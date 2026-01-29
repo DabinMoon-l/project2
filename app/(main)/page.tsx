@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useTheme } from '@/styles/themes/useTheme';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -82,6 +83,7 @@ const DUMMY_QUIZZES: QuizItem[] = [
  * 캐릭터, 스탯, 빠른 메뉴, 오늘의 퀴즈 표시
  */
 export default function HomePage() {
+  const router = useRouter();
   const { theme } = useTheme();
   const { user } = useAuth();
 
@@ -155,10 +157,7 @@ export default function HomePage() {
           <button
             className="p-2 rounded-full"
             style={{ backgroundColor: `${theme.colors.accent}20` }}
-            onClick={() => {
-              // TODO: 프로필/설정 페이지로 이동
-              console.log('프로필 클릭');
-            }}
+            onClick={() => router.push('/profile')}
           >
             <span className="text-lg">👤</span>
           </button>

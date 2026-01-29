@@ -1,8 +1,8 @@
 # 용사 퀴즈 개발 진행 상황
 
 ## 현재 상태
-- **마지막 업데이트**: Phase 3-22 교수님 문제 분석 완료
-- **다음 단계**: Phase 3-23 프로필 및 설정 화면
+- **마지막 업데이트**: Phase 3-23 프로필 및 설정 화면 완료
+- **다음 단계**: Phase 3-25 알림 시스템 (FCM)
 
 ## 완료된 단계
 
@@ -34,7 +34,7 @@
 - [x] #20 교수님 퀴즈 관리 ✅
 - [x] #21 교수님 학생 모니터링 ✅
 - [x] #22 교수님 문제 분석 ✅
-- [ ] #23 프로필 및 설정 화면
+- [x] #23 프로필 및 설정 화면 ✅
 - [ ] #25 알림 시스템 (FCM)
 - [ ] #26 시즌 리셋 및 학기 전환 로직
 
@@ -138,6 +138,30 @@ functions/            # Cloud Functions ✅
 - 문제별 상세 분석 (정답률, 오답 패턴)
 - 난이도/유형별 분포 차트
 - 필터링 (난이도, 유형, 정렬)
+
+### #23 프로필 및 설정 화면 ✅ 완료
+
+#### 생성된 파일:
+- [x] `lib/hooks/useProfile.ts` - 프로필 CRUD 훅
+- [x] `lib/hooks/useSettings.ts` - 설정 관리 훅
+- [x] `components/profile/ProfileCard.tsx` - 프로필 카드
+- [x] `components/profile/CharacterEditor.tsx` - 캐릭터 편집기
+- [x] `components/profile/StatsSummary.tsx` - 통계 요약
+- [x] `components/profile/SettingsItem.tsx` - 설정 항목
+- [x] `components/profile/SettingsList.tsx` - 설정 목록
+- [x] `components/profile/index.ts` - export
+- [x] `app/(main)/profile/page.tsx` - 프로필 페이지
+- [x] `app/(main)/settings/page.tsx` - 설정 페이지
+
+#### 주요 기능:
+- 프로필 카드 (캐릭터, 닉네임, 계급, 레벨)
+- 캐릭터 커스터마이징 (머리, 피부색, 수염)
+- 퀴즈/피드백 통계
+- 알림 설정 (퀴즈, 피드백, 게시판, 랭킹, 시즌)
+- 표시 설정 (애니메이션, 진동, 사운드)
+- 개인정보 설정 (프로필 공개, 랭킹 표시)
+- 로그아웃 기능
+- 설정 초기화 기능
 
 ## 명령어
 
