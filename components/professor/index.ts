@@ -21,3 +21,8 @@ export { default as StudentListItem } from './StudentListItem';
 export { default as StudentList } from './StudentList';
 export { default as StudentDetailModal } from './StudentDetailModal';
 export { default as StudentStats } from './StudentStats';
+
+// 문제 분석 컴포넌트
+export { default as QuestionAnalysisCard } from './QuestionAnalysisCard';
+export { default as DifficultyChart } from './DifficultyChart';
+export { default as AnalysisSummary } from './AnalysisSummary';
