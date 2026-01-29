@@ -119,8 +119,8 @@ const CategoryTab = forwardRef<HTMLButtonElement, CategoryTabProps>(
           color: isSelected
             ? colors.background
             : colors.text,
-          focusRingColor: colors.accent,
-        }}
+          '--tw-ring-color': colors.accent,
+        } as React.CSSProperties}
         aria-pressed={isSelected}
         aria-label={`${category.name} 카테고리`}
       >

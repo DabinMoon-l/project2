@@ -3,6 +3,7 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence, useDragControls, PanInfo } from 'framer-motion';
 import { createPortal } from 'react-dom';
+import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
 
 // BottomSheet 높이 타입
 type SheetHeight = 'auto' | 'half' | 'full';
@@ -57,6 +58,13 @@ const sheetVariants = {
   },
 };
 
+// reduce-motion 사용자를 위한 variants
+const reducedMotionVariants = {
+  hidden: { opacity: 0, y: 0 },
+  visible: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: 0 },
+};
+
 /**
  * 공통 BottomSheet 컴포넌트
  *
@@ -83,6 +91,11 @@ export default function BottomSheet({
   const sheetRef = useRef<HTMLDivElement>(null);
   const dragControls = useDragControls();
   const previousActiveElement = useRef<HTMLElement | null>(null);
+  const prefersReducedMotion = useReducedMotion();
+
+  // 접근성 설정에 따라 애니메이션 선택
+  const activeSheetVariants = prefersReducedMotion ? reducedMotionVariants : sheetVariants;
+  const activeBackdropVariants = prefersReducedMotion ? reducedMotionVariants : backdropVariants;
 
   // 드래그 종료 핸들러
   const handleDragEnd = useCallback(
@@ -153,7 +166,7 @@ export default function BottomSheet({
         <div className="fixed inset-0 z-50">
           {/* 백드롭 */}
           <motion.div
-            variants={backdropVariants}
+            variants={activeBackdropVariants}
             initial="hidden"
             animate="visible"
             exit="exit"
@@ -165,7 +178,7 @@ export default function BottomSheet({
           {/* 시트 */}
           <motion.div
             ref={sheetRef}
-            variants={sheetVariants}
+            variants={activeSheetVariants}
             initial="hidden"
             animate="visible"
             exit="exit"

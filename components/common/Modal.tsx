@@ -3,6 +3,7 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
+import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
 
 // Modal 크기 타입
 type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | 'full';
@@ -71,6 +72,13 @@ const modalVariants = {
   },
 };
 
+// reduce-motion 사용자를 위한 variants
+const reducedMotionVariants = {
+  hidden: { opacity: 1 },
+  visible: { opacity: 1 },
+  exit: { opacity: 0 },
+};
+
 /**
  * 공통 Modal 컴포넌트
  *
@@ -108,6 +116,11 @@ export default function Modal({
 }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
   const previousActiveElement = useRef<HTMLElement | null>(null);
+  const prefersReducedMotion = useReducedMotion();
+
+  // 접근성 설정에 따라 애니메이션 선택
+  const activeModalVariants = prefersReducedMotion ? reducedMotionVariants : modalVariants;
+  const activeBackdropVariants = prefersReducedMotion ? reducedMotionVariants : backdropVariants;
 
   // ESC 키 핸들러
   const handleKeyDown = useCallback(
@@ -164,7 +177,7 @@ export default function Modal({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           {/* 백드롭 */}
           <motion.div
-            variants={backdropVariants}
+            variants={activeBackdropVariants}
             initial="hidden"
             animate="visible"
             exit="exit"
@@ -176,7 +189,7 @@ export default function Modal({
           {/* 모달 */}
           <motion.div
             ref={modalRef}
-            variants={modalVariants}
+            variants={activeModalVariants}
             initial="hidden"
             animate="visible"
             exit="exit"

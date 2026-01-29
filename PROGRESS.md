@@ -1,8 +1,8 @@
 # 용사 퀴즈 개발 진행 상황
 
 ## 현재 상태
-- **마지막 업데이트**: Phase 4-28 성능 테스트 및 최적화 완료
-- **다음 단계**: Phase 4-29 애니메이션 최적화
+- **마지막 업데이트**: Phase 4-29 애니메이션 최적화 완료
+- **다음 단계**: Phase 4-30 PWA 및 오프라인 모드 테스트
 
 ## 개선 사항 (Phase 4-27 후속)
 
@@ -81,7 +81,7 @@
 ### Phase 4: 최적화 및 배포
 - [x] #27 아키텍처 리뷰 및 코드 리뷰 ✅
 - [x] #28 성능 테스트 및 최적화 ✅
-- [ ] #29 애니메이션 최적화
+- [x] #29 애니메이션 최적화 ✅
 - [ ] #30 PWA 및 오프라인 모드 테스트
 - [ ] #31 Playwright E2E 테스트
 - [ ] #32 Vercel 배포
@@ -258,6 +258,38 @@ functions/            # Cloud Functions ✅
   - 유지: 골드, 캐릭터 외형, 뱃지
 - 교수님 설정 페이지 (시즌 관리 + 기타 설정)
 - Cloud Functions `resetSeason` 연동
+
+### #29 애니메이션 최적화 ✅ 완료
+
+#### 생성된 파일:
+- [x] `lib/animations/index.ts` - 공통 애니메이션 설정
+  - 공통 Transition 설정 (quick, smooth, spring, softSpring)
+  - 페이지 전환 Variants (fade, slideUp, slideRight, slideLeft)
+  - 컴포넌트 Variants (scale, cardHover, buttonTap, stagger)
+  - 모달/오버레이 Variants (backdrop, modal, bottomSheet)
+  - 특수 효과 Variants (pulse, shake)
+  - reduce-motion 지원 유틸리티
+
+- [x] `lib/hooks/useReducedMotion.ts` - 접근성 지원 훅
+  - prefers-reduced-motion 미디어 쿼리 감지
+  - 실시간 설정 변경 감지
+  - useAnimationDuration 헬퍼
+
+#### 수정된 파일:
+- [x] `components/common/Modal.tsx` - useReducedMotion 적용
+- [x] `components/common/BottomSheet.tsx` - useReducedMotion 적용
+- [x] `components/quiz/MultipleChoice.tsx` - correctIndex prop 추가 (정답/오답 표시)
+- [x] `components/profile/CharacterEditor.tsx` - 불필요한 @ts-expect-error 제거
+- [x] `components/shop/CategoryTabs.tsx` - focusRingColor → CSS 변수 수정
+- [x] `lib/hooks/useProfessorAnalysis.ts` - TypeScript 타입 오류 수정
+- [x] `lib/hooks/useReview.ts` - Set 순회 오류 수정
+- [x] `tsconfig.json` - functions 폴더 제외
+
+#### 주요 기능:
+- **접근성 지원**: prefers-reduced-motion 설정 존중
+- **일관된 애니메이션**: 공통 variants로 통일된 애니메이션 경험
+- **성능 최적화**: transform/opacity 기반 애니메이션 권장
+- **재사용성**: 모든 컴포넌트에서 공통 애니메이션 사용 가능
 
 ### #28 성능 테스트 및 최적화 ✅ 완료
 

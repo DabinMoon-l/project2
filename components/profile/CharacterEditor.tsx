@@ -215,8 +215,8 @@ export default function CharacterEditor({
                   `}
                   style={{
                     backgroundColor: skin.color,
-                    ringColor: theme.colors.accent,
-                  }}
+                    '--tw-ring-color': theme.colors.accent,
+                  } as React.CSSProperties}
                   whileTap={{ scale: 0.9 }}
                 >
                   {options.skinColor === index && '✓'}

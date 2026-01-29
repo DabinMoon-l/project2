@@ -255,7 +255,7 @@ export const useReview = (): UseReviewReturn => {
         });
 
         // 퀴즈 제목 로드
-        for (const quizId of quizIds) {
+        for (const quizId of Array.from(quizIds)) {
           const title = await fetchQuizTitle(quizId);
           items.forEach((item) => {
             if (item.quizId === quizId && !item.quizTitle) {
@@ -312,7 +312,7 @@ export const useReview = (): UseReviewReturn => {
         });
 
         // 퀴즈 제목 로드
-        for (const quizId of quizIds) {
+        for (const quizId of Array.from(quizIds)) {
           const title = await fetchQuizTitle(quizId);
           items.forEach((item) => {
             if (item.quizId === quizId && !item.quizTitle) {

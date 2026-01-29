@@ -175,7 +175,13 @@ export function useProfessorAnalysis(): UseProfessorAnalysisReturn {
 
           totalQuizzes++;
 
-          const quizQuestions = quizData.questions || [];
+          const quizQuestions: Array<{
+            id: string;
+            text: string;
+            type: QuestionType;
+            choices?: string[];
+            answer: number | string;
+          }> = quizData.questions || [];
           let quizCorrectRateSum = 0;
           let hardest: QuestionAnalysis | null = null;
           let easiest: QuestionAnalysis | null = null;
@@ -318,20 +324,22 @@ export function useProfessorAnalysis(): UseProfessorAnalysisReturn {
 
           // 퀴즈 요약
           if (quizQuestions.length > 0) {
+            const hardestQ = hardest as QuestionAnalysis | null;
+            const easiestQ = easiest as QuestionAnalysis | null;
             summaries.push({
               quizId,
               quizTitle: quizData.title || '퀴즈',
               totalQuestions: quizQuestions.length,
               averageCorrectRate: Math.round(quizCorrectRateSum / quizQuestions.length),
-              hardestQuestion: hardest ? {
-                questionId: hardest.questionId,
-                text: hardest.questionText,
-                correctRate: hardest.correctRate,
+              hardestQuestion: hardestQ ? {
+                questionId: hardestQ.questionId,
+                text: hardestQ.questionText,
+                correctRate: hardestQ.correctRate,
               } : undefined,
-              easiestQuestion: easiest ? {
-                questionId: easiest.questionId,
-                text: easiest.questionText,
-                correctRate: easiest.correctRate,
+              easiestQuestion: easiestQ ? {
+                questionId: easiestQ.questionId,
+                text: easiestQ.questionText,
+                correctRate: easiestQ.correctRate,
               } : undefined,
               participantCount: resultsSnap.size,
             });

@@ -15,6 +15,8 @@ interface MultipleChoiceProps {
   onSelect: (index: number | null) => void;
   /** 비활성화 상태 */
   disabled?: boolean;
+  /** 정답 인덱스 (결과 표시용, 제출 후에만 사용) */
+  correctIndex?: number;
 }
 
 // 선지 번호 라벨
@@ -39,6 +41,7 @@ export default function MultipleChoice({
   selected,
   onSelect,
   disabled = false,
+  correctIndex,
 }: MultipleChoiceProps) {
   const colors = useThemeColors();
 
@@ -52,6 +55,26 @@ export default function MultipleChoice({
   // 선택 상태에 따른 스타일
   const getChoiceStyle = (index: number) => {
     const isSelected = selected === index;
+    const isCorrect = correctIndex !== undefined && correctIndex === index;
+    const isWrong = correctIndex !== undefined && isSelected && !isCorrect;
+
+    // 정답/오답 표시 모드
+    if (correctIndex !== undefined) {
+      if (isCorrect) {
+        return {
+          backgroundColor: '#10B981', // green
+          borderColor: '#10B981',
+          color: '#FFFFFF',
+        };
+      }
+      if (isWrong) {
+        return {
+          backgroundColor: '#EF4444', // red
+          borderColor: '#EF4444',
+          color: '#FFFFFF',
+        };
+      }
+    }
 
     if (isSelected) {
       return {
