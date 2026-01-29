@@ -99,6 +99,10 @@ export default function ProfessorDashboardPage() {
     router.push(`/professor/feedback/${feedbackId}`);
   }, [router]);
 
+  const handleSettings = useCallback(() => {
+    router.push('/professor/settings');
+  }, [router]);
+
   // 로딩 상태
   if (loading) {
     return (
@@ -152,6 +156,7 @@ export default function ProfessorDashboardPage() {
           onViewStudents={handleViewStudents}
           onAnalyze={handleAnalyze}
           onViewFeedback={handleViewFeedback}
+          onSettings={handleSettings}
         />
 
         {/* 반별 참여율 */}

@@ -19,6 +19,8 @@ interface QuickActionsProps {
   onAnalyze: () => void;
   /** 피드백 확인 클릭 */
   onViewFeedback: () => void;
+  /** 설정 클릭 (선택) */
+  onSettings?: () => void;
 }
 
 /**
@@ -29,6 +31,7 @@ export default function QuickActions({
   onViewStudents,
   onAnalyze,
   onViewFeedback,
+  onSettings,
 }: QuickActionsProps) {
   const actions: QuickAction[] = [
     {
@@ -59,6 +62,17 @@ export default function QuickActions({
       color: 'bg-purple-100 text-purple-600',
       onClick: onViewFeedback,
     },
+    ...(onSettings
+      ? [
+          {
+            id: 'settings',
+            label: '설정',
+            icon: '⚙️',
+            color: 'bg-gray-100 text-gray-600',
+            onClick: onSettings,
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -71,7 +85,7 @@ export default function QuickActions({
       <h3 className="font-bold text-gray-800 mb-4">빠른 액션</h3>
 
       {/* 액션 버튼 그리드 */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className={`grid gap-3 ${actions.length > 4 ? 'grid-cols-5' : 'grid-cols-4'}`}>
         {actions.map((action) => (
           <motion.button
             key={action.id}
@@ -82,7 +96,7 @@ export default function QuickActions({
             className="flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-gray-50 transition-colors"
           >
             {/* 아이콘 */}
-            <div className={`w-12 h-12 flex items-center justify-center rounded-xl text-2xl ${action.color}`}>
+            <div className={`${actions.length > 4 ? 'w-10 h-10 text-xl' : 'w-12 h-12 text-2xl'} flex items-center justify-center rounded-xl ${action.color}`}>
               {action.icon}
             </div>
             {/* 라벨 */}
