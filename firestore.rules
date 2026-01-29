@@ -1,0 +1,203 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============================================================
+    // 헬퍼 함수
+    // ============================================================
+
+    // 로그인 여부 확인
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // 본인 확인
+    function isOwner(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+
+    // 교수님 여부 확인
+    function isProfessor() {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'professor';
+    }
+
+    // 문자열 길이 검증
+    function isValidString(str, minLen, maxLen) {
+      return str is string && str.size() >= minLen && str.size() <= maxLen;
+    }
+
+    // ============================================================
+    // 사용자 컬렉션
+    // ============================================================
+
+    match /users/{uid} {
+      // 읽기: 본인 또는 교수님
+      allow read: if isOwner(uid) || isProfessor();
+
+      // 생성: 본인만 (온보딩 시)
+      allow create: if isOwner(uid) &&
+        request.resource.data.keys().hasAll(['nickname', 'classType', 'role']) &&
+        isValidString(request.resource.data.nickname, 2, 10) &&
+        request.resource.data.classType in ['A', 'B', 'C', 'D'] &&
+        request.resource.data.role == 'student';
+
+      // 수정: 본인만 (일부 필드만)
+      // gold, exp, rank 등은 Cloud Functions에서만 수정 가능
+      allow update: if isOwner(uid) &&
+        !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['gold', 'totalExp', 'rank', 'role', 'badges']);
+
+      // 삭제: 불가
+      allow delete: if false;
+
+      // 골드 히스토리 서브컬렉션
+      match /goldHistory/{historyId} {
+        allow read: if isOwner(uid);
+        allow write: if false; // Cloud Functions에서만 작성
+      }
+
+      // 퀴즈 기록 서브컬렉션
+      match /quizHistory/{quizId} {
+        allow read: if isOwner(uid) || isProfessor();
+        allow write: if false; // Cloud Functions에서만 작성
+      }
+    }
+
+    // ============================================================
+    // 퀴즈 컬렉션
+    // ============================================================
+
+    match /quizzes/{quizId} {
+      // 읽기: 공개된 퀴즈는 모두, 비공개는 교수님만
+      allow read: if isAuthenticated() &&
+        (resource.data.isPublished == true || isProfessor());
+
+      // 생성/수정/삭제: 교수님만
+      allow create, update, delete: if isProfessor();
+
+      // 퀴즈 제출 서브컬렉션
+      match /submissions/{submissionId} {
+        allow read: if isOwner(resource.data.userId) || isProfessor();
+        allow create: if isAuthenticated() &&
+          request.resource.data.userId == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }
+
+    // ============================================================
+    // 게시판 컬렉션
+    // ============================================================
+
+    match /posts/{postId} {
+      // 읽기: 모든 로그인 사용자
+      allow read: if isAuthenticated();
+
+      // 생성: 로그인 사용자 (유효성 검증)
+      allow create: if isAuthenticated() &&
+        request.resource.data.authorId == request.auth.uid &&
+        isValidString(request.resource.data.title, 1, 100) &&
+        isValidString(request.resource.data.content, 1, 5000) &&
+        request.resource.data.category in ['toProfessor', 'community'];
+
+      // 수정: 작성자만 (제목, 내용만)
+      allow update: if isOwner(resource.data.authorId) &&
+        !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['authorId', 'createdAt', 'likes', 'commentCount']);
+
+      // 삭제: 작성자 또는 교수님
+      allow delete: if isOwner(resource.data.authorId) || isProfessor();
+
+      // 댓글 서브컬렉션
+      match /comments/{commentId} {
+        allow read: if isAuthenticated();
+
+        allow create: if isAuthenticated() &&
+          request.resource.data.authorId == request.auth.uid &&
+          isValidString(request.resource.data.content, 1, 1000);
+
+        allow update: if isOwner(resource.data.authorId) &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['content', 'updatedAt']);
+
+        allow delete: if isOwner(resource.data.authorId) || isProfessor();
+      }
+    }
+
+    // ============================================================
+    // 피드백 컬렉션
+    // ============================================================
+
+    match /feedbacks/{feedbackId} {
+      // 읽기: 작성자 또는 교수님
+      allow read: if isOwner(resource.data.authorId) || isProfessor();
+
+      // 생성: 로그인 사용자
+      allow create: if isAuthenticated() &&
+        request.resource.data.authorId == request.auth.uid;
+
+      // 수정: 교수님만 (답변 작성)
+      allow update: if isProfessor();
+
+      // 삭제: 불가
+      allow delete: if false;
+    }
+
+    // ============================================================
+    // 도배 방지 (Rate Limit) 컬렉션
+    // ============================================================
+
+    match /rateLimits/{uid} {
+      allow read, write: if isOwner(uid);
+
+      match /{type}/{recordId} {
+        allow read, write: if isOwner(uid);
+      }
+    }
+
+    // ============================================================
+    // FCM 토큰 컬렉션
+    // ============================================================
+
+    match /fcmTokens/{tokenId} {
+      allow read: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid;
+
+      allow create, update: if isAuthenticated() &&
+        request.resource.data.userId == request.auth.uid;
+
+      allow delete: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================================
+    // 시즌 로그 컬렉션
+    // ============================================================
+
+    match /seasonLogs/{logId} {
+      // 읽기: 교수님만
+      allow read: if isProfessor();
+
+      // 쓰기: Cloud Functions에서만
+      allow write: if false;
+    }
+
+    // ============================================================
+    // 알림 컬렉션
+    // ============================================================
+
+    match /notifications/{notificationId} {
+      // 읽기: 본인 알림만
+      allow read: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid;
+
+      // 수정: 본인만 (읽음 처리)
+      allow update: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+
+      // 생성/삭제: Cloud Functions에서만
+      allow create, delete: if false;
+    }
+  }
+}

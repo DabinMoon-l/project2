@@ -101,6 +101,7 @@ export interface ProfileUpdateData {
   nickname?: string;
   characterOptions?: CharacterOptions;
   equipment?: Equipment;
+  classType?: 'A' | 'B' | 'C' | 'D';
 }
 
 /**

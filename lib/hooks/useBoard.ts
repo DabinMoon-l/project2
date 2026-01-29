@@ -521,8 +521,13 @@ export const useCreatePost = (): UseCreatePostReturn => {
         setLoading(true);
         setError(null);
 
-        // TODO: Firestore에서 사용자 닉네임 가져오기
-        const userNickname = user.displayName || '용사';
+        // Firestore에서 사용자 닉네임 가져오기 (보안 강화)
+        let userNickname = '용사';
+        const userDocRef = doc(db, 'users', user.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        if (userDocSnap.exists()) {
+          userNickname = userDocSnap.data().nickname || '용사';
+        }
 
         const postData = {
           ...data,
@@ -716,8 +721,13 @@ export const useCreateComment = (): UseCreateCommentReturn => {
         setLoading(true);
         setError(null);
 
-        // TODO: Firestore에서 사용자 닉네임 가져오기
-        const userNickname = user.displayName || '용사';
+        // Firestore에서 사용자 닉네임 가져오기 (보안 강화)
+        let userNickname = '용사';
+        const userDocRef = doc(db, 'users', user.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        if (userDocSnap.exists()) {
+          userNickname = userDocSnap.data().nickname || '용사';
+        }
 
         const commentData = {
           postId: data.postId,

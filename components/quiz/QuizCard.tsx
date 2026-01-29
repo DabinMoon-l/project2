@@ -1,5 +1,6 @@
 'use client';
 
+import { memo, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 
@@ -68,6 +69,7 @@ const typeLabels: Record<'midterm' | 'final' | 'past' | 'custom', string> = {
  *
  * 퀴즈 목록에서 개별 퀴즈를 표시하는 카드입니다.
  * 제목, 문제 수, 난이도, 참여자 수, 평균 점수, 완료 여부를 표시합니다.
+ * React.memo로 불필요한 리렌더링 방지
  *
  * @example
  * ```tsx
@@ -86,19 +88,23 @@ const typeLabels: Record<'midterm' | 'final' | 'past' | 'custom', string> = {
  * />
  * ```
  */
-export default function QuizCard({ quiz, onClick, className = '' }: QuizCardProps) {
+function QuizCard({ quiz, onClick, className = '' }: QuizCardProps) {
   const router = useRouter();
-  const difficultyStyle = difficultyStyles[quiz.difficulty];
 
-  // 카드 클릭 핸들러
-  const handleClick = () => {
+  // 난이도 스타일 메모이제이션
+  const difficultyStyle = useMemo(
+    () => difficultyStyles[quiz.difficulty],
+    [quiz.difficulty]
+  );
+
+  // 카드 클릭 핸들러 메모이제이션
+  const handleClick = useCallback(() => {
     if (onClick) {
       onClick();
     } else {
-      // 기본 동작: 퀴즈 상세 페이지로 이동
       router.push(`/quiz/${quiz.id}`);
     }
-  };
+  }, [onClick, router, quiz.id]);
 
   return (
     <motion.div
@@ -221,3 +227,6 @@ export default function QuizCard({ quiz, onClick, className = '' }: QuizCardProp
     </motion.div>
   );
 }
+
+// React.memo로 래핑하여 props가 변경되지 않으면 리렌더링 방지
+export default memo(QuizCard);

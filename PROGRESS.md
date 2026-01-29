@@ -4,6 +4,46 @@
 - **마지막 업데이트**: Phase 3-26 시즌 리셋 및 학기 전환 로직 완료
 - **다음 단계**: Phase 4-28 성능 테스트 및 최적화
 
+## 개선 사항 (Phase 4-27 후속)
+
+### P0: UserContext 추가 ✅
+- `lib/contexts/UserContext.tsx` - 프로필 전역 상태 관리
+- `lib/contexts/index.ts` - 모듈 내보내기
+- `app/(main)/layout.tsx` - UserProvider 적용
+- Firestore 실시간 구독으로 N+1 쿼리 문제 해결
+
+### P1: Firestore Security Rules 작성 ✅
+- `firestore.rules` - 전체 보안 규칙 파일 생성
+  - users, quizzes, posts, feedbacks, rateLimits, fcmTokens, seasonLogs, notifications 컬렉션 규칙
+  - 역할 기반 접근 제어 (학생/교수님)
+  - 유효성 검증 함수
+
+### P1: 에러 바운더리 추가 ✅
+- `components/common/ErrorBoundary.tsx` - 에러 바운더리 컴포넌트
+  - ErrorBoundary (전체 앱용)
+  - ErrorFallback (재사용 가능한 에러 UI)
+  - SectionErrorBoundary (작은 영역용)
+- `components/common/index.ts` - export 추가
+
+### P1: 닉네임 보안 개선 ✅
+- `lib/hooks/useBoard.ts` - useCreatePost, useCreateComment 수정
+  - Firebase Auth displayName 대신 Firestore에서 닉네임 조회
+
+### P2: 중복 코드 리팩토링 ✅
+- `lib/utils/firestore.ts` - Firestore 유틸리티 함수
+  - docToObject, docsToArray (문서 변환)
+  - getUserNickname, getUserRole (사용자 정보 조회)
+  - docExists, isDocAuthor (헬퍼 함수)
+- `lib/utils/asyncHandler.ts` - 비동기 작업 핸들러
+  - safeAsync, getErrorMessage (에러 처리)
+  - useAsyncState, useLoadingState (상태 관리 훅)
+  - handleFirebaseError (Firebase 에러 한글화)
+- `lib/utils/index.ts` - 모듈 내보내기
+
+### P2: 메모이제이션 추가 ✅
+- `components/quiz/QuizCard.tsx` - React.memo, useMemo, useCallback 적용
+- `components/board/PostCard.tsx` - React.memo, useMemo, useCallback 적용
+
 ## 완료된 단계
 
 ### Phase 1: 프로젝트 골격 ✅
@@ -254,19 +294,19 @@ functions/            # Cloud Functions ✅
 #### 발견된 주요 이슈
 
 **P0 (즉시):**
-- [ ] UserContext 추가 (N+1 쿼리 해결)
+- [x] UserContext 추가 (N+1 쿼리 해결) ✅
 
 **P1 (1주 내):**
-- [ ] Firestore Security Rules 작성
-- [ ] 닉네임 보안 개선 (useBoard.ts)
-- [ ] 에러 바운더리 추가
+- [x] Firestore Security Rules 작성 ✅
+- [x] 닉네임 보안 개선 (useBoard.ts) ✅
+- [x] 에러 바운더리 추가 ✅
 - [ ] console.log 제거
 
 **P2 (2주 내):**
 - [ ] ESLint exhaustive-deps 활성화
 - [ ] 큰 컴포넌트 분할
-- [ ] 메모이제이션 추가
-- [ ] 중복 코드 리팩토링
+- [x] 메모이제이션 추가 ✅
+- [x] 중복 코드 리팩토링 ✅
 
 **P3 (1개월):**
 - [ ] 테스트 환경 구축

@@ -1,5 +1,6 @@
 'use client';
 
+import { memo, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import type { Post } from '@/lib/hooks/useBoard';
 import NoticeTag from './NoticeTag';
@@ -12,34 +13,48 @@ interface PostCardProps {
 }
 
 /**
+ * 날짜 포맷팅 유틸리티
+ */
+function formatDate(date: Date): string {
+  const now = new Date();
+  const diff = now.getTime() - date.getTime();
+  const diffMinutes = Math.floor(diff / (1000 * 60));
+  const diffHours = Math.floor(diff / (1000 * 60 * 60));
+  const diffDays = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+  if (diffMinutes < 1) return '방금 전';
+  if (diffMinutes < 60) return `${diffMinutes}분 전`;
+  if (diffHours < 24) return `${diffHours}시간 전`;
+  if (diffDays < 7) return `${diffDays}일 전`;
+
+  return date.toLocaleDateString('ko-KR', {
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+/**
  * 게시글 카드 컴포넌트
  *
  * 게시글 목록에서 각 게시글을 표시하는 카드입니다.
  * 제목, 작성자, 좋아요 수, 댓글 수를 표시합니다.
+ * React.memo로 불필요한 리렌더링 방지
  */
-export default function PostCard({ post, onClick }: PostCardProps) {
-  // 날짜 포맷팅
-  const formatDate = (date: Date) => {
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const diffMinutes = Math.floor(diff / (1000 * 60));
-    const diffHours = Math.floor(diff / (1000 * 60 * 60));
-    const diffDays = Math.floor(diff / (1000 * 60 * 60 * 24));
+function PostCard({ post, onClick }: PostCardProps) {
+  // 날짜 메모이제이션
+  const formattedDate = useMemo(
+    () => formatDate(post.createdAt),
+    [post.createdAt]
+  );
 
-    if (diffMinutes < 1) return '방금 전';
-    if (diffMinutes < 60) return `${diffMinutes}분 전`;
-    if (diffHours < 24) return `${diffHours}시간 전`;
-    if (diffDays < 7) return `${diffDays}일 전`;
-
-    return date.toLocaleDateString('ko-KR', {
-      month: 'short',
-      day: 'numeric',
-    });
-  };
+  // 클릭 핸들러 메모이제이션
+  const handleClick = useCallback(() => {
+    onClick();
+  }, [onClick]);
 
   return (
     <motion.article
-      onClick={onClick}
+      onClick={handleClick}
       whileHover={{ y: -2 }}
       whileTap={{ scale: 0.99 }}
       className="
@@ -55,7 +70,7 @@ export default function PostCard({ post, onClick }: PostCardProps) {
         <div className="flex items-center gap-2">
           {post.isNotice && <NoticeTag />}
           <span className="text-xs text-gray-400">
-            {formatDate(post.createdAt)}
+            {formattedDate}
           </span>
         </div>
       </div>
@@ -107,3 +122,6 @@ export default function PostCard({ post, onClick }: PostCardProps) {
     </motion.article>
   );
 }
+
+// React.memo로 래핑하여 props가 변경되지 않으면 리렌더링 방지
+export default memo(PostCard);

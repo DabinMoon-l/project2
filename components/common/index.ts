@@ -39,3 +39,6 @@ export { default as NotificationProvider, useNotificationContext } from './Notif
 
 // NotificationPrompt 컴포넌트
 export { default as NotificationPrompt } from './NotificationPrompt';
+
+// ErrorBoundary 컴포넌트
+export { ErrorBoundary, ErrorFallback, SectionErrorBoundary } from './ErrorBoundary';
