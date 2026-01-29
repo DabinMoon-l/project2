@@ -14,6 +14,10 @@ import {
   signInWithApple,
   signInWithGoogle,
   signInWithNaver,
+  signInWithEmail,
+  signUpWithEmail,
+  sendEmailVerification,
+  isEmailVerified,
   signOut,
   User,
 } from '../auth';
@@ -38,6 +42,14 @@ interface UseAuthReturn {
   loginWithGoogle: () => Promise<void>;
   /** Naver 로그인 함수 (리다이렉트) */
   loginWithNaver: () => void;
+  /** 이메일/비밀번호 로그인 함수 */
+  loginWithEmail: (email: string, password: string) => Promise<void>;
+  /** 이메일/비밀번호 회원가입 함수 */
+  signUpWithEmailPassword: (email: string, password: string) => Promise<void>;
+  /** 인증 메일 발송 함수 */
+  sendVerificationEmail: () => Promise<void>;
+  /** 이메일 인증 여부 확인 */
+  emailVerified: boolean;
   /** 로그아웃 함수 */
   logout: () => Promise<void>;
   /** 에러 초기화 함수 */
@@ -158,6 +170,65 @@ export const useAuth = (): UseAuthReturn => {
   }, []);
 
   /**
+   * 이메일/비밀번호 로그인 처리
+   */
+  const loginWithEmail = useCallback(async (email: string, password: string): Promise<void> => {
+    try {
+      setLoading(true);
+      setError(null);
+      await signInWithEmail(email, password);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '이메일 로그인에 실패했습니다.';
+      setError(errorMessage);
+      console.error('이메일 로그인 에러:', errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  /**
+   * 이메일/비밀번호 회원가입 처리
+   */
+  const signUpWithEmailPassword = useCallback(async (email: string, password: string): Promise<void> => {
+    try {
+      setLoading(true);
+      setError(null);
+      const result = await signUpWithEmail(email, password);
+      // 회원가입 성공 후 인증 메일 발송
+      if (result.user) {
+        await sendEmailVerification(result.user);
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '회원가입에 실패했습니다.';
+      setError(errorMessage);
+      console.error('회원가입 에러:', errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  /**
+   * 인증 메일 재발송
+   */
+  const sendVerificationEmail = useCallback(async (): Promise<void> => {
+    try {
+      setLoading(true);
+      setError(null);
+      if (user) {
+        await sendEmailVerification(user);
+      } else {
+        throw new Error('로그인된 사용자가 없습니다.');
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '인증 메일 발송에 실패했습니다.';
+      setError(errorMessage);
+      console.error('인증 메일 발송 에러:', errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  /**
    * 에러 초기화
    */
   const clearError = useCallback((): void => {
@@ -171,6 +242,10 @@ export const useAuth = (): UseAuthReturn => {
     loginWithApple,
     loginWithGoogle,
     loginWithNaver,
+    loginWithEmail,
+    signUpWithEmailPassword,
+    sendVerificationEmail,
+    emailVerified: isEmailVerified(user),
     logout,
     clearError,
   };

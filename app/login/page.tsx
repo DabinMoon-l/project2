@@ -1,8 +1,8 @@
 /**
  * 로그인 페이지
  *
- * Apple, Google, Naver 소셜 로그인을 제공합니다.
- * 이미 로그인된 사용자는 홈 화면으로 리다이렉트됩니다.
+ * 픽셀 아트 스타일 배경과 깔끔한 로그인 UI
+ * 이미 로그인된 사용자는 온보딩으로 리다이렉트됩니다.
  */
 
 'use client';
@@ -10,6 +10,8 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
+import Image from 'next/image';
+import Link from 'next/link';
 import { useAuth } from '@/lib/hooks/useAuth';
 import SocialLoginButton from '@/components/auth/SocialLoginButton';
 
@@ -17,14 +19,14 @@ import SocialLoginButton from '@/components/auth/SocialLoginButton';
 // 애니메이션 설정
 // ============================================================
 
-/** 컨테이너 애니메이션 (stagger children) */
+/** 컨테이너 애니메이션 */
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.1,
-      delayChildren: 0.2,
+      staggerChildren: 0.15,
+      delayChildren: 0.3,
     },
   },
 };
@@ -42,18 +44,33 @@ const itemVariants = {
   },
 };
 
-/** 로고 애니메이션 */
-const logoVariants = {
-  hidden: { opacity: 0, scale: 0.8 },
-  visible: {
-    opacity: 1,
-    scale: 1,
-    transition: {
-      duration: 0.6,
-      ease: 'easeOut',
-    },
-  },
-};
+// ============================================================
+// 비디오 배경 컴포넌트
+// ============================================================
+
+/** 비디오 배경 (MP4) */
+function VideoBackground() {
+  return (
+    <div className="absolute inset-0 overflow-hidden">
+      {/* 비디오 배경 */}
+      <video
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="absolute inset-0 w-full h-full object-cover"
+        poster="/images/login-poster.jpg"  // 비디오 로딩 전 표시할 이미지 (선택)
+      >
+        <source src="/videos/login-bg.mp4" type="video/mp4" />
+        {/* 비디오 미지원 브라우저용 폴백 */}
+        Your browser does not support the video tag.
+      </video>
+
+      {/* 오버레이 (가독성을 위해 살짝 어둡게) */}
+      <div className="absolute inset-0 bg-black/20" />
+    </div>
+  );
+}
 
 // ============================================================
 // 컴포넌트
@@ -65,20 +82,24 @@ export default function LoginPage() {
     user,
     loading,
     error,
-    loginWithApple,
     loginWithGoogle,
-    loginWithNaver,
+    emailVerified,
     clearError,
   } = useAuth();
 
-  // 이미 로그인된 경우 홈으로 리다이렉트
+  // 이미 로그인된 경우
   useEffect(() => {
     if (user && !loading) {
-      router.replace('/');
+      // 이메일 인증이 필요한 경우 (이메일/비밀번호 로그인)
+      if (user.providerData[0]?.providerId === 'password' && !emailVerified) {
+        router.replace('/verify-email');
+      } else {
+        router.replace('/onboarding');
+      }
     }
-  }, [user, loading, router]);
+  }, [user, loading, emailVerified, router]);
 
-  // 에러 발생 시 3초 후 자동 초기화
+  // 에러 발생 시 5초 후 자동 초기화
   useEffect(() => {
     if (error) {
       const timer = setTimeout(() => {
@@ -91,51 +112,82 @@ export default function LoginPage() {
   // 로딩 중이거나 이미 로그인된 경우 로딩 화면 표시
   if (loading || user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-indigo-50 to-white">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-[#1a1a2e] to-[#16213e]">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           className="flex flex-col items-center gap-4"
         >
-          {/* 로딩 스피너 */}
-          <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
-          <p className="text-gray-500 text-sm">로딩 중...</p>
+          <div className="w-12 h-12 border-4 border-white/30 border-t-white rounded-full animate-spin" />
+          <p className="text-white text-sm font-medium drop-shadow-md">로딩 중...</p>
         </motion.div>
       </div>
     );
   }
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center px-6 bg-gradient-to-b from-indigo-50 to-white">
+    <main className="relative min-h-screen flex flex-col items-center justify-start pt-44 overflow-hidden">
+      {/* 비디오 배경 */}
+      <VideoBackground />
+
+      {/* 좌측 상단 이미지 */}
+      <div className="absolute top-0 left-0 z-10">
+        <Image
+          src="/images/corner-image.png"
+          alt="장식 이미지"
+          width={360}
+          height={360}
+          className="drop-shadow-lg"
+        />
+      </div>
+
+      {/* 콘텐츠 영역 */}
       <motion.div
-        className="w-full max-w-sm flex flex-col items-center"
+        className="relative z-10 w-full px-6"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
       >
-        {/* 로고 영역 */}
+        {/* 로고 이미지 */}
         <motion.div
-          className="mb-8 flex flex-col items-center"
-          variants={logoVariants}
+          className="flex justify-center"
+          variants={itemVariants}
         >
-          {/* 앱 아이콘/로고 */}
-          <div className="w-24 h-24 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-3xl flex items-center justify-center shadow-lg mb-4">
-            <span className="text-4xl" role="img" aria-label="용사">
-              ⚔️
-            </span>
+          <Image
+            src="/images/logo.png"
+            alt="QuizBunny"
+            width={300}
+            height={100}
+            className="drop-shadow-lg"
+            priority
+          />
+        </motion.div>
+
+        {/* 로그인 버튼 영역 */}
+        <motion.div
+          className="max-w-xs mx-auto mt-4 space-y-3"
+          variants={itemVariants}
+        >
+          <SocialLoginButton
+            provider="google"
+            onClick={loginWithGoogle}
+            loading={loading}
+          />
+
+          {/* 구분선 */}
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-white/30" />
+            <span className="text-white/50 text-xs">또는</span>
+            <div className="flex-1 h-px bg-white/30" />
           </div>
 
-          {/* 앱 이름 */}
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            용사 퀴즈
-          </h1>
-
-          {/* 앱 설명 */}
-          <p className="text-gray-500 text-center text-sm leading-relaxed">
-            퀴즈를 풀고 경험치를 얻어
-            <br />
-            전설의 용사가 되어보세요!
-          </p>
+          {/* 이메일 회원가입 링크 */}
+          <Link
+            href="/signup"
+            className="block w-full py-3 bg-white/10 border border-white/30 text-white font-medium rounded-xl text-center hover:bg-white/20 transition-colors"
+          >
+            이메일로 회원가입
+          </Link>
         </motion.div>
 
         {/* 에러 메시지 */}
@@ -144,56 +196,23 @@ export default function LoginPage() {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="w-full mb-4 p-3 bg-red-50 border border-red-200 rounded-xl"
+            className="max-w-sm mx-auto mt-4 p-3 bg-red-500/90 backdrop-blur-sm rounded-xl"
           >
-            <p className="text-red-600 text-sm text-center">{error}</p>
+            <p className="text-white text-sm text-center">{error}</p>
           </motion.div>
         )}
 
-        {/* 소셜 로그인 버튼 영역 */}
-        <motion.div
-          className="w-full space-y-3"
-          variants={itemVariants}
-        >
-          {/* Apple 로그인 */}
-          <motion.div variants={itemVariants}>
-            <SocialLoginButton
-              provider="apple"
-              onClick={loginWithApple}
-              loading={loading}
-            />
-          </motion.div>
-
-          {/* Google 로그인 */}
-          <motion.div variants={itemVariants}>
-            <SocialLoginButton
-              provider="google"
-              onClick={loginWithGoogle}
-              loading={loading}
-            />
-          </motion.div>
-
-          {/* Naver 로그인 */}
-          <motion.div variants={itemVariants}>
-            <SocialLoginButton
-              provider="naver"
-              onClick={loginWithNaver}
-              loading={loading}
-            />
-          </motion.div>
-        </motion.div>
-
         {/* 하단 안내 문구 */}
         <motion.p
-          className="mt-8 text-xs text-gray-400 text-center leading-relaxed"
+          className="mt-6 text-xs text-white/70 text-center"
           variants={itemVariants}
         >
           로그인 시{' '}
-          <a href="/terms" className="underline hover:text-gray-600">
+          <a href="/terms" className="underline hover:text-white">
             이용약관
           </a>{' '}
           및{' '}
-          <a href="/privacy" className="underline hover:text-gray-600">
+          <a href="/privacy" className="underline hover:text-white">
             개인정보처리방침
           </a>
           에 동의하게 됩니다.

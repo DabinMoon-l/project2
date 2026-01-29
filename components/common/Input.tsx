@@ -104,7 +104,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             }
             className={`
               block w-full
-              bg-white
+              bg-white text-gray-900
               border rounded-xl
               transition-all duration-200
               placeholder:text-gray-400

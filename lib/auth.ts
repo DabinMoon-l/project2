@@ -12,6 +12,9 @@ import {
   onAuthStateChanged as firebaseOnAuthStateChanged,
   GoogleAuthProvider,
   OAuthProvider,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendEmailVerification as firebaseSendEmailVerification,
   User,
   UserCredential,
   NextOrObserver,
@@ -89,7 +92,6 @@ const generateNaverAuthUrl = (): string => {
 export const signInWithApple = async (): Promise<UserCredential> => {
   try {
     const result = await signInWithPopup(auth, appleProvider);
-    console.log('Apple 로그인 성공:', result.user.email);
     return result;
   } catch (error: unknown) {
     console.error('Apple 로그인 실패:', error);
@@ -126,7 +128,6 @@ export const signInWithApple = async (): Promise<UserCredential> => {
 export const signInWithGoogle = async (): Promise<UserCredential> => {
   try {
     const result = await signInWithPopup(auth, googleProvider);
-    console.log('Google 로그인 성공:', result.user.email);
     return result;
   } catch (error: unknown) {
     console.error('Google 로그인 실패:', error);
@@ -186,7 +187,6 @@ export const signInWithNaver = (): void => {
 export const signOut = async (): Promise<void> => {
   try {
     await firebaseSignOut(auth);
-    console.log('로그아웃 성공');
   } catch (error) {
     console.error('로그아웃 실패:', error);
     throw new Error('로그아웃에 실패했습니다. 다시 시도해주세요.');
@@ -218,6 +218,116 @@ export const onAuthStateChanged = (
   callback: NextOrObserver<User>
 ): Unsubscribe => {
   return firebaseOnAuthStateChanged(auth, callback);
+};
+
+// ============================================================
+// 이메일/비밀번호 인증
+// ============================================================
+
+/**
+ * 이메일/비밀번호로 회원가입
+ *
+ * @param email - 사용자 이메일
+ * @param password - 비밀번호
+ * @returns Promise<UserCredential> - 회원가입 성공 시 사용자 자격 증명
+ */
+export const signUpWithEmail = async (
+  email: string,
+  password: string
+): Promise<UserCredential> => {
+  try {
+    const result = await createUserWithEmailAndPassword(auth, email, password);
+    return result;
+  } catch (error: unknown) {
+    console.error('이메일 회원가입 실패:', error);
+
+    if (error instanceof Error) {
+      const firebaseError = error as { code?: string };
+      switch (firebaseError.code) {
+        case 'auth/email-already-in-use':
+          throw new Error('이미 사용 중인 이메일입니다.');
+        case 'auth/invalid-email':
+          throw new Error('유효하지 않은 이메일 형식입니다.');
+        case 'auth/weak-password':
+          throw new Error('비밀번호는 6자 이상이어야 합니다.');
+        default:
+          throw new Error('회원가입에 실패했습니다. 다시 시도해주세요.');
+      }
+    }
+    throw new Error('알 수 없는 오류가 발생했습니다.');
+  }
+};
+
+/**
+ * 이메일/비밀번호로 로그인
+ *
+ * @param email - 사용자 이메일
+ * @param password - 비밀번호
+ * @returns Promise<UserCredential> - 로그인 성공 시 사용자 자격 증명
+ */
+export const signInWithEmail = async (
+  email: string,
+  password: string
+): Promise<UserCredential> => {
+  try {
+    const result = await signInWithEmailAndPassword(auth, email, password);
+    return result;
+  } catch (error: unknown) {
+    console.error('이메일 로그인 실패:', error);
+
+    if (error instanceof Error) {
+      const firebaseError = error as { code?: string };
+      switch (firebaseError.code) {
+        case 'auth/user-not-found':
+          throw new Error('등록되지 않은 이메일입니다.');
+        case 'auth/wrong-password':
+          throw new Error('비밀번호가 올바르지 않습니다.');
+        case 'auth/invalid-email':
+          throw new Error('유효하지 않은 이메일 형식입니다.');
+        case 'auth/too-many-requests':
+          throw new Error('너무 많은 시도가 있었습니다. 잠시 후 다시 시도해주세요.');
+        default:
+          throw new Error('로그인에 실패했습니다. 다시 시도해주세요.');
+      }
+    }
+    throw new Error('알 수 없는 오류가 발생했습니다.');
+  }
+};
+
+/**
+ * 이메일 인증 메일 발송
+ *
+ * @param user - 인증 메일을 보낼 사용자
+ * @returns Promise<void>
+ */
+export const sendEmailVerification = async (user: User): Promise<void> => {
+  try {
+    await firebaseSendEmailVerification(user);
+  } catch (error: unknown) {
+    console.error('인증 메일 발송 실패:', error);
+
+    if (error instanceof Error) {
+      const firebaseError = error as { code?: string };
+      switch (firebaseError.code) {
+        case 'auth/too-many-requests':
+          throw new Error('너무 많은 요청이 있었습니다. 잠시 후 다시 시도해주세요.');
+        default:
+          throw new Error('인증 메일 발송에 실패했습니다. 다시 시도해주세요.');
+      }
+    }
+    throw new Error('알 수 없는 오류가 발생했습니다.');
+  }
+};
+
+/**
+ * 이메일 인증 여부 확인
+ *
+ * @param user - 확인할 사용자
+ * @returns boolean - 이메일 인증 완료 여부
+ */
+export const isEmailVerified = (user: User | null): boolean => {
+  if (!user) return false;
+  return user.emailVerified;
 };
 
 // ============================================================

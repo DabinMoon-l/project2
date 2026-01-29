@@ -1,7 +1,7 @@
 {
-  "name": "용사 퀴즈",
-  "short_name": "용사 퀴즈",
-  "description": "대학 수업 보조 퀴즈 앱 - 용사 컨셉 게이미피케이션",
+  "name": "토끼키우기",
+  "short_name": "토끼키우기",
+  "description": "퀴즈를 풀고 토끼를 성장시키는 학습 앱",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

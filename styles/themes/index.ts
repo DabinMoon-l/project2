@@ -57,25 +57,25 @@ const themeA: Theme = {
   },
 };
 
-// B반 테마 - 크림 & 브라운 (아늑하고 포근함)
+// B반 테마 - 다크 브라운 & 머스타드 (후플푸프 스타일, 따뜻하고 충성스러움)
 const themeB: Theme = {
   id: 'B',
   meta: {
     name: 'B반',
-    mood: '아늑하고 포근함',
+    mood: '따뜻하고 충성스러움',
   },
   colors: {
-    background: '#F5E6C8',
-    backgroundSecondary: '#EDD9B5',
-    accent: '#3D2B1F',
-    accentLight: '#6B5344',
-    text: '#2C1810',
-    textSecondary: '#5C4333',
-    border: '#C9B896',
+    background: '#3D2B1F',
+    backgroundSecondary: '#4A3528',
+    accent: '#D4A520',
+    accentLight: '#E5B830',
+    text: '#F5F5F5',
+    textSecondary: '#D4C4B0',
+    border: '#5A4030',
   },
 };
 
-// C반 테마 - 에메랄드 & 실버 (고급스럽고 차분함)
+// C반 테마 - 에메랄드 & 그레이 실버 (고급스럽고 차분함)
 const themeC: Theme = {
   id: 'C',
   meta: {
@@ -85,15 +85,15 @@ const themeC: Theme = {
   colors: {
     background: '#0D3D2E',
     backgroundSecondary: '#165A45',
-    accent: '#C0C0C0',
-    accentLight: '#E0E0E0',
+    accent: '#8A8D93',
+    accentLight: '#A5A8AD',
     text: '#FFFFFF',
     textSecondary: '#B8D4CA',
     border: '#2E7A63',
   },
 };
 
-// D반 테마 - 네이비 & 브론즈 (지적이고 우아함)
+// D반 테마 - 다크 네이비 & 브론즈 (지적이고 우아함)
 const themeD: Theme = {
   id: 'D',
   meta: {
@@ -101,13 +101,13 @@ const themeD: Theme = {
     mood: '지적이고 우아함',
   },
   colors: {
-    background: '#1A2744',
-    backgroundSecondary: '#2A3B5C',
-    accent: '#CD7F32',
-    accentLight: '#DBA05C',
+    background: '#0E1927',
+    backgroundSecondary: '#1A2A3D',
+    accent: '#907355',
+    accentLight: '#A68A70',
     text: '#FFFFFF',
     textSecondary: '#B8C4D9',
-    border: '#3D5280',
+    border: '#2A3D52',
   },
 };
 

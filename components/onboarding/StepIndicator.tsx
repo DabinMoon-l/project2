@@ -92,19 +92,6 @@ export default function StepIndicator({
                 stepNumber
               )}
 
-              {/* 현재 단계 펄스 효과 */}
-              {isCurrent && (
-                <motion.div
-                  className="absolute inset-0 rounded-full bg-[var(--theme-accent)]"
-                  initial={{ opacity: 0.5, scale: 1 }}
-                  animate={{ opacity: 0, scale: 1.5 }}
-                  transition={{
-                    duration: 1.5,
-                    repeat: Infinity,
-                    ease: 'easeOut',
-                  }}
-                />
-              )}
             </motion.div>
 
             {/* 단계 사이 연결선 */}

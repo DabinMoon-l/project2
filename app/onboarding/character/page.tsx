@@ -3,14 +3,14 @@
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import Image from 'next/image';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
 import { Button } from '@/components/common';
 import StepIndicator, { ONBOARDING_STEPS } from '@/components/onboarding/StepIndicator';
-import CharacterPreview, {
+import {
   HAIR_STYLES,
   SKIN_COLORS,
-  BEARD_STYLES,
   DEFAULT_CHARACTER_OPTIONS,
   type CharacterOptions,
 } from '@/components/onboarding/CharacterPreview';
@@ -18,11 +18,11 @@ import CharacterPreview, {
 /**
  * 현재 선택 중인 옵션 탭
  */
-type OptionTab = 'hair' | 'skin' | 'beard';
+type OptionTab = 'hair' | 'skin';
 
 /**
  * 캐릭터 생성 페이지
- * 온보딩 2단계: 머리스타일, 피부색, 수염 선택
+ * 온보딩 2단계: 머리스타일, 피부색 선택
  */
 export default function CharacterPage() {
   const router = useRouter();
@@ -47,17 +47,6 @@ export default function CharacterPage() {
   );
 
   /**
-   * 랜덤 캐릭터 생성
-   */
-  const handleRandomize = useCallback(() => {
-    setOptions({
-      hairStyle: Math.floor(Math.random() * HAIR_STYLES.length),
-      skinColor: Math.floor(Math.random() * SKIN_COLORS.length),
-      beard: Math.floor(Math.random() * BEARD_STYLES.length),
-    });
-  }, []);
-
-  /**
    * 폼 제출 핸들러
    */
   const handleSubmit = async () => {
@@ -74,7 +63,6 @@ export default function CharacterPage() {
             character: {
               hairStyle: options.hairStyle,
               skinColor: options.skinColor,
-              beard: options.beard,
             },
             onboardingStep: 3,
             updatedAt: serverTimestamp(),
@@ -96,145 +84,21 @@ export default function CharacterPage() {
     }
   };
 
-  /**
-   * 탭 정보
-   */
-  const tabs: { id: OptionTab; label: string; icon: string }[] = [
-    { id: 'hair', label: '머리', icon: '💇' },
-    { id: 'skin', label: '피부', icon: '🎨' },
-    { id: 'beard', label: '수염', icon: '🧔' },
-  ];
+  // 캐릭터 이미지 경로
+  const characterImagePath = `/images/characters/skin_${options.skinColor}_hair_${options.hairStyle}.png`;
 
-  /**
-   * 현재 탭에 해당하는 옵션 목록 렌더링
-   */
-  const renderOptions = () => {
-    switch (activeTab) {
-      case 'hair':
-        return (
-          <div className="grid grid-cols-4 gap-2">
-            {HAIR_STYLES.map((style, index) => (
-              <motion.button
-                key={style}
-                type="button"
-                onClick={() => handleOptionChange('hairStyle', index)}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className={`
-                  px-3 py-2.5 rounded-xl text-xs font-medium
-                  transition-all duration-200
-                  ${
-                    options.hairStyle === index
-                      ? 'bg-[var(--theme-accent)] text-white shadow-lg'
-                      : 'bg-white/10 text-[var(--theme-text)] border border-[var(--theme-border)] hover:bg-white/20'
-                  }
-                `}
-              >
-                {style}
-              </motion.button>
-            ))}
-          </div>
-        );
-
-      case 'skin':
-        return (
-          <div className="grid grid-cols-5 gap-3">
-            {SKIN_COLORS.map((skin, index) => (
-              <motion.button
-                key={skin.name}
-                type="button"
-                onClick={() => handleOptionChange('skinColor', index)}
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.95 }}
-                className={`
-                  relative flex flex-col items-center justify-center
-                  p-2 rounded-xl
-                  transition-all duration-200
-                  ${
-                    options.skinColor === index
-                      ? 'ring-2 ring-[var(--theme-accent)] ring-offset-2 ring-offset-[var(--theme-background)] shadow-lg'
-                      : 'hover:bg-white/10'
-                  }
-                `}
-                title={skin.name}
-              >
-                {/* 색상 원 */}
-                <div
-                  className="w-10 h-10 rounded-full shadow-inner mb-1"
-                  style={{ backgroundColor: skin.color }}
-                />
-                {/* 이모지 */}
-                <span className="text-lg">{skin.emoji}</span>
-                {/* 선택 표시 */}
-                {options.skinColor === index && (
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center"
-                  >
-                    <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                    </svg>
-                  </motion.div>
-                )}
-              </motion.button>
-            ))}
-          </div>
-        );
-
-      case 'beard':
-        return (
-          <div className="grid grid-cols-2 gap-3">
-            {BEARD_STYLES.map((style, index) => (
-              <motion.button
-                key={style}
-                type="button"
-                onClick={() => handleOptionChange('beard', index)}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className={`
-                  flex items-center justify-center gap-2
-                  px-4 py-4 rounded-2xl text-base font-medium
-                  transition-all duration-200
-                  ${
-                    options.beard === index
-                      ? 'bg-[var(--theme-accent)] text-white shadow-lg'
-                      : 'bg-white/10 text-[var(--theme-text)] border border-[var(--theme-border)] hover:bg-white/20'
-                  }
-                `}
-              >
-                {/* 수염 아이콘 */}
-                <span className="text-2xl">
-                  {index === 0 ? '😊' : index === 1 ? '🥸' : index === 2 ? '🧔' : '🧔‍♂️'}
-                </span>
-                <span>{style}</span>
-              </motion.button>
-            ))}
-          </div>
-        );
-    }
-  };
-
-  /**
-   * 페이지 전환 애니메이션 설정
-   */
-  const pageVariants = {
-    initial: { opacity: 0, x: 50 },
-    animate: { opacity: 1, x: 0 },
-    exit: { opacity: 0, x: -50 },
-  };
+  // 현재 탭의 옵션 목록
+  const currentOptions = activeTab === 'hair' ? HAIR_STYLES : SKIN_COLORS;
 
   return (
     <motion.div
       className="min-h-screen bg-[var(--theme-background)] flex flex-col"
-      variants={pageVariants}
-      initial="initial"
-      animate="animate"
-      exit="exit"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
     >
       {/* 헤더 */}
-      <header className="sticky top-0 z-10 bg-[var(--theme-background)]/95 backdrop-blur-sm border-b border-[var(--theme-border)] px-4 py-3">
+      <header className="sticky top-0 z-20 bg-[var(--theme-background)]/95 backdrop-blur-sm border-b border-[var(--theme-border)] px-4 py-3">
         <div className="flex items-center justify-between">
           <button
             onClick={() => router.back()}
@@ -246,126 +110,177 @@ export default function CharacterPage() {
             </svg>
           </button>
           <h1 className="text-lg font-semibold text-[var(--theme-text)]">캐릭터 만들기</h1>
-          {/* 랜덤 버튼 */}
-          <motion.button
-            onClick={handleRandomize}
-            whileHover={{ scale: 1.1, rotate: 180 }}
-            whileTap={{ scale: 0.9 }}
-            className="p-2 -mr-2 text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10 rounded-full"
-            aria-label="랜덤 캐릭터"
-            title="랜덤 생성"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-              />
-            </svg>
-          </motion.button>
+          <div className="w-10" />
         </div>
         <StepIndicator currentStep={2} />
       </header>
 
       {/* 메인 컨텐츠 */}
-      <main className="flex-1 px-4 py-6 overflow-y-auto">
-        <div className="max-w-md mx-auto">
-          {/* 캐릭터 미리보기 */}
-          <motion.div
-            className="flex flex-col items-center mb-8"
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
+      <main className="flex-1 relative overflow-hidden">
+        {/* 비디오 배경 - 전체 화면 */}
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover"
+        >
+          <source src="/videos/character-bg.mp4" type="video/mp4" />
+        </video>
+
+        {/* 오버레이 */}
+        <div className="absolute inset-0 bg-black/30" />
+
+        {/* 왼쪽 사이드 - 탭 선택 (절대 위치) */}
+        <div className="absolute left-4 top-1/2 -translate-y-1/2 z-20 flex flex-col gap-4">
+          <button
+            onClick={() => setActiveTab('hair')}
+            className={`
+              px-6 py-4 rounded-xl transition-all duration-200 text-base font-medium
+              ${activeTab === 'hair'
+                ? 'bg-[var(--theme-accent)] text-white'
+                : 'bg-black/40 text-white/80 hover:bg-black/60'
+              }
+            `}
           >
-            <div className="relative">
-              {/* 배경 장식 */}
-              <div className="absolute inset-0 -m-8 bg-gradient-to-b from-[var(--theme-accent)]/20 to-transparent rounded-full blur-2xl" />
-              <CharacterPreview options={options} size="lg" animated />
-            </div>
+            머리
+          </button>
+          <button
+            onClick={() => setActiveTab('skin')}
+            className={`
+              px-6 py-4 rounded-xl transition-all duration-200 text-base font-medium
+              ${activeTab === 'skin'
+                ? 'bg-[var(--theme-accent)] text-white'
+                : 'bg-black/40 text-white/80 hover:bg-black/60'
+              }
+            `}
+          >
+            피부
+          </button>
+        </div>
 
-            {/* 캐릭터 정보 태그 */}
-            <motion.div
-              className="flex gap-2 mt-8"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.3 }}
-            >
-              <span className="px-3 py-1 bg-[var(--theme-accent)]/20 text-[var(--theme-accent)] rounded-full text-xs font-medium">
-                {HAIR_STYLES[options.hairStyle]}
-              </span>
-              <span className="px-3 py-1 bg-[var(--theme-accent)]/20 text-[var(--theme-accent)] rounded-full text-xs font-medium">
-                {SKIN_COLORS[options.skinColor].name}
-              </span>
-              <span className="px-3 py-1 bg-[var(--theme-accent)]/20 text-[var(--theme-accent)] rounded-full text-xs font-medium">
-                {BEARD_STYLES[options.beard]}
-              </span>
-            </motion.div>
+        {/* 중앙 - 캐릭터 이미지 */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <motion.div
+            key={`${options.hairStyle}-${options.skinColor}`}
+            className="relative z-10 w-64 h-80"
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+          >
+            <Image
+              src={characterImagePath}
+              alt="캐릭터 미리보기"
+              fill
+              className="object-contain drop-shadow-2xl"
+              priority
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.src = '/images/characters/default.png';
+              }}
+            />
           </motion.div>
+        </div>
 
-          {/* 옵션 탭 */}
-          <div className="mb-4">
-            <div className="flex bg-white/5 rounded-xl p-1">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`
-                    flex-1 flex items-center justify-center gap-2
-                    py-2.5 rounded-lg text-sm font-medium
-                    transition-all duration-200
-                    ${
-                      activeTab === tab.id
-                        ? 'bg-[var(--theme-accent)] text-white shadow-md'
-                        : 'text-[var(--theme-text-secondary)] hover:text-[var(--theme-text)]'
-                    }
-                  `}
-                >
-                  <span>{tab.icon}</span>
-                  <span>{tab.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
+        {/* 선택 정보 표시 */}
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex gap-3">
+          <span className="px-4 py-2 bg-black/50 backdrop-blur-sm text-white rounded-full text-sm font-medium">
+            {HAIR_STYLES[options.hairStyle]?.name}
+          </span>
+          <span className="px-4 py-2 bg-black/50 backdrop-blur-sm text-white rounded-full text-sm font-medium">
+            {SKIN_COLORS[options.skinColor]?.name}
+          </span>
+        </div>
 
-          {/* 옵션 선택 영역 */}
+        {/* 오른쪽 사이드 - 옵션 선택 (절대 위치) */}
+        <div className="absolute right-4 top-1/2 -translate-y-1/2 z-20">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
+              className="flex flex-col gap-2"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.2 }}
-              className="bg-white/5 rounded-2xl p-4 min-h-[200px]"
             >
-              <h3 className="text-sm font-medium text-[var(--theme-text-secondary)] mb-4">
-                {activeTab === 'hair' && `머리스타일 (${HAIR_STYLES.length}종)`}
-                {activeTab === 'skin' && `피부색 (${SKIN_COLORS.length}종)`}
-                {activeTab === 'beard' && `수염 (${BEARD_STYLES.length}종)`}
-              </h3>
-              {renderOptions()}
+              {currentOptions.map((option, index) => {
+                const isSelected = activeTab === 'hair'
+                  ? options.hairStyle === index
+                  : options.skinColor === index;
+
+                // 옵션별 썸네일 이미지 경로
+                const thumbnailPath = activeTab === 'hair'
+                  ? `/images/characters/thumbnails/hair_${index}.png`
+                  : `/images/characters/thumbnails/skin_${index}.png`;
+
+                return (
+                  <motion.button
+                    key={option.id}
+                    onClick={() => handleOptionChange(
+                      activeTab === 'hair' ? 'hairStyle' : 'skinColor',
+                      index
+                    )}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className={`
+                      relative w-20 h-20 rounded-xl overflow-hidden
+                      transition-all duration-200 border-2
+                      ${isSelected
+                        ? 'border-[var(--theme-accent)] shadow-lg'
+                        : 'border-white/50 hover:border-white'
+                      }
+                    `}
+                  >
+                    {/* 썸네일 이미지 */}
+                    <Image
+                      src={thumbnailPath}
+                      alt={option.name}
+                      fill
+                      className="object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.src = '/images/characters/thumbnails/default.png';
+                      }}
+                    />
+
+                    {/* 선택 표시 */}
+                    {isSelected && (
+                      <motion.div
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        className="absolute top-1 right-1 w-5 h-5 bg-[var(--theme-accent)] rounded-full flex items-center justify-center"
+                      >
+                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </motion.div>
+                    )}
+
+                    {/* 라벨 */}
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/60 py-1">
+                      <p className="text-[10px] text-white text-center truncate px-1">
+                        {option.name}
+                      </p>
+                    </div>
+                  </motion.button>
+                );
+              })}
             </motion.div>
           </AnimatePresence>
         </div>
       </main>
 
       {/* 하단 버튼 영역 */}
-      <footer className="sticky bottom-0 bg-[var(--theme-background)]/95 backdrop-blur-sm border-t border-[var(--theme-border)] px-4 py-4 safe-area-pb">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
+      <footer className="sticky bottom-0 z-20 bg-[var(--theme-background)]/95 backdrop-blur-sm border-t border-[var(--theme-border)] px-4 py-4 safe-area-pb">
+        <Button
+          onClick={handleSubmit}
+          loading={isSubmitting}
+          fullWidth
+          size="lg"
+          variant="secondary"
         >
-          <Button
-            onClick={handleSubmit}
-            loading={isSubmitting}
-            fullWidth
-            size="lg"
-            className="bg-[var(--theme-accent)] hover:bg-[var(--theme-accent-light)]"
-          >
-            캐릭터 저장
-          </Button>
-        </motion.div>
+          캐릭터 저장
+        </Button>
       </footer>
     </motion.div>
   );

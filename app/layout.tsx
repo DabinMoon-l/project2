@@ -1,28 +1,29 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Noto_Sans_KR } from "next/font/google";
 import "./globals.css";
 import { WebVitalsReporter } from "@/components/common/WebVitalsReporter";
 
-// 최적화된 폰트 설정 (next/font)
-const inter = Inter({
+// 노토 산스 KR 폰트 설정
+const notoSansKR = Noto_Sans_KR({
+  weight: ["400", "500", "700"],
   subsets: ["latin"],
-  display: "swap", // 폰트 로딩 최적화
+  display: "swap",
   preload: true,
-  variable: "--font-inter",
+  variable: "--font-noto-sans-kr",
 });
 
 export const metadata: Metadata = {
-  title: "용사 퀴즈",
-  description: "용사 퀴즈 앱",
+  title: "토끼키우기",
+  description: "퀴즈를 풀고 토끼를 성장시키는 학습 앱",
   // PWA manifest 링크 설정
   manifest: "/manifest.json",
   // SEO 최적화
-  keywords: ["퀴즈", "학습", "대학", "게이미피케이션"],
-  authors: [{ name: "용사 퀴즈 팀" }],
+  keywords: ["퀴즈", "학습", "대학", "게이미피케이션", "토끼"],
+  authors: [{ name: "토끼키우기 팀" }],
   // Open Graph
   openGraph: {
-    title: "용사 퀴즈",
-    description: "대학 수업 보조 앱 - 퀴즈와 게시판으로 함께 성장하세요",
+    title: "토끼키우기",
+    description: "퀴즈를 풀고 토끼를 성장시키는 학습 앱",
     type: "website",
     locale: "ko_KR",
   },
@@ -43,7 +44,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko" className={inter.variable}>
+    <html lang="ko" className={notoSansKR.variable}>
       <head>
         {/* DNS prefetch 최적화 */}
         <link rel="dns-prefetch" href="https://firebasestorage.googleapis.com" />
@@ -51,7 +52,7 @@ export default function RootLayout({
         {/* Preconnect for faster loading */}
         <link rel="preconnect" href="https://firebasestorage.googleapis.com" crossOrigin="anonymous" />
       </head>
-      <body className={`${inter.className} antialiased`}>
+      <body className={`${notoSansKR.className} antialiased`}>
         {children}
         {/* Web Vitals 리포터 (클라이언트 전용) */}
         <WebVitalsReporter />

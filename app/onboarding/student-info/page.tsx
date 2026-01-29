@@ -17,7 +17,6 @@ interface StudentInfoFormData {
   studentId: string;    // 학번
   grade: string;        // 학년
   classType: ClassType; // 반 (A/B/C/D)
-  major: string;        // 전공
 }
 
 /**
@@ -27,18 +26,17 @@ interface FormErrors {
   studentId?: string;
   grade?: string;
   classType?: string;
-  major?: string;
 }
 
 // 학년 옵션
-const GRADE_OPTIONS = ['1학년', '2학년', '3학년', '4학년', '5학년 이상'];
+const GRADE_OPTIONS = ['1학년', '2학년'];
 
-// 반 옵션
+// 반 옵션 (원래 배경색 사용)
 const CLASS_OPTIONS: { value: ClassType; label: string; color: string }[] = [
-  { value: 'A', label: 'A반', color: '#D4AF37' },
-  { value: 'B', label: 'B반', color: '#3D2B1F' },
-  { value: 'C', label: 'C반', color: '#C0C0C0' },
-  { value: 'D', label: 'D반', color: '#CD7F32' },
+  { value: 'A', label: 'A반', color: '#4A0E0E' },  // 버건디 (빨간색)
+  { value: 'B', label: 'B반', color: '#3D2B1F' },  // 다크 브라운
+  { value: 'C', label: 'C반', color: '#0D3D2E' },  // 에메랄드
+  { value: 'D', label: 'D반', color: '#0E1927' },  // 다크 네이비
 ];
 
 /**
@@ -54,7 +52,6 @@ export default function StudentInfoPage() {
     studentId: '',
     grade: '',
     classType: 'A',
-    major: '',
   });
 
   // 에러 상태
@@ -105,13 +102,6 @@ export default function StudentInfoPage() {
       newErrors.grade = '학년을 선택해주세요';
     }
 
-    // 전공 검사 (2자 이상)
-    if (!formData.major) {
-      newErrors.major = '전공을 입력해주세요';
-    } else if (formData.major.length < 2) {
-      newErrors.major = '전공은 2자 이상 입력해주세요';
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   }, [formData]);
@@ -136,7 +126,6 @@ export default function StudentInfoPage() {
             studentId: formData.studentId,
             grade: formData.grade,
             classType: formData.classType,
-            major: formData.major,
             onboardingStep: 2, // 다음 단계로 표시
             updatedAt: serverTimestamp(),
           },
@@ -219,7 +208,7 @@ export default function StudentInfoPage() {
             <Input
               type="text"
               inputMode="numeric"
-              placeholder="학번을 입력하세요 (예: 20231234)"
+              placeholder="학번을 입력하세요 (예: 25010501)"
               value={formData.studentId}
               onChange={(e) => handleInputChange('studentId', e.target.value)}
               error={errors.studentId}
@@ -232,7 +221,7 @@ export default function StudentInfoPage() {
             <label className="block text-sm font-medium text-[var(--theme-text)] mb-2">
               학년 *
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-3">
               {GRADE_OPTIONS.map((grade) => (
                 <motion.button
                   key={grade}
@@ -322,20 +311,6 @@ export default function StudentInfoPage() {
             )}
           </div>
 
-          {/* 전공 입력 */}
-          <div>
-            <label className="block text-sm font-medium text-[var(--theme-text)] mb-2">
-              전공 *
-            </label>
-            <Input
-              type="text"
-              placeholder="전공을 입력하세요 (예: 컴퓨터공학과)"
-              value={formData.major}
-              onChange={(e) => handleInputChange('major', e.target.value)}
-              error={errors.major}
-              maxLength={30}
-            />
-          </div>
         </motion.div>
       </main>
 
@@ -351,7 +326,7 @@ export default function StudentInfoPage() {
             loading={isSubmitting}
             fullWidth
             size="lg"
-            className="bg-[var(--theme-accent)] hover:bg-[var(--theme-accent-light)]"
+            variant="secondary"
           >
             다음 단계로
           </Button>
