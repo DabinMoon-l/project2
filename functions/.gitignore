@@ -1,0 +1,26 @@
+# 빌드 결과물
+lib/
+
+# 의존성
+node_modules/
+
+# 로그
+*.log
+
+# 환경 변수
+.env
+.env.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Firebase
+.firebase/
+firebase-debug.log
