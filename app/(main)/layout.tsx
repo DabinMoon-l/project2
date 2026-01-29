@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeProvider } from '@/styles/themes/ThemeProvider';
 import { useRequireAuth } from '@/lib/hooks/useAuth';
 import Navigation from '@/components/common/Navigation';
+import { NotificationProvider } from '@/components/common';
 import type { ClassType } from '@/styles/themes';
 
 /**
@@ -68,23 +69,25 @@ export default function MainLayout({
 
   return (
     <ThemeProvider initialClassType={userClassType}>
-      <div className="min-h-screen pb-20">
-        {/* 페이지 전환 애니메이션 */}
-        <AnimatePresence mode="wait">
-          <motion.main
-            key="main-content"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.2 }}
-          >
-            {children}
-          </motion.main>
-        </AnimatePresence>
+      <NotificationProvider>
+        <div className="min-h-screen pb-20">
+          {/* 페이지 전환 애니메이션 */}
+          <AnimatePresence mode="wait">
+            <motion.main
+              key="main-content"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              {children}
+            </motion.main>
+          </AnimatePresence>
 
-        {/* 하단 네비게이션 바 */}
-        <Navigation role={isProfessor ? 'professor' : 'student'} />
-      </div>
+          {/* 하단 네비게이션 바 */}
+          <Navigation role={isProfessor ? 'professor' : 'student'} />
+        </div>
+      </NotificationProvider>
     </ThemeProvider>
   );
 }

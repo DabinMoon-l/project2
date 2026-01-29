@@ -1,8 +1,8 @@
 # 용사 퀴즈 개발 진행 상황
 
 ## 현재 상태
-- **마지막 업데이트**: Phase 3-23 프로필 및 설정 화면 완료
-- **다음 단계**: Phase 3-25 알림 시스템 (FCM)
+- **마지막 업데이트**: Phase 3-25 알림 시스템 (FCM) 완료
+- **다음 단계**: Phase 3-26 시즌 리셋 및 학기 전환 로직
 
 ## 완료된 단계
 
@@ -35,7 +35,7 @@
 - [x] #21 교수님 학생 모니터링 ✅
 - [x] #22 교수님 문제 분석 ✅
 - [x] #23 프로필 및 설정 화면 ✅
-- [ ] #25 알림 시스템 (FCM)
+- [x] #25 알림 시스템 (FCM) ✅
 - [ ] #26 시즌 리셋 및 학기 전환 로직
 
 ### Phase 4: 최적화 및 배포
@@ -162,6 +162,36 @@ functions/            # Cloud Functions ✅
 - 개인정보 설정 (프로필 공개, 랭킹 표시)
 - 로그아웃 기능
 - 설정 초기화 기능
+
+### #25 알림 시스템 (FCM) ✅ 완료
+
+#### 생성된 파일:
+- [x] `lib/fcm.ts` - FCM 초기화 및 유틸리티
+- [x] `lib/hooks/useNotification.ts` - 알림 관리 커스텀 훅
+- [x] `public/firebase-messaging-sw.js` - FCM 서비스 워커
+- [x] `components/common/NotificationProvider.tsx` - 알림 프로바이더
+- [x] `components/common/NotificationPrompt.tsx` - 알림 권한 요청 배너
+- [x] `functions/src/notification.ts` - 알림 전송 Cloud Functions
+
+#### 수정된 파일:
+- [x] `components/common/index.ts` - NotificationProvider, NotificationPrompt export 추가
+- [x] `functions/src/index.ts` - 알림 Functions export 추가
+- [x] `public/manifest.json` - gcm_sender_id 추가
+- [x] `app/(main)/layout.tsx` - NotificationProvider 적용
+- [x] `app/(main)/page.tsx` - NotificationPrompt 추가
+
+#### 주요 기능:
+- FCM 푸시 알림 권한 요청 및 토큰 관리
+- 포그라운드/백그라운드 알림 처리
+- 알림 토스트 UI (포그라운드)
+- 알림 클릭 시 해당 페이지로 라우팅
+- Cloud Functions를 통한 알림 전송:
+  - 새 퀴즈 생성 시 대상 반 알림
+  - 피드백 답변 시 작성자 알림
+  - 게시판 댓글/대댓글 알림
+  - 랭킹 1등 달성 알림
+- 교수님 전용 알림 전송 기능 (개인/반별)
+- 알림 토픽 구독/해제
 
 ## 명령어
 

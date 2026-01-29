@@ -43,6 +43,19 @@ export {
 } from "./board";
 
 // ============================================
+// 알림 관련 Functions
+// ============================================
+export {
+  sendNotificationToUser,
+  sendNotificationToClass,
+  onNewQuizCreated,
+  onFeedbackReplied,
+  onBoardCommentCreated,
+  onBoardReplyCreated,
+  onRankingChange,
+} from "./notification";
+
+// ============================================
 // Rate Limit 관련 Functions
 // ============================================
 import { checkRateLimit, cleanupRateLimits, RateLimitType } from "./rateLimit";

@@ -33,3 +33,9 @@ export {
 // Navigation 컴포넌트
 export { default as Navigation } from './Navigation';
 export type { UserRole } from './Navigation';
+
+// NotificationProvider 컴포넌트
+export { default as NotificationProvider, useNotificationContext } from './NotificationProvider';
+
+// NotificationPrompt 컴포넌트
+export { default as NotificationPrompt } from './NotificationPrompt';

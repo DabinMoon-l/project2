@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import { useTheme } from '@/styles/themes/useTheme';
 import { useAuth } from '@/lib/hooks/useAuth';
 import Header from '@/components/common/Header';
+import { NotificationPrompt } from '@/components/common';
 import {
   HomeCharacter,
   StatsCard,
@@ -166,6 +167,9 @@ export default function HomePage() {
 
       {/* 메인 컨텐츠 */}
       <main className="px-4 pt-4 pb-8">
+        {/* 알림 권한 요청 배너 */}
+        <NotificationPrompt variant="card" className="mb-4" />
+
         {/* 캐릭터 섹션 */}
         <motion.section
           className="flex justify-center mb-6"
