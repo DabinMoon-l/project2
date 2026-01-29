@@ -1,8 +1,8 @@
 # 용사 퀴즈 개발 진행 상황
 
 ## 현재 상태
-- **마지막 업데이트**: Phase 3-20 교수님 퀴즈 관리 완료
-- **다음 단계**: Phase 3-21 교수님 학생 모니터링
+- **마지막 업데이트**: Phase 3-21 교수님 학생 모니터링 완료
+- **다음 단계**: Phase 3-22 교수님 문제 분석
 
 ## 완료된 단계
 
@@ -32,7 +32,7 @@
 - [x] #24 Cloud Functions (골드/경험치 처리)
 - [x] #19 교수님 홈 대시보드 ✅
 - [x] #20 교수님 퀴즈 관리 ✅
-- [ ] #21 교수님 학생 모니터링
+- [x] #21 교수님 학생 모니터링 ✅
 - [ ] #22 교수님 문제 분석
 - [ ] #23 프로필 및 설정 화면
 - [ ] #25 알림 시스템 (FCM)
@@ -105,9 +105,22 @@ functions/            # Cloud Functions ✅
 - [x] `app/(main)/professor/quiz/[id]/edit/page.tsx` - 퀴즈 수정 페이지
 - [x] `components/professor/index.ts` - export 업데이트
 
-### #21 학생 모니터링
-- `app/(main)/professor/students/page.tsx`
-- 학생별 진도 현황, 참여율, 점수
+### #21 학생 모니터링 ✅ 완료
+
+#### 생성된 파일:
+- [x] `lib/hooks/useProfessorStudents.ts` - 학생 데이터 조회 훅
+- [x] `components/professor/StudentListItem.tsx` - 학생 카드 컴포넌트
+- [x] `components/professor/StudentList.tsx` - 학생 목록 (무한 스크롤)
+- [x] `components/professor/StudentDetailModal.tsx` - 학생 상세 모달
+- [x] `components/professor/StudentStats.tsx` - 반별 통계 요약
+- [x] `app/(main)/professor/students/page.tsx` - 학생 모니터링 페이지
+- [x] `components/professor/index.ts` - export 업데이트
+
+#### 주요 기능:
+- 학생 목록 조회 (반별 필터, 검색, 정렬)
+- 학생 상세 정보 (퀴즈 기록, 피드백 내역)
+- 반별 통계 (참여율, 평균 점수, 1등 학생)
+- 무한 스크롤 지원
 
 ### #22 문제 분석
 - `app/(main)/professor/analysis/page.tsx`

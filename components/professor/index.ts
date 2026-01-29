@@ -15,3 +15,9 @@ export { default as QuizListItem } from './QuizListItem';
 export { default as QuizList } from './QuizList';
 export { default as QuizDeleteModal } from './QuizDeleteModal';
 export { default as QuizEditorForm } from './QuizEditorForm';
+
+// 학생 모니터링 컴포넌트
+export { default as StudentListItem } from './StudentListItem';
+export { default as StudentList } from './StudentList';
+export { default as StudentDetailModal } from './StudentDetailModal';
+export { default as StudentStats } from './StudentStats';
