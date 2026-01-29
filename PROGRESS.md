@@ -1,8 +1,8 @@
 # 용사 퀴즈 개발 진행 상황
 
 ## 현재 상태
-- **마지막 업데이트**: Phase 3-20 교수님 퀴즈 관리 (50% 완료)
-- **다음 단계**: Phase 3-20 교수님 퀴즈 관리 계속
+- **마지막 업데이트**: Phase 3-20 교수님 퀴즈 관리 완료
+- **다음 단계**: Phase 3-21 교수님 학생 모니터링
 
 ## 완료된 단계
 
@@ -31,7 +31,7 @@
 - [x] #18 게시판 (To 교수님, 우리들끼리)
 - [x] #24 Cloud Functions (골드/경험치 처리)
 - [x] #19 교수님 홈 대시보드 ✅
-- [ ] #20 교수님 퀴즈 관리 ⬅️ **진행 중 (50%)**
+- [x] #20 교수님 퀴즈 관리 ✅
 - [ ] #21 교수님 학생 모니터링
 - [ ] #22 교수님 문제 분석
 - [ ] #23 프로필 및 설정 화면
@@ -89,23 +89,21 @@ functions/            # Cloud Functions ✅
 
 ## 다음 단계 작업 내용
 
-### #20 교수님 퀴즈 관리 (진행 중)
+### #20 교수님 퀴즈 관리 ✅ 완료
 
-#### 완료된 컴포넌트 (Phase 1-2):
+#### 생성된 파일:
 - [x] `lib/hooks/useProfessorQuiz.ts` - Firestore CRUD 훅
 - [x] `components/professor/TargetClassSelector.tsx` - 대상 반 선택 UI
 - [x] `components/professor/PublishToggle.tsx` - 공개/비공개 토글
 - [x] `components/professor/QuizListItem.tsx` - 개별 퀴즈 카드
 - [x] `components/professor/QuizList.tsx` - 목록 컴포넌트
 - [x] `components/professor/QuizDeleteModal.tsx` - 삭제 확인 모달
-
-#### 남은 작업 (Phase 3-4):
-- [ ] `components/professor/QuizEditorForm.tsx` - 퀴즈 메타정보 폼
-- [ ] `app/(main)/professor/quiz/page.tsx` - 퀴즈 목록 페이지
-- [ ] `app/(main)/professor/quiz/create/page.tsx` - 퀴즈 출제 페이지
-- [ ] `app/(main)/professor/quiz/[id]/page.tsx` - 퀴즈 상세 페이지
-- [ ] `app/(main)/professor/quiz/[id]/edit/page.tsx` - 퀴즈 수정 페이지
-- [ ] `components/professor/index.ts` - export 업데이트
+- [x] `components/professor/QuizEditorForm.tsx` - 퀴즈 메타정보 폼
+- [x] `app/(main)/professor/quiz/page.tsx` - 퀴즈 목록 페이지
+- [x] `app/(main)/professor/quiz/create/page.tsx` - 퀴즈 출제 페이지
+- [x] `app/(main)/professor/quiz/[id]/page.tsx` - 퀴즈 상세 페이지
+- [x] `app/(main)/professor/quiz/[id]/edit/page.tsx` - 퀴즈 수정 페이지
+- [x] `components/professor/index.ts` - export 업데이트
 
 ### #21 학생 모니터링
 - `app/(main)/professor/students/page.tsx`
