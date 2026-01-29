@@ -1,8 +1,8 @@
 # 용사 퀴즈 개발 진행 상황
 
 ## 현재 상태
-- **마지막 업데이트**: Phase 3-26 시즌 리셋 및 학기 전환 로직 완료
-- **다음 단계**: Phase 4-28 성능 테스트 및 최적화
+- **마지막 업데이트**: Phase 4-28 성능 테스트 및 최적화 완료
+- **다음 단계**: Phase 4-29 애니메이션 최적화
 
 ## 개선 사항 (Phase 4-27 후속)
 
@@ -80,7 +80,7 @@
 
 ### Phase 4: 최적화 및 배포
 - [x] #27 아키텍처 리뷰 및 코드 리뷰 ✅
-- [ ] #28 성능 테스트 및 최적화
+- [x] #28 성능 테스트 및 최적화 ✅
 - [ ] #29 애니메이션 최적화
 - [ ] #30 PWA 및 오프라인 모드 테스트
 - [ ] #31 Playwright E2E 테스트
@@ -258,6 +258,28 @@ functions/            # Cloud Functions ✅
   - 유지: 골드, 캐릭터 외형, 뱃지
 - 교수님 설정 페이지 (시즌 관리 + 기타 설정)
 - Cloud Functions `resetSeason` 연동
+
+### #28 성능 테스트 및 최적화 ✅ 완료
+
+#### 기존 설정 확인
+- **번들 분석기**: `@next/bundle-analyzer` 설치 및 `npm run analyze` 스크립트 설정 완료
+- **Web Vitals**: `web-vitals` 패키지 설치, `WebVitalsReporter` 컴포넌트 적용
+- **폰트 최적화**: `next/font` (Inter) 설정 완료 (`display: swap`, `preload`)
+- **이미지 최적화**: next.config.mjs에 AVIF/WebP 포맷 설정
+- **DNS Prefetch**: Firebase 도메인 사전 연결 설정
+
+#### 최적화 설정 (next.config.mjs)
+- `optimizePackageImports`: framer-motion, firebase 번들 최적화
+- `removeConsole`: 프로덕션 빌드 시 console.log 자동 제거 (error, warn 유지)
+- 이미지 최적화: AVIF/WebP 포맷, 다양한 디바이스 크기 대응
+
+#### 빌드 결과
+- 빌드 성공 ✅
+- 주요 청크 크기:
+  - 공통 프레임워크: ~122KB (React, Next.js)
+  - Firebase 관련: ~111KB
+  - Framer Motion: ~107KB
+  - 페이지별 청크: 6KB ~ 49KB
 
 ### #27 아키텍처 리뷰 및 코드 리뷰 ✅ 완료
 
