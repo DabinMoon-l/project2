@@ -149,8 +149,10 @@ export default function LoginPage() {
           }
         } catch (err) {
           console.error('로그인 처리 에러:', err);
-          // 에러 발생 시 온보딩으로 이동
-          router.replace('/onboarding');
+          // 에러 발생 시에도 홈으로 시도 (layout에서 다시 체크함)
+          router.replace('/');
+        } finally {
+          setIsProcessing(false);
         }
       }
     };
