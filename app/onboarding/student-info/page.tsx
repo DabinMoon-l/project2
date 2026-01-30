@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { signOut } from 'firebase/auth';
 import { db, auth } from '@/lib/firebase';
 import { Button, Input } from '@/components/common';
 import StepIndicator, { ONBOARDING_STEPS } from '@/components/onboarding/StepIndicator';
@@ -168,7 +169,11 @@ export default function StudentInfoPage() {
       <header className="sticky top-0 z-10 bg-[var(--theme-background)]/95 backdrop-blur-sm border-b border-[var(--theme-border)] px-4 py-3">
         <div className="flex items-center justify-between">
           <button
-            onClick={() => router.replace('/login')}
+            onClick={async () => {
+              // 로그아웃 후 로그인 페이지로 이동
+              await signOut(auth);
+              router.replace('/login');
+            }}
             className="p-2 -ml-2 text-[var(--theme-text-secondary)] hover:text-[var(--theme-text)]"
             aria-label="뒤로가기"
           >

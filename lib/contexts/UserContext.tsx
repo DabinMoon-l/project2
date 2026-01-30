@@ -93,8 +93,8 @@ export function UserProvider({ children }: UserProviderProps) {
         if (docSnap.exists()) {
           const data = docSnap.data();
 
-          // 온보딩이 완료되지 않았으면 profile을 null로 설정
-          if (!data.onboardingCompleted) {
+          // 교수님이 아니고 온보딩이 완료되지 않았으면 profile을 null로 설정
+          if (data.role !== 'professor' && !data.onboardingCompleted) {
             setProfile(null);
             setLoading(false);
             return;

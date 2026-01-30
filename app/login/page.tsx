@@ -118,6 +118,7 @@ export default function LoginPage() {
               email: user.email,
               nickname: '교수님',
               role: 'professor',
+              onboardingCompleted: true,  // 교수님은 온보딩 완료 상태로 설정
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp(),
             });
@@ -125,8 +126,17 @@ export default function LoginPage() {
 
           router.replace('/');
         } else {
-          // 학생은 온보딩으로
-          router.replace('/onboarding');
+          // 학생: 온보딩 완료 여부 확인
+          const userDocRef = doc(db, 'users', user.uid);
+          const userDoc = await getDoc(userDocRef);
+
+          if (userDoc.exists() && userDoc.data()?.onboardingCompleted) {
+            // 온보딩 완료된 학생은 홈으로
+            router.replace('/');
+          } else {
+            // 온보딩 미완료 학생은 온보딩으로
+            router.replace('/onboarding');
+          }
         }
       }
     };
