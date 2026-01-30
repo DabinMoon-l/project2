@@ -119,3 +119,62 @@ functions/             # Firebase Cloud Functions
 ### 보안
 - Firestore Security Rules로 데이터 접근 제어
 - 도배 방지: 글 1분 3개, 댓글 30초 1개 제한
+- **중요**: `gold`, `totalExp`, `rank`, `role`, `badges` 필드는 클라이언트에서 수정 불가 (Cloud Functions 전용)
+
+## 구현 완료 현황
+
+### 인증 및 온보딩 (완료)
+- [x] 로그인 페이지 (`app/login/page.tsx`)
+  - 이메일/비밀번호 로그인 폼
+  - Google 소셜 로그인
+  - 이미 온보딩 완료한 사용자는 홈으로 리다이렉트
+  - 교수님 이메일은 자동으로 교수 권한 부여
+- [x] 온보딩 플로우 (`app/onboarding/`)
+  - 학적정보 입력 (학번, 학년, 반 선택)
+  - 캐릭터 커스터마이징 (머리스타일, 피부색)
+  - 닉네임 설정 (중복 검사)
+  - 튜토리얼 슬라이드
+- [x] 메인 레이아웃 (`app/(main)/layout.tsx`)
+  - 인증 체크 및 리다이렉트
+  - UserProvider로 프로필 전역 관리
+  - 온보딩 미완료 사용자 처리
+
+### 공통 컴포넌트 (완료)
+- [x] Button, Input, Card, Modal 등 (`components/common/`)
+- [x] Navigation 바 (`components/common/Navigation.tsx`)
+- [x] Header 컴포넌트 (`components/common/Header.tsx`)
+- [x] 반별 테마 시스템 (`styles/themes/`)
+
+### Firebase 설정 (완료)
+- [x] Firebase 초기화 (`lib/firebase.ts`)
+- [x] Firestore Security Rules (`firestore.rules`)
+- [x] 인증 훅 (`lib/hooks/useAuth.ts`)
+- [x] 사용자 컨텍스트 (`lib/contexts/UserContext.tsx`)
+
+### 진행 중
+- [ ] 홈 화면
+- [ ] 퀴즈 시스템
+- [ ] 게시판
+- [ ] 교수님 대시보드
+
+## 알려진 이슈 및 해결책
+
+### Firestore Security Rules 관련
+클라이언트에서 사용자 문서 업데이트 시 다음 필드는 포함하면 안 됨:
+```javascript
+// ❌ 이렇게 하면 Security Rules에서 거부됨
+await setDoc(doc(db, 'users', uid), {
+  totalExp: 0,
+  rank: '견습생',
+  // ...
+}, { merge: true });
+
+// ✅ 허용된 필드만 사용
+await setDoc(doc(db, 'users', uid), {
+  onboardingCompleted: true,
+  updatedAt: serverTimestamp(),
+}, { merge: true });
+```
+
+### 온보딩 완료 후 리다이렉트
+`onboarding_just_completed` localStorage 플래그를 사용하여 온보딩 직후 홈 화면 진입 시 다시 온보딩으로 리다이렉트되는 것을 방지함

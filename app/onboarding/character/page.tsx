@@ -278,7 +278,7 @@ export default function CharacterPage() {
           loading={isSubmitting}
           fullWidth
           size="lg"
-          variant="secondary"
+          className="bg-white hover:bg-gray-100 text-black"
         >
           캐릭터 저장
         </Button>

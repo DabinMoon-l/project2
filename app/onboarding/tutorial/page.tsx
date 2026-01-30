@@ -123,14 +123,13 @@ export default function TutorialPage() {
       }
 
       // Firestore에 온보딩 완료 표시
+      // 주의: totalExp, rank는 Security Rules에서 클라이언트 수정 금지
+      // Cloud Functions에서 초기화해야 함
       await setDoc(
         doc(db, 'users', user.uid),
         {
           onboardingCompleted: true,
           onboardingCompletedAt: serverTimestamp(),
-          // 초기 스탯 설정
-          totalExp: 0,
-          rank: '견습생',
           updatedAt: serverTimestamp(),
         },
         { merge: true }
