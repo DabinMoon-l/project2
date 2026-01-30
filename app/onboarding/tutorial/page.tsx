@@ -141,8 +141,11 @@ export default function TutorialPage() {
       localStorage.removeItem('onboarding_character');
       localStorage.removeItem('onboarding_nickname');
 
+      // 온보딩 완료 플래그 설정 (layout.tsx에서 리디렉션 방지용)
+      localStorage.setItem('onboarding_just_completed', 'true');
+
       // Firestore 동기화를 위한 짧은 딜레이 후 홈으로 이동
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 800));
       window.location.href = '/';
     } catch (error) {
       console.error('온보딩 완료 처리 실패:', error);

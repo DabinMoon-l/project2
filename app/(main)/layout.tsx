@@ -18,20 +18,33 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { profile, loading: profileLoading, isProfessor } = useUser();
   const [userClassType, setUserClassType] = useState<ClassType>('A');
+  const [waitCount, setWaitCount] = useState(0);
 
-  // 프로필이 없으면 온보딩으로 리다이렉트 (딜레이 추가)
+  // 프로필이 없으면 온보딩으로 리다이렉트
   useEffect(() => {
     if (!profileLoading && !profile) {
-      // Firestore 서버 데이터 동기화를 위한 딜레이
-      const timer = setTimeout(() => {
-        // 딜레이 후에도 profile이 없으면 리디렉션
-        if (!profile) {
-          router.replace('/onboarding');
-        }
-      }, 1000);
-      return () => clearTimeout(timer);
+      // 온보딩 방금 완료한 경우 플래그 확인
+      const justCompleted = localStorage.getItem('onboarding_just_completed');
+
+      if (justCompleted) {
+        // 플래그가 있으면 잠시 대기 후 다시 체크
+        localStorage.removeItem('onboarding_just_completed');
+        setWaitCount(prev => prev + 1);
+        return;
+      }
+
+      // 3번까지 대기 (총 약 3초)
+      if (waitCount < 3) {
+        const timer = setTimeout(() => {
+          setWaitCount(prev => prev + 1);
+        }, 1000);
+        return () => clearTimeout(timer);
+      }
+
+      // 대기 후에도 profile이 없으면 온보딩으로
+      router.replace('/onboarding');
     }
-  }, [profile, profileLoading, router]);
+  }, [profile, profileLoading, router, waitCount]);
 
   // 프로필에서 반 타입 가져오기
   useEffect(() => {
