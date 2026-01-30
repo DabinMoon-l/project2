@@ -168,8 +168,8 @@ export default function LoginPage() {
     }
   }, [error, clearError]);
 
-  // 로딩 중이거나 이미 로그인된 경우 로딩 화면 표시
-  if (loading || user) {
+  // 로딩 중이거나 리디렉션 처리 중인 경우 로딩 화면 표시
+  if (loading || isProcessing) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-[#1a1a2e] to-[#16213e]">
         <motion.div

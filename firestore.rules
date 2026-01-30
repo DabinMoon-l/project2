@@ -35,12 +35,8 @@ service cloud.firestore {
       // 읽기: 본인 또는 교수님
       allow read: if isOwner(uid) || isProfessor();
 
-      // 생성: 본인만 (온보딩 시)
-      allow create: if isOwner(uid) &&
-        request.resource.data.keys().hasAll(['nickname', 'classType', 'role']) &&
-        isValidString(request.resource.data.nickname, 2, 10) &&
-        request.resource.data.classType in ['A', 'B', 'C', 'D'] &&
-        request.resource.data.role == 'student';
+      // 생성: 본인만 (온보딩 시 또는 교수님 첫 로그인)
+      allow create: if isOwner(uid);
 
       // 수정: 본인만 (일부 필드만)
       // gold, exp, rank 등은 Cloud Functions에서만 수정 가능
