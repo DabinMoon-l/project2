@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
@@ -90,59 +90,74 @@ export default function LoginPage() {
     loading,
     error,
     loginWithGoogle,
+    loginWithEmail,
     emailVerified,
     clearError,
   } = useAuth();
 
+  // 이메일 로그인 폼 상태
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+
   // 이미 로그인된 경우
   useEffect(() => {
     const handleLogin = async () => {
-      if (user && !loading) {
-        // 이메일 인증이 필요한 경우 (이메일/비밀번호 로그인)
-        if (user.providerData[0]?.providerId === 'password' && !emailVerified) {
-          router.replace('/verify-email');
-          return;
-        }
+      if (user && !loading && !isProcessing) {
+        setIsProcessing(true);
 
-        // 교수님 이메일 체크
-        const isProfessor = PROFESSOR_EMAILS.includes(user.email || '');
-
-        if (isProfessor) {
-          // 교수님은 Firestore에 바로 저장하고 홈으로 이동
-          const userDocRef = doc(db, 'users', user.uid);
-          const userDoc = await getDoc(userDocRef);
-
-          if (!userDoc.exists()) {
-            // 첫 로그인인 경우 교수님 정보 생성
-            await setDoc(userDocRef, {
-              email: user.email,
-              nickname: '교수님',
-              role: 'professor',
-              onboardingCompleted: true,  // 교수님은 온보딩 완료 상태로 설정
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-            });
+        try {
+          // 이메일 인증이 필요한 경우 (이메일/비밀번호 로그인)
+          if (user.providerData[0]?.providerId === 'password' && !emailVerified) {
+            router.replace('/verify-email');
+            return;
           }
 
-          router.replace('/');
-        } else {
-          // 학생: 온보딩 완료 여부 확인
-          const userDocRef = doc(db, 'users', user.uid);
-          const userDoc = await getDoc(userDocRef);
+          // 교수님 이메일 체크
+          const isProfessor = PROFESSOR_EMAILS.includes(user.email || '');
 
-          if (userDoc.exists() && userDoc.data()?.onboardingCompleted) {
-            // 온보딩 완료된 학생은 홈으로
+          if (isProfessor) {
+            // 교수님은 Firestore에 바로 저장하고 홈으로 이동
+            const userDocRef = doc(db, 'users', user.uid);
+            const userDoc = await getDoc(userDocRef);
+
+            if (!userDoc.exists()) {
+              // 첫 로그인인 경우 교수님 정보 생성
+              await setDoc(userDocRef, {
+                email: user.email,
+                nickname: '교수님',
+                role: 'professor',
+                onboardingCompleted: true,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+              });
+            }
+
             router.replace('/');
           } else {
-            // 온보딩 미완료 학생은 온보딩으로
-            router.replace('/onboarding');
+            // 학생: 온보딩 완료 여부 확인
+            const userDocRef = doc(db, 'users', user.uid);
+            const userDoc = await getDoc(userDocRef);
+
+            if (userDoc.exists() && userDoc.data()?.onboardingCompleted) {
+              // 온보딩 완료된 학생은 홈으로
+              router.replace('/');
+            } else {
+              // 온보딩 미완료 학생은 온보딩으로
+              router.replace('/onboarding');
+            }
           }
+        } catch (err) {
+          console.error('로그인 처리 에러:', err);
+          // 에러 발생 시 온보딩으로 이동
+          router.replace('/onboarding');
         }
       }
     };
 
     handleLogin();
-  }, [user, loading, emailVerified, router]);
+  }, [user, loading, emailVerified, router, isProcessing]);
 
   // 에러 발생 시 5초 후 자동 초기화
   useEffect(() => {
@@ -226,13 +241,63 @@ export default function LoginPage() {
             <div className="flex-1 h-px bg-white/30" />
           </div>
 
+          {/* 이메일 로그인 토글 버튼 */}
+          {!showEmailForm ? (
+            <button
+              onClick={() => setShowEmailForm(true)}
+              className="block w-full py-3 bg-white/10 border border-white/30 text-white font-medium rounded-xl text-center hover:bg-white/20 transition-colors"
+            >
+              이메일로 로그인
+            </button>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              className="space-y-3"
+            >
+              <input
+                type="email"
+                placeholder="이메일"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-4 py-3 bg-white/10 border border-white/30 text-white placeholder-white/50 rounded-xl focus:outline-none focus:border-white/60"
+              />
+              <input
+                type="password"
+                placeholder="비밀번호"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-3 bg-white/10 border border-white/30 text-white placeholder-white/50 rounded-xl focus:outline-none focus:border-white/60"
+              />
+              <button
+                onClick={async () => {
+                  if (email && password) {
+                    await loginWithEmail(email, password);
+                  }
+                }}
+                disabled={loading || !email || !password}
+                className="w-full py-3 bg-white text-black font-medium rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-50"
+              >
+                {loading ? '로그인 중...' : '로그인'}
+              </button>
+              <button
+                onClick={() => setShowEmailForm(false)}
+                className="w-full py-2 text-white/70 text-sm hover:text-white"
+              >
+                취소
+              </button>
+            </motion.div>
+          )}
+
           {/* 이메일 회원가입 링크 */}
-          <Link
-            href="/signup"
-            className="block w-full py-3 bg-white/10 border border-white/30 text-white font-medium rounded-xl text-center hover:bg-white/20 transition-colors"
-          >
-            이메일로 회원가입
-          </Link>
+          {!showEmailForm && (
+            <Link
+              href="/signup"
+              className="block w-full py-3 text-white/70 text-sm text-center hover:text-white transition-colors"
+            >
+              계정이 없으신가요? <span className="underline">회원가입</span>
+            </Link>
+          )}
         </motion.div>
 
         {/* 에러 메시지 */}
