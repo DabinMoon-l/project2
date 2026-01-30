@@ -24,7 +24,6 @@ const RANK_COLORS: Record<string, { bg: string; text: string; border: string }> 
   '용사': { bg: '#C0C0C020', text: '#808080', border: '#C0C0C0' },
   '기사': { bg: '#FFD70020', text: '#B8860B', border: '#FFD700' },
   '장군': { bg: '#4169E120', text: '#4169E1', border: '#4169E1' },
-  '대원수': { bg: '#9400D320', text: '#9400D3', border: '#9400D3' },
   '전설의 용사': { bg: '#FF450020', text: '#FF4500', border: '#FF4500' },
 };
 

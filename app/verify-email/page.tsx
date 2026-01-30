@@ -9,8 +9,14 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { auth } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
+
+// 교수님 이메일 목록
+const PROFESSOR_EMAILS = [
+  'jkim@ccn.ac.kr',
+];
 
 export default function VerifyEmailPage() {
   const router = useRouter();
@@ -34,11 +40,31 @@ export default function VerifyEmailPage() {
     }
   }, [user, loading, router]);
 
-  // 이메일 인증 완료된 경우 온보딩으로
+  // 이메일 인증 완료된 경우
   useEffect(() => {
-    if (user && emailVerified) {
-      router.replace('/onboarding');
-    }
+    const handleVerified = async () => {
+      if (user && emailVerified) {
+        const isProfessor = PROFESSOR_EMAILS.includes(user.email || '');
+
+        if (isProfessor) {
+          // 교수님은 Firestore에 바로 저장하고 홈으로 이동
+          const userDocRef = doc(db, 'users', user.uid);
+          await setDoc(userDocRef, {
+            email: user.email,
+            nickname: '교수님',
+            role: 'professor',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          }, { merge: true });
+
+          router.replace('/');
+        } else {
+          router.replace('/onboarding');
+        }
+      }
+    };
+
+    handleVerified();
   }, [user, emailVerified, router]);
 
   // 주기적으로 인증 상태 확인 (5초마다)
@@ -48,7 +74,22 @@ export default function VerifyEmailPage() {
     const interval = setInterval(async () => {
       await auth.currentUser?.reload();
       if (auth.currentUser?.emailVerified) {
-        router.replace('/onboarding');
+        const isProfessor = PROFESSOR_EMAILS.includes(user.email || '');
+
+        if (isProfessor) {
+          const userDocRef = doc(db, 'users', user.uid);
+          await setDoc(userDocRef, {
+            email: user.email,
+            nickname: '교수님',
+            role: 'professor',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          }, { merge: true });
+
+          router.replace('/');
+        } else {
+          router.replace('/onboarding');
+        }
       }
     }, 5000);
 

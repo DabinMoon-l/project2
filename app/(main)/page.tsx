@@ -193,7 +193,6 @@ export default function HomePage() {
           transition={{ delay: 0.2 }}
         >
           <StatsCard
-            gold={userData.gold}
             totalExp={userData.totalExp}
             rankInfo={rankInfo}
           />

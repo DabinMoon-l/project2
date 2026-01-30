@@ -125,7 +125,7 @@ export default function QuizDeleteModal({
                 ) : (
                   <div>
                     <p className="mb-1">
-                      <strong>"{quiz.title}"</strong> 퀴즈가 삭제됩니다.
+                      <strong>&ldquo;{quiz.title}&rdquo;</strong> 퀴즈가 삭제됩니다.
                     </p>
                     <p>이 작업은 되돌릴 수 없습니다.</p>
                   </div>

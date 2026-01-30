@@ -260,9 +260,7 @@ export default function QuizCreatePage() {
         updatedAt: serverTimestamp(),
       };
 
-      const docRef = await addDoc(collection(db, 'quizzes'), quizData);
-
-      console.log('퀴즈 생성 완료:', docRef.id);
+      await addDoc(collection(db, 'quizzes'), quizData);
 
       // 성공 시 퀴즈 목록 페이지로 이동
       router.push('/quiz?created=true');

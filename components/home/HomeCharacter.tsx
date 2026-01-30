@@ -141,7 +141,6 @@ const RANK_ARMOR_COLORS: Record<string, { primary: string; secondary: string }> 
   '용사': { primary: '#C0C0C0', secondary: '#A8A8A8' },
   '기사': { primary: '#FFD700', secondary: '#DAA520' },
   '장군': { primary: '#4169E1', secondary: '#1E40AF' },
-  '대원수': { primary: '#9400D3', secondary: '#7B1FA2' },
   '전설의 용사': { primary: '#FF4500', secondary: '#DC143C' },
 };
 

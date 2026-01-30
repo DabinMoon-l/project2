@@ -21,8 +21,6 @@ interface RankInfo {
  * StatsCard Props
  */
 interface StatsCardProps {
-  // 골드
-  gold: number;
   // 총 경험치
   totalExp: number;
   // 계급 정보
@@ -30,15 +28,15 @@ interface StatsCardProps {
 }
 
 /**
- * 계급 목록 및 필요 경험치
+ * 계급 목록 및 필요 경험치 (5단계)
+ * 시즌 내 달성 가능하도록 완화된 기준
  */
 const RANKS = [
   { name: '견습생', minExp: 0 },
-  { name: '용사', minExp: 100 },
-  { name: '기사', minExp: 300 },
-  { name: '장군', minExp: 600 },
-  { name: '대원수', minExp: 1000 },
-  { name: '전설의 용사', minExp: 2000 },
+  { name: '용사', minExp: 50 },
+  { name: '기사', minExp: 75 },
+  { name: '장군', minExp: 100 },
+  { name: '전설의 용사', minExp: 125 },
 ];
 
 /**
@@ -49,7 +47,6 @@ const RANK_ICONS: Record<string, string> = {
   '용사': '⚔️',
   '기사': '🛡️',
   '장군': '🎖️',
-  '대원수': '👑',
   '전설의 용사': '🏆',
 };
 
@@ -68,9 +65,9 @@ function formatNumber(num: number): string {
 
 /**
  * 스탯 카드 컴포넌트
- * 골드, 경험치, 계급을 표시하며 계급 진행률 바를 포함
+ * 경험치, 계급을 표시하며 계급 진행률 바를 포함
  */
-export default function StatsCard({ gold, totalExp, rankInfo }: StatsCardProps) {
+export default function StatsCard({ totalExp, rankInfo }: StatsCardProps) {
   const { theme } = useTheme();
 
   // 경험치 진행률 계산 (0-100)
@@ -92,42 +89,13 @@ export default function StatsCard({ gold, totalExp, rankInfo }: StatsCardProps) 
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.2 }}
     >
-      {/* 상단: 골드 & 경험치 */}
-      <div className="flex justify-between items-center mb-4">
-        {/* 골드 */}
+      {/* 상단: 경험치 */}
+      <div className="flex justify-center items-center mb-4">
         <motion.div
-          className="flex items-center gap-2"
+          className="flex items-center gap-3"
           whileHover={{ scale: 1.05 }}
         >
-          <span className="text-2xl">🪙</span>
-          <div>
-            <p
-              className="text-xs"
-              style={{ color: theme.colors.textSecondary }}
-            >
-              골드
-            </p>
-            <p
-              className="text-lg font-bold"
-              style={{ color: theme.colors.accent }}
-            >
-              {formatNumber(gold)}
-            </p>
-          </div>
-        </motion.div>
-
-        {/* 구분선 */}
-        <div
-          className="h-10 w-px"
-          style={{ backgroundColor: theme.colors.border }}
-        />
-
-        {/* 경험치 */}
-        <motion.div
-          className="flex items-center gap-2"
-          whileHover={{ scale: 1.05 }}
-        >
-          <span className="text-2xl">✨</span>
+          <span className="text-3xl">✨</span>
           <div>
             <p
               className="text-xs"
@@ -136,8 +104,8 @@ export default function StatsCard({ gold, totalExp, rankInfo }: StatsCardProps) 
               총 경험치
             </p>
             <p
-              className="text-lg font-bold"
-              style={{ color: theme.colors.text }}
+              className="text-xl font-bold"
+              style={{ color: theme.colors.accent }}
             >
               {formatNumber(totalExp)} XP
             </p>

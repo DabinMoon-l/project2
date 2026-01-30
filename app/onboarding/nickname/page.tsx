@@ -166,7 +166,7 @@ export default function NicknamePage() {
           doc(db, 'users', user.uid),
           {
             nickname,
-            onboardingStep: 4,
+            onboardingStep: 3,
             updatedAt: serverTimestamp(),
           },
           { merge: true }
@@ -177,7 +177,7 @@ export default function NicknamePage() {
       }
 
       // 다음 단계로 이동
-      router.push(ONBOARDING_STEPS[3].path);
+      router.push(ONBOARDING_STEPS[2].path);
     } catch (error) {
       console.error('닉네임 저장 실패:', error);
       alert('저장에 실패했습니다. 다시 시도해주세요.');
@@ -267,7 +267,7 @@ export default function NicknamePage() {
           <h1 className="text-lg font-semibold text-[var(--theme-text)]">닉네임 설정</h1>
           <div className="w-10" />
         </div>
-        <StepIndicator currentStep={3} />
+        <StepIndicator currentStep={2} />
       </header>
 
       {/* 메인 컨텐츠 */}

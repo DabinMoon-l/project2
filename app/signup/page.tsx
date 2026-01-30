@@ -11,7 +11,14 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
 import Link from 'next/link';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
+
+// 교수님 이메일 목록
+const PROFESSOR_EMAILS = [
+  'jkim@ccn.ac.kr',
+];
 
 // 애니메이션 설정
 const containerVariants = {
@@ -56,9 +63,30 @@ export default function SignupPage() {
 
   // 이미 로그인된 경우
   useEffect(() => {
-    if (user && emailVerified) {
-      router.replace('/onboarding');
-    }
+    const handleLoggedIn = async () => {
+      if (user && emailVerified) {
+        // 교수님 이메일 체크
+        const isProfessor = PROFESSOR_EMAILS.includes(user.email || '');
+
+        if (isProfessor) {
+          // 교수님은 Firestore에 바로 저장하고 홈으로 이동
+          const userDocRef = doc(db, 'users', user.uid);
+          await setDoc(userDocRef, {
+            email: user.email,
+            nickname: '교수님',
+            role: 'professor',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          }, { merge: true });
+
+          router.replace('/');
+        } else {
+          router.replace('/onboarding');
+        }
+      }
+    };
+
+    handleLoggedIn();
   }, [user, emailVerified, router]);
 
   // 에러 자동 초기화

@@ -12,8 +12,15 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
 import Link from 'next/link';
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
 import SocialLoginButton from '@/components/auth/SocialLoginButton';
+
+// 교수님 이메일 목록
+const PROFESSOR_EMAILS = [
+  'jkim@ccn.ac.kr',
+];
 
 // ============================================================
 // 애니메이션 설정
@@ -89,14 +96,42 @@ export default function LoginPage() {
 
   // 이미 로그인된 경우
   useEffect(() => {
-    if (user && !loading) {
-      // 이메일 인증이 필요한 경우 (이메일/비밀번호 로그인)
-      if (user.providerData[0]?.providerId === 'password' && !emailVerified) {
-        router.replace('/verify-email');
-      } else {
-        router.replace('/onboarding');
+    const handleLogin = async () => {
+      if (user && !loading) {
+        // 이메일 인증이 필요한 경우 (이메일/비밀번호 로그인)
+        if (user.providerData[0]?.providerId === 'password' && !emailVerified) {
+          router.replace('/verify-email');
+          return;
+        }
+
+        // 교수님 이메일 체크
+        const isProfessor = PROFESSOR_EMAILS.includes(user.email || '');
+
+        if (isProfessor) {
+          // 교수님은 Firestore에 바로 저장하고 홈으로 이동
+          const userDocRef = doc(db, 'users', user.uid);
+          const userDoc = await getDoc(userDocRef);
+
+          if (!userDoc.exists()) {
+            // 첫 로그인인 경우 교수님 정보 생성
+            await setDoc(userDocRef, {
+              email: user.email,
+              nickname: '교수님',
+              role: 'professor',
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
+          }
+
+          router.replace('/');
+        } else {
+          // 학생은 온보딩으로
+          router.replace('/onboarding');
+        }
       }
-    }
+    };
+
+    handleLogin();
   }, [user, loading, emailVerified, router]);
 
   // 에러 발생 시 5초 후 자동 초기화

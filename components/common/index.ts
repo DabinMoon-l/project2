@@ -42,3 +42,6 @@ export { default as NotificationPrompt } from './NotificationPrompt';
 
 // ErrorBoundary 컴포넌트
 export { ErrorBoundary, ErrorFallback, SectionErrorBoundary } from './ErrorBoundary';
+
+// WebVitalsReporter 컴포넌트
+export { default as WebVitalsReporter } from './WebVitalsReporter';

@@ -179,15 +179,17 @@ export default function QuizListPage() {
       const snapshot = await getDocs(q);
 
       const newRankers: RaceRanker[] = [];
-      snapshot.forEach((doc, index) => {
+      let rankIndex = 0;
+      snapshot.forEach((doc) => {
         const data = doc.data();
         newRankers.push({
           userId: doc.id,
           nickname: data.nickname || '익명 용사',
-          rank: (index + 1) as 1 | 2 | 3,
+          rank: (rankIndex + 1) as 1 | 2 | 3,
           score: data.totalScore || 0,
           characterImageUrl: data.characterImageUrl,
         });
+        rankIndex++;
       });
 
       setRankers(newRankers);

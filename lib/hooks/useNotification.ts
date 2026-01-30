@@ -123,7 +123,6 @@ export function useNotification(): UseNotificationReturn {
   useEffect(() => {
     if (permissionStatus === 'granted' && fcmToken) {
       unsubscribeMessageRef.current = onForegroundMessage((message) => {
-        console.log('포그라운드 알림 수신:', message);
         setLastNotification(message);
 
         // 브라우저 알림 표시 (선택적)
@@ -234,7 +233,6 @@ export function useNotification(): UseNotificationReturn {
 
         setFcmToken(token);
         setIsSubscribed(true);
-        console.log('알림 구독 완료');
         return true;
       } catch (err) {
         console.error('알림 구독 에러:', err);
@@ -276,7 +274,6 @@ export function useNotification(): UseNotificationReturn {
 
         setFcmToken(null);
         setIsSubscribed(false);
-        console.log('알림 구독 해제 완료');
       } catch (err) {
         console.error('알림 구독 해제 에러:', err);
         setError('알림 구독 해제에 실패했습니다.');
@@ -308,8 +305,6 @@ export function useNotification(): UseNotificationReturn {
           topics: arrayUnion(topic),
           updatedAt: serverTimestamp(),
         });
-
-        console.log(`토픽 구독 완료: ${topic}`);
       } catch (err) {
         console.error('토픽 구독 에러:', err);
         setError('토픽 구독에 실패했습니다.');
@@ -340,8 +335,6 @@ export function useNotification(): UseNotificationReturn {
           topics: arrayRemove(topic),
           updatedAt: serverTimestamp(),
         });
-
-        console.log(`토픽 구독 해제: ${topic}`);
       } catch (err) {
         console.error('토픽 구독 해제 에러:', err);
         setError('토픽 구독 해제에 실패했습니다.');

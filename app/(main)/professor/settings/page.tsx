@@ -8,15 +8,24 @@
 
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { motion } from 'framer-motion';
 import { Header, Skeleton } from '@/components/common';
-import {
-  SeasonResetCard,
-  SeasonResetModal,
-  SeasonHistoryList,
-} from '@/components/professor';
 import { useSeasonReset, type SeasonType } from '@/lib/hooks/useSeasonReset';
 import { useTheme } from '@/styles/themes/useTheme';
+
+// 동적 import로 코드 스플리팅 적용 (교수님 전용 컴포넌트)
+const SeasonResetCard = dynamic(() => import('@/components/professor/SeasonResetCard'), {
+  loading: () => <Skeleton className="h-80 rounded-2xl" />,
+});
+
+const SeasonResetModal = dynamic(() => import('@/components/professor/SeasonResetModal'), {
+  ssr: false, // 모달은 SSR 불필요
+});
+
+const SeasonHistoryList = dynamic(() => import('@/components/professor/SeasonHistoryList'), {
+  loading: () => <Skeleton className="h-60 rounded-2xl" />,
+});
 
 // ============================================================
 // 타입

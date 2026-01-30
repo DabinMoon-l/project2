@@ -21,13 +21,12 @@ import { db } from '@/lib/firebase';
 // 타입 정의
 // ============================================================
 
-/** 학생 계급 */
+/** 학생 계급 (5단계) */
 export type StudentRank =
   | 'trainee'    // 견습생
   | 'warrior'    // 용사
   | 'knight'     // 기사
   | 'general'    // 장군
-  | 'marshal'    // 대원수
   | 'legend';    // 전설의 용사
 
 /** 반 타입 */
@@ -128,7 +127,6 @@ export const RANK_LABELS: Record<StudentRank, string> = {
   warrior: '용사',
   knight: '기사',
   general: '장군',
-  marshal: '대원수',
   legend: '전설의 용사',
 };
 

@@ -402,8 +402,7 @@ export default function ProfilePage() {
             <button
               type="button"
               onClick={() => {
-                // TODO: 닉네임 저장 로직
-                console.log('닉네임 저장:', newNickname);
+                // TODO: 닉네임 저장 로직 구현 필요
                 setShowNicknameModal(false);
               }}
               className="flex-1 py-3 rounded-xl font-medium"

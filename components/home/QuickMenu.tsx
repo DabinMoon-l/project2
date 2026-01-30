@@ -34,7 +34,7 @@ interface QuickMenuProps {
 
 /**
  * 빠른 메뉴 컴포넌트
- * 4개 아이콘 버튼: 오늘의 퀴즈, 복습, 게시판, Shop
+ * 4개 아이콘 버튼: 오늘의 퀴즈, 복습, 게시판, 프로필
  */
 export default function QuickMenu({
   unreadQuizCount = 0,
@@ -67,9 +67,9 @@ export default function QuickMenu({
       bgColor: '#45B7D1',
     },
     {
-      icon: '🛒',
-      label: 'Shop',
-      path: '/shop',
+      icon: '👤',
+      label: '프로필',
+      path: '/profile',
       badge: 0,
       bgColor: '#96CEB4',
     },

@@ -112,8 +112,6 @@ export default function BoardPage() {
           <PostList
             posts={posts}
             onPostClick={handlePostClick}
-            onLike={toggleLike}
-            isLiked={isLiked}
             hasMore={hasMore}
             onLoadMore={loadMore}
             loading={loading}

@@ -36,6 +36,7 @@ export default function CharacterPage() {
   // 로딩 상태
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+
   /**
    * 옵션 변경 핸들러
    */

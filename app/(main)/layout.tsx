@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeProvider } from '@/styles/themes/ThemeProvider';
 import { useRequireAuth } from '@/lib/hooks/useAuth';
@@ -14,8 +15,16 @@ import type { ClassType } from '@/styles/themes';
  * UserProvider 내부에서 useUser 사용
  */
 function MainLayoutContent({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const { profile, loading: profileLoading, isProfessor } = useUser();
   const [userClassType, setUserClassType] = useState<ClassType>('A');
+
+  // 프로필이 없으면 온보딩으로 리다이렉트
+  useEffect(() => {
+    if (!profileLoading && !profile) {
+      router.replace('/onboarding');
+    }
+  }, [profile, profileLoading, router]);
 
   // 프로필에서 반 타입 가져오기
   useEffect(() => {
@@ -25,6 +34,26 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
       localStorage.setItem('hero-quiz-class-type', profile.classType);
     }
   }, [profile?.classType]);
+
+  // 프로필 로딩 중이거나 프로필이 없으면 로딩 표시
+  if (profileLoading || !profile) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-[#4A0E0E]">
+        <motion.div
+          className="flex flex-col items-center gap-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          <motion.div
+            className="w-12 h-12 border-4 border-[#D4AF37] border-t-transparent rounded-full"
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+          />
+          <p className="text-[#D4AF37] text-sm">프로필 확인 중...</p>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <ThemeProvider initialClassType={userClassType}>

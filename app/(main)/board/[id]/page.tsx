@@ -173,7 +173,7 @@ export default function PostDetailPage() {
           {/* 좋아요/댓글 영역 */}
           <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-4">
             <LikeButton
-              likes={post.likes}
+              count={post.likes}
               isLiked={isLiked(postId)}
               onToggle={handleLike}
             />

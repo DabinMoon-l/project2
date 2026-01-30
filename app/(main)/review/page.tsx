@@ -139,11 +139,10 @@ function QuizGroup({ group, onPractice, onDelete }: QuizGroupProps) {
             className="overflow-hidden"
           >
             <div className="px-4 pb-4 space-y-3">
-              {group.items.map((item, index) => (
+              {group.items.map((item) => (
                 <ReviewQuestionCard
                   key={item.id}
                   item={item}
-                  number={index + 1}
                   onDelete={() => onDelete(item.id)}
                 />
               ))}
@@ -227,8 +226,8 @@ export default function ReviewPage() {
     return (
       <ReviewPractice
         items={practiceItems}
-        onComplete={handleEndPractice}
-        onReviewed={handleReviewed}
+        onComplete={() => handleEndPractice()}
+        onClose={handleEndPractice}
       />
     );
   }

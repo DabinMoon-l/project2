@@ -1,16 +1,28 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { motion } from 'framer-motion';
 import { Header, Skeleton } from '@/components/common';
-import {
-  DashboardStats,
-  RecentFeedback,
-  ClassParticipation,
-  QuickActions,
-} from '@/components/professor';
 import { useAuth } from '@/lib/hooks/useAuth';
+
+// 동적 import로 코드 스플리팅 적용 (교수님 전용 컴포넌트)
+const DashboardStats = dynamic(() => import('@/components/professor/DashboardStats'), {
+  loading: () => <div className="grid grid-cols-2 gap-3">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-28 rounded-2xl" />)}</div>,
+});
+
+const RecentFeedback = dynamic(() => import('@/components/professor/RecentFeedback'), {
+  loading: () => <Skeleton className="h-64 rounded-2xl" />,
+});
+
+const ClassParticipation = dynamic(() => import('@/components/professor/ClassParticipation'), {
+  loading: () => <Skeleton className="h-48 rounded-2xl" />,
+});
+
+const QuickActions = dynamic(() => import('@/components/professor/QuickActions'), {
+  loading: () => <Skeleton className="h-32 rounded-2xl" />,
+});
 
 // 임시 목업 데이터 (실제로는 Firestore에서 가져옴)
 const mockFeedbacks = [

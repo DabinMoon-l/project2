@@ -19,9 +19,8 @@ export interface OnboardingStep {
  */
 export const ONBOARDING_STEPS: OnboardingStep[] = [
   { step: 1, label: '학적정보', path: '/onboarding/student-info' },
-  { step: 2, label: '캐릭터', path: '/onboarding/character' },
-  { step: 3, label: '닉네임', path: '/onboarding/nickname' },
-  { step: 4, label: '튜토리얼', path: '/onboarding/tutorial' },
+  { step: 2, label: '닉네임', path: '/onboarding/nickname' },
+  { step: 3, label: '튜토리얼', path: '/onboarding/tutorial' },
 ];
 
 /**
@@ -43,7 +42,7 @@ interface StepIndicatorProps {
  */
 export default function StepIndicator({
   currentStep,
-  totalSteps = 4,
+  totalSteps = 3,
 }: StepIndicatorProps) {
   return (
     <div className="flex items-center justify-center gap-2 py-4">

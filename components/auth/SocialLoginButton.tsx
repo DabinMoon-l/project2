@@ -8,7 +8,6 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { ButtonHTMLAttributes } from 'react';
 
 // ============================================================
 // 타입 정의
@@ -18,12 +17,15 @@ import { ButtonHTMLAttributes } from 'react';
 export type SocialProvider = 'apple' | 'google' | 'naver';
 
 /** 컴포넌트 Props */
-interface SocialLoginButtonProps
-  extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
+interface SocialLoginButtonProps {
   /** 소셜 로그인 provider */
   provider: SocialProvider;
   /** 로딩 상태 */
   loading?: boolean;
+  /** 비활성화 상태 */
+  disabled?: boolean;
+  /** 추가 클래스명 */
+  className?: string;
   /** 클릭 핸들러 */
   onClick?: () => void;
 }
@@ -129,7 +131,6 @@ export const SocialLoginButton = ({
   onClick,
   disabled,
   className = '',
-  ...props
 }: SocialLoginButtonProps) => {
   const config = providerConfig[provider];
   const isDisabled = disabled || loading;
@@ -160,7 +161,6 @@ export const SocialLoginButton = ({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
-      {...props}
     >
       {/* 로딩 스피너 또는 아이콘 */}
       {loading ? (

@@ -144,7 +144,6 @@ export default function TutorialPage() {
             stats: {
               level: 1,
               exp: 0,
-              gold: 100, // 시작 골드
               rank: '견습생',
             },
             updatedAt: serverTimestamp(),
@@ -255,7 +254,7 @@ export default function TutorialPage() {
             건너뛰기
           </button>
         </div>
-        <StepIndicator currentStep={4} />
+        <StepIndicator currentStep={3} />
       </header>
 
       {/* 메인 컨텐츠 */}

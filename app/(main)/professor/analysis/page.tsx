@@ -1,19 +1,28 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Header, Skeleton } from '@/components/common';
-import {
-  QuestionAnalysisCard,
-  DifficultyChart,
-  AnalysisSummary,
-} from '@/components/professor';
 import { useAuth } from '@/lib/hooks/useAuth';
 import {
   useProfessorAnalysis,
   type AnalysisFilterOptions,
   type QuestionType,
 } from '@/lib/hooks/useProfessorAnalysis';
+
+// 동적 import로 코드 스플리팅 적용 (교수님 전용 컴포넌트)
+const QuestionAnalysisCard = dynamic(() => import('@/components/professor/QuestionAnalysisCard'), {
+  loading: () => <Skeleton className="h-32 rounded-xl" />,
+});
+
+const DifficultyChart = dynamic(() => import('@/components/professor/DifficultyChart'), {
+  loading: () => <Skeleton className="h-64 rounded-2xl" />,
+});
+
+const AnalysisSummary = dynamic(() => import('@/components/professor/AnalysisSummary'), {
+  loading: () => <Skeleton className="h-40 rounded-2xl" />,
+});
 
 // ============================================================
 // 타입 정의

@@ -88,7 +88,6 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
 
   try {
     const registration = await navigator.serviceWorker.register(SERVICE_WORKER_PATH);
-    console.log('서비스 워커 등록 성공:', registration.scope);
     return registration;
   } catch (error) {
     console.error('서비스 워커 등록 실패:', error);
@@ -171,7 +170,6 @@ export async function getFCMToken(
     });
 
     if (token) {
-      console.log('FCM 토큰 발급 성공');
       return token;
     } else {
       console.warn('FCM 토큰을 가져올 수 없습니다.');
@@ -204,8 +202,6 @@ export function onForegroundMessage(handler: NotificationHandler): () => void {
   foregroundHandler = handler;
 
   const unsubscribe = onMessage(messagingInstance, (payload: MessagePayload) => {
-    console.log('포그라운드 메시지 수신:', payload);
-
     const message: NotificationMessage = {
       title: payload.notification?.title || '알림',
       body: payload.notification?.body || '',

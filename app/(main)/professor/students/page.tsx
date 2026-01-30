@@ -1,20 +1,30 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import { motion } from 'framer-motion';
 import { Header, Skeleton } from '@/components/common';
-import {
-  StudentList,
-  StudentDetailModal,
-  StudentStats,
-  TargetClassSelector,
-} from '@/components/professor';
 import {
   useProfessorStudents,
   type StudentData,
   type StudentFilterOptions,
   type ClassType,
 } from '@/lib/hooks/useProfessorStudents';
+
+// 동적 import로 코드 스플리팅 적용 (교수님 전용 컴포넌트)
+const StudentList = dynamic(() => import('@/components/professor/StudentList'), {
+  loading: () => <div className="space-y-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>,
+});
+
+const StudentDetailModal = dynamic(() => import('@/components/professor/StudentDetailModal'), {
+  ssr: false, // 모달은 SSR 불필요
+});
+
+const StudentStats = dynamic(() => import('@/components/professor/StudentStats'), {
+  loading: () => <Skeleton className="h-64 rounded-2xl" />,
+});
+
+const TargetClassSelector = dynamic(() => import('@/components/professor/TargetClassSelector'));
 
 // ============================================================
 // 타입 정의

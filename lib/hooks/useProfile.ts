@@ -40,14 +40,14 @@ export interface Equipment {
 }
 
 /**
- * 계급 타입
+ * 계급 타입 (5단계)
+ * 중간→기말 시즌 전환 시 초기화됨
  */
 export type RankType =
   | '견습생'
   | '용사'
   | '기사'
   | '장군'
-  | '대원수'
   | '전설의 용사';
 
 /**
@@ -124,13 +124,13 @@ interface UseProfileReturn {
 
 /**
  * 경험치로 계급 계산
+ * 시즌 내 달성 가능하도록 완화된 기준
  */
 export function calculateRank(totalExp: number): RankType {
-  if (totalExp >= 10000) return '전설의 용사';
-  if (totalExp >= 5000) return '대원수';
-  if (totalExp >= 2000) return '장군';
-  if (totalExp >= 800) return '기사';
-  if (totalExp >= 200) return '용사';
+  if (totalExp >= 125) return '전설의 용사';
+  if (totalExp >= 100) return '장군';
+  if (totalExp >= 75) return '기사';
+  if (totalExp >= 50) return '용사';
   return '견습생';
 }
 
