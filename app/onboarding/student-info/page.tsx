@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -60,6 +60,11 @@ export default function StudentInfoPage() {
 
   // 로딩 상태
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 페이지 로드 시 A반 테마 적용
+  useEffect(() => {
+    setClassType('A');
+  }, [setClassType]);
 
   /**
    * 입력값 변경 핸들러
