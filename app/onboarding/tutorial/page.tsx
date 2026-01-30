@@ -59,16 +59,16 @@ const TUTORIAL_SLIDES: TutorialSlide[] = [
   },
   {
     id: 3,
-    title: 'Shop에서 아이템을 구매하세요',
+    title: '계급을 올려보세요',
     description:
-      '획득한 골드로 다양한 아이템을 구매할 수 있어요.\n무기, 방어구, 악세서리로 캐릭터를 꾸며보세요.',
+      '경험치를 모아 계급을 올리세요.\n견습생에서 전설의 용사까지 도전해보세요!',
     icon: (
       <svg className="w-20 h-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
           strokeWidth={1.5}
-          d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
+          d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
         />
       </svg>
     ),
@@ -367,7 +367,7 @@ export default function TutorialPage() {
               loading={isSubmitting}
               fullWidth
               size="lg"
-              className="bg-[var(--theme-accent)] hover:bg-[var(--theme-accent-light)]"
+              className="bg-white hover:bg-gray-100 text-black"
             >
               {isLastSlide ? (
                 <span className="flex items-center gap-2">

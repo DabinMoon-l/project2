@@ -92,6 +92,14 @@ export function UserProvider({ children }: UserProviderProps) {
       (docSnap) => {
         if (docSnap.exists()) {
           const data = docSnap.data();
+
+          // 온보딩이 완료되지 않았으면 profile을 null로 설정
+          if (!data.onboardingCompleted) {
+            setProfile(null);
+            setLoading(false);
+            return;
+          }
+
           const totalExp = data.totalExp || 0;
 
           setProfile({

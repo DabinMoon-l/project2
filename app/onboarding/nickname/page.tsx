@@ -376,35 +376,6 @@ export default function NicknamePage() {
               </ul>
             </div>
 
-            {/* 추천 닉네임 */}
-            <div>
-              <h3 className="text-sm font-medium text-[var(--theme-text)] mb-3">
-                추천 닉네임
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  '용감한토끼',
-                  '퀴즈마스터',
-                  '천재용사',
-                  '공부왕',
-                  '지식탐험가',
-                ].map((suggestedName) => (
-                  <motion.button
-                    key={suggestedName}
-                    type="button"
-                    onClick={() => {
-                      setNickname(suggestedName);
-                      setNicknameStatus('idle');
-                    }}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="px-3 py-1.5 bg-[var(--theme-accent)]/10 text-[var(--theme-accent)] rounded-full text-sm hover:bg-[var(--theme-accent)]/20 transition-colors"
-                  >
-                    {suggestedName}
-                  </motion.button>
-                ))}
-              </div>
-            </div>
           </motion.div>
         </div>
       </main>
@@ -422,7 +393,7 @@ export default function NicknamePage() {
             disabled={!nickname || nicknameStatus === 'invalid' || nicknameStatus === 'taken'}
             fullWidth
             size="lg"
-            className="bg-[var(--theme-accent)] hover:bg-[var(--theme-accent-light)]"
+            className="bg-white hover:bg-gray-100 text-black"
           >
             다음 단계로
           </Button>
