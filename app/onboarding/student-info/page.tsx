@@ -336,7 +336,7 @@ export default function StudentInfoPage() {
             loading={isSubmitting}
             fullWidth
             size="lg"
-            variant="secondary"
+            className="bg-white hover:bg-gray-100 text-black"
           >
             다음 단계로
           </Button>

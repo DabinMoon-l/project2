@@ -19,10 +19,17 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
   const { profile, loading: profileLoading, isProfessor } = useUser();
   const [userClassType, setUserClassType] = useState<ClassType>('A');
 
-  // 프로필이 없으면 온보딩으로 리다이렉트
+  // 프로필이 없으면 온보딩으로 리다이렉트 (딜레이 추가)
   useEffect(() => {
     if (!profileLoading && !profile) {
-      router.replace('/onboarding');
+      // Firestore 서버 데이터 동기화를 위한 딜레이
+      const timer = setTimeout(() => {
+        // 딜레이 후에도 profile이 없으면 리디렉션
+        if (!profile) {
+          router.replace('/onboarding');
+        }
+      }, 1000);
+      return () => clearTimeout(timer);
     }
   }, [profile, profileLoading, router]);
 
