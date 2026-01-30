@@ -27,7 +27,7 @@ const TUTORIAL_SLIDES: TutorialSlide[] = [
     id: 1,
     title: '퀴즈를 풀어보세요',
     description:
-      '다양한 과목의 퀴즈를 풀고 경험치와 골드를 획득하세요.\nOX, 객관식, 주관식 문제가 준비되어 있어요.',
+      '다양한 과목의 퀴즈를 풀고 경험치를 획득하세요.\nOX, 객관식, 주관식 문제가 준비되어 있어요.',
     icon: (
       <svg className="w-20 h-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path
@@ -59,23 +59,6 @@ const TUTORIAL_SLIDES: TutorialSlide[] = [
   },
   {
     id: 3,
-    title: '계급을 올려보세요',
-    description:
-      '경험치를 모아 계급을 올리세요.\n견습생에서 전설의 용사까지 도전해보세요!',
-    icon: (
-      <svg className="w-20 h-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={1.5}
-          d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
-        />
-      </svg>
-    ),
-    bgColor: 'from-emerald-500/20 to-teal-500/20',
-  },
-  {
-    id: 4,
     title: '피드백으로 수업에 참여하세요',
     description:
       '문제에 대한 피드백을 남기고\n게시판에서 다른 용사들과 소통해보세요.',
@@ -133,36 +116,38 @@ export default function TutorialPage() {
     try {
       const user = auth.currentUser;
 
-      if (user) {
-        // Firestore에 온보딩 완료 표시
-        await setDoc(
-          doc(db, 'users', user.uid),
-          {
-            onboardingCompleted: true,
-            onboardingCompletedAt: serverTimestamp(),
-            // 초기 스탯 설정
-            stats: {
-              level: 1,
-              exp: 0,
-              rank: '견습생',
-            },
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true }
-        );
+      if (!user) {
+        // 사용자가 없으면 로그인 페이지로
+        router.replace('/login');
+        return;
       }
+
+      // Firestore에 온보딩 완료 표시
+      await setDoc(
+        doc(db, 'users', user.uid),
+        {
+          onboardingCompleted: true,
+          onboardingCompletedAt: serverTimestamp(),
+          // 초기 스탯 설정
+          totalExp: 0,
+          rank: '견습생',
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
 
       // 로컬 스토리지 정리
       localStorage.removeItem('onboarding_student_info');
       localStorage.removeItem('onboarding_character');
       localStorage.removeItem('onboarding_nickname');
 
-      // 홈으로 이동
-      router.push('/');
+      // Firestore 동기화를 위한 짧은 딜레이 후 홈으로 이동
+      await new Promise(resolve => setTimeout(resolve, 500));
+      window.location.href = '/';
     } catch (error) {
       console.error('온보딩 완료 처리 실패:', error);
-      // 에러가 나도 홈으로 이동
-      router.push('/');
+      // 에러가 나면 로그인 페이지로
+      router.replace('/login');
     } finally {
       setIsSubmitting(false);
     }
@@ -351,9 +336,8 @@ export default function TutorialPage() {
             >
               <Button
                 onClick={handlePrev}
-                variant="ghost"
                 size="lg"
-                className="px-6"
+                className="px-6 bg-white hover:bg-gray-100 text-black"
               >
                 이전
               </Button>
