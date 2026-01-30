@@ -96,7 +96,6 @@ export default function LoginPage() {
   } = useAuth();
 
   // 이메일 로그인 폼 상태
-  const [showEmailForm, setShowEmailForm] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -223,81 +222,59 @@ export default function LoginPage() {
           />
         </motion.div>
 
-        {/* 로그인 버튼 영역 */}
+        {/* 로그인 폼 영역 */}
         <motion.div
           className="max-w-xs mx-auto mt-4 space-y-3"
           variants={itemVariants}
         >
-          <SocialLoginButton
-            provider="google"
-            onClick={loginWithGoogle}
-            loading={loading}
+          {/* 이메일 로그인 폼 */}
+          <input
+            type="email"
+            placeholder="이메일"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full px-4 py-3 bg-white/10 border border-white/30 text-white placeholder-white/50 rounded-xl focus:outline-none focus:border-white/60"
           />
+          <input
+            type="password"
+            placeholder="비밀번호"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full px-4 py-3 bg-white/10 border border-white/30 text-white placeholder-white/50 rounded-xl focus:outline-none focus:border-white/60"
+          />
+          <button
+            onClick={async () => {
+              if (email && password) {
+                await loginWithEmail(email, password);
+              }
+            }}
+            disabled={loading || !email || !password}
+            className="w-full py-3 bg-white text-black font-medium rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-50"
+          >
+            {loading ? '로그인 중...' : '로그인'}
+          </button>
+
+          {/* 이메일 회원가입 링크 */}
+          <Link
+            href="/signup"
+            className="block w-full py-2 text-white/70 text-sm text-center hover:text-white transition-colors"
+          >
+            계정이 없으신가요? <span className="underline">회원가입</span>
+          </Link>
 
           {/* 구분선 */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 pt-2">
             <div className="flex-1 h-px bg-white/30" />
             <span className="text-white/50 text-xs">또는</span>
             <div className="flex-1 h-px bg-white/30" />
           </div>
 
-          {/* 이메일 로그인 토글 버튼 */}
-          {!showEmailForm ? (
-            <button
-              onClick={() => setShowEmailForm(true)}
-              className="block w-full py-3 bg-white/10 border border-white/30 text-white font-medium rounded-xl text-center hover:bg-white/20 transition-colors"
-            >
-              이메일로 로그인
-            </button>
-          ) : (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              className="space-y-3"
-            >
-              <input
-                type="email"
-                placeholder="이메일"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 bg-white/10 border border-white/30 text-white placeholder-white/50 rounded-xl focus:outline-none focus:border-white/60"
-              />
-              <input
-                type="password"
-                placeholder="비밀번호"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 bg-white/10 border border-white/30 text-white placeholder-white/50 rounded-xl focus:outline-none focus:border-white/60"
-              />
-              <button
-                onClick={async () => {
-                  if (email && password) {
-                    await loginWithEmail(email, password);
-                  }
-                }}
-                disabled={loading || !email || !password}
-                className="w-full py-3 bg-white text-black font-medium rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-50"
-              >
-                {loading ? '로그인 중...' : '로그인'}
-              </button>
-              <button
-                onClick={() => setShowEmailForm(false)}
-                className="w-full py-2 text-white/70 text-sm hover:text-white"
-              >
-                취소
-              </button>
-            </motion.div>
-          )}
-
-          {/* 이메일 회원가입 링크 */}
-          {!showEmailForm && (
-            <Link
-              href="/signup"
-              className="block w-full py-3 text-white/70 text-sm text-center hover:text-white transition-colors"
-            >
-              계정이 없으신가요? <span className="underline">회원가입</span>
-            </Link>
-          )}
+          {/* 구글 로그인 */}
+          <SocialLoginButton
+            provider="google"
+            onClick={loginWithGoogle}
+            loading={loading}
+          />
         </motion.div>
 
         {/* 에러 메시지 */}
