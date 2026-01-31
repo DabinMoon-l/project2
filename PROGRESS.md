@@ -1,8 +1,8 @@
 # 용사 퀴즈 개발 진행 상황
 
 ## 현재 상태
-- **마지막 업데이트**: Phase 4-29 애니메이션 최적화 완료
-- **다음 단계**: Phase 4-30 PWA 및 오프라인 모드 테스트
+- **마지막 업데이트**: Phase 4-30 피드백 페이지 및 복습 시스템 완성
+- **다음 단계**: Phase 4-31 PWA 및 오프라인 모드 테스트
 
 ## 개선 사항 (Phase 4-27 후속)
 
@@ -82,9 +82,10 @@
 - [x] #27 아키텍처 리뷰 및 코드 리뷰 ✅
 - [x] #28 성능 테스트 및 최적화 ✅
 - [x] #29 애니메이션 최적화 ✅
-- [ ] #30 PWA 및 오프라인 모드 테스트
-- [ ] #31 Playwright E2E 테스트
-- [ ] #32 Vercel 배포
+- [x] #30 피드백 페이지 및 복습 시스템 ✅
+- [ ] #31 PWA 및 오프라인 모드 테스트
+- [ ] #32 Playwright E2E 테스트
+- [ ] #33 Vercel 배포
 
 ## 주요 파일 구조
 
@@ -258,6 +259,27 @@ functions/            # Cloud Functions ✅
   - 유지: 골드, 캐릭터 외형, 뱃지
 - 교수님 설정 페이지 (시즌 관리 + 기타 설정)
 - Cloud Functions `resetSeason` 연동
+
+### #30 피드백 페이지 및 복습 시스템 ✅ 완료
+
+#### 수정/생성된 파일:
+- [x] `app/(main)/quiz/[id]/feedback/page.tsx` - 스와이프 기반 피드백 페이지 재구현
+- [x] `app/(main)/quiz/[id]/result/page.tsx` - 푼 문제 저장 로직 추가
+- [x] `app/(main)/quiz/page.tsx` - 완료된 퀴즈 필터링, Image sizes prop 추가
+- [x] `app/(main)/review/page.tsx` - 폴더 삭제 기능, groupedSolvedItems 사용
+- [x] `app/(main)/review/[type]/[id]/page.tsx` - 폴더 상세 페이지 (새로 생성)
+- [x] `lib/hooks/useReview.ts` - ReviewType 확장, deleteSolvedQuiz 함수, 클라이언트 정렬
+- [x] `firestore.rules` - completedUsers 업데이트 권한 추가
+- [x] `firestore.indexes.json` - 복합 인덱스 추가
+- [x] `components/common/index.ts` - CurvedRibbon export 제거
+
+#### 주요 기능:
+- **피드백 페이지**: Framer Motion 스와이프로 문제 간 이동, 문제/선지/정답/내 답안/해설 표시
+- **푼 문제 저장**: 퀴즈 완료 시 모든 문제를 `reviewType: 'solved'`로 저장
+- **완료된 퀴즈 필터링**: `completedUsers` 배열로 추적, 퀴즈 목록에서 숨김
+- **폴더 삭제**: 푼 문제 폴더 삭제 시 퀴즈 목록에 다시 표시
+- **폴더 상세 페이지**: 문제 목록, 연습 모드, 커스텀 폴더 문제 추가/삭제
+- **클라이언트 정렬**: Firestore 복합 인덱스 오류 방지를 위해 orderBy 제거
 
 ### #29 애니메이션 최적화 ✅ 완료
 

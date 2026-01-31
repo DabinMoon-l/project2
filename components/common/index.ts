@@ -34,6 +34,9 @@ export {
 export { default as Navigation } from './Navigation';
 export type { UserRole } from './Navigation';
 
+// ProfileDrawer 컴포넌트
+export { default as ProfileDrawer } from './ProfileDrawer';
+
 // NotificationProvider 컴포넌트
 export { default as NotificationProvider, useNotificationContext } from './NotificationProvider';
 
@@ -45,3 +48,6 @@ export { ErrorBoundary, ErrorFallback, SectionErrorBoundary } from './ErrorBound
 
 // WebVitalsReporter 컴포넌트
 export { default as WebVitalsReporter } from './WebVitalsReporter';
+
+// RibbonBanner 컴포넌트 (빈티지 리본 스타일)
+export { default as RibbonBanner, SubRibbon } from './RibbonBanner';

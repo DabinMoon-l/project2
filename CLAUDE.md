@@ -9,13 +9,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 기술 스택
 
-- **Frontend**: Next.js 14 (App Router) + TypeScript + Tailwind CSS
-- **애니메이션**: Framer Motion (페이지 전환, UI), Lottie (캐릭터, 레이스)
-- **상태 관리**: React Query
+- **Frontend**: Next.js 15 (App Router) + React 19 + TypeScript + Tailwind CSS
+- **애니메이션**: Framer Motion (페이지 전환, UI), Lottie (캐릭터)
 - **Backend**: Firebase (Auth, Firestore, Cloud Functions, Cloud Messaging)
 - **OCR**: Tesseract.js
-- **PDF**: jsPDF
-- **배포**: Vercel (PWA)
+- **PDF**: pdfjs-dist
+- **배포**: Vercel (PWA, next-pwa)
+
+## UI 테마 (빈티지 신문 스타일)
+
+- **배경색**: #F5F0E8 (크림)
+- **주요 텍스트/테두리**: #1A1A1A (검정)
+- **보조 배경**: #EDEAE4
+- **음소거 텍스트**: #5C5C5C
+- **성공**: #1A6B1A (녹색)
+- **오류**: #8B1A1A (빨강)
+- **둥근 모서리 없음** (rounded-none)
 
 ## 개발 명령어
 
@@ -35,8 +44,26 @@ npm start
 # 린트
 npm run lint
 
-# Cloud Functions 배포
-cd functions && npm run deploy
+# 번들 분석
+npm run analyze
+```
+
+### Cloud Functions
+
+```bash
+cd functions
+
+# 빌드
+npm run build
+
+# 에뮬레이터로 로컬 테스트
+npm run serve
+
+# 배포
+npm run deploy
+
+# 로그 확인
+npm run logs
 ```
 
 ## 아키텍처
@@ -116,46 +143,49 @@ functions/             # Firebase Cloud Functions
 - 중간 → 기말 전환 시: 계급, 갑옷/무기, Shop 아이템 초기화
 - 골드, 캐릭터 외형, 뱃지는 유지
 
+### 복습 시스템
+- 복습 유형: `wrong` (오답), `bookmark` (찜), `solved` (푼 문제)
+- 퀴즈 완료 시 모든 문제가 `reviews` 컬렉션에 `reviewType: 'solved'`로 저장
+- 틀린 문제는 추가로 `reviewType: 'wrong'`으로 저장
+- 퀴즈 문서의 `completedUsers` 배열로 완료 여부 추적
+- 완료된 퀴즈는 퀴즈 목록에서 필터링됨
+- 폴더 삭제 시 `completedUsers`에서 제거되어 퀴즈 목록에 다시 표시
+- 커스텀 폴더에 다른 탭(푼 문제/오답/찜)에서 문제 추가 가능
+
 ### 보안
 - Firestore Security Rules로 데이터 접근 제어
 - 도배 방지: 글 1분 3개, 댓글 30초 1개 제한
 - **중요**: `gold`, `totalExp`, `rank`, `role`, `badges` 필드는 클라이언트에서 수정 불가 (Cloud Functions 전용)
 
-## 구현 완료 현황
+## 라우트 구조
 
-### 인증 및 온보딩 (완료)
-- [x] 로그인 페이지 (`app/login/page.tsx`)
-  - 이메일/비밀번호 로그인 폼
-  - Google 소셜 로그인
-  - 이미 온보딩 완료한 사용자는 홈으로 리다이렉트
-  - 교수님 이메일은 자동으로 교수 권한 부여
-- [x] 온보딩 플로우 (`app/onboarding/`)
-  - 학적정보 입력 (학번, 학년, 반 선택)
-  - 캐릭터 커스터마이징 (머리스타일, 피부색)
-  - 닉네임 설정 (중복 검사)
-  - 튜토리얼 슬라이드
-- [x] 메인 레이아웃 (`app/(main)/layout.tsx`)
-  - 인증 체크 및 리다이렉트
-  - UserProvider로 프로필 전역 관리
-  - 온보딩 미완료 사용자 처리
+```
+app/
+├── login/               # 로그인 페이지
+├── signup/              # 회원가입 페이지
+├── verify-email/        # 이메일 인증 페이지
+├── onboarding/          # 온보딩 플로우
+│   ├── student-info/    # 학적정보 입력
+│   ├── character/       # 캐릭터 커스터마이징
+│   ├── nickname/        # 닉네임 설정
+│   └── tutorial/        # 튜토리얼
+└── (main)/              # 인증 필요 라우트 그룹
+    ├── page.tsx         # 홈
+    ├── quiz/            # 퀴즈 목록 및 풀이
+    │   ├── [id]/        # 퀴즈 상세
+    │   │   ├── result/  # 결과 화면
+    │   │   └── feedback/ # 피드백 화면 (스와이프 기반)
+    │   └── create/      # 퀴즈 생성
+    ├── review/          # 복습 (오답노트, 찜한 문제, 푼 문제)
+    │   └── [type]/[id]/ # 폴더 상세 (문제 목록, 연습 모드)
+    ├── board/           # 게시판
+    ├── shop/            # 상점
+    ├── profile/         # 프로필
+    ├── settings/        # 설정
+    └── professor/       # 교수님 전용
+```
 
-### 공통 컴포넌트 (완료)
-- [x] Button, Input, Card, Modal 등 (`components/common/`)
-- [x] Navigation 바 (`components/common/Navigation.tsx`)
-- [x] Header 컴포넌트 (`components/common/Header.tsx`)
-- [x] 반별 테마 시스템 (`styles/themes/`)
-
-### Firebase 설정 (완료)
-- [x] Firebase 초기화 (`lib/firebase.ts`)
-- [x] Firestore Security Rules (`firestore.rules`)
-- [x] 인증 훅 (`lib/hooks/useAuth.ts`)
-- [x] 사용자 컨텍스트 (`lib/contexts/UserContext.tsx`)
-
-### 진행 중
-- [ ] 홈 화면
-- [ ] 퀴즈 시스템
-- [ ] 게시판
-- [ ] 교수님 대시보드
+`(main)` 라우트 그룹은 `layout.tsx`에서 인증 상태와 온보딩 완료 여부를 체크하며, `UserProvider`로 프로필을 전역 관리함
 
 ## 알려진 이슈 및 해결책
 
