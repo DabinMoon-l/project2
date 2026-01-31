@@ -24,6 +24,19 @@ export interface ExamplesData {
 }
 
 /**
+ * 공통 지문 타입 (결합형에서 사용)
+ */
+export type PassageType = 'normal' | 'korean_abc';
+
+/**
+ * ㄱㄴㄷ식 보기 항목 (결합형 공통 지문용)
+ */
+export interface KoreanAbcItem {
+  label: string; // ㄱ, ㄴ, ㄷ, ㄹ, ㅁ 등
+  text: string;
+}
+
+/**
  * 하위 문제 (결합형에서 사용)
  */
 export interface SubQuestion {
@@ -37,6 +50,10 @@ export interface SubQuestion {
   answerTexts?: string[];
   rubric?: RubricItem[];
   explanation?: string;
+  /** 보기 (하위 문제별 개별 보기) */
+  examples?: string[];
+  /** 이미지 URL (하위 문제별 개별 이미지) */
+  image?: string;
 }
 
 /**
@@ -69,6 +86,12 @@ export interface QuestionData {
   rubric?: RubricItem[];
   /** 하위 문제 (결합형용) */
   subQuestions?: SubQuestion[];
+  /** 공통 지문 타입 (결합형용) - normal: 일반 보기, korean_abc: ㄱㄴㄷ식 보기 */
+  passageType?: PassageType;
+  /** ㄱㄴㄷ식 보기 항목들 (결합형에서 passageType이 korean_abc일 때) */
+  koreanAbcItems?: KoreanAbcItem[];
+  /** 공통 지문 이미지 (결합형용) */
+  passageImage?: string | null;
 }
 
 interface QuestionEditorProps {
@@ -161,6 +184,15 @@ function RubricEditor({
         <span className={`text-xs ${totalPercentage === 100 ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>
           합계: {totalPercentage}%
         </span>
+      </div>
+      <p className="text-xs text-[#5C5C5C]">
+        부분점수 채점을 위한 평가 기준을 설정하세요
+      </p>
+      <div className="p-2 bg-[#EDEAE4] border border-[#1A1A1A]">
+        <p className="text-xs text-[#5C5C5C]">
+          <span className="font-bold">TIP:</span> 평가요소별로 점수가 배점되어 부분점수가 자동 계산됩니다.
+          예: 논리성 50% + 정확성 50% = 총점 100%
+        </p>
       </div>
 
       <div className="space-y-2">
@@ -552,6 +584,114 @@ function SubQuestionEditor({
         </div>
       )}
 
+      {/* 하위 문제 보기 (examples) */}
+      <div className="mt-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-bold text-[#1A1A1A]">
+            보기 <span className="text-[#5C5C5C] font-normal">(선택)</span>
+          </label>
+          {(!subQuestion.examples || subQuestion.examples.length === 0) && (
+            <button
+              type="button"
+              onClick={() => onChange({ ...subQuestion, examples: [''] })}
+              className="px-2 py-0.5 text-xs font-bold border border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+            >
+              + 보기 추가
+            </button>
+          )}
+        </div>
+        {subQuestion.examples && subQuestion.examples.length > 0 && (
+          <div className="space-y-1">
+            {subQuestion.examples.map((example, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <span className="w-6 h-6 bg-[#1A1A1A] text-[#F5F0E8] flex items-center justify-center text-xs font-bold flex-shrink-0">
+                  {['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ'][idx] || idx + 1}
+                </span>
+                <input
+                  type="text"
+                  value={example}
+                  onChange={(e) => {
+                    const newExamples = [...(subQuestion.examples || [])];
+                    newExamples[idx] = e.target.value;
+                    onChange({ ...subQuestion, examples: newExamples });
+                  }}
+                  placeholder={`보기 ${idx + 1}`}
+                  className="flex-1 px-2 py-1 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-xs focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newExamples = (subQuestion.examples || []).filter((_, i) => i !== idx);
+                    onChange({ ...subQuestion, examples: newExamples.length > 0 ? newExamples : undefined });
+                  }}
+                  className="w-6 h-6 flex items-center justify-center text-[#8B1A1A] hover:bg-[#F5F0E8] transition-colors"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+            {subQuestion.examples.length < 6 && (
+              <button
+                type="button"
+                onClick={() => onChange({ ...subQuestion, examples: [...(subQuestion.examples || []), ''] })}
+                className="w-full py-1 text-xs font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#F5F0E8] hover:text-[#1A1A1A] transition-colors"
+              >
+                + 보기 항목 추가
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* 하위 문제 이미지 */}
+      <div className="mt-3 space-y-2">
+        <label className="text-xs font-bold text-[#1A1A1A]">
+          이미지 <span className="text-[#5C5C5C] font-normal">(선택)</span>
+        </label>
+        {subQuestion.image ? (
+          <div className="relative border-2 border-[#1A1A1A] bg-[#EDEAE4] p-1">
+            <img
+              src={subQuestion.image}
+              alt="하위 문제 이미지"
+              className="w-full max-h-32 object-contain"
+            />
+            <button
+              type="button"
+              onClick={() => onChange({ ...subQuestion, image: undefined })}
+              className="absolute top-0.5 right-0.5 w-5 h-5 bg-[#8B1A1A] text-[#F5F0E8] flex items-center justify-center hover:bg-[#6B1414] transition-colors"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        ) : (
+          <label className="flex items-center justify-center gap-1 w-full py-2 border-2 border-dashed border-[#1A1A1A] text-[#5C5C5C] cursor-pointer hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors">
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  const reader = new FileReader();
+                  reader.onload = (event) => {
+                    onChange({ ...subQuestion, image: event.target?.result as string });
+                  };
+                  reader.readAsDataURL(file);
+                }
+              }}
+            />
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <span className="text-xs">이미지 업로드</span>
+          </label>
+        )}
+      </div>
+
       {/* 해설 */}
       <input
         type="text"
@@ -599,6 +739,9 @@ export default function QuestionEditor({
         examples: null,
         rubric: [],
         subQuestions: [],
+        passageType: 'normal',
+        koreanAbcItems: [],
+        passageImage: null,
       };
     }
 
@@ -623,6 +766,9 @@ export default function QuestionEditor({
       examples: existing.examples || null,
       rubric: existing.rubric || [],
       subQuestions: existing.subQuestions || [],
+      passageType: existing.passageType || 'normal',
+      koreanAbcItems: existing.koreanAbcItems || [],
+      passageImage: existing.passageImage || null,
     };
   };
 
@@ -673,6 +819,10 @@ export default function QuestionEditor({
         answerIndex: -1,
         answerIndices: [],
       }] : [],
+      // 결합형 관련 필드 초기화
+      passageType: type === 'combined' ? 'normal' : prev.passageType,
+      koreanAbcItems: type === 'combined' ? [] : prev.koreanAbcItems,
+      passageImage: type === 'combined' ? null : prev.passageImage,
     }));
     setErrors({});
     // 객관식이 아니면 복수정답 모드 해제
@@ -893,6 +1043,43 @@ export default function QuestionEditor({
   }, []);
 
   /**
+   * 결합형 공통 이미지(passageImage) 업로드 핸들러
+   */
+  const handlePassageImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setErrors((prev) => ({ ...prev, passageImage: '이미지 파일만 업로드할 수 있습니다.' }));
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setErrors((prev) => ({ ...prev, passageImage: '파일 크기는 5MB 이하여야 합니다.' }));
+      return;
+    }
+
+    setErrors((prev) => ({ ...prev, passageImage: '' }));
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const passageImage = event.target?.result as string;
+      setQuestion((prev) => ({ ...prev, passageImage }));
+    };
+    reader.onerror = () => {
+      setErrors((prev) => ({ ...prev, passageImage: '이미지 업로드에 실패했습니다.' }));
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
+  /**
+   * 결합형 공통 이미지(passageImage) 삭제
+   */
+  const handleRemovePassageImage = useCallback(() => {
+    setQuestion((prev) => ({ ...prev, passageImage: null }));
+  }, []);
+
+  /**
    * 보기 유형 변경
    */
   const handleExamplesTypeChange = useCallback((type: ExamplesType) => {
@@ -1038,9 +1225,18 @@ export default function QuestionEditor({
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
 
-    // 문제 텍스트 검사
-    if (!question.text.trim()) {
-      newErrors.text = '문제를 입력해주세요.';
+    // 문제 텍스트 검사 (결합형은 공통 지문 OR 이미지 중 하나만 있으면 OK)
+    if (question.type === 'combined') {
+      const hasPassage = question.text.trim().length > 0;
+      const hasPassageImage = !!question.passageImage;
+      const hasKoreanAbcItems = (question.koreanAbcItems || []).some(item => item.text.trim());
+      if (!hasPassage && !hasPassageImage && !hasKoreanAbcItems) {
+        newErrors.text = '공통 지문, 이미지, 또는 ㄱㄴㄷ식 보기 중 하나 이상을 입력해주세요.';
+      }
+    } else {
+      if (!question.text.trim()) {
+        newErrors.text = '문제를 입력해주세요.';
+      }
     }
 
     // 정답 검사
@@ -1192,6 +1388,52 @@ export default function QuestionEditor({
           <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
             {question.type === 'combined' ? '공통 지문' : '문제'}
           </label>
+
+          {/* 결합형일 때 공통 지문 타입 선택 */}
+          {question.type === 'combined' && (
+            <div className="mb-3">
+              <div className="flex gap-2 mb-2">
+                <button
+                  type="button"
+                  onClick={() => setQuestion(prev => ({ ...prev, passageType: 'normal' }))}
+                  className={`
+                    flex-1 py-2 text-sm font-bold border-2 transition-colors
+                    ${question.passageType === 'normal' || !question.passageType
+                      ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                      : 'bg-[#EDEAE4] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
+                    }
+                  `}
+                >
+                  일반 형식
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQuestion(prev => ({
+                    ...prev,
+                    passageType: 'korean_abc',
+                    koreanAbcItems: prev.koreanAbcItems && prev.koreanAbcItems.length > 0
+                      ? prev.koreanAbcItems
+                      : [{ label: 'ㄱ', text: '' }, { label: 'ㄴ', text: '' }, { label: 'ㄷ', text: '' }]
+                  }))}
+                  className={`
+                    flex-1 py-2 text-sm font-bold border-2 transition-colors
+                    ${question.passageType === 'korean_abc'
+                      ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                      : 'bg-[#EDEAE4] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
+                    }
+                  `}
+                >
+                  ㄱㄴㄷ식 보기
+                </button>
+              </div>
+              <p className="text-xs text-[#5C5C5C]">
+                {question.passageType === 'korean_abc'
+                  ? 'ㄱ, ㄴ, ㄷ 등의 보기 항목을 개별적으로 입력할 수 있습니다.'
+                  : '일반 텍스트 형식의 공통 지문을 입력합니다.'}
+              </p>
+            </div>
+          )}
+
           <textarea
             value={question.text}
             onChange={(e) => handleTextChange('text', e.target.value)}
@@ -1209,79 +1451,199 @@ export default function QuestionEditor({
               }
             `}
           />
+
+          {/* ㄱㄴㄷ식 보기 UI (결합형 + korean_abc일 때) */}
+          {question.type === 'combined' && question.passageType === 'korean_abc' && (
+            <div className="mt-3 space-y-2">
+              <label className="text-sm font-bold text-[#1A1A1A]">ㄱㄴㄷ식 보기 항목</label>
+              <div className="space-y-2">
+                {(question.koreanAbcItems || []).map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <span className="w-8 h-8 bg-[#1A1A1A] text-[#F5F0E8] flex items-center justify-center text-sm font-bold flex-shrink-0">
+                      {item.label}.
+                    </span>
+                    <input
+                      type="text"
+                      value={item.text}
+                      onChange={(e) => {
+                        const newItems = [...(question.koreanAbcItems || [])];
+                        newItems[idx] = { ...newItems[idx], text: e.target.value };
+                        setQuestion(prev => ({ ...prev, koreanAbcItems: newItems }));
+                      }}
+                      placeholder={`${item.label}. 내용을 입력하세요`}
+                      className="flex-1 px-3 py-2 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-sm focus:outline-none"
+                    />
+                    {(question.koreanAbcItems || []).length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newItems = (question.koreanAbcItems || []).filter((_, i) => i !== idx);
+                          setQuestion(prev => ({ ...prev, koreanAbcItems: newItems }));
+                        }}
+                        className="w-8 h-8 flex items-center justify-center text-[#8B1A1A] hover:bg-[#FDEAEA] transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {(question.koreanAbcItems || []).length < 6 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const koreanLabels = ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ'];
+                    const nextLabel = koreanLabels[(question.koreanAbcItems || []).length] || `${(question.koreanAbcItems || []).length + 1}`;
+                    setQuestion(prev => ({
+                      ...prev,
+                      koreanAbcItems: [...(prev.koreanAbcItems || []), { label: nextLabel, text: '' }]
+                    }));
+                  }}
+                  className="w-full py-2 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
+                >
+                  + 보기 항목 추가 (최대 6개)
+                </button>
+              )}
+              {/* 미리보기 */}
+              {(question.koreanAbcItems || []).some(item => item.text.trim()) && (
+                <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
+                  <p className="text-xs text-[#5C5C5C] mb-2">미리보기</p>
+                  <div className="space-y-1">
+                    {(question.koreanAbcItems || []).filter(item => item.text.trim()).map((item, idx) => (
+                      <p key={idx} className="text-sm text-[#1A1A1A]">
+                        <span className="font-bold">{item.label}.</span> {item.text}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {errors.text && (
             <p className="mt-1 text-sm text-[#8B1A1A]">{errors.text}</p>
           )}
         </div>
 
-        {/* 이미지 업로드 */}
-        <div>
-          <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
-            {question.type === 'combined' ? '공통 이미지' : '문제 이미지'} <span className="text-[#5C5C5C] font-normal">(선택)</span>
-          </label>
+        {/* 이미지 업로드 - 결합형이 아닐 때 */}
+        {question.type !== 'combined' && (
+          <div>
+            <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
+              문제 이미지 <span className="text-[#5C5C5C] font-normal">(선택)</span>
+            </label>
 
-          {question.imageUrl ? (
-            <div className="relative border-2 border-[#1A1A1A] bg-[#EDEAE4] p-2">
-              <img
-                src={question.imageUrl}
-                alt="문제 이미지"
-                className="w-full max-h-48 object-contain"
-              />
-              <button
-                type="button"
-                onClick={handleRemoveImage}
-                className="absolute top-1 right-1 w-7 h-7 bg-[#8B1A1A] text-[#F5F0E8] flex items-center justify-center hover:bg-[#6B1414] transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            {question.imageUrl ? (
+              <div className="relative border-2 border-[#1A1A1A] bg-[#EDEAE4] p-2">
+                <img
+                  src={question.imageUrl}
+                  alt="문제 이미지"
+                  className="w-full max-h-48 object-contain"
+                />
+                <button
+                  type="button"
+                  onClick={handleRemoveImage}
+                  className="absolute top-1 right-1 w-7 h-7 bg-[#8B1A1A] text-[#F5F0E8] flex items-center justify-center hover:bg-[#6B1414] transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ) : (
+              <div className="relative">
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  disabled={isUploadingImage}
+                  className="hidden"
+                  id="question-image"
+                />
+                <label
+                  htmlFor="question-image"
+                  className={`
+                    flex items-center justify-center gap-2
+                    w-full py-3 border-2 border-dashed border-[#1A1A1A]
+                    text-[#5C5C5C] cursor-pointer
+                    hover:bg-[#EDEAE4] hover:text-[#1A1A1A]
+                    transition-colors
+                    ${isUploadingImage ? 'opacity-50 cursor-not-allowed' : ''}
+                  `}
+                >
+                  {isUploadingImage ? (
+                    <span className="flex items-center gap-2">
+                      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      업로드 중...
+                    </span>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      이미지 업로드
+                    </>
+                  )}
+                </label>
+              </div>
+            )}
+            {errors.image && (
+              <p className="mt-1 text-sm text-[#8B1A1A]">{errors.image}</p>
+            )}
+          </div>
+        )}
+
+        {/* 공통 이미지 업로드 - 결합형일 때 */}
+        {question.type === 'combined' && (
+          <div>
+            <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
+              공통 이미지 <span className="text-[#5C5C5C] font-normal">(선택)</span>
+            </label>
+            <p className="text-xs text-[#5C5C5C] mb-2">
+              공통 지문과 함께 표시할 이미지를 업로드하세요. 공통 지문 또는 이미지 중 하나 이상 필요합니다.
+            </p>
+
+            {question.passageImage ? (
+              <div className="relative border-2 border-[#1A1A1A] bg-[#EDEAE4] p-2">
+                <img
+                  src={question.passageImage}
+                  alt="공통 이미지"
+                  className="w-full max-h-48 object-contain"
+                />
+                <button
+                  type="button"
+                  onClick={handleRemovePassageImage}
+                  className="absolute top-1 right-1 w-7 h-7 bg-[#8B1A1A] text-[#F5F0E8] flex items-center justify-center hover:bg-[#6B1414] transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ) : (
+              <label className="flex items-center justify-center gap-2 w-full py-3 border-2 border-dashed border-[#1A1A1A] text-[#5C5C5C] cursor-pointer hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePassageImageUpload}
+                  className="hidden"
+                />
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-              </button>
-            </div>
-          ) : (
-            <div className="relative">
-              <input
-                ref={imageInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                disabled={isUploadingImage}
-                className="hidden"
-                id="question-image"
-              />
-              <label
-                htmlFor="question-image"
-                className={`
-                  flex items-center justify-center gap-2
-                  w-full py-3 border-2 border-dashed border-[#1A1A1A]
-                  text-[#5C5C5C] cursor-pointer
-                  hover:bg-[#EDEAE4] hover:text-[#1A1A1A]
-                  transition-colors
-                  ${isUploadingImage ? 'opacity-50 cursor-not-allowed' : ''}
-                `}
-              >
-                {isUploadingImage ? (
-                  <span className="flex items-center gap-2">
-                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    업로드 중...
-                  </span>
-                ) : (
-                  <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    이미지 업로드
-                  </>
-                )}
+                이미지 업로드
               </label>
-            </div>
-          )}
-          {errors.image && (
-            <p className="mt-1 text-sm text-[#8B1A1A]">{errors.image}</p>
-          )}
-        </div>
+            )}
+            {errors.passageImage && (
+              <p className="mt-1 text-sm text-[#8B1A1A]">{errors.passageImage}</p>
+            )}
+          </div>
+        )}
 
         {/* 보기 (Examples) - 결합형 제외 */}
         {question.type !== 'combined' && (
@@ -1639,14 +2001,33 @@ export default function QuestionEditor({
             </motion.div>
           )}
 
-          {/* 서술형 루브릭 */}
+          {/* 서술형 모범답안 및 루브릭 */}
           {question.type === 'essay' && (
             <motion.div
               key="essay"
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
+              className="space-y-4"
             >
+              {/* 모범답안 입력 */}
+              <div>
+                <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
+                  완벽한 답 (모범답안)
+                </label>
+                <p className="text-xs text-[#5C5C5C] mb-2">
+                  채점 시 참고할 모범 답안을 입력하세요. 학생에게 직접 표시되지 않습니다.
+                </p>
+                <textarea
+                  value={question.answerText}
+                  onChange={(e) => handleTextChange('answerText', e.target.value)}
+                  placeholder="완벽한 모범 답안을 입력하세요"
+                  rows={4}
+                  className="w-full px-4 py-3 border-2 border-[#1A1A1A] bg-[#F5F0E8] resize-none focus:outline-none"
+                />
+              </div>
+
+              {/* 루브릭 */}
               <RubricEditor
                 rubric={question.rubric || [{ criteria: '', percentage: 100, description: '' }]}
                 onChange={handleRubricChange}
