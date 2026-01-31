@@ -1,13 +1,18 @@
 'use client';
 
-import { useCallback, useState, useMemo, memo } from 'react';
+import { useCallback, useState, useMemo, memo, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { Skeleton } from '@/components/common';
-import { usePosts, type Post } from '@/lib/hooks/useBoard';
+import { usePosts, type Post, type Comment } from '@/lib/hooks/useBoard';
 
 /** 기본 토끼 이미지 경로 */
 const DEFAULT_RABBIT_IMAGE = '/rabbit/default-news.png';
+
+/** 댓글을 postId별로 그룹화한 Map 타입 */
+type CommentsMap = Map<string, Comment[]>;
 
 /** 랜덤 명언 목록 */
 const MOTIVATIONAL_QUOTES = [
@@ -24,8 +29,17 @@ const MOTIVATIONAL_QUOTES = [
 /**
  * 헤드라인 기사 (최신 글)
  */
-const HeadlineArticle = memo(function HeadlineArticle({ post, onClick }: { post: Post; onClick: () => void }) {
+const HeadlineArticle = memo(function HeadlineArticle({
+  post,
+  onClick,
+  comments = [],
+}: {
+  post: Post;
+  onClick: () => void;
+  comments?: Comment[];
+}) {
   const imageUrl = post.imageUrl || post.imageUrls?.[0] || DEFAULT_RABBIT_IMAGE;
+  const displayComments = comments.filter(c => !c.parentId).slice(0, 2);
 
   return (
     <article
@@ -40,10 +54,11 @@ const HeadlineArticle = memo(function HeadlineArticle({ post, onClick }: { post:
           fill
           sizes="(max-width: 768px) 33vw, 200px"
           className="object-contain grayscale-[20%] group-hover:grayscale-0 transition-all"
+          priority
         />
       </div>
 
-      {/* 우측 - 제목, 본문, 댓글 수 */}
+      {/* 우측 - 제목, 본문, 댓글 */}
       <div className="flex-1 flex flex-col">
         {/* 제목 - 검정 박스 */}
         <div className="bg-[#1A1A1A] px-3 py-3">
@@ -52,17 +67,21 @@ const HeadlineArticle = memo(function HeadlineArticle({ post, onClick }: { post:
           </h1>
         </div>
 
-        {/* 본문 및 댓글 수 */}
+        {/* 본문 및 댓글 */}
         <div className="p-3 flex-1">
           <p className="text-sm text-[#1A1A1A] leading-relaxed line-clamp-3">
             {post.content}
           </p>
 
-          {/* 댓글 수 표시 */}
-          {post.commentCount > 0 && (
-            <p className="mt-2 pt-2 border-t border-dashed border-[#1A1A1A] text-xs text-[#5C5C5C]">
-              ㄴ {post.commentCount}개의 댓글
-            </p>
+          {/* 댓글 내용 표시 */}
+          {displayComments.length > 0 && (
+            <div className="mt-2 pt-2 border-t border-dashed border-[#1A1A1A]">
+              {displayComments.map((comment) => (
+                <p key={comment.id} className="text-sm text-[#1A1A1A] leading-snug py-0.5">
+                  ㄴ {comment.content}
+                </p>
+              ))}
+            </div>
           )}
         </div>
       </div>
@@ -74,9 +93,20 @@ const HeadlineArticle = memo(function HeadlineArticle({ post, onClick }: { post:
  * Masonry 아이템
  * @param imagePosition - 이미지 위치 ('top' 또는 'bottom')
  */
-const MasonryItem = memo(function MasonryItem({ post, onClick, imagePosition = 'top' }: { post: Post; onClick: () => void; imagePosition?: 'top' | 'bottom' }) {
+const MasonryItem = memo(function MasonryItem({
+  post,
+  onClick,
+  imagePosition = 'top',
+  comments = [],
+}: {
+  post: Post;
+  onClick: () => void;
+  imagePosition?: 'top' | 'bottom';
+  comments?: Comment[];
+}) {
   const hasImage = post.imageUrl || (post.imageUrls && post.imageUrls.length > 0);
   const imageUrl = post.imageUrl || post.imageUrls?.[0];
+  const displayComments = comments.filter(c => !c.parentId).slice(0, 2);
 
   const ImageSection = hasImage && imageUrl && (
     <div className="relative w-full aspect-[4/3] border border-[#1A1A1A] bg-[#EDEAE4]">
@@ -118,11 +148,15 @@ const MasonryItem = memo(function MasonryItem({ post, onClick, imagePosition = '
         {post.content}
       </p>
 
-      {/* 댓글 수 표시 */}
-      {post.commentCount > 0 && (
-        <p className="mt-2 pt-2 border-t border-dashed border-[#1A1A1A] text-xs text-[#5C5C5C]">
-          ㄴ {post.commentCount}개의 댓글
-        </p>
+      {/* 댓글 내용 표시 */}
+      {displayComments.length > 0 && (
+        <div className="mt-2 pt-2 border-t border-dashed border-[#1A1A1A]">
+          {displayComments.map((comment) => (
+            <p key={comment.id} className="text-sm text-[#1A1A1A] leading-snug py-0.5">
+              ㄴ {comment.content}
+            </p>
+          ))}
+        </div>
       )}
     </article>
   );
@@ -165,6 +199,62 @@ export default function BoardPage() {
 
   // 검색
   const [searchQuery, setSearchQuery] = useState('');
+  // 댓글 맵 (postId -> comments)
+  const [commentsMap, setCommentsMap] = useState<CommentsMap>(new Map());
+
+  // 게시글 ID 목록이 변경되면 댓글 한 번에 로드
+  useEffect(() => {
+    if (posts.length === 0) return;
+
+    const loadAllComments = async () => {
+      try {
+        // 모든 게시글의 댓글을 한 번에 조회
+        const postIds = posts.map(p => p.id);
+
+        // Firestore는 'in' 쿼리에 최대 30개까지만 지원
+        // 필요시 청크로 나눠서 쿼리
+        const chunks: string[][] = [];
+        for (let i = 0; i < postIds.length; i += 30) {
+          chunks.push(postIds.slice(i, i + 30));
+        }
+
+        const newMap = new Map<string, Comment[]>();
+
+        for (const chunk of chunks) {
+          const commentsQuery = query(
+            collection(db, 'comments'),
+            where('postId', 'in', chunk),
+            orderBy('createdAt', 'asc')
+          );
+
+          const snapshot = await getDocs(commentsQuery);
+          snapshot.forEach((doc) => {
+            const data = doc.data();
+            const comment: Comment = {
+              id: doc.id,
+              postId: data.postId || '',
+              parentId: data.parentId || undefined,
+              authorId: data.authorId || '',
+              authorNickname: data.authorNickname || '알 수 없음',
+              content: data.content || '',
+              isAnonymous: data.isAnonymous || false,
+              createdAt: data.createdAt?.toDate() || new Date(),
+            };
+
+            const existing = newMap.get(comment.postId) || [];
+            existing.push(comment);
+            newMap.set(comment.postId, existing);
+          });
+        }
+
+        setCommentsMap(newMap);
+      } catch (err) {
+        console.error('댓글 로드 실패:', err);
+      }
+    };
+
+    loadAllComments();
+  }, [posts]);
 
   // 검색 필터링
   const filteredPosts = searchQuery.trim()
@@ -303,6 +393,7 @@ export default function BoardPage() {
             <HeadlineArticle
               post={headline}
               onClick={() => handlePostClick(headline.id)}
+              comments={commentsMap.get(headline.id) || []}
             />
           </div>
         )}
@@ -316,6 +407,7 @@ export default function BoardPage() {
                 post={post}
                 onClick={() => handlePostClick(post.id)}
                 imagePosition={index % 2 === 0 ? 'top' : 'bottom'}
+                comments={commentsMap.get(post.id) || []}
               />
             ))}
           </div>
