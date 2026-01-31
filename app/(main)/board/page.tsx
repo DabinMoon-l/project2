@@ -98,11 +98,13 @@ const MasonryItem = memo(function MasonryItem({
   onClick,
   imagePosition = 'top',
   comments = [],
+  isPriority = false,
 }: {
   post: Post;
   onClick: () => void;
   imagePosition?: 'top' | 'bottom';
   comments?: Comment[];
+  isPriority?: boolean;
 }) {
   const hasImage = post.imageUrl || (post.imageUrls && post.imageUrls.length > 0);
   const imageUrl = post.imageUrl || post.imageUrls?.[0];
@@ -116,6 +118,7 @@ const MasonryItem = memo(function MasonryItem({
         fill
         sizes="(max-width: 768px) 50vw, 300px"
         className="object-contain grayscale-[30%] group-hover:grayscale-0 transition-all"
+        priority={isPriority}
       />
     </div>
   );
@@ -408,6 +411,7 @@ export default function BoardPage() {
                 onClick={() => handlePostClick(post.id)}
                 imagePosition={index % 2 === 0 ? 'top' : 'bottom'}
                 comments={commentsMap.get(post.id) || []}
+                isPriority={index < 4}
               />
             ))}
           </div>
