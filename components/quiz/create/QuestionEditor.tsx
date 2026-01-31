@@ -1582,9 +1582,7 @@ export default function QuestionEditor({
         {/* 문제 텍스트 (결합형에서는 공통 지문) */}
         <div>
           <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
-            {question.type === 'combined' ? (
-              <>공통 지문 <span className="text-[#5C5C5C] font-normal">(공통 이미지와 둘 중 하나 필수)</span></>
-            ) : '문제'}
+            {question.type === 'combined' ? '공통 지문' : '문제'}
           </label>
 
           {/* 결합형일 때 공통 지문 타입 선택 */}
@@ -1797,11 +1795,8 @@ export default function QuestionEditor({
         {question.type === 'combined' && (
           <div>
             <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
-              공통 이미지 <span className="text-[#5C5C5C] font-normal">(선택)</span>
+              공통 이미지
             </label>
-            <p className="text-xs text-[#5C5C5C] mb-2">
-              공통 지문과 함께 표시할 이미지를 업로드하세요. 공통 지문 또는 이미지 중 하나 이상 필요합니다.
-            </p>
 
             {question.passageImage ? (
               <div className="relative border-2 border-[#1A1A1A] bg-[#EDEAE4] p-2">
