@@ -25,8 +25,15 @@ export interface ExamplesData {
 
 /**
  * 공통 지문 타입 (결합형에서 사용)
+ * - 'text': 텍스트 박스 형식 (자유롭게 작성)
+ * - 'korean_abc': ㄱ.ㄴ.ㄷ. 형식 (각 항목 개별 입력)
  */
-export type PassageType = 'normal' | 'korean_abc';
+export type PassageType = 'text' | 'korean_abc';
+
+/**
+ * 한글 자음 라벨 순서 (ㄱ ~ ㅎ)
+ */
+export const KOREAN_LABELS = ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
 
 /**
  * ㄱㄴㄷ식 보기 항목 (결합형 공통 지문용)
@@ -50,8 +57,12 @@ export interface SubQuestion {
   answerTexts?: string[];
   rubric?: RubricItem[];
   explanation?: string;
-  /** 보기 (하위 문제별 개별 보기) */
+  /** 보기 유형 ('text': 텍스트 박스, 'korean_abc': ㄱㄴㄷ 형식) */
+  examplesType?: 'text' | 'korean_abc';
+  /** 보기 - 텍스트 박스용 (줄바꿈으로 구분) */
   examples?: string[];
+  /** 보기 - ㄱㄴㄷ 형식용 */
+  koreanAbcExamples?: KoreanAbcItem[];
   /** 이미지 URL (하위 문제별 개별 이미지) */
   image?: string;
 }
@@ -88,8 +99,10 @@ export interface QuestionData {
   scoringMethod?: 'ai_assisted' | 'manual';
   /** 하위 문제 (결합형용) */
   subQuestions?: SubQuestion[];
-  /** 공통 지문 타입 (결합형용) - normal: 일반 보기, korean_abc: ㄱㄴㄷ식 보기 */
+  /** 공통 지문 타입 (결합형용) - text: 텍스트 박스, korean_abc: ㄱㄴㄷ식 보기 */
   passageType?: PassageType;
+  /** 공통 지문 텍스트 (결합형에서 passageType이 text일 때) - text 필드와 함께 사용 */
+  passage?: string;
   /** ㄱㄴㄷ식 보기 항목들 (결합형에서 passageType이 korean_abc일 때) */
   koreanAbcItems?: KoreanAbcItem[];
   /** 공통 지문 이미지 (결합형용) */
@@ -142,6 +155,20 @@ const subQuestionTypeLabels: Record<Exclude<QuestionType, 'combined'>, string> =
   short_answer: '단답형',
   essay: '서술형',
 };
+
+/**
+ * 실제 문제 수 계산 (하위 문제 포함)
+ * - 일반 문제 1개 = 1문제
+ * - 결합형 1개 (하위 문제 N개) = N문제로 계산
+ */
+export function calculateTotalQuestionCount(questions: QuestionData[]): number {
+  return questions.reduce((total, q) => {
+    if (q.type === 'combined' && q.subQuestions && q.subQuestions.length > 0) {
+      return total + q.subQuestions.length;
+    }
+    return total + 1;
+  }, 0);
+}
 
 // ============================================================
 // 하위 컴포넌트
@@ -605,56 +632,149 @@ function SubQuestionEditor({
           <label className="text-xs font-bold text-[#1A1A1A]">
             보기 <span className="text-[#5C5C5C] font-normal">(선택)</span>
           </label>
-          {(!subQuestion.examples || subQuestion.examples.length === 0) && (
+          {(!subQuestion.examples || subQuestion.examples.length === 0) && (!subQuestion.koreanAbcExamples || subQuestion.koreanAbcExamples.length === 0) && (
             <button
               type="button"
-              onClick={() => onChange({ ...subQuestion, examples: [''] })}
-              className="px-2 py-0.5 text-xs font-bold border border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+              onClick={() => onChange({ ...subQuestion, examplesType: 'text', examples: [''] })}
+              className="px-2 py-0.5 text-xs font-bold border-2 border-[#1A1A1A] bg-[#EDEAE4] text-[#5C5C5C] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
             >
               + 보기 추가
             </button>
           )}
         </div>
-        {subQuestion.examples && subQuestion.examples.length > 0 && (
-          <div className="space-y-1">
-            {subQuestion.examples.map((example, idx) => (
-              <div key={idx} className="flex items-center gap-2">
-                <span className="w-6 h-6 bg-[#1A1A1A] text-[#F5F0E8] flex items-center justify-center text-xs font-bold flex-shrink-0">
-                  {['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ'][idx] || idx + 1}
-                </span>
-                <input
-                  type="text"
-                  value={example}
+
+        {/* 보기가 있을 때 형식 선택 및 입력 UI */}
+        {((subQuestion.examples && subQuestion.examples.length > 0) || (subQuestion.koreanAbcExamples && subQuestion.koreanAbcExamples.length > 0) || subQuestion.examplesType) && (
+          <div className="space-y-2">
+            {/* 형식 선택 버튼 */}
+            <div className="flex gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  // 텍스트 박스 형식으로 전환
+                  const currentItems = subQuestion.koreanAbcExamples?.map(item => item.text) || subQuestion.examples || [''];
+                  onChange({
+                    ...subQuestion,
+                    examplesType: 'text',
+                    examples: currentItems.length > 0 ? currentItems : [''],
+                    koreanAbcExamples: undefined
+                  });
+                }}
+                className={`
+                  flex-1 py-1.5 text-xs font-bold border-2 transition-colors
+                  ${subQuestion.examplesType !== 'korean_abc'
+                    ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                    : 'bg-[#EDEAE4] border-2 border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
+                  }
+                `}
+              >
+                텍스트 박스
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  // ㄱㄴㄷ 형식으로 전환
+                  const currentItems = subQuestion.examples || [];
+                  const koreanAbcItems = currentItems.map((text, idx) => ({
+                    label: KOREAN_LABELS[idx] || `${idx + 1}`,
+                    text
+                  }));
+                  onChange({
+                    ...subQuestion,
+                    examplesType: 'korean_abc',
+                    koreanAbcExamples: koreanAbcItems.length > 0 ? koreanAbcItems : [{ label: 'ㄱ', text: '' }],
+                    examples: undefined
+                  });
+                }}
+                className={`
+                  flex-1 py-1.5 text-xs font-bold border-2 transition-colors
+                  ${subQuestion.examplesType === 'korean_abc'
+                    ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                    : 'bg-[#EDEAE4] border-2 border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
+                  }
+                `}
+              >
+                ㄱ.ㄴ.ㄷ. 형식
+              </button>
+            </div>
+
+            {/* 텍스트 박스 형식 */}
+            {subQuestion.examplesType !== 'korean_abc' && (
+              <div className="space-y-1">
+                <textarea
+                  value={(subQuestion.examples || []).join('\n')}
                   onChange={(e) => {
-                    const newExamples = [...(subQuestion.examples || [])];
-                    newExamples[idx] = e.target.value;
-                    onChange({ ...subQuestion, examples: newExamples });
+                    const lines = e.target.value.split('\n');
+                    onChange({ ...subQuestion, examples: lines });
                   }}
-                  placeholder={`보기 ${idx + 1}`}
-                  className="flex-1 px-2 py-1 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-xs focus:outline-none"
+                  placeholder="보기를 줄바꿈으로 구분하여 입력..."
+                  rows={3}
+                  className="w-full px-2 py-1.5 border-2 border-[#1A1A1A] bg-white text-xs resize-none focus:outline-none"
                 />
                 <button
                   type="button"
-                  onClick={() => {
-                    const newExamples = (subQuestion.examples || []).filter((_, i) => i !== idx);
-                    onChange({ ...subQuestion, examples: newExamples.length > 0 ? newExamples : undefined });
-                  }}
-                  className="w-6 h-6 flex items-center justify-center text-[#8B1A1A] hover:bg-[#F5F0E8] transition-colors"
+                  onClick={() => onChange({ ...subQuestion, examplesType: undefined, examples: undefined })}
+                  className="w-full py-1 text-xs font-bold border-2 border-[#8B1A1A] text-[#8B1A1A] hover:bg-[#8B1A1A] hover:text-[#F5F0E8] transition-colors"
                 >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  보기 삭제
                 </button>
               </div>
-            ))}
-            {subQuestion.examples.length < 6 && (
-              <button
-                type="button"
-                onClick={() => onChange({ ...subQuestion, examples: [...(subQuestion.examples || []), ''] })}
-                className="w-full py-1 text-xs font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#F5F0E8] hover:text-[#1A1A1A] transition-colors"
-              >
-                + 보기 항목 추가
-              </button>
+            )}
+
+            {/* ㄱㄴㄷ 형식 */}
+            {subQuestion.examplesType === 'korean_abc' && (
+              <div className="space-y-1">
+                {(subQuestion.koreanAbcExamples || []).map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <span className="w-6 h-6 bg-[#1A1A1A] text-[#F5F0E8] flex items-center justify-center text-xs font-bold flex-shrink-0">
+                      {item.label}.
+                    </span>
+                    <input
+                      type="text"
+                      value={item.text}
+                      onChange={(e) => {
+                        const newItems = [...(subQuestion.koreanAbcExamples || [])];
+                        newItems[idx] = { ...newItems[idx], text: e.target.value };
+                        onChange({ ...subQuestion, koreanAbcExamples: newItems });
+                      }}
+                      placeholder={`${item.label}. 내용 입력`}
+                      className="flex-1 px-2 py-1 border-2 border-[#1A1A1A] bg-white text-xs focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newItems = (subQuestion.koreanAbcExamples || []).filter((_, i) => i !== idx);
+                        if (newItems.length === 0) {
+                          onChange({ ...subQuestion, examplesType: undefined, koreanAbcExamples: undefined });
+                        } else {
+                          onChange({ ...subQuestion, koreanAbcExamples: newItems });
+                        }
+                      }}
+                      className="w-6 h-6 flex items-center justify-center text-[#8B1A1A] hover:bg-[#F5F0E8] transition-colors"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+                {(subQuestion.koreanAbcExamples || []).length < 14 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const currentItems = subQuestion.koreanAbcExamples || [];
+                      const nextLabel = KOREAN_LABELS[currentItems.length] || `${currentItems.length + 1}`;
+                      onChange({
+                        ...subQuestion,
+                        koreanAbcExamples: [...currentItems, { label: nextLabel, text: '' }]
+                      });
+                    }}
+                    className="w-full py-1 text-xs font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#F5F0E8] hover:text-[#1A1A1A] transition-colors"
+                  >
+                    + 항목 추가
+                  </button>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -756,9 +876,10 @@ export default function QuestionEditor({
         rubric: [],
         scoringMethod: 'manual',
         subQuestions: [],
-        passageType: 'normal',
+        passageType: 'text',
         koreanAbcItems: [],
         passageImage: null,
+        passage: '',
       };
     }
 
@@ -784,9 +905,10 @@ export default function QuestionEditor({
       rubric: existing.rubric || [],
       scoringMethod: existing.scoringMethod || 'manual',
       subQuestions: existing.subQuestions || [],
-      passageType: existing.passageType || 'normal',
+      passageType: existing.passageType || 'text',
       koreanAbcItems: existing.koreanAbcItems || [],
       passageImage: existing.passageImage || null,
+      passage: existing.passage || '',
     };
   };
 
@@ -839,9 +961,10 @@ export default function QuestionEditor({
         answerIndices: [],
       }] : [],
       // 결합형 관련 필드 초기화
-      passageType: type === 'combined' ? 'normal' : prev.passageType,
+      passageType: type === 'combined' ? 'text' : prev.passageType,
       koreanAbcItems: type === 'combined' ? [] : prev.koreanAbcItems,
       passageImage: type === 'combined' ? null : prev.passageImage,
+      passage: type === 'combined' ? '' : prev.passage,
     }));
     setErrors({});
     // 객관식이 아니면 복수정답 모드 해제
@@ -1244,13 +1367,16 @@ export default function QuestionEditor({
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
 
-    // 문제 텍스트 검사 (결합형은 공통 지문 OR 이미지 중 하나만 있으면 OK)
+    // 문제 텍스트 검사 (결합형은 공통 지문 OR 공통 이미지 중 하나 이상 필수)
     if (question.type === 'combined') {
-      const hasPassage = question.text.trim().length > 0;
-      const hasPassageImage = !!question.passageImage;
-      const hasKoreanAbcItems = (question.koreanAbcItems || []).some(item => item.text.trim());
-      if (!hasPassage && !hasPassageImage && !hasKoreanAbcItems) {
-        newErrors.text = '공통 지문, 이미지, 또는 ㄱㄴㄷ식 보기 중 하나 이상을 입력해주세요.';
+      // passageType에 따라 지문 유효성 검사
+      const hasPassage = question.passageType === 'text'
+        ? (question.text?.trim() || question.passage?.trim())
+        : (question.koreanAbcItems && question.koreanAbcItems.length > 0 && question.koreanAbcItems.some(item => item.text.trim()));
+      const hasImage = !!question.passageImage;
+      const isValid = hasPassage || hasImage;
+      if (!isValid) {
+        newErrors.text = '공통 지문 또는 공통 이미지 중 하나 이상을 입력해주세요.';
       }
     } else {
       if (!question.text.trim()) {
@@ -1456,25 +1582,28 @@ export default function QuestionEditor({
         {/* 문제 텍스트 (결합형에서는 공통 지문) */}
         <div>
           <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
-            {question.type === 'combined' ? '공통 지문' : '문제'}
+            {question.type === 'combined' ? (
+              <>공통 지문 <span className="text-[#5C5C5C] font-normal">(공통 이미지와 둘 중 하나 필수)</span></>
+            ) : '문제'}
           </label>
 
           {/* 결합형일 때 공통 지문 타입 선택 */}
           {question.type === 'combined' && (
             <div className="mb-3">
+              <p className="text-xs text-[#5C5C5C] mb-2">지문 형식:</p>
               <div className="flex gap-2 mb-2">
                 <button
                   type="button"
-                  onClick={() => setQuestion(prev => ({ ...prev, passageType: 'normal' }))}
+                  onClick={() => setQuestion(prev => ({ ...prev, passageType: 'text' }))}
                   className={`
                     flex-1 py-2 text-sm font-bold border-2 transition-colors
-                    ${question.passageType === 'normal' || !question.passageType
+                    ${question.passageType === 'text' || !question.passageType
                       ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                      : 'bg-[#EDEAE4] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
+                      : 'bg-[#EDEAE4] border-2 border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
                     }
                   `}
                 >
-                  일반 형식
+                  텍스트 박스
                 </button>
                 <button
                   type="button"
@@ -1489,43 +1618,40 @@ export default function QuestionEditor({
                     flex-1 py-2 text-sm font-bold border-2 transition-colors
                     ${question.passageType === 'korean_abc'
                       ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                      : 'bg-[#EDEAE4] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
+                      : 'bg-[#EDEAE4] border-2 border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
                     }
                   `}
                 >
-                  ㄱㄴㄷ식 보기
+                  ㄱ.ㄴ.ㄷ. 형식
                 </button>
               </div>
-              <p className="text-xs text-[#5C5C5C]">
-                {question.passageType === 'korean_abc'
-                  ? 'ㄱ, ㄴ, ㄷ 등의 보기 항목을 개별적으로 입력할 수 있습니다.'
-                  : '일반 텍스트 형식의 공통 지문을 입력합니다.'}
-              </p>
             </div>
           )}
 
-          <textarea
-            value={question.text}
-            onChange={(e) => handleTextChange('text', e.target.value)}
-            placeholder={question.type === 'combined' ? '공통 지문을 입력하세요' : '문제를 입력하세요'}
-            rows={question.type === 'combined' ? 5 : 3}
-            className={`
-              w-full px-4 py-3 border-2 bg-[#F5F0E8]
-              resize-none
-              transition-colors duration-200
-              focus:outline-none
-              ${
-                errors.text
-                  ? 'border-[#8B1A1A]'
-                  : 'border-[#1A1A1A]'
-              }
-            `}
-          />
+          {/* 텍스트 박스 (결합형이 아니거나 passageType이 text일 때) */}
+          {(question.type !== 'combined' || question.passageType === 'text' || !question.passageType) && (
+            <textarea
+              value={question.text}
+              onChange={(e) => handleTextChange('text', e.target.value)}
+              placeholder={question.type === 'combined' ? '공통 지문을 입력하세요...' : '문제를 입력하세요'}
+              rows={question.type === 'combined' ? 5 : 3}
+              className={`
+                w-full px-4 py-3 border-2 bg-white
+                resize-none
+                transition-colors duration-200
+                focus:outline-none
+                ${
+                  errors.text
+                    ? 'border-[#8B1A1A]'
+                    : 'border-[#1A1A1A]'
+                }
+              `}
+            />
+          )}
 
           {/* ㄱㄴㄷ식 보기 UI (결합형 + korean_abc일 때) */}
           {question.type === 'combined' && question.passageType === 'korean_abc' && (
-            <div className="mt-3 space-y-2">
-              <label className="text-sm font-bold text-[#1A1A1A]">ㄱㄴㄷ식 보기 항목</label>
+            <div className="space-y-2">
               <div className="space-y-2">
                 {(question.koreanAbcItems || []).map((item, idx) => (
                   <div key={idx} className="flex items-center gap-2">
@@ -1541,7 +1667,7 @@ export default function QuestionEditor({
                         setQuestion(prev => ({ ...prev, koreanAbcItems: newItems }));
                       }}
                       placeholder={`${item.label}. 내용을 입력하세요`}
-                      className="flex-1 px-3 py-2 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-sm focus:outline-none"
+                      className="flex-1 px-3 py-2 border-2 border-[#1A1A1A] bg-white text-sm focus:outline-none"
                     />
                     {(question.koreanAbcItems || []).length > 1 && (
                       <button
@@ -1560,12 +1686,11 @@ export default function QuestionEditor({
                   </div>
                 ))}
               </div>
-              {(question.koreanAbcItems || []).length < 6 && (
+              {(question.koreanAbcItems || []).length < 14 && (
                 <button
                   type="button"
                   onClick={() => {
-                    const koreanLabels = ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ'];
-                    const nextLabel = koreanLabels[(question.koreanAbcItems || []).length] || `${(question.koreanAbcItems || []).length + 1}`;
+                    const nextLabel = KOREAN_LABELS[(question.koreanAbcItems || []).length] || `${(question.koreanAbcItems || []).length + 1}`;
                     setQuestion(prev => ({
                       ...prev,
                       koreanAbcItems: [...(prev.koreanAbcItems || []), { label: nextLabel, text: '' }]
@@ -1573,7 +1698,7 @@ export default function QuestionEditor({
                   }}
                   className="w-full py-2 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
                 >
-                  + 보기 항목 추가 (최대 6개)
+                  + 항목 추가
                 </button>
               )}
               {/* 미리보기 */}
