@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, useParams } from 'next/navigation';
 import {
@@ -215,9 +215,8 @@ export default function FolderDetailPage() {
     deleteReviewItem,
   } = useReview();
 
-  const [folderTitle, setFolderTitle] = useState('');
-  const [questions, setQuestions] = useState<ReviewItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [customQuestions, setCustomQuestions] = useState<ReviewItem[]>([]);
+  const [customLoading, setCustomLoading] = useState(false);
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [practiceItems, setPracticeItems] = useState<ReviewItem[] | null>(null);
@@ -225,76 +224,85 @@ export default function FolderDetailPage() {
   const [addSourceTab, setAddSourceTab] = useState<'solved' | 'wrong' | 'bookmark'>('solved');
   const [addSelectedIds, setAddSelectedIds] = useState<Set<string>>(new Set());
 
-  // 데이터 로드
-  useEffect(() => {
-    if (!user) return;
+  const loadedFolderRef = useRef<string | null>(null);
 
-    setLoading(true);
+  // 커스텀 폴더 찾기
+  const customFolder = useMemo(() => {
+    if (folderType === 'custom') {
+      return customFolders.find(f => f.id === folderId) || null;
+    }
+    return null;
+  }, [folderType, folderId, customFolders]);
 
+  // 폴더 데이터 계산 (useMemo로 무한 루프 방지)
+  const folderData = useMemo(() => {
     if (folderType === 'solved') {
       const group = groupedSolvedItems.find(g => g.quizId === folderId);
-      if (group) {
-        setFolderTitle(group.quizTitle);
-        setQuestions(group.items);
-      }
+      return group ? { title: group.quizTitle, items: group.items } : null;
     } else if (folderType === 'wrong') {
       const group = groupedWrongItems.find(g => g.quizId === folderId);
-      if (group) {
-        setFolderTitle(group.quizTitle);
-        setQuestions(group.items);
-      }
+      return group ? { title: group.quizTitle, items: group.items } : null;
     } else if (folderType === 'bookmark') {
       const group = groupedBookmarkedItems.find(g => g.quizId === folderId);
-      if (group) {
-        setFolderTitle(group.quizTitle);
-        setQuestions(group.items);
-      }
-    } else if (folderType === 'custom') {
-      const folder = customFolders.find(f => f.id === folderId);
-      if (folder) {
-        setFolderTitle(folder.name);
-        // 커스텀 폴더의 문제들 가져오기
-        const loadCustomQuestions = async () => {
-          const items: ReviewItem[] = [];
-          for (const q of folder.questions) {
-            // reviews 컬렉션에서 해당 문제 찾기
-            const reviewQuery = query(
-              collection(db, 'reviews'),
-              where('userId', '==', user.uid),
-              where('questionId', '==', q.questionId)
-            );
-            const reviewDocs = await getDocs(reviewQuery);
-            if (!reviewDocs.empty) {
-              const data = reviewDocs.docs[0].data();
-              items.push({
-                id: reviewDocs.docs[0].id,
-                userId: data.userId,
-                quizId: data.quizId,
-                quizTitle: data.quizTitle,
-                questionId: data.questionId,
-                question: data.question,
-                type: data.type,
-                options: data.options,
-                correctAnswer: data.correctAnswer,
-                userAnswer: data.userAnswer,
-                explanation: data.explanation,
-                reviewType: data.reviewType,
-                isBookmarked: data.isBookmarked,
-                isCorrect: data.isCorrect,
-                reviewCount: data.reviewCount || 0,
-                lastReviewedAt: data.lastReviewedAt,
-                createdAt: data.createdAt,
-              });
-            }
-          }
-          setQuestions(items);
-        };
-        loadCustomQuestions();
-      }
+      return group ? { title: group.quizTitle, items: group.items } : null;
+    } else if (folderType === 'custom' && customFolder) {
+      return { title: customFolder.name, items: null as ReviewItem[] | null };
     }
+    return null;
+  }, [folderType, folderId, groupedSolvedItems, groupedWrongItems, groupedBookmarkedItems, customFolder]);
 
-    setLoading(false);
-  }, [user, folderType, folderId, groupedSolvedItems, groupedWrongItems, groupedBookmarkedItems, customFolders]);
+  // 커스텀 폴더일 때만 비동기로 문제 로드
+  useEffect(() => {
+    if (!user || folderType !== 'custom' || !customFolder) return;
+    if (loadedFolderRef.current === folderId) return;
+
+    const loadCustomQuestions = async () => {
+      setCustomLoading(true);
+      const items: ReviewItem[] = [];
+
+      for (const q of customFolder.questions) {
+        const reviewQuery = query(
+          collection(db, 'reviews'),
+          where('userId', '==', user.uid),
+          where('questionId', '==', q.questionId)
+        );
+        const reviewDocs = await getDocs(reviewQuery);
+        if (!reviewDocs.empty) {
+          const data = reviewDocs.docs[0].data();
+          items.push({
+            id: reviewDocs.docs[0].id,
+            userId: data.userId,
+            quizId: data.quizId,
+            quizTitle: data.quizTitle,
+            questionId: data.questionId,
+            question: data.question,
+            type: data.type,
+            options: data.options,
+            correctAnswer: data.correctAnswer,
+            userAnswer: data.userAnswer,
+            explanation: data.explanation,
+            reviewType: data.reviewType,
+            isBookmarked: data.isBookmarked,
+            isCorrect: data.isCorrect,
+            reviewCount: data.reviewCount || 0,
+            lastReviewedAt: data.lastReviewedAt,
+            createdAt: data.createdAt,
+          });
+        }
+      }
+
+      setCustomQuestions(items);
+      loadedFolderRef.current = folderId;
+      setCustomLoading(false);
+    };
+
+    loadCustomQuestions();
+  }, [user, folderType, folderId, customFolder]);
+
+  // 최종 데이터
+  const folderTitle = folderData?.title || '';
+  const questions = folderType === 'custom' ? customQuestions : (folderData?.items || []);
+  const loading = folderType === 'custom' ? customLoading : !folderData;
 
   // 문제 선택/해제
   const handleSelectQuestion = (questionId: string) => {
@@ -316,7 +324,7 @@ export default function FolderDetailPage() {
 
     try {
       await removeFromCustomFolder(folderId, questionId);
-      setQuestions(prev => prev.filter(q => q.questionId !== questionId));
+      setCustomQuestions(prev => prev.filter(q => q.questionId !== questionId));
     } catch (err) {
       console.error('문제 제거 실패:', err);
       alert('제거에 실패했습니다.');
@@ -379,7 +387,7 @@ export default function FolderDetailPage() {
       await addToCustomFolder(folderId, questionsToAdd);
 
       // 추가된 문제 UI 업데이트
-      setQuestions(prev => [...prev, ...selectedItems]);
+      setCustomQuestions(prev => [...prev, ...selectedItems]);
 
       setIsAddMode(false);
       setAddSelectedIds(new Set());
