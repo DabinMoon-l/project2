@@ -217,13 +217,13 @@ await setDoc(doc(db, 'users', uid), {
 
 ## 진행 중인 작업
 
-### 퀴즈 생성 시스템 개편 (진행 중)
+### 퀴즈 생성 시스템 개편 (완료)
 - [x] OCR 진행률 컴포넌트 앱 스타일 적용 (`OcrProgress.tsx`, `OCRProcessor.tsx`)
 - [x] OCR 처리 취소 기능 추가
 - [x] 퀴즈 생성 페이지 레이아웃 수정 (sticky 버튼, flex 레이아웃)
 - [x] OCR 뒤로가기 시 재시작 버그 수정
 - [x] `lib/ocr.ts` 타입 정의 확장 (QuestionType 5종, RubricItem, SubQuestion)
-- [ ] `QuestionEditor.tsx` 리팩토링 (5가지 문제 유형 지원)
+- [x] `QuestionEditor.tsx` 리팩토링 (5가지 문제 유형 지원)
   - 객관식 선지 수 조절 (2~8개)
   - 서술형 루브릭 편집기
   - 결합형 문제 지원 (공통 지문/이미지 + 하위 문제)
