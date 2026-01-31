@@ -128,10 +128,16 @@ functions/             # Firebase Cloud Functions
 ## 주요 기능 구현 시 참고
 
 ### 퀴즈 시스템
-- 문제 유형: OX, 객관식 (4지선다), 주관식
+- 문제 유형: OX, 객관식, 단답형, 서술형, 결합형 (총 5가지)
+  - **OX**: 참/거짓 문제
+  - **객관식**: 2~8개 선지 지원 (기존 4지선다에서 확장)
+  - **단답형**: 짧은 텍스트 답변 (기존 주관식)
+  - **서술형**: 긴 답변 + 루브릭 채점 (평가요소 * 배점 비율)
+  - **결합형**: 공통 지문/이미지 + 여러 하위 문제
 - 퀴즈 풀이 중 즉시 피드백 버튼 (❗)
 - 오답은 자동으로 복습창에 저장
 - 자체제작 퀴즈: Tesseract OCR로 사진/PDF → 텍스트 추출
+- OCR 처리 중 취소 기능 지원
 
 ### 캐릭터 시스템
 - 기본: 귀여운 토끼 캐릭터
@@ -208,3 +214,29 @@ await setDoc(doc(db, 'users', uid), {
 
 ### 온보딩 완료 후 리다이렉트
 `onboarding_just_completed` localStorage 플래그를 사용하여 온보딩 직후 홈 화면 진입 시 다시 온보딩으로 리다이렉트되는 것을 방지함
+
+## 진행 중인 작업
+
+### 퀴즈 생성 시스템 개편 (진행 중)
+- [x] OCR 진행률 컴포넌트 앱 스타일 적용 (`OcrProgress.tsx`, `OCRProcessor.tsx`)
+- [x] OCR 처리 취소 기능 추가
+- [x] 퀴즈 생성 페이지 레이아웃 수정 (sticky 버튼, flex 레이아웃)
+- [x] OCR 뒤로가기 시 재시작 버그 수정
+- [x] `lib/ocr.ts` 타입 정의 확장 (QuestionType 5종, RubricItem, SubQuestion)
+- [ ] `QuestionEditor.tsx` 리팩토링 (5가지 문제 유형 지원)
+  - 객관식 선지 수 조절 (2~8개)
+  - 서술형 루브릭 편집기
+  - 결합형 문제 지원 (공통 지문/이미지 + 하위 문제)
+
+### 타입 정의 (`lib/ocr.ts`)
+```typescript
+// 문제 유형
+type QuestionType = 'ox' | 'multiple' | 'short_answer' | 'essay' | 'combined';
+
+// 서술형 루브릭 항목
+interface RubricItem {
+  criteria: string;      // 평가요소 이름
+  percentage: number;    // 배점 비율 (0-100)
+  description?: string;  // 평가 기준 상세 설명
+}
+```

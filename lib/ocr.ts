@@ -35,8 +35,25 @@ export interface OCRResult {
 
 /**
  * 파싱된 문제 타입
+ * - ox: OX 문제
+ * - multiple: 객관식 (2~8개 선지)
+ * - short_answer: 단답형
+ * - essay: 서술형 (루브릭 채점)
+ * - combined: 결합형 (공통 지문/이미지 + 여러 하위 문제)
  */
-export type QuestionType = 'ox' | 'multiple' | 'subjective';
+export type QuestionType = 'ox' | 'multiple' | 'short_answer' | 'essay' | 'combined';
+
+/**
+ * 서술형 루브릭 항목
+ */
+export interface RubricItem {
+  /** 평가요소 이름 */
+  criteria: string;
+  /** 배점 비율 (0-100) */
+  percentage: number;
+  /** 평가 기준 상세 설명 (선택) */
+  description?: string;
+}
 
 /**
  * 파싱된 문제
@@ -52,6 +69,8 @@ export interface ParsedQuestion {
   answer?: string | number;
   /** 해설 */
   explanation?: string;
+  /** 루브릭 (서술형) */
+  rubric?: RubricItem[];
 }
 
 /**
@@ -192,8 +211,9 @@ export const extractTextFromPDF = async (
     // PDF.js 동적 로드
     const pdfjsLib = await import('pdfjs-dist');
 
-    // PDF.js 워커 설정 (CDN 사용)
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+    // PDF.js 워커 설정 (unpkg CDN 사용 - 더 안정적)
+    // pdfjs-dist 4.x 버전용
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
     // PDF 파일을 ArrayBuffer로 변환
     const arrayBuffer = await pdfFile.arrayBuffer();

@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { Header, Button } from '@/components/common';
+import { useCourse } from '@/lib/contexts';
 import {
   ImageUploader,
   OCRProcessor,
@@ -40,6 +40,7 @@ type Step = 'upload' | 'questions' | 'meta' | 'confirm';
 export default function QuizCreatePage() {
   const router = useRouter();
   const { user } = useAuth();
+  const { userCourseId } = useCourse();
 
   // 단계 관리
   const [step, setStep] = useState<Step>('upload');
@@ -84,7 +85,7 @@ export default function QuizCreatePage() {
   const handleOCRComplete = useCallback((result: ParseResult) => {
     setIsOCRProcessing(false);
 
-    // 파싱된 문제가 있으면 문제 목록에 추가
+    // 파싱된 문제가 있으면 문제 목록에 추가하고 자동으로 다음 단계로 이동
     if (result.questions.length > 0) {
       const convertedQuestions: QuestionData[] = result.questions.map(
         (parsed: ParsedQuestion, index: number) => ({
@@ -106,10 +107,21 @@ export default function QuizCreatePage() {
               ? parsed.answer
               : '',
           explanation: parsed.explanation || '',
+          imageUrl: null,
+          examples: null,
         })
       );
 
       setQuestions((prev) => [...prev, ...convertedQuestions]);
+
+      // 문제가 추출되면 자동으로 문제 편집 단계로 이동
+      setStep('questions');
+    } else if (result.rawText.trim()) {
+      // 텍스트는 추출되었지만 문제 형식을 인식하지 못한 경우
+      // 사용자에게 알림 후 문제 편집 단계로 이동하여 직접 입력하도록 함
+      alert(`텍스트가 추출되었지만 문제 형식을 인식하지 못했습니다.\n직접 문제를 입력해주세요.\n\n추출된 텍스트:\n${result.rawText.slice(0, 200)}...`);
+      setStep('questions');
+      setIsAddingNew(true);
     }
   }, []);
 
@@ -119,6 +131,15 @@ export default function QuizCreatePage() {
   const handleOCRError = useCallback((error: string) => {
     setIsOCRProcessing(false);
     setOcrError(error);
+  }, []);
+
+  /**
+   * OCR 취소 핸들러
+   */
+  const handleOCRCancel = useCallback(() => {
+    setIsOCRProcessing(false);
+    setSelectedFile(null);
+    setOcrError(null);
   }, []);
 
   /**
@@ -203,6 +224,10 @@ export default function QuizCreatePage() {
    */
   const handlePrevStep = useCallback(() => {
     if (step === 'questions') {
+      // upload로 돌아갈 때 파일 상태 초기화
+      setSelectedFile(null);
+      setIsOCRProcessing(false);
+      setOcrError(null);
       setStep('upload');
     } else if (step === 'meta') {
       setStep('questions');
@@ -234,20 +259,43 @@ export default function QuizCreatePage() {
         type: 'custom' as const, // 자체제작 퀴즈
 
         // 문제 정보
-        questions: questions.map((q, index) => ({
-          order: index,
-          text: q.text,
-          type: q.type,
-          choices: q.type === 'multiple' ? q.choices.filter((c) => c.trim()) : null,
-          answer:
-            q.type === 'subjective' ? q.answerText : q.answerIndex,
-          explanation: q.explanation || null,
-        })),
+        questions: questions.map((q, index) => {
+          // 정답 처리
+          let answer: string | number;
+          if (q.type === 'subjective') {
+            // 주관식: 복수 정답은 "|||"로 구분 (쉼표는 답안에 포함될 수 있음)
+            const answerTexts = (q.answerTexts || [q.answerText]).filter(t => t.trim());
+            answer = answerTexts.length > 1 ? answerTexts.join('|||') : answerTexts[0] || '';
+          } else if (q.type === 'multiple' && q.answerIndices && q.answerIndices.length > 1) {
+            // 객관식 복수정답: 1-indexed로 변환하여 쉼표로 연결
+            answer = q.answerIndices.map(i => i + 1).join(',');
+          } else {
+            // 단일정답
+            answer = q.answerIndex;
+          }
+
+          return {
+            order: index,
+            text: q.text,
+            type: q.type,
+            choices: q.type === 'multiple' ? q.choices.filter((c) => c.trim()) : null,
+            answer,
+            explanation: q.explanation || null,
+            imageUrl: q.imageUrl || null,
+            examples: q.examples ? {
+              type: q.examples.type,
+              items: q.examples.items.filter((item) => item.trim()),
+            } : null,
+          };
+        }),
         questionCount: questions.length,
 
         // 생성자 정보
         creatorId: user.uid,
         creatorNickname: user.displayName || '익명 용사',
+
+        // 과목 정보
+        courseId: userCourseId || null,
 
         // 통계 (초기값)
         participantCount: 0,
@@ -270,7 +318,7 @@ export default function QuizCreatePage() {
     } finally {
       setIsSaving(false);
     }
-  }, [user, quizMeta, questions, router]);
+  }, [user, quizMeta, questions, router, userCourseId]);
 
   /**
    * 단계별 진행률
@@ -302,51 +350,60 @@ export default function QuizCreatePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-safe">
+    <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 */}
-      <Header
-        title="퀴즈 만들기"
-        showBack
-        onBack={() => {
-          if (step !== 'upload' || questions.length > 0) {
-            // 변경사항이 있으면 확인
-            if (window.confirm('작성 중인 내용이 사라집니다. 나가시겠습니까?')) {
-              router.back();
-            }
-          } else {
-            router.back();
-          }
-        }}
-      />
+      <header className="sticky top-0 z-20 border-b-2 border-[#1A1A1A]" style={{ backgroundColor: '#F5F0E8' }}>
+        <div className="flex items-center justify-between px-4 py-3">
+          <button
+            type="button"
+            onClick={() => {
+              if (step !== 'upload' || questions.length > 0) {
+                if (window.confirm('작성 중인 내용이 사라집니다. 나가시겠습니까?')) {
+                  router.back();
+                }
+              } else {
+                router.back();
+              }
+            }}
+            className="w-10 h-10 flex items-center justify-center border border-[#1A1A1A]"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <h1 className="font-serif-display text-lg font-bold text-[#1A1A1A]">퀴즈 만들기</h1>
+          <div className="w-10" />
+        </div>
+      </header>
 
       {/* 진행률 바 */}
-      <div className="sticky top-14 z-10 bg-white border-b border-gray-100">
+      <div className="sticky top-[57px] z-10 border-b border-[#1A1A1A]" style={{ backgroundColor: '#F5F0E8' }}>
         <div className="px-4 py-3">
           {/* 단계 표시 */}
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-700">
+            <span className="text-sm font-bold text-[#1A1A1A]">
               {step === 'upload' && '1. 업로드'}
               {step === 'questions' && '2. 문제 편집'}
               {step === 'meta' && '3. 퀴즈 정보'}
               {step === 'confirm' && '4. 확인'}
             </span>
-            <span className="text-sm text-gray-500">{getProgress()}%</span>
+            <span className="text-sm text-[#5C5C5C]">{getProgress()}%</span>
           </div>
 
           {/* 진행률 바 */}
-          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+          <div className="h-1.5 bg-[#EDEAE4] overflow-hidden">
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: `${getProgress()}%` }}
               transition={{ duration: 0.3 }}
-              className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full"
+              className="h-full bg-[#1A1A1A]"
             />
           </div>
         </div>
       </div>
 
       {/* 메인 컨텐츠 */}
-      <main className="px-4 py-6 max-w-lg mx-auto">
+      <main className="flex-1 px-4 py-6 max-w-lg mx-auto w-full overflow-y-auto">
         <AnimatePresence mode="wait">
           {/* Step 1: 업로드 */}
           {step === 'upload' && (
@@ -359,10 +416,10 @@ export default function QuizCreatePage() {
               className="space-y-6"
             >
               <div>
-                <h2 className="text-xl font-bold text-gray-800 mb-2">
+                <h2 className="text-xl font-bold text-[#1A1A1A] mb-2">
                   사진/PDF로 문제 추출
                 </h2>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-[#5C5C5C]">
                   시험지나 교재 사진을 업로드하면 OCR로 텍스트를 추출합니다.
                 </p>
               </div>
@@ -380,26 +437,31 @@ export default function QuizCreatePage() {
                   file={selectedFile}
                   onComplete={handleOCRComplete}
                   onError={handleOCRError}
+                  onCancel={handleOCRCancel}
                 />
               )}
 
               {/* 직접 입력 버튼 */}
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-200" />
+                  <div className="w-full border-t border-[#1A1A1A]" />
                 </div>
                 <div className="relative flex justify-center">
-                  <span className="px-3 bg-gray-50 text-sm text-gray-500">또는</span>
+                  <span className="px-3 text-sm text-[#5C5C5C]" style={{ backgroundColor: '#F5F0E8' }}>또는</span>
                 </div>
               </div>
 
-              <Button
-                variant="secondary"
-                fullWidth
-                onClick={handleNextStep}
+              <button
+                type="button"
+                onClick={() => {
+                  setStep('questions');
+                  setIsAddingNew(true);
+                }}
+                disabled={isOCRProcessing}
+                className="w-full py-3 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 직접 문제 입력하기
-              </Button>
+              </button>
             </motion.div>
           )}
 
@@ -414,10 +476,10 @@ export default function QuizCreatePage() {
               className="space-y-6"
             >
               <div>
-                <h2 className="text-xl font-bold text-gray-800 mb-2">
+                <h2 className="text-xl font-bold text-[#1A1A1A] mb-2">
                   문제 편집
                 </h2>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-[#5C5C5C]">
                   문제를 추가하거나 수정하세요. 최소 3문제 이상 필요합니다.
                 </p>
               </div>
@@ -453,15 +515,7 @@ export default function QuizCreatePage() {
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={handleStartAddQuestion}
-                    className="
-                      w-full py-4 px-6
-                      flex items-center justify-center gap-2
-                      bg-white border-2 border-dashed border-gray-300
-                      rounded-2xl
-                      text-gray-600 font-medium
-                      hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-600
-                      transition-colors
-                    "
+                    className="w-full py-4 px-6 flex items-center justify-center gap-2 border-2 border-dashed border-[#1A1A1A] text-[#1A1A1A] font-bold hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
                   >
                     <svg
                       className="w-5 h-5"
@@ -494,10 +548,10 @@ export default function QuizCreatePage() {
               className="space-y-6"
             >
               <div>
-                <h2 className="text-xl font-bold text-gray-800 mb-2">
+                <h2 className="text-xl font-bold text-[#1A1A1A] mb-2">
                   퀴즈 정보
                 </h2>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-[#5C5C5C]">
                   퀴즈 제목과 태그를 입력하고 공개 여부를 설정하세요.
                 </p>
               </div>
@@ -521,31 +575,31 @@ export default function QuizCreatePage() {
               className="space-y-6"
             >
               <div>
-                <h2 className="text-xl font-bold text-gray-800 mb-2">
+                <h2 className="text-xl font-bold text-[#1A1A1A] mb-2">
                   퀴즈 확인
                 </h2>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-[#5C5C5C]">
                   내용을 확인하고 퀴즈를 저장하세요.
                 </p>
               </div>
 
               {/* 퀴즈 요약 카드 */}
-              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 space-y-4">
+              <div className="p-6 border border-[#1A1A1A] space-y-4" style={{ backgroundColor: '#F5F0E8' }}>
                 {/* 제목 */}
                 <div>
-                  <span className="text-xs text-gray-500">퀴즈 제목</span>
-                  <p className="text-lg font-bold text-gray-800">{quizMeta.title}</p>
+                  <span className="text-xs text-[#5C5C5C]">퀴즈 제목</span>
+                  <p className="text-lg font-bold text-[#1A1A1A]">{quizMeta.title}</p>
                 </div>
 
                 {/* 태그 */}
                 {quizMeta.tags.length > 0 && (
                   <div>
-                    <span className="text-xs text-gray-500 mb-1 block">태그</span>
+                    <span className="text-xs text-[#5C5C5C] mb-1 block">태그</span>
                     <div className="flex flex-wrap gap-2">
                       {quizMeta.tags.map((tag) => (
                         <span
                           key={tag}
-                          className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-lg text-sm"
+                          className="px-2 py-0.5 border border-[#1A1A1A] text-[#1A1A1A] text-sm"
                         >
                           #{tag}
                         </span>
@@ -555,45 +609,45 @@ export default function QuizCreatePage() {
                 )}
 
                 {/* 정보 그리드 */}
-                <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-100">
+                <div className="grid grid-cols-3 gap-4 pt-4 border-t border-[#1A1A1A]">
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-indigo-600">
+                    <p className="text-2xl font-bold text-[#1A1A1A]">
                       {questions.length}
                     </p>
-                    <p className="text-xs text-gray-500">문제 수</p>
+                    <p className="text-xs text-[#5C5C5C]">문제 수</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-gray-800">
+                    <p className="text-2xl font-bold text-[#1A1A1A]">
                       {quizMeta.difficulty === 'easy'
                         ? '쉬움'
                         : quizMeta.difficulty === 'hard'
                           ? '어려움'
                           : '보통'}
                     </p>
-                    <p className="text-xs text-gray-500">난이도</p>
+                    <p className="text-xs text-[#5C5C5C]">난이도</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-gray-800">
+                    <p className="text-2xl font-bold text-[#1A1A1A]">
                       {quizMeta.isPublic ? '공개' : '비공개'}
                     </p>
-                    <p className="text-xs text-gray-500">공개 설정</p>
+                    <p className="text-xs text-[#5C5C5C]">공개 설정</p>
                   </div>
                 </div>
               </div>
 
               {/* 문제 미리보기 */}
-              <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-                <h3 className="font-medium text-gray-700 mb-3">문제 미리보기</h3>
+              <div className="p-4 border border-[#1A1A1A]" style={{ backgroundColor: '#F5F0E8' }}>
+                <h3 className="font-bold text-[#1A1A1A] mb-3">문제 미리보기</h3>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
                   {questions.map((q, index) => (
                     <div
                       key={q.id}
-                      className="flex items-start gap-2 p-2 bg-gray-50 rounded-lg"
+                      className="flex items-start gap-2 p-2 bg-[#EDEAE4]"
                     >
-                      <span className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
+                      <span className="w-6 h-6 bg-[#1A1A1A] text-[#F5F0E8] flex items-center justify-center text-xs font-bold flex-shrink-0">
                         {index + 1}
                       </span>
-                      <p className="text-sm text-gray-700 line-clamp-1 flex-1">
+                      <p className="text-sm text-[#1A1A1A] line-clamp-1 flex-1">
                         {q.text}
                       </p>
                     </div>
@@ -603,7 +657,7 @@ export default function QuizCreatePage() {
 
               {/* 저장 에러 */}
               {saveError && (
-                <div className="p-3 bg-red-50 text-red-600 rounded-xl text-sm">
+                <div className="p-3 border border-[#8B1A1A] text-[#8B1A1A] text-sm">
                   {saveError}
                 </div>
               )}
@@ -612,24 +666,25 @@ export default function QuizCreatePage() {
         </AnimatePresence>
       </main>
 
-      {/* 하단 버튼 */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-4 py-4 pb-safe">
+      {/* 하단 버튼 - 고정 */}
+      <div className="sticky bottom-0 border-t-2 border-[#1A1A1A] px-4 py-4" style={{ backgroundColor: '#F5F0E8' }}>
         <div className="max-w-lg mx-auto flex gap-3">
           {/* 이전 버튼 */}
           {step !== 'upload' && (
-            <Button
-              variant="secondary"
+            <button
+              type="button"
               onClick={handlePrevStep}
               disabled={isSaving}
+              className="px-6 py-3 border-2 border-[#1A1A1A] text-[#1A1A1A] font-bold hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               이전
-            </Button>
+            </button>
           )}
 
-          {/* 다음/저장 버튼 */}
-          {step !== 'confirm' ? (
-            <Button
-              fullWidth
+          {/* 다음/저장 버튼 - upload 단계에서는 숨김 (직접 입력하기 버튼 사용) */}
+          {step === 'upload' ? null : step !== 'confirm' ? (
+            <button
+              type="button"
               onClick={handleNextStep}
               disabled={
                 (step === 'questions' && questions.length < 3) ||
@@ -637,18 +692,25 @@ export default function QuizCreatePage() {
                 editingIndex !== null ||
                 isAddingNew
               }
+              className="flex-1 py-3 bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {step === 'upload' ? '다음' : step === 'questions' ? '다음' : '다음'}
-            </Button>
+              다음
+            </button>
           ) : (
-            <Button
-              fullWidth
+            <button
+              type="button"
               onClick={handleSaveQuiz}
-              loading={isSaving}
               disabled={isSaving}
+              className="flex-1 py-3 bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
+              {isSaving && (
+                <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+              )}
               퀴즈 저장하기
-            </Button>
+            </button>
           )}
         </div>
       </div>

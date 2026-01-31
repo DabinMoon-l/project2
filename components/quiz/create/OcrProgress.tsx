@@ -35,34 +35,31 @@ export default function OcrProgress({
   step = 'ocr',
   className = '',
 }: OcrProgressProps) {
-  /**
-   * 진행률 바 색상
-   */
-  const getProgressColor = () => {
-    if (progress.progress < 30) return 'bg-yellow-500';
-    if (progress.progress < 70) return 'bg-blue-500';
-    return 'bg-green-500';
-  };
-
   return (
-    <div className={`bg-white rounded-2xl p-6 shadow-sm border border-gray-100 ${className}`}>
+    <div className={`bg-[#F5F0E8] p-6 border-2 border-[#1A1A1A] ${className}`}>
       {/* 단계 표시 */}
       <div className="flex items-center gap-2 mb-4">
         <div
           className={`
-            w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium
-            ${step === 'ocr' ? 'bg-indigo-500' : 'bg-gray-300'}
+            w-8 h-8 flex items-center justify-center text-sm font-bold border-2
+            ${step === 'ocr'
+              ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+              : 'bg-[#EDEAE4] text-[#5C5C5C] border-[#5C5C5C]'
+            }
           `}
         >
           1
         </div>
         <div
-          className={`flex-1 h-1 ${step === 'parsing' ? 'bg-indigo-500' : 'bg-gray-200'}`}
+          className={`flex-1 h-0.5 ${step === 'parsing' ? 'bg-[#1A1A1A]' : 'bg-[#D4CFC4]'}`}
         />
         <div
           className={`
-            w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium
-            ${step === 'parsing' ? 'bg-indigo-500' : 'bg-gray-300'}
+            w-8 h-8 flex items-center justify-center text-sm font-bold border-2
+            ${step === 'parsing'
+              ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+              : 'bg-[#EDEAE4] text-[#5C5C5C] border-[#5C5C5C]'
+            }
           `}
         >
           2
@@ -71,24 +68,24 @@ export default function OcrProgress({
 
       {/* 현재 상태 */}
       <div className="text-center mb-4">
-        <p className="text-lg font-semibold text-gray-800">
+        <p className="font-serif-display text-xl font-black text-[#1A1A1A]">
           {step === 'ocr' ? '텍스트 추출 중' : '문제 분석 중'}
         </p>
-        <p className="text-sm text-gray-500 mt-1">{progress.status}</p>
+        <p className="text-sm text-[#5C5C5C] mt-1">{progress.status}</p>
       </div>
 
       {/* 진행률 바 */}
-      <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden">
+      <div className="relative h-2 bg-[#EDEAE4] border border-[#1A1A1A] overflow-hidden">
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${progress.progress}%` }}
           transition={{ duration: 0.3, ease: 'easeOut' }}
-          className={`absolute left-0 top-0 h-full rounded-full ${getProgressColor()}`}
+          className="absolute left-0 top-0 h-full bg-[#1A1A1A]"
         />
       </div>
 
       {/* 진행률 퍼센트 */}
-      <p className="text-center text-sm text-gray-600 mt-2">
+      <p className="text-center text-sm font-bold text-[#1A1A1A] mt-2">
         {Math.round(progress.progress)}%
       </p>
     </div>
