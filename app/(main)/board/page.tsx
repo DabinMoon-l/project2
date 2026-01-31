@@ -1,145 +1,341 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import { useCallback, useState, useMemo, memo } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Header, Skeleton } from '@/components/common';
-import BoardTabs from '@/components/board/BoardTabs';
-import PostCard from '@/components/board/PostCard';
-import PostList from '@/components/board/PostList';
-import { usePosts, useLike, type BoardCategory } from '@/lib/hooks/useBoard';
+import { Skeleton } from '@/components/common';
+import { usePosts, type Post } from '@/lib/hooks/useBoard';
+
+/** 기본 토끼 이미지 경로 */
+const DEFAULT_RABBIT_IMAGE = '/rabbit/default-news.png';
+
+/** 랜덤 명언 목록 */
+const MOTIVATIONAL_QUOTES = [
+  "Fortune favors the bold",
+  "The only limit is your mind",
+  "Dream it. Believe it. Achieve it.",
+  "Where there's a will, there's a way",
+  "Impossible is nothing",
+  "You are stronger than you think",
+  "Per aspera ad astra",
+  "Believe and you're halfway there",
+];
+
+/**
+ * 헤드라인 기사 (최신 글)
+ */
+const HeadlineArticle = memo(function HeadlineArticle({ post, onClick }: { post: Post; onClick: () => void }) {
+  const imageUrl = post.imageUrl || post.imageUrls?.[0] || DEFAULT_RABBIT_IMAGE;
+
+  return (
+    <article
+      onClick={onClick}
+      className="cursor-pointer group border-2 border-[#1A1A1A] flex"
+    >
+      {/* 좌측 - 이미지 */}
+      <div className="relative w-1/3 min-h-[160px] flex-shrink-0 bg-[#EDEAE4]">
+        <Image
+          src={imageUrl}
+          alt={post.title}
+          fill
+          sizes="(max-width: 768px) 33vw, 200px"
+          className="object-contain grayscale-[20%] group-hover:grayscale-0 transition-all"
+        />
+      </div>
+
+      {/* 우측 - 제목, 본문, 댓글 수 */}
+      <div className="flex-1 flex flex-col">
+        {/* 제목 - 검정 박스 */}
+        <div className="bg-[#1A1A1A] px-3 py-3">
+          <h1 className="font-serif-display text-3xl md:text-4xl font-black text-[#F5F0E8] leading-tight">
+            {post.title}
+          </h1>
+        </div>
+
+        {/* 본문 및 댓글 수 */}
+        <div className="p-3 flex-1">
+          <p className="text-sm text-[#1A1A1A] leading-relaxed line-clamp-3">
+            {post.content}
+          </p>
+
+          {/* 댓글 수 표시 */}
+          {post.commentCount > 0 && (
+            <p className="mt-2 pt-2 border-t border-dashed border-[#1A1A1A] text-xs text-[#5C5C5C]">
+              ㄴ {post.commentCount}개의 댓글
+            </p>
+          )}
+        </div>
+      </div>
+    </article>
+  );
+});
+
+/**
+ * Masonry 아이템
+ * @param imagePosition - 이미지 위치 ('top' 또는 'bottom')
+ */
+const MasonryItem = memo(function MasonryItem({ post, onClick, imagePosition = 'top' }: { post: Post; onClick: () => void; imagePosition?: 'top' | 'bottom' }) {
+  const hasImage = post.imageUrl || (post.imageUrls && post.imageUrls.length > 0);
+  const imageUrl = post.imageUrl || post.imageUrls?.[0];
+
+  const ImageSection = hasImage && imageUrl && (
+    <div className="relative w-full aspect-[4/3] border border-[#1A1A1A] bg-[#EDEAE4]">
+      <Image
+        src={imageUrl}
+        alt={post.title}
+        fill
+        sizes="(max-width: 768px) 50vw, 300px"
+        className="object-contain grayscale-[30%] group-hover:grayscale-0 transition-all"
+      />
+    </div>
+  );
+
+  const TitleSection = (
+    <h2 className="font-serif-display text-3xl md:text-4xl font-black leading-tight text-[#1A1A1A]">
+      {post.title}
+    </h2>
+  );
+
+  return (
+    <article
+      onClick={onClick}
+      className="cursor-pointer group break-inside-avoid mb-4 p-3 border border-[#1A1A1A]"
+    >
+      {imagePosition === 'top' ? (
+        <>
+          {ImageSection && <div className="mb-2">{ImageSection}</div>}
+          {TitleSection}
+        </>
+      ) : (
+        <>
+          {TitleSection}
+          {ImageSection && <div className="mt-2">{ImageSection}</div>}
+        </>
+      )}
+
+      {/* 본문 */}
+      <p className="text-sm text-[#1A1A1A] leading-relaxed line-clamp-4 mt-2">
+        {post.content}
+      </p>
+
+      {/* 댓글 수 표시 */}
+      {post.commentCount > 0 && (
+        <p className="mt-2 pt-2 border-t border-dashed border-[#1A1A1A] text-xs text-[#5C5C5C]">
+          ㄴ {post.commentCount}개의 댓글
+        </p>
+      )}
+    </article>
+  );
+});
+
+/**
+ * 스켈레톤
+ */
+function NewspaperSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="p-4 border-2 border-[#1A1A1A]">
+        <Skeleton className="w-3/4 h-10 rounded-none mb-3" />
+        <div className="flex gap-4">
+          <Skeleton className="w-40 h-32 rounded-none flex-shrink-0" />
+          <div className="flex-1">
+            <Skeleton className="w-full h-20 rounded-none" />
+          </div>
+        </div>
+      </div>
+      <div className="columns-2 gap-4">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="break-inside-avoid mb-4 p-3 border border-[#1A1A1A]">
+            <Skeleton className="w-full h-24 rounded-none mb-2" />
+            <Skeleton className="w-full h-6 rounded-none mb-2" />
+            <Skeleton className="w-full h-12 rounded-none" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /**
  * 게시판 메인 페이지
- *
- * To 교수님 / 우리들끼리 탭으로 구분된 게시판입니다.
  */
 export default function BoardPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<BoardCategory>('toProfessor');
+  const { posts, loading, error, hasMore, loadMore, refresh } = usePosts('all');
 
-  // 게시글 목록
-  const { posts, loading, error, hasMore, loadMore, refresh } = usePosts(activeTab);
+  // 검색
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // 좋아요 기능
-  const { toggleLike, isLiked } = useLike();
+  // 검색 필터링
+  const filteredPosts = searchQuery.trim()
+    ? posts.filter(post =>
+        post.title.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : posts;
 
-  /**
-   * 글 클릭 핸들러
-   */
   const handlePostClick = useCallback((postId: string) => {
     router.push(`/board/${postId}`);
   }, [router]);
 
-  /**
-   * 글 작성 버튼 클릭
-   */
   const handleWriteClick = useCallback(() => {
-    router.push(`/board/write?category=${activeTab}`);
-  }, [router, activeTab]);
+    router.push('/board/write');
+  }, [router]);
 
-  /**
-   * 탭 변경
-   */
-  const handleTabChange = useCallback((tab: BoardCategory) => {
-    setActiveTab(tab);
+  const handleManageClick = useCallback(() => {
+    router.push('/board/manage');
+  }, [router]);
+
+  const headline = filteredPosts.length > 0 ? filteredPosts[0] : null;
+  const masonryPosts = filteredPosts.slice(1);
+
+  // 랜덤 명언 (컴포넌트 마운트 시 한 번만 선택)
+  const randomQuote = useMemo(() => {
+    return MOTIVATIONAL_QUOTES[Math.floor(Math.random() * MOTIVATIONAL_QUOTES.length)];
   }, []);
 
+  // 오늘 날짜
+  const today = new Date();
+  const dateString = today.toLocaleDateString('ko-KR', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    weekday: 'long',
+  });
+
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen pb-28" style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 */}
-      <Header title="게시판" />
+      <header className="mx-4 mt-4 pb-6 border-b-4 border-double border-[#1A1A1A]">
+        {/* 상단 날짜 및 에디션 */}
+        <div className="flex justify-between items-center text-xs text-[#3A3A3A] mb-3">
+          <span>{dateString}</span>
+          <span className="font-bold">Vol. {today.getFullYear() - 2025} No. 1</span>
+          <span>✦ SPECIAL EDITION ✦</span>
+        </div>
 
-      {/* 메인 컨텐츠 */}
-      <main className="px-4 py-4 space-y-4">
-        {/* 탭 */}
-        <BoardTabs activeTab={activeTab} onTabChange={handleTabChange} />
+        {/* 상단 장식선 */}
+        <div className="border-t-2 border-[#1A1A1A] mb-2" />
 
-        {/* 에러 상태 */}
+        {/* 타이틀 */}
+        <h1 className="font-serif-display text-5xl md:text-7xl font-black tracking-tight text-[#1A1A1A] text-center py-6 border-y-4 border-[#1A1A1A]">
+          THE Q&A TIMES
+        </h1>
+
+        {/* 서브타이틀 및 슬로건 */}
+        <div className="flex justify-between items-center mt-3 mb-4">
+          <p className="text-xs text-[#3A3A3A] italic">
+            "{randomQuote}"
+          </p>
+          <p className="text-xs text-[#3A3A3A]">
+            2026 1st Semester · Microbiology
+          </p>
+        </div>
+
+        {/* 하단 장식선 */}
+        <div className="border-t border-[#1A1A1A] mb-4" />
+
+        {/* 버튼 + 검색 */}
+        <div className="flex items-center gap-3">
+          {/* 버튼들 - 좌측 */}
+          <button
+            onClick={handleWriteClick}
+            className="px-4 py-2 text-sm font-bold"
+            style={{
+              backgroundColor: '#1A1A1A',
+              color: '#F5F0E8',
+            }}
+          >
+            글 작성
+          </button>
+          <button
+            onClick={handleManageClick}
+            className="px-4 py-2 text-sm font-bold"
+            style={{
+              backgroundColor: 'transparent',
+              color: '#1A1A1A',
+              border: '1px solid #1A1A1A',
+            }}
+          >
+            글 관리
+          </button>
+
+          {/* 검색창 - 우측 */}
+          <div className="flex-1">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="제목 검색..."
+              className="w-full px-3 py-2 text-sm outline-none"
+              style={{
+                border: '1px solid #1A1A1A',
+                backgroundColor: '#F5F0E8',
+              }}
+            />
+          </div>
+        </div>
+      </header>
+
+      <main className="px-4 pt-4">
         {error && (
-          <div className="p-4 bg-red-50 text-red-600 rounded-xl text-sm text-center">
+          <div className="p-4 text-sm text-center border border-[#1A1A1A] mb-4">
             {error}
-            <button
-              type="button"
-              onClick={refresh}
-              className="ml-2 underline"
-            >
-              다시 시도
-            </button>
+            <button onClick={refresh} className="ml-2 underline">다시 시도</button>
           </div>
         )}
 
-        {/* 로딩 상태 */}
-        {loading && posts.length === 0 && (
-          <div className="space-y-3">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="bg-white rounded-2xl p-4 shadow-sm">
-                <Skeleton className="w-3/4 h-5 mb-2" />
-                <Skeleton className="w-full h-12 mb-3" />
-                <div className="flex gap-4">
-                  <Skeleton className="w-16 h-4" />
-                  <Skeleton className="w-16 h-4" />
-                </div>
-              </div>
+        {loading && posts.length === 0 && <NewspaperSkeleton />}
+
+        {!loading && filteredPosts.length === 0 && !error && (
+          <div className="py-12 text-center">
+            <h3 className="font-serif-display text-2xl font-black mb-2 text-[#1A1A1A]">
+              {searchQuery ? '검색 결과 없음' : 'EXTRA! EXTRA!'}
+            </h3>
+            <p className="text-sm text-[#3A3A3A]">
+              {searchQuery ? '다른 검색어를 입력해보세요.' : '아직 소식이 없습니다. 첫 기사를 작성해보세요!'}
+            </p>
+          </div>
+        )}
+
+        {/* 헤드라인 */}
+        {headline && (
+          <div className="mb-4">
+            <HeadlineArticle
+              post={headline}
+              onClick={() => handlePostClick(headline.id)}
+            />
+          </div>
+        )}
+
+        {/* Masonry 2열 */}
+        {masonryPosts.length > 0 && (
+          <div className="columns-2 gap-4">
+            {masonryPosts.map((post, index) => (
+              <MasonryItem
+                key={post.id}
+                post={post}
+                onClick={() => handlePostClick(post.id)}
+                imagePosition={index % 2 === 0 ? 'top' : 'bottom'}
+              />
             ))}
           </div>
         )}
 
-        {/* 빈 상태 */}
-        {!loading && posts.length === 0 && !error && (
-          <div className="py-16 text-center">
-            <div className="text-6xl mb-4">📝</div>
-            <h3 className="text-lg font-bold text-gray-800 mb-2">
-              아직 글이 없어요
-            </h3>
-            <p className="text-sm text-gray-500 mb-6">
-              첫 번째 글을 작성해보세요!
-            </p>
-            <motion.button
+        {/* 더 보기 */}
+        {hasMore && filteredPosts.length > 0 && !searchQuery && (
+          <div className="text-center py-4">
+            <button
               type="button"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={handleWriteClick}
-              className="px-6 py-2 bg-theme-accent text-white font-medium rounded-xl"
+              onClick={loadMore}
+              disabled={loading}
+              className="text-sm font-bold text-[#1A1A1A] hover:underline disabled:opacity-50"
             >
-              글 작성하기
-            </motion.button>
+              {loading ? 'Loading...' : 'MORE →'}
+            </button>
           </div>
-        )}
-
-        {/* 게시글 목록 */}
-        {posts.length > 0 && (
-          <PostList
-            posts={posts}
-            onPostClick={handlePostClick}
-            hasMore={hasMore}
-            onLoadMore={loadMore}
-            loading={loading}
-          />
         )}
       </main>
 
-      {/* 글 작성 FAB */}
-      {posts.length > 0 && (
-        <motion.button
-          type="button"
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={handleWriteClick}
-          className="
-            fixed right-4 bottom-24
-            w-14 h-14
-            flex items-center justify-center
-            bg-theme-accent text-white
-            rounded-full shadow-lg
-            z-40
-          "
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-        </motion.button>
-      )}
     </div>
   );
 }

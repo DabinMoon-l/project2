@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { motion } from 'framer-motion';
-import { Button, Input } from '@/components/common';
-import type { BoardCategory, CreatePostData } from '@/lib/hooks/useBoard';
+import { useState, useCallback, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import Image from 'next/image';
+import { useTheme } from '@/styles/themes/useTheme';
+import { useUpload, type FileInfo } from '@/lib/hooks/useStorage';
+import type { CreatePostData, AttachedFile } from '@/lib/hooks/useBoard';
 
 interface WriteFormProps {
-  /** 카테고리 */
-  category: BoardCategory;
   /** 제출 핸들러 */
   onSubmit: (data: CreatePostData) => Promise<void>;
   /** 제출 중 여부 */
@@ -17,134 +17,460 @@ interface WriteFormProps {
 }
 
 /**
- * 글 작성 폼 컴포넌트
- *
- * 게시글 작성을 위한 폼 UI를 제공합니다.
+ * 글 작성 폼 컴포넌트 - 이미지/파일 첨부 지원
  */
 export default function WriteForm({
-  category,
   onSubmit,
   isSubmitting = false,
   error,
 }: WriteFormProps) {
+  const { theme } = useTheme();
+  const { uploadImage, uploadFile, loading: uploading, error: uploadError } = useUpload();
+
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(false);
+
+  // 첨부 파일 상태
+  const [images, setImages] = useState<{ file: File; preview: string }[]>([]);
+  const [files, setFiles] = useState<{ file: File; name: string }[]>([]);
+
+  // 파일 input refs
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 유효성 검사
   const isValid = title.trim().length >= 2 && content.trim().length >= 10;
 
   /**
+   * 이미지 선택 핸들러
+   */
+  const handleImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = e.target.files;
+    if (!selectedFiles) return;
+
+    const newImages: { file: File; preview: string }[] = [];
+
+    Array.from(selectedFiles).forEach((file) => {
+      // 최대 5장까지
+      if (images.length + newImages.length >= 5) return;
+
+      // 이미지 타입 확인
+      if (!file.type.startsWith('image/')) return;
+
+      // 미리보기 URL 생성
+      const preview = URL.createObjectURL(file);
+      newImages.push({ file, preview });
+    });
+
+    setImages((prev) => [...prev, ...newImages]);
+
+    // input 초기화
+    if (imageInputRef.current) {
+      imageInputRef.current.value = '';
+    }
+  }, [images.length]);
+
+  /**
+   * 파일 선택 핸들러
+   */
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = e.target.files;
+    if (!selectedFiles) return;
+
+    const newFiles: { file: File; name: string }[] = [];
+
+    Array.from(selectedFiles).forEach((file) => {
+      // 최대 3개까지
+      if (files.length + newFiles.length >= 3) return;
+
+      newFiles.push({ file, name: file.name });
+    });
+
+    setFiles((prev) => [...prev, ...newFiles]);
+
+    // input 초기화
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, [files.length]);
+
+  /**
+   * 이미지 제거
+   */
+  const removeImage = useCallback((index: number) => {
+    setImages((prev) => {
+      const newImages = [...prev];
+      // 미리보기 URL 해제
+      URL.revokeObjectURL(newImages[index].preview);
+      newImages.splice(index, 1);
+      return newImages;
+    });
+  }, []);
+
+  /**
+   * 파일 제거
+   */
+  const removeFile = useCallback((index: number) => {
+    setFiles((prev) => {
+      const newFiles = [...prev];
+      newFiles.splice(index, 1);
+      return newFiles;
+    });
+  }, []);
+
+  /**
+   * 파일 크기 포맷
+   */
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  /**
    * 폼 제출
    */
   const handleSubmit = useCallback(async () => {
-    if (!isValid || isSubmitting) return;
+    if (!isValid || isSubmitting || uploading) return;
 
-    await onSubmit({
-      title: title.trim(),
-      content: content.trim(),
-      isAnonymous,
-      category,
-    });
-  }, [isValid, isSubmitting, title, content, isAnonymous, category, onSubmit]);
+    try {
+      // 이미지 업로드
+      const uploadedImageUrls: string[] = [];
+      for (const img of images) {
+        const url = await uploadImage(img.file);
+        if (url) {
+          uploadedImageUrls.push(url);
+        }
+      }
+
+      // 파일 업로드
+      const uploadedFiles: AttachedFile[] = [];
+      for (const f of files) {
+        const fileInfo = await uploadFile(f.file);
+        if (fileInfo) {
+          uploadedFiles.push(fileInfo);
+        }
+      }
+
+      await onSubmit({
+        title: title.trim(),
+        content: content.trim(),
+        isAnonymous,
+        category: 'community',
+        imageUrl: uploadedImageUrls[0] || undefined, // 대표 이미지
+        imageUrls: uploadedImageUrls,
+        fileUrls: uploadedFiles,
+      });
+    } catch (err) {
+      console.error('글 작성 실패:', err);
+    }
+  }, [isValid, isSubmitting, uploading, images, files, title, content, isAnonymous, uploadImage, uploadFile, onSubmit]);
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-4"
+      className="p-4"
+      style={{
+        border: '1px solid #1A1A1A',
+        backgroundColor: theme.colors.backgroundCard,
+      }}
     >
-      {/* 카테고리 표시 */}
-      <div className="flex items-center gap-2">
-        <span className="px-3 py-1 bg-theme-accent/10 text-theme-accent text-sm font-medium rounded-full">
-          {category === 'toProfessor' ? 'To 교수님' : '우리들끼리'}
-        </span>
-      </div>
-
       {/* 제목 입력 */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
-          제목 <span className="text-red-500">*</span>
+      <div className="mb-4">
+        <label
+          className="block text-sm font-serif-display font-bold mb-2"
+          style={{ color: theme.colors.text }}
+        >
+          HEADLINE <span style={{ color: '#8B1A1A' }}>*</span>
         </label>
-        <Input
+        <input
+          type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="제목을 입력하세요 (2자 이상)"
+          placeholder="기사 제목을 입력하세요 (2자 이상)"
           maxLength={100}
+          className="w-full px-4 py-3 outline-none transition-colors font-serif-display text-lg"
+          style={{
+            border: '1px solid #1A1A1A',
+            backgroundColor: theme.colors.background,
+            color: theme.colors.text,
+          }}
         />
-        <div className="mt-1 text-xs text-gray-400 text-right">
+        <div
+          className="mt-1 text-xs text-right font-serif-elegant"
+          style={{ color: theme.colors.textSecondary }}
+        >
           {title.length}/100
         </div>
       </div>
 
       {/* 내용 입력 */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
-          내용 <span className="text-red-500">*</span>
+      <div className="mb-4">
+        <label
+          className="block text-sm font-serif-display font-bold mb-2"
+          style={{ color: theme.colors.text }}
+        >
+          ARTICLE BODY <span style={{ color: '#8B1A1A' }}>*</span>
         </label>
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          placeholder="내용을 입력하세요 (10자 이상)"
+          placeholder="기사 내용을 입력하세요 (10자 이상)"
           rows={8}
           maxLength={2000}
-          className="
-            w-full px-4 py-3
-            border border-gray-200 rounded-xl
-            text-gray-800 placeholder-gray-400
-            resize-none
-            focus:outline-none focus:ring-2 focus:ring-theme-accent/30 focus:border-theme-accent
-            transition-colors
-          "
+          className="w-full px-4 py-3 resize-none outline-none transition-colors leading-relaxed"
+          style={{
+            border: '1px solid #1A1A1A',
+            backgroundColor: theme.colors.background,
+            color: theme.colors.text,
+          }}
         />
-        <div className="mt-1 text-xs text-gray-400 text-right">
+        <div
+          className="mt-1 text-xs text-right font-serif-elegant"
+          style={{ color: theme.colors.textSecondary }}
+        >
           {content.length}/2000
         </div>
       </div>
 
-      {/* 옵션 */}
-      <div className="flex items-center justify-between py-3 border-t border-gray-100">
-        {/* 익명 옵션 */}
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={isAnonymous}
-            onChange={(e) => setIsAnonymous(e.target.checked)}
-            className="w-5 h-5 rounded border-gray-300 text-theme-accent focus:ring-theme-accent"
-          />
-          <span className="text-sm text-gray-700">익명으로 작성</span>
+      {/* 이미지 첨부 */}
+      <div className="mb-4">
+        <label
+          className="block text-sm font-serif-display font-bold mb-2"
+          style={{ color: theme.colors.text }}
+        >
+          PHOTOS
+          <span className="font-normal text-xs ml-2" style={{ color: theme.colors.textSecondary }}>
+            (최대 5장)
+          </span>
         </label>
 
-        {/* 글자 수 안내 */}
-        <span className="text-xs text-gray-400">
-          {!title.trim() && '제목을 입력해주세요'}
-          {title.trim() && title.trim().length < 2 && '제목은 2자 이상'}
-          {title.trim().length >= 2 && content.trim().length < 10 && '내용은 10자 이상'}
-          {isValid && '작성 완료!'}
+        {/* 이미지 미리보기 */}
+        <AnimatePresence>
+          {images.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {images.map((img, index) => (
+                <motion.div
+                  key={img.preview}
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  className="relative w-20 h-20"
+                >
+                  <Image
+                    src={img.preview}
+                    alt={`첨부 이미지 ${index + 1}`}
+                    fill
+                    sizes="80px"
+                    className="object-cover"
+                    style={{ border: '1px solid #1A1A1A' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeImage(index)}
+                    className="absolute -top-2 -right-2 w-5 h-5 flex items-center justify-center text-xs"
+                    style={{
+                      backgroundColor: '#8B1A1A',
+                      color: '#F5F0E8',
+                    }}
+                  >
+                    ×
+                  </button>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* 이미지 추가 버튼 */}
+        {images.length < 5 && (
+          <button
+            type="button"
+            onClick={() => imageInputRef.current?.click()}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-serif-display transition-colors"
+            style={{
+              border: '1px dashed #1A1A1A',
+              backgroundColor: 'transparent',
+              color: theme.colors.text,
+            }}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            사진 첨부
+          </button>
+        )}
+
+        {/* 숨겨진 이미지 input */}
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          capture="environment"
+          onChange={handleImageSelect}
+          className="hidden"
+        />
+      </div>
+
+      {/* 파일 첨부 */}
+      <div className="mb-4">
+        <label
+          className="block text-sm font-serif-display font-bold mb-2"
+          style={{ color: theme.colors.text }}
+        >
+          FILES
+          <span className="font-normal text-xs ml-2" style={{ color: theme.colors.textSecondary }}>
+            (최대 3개, 10MB 이하)
+          </span>
+        </label>
+
+        {/* 파일 목록 */}
+        <AnimatePresence>
+          {files.length > 0 && (
+            <div className="space-y-2 mb-3">
+              {files.map((f, index) => (
+                <motion.div
+                  key={`${f.name}-${index}`}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  className="flex items-center justify-between px-3 py-2"
+                  style={{
+                    border: '1px solid #D4CFC4',
+                    backgroundColor: theme.colors.background,
+                  }}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                    </svg>
+                    <span className="text-sm truncate" style={{ color: theme.colors.text }}>
+                      {f.name}
+                    </span>
+                    <span className="text-xs flex-shrink-0" style={{ color: theme.colors.textSecondary }}>
+                      ({formatFileSize(f.file.size)})
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeFile(index)}
+                    className="text-sm px-2"
+                    style={{ color: '#8B1A1A' }}
+                  >
+                    삭제
+                  </button>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* 파일 추가 버튼 */}
+        {files.length < 3 && (
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-serif-display transition-colors"
+            style={{
+              border: '1px dashed #1A1A1A',
+              backgroundColor: 'transparent',
+              color: theme.colors.text,
+            }}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+            </svg>
+            파일 첨부
+          </button>
+        )}
+
+        {/* 숨겨진 파일 input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
+          multiple
+          onChange={handleFileSelect}
+          className="hidden"
+        />
+      </div>
+
+      {/* 옵션 */}
+      <div
+        className="flex items-center justify-between py-3 border-t border-b mb-4"
+        style={{ borderColor: '#D4CFC4' }}
+      >
+        {/* 익명 옵션 */}
+        <label className="flex items-center gap-3 cursor-pointer">
+          <div
+            className="w-5 h-5 flex items-center justify-center transition-colors"
+            style={{
+              border: '1px solid #1A1A1A',
+              backgroundColor: isAnonymous ? '#1A1A1A' : 'transparent',
+            }}
+            onClick={() => setIsAnonymous(!isAnonymous)}
+          >
+            {isAnonymous && (
+              <svg className="w-3 h-3" fill="#F5F0E8" viewBox="0 0 24 24">
+                <path d="M20.285 2l-11.285 11.567-5.286-5.011-3.714 3.716 9 8.728 15-15.285z" />
+              </svg>
+            )}
+          </div>
+          <span
+            className="text-sm font-serif-display"
+            style={{ color: theme.colors.text }}
+          >
+            익명의 기자로 작성
+          </span>
+        </label>
+
+        {/* 상태 안내 */}
+        <span
+          className="text-xs font-serif-elegant italic"
+          style={{ color: theme.colors.textSecondary }}
+        >
+          {uploading && 'Uploading...'}
+          {!uploading && !title.trim() && '제목을 입력해주세요'}
+          {!uploading && title.trim() && title.trim().length < 2 && '제목은 2자 이상'}
+          {!uploading && title.trim().length >= 2 && content.trim().length < 10 && '내용은 10자 이상'}
+          {!uploading && isValid && 'Ready to publish!'}
         </span>
       </div>
 
       {/* 에러 메시지 */}
-      {error && (
+      {(error || uploadError) && (
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="p-3 bg-red-50 text-red-600 rounded-xl text-sm"
+          className="p-3 mb-4 text-sm text-center"
+          style={{
+            border: '1px solid #8B1A1A',
+            backgroundColor: '#FEE2E2',
+            color: '#8B1A1A',
+          }}
         >
-          {error}
+          {error || uploadError}
         </motion.div>
       )}
 
       {/* 작성 버튼 */}
-      <Button
-        fullWidth
-        size="lg"
+      <motion.button
+        type="button"
+        whileHover={{ scale: 1.01 }}
+        whileTap={{ scale: 0.99 }}
         onClick={handleSubmit}
-        disabled={!isValid || isSubmitting}
-        loading={isSubmitting}
+        disabled={!isValid || isSubmitting || uploading}
+        className="w-full py-3 font-serif-display font-bold text-center transition-colors disabled:opacity-50"
+        style={{
+          backgroundColor: '#1A1A1A',
+          color: '#F5F0E8',
+        }}
       >
-        글 작성하기
-      </Button>
+        {uploading ? 'Uploading...' : isSubmitting ? 'Publishing...' : 'PUBLISH ARTICLE'}
+      </motion.button>
     </motion.div>
   );
 }

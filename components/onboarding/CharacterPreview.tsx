@@ -82,6 +82,7 @@ export default function CharacterPreview({
         src={characterImagePath}
         alt={`캐릭터: ${HAIR_STYLES[options.hairStyle]?.name} 머리, ${SKIN_COLORS[options.skinColor]?.name} 피부`}
         fill
+        sizes="(max-width: 768px) 50vw, 300px"
         className="object-contain"
         priority
         onError={(e) => {

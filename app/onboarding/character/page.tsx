@@ -173,6 +173,7 @@ export default function CharacterPage() {
               src={characterImagePath}
               alt="캐릭터 미리보기"
               fill
+              sizes="(max-width: 768px) 80vw, 400px"
               className="object-contain drop-shadow-2xl"
               priority
               onError={(e) => {
@@ -237,6 +238,7 @@ export default function CharacterPage() {
                       src={thumbnailPath}
                       alt={option.name}
                       fill
+                      sizes="80px"
                       className="object-cover"
                       onError={(e) => {
                         const target = e.target as HTMLImageElement;
