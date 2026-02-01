@@ -65,6 +65,8 @@ export interface SubQuestion {
   koreanAbcExamples?: KoreanAbcItem[];
   /** 이미지 URL (하위 문제별 개별 이미지) */
   image?: string;
+  /** 복수정답 모드 (객관식용) */
+  isMultipleAnswer?: boolean;
 }
 
 /**
@@ -387,9 +389,35 @@ function SubQuestionEditor({
     });
   };
 
+  // 복수정답 모드 여부
+  const isMultipleAnswerMode = (subQuestion.answerIndices?.length || 0) > 1 ||
+    (subQuestion as any).isMultipleAnswer === true;
+
+  const handleToggleMultipleAnswer = () => {
+    const newIsMultiple = !isMultipleAnswerMode;
+    if (newIsMultiple) {
+      // 복수정답 모드로 전환
+      onChange({
+        ...subQuestion,
+        answerIndices: subQuestion.answerIndex !== undefined && subQuestion.answerIndex >= 0
+          ? [subQuestion.answerIndex]
+          : [],
+        isMultipleAnswer: true,
+      } as SubQuestion);
+    } else {
+      // 단일정답 모드로 전환
+      const firstAnswer = (subQuestion.answerIndices || [])[0];
+      onChange({
+        ...subQuestion,
+        answerIndex: firstAnswer ?? -1,
+        answerIndices: firstAnswer !== undefined ? [firstAnswer] : [],
+        isMultipleAnswer: false,
+      } as SubQuestion);
+    }
+  };
+
   const handleAnswerSelect = (answerIndex: number) => {
-    const isMultipleAnswer = (subQuestion.answerIndices?.length || 0) > 1;
-    if (isMultipleAnswer) {
+    if (isMultipleAnswerMode) {
       const currentIndices = subQuestion.answerIndices || [];
       let newIndices: number[];
       if (currentIndices.includes(answerIndex)) {
@@ -484,15 +512,41 @@ function SubQuestionEditor({
       {/* 객관식 선지 */}
       {subQuestion.type === 'multiple' && (
         <div className="space-y-2">
-          {(subQuestion.choices || []).map((choice, idx) => (
+          {/* 복수정답 토글 */}
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-[#5C5C5C]">선지 (정답 클릭)</span>
+            <button
+              type="button"
+              onClick={handleToggleMultipleAnswer}
+              className={`
+                px-2 py-1 text-xs font-bold border transition-colors
+                ${isMultipleAnswerMode
+                  ? 'bg-[#1A6B1A] text-[#F5F0E8] border-[#1A6B1A]'
+                  : 'bg-[#EDEAE4] text-[#5C5C5C] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
+                }
+              `}
+            >
+              복수정답 {isMultipleAnswerMode ? 'ON' : 'OFF'}
+            </button>
+          </div>
+          {isMultipleAnswerMode && (
+            <p className="text-xs text-[#1A6B1A] mb-1">복수정답 모드: 2개 이상의 정답을 선택하세요</p>
+          )}
+          {(subQuestion.choices || []).map((choice, idx) => {
+            const isSelected = isMultipleAnswerMode
+              ? (subQuestion.answerIndices || []).includes(idx)
+              : subQuestion.answerIndex === idx;
+            return (
             <div key={idx} className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => handleAnswerSelect(idx)}
                 className={`
                   w-7 h-7 flex items-center justify-center text-xs font-bold border-2 transition-colors
-                  ${(subQuestion.answerIndices || []).includes(idx) || subQuestion.answerIndex === idx
-                    ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                  ${isSelected
+                    ? isMultipleAnswerMode
+                      ? 'bg-[#1A6B1A] text-[#F5F0E8] border-[#1A6B1A]'
+                      : 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
                     : 'bg-[#F5F0E8] text-[#5C5C5C] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
                   }
                 `}
@@ -518,7 +572,8 @@ function SubQuestionEditor({
                 </button>
               )}
             </div>
-          ))}
+            );
+          })}
           {(subQuestion.choices || []).length < 8 && (
             <button
               type="button"
