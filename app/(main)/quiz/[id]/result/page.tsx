@@ -9,6 +9,7 @@ import {
   collection,
   addDoc,
   updateDoc,
+  deleteDoc,
   arrayUnion,
   serverTimestamp,
   query,
@@ -17,6 +18,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { useCourse } from '@/lib/contexts';
 
 /**
  * 문제 결과 타입
@@ -32,6 +34,20 @@ interface QuestionResult {
   isCorrect: boolean;
   explanation: string;
   isBookmarked: boolean;
+  /** 결합형 그룹 ID */
+  combinedGroupId?: string;
+  /** 결합형 그룹 내 순서 */
+  combinedIndex?: number;
+  /** 결합형 그룹 내 총 문제 수 */
+  combinedTotal?: number;
+  /** 결합형 공통 지문 (첫 번째 문제에만) */
+  passage?: string;
+  /** 결합형 공통 지문 타입 */
+  passageType?: string;
+  /** 결합형 공통 이미지 */
+  passageImage?: string;
+  /** 결합형 ㄱㄴㄷ 보기 항목 */
+  koreanAbcItems?: string[];
 }
 
 /**
@@ -44,6 +60,7 @@ interface QuizResultData {
   totalCount: number;
   earnedExp: number;
   questionResults: QuestionResult[];
+  quizUpdatedAt?: any; // 퀴즈 수정 시간 (알림용)
 }
 
 /**
@@ -54,19 +71,36 @@ export default function QuizResultPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const { user } = useAuth();
+  const { userCourseId } = useCourse();
 
   const quizId = params.id as string;
 
   const [resultData, setResultData] = useState<QuizResultData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expandedQuestionId, setExpandedQuestionId] = useState<string | null>(null);
+  const [expandedQuestionIds, setExpandedQuestionIds] = useState<Set<string>>(new Set());
 
   const calculateAndSaveResults = useCallback(async () => {
     if (!user || !quizId) return;
 
     try {
       setIsLoading(true);
+
+      // 먼저 저장된 결과 데이터가 있는지 확인
+      const storedResult = localStorage.getItem(`quiz_result_${quizId}`);
+      if (storedResult) {
+        try {
+          const cachedResult = JSON.parse(storedResult);
+          if (cachedResult.questionResults && cachedResult.questionResults.length > 0) {
+            // 저장된 결과 사용
+            setResultData(cachedResult);
+            setIsLoading(false);
+            return;
+          }
+        } catch (e) {
+          console.error('캐시된 결과 파싱 오류:', e);
+        }
+      }
 
       const answersParam = searchParams.get('answers');
       let userAnswers: string[] = [];
@@ -100,17 +134,51 @@ export default function QuizResultPage() {
 
           let isCorrect = false;
           if (q.type === 'multiple') {
-            isCorrect = userAnswer.toString() === correctAnswer.toString();
+            const correctAnswerStr = correctAnswer.toString();
+            const userAnswerStr = userAnswer.toString();
+
+            // 복수정답 여부 확인
+            if (correctAnswerStr.includes(',')) {
+              // 복수정답: 모든 정답을 선택해야 정답
+              // correctAnswer와 userAnswer 모두 1-indexed (예: "1,3")
+              const correctIndices = correctAnswerStr.split(',').map((s: string) => parseInt(s.trim(), 10));
+              const userIndices = userAnswerStr
+                ? userAnswerStr.split(',').map((s: string) => parseInt(s.trim(), 10))
+                : [];
+
+              // 정렬 후 비교
+              const sortedCorrect = [...correctIndices].sort((a, b) => a - b);
+              const sortedUser = [...userIndices].sort((a, b) => a - b);
+
+              isCorrect =
+                sortedCorrect.length === sortedUser.length &&
+                sortedCorrect.every((val, idx) => val === sortedUser[idx]);
+            } else {
+              // 단일정답: 둘 다 1-indexed로 직접 비교
+              isCorrect = userAnswerStr === correctAnswerStr;
+            }
           } else if (q.type === 'ox') {
-            isCorrect = userAnswer.toString().toUpperCase() === correctAnswer.toString().toUpperCase();
+            // OX: 정답이 "0"/"1" 또는 "O"/"X"일 수 있음
+            const userOX = userAnswer.toString().toUpperCase();
+            let correctOX = correctAnswer.toString().toUpperCase();
+            if (correctOX === '0') correctOX = 'O';
+            else if (correctOX === '1') correctOX = 'X';
+            isCorrect = userOX === correctOX;
           } else {
-            isCorrect = userAnswer.toString().trim().toLowerCase() ===
-                       correctAnswer.toString().trim().toLowerCase();
+            // 주관식: 복수 정답 지원 ("|||"로 구분)
+            const userAnswerNormalized = userAnswer.toString().trim().toLowerCase();
+            if (correctAnswer.toString().includes('|||')) {
+              // 복수 정답: 하나라도 맞으면 정답
+              const correctAnswers = correctAnswer.toString().split('|||').map((a: string) => a.trim().toLowerCase());
+              isCorrect = correctAnswers.some((ca: string) => userAnswerNormalized === ca);
+            } else {
+              isCorrect = userAnswerNormalized === correctAnswer.toString().trim().toLowerCase();
+            }
           }
 
           if (isCorrect) correctCount++;
 
-          return {
+          const result: QuestionResult = {
             id: q.id || `q${index}`,
             number: index + 1,
             question: q.text || q.question || '',
@@ -122,10 +190,28 @@ export default function QuizResultPage() {
             explanation: q.explanation || '해설이 없습니다.',
             isBookmarked: false,
           };
+
+          // 결합형 그룹 정보 추가
+          if (q.combinedGroupId) {
+            result.combinedGroupId = q.combinedGroupId;
+            result.combinedIndex = q.combinedIndex;
+            result.combinedTotal = q.combinedTotal;
+
+            // 첫 번째 하위 문제에만 공통 지문 정보 포함
+            if (q.combinedIndex === 0) {
+              result.passageType = q.passageType;
+              result.passage = q.passage;
+              result.passageImage = q.passageImage;
+              result.koreanAbcItems = q.koreanAbcItems;
+            }
+          }
+
+          return result;
         }
       );
 
       const earnedExp = correctCount * 10;
+      const quizUpdatedAt = quizData.updatedAt || quizData.createdAt || null;
 
       const result: QuizResultData = {
         quizId,
@@ -134,6 +220,7 @@ export default function QuizResultPage() {
         totalCount: questions.length,
         earnedExp,
         questionResults,
+        quizUpdatedAt,
       };
 
       setResultData(result);
@@ -150,15 +237,21 @@ export default function QuizResultPage() {
 
         // 이미 결과가 있으면 새로 저장하지 않음 (중복 방지)
         if (existingResults.empty) {
-          // 퀴즈 결과 저장
+
+          // 점수 계산 (0-100)
+          const score = Math.round((correctCount / questions.length) * 100);
+
+          // 퀴즈 결과 저장 (score 필드 필수 - Cloud Function에서 사용)
           await addDoc(collection(db, 'quizResults'), {
             userId: user.uid,
             quizId,
             quizTitle: quizData.title || '퀴즈',
+            score, // Cloud Function onQuizComplete에서 필수
             correctCount,
             totalCount: questions.length,
             earnedExp,
             answers: userAnswers,
+            courseId: userCourseId || null,
             createdAt: serverTimestamp(),
           });
 
@@ -171,15 +264,20 @@ export default function QuizResultPage() {
             console.error('퀴즈 완료 표시 실패:', updateErr);
           }
 
+          // 퀴즈 업데이트 시간 저장 (문제 수정 알림용)
+          const quizUpdatedAt = quizData.updatedAt || quizData.createdAt || null;
+
           // 모든 문제를 'solved' 타입으로 저장 (푼 문제)
           for (const questionResult of questionResults) {
+            // 타입 정규화: subjective -> short
+            const normalizedType = questionResult.type === 'subjective' ? 'short' : questionResult.type;
             await addDoc(collection(db, 'reviews'), {
               userId: user.uid,
               quizId,
               quizTitle: quizData.title || '퀴즈',
               questionId: questionResult.id,
               question: questionResult.question,
-              type: questionResult.type,
+              type: normalizedType,
               options: questionResult.options || [],
               correctAnswer: questionResult.correctAnswer,
               userAnswer: questionResult.userAnswer,
@@ -189,6 +287,8 @@ export default function QuizResultPage() {
               isBookmarked: false,
               reviewCount: 0,
               lastReviewedAt: null,
+              courseId: userCourseId || null,
+              quizUpdatedAt, // 퀴즈 수정 시간 저장
               createdAt: serverTimestamp(),
             });
           }
@@ -196,13 +296,15 @@ export default function QuizResultPage() {
           // 오답 자동 저장 (틀린 문제)
           const wrongAnswers = questionResults.filter((r) => !r.isCorrect);
           for (const wrongAnswer of wrongAnswers) {
+            // 타입 정규화: subjective -> short
+            const normalizedWrongType = wrongAnswer.type === 'subjective' ? 'short' : wrongAnswer.type;
             await addDoc(collection(db, 'reviews'), {
               userId: user.uid,
               quizId,
               quizTitle: quizData.title || '퀴즈',
               questionId: wrongAnswer.id,
               question: wrongAnswer.question,
-              type: wrongAnswer.type,
+              type: normalizedWrongType,
               options: wrongAnswer.options || [],
               correctAnswer: wrongAnswer.correctAnswer,
               userAnswer: wrongAnswer.userAnswer,
@@ -211,6 +313,8 @@ export default function QuizResultPage() {
               isBookmarked: false,
               reviewCount: 0,
               lastReviewedAt: null,
+              courseId: userCourseId || null,
+              quizUpdatedAt, // 퀴즈 수정 시간 저장
               createdAt: serverTimestamp(),
             });
           }
@@ -239,6 +343,12 @@ export default function QuizResultPage() {
   const handleToggleBookmark = async (questionId: string) => {
     if (!user || !resultData) return;
 
+    const question = resultData.questionResults.find((r) => r.id === questionId);
+    if (!question) return;
+
+    const wasBookmarked = question.isBookmarked;
+
+    // UI 먼저 업데이트
     setResultData((prev) => {
       if (!prev) return prev;
       return {
@@ -250,28 +360,59 @@ export default function QuizResultPage() {
     });
 
     try {
-      const question = resultData.questionResults.find((r) => r.id === questionId);
-      if (!question || question.isBookmarked) return;
+      // 기존 북마크 문서 조회
+      const bookmarkQuery = query(
+        collection(db, 'reviews'),
+        where('userId', '==', user.uid),
+        where('quizId', '==', resultData.quizId),
+        where('questionId', '==', questionId),
+        where('reviewType', '==', 'bookmark')
+      );
+      const existingBookmarks = await getDocs(bookmarkQuery);
 
-      await addDoc(collection(db, 'reviews'), {
-        userId: user.uid,
-        quizId: resultData.quizId,
-        quizTitle: resultData.quizTitle,
-        questionId: question.id,
-        question: question.question,
-        type: question.type,
-        options: question.options || [],
-        correctAnswer: question.correctAnswer,
-        userAnswer: question.userAnswer,
-        explanation: question.explanation || '',
-        reviewType: 'bookmark',
-        isBookmarked: true,
-        reviewCount: 0,
-        lastReviewedAt: null,
-        createdAt: serverTimestamp(),
-      });
+      if (wasBookmarked) {
+        // 찜 해제: 기존 문서들 삭제
+        for (const docSnapshot of existingBookmarks.docs) {
+          await deleteDoc(docSnapshot.ref);
+        }
+      } else {
+        // 찜하기: 기존 문서가 없을 때만 추가
+        if (existingBookmarks.empty) {
+          // 타입 정규화: subjective -> short
+          const normalizedBookmarkType = question.type === 'subjective' ? 'short' : question.type;
+          await addDoc(collection(db, 'reviews'), {
+            userId: user.uid,
+            quizId: resultData.quizId,
+            quizTitle: resultData.quizTitle,
+            questionId: question.id,
+            question: question.question,
+            type: normalizedBookmarkType,
+            options: question.options || [],
+            correctAnswer: question.correctAnswer,
+            userAnswer: question.userAnswer,
+            explanation: question.explanation || '',
+            reviewType: 'bookmark',
+            isBookmarked: true,
+            reviewCount: 0,
+            lastReviewedAt: null,
+            courseId: userCourseId || null,
+            quizUpdatedAt: resultData.quizUpdatedAt || null, // 퀴즈 수정 시간 저장
+            createdAt: serverTimestamp(),
+          });
+        }
+      }
     } catch (err) {
       console.error('찜하기 오류:', err);
+      // 에러 시 UI 롤백
+      setResultData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          questionResults: prev.questionResults.map((r) =>
+            r.id === questionId ? { ...r, isBookmarked: wasBookmarked } : r
+          ),
+        };
+      });
     }
   };
 
@@ -284,7 +425,15 @@ export default function QuizResultPage() {
   };
 
   const toggleExpand = (questionId: string) => {
-    setExpandedQuestionId(expandedQuestionId === questionId ? null : questionId);
+    setExpandedQuestionIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(questionId)) {
+        newSet.delete(questionId);
+      } else {
+        newSet.add(questionId);
+      }
+      return newSet;
+    });
   };
 
   // 로딩 UI
@@ -355,15 +504,10 @@ export default function QuizResultPage() {
           )}
         </div>
 
-        {/* 획득 경험치 */}
-        <div className="bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 text-center">
-          <p className="text-xs text-[#5C5C5C] mb-1">획득 경험치</p>
-          <p className="text-xl font-bold text-[#1A6B1A]">+{resultData.earnedExp}XP</p>
-        </div>
 
         {/* 문제별 결과 */}
         <div className="space-y-3">
-          <h3 className="font-bold text-[#1A1A1A]">문제별 결과 (클릭하여 상세 보기)</h3>
+          <h3 className="font-bold text-[#1A1A1A]">문제별 결과</h3>
           {resultData.questionResults.map((result) => (
             <div key={result.id}>
               <button
@@ -380,7 +524,7 @@ export default function QuizResultPage() {
                   </span>
                   <svg
                     className={`w-5 h-5 text-[#5C5C5C] transition-transform ${
-                      expandedQuestionId === result.id ? 'rotate-180' : ''
+                      expandedQuestionIds.has(result.id) ? 'rotate-180' : ''
                     }`}
                     fill="none"
                     stroke="currentColor"
@@ -394,7 +538,7 @@ export default function QuizResultPage() {
 
               {/* 상세 정보 (펼침) */}
               <AnimatePresence>
-                {expandedQuestionId === result.id && (
+                {expandedQuestionIds.has(result.id) && (
                   <motion.div
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: 'auto', opacity: 1 }}
@@ -402,27 +546,99 @@ export default function QuizResultPage() {
                     className="overflow-hidden"
                   >
                     <div className="border-2 border-t-0 border-[#1A1A1A] bg-[#F5F0E8] p-4 space-y-3">
+                      {/* 결합형 문제 그룹 표시 */}
+                      {result.combinedGroupId && result.combinedIndex === 0 && (
+                        <div className="mb-3 p-3 border-2 border-[#8B6914] bg-[#FFF8E1]">
+                          <p className="text-xs font-bold text-[#8B6914] mb-2">
+                            결합형 문제 ({result.combinedTotal}문제)
+                          </p>
+                          {/* 공통 지문 - 텍스트 */}
+                          {result.passage && result.passageType !== 'korean_abc' && (
+                            <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{result.passage}</p>
+                          )}
+                          {/* 공통 지문 - ㄱㄴㄷ 형식 */}
+                          {result.passageType === 'korean_abc' && result.koreanAbcItems && result.koreanAbcItems.length > 0 && (
+                            <div className="space-y-1">
+                              {result.koreanAbcItems.map((item, idx) => (
+                                <p key={idx} className="text-sm text-[#1A1A1A]">
+                                  <span className="font-bold">{['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ'][idx]}.</span> {item}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                          {/* 공통 이미지 */}
+                          {result.passageImage && (
+                            <img src={result.passageImage} alt="공통 이미지" className="mt-2 max-w-full h-auto border border-[#1A1A1A]" />
+                          )}
+                        </div>
+                      )}
+                      {/* 결합형 후속 문제 표시 */}
+                      {result.combinedGroupId && result.combinedIndex !== undefined && result.combinedIndex > 0 && (
+                        <p className="text-xs text-[#8B6914] font-bold mb-2">
+                          결합형 문제 ({result.combinedIndex + 1}/{result.combinedTotal})
+                        </p>
+                      )}
+
                       {/* 선지 (객관식) */}
                       {result.options && result.options.length > 0 && (
                         <div>
+                          {/* 복수 정답 표시 */}
+                          {(() => {
+                            const correctAnswerStr = result.correctAnswer?.toString() || '';
+                            const correctAnswers = correctAnswerStr.includes(',')
+                              ? correctAnswerStr.split(',').map(a => a.trim())
+                              : [correctAnswerStr];
+                            const isMultipleAnswer = correctAnswers.length > 1;
+                            return isMultipleAnswer && (
+                              <p className="text-xs text-[#8B6914] font-bold mb-2 flex items-center gap-1">
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                                </svg>
+                                복수 정답 문제 ({correctAnswers.length}개)
+                              </p>
+                            );
+                          })()}
                           <p className="text-xs font-bold text-[#5C5C5C] mb-2">선지</p>
                           <div className="space-y-1">
-                            {result.options.map((opt, idx) => (
-                              <p
-                                key={idx}
-                                className={`text-sm p-2 border ${
-                                  result.correctAnswer === idx.toString()
-                                    ? 'border-[#1A6B1A] bg-[#E8F5E9] text-[#1A6B1A]'
-                                    : result.userAnswer === idx.toString() && !result.isCorrect
-                                    ? 'border-[#8B1A1A] bg-[#FDEAEA] text-[#8B1A1A]'
-                                    : 'border-[#EDEAE4] text-[#1A1A1A]'
-                                }`}
-                              >
-                                {idx + 1}. {opt}
-                                {result.correctAnswer === idx.toString() && ' ✓'}
-                                {result.userAnswer === idx.toString() && !result.isCorrect && ' (내 답)'}
-                              </p>
-                            ))}
+                            {result.options.map((opt, idx) => {
+                              const optionNum = (idx + 1).toString();
+                              const optionIdx = idx.toString();
+                              // 복수 정답 지원: 쉼표로 구분된 정답 처리
+                              const correctAnswerStr = result.correctAnswer?.toString() || '';
+                              const correctAnswers = correctAnswerStr.includes(',')
+                                ? correctAnswerStr.split(',').map(a => a.trim())
+                                : [correctAnswerStr];
+                              const isCorrectOption = correctAnswers.some(ca =>
+                                ca === optionNum || ca === optionIdx || ca === opt
+                              );
+                              // 사용자 답 비교: 복수 선택도 지원
+                              const userAnswerStr = result.userAnswer?.toString() || '';
+                              const userAnswers = userAnswerStr.includes(',')
+                                ? userAnswerStr.split(',').map(a => a.trim())
+                                : [userAnswerStr];
+                              const isUserAnswer = userAnswers.some(ua =>
+                                ua === optionNum || ua === optionIdx || ua === opt
+                              );
+
+                              // 스타일 결정: 정답 > 내 오답 > 기본
+                              let className = 'border-[#EDEAE4] text-[#1A1A1A]';
+                              if (isCorrectOption) {
+                                className = 'border-[#1A6B1A] bg-[#E8F5E9] text-[#1A6B1A]';
+                              } else if (isUserAnswer) {
+                                className = 'border-[#8B1A1A] bg-[#FDEAEA] text-[#8B1A1A]';
+                              }
+
+                              return (
+                                <p
+                                  key={idx}
+                                  className={`text-sm p-2 border ${className}`}
+                                >
+                                  {idx + 1}. {opt}
+                                  {isCorrectOption && ' (정답)'}
+                                  {isUserAnswer && !isCorrectOption && ' (내 답)'}
+                                </p>
+                              );
+                            })}
                           </div>
                         </div>
                       )}
@@ -432,12 +648,41 @@ export default function QuizResultPage() {
                         <div className="space-y-2">
                           <p className="text-sm">
                             <span className="text-[#5C5C5C]">내 답: </span>
-                            <span className="font-bold text-[#1A1A1A]">{result.userAnswer || '(미응답)'}</span>
+                            <span className="font-bold text-[#1A1A1A]">
+                              {result.type === 'ox'
+                                ? (result.userAnswer === '0' || result.userAnswer?.toString().toUpperCase() === 'O' ? 'O' : result.userAnswer === '1' || result.userAnswer?.toString().toUpperCase() === 'X' ? 'X' : result.userAnswer || '(미응답)')
+                                : (result.userAnswer || '(미응답)')}
+                            </span>
                           </p>
-                          <p className="text-sm">
-                            <span className="text-[#5C5C5C]">정답: </span>
-                            <span className="font-bold text-[#1A6B1A]">{result.correctAnswer}</span>
-                          </p>
+                          {/* 주관식 복수 정답 표시 */}
+                          {result.correctAnswer?.toString().includes('|||') ? (
+                            <div className="text-sm">
+                              <span className="text-[#5C5C5C]">정답 (다음 중 하나): </span>
+                              <div className="mt-1 space-y-1">
+                                {result.correctAnswer.split('|||').map((ans: string, idx: number) => (
+                                  <span
+                                    key={idx}
+                                    className="inline-block mr-2 px-2 py-0.5 bg-[#E8F5E9] border border-[#1A6B1A] text-[#1A6B1A] font-bold"
+                                  >
+                                    {ans.trim()}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          ) : result.type === 'ox' ? (
+                            // OX 문제: 인덱스를 O/X로 변환
+                            <p className="text-sm">
+                              <span className="text-[#5C5C5C]">정답: </span>
+                              <span className="font-bold text-[#1A6B1A]">
+                                {result.correctAnswer === '0' || result.correctAnswer?.toString().toUpperCase() === 'O' ? 'O' : 'X'}
+                              </span>
+                            </p>
+                          ) : (
+                            <p className="text-sm">
+                              <span className="text-[#5C5C5C]">정답: </span>
+                              <span className="font-bold text-[#1A6B1A]">{result.correctAnswer}</span>
+                            </p>
+                          )}
                         </div>
                       )}
 
@@ -481,6 +726,7 @@ export default function QuizResultPage() {
           다음
         </button>
       </div>
+
     </div>
   );
 }

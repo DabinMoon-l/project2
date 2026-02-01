@@ -33,11 +33,11 @@ interface InstantFeedbackButtonProps {
 }
 
 // 피드백 유형 옵션
-const feedbackTypes: { type: FeedbackType; label: string; emoji: string }[] = [
-  { type: 'unclear', label: '문제가 이해가 안 돼요', emoji: '😕' },
-  { type: 'wrong', label: '정답이 틀린 것 같아요', emoji: '🤔' },
-  { type: 'typo', label: '오타가 있어요', emoji: '📝' },
-  { type: 'other', label: '기타 의견', emoji: '💬' },
+const feedbackTypes: { type: FeedbackType; label: string }[] = [
+  { type: 'unclear', label: '문제가 이해가 안 돼요' },
+  { type: 'wrong', label: '정답이 틀린 것 같아요' },
+  { type: 'typo', label: '오타가 있어요' },
+  { type: 'other', label: '기타 의견' },
 ];
 
 /**
@@ -112,12 +112,12 @@ export default function InstantFeedbackButton({
         onClick={handleOpen}
         disabled={isSubmitted}
         className={`
-          w-10 h-10 rounded-full
+          w-10 h-10
           flex items-center justify-center
-          shadow-md transition-all duration-200
+          border-2 transition-all duration-200
           ${isSubmitted
-            ? 'bg-green-100 cursor-default'
-            : 'bg-orange-100 hover:bg-orange-200'
+            ? 'bg-[#E8F5E9] border-[#1A6B1A] cursor-default'
+            : 'bg-[#FFF8E1] border-[#8B6914] hover:bg-[#FFECB3]'
           }
         `}
         aria-label={isSubmitted ? '피드백 완료' : '문제에 대한 피드백 남기기'}
@@ -126,7 +126,7 @@ export default function InstantFeedbackButton({
           <motion.svg
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            className="w-5 h-5 text-green-600"
+            className="w-5 h-5 text-[#1A6B1A]"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -139,7 +139,7 @@ export default function InstantFeedbackButton({
             />
           </motion.svg>
         ) : (
-          <span className="text-lg" role="img" aria-hidden="true">
+          <span className="text-lg font-bold text-[#8B6914]" role="img" aria-hidden="true">
             !
           </span>
         )}
@@ -155,27 +155,27 @@ export default function InstantFeedbackButton({
         <div className="space-y-4">
           {/* 피드백 유형 선택 */}
           <div>
-            <p className="text-sm text-gray-600 mb-3">
+            <p className="text-sm text-[#5C5C5C] mb-3">
               문제에 어떤 문제가 있나요?
             </p>
             <div className="grid grid-cols-2 gap-2">
-              {feedbackTypes.map(({ type, label, emoji }) => (
+              {feedbackTypes.map(({ type, label }) => (
                 <motion.button
                   key={type}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => setSelectedType(type)}
-                  style={{
-                    borderColor: selectedType === type ? colors.accent : '#E5E7EB',
-                    backgroundColor: selectedType === type ? `${colors.accent}10` : '#FFFFFF',
-                  }}
                   className={`
-                    p-3 rounded-xl border-2 text-left
-                    transition-all duration-200
+                    p-4 border-2 transition-all duration-200
+                    flex items-center justify-center text-center
+                    min-h-[60px]
+                    ${selectedType === type
+                      ? 'border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8]'
+                      : 'border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A]'
+                    }
                   `}
                 >
-                  <span className="text-lg mb-1 block">{emoji}</span>
-                  <span className="text-sm text-gray-700">{label}</span>
+                  <span className="text-base font-bold">{label}</span>
                 </motion.button>
               ))}
             </div>
@@ -189,7 +189,7 @@ export default function InstantFeedbackButton({
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
               >
-                <label className="block text-sm text-gray-600 mb-2">
+                <label className="block text-sm text-[#5C5C5C] mb-2">
                   추가 의견 (선택)
                 </label>
                 <textarea
@@ -198,9 +198,9 @@ export default function InstantFeedbackButton({
                   placeholder="자세한 내용을 적어주세요"
                   rows={3}
                   maxLength={200}
-                  className="w-full p-3 rounded-xl border-2 border-gray-200 focus:border-theme-accent focus:outline-none resize-none text-sm"
+                  className="w-full p-3 border-2 border-[#1A1A1A] bg-[#F5F0E8] focus:outline-none resize-none text-sm text-[#1A1A1A] placeholder:text-[#5C5C5C]"
                 />
-                <p className="text-xs text-gray-400 text-right mt-1">
+                <p className="text-xs text-[#5C5C5C] text-right mt-1">
                   {content.length}/200
                 </p>
               </motion.div>
@@ -213,13 +213,13 @@ export default function InstantFeedbackButton({
             whileTap={selectedType ? { scale: 0.98 } : undefined}
             onClick={handleSubmit}
             disabled={!selectedType || isSubmitting}
-            style={{
-              backgroundColor: selectedType ? colors.accent : '#E5E7EB',
-            }}
             className={`
-              w-full py-3.5 rounded-xl font-semibold text-base
+              w-full py-3.5 font-bold text-base border-2
               transition-all duration-200
-              ${selectedType ? 'text-white' : 'text-gray-400 cursor-not-allowed'}
+              ${selectedType
+                ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A] hover:bg-[#2A2A2A]'
+                : 'bg-[#EDEAE4] text-[#5C5C5C] border-[#5C5C5C] cursor-not-allowed'
+              }
             `}
           >
             {isSubmitting ? (
@@ -251,7 +251,7 @@ export default function InstantFeedbackButton({
             )}
           </motion.button>
 
-          <p className="text-xs text-gray-400 text-center">
+          <p className="text-xs text-[#5C5C5C] text-center">
             피드백은 익명으로 전달됩니다.
           </p>
         </div>

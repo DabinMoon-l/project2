@@ -35,19 +35,25 @@ interface QuestionPreviewProps {
 /**
  * 문제 유형 라벨
  */
-const typeLabels = {
+const typeLabels: Record<string, string> = {
   ox: 'OX',
   multiple: '객관식',
   subjective: '주관식',
+  short_answer: '단답형',
+  essay: '서술형',
+  combined: '결합형',
 };
 
 /**
  * 문제 유형 색상
  */
-const typeColors = {
+const typeColors: Record<string, string> = {
   ox: 'bg-blue-100 text-blue-700',
   multiple: 'bg-purple-100 text-purple-700',
   subjective: 'bg-green-100 text-green-700',
+  short_answer: 'bg-green-100 text-green-700',
+  essay: 'bg-orange-100 text-orange-700',
+  combined: 'bg-red-100 text-red-700',
 };
 
 // ============================================================

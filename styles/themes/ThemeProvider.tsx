@@ -11,23 +11,30 @@ import {
 import {
   type ClassType,
   type Theme,
+  type BiologyTheme,
   defaultTheme,
   getTheme,
   themeToCssVariables,
+  biologyTheme,
 } from './index';
+import type { CourseId } from '@/lib/types/course';
 
 /**
  * 테마 컨텍스트 값 타입
  */
 export interface ThemeContextValue {
-  // 현재 테마
-  theme: Theme;
+  // 현재 테마 (반별 테마 또는 생물학 테마)
+  theme: Theme | BiologyTheme;
   // 현재 반 타입
   classType: ClassType;
   // 테마 변경 함수
   setClassType: (classType: ClassType) => void;
-  // 다크 모드 여부 (B반은 라이트 모드)
+  // 다크 모드 여부
   isDarkMode: boolean;
+  // 현재 과목 ID
+  courseId: CourseId | null;
+  // 생물학 단일 테마 사용 여부
+  isBiologyCourse: boolean;
 }
 
 // 테마 컨텍스트 생성
@@ -43,6 +50,8 @@ interface ThemeProviderProps {
   children: ReactNode;
   // 초기 반 타입 (서버에서 전달 가능)
   initialClassType?: ClassType;
+  // 현재 과목 ID (생물학이면 단일 테마 사용)
+  courseId?: CourseId | null;
 }
 
 /**
@@ -52,6 +61,7 @@ interface ThemeProviderProps {
 export function ThemeProvider({
   children,
   initialClassType,
+  courseId = null,
 }: ThemeProviderProps) {
   // 반 타입 상태 (초기값: A반)
   const [classType, setClassTypeState] = useState<ClassType>(
@@ -59,6 +69,9 @@ export function ThemeProvider({
   );
   // 클라이언트 마운트 여부
   const [mounted, setMounted] = useState(false);
+
+  // 생물학 과목 여부
+  const isBiologyCourse = courseId === 'biology';
 
   // 클라이언트에서 로컬 스토리지 값 로드
   useEffect(() => {
@@ -72,6 +85,13 @@ export function ThemeProvider({
     }
   }, [initialClassType]);
 
+  // initialClassType prop 변경 시 상태 업데이트
+  useEffect(() => {
+    if (initialClassType) {
+      setClassTypeState(initialClassType);
+    }
+  }, [initialClassType]);
+
   // 반 타입 변경 핸들러
   const setClassType = useCallback((newClassType: ClassType) => {
     setClassTypeState(newClassType);
@@ -79,10 +99,17 @@ export function ThemeProvider({
   }, []);
 
   // 현재 테마 계산
-  const theme = useMemo(() => getTheme(classType), [classType]);
+  // 생물학: 단일 테마 (biologyTheme)
+  // 병태생리학/미생물학: 반별 테마
+  const theme = useMemo(() => {
+    if (isBiologyCourse) {
+      return biologyTheme;
+    }
+    return getTheme(classType);
+  }, [classType, isBiologyCourse]);
 
-  // B반은 밝은 배경이므로 라이트 모드
-  const isDarkMode = classType !== 'B';
+  // 모든 반이 밝은 배경이므로 라이트 모드
+  const isDarkMode = false;
 
   // CSS 변수를 document에 적용
   useEffect(() => {
@@ -107,7 +134,12 @@ export function ThemeProvider({
 
     // 반 타입 data attribute 설정 (CSS 선택자용)
     root.setAttribute('data-class-type', classType);
-  }, [theme, isDarkMode, classType, mounted]);
+
+    // 과목 data attribute 설정 (CSS 선택자용)
+    if (courseId) {
+      root.setAttribute('data-course', courseId);
+    }
+  }, [theme, isDarkMode, classType, courseId, mounted]);
 
   // 컨텍스트 값 메모이제이션
   const contextValue = useMemo<ThemeContextValue>(
@@ -116,13 +148,15 @@ export function ThemeProvider({
       classType,
       setClassType,
       isDarkMode,
+      courseId,
+      isBiologyCourse,
     }),
-    [theme, classType, setClassType, isDarkMode]
+    [theme, classType, setClassType, isDarkMode, courseId, isBiologyCourse]
   );
 
   // 서버 사이드 렌더링 시 기본 테마 스타일 적용
   // hydration mismatch 방지를 위해 mounted 전에는 기본값 사용
-  const currentTheme = mounted ? theme : defaultTheme;
+  const currentTheme = mounted ? theme : (isBiologyCourse ? biologyTheme : defaultTheme);
 
   return (
     <ThemeContext.Provider value={contextValue}>

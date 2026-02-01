@@ -37,7 +37,7 @@ export type TargetClass = 'A' | 'B' | 'C' | 'D' | 'all';
 export type Difficulty = 'easy' | 'normal' | 'hard';
 
 /** 문제 유형 */
-export type QuestionType = 'ox' | 'multiple' | 'subjective';
+export type QuestionType = 'ox' | 'multiple' | 'subjective' | 'short_answer' | 'essay' | 'combined';
 
 /** 문제 데이터 */
 export interface QuizQuestion {
@@ -78,6 +78,10 @@ export interface QuizInput {
   difficulty: Difficulty;
   isPublished: boolean;
   questions: QuizQuestion[];
+  /** 실제 문제 수 (결합형 하위 문제 포함, 미지정 시 questions.length 사용) */
+  questionCount?: number;
+  /** 과목 ID (선택) */
+  courseId?: string | null;
 }
 
 /** 필터 옵션 */
@@ -340,10 +344,12 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
         setError(null);
 
         const now = Timestamp.now();
+        // 실제 문제 수: input.questionCount가 있으면 사용, 없으면 questions.length 사용
+        const actualQuestionCount = input.questionCount ?? input.questions.length;
         const quizData = {
           ...input,
           type: 'professor',
-          questionCount: input.questions.length,
+          questionCount: actualQuestionCount,
           creatorUid,
           creatorNickname,
           participantCount: 0,
@@ -361,7 +367,7 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
           ...input,
           id: docRef.id,
           type: 'professor',
-          questionCount: input.questions.length,
+          questionCount: actualQuestionCount,
           creatorUid,
           creatorNickname,
           participantCount: 0,
@@ -400,20 +406,22 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
 
         // 문제 목록이 변경되면 questionCount도 업데이트
         if (input.questions) {
-          updateData.questionCount = input.questions.length;
+          // input.questionCount가 있으면 사용, 없으면 questions.length 사용
+          updateData.questionCount = input.questionCount ?? input.questions.length;
         }
 
         const docRef = doc(db, QUIZZES_COLLECTION, quizId);
         await updateDoc(docRef, updateData);
 
         // 목록 업데이트
+        const actualQuestionCount = input.questionCount ?? input.questions?.length;
         setQuizzes((prev) =>
           prev.map((quiz) =>
             quiz.id === quizId
               ? {
                   ...quiz,
                   ...input,
-                  questionCount: input.questions?.length ?? quiz.questionCount,
+                  questionCount: actualQuestionCount ?? quiz.questionCount,
                   updatedAt: new Date(),
                 }
               : quiz

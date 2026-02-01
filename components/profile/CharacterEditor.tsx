@@ -7,7 +7,6 @@ import { type CharacterOptions } from '@/lib/hooks/useProfile';
 import CharacterPreview, {
   HAIR_STYLES,
   SKIN_COLORS,
-  BEARD_STYLES,
 } from '@/components/onboarding/CharacterPreview';
 import { Button, BottomSheet } from '@/components/common';
 
@@ -26,7 +25,7 @@ interface CharacterEditorProps {
   saving?: boolean;
 }
 
-type EditCategory = 'hair' | 'skin' | 'beard';
+type EditCategory = 'hair' | 'skin';
 
 // ============================================================
 // 컴포넌트
@@ -84,18 +83,13 @@ export default function CharacterEditor({
   > = {
     hair: {
       label: '머리스타일',
-      options: HAIR_STYLES,
+      options: HAIR_STYLES.map((h) => h.name),
       key: 'hairStyle',
     },
     skin: {
       label: '피부색',
       options: SKIN_COLORS.map((s) => s.name),
       key: 'skinColor',
-    },
-    beard: {
-      label: '수염',
-      options: BEARD_STYLES,
-      key: 'beard',
     },
   };
 
@@ -115,7 +109,7 @@ export default function CharacterEditor({
       {/* 카테고리 선택 버튼 */}
       <div className="px-4 pb-4">
         <div
-          className="grid grid-cols-3 gap-2 p-2 rounded-xl"
+          className="grid grid-cols-2 gap-2 p-2 rounded-xl"
           style={{ backgroundColor: theme.colors.backgroundSecondary }}
         >
           {(Object.keys(categoryOptions) as EditCategory[]).map((cat) => (
@@ -136,7 +130,6 @@ export default function CharacterEditor({
             >
               {cat === 'hair' && '💇'}
               {cat === 'skin' && '🎨'}
-              {cat === 'beard' && '🧔'}
               <br />
               <span className="text-xs">{categoryOptions[cat].label}</span>
             </motion.button>

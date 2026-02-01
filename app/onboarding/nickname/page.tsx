@@ -13,7 +13,6 @@ import {
   getDocs,
 } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
-import { Button, Input } from '@/components/common';
 import StepIndicator, { ONBOARDING_STEPS } from '@/components/onboarding/StepIndicator';
 import CharacterPreview, {
   DEFAULT_CHARACTER_OPTIONS,
@@ -77,9 +76,9 @@ export default function NicknamePage() {
       return false;
     }
 
-    // 특수문자 검사 (한글, 영문, 숫자만 허용)
+    // 특수문자 검사 (완성형 한글, 영문, 숫자만 허용)
     if (!/^[가-힣a-zA-Z0-9]+$/.test(value)) {
-      setErrorMessage('한글, 영문, 숫자만 사용할 수 있습니다');
+      setErrorMessage('완성된 한글, 영문, 숫자만 사용할 수 있습니다 (자음/모음만은 불가)');
       setNicknameStatus('invalid');
       return false;
     }
@@ -155,34 +154,36 @@ export default function NicknamePage() {
       if (nicknameStatus === 'taken') return;
     }
 
-    setIsSubmitting(true);
+    // 온보딩 완료 - 홈으로 이동
+    localStorage.setItem('onboarding_just_completed', 'true');
+    router.push('/');
 
-    try {
-      const user = auth.currentUser;
-
-      if (user) {
-        // Firestore에 닉네임 저장
-        await setDoc(
-          doc(db, 'users', user.uid),
-          {
-            nickname,
-            onboardingStep: 3,
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true }
-        );
-      } else {
-        // 로컬 스토리지에 임시 저장
-        localStorage.setItem('onboarding_nickname', nickname);
-      }
-
-      // 다음 단계로 이동
-      router.push(ONBOARDING_STEPS[2].path);
-    } catch (error) {
-      console.error('닉네임 저장 실패:', error);
-      alert('저장에 실패했습니다. 다시 시도해주세요.');
-    } finally {
-      setIsSubmitting(false);
+    // Firestore 저장은 백그라운드로 처리
+    const user = auth.currentUser;
+    if (user) {
+      setDoc(
+        doc(db, 'users', user.uid),
+        {
+          nickname,
+          onboardingCompleted: true,
+          onboardingStep: 2,
+          // 게임 관련 초기값 설정 (EXP 시스템에 필수)
+          totalExp: 0,
+          rank: '견습생',
+          totalQuizzes: 0,
+          correctAnswers: 0,
+          wrongAnswers: 0,
+          averageScore: 0,
+          participationRate: 0,
+          totalFeedbacks: 0,
+          helpfulFeedbacks: 0,
+          badges: [],
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      ).catch((error) => console.error('닉네임 저장 실패:', error));
+    } else {
+      localStorage.setItem('onboarding_nickname', nickname);
     }
   };
 
@@ -238,41 +239,55 @@ export default function NicknamePage() {
    * 페이지 전환 애니메이션 설정
    */
   const pageVariants = {
-    initial: { opacity: 0, x: 50 },
-    animate: { opacity: 1, x: 0 },
-    exit: { opacity: 0, x: -50 },
+    initial: { opacity: 0 },
+    animate: { opacity: 1 },
+    exit: { opacity: 0 },
   };
 
   return (
     <motion.div
-      className="min-h-screen bg-[var(--theme-background)] flex flex-col"
+      className="min-h-screen flex flex-col relative"
       variants={pageVariants}
       initial="initial"
       animate="animate"
       exit="exit"
-      transition={{ duration: 0.3 }}
+      transition={{ duration: 0.15 }}
     >
+      {/* 비디오 배경 */}
+      <div className="absolute inset-0 overflow-hidden -z-10">
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover"
+        >
+          <source src="/videos/login-bg.mp4" type="video/mp4" />
+        </video>
+        <div className="absolute inset-0 bg-black/30" />
+      </div>
+
       {/* 헤더 */}
-      <header className="sticky top-0 z-10 bg-[var(--theme-background)]/95 backdrop-blur-sm border-b border-[var(--theme-border)] px-4 py-3">
+      <header className="sticky top-0 z-10 px-4 py-3">
         <div className="flex items-center justify-between">
           <button
             onClick={() => router.back()}
-            className="p-2 -ml-2 text-[var(--theme-text-secondary)] hover:text-[var(--theme-text)]"
+            className="p-2 -ml-2 text-white/70 hover:text-white"
             aria-label="뒤로가기"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <h1 className="text-lg font-semibold text-[var(--theme-text)]">닉네임 설정</h1>
+          <h1 className="text-lg font-semibold text-white drop-shadow-md">닉네임 설정</h1>
           <div className="w-10" />
         </div>
         <StepIndicator currentStep={2} />
       </header>
 
       {/* 메인 컨텐츠 */}
-      <main className="flex-1 px-4 py-6 overflow-y-auto">
-        <div className="max-w-md mx-auto">
+      <main className="flex-1 px-4 py-6 overflow-y-auto flex items-center justify-center">
+        <div className="max-w-md w-full">
           {/* 캐릭터 미리보기 */}
           <motion.div
             className="flex flex-col items-center mb-8"
@@ -284,12 +299,12 @@ export default function NicknamePage() {
 
             {/* 닉네임 표시 영역 */}
             <motion.div
-              className="mt-4 px-6 py-2 bg-[var(--theme-accent)]/20 rounded-full"
+              className="mt-4 px-6 py-2 bg-white/20 backdrop-blur-sm border border-white/30 rounded-full"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.3 }}
             >
-              <span className="text-lg font-bold text-[var(--theme-accent)]">
+              <span className="text-lg font-bold text-white">
                 {nickname || '???'}
               </span>
             </motion.div>
@@ -304,48 +319,62 @@ export default function NicknamePage() {
           >
             {/* 안내 문구 */}
             <div className="text-center mb-6">
-              <h2 className="text-xl font-bold text-[var(--theme-text)] mb-2">
+              <h2 className="text-xl font-bold text-white mb-2 drop-shadow-md">
                 닉네임을 정해주세요
               </h2>
-              <p className="text-sm text-[var(--theme-text-secondary)]">
+              <p className="text-sm text-white/70">
                 다른 용사들에게 보여질 이름입니다
               </p>
             </div>
 
             {/* 닉네임 입력 필드 */}
             <div>
-              <label className="block text-sm font-medium text-[var(--theme-text)] mb-2">
+              <label className="block text-sm font-medium text-white mb-2 drop-shadow-sm">
                 닉네임 *
               </label>
               <div className="flex gap-2">
                 <div className="flex-1 relative">
-                  <Input
+                  <input
                     type="text"
                     placeholder="2-10자 (한글, 영문, 숫자)"
                     value={nickname}
                     onChange={handleNicknameChange}
                     maxLength={10}
-                    error={errorMessage}
-                    rightIcon={renderStatusIcon()}
+                    className="w-full px-4 py-3 bg-white/10 border border-white/30 text-white placeholder-white/50 rounded-xl focus:outline-none focus:border-white/60 pr-10"
                   />
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    {renderStatusIcon()}
+                  </div>
                 </div>
-                <Button
+                <button
                   onClick={handleCheckDuplicate}
                   disabled={!nickname || nicknameStatus === 'checking'}
-                  variant="secondary"
-                  size="md"
-                  className="whitespace-nowrap"
+                  className="px-4 py-3 bg-white/20 border border-white/30 text-white font-medium rounded-xl hover:bg-white/30 transition-colors disabled:opacity-50 whitespace-nowrap"
                 >
                   중복확인
-                </Button>
+                </button>
               </div>
+
+              {/* 에러 메시지 */}
+              {errorMessage && (
+                <p className="mt-1.5 text-sm text-red-400 flex items-center gap-1">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                      fillRule="evenodd"
+                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  {errorMessage}
+                </p>
+              )}
 
               {/* 상태 메시지 */}
               {nicknameStatus === 'available' && (
                 <motion.p
                   initial={{ opacity: 0, y: -5 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="mt-2 text-sm text-green-500 flex items-center gap-1"
+                  className="mt-2 text-sm text-green-400 flex items-center gap-1"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -356,21 +385,21 @@ export default function NicknamePage() {
             </div>
 
             {/* 닉네임 규칙 안내 */}
-            <div className="bg-white/5 rounded-xl p-4">
-              <h3 className="text-sm font-medium text-[var(--theme-text)] mb-3">
+            <div className="bg-white/10 border border-white/20 rounded-xl p-4">
+              <h3 className="text-sm font-medium text-white mb-3">
                 닉네임 규칙
               </h3>
-              <ul className="space-y-2 text-sm text-[var(--theme-text-secondary)]">
+              <ul className="space-y-2 text-sm text-white/70">
                 <li className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--theme-accent)]" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-white" />
                   2자 이상 10자 이하
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--theme-accent)]" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-white" />
                   한글, 영문, 숫자만 사용 가능
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--theme-accent)]" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-white" />
                   부적절한 닉네임 사용 불가
                 </li>
               </ul>
@@ -381,22 +410,19 @@ export default function NicknamePage() {
       </main>
 
       {/* 하단 버튼 영역 */}
-      <footer className="sticky bottom-0 bg-[var(--theme-background)]/95 backdrop-blur-sm border-t border-[var(--theme-border)] px-4 py-4 safe-area-pb">
+      <footer className="sticky bottom-0 px-4 py-4 safe-area-pb">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
         >
-          <Button
+          <button
             onClick={handleSubmit}
-            loading={isSubmitting}
-            disabled={!nickname || nicknameStatus === 'invalid' || nicknameStatus === 'taken'}
-            fullWidth
-            size="lg"
-            className="bg-white hover:bg-gray-100 text-black"
+            disabled={isSubmitting || !nickname || nicknameStatus === 'invalid' || nicknameStatus === 'taken'}
+            className="w-full py-3 bg-white text-black font-medium rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-50"
           >
-            다음 단계로
-          </Button>
+            {isSubmitting ? '처리 중...' : '시작하기'}
+          </button>
         </motion.div>
       </footer>
     </motion.div>

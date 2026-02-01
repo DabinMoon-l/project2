@@ -7,7 +7,6 @@ import CharacterPreview, {
   CharacterOptions,
   SKIN_COLORS,
   HAIR_STYLES,
-  BEARD_STYLES,
 } from '@/components/onboarding/CharacterPreview';
 
 /**

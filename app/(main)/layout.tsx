@@ -1,13 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useRouter, usePathname } from 'next/navigation';
 import { ThemeProvider } from '@/styles/themes/ThemeProvider';
 import { useRequireAuth } from '@/lib/hooks/useAuth';
 import Navigation from '@/components/common/Navigation';
-import { NotificationProvider } from '@/components/common';
-import { UserProvider, useUser } from '@/lib/contexts';
+import { NotificationProvider, ExpToastProvider } from '@/components/common';
+import { UserProvider, useUser, CourseProvider, useCourse } from '@/lib/contexts';
 import type { ClassType } from '@/styles/themes';
 
 /**
@@ -16,9 +15,14 @@ import type { ClassType } from '@/styles/themes';
  */
 function MainLayoutContent({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { profile, loading: profileLoading, isProfessor } = useUser();
+  const { userCourseId } = useCourse();
   const [userClassType, setUserClassType] = useState<ClassType>('A');
   const [waitCount, setWaitCount] = useState(0);
+
+  // 네비게이션 바를 숨길 페이지 (퀴즈 풀이, 결과, 수정 페이지 등)
+  const hideNavigation = pathname?.match(/^\/quiz\/[^/]+/) !== null || pathname?.includes('/edit');
 
   // 프로필이 없으면 온보딩으로 리다이렉트
   useEffect(() => {
@@ -41,8 +45,8 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
         return () => clearTimeout(timer);
       }
 
-      // 대기 후에도 profile이 없으면 온보딩으로
-      router.replace('/onboarding');
+      // 대기 후에도 profile이 없으면 학적정보 입력으로 직접 이동
+      router.replace('/onboarding/student-info');
     }
   }, [profile, profileLoading, router, waitCount]);
 
@@ -58,43 +62,33 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
   // 프로필 로딩 중이거나 프로필이 없으면 로딩 표시
   if (profileLoading || !profile) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#4A0E0E]">
-        <motion.div
-          className="flex flex-col items-center gap-4"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-        >
-          <motion.div
-            className="w-12 h-12 border-4 border-[#D4AF37] border-t-transparent rounded-full"
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+      <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor: '#F5F0E8' }}>
+        <div className="flex flex-col items-center gap-4">
+          <div
+            className="w-10 h-10 border-2 border-[#1A1A1A] border-t-transparent rounded-full animate-spin"
           />
-          <p className="text-[#D4AF37] text-sm">프로필 확인 중...</p>
-        </motion.div>
+          <p className="text-[#3A3A3A] text-sm">Loading...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <ThemeProvider initialClassType={userClassType}>
+    <ThemeProvider initialClassType={userClassType} courseId={userCourseId}>
       <NotificationProvider>
-        <div className="min-h-screen pb-20">
-          {/* 페이지 전환 애니메이션 */}
-          <AnimatePresence mode="wait">
-            <motion.main
-              key="main-content"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-            >
+        <ExpToastProvider>
+          <div className={`min-h-screen ${hideNavigation ? '' : 'pb-20'}`}>
+            {/* 메인 콘텐츠 */}
+            <main>
               {children}
-            </motion.main>
-          </AnimatePresence>
+            </main>
 
-          {/* 하단 네비게이션 바 */}
-          <Navigation role={isProfessor ? 'professor' : 'student'} />
-        </div>
+            {/* 하단 네비게이션 바 (퀴즈 풀이 중에는 숨김) */}
+            {!hideNavigation && (
+              <Navigation role={isProfessor ? 'professor' : 'student'} />
+            )}
+          </div>
+        </ExpToastProvider>
       </NotificationProvider>
     </ThemeProvider>
   );
@@ -114,35 +108,25 @@ export default function MainLayout({
 }) {
   const { user, loading } = useRequireAuth();
 
-  // 로딩 중일 때 스피너 표시
-  if (loading) {
+  // 로딩 중이거나 로그인되지 않은 경우 로딩 화면 표시
+  if (loading || !user) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#4A0E0E]">
-        <motion.div
-          className="flex flex-col items-center gap-4"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-        >
-          {/* 로딩 스피너 */}
-          <motion.div
-            className="w-12 h-12 border-4 border-[#D4AF37] border-t-transparent rounded-full"
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+      <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor: '#F5F0E8' }}>
+        <div className="flex flex-col items-center gap-4">
+          <div
+            className="w-10 h-10 border-2 border-[#1A1A1A] border-t-transparent rounded-full animate-spin"
           />
-          <p className="text-[#D4AF37] text-sm">로딩 중...</p>
-        </motion.div>
+          <p className="text-[#3A3A3A] text-sm">Loading...</p>
+        </div>
       </div>
     );
   }
 
-  // 로그인되지 않은 경우 (리다이렉트 중)
-  if (!user) {
-    return null;
-  }
-
   return (
     <UserProvider>
-      <MainLayoutContent>{children}</MainLayoutContent>
+      <CourseProvider>
+        <MainLayoutContent>{children}</MainLayoutContent>
+      </CourseProvider>
     </UserProvider>
   );
 }

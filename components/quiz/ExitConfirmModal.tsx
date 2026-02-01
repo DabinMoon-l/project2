@@ -1,9 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { useEffect, useRef } from 'react';
-import { useThemeColors } from '@/styles/themes/useTheme';
 
 /**
  * ExitConfirmModal Props 타입
@@ -13,12 +13,16 @@ interface ExitConfirmModalProps {
   isOpen: boolean;
   /** 모달 닫기 핸들러 */
   onClose: () => void;
-  /** 나가기 확인 핸들러 */
-  onConfirm: () => void;
+  /** 저장하고 나가기 핸들러 */
+  onSaveAndExit: () => void;
+  /** 저장하지 않고 나가기 핸들러 */
+  onExitWithoutSave: () => void;
   /** 현재 진행도 (답변한 문제 수) */
   answeredCount: number;
   /** 총 문제 수 */
   totalQuestions: number;
+  /** 저장 중 상태 */
+  isSaving?: boolean;
 }
 
 // 애니메이션 variants
@@ -58,27 +62,17 @@ const modalVariants = {
  * 나가기 확인 모달 컴포넌트
  *
  * 퀴즈 풀이 중 나가기 버튼을 누르면 표시되는 확인 모달입니다.
- * 진행 상황을 잃어버린다는 경고 메시지를 보여줍니다.
- *
- * @example
- * ```tsx
- * <ExitConfirmModal
- *   isOpen={showExitModal}
- *   onClose={() => setShowExitModal(false)}
- *   onConfirm={() => router.back()}
- *   answeredCount={5}
- *   totalQuestions={10}
- * />
- * ```
+ * 진행 상황을 저장할지 선택할 수 있습니다.
  */
 export default function ExitConfirmModal({
   isOpen,
   onClose,
-  onConfirm,
+  onSaveAndExit,
+  onExitWithoutSave,
   answeredCount,
   totalQuestions,
+  isSaving = false,
 }: ExitConfirmModalProps) {
-  const colors = useThemeColors();
   const modalRef = useRef<HTMLDivElement>(null);
   const previousActiveElement = useRef<HTMLElement | null>(null);
 
@@ -101,7 +95,7 @@ export default function ExitConfirmModal({
   // ESC 키로 닫기
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && !isSaving) {
         onClose();
       }
     };
@@ -113,11 +107,11 @@ export default function ExitConfirmModal({
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, isSaving]);
 
   // 백드롭 클릭 핸들러
   const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
+    if (e.target === e.currentTarget && !isSaving) {
       onClose();
     }
   };
@@ -154,13 +148,13 @@ export default function ExitConfirmModal({
             aria-labelledby="exit-modal-title"
             aria-describedby="exit-modal-description"
             tabIndex={-1}
-            className="relative w-full max-w-sm bg-white rounded-2xl shadow-xl overflow-hidden focus:outline-none"
+            className="relative w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] shadow-xl overflow-hidden focus:outline-none"
           >
             {/* 경고 아이콘 */}
             <div className="flex justify-center pt-6">
-              <div className="w-16 h-16 rounded-full bg-orange-100 flex items-center justify-center">
+              <div className="w-16 h-16 border-2 border-[#8B6914] bg-[#FFF8E1] flex items-center justify-center">
                 <svg
-                  className="w-8 h-8 text-orange-500"
+                  className="w-8 h-8 text-[#8B6914]"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -179,66 +173,99 @@ export default function ExitConfirmModal({
             <div className="px-6 py-4 text-center">
               <h2
                 id="exit-modal-title"
-                className="text-lg font-bold text-gray-900 mb-2"
+                className="text-lg font-bold text-[#1A1A1A] mb-2"
               >
                 퀴즈를 나가시겠습니까?
               </h2>
               <p
                 id="exit-modal-description"
-                className="text-sm text-gray-600 leading-relaxed"
+                className="text-sm text-[#5C5C5C] leading-relaxed"
               >
-                지금 나가면{' '}
-                <span className="font-semibold text-orange-600">
-                  {answeredCount}개
-                </span>
-                의 답변이 모두 사라집니다.
+                진행 상황을 저장하면 나중에
                 <br />
-                나중에 처음부터 다시 풀어야 해요.
+                이어서 풀 수 있습니다.
               </p>
 
               {/* 진행 상황 표시 */}
-              <div className="mt-4 p-3 bg-gray-50 rounded-xl">
+              <div className="mt-4 p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">현재 진행도</span>
-                  <span className="font-semibold text-gray-900">
+                  <span className="text-[#5C5C5C]">현재 진행도</span>
+                  <span className="font-bold text-[#1A1A1A]">
                     {answeredCount}/{totalQuestions} 문제 답변 완료
                   </span>
                 </div>
-                <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div className="mt-2 h-2 bg-[#DDD8D0] overflow-hidden">
                   <motion.div
                     initial={{ width: 0 }}
                     animate={{
                       width: `${(answeredCount / totalQuestions) * 100}%`,
                     }}
                     transition={{ duration: 0.5 }}
-                    className="h-full rounded-full"
-                    style={{ backgroundColor: colors.accent }}
+                    className="h-full bg-[#1A1A1A]"
                   />
                 </div>
               </div>
             </div>
 
             {/* 버튼 영역 */}
-            <div className="flex gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50">
+            <div className="flex flex-col gap-2 px-6 py-4 border-t-2 border-[#1A1A1A] bg-[#EDEAE4]">
               {/* 계속 풀기 버튼 */}
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={onClose}
-                style={{ backgroundColor: colors.accent }}
-                className="flex-1 py-3 rounded-xl font-semibold text-white transition-all duration-200"
+                disabled={isSaving}
+                className="w-full py-3 font-bold text-[#F5F0E8] bg-[#1A1A1A] border-2 border-[#1A1A1A] transition-all duration-200 hover:bg-[#2A2A2A] disabled:opacity-50"
               >
                 계속 풀기
               </motion.button>
 
-              {/* 나가기 버튼 */}
+              {/* 저장하고 나가기 버튼 */}
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                onClick={onConfirm}
-                className="flex-1 py-3 rounded-xl font-semibold bg-gray-200 text-gray-700 hover:bg-gray-300 transition-all duration-200"
+                onClick={onSaveAndExit}
+                disabled={isSaving}
+                className="w-full py-3 font-bold bg-[#F5F0E8] text-[#1A1A1A] border-2 border-[#1A1A1A] hover:bg-[#E5E0D8] transition-all duration-200 disabled:opacity-50 flex items-center justify-center"
               >
-                나가기
+                {isSaving ? (
+                  <>
+                    <svg
+                      className="animate-spin w-5 h-5 mr-2"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                    저장 중...
+                  </>
+                ) : (
+                  '저장하고 나가기'
+                )}
+              </motion.button>
+
+              {/* 저장하지 않고 나가기 버튼 */}
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={onExitWithoutSave}
+                disabled={isSaving}
+                className="w-full py-3 font-bold bg-[#F5F0E8] text-[#8B1A1A] border-2 border-[#8B1A1A] hover:bg-[#FDEAEA] transition-all duration-200 disabled:opacity-50"
+              >
+                저장하지 않고 나가기
               </motion.button>
             </div>
           </motion.div>

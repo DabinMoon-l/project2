@@ -28,11 +28,11 @@ export const HAIR_STYLES = [
  * 피부색 목록 (5종)
  */
 export const SKIN_COLORS = [
-  { id: 0, name: '기본' },
-  { id: 1, name: '밝은피부' },
-  { id: 2, name: '어두운피부' },
-  { id: 3, name: '노란색' },
-  { id: 4, name: '분홍색' },
+  { id: 0, name: '기본', color: '#FFDBAC' },
+  { id: 1, name: '밝은피부', color: '#FFE4C4' },
+  { id: 2, name: '어두운피부', color: '#8D5524' },
+  { id: 3, name: '노란색', color: '#F5DEB3' },
+  { id: 4, name: '분홍색', color: '#FFB6C1' },
 ];
 
 /**

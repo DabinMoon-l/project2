@@ -6,13 +6,15 @@ import { useRouter } from 'next/navigation';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { useCourse } from '@/lib/contexts';
+import { useCourse, useUser } from '@/lib/contexts';
+import { useExpToast } from '@/components/common';
 import {
   ImageUploader,
   OCRProcessor,
   QuestionEditor,
   QuestionList,
   QuizMetaForm,
+  calculateTotalQuestionCount,
   type QuestionData,
   type QuizMeta,
 } from '@/components/quiz/create';
@@ -41,6 +43,8 @@ export default function QuizCreatePage() {
   const router = useRouter();
   const { user } = useAuth();
   const { userCourseId } = useCourse();
+  const { profile } = useUser();
+  const { showExpToast } = useExpToast();
 
   // 단계 관리
   const [step, setStep] = useState<Step>('upload');
@@ -196,8 +200,9 @@ export default function QuizCreatePage() {
       // 문제가 없으면 직접 입력 모드로 전환
       setStep('questions');
     } else if (step === 'questions') {
-      // 최소 3문제 확인
-      if (questions.length < 3) {
+      // 최소 3문제 확인 (결합형 하위문제 포함)
+      const totalCount = calculateTotalQuestionCount(questions);
+      if (totalCount < 3) {
         return;
       }
       setStep('meta');
@@ -217,7 +222,7 @@ export default function QuizCreatePage() {
       setMetaErrors({});
       setStep('confirm');
     }
-  }, [step, questions.length, quizMeta.title]);
+  }, [step, questions, quizMeta.title]);
 
   /**
    * 이전 단계로 이동
@@ -258,37 +263,128 @@ export default function QuizCreatePage() {
         difficulty: quizMeta.difficulty,
         type: 'custom' as const, // 자체제작 퀴즈
 
-        // 문제 정보
-        questions: questions.map((q, index) => {
-          // 정답 처리
-          let answer: string | number;
-          if (q.type === 'subjective') {
-            // 주관식: 복수 정답은 "|||"로 구분 (쉼표는 답안에 포함될 수 있음)
-            const answerTexts = (q.answerTexts || [q.answerText]).filter(t => t.trim());
-            answer = answerTexts.length > 1 ? answerTexts.join('|||') : answerTexts[0] || '';
-          } else if (q.type === 'multiple' && q.answerIndices && q.answerIndices.length > 1) {
-            // 객관식 복수정답: 1-indexed로 변환하여 쉼표로 연결
-            answer = q.answerIndices.map(i => i + 1).join(',');
-          } else {
-            // 단일정답
-            answer = q.answerIndex;
-          }
+        // 문제 정보 - 결합형은 하위 문제를 개별 문제로 펼침
+        questions: (() => {
+          const flattenedQuestions: any[] = [];
+          let orderIndex = 0;
 
-          return {
-            order: index,
-            text: q.text,
-            type: q.type,
-            choices: q.type === 'multiple' ? q.choices.filter((c) => c.trim()) : null,
-            answer,
-            explanation: q.explanation || null,
-            imageUrl: q.imageUrl || null,
-            examples: q.examples ? {
-              type: q.examples.type,
-              items: q.examples.items.filter((item) => item.trim()),
-            } : null,
-          };
-        }),
-        questionCount: questions.length,
+          questions.forEach((q) => {
+            // 결합형 문제: 하위 문제를 개별 문제로 펼침
+            if (q.type === 'combined' && q.subQuestions && q.subQuestions.length > 0) {
+              const combinedGroupId = `combined_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+              const subQuestionsCount = q.subQuestions.length;
+
+              q.subQuestions.forEach((sq, sqIndex) => {
+                // 하위 문제 정답 처리
+                let subAnswer: string | number;
+                if (sq.type === 'short_answer') {
+                  const answerTexts = (sq.answerTexts || [sq.answerText || '']).filter(t => t.trim());
+                  subAnswer = answerTexts.length > 1 ? answerTexts.join('|||') : answerTexts[0] || '';
+                } else if (sq.type === 'multiple') {
+                  // 객관식: 1-indexed로 변환
+                  if (sq.answerIndices && sq.answerIndices.length > 1) {
+                    // 복수정답
+                    subAnswer = sq.answerIndices.map(i => i + 1).join(',');
+                  } else if (sq.answerIndices && sq.answerIndices.length === 1) {
+                    // 단일정답 (answerIndices에서)
+                    subAnswer = sq.answerIndices[0] + 1;
+                  } else if (sq.answerIndex !== undefined && sq.answerIndex >= 0) {
+                    // 단일정답 (answerIndex에서)
+                    subAnswer = sq.answerIndex + 1;
+                  } else {
+                    subAnswer = -1;
+                  }
+                } else {
+                  // OX: 0 = O, 1 = X (그대로 저장)
+                  subAnswer = sq.answerIndex ?? -1;
+                }
+
+                const subQuestionData: any = {
+                  order: orderIndex++,
+                  text: sq.text,
+                  type: sq.type,
+                  choices: sq.type === 'multiple' ? sq.choices?.filter((c) => c.trim()) : null,
+                  answer: subAnswer,
+                  explanation: sq.explanation || null,
+                  imageUrl: sq.image || null,
+                  examples: sq.examples ? {
+                    type: sq.examplesType || 'text',
+                    items: sq.examples.filter((item) => item.trim()),
+                  } : sq.koreanAbcExamples ? {
+                    type: 'labeled',
+                    items: sq.koreanAbcExamples.map(item => item.text).filter(t => t.trim()),
+                  } : null,
+                  // 결합형 그룹 정보
+                  combinedGroupId,
+                  combinedIndex: sqIndex,
+                  combinedTotal: subQuestionsCount,
+                };
+
+                // 첫 번째 하위 문제에만 공통 지문 정보 포함
+                if (sqIndex === 0) {
+                  subQuestionData.passageType = q.passageType || 'text';
+                  subQuestionData.passage = q.passageType === 'text' ? (q.passage || q.text || '') : '';
+                  subQuestionData.passageImage = q.passageImage || null;
+                  subQuestionData.koreanAbcItems = q.passageType === 'korean_abc'
+                    ? (q.koreanAbcItems || []).filter((item) => item.text?.trim()).map(item => item.text)
+                    : null;
+                  subQuestionData.combinedMainText = q.text || ''; // 결합형 메인 문제 텍스트
+                }
+
+                flattenedQuestions.push(subQuestionData);
+              });
+            } else {
+              // 일반 문제 처리
+              let answer: string | number;
+              if (q.type === 'subjective' || q.type === 'short_answer') {
+                const answerTexts = (q.answerTexts || [q.answerText]).filter(t => t.trim());
+                answer = answerTexts.length > 1 ? answerTexts.join('|||') : answerTexts[0] || '';
+              } else if (q.type === 'multiple') {
+                // 객관식: 1-indexed로 변환
+                if (q.answerIndices && q.answerIndices.length > 1) {
+                  // 복수정답
+                  answer = q.answerIndices.map(i => i + 1).join(',');
+                } else if (q.answerIndices && q.answerIndices.length === 1) {
+                  // 단일정답 (answerIndices에서)
+                  answer = q.answerIndices[0] + 1;
+                } else if (q.answerIndex !== undefined && q.answerIndex >= 0) {
+                  // 단일정답 (answerIndex에서)
+                  answer = q.answerIndex + 1;
+                } else {
+                  answer = -1;
+                }
+              } else {
+                // OX: 0 = O, 1 = X (그대로 저장)
+                answer = q.answerIndex;
+              }
+
+              flattenedQuestions.push({
+                order: orderIndex++,
+                text: q.text,
+                type: q.type === 'subjective' ? 'short_answer' : q.type,
+                choices: q.type === 'multiple' ? q.choices.filter((c) => c.trim()) : null,
+                answer,
+                explanation: q.explanation || null,
+                imageUrl: q.imageUrl || null,
+                examples: q.examples ? {
+                  type: q.examples.type,
+                  items: q.examples.items.filter((item) => item.trim()),
+                } : null,
+              });
+            }
+          });
+
+          return flattenedQuestions;
+        })(),
+        // 실제 문제 수 계산 (결합형 하위 문제 포함)
+        questionCount: (() => {
+          return questions.reduce((total, q) => {
+            if (q.type === 'combined' && q.subQuestions && q.subQuestions.length > 0) {
+              return total + q.subQuestions.length;
+            }
+            return total + 1;
+          }, 0);
+        })(),
 
         // 생성자 정보
         creatorId: user.uid,
@@ -310,15 +406,22 @@ export default function QuizCreatePage() {
 
       await addDoc(collection(db, 'quizzes'), quizData);
 
+      // EXP 토스트 표시 (퀴즈 생성 15 EXP)
+      // Cloud Functions에서 자동으로 EXP가 지급됨
+      const earnedExp = 15;
+      showExpToast(earnedExp, '퀴즈 생성');
+
       // 성공 시 퀴즈 목록 페이지로 이동
-      router.push('/quiz?created=true');
+      setTimeout(() => {
+        router.push('/quiz?created=true');
+      }, 300);
     } catch (error) {
       console.error('퀴즈 저장 실패:', error);
       setSaveError('퀴즈 저장에 실패했습니다. 다시 시도해주세요.');
     } finally {
       setIsSaving(false);
     }
-  }, [user, quizMeta, questions, router, userCourseId]);
+  }, [user, quizMeta, questions, router, userCourseId, showExpToast]);
 
   /**
    * 단계별 진행률
@@ -496,6 +599,7 @@ export default function QuizCreatePage() {
                     questionNumber={
                       editingIndex !== null ? editingIndex + 1 : questions.length + 1
                     }
+                    userRole={profile?.role === 'professor' ? 'professor' : 'student'}
                   />
                 )}
               </AnimatePresence>
@@ -687,7 +791,7 @@ export default function QuizCreatePage() {
               type="button"
               onClick={handleNextStep}
               disabled={
-                (step === 'questions' && questions.length < 3) ||
+                (step === 'questions' && calculateTotalQuestionCount(questions) < 3) ||
                 isOCRProcessing ||
                 editingIndex !== null ||
                 isAddingNew

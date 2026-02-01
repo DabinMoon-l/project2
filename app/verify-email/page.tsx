@@ -18,6 +18,24 @@ const PROFESSOR_EMAILS = [
   'jkim@ccn.ac.kr',
 ];
 
+/** 비디오 배경 (MP4) */
+function VideoBackground() {
+  return (
+    <div className="absolute inset-0 overflow-hidden">
+      <video
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="absolute inset-0 w-full h-full object-cover"
+      >
+        <source src="/videos/login-bg.mp4" type="video/mp4" />
+      </video>
+      <div className="absolute inset-0 bg-black/20" />
+    </div>
+  );
+}
+
 export default function VerifyEmailPage() {
   const router = useRouter();
   const {
@@ -130,14 +148,16 @@ export default function VerifyEmailPage() {
 
   if (loading || !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-[#1a1a2e] to-[#16213e]">
-        <div className="w-12 h-12 border-4 border-white/30 border-t-white rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
+        <VideoBackground />
+        <div className="relative z-10 w-12 h-12 border-4 border-white/30 border-t-white rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <main className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden bg-gradient-to-b from-[#1a1a2e] to-[#16213e]">
+    <main className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden">
+      <VideoBackground />
       <motion.div
         className="relative z-10 w-full max-w-sm px-6 text-center"
         initial={{ opacity: 0, y: 20 }}

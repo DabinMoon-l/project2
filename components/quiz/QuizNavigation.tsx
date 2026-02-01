@@ -59,7 +59,7 @@ export default function QuizNavigation({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: 0.2 }}
-      className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-4 py-3 pb-safe"
+      className="fixed bottom-0 left-0 right-0 bg-[#F5F0E8] border-t-2 border-[#1A1A1A] px-4 py-3 pb-safe"
       style={{
         paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
       }}
@@ -72,11 +72,11 @@ export default function QuizNavigation({
           onClick={onPrev}
           disabled={isFirstQuestion}
           className={`
-            flex-1 py-3.5 rounded-xl font-semibold text-base
-            transition-all duration-200
+            flex-1 py-3.5 font-bold text-base
+            border-2 transition-all duration-200
             ${isFirstQuestion
-              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 active:bg-gray-300'
+              ? 'bg-[#EDEAE4] text-[#5C5C5C] border-[#5C5C5C] cursor-not-allowed'
+              : 'bg-[#EDEAE4] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#E5E0D8] active:bg-[#DDD8D0]'
             }
           `}
           aria-label="이전 문제"
@@ -107,14 +107,11 @@ export default function QuizNavigation({
             whileTap={!isSubmitting ? { scale: 0.98 } : undefined}
             onClick={onSubmit}
             disabled={isSubmitting}
-            style={{
-              backgroundColor: colors.accent,
-              opacity: isSubmitting ? 0.7 : 1,
-            }}
             className={`
-              flex-1 py-3.5 rounded-xl font-semibold text-base text-white
-              transition-all duration-200
-              ${isSubmitting ? 'cursor-not-allowed' : ''}
+              flex-1 py-3.5 font-bold text-base
+              border-2 border-[#1A1A1A] transition-all duration-200
+              bg-[#1A1A1A] text-[#F5F0E8]
+              ${isSubmitting ? 'cursor-not-allowed opacity-70' : 'hover:bg-[#2A2A2A]'}
             `}
             aria-label="퀴즈 제출"
           >
@@ -169,8 +166,7 @@ export default function QuizNavigation({
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={onNext}
-            style={{ backgroundColor: colors.accent }}
-            className="flex-1 py-3.5 rounded-xl font-semibold text-base text-white transition-all duration-200"
+            className="flex-1 py-3.5 font-bold text-base border-2 border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8] transition-all duration-200 hover:bg-[#2A2A2A]"
             aria-label="다음 문제"
           >
             <span className="flex items-center justify-center gap-2">

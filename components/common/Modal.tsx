@@ -28,6 +28,8 @@ interface ModalProps {
   children: React.ReactNode;
   /** 푸터 영역 */
   footer?: React.ReactNode;
+  /** 백드롭 블러 효과 비활성화 */
+  noBlur?: boolean;
 }
 
 // 크기별 스타일
@@ -113,6 +115,7 @@ export default function Modal({
   showCloseButton = true,
   children,
   footer,
+  noBlur = false,
 }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
   const previousActiveElement = useRef<HTMLElement | null>(null);
@@ -182,7 +185,7 @@ export default function Modal({
             animate="visible"
             exit="exit"
             onClick={handleBackdropClick}
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            className={`absolute inset-0 bg-black/50 ${noBlur ? '' : 'backdrop-blur-sm'}`}
             aria-hidden="true"
           />
 

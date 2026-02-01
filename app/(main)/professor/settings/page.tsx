@@ -15,6 +15,10 @@ import { useSeasonReset, type SeasonType } from '@/lib/hooks/useSeasonReset';
 import { useTheme } from '@/styles/themes/useTheme';
 
 // 동적 import로 코드 스플리팅 적용 (교수님 전용 컴포넌트)
+const SemesterSettingsCard = dynamic(() => import('@/components/professor/SemesterSettingsCard'), {
+  loading: () => <Skeleton className="h-48 rounded-2xl" />,
+});
+
 const SeasonResetCard = dynamic(() => import('@/components/professor/SeasonResetCard'), {
   loading: () => <Skeleton className="h-80 rounded-2xl" />,
 });
@@ -185,6 +189,9 @@ export default function ProfessorSettingsPage() {
 
       {/* 메인 컨텐츠 */}
       <main className="p-4 space-y-4">
+        {/* 학기 설정 카드 */}
+        <SemesterSettingsCard />
+
         {/* 시즌 리셋 카드 */}
         <SeasonResetCard
           classSeasons={classSeasons}

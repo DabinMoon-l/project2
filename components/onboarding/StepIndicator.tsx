@@ -15,12 +15,11 @@ export interface OnboardingStep {
 }
 
 /**
- * 온보딩 단계 목록
+ * 온보딩 단계 목록 (튜토리얼 제거 - 2단계로 축소)
  */
 export const ONBOARDING_STEPS: OnboardingStep[] = [
   { step: 1, label: '학적정보', path: '/onboarding/student-info' },
   { step: 2, label: '닉네임', path: '/onboarding/nickname' },
-  { step: 3, label: '튜토리얼', path: '/onboarding/tutorial' },
 ];
 
 /**
@@ -42,7 +41,7 @@ interface StepIndicatorProps {
  */
 export default function StepIndicator({
   currentStep,
-  totalSteps = 3,
+  totalSteps = 2,
 }: StepIndicatorProps) {
   return (
     <div className="flex items-center justify-center gap-2 py-4">
@@ -66,8 +65,8 @@ export default function StepIndicator({
                 ${isCompleted
                   ? 'bg-green-500 text-white'
                   : isCurrent
-                    ? 'bg-[var(--theme-accent)] text-white shadow-lg shadow-[var(--theme-accent)]/30'
-                    : 'bg-gray-200 text-gray-400'
+                    ? 'bg-white text-black shadow-lg'
+                    : 'bg-white/30 text-white/50'
                 }
               `}
             >
@@ -97,7 +96,7 @@ export default function StepIndicator({
             {stepNumber < totalSteps && (
               <div className="relative w-8 h-0.5 mx-1">
                 {/* 배경선 */}
-                <div className="absolute inset-0 bg-gray-200 rounded-full" />
+                <div className="absolute inset-0 bg-white/30 rounded-full" />
                 {/* 진행선 */}
                 <motion.div
                   className="absolute inset-0 bg-green-500 rounded-full origin-left"
@@ -122,11 +121,11 @@ export function StepLabel({ currentStep }: { currentStep: number }) {
 
   return (
     <div className="text-center mb-2">
-      <p className="text-sm text-[var(--theme-text-secondary)]">
+      <p className="text-sm text-white/70">
         {currentStep}단계 / {ONBOARDING_STEPS.length}단계
       </p>
       {step && (
-        <p className="text-lg font-semibold text-[var(--theme-text)]">
+        <p className="text-lg font-semibold text-white">
           {step.label}
         </p>
       )}

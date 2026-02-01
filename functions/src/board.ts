@@ -1,338 +1,312 @@
 import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
-import {
-  addExpInTransaction,
-  addExpInTransaction,
-  EXP_REWARDS,
-  EXP_REWARDS,
-} from "./utils/gold";
+import { addExpInTransaction, EXP_REWARDS } from "./utils/gold";
 import { enforceRateLimit } from "./rateLimit";
 
 /**
- * 게시글 문서 ?�?? */
+ * 게시글 문서 타입
+ * 클라이언트에서 authorId를 사용하므로 두 필드 모두 허용
+ */
 interface Post {
-  userId: string;           // ?�성??ID
-  userName: string;         // ?�성???�름
-  userClass: string;        // ?�성??�?  boardType: "professor" | "students";  // 게시???�형
-  title: string;            // ?�목
-  content: string;          // ?�용
-  imageUrls?: string[];     // ?��?지 URL 목록
-  likeCount: number;        // 좋아????  commentCount: number;     // ?��? ??  rewarded?: boolean;       // 보상 지�??��?
+  userId?: string;
+  authorId?: string;
+  userName?: string;
+  authorNickname?: string;
+  userClass?: string;
+  boardType?: "professor" | "students";
+  category?: string;
+  title: string;
+  content: string;
+  imageUrls?: string[];
+  likeCount?: number;
+  likes?: number;
+  commentCount: number;
+  rewarded?: boolean;
   createdAt: FirebaseFirestore.Timestamp;
-  updatedAt: FirebaseFirestore.Timestamp;
+  updatedAt?: FirebaseFirestore.Timestamp;
 }
 
 /**
- * ?��? 문서 ?�?? */
+ * 댓글 문서 타입
+ * 클라이언트에서 authorId를 사용하므로 두 필드 모두 허용
+ */
 interface Comment {
-  userId: string;           // ?�성??ID
-  userName: string;         // ?�성???�름
-  userClass: string;        // ?�성??�?  postId: string;           // 게시글 ID
-  content: string;          // ?�용
-  likeCount: number;        // 좋아????  rewarded?: boolean;       // 보상 지�??��?
+  userId?: string;
+  authorId?: string;
+  userName?: string;
+  authorNickname?: string;
+  userClass?: string;
+  postId: string;
+  content: string;
+  likeCount?: number;
+  rewarded?: boolean;
   createdAt: FirebaseFirestore.Timestamp;
 }
 
 /**
- * 좋아??문서 ?�?? */
+ * 좋아요 문서 타입
+ */
 interface Like {
-  userId: string;           // 좋아???�른 ?�용??ID
-  targetType: "post" | "comment";  // ?�???�형
-  targetId: string;         // ?�??ID
-  targetUserId: string;     // ?�???�성??ID (보상 지급용)
-  rewarded?: boolean;       // 보상 지�??��?
+  userId: string;
+  targetType: "post" | "comment";
+  targetId: string;
+  targetUserId: string;
+  rewarded?: boolean;
   createdAt: FirebaseFirestore.Timestamp;
 }
 
 /**
- * 게시글 ?�성 ??골드/경험�?지�? *
- * Firestore ?�리�? posts/{postId} 문서 ?�성 ?? *
- * 보상:
- * - 골드: 10
- * - 경험�? 3
+ * 게시글 생성 시 경험치 지급
  */
 export const onPostCreate = onDocumentCreated(
-  "posts/{postId}",
+  {
+    document: "posts/{postId}",
+    region: "asia-northeast3",
+  },
   async (event) => {
     const snapshot = event.data;
     if (!snapshot) {
-      console.log("게시글 문서가 ?�습?�다.");
+      console.log("게시글 문서가 없습니다.");
       return;
     }
 
     const post = snapshot.data() as Post;
     const postId = event.params.postId;
 
-    // ?��? 보상??지급된 경우 ?�킵
     if (post.rewarded) {
-      console.log(`?��? 보상??지급된 게시글?�니?? ${postId}`);
+      console.log(`이미 보상이 지급된 게시글입니다: ${postId}`);
       return;
     }
 
-    const { userId, title, content } = post;
+    // 클라이언트는 authorId를 사용, 레거시는 userId 사용
+    const userId = post.authorId || post.userId;
+    const { title, content } = post;
 
-    // ?�수 ?�이??검�?    if (!userId || !title || !content) {
-      console.error("?�수 ?�이?��? ?�락?�었?�니??", { userId, title });
+    if (!userId || !title || !content) {
+      console.error("필수 데이터가 누락되었습니다", { userId, title });
       return;
     }
 
     const db = getFirestore();
 
     try {
-      // ?�배 방�? 체크
       await enforceRateLimit(userId, "POST", postId);
 
       const expReward = EXP_REWARDS.POST_CREATE;
-      const expReward = EXP_REWARDS.POST_CREATE;
-      const reason = "게시글 ?�성";
+      const reason = "게시글 작성";
 
       await db.runTransaction(async (transaction) => {
-        // 게시글 문서??보상 지�??�래�??�정
         transaction.update(snapshot.ref, {
           rewarded: true,
           rewardedAt: FieldValue.serverTimestamp(),
           expRewarded: expReward,
-          expRewarded: expReward,
         });
 
-        // 골드 지�?        await addExpInTransaction(transaction, userId, expReward, reason);
-
-        // 경험�?지�?        await addExpInTransaction(transaction, userId, expReward, reason);
+        await addExpInTransaction(transaction, userId, expReward, reason);
       });
 
-      console.log(`게시글 보상 지�??�료: ${userId}`, {
-        postId,
-        expReward,
-        expReward,
-      });
+      console.log(`게시글 보상 지급 완료: ${userId}`, { postId, expReward });
     } catch (error: unknown) {
-      // ?�배 방�???걸린 경우
       if (error && typeof error === "object" && "code" in error &&
           (error as { code: string }).code === "resource-exhausted") {
-        console.log(`?�배 방�?�?보상 거�?: ${userId}`, postId);
-        // 게시글?� ?��? ?�성?�었지�?보상?� 지급하지 ?�음
+        console.log(`도배 방지로 보상 거부: ${userId}`, postId);
         return;
       }
-      console.error("게시글 보상 지�??�패:", error);
+      console.error("게시글 보상 지급 실패:", error);
       throw error;
     }
   }
 );
 
 /**
- * ?��? ?�성 ??골드/경험�?지�? *
- * Firestore ?�리�? posts/{postId}/comments/{commentId} 문서 ?�성 ?? *
- * 보상:
- * - 골드: 5
- * - 경험�? 1
+ * 댓글 생성 시 경험치 지급
+ * 클라이언트는 comments 컬렉션에 저장하므로 해당 경로를 리스닝
  */
 export const onCommentCreate = onDocumentCreated(
-  "posts/{postId}/comments/{commentId}",
+  {
+    document: "comments/{commentId}",
+    region: "asia-northeast3",
+  },
   async (event) => {
     const snapshot = event.data;
     if (!snapshot) {
-      console.log("?��? 문서가 ?�습?�다.");
+      console.log("댓글 문서가 없습니다.");
       return;
     }
 
     const comment = snapshot.data() as Comment;
-    const { postId, commentId } = event.params;
+    const commentId = event.params.commentId;
 
-    // ?��? 보상??지급된 경우 ?�킵
     if (comment.rewarded) {
-      console.log(`?��? 보상??지급된 ?��??�니?? ${commentId}`);
+      console.log(`이미 보상이 지급된 댓글입니다: ${commentId}`);
       return;
     }
 
-    const { userId, content } = comment;
+    // 클라이언트는 authorId를 사용, 레거시는 userId 사용
+    const userId = comment.authorId || comment.userId;
+    const { content, postId } = comment;
 
-    // ?�수 ?�이??검�?    if (!userId || !content) {
-      console.error("?�수 ?�이?��? ?�락?�었?�니??", { userId });
+    if (!userId || !content || !postId) {
+      console.error("필수 데이터가 누락되었습니다", { userId, postId });
       return;
     }
 
     const db = getFirestore();
 
     try {
-      // ?�배 방�? 체크
       await enforceRateLimit(userId, "COMMENT", commentId);
 
       const expReward = EXP_REWARDS.COMMENT_CREATE;
-      const expReward = EXP_REWARDS.COMMENT_CREATE;
-      const reason = "?��? ?�성";
+      const reason = "댓글 작성";
 
       await db.runTransaction(async (transaction) => {
-        // ?��? 문서??보상 지�??�래�??�정
         transaction.update(snapshot.ref, {
           rewarded: true,
           rewardedAt: FieldValue.serverTimestamp(),
           expRewarded: expReward,
-          expRewarded: expReward,
         });
 
-        // 게시글???��? ??증�?
-        const postRef = db.collection("posts").doc(postId);
-        transaction.update(postRef, {
-          commentCount: FieldValue.increment(1),
-          updatedAt: FieldValue.serverTimestamp(),
-        });
+        // 클라이언트에서 이미 commentCount를 증가시키므로 여기서는 하지 않음
+        // const postRef = db.collection("posts").doc(postId);
+        // transaction.update(postRef, {
+        //   commentCount: FieldValue.increment(1),
+        //   updatedAt: FieldValue.serverTimestamp(),
+        // });
 
-        // 골드 지�?        await addExpInTransaction(transaction, userId, expReward, reason);
-
-        // 경험�?지�?        await addExpInTransaction(transaction, userId, expReward, reason);
+        await addExpInTransaction(transaction, userId, expReward, reason);
       });
 
-      console.log(`?��? 보상 지�??�료: ${userId}`, {
-        postId,
-        commentId,
-        expReward,
-        expReward,
-      });
+      console.log(`댓글 보상 지급 완료: ${userId}`, { postId, commentId, expReward });
 
-      // 게시글 ?�성?�에�??�림 (본인 ?��??� ?�외)
+      // 게시글 작성자에게 알림 (본인 댓글은 제외)
       const postDoc = await db.collection("posts").doc(postId).get();
       if (postDoc.exists) {
         const postData = postDoc.data() as Post;
-        if (postData.userId !== userId) {
+        const postAuthorId = postData.authorId || postData.userId;
+        if (postAuthorId && postAuthorId !== userId) {
           await db.collection("notifications").add({
-            userId: postData.userId,
+            userId: postAuthorId,
             type: "NEW_COMMENT",
-            title: "???��?",
-            message: `??글???�로???��????�렸?�니??`,
-            data: {
-              postId,
-              commentId,
-            },
+            title: "새 댓글",
+            message: "내 글에 새로운 댓글이 달렸습니다",
+            data: { postId, commentId },
             read: false,
             createdAt: FieldValue.serverTimestamp(),
           });
         }
       }
     } catch (error: unknown) {
-      // ?�배 방�???걸린 경우
       if (error && typeof error === "object" && "code" in error &&
           (error as { code: string }).code === "resource-exhausted") {
-        console.log(`?�배 방�?�?보상 거�?: ${userId}`, commentId);
+        console.log(`도배 방지로 보상 거부: ${userId}`, commentId);
         return;
       }
-      console.error("?��? 보상 지�??�패:", error);
+      console.error("댓글 보상 지급 실패:", error);
       throw error;
     }
   }
 );
 
 /**
- * 좋아??받으�?골드 지�?(글/?��? ?�성?�에�?
- *
- * Firestore ?�리�? likes/{likeId} 문서 ?�성 ?? *
- * 보상: 3 골드 (?�???�성?�에�?
+ * 좋아요 받으면 경험치 지급 (글/댓글 작성자에게)
  */
 export const onLikeReceived = onDocumentCreated(
-  "likes/{likeId}",
+  {
+    document: "likes/{likeId}",
+    region: "asia-northeast3",
+  },
   async (event) => {
     const snapshot = event.data;
     if (!snapshot) {
-      console.log("좋아??문서가 ?�습?�다.");
+      console.log("좋아요 문서가 없습니다.");
       return;
     }
 
     const like = snapshot.data() as Like;
     const likeId = event.params.likeId;
 
-    // ?��? 보상??지급된 경우 ?�킵
     if (like.rewarded) {
-      console.log(`?��? 보상??지급된 좋아?�입?�다: ${likeId}`);
+      console.log(`이미 보상이 지급된 좋아요입니다: ${likeId}`);
       return;
     }
 
     const { userId, targetType, targetId, targetUserId } = like;
 
-    // ?�수 ?�이??검�?    if (!userId || !targetType || !targetId || !targetUserId) {
-      console.error("?�수 ?�이?��? ?�락?�었?�니??", like);
+    if (!userId || !targetType || !targetId || !targetUserId) {
+      console.error("필수 데이터가 누락되었습니다", like);
       return;
     }
 
-    // ?�기 ?�신?�게 좋아?�는 보상 ?�음
+    // 자기 자신에게 좋아요는 보상 없음
     if (userId === targetUserId) {
-      console.log("?�기 ?�신?�게 좋아?�는 보상???�습?�다.");
+      console.log("자기 자신에게 좋아요는 보상이 없습니다.");
       return;
     }
 
     const db = getFirestore();
     const expReward = EXP_REWARDS.LIKE_RECEIVED;
-    const reason = `좋아??받음 (${targetType === "post" ? "게시글" : "?��?"})`;
+    const reason = `좋아요 받음 (${targetType === "post" ? "게시글" : "댓글"})`;
 
     try {
       await db.runTransaction(async (transaction) => {
-        // 좋아??문서??보상 지�??�래�??�정
         transaction.update(snapshot.ref, {
           rewarded: true,
           rewardedAt: FieldValue.serverTimestamp(),
           expRewarded: expReward,
         });
 
-        // ?�??문서??좋아????증�?
         if (targetType === "post") {
           const postRef = db.collection("posts").doc(targetId);
           transaction.update(postRef, {
             likeCount: FieldValue.increment(1),
           });
         } else if (targetType === "comment") {
-          // ?��? 좋아?�는 postId가 ?�요?��?�?별도 처리
-          // likes 문서??postId???�?�되???�다�?가??          const likeData = like as Like & { postId?: string };
-          if (likeData.postId) {
-            const commentRef = db
-              .collection("posts")
-              .doc(likeData.postId)
-              .collection("comments")
-              .doc(targetId);
-            transaction.update(commentRef, {
-              likeCount: FieldValue.increment(1),
-            });
-          }
+          // 댓글은 comments 컬렉션에 저장됨
+          const commentRef = db.collection("comments").doc(targetId);
+          transaction.update(commentRef, {
+            likeCount: FieldValue.increment(1),
+          });
         }
 
-        // ?�???�성?�에�?골드 지�?        await addExpInTransaction(transaction, targetUserId, expReward, reason);
+        await addExpInTransaction(transaction, targetUserId, expReward, reason);
       });
 
-      console.log(`좋아??보상 지�??�료: ${targetUserId}`, {
+      console.log(`좋아요 보상 지급 완료: ${targetUserId}`, {
         likeId,
         targetType,
         targetId,
         expReward,
       });
 
-      // ?�???�성?�에�??�림
+      // 대상 작성자에게 알림
       await db.collection("notifications").add({
         userId: targetUserId,
         type: "LIKE_RECEIVED",
-        title: "좋아??,
-        message: `??${targetType === "post" ? "글" : "?��?"}??좋아?��? 받았?�니??`,
-        data: {
-          likeId,
-          targetType,
-          targetId,
-        },
+        title: "좋아요",
+        message: `내 ${targetType === "post" ? "글" : "댓글"}에 좋아요를 받았습니다`,
+        data: { likeId, targetType, targetId },
         read: false,
         createdAt: FieldValue.serverTimestamp(),
       });
     } catch (error) {
-      console.error("좋아??보상 지�??�패:", error);
+      console.error("좋아요 보상 지급 실패:", error);
       throw error;
     }
   }
 );
 
 /**
- * 좋아??취소 ??좋아????감소
- *
- * Firestore ?�리�? likes/{likeId} 문서 ??�� ?? */
+ * 좋아요 취소 시 좋아요 수 감소
+ */
 export const onLikeRemoved = onDocumentWritten(
-  "likes/{likeId}",
+  {
+    document: "likes/{likeId}",
+    region: "asia-northeast3",
+  },
   async (event) => {
-    // ??��??경우�?처리
+    // 삭제인 경우만 처리
     if (event.data?.after.exists) {
-      return; // 문서가 존재?�면 ??��가 ?�님
+      return;
     }
 
     const beforeData = event.data?.before.data() as Like | undefined;
@@ -350,22 +324,16 @@ export const onLikeRemoved = onDocumentWritten(
           likeCount: FieldValue.increment(-1),
         });
       } else if (targetType === "comment") {
-        const likeData = beforeData as Like & { postId?: string };
-        if (likeData.postId) {
-          const commentRef = db
-            .collection("posts")
-            .doc(likeData.postId)
-            .collection("comments")
-            .doc(targetId);
-          await commentRef.update({
-            likeCount: FieldValue.increment(-1),
-          });
-        }
+        // 댓글은 comments 컬렉션에 저장됨
+        const commentRef = db.collection("comments").doc(targetId);
+        await commentRef.update({
+          likeCount: FieldValue.increment(-1),
+        });
       }
 
-      console.log("좋아??취소 처리 ?�료:", { targetType, targetId });
+      console.log("좋아요 취소 처리 완료:", { targetType, targetId });
     } catch (error) {
-      console.error("좋아??취소 처리 ?�패:", error);
+      console.error("좋아요 취소 처리 실패:", error);
     }
   }
 );

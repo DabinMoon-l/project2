@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
@@ -98,17 +98,21 @@ export default function LoginPage() {
   // 이메일 로그인 폼 상태
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
+
+  // 리다이렉트 중복 방지
+  const isRedirecting = useRef(false);
 
   // 이미 로그인된 경우
   useEffect(() => {
     const handleLogin = async () => {
-      if (user && !loading && !isProcessing) {
-        setIsProcessing(true);
+      if (user && !loading && !isRedirecting.current) {
+        isRedirecting.current = true;
 
         try {
           // 이메일 인증이 필요한 경우 (이메일/비밀번호 로그인)
-          if (user.providerData[0]?.providerId === 'password' && !emailVerified) {
+          // 테스트 계정(test로 시작) 또는 특정 이메일은 인증 스킵
+          const isTestAccount = user.email?.startsWith('test') || user.email === 'jkim@ccn.ac.kr';
+          if (user.providerData[0]?.providerId === 'password' && !emailVerified && !isTestAccount) {
             router.replace('/verify-email');
             return;
           }
@@ -143,22 +147,21 @@ export default function LoginPage() {
               // 온보딩 완료된 학생은 홈으로
               router.replace('/');
             } else {
-              // 온보딩 미완료 학생은 온보딩으로
-              router.replace('/onboarding');
+              // 온보딩 미완료 학생은 학적정보 입력으로 직접 이동
+              router.replace('/onboarding/student-info');
             }
           }
         } catch (err) {
           console.error('로그인 처리 에러:', err);
+          isRedirecting.current = false;
           // 에러 발생 시에도 홈으로 시도 (layout에서 다시 체크함)
           router.replace('/');
-        } finally {
-          setIsProcessing(false);
         }
       }
     };
 
     handleLogin();
-  }, [user, loading, emailVerified, router, isProcessing]);
+  }, [user, loading, emailVerified, router]);
 
   // 에러 발생 시 5초 후 자동 초기화
   useEffect(() => {
@@ -170,14 +173,16 @@ export default function LoginPage() {
     }
   }, [error, clearError]);
 
-  // 로딩 중이거나 리디렉션 처리 중인 경우 로딩 화면 표시
-  if (loading || isProcessing) {
+  // 로딩 중이거나 이미 로그인된 경우 로딩 화면 표시
+  if (loading || user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-[#1a1a2e] to-[#16213e]">
+      <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
+        {/* 비디오 배경 */}
+        <VideoBackground />
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="flex flex-col items-center gap-4"
+          className="relative z-10 flex flex-col items-center gap-4"
         >
           <div className="w-12 h-12 border-4 border-white/30 border-t-white rounded-full animate-spin" />
           <p className="text-white text-sm font-medium drop-shadow-md">로딩 중...</p>
@@ -192,12 +197,12 @@ export default function LoginPage() {
       <VideoBackground />
 
       {/* 좌측 상단 이미지 */}
-      <div className="absolute top-0 left-0 z-10">
+      <div className="absolute top-12 left-6 z-10">
         <Image
           src="/images/corner-image.png"
           alt="장식 이미지"
-          width={360}
-          height={360}
+          width={280}
+          height={140}
           className="drop-shadow-lg"
         />
       </div>

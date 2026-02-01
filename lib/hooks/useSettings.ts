@@ -139,38 +139,42 @@ export function useSettings(): UseSettingsReturn {
 
   /**
    * 설정 조회
+   * 사용자 문서(users/{uid})의 appSettings 필드에서 조회
    */
   const fetchSettings = useCallback(async (uid: string): Promise<void> => {
     try {
       setLoading(true);
       setError(null);
 
-      const docRef = doc(db, 'settings', uid);
-      const docSnap = await getDoc(docRef);
+      // users/{uid} 문서에서 appSettings 필드 조회
+      const userRef = doc(db, 'users', uid);
+      const userSnap = await getDoc(userRef);
 
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setSettings({
-          notifications: {
-            ...DEFAULT_SETTINGS.notifications,
-            ...data.notifications,
-          },
-          display: {
-            ...DEFAULT_SETTINGS.display,
-            ...data.display,
-          },
-          privacy: {
-            ...DEFAULT_SETTINGS.privacy,
-            ...data.privacy,
-          },
-        });
+      if (userSnap.exists()) {
+        const userData = userSnap.data();
+        const appSettings = userData.appSettings;
+
+        if (appSettings) {
+          setSettings({
+            notifications: {
+              ...DEFAULT_SETTINGS.notifications,
+              ...appSettings.notifications,
+            },
+            display: {
+              ...DEFAULT_SETTINGS.display,
+              ...appSettings.display,
+            },
+            privacy: {
+              ...DEFAULT_SETTINGS.privacy,
+              ...appSettings.privacy,
+            },
+          });
+        } else {
+          // appSettings가 없으면 기본값 사용 (저장은 나중에 변경 시)
+          setSettings(DEFAULT_SETTINGS);
+        }
       } else {
-        // 기본 설정으로 초기화
-        await setDoc(docRef, {
-          ...DEFAULT_SETTINGS,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
+        // 사용자 문서가 없으면 기본값 사용
         setSettings(DEFAULT_SETTINGS);
       }
     } catch (err) {
@@ -185,6 +189,7 @@ export function useSettings(): UseSettingsReturn {
 
   /**
    * 알림 설정 업데이트
+   * users/{uid} 문서의 appSettings.notifications 필드 업데이트
    */
   const updateNotifications = useCallback(
     async (uid: string, data: Partial<NotificationSettings>): Promise<void> => {
@@ -192,14 +197,14 @@ export function useSettings(): UseSettingsReturn {
         setLoading(true);
         setError(null);
 
-        const docRef = doc(db, 'settings', uid);
+        const userRef = doc(db, 'users', uid);
         const newNotifications = {
           ...(settings?.notifications || DEFAULT_SETTINGS.notifications),
           ...data,
         };
 
-        await updateDoc(docRef, {
-          notifications: newNotifications,
+        await updateDoc(userRef, {
+          'appSettings.notifications': newNotifications,
           updatedAt: serverTimestamp(),
         });
 
@@ -221,6 +226,7 @@ export function useSettings(): UseSettingsReturn {
 
   /**
    * 표시 설정 업데이트
+   * users/{uid} 문서의 appSettings.display 필드 업데이트
    */
   const updateDisplay = useCallback(
     async (uid: string, data: Partial<DisplaySettings>): Promise<void> => {
@@ -228,14 +234,14 @@ export function useSettings(): UseSettingsReturn {
         setLoading(true);
         setError(null);
 
-        const docRef = doc(db, 'settings', uid);
+        const userRef = doc(db, 'users', uid);
         const newDisplay = {
           ...(settings?.display || DEFAULT_SETTINGS.display),
           ...data,
         };
 
-        await updateDoc(docRef, {
-          display: newDisplay,
+        await updateDoc(userRef, {
+          'appSettings.display': newDisplay,
           updatedAt: serverTimestamp(),
         });
 
@@ -257,6 +263,7 @@ export function useSettings(): UseSettingsReturn {
 
   /**
    * 개인정보 설정 업데이트
+   * users/{uid} 문서의 appSettings.privacy 필드 업데이트
    */
   const updatePrivacy = useCallback(
     async (uid: string, data: Partial<PrivacySettings>): Promise<void> => {
@@ -264,14 +271,14 @@ export function useSettings(): UseSettingsReturn {
         setLoading(true);
         setError(null);
 
-        const docRef = doc(db, 'settings', uid);
+        const userRef = doc(db, 'users', uid);
         const newPrivacy = {
           ...(settings?.privacy || DEFAULT_SETTINGS.privacy),
           ...data,
         };
 
-        await updateDoc(docRef, {
-          privacy: newPrivacy,
+        await updateDoc(userRef, {
+          'appSettings.privacy': newPrivacy,
           updatedAt: serverTimestamp(),
         });
 
@@ -293,15 +300,16 @@ export function useSettings(): UseSettingsReturn {
 
   /**
    * 설정 초기화
+   * users/{uid} 문서의 appSettings 필드 초기화
    */
   const resetSettings = useCallback(async (uid: string): Promise<void> => {
     try {
       setLoading(true);
       setError(null);
 
-      const docRef = doc(db, 'settings', uid);
-      await setDoc(docRef, {
-        ...DEFAULT_SETTINGS,
+      const userRef = doc(db, 'users', uid);
+      await updateDoc(userRef, {
+        appSettings: DEFAULT_SETTINGS,
         updatedAt: serverTimestamp(),
       });
 

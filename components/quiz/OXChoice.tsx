@@ -54,16 +54,16 @@ export default function OXChoice({
 
     if (isSelected) {
       return {
-        backgroundColor: isO ? '#22C55E' : '#EF4444', // 초록/빨강
-        color: '#FFFFFF',
-        borderColor: isO ? '#22C55E' : '#EF4444',
+        backgroundColor: isO ? '#1A6B1A' : '#8B1A1A',
+        color: '#F5F0E8',
+        borderColor: isO ? '#1A6B1A' : '#8B1A1A',
       };
     }
 
     return {
-      backgroundColor: '#F9FAFB',
-      color: '#6B7280',
-      borderColor: '#E5E7EB',
+      backgroundColor: '#EDEAE4',
+      color: '#5C5C5C',
+      borderColor: '#1A1A1A',
     };
   };
 
@@ -77,8 +77,8 @@ export default function OXChoice({
         disabled={disabled}
         style={getButtonStyle('O')}
         className={`
-          w-28 h-28 rounded-full text-5xl font-bold
-          border-4 transition-colors duration-200
+          w-28 h-28 text-5xl font-bold
+          border-2 transition-colors duration-200
           flex items-center justify-center
           ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}
         `}
@@ -104,8 +104,8 @@ export default function OXChoice({
         disabled={disabled}
         style={getButtonStyle('X')}
         className={`
-          w-28 h-28 rounded-full text-5xl font-bold
-          border-4 transition-colors duration-200
+          w-28 h-28 text-5xl font-bold
+          border-2 transition-colors duration-200
           flex items-center justify-center
           ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}
         `}

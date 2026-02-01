@@ -10,11 +10,13 @@ import { ThemeContext, type ThemeContextValue } from './ThemeProvider';
  * @example
  * ```tsx
  * function MyComponent() {
- *   const { theme, classType, setClassType, isDarkMode } = useTheme();
+ *   const { theme, classType, setClassType, isDarkMode, courseId, isBiologyCourse } = useTheme();
  *
  *   return (
  *     <div style={{ background: theme.colors.background }}>
  *       <p>현재 반: {classType}</p>
+ *       <p>과목: {courseId}</p>
+ *       {isBiologyCourse && <p>생물학 단일 테마 사용 중</p>}
  *       <button onClick={() => setClassType('B')}>B반으로 변경</button>
  *     </div>
  *   );

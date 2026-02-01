@@ -144,14 +144,15 @@ const typeLabels: Record<QuestionType, string> = {
   ox: 'OX',
   multiple: '객관식',
   short_answer: '단답형',
+  subjective: '주관식',
   essay: '서술형',
   combined: '결합형',
 };
 
 /**
- * 하위 문제용 유형 라벨 (결합형, 서술형 제외)
+ * 하위 문제용 유형 라벨 (결합형, 서술형, 주관식 제외)
  */
-const subQuestionTypeLabels: Record<Exclude<QuestionType, 'combined' | 'essay'>, string> = {
+const subQuestionTypeLabels: Record<Exclude<QuestionType, 'combined' | 'essay' | 'subjective'>, string> = {
   ox: 'OX',
   multiple: '객관식',
   short_answer: '단답형',
@@ -343,7 +344,7 @@ function SubQuestionEditor({
   onRemove: () => void;
   canRemove: boolean;
 }) {
-  const handleTypeChange = (type: Exclude<QuestionType, 'combined'>) => {
+  const handleTypeChange = (type: Exclude<QuestionType, 'combined' | 'essay' | 'subjective'>) => {
     onChange({
       ...subQuestion,
       type,
@@ -352,7 +353,6 @@ function SubQuestionEditor({
       answerIndices: type === 'multiple' ? [] : undefined,
       answerText: type === 'short_answer' ? '' : undefined,
       answerTexts: type === 'short_answer' ? [''] : undefined,
-      rubric: type === 'essay' ? [{ criteria: '', percentage: 100, description: '' }] : undefined,
     });
   };
 
@@ -460,7 +460,7 @@ function SubQuestionEditor({
 
       {/* 유형 선택 */}
       <div className="flex gap-1 mb-3">
-        {(Object.keys(subQuestionTypeLabels) as Exclude<QuestionType, 'combined' | 'essay'>[]).map((type) => (
+        {(Object.keys(subQuestionTypeLabels) as Exclude<QuestionType, 'combined' | 'essay' | 'subjective'>[]).map((type) => (
           <button
             key={type}
             type="button"
@@ -640,43 +640,6 @@ function SubQuestionEditor({
               + 정답 추가
             </button>
           )}
-        </div>
-      )}
-
-      {/* 서술형 루브릭 (간소화) */}
-      {subQuestion.type === 'essay' && (
-        <div className="space-y-2">
-          <p className="text-xs text-[#5C5C5C]">평가 기준</p>
-          {(subQuestion.rubric || []).map((item, idx) => (
-            <div key={idx} className="flex gap-2">
-              <input
-                type="text"
-                value={item.criteria}
-                onChange={(e) => {
-                  const newRubric = [...(subQuestion.rubric || [])];
-                  newRubric[idx] = { ...newRubric[idx], criteria: e.target.value };
-                  onChange({ ...subQuestion, rubric: newRubric });
-                }}
-                placeholder="평가요소"
-                className="flex-1 px-2 py-1.5 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-xs focus:outline-none"
-              />
-              <div className="flex items-center gap-1">
-                <input
-                  type="number"
-                  value={item.percentage}
-                  onChange={(e) => {
-                    const newRubric = [...(subQuestion.rubric || [])];
-                    newRubric[idx] = { ...newRubric[idx], percentage: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)) };
-                    onChange({ ...subQuestion, rubric: newRubric });
-                  }}
-                  min="0"
-                  max="100"
-                  className="w-12 px-1 py-1.5 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-xs text-center focus:outline-none"
-                />
-                <span className="text-xs">%</span>
-              </div>
-            </div>
-          ))}
         </div>
       )}
 
@@ -1582,6 +1545,7 @@ export default function QuestionEditor({
                   ox: 'OX',
                   multiple: '객관식',
                   short_answer: '주관식',
+                  subjective: '주관식',
                   essay: '서술형',
                   combined: '결합형',
                 };

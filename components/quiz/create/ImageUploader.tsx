@@ -26,7 +26,7 @@ interface ImageUploaderProps {
 /**
  * 이미지/PDF 업로더 컴포넌트
  *
- * 카메라 촬영, 갤러리 선택, PDF 업로드를 지원합니다.
+ * 갤러리 선택, PDF 업로드를 지원합니다.
  * 드래그 앤 드롭도 지원합니다.
  */
 export default function ImageUploader({
@@ -43,7 +43,6 @@ export default function ImageUploader({
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   /**
    * 파일 유효성 검사 및 처리
@@ -133,9 +132,6 @@ export default function ImageUploader({
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-    if (cameraInputRef.current) {
-      cameraInputRef.current.value = '';
-    }
   }, [preview]);
 
   const displayError = error || localError;
@@ -148,12 +144,12 @@ export default function ImageUploader({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         animate={{
-          borderColor: isDragging ? '#6366f1' : '#e5e7eb',
-          backgroundColor: isDragging ? '#f5f3ff' : '#fafafa',
+          borderColor: isDragging ? '#1A1A1A' : '#1A1A1A',
+          backgroundColor: isDragging ? '#EDEAE4' : '#F5F0E8',
         }}
         className={`
           relative
-          border-2 border-dashed rounded-2xl
+          border-2 border-dashed
           p-6
           transition-colors duration-200
           ${isLoading ? 'pointer-events-none opacity-50' : ''}
@@ -171,7 +167,7 @@ export default function ImageUploader({
             >
               {/* 이미지 미리보기 */}
               {preview ? (
-                <div className="relative aspect-video bg-gray-100 rounded-xl overflow-hidden">
+                <div className="relative aspect-video bg-[#EDEAE4] overflow-hidden">
                   <img
                     src={preview}
                     alt="미리보기"
@@ -180,22 +176,22 @@ export default function ImageUploader({
                 </div>
               ) : (
                 /* PDF 아이콘 표시 */
-                <div className="flex flex-col items-center justify-center py-8 bg-gray-50 rounded-xl">
+                <div className="flex flex-col items-center justify-center py-8 bg-[#EDEAE4]">
                   <svg
-                    className="w-16 h-16 text-red-500 mb-2"
+                    className="w-16 h-16 text-[#8B1A1A] mb-2"
                     fill="currentColor"
                     viewBox="0 0 24 24"
                   >
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2l5 5h-5V4zM6 20V4h6v6h6v10H6z" />
                     <path d="M8 13h8v1H8zm0 2h8v1H8zm0 2h5v1H8z" />
                   </svg>
-                  <span className="text-sm text-gray-600">{fileName}</span>
+                  <span className="text-sm text-[#1A1A1A]">{fileName}</span>
                 </div>
               )}
 
               {/* 파일명 */}
               {preview && (
-                <p className="mt-2 text-sm text-center text-gray-600 truncate">
+                <p className="mt-2 text-sm text-center text-[#5C5C5C] truncate">
                   {fileName}
                 </p>
               )}
@@ -207,10 +203,9 @@ export default function ImageUploader({
                 className="
                   absolute -top-2 -right-2
                   w-8 h-8
-                  bg-red-500 text-white
-                  rounded-full shadow-lg
+                  bg-[#8B1A1A] text-[#F5F0E8]
                   flex items-center justify-center
-                  hover:bg-red-600
+                  hover:bg-[#6B1414]
                   transition-colors
                 "
                 aria-label="이미지 삭제"
@@ -239,8 +234,8 @@ export default function ImageUploader({
               exit={{ opacity: 0 }}
               className="flex flex-col items-center justify-center py-12"
             >
-              <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-500 rounded-full animate-spin mb-4" />
-              <p className="text-sm text-gray-600">OCR 처리 중...</p>
+              <div className="w-12 h-12 border-4 border-[#EDEAE4] border-t-[#1A1A1A] rounded-full animate-spin mb-4" />
+              <p className="text-sm text-[#5C5C5C]">OCR 처리 중...</p>
             </motion.div>
           ) : (
             /* 업로드 안내 */
@@ -252,9 +247,9 @@ export default function ImageUploader({
               className="flex flex-col items-center justify-center py-8"
             >
               {/* 업로드 아이콘 */}
-              <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mb-4">
+              <div className="w-16 h-16 bg-[#EDEAE4] flex items-center justify-center mb-4 border-2 border-[#1A1A1A]">
                 <svg
-                  className="w-8 h-8 text-indigo-500"
+                  className="w-8 h-8 text-[#1A1A1A]"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -269,10 +264,10 @@ export default function ImageUploader({
               </div>
 
               {/* 안내 텍스트 */}
-              <p className="text-gray-600 text-center mb-2">
+              <p className="text-[#1A1A1A] text-center mb-2 font-bold">
                 이미지 또는 PDF를 업로드하세요
               </p>
-              <p className="text-xs text-gray-400 text-center">
+              <p className="text-xs text-[#5C5C5C] text-center">
                 드래그 앤 드롭 또는 버튼 클릭
               </p>
             </motion.div>
@@ -288,63 +283,11 @@ export default function ImageUploader({
           className="hidden"
           disabled={isLoading}
         />
-
-        {/* 카메라 입력 (모바일) */}
-        <input
-          ref={cameraInputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          onChange={handleFileChange}
-          className="hidden"
-          disabled={isLoading}
-        />
       </motion.div>
 
-      {/* 버튼 그룹 */}
+      {/* 갤러리/PDF 버튼 (카메라 버튼 제거) */}
       {!preview && !fileName && !isLoading && (
-        <div className="flex gap-3">
-          {/* 카메라 버튼 */}
-          <motion.button
-            type="button"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => cameraInputRef.current?.click()}
-            className="
-              flex-1
-              flex items-center justify-center gap-2
-              px-4 py-3
-              bg-white border border-gray-200
-              rounded-xl
-              text-gray-700 font-medium
-              shadow-sm
-              hover:bg-gray-50
-              transition-colors
-            "
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
-              />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
-              />
-            </svg>
-            <span>카메라</span>
-          </motion.button>
-
-          {/* 갤러리 버튼 */}
+        <div className="flex">
           <motion.button
             type="button"
             whileHover={{ scale: 1.02 }}
@@ -354,12 +297,11 @@ export default function ImageUploader({
               flex-1
               flex items-center justify-center gap-2
               px-4 py-3
-              bg-gradient-to-r from-indigo-500 to-purple-600
-              rounded-xl
-              text-white font-medium
-              shadow-md
-              hover:shadow-lg
-              transition-shadow
+              bg-[#1A1A1A]
+              text-[#F5F0E8] font-bold
+              border-2 border-[#1A1A1A]
+              hover:bg-[#333]
+              transition-colors
             "
           >
             <svg
@@ -387,7 +329,7 @@ export default function ImageUploader({
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="flex items-center gap-2 p-3 bg-red-50 text-red-600 rounded-xl"
+            className="flex items-center gap-2 p-3 bg-[#FDEAEA] border border-[#8B1A1A] text-[#8B1A1A]"
           >
             <svg
               className="w-5 h-5 flex-shrink-0"
@@ -406,10 +348,10 @@ export default function ImageUploader({
       </AnimatePresence>
 
       {/* OCR 정확도 안내 */}
-      <div className="p-3 bg-amber-50 rounded-xl">
+      <div className="p-3 bg-[#FFF8E7] border border-[#D4A84B]">
         <div className="flex items-start gap-2">
           <svg
-            className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5"
+            className="w-5 h-5 text-[#D4A84B] flex-shrink-0 mt-0.5"
             fill="currentColor"
             viewBox="0 0 20 20"
           >
@@ -419,8 +361,8 @@ export default function ImageUploader({
               clipRule="evenodd"
             />
           </svg>
-          <div className="text-xs text-amber-700">
-            <p className="font-medium mb-1">OCR 인식 안내</p>
+          <div className="text-xs text-[#8B6914]">
+            <p className="font-bold mb-1">OCR 인식 안내</p>
             <p>
               OCR 기술로 텍스트를 추출하므로 100% 정확하지 않을 수 있습니다.
               추출된 내용을 반드시 확인하고 수정해주세요.

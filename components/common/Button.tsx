@@ -4,7 +4,7 @@ import { ButtonHTMLAttributes, forwardRef } from 'react';
 import { motion, HTMLMotionProps } from 'framer-motion';
 
 // 버튼 variant 타입
-type ButtonVariant = 'primary' | 'secondary' | 'ghost';
+type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'white';
 
 // 버튼 size 타입
 type ButtonSize = 'sm' | 'md' | 'lg';
@@ -31,6 +31,8 @@ const variantStyles: Record<ButtonVariant, string> = {
     'bg-white text-gray-800 border border-gray-200 shadow-sm hover:bg-gray-50 hover:border-gray-300 active:bg-gray-100',
   ghost:
     'bg-transparent text-gray-600 hover:bg-gray-100 hover:text-gray-800 active:bg-gray-200',
+  white:
+    'bg-white text-black shadow-md hover:bg-gray-100 active:bg-gray-200',
 };
 
 // size별 스타일
@@ -72,9 +74,8 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <motion.button
         ref={ref}
-        whileHover={!isDisabled ? { scale: 1.02 } : undefined}
-        whileTap={!isDisabled ? { scale: 0.98 } : undefined}
-        transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+        whileTap={!isDisabled ? { scale: 0.97 } : undefined}
+        transition={{ duration: 0.1 }}
         disabled={isDisabled}
         className={`
           inline-flex items-center justify-center gap-2

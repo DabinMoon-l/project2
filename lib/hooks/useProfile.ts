@@ -61,6 +61,7 @@ export interface UserProfile {
   classType: 'A' | 'B' | 'C' | 'D';
   studentId?: string;
   department?: string;
+  courseId?: string;
 
   // 캐릭터
   characterOptions: CharacterOptions;
@@ -92,6 +93,7 @@ export interface UserProfile {
   // 타임스탬프
   createdAt: Timestamp;
   updatedAt: Timestamp;
+  lastNicknameChangeAt?: Timestamp;
 }
 
 /**

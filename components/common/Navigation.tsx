@@ -3,165 +3,171 @@
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { useTheme } from '@/styles/themes/useTheme';
 
-/**
- * 사용자 역할 타입
- */
 export type UserRole = 'student' | 'professor';
 
-/**
- * 네비게이션 탭 아이템 인터페이스
- */
 interface NavItem {
-  // 탭 아이콘 (이모지)
-  icon: string;
-  // 탭 라벨
-  label: string;
-  // 이동 경로
+  icon: (isActive: boolean) => React.ReactNode;
   path: string;
+  label: string;
 }
 
-/**
- * Navigation Props
- */
 interface NavigationProps {
-  // 사용자 역할 (학생/교수님)
   role: UserRole;
 }
 
-// 학생용 네비게이션 탭 (4개)
+// 통일된 색상
+const ACTIVE_COLOR = '#1A1A1A';
+const INACTIVE_COLOR = '#9A9A9A';
+
+// 학생용 네비게이션 탭
 const studentTabs: NavItem[] = [
-  { icon: '🏠', label: '홈', path: '/' },
-  { icon: '📝', label: '퀴즈', path: '/quiz' },
-  { icon: '📚', label: '복습', path: '/review' },
-  { icon: '💬', label: '게시판', path: '/board' },
+  {
+    // 홈 아이콘
+    icon: (isActive) => (
+      <svg className="w-9 h-9" fill="none" stroke={isActive ? ACTIVE_COLOR : INACTIVE_COLOR} strokeWidth={isActive ? 2 : 1.5} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+      </svg>
+    ),
+    path: '/',
+    label: '홈',
+  },
+  {
+    // 퀴즈 아이콘 - 물음표
+    icon: (isActive) => (
+      <svg className="w-9 h-9" fill="none" stroke={isActive ? ACTIVE_COLOR : INACTIVE_COLOR} strokeWidth={isActive ? 2.5 : 2} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M7 8c0-2.5 2.5-4.5 5-4.5s5 2 5 4.5c0 2-1.5 3.5-3.5 4-.7.2-1.5.8-1.5 1.5v2" />
+        <circle cx="12" cy="19" r="1" fill={isActive ? ACTIVE_COLOR : INACTIVE_COLOR} />
+      </svg>
+    ),
+    path: '/quiz',
+    label: '퀴즈',
+  },
+  {
+    // 복습 아이콘 - 책
+    icon: (isActive) => (
+      <svg className="w-9 h-9" fill="none" stroke={isActive ? ACTIVE_COLOR : INACTIVE_COLOR} strokeWidth={isActive ? 2 : 1.5} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+      </svg>
+    ),
+    path: '/review',
+    label: '복습',
+  },
+  {
+    // 게시판 아이콘 - 신문
+    icon: (isActive) => (
+      <svg className="w-9 h-9" fill="none" stroke={isActive ? ACTIVE_COLOR : INACTIVE_COLOR} strokeWidth={isActive ? 2 : 1.5} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 7.5h1.5m-1.5 3h1.5m-7.5 3h7.5m-7.5 3h7.5m3-9h3.375c.621 0 1.125.504 1.125 1.125V18a2.25 2.25 0 01-2.25 2.25M16.5 7.5V18a2.25 2.25 0 002.25 2.25M16.5 7.5V4.875c0-.621-.504-1.125-1.125-1.125H4.125C3.504 3.75 3 4.254 3 4.875V18a2.25 2.25 0 002.25 2.25h13.5M6 7.5h3v3H6v-3z" />
+      </svg>
+    ),
+    path: '/board',
+    label: '게시판',
+  },
 ];
 
-// 교수님용 네비게이션 탭 (5개)
+// 교수님용 네비게이션 탭
 const professorTabs: NavItem[] = [
-  { icon: '🏠', label: '홈', path: '/professor' },
-  { icon: '📝', label: '퀴즈', path: '/professor/quiz' },
-  { icon: '📊', label: '학생', path: '/professor/students' },
-  { icon: '🔬', label: '문제', path: '/professor/analysis' },
-  { icon: '💬', label: '게시판', path: '/professor/board' },
+  {
+    icon: (isActive) => (
+      <svg className="w-9 h-9" fill="none" stroke={isActive ? ACTIVE_COLOR : INACTIVE_COLOR} strokeWidth={isActive ? 2 : 1.5} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+      </svg>
+    ),
+    path: '/professor',
+    label: '홈',
+  },
+  {
+    icon: (isActive) => (
+      <svg className="w-9 h-9" fill="none" stroke={isActive ? ACTIVE_COLOR : INACTIVE_COLOR} strokeWidth={isActive ? 2 : 1.5} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
+      </svg>
+    ),
+    path: '/professor/quiz',
+    label: '퀴즈',
+  },
+  {
+    icon: (isActive) => (
+      <svg className="w-9 h-9" fill="none" stroke={isActive ? ACTIVE_COLOR : INACTIVE_COLOR} strokeWidth={isActive ? 2 : 1.5} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+      </svg>
+    ),
+    path: '/professor/students',
+    label: '학생',
+  },
+  {
+    icon: (isActive) => (
+      <svg className="w-9 h-9" fill="none" stroke={isActive ? ACTIVE_COLOR : INACTIVE_COLOR} strokeWidth={isActive ? 2 : 1.5} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+      </svg>
+    ),
+    path: '/professor/analysis',
+    label: '분석',
+  },
 ];
 
-/**
- * 현재 경로가 탭과 매칭되는지 확인
- * @param pathname 현재 경로
- * @param tabPath 탭 경로
- * @returns 활성 여부
- */
 function isActiveTab(pathname: string, tabPath: string): boolean {
-  // 홈 경로는 정확히 일치해야 함
   if (tabPath === '/' || tabPath === '/professor') {
     return pathname === tabPath;
   }
-  // 그 외 경로는 해당 경로로 시작하면 활성
   return pathname.startsWith(tabPath);
 }
 
 /**
- * 하단 고정 네비게이션 바 컴포넌트
- * 학생/교수님 역할에 따라 다른 탭 구성 표시
- * Framer Motion으로 탭 전환 애니메이션 적용
+ * 심플 하단 네비게이션 - 아이콘만
  */
 export default function Navigation({ role }: NavigationProps) {
   const pathname = usePathname();
-  const { theme } = useTheme();
 
-  // 역할에 따른 탭 선택
   const tabs = role === 'professor' ? professorTabs : studentTabs;
 
   return (
-    <nav
-      className="fixed bottom-0 left-0 right-0 z-50 safe-area-bottom"
-      style={{
-        backgroundColor: theme.colors.backgroundSecondary,
-        borderTopWidth: '1px',
-        borderTopStyle: 'solid',
-        borderTopColor: theme.colors.border,
-      }}
-    >
-      <ul className="flex items-center justify-around h-16 max-w-md mx-auto px-2">
+    <nav className="fixed bottom-4 left-4 right-4 z-50 flex justify-center">
+      <div
+        className="flex items-center justify-around px-8 py-4"
+        style={{
+          backgroundColor: '#F5F0E8',
+          border: '2px solid #1A1A1A',
+          boxShadow: '4px 4px 0px #1A1A1A',
+          maxWidth: '380px',
+          width: '100%',
+        }}
+      >
         {tabs.map((tab) => {
           const isActive = isActiveTab(pathname, tab.path);
 
           return (
-            <li key={tab.path} className="relative flex-1">
-              <Link
-                href={tab.path}
-                className="flex flex-col items-center justify-center py-2 transition-colors duration-200"
-                style={{
-                  color: isActive
-                    ? theme.colors.accent
-                    : theme.colors.textSecondary,
-                }}
-              >
-                {/* 활성 탭 배경 인디케이터 */}
-                {isActive && (
-                  <motion.div
-                    layoutId="activeTab"
-                    className="absolute inset-x-1 top-1 bottom-1 rounded-xl -z-10"
-                    style={{
-                      backgroundColor: `${theme.colors.accent}20`,
-                    }}
-                    initial={false}
-                    transition={{
-                      type: 'spring',
-                      stiffness: 500,
-                      damping: 35,
-                    }}
-                  />
-                )}
-
-                {/* 아이콘 */}
-                <motion.span
-                  className="text-xl mb-0.5"
-                  animate={{
-                    scale: isActive ? 1.15 : 1,
-                  }}
+            <Link
+              key={tab.path}
+              href={tab.path}
+              className="relative flex items-center justify-center p-1 transition-all duration-200"
+              aria-label={tab.label}
+            >
+              {/* 활성 탭 밑줄 */}
+              {isActive && (
+                <motion.div
+                  layoutId="activeNavTab"
+                  className="absolute -bottom-2 inset-x-0 mx-auto w-8 h-1"
+                  style={{ backgroundColor: ACTIVE_COLOR }}
+                  initial={false}
                   transition={{
                     type: 'spring',
-                    stiffness: 400,
-                    damping: 20,
+                    stiffness: 500,
+                    damping: 35,
                   }}
-                >
-                  {tab.icon}
-                </motion.span>
+                />
+              )}
 
-                {/* 라벨 */}
-                <motion.span
-                  className="text-xs font-medium"
-                  animate={{
-                    fontWeight: isActive ? 600 : 500,
-                  }}
-                  transition={{ duration: 0.15 }}
-                >
-                  {tab.label}
-                </motion.span>
-
-                {/* 활성 상태 점 인디케이터 */}
-                {isActive && (
-                  <motion.div
-                    className="absolute -top-0.5 w-1 h-1 rounded-full"
-                    style={{ backgroundColor: theme.colors.accent }}
-                    initial={{ scale: 0, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0, opacity: 0 }}
-                    transition={{
-                      type: 'spring',
-                      stiffness: 500,
-                      damping: 25,
-                    }}
-                  />
-                )}
-              </Link>
-            </li>
+              {/* 아이콘 */}
+              <motion.div
+                animate={{ scale: isActive ? 1.15 : 1 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+              >
+                {tab.icon(isActive)}
+              </motion.div>
+            </Link>
           );
         })}
-      </ul>
+      </div>
     </nav>
   );
 }

@@ -51,3 +51,9 @@ export { default as WebVitalsReporter } from './WebVitalsReporter';
 
 // RibbonBanner 컴포넌트 (빈티지 리본 스타일)
 export { default as RibbonBanner, SubRibbon } from './RibbonBanner';
+
+// ExpToast 컴포넌트 (EXP 획득 토스트)
+export { default as ExpToastProvider, useExpToast } from './ExpToast';
+
+// SplashScreen 컴포넌트 (앱 진입 스플래시)
+export { default as SplashScreen } from './SplashScreen';

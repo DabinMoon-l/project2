@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, useParams } from 'next/navigation';
+import Image from 'next/image';
 import {
   doc,
   getDoc,
@@ -12,34 +13,133 @@ import {
   getDocs,
   updateDoc,
   deleteDoc,
+  addDoc,
+  serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useReview, type ReviewItem } from '@/lib/hooks/useReview';
-import { Skeleton } from '@/components/common';
+import { useCourse } from '@/lib/contexts/CourseContext';
+import { Skeleton, BottomSheet } from '@/components/common';
 import ReviewPractice from '@/components/review/ReviewPractice';
+
+/** 피드백 타입 */
+type FeedbackType = 'unclear' | 'wrong' | 'typo' | 'other';
+
+/** 피드백 유형 옵션 */
+const FEEDBACK_TYPES: { type: FeedbackType; label: string }[] = [
+  { type: 'unclear', label: '문제가 이해가 안 돼요' },
+  { type: 'wrong', label: '정답이 틀린 것 같아요' },
+  { type: 'typo', label: '오타가 있어요' },
+  { type: 'other', label: '기타 의견' },
+];
+
+/** 필터 타입 */
+type ReviewFilter = 'solved' | 'wrong' | 'bookmark' | 'custom';
+
+/** 필터 옵션 */
+const FILTER_OPTIONS: { value: ReviewFilter; line1: string; line2?: string }[] = [
+  { value: 'solved', line1: '푼 문제' },
+  { value: 'wrong', line1: '틀린', line2: '문제' },
+  { value: 'bookmark', line1: '찜한', line2: '문제' },
+  { value: 'custom', line1: '내맘대로' },
+];
+
+/**
+ * 슬라이드 필터 컴포넌트
+ */
+function SlideFilter({
+  activeFilter,
+  onFilterChange,
+}: {
+  activeFilter: ReviewFilter;
+  onFilterChange: (filter: ReviewFilter) => void;
+}) {
+  const activeIndex = FILTER_OPTIONS.findIndex((opt) => opt.value === activeFilter);
+
+  return (
+    <div className="relative flex items-stretch bg-[#EDEAE4] border border-[#1A1A1A] overflow-hidden min-w-[320px]">
+      {/* 슬라이드 배경 */}
+      <motion.div
+        className="absolute h-full bg-[#1A1A1A]"
+        initial={false}
+        animate={{
+          left: `${activeIndex * 25}%`,
+        }}
+        style={{
+          width: '25%',
+        }}
+        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+      />
+
+      {/* 필터 옵션들 */}
+      {FILTER_OPTIONS.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          onClick={() => onFilterChange(option.value)}
+          className={`relative z-10 w-1/4 px-3 py-2 text-xs font-bold transition-colors text-center flex flex-col items-center justify-center ${
+            activeFilter === option.value ? 'text-[#F5F0E8]' : 'text-[#1A1A1A]'
+          }`}
+        >
+          {option.line2 ? (
+            <>
+              <span className="leading-tight">{option.line1}</span>
+              <span className="leading-tight">{option.line2}</span>
+            </>
+          ) : (
+            <span className="whitespace-nowrap">{option.line1}</span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 /**
  * 문제 카드 컴포넌트
  */
 function QuestionCard({
   item,
+  questionNumber,
   isSelectMode,
   isSelected,
   onSelect,
-  onDelete,
-  showDelete,
+  onFeedbackSubmit,
 }: {
   item: ReviewItem;
+  questionNumber: number;
   isSelectMode: boolean;
   isSelected: boolean;
   onSelect: () => void;
-  onDelete?: () => void;
-  showDelete?: boolean;
+  onFeedbackSubmit?: (questionId: string, type: FeedbackType, content: string) => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  const [selectedFeedbackType, setSelectedFeedbackType] = useState<FeedbackType | null>(null);
+  const [feedbackContent, setFeedbackContent] = useState('');
+  const [isFeedbackSubmitting, setIsFeedbackSubmitting] = useState(false);
+  const [isFeedbackSubmitted, setIsFeedbackSubmitted] = useState(false);
+
+  // 피드백 제출
+  const handleFeedbackSubmit = async () => {
+    if (!selectedFeedbackType || !onFeedbackSubmit) return;
+    setIsFeedbackSubmitting(true);
+    try {
+      await onFeedbackSubmit(item.questionId, selectedFeedbackType, feedbackContent);
+      setIsFeedbackSubmitted(true);
+      setIsFeedbackOpen(false);
+      setSelectedFeedbackType(null);
+      setFeedbackContent('');
+    } catch (err) {
+      console.error('피드백 제출 실패:', err);
+    } finally {
+      setIsFeedbackSubmitting(false);
+    }
+  };
 
   return (
+    <>
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
@@ -64,16 +164,21 @@ function QuestionCard({
       >
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            {/* 정답/오답 표시 */}
-            {item.isCorrect !== undefined && (
-              <span className={`inline-block px-2 py-0.5 text-xs font-bold mb-1 ${
-                item.isCorrect
-                  ? 'bg-[#E8F5E9] text-[#1A6B1A] border border-[#1A6B1A]'
-                  : 'bg-[#FFEBEE] text-[#8B1A1A] border border-[#8B1A1A]'
-              }`}>
-                {item.isCorrect ? '정답' : '오답'}
+            {/* 문항 번호 + 정답/오답 표시 */}
+            <div className="flex items-center gap-2 mb-1">
+              <span className="inline-block px-2 py-0.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8]">
+                Q{questionNumber}
               </span>
-            )}
+              {item.isCorrect !== undefined && (
+                <span className={`inline-block px-2 py-0.5 text-xs font-bold ${
+                  item.isCorrect
+                    ? 'bg-[#E8F5E9] text-[#1A6B1A] border border-[#1A6B1A]'
+                    : 'bg-[#FFEBEE] text-[#8B1A1A] border border-[#8B1A1A]'
+                }`}>
+                  {item.isCorrect ? '정답' : '오답'}
+                </span>
+              )}
+            </div>
             <p className="text-sm text-[#1A1A1A] line-clamp-2">{item.question}</p>
           </div>
 
@@ -88,21 +193,6 @@ function QuestionCard({
                 </svg>
               )}
             </div>
-          )}
-
-          {/* 삭제 버튼 */}
-          {showDelete && onDelete && !isSelectMode && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete();
-              }}
-              className="w-6 h-6 border border-[#8B1A1A] text-[#8B1A1A] bg-[#F5F0E8] hover:bg-[#FDEAEA] flex items-center justify-center flex-shrink-0 transition-colors"
-            >
-              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-            </button>
           )}
 
           {/* 확장 아이콘 */}
@@ -132,23 +222,56 @@ function QuestionCard({
               {/* 선지 (객관식) */}
               {item.options && item.options.length > 0 && (
                 <div>
+                  {/* 복수 정답 표시 */}
+                  {(() => {
+                    const correctAnswerStr = item.correctAnswer?.toString() || '';
+                    const correctAnswers = correctAnswerStr.includes(',')
+                      ? correctAnswerStr.split(',').map(a => a.trim())
+                      : [correctAnswerStr];
+                    const isMultipleAnswer = correctAnswers.length > 1;
+                    return isMultipleAnswer && (
+                      <p className="text-xs text-[#8B6914] font-bold mb-2 flex items-center gap-1">
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                        </svg>
+                        복수 정답 ({correctAnswers.length}개)
+                      </p>
+                    );
+                  })()}
                   <p className="text-xs font-bold text-[#5C5C5C] mb-2">선지</p>
                   <div className="space-y-1">
                     {item.options.map((opt, idx) => {
                       const optionNum = (idx + 1).toString();
-                      const isCorrectOption = item.correctAnswer === optionNum;
-                      const isUserAnswer = item.userAnswer === optionNum;
+                      const optionIdx = idx.toString();
+                      // 복수 정답 지원
+                      const correctAnswerStr = item.correctAnswer?.toString() || '';
+                      const correctAnswers = correctAnswerStr.includes(',')
+                        ? correctAnswerStr.split(',').map(a => a.trim())
+                        : [correctAnswerStr];
+                      const isCorrectOption = correctAnswers.some(ca =>
+                        ca === optionNum || ca === optionIdx || ca === opt
+                      );
+                      // 사용자 답 비교
+                      const userAnswerStr = item.userAnswer?.toString() || '';
+                      const userAnswers = userAnswerStr.includes(',')
+                        ? userAnswerStr.split(',').map(a => a.trim())
+                        : [userAnswerStr];
+                      const isUserAnswer = userAnswers.some(ua =>
+                        ua === optionNum || ua === optionIdx || ua === opt
+                      );
+
+                      // 스타일 결정: 정답 > 내 오답 > 기본
+                      let className = 'border-[#EDEAE4] text-[#5C5C5C] bg-[#F5F0E8]';
+                      if (isCorrectOption) {
+                        className = 'border-[#1A6B1A] bg-[#E8F5E9] text-[#1A6B1A]';
+                      } else if (isUserAnswer) {
+                        className = 'border-[#8B1A1A] bg-[#FDEAEA] text-[#8B1A1A]';
+                      }
 
                       return (
                         <p
                           key={idx}
-                          className={`text-xs p-2 border ${
-                            isCorrectOption
-                              ? 'border-[#1A6B1A] bg-[#E8F5E9] text-[#1A6B1A]'
-                              : isUserAnswer
-                              ? 'border-[#8B1A1A] bg-[#FDEAEA] text-[#8B1A1A]'
-                              : 'border-[#EDEAE4] text-[#5C5C5C] bg-[#F5F0E8]'
-                          }`}
+                          className={`text-xs p-2 border ${className}`}
                         >
                           {idx + 1}. {opt}
                           {isCorrectOption && ' (정답)'}
@@ -183,11 +306,116 @@ function QuestionCard({
                   </p>
                 </div>
               )}
+
+              {/* 피드백 버튼 */}
+              {onFeedbackSubmit && (
+                <div className="pt-2 border-t border-[#EDEAE4]">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!isFeedbackSubmitted) {
+                        setIsFeedbackOpen(true);
+                      }
+                    }}
+                    disabled={isFeedbackSubmitted}
+                    className={`flex items-center gap-2 px-3 py-2 text-xs font-bold border-2 transition-colors ${
+                      isFeedbackSubmitted
+                        ? 'bg-[#E8F5E9] border-[#1A6B1A] text-[#1A6B1A] cursor-default'
+                        : 'bg-[#FFF8E1] border-[#8B6914] text-[#8B6914] hover:bg-[#FFECB3]'
+                    }`}
+                  >
+                    {isFeedbackSubmitted ? (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        피드백 완료
+                      </>
+                    ) : (
+                      <>
+                        <span className="w-5 h-5 flex items-center justify-center bg-[#8B6914] text-[#FFF8E1] font-bold">!</span>
+                        문제 피드백
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
           </motion.div>
         )}
       </AnimatePresence>
     </motion.div>
+
+      {/* 피드백 바텀시트 */}
+      <BottomSheet
+        isOpen={isFeedbackOpen}
+        onClose={() => {
+          setIsFeedbackOpen(false);
+          setSelectedFeedbackType(null);
+          setFeedbackContent('');
+        }}
+        title="문제 피드백"
+        height="auto"
+      >
+        <div className="space-y-4">
+          {/* 피드백 유형 선택 */}
+          <div>
+            <p className="text-sm text-[#5C5C5C] mb-3">문제에 어떤 문제가 있나요?</p>
+            <div className="grid grid-cols-2 gap-2">
+              {FEEDBACK_TYPES.map(({ type, label }) => (
+                <button
+                  key={type}
+                  onClick={() => setSelectedFeedbackType(type)}
+                  className={`p-3 border-2 text-sm font-bold transition-all ${
+                    selectedFeedbackType === type
+                      ? 'border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8]'
+                      : 'border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A]'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 추가 내용 입력 */}
+          <AnimatePresence>
+            {selectedFeedbackType && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+              >
+                <label className="block text-sm text-[#5C5C5C] mb-2">추가 의견 (선택)</label>
+                <textarea
+                  value={feedbackContent}
+                  onChange={(e) => setFeedbackContent(e.target.value)}
+                  placeholder="자세한 내용을 적어주세요"
+                  rows={3}
+                  maxLength={200}
+                  className="w-full p-3 border-2 border-[#1A1A1A] bg-[#F5F0E8] focus:outline-none resize-none text-sm"
+                />
+                <p className="text-xs text-[#5C5C5C] text-right mt-1">{feedbackContent.length}/200</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* 제출 버튼 */}
+          <button
+            onClick={handleFeedbackSubmit}
+            disabled={!selectedFeedbackType || isFeedbackSubmitting}
+            className={`w-full py-3 font-bold border-2 transition-colors ${
+              selectedFeedbackType
+                ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                : 'bg-[#EDEAE4] text-[#5C5C5C] border-[#5C5C5C] cursor-not-allowed'
+            }`}
+          >
+            {isFeedbackSubmitting ? '제출 중...' : '피드백 보내기'}
+          </button>
+          <p className="text-xs text-[#5C5C5C] text-center">피드백은 익명으로 전달됩니다.</p>
+        </div>
+      </BottomSheet>
+    </>
   );
 }
 
@@ -198,9 +426,14 @@ export default function FolderDetailPage() {
   const router = useRouter();
   const params = useParams();
   const { user } = useAuth();
+  const { userCourse } = useCourse();
 
   const folderType = params.type as string; // solved, wrong, bookmark, custom
   const folderId = params.id as string;
+
+  // 과목별 리본 이미지
+  const ribbonImage = userCourse?.reviewRibbonImage || '/images/biology-review-ribbon.png';
+  const ribbonScale = userCourse?.reviewRibbonScale || 1;
 
   const {
     groupedSolvedItems,
@@ -219,8 +452,10 @@ export default function FolderDetailPage() {
   const [customLoading, setCustomLoading] = useState(false);
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isDeleteMode, setIsDeleteMode] = useState(false);
   const [practiceItems, setPracticeItems] = useState<ReviewItem[] | null>(null);
   const [isAddMode, setIsAddMode] = useState(false);
+  const [showEmptyMessage, setShowEmptyMessage] = useState(false);
   const [addSourceTab, setAddSourceTab] = useState<'solved' | 'wrong' | 'bookmark'>('solved');
   const [addSelectedIds, setAddSelectedIds] = useState<Set<string>>(new Set());
 
@@ -315,32 +550,20 @@ export default function FolderDetailPage() {
     setSelectedIds(newSelected);
   };
 
-  // 문제 삭제 (커스텀 폴더에서)
-  const handleDeleteFromFolder = async (questionId: string) => {
-    if (folderType !== 'custom') return;
-
-    const confirmed = window.confirm('이 문제를 폴더에서 제거하시겠습니까?');
-    if (!confirmed) return;
-
-    try {
-      await removeFromCustomFolder(folderId, questionId);
-      setCustomQuestions(prev => prev.filter(q => q.questionId !== questionId));
-    } catch (err) {
-      console.error('문제 제거 실패:', err);
-      alert('제거에 실패했습니다.');
-    }
-  };
-
   // 선택된 문제로 연습 시작
   const handleStartPractice = () => {
-    if (selectedIds.size === 0) {
-      // 전체 문제로 연습
-      setPracticeItems(questions);
-    } else {
-      // 선택된 문제로 연습
-      const selected = questions.filter(q => selectedIds.has(q.id));
-      setPracticeItems(selected);
+    const targetItems = selectedIds.size === 0
+      ? questions
+      : questions.filter(q => selectedIds.has(q.id));
+
+    if (targetItems.length === 0) {
+      // 복습할 문제가 없으면 임시 메시지 표시
+      setShowEmptyMessage(true);
+      setTimeout(() => setShowEmptyMessage(false), 500);
+      return;
     }
+
+    setPracticeItems(targetItems);
     setIsSelectMode(false);
     setSelectedIds(new Set());
   };
@@ -370,6 +593,38 @@ export default function FolderDetailPage() {
     setAddSelectedIds(newSelected);
   };
 
+  // 선택된 문제들 삭제
+  const handleDeleteSelectedQuestions = async () => {
+    if (selectedIds.size === 0) return;
+
+    const confirmed = window.confirm(`선택한 ${selectedIds.size}개의 문제를 삭제하시겠습니까?`);
+    if (!confirmed) return;
+
+    try {
+      if (folderType === 'custom') {
+        // 커스텀 폴더에서 문제 제거
+        for (const itemId of selectedIds) {
+          const item = questions.find(q => q.id === itemId);
+          if (item) {
+            await removeFromCustomFolder(folderId, item.questionId);
+          }
+        }
+        setCustomQuestions(prev => prev.filter(q => !selectedIds.has(q.id)));
+      } else {
+        // reviews에서 직접 삭제
+        for (const itemId of selectedIds) {
+          await deleteReviewItem(itemId);
+        }
+      }
+      setSelectedIds(new Set());
+      setIsSelectMode(false);
+      setIsDeleteMode(false);
+    } catch (err) {
+      console.error('문제 삭제 실패:', err);
+      alert('삭제에 실패했습니다.');
+    }
+  };
+
   // 문제 추가 확정
   const handleAddQuestions = async () => {
     if (addSelectedIds.size === 0) return;
@@ -397,11 +652,30 @@ export default function FolderDetailPage() {
     }
   };
 
+  // 피드백 제출 핸들러
+  const handleFeedbackSubmit = async (questionId: string, type: FeedbackType, content: string) => {
+    if (!user) return;
+
+    // 문제 정보 찾기
+    const item = questions.find(q => q.questionId === questionId);
+
+    const feedbackRef = collection(db, 'questionFeedbacks');
+    await addDoc(feedbackRef, {
+      questionId,
+      quizId: item?.quizId || folderId,
+      userId: user.uid,
+      type,
+      content,
+      createdAt: serverTimestamp(),
+    });
+  };
+
   // 연습 모드
   if (practiceItems) {
     return (
       <ReviewPractice
         items={practiceItems}
+        quizTitle={folderTitle}
         onComplete={() => setPracticeItems(null)}
         onClose={() => setPracticeItems(null)}
       />
@@ -496,25 +770,58 @@ export default function FolderDetailPage() {
     );
   }
 
+  // 필터 변경 핸들러 (리뷰 페이지로 이동)
+  const handleFilterChange = (filter: ReviewFilter) => {
+    // 현재 폴더 타입과 다른 필터를 선택하면 리뷰 페이지로 이동
+    if (filter !== folderType) {
+      router.push(`/review?filter=${filter}`);
+    }
+  };
+
   return (
     <div className="min-h-screen pb-28" style={{ backgroundColor: '#F5F0E8' }}>
-      {/* 헤더 */}
-      <header className="sticky top-0 z-50 border-b-2 border-[#1A1A1A] bg-[#F5F0E8]">
-        <div className="flex items-center justify-between h-14 px-4">
+      {/* 헤더 - 리본 이미지 */}
+      <header className="pt-6 pb-4 flex flex-col items-center">
+        {/* 리본 이미지 */}
+        <div className="relative w-full px-4 h-32 sm:h-44 md:h-56 mb-4">
+          <Image
+            src={ribbonImage}
+            alt="Review"
+            fill
+            sizes="(max-width: 640px) 100vw, (max-width: 768px) 80vw, 60vw"
+            className="object-contain"
+            style={{ transform: `scale(${ribbonScale})` }}
+            priority
+          />
+        </div>
+
+        {/* 필터 + 뒤로가기 영역 */}
+        <div className="w-full px-4 flex items-center justify-between gap-4">
+          {/* 슬라이드 필터 - 좌측 */}
+          <SlideFilter
+            activeFilter={folderType as ReviewFilter}
+            onFilterChange={handleFilterChange}
+          />
+
+          {/* 뒤로가기 버튼 - 우측 */}
           <button
-            onClick={() => router.back()}
-            className="w-8 h-8 flex items-center justify-center"
+            onClick={() => router.push('/review')}
+            className="px-4 py-3 text-sm font-bold bg-[#EDEAE4] text-[#1A1A1A] border border-[#1A1A1A] whitespace-nowrap hover:bg-[#F5F0E8] transition-colors flex items-center gap-2"
           >
-            <svg className="w-6 h-6 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
+            목록
           </button>
-          <h1 className="text-base font-bold text-[#1A1A1A] truncate max-w-[200px]">
-            {folderTitle}
-          </h1>
-          <div className="w-8" />
         </div>
       </header>
+
+      {/* 폴더 제목 */}
+      <div className="px-4 py-3 border-b border-[#EDEAE4]">
+        <h2 className="text-lg font-bold text-[#1A1A1A] truncate">
+          {folderTitle}
+        </h2>
+      </div>
 
       {/* 커스텀 폴더일 때 문제 추가 버튼 */}
       {folderType === 'custom' && !isSelectMode && (
@@ -532,24 +839,60 @@ export default function FolderDetailPage() {
       <div className="px-4 py-3 flex items-center justify-between">
         <p className="text-sm text-[#5C5C5C]">
           총 {questions.length}문제
+          {isSelectMode && selectedIds.size > 0 && (
+            <span className="ml-2 text-[#1A1A1A] font-bold">
+              ({selectedIds.size}개 선택)
+            </span>
+          )}
         </p>
-        <button
-          onClick={() => {
-            if (isSelectMode) {
-              setIsSelectMode(false);
-              setSelectedIds(new Set());
-            } else {
-              setIsSelectMode(true);
-            }
-          }}
-          className={`px-3 py-1.5 text-xs font-bold border transition-colors ${
-            isSelectMode
-              ? 'bg-[#EDEAE4] text-[#1A1A1A] border-[#1A1A1A]'
-              : 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-          }`}
-        >
-          {isSelectMode ? '취소' : '선택'}
-        </button>
+        <div className="flex gap-2">
+          {/* 선택 모드일 때 버튼들 */}
+          {isSelectMode && (
+            <>
+              {/* 전체 선택 버튼 */}
+              <button
+                onClick={() => {
+                  if (selectedIds.size === questions.length) {
+                    setSelectedIds(new Set());
+                  } else {
+                    setSelectedIds(new Set(questions.map(q => q.id)));
+                  }
+                }}
+                className="px-3 py-1.5 text-xs font-bold border transition-colors bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#EDEAE4]"
+              >
+                {selectedIds.size === questions.length ? '전체 해제' : '전체'}
+              </button>
+              {/* 삭제 버튼 (선택된 항목이 있을 때) */}
+              {selectedIds.size > 0 && isDeleteMode && (
+                <button
+                  onClick={handleDeleteSelectedQuestions}
+                  className="px-3 py-1.5 text-xs font-bold border transition-colors bg-[#8B1A1A] text-[#F5F0E8] border-[#8B1A1A] hover:bg-[#6B1414]"
+                >
+                  삭제
+                </button>
+              )}
+            </>
+          )}
+          <button
+            onClick={() => {
+              if (isSelectMode) {
+                setIsSelectMode(false);
+                setIsDeleteMode(false);
+                setSelectedIds(new Set());
+              } else {
+                setIsSelectMode(true);
+                setIsDeleteMode(true);
+              }
+            }}
+            className={`px-3 py-1.5 text-xs font-bold border transition-colors ${
+              isSelectMode
+                ? 'bg-[#EDEAE4] text-[#1A1A1A] border-[#1A1A1A]'
+                : 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+            }`}
+          >
+            {isSelectMode ? '취소' : '선택'}
+          </button>
+        </div>
       </div>
 
       {/* 로딩 */}
@@ -569,15 +912,15 @@ export default function FolderDetailPage() {
               <p className="text-[#5C5C5C]">문제가 없습니다.</p>
             </div>
           ) : (
-            questions.map(item => (
+            questions.map((item, index) => (
               <QuestionCard
                 key={item.id}
                 item={item}
+                questionNumber={index + 1}
                 isSelectMode={isSelectMode}
                 isSelected={selectedIds.has(item.id)}
                 onSelect={() => handleSelectQuestion(item.id)}
-                onDelete={folderType === 'custom' ? () => handleDeleteFromFolder(item.questionId) : undefined}
-                showDelete={folderType === 'custom'}
+                onFeedbackSubmit={handleFeedbackSubmit}
               />
             ))
           )}
@@ -585,7 +928,7 @@ export default function FolderDetailPage() {
       )}
 
       {/* 하단 버튼 영역 */}
-      {!loading && questions.length > 0 && (
+      {!loading && questions.length > 0 && !isDeleteMode && (
         <div className="fixed bottom-20 left-0 right-0 p-4 bg-[#F5F0E8] border-t-2 border-[#1A1A1A]">
           <button
             onClick={handleStartPractice}
@@ -597,6 +940,57 @@ export default function FolderDetailPage() {
           </button>
         </div>
       )}
+
+      {/* 삭제 모드일 때 하단 버튼 - 삭제 + 복습 */}
+      {!loading && isDeleteMode && selectedIds.size > 0 && (
+        <div className="fixed bottom-20 left-0 right-0 p-4 bg-[#F5F0E8] border-t-2 border-[#1A1A1A]">
+          <div className="flex gap-2">
+            <button
+              onClick={handleDeleteSelectedQuestions}
+              className="flex-1 py-3 text-sm font-bold bg-[#8B1A1A] text-[#F5F0E8] border-2 border-[#8B1A1A] hover:bg-[#6B1414] transition-colors"
+            >
+              {selectedIds.size}개 삭제
+            </button>
+            <button
+              onClick={() => {
+                const targetItems = questions.filter(q => selectedIds.has(q.id));
+                if (targetItems.length > 0) {
+                  setPracticeItems(targetItems);
+                  setIsSelectMode(false);
+                  setIsDeleteMode(false);
+                  setSelectedIds(new Set());
+                }
+              }}
+              className="flex-1 py-3 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#3A3A3A] transition-colors"
+            >
+              {selectedIds.size}개 복습
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 빈 폴더 임시 메시지 */}
+      <AnimatePresence>
+        {showEmptyMessage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+          >
+            <motion.div
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.9 }}
+              className="bg-[#F5F0E8] border-2 border-[#1A1A1A] px-6 py-4 text-center"
+            >
+              <p className="text-sm font-bold text-[#1A1A1A]">
+                선택된 폴더에 복습할 문제가 없습니다
+              </p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

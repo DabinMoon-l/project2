@@ -109,6 +109,8 @@ export function UserProvider({ children }: UserProviderProps) {
             classType: data.classType || 'A',
             studentId: data.studentId,
             department: data.department,
+            // courseId에서 따옴표 제거 (Firestore 데이터 문제 대응)
+            courseId: data.courseId?.replace?.(/"/g, '') || data.courseId,
             characterOptions: data.characterOptions || {
               hairStyle: 0,
               skinColor: 3,
@@ -130,6 +132,7 @@ export function UserProvider({ children }: UserProviderProps) {
             role: data.role || 'student',
             createdAt: data.createdAt,
             updatedAt: data.updatedAt,
+            lastNicknameChangeAt: data.lastNicknameChangeAt,
           });
           setError(null);
         } else {
@@ -187,15 +190,29 @@ export function UserProvider({ children }: UserProviderProps) {
     [updateProfile]
   );
 
-  // 닉네임 수정
+  // 닉네임 수정 (30일 쿨다운 적용)
   const updateNickname = useCallback(
     async (nickname: string): Promise<void> => {
       if (nickname.length < 2 || nickname.length > 10) {
         throw new Error('닉네임은 2-10자 사이여야 합니다.');
       }
-      await updateProfile({ nickname });
+      if (!user?.uid) {
+        throw new Error('로그인이 필요합니다.');
+      }
+
+      try {
+        const userDocRef = doc(db, 'users', user.uid);
+        await updateDoc(userDocRef, {
+          nickname,
+          lastNicknameChangeAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } catch (err) {
+        console.error('닉네임 수정 에러:', err);
+        throw new Error('닉네임 수정에 실패했습니다.');
+      }
     },
-    [updateProfile]
+    [user?.uid]
   );
 
   // 새로고침

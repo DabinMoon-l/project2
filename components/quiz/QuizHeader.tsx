@@ -39,15 +39,13 @@ export default function QuizHeader({
   totalQuestions,
   onBack,
 }: QuizHeaderProps) {
-  const colors = useThemeColors();
-
   // 진행률 계산 (0 ~ 100)
   const progress = (currentQuestion / totalQuestions) * 100;
 
   return (
     <header
-      className="sticky top-0 z-50 w-full"
-      style={{ backgroundColor: colors.background }}
+      className="sticky top-0 z-50 w-full border-b-2 border-[#1A1A1A]"
+      style={{ backgroundColor: '#F5F0E8' }}
     >
       {/* 헤더 컨텐츠 */}
       <div className="flex items-center justify-between h-14 px-4">
@@ -56,8 +54,7 @@ export default function QuizHeader({
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.95 }}
           onClick={onBack}
-          className="p-2 -ml-2 rounded-full transition-colors duration-200"
-          style={{ color: colors.text }}
+          className="p-2 -ml-2 transition-colors duration-200 text-[#1A1A1A] hover:bg-[#EDEAE4]"
           aria-label="나가기"
         >
           <svg
@@ -78,30 +75,20 @@ export default function QuizHeader({
         </motion.button>
 
         {/* 퀴즈 제목 */}
-        <h1
-          className="text-base font-bold truncate max-w-[50%] text-center"
-          style={{ color: colors.text }}
-        >
+        <h1 className="text-base font-bold truncate max-w-[50%] text-center text-[#1A1A1A]">
           {title}
         </h1>
 
         {/* 진행도 표시 */}
-        <div
-          className="text-sm font-semibold min-w-[3rem] text-right"
-          style={{ color: colors.accent }}
-        >
+        <div className="text-sm font-bold min-w-[3rem] text-right text-[#1A1A1A]">
           {currentQuestion}/{totalQuestions}
         </div>
       </div>
 
       {/* 진행률 바 */}
-      <div
-        className="h-1 w-full"
-        style={{ backgroundColor: `${colors.accent}20` }}
-      >
+      <div className="h-1.5 w-full bg-[#EDEAE4]">
         <motion.div
-          className="h-full"
-          style={{ backgroundColor: colors.accent }}
+          className="h-full bg-[#1A1A1A]"
           initial={{ width: 0 }}
           animate={{ width: `${progress}%` }}
           transition={{ duration: 0.3, ease: 'easeOut' }}

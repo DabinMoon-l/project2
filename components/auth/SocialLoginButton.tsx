@@ -7,6 +7,7 @@
 
 'use client';
 
+import React from 'react';
 import { motion } from 'framer-motion';
 
 // ============================================================
@@ -42,7 +43,7 @@ const providerConfig: Record<
     bgColor: string;
     textColor: string;
     hoverBgColor: string;
-    icon: JSX.Element;
+    icon: React.ReactNode;
   }
 > = {
   apple: {

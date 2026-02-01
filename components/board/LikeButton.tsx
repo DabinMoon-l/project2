@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { useTheme } from '@/styles/themes/useTheme';
 
 interface LikeButtonProps {
   /** 좋아요 수 */
@@ -17,10 +18,7 @@ interface LikeButtonProps {
 }
 
 /**
- * 좋아요 버튼 컴포넌트
- *
- * 하트 아이콘과 좋아요 수를 표시합니다.
- * 클릭 시 좋아요를 토글하고, 애니메이션 효과를 제공합니다.
+ * 좋아요 버튼 컴포넌트 - 신문 스타일
  */
 export default function LikeButton({
   count,
@@ -29,6 +27,7 @@ export default function LikeButton({
   loading = false,
   size = 'md',
 }: LikeButtonProps) {
+  const { theme } = useTheme();
   const [isAnimating, setIsAnimating] = useState(false);
 
   const handleClick = () => {
@@ -58,11 +57,13 @@ export default function LikeButton({
       onClick={handleClick}
       disabled={loading}
       className={`
-        flex items-center gap-1.5
+        flex items-center gap-2
         ${loading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-        ${isLiked ? 'text-red-500' : 'text-theme-text-secondary'}
-        hover:text-red-500 transition-colors
+        transition-colors
       `}
+      style={{
+        color: isLiked ? '#8B1A1A' : theme.colors.textSecondary,
+      }}
       aria-label={isLiked ? '좋아요 취소' : '좋아요'}
     >
       <motion.div
@@ -88,18 +89,20 @@ export default function LikeButton({
             className={sizeClasses[size]}
             fill="none"
             stroke="currentColor"
+            strokeWidth={1.5}
             viewBox="0 0 24 24"
           >
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
-              strokeWidth={2}
               d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
             />
           </svg>
         )}
       </motion.div>
-      <span className={textSizeClasses[size]}>{count}</span>
+      <span className={textSizeClasses[size]}>
+        {count} {isLiked ? 'Liked' : 'Likes'}
+      </span>
     </button>
   );
 }

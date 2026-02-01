@@ -9,6 +9,7 @@ export { default as ClassParticipation } from './ClassParticipation';
 export { default as QuickActions } from './QuickActions';
 
 // 퀴즈 관리 컴포넌트
+export { default as CourseSelector } from './CourseSelector';
 export { default as TargetClassSelector } from './TargetClassSelector';
 export { default as PublishToggle } from './PublishToggle';
 export { default as QuizListItem } from './QuizListItem';
@@ -31,3 +32,7 @@ export { default as AnalysisSummary } from './AnalysisSummary';
 export { default as SeasonResetCard } from './SeasonResetCard';
 export { default as SeasonResetModal } from './SeasonResetModal';
 export { default as SeasonHistoryList } from './SeasonHistoryList';
+export { default as SemesterSettingsCard } from './SemesterSettingsCard';
+
+// 채점 컴포넌트
+export { default as EssayGrading } from './EssayGrading';

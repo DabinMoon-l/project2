@@ -1,290 +1,348 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useTheme } from '@/styles/themes/useTheme';
-import { useAuth } from '@/lib/hooks/useAuth';
-import Header from '@/components/common/Header';
-import { NotificationPrompt } from '@/components/common';
-import {
-  HomeCharacter,
-  StatsCard,
-  QuickMenu,
-  TodayQuiz,
-  calculateRankInfo,
-  type CharacterOptions,
-  type Equipment,
-  type QuizItem,
-} from '@/components/home';
+import { useUser, useCourse } from '@/lib/contexts';
+import { calculateRankInfo } from '@/components/home';
+import { ProfileDrawer } from '@/components/common';
+import { classColors, type ClassType } from '@/styles/themes';
+import { COURSES } from '@/lib/types/course';
 
 /**
- * 사용자 데이터 타입
+ * 빈티지 프로필 아이콘
  */
-interface UserData {
-  // 닉네임
-  nickname: string;
-  // 골드
-  gold: number;
-  // 총 경험치
-  totalExp: number;
-  // 캐릭터 옵션
-  characterOptions: CharacterOptions;
-  // 장비
-  equipment: Equipment;
-  // 참여도 (0-100)
-  participationRate: number;
-  // 반
-  classType: string;
-}
+const VintageProfileIcon = ({ size = 24 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="#1A1A1A">
+    <circle cx="12" cy="8" r="4" />
+    <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
+  </svg>
+);
 
 /**
- * 더미 사용자 데이터 (개발용)
- */
-const DUMMY_USER_DATA: UserData = {
-  nickname: '용감한 토끼',
-  gold: 1250,
-  totalExp: 450,
-  characterOptions: {
-    hairStyle: 2,
-    skinColor: 3,
-    beard: 0,
-  },
-  equipment: {
-    armor: 'basic',
-    weapon: 'sword',
-  },
-  participationRate: 75,
-  classType: 'A',
-};
-
-/**
- * 더미 퀴즈 데이터 (개발용)
- */
-const DUMMY_QUIZZES: QuizItem[] = [
-  {
-    id: 'quiz-1',
-    title: '데이터베이스 기초',
-    questionCount: 10,
-    deadline: new Date(Date.now() + 1000 * 60 * 60 * 3), // 3시간 후
-    completed: false,
-  },
-  {
-    id: 'quiz-2',
-    title: '알고리즘 복습',
-    questionCount: 5,
-    deadline: new Date(Date.now() + 1000 * 60 * 60 * 24), // 24시간 후
-    completed: true,
-    correctCount: 4,
-  },
-];
-
-/**
- * 홈 화면 메인 페이지
- * 캐릭터, 스탯, 빠른 메뉴, 오늘의 퀴즈 표시
+ * 홈 화면 메인 페이지 - 빈티지 신문 스타일
  */
 export default function HomePage() {
-  const router = useRouter();
-  const { theme } = useTheme();
-  const { user } = useAuth();
+  const { theme, classType } = useTheme();
+  const { profile } = useUser();
+  const { semesterSettings, userCourseId } = useCourse();
+  const [showProfileDrawer, setShowProfileDrawer] = useState(false);
 
-  // 상태 관리
-  const [userData, setUserData] = useState<UserData | null>(null);
-  const [quizzes, setQuizzes] = useState<QuizItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  // 과목 정보
+  const course = userCourseId ? COURSES[userCourseId] : null;
 
-  // 데이터 로드
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        // TODO: Firestore에서 실제 데이터 가져오기
-        // 현재는 더미 데이터 사용
-        await new Promise((resolve) => setTimeout(resolve, 500)); // 로딩 시뮬레이션
+  // 학기 표시 (예: "2026 1st Semester")
+  const semesterLabel = semesterSettings
+    ? `${semesterSettings.currentYear} ${semesterSettings.currentSemester === 1 ? '1st' : '2nd'} Semester`
+    : '';
 
-        setUserData(DUMMY_USER_DATA);
-        setQuizzes(DUMMY_QUIZZES);
-      } catch (error) {
-        console.error('데이터 로드 실패:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (user) {
-      loadData();
-    }
-  }, [user]);
-
-  // 로딩 상태
-  if (loading || !userData) {
+  if (!profile) {
     return (
       <div
         className="min-h-screen flex items-center justify-center"
         style={{ backgroundColor: theme.colors.background }}
       >
         <motion.div
-          className="flex flex-col items-center gap-4"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-        >
-          <motion.div
-            className="w-10 h-10 border-4 rounded-full"
-            style={{
-              borderColor: theme.colors.accent,
-              borderTopColor: 'transparent',
-            }}
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-          />
-          <p style={{ color: theme.colors.textSecondary }}>불러오는 중...</p>
-        </motion.div>
+          className="w-10 h-10 border-4 rounded-full"
+          style={{
+            borderColor: theme.colors.borderDark,
+            borderTopColor: 'transparent',
+          }}
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+        />
       </div>
     );
   }
 
-  // 계급 정보 계산
-  const rankInfo = calculateRankInfo(userData.totalExp);
+  const rankInfo = calculateRankInfo(profile.totalExp);
+  const expProgress = rankInfo.maxExp > 0
+    ? Math.min((rankInfo.currentExp / rankInfo.maxExp) * 100, 100)
+    : 100;
+  const correctRate = profile.totalQuizzes > 0
+    ? Math.round((profile.correctAnswers / profile.totalQuizzes) * 100)
+    : 0;
+
+  // 반별 참여도 (임시 데이터)
+  const classParticipation: Record<ClassType, number> = {
+    A: 75,
+    B: 60,
+    C: 45,
+    D: 30,
+  };
+
+  const sortedClasses = (['A', 'B', 'C', 'D'] as ClassType[])
+    .sort((a, b) => classParticipation[b] - classParticipation[a]);
 
   return (
     <div
-      className="min-h-screen"
+      className="min-h-screen pb-28"
       style={{ backgroundColor: theme.colors.background }}
     >
+      {/* 학기/과목 헤더 */}
+      <div className="px-4 pt-4">
+        <div
+          className="text-center py-2 border-2 border-[#1A1A1A]"
+          style={{ backgroundColor: theme.colors.backgroundCard }}
+        >
+          <p
+            className="font-serif-display text-xs tracking-widest"
+            style={{ color: theme.colors.textSecondary }}
+          >
+            {semesterLabel}
+            {course && ` · ${course.nameEn}`}
+          </p>
+        </div>
+      </div>
+
+      {/* 상단 장식 테두리 */}
+      <div className="border-b-2 border-[#1A1A1A] mx-4 mt-4" />
+
       {/* 헤더 */}
-      <Header
-        title={`${userData.nickname}님`}
-        showBack={false}
-        rightAction={
+      <header className="px-6 pt-8 pb-6">
+        <div className="flex items-start justify-between">
+          {/* 프로필 */}
           <button
-            className="p-2 rounded-full"
-            style={{ backgroundColor: `${theme.colors.accent}20` }}
-            onClick={() => router.push('/profile')}
+            className="flex items-center gap-3"
+            onClick={() => setShowProfileDrawer(true)}
           >
-            <span className="text-lg">👤</span>
-          </button>
-        }
-      />
-
-      {/* 메인 컨텐츠 */}
-      <main className="px-4 pt-4 pb-8">
-        {/* 알림 권한 요청 배너 */}
-        <NotificationPrompt variant="card" className="mb-4" />
-
-        {/* 캐릭터 섹션 */}
-        <motion.section
-          className="flex justify-center mb-6"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-        >
-          <HomeCharacter
-            options={userData.characterOptions}
-            equipment={userData.equipment}
-            participationRate={userData.participationRate}
-            rank={rankInfo.name}
-          />
-        </motion.section>
-
-        {/* 스탯 카드 */}
-        <motion.section
-          className="mb-6"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-        >
-          <StatsCard
-            totalExp={userData.totalExp}
-            rankInfo={rankInfo}
-          />
-        </motion.section>
-
-        {/* 빠른 메뉴 */}
-        <motion.section
-          className="mb-6"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-        >
-          <QuickMenu
-            unreadQuizCount={quizzes.filter((q) => !q.completed).length}
-            reviewCount={3} // TODO: 실제 오답 수
-            newPostCount={2} // TODO: 새 게시글 수
-          />
-        </motion.section>
-
-        {/* 오늘의 퀴즈 */}
-        <motion.section
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-        >
-          <TodayQuiz quizzes={quizzes} loading={false} />
-        </motion.section>
-
-        {/* 참여도 섹션 */}
-        <motion.section
-          className="mt-6"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-        >
-          <div
-            className="rounded-2xl p-4"
-            style={{
-              backgroundColor: theme.colors.backgroundSecondary,
-              border: `1px solid ${theme.colors.border}`,
-            }}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <h3
-                className="text-sm font-medium"
+            <div
+              className="w-16 h-16 flex items-center justify-center"
+              style={{
+                border: '2px solid #1A1A1A',
+                backgroundColor: theme.colors.backgroundCard,
+              }}
+            >
+              <VintageProfileIcon size={32} />
+            </div>
+            <div className="text-left">
+              <p
+                className="font-serif-display text-2xl font-bold"
+                style={{ color: theme.colors.text }}
+              >
+                {profile.nickname}
+              </p>
+              <p
+                className="text-sm"
                 style={{ color: theme.colors.textSecondary }}
               >
-                이번 주 참여도
-              </h3>
+                {profile.classType}반 · {rankInfo.name}
+              </p>
+            </div>
+          </button>
+
+          {/* 반 배지 */}
+          <div
+            className="px-3 py-1 font-serif-display font-bold"
+            style={{
+              backgroundColor: theme.colors.accent,
+              color: '#F5F0E8',
+            }}
+          >
+            {classType}반
+          </div>
+        </div>
+      </header>
+
+      {/* 장식 구분선 */}
+      <div className="flex items-center justify-center gap-4 px-4 mb-6">
+        <div className="flex-1 h-px bg-[#1A1A1A]" />
+        <div className="text-[#1A1A1A] text-lg">✦</div>
+        <div className="flex-1 h-px bg-[#1A1A1A]" />
+      </div>
+
+      {/* 캐릭터 영역 */}
+      <section className="px-4 mb-6">
+        <div
+          className="relative overflow-hidden"
+          style={{
+            border: '2px solid #1A1A1A',
+            backgroundColor: theme.colors.backgroundCard,
+          }}
+        >
+          {/* 장식 코너 */}
+          <div className="absolute top-2 left-2 w-4 h-4 border-t-2 border-l-2 border-[#1A1A1A]" />
+          <div className="absolute top-2 right-2 w-4 h-4 border-t-2 border-r-2 border-[#1A1A1A]" />
+          <div className="absolute bottom-2 left-2 w-4 h-4 border-b-2 border-l-2 border-[#1A1A1A]" />
+          <div className="absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 border-[#1A1A1A]" />
+
+          <div className="w-full h-56 flex items-center justify-center">
+            <div className="text-8xl grayscale-[20%]">🐰</div>
+          </div>
+
+          {/* 경험치 바 */}
+          <div className="px-4 pb-4">
+            <div className="flex justify-between mb-1">
               <span
-                className="text-lg font-bold"
+                className="text-xs font-serif-display"
                 style={{ color: theme.colors.accent }}
               >
-                {userData.participationRate}%
+                {rankInfo.name}
+              </span>
+              <span
+                className="text-xs"
+                style={{ color: theme.colors.textSecondary }}
+              >
+                {rankInfo.currentExp} / {rankInfo.maxExp} XP
               </span>
             </div>
-
-            {/* 참여도 바 */}
             <div
-              className="h-3 rounded-full overflow-hidden"
-              style={{ backgroundColor: `${theme.colors.accent}20` }}
+              className="h-2 overflow-hidden"
+              style={{
+                backgroundColor: theme.colors.backgroundSecondary,
+                border: '1px solid #1A1A1A',
+              }}
             >
               <motion.div
-                className="h-full rounded-full"
-                style={{
-                  backgroundColor:
-                    userData.participationRate >= 60
-                      ? theme.colors.accent
-                      : '#FF6B6B',
-                }}
+                className="h-full"
+                style={{ backgroundColor: theme.colors.accent }}
                 initial={{ width: 0 }}
-                animate={{ width: `${userData.participationRate}%` }}
-                transition={{ duration: 0.8, ease: 'easeOut', delay: 0.6 }}
+                animate={{ width: `${expProgress}%` }}
+                transition={{ duration: 0.8, ease: 'easeOut' }}
               />
             </div>
-
-            {/* 참여도 메시지 */}
-            <p
-              className="text-xs mt-2"
-              style={{ color: theme.colors.textSecondary }}
-            >
-              {userData.participationRate >= 90
-                ? '정말 대단해요! 최고의 용사예요!'
-                : userData.participationRate >= 60
-                ? '잘하고 있어요! 조금만 더 힘내요!'
-                : userData.participationRate >= 30
-                ? '아직 기회가 있어요! 퀴즈에 참여해보세요!'
-                : '퀴즈에 참여하면 경험치를 얻을 수 있어요!'}
-            </p>
           </div>
-        </motion.section>
-      </main>
+        </div>
+      </section>
+
+      {/* 프로필 드로어 */}
+      <ProfileDrawer
+        isOpen={showProfileDrawer}
+        onClose={() => setShowProfileDrawer(false)}
+      />
+
+      {/* 내 전적 */}
+      <section className="px-4 pb-6">
+        <h2
+          className="font-serif-display text-xl font-bold mb-4 flex items-center gap-2"
+          style={{ color: theme.colors.text }}
+        >
+          <span>MY RECORDS</span>
+          <div className="flex-1 h-px bg-[#1A1A1A]" />
+        </h2>
+
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { value: profile.totalQuizzes, label: '퀴즈' },
+            { value: `${correctRate}%`, label: '정답률' },
+            { value: `상위 ${100 - profile.participationRate}%`, label: '기여도' },
+          ].map((item, index) => (
+            <div
+              key={index}
+              className="text-center p-4"
+              style={{
+                border: '1px solid #1A1A1A',
+                backgroundColor: theme.colors.backgroundCard,
+              }}
+            >
+              <p
+                className="font-serif-display text-xl font-bold"
+                style={{ color: theme.colors.text }}
+              >
+                {item.value}
+              </p>
+              <p
+                className="text-xs mt-1"
+                style={{ color: theme.colors.textSecondary }}
+              >
+                {item.label}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 반별 레이스 */}
+      <section className="px-4 pb-8">
+        <h2
+          className="font-serif-display text-xl font-bold mb-4 flex items-center gap-2"
+          style={{ color: theme.colors.text }}
+        >
+          <span>CLASS RACE</span>
+          <div className="flex-1 h-px bg-[#1A1A1A]" />
+        </h2>
+
+        <div
+          className="p-4"
+          style={{
+            border: '1px solid #1A1A1A',
+            backgroundColor: theme.colors.backgroundCard,
+          }}
+        >
+          <div className="space-y-3">
+            {(['A', 'B', 'C', 'D'] as ClassType[]).map((cls) => {
+              const position = classParticipation[cls];
+              const rank = sortedClasses.indexOf(cls) + 1;
+              const isMyClass = cls === classType;
+
+              return (
+                <div key={cls} className="relative">
+                  <div className="flex items-center gap-3">
+                    {/* 반 라벨 */}
+                    <div
+                      className="w-10 text-center py-1 text-xs font-serif-display font-bold"
+                      style={{
+                        backgroundColor: classColors[cls],
+                        color: '#F5F0E8',
+                        border: isMyClass ? '2px solid #1A1A1A' : 'none',
+                      }}
+                    >
+                      {cls}
+                    </div>
+
+                    {/* 진행바 */}
+                    <div className="flex-1 relative">
+                      <div
+                        className="h-6 overflow-hidden"
+                        style={{
+                          backgroundColor: theme.colors.backgroundSecondary,
+                          border: '1px solid #D4CFC4',
+                        }}
+                      >
+                        <motion.div
+                          className="h-full flex items-center justify-end pr-2"
+                          style={{ backgroundColor: `${classColors[cls]}30` }}
+                          initial={{ width: '10%' }}
+                          animate={{ width: `${position}%` }}
+                          transition={{ duration: 1, ease: 'easeOut' }}
+                        >
+                          <span className="text-xs">🐰</span>
+                        </motion.div>
+                      </div>
+                    </div>
+
+                    {/* 순위 */}
+                    <div
+                      className="w-8 text-center font-serif-display font-bold text-sm"
+                      style={{ color: classColors[cls] }}
+                    >
+                      {rank}위
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div
+            className="mt-4 text-center py-2 border-t"
+            style={{ borderColor: theme.colors.border }}
+          >
+            <span style={{ color: theme.colors.text }}>
+              우리 반은 현재{' '}
+              <span className="font-serif-display font-bold" style={{ color: classColors[classType] }}>
+                {sortedClasses.indexOf(classType) + 1}위
+              </span>
+              !
+            </span>
+          </div>
+        </div>
+      </section>
+
+      {/* 하단 장식 */}
+      <div className="px-4">
+        <div className="border-t-2 border-[#1A1A1A]" />
+      </div>
     </div>
   );
 }

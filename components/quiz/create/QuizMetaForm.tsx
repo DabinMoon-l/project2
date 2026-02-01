@@ -44,25 +44,20 @@ interface QuizMetaFormProps {
  * 추천 태그 목록
  */
 const SUGGESTED_TAGS = [
-  '1주차',
-  '2주차',
-  '3주차',
   '중간고사',
   '기말고사',
   '복습',
   '심화',
   '기초',
-  '핵심정리',
-  '오답노트',
 ];
 
 /**
  * 난이도 옵션
  */
-const DIFFICULTY_OPTIONS: { value: QuizMeta['difficulty']; label: string; color: string }[] = [
-  { value: 'easy', label: '쉬움', color: 'bg-green-100 text-green-700 border-green-200' },
-  { value: 'normal', label: '보통', color: 'bg-yellow-100 text-yellow-700 border-yellow-200' },
-  { value: 'hard', label: '어려움', color: 'bg-red-100 text-red-700 border-red-200' },
+const DIFFICULTY_OPTIONS: { value: QuizMeta['difficulty']; label: string }[] = [
+  { value: 'easy', label: '쉬움' },
+  { value: 'normal', label: '보통' },
+  { value: 'hard', label: '어려움' },
 ];
 
 // ============================================================
@@ -173,22 +168,21 @@ export default function QuizMetaForm({
 
       {/* 태그 */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
           태그
-          <span className="ml-1 text-gray-400">(최대 5개)</span>
+          <span className="ml-1 text-[#5C5C5C] font-normal">(최대 5개)</span>
         </label>
 
         {/* 태그 입력 영역 */}
         <div
           className={`
             flex flex-wrap items-center gap-2
-            p-3 rounded-xl border
+            p-3 border-2 bg-[#F5F0E8]
             transition-colors duration-200
-            focus-within:ring-2 focus-within:ring-indigo-500/20
             ${
               errors.tags
-                ? 'border-red-300 focus-within:border-red-500'
-                : 'border-gray-200 focus-within:border-indigo-500'
+                ? 'border-[#8B1A1A]'
+                : 'border-[#1A1A1A]'
             }
           `}
         >
@@ -204,15 +198,15 @@ export default function QuizMetaForm({
                 className="
                   inline-flex items-center gap-1
                   px-2.5 py-1
-                  bg-indigo-100 text-indigo-700
-                  rounded-lg text-sm font-medium
+                  bg-[#1A1A1A] text-[#F5F0E8]
+                  text-sm font-bold
                 "
               >
                 #{tag}
                 <button
                   type="button"
                   onClick={() => handleRemoveTag(tag)}
-                  className="ml-0.5 hover:text-indigo-900"
+                  className="ml-0.5 hover:text-[#EDEAE4]"
                 >
                   <svg
                     className="w-3.5 h-3.5"
@@ -238,18 +232,18 @@ export default function QuizMetaForm({
               onChange={(e) => setTagInput(e.target.value)}
               onKeyDown={handleTagKeyDown}
               placeholder={meta.tags.length === 0 ? '태그 입력 후 Enter' : ''}
-              className="flex-1 min-w-[100px] py-1 px-1 outline-none text-sm"
+              className="flex-1 min-w-[100px] py-1 px-1 outline-none text-sm bg-transparent"
             />
           )}
         </div>
 
         {errors.tags && (
-          <p className="mt-1 text-sm text-red-500">{errors.tags}</p>
+          <p className="mt-1 text-sm text-[#8B1A1A]">{errors.tags}</p>
         )}
 
         {/* 추천 태그 */}
         <div className="mt-3">
-          <p className="text-xs text-gray-500 mb-2">추천 태그</p>
+          <p className="text-xs text-[#5C5C5C] mb-2">추천 태그</p>
           <div className="flex flex-wrap gap-2">
             {SUGGESTED_TAGS.filter((tag) => !meta.tags.includes(tag)).map((tag) => (
               <motion.button
@@ -261,9 +255,9 @@ export default function QuizMetaForm({
                 disabled={meta.tags.length >= 5}
                 className="
                   px-2.5 py-1
-                  bg-gray-100 text-gray-600
-                  rounded-lg text-xs font-medium
-                  hover:bg-gray-200
+                  bg-[#EDEAE4] text-[#1A1A1A]
+                  text-xs font-bold border border-[#1A1A1A]
+                  hover:bg-[#1A1A1A] hover:text-[#F5F0E8]
                   disabled:opacity-50 disabled:cursor-not-allowed
                   transition-colors
                 "
@@ -277,7 +271,7 @@ export default function QuizMetaForm({
 
       {/* 난이도 */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
           난이도
         </label>
         <div className="flex gap-2">
@@ -289,13 +283,13 @@ export default function QuizMetaForm({
               whileTap={{ scale: 0.98 }}
               onClick={() => handleDifficultyChange(option.value)}
               className={`
-                flex-1 py-2.5 px-4 rounded-xl
-                font-medium text-sm
+                flex-1 py-2.5 px-4
+                font-bold text-sm
                 border-2 transition-all duration-200
                 ${
                   meta.difficulty === option.value
-                    ? option.color + ' border-current'
-                    : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                    ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                    : 'bg-[#EDEAE4] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
                 }
               `}
             >
@@ -307,7 +301,7 @@ export default function QuizMetaForm({
 
       {/* 공개 설정 */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
           공개 설정
         </label>
         <div className="flex gap-3">
@@ -318,20 +312,20 @@ export default function QuizMetaForm({
             whileTap={{ scale: 0.98 }}
             onClick={() => handlePublicChange(true)}
             className={`
-              flex-1 p-4 rounded-2xl border-2
+              flex-1 p-4 border-2
               transition-all duration-200
               ${
                 meta.isPublic
-                  ? 'bg-indigo-50 border-indigo-500'
-                  : 'bg-white border-gray-200 hover:border-gray-300'
+                  ? 'bg-[#1A1A1A] border-[#1A1A1A]'
+                  : 'bg-[#F5F0E8] border-[#1A1A1A] hover:bg-[#EDEAE4]'
               }
             `}
           >
             <div className="flex items-center gap-3">
               <div
                 className={`
-                  w-10 h-10 rounded-full flex items-center justify-center
-                  ${meta.isPublic ? 'bg-indigo-500 text-white' : 'bg-gray-100 text-gray-400'}
+                  w-10 h-10 flex items-center justify-center border-2
+                  ${meta.isPublic ? 'bg-[#F5F0E8] text-[#1A1A1A] border-[#F5F0E8]' : 'bg-[#EDEAE4] text-[#5C5C5C] border-[#1A1A1A]'}
                 `}
               >
                 <svg
@@ -350,11 +344,11 @@ export default function QuizMetaForm({
               </div>
               <div className="text-left">
                 <p
-                  className={`font-medium ${meta.isPublic ? 'text-indigo-700' : 'text-gray-700'}`}
+                  className={`font-bold ${meta.isPublic ? 'text-[#F5F0E8]' : 'text-[#1A1A1A]'}`}
                 >
                   공개
                 </p>
-                <p className="text-xs text-gray-500">
+                <p className={`text-xs ${meta.isPublic ? 'text-[#EDEAE4]' : 'text-[#5C5C5C]'}`}>
                   모든 학생이 볼 수 있음
                 </p>
               </div>
@@ -368,20 +362,20 @@ export default function QuizMetaForm({
             whileTap={{ scale: 0.98 }}
             onClick={() => handlePublicChange(false)}
             className={`
-              flex-1 p-4 rounded-2xl border-2
+              flex-1 p-4 border-2
               transition-all duration-200
               ${
                 !meta.isPublic
-                  ? 'bg-gray-100 border-gray-500'
-                  : 'bg-white border-gray-200 hover:border-gray-300'
+                  ? 'bg-[#1A1A1A] border-[#1A1A1A]'
+                  : 'bg-[#F5F0E8] border-[#1A1A1A] hover:bg-[#EDEAE4]'
               }
             `}
           >
             <div className="flex items-center gap-3">
               <div
                 className={`
-                  w-10 h-10 rounded-full flex items-center justify-center
-                  ${!meta.isPublic ? 'bg-gray-500 text-white' : 'bg-gray-100 text-gray-400'}
+                  w-10 h-10 flex items-center justify-center border-2
+                  ${!meta.isPublic ? 'bg-[#F5F0E8] text-[#1A1A1A] border-[#F5F0E8]' : 'bg-[#EDEAE4] text-[#5C5C5C] border-[#1A1A1A]'}
                 `}
               >
                 <svg
@@ -400,11 +394,11 @@ export default function QuizMetaForm({
               </div>
               <div className="text-left">
                 <p
-                  className={`font-medium ${!meta.isPublic ? 'text-gray-700' : 'text-gray-700'}`}
+                  className={`font-bold ${!meta.isPublic ? 'text-[#F5F0E8]' : 'text-[#1A1A1A]'}`}
                 >
                   비공개
                 </p>
-                <p className="text-xs text-gray-500">
+                <p className={`text-xs ${!meta.isPublic ? 'text-[#EDEAE4]' : 'text-[#5C5C5C]'}`}>
                   나만 볼 수 있음
                 </p>
               </div>
@@ -412,24 +406,6 @@ export default function QuizMetaForm({
           </motion.button>
         </div>
 
-        {/* 공개 시 보상 안내 */}
-        {meta.isPublic && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-3 p-3 bg-amber-50 rounded-xl"
-          >
-            <div className="flex items-start gap-2">
-              <span className="text-lg">🎁</span>
-              <div className="text-xs text-amber-700">
-                <p className="font-medium mb-0.5">자체제작 보상 시스템</p>
-                <p>
-                  다른 학생이 내 퀴즈를 풀면 <strong>골드 +2</strong>를 받아요!
-                </p>
-              </div>
-            </div>
-          </motion.div>
-        )}
       </div>
     </div>
   );

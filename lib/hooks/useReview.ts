@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   collection,
   query,
@@ -26,6 +26,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from './useAuth';
+import { useCourse } from '../contexts/CourseContext';
 
 // ============================================================
 // 타입 정의
@@ -55,8 +56,8 @@ export interface ReviewItem {
   questionId: string;
   /** 문제 내용 */
   question: string;
-  /** 문제 유형 (ox, multiple, short) */
-  type: 'ox' | 'multiple' | 'short';
+  /** 문제 유형 (ox, multiple, short, subjective) */
+  type: 'ox' | 'multiple' | 'short' | 'subjective';
   /** 객관식 선지 */
   options?: string[];
   /** 정답 */
@@ -77,6 +78,8 @@ export interface ReviewItem {
   lastReviewedAt: Timestamp | null;
   /** 추가된 일시 */
   createdAt: Timestamp;
+  /** 퀴즈 수정 시간 (저장 당시) */
+  quizUpdatedAt?: Timestamp | null;
 }
 
 /**
@@ -86,6 +89,8 @@ export interface GroupedReviewItems {
   quizId: string;
   quizTitle: string;
   items: ReviewItem[];
+  /** 퀴즈가 수정되었는지 여부 */
+  hasUpdate?: boolean;
 }
 
 /**
@@ -127,6 +132,15 @@ export interface CustomFolder {
 }
 
 /**
+ * 퀴즈 업데이트 정보
+ */
+export interface QuizUpdateInfo {
+  quizId: string;
+  quizTitle: string;
+  hasUpdate: boolean;
+}
+
+/**
  * useReview 훅의 반환 타입
  */
 interface UseReviewReturn {
@@ -146,6 +160,8 @@ interface UseReviewReturn {
   quizAttempts: QuizAttempt[];
   /** 커스텀 폴더 목록 */
   customFolders: CustomFolder[];
+  /** 업데이트된 퀴즈 목록 */
+  updatedQuizzes: Map<string, QuizUpdateInfo>;
   /** 로딩 상태 */
   loading: boolean;
   /** 에러 메시지 */
@@ -164,6 +180,8 @@ interface UseReviewReturn {
   addToCustomFolder: (folderId: string, questions: { questionId: string; quizId: string; quizTitle: string }[]) => Promise<void>;
   /** 커스텀 폴더에서 문제 제거 */
   removeFromCustomFolder: (folderId: string, questionId: string) => Promise<void>;
+  /** 퀴즈 업데이트 확인 후 review 항목 업데이트 */
+  updateReviewItemsFromQuiz: (quizId: string) => Promise<void>;
   /** 데이터 새로고침 */
   refresh: () => void;
 }
@@ -191,7 +209,17 @@ function groupByQuiz(items: ReviewItem[]): GroupedReviewItems[] {
     }
   });
 
-  // 최신 추가 순으로 정렬
+  // 각 그룹 내 문제를 questionId 기준으로 정렬 (문제 순서 유지)
+  for (const group of grouped.values()) {
+    group.items.sort((a, b) => {
+      // questionId에서 숫자 추출 (예: "q0", "q1" -> 0, 1)
+      const aNum = parseInt(a.questionId.replace(/\D/g, '') || '0', 10);
+      const bNum = parseInt(b.questionId.replace(/\D/g, '') || '0', 10);
+      return aNum - bNum;
+    });
+  }
+
+  // 그룹은 최신 추가 순으로 정렬
   return Array.from(grouped.values()).sort((a, b) => {
     const aTime = a.items[0]?.createdAt?.toMillis() || 0;
     const bTime = b.items[0]?.createdAt?.toMillis() || 0;
@@ -233,6 +261,7 @@ function groupByQuiz(items: ReviewItem[]): GroupedReviewItems[] {
 export const useReview = (): UseReviewReturn => {
   // 상태 관리
   const { user } = useAuth();
+  const { userCourseId } = useCourse();
   const [wrongItems, setWrongItems] = useState<ReviewItem[]>([]);
   const [bookmarkedItems, setBookmarkedItems] = useState<ReviewItem[]>([]);
   const [solvedItems, setSolvedItems] = useState<ReviewItem[]>([]);
@@ -244,6 +273,9 @@ export const useReview = (): UseReviewReturn => {
 
   // 퀴즈 제목 캐시
   const [quizTitles, setQuizTitles] = useState<Record<string, string>>({});
+
+  // 퀴즈 업데이트 정보
+  const [updatedQuizzes, setUpdatedQuizzes] = useState<Map<string, QuizUpdateInfo>>(new Map());
 
   /**
    * 퀴즈 제목 가져오기
@@ -268,6 +300,7 @@ export const useReview = (): UseReviewReturn => {
     return '퀴즈';
   }, [quizTitles]);
 
+
   /**
    * 복습 문제 구독
    */
@@ -283,12 +316,19 @@ export const useReview = (): UseReviewReturn => {
     setLoading(true);
     setError(null);
 
-    // 오답 문제 구독 (orderBy 제거하여 인덱스 불필요)
-    const wrongQuery = query(
-      collection(db, 'reviews'),
-      where('userId', '==', user.uid),
-      where('reviewType', '==', 'wrong')
-    );
+    // 오답 문제 구독 (courseId로 필터링)
+    const wrongQuery = userCourseId
+      ? query(
+          collection(db, 'reviews'),
+          where('userId', '==', user.uid),
+          where('reviewType', '==', 'wrong'),
+          where('courseId', '==', userCourseId)
+        )
+      : query(
+          collection(db, 'reviews'),
+          where('userId', '==', user.uid),
+          where('reviewType', '==', 'wrong')
+        );
 
     const unsubscribeWrong = onSnapshot(
       wrongQuery,
@@ -315,6 +355,7 @@ export const useReview = (): UseReviewReturn => {
             reviewCount: data.reviewCount || 0,
             lastReviewedAt: data.lastReviewedAt,
             createdAt: data.createdAt,
+            quizUpdatedAt: data.quizUpdatedAt || null,
           });
           quizIds.add(data.quizId);
         });
@@ -346,12 +387,19 @@ export const useReview = (): UseReviewReturn => {
       }
     );
 
-    // 찜한 문제 구독 (orderBy 제거하여 인덱스 불필요)
-    const bookmarkQuery = query(
-      collection(db, 'reviews'),
-      where('userId', '==', user.uid),
-      where('reviewType', '==', 'bookmark')
-    );
+    // 찜한 문제 구독 (courseId로 필터링)
+    const bookmarkQuery = userCourseId
+      ? query(
+          collection(db, 'reviews'),
+          where('userId', '==', user.uid),
+          where('reviewType', '==', 'bookmark'),
+          where('courseId', '==', userCourseId)
+        )
+      : query(
+          collection(db, 'reviews'),
+          where('userId', '==', user.uid),
+          where('reviewType', '==', 'bookmark')
+        );
 
     const unsubscribeBookmark = onSnapshot(
       bookmarkQuery,
@@ -378,6 +426,7 @@ export const useReview = (): UseReviewReturn => {
             reviewCount: data.reviewCount || 0,
             lastReviewedAt: data.lastReviewedAt,
             createdAt: data.createdAt,
+            quizUpdatedAt: data.quizUpdatedAt || null,
           });
           quizIds.add(data.quizId);
         });
@@ -406,12 +455,19 @@ export const useReview = (): UseReviewReturn => {
       }
     );
 
-    // 푼 문제 구독 (solved, orderBy 제거하여 인덱스 불필요)
-    const solvedQuery = query(
-      collection(db, 'reviews'),
-      where('userId', '==', user.uid),
-      where('reviewType', '==', 'solved')
-    );
+    // 푼 문제 구독 (courseId로 필터링)
+    const solvedQuery = userCourseId
+      ? query(
+          collection(db, 'reviews'),
+          where('userId', '==', user.uid),
+          where('reviewType', '==', 'solved'),
+          where('courseId', '==', userCourseId)
+        )
+      : query(
+          collection(db, 'reviews'),
+          where('userId', '==', user.uid),
+          where('reviewType', '==', 'solved')
+        );
 
     const unsubscribeSolved = onSnapshot(
       solvedQuery,
@@ -439,6 +495,7 @@ export const useReview = (): UseReviewReturn => {
             reviewCount: data.reviewCount || 0,
             lastReviewedAt: data.lastReviewedAt,
             createdAt: data.createdAt,
+            quizUpdatedAt: data.quizUpdatedAt || null,
           });
           quizIds.add(data.quizId);
         });
@@ -467,11 +524,17 @@ export const useReview = (): UseReviewReturn => {
       }
     );
 
-    // 퀴즈 풀이 기록 구독 (푼 문제, orderBy 제거하여 인덱스 불필요)
-    const attemptsQuery = query(
-      collection(db, 'quizResults'),
-      where('userId', '==', user.uid)
-    );
+    // 퀴즈 풀이 기록 구독 (courseId로 필터링)
+    const attemptsQuery = userCourseId
+      ? query(
+          collection(db, 'quizResults'),
+          where('userId', '==', user.uid),
+          where('courseId', '==', userCourseId)
+        )
+      : query(
+          collection(db, 'quizResults'),
+          where('userId', '==', user.uid)
+        );
 
     const unsubscribeAttempts = onSnapshot(
       attemptsQuery,
@@ -519,11 +582,17 @@ export const useReview = (): UseReviewReturn => {
       }
     );
 
-    // 커스텀 폴더 구독
-    const foldersQuery = query(
-      collection(db, 'customFolders'),
-      where('userId', '==', user.uid)
-    );
+    // 커스텀 폴더 구독 (courseId로 필터링)
+    const foldersQuery = userCourseId
+      ? query(
+          collection(db, 'customFolders'),
+          where('userId', '==', user.uid),
+          where('courseId', '==', userCourseId)
+        )
+      : query(
+          collection(db, 'customFolders'),
+          where('userId', '==', user.uid)
+        );
 
     const unsubscribeFolders = onSnapshot(
       foldersQuery,
@@ -565,7 +634,7 @@ export const useReview = (): UseReviewReturn => {
       unsubscribeAttempts();
       unsubscribeFolders();
     };
-  }, [user, refreshKey, fetchQuizTitle]);
+  }, [user, userCourseId, refreshKey, fetchQuizTitle]);
 
   /**
    * 복습 문제 삭제
@@ -663,7 +732,96 @@ export const useReview = (): UseReviewReturn => {
    */
   const refresh = useCallback(() => {
     setRefreshKey((prev) => prev + 1);
+    setUpdatedQuizzes(new Map());
   }, []);
+
+  /**
+   * 퀴즈에서 업데이트된 문제를 review 항목에 추가
+   */
+  const updateReviewItemsFromQuiz = useCallback(async (quizId: string): Promise<void> => {
+    if (!user) return;
+
+    try {
+      // 퀴즈 데이터 가져오기
+      const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
+      if (!quizDoc.exists()) return;
+
+      const quizData = quizDoc.data();
+      const questions = quizData.questions || [];
+      const quizTitle = quizData.title || '퀴즈';
+      const quizUpdatedAt = quizData.updatedAt || quizData.createdAt || null;
+
+      // 해당 퀴즈의 기존 review 항목들 삭제
+      const existingReviewsQuery = query(
+        collection(db, 'reviews'),
+        where('userId', '==', user.uid),
+        where('quizId', '==', quizId)
+      );
+      const existingReviews = await getDocs(existingReviewsQuery);
+
+      // 기존 항목의 reviewType 보존
+      const existingTypes: Record<string, Set<string>> = {};
+      existingReviews.forEach((docSnapshot) => {
+        const data = docSnapshot.data();
+        const questionId = data.questionId;
+        if (!existingTypes[questionId]) {
+          existingTypes[questionId] = new Set();
+        }
+        existingTypes[questionId].add(data.reviewType);
+      });
+
+      // 기존 항목 삭제
+      for (const docSnapshot of existingReviews.docs) {
+        await deleteDoc(docSnapshot.ref);
+      }
+
+      // 새로운 문제로 review 항목 재생성
+      for (let i = 0; i < questions.length; i++) {
+        const q = questions[i];
+        const questionId = q.id || `q${i}`;
+        const types = existingTypes[questionId] || new Set(['solved']);
+
+        // 타입 정규화: subjective -> short
+        const rawType = q.type || 'short';
+        const normalizedType = rawType === 'subjective' ? 'short' : rawType;
+
+        for (const reviewType of types) {
+          await addDoc(collection(db, 'reviews'), {
+            userId: user.uid,
+            quizId,
+            quizTitle,
+            questionId,
+            question: q.text || q.question || '',
+            type: normalizedType,
+            options: q.choices || q.options || [],
+            correctAnswer: q.correctAnswer || q.answer || '',
+            userAnswer: '', // 업데이트된 문제는 새로 풀어야 함
+            explanation: q.explanation || '',
+            reviewType,
+            isBookmarked: reviewType === 'bookmark',
+            isCorrect: null,
+            reviewCount: 0,
+            lastReviewedAt: null,
+            quizUpdatedAt,
+            createdAt: serverTimestamp(),
+          });
+        }
+      }
+
+      // 업데이트 정보 제거
+      setUpdatedQuizzes((prev) => {
+        const newMap = new Map(prev);
+        newMap.delete(`wrong-${quizId}`);
+        newMap.delete(`bookmark-${quizId}`);
+        newMap.delete(`solved-${quizId}`);
+        return newMap;
+      });
+
+    } catch (err) {
+      console.error('문제 업데이트 실패:', err);
+      throw new Error('문제 업데이트에 실패했습니다.');
+    }
+  }, [user]);
 
   /**
    * 커스텀 폴더 생성
@@ -680,6 +838,7 @@ export const useReview = (): UseReviewReturn => {
         userId: user.uid,
         name,
         questions: [],
+        courseId: userCourseId || null,
         createdAt: serverTimestamp(),
       });
       console.log('[useReview] 폴더 생성 성공:', docRef.id);
@@ -690,7 +849,7 @@ export const useReview = (): UseReviewReturn => {
       console.error('에러 메시지:', err.message);
       return null;
     }
-  }, [user]);
+  }, [user, userCourseId]);
 
   /**
    * 커스텀 폴더 삭제
@@ -769,10 +928,113 @@ export const useReview = (): UseReviewReturn => {
     }
   }, [user]);
 
-  // 그룹핑된 데이터
-  const groupedWrongItems = groupByQuiz(wrongItems);
-  const groupedBookmarkedItems = groupByQuiz(bookmarkedItems);
-  const groupedSolvedItems = groupByQuiz(solvedItems);
+  // 그룹핑된 데이터 (useMemo로 메모이제이션하여 무한 루프 방지)
+  const groupedWrongItems = useMemo(() => groupByQuiz(wrongItems), [wrongItems]);
+  const groupedBookmarkedItems = useMemo(() => groupByQuiz(bookmarkedItems), [bookmarkedItems]);
+  const groupedSolvedItems = useMemo(() => groupByQuiz(solvedItems), [solvedItems]);
+
+  // 퀴즈 업데이트 확인 (items 로드 후, 한 번만 실행)
+  useEffect(() => {
+    // 로딩 중이거나 데이터가 없으면 스킵
+    if (loading) return;
+    if (wrongItems.length === 0 && bookmarkedItems.length === 0 && solvedItems.length === 0) return;
+
+    const checkAllUpdates = async () => {
+      const newUpdatedQuizzes = new Map<string, QuizUpdateInfo>();
+
+      // 오답 문제 업데이트 확인
+      for (const group of groupedWrongItems) {
+        if (group.items.length > 0 && group.items[0].quizUpdatedAt) {
+          try {
+            const quizDoc = await getDoc(doc(db, 'quizzes', group.quizId));
+            if (quizDoc.exists()) {
+              const quizData = quizDoc.data();
+              const currentUpdatedAt = quizData?.updatedAt || quizData?.createdAt;
+              const savedUpdatedAt = group.items[0].quizUpdatedAt;
+
+              if (currentUpdatedAt && savedUpdatedAt) {
+                const savedTime = savedUpdatedAt.toMillis ? savedUpdatedAt.toMillis() : 0;
+                const currentTime = currentUpdatedAt.toMillis ? currentUpdatedAt.toMillis() : 0;
+
+                if (currentTime > savedTime) {
+                  newUpdatedQuizzes.set(`wrong-${group.quizId}`, {
+                    quizId: group.quizId,
+                    quizTitle: group.quizTitle,
+                    hasUpdate: true,
+                  });
+                }
+              }
+            }
+          } catch (err) {
+            console.error('퀴즈 업데이트 확인 실패:', err);
+          }
+        }
+      }
+
+      // 찜한 문제 업데이트 확인
+      for (const group of groupedBookmarkedItems) {
+        if (group.items.length > 0 && group.items[0].quizUpdatedAt) {
+          try {
+            const quizDoc = await getDoc(doc(db, 'quizzes', group.quizId));
+            if (quizDoc.exists()) {
+              const quizData = quizDoc.data();
+              const currentUpdatedAt = quizData?.updatedAt || quizData?.createdAt;
+              const savedUpdatedAt = group.items[0].quizUpdatedAt;
+
+              if (currentUpdatedAt && savedUpdatedAt) {
+                const savedTime = savedUpdatedAt.toMillis ? savedUpdatedAt.toMillis() : 0;
+                const currentTime = currentUpdatedAt.toMillis ? currentUpdatedAt.toMillis() : 0;
+
+                if (currentTime > savedTime) {
+                  newUpdatedQuizzes.set(`bookmark-${group.quizId}`, {
+                    quizId: group.quizId,
+                    quizTitle: group.quizTitle,
+                    hasUpdate: true,
+                  });
+                }
+              }
+            }
+          } catch (err) {
+            console.error('퀴즈 업데이트 확인 실패:', err);
+          }
+        }
+      }
+
+      // 푼 문제 업데이트 확인
+      for (const group of groupedSolvedItems) {
+        if (group.items.length > 0 && group.items[0].quizUpdatedAt) {
+          try {
+            const quizDoc = await getDoc(doc(db, 'quizzes', group.quizId));
+            if (quizDoc.exists()) {
+              const quizData = quizDoc.data();
+              const currentUpdatedAt = quizData?.updatedAt || quizData?.createdAt;
+              const savedUpdatedAt = group.items[0].quizUpdatedAt;
+
+              if (currentUpdatedAt && savedUpdatedAt) {
+                const savedTime = savedUpdatedAt.toMillis ? savedUpdatedAt.toMillis() : 0;
+                const currentTime = currentUpdatedAt.toMillis ? currentUpdatedAt.toMillis() : 0;
+
+                if (currentTime > savedTime) {
+                  newUpdatedQuizzes.set(`solved-${group.quizId}`, {
+                    quizId: group.quizId,
+                    quizTitle: group.quizTitle,
+                    hasUpdate: true,
+                  });
+                }
+              }
+            }
+          } catch (err) {
+            console.error('퀴즈 업데이트 확인 실패:', err);
+          }
+        }
+      }
+
+      setUpdatedQuizzes(newUpdatedQuizzes);
+    };
+
+    checkAllUpdates();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, groupedWrongItems, groupedBookmarkedItems, groupedSolvedItems]);
 
   return {
     wrongItems,
@@ -783,6 +1045,7 @@ export const useReview = (): UseReviewReturn => {
     groupedSolvedItems,
     quizAttempts,
     customFolders,
+    updatedQuizzes,
     loading,
     error,
     deleteReviewItem,
@@ -792,6 +1055,7 @@ export const useReview = (): UseReviewReturn => {
     deleteCustomFolder,
     addToCustomFolder,
     removeFromCustomFolder,
+    updateReviewItemsFromQuiz,
     refresh,
   };
 };

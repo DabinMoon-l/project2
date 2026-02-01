@@ -25,7 +25,7 @@ initializeApp();
 // ============================================
 // 퀴즈 관련 Functions
 // ============================================
-export { onQuizComplete, updateQuizStatistics } from "./quiz";
+export { onQuizComplete, updateQuizStatistics, onQuizCreate } from "./quiz";
 
 // ============================================
 // 피드백 관련 Functions
@@ -201,6 +201,16 @@ export const getLeaderboard = onCall(
     return { leaderboard, type, classId };
   }
 );
+
+// ============================================
+// 학기 전환 Functions (자동 스케줄)
+// ============================================
+export { februaryTransition, augustTransition } from "./semesterTransition";
+
+// ============================================
+// 서술형 AI 채점 Functions
+// ============================================
+export { gradeEssay, gradeEssayBatch } from "./essay";
 
 // ============================================
 // 시즌 관련 Functions

@@ -82,8 +82,9 @@ service cloud.firestore {
          // 로그인 사용자가 completedUsers만 수정하는 경우 허용
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['completedUsers']));
 
-      // 삭제: 교수님만
-      allow delete: if isProfessor();
+      // 삭제: 교수님 또는 본인이 만든 자체제작 퀴즈
+      allow delete: if isProfessor() ||
+        (resource.data.type == 'custom' && resource.data.creatorId == request.auth.uid);
 
       // 퀴즈 제출 서브컬렉션
       match /submissions/{submissionId} {
@@ -152,10 +153,16 @@ service cloud.firestore {
         request.resource.data.authorId == request.auth.uid &&
         isValidString(request.resource.data.content, 1, 1000);
 
-      // 수정: 작성자만 (내용만)
-      allow update: if isOwner(resource.data.authorId) &&
+      // 수정: 작성자가 내용 수정 OR 로그인 사용자가 좋아요 업데이트
+      allow update: if isAuthenticated() && (
+        // 작성자가 내용 수정
+        (isOwner(resource.data.authorId) &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['content', 'updatedAt'])) ||
+        // 로그인 사용자가 좋아요 업데이트 (likes, likedBy 필드만 변경)
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['content', 'updatedAt']);
+          .hasOnly(['likes', 'likedBy'])
+      );
 
       // 삭제: 작성자 또는 교수님
       allow delete: if isOwner(resource.data.authorId) || isProfessor();
@@ -166,9 +173,13 @@ service cloud.firestore {
     // ============================================================
 
     match /feedbacks/{feedbackId} {
-      // 읽기: 작성자 또는 교수님
+      // 읽기: 작성자, 교수님, 또는 해당 퀴즈의 제작자
       allow read: if isAuthenticated() &&
-        (resource.data.userId == request.auth.uid || isProfessor());
+        (resource.data.userId == request.auth.uid ||
+         isProfessor() ||
+         // 퀴즈 제작자도 피드백 확인 가능
+         (resource.data.quizId != null &&
+          get(/databases/$(database)/documents/quizzes/$(resource.data.quizId)).data.creatorId == request.auth.uid));
 
       // 생성: 로그인 사용자 (본인 것만)
       allow create: if isAuthenticated() &&
@@ -277,8 +288,9 @@ service cloud.firestore {
       allow update: if isAuthenticated() &&
         resource.data.userId == request.auth.uid;
 
-      // 삭제: 불가
-      allow delete: if false;
+      // 삭제: 본인만 (푼 문제 폴더 삭제 시)
+      allow delete: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid;
     }
 
     // ============================================================
@@ -308,9 +320,13 @@ service cloud.firestore {
     // ============================================================
 
     match /questionFeedbacks/{feedbackId} {
-      // 읽기: 본인 피드백 또는 교수님
+      // 읽기: 본인 피드백, 교수님, 또는 해당 퀴즈의 제작자
       allow read: if isAuthenticated() &&
-        (resource.data.userId == request.auth.uid || isProfessor());
+        (resource.data.userId == request.auth.uid ||
+         isProfessor() ||
+         // 퀴즈 제작자도 피드백 확인 가능
+         (resource.data.quizId != null &&
+          get(/databases/$(database)/documents/quizzes/$(resource.data.quizId)).data.creatorId == request.auth.uid));
 
       // 생성: 로그인 사용자 (본인 것만)
       allow create: if isAuthenticated() &&
@@ -357,6 +373,52 @@ service cloud.firestore {
 
       // 수정/삭제: 불가
       allow update, delete: if false;
+    }
+
+    // ============================================================
+    // 퀴즈 북마크 컬렉션 (찜한 문제지)
+    // ============================================================
+
+    match /quizBookmarks/{bookmarkId} {
+      // 읽기: 본인 북마크만
+      allow read: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid;
+
+      // 생성: 로그인 사용자 (본인 것만)
+      allow create: if isAuthenticated() &&
+        request.resource.data.userId == request.auth.uid;
+
+      // 수정: 본인만
+      allow update: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid;
+
+      // 삭제: 본인만
+      allow delete: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================================
+    // 과목 컬렉션 (읽기 전용)
+    // ============================================================
+
+    match /courses/{courseId} {
+      // 읽기: 모든 로그인 사용자
+      allow read: if isAuthenticated();
+
+      // 쓰기: 교수님만
+      allow write: if isProfessor();
+    }
+
+    // ============================================================
+    // 설정 컬렉션 (학기 설정 등)
+    // ============================================================
+
+    match /settings/{settingId} {
+      // 읽기: 모든 로그인 사용자
+      allow read: if isAuthenticated();
+
+      // 쓰기: 교수님만
+      allow write: if isProfessor();
     }
   }
 }

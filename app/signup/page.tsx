@@ -2,6 +2,7 @@
  * 회원가입 페이지
  *
  * 이메일/비밀번호로 회원가입 후 인증 메일 발송
+ * 로그인 페이지와 동일한 비디오 배경 사용
  */
 
 'use client';
@@ -14,6 +15,29 @@ import Link from 'next/link';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
+
+// ============================================================
+// 비디오 배경 컴포넌트
+// ============================================================
+
+/** 비디오 배경 (MP4) */
+function VideoBackground() {
+  return (
+    <div className="absolute inset-0 overflow-hidden">
+      <video
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="absolute inset-0 w-full h-full object-cover"
+        poster="/images/login-poster.jpg"
+      >
+        <source src="/videos/login-bg.mp4" type="video/mp4" />
+      </video>
+      <div className="absolute inset-0 bg-black/20" />
+    </div>
+  );
+}
 
 // 교수님 이메일 목록
 const PROFESSOR_EMAILS = [
@@ -131,7 +155,20 @@ export default function SignupPage() {
   // 회원가입 성공 후 인증 메일 안내
   if (signupSuccess && user && !emailVerified) {
     return (
-      <main className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden bg-gradient-to-b from-[#1a1a2e] to-[#16213e]">
+      <main className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden">
+        <VideoBackground />
+
+        {/* 좌측 상단 이미지 */}
+        <div className="absolute top-0 left-0 z-10">
+          <Image
+            src="/images/corner-image.png"
+            alt="장식 이미지"
+            width={360}
+            height={360}
+            className="drop-shadow-lg"
+          />
+        </div>
+
         <motion.div
           className="relative z-10 w-full max-w-sm px-6 text-center"
           variants={containerVariants}
@@ -176,7 +213,20 @@ export default function SignupPage() {
   }
 
   return (
-    <main className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden bg-gradient-to-b from-[#1a1a2e] to-[#16213e]">
+    <main className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden">
+      <VideoBackground />
+
+      {/* 좌측 상단 이미지 */}
+      <div className="absolute top-0 left-0 z-10">
+        <Image
+          src="/images/corner-image.png"
+          alt="장식 이미지"
+          width={360}
+          height={360}
+          className="drop-shadow-lg"
+        />
+      </div>
+
       <motion.div
         className="relative z-10 w-full max-w-sm px-6"
         variants={containerVariants}

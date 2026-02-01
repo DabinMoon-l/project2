@@ -29,7 +29,6 @@ export default function WriteForm({
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [isAnonymous, setIsAnonymous] = useState(false);
 
   // 첨부 파일 상태
   const [images, setImages] = useState<{ file: File; preview: string }[]>([]);
@@ -156,7 +155,7 @@ export default function WriteForm({
       await onSubmit({
         title: title.trim(),
         content: content.trim(),
-        isAnonymous,
+        isAnonymous: false,
         category: 'community',
         imageUrl: uploadedImageUrls[0] || undefined, // 대표 이미지
         imageUrls: uploadedImageUrls,
@@ -165,7 +164,7 @@ export default function WriteForm({
     } catch (err) {
       console.error('글 작성 실패:', err);
     }
-  }, [isValid, isSubmitting, uploading, images, files, title, content, isAnonymous, uploadImage, uploadFile, onSubmit]);
+  }, [isValid, isSubmitting, uploading, images, files, title, content, uploadImage, uploadFile, onSubmit]);
 
   return (
     <motion.div
@@ -180,7 +179,7 @@ export default function WriteForm({
       {/* 제목 입력 */}
       <div className="mb-4">
         <label
-          className="block text-sm font-serif-display font-bold mb-2"
+          className="block text-sm font-bold mb-2"
           style={{ color: theme.colors.text }}
         >
           HEADLINE <span style={{ color: '#8B1A1A' }}>*</span>
@@ -191,7 +190,7 @@ export default function WriteForm({
           onChange={(e) => setTitle(e.target.value)}
           placeholder="기사 제목을 입력하세요 (2자 이상)"
           maxLength={100}
-          className="w-full px-4 py-3 outline-none transition-colors font-serif-display text-lg"
+          className="w-full px-4 py-3 outline-none transition-colors text-lg"
           style={{
             border: '1px solid #1A1A1A',
             backgroundColor: theme.colors.background,
@@ -199,7 +198,7 @@ export default function WriteForm({
           }}
         />
         <div
-          className="mt-1 text-xs text-right font-serif-elegant"
+          className="mt-1 text-xs text-right"
           style={{ color: theme.colors.textSecondary }}
         >
           {title.length}/100
@@ -209,7 +208,7 @@ export default function WriteForm({
       {/* 내용 입력 */}
       <div className="mb-4">
         <label
-          className="block text-sm font-serif-display font-bold mb-2"
+          className="block text-sm font-bold mb-2"
           style={{ color: theme.colors.text }}
         >
           ARTICLE BODY <span style={{ color: '#8B1A1A' }}>*</span>
@@ -228,7 +227,7 @@ export default function WriteForm({
           }}
         />
         <div
-          className="mt-1 text-xs text-right font-serif-elegant"
+          className="mt-1 text-xs text-right"
           style={{ color: theme.colors.textSecondary }}
         >
           {content.length}/2000
@@ -238,7 +237,7 @@ export default function WriteForm({
       {/* 이미지 첨부 */}
       <div className="mb-4">
         <label
-          className="block text-sm font-serif-display font-bold mb-2"
+          className="block text-sm font-bold mb-2"
           style={{ color: theme.colors.text }}
         >
           PHOTOS
@@ -289,7 +288,7 @@ export default function WriteForm({
           <button
             type="button"
             onClick={() => imageInputRef.current?.click()}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-serif-display transition-colors"
+            className="flex items-center gap-2 px-4 py-2 text-sm transition-colors"
             style={{
               border: '1px dashed #1A1A1A',
               backgroundColor: 'transparent',
@@ -318,7 +317,7 @@ export default function WriteForm({
       {/* 파일 첨부 */}
       <div className="mb-4">
         <label
-          className="block text-sm font-serif-display font-bold mb-2"
+          className="block text-sm font-bold mb-2"
           style={{ color: theme.colors.text }}
         >
           FILES
@@ -373,7 +372,7 @@ export default function WriteForm({
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-serif-display transition-colors"
+            className="flex items-center gap-2 px-4 py-2 text-sm transition-colors"
             style={{
               border: '1px dashed #1A1A1A',
               backgroundColor: 'transparent',
@@ -398,38 +397,13 @@ export default function WriteForm({
         />
       </div>
 
-      {/* 옵션 */}
+      {/* 상태 안내 */}
       <div
-        className="flex items-center justify-between py-3 border-t border-b mb-4"
+        className="flex items-center justify-end py-3 border-t border-b mb-4"
         style={{ borderColor: '#D4CFC4' }}
       >
-        {/* 익명 옵션 */}
-        <label className="flex items-center gap-3 cursor-pointer">
-          <div
-            className="w-5 h-5 flex items-center justify-center transition-colors"
-            style={{
-              border: '1px solid #1A1A1A',
-              backgroundColor: isAnonymous ? '#1A1A1A' : 'transparent',
-            }}
-            onClick={() => setIsAnonymous(!isAnonymous)}
-          >
-            {isAnonymous && (
-              <svg className="w-3 h-3" fill="#F5F0E8" viewBox="0 0 24 24">
-                <path d="M20.285 2l-11.285 11.567-5.286-5.011-3.714 3.716 9 8.728 15-15.285z" />
-              </svg>
-            )}
-          </div>
-          <span
-            className="text-sm font-serif-display"
-            style={{ color: theme.colors.text }}
-          >
-            익명의 기자로 작성
-          </span>
-        </label>
-
-        {/* 상태 안내 */}
         <span
-          className="text-xs font-serif-elegant italic"
+          className="text-xs italic"
           style={{ color: theme.colors.textSecondary }}
         >
           {uploading && 'Uploading...'}

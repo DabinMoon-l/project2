@@ -10,7 +10,6 @@ export { default as CharacterPreview } from './CharacterPreview';
 export {
   HAIR_STYLES,
   SKIN_COLORS,
-  BEARD_STYLES,
   DEFAULT_CHARACTER_OPTIONS,
 } from './CharacterPreview';
 export type { CharacterOptions } from './CharacterPreview';

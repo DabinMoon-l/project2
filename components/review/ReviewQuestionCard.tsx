@@ -16,10 +16,14 @@ interface ReviewQuestionCardProps {
 }
 
 // 문제 유형별 라벨
-const typeLabels: Record<'ox' | 'multiple' | 'short', string> = {
+const typeLabels: Record<string, string> = {
   ox: 'OX',
   multiple: '객관식',
   short: '주관식',
+  short_answer: '단답형',
+  subjective: '주관식',
+  essay: '서술형',
+  combined: '결합형',
 };
 
 /**

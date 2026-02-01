@@ -11,6 +11,7 @@ import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getFunctions, Functions } from 'firebase/functions';
+import { getStorage, FirebaseStorage } from 'firebase/storage';
 
 // Firebase 설정 객체
 // 환경 변수에서 Firebase 프로젝트 설정값을 가져옵니다
@@ -48,11 +49,15 @@ const db: Firestore = getFirestore(app);
 /**
  * Firebase Functions 인스턴스
  * 서버리스 백엔드 함수를 호출할 수 있습니다.
- *
- * 참고: 한국 리전을 사용하려면 아래와 같이 설정하세요:
- * const functions: Functions = getFunctions(app, 'asia-northeast3');
+ * 한국 리전(asia-northeast3)을 사용합니다.
  */
-const functions: Functions = getFunctions(app);
+const functions: Functions = getFunctions(app, 'asia-northeast3');
+
+/**
+ * Firebase Storage 인스턴스
+ * 이미지, 파일 등을 저장하고 관리할 수 있습니다.
+ */
+const storage: FirebaseStorage = getStorage(app);
 
 // 각 서비스 인스턴스를 내보냅니다
-export { app, auth, db, functions };
+export { app, auth, db, functions, storage };

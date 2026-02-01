@@ -1,9 +1,9 @@
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import {
-  calculateQuizGold,
   calculateQuizExp,
-  addRewardsInTransaction,
+  addExpInTransaction,
+  EXP_REWARDS,
 } from "./utils/gold";
 
 /**
@@ -22,23 +22,22 @@ interface QuizResult {
 }
 
 /**
- * 퀴즈 완료 시 골드/경험치 지급
+ * 퀴즈 완료 시 경험치 지급
  *
  * Firestore 트리거: quizResults/{resultId} 문서 생성 시
  *
- * 점수별 골드 보상:
- * - 만점(100): 100 골드
- * - 90% 이상: 70 골드
- * - 70% 이상: 50 골드
- * - 50% 이상: 30 골드
- * - 50% 미만: 10 골드 (참여 보상)
- *
- * 경험치 보상:
- * - 기본: 10 경험치
- * - 만점 보너스: +5 경험치
+ * 점수별 경험치 보상:
+ * - 만점(100): 50 EXP
+ * - 90% 이상: 35 EXP
+ * - 70% 이상: 25 EXP
+ * - 50% 이상: 15 EXP
+ * - 50% 미만: 5 EXP (참여 보상)
  */
 export const onQuizComplete = onDocumentCreated(
-  "quizResults/{resultId}",
+  {
+    document: "quizResults/{resultId}",
+    region: "asia-northeast3",
+  },
   async (event) => {
     const snapshot = event.data;
     if (!snapshot) {
@@ -63,8 +62,7 @@ export const onQuizComplete = onDocumentCreated(
       return;
     }
 
-    // 보상 계산
-    const goldReward = calculateQuizGold(score);
+    // 경험치 보상 계산
     const expReward = calculateQuizExp(score);
     const reason = `퀴즈 완료 (점수: ${score}점)`;
 
@@ -77,15 +75,13 @@ export const onQuizComplete = onDocumentCreated(
         transaction.update(snapshot.ref, {
           rewarded: true,
           rewardedAt: FieldValue.serverTimestamp(),
-          goldRewarded: goldReward,
           expRewarded: expReward,
         });
 
-        // 골드 및 경험치 지급
-        return await addRewardsInTransaction(
+        // 경험치 지급
+        return await addExpInTransaction(
           transaction,
           userId,
-          goldReward,
           expReward,
           reason
         );
@@ -94,7 +90,6 @@ export const onQuizComplete = onDocumentCreated(
       console.log(`퀴즈 보상 지급 완료: ${userId}`, {
         resultId,
         score,
-        goldReward,
         expReward,
         rankUp: rewardResult.rankUp,
         newRank: rewardResult.newRank?.name,
@@ -124,7 +119,10 @@ export const onQuizComplete = onDocumentCreated(
  * Firestore 트리거: quizResults/{resultId} 문서 생성 시
  */
 export const updateQuizStatistics = onDocumentCreated(
-  "quizResults/{resultId}",
+  {
+    document: "quizResults/{resultId}",
+    region: "asia-northeast3",
+  },
   async (event) => {
     const snapshot = event.data;
     if (!snapshot) return;
@@ -183,6 +181,101 @@ export const updateQuizStatistics = onDocumentCreated(
       console.log(`퀴즈 통계 업데이트 완료: ${quizId}`);
     } catch (error) {
       console.error("퀴즈 통계 업데이트 실패:", error);
+    }
+  }
+);
+
+/**
+ * 퀴즈 문서 타입
+ */
+interface Quiz {
+  creatorId: string;      // 생성자 ID
+  title: string;          // 퀴즈 제목
+  questions: unknown[];   // 문제 목록
+  rewarded?: boolean;     // 보상 지급 여부
+}
+
+/**
+ * 퀴즈 생성 시 경험치 지급
+ *
+ * Firestore 트리거: quizzes/{quizId} 문서 생성 시
+ *
+ * 보상: 15 EXP
+ */
+export const onQuizCreate = onDocumentCreated(
+  {
+    document: "quizzes/{quizId}",
+    region: "asia-northeast3",
+  },
+  async (event) => {
+    const snapshot = event.data;
+    if (!snapshot) {
+      console.log("퀴즈 문서가 없습니다.");
+      return;
+    }
+
+    const quiz = snapshot.data() as Quiz;
+    const quizId = event.params.quizId;
+
+    // 이미 보상이 지급된 경우 스킵
+    if (quiz.rewarded) {
+      console.log(`이미 보상이 지급된 퀴즈입니다: ${quizId}`);
+      return;
+    }
+
+    const { creatorId } = quiz;
+
+    // 필수 데이터 검증
+    if (!creatorId) {
+      console.error("퀴즈 생성자 ID가 없습니다:", quizId);
+      return;
+    }
+
+    const expReward = EXP_REWARDS.QUIZ_CREATE;
+    const reason = "퀴즈 생성";
+
+    const db = getFirestore();
+
+    try {
+      // 트랜잭션으로 보상 지급
+      const rewardResult = await db.runTransaction(async (transaction) => {
+        // 퀴즈 문서에 보상 지급 플래그 설정 (중복 방지)
+        transaction.update(snapshot.ref, {
+          rewarded: true,
+          rewardedAt: FieldValue.serverTimestamp(),
+          expRewarded: expReward,
+        });
+
+        // 경험치 지급
+        return await addExpInTransaction(
+          transaction,
+          creatorId,
+          expReward,
+          reason
+        );
+      });
+
+      console.log(`퀴즈 생성 보상 지급 완료: ${creatorId}`, {
+        quizId,
+        expReward,
+        rankUp: rewardResult.rankUp,
+        newRank: rewardResult.newRank?.name,
+      });
+
+      // 계급 업인 경우 알림 생성
+      if (rewardResult.rankUp && rewardResult.newRank) {
+        await db.collection("notifications").add({
+          userId: creatorId,
+          type: "RANK_UP",
+          title: "계급 승급!",
+          message: `축하합니다! ${rewardResult.previousRank}에서 ${rewardResult.newRank.name}(으)로 승급했습니다!`,
+          read: false,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (error) {
+      console.error("퀴즈 생성 보상 지급 실패:", error);
+      throw error;
     }
   }
 );

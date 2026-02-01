@@ -31,6 +31,7 @@ export const EXP_REWARDS = {
   QUIZ_GOOD: 25,          // 70% 이상
   QUIZ_PASS: 15,          // 50% 이상
   QUIZ_FAIL: 5,           // 50% 미만 (참여 보상)
+  QUIZ_CREATE: 15,        // 퀴즈 생성
 
   // 피드백 관련
   FEEDBACK_SUBMIT: 10,    // 피드백 작성
@@ -139,7 +140,7 @@ export async function addExpInTransaction(
   }
 
   const userData = userDoc.data()!;
-  const currentExp = userData.exp || 0;
+  const currentExp = userData.totalExp || 0;
   const currentRank = userData.rank || "견습생";
   const newExp = currentExp + amount;
 
@@ -149,7 +150,7 @@ export async function addExpInTransaction(
 
   // 사용자 문서 업데이트
   const updateData: Record<string, unknown> = {
-    exp: FieldValue.increment(amount),
+    totalExp: FieldValue.increment(amount),
     updatedAt: FieldValue.serverTimestamp(),
   };
 

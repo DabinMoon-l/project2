@@ -22,16 +22,25 @@ type Step = 'meta' | 'questions';
 
 /**
  * ProfessorQuiz의 question을 QuestionData로 변환
+ * DB는 1-indexed, 내부는 0-indexed
  */
 const convertToQuestionData = (
   question: ProfessorQuiz['questions'][0]
 ): QuestionData => {
+  // 객관식: DB의 1-indexed를 0-indexed로 변환
+  let answerIndex = -1;
+  if (question.type === 'multiple' && typeof question.answer === 'number' && question.answer > 0) {
+    answerIndex = question.answer - 1; // 1-indexed -> 0-indexed
+  } else if (question.type === 'ox' && typeof question.answer === 'number') {
+    answerIndex = question.answer; // OX는 0=O, 1=X로 그대로
+  }
+
   return {
     id: question.id,
     text: question.text,
     type: question.type,
     choices: question.choices || ['', '', '', ''],
-    answerIndex: typeof question.answer === 'number' ? question.answer : -1,
+    answerIndex,
     answerText: typeof question.answer === 'string' ? question.answer : '',
     explanation: question.explanation || '',
   };
@@ -184,15 +193,30 @@ export default function EditQuizPage() {
 
   /**
    * QuestionData를 QuizQuestion 형식으로 변환
+   * 내부 0-indexed를 DB 1-indexed로 변환
    */
-  const convertToQuizQuestion = (q: QuestionData) => ({
-    id: q.id,
-    text: q.text,
-    type: q.type,
-    choices: q.type === 'multiple' ? q.choices : undefined,
-    answer: q.type === 'subjective' ? q.answerText : q.answerIndex,
-    explanation: q.explanation || undefined,
-  });
+  const convertToQuizQuestion = (q: QuestionData) => {
+    // 정답 처리 (내부 0-indexed -> DB 1-indexed)
+    let answer: string | number;
+    if (q.type === 'subjective' || q.type === 'short_answer') {
+      answer = q.answerText;
+    } else if (q.type === 'multiple') {
+      // 객관식: 0-indexed -> 1-indexed
+      answer = q.answerIndex >= 0 ? q.answerIndex + 1 : -1;
+    } else {
+      // OX: 0=O, 1=X 그대로
+      answer = q.answerIndex;
+    }
+
+    return {
+      id: q.id,
+      text: q.text,
+      type: q.type,
+      choices: q.type === 'multiple' ? q.choices : undefined,
+      answer,
+      explanation: q.explanation || undefined,
+    };
+  };
 
   /**
    * 퀴즈 저장

@@ -4,12 +4,14 @@ import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Header, Button } from '@/components/common';
-import { QuizEditorForm, PublishToggle } from '@/components/professor';
+import { QuizEditorForm, PublishToggle, CourseSelector } from '@/components/professor';
 import QuestionEditor, { type QuestionData } from '@/components/quiz/create/QuestionEditor';
 import QuestionList from '@/components/quiz/create/QuestionList';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { useCourse } from '@/lib/contexts';
 import { useProfessorQuiz, type QuizInput, type TargetClass, type Difficulty } from '@/lib/hooks/useProfessorQuiz';
 import type { QuizMetaData } from '@/components/professor/QuizEditorForm';
+import type { CourseId } from '@/lib/types/course';
 
 // ============================================================
 // 타입 정의
@@ -31,10 +33,14 @@ type Step = 'meta' | 'questions';
 export default function CreateQuizPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const { semesterSettings } = useCourse();
   const { createQuiz, error, clearError } = useProfessorQuiz();
 
   // 단계 상태
   const [step, setStep] = useState<Step>('meta');
+
+  // 선택된 과목
+  const [selectedCourseId, setSelectedCourseId] = useState<CourseId | null>(null);
 
   // 퀴즈 메타 정보
   const [quizMeta, setQuizMeta] = useState<QuizMetaData>({
@@ -127,16 +133,134 @@ export default function CreateQuizPage() {
   }, []);
 
   /**
-   * QuestionData를 QuizQuestion 형식으로 변환
+   * QuestionData 배열을 펼쳐서 QuizQuestion 형식으로 변환
+   * 결합형 문제의 하위 문제들을 개별 문제로 펼침
    */
-  const convertToQuizQuestion = (q: QuestionData) => ({
-    id: q.id,
-    text: q.text,
-    type: q.type,
-    choices: q.type === 'multiple' ? q.choices : undefined,
-    answer: q.type === 'subjective' ? q.answerText : q.answerIndex,
-    explanation: q.explanation || undefined,
-  });
+  const convertToQuizQuestions = (questionList: QuestionData[]) => {
+    const flattenedQuestions: any[] = [];
+    let orderIndex = 0;
+
+    questionList.forEach((q) => {
+      // 결합형 문제: 하위 문제를 개별 문제로 펼침
+      if (q.type === 'combined' && q.subQuestions && q.subQuestions.length > 0) {
+        const combinedGroupId = `combined_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const subQuestionsCount = q.subQuestions.length;
+
+        q.subQuestions.forEach((sq, sqIndex) => {
+          // 하위 문제 정답 처리
+          let subAnswer: string | number;
+          if (sq.type === 'short_answer') {
+            const answerTexts = (sq.answerTexts || [sq.answerText || '']).filter(t => t.trim());
+            subAnswer = answerTexts.length > 1 ? answerTexts.join('|||') : answerTexts[0] || '';
+          } else if (sq.type === 'multiple') {
+            // 객관식: 1-indexed로 변환
+            if (sq.answerIndices && sq.answerIndices.length > 1) {
+              // 복수정답
+              subAnswer = sq.answerIndices.map(i => i + 1).join(',');
+            } else if (sq.answerIndices && sq.answerIndices.length === 1) {
+              // 단일정답 (answerIndices에서)
+              subAnswer = sq.answerIndices[0] + 1;
+            } else if (sq.answerIndex !== undefined && sq.answerIndex >= 0) {
+              // 단일정답 (answerIndex에서)
+              subAnswer = sq.answerIndex + 1;
+            } else {
+              subAnswer = -1;
+            }
+          } else {
+            // OX: 0 = O, 1 = X (그대로 저장)
+            subAnswer = sq.answerIndex ?? -1;
+          }
+
+          const subQuestionData: any = {
+            order: orderIndex++,
+            text: sq.text,
+            type: sq.type,
+            choices: sq.type === 'multiple' ? sq.choices?.filter((c) => c.trim()) : undefined,
+            answer: subAnswer,
+            explanation: sq.explanation || undefined,
+            imageUrl: sq.image || undefined,
+            examples: sq.examples ? {
+              type: sq.examplesType || 'text',
+              items: sq.examples.filter((item) => item.trim()),
+            } : sq.koreanAbcExamples ? {
+              type: 'labeled',
+              items: sq.koreanAbcExamples.map(item => item.text).filter(t => t.trim()),
+            } : undefined,
+            // 결합형 그룹 정보
+            combinedGroupId,
+            combinedIndex: sqIndex,
+            combinedTotal: subQuestionsCount,
+          };
+
+          // 첫 번째 하위 문제에만 공통 지문 정보 포함
+          if (sqIndex === 0) {
+            subQuestionData.passageType = q.passageType || 'text';
+            subQuestionData.passage = q.passageType === 'text' ? (q.passage || q.text || '') : '';
+            subQuestionData.passageImage = q.passageImage || undefined;
+            subQuestionData.koreanAbcItems = q.passageType === 'korean_abc'
+              ? (q.koreanAbcItems || []).filter((item) => item.text?.trim()).map(item => item.text)
+              : undefined;
+            subQuestionData.combinedMainText = q.text || '';
+          }
+
+          flattenedQuestions.push(subQuestionData);
+        });
+      } else {
+        // 일반 문제 처리
+        let answer: string | number;
+        if (q.type === 'subjective' || q.type === 'short_answer') {
+          const answerTexts = (q.answerTexts || [q.answerText]).filter(t => t.trim());
+          answer = answerTexts.length > 1 ? answerTexts.join('|||') : answerTexts[0] || '';
+        } else if (q.type === 'multiple') {
+          // 객관식: 1-indexed로 변환
+          if (q.answerIndices && q.answerIndices.length > 1) {
+            // 복수정답
+            answer = q.answerIndices.map(i => i + 1).join(',');
+          } else if (q.answerIndices && q.answerIndices.length === 1) {
+            // 단일정답 (answerIndices에서)
+            answer = q.answerIndices[0] + 1;
+          } else if (q.answerIndex !== undefined && q.answerIndex >= 0) {
+            // 단일정답 (answerIndex에서)
+            answer = q.answerIndex + 1;
+          } else {
+            answer = -1;
+          }
+        } else {
+          // OX: 0 = O, 1 = X (그대로 저장)
+          answer = q.answerIndex;
+        }
+
+        flattenedQuestions.push({
+          order: orderIndex++,
+          id: q.id,
+          text: q.text,
+          type: q.type === 'subjective' ? 'short_answer' : q.type,
+          choices: q.type === 'multiple' ? q.choices.filter((c) => c.trim()) : undefined,
+          answer,
+          explanation: q.explanation || undefined,
+          imageUrl: q.imageUrl || undefined,
+          examples: q.examples ? {
+            type: q.examples.type,
+            items: q.examples.items.filter((item) => item.trim()),
+          } : undefined,
+        });
+      }
+    });
+
+    return flattenedQuestions;
+  };
+
+  /**
+   * 실제 문제 수 계산 (결합형 하위 문제 포함)
+   */
+  const calculateQuestionCount = (questionList: QuestionData[]) => {
+    return questionList.reduce((total, q) => {
+      if (q.type === 'combined' && q.subQuestions && q.subQuestions.length > 0) {
+        return total + q.subQuestions.length;
+      }
+      return total + 1;
+    }, 0);
+  };
 
   /**
    * 퀴즈 저장
@@ -157,13 +281,16 @@ export default function CreateQuizPage() {
         setSaving(true);
         clearError();
 
+        const flattenedQuestions = convertToQuizQuestions(questions);
         const quizInput: QuizInput = {
           title: quizMeta.title,
           description: quizMeta.description || undefined,
           targetClass: quizMeta.targetClass,
           difficulty: quizMeta.difficulty,
           isPublished,
-          questions: questions.map(convertToQuizQuestion),
+          questions: flattenedQuestions,
+          questionCount: calculateQuestionCount(questions),
+          courseId: selectedCourseId,
         };
 
         const quizId = await createQuiz(
@@ -180,7 +307,7 @@ export default function CreateQuizPage() {
         setSaving(false);
       }
     },
-    [user, quizMeta, questions, createQuiz, clearError, router]
+    [user, quizMeta, questions, selectedCourseId, createQuiz, clearError, router]
   );
 
   /**
@@ -268,16 +395,40 @@ export default function CreateQuizPage() {
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
-              className="bg-white rounded-2xl p-5 shadow-sm"
+              className="space-y-4"
             >
-              <QuizEditorForm
-                data={quizMeta}
-                onChange={setQuizMeta}
-                errors={errors}
-              />
+              {/* 과목 선택 */}
+              <div className="bg-white rounded-2xl p-5 shadow-sm">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  과목 선택
+                </label>
+                <CourseSelector
+                  selectedCourseId={selectedCourseId}
+                  onCourseChange={setSelectedCourseId}
+                  showAllOption={false}
+                />
+                {!selectedCourseId && (
+                  <p className="text-xs text-amber-600 mt-2">
+                    * 과목을 선택해주세요
+                  </p>
+                )}
+              </div>
+
+              {/* 퀴즈 정보 */}
+              <div className="bg-white rounded-2xl p-5 shadow-sm">
+                <QuizEditorForm
+                  data={quizMeta}
+                  onChange={setQuizMeta}
+                  errors={errors}
+                />
+              </div>
 
               <div className="mt-6">
-                <Button fullWidth onClick={handleNextStep}>
+                <Button
+                  fullWidth
+                  onClick={handleNextStep}
+                  disabled={!selectedCourseId}
+                >
                   다음: 문제 편집
                 </Button>
               </div>
@@ -358,6 +509,7 @@ export default function CreateQuizPage() {
                     }
                     onSave={handleSaveQuestion}
                     onCancel={handleCancelEdit}
+                    userRole="professor"
                   />
                 )}
               </AnimatePresence>

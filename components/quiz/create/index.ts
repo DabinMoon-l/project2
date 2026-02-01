@@ -8,8 +8,8 @@ export { default as ImageUploader } from './ImageUploader';
 export { default as OCRProcessor } from './OCRProcessor';
 
 // QuestionEditor: 문제 편집기 컴포넌트
-export { default as QuestionEditor } from './QuestionEditor';
-export type { QuestionData } from './QuestionEditor';
+export { default as QuestionEditor, calculateTotalQuestionCount } from './QuestionEditor';
+export type { QuestionData, ExamplesData, ExamplesType } from './QuestionEditor';
 
 // QuestionList: 문제 목록 컴포넌트
 export { default as QuestionList } from './QuestionList';

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <rect width="200" height="200" fill="#EDEAE4"/>
+
+  <!-- 토끼 귀 -->
+  <ellipse cx="70" cy="60" rx="15" ry="35" fill="#1A1A1A"/>
+  <ellipse cx="130" cy="60" rx="15" ry="35" fill="#1A1A1A"/>
+  <ellipse cx="70" cy="60" rx="8" ry="25" fill="#F5F0E8"/>
+  <ellipse cx="130" cy="60" rx="8" ry="25" fill="#F5F0E8"/>
+
+  <!-- 토끼 얼굴 -->
+  <circle cx="100" cy="115" r="45" fill="#1A1A1A"/>
+
+  <!-- 눈 -->
+  <circle cx="85" cy="105" r="8" fill="#F5F0E8"/>
+  <circle cx="115" cy="105" r="8" fill="#F5F0E8"/>
+  <circle cx="87" cy="103" r="4" fill="#1A1A1A"/>
+  <circle cx="117" cy="103" r="4" fill="#1A1A1A"/>
+
+  <!-- 코 -->
+  <ellipse cx="100" cy="125" rx="6" ry="4" fill="#F5F0E8"/>
+
+  <!-- 수염 -->
+  <line x1="60" y1="120" x2="80" y2="125" stroke="#F5F0E8" stroke-width="2"/>
+  <line x1="60" y1="130" x2="80" y2="128" stroke="#F5F0E8" stroke-width="2"/>
+  <line x1="120" y1="125" x2="140" y2="120" stroke="#F5F0E8" stroke-width="2"/>
+  <line x1="120" y1="128" x2="140" y2="130" stroke="#F5F0E8" stroke-width="2"/>
+
+  <!-- 신문 아이콘 -->
+  <rect x="70" y="165" width="60" height="25" fill="#1A1A1A" rx="2"/>
+  <line x1="75" y1="172" x2="125" y2="172" stroke="#F5F0E8" stroke-width="2"/>
+  <line x1="75" y1="178" x2="115" y2="178" stroke="#F5F0E8" stroke-width="1"/>
+  <line x1="75" y1="183" x2="105" y2="183" stroke="#F5F0E8" stroke-width="1"/>
+</svg>

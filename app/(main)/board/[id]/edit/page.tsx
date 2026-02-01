@@ -27,7 +27,6 @@ export default function EditPostPage() {
   // 폼 상태
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [isAnonymous, setIsAnonymous] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
   // 기존 이미지/파일
@@ -47,7 +46,6 @@ export default function EditPostPage() {
     if (post && !initialized) {
       setTitle(post.title);
       setContent(post.content);
-      setIsAnonymous(post.isAnonymous);
       setExistingImages(post.imageUrls || (post.imageUrl ? [post.imageUrl] : []));
       setExistingFiles(post.fileUrls || []);
       setInitialized(true);
@@ -192,7 +190,7 @@ export default function EditPostPage() {
       const updateData: Record<string, unknown> = {
         title: title.trim(),
         content: content.trim(),
-        isAnonymous,
+        isAnonymous: false,
         imageUrls: uploadedImageUrls.length > 0 ? uploadedImageUrls : [],
         fileUrls: uploadedFiles.length > 0 ? uploadedFiles : [],
       };
@@ -212,7 +210,7 @@ export default function EditPostPage() {
     } catch (err) {
       console.error('글 수정 실패:', err);
     }
-  }, [isValid, updating, uploading, existingImages, existingFiles, newImages, newFiles, title, content, isAnonymous, uploadImage, uploadFile, updatePost, postId, router]);
+  }, [isValid, updating, uploading, existingImages, existingFiles, newImages, newFiles, title, content, uploadImage, uploadFile, updatePost, postId, router]);
 
   /**
    * 뒤로가기
@@ -233,7 +231,7 @@ export default function EditPostPage() {
         <header className="border-b-4 border-double border-[#1A1A1A] mx-4 mt-4 pb-4">
           <div className="text-center py-4">
             <h1 className="font-serif-display text-3xl font-black tracking-tight text-[#1A1A1A]">
-              THE Q&A TIMES
+              JIBDAN JISUNG
             </h1>
           </div>
         </header>
@@ -290,9 +288,9 @@ export default function EditPostPage() {
         {/* 신문 제목 */}
         <div className="text-center">
           <h1 className="font-serif-display text-3xl font-black tracking-tight text-[#1A1A1A]">
-            THE Q&A TIMES
+            JIBDAN JISUNG
           </h1>
-          <p className="text-sm text-[#3A3A3A] mt-1 font-serif-elegant italic">
+          <p className="text-sm text-[#3A3A3A] mt-1  italic">
             "Edit Your Story"
           </p>
         </div>
@@ -342,7 +340,7 @@ export default function EditPostPage() {
               }}
             />
             <div
-              className="mt-1 text-xs text-right font-serif-elegant"
+              className="mt-1 text-xs text-right "
               style={{ color: theme.colors.textSecondary }}
             >
               {title.length}/100
@@ -371,7 +369,7 @@ export default function EditPostPage() {
               }}
             />
             <div
-              className="mt-1 text-xs text-right font-serif-elegant"
+              className="mt-1 text-xs text-right "
               style={{ color: theme.colors.textSecondary }}
             >
               {content.length}/2000
@@ -463,7 +461,7 @@ export default function EditPostPage() {
               <button
                 type="button"
                 onClick={() => imageInputRef.current?.click()}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-serif-display transition-colors"
+                className="flex items-center gap-2 px-4 py-2 text-sm transition-colors"
                 style={{
                   border: '1px dashed #1A1A1A',
                   backgroundColor: 'transparent',
@@ -578,7 +576,7 @@ export default function EditPostPage() {
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-serif-display transition-colors"
+                className="flex items-center gap-2 px-4 py-2 text-sm transition-colors"
                 style={{
                   border: '1px dashed #1A1A1A',
                   backgroundColor: 'transparent',
@@ -602,38 +600,13 @@ export default function EditPostPage() {
             />
           </div>
 
-          {/* 옵션 */}
+          {/* 상태 안내 */}
           <div
-            className="flex items-center justify-between py-3 border-t border-b mb-4"
+            className="flex items-center justify-end py-3 border-t border-b mb-4"
             style={{ borderColor: '#D4CFC4' }}
           >
-            {/* 익명 옵션 */}
-            <label className="flex items-center gap-3 cursor-pointer">
-              <div
-                className="w-5 h-5 flex items-center justify-center transition-colors"
-                style={{
-                  border: '1px solid #1A1A1A',
-                  backgroundColor: isAnonymous ? '#1A1A1A' : 'transparent',
-                }}
-                onClick={() => setIsAnonymous(!isAnonymous)}
-              >
-                {isAnonymous && (
-                  <svg className="w-3 h-3" fill="#F5F0E8" viewBox="0 0 24 24">
-                    <path d="M20.285 2l-11.285 11.567-5.286-5.011-3.714 3.716 9 8.728 15-15.285z" />
-                  </svg>
-                )}
-              </div>
-              <span
-                className="text-sm font-serif-display"
-                style={{ color: theme.colors.text }}
-              >
-                익명의 기자로 작성
-              </span>
-            </label>
-
-            {/* 상태 안내 */}
             <span
-              className="text-xs font-serif-elegant italic"
+              className="text-xs italic"
               style={{ color: theme.colors.textSecondary }}
             >
               {uploading && 'Uploading...'}
@@ -679,8 +652,8 @@ export default function EditPostPage() {
       {/* 하단 장식 */}
       <div className="mt-8 mx-4">
         <div className="border-t-4 border-double border-[#1A1A1A] pt-2">
-          <p className="text-center text-sm text-[#3A3A3A] font-serif-elegant italic">
-            © {new Date().getFullYear()} The Q&A Times. All rights reserved.
+          <p className="text-center text-sm text-[#3A3A3A]  italic">
+            © {new Date().getFullYear()} Jibdan Jisung. All rights reserved.
           </p>
         </div>
       </div>
