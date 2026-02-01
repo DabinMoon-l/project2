@@ -215,28 +215,81 @@ await setDoc(doc(db, 'users', uid), {
 ### 온보딩 완료 후 리다이렉트
 `onboarding_just_completed` localStorage 플래그를 사용하여 온보딩 직후 홈 화면 진입 시 다시 온보딩으로 리다이렉트되는 것을 방지함
 
-## 진행 중인 작업
+## 퀴즈 생성 시스템
 
-### 퀴즈 생성 시스템 개편 (완료)
-- [x] OCR 진행률 컴포넌트 앱 스타일 적용 (`OcrProgress.tsx`, `OCRProcessor.tsx`)
-- [x] OCR 처리 취소 기능 추가
-- [x] 퀴즈 생성 페이지 레이아웃 수정 (sticky 버튼, flex 레이아웃)
-- [x] OCR 뒤로가기 시 재시작 버그 수정
-- [x] `lib/ocr.ts` 타입 정의 확장 (QuestionType 5종, RubricItem, SubQuestion)
-- [x] `QuestionEditor.tsx` 리팩토링 (5가지 문제 유형 지원)
-  - 객관식 선지 수 조절 (2~8개)
-  - 서술형 루브릭 편집기
-  - 결합형 문제 지원 (공통 지문/이미지 + 하위 문제)
+### 역할별 문제 유형
+| 역할 | 선택 가능한 유형 |
+|------|-----------------|
+| **학생** | OX, 객관식, 주관식, 결합형 (4개) |
+| **교수** | OX, 객관식, 단답형, 서술형, 결합형 (5개) |
 
-### 타입 정의 (`lib/ocr.ts`)
+- 학생의 "주관식" = 내부적으로 `short_answer` (단답형)
+- `QuestionEditor`에 `userRole?: 'student' | 'professor'` prop 전달
+
+### 문제 유형별 기능
+
+#### 객관식
+- 선지 2~8개 동적 추가/삭제
+- **복수정답 모드**: ON/OFF 토글 (녹색 스타일)
+
+#### 서술형 (교수 전용)
+- **채점 방식 선택**: AI 보조 / 수동
+- **AI 보조**: 루브릭 필수, 예상 비용 안내 (160명 기준 약 3,000원)
+- **수동**: 루브릭 선택사항, 토글로 추가/삭제
+- 모범답안 입력 필드 제공
+
+#### 결합형
+- **공통 지문**: 텍스트 박스 / ㄱ.ㄴ.ㄷ. 형식 중 선택
+- **공통 이미지**: 별도 업로드
+- **필수 조건**: 공통 지문 OR 공통 이미지 중 하나 이상
+- **하위 문제**: OX, 객관식, 단답형 (서술형 제외)
+  - 각 하위 문제에 보기 (텍스트/ㄱㄴㄷ) + 이미지 추가 가능
+  - 객관식은 복수정답 지원
+- **문제 수 계산**: 하위 문제 N개 = N문제로 계산 (`calculateTotalQuestionCount()`)
+
+### 타입 정의
+
+#### `lib/ocr.ts`
 ```typescript
-// 문제 유형
 type QuestionType = 'ox' | 'multiple' | 'short_answer' | 'essay' | 'combined';
 
-// 서술형 루브릭 항목
 interface RubricItem {
   criteria: string;      // 평가요소 이름
   percentage: number;    // 배점 비율 (0-100)
   description?: string;  // 평가 기준 상세 설명
 }
 ```
+
+#### `lib/scoring.ts` (부분점수 채점)
+```typescript
+// 주요 함수
+calculateEssayScore(rubricScores)      // 루브릭 점수 합산
+createEmptyEssayScore(questionId, rubric)  // 빈 채점 결과 생성
+validateEssayScore(result)             // 유효성 검사
+updateRubricScore(result, index, score, feedback)  // 점수 업데이트
+generateScoreSummary(result)           // 채점 결과 텍스트 요약
+```
+
+### 한글 라벨 상수
+```typescript
+// components/quiz/create/QuestionEditor.tsx
+export const KOREAN_LABELS = ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
+```
+
+## 진행 중인 작업
+
+### 퀴즈 생성 시스템 개편 (완료)
+- [x] OCR 진행률 컴포넌트 앱 스타일 적용
+- [x] OCR 처리 취소 기능 추가
+- [x] 역할별 문제 유형 필터링 (학생/교수)
+- [x] 서술형 채점 방식 선택 (AI 보조/수동)
+- [x] 결합형 공통 지문 형식 선택 (텍스트/ㄱㄴㄷ)
+- [x] 하위 문제 보기 형식 선택 + 이미지 지원
+- [x] 하위 문제 객관식 복수정답 기능
+- [x] 문제 수 계산 로직 (`calculateTotalQuestionCount`)
+- [x] 부분점수 채점 로직 (`lib/scoring.ts`)
+
+### 할 일
+- [ ] AI 보조 채점 Cloud Function 구현 (Claude API 연동)
+- [ ] 퀴즈 생성 페이지에서 `userRole` prop 전달 (현재 사용자 역할 기반)
+- [ ] 서술형 채점 UI 구현 (교수용)
