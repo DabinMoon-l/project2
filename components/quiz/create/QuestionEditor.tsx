@@ -49,7 +49,7 @@ export interface KoreanAbcItem {
 export interface SubQuestion {
   id: string;
   text: string;
-  type: Exclude<QuestionType, 'combined'>;
+  type: Exclude<QuestionType, 'combined' | 'essay'>;
   choices?: string[];
   answerIndex?: number;
   answerIndices?: number[];
@@ -147,13 +147,12 @@ const typeLabels: Record<QuestionType, string> = {
 };
 
 /**
- * 하위 문제용 유형 라벨 (결합형 제외)
+ * 하위 문제용 유형 라벨 (결합형, 서술형 제외)
  */
-const subQuestionTypeLabels: Record<Exclude<QuestionType, 'combined'>, string> = {
+const subQuestionTypeLabels: Record<Exclude<QuestionType, 'combined' | 'essay'>, string> = {
   ox: 'OX',
   multiple: '객관식',
   short_answer: '단답형',
-  essay: '서술형',
 };
 
 /**
@@ -433,7 +432,7 @@ function SubQuestionEditor({
 
       {/* 유형 선택 */}
       <div className="flex gap-1 mb-3">
-        {(Object.keys(subQuestionTypeLabels) as Exclude<QuestionType, 'combined'>[]).map((type) => (
+        {(Object.keys(subQuestionTypeLabels) as Exclude<QuestionType, 'combined' | 'essay'>[]).map((type) => (
           <button
             key={type}
             type="button"
