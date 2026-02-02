@@ -27,6 +27,7 @@ export default function EditQuizPage() {
   // 퀴즈 데이터
   const [title, setTitle] = useState('');
   const [questions, setQuestions] = useState<QuestionData[]>([]);
+  const [originalQuestions, setOriginalQuestions] = useState<any[]>([]); // 원본 문제 (수정 감지용)
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [isAddingNew, setIsAddingNew] = useState(false);
 
@@ -53,6 +54,9 @@ export default function EditQuizPage() {
         }
 
         setTitle(data.title || '');
+
+        // 원본 문제 저장 (수정 감지용)
+        setOriginalQuestions(data.questions || []);
 
         // 문제 데이터 변환 (DB는 1-indexed, 내부는 0-indexed)
         const loadedQuestions: QuestionData[] = (data.questions || []).map((q: any, index: number) => {
@@ -125,6 +129,47 @@ export default function EditQuizPage() {
     setIsAddingNew(false);
   }, []);
 
+  /**
+   * 문제 내용이 변경되었는지 확인
+   */
+  const isQuestionChanged = (original: any, current: QuestionData): boolean => {
+    if (!original) return true; // 새 문제
+
+    // 텍스트 비교
+    if (original.text !== current.text) return true;
+
+    // 타입 비교
+    if (original.type !== current.type) return true;
+
+    // 정답 비교
+    if (current.type === 'subjective' || current.type === 'short_answer') {
+      if (original.answer !== current.answerText) return true;
+    } else if (current.type === 'multiple') {
+      const origAnswer = typeof original.answer === 'number' ? original.answer - 1 : -1;
+      if (origAnswer !== current.answerIndex) return true;
+    } else {
+      if (original.answer !== current.answerIndex) return true;
+    }
+
+    // 선지 비교 (객관식)
+    if (current.type === 'multiple') {
+      const origChoices = original.choices || [];
+      const currChoices = current.choices.filter((c) => c.trim());
+      if (origChoices.length !== currChoices.length) return true;
+      for (let i = 0; i < currChoices.length; i++) {
+        if (origChoices[i] !== currChoices[i]) return true;
+      }
+    }
+
+    // 해설 비교
+    if ((original.explanation || '') !== (current.explanation || '')) return true;
+
+    // 이미지 비교
+    if ((original.imageUrl || null) !== (current.imageUrl || null)) return true;
+
+    return false;
+  };
+
   // 퀴즈 저장
   const handleSave = async () => {
     if (!user || !quizId) return;
@@ -157,6 +202,10 @@ export default function EditQuizPage() {
             answer = q.answerIndex;
           }
 
+          // 기존 문제 찾기
+          const originalQ = originalQuestions.find((oq) => oq.id === q.id);
+          const hasChanged = isQuestionChanged(originalQ, q);
+
           return {
             id: q.id,
             order: index,
@@ -167,6 +216,8 @@ export default function EditQuizPage() {
             explanation: q.explanation || null,
             imageUrl: q.imageUrl || null,
             examples: q.examples || null,
+            // 문제별 수정 시간: 변경된 경우에만 업데이트, 그렇지 않으면 기존 값 유지
+            questionUpdatedAt: hasChanged ? serverTimestamp() : (originalQ?.questionUpdatedAt || null),
           };
         }),
         questionCount: questions.length,
@@ -288,6 +339,7 @@ export default function EditQuizPage() {
                 questions={questions}
                 onQuestionsChange={setQuestions}
                 onEditQuestion={handleEditQuestion}
+                userRole="student"
               />
             </div>
 

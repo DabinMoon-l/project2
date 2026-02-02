@@ -171,16 +171,16 @@ async function deleteStudentAccount(
     }
   }
 
-  // 2. 골드 히스토리 삭제 (서브컬렉션)
-  const goldHistorySnapshot = await db
+  // 2. 경험치 히스토리 삭제 (서브컬렉션)
+  const expHistorySnapshot = await db
     .collection("users")
     .doc(userId)
-    .collection("goldHistory")
+    .collection("expHistory")
     .get();
 
-  if (!goldHistorySnapshot.empty) {
+  if (!expHistorySnapshot.empty) {
     const batch = db.batch();
-    for (const doc of goldHistorySnapshot.docs) {
+    for (const doc of expHistorySnapshot.docs) {
       batch.delete(doc.ref);
     }
     await batch.commit();

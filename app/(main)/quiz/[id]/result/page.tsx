@@ -241,16 +241,33 @@ export default function QuizResultPage() {
           // 점수 계산 (0-100)
           const score = Math.round((correctCount / questions.length) * 100);
 
+          // 문제별 점수 객체 생성 (업데이트 시스템용)
+          const questionScores: Record<string, {
+            isCorrect: boolean;
+            userAnswer: string;
+            answeredAt: any;
+          }> = {};
+          questionResults.forEach((qr) => {
+            questionScores[qr.id] = {
+              isCorrect: qr.isCorrect,
+              userAnswer: qr.userAnswer,
+              answeredAt: serverTimestamp(),
+            };
+          });
+
           // 퀴즈 결과 저장 (score 필드 필수 - Cloud Function에서 사용)
           await addDoc(collection(db, 'quizResults'), {
             userId: user.uid,
             quizId,
             quizTitle: quizData.title || '퀴즈',
+            quizCreatorId: quizData.creatorId || null, // 퀴즈 제작자 ID (통계 조회용)
             score, // Cloud Function onQuizComplete에서 필수
             correctCount,
             totalCount: questions.length,
             earnedExp,
             answers: userAnswers,
+            questionScores, // 문제별 점수 (업데이트 시스템용)
+            isUpdate: false, // 첫 풀이 표시
             courseId: userCourseId || null,
             createdAt: serverTimestamp(),
           });

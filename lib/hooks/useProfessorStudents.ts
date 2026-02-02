@@ -42,7 +42,6 @@ export interface StudentData {
   // 통계
   level: number;
   experience: number;
-  gold: number;
   rank: StudentRank;
 
   // 퀴즈 통계
@@ -167,7 +166,6 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
       classId: data.classId || 'A',
       level: data.level || 1,
       experience: data.experience || 0,
-      gold: data.gold || 0,
       rank: data.rank || 'trainee',
       quizStats: {
         totalAttempts: data.quizStats?.totalAttempts || 0,
@@ -317,7 +315,6 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
         classId: userData.classId || 'A',
         level: userData.level || 1,
         experience: userData.experience || 0,
-        gold: userData.gold || 0,
         rank: userData.rank || 'trainee',
         quizStats: {
           totalAttempts: userData.quizStats?.totalAttempts || 0,

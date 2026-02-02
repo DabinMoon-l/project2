@@ -104,12 +104,12 @@ export default function CommentItem({
           {/* ㄴ 표시 */}
           <span className="text-base font-bold text-[#3A3A3A]">ㄴ</span>
 
-          {/* 작성자 이름 */}
+          {/* 작성자 이름: 닉네임·반 형식 */}
           <span
             className="text-sm font-semibold"
-            style={{ color: comment.isAnonymous ? '#3A3A3A' : theme.colors.text }}
+            style={{ color: theme.colors.text }}
           >
-            {comment.isAnonymous ? '익명' : comment.authorNickname}
+            {comment.authorNickname}·{comment.authorClassType || '?'}반
           </span>
 
           {/* 구분선 */}

@@ -58,6 +58,7 @@ export interface Post {
   fileUrls?: AttachedFile[]; // 첨부 파일 목록
   authorId: string;
   authorNickname: string;
+  authorClassType?: 'A' | 'B' | 'C' | 'D'; // 작성자 반
   isAnonymous: boolean;
   category: BoardCategory;
   courseId?: string; // 과목 ID (과목별 분리)
@@ -71,6 +72,8 @@ export interface Post {
   isPinned?: boolean;
   pinnedAt?: Date;
   pinnedBy?: string;
+  // 교수님께 전달 여부
+  toProfessor?: boolean;
 }
 
 /** 댓글 데이터 타입 */
@@ -80,6 +83,7 @@ export interface Comment {
   parentId?: string; // 대댓글인 경우 부모 댓글 ID
   authorId: string;
   authorNickname: string;
+  authorClassType?: 'A' | 'B' | 'C' | 'D'; // 작성자 반
   content: string;
   isAnonymous: boolean;
   createdAt: Date;
@@ -98,6 +102,7 @@ export interface CreatePostData {
   isAnonymous: boolean;
   category: BoardCategory;
   courseId?: string; // 과목 ID (과목별 분리)
+  toProfessor?: boolean; // 교수님께 전달 여부
 }
 
 /** 댓글 작성 데이터 */
@@ -210,6 +215,22 @@ interface UsePinnedPostsReturn {
   refresh: () => Promise<void>;
 }
 
+/** useToProfessorPosts 훅 반환 타입 */
+interface UseToProfessorPostsReturn {
+  posts: Post[];
+  loading: boolean;
+  error: string | null;
+  refresh: () => Promise<void>;
+}
+
+/** usePostsByClass 훅 반환 타입 */
+interface UsePostsByClassReturn {
+  posts: Post[];
+  loading: boolean;
+  error: string | null;
+  refresh: () => Promise<void>;
+}
+
 // ============================================================
 // 페이지 크기 상수
 // ============================================================
@@ -311,6 +332,7 @@ const docToPost = (doc: QueryDocumentSnapshot | DocumentSnapshot): Post => {
     fileUrls: data?.fileUrls || [],
     authorId: data?.authorId || '',
     authorNickname: data?.authorNickname || '알 수 없음',
+    authorClassType: data?.authorClassType,
     isAnonymous: data?.isAnonymous || false,
     category: data?.category || 'community',
     courseId: data?.courseId,
@@ -324,6 +346,8 @@ const docToPost = (doc: QueryDocumentSnapshot | DocumentSnapshot): Post => {
     isPinned: data?.isPinned || false,
     pinnedAt: data?.pinnedAt?.toDate(),
     pinnedBy: data?.pinnedBy,
+    // 교수님께 전달 여부
+    toProfessor: data?.toProfessor || false,
   };
 };
 
@@ -338,6 +362,7 @@ const docToComment = (doc: QueryDocumentSnapshot | DocumentSnapshot): Comment =>
     parentId: data?.parentId || undefined,
     authorId: data?.authorId || '',
     authorNickname: data?.authorNickname || '알 수 없음',
+    authorClassType: data?.authorClassType,
     content: data?.content || '',
     isAnonymous: data?.isAnonymous || false,
     createdAt: data?.createdAt?.toDate() || new Date(),
@@ -782,29 +807,34 @@ export const useCreatePost = (): UseCreatePostReturn => {
         setLoading(true);
         setError(null);
 
-        // Firestore에서 사용자 닉네임 가져오기 (보안 강화)
+        // Firestore에서 사용자 정보 가져오기 (보안 강화)
         let userNickname = '용사';
+        let userClassType: 'A' | 'B' | 'C' | 'D' | undefined;
         const userDocRef = doc(db, 'users', user.uid);
         const userDocSnap = await getDoc(userDocRef);
         if (userDocSnap.exists()) {
-          userNickname = userDocSnap.data().nickname || '용사';
+          const userData = userDocSnap.data();
+          userNickname = userData.nickname || '용사';
+          userClassType = userData.classId; // Firestore 필드명은 classId
         }
 
         const postData = {
           title: data.title,
           content: data.content,
-          isAnonymous: data.isAnonymous,
+          isAnonymous: false, // 익명 기능 사용 안 함
           category: data.category,
           courseId: data.courseId || null, // 과목 ID 저장
           imageUrl: data.imageUrl || null,
           imageUrls: data.imageUrls || [],
           fileUrls: data.fileUrls || [],
           authorId: user.uid,
-          authorNickname: data.isAnonymous ? '익명' : userNickname,
+          authorNickname: userNickname,
+          authorClassType: userClassType || null,
           likes: 0,
           likedBy: [],
           commentCount: 0,
           isNotice: false,
+          toProfessor: data.toProfessor || false, // 교수님께 전달 여부
           createdAt: serverTimestamp(),
         };
 
@@ -989,20 +1019,24 @@ export const useCreateComment = (): UseCreateCommentReturn => {
         setLoading(true);
         setError(null);
 
-        // Firestore에서 사용자 닉네임 가져오기 (보안 강화)
+        // Firestore에서 사용자 정보 가져오기 (보안 강화)
         let userNickname = '용사';
+        let userClassType: 'A' | 'B' | 'C' | 'D' | undefined;
         const userDocRef = doc(db, 'users', user.uid);
         const userDocSnap = await getDoc(userDocRef);
         if (userDocSnap.exists()) {
-          userNickname = userDocSnap.data().nickname || '용사';
+          const userData = userDocSnap.data();
+          userNickname = userData.nickname || '용사';
+          userClassType = userData.classId; // Firestore 필드명은 classId
         }
 
         const commentData: Record<string, unknown> = {
           postId: data.postId,
           authorId: user.uid,
-          authorNickname: data.isAnonymous ? '익명' : userNickname,
+          authorNickname: userNickname,
+          authorClassType: userClassType || null,
           content: data.content,
-          isAnonymous: data.isAnonymous,
+          isAnonymous: false, // 익명 기능 사용 안 함
           createdAt: serverTimestamp(),
         };
 
@@ -1608,6 +1642,150 @@ export const usePinnedPosts = (courseId?: string): UsePinnedPostsReturn => {
   return { pinnedPosts, loading, error, pinPost, unpinPost, refresh };
 };
 
+// ============================================================
+// useToProfessorPosts 훅 - 교수님께 전달된 게시글 조회
+// ============================================================
+
+/**
+ * 교수님께 전달된 게시글을 조회하는 훅 (교수님 전용)
+ *
+ * @param courseId - 과목 ID (과목별 필터링)
+ * @returns 교수님께 전달된 글 목록, 로딩 상태, 에러, 새로고침 함수
+ */
+export const useToProfessorPosts = (courseId?: string): UseToProfessorPostsReturn => {
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadPosts = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // toProfessor=true인 글 조회
+      let postsQuery;
+      if (courseId) {
+        postsQuery = query(
+          collection(db, 'posts'),
+          where('courseId', '==', courseId),
+          where('toProfessor', '==', true),
+          orderBy('createdAt', 'desc'),
+          limit(50)
+        );
+      } else {
+        postsQuery = query(
+          collection(db, 'posts'),
+          where('toProfessor', '==', true),
+          orderBy('createdAt', 'desc'),
+          limit(50)
+        );
+      }
+
+      const snapshot = await getDocs(postsQuery);
+      const loadedPosts = snapshot.docs.map(docToPost);
+      setPosts(loadedPosts);
+    } catch (err) {
+      console.error('교수님께 전달된 글 로드 실패:', err);
+      setError('글을 불러오는데 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  }, [courseId]);
+
+  const refresh = useCallback(async () => {
+    await loadPosts();
+  }, [loadPosts]);
+
+  useEffect(() => {
+    loadPosts();
+  }, [loadPosts]);
+
+  return { posts, loading, error, refresh };
+};
+
+// ============================================================
+// usePostsByClass 훅 - 반별 게시글 조회
+// ============================================================
+
+/**
+ * 반별 게시글을 조회하는 훅 (교수님 전용)
+ *
+ * @param courseId - 과목 ID (과목별 필터링)
+ * @param classType - 반 ('A', 'B', 'C', 'D' 또는 undefined면 전체)
+ * @returns 해당 반 글 목록, 로딩 상태, 에러, 새로고침 함수
+ */
+export const usePostsByClass = (
+  courseId?: string,
+  classType?: 'A' | 'B' | 'C' | 'D'
+): UsePostsByClassReturn => {
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadPosts = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // 반별 글 조회
+      let postsQuery;
+
+      if (courseId && classType) {
+        // 과목 + 반 필터링
+        postsQuery = query(
+          collection(db, 'posts'),
+          where('courseId', '==', courseId),
+          where('authorClassType', '==', classType),
+          orderBy('createdAt', 'desc'),
+          limit(50)
+        );
+      } else if (courseId) {
+        // 과목만 필터링
+        postsQuery = query(
+          collection(db, 'posts'),
+          where('courseId', '==', courseId),
+          orderBy('createdAt', 'desc'),
+          limit(50)
+        );
+      } else if (classType) {
+        // 반만 필터링
+        postsQuery = query(
+          collection(db, 'posts'),
+          where('authorClassType', '==', classType),
+          orderBy('createdAt', 'desc'),
+          limit(50)
+        );
+      } else {
+        // 전체 조회
+        postsQuery = query(
+          collection(db, 'posts'),
+          orderBy('createdAt', 'desc'),
+          limit(50)
+        );
+      }
+
+      const snapshot = await getDocs(postsQuery);
+      const loadedPosts = snapshot.docs.map(docToPost);
+      setPosts(loadedPosts);
+    } catch (err) {
+      console.error('반별 글 로드 실패:', err);
+      setError('글을 불러오는데 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  }, [courseId, classType]);
+
+  const refresh = useCallback(async () => {
+    await loadPosts();
+  }, [loadPosts]);
+
+  useEffect(() => {
+    loadPosts();
+  }, [loadPosts]);
+
+  return { posts, loading, error, refresh };
+};
+
 // 기본 내보내기
 export default {
   usePosts,
@@ -1625,4 +1803,6 @@ export default {
   useCommentLike,
   useMyLikedPosts,
   usePinnedPosts,
+  useToProfessorPosts,
+  usePostsByClass,
 };

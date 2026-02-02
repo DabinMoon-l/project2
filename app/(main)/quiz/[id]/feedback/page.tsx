@@ -56,6 +56,7 @@ interface QuestionResult {
 interface FeedbackPageData {
   quizId: string;
   quizTitle: string;
+  quizCreatorId: string;
   questionResults: QuestionResult[];
   hasSubmittedFeedback: boolean;
 }
@@ -246,6 +247,7 @@ export default function FeedbackPage() {
       setPageData({
         quizId,
         quizTitle: quizData.title || '퀴즈',
+        quizCreatorId: quizData.creatorId || '',
         questionResults,
         hasSubmittedFeedback,
       });
@@ -330,6 +332,7 @@ export default function FeedbackPage() {
           await addDoc(collection(db, 'feedbacks'), {
             userId: user.uid,
             quizId: pageData.quizId,
+            quizCreatorId: pageData.quizCreatorId, // 퀴즈 제작자 ID 추가
             questionId,
             feedbackType,
             feedback: feedback.trim(),
@@ -441,6 +444,26 @@ export default function FeedbackPage() {
         <button
           onClick={() => router.push('/quiz')}
           className="px-6 py-2 bg-[#1A1A1A] text-[#F5F0E8] font-bold"
+        >
+          퀴즈 목록으로
+        </button>
+      </div>
+    );
+  }
+
+  // 자신이 만든 퀴즈인 경우
+  if (user && pageData.quizCreatorId === user.uid) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-4" style={{ backgroundColor: '#F5F0E8' }}>
+        <h2 className="text-xl font-bold text-[#1A1A1A] mb-2">
+          피드백을 남길 수 없습니다
+        </h2>
+        <p className="text-[#5C5C5C] text-center mb-6">
+          자신이 만든 퀴즈에는 피드백을 남길 수 없습니다.
+        </p>
+        <button
+          onClick={() => router.push('/quiz')}
+          className="px-6 py-3 bg-[#1A1A1A] text-[#F5F0E8] font-bold"
         >
           퀴즈 목록으로
         </button>

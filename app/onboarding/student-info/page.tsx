@@ -15,7 +15,6 @@ import {
   type SemesterSettings,
   determineCourse,
   getAvailableGrades,
-  COURSES,
 } from '@/lib/types/course';
 
 /**
@@ -281,7 +280,7 @@ export default function StudentInfoPage() {
       </header>
 
       {/* 메인 컨텐츠 */}
-      <main className="flex-1 px-4 py-6 overflow-y-auto relative z-10 flex items-center justify-center">
+      <main className="flex-1 px-4 pt-0 pb-6 overflow-y-auto relative z-10 flex items-start justify-center">
         <motion.div
           className="max-w-md w-full space-y-6"
           initial={{ opacity: 0, y: 20 }}
@@ -444,17 +443,11 @@ export default function StudentInfoPage() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="bg-white/20 backdrop-blur-sm border border-white/30 rounded-xl p-4 text-center shadow-lg"
+                className="-mt-4 bg-white/20 backdrop-blur-sm border border-white/30 rounded-xl p-4 text-center shadow-lg"
               >
                 <p className="text-sm text-white/80 mb-1">배정 과목</p>
                 <p className="text-xl font-bold text-white">
                   {selectedCourse.courseName}
-                </p>
-                <p className="text-xs text-white/60 mt-1">
-                  {COURSES[selectedCourse.courseId].isUniverseSeparated
-                    ? `${formData.classType}반과 함께 학습합니다`
-                    : '전체 학생과 함께 학습합니다'
-                  }
                 </p>
               </motion.div>
             )}

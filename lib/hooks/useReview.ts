@@ -736,7 +736,8 @@ export const useReview = (): UseReviewReturn => {
   }, []);
 
   /**
-   * 퀴즈에서 업데이트된 문제를 review 항목에 추가
+   * 퀴즈에서 업데이트된 문제를 review 항목에 반영
+   * 기존 리뷰 데이터를 최대한 보존하면서 문제 내용만 업데이트
    */
   const updateReviewItemsFromQuiz = useCallback(async (quizId: string): Promise<void> => {
     if (!user) return;
@@ -751,7 +752,7 @@ export const useReview = (): UseReviewReturn => {
       const quizTitle = quizData.title || '퀴즈';
       const quizUpdatedAt = quizData.updatedAt || quizData.createdAt || null;
 
-      // 해당 퀴즈의 기존 review 항목들 삭제
+      // 해당 퀴즈의 기존 review 항목들 가져오기
       const existingReviewsQuery = query(
         collection(db, 'reviews'),
         where('userId', '==', user.uid),
@@ -759,54 +760,97 @@ export const useReview = (): UseReviewReturn => {
       );
       const existingReviews = await getDocs(existingReviewsQuery);
 
-      // 기존 항목의 reviewType 보존
-      const existingTypes: Record<string, Set<string>> = {};
+      // 기존 리뷰를 questionId+reviewType 키로 매핑
+      const existingReviewMap = new Map<string, { docId: string; data: any }>();
       existingReviews.forEach((docSnapshot) => {
         const data = docSnapshot.data();
-        const questionId = data.questionId;
-        if (!existingTypes[questionId]) {
-          existingTypes[questionId] = new Set();
-        }
-        existingTypes[questionId].add(data.reviewType);
+        const key = `${data.questionId}-${data.reviewType}`;
+        existingReviewMap.set(key, { docId: docSnapshot.id, data });
       });
 
-      // 기존 항목 삭제
-      for (const docSnapshot of existingReviews.docs) {
-        await deleteDoc(docSnapshot.ref);
-      }
+      // 새 퀴즈의 questionId 집합
+      const newQuestionIds = new Set<string>();
+      questions.forEach((q: any, i: number) => {
+        newQuestionIds.add(q.id || `q${i}`);
+      });
 
-      // 새로운 문제로 review 항목 재생성
+      // 기존 리뷰에서 새 퀴즈에 없는 문제의 리뷰는 삭제하지 않고 유지
+      // (단, questionId가 완전히 달라진 경우는 인덱스 기반으로 매핑 시도)
+
+      // 인덱스 기반 매핑을 위해 기존 리뷰의 questionId 추출 (sorted)
+      const existingQuestionIds = new Set<string>();
+      existingReviews.forEach((docSnapshot) => {
+        existingQuestionIds.add(docSnapshot.data().questionId);
+      });
+
+      // 각 문제에 대해 업데이트 또는 생성
       for (let i = 0; i < questions.length; i++) {
         const q = questions[i];
         const questionId = q.id || `q${i}`;
-        const types = existingTypes[questionId] || new Set(['solved']);
 
         // 타입 정규화: subjective -> short
         const rawType = q.type || 'short';
         const normalizedType = rawType === 'subjective' ? 'short' : rawType;
 
-        for (const reviewType of types) {
-          await addDoc(collection(db, 'reviews'), {
-            userId: user.uid,
-            quizId,
-            quizTitle,
-            questionId,
-            question: q.text || q.question || '',
-            type: normalizedType,
-            options: q.choices || q.options || [],
-            correctAnswer: q.correctAnswer || q.answer || '',
-            userAnswer: '', // 업데이트된 문제는 새로 풀어야 함
-            explanation: q.explanation || '',
-            reviewType,
-            isBookmarked: reviewType === 'bookmark',
-            isCorrect: null,
-            reviewCount: 0,
-            lastReviewedAt: null,
-            quizUpdatedAt,
-            createdAt: serverTimestamp(),
-          });
+        // 이 문제에 대한 기존 리뷰 타입들 찾기
+        const existingTypesForQuestion: string[] = [];
+        existingReviewMap.forEach((value, key) => {
+          if (key.startsWith(`${questionId}-`)) {
+            existingTypesForQuestion.push(key.split('-')[1]);
+          }
+        });
+
+        // 기존 타입이 없으면 'solved'만 생성
+        const typesToProcess = existingTypesForQuestion.length > 0
+          ? existingTypesForQuestion
+          : ['solved'];
+
+        for (const reviewType of typesToProcess) {
+          const key = `${questionId}-${reviewType}`;
+          const existing = existingReviewMap.get(key);
+
+          if (existing) {
+            // 기존 리뷰 업데이트 - 문제 내용만 업데이트하고 userAnswer, isCorrect 등은 유지
+            await updateDoc(doc(db, 'reviews', existing.docId), {
+              quizTitle,
+              question: q.text || q.question || '',
+              type: normalizedType,
+              options: q.choices || q.options || [],
+              correctAnswer: q.correctAnswer || q.answer || '',
+              explanation: q.explanation || '',
+              quizUpdatedAt,
+              // userAnswer, isCorrect, reviewCount, lastReviewedAt 등은 유지
+            });
+            // 처리됨 표시
+            existingReviewMap.delete(key);
+          } else {
+            // 새 리뷰 생성
+            await addDoc(collection(db, 'reviews'), {
+              userId: user.uid,
+              quizId,
+              quizTitle,
+              questionId,
+              question: q.text || q.question || '',
+              type: normalizedType,
+              options: q.choices || q.options || [],
+              correctAnswer: q.correctAnswer || q.answer || '',
+              userAnswer: '',
+              explanation: q.explanation || '',
+              reviewType,
+              isBookmarked: reviewType === 'bookmark',
+              isCorrect: null,
+              reviewCount: 0,
+              lastReviewedAt: null,
+              quizUpdatedAt,
+              courseId: userCourseId || null,
+              createdAt: serverTimestamp(),
+            });
+          }
         }
       }
+
+      // 남은 기존 리뷰들 (새 퀴즈에 없는 문제들)은 삭제하지 않고 유지
+      // 사용자가 직접 삭제할 때까지 보존
 
       // 업데이트 정보 제거
       setUpdatedQuizzes((prev) => {
@@ -821,7 +865,7 @@ export const useReview = (): UseReviewReturn => {
       console.error('문제 업데이트 실패:', err);
       throw new Error('문제 업데이트에 실패했습니다.');
     }
-  }, [user]);
+  }, [user, userCourseId]);
 
   /**
    * 커스텀 폴더 생성

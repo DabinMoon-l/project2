@@ -106,7 +106,7 @@ export function UserProvider({ children }: UserProviderProps) {
             uid: user.uid,
             email: data.email || user.email || '',
             nickname: data.nickname || '용사',
-            classType: data.classType || 'A',
+            classType: data.classId || 'A', // Firestore 필드명은 classId
             studentId: data.studentId,
             department: data.department,
             // courseId에서 따옴표 제거 (Firestore 데이터 문제 대응)
@@ -117,7 +117,6 @@ export function UserProvider({ children }: UserProviderProps) {
               beard: 0,
             },
             equipment: data.equipment || {},
-            gold: data.gold || 0,
             totalExp,
             level: calculateLevel(totalExp),
             rank: calculateRank(totalExp),

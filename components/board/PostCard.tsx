@@ -85,9 +85,9 @@ function PostCard({ post, onClick }: PostCardProps) {
 
       {/* 푸터: 작성자, 좋아요, 댓글 */}
       <div className="flex items-center justify-between">
-        {/* 작성자 */}
+        {/* 작성자: 닉네임·반 형식 */}
         <span className="text-xs text-gray-500">
-          {post.isAnonymous ? '익명' : post.authorNickname}
+          {post.authorNickname}·{post.authorClassType || '?'}반
         </span>
 
         {/* 좋아요, 댓글 수 */}

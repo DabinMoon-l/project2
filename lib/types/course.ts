@@ -113,7 +113,7 @@ export const COURSES: Record<CourseId, Course> = {
     nameEn: 'Pathophysiology',
     grade: 1,
     semester: 2,
-    isUniverseSeparated: true, // 반별 분리
+    isUniverseSeparated: false, // 전체 학년 공통
     classes: ['A', 'B', 'C', 'D'],
     order: 2,
     quizRibbonImage: '/images/pathophysiology-quiz-ribbon.png',
@@ -128,7 +128,7 @@ export const COURSES: Record<CourseId, Course> = {
     nameEn: 'Microbiology',
     grade: 2,
     semester: 1,
-    isUniverseSeparated: true, // 반별 분리
+    isUniverseSeparated: false, // 전체 학년 공통
     classes: ['A', 'B', 'C', 'D'],
     order: 3,
     quizRibbonImage: '/images/microbiology-quiz-ribbon.png',

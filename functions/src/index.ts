@@ -5,9 +5,9 @@
  * 각 기능별로 모듈화되어 있으며, 여기서 통합하여 export합니다.
  *
  * 주요 기능:
- * - 퀴즈 완료 시 골드/경험치 지급
- * - 피드백 작성 시 골드 지급
- * - 게시판 활동(글/댓글/좋아요) 시 골드/경험치 지급
+ * - 퀴즈 완료 시 경험치 지급
+ * - 피드백 작성 시 경험치 지급
+ * - 게시판 활동(글/댓글/좋아요) 시 경험치 지급
  * - 도배 방지 (Rate Limiting)
  *
  * @author Hero Quiz Team
@@ -114,7 +114,7 @@ export const cleanupRateLimitsScheduled = onSchedule(
 
 /**
  * 사용자 프로필 조회 (Callable Function)
- * 골드, 경험치, 계급 등 통계 정보 반환
+ * 경험치, 계급 등 통계 정보 반환
  */
 export const getUserStats = onCall(
   { region: "asia-northeast3" },
@@ -134,7 +134,6 @@ export const getUserStats = onCall(
     const userData = userDoc.data()!;
 
     return {
-      gold: userData.gold || 0,
       exp: userData.exp || 0,
       rank: userData.rank || "견습생",
       quizCount: userData.quizCount || 0,
@@ -149,7 +148,7 @@ export const getUserStats = onCall(
  * 반별/전체 랭킹 조회
  *
  * @param data.classId - 반 ID (선택사항, 없으면 전체)
- * @param data.type - "gold" | "exp" | "quiz" (기본: exp)
+ * @param data.type - "exp" | "quiz" (기본: exp)
  * @param data.limit - 조회 수 (기본: 10, 최대: 50)
  */
 export const getLeaderboard = onCall(
@@ -161,7 +160,7 @@ export const getLeaderboard = onCall(
 
     const { classId, type = "exp", limit = 10 } = request.data as {
       classId?: string;
-      type?: "gold" | "exp" | "quiz";
+      type?: "exp" | "quiz";
       limit?: number;
     };
 
@@ -169,8 +168,7 @@ export const getLeaderboard = onCall(
     const db = getFirestore();
 
     // 정렬 필드 결정
-    const orderField = type === "gold" ? "gold" :
-                       type === "quiz" ? "quizCount" : "exp";
+    const orderField = type === "quiz" ? "quizCount" : "exp";
 
     let query = db.collection("users")
       .orderBy(orderField, "desc")
@@ -219,7 +217,7 @@ export { gradeEssay, gradeEssayBatch } from "./essay";
 /**
  * 시즌 리셋 (Callable Function - 교수님 전용)
  * 중간→기말 전환 시 계급, 갑옷/무기, Shop 아이템 초기화
- * 골드, 캐릭터 외형, 뱃지는 유지
+ * 캐릭터 외형, 뱃지는 유지
  */
 export const resetSeason = onCall(
   { region: "asia-northeast3" },
@@ -270,7 +268,7 @@ export const resetSeason = onCall(
         currentSeason: newSeason,
         seasonResetAt: FieldValue.serverTimestamp(),
 
-        // 골드, 캐릭터 외형, 뱃지는 유지 (업데이트하지 않음)
+        // 캐릭터 외형, 뱃지는 유지 (업데이트하지 않음)
         updatedAt: FieldValue.serverTimestamp(),
       });
       resetCount++;
@@ -302,82 +300,3 @@ export const resetSeason = onCall(
   }
 );
 
-// ============================================
-// 관리자 유틸리티 Functions
-// ============================================
-
-/**
- * 수동 골드 지급 (Callable Function - 교수님 전용)
- * 특별 이벤트, 보상 등을 위한 수동 골드 지급
- */
-export const grantGold = onCall(
-  { region: "asia-northeast3" },
-  async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
-    }
-
-    const adminId = request.auth.uid;
-    const db = getFirestore();
-
-    // 교수님 권한 확인
-    const adminDoc = await db.collection("users").doc(adminId).get();
-    if (!adminDoc.exists || adminDoc.data()?.role !== "professor") {
-      throw new HttpsError("permission-denied", "교수님만 골드 지급이 가능합니다.");
-    }
-
-    const { targetUserId, amount, reason } = request.data as {
-      targetUserId: string;
-      amount: number;
-      reason: string;
-    };
-
-    // 유효성 검사
-    if (!targetUserId || !amount || !reason) {
-      throw new HttpsError("invalid-argument", "targetUserId, amount, reason이 필요합니다.");
-    }
-
-    if (amount <= 0 || amount > 1000) {
-      throw new HttpsError("invalid-argument", "골드는 1~1000 사이여야 합니다.");
-    }
-
-    // 대상 사용자 확인
-    const targetUserDoc = await db.collection("users").doc(targetUserId).get();
-    if (!targetUserDoc.exists) {
-      throw new HttpsError("not-found", "대상 사용자를 찾을 수 없습니다.");
-    }
-
-    // 골드 지급
-    await db.runTransaction(async (transaction) => {
-      const userRef = db.collection("users").doc(targetUserId);
-      transaction.update(userRef, {
-        gold: FieldValue.increment(amount),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-
-      // 히스토리 기록
-      const historyRef = db.collection("users").doc(targetUserId)
-        .collection("goldHistory").doc();
-      transaction.set(historyRef, {
-        amount,
-        reason: `[관리자 지급] ${reason}`,
-        grantedBy: adminId,
-        createdAt: FieldValue.serverTimestamp(),
-      });
-    });
-
-    console.log(`수동 골드 지급: ${targetUserId}`, { amount, reason, grantedBy: adminId });
-
-    // 대상 사용자에게 알림
-    await db.collection("notifications").add({
-      userId: targetUserId,
-      type: "GOLD_GRANTED",
-      title: "골드 지급",
-      message: `${amount} 골드가 지급되었습니다. (${reason})`,
-      read: false,
-      createdAt: FieldValue.serverTimestamp(),
-    });
-
-    return { success: true, amount };
-  }
-);

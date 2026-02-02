@@ -221,16 +221,6 @@ export default function ProfileCard({ profile, onEdit }: ProfileCardProps) {
           </p>
         </div>
 
-        {/* 골드 */}
-        <div className="flex items-center justify-center gap-2">
-          <span className="text-lg">🪙</span>
-          <span
-            className="text-lg font-bold"
-            style={{ color: '#FFD700' }}
-          >
-            {profile.gold.toLocaleString()}
-          </span>
-        </div>
       </div>
     </motion.div>
   );

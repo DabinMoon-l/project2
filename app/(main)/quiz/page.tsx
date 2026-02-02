@@ -13,10 +13,14 @@ import {
   getDocs,
   deleteDoc,
   doc,
+  getDoc,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useQuizBookmark } from '@/lib/hooks/useQuizBookmark';
+import { useQuizUpdate, type QuizUpdateInfo } from '@/lib/hooks/useQuizUpdate';
+import UpdateQuizModal from '@/components/quiz/UpdateQuizModal';
+import QuizStatsModal from '@/components/quiz/manage/QuizStatsModal';
 import { Skeleton } from '@/components/common';
 import { useCourse } from '@/lib/contexts';
 import { COURSES } from '@/lib/types/course';
@@ -46,7 +50,10 @@ interface QuizCardData {
   isCompleted: boolean;
   myScore?: number;
   creatorNickname?: string;
+  creatorClassType?: 'A' | 'B' | 'C' | 'D';
   creatorId?: string;
+  hasUpdate?: boolean;
+  updatedQuestionCount?: number;
 }
 
 /**
@@ -94,6 +101,39 @@ function SlideFilter({
 }
 
 /**
+ * 완료 뱃지 컴포넌트
+ * public/images/completed-badge.png 파일이 있으면 커스텀 이미지 사용
+ */
+function CompletedBadge() {
+  const [useCustom, setUseCustom] = useState(false);
+
+  useEffect(() => {
+    // 커스텀 뱃지 이미지 존재 여부 확인
+    const img = new window.Image();
+    img.onload = () => setUseCustom(true);
+    img.onerror = () => setUseCustom(false);
+    img.src = '/images/completed-badge.png';
+  }, []);
+
+  if (useCustom) {
+    return (
+      <img
+        src="/images/completed-badge.png"
+        alt="완료"
+        className="w-32 h-32 object-contain"
+      />
+    );
+  }
+
+  // 기본 초록색 뱃지
+  return (
+    <div className="bg-[#1A6B1A] text-[#F5F0E8] px-3 py-1.5 font-bold text-xs border-2 border-[#F5F0E8]">
+      완료
+    </div>
+  );
+}
+
+/**
  * 퀴즈 카드 컴포넌트 - 미니멀 스타일
  */
 function QuizCard({
@@ -102,23 +142,37 @@ function QuizCard({
   onDetails,
   isBookmarked,
   onToggleBookmark,
+  onUpdate,
 }: {
   quiz: QuizCardData;
   onStart: () => void;
   onDetails: () => void;
   isBookmarked?: boolean;
   onToggleBookmark?: () => void;
+  onUpdate?: () => void;
 }) {
   return (
     <div className={`relative border border-[#1A1A1A] bg-[#F5F0E8] p-4 ${
-      quiz.isCompleted ? 'pointer-events-none' : ''
+      quiz.isCompleted && !quiz.hasUpdate ? 'pointer-events-none' : ''
     }`}>
-      {/* 완료 오버레이 */}
+      {/* 완료 오버레이 - 업데이트가 있으면 다른 스타일 */}
       {quiz.isCompleted && (
-        <div className="absolute inset-0 bg-black/50 z-10 flex items-center justify-center">
-          <div className="bg-[#1A6B1A] text-[#F5F0E8] px-3 py-1.5 font-bold text-xs border-2 border-[#F5F0E8]">
-            완료
-          </div>
+        <div className={`absolute inset-0 z-10 flex items-center justify-center ${
+          quiz.hasUpdate ? 'bg-black/40' : 'bg-black/70'
+        }`}>
+          {quiz.hasUpdate ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onUpdate?.();
+              }}
+              className="bg-[#F5C518] text-[#1A1A1A] px-3 py-1.5 font-bold text-xs border-2 border-[#1A1A1A] hover:bg-[#E5B508] transition-colors pointer-events-auto"
+            >
+              업데이트 ({quiz.updatedQuestionCount})
+            </button>
+          ) : (
+            <CompletedBadge />
+          )}
         </div>
       )}
 
@@ -211,11 +265,13 @@ function ManageQuizCard({
   onEdit,
   onDelete,
   onFeedback,
+  onStats,
 }: {
   quiz: QuizCardData;
   onEdit: () => void;
   onDelete: () => void;
   onFeedback: () => void;
+  onStats: () => void;
 }) {
   return (
     <div className="border border-[#1A1A1A] bg-[#F5F0E8] p-4">
@@ -226,22 +282,28 @@ function ManageQuizCard({
         {quiz.questionCount}문제 · {quiz.participantCount}명 참여
       </p>
 
-      <div className="flex gap-2">
+      <div className="flex gap-1.5 flex-wrap">
+        <button
+          onClick={onStats}
+          className="flex-1 min-w-[45%] py-1.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+        >
+          통계
+        </button>
         <button
           onClick={onFeedback}
-          className="flex-1 py-1.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+          className="flex-1 min-w-[45%] py-1.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
         >
           피드백
         </button>
         <button
           onClick={onEdit}
-          className="flex-1 py-1.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+          className="flex-1 min-w-[45%] py-1.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
         >
           수정
         </button>
         <button
           onClick={onDelete}
-          className="flex-1 py-1.5 text-xs font-bold border border-[#8B1A1A] text-[#8B1A1A] hover:bg-[#FDEAEA] transition-colors"
+          className="flex-1 min-w-[45%] py-1.5 text-xs font-bold border border-[#8B1A1A] text-[#8B1A1A] hover:bg-[#FDEAEA] transition-colors"
         >
           삭제
         </button>
@@ -255,6 +317,9 @@ export default function QuizListPage() {
   const { user } = useAuth();
   const { isBookmarked, toggleBookmark } = useQuizBookmark();
   const { userCourseId } = useCourse();
+
+  // 퀴즈 업데이트 훅
+  const { updatedQuizzes, checkQuizUpdate, refresh: refreshUpdates } = useQuizUpdate();
 
   // 과목별 리본 이미지 및 스케일 (기본값: biology)
   const currentCourse = userCourseId && COURSES[userCourseId] ? COURSES[userCourseId] : null;
@@ -276,6 +341,13 @@ export default function QuizListPage() {
   const [feedbackQuiz, setFeedbackQuiz] = useState<QuizCardData | null>(null);
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
   const [isLoadingFeedbacks, setIsLoadingFeedbacks] = useState(false);
+
+  // 업데이트 모달
+  const [updateModalInfo, setUpdateModalInfo] = useState<QuizUpdateInfo | null>(null);
+  const [updateModalQuizCount, setUpdateModalQuizCount] = useState(0);
+
+  // 통계 모달
+  const [statsQuiz, setStatsQuiz] = useState<QuizCardData | null>(null);
 
   // 내 퀴즈 불러오기
   const fetchMyQuizzes = useCallback(async () => {
@@ -305,6 +377,7 @@ export default function QuizListPage() {
           isCompleted: false,
           creatorId: data.creatorId,
           creatorNickname: data.creatorNickname,
+          creatorClassType: data.creatorClassType,
         });
       });
 
@@ -370,6 +443,9 @@ export default function QuizListPage() {
             return;
           }
 
+          // 업데이트 정보 확인
+          const updateInfo = updatedQuizzes.get(docSnapshot.id);
+
           newQuizzes.push({
             id: docSnapshot.id,
             title: data.title || '제목 없음',
@@ -381,16 +457,25 @@ export default function QuizListPage() {
             isCompleted, // 완료 여부 저장
             myScore: data.userScores?.[user.uid],
             creatorNickname: data.creatorNickname,
+            creatorClassType: data.creatorClassType,
             creatorId: data.creatorId,
+            hasUpdate: isCompleted && updateInfo?.hasUpdate,
+            updatedQuestionCount: updateInfo?.updatedQuestionCount,
           });
         });
 
-        // 미완료 퀴즈 먼저, 완료된 퀴즈 나중에, 각각 최신순
+        // 미완료 퀴즈 먼저, 업데이트 있는 퀴즈, 완료된 퀴즈 순서로 정렬
         newQuizzes.sort((a, b) => {
-          // 완료 여부로 먼저 정렬 (미완료가 먼저)
-          if (a.isCompleted !== b.isCompleted) {
-            return a.isCompleted ? 1 : -1;
+          // 미완료 우선
+          if (!a.isCompleted && b.isCompleted) return -1;
+          if (a.isCompleted && !b.isCompleted) return 1;
+
+          // 완료된 것 중에서는 업데이트 있는 것 우선
+          if (a.isCompleted && b.isCompleted) {
+            if (a.hasUpdate && !b.hasUpdate) return -1;
+            if (!a.hasUpdate && b.hasUpdate) return 1;
           }
+
           // 같은 그룹 내에서는 최신순
           return b.id.localeCompare(a.id);
         });
@@ -401,7 +486,7 @@ export default function QuizListPage() {
         setIsLoading(false);
       }
     },
-    [user, activeFilter, userCourseId]
+    [user, activeFilter, userCourseId, updatedQuizzes]
   );
 
   useEffect(() => {
@@ -468,6 +553,28 @@ export default function QuizListPage() {
       setIsLoadingFeedbacks(false);
     }
   };
+
+  /**
+   * 업데이트 모달 열기
+   */
+  const handleOpenUpdateModal = useCallback(async (quiz: QuizCardData) => {
+    const updateInfo = await checkQuizUpdate(quiz.id);
+    if (updateInfo?.hasUpdate) {
+      setUpdateModalInfo(updateInfo);
+      setUpdateModalQuizCount(quiz.questionCount);
+    } else {
+      alert('업데이트할 문제가 없습니다.');
+    }
+  }, [checkQuizUpdate]);
+
+  /**
+   * 업데이트 완료 핸들러
+   */
+  const handleUpdateComplete = useCallback((newScore: number, newCorrectCount: number) => {
+    // 퀴즈 목록 새로고침
+    fetchQuizzes();
+    refreshUpdates();
+  }, [fetchQuizzes, refreshUpdates]);
 
   // 관리 모드 UI
   if (isManageMode) {
@@ -562,6 +669,7 @@ export default function QuizListPage() {
                   onEdit={() => handleEditQuiz(quiz.id)}
                   onDelete={() => handleDeleteQuiz(quiz.id)}
                   onFeedback={() => handleViewFeedback(quiz)}
+                  onStats={() => setStatsQuiz(quiz)}
                 />
               ))}
             </div>
@@ -603,19 +711,35 @@ export default function QuizListPage() {
 
                 {!isLoadingFeedbacks && feedbacks.length > 0 && (
                   <div className="space-y-3">
-                    {feedbacks.map((feedback) => (
-                      <div
-                        key={feedback.id}
-                        className="p-3 border border-[#1A1A1A] bg-[#EDEAE4]"
-                      >
-                        <p className="text-xs text-[#5C5C5C] mb-1">
-                          문제 {feedback.questionId}
-                        </p>
-                        <p className="text-sm text-[#1A1A1A]">
-                          {feedback.feedback}
-                        </p>
-                      </div>
-                    ))}
+                    {feedbacks.map((feedback) => {
+                      // 피드백 타입 한글 변환
+                      const typeLabels: Record<string, string> = {
+                        unclear: '문제가 이해가 안 돼요',
+                        wrong: '정답이 틀린 것 같아요',
+                        typo: '오타가 있어요',
+                        other: '기타 의견',
+                      };
+                      const typeLabel = typeLabels[feedback.feedbackType] || feedback.feedbackType;
+
+                      return (
+                        <div
+                          key={feedback.id}
+                          className="p-3 border border-[#1A1A1A] bg-[#EDEAE4]"
+                        >
+                          <p className="text-xs text-[#5C5C5C] mb-1">
+                            문제 {feedback.questionId}
+                          </p>
+                          <p className="text-xs font-bold text-[#8B6914] mb-1">
+                            {typeLabel}
+                          </p>
+                          {feedback.feedback && (
+                            <p className="text-sm text-[#1A1A1A]">
+                              {feedback.feedback}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -633,6 +757,16 @@ export default function QuizListPage() {
               </div>
             </motion.div>
           </div>
+        )}
+
+        {/* 통계 모달 */}
+        {statsQuiz && (
+          <QuizStatsModal
+            quizId={statsQuiz.id}
+            quizTitle={statsQuiz.title}
+            isOpen={true}
+            onClose={() => setStatsQuiz(null)}
+          />
         )}
       </div>
     );
@@ -727,6 +861,7 @@ export default function QuizListPage() {
                   onDetails={() => handleShowDetails(quiz)}
                   isBookmarked={isBookmarked(quiz.id)}
                   onToggleBookmark={() => toggleBookmark(quiz.id)}
+                  onUpdate={() => handleOpenUpdateModal(quiz)}
                 />
               </motion.div>
             ))}
@@ -763,7 +898,9 @@ export default function QuizListPage() {
               )}
               {selectedQuiz.creatorNickname && (
                 <p className="text-sm text-[#5C5C5C]">
-                  제작자: <span className="font-bold text-[#1A1A1A]">{selectedQuiz.creatorNickname}</span>
+                  제작자: <span className="font-bold text-[#1A1A1A]">
+                    {selectedQuiz.creatorNickname}·{selectedQuiz.creatorClassType || '?'}반
+                  </span>
                 </p>
               )}
             </div>
@@ -787,6 +924,17 @@ export default function QuizListPage() {
             </div>
           </motion.div>
         </div>
+      )}
+
+      {/* 업데이트 모달 */}
+      {updateModalInfo && (
+        <UpdateQuizModal
+          isOpen={true}
+          onClose={() => setUpdateModalInfo(null)}
+          updateInfo={updateModalInfo}
+          totalQuestionCount={updateModalQuizCount}
+          onComplete={handleUpdateComplete}
+        />
       )}
     </div>
   );

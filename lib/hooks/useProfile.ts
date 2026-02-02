@@ -68,7 +68,6 @@ export interface UserProfile {
   equipment: Equipment;
 
   // 스탯
-  gold: number;
   totalExp: number;
   level: number;
   rank: RankType;
@@ -187,7 +186,7 @@ export function useProfile(): UseProfileReturn {
           uid,
           email: data.email || '',
           nickname: data.nickname || '용사',
-          classType: data.classType || 'A',
+          classType: data.classId || 'A', // Firestore 필드명은 classId
           studentId: data.studentId,
           department: data.department,
           characterOptions: data.characterOptions || {
@@ -196,7 +195,6 @@ export function useProfile(): UseProfileReturn {
             beard: 0,
           },
           equipment: data.equipment || {},
-          gold: data.gold || 0,
           totalExp,
           level,
           rank,

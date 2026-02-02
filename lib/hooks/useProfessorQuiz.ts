@@ -346,8 +346,12 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
         const now = Timestamp.now();
         // 실제 문제 수: input.questionCount가 있으면 사용, 없으면 questions.length 사용
         const actualQuestionCount = input.questionCount ?? input.questions.length;
+
+        // undefined 값 제거 (Firestore는 undefined를 허용하지 않음)
+        const cleanedInput = JSON.parse(JSON.stringify(input));
+
         const quizData = {
-          ...input,
+          ...cleanedInput,
           type: 'professor',
           questionCount: actualQuestionCount,
           creatorUid,

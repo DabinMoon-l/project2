@@ -13,8 +13,10 @@ interface Post {
   userName?: string;
   authorNickname?: string;
   userClass?: string;
+  authorClassType?: string;
   boardType?: "professor" | "students";
   category?: string;
+  courseId?: string;
   title: string;
   content: string;
   imageUrls?: string[];
@@ -22,6 +24,7 @@ interface Post {
   likes?: number;
   commentCount: number;
   rewarded?: boolean;
+  toProfessor?: boolean; // 교수님께 전달 여부
   createdAt: FirebaseFirestore.Timestamp;
   updatedAt?: FirebaseFirestore.Timestamp;
 }
@@ -106,6 +109,46 @@ export const onPostCreate = onDocumentCreated(
       });
 
       console.log(`게시글 보상 지급 완료: ${userId}`, { postId, expReward });
+
+      // 교수님께 전달 체크된 경우 교수님에게 알림 전송
+      if (post.toProfessor && post.courseId) {
+        try {
+          // 해당 과목의 교수님들 조회
+          const professorsSnapshot = await db.collection("users")
+            .where("role", "==", "professor")
+            .get();
+
+          const authorNickname = post.authorNickname || post.userName || "학생";
+          const authorClass = post.authorClassType || post.userClass || "";
+
+          // 각 교수님에게 알림 전송
+          const notificationPromises = professorsSnapshot.docs.map((profDoc) =>
+            db.collection("notifications").add({
+              userId: profDoc.id,
+              type: "TO_PROFESSOR_POST",
+              title: "📬 학생 질문",
+              message: `${authorNickname}${authorClass ? `(${authorClass}반)` : ""}님이 교수님께 질문을 남겼습니다`,
+              data: {
+                postId,
+                courseId: post.courseId,
+                title: post.title,
+                authorNickname,
+                authorClass,
+              },
+              read: false,
+              createdAt: FieldValue.serverTimestamp(),
+            })
+          );
+
+          await Promise.all(notificationPromises);
+          console.log(`교수님께 알림 전송 완료: ${postId}`, {
+            professorCount: professorsSnapshot.size,
+          });
+        } catch (notifError) {
+          // 알림 실패해도 게시글 작성은 성공으로 처리
+          console.error("교수님 알림 전송 실패:", notifError);
+        }
+      }
     } catch (error: unknown) {
       if (error && typeof error === "object" && "code" in error &&
           (error as { code: string }).code === "resource-exhausted") {

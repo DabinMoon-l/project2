@@ -10,7 +10,8 @@ import { Skeleton } from '@/components/common';
 import { usePosts, usePinnedPosts, type Post, type Comment } from '@/lib/hooks/useBoard';
 import { useCourse } from '@/lib/contexts/CourseContext';
 import { useUser } from '@/lib/contexts/UserContext';
-import { COURSES, type CourseId } from '@/lib/types/course';
+import { COURSES, type CourseId, getCourseList } from '@/lib/types/course';
+import BoardManagementModal from '@/components/professor/BoardManagementModal';
 
 /** 기본 토끼 이미지 경로 */
 const DEFAULT_RABBIT_IMAGE = '/rabbit/default-news.png';
@@ -488,13 +489,22 @@ export default function BoardPage() {
   const { semesterSettings } = useCourse();
   const { profile } = useUser();
 
-  // 사용자의 과목 ID로 게시물 필터링
-  const userCourseId = profile?.courseId;
-  const { posts, loading, error, hasMore, loadMore, refresh } = usePosts('all', userCourseId);
-  const { pinnedPosts, pinPost, unpinPost, refresh: refreshPinned } = usePinnedPosts(userCourseId);
-
   // 교수님 여부 확인
   const isProfessor = profile?.role === 'professor';
+
+  // 교수님용 과목 선택 (기본값: biology)
+  const [selectedCourseId, setSelectedCourseId] = useState<CourseId>('biology');
+
+  // 교수님 관리 모달 상태
+  const [showManagementModal, setShowManagementModal] = useState(false);
+
+  // 사용자의 과목 ID (교수님은 선택한 과목, 학생은 자신의 과목)
+  const activeCourseId = isProfessor ? selectedCourseId : profile?.courseId;
+  const { posts, loading, error, hasMore, loadMore, refresh } = usePosts('all', activeCourseId);
+  const { pinnedPosts, pinPost, unpinPost, refresh: refreshPinned } = usePinnedPosts(activeCourseId);
+
+  // 과목 목록 (교수님용)
+  const courseList = useMemo(() => getCourseList(), []);
 
   // 검색
   const [searchQuery, setSearchQuery] = useState('');
@@ -653,8 +663,12 @@ export default function BoardPage() {
   }, [router]);
 
   const handleManageClick = useCallback(() => {
-    router.push('/board/manage');
-  }, [router]);
+    if (isProfessor) {
+      setShowManagementModal(true);
+    } else {
+      router.push('/board/manage');
+    }
+  }, [router, isProfessor]);
 
   // 게시글 고정 핸들러
   const handlePinPost = useCallback(async (postId: string) => {
@@ -704,6 +718,27 @@ export default function BoardPage() {
 
   return (
     <div className="min-h-screen pb-28" style={{ backgroundColor: '#F5F0E8' }}>
+      {/* 교수님용 과목 탭 */}
+      {isProfessor && (
+        <div className="sticky top-0 z-30 bg-[#1A1A1A] border-b-2 border-[#D4AF37]">
+          <div className="flex">
+            {courseList.map((course) => (
+              <button
+                key={course.id}
+                onClick={() => setSelectedCourseId(course.id)}
+                className={`flex-1 py-3 text-sm font-bold transition-colors ${
+                  selectedCourseId === course.id
+                    ? 'bg-[#D4AF37] text-[#1A1A1A]'
+                    : 'text-[#F5F0E8] hover:bg-[#3A3A3A]'
+                }`}
+              >
+                {course.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 헤더 */}
       <header ref={headerRef} className="mx-4 mt-4 pb-6 border-b-4 border-double border-[#1A1A1A]">
         {/* 상단 날짜 및 에디션 */}
@@ -887,6 +922,15 @@ export default function BoardPage() {
           </motion.button>
         )}
       </AnimatePresence>
+
+      {/* 교수님 관리 모달 */}
+      {isProfessor && (
+        <BoardManagementModal
+          isOpen={showManagementModal}
+          onClose={() => setShowManagementModal(false)}
+          courseId={selectedCourseId}
+        />
+      )}
 
     </div>
   );

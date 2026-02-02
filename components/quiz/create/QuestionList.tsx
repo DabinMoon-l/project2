@@ -16,6 +16,8 @@ interface QuestionListProps {
   onQuestionsChange: (questions: QuestionData[]) => void;
   /** 문제 편집 시 콜백 */
   onEditQuestion: (index: number) => void;
+  /** 사용자 역할 (학생/교수) */
+  userRole?: 'student' | 'professor';
   /** 추가 클래스명 */
   className?: string;
 }
@@ -50,8 +52,16 @@ export default function QuestionList({
   questions,
   onQuestionsChange,
   onEditQuestion,
+  userRole = 'student',
   className = '',
 }: QuestionListProps) {
+  // 역할에 따른 라벨 반환
+  const getTypeLabel = (type: string) => {
+    if (userRole === 'student' && type === 'short_answer') {
+      return '주관식';
+    }
+    return typeLabels[type] || type;
+  };
   // 삭제 확인 모달 상태
   const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
 
@@ -178,7 +188,7 @@ export default function QuestionList({
                           ? 'border-[#1A6B1A] bg-[#E8F5E9] text-[#1A6B1A]'
                           : 'border-[#1A1A1A] text-[#1A1A1A]'
                       }`}>
-                        {typeLabels[question.type] || question.type}
+                        {getTypeLabel(question.type)}
                         {question.type === 'combined' && question.subQuestions && (
                           <span className="ml-1">({question.subQuestions.length})</span>
                         )}
@@ -301,7 +311,7 @@ export default function QuestionList({
                                   {sqIdx + 1}
                                 </span>
                                 <span className="px-1.5 py-0.5 border border-[#5C5C5C] text-[#5C5C5C] text-[10px]">
-                                  {typeLabels[sq.type] || sq.type}
+                                  {getTypeLabel(sq.type)}
                                 </span>
                               </div>
                               <p className="text-[#1A1A1A] line-clamp-1">{sq.text || '(내용 없음)'}</p>

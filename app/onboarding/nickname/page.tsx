@@ -254,7 +254,7 @@ export default function NicknamePage() {
       transition={{ duration: 0.15 }}
     >
       {/* 비디오 배경 */}
-      <div className="absolute inset-0 overflow-hidden -z-10">
+      <div className="fixed inset-0 overflow-hidden">
         <video
           autoPlay
           loop
@@ -268,7 +268,7 @@ export default function NicknamePage() {
       </div>
 
       {/* 헤더 */}
-      <header className="sticky top-0 z-10 px-4 py-3">
+      <header className="sticky top-0 z-20 px-4 py-3 relative">
         <div className="flex items-center justify-between">
           <button
             onClick={() => router.back()}
@@ -286,7 +286,7 @@ export default function NicknamePage() {
       </header>
 
       {/* 메인 컨텐츠 */}
-      <main className="flex-1 px-4 py-6 overflow-y-auto flex items-center justify-center">
+      <main className="flex-1 px-4 pt-0 pb-6 overflow-y-auto relative z-10 flex items-start justify-center">
         <div className="max-w-md w-full">
           {/* 캐릭터 미리보기 */}
           <motion.div
@@ -323,7 +323,7 @@ export default function NicknamePage() {
                 닉네임을 정해주세요
               </h2>
               <p className="text-sm text-white/70">
-                다른 용사들에게 보여질 이름입니다
+                다른 학생들에게 보여질 이름입니다
               </p>
             </div>
 
@@ -410,7 +410,7 @@ export default function NicknamePage() {
       </main>
 
       {/* 하단 버튼 영역 */}
-      <footer className="sticky bottom-0 px-4 py-4 safe-area-pb">
+      <footer className="sticky bottom-0 px-4 py-4 safe-area-pb relative z-20">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

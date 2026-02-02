@@ -14,6 +14,8 @@ interface WriteFormProps {
   isSubmitting?: boolean;
   /** 에러 메시지 */
   error?: string | null;
+  /** 교수님께 체크박스 표시 여부 */
+  showToProfessorOption?: boolean;
 }
 
 /**
@@ -23,12 +25,14 @@ export default function WriteForm({
   onSubmit,
   isSubmitting = false,
   error,
+  showToProfessorOption = true,
 }: WriteFormProps) {
   const { theme } = useTheme();
   const { uploadImage, uploadFile, loading: uploading, error: uploadError } = useUpload();
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [toProfessor, setToProfessor] = useState(false);
 
   // 첨부 파일 상태
   const [images, setImages] = useState<{ file: File; preview: string }[]>([]);
@@ -160,6 +164,7 @@ export default function WriteForm({
         imageUrl: uploadedImageUrls[0] || undefined, // 대표 이미지
         imageUrls: uploadedImageUrls,
         fileUrls: uploadedFiles,
+        toProfessor,
       });
     } catch (err) {
       console.error('글 작성 실패:', err);
@@ -233,6 +238,40 @@ export default function WriteForm({
           {content.length}/2000
         </div>
       </div>
+
+      {/* 교수님께 체크박스 */}
+      {showToProfessorOption && (
+        <div className="mb-4">
+          <label
+            className="flex items-center gap-3 cursor-pointer py-3 px-4"
+            style={{
+              border: toProfessor ? '2px solid #1A6B1A' : '1px solid #D4CFC4',
+              backgroundColor: toProfessor ? '#E8F5E8' : 'transparent',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={toProfessor}
+              onChange={(e) => setToProfessor(e.target.checked)}
+              className="w-5 h-5 accent-[#1A6B1A]"
+            />
+            <div>
+              <span
+                className="font-bold text-sm"
+                style={{ color: toProfessor ? '#1A6B1A' : theme.colors.text }}
+              >
+                📬 교수님께 전달
+              </span>
+              <p
+                className="text-xs mt-0.5"
+                style={{ color: theme.colors.textSecondary }}
+              >
+                체크하면 교수님께 알림이 전송되고, 교수님 관리 목록에 표시됩니다
+              </p>
+            </div>
+          </label>
+        </div>
+      )}
 
       {/* 이미지 첨부 */}
       <div className="mb-4">

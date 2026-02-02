@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Header, Button } from '@/components/common';
@@ -61,6 +61,148 @@ export default function CreateQuizPage() {
 
   // 유효성 검사 에러
   const [errors, setErrors] = useState<{ title?: string }>({});
+
+  // 초안 저장/복원 관련 상태
+  const [showExitModal, setShowExitModal] = useState(false);
+  const [showResumeModal, setShowResumeModal] = useState(false);
+  const [savedDraftInfo, setSavedDraftInfo] = useState<{ questionCount: number; title: string } | null>(null);
+
+  // localStorage 키
+  const DRAFT_KEY = 'professor_quiz_create_draft';
+
+  /**
+   * 데이터 정리 (undefined, null, 빈 배열 제거)
+   * localStorage와 Firestore 모두 직렬화 가능한 데이터만 허용
+   */
+  const cleanDataForStorage = useCallback((data: any): any => {
+    if (data === null || data === undefined) return null;
+    if (Array.isArray(data)) {
+      return data.map(item => cleanDataForStorage(item)).filter(item => item !== null && item !== undefined);
+    }
+    if (typeof data === 'object') {
+      const cleaned: any = {};
+      for (const key in data) {
+        const value = data[key];
+        // undefined, 함수, File 객체 제외
+        if (value !== undefined && typeof value !== 'function' && !(value instanceof File)) {
+          const cleanedValue = cleanDataForStorage(value);
+          if (cleanedValue !== null && cleanedValue !== undefined) {
+            cleaned[key] = cleanedValue;
+          }
+        }
+      }
+      return Object.keys(cleaned).length > 0 ? cleaned : null;
+    }
+    return data;
+  }, []);
+
+  /**
+   * 초안 저장
+   */
+  const saveDraft = useCallback(() => {
+    try {
+      // 데이터 정리 후 저장
+      const cleanedQuestions = cleanDataForStorage(questions) || [];
+      const cleanedMeta = cleanDataForStorage(quizMeta) || {};
+
+      const draftData = {
+        step,
+        questions: cleanedQuestions,
+        quizMeta: cleanedMeta,
+        selectedCourseId,
+        savedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(draftData));
+      return true;
+    } catch (err) {
+      console.error('초안 저장 실패:', err);
+      return false;
+    }
+  }, [step, questions, quizMeta, selectedCourseId, cleanDataForStorage]);
+
+  /**
+   * 초안 불러오기
+   */
+  const loadDraft = useCallback(() => {
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY);
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (err) {
+      console.error('초안 불러오기 실패:', err);
+    }
+    return null;
+  }, []);
+
+  /**
+   * 초안 삭제
+   */
+  const deleteDraft = useCallback(() => {
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch (err) {
+      console.error('초안 삭제 실패:', err);
+    }
+  }, []);
+
+  /**
+   * 페이지 로드 시 저장된 초안 확인
+   */
+  useEffect(() => {
+    const draft = loadDraft();
+    if (draft && (draft.questions?.length > 0 || draft.quizMeta?.title)) {
+      setSavedDraftInfo({
+        questionCount: draft.questions?.length || 0,
+        title: draft.quizMeta?.title || '',
+      });
+      setShowResumeModal(true);
+    }
+  }, [loadDraft]);
+
+  /**
+   * 이전 초안 이어서 작성
+   */
+  const handleResumeDraft = useCallback(() => {
+    const draft = loadDraft();
+    if (draft) {
+      if (draft.step) setStep(draft.step);
+      if (draft.questions) setQuestions(draft.questions);
+      if (draft.quizMeta) setQuizMeta(draft.quizMeta);
+      if (draft.selectedCourseId) setSelectedCourseId(draft.selectedCourseId);
+    }
+    setShowResumeModal(false);
+    setSavedDraftInfo(null);
+  }, [loadDraft]);
+
+  /**
+   * 처음부터 새로 작성
+   */
+  const handleStartFresh = useCallback(() => {
+    deleteDraft();
+    setShowResumeModal(false);
+    setSavedDraftInfo(null);
+  }, [deleteDraft]);
+
+  /**
+   * 저장하고 나가기
+   */
+  const handleSaveAndExit = useCallback(() => {
+    const success = saveDraft();
+    if (success) {
+      router.back();
+    } else {
+      alert('저장에 실패했습니다.');
+    }
+  }, [saveDraft, router]);
+
+  /**
+   * 저장하지 않고 나가기
+   */
+  const handleExitWithoutSave = useCallback(() => {
+    deleteDraft();
+    router.back();
+  }, [deleteDraft, router]);
 
   /**
    * 메타 정보 유효성 검사
@@ -299,6 +441,9 @@ export default function CreateQuizPage() {
           quizInput
         );
 
+        // 저장된 초안 삭제
+        deleteDraft();
+
         // 성공 시 목록으로 이동
         router.push('/professor/quiz');
       } catch (err) {
@@ -307,17 +452,16 @@ export default function CreateQuizPage() {
         setSaving(false);
       }
     },
-    [user, quizMeta, questions, selectedCourseId, createQuiz, clearError, router]
+    [user, quizMeta, questions, selectedCourseId, createQuiz, clearError, router, deleteDraft]
   );
 
   /**
-   * 뒤로가기 확인
+   * 뒤로가기 버튼 핸들러
    */
   const handleBack = useCallback(() => {
+    // 작성 중인 내용이 있으면 모달 표시
     if (questions.length > 0 || quizMeta.title.trim()) {
-      if (confirm('작성 중인 내용이 있습니다. 정말 나가시겠습니까?')) {
-        router.back();
-      }
+      setShowExitModal(true);
     } else {
       router.back();
     }
@@ -520,6 +664,7 @@ export default function CreateQuizPage() {
                   questions={questions}
                   onQuestionsChange={setQuestions}
                   onEditQuestion={handleEditQuestion}
+                  userRole="professor"
                 />
               )}
             </motion.div>
@@ -556,6 +701,158 @@ export default function CreateQuizPage() {
           )}
         </div>
       )}
+
+      {/* 나가기 확인 모달 */}
+      <AnimatePresence>
+        {showExitModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          >
+            {/* 백드롭 */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowExitModal(false)}
+              className="absolute inset-0 bg-black/50"
+            />
+
+            {/* 모달 */}
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl"
+            >
+              <div className="text-center">
+                {/* 아이콘 */}
+                <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+
+                {/* 제목 */}
+                <h3 className="text-lg font-bold text-gray-900 mb-2">
+                  작성 중인 내용이 있습니다
+                </h3>
+
+                {/* 설명 */}
+                <p className="text-sm text-gray-500 mb-6">
+                  저장하지 않고 나가면 작성 중인 내용이 사라집니다.
+                  <br />나중에 이어서 작성하시겠습니까?
+                </p>
+
+                {/* 버튼 */}
+                <div className="space-y-2">
+                  <Button
+                    fullWidth
+                    onClick={handleSaveAndExit}
+                  >
+                    저장하고 나가기
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    fullWidth
+                    onClick={handleExitWithoutSave}
+                    className="!text-red-600 !border-red-300 hover:!bg-red-50"
+                  >
+                    저장하지 않고 나가기
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    fullWidth
+                    onClick={() => setShowExitModal(false)}
+                  >
+                    계속 작성하기
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 초안 복원 모달 */}
+      <AnimatePresence>
+        {showResumeModal && savedDraftInfo && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          >
+            {/* 백드롭 */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/50"
+            />
+
+            {/* 모달 */}
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl"
+            >
+              <div className="text-center">
+                {/* 아이콘 */}
+                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+
+                {/* 제목 */}
+                <h3 className="text-lg font-bold text-gray-900 mb-2">
+                  이전 작성 내용이 있습니다
+                </h3>
+
+                {/* 진행 상황 정보 */}
+                <div className="bg-gray-100 rounded-lg p-3 mb-4 text-left">
+                  <p className="text-sm text-gray-600">
+                    {savedDraftInfo.title && (
+                      <span className="block mb-1">
+                        제목: <span className="text-gray-900 font-medium">{savedDraftInfo.title}</span>
+                      </span>
+                    )}
+                    <span className="block">
+                      문제 수: <span className="text-gray-900 font-medium">{savedDraftInfo.questionCount}개</span>
+                    </span>
+                  </p>
+                </div>
+
+                {/* 설명 */}
+                <p className="text-sm text-gray-500 mb-6">
+                  이어서 작성하시겠습니까?
+                </p>
+
+                {/* 버튼 */}
+                <div className="flex gap-3">
+                  <Button
+                    variant="secondary"
+                    fullWidth
+                    onClick={handleStartFresh}
+                  >
+                    처음부터
+                  </Button>
+                  <Button
+                    fullWidth
+                    onClick={handleResumeDraft}
+                  >
+                    이어서 작성
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

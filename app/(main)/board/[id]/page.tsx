@@ -273,7 +273,10 @@ export default function PostDetailPage() {
 
           {/* 메타 정보 */}
           <div className="flex items-center gap-2 text-sm text-[#3A3A3A] mb-4 pb-4 border-b border-dashed border-[#1A1A1A]">
-            <span>{post.isAnonymous ? '익명' : post.authorNickname}</span>
+            {/* 작성자: 닉네임·반 형식 */}
+            <span>
+              {post.authorNickname}·{post.authorClassType || '?'}반
+            </span>
             <span>·</span>
             <span>{formatDate(post.createdAt)}</span>
             <span>·</span>

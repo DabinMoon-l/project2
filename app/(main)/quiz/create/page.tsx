@@ -74,6 +74,158 @@ export default function QuizCreatePage() {
   // 유효성 검사 에러
   const [metaErrors, setMetaErrors] = useState<{ title?: string; tags?: string }>({});
 
+  // 초안 저장/복원 관련 상태
+  const [showExitModal, setShowExitModal] = useState(false);
+  const [showResumeModal, setShowResumeModal] = useState(false);
+  const [savedDraftInfo, setSavedDraftInfo] = useState<{ questionCount: number; title: string } | null>(null);
+
+  // localStorage 키
+  const DRAFT_KEY = 'quiz_create_draft';
+
+  /**
+   * 데이터 정리 (undefined, null, 빈 배열 제거)
+   * localStorage와 Firestore 모두 직렬화 가능한 데이터만 허용
+   */
+  const cleanDataForStorage = useCallback((data: any): any => {
+    if (data === null || data === undefined) return null;
+    if (Array.isArray(data)) {
+      return data.map(item => cleanDataForStorage(item)).filter(item => item !== null && item !== undefined);
+    }
+    if (typeof data === 'object') {
+      const cleaned: any = {};
+      for (const key in data) {
+        const value = data[key];
+        // undefined, 함수, File 객체 제외
+        if (value !== undefined && typeof value !== 'function' && !(value instanceof File)) {
+          const cleanedValue = cleanDataForStorage(value);
+          if (cleanedValue !== null && cleanedValue !== undefined) {
+            cleaned[key] = cleanedValue;
+          }
+        }
+      }
+      return Object.keys(cleaned).length > 0 ? cleaned : null;
+    }
+    return data;
+  }, []);
+
+  /**
+   * 초안 저장
+   */
+  const saveDraft = useCallback(() => {
+    try {
+      // 데이터 정리 후 저장
+      const cleanedQuestions = cleanDataForStorage(questions) || [];
+      const cleanedMeta = cleanDataForStorage(quizMeta) || {};
+
+      const draftData = {
+        step,
+        questions: cleanedQuestions,
+        quizMeta: cleanedMeta,
+        savedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(draftData));
+      return true;
+    } catch (err) {
+      console.error('초안 저장 실패:', err);
+      return false;
+    }
+  }, [step, questions, quizMeta, cleanDataForStorage]);
+
+  /**
+   * 초안 불러오기
+   */
+  const loadDraft = useCallback(() => {
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY);
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (err) {
+      console.error('초안 불러오기 실패:', err);
+    }
+    return null;
+  }, []);
+
+  /**
+   * 초안 삭제
+   */
+  const deleteDraft = useCallback(() => {
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch (err) {
+      console.error('초안 삭제 실패:', err);
+    }
+  }, []);
+
+  /**
+   * 페이지 로드 시 저장된 초안 확인
+   */
+  useEffect(() => {
+    const draft = loadDraft();
+    if (draft && (draft.questions?.length > 0 || draft.quizMeta?.title)) {
+      setSavedDraftInfo({
+        questionCount: draft.questions?.length || 0,
+        title: draft.quizMeta?.title || '',
+      });
+      setShowResumeModal(true);
+    }
+  }, [loadDraft]);
+
+  /**
+   * 이전 초안 이어서 작성
+   */
+  const handleResumeDraft = useCallback(() => {
+    const draft = loadDraft();
+    if (draft) {
+      if (draft.step) setStep(draft.step);
+      if (draft.questions) setQuestions(draft.questions);
+      if (draft.quizMeta) setQuizMeta(draft.quizMeta);
+    }
+    setShowResumeModal(false);
+    setSavedDraftInfo(null);
+  }, [loadDraft]);
+
+  /**
+   * 처음부터 새로 작성
+   */
+  const handleStartFresh = useCallback(() => {
+    deleteDraft();
+    setShowResumeModal(false);
+    setSavedDraftInfo(null);
+  }, [deleteDraft]);
+
+  /**
+   * 저장하고 나가기
+   */
+  const handleSaveAndExit = useCallback(() => {
+    const success = saveDraft();
+    if (success) {
+      router.back();
+    } else {
+      alert('저장에 실패했습니다.');
+    }
+  }, [saveDraft, router]);
+
+  /**
+   * 저장하지 않고 나가기
+   */
+  const handleExitWithoutSave = useCallback(() => {
+    deleteDraft();
+    router.back();
+  }, [deleteDraft, router]);
+
+  /**
+   * 뒤로가기 버튼 핸들러
+   */
+  const handleBackButton = useCallback(() => {
+    // 작성 중인 내용이 있으면 모달 표시
+    if (step !== 'upload' || questions.length > 0 || quizMeta.title) {
+      setShowExitModal(true);
+    } else {
+      router.back();
+    }
+  }, [step, questions.length, quizMeta.title, router]);
+
   /**
    * 파일 선택 핸들러
    */
@@ -388,7 +540,8 @@ export default function QuizCreatePage() {
 
         // 생성자 정보
         creatorId: user.uid,
-        creatorNickname: user.displayName || '익명 용사',
+        creatorNickname: profile?.nickname || user.displayName || '익명 용사',
+        creatorClassType: profile?.classType || null,
 
         // 과목 정보
         courseId: userCourseId || null,
@@ -399,17 +552,24 @@ export default function QuizCreatePage() {
         completedUsers: [],
         userScores: {},
 
-        // 타임스탬프
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
       };
 
-      await addDoc(collection(db, 'quizzes'), quizData);
+      // undefined 값 제거 (Firestore는 undefined를 허용하지 않음)
+      const cleanedQuizData = JSON.parse(JSON.stringify(quizData));
+
+      // 타임스탬프 추가 (JSON 직렬화 후에 추가해야 함)
+      cleanedQuizData.createdAt = serverTimestamp();
+      cleanedQuizData.updatedAt = serverTimestamp();
+
+      await addDoc(collection(db, 'quizzes'), cleanedQuizData);
 
       // EXP 토스트 표시 (퀴즈 생성 15 EXP)
       // Cloud Functions에서 자동으로 EXP가 지급됨
       const earnedExp = 15;
       showExpToast(earnedExp, '퀴즈 생성');
+
+      // 저장된 초안 삭제
+      deleteDraft();
 
       // 성공 시 퀴즈 목록 페이지로 이동
       setTimeout(() => {
@@ -421,7 +581,7 @@ export default function QuizCreatePage() {
     } finally {
       setIsSaving(false);
     }
-  }, [user, quizMeta, questions, router, userCourseId, showExpToast]);
+  }, [user, quizMeta, questions, router, userCourseId, showExpToast, deleteDraft]);
 
   /**
    * 단계별 진행률
@@ -459,15 +619,7 @@ export default function QuizCreatePage() {
         <div className="flex items-center justify-between px-4 py-3">
           <button
             type="button"
-            onClick={() => {
-              if (step !== 'upload' || questions.length > 0) {
-                if (window.confirm('작성 중인 내용이 사라집니다. 나가시겠습니까?')) {
-                  router.back();
-                }
-              } else {
-                router.back();
-              }
-            }}
+            onClick={handleBackButton}
             className="w-10 h-10 flex items-center justify-center border border-[#1A1A1A]"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -611,6 +763,7 @@ export default function QuizCreatePage() {
                     questions={questions}
                     onQuestionsChange={setQuestions}
                     onEditQuestion={handleEditQuestion}
+                    userRole={profile?.role === 'professor' ? 'professor' : 'student'}
                   />
 
                   {/* 문제 추가 버튼 */}
@@ -818,6 +971,169 @@ export default function QuizCreatePage() {
           )}
         </div>
       </div>
+
+      {/* 나가기 확인 모달 */}
+      <AnimatePresence>
+        {showExitModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          >
+            {/* 백드롭 */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowExitModal(false)}
+              className="absolute inset-0 bg-black/50"
+            />
+
+            {/* 모달 */}
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6 max-w-sm w-full"
+            >
+              <div className="text-center">
+                {/* 아이콘 */}
+                <div className="w-12 h-12 bg-[#FFF8E7] border-2 border-[#D4A84B] flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-6 h-6 text-[#D4A84B]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+
+                {/* 제목 */}
+                <h3 className="text-lg font-bold text-[#1A1A1A] mb-2">
+                  작성 중인 내용이 있습니다
+                </h3>
+
+                {/* 설명 */}
+                <p className="text-sm text-[#5C5C5C] mb-6">
+                  저장하지 않고 나가면 작성 중인 내용이 사라집니다.
+                  <br />나중에 이어서 작성하시겠습니까?
+                </p>
+
+                {/* 버튼 */}
+                <div className="space-y-2">
+                  <motion.button
+                    type="button"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleSaveAndExit}
+                    className="w-full py-2.5 px-4 bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
+                  >
+                    저장하고 나가기
+                  </motion.button>
+                  <motion.button
+                    type="button"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleExitWithoutSave}
+                    className="w-full py-2.5 px-4 bg-[#EDEAE4] text-[#8B1A1A] font-bold border-2 border-[#8B1A1A] hover:bg-[#FDEAEA] transition-colors"
+                  >
+                    저장하지 않고 나가기
+                  </motion.button>
+                  <motion.button
+                    type="button"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowExitModal(false)}
+                    className="w-full py-2.5 px-4 bg-[#EDEAE4] text-[#1A1A1A] font-bold border-2 border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+                  >
+                    계속 작성하기
+                  </motion.button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 초안 복원 모달 */}
+      <AnimatePresence>
+        {showResumeModal && savedDraftInfo && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          >
+            {/* 백드롭 */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/50"
+            />
+
+            {/* 모달 */}
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6 max-w-sm w-full"
+            >
+              <div className="text-center">
+                {/* 아이콘 */}
+                <div className="w-12 h-12 bg-[#E8F5E9] border-2 border-[#1A6B1A] flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-6 h-6 text-[#1A6B1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+
+                {/* 제목 */}
+                <h3 className="text-lg font-bold text-[#1A1A1A] mb-2">
+                  이전 작성 내용이 있습니다
+                </h3>
+
+                {/* 진행 상황 정보 */}
+                <div className="bg-[#EDEAE4] p-3 mb-4 text-left">
+                  <p className="text-sm text-[#5C5C5C]">
+                    {savedDraftInfo.title && (
+                      <span className="block mb-1">
+                        제목: <span className="text-[#1A1A1A] font-medium">{savedDraftInfo.title}</span>
+                      </span>
+                    )}
+                    <span className="block">
+                      문제 수: <span className="text-[#1A1A1A] font-medium">{savedDraftInfo.questionCount}개</span>
+                    </span>
+                  </p>
+                </div>
+
+                {/* 설명 */}
+                <p className="text-sm text-[#5C5C5C] mb-6">
+                  이어서 작성하시겠습니까?
+                </p>
+
+                {/* 버튼 */}
+                <div className="flex gap-3">
+                  <motion.button
+                    type="button"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleStartFresh}
+                    className="flex-1 py-2.5 px-4 bg-[#EDEAE4] text-[#1A1A1A] font-bold border-2 border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+                  >
+                    처음부터
+                  </motion.button>
+                  <motion.button
+                    type="button"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleResumeDraft}
+                    className="flex-1 py-2.5 px-4 bg-[#1A6B1A] text-[#F5F0E8] font-bold border-2 border-[#1A6B1A] hover:bg-[#145214] transition-colors"
+                  >
+                    이어서 작성
+                  </motion.button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

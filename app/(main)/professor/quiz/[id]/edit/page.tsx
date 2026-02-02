@@ -3,11 +3,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Timestamp } from 'firebase/firestore';
 import { Header, Button, Skeleton } from '@/components/common';
 import { QuizEditorForm, PublishToggle } from '@/components/professor';
 import QuestionEditor, { type QuestionData } from '@/components/quiz/create/QuestionEditor';
 import QuestionList from '@/components/quiz/create/QuestionList';
-import { useProfessorQuiz, type ProfessorQuiz, type QuizInput } from '@/lib/hooks/useProfessorQuiz';
+import { useProfessorQuiz, type ProfessorQuiz, type QuizInput, type QuizQuestion } from '@/lib/hooks/useProfessorQuiz';
 import type { QuizMetaData } from '@/components/professor/QuizEditorForm';
 
 // ============================================================
@@ -84,6 +85,9 @@ export default function EditQuizPage() {
   // 문제 목록
   const [questions, setQuestions] = useState<QuestionData[]>([]);
 
+  // 원본 문제 목록 (수정 감지용)
+  const [originalQuestions, setOriginalQuestions] = useState<QuizQuestion[]>([]);
+
   // 편집 중인 문제 인덱스 (-1: 새 문제 추가 모드)
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
 
@@ -108,6 +112,8 @@ export default function EditQuizPage() {
           });
           setIsPublished(data.isPublished);
           setQuestions(data.questions.map(convertToQuestionData));
+          // 원본 문제 저장 (수정 감지용)
+          setOriginalQuestions(data.questions as QuizQuestion[]);
         } else {
           setLoadError('퀴즈를 찾을 수 없습니다.');
         }
@@ -192,6 +198,44 @@ export default function EditQuizPage() {
   }, []);
 
   /**
+   * 문제 내용이 변경되었는지 확인
+   */
+  const isQuestionChanged = (original: QuizQuestion | undefined, current: QuestionData): boolean => {
+    if (!original) return true; // 새 문제
+
+    // 텍스트 비교
+    if (original.text !== current.text) return true;
+
+    // 타입 비교
+    if (original.type !== current.type) return true;
+
+    // 정답 비교
+    if (current.type === 'subjective' || current.type === 'short_answer') {
+      if (original.answer !== current.answerText) return true;
+    } else if (current.type === 'multiple') {
+      const origAnswer = typeof original.answer === 'number' ? original.answer - 1 : -1;
+      if (origAnswer !== current.answerIndex) return true;
+    } else {
+      if (original.answer !== current.answerIndex) return true;
+    }
+
+    // 선지 비교 (객관식)
+    if (current.type === 'multiple') {
+      const origChoices = original.choices || [];
+      const currChoices = current.choices?.filter((c) => c.trim()) || [];
+      if (origChoices.length !== currChoices.length) return true;
+      for (let i = 0; i < currChoices.length; i++) {
+        if (origChoices[i] !== currChoices[i]) return true;
+      }
+    }
+
+    // 해설 비교
+    if ((original.explanation || '') !== (current.explanation || '')) return true;
+
+    return false;
+  };
+
+  /**
    * QuestionData를 QuizQuestion 형식으로 변환
    * 내부 0-indexed를 DB 1-indexed로 변환
    */
@@ -208,6 +252,10 @@ export default function EditQuizPage() {
       answer = q.answerIndex;
     }
 
+    // 기존 문제 찾기
+    const originalQ = originalQuestions.find((oq) => oq.id === q.id);
+    const hasChanged = isQuestionChanged(originalQ, q);
+
     return {
       id: q.id,
       text: q.text,
@@ -215,6 +263,8 @@ export default function EditQuizPage() {
       choices: q.type === 'multiple' ? q.choices : undefined,
       answer,
       explanation: q.explanation || undefined,
+      // 문제별 수정 시간: 변경된 경우에만 업데이트, 그렇지 않으면 기존 값 유지
+      questionUpdatedAt: hasChanged ? Timestamp.now() : ((originalQ as any)?.questionUpdatedAt || null),
     };
   };
 
@@ -477,6 +527,7 @@ export default function EditQuizPage() {
                   questions={questions}
                   onQuestionsChange={setQuestions}
                   onEditQuestion={handleEditQuestion}
+                  userRole="professor"
                 />
               )}
             </motion.div>

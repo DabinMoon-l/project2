@@ -1137,10 +1137,10 @@ function ReviewPageContent() {
               </p>
               <p className="text-sm text-[#5C5C5C] mb-4">
                 이 퀴즈의 문제가 수정되었습니다.
-                수정된 문제로 업데이트하시겠습니까?
+                수정된 문제 내용으로 업데이트하시겠습니까?
               </p>
-              <p className="text-xs text-[#8B1A1A] mb-4">
-                * 기존에 저장된 내 답과 오답 정보는 초기화됩니다.
+              <p className="text-xs text-[#1A6B1A] mb-4">
+                * 기존에 저장된 내 답과 복습 기록은 유지됩니다.
               </p>
 
               <div className="flex gap-2">

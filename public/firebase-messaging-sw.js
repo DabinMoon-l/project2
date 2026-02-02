@@ -35,7 +35,7 @@ messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] 백그라운드 메시지 수신:', payload);
 
   // 알림 데이터 추출
-  const notificationTitle = payload.notification?.title || '용사 퀴즈';
+  const notificationTitle = payload.notification?.title || 'QuizBunny';
   const notificationOptions = {
     body: payload.notification?.body || '새로운 알림이 있습니다.',
     icon: payload.notification?.icon || '/icons/icon-192x192.png',

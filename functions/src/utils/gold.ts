@@ -1,5 +1,7 @@
 import { getFirestore, FieldValue, Transaction } from "firebase-admin/firestore";
 
+// 참고: gold 기능이 제거되어 이 파일은 경험치/계급 관련 함수만 포함합니다.
+
 /**
  * 계급 정보 타입
  */
@@ -84,39 +86,6 @@ export function calculateQuizExp(score: number): number {
 }
 
 /**
- * 사용자에게 골드 지급 (트랜잭션 내에서 사용)
- * @param transaction Firestore 트랜잭션
- * @param userId 사용자 ID
- * @param amount 지급할 골드량
- * @param reason 지급 사유
- */
-export async function addGoldInTransaction(
-  transaction: Transaction,
-  userId: string,
-  amount: number,
-  reason: string
-): Promise<void> {
-  const db = getFirestore();
-  const userRef = db.collection("users").doc(userId);
-
-  // 사용자 문서 업데이트
-  transaction.update(userRef, {
-    gold: FieldValue.increment(amount),
-    updatedAt: FieldValue.serverTimestamp(),
-  });
-
-  // 골드 히스토리 기록
-  const historyRef = db.collection("users").doc(userId)
-    .collection("goldHistory").doc();
-
-  transaction.set(historyRef, {
-    amount,
-    reason,
-    createdAt: FieldValue.serverTimestamp(),
-  });
-}
-
-/**
  * 사용자에게 경험치 지급 및 계급 업 체크 (트랜잭션 내에서 사용)
  * @param transaction Firestore 트랜잭션
  * @param userId 사용자 ID
@@ -189,24 +158,3 @@ export async function addExpInTransaction(
   };
 }
 
-/**
- * 골드와 경험치 동시 지급 (트랜잭션 내에서 사용)
- * @param transaction Firestore 트랜잭션
- * @param userId 사용자 ID
- * @param gold 지급할 골드량
- * @param exp 지급할 경험치량
- * @param reason 지급 사유
- */
-export async function addRewardsInTransaction(
-  transaction: Transaction,
-  userId: string,
-  gold: number,
-  exp: number,
-  reason: string
-): Promise<{ rankUp: boolean; newRank?: RankInfo; previousRank?: string }> {
-  // 골드 지급
-  await addGoldInTransaction(transaction, userId, gold, reason);
-
-  // 경험치 지급 (계급 업 체크 포함)
-  return await addExpInTransaction(transaction, userId, exp, reason);
-}

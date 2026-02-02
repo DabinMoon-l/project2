@@ -39,19 +39,13 @@ service cloud.firestore {
       allow create: if isOwner(uid);
 
       // 수정: 본인만 (일부 필드만)
-      // gold, exp, rank 등은 Cloud Functions에서만 수정 가능
+      // exp, rank 등은 Cloud Functions에서만 수정 가능
       allow update: if isOwner(uid) &&
         !request.resource.data.diff(resource.data).affectedKeys()
-          .hasAny(['gold', 'totalExp', 'rank', 'role', 'badges']);
+          .hasAny(['totalExp', 'rank', 'role', 'badges']);
 
       // 삭제: 불가
       allow delete: if false;
-
-      // 골드 히스토리 서브컬렉션
-      match /goldHistory/{historyId} {
-        allow read: if isOwner(uid);
-        allow write: if false; // Cloud Functions에서만 작성
-      }
 
       // 퀴즈 기록 서브컬렉션
       match /quizHistory/{quizId} {
@@ -173,13 +167,8 @@ service cloud.firestore {
     // ============================================================
 
     match /feedbacks/{feedbackId} {
-      // 읽기: 작성자, 교수님, 또는 해당 퀴즈의 제작자
-      allow read: if isAuthenticated() &&
-        (resource.data.userId == request.auth.uid ||
-         isProfessor() ||
-         // 퀴즈 제작자도 피드백 확인 가능
-         (resource.data.quizId != null &&
-          get(/databases/$(database)/documents/quizzes/$(resource.data.quizId)).data.creatorId == request.auth.uid));
+      // 읽기: 로그인 사용자 (퀴즈 제작자가 피드백 확인용, 민감하지 않은 데이터)
+      allow read: if isAuthenticated();
 
       // 생성: 로그인 사용자 (본인 것만)
       allow create: if isAuthenticated() &&
@@ -276,9 +265,8 @@ service cloud.firestore {
     // ============================================================
 
     match /quizResults/{resultId} {
-      // 읽기: 본인 또는 교수님
-      allow read: if isAuthenticated() &&
-        (resource.data.userId == request.auth.uid || isProfessor());
+      // 읽기: 로그인 사용자 (통계 조회용, 민감하지 않은 데이터)
+      allow read: if isAuthenticated();
 
       // 생성: 로그인 사용자 (본인 것만)
       allow create: if isAuthenticated() &&

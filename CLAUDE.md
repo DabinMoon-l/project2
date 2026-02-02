@@ -96,7 +96,6 @@ styles/themes/         # 반별 테마 (A빨강/B노랑/C초록/D파랑)
 
 public/
 ├── rabbit/            # 토끼 캐릭터 에셋
-├── items/             # Shop 아이템 에셋
 └── animations/        # Lottie 애니메이션
 
 functions/             # Firebase Cloud Functions
@@ -122,7 +121,7 @@ functions/             # Firebase Cloud Functions
 | C | #22C55E (초록) |
 | D | #3B82F6 (파랑) |
 
-### 골드/경험치 처리
+### 경험치 처리
 - 클라이언트에서 직접 수정 불가
 - Cloud Functions에서 검증 후 지급
 
@@ -153,11 +152,11 @@ functions/             # Firebase Cloud Functions
 - 기본: 귀여운 토끼 캐릭터
 - 커스터마이징: 머리스타일, 피부색, 수염
 - 계급: 견습생 → 용사 → 기사 → 장군 → 대원수 → 전설의 용사
-- 갑옷은 계급으로만 획득 (Shop 구매 불가)
+- 갑옷은 계급으로만 획득
 
 ### 시즌 시스템
-- 중간 → 기말 전환 시: 계급, 갑옷/무기, Shop 아이템 초기화
-- 골드, 캐릭터 외형, 뱃지는 유지
+- 중간 → 기말 전환 시: 계급, 갑옷/무기 초기화
+- 캐릭터 외형, 뱃지는 유지
 
 ### 복습 시스템
 - 복습 유형: `wrong` (오답), `bookmark` (찜), `solved` (푼 문제)
@@ -171,7 +170,7 @@ functions/             # Firebase Cloud Functions
 ### 보안
 - Firestore Security Rules로 데이터 접근 제어
 - 도배 방지: 글 1분 3개, 댓글 30초 1개 제한
-- **중요**: `gold`, `totalExp`, `rank`, `role`, `badges` 필드는 클라이언트에서 수정 불가 (Cloud Functions 전용)
+- **중요**: `totalExp`, `rank`, `role`, `badges` 필드는 클라이언트에서 수정 불가 (Cloud Functions 전용)
 
 ## 라우트 구조
 
@@ -195,7 +194,6 @@ app/
     ├── review/          # 복습 (오답노트, 찜한 문제, 푼 문제)
     │   └── [type]/[id]/ # 폴더 상세 (문제 목록, 연습 모드)
     ├── board/           # 게시판
-    ├── shop/            # 상점
     ├── profile/         # 프로필
     ├── settings/        # 설정
     └── professor/       # 교수님 전용
