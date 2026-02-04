@@ -11,6 +11,7 @@ import {
   updateDoc,
   deleteDoc,
   arrayUnion,
+  increment,
   serverTimestamp,
   query,
   where,
@@ -56,7 +57,24 @@ interface QuestionResult {
   /** 하위 문제 보기 (ㄱㄴㄷ 형식) */
   subQuestionOptions?: string[];
   /** 보기 타입 */
-  subQuestionOptionsType?: 'text' | 'labeled';
+  subQuestionOptionsType?: 'text' | 'labeled' | 'mixed';
+  /** 혼합 보기 원본 데이터 (렌더링용) */
+  mixedExamples?: Array<{
+    id: string;
+    type: 'text' | 'labeled' | 'image' | 'grouped';
+    label?: string;
+    content?: string;
+    items?: Array<{ id: string; label: string; content: string }>;
+    imageUrl?: string;
+    children?: Array<{
+      id: string;
+      type: 'text' | 'labeled' | 'image';
+      label?: string;
+      content?: string;
+      items?: Array<{ id: string; label: string; content: string }>;
+      imageUrl?: string;
+    }>;
+  }>;
   /** 하위 문제 이미지 */
   subQuestionImage?: string;
   /** 챕터 ID */
@@ -269,6 +287,10 @@ export default function QuizResultPage() {
             image: q.image || q.imageUrl || null,
             // 보기: examples 객체에서 items 추출
             subQuestionOptions: (() => {
+              // mixedExamples가 있는 경우 (최신 형식 - 텍스트+ㄱㄴㄷ 혼합)
+              if (q.mixedExamples && Array.isArray(q.mixedExamples) && q.mixedExamples.length > 0) {
+                return q.mixedExamples.map((item: { content: string }) => item.content);
+              }
               // examples가 직접 배열인 경우 (이전 형식)
               if (Array.isArray(q.examples)) {
                 return q.examples;
@@ -286,6 +308,10 @@ export default function QuizResultPage() {
             })(),
             // 보기 타입 추출
             subQuestionOptionsType: (() => {
+              // mixedExamples가 있는 경우 (최신 형식 - 텍스트+ㄱㄴㄷ 혼합)
+              if (q.mixedExamples && Array.isArray(q.mixedExamples) && q.mixedExamples.length > 0) {
+                return 'mixed'; // 혼합 형식 표시
+              }
               if (Array.isArray(q.examples)) {
                 return 'text'; // 이전 형식은 기본 텍스트로
               }
@@ -297,6 +323,8 @@ export default function QuizResultPage() {
               }
               return null;
             })(),
+            // 혼합 보기 원본 데이터 (렌더링용)
+            mixedExamples: q.mixedExamples || null,
             subQuestionImage: q.subQuestionImage || null,
             // 챕터 정보
             chapterId: q.chapterId || null,
@@ -387,10 +415,12 @@ export default function QuizResultPage() {
             createdAt: serverTimestamp(),
           });
 
-          // 퀴즈 문서에 completedUsers 추가
+          // 퀴즈 문서에 completedUsers, userScores, participantCount 업데이트
           try {
             await updateDoc(doc(db, 'quizzes', quizId), {
               completedUsers: arrayUnion(user.uid),
+              [`userScores.${user.uid}`]: score,
+              participantCount: increment(1),
             });
           } catch (updateErr) {
             console.error('퀴즈 완료 표시 실패:', updateErr);
@@ -653,9 +683,58 @@ export default function QuizResultPage() {
   };
 
   // 문제 상세 정보 렌더링 헬퍼 함수
-  const renderQuestionDetail = (result: QuestionResult) => (
+  const renderQuestionDetail = (result: QuestionResult) => {
+    // 혼합 보기가 있는 경우 순서별로 분리
+    const groupedBlocks = result.mixedExamples?.filter(b => b.type === 'grouped') || [];
+    const textBlocks = result.mixedExamples?.filter(b => b.type === 'text' && b.content?.trim()) || [];
+    const labeledBlocks = result.mixedExamples?.filter(b => b.type === 'labeled') || [];
+    const hasMixedExamples = result.mixedExamples && result.mixedExamples.length > 0;
+
+    return (
     <>
-      {/* 문제 이미지 */}
+      {/* 1. 묶은 보기 (grouped) - 먼저 표시 */}
+      {groupedBlocks.map((block) => (
+        <div key={block.id} className="mb-3 p-3 border-2 border-[#1A1A1A] bg-[#FFF8E1]">
+          <p className="text-xs font-bold text-[#8B6914] mb-2">보기</p>
+          <div className="space-y-1">
+            {block.children?.map((child) => (
+              <div key={child.id}>
+                {child.type === 'text' && child.content?.trim() && (
+                  <p className="text-sm text-[#5C5C5C] whitespace-pre-wrap">{child.content}</p>
+                )}
+                {child.type === 'labeled' && (child.items || []).filter(i => i.content.trim()).map((item) => (
+                  <p key={item.id} className="text-sm text-[#1A1A1A]">
+                    <span className="font-bold">{item.label}.</span> {item.content}
+                  </p>
+                ))}
+                {child.type === 'image' && child.imageUrl && (
+                  <img src={child.imageUrl} alt="보기 이미지" className="max-w-full h-auto border border-[#1A1A1A]" />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      {/* 2. 텍스트박스 단독 (text) */}
+      {textBlocks.map((block) => (
+        <div key={block.id} className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1]">
+          <p className="text-xs font-bold text-[#8B6914] mb-2">보기</p>
+          <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{block.content}</p>
+        </div>
+      ))}
+
+      {/* 레거시 보기 - 텍스트 형식 (혼합 보기가 없을 때만) */}
+      {!hasMixedExamples && result.subQuestionOptions && result.subQuestionOptions.length > 0 && result.subQuestionOptionsType === 'text' && (
+        <div className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1]">
+          <p className="text-xs font-bold text-[#8B6914] mb-2">보기</p>
+          <p className="text-sm text-[#1A1A1A]">
+            {result.subQuestionOptions.join(', ')}
+          </p>
+        </div>
+      )}
+
+      {/* 3. 문제 이미지 */}
       {result.image && (
         <div className="mb-3">
           <p className="text-xs font-bold text-[#5C5C5C] mb-2">문제 이미지</p>
@@ -663,25 +742,31 @@ export default function QuizResultPage() {
         </div>
       )}
 
-      {/* 보기 (텍스트 또는 ㄱㄴㄷ 형식) */}
-      {result.subQuestionOptions && result.subQuestionOptions.length > 0 && (
+      {/* 4. ㄱ.ㄴ.ㄷ.형식 단독 (labeled) */}
+      {labeledBlocks.map((block) => (
+        <div key={block.id} className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1]">
+          <p className="text-xs font-bold text-[#8B6914] mb-2">보기</p>
+          <div className="space-y-1">
+            {(block.items || []).filter(i => i.content.trim()).map((item) => (
+              <p key={item.id} className="text-sm text-[#1A1A1A]">
+                <span className="font-bold">{item.label}.</span> {item.content}
+              </p>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      {/* 레거시 보기 - ㄱㄴㄷ 형식 (혼합 보기가 없을 때만) */}
+      {!hasMixedExamples && result.subQuestionOptions && result.subQuestionOptions.length > 0 && result.subQuestionOptionsType === 'labeled' && (
         <div className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1]">
           <p className="text-xs font-bold text-[#8B6914] mb-2">보기</p>
-          {result.subQuestionOptionsType === 'text' ? (
-            // 텍스트 형식: 쉼표로 구분하여 한 줄로 표시
-            <p className="text-sm text-[#1A1A1A]">
-              {result.subQuestionOptions.join(', ')}
-            </p>
-          ) : (
-            // ㄱㄴㄷ 형식 (labeled) 또는 기본
-            <div className="space-y-1">
-              {result.subQuestionOptions.map((itm, idx) => (
-                <p key={idx} className="text-sm text-[#1A1A1A]">
-                  <span className="font-bold">{['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ'][idx]}.</span> {itm}
-                </p>
-              ))}
-            </div>
-          )}
+          <div className="space-y-1">
+            {result.subQuestionOptions.map((itm, idx) => (
+              <p key={idx} className="text-sm text-[#1A1A1A]">
+                <span className="font-bold">{['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ'][idx]}.</span> {itm}
+              </p>
+            ))}
+          </div>
         </div>
       )}
 
@@ -740,8 +825,9 @@ export default function QuizResultPage() {
                   className={`text-sm p-2 border ${className}`}
                 >
                   {idx + 1}. {opt}
-                  {isCorrectOption && ' (정답)'}
-                  {isUserAnswer && ' (내 답)'}
+                  {isCorrectOption && isUserAnswer && ' (정답)'}
+                  {isCorrectOption && !isUserAnswer && ' (정답)'}
+                  {!isCorrectOption && isUserAnswer && ' (내 답)'}
                 </p>
               );
             })}
@@ -762,19 +848,12 @@ export default function QuizResultPage() {
           </p>
           {/* 주관식 복수 정답 표시 */}
           {result.correctAnswer?.toString().includes('|||') ? (
-            <div className="text-sm">
-              <span className="text-[#5C5C5C]">정답 (다음 중 하나): </span>
-              <div className="mt-1 space-y-1">
-                {result.correctAnswer.split('|||').map((ans: string, idx: number) => (
-                  <span
-                    key={idx}
-                    className="inline-block mr-2 px-2 py-0.5 bg-[#E8F5E9] border border-[#1A6B1A] text-[#1A6B1A] font-bold"
-                  >
-                    {ans.trim()}
-                  </span>
-                ))}
-              </div>
-            </div>
+            <p className="text-sm">
+              <span className="text-[#5C5C5C]">정답: </span>
+              <span className="font-bold text-[#1A6B1A]">
+                {result.correctAnswer.split('|||').map((a: string) => a.trim()).join(', ')}
+              </span>
+            </p>
           ) : result.type === 'ox' ? (
             <p className="text-sm">
               <span className="text-[#5C5C5C]">정답: </span>
@@ -799,7 +878,8 @@ export default function QuizResultPage() {
         </p>
       </div>
     </>
-  );
+    );
+  };
 
   // 로딩 UI
   if (isLoading) {
@@ -984,14 +1064,6 @@ export default function QuizResultPage() {
                         className="overflow-hidden"
                       >
                         <div className="border border-t-0 border-[#1A1A1A] bg-[#F5F0E8] p-4 space-y-4">
-                          {/* 공통 문제 */}
-                          {firstResult.commonQuestion && (
-                            <div className="p-3 border-2 border-[#1A1A1A] bg-white">
-                              <p className="text-xs font-bold text-[#5C5C5C] mb-2">공통 문제</p>
-                              <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{firstResult.commonQuestion}</p>
-                            </div>
-                          )}
-
                           {/* 공통 지문/보기 */}
                           {(firstResult.passage || firstResult.passageImage || firstResult.koreanAbcItems) && (
                             <div className="p-3 border border-[#8B6914] bg-[#FFF8E1]">
@@ -1054,7 +1126,7 @@ export default function QuizResultPage() {
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                     </svg>
                                   </div>
-                                  <p className="text-xs text-[#1A1A1A] mt-1 line-clamp-2">{subResult.question}</p>
+                                  <p className="text-sm text-[#1A1A1A] mt-1 line-clamp-2">{subResult.question}</p>
                                 </button>
 
                                 {/* 하위 문제 상세 */}

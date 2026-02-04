@@ -44,6 +44,8 @@ interface ReviewPracticeProps {
 export interface PracticeResult {
   /** 복습 문제 ID */
   reviewId: string;
+  /** 퀴즈 ID */
+  quizId: string;
   /** 사용자 답변 */
   userAnswer: string;
   /** 정답 여부 */
@@ -350,6 +352,7 @@ export default function ReviewPractice({
           const isCorrectAnswer = checkSingleAnswer(item, subAnswer);
           newResults[subIdx] = {
             reviewId: item.id,
+            quizId: item.quizId,
             userAnswer: Array.isArray(subAnswer) ? subAnswer.join(',') : subAnswer.toString(),
             isCorrect: isCorrectAnswer,
           };
@@ -370,6 +373,7 @@ export default function ReviewPractice({
       const isCorrectAnswer = checkAnswer();
       const newResult: PracticeResult = {
         reviewId: currentItem.id,
+        quizId: currentItem.quizId,
         userAnswer: Array.isArray(answer) ? answer.join(',') : answer.toString(),
         isCorrect: isCorrectAnswer,
       };
@@ -565,7 +569,7 @@ export default function ReviewPractice({
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           {/* 문항 번호 + 결합형 표시 + 정답 수 */}
-                          <div className="flex items-center gap-2 flex-wrap">
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
                             <span className="inline-block px-2 py-0.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8]">
                               Q{groupIdx + 1}
                             </span>
@@ -582,12 +586,18 @@ export default function ReviewPractice({
                               {groupCorrectCount}/{group.items.length} 정답
                             </span>
                           </div>
+                          {/* 공통 문제 내용 표시 */}
+                          {firstItem.commonQuestion && (
+                            <p className="text-sm font-medium text-[#1A1A1A] line-clamp-2 pl-1">
+                              {firstItem.commonQuestion}
+                            </p>
+                          )}
                         </div>
 
                         {/* 화살표 */}
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
                           <svg
-                            className={`w-5 h-5 text-[#5C5C5C] transition-transform ${isGroupExpanded ? 'rotate-180' : ''}`}
+                            className={`w-5 h-5 text-[#5C5C5C] transition-transform mt-1 ${isGroupExpanded ? 'rotate-180' : ''}`}
                             fill="none"
                             stroke="currentColor"
                             viewBox="0 0 24 24"
@@ -608,10 +618,7 @@ export default function ReviewPractice({
                           className="overflow-hidden"
                         >
                           <div className="border-t border-[#1A1A1A] p-3 bg-[#EDEAE4] space-y-3">
-                            {/* 공통 문제 (박스 없이 일반 텍스트) */}
-                            {firstItem.commonQuestion && (
-                              <p className="text-sm text-[#1A1A1A]">{firstItem.commonQuestion}</p>
-                            )}
+                            {/* 공통 문제는 아코디언 헤더에 표시되므로 생략 */}
 
                             {/* 공통 지문/이미지 (노란색 박스) */}
                             {(firstItem.passage || firstItem.passageImage || (firstItem.koreanAbcItems && firstItem.koreanAbcItems.length > 0)) && (
@@ -650,18 +657,20 @@ export default function ReviewPractice({
                                       onClick={() => toggleSubExpand(subItem.id)}
                                       className="p-2 cursor-pointer flex items-center justify-between"
                                     >
-                                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                                        <span className={`w-5 h-5 flex items-center justify-center text-xs font-bold ${
-                                          isSubCorrect ? 'bg-[#1A6B1A] text-white' : 'bg-[#8B1A1A] text-white'
-                                        }`}>
-                                          {isSubCorrect ? 'O' : 'X'}
-                                        </span>
-                                        <span className="text-xs font-bold text-[#1A1A1A]">
-                                          Q{groupIdx + 1}-{subIdx + 1}
-                                        </span>
-                                        <span className="text-xs text-[#5C5C5C] line-clamp-1 flex-1">
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2">
+                                          <span className={`w-5 h-5 flex items-center justify-center text-xs font-bold ${
+                                            isSubCorrect ? 'bg-[#1A6B1A] text-white' : 'bg-[#8B1A1A] text-white'
+                                          }`}>
+                                            {isSubCorrect ? 'O' : 'X'}
+                                          </span>
+                                          <span className="text-xs font-bold text-[#1A1A1A]">
+                                            Q{groupIdx + 1}-{subIdx + 1}
+                                          </span>
+                                        </div>
+                                        <p className="text-xs font-medium text-[#1A1A1A] line-clamp-1 mt-1 pl-7">
                                           {subItem.question}
-                                        </span>
+                                        </p>
                                       </div>
                                       <svg
                                         className={`w-4 h-4 text-[#5C5C5C] transition-transform flex-shrink-0 ${isSubExpanded ? 'rotate-180' : ''}`}
@@ -683,25 +692,30 @@ export default function ReviewPractice({
                                           className="overflow-hidden"
                                         >
                                           <div className="border-t border-[#D4CFC4] p-2 bg-[#EDEAE4] space-y-2">
-                                            {/* 문제 텍스트 */}
-                                            <p className="text-sm text-[#1A1A1A]">{subItem.question}</p>
+                                            {/* 문제 텍스트는 아코디언 헤더에 표시되므로 생략 */}
 
                                             {/* 문제 이미지 */}
                                             {subItem.image && (
                                               <img src={subItem.image} alt="문제 이미지" className="max-w-full max-h-[150px] object-contain border border-[#1A1A1A]" />
                                             )}
 
-                                            {/* 하위 문제 보기 */}
+                                            {/* 보기 (텍스트 또는 ㄱㄴㄷ 형식) */}
                                             {subItem.subQuestionOptions && subItem.subQuestionOptions.length > 0 && (
                                               <div className="p-3 border border-[#8B6914] bg-[#FFF8E1]">
                                                 <p className="text-xs font-bold text-[#8B6914] mb-2">보기</p>
-                                                <div className="space-y-1">
-                                                  {subItem.subQuestionOptions.map((opt, i) => (
-                                                    <p key={i} className="text-sm text-[#1A1A1A]">
-                                                      <span className="font-bold">{KOREAN_LABELS[i]}.</span> {opt}
-                                                    </p>
-                                                  ))}
-                                                </div>
+                                                {subItem.subQuestionOptionsType === 'text' ? (
+                                                  <p className="text-sm text-[#1A1A1A]">
+                                                    {subItem.subQuestionOptions.join(', ')}
+                                                  </p>
+                                                ) : (
+                                                  <div className="space-y-1">
+                                                    {subItem.subQuestionOptions.map((opt, i) => (
+                                                      <p key={i} className="text-sm text-[#1A1A1A]">
+                                                        <span className="font-bold">{KOREAN_LABELS[i]}.</span> {opt}
+                                                      </p>
+                                                    ))}
+                                                  </div>
+                                                )}
                                               </div>
                                             )}
 
@@ -738,6 +752,28 @@ export default function ReviewPractice({
                                                     </div>
                                                   );
                                                 })}
+                                              </div>
+                                            )}
+
+                                            {/* OX/주관식 답 (하위 문제용) */}
+                                            {(!subItem.options || subItem.options.length === 0) && (
+                                              <div className="text-sm space-y-1">
+                                                <p>
+                                                  <span className="text-[#5C5C5C]">내 답: </span>
+                                                  <span className={`font-bold ${isSubCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>
+                                                    {subResult?.userAnswer || '(미응답)'}
+                                                  </span>
+                                                </p>
+                                                {!isSubCorrect && (
+                                                  <p>
+                                                    <span className="text-[#5C5C5C]">정답: </span>
+                                                    <span className="font-bold text-[#1A6B1A]">
+                                                      {subItem.type === 'ox'
+                                                        ? (subItem.correctAnswer?.toString() === '0' || subItem.correctAnswer?.toString().toUpperCase() === 'O' ? 'O' : 'X')
+                                                        : (subItem.correctAnswer?.toString().replace(/\|\|\|/g, ', ') || '')}
+                                                    </span>
+                                                  </p>
+                                                )}
                                               </div>
                                             )}
 
@@ -790,34 +826,43 @@ export default function ReviewPractice({
                     {/* 문제 헤더 */}
                     <div
                       onClick={() => toggleExpand(item.id)}
-                      className="p-3 cursor-pointer flex items-center justify-between"
+                      className="p-3 cursor-pointer"
                     >
-                      <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
-                        <span className={`w-6 h-6 flex items-center justify-center text-xs font-bold ${
-                          isItemCorrect ? 'bg-[#1A6B1A] text-white' : 'bg-[#8B1A1A] text-white'
-                        }`}>
-                          {isItemCorrect ? 'O' : 'X'}
-                        </span>
-                        <span className="text-sm font-bold text-[#1A1A1A]">
-                          Q{groupIdx + 1}
-                        </span>
-                        {userCourseId && item.chapterId && (
-                          <span className="px-1.5 py-0.5 bg-[#E8F0FE] border border-[#4A6DA7] text-[#4A6DA7] text-xs font-medium">
-                            {formatChapterLabel(userCourseId, item.chapterId, item.chapterDetailId)}
-                          </span>
-                        )}
-                        <span className="text-sm text-[#5C5C5C] line-clamp-1 max-w-[150px]">
-                          {item.question}
-                        </span>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          {/* 첫 줄: 정답/오답 + 문항번호 + 챕터 + 문제유형 */}
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <span className={`w-6 h-6 flex items-center justify-center text-xs font-bold ${
+                              isItemCorrect ? 'bg-[#1A6B1A] text-white' : 'bg-[#8B1A1A] text-white'
+                            }`}>
+                              {isItemCorrect ? 'O' : 'X'}
+                            </span>
+                            <span className="text-sm font-bold text-[#1A1A1A]">
+                              Q{groupIdx + 1}
+                            </span>
+                            {userCourseId && item.chapterId && (
+                              <span className="px-1.5 py-0.5 bg-[#E8F0FE] border border-[#4A6DA7] text-[#4A6DA7] text-xs font-medium">
+                                {formatChapterLabel(userCourseId, item.chapterId, item.chapterDetailId)}
+                              </span>
+                            )}
+                            <span className="px-1.5 py-0.5 text-xs border border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A]">
+                              {item.type === 'ox' ? 'OX문제' : item.type === 'multiple' ? '객관식문제' : '주관식문제'}
+                            </span>
+                          </div>
+                          {/* 둘째 줄: 문제 내용 */}
+                          <p className="text-sm font-medium text-[#1A1A1A] line-clamp-2 pl-8">
+                            {item.question}
+                          </p>
+                        </div>
+                        <svg
+                          className={`w-5 h-5 text-[#5C5C5C] transition-transform flex-shrink-0 mt-1 ${isExpanded ? 'rotate-180' : ''}`}
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
                       </div>
-                      <svg
-                        className={`w-5 h-5 text-[#5C5C5C] transition-transform flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
                     </div>
 
                   {/* 문제 상세 */}
@@ -830,15 +875,9 @@ export default function ReviewPractice({
                         className="overflow-hidden"
                       >
                         <div className="border-t border-[#1A1A1A] p-3 bg-[#EDEAE4] space-y-3">
-                          {/* 결합형 공통 정보 */}
-                          {item.combinedGroupId && (item.commonQuestion || item.passage || item.passageImage || item.koreanAbcItems) && (
+                          {/* 결합형 공통 정보 - 공통 문제는 아코디언 헤더에 표시되므로 생략 */}
+                          {item.combinedGroupId && (item.passage || item.passageImage || item.koreanAbcItems) && (
                             <div className="space-y-2">
-                              {item.commonQuestion && (
-                                <div className="p-2 border border-[#1A1A1A] bg-[#F5F0E8]">
-                                  <p className="text-xs font-bold text-[#5C5C5C] mb-1">공통 문제</p>
-                                  <p className="text-sm text-[#1A1A1A]">{item.commonQuestion}</p>
-                                </div>
-                              )}
                               {(item.passage || item.passageImage || item.koreanAbcItems) && (
                                 <div className="p-2 border border-[#8B6914] bg-[#FFF8E1]">
                                   {item.passage && item.passageType !== 'korean_abc' && (
@@ -861,25 +900,30 @@ export default function ReviewPractice({
                             </div>
                           )}
 
-                          {/* 문제 텍스트 */}
-                          <p className="text-sm text-[#1A1A1A]">{item.question}</p>
+                          {/* 문제 텍스트는 아코디언 헤더에 표시되므로 생략 */}
 
                           {/* 문제 이미지 */}
                           {item.image && (
                             <img src={item.image} alt="문제 이미지" className="max-w-full max-h-[200px] object-contain border border-[#1A1A1A]" />
                           )}
 
-                          {/* 하위 문제 보기 (ㄱㄴㄷ 형식) */}
+                          {/* 보기 (텍스트 또는 ㄱㄴㄷ 형식) */}
                           {item.subQuestionOptions && item.subQuestionOptions.length > 0 && (
                             <div className="p-3 border border-[#8B6914] bg-[#FFF8E1]">
                               <p className="text-xs font-bold text-[#8B6914] mb-2">보기</p>
-                              <div className="space-y-1">
-                                {item.subQuestionOptions.map((opt, i) => (
-                                  <p key={i} className="text-sm text-[#1A1A1A]">
-                                    <span className="font-bold">{KOREAN_LABELS[i]}.</span> {opt}
-                                  </p>
-                                ))}
-                              </div>
+                              {item.subQuestionOptionsType === 'text' ? (
+                                <p className="text-sm text-[#1A1A1A]">
+                                  {item.subQuestionOptions.join(', ')}
+                                </p>
+                              ) : (
+                                <div className="space-y-1">
+                                  {item.subQuestionOptions.map((opt, i) => (
+                                    <p key={i} className="text-sm text-[#1A1A1A]">
+                                      <span className="font-bold">{KOREAN_LABELS[i]}.</span> {opt}
+                                    </p>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           )}
 
@@ -939,7 +983,7 @@ export default function ReviewPractice({
                                   <span className="font-bold text-[#1A6B1A]">
                                     {item.type === 'ox'
                                       ? (item.correctAnswer?.toString() === '0' || item.correctAnswer?.toString().toUpperCase() === 'O' ? 'O' : 'X')
-                                      : item.correctAnswer?.toString()}
+                                      : (item.correctAnswer?.toString().replace(/\|\|\|/g, ', ') || '')}
                                   </span>
                                 </p>
                               )}
@@ -1437,17 +1481,23 @@ export default function ReviewPractice({
                         </div>
                       )}
 
-                      {/* 하위 문제 보기 (ㄱㄴㄷ 형식) */}
+                      {/* 보기 (텍스트 또는 ㄱㄴㄷ 형식) */}
                       {subItem.subQuestionOptions && subItem.subQuestionOptions.length > 0 && (
                         <div className="p-3 border border-[#8B6914] bg-[#FFF8E1] mb-3">
                           <p className="text-xs font-bold text-[#8B6914] mb-2">보기</p>
-                          <div className="space-y-1">
-                            {subItem.subQuestionOptions.map((opt, i) => (
-                              <p key={i} className="text-sm text-[#1A1A1A]">
-                                <span className="font-bold">{KOREAN_LABELS[i]}.</span> {opt}
-                              </p>
-                            ))}
-                          </div>
+                          {subItem.subQuestionOptionsType === 'text' ? (
+                            <p className="text-sm text-[#1A1A1A]">
+                              {subItem.subQuestionOptions.join(', ')}
+                            </p>
+                          ) : (
+                            <div className="space-y-1">
+                              {subItem.subQuestionOptions.map((opt, i) => (
+                                <p key={i} className="text-sm text-[#1A1A1A]">
+                                  <span className="font-bold">{KOREAN_LABELS[i]}.</span> {opt}
+                                </p>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -1571,6 +1621,26 @@ export default function ReviewPractice({
                         alt="문제 이미지"
                         className="max-w-full max-h-[300px] object-contain border border-[#1A1A1A]"
                       />
+                    </div>
+                  )}
+
+                  {/* 보기 (텍스트 또는 ㄱㄴㄷ 형식) */}
+                  {currentItem.subQuestionOptions && currentItem.subQuestionOptions.length > 0 && (
+                    <div className="mt-4 p-3 border border-[#8B6914] bg-[#FFF8E1]">
+                      <p className="text-xs font-bold text-[#8B6914] mb-2">보기</p>
+                      {currentItem.subQuestionOptionsType === 'text' ? (
+                        <p className="text-sm text-[#1A1A1A]">
+                          {currentItem.subQuestionOptions.join(', ')}
+                        </p>
+                      ) : (
+                        <div className="space-y-1">
+                          {currentItem.subQuestionOptions.map((opt, i) => (
+                            <p key={i} className="text-sm text-[#1A1A1A]">
+                              <span className="font-bold">{KOREAN_LABELS[i]}.</span> {opt}
+                            </p>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

@@ -56,6 +56,10 @@ export interface BookmarkedQuiz {
   subjectiveCount?: number;
   /** 처음 푼 점수 */
   myScore?: number;
+  /** 첫번째 복습 점수 */
+  myFirstReviewScore?: number;
+  /** 퀴즈 완료 여부 (completedUsers 배열에 있는지) */
+  hasCompleted?: boolean;
 }
 
 /**
@@ -123,6 +127,10 @@ export const useQuizBookmark = (): UseQuizBookmarkReturn => {
             const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
             if (quizDoc.exists()) {
               const quizData = quizDoc.data();
+              // completedUsers 배열에 사용자가 있는지 확인
+              const completedUsers: string[] = quizData.completedUsers || [];
+              const hasCompleted = user ? completedUsers.includes(user.uid) : false;
+
               quizzes.push({
                 id: quizId,
                 quizId,
@@ -138,6 +146,8 @@ export const useQuizBookmark = (): UseQuizBookmarkReturn => {
                 multipleChoiceCount: quizData.multipleChoiceCount || 0,
                 subjectiveCount: quizData.subjectiveCount || 0,
                 myScore: user ? quizData.userScores?.[user.uid] : undefined,
+                myFirstReviewScore: user ? quizData.userFirstReviewScores?.[user.uid] : undefined,
+                hasCompleted,
               });
             }
           } catch (err) {

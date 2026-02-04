@@ -223,6 +223,30 @@ export interface PrivateQuiz {
 }
 
 /**
+ * 삭제된 항목 (휴지통)
+ */
+export interface DeletedItem {
+  /** 삭제 항목 ID */
+  id: string;
+  /** 사용자 ID */
+  userId: string;
+  /** 과목 ID */
+  courseId: string | null;
+  /** 삭제 유형: solved(푼 문제), wrong(오답), bookmark(찜한 퀴즈), custom(내맘대로 폴더) */
+  type: 'solved' | 'wrong' | 'bookmark' | 'custom';
+  /** 원본 ID (퀴즈 ID 또는 폴더 ID) */
+  originalId: string;
+  /** 제목 */
+  title: string;
+  /** 문제 수 */
+  questionCount: number;
+  /** 삭제 일시 */
+  deletedAt: Timestamp;
+  /** 복원에 필요한 데이터 */
+  restoreData?: any;
+}
+
+/**
  * useReview 훅의 반환 타입
  */
 interface UseReviewReturn {
@@ -256,6 +280,8 @@ interface UseReviewReturn {
   deleteSolvedQuiz: (quizId: string) => Promise<void>;
   /** 오답 폴더 삭제 (해당 퀴즈의 오답만 삭제) */
   deleteWrongQuiz: (quizId: string) => Promise<void>;
+  /** 오답 폴더 삭제 (챕터별) */
+  deleteWrongQuizByChapter: (quizId: string, chapterId: string | null, chapterName?: string) => Promise<void>;
   /** 찜한 문제 폴더 삭제 (해당 퀴즈의 찜한 문제만 삭제) */
   deleteBookmarkQuiz: (quizId: string) => Promise<void>;
   /** 복습 완료 처리 */
@@ -284,6 +310,12 @@ interface UseReviewReturn {
   assignQuestionToCategory: (folderId: string, questionId: string, categoryId: string | null) => Promise<void>;
   /** 카테고리 이름 수정 */
   updateCategoryName: (folderId: string, categoryId: string, newName: string) => Promise<void>;
+  /** 삭제된 항목 목록 (휴지통) */
+  deletedItems: DeletedItem[];
+  /** 삭제된 항목 복원 */
+  restoreDeletedItem: (deletedItemId: string) => Promise<void>;
+  /** 삭제된 항목 영구 삭제 */
+  permanentlyDeleteItem: (deletedItemId: string) => Promise<void>;
 }
 
 // ============================================================
@@ -451,6 +483,7 @@ export const useReview = (): UseReviewReturn => {
   const [quizAttempts, setQuizAttempts] = useState<QuizAttempt[]>([]);
   const [customFolders, setCustomFolders] = useState<CustomFolder[]>([]);
   const [privateQuizzes, setPrivateQuizzes] = useState<PrivateQuiz[]>([]);
+  const [deletedItems, setDeletedItems] = useState<DeletedItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState<number>(0);
@@ -908,6 +941,45 @@ export const useReview = (): UseReviewReturn => {
       }
     );
 
+    // 삭제된 항목 구독 (휴지통)
+    const deletedQuery = userCourseId
+      ? query(
+          collection(db, 'deletedReviewItems'),
+          where('userId', '==', user.uid),
+          where('courseId', '==', userCourseId),
+          orderBy('deletedAt', 'desc')
+        )
+      : query(
+          collection(db, 'deletedReviewItems'),
+          where('userId', '==', user.uid),
+          orderBy('deletedAt', 'desc')
+        );
+
+    const unsubscribeDeleted = onSnapshot(
+      deletedQuery,
+      (snapshot) => {
+        const items: DeletedItem[] = [];
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          items.push({
+            id: doc.id,
+            userId: data.userId,
+            courseId: data.courseId,
+            type: data.type,
+            originalId: data.originalId,
+            title: data.title,
+            questionCount: data.questionCount || 0,
+            deletedAt: data.deletedAt,
+            restoreData: data.restoreData,
+          });
+        });
+        setDeletedItems(items);
+      },
+      (err) => {
+        console.error('삭제된 항목 로드 실패:', err);
+      }
+    );
+
     return () => {
       unsubscribeWrong();
       unsubscribeBookmark();
@@ -915,6 +987,7 @@ export const useReview = (): UseReviewReturn => {
       unsubscribeAttempts();
       unsubscribeFolders();
       unsubscribePrivateQuizzes();
+      unsubscribeDeleted();
     };
   }, [user, userCourseId, refreshKey, fetchQuizTitle]);
 
@@ -939,7 +1012,18 @@ export const useReview = (): UseReviewReturn => {
     if (!user) return;
 
     try {
-      // 해당 퀴즈의 모든 solved 리뷰 삭제
+      // 퀴즈 제목 가져오기
+      let quizTitle = '퀴즈';
+      try {
+        const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
+        if (quizDoc.exists()) {
+          quizTitle = quizDoc.data()?.title || '퀴즈';
+        }
+      } catch (e) {
+        console.error('퀴즈 제목 로드 실패:', e);
+      }
+
+      // 해당 퀴즈의 모든 solved 리뷰 가져오기
       const solvedQuery = query(
         collection(db, 'reviews'),
         where('userId', '==', user.uid),
@@ -947,6 +1031,24 @@ export const useReview = (): UseReviewReturn => {
         where('reviewType', '==', 'solved')
       );
       const solvedDocs = await getDocs(solvedQuery);
+
+      // 휴지통에 저장 (복원 데이터 포함)
+      const restoreData = {
+        solvedReviews: solvedDocs.docs.map(d => ({ id: d.id, ...d.data() })),
+      };
+
+      await addDoc(collection(db, 'deletedReviewItems'), {
+        userId: user.uid,
+        courseId: userCourseId || null,
+        type: 'solved',
+        originalId: quizId,
+        title: quizTitle,
+        questionCount: solvedDocs.size,
+        deletedAt: serverTimestamp(),
+        restoreData,
+      });
+
+      // 해당 퀴즈의 모든 solved 리뷰 삭제
       for (const docSnap of solvedDocs.docs) {
         await deleteDoc(docSnap.ref);
       }
@@ -990,16 +1092,128 @@ export const useReview = (): UseReviewReturn => {
       console.error('푼 문제 삭제 실패:', err);
       throw new Error('삭제에 실패했습니다.');
     }
-  }, [user]);
+  }, [user, userCourseId]);
 
   /**
-   * 오답 폴더 삭제 - 해당 퀴즈의 오답만 삭제
+   * 오답 폴더 삭제 (챕터별) - 특정 챕터의 오답만 삭제
+   * @param quizId 퀴즈 ID
+   * @param chapterId 챕터 ID (null이면 미분류)
+   * @param chapterName 챕터 이름 (휴지통 표시용)
+   */
+  const deleteWrongQuizByChapter = useCallback(async (
+    quizId: string,
+    chapterId: string | null,
+    chapterName?: string
+  ): Promise<void> => {
+    if (!user) return;
+
+    try {
+      // 퀴즈 제목 가져오기
+      let quizTitle = '퀴즈';
+      try {
+        const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
+        if (quizDoc.exists()) {
+          quizTitle = quizDoc.data()?.title || '퀴즈';
+        } else {
+          const privateQuizDoc = await getDoc(doc(db, 'privateQuizzes', quizId));
+          if (privateQuizDoc.exists()) {
+            quizTitle = privateQuizDoc.data()?.title || '퀴즈';
+          }
+        }
+      } catch (e) {
+        console.error('퀴즈 제목 로드 실패:', e);
+      }
+
+      // 해당 챕터의 오답만 가져오기
+      let wrongQuery;
+      if (chapterId) {
+        wrongQuery = query(
+          collection(db, 'reviews'),
+          where('userId', '==', user.uid),
+          where('quizId', '==', quizId),
+          where('chapterId', '==', chapterId),
+          where('reviewType', '==', 'wrong')
+        );
+      } else {
+        // 미분류 (chapterId가 null 또는 없음)
+        wrongQuery = query(
+          collection(db, 'reviews'),
+          where('userId', '==', user.uid),
+          where('quizId', '==', quizId),
+          where('reviewType', '==', 'wrong')
+        );
+        // chapterId가 없는 문서만 필터링
+      }
+      const wrongDocs = await getDocs(wrongQuery);
+
+      // chapterId가 null인 경우 추가 필터링
+      let filteredDocs = wrongDocs.docs;
+      if (!chapterId) {
+        filteredDocs = wrongDocs.docs.filter(d => !d.data().chapterId);
+      }
+
+      // 0문제면 삭제할 것이 없음
+      if (filteredDocs.length === 0) {
+        return;
+      }
+
+      // 휴지통에 저장 (챕터명 · 퀴즈명 형식)
+      const displayTitle = chapterName
+        ? `${chapterName} · ${quizTitle}`
+        : `미분류 · ${quizTitle}`;
+
+      const restoreData = {
+        wrongReviews: filteredDocs.map(d => ({ id: d.id, ...d.data() })),
+      };
+
+      await addDoc(collection(db, 'deletedReviewItems'), {
+        userId: user.uid,
+        courseId: userCourseId || null,
+        type: 'wrong',
+        originalId: quizId,
+        chapterId: chapterId || null,
+        title: displayTitle,
+        questionCount: filteredDocs.length,
+        deletedAt: serverTimestamp(),
+        restoreData,
+      });
+
+      // 삭제
+      for (const docSnap of filteredDocs) {
+        await deleteDoc(docSnap.ref);
+      }
+    } catch (err) {
+      console.error('오답 폴더 삭제 실패:', err);
+      throw new Error('삭제에 실패했습니다.');
+    }
+  }, [user, userCourseId]);
+
+  /**
+   * 오답 폴더 삭제 - 해당 퀴즈의 오답만 삭제 (레거시, 전체 삭제)
    */
   const deleteWrongQuiz = useCallback(async (quizId: string): Promise<void> => {
     if (!user) return;
 
     try {
-      // 해당 퀴즈의 모든 wrong 리뷰 삭제
+      // 퀴즈 제목 가져오기 (공개 퀴즈 또는 비공개 퀴즈)
+      let quizTitle = '퀴즈';
+      try {
+        // 먼저 공개 퀴즈에서 찾기
+        const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
+        if (quizDoc.exists()) {
+          quizTitle = quizDoc.data()?.title || '퀴즈';
+        } else {
+          // 비공개 퀴즈에서 찾기
+          const privateQuizDoc = await getDoc(doc(db, 'privateQuizzes', quizId));
+          if (privateQuizDoc.exists()) {
+            quizTitle = privateQuizDoc.data()?.title || '퀴즈';
+          }
+        }
+      } catch (e) {
+        console.error('퀴즈 제목 로드 실패:', e);
+      }
+
+      // 해당 퀴즈의 모든 wrong 리뷰 가져오기
       const wrongQuery = query(
         collection(db, 'reviews'),
         where('userId', '==', user.uid),
@@ -1007,6 +1221,24 @@ export const useReview = (): UseReviewReturn => {
         where('reviewType', '==', 'wrong')
       );
       const wrongDocs = await getDocs(wrongQuery);
+
+      // 휴지통에 저장
+      const restoreData = {
+        wrongReviews: wrongDocs.docs.map(d => ({ id: d.id, ...d.data() })),
+      };
+
+      await addDoc(collection(db, 'deletedReviewItems'), {
+        userId: user.uid,
+        courseId: userCourseId || null,
+        type: 'wrong',
+        originalId: quizId,
+        title: quizTitle,
+        questionCount: wrongDocs.size,
+        deletedAt: serverTimestamp(),
+        restoreData,
+      });
+
+      // 삭제
       for (const docSnap of wrongDocs.docs) {
         await deleteDoc(docSnap.ref);
       }
@@ -1014,7 +1246,7 @@ export const useReview = (): UseReviewReturn => {
       console.error('오답 폴더 삭제 실패:', err);
       throw new Error('삭제에 실패했습니다.');
     }
-  }, [user]);
+  }, [user, userCourseId]);
 
   /**
    * 찜한 문제 폴더 삭제 - 해당 퀴즈의 찜한 문제만 삭제 (isBookmarked 해제)
@@ -1023,8 +1255,18 @@ export const useReview = (): UseReviewReturn => {
     if (!user) return;
 
     try {
-      // 해당 퀴즈의 모든 bookmark 리뷰에서 isBookmarked를 false로 변경
-      // (bookmark 타입은 따로 없고, isBookmarked 필드로 관리됨)
+      // 퀴즈 제목 가져오기
+      let quizTitle = '퀴즈';
+      try {
+        const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
+        if (quizDoc.exists()) {
+          quizTitle = quizDoc.data()?.title || '퀴즈';
+        }
+      } catch (e) {
+        console.error('퀴즈 제목 로드 실패:', e);
+      }
+
+      // 해당 퀴즈의 모든 bookmark 리뷰 가져오기
       const reviewsQuery = query(
         collection(db, 'reviews'),
         where('userId', '==', user.uid),
@@ -1032,6 +1274,24 @@ export const useReview = (): UseReviewReturn => {
         where('isBookmarked', '==', true)
       );
       const reviewsDocs = await getDocs(reviewsQuery);
+
+      // 휴지통에 저장 (복원용 review ID 목록)
+      const restoreData = {
+        bookmarkedReviewIds: reviewsDocs.docs.map(d => d.id),
+      };
+
+      await addDoc(collection(db, 'deletedReviewItems'), {
+        userId: user.uid,
+        courseId: userCourseId || null,
+        type: 'bookmark',
+        originalId: quizId,
+        title: quizTitle,
+        questionCount: reviewsDocs.size,
+        deletedAt: serverTimestamp(),
+        restoreData,
+      });
+
+      // isBookmarked를 false로 변경
       for (const docSnap of reviewsDocs.docs) {
         await updateDoc(docSnap.ref, { isBookmarked: false });
       }
@@ -1039,7 +1299,7 @@ export const useReview = (): UseReviewReturn => {
       console.error('찜한 문제 폴더 삭제 실패:', err);
       throw new Error('삭제에 실패했습니다.');
     }
-  }, [user]);
+  }, [user, userCourseId]);
 
   /**
    * 복습 완료 처리
@@ -1065,6 +1325,98 @@ export const useReview = (): UseReviewReturn => {
     setRefreshKey((prev) => prev + 1);
     setUpdatedQuizzes(new Map());
   }, []);
+
+  /**
+   * 삭제된 항목 복원
+   */
+  const restoreDeletedItem = useCallback(async (deletedItemId: string): Promise<void> => {
+    if (!user) return;
+
+    try {
+      // 삭제된 항목 가져오기
+      const deletedRef = doc(db, 'deletedReviewItems', deletedItemId);
+      const deletedDoc = await getDoc(deletedRef);
+
+      if (!deletedDoc.exists()) {
+        throw new Error('삭제된 항목을 찾을 수 없습니다.');
+      }
+
+      const data = deletedDoc.data();
+      const restoreData = data.restoreData;
+
+      // 타입에 따라 복원
+      if (data.type === 'solved' && restoreData?.solvedReviews) {
+        // 푼 문제 복원 - reviews 컬렉션에 다시 추가
+        for (const review of restoreData.solvedReviews) {
+          const { id, ...reviewData } = review;
+          await addDoc(collection(db, 'reviews'), {
+            ...reviewData,
+            createdAt: serverTimestamp(),
+          });
+        }
+        // completedUsers에 다시 추가
+        try {
+          const quizRef = doc(db, 'quizzes', data.originalId);
+          const quizDoc = await getDoc(quizRef);
+          if (quizDoc.exists()) {
+            const completedUsers = quizDoc.data()?.completedUsers || [];
+            if (!completedUsers.includes(user.uid)) {
+              await updateDoc(quizRef, {
+                completedUsers: [...completedUsers, user.uid],
+              });
+            }
+          }
+        } catch (e) {
+          console.error('completedUsers 복원 실패:', e);
+        }
+      } else if (data.type === 'wrong' && restoreData?.wrongReviews) {
+        // 오답 복원
+        for (const review of restoreData.wrongReviews) {
+          const { id, ...reviewData } = review;
+          await addDoc(collection(db, 'reviews'), {
+            ...reviewData,
+            createdAt: serverTimestamp(),
+          });
+        }
+      } else if (data.type === 'bookmark' && restoreData?.bookmarkedReviewIds) {
+        // 찜 복원 - isBookmarked를 true로 변경
+        for (const reviewId of restoreData.bookmarkedReviewIds) {
+          try {
+            await updateDoc(doc(db, 'reviews', reviewId), { isBookmarked: true });
+          } catch (e) {
+            console.error('리뷰 복원 실패:', reviewId, e);
+          }
+        }
+      } else if (data.type === 'custom' && restoreData?.folderData) {
+        // 커스텀 폴더 복원
+        const { id, ...folderData } = restoreData.folderData;
+        await addDoc(collection(db, 'customFolders'), {
+          ...folderData,
+          createdAt: serverTimestamp(),
+        });
+      }
+
+      // 휴지통에서 삭제
+      await deleteDoc(deletedRef);
+    } catch (err) {
+      console.error('항목 복원 실패:', err);
+      throw new Error('복원에 실패했습니다.');
+    }
+  }, [user]);
+
+  /**
+   * 삭제된 항목 영구 삭제
+   */
+  const permanentlyDeleteItem = useCallback(async (deletedItemId: string): Promise<void> => {
+    if (!user) return;
+
+    try {
+      await deleteDoc(doc(db, 'deletedReviewItems', deletedItemId));
+    } catch (err) {
+      console.error('영구 삭제 실패:', err);
+      throw new Error('영구 삭제에 실패했습니다.');
+    }
+  }, [user]);
 
   /**
    * 퀴즈에서 업데이트된 문제를 review 항목에 반영
@@ -1233,12 +1585,37 @@ export const useReview = (): UseReviewReturn => {
     if (!user) return;
 
     try {
-      await deleteDoc(doc(db, 'customFolders', folderId));
+      // 폴더 데이터 가져오기
+      const folderRef = doc(db, 'customFolders', folderId);
+      const folderDoc = await getDoc(folderRef);
+
+      if (!folderDoc.exists()) {
+        throw new Error('폴더를 찾을 수 없습니다.');
+      }
+
+      const folderData = folderDoc.data();
+
+      // 휴지통에 저장
+      await addDoc(collection(db, 'deletedReviewItems'), {
+        userId: user.uid,
+        courseId: userCourseId || null,
+        type: 'custom',
+        originalId: folderId,
+        title: folderData.name || '폴더',
+        questionCount: folderData.questions?.length || 0,
+        deletedAt: serverTimestamp(),
+        restoreData: {
+          folderData: { ...folderData, id: folderId },
+        },
+      });
+
+      // 삭제
+      await deleteDoc(folderRef);
     } catch (err) {
       console.error('커스텀 폴더 삭제 실패:', err);
       throw new Error('폴더 삭제에 실패했습니다.');
     }
-  }, [user]);
+  }, [user, userCourseId]);
 
   /**
    * 문제를 커스텀 폴더에 추가
@@ -1640,6 +2017,7 @@ export const useReview = (): UseReviewReturn => {
     deleteReviewItem,
     deleteSolvedQuiz,
     deleteWrongQuiz,
+    deleteWrongQuizByChapter,
     deleteBookmarkQuiz,
     markAsReviewed,
     createCustomFolder,
@@ -1653,6 +2031,9 @@ export const useReview = (): UseReviewReturn => {
     removeCategoryFromFolder,
     assignQuestionToCategory,
     updateCategoryName,
+    deletedItems,
+    restoreDeletedItem,
+    permanentlyDeleteItem,
   };
 };
 

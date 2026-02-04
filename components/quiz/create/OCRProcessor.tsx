@@ -2,16 +2,12 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '@/lib/firebase';
 import {
-  extractTextFromImage,
-  extractTextFromPDF,
-  parseQuestions,
+  parseQuestionsAuto,
   isImageFile,
   isPDFFile,
-  initializeOCRWorker,
-  terminateOCRWorker,
-  type OCRProgress,
-  type OCRResult,
   type ParseResult,
 } from '@/lib/ocr';
 
@@ -28,8 +24,43 @@ interface OCRProcessorProps {
   onError?: (error: string) => void;
   /** 취소 시 콜백 */
   onCancel?: () => void;
+  /** 원본 이미지 URL 전달 콜백 (이미지 크롭용) */
+  onImageReady?: (imageUrl: string) => void;
   /** 추가 클래스명 */
   className?: string;
+}
+
+interface OcrUsage {
+  used: number;
+  limit: number;
+  remaining: number;
+}
+
+interface OcrResult {
+  success: boolean;
+  text: string;
+  usage: OcrUsage;
+}
+
+interface ProgressState {
+  progress: number;
+  status: string;
+}
+
+// ============================================================
+// 유틸리티 함수
+// ============================================================
+
+/**
+ * 파일을 base64로 변환
+ */
+async function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 // ============================================================
@@ -39,20 +70,23 @@ interface OCRProcessorProps {
 /**
  * OCR 처리 컴포넌트
  *
- * Tesseract.js를 사용하여 이미지/PDF에서 텍스트를 추출하고
+ * Naver CLOVA OCR을 사용하여 이미지에서 텍스트를 추출하고
  * 문제 형식으로 파싱합니다.
+ *
+ * 월 500건 무료 한도를 추적합니다.
  */
 export default function OCRProcessor({
   file,
   onComplete,
   onError,
   onCancel,
+  onImageReady,
   className = '',
 }: OCRProcessorProps) {
   // 상태
   const [isProcessing, setIsProcessing] = useState(false);
-  const [progress, setProgress] = useState<OCRProgress | null>(null);
-  const [ocrResult, setOcrResult] = useState<OCRResult | null>(null);
+  const [progress, setProgress] = useState<ProgressState | null>(null);
+  const [ocrUsage, setOcrUsage] = useState<OcrUsage | null>(null);
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
   const [step, setStep] = useState<'idle' | 'ocr' | 'parsing' | 'review'>('idle');
 
@@ -60,21 +94,6 @@ export default function OCRProcessor({
   const isCancelledRef = useRef(false);
   // 현재 처리 중인 파일 추적
   const processedFileRef = useRef<File | null>(null);
-
-  /**
-   * OCR 워커 초기화 (컴포넌트 마운트 시)
-   */
-  useEffect(() => {
-    // 워커 사전 초기화 (성능 개선)
-    initializeOCRWorker().catch((err) => {
-      console.error('OCR Worker 초기화 실패:', err);
-    });
-
-    // 컴포넌트 언마운트 시 워커 종료
-    return () => {
-      terminateOCRWorker().catch(console.error);
-    };
-  }, []);
 
   /**
    * 파일 변경 시 OCR 처리 시작
@@ -96,7 +115,7 @@ export default function OCRProcessor({
   const resetState = useCallback(() => {
     setIsProcessing(false);
     setProgress(null);
-    setOcrResult(null);
+    setOcrUsage(null);
     setParseResult(null);
     setStep('idle');
     processedFileRef.current = null;
@@ -121,53 +140,54 @@ export default function OCRProcessor({
       setProgress({ progress: 0, status: '준비 중...' });
 
       try {
-        let result: OCRResult;
-
-        if (isImageFile(targetFile)) {
-          // 이미지 파일 처리
-          result = await extractTextFromImage(targetFile, (p) => {
-            if (!isCancelledRef.current) {
-              setProgress(p);
-            }
-          });
-        } else if (isPDFFile(targetFile)) {
-          // PDF 파일 처리
-          result = await extractTextFromPDF(targetFile, (p) => {
-            if (!isCancelledRef.current) {
-              setProgress(p);
-            }
-          });
-        } else {
-          throw new Error('지원하지 않는 파일 형식입니다.');
+        // 이미지 파일만 지원
+        if (!isImageFile(targetFile)) {
+          if (isPDFFile(targetFile)) {
+            throw new Error('PDF 파일은 현재 지원하지 않습니다. 이미지 파일(JPG, PNG)을 사용해주세요.');
+          }
+          throw new Error('지원하지 않는 파일 형식입니다. JPG, PNG 이미지만 지원합니다.');
         }
 
-        // 취소된 경우 결과 무시
-        if (isCancelledRef.current) {
-          return;
-        }
+        // 원본 이미지 URL 생성 및 전달 (이미지 크롭용)
+        const imageUrl = URL.createObjectURL(targetFile);
+        onImageReady?.(imageUrl);
 
-        // OCR 에러 확인
-        if (result.error) {
-          throw new Error(result.error);
-        }
+        setProgress({ progress: 10, status: '이미지 변환 중...' });
 
-        setOcrResult(result);
+        // 이미지를 base64로 변환
+        const base64Image = await fileToBase64(targetFile);
+
+        if (isCancelledRef.current) return;
+
+        setProgress({ progress: 30, status: 'CLOVA OCR 처리 중...' });
+
+        // Cloud Function 호출
+        const runClovaOcr = httpsCallable<{ image: string }, OcrResult>(
+          functions,
+          'runClovaOcr'
+        );
+
+        const result = await runClovaOcr({ image: base64Image });
+
+        if (isCancelledRef.current) return;
+
+        const { text, usage } = result.data;
+        setOcrUsage(usage);
 
         // 텍스트가 추출되면 문제 파싱 시도
-        if (result.text.trim()) {
+        if (text.trim()) {
           setStep('parsing');
-          setProgress({ progress: 0, status: '문제 분석 중...' });
+          setProgress({ progress: 70, status: '문제 분석 중...' });
 
           // 약간의 딜레이 후 파싱 (UI 업데이트를 위해)
           await new Promise((resolve) => setTimeout(resolve, 300));
 
-          if (isCancelledRef.current) {
-            return;
-          }
+          if (isCancelledRef.current) return;
 
-          const parsed = parseQuestions(result.text);
+          const parsed = parseQuestionsAuto(text);
           setParseResult(parsed);
           setStep('review');
+          setProgress({ progress: 100, status: '완료!' });
 
           // 파싱 결과 전달
           onComplete(parsed);
@@ -183,12 +203,22 @@ export default function OCRProcessor({
           setStep('review');
           onComplete(emptyResult);
         }
-      } catch (error) {
-        if (isCancelledRef.current) {
-          return;
+      } catch (error: any) {
+        if (isCancelledRef.current) return;
+
+        let errorMessage = 'OCR 처리 중 오류가 발생했습니다.';
+
+        // Firebase Functions 에러 처리
+        if (error.code === 'functions/resource-exhausted') {
+          errorMessage = error.message || '이번 달 OCR 사용량(500건)을 초과했습니다.';
+        } else if (error.code === 'functions/failed-precondition') {
+          errorMessage = 'OCR 서비스가 설정되지 않았습니다. 관리자에게 문의하세요.';
+        } else if (error.code === 'functions/unauthenticated') {
+          errorMessage = '로그인이 필요합니다.';
+        } else if (error.message) {
+          errorMessage = error.message;
         }
-        const errorMessage =
-          error instanceof Error ? error.message : 'OCR 처리 중 오류가 발생했습니다.';
+
         console.error('OCR 처리 오류:', error);
         onError?.(errorMessage);
         setStep('idle');
@@ -198,7 +228,7 @@ export default function OCRProcessor({
         }
       }
     },
-    [onComplete, onError]
+    [onComplete, onError, onImageReady]
   );
 
   // 파일이 없거나 idle 상태면 렌더링하지 않음
@@ -252,7 +282,7 @@ export default function OCRProcessor({
             {/* 현재 상태 */}
             <div className="text-center mb-4">
               <p className="font-serif-display text-xl font-black text-[#1A1A1A]">
-                {step === 'ocr' ? '텍스트 추출 중' : '문제 분석 중'}
+                {step === 'ocr' ? 'CLOVA OCR 처리 중' : '문제 분석 중'}
               </p>
               <p className="text-sm text-[#5C5C5C] mt-1">{progress.status}</p>
             </div>
@@ -292,23 +322,28 @@ export default function OCRProcessor({
             exit={{ opacity: 0, y: -20 }}
             className="space-y-4"
           >
-            {/* OCR 신뢰도 표시 */}
-            {ocrResult && (
+            {/* OCR 사용량 표시 */}
+            {ocrUsage && (
               <div className="bg-[#F5F0E8] p-4 border-2 border-[#1A1A1A]">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold text-[#1A1A1A]">OCR 인식 신뢰도</span>
+                  <span className="text-sm font-bold text-[#1A1A1A]">이번 달 OCR 사용량</span>
                   <div className="flex items-center gap-2">
                     <div className="w-24 h-2 bg-[#EDEAE4] border border-[#1A1A1A] overflow-hidden">
                       <div
-                        className="h-full bg-[#1A1A1A]"
-                        style={{ width: `${ocrResult.confidence}%` }}
+                        className={`h-full ${ocrUsage.remaining < 50 ? 'bg-[#8B1A1A]' : 'bg-[#1A1A1A]'}`}
+                        style={{ width: `${(ocrUsage.used / ocrUsage.limit) * 100}%` }}
                       />
                     </div>
-                    <span className="text-sm font-bold text-[#1A1A1A]">
-                      {Math.round(ocrResult.confidence)}%
+                    <span className={`text-sm font-bold ${ocrUsage.remaining < 50 ? 'text-[#8B1A1A]' : 'text-[#1A1A1A]'}`}>
+                      {ocrUsage.used} / {ocrUsage.limit}
                     </span>
                   </div>
                 </div>
+                {ocrUsage.remaining < 50 && (
+                  <p className="text-xs text-[#8B1A1A] mt-2">
+                    남은 횟수: {ocrUsage.remaining}회
+                  </p>
+                )}
               </div>
             )}
 

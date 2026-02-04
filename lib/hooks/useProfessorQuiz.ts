@@ -90,6 +90,46 @@ export interface QuizFilterOptions {
   targetClass?: TargetClass | 'all';
 }
 
+/** 문제별 선택 통계 */
+export interface ChoiceStats {
+  /** 선지 인덱스 또는 답안 */
+  choice: number | string;
+  /** 선택 횟수 */
+  count: number;
+  /** 선택 비율 (0-100) */
+  percentage: number;
+}
+
+/** 문제별 통계 */
+export interface QuestionStats {
+  /** 문제 ID */
+  questionId: string;
+  /** 문제 인덱스 */
+  questionIndex: number;
+  /** 총 응답 수 */
+  totalResponses: number;
+  /** 정답 수 */
+  correctCount: number;
+  /** 오답 수 */
+  wrongCount: number;
+  /** 정답률 (0-100) */
+  correctRate: number;
+  /** 오답률 (0-100) */
+  wrongRate: number;
+  /** 선지별 선택 통계 (OX/객관식) */
+  choiceStats?: ChoiceStats[];
+  /** 오답 목록 (주관식) */
+  wrongAnswers?: string[];
+}
+
+/** 퀴즈 전체 통계 */
+export interface QuizStatistics {
+  /** 문제별 통계 */
+  questionStats: QuestionStats[];
+  /** 오답률 순위 (높은 순) */
+  wrongRateRanking: { questionIndex: number; wrongRate: number }[];
+}
+
 /** 훅 반환 타입 */
 interface UseProfessorQuizReturn {
   /** 퀴즈 목록 */
@@ -108,6 +148,8 @@ interface UseProfessorQuizReturn {
   fetchMore: () => Promise<void>;
   /** 단일 퀴즈 조회 */
   fetchQuiz: (quizId: string) => Promise<ProfessorQuiz | null>;
+  /** 퀴즈 통계 조회 */
+  fetchQuizStatistics: (quizId: string, questions: QuizQuestion[]) => Promise<QuizStatistics | null>;
   /** 퀴즈 생성 */
   createQuiz: (creatorUid: string, creatorNickname: string, input: QuizInput) => Promise<string>;
   /** 퀴즈 수정 */
@@ -332,6 +374,160 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
   }, []);
 
   /**
+   * 퀴즈 통계 조회
+   * quizResults 컬렉션에서 문제별 통계를 계산합니다.
+   */
+  const fetchQuizStatistics = useCallback(
+    async (quizId: string, questions: QuizQuestion[]): Promise<QuizStatistics | null> => {
+      try {
+        // quizResults에서 해당 퀴즈의 모든 결과 가져오기
+        const resultsQuery = query(
+          collection(db, 'quizResults'),
+          where('quizId', '==', quizId)
+        );
+        const resultsSnapshot = await getDocs(resultsQuery);
+
+        if (resultsSnapshot.empty) {
+          // 결과가 없으면 빈 통계 반환
+          const emptyStats: QuestionStats[] = questions.map((q, idx) => ({
+            questionId: q.id,
+            questionIndex: idx,
+            totalResponses: 0,
+            correctCount: 0,
+            wrongCount: 0,
+            correctRate: 0,
+            wrongRate: 0,
+            choiceStats: q.type === 'ox'
+              ? [{ choice: 0, count: 0, percentage: 0 }, { choice: 1, count: 0, percentage: 0 }]
+              : q.type === 'multiple' && q.choices
+                ? q.choices.map((_, i) => ({ choice: i, count: 0, percentage: 0 }))
+                : undefined,
+            wrongAnswers: (q.type === 'subjective' || q.type === 'short_answer') ? [] : undefined,
+          }));
+
+          return {
+            questionStats: emptyStats,
+            wrongRateRanking: [],
+          };
+        }
+
+        // 문제별 통계 계산
+        const questionStats: QuestionStats[] = questions.map((question, idx) => {
+          let totalResponses = 0;
+          let correctCount = 0;
+          const choiceCounts: Record<string, number> = {};
+          const wrongAnswerSet = new Set<string>();
+
+          // 각 결과에서 해당 문제의 답안 분석
+          resultsSnapshot.docs.forEach((resultDoc) => {
+            const resultData = resultDoc.data();
+            const answers = resultData.answers || [];
+            const userAnswer = answers[idx];
+
+            if (userAnswer === undefined || userAnswer === null || userAnswer === '') {
+              return; // 미응답 건너뜀
+            }
+
+            totalResponses++;
+
+            // 정답 여부 확인
+            const correctAnswer = question.answer;
+            let isCorrect = false;
+
+            if (question.type === 'ox') {
+              // OX: O=0, X=1
+              const userOX = String(userAnswer).toUpperCase();
+              const correctOX = correctAnswer === 0 ? 'O' : 'X';
+              isCorrect = userOX === correctOX || userOX === String(correctAnswer);
+
+              // 선택 카운트
+              const choiceKey = userOX === 'O' || userAnswer === 0 || userAnswer === '0' ? '0' : '1';
+              choiceCounts[choiceKey] = (choiceCounts[choiceKey] || 0) + 1;
+            } else if (question.type === 'multiple') {
+              // 객관식
+              const userIdx = typeof userAnswer === 'string' ? parseInt(userAnswer, 10) : userAnswer;
+              isCorrect = userIdx === correctAnswer;
+
+              // 선택 카운트
+              const choiceKey = String(userIdx);
+              choiceCounts[choiceKey] = (choiceCounts[choiceKey] || 0) + 1;
+            } else {
+              // 주관식/단답형
+              const userStr = String(userAnswer).trim().toLowerCase();
+              const correctStr = String(correctAnswer);
+
+              // 복수 정답 지원 (|||로 구분)
+              if (correctStr.includes('|||')) {
+                const correctAnswers = correctStr.split('|||').map(a => a.trim().toLowerCase());
+                isCorrect = correctAnswers.includes(userStr);
+              } else {
+                isCorrect = userStr === correctStr.trim().toLowerCase();
+              }
+
+              // 오답 수집
+              if (!isCorrect && userStr) {
+                wrongAnswerSet.add(String(userAnswer).trim());
+              }
+            }
+
+            if (isCorrect) {
+              correctCount++;
+            }
+          });
+
+          const wrongCount = totalResponses - correctCount;
+          const correctRate = totalResponses > 0 ? Math.round((correctCount / totalResponses) * 100) : 0;
+          const wrongRate = totalResponses > 0 ? Math.round((wrongCount / totalResponses) * 100) : 0;
+
+          // 선지별 통계 계산
+          let choiceStats: ChoiceStats[] | undefined;
+          if (question.type === 'ox') {
+            choiceStats = [
+              { choice: 0, count: choiceCounts['0'] || 0, percentage: totalResponses > 0 ? Math.round(((choiceCounts['0'] || 0) / totalResponses) * 100) : 0 },
+              { choice: 1, count: choiceCounts['1'] || 0, percentage: totalResponses > 0 ? Math.round(((choiceCounts['1'] || 0) / totalResponses) * 100) : 0 },
+            ];
+          } else if (question.type === 'multiple' && question.choices) {
+            choiceStats = question.choices.map((_, i) => ({
+              choice: i,
+              count: choiceCounts[String(i)] || 0,
+              percentage: totalResponses > 0 ? Math.round(((choiceCounts[String(i)] || 0) / totalResponses) * 100) : 0,
+            }));
+          }
+
+          return {
+            questionId: question.id,
+            questionIndex: idx,
+            totalResponses,
+            correctCount,
+            wrongCount,
+            correctRate,
+            wrongRate,
+            choiceStats,
+            wrongAnswers: (question.type === 'subjective' || question.type === 'short_answer')
+              ? Array.from(wrongAnswerSet)
+              : undefined,
+          };
+        });
+
+        // 오답률 순위 계산 (높은 순)
+        const wrongRateRanking = questionStats
+          .filter(s => s.totalResponses > 0)
+          .map(s => ({ questionIndex: s.questionIndex, wrongRate: s.wrongRate }))
+          .sort((a, b) => b.wrongRate - a.wrongRate);
+
+        return {
+          questionStats,
+          wrongRateRanking,
+        };
+      } catch (err) {
+        console.error('퀴즈 통계 조회 에러:', err);
+        return null;
+      }
+    },
+    []
+  );
+
+  /**
    * 퀴즈 생성
    */
   const createQuiz = useCallback(
@@ -350,14 +546,24 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
         // undefined 값 제거 (Firestore는 undefined를 허용하지 않음)
         const cleanedInput = JSON.parse(JSON.stringify(input));
 
+        // 문제 유형별 개수 계산
+        const questions = input.questions || [];
+        const oxCount = questions.filter(q => q.type === 'ox').length;
+        const multipleChoiceCount = questions.filter(q => q.type === 'multiple').length;
+        const subjectiveCount = questions.filter(q => q.type === 'short_answer' || q.type === 'subjective' || q.type === 'essay').length;
+
         const quizData = {
           ...cleanedInput,
           type: 'professor',
           questionCount: actualQuestionCount,
+          oxCount,
+          multipleChoiceCount,
+          subjectiveCount,
           creatorUid,
           creatorNickname,
           participantCount: 0,
           averageScore: 0,
+          bookmarkCount: 0,
           feedbackCount: 0,
           completedUsers: [],
           createdAt: now,
@@ -408,10 +614,14 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
           updatedAt: Timestamp.now(),
         };
 
-        // 문제 목록이 변경되면 questionCount도 업데이트
+        // 문제 목록이 변경되면 questionCount와 유형별 개수도 업데이트
         if (input.questions) {
           // input.questionCount가 있으면 사용, 없으면 questions.length 사용
           updateData.questionCount = input.questionCount ?? input.questions.length;
+          // 문제 유형별 개수 계산
+          updateData.oxCount = input.questions.filter(q => q.type === 'ox').length;
+          updateData.multipleChoiceCount = input.questions.filter(q => q.type === 'multiple').length;
+          updateData.subjectiveCount = input.questions.filter(q => q.type === 'short_answer' || q.type === 'subjective' || q.type === 'essay').length;
         }
 
         const docRef = doc(db, QUIZZES_COLLECTION, quizId);
@@ -507,6 +717,7 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
     fetchQuizzes,
     fetchMore,
     fetchQuiz,
+    fetchQuizStatistics,
     createQuiz,
     updateQuiz,
     deleteQuiz,

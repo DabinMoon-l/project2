@@ -219,6 +219,96 @@ const COPYRIGHT_PATTERNS = [
 ];
 
 /**
+ * OCR에서 자주 발생하는 원숫자 오인식 패턴 보정
+ * ① → (D, @, CD, (1), 1), ⓵ 등으로 인식될 수 있음
+ */
+const normalizeCircledNumbers = (text: string): string => {
+  let result = text;
+
+  // 1단계: 다른 스타일의 원숫자 통일
+  const circledVariants: Array<[RegExp, string]> = [
+    [/⓵/g, '①'],
+    [/⓶/g, '②'],
+    [/⓷/g, '③'],
+    [/⓸/g, '④'],
+    [/⓹/g, '⑤'],
+    [/⓺/g, '⑥'],
+    [/⓻/g, '⑦'],
+    [/⓼/g, '⑧'],
+    // 네모 숫자
+    [/❶/g, '①'],
+    [/❷/g, '②'],
+    [/❸/g, '③'],
+    [/❹/g, '④'],
+    [/❺/g, '⑤'],
+  ];
+
+  for (const [pattern, replacement] of circledVariants) {
+    result = result.replace(pattern, replacement);
+  }
+
+  // 2단계: OCR 오인식 패턴을 원숫자로 변환 (더 유연하게)
+  // 줄 시작이나 공백 뒤에 있는 (1), (2), ... 패턴
+  result = result.replace(/(?:^|[\s\n])\(1\)\s*/gm, ' ① ');
+  result = result.replace(/(?:^|[\s\n])\(2\)\s*/gm, ' ② ');
+  result = result.replace(/(?:^|[\s\n])\(3\)\s*/gm, ' ③ ');
+  result = result.replace(/(?:^|[\s\n])\(4\)\s*/gm, ' ④ ');
+  result = result.replace(/(?:^|[\s\n])\(5\)\s*/gm, ' ⑤ ');
+  result = result.replace(/(?:^|[\s\n])\(6\)\s*/gm, ' ⑥ ');
+  result = result.replace(/(?:^|[\s\n])\(7\)\s*/gm, ' ⑦ ');
+  result = result.replace(/(?:^|[\s\n])\(8\)\s*/gm, ' ⑧ ');
+
+  // @1, @2 등의 오인식 (더 유연한 패턴)
+  result = result.replace(/@1\b/g, '①');
+  result = result.replace(/@2\b/g, '②');
+  result = result.replace(/@3\b/g, '③');
+  result = result.replace(/@4\b/g, '④');
+  result = result.replace(/@5\b/g, '⑤');
+
+  // CD, (D 등이 ① 로 오인식되는 경우 (흔하지 않으므로 보수적으로)
+  // 줄 시작에 CD나 (D가 있고 뒤에 텍스트가 오면 ①로 추정
+  result = result.replace(/^CD\s+/gm, '① ');
+  result = result.replace(/^\(D\s+/gm, '① ');
+
+  // 3단계: 선지 블록 감지 및 변환
+  // 선지가 연속으로 나열된 블록을 찾아서 변환
+  // 예: "1) 가나다 2) 라마바 3) 사아자 4) 차카타 5) 파하"
+  const choiceBlockPattern = /(?:^|\n)(\s*)1\)\s*(.+?)\s+2\)\s*(.+?)\s+3\)\s*(.+?)\s+4\)\s*(.+?)(?:\s+5\)\s*(.+?))?(?=\s*\n|$)/gm;
+  result = result.replace(choiceBlockPattern, (match, indent, c1, c2, c3, c4, c5) => {
+    let converted = `\n${indent}① ${c1} ② ${c2} ③ ${c3} ④ ${c4}`;
+    if (c5) converted += ` ⑤ ${c5}`;
+    return converted;
+  });
+
+  return result;
+};
+
+/**
+ * 문제 번호 정규화
+ * "1.", "1)", "1번", "문제1", "Q1" 등을 통일된 형식으로
+ */
+const normalizeQuestionNumbers = (text: string): string => {
+  let result = text;
+
+  // 문제 번호 패턴들을 "숫자. " 형식으로 통일
+  // 단, 선지(①②③④⑤)와 혼동하지 않도록 주의
+
+  // "문제 1", "문제1" → "1."
+  result = result.replace(/문제\s*(\d+)\s*[.):：]?\s*/g, '$1. ');
+
+  // "Q1", "Q.1", "Q 1" → "1."
+  result = result.replace(/Q\.?\s*(\d+)\s*[.):：]?\s*/gi, '$1. ');
+
+  // "1번", "1 번" → "1."
+  result = result.replace(/(\d+)\s*번\s*[.):：]?\s*/g, '$1. ');
+
+  // 줄 시작의 "1)" → "1."
+  result = result.replace(/^(\d+)\)\s*/gm, '$1. ');
+
+  return result;
+};
+
+/**
  * OCR 텍스트 전처리
  * 저작권 문구 제거, 오타 수정, 불필요한 공백 정리
  */
@@ -231,14 +321,19 @@ export const preprocessOCRText = (text: string): string => {
   }
 
   // 2. 흔한 OCR 오타 수정 (문맥에 맞게)
-  // 문제/정답/해설 등의 키워드 주변에서만 수정
   processed = processed.replace(/묻제/g, '문제');
   processed = processed.replace(/쩨목/g, '제목');
   processed = processed.replace(/젱답/g, '정답');
   processed = processed.replace(/딥안/g, '답안');
   processed = processed.replace(/헤설/g, '해설');
 
-  // 3. 불필요한 공백 정리
+  // 3. 원숫자 오인식 보정
+  processed = normalizeCircledNumbers(processed);
+
+  // 4. 문제 번호 정규화
+  processed = normalizeQuestionNumbers(processed);
+
+  // 5. 불필요한 공백 정리
   processed = processed
     // 여러 개의 공백을 하나로
     .replace(/[ \t]+/g, ' ')
@@ -279,47 +374,230 @@ export const detectCombinedQuestionRange = (text: string): { start: number; end:
 };
 
 /**
- * 원숫자 선지 추출
+ * 수능 스타일 선지 추출 (CSAT-specific)
+ * "① ㄱ ② ㄷ ③ ㄱ, ㄴ ④ ㄴ, ㄷ ⑤ ㄱ, ㄴ, ㄷ" 형식
+ *
+ * OCR이 원숫자를 인식 못해도 패턴으로 감지:
+ * - 5개의 짧은 항목이 한 줄에 나열
+ * - 각 항목은 ㄱ,ㄴ,ㄷ 조합이거나 짧은 텍스트
+ */
+export const extractCSATChoices = (text: string): string[] | null => {
+  console.log('[extractCSATChoices] 수능 스타일 선지 추출 시도');
+
+  // 줄 단위로 분석
+  const lines = text.split('\n');
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // 방법 1: 원숫자가 포함된 줄 찾기
+    // "① ㄱ ② ㄷ ③ ㄱ, ㄴ ④ ㄴ, ㄷ ⑤ ㄱ, ㄴ, ㄷ"
+    const circledPattern = /[①②③④⑤].*[①②③④⑤].*[①②③④⑤]/;
+    if (circledPattern.test(trimmed)) {
+      const choices: string[] = [];
+      const parts = trimmed.split(/[①②③④⑤⑥⑦⑧]/).filter(p => p.trim());
+      if (parts.length >= 4) {
+        console.log('[extractCSATChoices] 원숫자 패턴 발견:', parts);
+        return parts.map(p => p.trim());
+      }
+    }
+
+    // 방법 2: OCR이 원숫자를 숫자로 인식한 경우
+    // "1 ㄱ 2 ㄷ 3 ㄱ, ㄴ 4 ㄴ, ㄷ 5 ㄱ, ㄴ, ㄷ"
+    // 또는 "0 ㄱ @ ㄷ 3 ㄱ, ㄴ" 등 다양한 변형
+    const numberedChoiceLine = /^[\s\d①②③④⑤@O0]*[ㄱㄴㄷㄹㅁㅂ,\s]+$/;
+    if (numberedChoiceLine.test(trimmed) && trimmed.length > 10) {
+      // ㄱ,ㄴ,ㄷ 조합을 추출
+      const koreanMatches = trimmed.match(/[ㄱㄴㄷㄹㅁㅂ][,\s]*[ㄱㄴㄷㄹㅁㅂ]?[,\s]*[ㄱㄴㄷㄹㅁㅂ]?/g);
+      if (koreanMatches && koreanMatches.length >= 4) {
+        console.log('[extractCSATChoices] ㄱㄴㄷ 패턴 발견:', koreanMatches);
+        return koreanMatches.map(m => m.trim());
+      }
+    }
+
+    // 방법 3: 5개의 짧은 항목이 반복되는 패턴
+    // "ㄱ    ㄷ    ㄱ, ㄴ    ㄴ, ㄷ    ㄱ, ㄴ, ㄷ" (번호 없이)
+    const shortItemsPattern = /^[ㄱㄴㄷㄹㅁㅂ,\s]+$/;
+    if (shortItemsPattern.test(trimmed) && trimmed.includes('ㄱ')) {
+      const items = trimmed.split(/\s{2,}/).filter(i => i.trim());
+      if (items.length >= 4) {
+        console.log('[extractCSATChoices] 공백 구분 패턴 발견:', items);
+        return items;
+      }
+    }
+  }
+
+  console.log('[extractCSATChoices] 수능 스타일 선지 없음');
+  return null;
+};
+
+/**
+ * OCR 오인식 문자를 원숫자로 변환 후 선지 추출
+ * Tesseract가 ①을 0, @, O, CD 등으로 인식하는 경우 처리
+ */
+export const extractMangledCircledChoices = (text: string): string[] | null => {
+  console.log('[extractMangledCircledChoices] 오인식 문자 선지 추출 시도');
+
+  // OCR이 원숫자를 오인식하는 패턴들
+  // ① → 0, @, O, CD, (D, Q), 1)
+  // ② → @, 2, 2), Q, (2)
+  // 등등
+
+  // 한 줄에 5개의 항목이 있는 패턴 찾기
+  const lines = text.split('\n');
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.length < 5) continue;
+
+    // 패턴: 숫자/기호 + 텍스트가 5번 반복
+    // 예: "0 가 @ 나 3 다 4 라 5 마"
+    // 예: "1) 가 2) 나 3) 다 4) 라 5) 마"
+
+    // 숫자나 기호로 시작하고 짧은 텍스트가 5개 이상 있는지 체크
+    const itemPattern = /(?:[\d@O0①②③④⑤]\)?|\(\d\))\s*([^0-9@O①②③④⑤()\s][^\d@O①②③④⑤()]*?)(?=\s*(?:[\d@O0①②③④⑤]\)?|\(\d\)|$))/g;
+    const matches: string[] = [];
+    let match;
+
+    while ((match = itemPattern.exec(trimmed)) !== null) {
+      const content = match[1].trim();
+      if (content && content.length > 0) {
+        matches.push(content);
+      }
+    }
+
+    if (matches.length >= 4) {
+      console.log('[extractMangledCircledChoices] 오인식 패턴 발견:', matches);
+      return matches;
+    }
+  }
+
+  console.log('[extractMangledCircledChoices] 오인식 패턴 없음');
+  return null;
+};
+
+/**
+ * 원숫자 선지 추출 (CLOVA OCR 최적화 버전)
  * ①②③④⑤ 형식의 선지를 배열로 변환
+ *
+ * CLOVA OCR은 원숫자를 정확하게 인식하므로:
+ * - 오인식 처리보다 정확한 패턴 매칭에 집중
+ * - 선지가 연속적으로 나와야 함 (①→②→③...)
+ * - 중간에 다른 문제 번호가 나오면 거기서 끊음
  */
 export const extractCircledChoices = (text: string): string[] | null => {
   const circledNumbers = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧'];
   const choices: string[] = [];
 
-  // 원숫자 위치 찾기
-  const positions: { index: number; num: number }[] = [];
+  console.log('[extractCircledChoices] 입력 텍스트 (처음 500자):', text.slice(0, 500));
+
+  // 방법 1: 정규식으로 원숫자 + 내용 패턴 매칭 (CLOVA OCR에 최적)
+  const circledPattern = /([①②③④⑤⑥⑦⑧])\s*([^①②③④⑤⑥⑦⑧\n]+)/g;
+  const matches = [...text.matchAll(circledPattern)];
+
+  if (matches.length >= 2) {
+    // 순서 검증
+    let expectedIdx = 0;
+    for (const match of matches) {
+      const circleChar = match[1];
+      const actualIdx = circledNumbers.indexOf(circleChar);
+
+      if (actualIdx === expectedIdx) {
+        const content = match[2].trim();
+        if (content && content.length > 0) {
+          choices.push(content);
+          expectedIdx++;
+        }
+      } else if (actualIdx > expectedIdx) {
+        // 순서가 건너뛰면 중단
+        break;
+      }
+    }
+
+    if (choices.length >= 2) {
+      console.log(`[extractCircledChoices] 정규식 패턴으로 ${choices.length}개 선지 추출`);
+      return choices;
+    }
+  }
+
+  // 방법 2: 수능 스타일 선지 시도
+  const csatChoices = extractCSATChoices(text);
+  if (csatChoices) {
+    return csatChoices;
+  }
+
+  // 방법 3: 위치 기반 추출 (fallback)
+  const positions: { index: number; num: number; char: string }[] = [];
+
   for (let i = 0; i < circledNumbers.length; i++) {
-    let pos = 0;
-    while ((pos = text.indexOf(circledNumbers[i], pos)) !== -1) {
-      positions.push({ index: pos, num: i });
-      pos++;
+    const idx = text.indexOf(circledNumbers[i]);
+    if (idx !== -1) {
+      positions.push({ index: idx, num: i, char: circledNumbers[i] });
     }
   }
 
   // 위치순 정렬
   positions.sort((a, b) => a.index - b.index);
 
+  console.log('[extractCircledChoices] 찾은 원숫자 위치:', positions);
+
+  // ①부터 시작하는지 확인
+  if (positions.length === 0 || positions[0].num !== 0) {
+    console.log('[extractCircledChoices] ①을 찾지 못함');
+    return null;
+  }
+
   // 연속된 선지 추출
+  let expectedNum = 0;
   for (let i = 0; i < positions.length; i++) {
     const current = positions[i];
-    const next = positions[i + 1];
 
+    // 순서가 맞지 않으면 중단
+    if (current.num !== expectedNum) {
+      console.log(`[extractCircledChoices] 순서 불일치: 예상 ${expectedNum}, 실제 ${current.num}`);
+      break;
+    }
+
+    const next = positions[i + 1];
     const startIdx = current.index + 1; // 원숫자 다음부터
-    const endIdx = next ? next.index : text.length;
+
+    // 끝 위치 결정: 다음 원숫자 또는 문제 번호 패턴 또는 텍스트 끝
+    let endIdx = next ? next.index : text.length;
+
+    // 다음 문제 시작 패턴 체크 (예: "2. ", "\n2.")
+    const remainingText = text.slice(startIdx, endIdx);
+    const nextQuestionMatch = remainingText.match(/\n\s*\d+\s*[.．]\s/);
+    if (nextQuestionMatch?.index !== undefined) {
+      endIdx = startIdx + nextQuestionMatch.index;
+    }
 
     let choice = text.slice(startIdx, endIdx).trim();
-    // 줄바꿈 이후 내용은 제외 (다음 문제로 넘어갈 수 있음)
-    const newlineIdx = choice.indexOf('\n');
-    if (newlineIdx > 0 && newlineIdx < 50) {
-      // 짧은 선지 내에서만
-      choice = choice.slice(0, newlineIdx).trim();
+
+    // 줄바꿈 처리: 여러 줄이면 첫 줄만 (또는 내용이 짧으면 합치기)
+    const lines = choice.split('\n').map(l => l.trim()).filter(l => l);
+    if (lines.length > 0) {
+      // 첫 줄이 짧고 다음 줄이 있으면 합치기 (선지가 줄바꿈된 경우)
+      if (lines[0].length < 30 && lines.length > 1 && !lines[1].match(/^[①②③④⑤⑥⑦⑧\d]/)) {
+        choice = lines.slice(0, 2).join(' ');
+      } else {
+        choice = lines[0];
+      }
+    }
+
+    // 내용이 너무 길면 자르기 (150자로 확장 - CLOVA OCR이 정확하므로)
+    if (choice.length > 150) {
+      choice = choice.slice(0, 150).trim();
     }
 
     if (choice) {
       choices.push(choice);
+      console.log(`[extractCircledChoices] 선지 ${current.char}: "${choice.slice(0, 50)}..."`);
     }
+
+    expectedNum++;
   }
 
+  console.log(`[extractCircledChoices] 총 ${choices.length}개 선지 추출`);
   return choices.length >= 2 ? choices : null;
 };
 
@@ -328,21 +606,143 @@ export const extractCircledChoices = (text: string): string[] | null => {
  * (1)(2)(3)(4)(5) 형식의 선지를 배열로 변환
  */
 export const extractParenChoices = (text: string): string[] | null => {
-  const pattern = /\((\d)\)\s*([^\n(]+)/g;
-  const choices: string[] = [];
+  // 패턴 1: (1) 텍스트 형식
+  const pattern1 = /\((\d)\)\s*([^\n(①②③④⑤]+)/g;
+  const choices1: string[] = [];
   let match;
 
-  while ((match = pattern.exec(text)) !== null) {
+  while ((match = pattern1.exec(text)) !== null) {
     const choiceNum = parseInt(match[1], 10);
     const choiceText = match[2].trim();
 
     // 순서대로 추가
-    if (choiceNum === choices.length + 1 && choiceText) {
-      choices.push(choiceText);
+    if (choiceNum === choices1.length + 1 && choiceText && choiceText.length > 1) {
+      choices1.push(choiceText);
     }
   }
 
+  if (choices1.length >= 2) return choices1;
+
+  // 패턴 2: 1) 텍스트 형식 (줄 시작)
+  const pattern2 = /(?:^|\n)\s*(\d)\)\s*([^\n]+)/g;
+  const choices2: string[] = [];
+
+  while ((match = pattern2.exec(text)) !== null) {
+    const choiceNum = parseInt(match[1], 10);
+    const choiceText = match[2].trim();
+
+    if (choiceNum === choices2.length + 1 && choiceText && choiceText.length > 1) {
+      choices2.push(choiceText);
+    }
+  }
+
+  return choices2.length >= 2 ? choices2 : null;
+};
+
+/**
+ * 숫자 목록 형태 선지 추출 (Fallback)
+ * 1. 텍스트 또는 1, 텍스트 형식의 선지를 배열로 변환
+ * OCR이 원숫자를 전혀 인식하지 못한 경우의 fallback
+ */
+export const extractNumberedListChoices = (text: string): string[] | null => {
+  const choices: string[] = [];
+
+  // 줄 단위로 분석
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+
+  // 패턴: 줄 시작에 숫자가 있고 뒤에 텍스트가 있는 경우
+  // 1. 텍스트, 1, 텍스트, 1) 텍스트 등
+  const linePattern = /^(\d)[.),\s]\s*(.+)/;
+
+  let expectedNum = 1;
+  for (const line of lines) {
+    const match = line.match(linePattern);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      const content = match[2].trim();
+
+      // 연속된 번호인지 확인
+      if (num === expectedNum && content.length > 1) {
+        choices.push(content);
+        expectedNum++;
+      } else if (num > expectedNum) {
+        // 번호가 건너뛰어진 경우 중단
+        break;
+      }
+    } else if (choices.length > 0) {
+      // 숫자로 시작하지 않는 줄이면 이전 선지에 추가하거나 중단
+      // 선지가 2개 이상이면 중단
+      if (choices.length >= 2) break;
+    }
+  }
+
+  console.log(`[extractNumberedListChoices] 추출된 선지: ${choices.length}개`);
   return choices.length >= 2 ? choices : null;
+};
+
+/**
+ * 한 줄에 나열된 선지 추출
+ * 예: "① 가나다 ② 라마바 ③ 사아자 ④ 차카타 ⑤ 파하"
+ * 또는 "1.가나다 2.라마바 3.사아자 4.차카타 5.파하"
+ */
+export const extractInlineChoices = (text: string): string[] | null => {
+  // 원숫자 패턴
+  const circledPattern = /([①②③④⑤⑥⑦⑧])\s*([^①②③④⑤⑥⑦⑧\n]+)/g;
+  const circledChoices: { num: number; text: string }[] = [];
+  const circledNums = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧'];
+
+  let match;
+  while ((match = circledPattern.exec(text)) !== null) {
+    const num = circledNums.indexOf(match[1]);
+    if (num !== -1) {
+      circledChoices.push({ num, text: match[2].trim() });
+    }
+  }
+
+  // 순서대로 정렬하고 연속성 체크
+  circledChoices.sort((a, b) => a.num - b.num);
+  const result: string[] = [];
+  for (let i = 0; i < circledChoices.length; i++) {
+    if (circledChoices[i].num === i && circledChoices[i].text) {
+      result.push(circledChoices[i].text);
+    } else {
+      break;
+    }
+  }
+
+  if (result.length >= 2) {
+    console.log(`[extractInlineChoices] 원숫자 선지 ${result.length}개 추출`);
+    return result;
+  }
+
+  // 숫자. 패턴 (1.가나다 2.라마바...)
+  const numberedPattern = /(\d)[.．]\s*([^\d\n.．]+?)(?=\s*\d[.．]|\s*$)/g;
+  const numberedChoices: { num: number; text: string }[] = [];
+
+  while ((match = numberedPattern.exec(text)) !== null) {
+    const num = parseInt(match[1], 10) - 1; // 0-indexed
+    const content = match[2].trim();
+    if (num >= 0 && num < 8 && content) {
+      numberedChoices.push({ num, text: content });
+    }
+  }
+
+  numberedChoices.sort((a, b) => a.num - b.num);
+  const result2: string[] = [];
+  for (let i = 0; i < numberedChoices.length; i++) {
+    if (numberedChoices[i].num === i && numberedChoices[i].text) {
+      result2.push(numberedChoices[i].text);
+    } else {
+      break;
+    }
+  }
+
+  if (result2.length >= 2) {
+    console.log(`[extractInlineChoices] 숫자 선지 ${result2.length}개 추출`);
+    return result2;
+  }
+
+  return null;
 };
 
 /**
@@ -868,15 +1268,136 @@ export const terminateOCRWorker = async (): Promise<void> => {
 // ============================================================
 
 /**
+ * 이미지를 Canvas에 로드
+ */
+const loadImageToCanvas = (source: string): Promise<HTMLCanvasElement> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Canvas context 생성 실패'));
+        return;
+      }
+      ctx.drawImage(img, 0, 0);
+      resolve(canvas);
+    };
+    img.onerror = () => reject(new Error('이미지 로드 실패'));
+    img.src = source;
+  });
+};
+
+/**
+ * 이미지를 좌/우로 분할하여 각각 OCR 후 합치기
+ * 2단 레이아웃 시험지 처리용
+ */
+const extractTextFromTwoColumnImage = async (
+  canvas: HTMLCanvasElement,
+  onProgress?: (progress: OCRProgress) => void
+): Promise<{ text: string; confidence: number }> => {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas context 생성 실패');
+
+  const width = canvas.width;
+  const height = canvas.height;
+  const halfWidth = Math.floor(width / 2);
+
+  // 왼쪽 절반 추출
+  const leftCanvas = document.createElement('canvas');
+  leftCanvas.width = halfWidth;
+  leftCanvas.height = height;
+  const leftCtx = leftCanvas.getContext('2d');
+  if (!leftCtx) throw new Error('Left canvas context 생성 실패');
+  leftCtx.drawImage(canvas, 0, 0, halfWidth, height, 0, 0, halfWidth, height);
+
+  // 오른쪽 절반 추출
+  const rightCanvas = document.createElement('canvas');
+  rightCanvas.width = width - halfWidth;
+  rightCanvas.height = height;
+  const rightCtx = rightCanvas.getContext('2d');
+  if (!rightCtx) throw new Error('Right canvas context 생성 실패');
+  rightCtx.drawImage(canvas, halfWidth, 0, width - halfWidth, height, 0, 0, width - halfWidth, height);
+
+  onProgress?.({ progress: 20, status: '왼쪽 영역 인식 중...' });
+
+  // 왼쪽 OCR
+  const leftDataUrl = leftCanvas.toDataURL('image/png');
+  const leftResult = await worker!.recognize(leftDataUrl);
+
+  onProgress?.({ progress: 60, status: '오른쪽 영역 인식 중...' });
+
+  // 오른쪽 OCR
+  const rightDataUrl = rightCanvas.toDataURL('image/png');
+  const rightResult = await worker!.recognize(rightDataUrl);
+
+  // 캔버스 정리
+  leftCanvas.remove();
+  rightCanvas.remove();
+
+  // 텍스트 합치기 (왼쪽 먼저, 오른쪽 다음)
+  const combinedText = leftResult.data.text + '\n\n' + rightResult.data.text;
+  const avgConfidence = (leftResult.data.confidence + rightResult.data.confidence) / 2;
+
+  return {
+    text: combinedText,
+    confidence: avgConfidence,
+  };
+};
+
+/**
+ * 이미지가 2단 레이아웃인지 감지
+ *
+ * 2단 레이아웃 추정 조건:
+ * 1. 가로가 넓은 이미지 (책 펼침 스캔, 가로 사진)
+ * 2. 충분히 큰 세로 이미지 (A4 시험지 2단 스캔)
+ * 3. 시험지 크기의 이미지 (스캔 또는 사진)
+ */
+const isTwoColumnLayout = (width: number, height: number): boolean => {
+  const aspectRatio = width / height;
+
+  // 케이스 1: 가로가 넓은 이미지 (책 펼침, 2페이지 스캔)
+  // 비율 1.2 이상이면 확실히 2단
+  if (aspectRatio > 1.2) {
+    console.log('[isTwoColumnLayout] 가로형 이미지 → 2단 판정');
+    return true;
+  }
+
+  // 케이스 2: 세로 이미지이지만 충분히 넓은 경우
+  // A4 시험지를 스캔하면 보통 2000x3000 픽셀 정도
+  // 가로 700px 이상이면 2단 시험지일 가능성 높음
+  if (width >= 700 && height >= 900) {
+    console.log(`[isTwoColumnLayout] 큰 세로 이미지 (${width}x${height}) → 2단 판정`);
+    return true;
+  }
+
+  // 케이스 3: 중간 크기 이미지이지만 문서 비율
+  // 세로가 가로의 1.2~1.6배 (A4 비율 근처)이고 적당한 크기
+  if (aspectRatio >= 0.6 && aspectRatio <= 0.85 && width >= 500) {
+    console.log(`[isTwoColumnLayout] 문서 비율 이미지 (비율: ${aspectRatio.toFixed(2)}) → 2단 판정`);
+    return true;
+  }
+
+  console.log(`[isTwoColumnLayout] 1단 판정 (${width}x${height}, 비율: ${aspectRatio.toFixed(2)})`);
+  return false;
+};
+
+/**
  * 이미지에서 텍스트 추출
+ * 2단 레이아웃 자동 감지 및 처리
  *
  * @param imageSource - 이미지 파일, URL, 또는 base64 문자열
  * @param onProgress - 진행 상태 콜백 (선택)
+ * @param forceTwoColumn - 강제로 2단 처리 (선택)
  * @returns OCR 결과
  */
 export const extractTextFromImage = async (
   imageSource: File | string,
-  onProgress?: (progress: OCRProgress) => void
+  onProgress?: (progress: OCRProgress) => void,
+  forceTwoColumn?: boolean
 ): Promise<OCRResult> => {
   try {
     // Worker 초기화 확인
@@ -888,30 +1409,55 @@ export const extractTextFromImage = async (
     onProgress?.({ progress: 10, status: '이미지 분석 중...' });
 
     // 이미지 소스 준비
-    let source: string | File = imageSource;
+    let source: string;
 
     if (imageSource instanceof File) {
-      // File 객체인 경우 URL로 변환
       source = URL.createObjectURL(imageSource);
+    } else {
+      source = imageSource;
     }
 
-    onProgress?.({ progress: 20, status: '텍스트 인식 중...' });
+    // 이미지를 Canvas에 로드하여 크기 확인
+    const canvas = await loadImageToCanvas(source);
+    const { width, height } = canvas;
 
-    // OCR 실행
-    const result = await worker!.recognize(source);
+    console.log(`[OCR] 이미지 크기: ${width}x${height}, 비율: ${(width/height).toFixed(2)}`);
+
+    let text: string;
+    let confidence: number;
+
+    // 2단 레이아웃 처리
+    if (forceTwoColumn || isTwoColumnLayout(width, height)) {
+      console.log('[OCR] 2단 레이아웃 감지, 분할 처리');
+      onProgress?.({ progress: 15, status: '2단 레이아웃 감지, 분할 처리 중...' });
+
+      const result = await extractTextFromTwoColumnImage(canvas, onProgress);
+      text = result.text;
+      confidence = result.confidence;
+    } else {
+      console.log('[OCR] 1단 레이아웃, 일반 처리');
+      onProgress?.({ progress: 20, status: '텍스트 인식 중...' });
+
+      const result = await worker!.recognize(canvas.toDataURL('image/png'));
+      text = result.data.text;
+      confidence = result.data.confidence;
+    }
 
     onProgress?.({ progress: 90, status: '결과 처리 중...' });
 
+    // 캔버스 정리
+    canvas.remove();
+
     // URL 해제 (메모리 정리)
     if (imageSource instanceof File) {
-      URL.revokeObjectURL(source as string);
+      URL.revokeObjectURL(source);
     }
 
     onProgress?.({ progress: 100, status: '완료!' });
 
     return {
-      text: result.data.text,
-      confidence: result.data.confidence,
+      text,
+      confidence,
     };
   } catch (error) {
     console.error('OCR 처리 실패:', error);
@@ -1036,6 +1582,8 @@ export const parseQuestions = (
 ): ParseResult => {
   const questions: ParsedQuestion[] = [];
 
+  console.log('[parseQuestions] 입력 텍스트 길이:', text.length);
+
   // 텍스트가 비어있는 경우
   if (!text.trim()) {
     return {
@@ -1050,31 +1598,45 @@ export const parseQuestions = (
     // 1. 전처리 적용 (옵션)
     const processedText = options.preprocess ? preprocessOCRText(text) : text;
 
+    console.log('[parseQuestions] 전처리 후 텍스트 (처음 1000자):', processedText.slice(0, 1000));
+
     // 2. 각주 추출 (문제 파싱 전에 추출해서 나중에 활용 가능)
     const footnotes = extractFootnotes(processedText);
 
     // 3. 결합형 문제 범위 감지
     const combinedRange = detectCombinedQuestionRange(processedText);
+    console.log('[parseQuestions] 결합형 범위:', combinedRange);
 
-    // 문제 번호 패턴 (1., 1), 1번, 문제1, Q1 등)
-    const questionPattern = /(?:^|\n)\s*(?:문제\s*)?(?:Q\.?\s*)?(\d+)\s*[.)번:\s]/gi;
+    // 문제 번호 패턴 - CLOVA OCR에 맞게 다양한 형식 지원
+    // "1. ", "1.", "01.", "문1.", "[1]", "Q1." 등
+    const questionPattern = /(?:^|\n)\s*(?:문\s*)?(?:Q\s*)?(?:\[)?(\d+)(?:\])?\s*[.．:]\s/gmi;
 
-    // OX 문제 패턴
+    // OX 문제 패턴 - CLOVA OCR에 맞게 확장
     const oxPatterns = [
       /[OoXx○×]\s*[,/|]\s*[OoXx○×]/i,  // O/X, O,X 등
       /참\s*[,/|]\s*거짓/i,              // 참/거짓
       /True\s*[,/|]\s*False/i,           // True/False
       /맞으면\s*O.*틀리면\s*X/i,          // 맞으면 O, 틀리면 X
+      /옳으면\s*O.*틀리면\s*X/i,          // 옳으면 O, 틀리면 X
+      /\(?\s*[OoXx○×]\s*[,/]\s*[OoXx○×]\s*\)?/i, // (O/X), (O, X)
+      /맞[는으]?\s*(것|면)[은를]?\s*O/i,   // 맞는 것은 O
+      /틀린\s*(것|면)[은를]?\s*X/i,       // 틀린 것은 X
+      /옳[은고]\s*것[을은]?\s*모두/i,     // 옳은 것을 모두 → OX일 수 있음
     ];
 
-    // 정답 패턴
-    const answerPattern = /(?:정답|답|Answer|Ans)[\s:：]+([^\n]+)/i;
+    // 정답 패턴 - 더 다양한 형식 지원
+    const answerPattern = /(?:정답|답|답안|Answer|Ans|정답란)[\s:：=]*([^\n]+)/i;
 
     // 해설 패턴
     const explanationPattern = /(?:해설|설명|풀이|Explanation)[\s:：]+([^\n]+(?:\n(?![문제Q\d])[^\n]+)*)/i;
 
     // 문제 분리
     const matches = [...processedText.matchAll(questionPattern)];
+
+    console.log('[parseQuestions] 찾은 문제 번호 수:', matches.length);
+    matches.forEach((m, i) => {
+      console.log(`[parseQuestions] 문제 ${i + 1}: 번호=${m[1]}, 위치=${m.index}, 매치="${m[0].slice(0, 20)}..."`);
+    });
 
     if (matches.length === 0) {
       // 문제 번호가 없으면 줄 단위로 분리 시도
@@ -1161,18 +1723,39 @@ export const parseQuestions = (
       else if (oxPatterns.some(pattern => pattern.test(questionText))) {
         type = 'ox';
       }
-      // 객관식 선지 확인 (개선된 추출)
+      // 객관식 선지 확인 (개선된 추출 - 여러 fallback 시도)
       else {
-        // 원숫자 선지 시도
-        choices = extractCircledChoices(questionText) ?? undefined;
+        console.log(`[parseQuestions] 문제 ${questionNumber}: 선지 추출 시도`);
+        console.log(`[parseQuestions] 문제 텍스트 (처음 500자): "${questionText.slice(0, 500)}"`);
 
+        // 1. 원숫자 선지 시도 (①②③④⑤)
+        choices = extractCircledChoices(questionText) ?? undefined;
+        console.log(`[parseQuestions] 1. 원숫자 선지 결과:`, choices?.length ?? 0);
+
+        // 2. 한 줄 인라인 선지 시도 (① 가 ② 나 ③ 다...)
         if (!choices) {
-          // 괄호 숫자 선지 시도
+          choices = extractInlineChoices(questionText) ?? undefined;
+          console.log(`[parseQuestions] 2. 인라인 선지 결과:`, choices?.length ?? 0);
+        }
+
+        // 3. 괄호 숫자 선지 시도 ((1)(2)(3)...)
+        if (!choices) {
           choices = extractParenChoices(questionText) ?? undefined;
+          console.log(`[parseQuestions] 3. 괄호 선지 결과:`, choices?.length ?? 0);
+        }
+
+        // 4. 숫자 목록 선지 시도 (1. 2. 3. 또는 1, 2, 3,)
+        if (!choices) {
+          choices = extractNumberedListChoices(questionText) ?? undefined;
+          console.log(`[parseQuestions] 4. 숫자 목록 선지 결과:`, choices?.length ?? 0);
         }
 
         if (choices && choices.length >= 2) {
           type = 'multiple';
+          console.log(`[parseQuestions] 문제 ${questionNumber}: 객관식으로 판정, 선지 ${choices.length}개`);
+        } else {
+          console.log(`[parseQuestions] 문제 ${questionNumber}: 선지 없음, 주관식으로 판정`);
+          choices = undefined;
         }
       }
 
@@ -1531,6 +2114,572 @@ export const convertAllToQuestionData = (
   parseResult: ParseResult
 ): QuestionDataForEditor[] => {
   return parseResult.questions.map((q, idx) => convertToQuestionData(q, idx));
+};
+
+// ============================================================
+// 수능형 문제 파싱 (고급 파싱)
+// ============================================================
+
+/**
+ * 수능형 문제 구조
+ * - 문제 번호: 1. 2. 3. 또는 숫자만
+ * - 지문: (가), (나), (다) 또는 [A], [B], [C]
+ * - <보 기>: ㄱ. ㄴ. ㄷ. 형식
+ * - 선지: ①②③④⑤ (5개 고정)
+ * - 결합형: [16~17] 다음 글을 읽고 물음에 답하시오
+ */
+
+/**
+ * 수능형 지문 데이터
+ */
+export interface CSATPassage {
+  /** 전체 지문 텍스트 */
+  fullText: string;
+  /** 분리된 지문들 (가), (나), (다) */
+  sections?: Array<{ label: string; content: string }>;
+  /** 지문 유형 */
+  type: 'single' | 'multiple';
+}
+
+/**
+ * 수능형 <보 기> 데이터
+ */
+export interface CSATBogi {
+  /** 보기 항목들 */
+  items: Array<{ label: string; content: string }>;
+  /** 보기 전체 텍스트 (박스 형태일 때) */
+  rawText?: string;
+}
+
+/**
+ * 수능형 파싱 결과
+ */
+export interface CSATParseResult {
+  /** 문제 번호 */
+  questionNumber: number;
+  /** 문제 텍스트 (질문 부분만) */
+  questionText: string;
+  /** 지문 */
+  passage?: CSATPassage;
+  /** <보 기> */
+  bogi?: CSATBogi;
+  /** 선지 ①②③④⑤ */
+  choices: string[];
+  /** 결합형 여부 */
+  isCombined: boolean;
+  /** 결합형 범위 */
+  combinedRange?: { start: number; end: number };
+}
+
+/**
+ * (가), (나), (다) 형식의 지문 섹션 추출
+ */
+export const extractPassageSections = (text: string): CSATPassage | null => {
+  // (가), (나), (다), (라) 등의 패턴
+  const sectionLabels = ['가', '나', '다', '라', '마', '바'];
+  const sections: Array<{ label: string; content: string }> = [];
+
+  // 섹션 위치 찾기
+  const positions: Array<{ index: number; label: string; fullMatch: string }> = [];
+
+  for (const label of sectionLabels) {
+    // (가) 또는 （가） 형식
+    const pattern = new RegExp(`[\\(（]\\s*(${label})\\s*[\\)）]`, 'g');
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      positions.push({
+        index: match.index,
+        label: match[1],
+        fullMatch: match[0],
+      });
+    }
+  }
+
+  // 위치순 정렬
+  positions.sort((a, b) => a.index - b.index);
+
+  if (positions.length < 2) {
+    // 섹션이 2개 미만이면 단일 지문
+    return null;
+  }
+
+  // 각 섹션 내용 추출
+  for (let i = 0; i < positions.length; i++) {
+    const current = positions[i];
+    const next = positions[i + 1];
+
+    const startIdx = current.index + current.fullMatch.length;
+    // 다음 섹션 시작 또는 선지(①) 또는 <보 기> 전까지
+    let endIdx = next ? next.index : text.length;
+
+    // 선지나 보기가 먼저 나오면 거기서 끊기
+    const choiceMatch = text.slice(startIdx, endIdx).search(/[①②③④⑤]|<\s*보\s*기\s*>/);
+    if (choiceMatch !== -1) {
+      endIdx = startIdx + choiceMatch;
+    }
+
+    const content = text.slice(startIdx, endIdx).trim();
+    if (content) {
+      sections.push({
+        label: current.label,
+        content,
+      });
+    }
+  }
+
+  if (sections.length >= 2) {
+    return {
+      fullText: sections.map(s => `(${s.label}) ${s.content}`).join('\n\n'),
+      sections,
+      type: 'multiple',
+    };
+  }
+
+  return null;
+};
+
+/**
+ * [A], [B], [C] 형식의 지문 섹션 추출
+ */
+export const extractBracketSections = (text: string): CSATPassage | null => {
+  const sectionLabels = ['A', 'B', 'C', 'D', 'E'];
+  const sections: Array<{ label: string; content: string }> = [];
+
+  const positions: Array<{ index: number; label: string; fullMatch: string }> = [];
+
+  for (const label of sectionLabels) {
+    const pattern = new RegExp(`\\[\\s*(${label})\\s*\\]`, 'g');
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      positions.push({
+        index: match.index,
+        label: match[1],
+        fullMatch: match[0],
+      });
+    }
+  }
+
+  positions.sort((a, b) => a.index - b.index);
+
+  if (positions.length < 2) {
+    return null;
+  }
+
+  for (let i = 0; i < positions.length; i++) {
+    const current = positions[i];
+    const next = positions[i + 1];
+
+    const startIdx = current.index + current.fullMatch.length;
+    let endIdx = next ? next.index : text.length;
+
+    const choiceMatch = text.slice(startIdx, endIdx).search(/[①②③④⑤]|<\s*보\s*기\s*>/);
+    if (choiceMatch !== -1) {
+      endIdx = startIdx + choiceMatch;
+    }
+
+    const content = text.slice(startIdx, endIdx).trim();
+    if (content) {
+      sections.push({
+        label: current.label,
+        content,
+      });
+    }
+  }
+
+  if (sections.length >= 2) {
+    return {
+      fullText: sections.map(s => `[${s.label}] ${s.content}`).join('\n\n'),
+      sections,
+      type: 'multiple',
+    };
+  }
+
+  return null;
+};
+
+/**
+ * <보 기> 블록 추출 (수능형)
+ * 다양한 형식 지원:
+ * - <보 기>, <보기>, 〈보 기〉, ＜보 기＞
+ * - 박스 안에 ㄱ. ㄴ. ㄷ. 형식
+ */
+export const extractCSATBogi = (text: string): CSATBogi | null => {
+  // <보 기> 시작 패턴 (다양한 괄호 형태)
+  const bogiStartPatterns = [
+    /<\s*보\s*기\s*>/i,
+    /〈\s*보\s*기\s*〉/i,
+    /＜\s*보\s*기\s*＞/i,
+    /\[\s*보\s*기\s*\]/i,
+    /【\s*보\s*기\s*】/i,
+  ];
+
+  let bogiStartIndex = -1;
+  let bogiStartMatch = '';
+
+  for (const pattern of bogiStartPatterns) {
+    const match = text.match(pattern);
+    if (match && match.index !== undefined) {
+      if (bogiStartIndex === -1 || match.index < bogiStartIndex) {
+        bogiStartIndex = match.index;
+        bogiStartMatch = match[0];
+      }
+    }
+  }
+
+  if (bogiStartIndex === -1) {
+    return null;
+  }
+
+  // 보기 끝 찾기: 선지(①) 시작 전까지
+  const afterBogi = text.slice(bogiStartIndex + bogiStartMatch.length);
+  const choiceStartMatch = afterBogi.match(/[①②③④⑤]/);
+  const bogiEndIndex = choiceStartMatch?.index !== undefined
+    ? bogiStartIndex + bogiStartMatch.length + choiceStartMatch.index
+    : text.length;
+
+  const bogiContent = text.slice(bogiStartIndex + bogiStartMatch.length, bogiEndIndex).trim();
+
+  if (!bogiContent) {
+    return null;
+  }
+
+  // ㄱ. ㄴ. ㄷ. 형식 추출
+  const items: Array<{ label: string; content: string }> = [];
+  const labelPattern = /([ㄱㄴㄷㄹㅁㅂㅅㅇ])\s*[..)]\s*([^ㄱㄴㄷㄹㅁㅂㅅㅇ①②③④⑤]+)/g;
+
+  let match;
+  while ((match = labelPattern.exec(bogiContent)) !== null) {
+    const label = match[1];
+    const content = match[2].trim();
+    if (content) {
+      items.push({ label, content });
+    }
+  }
+
+  if (items.length > 0) {
+    return {
+      items,
+      rawText: bogiContent,
+    };
+  }
+
+  // ㄱㄴㄷ 형식이 아니면 전체 텍스트로 반환
+  return {
+    items: [{ label: '', content: bogiContent }],
+    rawText: bogiContent,
+  };
+};
+
+// extractCSATChoices는 상단에 이미 정의됨 (384줄)
+
+/**
+ * 결합형 문제 범위 감지 (수능형)
+ * [16~17], [16～17], 16~17번 등
+ */
+export const detectCSATCombinedRange = (text: string): { start: number; end: number } | null => {
+  const patterns = [
+    /\[\s*(\d+)\s*[~～\-]\s*(\d+)\s*\]/,  // [16~17]
+    /(\d+)\s*[~～\-]\s*(\d+)\s*번/,         // 16~17번
+    /(\d+)\s*[~～\-]\s*(\d+)\s*[..)]/,      // 16~17.
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) {
+      const start = parseInt(match[1], 10);
+      const end = parseInt(match[2], 10);
+      if (start < end && end - start <= 3) { // 최대 3문제 연속
+        return { start, end };
+      }
+    }
+  }
+
+  return null;
+};
+
+/**
+ * 문제와 지문 분리 (수능형)
+ * "밑줄 친 ㉠의 의미로...", "윗글의 내용과 일치하는 것은?" 등의 패턴
+ */
+export const separateQuestionFromPassage = (text: string): { question: string; passage: string } => {
+  // 질문 시작 패턴들
+  const questionPatterns = [
+    /(?:윗글|위\s*글|본문|지문)(?:의|에서|을|를|과|와)\s*(?:내용|주제|제목|요지).*/,
+    /(?:밑줄|빈칸)\s*(?:친|그은|뚫린)?\s*[㉠-㉺ⓐ-ⓩ①-⑳].*/,
+    /다음\s*(?:중|글|내용).*(?:맞는|옳은|적절한|일치하는).*/,
+    /<보\s*기>.*(?:옳은|맞는|적절한).*/,
+    /(?:이|그)\s*글.*(?:목적|의도|주제|요지|제목).*/,
+    /.*(?:가장\s*)?(?:적절한|옳은|알맞은)\s*것(?:은|을|만을)?\s*[?？]?\s*$/,
+    /.*(?:고르|찾으|선택하)[시세]오[.?]?\s*$/,
+  ];
+
+  // 텍스트를 문장 단위로 분리
+  const sentences = text.split(/(?<=[.?!。？！])\s+/);
+
+  let questionStartIndex = -1;
+  let questionText = '';
+
+  // 뒤에서부터 질문 패턴 찾기
+  for (let i = sentences.length - 1; i >= 0; i--) {
+    const sentence = sentences[i];
+    for (const pattern of questionPatterns) {
+      if (pattern.test(sentence)) {
+        questionStartIndex = i;
+        questionText = sentences.slice(i).join(' ');
+        break;
+      }
+    }
+    if (questionStartIndex !== -1) break;
+  }
+
+  if (questionStartIndex !== -1 && questionStartIndex > 0) {
+    const passage = sentences.slice(0, questionStartIndex).join(' ');
+    return { question: questionText, passage };
+  }
+
+  // 질문 패턴을 찾지 못하면 전체를 질문으로
+  return { question: text, passage: '' };
+};
+
+/**
+ * 수능형 문제 통합 파싱
+ */
+export const parseCSATQuestion = (
+  text: string,
+  questionNumber: number
+): CSATParseResult => {
+  // 1. 결합형 여부 확인
+  const combinedRange = detectCSATCombinedRange(text);
+  const isCombined = combinedRange !== null;
+
+  // 2. 지문 섹션 추출 (가), (나), (다) 또는 [A], [B], [C]
+  let passage = extractPassageSections(text) || extractBracketSections(text);
+
+  // 3. <보 기> 추출
+  const bogi = extractCSATBogi(text);
+
+  // 4. 선지 추출
+  const choices = extractCSATChoices(text);
+
+  // 5. 문제 텍스트 추출 (지문, 보기, 선지 제외)
+  let questionText = text;
+
+  // 선지 이전까지만
+  const firstChoiceIdx = text.indexOf('①');
+  if (firstChoiceIdx !== -1) {
+    questionText = text.slice(0, firstChoiceIdx);
+  }
+
+  // <보 기> 이전까지
+  const bogiPatterns = [/<\s*보\s*기\s*>/i, /〈\s*보\s*기\s*〉/i, /＜\s*보\s*기\s*＞/i];
+  for (const pattern of bogiPatterns) {
+    const match = questionText.match(pattern);
+    if (match?.index !== undefined) {
+      questionText = questionText.slice(0, match.index);
+      break;
+    }
+  }
+
+  // 지문 섹션이 있으면 제거
+  if (passage) {
+    for (const section of passage.sections || []) {
+      const sectionPattern = new RegExp(`[\\(（]\\s*${section.label}\\s*[\\)）][\\s\\S]*?(?=[\\(（]|$)`, 'g');
+      questionText = questionText.replace(sectionPattern, '');
+    }
+  }
+
+  // 문제 번호 패턴 제거
+  questionText = questionText.replace(/^\s*\d+\s*[..)]\s*/, '');
+  questionText = questionText.replace(/^\s*\[\s*\d+\s*[~～\-]\s*\d+\s*\]\s*/, '');
+
+  // 문제와 남은 지문 분리
+  if (!passage) {
+    const separated = separateQuestionFromPassage(questionText);
+    if (separated.passage) {
+      passage = {
+        fullText: separated.passage,
+        type: 'single',
+      };
+      questionText = separated.question;
+    }
+  }
+
+  questionText = questionText.trim();
+
+  return {
+    questionNumber,
+    questionText,
+    passage: passage || undefined,
+    bogi: bogi || undefined,
+    choices: choices || [],
+    isCombined,
+    combinedRange: combinedRange || undefined,
+  };
+};
+
+/**
+ * 수능형 텍스트에서 문제 블록들 분리
+ */
+export const splitCSATQuestions = (text: string): Array<{ number: number; content: string }> => {
+  const questions: Array<{ number: number; content: string }> = [];
+
+  // 문제 번호 패턴: 줄 시작에 숫자. 또는 숫자) 또는 [숫자~숫자]
+  const questionStartPattern = /(?:^|\n)\s*(?:\[?\s*(\d+)\s*(?:[~～\-]\s*\d+)?\s*\]?\s*[..)]\s*|\[(\d+)\s*[~～\-]\s*\d+\]\s*)/g;
+
+  const matches: Array<{ index: number; number: number; fullMatch: string }> = [];
+  let match;
+
+  while ((match = questionStartPattern.exec(text)) !== null) {
+    const num = parseInt(match[1] || match[2], 10);
+    if (!isNaN(num)) {
+      matches.push({
+        index: match.index,
+        number: num,
+        fullMatch: match[0],
+      });
+    }
+  }
+
+  // 각 문제 내용 추출
+  for (let i = 0; i < matches.length; i++) {
+    const current = matches[i];
+    const next = matches[i + 1];
+
+    const startIdx = current.index + current.fullMatch.length;
+    const endIdx = next ? next.index : text.length;
+
+    const content = text.slice(startIdx, endIdx).trim();
+    if (content) {
+      questions.push({
+        number: current.number,
+        content,
+      });
+    }
+  }
+
+  return questions;
+};
+
+/**
+ * 수능형 파싱 결과를 ParsedQuestion으로 변환
+ */
+export const convertCSATToParseResult = (csatResult: CSATParseResult): ParsedQuestion => {
+  const result: ParsedQuestion = {
+    text: csatResult.questionText,
+    type: csatResult.choices.length >= 2 ? 'multiple' : 'short_answer',
+    choices: csatResult.choices.length >= 2 ? csatResult.choices : undefined,
+  };
+
+  // 지문이 있으면 결합형으로 처리
+  if (csatResult.passage) {
+    if (csatResult.passage.type === 'multiple' && csatResult.passage.sections) {
+      // (가), (나), (다) 형식 -> 공통 지문으로
+      result.passageType = 'text';
+      result.passage = csatResult.passage.fullText;
+    } else {
+      // 단일 지문
+      result.passageType = 'text';
+      result.passage = csatResult.passage.fullText;
+    }
+  }
+
+  // <보 기>가 있으면 examples로
+  if (csatResult.bogi) {
+    if (csatResult.bogi.items.length > 0 && csatResult.bogi.items[0].label) {
+      // ㄱ. ㄴ. ㄷ. 형식
+      result.examples = {
+        type: 'labeled',
+        items: csatResult.bogi.items.map(item => item.content),
+      };
+      result.koreanAbcItems = csatResult.bogi.items.map(item => item.content);
+    } else if (csatResult.bogi.rawText) {
+      // 텍스트 박스 형식
+      result.examples = {
+        type: 'text',
+        items: [csatResult.bogi.rawText],
+      };
+    }
+  }
+
+  return result;
+};
+
+/**
+ * 수능형 통합 파싱 (전체 텍스트 -> ParseResult)
+ */
+export const parseCSATText = (text: string): ParseResult => {
+  const questions: ParsedQuestion[] = [];
+
+  // 전처리
+  const processedText = preprocessOCRText(text);
+
+  // 문제 블록 분리
+  const questionBlocks = splitCSATQuestions(processedText);
+
+  if (questionBlocks.length === 0) {
+    // 문제 번호를 찾지 못하면 기존 파싱 로직 사용
+    return parseQuestions(text);
+  }
+
+  // 결합형 문제 범위 감지
+  const combinedRanges: Array<{ start: number; end: number }> = [];
+  for (const block of questionBlocks) {
+    const range = detectCSATCombinedRange(block.content);
+    if (range) {
+      combinedRanges.push(range);
+    }
+  }
+
+  // 각 문제 파싱
+  for (const block of questionBlocks) {
+    const csatResult = parseCSATQuestion(block.content, block.number);
+    const parsedQuestion = convertCSATToParseResult(csatResult);
+
+    // 결합형 범위에 속하는지 확인
+    const inCombinedRange = combinedRanges.some(
+      range => block.number >= range.start && block.number <= range.end
+    );
+
+    if (inCombinedRange && csatResult.passage) {
+      parsedQuestion.type = 'combined';
+    }
+
+    questions.push(parsedQuestion);
+  }
+
+  return {
+    questions,
+    rawText: text,
+    success: questions.length > 0,
+    message: questions.length > 0
+      ? `${questions.length}개의 문제를 파싱했습니다.`
+      : '문제를 파싱할 수 없습니다.',
+  };
+};
+
+/**
+ * 자동 파싱 모드 선택
+ * 텍스트 특성에 따라 수능형 또는 일반형 파싱 선택
+ */
+export const parseQuestionsAuto = (text: string): ParseResult => {
+  // 수능형 특성 감지
+  const csatIndicators = [
+    /<\s*보\s*기\s*>/i,              // <보 기>
+    /[①②③④⑤]/,                      // 원숫자 선지
+    /\[\s*\d+\s*[~～\-]\s*\d+\s*\]/, // [16~17] 결합형
+    /[（\(][가나다라]\s*[）\)]/,       // (가), (나), (다)
+    /ㄱ\s*[..)]\s*.*ㄴ\s*[..)]/,      // ㄱ. ... ㄴ.
+  ];
+
+  const isCSATStyle = csatIndicators.some(pattern => pattern.test(text));
+
+  if (isCSATStyle) {
+    console.log('[OCR] 수능형 문제 감지, 수능 파싱 모드 사용');
+    return parseCSATText(text);
+  }
+
+  console.log('[OCR] 일반형 문제 감지, 기본 파싱 모드 사용');
+  return parseQuestions(text);
 };
 
 // ============================================================

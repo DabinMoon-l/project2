@@ -962,9 +962,9 @@ function ManageQuizCard({
         {quiz.questionCount}문제 · {quiz.participantCount}명 참여
       </p>
 
-      <div className="h-[40px] mb-3">
+      <div className="h-[48px] mb-3 overflow-hidden">
         {quiz.tags && quiz.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1 line-clamp-2 overflow-hidden">
+          <div className="flex flex-wrap gap-1">
             {quiz.tags.slice(0, 5).map((tag) => (
               <span
                 key={tag}
@@ -1426,20 +1426,22 @@ export default function QuizListPage() {
                         other: '기타 의견',
                       };
                       const typeLabel = typeLabels[feedback.feedbackType] || feedback.feedbackType;
+                      // questionId에서 숫자 추출 후 +1 (q0 → 1, q1 → 2)
+                      const questionNum = parseInt(feedback.questionId.replace(/\D/g, ''), 10) + 1;
 
                       return (
                         <div
                           key={feedback.id}
-                          className="p-3 border border-[#1A1A1A] bg-[#EDEAE4]"
+                          className="p-4 border border-[#1A1A1A] bg-[#EDEAE4]"
                         >
-                          <p className="text-xs text-[#5C5C5C] mb-1">
-                            문제 {feedback.questionId}
+                          <p className="text-sm text-[#5C5C5C] mb-1">
+                            문제 {questionNum}.
                           </p>
-                          <p className="text-xs font-bold text-[#8B6914] mb-1">
+                          <p className="text-base font-bold text-[#8B6914] mb-2">
                             {typeLabel}
                           </p>
                           {feedback.feedback && (
-                            <p className="text-sm text-[#1A1A1A]">
+                            <p className="text-base text-[#1A1A1A]">
                               {feedback.feedback}
                             </p>
                           )}
@@ -1483,7 +1485,7 @@ export default function QuizListPage() {
     <div className="min-h-screen pb-28" style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 */}
       <header className="pt-6 pb-4 flex flex-col items-center">
-        <div className="relative w-full px-4 h-32 sm:h-44 md:h-56 mb-4 overflow-visible">
+        <div className="relative w-full px-4 h-32 sm:h-44 md:h-56 mb-4">
           <Image
             src={ribbonImage}
             alt="Quiz"
@@ -1513,7 +1515,7 @@ export default function QuizListPage() {
       </header>
 
       {/* 뉴스 캐러셀 (중간/기말/기출) */}
-      <section className="mb-8">
+      <section className="mb-8 px-4">
         <NewsCarousel
           midtermQuizzes={midtermQuizzes}
           finalQuizzes={finalQuizzes}

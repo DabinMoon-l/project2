@@ -224,7 +224,6 @@ function QuestionCard({
   isSelected,
   onSelect,
   onFeedbackSubmit,
-  onBookmark,
   currentUserId,
   quizCreatorId,
   courseId,
@@ -238,7 +237,6 @@ function QuestionCard({
   isSelected: boolean;
   onSelect: () => void;
   onFeedbackSubmit?: (questionId: string, type: FeedbackType, content: string) => void;
-  onBookmark?: (item: ReviewItem) => void;
   /** 현재 로그인한 사용자 ID (자기 문제 피드백 방지용) */
   currentUserId?: string;
   /** 해당 퀴즈의 생성자 ID (자기 문제 피드백 방지용) */
@@ -354,16 +352,6 @@ function QuestionCard({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             )}
-
-            {/* 찜 상태 뱃지 - 아이콘 아래 */}
-            {item.isBookmarked && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-bold bg-[#FDEAEA] text-[#8B1A1A] border border-[#8B1A1A]">
-                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                </svg>
-                찜
-              </span>
-            )}
           </div>
         </div>
       </div>
@@ -378,39 +366,57 @@ function QuestionCard({
             className="overflow-hidden"
           >
             <div className="border-t border-[#1A1A1A] p-4 space-y-4 bg-[#EDEAE4]">
-              {/* 결합형 공통 정보 (단일 문제로 표시될 때) */}
+              {/* 결합형 공통 정보 (단일 문제로 표시될 때) - 공통 문제는 아코디언 헤더에 표시되므로 생략 */}
               {item.combinedGroupId && !subQuestionNumber && (
                 <div className="space-y-3 mb-4">
-                  {/* 공통 문제 (문제 탭에서만 표시) */}
-                  {item.commonQuestion && folderType === 'solved' && (
-                    <div className="p-3 border-2 border-[#1A1A1A] bg-[#F5F0E8]">
-                      <p className="text-xs font-bold text-[#5C5C5C] mb-2">공통 문제</p>
-                      <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{item.commonQuestion}</p>
-                    </div>
-                  )}
                   {/* 공통 지문 */}
-                  {(item.passage || item.passageImage || (item.koreanAbcItems && item.koreanAbcItems.length > 0)) && (
-                    <div className="p-3 border-2 border-[#8B6914] bg-[#FFF8E1]">
-                      {/* 텍스트 */}
-                      {item.passage && item.passageType !== 'korean_abc' && (
-                        <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{item.passage}</p>
-                      )}
-                      {/* ㄱㄴㄷ 형식 */}
-                      {item.passageType === 'korean_abc' && item.koreanAbcItems && item.koreanAbcItems.length > 0 && (
-                        <div className="space-y-1">
-                          {item.koreanAbcItems.map((itm, idx) => (
-                            <p key={idx} className="text-sm text-[#1A1A1A]">
-                              <span className="font-bold">{KOREAN_LABELS[idx]}.</span> {itm}
-                            </p>
-                          ))}
-                        </div>
-                      )}
-                      {/* 이미지 */}
-                      {item.passageImage && (
-                        <img src={item.passageImage} alt="공통 이미지" className="mt-2 max-w-full max-h-[300px] object-contain border border-[#1A1A1A]" />
-                      )}
-                    </div>
-                  )}
+                  {(item.passage || item.passageImage || (item.koreanAbcItems && item.koreanAbcItems.length > 0)) && (() => {
+                    // 지문과 이미지가 둘 다 있는지 확인
+                    const hasText = item.passage || (item.koreanAbcItems && item.koreanAbcItems.length > 0);
+                    const hasImage = !!item.passageImage;
+                    const needsInnerBox = hasText && hasImage;
+
+                    return (
+                      <div className="p-3 border-2 border-[#8B6914] bg-[#FFF8E1]">
+                        {/* 텍스트 */}
+                        {item.passage && item.passageType !== 'korean_abc' && (
+                          needsInnerBox ? (
+                            <div className="p-3 bg-[#FFFDF7] border border-[#E8D9A8]">
+                              <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{item.passage}</p>
+                            </div>
+                          ) : (
+                            <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{item.passage}</p>
+                          )
+                        )}
+                        {/* ㄱㄴㄷ 형식 */}
+                        {item.passageType === 'korean_abc' && item.koreanAbcItems && item.koreanAbcItems.length > 0 && (
+                          needsInnerBox ? (
+                            <div className="p-3 bg-[#FFFDF7] border border-[#E8D9A8]">
+                              <div className="space-y-1">
+                                {item.koreanAbcItems.map((itm, idx) => (
+                                  <p key={idx} className="text-sm text-[#1A1A1A]">
+                                    <span className="font-bold">{KOREAN_LABELS[idx]}.</span> {itm}
+                                  </p>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-1">
+                              {item.koreanAbcItems.map((itm, idx) => (
+                                <p key={idx} className="text-sm text-[#1A1A1A]">
+                                  <span className="font-bold">{KOREAN_LABELS[idx]}.</span> {itm}
+                                </p>
+                              ))}
+                            </div>
+                          )
+                        )}
+                        {/* 이미지 */}
+                        {item.passageImage && (
+                          <img src={item.passageImage} alt="공통 이미지" className={`max-w-full max-h-[300px] object-contain border border-[#1A1A1A] ${hasText ? 'mt-3' : ''}`} />
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -629,17 +635,11 @@ function QuestionCard({
                     <div className="p-3 border-2 border-[#1A6B1A] bg-[#E8F5E9]">
                       <p className="text-xs text-[#1A6B1A] mb-1">정답</p>
                       <p className="text-sm font-medium text-[#1A6B1A] whitespace-pre-wrap">
-                        {/* 복수 정답 표시 (||| 구분자) */}
-                        {item.correctAnswer?.includes('|||') ? (
-                          item.correctAnswer.split('|||').map((ans, i) => (
-                            <span key={i}>
-                              {i > 0 && <span className="mx-1 text-[#5C5C5C]">또는</span>}
-                              {ans.trim()}
-                            </span>
-                          ))
-                        ) : (
-                          item.correctAnswer
-                        )}
+                        {/* 복수 정답 표시 (||| -> , 로 변환) */}
+                        {item.correctAnswer?.includes('|||')
+                          ? item.correctAnswer.split('|||').map((a: string) => a.trim()).join(', ')
+                          : item.correctAnswer
+                        }
                       </p>
                     </div>
                   )}
@@ -684,61 +684,37 @@ function QuestionCard({
                 </div>
               )}
 
-              {/* 피드백 + 찜 버튼 */}
-              {(onFeedbackSubmit || onBookmark) && (
+              {/* 피드백 버튼 - 자기 문제가 아닌 경우에만 표시 */}
+              {onFeedbackSubmit && !(currentUserId && (quizCreatorId === currentUserId || item.quizCreatorId === currentUserId)) && (
                 <div className="pt-3 border-t border-[#EDEAE4] flex items-center gap-2">
-                  {/* 피드백 버튼 (좌측) - 자기 문제가 아닌 경우에만 표시 */}
-                  {onFeedbackSubmit && !(currentUserId && (quizCreatorId === currentUserId || item.quizCreatorId === currentUserId)) && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (!isFeedbackSubmitted) {
-                          setIsFeedbackOpen(true);
-                        }
-                      }}
-                      disabled={isFeedbackSubmitted}
-                      className={`flex items-center gap-2 px-3 py-2 text-xs font-bold border-2 transition-colors ${
-                        isFeedbackSubmitted
-                          ? 'bg-[#E8F5E9] border-[#1A6B1A] text-[#1A6B1A] cursor-default'
-                          : 'bg-[#FFF8E1] border-[#8B6914] text-[#8B6914] hover:bg-[#FFECB3]'
-                      }`}
-                    >
-                      {isFeedbackSubmitted ? (
-                        <>
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                          피드백 완료
-                        </>
-                      ) : (
-                        <>
-                          <span className="w-5 h-5 flex items-center justify-center bg-[#8B6914] text-[#FFF8E1] font-bold">!</span>
-                          문제 피드백
-                        </>
-                      )}
-                    </button>
-                  )}
-
-                  {/* 찜 버튼 (항상 우측) */}
-                  {onBookmark && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        console.log('찜 버튼 클릭:', item.questionId, item.isBookmarked);
-                        onBookmark(item);
-                      }}
-                      className={`ml-auto flex items-center gap-2 px-3 py-2 text-xs font-bold border-2 transition-colors ${
-                        item.isBookmarked
-                          ? 'bg-[#FDEAEA] border-[#8B1A1A] text-[#8B1A1A]'
-                          : 'bg-[#F5F0E8] border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4]'
-                      }`}
-                    >
-                      <svg className="w-4 h-4" fill={item.isBookmarked ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                      </svg>
-                      {item.isBookmarked ? '찜 해제' : '찜'}
-                    </button>
-                  )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!isFeedbackSubmitted) {
+                        setIsFeedbackOpen(true);
+                      }
+                    }}
+                    disabled={isFeedbackSubmitted}
+                    className={`flex items-center gap-2 px-3 py-2 text-xs font-bold border-2 transition-colors ${
+                      isFeedbackSubmitted
+                        ? 'bg-[#E8F5E9] border-[#1A6B1A] text-[#1A6B1A] cursor-default'
+                        : 'bg-[#FFF8E1] border-[#8B6914] text-[#8B6914] hover:bg-[#FFECB3]'
+                    }`}
+                  >
+                    {isFeedbackSubmitted ? (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        피드백 완료
+                      </>
+                    ) : (
+                      <>
+                        <span className="w-5 h-5 flex items-center justify-center bg-[#8B6914] text-[#FFF8E1] font-bold">!</span>
+                        문제 피드백
+                      </>
+                    )}
+                  </button>
                 </div>
               )}
             </div>
@@ -841,15 +817,12 @@ export default function FolderDetailPage() {
   const {
     groupedSolvedItems,
     groupedWrongItems,
-    groupedBookmarkedItems,
     customFolders,
     solvedItems,
     wrongItems,
-    bookmarkedItems,
     addToCustomFolder,
     removeFromCustomFolder,
     deleteReviewItem,
-    toggleQuestionBookmark,
     addCategoryToFolder,
     removeCategoryFromFolder,
     assignQuestionToCategory,
@@ -861,6 +834,7 @@ export default function FolderDetailPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isDeleteMode, setIsDeleteMode] = useState(false);
   const [practiceItems, setPracticeItems] = useState<ReviewItem[] | null>(null);
+  const [practiceMode, setPracticeMode] = useState<'all' | 'wrongOnly' | null>(null); // 복습 모드 (첫복습점수 저장용)
   const [isAddMode, setIsAddMode] = useState(false);
   const [showEmptyMessage, setShowEmptyMessage] = useState(false);
   const [addSelectedIds, setAddSelectedIds] = useState<Set<string>>(new Set());
@@ -887,6 +861,9 @@ export default function FolderDetailPage() {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isAssignMode, setIsAssignMode] = useState(false);
   const [selectedCategoryForAssign, setSelectedCategoryForAssign] = useState<string | null>(null);
+
+  // 퀴즈 점수 상태 (solved/bookmark 타입용)
+  const [quizScores, setQuizScores] = useState<{ myScore?: number; myFirstReviewScore?: number } | null>(null);
 
   const loadedFolderRef = useRef<string | null>(null);
 
@@ -923,13 +900,14 @@ export default function FolderDetailPage() {
         : group.items;
       return { title: group.quizTitle, items: filteredItems };
     } else if (folderType === 'bookmark') {
-      const group = groupedBookmarkedItems.find(g => g.quizId === folderId);
-      return group ? { title: group.quizTitle, items: group.items } : null;
+      // 퀴즈 단위 찜: solved items에서 가져오기
+      const solvedGroup = groupedSolvedItems.find(g => g.quizId === folderId);
+      return solvedGroup ? { title: solvedGroup.quizTitle, items: solvedGroup.items } : null;
     } else if (folderType === 'custom' && customFolder) {
       return { title: customFolder.name, items: null as ReviewItem[] | null };
     }
     return null;
-  }, [folderType, folderId, groupedSolvedItems, groupedWrongItems, groupedBookmarkedItems, customFolder, chapterFilter]);
+  }, [folderType, folderId, groupedSolvedItems, groupedWrongItems, customFolder, chapterFilter]);
 
   // 커스텀 폴더일 때만 비동기로 문제 로드
   useEffect(() => {
@@ -1046,6 +1024,32 @@ export default function FolderDetailPage() {
 
     loadQuizCreators();
   }, [questions]);
+
+  // solved/bookmark 타입일 때 퀴즈 점수 가져오기
+  useEffect(() => {
+    if (!user || (folderType !== 'solved' && folderType !== 'bookmark')) {
+      setQuizScores(null);
+      return;
+    }
+
+    const loadQuizScores = async () => {
+      try {
+        const quizDoc = await getDoc(doc(db, 'quizzes', folderId));
+        if (quizDoc.exists()) {
+          const data = quizDoc.data();
+          setQuizScores({
+            myScore: data.userScores?.[user.uid],
+            myFirstReviewScore: data.userFirstReviewScores?.[user.uid],
+          });
+        }
+      } catch (err) {
+        console.error('퀴즈 점수 로드 실패:', err);
+      }
+    };
+
+    loadQuizScores();
+  }, [user, folderType, folderId]);
+
   const loading = folderType === 'custom' ? customLoading : !folderData;
 
   // displayItems 계산 (결합형 문제 그룹핑)
@@ -1077,30 +1081,7 @@ export default function FolderDetailPage() {
     setSelectedIds(newSelected);
   };
 
-  // 찜 토글 핸들러 (로컬 상태도 함께 업데이트)
-  const handleBookmarkToggle = useCallback(async (item: ReviewItem) => {
-    try {
-      const wasBookmarked = item.isBookmarked;
-      await toggleQuestionBookmark(item);
-
-      // 커스텀 폴더의 경우 로컬 상태도 업데이트
-      if (folderType === 'custom') {
-        setCustomQuestions(prev => prev.map(q =>
-          q.questionId === item.questionId
-            ? { ...q, isBookmarked: !wasBookmarked }
-            : q
-        ));
-      }
-
-      // 토스트 메시지
-      showToast(wasBookmarked ? '찜 해제됨' : '찜 완료');
-    } catch (err) {
-      console.error('찜 토글 실패:', err);
-      showToast('찜 처리에 실패했습니다.');
-    }
-  }, [toggleQuestionBookmark, folderType, showToast]);
-
-  // 선택된 문제로 연습 시작
+  // 선택된 문제로 연습 시작 (전체 복습)
   const handleStartPractice = () => {
     const targetItems = selectedIds.size === 0
       ? questions
@@ -1113,10 +1094,46 @@ export default function FolderDetailPage() {
       return;
     }
 
+    setPracticeMode('all'); // 전체 복습 모드
     setPracticeItems(targetItems);
     setIsSelectMode(false);
     setSelectedIds(new Set());
   };
+
+  // 오답만 복습하기
+  const handleStartWrongOnlyPractice = () => {
+    // 현재 questions 중에서 wrongItems에도 있는 것만 필터링
+    const wrongQuestionKeys = new Set(
+      wrongItems
+        .filter(w => w.quizId === folderId)
+        .map(w => `${w.quizId}:${w.questionId}`)
+    );
+
+    const wrongOnlyItems = questions.filter(q =>
+      wrongQuestionKeys.has(`${q.quizId}:${q.questionId}`)
+    );
+
+    if (wrongOnlyItems.length === 0) {
+      showToast('이 문제지에 오답이 없습니다');
+      return;
+    }
+
+    setPracticeMode('wrongOnly'); // 오답만 복습 모드 (첫복습점수 저장 안함)
+    setPracticeItems(wrongOnlyItems);
+    setIsSelectMode(false);
+    setSelectedIds(new Set());
+  };
+
+  // 현재 문제지의 오답 개수 계산
+  const wrongCount = useMemo(() => {
+    if (folderType === 'wrong') return questions.length; // 이미 오답만 보여주는 경우
+    const wrongQuestionKeys = new Set(
+      wrongItems
+        .filter(w => w.quizId === folderId)
+        .map(w => `${w.quizId}:${w.questionId}`)
+    );
+    return questions.filter(q => wrongQuestionKeys.has(`${q.quizId}:${q.questionId}`)).length;
+  }, [folderType, folderId, questions, wrongItems]);
 
   // 선택된 퀴즈의 문제 목록 가져오기
   const getSelectedQuizItems = () => {
@@ -1368,8 +1385,14 @@ export default function FolderDetailPage() {
       <ReviewPractice
         items={practiceItems}
         quizTitle={folderTitle}
-        onComplete={() => setPracticeItems(null)}
-        onClose={() => setPracticeItems(null)}
+        onComplete={() => {
+          setPracticeItems(null);
+          setPracticeMode(null);
+        }}
+        onClose={() => {
+          setPracticeItems(null);
+          setPracticeMode(null);
+        }}
         currentUserId={user?.uid}
       />
     );
@@ -1606,11 +1629,33 @@ export default function FolderDetailPage() {
         </div>
       </header>
 
-      {/* 폴더 제목 */}
-      <div className="px-4 py-3 border-b border-[#EDEAE4]">
-        <h2 className="text-lg font-bold text-[#1A1A1A] truncate">
-          {folderTitle}
-        </h2>
+      {/* 폴더 제목 + 점수 */}
+      <div className="px-4 py-4 border-b border-[#EDEAE4]">
+        {/* solved/bookmark 타입일 때 제목 + 점수 표시 */}
+        {(folderType === 'solved' || folderType === 'bookmark') ? (
+          <>
+            <h2 className="text-2xl font-black text-[#1A1A1A] mb-3">
+              {folderTitle}
+            </h2>
+            <div className="flex items-center gap-3">
+              <span className="text-4xl font-black text-[#1A1A1A]">
+                {quizScores?.myScore !== undefined ? quizScores.myScore : '-'}
+              </span>
+              <span className="text-xl text-[#5C5C5C]">/</span>
+              <span className="text-4xl font-black text-[#1A1A1A]">
+                {quizScores?.myFirstReviewScore !== undefined ? quizScores.myFirstReviewScore : '-'}
+              </span>
+            </div>
+            <div className="flex items-center gap-5 mt-1">
+              <span className="text-xs text-[#5C5C5C]">퀴즈</span>
+              <span className="text-xs text-[#5C5C5C]">복습</span>
+            </div>
+          </>
+        ) : (
+          <h2 className="text-xl font-bold text-[#1A1A1A] truncate">
+            {folderTitle}
+          </h2>
+        )}
       </div>
 
       {/* 커스텀 폴더일 때 문제 추가 버튼 */}
@@ -1727,8 +1772,7 @@ export default function FolderDetailPage() {
                             isSelected={selectedIds.has(item.id)}
                             onSelect={() => handleSelectQuestion(item.id)}
                             onFeedbackSubmit={handleFeedbackSubmit}
-                            onBookmark={handleBookmarkToggle}
-                            currentUserId={user?.uid}
+                                                        currentUserId={user?.uid}
                             quizCreatorId={quizCreatorsMap.get(item.quizId)}
                             folderType={folderType}
                             courseId={userCourse?.id}
@@ -1755,8 +1799,7 @@ export default function FolderDetailPage() {
                     isSelected={selectedIds.has(item.id)}
                     onSelect={() => handleSelectQuestion(item.id)}
                     onFeedbackSubmit={handleFeedbackSubmit}
-                    onBookmark={handleBookmarkToggle}
-                    currentUserId={user?.uid}
+                                        currentUserId={user?.uid}
                     quizCreatorId={quizCreatorsMap.get(item.quizId)}
                     courseId={userCourse?.id}
                     folderType={folderType}
@@ -1865,37 +1908,56 @@ export default function FolderDetailPage() {
                           className="overflow-hidden"
                         >
                           <div className="border border-t-0 border-[#1A1A1A] bg-[#F5F0E8] p-4 space-y-4">
-                            {/* 공통 문제 (문제 탭에서만 표시) */}
-                            {firstItem.commonQuestion && folderType === 'solved' && (
-                              <div className="p-3 border border-[#1A1A1A] bg-[#EDEAE4]">
-                                <p className="text-xs font-bold text-[#5C5C5C] mb-2">공통 문제</p>
-                                <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{firstItem.commonQuestion}</p>
-                              </div>
-                            )}
+                            {/* 공통 문제는 아코디언 헤더에 표시되므로 생략 */}
 
                             {/* 공통 지문 */}
-                            {(firstItem.passage || firstItem.passageImage || firstItem.koreanAbcItems) && (
-                              <div className="p-3 border border-[#8B6914] bg-[#FFF8E1]">
-                                {/* 텍스트 */}
-                                {firstItem.passage && firstItem.passageType !== 'korean_abc' && (
-                                  <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{firstItem.passage}</p>
-                                )}
-                                {/* ㄱㄴㄷ 형식 */}
-                                {firstItem.passageType === 'korean_abc' && firstItem.koreanAbcItems && firstItem.koreanAbcItems.length > 0 && (
-                                  <div className="space-y-1">
-                                    {firstItem.koreanAbcItems.map((itm, idx) => (
-                                      <p key={idx} className="text-sm text-[#1A1A1A]">
-                                        <span className="font-bold">{KOREAN_LABELS[idx]}.</span> {itm}
-                                      </p>
-                                    ))}
-                                  </div>
-                                )}
-                                {/* 이미지 */}
-                                {firstItem.passageImage && (
-                                  <img src={firstItem.passageImage} alt="공통 이미지" className="mt-2 max-w-full max-h-[300px] object-contain border border-[#1A1A1A]" />
-                                )}
-                              </div>
-                            )}
+                            {(firstItem.passage || firstItem.passageImage || firstItem.koreanAbcItems) && (() => {
+                              // 지문과 이미지가 둘 다 있는지 확인
+                              const hasText = firstItem.passage || (firstItem.koreanAbcItems && firstItem.koreanAbcItems.length > 0);
+                              const hasImage = !!firstItem.passageImage;
+                              const needsInnerBox = hasText && hasImage;
+
+                              return (
+                                <div className="p-3 border border-[#8B6914] bg-[#FFF8E1]">
+                                  {/* 텍스트 */}
+                                  {firstItem.passage && firstItem.passageType !== 'korean_abc' && (
+                                    needsInnerBox ? (
+                                      <div className="p-3 bg-[#FFFDF7] border border-[#E8D9A8]">
+                                        <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{firstItem.passage}</p>
+                                      </div>
+                                    ) : (
+                                      <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{firstItem.passage}</p>
+                                    )
+                                  )}
+                                  {/* ㄱㄴㄷ 형식 */}
+                                  {firstItem.passageType === 'korean_abc' && firstItem.koreanAbcItems && firstItem.koreanAbcItems.length > 0 && (
+                                    needsInnerBox ? (
+                                      <div className="p-3 bg-[#FFFDF7] border border-[#E8D9A8]">
+                                        <div className="space-y-1">
+                                          {firstItem.koreanAbcItems.map((itm, idx) => (
+                                            <p key={idx} className="text-sm text-[#1A1A1A]">
+                                              <span className="font-bold">{KOREAN_LABELS[idx]}.</span> {itm}
+                                            </p>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="space-y-1">
+                                        {firstItem.koreanAbcItems.map((itm, idx) => (
+                                          <p key={idx} className="text-sm text-[#1A1A1A]">
+                                            <span className="font-bold">{KOREAN_LABELS[idx]}.</span> {itm}
+                                          </p>
+                                        ))}
+                                      </div>
+                                    )
+                                  )}
+                                  {/* 이미지 */}
+                                  {firstItem.passageImage && (
+                                    <img src={firstItem.passageImage} alt="공통 이미지" className={`max-w-full max-h-[300px] object-contain border border-[#1A1A1A] ${hasText ? 'mt-3' : ''}`} />
+                                  )}
+                                </div>
+                              );
+                            })()}
 
                             {/* 하위 문제들 */}
                             <div className="space-y-2 p-3 bg-[#EDEAE4] border border-[#D4CFC4]">
@@ -1909,8 +1971,7 @@ export default function FolderDetailPage() {
                                   isSelected={false}
                                   onSelect={() => {}}
                                   onFeedbackSubmit={handleFeedbackSubmit}
-                                  onBookmark={handleBookmarkToggle}
-                                  currentUserId={user?.uid}
+                                                                    currentUserId={user?.uid}
                                   quizCreatorId={quizCreatorsMap.get(subItem.quizId)}
                                   courseId={userCourse?.id}
                                   folderType={folderType}
@@ -1934,18 +1995,43 @@ export default function FolderDetailPage() {
       {/* 하단 버튼 영역 */}
       {!loading && questions.length > 0 && !isDeleteMode && (
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#F5F0E8] border-t-2 border-[#1A1A1A]">
-          <button
-            onClick={handleStartPractice}
-            className="w-full py-3 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#3A3A3A] transition-colors"
-          >
-            {isSelectMode && selectedIds.size > 0
-              ? `${selectedIds.size}개 문제 복습하기`
-              : '전체 복습하기'}
-          </button>
+          {isSelectMode && selectedIds.size > 0 ? (
+            /* 선택 모드일 때 - 선택한 문제 복습 */
+            <button
+              onClick={handleStartPractice}
+              className="w-full py-3 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#3A3A3A] transition-colors"
+            >
+              {selectedIds.size}개 문제 복습하기
+            </button>
+          ) : folderType !== 'wrong' && wrongCount > 0 ? (
+            /* 오답이 있는 경우 - 두 버튼 표시 */
+            <div className="flex gap-2">
+              <button
+                onClick={handleStartPractice}
+                className="flex-1 py-3 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#3A3A3A] transition-colors"
+              >
+                전체 복습하기
+              </button>
+              <button
+                onClick={handleStartWrongOnlyPractice}
+                className="flex-1 py-3 text-sm font-bold bg-[#8B1A1A] text-[#F5F0E8] border-2 border-[#8B1A1A] hover:bg-[#6B1414] transition-colors"
+              >
+                오답만 ({wrongCount})
+              </button>
+            </div>
+          ) : (
+            /* 기본 - 전체 복습하기만 */
+            <button
+              onClick={handleStartPractice}
+              className="w-full py-3 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#3A3A3A] transition-colors"
+            >
+              전체 복습하기
+            </button>
+          )}
         </div>
       )}
 
-      {/* 삭제 모드일 때 하단 버튼 - 삭제 + 찜 + 복습 */}
+      {/* 삭제 모드일 때 하단 버튼 - 삭제 + 복습 */}
       {!loading && isDeleteMode && !isAssignMode && selectedIds.size > 0 && (
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#F5F0E8] border-t-2 border-[#1A1A1A]">
           <div className="flex gap-2">
@@ -1954,42 +2040,6 @@ export default function FolderDetailPage() {
               className="flex-1 py-3 text-sm font-bold bg-[#8B1A1A] text-[#F5F0E8] border-2 border-[#8B1A1A] hover:bg-[#6B1414] transition-colors"
             >
               삭제
-            </button>
-            <button
-              onClick={async () => {
-                const allTargetItems = questions.filter(q => selectedIds.has(q.id));
-                const notBookmarkedItems = allTargetItems.filter(q => !q.isBookmarked);
-                const alreadyBookmarkedCount = allTargetItems.length - notBookmarkedItems.length;
-
-                if (notBookmarkedItems.length === 0) {
-                  showToast('선택한 문제가 모두 이미 찜되어 있습니다.');
-                  return;
-                }
-
-                for (const item of notBookmarkedItems) {
-                  await toggleQuestionBookmark(item);
-                }
-
-                // 커스텀 폴더의 경우 로컬 상태도 업데이트
-                if (folderType === 'custom') {
-                  const bookmarkedIds = new Set(notBookmarkedItems.map(q => q.questionId));
-                  setCustomQuestions(prev => prev.map(q =>
-                    bookmarkedIds.has(q.questionId)
-                      ? { ...q, isBookmarked: true }
-                      : q
-                  ));
-                }
-
-                // 선택 유지, 모드 유지
-                if (alreadyBookmarkedCount > 0) {
-                  showToast(`${notBookmarkedItems.length}개 문제 찜 완료 (${alreadyBookmarkedCount}개는 이미 찜됨)`);
-                } else {
-                  showToast(`${notBookmarkedItems.length}개 문제 찜 완료`);
-                }
-              }}
-              className="flex-1 py-3 text-sm font-bold bg-[#F5F0E8] text-[#1A1A1A] border-2 border-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
-            >
-              찜
             </button>
             <button
               onClick={() => {

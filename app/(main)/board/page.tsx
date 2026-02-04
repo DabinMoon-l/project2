@@ -635,7 +635,7 @@ export default function BoardPage() {
     loadAllComments();
   }, [posts]);
 
-  // 검색 필터링 및 정렬 (좋아요 수 > 최신순)
+  // 검색 필터링 및 정렬 (최신순)
   const filteredPosts = useMemo(() => {
     let result = searchQuery.trim()
       ? posts.filter(post =>
@@ -643,13 +643,8 @@ export default function BoardPage() {
         )
       : [...posts];
 
-    // 좋아요 수 내림차순, 같으면 최신순 정렬
-    result.sort((a, b) => {
-      if (b.likes !== a.likes) {
-        return b.likes - a.likes;
-      }
-      return b.createdAt.getTime() - a.createdAt.getTime();
-    });
+    // 최신순 정렬
+    result.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
     return result;
   }, [posts, searchQuery]);

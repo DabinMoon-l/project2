@@ -385,6 +385,20 @@ export default function CreateQuizPage() {
             type: q.examples.type,
             items: q.examples.items.filter((item) => item.trim()),
           } : undefined,
+          // 혼합 보기 (텍스트박스+ㄱㄴㄷ 블록)
+          mixedExamples: q.mixedExamples && q.mixedExamples.length > 0
+            ? q.mixedExamples.filter((block) =>
+                block.type === 'text'
+                  ? block.content?.trim()
+                  : (block.items || []).some(i => i.content.trim())
+              ).map(block => ({
+                ...block,
+                // labeled 블록의 빈 항목 필터링
+                items: block.type === 'labeled'
+                  ? (block.items || []).filter(i => i.content.trim())
+                  : undefined,
+              }))
+            : undefined,
         });
       }
     });

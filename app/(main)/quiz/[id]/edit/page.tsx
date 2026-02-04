@@ -78,6 +78,7 @@ export default function EditQuizPage() {
             explanation: q.explanation || '',
             imageUrl: q.imageUrl || null,
             examples: q.examples || null,
+            mixedExamples: q.mixedExamples || null,
           };
         });
 
@@ -216,11 +217,16 @@ export default function EditQuizPage() {
             explanation: q.explanation || null,
             imageUrl: q.imageUrl || null,
             examples: q.examples || null,
+            mixedExamples: q.mixedExamples || null,
             // 문제별 수정 시간: 변경된 경우에만 업데이트, 그렇지 않으면 기존 값 유지
             questionUpdatedAt: hasChanged ? serverTimestamp() : (originalQ?.questionUpdatedAt || null),
           };
         }),
         questionCount: questions.length,
+        // 문제 유형별 개수
+        oxCount: questions.filter(q => q.type === 'ox').length,
+        multipleChoiceCount: questions.filter(q => q.type === 'multiple').length,
+        subjectiveCount: questions.filter(q => q.type === 'short_answer' || q.type === 'subjective').length,
         updatedAt: serverTimestamp(),
       };
 

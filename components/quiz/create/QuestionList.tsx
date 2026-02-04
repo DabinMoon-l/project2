@@ -6,6 +6,8 @@ import type { QuestionData } from './QuestionEditor';
 import { calculateTotalQuestionCount } from './QuestionEditor';
 import { formatChapterLabel } from '@/lib/courseIndex';
 
+// 결합형 문제 펼침 상태 관리용
+
 // ============================================================
 // 타입 정의
 // ============================================================
@@ -68,6 +70,22 @@ export default function QuestionList({
   };
   // 삭제 확인 모달 상태
   const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
+
+  // 결합형 문제 하위문제 펼침 상태 (문제 ID -> 펼침 여부)
+  const [expandedCombined, setExpandedCombined] = useState<Set<string>>(new Set());
+
+  // 결합형 문제 펼침 토글
+  const toggleCombinedExpand = useCallback((questionId: string) => {
+    setExpandedCombined(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(questionId)) {
+        newSet.delete(questionId);
+      } else {
+        newSet.add(questionId);
+      }
+      return newSet;
+    });
+  }, []);
 
   /**
    * 문제 삭제
@@ -292,9 +310,10 @@ export default function QuestionList({
                         {question.imageUrl && (
                           <span className="text-[#5C5C5C]">| 이미지</span>
                         )}
-                        {question.examples && question.examples.items?.some(i => i.trim()) && (
+                        {(question.examples && question.examples.items?.some(i => i.trim())) ||
+                          (question.mixedExamples && question.mixedExamples.some(i => i.content?.trim())) ? (
                           <span className="text-[#5C5C5C]">| 보기</span>
-                        )}
+                        ) : null}
                         {question.explanation && (
                           <span className="text-[#5C5C5C]">| 해설</span>
                         )}
@@ -302,54 +321,85 @@ export default function QuestionList({
                     </>
                   )}
 
-                  {/* 결합형 문제: 공통 지문 + 하위 문제 목록 */}
+                  {/* 결합형 문제: 공통 문제 + 하위 문제 아코디언 */}
                   {question.type === 'combined' && (
                     <>
-                      {/* 공통 지문 미리보기 */}
-                      {(question.passage || question.text) && (
-                        <p className="text-[#5C5C5C] text-xs line-clamp-2 mb-2 italic">
-                          [공통 지문] {question.passage || question.text}
-                        </p>
-                      )}
+                      {/* 공통 문제 (일반 문제처럼 표시) */}
+                      <p className="text-[#1A1A1A] text-sm line-clamp-2 mb-2">
+                        {question.commonQuestion || question.text || '(공통 문제 없음)'}
+                      </p>
 
-                      {/* 하위 문제 목록 */}
+                      {/* 공통 지문/보기 있음 표시 */}
+                      <div className="text-xs text-[#5C5C5C] flex flex-wrap items-center gap-x-2 mb-2">
+                        {question.passage && <span>| 공통 지문</span>}
+                        {question.passageImage && <span>| 공통 이미지</span>}
+                        {question.koreanAbcItems && question.koreanAbcItems.length > 0 && <span>| ㄱㄴㄷ 보기</span>}
+                      </div>
+
+                      {/* 하위 문제 아코디언 */}
                       {question.subQuestions && question.subQuestions.length > 0 ? (
-                        <div className="mt-2 space-y-1.5 border-l-2 border-[#1A6B1A] pl-3">
-                          {question.subQuestions.map((sq, sqIdx) => (
-                            <div key={sq.id} className="text-xs bg-[#EDEAE4] p-2">
-                              <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                <span className="px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] font-bold text-[10px]">
-                                  {sqIdx + 1}
-                                </span>
-                                <span className="px-1.5 py-0.5 border border-[#5C5C5C] text-[#5C5C5C] text-[10px]">
-                                  {getTypeLabel(sq.type)}
-                                </span>
-                                {/* 하위 문제 챕터 뱃지 */}
-                                {courseId && sq.chapterId && (
-                                  <span className="px-1.5 py-0.5 bg-[#E8F0FE] border border-[#4A6DA7] text-[#4A6DA7] text-[10px] font-medium">
-                                    {formatChapterLabel(courseId, sq.chapterId, sq.chapterDetailId)}
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-[#1A1A1A] line-clamp-1">{sq.text || '(내용 없음)'}</p>
-                              <span className="text-[#5C5C5C]">
-                                정답:{' '}
-                                <span className="text-[#1A6B1A] font-bold">
-                                  {sq.type === 'ox'
-                                    ? sq.answerIndex === 0
-                                      ? 'O'
-                                      : sq.answerIndex === 1
-                                        ? 'X'
-                                        : '미선택'
-                                    : sq.type === 'multiple'
-                                      ? sq.answerIndex !== undefined && sq.answerIndex >= 0
-                                        ? `${sq.answerIndex + 1}번`
-                                        : '미선택'
-                                      : sq.answerText || '미입력'}
-                                </span>
-                              </span>
-                            </div>
-                          ))}
+                        <div className="mt-2">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleCombinedExpand(question.id);
+                            }}
+                            className="flex items-center gap-2 text-xs text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors"
+                          >
+                            <svg
+                              className={`w-4 h-4 transition-transform ${expandedCombined.has(question.id) ? 'rotate-180' : ''}`}
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                            <span>하위 문제 {question.subQuestions.length}개 {expandedCombined.has(question.id) ? '접기' : '보기'}</span>
+                          </button>
+
+                          {/* 펼쳐진 하위 문제 목록 */}
+                          <AnimatePresence>
+                            {expandedCombined.has(question.id) && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className="overflow-hidden"
+                              >
+                                <div className="mt-2 space-y-1.5 border-l-2 border-[#1A6B1A] pl-3">
+                                  {question.subQuestions.map((sq, sqIdx) => (
+                                    <div key={sq.id} className="text-xs bg-[#EDEAE4] p-2">
+                                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                        <span className="px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] font-bold text-[10px]">
+                                          {sqIdx + 1}
+                                        </span>
+                                        <span className="px-1.5 py-0.5 border border-[#5C5C5C] text-[#5C5C5C] text-[10px]">
+                                          {getTypeLabel(sq.type)}
+                                        </span>
+                                        {courseId && sq.chapterId && (
+                                          <span className="px-1.5 py-0.5 bg-[#E8F0FE] border border-[#4A6DA7] text-[#4A6DA7] text-[10px] font-medium">
+                                            {formatChapterLabel(courseId, sq.chapterId, sq.chapterDetailId)}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="text-[#1A1A1A] line-clamp-1">{sq.text || '(내용 없음)'}</p>
+                                      <span className="text-[#5C5C5C]">
+                                        정답:{' '}
+                                        <span className="text-[#1A6B1A] font-bold">
+                                          {sq.type === 'ox'
+                                            ? sq.answerIndex === 0 ? 'O' : sq.answerIndex === 1 ? 'X' : '미선택'
+                                            : sq.type === 'multiple'
+                                              ? sq.answerIndex !== undefined && sq.answerIndex >= 0 ? `${sq.answerIndex + 1}번` : '미선택'
+                                              : sq.answerText || '미입력'}
+                                        </span>
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                         </div>
                       ) : (
                         <p className="text-xs text-[#8B1A1A]">하위 문제가 없습니다</p>

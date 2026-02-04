@@ -682,7 +682,7 @@ export default function QuizStatsModal({
                                       <span className="text-[#5C5C5C]">정답: </span>
                                       <span className="font-bold text-[#1A6B1A]">
                                         {q.correctAnswer.includes('|||')
-                                          ? q.correctAnswer.split('|||').join(' / ')
+                                          ? q.correctAnswer.split('|||').map((a: string) => a.trim()).join(', ')
                                           : q.correctAnswer}
                                       </span>
                                     </div>

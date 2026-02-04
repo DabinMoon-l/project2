@@ -68,13 +68,15 @@ service cloud.firestore {
          (request.resource.data.type == 'custom' &&
           request.resource.data.creatorId == request.auth.uid));
 
-      // 수정: 교수님 또는 본인이 만든 자체제작 퀴즈 또는 completedUsers만 수정
+      // 수정: 교수님 또는 본인이 만든 자체제작 퀴즈 또는 퀴즈 완료/찜 관련 필드만 수정
       allow update: if isAuthenticated() &&
         (isProfessor() ||
          (resource.data.type == 'custom' &&
           resource.data.creatorId == request.auth.uid) ||
-         // 로그인 사용자가 completedUsers만 수정하는 경우 허용
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['completedUsers']));
+         // 로그인 사용자가 퀴즈 완료/통계 관련 필드만 수정하는 경우 허용
+         // completedUsers, userScores, participantCount, bookmarkCount
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['completedUsers', 'userScores', 'participantCount', 'bookmarkCount']));
 
       // 삭제: 교수님 또는 본인이 만든 자체제작 퀴즈
       allow delete: if isProfessor() ||
@@ -381,6 +383,27 @@ service cloud.firestore {
         resource.data.userId == request.auth.uid;
 
       // 삭제: 본인만
+      allow delete: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================================
+    // 삭제된 항목 컬렉션 (휴지통)
+    // ============================================================
+
+    match /deletedReviewItems/{itemId} {
+      // 읽기: 본인 항목만
+      allow read: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid;
+
+      // 생성: 로그인 사용자 (본인 것만)
+      allow create: if isAuthenticated() &&
+        request.resource.data.userId == request.auth.uid;
+
+      // 수정: 불가 (복원은 삭제 후 재생성으로 처리)
+      allow update: if false;
+
+      // 삭제: 본인만 (복원 또는 영구 삭제 시)
       allow delete: if isAuthenticated() &&
         resource.data.userId == request.auth.uid;
     }

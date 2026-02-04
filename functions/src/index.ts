@@ -211,6 +211,11 @@ export { februaryTransition, augustTransition } from "./semesterTransition";
 export { gradeEssay, gradeEssayBatch } from "./essay";
 
 // ============================================
+// OCR Functions (Naver CLOVA OCR)
+// ============================================
+export { runClovaOcr, getOcrUsage } from "./ocr";
+
+// ============================================
 // 시즌 관련 Functions
 // ============================================
 

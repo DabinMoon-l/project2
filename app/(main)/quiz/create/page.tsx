@@ -20,9 +20,14 @@ import {
   calculateTotalQuestionCount,
   validateRequiredTags,
   getChapterTags,
+  ExtractedImagesProvider,
+  useExtractedImages,
+  ImageRegionSelector,
+  ExtractedImagePicker,
   type QuestionData,
   type QuizMeta,
 } from '@/components/quiz/create';
+import ImageCropper from '@/components/quiz/create/ImageCropper';
 import type { ParseResult, ParsedQuestion } from '@/lib/ocr';
 
 // ============================================================
@@ -59,6 +64,22 @@ export default function QuizCreatePage() {
   const [isOCRProcessing, setIsOCRProcessing] = useState(false);
   const [ocrError, setOcrError] = useState<string | null>(null);
 
+  // 이미지 크롭 상태
+  const [originalImageUrl, setOriginalImageUrl] = useState<string | null>(null);
+  const [showImageCropper, setShowImageCropper] = useState(false);
+
+  // 새로운 OCR 흐름: 파일 목록 관리
+  const [uploadedFiles, setUploadedFiles] = useState<Array<{ id: string; file: File; preview: string }>>([]);
+  const [showImageRegionSelector, setShowImageRegionSelector] = useState(false);
+  const [ocrTargetFile, setOcrTargetFile] = useState<File | null>(null);
+
+  // 파일 선택 모드
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set());
+
+  // 추출된 이미지 목록 (퀴즈 생성 세션 동안만 유지)
+  const [extractedImages, setExtractedImages] = useState<Array<{ id: string; dataUrl: string; sourceFileName?: string }>>([]);
+
   // 문제 관리
   const [questions, setQuestions] = useState<QuestionData[]>([]);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -75,6 +96,9 @@ export default function QuizCreatePage() {
   // 저장 상태
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  // 미리보기 아코디언 상태 (결합형 문제 ID -> 펼침 여부)
+  const [previewExpanded, setPreviewExpanded] = useState<Set<string>>(new Set());
 
   // 유효성 검사 에러
   const [metaErrors, setMetaErrors] = useState<{ title?: string; tags?: string }>({});
@@ -232,12 +256,193 @@ export default function QuizCreatePage() {
   }, [step, questions.length, quizMeta.title, router]);
 
   /**
-   * 파일 선택 핸들러
+   * 파일을 base64로 변환
    */
-  const handleFileSelect = useCallback((file: File) => {
-    setSelectedFile(file);
-    setIsOCRProcessing(true);
-    setOcrError(null);
+  const fileToBase64 = useCallback(async (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }, []);
+
+  /**
+   * 파일 선택 핸들러 (목록에 추가만, OCR 자동 실행 X)
+   */
+  const handleFileSelect = useCallback(async (file: File) => {
+    try {
+      const preview = file.type.startsWith('image/') ? await fileToBase64(file) : 'pdf';
+      const newFile = {
+        id: `file_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        file,
+        preview,
+      };
+      setUploadedFiles((prev) => [...prev, newFile]);
+      setOcrError(null);
+    } catch (err) {
+      console.error('파일 추가 실패:', err);
+      setOcrError('파일을 추가하는데 실패했습니다.');
+    }
+  }, [fileToBase64]);
+
+  /**
+   * 업로드된 파일 삭제
+   */
+  const handleRemoveUploadedFile = useCallback((fileId: string) => {
+    setUploadedFiles((prev) => prev.filter((f) => f.id !== fileId));
+    setSelectedFileIds((prev) => {
+      const newSet = new Set(prev);
+      newSet.delete(fileId);
+      return newSet;
+    });
+  }, []);
+
+  /**
+   * 파일 선택 토글
+   */
+  const handleToggleFileSelection = useCallback((fileId: string) => {
+    setSelectedFileIds((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(fileId)) {
+        newSet.delete(fileId);
+      } else {
+        newSet.add(fileId);
+      }
+      return newSet;
+    });
+  }, []);
+
+  /**
+   * 선택 모드 토글
+   */
+  const handleToggleSelectMode = useCallback(() => {
+    setIsSelectMode((prev) => !prev);
+    if (isSelectMode) {
+      // 선택 모드 해제 시 선택 초기화
+      setSelectedFileIds(new Set());
+    }
+  }, [isSelectMode]);
+
+  /**
+   * 전체 선택/해제
+   */
+  const handleSelectAll = useCallback(() => {
+    if (selectedFileIds.size === uploadedFiles.length) {
+      setSelectedFileIds(new Set());
+    } else {
+      setSelectedFileIds(new Set(uploadedFiles.map(f => f.id)));
+    }
+  }, [selectedFileIds.size, uploadedFiles]);
+
+  /**
+   * 선택된 파일들 가져오기
+   */
+  const selectedFiles = uploadedFiles.filter(f => selectedFileIds.has(f.id));
+
+  /**
+   * 텍스트 추출 버튼 클릭 (OCR 시작)
+   * 선택된 파일들에 대해 OCR 수행 (PDF도 지원)
+   */
+  const handleStartOCR = useCallback(async () => {
+    if (selectedFiles.length === 0) {
+      setOcrError('먼저 파일을 선택해주세요.');
+      return;
+    }
+
+    // 첫 번째 파일로 OCR 시작
+    const firstFile = selectedFiles[0];
+
+    // PDF 파일인 경우 첫 페이지를 이미지로 변환
+    if (firstFile.file.type === 'application/pdf') {
+      try {
+        setIsOCRProcessing(true);
+        setOcrError(null);
+
+        // PDF.js로 첫 페이지를 이미지로 변환
+        const pdfjsLib = await import('pdfjs-dist');
+        if (typeof window !== 'undefined') {
+          pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
+        }
+
+        const arrayBuffer = await firstFile.file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({
+          data: arrayBuffer,
+          cMapUrl: 'https://unpkg.com/pdfjs-dist@4.10.38/cmaps/',
+          cMapPacked: true,
+        }).promise;
+
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 2.5 });
+
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Canvas context failed');
+
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+
+        await page.render({
+          canvasContext: context,
+          viewport: viewport,
+        }).promise;
+
+        // Canvas를 Blob으로 변환
+        const blob = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob((b) => {
+            if (b) resolve(b);
+            else reject(new Error('Blob conversion failed'));
+          }, 'image/png');
+        });
+
+        // Blob을 File로 변환
+        const pdfImageFile = new File([blob], `${firstFile.file.name}_page1.png`, { type: 'image/png' });
+        setOcrTargetFile(pdfImageFile);
+        setSelectedFile(pdfImageFile);
+      } catch (err) {
+        console.error('PDF 변환 오류:', err);
+        setOcrError('PDF 파일을 처리하는 중 오류가 발생했습니다.');
+        setIsOCRProcessing(false);
+      }
+    } else if (firstFile.file.type.startsWith('image/')) {
+      // 이미지 파일인 경우 바로 OCR 시작
+      setOcrTargetFile(firstFile.file);
+      setSelectedFile(firstFile.file);
+      setIsOCRProcessing(true);
+      setOcrError(null);
+    } else {
+      setOcrError('지원하지 않는 파일 형식입니다.');
+    }
+  }, [selectedFiles]);
+
+  /**
+   * 이미지 영역 선택 모달 열기
+   */
+  const handleOpenImageRegionSelector = useCallback(() => {
+    if (selectedFiles.length === 0) {
+      setOcrError('먼저 파일을 선택해주세요.');
+      return;
+    }
+    setShowImageRegionSelector(true);
+  }, [selectedFiles]);
+
+  /**
+   * 이미지 영역 추출 핸들러
+   */
+  const handleExtractImage = useCallback((dataUrl: string, sourceFileName?: string) => {
+    const newImage = {
+      id: `extract_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      dataUrl,
+      sourceFileName,
+    };
+    setExtractedImages((prev) => [...prev, newImage]);
+  }, []);
+
+  /**
+   * 추출 이미지 삭제 핸들러
+   */
+  const handleRemoveExtractedImage = useCallback((id: string) => {
+    setExtractedImages((prev) => prev.filter((img) => img.id !== id));
   }, []);
 
   /**
@@ -249,28 +454,92 @@ export default function QuizCreatePage() {
     // 파싱된 문제가 있으면 문제 목록에 추가하고 자동으로 다음 단계로 이동
     if (result.questions.length > 0) {
       const convertedQuestions: QuestionData[] = result.questions.map(
-        (parsed: ParsedQuestion, index: number) => ({
-          id: `ocr_${Date.now()}_${index}`,
-          text: parsed.text,
-          type: parsed.type,
-          choices: parsed.choices || ['', '', '', ''],
-          answerIndex:
-            typeof parsed.answer === 'number'
-              ? parsed.answer
-              : parsed.type === 'ox'
-                ? String(parsed.answer).toLowerCase() === 'o' ||
-                  String(parsed.answer) === '참'
-                  ? 0
-                  : 1
-                : -1,
-          answerText:
-            parsed.type === 'subjective' && typeof parsed.answer === 'string'
-              ? parsed.answer
-              : '',
-          explanation: parsed.explanation || '',
-          imageUrl: null,
-          examples: null,
-        })
+        (parsed: ParsedQuestion, index: number) => {
+          // 정답 인덱스 계산
+          let answerIndex = -1;
+          if (typeof parsed.answer === 'number') {
+            answerIndex = parsed.answer;
+          } else if (parsed.type === 'ox') {
+            const ansStr = String(parsed.answer).toLowerCase();
+            answerIndex = (ansStr === 'o' || ansStr === '참') ? 0 : 1;
+          }
+
+          // 복수정답 처리
+          const answerIndices = parsed.answerIndices || undefined;
+          const hasMultipleAnswers = parsed.hasMultipleAnswers || (answerIndices && answerIndices.length > 1);
+
+          // 단답형 정답
+          const answerText = (parsed.type === 'short_answer' || parsed.type === 'subjective') &&
+            typeof parsed.answer === 'string' ? parsed.answer : '';
+
+          // 보기(Examples) 변환 - mixedExamples 형식으로
+          let mixedExamples: Array<{ id: string; type: 'text' | 'labeled'; label?: string; content: string }> | undefined;
+          if (parsed.examples) {
+            if (parsed.examples.type === 'labeled') {
+              const KOREAN_LABELS = ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ'];
+              mixedExamples = parsed.examples.items.map((content, idx) => ({
+                id: `ex_${Date.now()}_${idx}`,
+                type: 'labeled' as const,
+                label: KOREAN_LABELS[idx] || `${idx + 1}`,
+                content,
+              }));
+            } else {
+              mixedExamples = parsed.examples.items.map((content, idx) => ({
+                id: `ex_${Date.now()}_${idx}`,
+                type: 'text' as const,
+                content,
+              }));
+            }
+          }
+
+          // 결합형 처리
+          let passageType: 'text' | 'korean_abc' | undefined;
+          let passage: string | undefined;
+          let koreanAbcItems: Array<{ label: string; text: string }> | undefined;
+
+          if (parsed.passageType) {
+            passageType = parsed.passageType;
+          }
+          if (parsed.passage) {
+            passage = parsed.passage;
+          }
+          if (parsed.koreanAbcItems && parsed.koreanAbcItems.length > 0) {
+            const KOREAN_LABELS = ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ'];
+            koreanAbcItems = parsed.koreanAbcItems.map((text, idx) => ({
+              label: KOREAN_LABELS[idx] || `${idx + 1}`,
+              text,
+            }));
+          }
+
+          const questionData: QuestionData = {
+            id: `ocr_${Date.now()}_${index}`,
+            text: parsed.text,
+            type: parsed.type,
+            choices: parsed.choices || ['', '', '', ''],
+            answerIndex,
+            answerText,
+            explanation: parsed.explanation || '',
+            imageUrl: null,
+            examples: null, // 레거시 필드
+            mixedExamples, // 새로운 혼합 보기 형식
+          };
+
+          // 선택적 필드 추가
+          if (answerIndices && answerIndices.length > 0) {
+            questionData.answerIndices = answerIndices;
+          }
+          if (passageType) {
+            questionData.passageType = passageType;
+          }
+          if (passage) {
+            questionData.passage = passage;
+          }
+          if (koreanAbcItems) {
+            questionData.koreanAbcItems = koreanAbcItems;
+          }
+
+          return questionData;
+        }
       );
 
       setQuestions((prev) => [...prev, ...convertedQuestions]);
@@ -301,7 +570,47 @@ export default function QuizCreatePage() {
     setIsOCRProcessing(false);
     setSelectedFile(null);
     setOcrError(null);
+    setOriginalImageUrl(null);
   }, []);
+
+  /**
+   * 원본 이미지 URL 설정 핸들러 (이미지 크롭용)
+   */
+  const handleImageReady = useCallback((imageUrl: string) => {
+    setOriginalImageUrl(imageUrl);
+  }, []);
+
+  /**
+   * 이미지 크롭 완료 핸들러
+   */
+  const handleImageCrop = useCallback((croppedImage: string) => {
+    // 현재 편집 중인 문제 또는 마지막 문제에 이미지 첨부
+    if (editingIndex !== null) {
+      // 편집 중인 문제에 이미지 첨부
+      setQuestions((prev) => {
+        const updated = [...prev];
+        updated[editingIndex] = {
+          ...updated[editingIndex],
+          imageUrl: croppedImage,
+        };
+        return updated;
+      });
+    } else if (questions.length > 0) {
+      // 마지막 문제에 이미지 첨부
+      setQuestions((prev) => {
+        const updated = [...prev];
+        updated[updated.length - 1] = {
+          ...updated[updated.length - 1],
+          imageUrl: croppedImage,
+        };
+        return updated;
+      });
+    } else {
+      // 문제가 없으면 알림
+      alert('이미지를 첨부할 문제가 없습니다. 먼저 문제를 추가해주세요.');
+    }
+    setShowImageCropper(false);
+  }, [editingIndex, questions.length]);
 
   /**
    * 새 문제 추가 시작
@@ -542,7 +851,7 @@ export default function QuizCreatePage() {
                 answer = q.answerIndex;
               }
 
-              // 일반 문제의 보기(examples) 처리
+              // 일반 문제의 보기(examples) 처리 - 레거시 형식
               let questionExamples = null;
               if (q.examples && q.examples.items && Array.isArray(q.examples.items) && q.examples.items.length > 0) {
                 const filteredItems = q.examples.items.filter((item) => typeof item === 'string' && item.trim());
@@ -551,6 +860,26 @@ export default function QuizCreatePage() {
                     type: q.examples.type || 'text',
                     items: filteredItems,
                   };
+                }
+              }
+
+              // 혼합 보기(mixedExamples) 처리 - 블록 형식 (텍스트박스+ㄱㄴㄷ 블록)
+              let questionMixedExamples = null;
+              if (q.mixedExamples && Array.isArray(q.mixedExamples) && q.mixedExamples.length > 0) {
+                const filteredMixed = q.mixedExamples
+                  .filter((block) =>
+                    block.type === 'text'
+                      ? block.content?.trim()
+                      : (block.items || []).some(i => i.content.trim())
+                  )
+                  .map(block => ({
+                    ...block,
+                    items: block.type === 'labeled'
+                      ? (block.items || []).filter(i => i.content.trim())
+                      : undefined,
+                  }));
+                if (filteredMixed.length > 0) {
+                  questionMixedExamples = filteredMixed;
                 }
               }
 
@@ -563,6 +892,7 @@ export default function QuizCreatePage() {
                 explanation: q.explanation || null,
                 imageUrl: q.imageUrl || null,
                 examples: questionExamples,
+                mixedExamples: questionMixedExamples,
                 // 챕터 정보
                 chapterId: q.chapterId || null,
                 chapterDetailId: q.chapterDetailId || null,
@@ -582,6 +912,26 @@ export default function QuizCreatePage() {
           }, 0);
         })(),
 
+        // 문제 유형별 개수
+        oxCount: questions.reduce((count, q) => {
+          if (q.type === 'combined' && q.subQuestions) {
+            return count + q.subQuestions.filter(sq => sq.type === 'ox').length;
+          }
+          return count + (q.type === 'ox' ? 1 : 0);
+        }, 0),
+        multipleChoiceCount: questions.reduce((count, q) => {
+          if (q.type === 'combined' && q.subQuestions) {
+            return count + q.subQuestions.filter(sq => sq.type === 'multiple').length;
+          }
+          return count + (q.type === 'multiple' ? 1 : 0);
+        }, 0),
+        subjectiveCount: questions.reduce((count, q) => {
+          if (q.type === 'combined' && q.subQuestions) {
+            return count + q.subQuestions.filter(sq => sq.type === 'short_answer' || sq.type === 'subjective').length;
+          }
+          return count + (q.type === 'short_answer' || q.type === 'subjective' ? 1 : 0);
+        }, 0),
+
         // 생성자 정보
         creatorId: user.uid,
         creatorNickname: profile?.nickname || user.displayName || '익명 용사',
@@ -596,6 +946,7 @@ export default function QuizCreatePage() {
         // 통계 (초기값)
         participantCount: 0,
         averageScore: 0,
+        bookmarkCount: 0,
         completedUsers: [],
         userScores: {},
 
@@ -885,7 +1236,7 @@ export default function QuizCreatePage() {
                   사진/PDF로 문제 추출
                 </h2>
                 <p className="text-sm text-[#5C5C5C]">
-                  시험지나 교재 사진을 업로드하면 OCR로 텍스트를 추출합니다.
+                  이미지를 업로드한 후 텍스트 추출 또는 이미지 영역 선택을 할 수 있습니다.
                 </p>
               </div>
 
@@ -896,13 +1247,156 @@ export default function QuizCreatePage() {
                 error={ocrError}
               />
 
+              {/* 업로드된 파일 목록 */}
+              {uploadedFiles.length > 0 && !isOCRProcessing && (
+                <div className="space-y-3">
+                  {/* 헤더: 파일 개수 + 선택 버튼 */}
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-bold text-[#1A1A1A]">
+                      업로드된 파일 ({uploadedFiles.length}개)
+                      {isSelectMode && selectedFileIds.size > 0 && (
+                        <span className="text-[#1A6B1A] ml-2">
+                          {selectedFileIds.size}개 선택됨
+                        </span>
+                      )}
+                    </p>
+                    <div className="flex gap-2">
+                      {isSelectMode && (
+                        <button
+                          type="button"
+                          onClick={handleSelectAll}
+                          className="px-3 py-1 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+                        >
+                          {selectedFileIds.size === uploadedFiles.length ? '전체 해제' : '전체 선택'}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleToggleSelectMode}
+                        className={`px-3 py-1 text-xs font-bold border transition-colors ${
+                          isSelectMode
+                            ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                            : 'border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
+                        }`}
+                      >
+                        {isSelectMode ? '취소' : '선택'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 파일 그리드 */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {uploadedFiles.map((item) => {
+                      const isSelected = selectedFileIds.has(item.id);
+                      return (
+                        <div
+                          key={item.id}
+                          className={`relative aspect-square bg-[#EDEAE4] border-2 overflow-hidden group cursor-pointer transition-all ${
+                            isSelectMode
+                              ? isSelected
+                                ? 'border-[#1A6B1A] ring-2 ring-[#1A6B1A]'
+                                : 'border-[#D4CFC4] hover:border-[#1A1A1A]'
+                              : 'border-[#1A1A1A]'
+                          }`}
+                          onClick={() => {
+                            if (isSelectMode) {
+                              handleToggleFileSelection(item.id);
+                            }
+                          }}
+                        >
+                          {item.preview !== 'pdf' ? (
+                            <img
+                              src={item.preview}
+                              alt={item.file.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex flex-col items-center justify-center">
+                              <svg className="w-8 h-8 text-[#8B1A1A]" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zM6 20V4h7v5h5v11H6z" />
+                              </svg>
+                              <span className="text-[10px] text-[#5C5C5C] mt-1">PDF</span>
+                            </div>
+                          )}
+
+                          {/* 선택 모드: 체크박스 */}
+                          {isSelectMode && (
+                            <div className={`absolute top-1 left-1 w-6 h-6 flex items-center justify-center border-2 ${
+                              isSelected
+                                ? 'bg-[#1A6B1A] border-[#1A6B1A]'
+                                : 'bg-white border-[#1A1A1A]'
+                            }`}>
+                              {isSelected && (
+                                <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
+                                </svg>
+                              )}
+                            </div>
+                          )}
+
+                          {/* 비선택 모드: 삭제 버튼 */}
+                          {!isSelectMode && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveUploadedFile(item.id);
+                              }}
+                              className="absolute top-1 right-1 w-5 h-5 bg-[#8B1A1A] text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* 액션 버튼들 - 선택 모드에서 파일이 선택되었을 때만 표시 */}
+                  {isSelectMode && selectedFileIds.size > 0 && (
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleStartOCR}
+                        className="flex-1 py-3 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors flex items-center justify-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        텍스트 추출
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleOpenImageRegionSelector}
+                        className="flex-1 py-3 text-sm font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors flex items-center justify-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        이미지 영역 선택
+                      </button>
+                    </div>
+                  )}
+
+                  {/* 선택 모드가 아닐 때 안내 메시지 */}
+                  {!isSelectMode && (
+                    <p className="text-xs text-[#5C5C5C] text-center">
+                      &apos;선택&apos; 버튼을 눌러 파일을 선택한 후 텍스트 추출 또는 이미지 영역 선택을 할 수 있습니다.
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* OCR 처리기 */}
-              {selectedFile && (
+              {ocrTargetFile && isOCRProcessing && (
                 <OCRProcessor
-                  file={selectedFile}
+                  file={ocrTargetFile}
                   onComplete={handleOCRComplete}
                   onError={handleOCRError}
                   onCancel={handleOCRCancel}
+                  onImageReady={handleImageReady}
                 />
               )}
 
@@ -963,6 +1457,7 @@ export default function QuizCreatePage() {
                     }
                     userRole={profile?.role === 'professor' ? 'professor' : 'student'}
                     courseId={userCourseId || undefined}
+                    extractedImages={extractedImages}
                   />
                 )}
               </AnimatePresence>
@@ -1102,18 +1597,65 @@ export default function QuizCreatePage() {
               {/* 문제 미리보기 */}
               <div className="p-4 border border-[#1A1A1A]" style={{ backgroundColor: '#F5F0E8' }}>
                 <h3 className="font-bold text-[#1A1A1A] mb-3">문제 미리보기</h3>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
+                <div className="space-y-2 max-h-64 overflow-y-auto">
                   {questions.map((q, index) => (
-                    <div
-                      key={q.id}
-                      className="flex items-start gap-2 p-2 bg-[#EDEAE4]"
-                    >
-                      <span className="w-6 h-6 bg-[#1A1A1A] text-[#F5F0E8] flex items-center justify-center text-xs font-bold flex-shrink-0">
-                        {index + 1}
-                      </span>
-                      <p className="text-sm text-[#1A1A1A] line-clamp-1 flex-1">
-                        {q.text}
-                      </p>
+                    <div key={q.id}>
+                      {/* 일반 문제 또는 결합형 문제 헤더 */}
+                      <div
+                        className={`flex items-start gap-2 p-2 bg-[#EDEAE4] ${
+                          q.type === 'combined' ? 'cursor-pointer hover:bg-[#E5E0D8]' : ''
+                        }`}
+                        onClick={() => {
+                          if (q.type === 'combined') {
+                            setPreviewExpanded(prev => {
+                              const newSet = new Set(prev);
+                              if (newSet.has(q.id)) {
+                                newSet.delete(q.id);
+                              } else {
+                                newSet.add(q.id);
+                              }
+                              return newSet;
+                            });
+                          }
+                        }}
+                      >
+                        <span className="w-6 h-6 bg-[#1A1A1A] text-[#F5F0E8] flex items-center justify-center text-xs font-bold flex-shrink-0">
+                          {index + 1}
+                        </span>
+                        <div className="flex-1 flex items-center gap-2">
+                          <p className="text-sm text-[#1A1A1A] line-clamp-1 flex-1">
+                            {q.type === 'combined' ? (q.commonQuestion || q.text || '(공통 문제 없음)') : q.text}
+                          </p>
+                          {/* 결합형: 아코디언 아이콘 */}
+                          {q.type === 'combined' && q.subQuestions && q.subQuestions.length > 0 && (
+                            <svg
+                              className={`w-4 h-4 text-[#5C5C5C] flex-shrink-0 transition-transform ${
+                                previewExpanded.has(q.id) ? 'rotate-180' : ''
+                              }`}
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          )}
+                        </div>
+                      </div>
+                      {/* 결합형: 하위 문제 목록 (펼쳤을 때) */}
+                      {q.type === 'combined' && q.subQuestions && previewExpanded.has(q.id) && (
+                        <div className="ml-8 border-l-2 border-[#1A1A1A] bg-[#F5F0E8]">
+                          {q.subQuestions.map((sq, sqIdx) => (
+                            <div key={sq.id} className="flex items-start gap-2 p-2 border-b border-[#EDEAE4] last:border-b-0">
+                              <span className="text-sm font-bold text-[#5C5C5C] flex-shrink-0 w-8">
+                                {index + 1}-{sqIdx + 1}
+                              </span>
+                              <p className="text-sm text-[#1A1A1A] line-clamp-1 flex-1">
+                                {sq.text || '(내용 없음)'}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1339,6 +1881,29 @@ export default function QuizCreatePage() {
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 이미지 크롭 모달 */}
+      {showImageCropper && originalImageUrl && (
+        <ImageCropper
+          imageSource={originalImageUrl}
+          onCrop={handleImageCrop}
+          onClose={() => setShowImageCropper(false)}
+          title="이미지 영역 선택"
+        />
+      )}
+
+      {/* 이미지 영역 선택 모달 */}
+      <AnimatePresence>
+        {showImageRegionSelector && (
+          <ImageRegionSelector
+            uploadedFiles={selectedFiles}
+            extractedImages={extractedImages}
+            onExtract={handleExtractImage}
+            onRemoveExtracted={handleRemoveExtractedImage}
+            onClose={() => setShowImageRegionSelector(false)}
+          />
         )}
       </AnimatePresence>
     </div>

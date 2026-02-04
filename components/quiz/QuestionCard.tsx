@@ -31,6 +31,27 @@ export interface ExamplesData {
 }
 
 /**
+ * 라벨이 붙은 항목 (ㄱ.ㄴ.ㄷ. 형식)
+ */
+export interface LabeledItem {
+  label: string;
+  content: string;
+}
+
+/**
+ * 혼합 보기 항목 (텍스트 + ㄱㄴㄷ + 이미지 + 그룹 혼합 가능)
+ */
+export interface MixedExampleItem {
+  id: string;
+  type: 'text' | 'labeled' | 'image' | 'grouped';
+  label?: string; // labeled 타입일 때 (ㄱ, ㄴ, ㄷ 등)
+  content?: string; // text, labeled 타입
+  items?: LabeledItem[]; // labeled 타입 (다중 항목)
+  imageUrl?: string; // image 타입
+  children?: MixedExampleItem[]; // grouped 타입
+}
+
+/**
  * 하위 문제 타입 (결합형용)
  */
 export interface SubQuestion {
@@ -72,6 +93,8 @@ export interface Question {
   choices?: string[];
   /** 보기 데이터 (선택) */
   examples?: ExamplesData;
+  /** 혼합 보기 데이터 (텍스트 + ㄱㄴㄷ 혼합 가능) */
+  mixedExamples?: MixedExampleItem[];
   /** 복수정답 여부 */
   hasMultipleAnswers?: boolean;
   /** 결합형: 공통 지문 타입 */
@@ -142,6 +165,29 @@ export default function QuestionCard({ question, courseId }: QuestionCardProps) 
     question.examples.items &&
     question.examples.items.some(item => item.trim());
 
+  // 혼합 보기 항목이 유효한지 확인하는 함수
+  const isValidMixedItem = (item: MixedExampleItem): boolean => {
+    switch (item.type) {
+      case 'text':
+        return Boolean(item.content?.trim());
+      case 'labeled':
+        // 단일 content가 있거나 items 배열에 유효한 항목이 있는 경우
+        return Boolean(item.content?.trim()) ||
+               Boolean(item.items?.some(i => i.content.trim()));
+      case 'image':
+        return Boolean(item.imageUrl);
+      case 'grouped':
+        return Boolean(item.children?.length && item.children.some(child => isValidMixedItem(child)));
+      default:
+        return false;
+    }
+  };
+
+  // 혼합 보기에 유효한 항목이 있는지 확인
+  const hasValidMixedExamples = question.mixedExamples &&
+    question.mixedExamples.length > 0 &&
+    question.mixedExamples.some(item => isValidMixedItem(item));
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -176,18 +222,79 @@ export default function QuestionCard({ question, courseId }: QuestionCardProps) 
         {question.text}
       </p>
 
-      {/* 문제 이미지 (첨부 시) */}
+      {/*
+        보기 표시 순서: 묶은 보기 → 텍스트박스 단독 → 이미지 → ㄱ.ㄴ.ㄷ.형식 단독
+        각 항목은 개별 컨테이너로 표시 (묶인 것만 하나의 박스)
+      */}
+
+      {/* 1. 묶은 보기 (grouped) - 먼저 표시 */}
+      {hasValidMixedExamples && question.mixedExamples!
+        .filter(item => item.type === 'grouped' && isValidMixedItem(item))
+        .map((item) => (
+          <div key={item.id} className="mt-4 p-4 bg-[#EDEAE4] border-2 border-[#1A1A1A] space-y-2">
+            {item.children?.filter(child => isValidMixedItem(child)).map((child) => (
+              <div key={child.id}>
+                {child.type === 'text' && child.content && (
+                  <p className="text-[#5C5C5C] text-sm whitespace-pre-wrap">{child.content}</p>
+                )}
+                {child.type === 'labeled' && (
+                  <>
+                    {child.content && (
+                      <p className="text-[#1A1A1A] text-sm">
+                        <span className="font-bold text-[#1A1A1A] mr-1">{child.label}.</span>
+                        {child.content}
+                      </p>
+                    )}
+                    {child.items && child.items.map((labeledItem, idx) => (
+                      <p key={idx} className="text-[#1A1A1A] text-sm">
+                        <span className="font-bold text-[#1A1A1A] mr-1">{labeledItem.label}.</span>
+                        {labeledItem.content}
+                      </p>
+                    ))}
+                  </>
+                )}
+                {child.type === 'image' && child.imageUrl && (
+                  <div className="relative w-full max-w-xs overflow-hidden bg-white border border-[#1A1A1A]">
+                    <img
+                      src={child.imageUrl}
+                      alt="보기 이미지"
+                      className="w-full h-auto object-contain"
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ))}
+
+      {/* 2. 텍스트박스 단독 (text) */}
+      {hasValidMixedExamples && question.mixedExamples!
+        .filter(item => item.type === 'text' && isValidMixedItem(item))
+        .map((item) => (
+          <div key={item.id} className="mt-4 p-4 bg-[#EDEAE4] border border-[#1A1A1A]">
+            <p className="text-[#1A1A1A] text-sm whitespace-pre-wrap">{item.content}</p>
+          </div>
+        ))}
+
+      {/* 레거시 보기 (Examples) - 텍스트 형식 */}
+      {hasValidExamples && !hasValidMixedExamples && question.examples!.type === 'text' && (
+        <div className="mt-4 p-4 bg-[#EDEAE4] border border-[#1A1A1A]">
+          <p className="text-[#1A1A1A] text-sm leading-relaxed">
+            {question.examples!.items.filter(i => i.trim()).join(', ')}
+          </p>
+        </div>
+      )}
+
+      {/* 3. 문제 이미지 (첨부 시) */}
       {question.imageUrl && (
         <div className="mt-4 relative w-full aspect-video overflow-hidden bg-[#EDEAE4] border border-[#1A1A1A]">
           {question.imageUrl.startsWith('data:') ? (
-            // Base64 이미지인 경우 일반 img 태그 사용
             <img
               src={question.imageUrl}
               alt={`문제 ${question.number} 이미지`}
               className="w-full h-full object-contain"
             />
           ) : (
-            // URL인 경우 Next.js Image 사용
             <Image
               src={question.imageUrl}
               alt={`문제 ${question.number} 이미지`}
@@ -199,29 +306,37 @@ export default function QuestionCard({ question, courseId }: QuestionCardProps) 
         </div>
       )}
 
-      {/* 보기 (Examples) - 일반 문제용 */}
-      {hasValidExamples && (
-        <div className="mt-4">
-          {question.examples!.type === 'text' ? (
-            // 텍스트 박스 형식
-            <div className="p-4 bg-[#EDEAE4] border border-[#1A1A1A]">
-              <p className="text-[#1A1A1A] text-sm leading-relaxed">
-                {question.examples!.items.filter(i => i.trim()).join(', ')}
+      {/* 4. ㄱ.ㄴ.ㄷ.형식 단독 (labeled) */}
+      {hasValidMixedExamples && question.mixedExamples!
+        .filter(item => item.type === 'labeled' && isValidMixedItem(item))
+        .map((item) => (
+          <div key={item.id} className="mt-4 p-4 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
+            {item.content && (
+              <p className="text-[#1A1A1A] text-sm">
+                <span className="font-bold text-[#1A1A1A] mr-1">{item.label}.</span>
+                {item.content}
               </p>
-            </div>
-          ) : (
-            // ㄱ.ㄴ.ㄷ. 형식
-            <div className="p-4 bg-[#EDEAE4] border border-[#1A1A1A] space-y-2">
-              {question.examples!.items.filter(i => i.trim()).map((item, idx) => (
-                <p key={idx} className="text-[#1A1A1A] text-sm">
-                  <span className="font-bold text-[#1A1A1A] mr-1">
-                    {['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ'][idx]}.
-                  </span>
-                  {item}
-                </p>
-              ))}
-            </div>
-          )}
+            )}
+            {item.items && item.items.map((labeledItem, idx) => (
+              <p key={idx} className="text-[#1A1A1A] text-sm">
+                <span className="font-bold text-[#1A1A1A] mr-1">{labeledItem.label}.</span>
+                {labeledItem.content}
+              </p>
+            ))}
+          </div>
+        ))}
+
+      {/* 레거시 보기 (Examples) - ㄱ.ㄴ.ㄷ. 형식 */}
+      {hasValidExamples && !hasValidMixedExamples && question.examples!.type === 'labeled' && (
+        <div className="mt-4 p-4 bg-[#EDEAE4] border border-[#1A1A1A] space-y-2">
+          {question.examples!.items.filter(i => i.trim()).map((item, idx) => (
+            <p key={idx} className="text-[#1A1A1A] text-sm">
+              <span className="font-bold text-[#1A1A1A] mr-1">
+                {['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ'][idx]}.
+              </span>
+              {item}
+            </p>
+          ))}
         </div>
       )}
 

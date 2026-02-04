@@ -248,6 +248,7 @@ export default function QuizPage() {
             imageUrl: q.imageUrl || undefined,
             choices: q.choices || undefined,
             examples: q.examples || undefined,
+            mixedExamples: q.mixedExamples || undefined,
             hasMultipleAnswers,
             // 결합형 그룹 정보 추가
             combinedGroupId: q.combinedGroupId,
@@ -305,6 +306,7 @@ export default function QuizPage() {
                 imageUrl: sq.imageUrl || undefined,
                 choices: sq.choices || undefined,
                 examples: sq.examples || undefined,
+                mixedExamples: sq.mixedExamples || undefined,
                 hasMultipleAnswers,
                 // 결합형 그룹 정보 추가 (하위 호환)
                 combinedGroupId: legacyCombinedGroupId,
@@ -371,6 +373,7 @@ export default function QuizPage() {
             imageUrl: q.imageUrl || undefined,
             choices: q.choices || undefined,
             examples: q.examples || undefined,
+            mixedExamples: q.mixedExamples || undefined,
             hasMultipleAnswers,
             // 챕터 정보 추가
             chapterId: q.chapterId || undefined,
