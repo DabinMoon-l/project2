@@ -27,6 +27,7 @@ import {
 import { db } from '../firebase';
 import { useAuth } from './useAuth';
 import { useCourse } from '../contexts/CourseContext';
+import { getChapterById } from '../courseIndex';
 
 // ============================================================
 // 타입 정의
@@ -56,8 +57,8 @@ export interface ReviewItem {
   questionId: string;
   /** 문제 내용 */
   question: string;
-  /** 문제 유형 (ox, multiple, short, subjective) */
-  type: 'ox' | 'multiple' | 'short' | 'subjective';
+  /** 문제 유형 */
+  type: 'ox' | 'multiple' | 'short' | 'short_answer' | 'subjective' | 'essay' | 'combined' | string;
   /** 객관식 선지 */
   options?: string[];
   /** 정답 */
@@ -80,6 +81,36 @@ export interface ReviewItem {
   createdAt: Timestamp;
   /** 퀴즈 수정 시간 (저장 당시) */
   quizUpdatedAt?: Timestamp | null;
+  /** 결합형 그룹 ID */
+  combinedGroupId?: string;
+  /** 결합형 그룹 내 순서 (1부터 시작) */
+  combinedIndex?: number;
+  /** 결합형 그룹 내 총 문제 수 */
+  combinedTotal?: number;
+  /** 결합형 공통 지문 */
+  passage?: string;
+  /** 결합형 공통 지문 타입 */
+  passageType?: 'text' | 'korean_abc';
+  /** 결합형 공통 이미지 */
+  passageImage?: string;
+  /** 결합형 ㄱㄴㄷ 보기 항목 */
+  koreanAbcItems?: string[];
+  /** 결합형 공통 문제 */
+  commonQuestion?: string;
+  /** 문제 이미지 */
+  image?: string;
+  /** 하위 문제 보기 (ㄱㄴㄷ 형식) */
+  subQuestionOptions?: string[];
+  /** 보기 타입 */
+  subQuestionOptionsType?: 'text' | 'labeled';
+  /** 하위 문제 이미지 */
+  subQuestionImage?: string;
+  /** 퀴즈 생성자 ID */
+  quizCreatorId?: string;
+  /** 챕터 ID */
+  chapterId?: string;
+  /** 챕터 세부항목 ID */
+  chapterDetailId?: string;
 }
 
 /**
@@ -91,6 +122,20 @@ export interface GroupedReviewItems {
   items: ReviewItem[];
   /** 퀴즈가 수정되었는지 여부 */
   hasUpdate?: boolean;
+}
+
+/**
+ * 챕터별로 그룹핑된 오답 (챕터 → 문제지 구조)
+ */
+export interface ChapterGroupedWrongItems {
+  /** 챕터 ID (null이면 미분류) */
+  chapterId: string | null;
+  /** 챕터 이름 */
+  chapterName: string;
+  /** 해당 챕터의 문제지별 폴더 */
+  folders: GroupedReviewItems[];
+  /** 총 문제 수 */
+  totalCount: number;
 }
 
 /**
@@ -118,6 +163,27 @@ export interface QuizAttempt {
 }
 
 /**
+ * 커스텀 폴더 카테고리
+ */
+export interface FolderCategory {
+  /** 카테고리 ID */
+  id: string;
+  /** 카테고리 이름 */
+  name: string;
+}
+
+/**
+ * 커스텀 폴더 문제 항목
+ */
+export interface CustomFolderQuestion {
+  questionId: string;
+  quizId: string;
+  quizTitle: string;
+  /** 배정된 카테고리 ID (없으면 미분류) */
+  categoryId?: string;
+}
+
+/**
  * 커스텀 폴더
  */
 export interface CustomFolder {
@@ -128,7 +194,9 @@ export interface CustomFolder {
   /** 생성 일시 */
   createdAt: Timestamp;
   /** 문제 목록 */
-  questions: { questionId: string; quizId: string; quizTitle: string }[];
+  questions: CustomFolderQuestion[];
+  /** 카테고리 목록 */
+  categories?: FolderCategory[];
 }
 
 /**
@@ -138,6 +206,20 @@ export interface QuizUpdateInfo {
   quizId: string;
   quizTitle: string;
   hasUpdate: boolean;
+}
+
+/**
+ * 비공개 퀴즈 (내가 만든 비공개 퀴즈)
+ */
+export interface PrivateQuiz {
+  /** 퀴즈 ID */
+  id: string;
+  /** 퀴즈 제목 */
+  title: string;
+  /** 문제 수 */
+  questionCount: number;
+  /** 생성 일시 */
+  createdAt: Timestamp;
 }
 
 /**
@@ -152,6 +234,8 @@ interface UseReviewReturn {
   solvedItems: ReviewItem[];
   /** 퀴즈별 그룹핑된 오답 */
   groupedWrongItems: GroupedReviewItems[];
+  /** 챕터별로 그룹핑된 오답 (챕터 → 문제지 구조) */
+  chapterGroupedWrongItems: ChapterGroupedWrongItems[];
   /** 퀴즈별 그룹핑된 찜한 문제 */
   groupedBookmarkedItems: GroupedReviewItems[];
   /** 퀴즈별 그룹핑된 푼 문제 */
@@ -170,6 +254,10 @@ interface UseReviewReturn {
   deleteReviewItem: (reviewId: string) => Promise<void>;
   /** 푼 문제(폴더) 삭제 - 퀴즈 목록에 다시 표시 */
   deleteSolvedQuiz: (quizId: string) => Promise<void>;
+  /** 오답 폴더 삭제 (해당 퀴즈의 오답만 삭제) */
+  deleteWrongQuiz: (quizId: string) => Promise<void>;
+  /** 찜한 문제 폴더 삭제 (해당 퀴즈의 찜한 문제만 삭제) */
+  deleteBookmarkQuiz: (quizId: string) => Promise<void>;
   /** 복습 완료 처리 */
   markAsReviewed: (reviewId: string) => Promise<void>;
   /** 커스텀 폴더 생성 */
@@ -182,13 +270,61 @@ interface UseReviewReturn {
   removeFromCustomFolder: (folderId: string, questionId: string) => Promise<void>;
   /** 퀴즈 업데이트 확인 후 review 항목 업데이트 */
   updateReviewItemsFromQuiz: (quizId: string) => Promise<void>;
+  /** 비공개 퀴즈 목록 */
+  privateQuizzes: PrivateQuiz[];
+  /** 문제 찜 토글 */
+  toggleQuestionBookmark: (item: ReviewItem) => Promise<void>;
   /** 데이터 새로고침 */
   refresh: () => void;
+  /** 커스텀 폴더에 카테고리 추가 */
+  addCategoryToFolder: (folderId: string, categoryName: string) => Promise<string | null>;
+  /** 커스텀 폴더에서 카테고리 삭제 */
+  removeCategoryFromFolder: (folderId: string, categoryId: string) => Promise<void>;
+  /** 문제를 카테고리에 배정 */
+  assignQuestionToCategory: (folderId: string, questionId: string, categoryId: string | null) => Promise<void>;
+  /** 카테고리 이름 수정 */
+  updateCategoryName: (folderId: string, categoryId: string, newName: string) => Promise<void>;
 }
 
 // ============================================================
 // 유틸리티 함수
 // ============================================================
+
+/**
+ * questionId에서 주문제 번호와 하위문제 번호를 추출
+ * 예: "q0" → [0, 0], "q1" → [1, 0], "q1-1" → [1, 1], "q1-2" → [1, 2]
+ */
+function parseQuestionId(questionId: string): [number, number] {
+  if (!questionId) return [0, 0];
+
+  // 형식: "q{main}" 또는 "q{main}-{sub}" 또는 "q{main}_{sub}"
+  const match = questionId.match(/q?(\d+)(?:[-_](\d+))?/i);
+  if (match) {
+    const main = parseInt(match[1], 10);
+    const sub = match[2] ? parseInt(match[2], 10) : 0;
+    return [main, sub];
+  }
+
+  // 숫자만 있는 경우
+  const numMatch = questionId.match(/(\d+)/);
+  return numMatch ? [parseInt(numMatch[1], 10), 0] : [0, 0];
+}
+
+/**
+ * 문제를 questionId 기준으로 정렬하는 비교 함수
+ * 결합형 문제 ID (q1-1, q1-2) 를 올바르게 처리
+ */
+function compareQuestionIds(a: ReviewItem, b: ReviewItem): number {
+  const [aMain, aSub] = parseQuestionId(a.questionId);
+  const [bMain, bSub] = parseQuestionId(b.questionId);
+
+  // 주문제 번호로 먼저 정렬
+  if (aMain !== bMain) {
+    return aMain - bMain;
+  }
+  // 같은 주문제면 하위문제 번호로 정렬
+  return aSub - bSub;
+}
 
 /**
  * 복습 문제를 퀴즈별로 그룹핑
@@ -209,14 +345,9 @@ function groupByQuiz(items: ReviewItem[]): GroupedReviewItems[] {
     }
   });
 
-  // 각 그룹 내 문제를 questionId 기준으로 정렬 (문제 순서 유지)
+  // 각 그룹 내 문제를 questionId 기준으로 정렬 (결합형 문제 순서 유지)
   for (const group of grouped.values()) {
-    group.items.sort((a, b) => {
-      // questionId에서 숫자 추출 (예: "q0", "q1" -> 0, 1)
-      const aNum = parseInt(a.questionId.replace(/\D/g, '') || '0', 10);
-      const bNum = parseInt(b.questionId.replace(/\D/g, '') || '0', 10);
-      return aNum - bNum;
-    });
+    group.items.sort(compareQuestionIds);
   }
 
   // 그룹은 최신 추가 순으로 정렬
@@ -224,6 +355,58 @@ function groupByQuiz(items: ReviewItem[]): GroupedReviewItems[] {
     const aTime = a.items[0]?.createdAt?.toMillis() || 0;
     const bTime = b.items[0]?.createdAt?.toMillis() || 0;
     return bTime - aTime;
+  });
+}
+
+/**
+ * 오답 문제를 챕터별로 그룹핑 (챕터 → 문제지 구조)
+ * 1차: chapterId로 카테고리 생성
+ * 2차: 각 카테고리 내에서 quizId로 폴더 생성
+ */
+function groupByChapterAndQuiz(items: ReviewItem[], courseId?: string): ChapterGroupedWrongItems[] {
+  // 1차: chapterId로 그룹핑
+  const chapterMap = new Map<string | null, ReviewItem[]>();
+
+  items.forEach(item => {
+    const chapterId = item.chapterId || null;
+    const existing = chapterMap.get(chapterId);
+    if (existing) {
+      existing.push(item);
+    } else {
+      chapterMap.set(chapterId, [item]);
+    }
+  });
+
+  // 2차: 각 챕터 내에서 quizId로 그룹핑
+  const result: ChapterGroupedWrongItems[] = [];
+
+  chapterMap.forEach((chapterItems, chapterId) => {
+    // 챕터 내 문제를 퀴즈별로 그룹핑
+    const folders = groupByQuiz(chapterItems);
+    const totalCount = chapterItems.length;
+
+    // 챕터 이름 가져오기
+    let chapterName = '미분류';
+    if (chapterId && courseId) {
+      const chapter = getChapterById(courseId, chapterId);
+      if (chapter) {
+        chapterName = chapter.name;
+      }
+    }
+
+    result.push({
+      chapterId,
+      chapterName,
+      folders,
+      totalCount,
+    });
+  });
+
+  // 챕터 순서대로 정렬 (미분류는 마지막)
+  return result.sort((a, b) => {
+    if (!a.chapterId) return 1;  // 미분류는 마지막
+    if (!b.chapterId) return -1;
+    return a.chapterId.localeCompare(b.chapterId);
   });
 }
 
@@ -267,6 +450,7 @@ export const useReview = (): UseReviewReturn => {
   const [solvedItems, setSolvedItems] = useState<ReviewItem[]>([]);
   const [quizAttempts, setQuizAttempts] = useState<QuizAttempt[]>([]);
   const [customFolders, setCustomFolders] = useState<CustomFolder[]>([]);
+  const [privateQuizzes, setPrivateQuizzes] = useState<PrivateQuiz[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState<number>(0);
@@ -356,6 +540,24 @@ export const useReview = (): UseReviewReturn => {
             lastReviewedAt: data.lastReviewedAt,
             createdAt: data.createdAt,
             quizUpdatedAt: data.quizUpdatedAt || null,
+            // 결합형 문제 필드
+            combinedGroupId: data.combinedGroupId,
+            combinedIndex: data.combinedIndex,
+            combinedTotal: data.combinedTotal,
+            passage: data.passage,
+            passageType: data.passageType,
+            passageImage: data.passageImage,
+            koreanAbcItems: data.koreanAbcItems,
+            commonQuestion: data.commonQuestion,
+            // 문제 이미지/보기 필드
+            image: data.image,
+            subQuestionOptions: data.subQuestionOptions,
+            subQuestionOptionsType: data.subQuestionOptionsType,
+            subQuestionImage: data.subQuestionImage,
+            quizCreatorId: data.quizCreatorId,
+            // 챕터 정보
+            chapterId: data.chapterId,
+            chapterDetailId: data.chapterDetailId,
           });
           quizIds.add(data.quizId);
         });
@@ -427,6 +629,24 @@ export const useReview = (): UseReviewReturn => {
             lastReviewedAt: data.lastReviewedAt,
             createdAt: data.createdAt,
             quizUpdatedAt: data.quizUpdatedAt || null,
+            // 결합형 문제 필드
+            combinedGroupId: data.combinedGroupId,
+            combinedIndex: data.combinedIndex,
+            combinedTotal: data.combinedTotal,
+            passage: data.passage,
+            passageType: data.passageType,
+            passageImage: data.passageImage,
+            koreanAbcItems: data.koreanAbcItems,
+            commonQuestion: data.commonQuestion,
+            // 문제 이미지/보기 필드
+            image: data.image,
+            subQuestionOptions: data.subQuestionOptions,
+            subQuestionOptionsType: data.subQuestionOptionsType,
+            subQuestionImage: data.subQuestionImage,
+            quizCreatorId: data.quizCreatorId,
+            // 챕터 정보
+            chapterId: data.chapterId,
+            chapterDetailId: data.chapterDetailId,
           });
           quizIds.add(data.quizId);
         });
@@ -496,6 +716,24 @@ export const useReview = (): UseReviewReturn => {
             lastReviewedAt: data.lastReviewedAt,
             createdAt: data.createdAt,
             quizUpdatedAt: data.quizUpdatedAt || null,
+            // 결합형 문제 필드
+            combinedGroupId: data.combinedGroupId,
+            combinedIndex: data.combinedIndex,
+            combinedTotal: data.combinedTotal,
+            passage: data.passage,
+            passageType: data.passageType,
+            passageImage: data.passageImage,
+            koreanAbcItems: data.koreanAbcItems,
+            commonQuestion: data.commonQuestion,
+            // 문제 이미지/보기 필드
+            image: data.image,
+            subQuestionOptions: data.subQuestionOptions,
+            subQuestionOptionsType: data.subQuestionOptionsType,
+            subQuestionImage: data.subQuestionImage,
+            quizCreatorId: data.quizCreatorId,
+            // 챕터 정보
+            chapterId: data.chapterId,
+            chapterDetailId: data.chapterDetailId,
           });
           quizIds.add(data.quizId);
         });
@@ -608,6 +846,7 @@ export const useReview = (): UseReviewReturn => {
             name: data.name,
             createdAt: data.createdAt,
             questions: data.questions || [],
+            categories: data.categories || [],
           });
         });
 
@@ -627,12 +866,55 @@ export const useReview = (): UseReviewReturn => {
       }
     );
 
+    // 비공개 퀴즈 구독 (내가 만든 비공개 퀴즈)
+    const privateQuizzesQuery = userCourseId
+      ? query(
+          collection(db, 'quizzes'),
+          where('creatorId', '==', user.uid),
+          where('isPublic', '==', false),
+          where('courseId', '==', userCourseId)
+        )
+      : query(
+          collection(db, 'quizzes'),
+          where('creatorId', '==', user.uid),
+          where('isPublic', '==', false)
+        );
+
+    const unsubscribePrivateQuizzes = onSnapshot(
+      privateQuizzesQuery,
+      (snapshot) => {
+        const quizzes: PrivateQuiz[] = [];
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          quizzes.push({
+            id: doc.id,
+            title: data.title || '퀴즈',
+            questionCount: data.questions?.length || 0,
+            createdAt: data.createdAt,
+          });
+        });
+
+        // 최신순 정렬
+        quizzes.sort((a, b) => {
+          const aTime = a.createdAt?.toMillis?.() || 0;
+          const bTime = b.createdAt?.toMillis?.() || 0;
+          return bTime - aTime;
+        });
+
+        setPrivateQuizzes(quizzes);
+      },
+      (err) => {
+        console.error('비공개 퀴즈 로드 실패:', err);
+      }
+    );
+
     return () => {
       unsubscribeWrong();
       unsubscribeBookmark();
       unsubscribeSolved();
       unsubscribeAttempts();
       unsubscribeFolders();
+      unsubscribePrivateQuizzes();
     };
   }, [user, userCourseId, refreshKey, fetchQuizTitle]);
 
@@ -706,6 +988,55 @@ export const useReview = (): UseReviewReturn => {
       }
     } catch (err) {
       console.error('푼 문제 삭제 실패:', err);
+      throw new Error('삭제에 실패했습니다.');
+    }
+  }, [user]);
+
+  /**
+   * 오답 폴더 삭제 - 해당 퀴즈의 오답만 삭제
+   */
+  const deleteWrongQuiz = useCallback(async (quizId: string): Promise<void> => {
+    if (!user) return;
+
+    try {
+      // 해당 퀴즈의 모든 wrong 리뷰 삭제
+      const wrongQuery = query(
+        collection(db, 'reviews'),
+        where('userId', '==', user.uid),
+        where('quizId', '==', quizId),
+        where('reviewType', '==', 'wrong')
+      );
+      const wrongDocs = await getDocs(wrongQuery);
+      for (const docSnap of wrongDocs.docs) {
+        await deleteDoc(docSnap.ref);
+      }
+    } catch (err) {
+      console.error('오답 폴더 삭제 실패:', err);
+      throw new Error('삭제에 실패했습니다.');
+    }
+  }, [user]);
+
+  /**
+   * 찜한 문제 폴더 삭제 - 해당 퀴즈의 찜한 문제만 삭제 (isBookmarked 해제)
+   */
+  const deleteBookmarkQuiz = useCallback(async (quizId: string): Promise<void> => {
+    if (!user) return;
+
+    try {
+      // 해당 퀴즈의 모든 bookmark 리뷰에서 isBookmarked를 false로 변경
+      // (bookmark 타입은 따로 없고, isBookmarked 필드로 관리됨)
+      const reviewsQuery = query(
+        collection(db, 'reviews'),
+        where('userId', '==', user.uid),
+        where('quizId', '==', quizId),
+        where('isBookmarked', '==', true)
+      );
+      const reviewsDocs = await getDocs(reviewsQuery);
+      for (const docSnap of reviewsDocs.docs) {
+        await updateDoc(docSnap.ref, { isBookmarked: false });
+      }
+    } catch (err) {
+      console.error('찜한 문제 폴더 삭제 실패:', err);
       throw new Error('삭제에 실패했습니다.');
     }
   }, [user]);
@@ -816,7 +1147,7 @@ export const useReview = (): UseReviewReturn => {
               question: q.text || q.question || '',
               type: normalizedType,
               options: q.choices || q.options || [],
-              correctAnswer: q.correctAnswer || q.answer || '',
+              correctAnswer: q.correctAnswer ?? q.answer ?? '',
               explanation: q.explanation || '',
               quizUpdatedAt,
               // userAnswer, isCorrect, reviewCount, lastReviewedAt 등은 유지
@@ -833,7 +1164,7 @@ export const useReview = (): UseReviewReturn => {
               question: q.text || q.question || '',
               type: normalizedType,
               options: q.choices || q.options || [],
-              correctAnswer: q.correctAnswer || q.answer || '',
+              correctAnswer: q.correctAnswer ?? q.answer ?? '',
               userAnswer: '',
               explanation: q.explanation || '',
               reviewType,
@@ -929,9 +1260,11 @@ export const useReview = (): UseReviewReturn => {
       const currentQuestions = folderDoc.data().questions || [];
       const newQuestions = [...currentQuestions];
 
-      // 중복 제거하며 추가
+      // 중복 제거하며 추가 (questionId + quizId 조합으로 확인)
       for (const q of questions) {
-        if (!newQuestions.some(existing => existing.questionId === q.questionId)) {
+        if (!newQuestions.some(existing =>
+          existing.questionId === q.questionId && existing.quizId === q.quizId
+        )) {
           newQuestions.push(q);
         }
       }
@@ -972,8 +1305,218 @@ export const useReview = (): UseReviewReturn => {
     }
   }, [user]);
 
+  /**
+   * 문제 찜 토글 (찜한 문제로 추가/제거)
+   */
+  const toggleQuestionBookmark = useCallback(async (item: ReviewItem): Promise<void> => {
+    if (!user) return;
+
+    try {
+      if (item.isBookmarked) {
+        // 이미 찜한 문제면 bookmark 리뷰 삭제
+        const bookmarkQuery = query(
+          collection(db, 'reviews'),
+          where('userId', '==', user.uid),
+          where('questionId', '==', item.questionId),
+          where('reviewType', '==', 'bookmark')
+        );
+        const bookmarkDocs = await getDocs(bookmarkQuery);
+        for (const docSnap of bookmarkDocs.docs) {
+          await deleteDoc(docSnap.ref);
+        }
+
+        // 원본 리뷰의 isBookmarked 플래그 업데이트
+        if (item.reviewType !== 'bookmark') {
+          await updateDoc(doc(db, 'reviews', item.id), { isBookmarked: false });
+        }
+      } else {
+        // 찜 안한 문제면 bookmark 리뷰 생성
+        await addDoc(collection(db, 'reviews'), {
+          userId: user.uid,
+          quizId: item.quizId,
+          quizTitle: item.quizTitle || '',
+          questionId: item.questionId,
+          question: item.question,
+          type: item.type,
+          options: item.options || [],
+          correctAnswer: item.correctAnswer,
+          userAnswer: item.userAnswer || '',
+          explanation: item.explanation || '',
+          reviewType: 'bookmark',
+          isBookmarked: true,
+          isCorrect: item.isCorrect ?? null, // undefined면 null로 변환
+          reviewCount: 0,
+          lastReviewedAt: null,
+          quizUpdatedAt: item.quizUpdatedAt || null,
+          courseId: userCourseId || null,
+          createdAt: serverTimestamp(),
+        });
+
+        // 원본 리뷰의 isBookmarked 플래그 업데이트
+        if (item.reviewType !== 'bookmark') {
+          await updateDoc(doc(db, 'reviews', item.id), { isBookmarked: true });
+        }
+      }
+    } catch (err) {
+      console.error('찜 토글 실패:', err);
+      throw new Error('찜 처리에 실패했습니다.');
+    }
+  }, [user, userCourseId]);
+
+  /**
+   * 커스텀 폴더에 카테고리 추가
+   */
+  const addCategoryToFolder = useCallback(async (
+    folderId: string,
+    categoryName: string
+  ): Promise<string | null> => {
+    if (!user) return null;
+
+    try {
+      const folderRef = doc(db, 'customFolders', folderId);
+      const folderDoc = await getDoc(folderRef);
+
+      if (!folderDoc.exists()) {
+        throw new Error('폴더를 찾을 수 없습니다.');
+      }
+
+      const currentCategories = folderDoc.data().categories || [];
+      const newCategoryId = `cat_${Date.now()}`;
+      const newCategory: FolderCategory = {
+        id: newCategoryId,
+        name: categoryName,
+      };
+
+      await updateDoc(folderRef, {
+        categories: [...currentCategories, newCategory],
+      });
+
+      return newCategoryId;
+    } catch (err) {
+      console.error('카테고리 추가 실패:', err);
+      return null;
+    }
+  }, [user]);
+
+  /**
+   * 커스텀 폴더에서 카테고리 삭제
+   * 해당 카테고리에 배정된 문제들은 미분류로 변경
+   */
+  const removeCategoryFromFolder = useCallback(async (
+    folderId: string,
+    categoryId: string
+  ): Promise<void> => {
+    if (!user) return;
+
+    try {
+      const folderRef = doc(db, 'customFolders', folderId);
+      const folderDoc = await getDoc(folderRef);
+
+      if (!folderDoc.exists()) {
+        throw new Error('폴더를 찾을 수 없습니다.');
+      }
+
+      const data = folderDoc.data();
+      const currentCategories = data.categories || [];
+      const currentQuestions = data.questions || [];
+
+      // 카테고리 삭제
+      const newCategories = currentCategories.filter(
+        (cat: FolderCategory) => cat.id !== categoryId
+      );
+
+      // 해당 카테고리의 문제들은 미분류로 변경
+      const newQuestions = currentQuestions.map((q: CustomFolderQuestion) => ({
+        ...q,
+        categoryId: q.categoryId === categoryId ? undefined : q.categoryId,
+      }));
+
+      await updateDoc(folderRef, {
+        categories: newCategories,
+        questions: newQuestions,
+      });
+    } catch (err) {
+      console.error('카테고리 삭제 실패:', err);
+      throw new Error('카테고리 삭제에 실패했습니다.');
+    }
+  }, [user]);
+
+  /**
+   * 문제를 카테고리에 배정
+   * categoryId가 null이면 미분류로 변경
+   */
+  const assignQuestionToCategory = useCallback(async (
+    folderId: string,
+    questionId: string,
+    categoryId: string | null
+  ): Promise<void> => {
+    if (!user) return;
+
+    try {
+      const folderRef = doc(db, 'customFolders', folderId);
+      const folderDoc = await getDoc(folderRef);
+
+      if (!folderDoc.exists()) {
+        throw new Error('폴더를 찾을 수 없습니다.');
+      }
+
+      const currentQuestions = folderDoc.data().questions || [];
+      const newQuestions = currentQuestions.map((q: CustomFolderQuestion) => {
+        if (q.questionId === questionId) {
+          return {
+            ...q,
+            categoryId: categoryId || undefined,
+          };
+        }
+        return q;
+      });
+
+      await updateDoc(folderRef, { questions: newQuestions });
+    } catch (err) {
+      console.error('문제 카테고리 배정 실패:', err);
+      throw new Error('카테고리 배정에 실패했습니다.');
+    }
+  }, [user]);
+
+  /**
+   * 카테고리 이름 수정
+   */
+  const updateCategoryName = useCallback(async (
+    folderId: string,
+    categoryId: string,
+    newName: string
+  ): Promise<void> => {
+    if (!user) return;
+
+    try {
+      const folderRef = doc(db, 'customFolders', folderId);
+      const folderDoc = await getDoc(folderRef);
+
+      if (!folderDoc.exists()) {
+        throw new Error('폴더를 찾을 수 없습니다.');
+      }
+
+      const currentCategories = folderDoc.data().categories || [];
+      const newCategories = currentCategories.map((cat: FolderCategory) => {
+        if (cat.id === categoryId) {
+          return { ...cat, name: newName };
+        }
+        return cat;
+      });
+
+      await updateDoc(folderRef, { categories: newCategories });
+    } catch (err) {
+      console.error('카테고리 이름 수정 실패:', err);
+      throw new Error('카테고리 수정에 실패했습니다.');
+    }
+  }, [user]);
+
   // 그룹핑된 데이터 (useMemo로 메모이제이션하여 무한 루프 방지)
   const groupedWrongItems = useMemo(() => groupByQuiz(wrongItems), [wrongItems]);
+  const chapterGroupedWrongItems = useMemo(
+    () => groupByChapterAndQuiz(wrongItems, userCourseId || undefined),
+    [wrongItems, userCourseId]
+  );
   const groupedBookmarkedItems = useMemo(() => groupByQuiz(bookmarkedItems), [bookmarkedItems]);
   const groupedSolvedItems = useMemo(() => groupByQuiz(solvedItems), [solvedItems]);
 
@@ -1087,20 +1630,29 @@ export const useReview = (): UseReviewReturn => {
     groupedWrongItems,
     groupedBookmarkedItems,
     groupedSolvedItems,
+    chapterGroupedWrongItems,
     quizAttempts,
     customFolders,
+    privateQuizzes,
     updatedQuizzes,
     loading,
     error,
     deleteReviewItem,
     deleteSolvedQuiz,
+    deleteWrongQuiz,
+    deleteBookmarkQuiz,
     markAsReviewed,
     createCustomFolder,
     deleteCustomFolder,
     addToCustomFolder,
     removeFromCustomFolder,
+    toggleQuestionBookmark,
     updateReviewItemsFromQuiz,
     refresh,
+    addCategoryToFolder,
+    removeCategoryFromFolder,
+    assignQuestionToCategory,
+    updateCategoryName,
   };
 };
 

@@ -14,8 +14,6 @@ interface WriteFormProps {
   isSubmitting?: boolean;
   /** 에러 메시지 */
   error?: string | null;
-  /** 교수님께 체크박스 표시 여부 */
-  showToProfessorOption?: boolean;
 }
 
 /**
@@ -25,14 +23,12 @@ export default function WriteForm({
   onSubmit,
   isSubmitting = false,
   error,
-  showToProfessorOption = true,
 }: WriteFormProps) {
   const { theme } = useTheme();
   const { uploadImage, uploadFile, loading: uploading, error: uploadError } = useUpload();
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [toProfessor, setToProfessor] = useState(false);
 
   // 첨부 파일 상태
   const [images, setImages] = useState<{ file: File; preview: string }[]>([]);
@@ -164,7 +160,6 @@ export default function WriteForm({
         imageUrl: uploadedImageUrls[0] || undefined, // 대표 이미지
         imageUrls: uploadedImageUrls,
         fileUrls: uploadedFiles,
-        toProfessor,
       });
     } catch (err) {
       console.error('글 작성 실패:', err);
@@ -239,39 +234,6 @@ export default function WriteForm({
         </div>
       </div>
 
-      {/* 교수님께 체크박스 */}
-      {showToProfessorOption && (
-        <div className="mb-4">
-          <label
-            className="flex items-center gap-3 cursor-pointer py-3 px-4"
-            style={{
-              border: toProfessor ? '2px solid #1A6B1A' : '1px solid #D4CFC4',
-              backgroundColor: toProfessor ? '#E8F5E8' : 'transparent',
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={toProfessor}
-              onChange={(e) => setToProfessor(e.target.checked)}
-              className="w-5 h-5 accent-[#1A6B1A]"
-            />
-            <div>
-              <span
-                className="font-bold text-sm"
-                style={{ color: toProfessor ? '#1A6B1A' : theme.colors.text }}
-              >
-                📬 교수님께 전달
-              </span>
-              <p
-                className="text-xs mt-0.5"
-                style={{ color: theme.colors.textSecondary }}
-              >
-                체크하면 교수님께 알림이 전송되고, 교수님 관리 목록에 표시됩니다
-              </p>
-            </div>
-          </label>
-        </div>
-      )}
 
       {/* 이미지 첨부 */}
       <div className="mb-4">
@@ -436,22 +398,11 @@ export default function WriteForm({
         />
       </div>
 
-      {/* 상태 안내 */}
+      {/* 구분선 */}
       <div
-        className="flex items-center justify-end py-3 border-t border-b mb-4"
+        className="py-3 border-t border-b mb-4"
         style={{ borderColor: '#D4CFC4' }}
-      >
-        <span
-          className="text-xs italic"
-          style={{ color: theme.colors.textSecondary }}
-        >
-          {uploading && 'Uploading...'}
-          {!uploading && !title.trim() && '제목을 입력해주세요'}
-          {!uploading && title.trim() && title.trim().length < 2 && '제목은 2자 이상'}
-          {!uploading && title.trim().length >= 2 && content.trim().length < 10 && '내용은 10자 이상'}
-          {!uploading && isValid && 'Ready to publish!'}
-        </span>
-      </div>
+      />
 
       {/* 에러 메시지 */}
       {(error || uploadError) && (

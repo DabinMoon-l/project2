@@ -23,8 +23,27 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# deploy logs
+deploy_output.txt
+*_output.txt
+
 # local env files
+.env
+.env.*
 .env*.local
+!.env.local.example
+
+# Security - NEVER commit these
+serviceAccountKey.json
+**/serviceAccountKey.json
+*.key
+*.key.json
+*-key.json
+firebase-adminsdk*.json
+*credentials*.json
+*secret*.json
+*.p12
+*.pfx
 
 # vercel
 .vercel

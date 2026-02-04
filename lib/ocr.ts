@@ -1393,6 +1393,10 @@ export interface SubQuestionForEditor {
   koreanAbcExamples?: KoreanAbcItem[];
   image?: string;
   isMultipleAnswer?: boolean;
+  /** 챕터 ID */
+  chapterId?: string;
+  /** 세부항목 ID */
+  chapterDetailId?: string;
 }
 
 /**

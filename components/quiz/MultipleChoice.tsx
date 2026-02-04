@@ -27,8 +27,8 @@ interface MultipleChoiceProps {
   correctIndices?: number[];
 }
 
-// 선지 번호 라벨
-const choiceLabels = ['①', '②', '③', '④'];
+// 선지 번호 라벨 (최대 8개 지원)
+const choiceLabels = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧'];
 
 /**
  * 객관식 선지 컴포넌트 (4지선다)

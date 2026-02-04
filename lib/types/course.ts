@@ -104,8 +104,8 @@ export const COURSES: Record<CourseId, Course> = {
     order: 1,
     quizRibbonImage: '/images/biology-quiz-ribbon.png',
     reviewRibbonImage: '/images/biology-review-ribbon.png',
-    quizRibbonScale: 1,
-    reviewRibbonScale: 1.15, // 리뷰 리본 키움
+    quizRibbonScale: 1.15, // 리뷰 리본과 동일하게
+    reviewRibbonScale: 1.15,
   },
   pathophysiology: {
     id: 'pathophysiology',
@@ -118,9 +118,9 @@ export const COURSES: Record<CourseId, Course> = {
     order: 2,
     quizRibbonImage: '/images/pathophysiology-quiz-ribbon.png',
     reviewRibbonImage: '/images/pathophysiology-review-ribbon.png',
-    quizRibbonScale: 1.0, // 퀴즈 리본
-    quizRibbonOffsetY: 0, // 중앙 유지
-    reviewRibbonScale: 1.0, // 리뷰 리본
+    quizRibbonScale: 1.15, // 리뷰 리본과 동일하게
+    quizRibbonOffsetY: 0,
+    reviewRibbonScale: 1.15,
   },
   microbiology: {
     id: 'microbiology',
@@ -133,9 +133,9 @@ export const COURSES: Record<CourseId, Course> = {
     order: 3,
     quizRibbonImage: '/images/microbiology-quiz-ribbon.png',
     reviewRibbonImage: '/images/microbiology-review-ribbon.png',
-    quizRibbonScale: 1.0, // 퀴즈 리본
-    quizRibbonOffsetY: 0, // 중앙 유지
-    reviewRibbonScale: 1.0, // 리뷰 리본
+    quizRibbonScale: 1.15, // 리뷰 리본과 동일하게
+    quizRibbonOffsetY: 0,
+    reviewRibbonScale: 1.15,
   },
 };
 
@@ -198,8 +198,139 @@ export function getCourse(courseId: CourseId): Course {
 }
 
 /**
+ * 퀴즈 필터 탭 타입
+ */
+export type QuizFilterTab = 'midterm' | 'final' | 'past' | 'custom';
+
+/**
+ * 현재 날짜 기반 학기 계산
+ * - 02-22 ~ 08-21: 1학기
+ * - 08-22 ~ 02-21: 2학기
+ */
+export function getCurrentSemesterByDate(): Semester {
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const day = now.getDate();
+
+  // 2월 22일 ~ 8월 21일: 1학기
+  if (month === 2 && day >= 22) return 1;
+  if (month >= 3 && month <= 7) return 1;
+  if (month === 8 && day <= 21) return 1;
+
+  // 8월 22일 ~ 다음해 2월 21일: 2학기
+  return 2;
+}
+
+/**
+ * 현재 날짜 기반 기본 퀴즈 탭 계산
+ * - 02-22 ~ 04-30: 중간대비 (1학기)
+ * - 05-01 ~ 06-30: 기말대비 (1학기)
+ * - 07-01 ~ 08-21: 족보 (1학기)
+ * - 08-22 ~ 10-30: 중간대비 (2학기)
+ * - 11-01 ~ 12-31: 기말대비 (2학기)
+ * - 01-01 ~ 02-21: 족보 (2학기)
+ */
+export function getDefaultQuizTab(): QuizFilterTab {
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const day = now.getDate();
+  const mmdd = month * 100 + day; // 예: 2월 22일 = 222, 12월 31일 = 1231
+
+  // 1학기
+  if (mmdd >= 222 && mmdd <= 430) return 'midterm';
+  if (mmdd >= 501 && mmdd <= 630) return 'final';
+  if (mmdd >= 701 && mmdd <= 821) return 'past';
+
+  // 2학기
+  if (mmdd >= 822 && mmdd <= 1030) return 'midterm';
+  if (mmdd >= 1101 && mmdd <= 1231) return 'final';
+  if (mmdd >= 101 && mmdd <= 221) return 'past';
+
+  return 'midterm'; // 기본값
+}
+
+/**
  * 과목 목록 가져오기 (정렬됨)
  */
 export function getCourseList(): Course[] {
   return Object.values(COURSES).sort((a, b) => a.order - b.order);
+}
+
+/**
+ * 기출 옵션 타입
+ */
+export interface PastExamOption {
+  year: number;
+  examType: 'midterm' | 'final';
+  label: string; // "2025-중간"
+  value: string; // "2025-midterm"
+}
+
+/**
+ * 과목의 학기 기반 기출 옵션 생성
+ * - 2025년: 중간/기말 기본 표시
+ * - 2026년부터: 시즌에 따라 자동 추가
+ *   - 1학기 과목 (생물학, 미생물학): 02-22 이후 중간, 05-01 이후 기말
+ *   - 2학기 과목 (병태생리학): 08-22 이후 중간, 11-01 이후 기말
+ */
+export function getPastExamOptions(courseId: CourseId | string | null): PastExamOption[] {
+  const options: PastExamOption[] = [];
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const day = now.getDate();
+  const mmdd = month * 100 + day;
+
+  // 과목별 학기 확인 (1학기 or 2학기)
+  const course = courseId ? COURSES[courseId as CourseId] : null;
+  const courseSemester = course?.semester || 1;
+
+  // 2025년: 기본으로 중간/기말 둘 다 표시
+  options.push(
+    { year: 2025, examType: 'midterm', label: '2025-중간', value: '2025-midterm' },
+    { year: 2025, examType: 'final', label: '2025-기말', value: '2025-final' }
+  );
+
+  // 2026년부터: 시즌에 따라 자동 추가
+  for (let year = 2026; year <= currentYear; year++) {
+    if (year < currentYear) {
+      // 이전 연도는 중간/기말 둘 다 추가
+      options.push(
+        { year, examType: 'midterm', label: `${year}-중간`, value: `${year}-midterm` },
+        { year, examType: 'final', label: `${year}-기말`, value: `${year}-final` }
+      );
+    } else {
+      // 현재 연도: 과목 학기와 현재 날짜로 판단
+      if (courseSemester === 1) {
+        // 1학기 과목 (생물학, 미생물학): 봄학기 기준
+        // 중간고사 시즌 시작: 02-22
+        if (mmdd >= 222) {
+          options.push({ year, examType: 'midterm', label: `${year}-중간`, value: `${year}-midterm` });
+        }
+        // 기말고사 시즌 시작: 05-01
+        if (mmdd >= 501) {
+          options.push({ year, examType: 'final', label: `${year}-기말`, value: `${year}-final` });
+        }
+      } else {
+        // 2학기 과목 (병태생리학): 가을학기 기준
+        // 중간고사 시즌 시작: 08-22
+        if (mmdd >= 822) {
+          options.push({ year, examType: 'midterm', label: `${year}-중간`, value: `${year}-midterm` });
+        }
+        // 기말고사 시즌 시작: 11-01
+        if (mmdd >= 1101) {
+          options.push({ year, examType: 'final', label: `${year}-기말`, value: `${year}-final` });
+        }
+      }
+    }
+  }
+
+  // 최신순 정렬 (2026-기말, 2026-중간, 2025-기말, 2025-중간)
+  options.sort((a, b) => {
+    if (a.year !== b.year) return b.year - a.year;
+    // 같은 연도면 기말 > 중간
+    return a.examType === 'final' ? -1 : 1;
+  });
+
+  return options;
 }

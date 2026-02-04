@@ -9,7 +9,15 @@ node_modules/
 
 # 환경 변수
 .env
-.env.local
+.env.*
+!.env.example
+
+# Security - NEVER commit these
+serviceAccountKey.json
+*-key.json
+*.key.json
+*credentials*.json
+*secret*.json
 
 # IDE
 .idea/

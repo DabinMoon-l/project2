@@ -134,7 +134,7 @@ function MyCommentCard({
         className="w-full text-left"
       >
         <p
-          className="text-sm leading-relaxed line-clamp-2 mb-2 hover:bg-[#EDEAE4] p-1 -ml-1 transition-colors"
+          className="text-sm leading-relaxed line-clamp-2 break-all mb-2 hover:bg-[#EDEAE4] p-1 -ml-1 transition-colors"
           style={{ color: theme.colors.text }}
         >
           {comment.content}

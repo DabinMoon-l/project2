@@ -72,10 +72,11 @@ export default function SplashScreen({ children }: SplashScreenProps) {
               <Image
                 src="/images/logo.png"
                 alt="QuizBunny"
-                width={280}
-                height={280}
+                width={360}
+                height={360}
                 priority
                 className="drop-shadow-2xl"
+                style={{ width: 'auto', height: 'auto' }}
               />
             </motion.div>
 

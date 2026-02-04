@@ -12,9 +12,9 @@ service firebase.storage {
       return isAuthenticated() && request.auth.uid == uid;
     }
 
-    // 이미지 파일 검증 (5MB 이하)
+    // 이미지 파일 검증 (10MB 이하 - 클라이언트에서 압축하지만 여유 확보)
     function isValidImage() {
-      return request.resource.size < 5 * 1024 * 1024 &&
+      return request.resource.size < 10 * 1024 * 1024 &&
         request.resource.contentType.matches('image/.*');
     }
 
@@ -49,6 +49,18 @@ service firebase.storage {
 
     // 프로필 이미지 저장 경로
     match /profiles/{userId}/{fileName} {
+      // 읽기: 모든 인증된 사용자
+      allow read: if isAuthenticated();
+
+      // 쓰기: 본인만 + 유효한 이미지
+      allow write: if isOwner(userId) && isValidImage();
+
+      // 삭제: 본인만
+      allow delete: if isOwner(userId);
+    }
+
+    // 퀴즈 문제 이미지 저장 경로
+    match /quiz-images/{userId}/{fileName} {
       // 읽기: 모든 인증된 사용자
       allow read: if isAuthenticated();
 

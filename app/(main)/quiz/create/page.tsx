@@ -4,10 +4,13 @@ import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '@/lib/firebase';
+import { compressImage, formatFileSize } from '@/lib/imageUtils';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse, useUser } from '@/lib/contexts';
 import { useExpToast } from '@/components/common';
+import { getCurrentSemesterByDate } from '@/lib/types/course';
 import {
   ImageUploader,
   OCRProcessor,
@@ -15,6 +18,8 @@ import {
   QuestionList,
   QuizMetaForm,
   calculateTotalQuestionCount,
+  validateRequiredTags,
+  getChapterTags,
   type QuestionData,
   type QuizMeta,
 } from '@/components/quiz/create';
@@ -366,6 +371,13 @@ export default function QuizCreatePage() {
         errors.title = '퀴즈 제목을 입력해주세요.';
       }
 
+      // 필수 태그 검증
+      const chapterTags = getChapterTags(userCourseId);
+      const tagError = validateRequiredTags(quizMeta.tags, chapterTags);
+      if (tagError) {
+        errors.tags = tagError;
+      }
+
       if (Object.keys(errors).length > 0) {
         setMetaErrors(errors);
         return;
@@ -374,7 +386,7 @@ export default function QuizCreatePage() {
       setMetaErrors({});
       setStep('confirm');
     }
-  }, [step, questions, quizMeta.title]);
+  }, [step, questions, quizMeta.title, quizMeta.tags, userCourseId]);
 
   /**
    * 이전 단계로 이동
@@ -451,25 +463,44 @@ export default function QuizCreatePage() {
                   subAnswer = sq.answerIndex ?? -1;
                 }
 
+                // 하위 문제의 보기(examples) 처리
+                let subExamples = null;
+                if (sq.examples && Array.isArray(sq.examples) && sq.examples.length > 0) {
+                  const filteredItems = sq.examples.filter((item) => typeof item === 'string' && item.trim());
+                  if (filteredItems.length > 0) {
+                    subExamples = {
+                      type: sq.examplesType || 'text',
+                      items: filteredItems,
+                    };
+                  }
+                } else if (sq.koreanAbcExamples && Array.isArray(sq.koreanAbcExamples) && sq.koreanAbcExamples.length > 0) {
+                  const filteredItems = sq.koreanAbcExamples
+                    .filter((item) => item && typeof item.text === 'string' && item.text.trim())
+                    .map((item) => item.text);
+                  if (filteredItems.length > 0) {
+                    subExamples = {
+                      type: 'labeled',
+                      items: filteredItems,
+                    };
+                  }
+                }
+
                 const subQuestionData: any = {
                   order: orderIndex++,
                   text: sq.text,
                   type: sq.type,
-                  choices: sq.type === 'multiple' ? sq.choices?.filter((c) => c.trim()) : null,
+                  choices: sq.type === 'multiple' && sq.choices ? sq.choices.filter((c) => c && c.trim()) : null,
                   answer: subAnswer,
                   explanation: sq.explanation || null,
                   imageUrl: sq.image || null,
-                  examples: sq.examples ? {
-                    type: sq.examplesType || 'text',
-                    items: sq.examples.filter((item) => item.trim()),
-                  } : sq.koreanAbcExamples ? {
-                    type: 'labeled',
-                    items: sq.koreanAbcExamples.map(item => item.text).filter(t => t.trim()),
-                  } : null,
+                  examples: subExamples,
                   // 결합형 그룹 정보
                   combinedGroupId,
                   combinedIndex: sqIndex,
                   combinedTotal: subQuestionsCount,
+                  // 챕터 정보
+                  chapterId: sq.chapterId || null,
+                  chapterDetailId: sq.chapterDetailId || null,
                 };
 
                 // 첫 번째 하위 문제에만 공통 지문 정보 포함
@@ -477,8 +508,9 @@ export default function QuizCreatePage() {
                   subQuestionData.passageType = q.passageType || 'text';
                   subQuestionData.passage = q.passageType === 'text' ? (q.passage || q.text || '') : '';
                   subQuestionData.passageImage = q.passageImage || null;
-                  subQuestionData.koreanAbcItems = q.passageType === 'korean_abc'
-                    ? (q.koreanAbcItems || []).filter((item) => item.text?.trim()).map(item => item.text)
+                  subQuestionData.commonQuestion = q.commonQuestion || null; // 공통 문제 추가
+                  subQuestionData.koreanAbcItems = q.passageType === 'korean_abc' && q.koreanAbcItems
+                    ? q.koreanAbcItems.filter((item) => item && item.text?.trim()).map((item) => item.text)
                     : null;
                   subQuestionData.combinedMainText = q.text || ''; // 결합형 메인 문제 텍스트
                 }
@@ -510,18 +542,30 @@ export default function QuizCreatePage() {
                 answer = q.answerIndex;
               }
 
+              // 일반 문제의 보기(examples) 처리
+              let questionExamples = null;
+              if (q.examples && q.examples.items && Array.isArray(q.examples.items) && q.examples.items.length > 0) {
+                const filteredItems = q.examples.items.filter((item) => typeof item === 'string' && item.trim());
+                if (filteredItems.length > 0) {
+                  questionExamples = {
+                    type: q.examples.type || 'text',
+                    items: filteredItems,
+                  };
+                }
+              }
+
               flattenedQuestions.push({
                 order: orderIndex++,
                 text: q.text,
                 type: q.type === 'subjective' ? 'short_answer' : q.type,
-                choices: q.type === 'multiple' ? q.choices.filter((c) => c.trim()) : null,
+                choices: q.type === 'multiple' && q.choices ? q.choices.filter((c) => c && c.trim()) : null,
                 answer,
                 explanation: q.explanation || null,
                 imageUrl: q.imageUrl || null,
-                examples: q.examples ? {
-                  type: q.examples.type,
-                  items: q.examples.items.filter((item) => item.trim()),
-                } : null,
+                examples: questionExamples,
+                // 챕터 정보
+                chapterId: q.chapterId || null,
+                chapterDetailId: q.chapterDetailId || null,
               });
             }
           });
@@ -546,6 +590,9 @@ export default function QuizCreatePage() {
         // 과목 정보
         courseId: userCourseId || null,
 
+        // 학기 정보 (날짜 기반 자동 설정)
+        semester: getCurrentSemesterByDate(),
+
         // 통계 (초기값)
         participantCount: 0,
         averageScore: 0,
@@ -554,13 +601,176 @@ export default function QuizCreatePage() {
 
       };
 
-      // undefined 값 제거 (Firestore는 undefined를 허용하지 않음)
-      const cleanedQuizData = JSON.parse(JSON.stringify(quizData));
+      // base64 이미지를 Firebase Storage에 업로드하는 함수
+      const uploadBase64ToStorage = async (base64: string, path: string): Promise<string | null> => {
+        try {
+          console.log(`[이미지 업로드 시작] ${path}`);
 
-      // 타임스탬프 추가 (JSON 직렬화 후에 추가해야 함)
+          // base64에서 데이터 추출
+          const matches = base64.match(/^data:image\/(\w+);base64,(.+)$/);
+          if (!matches) {
+            console.error(`[실패] ${path}: 잘못된 base64 형식`);
+            return null;
+          }
+
+          const extension = matches[1];
+          const data = matches[2];
+
+          // base64를 Blob으로 변환
+          const byteCharacters = atob(data);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const originalBlob = new Blob([byteArray], { type: `image/${extension}` });
+
+          console.log(`[원본 크기] ${path}: ${formatFileSize(originalBlob.size)}`);
+
+          // 이미지 압축 (1MB 초과 시 또는 항상 최적화)
+          let finalBlob: Blob = originalBlob;
+          let finalExtension = extension;
+
+          try {
+            const compressionResult = await compressImage(originalBlob, {
+              maxWidth: 1920,
+              maxHeight: 1080,
+              quality: 0.85,
+              maxSizeBytes: 800 * 1024, // 800KB 목표
+              outputType: 'image/jpeg',
+            });
+
+            finalBlob = compressionResult.blob;
+            finalExtension = 'jpg';
+
+            console.log(`[압축 완료] ${path}: ${formatFileSize(compressionResult.originalSize)} → ${formatFileSize(compressionResult.compressedSize)} (${compressionResult.compressionRatio}% 절감)`);
+          } catch (compressErr) {
+            console.warn(`[압축 실패] ${path}: 원본 사용`, compressErr);
+            // 압축 실패 시 원본 사용
+          }
+
+          // 최종 크기 확인
+          if (finalBlob.size > 5 * 1024 * 1024) {
+            console.error(`[실패] ${path}: 파일 크기 초과 (${formatFileSize(finalBlob.size)} > 5MB)`);
+            throw new Error(`이미지 크기가 너무 큽니다: ${formatFileSize(finalBlob.size)}. 5MB 이하로 줄여주세요.`);
+          }
+
+          // Storage에 업로드
+          const timestamp = Date.now();
+          const randomStr = Math.random().toString(36).substring(2, 8);
+          const storageRef = ref(storage, `quiz-images/${user.uid}/${timestamp}_${randomStr}.${finalExtension}`);
+
+          console.log(`[업로드 중] ${path}: ${formatFileSize(finalBlob.size)}`);
+
+          await uploadBytes(storageRef, finalBlob);
+          const downloadUrl = await getDownloadURL(storageRef);
+
+          console.log(`[성공] ${path}: 이미지 업로드 완료 - ${downloadUrl.substring(0, 80)}...`);
+          return downloadUrl;
+        } catch (err: any) {
+          // 상세 에러 로깅
+          console.error(`[실패] ${path}: 이미지 업로드 실패`);
+          console.error(`  - 에러 타입: ${err?.name || 'Unknown'}`);
+          console.error(`  - 에러 코드: ${err?.code || 'N/A'}`);
+          console.error(`  - 에러 메시지: ${err?.message || String(err)}`);
+
+          if (err?.code === 'storage/unauthorized') {
+            console.error(`  - 원인: Storage 권한 부족. storage.rules 확인 필요.`);
+            console.error(`  - 경로: quiz-images/${user.uid}/...`);
+          } else if (err?.code === 'storage/quota-exceeded') {
+            console.error(`  - 원인: Storage 용량 초과`);
+          } else if (err?.code === 'storage/invalid-format') {
+            console.error(`  - 원인: 잘못된 파일 형식`);
+          }
+
+          return null;
+        }
+      };
+
+      // 퀴즈 데이터에서 base64 이미지를 Storage URL로 변환
+      const processImagesInQuizData = async (data: any): Promise<any> => {
+        // questions 배열의 이미지 처리
+        if (data.questions && Array.isArray(data.questions)) {
+          for (let i = 0; i < data.questions.length; i++) {
+            const q = data.questions[i];
+
+            // imageUrl 처리
+            if (q.imageUrl && typeof q.imageUrl === 'string' && q.imageUrl.startsWith('data:image/')) {
+              console.log(`[처리중] questions[${i}].imageUrl 업로드...`);
+              const url = await uploadBase64ToStorage(q.imageUrl, `questions[${i}].imageUrl`);
+              data.questions[i].imageUrl = url;
+            }
+
+            // passageImage 처리 (결합형 문제)
+            if (q.passageImage && typeof q.passageImage === 'string' && q.passageImage.startsWith('data:image/')) {
+              console.log(`[처리중] questions[${i}].passageImage 업로드...`);
+              const url = await uploadBase64ToStorage(q.passageImage, `questions[${i}].passageImage`);
+              data.questions[i].passageImage = url;
+            }
+          }
+        }
+
+        return data;
+      };
+
+      // Firestore 호환성을 위한 데이터 정리 함수 (이미지 처리 후 사용)
+      const sanitizeForFirestore = (data: any, path: string = ''): any => {
+        if (data === null || data === undefined) {
+          return null;
+        }
+
+        if (typeof data === 'string') {
+          // 이미지 업로드 후에도 남은 base64가 있으면 제거
+          if (data.startsWith('data:image/')) {
+            console.warn(`[경고] ${path}: 업로드되지 않은 base64 이미지 발견 - null로 대체`);
+            return null;
+          }
+          return data;
+        }
+
+        if (Array.isArray(data)) {
+          return data
+            .filter((item) => item !== undefined && item !== null)
+            .map((item, idx) => {
+              if (Array.isArray(item)) {
+                // 중첩 배열은 문자열로 변환
+                return item.filter(i => i != null).join(', ');
+              }
+              return sanitizeForFirestore(item, `${path}[${idx}]`);
+            });
+        }
+
+        if (typeof data === 'object') {
+          const sanitized: any = {};
+          for (const key of Object.keys(data)) {
+            const value = data[key];
+            if (value !== undefined) {
+              sanitized[key] = sanitizeForFirestore(value, path ? `${path}.${key}` : key);
+            }
+          }
+          return sanitized;
+        }
+
+        return data;
+      };
+
+      // 1. 먼저 이미지를 Storage에 업로드
+      console.log('=== 이미지 업로드 시작 ===');
+      const quizDataWithUrls = await processImagesInQuizData(JSON.parse(JSON.stringify(quizData)));
+      console.log('=== 이미지 업로드 완료 ===');
+
+      // 2. 데이터 정리 (중첩 배열 제거 등)
+      const cleanedQuizData = sanitizeForFirestore(quizDataWithUrls);
+
+      // 3. 데이터 크기 확인
+      const dataSize = JSON.stringify(cleanedQuizData).length;
+      console.log(`최종 데이터 크기: ${(dataSize / 1024).toFixed(1)}KB`);
+
+      // 4. 타임스탬프 추가
       cleanedQuizData.createdAt = serverTimestamp();
       cleanedQuizData.updatedAt = serverTimestamp();
 
+      // 5. Firestore에 저장
       await addDoc(collection(db, 'quizzes'), cleanedQuizData);
 
       // EXP 토스트 표시 (퀴즈 생성 15 EXP)
@@ -752,6 +962,7 @@ export default function QuizCreatePage() {
                       editingIndex !== null ? editingIndex + 1 : questions.length + 1
                     }
                     userRole={profile?.role === 'professor' ? 'professor' : 'student'}
+                    courseId={userCourseId || undefined}
                   />
                 )}
               </AnimatePresence>
@@ -764,6 +975,7 @@ export default function QuizCreatePage() {
                     onQuestionsChange={setQuestions}
                     onEditQuestion={handleEditQuestion}
                     userRole={profile?.role === 'professor' ? 'professor' : 'student'}
+                    courseId={userCourseId || undefined}
                   />
 
                   {/* 문제 추가 버튼 */}
@@ -809,7 +1021,7 @@ export default function QuizCreatePage() {
                   퀴즈 정보
                 </h2>
                 <p className="text-sm text-[#5C5C5C]">
-                  퀴즈 제목과 태그를 입력하고 공개 여부를 설정하세요.
+                  퀴즈 제목과 태그를 입력해주세요.
                 </p>
               </div>
 
@@ -817,6 +1029,7 @@ export default function QuizCreatePage() {
                 meta={quizMeta}
                 onChange={setQuizMeta}
                 errors={metaErrors}
+                courseId={userCourseId}
               />
             </motion.div>
           )}
@@ -882,12 +1095,6 @@ export default function QuizCreatePage() {
                           : '보통'}
                     </p>
                     <p className="text-xs text-[#5C5C5C]">난이도</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-2xl font-bold text-[#1A1A1A]">
-                      {quizMeta.isPublic ? '공개' : '비공개'}
-                    </p>
-                    <p className="text-xs text-[#5C5C5C]">공개 설정</p>
                   </div>
                 </div>
               </div>

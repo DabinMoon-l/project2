@@ -28,6 +28,22 @@ import MultipleChoice from '@/components/quiz/MultipleChoice';
 import ShortAnswer from '@/components/quiz/ShortAnswer';
 import QuizNavigation from '@/components/quiz/QuizNavigation';
 import ExitConfirmModal from '@/components/quiz/ExitConfirmModal';
+import CombinedQuestionGroup from '@/components/quiz/CombinedQuestionGroup';
+
+/**
+ * 화면에 표시될 아이템 타입 (단일 문제 또는 결합형 그룹)
+ */
+interface DisplayItem {
+  type: 'single' | 'combined_group';
+  /** 단일 문제 (type === 'single'일 때) */
+  question?: Question;
+  /** 결합형 그룹 문제들 (type === 'combined_group'일 때) */
+  questions?: Question[];
+  /** 결합형 그룹 ID */
+  combinedGroupId?: string;
+  /** 화면에 표시될 번호 */
+  displayNumber: number;
+}
 
 /**
  * 퀴즈 데이터 타입
@@ -36,6 +52,10 @@ interface QuizData {
   id: string;
   title: string;
   questions: Question[];
+  /** 화면에 표시될 아이템들 (결합형 그룹 처리) */
+  displayItems: DisplayItem[];
+  /** 과목 ID */
+  courseId?: string;
 }
 
 /**
@@ -90,10 +110,16 @@ export default function QuizPage() {
     answeredCount: number;
   } | null>(null);
 
-  // 현재 문제
-  const currentQuestion = useMemo(
-    () => quiz?.questions[currentQuestionIndex] || null,
+  // 현재 표시 아이템 (단일 문제 또는 결합형 그룹)
+  const currentDisplayItem = useMemo(
+    () => quiz?.displayItems[currentQuestionIndex] || null,
     [quiz, currentQuestionIndex]
+  );
+
+  // 현재 문제 (단일 문제일 때만 사용, 결합형은 displayItem.questions 사용)
+  const currentQuestion = useMemo(
+    () => currentDisplayItem?.type === 'single' ? currentDisplayItem.question || null : null,
+    [currentDisplayItem]
   );
 
   // 답변한 문제 수
@@ -104,6 +130,30 @@ export default function QuizPage() {
       return true;
     }).length;
   }, [answers]);
+
+  // 현재 화면에서 답변 완료 여부 확인 (Hook 순서 보장을 위해 조기 return 전에 선언)
+  const isCurrentItemAnswered = useMemo(() => {
+    if (!currentDisplayItem) return false;
+
+    if (currentDisplayItem.type === 'single' && currentDisplayItem.question) {
+      const answer = answers[currentDisplayItem.question.id];
+      if (answer === null || answer === '') return false;
+      if (Array.isArray(answer) && answer.length === 0) return false;
+      return true;
+    }
+
+    if (currentDisplayItem.type === 'combined_group' && currentDisplayItem.questions) {
+      // 결합형 그룹: 모든 하위 문제에 답변해야 함
+      return currentDisplayItem.questions.every((q) => {
+        const answer = answers[q.id];
+        if (answer === null || answer === '') return false;
+        if (Array.isArray(answer) && answer.length === 0) return false;
+        return true;
+      });
+    }
+
+    return false;
+  }, [currentDisplayItem, answers]);
 
   /**
    * 저장된 진행 상황 불러오기
@@ -203,6 +253,9 @@ export default function QuizPage() {
             combinedGroupId: q.combinedGroupId,
             combinedIndex: q.combinedIndex,
             combinedTotal: q.combinedTotal,
+            // 챕터 정보 추가
+            chapterId: q.chapterId || undefined,
+            chapterDetailId: q.chapterDetailId || undefined,
           };
 
           // 첫 번째 하위 문제 (combinedIndex === 0)에만 공통 지문 정보 표시
@@ -211,6 +264,7 @@ export default function QuizPage() {
             questionData.passage = q.passage || undefined;
             questionData.passageImage = q.passageImage || undefined;
             questionData.koreanAbcItems = q.koreanAbcItems || undefined;
+            questionData.commonQuestion = q.commonQuestion || undefined;
 
             console.log('[QuizPage] 결합형 공통 지문 정보:', {
               passageType: questionData.passageType,
@@ -218,6 +272,7 @@ export default function QuizPage() {
               hasPassageImage: !!questionData.passageImage,
               koreanAbcItems: questionData.koreanAbcItems,
               combinedGroupId: q.combinedGroupId,
+              commonQuestion: questionData.commonQuestion?.substring(0, 50),
             });
           }
 
@@ -255,6 +310,9 @@ export default function QuizPage() {
                 combinedGroupId: legacyCombinedGroupId,
                 combinedIndex: sqIndex,
                 combinedTotal: subQuestions.length,
+                // 챕터 정보 추가
+                chapterId: q.chapterId || undefined,
+                chapterDetailId: q.chapterDetailId || undefined,
               };
 
               // 첫 번째 하위 문제에만 공통 지문 정보 표시
@@ -263,12 +321,14 @@ export default function QuizPage() {
                 questionData.passage = q.passage || undefined;
                 questionData.passageImage = q.passageImage || undefined;
                 questionData.koreanAbcItems = q.koreanAbcItems || undefined;
+                questionData.commonQuestion = q.commonQuestion || undefined;
 
                 console.log('[QuizPage] 결합형 공통 지문 정보 (레거시):', {
                   passageType: questionData.passageType,
                   passage: questionData.passage?.substring(0, 50),
                   hasPassageImage: !!questionData.passageImage,
                   koreanAbcItems: questionData.koreanAbcItems,
+                  commonQuestion: questionData.commonQuestion?.substring(0, 50),
                 });
               }
 
@@ -286,6 +346,9 @@ export default function QuizPage() {
               passage: q.passage || undefined,
               passageImage: q.passageImage || undefined,
               koreanAbcItems: q.koreanAbcItems || undefined,
+              commonQuestion: q.commonQuestion || undefined,
+              chapterId: q.chapterId || undefined,
+              chapterDetailId: q.chapterDetailId || undefined,
             });
           }
         } else {
@@ -309,6 +372,9 @@ export default function QuizPage() {
             choices: q.choices || undefined,
             examples: q.examples || undefined,
             hasMultipleAnswers,
+            // 챕터 정보 추가
+            chapterId: q.chapterId || undefined,
+            chapterDetailId: q.chapterDetailId || undefined,
           });
         }
       });
@@ -318,6 +384,7 @@ export default function QuizPage() {
         number: q.number,
         type: q.type,
         hasPassage: !!q.passage || !!q.passageImage,
+        combinedGroupId: q.combinedGroupId,
       })));
 
       // 문제 번호순 정렬
@@ -329,10 +396,54 @@ export default function QuizPage() {
         return;
       }
 
+      // displayItems 생성: 결합형 그룹을 하나의 화면으로 묶기
+      const displayItems: DisplayItem[] = [];
+      const processedGroupIds = new Set<string>();
+      let displayNumber = 0;
+
+      questions.forEach((question) => {
+        if (question.combinedGroupId) {
+          // 이미 처리된 그룹이면 스킵
+          if (processedGroupIds.has(question.combinedGroupId)) {
+            return;
+          }
+          processedGroupIds.add(question.combinedGroupId);
+
+          // 같은 그룹의 모든 문제 찾기
+          const groupQuestions = questions.filter(
+            (q) => q.combinedGroupId === question.combinedGroupId
+          );
+
+          displayNumber++;
+          displayItems.push({
+            type: 'combined_group',
+            questions: groupQuestions,
+            combinedGroupId: question.combinedGroupId,
+            displayNumber,
+          });
+        } else {
+          // 일반 문제
+          displayNumber++;
+          displayItems.push({
+            type: 'single',
+            question,
+            displayNumber,
+          });
+        }
+      });
+
+      console.log('[QuizPage] displayItems:', displayItems.map(item => ({
+        type: item.type,
+        displayNumber: item.displayNumber,
+        questionCount: item.type === 'combined_group' ? item.questions?.length : 1,
+      })));
+
       setQuiz({
         id: quizId,
         title: quizData.title || '퀴즈',
         questions,
+        displayItems,
+        courseId: quizData.courseId || undefined,
       });
 
       // 저장된 진행 상황 확인
@@ -419,7 +530,7 @@ export default function QuizPage() {
    * 다음 문제로 이동
    */
   const handleNext = useCallback(() => {
-    if (quiz && currentQuestionIndex < quiz.questions.length - 1) {
+    if (quiz && currentQuestionIndex < quiz.displayItems.length - 1) {
       setCurrentQuestionIndex((prev) => prev + 1);
     }
   }, [quiz, currentQuestionIndex]);
@@ -636,7 +747,7 @@ export default function QuizPage() {
     );
   }
 
-  // 현재 답안 가져오기
+  // 현재 답안 가져오기 (단일 문제용)
   const currentAnswer = currentQuestion ? answers[currentQuestion.id] : null;
 
   return (
@@ -645,86 +756,102 @@ export default function QuizPage() {
       <QuizHeader
         title={quiz.title}
         currentQuestion={currentQuestionIndex + 1}
-        totalQuestions={quiz.questions.length}
+        totalQuestions={quiz.displayItems.length}
         onBack={() => setShowExitModal(true)}
       />
 
       {/* 문제 영역 */}
       <main className="px-4 py-6">
         <AnimatePresence mode="wait">
-          {currentQuestion && (
+          {currentDisplayItem && (
             <motion.div
-              key={currentQuestion.id}
+              key={currentDisplayItem.type === 'single'
+                ? currentDisplayItem.question?.id
+                : currentDisplayItem.combinedGroupId}
               initial={{ opacity: 0, x: 50 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -50 }}
               transition={{ duration: 0.3 }}
             >
-              {/* 문제 카드 */}
-              <QuestionCard question={currentQuestion} />
+              {/* 단일 문제 */}
+              {currentDisplayItem.type === 'single' && currentQuestion && (
+                <>
+                  {/* 문제 카드 */}
+                  <QuestionCard question={currentQuestion} courseId={quiz?.courseId} />
 
-              {/* 선지 영역 */}
-              <div className="mt-4">
-                {/* OX 선지 */}
-                {currentQuestion.type === 'ox' && (
-                  <OXChoice
-                    selected={currentAnswer as OXAnswer}
-                    onSelect={(answer) =>
-                      handleAnswerChange(currentQuestion.id, answer)
-                    }
-                  />
-                )}
-
-                {/* 객관식 선지 */}
-                {currentQuestion.type === 'multiple' &&
-                  currentQuestion.choices && (
-                    currentQuestion.hasMultipleAnswers ? (
-                      // 복수정답: 다중 선택 모드
-                      <MultipleChoice
-                        choices={currentQuestion.choices}
-                        multiSelect
-                        selectedIndices={Array.isArray(currentAnswer) ? currentAnswer : []}
-                        onMultiSelect={(indices) =>
-                          handleAnswerChange(currentQuestion.id, indices)
+                  {/* 선지 영역 */}
+                  <div className="mt-4">
+                    {/* OX 선지 */}
+                    {currentQuestion.type === 'ox' && (
+                      <OXChoice
+                        selected={currentAnswer as OXAnswer}
+                        onSelect={(answer) =>
+                          handleAnswerChange(currentQuestion.id, answer)
                         }
                       />
-                    ) : (
-                      // 단일정답: 기존 단일 선택 모드
-                      <MultipleChoice
-                        choices={currentQuestion.choices}
-                        selected={currentAnswer as number | null}
-                        onSelect={(index) =>
-                          handleAnswerChange(currentQuestion.id, index)
+                    )}
+
+                    {/* 객관식 선지 */}
+                    {currentQuestion.type === 'multiple' &&
+                      currentQuestion.choices && (
+                        currentQuestion.hasMultipleAnswers ? (
+                          <MultipleChoice
+                            choices={currentQuestion.choices}
+                            multiSelect
+                            selectedIndices={Array.isArray(currentAnswer) ? currentAnswer : []}
+                            onMultiSelect={(indices) =>
+                              handleAnswerChange(currentQuestion.id, indices)
+                            }
+                          />
+                        ) : (
+                          <MultipleChoice
+                            choices={currentQuestion.choices}
+                            selected={currentAnswer as number | null}
+                            onSelect={(index) =>
+                              handleAnswerChange(currentQuestion.id, index)
+                            }
+                          />
+                        )
+                      )}
+
+                    {/* 주관식/단답형 입력 */}
+                    {(currentQuestion.type === 'short' || currentQuestion.type === 'short_answer') && (
+                      <ShortAnswer
+                        value={(currentAnswer as string) || ''}
+                        onChange={(value) =>
+                          handleAnswerChange(currentQuestion.id, value)
                         }
                       />
-                    )
-                  )}
+                    )}
 
-                {/* 주관식/단답형 입력 */}
-                {(currentQuestion.type === 'short' || currentQuestion.type === 'short_answer') && (
-                  <ShortAnswer
-                    value={(currentAnswer as string) || ''}
-                    onChange={(value) =>
-                      handleAnswerChange(currentQuestion.id, value)
-                    }
-                  />
-                )}
-
-                {/* 결합형 문제인데 선지가 없는 경우 (데이터 오류) - 주관식으로 대체 */}
-                {currentQuestion.type === 'combined' && !currentQuestion.choices && (
-                  <div className="space-y-4">
-                    <div className="p-3 bg-[#FFF8E1] border border-[#8B6914] text-sm text-[#8B6914]">
-                      ⚠️ 이 문제는 하위 문제가 설정되지 않았습니다. 텍스트로 답변해주세요.
-                    </div>
-                    <ShortAnswer
-                      value={(currentAnswer as string) || ''}
-                      onChange={(value) =>
-                        handleAnswerChange(currentQuestion.id, value)
-                      }
-                    />
+                    {/* 결합형 문제인데 선지가 없는 경우 (데이터 오류) - 주관식으로 대체 */}
+                    {currentQuestion.type === 'combined' && !currentQuestion.choices && (
+                      <div className="space-y-4">
+                        <div className="p-3 bg-[#FFF8E1] border border-[#8B6914] text-sm text-[#8B6914]">
+                          ⚠️ 이 문제는 하위 문제가 설정되지 않았습니다. 텍스트로 답변해주세요.
+                        </div>
+                        <ShortAnswer
+                          value={(currentAnswer as string) || ''}
+                          onChange={(value) =>
+                            handleAnswerChange(currentQuestion.id, value)
+                          }
+                        />
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                </>
+              )}
+
+              {/* 결합형 문제 그룹 */}
+              {currentDisplayItem.type === 'combined_group' && currentDisplayItem.questions && (
+                <CombinedQuestionGroup
+                  questions={currentDisplayItem.questions}
+                  answers={answers}
+                  onAnswerChange={handleAnswerChange}
+                  groupNumber={currentDisplayItem.displayNumber}
+                  courseId={quiz?.courseId}
+                />
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -733,15 +860,11 @@ export default function QuizPage() {
       {/* 네비게이션 */}
       <QuizNavigation
         currentQuestion={currentQuestionIndex + 1}
-        totalQuestions={quiz.questions.length}
+        totalQuestions={quiz.displayItems.length}
         onPrev={handlePrev}
         onNext={handleNext}
         onSubmit={handleSubmit}
-        hasAnswered={
-          currentAnswer !== null &&
-          currentAnswer !== '' &&
-          !(Array.isArray(currentAnswer) && currentAnswer.length === 0)
-        }
+        hasAnswered={isCurrentItemAnswered}
         isSubmitting={isSubmitting}
       />
 

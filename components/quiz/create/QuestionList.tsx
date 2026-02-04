@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import type { QuestionData } from './QuestionEditor';
 import { calculateTotalQuestionCount } from './QuestionEditor';
+import { formatChapterLabel } from '@/lib/courseIndex';
 
 // ============================================================
 // 타입 정의
@@ -18,6 +19,8 @@ interface QuestionListProps {
   onEditQuestion: (index: number) => void;
   /** 사용자 역할 (학생/교수) */
   userRole?: 'student' | 'professor';
+  /** 과목 ID (챕터 라벨 표시용) */
+  courseId?: string;
   /** 추가 클래스명 */
   className?: string;
 }
@@ -53,6 +56,7 @@ export default function QuestionList({
   onQuestionsChange,
   onEditQuestion,
   userRole = 'student',
+  courseId,
   className = '',
 }: QuestionListProps) {
   // 역할에 따른 라벨 반환
@@ -193,6 +197,13 @@ export default function QuestionList({
                           <span className="ml-1">({question.subQuestions.length})</span>
                         )}
                       </span>
+
+                      {/* 챕터 뱃지 */}
+                      {courseId && question.chapterId && (
+                        <span className="px-2 py-0.5 bg-[#E8F0FE] border border-[#4A6DA7] text-[#4A6DA7] text-xs font-medium">
+                          {formatChapterLabel(courseId, question.chapterId, question.chapterDetailId)}
+                        </span>
+                      )}
                     </div>
 
                     {/* 액션 버튼 */}
@@ -306,13 +317,19 @@ export default function QuestionList({
                         <div className="mt-2 space-y-1.5 border-l-2 border-[#1A6B1A] pl-3">
                           {question.subQuestions.map((sq, sqIdx) => (
                             <div key={sq.id} className="text-xs bg-[#EDEAE4] p-2">
-                              <div className="flex items-center gap-2 mb-1">
+                              <div className="flex items-center gap-2 mb-1 flex-wrap">
                                 <span className="px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] font-bold text-[10px]">
                                   {sqIdx + 1}
                                 </span>
                                 <span className="px-1.5 py-0.5 border border-[#5C5C5C] text-[#5C5C5C] text-[10px]">
                                   {getTypeLabel(sq.type)}
                                 </span>
+                                {/* 하위 문제 챕터 뱃지 */}
+                                {courseId && sq.chapterId && (
+                                  <span className="px-1.5 py-0.5 bg-[#E8F0FE] border border-[#4A6DA7] text-[#4A6DA7] text-[10px] font-medium">
+                                    {formatChapterLabel(courseId, sq.chapterId, sq.chapterDetailId)}
+                                  </span>
+                                )}
                               </div>
                               <p className="text-[#1A1A1A] line-clamp-1">{sq.text || '(내용 없음)'}</p>
                               <span className="text-[#5C5C5C]">

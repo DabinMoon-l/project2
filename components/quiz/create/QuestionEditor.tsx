@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { QuestionType, RubricItem } from '@/lib/ocr';
+import ChapterSelector from './ChapterSelector';
 
 // ============================================================
 // 타입 정의
@@ -67,6 +68,10 @@ export interface SubQuestion {
   image?: string;
   /** 복수정답 모드 (객관식용) */
   isMultipleAnswer?: boolean;
+  /** 챕터 ID */
+  chapterId?: string;
+  /** 세부항목 ID */
+  chapterDetailId?: string;
 }
 
 /**
@@ -109,6 +114,12 @@ export interface QuestionData {
   koreanAbcItems?: KoreanAbcItem[];
   /** 공통 지문 이미지 (결합형용) */
   passageImage?: string | null;
+  /** 공통 문제 (결합형용) - 공통 지문 위에 표시되는 문제 텍스트 */
+  commonQuestion?: string;
+  /** 챕터 ID (결합형이 아닌 문제용) */
+  chapterId?: string;
+  /** 세부항목 ID (결합형이 아닌 문제용) */
+  chapterDetailId?: string;
 }
 
 interface QuestionEditorProps {
@@ -124,6 +135,8 @@ interface QuestionEditorProps {
   className?: string;
   /** 사용자 역할 - 학생/교수 (기본값: 'student') */
   userRole?: 'student' | 'professor';
+  /** 과목 ID (챕터 선택용) */
+  courseId?: string;
 }
 
 // ============================================================
@@ -337,12 +350,14 @@ function SubQuestionEditor({
   onChange,
   onRemove,
   canRemove,
+  courseId,
 }: {
   subQuestion: SubQuestion;
   index: number;
   onChange: (subQuestion: SubQuestion) => void;
   onRemove: () => void;
   canRemove: boolean;
+  courseId?: string;
 }) {
   const handleTypeChange = (type: Exclude<QuestionType, 'combined' | 'essay' | 'subjective'>) => {
     onChange({
@@ -442,9 +457,26 @@ function SubQuestionEditor({
   return (
     <div className="p-4 border-2 border-[#1A1A1A] bg-[#EDEAE4]">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-sm font-bold text-[#1A1A1A]">
-          하위 문제 {index + 1}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-bold text-[#1A1A1A]">
+            하위 문제 {index + 1}
+          </span>
+          {courseId && (
+            <ChapterSelector
+              courseId={courseId}
+              chapterId={subQuestion.chapterId}
+              detailId={subQuestion.chapterDetailId}
+              onChange={(chapterId, detailId) => {
+                onChange({
+                  ...subQuestion,
+                  chapterId,
+                  chapterDetailId: detailId,
+                });
+              }}
+              compact
+            />
+          )}
+        </div>
         {canRemove && (
           <button
             type="button"
@@ -873,6 +905,7 @@ export default function QuestionEditor({
   questionNumber,
   className = '',
   userRole = 'student',
+  courseId,
 }: QuestionEditorProps) {
   // 초기 상태 설정
   const getInitialData = (): QuestionData => {
@@ -1470,6 +1503,11 @@ export default function QuestionEditor({
         }
       }
     } else if (question.type === 'combined') {
+      // 공통 문제 검사 (필수)
+      if (!question.commonQuestion?.trim()) {
+        newErrors.commonQuestion = '공통 문제를 입력해주세요.';
+      }
+
       // 하위 문제 검사
       const subQuestions = question.subQuestions || [];
       if (subQuestions.length === 0) {
@@ -1478,6 +1516,23 @@ export default function QuestionEditor({
         const hasEmptySubQuestion = subQuestions.some(sq => !sq.text.trim());
         if (hasEmptySubQuestion) {
           newErrors.subQuestions = '모든 하위 문제에 내용을 입력해주세요.';
+        }
+      }
+    }
+
+    // 챕터 검사 (courseId가 있을 때만 필수)
+    if (courseId) {
+      if (question.type === 'combined') {
+        // 결합형: 모든 하위 문제에 챕터 필수
+        const subQuestions = question.subQuestions || [];
+        const hasEmptyChapter = subQuestions.some(sq => !sq.chapterId);
+        if (hasEmptyChapter) {
+          newErrors.chapter = '모든 하위 문제의 챕터를 설정해주세요.';
+        }
+      } else {
+        // 일반 문제: 챕터 필수
+        if (!question.chapterId) {
+          newErrors.chapter = '챕터를 설정해주세요.';
         }
       }
     }
@@ -1595,7 +1650,52 @@ export default function QuestionEditor({
               ))}
             </div>
           )}
+
+          {/* 챕터 선택 (결합형이 아닌 문제만) */}
+          {courseId && question.type !== 'combined' && (
+            <div className="mt-3 flex items-center gap-2">
+              <span className="text-sm text-[#5C5C5C]">챕터:</span>
+              <ChapterSelector
+                courseId={courseId}
+                chapterId={question.chapterId}
+                detailId={question.chapterDetailId}
+                onChange={(chapterId, detailId) => {
+                  setQuestion(prev => ({
+                    ...prev,
+                    chapterId,
+                    chapterDetailId: detailId,
+                  }));
+                  setErrors(prev => ({ ...prev, chapter: '' }));
+                }}
+                error={errors.chapter}
+              />
+            </div>
+          )}
         </div>
+
+        {/* 결합형 공통 문제 (공통 지문 위에 표시) */}
+        {question.type === 'combined' && (
+          <div className="mb-4">
+            <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
+              공통 문제 <span className="text-[#8B1A1A]">*</span>
+            </label>
+            <textarea
+              value={question.commonQuestion || ''}
+              onChange={(e) => {
+                setQuestion(prev => ({ ...prev, commonQuestion: e.target.value }));
+                setErrors(prev => ({ ...prev, commonQuestion: '' }));
+              }}
+              placeholder="공통 문제를 입력하세요 (예: 다음 자료를 보고 물음에 답하시오.)"
+              rows={2}
+              className={`w-full px-4 py-3 border-2 bg-white resize-none transition-colors duration-200 focus:outline-none ${
+                errors.commonQuestion ? 'border-[#8B1A1A]' : 'border-[#1A1A1A]'
+              }`}
+            />
+            {errors.commonQuestion && (
+              <p className="mt-1 text-sm text-[#8B1A1A]">{errors.commonQuestion}</p>
+            )}
+          </div>
+        )}
 
         {/* 문제 텍스트 (결합형에서는 공통 지문) */}
         <div>
@@ -2361,6 +2461,7 @@ export default function QuestionEditor({
                     key={subQ.id}
                     subQuestion={subQ}
                     index={index}
+                    courseId={courseId}
                     onChange={(updated) => handleSubQuestionChange(index, updated)}
                     onRemove={() => handleRemoveSubQuestion(index)}
                     canRemove={(question.subQuestions || []).length > 1}
@@ -2380,6 +2481,9 @@ export default function QuestionEditor({
 
               {errors.subQuestions && (
                 <p className="text-sm text-[#8B1A1A]">{errors.subQuestions}</p>
+              )}
+              {errors.chapter && (
+                <p className="text-sm text-[#8B1A1A]">{errors.chapter}</p>
               )}
             </motion.div>
           )}

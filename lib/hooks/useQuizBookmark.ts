@@ -15,6 +15,8 @@ import {
   setDoc,
   deleteDoc,
   getDoc,
+  updateDoc,
+  increment,
   serverTimestamp,
   Timestamp,
 } from 'firebase/firestore';
@@ -38,6 +40,22 @@ export interface BookmarkedQuiz {
   participantCount: number;
   /** 북마크 일시 */
   bookmarkedAt: Timestamp;
+  /** 난이도 */
+  difficulty?: 'easy' | 'normal' | 'hard';
+  /** 챕터 ID */
+  chapterId?: string;
+  /** 제작자 닉네임 */
+  creatorNickname?: string;
+  /** 태그 목록 */
+  tags?: string[];
+  /** OX 문제 수 */
+  oxCount?: number;
+  /** 객관식 문제 수 */
+  multipleChoiceCount?: number;
+  /** 주관식 문제 수 */
+  subjectiveCount?: number;
+  /** 처음 푼 점수 */
+  myScore?: number;
 }
 
 /**
@@ -112,6 +130,14 @@ export const useQuizBookmark = (): UseQuizBookmarkReturn => {
                 questionCount: quizData.questionCount || 0,
                 participantCount: quizData.participantCount || 0,
                 bookmarkedAt: data.bookmarkedAt,
+                difficulty: quizData.difficulty || 'normal',
+                chapterId: quizData.chapterId || undefined,
+                creatorNickname: quizData.creatorNickname || '익명',
+                tags: quizData.tags || [],
+                oxCount: quizData.oxCount || 0,
+                multipleChoiceCount: quizData.multipleChoiceCount || 0,
+                subjectiveCount: quizData.subjectiveCount || 0,
+                myScore: user ? quizData.userScores?.[user.uid] : undefined,
               });
             }
           } catch (err) {
@@ -146,11 +172,16 @@ export const useQuizBookmark = (): UseQuizBookmarkReturn => {
     if (!user) return;
 
     const bookmarkRef = doc(db, 'quizBookmarks', `${user.uid}_${quizId}`);
+    const quizRef = doc(db, 'quizzes', quizId);
 
     try {
       if (bookmarkedQuizIds.has(quizId)) {
         // 북마크 해제
         await deleteDoc(bookmarkRef);
+        // 퀴즈의 북마크 수 감소
+        await updateDoc(quizRef, {
+          bookmarkCount: increment(-1),
+        });
       } else {
         // 북마크 추가 (courseId 포함)
         await setDoc(bookmarkRef, {
@@ -158,6 +189,10 @@ export const useQuizBookmark = (): UseQuizBookmarkReturn => {
           quizId,
           courseId: userCourseId || null,
           bookmarkedAt: serverTimestamp(),
+        });
+        // 퀴즈의 북마크 수 증가
+        await updateDoc(quizRef, {
+          bookmarkCount: increment(1),
         });
       }
     } catch (err) {

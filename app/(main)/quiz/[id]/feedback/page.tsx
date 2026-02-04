@@ -361,50 +361,16 @@ export default function FeedbackPage() {
         });
       }
 
-      // Cloud Function 호출하여 경험치 지급 (퀴즈 완료 + 피드백)
+      // 피드백 제출 여부를 localStorage에 저장 (EXP 페이지에서 확인)
       const feedbackCount = Object.values(feedbackTypes).filter((t) => t !== null).length;
-
-      // EXP 토스트 표시: 퀴즈 완료 EXP 계산
-      if (profile && pageData.questionResults.length > 0) {
-        const correctCount = pageData.questionResults.filter(q => q.isCorrect).length;
-        const totalCount = pageData.questionResults.length;
-        const score = Math.round((correctCount / totalCount) * 100);
-
-        // 점수에 따른 EXP (Cloud Function과 동일한 로직)
-        let quizExp = 5;
-        if (score === 100) quizExp = 50;
-        else if (score >= 90) quizExp = 35;
-        else if (score >= 70) quizExp = 25;
-        else if (score >= 50) quizExp = 15;
-
-        // 피드백 EXP (피드백 제출 시 10 XP)
-        const feedbackExp = feedbackCount > 0 ? 10 : 0;
-
-        const totalEarnedExp = quizExp + feedbackExp;
-        const currentExp = profile.totalExp || 0;
-
-        showExpToast(totalEarnedExp, '퀴즈 완료', currentExp + totalEarnedExp);
-      }
-
-      try {
-        const grantFeedbackReward = httpsCallable(functions, 'grantFeedbackReward');
-        await grantFeedbackReward({
-          userId: user.uid,
-          quizId: pageData.quizId,
-          feedbackCount,
-        });
-      } catch (functionError) {
-        console.error('Cloud Function 호출 오류:', functionError);
+      if (feedbackCount > 0) {
+        localStorage.setItem(`quiz_feedback_${quizId}`, 'true');
       }
 
       if (!isMountedRef.current) return; // 마운트 상태 체크
 
-      // 로컬 스토리지 정리
-      localStorage.removeItem(`quiz_answers_${quizId}`);
-      localStorage.removeItem(`quiz_result_${quizId}`);
-
-      // 퀴즈 목록으로 이동
-      router.push('/quiz');
+      // EXP 페이지로 이동 (EXP 토스트는 EXP 페이지에서 표시)
+      router.push(`/quiz/${quizId}/exp`);
     } catch (err) {
       console.error('피드백 제출 오류:', err);
       setError('피드백 제출 중 오류가 발생했습니다.');
@@ -417,10 +383,8 @@ export default function FeedbackPage() {
    * 건너뛰기 핸들러
    */
   const handleSkip = () => {
-    // 로컬 스토리지 정리
-    localStorage.removeItem(`quiz_answers_${quizId}`);
-    localStorage.removeItem(`quiz_result_${quizId}`);
-    router.push('/quiz');
+    // EXP 페이지로 이동 (피드백 미제출)
+    router.push(`/quiz/${quizId}/exp`);
   };
 
   // 로딩 UI

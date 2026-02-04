@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { useState, useEffect } from 'react';
 
 export type UserRole = 'student' | 'professor';
 
@@ -117,8 +118,29 @@ function isActiveTab(pathname: string, tabPath: string): boolean {
  */
 export default function Navigation({ role }: NavigationProps) {
   const pathname = usePathname();
+  const [isHidden, setIsHidden] = useState(false);
+
+  // body의 data-hide-nav attribute를 감지하여 네비게이션 숨김
+  useEffect(() => {
+    const checkHideNav = () => {
+      const shouldHide = document.body.hasAttribute('data-hide-nav');
+      setIsHidden(shouldHide);
+    };
+
+    // 초기 체크
+    checkHideNav();
+
+    // MutationObserver로 body attribute 변경 감지
+    const observer = new MutationObserver(checkHideNav);
+    observer.observe(document.body, { attributes: true, attributeFilter: ['data-hide-nav'] });
+
+    return () => observer.disconnect();
+  }, []);
 
   const tabs = role === 'professor' ? professorTabs : studentTabs;
+
+  // 숨김 상태면 렌더링하지 않음
+  if (isHidden) return null;
 
   return (
     <nav className="fixed bottom-4 left-4 right-4 z-50 flex justify-center">

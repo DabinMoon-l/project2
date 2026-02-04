@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion';
 import Image from 'next/image';
+import { formatChapterLabel } from '@/lib/courseIndex';
 
 /**
  * 문제 타입
@@ -89,6 +90,12 @@ export interface Question {
   combinedIndex?: number;
   /** 결합형 그룹 내 총 문제 수 */
   combinedTotal?: number;
+  /** 결합형 공통 문제 텍스트 */
+  commonQuestion?: string;
+  /** 챕터 ID */
+  chapterId?: string;
+  /** 챕터 세부항목 ID */
+  chapterDetailId?: string;
 }
 
 /**
@@ -97,6 +104,8 @@ export interface Question {
 interface QuestionCardProps {
   /** 문제 데이터 */
   question: Question;
+  /** 과목 ID (챕터 라벨 표시용) */
+  courseId?: string;
 }
 
 /**
@@ -117,7 +126,7 @@ interface QuestionCardProps {
  * />
  * ```
  */
-export default function QuestionCard({ question }: QuestionCardProps) {
+export default function QuestionCard({ question, courseId }: QuestionCardProps) {
   // 문제 유형별 라벨
   const typeLabels: Record<QuestionType, string> = {
     ox: 'OX',
@@ -152,6 +161,12 @@ export default function QuestionCard({ question }: QuestionCardProps) {
         {question.hasMultipleAnswers && (
           <span className="px-2 py-0.5 bg-[#1A6B1A] text-[#F5F0E8] text-xs font-bold">
             복수정답
+          </span>
+        )}
+        {/* 챕터 표시 */}
+        {courseId && question.chapterId && (
+          <span className="px-2 py-0.5 bg-[#E8F0FE] border border-[#4A6DA7] text-[#4A6DA7] text-xs font-medium">
+            {formatChapterLabel(courseId, question.chapterId, question.chapterDetailId)}
           </span>
         )}
       </div>

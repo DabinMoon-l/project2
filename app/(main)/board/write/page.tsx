@@ -75,7 +75,7 @@ export default function WritePage() {
             JIBDAN JISUNG
           </h1>
           <p className="text-sm text-[#3A3A3A] mt-1  italic">
-            "Submit Your Story"
+            "Submit Your Question"
           </p>
         </div>
       </header>
@@ -90,7 +90,7 @@ export default function WritePage() {
           <div className="flex-1 h-px bg-[#1A1A1A]" />
         </div>
         <p className="text-center text-sm  italic mt-2" style={{ color: theme.colors.textSecondary }}>
-          새로운 소식을 공유해보세요
+          궁금한 점을 질문해보세요
         </p>
       </div>
 

@@ -164,13 +164,13 @@ const HeadlineArticle = memo(function HeadlineArticle({
             <div className="mt-2 pt-2 border-t border-dashed border-[#1A1A1A] overflow-hidden">
               {displayItems.map(({ comment, replies }) => (
                 <div key={comment.id} className="overflow-hidden">
-                  <p className="text-sm text-[#1A1A1A] leading-snug py-0.5 overflow-hidden text-ellipsis" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere', maxWidth: '100%' }}>
-                    ㄴ {truncateComment(comment.content)}
+                  <p className="text-sm text-[#1A1A1A] leading-snug py-0.5 overflow-hidden text-ellipsis" style={{ wordBreak: 'break-all', maxWidth: '100%' }}>
+                    <span className="whitespace-nowrap">ㄴ </span>{truncateComment(comment.content)}
                   </p>
                   {/* 대댓글 표시 */}
                   {replies.map((reply) => (
-                    <p key={reply.id} className="text-sm text-[#5C5C5C] leading-snug py-0.5 pl-4 overflow-hidden text-ellipsis" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere', maxWidth: '100%' }}>
-                      ㄴ {truncateComment(reply.content)}
+                    <p key={reply.id} className="text-sm text-[#5C5C5C] leading-snug py-0.5 pl-4 overflow-hidden text-ellipsis" style={{ wordBreak: 'break-all', maxWidth: '100%' }}>
+                      <span className="whitespace-nowrap">ㄴ </span>{truncateComment(reply.content)}
                     </p>
                   ))}
                 </div>
@@ -428,13 +428,13 @@ const MasonryItem = memo(function MasonryItem({
         <div className="mt-2 pt-2 border-t border-dashed border-[#1A1A1A] overflow-hidden">
           {displayItems.map(({ comment, replies }) => (
             <div key={comment.id} className="overflow-hidden">
-              <p className="text-sm text-[#1A1A1A] leading-snug py-0.5 overflow-hidden text-ellipsis" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere', maxWidth: '100%' }}>
-                ㄴ {truncateComment(comment.content)}
+              <p className="text-sm text-[#1A1A1A] leading-snug py-0.5 overflow-hidden text-ellipsis" style={{ wordBreak: 'break-all', maxWidth: '100%' }}>
+                <span className="whitespace-nowrap">ㄴ </span>{truncateComment(comment.content)}
               </p>
               {/* 대댓글 표시 */}
               {replies.map((reply) => (
-                <p key={reply.id} className="text-sm text-[#5C5C5C] leading-snug py-0.5 pl-4 overflow-hidden text-ellipsis" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere', maxWidth: '100%' }}>
-                  ㄴ {truncateComment(reply.content)}
+                <p key={reply.id} className="text-sm text-[#5C5C5C] leading-snug py-0.5 pl-4 overflow-hidden text-ellipsis" style={{ wordBreak: 'break-all', maxWidth: '100%' }}>
+                  <span className="whitespace-nowrap">ㄴ </span>{truncateComment(reply.content)}
                 </p>
               ))}
             </div>

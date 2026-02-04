@@ -15,5 +15,5 @@ export type { QuestionData, ExamplesData, ExamplesType } from './QuestionEditor'
 export { default as QuestionList } from './QuestionList';
 
 // QuizMetaForm: 퀴즈 메타정보 폼 컴포넌트
-export { default as QuizMetaForm } from './QuizMetaForm';
+export { default as QuizMetaForm, validateRequiredTags, getChapterTags } from './QuizMetaForm';
 export type { QuizMeta } from './QuizMetaForm';

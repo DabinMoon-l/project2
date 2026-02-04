@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import {
@@ -19,6 +19,7 @@ import {
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse } from '@/lib/contexts';
+import { formatChapterLabel } from '@/lib/courseIndex';
 
 /**
  * 문제 결과 타입
@@ -48,6 +49,35 @@ interface QuestionResult {
   passageImage?: string;
   /** 결합형 ㄱㄴㄷ 보기 항목 */
   koreanAbcItems?: string[];
+  /** 결합형 공통 문제 */
+  commonQuestion?: string;
+  /** 문제 이미지 */
+  image?: string;
+  /** 하위 문제 보기 (ㄱㄴㄷ 형식) */
+  subQuestionOptions?: string[];
+  /** 보기 타입 */
+  subQuestionOptionsType?: 'text' | 'labeled';
+  /** 하위 문제 이미지 */
+  subQuestionImage?: string;
+  /** 챕터 ID */
+  chapterId?: string;
+  /** 챕터 세부항목 ID */
+  chapterDetailId?: string;
+}
+
+/**
+ * 결과 화면에 표시될 아이템 (단일 문제 또는 결합형 그룹)
+ */
+interface ResultDisplayItem {
+  type: 'single' | 'combined_group';
+  /** 단일 문제 (type === 'single'일 때) */
+  result?: QuestionResult;
+  /** 결합형 그룹 문제들 (type === 'combined_group'일 때) */
+  results?: QuestionResult[];
+  /** 결합형 그룹 ID */
+  combinedGroupId?: string;
+  /** 화면에 표시될 번호 */
+  displayNumber: number;
 }
 
 /**
@@ -56,6 +86,7 @@ interface QuestionResult {
 interface QuizResultData {
   quizId: string;
   quizTitle: string;
+  quizCreatorId?: string; // 퀴즈 제작자 ID
   correctCount: number;
   totalCount: number;
   earnedExp: number;
@@ -79,6 +110,50 @@ export default function QuizResultPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedQuestionIds, setExpandedQuestionIds] = useState<Set<string>>(new Set());
+  // 결합형 그룹 펼침 상태 (그룹 ID -> 펼침 여부)
+  const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(new Set());
+
+  // 결과 데이터를 displayItems로 변환 (결합형 그룹 처리)
+  const displayItems = useMemo<ResultDisplayItem[]>(() => {
+    if (!resultData) return [];
+
+    const items: ResultDisplayItem[] = [];
+    const processedGroupIds = new Set<string>();
+    let displayNumber = 0;
+
+    resultData.questionResults.forEach((result) => {
+      if (result.combinedGroupId) {
+        // 이미 처리된 그룹이면 스킵
+        if (processedGroupIds.has(result.combinedGroupId)) {
+          return;
+        }
+        processedGroupIds.add(result.combinedGroupId);
+
+        // 같은 그룹의 모든 문제 찾기
+        const groupResults = resultData.questionResults.filter(
+          (r) => r.combinedGroupId === result.combinedGroupId
+        );
+
+        displayNumber++;
+        items.push({
+          type: 'combined_group',
+          results: groupResults,
+          combinedGroupId: result.combinedGroupId,
+          displayNumber,
+        });
+      } else {
+        // 일반 문제
+        displayNumber++;
+        items.push({
+          type: 'single',
+          result,
+          displayNumber,
+        });
+      }
+    });
+
+    return items;
+  }, [resultData]);
 
   const calculateAndSaveResults = useCallback(async () => {
     if (!user || !quizId) return;
@@ -130,7 +205,8 @@ export default function QuizResultPage() {
       const questionResults: QuestionResult[] = questions.map(
         (q: any, index: number) => {
           const userAnswer = userAnswers[index] || '';
-          const correctAnswer = q.correctAnswer || q.answer || '';
+          // ?? 연산자 사용 - 0도 유효한 값이므로 (OX 문제에서 0=O)
+          const correctAnswer = q.correctAnswer ?? q.answer ?? '';
 
           let isCorrect = false;
           if (q.type === 'multiple') {
@@ -189,6 +265,42 @@ export default function QuizResultPage() {
             isCorrect,
             explanation: q.explanation || '해설이 없습니다.',
             isBookmarked: false,
+            // 문제 이미지/보기 필드
+            image: q.image || q.imageUrl || null,
+            // 보기: examples 객체에서 items 추출
+            subQuestionOptions: (() => {
+              // examples가 직접 배열인 경우 (이전 형식)
+              if (Array.isArray(q.examples)) {
+                return q.examples;
+              }
+              // examples가 객체이고 items 배열이 있는 경우 (새 형식)
+              if (q.examples && typeof q.examples === 'object' && Array.isArray(q.examples.items)) {
+                return q.examples.items;
+              }
+              // koreanAbcExamples가 있는 경우 (ㄱㄴㄷ 형식)
+              if (q.koreanAbcExamples && Array.isArray(q.koreanAbcExamples)) {
+                return q.koreanAbcExamples.map((e: {text: string}) => e.text);
+              }
+              // 기존 subQuestionOptions 필드
+              return q.subQuestionOptions || null;
+            })(),
+            // 보기 타입 추출
+            subQuestionOptionsType: (() => {
+              if (Array.isArray(q.examples)) {
+                return 'text'; // 이전 형식은 기본 텍스트로
+              }
+              if (q.examples && typeof q.examples === 'object' && q.examples.type) {
+                return q.examples.type;
+              }
+              if (q.koreanAbcExamples && Array.isArray(q.koreanAbcExamples)) {
+                return 'labeled';
+              }
+              return null;
+            })(),
+            subQuestionImage: q.subQuestionImage || null,
+            // 챕터 정보
+            chapterId: q.chapterId || null,
+            chapterDetailId: q.chapterDetailId || null,
           };
 
           // 결합형 그룹 정보 추가
@@ -203,6 +315,7 @@ export default function QuizResultPage() {
               result.passage = q.passage;
               result.passageImage = q.passageImage;
               result.koreanAbcItems = q.koreanAbcItems;
+              result.commonQuestion = q.commonQuestion;
             }
           }
 
@@ -212,10 +325,12 @@ export default function QuizResultPage() {
 
       const earnedExp = correctCount * 10;
       const quizUpdatedAt = quizData.updatedAt || quizData.createdAt || null;
+      const quizCreatorId = quizData.creatorId || null;
 
       const result: QuizResultData = {
         quizId,
         quizTitle: quizData.title || '퀴즈',
+        quizCreatorId,
         correctCount,
         totalCount: questions.length,
         earnedExp,
@@ -288,6 +403,21 @@ export default function QuizResultPage() {
           for (const questionResult of questionResults) {
             // 타입 정규화: subjective -> short
             const normalizedType = questionResult.type === 'subjective' ? 'short' : questionResult.type;
+            // 결합형 필드 준비
+            const combinedFields: Record<string, unknown> = {};
+            if (questionResult.combinedGroupId) {
+              combinedFields.combinedGroupId = questionResult.combinedGroupId;
+              combinedFields.combinedIndex = questionResult.combinedIndex;
+              combinedFields.combinedTotal = questionResult.combinedTotal;
+              // 첫 번째 하위 문제에만 공통 지문 정보 저장
+              if (questionResult.combinedIndex === 0 || questionResult.combinedIndex === 1) {
+                if (questionResult.passage) combinedFields.passage = questionResult.passage;
+                if (questionResult.passageType) combinedFields.passageType = questionResult.passageType;
+                if (questionResult.passageImage) combinedFields.passageImage = questionResult.passageImage;
+                if (questionResult.koreanAbcItems) combinedFields.koreanAbcItems = questionResult.koreanAbcItems;
+                if (questionResult.commonQuestion) combinedFields.commonQuestion = questionResult.commonQuestion;
+              }
+            }
             await addDoc(collection(db, 'reviews'), {
               userId: user.uid,
               quizId,
@@ -306,7 +436,15 @@ export default function QuizResultPage() {
               lastReviewedAt: null,
               courseId: userCourseId || null,
               quizUpdatedAt, // 퀴즈 수정 시간 저장
+              quizCreatorId: quizData.creatorId || null, // 퀴즈 제작자 ID
+              image: questionResult.image || null, // 문제 이미지
+              subQuestionOptions: questionResult.subQuestionOptions || null, // 보기 항목
+              subQuestionOptionsType: questionResult.subQuestionOptionsType || null, // 보기 타입
+              subQuestionImage: questionResult.subQuestionImage || null, // 하위 문제 이미지
+              chapterId: questionResult.chapterId || null, // 챕터 ID
+              chapterDetailId: questionResult.chapterDetailId || null, // 챕터 세부항목 ID
               createdAt: serverTimestamp(),
+              ...combinedFields,
             });
           }
 
@@ -315,6 +453,21 @@ export default function QuizResultPage() {
           for (const wrongAnswer of wrongAnswers) {
             // 타입 정규화: subjective -> short
             const normalizedWrongType = wrongAnswer.type === 'subjective' ? 'short' : wrongAnswer.type;
+            // 결합형 필드 준비
+            const wrongCombinedFields: Record<string, unknown> = {};
+            if (wrongAnswer.combinedGroupId) {
+              wrongCombinedFields.combinedGroupId = wrongAnswer.combinedGroupId;
+              wrongCombinedFields.combinedIndex = wrongAnswer.combinedIndex;
+              wrongCombinedFields.combinedTotal = wrongAnswer.combinedTotal;
+              // 첫 번째 하위 문제에만 공통 지문 정보 저장
+              if (wrongAnswer.combinedIndex === 0 || wrongAnswer.combinedIndex === 1) {
+                if (wrongAnswer.passage) wrongCombinedFields.passage = wrongAnswer.passage;
+                if (wrongAnswer.passageType) wrongCombinedFields.passageType = wrongAnswer.passageType;
+                if (wrongAnswer.passageImage) wrongCombinedFields.passageImage = wrongAnswer.passageImage;
+                if (wrongAnswer.koreanAbcItems) wrongCombinedFields.koreanAbcItems = wrongAnswer.koreanAbcItems;
+                if (wrongAnswer.commonQuestion) wrongCombinedFields.commonQuestion = wrongAnswer.commonQuestion;
+              }
+            }
             await addDoc(collection(db, 'reviews'), {
               userId: user.uid,
               quizId,
@@ -332,7 +485,15 @@ export default function QuizResultPage() {
               lastReviewedAt: null,
               courseId: userCourseId || null,
               quizUpdatedAt, // 퀴즈 수정 시간 저장
+              quizCreatorId: quizData.creatorId || null, // 퀴즈 제작자 ID
+              image: wrongAnswer.image || null, // 문제 이미지
+              subQuestionOptions: wrongAnswer.subQuestionOptions || null, // 보기 항목
+              subQuestionOptionsType: wrongAnswer.subQuestionOptionsType || null, // 보기 타입
+              subQuestionImage: wrongAnswer.subQuestionImage || null, // 하위 문제 이미지
+              chapterId: wrongAnswer.chapterId || null, // 챕터 ID
+              chapterDetailId: wrongAnswer.chapterDetailId || null, // 챕터 세부항목 ID
               createdAt: serverTimestamp(),
+              ...wrongCombinedFields,
             });
           }
         }
@@ -397,6 +558,19 @@ export default function QuizResultPage() {
         if (existingBookmarks.empty) {
           // 타입 정규화: subjective -> short
           const normalizedBookmarkType = question.type === 'subjective' ? 'short' : question.type;
+          // 결합형 필드 준비
+          const bookmarkCombinedFields: Record<string, unknown> = {};
+          if (question.combinedGroupId) {
+            bookmarkCombinedFields.combinedGroupId = question.combinedGroupId;
+            bookmarkCombinedFields.combinedIndex = question.combinedIndex;
+            bookmarkCombinedFields.combinedTotal = question.combinedTotal;
+            if (question.combinedIndex === 0 || question.combinedIndex === 1) {
+              if (question.passage) bookmarkCombinedFields.passage = question.passage;
+              if (question.passageType) bookmarkCombinedFields.passageType = question.passageType;
+              if (question.passageImage) bookmarkCombinedFields.passageImage = question.passageImage;
+              if (question.koreanAbcItems) bookmarkCombinedFields.koreanAbcItems = question.koreanAbcItems;
+            }
+          }
           await addDoc(collection(db, 'reviews'), {
             userId: user.uid,
             quizId: resultData.quizId,
@@ -414,7 +588,15 @@ export default function QuizResultPage() {
             lastReviewedAt: null,
             courseId: userCourseId || null,
             quizUpdatedAt: resultData.quizUpdatedAt || null, // 퀴즈 수정 시간 저장
+            quizCreatorId: resultData.quizCreatorId || null, // 퀴즈 제작자 ID
+            image: question.image || null, // 문제 이미지
+            subQuestionOptions: question.subQuestionOptions || null, // 보기 항목
+            subQuestionOptionsType: question.subQuestionOptionsType || null, // 보기 타입
+            subQuestionImage: question.subQuestionImage || null, // 하위 문제 이미지
+            chapterId: question.chapterId || null, // 챕터 ID
+            chapterDetailId: question.chapterDetailId || null, // 챕터 세부항목 ID
             createdAt: serverTimestamp(),
+            ...bookmarkCombinedFields,
           });
         }
       }
@@ -434,7 +616,12 @@ export default function QuizResultPage() {
   };
 
   const handleNext = () => {
-    router.push(`/quiz/${quizId}/feedback`);
+    // 자기가 만든 퀴즈인 경우 바로 EXP 페이지로 이동 (피드백 건너뜀)
+    if (user && resultData?.quizCreatorId === user.uid) {
+      router.push(`/quiz/${quizId}/exp`);
+    } else {
+      router.push(`/quiz/${quizId}/feedback`);
+    }
   };
 
   const handleGoHome = () => {
@@ -452,6 +639,167 @@ export default function QuizResultPage() {
       return newSet;
     });
   };
+
+  const toggleGroupExpand = (groupId: string) => {
+    setExpandedGroupIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(groupId)) {
+        newSet.delete(groupId);
+      } else {
+        newSet.add(groupId);
+      }
+      return newSet;
+    });
+  };
+
+  // 문제 상세 정보 렌더링 헬퍼 함수
+  const renderQuestionDetail = (result: QuestionResult) => (
+    <>
+      {/* 문제 이미지 */}
+      {result.image && (
+        <div className="mb-3">
+          <p className="text-xs font-bold text-[#5C5C5C] mb-2">문제 이미지</p>
+          <img src={result.image} alt="문제 이미지" className="max-w-full h-auto border border-[#1A1A1A]" />
+        </div>
+      )}
+
+      {/* 보기 (텍스트 또는 ㄱㄴㄷ 형식) */}
+      {result.subQuestionOptions && result.subQuestionOptions.length > 0 && (
+        <div className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1]">
+          <p className="text-xs font-bold text-[#8B6914] mb-2">보기</p>
+          {result.subQuestionOptionsType === 'text' ? (
+            // 텍스트 형식: 쉼표로 구분하여 한 줄로 표시
+            <p className="text-sm text-[#1A1A1A]">
+              {result.subQuestionOptions.join(', ')}
+            </p>
+          ) : (
+            // ㄱㄴㄷ 형식 (labeled) 또는 기본
+            <div className="space-y-1">
+              {result.subQuestionOptions.map((itm, idx) => (
+                <p key={idx} className="text-sm text-[#1A1A1A]">
+                  <span className="font-bold">{['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ'][idx]}.</span> {itm}
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 하위 문제 이미지 */}
+      {result.subQuestionImage && (
+        <div className="mb-3">
+          <p className="text-xs font-bold text-[#5C5C5C] mb-2">이미지</p>
+          <img src={result.subQuestionImage} alt="하위 문제 이미지" className="max-w-full h-auto border border-[#1A1A1A]" />
+        </div>
+      )}
+
+      {/* 선지 (객관식) */}
+      {result.options && result.options.length > 0 && (
+        <div>
+          {/* 복수 정답 표시 */}
+          {(() => {
+            const correctAnswerStr = result.correctAnswer?.toString() || '';
+            const correctAnswers = correctAnswerStr.includes(',')
+              ? correctAnswerStr.split(',').map(a => a.trim())
+              : [correctAnswerStr];
+            const isMultipleAnswer = correctAnswers.length > 1;
+            return isMultipleAnswer && (
+              <p className="text-xs text-[#8B6914] font-bold mb-2 flex items-center gap-1">
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+                복수 정답 문제 ({correctAnswers.length}개)
+              </p>
+            );
+          })()}
+          <p className="text-xs font-bold text-[#5C5C5C] mb-2">선지</p>
+          <div className="space-y-1">
+            {result.options.map((opt, idx) => {
+              const optionNum = (idx + 1).toString();
+              const correctAnswerStr = result.correctAnswer?.toString() || '';
+              const correctAnswers = correctAnswerStr.includes(',')
+                ? correctAnswerStr.split(',').map(a => a.trim())
+                : [correctAnswerStr];
+              const isCorrectOption = correctAnswers.includes(optionNum);
+              const userAnswerStr = result.userAnswer?.toString() || '';
+              const userAnswers = userAnswerStr.includes(',')
+                ? userAnswerStr.split(',').map(a => a.trim())
+                : [userAnswerStr];
+              const isUserAnswer = userAnswers.includes(optionNum);
+
+              let className = 'border-[#EDEAE4] text-[#1A1A1A]';
+              if (isCorrectOption) {
+                className = 'border-[#1A6B1A] bg-[#E8F5E9] text-[#1A6B1A]';
+              } else if (isUserAnswer) {
+                className = 'border-[#8B1A1A] bg-[#FDEAEA] text-[#8B1A1A]';
+              }
+
+              return (
+                <p
+                  key={idx}
+                  className={`text-sm p-2 border ${className}`}
+                >
+                  {idx + 1}. {opt}
+                  {isCorrectOption && ' (정답)'}
+                  {isUserAnswer && ' (내 답)'}
+                </p>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* OX/주관식 답 */}
+      {(!result.options || result.options.length === 0) && (
+        <div className="space-y-2">
+          <p className="text-sm">
+            <span className="text-[#5C5C5C]">내 답: </span>
+            <span className="font-bold text-[#1A1A1A]">
+              {result.type === 'ox'
+                ? (result.userAnswer === '0' || result.userAnswer?.toString().toUpperCase() === 'O' ? 'O' : result.userAnswer === '1' || result.userAnswer?.toString().toUpperCase() === 'X' ? 'X' : result.userAnswer || '(미응답)')
+                : (result.userAnswer || '(미응답)')}
+            </span>
+          </p>
+          {/* 주관식 복수 정답 표시 */}
+          {result.correctAnswer?.toString().includes('|||') ? (
+            <div className="text-sm">
+              <span className="text-[#5C5C5C]">정답 (다음 중 하나): </span>
+              <div className="mt-1 space-y-1">
+                {result.correctAnswer.split('|||').map((ans: string, idx: number) => (
+                  <span
+                    key={idx}
+                    className="inline-block mr-2 px-2 py-0.5 bg-[#E8F5E9] border border-[#1A6B1A] text-[#1A6B1A] font-bold"
+                  >
+                    {ans.trim()}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : result.type === 'ox' ? (
+            <p className="text-sm">
+              <span className="text-[#5C5C5C]">정답: </span>
+              <span className="font-bold text-[#1A6B1A]">
+                {result.correctAnswer === '0' || result.correctAnswer?.toString().toUpperCase() === 'O' ? 'O' : 'X'}
+              </span>
+            </p>
+          ) : (
+            <p className="text-sm">
+              <span className="text-[#5C5C5C]">정답: </span>
+              <span className="font-bold text-[#1A6B1A]">{result.correctAnswer}</span>
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* 해설 */}
+      <div>
+        <p className="text-xs font-bold text-[#5C5C5C] mb-1">해설</p>
+        <p className="text-sm text-[#1A1A1A] bg-[#EDEAE4] p-3 border border-[#1A1A1A]">
+          {result.explanation}
+        </p>
+      </div>
+    </>
+  );
 
   // 로딩 UI
   if (isLoading) {
@@ -525,212 +873,218 @@ export default function QuizResultPage() {
         {/* 문제별 결과 */}
         <div className="space-y-3">
           <h3 className="font-bold text-[#1A1A1A]">문제별 결과</h3>
-          {resultData.questionResults.map((result) => (
-            <div key={result.id}>
-              <button
-                onClick={() => toggleExpand(result.id)}
-                className={`w-full border-2 p-4 text-left ${
-                  result.isCorrect
-                    ? 'border-[#1A6B1A] bg-[#E8F5E9]'
-                    : 'border-[#8B1A1A] bg-[#FDEAEA]'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className={`text-sm font-bold ${result.isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>
-                    Q{result.number}. {result.isCorrect ? '정답' : '오답'}
-                  </span>
-                  <svg
-                    className={`w-5 h-5 text-[#5C5C5C] transition-transform ${
-                      expandedQuestionIds.has(result.id) ? 'rotate-180' : ''
+          {displayItems.map((item) => {
+            // 단일 문제
+            if (item.type === 'single' && item.result) {
+              const result = item.result;
+              return (
+                <div key={result.id}>
+                  <button
+                    onClick={() => toggleExpand(result.id)}
+                    className={`w-full border-2 p-4 text-left ${
+                      result.isCorrect
+                        ? 'border-[#1A6B1A] bg-[#E8F5E9]'
+                        : 'border-[#8B1A1A] bg-[#FDEAEA]'
                     }`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
                   >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-                <p className="text-sm text-[#1A1A1A] mt-2 line-clamp-2">{result.question}</p>
-              </button>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-sm font-bold ${result.isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>
+                          Q{item.displayNumber}. {result.isCorrect ? '정답' : '오답'}
+                        </span>
+                        {/* 챕터 표시 */}
+                        {userCourseId && result.chapterId && (
+                          <span className="px-1.5 py-0.5 bg-[#E8F0FE] border border-[#4A6DA7] text-[#4A6DA7] text-xs font-medium">
+                            {formatChapterLabel(userCourseId, result.chapterId, result.chapterDetailId)}
+                          </span>
+                        )}
+                      </div>
+                      <svg
+                        className={`w-5 h-5 text-[#5C5C5C] transition-transform ${
+                          expandedQuestionIds.has(result.id) ? 'rotate-180' : ''
+                        }`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                    <p className="text-sm text-[#1A1A1A] mt-2 line-clamp-2">{result.question}</p>
+                  </button>
 
-              {/* 상세 정보 (펼침) */}
-              <AnimatePresence>
-                {expandedQuestionIds.has(result.id) && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="overflow-hidden"
+                  {/* 상세 정보 (펼침) */}
+                  <AnimatePresence>
+                    {expandedQuestionIds.has(result.id) && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="border-2 border-t-0 border-[#1A1A1A] bg-[#F5F0E8] p-4 space-y-3">
+                          {renderQuestionDetail(result)}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              );
+            }
+
+            // 결합형 그룹
+            if (item.type === 'combined_group' && item.results && item.combinedGroupId) {
+              const groupId = item.combinedGroupId;
+              const groupResults = item.results;
+              const correctInGroup = groupResults.filter(r => r.isCorrect).length;
+              const totalInGroup = groupResults.length;
+              const firstResult = groupResults[0];
+              const isGroupExpanded = expandedGroupIds.has(groupId);
+
+              return (
+                <div key={groupId}>
+                  {/* 그룹 헤더 */}
+                  <button
+                    onClick={() => toggleGroupExpand(groupId)}
+                    className="w-full border border-[#1A1A1A] bg-[#F5F0E8] p-4 text-left"
                   >
-                    <div className="border-2 border-t-0 border-[#1A1A1A] bg-[#F5F0E8] p-4 space-y-3">
-                      {/* 결합형 문제 그룹 표시 */}
-                      {result.combinedGroupId && result.combinedIndex === 0 && (
-                        <div className="mb-3 p-3 border-2 border-[#8B6914] bg-[#FFF8E1]">
-                          <p className="text-xs font-bold text-[#8B6914] mb-2">
-                            결합형 문제 ({result.combinedTotal}문제)
-                          </p>
-                          {/* 공통 지문 - 텍스트 */}
-                          {result.passage && result.passageType !== 'korean_abc' && (
-                            <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{result.passage}</p>
-                          )}
-                          {/* 공통 지문 - ㄱㄴㄷ 형식 */}
-                          {result.passageType === 'korean_abc' && result.koreanAbcItems && result.koreanAbcItems.length > 0 && (
-                            <div className="space-y-1">
-                              {result.koreanAbcItems.map((item, idx) => (
-                                <p key={idx} className="text-sm text-[#1A1A1A]">
-                                  <span className="font-bold">{['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ'][idx]}.</span> {item}
-                                </p>
-                              ))}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-[#1A1A1A]">
+                          Q{item.displayNumber}. 결합형 문제
+                        </span>
+                        <span className="text-xs px-2 py-0.5 bg-[#1A1A1A] text-[#F5F0E8]">
+                          {correctInGroup}/{totalInGroup} 정답
+                        </span>
+                      </div>
+                      <svg
+                        className={`w-5 h-5 text-[#5C5C5C] transition-transform ${
+                          isGroupExpanded ? 'rotate-180' : ''
+                        }`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                    {/* 공통 문제 미리보기 */}
+                    {firstResult.commonQuestion && (
+                      <p className="text-sm text-[#1A1A1A] mt-2 line-clamp-2">{firstResult.commonQuestion}</p>
+                    )}
+                  </button>
+
+                  {/* 그룹 펼침 (공통 지문 + 하위 문제들) */}
+                  <AnimatePresence>
+                    {isGroupExpanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="border border-t-0 border-[#1A1A1A] bg-[#F5F0E8] p-4 space-y-4">
+                          {/* 공통 문제 */}
+                          {firstResult.commonQuestion && (
+                            <div className="p-3 border-2 border-[#1A1A1A] bg-white">
+                              <p className="text-xs font-bold text-[#5C5C5C] mb-2">공통 문제</p>
+                              <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{firstResult.commonQuestion}</p>
                             </div>
                           )}
-                          {/* 공통 이미지 */}
-                          {result.passageImage && (
-                            <img src={result.passageImage} alt="공통 이미지" className="mt-2 max-w-full h-auto border border-[#1A1A1A]" />
-                          )}
-                        </div>
-                      )}
-                      {/* 결합형 후속 문제 표시 */}
-                      {result.combinedGroupId && result.combinedIndex !== undefined && result.combinedIndex > 0 && (
-                        <p className="text-xs text-[#8B6914] font-bold mb-2">
-                          결합형 문제 ({result.combinedIndex + 1}/{result.combinedTotal})
-                        </p>
-                      )}
 
-                      {/* 선지 (객관식) */}
-                      {result.options && result.options.length > 0 && (
-                        <div>
-                          {/* 복수 정답 표시 */}
-                          {(() => {
-                            const correctAnswerStr = result.correctAnswer?.toString() || '';
-                            const correctAnswers = correctAnswerStr.includes(',')
-                              ? correctAnswerStr.split(',').map(a => a.trim())
-                              : [correctAnswerStr];
-                            const isMultipleAnswer = correctAnswers.length > 1;
-                            return isMultipleAnswer && (
-                              <p className="text-xs text-[#8B6914] font-bold mb-2 flex items-center gap-1">
-                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                                </svg>
-                                복수 정답 문제 ({correctAnswers.length}개)
+                          {/* 공통 지문/보기 */}
+                          {(firstResult.passage || firstResult.passageImage || firstResult.koreanAbcItems) && (
+                            <div className="p-3 border border-[#8B6914] bg-[#FFF8E1]">
+                              <p className="text-xs font-bold text-[#8B6914] mb-2">
+                                {firstResult.passageType === 'korean_abc' ? '보기' : '공통 지문'}
                               </p>
-                            );
-                          })()}
-                          <p className="text-xs font-bold text-[#5C5C5C] mb-2">선지</p>
-                          <div className="space-y-1">
-                            {result.options.map((opt, idx) => {
-                              const optionNum = (idx + 1).toString();
-                              const optionIdx = idx.toString();
-                              // 복수 정답 지원: 쉼표로 구분된 정답 처리
-                              const correctAnswerStr = result.correctAnswer?.toString() || '';
-                              const correctAnswers = correctAnswerStr.includes(',')
-                                ? correctAnswerStr.split(',').map(a => a.trim())
-                                : [correctAnswerStr];
-                              const isCorrectOption = correctAnswers.some(ca =>
-                                ca === optionNum || ca === optionIdx || ca === opt
-                              );
-                              // 사용자 답 비교: 복수 선택도 지원
-                              const userAnswerStr = result.userAnswer?.toString() || '';
-                              const userAnswers = userAnswerStr.includes(',')
-                                ? userAnswerStr.split(',').map(a => a.trim())
-                                : [userAnswerStr];
-                              const isUserAnswer = userAnswers.some(ua =>
-                                ua === optionNum || ua === optionIdx || ua === opt
-                              );
+                              {/* 텍스트 */}
+                              {firstResult.passage && firstResult.passageType !== 'korean_abc' && (
+                                <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{firstResult.passage}</p>
+                              )}
+                              {/* ㄱㄴㄷ 형식 */}
+                              {firstResult.passageType === 'korean_abc' && firstResult.koreanAbcItems && firstResult.koreanAbcItems.length > 0 && (
+                                <div className="space-y-1">
+                                  {firstResult.koreanAbcItems.map((itm, idx) => (
+                                    <p key={idx} className="text-sm text-[#1A1A1A]">
+                                      <span className="font-bold">{['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ'][idx]}.</span> {itm}
+                                    </p>
+                                  ))}
+                                </div>
+                              )}
+                              {/* 이미지 */}
+                              {firstResult.passageImage && (
+                                <img src={firstResult.passageImage} alt="공통 이미지" className="mt-2 max-w-full h-auto border border-[#1A1A1A]" />
+                              )}
+                            </div>
+                          )}
 
-                              // 스타일 결정: 정답 > 내 오답 > 기본
-                              let className = 'border-[#EDEAE4] text-[#1A1A1A]';
-                              if (isCorrectOption) {
-                                className = 'border-[#1A6B1A] bg-[#E8F5E9] text-[#1A6B1A]';
-                              } else if (isUserAnswer) {
-                                className = 'border-[#8B1A1A] bg-[#FDEAEA] text-[#8B1A1A]';
-                              }
-
-                              return (
-                                <p
-                                  key={idx}
-                                  className={`text-sm p-2 border ${className}`}
+                          {/* 하위 문제들 */}
+                          <div className="space-y-3 p-3 bg-[#EDEAE4] border border-[#D4CFC4]">
+                            {groupResults.map((subResult, subIdx) => (
+                              <div key={subResult.id}>
+                                <button
+                                  onClick={() => toggleExpand(subResult.id)}
+                                  className={`w-full border p-3 text-left ${
+                                    subResult.isCorrect
+                                      ? 'border-[#1A6B1A] bg-[#E8F5E9]'
+                                      : 'border-[#8B1A1A] bg-[#FDEAEA]'
+                                  }`}
                                 >
-                                  {idx + 1}. {opt}
-                                  {isCorrectOption && ' (정답)'}
-                                  {isUserAnswer && !isCorrectOption && ' (내 답)'}
-                                </p>
-                              );
-                            })}
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className={`text-xs font-bold ${subResult.isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>
+                                        Q{item.displayNumber}-{subIdx + 1}. {subResult.isCorrect ? '정답' : '오답'}
+                                      </span>
+                                      {/* 챕터 표시 */}
+                                      {userCourseId && subResult.chapterId && (
+                                        <span className="px-1.5 py-0.5 bg-[#E8F0FE] border border-[#4A6DA7] text-[#4A6DA7] text-[10px] font-medium">
+                                          {formatChapterLabel(userCourseId, subResult.chapterId, subResult.chapterDetailId)}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <svg
+                                      className={`w-4 h-4 text-[#5C5C5C] transition-transform ${
+                                        expandedQuestionIds.has(subResult.id) ? 'rotate-180' : ''
+                                      }`}
+                                      fill="none"
+                                      stroke="currentColor"
+                                      viewBox="0 0 24 24"
+                                    >
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                  </div>
+                                  <p className="text-xs text-[#1A1A1A] mt-1 line-clamp-2">{subResult.question}</p>
+                                </button>
+
+                                {/* 하위 문제 상세 */}
+                                <AnimatePresence>
+                                  {expandedQuestionIds.has(subResult.id) && (
+                                    <motion.div
+                                      initial={{ height: 0, opacity: 0 }}
+                                      animate={{ height: 'auto', opacity: 1 }}
+                                      exit={{ height: 0, opacity: 0 }}
+                                      className="overflow-hidden"
+                                    >
+                                      <div className="border-2 border-t-0 border-[#1A1A1A] bg-white p-3 space-y-2">
+                                        {renderQuestionDetail(subResult)}
+                                      </div>
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </div>
+                            ))}
                           </div>
                         </div>
-                      )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              );
+            }
 
-                      {/* OX/주관식 답 */}
-                      {(!result.options || result.options.length === 0) && (
-                        <div className="space-y-2">
-                          <p className="text-sm">
-                            <span className="text-[#5C5C5C]">내 답: </span>
-                            <span className="font-bold text-[#1A1A1A]">
-                              {result.type === 'ox'
-                                ? (result.userAnswer === '0' || result.userAnswer?.toString().toUpperCase() === 'O' ? 'O' : result.userAnswer === '1' || result.userAnswer?.toString().toUpperCase() === 'X' ? 'X' : result.userAnswer || '(미응답)')
-                                : (result.userAnswer || '(미응답)')}
-                            </span>
-                          </p>
-                          {/* 주관식 복수 정답 표시 */}
-                          {result.correctAnswer?.toString().includes('|||') ? (
-                            <div className="text-sm">
-                              <span className="text-[#5C5C5C]">정답 (다음 중 하나): </span>
-                              <div className="mt-1 space-y-1">
-                                {result.correctAnswer.split('|||').map((ans: string, idx: number) => (
-                                  <span
-                                    key={idx}
-                                    className="inline-block mr-2 px-2 py-0.5 bg-[#E8F5E9] border border-[#1A6B1A] text-[#1A6B1A] font-bold"
-                                  >
-                                    {ans.trim()}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          ) : result.type === 'ox' ? (
-                            // OX 문제: 인덱스를 O/X로 변환
-                            <p className="text-sm">
-                              <span className="text-[#5C5C5C]">정답: </span>
-                              <span className="font-bold text-[#1A6B1A]">
-                                {result.correctAnswer === '0' || result.correctAnswer?.toString().toUpperCase() === 'O' ? 'O' : 'X'}
-                              </span>
-                            </p>
-                          ) : (
-                            <p className="text-sm">
-                              <span className="text-[#5C5C5C]">정답: </span>
-                              <span className="font-bold text-[#1A6B1A]">{result.correctAnswer}</span>
-                            </p>
-                          )}
-                        </div>
-                      )}
-
-                      {/* 해설 */}
-                      <div>
-                        <p className="text-xs font-bold text-[#5C5C5C] mb-1">해설</p>
-                        <p className="text-sm text-[#1A1A1A] bg-[#EDEAE4] p-3 border border-[#1A1A1A]">
-                          {result.explanation}
-                        </p>
-                      </div>
-
-                      {/* 찜하기 버튼 */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleToggleBookmark(result.id);
-                        }}
-                        className={`w-full py-2 font-bold border-2 text-sm ${
-                          result.isBookmarked
-                            ? 'border-[#8B6914] bg-[#FFF8E1] text-[#8B6914]'
-                            : 'border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A]'
-                        }`}
-                      >
-                        {result.isBookmarked ? '찜 완료' : '찜하기'}
-                      </button>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          ))}
+            return null;
+          })}
         </div>
       </motion.main>
 
