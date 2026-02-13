@@ -66,7 +66,6 @@ function VideoBackground() {
         muted
         playsInline
         className="absolute inset-0 w-full h-full object-cover"
-        poster="/images/login-poster.jpg"  // 비디오 로딩 전 표시할 이미지 (선택)
       >
         <source src="/videos/login-bg.mp4" type="video/mp4" />
         {/* 비디오 미지원 브라우저용 폴백 */}
@@ -203,6 +202,7 @@ export default function LoginPage() {
           alt="장식 이미지"
           width={280}
           height={140}
+          style={{ width: 'auto', height: 'auto' }}
           className="drop-shadow-lg"
         />
       </div>
@@ -221,9 +221,10 @@ export default function LoginPage() {
         >
           <Image
             src="/images/logo.png"
-            alt="QuizBunny"
+            alt="RabbiTory"
             width={300}
             height={100}
+            style={{ width: 'auto', height: 'auto' }}
             className="drop-shadow-lg"
             priority
           />

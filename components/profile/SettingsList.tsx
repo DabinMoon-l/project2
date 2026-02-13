@@ -307,7 +307,7 @@ export default function SettingsList({
           className="text-sm"
           style={{ color: theme.colors.textSecondary }}
         >
-          QuizBunny v1.0.0
+          RabbiTory v1.0.0
         </p>
         <p
           className="text-xs mt-1"

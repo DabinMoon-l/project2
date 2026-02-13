@@ -19,6 +19,8 @@ interface QuickActionsProps {
   onAnalyze: () => void;
   /** 피드백 확인 클릭 */
   onViewFeedback: () => void;
+  /** 출제 스타일 분석 클릭 (선택) */
+  onViewStyleProfile?: () => void;
   /** 설정 클릭 (선택) */
   onSettings?: () => void;
 }
@@ -31,6 +33,7 @@ export default function QuickActions({
   onViewStudents,
   onAnalyze,
   onViewFeedback,
+  onViewStyleProfile,
   onSettings,
 }: QuickActionsProps) {
   const actions: QuickAction[] = [
@@ -62,6 +65,17 @@ export default function QuickActions({
       color: 'bg-purple-100 text-purple-600',
       onClick: onViewFeedback,
     },
+    ...(onViewStyleProfile
+      ? [
+          {
+            id: 'style-profile',
+            label: '출제 스타일',
+            icon: '🎯',
+            color: 'bg-cyan-100 text-cyan-600',
+            onClick: onViewStyleProfile,
+          },
+        ]
+      : []),
     ...(onSettings
       ? [
           {

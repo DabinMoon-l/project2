@@ -3,12 +3,15 @@
 @tailwind utilities;
 
 :root {
-  /* 빈티지 크림 배경 */
-  --background-cream: #F5F0E8;
-  --background-cream-dark: #EBE5D9;
+  /* 낡은 신문 스타일 배경 */
+  --background-cream: #E8DFD0;
+  --background-cream-light: #F0E8DA;
+  --background-cream-dark: #DED5C4;
   --text-dark: #1A1A1A;
   --text-secondary: #5C5C5C;
-  --border-vintage: #D4CFC4;
+  --text-sepia: #4A4235;
+  --border-vintage: #C4B8A8;
+  --border-dark: #8B7355;
 }
 
 body {
@@ -136,4 +139,13 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #A8A39A;
+}
+
+/* 스크롤바 숨김 유틸리티 */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }

@@ -358,7 +358,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                   className="text-xs  italic"
                   style={{ color: theme.colors.textSecondary }}
                 >
-                  QuizBunny v1.0.0
+                  RabbiTory v1.0.0
                 </p>
               </div>
             </div>

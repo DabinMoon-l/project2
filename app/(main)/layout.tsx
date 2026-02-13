@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { ThemeProvider } from '@/styles/themes/ThemeProvider';
 import { useRequireAuth } from '@/lib/hooks/useAuth';
 import Navigation from '@/components/common/Navigation';
 import { NotificationProvider, ExpToastProvider } from '@/components/common';
+import { AIQuizContainer } from '@/components/ai-quiz';
 import { UserProvider, useUser, CourseProvider, useCourse } from '@/lib/contexts';
 import type { ClassType } from '@/styles/themes';
 
@@ -16,13 +17,22 @@ import type { ClassType } from '@/styles/themes';
 function MainLayoutContent({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { profile, loading: profileLoading, isProfessor } = useUser();
   const { userCourseId } = useCourse();
   const [userClassType, setUserClassType] = useState<ClassType>('A');
   const [waitCount, setWaitCount] = useState(0);
 
-  // 네비게이션 바를 숨길 페이지 (퀴즈 풀이, 결과, 수정 페이지 등)
-  const hideNavigation = pathname?.match(/^\/quiz\/[^/]+/) !== null || pathname?.includes('/edit');
+  // 네비게이션 바를 숨길 페이지
+  // - 퀴즈 풀이/결과/피드백 (/quiz/[id]/*)
+  // - 수정 페이지 (/edit 포함)
+  // - 랭킹 페이지 (/ranking)
+  // - 랜덤 복습 페이지 (/review/random)
+  const hideNavigation =
+    pathname?.match(/^\/quiz\/[^/]+/) !== null ||
+    pathname?.includes('/edit') ||
+    pathname === '/ranking' ||
+    pathname === '/review/random';
 
   // 프로필이 없으면 온보딩으로 리다이렉트
   useEffect(() => {
@@ -87,6 +97,9 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
             {!hideNavigation && (
               <Navigation role={isProfessor ? 'professor' : 'student'} />
             )}
+
+            {/* AI 퀴즈 플로팅 버튼 (학생 전용, 퀴즈 페이지에서만, 관리 모드 제외) */}
+            {!isProfessor && pathname === '/quiz' && searchParams.get('manage') !== 'true' && <AIQuizContainer />}
           </div>
         </ExpToastProvider>
       </NotificationProvider>

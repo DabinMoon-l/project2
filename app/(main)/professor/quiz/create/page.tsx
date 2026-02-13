@@ -313,7 +313,43 @@ export default function CreateQuizPage() {
             subAnswer = sq.answerIndex ?? -1;
           }
 
+          // 하위 문제의 혼합 보기(mixedExamples) 처리
+          let subMixedExamples = null;
+          if (sq.mixedExamples && Array.isArray(sq.mixedExamples) && sq.mixedExamples.length > 0) {
+            const filteredMixed = sq.mixedExamples
+              .filter((block: any) => {
+                switch (block.type) {
+                  case 'text': return block.content?.trim();
+                  case 'labeled': return (block.items || []).some((i: any) => i.content?.trim());
+                  case 'image': return block.imageUrl?.trim();
+                  case 'grouped': return (block.children?.length ?? 0) > 0;
+                  default: return false;
+                }
+              })
+              .map((block: any) => {
+                if (block.type === 'labeled') {
+                  return { ...block, items: (block.items || []).filter((i: any) => i.content?.trim()) };
+                }
+                if (block.type === 'grouped') {
+                  return {
+                    ...block,
+                    children: (block.children || []).filter((child: any) => {
+                      if (child.type === 'text') return child.content?.trim();
+                      if (child.type === 'labeled') return (child.items || []).some((i: any) => i.content?.trim());
+                      if (child.type === 'image') return child.imageUrl?.trim();
+                      return false;
+                    }),
+                  };
+                }
+                return block;
+              });
+            if (filteredMixed.length > 0) {
+              subMixedExamples = filteredMixed;
+            }
+          }
+
           const subQuestionData: any = {
+            id: sq.id || `${combinedGroupId}_${sqIndex}`, // ID 명시적 포함
             order: orderIndex++,
             text: sq.text,
             type: sq.type,
@@ -328,6 +364,7 @@ export default function CreateQuizPage() {
               type: 'labeled',
               items: sq.koreanAbcExamples.map(item => item.text).filter(t => t.trim()),
             } : undefined,
+            mixedExamples: subMixedExamples,
             // 결합형 그룹 정보
             combinedGroupId,
             combinedIndex: sqIndex,
@@ -342,6 +379,37 @@ export default function CreateQuizPage() {
             subQuestionData.koreanAbcItems = q.passageType === 'korean_abc'
               ? (q.koreanAbcItems || []).filter((item) => item.text?.trim()).map(item => item.text)
               : undefined;
+            // 공통 지문 혼합 보기
+            if (q.passageType === 'mixed' && q.passageMixedExamples && q.passageMixedExamples.length > 0) {
+              const filteredPassageMixed = q.passageMixedExamples
+                .filter((block: any) => {
+                  switch (block.type) {
+                    case 'text': return block.content?.trim();
+                    case 'labeled': return (block.items || []).some((i: any) => i.content?.trim());
+                    case 'image': return block.imageUrl?.trim();
+                    case 'grouped': return (block.children?.length ?? 0) > 0;
+                    default: return false;
+                  }
+                })
+                .map((block: any) => {
+                  if (block.type === 'labeled') {
+                    return { ...block, items: (block.items || []).filter((i: any) => i.content?.trim()) };
+                  }
+                  if (block.type === 'grouped') {
+                    return {
+                      ...block,
+                      children: (block.children || []).filter((child: any) => {
+                        if (child.type === 'text') return child.content?.trim();
+                        if (child.type === 'labeled') return (child.items || []).some((i: any) => i.content?.trim());
+                        if (child.type === 'image') return child.imageUrl?.trim();
+                        return false;
+                      }),
+                    };
+                  }
+                  return block;
+                });
+              subQuestionData.passageMixedExamples = filteredPassageMixed.length > 0 ? filteredPassageMixed : undefined;
+            }
             subQuestionData.combinedMainText = q.text || '';
           }
 
@@ -385,19 +453,41 @@ export default function CreateQuizPage() {
             type: q.examples.type,
             items: q.examples.items.filter((item) => item.trim()),
           } : undefined,
-          // 혼합 보기 (텍스트박스+ㄱㄴㄷ 블록)
+          // 혼합 보기 (텍스트박스+ㄱㄴㄷ+이미지+그룹 블록)
           mixedExamples: q.mixedExamples && q.mixedExamples.length > 0
-            ? q.mixedExamples.filter((block) =>
-                block.type === 'text'
-                  ? block.content?.trim()
-                  : (block.items || []).some(i => i.content.trim())
-              ).map(block => ({
-                ...block,
-                // labeled 블록의 빈 항목 필터링
-                items: block.type === 'labeled'
-                  ? (block.items || []).filter(i => i.content.trim())
-                  : undefined,
-              }))
+            ? q.mixedExamples.filter((block) => {
+                switch (block.type) {
+                  case 'text':
+                    return block.content?.trim();
+                  case 'labeled':
+                    return (block.items || []).some(i => i.content?.trim());
+                  case 'image':
+                    return block.imageUrl?.trim();
+                  case 'grouped':
+                    return (block.children?.length ?? 0) > 0;
+                  default:
+                    return false;
+                }
+              }).map(block => {
+                if (block.type === 'labeled') {
+                  return {
+                    ...block,
+                    items: (block.items || []).filter(i => i.content?.trim()),
+                  };
+                }
+                if (block.type === 'grouped') {
+                  return {
+                    ...block,
+                    children: (block.children || []).filter(child => {
+                      if (child.type === 'text') return child.content?.trim();
+                      if (child.type === 'labeled') return (child.items || []).some(i => i.content?.trim());
+                      if (child.type === 'image') return child.imageUrl?.trim();
+                      return false;
+                    }),
+                  };
+                }
+                return block;
+              })
             : undefined,
         });
       }

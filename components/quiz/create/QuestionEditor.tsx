@@ -35,20 +35,65 @@ export interface LabeledItem {
 }
 
 /**
- * 혼합 보기 블록 (텍스트박스, ㄱㄴㄷ 그룹, 이미지, 또는 묶음)
+ * 혼합 보기 블록 (텍스트박스, ㄱㄴㄷ 그룹, (가)(나)(다) 그룹, ◦항목, 이미지, 또는 묶음)
  * - text: 텍스트박스 (content 필드 사용)
  * - labeled: ㄱ.ㄴ.ㄷ. 형식 (items 배열 사용, 블록 내에서 항목 추가/삭제 가능)
+ * - gana: (가)(나)(다) 형식 (items 배열 사용)
+ * - bullet: ◦ 항목 형식 (items 배열 사용)
  * - image: 이미지 (imageUrl 필드 사용)
  * - grouped: 묶음 (children 배열 사용 - 여러 블록을 하나로 묶음)
+ * @deprecated 지문(PassageBlock)과 보기(BogiData)로 분리됨
  */
 export interface MixedExampleBlock {
   id: string;
-  type: 'text' | 'labeled' | 'image' | 'grouped';
+  type: 'text' | 'labeled' | 'gana' | 'bullet' | 'image' | 'grouped';
   content?: string; // text 타입일 때
-  items?: LabeledItem[]; // labeled 타입일 때
+  items?: LabeledItem[]; // labeled, gana, bullet 타입일 때
   imageUrl?: string; // image 타입일 때
   children?: MixedExampleBlock[]; // grouped 타입일 때
 }
+
+/**
+ * 제시문 블록 (텍스트박스, (가)(나)(다) 그룹, ◦항목, 이미지, 또는 묶음)
+ * - text: 텍스트박스 (content 필드 사용)
+ * - gana: (가)(나)(다) 형식 (items 배열 사용)
+ * - bullet: ◦ 항목 형식 (items 배열 사용)
+ * - image: 이미지 (imageUrl 필드 사용)
+ * - grouped: 묶음 (children 배열 사용 - 여러 블록을 하나로 묶음)
+ *
+ * 주의: labeled(ㄱㄴㄷ) 타입은 제시문에서 사용 불가 (보기에서만 사용)
+ */
+export interface PassageBlock {
+  id: string;
+  type: 'text' | 'gana' | 'bullet' | 'image' | 'grouped';
+  content?: string; // text 타입일 때
+  items?: LabeledItem[]; // gana, bullet 타입일 때
+  imageUrl?: string; // image 타입일 때
+  children?: PassageBlock[]; // grouped 타입일 때
+  prompt?: string; // 제시문 발문
+}
+
+/**
+ * 보기 데이터 (<보기> 박스 - 객관식/주관식에서만 사용)
+ * - questionText: 발문 ("이에 대한 설명으로 옳은 것만을 <보기>에서 있는 대로 고른 것은?" 같은 문구)
+ * - items: ㄱ.ㄴ.ㄷ. 형식의 보기 항목들
+ */
+export interface BogiData {
+  /** 발문 (자동 선택 또는 직접 입력) */
+  questionText: string;
+  /** ㄱ.ㄴ.ㄷ. 형식의 보기 항목들 */
+  items: LabeledItem[];
+}
+
+/**
+ * 보기 발문 프리셋
+ */
+export const BOGI_QUESTION_PRESETS = [
+  '이에 대한 설명으로 옳은 것만을 <보기>에서 있는 대로 고른 것은?',
+  '이에 대한 설명으로 옳지 않은 것만을 <보기>에서 있는 대로 고른 것은?',
+  '위 자료에 대한 분석으로 옳은 것만을 <보기>에서 있는 대로 고른 것은?',
+  '위 자료에 대한 분석으로 옳지 않은 것만을 <보기>에서 있는 대로 고른 것은?',
+];
 
 /**
  * @deprecated 이전 버전 호환용 - MixedExampleBlock으로 마이그레이션됨
@@ -73,6 +118,11 @@ export type PassageType = 'text' | 'korean_abc';
 export const KOREAN_LABELS = ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
 
 /**
+ * (가)(나)(다) 라벨 순서 (가~바까지 6개)
+ */
+export const GANA_LABELS = ['가', '나', '다', '라', '마', '바'];
+
+/**
  * ㄱㄴㄷ식 보기 항목 (결합형 공통 지문용)
  */
 export interface KoreanAbcItem {
@@ -94,12 +144,20 @@ export interface SubQuestion {
   answerTexts?: string[];
   rubric?: RubricItem[];
   explanation?: string;
-  /** 보기 유형 ('text': 텍스트 박스, 'korean_abc': ㄱㄴㄷ 형식) */
-  examplesType?: 'text' | 'korean_abc';
-  /** 보기 - 텍스트 박스용 (줄바꿈으로 구분) */
+  /** @deprecated 제시문(passageBlocks)으로 대체됨 */
+  examplesType?: 'text' | 'korean_abc' | 'mixed';
+  /** @deprecated 제시문(passageBlocks)으로 대체됨 */
   examples?: string[];
-  /** 보기 - ㄱㄴㄷ 형식용 */
+  /** @deprecated 제시문(passageBlocks)으로 대체됨 */
   koreanAbcExamples?: KoreanAbcItem[];
+  /** @deprecated 제시문(passageBlocks)으로 대체됨 */
+  mixedExamples?: MixedExampleBlock[];
+  /** 제시문 블록들 (텍스트박스, (가)(나)(다), 이미지, 묶기) */
+  passageBlocks?: PassageBlock[];
+  /** 제시문 발문 */
+  passagePrompt?: string;
+  /** 보기 데이터 (<보기> 박스 - 객관식/주관식에서만 사용, OX는 사용 안함) */
+  bogi?: BogiData | null;
   /** 이미지 URL (하위 문제별 개별 이미지) */
   image?: string;
   /** 복수정답 모드 (객관식용) */
@@ -134,25 +192,33 @@ export interface QuestionData {
   explanation: string;
   /** 문제 이미지 URL */
   imageUrl?: string | null;
-  /** 보기 데이터 (기존 - 호환성 유지) */
+  /** @deprecated 제시문(passageBlocks)으로 대체됨 - 호환성 유지 */
   examples?: ExamplesData | null;
-  /** 혼합 보기 블록들 (텍스트박스 또는 ㄱㄴㄷ 그룹) */
+  /** @deprecated 제시문(passageBlocks)으로 대체됨 - 호환성 유지 */
   mixedExamples?: MixedExampleBlock[];
+  /** 제시문 블록들 (텍스트박스, (가)(나)(다), 이미지, 묶기) */
+  passageBlocks?: PassageBlock[];
+  /** 제시문 발문 */
+  passagePrompt?: string;
+  /** 보기 데이터 (<보기> 박스 - 객관식/주관식에서만 사용) */
+  bogi?: BogiData | null;
   /** 루브릭 (서술형용) */
   rubric?: RubricItem[];
   /** 채점 방식 (서술형용) - 기본값: 'manual' */
   scoringMethod?: 'ai_assisted' | 'manual';
   /** 하위 문제 (결합형용) */
   subQuestions?: SubQuestion[];
-  /** 공통 지문 타입 (결합형용) - text: 텍스트 박스, korean_abc: ㄱㄴㄷ식 보기 */
-  passageType?: PassageType;
-  /** 공통 지문 텍스트 (결합형에서 passageType이 text일 때) - text 필드와 함께 사용 */
+  /** 공통 제시문 타입 (결합형용) - text: 텍스트 박스, korean_abc: ㄱㄴㄷ식 보기, mixed: 혼합 */
+  passageType?: PassageType | 'mixed';
+  /** 공통 제시문 텍스트 (결합형에서 passageType이 text일 때) - text 필드와 함께 사용 */
   passage?: string;
   /** ㄱㄴㄷ식 보기 항목들 (결합형에서 passageType이 korean_abc일 때) */
   koreanAbcItems?: KoreanAbcItem[];
-  /** 공통 지문 이미지 (결합형용) */
+  /** 공통 제시문 혼합 보기 (결합형에서 passageType이 mixed일 때) */
+  passageMixedExamples?: MixedExampleBlock[];
+  /** 공통 제시문 이미지 (결합형용) */
   passageImage?: string | null;
-  /** 공통 문제 (결합형용) - 공통 지문 위에 표시되는 문제 텍스트 */
+  /** 공통 문제 (결합형용) - 공통 제시문 위에 표시되는 문제 텍스트 */
   commonQuestion?: string;
   /** 챕터 ID (결합형이 아닌 문제용) */
   chapterId?: string;
@@ -384,6 +450,675 @@ function RubricEditor({
               </tr>
             </tbody>
           </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 하위 문제용 혼합 보기 편집기 (일반 문제와 동일한 UI)
+ */
+function SubQuestionMixedExamplesEditor({
+  mixedExamples,
+  onChange,
+  onDelete,
+}: {
+  mixedExamples: MixedExampleBlock[];
+  onChange: (blocks: MixedExampleBlock[]) => void;
+  onDelete: () => void;
+}) {
+  const [isGroupingMode, setIsGroupingMode] = useState(false);
+  const [groupingSelection, setGroupingSelection] = useState<Map<string, number>>(new Map());
+
+  // 텍스트 블록 추가
+  const handleAddTextBlock = () => {
+    if (mixedExamples.length >= 10) return;
+    const newBlock: MixedExampleBlock = {
+      id: `text_${Date.now()}`,
+      type: 'text',
+      content: '',
+    };
+    onChange([...mixedExamples, newBlock]);
+  };
+
+  // ㄱㄴㄷ 블록 추가
+  const handleAddLabeledBlock = () => {
+    if (mixedExamples.length >= 10) return;
+    const newBlock: MixedExampleBlock = {
+      id: `labeled_${Date.now()}`,
+      type: 'labeled',
+      items: [
+        { id: `item_${Date.now()}_0`, label: 'ㄱ', content: '' },
+        { id: `item_${Date.now()}_1`, label: 'ㄴ', content: '' },
+      ],
+    };
+    onChange([...mixedExamples, newBlock]);
+  };
+
+  // (가)(나)(다) 블록 추가
+  const handleAddGanaBlock = () => {
+    if (mixedExamples.length >= 10) return;
+    const newBlock: MixedExampleBlock = {
+      id: `gana_${Date.now()}`,
+      type: 'gana',
+      items: [
+        { id: `item_${Date.now()}_0`, label: '가', content: '' },
+        { id: `item_${Date.now()}_1`, label: '나', content: '' },
+      ],
+    };
+    onChange([...mixedExamples, newBlock]);
+  };
+
+  // ◦ 항목 블록 추가
+  const handleAddBulletBlock = () => {
+    if (mixedExamples.length >= 10) return;
+    const newBlock: MixedExampleBlock = {
+      id: `bullet_${Date.now()}`,
+      type: 'bullet',
+      items: [
+        { id: `item_${Date.now()}_0`, label: '◦', content: '' },
+        { id: `item_${Date.now()}_1`, label: '◦', content: '' },
+      ],
+    };
+    onChange([...mixedExamples, newBlock]);
+  };
+
+  // 블록 내용 변경
+  const handleBlockChange = (blockId: string, updates: Partial<MixedExampleBlock>) => {
+    onChange(
+      mixedExamples.map((block) =>
+        block.id === blockId ? { ...block, ...updates } : block
+      )
+    );
+  };
+
+  // 블록 삭제
+  const handleRemoveBlock = (blockId: string) => {
+    onChange(mixedExamples.filter((block) => block.id !== blockId));
+  };
+
+  // ㄱㄴㄷ/(가)(나)(다)/◦ 항목 추가
+  const handleAddLabeledItem = (blockId: string) => {
+    onChange(
+      mixedExamples.map((block) => {
+        if (block.id === blockId && (block.type === 'labeled' || block.type === 'gana' || block.type === 'bullet')) {
+          const items = block.items || [];
+          let nextLabel: string;
+          if (block.type === 'gana') {
+            nextLabel = GANA_LABELS[items.length] || `${items.length + 1}`;
+          } else if (block.type === 'bullet') {
+            nextLabel = '◦';
+          } else {
+            nextLabel = KOREAN_LABELS[items.length] || `${items.length + 1}`;
+          }
+          return {
+            ...block,
+            items: [...items, { id: `item_${Date.now()}`, label: nextLabel, content: '' }],
+          };
+        }
+        return block;
+      })
+    );
+  };
+
+  // ㄱㄴㄷ/(가)(나)(다)/◦ 항목 삭제
+  const handleRemoveLabeledItem = (blockId: string, itemId: string) => {
+    onChange(
+      mixedExamples.map((block) => {
+        if (block.id === blockId && (block.type === 'labeled' || block.type === 'gana' || block.type === 'bullet')) {
+          const filteredItems = (block.items || []).filter((item) => item.id !== itemId);
+          // 라벨 재정렬 (bullet은 항상 ◦)
+          let reorderedItems;
+          if (block.type === 'bullet') {
+            reorderedItems = filteredItems.map((item) => ({
+              ...item,
+              label: '◦',
+            }));
+          } else {
+            const labels = block.type === 'gana' ? GANA_LABELS : KOREAN_LABELS;
+            reorderedItems = filteredItems.map((item, idx) => ({
+              ...item,
+              label: labels[idx] || `${idx + 1}`,
+            }));
+          }
+          return {
+            ...block,
+            items: reorderedItems,
+          };
+        }
+        return block;
+      })
+    );
+  };
+
+  // 묶기 모드 토글
+  const handleToggleGroupingMode = () => {
+    setIsGroupingMode(true);
+    setGroupingSelection(new Map());
+  };
+
+  // 묶기 선택 토글
+  const handleToggleGroupingSelection = (blockId: string) => {
+    const newSelection = new Map(groupingSelection);
+    if (newSelection.has(blockId)) {
+      newSelection.delete(blockId);
+    } else {
+      newSelection.set(blockId, newSelection.size + 1);
+    }
+    setGroupingSelection(newSelection);
+  };
+
+  // 묶기 완료
+  const handleCompleteGrouping = () => {
+    if (groupingSelection.size >= 2) {
+      const selectedBlocks: { id: string; order: number; block: MixedExampleBlock }[] = [];
+      groupingSelection.forEach((order, id) => {
+        const block = mixedExamples.find(b => b.id === id);
+        if (block) selectedBlocks.push({ id, order, block });
+      });
+      selectedBlocks.sort((a, b) => a.order - b.order);
+
+      const remainingBlocks = mixedExamples.filter(b => !groupingSelection.has(b.id));
+      const groupedBlock: MixedExampleBlock = {
+        id: `grouped_${Date.now()}`,
+        type: 'grouped',
+        children: selectedBlocks.map(s => s.block),
+      };
+
+      const firstSelectedIdx = mixedExamples.findIndex(b => groupingSelection.has(b.id));
+      remainingBlocks.splice(firstSelectedIdx, 0, groupedBlock);
+      onChange(remainingBlocks);
+    }
+    setIsGroupingMode(false);
+    setGroupingSelection(new Map());
+  };
+
+  // 묶음 해제
+  const handleUngroupBlock = (groupId: string) => {
+    const groupBlock = mixedExamples.find((b) => b.id === groupId);
+    if (groupBlock?.type === 'grouped' && groupBlock.children) {
+      const idx = mixedExamples.findIndex((b) => b.id === groupId);
+      const newBlocks = [...mixedExamples];
+      newBlocks.splice(idx, 1, ...groupBlock.children.map(child => ({
+        ...child,
+        id: child.id || `child_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      })));
+      onChange(newBlocks);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* 묶기 모드 안내 */}
+      {isGroupingMode && (
+        <div className="p-2 bg-[#EDEAE4] border border-[#1A1A1A] text-sm text-[#1A1A1A]">
+          묶을 블록들을 순서대로 클릭하세요. 숫자는 배열 순서입니다.
+        </div>
+      )}
+
+      {/* 혼합 보기 블록 입력 */}
+      <div className="space-y-4">
+        {mixedExamples.map((block, blockIdx) => (
+          <div
+            key={block.id}
+            className={`border-2 p-4 bg-[#FAFAFA] relative transition-all ${
+              isGroupingMode
+                ? groupingSelection.has(block.id)
+                  ? 'border-[#1A1A1A] ring-2 ring-[#1A1A1A] cursor-pointer bg-[#EDEAE4]'
+                  : 'border-[#D4CFC4] cursor-pointer hover:border-[#1A1A1A]'
+                : 'border-[#1A1A1A]'
+            }`}
+            onClick={isGroupingMode && block.type !== 'grouped' ? () => handleToggleGroupingSelection(block.id) : undefined}
+          >
+            {/* 묶기 모드: 선택 체크박스 + 순서 번호 */}
+            {isGroupingMode && block.type !== 'grouped' && (
+              <div className={`absolute -top-3 -left-3 w-7 h-7 flex items-center justify-center border-2 font-bold text-sm z-10 ${
+                groupingSelection.has(block.id)
+                  ? 'bg-[#1A1A1A] border-[#1A1A1A] text-white'
+                  : 'bg-white border-[#1A1A1A] text-[#1A1A1A]'
+              }`}>
+                {groupingSelection.has(block.id) ? groupingSelection.get(block.id) : ''}
+              </div>
+            )}
+            {/* 블록 번호 표시 */}
+            <div className={`absolute -top-3 bg-[#1A1A1A] text-[#F5F0E8] px-2 py-0.5 text-xs font-bold ${isGroupingMode && block.type !== 'grouped' ? 'left-8' : 'left-3'}`}>
+              보기 {blockIdx + 1}
+            </div>
+
+            {/* 텍스트박스 블록 */}
+            {block.type === 'text' && (
+              <div className="space-y-2" onClick={(e) => isGroupingMode && e.stopPropagation()}>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[#5C5C5C]">텍스트박스</span>
+                  {!isGroupingMode && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveBlock(block.id)}
+                      className="text-xs text-[#8B1A1A] hover:underline"
+                    >
+                      블록 삭제
+                    </button>
+                  )}
+                </div>
+                <textarea
+                  value={block.content || ''}
+                  onChange={(e) => handleBlockChange(block.id, { content: e.target.value })}
+                  placeholder="텍스트 내용 입력 (줄바꿈 가능)"
+                  rows={2}
+                  disabled={isGroupingMode}
+                  className="w-full px-3 py-2 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-sm focus:outline-none resize-none disabled:opacity-70"
+                />
+              </div>
+            )}
+
+            {/* ㄱ.ㄴ.ㄷ. 블록 */}
+            {block.type === 'labeled' && (
+              <div className="space-y-2" onClick={(e) => isGroupingMode && e.stopPropagation()}>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[#5C5C5C]">ㄱ.ㄴ.ㄷ.형식</span>
+                  {!isGroupingMode && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveBlock(block.id)}
+                      className="text-xs text-[#8B1A1A] hover:underline"
+                    >
+                      블록 삭제
+                    </button>
+                  )}
+                </div>
+                {/* 항목들 */}
+                <div className="space-y-2">
+                  {(block.items || []).map((item) => (
+                    <div key={item.id} className="flex items-center gap-2">
+                      <span className="w-7 h-7 bg-[#1A1A1A] text-[#F5F0E8] flex items-center justify-center text-sm font-bold flex-shrink-0">
+                        {item.label}
+                      </span>
+                      <input
+                        type="text"
+                        value={item.content}
+                        onChange={(e) => {
+                          const newItems = [...(block.items || [])];
+                          const itemIdx = newItems.findIndex(i => i.id === item.id);
+                          if (itemIdx !== -1) {
+                            newItems[itemIdx] = { ...newItems[itemIdx], content: e.target.value };
+                            handleBlockChange(block.id, { items: newItems });
+                          }
+                        }}
+                        placeholder={`${item.label}. 내용 입력`}
+                        disabled={isGroupingMode}
+                        className="flex-1 px-3 py-1.5 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-sm focus:outline-none disabled:opacity-70"
+                      />
+                      {!isGroupingMode && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveLabeledItem(block.id, item.id)}
+                          className="w-7 h-7 flex items-center justify-center text-[#8B1A1A] hover:bg-[#FDEAEA] transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {/* 항목 추가 버튼 */}
+                {!isGroupingMode && (block.items || []).length < KOREAN_LABELS.length && (
+                  <button
+                    type="button"
+                    onClick={() => handleAddLabeledItem(block.id)}
+                    className="w-full py-1.5 text-xs font-bold border border-dashed border-[#5C5C5C] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
+                  >
+                    + {KOREAN_LABELS[(block.items || []).length]} 추가
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* (가)(나)(다) 블록 */}
+            {block.type === 'gana' && (
+              <div className="space-y-2" onClick={(e) => isGroupingMode && e.stopPropagation()}>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[#5C5C5C]">(가)(나)(다)형식</span>
+                  {!isGroupingMode && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveBlock(block.id)}
+                      className="text-xs text-[#8B1A1A] hover:underline"
+                    >
+                      블록 삭제
+                    </button>
+                  )}
+                </div>
+                {/* 항목들 */}
+                <div className="space-y-2">
+                  {(block.items || []).map((item) => (
+                    <div key={item.id} className="flex items-center gap-2">
+                      <span className="w-8 h-7 bg-[#1A1A1A] text-[#F5F0E8] flex items-center justify-center text-xs font-bold flex-shrink-0">
+                        ({item.label})
+                      </span>
+                      <input
+                        type="text"
+                        value={item.content}
+                        onChange={(e) => {
+                          const newItems = [...(block.items || [])];
+                          const itemIdx = newItems.findIndex(i => i.id === item.id);
+                          if (itemIdx !== -1) {
+                            newItems[itemIdx] = { ...newItems[itemIdx], content: e.target.value };
+                            handleBlockChange(block.id, { items: newItems });
+                          }
+                        }}
+                        placeholder={`(${item.label}) 내용 입력`}
+                        disabled={isGroupingMode}
+                        className="flex-1 px-3 py-1.5 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-sm focus:outline-none disabled:opacity-70"
+                      />
+                      {!isGroupingMode && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveLabeledItem(block.id, item.id)}
+                          className="w-7 h-7 flex items-center justify-center text-[#8B1A1A] hover:bg-[#FDEAEA] transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {/* 항목 추가 버튼 */}
+                {!isGroupingMode && (block.items || []).length < GANA_LABELS.length && (
+                  <button
+                    type="button"
+                    onClick={() => handleAddLabeledItem(block.id)}
+                    className="w-full py-1.5 text-xs font-bold border border-dashed border-[#5C5C5C] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
+                  >
+                    + ({GANA_LABELS[(block.items || []).length]}) 추가
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* ◦ 항목 블록 */}
+            {block.type === 'bullet' && (
+              <div className="space-y-2" onClick={(e) => isGroupingMode && e.stopPropagation()}>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[#5C5C5C]">◦ 항목 형식</span>
+                  {!isGroupingMode && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveBlock(block.id)}
+                      className="text-xs text-[#8B1A1A] hover:underline"
+                    >
+                      블록 삭제
+                    </button>
+                  )}
+                </div>
+                {/* 항목들 */}
+                <div className="space-y-2">
+                  {(block.items || []).map((item, itemIdx) => (
+                    <div key={item.id} className="flex items-center gap-2">
+                      <span className="w-7 h-7 bg-[#1A1A1A] text-[#F5F0E8] flex items-center justify-center text-sm font-bold flex-shrink-0 rounded-full">
+                        ◦
+                      </span>
+                      <input
+                        type="text"
+                        value={item.content}
+                        onChange={(e) => {
+                          const newItems = [...(block.items || [])];
+                          const idx = newItems.findIndex(i => i.id === item.id);
+                          if (idx !== -1) {
+                            newItems[idx] = { ...newItems[idx], content: e.target.value };
+                            handleBlockChange(block.id, { items: newItems });
+                          }
+                        }}
+                        placeholder={`항목 ${itemIdx + 1} 입력`}
+                        disabled={isGroupingMode}
+                        className="flex-1 px-3 py-1.5 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-sm focus:outline-none disabled:opacity-70"
+                      />
+                      {!isGroupingMode && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveLabeledItem(block.id, item.id)}
+                          className="w-7 h-7 flex items-center justify-center text-[#8B1A1A] hover:bg-[#FDEAEA] transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {/* 항목 추가 버튼 */}
+                {!isGroupingMode && (block.items || []).length < 20 && (
+                  <button
+                    type="button"
+                    onClick={() => handleAddLabeledItem(block.id)}
+                    className="w-full py-1.5 text-xs font-bold border border-dashed border-[#5C5C5C] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
+                  >
+                    + ◦ 항목 추가
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* 이미지 블록 */}
+            {block.type === 'image' && block.imageUrl && (
+              <div className="space-y-2" onClick={(e) => isGroupingMode && e.stopPropagation()}>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[#5C5C5C]">이미지</span>
+                  {!isGroupingMode && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveBlock(block.id)}
+                      className="text-xs text-[#8B1A1A] hover:underline"
+                    >
+                      블록 삭제
+                    </button>
+                  )}
+                </div>
+                <img
+                  src={block.imageUrl}
+                  alt="보기 이미지"
+                  className="max-h-32 object-contain border border-[#D4CFC4]"
+                />
+              </div>
+            )}
+
+            {/* 묶음(grouped) 블록 */}
+            {block.type === 'grouped' && block.children && (
+              <div className="space-y-2" onClick={(e) => isGroupingMode && e.stopPropagation()}>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[#1A1A1A]">묶음 ({block.children.length}개)</span>
+                  {!isGroupingMode && (
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleUngroupBlock(block.id)}
+                        className="text-xs text-[#5C5C5C] hover:underline"
+                      >
+                        묶음 해체
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveBlock(block.id)}
+                        className="text-xs text-[#8B1A1A] hover:underline"
+                      >
+                        블록 삭제
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {/* 묶음 내 자식 블록들 표시 */}
+                <div className="border-l-4 border-[#1A1A1A] pl-3 space-y-2">
+                  {block.children.map((child, childIdx) => (
+                    <div key={child.id || childIdx} className="text-sm">
+                      {child.type === 'text' && child.content && (
+                        <p className="whitespace-pre-wrap text-[#5C5C5C]">{child.content}</p>
+                      )}
+                      {child.type === 'labeled' && (child.items || []).map((item) => (
+                        <p key={item.id} className="text-[#1A1A1A]">
+                          <span className="font-bold">{item.label}.</span> {item.content}
+                        </p>
+                      ))}
+                      {child.type === 'gana' && (child.items || []).map((item) => (
+                        <p key={item.id} className="text-[#1A1A1A]">
+                          <span className="font-bold">({item.label})</span> {item.content}
+                        </p>
+                      ))}
+                      {child.type === 'image' && child.imageUrl && (
+                        <img
+                          src={child.imageUrl}
+                          alt="묶음 이미지"
+                          className="max-h-24 object-contain border border-[#D4CFC4]"
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* 제시문 블록 추가 버튼들 - 묶기 모드가 아닐 때만 */}
+      {/* 주의: ㄱㄴㄷ 형식은 제시문이 아닌 보기에서만 사용 */}
+      {!isGroupingMode && mixedExamples.length < 10 && (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={handleAddTextBlock}
+            className="flex-1 py-2 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
+          >
+            + 텍스트박스
+          </button>
+          <button
+            type="button"
+            onClick={handleAddGanaBlock}
+            className="flex-1 py-2 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
+          >
+            + (가)(나)(다)
+          </button>
+          <button
+            type="button"
+            onClick={handleAddBulletBlock}
+            className="flex-1 py-2 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
+          >
+            + ◦ 항목
+          </button>
+        </div>
+      )}
+
+      {/* 묶기/삭제 버튼 영역 */}
+      <div className="flex gap-2">
+        {/* 묶기 버튼 */}
+        {mixedExamples.length >= 2 && !isGroupingMode && (
+          <button
+            type="button"
+            onClick={handleToggleGroupingMode}
+            className="flex-1 py-2 text-sm font-bold border border-[#1A1A1A] bg-[#EDEAE4] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+          >
+            묶기
+          </button>
+        )}
+        {isGroupingMode && (
+          <>
+            <button
+              type="button"
+              onClick={handleCompleteGrouping}
+              disabled={groupingSelection.size < 2}
+              className="flex-1 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] disabled:opacity-50"
+            >
+              묶기 완료 ({groupingSelection.size}개)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsGroupingMode(false);
+                setGroupingSelection(new Map());
+              }}
+              className="px-4 py-2 text-sm font-bold border border-[#8B1A1A] text-[#8B1A1A] hover:bg-[#8B1A1A] hover:text-[#F5F0E8] transition-colors"
+            >
+              취소
+            </button>
+          </>
+        )}
+        {/* 제시문 삭제 버튼 */}
+        {!isGroupingMode && (
+          <button
+            type="button"
+            onClick={onDelete}
+            className={`${mixedExamples.length >= 2 ? 'flex-1' : 'w-full'} py-2 text-sm font-bold border-2 border-[#8B1A1A] text-[#8B1A1A] hover:bg-[#8B1A1A] hover:text-[#F5F0E8] transition-colors`}
+          >
+            제시문 삭제
+          </button>
+        )}
+      </div>
+
+      {/* 미리보기 */}
+      {mixedExamples.some(block => {
+        if (block.type === 'text') return block.content?.trim();
+        if (block.type === 'labeled') return (block.items || []).some(i => i.content?.trim());
+        if (block.type === 'image') return !!block.imageUrl;
+        if (block.type === 'grouped') return block.children && block.children.length > 0;
+        return false;
+      }) && (
+        <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
+          <p className="text-xs text-[#5C5C5C] mb-2">미리보기</p>
+          <div className="space-y-2">
+            {mixedExamples.map((block, blockIdx) => {
+              const hasContent = (() => {
+                if (block.type === 'text') return block.content?.trim();
+                if (block.type === 'labeled') return (block.items || []).some(i => i.content?.trim());
+                if (block.type === 'image') return !!block.imageUrl;
+                if (block.type === 'grouped') return block.children && block.children.length > 0;
+                return false;
+              })();
+              if (!hasContent) return null;
+
+              return (
+                <div key={block.id} className={`p-2 border bg-white ${block.type === 'grouped' ? 'border-[#1A1A1A] border-2' : 'border-dashed border-[#5C5C5C]'}`}>
+                  <p className="text-[10px] text-[#5C5C5C] mb-1">
+                    보기 {blockIdx + 1}
+                    {block.type === 'grouped' && <span className="text-[#5C5C5C] ml-1">(묶음)</span>}
+                  </p>
+                  {block.type === 'text' && block.content?.trim() && (
+                    <p className="text-sm text-[#5C5C5C] whitespace-pre-wrap">{block.content}</p>
+                  )}
+                  {block.type === 'labeled' && (block.items || []).filter(i => i.content?.trim()).map((item) => (
+                    <p key={item.id} className="text-sm text-[#1A1A1A]">
+                      <span className="font-bold">{item.label}.</span> {item.content}
+                    </p>
+                  ))}
+                  {block.type === 'image' && block.imageUrl && (
+                    <img src={block.imageUrl} alt="보기 이미지" className="max-h-24 object-contain" />
+                  )}
+                  {block.type === 'grouped' && block.children && (
+                    <div className="space-y-1">
+                      {block.children.map((child, childIdx) => (
+                        <div key={child.id || childIdx}>
+                          {child.type === 'text' && child.content?.trim() && (
+                            <p className="text-sm text-[#5C5C5C] whitespace-pre-wrap">{child.content}</p>
+                          )}
+                          {child.type === 'labeled' && (child.items || []).filter(i => i.content?.trim()).map((item) => (
+                            <p key={item.id} className="text-sm text-[#1A1A1A]">
+                              <span className="font-bold">{item.label}.</span> {item.content}
+                            </p>
+                          ))}
+                          {child.type === 'image' && child.imageUrl && (
+                            <img src={child.imageUrl} alt="묶음 이미지" className="max-h-20 object-contain" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
@@ -724,157 +1459,57 @@ function SubQuestionEditor({
         </div>
       )}
 
-      {/* 하위 문제 보기 (examples) */}
+      {/* 하위 문제 제시문 (passage) - 일반 문제와 동일한 UI */}
       <div className="mt-3 space-y-2">
         <div className="flex items-center justify-between">
           <label className="text-xs font-bold text-[#1A1A1A]">
-            보기 <span className="text-[#5C5C5C] font-normal">(선택)</span>
+            제시문 <span className="text-[#5C5C5C] font-normal">(선택)</span>
           </label>
-          {(!subQuestion.examples || subQuestion.examples.length === 0) && (!subQuestion.koreanAbcExamples || subQuestion.koreanAbcExamples.length === 0) && (
-            <button
-              type="button"
-              onClick={() => onChange({ ...subQuestion, examplesType: 'text', examples: [''] })}
-              className="px-2 py-0.5 text-xs font-bold border-2 border-[#1A1A1A] bg-[#EDEAE4] text-[#5C5C5C] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
-            >
-              + 보기 추가
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => {
+              if (subQuestion.mixedExamples !== undefined) {
+                // 제시문 삭제
+                onChange({ ...subQuestion, mixedExamples: undefined, examplesType: undefined, examples: undefined, koreanAbcExamples: undefined });
+              } else {
+                // 제시문 추가
+                onChange({ ...subQuestion, mixedExamples: [], examplesType: 'mixed' });
+              }
+            }}
+            className={`
+              px-2 py-0.5 text-xs font-bold border-2 border-[#1A1A1A] transition-colors
+              ${subQuestion.mixedExamples !== undefined
+                ? 'bg-[#1A1A1A] text-[#F5F0E8]'
+                : 'bg-[#EDEAE4] text-[#5C5C5C] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
+              }
+            `}
+          >
+            {subQuestion.mixedExamples !== undefined ? '제시문 삭제' : '제시문 추가'}
+          </button>
         </div>
 
-        {/* 보기가 있을 때 형식 선택 및 입력 UI */}
-        {((subQuestion.examples && subQuestion.examples.length > 0) || (subQuestion.koreanAbcExamples && subQuestion.koreanAbcExamples.length > 0) || subQuestion.examplesType) && (
-          <div className="space-y-2">
-            {/* 형식 선택 버튼 */}
-            <div className="flex gap-1">
-              <button
-                type="button"
-                onClick={() => {
-                  // 텍스트 박스 형식으로 전환
-                  const currentItems = subQuestion.koreanAbcExamples?.map(item => item.text) || subQuestion.examples || [''];
-                  onChange({
-                    ...subQuestion,
-                    examplesType: 'text',
-                    examples: currentItems.length > 0 ? currentItems : [''],
-                    koreanAbcExamples: undefined
-                  });
-                }}
-                className={`
-                  flex-1 py-1.5 text-xs font-bold border-2 transition-colors
-                  ${subQuestion.examplesType !== 'korean_abc'
-                    ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                    : 'bg-[#EDEAE4] border-2 border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
-                  }
-                `}
-              >
-                텍스트 박스
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  // ㄱㄴㄷ 형식으로 전환
-                  const currentItems = subQuestion.examples || [];
-                  const koreanAbcItems = currentItems.map((text, idx) => ({
-                    label: KOREAN_LABELS[idx] || `${idx + 1}`,
-                    text
-                  }));
-                  onChange({
-                    ...subQuestion,
-                    examplesType: 'korean_abc',
-                    koreanAbcExamples: koreanAbcItems.length > 0 ? koreanAbcItems : [{ label: 'ㄱ', text: '' }],
-                    examples: undefined
-                  });
-                }}
-                className={`
-                  flex-1 py-1.5 text-xs font-bold border-2 transition-colors
-                  ${subQuestion.examplesType === 'korean_abc'
-                    ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                    : 'bg-[#EDEAE4] border-2 border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
-                  }
-                `}
-              >
-                ㄱ.ㄴ.ㄷ. 형식
-              </button>
+        {/* 제시문 편집 UI */}
+        {subQuestion.mixedExamples !== undefined && (
+          <>
+            <SubQuestionMixedExamplesEditor
+              mixedExamples={subQuestion.mixedExamples || []}
+              onChange={(newMixed) => onChange({ ...subQuestion, mixedExamples: newMixed })}
+              onDelete={() => onChange({ ...subQuestion, mixedExamples: undefined, examplesType: undefined })}
+            />
+            {/* 제시문 발문 입력 */}
+            <div className="mt-2 pt-2 border-t border-dashed border-[#D4CFC4]">
+              <label className="block text-[10px] font-bold text-[#5C5C5C] mb-1">
+                제시문 발문 <span className="font-normal">(선택)</span>
+              </label>
+              <input
+                type="text"
+                value={subQuestion.passagePrompt || ''}
+                onChange={(e) => onChange({ ...subQuestion, passagePrompt: e.target.value })}
+                placeholder="예: 다음 자료에 대한 설명으로 적절한 것은?"
+                className="w-full px-2 py-1 text-xs border border-[#1A1A1A] bg-white focus:outline-none"
+              />
             </div>
-
-            {/* 텍스트 박스 형식 */}
-            {subQuestion.examplesType !== 'korean_abc' && (
-              <div className="space-y-1">
-                <textarea
-                  value={(subQuestion.examples || []).join('\n')}
-                  onChange={(e) => {
-                    const lines = e.target.value.split('\n');
-                    onChange({ ...subQuestion, examples: lines });
-                  }}
-                  placeholder="보기를 줄바꿈으로 구분하여 입력..."
-                  rows={3}
-                  className="w-full px-2 py-1.5 border-2 border-[#1A1A1A] bg-white text-xs resize-none focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={() => onChange({ ...subQuestion, examplesType: undefined, examples: undefined })}
-                  className="w-full py-1 text-xs font-bold border-2 border-[#8B1A1A] text-[#8B1A1A] hover:bg-[#8B1A1A] hover:text-[#F5F0E8] transition-colors"
-                >
-                  보기 삭제
-                </button>
-              </div>
-            )}
-
-            {/* ㄱㄴㄷ 형식 */}
-            {subQuestion.examplesType === 'korean_abc' && (
-              <div className="space-y-1">
-                {(subQuestion.koreanAbcExamples || []).map((item, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <span className="w-6 h-6 bg-[#1A1A1A] text-[#F5F0E8] flex items-center justify-center text-xs font-bold flex-shrink-0">
-                      {item.label}.
-                    </span>
-                    <input
-                      type="text"
-                      value={item.text}
-                      onChange={(e) => {
-                        const newItems = [...(subQuestion.koreanAbcExamples || [])];
-                        newItems[idx] = { ...newItems[idx], text: e.target.value };
-                        onChange({ ...subQuestion, koreanAbcExamples: newItems });
-                      }}
-                      placeholder={`${item.label}. 내용 입력`}
-                      className="flex-1 px-2 py-1 border-2 border-[#1A1A1A] bg-white text-xs focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const newItems = (subQuestion.koreanAbcExamples || []).filter((_, i) => i !== idx);
-                        if (newItems.length === 0) {
-                          onChange({ ...subQuestion, examplesType: undefined, koreanAbcExamples: undefined });
-                        } else {
-                          onChange({ ...subQuestion, koreanAbcExamples: newItems });
-                        }
-                      }}
-                      className="w-6 h-6 flex items-center justify-center text-[#8B1A1A] hover:bg-[#F5F0E8] transition-colors"
-                    >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                ))}
-                {(subQuestion.koreanAbcExamples || []).length < 14 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const currentItems = subQuestion.koreanAbcExamples || [];
-                      const nextLabel = KOREAN_LABELS[currentItems.length] || `${currentItems.length + 1}`;
-                      onChange({
-                        ...subQuestion,
-                        koreanAbcExamples: [...currentItems, { label: nextLabel, text: '' }]
-                      });
-                    }}
-                    className="w-full py-1 text-xs font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#F5F0E8] hover:text-[#1A1A1A] transition-colors"
-                  >
-                    + 항목 추가
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
+          </>
         )}
       </div>
 
@@ -892,10 +1527,14 @@ function SubQuestionEditor({
             />
             <button
               type="button"
-              onClick={() => onChange({ ...subQuestion, image: undefined })}
-              className="absolute top-0.5 right-0.5 w-5 h-5 bg-[#8B1A1A] text-[#F5F0E8] flex items-center justify-center hover:bg-[#6B1414] transition-colors"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onChange({ ...subQuestion, image: undefined });
+              }}
+              className="absolute top-0.5 right-0.5 z-10 w-6 h-6 bg-[#8B1A1A] text-[#F5F0E8] flex items-center justify-center hover:bg-[#6B1414] transition-colors cursor-pointer"
             >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
@@ -924,6 +1563,160 @@ function SubQuestionEditor({
           </label>
         )}
       </div>
+
+      {/* 하위 문제 보기 (<보기> 박스) - 객관식/주관식에서만 사용, OX는 사용 안함 */}
+      {(subQuestion.type === 'multiple' || subQuestion.type === 'short_answer') && (
+        <div className="mt-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-bold text-[#1A1A1A]">
+              보기 <span className="text-[#5C5C5C] font-normal">(선택)</span>
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                if (subQuestion.bogi) {
+                  onChange({ ...subQuestion, bogi: undefined });
+                } else {
+                  onChange({
+                    ...subQuestion,
+                    bogi: {
+                      questionText: BOGI_QUESTION_PRESETS[0],
+                      items: [
+                        { id: `bogi_${Date.now()}_0`, label: 'ㄱ', content: '' },
+                        { id: `bogi_${Date.now()}_1`, label: 'ㄴ', content: '' },
+                      ],
+                    },
+                  });
+                }
+              }}
+              className={`
+                px-2 py-0.5 text-xs font-bold border-2 border-[#1A1A1A] transition-colors
+                ${subQuestion.bogi
+                  ? 'bg-[#1A1A1A] text-[#F5F0E8]'
+                  : 'bg-[#EDEAE4] text-[#5C5C5C] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
+                }
+              `}
+            >
+              {subQuestion.bogi ? '보기 삭제' : '보기 추가'}
+            </button>
+          </div>
+
+          {/* 보기 편집 UI */}
+          {subQuestion.bogi && (
+            <div className="space-y-2 border border-[#1A1A1A] p-2 bg-[#FAFAFA]">
+              {/* 보기 발문 프리셋 */}
+              <div className="flex flex-wrap gap-1">
+                {BOGI_QUESTION_PRESETS.slice(0, 2).map((preset, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => onChange({
+                      ...subQuestion,
+                      bogi: subQuestion.bogi ? { ...subQuestion.bogi, questionText: preset } : undefined,
+                    })}
+                    className={`
+                      px-1.5 py-0.5 text-[10px] border transition-colors
+                      ${subQuestion.bogi?.questionText === preset
+                        ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                        : 'bg-white text-[#5C5C5C] border-[#D4CFC4]'
+                      }
+                    `}
+                  >
+                    프리셋{idx + 1}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => onChange({
+                    ...subQuestion,
+                    bogi: subQuestion.bogi ? { ...subQuestion.bogi, questionText: '' } : undefined,
+                  })}
+                  className={`
+                    px-1.5 py-0.5 text-[10px] border transition-colors
+                    ${!subQuestion.bogi?.questionText || !BOGI_QUESTION_PRESETS.includes(subQuestion.bogi.questionText)
+                      ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                      : 'bg-white text-[#5C5C5C] border-[#D4CFC4]'
+                    }
+                  `}
+                >
+                  직접입력
+                </button>
+              </div>
+              <input
+                type="text"
+                value={subQuestion.bogi?.questionText || ''}
+                onChange={(e) => onChange({
+                  ...subQuestion,
+                  bogi: subQuestion.bogi ? { ...subQuestion.bogi, questionText: e.target.value } : undefined,
+                })}
+                placeholder="발문 입력"
+                className="w-full px-2 py-1 text-xs border border-[#1A1A1A] bg-white focus:outline-none"
+              />
+
+              {/* ㄱㄴㄷ 항목들 */}
+              <div className="space-y-1">
+                {(subQuestion.bogi?.items || []).map((item, idx) => (
+                  <div key={item.id} className="flex gap-1 items-center">
+                    <span className="w-5 text-xs font-bold text-[#1A1A1A]">{item.label}.</span>
+                    <input
+                      type="text"
+                      value={item.content}
+                      onChange={(e) => {
+                        const items = [...(subQuestion.bogi?.items || [])];
+                        items[idx] = { ...items[idx], content: e.target.value };
+                        onChange({
+                          ...subQuestion,
+                          bogi: subQuestion.bogi ? { ...subQuestion.bogi, items } : undefined,
+                        });
+                      }}
+                      placeholder={`${item.label} 내용`}
+                      className="flex-1 px-2 py-1 text-xs border border-[#1A1A1A] bg-white focus:outline-none"
+                    />
+                    {(subQuestion.bogi?.items?.length || 0) > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const filteredItems = (subQuestion.bogi?.items || []).filter((_, i) => i !== idx);
+                          const reorderedItems = filteredItems.map((it, i) => ({
+                            ...it,
+                            label: KOREAN_LABELS[i] || `${i + 1}`,
+                          }));
+                          onChange({
+                            ...subQuestion,
+                            bogi: subQuestion.bogi ? { ...subQuestion.bogi, items: reorderedItems } : undefined,
+                          });
+                        }}
+                        className="w-5 h-5 text-[#8B1A1A] hover:bg-[#8B1A1A] hover:text-white text-xs"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {(subQuestion.bogi?.items?.length || 0) < 6 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const items = subQuestion.bogi?.items || [];
+                      const nextLabel = KOREAN_LABELS[items.length] || `${items.length + 1}`;
+                      onChange({
+                        ...subQuestion,
+                        bogi: subQuestion.bogi ? {
+                          ...subQuestion.bogi,
+                          items: [...items, { id: `bogi_${Date.now()}`, label: nextLabel, content: '' }],
+                        } : undefined,
+                      });
+                    }}
+                    className="w-full py-1 text-xs text-[#5C5C5C] border border-dashed border-[#1A1A1A] hover:bg-[#EDEAE4]"
+                  >
+                    + 항목 추가
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 해설 */}
       <input
@@ -1468,23 +2261,80 @@ export default function QuestionEditor({
   }, [generateExampleId]);
 
   /**
-   * labeled 블록 내에 항목 추가 (ㄴ, ㄷ, ㄹ...)
+   * (가)(나)(다) 블록 추가 (기본 가 항목 1개 포함)
+   */
+  const handleAddGanaExample = useCallback(() => {
+    setQuestion((prev) => {
+      const mixedExamples = [...(prev.mixedExamples || [])];
+      if (mixedExamples.length < 10) {
+        mixedExamples.push({
+          id: generateExampleId(),
+          type: 'gana',
+          items: [{
+            id: generateExampleId(),
+            label: '가',
+            content: '',
+          }],
+        });
+      }
+      return { ...prev, mixedExamples };
+    });
+  }, [generateExampleId]);
+
+  /**
+   * ◦ 항목 블록 추가 (기본 1개 포함)
+   */
+  const handleAddBulletExample = useCallback(() => {
+    setQuestion((prev) => {
+      const mixedExamples = [...(prev.mixedExamples || [])];
+      if (mixedExamples.length < 10) {
+        mixedExamples.push({
+          id: generateExampleId(),
+          type: 'bullet',
+          items: [{
+            id: generateExampleId(),
+            label: '◦',
+            content: '',
+          }],
+        });
+      }
+      return { ...prev, mixedExamples };
+    });
+  }, [generateExampleId]);
+
+  /**
+   * labeled, gana 또는 bullet 블록 내에 항목 추가
    */
   const handleAddLabeledItem = useCallback((blockId: string) => {
     setQuestion((prev) => {
       const mixedExamples = (prev.mixedExamples || []).map(block => {
-        if (block.id === blockId && block.type === 'labeled') {
+        if (block.id === blockId && (block.type === 'labeled' || block.type === 'gana' || block.type === 'bullet')) {
           const items = block.items || [];
-          if (items.length < KOREAN_LABELS.length) {
-            const nextLabel = KOREAN_LABELS[items.length];
-            return {
-              ...block,
-              items: [...items, {
-                id: generateExampleId(),
-                label: nextLabel,
-                content: '',
-              }],
-            };
+          if (block.type === 'bullet') {
+            // bullet은 항상 ◦, 최대 20개까지
+            if (items.length < 20) {
+              return {
+                ...block,
+                items: [...items, {
+                  id: generateExampleId(),
+                  label: '◦',
+                  content: '',
+                }],
+              };
+            }
+          } else {
+            const labels = block.type === 'gana' ? GANA_LABELS : KOREAN_LABELS;
+            if (items.length < labels.length) {
+              const nextLabel = labels[items.length];
+              return {
+                ...block,
+                items: [...items, {
+                  id: generateExampleId(),
+                  label: nextLabel,
+                  content: '',
+                }],
+              };
+            }
           }
         }
         return block;
@@ -1508,12 +2358,12 @@ export default function QuestionEditor({
   }, []);
 
   /**
-   * labeled 블록 내 항목 내용 변경
+   * labeled 또는 gana 블록 내 항목 내용 변경
    */
   const handleLabeledItemChange = useCallback((blockId: string, itemId: string, content: string) => {
     setQuestion((prev) => {
       const mixedExamples = (prev.mixedExamples || []).map(block => {
-        if (block.id === blockId && block.type === 'labeled') {
+        if (block.id === blockId && (block.type === 'labeled' || block.type === 'gana' || block.type === 'bullet')) {
           return {
             ...block,
             items: (block.items || []).map(item =>
@@ -1538,21 +2388,30 @@ export default function QuestionEditor({
   }, []);
 
   /**
-   * labeled 블록 내 항목 삭제 (항목이 1개면 블록 전체 삭제)
+   * labeled, gana 또는 bullet 블록 내 항목 삭제 (항목이 1개면 블록 전체 삭제)
    */
   const handleRemoveLabeledItem = useCallback((blockId: string, itemId: string) => {
     setQuestion((prev) => {
       const mixedExamples = (prev.mixedExamples || []).map(block => {
-        if (block.id === blockId && block.type === 'labeled') {
+        if (block.id === blockId && (block.type === 'labeled' || block.type === 'gana' || block.type === 'bullet')) {
           const items = (block.items || []).filter(item => item.id !== itemId);
           if (items.length === 0) {
             return null; // 블록 삭제 표시
           }
-          // 라벨 재정렬
-          const reorderedItems = items.map((item, idx) => ({
-            ...item,
-            label: KOREAN_LABELS[idx] || `${idx + 1}`,
-          }));
+          // 라벨 재정렬 (bullet은 항상 ◦, gana면 GANA_LABELS, 아니면 KOREAN_LABELS 사용)
+          let reorderedItems;
+          if (block.type === 'bullet') {
+            reorderedItems = items.map((item) => ({
+              ...item,
+              label: '◦',
+            }));
+          } else {
+            const labels = block.type === 'gana' ? GANA_LABELS : KOREAN_LABELS;
+            reorderedItems = items.map((item, idx) => ({
+              ...item,
+              label: labels[idx] || `${idx + 1}`,
+            }));
+          }
           return { ...block, items: reorderedItems };
         }
         return block;
@@ -1839,17 +2698,12 @@ export default function QuestionEditor({
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
 
-    // 문제 텍스트 검사 (결합형은 공통 지문 OR 공통 이미지 중 하나 이상 필수)
+    // 문제 텍스트 검사 (결합형은 공통 지문 보기 OR 공통 이미지 중 하나 이상 선택사항)
     if (question.type === 'combined') {
-      // passageType에 따라 지문 유효성 검사
-      const hasPassage = question.passageType === 'text'
-        ? (question.text?.trim() || question.passage?.trim())
-        : (question.koreanAbcItems && question.koreanAbcItems.length > 0 && question.koreanAbcItems.some(item => item.text.trim()));
-      const hasImage = !!question.passageImage;
-      const isValid = hasPassage || hasImage;
-      if (!isValid) {
-        newErrors.text = '공통 지문 또는 공통 이미지 중 하나 이상을 입력해주세요.';
-      }
+      // 결합형: 공통 지문 보기와 공통 이미지 모두 선택사항 (둘 다 없어도 됨)
+      // passageMixedExamples (혼합 보기)가 있으면 유효
+      // 단, 공통 문제(commonQuestion)와 하위 문제(subQuestions)는 필수 (아래에서 별도 검사)
+      // 따라서 여기서는 추가 검사 불필요
     } else {
       if (!question.text.trim()) {
         newErrors.text = '문제를 입력해주세요.';
@@ -2119,146 +2973,79 @@ export default function QuestionEditor({
           </div>
         )}
 
-        {/* 문제 텍스트 (결합형에서는 공통 지문) */}
-        <div>
-          <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
-            {question.type === 'combined' ? '공통 지문' : '문제'}
-          </label>
-
-          {/* 결합형일 때 공통 지문 타입 선택 */}
-          {question.type === 'combined' && (
-            <div className="mb-3">
-              <p className="text-xs text-[#5C5C5C] mb-2">지문 형식:</p>
-              <div className="flex gap-2 mb-2">
-                <button
-                  type="button"
-                  onClick={() => setQuestion(prev => ({ ...prev, passageType: 'text' }))}
-                  className={`
-                    flex-1 py-2 text-sm font-bold border-2 transition-colors
-                    ${question.passageType === 'text' || !question.passageType
-                      ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                      : 'bg-[#EDEAE4] border-2 border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
-                    }
-                  `}
-                >
-                  텍스트 박스
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setQuestion(prev => ({
-                    ...prev,
-                    passageType: 'korean_abc',
-                    koreanAbcItems: prev.koreanAbcItems && prev.koreanAbcItems.length > 0
-                      ? prev.koreanAbcItems
-                      : [{ label: 'ㄱ', text: '' }, { label: 'ㄴ', text: '' }, { label: 'ㄷ', text: '' }]
-                  }))}
-                  className={`
-                    flex-1 py-2 text-sm font-bold border-2 transition-colors
-                    ${question.passageType === 'korean_abc'
-                      ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                      : 'bg-[#EDEAE4] border-2 border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
-                    }
-                  `}
-                >
-                  ㄱ.ㄴ.ㄷ. 형식
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* 텍스트 박스 (결합형이 아니거나 passageType이 text일 때) */}
-          {(question.type !== 'combined' || question.passageType === 'text' || !question.passageType) && (
+        {/* 문제 텍스트 (결합형 제외) */}
+        {question.type !== 'combined' && (
+          <div>
+            <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
+              문제
+            </label>
             <textarea
               value={question.text}
               onChange={(e) => handleTextChange('text', e.target.value)}
-              placeholder={question.type === 'combined' ? '공통 지문을 입력하세요...' : '문제를 입력하세요'}
-              rows={question.type === 'combined' ? 5 : 3}
+              placeholder="문제를 입력하세요"
+              rows={3}
               className={`
                 w-full px-4 py-3 border-2 bg-white
                 resize-none
                 transition-colors duration-200
                 focus:outline-none
-                ${
-                  errors.text
-                    ? 'border-[#8B1A1A]'
-                    : 'border-[#1A1A1A]'
-                }
+                ${errors.text ? 'border-[#8B1A1A]' : 'border-[#1A1A1A]'}
               `}
             />
-          )}
+            {errors.text && (
+              <p className="mt-1 text-sm text-[#8B1A1A]">{errors.text}</p>
+            )}
+          </div>
+        )}
 
-          {/* ㄱㄴㄷ식 보기 UI (결합형 + korean_abc일 때) */}
-          {question.type === 'combined' && question.passageType === 'korean_abc' && (
-            <div className="space-y-2">
-              <div className="space-y-2">
-                {(question.koreanAbcItems || []).map((item, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <span className="w-8 h-8 bg-[#1A1A1A] text-[#F5F0E8] flex items-center justify-center text-sm font-bold flex-shrink-0">
-                      {item.label}.
-                    </span>
-                    <input
-                      type="text"
-                      value={item.text}
-                      onChange={(e) => {
-                        const newItems = [...(question.koreanAbcItems || [])];
-                        newItems[idx] = { ...newItems[idx], text: e.target.value };
-                        setQuestion(prev => ({ ...prev, koreanAbcItems: newItems }));
-                      }}
-                      placeholder={`${item.label}. 내용을 입력하세요`}
-                      className="flex-1 px-3 py-2 border-2 border-[#1A1A1A] bg-white text-sm focus:outline-none"
-                    />
-                    {(question.koreanAbcItems || []).length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const newItems = (question.koreanAbcItems || []).filter((_, i) => i !== idx);
-                          setQuestion(prev => ({ ...prev, koreanAbcItems: newItems }));
-                        }}
-                        className="w-8 h-8 flex items-center justify-center text-[#8B1A1A] hover:bg-[#FDEAEA] transition-colors"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-              {(question.koreanAbcItems || []).length < 14 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const nextLabel = KOREAN_LABELS[(question.koreanAbcItems || []).length] || `${(question.koreanAbcItems || []).length + 1}`;
-                    setQuestion(prev => ({
-                      ...prev,
-                      koreanAbcItems: [...(prev.koreanAbcItems || []), { label: nextLabel, text: '' }]
-                    }));
-                  }}
-                  className="w-full py-2 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
-                >
-                  + 항목 추가
-                </button>
-              )}
-              {/* 미리보기 */}
-              {(question.koreanAbcItems || []).some(item => item.text.trim()) && (
-                <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
-                  <p className="text-xs text-[#5C5C5C] mb-2">미리보기</p>
-                  <div className="space-y-1">
-                    {(question.koreanAbcItems || []).filter(item => item.text.trim()).map((item, idx) => (
-                      <p key={idx} className="text-sm text-[#1A1A1A]">
-                        <span className="font-bold">{item.label}.</span> {item.text}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              )}
+        {/* 공통 제시문 (결합형만) - 일반 문제의 제시문과 동일한 UI */}
+        {question.type === 'combined' && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-bold text-[#1A1A1A]">
+                공통 제시문
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  if (question.passageMixedExamples && question.passageMixedExamples.length > 0) {
+                    // 제시문 삭제
+                    setQuestion(prev => ({ ...prev, passageMixedExamples: undefined, passageType: undefined }));
+                  } else {
+                    // 제시문 추가
+                    setQuestion(prev => ({ ...prev, passageMixedExamples: [], passageType: 'mixed' }));
+                  }
+                }}
+                className={`
+                  px-3 py-1 text-xs font-bold border border-[#1A1A1A]
+                  transition-colors
+                  ${question.passageMixedExamples && question.passageMixedExamples.length >= 0
+                    ? 'bg-[#1A1A1A] text-[#F5F0E8]'
+                    : 'bg-[#EDEAE4] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
+                  }
+                `}
+              >
+                {question.passageMixedExamples !== undefined ? '제시문 삭제' : '제시문 추가'}
+              </button>
             </div>
-          )}
 
-          {errors.text && (
-            <p className="mt-1 text-sm text-[#8B1A1A]">{errors.text}</p>
-          )}
-        </div>
+            <AnimatePresence>
+              {question.passageMixedExamples !== undefined && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                >
+                  <SubQuestionMixedExamplesEditor
+                    mixedExamples={question.passageMixedExamples || []}
+                    onChange={(newMixed) => setQuestion(prev => ({ ...prev, passageMixedExamples: newMixed }))}
+                    onDelete={() => setQuestion(prev => ({ ...prev, passageMixedExamples: undefined, passageType: undefined }))}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
 
         {/* 이미지 업로드 - 결합형이 아닐 때 */}
         {question.type !== 'combined' && (
@@ -2276,10 +3063,14 @@ export default function QuestionEditor({
                 />
                 <button
                   type="button"
-                  onClick={handleRemoveImage}
-                  className="absolute top-1 right-1 w-7 h-7 bg-[#8B1A1A] text-[#F5F0E8] flex items-center justify-center hover:bg-[#6B1414] transition-colors"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleRemoveImage();
+                  }}
+                  className="absolute top-1 right-1 z-10 w-8 h-8 bg-[#8B1A1A] text-[#F5F0E8] flex items-center justify-center hover:bg-[#6B1414] transition-colors cursor-pointer"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
@@ -2366,10 +3157,14 @@ export default function QuestionEditor({
                 />
                 <button
                   type="button"
-                  onClick={handleRemovePassageImage}
-                  className="absolute top-1 right-1 w-7 h-7 bg-[#8B1A1A] text-[#F5F0E8] flex items-center justify-center hover:bg-[#6B1414] transition-colors"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleRemovePassageImage();
+                  }}
+                  className="absolute top-1 right-1 z-10 w-8 h-8 bg-[#8B1A1A] text-[#F5F0E8] flex items-center justify-center hover:bg-[#6B1414] transition-colors cursor-pointer"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
@@ -2413,12 +3208,12 @@ export default function QuestionEditor({
           </div>
         )}
 
-        {/* 보기 (Examples) - 결합형 제외, 혼합 형식 지원 */}
+        {/* 제시문 (Passage) - 결합형 제외, 혼합 형식 지원 */}
         {question.type !== 'combined' && (
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="block text-sm font-bold text-[#1A1A1A]">
-                보기 <span className="text-[#5C5C5C] font-normal">(선택)</span>
+                제시문 <span className="text-[#5C5C5C] font-normal">(선택)</span>
               </label>
               <div className="flex gap-2">
                 {/* 묶기 버튼 - 보기가 2개 이상일 때만 표시 */}
@@ -2464,7 +3259,7 @@ export default function QuestionEditor({
                     }
                   `}
                 >
-                  {showExamplesEditor ? '보기 삭제' : '보기 추가'}
+                  {showExamplesEditor ? '제시문 삭제' : '제시문 추가'}
                 </button>
               </div>
             </div>
@@ -2596,6 +3391,120 @@ export default function QuestionEditor({
                           </div>
                         )}
 
+                        {/* (가)(나)(다) 블록 */}
+                        {block.type === 'gana' && (
+                          <div className="space-y-2" onClick={(e) => isGroupingMode && e.stopPropagation()}>
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-[#5C5C5C]">(가)(나)(다)형식</span>
+                              {!isGroupingMode && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveMixedExample(block.id)}
+                                  className="text-xs text-[#8B1A1A] hover:underline"
+                                >
+                                  블록 삭제
+                                </button>
+                              )}
+                            </div>
+                            {/* 항목들 */}
+                            <div className="space-y-2">
+                              {(block.items || []).map((item) => (
+                                <div key={item.id} className="flex items-center gap-2">
+                                  <span className="w-8 h-7 bg-[#1A1A1A] text-[#F5F0E8] flex items-center justify-center text-sm font-bold flex-shrink-0">
+                                    ({item.label})
+                                  </span>
+                                  <input
+                                    type="text"
+                                    value={item.content}
+                                    onChange={(e) => handleLabeledItemChange(block.id, item.id, e.target.value)}
+                                    placeholder={`(${item.label}) 내용 입력`}
+                                    disabled={isGroupingMode}
+                                    className="flex-1 px-3 py-1.5 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-sm focus:outline-none disabled:opacity-70"
+                                  />
+                                  {!isGroupingMode && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveLabeledItem(block.id, item.id)}
+                                      className="w-7 h-7 flex items-center justify-center text-[#8B1A1A] hover:bg-[#FDEAEA] transition-colors"
+                                    >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                      </svg>
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                            {/* 항목 추가 버튼 */}
+                            {!isGroupingMode && (block.items || []).length < GANA_LABELS.length && (
+                              <button
+                                type="button"
+                                onClick={() => handleAddLabeledItem(block.id)}
+                                className="w-full py-1.5 text-xs font-bold border border-dashed border-[#5C5C5C] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
+                              >
+                                + ({GANA_LABELS[(block.items || []).length]}) 추가
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        {/* ◦ 항목 블록 */}
+                        {block.type === 'bullet' && (
+                          <div className="space-y-2" onClick={(e) => isGroupingMode && e.stopPropagation()}>
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-[#5C5C5C]">◦ 항목 형식</span>
+                              {!isGroupingMode && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveMixedExample(block.id)}
+                                  className="text-xs text-[#8B1A1A] hover:underline"
+                                >
+                                  블록 삭제
+                                </button>
+                              )}
+                            </div>
+                            {/* 항목들 */}
+                            <div className="space-y-2">
+                              {(block.items || []).map((item, itemIdx) => (
+                                <div key={item.id} className="flex items-center gap-2">
+                                  <span className="w-7 h-7 bg-[#1A1A1A] text-[#F5F0E8] flex items-center justify-center text-sm font-bold flex-shrink-0 rounded-full">
+                                    ◦
+                                  </span>
+                                  <input
+                                    type="text"
+                                    value={item.content}
+                                    onChange={(e) => handleLabeledItemChange(block.id, item.id, e.target.value)}
+                                    placeholder={`항목 ${itemIdx + 1} 입력`}
+                                    disabled={isGroupingMode}
+                                    className="flex-1 px-3 py-1.5 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-sm focus:outline-none disabled:opacity-70"
+                                  />
+                                  {!isGroupingMode && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveLabeledItem(block.id, item.id)}
+                                      className="w-7 h-7 flex items-center justify-center text-[#8B1A1A] hover:bg-[#FDEAEA] transition-colors"
+                                    >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                      </svg>
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                            {/* 항목 추가 버튼 */}
+                            {!isGroupingMode && (block.items || []).length < 20 && (
+                              <button
+                                type="button"
+                                onClick={() => handleAddLabeledItem(block.id)}
+                                className="w-full py-1.5 text-xs font-bold border border-dashed border-[#5C5C5C] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
+                              >
+                                + ◦ 항목 추가
+                              </button>
+                            )}
+                          </div>
+                        )}
+
                         {/* 이미지 블록 */}
                         {block.type === 'image' && block.imageUrl && (
                           <div className="space-y-2" onClick={(e) => isGroupingMode && e.stopPropagation()}>
@@ -2655,6 +3564,11 @@ export default function QuestionEditor({
                                       <span className="font-bold">{item.label}.</span> {item.content}
                                     </p>
                                   ))}
+                                  {child.type === 'gana' && (child.items || []).map((item) => (
+                                    <p key={item.id} className="text-[#1A1A1A]">
+                                      <span className="font-bold">({item.label})</span> {item.content}
+                                    </p>
+                                  ))}
                                   {child.type === 'image' && child.imageUrl && (
                                     <img
                                       src={child.imageUrl}
@@ -2671,22 +3585,30 @@ export default function QuestionEditor({
                     ))}
                   </div>
 
-                  {/* 블록 추가 버튼들 - 묶기 모드가 아닐 때만 */}
+                  {/* 제시문 블록 추가 버튼들 - 묶기 모드가 아닐 때만 */}
+                  {/* 주의: ㄱㄴㄷ 형식은 제시문이 아닌 보기에서만 사용 */}
                   {!isGroupingMode && (question.mixedExamples || []).length < 10 && (
-                    <div className="flex gap-2 flex-wrap">
+                    <div className="grid grid-cols-3 gap-2">
                       <button
                         type="button"
                         onClick={handleAddTextExample}
-                        className="flex-1 min-w-[120px] py-2 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
+                        className="py-2 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
                       >
                         + 텍스트박스
                       </button>
                       <button
                         type="button"
-                        onClick={handleAddLabeledExample}
-                        className="flex-1 min-w-[120px] py-2 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
+                        onClick={handleAddGanaExample}
+                        className="py-2 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
                       >
-                        + ㄱ.ㄴ.ㄷ.형식
+                        + (가)(나)(다)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleAddBulletExample}
+                        className="py-2 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
+                      >
+                        + ◦ 항목
                       </button>
                     </div>
                   )}
@@ -2694,7 +3616,7 @@ export default function QuestionEditor({
                   {/* 미리보기 */}
                   {(question.mixedExamples || []).some(block => {
                     if (block.type === 'text') return block.content?.trim();
-                    if (block.type === 'labeled') return (block.items || []).some(i => i.content.trim());
+                    if (block.type === 'labeled' || block.type === 'gana' || block.type === 'bullet') return (block.items || []).some(i => i.content?.trim());
                     if (block.type === 'image') return !!block.imageUrl;
                     if (block.type === 'grouped') return block.children && block.children.length > 0;
                     return false;
@@ -2705,7 +3627,7 @@ export default function QuestionEditor({
                         {(question.mixedExamples || []).map((block, blockIdx) => {
                           const hasContent = (() => {
                             if (block.type === 'text') return block.content?.trim();
-                            if (block.type === 'labeled') return (block.items || []).some(i => i.content.trim());
+                            if (block.type === 'labeled' || block.type === 'gana' || block.type === 'bullet') return (block.items || []).some(i => i.content?.trim());
                             if (block.type === 'image') return !!block.imageUrl;
                             if (block.type === 'grouped') return block.children && block.children.length > 0;
                             return false;
@@ -2715,19 +3637,29 @@ export default function QuestionEditor({
                           return (
                             <div key={block.id} className={`p-2 border bg-white ${block.type === 'grouped' ? 'border-[#1A1A1A] border-2' : 'border-dashed border-[#5C5C5C]'}`}>
                               <p className="text-[10px] text-[#5C5C5C] mb-1">
-                                보기 {blockIdx + 1}
+                                제시문 {blockIdx + 1}
                                 {block.type === 'grouped' && <span className="text-[#5C5C5C] ml-1">(묶음)</span>}
                               </p>
                               {block.type === 'text' && block.content?.trim() && (
                                 <p className="text-sm text-[#5C5C5C] whitespace-pre-wrap">{block.content}</p>
                               )}
-                              {block.type === 'labeled' && (block.items || []).filter(i => i.content.trim()).map((item) => (
+                              {block.type === 'labeled' && (block.items || []).filter(i => i.content?.trim()).map((item) => (
                                 <p key={item.id} className="text-sm text-[#1A1A1A]">
                                   <span className="font-bold">{item.label}.</span> {item.content}
                                 </p>
                               ))}
+                              {block.type === 'gana' && (block.items || []).filter(i => i.content?.trim()).map((item) => (
+                                <p key={item.id} className="text-sm text-[#1A1A1A]">
+                                  <span className="font-bold">({item.label})</span> {item.content}
+                                </p>
+                              ))}
+                              {block.type === 'bullet' && (block.items || []).filter(i => i.content?.trim()).map((item) => (
+                                <p key={item.id} className="text-sm text-[#1A1A1A]">
+                                  <span className="font-bold">◦</span> {item.content}
+                                </p>
+                              ))}
                               {block.type === 'image' && block.imageUrl && (
-                                <img src={block.imageUrl} alt="보기 이미지" className="max-h-24 object-contain" />
+                                <img src={block.imageUrl} alt="제시문 이미지" className="max-h-24 object-contain" />
                               )}
                               {block.type === 'grouped' && block.children && (
                                 <div className="space-y-1">
@@ -2736,9 +3668,19 @@ export default function QuestionEditor({
                                       {child.type === 'text' && child.content?.trim() && (
                                         <p className="text-sm text-[#5C5C5C] whitespace-pre-wrap">{child.content}</p>
                                       )}
-                                      {child.type === 'labeled' && (child.items || []).filter(i => i.content.trim()).map((item) => (
+                                      {child.type === 'labeled' && (child.items || []).filter(i => i.content?.trim()).map((item) => (
                                         <p key={item.id} className="text-sm text-[#1A1A1A]">
                                           <span className="font-bold">{item.label}.</span> {item.content}
+                                        </p>
+                                      ))}
+                                      {child.type === 'gana' && (child.items || []).filter(i => i.content?.trim()).map((item) => (
+                                        <p key={item.id} className="text-sm text-[#1A1A1A]">
+                                          <span className="font-bold">({item.label})</span> {item.content}
+                                        </p>
+                                      ))}
+                                      {child.type === 'bullet' && (child.items || []).filter(i => i.content?.trim()).map((item) => (
+                                        <p key={item.id} className="text-sm text-[#1A1A1A]">
+                                          <span className="font-bold">◦</span> {item.content}
                                         </p>
                                       ))}
                                       {child.type === 'image' && child.imageUrl && (
@@ -2751,6 +3693,219 @@ export default function QuestionEditor({
                             </div>
                           );
                         })}
+                      </div>
+                    </div>
+                  )}
+                  {/* 제시문 발문 입력 */}
+                  <div className="mt-4 pt-4 border-t border-dashed border-[#D4CFC4]">
+                    <label className="block text-xs font-bold text-[#5C5C5C] mb-1">
+                      제시문 발문 <span className="font-normal">(선택)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={question.passagePrompt || ''}
+                      onChange={(e) => setQuestion(prev => ({ ...prev, passagePrompt: e.target.value }))}
+                      placeholder="예: 다음 자료에 대한 설명으로 적절한 것은?"
+                      className="w-full px-3 py-2 text-sm border border-[#1A1A1A] bg-white focus:outline-none"
+                    />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+
+        {/* 보기 (<보기> 박스) - 객관식/주관식에서만 사용, OX는 사용 안함 */}
+        {(question.type === 'multiple' || question.type === 'short_answer') && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-bold text-[#1A1A1A]">
+                보기 <span className="text-[#5C5C5C] font-normal">(선택)</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  if (question.bogi) {
+                    setQuestion(prev => ({ ...prev, bogi: null }));
+                  } else {
+                    setQuestion(prev => ({
+                      ...prev,
+                      bogi: {
+                        questionText: BOGI_QUESTION_PRESETS[0],
+                        items: [
+                          { id: `bogi_${Date.now()}_0`, label: 'ㄱ', content: '' },
+                          { id: `bogi_${Date.now()}_1`, label: 'ㄴ', content: '' },
+                        ],
+                      },
+                    }));
+                  }
+                }}
+                className={`
+                  px-3 py-1 text-xs font-bold border border-[#1A1A1A]
+                  transition-colors
+                  ${question.bogi
+                    ? 'bg-[#1A1A1A] text-[#F5F0E8]'
+                    : 'bg-[#EDEAE4] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
+                  }
+                `}
+              >
+                {question.bogi ? '보기 삭제' : '보기 추가'}
+              </button>
+            </div>
+
+            <AnimatePresence>
+              {question.bogi && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="space-y-3 border-2 border-[#1A1A1A] p-4 bg-[#FAFAFA]"
+                >
+                  {/* 발문 */}
+                  <div>
+                    <label className="block text-xs font-bold text-[#5C5C5C] mb-1">
+                      발문
+                    </label>
+                    <div className="space-y-2">
+                      {/* 프리셋 버튼들 */}
+                      <div className="flex flex-wrap gap-1">
+                        {BOGI_QUESTION_PRESETS.map((preset, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => setQuestion(prev => ({
+                              ...prev,
+                              bogi: prev.bogi ? { ...prev.bogi, questionText: preset } : null,
+                            }))}
+                            className={`
+                              px-2 py-1 text-xs border transition-colors
+                              ${question.bogi?.questionText === preset
+                                ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                                : 'bg-white text-[#5C5C5C] border-[#D4CFC4] hover:border-[#1A1A1A]'
+                              }
+                            `}
+                          >
+                            프리셋 {idx + 1}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => setQuestion(prev => ({
+                            ...prev,
+                            bogi: prev.bogi ? { ...prev.bogi, questionText: '' } : null,
+                          }))}
+                          className={`
+                            px-2 py-1 text-xs border transition-colors
+                            ${question.bogi?.questionText === '' || (question.bogi?.questionText && !BOGI_QUESTION_PRESETS.includes(question.bogi.questionText))
+                              ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                              : 'bg-white text-[#5C5C5C] border-[#D4CFC4] hover:border-[#1A1A1A]'
+                            }
+                          `}
+                        >
+                          직접 입력
+                        </button>
+                      </div>
+                      {/* 텍스트 입력 */}
+                      <textarea
+                        value={question.bogi?.questionText || ''}
+                        onChange={(e) => setQuestion(prev => ({
+                          ...prev,
+                          bogi: prev.bogi ? { ...prev.bogi, questionText: e.target.value } : null,
+                        }))}
+                        placeholder="예: 이에 대한 설명으로 옳은 것만을 <보기>에서 있는 대로 고른 것은?"
+                        rows={2}
+                        className="w-full px-3 py-2 text-sm border border-[#1A1A1A] bg-white resize-none focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* ㄱㄴㄷ 항목들 */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-xs font-bold text-[#5C5C5C]">
+                        &lt;보기&gt; 항목 (ㄱ.ㄴ.ㄷ.)
+                      </label>
+                      {(question.bogi?.items?.length || 0) < 8 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const items = question.bogi?.items || [];
+                            const nextLabel = KOREAN_LABELS[items.length] || `${items.length + 1}`;
+                            setQuestion(prev => ({
+                              ...prev,
+                              bogi: prev.bogi ? {
+                                ...prev.bogi,
+                                items: [...(prev.bogi.items || []), { id: `bogi_${Date.now()}`, label: nextLabel, content: '' }],
+                              } : null,
+                            }));
+                          }}
+                          className="px-2 py-1 text-xs font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4]"
+                        >
+                          + 항목 추가
+                        </button>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      {(question.bogi?.items || []).map((item, idx) => (
+                        <div key={item.id} className="flex gap-2 items-start">
+                          <span className="w-6 h-9 flex items-center justify-center text-sm font-bold text-[#1A1A1A] border border-[#1A1A1A] bg-white">
+                            {item.label}.
+                          </span>
+                          <textarea
+                            value={item.content}
+                            onChange={(e) => {
+                              const items = [...(question.bogi?.items || [])];
+                              items[idx] = { ...items[idx], content: e.target.value };
+                              setQuestion(prev => ({
+                                ...prev,
+                                bogi: prev.bogi ? { ...prev.bogi, items } : null,
+                              }));
+                            }}
+                            placeholder={`${item.label} 내용 입력`}
+                            rows={1}
+                            className="flex-1 px-2 py-1.5 text-sm border border-[#1A1A1A] bg-white resize-none focus:outline-none"
+                          />
+                          {(question.bogi?.items?.length || 0) > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const filteredItems = (question.bogi?.items || []).filter((_, i) => i !== idx);
+                                // 라벨 재정렬
+                                const reorderedItems = filteredItems.map((it, i) => ({
+                                  ...it,
+                                  label: KOREAN_LABELS[i] || `${i + 1}`,
+                                }));
+                                setQuestion(prev => ({
+                                  ...prev,
+                                  bogi: prev.bogi ? { ...prev.bogi, items: reorderedItems } : null,
+                                }));
+                              }}
+                              className="w-7 h-9 flex items-center justify-center text-[#8B1A1A] hover:bg-[#8B1A1A] hover:text-white border border-[#8B1A1A] transition-colors"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 미리보기 */}
+                  {question.bogi?.items?.some(i => i.content?.trim()) && (
+                    <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
+                      <p className="text-xs text-[#5C5C5C] mb-2">미리보기</p>
+                      {question.bogi?.questionText && (
+                        <p className="text-sm text-[#1A1A1A] mb-2">{question.bogi.questionText}</p>
+                      )}
+                      <div className="border border-[#1A1A1A] bg-white p-2">
+                        <p className="text-xs text-center text-[#5C5C5C] mb-1">&lt;보 기&gt;</p>
+                        {(question.bogi?.items || []).filter(i => i.content?.trim()).map((item) => (
+                          <p key={item.id} className="text-sm text-[#1A1A1A]">
+                            <span className="font-bold">{item.label}.</span> {item.content}
+                          </p>
+                        ))}
                       </div>
                     </div>
                   )}
@@ -3213,7 +4368,7 @@ export default function QuestionEditor({
               transition-colors
             "
           >
-            저장
+            수정
           </motion.button>
         </div>
       </div>

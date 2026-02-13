@@ -231,15 +231,18 @@ export const useQuizUpdate = (): UseQuizUpdateReturn => {
         }
       });
 
-      // 각 퀴즈의 업데이트 확인
+      // 각 퀴즈의 업데이트 확인 (병렬 실행으로 최적화)
       const newUpdatedQuizzes = new Map<string, QuizUpdateInfo>();
 
-      for (const quizId of quizIds) {
-        const updateInfo = await checkQuizUpdate(quizId);
+      const updateChecks = await Promise.all(
+        Array.from(quizIds).map(quizId => checkQuizUpdate(quizId))
+      );
+
+      updateChecks.forEach((updateInfo) => {
         if (updateInfo?.hasUpdate) {
-          newUpdatedQuizzes.set(quizId, updateInfo);
+          newUpdatedQuizzes.set(updateInfo.quizId, updateInfo);
         }
-      }
+      });
 
       setUpdatedQuizzes(newUpdatedQuizzes);
     } catch (err) {

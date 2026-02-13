@@ -60,6 +60,12 @@ export interface BookmarkedQuiz {
   myFirstReviewScore?: number;
   /** 퀴즈 완료 여부 (completedUsers 배열에 있는지) */
   hasCompleted?: boolean;
+  /** 찜한 수 (전체 사용자) */
+  bookmarkCount?: number;
+  /** AI 생성 퀴즈 여부 */
+  isAiGenerated?: boolean;
+  /** 평균 점수 */
+  averageScore?: number;
 }
 
 /**
@@ -127,9 +133,12 @@ export const useQuizBookmark = (): UseQuizBookmarkReturn => {
             const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
             if (quizDoc.exists()) {
               const quizData = quizDoc.data();
-              // completedUsers 배열에 사용자가 있는지 확인
-              const completedUsers: string[] = quizData.completedUsers || [];
-              const hasCompleted = user ? completedUsers.includes(user.uid) : false;
+              // quiz_completions로 완료 여부 확인
+              let hasCompleted = false;
+              if (user) {
+                const completionDoc = await getDoc(doc(db, 'quiz_completions', `${quizId}_${user.uid}`));
+                hasCompleted = completionDoc.exists();
+              }
 
               quizzes.push({
                 id: quizId,
@@ -148,6 +157,15 @@ export const useQuizBookmark = (): UseQuizBookmarkReturn => {
                 myScore: user ? quizData.userScores?.[user.uid] : undefined,
                 myFirstReviewScore: user ? quizData.userFirstReviewScores?.[user.uid] : undefined,
                 hasCompleted,
+                bookmarkCount: quizData.bookmarkCount || 0,
+                isAiGenerated: quizData.isAiGenerated || quizData.type === 'ai-generated',
+                averageScore: quizData.averageScore || (() => {
+                  if (quizData.userScores) {
+                    const scores = Object.values(quizData.userScores) as number[];
+                    return scores.length > 0 ? Math.round((scores.reduce((s, v) => s + v, 0) / scores.length) * 10) / 10 : 0;
+                  }
+                  return 0;
+                })(),
               });
             }
           } catch (err) {

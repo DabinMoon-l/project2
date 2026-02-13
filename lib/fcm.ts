@@ -67,7 +67,11 @@ export function getMessagingInstance(): Messaging | null {
     try {
       messaging = getMessaging(app);
     } catch (error) {
-      console.error('FCM 초기화 에러:', error);
+      // Firebase Installations 오류 등은 조용히 무시
+      // FCM이 필수가 아니므로 앱 작동에 영향 없음
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[FCM] 초기화 스킵:', (error as Error).message);
+      }
       return null;
     }
   }

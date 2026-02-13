@@ -99,6 +99,11 @@ public/
 └── animations/        # Lottie 애니메이션
 
 functions/             # Firebase Cloud Functions
+
+cloud-run-pptx/        # PPTX 퀴즈 생성 Cloud Run 서비스
+├── main.py            # Flask 앱 (PPTX 처리, Gemini 연동)
+├── requirements.txt   # Python 의존성
+└── Dockerfile         # Cloud Run 배포용
 ```
 
 ### 사용자 유형
@@ -320,8 +325,66 @@ export const KOREAN_LABELS = ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', '
 - [x] 퀴즈 생성 페이지에서 `userRole` prop 전달 (현재 사용자 역할 기반)
 - [x] 서술형 채점 UI 구현 (교수용) - `components/professor/EssayGrading.tsx`
 
+### PPTX 퀴즈 생성 시스템 (Cloud Run)
+- [x] Cloud Run Python 서비스 구현 (`cloud-run-pptx/`)
+- [x] PPTX 텍스트 추출 (python-pptx)
+- [x] Gemini API 연동 (gemini-1.5-flash)
+- [x] Firestore 작업 상태 실시간 업데이트
+- [x] Cloud Functions 트리거 (`onPptxJobCreated`)
+- [x] 프론트엔드 업로드 및 진행 UI
+
+### 스타일 기반 AI 문제 생성 (`generateStyledQuiz`)
+
+교수 출제 스타일을 학습하여 맞춤형 문제를 생성하는 시스템.
+
+#### 난이도별 기능
+| 난이도 | 문제 형식 | 제시문 | 보기(ㄱㄴㄷ) | 이미지 자동 크롭 |
+|--------|----------|--------|-------------|-----------------|
+| **쉬움** | OX, 객관식 | ❌ | ❌ | ❌ |
+| **보통** | 객관식 | ✅ | ❌ | ❌ |
+| **어려움** | 객관식 | ✅ | ✅ | ✅ |
+
+#### 이미지 자동 크롭 (HARD 난이도 전용)
+- 학습 자료 이미지에서 Gemini Vision으로 그림/표/그래프 영역 감지
+- 감지된 영역을 자동 크롭하여 Firebase Storage에 업로드
+- 생성된 문제에 이미지 URL 연결
+
+**관련 파일:**
+- `functions/src/styledQuizGenerator.ts` - 메인 문제 생성 로직
+- `functions/src/imageRegionAnalysis.ts` - Gemini Vision 영역 감지
+- `functions/src/imageCropping.ts` - 이미지 크롭 및 업로드
+- `components/ai-quiz/AIQuizContainer.tsx` - 프론트엔드 UI
+
+#### 사용법
+```typescript
+// Cloud Function 호출
+const result = await generateStyledQuiz({
+  text: "학습 자료 텍스트",
+  images: ["base64이미지1", "base64이미지2"],  // HARD에서만 크롭 처리
+  difficulty: "hard",
+  questionCount: 10,
+  courseId: "biology",
+  courseName: "생물학",
+});
+```
+
 ### 배포 전 필요 사항
 - [ ] Firebase Functions에 `ANTHROPIC_API_KEY` 환경 변수 설정
   ```bash
   firebase functions:secrets:set ANTHROPIC_API_KEY
+  ```
+- [ ] Cloud Run PPTX 서비스 배포 및 환경 변수 설정
+  ```bash
+  # 1. Cloud Run 배포 (인증 필요 모드)
+  cd cloud-run-pptx
+  gcloud run deploy pptx-quiz-generator --source . --region asia-northeast3 --no-allow-unauthenticated --set-env-vars GEMINI_API_KEY=your-api-key
+
+  # 2. Cloud Functions 서비스 계정에 Cloud Run 호출 권한 부여
+  gcloud run services add-iam-policy-binding pptx-quiz-generator --region asia-northeast3 --member="serviceAccount:YOUR_PROJECT_ID@appspot.gserviceaccount.com" --role="roles/run.invoker"
+
+  # 3. functions/.env 파일 생성 (.env.example 참고)
+  # PPTX_CLOUD_RUN_URL=https://pptx-quiz-generator-xxxxx-an.a.run.app
+
+  # 4. Cloud Functions 배포
+  cd functions && npm run deploy
   ```

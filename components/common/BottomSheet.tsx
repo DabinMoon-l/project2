@@ -24,6 +24,8 @@ interface BottomSheetProps {
   closeOnBackdropClick?: boolean;
   /** 시트 내용 */
   children: React.ReactNode;
+  /** z-index 클래스 (기본: z-50) */
+  zIndex?: string;
 }
 
 // 높이별 스타일
@@ -87,6 +89,7 @@ export default function BottomSheet({
   enableDrag = true,
   closeOnBackdropClick = true,
   children,
+  zIndex = 'z-50',
 }: BottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const dragControls = useDragControls();
@@ -163,7 +166,7 @@ export default function BottomSheet({
   return createPortal(
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50">
+        <div className={`fixed inset-0 ${zIndex}`}>
           {/* 백드롭 */}
           <motion.div
             variants={activeBackdropVariants}

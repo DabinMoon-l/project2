@@ -66,6 +66,7 @@ function QuestionAnalysis({
   const commonPassage = (question as any).commonPassage as string | undefined;
   const commonImage = (question as any).commonImage as string | undefined;
   const passageFormat = (question as any).passageFormat as string | undefined;
+  const passageMixedExamples = (question as any).passageMixedExamples as any[] | undefined;
 
   return (
     <div className="bg-white rounded-2xl p-5 shadow-sm">
@@ -175,6 +176,60 @@ function QuestionAnalysis({
           {commonImage && (
             <div className="rounded-lg overflow-hidden">
               <img src={commonImage} alt="공통 이미지" className="w-full object-contain max-h-48" />
+            </div>
+          )}
+
+          {/* 공통 지문 - 혼합 형식 */}
+          {passageFormat === 'mixed' && passageMixedExamples && passageMixedExamples.length > 0 && (
+            <div className="space-y-2">
+              {passageMixedExamples.map((block: any) => (
+                <div key={block.id}>
+                  {/* 묶음 블록 */}
+                  {block.type === 'grouped' && (
+                    <div className="p-3 bg-amber-50 rounded-lg border-2 border-amber-200 space-y-1">
+                      {(block.children || []).map((child: any) => (
+                        <div key={child.id}>
+                          {child.type === 'text' && child.content?.trim() && (
+                            <p className="text-gray-600 text-sm whitespace-pre-wrap">{child.content}</p>
+                          )}
+                          {child.type === 'labeled' && (child.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                            <p key={item.id} className="text-gray-700 text-sm">
+                              <span className="font-bold mr-1">{item.label}.</span>
+                              {item.content}
+                            </p>
+                          ))}
+                          {child.type === 'image' && child.imageUrl && (
+                            <img src={child.imageUrl} alt="보기 이미지" className="max-w-full h-auto rounded" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* 텍스트 블록 */}
+                  {block.type === 'text' && block.content?.trim() && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-gray-700 text-sm whitespace-pre-wrap">{block.content}</p>
+                    </div>
+                  )}
+                  {/* ㄱㄴㄷ 블록 */}
+                  {block.type === 'labeled' && (block.items || []).length > 0 && (
+                    <div className="p-3 bg-amber-50 rounded-lg space-y-1">
+                      {(block.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                        <p key={item.id} className="text-gray-700 text-sm">
+                          <span className="font-bold mr-1">{item.label}.</span>
+                          {item.content}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  {/* 이미지 블록 */}
+                  {block.type === 'image' && block.imageUrl && (
+                    <div className="rounded-lg overflow-hidden">
+                      <img src={block.imageUrl} alt="보기 이미지" className="max-w-full h-auto" />
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
 
@@ -386,7 +441,17 @@ function QuestionAnalysis({
       {stats && stats.totalResponses > 0 && question.type !== 'combined' && (
         <div className="mt-4 pt-4 border-t border-gray-100 flex justify-center gap-8">
           <div className="text-center">
-            <p className="text-2xl font-bold text-green-600">{stats.correctRate}%</p>
+            <div className="flex items-center justify-center gap-1">
+              {stats.isModified && (
+                <span
+                  className="w-6 h-6 flex items-center justify-center bg-amber-500 text-white text-sm font-bold rounded-full"
+                  title="수정된 문제 (수정 이후 데이터만 표시)"
+                >
+                  !
+                </span>
+              )}
+              <p className="text-2xl font-bold text-green-600">{stats.correctRate}%</p>
+            </div>
             <p className="text-xs text-gray-500">정답률</p>
           </div>
           <div className="text-center">
@@ -785,13 +850,21 @@ export default function QuizDetailPage() {
 
                   {/* 오답률 표시 */}
                   {statistics?.questionStats[index] && statistics.questionStats[index].totalResponses > 0 && (
-                    <span className={`ml-auto text-xs font-medium ${
+                    <span className={`ml-auto text-xs font-medium flex items-center gap-1 ${
                       statistics.questionStats[index].wrongRate >= 50
                         ? 'text-red-500'
                         : statistics.questionStats[index].wrongRate >= 30
                           ? 'text-amber-500'
                           : 'text-green-500'
                     }`}>
+                      {statistics.questionStats[index].isModified && (
+                        <span
+                          className="w-4 h-4 flex items-center justify-center bg-amber-500 text-white text-[10px] font-bold rounded-full"
+                          title="수정된 문제"
+                        >
+                          !
+                        </span>
+                      )}
                       오답 {statistics.questionStats[index].wrongRate}%
                     </span>
                   )}

@@ -10,6 +10,12 @@ import {
   isPDFFile,
   type ParseResult,
 } from '@/lib/ocr';
+import * as pdfjsLib from 'pdfjs-dist';
+
+// PDF.js 워커 설정
+if (typeof window !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+}
 
 // ============================================================
 // 타입 정의
@@ -26,6 +32,8 @@ interface OCRProcessorProps {
   onCancel?: () => void;
   /** 원본 이미지 URL 전달 콜백 (이미지 크롭용) */
   onImageReady?: (imageUrl: string) => void;
+  /** 자동 크롭된 이미지 추가 콜백 */
+  onAutoExtractImage?: (dataUrl: string, questionNumber: number, sourceFileName?: string) => void;
   /** 추가 클래스명 */
   className?: string;
 }
@@ -36,10 +44,52 @@ interface OcrUsage {
   remaining: number;
 }
 
+interface ParsedQuestionV4 {
+  questionNumber: number | string;
+  type: 'multipleChoice' | 'ox' | 'unknown';
+  stem: string;
+  // 제시문
+  passage?: string;
+  passageType?: 'text' | 'labeled' | 'bullet';
+  labeledPassages?: Record<string, string>;
+  bulletItems?: string[];  // ◦ 항목 형식 제시문
+  passagePrompt?: string;  // 제시문 발문
+  // 보기
+  boxItems: Array<{ label: string; text: string }>;
+  bogiPrompt?: string;  // 보기 발문
+  // 선지
+  choices: Array<{ label: string; text: string }>;
+  needsReview: boolean;
+  // 이미지 필요 여부
+  needsImage?: boolean;
+}
+
+/** 이미지 영역 바운딩 박스 */
+interface BoundingBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** 문제별 이미지 영역 */
+interface QuestionImageRegion {
+  questionNumber: number;
+  boundingBox: BoundingBox;
+  description?: string;
+}
+
+interface ParseResultV4 {
+  success: boolean;
+  questions: ParsedQuestionV4[];
+  preprocessed: boolean;
+}
+
 interface OcrResult {
   success: boolean;
   text: string;
   usage: OcrUsage;
+  parsedV4?: ParseResultV4;  // Gemini 전처리 결과
 }
 
 interface ProgressState {
@@ -63,6 +113,138 @@ async function fileToBase64(file: File): Promise<string> {
   });
 }
 
+/**
+ * 이미지 URL을 로드하여 Image 객체 반환
+ */
+async function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+/**
+ * 바운딩 박스 좌표로 이미지 크롭 (정규화 좌표 0-1)
+ * 텍스트가 포함되지 않도록 상하 여백을 축소하여 크롭
+ */
+async function cropImageRegion(
+  imageBase64: string,
+  boundingBox: BoundingBox
+): Promise<string> {
+  const img = await loadImage(imageBase64);
+
+  // 텍스트 제거를 위한 내부 여백 축소 (최소화하여 화질 보존)
+  const topPadding = 0.02;    // 상단 2% 축소
+  const bottomPadding = 0.02; // 하단 2% 축소
+  const sidePadding = 0.01;   // 좌우 1% 축소
+
+  // 조정된 바운딩 박스 계산
+  const adjustedBox = {
+    x: boundingBox.x + (boundingBox.width * sidePadding),
+    y: boundingBox.y + (boundingBox.height * topPadding),
+    width: boundingBox.width * (1 - 2 * sidePadding),
+    height: boundingBox.height * (1 - topPadding - bottomPadding),
+  };
+
+  // 정규화 좌표를 픽셀 좌표로 변환
+  const x = Math.floor(adjustedBox.x * img.width);
+  const y = Math.floor(adjustedBox.y * img.height);
+  const width = Math.floor(adjustedBox.width * img.width);
+  const height = Math.floor(adjustedBox.height * img.height);
+
+  // 범위 검증
+  const safeX = Math.max(0, Math.min(x, img.width - 1));
+  const safeY = Math.max(0, Math.min(y, img.height - 1));
+  const safeWidth = Math.min(width, img.width - safeX);
+  const safeHeight = Math.min(height, img.height - safeY);
+
+  if (safeWidth <= 0 || safeHeight <= 0) {
+    throw new Error('크롭 영역이 너무 작습니다');
+  }
+
+  // 캔버스에 크롭
+  const canvas = document.createElement('canvas');
+  canvas.width = safeWidth;
+  canvas.height = safeHeight;
+  const ctx = canvas.getContext('2d');
+
+  if (!ctx) {
+    throw new Error('Canvas context 생성 실패');
+  }
+
+  // 고품질 이미지 스케일링 설정
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+
+  ctx.drawImage(img, safeX, safeY, safeWidth, safeHeight, 0, 0, safeWidth, safeHeight);
+
+  // JPEG 고품질(0.95)로 저장하여 화질 유지
+  return canvas.toDataURL('image/jpeg', 0.95);
+}
+
+/**
+ * PDF 파일을 이미지(base64)로 변환
+ * 멀티 페이지 PDF의 경우 모든 페이지를 하나의 긴 이미지로 합침
+ */
+async function pdfToImages(file: File): Promise<{ images: string[]; combinedImage: string }> {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const numPages = pdf.numPages;
+
+  const images: string[] = [];
+  const scale = 2.0; // 고해상도 렌더링
+
+  let totalHeight = 0;
+  let maxWidth = 0;
+  const pageCanvases: HTMLCanvasElement[] = [];
+
+  // 각 페이지를 캔버스로 렌더링
+  for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+    const page = await pdf.getPage(pageNum);
+    const viewport = page.getViewport({ scale });
+
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) continue;
+
+    await page.render({
+      canvasContext: ctx,
+      viewport: viewport,
+    }).promise;
+
+    // 개별 페이지 이미지 저장
+    images.push(canvas.toDataURL('image/png'));
+    pageCanvases.push(canvas);
+
+    totalHeight += viewport.height;
+    maxWidth = Math.max(maxWidth, viewport.width);
+  }
+
+  // 모든 페이지를 하나의 긴 이미지로 합치기
+  const combinedCanvas = document.createElement('canvas');
+  combinedCanvas.width = maxWidth;
+  combinedCanvas.height = totalHeight;
+  const combinedCtx = combinedCanvas.getContext('2d');
+
+  if (combinedCtx) {
+    let yOffset = 0;
+    for (const pageCanvas of pageCanvases) {
+      combinedCtx.drawImage(pageCanvas, 0, yOffset);
+      yOffset += pageCanvas.height;
+    }
+  }
+
+  return {
+    images,
+    combinedImage: combinedCanvas.toDataURL('image/png'),
+  };
+}
+
 // ============================================================
 // 컴포넌트
 // ============================================================
@@ -81,6 +263,7 @@ export default function OCRProcessor({
   onError,
   onCancel,
   onImageReady,
+  onAutoExtractImage,
   className = '',
 }: OCRProcessorProps) {
   // 상태
@@ -140,22 +323,40 @@ export default function OCRProcessor({
       setProgress({ progress: 0, status: '준비 중...' });
 
       try {
-        // 이미지 파일만 지원
-        if (!isImageFile(targetFile)) {
-          if (isPDFFile(targetFile)) {
-            throw new Error('PDF 파일은 현재 지원하지 않습니다. 이미지 파일(JPG, PNG)을 사용해주세요.');
-          }
-          throw new Error('지원하지 않는 파일 형식입니다. JPG, PNG 이미지만 지원합니다.');
+        // 이미지 또는 PDF 파일만 지원
+        const isPdf = isPDFFile(targetFile);
+        const isImage = isImageFile(targetFile);
+
+        if (!isImage && !isPdf) {
+          throw new Error('지원하지 않는 파일 형식입니다. JPG, PNG 이미지 또는 PDF 파일을 사용해주세요.');
         }
 
-        // 원본 이미지 URL 생성 및 전달 (이미지 크롭용)
-        const imageUrl = URL.createObjectURL(targetFile);
-        onImageReady?.(imageUrl);
+        let base64Image: string;
 
-        setProgress({ progress: 10, status: '이미지 변환 중...' });
+        if (isPdf) {
+          // PDF 파일 처리
+          setProgress({ progress: 5, status: 'PDF 변환 중...' });
 
-        // 이미지를 base64로 변환
-        const base64Image = await fileToBase64(targetFile);
+          const { combinedImage, images } = await pdfToImages(targetFile);
+          base64Image = combinedImage;
+
+          // PDF의 첫 페이지 이미지를 크롭용으로 전달
+          if (images.length > 0) {
+            onImageReady?.(images[0]);
+          }
+
+          console.log(`[OCRProcessor] PDF 변환 완료: ${images.length}페이지`);
+        } else {
+          // 이미지 파일 처리
+          // 원본 이미지 URL 생성 및 전달 (이미지 크롭용)
+          const imageUrl = URL.createObjectURL(targetFile);
+          onImageReady?.(imageUrl);
+
+          setProgress({ progress: 10, status: '이미지 변환 중...' });
+
+          // 이미지를 base64로 변환
+          base64Image = await fileToBase64(targetFile);
+        }
 
         if (isCancelledRef.current) return;
 
@@ -171,26 +372,180 @@ export default function OCRProcessor({
 
         if (isCancelledRef.current) return;
 
-        const { text, usage } = result.data;
+        const { text, usage, parsedV4 } = result.data;
+
+        // 🔍 디버그: 서버 응답 확인
+        console.log('=== OCR 서버 응답 디버그 ===');
+        console.log('text 길이:', text?.length || 0);
+        console.log('parsedV4 존재:', !!parsedV4);
+        console.log('parsedV4.success:', parsedV4?.success);
+        console.log('parsedV4.questions 수:', parsedV4?.questions?.length || 0);
+        if (parsedV4?.questions && parsedV4.questions.length > 0) {
+          console.log('첫번째 문제 stem:', parsedV4.questions[0].stem?.substring(0, 50));
+        }
+        console.log('=== 디버그 끝 ===');
+
         setOcrUsage(usage);
 
-        // 텍스트가 추출되면 문제 파싱 시도
-        if (text.trim()) {
-          setStep('parsing');
-          setProgress({ progress: 70, status: '문제 분석 중...' });
+        setStep('parsing');
+        setProgress({ progress: 70, status: '문제 분석 중...' });
 
-          // 약간의 딜레이 후 파싱 (UI 업데이트를 위해)
-          await new Promise((resolve) => setTimeout(resolve, 300));
+        // 약간의 딜레이 후 파싱 (UI 업데이트를 위해)
+        await new Promise((resolve) => setTimeout(resolve, 300));
 
-          if (isCancelledRef.current) return;
+        if (isCancelledRef.current) return;
 
-          const parsed = parseQuestionsAuto(text);
+        // V4 (Gemini 전처리) 결과 우선 사용
+        if (parsedV4?.success && parsedV4.questions.length > 0) {
+          console.log('[OCRProcessor] V4 파싱 결과 사용:', parsedV4.questions.length, '문제');
+
+          // 이미지가 필요한 문제가 있는지 확인
+          const questionsNeedingImage = parsedV4.questions.filter(q => q.needsImage);
+
+          if (questionsNeedingImage.length > 0 && onAutoExtractImage) {
+            console.log('[OCRProcessor] 이미지 필요 문제:', questionsNeedingImage.length, '개');
+            setProgress({ progress: 75, status: '이미지 영역 분석 중...' });
+
+            try {
+              // 이미지 영역 분석 Cloud Function 호출
+              const analyzeImageRegionsCall = httpsCallable<
+                { imageBase64: string },
+                { success: boolean; regions: QuestionImageRegion[] }
+              >(functions, 'analyzeImageRegionsCall');
+
+              const regionResult = await analyzeImageRegionsCall({ imageBase64: base64Image });
+
+              if (regionResult.data.success && regionResult.data.regions.length > 0) {
+                console.log('[OCRProcessor] 이미지 영역 분석 완료:', regionResult.data.regions.length, '개');
+                setProgress({ progress: 85, status: '이미지 자동 추출 중...' });
+
+                // 각 영역을 크롭하여 해당 문제에 매핑
+                for (const region of regionResult.data.regions) {
+                  try {
+                    const croppedDataUrl = await cropImageRegion(base64Image, region.boundingBox);
+                    onAutoExtractImage(
+                      croppedDataUrl,
+                      region.questionNumber,
+                      targetFile.name
+                    );
+                    console.log(`[OCRProcessor] ${region.questionNumber}번 문제 이미지 추출 완료`);
+                  } catch (cropError) {
+                    console.error(`[OCRProcessor] ${region.questionNumber}번 이미지 크롭 실패:`, cropError);
+                  }
+                }
+              } else {
+                console.log('[OCRProcessor] 분석된 이미지 영역 없음');
+              }
+            } catch (analyzeError) {
+              console.error('[OCRProcessor] 이미지 영역 분석 실패:', analyzeError);
+              // 이미지 분석 실패해도 계속 진행
+            }
+          }
+
+          // V4 결과를 앱의 ParseResult 형식으로 변환
+          const parsed: ParseResult = {
+            questions: parsedV4.questions.map((q) => {
+              const question: any = {
+                // 필수 필드
+                text: q.stem,
+                type: q.type === 'multipleChoice' ? 'multiple' : q.type === 'ox' ? 'ox' : 'short_answer',
+                // 선지는 text만 사용 (UI에서 번호 표시)
+                choices: q.choices.map((c) => c.text),
+                answer: '',
+                explanation: '',
+              };
+
+              // 제시문 처리 - mixedExamples 형식으로 변환 (QuestionEditor UI와 호환)
+              // QuestionEditor는 mixedExamples를 사용하여 제시문 섹션을 렌더링함
+              const mixedExamples: Array<{
+                id: string;
+                type: 'text' | 'gana' | 'bullet';
+                content?: string;
+                items?: Array<{ id: string; label: string; content: string }>;
+              }> = [];
+
+              // 1. text 타입 제시문
+              if (q.passage) {
+                mixedExamples.push({
+                  id: `passage_text_${Date.now()}`,
+                  type: 'text',
+                  content: q.passage,
+                });
+              }
+
+              // 2. (가)(나)(다) 타입 제시문
+              if (q.labeledPassages && Object.keys(q.labeledPassages).length > 0) {
+                mixedExamples.push({
+                  id: `passage_gana_${Date.now()}`,
+                  type: 'gana',
+                  items: Object.entries(q.labeledPassages).map(([label, text], idx) => ({
+                    id: `gana_item_${Date.now()}_${idx}`,
+                    label: label,
+                    content: text as string,
+                  })),
+                });
+              }
+
+              // 3. bullet 타입 제시문 (◦ 항목)
+              if (q.bulletItems && q.bulletItems.length > 0) {
+                mixedExamples.push({
+                  id: `passage_bullet_${Date.now()}`,
+                  type: 'bullet',
+                  items: q.bulletItems.map((text, idx) => ({
+                    id: `bullet_item_${Date.now()}_${idx}`,
+                    label: '◦',
+                    content: text,
+                  })),
+                });
+              }
+
+              // mixedExamples가 있으면 추가 (QuestionEditor에서 제시문 섹션에 표시됨)
+              if (mixedExamples.length > 0) {
+                question.mixedExamples = mixedExamples;
+              }
+
+              // 제시문 발문
+              if (q.passagePrompt) {
+                question.passagePrompt = q.passagePrompt;
+              }
+
+              // 보기 데이터 (bogi 형식으로 변환)
+              if (q.boxItems && q.boxItems.length > 0) {
+                question.bogi = {
+                  questionText: q.bogiPrompt || '',  // 보기 발문
+                  items: q.boxItems.map((b, idx) => ({
+                    id: `bogi_${Date.now()}_${idx}`,
+                    label: b.label,
+                    content: b.text,
+                  })),
+                };
+              }
+
+              return question;
+            }),
+            rawText: text,
+            success: true,
+            message: `${parsedV4.questions.length}개의 문제를 인식했습니다. (AI 전처리)`,
+          };
+
           setParseResult(parsed);
           setStep('review');
           setProgress({ progress: 100, status: '완료!' });
-
-          // 파싱 결과 전달
           onComplete(parsed);
+        } else if (text.trim()) {
+          // V4 실패 - 에러 표시 (디버깅용)
+          console.error('[OCRProcessor] V4 실패!');
+          console.error('[OCRProcessor] parsedV4:', parsedV4);
+          console.error('[OCRProcessor] parsedV4?.debug:', (parsedV4 as any)?.debug);
+
+          // 서버에서 전달된 에러 메시지 추출
+          const serverError = (parsedV4 as any)?.debug?.error || '알 수 없는 오류';
+
+          const errorMsg = parsedV4
+            ? `V4 파싱 실패: ${serverError}`
+            : 'V4 결과가 null입니다 (서버에서 Gemini 호출 실패)';
+
+          throw new Error(errorMsg);
         } else {
           // 텍스트가 없는 경우
           const emptyResult: ParseResult = {
@@ -228,7 +583,7 @@ export default function OCRProcessor({
         }
       }
     },
-    [onComplete, onError, onImageReady]
+    [onComplete, onError, onImageReady, onAutoExtractImage]
   );
 
   // 파일이 없거나 idle 상태면 렌더링하지 않음

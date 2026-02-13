@@ -52,12 +52,7 @@ const CUSTOM_TAG_MAX_LENGTH = 10;
 /**
  * 시험 유형 태그 (필수: 1개 선택)
  */
-const EXAM_TYPE_TAGS = ['중간고사', '기말고사'];
-
-/**
- * 기타 추천 태그
- */
-const OTHER_SUGGESTED_TAGS = ['복습', '심화', '기초'];
+const EXAM_TYPE_TAGS = ['중간', '기말', '기타'];
 
 /**
  * 난이도 옵션
@@ -85,10 +80,10 @@ export function validateRequiredTags(tags: string[], chapterTags: string[]): str
   const hasChapter = tags.some(tag => chapterTags.includes(tag));
 
   if (!hasExamType && !hasChapter) {
-    return '시험 유형(중간고사/기말고사)과 챕터 태그를 각각 1개 이상 선택해주세요.';
+    return '시험 유형(중간/기말/기타)과 챕터 태그를 각각 1개 이상 선택해주세요.';
   }
   if (!hasExamType) {
-    return '시험 유형(중간고사/기말고사) 태그를 선택해주세요.';
+    return '시험 유형(중간/기말/기타) 태그를 선택해주세요.';
   }
   if (!hasChapter) {
     return '챕터 태그를 1개 이상 선택해주세요.';
@@ -97,13 +92,17 @@ export function validateRequiredTags(tags: string[], chapterTags: string[]): str
 }
 
 /**
- * 과목 ID로 챕터 태그 목록 가져오기
+ * 과목 ID로 챕터 태그 목록 가져오기 (형식: "12_신경계")
  */
 export function getChapterTags(courseId?: string | null): string[] {
   if (!courseId) return [];
   const courseIndex = getCourseIndex(courseId);
   if (!courseIndex) return [];
-  return courseIndex.chapters.map(chapter => chapter.shortName);
+  return courseIndex.chapters.map(chapter => {
+    // 챕터 번호 추출 (예: "12. 신경계" -> "12")
+    const chapterNum = chapter.name.split('.')[0].trim();
+    return `${chapterNum}_${chapter.shortName}`;
+  });
 }
 
 export default function QuizMetaForm({
@@ -340,30 +339,6 @@ export default function QuizMetaForm({
           </div>
         )}
 
-        {/* 기타 추천 태그 */}
-        <div className="mt-3">
-          <p className="text-xs text-[#5C5C5C] mb-2">기타</p>
-          <div className="flex flex-wrap gap-2">
-            {OTHER_SUGGESTED_TAGS.filter((tag) => !meta.tags.includes(tag)).map((tag) => (
-              <button
-                key={tag}
-                type="button"
-                onClick={() => handleAddTag(tag, true)}
-                disabled={meta.tags.length >= 5}
-                className="
-                  px-2.5 py-1
-                  bg-[#EDEAE4] text-[#1A1A1A]
-                  text-xs font-bold border border-[#1A1A1A]
-                  hover:bg-[#1A1A1A] hover:text-[#F5F0E8]
-                  disabled:opacity-50 disabled:cursor-not-allowed
-                  transition-colors
-                "
-              >
-                +{tag}
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
 
       {/* 난이도 */}

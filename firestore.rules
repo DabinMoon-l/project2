@@ -52,6 +52,12 @@ service cloud.firestore {
         allow read: if isOwner(uid) || isProfessor();
         allow write: if false; // Cloud Functions에서만 작성
       }
+
+      // 경험치 히스토리 서브컬렉션 (CF 전용 쓰기)
+      match /expHistory/{historyId} {
+        allow read: if isOwner(uid) || isProfessor();
+        allow write: if false;
+      }
     }
 
     // ============================================================
@@ -62,25 +68,25 @@ service cloud.firestore {
       // 읽기: 로그인 사용자는 모든 퀴즈 읽기 가능 (목록 조회를 위해)
       allow read: if isAuthenticated();
 
-      // 생성: 교수님 또는 로그인 사용자 (자체제작 퀴즈)
+      // 생성: 교수님 또는 로그인 사용자 (자체제작/AI생성 퀴즈)
       allow create: if isAuthenticated() &&
         (isProfessor() ||
-         (request.resource.data.type == 'custom' &&
+         (request.resource.data.type in ['custom', 'ai-generated'] &&
           request.resource.data.creatorId == request.auth.uid));
 
-      // 수정: 교수님 또는 본인이 만든 자체제작 퀴즈 또는 퀴즈 완료/찜 관련 필드만 수정
+      // 수정: 교수님 또는 본인이 만든 자체제작/AI생성 퀴즈 또는 퀴즈 완료/찜 관련 필드만 수정
       allow update: if isAuthenticated() &&
         (isProfessor() ||
-         (resource.data.type == 'custom' &&
+         (resource.data.type in ['custom', 'ai-generated'] &&
           resource.data.creatorId == request.auth.uid) ||
          // 로그인 사용자가 퀴즈 완료/통계 관련 필드만 수정하는 경우 허용
-         // completedUsers, userScores, participantCount, bookmarkCount
+         // completedUsers, userScores, userFirstReviewScores, participantCount, bookmarkCount
          request.resource.data.diff(resource.data).affectedKeys()
-           .hasOnly(['completedUsers', 'userScores', 'participantCount', 'bookmarkCount']));
+           .hasOnly(['completedUsers', 'userScores', 'userFirstReviewScores', 'participantCount', 'bookmarkCount', 'averageScore', 'updatedAt']));
 
-      // 삭제: 교수님 또는 본인이 만든 자체제작 퀴즈
+      // 삭제: 교수님 또는 본인이 만든 자체제작/AI생성 퀴즈
       allow delete: if isProfessor() ||
-        (resource.data.type == 'custom' && resource.data.creatorId == request.auth.uid);
+        (resource.data.type in ['custom', 'ai-generated'] && resource.data.creatorId == request.auth.uid);
 
       // 퀴즈 제출 서브컬렉션
       match /submissions/{submissionId} {
@@ -88,6 +94,18 @@ service cloud.firestore {
         allow create: if isAuthenticated() &&
           request.resource.data.userId == request.auth.uid;
         allow update, delete: if false;
+      }
+
+      // 서술형 채점 결과 서브컬렉션 (CF 전용 쓰기, 교수/학생 읽기)
+      match /essayGrades/{gradeId} {
+        allow read: if isAuthenticated();
+        allow write: if false;
+      }
+
+      // 문제별 통계 서브컬렉션 (CF 전용 쓰기)
+      match /questionStats/{statId} {
+        allow read: if isAuthenticated();
+        allow write: if false;
       }
     }
 
@@ -430,6 +448,211 @@ service cloud.firestore {
 
       // 쓰기: 교수님만
       allow write: if isProfessor();
+    }
+
+    // ============================================================
+    // PPTX 퀴즈 생성 작업 컬렉션
+    // ============================================================
+
+    match /quizJobs/{jobId} {
+      // 읽기: 본인 작업만
+      allow read: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid;
+
+      // 생성: 로그인 사용자 (본인 것만)
+      allow create: if isAuthenticated() &&
+        request.resource.data.userId == request.auth.uid;
+
+      // 수정: Cloud Functions에서만 (클라이언트 수정 불가)
+      allow update: if false;
+
+      // 삭제: 불가 (Cloud Functions에서 정리)
+      allow delete: if false;
+    }
+
+    // ============================================================
+    // 퀴즈 완료 기록 (completedUsers 배열 대체)
+    // Cloud Functions에서만 쓰기 (recordAttempt)
+    // ============================================================
+
+    match /quiz_completions/{docId} {
+      // 읽기: 로그인 사용자 (완료 여부 확인)
+      allow read: if isAuthenticated();
+
+      // 쓰기: 본인의 완료 기록만 (userId 필드가 본인 또는 docId에 본인 uid 포함)
+      allow create, update: if isAuthenticated()
+        && request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated()
+        && resource.data.userId == request.auth.uid;
+    }
+
+    // ============================================================
+    // 퀴즈 통계 분산 카운터
+    // Cloud Functions에서만 쓰기 (recordAttempt)
+    // ============================================================
+
+    match /quiz_agg/{quizId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+
+      match /shards/{shardId} {
+        allow read: if isAuthenticated();
+        allow write: if false;
+      }
+    }
+
+    // ============================================================
+    // Rate Limit v2 (recordAttempt용)
+    // Cloud Functions에서만 쓰기
+    // ============================================================
+
+    match /rateLimits_v2/{docId} {
+      allow read: if false;
+      allow write: if false;
+    }
+
+    // ============================================================
+    // AI 문제 생성 Jobs (CF 전용 쓰기, 본인 읽기)
+    // ============================================================
+    match /jobs/{jobId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow write: if false; // CF에서만 쓰기
+    }
+
+    // ============================================================
+    // Material 캐시 (CF 전용, 클라이언트 접근 불가)
+    // ============================================================
+    match /materials/{fingerprint} {
+      allow read: if false;
+      allow write: if false;
+    }
+
+    // ============================================================
+    // 공지 채널 (교수님 작성, 학생 읽기/리액션)
+    // ============================================================
+    match /announcements/{announcementId} {
+      // 읽기: 로그인 사용자
+      allow read: if isAuthenticated();
+
+      // 생성: 교수님만
+      allow create: if isProfessor();
+
+      // 수정: 교수님 (내용 수정) 또는 로그인 사용자 (리액션/투표)
+      allow update: if isAuthenticated() && (
+        isProfessor() ||
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['reactions', 'poll.votes'])
+      );
+
+      // 삭제: 교수님만
+      allow delete: if isProfessor();
+    }
+
+    // ============================================================
+    // 캐릭터 도감 (과목별 공유 도감)
+    // ============================================================
+    match /characterDiscoveries/{discoveryId} {
+      // 읽기: 로그인 사용자 (과목별 도감 조회)
+      allow read: if isAuthenticated();
+
+      // 생성: 로그인 사용자 (새 캐릭터 발견)
+      allow create: if isAuthenticated() &&
+        request.resource.data.discoveredBy == request.auth.uid;
+
+      // 수정/삭제: 불가
+      allow update, delete: if false;
+    }
+
+    // ============================================================
+    // 비공개 퀴즈 (자체제작 퀴즈 폴백 조회)
+    // ============================================================
+    match /privateQuizzes/{quizId} {
+      // 읽기: 로그인 사용자
+      allow read: if isAuthenticated();
+
+      // 쓰기: 불가 (Cloud Functions 또는 다른 경로에서 관리)
+      allow write: if false;
+    }
+
+    // ============================================================
+    // 좋아요 컬렉션 (CF 트리거용)
+    // ============================================================
+    match /likes/{likeId} {
+      allow read: if isAuthenticated();
+
+      allow create: if isAuthenticated() &&
+        request.resource.data.userId == request.auth.uid;
+
+      allow delete: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid;
+
+      allow update: if false;
+    }
+
+    // ============================================================
+    // Cloud Functions 전용 컬렉션 (클라이언트 접근 차단)
+    // ============================================================
+
+    // 알림 히스토리
+    match /notificationHistory/{docId} {
+      allow read, write: if false;
+    }
+
+    // 학기 전환 로그
+    match /semesterTransitionLogs/{logId} {
+      allow read: if isProfessor();
+      allow write: if false;
+    }
+
+    // 과목 Scope (AI 문제 생성용 범위 데이터)
+    match /courseScopes/{courseId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+
+      match /chapters/{chapterId} {
+        allow read: if isAuthenticated();
+        allow write: if false;
+      }
+    }
+
+    // 교수 퀴즈 스타일 분석
+    match /professorQuizAnalysis/{courseId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+
+      match /raw/{quizId} {
+        allow read, write: if false;
+      }
+
+      match /data/{dataId} {
+        allow read: if isAuthenticated();
+        allow write: if false;
+      }
+    }
+
+    // Gemini 사용량 추적
+    match /geminiUsage/{path=**} {
+      allow read, write: if false;
+    }
+
+    // Gemini 큐
+    match /geminiQueue/{docId} {
+      allow read, write: if false;
+    }
+
+    // OCR 사용량 추적
+    match /ocrUsage/{path=**} {
+      allow read, write: if false;
+    }
+
+    // Vision OCR 사용량 추적
+    match /visionOcrUsage/{path=**} {
+      allow read, write: if false;
+    }
+
+    // 스타일 기반 AI 문제 생성 사용량
+    match /styledQuizUsage/{path=**} {
+      allow read, write: if false;
     }
   }
 }

@@ -27,3 +27,6 @@ export { default as ImageRegionSelector } from './ImageRegionSelector';
 
 // ExtractedImagePicker: 추출 이미지 선택 모달
 export { default as ExtractedImagePicker } from './ExtractedImagePicker';
+
+// AIQuizGenerator: AI 문제 생성 컴포넌트 (Gemini)
+export { default as AIQuizGenerator } from './AIQuizGenerator';

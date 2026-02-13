@@ -89,6 +89,11 @@ export interface UserProfile {
   // 역할
   role: 'student' | 'professor';
 
+  // 캐릭터/뽑기 시스템
+  currentCharacterIndex?: number;
+  currentCharacterName?: string;
+  lastGachaExp?: number;
+
   // 타임스탬프
   createdAt: Timestamp;
   updatedAt: Timestamp;

@@ -304,16 +304,22 @@ export default function QuestionList({
                                 ? question.answerIndex >= 0
                                   ? `${question.answerIndex + 1}번`
                                   : '미선택'
-                                : question.answerText || '미입력'}
+                                : (question.answerText || '').replace(/\|\|\|/g, ', ') || '미입력'}
                           </span>
                         </span>
                         {question.imageUrl && (
                           <span className="text-[#5C5C5C]">| 이미지</span>
                         )}
-                        {(question.examples && question.examples.items?.some(i => i.trim())) ||
+                        {/* 지문 (구 보기/mixedExamples → passageBlocks) */}
+                        {(question.passageBlocks && question.passageBlocks.length > 0) ||
+                          (question.examples && question.examples.items?.some(i => i.trim())) ||
                           (question.mixedExamples && question.mixedExamples.some(i => i.content?.trim())) ? (
-                          <span className="text-[#5C5C5C]">| 보기</span>
+                          <span className="text-[#5C5C5C]">| 지문</span>
                         ) : null}
+                        {/* 보기 (새로운 bogi 필드) */}
+                        {question.bogi && question.bogi.items && question.bogi.items.some(i => i.content?.trim()) && (
+                          <span className="text-[#5C5C5C]">| 보기</span>
+                        )}
                         {question.explanation && (
                           <span className="text-[#5C5C5C]">| 해설</span>
                         )}
@@ -329,11 +335,14 @@ export default function QuestionList({
                         {question.commonQuestion || question.text || '(공통 문제 없음)'}
                       </p>
 
-                      {/* 공통 지문/보기 있음 표시 */}
+                      {/* 공통 지문/이미지/보기 있음 표시 */}
                       <div className="text-xs text-[#5C5C5C] flex flex-wrap items-center gap-x-2 mb-2">
                         {question.passage && <span>| 공통 지문</span>}
                         {question.passageImage && <span>| 공통 이미지</span>}
-                        {question.koreanAbcItems && question.koreanAbcItems.length > 0 && <span>| ㄱㄴㄷ 보기</span>}
+                        {question.passageBlocks && question.passageBlocks.length > 0 && <span>| 지문</span>}
+                        {question.bogi && question.bogi.items && question.bogi.items.some(i => i.content?.trim()) && <span>| 보기</span>}
+                        {/* 구 형식 호환 */}
+                        {question.koreanAbcItems && question.koreanAbcItems.length > 0 && <span>| ㄱㄴㄷ 지문</span>}
                       </div>
 
                       {/* 하위 문제 아코디언 */}
@@ -391,7 +400,7 @@ export default function QuestionList({
                                             ? sq.answerIndex === 0 ? 'O' : sq.answerIndex === 1 ? 'X' : '미선택'
                                             : sq.type === 'multiple'
                                               ? sq.answerIndex !== undefined && sq.answerIndex >= 0 ? `${sq.answerIndex + 1}번` : '미선택'
-                                              : sq.answerText || '미입력'}
+                                              : (sq.answerText || '').replace(/\|\|\|/g, ', ') || '미입력'}
                                         </span>
                                       </span>
                                     </div>

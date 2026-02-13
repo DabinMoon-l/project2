@@ -122,17 +122,21 @@ export function useNotification(): UseNotificationReturn {
    */
   useEffect(() => {
     if (permissionStatus === 'granted' && fcmToken) {
-      unsubscribeMessageRef.current = onForegroundMessage((message) => {
-        setLastNotification(message);
+      try {
+        unsubscribeMessageRef.current = onForegroundMessage((message) => {
+          setLastNotification(message);
 
-        // 브라우저 알림 표시 (선택적)
-        if (typeof window !== 'undefined' && 'Notification' in window) {
-          new Notification(message.title, {
-            body: message.body,
-            icon: message.icon || '/icons/icon-192x192.png',
-          });
-        }
-      });
+          // 브라우저 알림 표시 (선택적)
+          if (typeof window !== 'undefined' && 'Notification' in window) {
+            new Notification(message.title, {
+              body: message.body,
+              icon: message.icon || '/icons/icon-192x192.png',
+            });
+          }
+        });
+      } catch {
+        // FCM 초기화 실패 시 무시 (필수 기능 아님)
+      }
     }
 
     return () => {

@@ -273,9 +273,9 @@ export default function PostDetailPage() {
 
           {/* 메타 정보 */}
           <div className="flex items-center gap-2 text-sm text-[#3A3A3A] mb-4 pb-4 border-b border-dashed border-[#1A1A1A]">
-            {/* 작성자: 닉네임·반 형식 */}
+            {/* 작성자: 닉네임·반·계급 형식 */}
             <span>
-              {post.authorNickname}·{post.authorClassType || '?'}반
+              {post.authorNickname}·{post.authorClassType || '?'}반·{post.authorRank || '견습생'}
             </span>
             <span>·</span>
             <span>{formatDate(post.createdAt)}</span>

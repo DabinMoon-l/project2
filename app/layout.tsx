@@ -32,13 +32,13 @@ const cormorantGaramond = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
-  title: "QuizBunny",
+  title: "RabbiTory",
   description: "퀴즈를 풀고 토끼를 성장시키는 학습 앱",
   manifest: "/manifest.json",
   keywords: ["퀴즈", "학습", "대학", "게이미피케이션", "토끼"],
-  authors: [{ name: "QuizBunny 팀" }],
+  authors: [{ name: "RabbiTory 팀" }],
   openGraph: {
-    title: "QuizBunny",
+    title: "RabbiTory",
     description: "퀴즈를 풀고 토끼를 성장시키는 학습 앱",
     type: "website",
     locale: "ko_KR",

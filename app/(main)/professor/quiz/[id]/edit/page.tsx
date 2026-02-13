@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Timestamp } from 'firebase/firestore';
 import { Header, Button, Skeleton } from '@/components/common';
 import { QuizEditorForm, PublishToggle } from '@/components/professor';
-import QuestionEditor, { type QuestionData } from '@/components/quiz/create/QuestionEditor';
+import QuestionEditor, { type QuestionData, type SubQuestion } from '@/components/quiz/create/QuestionEditor';
 import QuestionList from '@/components/quiz/create/QuestionList';
 import { useProfessorQuiz, type ProfessorQuiz, type QuizInput, type QuizQuestion } from '@/lib/hooks/useProfessorQuiz';
 import type { QuizMetaData } from '@/components/professor/QuizEditorForm';
@@ -22,29 +22,102 @@ type Step = 'meta' | 'questions';
 // ============================================================
 
 /**
- * ProfessorQuiz의 question을 QuestionData로 변환
+ * ProfessorQuiz의 questions를 QuestionData[]로 변환 (결합형 문제 재조합 포함)
  * DB는 1-indexed, 내부는 0-indexed
  */
-const convertToQuestionData = (
-  question: ProfessorQuiz['questions'][0]
-): QuestionData => {
-  // 객관식: DB의 1-indexed를 0-indexed로 변환
-  let answerIndex = -1;
-  if (question.type === 'multiple' && typeof question.answer === 'number' && question.answer > 0) {
-    answerIndex = question.answer - 1; // 1-indexed -> 0-indexed
-  } else if (question.type === 'ox' && typeof question.answer === 'number') {
-    answerIndex = question.answer; // OX는 0=O, 1=X로 그대로
-  }
+const convertToQuestionDataList = (
+  rawQuestions: ProfessorQuiz['questions']
+): QuestionData[] => {
+  const loadedQuestions: QuestionData[] = [];
+  const processedCombinedGroups = new Set<string>();
 
-  return {
-    id: question.id,
-    text: question.text,
-    type: question.type,
-    choices: question.choices || ['', '', '', ''],
-    answerIndex,
-    answerText: typeof question.answer === 'string' ? question.answer : '',
-    explanation: question.explanation || '',
-  };
+  rawQuestions.forEach((q: any, index: number) => {
+    // 결합형 문제인 경우: combinedGroupId로 그룹핑하여 재조합
+    if (q.combinedGroupId) {
+      // 이미 처리된 그룹이면 스킵
+      if (processedCombinedGroups.has(q.combinedGroupId)) {
+        return;
+      }
+      processedCombinedGroups.add(q.combinedGroupId);
+
+      // 같은 combinedGroupId를 가진 모든 하위 문제 찾기
+      const groupQuestions = rawQuestions.filter(
+        (gq: any) => gq.combinedGroupId === q.combinedGroupId
+      ).sort((a: any, b: any) => (a.combinedIndex || 0) - (b.combinedIndex || 0));
+
+      // 첫 번째 하위 문제에서 공통 정보 추출
+      const firstQ = groupQuestions[0] as any;
+
+      // 하위 문제들을 SubQuestion 형태로 변환
+      const subQuestions: SubQuestion[] = groupQuestions.map((sq: any) => {
+        let answerIndex = -1;
+        if (sq.type === 'multiple' && typeof sq.answer === 'number' && sq.answer > 0) {
+          answerIndex = sq.answer - 1;
+        } else if (sq.type === 'ox' && typeof sq.answer === 'number') {
+          answerIndex = sq.answer;
+        }
+
+        return {
+          id: sq.id || `${q.combinedGroupId}_${sq.combinedIndex || 0}`,
+          text: sq.text || '',
+          type: sq.type || 'multiple',
+          choices: sq.choices || undefined,
+          answerIndex: sq.type === 'multiple' || sq.type === 'ox' ? answerIndex : undefined,
+          answerText: typeof sq.answer === 'string' ? sq.answer : undefined,
+          explanation: sq.explanation || undefined,
+          mixedExamples: sq.examples || sq.mixedExamples || undefined,
+          image: sq.imageUrl || undefined,
+          chapterId: sq.chapterId || undefined,
+          chapterDetailId: sq.chapterDetailId || undefined,
+        };
+      });
+
+      // 결합형 문제로 재조합
+      const combinedQuestion: QuestionData = {
+        id: q.combinedGroupId,
+        text: firstQ.combinedMainText || '',
+        type: 'combined',
+        choices: [],
+        answerIndex: -1,
+        answerText: '',
+        explanation: '',
+        subQuestions,
+        passageType: firstQ.passageType || undefined,
+        passage: firstQ.passage || undefined,
+        koreanAbcItems: firstQ.koreanAbcItems || undefined,
+        passageMixedExamples: firstQ.passageMixedExamples || undefined,
+        passageImage: firstQ.passageImage || undefined,
+        commonQuestion: firstQ.commonQuestion || undefined,
+      };
+
+      loadedQuestions.push(combinedQuestion);
+    } else {
+      // 일반 문제: 기존 변환 로직
+      let answerIndex = -1;
+      if (q.type === 'multiple' && typeof q.answer === 'number' && q.answer > 0) {
+        answerIndex = q.answer - 1;
+      } else if (q.type === 'ox' && typeof q.answer === 'number') {
+        answerIndex = q.answer;
+      }
+
+      loadedQuestions.push({
+        id: q.id || `q_${index}`,
+        text: q.text || '',
+        type: q.type || 'multiple',
+        choices: q.choices || ['', '', '', ''],
+        answerIndex,
+        answerText: typeof q.answer === 'string' ? q.answer : '',
+        explanation: q.explanation || '',
+        imageUrl: q.imageUrl || null,
+        examples: q.examples || null,
+        mixedExamples: q.mixedExamples || null,
+        chapterId: q.chapterId || undefined,
+        chapterDetailId: q.chapterDetailId || undefined,
+      });
+    }
+  });
+
+  return loadedQuestions;
 };
 
 // ============================================================
@@ -111,7 +184,7 @@ export default function EditQuizPage() {
             difficulty: data.difficulty,
           });
           setIsPublished(data.isPublished);
-          setQuestions(data.questions.map(convertToQuestionData));
+          setQuestions(convertToQuestionDataList(data.questions));
           // 원본 문제 저장 (수정 감지용)
           setOriginalQuestions(data.questions as QuizQuestion[]);
         } else {
@@ -236,36 +309,143 @@ export default function EditQuizPage() {
   };
 
   /**
-   * QuestionData를 QuizQuestion 형식으로 변환
-   * 내부 0-indexed를 DB 1-indexed로 변환
+   * 결합형 하위 문제 변경 확인
    */
-  const convertToQuizQuestion = (q: QuestionData) => {
-    // 정답 처리 (내부 0-indexed -> DB 1-indexed)
-    let answer: string | number;
-    if (q.type === 'subjective' || q.type === 'short_answer') {
-      answer = q.answerText;
-    } else if (q.type === 'multiple') {
-      // 객관식: 0-indexed -> 1-indexed
-      answer = q.answerIndex >= 0 ? q.answerIndex + 1 : -1;
+  const isQuestionChangedForSubQuestion = (original: any, current: SubQuestion): boolean => {
+    if (!original) return true;
+
+    // 텍스트 비교
+    if (original.text !== current.text) return true;
+
+    // 타입 비교
+    if (original.type !== current.type) return true;
+
+    // 정답 비교
+    if (current.type === 'subjective' || current.type === 'short_answer') {
+      if (original.answer !== (current.answerText || '')) return true;
+    } else if (current.type === 'multiple') {
+      const origAnswer = typeof original.answer === 'number' ? original.answer - 1 : -1;
+      if (origAnswer !== (current.answerIndex ?? -1)) return true;
     } else {
-      // OX: 0=O, 1=X 그대로
-      answer = q.answerIndex;
+      if (original.answer !== (current.answerIndex ?? 0)) return true;
     }
 
-    // 기존 문제 찾기
-    const originalQ = originalQuestions.find((oq) => oq.id === q.id);
-    const hasChanged = isQuestionChanged(originalQ, q);
+    // 선지 비교 (객관식)
+    if (current.type === 'multiple') {
+      const origChoices = original.choices || [];
+      const currChoices = (current.choices || []).filter((c) => c.trim());
+      if (origChoices.length !== currChoices.length) return true;
+      for (let i = 0; i < currChoices.length; i++) {
+        if (origChoices[i] !== currChoices[i]) return true;
+      }
+    }
 
-    return {
-      id: q.id,
-      text: q.text,
-      type: q.type,
-      choices: q.type === 'multiple' ? q.choices : undefined,
-      answer,
-      explanation: q.explanation || undefined,
-      // 문제별 수정 시간: 변경된 경우에만 업데이트, 그렇지 않으면 기존 값 유지
-      questionUpdatedAt: hasChanged ? Timestamp.now() : ((originalQ as any)?.questionUpdatedAt || null),
-    };
+    // 해설 비교
+    if ((original.explanation || '') !== (current.explanation || '')) return true;
+
+    // 이미지 비교
+    if ((original.imageUrl || null) !== (current.image || null)) return true;
+
+    return false;
+  };
+
+  /**
+   * QuestionData[]를 펼쳐서 저장용 배열로 변환 (결합형 문제 포함)
+   */
+  const flattenQuestionsForSave = (): any[] => {
+    const flattenedQuestions: any[] = [];
+    let orderIndex = 0;
+
+    questions.forEach((q) => {
+      // 결합형 문제: 하위 문제를 개별 문제로 펼침
+      if (q.type === 'combined' && q.subQuestions && q.subQuestions.length > 0) {
+        const combinedGroupId = q.id || `combined_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const subQuestionsCount = q.subQuestions.length;
+
+        q.subQuestions.forEach((sq, sqIndex) => {
+          // 정답 처리
+          let answer: string | number;
+          if (sq.type === 'subjective' || sq.type === 'short_answer') {
+            answer = sq.answerText || '';
+          } else if (sq.type === 'multiple') {
+            answer = (sq.answerIndex !== undefined && sq.answerIndex >= 0) ? sq.answerIndex + 1 : -1;
+          } else {
+            answer = sq.answerIndex ?? 0;
+          }
+
+          // 기존 문제 찾기 (ID로 찾기)
+          const originalQ = originalQuestions.find((oq) => oq.id === sq.id);
+          const hasChanged = !originalQ || isQuestionChangedForSubQuestion(originalQ, sq);
+
+          const subQuestionData: any = {
+            id: sq.id || `${combinedGroupId}_${sqIndex}`,
+            order: orderIndex++,
+            text: sq.text,
+            type: sq.type,
+            choices: sq.type === 'multiple' ? (sq.choices || []).filter((c) => c.trim()) : undefined,
+            answer,
+            explanation: sq.explanation || undefined,
+            imageUrl: sq.image || undefined,
+            examples: sq.mixedExamples || undefined,
+            mixedExamples: sq.mixedExamples || undefined,
+            // 결합형 그룹 정보
+            combinedGroupId,
+            combinedIndex: sqIndex,
+            combinedTotal: subQuestionsCount,
+            // 챕터 정보
+            chapterId: sq.chapterId || undefined,
+            chapterDetailId: sq.chapterDetailId || undefined,
+            // 문제별 수정 시간
+            questionUpdatedAt: hasChanged ? Timestamp.now() : ((originalQ as any)?.questionUpdatedAt || null),
+          };
+
+          // 첫 번째 하위 문제에만 공통 정보 추가
+          if (sqIndex === 0) {
+            subQuestionData.passageType = q.passageType || undefined;
+            subQuestionData.passage = q.passage || undefined;
+            subQuestionData.koreanAbcItems = q.koreanAbcItems || undefined;
+            subQuestionData.passageMixedExamples = q.passageMixedExamples || undefined;
+            subQuestionData.passageImage = q.passageImage || undefined;
+            subQuestionData.commonQuestion = q.commonQuestion || undefined;
+            subQuestionData.combinedMainText = q.text || '';
+          }
+
+          flattenedQuestions.push(subQuestionData);
+        });
+      } else {
+        // 일반 문제
+        let answer: string | number;
+        if (q.type === 'subjective' || q.type === 'short_answer') {
+          answer = q.answerText;
+        } else if (q.type === 'multiple') {
+          answer = q.answerIndex >= 0 ? q.answerIndex + 1 : -1;
+        } else {
+          answer = q.answerIndex;
+        }
+
+        // 기존 문제 찾기
+        const originalQ = originalQuestions.find((oq) => oq.id === q.id) || originalQuestions[orderIndex];
+        const hasChanged = isQuestionChanged(originalQ, q);
+
+        flattenedQuestions.push({
+          id: q.id,
+          order: orderIndex++,
+          text: q.text,
+          type: q.type,
+          choices: q.type === 'multiple' ? q.choices?.filter((c) => c.trim()) : undefined,
+          answer,
+          explanation: q.explanation || undefined,
+          imageUrl: q.imageUrl || undefined,
+          examples: q.examples || undefined,
+          mixedExamples: q.mixedExamples || undefined,
+          chapterId: q.chapterId || undefined,
+          chapterDetailId: q.chapterDetailId || undefined,
+          questionUpdatedAt: hasChanged ? Timestamp.now() : ((originalQ as any)?.questionUpdatedAt || null),
+        });
+      }
+    });
+
+    return flattenedQuestions;
   };
 
   /**
@@ -281,13 +461,15 @@ export default function EditQuizPage() {
       setSaving(true);
       clearError();
 
+      const flattenedQuestions = flattenQuestionsForSave();
+
       const quizInput: Partial<QuizInput> = {
         title: quizMeta.title,
         description: quizMeta.description || undefined,
         targetClass: quizMeta.targetClass,
         difficulty: quizMeta.difficulty,
         isPublished,
-        questions: questions.map(convertToQuizQuestion),
+        questions: flattenedQuestions,
       };
 
       await updateQuiz(quizId, quizInput);

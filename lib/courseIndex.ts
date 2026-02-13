@@ -143,89 +143,89 @@ export const BIOLOGY_INDEX: CourseIndex = {
   ],
 };
 
-// 병태생리학 인덱스
+// 병태생리학 인덱스 (1, 2, 6단원은 범위 외)
 export const PATHOPHYSIOLOGY_INDEX: CourseIndex = {
   courseId: 'pathophysiology',
   courseName: '병태생리학',
   chapters: [
     {
-      id: 'patho_1',
-      name: '1. 세포손상',
+      id: 'patho_3',
+      name: '3. 세포손상',
       shortName: '세포손상',
       details: [
-        { id: 'patho_1_1', name: '세포 적응' },
-        { id: 'patho_1_2', name: '가역적 세포 손상과 석회화' },
-        { id: 'patho_1_3', name: '비가역적 세포 손상' },
-      ],
-    },
-    {
-      id: 'patho_2',
-      name: '2. 염증',
-      shortName: '염증',
-      details: [
-        { id: 'patho_2_1', name: '혈액과 혈구' },
-        { id: 'patho_2_2', name: '염증의 기본 증후' },
-        { id: 'patho_2_3', name: '급성 염증' },
-        { id: 'patho_2_4', name: '만성 염증' },
-        { id: 'patho_2_5', name: '염증의 화학 매개 물질과 염증 세포' },
-      ],
-    },
-    {
-      id: 'patho_3',
-      name: '3. 치유',
-      shortName: '치유',
-      details: [
-        { id: 'patho_3_1', name: '세포 환경과 증식' },
-        { id: 'patho_3_2', name: '재생과 재생 능력에 따른 세포 분류' },
-        { id: 'patho_3_3', name: '피부의 상처 치유와 섬유화' },
+        { id: 'patho_3_1', name: '세포 적응' },
+        { id: 'patho_3_2', name: '가역적 세포 손상과 석회화' },
+        { id: 'patho_3_3', name: '비가역적 세포 손상' },
       ],
     },
     {
       id: 'patho_4',
-      name: '4. 면역',
-      shortName: '면역',
+      name: '4. 염증',
+      shortName: '염증',
       details: [
-        { id: 'patho_4_1', name: '생물학적 면역체계' },
-        { id: 'patho_4_2', name: '면역체계의 분류' },
-        { id: 'patho_4_3', name: '과민반응' },
-        { id: 'patho_4_4', name: '자가면역질환과 AIDS' },
-        { id: 'patho_4_5', name: '이식면역' },
+        { id: 'patho_4_1', name: '혈액과 혈구' },
+        { id: 'patho_4_2', name: '염증의 기본 증후' },
+        { id: 'patho_4_3', name: '급성 염증' },
+        { id: 'patho_4_4', name: '만성 염증' },
+        { id: 'patho_4_5', name: '염증의 화학 매개 물질과 염증 세포' },
       ],
     },
     {
       id: 'patho_5',
-      name: '5. 순환장애',
-      shortName: '순환장애',
+      name: '5. 치유',
+      shortName: '치유',
       details: [
-        { id: 'patho_5_1', name: '충혈과 울혈' },
-        { id: 'patho_5_2', name: '혈전과 색전' },
-        { id: 'patho_5_3', name: '경색' },
-        { id: 'patho_5_4', name: '쇼크' },
-        { id: 'patho_5_5', name: 'DIC (파종성 혈관 내 응고)' },
-      ],
-    },
-    {
-      id: 'patho_6',
-      name: '6. 신생물',
-      shortName: '신생물',
-      details: [
-        { id: 'patho_6_1', name: '신생물의 정의와 특징' },
-        { id: 'patho_6_2', name: '종양의 종류와 명칭' },
-        { id: 'patho_6_3', name: '신생물이 신체에 미치는 영향' },
-        { id: 'patho_6_4', name: '종양의 악성도와 병기' },
-        { id: 'patho_6_5', name: '신생물 분류' },
-        { id: 'patho_6_6', name: '종양의 전파' },
+        { id: 'patho_5_1', name: '세포 환경과 증식' },
+        { id: 'patho_5_2', name: '재생과 재생 능력에 따른 세포 분류' },
+        { id: 'patho_5_3', name: '피부의 상처 치유와 섬유화' },
       ],
     },
     {
       id: 'patho_7',
-      name: '7. 선천성 이상',
+      name: '7. 면역',
+      shortName: '면역',
+      details: [
+        { id: 'patho_7_1', name: '생물학적 면역체계' },
+        { id: 'patho_7_2', name: '면역체계의 분류' },
+        { id: 'patho_7_3', name: '과민반응' },
+        { id: 'patho_7_4', name: '자가면역질환과 AIDS' },
+        { id: 'patho_7_5', name: '이식면역' },
+      ],
+    },
+    {
+      id: 'patho_8',
+      name: '8. 순환장애',
+      shortName: '순환장애',
+      details: [
+        { id: 'patho_8_1', name: '충혈과 울혈' },
+        { id: 'patho_8_2', name: '혈전과 색전' },
+        { id: 'patho_8_3', name: '경색' },
+        { id: 'patho_8_4', name: '쇼크' },
+        { id: 'patho_8_5', name: 'DIC (파종성 혈관 내 응고)' },
+      ],
+    },
+    {
+      id: 'patho_9',
+      name: '9. 신생물',
+      shortName: '신생물',
+      details: [
+        { id: 'patho_9_1', name: '신생물의 정의와 특징' },
+        { id: 'patho_9_2', name: '종양의 종류와 명칭' },
+        { id: 'patho_9_3', name: '신생물이 신체에 미치는 영향' },
+        { id: 'patho_9_4', name: '종양의 악성도와 병기' },
+        { id: 'patho_9_5', name: '신생물 분류' },
+        { id: 'patho_9_6', name: '종양의 전파' },
+      ],
+    },
+    {
+      id: 'patho_10',
+      name: '10. 선천성 이상',
       shortName: '선천성 이상',
       details: [],
     },
     {
-      id: 'patho_8',
-      name: '8. 노화',
+      id: 'patho_11',
+      name: '11. 노화',
       shortName: '노화',
       details: [],
     },
@@ -282,3 +282,72 @@ export function formatChapterLabel(
   const chapterNum = chapter.name.split('.')[0];
   return `${chapterNum}·${chapter.shortName}`;
 }
+
+/**
+ * 태그 옵션 타입
+ */
+export interface TagOption {
+  value: string;  // 태그 값 (예: "12_신경계")
+  label: string;  // 표시 라벨 (예: "#12_신경계")
+}
+
+/**
+ * 과목별 태그 옵션 생성
+ * 챕터 번호를 포함한 태그 목록을 생성
+ * 예: 생물학 12장 신경계 -> { value: "12_신경계", label: "#12_신경계" }
+ */
+export function generateCourseTags(courseId: string | null): TagOption[] {
+  if (!courseId) {
+    // 과목이 설정되지 않은 경우 기본 태그 (생물학)
+    return generateCourseTags('biology');
+  }
+
+  const courseIndex = getCourseIndex(courseId);
+  if (!courseIndex) {
+    // 인덱스가 없으면 빈 배열 반환
+    return [];
+  }
+
+  return courseIndex.chapters.map((chapter) => {
+    // 챕터 번호 추출 (예: "12. 신경계" -> "12")
+    const chapterNum = chapter.name.split('.')[0].trim();
+    // 태그 값 생성 (예: "12_신경계")
+    const tagValue = `${chapterNum}_${chapter.shortName}`;
+
+    return {
+      value: tagValue,
+      label: `#${tagValue}`,
+    };
+  });
+}
+
+/**
+ * 태그에서 챕터 ID 역추적
+ * 예: "12_신경계" -> "bio_12"
+ */
+export function getChapterIdFromTag(courseId: string, tag: string): string | null {
+  const courseIndex = getCourseIndex(courseId);
+  if (!courseIndex) return null;
+
+  // 태그에서 챕터 번호 추출 (예: "12_신경계" -> "12")
+  const match = tag.match(/^(\d+)_/);
+  if (!match) return null;
+
+  const chapterNum = match[1];
+
+  // 해당 번호의 챕터 찾기
+  const chapter = courseIndex.chapters.find((c) =>
+    c.name.startsWith(`${chapterNum}.`)
+  );
+
+  return chapter?.id || null;
+}
+
+/**
+ * 기본 공통 태그 (과목과 무관)
+ */
+export const COMMON_TAGS: TagOption[] = [
+  { value: '중간', label: '#중간' },
+  { value: '기말', label: '#기말' },
+  { value: '기타', label: '#기타' },
+];

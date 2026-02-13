@@ -23,12 +23,14 @@ import { useUser } from '@/lib/contexts';
 /**
  * 피드백 타입
  */
-type FeedbackType = 'unclear' | 'wrong' | 'typo' | 'other';
+type FeedbackType = 'unclear' | 'wrong' | 'typo' | 'other' | 'praise' | 'wantmore';
 
 /**
  * 피드백 타입 옵션
  */
-const FEEDBACK_TYPE_OPTIONS: { type: FeedbackType; label: string }[] = [
+const FEEDBACK_TYPE_OPTIONS: { type: FeedbackType; label: string; positive?: boolean }[] = [
+  { type: 'praise', label: '문제가 좋아요!', positive: true },
+  { type: 'wantmore', label: '더 풀고 싶어요', positive: true },
   { type: 'unclear', label: '문제가 이해가 안 돼요' },
   { type: 'wrong', label: '정답이 틀린 것 같아요' },
   { type: 'typo', label: '오타가 있어요' },
@@ -51,6 +53,36 @@ interface QuestionResult {
   // 결합형 문제 관련
   combinedGroupId?: string;
   subQuestionIndex?: number;
+  // 문제 이미지
+  image?: string;
+  // 하위 문제 지문 (ㄱㄴㄷ 형식 등)
+  subQuestionOptions?: string[];
+  subQuestionOptionsType?: 'text' | 'labeled' | 'mixed';
+  // 혼합 지문 원본 데이터
+  mixedExamples?: Array<{
+    id: string;
+    type: 'text' | 'labeled' | 'image' | 'grouped';
+    label?: string;
+    content?: string;
+    items?: Array<{ id: string; label: string; content: string }>;
+    imageUrl?: string;
+    children?: Array<{
+      id: string;
+      type: 'text' | 'labeled' | 'image';
+      label?: string;
+      content?: string;
+      items?: Array<{ id: string; label: string; content: string }>;
+      imageUrl?: string;
+    }>;
+  }>;
+  // 발문 정보
+  passagePrompt?: string;
+  bogiQuestionText?: string;
+  // 보기 (<보기> 박스 데이터)
+  bogi?: {
+    questionText?: string;
+    items: Array<{ label: string; content: string }>;
+  } | null;
 }
 
 /**
@@ -64,6 +96,7 @@ interface CombinedGroup {
   passageType?: string;
   passageImage?: string;
   koreanAbcItems?: string[];
+  passageMixedExamples?: any[];
   subQuestions: QuestionResult[];
 }
 
@@ -84,6 +117,7 @@ interface FeedbackPageData {
   questionResults: QuestionResult[];
   pageItems: PageItem[]; // 페이지 단위 아이템 (일반 문제 또는 결합형 그룹)
   hasSubmittedFeedback: boolean;
+  isQuizDeleted?: boolean; // 퀴즈 삭제 여부
 }
 
 /**
@@ -128,10 +162,145 @@ function SingleQuestionCard({
         <p className="text-xs text-[#5C5C5C] mb-1">Q{question.number}</p>
         <p className="text-sm font-bold text-[#1A1A1A] leading-relaxed">
           {question.question}
+          {/* 제시문 발문 또는 보기 발문 표시 */}
+          {(question.passagePrompt || question.bogiQuestionText) && (
+            <span className="ml-1 font-normal text-[#5C5C5C]">
+              {question.passagePrompt || question.bogiQuestionText}
+            </span>
+          )}
         </p>
       </div>
 
-      {/* 선지 (객관식) */}
+      {/* 1. 지문 - 혼합 형식 (grouped 먼저, 나머지는 생성 순서대로) */}
+      {question.mixedExamples && question.mixedExamples.length > 0 && (
+        <div className="mb-4 space-y-2">
+          <p className="text-xs font-bold text-[#5C5C5C]">지문</p>
+          {/* 1-1. 묶음 블록 (grouped) 먼저 */}
+          {question.mixedExamples.filter((b: any) => b.type === 'grouped').map((block: any) => (
+            <div key={block.id} className="p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A] space-y-1">
+              {(block.children || []).map((child: any) => (
+                <div key={child.id}>
+                  {child.type === 'text' && child.content?.trim() && (
+                    <p className="text-[#5C5C5C] text-xs whitespace-pre-wrap">{child.content}</p>
+                  )}
+                  {child.type === 'labeled' && (child.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                    <p key={item.id} className="text-[#1A1A1A] text-xs">
+                      <span className="font-bold mr-1">{item.label}.</span>
+                      {item.content}
+                    </p>
+                  ))}
+                  {child.type === 'gana' && (child.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                    <p key={item.id} className="text-[#1A1A1A] text-xs">
+                      <span className="font-bold mr-1">({item.label})</span>
+                      {item.content}
+                    </p>
+                  ))}
+                  {child.type === 'image' && child.imageUrl && (
+                    <img src={child.imageUrl} alt="지문 이미지" className="max-w-full h-auto border border-[#1A1A1A]" />
+                  )}
+                </div>
+              ))}
+            </div>
+          ))}
+          {/* 1-2. 나머지 블록 (생성 순서대로) */}
+          {question.mixedExamples.filter((b: any) => b.type !== 'grouped').map((block: any) => (
+            <div key={block.id}>
+              {/* 텍스트 블록 */}
+              {block.type === 'text' && block.content?.trim() && (
+                <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
+                  <p className="text-[#1A1A1A] text-xs whitespace-pre-wrap">{block.content}</p>
+                </div>
+              )}
+              {/* ㄱㄴㄷ 블록 */}
+              {block.type === 'labeled' && (block.items || []).length > 0 && (
+                <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
+                  {(block.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                    <p key={item.id} className="text-[#1A1A1A] text-xs">
+                      <span className="font-bold mr-1">{item.label}.</span>
+                      {item.content}
+                    </p>
+                  ))}
+                </div>
+              )}
+              {/* (가)(나)(다) 블록 */}
+              {block.type === 'gana' && (block.items || []).length > 0 && (
+                <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
+                  {(block.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                    <p key={item.id} className="text-[#1A1A1A] text-xs">
+                      <span className="font-bold mr-1">({item.label})</span>
+                      {item.content}
+                    </p>
+                  ))}
+                </div>
+              )}
+              {/* 이미지 블록 */}
+              {block.type === 'image' && block.imageUrl && (
+                <div className="border border-[#1A1A1A] overflow-hidden">
+                  <img src={block.imageUrl} alt="지문 이미지" className="max-w-full h-auto" />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 2. 지문 - 텍스트 형식 */}
+      {!question.mixedExamples && question.subQuestionOptions && question.subQuestionOptions.length > 0 && question.subQuestionOptionsType === 'text' && (
+        <div className="mb-4 p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
+          <p className="text-xs font-bold text-[#5C5C5C] mb-2">지문</p>
+          <p className="text-[#1A1A1A] text-xs">
+            {question.subQuestionOptions.join(', ')}
+          </p>
+        </div>
+      )}
+
+      {/* 3. 지문 - ㄱㄴㄷ 형식 */}
+      {!question.mixedExamples && question.subQuestionOptions && question.subQuestionOptions.length > 0 && question.subQuestionOptionsType === 'labeled' && (
+        <div className="mb-4 p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
+          <p className="text-xs font-bold text-[#5C5C5C] mb-2">지문</p>
+          {question.subQuestionOptions.map((itm, idx) => (
+            <p key={idx} className="text-[#1A1A1A] text-xs">
+              <span className="font-bold mr-1">{['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ'][idx]}.</span>
+              {itm}
+            </p>
+          ))}
+        </div>
+      )}
+
+      {/* 4. 문제 이미지 - 지문 다음에 표시 */}
+      {question.image && (
+        <div className="mb-4 border border-[#1A1A1A] overflow-hidden">
+          <img src={question.image} alt="문제 이미지" className="max-w-full h-auto" />
+        </div>
+      )}
+
+      {/* 5. 보기 (<보기> 박스) - 이미지 다음, 발문 전에 표시 */}
+      {question.bogi && question.bogi.items && question.bogi.items.some(i => i.content?.trim()) && (
+        <div className="mb-4 p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A]">
+          <p className="text-xs text-center text-[#5C5C5C] mb-2 font-bold">&lt;보 기&gt;</p>
+          <div className="space-y-1">
+            {question.bogi.items.filter(i => i.content?.trim()).map((item, idx) => (
+              <p key={idx} className="text-xs text-[#1A1A1A]">
+                <span className="font-bold mr-1">{item.label}.</span>
+                {item.content}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 6. 발문 (제시문 발문 + 보기 발문 합침, 선지 전에 표시) */}
+      {(question.passagePrompt || question.bogiQuestionText) && (
+        <div className="mb-4 p-2 border border-[#1A1A1A] bg-[#F5F0E8]">
+          <p className="text-xs text-[#1A1A1A]">
+            {question.passagePrompt && question.bogiQuestionText
+              ? `${question.passagePrompt} ${question.bogiQuestionText}`
+              : question.passagePrompt || question.bogiQuestionText}
+          </p>
+        </div>
+      )}
+
+      {/* 7. 선지 (객관식) */}
       {question.type === 'multiple' && question.options && question.options.length > 0 && (
         <div className="mb-4 space-y-2">
           <p className="text-xs font-bold text-[#5C5C5C]">선지</p>
@@ -161,19 +330,75 @@ function SingleQuestionCard({
               >
                 <span className="font-bold mr-2">{idx + 1}.</span>
                 {option}
-                {isCorrect && isUserAnswer && <span className="ml-2 font-bold">(정답)</span>}
+                {isCorrect && isUserAnswer && <span className="ml-2 font-bold">(정답) (내 답)</span>}
                 {isCorrect && !isUserAnswer && <span className="ml-2 font-bold">(정답)</span>}
-                {!isCorrect && isUserAnswer && <span className="ml-2 font-bold">(내 선택)</span>}
+                {!isCorrect && isUserAnswer && <span className="ml-2 font-bold">(내 답)</span>}
               </div>
             );
           })}
         </div>
       )}
 
-      {/* OX 또는 주관식 답변 */}
-      {(question.type === 'ox' || question.type === 'short') && (
+      {/* OX 선지 - 버튼 스타일 */}
+      {question.type === 'ox' && (() => {
+        const correctAnswerNormalized = (() => {
+          const ca = question.correctAnswer?.toString();
+          if (ca === '0' || ca?.toUpperCase() === 'O') return 'O';
+          return 'X';
+        })();
+        const userAnswerNormalized = question.userAnswer?.toString().toUpperCase() || '';
+
+        return (
+          <div className="mb-4">
+            <p className="text-xs font-bold text-[#5C5C5C] mb-2">선지</p>
+            <div className="flex gap-4 justify-center py-2">
+              {['O', 'X'].map((option) => {
+                const isCorrect = option === correctAnswerNormalized;
+                const isUserAnswer = option === userAnswerNormalized;
+
+                // 스타일 결정: 정답=녹색, 오답(내답)=빨강, 기본=회색
+                let bgColor = '#EDEAE4';
+                let textColor = '#5C5C5C';
+                let borderColor = '#1A1A1A';
+
+                if (isCorrect) {
+                  bgColor = '#1A6B1A';
+                  textColor = '#F5F0E8';
+                  borderColor = '#1A6B1A';
+                } else if (isUserAnswer) {
+                  bgColor = '#8B1A1A';
+                  textColor = '#F5F0E8';
+                  borderColor = '#8B1A1A';
+                }
+
+                return (
+                  <div
+                    key={option}
+                    className="w-24 h-24 text-4xl font-bold border-2 flex flex-col items-center justify-center"
+                    style={{ backgroundColor: bgColor, color: textColor, borderColor }}
+                  >
+                    <span>{option}</span>
+                    {isCorrect && isUserAnswer && (
+                      <span className="text-[10px] mt-1">정답/내 답</span>
+                    )}
+                    {isCorrect && !isUserAnswer && (
+                      <span className="text-[10px] mt-1">정답</span>
+                    )}
+                    {!isCorrect && isUserAnswer && (
+                      <span className="text-[10px] mt-1">내 답</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* 주관식 답변 */}
+      {question.type === 'short' && (
         <div className="mb-4 space-y-2">
-          {question.type === 'short' && question.correctAnswer?.includes('|||') ? (
+          {question.correctAnswer?.includes('|||') ? (
             <div className="space-y-2 text-xs">
               <div className="p-2 bg-[#E8F5E9] border border-[#1A6B1A]">
                 <span className="text-[#5C5C5C]">정답: </span>
@@ -233,15 +458,19 @@ function SingleQuestionCard({
           이 문제에 대한 피드백 (선택)
         </label>
         <div className="grid grid-cols-2 gap-2 mb-3">
-          {FEEDBACK_TYPE_OPTIONS.map(({ type, label }) => (
+          {FEEDBACK_TYPE_OPTIONS.map(({ type, label, positive }) => (
             <button
               key={type}
               type="button"
               onClick={() => onFeedbackTypeChange(question.id, type)}
               className={`p-2 text-xs font-bold border-2 transition-colors ${
                 feedbackTypes[question.id] === type
-                  ? 'border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8]'
-                  : 'border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] hover:bg-[#EDEAE4]'
+                  ? positive
+                    ? 'border-[#1A6B1A] bg-[#1A6B1A] text-[#F5F0E8]'
+                    : 'border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8]'
+                  : positive
+                    ? 'border-[#1A6B1A] bg-[#E8F5E9] text-[#1A6B1A] hover:bg-[#D0EBD0]'
+                    : 'border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] hover:bg-[#EDEAE4]'
               }`}
             >
               {label}
@@ -329,7 +558,7 @@ function CombinedQuestionCard({
         {/* 공통 지문 - ㄱㄴㄷ 형식 */}
         {group.passageType === 'korean_abc' && group.koreanAbcItems && group.koreanAbcItems.length > 0 && (
           <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A] mb-4 space-y-1">
-            <p className="text-xs text-[#5C5C5C] mb-2 font-bold">보기</p>
+            <p className="text-xs text-[#5C5C5C] mb-2 font-bold">지문</p>
             {group.koreanAbcItems.filter((i: string) => i.trim()).map((item: string, idx: number) => (
               <p key={idx} className="text-[#1A1A1A] text-xs">
                 <span className="font-bold text-[#1A1A1A] mr-1">
@@ -337,6 +566,77 @@ function CombinedQuestionCard({
                 </span>
                 {item}
               </p>
+            ))}
+          </div>
+        )}
+
+        {/* 공통 지문 - 혼합 형식 */}
+        {group.passageMixedExamples && group.passageMixedExamples.length > 0 && (
+          <div className="mb-4 space-y-2">
+            {group.passageMixedExamples.map((block: any) => (
+              <div key={block.id}>
+                {/* 묶음 블록 */}
+                {block.type === 'grouped' && (
+                  <div className="p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A] space-y-1">
+                    {(block.children || []).map((child: any) => (
+                      <div key={child.id}>
+                        {child.type === 'text' && child.content?.trim() && (
+                          <p className="text-[#5C5C5C] text-xs whitespace-pre-wrap">{child.content}</p>
+                        )}
+                        {child.type === 'labeled' && (child.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                          <p key={item.id} className="text-[#1A1A1A] text-xs">
+                            <span className="font-bold mr-1">{item.label}.</span>
+                            {item.content}
+                          </p>
+                        ))}
+                        {child.type === 'gana' && (child.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                          <p key={item.id} className="text-[#1A1A1A] text-xs">
+                            <span className="font-bold mr-1">({item.label})</span>
+                            {item.content}
+                          </p>
+                        ))}
+                        {child.type === 'image' && child.imageUrl && (
+                          <img src={child.imageUrl} alt="지문 이미지" className="max-w-full h-auto border border-[#1A1A1A]" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* 텍스트 블록 */}
+                {block.type === 'text' && block.content?.trim() && (
+                  <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
+                    <p className="text-[#1A1A1A] text-xs whitespace-pre-wrap">{block.content}</p>
+                  </div>
+                )}
+                {/* ㄱㄴㄷ 블록 */}
+                {block.type === 'labeled' && (block.items || []).length > 0 && (
+                  <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
+                    {(block.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                      <p key={item.id} className="text-[#1A1A1A] text-xs">
+                        <span className="font-bold mr-1">{item.label}.</span>
+                        {item.content}
+                      </p>
+                    ))}
+                  </div>
+                )}
+                {/* (가)(나)(다) 블록 */}
+                {block.type === 'gana' && (block.items || []).length > 0 && (
+                  <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
+                    {(block.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                      <p key={item.id} className="text-[#1A1A1A] text-xs">
+                        <span className="font-bold mr-1">({item.label})</span>
+                        {item.content}
+                      </p>
+                    ))}
+                  </div>
+                )}
+                {/* 이미지 블록 */}
+                {block.type === 'image' && block.imageUrl && (
+                  <div className="border border-[#1A1A1A] overflow-hidden">
+                    <img src={block.imageUrl} alt="지문 이미지" className="max-w-full h-auto" />
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         )}
@@ -388,7 +688,116 @@ function CombinedQuestionCard({
             {/* 하위 문제 텍스트 */}
             <p className="text-[#1A1A1A] text-sm leading-relaxed whitespace-pre-wrap mb-4">
               {question.question}
+              {/* 제시문 발문 또는 보기 발문 표시 */}
+              {(question.passagePrompt || question.bogiQuestionText) && (
+                <span className="ml-1 text-[#5C5C5C]">
+                  {question.passagePrompt || question.bogiQuestionText}
+                </span>
+              )}
             </p>
+
+            {/* 하위 문제 이미지 */}
+            {question.image && (
+              <div className="mb-4 border border-[#1A1A1A] overflow-hidden">
+                <img src={question.image} alt="문제 이미지" className="max-w-full h-auto" />
+              </div>
+            )}
+
+            {/* 하위 문제 지문 - 혼합 형식 (grouped 먼저, 나머지 생성 순서대로) */}
+            {question.mixedExamples && question.mixedExamples.length > 0 && (
+              <div className="mb-4 space-y-2">
+                <p className="text-xs font-bold text-[#5C5C5C]">지문</p>
+                {/* 묶음 블록 먼저 */}
+                {question.mixedExamples.filter((b: any) => b.type === 'grouped').map((block: any) => (
+                  <div key={block.id} className="p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A] space-y-1">
+                    {(block.children || []).map((child: any) => (
+                      <div key={child.id}>
+                        {child.type === 'text' && child.content?.trim() && (
+                          <p className="text-[#5C5C5C] text-xs whitespace-pre-wrap">{child.content}</p>
+                        )}
+                        {child.type === 'labeled' && (child.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                          <p key={item.id} className="text-[#1A1A1A] text-xs">
+                            <span className="font-bold mr-1">{item.label}.</span>
+                            {item.content}
+                          </p>
+                        ))}
+                        {child.type === 'gana' && (child.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                          <p key={item.id} className="text-[#1A1A1A] text-xs">
+                            <span className="font-bold mr-1">({item.label})</span>
+                            {item.content}
+                          </p>
+                        ))}
+                        {child.type === 'image' && child.imageUrl && (
+                          <img src={child.imageUrl} alt="지문 이미지" className="max-w-full h-auto border border-[#1A1A1A]" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+                {/* 나머지 블록 (생성 순서대로) */}
+                {question.mixedExamples.filter((b: any) => b.type !== 'grouped').map((block: any) => (
+                  <div key={block.id}>
+                    {/* 텍스트 블록 */}
+                    {block.type === 'text' && block.content?.trim() && (
+                      <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
+                        <p className="text-[#1A1A1A] text-xs whitespace-pre-wrap">{block.content}</p>
+                      </div>
+                    )}
+                    {/* ㄱㄴㄷ 블록 */}
+                    {block.type === 'labeled' && (block.items || []).length > 0 && (
+                      <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
+                        {(block.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                          <p key={item.id} className="text-[#1A1A1A] text-xs">
+                            <span className="font-bold mr-1">{item.label}.</span>
+                            {item.content}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                    {/* (가)(나)(다) 블록 */}
+                    {block.type === 'gana' && (block.items || []).length > 0 && (
+                      <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
+                        {(block.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                          <p key={item.id} className="text-[#1A1A1A] text-xs">
+                            <span className="font-bold mr-1">({item.label})</span>
+                            {item.content}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                    {/* 이미지 블록 */}
+                    {block.type === 'image' && block.imageUrl && (
+                      <div className="border border-[#1A1A1A] overflow-hidden">
+                        <img src={block.imageUrl} alt="지문 이미지" className="max-w-full h-auto" />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* 하위 문제 지문 - 텍스트 형식 */}
+            {!question.mixedExamples && question.subQuestionOptions && question.subQuestionOptions.length > 0 && question.subQuestionOptionsType === 'text' && (
+              <div className="mb-4 p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
+                <p className="text-xs font-bold text-[#5C5C5C] mb-2">지문</p>
+                <p className="text-[#1A1A1A] text-xs">
+                  {question.subQuestionOptions.join(', ')}
+                </p>
+              </div>
+            )}
+
+            {/* 하위 문제 지문 - ㄱㄴㄷ 형식 */}
+            {!question.mixedExamples && question.subQuestionOptions && question.subQuestionOptions.length > 0 && question.subQuestionOptionsType === 'labeled' && (
+              <div className="mb-4 p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
+                <p className="text-xs font-bold text-[#5C5C5C] mb-2">지문</p>
+                {question.subQuestionOptions.map((itm, idx) => (
+                  <p key={idx} className="text-[#1A1A1A] text-xs">
+                    <span className="font-bold mr-1">{['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ'][idx]}.</span>
+                    {itm}
+                  </p>
+                ))}
+              </div>
+            )}
 
             {/* 선지 (객관식) */}
             {question.type === 'multiple' && question.options && question.options.length > 0 && (
@@ -429,10 +838,66 @@ function CombinedQuestionCard({
               </div>
             )}
 
-            {/* OX 또는 주관식 답변 */}
-            {(question.type === 'ox' || question.type === 'short') && (
+            {/* OX 선지 - 버튼 스타일 */}
+            {question.type === 'ox' && (() => {
+              const correctAnswerNormalized = (() => {
+                const ca = question.correctAnswer?.toString();
+                if (ca === '0' || ca?.toUpperCase() === 'O') return 'O';
+                return 'X';
+              })();
+              const userAnswerNormalized = question.userAnswer?.toString().toUpperCase() || '';
+
+              return (
+                <div className="mb-4">
+                  <p className="text-xs font-bold text-[#5C5C5C] mb-2">선지</p>
+                  <div className="flex gap-4 justify-center py-2">
+                    {['O', 'X'].map((option) => {
+                      const isCorrect = option === correctAnswerNormalized;
+                      const isUserAnswer = option === userAnswerNormalized;
+
+                      // 스타일 결정: 정답=녹색, 오답(내답)=빨강, 기본=회색
+                      let bgColor = '#EDEAE4';
+                      let textColor = '#5C5C5C';
+                      let borderColor = '#1A1A1A';
+
+                      if (isCorrect) {
+                        bgColor = '#1A6B1A';
+                        textColor = '#F5F0E8';
+                        borderColor = '#1A6B1A';
+                      } else if (isUserAnswer) {
+                        bgColor = '#8B1A1A';
+                        textColor = '#F5F0E8';
+                        borderColor = '#8B1A1A';
+                      }
+
+                      return (
+                        <div
+                          key={option}
+                          className="w-24 h-24 text-4xl font-bold border-2 flex flex-col items-center justify-center"
+                          style={{ backgroundColor: bgColor, color: textColor, borderColor }}
+                        >
+                          <span>{option}</span>
+                          {isCorrect && isUserAnswer && (
+                            <span className="text-[10px] mt-1">정답/내 답</span>
+                          )}
+                          {isCorrect && !isUserAnswer && (
+                            <span className="text-[10px] mt-1">정답</span>
+                          )}
+                          {!isCorrect && isUserAnswer && (
+                            <span className="text-[10px] mt-1">내 답</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* 주관식 답변 */}
+            {question.type === 'short' && (
               <div className="mb-4 space-y-2">
-                {question.type === 'short' && question.correctAnswer?.includes('|||') ? (
+                {question.correctAnswer?.includes('|||') ? (
                   <div className="space-y-2 text-xs">
                     <div className="p-2 bg-[#E8F5E9] border border-[#1A6B1A]">
                       <span className="text-[#5C5C5C]">정답: </span>
@@ -492,15 +957,19 @@ function CombinedQuestionCard({
                 Q{subNumber}에 대한 피드백 (선택)
               </label>
               <div className="grid grid-cols-2 gap-2 mb-3">
-                {FEEDBACK_TYPE_OPTIONS.map(({ type, label }) => (
+                {FEEDBACK_TYPE_OPTIONS.map(({ type, label, positive }) => (
                   <button
                     key={type}
                     type="button"
                     onClick={() => onFeedbackTypeChange(question.id, type)}
                     className={`p-2 text-xs font-bold border-2 transition-colors ${
                       feedbackTypes[question.id] === type
-                        ? 'border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8]'
-                        : 'border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] hover:bg-[#EDEAE4]'
+                        ? positive
+                          ? 'border-[#1A6B1A] bg-[#1A6B1A] text-[#F5F0E8]'
+                          : 'border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8]'
+                        : positive
+                          ? 'border-[#1A6B1A] bg-[#E8F5E9] text-[#1A6B1A] hover:bg-[#D0EBD0]'
+                          : 'border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] hover:bg-[#EDEAE4]'
                     }`}
                   >
                     {label}
@@ -579,13 +1048,32 @@ export default function FeedbackPage() {
 
       // 퀴즈 데이터 가져오기
       const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
-      if (!quizDoc.exists()) {
-        setError('퀴즈를 찾을 수 없습니다.');
+      const isQuizDeleted = !quizDoc.exists();
+
+      // 퀴즈가 삭제된 경우 - 피드백 불가 메시지 표시
+      if (isQuizDeleted) {
+        setPageData({
+          quizId,
+          quizTitle: '',
+          quizCreatorId: '',
+          questionResults: [],
+          pageItems: [],
+          hasSubmittedFeedback: false,
+          isQuizDeleted: true,
+        });
         return;
       }
 
       const quizData = quizDoc.data();
       const questions = quizData.questions || [];
+
+      // AI 생성 퀴즈이거나 자기 퀴즈인 경우 피드백 페이지 건너뛰기
+      const isAIGenerated = quizData.type === 'ai-generated' || quizData.isAiGenerated;
+      const isOwnQuiz = quizData.creatorId === user.uid;
+      if (isAIGenerated || isOwnQuiz) {
+        router.replace(`/quiz/${quizId}/exp`);
+        return;
+      }
 
       // 사용자 결과 문서 확인
       const resultsQuery = query(
@@ -684,11 +1172,32 @@ export default function FeedbackPage() {
             // 사용자 답변은 이미 O/X로 저장됨
           }
 
+          // mixedExamples 처리 (subQuestionOptions가 없고 mixedExamples가 있는 경우)
+          let subQuestionOptions = q.subQuestionOptions || null;
+          let subQuestionOptionsType = q.subQuestionOptionsType || null;
+          let mixedExamples = null;
+
+          if (q.mixedExamples && q.mixedExamples.length > 0) {
+            mixedExamples = q.mixedExamples;
+            subQuestionOptionsType = 'mixed';
+          } else if (!subQuestionOptions && q.examples && q.examples.length > 0) {
+            // examples 필드를 subQuestionOptions로 변환
+            subQuestionOptions = q.examples;
+            subQuestionOptionsType = q.examplesType || 'text';
+          }
+
+          // 타입 정규화: short_answer, subjective → short
+          const normalizedType = (() => {
+            const t = q.type || 'short';
+            if (t === 'short_answer' || t === 'subjective') return 'short';
+            return t;
+          })();
+
           return {
             id: q.id || `q${index}`,
             number: index + 1,
             question: q.question || q.text || '',
-            type: q.type || 'short',
+            type: normalizedType,
             options: q.options || q.choices || [],
             correctAnswer: displayCorrectAnswer,
             userAnswer: displayUserAnswer,
@@ -696,6 +1205,10 @@ export default function FeedbackPage() {
             explanation: q.explanation || '',
             combinedGroupId: q.combinedGroupId,
             subQuestionIndex: q.subQuestionIndex,
+            image: q.image || q.imageUrl || null,
+            subQuestionOptions,
+            subQuestionOptionsType,
+            mixedExamples,
           };
         }
       );
@@ -731,6 +1244,7 @@ export default function FeedbackPage() {
               passageType: q.passageType,
               passageImage: q.passageImage,
               koreanAbcItems: q.koreanAbcItems,
+              passageMixedExamples: q.passageMixedExamples,
               subQuestions,
             };
 
@@ -846,15 +1360,20 @@ export default function FeedbackPage() {
         if (!isMountedRef.current) return; // 마운트 상태 체크
         if (feedbackType) {
           const feedback = feedbacks[questionId] || '';
-          console.log('[피드백] 저장 중:', { questionId, feedbackType, feedback: feedback.trim() });
+          // 문제 번호 찾기
+          const question = pageData.questionResults.find(q => q.id === questionId);
+          const questionNumber = question?.number || 1;
+          console.log('[피드백] 저장 중:', { questionId, questionNumber, feedbackType, feedback: feedback.trim() });
           try {
-            await addDoc(collection(db, 'feedbacks'), {
+            // questionFeedbacks 컬렉션에 통일된 형식으로 저장
+            await addDoc(collection(db, 'questionFeedbacks'), {
               userId: user.uid,
               quizId: pageData.quizId,
               quizCreatorId: pageData.quizCreatorId, // 퀴즈 제작자 ID 추가
               questionId,
-              feedbackType,
-              feedback: feedback.trim(),
+              questionNumber, // 문제 번호 추가 (표시용)
+              type: feedbackType, // 필드명 통일 (feedbackType → type)
+              content: feedback.trim(), // 필드명 통일 (feedback → content)
               createdAt: serverTimestamp(),
             });
             console.log('[피드백] 저장 성공:', questionId);
@@ -934,6 +1453,34 @@ export default function FeedbackPage() {
           className="px-6 py-2 bg-[#1A1A1A] text-[#F5F0E8] font-bold"
         >
           퀴즈 목록으로
+        </button>
+      </div>
+    );
+  }
+
+  // 삭제된 퀴즈인 경우
+  if (pageData.isQuizDeleted) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-4" style={{ backgroundColor: '#F5F0E8' }}>
+        <div className="w-16 h-16 mb-4 flex items-center justify-center bg-[#EDEAE4] border-2 border-[#1A1A1A]">
+          <svg className="w-8 h-8 text-[#5C5C5C]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </div>
+        <h2 className="text-xl font-bold text-[#1A1A1A] mb-2">
+          피드백을 남길 수 없습니다
+        </h2>
+        <p className="text-[#5C5C5C] text-center mb-2">
+          이 퀴즈는 삭제되었습니다.
+        </p>
+        <p className="text-xs text-[#5C5C5C] text-center mb-6">
+          리뷰창에서는 계속 복습할 수 있습니다.
+        </p>
+        <button
+          onClick={() => router.push('/review')}
+          className="px-6 py-3 bg-[#1A1A1A] text-[#F5F0E8] font-bold"
+        >
+          리뷰창으로 이동
         </button>
       </div>
     );

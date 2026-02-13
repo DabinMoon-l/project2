@@ -21,6 +21,15 @@ const config: Config = {
           "text-secondary": "var(--theme-text-secondary)",
           border: "var(--theme-border)",
         },
+        // 빈티지 신문 색상
+        vintage: {
+          cream: "#E8DFD0",
+          "cream-light": "#F0E8DA",
+          "cream-dark": "#DED5C4",
+          sepia: "#4A4235",
+          border: "#C4B8A8",
+          "border-dark": "#8B7355",
+        },
       },
       // 테마 배경색
       backgroundColor: {

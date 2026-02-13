@@ -8,7 +8,7 @@ import { useThemeColors } from '@/styles/themes/useTheme';
 /**
  * 피드백 타입
  */
-export type FeedbackType = 'unclear' | 'wrong' | 'typo' | 'other';
+export type FeedbackType = 'unclear' | 'wrong' | 'typo' | 'other' | 'praise' | 'wantmore';
 
 /**
  * 피드백 데이터 타입
@@ -33,7 +33,9 @@ interface InstantFeedbackButtonProps {
 }
 
 // 피드백 유형 옵션
-const feedbackTypes: { type: FeedbackType; label: string }[] = [
+const feedbackTypes: { type: FeedbackType; label: string; positive?: boolean }[] = [
+  { type: 'praise', label: '문제가 좋아요!', positive: true },
+  { type: 'wantmore', label: '더 풀고 싶어요', positive: true },
   { type: 'unclear', label: '문제가 이해가 안 돼요' },
   { type: 'wrong', label: '정답이 틀린 것 같아요' },
   { type: 'typo', label: '오타가 있어요' },
@@ -156,10 +158,10 @@ export default function InstantFeedbackButton({
           {/* 피드백 유형 선택 */}
           <div>
             <p className="text-sm text-[#5C5C5C] mb-3">
-              문제에 어떤 문제가 있나요?
+              이 문제에 대한 의견을 선택해주세요
             </p>
             <div className="grid grid-cols-2 gap-2">
-              {feedbackTypes.map(({ type, label }) => (
+              {feedbackTypes.map(({ type, label, positive }) => (
                 <motion.button
                   key={type}
                   whileHover={{ scale: 1.02 }}
@@ -170,8 +172,12 @@ export default function InstantFeedbackButton({
                     flex items-center justify-center text-center
                     min-h-[60px]
                     ${selectedType === type
-                      ? 'border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8]'
-                      : 'border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A]'
+                      ? positive
+                        ? 'border-[#1A6B1A] bg-[#1A6B1A] text-[#F5F0E8]'
+                        : 'border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8]'
+                      : positive
+                        ? 'border-[#1A6B1A] bg-[#E8F5E9] text-[#1A6B1A]'
+                        : 'border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A]'
                     }
                   `}
                 >

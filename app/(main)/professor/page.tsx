@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { motion } from 'framer-motion';
+import { collection, query, where, getDocs, orderBy, limit, doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { Header, Skeleton } from '@/components/common';
 import { useAuth } from '@/lib/hooks/useAuth';
 
@@ -24,36 +26,29 @@ const QuickActions = dynamic(() => import('@/components/professor/QuickActions')
   loading: () => <Skeleton className="h-32 rounded-2xl" />,
 });
 
-// 임시 목업 데이터 (실제로는 Firestore에서 가져옴)
-const mockFeedbacks = [
-  {
-    id: '1',
-    quizTitle: '중간고사 대비',
-    questionNumber: 3,
-    content: '이 문제의 해설이 좀 더 자세했으면 좋겠어요. 왜 2번이 답인지 이해가 안 됩니다.',
-    studentNickname: '용감한토끼',
-    createdAt: new Date(Date.now() - 1000 * 60 * 30), // 30분 전
-    isRead: false,
-  },
-  {
-    id: '2',
-    quizTitle: '1주차 복습',
-    questionNumber: 7,
-    content: '문제가 모호한 것 같아요. 선지 1번과 3번이 둘 다 맞는 것 같습니다.',
-    studentNickname: '익명',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2시간 전
-    isRead: false,
-  },
-  {
-    id: '3',
-    quizTitle: '중간고사 대비',
-    questionNumber: 15,
-    content: '좋은 문제입니다! 덕분에 개념 정리가 됐어요.',
-    studentNickname: '공부하는용사',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 5), // 5시간 전
-    isRead: true,
-  },
-];
+const StyleProfileModal = dynamic(() => import('@/components/professor/StyleProfileModal'), {
+  ssr: false,
+});
+
+// 피드백 타입 라벨
+const FEEDBACK_TYPE_LABELS: Record<string, string> = {
+  unclear: '문제가 이해가 안 돼요',
+  wrong: '정답이 틀린 것 같아요',
+  typo: '오타가 있어요',
+  other: '기타 의견',
+};
+
+// 피드백 인터페이스
+interface FeedbackItem {
+  id: string;
+  quizTitle: string;
+  questionNumber: number;
+  content: string;
+  studentNickname: string;
+  createdAt: Date;
+  isRead: boolean;
+  type?: string;
+}
 
 const mockClasses = [
   { classId: 'A', className: 'A', participationRate: 87, studentCount: 32, color: '#D4AF37' },
@@ -69,22 +64,136 @@ export default function ProfessorDashboardPage() {
   const router = useRouter();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [feedbacks, setFeedbacks] = useState<FeedbackItem[]>([]);
+  const [showStyleProfile, setShowStyleProfile] = useState(false);
 
   // 통계 데이터 (실제로는 Firestore에서)
   const [stats, setStats] = useState({
     totalStudents: 125,
     weeklyParticipation: 78,
     averageScore: 82,
-    newFeedbacks: 5,
+    newFeedbacks: 0,
   });
 
-  // 데이터 로드 시뮬레이션
+  // 피드백 데이터 로드
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, []);
+    const loadFeedbacks = async () => {
+      if (!user) return;
+
+      try {
+        // 1. 교수가 만든 퀴즈 목록 가져오기 (제목 조회용)
+        const quizzesQuery = query(
+          collection(db, 'quizzes'),
+          where('creatorId', '==', user.uid)
+        );
+        const quizzesSnapshot = await getDocs(quizzesQuery);
+        const quizMap = new Map<string, { title: string; questions: any[] }>();
+
+        quizzesSnapshot.docs.forEach(qDoc => {
+          const data = qDoc.data();
+          quizMap.set(qDoc.id, {
+            title: data.title || '퀴즈',
+            questions: data.questions || [],
+          });
+        });
+
+        // 2. questionFeedbacks에서 피드백 가져오기
+        // 방법 1: quizCreatorId로 직접 조회 (새로 저장된 피드백)
+        // 방법 2: quizId로 조회 (기존 피드백)
+        let feedbackItems: FeedbackItem[] = [];
+
+        // quizCreatorId로 조회 시도
+        try {
+          const feedbacksByCreatorQuery = query(
+            collection(db, 'questionFeedbacks'),
+            where('quizCreatorId', '==', user.uid),
+            orderBy('createdAt', 'desc'),
+            limit(20)
+          );
+          const feedbacksSnapshot = await getDocs(feedbacksByCreatorQuery);
+
+          for (const feedbackDoc of feedbacksSnapshot.docs) {
+            const data = feedbackDoc.data();
+            const quizInfo = quizMap.get(data.quizId);
+
+            // 문제 번호 찾기 (questionNumber 필드가 있으면 우선 사용)
+            let questionNumber = data.questionNumber || 1;
+            if (!data.questionNumber && quizInfo && data.questionId) {
+              const qIndex = quizInfo.questions.findIndex((q: any) => q.id === data.questionId);
+              if (qIndex >= 0) questionNumber = qIndex + 1;
+            }
+
+            // 피드백 내용 생성
+            const typeLabel = FEEDBACK_TYPE_LABELS[data.type] || '';
+            const content = data.content
+              ? `${typeLabel ? `[${typeLabel}] ` : ''}${data.content}`
+              : typeLabel || '피드백';
+
+            feedbackItems.push({
+              id: feedbackDoc.id,
+              quizTitle: quizInfo?.title || '퀴즈',
+              questionNumber,
+              content,
+              studentNickname: '익명', // 피드백은 익명으로 처리
+              createdAt: data.createdAt?.toDate() || new Date(),
+              isRead: data.isRead || false,
+              type: data.type,
+            });
+          }
+        } catch (err) {
+          // 인덱스가 없는 경우 quizId로 폴백 조회
+          console.log('quizCreatorId 인덱스 없음, quizId로 폴백 조회');
+          if (quizMap.size > 0) {
+            const quizIds = Array.from(quizMap.keys()).slice(0, 10);
+            const feedbacksByQuizQuery = query(
+              collection(db, 'questionFeedbacks'),
+              where('quizId', 'in', quizIds),
+              orderBy('createdAt', 'desc'),
+              limit(20)
+            );
+            const feedbacksSnapshot = await getDocs(feedbacksByQuizQuery);
+
+            for (const feedbackDoc of feedbacksSnapshot.docs) {
+              const data = feedbackDoc.data();
+              const quizInfo = quizMap.get(data.quizId);
+
+              // 문제 번호 찾기 (questionNumber 필드가 있으면 우선 사용)
+              let questionNumber = data.questionNumber || 1;
+              if (!data.questionNumber && quizInfo && data.questionId) {
+                const qIndex = quizInfo.questions.findIndex((q: any) => q.id === data.questionId);
+                if (qIndex >= 0) questionNumber = qIndex + 1;
+              }
+
+              const typeLabel = FEEDBACK_TYPE_LABELS[data.type] || '';
+              const content = data.content
+                ? `${typeLabel ? `[${typeLabel}] ` : ''}${data.content}`
+                : typeLabel || '피드백';
+
+              feedbackItems.push({
+                id: feedbackDoc.id,
+                quizTitle: quizInfo?.title || '퀴즈',
+                questionNumber,
+                content,
+                studentNickname: '익명',
+                createdAt: data.createdAt?.toDate() || new Date(),
+                isRead: data.isRead || false,
+                type: data.type,
+              });
+            }
+          }
+        }
+
+        setFeedbacks(feedbackItems);
+        setStats(prev => ({ ...prev, newFeedbacks: feedbackItems.filter(f => !f.isRead).length }));
+      } catch (error) {
+        console.error('피드백 로드 오류:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadFeedbacks();
+  }, [user]);
 
   // 네비게이션 핸들러
   const handleCreateQuiz = useCallback(() => {
@@ -114,6 +223,10 @@ export default function ProfessorDashboardPage() {
   const handleSettings = useCallback(() => {
     router.push('/professor/settings');
   }, [router]);
+
+  const handleViewStyleProfile = useCallback(() => {
+    setShowStyleProfile(true);
+  }, []);
 
   // 로딩 상태
   if (loading) {
@@ -168,6 +281,7 @@ export default function ProfessorDashboardPage() {
           onViewStudents={handleViewStudents}
           onAnalyze={handleAnalyze}
           onViewFeedback={handleViewFeedback}
+          onViewStyleProfile={handleViewStyleProfile}
           onSettings={handleSettings}
         />
 
@@ -176,11 +290,18 @@ export default function ProfessorDashboardPage() {
 
         {/* 최근 피드백 */}
         <RecentFeedback
-          feedbacks={mockFeedbacks}
+          feedbacks={feedbacks}
           onViewAll={handleViewAllFeedback}
           onFeedbackClick={handleFeedbackClick}
         />
       </main>
+
+      {/* 출제 스타일 분석 모달 */}
+      <StyleProfileModal
+        isOpen={showStyleProfile}
+        onClose={() => setShowStyleProfile(false)}
+        courseId="pathophysiology"
+      />
     </div>
   );
 }

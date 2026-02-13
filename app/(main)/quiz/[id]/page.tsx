@@ -241,7 +241,7 @@ export default function QuizPage() {
           }
 
           const questionData: Question = {
-            id: q.id || `q_${index}`,
+            id: q.id || `q${index}`,
             number: questionNumber,
             type: mappedType,
             text: q.text || '',
@@ -254,6 +254,9 @@ export default function QuizPage() {
             combinedGroupId: q.combinedGroupId,
             combinedIndex: q.combinedIndex,
             combinedTotal: q.combinedTotal,
+            // 발문 정보 추가
+            passagePrompt: q.passagePrompt || undefined,
+            bogi: q.bogi || undefined,
             // 챕터 정보 추가
             chapterId: q.chapterId || undefined,
             chapterDetailId: q.chapterDetailId || undefined,
@@ -265,6 +268,7 @@ export default function QuizPage() {
             questionData.passage = q.passage || undefined;
             questionData.passageImage = q.passageImage || undefined;
             questionData.koreanAbcItems = q.koreanAbcItems || undefined;
+            questionData.passageMixedExamples = q.passageMixedExamples || undefined;
             questionData.commonQuestion = q.commonQuestion || undefined;
 
             console.log('[QuizPage] 결합형 공통 지문 정보:', {
@@ -272,6 +276,7 @@ export default function QuizPage() {
               passage: questionData.passage?.substring(0, 50),
               hasPassageImage: !!questionData.passageImage,
               koreanAbcItems: questionData.koreanAbcItems,
+              hasPassageMixedExamples: !!questionData.passageMixedExamples,
               combinedGroupId: q.combinedGroupId,
               commonQuestion: questionData.commonQuestion?.substring(0, 50),
             });
@@ -299,7 +304,7 @@ export default function QuizPage() {
               }
 
               const questionData: Question = {
-                id: sq.id || `${q.id || `q_${index}`}_sq_${sqIndex}`,
+                id: sq.id || `q${index}_sub${sqIndex}`,
                 number: questionNumber,
                 type: mappedType,
                 text: sq.text || '',
@@ -312,6 +317,9 @@ export default function QuizPage() {
                 combinedGroupId: legacyCombinedGroupId,
                 combinedIndex: sqIndex,
                 combinedTotal: subQuestions.length,
+                // 발문 정보 추가
+                passagePrompt: sq.passagePrompt || undefined,
+                bogi: sq.bogi || undefined,
                 // 챕터 정보 추가
                 chapterId: q.chapterId || undefined,
                 chapterDetailId: q.chapterDetailId || undefined,
@@ -323,6 +331,7 @@ export default function QuizPage() {
                 questionData.passage = q.passage || undefined;
                 questionData.passageImage = q.passageImage || undefined;
                 questionData.koreanAbcItems = q.koreanAbcItems || undefined;
+                questionData.passageMixedExamples = q.passageMixedExamples || undefined;
                 questionData.commonQuestion = q.commonQuestion || undefined;
 
                 console.log('[QuizPage] 결합형 공통 지문 정보 (레거시):', {
@@ -330,6 +339,7 @@ export default function QuizPage() {
                   passage: questionData.passage?.substring(0, 50),
                   hasPassageImage: !!questionData.passageImage,
                   koreanAbcItems: questionData.koreanAbcItems,
+                  hasPassageMixedExamples: !!questionData.passageMixedExamples,
                   commonQuestion: questionData.commonQuestion?.substring(0, 50),
                 });
               }
@@ -340,7 +350,7 @@ export default function QuizPage() {
             // 하위 문제가 없는 결합형 문제 (예외 처리)
             questionNumber++;
             questions.push({
-              id: q.id || `q_${index}`,
+              id: q.id || `q${index}`,
               number: questionNumber,
               type: 'combined' as QuestionType,
               text: q.text || '(하위 문제가 없습니다)',
@@ -348,6 +358,7 @@ export default function QuizPage() {
               passage: q.passage || undefined,
               passageImage: q.passageImage || undefined,
               koreanAbcItems: q.koreanAbcItems || undefined,
+              passageMixedExamples: q.passageMixedExamples || undefined,
               commonQuestion: q.commonQuestion || undefined,
               chapterId: q.chapterId || undefined,
               chapterDetailId: q.chapterDetailId || undefined,
@@ -366,7 +377,7 @@ export default function QuizPage() {
           }
 
           questions.push({
-            id: q.id || `q_${index}`,
+            id: q.id || `q${index}`,
             number: questionNumber,
             type: mappedType,
             text: q.text || '',
@@ -375,6 +386,9 @@ export default function QuizPage() {
             examples: q.examples || undefined,
             mixedExamples: q.mixedExamples || undefined,
             hasMultipleAnswers,
+            // 발문 정보 추가
+            passagePrompt: q.passagePrompt || undefined,
+            bogi: q.bogi || undefined,
             // 챕터 정보 추가
             chapterId: q.chapterId || undefined,
             chapterDetailId: q.chapterDetailId || undefined,
@@ -673,7 +687,8 @@ export default function QuizPage() {
   const handleSaveAndExit = useCallback(async () => {
     const success = await saveProgress();
     if (success) {
-      router.back();
+      // 퀴즈 풀이 중 이탈 시 항상 퀴즈 목록으로 이동 (관리창이 아님)
+      router.push('/quiz');
     } else {
       alert('저장에 실패했습니다. 다시 시도해주세요.');
     }
@@ -685,7 +700,8 @@ export default function QuizPage() {
   const handleExitWithoutSave = useCallback(async () => {
     // 기존 저장된 진행상황 삭제
     await deleteProgress();
-    router.back();
+    // 퀴즈 풀이 중 이탈 시 항상 퀴즈 목록으로 이동 (관리창이 아님)
+    router.push('/quiz');
   }, [router, deleteProgress]);
 
   // 로딩 상태
@@ -740,7 +756,7 @@ export default function QuizPage() {
             잠시 후 다시 시도해주세요.
           </p>
           <button
-            onClick={() => router.back()}
+            onClick={() => router.push('/quiz')}
             className="px-6 py-3 bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
           >
             돌아가기

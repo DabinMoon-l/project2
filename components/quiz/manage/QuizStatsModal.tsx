@@ -10,7 +10,7 @@
 
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   collection,
@@ -347,6 +347,31 @@ const CLASS_FILTERS: { value: ClassFilter; label: string }[] = [
  *
  * 중요: ID 생성 시 result 페이지와 동일한 로직 사용 (q.id || `q${index}`)
  */
+/**
+ * 객관식 answer를 0-indexed에서 1-indexed 문자열로 변환
+ * 예: 2 → "3", [0, 2] → "1,3"
+ */
+function convertAnswerTo1Indexed(type: string, answer: any): string | undefined {
+  if (answer === null || answer === undefined) return undefined;
+  if (type !== 'multiple') return answer?.toString();
+
+  // 이미 1-indexed 문자열인 경우 (예: "3" 또는 "1,3")
+  if (typeof answer === 'string') {
+    // 숫자 문자열이면 0-indexed일 수 있으므로 변환
+    // 하지만 문자열로 저장된 경우 이미 변환된 것일 수 있어 판단이 어려움
+    // → Firestore에서 answer는 항상 number/number[]로 저장되므로, 문자열이면 이미 변환된 것
+    return answer;
+  }
+
+  if (Array.isArray(answer)) {
+    return answer.map((a: number) => a + 1).join(',');
+  }
+  if (typeof answer === 'number') {
+    return (answer + 1).toString();
+  }
+  return answer?.toString();
+}
+
 function flattenQuestions(questions: any[]): FlattenedQuestion[] {
   const result: FlattenedQuestion[] = [];
 
@@ -361,7 +386,7 @@ function flattenQuestions(questions: any[]): FlattenedQuestion[] {
         text: q.text || '',
         type: q.type,
         choices: q.choices,
-        answer: q.answer?.toString(),
+        answer: convertAnswerTo1Indexed(q.type, q.answer),
         chapterId: q.chapterId,
         chapterDetailId: q.chapterDetailId,
         imageUrl: q.imageUrl,
@@ -413,7 +438,7 @@ function flattenQuestions(questions: any[]): FlattenedQuestion[] {
         text: q.text || '',
         type: q.type,
         choices: q.choices,
-        answer: q.answer?.toString(),
+        answer: convertAnswerTo1Indexed(q.type, q.answer),
         chapterId: q.chapterId,
         chapterDetailId: q.chapterDetailId,
         imageUrl: q.imageUrl,
@@ -477,6 +502,9 @@ export default function QuizStatsModal({
   // 슬라이드 방향 (1: 오른쪽으로, -1: 왼쪽으로)
   const [slideDirection, setSlideDirection] = useState(0);
 
+  // CSS 페이드 전환용
+  const [fadeIn, setFadeIn] = useState(true);
+
   // 스와이프 감지 최소 거리
   const minSwipeDistance = 50;
 
@@ -496,12 +524,10 @@ export default function QuizStatsModal({
     const isRightSwipe = distance < -minSwipeDistance;
 
     if (isLeftSwipe && stats && selectedQuestionIndex < stats.questionStats.length - 1) {
-      setSlideDirection(1);
-      setSelectedQuestionIndex(prev => prev + 1);
+      goToQuestion(selectedQuestionIndex + 1);
     }
     if (isRightSwipe && selectedQuestionIndex > 0) {
-      setSlideDirection(-1);
-      setSelectedQuestionIndex(prev => prev - 1);
+      goToQuestion(selectedQuestionIndex - 1);
     }
   };
 
@@ -852,19 +878,23 @@ export default function QuizStatsModal({
     }
   };
 
-  // 이전/다음 문제
+  // 문제 전환 (페이드 포함)
+  const goToQuestion = useCallback((newIdx: number) => {
+    if (newIdx === selectedQuestionIndex) return;
+    setFadeIn(false);
+    setTimeout(() => {
+      setSlideDirection(newIdx > selectedQuestionIndex ? 1 : -1);
+      setSelectedQuestionIndex(newIdx);
+      setFadeIn(true);
+    }, 80);
+  }, [selectedQuestionIndex]);
+
   const goToPrevQuestion = () => {
-    if (selectedQuestionIndex > 0) {
-      setSlideDirection(-1);
-      setSelectedQuestionIndex(prev => prev - 1);
-    }
+    if (selectedQuestionIndex > 0) goToQuestion(selectedQuestionIndex - 1);
   };
 
   const goToNextQuestion = () => {
-    if (stats && selectedQuestionIndex < stats.questionStats.length - 1) {
-      setSlideDirection(1);
-      setSelectedQuestionIndex(prev => prev + 1);
-    }
+    if (stats && selectedQuestionIndex < stats.questionStats.length - 1) goToQuestion(selectedQuestionIndex + 1);
   };
 
   // 현재 선택된 문제
@@ -968,36 +998,90 @@ export default function QuizStatsModal({
               {/* 문제별 분석 */}
               {stats.questionStats.length > 0 && (
                 <div className="border-2 border-[#1A1A1A] bg-[#EDEAE4]">
-                  {/* 헤더: 문제 슬라이더 */}
+                  {/* 헤더: 문제 슬라이더 + 킬러 Top 3 */}
                   <div className="p-4 border-b-2 border-[#1A1A1A] bg-[#F5F0E8]">
                     <div className="flex items-center justify-between mb-3">
                       <span className="text-3xl font-bold text-[#1A1A1A]">Q{selectedQuestionIndex + 1}.</span>
-                      <span className="text-base text-[#5C5C5C]">{stats.questionStats.length}문제 중</span>
+                      <span className="text-3xl font-bold text-[#1A1A1A]">{stats.questionStats.length}문제</span>
                     </div>
-                    {stats.questionStats.length > 1 && (
-                      <input
-                        type="range"
-                        min={0}
-                        max={stats.questionStats.length - 1}
-                        value={selectedQuestionIndex}
-                        onChange={(e) => {
-                          const newIdx = parseInt(e.target.value);
-                          setSlideDirection(newIdx > selectedQuestionIndex ? 1 : -1);
-                          setSelectedQuestionIndex(newIdx);
-                        }}
-                        className="w-full h-2 bg-[#D4CFC4] appearance-none cursor-pointer accent-[#1A1A1A]"
-                        style={{
-                          background: `linear-gradient(to right, #1A1A1A 0%, #1A1A1A ${(selectedQuestionIndex / (stats.questionStats.length - 1)) * 100}%, #D4CFC4 ${(selectedQuestionIndex / (stats.questionStats.length - 1)) * 100}%, #D4CFC4 100%)`
-                        }}
-                      />
-                    )}
+                    {/* 슬라이더 + 킬러 마커 */}
+                    {stats.questionStats.length > 1 && (() => {
+                      const totalQ = stats.questionStats.length;
+                      const markers = wrongRateTop3
+                        .map((item) => ({
+                          ...item,
+                          position: ((item.questionNum - 1) / (totalQ - 1)) * 100,
+                          correctRate: 100 - item.wrongRate,
+                        }))
+                        .sort((a, b) => a.position - b.position);
+
+                      // 겹침 감지: 인접 마커 간 거리가 20% 미만이면 위아래 교대 배치
+                      const needsStagger = markers.length > 1 && markers.some((m, i) =>
+                        i > 0 && (m.position - markers[i - 1].position) < 20
+                      );
+
+                      const renderMarker = (item: typeof markers[0], placeAbove: boolean) => {
+                        const rankLabel = item.rank === 1 ? '1st' : item.rank === 2 ? '2nd' : '3rd';
+                        // 양 끝 텍스트 잘림 방지
+                        const align = item.position < 8 ? 'translateX(0)' : item.position > 92 ? 'translateX(-100%)' : 'translateX(-50%)';
+                        return (
+                          <span
+                            key={item.rank}
+                            onClick={() => goToQuestion(item.questionNum - 1)}
+                            className="absolute text-xs font-bold text-[#1A1A1A] cursor-pointer hover:text-[#5C5C5C] text-center leading-tight whitespace-nowrap"
+                            style={{
+                              left: `${item.position}%`,
+                              transform: align,
+                              ...(placeAbove
+                                ? { bottom: '100%', marginBottom: '4px' }
+                                : { top: '100%', marginTop: '4px' }),
+                            }}
+                          >
+                            {rankLabel}<br />{item.correctRate}%
+                          </span>
+                        );
+                      };
+
+                      return (
+                        <div>
+                          {/* 슬라이더 + 마커 */}
+                          <div
+                            className="relative"
+                            style={{
+                              marginTop: needsStagger ? '40px' : '0',
+                              marginBottom: markers.length > 0 ? '36px' : '0',
+                            }}
+                          >
+                            <input
+                              type="range"
+                              min={0}
+                              max={totalQ - 1}
+                              value={selectedQuestionIndex}
+                              onChange={(e) => {
+                                const newIdx = parseInt(e.target.value);
+                                setSlideDirection(newIdx > selectedQuestionIndex ? 1 : -1);
+                                setSelectedQuestionIndex(newIdx);
+                              }}
+                              className="w-full h-2 bg-[#D4CFC4] appearance-none cursor-pointer accent-[#1A1A1A] relative z-10"
+                              style={{
+                                background: `linear-gradient(to right, #1A1A1A 0%, #1A1A1A ${(selectedQuestionIndex / (totalQ - 1)) * 100}%, #D4CFC4 ${(selectedQuestionIndex / (totalQ - 1)) * 100}%, #D4CFC4 100%)`
+                              }}
+                            />
+                            {/* 킬러 마커 */}
+                            {markers.map((item, idx) =>
+                              renderMarker(item, needsStagger && idx % 2 === 0)
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* 현재 문제 정보 - 고정 높이 스크롤 영역 + 스와이프 지원 */}
                   {currentQuestion && (
-                    <div className="relative h-[600px]">
+                    <div className="relative h-[600px] overflow-hidden">
                       <div
-                        className="h-full overflow-y-auto"
+                        className="h-full overflow-y-auto overflow-x-hidden scrollbar-hide"
                         onTouchStart={onTouchStart}
                         onTouchMove={onTouchMove}
                         onTouchEnd={onTouchEnd}
@@ -1010,14 +1094,9 @@ export default function QuizStatsModal({
                           </p>
                         </div>
                       ) : (
-                      <AnimatePresence mode="wait" initial={false}>
-                        <motion.div
-                          key={selectedQuestionIndex}
-                          initial={{ opacity: 0, x: slideDirection * 50 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: -slideDirection * 50 }}
-                          transition={{ duration: 0.2, ease: 'easeOut' }}
-                          className="min-h-full flex flex-col justify-center p-4"
+                      <div
+                          className="min-h-full flex flex-col justify-center p-4 transition-opacity duration-150 ease-in-out"
+                          style={{ opacity: fadeIn ? 1 : 0 }}
                         >
                         {/* 문제 헤더 */}
                         <div className="flex items-center justify-center mb-4">
@@ -1353,8 +1432,7 @@ export default function QuizStatsModal({
                           </div>
                         )}
 
-                      </motion.div>
-                      </AnimatePresence>
+                      </div>
                       )}
                       </div>
                     </div>

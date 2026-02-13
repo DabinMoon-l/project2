@@ -13,7 +13,11 @@ import {
   doc,
   addDoc,
   updateDoc,
+  getDoc,
   collection,
+  query,
+  where,
+  getDocs,
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -48,7 +52,7 @@ export default function UpdateQuizModal({
   onComplete,
 }: UpdateQuizModalProps) {
   const { user } = useAuth();
-  const { userCourseId } = useCourse();
+  const { userCourseId, userClassId } = useCourse();
 
   // 현재 문제 인덱스
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -64,7 +68,16 @@ export default function UpdateQuizModal({
   const [resultData, setResultData] = useState<{
     newCorrectCount: number;
     newScore: number;
-    questionResults: { questionId: string; isCorrect: boolean; userAnswer: string; correctAnswer: string }[];
+    questionResults: {
+      questionId: string;
+      isCorrect: boolean;
+      userAnswer: string;
+      correctAnswer: string;
+      previousAnswer: string;
+      questionText: string;
+      questionType: string;
+      choices?: string[];
+    }[];
   } | null>(null);
 
   const questions = updateInfo.updatedQuestions;
@@ -108,11 +121,22 @@ export default function UpdateQuizModal({
       setIsSubmitting(true);
 
       // 1. 새로 푼 문제 채점
-      const questionResults: { questionId: string; isCorrect: boolean; userAnswer: string; correctAnswer: string }[] = [];
+      const originalScores = updateInfo.originalQuestionScores;
+      const questionResults: {
+        questionId: string;
+        isCorrect: boolean;
+        userAnswer: string;
+        correctAnswer: string;
+        previousAnswer: string;
+        questionText: string;
+        questionType: string;
+        choices?: string[];
+      }[] = [];
 
       for (const q of questions) {
         const userAnswer = userAnswers[q.questionId] || '';
         const correctAnswer = q.correctAnswer;
+        const previousAnswer = originalScores[q.questionId]?.userAnswer || '';
 
         let isCorrect = false;
 
@@ -155,11 +179,14 @@ export default function UpdateQuizModal({
           isCorrect,
           userAnswer,
           correctAnswer,
+          previousAnswer,
+          questionText: q.questionText,
+          questionType: q.questionType,
+          choices: q.choices,
         });
       }
 
       // 2. 기존 점수와 병합
-      const originalScores = updateInfo.originalQuestionScores;
       const mergedScores: Record<string, { isCorrect: boolean; userAnswer: string; answeredAt: any }> = { ...originalScores };
 
       // 새로 푼 문제로 교체
@@ -194,11 +221,89 @@ export default function UpdateQuizModal({
         originalResultId: updateInfo.originalResultId,
         updatedQuestionIds: questions.map((q) => q.questionId),
         courseId: userCourseId || null,
+        classId: userClassId || null,
         createdAt: serverTimestamp(),
       });
 
-      // 5. reviews 업데이트 (수정된 문제의 정답 여부 반영)
-      // TODO: reviews 컬렉션 업데이트
+      // 5. reviews 업데이트 (수정된 문제의 정답 여부, 답변, 복습횟수 반영)
+      const reviewsQuery = query(
+        collection(db, 'reviews'),
+        where('userId', '==', user.uid),
+        where('quizId', '==', updateInfo.quizId)
+      );
+      const reviewsSnapshot = await getDocs(reviewsQuery);
+
+      // 업데이트된 문제의 questionId 집합
+      const updatedQuestionIds = new Set(questions.map((q) => q.questionId));
+
+      // 각 리뷰 업데이트 (수정된 문제 + 전체 quizUpdatedAt 갱신)
+      for (const reviewDoc of reviewsSnapshot.docs) {
+        const reviewData = reviewDoc.data();
+        const questionId = reviewData.questionId;
+
+        if (updatedQuestionIds.has(questionId)) {
+          // 수정된 문제: 답변 + quizUpdatedAt 업데이트
+          const result = questionResults.find((r) => r.questionId === questionId);
+          if (result) {
+            const currentReviewType = reviewData.reviewType;
+            let newReviewType = currentReviewType;
+
+            if (result.isCorrect && currentReviewType === 'wrong') {
+              newReviewType = 'solved';
+            } else if (!result.isCorrect && currentReviewType === 'solved') {
+              newReviewType = 'wrong';
+            }
+
+            await updateDoc(doc(db, 'reviews', reviewDoc.id), {
+              userAnswer: result.userAnswer,
+              isCorrect: result.isCorrect,
+              reviewType: newReviewType,
+              reviewCount: (reviewData.reviewCount || 0) + 1,
+              lastReviewedAt: serverTimestamp(),
+              answeredAt: serverTimestamp(),
+              quizUpdatedAt: serverTimestamp(),
+            });
+          }
+        } else {
+          // 수정 안 된 문제: quizUpdatedAt만 갱신 (폴더/문제 뱃지 제거용)
+          await updateDoc(doc(db, 'reviews', reviewDoc.id), {
+            quizUpdatedAt: serverTimestamp(),
+          });
+        }
+      }
+
+      // 6. 원본 quizResult의 questionScores 업데이트 (뱃지 제거용)
+      // 원본 결과의 answeredAt을 업데이트해야 useQuizUpdate 훅에서 업데이트 완료로 인식
+      await updateDoc(doc(db, 'quizResults', updateInfo.originalResultId), {
+        questionScores: mergedScores,
+        score: newScore,
+        correctCount: totalCorrect,
+      });
+
+      // 7. 퀴즈 문서의 userScores, averageScore 업데이트
+      try {
+        const currentQuizDoc = await getDoc(doc(db, 'quizzes', updateInfo.quizId));
+        if (currentQuizDoc.exists()) {
+          const currentQuizData = currentQuizDoc.data();
+          const currentUserScores = currentQuizData?.userScores || {};
+
+          // 현재 사용자의 점수를 새 점수로 교체
+          currentUserScores[user.uid] = newScore;
+
+          // 전체 평균 점수 재계산
+          const allScores = Object.values(currentUserScores) as number[];
+          const newAverageScore = allScores.length > 0
+            ? allScores.reduce((sum, s) => sum + s, 0) / allScores.length
+            : 0;
+
+          await updateDoc(doc(db, 'quizzes', updateInfo.quizId), {
+            [`userScores.${user.uid}`]: newScore,
+            averageScore: Math.round(newAverageScore * 10) / 10,
+          });
+        }
+      } catch (statsErr) {
+        console.error('퀴즈 통계 업데이트 실패:', statsErr);
+      }
 
       // 결과 표시
       setResultData({
@@ -261,22 +366,72 @@ export default function UpdateQuizModal({
             </div>
 
             {/* 문제별 결과 */}
-            <div className="space-y-2 text-left">
-              {resultData.questionResults.map((r, idx) => (
-                <div
-                  key={r.questionId}
-                  className={`p-3 border ${r.isCorrect ? 'border-[#1A6B1A] bg-[#E8F5E9]' : 'border-[#8B1A1A] bg-[#FDEAEA]'}`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className={`text-sm font-bold ${r.isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>
-                      문제 {idx + 1}
-                    </span>
-                    <span className={`text-xs ${r.isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>
-                      {r.isCorrect ? '정답' : '오답'}
-                    </span>
+            <div className="space-y-3 text-left">
+              {resultData.questionResults.map((r, idx) => {
+                // 답 표시 포맷
+                const formatAnswer = (answer: string, type: string, choices?: string[]) => {
+                  if (!answer) return '-';
+                  if (type === 'ox') return answer.toUpperCase();
+                  if (type === 'multiple' && choices) {
+                    const indices = answer.split(',').map(s => parseInt(s.trim(), 10) - 1);
+                    return indices.map(i => choices[i] || `${i + 1}번`).join(', ');
+                  }
+                  return answer;
+                };
+
+                const formattedUserAnswer = formatAnswer(r.userAnswer, r.questionType, r.choices);
+                const formattedPreviousAnswer = formatAnswer(r.previousAnswer, r.questionType, r.choices);
+                const formattedCorrectAnswer = formatAnswer(r.correctAnswer, r.questionType, r.choices);
+                const sameAnswer = r.userAnswer === r.previousAnswer;
+
+                return (
+                  <div
+                    key={r.questionId}
+                    className={`p-3 border ${r.isCorrect ? 'border-[#1A6B1A] bg-[#E8F5E9]' : 'border-[#8B1A1A] bg-[#FDEAEA]'}`}
+                  >
+                    {/* 문제 헤더 */}
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-sm font-bold ${r.isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>
+                        문제 {idx + 1}
+                      </span>
+                      <span className={`text-xs px-2 py-0.5 ${r.isCorrect ? 'bg-[#1A6B1A] text-white' : 'bg-[#8B1A1A] text-white'}`}>
+                        {r.isCorrect ? '정답' : '오답'}
+                      </span>
+                    </div>
+
+                    {/* 문제 내용 */}
+                    <p className="text-sm text-[#1A1A1A] mb-2">{r.questionText}</p>
+
+                    {/* 객관식 선지 */}
+                    {r.questionType === 'multiple' && r.choices && (
+                      <div className="text-xs text-[#5C5C5C] mb-2 space-y-0.5">
+                        {r.choices.map((choice, i) => (
+                          <p key={i}>{i + 1}. {choice}</p>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* 정답 */}
+                    <div className="text-xs space-y-1">
+                      <p className="text-[#1A6B1A]">
+                        <span className="font-bold">정답:</span> {formattedCorrectAnswer}
+                      </p>
+
+                      {/* 내가 쓴 답 & 수정 전 내가 쓴 답 */}
+                      <div className="flex flex-wrap gap-2">
+                        <p className={r.isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}>
+                          <span className="font-bold">{sameAnswer ? '(내 답)' : ''}</span> {formattedUserAnswer}
+                        </p>
+                        {r.previousAnswer && (
+                          <p className="text-[#5C5C5C]">
+                            <span className="font-bold">{sameAnswer ? '(수정 전 내 답)' : ''}</span> {formattedPreviousAnswer}
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 

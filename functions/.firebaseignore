@@ -1,0 +1,16 @@
+# 소스 파일 (배포 불필요)
+src/
+
+# Node modules는 Cloud Functions에서 자동 설치
+node_modules/
+
+# 기타
+*.log
+.env
+.env.*
+!.env.example
+.gitignore
+.eslintrc.js
+tsconfig.json
+
+# 중요: lib/는 배포에 포함되어야 함 (여기에 포함하지 않음)

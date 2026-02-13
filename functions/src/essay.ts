@@ -6,6 +6,10 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { defineSecret } from "firebase-functions/params";
+
+// Anthropic API 키 (firebase functions:secrets:set ANTHROPIC_API_KEY)
+const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
 
 // ============================================================
 // 타입 정의
@@ -78,17 +82,12 @@ async function callClaudeAPI(
   questionText: string,
   modelAnswer: string,
   studentAnswer: string,
-  rubric: RubricItem[]
+  rubric: RubricItem[],
+  apiKey: string
 ): Promise<{
   rubricScores: RubricScore[];
   overallFeedback: string;
 }> {
-  // 환경 변수에서 API 키 가져오기
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-
-  if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY 환경 변수가 설정되지 않았습니다.");
-  }
 
   // 루브릭을 텍스트로 변환
   const rubricText = rubric
@@ -237,6 +236,7 @@ export const gradeEssay = onCall(
     timeoutSeconds: 60,
     // 메모리 설정
     memory: "256MiB",
+    secrets: [ANTHROPIC_API_KEY],
   },
   async (request): Promise<GradeEssayResponse> => {
     // 인증 확인
@@ -293,7 +293,8 @@ export const gradeEssay = onCall(
         data.questionText,
         data.modelAnswer,
         data.studentAnswer,
-        data.rubric
+        data.rubric,
+        ANTHROPIC_API_KEY.value()
       );
 
       // 총점 계산
@@ -363,6 +364,7 @@ export const gradeEssayBatch = onCall(
     // 일괄 처리에는 더 긴 타임아웃 필요
     timeoutSeconds: 300,
     memory: "512MiB",
+    secrets: [ANTHROPIC_API_KEY],
   },
   async (request) => {
     // 인증 확인
@@ -421,7 +423,8 @@ export const gradeEssayBatch = onCall(
           questionText,
           modelAnswer,
           submission.studentAnswer,
-          rubric
+          rubric,
+          ANTHROPIC_API_KEY.value()
         );
 
         const totalScore = rubricScores.reduce(

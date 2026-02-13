@@ -13,14 +13,20 @@ export interface RankInfo {
 
 /**
  * 계급 시스템 정의 (5단계)
- * 시즌 내 달성 가능하도록 완화된 기준
+ * 한 학기 동안 꾸준히 활동하면 전설 달성 가능한 밸런스
+ *
+ * 예상 달성 시점:
+ * - 용사: 1~2주 활동
+ * - 기사: 1개월 활동
+ * - 장군: 2개월 활동
+ * - 전설의 용사: 한 학기 꾸준히
  */
 export const RANKS: RankInfo[] = [
   { name: "견습생", minExp: 0, armorUnlocked: false },
   { name: "용사", minExp: 50, armorUnlocked: true },
-  { name: "기사", minExp: 75, armorUnlocked: true },
-  { name: "장군", minExp: 100, armorUnlocked: true },
-  { name: "전설의 용사", minExp: 125, armorUnlocked: true },
+  { name: "기사", minExp: 150, armorUnlocked: true },
+  { name: "장군", minExp: 350, armorUnlocked: true },
+  { name: "전설의 용사", minExp: 600, armorUnlocked: true },
 ];
 
 /**
@@ -42,6 +48,12 @@ export const EXP_REWARDS = {
   POST_CREATE: 5,         // 글 작성
   COMMENT_CREATE: 2,      // 댓글 작성
   LIKE_RECEIVED: 1,       // 좋아요 받음
+
+  // 데일리 관련
+  DAILY_COMPLETE: 5,      // 데일리 퀴즈 완료
+  STREAK_3_DAYS: 10,      // 3일 연속 출석 보너스
+  STREAK_7_DAYS: 20,      // 7일 연속 출석 보너스
+  STREAK_30_DAYS: 50,     // 30일 연속 출석 보너스
 };
 
 /**

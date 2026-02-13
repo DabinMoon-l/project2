@@ -67,11 +67,11 @@ export default function SplashScreen({ children }: SplashScreenProps) {
                 ease: [0.34, 1.56, 0.64, 1], // 바운스 효과
                 delay: 0.2
               }}
-              className="relative z-10 mt-[25vh]"
+              className="relative z-10 mt-[15vh]"
             >
               <Image
                 src="/images/logo.png"
-                alt="QuizBunny"
+                alt="RabbiTory"
                 width={360}
                 height={360}
                 priority

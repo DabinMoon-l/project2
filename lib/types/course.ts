@@ -104,8 +104,8 @@ export const COURSES: Record<CourseId, Course> = {
     order: 1,
     quizRibbonImage: '/images/biology-quiz-ribbon.png',
     reviewRibbonImage: '/images/biology-review-ribbon.png',
-    quizRibbonScale: 1.15, // 리뷰 리본과 동일하게
-    reviewRibbonScale: 1.15,
+    quizRibbonScale: 1,
+    reviewRibbonScale: 1,
   },
   pathophysiology: {
     id: 'pathophysiology',
@@ -118,9 +118,8 @@ export const COURSES: Record<CourseId, Course> = {
     order: 2,
     quizRibbonImage: '/images/pathophysiology-quiz-ribbon.png',
     reviewRibbonImage: '/images/pathophysiology-review-ribbon.png',
-    quizRibbonScale: 1.15, // 리뷰 리본과 동일하게
-    quizRibbonOffsetY: 0,
-    reviewRibbonScale: 1.15,
+    quizRibbonScale: 1,
+    reviewRibbonScale: 1,
   },
   microbiology: {
     id: 'microbiology',
@@ -133,9 +132,8 @@ export const COURSES: Record<CourseId, Course> = {
     order: 3,
     quizRibbonImage: '/images/microbiology-quiz-ribbon.png',
     reviewRibbonImage: '/images/microbiology-review-ribbon.png',
-    quizRibbonScale: 1.15, // 리뷰 리본과 동일하게
-    quizRibbonOffsetY: 0,
-    reviewRibbonScale: 1.15,
+    quizRibbonScale: 1,
+    reviewRibbonScale: 1,
   },
 };
 

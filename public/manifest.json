@@ -1,6 +1,6 @@
 {
-  "name": "토끼키우기",
-  "short_name": "토끼키우기",
+  "name": "RabbiTory",
+  "short_name": "RabbiTory",
   "description": "퀴즈를 풀고 토끼를 성장시키는 학습 앱",
   "start_url": "/",
   "display": "standalone",

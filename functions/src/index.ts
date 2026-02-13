@@ -28,6 +28,16 @@ initializeApp();
 export { onQuizComplete, updateQuizStatistics, onQuizCreate } from "./quiz";
 
 // ============================================
+// 퀴즈 제출 (서버 채점 + 분산 쓰기)
+// ============================================
+export { recordAttempt } from "./recordAttempt";
+
+// ============================================
+// Reviews 비동기 생성 (quizResults 생성 트리거)
+// ============================================
+export { generateReviewsOnResult } from "./reviewsGenerator";
+
+// ============================================
 // 피드백 관련 Functions
 // ============================================
 export { onFeedbackSubmit, onFeedbackStatusChange } from "./feedback";
@@ -117,7 +127,7 @@ export const cleanupRateLimitsScheduled = onSchedule(
  * 경험치, 계급 등 통계 정보 반환
  */
 export const getUserStats = onCall(
-  { region: "asia-northeast3" },
+  { region: "asia-northeast3", concurrency: 80 },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -152,7 +162,7 @@ export const getUserStats = onCall(
  * @param data.limit - 조회 수 (기본: 10, 최대: 50)
  */
 export const getLeaderboard = onCall(
-  { region: "asia-northeast3" },
+  { region: "asia-northeast3", concurrency: 80 },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -214,6 +224,94 @@ export { gradeEssay, gradeEssayBatch } from "./essay";
 // OCR Functions (Naver CLOVA OCR)
 // ============================================
 export { runClovaOcr, getOcrUsage } from "./ocr";
+
+// ============================================
+// Gemini AI 문제 생성 Functions
+// ============================================
+export { generateQuizWithGemini, getGeminiUsage, extractKeywords } from "./gemini";
+
+// ============================================
+// Vision OCR Functions (Google Cloud Vision)
+// ============================================
+export { runVisionOcr, getVisionOcrUsage } from "./visionOcr";
+
+// ============================================
+// 이미지 영역 분석 Functions (Gemini Vision)
+// ============================================
+import { analyzeImageRegions, GEMINI_API_KEY as IMAGE_REGION_API_KEY } from "./imageRegionAnalysis";
+
+/**
+ * 이미지 영역 분석 (Callable Function)
+ * 문제지 이미지에서 각 문제의 시각 자료(그림, 표, 그래프) 영역 좌표를 분석
+ */
+export const analyzeImageRegionsCall = onCall(
+  {
+    region: "asia-northeast3",
+    secrets: [IMAGE_REGION_API_KEY],
+  },
+  async (request) => {
+    const { imageBase64 } = request.data as { imageBase64: string };
+
+    if (!imageBase64) {
+      throw new HttpsError("invalid-argument", "imageBase64가 필요합니다.");
+    }
+
+    const apiKey = IMAGE_REGION_API_KEY.value();
+    if (!apiKey) {
+      throw new HttpsError("internal", "Gemini API 키가 설정되지 않았습니다.");
+    }
+
+    const result = await analyzeImageRegions(imageBase64, apiKey);
+
+    if (!result.success) {
+      throw new HttpsError("internal", result.error || "이미지 분석 실패");
+    }
+
+    return {
+      success: true,
+      regions: result.regions,
+    };
+  }
+);
+
+// ============================================
+// Gemini 큐 시스템 Functions
+// ============================================
+export {
+  addToGeminiQueue,
+  checkGeminiQueueStatus,
+  claimGeminiQueueResult,
+  processGeminiQueue,
+  cleanupGeminiQueue,
+} from "./geminiQueue";
+
+// ============================================
+// PPTX 퀴즈 생성 Functions (Cloud Run 연동)
+// ============================================
+export { onPptxJobCreated, cleanupOldQuizJobs } from "./pptx";
+
+// ============================================
+// 교수 퀴즈 분석 Functions (AI 문제 생성 스타일 학습)
+// ============================================
+export { onProfessorQuizCreated } from "./professorQuizAnalysis";
+
+// ============================================
+// 스타일 기반 AI 문제 생성 Functions
+// ============================================
+export { generateStyledQuiz, getStyleProfile } from "./styledQuizGenerator";
+
+// ============================================
+// 과목 범위(Scope) 관리 Functions
+// ============================================
+export { uploadCourseScope, getCourseScope } from "./courseScope";
+
+// ============================================
+// AI 문제 생성 Jobs 시스템
+// ============================================
+export { enqueueGenerationJob, checkJobStatus } from "./enqueueGenerationJob";
+export { workerProcessJob, retryQueuedJobs, cleanupExpiredJobs } from "./workerProcessJob";
+
+
 
 // ============================================
 // 시즌 관련 Functions

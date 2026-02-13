@@ -22,13 +22,26 @@ import {
   getChapterTags,
   ExtractedImagesProvider,
   useExtractedImages,
-  ImageRegionSelector,
   ExtractedImagePicker,
   type QuestionData,
   type QuizMeta,
 } from '@/components/quiz/create';
 import ImageCropper from '@/components/quiz/create/ImageCropper';
+import PageSelectionModal from '@/components/ai-quiz/PageSelectionModal';
 import type { ParseResult, ParsedQuestion } from '@/lib/ocr';
+import * as pdfjsLib from 'pdfjs-dist';
+
+// PDF.js worker 설정
+if (typeof window !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
+}
+
+// PDF 페이지 타입
+interface DocumentPage {
+  pageNum: number;
+  thumbnail: string;
+  selected: boolean;
+}
 
 // ============================================================
 // 타입 정의
@@ -64,21 +77,26 @@ export default function QuizCreatePage() {
   const [isOCRProcessing, setIsOCRProcessing] = useState(false);
   const [ocrError, setOcrError] = useState<string | null>(null);
 
+
   // 이미지 크롭 상태
   const [originalImageUrl, setOriginalImageUrl] = useState<string | null>(null);
   const [showImageCropper, setShowImageCropper] = useState(false);
 
-  // 새로운 OCR 흐름: 파일 목록 관리
-  const [uploadedFiles, setUploadedFiles] = useState<Array<{ id: string; file: File; preview: string }>>([]);
-  const [showImageRegionSelector, setShowImageRegionSelector] = useState(false);
+  // OCR 대상 파일
   const [ocrTargetFile, setOcrTargetFile] = useState<File | null>(null);
-
-  // 파일 선택 모드
-  const [isSelectMode, setIsSelectMode] = useState(false);
-  const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set());
 
   // 추출된 이미지 목록 (퀴즈 생성 세션 동안만 유지)
   const [extractedImages, setExtractedImages] = useState<Array<{ id: string; dataUrl: string; sourceFileName?: string }>>([]);
+
+  // 자동 추출 이미지 매핑 (문제 번호 -> 이미지 데이터)
+  const [autoExtractedImages, setAutoExtractedImages] = useState<Map<number, string>>(new Map());
+
+  // PDF 페이지 선택 관련 상태
+  const [documentPages, setDocumentPages] = useState<DocumentPage[]>([]);
+  const [showPageSelectionModal, setShowPageSelectionModal] = useState(false);
+  const [isLoadingDocument, setIsLoadingDocument] = useState(false);
+  const [pdfLoadingMessage, setPdfLoadingMessage] = useState('');
+  const [pendingPdfFile, setPendingPdfFile] = useState<File | null>(null);
 
   // 문제 관리
   const [questions, setQuestions] = useState<QuestionData[]>([]);
@@ -268,112 +286,106 @@ export default function QuizCreatePage() {
   }, []);
 
   /**
-   * 파일 선택 핸들러 (목록에 추가만, OCR 자동 실행 X)
+   * 파일 선택 핸들러 - 이미지는 바로 OCR, PDF는 페이지 선택 모달 표시
    */
   const handleFileSelect = useCallback(async (file: File) => {
-    try {
-      const preview = file.type.startsWith('image/') ? await fileToBase64(file) : 'pdf';
-      const newFile = {
-        id: `file_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        file,
-        preview,
-      };
-      setUploadedFiles((prev) => [...prev, newFile]);
-      setOcrError(null);
-    } catch (err) {
-      console.error('파일 추가 실패:', err);
-      setOcrError('파일을 추가하는데 실패했습니다.');
-    }
-  }, [fileToBase64]);
-
-  /**
-   * 업로드된 파일 삭제
-   */
-  const handleRemoveUploadedFile = useCallback((fileId: string) => {
-    setUploadedFiles((prev) => prev.filter((f) => f.id !== fileId));
-    setSelectedFileIds((prev) => {
-      const newSet = new Set(prev);
-      newSet.delete(fileId);
-      return newSet;
-    });
-  }, []);
-
-  /**
-   * 파일 선택 토글
-   */
-  const handleToggleFileSelection = useCallback((fileId: string) => {
-    setSelectedFileIds((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(fileId)) {
-        newSet.delete(fileId);
-      } else {
-        newSet.add(fileId);
-      }
-      return newSet;
-    });
-  }, []);
-
-  /**
-   * 선택 모드 토글
-   */
-  const handleToggleSelectMode = useCallback(() => {
-    setIsSelectMode((prev) => !prev);
-    if (isSelectMode) {
-      // 선택 모드 해제 시 선택 초기화
-      setSelectedFileIds(new Set());
-    }
-  }, [isSelectMode]);
-
-  /**
-   * 전체 선택/해제
-   */
-  const handleSelectAll = useCallback(() => {
-    if (selectedFileIds.size === uploadedFiles.length) {
-      setSelectedFileIds(new Set());
-    } else {
-      setSelectedFileIds(new Set(uploadedFiles.map(f => f.id)));
-    }
-  }, [selectedFileIds.size, uploadedFiles]);
-
-  /**
-   * 선택된 파일들 가져오기
-   */
-  const selectedFiles = uploadedFiles.filter(f => selectedFileIds.has(f.id));
-
-  /**
-   * 텍스트 추출 버튼 클릭 (OCR 시작)
-   * 선택된 파일들에 대해 OCR 수행 (PDF도 지원)
-   */
-  const handleStartOCR = useCallback(async () => {
-    if (selectedFiles.length === 0) {
-      setOcrError('먼저 파일을 선택해주세요.');
-      return;
-    }
-
-    // 첫 번째 파일로 OCR 시작
-    const firstFile = selectedFiles[0];
-
-    // PDF 파일인 경우 첫 페이지를 이미지로 변환
-    if (firstFile.file.type === 'application/pdf') {
+    // PDF 파일인 경우 - 페이지 선택 모달 표시
+    if (file.type === 'application/pdf') {
       try {
-        setIsOCRProcessing(true);
+        setIsLoadingDocument(true);
+        setPdfLoadingMessage('PDF 로딩 중...');
         setOcrError(null);
+        setPendingPdfFile(file);
 
-        // PDF.js로 첫 페이지를 이미지로 변환
-        const pdfjsLib = await import('pdfjs-dist');
-        if (typeof window !== 'undefined') {
-          pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
-        }
+        const arrayBuffer = await file.arrayBuffer();
 
-        const arrayBuffer = await firstFile.file.arrayBuffer();
+        // PDF 로드
         const pdf = await pdfjsLib.getDocument({
           data: arrayBuffer,
-          cMapUrl: 'https://unpkg.com/pdfjs-dist@4.10.38/cmaps/',
+          cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/cmaps/',
           cMapPacked: true,
         }).promise;
 
-        const page = await pdf.getPage(1);
-        const viewport = page.getViewport({ scale: 2.5 });
+        const pages: DocumentPage[] = [];
+
+        // 각 페이지의 썸네일 생성
+        for (let i = 1; i <= pdf.numPages; i++) {
+          setPdfLoadingMessage(`PDF 로딩 중... (${i}/${pdf.numPages})`);
+          const page = await pdf.getPage(i);
+          // 썸네일 생성 (scale 0.8)
+          const viewport = page.getViewport({ scale: 0.8 });
+
+          const canvas = document.createElement('canvas');
+          const context = canvas.getContext('2d')!;
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+
+          await page.render({
+            canvasContext: context,
+            viewport: viewport,
+          }).promise;
+
+          const thumbnail = canvas.toDataURL('image/jpeg', 0.9);
+
+          pages.push({
+            pageNum: i,
+            thumbnail,
+            selected: false,
+          });
+        }
+
+        setDocumentPages(pages);
+        setShowPageSelectionModal(true);
+      } catch (err) {
+        console.error('PDF 로딩 오류:', err);
+        setOcrError('PDF 파일을 읽을 수 없습니다.');
+        setPendingPdfFile(null);
+      } finally {
+        setIsLoadingDocument(false);
+        setPdfLoadingMessage('');
+      }
+    } else if (file.type.startsWith('image/')) {
+      // 이미지 파일인 경우 바로 OCR 시작
+      setOcrTargetFile(file);
+      setSelectedFile(file);
+      setIsOCRProcessing(true);
+      setOcrError(null);
+    } else {
+      setOcrError('지원하지 않는 파일 형식입니다. 이미지 또는 PDF 파일을 업로드해주세요.');
+    }
+  }, []);
+
+  /**
+   * PDF 페이지 선택 확인 핸들러 - 선택된 모든 페이지를 병합하여 OCR 처리
+   */
+  const handlePageSelectionConfirm = useCallback(async (selectedPages: DocumentPage[]) => {
+    setShowPageSelectionModal(false);
+
+    const selected = selectedPages.filter(p => p.selected);
+    if (selected.length === 0 || !pendingPdfFile) return;
+
+    try {
+      setIsOCRProcessing(true);
+      setOcrError(null);
+
+      // 선택된 페이지들을 고해상도 이미지로 변환
+      const arrayBuffer = await pendingPdfFile.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({
+        data: arrayBuffer,
+        cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/cmaps/',
+        cMapPacked: true,
+      }).promise;
+
+      console.log(`[PDF] ${selected.length}개 페이지 선택됨. 모든 페이지 OCR 처리 시작`);
+
+      // 모든 선택된 페이지를 렌더링
+      const pageCanvases: HTMLCanvasElement[] = [];
+      let totalHeight = 0;
+      let maxWidth = 0;
+
+      for (const pageInfo of selected) {
+        const page = await pdf.getPage(pageInfo.pageNum);
+        const viewport = page.getViewport({ scale: 2.0 }); // 고해상도 (메모리 고려하여 2.0으로 조정)
 
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
@@ -387,44 +399,62 @@ export default function QuizCreatePage() {
           viewport: viewport,
         }).promise;
 
-        // Canvas를 Blob으로 변환
-        const blob = await new Promise<Blob>((resolve, reject) => {
-          canvas.toBlob((b) => {
-            if (b) resolve(b);
-            else reject(new Error('Blob conversion failed'));
-          }, 'image/png');
-        });
-
-        // Blob을 File로 변환
-        const pdfImageFile = new File([blob], `${firstFile.file.name}_page1.png`, { type: 'image/png' });
-        setOcrTargetFile(pdfImageFile);
-        setSelectedFile(pdfImageFile);
-      } catch (err) {
-        console.error('PDF 변환 오류:', err);
-        setOcrError('PDF 파일을 처리하는 중 오류가 발생했습니다.');
-        setIsOCRProcessing(false);
+        pageCanvases.push(canvas);
+        totalHeight += canvas.height;
+        maxWidth = Math.max(maxWidth, canvas.width);
       }
-    } else if (firstFile.file.type.startsWith('image/')) {
-      // 이미지 파일인 경우 바로 OCR 시작
-      setOcrTargetFile(firstFile.file);
-      setSelectedFile(firstFile.file);
-      setIsOCRProcessing(true);
-      setOcrError(null);
-    } else {
-      setOcrError('지원하지 않는 파일 형식입니다.');
-    }
-  }, [selectedFiles]);
 
-  /**
-   * 이미지 영역 선택 모달 열기
-   */
-  const handleOpenImageRegionSelector = useCallback(() => {
-    if (selectedFiles.length === 0) {
-      setOcrError('먼저 파일을 선택해주세요.');
-      return;
+      // 모든 페이지를 세로로 병합
+      const mergedCanvas = document.createElement('canvas');
+      const mergedContext = mergedCanvas.getContext('2d');
+      if (!mergedContext) throw new Error('Merged canvas context failed');
+
+      mergedCanvas.width = maxWidth;
+      mergedCanvas.height = totalHeight;
+
+      // 흰색 배경으로 채우기
+      mergedContext.fillStyle = '#FFFFFF';
+      mergedContext.fillRect(0, 0, maxWidth, totalHeight);
+
+      // 각 페이지를 순서대로 그리기
+      let currentY = 0;
+      for (const canvas of pageCanvases) {
+        // 페이지를 가운데 정렬
+        const offsetX = (maxWidth - canvas.width) / 2;
+        mergedContext.drawImage(canvas, offsetX, currentY);
+        currentY += canvas.height;
+      }
+
+      // 병합된 Canvas를 Blob으로 변환
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        mergedCanvas.toBlob((b) => {
+          if (b) resolve(b);
+          else reject(new Error('Blob conversion failed'));
+        }, 'image/png');
+      });
+
+      // Blob을 File로 변환
+      const pageNumbers = selected.map(p => p.pageNum).join('_');
+      const pdfImageFile = new File(
+        [blob],
+        `${pendingPdfFile.name}_pages_${pageNumbers}.png`,
+        { type: 'image/png' }
+      );
+
+      console.log(`[PDF] ${selected.length}개 페이지 병합 완료. 총 크기: ${maxWidth}x${totalHeight}`);
+
+      setOcrTargetFile(pdfImageFile);
+      setSelectedFile(pdfImageFile);
+    } catch (err) {
+      console.error('PDF 페이지 변환 오류:', err);
+      setOcrError('PDF 페이지를 처리하는 중 오류가 발생했습니다.');
+      setIsOCRProcessing(false);
+    } finally {
+      // PDF 관련 상태 초기화
+      setDocumentPages([]);
+      setPendingPdfFile(null);
     }
-    setShowImageRegionSelector(true);
-  }, [selectedFiles]);
+  }, [pendingPdfFile]);
 
   /**
    * 이미지 영역 추출 핸들러
@@ -443,6 +473,28 @@ export default function QuizCreatePage() {
    */
   const handleRemoveExtractedImage = useCallback((id: string) => {
     setExtractedImages((prev) => prev.filter((img) => img.id !== id));
+  }, []);
+
+  /**
+   * 자동 추출 이미지 핸들러 (OCR 이미지 영역 분석 후 호출)
+   */
+  const handleAutoExtractImage = useCallback((dataUrl: string, questionNumber: number, sourceFileName?: string) => {
+    console.log(`[QuizCreate] 자동 추출 이미지: 문제 ${questionNumber}`);
+
+    // 자동 추출 이미지 매핑에 저장
+    setAutoExtractedImages((prev) => {
+      const newMap = new Map(prev);
+      newMap.set(questionNumber, dataUrl);
+      return newMap;
+    });
+
+    // 추출 이미지 목록에도 추가 (나중에 수동으로 다른 문제에 할당할 수 있도록)
+    const newImage = {
+      id: `auto_${questionNumber}_${Date.now()}`,
+      dataUrl,
+      sourceFileName: sourceFileName ? `${sourceFileName} (문제 ${questionNumber})` : `문제 ${questionNumber} 자동 추출`,
+    };
+    setExtractedImages((prev) => [...prev, newImage]);
   }, []);
 
   /**
@@ -472,9 +524,15 @@ export default function QuizCreatePage() {
           const answerText = (parsed.type === 'short_answer' || parsed.type === 'subjective') &&
             typeof parsed.answer === 'string' ? parsed.answer : '';
 
-          // 보기(Examples) 변환 - mixedExamples 형식으로
-          let mixedExamples: Array<{ id: string; type: 'text' | 'labeled'; label?: string; content: string }> | undefined;
-          if (parsed.examples) {
+          // 보기(Examples) 변환 - mixedExamples 형식으로 (레거시 호환용)
+          let mixedExamples: Array<{ id: string; type: 'text' | 'labeled' | 'gana' | 'bullet'; label?: string; content?: string; items?: Array<{ id: string; label: string; content: string }> }> | undefined;
+
+          // 1. parsed.mixedExamples가 있으면 그대로 사용 (레거시)
+          if (parsed.mixedExamples && parsed.mixedExamples.length > 0) {
+            mixedExamples = parsed.mixedExamples;
+          }
+          // 2. parsed.examples가 있으면 변환 (레거시)
+          else if (parsed.examples) {
             if (parsed.examples.type === 'labeled') {
               const KOREAN_LABELS = ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ'];
               mixedExamples = parsed.examples.items.map((content, idx) => ({
@@ -511,6 +569,10 @@ export default function QuizCreatePage() {
             }));
           }
 
+          // 자동 추출 이미지 확인 (문제 번호는 index + 1)
+          const questionNumber = index + 1;
+          const autoImage = autoExtractedImages.get(questionNumber);
+
           const questionData: QuestionData = {
             id: `ocr_${Date.now()}_${index}`,
             text: parsed.text,
@@ -519,10 +581,14 @@ export default function QuizCreatePage() {
             answerIndex,
             answerText,
             explanation: parsed.explanation || '',
-            imageUrl: null,
+            imageUrl: autoImage || null,  // 자동 추출 이미지가 있으면 사용
             examples: null, // 레거시 필드
             mixedExamples, // 새로운 혼합 보기 형식
           };
+
+          if (autoImage) {
+            console.log(`[QuizCreate] 문제 ${questionNumber}에 자동 추출 이미지 매핑됨`);
+          }
 
           // 선택적 필드 추가
           if (answerIndices && answerIndices.length > 0) {
@@ -536,6 +602,21 @@ export default function QuizCreatePage() {
           }
           if (koreanAbcItems) {
             questionData.koreanAbcItems = koreanAbcItems;
+          }
+
+          // 제시문 발문 추가
+          if (parsed.passagePrompt) {
+            questionData.passagePrompt = parsed.passagePrompt;
+          }
+
+          // 보기(bogi) 추가 - OCRProcessor에서 전달됨
+          if (parsed.bogi) {
+            questionData.bogi = parsed.bogi;
+          }
+
+          // 제시문 블록들 추가 - OCRProcessor에서 전달됨
+          if (parsed.passageBlocks && parsed.passageBlocks.length > 0) {
+            questionData.passageBlocks = parsed.passageBlocks;
           }
 
           return questionData;
@@ -553,7 +634,10 @@ export default function QuizCreatePage() {
       setStep('questions');
       setIsAddingNew(true);
     }
-  }, []);
+
+    // OCR 완료 후 자동 추출 이미지 매핑 초기화
+    setAutoExtractedImages(new Map());
+  }, [autoExtractedImages]);
 
   /**
    * OCR 에러 핸들러
@@ -772,7 +856,7 @@ export default function QuizCreatePage() {
                   subAnswer = sq.answerIndex ?? -1;
                 }
 
-                // 하위 문제의 보기(examples) 처리
+                // 하위 문제의 보기(examples) 처리 - 레거시 형식
                 let subExamples = null;
                 if (sq.examples && Array.isArray(sq.examples) && sq.examples.length > 0) {
                   const filteredItems = sq.examples.filter((item) => typeof item === 'string' && item.trim());
@@ -794,7 +878,51 @@ export default function QuizCreatePage() {
                   }
                 }
 
+                // 하위 문제의 혼합 보기(mixedExamples) 처리
+                let subMixedExamples = null;
+                if (sq.mixedExamples && Array.isArray(sq.mixedExamples) && sq.mixedExamples.length > 0) {
+                  const filteredMixed = sq.mixedExamples
+                    .filter((block: any) => {
+                      switch (block.type) {
+                        case 'text':
+                          return block.content?.trim();
+                        case 'labeled':
+                          return (block.items || []).some((i: any) => i.content?.trim());
+                        case 'image':
+                          return block.imageUrl?.trim();
+                        case 'grouped':
+                          return (block.children?.length ?? 0) > 0;
+                        default:
+                          return false;
+                      }
+                    })
+                    .map((block: any) => {
+                      if (block.type === 'labeled') {
+                        return {
+                          ...block,
+                          items: (block.items || []).filter((i: any) => i.content?.trim()),
+                        };
+                      }
+                      if (block.type === 'grouped') {
+                        return {
+                          ...block,
+                          children: (block.children || []).filter((child: any) => {
+                            if (child.type === 'text') return child.content?.trim();
+                            if (child.type === 'labeled') return (child.items || []).some((i: any) => i.content?.trim());
+                            if (child.type === 'image') return child.imageUrl?.trim();
+                            return false;
+                          }),
+                        };
+                      }
+                      return block;
+                    });
+                  if (filteredMixed.length > 0) {
+                    subMixedExamples = filteredMixed;
+                  }
+                }
+
                 const subQuestionData: any = {
+                  id: sq.id || `${combinedGroupId}_${sqIndex}`, // ID 명시적 포함
                   order: orderIndex++,
                   text: sq.text,
                   type: sq.type,
@@ -803,6 +931,7 @@ export default function QuizCreatePage() {
                   explanation: sq.explanation || null,
                   imageUrl: sq.image || null,
                   examples: subExamples,
+                  mixedExamples: subMixedExamples,
                   // 결합형 그룹 정보
                   combinedGroupId,
                   combinedIndex: sqIndex,
@@ -821,6 +950,37 @@ export default function QuizCreatePage() {
                   subQuestionData.koreanAbcItems = q.passageType === 'korean_abc' && q.koreanAbcItems
                     ? q.koreanAbcItems.filter((item) => item && item.text?.trim()).map((item) => item.text)
                     : null;
+                  // 공통 지문 혼합 보기 (passageType이 mixed일 때)
+                  if (q.passageType === 'mixed' && q.passageMixedExamples && q.passageMixedExamples.length > 0) {
+                    const filteredPassageMixed = q.passageMixedExamples
+                      .filter((block: any) => {
+                        switch (block.type) {
+                          case 'text': return block.content?.trim();
+                          case 'labeled': return (block.items || []).some((i: any) => i.content?.trim());
+                          case 'image': return block.imageUrl?.trim();
+                          case 'grouped': return (block.children?.length ?? 0) > 0;
+                          default: return false;
+                        }
+                      })
+                      .map((block: any) => {
+                        if (block.type === 'labeled') {
+                          return { ...block, items: (block.items || []).filter((i: any) => i.content?.trim()) };
+                        }
+                        if (block.type === 'grouped') {
+                          return {
+                            ...block,
+                            children: (block.children || []).filter((child: any) => {
+                              if (child.type === 'text') return child.content?.trim();
+                              if (child.type === 'labeled') return (child.items || []).some((i: any) => i.content?.trim());
+                              if (child.type === 'image') return child.imageUrl?.trim();
+                              return false;
+                            }),
+                          };
+                        }
+                        return block;
+                      });
+                    subQuestionData.passageMixedExamples = filteredPassageMixed.length > 0 ? filteredPassageMixed : null;
+                  }
                   subQuestionData.combinedMainText = q.text || ''; // 결합형 메인 문제 텍스트
                 }
 
@@ -863,27 +1023,51 @@ export default function QuizCreatePage() {
                 }
               }
 
-              // 혼합 보기(mixedExamples) 처리 - 블록 형식 (텍스트박스+ㄱㄴㄷ 블록)
+              // 혼합 보기(mixedExamples) 처리 - 블록 형식 (텍스트박스+ㄱㄴㄷ+이미지+그룹 블록)
               let questionMixedExamples = null;
               if (q.mixedExamples && Array.isArray(q.mixedExamples) && q.mixedExamples.length > 0) {
                 const filteredMixed = q.mixedExamples
-                  .filter((block) =>
-                    block.type === 'text'
-                      ? block.content?.trim()
-                      : (block.items || []).some(i => i.content.trim())
-                  )
-                  .map(block => ({
-                    ...block,
-                    items: block.type === 'labeled'
-                      ? (block.items || []).filter(i => i.content.trim())
-                      : undefined,
-                  }));
+                  .filter((block) => {
+                    switch (block.type) {
+                      case 'text':
+                        return block.content?.trim();
+                      case 'labeled':
+                        return (block.items || []).some(i => i.content?.trim());
+                      case 'image':
+                        return block.imageUrl?.trim();
+                      case 'grouped':
+                        return (block.children?.length ?? 0) > 0;
+                      default:
+                        return false;
+                    }
+                  })
+                  .map(block => {
+                    if (block.type === 'labeled') {
+                      return {
+                        ...block,
+                        items: (block.items || []).filter(i => i.content?.trim()),
+                      };
+                    }
+                    if (block.type === 'grouped') {
+                      return {
+                        ...block,
+                        children: (block.children || []).filter(child => {
+                          if (child.type === 'text') return child.content?.trim();
+                          if (child.type === 'labeled') return (child.items || []).some(i => i.content?.trim());
+                          if (child.type === 'image') return child.imageUrl?.trim();
+                          return false;
+                        }),
+                      };
+                    }
+                    return block;
+                  });
                 if (filteredMixed.length > 0) {
                   questionMixedExamples = filteredMixed;
                 }
               }
 
               flattenedQuestions.push({
+                id: q.id, // ID 명시적 포함 (통계 매칭용)
                 order: orderIndex++,
                 text: q.text,
                 type: q.type === 'subjective' ? 'short_answer' : q.type,
@@ -947,7 +1131,6 @@ export default function QuizCreatePage() {
         participantCount: 0,
         averageScore: 0,
         bookmarkCount: 0,
-        completedUsers: [],
         userScores: {},
 
       };
@@ -1231,161 +1414,27 @@ export default function QuizCreatePage() {
               exit="exit"
               className="space-y-6"
             >
-              <div>
-                <h2 className="text-xl font-bold text-[#1A1A1A] mb-2">
-                  사진/PDF로 문제 추출
-                </h2>
-                <p className="text-sm text-[#5C5C5C]">
-                  이미지를 업로드한 후 텍스트 추출 또는 이미지 영역 선택을 할 수 있습니다.
+              {/* 모드 설명 */}
+              <div className="bg-[#EDEAE4] p-3 border border-[#1A1A1A]">
+                <p className="text-xs text-[#5C5C5C]">
+                  <strong className="text-[#1A1A1A]">문제지 스캔:</strong> 기존 문제지 이미지/PDF에서 문제를 추출합니다.
                 </p>
               </div>
 
-              {/* 이미지 업로더 */}
+              {/* 이미지 업로더 - 파일 선택 시 바로 OCR 시작 (PDF는 페이지 선택 모달) */}
               <ImageUploader
                 onFileSelect={handleFileSelect}
-                isLoading={isOCRProcessing}
+                isLoading={isOCRProcessing || isLoadingDocument}
                 error={ocrError}
               />
 
-              {/* 업로드된 파일 목록 */}
-              {uploadedFiles.length > 0 && !isOCRProcessing && (
-                <div className="space-y-3">
-                  {/* 헤더: 파일 개수 + 선택 버튼 */}
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-bold text-[#1A1A1A]">
-                      업로드된 파일 ({uploadedFiles.length}개)
-                      {isSelectMode && selectedFileIds.size > 0 && (
-                        <span className="text-[#1A6B1A] ml-2">
-                          {selectedFileIds.size}개 선택됨
-                        </span>
-                      )}
-                    </p>
-                    <div className="flex gap-2">
-                      {isSelectMode && (
-                        <button
-                          type="button"
-                          onClick={handleSelectAll}
-                          className="px-3 py-1 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
-                        >
-                          {selectedFileIds.size === uploadedFiles.length ? '전체 해제' : '전체 선택'}
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={handleToggleSelectMode}
-                        className={`px-3 py-1 text-xs font-bold border transition-colors ${
-                          isSelectMode
-                            ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                            : 'border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
-                        }`}
-                      >
-                        {isSelectMode ? '취소' : '선택'}
-                      </button>
-                    </div>
+              {/* PDF 로딩 중 표시 */}
+              {isLoadingDocument && (
+                <div className="flex items-center justify-center py-8 border-2 border-dashed border-[#9A9A9A]">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="w-8 h-8 border-2 border-[#1A1A1A] border-t-transparent rounded-full animate-spin" />
+                    <span className="text-sm text-[#5C5C5C]">{pdfLoadingMessage}</span>
                   </div>
-
-                  {/* 파일 그리드 */}
-                  <div className="grid grid-cols-3 gap-2">
-                    {uploadedFiles.map((item) => {
-                      const isSelected = selectedFileIds.has(item.id);
-                      return (
-                        <div
-                          key={item.id}
-                          className={`relative aspect-square bg-[#EDEAE4] border-2 overflow-hidden group cursor-pointer transition-all ${
-                            isSelectMode
-                              ? isSelected
-                                ? 'border-[#1A6B1A] ring-2 ring-[#1A6B1A]'
-                                : 'border-[#D4CFC4] hover:border-[#1A1A1A]'
-                              : 'border-[#1A1A1A]'
-                          }`}
-                          onClick={() => {
-                            if (isSelectMode) {
-                              handleToggleFileSelection(item.id);
-                            }
-                          }}
-                        >
-                          {item.preview !== 'pdf' ? (
-                            <img
-                              src={item.preview}
-                              alt={item.file.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex flex-col items-center justify-center">
-                              <svg className="w-8 h-8 text-[#8B1A1A]" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zM6 20V4h7v5h5v11H6z" />
-                              </svg>
-                              <span className="text-[10px] text-[#5C5C5C] mt-1">PDF</span>
-                            </div>
-                          )}
-
-                          {/* 선택 모드: 체크박스 */}
-                          {isSelectMode && (
-                            <div className={`absolute top-1 left-1 w-6 h-6 flex items-center justify-center border-2 ${
-                              isSelected
-                                ? 'bg-[#1A6B1A] border-[#1A6B1A]'
-                                : 'bg-white border-[#1A1A1A]'
-                            }`}>
-                              {isSelected && (
-                                <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
-                                  <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
-                                </svg>
-                              )}
-                            </div>
-                          )}
-
-                          {/* 비선택 모드: 삭제 버튼 */}
-                          {!isSelectMode && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleRemoveUploadedFile(item.id);
-                              }}
-                              className="absolute top-1 right-1 w-5 h-5 bg-[#8B1A1A] text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* 액션 버튼들 - 선택 모드에서 파일이 선택되었을 때만 표시 */}
-                  {isSelectMode && selectedFileIds.size > 0 && (
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={handleStartOCR}
-                        className="flex-1 py-3 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors flex items-center justify-center gap-2"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        텍스트 추출
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleOpenImageRegionSelector}
-                        className="flex-1 py-3 text-sm font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors flex items-center justify-center gap-2"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        이미지 영역 선택
-                      </button>
-                    </div>
-                  )}
-
-                  {/* 선택 모드가 아닐 때 안내 메시지 */}
-                  {!isSelectMode && (
-                    <p className="text-xs text-[#5C5C5C] text-center">
-                      &apos;선택&apos; 버튼을 눌러 파일을 선택한 후 텍스트 추출 또는 이미지 영역 선택을 할 수 있습니다.
-                    </p>
-                  )}
                 </div>
               )}
 
@@ -1397,6 +1446,7 @@ export default function QuizCreatePage() {
                   onError={handleOCRError}
                   onCancel={handleOCRCancel}
                   onImageReady={handleImageReady}
+                  onAutoExtractImage={handleAutoExtractImage}
                 />
               )}
 
@@ -1894,18 +1944,21 @@ export default function QuizCreatePage() {
         />
       )}
 
-      {/* 이미지 영역 선택 모달 */}
-      <AnimatePresence>
-        {showImageRegionSelector && (
-          <ImageRegionSelector
-            uploadedFiles={selectedFiles}
-            extractedImages={extractedImages}
-            onExtract={handleExtractImage}
-            onRemoveExtracted={handleRemoveExtractedImage}
-            onClose={() => setShowImageRegionSelector(false)}
-          />
-        )}
-      </AnimatePresence>
+      {/* PDF 페이지 선택 모달 */}
+      <PageSelectionModal
+        isOpen={showPageSelectionModal}
+        onClose={() => {
+          setShowPageSelectionModal(false);
+          setDocumentPages([]);
+          setPendingPdfFile(null);
+        }}
+        onConfirm={handlePageSelectionConfirm}
+        pages={documentPages}
+        title="PDF 페이지 선택"
+        isLoading={isLoadingDocument}
+        loadingMessage={pdfLoadingMessage}
+      />
+
     </div>
   );
 }

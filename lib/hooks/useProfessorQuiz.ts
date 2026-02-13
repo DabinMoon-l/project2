@@ -65,7 +65,6 @@ export interface ProfessorQuiz {
   participantCount: number;
   averageScore: number;
   feedbackCount: number;
-  completedUsers: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -120,6 +119,8 @@ export interface QuestionStats {
   choiceStats?: ChoiceStats[];
   /** 오답 목록 (주관식) */
   wrongAnswers?: string[];
+  /** 문제가 수정되었는지 여부 (수정 후 데이터가 있으면 true) */
+  isModified?: boolean;
 }
 
 /** 퀴즈 전체 통계 */
@@ -193,7 +194,6 @@ const docToQuiz = (doc: DocumentSnapshot | QueryDocumentSnapshot): ProfessorQuiz
     participantCount: data.participantCount || 0,
     averageScore: data.averageScore || 0,
     feedbackCount: data.feedbackCount || 0,
-    completedUsers: data.completedUsers || [],
     createdAt: data.createdAt?.toDate() || new Date(),
     updatedAt: data.updatedAt?.toDate() || new Date(),
   };
@@ -374,12 +374,124 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
   }, []);
 
   /**
+   * 결합형 문제를 펼쳐서 개별 문제로 변환하는 헬퍼 함수
+   */
+  const flattenQuestionsForStats = (questions: any[]): QuizQuestion[] => {
+    const result: QuizQuestion[] = [];
+
+    questions.forEach((q) => {
+      // 이미 펼쳐진 결합형 문제 (combinedGroupId가 있는 경우)
+      if (q.combinedGroupId) {
+        result.push({
+          id: q.id,
+          text: q.text || '',
+          type: q.type,
+          choices: q.choices,
+          answer: q.answer,
+          explanation: q.explanation,
+        });
+      }
+      // 레거시 결합형 문제 (type === 'combined' + subQuestions)
+      else if (q.type === 'combined' && q.subQuestions && q.subQuestions.length > 0) {
+        q.subQuestions.forEach((sq: any, idx: number) => {
+          // 정답 형식 변환
+          let answer: number | string;
+          if (sq.type === 'ox') {
+            answer = sq.answerIndex ?? 0;
+          } else if (sq.type === 'multiple') {
+            if (sq.answerIndices?.length > 0) {
+              answer = sq.answerIndices.map((i: number) => i + 1).join(',');
+            } else if (sq.answerIndex !== undefined) {
+              answer = sq.answerIndex + 1;
+            } else {
+              answer = 0;
+            }
+          } else {
+            answer = sq.answerText || '';
+          }
+
+          result.push({
+            id: sq.id || `${q.id}_sub${idx}`,
+            text: sq.text || '',
+            type: sq.type || 'short_answer',
+            choices: sq.choices,
+            answer,
+            explanation: sq.explanation,
+          });
+        });
+      }
+      // 일반 문제
+      else {
+        result.push({
+          id: q.id,
+          text: q.text || '',
+          type: q.type,
+          choices: q.choices,
+          answer: q.answer,
+          explanation: q.explanation,
+        });
+      }
+    });
+
+    return result;
+  };
+
+  /**
    * 퀴즈 통계 조회
    * quizResults 컬렉션에서 문제별 통계를 계산합니다.
+   * 문제가 수정된 경우, 수정 이후의 응답만 통계에 포함합니다.
    */
   const fetchQuizStatistics = useCallback(
     async (quizId: string, questions: QuizQuestion[]): Promise<QuizStatistics | null> => {
       try {
+        // 결합형 문제 펼치기 (레거시 호환성)
+        const flattenedQuestions = flattenQuestionsForStats(questions);
+
+        // 원본 questions에서 questionUpdatedAt 정보 추출 (결합형 포함)
+        const questionUpdatedAtMap = new Map<number, number>(); // idx -> updatedAt timestamp
+        const questionModifiedMap = new Map<number, boolean>(); // idx -> isModified
+
+        // 원본 questions에서 questionUpdatedAt 추출
+        let flatIdx = 0;
+        questions.forEach((q: any) => {
+          if (q.type === 'combined' && q.subQuestions && q.subQuestions.length > 0) {
+            // 결합형: 각 하위 문제별로 처리
+            q.subQuestions.forEach((sq: any) => {
+              const updatedAt = sq.questionUpdatedAt || q.questionUpdatedAt;
+              if (updatedAt) {
+                const ts = updatedAt.toMillis ? updatedAt.toMillis() : (updatedAt.seconds ? updatedAt.seconds * 1000 : 0);
+                if (ts > 0) {
+                  questionUpdatedAtMap.set(flatIdx, ts);
+                  questionModifiedMap.set(flatIdx, true);
+                }
+              }
+              flatIdx++;
+            });
+          } else if (q.combinedGroupId) {
+            // 이미 펼쳐진 결합형 문제
+            const updatedAt = q.questionUpdatedAt;
+            if (updatedAt) {
+              const ts = updatedAt.toMillis ? updatedAt.toMillis() : (updatedAt.seconds ? updatedAt.seconds * 1000 : 0);
+              if (ts > 0) {
+                questionUpdatedAtMap.set(flatIdx, ts);
+                questionModifiedMap.set(flatIdx, true);
+              }
+            }
+            flatIdx++;
+          } else {
+            // 일반 문제
+            const updatedAt = q.questionUpdatedAt;
+            if (updatedAt) {
+              const ts = updatedAt.toMillis ? updatedAt.toMillis() : (updatedAt.seconds ? updatedAt.seconds * 1000 : 0);
+              if (ts > 0) {
+                questionUpdatedAtMap.set(flatIdx, ts);
+                questionModifiedMap.set(flatIdx, true);
+              }
+            }
+            flatIdx++;
+          }
+        });
+
         // quizResults에서 해당 퀴즈의 모든 결과 가져오기
         const resultsQuery = query(
           collection(db, 'quizResults'),
@@ -387,9 +499,27 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
         );
         const resultsSnapshot = await getDocs(resultsQuery);
 
+        console.log('[fetchQuizStatistics] 퀴즈 ID:', quizId);
+        console.log('[fetchQuizStatistics] 원본 질문 수:', questions.length);
+        console.log('[fetchQuizStatistics] 펼친 질문 수:', flattenedQuestions.length);
+        console.log('[fetchQuizStatistics] 결과 문서 수:', resultsSnapshot.size);
+        console.log('[fetchQuizStatistics] 수정된 문제 인덱스:', Array.from(questionModifiedMap.keys()));
+
+        if (!resultsSnapshot.empty) {
+          // 첫 번째 결과 문서 디버깅
+          const firstResult = resultsSnapshot.docs[0].data();
+          console.log('[fetchQuizStatistics] 첫 번째 결과 문서:', {
+            userId: firstResult.userId,
+            answersLength: firstResult.answers?.length,
+            answers: firstResult.answers,
+            score: firstResult.score,
+          });
+          console.log('[fetchQuizStatistics] 질문 타입들:', flattenedQuestions.map((q, i) => ({ idx: i, id: q.id, type: q.type, answer: q.answer })));
+        }
+
         if (resultsSnapshot.empty) {
           // 결과가 없으면 빈 통계 반환
-          const emptyStats: QuestionStats[] = questions.map((q, idx) => ({
+          const emptyStats: QuestionStats[] = flattenedQuestions.map((q, idx) => ({
             questionId: q.id,
             questionIndex: idx,
             totalResponses: 0,
@@ -403,6 +533,7 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
                 ? q.choices.map((_, i) => ({ choice: i, count: 0, percentage: 0 }))
                 : undefined,
             wrongAnswers: (q.type === 'subjective' || q.type === 'short_answer') ? [] : undefined,
+            isModified: questionModifiedMap.get(idx) || false,
           }));
 
           return {
@@ -412,17 +543,58 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
         }
 
         // 문제별 통계 계산
-        const questionStats: QuestionStats[] = questions.map((question, idx) => {
+        const questionStats: QuestionStats[] = flattenedQuestions.map((question, idx) => {
           let totalResponses = 0;
           let correctCount = 0;
           const choiceCounts: Record<string, number> = {};
           const wrongAnswerSet = new Set<string>();
 
+          // 이 문제의 수정 시간 (없으면 undefined)
+          const questionUpdatedAt = questionUpdatedAtMap.get(idx);
+          const isModified = questionModifiedMap.get(idx) || false;
+
           // 각 결과에서 해당 문제의 답안 분석
-          resultsSnapshot.docs.forEach((resultDoc) => {
+          resultsSnapshot.docs.forEach((resultDoc, docIdx) => {
             const resultData = resultDoc.data();
             const answers = resultData.answers || [];
             const userAnswer = answers[idx];
+
+            // 문제가 수정된 경우, 수정 이후의 응답만 포함
+            if (questionUpdatedAt) {
+              // questionScores에서 개별 문제의 응답 시간 확인
+              const questionScores = resultData.questionScores || {};
+              const questionScore = questionScores[question.id];
+              let answeredAt = 0;
+
+              if (questionScore?.answeredAt) {
+                const at = questionScore.answeredAt;
+                answeredAt = at.toMillis ? at.toMillis() : (at.seconds ? at.seconds * 1000 : 0);
+              } else {
+                // questionScores가 없으면 결과 생성 시간 사용
+                const createdAt = resultData.createdAt;
+                if (createdAt) {
+                  answeredAt = createdAt.toMillis ? createdAt.toMillis() : (createdAt.seconds ? createdAt.seconds * 1000 : 0);
+                }
+              }
+
+              // 응답이 문제 수정 이전이면 통계에서 제외
+              if (answeredAt > 0 && answeredAt < questionUpdatedAt) {
+                return;
+              }
+            }
+
+            // 첫 번째 문제와 첫 번째 결과만 디버깅
+            if (idx === 0 && docIdx === 0) {
+              console.log(`[fetchQuizStatistics] 문제 ${idx} 분석:`, {
+                questionId: question.id,
+                questionType: question.type,
+                correctAnswer: question.answer,
+                answersArrayLength: answers.length,
+                userAnswer,
+                answerType: typeof userAnswer,
+                isModified,
+              });
+            }
 
             if (userAnswer === undefined || userAnswer === null || userAnswer === '') {
               return; // 미응답 건너뜀
@@ -506,6 +678,7 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
             wrongAnswers: (question.type === 'subjective' || question.type === 'short_answer')
               ? Array.from(wrongAnswerSet)
               : undefined,
+            isModified,
           };
         });
 
@@ -565,7 +738,6 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
           averageScore: 0,
           bookmarkCount: 0,
           feedbackCount: 0,
-          completedUsers: [],
           createdAt: now,
           updatedAt: now,
         };
@@ -583,7 +755,6 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
           participantCount: 0,
           averageScore: 0,
           feedbackCount: 0,
-          completedUsers: [],
           createdAt: now.toDate(),
           updatedAt: now.toDate(),
         };

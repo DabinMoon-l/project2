@@ -4,17 +4,20 @@ import { useState, useCallback, useEffect, Suspense, useRef, useMemo } from 'rea
 import { motion, AnimatePresence, PanInfo } from 'framer-motion';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { doc, getDoc, collection, query, where, onSnapshot, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, getDocs, collection, query, where, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Skeleton } from '@/components/common';
 import FolderSlider from '@/components/common/FolderSlider';
 import ReviewPractice, { type PracticeResult } from '@/components/review/ReviewPractice';
-import { useReview, type ReviewItem, type GroupedReviewItems, type QuizUpdateInfo, type PrivateQuiz, type CustomFolder, type QuizAttempt } from '@/lib/hooks/useReview';
+import { useReview, calculateCustomFolderQuestionCount, type ReviewItem, type GroupedReviewItems, type QuizUpdateInfo, type PrivateQuiz, type CustomFolder, type QuizAttempt } from '@/lib/hooks/useReview';
+import { useQuizUpdate, type QuizUpdateInfo as DetailedQuizUpdateInfo } from '@/lib/hooks/useQuizUpdate';
+import UpdateQuizModal from '@/components/quiz/UpdateQuizModal';
 import { useQuizBookmark, type BookmarkedQuiz } from '@/lib/hooks/useQuizBookmark';
+import { useLearningQuizzes, type LearningQuiz } from '@/lib/hooks/useLearningQuizzes';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse } from '@/lib/contexts';
 import { COURSES, getPastExamOptions, type PastExamOption } from '@/lib/types/course';
-import { getChapterById } from '@/lib/courseIndex';
+import { getChapterById, generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 
 /** 완료된 퀴즈 데이터 타입 */
 interface CompletedQuizData {
@@ -38,6 +41,10 @@ interface CompletedQuizData {
   myScore?: number;
   /** 첫번째 복습 점수 */
   myFirstReviewScore?: number;
+  /** AI 생성 퀴즈 여부 */
+  isAiGenerated?: boolean;
+  /** 평균 점수 */
+  averageScore?: number;
 }
 
 /**
@@ -63,14 +70,14 @@ function formatQuestionTypes(
 }
 
 /** 필터 타입 */
-type ReviewFilter = 'solved' | 'wrong' | 'bookmark' | 'custom';
+type ReviewFilter = 'library' | 'wrong' | 'bookmark' | 'custom';
 
 /** 필터 옵션 */
 const FILTER_OPTIONS: { value: ReviewFilter; line1: string; line2?: string }[] = [
-  { value: 'solved', line1: '문제' },
+  { value: 'library', line1: '서재' },
   { value: 'wrong', line1: '오답' },
   { value: 'bookmark', line1: '찜' },
-  { value: 'custom', line1: '내맘대로' },
+  { value: 'custom', line1: '커스텀' },
 ];
 
 /**
@@ -236,16 +243,24 @@ function FolderCard({
 
 /**
  * 찜한 퀴즈 카드 컴포넌트 (하트 아이콘 포함)
+ * 아이콘 순서: [업데이트 뱃지] [지구 아이콘 (AI 공개)] [찜]
  */
 function BookmarkedQuizCard({
   quiz,
   onClick,
   onUnbookmark,
+  hasUpdate = false,
+  onUpdateClick,
 }: {
   quiz: BookmarkedQuiz;
   onClick: () => void;
   onUnbookmark: () => void;
+  hasUpdate?: boolean;
+  onUpdateClick?: () => void;
 }) {
+  // AI 생성 퀴즈 여부
+  const isAiGenerated = quiz.isAiGenerated;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -253,18 +268,50 @@ function BookmarkedQuizCard({
       onClick={onClick}
       className="relative border border-[#1A1A1A] bg-[#F5F0E8] p-3 cursor-pointer hover:bg-[#EDEAE4] transition-all"
     >
-      {/* 하트 아이콘 (북마크 해제) */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onUnbookmark();
-        }}
-        className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center transition-transform hover:scale-110"
-      >
-        <svg className="w-5 h-5 text-[#8B1A1A]" fill="currentColor" viewBox="0 0 24 24">
-          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-        </svg>
-      </button>
+      {/* 우측 상단 아이콘 그룹: [업데이트] [지구] [찜] */}
+      <div className="absolute top-2 right-2 flex items-start gap-1 z-10">
+        {/* 업데이트 뱃지 */}
+        {hasUpdate && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onUpdateClick?.();
+            }}
+            className="w-5 h-5 bg-[#F5C518] rounded-full flex items-center justify-center border-2 border-[#1A1A1A] hover:scale-110 transition-transform"
+          >
+            <span className="text-[#1A1A1A] font-bold text-xs">!</span>
+          </button>
+        )}
+
+        {/* 지구 아이콘 (AI 생성 공개 퀴즈) - 상호작용 없음 */}
+        {isAiGenerated && (
+          <div className="w-5 h-5 flex items-center justify-center text-[#5C5C5C]">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.6 9h16.8M3.6 15h16.8" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3a15.3 15.3 0 0 1 4 9 15.3 15.3 0 0 1-4 9 15.3 15.3 0 0 1-4-9 15.3 15.3 0 0 1 4-9z" />
+            </svg>
+          </div>
+        )}
+
+        {/* 하트 아이콘 (북마크 해제) + 찜한 수 */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onUnbookmark();
+          }}
+          className="flex flex-col items-center transition-transform hover:scale-110"
+        >
+          <svg className="w-5 h-5 text-[#8B1A1A]" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+          </svg>
+          {(quiz.bookmarkCount ?? 0) > 0 && (
+            <span className="text-[10px] text-[#5C5C5C] font-bold mt-0.5">
+              {quiz.bookmarkCount}
+            </span>
+          )}
+        </button>
+      </div>
 
       {/* 퀴즈 카드 스타일 아이콘 */}
       <div className="flex justify-center mb-2">
@@ -336,19 +383,25 @@ function getQuestionTypeLabel(quiz: CompletedQuizData): string {
 
 /**
  * 큰 찜한 퀴즈 카드 컴포넌트 (전체 너비, 강조 표시)
+ * 아이콘 순서: [업데이트 뱃지] [지구 아이콘 (AI 공개)] [찜]
  */
 function LargeBookmarkedQuizCard({
   quiz,
   onClick,
   onUnbookmark,
   chapterName,
+  hasUpdate = false,
+  onUpdateClick,
 }: {
   quiz: BookmarkedQuiz;
   onClick: () => void;
   onUnbookmark: () => void;
   chapterName?: string;
+  hasUpdate?: boolean;
+  onUpdateClick?: () => void;
 }) {
   const difficulty = quiz.difficulty || 'normal';
+  const isAiGenerated = quiz.isAiGenerated;
 
   return (
     <motion.div
@@ -357,18 +410,50 @@ function LargeBookmarkedQuizCard({
       onClick={onClick}
       className="relative border-2 border-[#1A1A1A] bg-[#F5F0E8] cursor-pointer hover:bg-[#EDEAE4] transition-all"
     >
-      {/* 하트 아이콘 (북마크 해제) */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onUnbookmark();
-        }}
-        className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center transition-transform hover:scale-110 z-10"
-      >
-        <svg className="w-6 h-6 text-[#8B1A1A]" fill="currentColor" viewBox="0 0 24 24">
-          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-        </svg>
-      </button>
+      {/* 우측 상단 아이콘 그룹: [업데이트] [지구] [찜] */}
+      <div className="absolute top-3 right-3 flex items-start gap-1.5 z-10">
+        {/* 업데이트 뱃지 */}
+        {hasUpdate && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onUpdateClick?.();
+            }}
+            className="w-6 h-6 bg-[#F5C518] rounded-full flex items-center justify-center border-2 border-[#1A1A1A] hover:scale-110 transition-transform"
+          >
+            <span className="text-[#1A1A1A] font-bold text-xs">!</span>
+          </button>
+        )}
+
+        {/* 지구 아이콘 (AI 생성 공개 퀴즈) - 상호작용 없음 */}
+        {isAiGenerated && (
+          <div className="w-6 h-6 flex items-center justify-center text-[#F5F0E8]">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.6 9h16.8M3.6 15h16.8" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3a15.3 15.3 0 0 1 4 9 15.3 15.3 0 0 1-4 9 15.3 15.3 0 0 1-4-9 15.3 15.3 0 0 1 4-9z" />
+            </svg>
+          </div>
+        )}
+
+        {/* 하트 아이콘 (북마크 해제) + 찜한 수 */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onUnbookmark();
+          }}
+          className="flex flex-col items-center transition-transform hover:scale-110"
+        >
+          <svg className="w-6 h-6 text-[#8B1A1A]" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+          </svg>
+          {(quiz.bookmarkCount ?? 0) > 0 && (
+            <span className="text-[10px] text-[#F5F0E8] font-bold mt-0.5">
+              {quiz.bookmarkCount}
+            </span>
+          )}
+        </button>
+      </div>
 
       {/* 상단: 검정색 박스 + 제목 */}
       <div className="bg-[#1A1A1A] px-4 py-3">
@@ -775,9 +860,7 @@ function ReviewNewsCard({
       {/* 기사 영역 (스크롤 가능) */}
       <div className="flex-1 overflow-y-auto p-3">
         {isLoading ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="animate-pulse text-[#5C5C5C]">로딩 중...</div>
-          </div>
+          <div className="h-full" />
         ) : quizzes.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <h3 className="font-bold text-lg mb-2 text-[#1A1A1A]">완료한 퀴즈가 없습니다</h3>
@@ -893,9 +976,7 @@ function ReviewPastExamNewsCard({
       {/* 큰 기사 하나 */}
       <div className="flex-1 overflow-y-auto p-4">
         {isLoading ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="animate-pulse text-[#5C5C5C]">로딩 중...</div>
-          </div>
+          <div className="h-full" />
         ) : !quiz ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <h3 className="font-bold text-lg mb-2 text-[#1A1A1A]">완료한 기출문제가 없습니다</h3>
@@ -1223,7 +1304,7 @@ function CustomReviewQuizCard({
         </p>
       </div>
 
-      {/* 선택 모드 체크 아이콘 */}
+      {/* 선택 모드 체크 아이콘 또는 아이콘 그룹 */}
       {isSelectMode ? (
         <div className={`absolute top-2 right-2 z-30 w-5 h-5 flex items-center justify-center ${
           isSelected ? 'bg-[#1A1A1A]' : 'border-2 border-[#5C5C5C] bg-white/80'
@@ -1235,26 +1316,40 @@ function CustomReviewQuizCard({
           )}
         </div>
       ) : (
-        /* 북마크 버튼 */
-        onToggleBookmark && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleBookmark();
-            }}
-            className="absolute top-2 right-2 z-30 flex flex-col items-center transition-transform hover:scale-110"
-          >
-            {isBookmarked ? (
-              <svg className="w-5 h-5 text-[#8B1A1A]" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+        /* 우측 상단 아이콘 그룹: [지구 (AI 공개)] [북마크] */
+        <div className="absolute top-2 right-2 z-30 flex items-center gap-1.5">
+          {/* 지구 아이콘 (AI 생성 공개 퀴즈) - 상호작용 없음 */}
+          {quiz.isAiGenerated && (
+            <div className="w-5 h-5 flex items-center justify-center text-[#5C5C5C]">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.6 9h16.8M3.6 15h16.8" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3a15.3 15.3 0 0 1 4 9 15.3 15.3 0 0 1-4 9 15.3 15.3 0 0 1-4-9 15.3 15.3 0 0 1 4-9z" />
               </svg>
-            ) : (
-              <svg className="w-5 h-5 text-[#5C5C5C]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-              </svg>
-            )}
-          </button>
-        )
+            </div>
+          )}
+
+          {/* 북마크 버튼 */}
+          {onToggleBookmark && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleBookmark();
+              }}
+              className="flex flex-col items-center transition-transform hover:scale-110"
+            >
+              {isBookmarked ? (
+                <svg className="w-5 h-5 text-[#8B1A1A]" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5 text-[#5C5C5C]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                </svg>
+              )}
+            </button>
+          )}
+        </div>
       )}
 
       {/* 카드 내용 */}
@@ -1364,16 +1459,31 @@ function CustomReviewQuizCard({
 }
 
 /**
- * 스켈레톤 폴더 카드
+ * 스켈레톤 퀴즈 카드 (찜/서재 탭용)
  */
-function SkeletonFolderCard() {
+function SkeletonQuizCard() {
   return (
-    <div className="border border-[#1A1A1A] bg-[#F5F0E8] p-3 shadow-md">
-      <div className="flex justify-center mb-2">
-        <Skeleton className="w-12 h-12 rounded-none" />
+    <div className="border border-[#D4CFC4] bg-[#F5F0E8] p-4 shadow-sm">
+      {/* 상단: 제목 + 하트 */}
+      <div className="flex justify-between items-start mb-3">
+        <Skeleton className="w-2/3 h-5 rounded-none" />
+        <Skeleton className="w-5 h-5 rounded-none" />
       </div>
-      <Skeleton className="w-full h-4 mb-1 rounded-none" />
-      <Skeleton className="w-1/2 h-3 mx-auto rounded-none" />
+
+      {/* 정보 텍스트 */}
+      <Skeleton className="w-24 h-3 mb-3 rounded-none" />
+
+      {/* 태그들 */}
+      <div className="flex flex-wrap gap-1 mb-4">
+        <Skeleton className="w-16 h-5 rounded-none" />
+        <Skeleton className="w-20 h-5 rounded-none" />
+      </div>
+
+      {/* 버튼들 */}
+      <div className="flex gap-2">
+        <Skeleton className="flex-1 h-9 rounded-none" />
+        <Skeleton className="flex-1 h-9 rounded-none" />
+      </div>
     </div>
   );
 }
@@ -1381,12 +1491,13 @@ function SkeletonFolderCard() {
 /**
  * 빈 상태 컴포넌트
  */
-function EmptyState({ filter, type, fullHeight = false }: { filter: ReviewFilter; type?: 'quiz' | 'question'; fullHeight?: boolean }) {
-  const messages: Record<ReviewFilter, { title: string; desc: string }> = {
-    solved: { title: '문제가 없습니다', desc: '퀴즈를 풀거나 비공개 퀴즈를 만들어보세요.' },
+function EmptyState({ filter, type, fullHeight = false }: { filter: ReviewFilter | 'solved'; type?: 'quiz' | 'question'; fullHeight?: boolean }) {
+  const messages: Record<ReviewFilter | 'solved', { title: string; desc: string }> = {
+    library: { title: '서재가 비어있습니다', desc: 'AI 퀴즈로 학습하면 여기에 저장돼요.' },
     wrong: { title: '오답이 없습니다', desc: '퀴즈를 풀면 틀린 문제가 자동으로 저장됩니다.' },
     bookmark: { title: '찜한 항목이 없습니다', desc: '퀴즈나 문제를 찜해보세요.' },
     custom: { title: '폴더가 없습니다', desc: '나만의 폴더를 만들어보세요.' },
+    solved: { title: '푼 문제가 없습니다', desc: '퀴즈를 풀면 여기에 표시됩니다.' },
   };
 
   // 찜 탭에서 퀴즈/문제 구분
@@ -1514,6 +1625,209 @@ function ScrollIndicator({
 }
 
 /**
+ * 서재 퀴즈 카드 (CustomReviewQuizCard와 동일한 스타일)
+ * - 카드 클릭: 상세 페이지로 이동
+ * - Details 버튼: 상세 페이지로 이동
+ * - Review 버튼: 복습 시작
+ * - 지구 아이콘: 공개 전환
+ */
+function LibraryQuizCard({
+  quiz,
+  onCardClick,
+  onDetails,
+  onReview,
+  onReviewWrongOnly,
+  onPublish,
+  isSelectMode = false,
+  isSelected = false,
+}: {
+  quiz: { id: string; title: string; questionCount: number; score: number; totalQuestions: number; tags?: string[]; myScore?: number; myFirstReviewScore?: number };
+  onCardClick: () => void;
+  onDetails: () => void;
+  onReview: () => void;
+  onReviewWrongOnly?: () => void;
+  onPublish: () => void;
+  isSelectMode?: boolean;
+  isSelected?: boolean;
+}) {
+  const [showReviewMenu, setShowReviewMenu] = useState(false);
+  const reviewMenuRef = useRef<HTMLDivElement>(null);
+
+  // 외부 클릭 시 메뉴 닫기
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (reviewMenuRef.current && !reviewMenuRef.current.contains(event.target as Node)) {
+        setShowReviewMenu(false);
+      }
+    };
+    if (showReviewMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showReviewMenu]);
+
+  const tags = quiz.tags || [];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -4, boxShadow: '0 8px 25px rgba(26, 26, 26, 0.15)' }}
+      transition={{ duration: 0.2 }}
+      onClick={onCardClick}
+      className={`relative border bg-[#F5F0E8] overflow-hidden shadow-md cursor-pointer ${
+        isSelectMode
+          ? isSelected
+            ? 'border-2 border-[#8B1A1A] bg-[#FDEAEA]'
+            : 'border border-[#1A1A1A] hover:bg-[#EDEAE4]'
+          : 'border-[#1A1A1A]'
+      }`}
+    >
+      {/* 신문 배경 텍스트 */}
+      <div className="absolute inset-0 p-2 overflow-hidden pointer-events-none">
+        <p className="text-[5px] text-[#E8E8E8] leading-tight break-words">
+          {NEWSPAPER_BG_TEXT.slice(0, 300)}
+        </p>
+      </div>
+
+      {/* 선택 모드 체크 아이콘 */}
+      {isSelectMode && (
+        <div className={`absolute top-2 right-2 w-6 h-6 border-2 flex items-center justify-center z-20 ${
+          isSelected
+            ? 'border-[#8B1A1A] bg-[#8B1A1A]'
+            : 'border-[#5C5C5C] bg-white'
+        }`}>
+          {isSelected && (
+            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+            </svg>
+          )}
+        </div>
+      )}
+
+      {/* 공개 버튼 (자물쇠 아이콘 - 비공개 상태) - 선택 모드가 아닐 때만 표시 */}
+      {!isSelectMode && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onPublish();
+          }}
+          className="absolute top-2 right-2 z-20 w-7 h-7 flex items-center justify-center text-[#5C5C5C] hover:text-[#1A1A1A] hover:scale-110 transition-all"
+          title="공개로 전환"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+        </button>
+      )}
+
+      {/* 카드 내용 */}
+      <div className="relative z-10 p-4 bg-[#F5F0E8]/90">
+        {/* 제목 (2줄 고정 높이) */}
+        <div className="h-[44px] mb-2">
+          <h3 className="font-serif-display font-bold text-base line-clamp-2 text-[#1A1A1A] leading-snug pr-8">
+            {quiz.title}
+          </h3>
+        </div>
+
+        {/* 메타 정보 */}
+        <p className="text-sm text-[#5C5C5C] mb-1">
+          {quiz.questionCount}문제
+        </p>
+
+        {/* 태그 (2줄 고정 높이) */}
+        <div className="h-[48px] mb-2 overflow-hidden">
+          {tags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {tags.slice(0, 8).map((tag) => (
+                <span
+                  key={tag}
+                  className="px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-medium"
+                >
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 버튼 (선택 모드가 아닐 때만 표시) */}
+        {!isSelectMode && (
+          <div className="flex gap-2 mt-3">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDetails();
+              }}
+              className="flex-1 py-2 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+            >
+              Details
+            </button>
+            {/* Review 버튼 with 드롭다운 */}
+            <div className="relative flex-1" ref={reviewMenuRef}>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onReviewWrongOnly) {
+                    setShowReviewMenu(!showReviewMenu);
+                  } else {
+                    onReview();
+                  }
+                }}
+                className="w-full py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors flex items-center justify-center gap-1"
+              >
+                Review
+                {onReviewWrongOnly && (
+                  <svg className={`w-3 h-3 transition-transform ${showReviewMenu ? 'rotate-180' : ''}`} fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </button>
+              {/* 드롭다운 메뉴 */}
+              <AnimatePresence>
+                {showReviewMenu && onReviewWrongOnly && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -5 }}
+                    className="absolute bottom-full left-0 right-0 mb-1 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg z-50"
+                  >
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowReviewMenu(false);
+                        onReview();
+                      }}
+                      className="w-full px-3 py-2 text-sm font-bold text-[#1A1A1A] hover:bg-[#EDEAE4] text-left border-b border-[#EDEAE4]"
+                    >
+                      모두
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowReviewMenu(false);
+                        onReviewWrongOnly();
+                      }}
+                      className="w-full px-3 py-2 text-sm font-bold text-[#8B1A1A] hover:bg-[#FDEAEA] text-left"
+                    >
+                      오답만
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+/**
  * 찜한 퀴즈 카드 (자작 탭 QuizCard와 동일한 스타일)
  */
 function BookmarkQuizCard({
@@ -1526,6 +1840,8 @@ function BookmarkQuizCard({
   onUnbookmark,
   isSelectMode = false,
   isSelected = false,
+  hasUpdate = false,
+  onUpdateClick,
 }: {
   quiz: BookmarkedQuiz;
   onCardClick: () => void;
@@ -1536,12 +1852,14 @@ function BookmarkQuizCard({
   onUnbookmark: () => void;
   isSelectMode?: boolean;
   isSelected?: boolean;
+  hasUpdate?: boolean;
+  onUpdateClick?: () => void;
 }) {
   const tags = quiz.tags || [];
   const [showReviewMenu, setShowReviewMenu] = useState(false);
   const reviewMenuRef = useRef<HTMLDivElement>(null);
 
-  // 퀴즈 완료 여부 (completedUsers에 있거나 myScore가 있으면 퀴즈 완료)
+  // 퀴즈 완료 여부 (quiz_completions에 있거나 myScore가 있으면 퀴즈 완료)
   const hasCompletedQuiz = quiz.hasCompleted || quiz.myScore !== undefined;
 
   // 외부 클릭 시 메뉴 닫기
@@ -1596,18 +1914,37 @@ function BookmarkQuizCard({
           )}
         </div>
       ) : (
-        /* 하트 아이콘 (북마크 해제) */
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onUnbookmark();
-          }}
-          className="absolute top-2 right-2 flex flex-col items-center transition-transform hover:scale-110"
-        >
-          <svg className="w-5 h-5 text-[#8B1A1A]" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-          </svg>
-        </button>
+        <>
+          {/* 업데이트 뱃지 (하트 아이콘 왼쪽) */}
+          {hasUpdate && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onUpdateClick?.();
+              }}
+              className="absolute top-2 right-9 z-30 w-5 h-5 bg-[#F5C518] rounded-full flex items-center justify-center border-2 border-[#1A1A1A] hover:scale-110 transition-transform"
+            >
+              <span className="text-[#1A1A1A] font-bold text-xs">!</span>
+            </button>
+          )}
+          {/* 하트 아이콘 (북마크 해제) */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onUnbookmark();
+            }}
+            className="absolute top-2 right-2 flex flex-col items-center transition-transform hover:scale-110"
+          >
+            <svg className="w-5 h-5 text-[#8B1A1A]" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+            </svg>
+            {(quiz.bookmarkCount ?? 0) > 0 && (
+              <span className="text-[10px] text-[#5C5C5C] font-bold mt-0.5">
+                {quiz.bookmarkCount}
+              </span>
+            )}
+          </button>
+        </>
       )}
 
       {/* 제목 (2줄 고정 높이) - 가독성 향상 */}
@@ -1741,6 +2078,8 @@ function BookmarkGridView({
   isSelectMode = false,
   selectedFolderIds,
   onSelectToggle,
+  getQuizUpdateInfo,
+  onUpdateClick,
 }: {
   bookmarkedQuizzes: BookmarkedQuiz[];
   onQuizCardClick: (quizId: string) => void;
@@ -1752,6 +2091,8 @@ function BookmarkGridView({
   isSelectMode?: boolean;
   selectedFolderIds?: Set<string>;
   onSelectToggle?: (quizId: string) => void;
+  getQuizUpdateInfo?: (quizId: string) => { hasUpdate: boolean; updatedCount: number } | null;
+  onUpdateClick?: (quizId: string) => void;
 }) {
   // 빈 상태
   if (bookmarkedQuizzes.length === 0) {
@@ -1803,6 +2144,8 @@ function BookmarkGridView({
             onUnbookmark={() => onUnbookmark(quiz.quizId)}
             isSelectMode={isSelectMode}
             isSelected={selectedFolderIds?.has(`bookmark-${quiz.quizId}`) || false}
+            hasUpdate={getQuizUpdateInfo?.(quiz.quizId)?.hasUpdate || false}
+            onUpdateClick={() => onUpdateClick?.(quiz.quizId)}
           />
         </motion.div>
       ))}
@@ -1862,189 +2205,120 @@ function SolvedQuizLayout({
     return pastExamOptions.length > 0 ? pastExamOptions[0].value : '2025-midterm';
   });
 
-  // 중간대비 퀴즈 로드
-  useEffect(() => {
-    if (!userId || !courseId) {
-      setIsLoading(prev => ({ ...prev, midterm: false }));
-      return;
-    }
+  // 자작 퀴즈 태그 필터 상태
+  const [selectedCustomTags, setSelectedCustomTags] = useState<string[]>([]);
+  const [showTagFilter, setShowTagFilter] = useState(false);
 
-    const q = query(
-      collection(db, 'quizzes'),
-      where('type', '==', 'midterm'),
-      where('courseId', '==', courseId),
-      where('completedUsers', 'array-contains', userId)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const quizzes: CompletedQuizData[] = [];
-      snapshot.forEach((docSnapshot) => {
-        const data = docSnapshot.data();
-        quizzes.push({
-          id: docSnapshot.id,
-          title: data.title || '제목 없음',
-          type: data.type || 'midterm',
-          questionCount: data.questionCount || 0,
-          participantCount: data.participantCount || 0,
-          tags: data.tags || [],
-          creatorNickname: data.creatorNickname,
-          attachmentUrl: data.attachmentUrl,
-          oneLineSummary: data.oneLineSummary,
-          difficultyImageUrl: data.difficultyImageUrl,
-          multipleChoiceCount: data.multipleChoiceCount || 0,
-          subjectiveCount: data.subjectiveCount || 0,
-          oxCount: data.oxCount || 0,
-          difficulty: data.difficulty || 'normal',
-          myScore: data.userScores?.[userId],
-          myFirstReviewScore: data.userFirstReviewScores?.[userId],
-        });
-      });
-      setMidtermQuizzes(quizzes);
-      setIsLoading(prev => ({ ...prev, midterm: false }));
-    });
-
-    return () => unsubscribe();
-  }, [userId, courseId]);
-
-  // 기말대비 퀴즈 로드
-  useEffect(() => {
-    if (!userId || !courseId) {
-      setIsLoading(prev => ({ ...prev, final: false }));
-      return;
-    }
-
-    const q = query(
-      collection(db, 'quizzes'),
-      where('type', '==', 'final'),
-      where('courseId', '==', courseId),
-      where('completedUsers', 'array-contains', userId)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const quizzes: CompletedQuizData[] = [];
-      snapshot.forEach((docSnapshot) => {
-        const data = docSnapshot.data();
-        quizzes.push({
-          id: docSnapshot.id,
-          title: data.title || '제목 없음',
-          type: data.type || 'final',
-          questionCount: data.questionCount || 0,
-          participantCount: data.participantCount || 0,
-          tags: data.tags || [],
-          creatorNickname: data.creatorNickname,
-          attachmentUrl: data.attachmentUrl,
-          oneLineSummary: data.oneLineSummary,
-          difficultyImageUrl: data.difficultyImageUrl,
-          multipleChoiceCount: data.multipleChoiceCount || 0,
-          subjectiveCount: data.subjectiveCount || 0,
-          oxCount: data.oxCount || 0,
-          difficulty: data.difficulty || 'normal',
-          myScore: data.userScores?.[userId],
-          myFirstReviewScore: data.userFirstReviewScores?.[userId],
-        });
-      });
-      setFinalQuizzes(quizzes);
-      setIsLoading(prev => ({ ...prev, final: false }));
-    });
-
-    return () => unsubscribe();
-  }, [userId, courseId]);
-
-  // 기출 퀴즈 로드
-  useEffect(() => {
-    if (!userId || !courseId) {
-      setIsLoading(prev => ({ ...prev, past: false }));
-      return;
-    }
-
-    const [yearStr, examType] = selectedPastExam.split('-');
-    const year = parseInt(yearStr, 10);
-
-    const q = query(
-      collection(db, 'quizzes'),
-      where('type', '==', 'past'),
-      where('courseId', '==', courseId),
-      where('pastYear', '==', year),
-      where('pastExamType', '==', examType),
-      where('completedUsers', 'array-contains', userId)
-    );
-
-    setIsLoading(prev => ({ ...prev, past: true }));
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const quizzes: CompletedQuizData[] = [];
-      snapshot.forEach((docSnapshot) => {
-        const data = docSnapshot.data();
-        quizzes.push({
-          id: docSnapshot.id,
-          title: data.title || '제목 없음',
-          type: data.type || 'past',
-          questionCount: data.questionCount || 0,
-          participantCount: data.participantCount || 0,
-          tags: data.tags || [],
-          creatorNickname: data.creatorNickname,
-          attachmentUrl: data.attachmentUrl,
-          oneLineSummary: data.oneLineSummary,
-          difficultyImageUrl: data.difficultyImageUrl,
-          multipleChoiceCount: data.multipleChoiceCount || 0,
-          subjectiveCount: data.subjectiveCount || 0,
-          oxCount: data.oxCount || 0,
-          difficulty: data.difficulty || 'normal',
-          pastYear: data.pastYear,
-          pastExamType: data.pastExamType,
-          myScore: data.userScores?.[userId],
-          myFirstReviewScore: data.userFirstReviewScores?.[userId],
-        });
-      });
-      setPastQuizzes(quizzes);
-      setIsLoading(prev => ({ ...prev, past: false }));
-    });
-
-    return () => unsubscribe();
-  }, [userId, courseId, selectedPastExam]);
-
-  // 자작 퀴즈 로드
+  // 모든 완료된 퀴즈 통합 로드 (quiz_completions 기반 - hotspot 제거)
   useEffect(() => {
     if (!userId) {
-      setIsLoading(prev => ({ ...prev, custom: false }));
+      setIsLoading({ midterm: false, final: false, past: false, custom: false });
       return;
     }
 
+    // quiz_completions 구독 → 완료된 퀴즈 ID 목록 → 퀴즈 문서 조회
     const q = query(
-      collection(db, 'quizzes'),
-      where('type', '==', 'custom'),
-      where('completedUsers', 'array-contains', userId)
+      collection(db, 'quiz_completions'),
+      where('userId', '==', userId)
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const quizzes: CompletedQuizData[] = [];
-      snapshot.forEach((docSnapshot) => {
-        const data = docSnapshot.data();
-        quizzes.push({
-          id: docSnapshot.id,
-          title: data.title || '제목 없음',
-          type: data.type || 'custom',
-          questionCount: data.questionCount || 0,
-          participantCount: data.participantCount || 0,
-          tags: data.tags || [],
-          creatorNickname: data.creatorNickname,
-          attachmentUrl: data.attachmentUrl,
-          oneLineSummary: data.oneLineSummary,
-          difficultyImageUrl: data.difficultyImageUrl,
-          multipleChoiceCount: data.multipleChoiceCount || 0,
-          subjectiveCount: data.subjectiveCount || 0,
-          oxCount: data.oxCount || 0,
-          difficulty: data.difficulty || 'normal',
-          myScore: data.userScores?.[userId],
-          myFirstReviewScore: data.userFirstReviewScores?.[userId],
-        });
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      const completions = new Map<string, number>();
+      snapshot.forEach(d => {
+        const data = d.data();
+        completions.set(data.quizId, data.score ?? 0);
       });
-      setCustomQuizzes(quizzes);
-      setIsLoading(prev => ({ ...prev, custom: false }));
+
+      const quizIds = Array.from(completions.keys());
+
+      if (quizIds.length === 0) {
+        setMidtermQuizzes([]);
+        setFinalQuizzes([]);
+        setPastQuizzes([]);
+        setCustomQuizzes([]);
+        setIsLoading({ midterm: false, final: false, past: false, custom: false });
+        return;
+      }
+
+      // 퀴즈 문서 배치 조회 (10개씩 병렬)
+      const midterm: CompletedQuizData[] = [];
+      const final: CompletedQuizData[] = [];
+      const past: CompletedQuizData[] = [];
+      const custom: CompletedQuizData[] = [];
+
+      for (let i = 0; i < quizIds.length; i += 10) {
+        const batch = quizIds.slice(i, i + 10);
+        const docs = await Promise.all(
+          batch.map(id => getDoc(doc(db, 'quizzes', id)))
+        );
+
+        for (const quizDoc of docs) {
+          if (!quizDoc.exists()) continue;
+          const data = quizDoc.data();
+          const completionScore = completions.get(quizDoc.id);
+
+          const quizData: CompletedQuizData = {
+            id: quizDoc.id,
+            title: data.title || '제목 없음',
+            type: data.type || 'custom',
+            questionCount: data.questionCount || 0,
+            participantCount: data.participantCount || 0,
+            tags: data.tags || [],
+            creatorNickname: data.creatorNickname,
+            attachmentUrl: data.attachmentUrl,
+            oneLineSummary: data.oneLineSummary,
+            difficultyImageUrl: data.difficultyImageUrl,
+            multipleChoiceCount: data.multipleChoiceCount || 0,
+            subjectiveCount: data.subjectiveCount || 0,
+            oxCount: data.oxCount || 0,
+            difficulty: data.difficulty || 'normal',
+            pastYear: data.pastYear,
+            pastExamType: data.pastExamType,
+            myScore: completionScore ?? data.userScores?.[userId],
+            myFirstReviewScore: data.userFirstReviewScores?.[userId],
+            isAiGenerated: data.isAiGenerated || data.type === 'ai-generated',
+            averageScore: data.averageScore || (() => {
+              if (data.userScores) {
+                const scores = Object.values(data.userScores) as number[];
+                return scores.length > 0 ? Math.round((scores.reduce((s: number, v: number) => s + v, 0) / scores.length) * 10) / 10 : 0;
+              }
+              return 0;
+            })(),
+          };
+
+          switch (data.type) {
+            case 'midterm':
+              if (data.courseId === courseId) midterm.push(quizData);
+              break;
+            case 'final':
+              if (data.courseId === courseId) final.push(quizData);
+              break;
+            case 'past':
+              if (data.courseId === courseId) past.push(quizData);
+              break;
+            case 'custom':
+              custom.push(quizData);
+              break;
+          }
+        }
+      }
+
+      setMidtermQuizzes(midterm);
+      setFinalQuizzes(final);
+      setPastQuizzes(past);
+      setCustomQuizzes(custom);
+      setIsLoading({ midterm: false, final: false, past: false, custom: false });
     });
 
     return () => unsubscribe();
-  }, [userId]);
+  }, [userId, courseId]);
+
+  // 기출 퀴즈 필터링 (selectedPastExam 변경 시 클라이언트에서 필터)
+  const filteredPastQuizzes = useMemo(() => {
+    const [yearStr, examType] = selectedPastExam.split('-');
+    const year = parseInt(yearStr, 10);
+    return pastQuizzes.filter(q => q.pastYear === year && q.pastExamType === examType);
+  }, [pastQuizzes, selectedPastExam]);
 
   // 자작 퀴즈를 최근 푼 순서로 정렬
   const sortedCustomQuizzes = useMemo(() => {
@@ -2068,6 +2342,22 @@ function SolvedQuizLayout({
     });
   }, [customQuizzes, quizAttempts]);
 
+  // 과목별 동적 태그 목록 (공통 태그 + 챕터 태그)
+  const fixedTagOptions = useMemo(() => {
+    const courseTags = generateCourseTags(courseId);
+    // 태그 값만 추출 (label이 아닌 value 사용)
+    return [...COMMON_TAGS.map(t => t.value), ...courseTags.map(t => t.value)];
+  }, [courseId]);
+
+  // 태그 필터링된 자작 퀴즈
+  const filteredCustomQuizzes = useMemo(() => {
+    if (selectedCustomTags.length === 0) return sortedCustomQuizzes;
+    // 선택된 모든 태그를 포함하는 퀴즈만 필터링 (AND 조건)
+    return sortedCustomQuizzes.filter(quiz =>
+      selectedCustomTags.every(tag => quiz.tags?.includes(tag))
+    );
+  }, [sortedCustomQuizzes, selectedCustomTags]);
+
   return (
     <div className="flex flex-col">
       {/* 뉴스 캐러셀 (중간/기말/기출) */}
@@ -2075,7 +2365,7 @@ function SolvedQuizLayout({
         <ReviewNewsCarousel
           midtermQuizzes={midtermQuizzes}
           finalQuizzes={finalQuizzes}
-          pastQuiz={pastQuizzes.length > 0 ? pastQuizzes[0] : null}
+          pastQuiz={filteredPastQuizzes.length > 0 ? filteredPastQuizzes[0] : null}
           pastExamOptions={pastExamOptions}
           selectedPastExam={selectedPastExam}
           onSelectPastExam={setSelectedPastExam}
@@ -2090,17 +2380,74 @@ function SolvedQuizLayout({
       {/* 자작 섹션 */}
       <section className="px-4">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-serif-display text-xl font-black text-[#1A1A1A]">자작</h2>
+          <h2 className="font-serif-display text-xl font-black text-[#1A1A1A] shrink-0">자작</h2>
+
+          {/* 선택된 태그들 + 태그 아이콘 (우측) */}
+          <div className="flex items-center gap-2">
+            {/* 선택된 태그들 (태그 아이콘 왼쪽에 배치) */}
+            {selectedCustomTags.map((tag) => (
+              <div
+                key={tag}
+                className="flex items-center gap-1 px-2 py-1 bg-[#F5F0E8] text-[#1A1A1A] text-sm font-bold border border-[#1A1A1A]"
+              >
+                #{tag}
+                <button
+                  onClick={() => setSelectedCustomTags(prev => prev.filter(t => t !== tag))}
+                  className="ml-0.5 hover:text-[#5C5C5C]"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+
+            {/* 태그 검색 버튼 */}
+            <button
+              onClick={() => setShowTagFilter(!showTagFilter)}
+              className={`flex items-center justify-center w-9 h-9 border transition-colors shrink-0 ${
+                showTagFilter
+                  ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                  : 'bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A]'
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+              </svg>
+            </button>
+          </div>
         </div>
 
-        {isLoading.custom && (
-          <div className="grid grid-cols-2 gap-3">
-            {[1, 2, 3, 4].map((i) => (
-              <SkeletonFolderCard key={i} />
-            ))}
-          </div>
-        )}
+        {/* 태그 필터 목록 */}
+        <AnimatePresence>
+          {showTagFilter && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden mb-4"
+            >
+              <div className="flex flex-wrap gap-2 p-3 bg-[#EDEAE4] border border-[#D4CFC4]">
+                {/* 태그 버튼들 (이미 선택된 태그 제외) */}
+                {fixedTagOptions
+                  .filter(tag => !selectedCustomTags.includes(tag))
+                  .map((tag) => (
+                    <button
+                      key={tag}
+                      onClick={() => {
+                        setSelectedCustomTags(prev => [...prev, tag]);
+                        setShowTagFilter(false);
+                      }}
+                      className="px-3 py-1.5 text-sm font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#E5E0D8] transition-colors"
+                    >
+                      #{tag}
+                    </button>
+                  ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
+        {/* 전체 퀴즈가 없을 때 */}
         {!isLoading.custom && sortedCustomQuizzes.length === 0 && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -2116,9 +2463,29 @@ function SolvedQuizLayout({
           </motion.div>
         )}
 
-        {!isLoading.custom && sortedCustomQuizzes.length > 0 && (
+        {/* 필터링 결과가 없을 때 */}
+        {!isLoading.custom && sortedCustomQuizzes.length > 0 && filteredCustomQuizzes.length === 0 && selectedCustomTags.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex flex-col items-center justify-center text-center py-8"
+          >
+            <p className="text-sm text-[#5C5C5C]">
+              {selectedCustomTags.map(t => `#${t}`).join(' ')} 태그가 있는 퀴즈가 없습니다
+            </p>
+            <button
+              onClick={() => setSelectedCustomTags([])}
+              className="mt-2 px-4 py-2 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+            >
+              필터 해제
+            </button>
+          </motion.div>
+        )}
+
+        {/* 퀴즈 목록 */}
+        {!isLoading.custom && filteredCustomQuizzes.length > 0 && (
           <div className="grid grid-cols-2 gap-3">
-            {sortedCustomQuizzes.map((quiz, index) => (
+            {filteredCustomQuizzes.map((quiz, index) => (
               <motion.div
                 key={quiz.id}
                 initial={{ opacity: 0, y: 20 }}
@@ -2344,13 +2711,13 @@ function ReviewPageContent() {
   const { user } = useAuth();
   const { userCourseId } = useCourse();
 
-  // 과목별 리본 이미지 및 스케일 (기본값: biology)
+  // 과목별 리본 이미지
   const currentCourse = userCourseId && COURSES[userCourseId] ? COURSES[userCourseId] : null;
   const ribbonImage = currentCourse?.reviewRibbonImage || '/images/biology-review-ribbon.png';
   const ribbonScale = currentCourse?.reviewRibbonScale || 1;
 
-  // URL 쿼리 파라미터에서 초기 필터값 가져오기
-  const initialFilter = (searchParams.get('filter') as ReviewFilter) || 'solved';
+  // URL 쿼리 파라미터에서 초기 필터값 가져오기 (기본값: 서재)
+  const initialFilter = (searchParams.get('filter') as ReviewFilter) || 'library';
   const [activeFilter, setActiveFilter] = useState<ReviewFilter>(initialFilter);
   const [practiceItems, setPracticeItems] = useState<ReviewItem[] | null>(null);
   // 복습 모드: 'all' (모두) vs 'wrongOnly' (오답만) - 첫 복습 점수 저장 여부 결정에 사용
@@ -2365,6 +2732,24 @@ function ReviewPageContent() {
   const [isReviewSelectMode, setIsReviewSelectMode] = useState(false);
   const [reviewSelectedIds, setReviewSelectedIds] = useState<Set<string>>(new Set());
 
+  // 서재 공개 업로드 선택 모드
+  const [isLibrarySelectMode, setIsLibrarySelectMode] = useState(false);
+  const [librarySelectedIds, setLibrarySelectedIds] = useState<Set<string>>(new Set());
+
+  // 서재 퀴즈 공개 확인 모달
+  const [publishConfirmQuizId, setPublishConfirmQuizId] = useState<string | null>(null);
+
+  // 서재 퀴즈 상세 모달
+  const [selectedLibraryQuiz, setSelectedLibraryQuiz] = useState<typeof libraryQuizzesRaw[number] | null>(null);
+
+  // 서재 태그 필터 상태
+  const [librarySelectedTags, setLibrarySelectedTags] = useState<string[]>([]);
+  const [showLibraryTagFilter, setShowLibraryTagFilter] = useState(false);
+
+  // 찜 태그 필터 상태
+  const [bookmarkSelectedTags, setBookmarkSelectedTags] = useState<string[]>([]);
+  const [showBookmarkTagFilter, setShowBookmarkTagFilter] = useState(false);
+
   // 삭제 확인 바텀시트 (휴지통)
   const [showDeleteConfirmSheet, setShowDeleteConfirmSheet] = useState(false);
 
@@ -2374,8 +2759,6 @@ function ReviewPageContent() {
   // 찜한 퀴즈 상세보기 모달
   const [selectedBookmarkedQuiz, setSelectedBookmarkedQuiz] = useState<BookmarkedQuiz | null>(null);
 
-  // 완료된 퀴즈 상세보기 모달 (문제 탭용)
-  const [selectedSolvedQuiz, setSelectedSolvedQuiz] = useState<CompletedQuizData | null>(null);
 
   // 문제 상세보기 모달 (문제 목록 표시)
   const [questionListQuiz, setQuestionListQuiz] = useState<CompletedQuizData | null>(null);
@@ -2539,8 +2922,10 @@ function ReviewPageContent() {
 
   const {
     wrongItems,
+    bookmarkedItems,
     solvedItems,
     groupedWrongItems,
+    groupedBookmarkedItems,
     groupedSolvedItems,
     chapterGroupedWrongItems,
     quizAttempts,
@@ -2550,7 +2935,6 @@ function ReviewPageContent() {
     loading,
     createCustomFolder,
     deleteCustomFolder,
-    deleteSolvedQuiz,
     deleteWrongQuiz,
     deleteWrongQuizByChapter,
     deleteBookmarkQuiz,
@@ -2569,6 +2953,49 @@ function ReviewPageContent() {
     loading: bookmarkLoading,
   } = useQuizBookmark();
 
+  // 서재 (AI 학습 퀴즈) 훅
+  const {
+    quizzes: libraryQuizzesRaw,
+    loading: libraryLoading,
+    deleteQuiz: deleteLibraryQuiz,
+    uploadToPublic,
+  } = useLearningQuizzes();
+
+  // 서재 고정 태그 목록
+  // 과목별 동적 태그 목록 (공통 태그 + 챕터 태그)
+  const libraryTagOptions = useMemo(() => {
+    const courseTags = generateCourseTags(userCourseId);
+    return [...COMMON_TAGS.map(t => t.value), ...courseTags.map(t => t.value)];
+  }, [userCourseId]);
+
+  // 태그 필터링된 서재 퀴즈
+  const libraryQuizzes = useMemo(() => {
+    if (librarySelectedTags.length === 0) return libraryQuizzesRaw;
+    // 선택된 모든 태그를 포함하는 퀴즈만 필터링 (AND 조건)
+    return libraryQuizzesRaw.filter(quiz =>
+      librarySelectedTags.every(tag => quiz.tags?.includes(tag))
+    );
+  }, [libraryQuizzesRaw, librarySelectedTags]);
+
+  // 찜 고정 태그 목록 (서재와 동일)
+  // 찜 태그 목록 (서재와 동일)
+  const bookmarkTagOptions = libraryTagOptions;
+
+  // 태그 필터링된 찜 퀴즈
+  const filteredBookmarkedQuizzes = useMemo(() => {
+    if (bookmarkSelectedTags.length === 0) return bookmarkedQuizzes;
+    // 선택된 모든 태그를 포함하는 퀴즈만 필터링 (AND 조건)
+    return bookmarkedQuizzes.filter(quiz =>
+      bookmarkSelectedTags.every(tag => quiz.tags?.includes(tag))
+    );
+  }, [bookmarkedQuizzes, bookmarkSelectedTags]);
+
+  // 퀴즈 업데이트 감지 훅 (상세 정보 포함)
+  const {
+    checkQuizUpdate,
+    refresh: refreshQuizUpdate,
+  } = useQuizUpdate();
+
   // 업데이트 확인 모달
   const [updateModalInfo, setUpdateModalInfo] = useState<{
     quizId: string;
@@ -2576,32 +3003,42 @@ function ReviewPageContent() {
     filterType: string;
   } | null>(null);
 
-  // 푼 문제 (solved 타입의 리뷰)
-  const solvedQuizzes = groupedSolvedItems.map(g => ({
-    id: g.quizId,
-    title: g.quizTitle,
-    count: g.items.length,
-    type: 'solved' as const,
-  }));
+  // UpdateQuizModal용 상세 업데이트 정보
+  const [detailedUpdateInfo, setDetailedUpdateInfo] = useState<DetailedQuizUpdateInfo | null>(null);
+  const [updateModalLoading, setUpdateModalLoading] = useState(false);
+  const [totalQuestionCount, setTotalQuestionCount] = useState(0);
 
-  // 커스텀 폴더
+  // 업데이트 모달이 열릴 때 네비게이션 숨김
+  useEffect(() => {
+    if (updateModalInfo || detailedUpdateInfo) {
+      document.body.setAttribute('data-hide-nav', 'true');
+    } else {
+      document.body.removeAttribute('data-hide-nav');
+    }
+    return () => {
+      document.body.removeAttribute('data-hide-nav');
+    };
+  }, [updateModalInfo, detailedUpdateInfo]);
+
+  // 커스텀 폴더 (결합형 문제는 1개로 계산)
   const customFolders = customFoldersData.map(f => ({
     id: f.id,
     title: f.name,
-    count: f.questions.length,
+    count: calculateCustomFolderQuestionCount(f.questions),
     type: 'custom' as const,
   }));
 
   // 현재 필터에 따른 데이터
   const getCurrentFolders = () => {
     switch (activeFilter) {
-      case 'solved':
-        return solvedQuizzes.map(f => ({ ...f, filterType: 'solved' as const }));
+      case 'library':
+        // 서재 탭은 LibraryGridView에서 별도 처리 (폴더 목록 불필요)
+        return [];
       case 'wrong':
         return groupedWrongItems.map(g => ({
           id: g.quizId,
           title: g.quizTitle,
-          count: g.items.length,
+          count: g.questionCount,
           filterType: 'wrong' as const,
         }));
       case 'bookmark':
@@ -2622,7 +3059,7 @@ function ReviewPageContent() {
   // URL 파라미터 변경 시 필터 업데이트
   useEffect(() => {
     const filterParam = searchParams.get('filter') as ReviewFilter;
-    if (filterParam && ['solved', 'wrong', 'bookmark', 'custom'].includes(filterParam)) {
+    if (filterParam && ['library', 'wrong', 'bookmark', 'custom'].includes(filterParam)) {
       setActiveFilter(filterParam);
     }
   }, [searchParams]);
@@ -2653,9 +3090,7 @@ function ReviewPageContent() {
     if (!confirmed) return;
 
     try {
-      if (folder.filterType === 'solved') {
-        await deleteSolvedQuiz(folder.id);
-      } else if (folder.filterType === 'custom') {
+      if (folder.filterType === 'custom') {
         await deleteCustomFolder(folder.id);
       }
     } catch (err) {
@@ -2669,18 +3104,11 @@ function ReviewPageContent() {
     // 현재 탭의 모든 문제로 복습 시작
     let items: ReviewItem[] = [];
 
-    if (activeFilter === 'solved') {
-      items = solvedItems;
-    } else if (activeFilter === 'wrong') {
+    if (activeFilter === 'wrong') {
       items = wrongItems;
     } else if (activeFilter === 'bookmark') {
-      // 찜한 퀴즈의 모든 문제
-      bookmarkedQuizzes.forEach(bq => {
-        const group = groupedSolvedItems.find(g => g.quizId === bq.quizId);
-        if (group) {
-          items.push(...group.items);
-        }
-      });
+      // 찜한 문제만 복습 (bookmarkedItems 사용)
+      items = bookmarkedItems;
     }
 
     if (items.length > 0) {
@@ -2706,7 +3134,6 @@ function ReviewPageContent() {
       // 중복 삭제 방지를 위한 Set (wrong은 quizId+chapterId 조합으로)
       const deletedWrongKeys = new Set<string>();
       const deletedBookmarkQuizIds = new Set<string>();
-      const deletedSolvedQuizIds = new Set<string>();
 
       for (const folderId of deleteFolderIds) {
         if (folderId.startsWith('custom-')) {
@@ -2740,12 +3167,6 @@ function ReviewPageContent() {
             // 퀴즈 북마크 해제 (useQuizBookmark 사용)
             await toggleQuizBookmark(id);
           }
-        } else if (folderId.startsWith('solved-')) {
-          const id = folderId.replace('solved-', '');
-          if (!deletedSolvedQuizIds.has(id)) {
-            deletedSolvedQuizIds.add(id);
-            await deleteSolvedQuiz(id);
-          }
         }
       }
     } catch (err) {
@@ -2767,19 +3188,14 @@ function ReviewPageContent() {
   };
 
   // 선택한 폴더/문제지로 복습 시작
-  const handleStartSelectedReview = useCallback(() => {
+  const handleStartSelectedReview = useCallback(async () => {
     if (reviewSelectedIds.size === 0) return;
 
     const items: ReviewItem[] = [];
+    const libraryQuizIds: string[] = [];
 
     reviewSelectedIds.forEach(folderId => {
-      if (folderId.startsWith('solved-')) {
-        const quizId = folderId.replace('solved-', '');
-        const group = groupedSolvedItems.find(g => g.quizId === quizId);
-        if (group) {
-          items.push(...group.items);
-        }
-      } else if (folderId.startsWith('wrong-')) {
+      if (folderId.startsWith('wrong-')) {
         // wrong-quizId-chapter-chapterId 형식 처리
         const parts = folderId.replace('wrong-', '').split('-chapter-');
         const quizId = parts[0];
@@ -2798,10 +3214,10 @@ function ReviewPageContent() {
         }
       } else if (folderId.startsWith('bookmark-')) {
         const quizId = folderId.replace('bookmark-', '');
-        // 찜한 퀴즈의 문제들은 solved에서 가져옴
-        const solvedGroup = groupedSolvedItems.find(g => g.quizId === quizId);
-        if (solvedGroup) {
-          items.push(...solvedGroup.items);
+        // 찜한 퀴즈의 문제들은 bookmarkedItems에서 가져옴
+        const bookmarkGroup = groupedBookmarkedItems.find(g => g.quizId === quizId);
+        if (bookmarkGroup) {
+          items.push(...bookmarkGroup.items);
         }
       } else if (folderId.startsWith('custom-')) {
         const id = folderId.replace('custom-', '');
@@ -2815,8 +3231,67 @@ function ReviewPageContent() {
             }
           });
         }
+      } else if (folderId.startsWith('library-')) {
+        // 서재 퀴즈 ID 수집 (나중에 일괄 처리)
+        const quizId = folderId.replace('library-', '');
+        libraryQuizIds.push(quizId);
       }
     });
+
+    // 서재 퀴즈들의 문제 가져오기
+    for (const quizId of libraryQuizIds) {
+      try {
+        const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
+        if (quizDoc.exists()) {
+          const quizData = quizDoc.data();
+          const questions = quizData.questions || [];
+          const quizTitle = quizData.title || '서재 퀴즈';
+
+          questions.forEach((q: any, idx: number) => {
+            // ReviewItem 형식으로 변환
+            let correctAnswer = '';
+            if (q.type === 'multiple') {
+              if (Array.isArray(q.answer)) {
+                correctAnswer = q.answer.map((a: number) => String(a + 1)).join(',');
+              } else {
+                correctAnswer = String((q.answer ?? 0) + 1);
+              }
+            } else if (q.type === 'ox') {
+              correctAnswer = q.answer === 0 ? 'O' : 'X';
+            } else {
+              correctAnswer = String(q.answer ?? '');
+            }
+
+            items.push({
+              id: `library-${quizId}-${q.id || idx}`,
+              userId: user?.uid || '',
+              quizId,
+              quizTitle,
+              questionId: q.id || `q${idx}`,
+              question: q.text || '',
+              type: q.type === 'short' ? 'short_answer' : (q.type || 'multiple'),
+              options: q.choices || [],
+              correctAnswer,
+              userAnswer: correctAnswer, // 서재 퀴즈는 정답으로 설정
+              explanation: q.explanation || '',
+              isCorrect: true,
+              reviewType: 'solved',
+              isBookmarked: false,
+              reviewCount: 0,
+              lastReviewedAt: null,
+              createdAt: new Date() as any, // 클라이언트 사이드 임시 데이터
+              // 선택적 필드들
+              courseId: userCourseId || null,
+              image: q.image || null,
+              chapterId: q.chapterId || null,
+              imageUrl: q.imageUrl || null,
+            } as any);
+          });
+        }
+      } catch (error) {
+        console.error('서재 퀴즈 로드 오류:', error);
+      }
+    }
 
     if (items.length > 0) {
       setPracticeMode('all'); // 선택 복습도 "모두" 복습으로 취급
@@ -2826,20 +3301,14 @@ function ReviewPageContent() {
     } else {
       alert('선택한 항목에 복습할 문제가 없습니다.');
     }
-  }, [reviewSelectedIds, groupedSolvedItems, chapterGroupedWrongItems, customFoldersData, solvedItems]);
+  }, [reviewSelectedIds, groupedSolvedItems, groupedBookmarkedItems, chapterGroupedWrongItems, customFoldersData, solvedItems, user?.uid, userCourseId]);
 
   // 선택한 폴더 정보 가져오기 (바텀시트 표시용)
   const getSelectedFolderInfo = useCallback(() => {
     const info: { id: string; title: string; type: string; count: number }[] = [];
 
     deleteFolderIds.forEach(folderId => {
-      if (folderId.startsWith('solved-')) {
-        const quizId = folderId.replace('solved-', '');
-        const group = groupedSolvedItems.find(g => g.quizId === quizId);
-        if (group) {
-          info.push({ id: folderId, title: group.quizTitle, type: '문제', count: group.items.length });
-        }
-      } else if (folderId.startsWith('wrong-')) {
+      if (folderId.startsWith('wrong-')) {
         // wrong-quizId-chapter-chapterId 형식 처리
         const parts = folderId.replace('wrong-', '').split('-chapter-');
         const quizId = parts[0];
@@ -2856,7 +3325,7 @@ function ReviewPageContent() {
             const displayTitle = chapterGroup.chapterName !== '기타'
               ? `${chapterGroup.chapterName} · ${folder.quizTitle}`
               : folder.quizTitle;
-            info.push({ id: folderId, title: displayTitle, type: '오답', count: folder.items.length });
+            info.push({ id: folderId, title: displayTitle, type: '오답', count: folder.questionCount });
           }
         }
       } else if (folderId.startsWith('bookmark-')) {
@@ -2869,13 +3338,13 @@ function ReviewPageContent() {
         const id = folderId.replace('custom-', '');
         const folder = customFoldersData.find(f => f.id === id);
         if (folder) {
-          info.push({ id: folderId, title: folder.name, type: '내맘대로', count: folder.questions.length });
+          info.push({ id: folderId, title: folder.name, type: '커스텀', count: calculateCustomFolderQuestionCount(folder.questions) });
         }
       }
     });
 
     return info;
-  }, [deleteFolderIds, groupedSolvedItems, chapterGroupedWrongItems, bookmarkedQuizzes, customFoldersData]);
+  }, [deleteFolderIds, chapterGroupedWrongItems, bookmarkedQuizzes, customFoldersData]);
 
   // 퀴즈 ID로 복습 시작 (찜탭, 문제탭에서 Review 버튼 클릭 시)
   const handleStartReviewByQuizId = useCallback((quizId: string) => {
@@ -2952,23 +3421,19 @@ function ReviewPageContent() {
 
   return (
     <div className="min-h-screen pb-28" style={{ backgroundColor: '#F5F0E8' }}>
-      {/* 헤더 - 리본 이미지 */}
-      <header className="pt-6 pb-4 flex flex-col items-center">
-        {/* 리본 이미지 (퀴즈창과 동일) */}
-        <div className="relative w-full px-4 h-32 sm:h-44 md:h-56 mb-4">
-          <Image
+      {/* 헤더 - 배너 이미지 */}
+      <header className="pt-4 pb-2 flex flex-col items-center">
+        <div className="w-full flex justify-center">
+          <img
             src={ribbonImage}
             alt="Review"
-            fill
-            sizes="(max-width: 640px) 100vw, (max-width: 768px) 80vw, 60vw"
-            className="object-contain"
+            className="w-[85%] sm:w-[80%] md:w-[75%] min-w-[280px] max-w-[800px] h-auto"
             style={{ transform: `scale(${ribbonScale})` }}
-            priority
           />
         </div>
 
         {/* 필터 + 버튼 영역 */}
-        <div className="w-full px-4 flex items-center justify-between gap-4">
+        <div className="w-full px-4 py-4 flex items-center justify-between gap-4">
           {/* 슬라이드 필터 - 좌측 */}
           <SlideFilter
             activeFilter={activeFilter}
@@ -3004,12 +3469,11 @@ function ReviewPageContent() {
                     animate={{ scale: 1, opacity: 1 }}
                     exit={{ scale: 0.8, opacity: 0 }}
                     onClick={() => setShowDeleteConfirmSheet(true)}
-                    className="px-4 py-3 text-sm font-bold border-2 border-[#8B1A1A] text-[#8B1A1A] hover:bg-[#FDEAEA] whitespace-nowrap transition-colors flex items-center gap-2"
+                    className="px-4 py-3 text-sm font-bold border-2 border-[#8B1A1A] text-[#8B1A1A] hover:bg-[#FDEAEA] whitespace-nowrap transition-colors flex items-center justify-center"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
-                    {deleteFolderIds.size > 0 && <span>{deleteFolderIds.size}</span>}
                   </motion.button>
                   {/* 삭제 버튼 */}
                   <motion.button
@@ -3032,7 +3496,55 @@ function ReviewPageContent() {
                         : 'bg-[#D4CFC4] text-[#EDEAE4] cursor-not-allowed'
                     }`}
                   >
-                    삭제
+                    삭제{deleteFolderIds.size > 0 && ` (${deleteFolderIds.size})`}
+                  </motion.button>
+                </>
+              ) : isLibrarySelectMode ? (
+                // 서재 삭제 선택 모드 버튼들
+                <>
+                  <motion.button
+                    key="cancel-library"
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.8, opacity: 0 }}
+                    onClick={() => {
+                      setIsLibrarySelectMode(false);
+                      setLibrarySelectedIds(new Set());
+                    }}
+                    className="px-4 py-3 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] whitespace-nowrap hover:bg-[#EDEAE4] transition-colors"
+                  >
+                    취소
+                  </motion.button>
+                  {/* 삭제 버튼 */}
+                  <motion.button
+                    key="delete-library"
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.8, opacity: 0 }}
+                    onClick={async () => {
+                      if (librarySelectedIds.size > 0) {
+                        const confirmed = window.confirm(`${librarySelectedIds.size}개 퀴즈를 삭제하시겠습니까?`);
+                        if (confirmed) {
+                          for (const quizId of librarySelectedIds) {
+                            try {
+                              await deleteLibraryQuiz(quizId);
+                            } catch (err) {
+                              console.error('삭제 오류:', err);
+                            }
+                          }
+                          setIsLibrarySelectMode(false);
+                          setLibrarySelectedIds(new Set());
+                        }
+                      }
+                    }}
+                    disabled={librarySelectedIds.size === 0}
+                    className={`px-4 py-3 text-sm font-bold whitespace-nowrap transition-colors ${
+                      librarySelectedIds.size > 0
+                        ? 'bg-[#8B1A1A] text-[#F5F0E8] hover:bg-[#7A1717]'
+                        : 'bg-[#D4CFC4] text-[#EDEAE4] cursor-not-allowed'
+                    }`}
+                  >
+                    삭제 {librarySelectedIds.size > 0 && `(${librarySelectedIds.size})`}
                   </motion.button>
                 </>
               ) : isReviewSelectMode ? (
@@ -3075,20 +3587,26 @@ function ReviewPageContent() {
               ) : (
                 // 일반 모드 버튼들
                 <>
-                  {/* 선택 버튼 */}
-                  <motion.button
-                    key="select"
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.8, opacity: 0 }}
-                    onClick={() => {
-                      setIsFolderDeleteMode(true);
-                    }}
-                    className="px-4 py-3 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] whitespace-nowrap hover:bg-[#EDEAE4] transition-colors"
-                  >
-                    선택
-                  </motion.button>
-                  {/* 복습하기 버튼 */}
+                  {/* 삭제 버튼 (커스텀/서재 탭에서) */}
+                  {(activeFilter === 'custom' || activeFilter === 'library') && (
+                    <motion.button
+                      key="select"
+                      initial={{ scale: 0.8, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0.8, opacity: 0 }}
+                      onClick={() => {
+                        if (activeFilter === 'library') {
+                          setIsLibrarySelectMode(true);
+                        } else {
+                          setIsFolderDeleteMode(true);
+                        }
+                      }}
+                      className="px-4 py-3 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] whitespace-nowrap hover:bg-[#EDEAE4] transition-colors"
+                    >
+                      삭제
+                    </motion.button>
+                  )}
+                  {/* 선택 복습 버튼 */}
                   <motion.button
                     key="review"
                     initial={{ scale: 0.8, opacity: 0 }}
@@ -3099,7 +3617,7 @@ function ReviewPageContent() {
                     }}
                     className="px-4 py-3 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] whitespace-nowrap hover:bg-[#3A3A3A] transition-colors"
                   >
-                    복습하기
+                    선택 복습
                   </motion.button>
                 </>
               )}
@@ -3109,7 +3627,7 @@ function ReviewPageContent() {
 
         {/* 선택 모드 안내 */}
         <AnimatePresence>
-          {(isFolderDeleteMode || isReviewSelectMode || isAssignMode) && (
+          {(isFolderDeleteMode || isReviewSelectMode || isAssignMode || isLibrarySelectMode) && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
@@ -3117,14 +3635,14 @@ function ReviewPageContent() {
               className="w-full px-4 mt-3"
             >
               <div className={`p-2 border border-dashed text-center ${
-                isFolderDeleteMode
+                isFolderDeleteMode || isLibrarySelectMode
                   ? 'bg-[#FDEAEA] border-[#8B1A1A]'
                   : isReviewSelectMode
                     ? 'bg-[#E8EFF5] border-[#1A1A1A]'
                     : 'bg-[#E8F5E9] border-[#1A6B1A]'
               }`}>
                 <p className={`text-xs ${
-                  isFolderDeleteMode
+                  isFolderDeleteMode || isLibrarySelectMode
                     ? 'text-[#8B1A1A]'
                     : isReviewSelectMode
                       ? 'text-[#1A1A1A]'
@@ -3134,13 +3652,17 @@ function ReviewPageContent() {
                     ? deleteFolderIds.size > 0
                       ? `${deleteFolderIds.size}개 선택됨 (다른 탭에서도 추가 선택 가능)`
                       : '삭제할 폴더나 문제지를 선택하세요 (다른 탭에서도 추가 선택 가능)'
-                    : isReviewSelectMode
-                      ? reviewSelectedIds.size > 0
-                        ? `${reviewSelectedIds.size}개 선택됨 (다른 탭에서도 추가 선택 가능)`
-                        : '복습할 폴더나 문제지를 선택하세요 (다른 탭에서도 추가 선택 가능)'
-                      : selectedFolderForAssign
-                        ? '카테고리 영역 또는 다른 폴더를 탭하세요'
-                        : '이동할 폴더를 선택하세요'
+                    : isLibrarySelectMode
+                      ? librarySelectedIds.size > 0
+                        ? `${librarySelectedIds.size}개 선택됨`
+                        : '삭제할 퀴즈를 선택하세요'
+                      : isReviewSelectMode
+                        ? reviewSelectedIds.size > 0
+                          ? `${reviewSelectedIds.size}개 선택됨 (다른 탭에서도 추가 선택 가능)`
+                          : '복습할 폴더나 문제지를 선택하세요 (다른 탭에서도 추가 선택 가능)'
+                        : selectedFolderForAssign
+                          ? '카테고리 영역 또는 다른 폴더를 탭하세요'
+                          : '이동할 폴더를 선택하세요'
                   }
                 </p>
                 {isAssignMode && (
@@ -3183,94 +3705,332 @@ function ReviewPageContent() {
       </header>
 
       <main className="px-4">
-        {/* 로딩 스켈레톤 */}
-        {(loading || (activeFilter === 'bookmark' && bookmarkLoading)) && (
-          <div className="grid grid-cols-3 gap-3">
+        {/* 로딩 스켈레톤 (2열 카드 그리드) */}
+        {(loading || (activeFilter === 'bookmark' && bookmarkLoading) || (activeFilter === 'library' && libraryLoading)) && (
+          <div className="grid grid-cols-2 gap-3">
             {[1, 2, 3, 4, 5, 6].map((i) => (
-              <SkeletonFolderCard key={i} />
+              <SkeletonQuizCard key={i} />
             ))}
+          </div>
+        )}
+
+        {/* 서재 탭 - AI 학습 퀴즈 */}
+        {!loading && !libraryLoading && activeFilter === 'library' && (
+          <div className="space-y-4">
+            {/* 태그 검색 헤더 (3개 이상일 때만 표시) */}
+            {libraryQuizzesRaw.length >= 3 && (
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="font-serif-display text-lg font-black text-[#1A1A1A]">서재</h2>
+
+                  {/* 선택된 태그들 + 태그 아이콘 (우측) */}
+                  <div className="flex items-center gap-2">
+                    {/* 선택된 태그들 (태그 아이콘 왼쪽에 배치) */}
+                    {librarySelectedTags.map((tag) => (
+                      <div
+                        key={tag}
+                        className="flex items-center gap-1 px-2 py-1 bg-[#F5F0E8] text-[#1A1A1A] text-sm font-bold border border-[#1A1A1A]"
+                      >
+                        #{tag}
+                        <button
+                          onClick={() => setLibrarySelectedTags(prev => prev.filter(t => t !== tag))}
+                          className="ml-0.5 hover:text-[#5C5C5C]"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+
+                    {/* 태그 검색 버튼 */}
+                    <button
+                      onClick={() => setShowLibraryTagFilter(!showLibraryTagFilter)}
+                      className={`flex items-center justify-center w-9 h-9 border transition-colors shrink-0 ${
+                        showLibraryTagFilter
+                          ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                          : 'bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A]'
+                      }`}
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 태그 필터 목록 */}
+                <AnimatePresence>
+                  {showLibraryTagFilter && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="flex flex-wrap gap-2 p-3 bg-[#EDEAE4] border border-[#D4CFC4]">
+                        {/* 태그 버튼들 (이미 선택된 태그 제외) */}
+                        {libraryTagOptions
+                          .filter(tag => !librarySelectedTags.includes(tag))
+                          .map((tag) => (
+                            <button
+                              key={tag}
+                              onClick={() => {
+                                setLibrarySelectedTags(prev => [...prev, tag]);
+                                setShowLibraryTagFilter(false);
+                              }}
+                              className="px-3 py-1.5 text-sm font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#E5E0D8] transition-colors"
+                            >
+                              #{tag}
+                            </button>
+                          ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+
+            {/* 필터링 결과가 없을 때 (원본에는 퀴즈가 있지만 필터링 결과가 없을 때) */}
+            {libraryQuizzesRaw.length > 0 && libraryQuizzes.length === 0 && librarySelectedTags.length > 0 ? (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="flex flex-col items-center justify-center text-center py-8"
+              >
+                <p className="text-sm text-[#5C5C5C]">
+                  {librarySelectedTags.map(t => `#${t}`).join(' ')} 태그가 있는 퀴즈가 없습니다
+                </p>
+                <button
+                  onClick={() => setLibrarySelectedTags([])}
+                  className="mt-2 px-4 py-2 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+                >
+                  필터 해제
+                </button>
+              </motion.div>
+            ) : libraryQuizzes.length === 0 ? (
+              <EmptyState filter="library" fullHeight />
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {libraryQuizzes.map((quiz, index) => {
+                  const libraryKey = `library-${quiz.id}`;
+                  const isSelected = isLibrarySelectMode
+                    ? librarySelectedIds.has(quiz.id)
+                    : isReviewSelectMode
+                      ? reviewSelectedIds.has(libraryKey)
+                      : false;
+                  return (
+                    <motion.div
+                      key={quiz.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.03 }}
+                    >
+                      <LibraryQuizCard
+                        quiz={quiz}
+                        onCardClick={() => {
+                          if (isLibrarySelectMode) {
+                            // 삭제 선택 모드일 때는 체크박스 토글
+                            const newSelected = new Set(librarySelectedIds);
+                            if (newSelected.has(quiz.id)) {
+                              newSelected.delete(quiz.id);
+                            } else {
+                              newSelected.add(quiz.id);
+                            }
+                            setLibrarySelectedIds(newSelected);
+                          } else if (isReviewSelectMode) {
+                            // 복습 선택 모드일 때는 reviewSelectedIds 토글
+                            const newSelected = new Set(reviewSelectedIds);
+                            if (newSelected.has(libraryKey)) {
+                              newSelected.delete(libraryKey);
+                            } else {
+                              newSelected.add(libraryKey);
+                            }
+                            setReviewSelectedIds(newSelected);
+                          } else {
+                            // 일반 모드일 때는 상세 페이지로 이동
+                            router.push(`/review/library/${quiz.id}`);
+                          }
+                        }}
+                        onDetails={() => {
+                          // 모달 열기
+                          setSelectedLibraryQuiz(quiz);
+                        }}
+                        onReview={() => {
+                          // 전체 복습 시작
+                          router.push(`/review/library/${quiz.id}?mode=review`);
+                        }}
+                        onReviewWrongOnly={() => {
+                          // 오답만 복습 시작
+                          router.push(`/review/library/${quiz.id}?mode=review&wrongOnly=true`);
+                        }}
+                        onPublish={() => {
+                          setPublishConfirmQuizId(quiz.id);
+                        }}
+                        isSelectMode={isLibrarySelectMode || isReviewSelectMode}
+                        isSelected={isSelected}
+                      />
+                    </motion.div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
         {/* 찜 탭 - 2열 그리드 레이아웃 (자작 탭과 동일) */}
         {!loading && !bookmarkLoading && activeFilter === 'bookmark' && (
-          <BookmarkGridView
-            bookmarkedQuizzes={bookmarkedQuizzes}
-            onQuizCardClick={(quizId) => router.push(`/review/bookmark/${quizId}`)}
-            onQuizDetails={(quiz) => setSelectedBookmarkedQuiz(quiz)}
-            onStartQuiz={(quizId) => router.push(`/quiz/${quizId}`)}
-            onStartReview={(quizId) => handleStartReviewByQuizId(quizId)}
-            onStartReviewWrongOnly={(quizId) => handleStartReviewWrongOnlyByQuizId(quizId)}
-            onUnbookmark={(quizId) => toggleQuizBookmark(quizId)}
-            isSelectMode={isFolderDeleteMode || isReviewSelectMode}
-            selectedFolderIds={isFolderDeleteMode ? deleteFolderIds : reviewSelectedIds}
-            onSelectToggle={(quizId) => {
-              const key = `bookmark-${quizId}`;
-              if (isFolderDeleteMode) {
-                const newSelected = new Set(deleteFolderIds);
-                if (newSelected.has(key)) {
-                  newSelected.delete(key);
-                } else {
-                  newSelected.add(key);
-                }
-                setDeleteFolderIds(newSelected);
-              } else if (isReviewSelectMode) {
-                const newSelected = new Set(reviewSelectedIds);
-                if (newSelected.has(key)) {
-                  newSelected.delete(key);
-                } else {
-                  newSelected.add(key);
-                }
-                setReviewSelectedIds(newSelected);
-              }
-            }}
-          />
+          <div className="space-y-4">
+            {/* 태그 검색 헤더 (3개 이상일 때만 표시) */}
+            {bookmarkedQuizzes.length >= 3 && (
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="font-serif-display text-lg font-black text-[#1A1A1A]">찜</h2>
+
+                  {/* 선택된 태그들 + 태그 아이콘 (우측) */}
+                  <div className="flex items-center gap-2">
+                    {/* 선택된 태그들 */}
+                    {bookmarkSelectedTags.map((tag) => (
+                      <div
+                        key={tag}
+                        className="flex items-center gap-1 px-2 py-1 bg-[#F5F0E8] text-[#1A1A1A] text-sm font-bold border border-[#1A1A1A]"
+                      >
+                        #{tag}
+                        <button
+                          onClick={() => setBookmarkSelectedTags(prev => prev.filter(t => t !== tag))}
+                          className="ml-0.5 hover:text-[#5C5C5C]"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+
+                    {/* 태그 검색 버튼 */}
+                    <button
+                      onClick={() => setShowBookmarkTagFilter(!showBookmarkTagFilter)}
+                      className={`flex items-center justify-center w-9 h-9 border transition-colors shrink-0 ${
+                        showBookmarkTagFilter
+                          ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                          : 'bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A]'
+                      }`}
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 태그 필터 목록 */}
+                <AnimatePresence>
+                  {showBookmarkTagFilter && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="flex flex-wrap gap-2 p-3 bg-[#EDEAE4] border border-[#D4CFC4]">
+                        {bookmarkTagOptions
+                          .filter(tag => !bookmarkSelectedTags.includes(tag))
+                          .map((tag) => (
+                            <button
+                              key={tag}
+                              onClick={() => {
+                                setBookmarkSelectedTags(prev => [...prev, tag]);
+                                setShowBookmarkTagFilter(false);
+                              }}
+                              className="px-3 py-1.5 text-sm font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#E5E0D8] transition-colors"
+                            >
+                              #{tag}
+                            </button>
+                          ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+
+            {/* 필터링 결과가 없을 때 */}
+            {bookmarkedQuizzes.length > 0 && filteredBookmarkedQuizzes.length === 0 && bookmarkSelectedTags.length > 0 ? (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="flex flex-col items-center justify-center text-center py-8"
+              >
+                <p className="text-sm text-[#5C5C5C]">
+                  {bookmarkSelectedTags.map(t => `#${t}`).join(' ')} 태그가 있는 퀴즈가 없습니다
+                </p>
+                <button
+                  onClick={() => setBookmarkSelectedTags([])}
+                  className="mt-2 px-4 py-2 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+                >
+                  필터 해제
+                </button>
+              </motion.div>
+            ) : (
+              <BookmarkGridView
+                bookmarkedQuizzes={filteredBookmarkedQuizzes}
+                onQuizCardClick={(quizId) => router.push(`/review/bookmark/${quizId}`)}
+                onQuizDetails={(quiz) => setSelectedBookmarkedQuiz(quiz)}
+                onStartQuiz={(quizId) => router.push(`/quiz/${quizId}`)}
+                onStartReview={(quizId) => handleStartReviewByQuizId(quizId)}
+                onStartReviewWrongOnly={(quizId) => handleStartReviewWrongOnlyByQuizId(quizId)}
+                onUnbookmark={(quizId) => toggleQuizBookmark(quizId)}
+                isSelectMode={isFolderDeleteMode || isReviewSelectMode}
+                selectedFolderIds={isFolderDeleteMode ? deleteFolderIds : reviewSelectedIds}
+                onSelectToggle={(quizId) => {
+                  const key = `bookmark-${quizId}`;
+                  if (isFolderDeleteMode) {
+                    const newSelected = new Set(deleteFolderIds);
+                    if (newSelected.has(key)) {
+                      newSelected.delete(key);
+                    } else {
+                      newSelected.add(key);
+                    }
+                    setDeleteFolderIds(newSelected);
+                  } else if (isReviewSelectMode) {
+                    const newSelected = new Set(reviewSelectedIds);
+                    if (newSelected.has(key)) {
+                      newSelected.delete(key);
+                    } else {
+                      newSelected.add(key);
+                    }
+                    setReviewSelectedIds(newSelected);
+                  }
+                }}
+                getQuizUpdateInfo={(quizId) => {
+                  const updateKey = `quiz-${quizId}`;
+                  const info = updatedQuizzes.get(updateKey);
+                  if (info && info.hasUpdate) {
+                    return { hasUpdate: true, updatedCount: 0 };
+                  }
+                  return null;
+                }}
+                onUpdateClick={(quizId) => {
+                  const updateKey = `quiz-${quizId}`;
+                  const info = updatedQuizzes.get(updateKey);
+                  if (info) {
+                    setUpdateModalInfo({
+                      quizId,
+                      quizTitle: info.quizTitle,
+                      filterType: 'bookmark',
+                    });
+                  }
+                }}
+              />
+            )}
+          </div>
         )}
 
-        {/* 문제 탭 - 퀴즈 페이지와 동일한 레이아웃 (중간/기말/기출/자작) */}
-        {!loading && activeFilter === 'solved' && user && (
-          <SolvedQuizLayout
-            userId={user.uid}
-            courseId={userCourseId}
-            onQuizClick={(quizId) => handleStartReviewByQuizId(quizId)}
-            onQuizClickWrongOnly={(quizId) => handleStartReviewWrongOnlyByQuizId(quizId)}
-            onShowDetails={(quiz) => setSelectedSolvedQuiz(quiz)}
-            onQuizCardClick={(quizId) => router.push(`/review/solved/${quizId}`)}
-            isQuizBookmarked={isQuizBookmarked}
-            onToggleBookmark={toggleQuizBookmark}
-            isSelectMode={isFolderDeleteMode || isReviewSelectMode}
-            selectedFolderIds={isFolderDeleteMode ? deleteFolderIds : reviewSelectedIds}
-            onSelectToggle={(quizId) => {
-              const key = `solved-${quizId}`;
-              if (isFolderDeleteMode) {
-                const newSelected = new Set(deleteFolderIds);
-                if (newSelected.has(key)) {
-                  newSelected.delete(key);
-                } else {
-                  newSelected.add(key);
-                }
-                setDeleteFolderIds(newSelected);
-              } else if (isReviewSelectMode) {
-                const newSelected = new Set(reviewSelectedIds);
-                if (newSelected.has(key)) {
-                  newSelected.delete(key);
-                } else {
-                  newSelected.add(key);
-                }
-                setReviewSelectedIds(newSelected);
-              }
-            }}
-            quizAttempts={quizAttempts}
-          />
-        )}
-
-        {/* 빈 상태 (찜/문제 탭 제외) - 화면 중앙 배치 */}
-        {!loading && activeFilter !== 'bookmark' && activeFilter !== 'solved' && currentFolders.length === 0 && (
+        {/* 빈 상태 (서재/찜 탭 제외) - 화면 중앙 배치 */}
+        {!loading && activeFilter !== 'library' && activeFilter !== 'bookmark' && currentFolders.length === 0 && (
           <EmptyState filter={activeFilter} fullHeight />
         )}
 
-        {/* 폴더 그리드 (3열) - 찜/문제 탭 제외 */}
-        {!loading && activeFilter !== 'bookmark' && activeFilter !== 'solved' && currentFolders.length > 0 && (
+        {/* 폴더 그리드 (3열) - 서재/찜 탭 제외 */}
+        {!loading && activeFilter !== 'library' && activeFilter !== 'bookmark' && currentFolders.length > 0 && (
           <>
             {/* 오답 탭에서 챕터별로 그룹화 */}
             {activeFilter === 'wrong' && chapterGroupedWrongItems.length > 0 ? (
@@ -3354,7 +4114,7 @@ function ReviewPageContent() {
                                 <div key={selectKey} className="w-[100px] flex-shrink-0">
                                   <FolderCard
                                     title={folder.quizTitle}
-                                    count={folder.items.length}
+                                    count={folder.questionCount}
                                     onClick={() => {
                                       if (isFolderDeleteMode) {
                                         const newSelected = new Set(deleteFolderIds);
@@ -3410,7 +4170,7 @@ function ReviewPageContent() {
                               <FolderCard
                                 key={selectKey}
                                 title={folder.quizTitle}
-                                count={folder.items.length}
+                                count={folder.questionCount}
                                 onClick={() => {
                                   if (isFolderDeleteMode) {
                                     const newSelected = new Set(deleteFolderIds);
@@ -3553,7 +4313,7 @@ function ReviewPageContent() {
                           ) : (
                             <div className="grid grid-cols-3 gap-3 pb-2">
                               {firstCategoryFolders.map((folder) => {
-                                const canDelete = folder.filterType !== 'solved';
+                                const canDelete = true;
                                 const updateKey = `${folder.filterType}-${folder.id}`;
                                 const hasUpdate = updatedQuizzes.has(updateKey);
                                 return (
@@ -3678,7 +4438,7 @@ function ReviewPageContent() {
                           <div className="flex-1 overflow-y-auto min-h-0">
                             <div className="grid grid-cols-3 gap-3 pb-2">
                               {sortedUncategorized.map((folder) => {
-                                const canDelete = folder.filterType !== 'solved';
+                                const canDelete = true;
                                 const updateKey = `${folder.filterType}-${folder.id}`;
                                 const hasUpdate = updatedQuizzes.has(updateKey);
                                 return (
@@ -3831,7 +4591,7 @@ function ReviewPageContent() {
                             // 4개 이상: 슬라이더
                             <FolderSlider>
                               {categoryFolders.map((folder) => {
-                                const canDelete = folder.filterType !== 'solved';
+                                const canDelete = true;
                                 const updateKey = `${folder.filterType}-${folder.id}`;
                                 const hasUpdate = updatedQuizzes.has(updateKey);
                                 return (
@@ -3886,7 +4646,7 @@ function ReviewPageContent() {
                             // 3개 이하: 일반 그리드
                             <div className="grid grid-cols-3 gap-3">
                               {categoryFolders.map((folder) => {
-                                const canDelete = folder.filterType !== 'solved';
+                                const canDelete = true;
                                 const updateKey = `${folder.filterType}-${folder.id}`;
                                 const hasUpdate = updatedQuizzes.has(updateKey);
                                 return (
@@ -4014,7 +4774,7 @@ function ReviewPageContent() {
                         // 4개 이상: 슬라이더
                         <FolderSlider>
                           {sortedUncategorizedForMany.map((folder) => {
-                            const canDelete = folder.filterType !== 'solved';
+                            const canDelete = true;
                             const updateKey = `${folder.filterType}-${folder.id}`;
                             const hasUpdate = updatedQuizzes.has(updateKey);
                             return (
@@ -4069,7 +4829,7 @@ function ReviewPageContent() {
                         // 3개 이하: 일반 그리드
                         <div className="grid grid-cols-3 gap-3">
                           {sortedUncategorizedForMany.map((folder) => {
-                            const canDelete = folder.filterType !== 'solved';
+                            const canDelete = true;
                             const updateKey = `${folder.filterType}-${folder.id}`;
                             const hasUpdate = updatedQuizzes.has(updateKey);
                             return (
@@ -4130,11 +4890,10 @@ function ReviewPageContent() {
               // 기본 그리드 (카테고리 없을 때)
               <div className="grid grid-cols-3 gap-3">
                 {currentFolders.map((folder) => {
-                  const canDelete = folder.filterType !== 'solved';
+                  const canDelete = true;
                   const updateKey = `${folder.filterType}-${folder.id}`;
                   const hasUpdate = updatedQuizzes.has(updateKey);
-                  // 푼 문제(solved)는 퀴즈 카드 스타일로, 나머지는 폴더 스타일
-                  const variant = folder.filterType === 'solved' ? 'quiz' : 'folder';
+                  const variant = 'folder';
                   return (
                     <FolderCard
                       key={updateKey}
@@ -4176,7 +4935,7 @@ function ReviewPageContent() {
       {/* 찜한 퀴즈 상세보기 모달 */}
       {selectedBookmarkedQuiz && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
           onClick={() => setSelectedBookmarkedQuiz(null)}
         >
           <motion.div
@@ -4186,9 +4945,21 @@ function ReviewPageContent() {
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
           >
-            <h2 className="font-serif-display text-2xl font-bold text-[#1A1A1A] mb-4">
+            <h2 className="font-serif-display text-lg font-bold text-[#1A1A1A] mb-4">
               {selectedBookmarkedQuiz.title}
             </h2>
+
+            {/* 미완료 퀴즈: 평균 점수 대형 표시 (Start 버전) */}
+            {!selectedBookmarkedQuiz.hasCompleted && (
+              <div className="text-center py-4 mb-4 border-2 border-dashed border-[#1A1A1A] bg-[#EDEAE4]">
+                <p className="text-xs text-[#5C5C5C] mb-1">평균 점수</p>
+                <p className="text-4xl font-black text-[#1A1A1A]">
+                  {selectedBookmarkedQuiz.participantCount > 0
+                    ? <>{(selectedBookmarkedQuiz.averageScore ?? 0).toFixed(0)}<span className="text-lg font-bold">점</span></>
+                    : '-'}
+                </p>
+              </div>
+            )}
 
             <div className="space-y-2 mb-6">
               <div className="flex justify-between text-sm">
@@ -4221,24 +4992,38 @@ function ReviewPageContent() {
                   {selectedBookmarkedQuiz.creatorNickname || '익명'}
                 </span>
               </div>
-              {/* 점수 표시: 퀴즈 점수 / 첫번째 복습 점수 */}
-              <div className="py-3 border-t border-[#EDEAE4]">
-                <div className="flex items-center justify-center gap-3">
-                  <span className="text-5xl font-black text-[#1A1A1A]">
-                    {selectedBookmarkedQuiz.myScore !== undefined ? selectedBookmarkedQuiz.myScore : '-'}
-                  </span>
-                  <span className="text-xl text-[#5C5C5C]">/</span>
-                  <span className="text-5xl font-black text-[#1A1A1A]">
-                    {selectedBookmarkedQuiz.myFirstReviewScore !== undefined ? selectedBookmarkedQuiz.myFirstReviewScore : '-'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-center gap-6 mt-1">
-                  <span className="text-xs text-[#5C5C5C]">퀴즈</span>
-                  <span className="text-xs text-[#5C5C5C]">복습</span>
-                </div>
-              </div>
+
+              {/* 완료된 퀴즈: 평균 점수 행 + 점수 표시 (Review 버전) */}
+              {selectedBookmarkedQuiz.hasCompleted && (
+                <>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-[#5C5C5C]">평균 점수</span>
+                    <span className="font-bold text-[#1A1A1A]">
+                      {selectedBookmarkedQuiz.participantCount > 0
+                        ? `${(selectedBookmarkedQuiz.averageScore ?? 0).toFixed(0)}점`
+                        : '-'}
+                    </span>
+                  </div>
+                  <div className="py-3 border-t border-[#A0A0A0]">
+                    <div className="flex items-center justify-center gap-3">
+                      <span className="text-5xl font-black text-[#1A1A1A]">
+                        {selectedBookmarkedQuiz.myScore !== undefined ? selectedBookmarkedQuiz.myScore : '-'}
+                      </span>
+                      <span className="text-xl text-[#5C5C5C]">/</span>
+                      <span className="text-5xl font-black text-[#1A1A1A]">
+                        {selectedBookmarkedQuiz.myFirstReviewScore !== undefined ? selectedBookmarkedQuiz.myFirstReviewScore : '-'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-center gap-6 mt-1">
+                      <span className="text-xs text-[#5C5C5C]">퀴즈</span>
+                      <span className="text-xs text-[#5C5C5C]">복습</span>
+                    </div>
+                  </div>
+                </>
+              )}
+
               {selectedBookmarkedQuiz.tags && selectedBookmarkedQuiz.tags.length > 0 && (
-                <div className="pt-2 border-t border-[#EDEAE4]">
+                <div className="pt-2 border-t border-[#A0A0A0]">
                   <div className="flex flex-wrap gap-1.5">
                     {selectedBookmarkedQuiz.tags.map((tag) => (
                       <span
@@ -4267,108 +5052,7 @@ function ReviewPageContent() {
                 }}
                 className="flex-1 py-3 font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
               >
-                복습하기
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
-
-      {/* 완료된 퀴즈 상세보기 모달 (문제 탭용) */}
-      {selectedSolvedQuiz && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
-          onClick={() => setSelectedSolvedQuiz(null)}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
-          >
-            <h2 className="font-serif-display text-2xl font-bold text-[#1A1A1A] mb-4">
-              {selectedSolvedQuiz.title}
-            </h2>
-
-            <div className="space-y-2 mb-6">
-              <div className="flex justify-between text-sm">
-                <span className="text-[#5C5C5C]">문제 수</span>
-                <span className="font-bold text-[#1A1A1A]">{selectedSolvedQuiz.questionCount}문제</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-[#5C5C5C]">참여자</span>
-                <span className="font-bold text-[#1A1A1A]">{selectedSolvedQuiz.participantCount}명</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-[#5C5C5C]">난이도</span>
-                <span className="font-bold text-[#1A1A1A]">
-                  {selectedSolvedQuiz.difficulty === 'easy' ? '쉬움' : selectedSolvedQuiz.difficulty === 'hard' ? '어려움' : '보통'}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-[#5C5C5C]">문제 유형</span>
-                <span className="font-bold text-[#1A1A1A]">
-                  {formatQuestionTypes(
-                    selectedSolvedQuiz.oxCount || 0,
-                    selectedSolvedQuiz.multipleChoiceCount || 0,
-                    selectedSolvedQuiz.subjectiveCount || 0
-                  )}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-[#5C5C5C]">제작자</span>
-                <span className="font-bold text-[#1A1A1A]">
-                  {selectedSolvedQuiz.creatorNickname || '익명'}
-                </span>
-              </div>
-              {/* 점수 표시: 퀴즈 점수 / 첫번째 복습 점수 */}
-              <div className="py-3 border-t border-[#EDEAE4]">
-                <div className="flex items-center justify-center gap-3">
-                  <span className="text-5xl font-black text-[#1A1A1A]">
-                    {selectedSolvedQuiz.myScore !== undefined ? selectedSolvedQuiz.myScore : '-'}
-                  </span>
-                  <span className="text-xl text-[#5C5C5C]">/</span>
-                  <span className="text-5xl font-black text-[#1A1A1A]">
-                    {selectedSolvedQuiz.myFirstReviewScore !== undefined ? selectedSolvedQuiz.myFirstReviewScore : '-'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-center gap-6 mt-1">
-                  <span className="text-xs text-[#5C5C5C]">퀴즈</span>
-                  <span className="text-xs text-[#5C5C5C]">복습</span>
-                </div>
-              </div>
-              {selectedSolvedQuiz.tags && selectedSolvedQuiz.tags.length > 0 && (
-                <div className="pt-2 border-t border-[#EDEAE4]">
-                  <div className="flex flex-wrap gap-1.5">
-                    {selectedSolvedQuiz.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="px-2 py-1 bg-[#1A1A1A] text-[#F5F0E8] text-sm font-medium"
-                      >
-                        #{tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setSelectedSolvedQuiz(null)}
-                className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
-              >
-                닫기
-              </button>
-              <button
-                onClick={() => {
-                  router.push(`/quiz/${selectedSolvedQuiz.id}`);
-                  setSelectedSolvedQuiz(null);
-                }}
-                className="flex-1 py-3 font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
-              >
-                복습하기
+                {selectedBookmarkedQuiz.hasCompleted ? '복습하기' : '시작하기'}
               </button>
             </div>
           </motion.div>
@@ -4412,66 +5096,119 @@ function ReviewPageContent() {
       </AnimatePresence>
 
       {/* 퀴즈 업데이트 확인 모달 */}
-      <AnimatePresence>
-        {updateModalInfo && (
+      {updateModalInfo && !detailedUpdateInfo && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => !updateModalLoading && setUpdateModalInfo(null)}
+        >
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-            onClick={() => setUpdateModalInfo(null)}
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-xs bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
           >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-              className="bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 max-w-sm w-full"
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-6 h-6 bg-[#F5C518] rounded-full flex items-center justify-center border-2 border-[#1A1A1A]">
-                  <span className="text-[#1A1A1A] font-bold text-xs">!</span>
-                </div>
-                <h3 className="font-bold text-lg text-[#1A1A1A]">문제가 수정됨</h3>
-              </div>
-
-              <p className="text-sm text-[#5C5C5C] mb-2">
-                <span className="font-bold text-[#1A1A1A]">{updateModalInfo.quizTitle}</span>
-              </p>
-              <p className="text-sm text-[#5C5C5C] mb-4">
-                이 퀴즈의 문제가 수정되었습니다.
-                수정된 문제 내용으로 업데이트하시겠습니까?
-              </p>
-              <p className="text-xs text-[#1A6B1A] mb-4">
-                * 기존에 저장된 내 답과 복습 기록은 유지됩니다.
-              </p>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setUpdateModalInfo(null)}
-                  className="flex-1 py-2 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+            {/* 아이콘 */}
+            <div className="flex justify-center mb-4">
+              <div className="w-12 h-12 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
+                <svg
+                  className="w-6 h-6 text-[#1A1A1A]"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
                 >
-                  나중에
-                </button>
-                <button
-                  onClick={async () => {
-                    try {
-                      await updateReviewItemsFromQuiz(updateModalInfo.quizId);
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+              </div>
+            </div>
+
+            <h3 className="text-center font-bold text-lg text-[#1A1A1A] mb-2">
+              수정된 문제를 풀까요?
+            </h3>
+            <p className="text-sm text-[#5C5C5C] mb-1">
+              - 수정된 문제만 다시 풀 수 있습니다.
+            </p>
+            <p className="text-sm text-[#5C5C5C] mb-1">
+              - 새로운 답변이 복습 기록에 반영됩니다.
+            </p>
+            <p className="text-sm text-[#5C5C5C] mb-6">
+              - 정답 여부와 복습 횟수가 업데이트됩니다.
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setUpdateModalInfo(null)}
+                disabled={updateModalLoading}
+                className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors disabled:opacity-50"
+              >
+                취소
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    setUpdateModalLoading(true);
+                    const info = await checkQuizUpdate(updateModalInfo.quizId);
+                    if (info && info.hasUpdate && info.updatedQuestions.length > 0) {
+                      const quizDoc = await getDoc(doc(db, 'quizzes', updateModalInfo.quizId));
+                      if (quizDoc.exists()) {
+                        const quizData = quizDoc.data();
+                        setTotalQuestionCount(quizData.questions?.length || 0);
+                      }
+                      setDetailedUpdateInfo(info);
+                    } else {
+                      alert('이미 최신 상태입니다.');
                       setUpdateModalInfo(null);
-                      alert('문제가 업데이트되었습니다.');
-                    } catch (err) {
-                      alert('업데이트에 실패했습니다.');
                     }
-                  }}
-                  className="flex-1 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors"
-                >
-                  업데이트
-                </button>
-              </div>
-            </motion.div>
+                  } catch (err) {
+                    alert('업데이트 정보를 불러오는데 실패했습니다.');
+                  } finally {
+                    setUpdateModalLoading(false);
+                  }
+                }}
+                disabled={updateModalLoading}
+                className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#333] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {updateModalLoading ? (
+                  <>
+                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    로딩...
+                  </>
+                ) : (
+                  '풀기'
+                )}
+              </button>
+            </div>
           </motion.div>
-        )}
-      </AnimatePresence>
+        </div>
+      )}
+
+      {/* 수정된 문제 풀기 모달 (UpdateQuizModal) */}
+      {detailedUpdateInfo && (
+        <UpdateQuizModal
+          isOpen={!!detailedUpdateInfo}
+          onClose={() => {
+            setDetailedUpdateInfo(null);
+            setUpdateModalInfo(null);
+          }}
+          updateInfo={detailedUpdateInfo}
+          totalQuestionCount={totalQuestionCount}
+          onComplete={(newScore, newCorrectCount) => {
+            // 완료 후 새로고침
+            refresh();
+            refreshQuizUpdate();
+            setDetailedUpdateInfo(null);
+            setUpdateModalInfo(null);
+          }}
+        />
+      )}
 
       {/* 폴더 카테고리 설정 모달 */}
       <AnimatePresence>
@@ -4642,9 +5379,31 @@ function ReviewPageContent() {
 
               {/* 삭제된 항목 목록 (휴지통) */}
               <div className="flex-1 overflow-y-auto p-4">
-                <p className="text-sm text-[#5C5C5C] mb-3">
-                  삭제된 항목입니다. 되살리려면 항목을 탭하세요.
-                </p>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm text-[#5C5C5C]">
+                    삭제된 항목입니다.
+                  </p>
+                  {deletedItems.length > 0 && (
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        if (confirm(`휴지통의 모든 항목(${deletedItems.length}개)을 영구 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) {
+                          try {
+                            for (const item of deletedItems) {
+                              await permanentlyDeleteItem(item.id);
+                            }
+                            setShowDeleteConfirmSheet(false);
+                          } catch (err) {
+                            alert('휴지통 비우기에 실패했습니다.');
+                          }
+                        }
+                      }}
+                      className="px-3 py-1.5 text-sm font-bold text-[#8B1A1A] border border-[#8B1A1A] hover:bg-[#8B1A1A] hover:text-white transition-colors"
+                    >
+                      휴지통 비우기
+                    </button>
+                  )}
+                </div>
                 {deletedItems.length > 0 ? (
                   <div className="space-y-2">
                     {deletedItems.map((item) => {
@@ -4652,7 +5411,7 @@ function ReviewPageContent() {
                         solved: '문제',
                         wrong: '오답',
                         bookmark: '찜',
-                        custom: '내맘대로',
+                        custom: '커스텀',
                       };
                       return (
                         <motion.div
@@ -4661,21 +5420,7 @@ function ReviewPageContent() {
                           initial={{ opacity: 0, x: -20 }}
                           animate={{ opacity: 1, x: 0 }}
                           exit={{ opacity: 0, x: 20 }}
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            try {
-                              await restoreDeletedItem(item.id);
-                              // 복원 성공 시 모든 모드 해제 및 상태 초기화
-                              setShowDeleteConfirmSheet(false);
-                              setIsFolderDeleteMode(false);
-                              setDeleteFolderIds(new Set());
-                              setIsReviewSelectMode(false);
-                              setReviewSelectedIds(new Set());
-                            } catch (err) {
-                              alert('복원에 실패했습니다.');
-                            }
-                          }}
-                          className="flex items-center justify-between p-3 border border-[#5C5C5C] bg-[#EDEAE4] cursor-pointer hover:bg-[#E5E0D8] transition-colors"
+                          className="flex items-center justify-between p-3 border border-[#5C5C5C] bg-[#EDEAE4]"
                         >
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-bold text-[#1A1A1A] truncate">{item.title}</p>
@@ -4684,10 +5429,43 @@ function ReviewPageContent() {
                             </p>
                           </div>
                           <div className="flex items-center gap-2 ml-2">
-                            <span className="text-xs text-[#1A6B1A] font-bold">되살리기</span>
-                            <svg className="w-4 h-4 text-[#1A6B1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                            </svg>
+                            {/* 되살리기 버튼 */}
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                try {
+                                  await restoreDeletedItem(item.id);
+                                  // 복원 성공 시 모든 모드 해제 및 상태 초기화
+                                  setShowDeleteConfirmSheet(false);
+                                  setIsFolderDeleteMode(false);
+                                  setDeleteFolderIds(new Set());
+                                  setIsReviewSelectMode(false);
+                                  setReviewSelectedIds(new Set());
+                                } catch (err) {
+                                  alert('복원에 실패했습니다.');
+                                }
+                              }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-[#1A6B1A] font-bold border border-[#1A6B1A] hover:bg-[#1A6B1A] hover:text-white transition-colors"
+                            >
+                              되살리기
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                              </svg>
+                            </button>
+                            {/* 삭제 버튼 */}
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                try {
+                                  await permanentlyDeleteItem(item.id);
+                                } catch (err) {
+                                  alert('삭제에 실패했습니다.');
+                                }
+                              }}
+                              className="px-3 py-1.5 text-sm text-[#8B1A1A] font-bold border border-[#8B1A1A] hover:bg-[#8B1A1A] hover:text-white transition-colors"
+                            >
+                              삭제
+                            </button>
                           </div>
                         </motion.div>
                       );
@@ -4714,6 +5492,162 @@ function ReviewPageContent() {
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 서재 퀴즈 공개 확인 모달 */}
+      <AnimatePresence>
+        {publishConfirmQuizId && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+            onClick={() => setPublishConfirmQuizId(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-xs bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
+            >
+              {/* 아이콘 */}
+              <div className="flex justify-center mb-4">
+                <div className="w-12 h-12 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
+                  <svg className="w-6 h-6 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.6 9h16.8M3.6 15h16.8" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3a15.3 15.3 0 0 1 4 9 15.3 15.3 0 0 1-4 9 15.3 15.3 0 0 1-4-9 15.3 15.3 0 0 1 4-9z" />
+                  </svg>
+                </div>
+              </div>
+
+              {/* 텍스트 */}
+              <h3 className="text-center font-bold text-lg text-[#1A1A1A] mb-2">
+                퀴즈를 공개할까요?
+              </h3>
+              <p className="text-center text-sm text-[#5C5C5C] mb-1">
+                공개하면 다른 학생들도 풀 수 있어요.
+              </p>
+              <p className="text-center text-sm text-[#5C5C5C] mb-6">
+                참여 통계도 확인할 수 있어요.
+              </p>
+
+              {/* 버튼 */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setPublishConfirmQuizId(null)}
+                  className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={() => {
+                    uploadToPublic(publishConfirmQuizId);
+                    setPublishConfirmQuizId(null);
+                  }}
+                  className="flex-1 py-3 font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
+                >
+                  공개
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 서재 퀴즈 상세 모달 */}
+      <AnimatePresence>
+        {selectedLibraryQuiz && (
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
+            onClick={() => setSelectedLibraryQuiz(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
+            >
+              <h2 className="font-serif-display text-2xl font-bold text-[#1A1A1A] mb-4">
+                {selectedLibraryQuiz.title}
+              </h2>
+
+              <div className="space-y-2 mb-6">
+                <div className="flex justify-between text-sm">
+                  <span className="text-[#5C5C5C]">문제 수</span>
+                  <span className="font-bold text-[#1A1A1A]">{selectedLibraryQuiz.questionCount}문제</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-[#5C5C5C]">난이도</span>
+                  <span className="font-bold text-[#1A1A1A]">
+                    {selectedLibraryQuiz.difficulty === 'easy' ? '쉬움' :
+                     selectedLibraryQuiz.difficulty === 'hard' ? '어려움' : '보통'}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-[#5C5C5C]">문제 유형</span>
+                  <span className="font-bold text-[#1A1A1A]">
+                    {formatQuestionTypes(
+                      selectedLibraryQuiz.oxCount || 0,
+                      selectedLibraryQuiz.multipleChoiceCount || 0,
+                      selectedLibraryQuiz.subjectiveCount || 0
+                    )}
+                  </span>
+                </div>
+                {/* 점수 표시: 퀴즈 점수 / 첫번째 복습 점수 */}
+                <div className="py-3 border-t border-[#A0A0A0]">
+                  <div className="flex items-center justify-center gap-3">
+                    <span className="text-5xl font-black text-[#1A1A1A]">
+                      {selectedLibraryQuiz.myScore !== undefined ? selectedLibraryQuiz.myScore : selectedLibraryQuiz.score}
+                    </span>
+                    <span className="text-xl text-[#5C5C5C]">/</span>
+                    <span className="text-5xl font-black text-[#1A1A1A]">
+                      {selectedLibraryQuiz.myFirstReviewScore !== undefined ? selectedLibraryQuiz.myFirstReviewScore : '-'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-center gap-6 mt-1">
+                    <span className="text-xs text-[#5C5C5C]">퀴즈</span>
+                    <span className="text-xs text-[#5C5C5C]">복습</span>
+                  </div>
+                </div>
+                {selectedLibraryQuiz.tags && selectedLibraryQuiz.tags.length > 0 && (
+                  <div className="pt-2 border-t border-[#A0A0A0]">
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedLibraryQuiz.tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="px-2 py-1 bg-[#1A1A1A] text-[#F5F0E8] text-sm font-medium"
+                        >
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setSelectedLibraryQuiz(null)}
+                  className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+                >
+                  닫기
+                </button>
+                <button
+                  onClick={() => {
+                    router.push(`/review/library/${selectedLibraryQuiz.id}?mode=review`);
+                    setSelectedLibraryQuiz(null);
+                  }}
+                  className="flex-1 py-3 font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
+                >
+                  복습하기
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 

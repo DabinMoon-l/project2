@@ -70,5 +70,24 @@ service firebase.storage {
       // 삭제: 본인만
       allow delete: if isOwner(userId);
     }
+
+    // PPTX 업로드 경로 (Cloud Run 퀴즈 생성용)
+    match /pptx-uploads/{userId}/{fileName} {
+      // PPTX 파일 검증 (50MB 이하)
+      function isValidPptx() {
+        return request.resource.size < 50 * 1024 * 1024 &&
+          (request.resource.contentType == 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+           fileName.matches('.*\\.pptx$'));
+      }
+
+      // 읽기: 본인만 (Cloud Run은 서비스 계정으로 접근)
+      allow read: if isOwner(userId);
+
+      // 쓰기: 본인만 + 유효한 PPTX
+      allow write: if isOwner(userId) && isValidPptx();
+
+      // 삭제: 본인만 (Cloud Run에서 처리 후 삭제)
+      allow delete: if isOwner(userId);
+    }
   }
 }

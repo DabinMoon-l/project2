@@ -237,7 +237,7 @@ export default function SignupPage() {
         <motion.div className="flex justify-center mb-8" variants={itemVariants}>
           <Image
             src="/images/logo.png"
-            alt="QuizBunny"
+            alt="RabbiTory"
             width={200}
             height={70}
             className="drop-shadow-lg"

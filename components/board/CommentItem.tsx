@@ -104,12 +104,12 @@ export default function CommentItem({
           {/* ㄴ 표시 */}
           <span className="text-base font-bold text-[#3A3A3A]">ㄴ</span>
 
-          {/* 작성자 이름: 닉네임·반 형식 */}
+          {/* 작성자 이름: 닉네임·반·계급 형식 */}
           <span
             className="text-sm font-semibold"
             style={{ color: theme.colors.text }}
           >
-            {comment.authorNickname}·{comment.authorClassType || '?'}반
+            {comment.authorNickname}·{comment.authorClassType || '?'}반·{comment.authorRank || '견습생'}
           </span>
 
           {/* 구분선 */}

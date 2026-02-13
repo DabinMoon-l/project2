@@ -147,10 +147,20 @@ export const updateQuizStatistics = onDocumentCreated(
         const quizDoc = await transaction.get(quizRef);
         if (!quizDoc.exists) return;
 
-        // 퀴즈 참여 횟수 증가
+        const quizData = quizDoc.data();
+        const currentAttemptCount = quizData?.attemptCount || 0;
+        const currentTotalScore = quizData?.totalScore || 0;
+
+        // 새로운 값 계산
+        const newAttemptCount = currentAttemptCount + 1;
+        const newTotalScore = currentTotalScore + result.score;
+        const newAverageScore = newTotalScore / newAttemptCount;
+
+        // 퀴즈 통계 업데이트 (평균 점수 포함)
         transaction.update(quizRef, {
-          attemptCount: FieldValue.increment(1),
-          totalScore: FieldValue.increment(result.score),
+          attemptCount: newAttemptCount,
+          totalScore: newTotalScore,
+          averageScore: Math.round(newAverageScore * 10) / 10, // 소수점 1자리
           updatedAt: FieldValue.serverTimestamp(),
         });
       });
