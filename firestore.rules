@@ -32,8 +32,10 @@ service cloud.firestore {
     // ============================================================
 
     match /users/{uid} {
-      // 읽기: 본인 또는 교수님
-      allow read: if isOwner(uid) || isProfessor();
+      // 개별 읽기: 본인 또는 교수님
+      allow get: if isOwner(uid) || isProfessor();
+      // 목록 쿼리: 로그인 사용자 (랭킹 조회용)
+      allow list: if isAuthenticated();
 
       // 생성: 본인만 (온보딩 시 또는 교수님 첫 로그인)
       allow create: if isOwner(uid);

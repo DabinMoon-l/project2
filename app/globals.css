@@ -14,7 +14,8 @@
   --border-dark: #8B7355;
 }
 
-body {
+html, body {
+  overflow-x: hidden;
   background-color: var(--background-cream);
   color: var(--text-dark);
 }
@@ -123,22 +124,13 @@ body {
   font-weight: 700;
 }
 
-/* 스크롤바 스타일 */
-::-webkit-scrollbar {
-  width: 8px;
+/* 스크롤바 숨김 (모바일 PWA) */
+* {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
-
-::-webkit-scrollbar-track {
-  background: var(--background-cream);
-}
-
-::-webkit-scrollbar-thumb {
-  background: #C4BFB3;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #A8A39A;
+*::-webkit-scrollbar {
+  display: none;
 }
 
 /* 스크롤바 숨김 유틸리티 */

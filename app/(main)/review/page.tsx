@@ -3704,7 +3704,7 @@ function ReviewPageContent() {
         )}
       </header>
 
-      <main className="px-4">
+      <main className="px-4 mt-3">
         {/* 로딩 스켈레톤 (2열 카드 그리드) */}
         {(loading || (activeFilter === 'bookmark' && bookmarkLoading) || (activeFilter === 'library' && libraryLoading)) && (
           <div className="grid grid-cols-2 gap-3">

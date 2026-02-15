@@ -26,13 +26,7 @@ export default function HomePage() {
   const { profile } = useUser();
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
 
-  // 홈 화면에서 body 스크롤 방지
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, []);
+  // 홈 화면은 h-screen overflow-hidden 컨테이너로 스크롤 방지
 
   if (!profile) {
     return (
