@@ -1,36 +1,10 @@
 import { getFirestore, FieldValue, Transaction } from "firebase-admin/firestore";
 
-// 참고: gold 기능이 제거되어 이 파일은 경험치/계급 관련 함수만 포함합니다.
+// 참고: 계급 시스템은 토끼 집사 시스템으로 대체되었습니다.
+// 이 파일은 경험치 지급 관련 함수만 포함합니다.
 
 /**
- * 계급 정보 타입
- */
-export interface RankInfo {
-  name: string;           // 계급 이름
-  minExp: number;         // 필요 최소 경험치
-  armorUnlocked: boolean; // 갑옷 해금 여부
-}
-
-/**
- * 계급 시스템 정의 (5단계)
- * 한 학기 동안 꾸준히 활동하면 전설 달성 가능한 밸런스
- *
- * 예상 달성 시점:
- * - 용사: 1~2주 활동
- * - 기사: 1개월 활동
- * - 장군: 2개월 활동
- * - 전설의 용사: 한 학기 꾸준히
- */
-export const RANKS: RankInfo[] = [
-  { name: "견습생", minExp: 0, armorUnlocked: false },
-  { name: "용사", minExp: 50, armorUnlocked: true },
-  { name: "기사", minExp: 150, armorUnlocked: true },
-  { name: "장군", minExp: 350, armorUnlocked: true },
-  { name: "전설의 용사", minExp: 600, armorUnlocked: true },
-];
-
-/**
- * 경험치 보상 설정 (골드 제거, 경험치로 통합)
+ * 경험치 보상 설정
  */
 export const EXP_REWARDS = {
   // 퀴즈 관련
@@ -57,34 +31,6 @@ export const EXP_REWARDS = {
 };
 
 /**
- * 경험치로 계급 결정
- * @param exp 현재 경험치
- * @returns 계급 정보
- */
-export function getRankByExp(exp: number): RankInfo {
-  // 경험치가 높은 순으로 확인하여 해당 계급 반환
-  for (let i = RANKS.length - 1; i >= 0; i--) {
-    if (exp >= RANKS[i].minExp) {
-      return RANKS[i];
-    }
-  }
-  return RANKS[0]; // 기본값: 견습생
-}
-
-/**
- * 다음 계급 정보 가져오기
- * @param currentRank 현재 계급 이름
- * @returns 다음 계급 정보 또는 null (최고 계급인 경우)
- */
-export function getNextRank(currentRank: string): RankInfo | null {
-  const currentIndex = RANKS.findIndex(r => r.name === currentRank);
-  if (currentIndex === -1 || currentIndex >= RANKS.length - 1) {
-    return null;
-  }
-  return RANKS[currentIndex + 1];
-}
-
-/**
  * 퀴즈 점수에 따른 경험치 보상 계산
  * @param score 점수 (0-100)
  * @returns 경험치 보상량
@@ -98,19 +44,21 @@ export function calculateQuizExp(score: number): number {
 }
 
 /**
- * 사용자에게 경험치 지급 및 계급 업 체크 (트랜잭션 내에서 사용)
+ * 사용자에게 경험치 지급 (트랜잭션 내에서 사용)
+ *
+ * XP만 증가시키고 히스토리 기록.
+ *
  * @param transaction Firestore 트랜잭션
  * @param userId 사용자 ID
  * @param amount 지급할 경험치량
  * @param reason 지급 사유
- * @returns 계급 업 여부와 새 계급 정보
  */
 export async function addExpInTransaction(
   transaction: Transaction,
   userId: string,
   amount: number,
   reason: string
-): Promise<{ rankUp: boolean; newRank?: RankInfo; previousRank?: string }> {
+): Promise<{ rankUp: boolean }> {
   const db = getFirestore();
   const userRef = db.collection("users").doc(userId);
 
@@ -122,31 +70,13 @@ export async function addExpInTransaction(
 
   const userData = userDoc.data()!;
   const currentExp = userData.totalExp || 0;
-  const currentRank = userData.rank || "견습생";
   const newExp = currentExp + amount;
 
-  // 새 경험치로 계급 결정
-  const newRankInfo = getRankByExp(newExp);
-  const rankUp = newRankInfo.name !== currentRank;
-
-  // 사용자 문서 업데이트
-  const updateData: Record<string, unknown> = {
+  // 사용자 문서 업데이트 (XP만)
+  transaction.update(userRef, {
     totalExp: FieldValue.increment(amount),
     updatedAt: FieldValue.serverTimestamp(),
-  };
-
-  // 계급 업인 경우 계급 정보도 업데이트
-  if (rankUp) {
-    updateData.rank = newRankInfo.name;
-    updateData.rankUpdatedAt = FieldValue.serverTimestamp();
-
-    // 갑옷 해금 처리
-    if (newRankInfo.armorUnlocked) {
-      updateData[`unlockedArmors.${newRankInfo.name}`] = true;
-    }
-  }
-
-  transaction.update(userRef, updateData);
+  });
 
   // 경험치 히스토리 기록
   const historyRef = db.collection("users").doc(userId)
@@ -157,16 +87,9 @@ export async function addExpInTransaction(
     reason,
     previousExp: currentExp,
     newExp,
-    rankUp,
-    previousRank: rankUp ? currentRank : null,
-    newRank: rankUp ? newRankInfo.name : null,
     createdAt: FieldValue.serverTimestamp(),
   });
 
-  return {
-    rankUp,
-    newRank: rankUp ? newRankInfo : undefined,
-    previousRank: rankUp ? currentRank : undefined,
-  };
+  // 하위 호환용 반환 (항상 rankUp: false)
+  return { rankUp: false };
 }
-

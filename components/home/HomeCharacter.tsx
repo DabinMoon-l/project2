@@ -40,8 +40,6 @@ interface HomeCharacterProps {
   equipment?: Equipment;
   // 참여도 (0-100)
   participationRate: number;
-  // 계급
-  rank: string;
 }
 
 /**
@@ -133,16 +131,8 @@ function getExpression(rate: number): {
   }
 }
 
-/**
- * 계급별 갑옷 색상
- */
-const RANK_ARMOR_COLORS: Record<string, { primary: string; secondary: string }> = {
-  '견습생': { primary: '#A0522D', secondary: '#8B4513' },
-  '용사': { primary: '#C0C0C0', secondary: '#A8A8A8' },
-  '기사': { primary: '#FFD700', secondary: '#DAA520' },
-  '장군': { primary: '#4169E1', secondary: '#1E40AF' },
-  '전설의 용사': { primary: '#FF4500', secondary: '#DC143C' },
-};
+/** 기본 갑옷 색상 */
+const DEFAULT_ARMOR_COLORS = { primary: '#A0522D', secondary: '#8B4513' };
 
 /**
  * 홈 화면 캐릭터 컴포넌트
@@ -152,7 +142,6 @@ export default function HomeCharacter({
   options,
   equipment,
   participationRate,
-  rank,
 }: HomeCharacterProps) {
   const { theme } = useTheme();
   const [isTouched, setIsTouched] = useState(false);
@@ -165,7 +154,7 @@ export default function HomeCharacter({
   // 표정
   const expression = getExpression(participationRate);
   // 갑옷 색상
-  const armorColors = RANK_ARMOR_COLORS[rank] || RANK_ARMOR_COLORS['견습생'];
+  const armorColors = DEFAULT_ARMOR_COLORS;
 
   /**
    * 터치/클릭 핸들러

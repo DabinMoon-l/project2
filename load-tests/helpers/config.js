@@ -78,3 +78,24 @@ export function firestoreQuery(http, collectionId, structuredQuery, token) {
 
   return http.post(url, JSON.stringify(body), params);
 }
+
+// http.batch()용 Firestore 쿼리 요청 빌더
+// 반환값: ["POST", url, body, params] 형태로 http.batch()에 전달
+export function buildFirestoreQueryRequest(collectionId, structuredQuery, token, tagName) {
+  const url = `${FIRESTORE_URL}:runQuery`;
+  const body = JSON.stringify({
+    structuredQuery: {
+      from: [{ collectionId }],
+      ...structuredQuery,
+    },
+  });
+  const params = {
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    tags: { name: tagName || `firestore_query_${collectionId}` },
+  };
+
+  return ["POST", url, body, params];
+}

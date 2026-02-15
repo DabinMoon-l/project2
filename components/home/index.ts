@@ -5,7 +5,7 @@
 export { default as HomeCharacter } from './HomeCharacter';
 export type { CharacterOptions, Equipment } from './HomeCharacter';
 
-export { default as StatsCard, calculateRankInfo } from './StatsCard';
+export { default as StatsCard, calculateMilestoneInfo } from './StatsCard';
 
 export { default as QuickMenu } from './QuickMenu';
 

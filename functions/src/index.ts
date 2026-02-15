@@ -202,7 +202,6 @@ export const getLeaderboard = onCall(
         userClass: data.classId || "",
         characterPreview: data.characterPreview || null,
         value: data[orderField] || 0,
-        rankTitle: data.rank || "견습생",
       };
     });
 
@@ -314,6 +313,22 @@ export { workerProcessJob, retryQueuedJobs, cleanupExpiredJobs } from "./workerP
 
 
 // ============================================
+// 토끼 집사 시스템 Functions
+// ============================================
+export { spinRabbitGacha, claimGachaRabbit } from "./rabbitGacha";
+export {
+  nameButlerRabbit,
+  graduateButlerRabbit,
+  releaseRabbit,
+  equipRabbit,
+} from "./rabbitButler";
+
+// ============================================
+// 마이그레이션 Functions
+// ============================================
+export { migrateCharactersToRabbits } from "./migrateCharacters";
+
+// ============================================
 // 시즌 관련 Functions
 // ============================================
 
@@ -360,12 +375,14 @@ export const resetSeason = onCall(
       batch.update(studentDoc.ref, {
         // 초기화 항목
         exp: 0,
-        rank: "견습생",
-        unlockedArmors: {},
-        unlockedWeapons: {},
-        equippedArmor: null,
-        equippedWeapon: null,
+        totalExp: 0,
+        lastGachaExp: 0,
         purchasedItems: [],
+
+        // 토끼 장착 초기화
+        equippedRabbitId: null,
+        equippedRabbitCourseId: null,
+        ownedRabbitKeys: [],
 
         // 시즌 정보 업데이트
         currentSeason: newSeason,

@@ -56,8 +56,10 @@ export const options = {
   },
   thresholds: {
     ...DEFAULT_THRESHOLDS,
-    // 전체 시나리오 95%가 10초 이내 완료
-    scenario_duration: ["p(95)<10000"],
+    // 전체 HTTP (리뷰 순차 쿼리 포함, 기본 3s보다 완화)
+    http_req_duration: ["p(95)<10000"],
+    // 전체 시나리오 95%가 20초 이내 완료 (퀴즈 풀이 5~15s 포함)
+    scenario_duration: ["p(95)<20000"],
     cloud_function_errors: ["rate<0.05"],
     firestore_errors: ["rate<0.05"],
   },
@@ -91,6 +93,58 @@ function ensureAuth(vuIndex) {
     };
   }
   return vuState[__VU];
+}
+
+// ============================================================
+// 헬퍼 함수
+// ============================================================
+
+// 리뷰 타입별 쿼리 생성 (실제 앱과 동일하게 courseId 필터 포함)
+function buildReviewQueryForMixed(userId, reviewType) {
+  const q = {
+    where: {
+      compositeFilter: {
+        op: "AND",
+        filters: [
+          {
+            fieldFilter: {
+              field: { fieldPath: "userId" },
+              op: "EQUAL",
+              value: { stringValue: userId },
+            },
+          },
+          {
+            fieldFilter: {
+              field: { fieldPath: "reviewType" },
+              op: "EQUAL",
+              value: { stringValue: reviewType },
+            },
+          },
+          {
+            fieldFilter: {
+              field: { fieldPath: "courseId" },
+              op: "EQUAL",
+              value: { stringValue: TEST_COURSE_ID },
+            },
+          },
+        ],
+      },
+    },
+    orderBy: [
+      {
+        field: { fieldPath: "createdAt" },
+        direction: "DESCENDING",
+      },
+    ],
+  };
+
+  if (reviewType === "solved") {
+    q.limit = 51;
+  } else {
+    q.limit = 101;
+  }
+
+  return q;
 }
 
 // ============================================================
@@ -202,46 +256,12 @@ function scenarioQuiz(token, userId) {
 
 function scenarioReview(token, userId) {
   group("복습 페이지", function () {
-    // 오답 + 찜 + 푼 문제 동시 조회 (실제 앱에서는 useReview 훅이 한번에 실행)
     const reviewTypes = ["wrong", "bookmark", "solved"];
 
     for (const reviewType of reviewTypes) {
-      const queryBody = {
-        where: {
-          compositeFilter: {
-            op: "AND",
-            filters: [
-              {
-                fieldFilter: {
-                  field: { fieldPath: "userId" },
-                  op: "EQUAL",
-                  value: { stringValue: userId },
-                },
-              },
-              {
-                fieldFilter: {
-                  field: { fieldPath: "reviewType" },
-                  op: "EQUAL",
-                  value: { stringValue: reviewType },
-                },
-              },
-            ],
-          },
-        },
-        orderBy: [
-          {
-            field: { fieldPath: "createdAt" },
-            direction: "DESCENDING",
-          },
-        ],
-      };
-
-      // solved 타입은 페이지네이션 적용 (앱에서 50개씩 로드)
-      if (reviewType === "solved") {
-        queryBody.limit = 51;
-      }
-
-      const res = firestoreQuery(http, "reviews", queryBody, token);
+      const res = firestoreQuery(
+        http, "reviews", buildReviewQueryForMixed(userId, reviewType), token
+      );
 
       const ok = check(res, {
         [`${reviewType} 쿼리 200`]: (r) => r.status === 200,

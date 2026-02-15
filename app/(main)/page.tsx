@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useTheme } from '@/styles/themes/useTheme';
 import { useUser } from '@/lib/contexts';
@@ -9,38 +9,35 @@ import {
   AnnouncementChannel,
   CharacterBox,
   RankingSection,
-  RandomReviewBanner,
 } from '@/components/home';
 
 /**
- * 빈티지 프로필 아이콘
- */
-const VintageProfileIcon = ({ size = 24 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="#1A1A1A">
-    <circle cx="12" cy="8" r="4" />
-    <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
-  </svg>
-);
-
-/**
- * 홈 화면 메인 페이지 - 개편된 버전
+ * 홈 화면 메인 페이지 — 리디자인
  *
  * 구조:
- * 1. 프로필 헤더
- * 2. 공지 채널
- * 3. 캐릭터 박스 (총XP, 도감, 캐릭터, EXP바)
- * 4. 랭킹 섹션 (반별 + 개인)
- * 5. 랜덤 복습 배너
+ * 1. 캐릭터 히어로 섹션 (60vh, 풀블리드)
+ * 2. 바텀시트 스타일 콘텐츠 (40vh, 내부 스크롤)
+ *    - 프로필 + 닉네임
+ *    - 공지 채널
+ *    - 랭킹 섹션
  */
 export default function HomePage() {
   const { theme } = useTheme();
   const { profile } = useUser();
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
 
+  // 홈 화면에서 body 스크롤 방지
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, []);
+
   if (!profile) {
     return (
       <div
-        className="min-h-screen flex items-center justify-center"
+        className="h-screen flex items-center justify-center"
         style={{ backgroundColor: theme.colors.background }}
       >
         <motion.div
@@ -57,55 +54,43 @@ export default function HomePage() {
   }
 
   return (
-    <div
-      className="min-h-screen pb-28"
-      style={{ backgroundColor: theme.colors.background }}
-    >
-      {/* 프로필 헤더 */}
-      <header className="px-4 pt-6 pb-4">
-        <button
-          className="flex items-center gap-3"
-          onClick={() => setShowProfileDrawer(true)}
-        >
-          <div
-            className="w-14 h-14 flex items-center justify-center"
-            style={{
-              border: '2px solid #1A1A1A',
-              backgroundColor: theme.colors.backgroundCard,
-            }}
+    <div className="h-screen overflow-hidden flex flex-col scrollbar-hide">
+      {/* 캐릭터 히어로 섹션 (60vh) */}
+      <CharacterBox />
+
+      {/* 콘텐츠 영역 — 배경 위로 겹쳐서 그라데이션 */}
+      <div
+        className="relative z-10 overflow-y-auto scrollbar-hide -mt-32"
+        style={{ height: 'calc((100vh - 5rem) * 0.4 + 8rem)' }}
+      >
+        {/* 그라데이션 오버레이 */}
+        <div className="sticky top-0 h-32 pointer-events-none" style={{ background: 'linear-gradient(to bottom, transparent 0%, rgba(245,240,232,0.5) 40%, #F5F0E8 100%)' }} />
+        <div className="px-4 pb-28 space-y-4" style={{ backgroundColor: '#F5F0E8' }}>
+          {/* 프로필 + 닉네임 */}
+          <button
+            className="w-full text-left flex items-center gap-4 pt-2"
+            onClick={() => setShowProfileDrawer(true)}
           >
-            <VintageProfileIcon size={28} />
-          </div>
-          <div className="text-left">
-            <p
-              className="font-bold text-xl"
-              style={{ color: theme.colors.text }}
+            <div
+              className="w-14 h-14 flex items-center justify-center flex-shrink-0 border-2 border-[#1A1A1A]"
+              style={{ backgroundColor: theme.colors.backgroundCard }}
             >
+              <svg width={28} height={28} viewBox="0 0 24 24" fill="#1A1A1A">
+                <circle cx="12" cy="8" r="4" />
+                <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
+              </svg>
+            </div>
+            <p className="font-bold text-4xl text-[#1A1A1A] truncate">
               {profile.nickname}
             </p>
-            <p
-              className="text-sm"
-              style={{ color: theme.colors.textSecondary }}
-            >
-              {profile.classType}반
-            </p>
-          </div>
-        </button>
-      </header>
+          </button>
 
-      {/* 메인 콘텐츠 */}
-      <div className="px-4 space-y-4">
-        {/* 공지 채널 */}
-        <AnnouncementChannel />
+          {/* 공지 채널 */}
+          <AnnouncementChannel />
 
-        {/* 캐릭터 박스 */}
-        <CharacterBox />
-
-        {/* 랭킹 섹션 */}
-        <RankingSection />
-
-        {/* 랜덤 복습 배너 */}
-        <RandomReviewBanner />
+          {/* 랭킹 섹션 */}
+          <RankingSection />
+        </div>
       </div>
 
       {/* 프로필 드로어 */}

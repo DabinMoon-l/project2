@@ -16,15 +16,13 @@ interface ProfileCardProps {
 }
 
 // ============================================================
-// 계급별 색상
+// 토끼 뱃지 스타일
 // ============================================================
 
-const RANK_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  '견습생': { bg: '#A0522D20', text: '#A0522D', border: '#A0522D' },
-  '용사': { bg: '#C0C0C020', text: '#808080', border: '#C0C0C0' },
-  '기사': { bg: '#FFD70020', text: '#B8860B', border: '#FFD700' },
-  '장군': { bg: '#4169E120', text: '#4169E1', border: '#4169E1' },
-  '전설의 용사': { bg: '#FF450020', text: '#FF4500', border: '#FF4500' },
+const RABBIT_BADGE_STYLE = {
+  bg: '#D4AF3720',
+  text: '#B8860B',
+  border: '#D4AF37',
 };
 
 // ============================================================
@@ -48,7 +46,7 @@ const SKIN_COLORS = [
  */
 export default function ProfileCard({ profile, onEdit }: ProfileCardProps) {
   const { theme } = useTheme();
-  const rankStyle = RANK_COLORS[profile.rank] || RANK_COLORS['견습생'];
+  const rabbitCount = profile.ownedRabbitKeys?.length || 0;
   const skinColor = SKIN_COLORS[profile.characterOptions?.skinColor || 3];
 
   // 다음 레벨까지 필요한 경험치 계산
@@ -147,16 +145,16 @@ export default function ProfileCard({ profile, onEdit }: ProfileCardProps) {
           </svg>
         </motion.div>
 
-        {/* 계급 뱃지 */}
+        {/* 토끼 뱃지 */}
         <div
           className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-2 px-3 py-1 rounded-full text-xs font-bold"
           style={{
-            backgroundColor: rankStyle.bg,
-            color: rankStyle.text,
-            border: `1px solid ${rankStyle.border}`,
+            backgroundColor: RABBIT_BADGE_STYLE.bg,
+            color: RABBIT_BADGE_STYLE.text,
+            border: `1px solid ${RABBIT_BADGE_STYLE.border}`,
           }}
         >
-          {profile.rank}
+          🐰 집사 {rabbitCount}
         </div>
       </div>
 

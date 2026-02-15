@@ -4,51 +4,30 @@ import { motion } from 'framer-motion';
 import { useTheme } from '@/styles/themes/useTheme';
 
 /**
- * 계급 정보 타입
+ * 뽑기 마일스톤 정보 타입
  */
-interface RankInfo {
-  // 현재 계급명
-  name: string;
-  // 다음 계급명
-  nextRank: string | null;
-  // 현재 경험치
+interface MilestoneInfo {
+  /** 현재 마일스톤 구간 내 진행도 (0-50) */
   currentExp: number;
-  // 다음 계급까지 필요한 경험치
+  /** 마일스톤 간격 */
   maxExp: number;
+  /** 뽑기 가능 여부 */
+  canGacha: boolean;
 }
 
 /**
  * StatsCard Props
  */
 interface StatsCardProps {
-  // 총 경험치
+  /** 총 경험치 */
   totalExp: number;
-  // 계급 정보
-  rankInfo: RankInfo;
+  /** 뽑기 마일스톤 정보 */
+  milestoneInfo: MilestoneInfo;
+  /** 보유 토끼 수 */
+  rabbitCount: number;
+  /** 집사 토끼 수 */
+  butlerCount: number;
 }
-
-/**
- * 계급 목록 및 필요 경험치 (5단계)
- * 시즌 내 달성 가능하도록 완화된 기준
- */
-const RANKS = [
-  { name: '견습생', minExp: 0 },
-  { name: '용사', minExp: 50 },
-  { name: '기사', minExp: 75 },
-  { name: '장군', minExp: 100 },
-  { name: '전설의 용사', minExp: 125 },
-];
-
-/**
- * 계급별 아이콘/배지
- */
-const RANK_ICONS: Record<string, string> = {
-  '견습생': '🌱',
-  '용사': '⚔️',
-  '기사': '🛡️',
-  '장군': '🎖️',
-  '전설의 용사': '🏆',
-};
 
 /**
  * 숫자를 천 단위로 포맷팅
@@ -65,18 +44,15 @@ function formatNumber(num: number): string {
 
 /**
  * 스탯 카드 컴포넌트
- * 경험치, 계급을 표시하며 계급 진행률 바를 포함
+ *
+ * 경험치, 뽑기 마일스톤 진행률, 토끼 보유 현황 표시
  */
-export default function StatsCard({ totalExp, rankInfo }: StatsCardProps) {
+export default function StatsCard({ totalExp, milestoneInfo, rabbitCount, butlerCount }: StatsCardProps) {
   const { theme } = useTheme();
 
-  // 경험치 진행률 계산 (0-100)
-  const expProgress = rankInfo.maxExp > 0
-    ? Math.min((rankInfo.currentExp / rankInfo.maxExp) * 100, 100)
+  const expProgress = milestoneInfo.maxExp > 0
+    ? Math.min((milestoneInfo.currentExp / milestoneInfo.maxExp) * 100, 100)
     : 100;
-
-  // 최고 계급 여부
-  const isMaxRank = rankInfo.nextRank === null;
 
   return (
     <motion.div
@@ -113,50 +89,48 @@ export default function StatsCard({ totalExp, rankInfo }: StatsCardProps) {
         </motion.div>
       </div>
 
-      {/* 하단: 계급 정보 */}
+      {/* 하단: 뽑기 마일스톤 + 토끼 현황 */}
       <div
         className="pt-3"
         style={{ borderTop: `1px solid ${theme.colors.border}` }}
       >
-        {/* 계급 아이콘 및 이름 */}
+        {/* 토끼 현황 */}
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
-            <span className="text-xl">{RANK_ICONS[rankInfo.name] || '🌟'}</span>
+            <span className="text-xl">🐰</span>
             <span
               className="font-bold"
               style={{ color: theme.colors.text }}
             >
-              {rankInfo.name}
+              {rabbitCount}마리
             </span>
+            {butlerCount > 0 && (
+              <span
+                className="text-sm"
+                style={{ color: theme.colors.textSecondary }}
+              >
+                (집사 {butlerCount})
+              </span>
+            )}
           </div>
 
-          {/* 다음 계급 정보 */}
-          {!isMaxRank && (
+          {/* 뽑기 가능 알림 */}
+          {milestoneInfo.canGacha && (
             <span
-              className="text-sm"
-              style={{ color: theme.colors.textSecondary }}
+              className="text-sm font-medium px-2 py-0.5"
+              style={{ color: '#D4AF37', backgroundColor: '#D4AF3720' }}
             >
-              다음: {RANK_ICONS[rankInfo.nextRank!]} {rankInfo.nextRank}
-            </span>
-          )}
-          {isMaxRank && (
-            <span
-              className="text-sm font-medium"
-              style={{ color: theme.colors.accent }}
-            >
-              최고 계급 달성!
+              뽑기 가능!
             </span>
           )}
         </div>
 
-        {/* 경험치 진행률 바 */}
+        {/* 마일스톤 진행률 바 */}
         <div className="relative">
-          {/* 배경 바 */}
           <div
             className="h-3 rounded-full overflow-hidden"
             style={{ backgroundColor: `${theme.colors.accent}20` }}
           >
-            {/* 진행률 바 */}
             <motion.div
               className="h-full rounded-full"
               style={{ backgroundColor: theme.colors.accent }}
@@ -166,19 +140,18 @@ export default function StatsCard({ totalExp, rankInfo }: StatsCardProps) {
             />
           </div>
 
-          {/* 경험치 텍스트 */}
           <div className="flex justify-between mt-1">
             <span
               className="text-xs"
               style={{ color: theme.colors.textSecondary }}
             >
-              {rankInfo.currentExp} / {rankInfo.maxExp} XP
+              {milestoneInfo.currentExp} / {milestoneInfo.maxExp} XP
             </span>
             <span
-              className="text-xs font-medium"
-              style={{ color: theme.colors.accent }}
+              className="text-xs"
+              style={{ color: theme.colors.textSecondary }}
             >
-              {Math.round(expProgress)}%
+              다음 뽑기
             </span>
           </div>
         </div>
@@ -188,40 +161,15 @@ export default function StatsCard({ totalExp, rankInfo }: StatsCardProps) {
 }
 
 /**
- * 경험치로 계급 정보 계산하는 유틸리티 함수
+ * 뽑기 마일스톤 정보 계산 유틸리티 함수
  */
-export function calculateRankInfo(totalExp: number): RankInfo {
-  let currentRankIndex = 0;
-
-  // 현재 계급 찾기
-  for (let i = RANKS.length - 1; i >= 0; i--) {
-    if (totalExp >= RANKS[i].minExp) {
-      currentRankIndex = i;
-      break;
-    }
-  }
-
-  const currentRank = RANKS[currentRankIndex];
-  const nextRank = RANKS[currentRankIndex + 1];
-
-  // 다음 계급이 없으면 (최고 계급)
-  if (!nextRank) {
-    return {
-      name: currentRank.name,
-      nextRank: null,
-      currentExp: totalExp - currentRank.minExp,
-      maxExp: 0, // 최고 계급이면 진행률 100%
-    };
-  }
-
-  // 현재 계급 내에서의 경험치 계산
-  const currentExp = totalExp - currentRank.minExp;
-  const maxExp = nextRank.minExp - currentRank.minExp;
+export function calculateMilestoneInfo(totalExp: number, lastGachaExp: number): MilestoneInfo {
+  const currentMilestone = Math.floor(totalExp / 50) * 50;
+  const canGacha = currentMilestone > lastGachaExp && totalExp >= 50;
 
   return {
-    name: currentRank.name,
-    nextRank: nextRank.name,
-    currentExp,
-    maxExp,
+    currentExp: totalExp % 50,
+    maxExp: 50,
+    canGacha,
   };
 }

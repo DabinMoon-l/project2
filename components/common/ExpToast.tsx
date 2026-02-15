@@ -7,44 +7,15 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
 
-/** 계급 정보 */
-const RANKS = [
-  { name: '견습생', minExp: 0 },
-  { name: '용사', minExp: 50 },
-  { name: '기사', minExp: 75 },
-  { name: '장군', minExp: 100 },
-  { name: '전설의 용사', minExp: 125 },
-];
-
-/** 현재 계급과 다음 계급 정보 계산 */
-function getRankInfo(totalExp: number) {
-  let currentRank = RANKS[0];
-  let nextRank = RANKS[1];
-
-  for (let i = RANKS.length - 1; i >= 0; i--) {
-    if (totalExp >= RANKS[i].minExp) {
-      currentRank = RANKS[i];
-      nextRank = RANKS[i + 1] || null;
-      break;
-    }
-  }
-
-  const expInCurrentRank = nextRank
-    ? totalExp - currentRank.minExp
-    : totalExp - currentRank.minExp;
-  const expNeededForNext = nextRank
-    ? nextRank.minExp - currentRank.minExp
-    : 0;
-  const progress = nextRank
-    ? (expInCurrentRank / expNeededForNext) * 100
-    : 100;
+/** 뽑기 마일스톤 정보 계산 */
+function getMilestoneInfo(totalExp: number) {
+  const currentExp = totalExp % 50;
+  const maxExp = 50;
+  const progress = (currentExp / maxExp) * 100;
 
   return {
-    currentRank,
-    nextRank,
-    expInCurrentRank,
-    expNeededForNext,
-    expToNext: nextRank ? nextRank.minExp - totalExp : 0,
+    currentExp,
+    maxExp,
     progress: Math.min(progress, 100),
   };
 }
@@ -141,7 +112,7 @@ function ExpToastContainer({ toasts }: { toasts: ExpToastData[] }) {
 /** 개별 토스트 아이템 */
 function ExpToastItem({ toast }: { toast: ExpToastData }) {
   const { theme } = useTheme();
-  const rankInfo = getRankInfo(toast.totalExp);
+  const milestoneInfo = getMilestoneInfo(toast.totalExp);
   const [showParticles, setShowParticles] = useState(true);
 
   useEffect(() => {
@@ -182,38 +153,7 @@ function ExpToastItem({ toast }: { toast: ExpToastData }) {
         )}
       </AnimatePresence>
 
-      {/* 계급 승급 토스트 */}
-      {toast.isRankUp ? (
-        <motion.div
-          initial={{ scale: 0.5 }}
-          animate={{ scale: 1 }}
-          className="px-6 py-4 shadow-lg"
-          style={{
-            backgroundColor: theme.colors.accent,
-            border: '2px solid #1A1A1A',
-          }}
-        >
-          {/* 장식 코너 */}
-          <div className="absolute top-1 left-1 w-3 h-3 border-t-2 border-l-2 border-[#1A1A1A] opacity-50" />
-          <div className="absolute top-1 right-1 w-3 h-3 border-t-2 border-r-2 border-[#1A1A1A] opacity-50" />
-          <div className="absolute bottom-1 left-1 w-3 h-3 border-b-2 border-l-2 border-[#1A1A1A] opacity-50" />
-          <div className="absolute bottom-1 right-1 w-3 h-3 border-b-2 border-r-2 border-[#1A1A1A] opacity-50" />
-
-          <div className="text-center relative">
-            <motion.div
-              initial={{ rotate: -10 }}
-              animate={{ rotate: [0, -5, 5, 0] }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="text-2xl mb-1"
-            >
-              ✦
-            </motion.div>
-            <p className="font-serif-display text-lg font-bold text-[#F5F0E8]">RANK UP!</p>
-            <p className="font-serif-display text-sm font-bold text-[#F5F0E8] opacity-90">{toast.newRank}</p>
-          </div>
-        </motion.div>
-      ) : (
-        /* 일반 EXP 토스트 - 빈티지 신문 스타일 */
+      {/* 일반 EXP 토스트 - 빈티지 신문 스타일 */}
         <div
           className="relative px-5 py-3 shadow-lg min-w-[220px]"
           style={{
@@ -266,49 +206,36 @@ function ExpToastItem({ toast }: { toast: ExpToastData }) {
             </p>
           )}
 
-          {/* 프로그레스 바 */}
-          {rankInfo.nextRank && (
-            <div className="mt-2">
-              <div className="flex justify-between text-xs mb-1">
-                <span
-                  className="font-serif-display"
-                  style={{ color: theme.colors.accent }}
-                >
-                  {rankInfo.currentRank.name}
-                </span>
-                <span style={{ color: theme.colors.textSecondary }}>
-                  {rankInfo.expInCurrentRank} / {rankInfo.expNeededForNext} XP
-                </span>
-              </div>
-              <div
-                className="h-2 overflow-hidden"
-                style={{
-                  backgroundColor: theme.colors.backgroundSecondary,
-                  border: '1px solid #1A1A1A',
-                }}
+          {/* 뽑기 마일스톤 바 */}
+          <div className="mt-2">
+            <div className="flex justify-between text-xs mb-1">
+              <span
+                className="font-serif-display"
+                style={{ color: theme.colors.accent }}
               >
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${rankInfo.progress}%` }}
-                  transition={{ duration: 0.5, delay: 0.2 }}
-                  className="h-full"
-                  style={{ backgroundColor: theme.colors.accent }}
-                />
-              </div>
+                다음 뽑기
+              </span>
+              <span style={{ color: theme.colors.textSecondary }}>
+                {milestoneInfo.currentExp} / {milestoneInfo.maxExp} XP
+              </span>
             </div>
-          )}
-
-          {/* 최고 계급 도달 시 */}
-          {!rankInfo.nextRank && (
-            <p
-              className="text-xs text-center mt-1  italic"
-              style={{ color: theme.colors.accent }}
+            <div
+              className="h-2 overflow-hidden"
+              style={{
+                backgroundColor: theme.colors.backgroundSecondary,
+                border: '1px solid #1A1A1A',
+              }}
             >
-              ✦ 최고 계급 달성 ✦
-            </p>
-          )}
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${milestoneInfo.progress}%` }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+                className="h-full"
+                style={{ backgroundColor: theme.colors.accent }}
+              />
+            </div>
+          </div>
         </div>
-      )}
     </motion.div>
   );
 }

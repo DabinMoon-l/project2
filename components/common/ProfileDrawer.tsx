@@ -12,7 +12,7 @@ import {
   type PrivacySettings,
   DEFAULT_SETTINGS,
 } from '@/lib/hooks/useSettings';
-import { calculateRankInfo } from '@/components/home';
+import { calculateMilestoneInfo } from '@/components/home/StatsCard';
 import Modal from './Modal';
 
 interface ProfileDrawerProps {
@@ -62,9 +62,9 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
 
   const displaySettings = settings || DEFAULT_SETTINGS;
 
-  const rankInfo = profile ? calculateRankInfo(profile.totalExp) : null;
-  const expProgress = rankInfo && rankInfo.maxExp > 0
-    ? Math.min((rankInfo.currentExp / rankInfo.maxExp) * 100, 100)
+  const milestoneInfo = profile ? calculateMilestoneInfo(profile.totalExp, profile.lastGachaExp || 0) : null;
+  const expProgress = milestoneInfo && milestoneInfo.maxExp > 0
+    ? Math.min((milestoneInfo.currentExp / milestoneInfo.maxExp) * 100, 100)
     : 0;
 
   const handleNicknameChange = useCallback(async () => {
@@ -249,21 +249,22 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                 </div>
               </div>
 
-              {/* 경험치 게이지 */}
-              {rankInfo && (
+              {/* 뽑기 마일스톤 게이지 */}
+              {milestoneInfo && (
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <span
                       className="text-sm font-serif-display"
                       style={{ color: theme.colors.accent }}
                     >
-                      {rankInfo.name}
+                      {profile.totalExp} XP
                     </span>
                     <span
                       className="text-xs"
                       style={{ color: theme.colors.textSecondary }}
                     >
-                      {rankInfo.currentExp} / {rankInfo.maxExp} XP
+                      {milestoneInfo.currentExp} / {milestoneInfo.maxExp} XP
+                      {milestoneInfo.canGacha && ' · 뽑기 가능!'}
                     </span>
                   </div>
                   <div

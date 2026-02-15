@@ -1,0 +1,528 @@
+{
+    "root_group": {
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {
+            "게시판 목록 조회": {
+                "name": "게시판 목록 조회",
+                "path": "::게시판 목록 조회",
+                "id": "ef9b0630ef415a496d517d3cb76f88a2",
+                "groups": {},
+                "checks": {
+                        "게시판 목록 200 OK": {
+                            "name": "게시판 목록 200 OK",
+                            "path": "::게시판 목록 조회::게시판 목록 200 OK",
+                            "id": "849582fd7f0885efab001c2c514e34d0",
+                            "passes": 3641,
+                            "fails": 0
+                        }
+                    }
+            },
+            "글 작성": {
+                "groups": {},
+                "checks": {},
+                "name": "글 작성",
+                "path": "::글 작성",
+                "id": "abb6bdc4803f4fc643970b90f1f86082"
+            },
+            "댓글 작성": {
+                "name": "댓글 작성",
+                "path": "::댓글 작성",
+                "id": "4b3a10f3ea96174d0e300368334da50a",
+                "groups": {},
+                "checks": {
+                        "댓글 작성 200 OK": {
+                            "name": "댓글 작성 200 OK",
+                            "path": "::댓글 작성::댓글 작성 200 OK",
+                            "id": "8ac5d4d6a383230473c0bf7c4a06aef4",
+                            "passes": 516,
+                            "fails": 0
+                        }
+                    }
+            },
+            "복습 페이지 로드": {
+                "name": "복습 페이지 로드",
+                "path": "::복습 페이지 로드",
+                "id": "818edd8a83c9da374f2dc77e5731289e",
+                "groups": {
+                    "오답 쿼리": {
+                        "path": "::복습 페이지 로드::오답 쿼리",
+                        "id": "4bc95dafd10c6a00631c3666a5febf3d",
+                        "groups": {},
+                        "checks": {
+                                "오답 쿼리 200": {
+                                    "name": "오답 쿼리 200",
+                                    "path": "::복습 페이지 로드::오답 쿼리::오답 쿼리 200",
+                                    "id": "4ba7b73f7a6ed12d336bd86b740b06d7",
+                                    "passes": 1437,
+                                    "fails": 45
+                                }
+                            },
+                        "name": "오답 쿼리"
+                    },
+                    "찜 쿼리": {
+                        "id": "ae66ad3e22f10d74bc173b87bc2fa927",
+                        "groups": {},
+                        "checks": {
+                                "찜 쿼리 200": {
+                                    "path": "::복습 페이지 로드::찜 쿼리::찜 쿼리 200",
+                                    "id": "e812512b004ce869a3ef81ecb8de06c6",
+                                    "passes": 1448,
+                                    "fails": 31,
+                                    "name": "찜 쿼리 200"
+                                }
+                            },
+                        "name": "찜 쿼리",
+                        "path": "::복습 페이지 로드::찜 쿼리"
+                    },
+                    "푼 문제 쿼리": {
+                        "name": "푼 문제 쿼리",
+                        "path": "::복습 페이지 로드::푼 문제 쿼리",
+                        "id": "f397da4ef038e1edce258f0fc3a65a09",
+                        "groups": {},
+                        "checks": {
+                                "푼 문제 쿼리 200": {
+                                    "passes": 1443,
+                                    "fails": 6,
+                                    "name": "푼 문제 쿼리 200",
+                                    "path": "::복습 페이지 로드::푼 문제 쿼리::푼 문제 쿼리 200",
+                                    "id": "56ed56a41b604b896d99c4ac22f25857"
+                                }
+                            }
+                    },
+                    "퀴즈 결과 쿼리": {
+                        "checks": {},
+                        "name": "퀴즈 결과 쿼리",
+                        "path": "::복습 페이지 로드::퀴즈 결과 쿼리",
+                        "id": "16e66af188e26dc43fc114a2b0df5149",
+                        "groups": {}
+                    },
+                    "커스텀 폴더 쿼리": {
+                        "name": "커스텀 폴더 쿼리",
+                        "path": "::복습 페이지 로드::커스텀 폴더 쿼리",
+                        "id": "57254f8b21cf2556b730ae4997526103",
+                        "groups": {},
+                        "checks": {}
+                    }
+                },
+                "checks": {}
+            },
+            "퀴즈 풀기 플로우": {
+                "path": "::퀴즈 풀기 플로우",
+                "id": "7b8a78685850fafc868c78214f28ec84",
+                "groups": {
+                    "퀴즈 목록": {
+                        "name": "퀴즈 목록",
+                        "path": "::퀴즈 풀기 플로우::퀴즈 목록",
+                        "id": "3d839c13ffc67bf9166063f3b1cf5e54",
+                        "groups": {},
+                        "checks": {
+                                "퀴즈 목록 200": {
+                                    "fails": 16,
+                                    "name": "퀴즈 목록 200",
+                                    "path": "::퀴즈 풀기 플로우::퀴즈 목록::퀴즈 목록 200",
+                                    "id": "5bb520985faa5553e2b08d4210edd6ed",
+                                    "passes": 1719
+                                }
+                            }
+                    },
+                    "퀴즈 상세": {
+                        "checks": {
+                            "퀴즈 상세 200": {
+                                "path": "::퀴즈 풀기 플로우::퀴즈 상세::퀴즈 상세 200",
+                                "id": "70bbe7f5f86ec15c212d87778dd415ed",
+                                "passes": 1720,
+                                "fails": 8,
+                                "name": "퀴즈 상세 200"
+                            }
+                        },
+                        "name": "퀴즈 상세",
+                        "path": "::퀴즈 풀기 플로우::퀴즈 상세",
+                        "id": "8d4909bed6d4f260e1d61ad30ee04ba8",
+                        "groups": {}
+                    },
+                    "퀴즈 제출": {
+                        "name": "퀴즈 제출",
+                        "path": "::퀴즈 풀기 플로우::퀴즈 제출",
+                        "id": "2311e73e9154eb0b606e185c1104f74b",
+                        "groups": {},
+                        "checks": {
+                                "recordAttempt 200": {
+                                    "id": "56ee9e13d34e20bd0c65608f9e67f21c",
+                                    "passes": 1728,
+                                    "fails": 0,
+                                    "name": "recordAttempt 200",
+                                    "path": "::퀴즈 풀기 플로우::퀴즈 제출::recordAttempt 200"
+                                }
+                            }
+                    }
+                },
+                "checks": {},
+                "name": "퀴즈 풀기 플로우"
+            },
+            "복습 페이지": {
+                "name": "복습 페이지",
+                "path": "::복습 페이지",
+                "id": "358db27681f0351def740c3cc6081dda",
+                "groups": {},
+                "checks": {
+                        "wrong 쿼리 200": {
+                            "name": "wrong 쿼리 200",
+                            "path": "::복습 페이지::wrong 쿼리 200",
+                            "id": "6961028e3bf82b5ada4c9650d1d8a275",
+                            "passes": 1784,
+                            "fails": 5
+                        },
+                        "bookmark 쿼리 200": {
+                            "name": "bookmark 쿼리 200",
+                            "path": "::복습 페이지::bookmark 쿼리 200",
+                            "id": "da8e9e96b91669cfed7b45b2e1a64586",
+                            "passes": 1785,
+                            "fails": 4
+                        },
+                        "solved 쿼리 200": {
+                            "passes": 1785,
+                            "fails": 4,
+                            "name": "solved 쿼리 200",
+                            "path": "::복습 페이지::solved 쿼리 200",
+                            "id": "8988feac4cee398396679ac35db484f9"
+                        }
+                    }
+            },
+            "게시판 활동": {
+                "name": "게시판 활동",
+                "path": "::게시판 활동",
+                "id": "719c7817779bc3522d27a8dec2d287c4",
+                "groups": {},
+                "checks": {
+                        "게시판 목록 200": {
+                            "id": "1cd2088d838299ec087fdda4c9849e67",
+                            "passes": 1580,
+                            "fails": 5,
+                            "name": "게시판 목록 200",
+                            "path": "::게시판 활동::게시판 목록 200"
+                        }
+                    }
+            },
+            "프로필 조회": {
+                "checks": {
+                    "프로필 조회 200": {
+                        "passes": 1250,
+                        "fails": 0,
+                        "name": "프로필 조회 200",
+                        "path": "::프로필 조회::프로필 조회 200",
+                        "id": "ddfb33fe0724718417e8eab4f31fc577"
+                    }
+                },
+                "name": "프로필 조회",
+                "path": "::프로필 조회",
+                "id": "0e9343eaafbfd076fe76d6e7a4c6d102",
+                "groups": {}
+            },
+            "랭킹 조회": {
+                "path": "::랭킹 조회",
+                "id": "be4b1b786f85dcb8190f02346cbf52e9",
+                "groups": {},
+                "checks": {
+                        "랭킹 조회 200": {
+                            "name": "랭킹 조회 200",
+                            "path": "::랭킹 조회::랭킹 조회 200",
+                            "id": "2fd5e6bf27ade1e3a30e6b24a7cd7bb3",
+                            "passes": 980,
+                            "fails": 0
+                        }
+                    },
+                "name": "랭킹 조회"
+            }
+        },
+        "checks": {
+            "recordAttempt 200 OK": {
+                "name": "recordAttempt 200 OK",
+                "path": "::recordAttempt 200 OK",
+                "id": "b67a194344d027f36ab76d4a142f87d2",
+                "passes": 4694,
+                "fails": 54
+            },
+            "결과에 score 포함": {
+                "path": "::결과에 score 포함",
+                "id": "c20eb1f6b59e57819788302e13293739",
+                "passes": 4694,
+                "fails": 54,
+                "name": "결과에 score 포함"
+            }
+        }
+    },
+    "metrics": {
+        "cloud_function_errors": {
+            "passes": 0,
+            "fails": 2708,
+            "thresholds": {
+                "rate<0.05": false
+            },
+            "value": 0
+        },
+        "iteration_duration": {
+            "p(95)": 23804.654394999983,
+            "avg": 9002.417301166697,
+            "min": 1028.8592,
+            "med": 6835.66145,
+            "max": 192464.0551,
+            "p(90)": 18165.58447
+        },
+        "bookmark_query_duration": {
+            "p(95)": 9394.399999999998,
+            "avg": 3662.0405679513183,
+            "min": 17,
+            "med": 1798,
+            "max": 60003,
+            "p(90)": 5847.6,
+            "thresholds": {
+                "p(95)<8000": true
+            }
+        },
+        "vus_max": {
+            "max": 300,
+            "value": 300,
+            "min": 300
+        },
+        "data_received": {
+            "count": 2367583818,
+            "rate": 2437172.0054419236
+        },
+        "http_reqs": {
+            "count": 34938,
+            "rate": 35.964900114100175
+        },
+        "http_req_waiting": {
+            "med": 116.9254,
+            "max": 60002.5253,
+            "p(90)": 1867.8629199999998,
+            "p(95)": 2520.071215000002,
+            "avg": 689.9502218071999,
+            "min": 0
+        },
+        "rate_limit_errors": {
+            "count": 54,
+            "rate": 0.05558717173740367
+        },
+        "group_duration": {
+            "p(90)": 12817.5583,
+            "p(95)": 17960.021025,
+            "avg": 4439.262763273493,
+            "min": 14.9665,
+            "med": 1609.31015,
+            "max": 180002.0627
+        },
+        "record_attempt_errors": {
+            "passes": 54,
+            "fails": 4694,
+            "thresholds": {
+                "rate<0.03": false
+            },
+            "value": 0.011373209772535805
+        },
+        "http_req_failed": {
+            "passes": 1543,
+            "fails": 33395,
+            "thresholds": {
+                "rate<0.05": false
+            },
+            "value": 0.044163947564256685
+        },
+        "review_query_errors": {
+            "passes": 45,
+            "fails": 1437,
+            "thresholds": {
+                "rate<0.05": false
+            },
+            "value": 0.030364372469635626
+        },
+        "http_req_sending": {
+            "min": 0,
+            "med": 0,
+            "max": 33.6379,
+            "p(90)": 0.5890299999999999,
+            "p(95)": 0.7545300000000003,
+            "avg": 0.2548913045967169
+        },
+        "post_create_duration": {
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0,
+            "thresholds": {
+                "p(95)<3000": false
+            }
+        },
+        "comment_create_duration": {
+            "p(95)": 44,
+            "avg": 30.80426356589147,
+            "min": 18,
+            "med": 26,
+            "max": 1154,
+            "p(90)": 38.5,
+            "thresholds": {
+                "p(95)<3000": false
+            }
+        },
+        "http_req_tls_handshaking": {
+            "max": 32045.2795,
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 15.978128959871796,
+            "min": 0,
+            "med": 0
+        },
+        "scenario_duration": {
+            "max": 186787,
+            "p(90)": 13730.800000000001,
+            "p(95)": 15827.699999999999,
+            "avg": 6351.57010365521,
+            "min": 1048,
+            "med": 4226,
+            "thresholds": {
+                "p(95)<20000": false
+            }
+        },
+        "active_scenarios": {
+            "count": 7341,
+            "rate": 7.556767180079266
+        },
+        "http_req_duration": {
+            "min": 0,
+            "med": 126.7697,
+            "max": 60006.1586,
+            "p(90)": 3038.43454,
+            "p(95)": 6830.241955000002,
+            "avg": 1344.2087828009762,
+            "thresholds": {
+                "p(95)<10000": false
+            }
+        },
+        "http_req_connecting": {
+            "avg": 7.64787246264812,
+            "min": 0,
+            "med": 0,
+            "max": 3765.8603,
+            "p(90)": 0,
+            "p(95)": 0
+        },
+        "http_req_duration{expected_response:true}": {
+            "min": 14.2505,
+            "med": 129.617,
+            "max": 58389.9328,
+            "p(90)": 3058.4582000000014,
+            "p(95)": 6659.576039999998,
+            "avg": 1168.5940182213021
+        },
+        "iterations": {
+            "count": 18684,
+            "rate": 19.23316142114167
+        },
+        "solved_query_duration": {
+            "med": 3729,
+            "max": 60003,
+            "p(90)": 9255.600000000002,
+            "p(95)": 13416.799999999988,
+            "avg": 5113.173913043478,
+            "min": 39,
+            "thresholds": {
+                "p(95)<12000": true
+            }
+        },
+        "vus": {
+            "max": 300,
+            "value": 1,
+            "min": 0
+        },
+        "data_sent": {
+            "count": 28226336,
+            "rate": 29055.966421289995
+        },
+        "http_req_receiving": {
+            "p(90)": 557.1430399999999,
+            "p(95)": 3928.897470000004,
+            "avg": 654.0036696891696,
+            "min": 0,
+            "med": 1.13925,
+            "max": 58581.1068
+        },
+        "rate_limit_hits": {
+            "passes": 1038,
+            "fails": 0,
+            "value": 1
+        },
+        "wrong_query_duration": {
+            "avg": 8415.60661268556,
+            "min": 204,
+            "med": 5512,
+            "max": 60058,
+            "p(90)": 16631.300000000003,
+            "p(95)": 24755.85000000001,
+            "thresholds": {
+                "p(95)<20000": true
+            }
+        },
+        "review_page_load": {
+            "avg": 24466.90596491228,
+            "min": 418,
+            "med": 21329,
+            "max": 172139,
+            "p(90)": 41977.4,
+            "p(95)": 50678.2,
+            "thresholds": {
+                "p(95)<50000": true
+            }
+        },
+        "checks": {
+            "passes": 32204,
+            "fails": 232,
+            "value": 0.9928474534467875
+        },
+        "firestore_errors": {
+            "passes": 34,
+            "fails": 9903,
+            "thresholds": {
+                "rate<0.05": false
+            },
+            "value": 0.0034215558015497634
+        },
+        "http_req_blocked": {
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 23.64164368309578,
+            "min": 0,
+            "med": 0,
+            "max": 34467.1861
+        },
+        "record_attempt_duration": {
+            "min": 78,
+            "med": 124,
+            "max": 546,
+            "p(90)": 182,
+            "p(95)": 237.64999999999964,
+            "avg": 137.52422072451557,
+            "thresholds": {
+                "p(95)<5000": false,
+                "p(99)<8000": false
+            }
+        },
+        "post_list_duration": {
+            "avg": 37.0442186212579,
+            "min": 19,
+            "med": 30,
+            "max": 1238,
+            "p(90)": 48,
+            "p(95)": 69,
+            "thresholds": {
+                "p(95)<2000": false
+            }
+        }
+    },
+    "setup_data": {
+        "quizId": "GQn3lccHnZeGynRv3Q8r"
+    }
+}

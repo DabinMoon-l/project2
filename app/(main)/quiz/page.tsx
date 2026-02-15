@@ -1245,7 +1245,7 @@ function QuizListPageContent() {
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const { isBookmarked, toggleBookmark } = useQuizBookmark();
-  const { userCourseId } = useCourse();
+  const { userCourseId, semesterSettings } = useCourse();
   const { updatedQuizzes, checkQuizUpdate, refresh: refreshUpdates, loading: updatesLoading } = useQuizUpdate();
 
   // 과목별 리본 이미지
@@ -1968,18 +1968,18 @@ function QuizListPageContent() {
   return (
     <div className="min-h-screen pb-72" style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 - 배너 이미지 */}
-      <header className="pt-4 pb-2 flex flex-col items-center">
-        <div className="w-full flex justify-center">
+      <header className="flex flex-col items-center">
+        <div className="w-full h-[260px] pt-2">
           <img
             src={ribbonImage}
             alt="Quiz"
-            className="w-[85%] sm:w-[80%] md:w-[75%] min-w-[280px] max-w-[800px] h-auto"
-            style={{ transform: `scale(${ribbonScale})` }}
+            className="w-full h-full object-contain"
+            style={{ transform: `scale(${ribbonScale}) scaleX(1.15)` }}
           />
         </div>
 
         {/* 버튼 영역 */}
-        <div className="w-full px-4 py-4 flex items-center justify-between">
+        <div className="w-full px-4 py-2 flex items-center justify-between">
           <button
             onClick={() => setIsManageMode(true)}
             className="px-4 py-3 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] whitespace-nowrap hover:bg-[#EDEAE4] transition-colors"

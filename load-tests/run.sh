@@ -17,7 +17,8 @@
 #   board   - 게시판 동시 읽기/쓰기 테스트
 #   review  - 복습 목록 대량 조회 테스트
 #   mixed   - 300명 혼합 현실적 시나리오
-#   all     - 전체 시나리오 순차 실행
+#   sequential - 단일 k6 프로세스로 전체 시나리오 순차 실행 (권장)
+#   all     - 전체 시나리오 순차 실행 (개별 k6 프로세스)
 # ============================================================
 
 set -e
@@ -29,7 +30,7 @@ if [ -z "$FIREBASE_API_KEY" ]; then
   exit 1
 fi
 
-SCENARIO=${1:-mixed}
+SCENARIO=${1:-sequential}
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 RESULTS_DIR="load-tests/results"
 mkdir -p "$RESULTS_DIR"
@@ -76,8 +77,14 @@ case $SCENARIO in
   mixed)
     run_scenario "mixed-realistic" "load-tests/scenarios/mixed-realistic.js"
     ;;
+  sequential)
+    echo "단일 k6 프로세스로 전체 시나리오 순차 실행 (~16분)..."
+    echo "  quiz_submit → board_activity → review_load → mixed_realistic"
+    echo ""
+    run_scenario "sequential-all" "load-tests/scenarios/sequential-all.js"
+    ;;
   all)
-    echo "전체 시나리오 순차 실행..."
+    echo "전체 시나리오 순차 실행 (개별 k6 프로세스)..."
     echo ""
     run_scenario "quiz-submit" "load-tests/scenarios/quiz-submit.js"
     sleep 10
@@ -92,7 +99,7 @@ case $SCENARIO in
     ;;
   *)
     echo "❌ 알 수 없는 시나리오: $SCENARIO"
-    echo "   사용법: ./load-tests/run.sh <quiz|board|review|mixed|all>"
+    echo "   사용법: ./load-tests/run.sh <quiz|board|review|mixed|sequential|all>"
     exit 1
     ;;
 esac

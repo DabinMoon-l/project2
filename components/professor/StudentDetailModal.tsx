@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   type StudentData,
   type StudentDetail,
-  RANK_LABELS,
   CLASS_COLORS,
 } from '@/lib/hooks/useProfessorStudents';
 
@@ -130,9 +129,6 @@ export default function StudentDetailModal({
                       style={{ backgroundColor: classColor }}
                     >
                       {student?.classId}반
-                    </span>
-                    <span className="text-sm text-gray-500">
-                      {student && RANK_LABELS[student.rank]}
                     </span>
                     <span className="text-sm text-gray-400">
                       Lv.{student?.level}

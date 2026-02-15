@@ -32,7 +32,6 @@ async function migrateUserExp() {
     if (data.totalExp === undefined || data.totalExp === null) {
       batch.update(doc.ref, {
         totalExp: 0,
-        rank: data.rank ?? '견습생',
         totalQuizzes: data.totalQuizzes ?? 0,
         correctAnswers: data.correctAnswers ?? 0,
         wrongAnswers: data.wrongAnswers ?? 0,

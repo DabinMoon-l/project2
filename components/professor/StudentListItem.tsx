@@ -4,7 +4,6 @@ import { motion } from 'framer-motion';
 import {
   type StudentData,
   type ClassType,
-  RANK_LABELS,
   CLASS_COLORS,
 } from '@/lib/hooks/useProfessorStudents';
 
@@ -109,11 +108,6 @@ export default function StudentListItem({ student, onClick }: StudentListItemPro
               style={{ backgroundColor: classColor }}
             >
               {student.classId}반
-            </span>
-
-            {/* 계급 */}
-            <span className="text-xs text-gray-500">
-              {RANK_LABELS[student.rank]}
             </span>
 
             {/* 레벨 */}

@@ -156,8 +156,8 @@ export default function (data) {
     recordAttemptErrors.add(0);
   }
 
-  // 다음 반복 전 쿨다운
-  sleep(Math.random() * 3 + 1);
+  // 다음 반복 전 쿨다운 (rate limit 10회/분 준수: avg 5s → ~8.5회/분)
+  sleep(Math.random() * 4 + 3);
 }
 
 export function teardown(data) {

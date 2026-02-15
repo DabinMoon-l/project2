@@ -109,7 +109,7 @@ export default function CommentItem({
             className="text-sm font-semibold"
             style={{ color: theme.colors.text }}
           >
-            {comment.authorNickname}·{comment.authorClassType || '?'}반·{comment.authorRank || '견습생'}
+            {comment.authorNickname}·{comment.authorClassType || '?'}반
           </span>
 
           {/* 구분선 */}

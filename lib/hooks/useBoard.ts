@@ -59,7 +59,6 @@ export interface Post {
   authorId: string;
   authorNickname: string;
   authorClassType?: 'A' | 'B' | 'C' | 'D'; // 작성자 반
-  authorRank?: string; // 작성자 계급
   isAnonymous: boolean;
   category: BoardCategory;
   courseId?: string; // 과목 ID (과목별 분리)
@@ -85,7 +84,6 @@ export interface Comment {
   authorId: string;
   authorNickname: string;
   authorClassType?: 'A' | 'B' | 'C' | 'D'; // 작성자 반
-  authorRank?: string; // 작성자 계급
   content: string;
   isAnonymous: boolean;
   createdAt: Date;
@@ -335,7 +333,6 @@ const docToPost = (doc: QueryDocumentSnapshot | DocumentSnapshot): Post => {
     authorId: data?.authorId || '',
     authorNickname: data?.authorNickname || '알 수 없음',
     authorClassType: data?.authorClassType,
-    authorRank: data?.authorRank,
     isAnonymous: data?.isAnonymous || false,
     category: data?.category || 'community',
     courseId: data?.courseId,
@@ -366,7 +363,6 @@ const docToComment = (doc: QueryDocumentSnapshot | DocumentSnapshot): Comment =>
     authorId: data?.authorId || '',
     authorNickname: data?.authorNickname || '알 수 없음',
     authorClassType: data?.authorClassType,
-    authorRank: data?.authorRank,
     content: data?.content || '',
     isAnonymous: data?.isAnonymous || false,
     createdAt: data?.createdAt?.toDate() || new Date(),
@@ -814,14 +810,12 @@ export const useCreatePost = (): UseCreatePostReturn => {
         // Firestore에서 사용자 정보 가져오기 (보안 강화)
         let userNickname = '용사';
         let userClassType: 'A' | 'B' | 'C' | 'D' | undefined;
-        let userRank = '견습생';
         const userDocRef = doc(db, 'users', user.uid);
         const userDocSnap = await getDoc(userDocRef);
         if (userDocSnap.exists()) {
           const userData = userDocSnap.data();
           userNickname = userData.nickname || '용사';
           userClassType = userData.classId; // Firestore 필드명은 classId
-          userRank = userData.rank || '견습생';
         }
 
         const postData = {
@@ -836,7 +830,6 @@ export const useCreatePost = (): UseCreatePostReturn => {
           authorId: user.uid,
           authorNickname: userNickname,
           authorClassType: userClassType || null,
-          authorRank: userRank,
           likes: 0,
           likedBy: [],
           commentCount: 0,
@@ -1029,14 +1022,12 @@ export const useCreateComment = (): UseCreateCommentReturn => {
         // Firestore에서 사용자 정보 가져오기 (보안 강화)
         let userNickname = '용사';
         let userClassType: 'A' | 'B' | 'C' | 'D' | undefined;
-        let userRank = '견습생';
         const userDocRef = doc(db, 'users', user.uid);
         const userDocSnap = await getDoc(userDocRef);
         if (userDocSnap.exists()) {
           const userData = userDocSnap.data();
           userNickname = userData.nickname || '용사';
           userClassType = userData.classId; // Firestore 필드명은 classId
-          userRank = userData.rank || '견습생';
         }
 
         const commentData: Record<string, unknown> = {
@@ -1044,7 +1035,6 @@ export const useCreateComment = (): UseCreateCommentReturn => {
           authorId: user.uid,
           authorNickname: userNickname,
           authorClassType: userClassType || null,
-          authorRank: userRank,
           content: data.content,
           isAnonymous: false, // 익명 기능 사용 안 함
           createdAt: serverTimestamp(),

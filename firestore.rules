@@ -42,7 +42,8 @@ service cloud.firestore {
       // exp, rank 등은 Cloud Functions에서만 수정 가능
       allow update: if isOwner(uid) &&
         !request.resource.data.diff(resource.data).affectedKeys()
-          .hasAny(['totalExp', 'rank', 'role', 'badges']);
+          .hasAny(['totalExp', 'rank', 'role', 'badges',
+                   'ownedRabbitKeys', 'equippedRabbitId', 'equippedRabbitCourseId']);
 
       // 삭제: 불가
       allow delete: if false;
@@ -55,6 +56,12 @@ service cloud.firestore {
 
       // 경험치 히스토리 서브컬렉션 (CF 전용 쓰기)
       match /expHistory/{historyId} {
+        allow read: if isOwner(uid) || isProfessor();
+        allow write: if false;
+      }
+
+      // 토끼 보유 서브컬렉션 (CF 전용 쓰기, 본인/교수 읽기)
+      match /rabbitHoldings/{holdingId} {
         allow read: if isOwner(uid) || isProfessor();
         allow write: if false;
       }
@@ -549,19 +556,34 @@ service cloud.firestore {
     }
 
     // ============================================================
-    // 캐릭터 도감 (과목별 공유 도감)
+    // 캐릭터 도감 (레거시 — 읽기 전용 보존)
     // ============================================================
     match /characterDiscoveries/{discoveryId} {
-      // 읽기: 로그인 사용자 (과목별 도감 조회)
       allow read: if isAuthenticated();
-
-      // 생성: 로그인 사용자 (새 캐릭터 발견)
-      allow create: if isAuthenticated() &&
-        request.resource.data.discoveredBy == request.auth.uid;
-
-      // 수정/삭제: 불가
-      allow update, delete: if false;
+      allow write: if false;
     }
+
+    // ============================================================
+    // 토끼 컬렉션 (CF 전용 쓰기)
+    // ============================================================
+    match /rabbits/{rabbitDocId} {
+      // 읽기: 로그인 사용자 (도감 조회)
+      allow read: if isAuthenticated();
+      // 쓰기: Cloud Functions에서만
+      allow write: if false;
+    }
+
+    // ============================================================
+    // 토끼 승계 큐 (CF 전용)
+    // ============================================================
+    match /rabbit_successors/{rabbitDocId} {
+      allow read, write: if false;
+    }
+
+    // ============================================================
+    // 토끼 보유 서브컬렉션 (users/{uid}/rabbitHoldings)
+    // ============================================================
+    // users/{uid} 하위에 이미 정의되어 있으므로 아래 참고
 
     // ============================================================
     // 비공개 퀴즈 (자체제작 퀴즈 폴백 조회)

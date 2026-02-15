@@ -1,0 +1,247 @@
+{
+    "root_group": {
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {},
+        "checks": {},
+        "name": ""
+    },
+    "metrics": {
+        "firestore_errors": {
+            "passes": 0,
+            "fails": 0,
+            "thresholds": {
+                "rate<0.05": false
+            },
+            "value": 0
+        },
+        "http_req_connecting": {
+            "avg": 0.634415560298827,
+            "min": 0,
+            "med": 0,
+            "max": 111.6708,
+            "p(90)": 0,
+            "p(95)": 0
+        },
+        "iteration_duration": {
+            "p(90)": 5252.3681,
+            "p(95)": 5266.860720000001,
+            "avg": 5244.754718393026,
+            "min": 5215.5236,
+            "med": 5236.6123,
+            "max": 7210.0839
+        },
+        "http_req_duration": {
+            "med": 235.7232,
+            "max": 2209.1542,
+            "p(90)": 249.36754,
+            "p(95)": 258.6973,
+            "avg": 242.4423494892499,
+            "min": 214.892,
+            "thresholds": {
+                "p(95)<10000": false
+            }
+        },
+        "data_received": {
+            "count": 32180060,
+            "rate": 33374.00774473747
+        },
+        "record_attempt_duration": {
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0,
+            "thresholds": {
+                "p(95)<5000": false,
+                "p(99)<8000": false
+            }
+        },
+        "data_sent": {
+            "count": 7617065,
+            "rate": 7899.674093279153
+        },
+        "wrong_query_duration": {
+            "p(95)": 0,
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "p(90)": 0,
+            "thresholds": {
+                "p(95)<30000": false
+            }
+        },
+        "solved_query_duration": {
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "thresholds": {
+                "p(95)<15000": false
+            }
+        },
+        "record_attempt_errors": {
+            "passes": 6004,
+            "fails": 0,
+            "thresholds": {
+                "rate<0.03": true
+            },
+            "value": 1
+        },
+        "http_req_sending": {
+            "avg": 0.29921280987955584,
+            "min": 0,
+            "med": 0.3358,
+            "max": 31.3759,
+            "p(90)": 0.5948,
+            "p(95)": 0.76903
+        },
+        "cloud_function_errors": {
+            "passes": 0,
+            "fails": 0,
+            "thresholds": {
+                "rate<0.05": false
+            },
+            "value": 0
+        },
+        "vus": {
+            "max": 300,
+            "value": 2,
+            "min": 0
+        },
+        "http_req_tls_handshaking": {
+            "avg": 0.818695066321085,
+            "min": 0,
+            "med": 0,
+            "max": 151.9893,
+            "p(90)": 0,
+            "p(95)": 0
+        },
+        "iterations": {
+            "count": 32795,
+            "rate": 34.0117633089766
+        },
+        "http_reqs": {
+            "count": 32795,
+            "rate": 34.0117633089766
+        },
+        "review_page_load": {
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0,
+            "thresholds": {
+                "p(95)<60000": false
+            }
+        },
+        "review_query_errors": {
+            "passes": 8822,
+            "fails": 0,
+            "thresholds": {
+                "rate<0.05": true
+            },
+            "value": 1
+        },
+        "scenario_duration": {
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0,
+            "thresholds": {
+                "p(95)<20000": false
+            }
+        },
+        "bookmark_query_duration": {
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0,
+            "thresholds": {
+                "p(95)<12000": false
+            }
+        },
+        "post_create_duration": {
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "thresholds": {
+                "p(95)<3000": false
+            }
+        },
+        "http_req_failed": {
+            "passes": 32795,
+            "fails": 0,
+            "thresholds": {
+                "rate<0.05": true
+            },
+            "value": 1
+        },
+        "comment_create_duration": {
+            "med": 0,
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0,
+            "min": 0,
+            "thresholds": {
+                "p(95)<3000": false
+            }
+        },
+        "vus_max": {
+            "value": 300,
+            "min": 300,
+            "max": 300
+        },
+        "http_req_receiving": {
+            "p(95)": 3.4335999999999918,
+            "avg": 0.7536791279158392,
+            "min": 0,
+            "med": 0,
+            "max": 283.5988,
+            "p(90)": 1.5638600000000014
+        },
+        "http_req_waiting": {
+            "avg": 241.38945755145392,
+            "min": 214.2504,
+            "med": 234.7008,
+            "max": 1928.903,
+            "p(90)": 248.35498,
+            "p(95)": 257.63271
+        },
+        "http_req_blocked": {
+            "med": 0,
+            "max": 211.5275,
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 1.4582568867205365,
+            "min": 0
+        },
+        "post_list_duration": {
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "thresholds": {
+                "p(95)<2000": false
+            }
+        }
+    },
+    "setup_data": {
+        "quizId": "GQn3lccHnZeGynRv3Q8r"
+    }
+}

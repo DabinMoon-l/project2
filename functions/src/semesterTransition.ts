@@ -39,18 +39,12 @@ async function resetStudentData(
 
     // 초기화 항목
     totalExp: 0,
-    rank: "견습생",
+    lastGachaExp: 0,
 
-    // 캐릭터 초기화 (기본값으로)
-    character: {
-      hairStyle: 0,
-      skinColor: 0,
-      accessories: [],
-    },
-    unlockedArmors: {},
-    unlockedWeapons: {},
-    equippedArmor: null,
-    equippedWeapon: null,
+    // 토끼 장착 초기화
+    equippedRabbitId: null,
+    equippedRabbitCourseId: null,
+    ownedRabbitKeys: [],
     purchasedItems: [],
 
     // 퀴즈 통계 초기화

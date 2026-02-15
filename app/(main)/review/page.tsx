@@ -2709,7 +2709,7 @@ function ReviewPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
-  const { userCourseId } = useCourse();
+  const { userCourseId, semesterSettings } = useCourse();
 
   // 과목별 리본 이미지
   const currentCourse = userCourseId && COURSES[userCourseId] ? COURSES[userCourseId] : null;
@@ -3422,18 +3422,18 @@ function ReviewPageContent() {
   return (
     <div className="min-h-screen pb-28" style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 - 배너 이미지 */}
-      <header className="pt-4 pb-2 flex flex-col items-center">
-        <div className="w-full flex justify-center">
+      <header className="flex flex-col items-center">
+        <div className="w-full h-[260px] pt-2">
           <img
             src={ribbonImage}
             alt="Review"
-            className="w-[85%] sm:w-[80%] md:w-[75%] min-w-[280px] max-w-[800px] h-auto"
-            style={{ transform: `scale(${ribbonScale})` }}
+            className="w-full h-full object-contain"
+            style={{ transform: `scale(${ribbonScale}) scaleX(1.15)` }}
           />
         </div>
 
         {/* 필터 + 버튼 영역 */}
-        <div className="w-full px-4 py-4 flex items-center justify-between gap-4">
+        <div className="w-full px-4 py-2 flex items-center justify-between gap-4">
           {/* 슬라이드 필터 - 좌측 */}
           <SlideFilter
             activeFilter={activeFilter}

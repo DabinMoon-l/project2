@@ -21,14 +21,6 @@ import { db } from '@/lib/firebase';
 // 타입 정의
 // ============================================================
 
-/** 학생 계급 (5단계) */
-export type StudentRank =
-  | 'trainee'    // 견습생
-  | 'warrior'    // 용사
-  | 'knight'     // 기사
-  | 'general'    // 장군
-  | 'legend';    // 전설의 용사
-
 /** 반 타입 */
 export type ClassType = 'A' | 'B' | 'C' | 'D';
 
@@ -42,7 +34,6 @@ export interface StudentData {
   // 통계
   level: number;
   experience: number;
-  rank: StudentRank;
 
   // 퀴즈 통계
   quizStats: {
@@ -120,15 +111,6 @@ export interface ClassStats {
 
 const PAGE_SIZE = 20;
 
-/** 계급 라벨 */
-export const RANK_LABELS: Record<StudentRank, string> = {
-  trainee: '견습생',
-  warrior: '용사',
-  knight: '기사',
-  general: '장군',
-  legend: '전설의 용사',
-};
-
 /** 반별 색상 */
 export const CLASS_COLORS: Record<ClassType, string> = {
   A: '#DC2626', // 빨강
@@ -166,7 +148,6 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
       classId: data.classId || 'A',
       level: data.level || 1,
       experience: data.experience || 0,
-      rank: data.rank || 'trainee',
       quizStats: {
         totalAttempts: data.quizStats?.totalAttempts || 0,
         totalCorrect: data.quizStats?.totalCorrect || 0,
@@ -315,7 +296,6 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
         classId: userData.classId || 'A',
         level: userData.level || 1,
         experience: userData.experience || 0,
-        rank: userData.rank || 'trainee',
         quizStats: {
           totalAttempts: userData.quizStats?.totalAttempts || 0,
           totalCorrect: userData.quizStats?.totalCorrect || 0,

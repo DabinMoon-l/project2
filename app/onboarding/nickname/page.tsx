@@ -169,7 +169,6 @@ export default function NicknamePage() {
           onboardingStep: 2,
           // 게임 관련 초기값 설정 (EXP 시스템에 필수)
           totalExp: 0,
-          rank: '견습생',
           totalQuizzes: 0,
           correctAnswers: 0,
           wrongAnswers: 0,

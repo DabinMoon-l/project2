@@ -70,7 +70,7 @@ export const onQuizComplete = onDocumentCreated(
 
     try {
       // 트랜잭션으로 보상 지급
-      const rewardResult = await db.runTransaction(async (transaction) => {
+      await db.runTransaction(async (transaction) => {
         // 결과 문서에 보상 지급 플래그 설정 (중복 방지)
         transaction.update(snapshot.ref, {
           rewarded: true,
@@ -79,33 +79,14 @@ export const onQuizComplete = onDocumentCreated(
         });
 
         // 경험치 지급
-        return await addExpInTransaction(
-          transaction,
-          userId,
-          expReward,
-          reason
-        );
+        await addExpInTransaction(transaction, userId, expReward, reason);
       });
 
       console.log(`퀴즈 보상 지급 완료: ${userId}`, {
         resultId,
         score,
         expReward,
-        rankUp: rewardResult.rankUp,
-        newRank: rewardResult.newRank?.name,
       });
-
-      // 계급 업인 경우 알림 생성
-      if (rewardResult.rankUp && rewardResult.newRank) {
-        await db.collection("notifications").add({
-          userId,
-          type: "RANK_UP",
-          title: "계급 승급!",
-          message: `축하합니다! ${rewardResult.previousRank}에서 ${rewardResult.newRank.name}(으)로 승급했습니다!`,
-          read: false,
-          createdAt: FieldValue.serverTimestamp(),
-        });
-      }
     } catch (error) {
       console.error("퀴즈 보상 지급 실패:", error);
       throw error;
@@ -248,7 +229,7 @@ export const onQuizCreate = onDocumentCreated(
 
     try {
       // 트랜잭션으로 보상 지급
-      const rewardResult = await db.runTransaction(async (transaction) => {
+      await db.runTransaction(async (transaction) => {
         // 퀴즈 문서에 보상 지급 플래그 설정 (중복 방지)
         transaction.update(snapshot.ref, {
           rewarded: true,
@@ -257,32 +238,13 @@ export const onQuizCreate = onDocumentCreated(
         });
 
         // 경험치 지급
-        return await addExpInTransaction(
-          transaction,
-          creatorId,
-          expReward,
-          reason
-        );
+        await addExpInTransaction(transaction, creatorId, expReward, reason);
       });
 
       console.log(`퀴즈 생성 보상 지급 완료: ${creatorId}`, {
         quizId,
         expReward,
-        rankUp: rewardResult.rankUp,
-        newRank: rewardResult.newRank?.name,
       });
-
-      // 계급 업인 경우 알림 생성
-      if (rewardResult.rankUp && rewardResult.newRank) {
-        await db.collection("notifications").add({
-          userId: creatorId,
-          type: "RANK_UP",
-          title: "계급 승급!",
-          message: `축하합니다! ${rewardResult.previousRank}에서 ${rewardResult.newRank.name}(으)로 승급했습니다!`,
-          read: false,
-          createdAt: FieldValue.serverTimestamp(),
-        });
-      }
     } catch (error) {
       console.error("퀴즈 생성 보상 지급 실패:", error);
       throw error;

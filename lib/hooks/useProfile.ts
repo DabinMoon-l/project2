@@ -40,17 +40,6 @@ export interface Equipment {
 }
 
 /**
- * 계급 타입 (5단계)
- * 중간→기말 시즌 전환 시 초기화됨
- */
-export type RankType =
-  | '견습생'
-  | '용사'
-  | '기사'
-  | '장군'
-  | '전설의 용사';
-
-/**
  * 사용자 프로필 타입
  */
 export interface UserProfile {
@@ -70,7 +59,6 @@ export interface UserProfile {
   // 스탯
   totalExp: number;
   level: number;
-  rank: RankType;
 
   // 퀴즈 통계
   totalQuizzes: number;
@@ -89,10 +77,15 @@ export interface UserProfile {
   // 역할
   role: 'student' | 'professor';
 
-  // 캐릭터/뽑기 시스템
+  // 캐릭터/뽑기 시스템 (레거시)
   currentCharacterIndex?: number;
   currentCharacterName?: string;
   lastGachaExp?: number;
+
+  // 토끼 집사 시스템
+  equippedRabbitId?: number | null;
+  equippedRabbitCourseId?: string | null;
+  ownedRabbitKeys?: string[];
 
   // 타임스탬프
   createdAt: Timestamp;
@@ -122,22 +115,6 @@ interface UseProfileReturn {
   updateCharacter: (uid: string, options: CharacterOptions) => Promise<void>;
   updateNickname: (uid: string, nickname: string) => Promise<void>;
   clearError: () => void;
-}
-
-// ============================================================
-// 계급 계산 헬퍼
-// ============================================================
-
-/**
- * 경험치로 계급 계산
- * 시즌 내 달성 가능하도록 완화된 기준
- */
-export function calculateRank(totalExp: number): RankType {
-  if (totalExp >= 125) return '전설의 용사';
-  if (totalExp >= 100) return '장군';
-  if (totalExp >= 75) return '기사';
-  if (totalExp >= 50) return '용사';
-  return '견습생';
 }
 
 /**
@@ -182,9 +159,8 @@ export function useProfile(): UseProfileReturn {
       if (docSnap.exists()) {
         const data = docSnap.data();
 
-        // 계급과 레벨 계산
+        // 레벨 계산
         const totalExp = data.totalExp || 0;
-        const rank = calculateRank(totalExp);
         const level = calculateLevel(totalExp);
 
         setProfile({
@@ -202,7 +178,6 @@ export function useProfile(): UseProfileReturn {
           equipment: data.equipment || {},
           totalExp,
           level,
-          rank,
           totalQuizzes: data.totalQuizzes || 0,
           correctAnswers: data.correctAnswers || 0,
           wrongAnswers: data.wrongAnswers || 0,

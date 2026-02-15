@@ -25,7 +25,7 @@ import type {
   Equipment,
   ProfileUpdateData,
 } from '@/lib/hooks/useProfile';
-import { calculateRank, calculateLevel } from '@/lib/hooks/useProfile';
+import { calculateLevel } from '@/lib/hooks/useProfile';
 
 // ============================================================
 // 타입 정의
@@ -119,7 +119,6 @@ export function UserProvider({ children }: UserProviderProps) {
             equipment: data.equipment || {},
             totalExp,
             level: calculateLevel(totalExp),
-            rank: calculateRank(totalExp),
             totalQuizzes: data.totalQuizzes || 0,
             correctAnswers: data.correctAnswers || 0,
             wrongAnswers: data.wrongAnswers || 0,
@@ -129,6 +128,10 @@ export function UserProvider({ children }: UserProviderProps) {
             helpfulFeedbacks: data.helpfulFeedbacks || 0,
             badges: data.badges || [],
             role: data.role || 'student',
+            // 토끼 집사 시스템
+            equippedRabbitId: data.equippedRabbitId ?? null,
+            equippedRabbitCourseId: data.equippedRabbitCourseId ?? null,
+            ownedRabbitKeys: data.ownedRabbitKeys || [],
             createdAt: data.createdAt,
             updatedAt: data.updatedAt,
             lastNicknameChangeAt: data.lastNicknameChangeAt,
