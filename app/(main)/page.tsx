@@ -54,12 +54,14 @@ export default function HomePage() {
 
       {/* 콘텐츠 영역 — 배경 위로 겹쳐서 그라데이션 */}
       <div
-        className="relative z-10 overflow-y-auto scrollbar-hide -mt-32"
-        style={{ height: 'calc((100vh - 5rem) * 0.4 + 8rem)' }}
+        className="relative z-10 overflow-y-auto scrollbar-hide -mt-56"
+        style={{ height: 'calc((100vh - 5rem) * 0.4 + 12rem)' }}
       >
-        {/* 그라데이션 오버레이 */}
-        <div className="sticky top-0 h-32 pointer-events-none" style={{ background: 'linear-gradient(to bottom, transparent 0%, rgba(245,240,232,0.5) 40%, #F5F0E8 100%)' }} />
-        <div className="px-4 pb-28 space-y-4" style={{ backgroundColor: '#F5F0E8' }}>
+        <div className="px-4 pb-28 space-y-4 pt-32"
+          style={{
+            background: 'linear-gradient(to bottom, transparent 0%, rgba(245,240,232,0.15) 40px, rgba(245,240,232,0.4) 80px, rgba(245,240,232,0.7) 120px, #F5F0E8 180px)',
+          }}
+        >
           {/* 프로필 + 닉네임 */}
           <button
             className="w-full text-left flex items-center gap-4 pt-2"

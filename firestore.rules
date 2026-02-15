@@ -44,8 +44,7 @@ service cloud.firestore {
       // exp, rank 등은 Cloud Functions에서만 수정 가능
       allow update: if isOwner(uid) &&
         !request.resource.data.diff(resource.data).affectedKeys()
-          .hasAny(['totalExp', 'rank', 'role', 'badges',
-                   'ownedRabbitKeys', 'equippedRabbitId', 'equippedRabbitCourseId']);
+          .hasAny(['totalExp', 'rank', 'role', 'badges', 'equippedRabbits']);
 
       // 삭제: 불가
       allow delete: if false;
@@ -575,12 +574,8 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // ============================================================
-    // 토끼 승계 큐 (CF 전용)
-    // ============================================================
-    match /rabbit_successors/{rabbitDocId} {
-      allow read, write: if false;
-    }
+    // rabbit_successors: 레거시 (승계 모델 제거됨)
+    // 마이그레이션 완료 후 삭제 예정
 
     // ============================================================
     // 토끼 보유 서브컬렉션 (users/{uid}/rabbitHoldings)

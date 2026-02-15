@@ -23,10 +23,8 @@ interface StatsCardProps {
   totalExp: number;
   /** 뽑기 마일스톤 정보 */
   milestoneInfo: MilestoneInfo;
-  /** 보유 토끼 수 */
+  /** 발견 토끼 수 */
   rabbitCount: number;
-  /** 집사 토끼 수 */
-  butlerCount: number;
 }
 
 /**
@@ -47,7 +45,7 @@ function formatNumber(num: number): string {
  *
  * 경험치, 뽑기 마일스톤 진행률, 토끼 보유 현황 표시
  */
-export default function StatsCard({ totalExp, milestoneInfo, rabbitCount, butlerCount }: StatsCardProps) {
+export default function StatsCard({ totalExp, milestoneInfo, rabbitCount }: StatsCardProps) {
   const { theme } = useTheme();
 
   const expProgress = milestoneInfo.maxExp > 0
@@ -104,14 +102,6 @@ export default function StatsCard({ totalExp, milestoneInfo, rabbitCount, butler
             >
               {rabbitCount}마리
             </span>
-            {butlerCount > 0 && (
-              <span
-                className="text-sm"
-                style={{ color: theme.colors.textSecondary }}
-              >
-                (집사 {butlerCount})
-              </span>
-            )}
           </div>
 
           {/* 뽑기 가능 알림 */}

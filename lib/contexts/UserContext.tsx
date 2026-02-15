@@ -128,10 +128,9 @@ export function UserProvider({ children }: UserProviderProps) {
             helpfulFeedbacks: data.helpfulFeedbacks || 0,
             badges: data.badges || [],
             role: data.role || 'student',
-            // 토끼 집사 시스템
-            equippedRabbitId: data.equippedRabbitId ?? null,
-            equippedRabbitCourseId: data.equippedRabbitCourseId ?? null,
-            ownedRabbitKeys: data.ownedRabbitKeys || [],
+            // 토끼 시스템 (발견 + 장착)
+            equippedRabbits: data.equippedRabbits || [],
+            lastGachaExp: data.lastGachaExp || 0,
             createdAt: data.createdAt,
             updatedAt: data.updatedAt,
             lastNicknameChangeAt: data.lastNicknameChangeAt,

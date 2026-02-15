@@ -46,7 +46,7 @@ const SKIN_COLORS = [
  */
 export default function ProfileCard({ profile, onEdit }: ProfileCardProps) {
   const { theme } = useTheme();
-  const rabbitCount = profile.ownedRabbitKeys?.length || 0;
+  const rabbitCount = profile.equippedRabbits?.length || 0;
   const skinColor = SKIN_COLORS[profile.characterOptions?.skinColor || 3];
 
   // 다음 레벨까지 필요한 경험치 계산
@@ -154,7 +154,7 @@ export default function ProfileCard({ profile, onEdit }: ProfileCardProps) {
             border: `1px solid ${RABBIT_BADGE_STYLE.border}`,
           }}
         >
-          🐰 집사 {rabbitCount}
+          🐰 장착 {rabbitCount}
         </div>
       </div>
 

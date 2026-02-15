@@ -28,9 +28,15 @@ export interface RabbitHolding {
   id: string; // "{courseId}_{rabbitId}"
   rabbitId: number;
   courseId: string;
-  generationIndex: number;
-  isButler: boolean;
-  acquiredAt: any;
+  discoveryOrder: number; // 1=최초발견, 2+=후속
+  discoveredAt: any;
+}
+
+/** 발견자 정보 */
+export interface RabbitDiscoverer {
+  userId: string;
+  nickname: string;
+  discoveryOrder: number;
 }
 
 /** 토끼 문서 (rabbits 컬렉션) */
@@ -38,17 +44,11 @@ export interface RabbitDoc {
   id: string;
   courseId: string;
   rabbitId: number;
-  currentButlerUserId: string | null;
-  currentName: string | null;
-  nextGenerationCounter: number;
-  holderCount: number;
-  butlerHistory: {
-    userId: string;
-    userName: string;
-    name: string | null;
-    startAt: any;
-    endAt: any;
-  }[];
+  name: string | null; // 영구 이름 (최초 발견자가 지음)
+  firstDiscovererUserId: string;
+  firstDiscovererName: string;
+  discovererCount: number; // 총 발견자 수
+  discoverers: RabbitDiscoverer[]; // 전체 발견자 목록
   createdAt: any;
   updatedAt: any;
 }

@@ -313,20 +313,18 @@ export { workerProcessJob, retryQueuedJobs, cleanupExpiredJobs } from "./workerP
 
 
 // ============================================
-// 토끼 집사 시스템 Functions
+// 토끼 시스템 Functions (발견 + 장착)
 // ============================================
 export { spinRabbitGacha, claimGachaRabbit } from "./rabbitGacha";
-export {
-  nameButlerRabbit,
-  graduateButlerRabbit,
-  releaseRabbit,
-  equipRabbit,
-} from "./rabbitButler";
+export { equipRabbit, unequipRabbit } from "./rabbitEquip";
+export { onOnboardingComplete } from "./onboardingRabbit";
 
 // ============================================
 // 마이그레이션 Functions
 // ============================================
 export { migrateCharactersToRabbits } from "./migrateCharacters";
+export { migrateRabbitSystem } from "./migrateRabbitSystem";
+export { migrateDefaultRabbit } from "./migrateDefaultRabbit";
 
 // ============================================
 // 시즌 관련 Functions
@@ -380,9 +378,7 @@ export const resetSeason = onCall(
         purchasedItems: [],
 
         // 토끼 장착 초기화
-        equippedRabbitId: null,
-        equippedRabbitCourseId: null,
-        ownedRabbitKeys: [],
+        equippedRabbits: [],
 
         // 시즌 정보 업데이트
         currentSeason: newSeason,

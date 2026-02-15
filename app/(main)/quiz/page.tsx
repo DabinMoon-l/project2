@@ -1323,38 +1323,25 @@ function QuizListPageContent() {
     return [...COMMON_TAGS.map(t => t.value), ...courseTags.map(t => t.value)];
   }, [userCourseId]);
 
-  // 업데이트 상태 적용 + 완료 상태 병합 + 정렬 헬퍼
+  // 완료 상태 병합 + 정렬 헬퍼 (퀴즈탭: 수정 뱃지 없이 완료 유지)
   const applyUpdateStatusAndSort = useCallback((quizzes: QuizCardData[]): QuizCardData[] => {
-    // 1. quiz_completions 기반 완료 상태 병합 + 업데이트 상태 적용
-    const withUpdate = quizzes.map(quiz => {
+    // 1. quiz_completions 기반 완료 상태 병합
+    const withCompletion = quizzes.map(quiz => {
       const completionScore = completionMap.get(quiz.id);
       const isCompleted = completionScore !== undefined || quiz.isCompleted;
       const myScore = completionScore ?? quiz.myScore;
-      const updateInfo = updatedQuizzes.get(quiz.id);
-
-      if (isCompleted && updateInfo?.hasUpdate) {
-        return {
-          ...quiz,
-          isCompleted,
-          myScore,
-          hasUpdate: true,
-          updatedQuestionCount: updateInfo.updatedQuestionCount,
-        };
-      }
       return { ...quiz, isCompleted, myScore };
     });
 
-    // 2. 정렬: 수정된 퀴즈 > 미완료 > 완료 > 최신순
-    return [...withUpdate].sort((a, b) => {
-      if (a.hasUpdate && !b.hasUpdate) return -1;
-      if (!a.hasUpdate && b.hasUpdate) return 1;
+    // 2. 정렬: 미완료 > 완료 > 최신순
+    return [...withCompletion].sort((a, b) => {
       if (!a.isCompleted && b.isCompleted) return -1;
       if (a.isCompleted && !b.isCompleted) return 1;
       const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
       const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
       return bTime - aTime;
     });
-  }, [updatedQuizzes, completionMap]);
+  }, [completionMap]);
 
   // 업데이트 상태가 적용된 중간 퀴즈 (정렬 포함)
   const midtermQuizzesWithUpdate = useMemo(() => {
@@ -1384,7 +1371,7 @@ function QuizListPageContent() {
     );
   }, [customQuizzesWithUpdate, selectedTags]);
 
-  // 태그 필터링된 완료 퀴즈 (복습 탭) - 최신순 정렬
+  // 태그 필터링된 완료 퀴즈 (복습 탭) - 수정 > 최신순 정렬
   const filteredCompletedQuizzes = useMemo(() => {
     let completed = customQuizzesWithUpdate.filter(q => q.isCompleted);
     if (selectedTags.length > 0) {
@@ -1392,13 +1379,21 @@ function QuizListPageContent() {
         selectedTags.every(tag => quiz.tags?.includes(tag))
       );
     }
-    // 복습탭은 최신순만 적용
-    return completed.sort((a, b) => {
+    // 수정 상태 적용 + 정렬: 수정 > 최신순
+    return completed.map(quiz => {
+      const updateInfo = updatedQuizzes.get(quiz.id);
+      if (updateInfo?.hasUpdate) {
+        return { ...quiz, hasUpdate: true, updatedQuestionCount: updateInfo.updatedQuestionCount };
+      }
+      return quiz;
+    }).sort((a, b) => {
+      if (a.hasUpdate && !b.hasUpdate) return -1;
+      if (!a.hasUpdate && b.hasUpdate) return 1;
       const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
       const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
       return bTime - aTime;
     });
-  }, [customQuizzesWithUpdate, selectedTags]);
+  }, [customQuizzesWithUpdate, selectedTags, updatedQuizzes]);
 
   // ============================================================
   // 데이터 로드 함수들

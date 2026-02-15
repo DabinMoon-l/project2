@@ -82,10 +82,8 @@ export interface UserProfile {
   currentCharacterName?: string;
   lastGachaExp?: number;
 
-  // 토끼 집사 시스템
-  equippedRabbitId?: number | null;
-  equippedRabbitCourseId?: string | null;
-  ownedRabbitKeys?: string[];
+  // 토끼 시스템 (발견 + 장착)
+  equippedRabbits: Array<{ rabbitId: number; courseId: string }>;
 
   // 타임스탬프
   createdAt: Timestamp;
@@ -187,6 +185,7 @@ export function useProfile(): UseProfileReturn {
           helpfulFeedbacks: data.helpfulFeedbacks || 0,
           badges: data.badges || [],
           role: data.role || 'student',
+          equippedRabbits: data.equippedRabbits || [],
           createdAt: data.createdAt,
           updatedAt: data.updatedAt,
         });

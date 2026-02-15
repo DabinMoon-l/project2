@@ -42,9 +42,7 @@ async function resetStudentData(
     lastGachaExp: 0,
 
     // 토끼 장착 초기화
-    equippedRabbitId: null,
-    equippedRabbitCourseId: null,
-    ownedRabbitKeys: [],
+    equippedRabbits: [],
     purchasedItems: [],
 
     // 퀴즈 통계 초기화

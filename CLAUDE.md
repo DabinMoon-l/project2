@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 기술 스택
 
-- **Frontend**: Next.js 15 (App Router) + React 19 + TypeScript + Tailwind CSS
+- **Frontend**: Next.js 16 (App Router) + React 19 + TypeScript + Tailwind CSS 3
 - **애니메이션**: Framer Motion (페이지 전환, UI), Lottie (캐릭터)
 - **Backend**: Firebase (Auth, Firestore, Cloud Functions, Cloud Messaging, Storage)
 - **OCR**: Tesseract.js, pdfjs-dist
@@ -80,10 +80,10 @@ app/
 MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
   └── UserProvider (Firestore /users/{uid} 실시간 구독)
       └── CourseProvider (/settings/semester 구독, 과목/반 정보)
-          └── ThemeProvider (반별 CSS 변수 적용)
-              └── NotificationProvider + ExpToastProvider
-                  └── MainLayoutContent
-                      ├── Navigation (퀴즈 풀이/수정 페이지에서 숨김)
+          └── MainLayoutContent
+              └── ThemeProvider (반별 CSS 변수 적용)
+                  └── NotificationProvider + ExpToastProvider
+                      ├── Navigation (특정 경로에서 숨김)
                       ├── AIQuizContainer (학생 전용, 퀴즈 페이지)
                       └── children
 ```
@@ -126,8 +126,17 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 | `imageCropping.ts` | 이미지 크롭 → Firebase Storage 업로드 |
 | `pptx.ts` | PPTX 업로드 → Cloud Run 트리거 |
 | `rabbitGacha.ts` | 토끼 뽑기 2단계 (spinRabbitGacha → claimGachaRabbit) |
-| `rabbitButler.ts` | 토끼 집사 시스템 (이름짓기, 졸업, 놓아주기, 장착) |
+| `rabbitEquip.ts` | 토끼 장착/해제 (equipRabbit, unequipRabbit) |
+| `onboardingRabbit.ts` | 온보딩 완료 시 기본 토끼(#0) 자동 지급 (Firestore trigger) |
+| `migrateDefaultRabbit.ts` | 기존 유저 기본 토끼 일괄 지급 (1회성, 교수님 전용) |
+| `migrateRabbitSystem.ts` | 집사→발견 모델 마이그레이션 (1회성) |
 | `migrateCharacters.ts` | 레거시 캐릭터 → 토끼 시스템 마이그레이션 |
+| `gemini.ts` / `geminiQueue.ts` | Gemini API 래퍼 + 큐 관리 |
+| `questionParser*.ts` (v1~v4) | OCR 결과 → 문제 파싱 (다중 버전) |
+| `semesterTransition.ts` | 시즌(중간→기말) 전환 로직 |
+| `professorQuizAnalysis.ts` | 교수 대시보드 분석 데이터 |
+| `courseScope.ts` | 과목/반 범위 쿼리 유틸 |
+| `utils/shardedCounter.ts` | 분산 카운터 (동시쓰기 대응) |
 
 ## UI 테마 시스템
 
@@ -222,31 +231,47 @@ generateScoreSummary(result)                // 텍스트 요약
 - `completedUsers` 배열로 퀴즈 완료 여부 추적
 - 폴더 삭제 시 `completedUsers`에서 제거 → 퀴즈 목록에 다시 표시
 
-### 토끼 뽑기/집사 시스템
+### 토끼 발견/장착 시스템
 
 **2단계 뽑기 (Roll → Claim):**
 1. `spinRabbitGacha` (Roll): 50XP 마일스톤마다 랜덤 토끼(0~99) 선택, `lastGachaExp` 갱신만 수행
-2. `claimGachaRabbit` (Claim): 사용자 선택에 따라 입양/놓아주기
-   - 미발견 토끼 → 집사되기 (이름 짓기)
-   - 발견된 토끼 → n세대로 데려오기
-   - 보유 3마리 초과 시 → 교체 모달 (replaceKey)
+2. `claimGachaRabbit` (Claim): 사용자 선택에 따라 발견/놓아주기
+   - 미발견 토끼 → 최초 발견 (이름 짓기, 영구)
+   - 발견된 토끼 → 후속 발견 (N세)
+   - 이미 발견한 토끼 → 안내만 표시
+   - 발견은 무제한, 장착만 최대 2마리
+
+**장착 시스템:**
+- `equipRabbit`: 도감에서 "데려오기" (slotIndex 0|1 지정)
+- `unequipRabbit`: 슬롯에서 해제
+- 뽑기 시 빈 슬롯 자동 장착 (2개 미만), 슬롯 가득 → 인라인 선택 UI
+
+**기본 토끼 (#0):**
+- 온보딩 완료 시 `onOnboardingComplete` 트리거로 자동 지급 (rabbitHoldings + rabbits + equippedRabbits)
+- 기본 토끼는 이름 없음, 도감에서 "토끼는 언제나 {닉네임} 편!" 메시지 표시
+- 보유 집사 섹션 미표시
+
+**토끼 도감 상세:**
+- `discoverers` 배열: `{userId, nickname, discoveryOrder}` — 보유 집사 목록 실시간 표시
+- 부모(최초 발견자, 금색) → N대 집사(후속 발견자) 2열 레이아웃
+- 20명 단위 구분선, 스크롤 가능 (max-h-[200px])
 
 **핵심 데이터 모델:**
-- `users/{uid}` 필드: `ownedRabbitKeys: string[]` (max 3, `"courseId_rabbitId"` 형식), `equippedRabbitId`, `equippedRabbitCourseId`, `lastGachaExp`
-- `rabbits/{courseId_rabbitId}`: 토끼 문서 (집사 역사, 보유자 수, 승계 큐)
-- `users/{uid}/rabbitHoldings/{courseId_rabbitId}`: 보유 정보 (세대, 집사 여부)
-- `rabbit_successors/{courseId_rabbitId}`: 집사 승계 큐
+- `users/{uid}` 필드: `equippedRabbits: Array<{rabbitId, courseId}>` (max 2), `lastGachaExp`
+- `rabbits/{courseId_rabbitId}`: 토끼 문서 (`name` 영구, `firstDiscovererUserId`, `discovererCount`, `discoverers[]`)
+- `users/{uid}/rabbitHoldings/{courseId_rabbitId}`: 발견 정보 (`discoveryOrder`, `discoveredAt`)
 
 **관련 파일:**
-- CF: `functions/src/rabbitGacha.ts`, `functions/src/rabbitButler.ts`
+- CF: `functions/src/rabbitGacha.ts`, `functions/src/rabbitEquip.ts`, `functions/src/onboardingRabbit.ts`
 - 훅: `lib/hooks/useRabbit.ts` (useRabbitHoldings, useRabbitDoc, useRabbitsForCourse)
-- UI: `components/home/CharacterBox.tsx` (홈 히어로), `GachaResultModal.tsx`, `RabbitReplaceModal.tsx`, `RabbitDogam.tsx`, `MyRabbitsDrawer.tsx`
+- UI: `components/home/CharacterBox.tsx` (홈 히어로, 2마리 표시), `GachaResultModal.tsx`, `RabbitDogam.tsx` (도감 + 데려오기)
 - 유틸: `lib/utils/rabbitDisplayName.ts`
+- 마이그레이션: `functions/src/migrateRabbitSystem.ts`, `functions/src/migrateDefaultRabbit.ts`
 
 ### 캐릭터/게이미피케이션
 
 - 토끼 캐릭터 커스터마이징: 머리스타일, 피부색, 수염
-- 시즌 전환(중간→기말): 토끼 보유 초기화, 외형/뱃지는 유지
+- 시즌 전환(중간→기말): 토끼 장착(equippedRabbits) 초기화, 발견 기록/외형/뱃지는 유지
 
 ### AI 문제 생성 (`generateStyledQuiz`)
 
@@ -270,7 +295,18 @@ await setDoc(doc(db, 'users', uid), { totalExp: 0, rank: '견습생' }, { merge:
 await setDoc(doc(db, 'users', uid), { onboardingCompleted: true, updatedAt: serverTimestamp() }, { merge: true });
 ```
 
-보호 필드: `totalExp`, `rank`, `role`, `badges`, `ownedRabbitKeys`, `equippedRabbitId`, `equippedRabbitCourseId` — Cloud Functions에서만 수정 가능
+보호 필드: `totalExp`, `rank`, `role`, `badges`, `equippedRabbits` — Cloud Functions에서만 수정 가능
+
+### Firestore 주요 컬렉션/서브컬렉션
+
+- `users/{uid}` — 프로필, 캐릭터, 통계
+- `users/{uid}/quizHistory/{quizId}` — 퀴즈 풀이 기록
+- `users/{uid}/expHistory/{historyId}` — EXP 트랜잭션 로그
+- `users/{uid}/rabbitHoldings/{holdingId}` — 토끼 발견 정보 (discoveryOrder, discoveredAt)
+- `quizzes/{quizId}` — 퀴즈 문서
+- `quizzes/{quizId}/submissions/{submissionId}` — 제출 답안 (CF 전용 쓰기)
+- `quizzes/{quizId}/feedback/{feedbackId}` — 피드백 (CF 전용 쓰기)
+- `rabbits/{courseId_rabbitId}` — 토끼 문서 (name, firstDiscovererUserId, discovererCount)
 
 ### Firestore Rules — users 읽기 규칙
 
@@ -287,14 +323,34 @@ await setDoc(doc(db, 'users', uid), { onboardingCompleted: true, updatedAt: serv
 
 ### 네비게이션 숨김 규칙
 
+경로 기반 (Navigation 컴포넌트):
 - `/quiz/[id]/*` 경로: 퀴즈 풀이, 결과, 피드백 페이지
 - `/edit` 포함 경로: 퀴즈 수정 페이지
+- `/ranking` 경로: 랭킹 페이지
+- `/review/random` 경로: 랜덤 복습 페이지
+
+모달 기반 (`data-hide-nav` body 속성):
+- 토끼 도감, 뽑기 모달, 공지 채널 모달 열림 시 `document.body.setAttribute('data-hide-nav', '')` → 닫힘 시 제거
+- Navigation에서 MutationObserver로 감지하여 숨김 처리
 
 ### 홈 화면 구조
 
 - `CharacterBox`: 캐릭터 히어로 (60vh), 배경 이미지, XP 배지, 도감 버튼, EXP 바 (게임 HUD 스타일 `bg-black/40 rounded-full backdrop-blur-sm`)
 - 바텀시트: 프로필 닉네임, 공지 채널, 랭킹 섹션
 - 홈은 `h-screen overflow-hidden` 컨테이너로 스크롤 방지 (body style 직접 조작 금지)
+- **z-index 주의**: 바텀시트 콘텐츠 영역이 `relative z-10` stacking context를 생성. 그 안의 모달(공지 채널 등)은 `createPortal(... , document.body)`로 body에 렌더링해야 CharacterBox의 z-20 EXP 바 위에 표시됨
+
+### 퀴즈 목록 정렬 규칙
+
+- **퀴즈탭**: 미완료 > 완료 > 최신순. 수정된 퀴즈도 "완료" 상태 유지, "!" 뱃지 미표시
+- **복습탭**: 수정된 퀴즈 우선 > 최신순. "!" 뱃지 표시 (복습탭에서만)
+
+### Firebase 설정 파일
+
+- `firebase.json` — Firestore rules/indexes, Functions, Storage 배포 설정
+- `firestore.rules` — Firestore 보안 규칙
+- `firestore.indexes.json` — 복합 인덱스 정의
+- `storage.rules` — Cloud Storage 보안 규칙
 
 ### Firebase 배포 (규칙 변경 시)
 
@@ -310,6 +366,11 @@ firebase deploy --only functions
 ### 프론트엔드 (Vercel)
 
 `npm run build` → Vercel 자동 배포. PWA 서비스 워커 자동 등록.
+
+### 토끼 에셋
+
+`rabbits/` 디렉토리에 100개 PNG 파일 (rabbit-001.png ~ rabbit-100.png, 총 ~110MB). git 미추적 상태 — `.gitignore`에 포함하거나 LFS 사용 권장.
+주의: `rabbit-092-.png` 파일명에 불필요한 대시(-) 포함.
 
 ### Cloud Run PPTX 서비스
 
