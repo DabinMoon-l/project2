@@ -712,7 +712,7 @@ export default function BoardPage() {
 
 
   return (
-    <div className="min-h-screen pb-28" style={{ backgroundColor: '#F5F0E8' }}>
+    <div className="min-h-screen pb-28 overflow-x-hidden" style={{ backgroundColor: '#F5F0E8' }}>
       {/* 교수님용 과목 탭 */}
       {isProfessor && (
         <div className="sticky top-0 z-30 bg-[#1A1A1A] border-b-2 border-[#D4AF37]">

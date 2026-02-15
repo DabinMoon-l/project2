@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 프로젝트 개요
 
-대학 수업 보조 앱 "용사 퀴즈". 퀴즈 + 게시판 기능에 용사 컨셉 게이미피케이션을 적용한 PWA.
+대학 수업 보조 앱 "RabbiTory". 퀴즈 + 게시판 기능에 토끼 컨셉 게이미피케이션을 적용한 PWA.
 학생은 퀴즈를 풀고 피드백을 남기며, 교수님은 문제에 대한 피드백을 수집하고 학생 참여도를 모니터링.
 
 ## 기술 스택
@@ -125,6 +125,9 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 | `imageRegionAnalysis.ts` | Gemini Vision 이미지 영역 감지 |
 | `imageCropping.ts` | 이미지 크롭 → Firebase Storage 업로드 |
 | `pptx.ts` | PPTX 업로드 → Cloud Run 트리거 |
+| `rabbitGacha.ts` | 토끼 뽑기 2단계 (spinRabbitGacha → claimGachaRabbit) |
+| `rabbitButler.ts` | 토끼 집사 시스템 (이름짓기, 졸업, 놓아주기, 장착) |
+| `migrateCharacters.ts` | 레거시 캐릭터 → 토끼 시스템 마이그레이션 |
 
 ## UI 테마 시스템
 
@@ -167,6 +170,8 @@ Tailwind에서 `bg-theme-background`, `text-theme-accent` 등으로 사용 (`tai
 - `.btn-vintage` / `.btn-vintage-outline` — 빈티지 스타일 버튼
 - `.decorative-corner` — 신문 스타일 코너 장식
 - `.pb-navigation` — 네비게이션 바 + safe area 패딩
+- 전역 스크롤바 숨김 (`* { scrollbar-width: none }`, `*::-webkit-scrollbar { display: none }`)
+- `html, body { overflow-x: hidden }` — 모바일 PWA 가로 스크롤 방지
 
 ## 코딩 컨벤션
 
@@ -217,12 +222,31 @@ generateScoreSummary(result)                // 텍스트 요약
 - `completedUsers` 배열로 퀴즈 완료 여부 추적
 - 폴더 삭제 시 `completedUsers`에서 제거 → 퀴즈 목록에 다시 표시
 
+### 토끼 뽑기/집사 시스템
+
+**2단계 뽑기 (Roll → Claim):**
+1. `spinRabbitGacha` (Roll): 50XP 마일스톤마다 랜덤 토끼(0~99) 선택, `lastGachaExp` 갱신만 수행
+2. `claimGachaRabbit` (Claim): 사용자 선택에 따라 입양/놓아주기
+   - 미발견 토끼 → 집사되기 (이름 짓기)
+   - 발견된 토끼 → n세대로 데려오기
+   - 보유 3마리 초과 시 → 교체 모달 (replaceKey)
+
+**핵심 데이터 모델:**
+- `users/{uid}` 필드: `ownedRabbitKeys: string[]` (max 3, `"courseId_rabbitId"` 형식), `equippedRabbitId`, `equippedRabbitCourseId`, `lastGachaExp`
+- `rabbits/{courseId_rabbitId}`: 토끼 문서 (집사 역사, 보유자 수, 승계 큐)
+- `users/{uid}/rabbitHoldings/{courseId_rabbitId}`: 보유 정보 (세대, 집사 여부)
+- `rabbit_successors/{courseId_rabbitId}`: 집사 승계 큐
+
+**관련 파일:**
+- CF: `functions/src/rabbitGacha.ts`, `functions/src/rabbitButler.ts`
+- 훅: `lib/hooks/useRabbit.ts` (useRabbitHoldings, useRabbitDoc, useRabbitsForCourse)
+- UI: `components/home/CharacterBox.tsx` (홈 히어로), `GachaResultModal.tsx`, `RabbitReplaceModal.tsx`, `RabbitDogam.tsx`, `MyRabbitsDrawer.tsx`
+- 유틸: `lib/utils/rabbitDisplayName.ts`
+
 ### 캐릭터/게이미피케이션
 
 - 토끼 캐릭터 커스터마이징: 머리스타일, 피부색, 수염
-- 계급: 견습생 → 용사 → 기사 → 장군 → 대원수 → 전설의 용사
-- 갑옷은 계급으로만 획득
-- 시즌 전환(중간→기말): 계급/갑옷/무기 초기화, 외형/뱃지는 유지
+- 시즌 전환(중간→기말): 토끼 보유 초기화, 외형/뱃지는 유지
 
 ### AI 문제 생성 (`generateStyledQuiz`)
 
@@ -246,7 +270,12 @@ await setDoc(doc(db, 'users', uid), { totalExp: 0, rank: '견습생' }, { merge:
 await setDoc(doc(db, 'users', uid), { onboardingCompleted: true, updatedAt: serverTimestamp() }, { merge: true });
 ```
 
-보호 필드: `totalExp`, `rank`, `role`, `badges` — Cloud Functions에서만 수정 가능
+보호 필드: `totalExp`, `rank`, `role`, `badges`, `ownedRabbitKeys`, `equippedRabbitId`, `equippedRabbitCourseId` — Cloud Functions에서만 수정 가능
+
+### Firestore Rules — users 읽기 규칙
+
+- `get`: 본인 또는 교수님만 (개별 문서 읽기)
+- `list`: 로그인 사용자 모두 (랭킹 등 컬렉션 쿼리)
 
 ### 도배 방지
 
@@ -260,6 +289,21 @@ await setDoc(doc(db, 'users', uid), { onboardingCompleted: true, updatedAt: serv
 
 - `/quiz/[id]/*` 경로: 퀴즈 풀이, 결과, 피드백 페이지
 - `/edit` 포함 경로: 퀴즈 수정 페이지
+
+### 홈 화면 구조
+
+- `CharacterBox`: 캐릭터 히어로 (60vh), 배경 이미지, XP 배지, 도감 버튼, EXP 바 (게임 HUD 스타일 `bg-black/40 rounded-full backdrop-blur-sm`)
+- 바텀시트: 프로필 닉네임, 공지 채널, 랭킹 섹션
+- 홈은 `h-screen overflow-hidden` 컨테이너로 스크롤 방지 (body style 직접 조작 금지)
+
+### Firebase 배포 (규칙 변경 시)
+
+Firestore 규칙/인덱스는 git push만으로 배포되지 않음. 별도 배포 필요:
+```bash
+firebase deploy --only firestore:rules
+firebase deploy --only firestore:indexes
+firebase deploy --only functions
+```
 
 ## 배포
 
