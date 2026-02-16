@@ -251,7 +251,7 @@ export const onCommentCreate = onDocumentCreated(
 );
 
 /**
- * 좋아요 받으면 경험치 지급 (글/댓글 작성자에게)
+ * 좋아요 받으면 likeCount 증가 + 알림 (EXP 보상 없음)
  */
 export const onLikeReceived = onDocumentCreated(
   {
@@ -268,11 +268,6 @@ export const onLikeReceived = onDocumentCreated(
     const like = snapshot.data() as Like;
     const likeId = event.params.likeId;
 
-    if (like.rewarded) {
-      console.log(`이미 보상이 지급된 좋아요입니다: ${likeId}`);
-      return;
-    }
-
     const { userId, targetType, targetId, targetUserId } = like;
 
     if (!userId || !targetType || !targetId || !targetUserId) {
@@ -280,59 +275,38 @@ export const onLikeReceived = onDocumentCreated(
       return;
     }
 
-    // 자기 자신에게 좋아요는 보상 없음
-    if (userId === targetUserId) {
-      console.log("자기 자신에게 좋아요는 보상이 없습니다.");
-      return;
-    }
-
     const db = getFirestore();
-    const expReward = EXP_REWARDS.LIKE_RECEIVED;
-    const reason = `좋아요 받음 (${targetType === "post" ? "게시글" : "댓글"})`;
 
     try {
-      await db.runTransaction(async (transaction) => {
-        transaction.update(snapshot.ref, {
-          rewarded: true,
-          rewardedAt: FieldValue.serverTimestamp(),
-          expRewarded: expReward,
+      // likeCount 증가 (EXP 지급 없음)
+      if (targetType === "post") {
+        const postRef = db.collection("posts").doc(targetId);
+        await postRef.update({
+          likeCount: FieldValue.increment(1),
         });
+      } else if (targetType === "comment") {
+        const commentRef = db.collection("comments").doc(targetId);
+        await commentRef.update({
+          likeCount: FieldValue.increment(1),
+        });
+      }
 
-        if (targetType === "post") {
-          const postRef = db.collection("posts").doc(targetId);
-          transaction.update(postRef, {
-            likeCount: FieldValue.increment(1),
-          });
-        } else if (targetType === "comment") {
-          // 댓글은 comments 컬렉션에 저장됨
-          const commentRef = db.collection("comments").doc(targetId);
-          transaction.update(commentRef, {
-            likeCount: FieldValue.increment(1),
-          });
-        }
+      console.log("좋아요 처리 완료:", { likeId, targetType, targetId });
 
-        await addExpInTransaction(transaction, targetUserId, expReward, reason);
-      });
-
-      console.log(`좋아요 보상 지급 완료: ${targetUserId}`, {
-        likeId,
-        targetType,
-        targetId,
-        expReward,
-      });
-
-      // 대상 작성자에게 알림
-      await db.collection("notifications").add({
-        userId: targetUserId,
-        type: "LIKE_RECEIVED",
-        title: "좋아요",
-        message: `내 ${targetType === "post" ? "글" : "댓글"}에 좋아요를 받았습니다`,
-        data: { likeId, targetType, targetId },
-        read: false,
-        createdAt: FieldValue.serverTimestamp(),
-      });
+      // 자기 자신에게 좋아요면 알림 미전송
+      if (userId !== targetUserId) {
+        await db.collection("notifications").add({
+          userId: targetUserId,
+          type: "LIKE_RECEIVED",
+          title: "좋아요",
+          message: `내 ${targetType === "post" ? "글" : "댓글"}에 좋아요를 받았습니다`,
+          data: { likeId, targetType, targetId },
+          read: false,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      }
     } catch (error) {
-      console.error("좋아요 보상 지급 실패:", error);
+      console.error("좋아요 처리 실패:", error);
       throw error;
     }
   }

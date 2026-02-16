@@ -19,12 +19,12 @@ interface Feedback {
 /**
  * 피드백 제출 시 경험치 지급
  *
- * Firestore 트리거: feedbacks/{feedbackId} 문서 생성 시
- * 보상: 15 경험치
+ * Firestore 트리거: questionFeedbacks/{feedbackId} 문서 생성 시
+ * 보상: 20 경험치
  */
 export const onFeedbackSubmit = onDocumentCreated(
   {
-    document: "feedbacks/{feedbackId}",
+    document: "questionFeedbacks/{feedbackId}",
     region: "asia-northeast3",
   },
   async (event) => {
@@ -116,7 +116,7 @@ export const onFeedbackSubmit = onDocumentCreated(
  */
 export const onFeedbackStatusChange = onDocumentCreated(
   {
-    document: "feedbacks/{feedbackId}/statusHistory/{historyId}",
+    document: "questionFeedbacks/{feedbackId}/statusHistory/{historyId}",
     region: "asia-northeast3",
   },
   async (event) => {
@@ -135,7 +135,7 @@ export const onFeedbackStatusChange = onDocumentCreated(
     const db = getFirestore();
 
     // 피드백 작성자 조회
-    const feedbackDoc = await db.collection("feedbacks").doc(feedbackId).get();
+    const feedbackDoc = await db.collection("questionFeedbacks").doc(feedbackId).get();
     if (!feedbackDoc.exists) return;
 
     const feedback = feedbackDoc.data() as Feedback;

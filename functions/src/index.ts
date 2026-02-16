@@ -25,7 +25,7 @@ initializeApp();
 // ============================================
 // 퀴즈 관련 Functions
 // ============================================
-export { onQuizComplete, updateQuizStatistics, onQuizCreate } from "./quiz";
+export { onQuizComplete, updateQuizStatistics, onQuizCreate, onQuizMakePublic } from "./quiz";
 
 // ============================================
 // 퀴즈 제출 (서버 채점 + 분산 쓰기)
@@ -144,7 +144,7 @@ export const getUserStats = onCall(
     const userData = userDoc.data()!;
 
     return {
-      exp: userData.exp || 0,
+      exp: userData.totalExp || 0,
       rank: userData.rank || "견습생",
       quizCount: userData.quizCount || 0,
       postCount: userData.postCount || 0,
@@ -178,7 +178,7 @@ export const getLeaderboard = onCall(
     const db = getFirestore();
 
     // 정렬 필드 결정
-    const orderField = type === "quiz" ? "quizCount" : "exp";
+    const orderField = type === "quiz" ? "quizCount" : "totalExp";
 
     let query = db.collection("users")
       .orderBy(orderField, "desc")

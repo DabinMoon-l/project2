@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -13,484 +13,693 @@ import {
   updateDoc,
   doc,
   serverTimestamp,
+  arrayUnion,
   Timestamp,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useUser, useCourse } from '@/lib/contexts';
+import { useTheme } from '@/styles/themes/useTheme';
+import { useUpload } from '@/lib/hooks/useStorage';
 
-/**
- * 공지 타입
- */
+// ─── 타입 ───────────────────────────────────────────────
+
 interface Announcement {
   id: string;
   content: string;
   imageUrl?: string;
+  fileUrl?: string;
+  fileName?: string;
+  fileType?: string;
+  fileSize?: number;
   poll?: {
     question: string;
     options: string[];
-    votes: Record<string, string[]>; // optionIndex -> userIds
+    votes: Record<string, string[]>;
     allowMultiple: boolean;
   };
-  reactions: Record<string, string[]>; // emoji -> userIds
+  reactions: Record<string, string[]>;
+  readBy?: string[];
   createdAt: Timestamp;
   createdBy: string;
   courseId: string;
 }
 
-/**
- * 이모지 반응 선택 팝업
- */
-const REACTION_EMOJIS = ['❤️', '👍', '🔥', '😂', '😮', '😢'];
+// ─── 상수 ───────────────────────────────────────────────
 
-/**
- * 공지 채널 컴포넌트
- * - 홈에서 미리보기 표시
- * - 터치 시 큰 모달로 전체 공지 표시
- * - 교수님은 작성 가능, 학생은 이모지 반응 가능
- */
+const REACTION_EMOJIS = ['❤️', '👍', '🔥', '😂', '😮', '😢'];
+const BUBBLE_C = 20;
+
+// ─── 유틸 ───────────────────────────────────────────────
+
+function fmtDate(ts: Timestamp): string {
+  if (!ts) return '';
+  return ts.toDate().toLocaleDateString('ko-KR', {
+    month: 'long', day: 'numeric', weekday: 'long',
+  });
+}
+
+function dateKey(ts: Timestamp): string {
+  if (!ts) return '';
+  return ts.toDate().toDateString();
+}
+
+function fmtTime(ts: Timestamp): string {
+  if (!ts) return '';
+  return ts.toDate().toLocaleTimeString('ko-KR', {
+    hour: 'numeric', minute: '2-digit', hour12: true,
+  });
+}
+
+function fmtSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
+
+function lastReadKey(cid: string) {
+  return `announcement_lastRead_${cid}`;
+}
+
+// ─── 9-slice 말풍선 ─────────────────────────────────────
+
+function Bubble({ children }: { children: React.ReactNode }) {
+  const c = BUBBLE_C;
+  const bg = (name: string, size = '100% 100%') => ({
+    backgroundImage: `url(/notice/bubble_professor_${name}.png)`,
+    backgroundSize: size,
+    backgroundRepeat: 'no-repeat' as const,
+  });
+  return (
+    <div
+      className="grid"
+      style={{
+        gridTemplateColumns: `${c}px 1fr ${c}px`,
+        gridTemplateRows: `${c}px 1fr ${c}px`,
+      }}
+    >
+      <div style={bg('tl', 'cover')} />
+      <div style={bg('top')} />
+      <div style={bg('tr', 'cover')} />
+      <div style={bg('left')} />
+      <div style={bg('center')}>
+        <div className="px-3 py-2">{children}</div>
+      </div>
+      <div style={bg('right')} />
+      <div style={bg('bl', 'cover')} />
+      <div style={bg('bottom')} />
+      <div style={bg('br', 'cover')} />
+    </div>
+  );
+}
+
+// ─── 이미지 전체화면 뷰어 ──────────────────────────────
+
+function ImageViewer({ src, onClose }: { src: string; onClose: () => void }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[70] bg-black/90 flex items-center justify-center"
+      onClick={onClose}
+    >
+      <button onClick={onClose} className="absolute top-4 right-4 text-white p-2 z-10">
+        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+      <a
+        href={src} target="_blank" rel="noopener noreferrer" download
+        onClick={(e) => e.stopPropagation()}
+        className="absolute top-4 left-4 text-white p-2 z-10"
+      >
+        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
+      </a>
+      <img src={src} alt="" className="max-w-[90vw] max-h-[85vh] object-contain" onClick={(e) => e.stopPropagation()} />
+    </motion.div>
+  );
+}
+
+// ─── 미디어/파일 드로어 ─────────────────────────────────
+
+function MediaDrawer({
+  announcements, onClose, onImageClick,
+}: {
+  announcements: Announcement[];
+  onClose: () => void;
+  onImageClick: (url: string) => void;
+}) {
+  const images = announcements.filter((a) => a.imageUrl).map((a) => a.imageUrl!);
+  const files = announcements
+    .filter((a) => a.fileUrl && a.fileName)
+    .map((a) => ({ url: a.fileUrl!, name: a.fileName!, size: a.fileSize }));
+
+  return (
+    <motion.div
+      initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
+      transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+      className="absolute inset-0 z-20 flex flex-col bg-[#F5F0E8]"
+    >
+      <div className="flex items-center gap-3 px-4 h-[44px] shrink-0 border-b border-[#D4CFC4]">
+        <button onClick={onClose} className="p-1">
+          <svg className="w-5 h-5 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <span className="font-bold text-[#1A1A1A] text-sm">미디어 · 파일</span>
+      </div>
+      <div className="flex-1 overflow-y-auto p-4 space-y-5">
+        {images.length > 0 && (
+          <div>
+            <p className="text-[11px] font-bold text-[#8C8478] mb-2 tracking-wider">이미지</p>
+            <div className="grid grid-cols-3 gap-1.5">
+              {images.map((url, i) => (
+                <button key={i} onClick={() => onImageClick(url)} className="aspect-square overflow-hidden border border-[#D4CFC4]">
+                  <img src={url} alt="" className="w-full h-full object-cover" />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {files.length > 0 && (
+          <div>
+            <p className="text-[11px] font-bold text-[#8C8478] mb-2 tracking-wider">파일</p>
+            <div className="space-y-2">
+              {files.map((f, i) => (
+                <a key={i} href={f.url} target="_blank" rel="noopener noreferrer" download={f.name}
+                  className="flex items-center gap-3 p-3 border border-[#D4CFC4] bg-white/40 hover:bg-white/60 transition-colors"
+                >
+                  <svg className="w-5 h-5 text-[#5C5C5C] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-[#1A1A1A] truncate">{f.name}</p>
+                    {f.size != null && <p className="text-[10px] text-[#8C8478]">{fmtSize(f.size)}</p>}
+                  </div>
+                  <svg className="w-4 h-4 text-[#8C8478] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+        {images.length === 0 && files.length === 0 && (
+          <div className="flex items-center justify-center text-sm text-[#8C8478] py-20">
+            아직 올린 미디어가 없습니다.
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── 메인 컴포넌트 ──────────────────────────────────────
+
 export default function AnnouncementChannel() {
   const { profile, isProfessor } = useUser();
   const { userCourseId } = useCourse();
+  const { theme } = useTheme();
+  const { uploadImage, uploadFile, loading: uploadLoading } = useUpload();
+
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [showComposer, setShowComposer] = useState(false);
+  const [showMedia, setShowMedia] = useState(false);
   const [newContent, setNewContent] = useState('');
+  const [showToolbar, setShowToolbar] = useState(false);
   const [showPollCreator, setShowPollCreator] = useState(false);
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState(['', '']);
+  const [pendingImage, setPendingImage] = useState<File | null>(null);
+  const [pendingImagePreview, setPendingImagePreview] = useState<string | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [viewerImage, setViewerImage] = useState<string | null>(null);
+  const [hasUnread, setHasUnread] = useState(false);
 
-  // 모달 열림 시 네비게이션 숨김
+  const endRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // ─── 네비게이션 숨김
   useEffect(() => {
-    if (showModal) {
-      document.body.setAttribute('data-hide-nav', '');
-    } else {
-      document.body.removeAttribute('data-hide-nav');
-    }
+    if (showModal) document.body.setAttribute('data-hide-nav', '');
+    else document.body.removeAttribute('data-hide-nav');
     return () => document.body.removeAttribute('data-hide-nav');
   }, [showModal]);
 
-  // 공지 구독
+  // ─── 공지 구독
   useEffect(() => {
     if (!userCourseId) return;
-
     const q = query(
       collection(db, 'announcements'),
       where('courseId', '==', userCourseId),
-      orderBy('createdAt', 'desc')
+      orderBy('createdAt', 'desc'),
     );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Announcement[];
-      setAnnouncements(data);
+    const unsub = onSnapshot(q, (snap) => {
+      setAnnouncements(snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Announcement[]);
       setLoading(false);
     });
-
-    return () => unsubscribe();
+    return () => unsub();
   }, [userCourseId]);
 
-  // 공지 작성 (교수님 전용)
-  const handlePost = async () => {
-    if (!profile || !userCourseId || !newContent.trim()) return;
+  // ─── 미읽음
+  useEffect(() => {
+    if (!userCourseId || !announcements.length) { setHasUnread(false); return; }
+    const lr = localStorage.getItem(lastReadKey(userCourseId));
+    if (!lr) { setHasUnread(true); return; }
+    const latest = announcements[0];
+    if (!latest?.createdAt) { setHasUnread(false); return; }
+    setHasUnread(latest.createdAt.toDate().getTime() > new Date(lr).getTime());
+  }, [announcements, userCourseId, showModal]);
 
-    try {
-      const announcementData: any = {
-        content: newContent.trim(),
-        reactions: {},
-        createdAt: serverTimestamp(),
-        createdBy: profile.uid,
-        courseId: userCourseId,
-      };
+  // ─── 읽음 처리
+  useEffect(() => {
+    if (!showModal || !userCourseId || !profile) return;
+    localStorage.setItem(lastReadKey(userCourseId), new Date().toISOString());
+    setHasUnread(false);
+    announcements.forEach((a) => {
+      if (a.readBy?.includes(profile.uid)) return;
+      updateDoc(doc(db, 'announcements', a.id), { readBy: arrayUnion(profile.uid) }).catch(() => {});
+    });
+  }, [showModal, userCourseId, profile, announcements]);
 
-      // 투표가 있는 경우
-      if (showPollCreator && pollQuestion.trim() && pollOptions.filter(o => o.trim()).length >= 2) {
-        announcementData.poll = {
-          question: pollQuestion.trim(),
-          options: pollOptions.filter(o => o.trim()),
-          votes: {},
-          allowMultiple: false,
-        };
-      }
+  // ─── 스크롤
+  const scrollToBottom = useCallback(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
 
-      await addDoc(collection(db, 'announcements'), announcementData);
-
-      // 초기화
-      setNewContent('');
-      setShowPollCreator(false);
-      setPollQuestion('');
-      setPollOptions(['', '']);
-      setShowComposer(false);
-    } catch (error) {
-      console.error('공지 작성 실패:', error);
+  useEffect(() => {
+    if (showModal && !showMedia) {
+      const t = setTimeout(scrollToBottom, 100);
+      return () => clearTimeout(t);
     }
+  }, [showModal, showMedia, announcements.length, scrollToBottom]);
+
+  // ─── 파일 선택
+  const onImgSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]; if (!f) return;
+    setPendingImage(f);
+    setPendingImagePreview(URL.createObjectURL(f));
+    e.target.value = '';
+  };
+  const clearImg = () => {
+    if (pendingImagePreview) URL.revokeObjectURL(pendingImagePreview);
+    setPendingImage(null); setPendingImagePreview(null);
+  };
+  const onFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]; if (!f) return;
+    setPendingFile(f); e.target.value = '';
   };
 
-  // 이모지 반응 토글
-  const handleReaction = async (announcementId: string, emoji: string) => {
-    if (!profile) return;
-
-    const announcement = announcements.find(a => a.id === announcementId);
-    if (!announcement) return;
-
-    const currentReactions = announcement.reactions || {};
-    const emojiReactions = currentReactions[emoji] || [];
-    const hasReacted = emojiReactions.includes(profile.uid);
-
-    const updatedReactions = { ...currentReactions };
-    if (hasReacted) {
-      updatedReactions[emoji] = emojiReactions.filter(id => id !== profile.uid);
-      if (updatedReactions[emoji].length === 0) {
-        delete updatedReactions[emoji];
-      }
-    } else {
-      updatedReactions[emoji] = [...emojiReactions, profile.uid];
-    }
-
+  // ─── 공지 작성
+  const handlePost = async () => {
+    if (!profile || !userCourseId || (!newContent.trim() && !pendingImage && !pendingFile)) return;
     try {
-      await updateDoc(doc(db, 'announcements', announcementId), {
-        reactions: updatedReactions,
-      });
-    } catch (error) {
-      console.error('반응 실패:', error);
-    }
+      const data: Record<string, unknown> = {
+        content: newContent.trim(), reactions: {}, readBy: [],
+        createdAt: serverTimestamp(), createdBy: profile.uid, courseId: userCourseId,
+      };
+      if (pendingImage) { const url = await uploadImage(pendingImage); if (url) data.imageUrl = url; }
+      if (pendingFile) {
+        const fi = await uploadFile(pendingFile);
+        if (fi) { data.fileUrl = fi.url; data.fileName = fi.name; data.fileType = fi.type; data.fileSize = fi.size; }
+      }
+      if (showPollCreator && pollQuestion.trim() && pollOptions.filter((o) => o.trim()).length >= 2) {
+        data.poll = { question: pollQuestion.trim(), options: pollOptions.filter((o) => o.trim()), votes: {}, allowMultiple: false };
+      }
+      await addDoc(collection(db, 'announcements'), data);
+      setNewContent(''); setShowPollCreator(false); setPollQuestion(''); setPollOptions(['', '']);
+      clearImg(); setPendingFile(null); setShowToolbar(false);
+    } catch (err) { console.error('공지 작성 실패:', err); }
+  };
 
+  // ─── 이모지 반응
+  const handleReaction = async (aid: string, emoji: string) => {
+    if (!profile) return;
+    const a = announcements.find((x) => x.id === aid); if (!a) return;
+    const cur = a.reactions || {}; const arr = cur[emoji] || [];
+    const has = arr.includes(profile.uid);
+    const upd = { ...cur };
+    if (has) { upd[emoji] = arr.filter((id) => id !== profile.uid); if (!upd[emoji].length) delete upd[emoji]; }
+    else { upd[emoji] = [...arr, profile.uid]; }
+    try { await updateDoc(doc(db, 'announcements', aid), { reactions: upd }); } catch {}
     setShowEmojiPicker(null);
   };
 
-  // 투표하기
-  const handleVote = async (announcementId: string, optionIndex: number) => {
+  // ─── 투표
+  const handleVote = async (aid: string, optIdx: number) => {
     if (!profile) return;
-
-    const announcement = announcements.find(a => a.id === announcementId);
-    if (!announcement?.poll) return;
-
-    const currentVotes = announcement.poll.votes || {};
-    const updatedVotes: Record<string, string[]> = {};
-
-    // 기존 투표 제거 (단일 선택인 경우)
-    Object.keys(currentVotes).forEach(key => {
-      updatedVotes[key] = currentVotes[key].filter(id => id !== profile.uid);
-    });
-
-    // 새 투표 추가
-    const optionKey = optionIndex.toString();
-    if (!updatedVotes[optionKey]) {
-      updatedVotes[optionKey] = [];
-    }
-    updatedVotes[optionKey].push(profile.uid);
-
-    try {
-      await updateDoc(doc(db, 'announcements', announcementId), {
-        'poll.votes': updatedVotes,
-      });
-    } catch (error) {
-      console.error('투표 실패:', error);
-    }
+    const a = announcements.find((x) => x.id === aid); if (!a?.poll) return;
+    const cur = a.poll.votes || {};
+    const upd: Record<string, string[]> = {};
+    Object.keys(cur).forEach((k) => { upd[k] = cur[k].filter((id) => id !== profile.uid); });
+    const key = optIdx.toString(); if (!upd[key]) upd[key] = [];
+    upd[key].push(profile.uid);
+    try { await updateDoc(doc(db, 'announcements', aid), { 'poll.votes': upd }); } catch {}
   };
 
-  // 날짜 포맷팅
-  const formatDate = (timestamp: Timestamp) => {
-    if (!timestamp) return '';
-    const date = timestamp.toDate();
-    const now = new Date();
-    const isToday = date.toDateString() === now.toDateString();
+  // ─── 파생
+  const latest = announcements[0];
+  const chrono = useMemo(() => [...announcements].reverse(), [announcements]);
+  const closeModal = () => { setShowModal(false); setShowEmojiPicker(null); setShowMedia(false); };
 
-    if (isToday) {
-      return date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-    }
-    return date.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
-  };
-
-  // 미리보기용 최신 공지
-  const latestAnnouncement = announcements[0];
-  const unreadCount = announcements.length;
+  // ═══════════════════════════════════════════════════════
+  // 렌더링
+  // ═══════════════════════════════════════════════════════
 
   return (
     <>
-      {/* 홈 미리보기 */}
-      <button
-        onClick={() => setShowModal(true)}
-        className="w-full p-4 border-2 border-[#1A1A1A] bg-[#EDEAE4] text-left hover:bg-[#E5E0D8] transition-colors"
-      >
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <span className="text-lg">📢</span>
-            <span className="font-bold text-[#1A1A1A]">공지 채널</span>
-          </div>
-          {unreadCount > 0 && (
-            <span className="px-2 py-0.5 bg-[#8B1A1A] text-white text-xs font-bold">
-              {unreadCount}
-            </span>
-          )}
-        </div>
-        {latestAnnouncement ? (
-          <p className="text-sm text-[#5C5C5C] truncate">
-            {latestAnnouncement.content}
-          </p>
-        ) : (
-          <p className="text-sm text-[#5C5C5C]">
-            {loading ? '불러오는 중...' : '공지가 없습니다'}
-          </p>
-        )}
-      </button>
+      {/* ═══ 홈 미리보기 (2줄: 첫 단어 / 나머지) ═══ */}
+      {(() => {
+        const raw = loading ? '불러오는 중...' : latest ? latest.content : '아직 공지가 없습니다.';
+        const spaceIdx = raw.indexOf(' ');
+        const firstWord = spaceIdx > 0 ? raw.slice(0, spaceIdx) : raw;
+        const rest = spaceIdx > 0 ? raw.slice(spaceIdx + 1) : '';
+        return (
+          <button onClick={() => setShowModal(true)} className="w-full text-left flex items-center">
+            <div className="flex-1 min-w-0">
+              <p className="text-4xl font-bold text-[#1A1A1A]">{firstWord}</p>
+              <p className="text-4xl font-bold text-[#1A1A1A] truncate">{rest || '\u00A0'}</p>
+            </div>
+            <div className="flex-shrink-0 ml-3 self-center">
+              {hasUnread ? (
+                <div className="w-3 h-3" style={{ backgroundColor: theme.colors.accent }} />
+              ) : (
+                <svg className="w-6 h-6 text-[#8C8478]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              )}
+            </div>
+          </button>
+        );
+      })()}
 
-      {/* 모달 — Portal로 body에 렌더링 (부모 z-10 stacking context 탈출) */}
+      {/* ═══ 모달 ═══ */}
       {typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
           {showModal && (
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
-              onClick={() => setShowModal(false)}
+              onClick={closeModal}
             >
               <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
+                initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.9, opacity: 0 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-lg max-h-[85vh] bg-[#F5F0E8] border-2 border-[#1A1A1A] flex flex-col"
+                className="relative w-full max-w-[420px] flex flex-col overflow-hidden bg-[#F5F0E8] border border-[#C8C3B8]"
+                style={{ height: 'min(88vh, 780px)', boxShadow: '0 8px 40px rgba(0,0,0,0.25)' }}
               >
-                {/* 헤더 */}
-                <div className="flex items-center justify-between p-4 border-b-2 border-[#1A1A1A]">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setShowModal(false)}
-                      className="p-1 hover:bg-[#EDEAE4]"
-                    >
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                      </svg>
+                {/* ── 헤더 ── */}
+                <div className="relative h-[52px] shrink-0">
+                  <img src="/notice/header_bar.png" alt="" className="absolute inset-0 w-full h-full object-fill" />
+                  <div className="relative h-full flex items-center justify-between px-3">
+                    <button onClick={() => setShowMedia(true)} className="w-7 h-7 flex items-center justify-center">
+                      <img src="/notice/icon_menu.png" alt="미디어" className="w-[18px] h-[18px] brightness-0 invert" />
                     </button>
-                    <span className="font-bold text-lg text-[#1A1A1A]">공지 채널</span>
+                    <button onClick={closeModal} className="w-7 h-7 flex items-center justify-center">
+                      <img src="/notice/icon_close.png" alt="닫기" className="w-[18px] h-[18px] brightness-0 invert" />
+                    </button>
                   </div>
-                  <span className="text-sm text-[#5C5C5C]">멤버 {announcements.length > 0 ? '160' : '0'}명</span>
                 </div>
 
-                {/* 공지 목록 */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                  {announcements.length === 0 ? (
-                    <div className="text-center py-12 text-[#5C5C5C]">
-                      {loading ? '불러오는 중...' : '아직 공지가 없습니다'}
+                {/* ── 메시지 영역 ── */}
+                <div
+                  className="flex-1 overflow-y-auto px-3 py-4 bg-[#EDEAE4]"
+                  onClick={() => setShowEmojiPicker(null)}
+                >
+                  {!announcements.length ? (
+                    <div className="h-full flex items-center justify-center text-[#8C8478] text-sm">
+                      {loading ? '불러오는 중...' : '아직 공지가 없습니다.'}
                     </div>
                   ) : (
-                    announcements.map((announcement, index) => {
-                      // 날짜 구분선
-                      const showDateSeparator = index === 0 ||
-                        formatDate(announcements[index - 1]?.createdAt) !== formatDate(announcement.createdAt);
+                    <div className="space-y-4">
+                      {chrono.map((a, i) => {
+                        const prev = chrono[i - 1];
+                        const showDate = i === 0 || !prev?.createdAt || dateKey(prev.createdAt) !== dateKey(a.createdAt);
+                        const readCount = a.readBy?.length || 0;
+                        const reactions = Object.entries(a.reactions || {});
 
-                      return (
-                        <div key={announcement.id}>
-                          {showDateSeparator && (
-                            <div className="text-center text-xs text-[#5C5C5C] my-4">
-                              {formatDate(announcement.createdAt)}
-                            </div>
-                          )}
-
-                          {/* 공지 버블 */}
-                          <div className="bg-[#EDEAE4] border border-[#D4CFC4] p-3">
-                            <p className="text-[#1A1A1A] whitespace-pre-wrap">{announcement.content}</p>
-
-                            {/* 이미지 */}
-                            {announcement.imageUrl && (
-                              <img
-                                src={announcement.imageUrl}
-                                alt="공지 이미지"
-                                className="mt-2 w-full max-h-48 object-cover border border-[#D4CFC4]"
-                              />
+                        return (
+                          <div key={a.id}>
+                            {/* 날짜 구분선 */}
+                            {showDate && a.createdAt && (
+                              <div className="flex items-center gap-3 my-3">
+                                <div className="flex-1 border-t border-dashed border-[#C8C3B8]" />
+                                <span className="text-[10px] text-[#8C8478] whitespace-nowrap">
+                                  {fmtDate(a.createdAt)}
+                                </span>
+                                <div className="flex-1 border-t border-dashed border-[#C8C3B8]" />
+                              </div>
                             )}
 
-                            {/* 투표 */}
-                            {announcement.poll && (
-                              <div className="mt-3 p-3 bg-[#F5F0E8] border border-[#1A1A1A]">
-                                <p className="font-bold text-sm mb-2">{announcement.poll.question}</p>
-                                <div className="space-y-2">
-                                  {announcement.poll.options.map((option, optIdx) => {
-                                    const votes = announcement.poll!.votes[optIdx.toString()] || [];
-                                    const totalVotes = Object.values(announcement.poll!.votes).flat().length;
-                                    const percentage = totalVotes > 0 ? Math.round((votes.length / totalVotes) * 100) : 0;
-                                    const hasVoted = profile && votes.includes(profile.uid);
+                            {/* 메시지 */}
+                            <div className="flex gap-2">
+                              {/* 아바타 */}
+                              <img
+                                src="/notice/avatar_professor.png" alt="교수님"
+                                className="w-9 h-9 shrink-0 object-contain mt-0.5"
+                              />
 
-                                    return (
-                                      <button
-                                        key={optIdx}
-                                        onClick={() => handleVote(announcement.id, optIdx)}
-                                        className="w-full text-left"
-                                      >
-                                        <div className="flex items-center gap-2">
-                                          <span className={`w-4 h-4 border-2 border-[#1A1A1A] flex items-center justify-center ${hasVoted ? 'bg-[#1A1A1A]' : ''}`}>
-                                            {hasVoted && <span className="text-white text-xs">✓</span>}
-                                          </span>
-                                          <span className="flex-1 text-sm">{option}</span>
-                                          <span className="text-xs text-[#5C5C5C]">{percentage}%</span>
-                                        </div>
-                                        <div className="mt-1 h-2 bg-[#D4CFC4]">
-                                          <div
-                                            className="h-full bg-[#1A1A1A] transition-all"
-                                            style={{ width: `${percentage}%` }}
-                                          />
-                                        </div>
-                                      </button>
-                                    );
-                                  })}
+                              <div className="flex-1 min-w-0">
+                                {/* 이름 */}
+                                <p className="text-[11px] font-bold text-[#5C5C5C] mb-1">Prof. Kim</p>
+
+                                {/* 9-slice 말풍선 */}
+                                <Bubble>
+                                  {a.content && (
+                                    <p className="text-[13px] text-[#1A1A1A] whitespace-pre-wrap break-words leading-relaxed">
+                                      {a.content}
+                                    </p>
+                                  )}
+
+                                  {/* 이미지 */}
+                                  {a.imageUrl && (
+                                    <button onClick={() => setViewerImage(a.imageUrl!)} className="mt-2 block w-full">
+                                      <img src={a.imageUrl} alt="이미지" className="w-full max-h-44 object-cover border border-[#D4CFC4]" />
+                                    </button>
+                                  )}
+
+                                  {/* 파일 카드 */}
+                                  {a.fileUrl && a.fileName && (
+                                    <a href={a.fileUrl} target="_blank" rel="noopener noreferrer" download={a.fileName}
+                                      className="mt-2 flex items-center gap-2 p-2 border border-[#D4CFC4] bg-[#F5F0E8]/60 hover:bg-[#F5F0E8] transition-colors"
+                                    >
+                                      <svg className="w-4 h-4 text-[#5C5C5C] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                      </svg>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-[11px] font-medium text-[#1A1A1A] truncate">{a.fileName}</p>
+                                        {a.fileSize != null && <p className="text-[10px] text-[#8C8478]">{fmtSize(a.fileSize)}</p>}
+                                      </div>
+                                      <svg className="w-3.5 h-3.5 text-[#8C8478] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                                      </svg>
+                                    </a>
+                                  )}
+
+                                  {/* 투표 */}
+                                  {a.poll && (
+                                    <div className="mt-2 p-2 border border-[#D4CFC4]">
+                                      <p className="font-bold text-[11px] mb-1.5 text-[#1A1A1A]">{a.poll.question}</p>
+                                      <div className="space-y-1.5">
+                                        {a.poll.options.map((opt, oi) => {
+                                          const v = a.poll!.votes[oi.toString()] || [];
+                                          const total = Object.values(a.poll!.votes).flat().length;
+                                          const pct = total > 0 ? Math.round((v.length / total) * 100) : 0;
+                                          const voted = profile && v.includes(profile.uid);
+                                          return (
+                                            <button key={oi} onClick={() => handleVote(a.id, oi)} className="w-full text-left">
+                                              <div className="flex items-center gap-1.5">
+                                                <span className={`w-3 h-3 border border-[#1A1A1A] flex items-center justify-center ${voted ? 'bg-[#1A1A1A]' : ''}`}>
+                                                  {voted && <span className="text-white text-[7px]">✓</span>}
+                                                </span>
+                                                <span className="flex-1 text-[11px]">{opt}</span>
+                                                <span className="text-[10px] text-[#8C8478]">{pct}%</span>
+                                              </div>
+                                              <div className="mt-0.5 h-1 bg-[#D4CFC4]">
+                                                <div className="h-full bg-[#1A1A1A] transition-all" style={{ width: `${pct}%` }} />
+                                              </div>
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
+                                </Bubble>
+
+                                {/* 시각 + 읽음 + 이모지 */}
+                                <div className="flex items-center gap-1.5 mt-1 relative flex-wrap">
+                                  {a.createdAt && <span className="text-[10px] text-[#8C8478]">{fmtTime(a.createdAt)}</span>}
+                                  {readCount > 0 && <span className="text-[10px] text-[#8C8478]">· {readCount}명 읽음</span>}
+                                  <div className="flex-1" />
+                                  {reactions.map(([emoji, uids]) => (
+                                    <button key={emoji} onClick={() => handleReaction(a.id, emoji)}
+                                      className={`text-xs px-1 py-0.5 border bg-white/50 ${profile && uids.includes(profile.uid) ? 'border-[#1A1A1A] bg-[#EDEAE4]' : 'border-[#D4CFC4]'}`}
+                                    >
+                                      {emoji} <span className="text-[10px] text-[#8C8478]">{uids.length}</span>
+                                    </button>
+                                  ))}
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setShowEmojiPicker(showEmojiPicker === a.id ? null : a.id); }}
+                                    className="text-[#C8C3B8] hover:text-[#8C8478] transition-colors"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                  </button>
+                                  {showEmojiPicker === a.id && (
+                                    <div
+                                      className="absolute right-0 bottom-full mb-1 bg-white border border-[#1A1A1A] p-1.5 flex gap-1 z-20 shadow-lg"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      {REACTION_EMOJIS.map((em) => (
+                                        <button key={em} onClick={() => handleReaction(a.id, em)} className="text-lg hover:scale-110 transition-transform">{em}</button>
+                                      ))}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
-                            )}
+                            </div>
                           </div>
-
-                          {/* 반응 */}
-                          <div className="flex items-center gap-2 mt-1 relative">
-                            {/* 기존 반응들 */}
-                            {Object.entries(announcement.reactions || {}).map(([emoji, userIds]) => (
-                              <button
-                                key={emoji}
-                                onClick={() => handleReaction(announcement.id, emoji)}
-                                className={`flex items-center gap-1 px-2 py-0.5 text-sm border ${
-                                  profile && userIds.includes(profile.uid)
-                                    ? 'border-[#1A1A1A] bg-[#EDEAE4]'
-                                    : 'border-[#D4CFC4]'
-                                }`}
-                              >
-                                <span>{emoji}</span>
-                                <span className="text-xs">{userIds.length}</span>
-                              </button>
-                            ))}
-
-                            {/* 반응 추가 버튼 */}
-                            <button
-                              onClick={() => setShowEmojiPicker(
-                                showEmojiPicker === announcement.id ? null : announcement.id
-                              )}
-                              className="p-1 text-[#5C5C5C] hover:text-[#1A1A1A]"
-                            >
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                            </button>
-
-                            {/* 이모지 피커 */}
-                            {showEmojiPicker === announcement.id && (
-                              <div className="absolute left-0 bottom-full mb-1 bg-white border-2 border-[#1A1A1A] p-2 flex gap-1 z-10">
-                                {REACTION_EMOJIS.map((emoji) => (
-                                  <button
-                                    key={emoji}
-                                    onClick={() => handleReaction(announcement.id, emoji)}
-                                    className="text-xl hover:scale-125 transition-transform"
-                                  >
-                                    {emoji}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-
-                            {/* 시간 */}
-                            <span className="ml-auto text-xs text-[#5C5C5C]">
-                              {announcement.createdAt?.toDate().toLocaleTimeString('ko-KR', {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })
+                        );
+                      })}
+                      <div ref={endRef} />
+                    </div>
                   )}
                 </div>
 
-                {/* 교수님 입력창 */}
+                {/* ── 하단 입력 (교수님 전용) ── */}
                 {isProfessor && (
-                  <div className="border-t-2 border-[#1A1A1A] p-4">
-                    {showComposer ? (
-                      <div className="space-y-3">
+                  <div className="shrink-0 border-t border-[#D4CFC4] bg-[#F5F0E8] px-3 py-2">
+                    {/* 첨부 미리보기 */}
+                    {(pendingImagePreview || pendingFile || showPollCreator) && (
+                      <div className="mb-2 space-y-1.5">
+                        {pendingImagePreview && (
+                          <div className="relative inline-block">
+                            <img src={pendingImagePreview} alt="" className="h-14 object-cover border border-[#D4CFC4]" />
+                            <button onClick={clearImg} className="absolute -top-1 -right-1 w-4 h-4 bg-[#1A1A1A] text-white flex items-center justify-center text-[8px] rounded-full">✕</button>
+                          </div>
+                        )}
+                        {pendingFile && (
+                          <div className="flex items-center gap-2 p-1.5 bg-[#EDEAE4] border border-[#D4CFC4] text-[11px]">
+                            <span className="truncate flex-1">{pendingFile.name}</span>
+                            <span className="text-[#8C8478] shrink-0">{fmtSize(pendingFile.size)}</span>
+                            <button onClick={() => setPendingFile(null)} className="text-[#1A1A1A] font-bold shrink-0">✕</button>
+                          </div>
+                        )}
+                        {showPollCreator && (
+                          <div className="p-2 border border-[#D4CFC4] bg-[#EDEAE4] space-y-1">
+                            <input value={pollQuestion} onChange={(e) => setPollQuestion(e.target.value)} placeholder="투표 질문"
+                              className="w-full p-1.5 border border-[#D4CFC4] bg-white/70 text-[11px] focus:outline-none" />
+                            {pollOptions.map((o, idx) => (
+                              <input key={idx} value={o}
+                                onChange={(e) => { const opts = [...pollOptions]; opts[idx] = e.target.value; setPollOptions(opts); }}
+                                placeholder={`선택지 ${idx + 1}`}
+                                className="w-full p-1.5 border border-[#D4CFC4] bg-white/70 text-[11px] focus:outline-none" />
+                            ))}
+                            <button onClick={() => setPollOptions([...pollOptions, ''])} className="text-[11px] text-[#8C8478] hover:text-[#1A1A1A]">+ 선택지 추가</button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* 입력 행 */}
+                    <div className="flex items-end gap-2">
+                      <button onClick={() => setShowToolbar(!showToolbar)}
+                        className="w-8 h-8 flex items-center justify-center shrink-0 mb-px text-[#8C8478] hover:text-[#1A1A1A] transition-colors"
+                      >
+                        <motion.svg animate={{ rotate: showToolbar ? 45 : 0 }} className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </motion.svg>
+                      </button>
+
+                      <div className="flex-1 relative min-h-[36px]">
+                        <img src="/notice/button.jpg" alt="" className="absolute inset-0 w-full h-full object-fill" />
                         <textarea
                           value={newContent}
                           onChange={(e) => setNewContent(e.target.value)}
                           placeholder="공지를 입력하세요..."
-                          className="w-full p-3 border-2 border-[#1A1A1A] bg-[#F5F0E8] resize-none focus:outline-none"
-                          rows={3}
+                          className="relative w-full bg-transparent resize-none focus:outline-none text-[13px] text-[#1A1A1A] px-3 py-2 min-h-[36px] max-h-[80px]"
+                          rows={1}
+                          onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 80) + 'px'; }}
+                          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handlePost(); } }}
                         />
-
-                        {/* 투표 생성 */}
-                        {showPollCreator && (
-                          <div className="p-3 border border-[#D4CFC4] bg-[#EDEAE4]">
-                            <input
-                              type="text"
-                              value={pollQuestion}
-                              onChange={(e) => setPollQuestion(e.target.value)}
-                              placeholder="투표 질문"
-                              className="w-full p-2 mb-2 border border-[#D4CFC4] bg-[#F5F0E8]"
-                            />
-                            {pollOptions.map((option, idx) => (
-                              <input
-                                key={idx}
-                                type="text"
-                                value={option}
-                                onChange={(e) => {
-                                  const newOptions = [...pollOptions];
-                                  newOptions[idx] = e.target.value;
-                                  setPollOptions(newOptions);
-                                }}
-                                placeholder={`선택지 ${idx + 1}`}
-                                className="w-full p-2 mb-1 border border-[#D4CFC4] bg-[#F5F0E8]"
-                              />
-                            ))}
-                            <button
-                              onClick={() => setPollOptions([...pollOptions, ''])}
-                              className="text-sm text-[#5C5C5C] hover:text-[#1A1A1A]"
-                            >
-                              + 선택지 추가
-                            </button>
-                          </div>
-                        )}
-
-                        <div className="flex items-center justify-between">
-                          <button
-                            onClick={() => setShowPollCreator(!showPollCreator)}
-                            className={`px-3 py-1 text-sm border ${showPollCreator ? 'border-[#1A1A1A] bg-[#1A1A1A] text-white' : 'border-[#D4CFC4]'}`}
-                          >
-                            📊 투표
-                          </button>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => {
-                                setShowComposer(false);
-                                setNewContent('');
-                                setShowPollCreator(false);
-                              }}
-                              className="px-4 py-2 border border-[#D4CFC4] text-sm"
-                            >
-                              취소
-                            </button>
-                            <button
-                              onClick={handlePost}
-                              disabled={!newContent.trim()}
-                              className="px-4 py-2 bg-[#1A1A1A] text-white text-sm disabled:opacity-50"
-                            >
-                              보내기
-                            </button>
-                          </div>
-                        </div>
                       </div>
-                    ) : (
-                      <button
-                        onClick={() => setShowComposer(true)}
-                        className="w-full p-3 border-2 border-dashed border-[#D4CFC4] text-[#5C5C5C] hover:border-[#1A1A1A] hover:text-[#1A1A1A] transition-colors"
+
+                      <button onClick={handlePost}
+                        disabled={(!newContent.trim() && !pendingImage && !pendingFile) || uploadLoading}
+                        className="w-8 h-8 flex items-center justify-center shrink-0 mb-px text-[#1A1A1A] disabled:text-[#C8C3B8] transition-colors"
                       >
-                        공지 작성하기...
+                        {uploadLoading ? (
+                          <div className="w-4 h-4 border-2 border-[#C8C3B8] border-t-[#1A1A1A] rounded-full animate-spin" />
+                        ) : (
+                          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                          </svg>
+                        )}
                       </button>
-                    )}
+                    </div>
+
+                    {/* 도구 바 */}
+                    <AnimatePresence>
+                      {showToolbar && (
+                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                          <div className="flex items-center gap-1.5 pt-2">
+                            <button onClick={() => imgRef.current?.click()} className="p-1.5 text-[#8C8478] hover:text-[#1A1A1A] transition-colors" title="이미지">
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            </button>
+                            <button onClick={() => fileRef.current?.click()} className="p-1.5 text-[#8C8478] hover:text-[#1A1A1A] transition-colors" title="파일">
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                              </svg>
+                            </button>
+                            <button onClick={() => setShowPollCreator(!showPollCreator)}
+                              className={`p-1.5 transition-colors ${showPollCreator ? 'text-[#1A1A1A]' : 'text-[#8C8478]'} hover:text-[#1A1A1A]`} title="투표"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                              </svg>
+                            </button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    <input ref={imgRef} type="file" accept="image/*" className="hidden" onChange={onImgSelect} />
+                    <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip" className="hidden" onChange={onFileSelect} />
                   </div>
                 )}
+
+                {/* ── 미디어 드로어 ── */}
+                <AnimatePresence>
+                  {showMedia && (
+                    <MediaDrawer
+                      announcements={announcements}
+                      onClose={() => setShowMedia(false)}
+                      onImageClick={(url) => { setViewerImage(url); setShowMedia(false); }}
+                    />
+                  )}
+                </AnimatePresence>
               </motion.div>
             </motion.div>
           )}
         </AnimatePresence>,
-        document.body
+        document.body,
+      )}
+
+      {/* ═══ 이미지 뷰어 ═══ */}
+      {typeof document !== 'undefined' && viewerImage && createPortal(
+        <AnimatePresence>
+          <ImageViewer src={viewerImage} onClose={() => setViewerImage(null)} />
+        </AnimatePresence>,
+        document.body,
       )}
     </>
   );

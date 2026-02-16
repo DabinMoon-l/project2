@@ -158,7 +158,7 @@ export default function CharacterBox() {
         <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-12 pt-14">
           {/* 총 XP 배지 */}
           <div
-            className="flex items-center gap-3 px-5 py-2 bg-black/40 rounded-full backdrop-blur-sm"
+            className="h-10 flex items-center gap-3 px-5 bg-black/40 rounded-full backdrop-blur-sm"
           >
             <span className="text-xl font-bold text-yellow-300">XP</span>
             <span className="font-bold text-xl text-white leading-none min-w-[3ch] text-right">{totalExp}</span>
@@ -167,10 +167,9 @@ export default function CharacterBox() {
           {/* 도감 버튼 */}
           <button
             onClick={() => setShowDogam(true)}
-            title="도감"
-            className="transition-transform duration-200 hover:scale-110 active:scale-95"
+            className="h-10 flex items-center justify-center px-8 bg-black/40 rounded-full backdrop-blur-sm transition-transform duration-200 hover:scale-110 active:scale-95"
           >
-            <img src="/images/home-book.png" alt="도감" className="w-24 object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]" style={{ transform: 'scaleY(1.15)' }} />
+            <span className="text-xl font-bold text-yellow-300 tracking-widest">도감</span>
           </button>
         </div>
 

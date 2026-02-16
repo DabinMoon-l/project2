@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useTheme } from '@/styles/themes/useTheme';
 import { useUser } from '@/lib/contexts';
@@ -20,13 +21,23 @@ import {
  *    - 프로필 + 닉네임
  *    - 공지 채널
  *    - 랭킹 섹션
+ *
+ * 앱 최초 접속 시 /quiz로 리다이렉트 (세션당 1회)
  */
 export default function HomePage() {
   const { theme } = useTheme();
   const { profile } = useUser();
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
+  const router = useRouter();
 
-  // 홈 화면은 h-screen overflow-hidden 컨테이너로 스크롤 방지
+  // 앱 최초 접속 시 /quiz로 리다이렉트 (세션당 1회)
+  useEffect(() => {
+    const key = 'session_home_visited';
+    if (!sessionStorage.getItem(key)) {
+      sessionStorage.setItem(key, '1');
+      router.replace('/quiz');
+    }
+  }, [router]);
 
   if (!profile) {
     return (
@@ -63,23 +74,21 @@ export default function HomePage() {
           }}
         >
           {/* 프로필 + 닉네임 */}
-          <button
-            className="w-full text-left flex items-center gap-4 pt-2"
-            onClick={() => setShowProfileDrawer(true)}
-          >
-            <div
-              className="w-14 h-14 flex items-center justify-center flex-shrink-0 border-2 border-[#1A1A1A]"
+          <div className="w-full flex items-center gap-4 pt-2">
+            <button
+              className="w-[72px] h-[72px] flex items-center justify-center flex-shrink-0 border-2 border-[#1A1A1A]"
               style={{ backgroundColor: theme.colors.backgroundCard }}
+              onClick={() => setShowProfileDrawer(true)}
             >
-              <svg width={28} height={28} viewBox="0 0 24 24" fill="#1A1A1A">
+              <svg width={36} height={36} viewBox="0 0 24 24" fill="#1A1A1A">
                 <circle cx="12" cy="8" r="4" />
                 <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
               </svg>
-            </div>
-            <p className="font-bold text-4xl text-[#1A1A1A] truncate">
+            </button>
+            <p className="font-bold text-5xl text-[#1A1A1A] truncate leading-normal pb-1">
               {profile.nickname}
             </p>
-          </button>
+          </div>
 
           {/* 공지 채널 */}
           <AnnouncementChannel />

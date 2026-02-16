@@ -4899,12 +4899,30 @@ function ReviewPageContent() {
                       key={updateKey}
                       title={folder.title}
                       count={folder.count}
-                      onClick={() => handleFolderClick(folder)}
-                      isSelectMode={isFolderDeleteMode && canDelete}
+                      onClick={() => {
+                        if (isFolderDeleteMode) {
+                          const newSelected = new Set(deleteFolderIds);
+                          if (newSelected.has(updateKey)) {
+                            newSelected.delete(updateKey);
+                          } else {
+                            newSelected.add(updateKey);
+                          }
+                          setDeleteFolderIds(newSelected);
+                        } else if (isReviewSelectMode) {
+                          const newSelected = new Set(reviewSelectedIds);
+                          if (newSelected.has(updateKey)) {
+                            newSelected.delete(updateKey);
+                          } else {
+                            newSelected.add(updateKey);
+                          }
+                          setReviewSelectedIds(newSelected);
+                        } else {
+                          handleFolderClick(folder);
+                        }
+                      }}
+                      isSelectMode={(isFolderDeleteMode && canDelete) || isReviewSelectMode}
                       isSelected={
-                        isFolderDeleteMode
-                          ? deleteFolderIds.has(updateKey)
-                          : deleteFolderIds.has(updateKey)
+                        (isFolderDeleteMode ? deleteFolderIds : reviewSelectedIds).has(updateKey)
                       }
                       showDelete={false}
                       hasUpdate={hasUpdate}

@@ -1,4 +1,4 @@
-import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import {
   calculateQuizExp,
@@ -183,15 +183,17 @@ interface Quiz {
   creatorId: string;      // 생성자 ID
   title: string;          // 퀴즈 제목
   questions: unknown[];   // 문제 목록
-  rewarded?: boolean;     // 보상 지급 여부
+  isPublic?: boolean;     // 공개 여부
+  type?: string;          // 퀴즈 타입 (ai-generated 등)
+  rewarded?: boolean;     // 생성 보상 지급 여부
+  publicRewarded?: boolean; // 공개 전환 보상 지급 여부
 }
 
 /**
  * 퀴즈 생성 시 경험치 지급
  *
- * Firestore 트리거: quizzes/{quizId} 문서 생성 시
- *
- * 보상: 15 EXP
+ * - 커스텀 퀴즈 (isPublic: true): 50 EXP
+ * - AI 퀴즈 서재 저장 (isPublic: false): 25 EXP
  */
 export const onQuizCreate = onDocumentCreated(
   {
@@ -208,46 +210,93 @@ export const onQuizCreate = onDocumentCreated(
     const quiz = snapshot.data() as Quiz;
     const quizId = event.params.quizId;
 
-    // 이미 보상이 지급된 경우 스킵
     if (quiz.rewarded) {
       console.log(`이미 보상이 지급된 퀴즈입니다: ${quizId}`);
       return;
     }
 
     const { creatorId } = quiz;
-
-    // 필수 데이터 검증
     if (!creatorId) {
       console.error("퀴즈 생성자 ID가 없습니다:", quizId);
       return;
     }
 
-    const expReward = EXP_REWARDS.QUIZ_CREATE;
-    const reason = "퀴즈 생성";
+    // 커스텀(공개) vs AI(서재) 구분
+    const isAiSave = quiz.isPublic === false;
+    const expReward = isAiSave ? EXP_REWARDS.QUIZ_AI_SAVE : EXP_REWARDS.QUIZ_CREATE;
+    const reason = isAiSave ? "AI 퀴즈 서재 저장" : "퀴즈 생성";
 
     const db = getFirestore();
 
     try {
-      // 트랜잭션으로 보상 지급
       await db.runTransaction(async (transaction) => {
-        // 퀴즈 문서에 보상 지급 플래그 설정 (중복 방지)
         transaction.update(snapshot.ref, {
           rewarded: true,
           rewardedAt: FieldValue.serverTimestamp(),
           expRewarded: expReward,
         });
 
-        // 경험치 지급
         await addExpInTransaction(transaction, creatorId, expReward, reason);
       });
 
       console.log(`퀴즈 생성 보상 지급 완료: ${creatorId}`, {
         quizId,
         expReward,
+        isAiSave,
       });
     } catch (error) {
       console.error("퀴즈 생성 보상 지급 실패:", error);
       throw error;
+    }
+  }
+);
+
+/**
+ * 서재 퀴즈 공개 전환 시 경험치 지급
+ *
+ * isPublic: false → true 변경 감지
+ * 보상: 10 EXP (1회만)
+ */
+export const onQuizMakePublic = onDocumentWritten(
+  {
+    document: "quizzes/{quizId}",
+    region: "asia-northeast3",
+  },
+  async (event) => {
+    const before = event.data?.before.data() as Quiz | undefined;
+    const after = event.data?.after.data() as Quiz | undefined;
+
+    // 삭제이거나 데이터 없으면 무시
+    if (!before || !after) return;
+
+    // isPublic이 false → true로 변경된 경우만
+    if (before.isPublic !== false || after.isPublic !== true) return;
+
+    // 이미 공개 전환 보상 지급된 경우
+    if (after.publicRewarded) return;
+
+    const quizId = event.params.quizId;
+    const creatorId = after.creatorId;
+    if (!creatorId) return;
+
+    const expReward = EXP_REWARDS.QUIZ_MAKE_PUBLIC;
+    const reason = "퀴즈 공개 전환";
+    const db = getFirestore();
+
+    try {
+      await db.runTransaction(async (transaction) => {
+        const quizRef = db.collection("quizzes").doc(quizId);
+        transaction.update(quizRef, {
+          publicRewarded: true,
+          publicRewardedAt: FieldValue.serverTimestamp(),
+        });
+
+        await addExpInTransaction(transaction, creatorId, expReward, reason);
+      });
+
+      console.log(`퀴즈 공개 전환 보상 지급: ${creatorId}`, { quizId, expReward });
+    } catch (error) {
+      console.error("퀴즈 공개 전환 보상 실패:", error);
     }
   }
 );

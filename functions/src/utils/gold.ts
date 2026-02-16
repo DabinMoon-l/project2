@@ -13,21 +13,16 @@ export const EXP_REWARDS = {
   QUIZ_GOOD: 25,          // 70% 이상
   QUIZ_PASS: 15,          // 50% 이상
   QUIZ_FAIL: 5,           // 50% 미만 (참여 보상)
-  QUIZ_CREATE: 15,        // 퀴즈 생성
+  QUIZ_CREATE: 50,        // 커스텀 퀴즈 생성 (isPublic: true)
+  QUIZ_AI_SAVE: 25,       // AI 퀴즈 서재 저장 (isPublic: false)
+  QUIZ_MAKE_PUBLIC: 10,   // 서재 퀴즈 공개 전환
 
   // 피드백 관련
-  FEEDBACK_SUBMIT: 10,    // 피드백 작성
+  FEEDBACK_SUBMIT: 15,    // 피드백 작성
 
   // 게시판 관련
-  POST_CREATE: 5,         // 글 작성
-  COMMENT_CREATE: 2,      // 댓글 작성
-  LIKE_RECEIVED: 1,       // 좋아요 받음
-
-  // 데일리 관련
-  DAILY_COMPLETE: 5,      // 데일리 퀴즈 완료
-  STREAK_3_DAYS: 10,      // 3일 연속 출석 보너스
-  STREAK_7_DAYS: 20,      // 7일 연속 출석 보너스
-  STREAK_30_DAYS: 50,     // 30일 연속 출석 보너스
+  POST_CREATE: 15,        // 글 작성
+  COMMENT_CREATE: 15,     // 댓글 작성
 };
 
 /**
