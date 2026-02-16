@@ -21,18 +21,8 @@ interface NavigationProps {
 const ACTIVE_COLOR = '#1A1A1A';
 const INACTIVE_COLOR = '#9A9A9A';
 
-// 학생용 네비게이션 탭
+// 학생용 네비게이션 탭 (홈은 스와이프로 접근)
 const studentTabs: NavItem[] = [
-  {
-    // 홈 아이콘
-    icon: (isActive) => (
-      <svg className="w-9 h-9" fill="none" stroke={isActive ? ACTIVE_COLOR : INACTIVE_COLOR} strokeWidth={isActive ? 2 : 1.5} viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-      </svg>
-    ),
-    path: '/',
-    label: '홈',
-  },
   {
     // 퀴즈 아이콘 - 물음표
     icon: (isActive) => (
@@ -145,7 +135,7 @@ export default function Navigation({ role }: NavigationProps) {
   return (
     <nav className="fixed bottom-4 left-4 right-4 z-50 flex justify-center">
       <div
-        className="flex items-center justify-around px-8 py-4"
+        className="flex items-center justify-around px-8 py-4 rounded-2xl"
         style={{
           backgroundColor: '#F5F0E8',
           border: '2px solid #1A1A1A',

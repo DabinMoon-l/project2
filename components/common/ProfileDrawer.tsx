@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import Image from 'next/image';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useUser } from '@/lib/contexts/UserContext';
 import { useTheme } from '@/styles/themes/useTheme';
@@ -60,6 +61,13 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
       fetchSettings(user.uid);
     }
   }, [user?.uid, isOpen, fetchSettings]);
+
+  // 모달 열림 시 스와이프 전환 방지
+  useEffect(() => {
+    if (isOpen) document.body.setAttribute('data-hide-nav', '');
+    else document.body.removeAttribute('data-hide-nav');
+    return () => document.body.removeAttribute('data-hide-nav');
+  }, [isOpen]);
 
   const displaySettings = settings || DEFAULT_SETTINGS;
 
@@ -218,9 +226,11 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                   }}
                 >
                   {profile.profileRabbitId != null ? (
-                    <img
+                    <Image
                       src={getRabbitProfileUrl(profile.profileRabbitId)}
                       alt="프로필"
+                      width={56}
+                      height={56}
                       className="w-full h-full object-cover"
                     />
                   ) : (

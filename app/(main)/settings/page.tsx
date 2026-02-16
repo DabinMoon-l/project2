@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
+import Image from 'next/image';
 import { Header, Modal } from '@/components/common';
 import { SettingsList } from '@/components/profile';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -176,9 +177,11 @@ export default function SettingsPage() {
           >
             <div className="w-16 h-16 flex-shrink-0 border-2 border-[#1A1A1A] overflow-hidden flex items-center justify-center bg-[#FDFBF7]">
               {profile?.profileRabbitId != null ? (
-                <img
+                <Image
                   src={getRabbitProfileUrl(profile.profileRabbitId)}
                   alt="프로필"
+                  width={64}
+                  height={64}
                   className="w-full h-full object-cover"
                 />
               ) : (
@@ -313,9 +316,11 @@ export default function SettingsPage() {
                         : 'border-[#D4CFC4] hover:border-[#9A9A9A]'
                     }`}
                   >
-                    <img
+                    <Image
                       src={getRabbitProfileUrl(h.rabbitId)}
                       alt={`토끼 #${h.rabbitId}`}
+                      width={80}
+                      height={80}
                       className="w-full h-full object-cover"
                     />
                   </button>

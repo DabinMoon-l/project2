@@ -13,20 +13,12 @@ import { useUser, useCourse } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
 import { type ClassType } from '@/styles/themes';
 
-// Team PNG 매핑
-const teamImages: Record<ClassType, string> = {
-  A: '/images/team_a.png',
-  B: '/images/team_b.png',
-  C: '/images/team_c.png',
-  D: '/images/team_d.png',
-};
-
-// 순위 PNG 매핑
-const rankImages: Record<number, string> = {
-  1: '/images/1st.png',
-  2: '/images/2nd.png',
-  3: '/images/3rd.png',
-  4: '/images/4th.png',
+// 순위 접미사
+const ordinalSuffix = (n: number) => {
+  if (n === 1) return 'st';
+  if (n === 2) return 'nd';
+  if (n === 3) return 'rd';
+  return 'th';
 };
 
 interface UserData {
@@ -41,7 +33,6 @@ interface UserData {
 
 /**
  * 백분위 계산 (0~100)
- * 자신보다 낮은 값을 가진 사람 수 / (전체-1) * 100
  */
 function computePercentile(value: number, allValues: number[]): number {
   if (allValues.length <= 1) return 100;
@@ -50,12 +41,8 @@ function computePercentile(value: number, allValues: number[]): number {
 }
 
 /**
- * 랭킹 섹션 컴포넌트 (리디자인)
- *
- * - 반 대항 랭킹: normalizedAvgExp * 0.6 + participationRate * 0.4
- *   참여율 = 교수 출제 퀴즈 기준 응시율
- * - 개인 랭킹: scorePercentile * 0.4 + expPercentile * 0.6
- * - PNG 에셋으로 팀/순위 표시
+ * 랭킹 섹션 컴포넌트 (홈 하단, 흰색 텍스트)
+ * TEAM | TEAM RANK | MY RANK | >
  */
 export default function RankingSection() {
   const router = useRouter();
@@ -73,7 +60,6 @@ export default function RankingSection() {
 
     const loadRankings = async () => {
       try {
-        // 1. 같은 과목의 모든 사용자 가져오기
         const usersSnapshot = await getDocs(
           query(collection(db, 'users'), where('courseId', '==', userCourseId))
         );
@@ -82,62 +68,32 @@ export default function RankingSection() {
           ...doc.data(),
         }));
 
-        const professorIds = new Set(
-          allUsers.filter(u => u.role === 'professor').map(p => p.id)
-        );
         const students = allUsers.filter(u => u.role !== 'professor');
 
-        // 2. 교수 출제 퀴즈 수 가져오기
-        const quizzesSnapshot = await getDocs(
-          query(collection(db, 'quizzes'), where('courseId', '==', userCourseId))
-        );
-        const totalProfQuizzes = quizzesSnapshot.docs.filter(doc =>
-          professorIds.has(doc.data().creatorId)
-        ).length;
+        // 반별 랭킹
+        const classes = ['A', 'B', 'C', 'D'];
+        const classScores = classes.map(cls => {
+          const members = students.filter(u => u.classId === cls);
+          if (members.length === 0) return { classId: cls, score: 0 };
 
-        // ── 반 대항 랭킹 ──
-        // classScore = normalizedAvgExp * 0.6 + participationRate * 0.4
-        const classStats: Record<string, { totalExp: number; count: number; profQuizSum: number }> = {};
-        for (const cls of ['A', 'B', 'C', 'D']) {
-          classStats[cls] = { totalExp: 0, count: 0, profQuizSum: 0 };
-        }
+          const avgExp = members.reduce((s, u) => s + (u.totalExp || 0), 0) / members.length;
+          const maxExp = Math.max(...students.map(u => u.totalExp || 0), 1);
+          const normalizedAvgExp = (avgExp / maxExp) * 100;
 
-        students.forEach(user => {
-          const cls = user.classId;
-          if (cls && classStats[cls]) {
-            classStats[cls].totalExp += user.totalExp || 0;
-            classStats[cls].count += 1;
-            classStats[cls].profQuizSum += user.professorQuizzesCompleted || 0;
-          }
+          const participated = members.filter(u => (u.professorQuizzesCompleted || 0) > 0).length;
+          const participationRate = members.length > 0 ? (participated / members.length) * 100 : 0;
+
+          return {
+            classId: cls,
+            score: normalizedAvgExp * 0.6 + participationRate * 0.4,
+          };
         });
 
-        // 반별 평균 EXP
-        const classAvgExp: Record<string, number> = {};
-        let maxAvgExp = 0;
-        for (const cls of ['A', 'B', 'C', 'D']) {
-          const s = classStats[cls];
-          classAvgExp[cls] = s.count > 0 ? s.totalExp / s.count : 0;
-          maxAvgExp = Math.max(maxAvgExp, classAvgExp[cls]);
-        }
-
-        // 반별 종합 점수 + 순위
-        const classScores: { cls: string; score: number }[] = [];
-        for (const cls of ['A', 'B', 'C', 'D']) {
-          const s = classStats[cls];
-          const normalizedExp = maxAvgExp > 0 ? classAvgExp[cls] / maxAvgExp : 0;
-          const participationRate = (totalProfQuizzes > 0 && s.count > 0)
-            ? s.profQuizSum / (totalProfQuizzes * s.count)
-            : 0;
-          const score = normalizedExp * 0.6 + participationRate * 0.4;
-          classScores.push({ cls, score });
-        }
-
         classScores.sort((a, b) => b.score - a.score);
-        const myTeamRank = classScores.findIndex(c => c.cls === classType) + 1;
-        setTeamRank(myTeamRank || 4);
+        const myClassRank = classScores.findIndex(c => c.classId === classType) + 1;
+        setTeamRank(myClassRank);
 
-        // ── 개인 랭킹 ──
-        // rankScore = scorePercentile * 0.4 + expPercentile * 0.6
+        // 개인 랭킹
         const allExps = students.map(u => u.totalExp || 0);
         const allAvgScores = students.map(u => {
           const total = u.totalAttemptedQuestions || 0;
@@ -148,14 +104,9 @@ export default function RankingSection() {
           const exp = u.totalExp || 0;
           const total = u.totalAttemptedQuestions || 0;
           const avgScore = total > 0 ? ((u.totalCorrect || 0) / total) * 100 : 0;
-
           const expPercentile = computePercentile(exp, allExps);
           const scorePercentile = computePercentile(avgScore, allAvgScores);
-
-          return {
-            id: u.id,
-            rankScore: scorePercentile * 0.4 + expPercentile * 0.6,
-          };
+          return { id: u.id, rankScore: scorePercentile * 0.4 + expPercentile * 0.6 };
         });
 
         studentRankScores.sort((a, b) => b.rankScore - a.rankScore);
@@ -175,73 +126,56 @@ export default function RankingSection() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-8 px-8">
-        <div className="w-6 h-6 border-2 border-[#1A1A1A] border-t-transparent rounded-full animate-spin" />
+      <div className="flex items-center justify-center py-4">
+        <div className="w-6 h-6 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
+  const teamRankLabel = teamRank > 0 ? `${teamRank}${ordinalSuffix(teamRank)}` : '-';
+
   return (
-    <div className="px-8">
-      {/* 라벨 행 */}
-      <div className="flex items-center mb-2">
-        <div className="flex-1 text-center">
-          <span className="text-sm font-bold text-[#5C5C5C] tracking-widest">TEAM</span>
-        </div>
-        <div className="w-px h-4" />
-        <div className="flex-1 text-center">
-          <span className="text-sm font-bold text-[#5C5C5C] tracking-widest">TEAM RANK</span>
-        </div>
-        <div className="w-px h-4" />
-        <div className="flex-1 text-center">
-          <span className="text-sm font-bold text-[#5C5C5C] tracking-widest">MY RANK</span>
-        </div>
-      </div>
-
-      {/* 콘텐츠 행 */}
-      <div className="flex items-center">
-        {/* Team 이미지 */}
-        <div className="flex-1 flex justify-center">
-          <img
-            src={teamImages[classType]}
-            alt={`Team ${classType}`}
-            className="w-36 h-36 object-contain"
-          />
+    <button
+      onClick={() => router.push('/ranking')}
+      className="w-full active:scale-[0.98] transition-transform"
+    >
+      <div className="flex items-center justify-center gap-10">
+        {/* TEAM */}
+        <div className="text-center">
+          <span className="text-xs font-bold text-white/50 tracking-widest">TEAM</span>
+          <div className="text-5xl font-black text-white mt-1">{classType}</div>
         </div>
 
         {/* 구분선 */}
-        <div className="w-px h-36 bg-[#D4CFC4]" />
+        <div className="w-px h-12 bg-white/20" />
 
-        {/* 순위 이미지 */}
-        <div className="flex-1 flex justify-center">
-          {teamRank >= 1 && teamRank <= 4 ? (
-            <img
-              src={rankImages[teamRank]}
-              alt={`${teamRank}위`}
-              className="w-36 h-36 object-contain"
-            />
-          ) : (
-            <span className="text-5xl font-black text-[#1A1A1A]">-</span>
-          )}
+        {/* TEAM RANK */}
+        <div className="text-center">
+          <span className="text-xs font-bold text-white/50 tracking-widest">TEAM RANK</span>
+          <div className="text-5xl font-black text-white mt-1">{teamRankLabel}</div>
         </div>
 
         {/* 구분선 */}
-        <div className="w-px h-36 bg-[#D4CFC4]" />
+        <div className="w-px h-12 bg-white/20" />
 
-        {/* 개인 랭킹 — 클릭 가능 버튼 */}
-        <button
-          onClick={() => router.push('/ranking')}
-          className="flex-1 h-36 flex flex-col items-center justify-center active:scale-95 transition-transform"
-        >
-          <div className="flex items-baseline text-[#1A1A1A]">
-            <span className="text-6xl font-black">{personalRank || '-'}</span>
-            <span className="text-lg font-bold text-[#5C5C5C] ml-1">
+        {/* MY RANK */}
+        <div className="text-center">
+          <span className="text-xs font-bold text-white/50 tracking-widest">MY RANK</span>
+          <div className="flex items-baseline justify-center mt-1">
+            <span className="text-5xl font-black text-white">
+              {personalRank || '-'}
+            </span>
+            <span className="text-lg font-bold text-white/50 ml-1">
               /{totalStudents}
             </span>
           </div>
-          <span className="text-base text-[#5C5C5C] mt-3">- 더보기 -</span>
-        </button>
+        </div>
+
+        {/* 화살표 */}
+        <svg className="w-5 h-5 text-white/50 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+        </svg>
       </div>
-    </div>
+    </button>
   );
 }

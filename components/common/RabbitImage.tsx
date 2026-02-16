@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { getRabbitImageSrc } from '@/lib/utils/rabbitImage';
 
 interface RabbitImageProps {
-  /** 토끼 ID (0~99) */
+  /** 토끼 ID (0~79) */
   rabbitId: number;
   /** 이미지 표시 크기 (px) */
   size: number;

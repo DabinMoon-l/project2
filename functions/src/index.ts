@@ -320,6 +320,11 @@ export { equipRabbit, unequipRabbit } from "./rabbitEquip";
 export { onOnboardingComplete } from "./onboardingRabbit";
 
 // ============================================
+// 디버그/테스트 Functions
+// ============================================
+export { fillDogam } from "./fillDogam";
+
+// ============================================
 // 마이그레이션 Functions
 // ============================================
 export { migrateCharactersToRabbits } from "./migrateCharacters";

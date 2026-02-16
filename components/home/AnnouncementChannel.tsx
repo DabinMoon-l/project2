@@ -380,14 +380,14 @@ export default function AnnouncementChannel() {
         return (
           <button onClick={() => setShowModal(true)} className="w-full text-left flex items-center">
             <div className="flex-1 min-w-0">
-              <p className="text-4xl font-bold text-[#1A1A1A]">{firstWord}</p>
-              <p className="text-4xl font-bold text-[#1A1A1A] truncate">{rest || '\u00A0'}</p>
+              <p className="text-4xl font-bold text-white">{firstWord}</p>
+              <p className="text-4xl font-bold text-white truncate">{rest || '\u00A0'}</p>
             </div>
             <div className="flex-shrink-0 ml-3 self-center">
               {hasUnread ? (
                 <div className="w-3 h-3" style={{ backgroundColor: theme.colors.accent }} />
               ) : (
-                <svg className="w-6 h-6 text-[#8C8478]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-6 h-6 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               )}
@@ -415,7 +415,7 @@ export default function AnnouncementChannel() {
                 style={{ height: 'min(88vh, 780px)', boxShadow: '0 8px 40px rgba(0,0,0,0.25)' }}
               >
                 {/* ── 헤더 ── */}
-                <div className="relative h-[52px] shrink-0">
+                <div className="relative h-[64px] shrink-0">
                   <img src="/notice/header_bar.png" alt="" className="absolute inset-0 w-full h-full object-fill" />
                   <div className="relative h-full flex items-center justify-between px-3">
                     <button onClick={() => setShowMedia(true)} className="w-7 h-7 flex items-center justify-center">

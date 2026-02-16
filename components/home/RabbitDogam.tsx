@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
@@ -17,7 +18,7 @@ interface RabbitDogamProps {
 }
 
 /**
- * 토끼 도감 — 내가 발견한 토끼 기반 100칸 그리드
+ * 토끼 도감 — 내가 발견한 토끼 기반 80칸 그리드
  */
 export default function RabbitDogam({
   isOpen,
@@ -52,12 +53,27 @@ export default function RabbitDogam({
 
   const discoveredCount = myHoldingMap.size;
   const loading = rabbitsLoading || holdingsLoading;
+  const [filling, setFilling] = useState(false);
+
+  // 도감 전체 채우기 (디버그)
+  const handleFillDogam = async () => {
+    if (filling) return;
+    setFilling(true);
+    try {
+      const fillDogam = httpsCallable(functions, 'fillDogam');
+      await fillDogam({ courseId });
+      window.location.reload();
+    } catch (err) {
+      console.error('도감 채우기 실패:', err);
+      setFilling(false);
+    }
+  };
 
   // 선택된 토끼의 상세 정보
   const selectedRabbit = selectedRabbitId !== null ? rabbitDocMap.get(selectedRabbitId) : null;
   const selectedHolding = selectedRabbitId !== null ? myHoldingMap.get(selectedRabbitId) : null;
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {isOpen && (
         <motion.div
@@ -85,11 +101,22 @@ export default function RabbitDogam({
               <span className="font-bold text-xl">
                 {selectedRabbitId !== null ? '토끼 상세' : '토끼 도감'}
               </span>
-              <span className="font-bold text-xl">
-                {selectedRabbitId !== null
-                  ? `#${selectedRabbitId + 1}`
-                  : `${discoveredCount}/100`}
-              </span>
+              <div className="flex items-center gap-2">
+                {selectedRabbitId === null && discoveredCount < 80 && (
+                  <button
+                    onClick={handleFillDogam}
+                    disabled={filling}
+                    className="text-xs px-2 py-1 border border-[#1A1A1A] bg-[#EDEAE4] disabled:opacity-50"
+                  >
+                    {filling ? '채우는 중...' : '전체 채우기'}
+                  </button>
+                )}
+                <span className="font-bold text-xl">
+                  {selectedRabbitId !== null
+                    ? `#${selectedRabbitId + 1}`
+                    : `${discoveredCount}/80`}
+                </span>
+              </div>
             </div>
 
             {/* 본문 */}
@@ -101,7 +128,7 @@ export default function RabbitDogam({
               ) : (
                 /* 100칸 그리드 */
                 <div className="grid grid-cols-4 gap-2">
-                  {Array.from({ length: 100 }).map((_, index) => {
+                  {Array.from({ length: 80 }).map((_, index) => {
                     const isDiscovered = myHoldingMap.has(index);
                     return (
                       <button
@@ -146,7 +173,8 @@ export default function RabbitDogam({
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }
 

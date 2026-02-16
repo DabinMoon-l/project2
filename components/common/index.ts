@@ -37,6 +37,9 @@ export type { UserRole } from './Navigation';
 // ProfileDrawer 컴포넌트
 export { default as ProfileDrawer } from './ProfileDrawer';
 
+// PullToHome 컴포넌트 (스와이프 다운 → 홈 이동)
+export { default as PullToHome } from './PullToHome';
+
 // NotificationProvider 컴포넌트
 export { default as NotificationProvider, useNotificationContext } from './NotificationProvider';
 

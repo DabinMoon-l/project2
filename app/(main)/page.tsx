@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
+import Image from 'next/image';
 import { useTheme } from '@/styles/themes/useTheme';
 import { useUser } from '@/lib/contexts';
 import { ProfileDrawer } from '@/components/common';
@@ -13,23 +14,110 @@ import {
   RankingSection,
 } from '@/components/home';
 
+const SWIPE_THRESHOLD = 120;
+const WHEEL_THRESHOLD = 80;
+
 /**
- * 홈 화면 메인 페이지 — 리디자인
+ * 배경 이미지 경로
+ */
+const HOME_BG_IMAGE = '/images/home-bg.jpg';
+
+/**
+ * 홈 화면 메인 페이지 — 풀스크린 배경
  *
- * 구조:
- * 1. 캐릭터 히어로 섹션 (60vh, 풀블리드)
- * 2. 바텀시트 스타일 콘텐츠 (40vh, 내부 스크롤)
- *    - 프로필 + 닉네임
- *    - 공지 채널
- *    - 랭킹 섹션
- *
- * 앱 최초 접속 시 /quiz로 리다이렉트 (세션당 1회)
+ * 구조 (위→아래):
+ * 1. 상단: 프로필 + 닉네임 + 공지 (부드러운 그라데이션 오버레이)
+ * 2. 중앙: 캐릭터 슬롯 + XP/도감 + EXP 바 (오버레이 없음)
+ * 3. 하단: 랭킹 섹션 (부드러운 그라데이션 오버레이)
  */
 export default function HomePage() {
   const { theme } = useTheme();
   const { profile } = useUser();
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
   const router = useRouter();
+
+  // 스와이프 업 → 이전 페이지로 복귀
+  const [pullY, setPullY] = useState(0);
+  const [transitioning, setTransitioning] = useState(false);
+  const startY = useRef(0);
+  const pulling = useRef(false);
+  const wheelAccum = useRef(0);
+  const wheelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 복귀 페이지 미리 로드
+  useEffect(() => {
+    const returnPath = sessionStorage.getItem('home_return_path') || '/quiz';
+    router.prefetch(returnPath);
+  }, [router]);
+
+  const navigateReturn = useCallback(() => {
+    setTransitioning(true);
+    setPullY(window.innerHeight);
+    const returnPath = sessionStorage.getItem('home_return_path') || '/quiz';
+    setTimeout(() => {
+      router.push(returnPath);
+    }, 300);
+  }, [router]);
+
+  // 모달/바텀시트 열림 여부
+  const isModalOpen = () => document.body.hasAttribute('data-hide-nav');
+
+  // 모바일 터치
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    if (transitioning || isModalOpen()) return;
+    startY.current = e.touches[0].clientY;
+    pulling.current = true;
+  }, [transitioning]);
+
+  const onTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!pulling.current || transitioning) return;
+    const delta = startY.current - e.touches[0].clientY;
+    if (delta > 0) {
+      setPullY(delta * 0.4);
+    } else {
+      pulling.current = false;
+      setPullY(0);
+    }
+  }, [transitioning]);
+
+  const onTouchEnd = useCallback(() => {
+    if (!pulling.current || transitioning) return;
+    pulling.current = false;
+    if (pullY > SWIPE_THRESHOLD) {
+      navigateReturn();
+    } else {
+      setPullY(0);
+    }
+  }, [pullY, transitioning, navigateReturn]);
+
+  // PC 마우스 휠 (아래로 스크롤 → 이전 페이지)
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      if (transitioning || isModalOpen()) return;
+      if (e.deltaY > 0) {
+        wheelAccum.current += e.deltaY;
+
+        // 데드존: 누적 40 이상부터 시각 피드백
+        const visual = Math.max(0, wheelAccum.current - 40) * 0.6;
+        if (visual > 0) {
+          setPullY(Math.min(visual, SWIPE_THRESHOLD * 1.2));
+        }
+
+        if (wheelAccum.current > WHEEL_THRESHOLD) {
+          wheelAccum.current = 0;
+          navigateReturn();
+          return;
+        }
+        if (wheelTimer.current) clearTimeout(wheelTimer.current);
+        wheelTimer.current = setTimeout(() => {
+          wheelAccum.current = 0;
+          setPullY(0);
+        }, 300);
+      }
+    };
+    window.addEventListener('wheel', handleWheel, { passive: true });
+    return () => window.removeEventListener('wheel', handleWheel);
+  }, [transitioning, navigateReturn]);
 
   // 앱 최초 접속 시 /quiz로 리다이렉트 (세션당 1회)
   useEffect(() => {
@@ -60,63 +148,109 @@ export default function HomePage() {
   }
 
   return (
-    <div className="h-screen overflow-hidden flex flex-col scrollbar-hide">
-      {/* 캐릭터 히어로 섹션 (60vh) */}
-      <CharacterBox />
+    <>
+      {/* 대상 페이지 배경 미리보기 — 홈 뒤에 아이보리 깔림 */}
+      {(pullY > 5 || transitioning) && (
+        <div
+          className="fixed inset-0 pointer-events-none"
+          style={{ zIndex: 0, backgroundColor: '#F5F0E8' }}
+        />
+      )}
 
-      {/* 콘텐츠 영역 — 배경 위로 겹쳐서 그라데이션 */}
+      {/* 홈 화면 (슬라이드) */}
       <div
-        className="relative z-10 overflow-y-auto scrollbar-hide -mt-56"
-        style={{ height: 'calc((100vh - 5rem) * 0.4 + 12rem)' }}
+        className="h-screen overflow-hidden flex flex-col scrollbar-hide"
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        style={{
+          position: 'relative',
+          zIndex: 1,
+          backgroundImage: `url(${HOME_BG_IMAGE})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center 5%',
+          backgroundColor: '#2a2018',
+          transform: pullY > 5 ? `translateY(-${pullY}px)` : undefined,
+          transition: pulling.current ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0, 0, 1)',
+          willChange: pullY > 5 ? 'transform' : undefined,
+        }}
       >
-        <div className="px-4 pb-28 space-y-4 pt-32"
-          style={{
-            background: 'linear-gradient(to bottom, transparent 0%, rgba(245,240,232,0.15) 40px, rgba(245,240,232,0.4) 80px, rgba(245,240,232,0.7) 120px, #F5F0E8 180px)',
-          }}
-        >
+
+        {/* 콘텐츠 — 하나의 연속 흐름 */}
+        <div className="relative z-[2] flex-1 flex flex-col pt-16 pb-16">
           {/* 프로필 + 닉네임 */}
-          <div className="w-full flex items-center gap-4 pt-2">
+          <div className="px-5 flex items-center gap-4 mb-5">
             <button
-              className="w-[72px] h-[72px] flex items-center justify-center flex-shrink-0 border-2 border-[#1A1A1A] overflow-hidden"
-              style={{ backgroundColor: theme.colors.backgroundCard }}
+              className="w-20 h-20 flex items-center justify-center flex-shrink-0 border-2 border-white/50 rounded-xl overflow-hidden"
+              style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}
               onClick={() => setShowProfileDrawer(true)}
             >
               {profile.profileRabbitId != null ? (
-                <img
+                <Image
                   src={getRabbitProfileUrl(profile.profileRabbitId)}
                   alt="프로필"
+                  width={80}
+                  height={80}
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <svg width={36} height={36} viewBox="0 0 24 24" fill="#1A1A1A">
+                <svg width={40} height={40} viewBox="0 0 24 24" fill="white">
                   <circle cx="12" cy="8" r="4" />
                   <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
                 </svg>
               )}
             </button>
-            <p className="font-bold text-5xl text-[#1A1A1A] truncate leading-normal pb-1">
+            <p className="font-bold text-6xl text-white truncate leading-normal flex-1">
               {profile.nickname}
             </p>
           </div>
 
-          {/* 공지 채널 */}
-          <AnnouncementChannel />
-
-          {/* 구분선 */}
-          <div className="px-8">
-            <div className="h-px bg-[#D4CFC4]" />
+          {/* 공지 */}
+          <div className="px-5 -mb-4">
+            <AnnouncementChannel />
           </div>
 
-          {/* 랭킹 섹션 */}
-          <RankingSection />
-        </div>
-      </div>
+          {/* 캐릭터 영역 */}
+          <CharacterBox />
 
-      {/* 프로필 드로어 */}
-      <ProfileDrawer
-        isOpen={showProfileDrawer}
-        onClose={() => setShowProfileDrawer(false)}
-      />
-    </div>
+          {/* 랭킹 — 하단 */}
+          <div className="mt-auto -translate-y-[100px]">
+            <RankingSection />
+          </div>
+        </div>
+
+        {/* 스와이프 업 인디케이터 */}
+        {pullY > 10 && !transitioning && (
+          <div
+            className="fixed bottom-0 left-0 right-0 z-50 flex justify-center pb-4 pointer-events-none"
+            style={{ opacity: Math.min(pullY / SWIPE_THRESHOLD, 1) }}
+          >
+            <div className="flex flex-col items-center gap-1">
+              <svg
+                className="w-5 h-5 text-white"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                style={{
+                  transform: pullY > SWIPE_THRESHOLD ? 'rotate(180deg)' : 'none',
+                  transition: 'transform 0.2s',
+                }}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+              </svg>
+              <span className="text-xs font-bold text-white">
+                {pullY > SWIPE_THRESHOLD ? '놓으면 이동' : '위로 스와이프'}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* 프로필 드로어 */}
+        <ProfileDrawer
+          isOpen={showProfileDrawer}
+          onClose={() => setShowProfileDrawer(false)}
+        />
+      </div>
+    </>
   );
 }

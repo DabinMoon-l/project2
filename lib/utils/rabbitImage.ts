@@ -1,7 +1,7 @@
 /**
  * 토끼 이미지 경로 유틸리티
  *
- * rabbitId (0~99) → public/rabbit/ 내 PNG 파일 경로 매핑
+ * rabbitId (0~79) → public/rabbit/ 내 PNG 파일 경로 매핑
  * 수정중인 파일(-붙은 이름)은 별도 파일명 패턴 처리
  */
 
@@ -11,7 +11,7 @@ const EDITING_RABBIT_IDS = new Set<number>([]);
 /**
  * rabbitId로 이미지 경로를 반환
  *
- * @param rabbitId 0~99
+ * @param rabbitId 0~79
  * @returns `/rabbit/rabbit-001.png` 형식 경로, 수정중이면 `-` 포함 파일명
  */
 export function getRabbitImageSrc(rabbitId: number): string {

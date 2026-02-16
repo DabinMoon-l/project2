@@ -75,8 +75,8 @@ export const spinRabbitGacha = onCall(
         );
       }
 
-      // 랜덤 토끼 ID (0-99)
-      const rabbitId = Math.floor(Math.random() * 100);
+      // 랜덤 토끼 ID (0-79)
+      const rabbitId = Math.floor(Math.random() * 80);
       const rabbitDocId = `${courseId}_${rabbitId}`;
 
       // 이미 보유하고 있는지 확인

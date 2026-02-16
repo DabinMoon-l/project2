@@ -5,7 +5,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { ThemeProvider } from '@/styles/themes/ThemeProvider';
 import { useRequireAuth } from '@/lib/hooks/useAuth';
 import Navigation from '@/components/common/Navigation';
-import { NotificationProvider, ExpToastProvider } from '@/components/common';
+import { NotificationProvider, ExpToastProvider, PullToHome } from '@/components/common';
 import { AIQuizContainer } from '@/components/ai-quiz';
 import { UserProvider, useUser, CourseProvider, useCourse } from '@/lib/contexts';
 import type { ClassType } from '@/styles/themes';
@@ -28,11 +28,20 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
   // - 수정 페이지 (/edit 포함)
   // - 랭킹 페이지 (/ranking)
   // - 랜덤 복습 페이지 (/review/random)
+  const isHome = pathname === '/';
+
   const hideNavigation =
+    isHome ||
     pathname?.match(/^\/quiz\/[^/]+/) !== null ||
     pathname?.includes('/edit') ||
     pathname === '/ranking' ||
     pathname === '/review/random';
+
+  // 스와이프 다운으로 홈 이동 가능한 페이지
+  const enablePullToHome =
+    !isProfessor &&
+    !isHome &&
+    (pathname === '/quiz' || pathname === '/review' || pathname === '/board');
 
   // 프로필이 없으면 온보딩으로 리다이렉트
   useEffect(() => {
@@ -90,16 +99,29 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
           <div className={`min-h-screen ${hideNavigation ? '' : 'pb-20'}`}>
             {/* 메인 콘텐츠 */}
             <main>
-              {children}
+              {enablePullToHome ? (
+                <PullToHome>
+                  {children}
+                  {/* AI 퀴즈 플로팅 버튼 — PullToHome 안에 넣어야 같이 슬라이드됨 */}
+                  {pathname === '/quiz' && searchParams.get('manage') !== 'true' && <AIQuizContainer />}
+                  {/* 네비게이션도 같이 슬라이드 */}
+                  {!hideNavigation && (
+                    <Navigation role={isProfessor ? 'professor' : 'student'} />
+                  )}
+                </PullToHome>
+              ) : (
+                <>
+                  {children}
+                  {/* AI 퀴즈 플로팅 버튼 (교수 모드 등 PullToHome 미적용 시) */}
+                  {!isProfessor && pathname === '/quiz' && searchParams.get('manage') !== 'true' && <AIQuizContainer />}
+                </>
+              )}
             </main>
 
-            {/* 하단 네비게이션 바 (퀴즈 풀이 중에는 숨김) */}
-            {!hideNavigation && (
+            {/* 하단 네비게이션 바 (PullToHome 미적용 페이지) */}
+            {!enablePullToHome && !hideNavigation && (
               <Navigation role={isProfessor ? 'professor' : 'student'} />
             )}
-
-            {/* AI 퀴즈 플로팅 버튼 (학생 전용, 퀴즈 페이지에서만, 관리 모드 제외) */}
-            {!isProfessor && pathname === '/quiz' && searchParams.get('manage') !== 'true' && <AIQuizContainer />}
           </div>
         </ExpToastProvider>
       </NotificationProvider>
