@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import { useTheme } from '@/styles/themes/useTheme';
 import { useUser } from '@/lib/contexts';
 import { ProfileDrawer } from '@/components/common';
+import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 import {
   AnnouncementChannel,
   CharacterBox,
@@ -76,14 +77,22 @@ export default function HomePage() {
           {/* 프로필 + 닉네임 */}
           <div className="w-full flex items-center gap-4 pt-2">
             <button
-              className="w-[72px] h-[72px] flex items-center justify-center flex-shrink-0 border-2 border-[#1A1A1A]"
+              className="w-[72px] h-[72px] flex items-center justify-center flex-shrink-0 border-2 border-[#1A1A1A] overflow-hidden"
               style={{ backgroundColor: theme.colors.backgroundCard }}
               onClick={() => setShowProfileDrawer(true)}
             >
-              <svg width={36} height={36} viewBox="0 0 24 24" fill="#1A1A1A">
-                <circle cx="12" cy="8" r="4" />
-                <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
-              </svg>
+              {profile.profileRabbitId != null ? (
+                <img
+                  src={getRabbitProfileUrl(profile.profileRabbitId)}
+                  alt="프로필"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <svg width={36} height={36} viewBox="0 0 24 24" fill="#1A1A1A">
+                  <circle cx="12" cy="8" r="4" />
+                  <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
+                </svg>
+              )}
             </button>
             <p className="font-bold text-5xl text-[#1A1A1A] truncate leading-normal pb-1">
               {profile.nickname}
@@ -92,6 +101,11 @@ export default function HomePage() {
 
           {/* 공지 채널 */}
           <AnnouncementChannel />
+
+          {/* 구분선 */}
+          <div className="px-8">
+            <div className="h-px bg-[#D4CFC4]" />
+          </div>
 
           {/* 랭킹 섹션 */}
           <RankingSection />

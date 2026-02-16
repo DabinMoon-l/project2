@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useUser } from '@/lib/contexts/UserContext';
 import { useTheme } from '@/styles/themes/useTheme';
+import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 import {
   useSettings,
   type NotificationSettings,
@@ -173,17 +174,22 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
             onClick={onClose}
           />
 
-          {/* 드로어 */}
+          {/* 바텀시트 */}
           <motion.div
-            initial={{ x: '-100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '-100%' }}
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            className="fixed left-0 top-0 bottom-0 w-80 z-50 overflow-y-auto"
+            className="fixed left-0 right-0 bottom-0 z-50 overflow-y-auto max-h-[85vh]"
             style={{ backgroundColor: theme.colors.background }}
           >
+            {/* 바텀시트 핸들 */}
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 bg-[#D4CFC4]" />
+            </div>
+
             {/* 헤더 */}
-            <div className="px-5 pt-8 pb-4">
+            <div className="px-5 pt-2 pb-4">
               <div className="flex items-center justify-between mb-6">
                 <h2
                   className="font-serif-display text-2xl font-bold"
@@ -205,16 +211,24 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
               {/* 프로필 정보 */}
               <div className="flex items-center gap-3 mb-4">
                 <div
-                  className="w-14 h-14 flex items-center justify-center flex-shrink-0"
+                  className="w-14 h-14 flex items-center justify-center flex-shrink-0 overflow-hidden"
                   style={{
                     border: '2px solid #1A1A1A',
                     backgroundColor: theme.colors.backgroundCard,
                   }}
                 >
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="#1A1A1A">
-                    <circle cx="12" cy="8" r="4" />
-                    <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
-                  </svg>
+                  {profile.profileRabbitId != null ? (
+                    <img
+                      src={getRabbitProfileUrl(profile.profileRabbitId)}
+                      alt="프로필"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="#1A1A1A">
+                      <circle cx="12" cy="8" r="4" />
+                      <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
+                    </svg>
+                  )}
                 </div>
                 <div className="flex-1">
                   <button

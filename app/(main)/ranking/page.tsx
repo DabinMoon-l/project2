@@ -14,6 +14,7 @@ import { db } from '@/lib/firebase';
 import { useUser, useCourse } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
 import { classColors, type ClassType } from '@/styles/themes';
+import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 
 /**
  * 랭킹 유저 데이터
@@ -25,6 +26,7 @@ interface RankedUser {
   characterName: string;
   totalExp: number;
   averageQuizScore: number;
+  profileRabbitId?: number;
   rank: number;
 }
 
@@ -77,6 +79,7 @@ export default function RankingPage() {
           characterName: doc.data().currentCharacterName || '기본토끼',
           totalExp: doc.data().totalExp || 0,
           averageQuizScore: doc.data().averageQuizScore || 0,
+          profileRabbitId: doc.data().profileRabbitId,
           rank: 0,
         })) as RankedUser[];
 
@@ -200,15 +203,22 @@ export default function RankingPage() {
                     {/* 순위 */}
                     <span className="text-2xl mb-1">{getMedal(user.rank)}</span>
 
-                    {/* 캐릭터 placeholder */}
+                    {/* 프로필 */}
                     <div
-                      className="w-12 h-12 flex items-center justify-center text-3xl border-2"
+                      className="w-12 h-12 flex items-center justify-center border-2 overflow-hidden"
                       style={{
                         borderColor: classColors[user.classType],
                         backgroundColor: '#F5F0E8',
                       }}
                     >
-                      🐰
+                      {user.profileRabbitId != null ? (
+                        <img src={getRabbitProfileUrl(user.profileRabbitId)} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <svg width={24} height={24} viewBox="0 0 24 24" fill="#1A1A1A">
+                          <circle cx="12" cy="8" r="4" />
+                          <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
+                        </svg>
+                      )}
                     </div>
 
                     {/* 이름 */}
@@ -237,10 +247,17 @@ export default function RankingPage() {
 
                 {/* 프로필 */}
                 <div
-                  className="w-10 h-10 flex items-center justify-center text-xl border"
+                  className="w-10 h-10 flex items-center justify-center border overflow-hidden"
                   style={{ borderColor: classColors[user.classType] }}
                 >
-                  🐰
+                  {user.profileRabbitId != null ? (
+                    <img src={getRabbitProfileUrl(user.profileRabbitId)} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <svg width={20} height={20} viewBox="0 0 24 24" fill="#1A1A1A">
+                      <circle cx="12" cy="8" r="4" />
+                      <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
+                    </svg>
+                  )}
                 </div>
 
                 {/* 정보 */}
@@ -291,9 +308,16 @@ export default function RankingPage() {
 
             {/* 프로필 */}
             <div
-              className="w-10 h-10 flex items-center justify-center text-xl border-2 border-[#1A1A1A]"
+              className="w-10 h-10 flex items-center justify-center border-2 border-[#1A1A1A] overflow-hidden"
             >
-              🐰
+              {myRank.profileRabbitId != null ? (
+                <img src={getRabbitProfileUrl(myRank.profileRabbitId)} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <svg width={20} height={20} viewBox="0 0 24 24" fill="#1A1A1A">
+                  <circle cx="12" cy="8" r="4" />
+                  <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
+                </svg>
+              )}
             </div>
 
             {/* 정보 */}

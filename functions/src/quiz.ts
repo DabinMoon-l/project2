@@ -19,6 +19,8 @@ interface QuizResult {
   startedAt: FirebaseFirestore.Timestamp;   // 시작 시간
   completedAt: FirebaseFirestore.Timestamp; // 완료 시간
   rewarded?: boolean;     // 보상 지급 여부
+  isUpdate?: boolean;     // 재시도 여부
+  quizCreatorId?: string; // 퀴즈 생성자 ID
 }
 
 /**
@@ -54,7 +56,9 @@ export const onQuizComplete = onDocumentCreated(
       return;
     }
 
-    const { userId, quizId, score } = result;
+    const { userId, quizId, score, correctCount, totalCount } = result;
+    const isUpdate = result.isUpdate === true;
+    const quizCreatorId = result.quizCreatorId || null;
 
     // 필수 데이터 검증
     if (!userId || !quizId || score === undefined) {
@@ -80,6 +84,27 @@ export const onQuizComplete = onDocumentCreated(
 
         // 경험치 지급
         await addExpInTransaction(transaction, userId, expReward, reason);
+
+        // 첫 시도에만 누적 통계 업데이트 (랭킹용)
+        if (!isUpdate && correctCount !== undefined && totalCount !== undefined) {
+          const userRef = db.collection("users").doc(userId);
+          const statsUpdate: Record<string, FirebaseFirestore.FieldValue> = {
+            totalCorrect: FieldValue.increment(correctCount),
+            totalAttemptedQuestions: FieldValue.increment(totalCount),
+          };
+
+          // 교수 출제 퀴즈인 경우 참여 횟수 카운트
+          if (quizCreatorId) {
+            const creatorDoc = await transaction.get(
+              db.collection("users").doc(quizCreatorId)
+            );
+            if (creatorDoc.exists && creatorDoc.data()?.role === "professor") {
+              statsUpdate.professorQuizzesCompleted = FieldValue.increment(1);
+            }
+          }
+
+          transaction.update(userRef, statsUpdate);
+        }
       });
 
       console.log(`퀴즈 보상 지급 완료: ${userId}`, {

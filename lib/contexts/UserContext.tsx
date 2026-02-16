@@ -131,6 +131,7 @@ export function UserProvider({ children }: UserProviderProps) {
             // 토끼 시스템 (발견 + 장착)
             equippedRabbits: data.equippedRabbits || [],
             lastGachaExp: data.lastGachaExp || 0,
+            profileRabbitId: data.profileRabbitId,
             createdAt: data.createdAt,
             updatedAt: data.updatedAt,
             lastNicknameChangeAt: data.lastNicknameChangeAt,

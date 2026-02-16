@@ -85,6 +85,9 @@ export interface UserProfile {
   // 토끼 시스템 (발견 + 장착)
   equippedRabbits: Array<{ rabbitId: number; courseId: string }>;
 
+  // 프로필 사진 (토끼 ID, 미설정 시 null/undefined)
+  profileRabbitId?: number | null;
+
   // 타임스탬프
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -99,6 +102,7 @@ export interface ProfileUpdateData {
   characterOptions?: CharacterOptions;
   equipment?: Equipment;
   classType?: 'A' | 'B' | 'C' | 'D';
+  profileRabbitId?: number | null;
 }
 
 /**

@@ -6,6 +6,9 @@ import { motion } from 'framer-motion';
 import { Header, Modal } from '@/components/common';
 import { SettingsList } from '@/components/profile';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { useUser, useCourse } from '@/lib/contexts';
+import { useRabbitHoldings } from '@/lib/hooks/useRabbit';
+import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 import {
   useSettings,
   type NotificationSettings,
@@ -28,6 +31,10 @@ export default function SettingsPage() {
   const router = useRouter();
   const { theme } = useTheme();
   const { user, logout } = useAuth();
+  const { profile, updateProfile } = useUser();
+  const { userCourseId } = useCourse();
+  const { holdings } = useRabbitHoldings(user?.uid);
+  const [showProfilePicker, setShowProfilePicker] = useState(false);
   const {
     settings,
     loading,
@@ -149,8 +156,51 @@ export default function SettingsPage() {
         </motion.div>
       )}
 
+      {/* 프로필 사진 설정 */}
+      <div className="px-4 pt-4 pb-2">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl overflow-hidden"
+          style={{
+            backgroundColor: theme.colors.backgroundSecondary,
+            border: `1px solid ${theme.colors.border}`,
+          }}
+        >
+          <div className="px-4 py-3 border-b" style={{ borderColor: theme.colors.border }}>
+            <h3 className="font-bold" style={{ color: theme.colors.text }}>프로필 사진</h3>
+          </div>
+          <button
+            onClick={() => setShowProfilePicker(true)}
+            className="w-full flex items-center gap-4 px-4 py-4 transition-colors hover:bg-black/5"
+          >
+            <div className="w-16 h-16 flex-shrink-0 border-2 border-[#1A1A1A] overflow-hidden flex items-center justify-center bg-[#FDFBF7]">
+              {profile?.profileRabbitId != null ? (
+                <img
+                  src={getRabbitProfileUrl(profile.profileRabbitId)}
+                  alt="프로필"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <svg width={32} height={32} viewBox="0 0 24 24" fill="#1A1A1A">
+                  <circle cx="12" cy="8" r="4" />
+                  <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
+                </svg>
+              )}
+            </div>
+            <div className="flex-1 text-left">
+              <p className="font-bold text-[#1A1A1A]">프로필 사진 변경</p>
+              <p className="text-sm text-[#5C5C5C]">발견한 토끼로 프로필을 꾸며보세요</p>
+            </div>
+            <svg className="w-5 h-5 text-[#9A9A9A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </motion.div>
+      </div>
+
       {/* 메인 컨텐츠 */}
-      <main className="px-4 pt-4">
+      <main className="px-4 pt-2">
         <SettingsList
           notifications={displaySettings.notifications}
           display={displaySettings.display}
@@ -208,6 +258,75 @@ export default function SettingsPage() {
               {actionLoading ? '처리 중...' : '로그아웃'}
             </button>
           </div>
+        </div>
+      </Modal>
+
+      {/* 프로필 사진 선택 모달 */}
+      <Modal
+        isOpen={showProfilePicker}
+        onClose={() => setShowProfilePicker(false)}
+        title="프로필 사진 선택"
+      >
+        <div className="p-4">
+          <p className="text-sm text-[#5C5C5C] mb-4">발견한 토끼 중 하나를 선택하세요</p>
+
+          {/* 기본 프로필 (초기화) */}
+          <button
+            onClick={async () => {
+              await updateProfile({ profileRabbitId: null  });
+              setShowProfilePicker(false);
+            }}
+            className={`w-full flex items-center gap-3 p-3 mb-3 border-2 transition-colors ${
+              profile?.profileRabbitId == null
+                ? 'border-[#1A1A1A] bg-[#EDEAE4]'
+                : 'border-[#D4CFC4]'
+            }`}
+          >
+            <div className="w-12 h-12 flex items-center justify-center bg-[#FDFBF7] border border-[#D4CFC4]">
+              <svg width={24} height={24} viewBox="0 0 24 24" fill="#1A1A1A">
+                <circle cx="12" cy="8" r="4" />
+                <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
+              </svg>
+            </div>
+            <span className="font-bold text-[#1A1A1A]">기본 프로필</span>
+            {profile?.profileRabbitId == null && (
+              <span className="ml-auto text-sm text-[#5C5C5C]">선택됨</span>
+            )}
+          </button>
+
+          {/* 발견한 토끼 그리드 */}
+          {holdings.length > 0 ? (
+            <div className="grid grid-cols-4 gap-2 max-h-[50vh] overflow-y-auto">
+              {holdings
+                .filter(h => h.rabbitId > 0)
+                .sort((a, b) => a.rabbitId - b.rabbitId)
+                .map(h => (
+                  <button
+                    key={h.id}
+                    onClick={async () => {
+                      await updateProfile({ profileRabbitId: h.rabbitId } );
+                      setShowProfilePicker(false);
+                    }}
+                    className={`aspect-square border-2 overflow-hidden transition-all ${
+                      profile?.profileRabbitId === h.rabbitId
+                        ? 'border-[#1A1A1A] scale-95 bg-[#EDEAE4]'
+                        : 'border-[#D4CFC4] hover:border-[#9A9A9A]'
+                    }`}
+                  >
+                    <img
+                      src={getRabbitProfileUrl(h.rabbitId)}
+                      alt={`토끼 #${h.rabbitId}`}
+                      className="w-full h-full object-cover"
+                    />
+                  </button>
+                ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-[#5C5C5C]">
+              <p className="text-lg mb-1">아직 발견한 토끼가 없어요</p>
+              <p className="text-sm">퀴즈를 풀어 토끼를 발견해보세요!</p>
+            </div>
+          )}
         </div>
       </Modal>
 
