@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react';
+import { useState, useEffect, useCallback, createContext, useContext } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '@/styles/themes/useTheme';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -25,17 +25,17 @@ interface ExpToastData {
   id: string;
   amount: number;
   reason?: string;
-  totalExp: number;
-  isRankUp?: boolean;
-  newRank?: string;
 }
 
 /** Context 타입 */
 interface ExpToastContextType {
-  showExpToast: (amount: number, reason?: string, totalExp?: number, isRankUp?: boolean, newRank?: string) => void;
+  showExpToast: (amount: number, reason?: string) => void;
 }
 
 const ExpToastContext = createContext<ExpToastContextType | null>(null);
+
+/** 실시간 totalExp context (토스트 아이템에서 사용) */
+const RealtimeExpContext = createContext<number>(0);
 
 /** ExpToast Provider */
 export function ExpToastProvider({ children }: { children: React.ReactNode }) {
@@ -64,25 +64,22 @@ export function ExpToastProvider({ children }: { children: React.ReactNode }) {
   const showExpToast = useCallback((
     amount: number,
     reason?: string,
-    totalExp?: number,
-    isRankUp?: boolean,
-    newRank?: string
   ) => {
     const id = `${Date.now()}-${Math.random()}`;
-    // totalExp가 전달되지 않으면 실시간 값 + 획득량 사용
-    const expToShow = totalExp !== undefined ? totalExp : realtimeTotalExp + amount;
-    setToasts(prev => [...prev, { id, amount, reason, totalExp: expToShow, isRankUp, newRank }]);
+    setToasts(prev => [...prev, { id, amount, reason }]);
 
     // 자동 제거 (3초 후)
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, 3000);
-  }, [realtimeTotalExp]);
+  }, []);
 
   return (
     <ExpToastContext.Provider value={{ showExpToast }}>
-      {children}
-      <ExpToastContainer toasts={toasts} />
+      <RealtimeExpContext.Provider value={realtimeTotalExp}>
+        {children}
+        <ExpToastContainer toasts={toasts} />
+      </RealtimeExpContext.Provider>
     </ExpToastContext.Provider>
   );
 }
@@ -109,10 +106,11 @@ function ExpToastContainer({ toasts }: { toasts: ExpToastData[] }) {
   );
 }
 
-/** 개별 토스트 아이템 */
+/** 개별 토스트 아이템 — realtimeTotalExp를 실시간으로 반영 */
 function ExpToastItem({ toast }: { toast: ExpToastData }) {
   const { theme } = useTheme();
-  const milestoneInfo = getMilestoneInfo(toast.totalExp);
+  const realtimeTotalExp = useContext(RealtimeExpContext);
+  const milestoneInfo = getMilestoneInfo(realtimeTotalExp);
   const [showParticles, setShowParticles] = useState(true);
 
   useEffect(() => {
@@ -206,7 +204,7 @@ function ExpToastItem({ toast }: { toast: ExpToastData }) {
             </p>
           )}
 
-          {/* 뽑기 마일스톤 바 */}
+          {/* 뽑기 마일스톤 바 — Firestore 실시간 값 사용 */}
           <div className="mt-2">
             <div className="flex justify-between text-xs mb-1">
               <span

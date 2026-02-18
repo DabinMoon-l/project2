@@ -9,10 +9,11 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { getBaseStats } from "./utils/rabbitStats";
 
 /** Roll 결과 타입 (Phase 1 반환값) */
 interface RollResult {
-  type: "undiscovered" | "discovered" | "already_discovered";
+  type: "undiscovered" | "discovered";
   rabbitId: number;
   rabbitName: string | null;
   nextDiscoveryOrder: number | null;
@@ -65,50 +66,54 @@ export const spinRabbitGacha = onCall(
       const userData = userDoc.data()!;
       const totalExp = userData.totalExp || 0;
       const lastGachaExp = userData.lastGachaExp || 0;
-      const currentMilestone = Math.floor(totalExp / 50) * 50;
 
-      // 마일스톤 검증
-      if (currentMilestone <= lastGachaExp || totalExp < 50) {
+      // 마일스톤 검증 (pending = floor(totalExp/50) - floor(lastGachaExp/50))
+      const pendingMilestones =
+        Math.floor(totalExp / 50) - Math.floor(lastGachaExp / 50);
+      if (pendingMilestones <= 0) {
         throw new HttpsError(
           "failed-precondition",
           "뽑기 조건을 충족하지 않습니다."
         );
       }
 
-      // 랜덤 토끼 ID (0-79)
-      const rabbitId = Math.floor(Math.random() * 80);
-      const rabbitDocId = `${courseId}_${rabbitId}`;
+      // 보유 토끼 목록 조회 → 풀에서 제외
+      const holdingsSnap = await transaction.get(
+        userRef.collection("rabbitHoldings")
+      );
+      const ownedIds = new Set(
+        holdingsSnap.docs
+          .filter((d) => d.data().courseId === courseId)
+          .map((d) => d.data().rabbitId as number)
+      );
+      const pool = Array.from({ length: 80 }, (_, i) => i).filter(
+        (id) => !ownedIds.has(id)
+      );
+      if (pool.length === 0) {
+        throw new HttpsError(
+          "failed-precondition",
+          "모든 토끼를 발견했습니다!"
+        );
+      }
 
-      // 이미 보유하고 있는지 확인
-      const holdingRef = userRef.collection("rabbitHoldings").doc(rabbitDocId);
-      const holdingDoc = await transaction.get(holdingRef);
+      // 미보유 풀에서 랜덤 선택
+      const rabbitId = pool[Math.floor(Math.random() * pool.length)];
+      const rabbitDocId = `${courseId}_${rabbitId}`;
 
       // 토끼 문서 확인
       const rabbitRef = db.collection("rabbits").doc(rabbitDocId);
       const rabbitDoc = await transaction.get(rabbitRef);
       const rabbitData = rabbitDoc.exists ? rabbitDoc.data()! : null;
 
-      // lastGachaExp 갱신 (스핀 소모 — 놓아주기 선택해도 복구 안 됨)
+      // lastGachaExp += 50 (마일스톤 1개만 소비)
       transaction.update(userRef, {
-        lastGachaExp: currentMilestone,
+        lastGachaExp: lastGachaExp + 50,
         updatedAt: FieldValue.serverTimestamp(),
       });
 
       // 장착 수 계산
       const equippedRabbits: Array<{ rabbitId: number; courseId: string }> =
         userData.equippedRabbits || [];
-
-      if (holdingDoc.exists) {
-        // 이미 발견한 토끼
-        return {
-          type: "already_discovered",
-          rabbitId,
-          rabbitName: rabbitData?.name || null,
-          nextDiscoveryOrder: null,
-          myDiscoveryOrder: holdingDoc.data()!.discoveryOrder,
-          equippedCount: equippedRabbits.length,
-        } as RollResult;
-      }
 
       if (!rabbitData) {
         // 미발견 — 아직 아무도 발견하지 않은 토끼
@@ -181,6 +186,22 @@ export const claimGachaRabbit = onCall(
     }
 
     const db = getFirestore();
+
+    // 이름 중복 체크 (트랜잭션 밖에서 선행 검사)
+    if (trimmedName) {
+      const existing = await db
+        .collection("rabbits")
+        .where("courseId", "==", courseId)
+        .where("name", "==", trimmedName)
+        .limit(1)
+        .get();
+      if (!existing.empty) {
+        throw new HttpsError(
+          "already-exists",
+          "이미 같은 이름의 토끼가 있어요!"
+        );
+      }
+    }
     const rabbitDocId = `${courseId}_${rabbitId}`;
 
     const result = await db.runTransaction(async (transaction) => {
@@ -233,12 +254,14 @@ export const claimGachaRabbit = onCall(
           updatedAt: FieldValue.serverTimestamp(),
         });
 
-        // 홀딩 생성
+        // 홀딩 생성 (level/stats 초기화)
         transaction.set(holdingRef, {
           rabbitId,
           courseId,
           discoveryOrder: 1,
           discoveredAt: FieldValue.serverTimestamp(),
+          level: 1,
+          stats: getBaseStats(rabbitId),
         });
       } else {
         // 존재 → 후속 발견자 등록
@@ -251,12 +274,14 @@ export const claimGachaRabbit = onCall(
           updatedAt: FieldValue.serverTimestamp(),
         });
 
-        // 홀딩 생성
+        // 홀딩 생성 (level/stats 초기화)
         transaction.set(holdingRef, {
           rabbitId,
           courseId,
           discoveryOrder,
           discoveredAt: FieldValue.serverTimestamp(),
+          level: 1,
+          stats: getBaseStats(rabbitId),
         });
       }
 

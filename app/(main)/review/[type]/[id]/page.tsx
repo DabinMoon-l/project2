@@ -15,6 +15,7 @@ import {
   deleteDoc,
   addDoc,
   serverTimestamp,
+  Timestamp,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -348,7 +349,7 @@ function QuestionCard({
                 </span>
               )}
             </div>
-            <p className="text-sm text-[#1A1A1A] line-clamp-2">
+            <p className="text-sm text-[#1A1A1A]">
               {item.question}
               {/* 제시문 발문 또는 보기 발문 표시 */}
               {(item.passagePrompt || item.bogiQuestionText) && (
@@ -1099,11 +1100,11 @@ export default function FolderDetailPage() {
   const chapterFilter = searchParams.get('chapter'); // 챕터 필터 (오답 탭에서 챕터별 클릭 시)
   const fromQuizPage = searchParams.get('from') === 'quiz'; // 퀴즈 페이지 복습탭에서 접근 시 수정 비활성화
 
-  // 과목별 리본 이미지 (solved 타입은 퀴즈 리본, 나머지는 리뷰 리본)
-  const ribbonImage = folderType === 'solved'
+  // 과목별 리본 이미지 (solved 타입 또는 퀴즈 페이지에서 온 경우 퀴즈 리본, 나머지는 리뷰 리본)
+  const ribbonImage = (folderType === 'solved' || fromQuizPage)
     ? (userCourse?.quizRibbonImage || '/images/biology-quiz-ribbon.png')
     : (userCourse?.reviewRibbonImage || '/images/biology-review-ribbon.png');
-  const ribbonScale = folderType === 'solved'
+  const ribbonScale = (folderType === 'solved' || fromQuizPage)
     ? (userCourse?.quizRibbonScale || 1)
     : (userCourse?.reviewRibbonScale || 1);
 
@@ -1120,6 +1121,7 @@ export default function FolderDetailPage() {
     addCategoryToFolder,
     removeCategoryFromFolder,
     assignQuestionToCategory,
+    loading: reviewLoading,
   } = useReview();
 
   const [customQuestions, setCustomQuestions] = useState<ReviewItem[]>([]);
@@ -1127,6 +1129,10 @@ export default function FolderDetailPage() {
   // 서재(library) 퀴즈 상태
   const [libraryQuestions, setLibraryQuestions] = useState<ReviewItem[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
+  // 찜 퀴즈 폴백 상태 (reviews에 bookmark 타입 문제가 없을 때 퀴즈 문서에서 로드)
+  const [bookmarkFallbackQuestions, setBookmarkFallbackQuestions] = useState<ReviewItem[]>([]);
+  const [bookmarkFallbackLoading, setBookmarkFallbackLoading] = useState(false);
+  const [bookmarkFallbackTitle, setBookmarkFallbackTitle] = useState('');
   const [libraryQuizTitle, setLibraryQuizTitle] = useState<string>('');
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -1215,14 +1221,20 @@ export default function FolderDetailPage() {
         : group.items;
       return { title: group.quizTitle, items: filteredItems };
     } else if (folderType === 'bookmark') {
-      // 퀴즈 단위 찜: bookmark items에서 가져오기
+      // 1) bookmark 리뷰에서 찾기 (개별 문제 찜)
       const bookmarkGroup = groupedBookmarkedItems.find(g => g.quizId === folderId);
-      return bookmarkGroup ? { title: bookmarkGroup.quizTitle, items: bookmarkGroup.items } : null;
+      if (bookmarkGroup) return { title: bookmarkGroup.quizTitle, items: bookmarkGroup.items };
+      // 2) solved 리뷰에서 폴백 (퀴즈 레벨만 찜한 경우, 풀이 기록이 있으면 사용)
+      const solvedGroup = groupedSolvedItems.find(g => g.quizId === folderId);
+      if (solvedGroup) return { title: solvedGroup.quizTitle, items: solvedGroup.items };
+      // 3) 퀴즈 문서에서 직접 로드한 폴백 데이터
+      if (bookmarkFallbackTitle) return { title: bookmarkFallbackTitle, items: bookmarkFallbackQuestions };
+      return null;
     } else if (folderType === 'custom' && customFolder) {
       return { title: customFolder.name, items: null as ReviewItem[] | null };
     }
     return null;
-  }, [folderType, folderId, groupedSolvedItems, groupedWrongItems, groupedBookmarkedItems, customFolder, chapterFilter, libraryQuizTitle, libraryQuestions]);
+  }, [folderType, folderId, groupedSolvedItems, groupedWrongItems, groupedBookmarkedItems, customFolder, chapterFilter, libraryQuizTitle, libraryQuestions, bookmarkFallbackTitle, bookmarkFallbackQuestions]);
 
   // 비서재 타입(wrong/solved/bookmark)에서 choiceExplanations가 빠진 경우 퀴즈 문서에서 보충
   useEffect(() => {
@@ -1543,6 +1555,99 @@ export default function FolderDetailPage() {
     loadLibraryQuiz();
   }, [user, folderType, folderId]);
 
+  // 찜 퀴즈 폴백 로드 (bookmark 리뷰도 solved 리뷰도 없을 때 퀴즈 문서에서 직접 로드)
+  useEffect(() => {
+    if (!user || folderType !== 'bookmark') return;
+    if (reviewLoading) return; // useReview 로딩 완료 대기
+
+    // bookmark 또는 solved 리뷰가 있으면 폴백 불필요
+    const hasBookmarkReviews = groupedBookmarkedItems.some(g => g.quizId === folderId);
+    const hasSolvedReviews = groupedSolvedItems.some(g => g.quizId === folderId);
+    if (hasBookmarkReviews || hasSolvedReviews) return;
+
+    const loadBookmarkFallback = async () => {
+      setBookmarkFallbackLoading(true);
+      try {
+        const quizDoc = await getDoc(doc(db, 'quizzes', folderId));
+        if (!quizDoc.exists()) {
+          setBookmarkFallbackQuestions([]);
+          setBookmarkFallbackTitle('');
+          setBookmarkFallbackLoading(false);
+          return;
+        }
+
+        const quizData = quizDoc.data();
+        setBookmarkFallbackTitle(quizData.title || '퀴즈');
+
+        const rawQuestions = quizData.questions || [];
+        const items: ReviewItem[] = rawQuestions.map((q: any, idx: number) => {
+          let correctAnswer = '';
+          if (q.type === 'multiple') {
+            if (Array.isArray(q.answer)) {
+              correctAnswer = q.answer.map((a: number) => String(a + 1)).join(',');
+            } else {
+              correctAnswer = String((q.answer ?? 0) + 1);
+            }
+          } else if (q.type === 'ox') {
+            correctAnswer = q.answer === 0 ? 'O' : 'X';
+          } else {
+            correctAnswer = String(q.answer ?? '');
+          }
+
+          const questionId = q.id || `q${idx}`;
+          return {
+            id: `fallback-${folderId}-${questionId}`,
+            userId: user.uid,
+            quizId: folderId,
+            quizTitle: quizData.title || '퀴즈',
+            questionId,
+            question: q.question || q.text || '',
+            type: q.type || 'multiple',
+            options: q.choices || q.options || [],
+            correctAnswer,
+            userAnswer: '',
+            explanation: q.explanation || '',
+            reviewType: 'bookmark' as const,
+            isBookmarked: true,
+            isCorrect: undefined,
+            reviewCount: 0,
+            lastReviewedAt: null,
+            createdAt: quizData.createdAt || Timestamp.now(),
+            // 결합형 문제 필드
+            combinedGroupId: q.combinedGroupId,
+            combinedIndex: q.combinedIndex,
+            combinedTotal: q.combinedTotal,
+            passage: q.passage,
+            passageType: q.passageType,
+            passageImage: q.passageImage,
+            koreanAbcItems: q.koreanAbcItems,
+            passageMixedExamples: q.passageMixedExamples,
+            commonQuestion: q.commonQuestion,
+            image: q.image || q.imageUrl,
+            mixedExamples: q.mixedExamples,
+            subQuestionOptions: q.subQuestionOptions,
+            subQuestionOptionsType: q.subQuestionOptionsType,
+            subQuestionImage: q.subQuestionImage,
+            choiceExplanations: q.choiceExplanations,
+            passagePrompt: q.passagePrompt,
+            bogiQuestionText: q.bogiQuestionText,
+            bogi: q.bogi,
+          } as ReviewItem;
+        });
+
+        setBookmarkFallbackQuestions(sortByQuestionId(items));
+      } catch (err) {
+        console.error('찜 퀴즈 폴백 로드 실패:', err);
+        setBookmarkFallbackQuestions([]);
+        setBookmarkFallbackTitle('');
+      }
+      setBookmarkFallbackLoading(false);
+    };
+
+    loadBookmarkFallback();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, folderType, folderId, reviewLoading, groupedBookmarkedItems, groupedSolvedItems]);
+
   // 최종 데이터
   const baseFolderTitle = folderData?.title || '';
   // 챕터 필터가 있으면 제목에 챕터 정보 추가
@@ -1695,7 +1800,9 @@ export default function FolderDetailPage() {
     ? libraryLoading
     : folderType === 'custom'
       ? customLoading
-      : !folderData;
+      : folderType === 'bookmark'
+        ? (!folderData && (reviewLoading || bookmarkFallbackLoading))
+        : !folderData;
 
   // displayItems 계산 (결합형 문제 그룹핑)
   const displayItems = useMemo(() => {
@@ -2707,6 +2814,19 @@ export default function FolderDetailPage() {
                 )}
               </div>
             </>
+          ) : fromQuizPage ? (
+            /* 퀴즈 페이지 복습탭에서 온 경우: 필터 없이 이전 버튼만 */
+            <div className="flex justify-end">
+              <button
+                onClick={() => router.back()}
+                className="px-4 py-3 text-xs font-bold bg-[#EDEAE4] text-[#1A1A1A] border border-[#1A1A1A] whitespace-nowrap hover:bg-[#F5F0E8] transition-colors flex items-center gap-1.5"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+                이전
+              </button>
+            </div>
           ) : (
             /* 서재/오답/찜/커스텀: 필터 + 이전 버튼 */
             <div className="flex items-stretch justify-between">
@@ -2812,7 +2932,7 @@ export default function FolderDetailPage() {
       {/* 상단 정보 */}
       <div className="px-4 py-3 flex items-center justify-between">
         <p className="text-sm text-[#5C5C5C]">
-          총 {questions.length}문제
+          {loading ? '불러오는 중...' : `총 ${questions.length}문제`}
           {isSelectMode && selectedIds.size > 0 && (
             <span className="ml-2 text-[#1A1A1A] font-bold">
               ({selectedIds.size}개 선택)
@@ -3027,7 +3147,7 @@ export default function FolderDetailPage() {
                             </span>
                           </div>
                           {/* 공통 지문/문제 미리보기 */}
-                          <p className="text-sm text-[#1A1A1A] line-clamp-2">
+                          <p className="text-sm text-[#1A1A1A]">
                             {firstItem.commonQuestion || firstItem.passage || '결합형 문제'}
                             {/* 제시문 발문 표시 */}
                             {firstItem.passagePrompt && (

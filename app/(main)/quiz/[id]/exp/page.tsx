@@ -112,18 +112,17 @@ export default function ExpPage() {
       // 점수 계산
       const score = totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0;
 
-      // 기본 EXP: 5 XP
-      const baseExp = 5;
+      // 기본 EXP: 25 XP (참여 보상)
+      const baseExp = 25;
 
       // 성적 보너스 EXP (Cloud Function과 동일한 로직)
       let bonusExp = 0;
-      if (score === 100) bonusExp = 45; // 총 50
-      else if (score >= 90) bonusExp = 30; // 총 35
-      else if (score >= 70) bonusExp = 20; // 총 25
-      else if (score >= 50) bonusExp = 10; // 총 15
+      if (score === 100) bonusExp = 25; // 총 50
+      else if (score >= 90) bonusExp = 15; // 총 40
+      else if (score >= 70) bonusExp = 10; // 총 35
+      else if (score >= 50) bonusExp = 5; // 총 30
 
-      // 피드백 EXP (자기 퀴즈면 0, 피드백 페이지에서 왔으면 10)
-      // localStorage에서 피드백 제출 여부 확인
+      // 피드백 EXP (자기 퀴즈면 0, 피드백 1개당 10)
       const hasFeedback = localStorage.getItem(`quiz_feedback_${quizId}`) === 'true';
       const feedbackExp = isOwnQuiz ? 0 : (hasFeedback ? 10 : 0);
 
@@ -166,10 +165,7 @@ export default function ExpPage() {
       setIsCompleting(true);
 
       // EXP 토스트 표시
-      if (profile) {
-        const currentExp = profile.totalExp || 0;
-        showExpToast(expInfo.totalExp, '퀴즈 완료', currentExp + expInfo.totalExp);
-      }
+      showExpToast(expInfo.totalExp, '퀴즈 완료');
 
       // 로컬 스토리지 정리
       localStorage.removeItem(`quiz_answers_${quizId}`);

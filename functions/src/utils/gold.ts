@@ -9,16 +9,16 @@ import { getFirestore, FieldValue, Transaction } from "firebase-admin/firestore"
 export const EXP_REWARDS = {
   // 퀴즈 관련
   QUIZ_PERFECT: 50,       // 만점
-  QUIZ_EXCELLENT: 35,     // 90% 이상
-  QUIZ_GOOD: 25,          // 70% 이상
-  QUIZ_PASS: 15,          // 50% 이상
-  QUIZ_FAIL: 5,           // 50% 미만 (참여 보상)
+  QUIZ_EXCELLENT: 40,     // 90% 이상
+  QUIZ_GOOD: 35,          // 70% 이상
+  QUIZ_PASS: 30,          // 50% 이상
+  QUIZ_FAIL: 25,          // 50% 미만 (참여 보상)
   QUIZ_CREATE: 50,        // 커스텀 퀴즈 생성 (isPublic: true)
   QUIZ_AI_SAVE: 25,       // AI 퀴즈 서재 저장 (isPublic: false)
   QUIZ_MAKE_PUBLIC: 10,   // 서재 퀴즈 공개 전환
 
   // 피드백 관련
-  FEEDBACK_SUBMIT: 15,    // 피드백 작성
+  FEEDBACK_SUBMIT: 10,    // 피드백 작성 (1개당)
 
   // 게시판 관련
   POST_CREATE: 15,        // 글 작성

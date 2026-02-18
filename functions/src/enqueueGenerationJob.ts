@@ -10,6 +10,7 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 import * as crypto from "crypto";
 import { checkRateLimitV2 } from "./utils/rateLimitV2";
 import { buildMaterialFingerprint } from "./utils/materialCache";
@@ -30,6 +31,7 @@ export interface GenerationJob {
   questionCount: number;
   courseId: string;
   courseName: string;
+  courseCustomized: boolean; // 과목 맞춤형 (false면 스타일/범위/포커스 제외)
 
   // 중복 방지
   dedupeKey: string;
@@ -65,7 +67,8 @@ function buildDedupeKey(
   images: string[],
   difficulty: string,
   questionCount: number,
-  courseId: string
+  courseId: string,
+  courseCustomized: boolean
 ): string {
   const hash = crypto.createHash("sha256");
   hash.update(userId);
@@ -73,6 +76,7 @@ function buildDedupeKey(
   hash.update(difficulty);
   hash.update(String(questionCount));
   hash.update(courseId);
+  hash.update(String(courseCustomized));
 
   // 이미지는 앞 100바이트씩만 해싱 (전체 base64는 너무 큼)
   for (const img of images.slice(0, 5)) {
@@ -96,21 +100,23 @@ export const enqueueGenerationJob = onCall(
     }
 
     const userId = request.auth.uid;
-    const {
-      text = "",
-      images = [],
-      difficulty = "medium",
-      questionCount = 5,
-      courseId = "general",
-      courseName = "일반",
-    } = request.data as {
-      text?: string;
-      images?: string[];
+    const raw = request.data as {
+      text?: string | null;
+      images?: string[] | null;
       difficulty?: "easy" | "medium" | "hard";
       questionCount?: number;
       courseId?: string;
       courseName?: string;
+      courseCustomized?: boolean;
     };
+    // Firebase SDK가 undefined → null로 직렬화하므로 ?? 로 안전하게 처리
+    const text = raw.text ?? "";
+    const images = raw.images ?? [];
+    const difficulty = raw.difficulty ?? "medium";
+    const questionCount = raw.questionCount ?? 5;
+    const courseId = raw.courseId ?? "general";
+    const courseName = raw.courseName ?? "일반";
+    const courseCustomized = raw.courseCustomized ?? true;
 
     // Rate limit 검사
     try {
@@ -132,7 +138,8 @@ export const enqueueGenerationJob = onCall(
       images,
       difficulty,
       questionCount,
-      courseId
+      courseId,
+      courseCustomized
     );
 
     // 중복 Job 확인 (최근 10분 이내 같은 dedupeKey)
@@ -174,16 +181,35 @@ export const enqueueGenerationJob = onCall(
 
     // Job 문서 생성
     const jobRef = db.collection("jobs").doc();
+    const limitedImages = images.slice(0, 10);
+
+    // 이미지를 Firebase Storage에 임시 저장 (Firestore 1MB 문서 크기 제한 회피)
+    let storagePaths: string[] = [];
+    if (limitedImages.length > 0) {
+      const bucket = getStorage().bucket();
+      storagePaths = await Promise.all(
+        limitedImages.map(async (img, idx) => {
+          const path = `tmp/jobs/${jobRef.id}/image-${idx}.b64`;
+          await bucket.file(path).save(Buffer.from(img, "utf-8"), {
+            contentType: "text/plain",
+            metadata: { cacheControl: "no-cache" },
+          });
+          return path;
+        })
+      );
+    }
+
     const jobData: GenerationJob = {
       jobId: jobRef.id,
       userId,
       status: "QUEUED",
       text: text.slice(0, 50000), // 텍스트 크기 제한
-      images: images.slice(0, 10), // 이미지 개수 제한
+      images: storagePaths, // Storage 경로만 저장 (base64 대신)
       difficulty: validDifficulty as "easy" | "medium" | "hard",
       questionCount: validQuestionCount,
       courseId,
       courseName,
+      courseCustomized,
       dedupeKey,
       materialFingerprint,
       createdAt: FieldValue.serverTimestamp(),

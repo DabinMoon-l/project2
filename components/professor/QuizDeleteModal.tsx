@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // ============================================================
@@ -38,6 +39,13 @@ export default function QuizDeleteModal({
   onConfirm,
   onCancel,
 }: QuizDeleteModalProps) {
+  // 모달 열림 시 body 스크롤 잠금 (PullToHome 스와이프 방지)
+  useEffect(() => {
+    if (!quiz) return;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, [quiz]);
+
   return (
     <AnimatePresence>
       {quiz && (

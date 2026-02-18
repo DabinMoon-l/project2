@@ -7,7 +7,7 @@ import { db } from '@/lib/firebase';
 import { useUser, useCourse } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
 import { readHomeCache, writeHomeCache } from '@/lib/utils/rankingCache';
-import { computeRankScore, computeExpPercentile, computeProfessorCorrectRate, computeTeamScore } from '@/lib/utils/ranking';
+import { computeRankScore, computeTeamScore } from '@/lib/utils/ranking';
 
 // 순위 접미사
 const ordinalSuffix = (n: number) => {
@@ -187,13 +187,10 @@ async function computeHomeFallback(
   });
 
   // 개인 랭킹
-  const allExps = students.map((u: any) => u.totalExp || 0);
   const ranked = students.map((u: any) => {
     const exp = u.totalExp || 0;
     const profStat = studentProfStats[u.id] || { correct: 0, attempted: 0 };
-    const profCorrectRate = computeProfessorCorrectRate(profStat.correct, profStat.attempted);
-    const expPercentile = computeExpPercentile(exp, allExps);
-    return { id: u.id, classId: u.classId || 'A', rankScore: computeRankScore(profCorrectRate, expPercentile), rank: 0 };
+    return { id: u.id, classId: u.classId || 'A', rankScore: computeRankScore(profStat.correct, exp), rank: 0 };
   });
   ranked.sort((a, b) => b.rankScore - a.rankScore);
   ranked.forEach((u, i) => { u.rank = i + 1; });
@@ -204,6 +201,7 @@ async function computeHomeFallback(
 
   // 팀 랭킹
   const classes = ['A', 'B', 'C', 'D'];
+  const allExps = students.map((u: any) => u.totalExp || 0);
   const maxExp = Math.max(...allExps, 1);
   const teamEntries = classes.map(cls => {
     const members = students.filter((u: any) => u.classId === cls);
@@ -213,7 +211,8 @@ async function computeHomeFallback(
     const normalizedAvgExp = (avgExp / maxExp) * 100;
     const correctRates = members.map((u: any) => {
       const stat = studentProfStats[u.id];
-      return computeProfessorCorrectRate(stat?.correct || 0, stat?.attempted || 0);
+      if (!stat || stat.attempted === 0) return 0;
+      return (stat.correct / stat.attempted) * 100;
     });
     const avgCorrectRate = correctRates.reduce((s, r) => s + r, 0) / correctRates.length;
     let avgCompletionRate = 0;

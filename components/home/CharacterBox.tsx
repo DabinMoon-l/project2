@@ -13,18 +13,15 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 import { useUser, useCourse } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
+import { useRabbitHoldings, useRabbitDoc, getRabbitStats } from '@/lib/hooks/useRabbit';
+import { getPendingMilestones, getExpBarDisplay } from '@/lib/utils/milestone';
+import { computeRabbitDisplayName } from '@/lib/utils/rabbitDisplayName';
 
 import RabbitImage from '@/components/common/RabbitImage';
 import GachaResultModal, { type RollResultData } from './GachaResultModal';
 import RabbitDogam from './RabbitDogam';
-
-const GACHA_MESSAGES = [
-  '탈피가 시작됐어요!',
-  '윽... 몸이 이상해요!',
-  '뭔가 변하고 있어요!',
-  '두근두근...!',
-  '새로운 모습이 될 것 같아요!',
-];
+import MilestoneChoiceModal from './MilestoneChoiceModal';
+import LevelUpBottomSheet from './LevelUpBottomSheet';
 
 const SWIPE_THRESHOLD = 40;
 
@@ -33,27 +30,18 @@ const ORBIT_RX = 175;
 const ORBIT_RY = 50;
 const CHAR_SIZE = 180;
 const CHAR_HALF = CHAR_SIZE / 2;
-const ORBIT_Y_SHIFT = 195; // 궤도를 아래로 — 앞 캐릭터 하체
-
-/** 플레이스홀더 스탯 (추후 실제 데이터로 교체) */
-function getPlaceholderStats(rabbitId: number) {
-  return {
-    hp: 10 + ((rabbitId * 3) % 20),
-    atk: 3 + ((rabbitId * 7) % 12),
-    def: 2 + ((rabbitId * 5) % 8),
-  };
-}
+const ORBIT_Y_SHIFT = 195;
 
 /**
- * 캐릭터 섹션 — 궤도 캐러셀 + XP/도감 + EXP 바
- *
- * 2마리 장착: 타원 궤도를 따라 공전 (터치 + 마우스 드래그)
- * 1마리 장착: 가운데 표시 + 스탯
+ * 캐릭터 섹션 — 궤도 캐러셀 + XP/도감 + EXP 바 + 마일스톤
  */
 export default function CharacterBox() {
   const { profile } = useUser();
   const { userCourseId } = useCourse();
   const { theme } = useTheme();
+
+  // 토끼 홀딩 구독 (실제 스탯)
+  const { holdings } = useRabbitHoldings(profile?.uid);
 
   // 캐러셀
   const [activeIndex, setActiveIndex] = useState(0);
@@ -68,41 +56,67 @@ export default function CharacterBox() {
   const springRotation = useSpring(rotationMV, { stiffness: 100, damping: 18 });
 
   // 뽑기 상태
-  const [canGacha, setCanGacha] = useState(false);
   const [showGachaModal, setShowGachaModal] = useState(false);
-  const [showGachaBubble, setShowGachaBubble] = useState(false);
-  const [bubbleMessage, setBubbleMessage] = useState('');
   const [rollResult, setRollResult] = useState<RollResultData | null>(null);
   const [isGachaAnimating, setIsGachaAnimating] = useState(false);
+
+  // 마일스톤 / 레벨업 모달
+  const [showMilestoneModal, setShowMilestoneModal] = useState(false);
+  const [showLevelUpSheet, setShowLevelUpSheet] = useState(false);
+  const prevPendingRef = useRef<number | null>(null);
 
   // 도감
   const [showDogam, setShowDogam] = useState(false);
 
-  // 장착된 토끼
+  // 장착된 토끼 (항상 2슬롯: 빈 슬롯은 null로 표시)
   const equippedRabbits = profile?.equippedRabbits || [];
   const slot0 = equippedRabbits[0] || (userCourseId ? { rabbitId: 0, courseId: userCourseId } : null);
   const slot1 = equippedRabbits[1] || null;
-  const slots = slot1 ? [slot0!, slot1] : slot0 ? [slot0] : [];
+  // 항상 2슬롯 배열 (빈 슬롯 = null)
+  const slots: (typeof slot0)[] = slot0 ? [slot0, slot1] : [];
   const slotCount = slots.length;
 
-  // EXP
-  const currentExp = profile ? profile.totalExp % 50 : 0;
+  // EXP & 마일스톤
   const totalExp = profile?.totalExp || 0;
+  const lastGachaExp = profile?.lastGachaExp || 0;
+  const pendingCount = getPendingMilestones(totalExp, lastGachaExp);
+  const expBar = getExpBarDisplay(totalExp, lastGachaExp);
+  const allRabbitsDiscovered = userCourseId
+    ? holdings.filter((h) => h.courseId === userCourseId).length >= 80
+    : false;
 
-  // 뽑기 가능 여부
+  // 앞 캐릭터의 실제 스탯 (홀딩에서)
+  const frontSlot = slots[activeIndex] || slots[0] || null;
+  const isEmptySlot = !frontSlot; // 빈 슬롯인지
+  const frontHolding = frontSlot
+    ? holdings.find(
+        (h) => h.rabbitId === frontSlot.rabbitId && h.courseId === frontSlot.courseId
+      )
+    : null;
+  const frontInfo = frontHolding ? getRabbitStats(frontHolding) : null;
+
+  // 앞 토끼 이름 구독
+  const { rabbit: frontRabbitDoc } = useRabbitDoc(frontSlot?.courseId, frontSlot?.rabbitId);
+  const frontDisplayName = isEmptySlot
+    ? '???'
+    : frontHolding && frontRabbitDoc
+      ? computeRabbitDisplayName(frontRabbitDoc.name, frontHolding.discoveryOrder, frontSlot!.rabbitId)
+      : frontSlot?.rabbitId === 0
+        ? '토끼'
+        : null;
+
+  // 마일스톤 자동 표시 (pendingCount가 >0이 되면)
   useEffect(() => {
-    if (!profile) return;
-    const lastGachaExp = profile.lastGachaExp || 0;
-    const currentMilestone = Math.floor(profile.totalExp / 50) * 50;
-    if (currentMilestone > lastGachaExp && profile.totalExp >= 50) {
-      setCanGacha(true);
-      setShowGachaBubble(true);
-      setBubbleMessage(GACHA_MESSAGES[Math.floor(Math.random() * GACHA_MESSAGES.length)]);
-    } else {
-      setCanGacha(false);
-      setShowGachaBubble(false);
+    if (pendingCount > 0 && !showMilestoneModal && !showGachaModal && !showDogam && !showLevelUpSheet) {
+      // 이전 값이 없거나(초기 로드) 0이었을 때만
+      if (prevPendingRef.current === null || prevPendingRef.current === 0) {
+        const timer = setTimeout(() => setShowMilestoneModal(true), 600);
+        prevPendingRef.current = pendingCount;
+        return () => clearTimeout(timer);
+      }
     }
-  }, [profile?.totalExp, profile?.lastGachaExp]);
+    prevPendingRef.current = pendingCount;
+  }, [pendingCount, showMilestoneModal, showGachaModal, showDogam, showLevelUpSheet]);
 
   // activeIndex 범위 보정
   useEffect(() => {
@@ -158,10 +172,12 @@ export default function CharacterBox() {
     return () => window.removeEventListener('mouseup', handleMouseUp);
   }, [doOrbitSwap]);
 
-  // 뽑기
+  // 뽑기 (스핀)
+  const [spinError, setSpinError] = useState<string | null>(null);
   const handleSpin = useCallback(async () => {
-    if (!profile || !userCourseId || !canGacha) return;
+    if (!profile || !userCourseId || pendingCount <= 0) return;
     setIsGachaAnimating(true);
+    setSpinError(null);
     try {
       const spinRabbitGacha = httpsCallable<{ courseId: string }, RollResultData>(
         functions, 'spinRabbitGacha'
@@ -171,41 +187,48 @@ export default function CharacterBox() {
         new Promise(resolve => setTimeout(resolve, 2000)),
       ]);
       setRollResult(result.data);
-      setCanGacha(false);
-      setShowGachaBubble(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('뽑기 실패:', error);
+      const msg = error?.message || '';
+      if (msg.includes('모든 토끼를 발견')) {
+        setSpinError('모든 토끼를 발견했습니다!');
+      } else {
+        setSpinError('뽑기에 실패했습니다.');
+      }
     } finally {
       setIsGachaAnimating(false);
     }
-  }, [profile, userCourseId, canGacha]);
+  }, [profile, userCourseId, pendingCount]);
 
-  // 발견하기
+  // 발견하기 (에러를 throw하여 GachaResultModal에서 catch)
   const handleDiscover = useCallback(async (
     result: RollResultData,
     name?: string,
     equipSlot?: number
   ) => {
     if (!userCourseId) return;
-    try {
-      const claimGachaRabbit = httpsCallable(functions, 'claimGachaRabbit');
-      await claimGachaRabbit({
-        courseId: userCourseId,
-        rabbitId: result.rabbitId,
-        action: 'discover',
-        name,
-        equipSlot,
-      });
-      setShowGachaModal(false);
-      setRollResult(null);
-    } catch (error) {
-      console.error('발견하기 실패:', error);
-    }
+    const claimGachaRabbit = httpsCallable(functions, 'claimGachaRabbit');
+    await claimGachaRabbit({
+      courseId: userCourseId,
+      rabbitId: result.rabbitId,
+      action: 'discover',
+      name,
+      equipSlot,
+    });
+    setShowGachaModal(false);
+    setRollResult(null);
   }, [userCourseId]);
 
-  // 앞 캐릭터 스탯
-  const frontSlot = slots[activeIndex] || slots[0] || null;
-  const frontStats = frontSlot ? getPlaceholderStats(frontSlot.rabbitId) : null;
+  // 마일스톤 모달 핸들러
+  const handleMilestoneClick = () => setShowMilestoneModal(true);
+  const handleChooseLevelUp = () => {
+    setShowMilestoneModal(false);
+    setShowLevelUpSheet(true);
+  };
+  const handleChooseGacha = () => {
+    setShowMilestoneModal(false);
+    setShowGachaModal(true);
+  };
 
   const containerW = ORBIT_RX * 2 + CHAR_SIZE;
   const containerH = ORBIT_RY * 2 + CHAR_SIZE;
@@ -214,8 +237,8 @@ export default function CharacterBox() {
     <>
       <div className="flex flex-col items-center w-full">
         {/* XP / 도감 */}
-        <div className="w-full flex items-center justify-between px-8 mb-8 mt-20 relative z-20">
-          <div className="h-11 flex items-center gap-12 px-9 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl">
+        <div className="w-full flex items-center justify-between px-8 mb-8 mt-14 relative z-20">
+          <div className="h-11 flex items-center gap-4 px-9 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl">
             <span className="text-xl font-bold text-white">XP</span>
             <span className="font-bold text-xl text-white leading-none text-right">{totalExp}</span>
           </div>
@@ -227,10 +250,10 @@ export default function CharacterBox() {
           </button>
         </div>
 
-        {/* 캐릭터 영역 */}
-        {slotCount > 1 ? (
+        {/* 캐릭터 영역 — 항상 2슬롯 궤도 캐러셀 */}
+        {slotCount >= 2 ? (
           <div
-            className="relative select-none -mt-20"
+            className="relative select-none -mt-24"
             style={{
               width: containerW,
               height: containerH,
@@ -242,7 +265,7 @@ export default function CharacterBox() {
             onTouchEnd={onTouchEnd}
             onMouseDown={onMouseDown}
           >
-            {/* 궤도 타원 (몸통 위치, 캐릭터 뒤) */}
+            {/* 궤도 타원 */}
             <div
               className="absolute pointer-events-none"
               style={{
@@ -257,91 +280,120 @@ export default function CharacterBox() {
               }}
             />
 
-            {/* 공전 캐릭터 */}
+            {/* 공전 캐릭터 (빈 슬롯은 "?" 표시) */}
             {slots.map((slot, idx) => (
-              <OrbitalCharacter
-                key={idx}
-                rabbitId={slot.rabbitId}
-                springRotation={springRotation}
-                charIndex={idx}
-              />
+              slot ? (
+                <OrbitalCharacter
+                  key={idx}
+                  rabbitId={slot.rabbitId}
+                  springRotation={springRotation}
+                  charIndex={idx}
+                />
+              ) : (
+                <OrbitalPlaceholder
+                  key={`empty-${idx}`}
+                  springRotation={springRotation}
+                  charIndex={idx}
+                />
+              )
             ))}
 
-            {/* 스탯 (앞 캐릭터 옆, 세로 배치) */}
+            {/* 스탯 (앞 캐릭터 옆) */}
             <AnimatePresence mode="wait">
-              {frontStats && (
-                <motion.div
-                  key={activeIndex}
-                  initial={{ opacity: 0, x: -5 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 5 }}
-                  transition={{ duration: 0.2 }}
-                  className="absolute flex flex-col gap-1.5"
-                  style={{
-                    right: 50,
-                    top: '58%',
-                    zIndex: 15,
-                  }}
-                >
-                  <StatBadge icon="heart" value={frontStats.hp} color="#f87171" />
-                  <StatBadge icon="attack" value={frontStats.atk} color="#fb923c" />
-                  <StatBadge icon="shield" value={frontStats.def} color="#60a5fa" />
-                </motion.div>
-              )}
+              <motion.div
+                key={activeIndex}
+                initial={{ opacity: 0, x: -5 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 5 }}
+                transition={{ duration: 0.2 }}
+                className="absolute flex flex-col gap-1.5"
+                style={{
+                  right: 50,
+                  top: '58%',
+                  zIndex: 15,
+                }}
+              >
+                <StatBadge icon="heart" value={isEmptySlot ? '-' : frontInfo?.stats.hp ?? '-'} color="#f87171" />
+                <StatBadge icon="attack" value={isEmptySlot ? '-' : frontInfo?.stats.atk ?? '-'} color="#fb923c" />
+                <StatBadge icon="shield" value={isEmptySlot ? '-' : frontInfo?.stats.def ?? '-'} color="#60a5fa" />
+              </motion.div>
             </AnimatePresence>
-          </div>
-        ) : slots[0] ? (
-          /* 1마리 — 가운데 + 스탯 옆 */
-          <div className="flex items-center gap-8 -mt-20">
-            <FloatingWrapper seed={0}>
-              <RabbitImage
-                rabbitId={slots[0].rabbitId}
-                size={180}
-                priority
-                className="drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
-                style={{ filter: 'sepia(0.08) saturate(1.1) brightness(1.03) hue-rotate(-5deg)' }}
-              />
-            </FloatingWrapper>
-            {frontStats && (
-              <div className="flex flex-col gap-1.5">
-                <StatBadge icon="heart" value={frontStats.hp} color="#f87171" />
-                <StatBadge icon="attack" value={frontStats.atk} color="#fb923c" />
-                <StatBadge icon="shield" value={frontStats.def} color="#60a5fa" />
-              </div>
-            )}
           </div>
         ) : null}
 
-        {/* 뽑기 말풍선 */}
-        <AnimatePresence>
-          {showGachaBubble && (
-            <motion.button
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0, opacity: 0 }}
-              onClick={() => setShowGachaModal(true)}
-              className="px-4 py-2 bg-white border-2 border-[#1A1A1A] whitespace-nowrap"
-              style={{ boxShadow: '3px 3px 0 #1A1A1A' }}
-            >
-              <span className="text-sm font-bold">{bubbleMessage}</span>
-            </motion.button>
-          )}
-        </AnimatePresence>
+        {/* 토끼 이름 + 레벨 */}
+        <div className="mt-[188px]">
+          <AnimatePresence mode="wait">
+            {isEmptySlot ? (
+              <motion.div
+                key="empty-slot"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="px-5 py-1.5 bg-black/30 border border-white/10 rounded-full backdrop-blur-xl"
+              >
+                <span className="text-[1.35rem] font-bold text-white/50 tracking-wide">
+                  빈 슬롯
+                </span>
+              </motion.div>
+            ) : frontInfo && frontDisplayName ? (
+              <motion.div
+                key={`${activeIndex}-${frontDisplayName}`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="px-5 py-1.5 bg-black/30 border border-white/10 rounded-full backdrop-blur-xl"
+              >
+                <span className="text-[1.35rem] font-bold text-white tracking-wide">
+                  Lv {frontInfo.level}.&nbsp; {frontDisplayName}
+                </span>
+              </motion.div>
+            ) : (
+              <motion.div className="h-[38px]" />
+            )}
+          </AnimatePresence>
+        </div>
 
         {/* EXP 바 */}
-        <div className="w-full px-8 mt-[180px]">
-          <div className="text-right mb-1">
-            <span className="text-lg font-bold text-white/70">
-              {currentExp}/50 XP
+        <div className="w-full px-8 mt-3">
+          <div className="flex items-center justify-between mb-1">
+            {/* 마일스톤 버튼 (pending > 0일 때 좌측 하단) */}
+            {pendingCount > 0 ? (
+              <button
+                onClick={handleMilestoneClick}
+                className="relative flex-shrink-0 w-9 h-9 flex items-center justify-center bg-[#D4AF37] rounded-full shadow-lg active:scale-95 transition-transform"
+              >
+                <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
+                </svg>
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] flex items-center justify-center bg-[#8B1A1A] text-white text-[9px] font-bold rounded-full px-0.5">
+                  {pendingCount}
+                </span>
+              </button>
+            ) : (
+              <div />
+            )}
+            <span className={`text-base font-bold ${expBar.overflow ? 'text-[#F5D76E]' : 'text-white/70'}`}>
+              {expBar.current}/{expBar.max} XP
             </span>
           </div>
           <div className="px-3 py-1.5 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl">
             <div className="h-3.5 overflow-hidden bg-white/20 rounded-full">
               <motion.div
                 className="h-full rounded-full"
-                style={{ backgroundColor: theme.colors.accent }}
+                style={{
+                  background: expBar.overflow
+                    ? 'linear-gradient(90deg, #D4AF37, #F5D76E, #D4AF37)'
+                    : 'linear-gradient(90deg, #BBA46A, #C89A82, #C0929E, #AB96B4)',
+                }}
                 initial={{ width: 0 }}
-                animate={{ width: `${(currentExp / 50) * 100}%` }}
+                animate={{
+                  width: expBar.overflow
+                    ? '100%'
+                    : `${(expBar.current / expBar.max) * 100}%`,
+                }}
                 transition={{ duration: 0.8, ease: 'easeOut' }}
               />
             </div>
@@ -349,15 +401,36 @@ export default function CharacterBox() {
         </div>
       </div>
 
+      {/* 마일스톤 선택 모달 */}
+      <MilestoneChoiceModal
+        isOpen={showMilestoneModal}
+        onClose={() => setShowMilestoneModal(false)}
+        pendingCount={pendingCount}
+        onChooseLevelUp={handleChooseLevelUp}
+        onChooseGacha={handleChooseGacha}
+        allRabbitsDiscovered={allRabbitsDiscovered}
+      />
+
+      {/* 레벨업 바텀시트 */}
+      {userCourseId && (
+        <LevelUpBottomSheet
+          isOpen={showLevelUpSheet}
+          onClose={() => setShowLevelUpSheet(false)}
+          courseId={userCourseId}
+          holdings={holdings}
+        />
+      )}
+
       {/* 뽑기 모달 */}
       <GachaResultModal
         isOpen={showGachaModal}
-        onClose={() => { setShowGachaModal(false); setRollResult(null); }}
+        onClose={() => { setShowGachaModal(false); setRollResult(null); setSpinError(null); }}
         result={rollResult}
         isAnimating={isGachaAnimating}
         onSpin={handleSpin}
-        canGacha={canGacha}
+        canGacha={pendingCount > 0}
         onDiscover={handleDiscover}
+        spinError={spinError}
       />
 
       {/* 도감 모달 */}
@@ -376,7 +449,6 @@ export default function CharacterBox() {
 
 /**
  * 궤도 위 캐릭터 — useTransform으로 타원 경로 공전
- * 아래(sin>0) = 앞(크고 선명), 위(sin<0) = 뒤(작고 흐림)
  */
 function OrbitalCharacter({
   rabbitId,
@@ -427,7 +499,6 @@ function OrbitalCharacter({
 
 /**
  * 둥실둥실 떠다니는 래퍼
- * seed로 캐릭터마다 타이밍을 살짝 다르게 하여 자연스러움 연출
  */
 function FloatingWrapper({ children, seed = 0 }: { children: React.ReactNode; seed?: number }) {
   const duration = 2.6 + seed * 0.4;
@@ -447,8 +518,8 @@ function FloatingWrapper({ children, seed = 0 }: { children: React.ReactNode; se
   );
 }
 
-/** 스탯 배지 */
-function StatBadge({ icon, value, color }: { icon: string; value: number; color: string }) {
+/** 스탯 배지 (빈 슬롯은 '-' 표시) */
+function StatBadge({ icon, value, color }: { icon: string; value: number | string; color: string }) {
   return (
     <div className="flex items-center gap-2 px-3.5 py-1.5 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl">
       {icon === 'heart' && (
@@ -468,5 +539,54 @@ function StatBadge({ icon, value, color }: { icon: string; value: number; color:
       )}
       <span className="text-white font-bold text-base">{value}</span>
     </div>
+  );
+}
+
+/**
+ * 궤도 위 빈 슬롯 플레이스홀더 — 흰색 "?" 표시
+ */
+function OrbitalPlaceholder({
+  springRotation,
+  charIndex,
+}: {
+  springRotation: MotionValue<number>;
+  charIndex: number;
+}) {
+  const offset = charIndex * Math.PI;
+
+  const x = useTransform(springRotation, r =>
+    ORBIT_RX * (1 + Math.cos(r + offset))
+  );
+  const y = useTransform(springRotation, r =>
+    ORBIT_RY * (1 + Math.sin(r + offset))
+  );
+  const scale = useTransform(springRotation, r => {
+    const depth = (Math.sin(r + offset) + 1) / 2;
+    return 0.5 + 0.5 * depth;
+  });
+  const zIndex = useTransform(springRotation, r =>
+    Math.sin(r + offset) > -0.1 ? 10 : 1
+  );
+  const opacity = useTransform(springRotation, r => {
+    const depth = (Math.sin(r + offset) + 1) / 2;
+    return 0.3 + 0.5 * depth;
+  });
+
+  return (
+    <motion.div
+      className="absolute"
+      style={{ left: 0, top: 0, x, y, scale, zIndex, opacity }}
+    >
+      <FloatingWrapper seed={charIndex}>
+        <div
+          className="flex items-center justify-center drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
+          style={{ width: CHAR_SIZE, height: CHAR_SIZE, paddingTop: CHAR_SIZE * 0.15 }}
+        >
+          <span className="text-white font-black" style={{ fontSize: CHAR_SIZE * 0.55, lineHeight: 1, textShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
+            ?
+          </span>
+        </div>
+      </FloatingWrapper>
+    </motion.div>
   );
 }

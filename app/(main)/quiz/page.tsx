@@ -1317,6 +1317,27 @@ function QuizListPageContent() {
   // 삭제 확인 모달
   const [quizToDelete, setQuizToDelete] = useState<QuizCardData | null>(null);
 
+  // 삭제 모달 열림 시 body 스크롤 방지 (PullToHome 스와이프 방지)
+  useEffect(() => {
+    if (!quizToDelete) return;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, [quizToDelete]);
+
+  // 피드백 모달 열림 시 body 스크롤 방지 (PullToHome 스와이프 방지)
+  useEffect(() => {
+    if (!feedbackQuiz) return;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, [feedbackQuiz]);
+
+  // 퀴즈 관리 모드 시 body 스크롤 방지 (PullToHome 스와이프 방지)
+  useEffect(() => {
+    if (!isManageMode) return;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, [isManageMode]);
+
   // 태그 필터링 상태
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [showTagFilter, setShowTagFilter] = useState(false);
@@ -1731,7 +1752,7 @@ function QuizListPageContent() {
   // 관리 모드
   if (isManageMode) {
     return (
-      <div className="min-h-screen pb-28" style={{ backgroundColor: '#F5F0E8' }}>
+      <div className="fixed inset-0 overflow-y-auto overscroll-contain pb-28 z-[5]" style={{ backgroundColor: '#F5F0E8' }}>
         <header className="px-4 pt-4 pb-3 border-b border-[#EDEAE4]">
           <div className="flex items-center justify-between gap-4">
             <Image
@@ -1830,7 +1851,7 @@ function QuizListPageContent() {
                 <p className="text-sm text-[#5C5C5C]">{feedbackQuiz.title}</p>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4">
+              <div className="flex-1 overflow-y-auto overscroll-contain p-4">
                 {isLoadingFeedbacks && (
                   <div className="py-8 text-center">
                     <p className="text-[#5C5C5C]">로딩 중...</p>
@@ -2236,8 +2257,8 @@ function QuizListPageContent() {
                       quiz={quiz}
                       onCardClick={() => router.push(`/review/library/${quiz.id}?from=quiz`)}
                       onDetails={() => setReviewDetailsQuiz(quiz)}
-                      onReview={() => router.push(`/quiz/${quiz.id}`)}
-                      onReviewWrongOnly={() => router.push(`/quiz/${quiz.id}?wrongOnly=true`)}
+                      onReview={() => router.push(`/review/library/${quiz.id}?from=quiz`)}
+                      onReviewWrongOnly={() => router.push(`/review/wrong/${quiz.id}?from=quiz`)}
                       isBookmarked={isBookmarked(quiz.id)}
                       onToggleBookmark={() => toggleBookmark(quiz.id)}
                       hasUpdate={quiz.hasUpdate}
@@ -2474,7 +2495,7 @@ function QuizListPageContent() {
               </button>
               <button
                 onClick={() => {
-                  router.push(`/quiz/${reviewDetailsQuiz.id}`);
+                  router.push(`/review/library/${reviewDetailsQuiz.id}?from=quiz`);
                   setReviewDetailsQuiz(null);
                 }}
                 className="flex-1 py-3 font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"

@@ -209,7 +209,7 @@ export default function HomePage() {
           <CharacterBox />
 
           {/* 랭킹 — 하단 */}
-          <div className="mt-auto -translate-y-[100px]">
+          <div className="mt-auto -translate-y-[80px]">
             <RankingSection />
           </div>
 

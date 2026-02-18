@@ -12,6 +12,7 @@
 
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 import { defineSecret } from "firebase-functions/params";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import type { StyleProfile, KeywordStore } from "./professorQuizAnalysis";
@@ -111,13 +112,30 @@ export const workerProcessJob = onDocumentCreated(
 
     const {
       text,
-      images = [],
+      images: rawImages = [],
       difficulty,
       questionCount,
       courseId,
       courseName,
       userId,
+      courseCustomized = true,
     } = jobData;
+
+    // Storage 경로인 경우 실제 base64 데이터 다운로드
+    let images: string[] = [];
+    if (rawImages.length > 0 && typeof rawImages[0] === "string" && rawImages[0].startsWith("tmp/jobs/")) {
+      const bucket = getStorage().bucket();
+      images = await Promise.all(
+        rawImages.map(async (path: string) => {
+          const [content] = await bucket.file(path).download();
+          return content.toString("utf-8");
+        })
+      );
+      console.log(`[Worker] Job ${jobId}: Storage에서 이미지 ${images.length}개 다운로드`);
+    } else {
+      // 레거시: 직접 base64가 저장된 경우 (기존 job 호환)
+      images = rawImages;
+    }
 
     try {
       const trimmedText = (text || "").trim();
@@ -143,7 +161,7 @@ export const workerProcessJob = onDocumentCreated(
       if (cached) {
         // 캐시 히트: scope + 이미지 크롭 결과 재사용
         cacheHit = true;
-        if (cached.scopeData) {
+        if (cached.scopeData && courseCustomized) {
           styleContext.scope = cached.scopeData;
         }
         croppedImages = cached.croppedImages || [];
@@ -153,28 +171,29 @@ export const workerProcessJob = onDocumentCreated(
       }
 
       // ========================================
-      // 스타일 프로필 + 키워드는 항상 최신 조회
-      // Scope는 캐시 미스일 때만 로드
+      // 과목 맞춤형일 때만 스타일/키워드/스코프 로드
       // ========================================
-      const analysisRef = db.collection("professorQuizAnalysis").doc(courseId);
-      const shouldLoadScope = !cacheHit && (isShortText || validDifficulty !== "easy");
+      if (courseCustomized) {
+        const analysisRef = db.collection("professorQuizAnalysis").doc(courseId);
+        const shouldLoadScope = !cacheHit && (isShortText || validDifficulty !== "easy");
 
-      const [profileDoc, keywordsDoc, scopeResult] = await Promise.all([
-        analysisRef.collection("data").doc("styleProfile").get(),
-        analysisRef.collection("data").doc("keywords").get(),
-        shouldLoadScope
-          ? loadScopeForQuiz(courseId, trimmedText || "general", validDifficulty)
-          : Promise.resolve(null),
-      ]);
+        const [profileDoc, keywordsDoc, scopeResult] = await Promise.all([
+          analysisRef.collection("data").doc("styleProfile").get(),
+          analysisRef.collection("data").doc("keywords").get(),
+          shouldLoadScope
+            ? loadScopeForQuiz(courseId, trimmedText || "general", validDifficulty)
+            : Promise.resolve(null),
+        ]);
 
-      if (profileDoc.exists) {
-        styleContext.profile = profileDoc.data() as StyleProfile;
-      }
-      if (keywordsDoc.exists) {
-        styleContext.keywords = keywordsDoc.data() as KeywordStore;
-      }
-      if (scopeResult) {
-        styleContext.scope = scopeResult;
+        if (profileDoc.exists) {
+          styleContext.profile = profileDoc.data() as StyleProfile;
+        }
+        if (keywordsDoc.exists) {
+          styleContext.keywords = keywordsDoc.data() as KeywordStore;
+        }
+        if (scopeResult) {
+          styleContext.scope = scopeResult;
+        }
       }
 
       const loadTime = Date.now() - startTime;
@@ -226,12 +245,13 @@ export const workerProcessJob = onDocumentCreated(
         courseId,
         isShortText,
         isVeryShortText,
-        croppedImages
+        croppedImages,
+        courseCustomized
       );
 
       console.log(
         `[Worker] Job ${jobId} 문제 생성 시작: ` +
-        `과목=${courseName}, 난이도=${validDifficulty}, 개수=${validQuestionCount}`
+        `과목=${courseName}, 난이도=${validDifficulty}, 개수=${validQuestionCount}, 맞춤형=${courseCustomized}`
       );
 
       const questions = await generateWithGemini(
@@ -264,10 +284,12 @@ export const workerProcessJob = onDocumentCreated(
       // ========================================
       // COMPLETED
       // ========================================
+      // Gemini 응답에 undefined 필드가 포함될 수 있음 → Firestore 저장 전 제거
+      const cleanQuestions = JSON.parse(JSON.stringify(questions));
       await jobRef.update({
         status: "COMPLETED",
         result: {
-          questions,
+          questions: cleanQuestions,
           meta: {
             courseId,
             difficulty: validDifficulty,
@@ -296,6 +318,17 @@ export const workerProcessJob = onDocumentCreated(
           : "문제 생성 중 오류가 발생했습니다.",
         completedAt: FieldValue.serverTimestamp(),
       });
+    } finally {
+      // Storage 임시 이미지 정리
+      if (rawImages.length > 0 && typeof rawImages[0] === "string" && rawImages[0].startsWith("tmp/jobs/")) {
+        try {
+          const bucket = getStorage().bucket();
+          await Promise.all(rawImages.map((p: string) => bucket.file(p).delete().catch(() => {})));
+          console.log(`[Worker] Job ${jobId}: 임시 이미지 ${rawImages.length}개 삭제`);
+        } catch (e) {
+          console.warn(`[Worker] Job ${jobId}: 임시 이미지 삭제 실패`, e);
+        }
+      }
     }
   }
 );
@@ -417,13 +450,28 @@ async function processJobData(
 ) {
   const {
     text,
-    images = [],
+    images: rawImgs = [],
     difficulty,
     questionCount,
     courseId,
     courseName,
     userId,
+    courseCustomized = true,
   } = jobData;
+
+  // Storage 경로인 경우 실제 base64 데이터 다운로드
+  let images: string[] = [];
+  if (rawImgs.length > 0 && typeof rawImgs[0] === "string" && rawImgs[0].startsWith("tmp/jobs/")) {
+    const bucket = getStorage().bucket();
+    images = await Promise.all(
+      rawImgs.map(async (path: string) => {
+        const [content] = await bucket.file(path).download();
+        return content.toString("utf-8");
+      })
+    );
+  } else {
+    images = rawImgs;
+  }
 
   const trimmedText = (text || "").trim();
   const isShortText = trimmedText.length < 200;
@@ -444,31 +492,33 @@ async function processJobData(
 
   if (cached) {
     cacheHit = true;
-    if (cached.scopeData) styleContext.scope = cached.scopeData;
+    if (cached.scopeData && courseCustomized) styleContext.scope = cached.scopeData;
     croppedImages = cached.croppedImages || [];
     console.log(`[processJobData] 캐시 히트: scope=${!!cached.scopeData}, images=${croppedImages.length}`);
   }
 
-  // 스타일 프로필 + 키워드 항상 최신 조회, Scope는 캐시 미스일 때만
-  const analysisRef = db.collection("professorQuizAnalysis").doc(courseId);
-  const shouldLoadScope = !cacheHit && (isShortText || validDifficulty !== "easy");
+  // 과목 맞춤형일 때만 스타일/키워드/스코프 로드
+  if (courseCustomized) {
+    const analysisRef = db.collection("professorQuizAnalysis").doc(courseId);
+    const shouldLoadScope = !cacheHit && (isShortText || validDifficulty !== "easy");
 
-  const [profileDoc, keywordsDoc, scopeResult] = await Promise.all([
-    analysisRef.collection("data").doc("styleProfile").get(),
-    analysisRef.collection("data").doc("keywords").get(),
-    shouldLoadScope
-      ? loadScopeForQuiz(courseId, trimmedText || "general", validDifficulty)
-      : Promise.resolve(null),
-  ]);
+    const [profileDoc, keywordsDoc, scopeResult] = await Promise.all([
+      analysisRef.collection("data").doc("styleProfile").get(),
+      analysisRef.collection("data").doc("keywords").get(),
+      shouldLoadScope
+        ? loadScopeForQuiz(courseId, trimmedText || "general", validDifficulty)
+        : Promise.resolve(null),
+    ]);
 
-  if (profileDoc.exists) {
-    styleContext.profile = profileDoc.data() as StyleProfile;
-  }
-  if (keywordsDoc.exists) {
-    styleContext.keywords = keywordsDoc.data() as KeywordStore;
-  }
-  if (scopeResult) {
-    styleContext.scope = scopeResult;
+    if (profileDoc.exists) {
+      styleContext.profile = profileDoc.data() as StyleProfile;
+    }
+    if (keywordsDoc.exists) {
+      styleContext.keywords = keywordsDoc.data() as KeywordStore;
+    }
+    if (scopeResult) {
+      styleContext.scope = scopeResult;
+    }
   }
 
   // 이미지 크롭 (캐시 미스일 때만)
@@ -506,7 +556,8 @@ async function processJobData(
     courseId,
     isShortText,
     isVeryShortText,
-    croppedImages
+    croppedImages,
+    courseCustomized
   );
 
   const questions = await generateWithGemini(
@@ -536,7 +587,7 @@ async function processJobData(
     .catch(() => {});
 
   return {
-    questions,
+    questions: JSON.parse(JSON.stringify(questions)),
     meta: {
       courseId,
       difficulty: validDifficulty,

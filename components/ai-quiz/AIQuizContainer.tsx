@@ -2,7 +2,8 @@
 
 import { useState, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '@/lib/firebase';
 import {
   getFirestore,
   doc,
@@ -126,9 +127,6 @@ export default function AIQuizContainer() {
       // 1단계: Job 등록
       setProgressStep('uploading');
 
-      const functions = getFunctions();
-      functions.region = 'asia-northeast3';
-
       const enqueueJob = httpsCallable<
         {
           text?: string;
@@ -137,6 +135,7 @@ export default function AIQuizContainer() {
           questionCount: number;
           courseId: string;
           courseName?: string;
+          courseCustomized?: boolean;
         },
         { jobId: string; status: string; deduplicated: boolean }
       >(functions, 'enqueueGenerationJob');
@@ -148,6 +147,7 @@ export default function AIQuizContainer() {
         questionCount: data.questionCount,
         courseId: userCourseId || 'biology',
         courseName: userCourse?.name || '일반',
+        courseCustomized: data.courseCustomized ?? true,
       });
 
       const { jobId, status: initialStatus, deduplicated } = enqueueResult.data;
@@ -229,7 +229,7 @@ export default function AIQuizContainer() {
           choices: q.choices,
           answer: q.answer,
           explanation: q.explanation || '',
-          choiceExplanations: q.choiceExplanations || undefined, // 각 선지별 해설
+          ...(q.choiceExplanations ? { choiceExplanations: q.choiceExplanations } : {}), // 각 선지별 해설
           // Gemini가 할당한 챕터 ID 사용, 없으면 태그에서 추출한 폴백 사용
           chapterId: q.chapterId || fallbackChapterId,
           chapterDetailId: q.chapterDetailId || null,

@@ -99,9 +99,10 @@ export default function PullToHome({ children }: { children: React.ReactNode }) 
   const touchTarget = useRef<EventTarget | null>(null);
 
   // 터치 대상이 모달/오버레이 내부인지 확인
-  // data-hide-nav 또는 fixed 포지션 조상 (모달 백드롭) 감지
+  // data-hide-nav, body scroll lock, 또는 fixed 포지션 조상 (모달 백드롭) 감지
   const shouldBlockGesture = useCallback((target: EventTarget | null): boolean => {
     if (document.body.hasAttribute('data-hide-nav')) return true;
+    if (document.body.style.overflow === 'hidden') return true;
     let el = target as HTMLElement | null;
     while (el && el !== containerRef.current) {
       if (window.getComputedStyle(el).position === 'fixed') return true;
@@ -135,6 +136,15 @@ export default function PullToHome({ children }: { children: React.ReactNode }) 
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
     if (transitioning || transitioningX) return;
+    // 모달 등이 열려있으면 제스처 차단 (터치 시작 이후 열린 모달도 감지)
+    if (shouldBlockGesture(touchTarget.current)) {
+      pulling.current = false;
+      swipingX.current = false;
+      direction.current = 'none';
+      setPullY(0);
+      setPullX(0);
+      return;
+    }
 
     const currentX = e.touches[0].clientX;
     const currentY = e.touches[0].clientY;
@@ -186,7 +196,7 @@ export default function PullToHome({ children }: { children: React.ReactNode }) 
         setPullY(0);
       }
     }
-  }, [transitioning, transitioningX, tabIndex]);
+  }, [transitioning, transitioningX, tabIndex, shouldBlockGesture, getScrollTop]);
 
   const onTouchEnd = useCallback(() => {
     // 가로 스와이프 종료
@@ -233,7 +243,7 @@ export default function PullToHome({ children }: { children: React.ReactNode }) 
   // PC 마우스 휠
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
-      if (transitioning || document.body.hasAttribute('data-hide-nav')) return;
+      if (transitioning || document.body.hasAttribute('data-hide-nav') || document.body.style.overflow === 'hidden') return;
       const scrollTop = document.documentElement.scrollTop || document.body.scrollTop;
       if (scrollTop > 0) return;
       if (e.deltaY < 0) {

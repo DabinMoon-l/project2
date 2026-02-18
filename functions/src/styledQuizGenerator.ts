@@ -39,8 +39,6 @@ export interface GeneratedQuestion {
   trapPattern?: string;     // 사용된 함정 패턴
   chapterId?: string;       // 챕터 ID (예: "bio_5", "patho_4")
   chapterDetailId?: string; // 세부 챕터 ID (예: "bio_5_1", "patho_4_3")
-  // 제시문 (MEDIUM/HARD)
-  passage?: string;         // 제시문 텍스트
   // 보기 (HARD)
   bogi?: {
     questionText: string;   // 발문 ("옳은 것만을 <보기>에서 있는 대로 고른 것은?")
@@ -463,7 +461,7 @@ const DIFFICULTY_PARAMS = {
     stemLength: "중간 길이 발문 (2-3문장)",
     typeRatio: "기전 40%, 분류 30%, 비교 20%, 기타 10%",
     allowedFormats: ["multiple"],
-    allowPassage: true,   // 제시문 허용
+    allowPassage: false,
     allowBogi: false,
   },
   hard: {
@@ -474,7 +472,7 @@ const DIFFICULTY_PARAMS = {
     stemLength: "긴 발문 또는 케이스 시나리오",
     typeRatio: "부정형 25%, 보기문제 20%, 임상케이스 20%, 다중선택 20%, 기전 15%",
     allowedFormats: ["multiple"],
-    allowPassage: true,   // 제시문 허용
+    allowPassage: false,
     allowBogi: true,      // 보기 허용
     allowMultipleAnswers: true, // 복수정답 허용
   },
@@ -589,14 +587,6 @@ function buildDifficultyPrompt(
 - 명확한 참/거짓 판단이 가능한 진술로 구성`;
   }
 
-  if (params.allowPassage) {
-    formatInstructions += `
-### 제시문 사용 (선택적)
-- 일부 문제에 제시문(passage)을 추가할 수 있습니다.
-- 제시문은 문제를 풀기 위한 배경 정보나 자료를 제공합니다.
-- "passage": "제시문 내용"으로 추가`;
-  }
-
   if (params.allowBogi) {
     formatInstructions += `
 ### 보기 문제 형식 (어려움 난이도 전용)
@@ -646,8 +636,10 @@ function buildScopeContextPrompt(context: StyleContext): string {
   const { content, chaptersLoaded } = context.scope;
 
   return `
-## 과목 전체 범위 (배경 지식)
-> 아래는 이 과목의 전체 학습 범위입니다. 문제 출제 시 이 내용을 기반으로 정확한 개념과 용어를 사용하세요.
+## 과목 전체 범위 (참고용 — 출제 원천 아님)
+> ⚠️ 아래는 용어 정확성 확인과 오답 선지 구성을 위한 참고 자료입니다.
+> **문제의 발문(질문)은 반드시 위 '학습 자료'에서 출제하세요.**
+> 이 과목 범위에만 있고 학습 자료에 없는 내용으로 문제를 만들지 마세요.
 > 로드된 챕터: ${chaptersLoaded.join(", ")}장
 
 ${content.slice(0, 12000)}
@@ -666,13 +658,14 @@ export function buildFullPrompt(
   courseId: string,
   isShortText: boolean = false,
   isVeryShortText: boolean = false,
-  availableImages: CroppedImage[] = []
+  availableImages: CroppedImage[] = [],
+  courseCustomized: boolean = true
 ): string {
-  const styleContext = buildStyleContextPrompt(context);
+  const styleContext = courseCustomized ? buildStyleContextPrompt(context) : "";
   const difficultyPrompt = buildDifficultyPrompt(difficulty, context);
-  const scopeContext = buildScopeContextPrompt(context);
-  const chapterIndexPrompt = buildChapterIndexPrompt(courseId);
-  const focusGuide = getFocusGuide(courseId);
+  const scopeContext = courseCustomized ? buildScopeContextPrompt(context) : "";
+  const chapterIndexPrompt = courseCustomized ? buildChapterIndexPrompt(courseId) : "";
+  const focusGuide = courseCustomized ? getFocusGuide(courseId) : null;
 
   // Scope가 있으면 "출제 범위"로, 없으면 "학습 자료"로 표현
   const hasScope = !!context.scope?.content;
@@ -680,6 +673,12 @@ export function buildFullPrompt(
   const hasFocusGuide = !!focusGuide;
 
   // 난이도별 컨텐츠 규칙 설정
+  // 핵심 원칙:
+  // 1. 학습 자료를 보고 해당 챕터를 파악
+  // 2. 해당 챕터의 포커스 가이드 내용을 적극 활용 (문제 주제/출제 포인트)
+  // 3. 학습 자료 내용 + 포커스 가이드 내용이 1:1로 모두 반영
+  // 4. 학습 자료와 무관한 챕터의 문제는 절대 금지
+  // 5. Scope(과목 범위)는 어려움 난이도에서 오답 선지/함정 구성용
   let contentRule: string;
   let uploadedTextLabel: string;
 
@@ -687,68 +686,75 @@ export function buildFullPrompt(
   if (isVeryShortText && hasFocusGuide) {
     uploadedTextLabel = "키워드/힌트 (선택적)";
     contentRule = `**포커스 가이드 기반 출제 규칙**:
-   - '출제 포커스 가이드'에 명시된 핵심 개념 위주로 문제를 출제하세요
    - '키워드/힌트'가 있다면 해당 키워드와 관련된 포커스 가이드 내용을 우선 출제
    - '키워드/힌트'가 비어있거나 짧다면 포커스 가이드 전체에서 골고루 출제
    - '과목 전체 범위'에서 정확한 개념과 용어를 확인하세요`;
   }
-  // 2. 매우 짧은 텍스트 + FocusGuide 없음 (과목과 무관): 텍스트 기반 일반 지식 문제
+  // 2. 매우 짧은 텍스트 + FocusGuide 없음: 텍스트 기반 일반 지식 문제
   else if (isVeryShortText && !hasFocusGuide) {
     uploadedTextLabel = "키워드/주제";
     contentRule = `**일반 주제 출제 규칙**:
    - 제공된 '키워드/주제'와 관련된 일반적인 사실을 바탕으로 문제를 출제하세요
    - **중요**: 확실하지 않거나 추측성 내용은 절대 포함하지 마세요
-   - 널리 알려진 기본 개념, 정의, 특징만 문제로 만드세요
-   - 주제가 불명확하면 제공된 텍스트 그대로 해석해서 출제하세요`;
+   - 널리 알려진 기본 개념, 정의, 특징만 문제로 만드세요`;
   }
-  // 3. 짧은 텍스트 (50-200자) + Scope 있음: Scope를 주요 출제 자료로 사용
-  else if (isShortText && hasScope) {
-    uploadedTextLabel = "키워드/힌트 (짧은 학습 자료)";
-    contentRule = `**짧은 텍스트 보충 출제 규칙**:
-   - 제공된 '키워드/힌트'에서 핵심 개념을 파악하세요
-   - '출제 포커스 가이드' > '과목 전체 범위' 순으로 관련 내용을 찾아 문제를 출제하세요
-   - 힌트에 언급된 개념을 중심으로 정확한 내용만 문제로 만드세요`;
+  // 3. 짧은 텍스트 (50-200자) + FocusGuide 있음: 학습 자료로 챕터 파악 → 포커스 가이드 활용
+  else if (isShortText && hasFocusGuide) {
+    uploadedTextLabel = "학습 자료 (짧은 텍스트)";
+    contentRule = `**학습 자료 + 포커스 가이드 연계 출제 규칙**:
+   - 먼저 '학습 자료'를 분석하여 어떤 챕터에 해당하는지 파악하세요
+   - 파악된 챕터의 '출제 포커스 가이드' 내용을 적극 활용하여 문제를 출제하세요
+   - 학습 자료에 언급된 개념 + 해당 챕터의 포커스 가이드 내용이 모두 반영되어야 합니다
+   - **금지**: 학습 자료와 무관한 챕터의 포커스 가이드로 문제를 만들지 마세요`;
   }
-  // 4. 짧은 텍스트 + Scope 없음: 키워드 기반으로 일반 지식 문제
-  else if (isShortText && !hasScope) {
-    uploadedTextLabel = "키워드/힌트 (짧은 학습 자료)";
-    contentRule = `**키워드 기반 출제 규칙**:
-   - 제공된 '키워드/힌트'에서 핵심 개념을 파악하세요
-   - 해당 키워드와 관련된 기본적이고 정확한 지식을 바탕으로 문제를 출제하세요
-   - **중요**: 확실하지 않은 내용은 절대 지어내지 마세요
-   - 기본 개념, 정의, 특징 등 명확한 사실만 문제로 만드세요`;
+  // 4. 짧은 텍스트 + FocusGuide 없음: 키워드 기반
+  else if (isShortText && !hasFocusGuide) {
+    uploadedTextLabel = "학습 자료 (짧은 텍스트)";
+    contentRule = `**학습 자료 기반 출제 규칙**:
+   - 제공된 '학습 자료'에서 핵심 개념을 파악하세요
+   - 해당 내용과 관련된 기본적이고 정확한 지식을 바탕으로 문제를 출제하세요
+   - **중요**: 확실하지 않은 내용은 절대 지어내지 마세요`;
   }
-  // 5. HARD + Scope: 발문은 출제 범위, 선지/보기/제시문은 Scope에서도 활용
+  // 5. 충분한 텍스트 + HARD + Scope: 학습 자료 + 포커스 가이드 + Scope(오답 선지)
   else if (hasScope && isHard) {
-    // HARD + Scope: 발문은 출제 범위, 선지/보기/제시문은 Scope에서도 활용
-    uploadedTextLabel = "출제 범위 (발문의 핵심 내용)";
-    contentRule = `**어려움 난이도 출제 규칙**:
-   - **발문(질문)**: 반드시 '출제 범위'에 있는 개념에서 출제
-   - **선지/보기/제시문 구성**: '과목 전체 범위'의 관련 챕터에서 유사 개념, 헷갈리는 용어, 연관 내용을 가져와 함정 선지로 활용
-   - 예시: 출제 범위가 "염증"이면, 과목 전체 범위의 "면역", "치유" 챕터에서 유사한 개념을 오답 선지로 활용
-   - 학생이 관련 챕터 전체를 이해해야 풀 수 있는 통합적 문제 출제`;
+    uploadedTextLabel = "학습 자료";
+    contentRule = `**어려움 난이도 출제 규칙 (학습 자료 + 포커스 가이드 + Scope)**:
+   - **Step 1**: '학습 자료'를 분석하여 어떤 챕터에 해당하는지 파악
+   - **Step 2**: 학습 자료 내용 + 해당 챕터의 포커스 가이드 내용으로 발문(질문) 구성
+   - **Step 3**: '과목 전체 범위'에서 유사하지만 다른 개념을 가져와 함정 오답 선지로 활용
+   - **금지**: 학습 자료와 무관한 챕터의 내용을 발문으로 삼지 마세요
+   - 학생이 학습 자료를 정확히 이해해야 풀 수 있는 문제를 만드세요`;
+  } else if (hasFocusGuide) {
+    // EASY/MEDIUM + FocusGuide: 학습 자료 + 포커스 가이드 연계
+    uploadedTextLabel = "학습 자료";
+    contentRule = `**학습 자료 + 포커스 가이드 연계 출제**:
+   - 먼저 '학습 자료'를 분석하여 어떤 챕터에 해당하는지 파악하세요
+   - 학습 자료 내용 + 해당 챕터의 포커스 가이드 내용을 모두 반영하여 문제를 출제하세요
+   - **금지**: 학습 자료와 무관한 챕터의 포커스 가이드/과목 범위로 문제를 만들지 마세요
+   - '과목 전체 범위'는 정확한 용어와 개념 확인 참고용입니다`;
   } else if (hasScope) {
-    // EASY/MEDIUM + Scope: 출제 범위 내에서만
-    uploadedTextLabel = "출제 범위 (이 내용에서만 문제 출제)";
-    contentRule = "**출제 범위 내용 기반**: 반드시 '출제 범위'에 있는 내용에서만 문제를 만드세요. '과목 전체 범위'는 정확한 개념과 용어 참고용입니다.";
+    // Scope만 있고 FocusGuide 없음
+    uploadedTextLabel = "학습 자료";
+    contentRule = `**학습 자료 기반 출제**: 반드시 '학습 자료'에 있는 내용에서 문제를 만드세요.
+   - '과목 전체 범위'는 정확한 개념과 용어 확인 참고용입니다.
+   - **금지**: 학습 자료와 무관한 챕터의 내용으로 문제를 만들지 마세요.`;
   } else {
     // Scope 없음
     uploadedTextLabel = "학습 자료";
-    contentRule = "**내용 기반**: 위 학습 자료에 있는 내용으로만 문제를 만드세요";
+    contentRule = "**내용 기반**: 위 학습 자료에 있는 내용으로만 문제를 만드세요. 학습 자료에 없는 내용을 지어내지 마세요.";
   }
 
   // HARD 난이도 추가 지침
   const hardModeExtra = isHard && hasScope ? `
 ## 어려움 난이도 선지 구성 전략
 
-1. **교차 챕터 함정**: 출제 범위와 비슷하지만 다른 챕터의 개념을 오답으로 배치
-   - 예: "급성 염증의 특징"을 물을 때, "만성 염증" 또는 "면역 반응"의 특징을 오답으로
-2. **유사 용어 혼동**: 과목 전체 범위에서 비슷한 이름의 다른 개념 활용
-   - 예: "호중구"를 물을 때, "호산구", "호염기구", "대식세포" 등을 선지로
-3. **기전 연결 오류**: 원인-결과 관계를 다른 챕터의 기전과 섞어서 출제
+⚠️ **주의**: 아래 전략은 오답 선지 구성에만 적용하세요. 발문(질문) 자체는 반드시 학습 자료 내용에서 출제해야 합니다.
+
+1. **유사 용어 혼동**: 학습 자료에 나온 개념과 비슷한 이름의 다른 개념을 오답으로 활용
+2. **교차 챕터 함정**: 학습 자료의 개념과 비슷하지만 다른 챕터의 개념을 오답으로 배치
+3. **기전 연결 오류**: 원인-결과 관계를 다른 챕터의 기전과 섞어서 오답으로 구성
 4. **복수 정답 가능성**: 부분적으로 맞는 선지를 배치하여 "가장 적절한 것" 판단 요구
-5. **임상 케이스 통합**: 여러 챕터의 지식을 종합해야 풀 수 있는 시나리오 제시
-6. **지엽적 내용 허용**: 학습 자료의 세부 내용에서도 문제 출제 가능
+5. **지엽적 내용 허용**: 학습 자료의 세부 내용에서도 문제 출제 가능
 ` : "";
 
   // 사용 가능한 이미지 정보 (HARD 난이도 전용)

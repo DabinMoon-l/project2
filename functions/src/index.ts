@@ -323,6 +323,7 @@ export { refreshRankings, computeRankingsScheduled } from "./computeRankings";
 export { spinRabbitGacha, claimGachaRabbit } from "./rabbitGacha";
 export { equipRabbit, unequipRabbit } from "./rabbitEquip";
 export { onOnboardingComplete } from "./onboardingRabbit";
+export { levelUpRabbit } from "./rabbitLevelUp";
 
 // ============================================
 // 디버그/테스트 Functions

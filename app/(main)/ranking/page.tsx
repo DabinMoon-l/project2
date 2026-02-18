@@ -13,7 +13,7 @@ import { type ClassType } from '@/styles/themes';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 import { getRabbitImageSrc } from '@/lib/utils/rabbitImage';
 import { readFullCache, writeFullCache } from '@/lib/utils/rankingCache';
-import { computeRankScore, computeExpPercentile, computeProfessorCorrectRate } from '@/lib/utils/ranking';
+import { computeRankScore } from '@/lib/utils/ranking';
 
 /**
  * 랭킹 유저 데이터
@@ -23,7 +23,7 @@ interface RankedUser {
   nickname: string;
   classType: ClassType;
   totalExp: number;
-  profCorrectRate: number;
+  profCorrectCount: number;
   rankScore: number;
   profileRabbitId?: number;
   equippedRabbitNames: string;
@@ -464,9 +464,8 @@ export default function RankingPage() {
                 {/* 안내 */}
                 <div className="text-sm text-white/60 space-y-1.5 mb-6">
                   <p className="font-bold text-white">개인 랭킹</p>
-                  <p>- 교수님 퀴즈 성적(40%) + 참여도(60%)</p>
-                  <p>- 참여도 = 다른 학생보다 EXP를 많이 모을수록 높아져요</p>
-                  <p>- 미응시 시 성적 0점으로 계산됩니다</p>
+                  <p>- 교수님 퀴즈 정답 수 + EXP로 계산됩니다</p>
+                  <p>- 퀴즈를 많이 맞히고, 활동을 많이 할수록 점수가 올라요</p>
                   <div className="pt-2" />
                   <p className="font-bold text-white">팀 랭킹</p>
                   <p>- 평균 참여도(40%) + 평균 성적(40%) + 퀴즈 응시율(20%)</p>
@@ -551,14 +550,11 @@ async function computeRankingsClientSide(courseId: string): Promise<RankedUser[]
   }
 
   // 4. 개인 랭킹 계산
-  const allExps = students.map((u: any) => u.totalExp || 0);
 
   const ranked: RankedUser[] = students.map((u: any) => {
     const exp = u.totalExp || 0;
     const profStat = studentProfStats[u.id] || { correct: 0, attempted: 0 };
-    const profCorrectRate = computeProfessorCorrectRate(profStat.correct, profStat.attempted);
-    const expPercentile = computeExpPercentile(exp, allExps);
-    const rankScore = computeRankScore(profCorrectRate, expPercentile);
+    const rankScore = computeRankScore(profStat.correct, exp);
 
     const allEquipped = u.equippedRabbits || [];
     const names = allEquipped.map((r: any) => {
@@ -574,7 +570,7 @@ async function computeRankingsClientSide(courseId: string): Promise<RankedUser[]
       nickname: u.nickname || '익명',
       classType: (u.classId || 'A') as ClassType,
       totalExp: exp,
-      profCorrectRate: Math.round(profCorrectRate),
+      profCorrectCount: profStat.correct,
       rankScore,
       profileRabbitId: u.profileRabbitId,
       equippedRabbitNames: names.length > 0 ? names.join(' & ') : '',

@@ -5,6 +5,6 @@
  * @returns /rabbit_profile/rabbit-XXX-pf.png 경로
  */
 export function getRabbitProfileUrl(rabbitId: number): string {
-  const padded = String(rabbitId).padStart(3, '0');
+  const padded = String(rabbitId + 1).padStart(3, '0');
   return `/rabbit_profile/rabbit-${padded}-pf.png`;
 }

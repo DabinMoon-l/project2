@@ -1204,7 +1204,7 @@ export default function QuizStatsModal({
                     >
                       <div
                         ref={questionContentRef}
-                        className="h-full overflow-y-auto overflow-x-hidden scrollbar-hide"
+                        className="h-full overflow-y-auto overflow-x-hidden scrollbar-hide overscroll-contain"
                       >
                       {/* 참여자가 없는 반일 경우 */}
                       {stats.participantCount === 0 ? (

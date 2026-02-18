@@ -44,7 +44,7 @@ service cloud.firestore {
       // exp, rank 등은 Cloud Functions에서만 수정 가능
       allow update: if isOwner(uid) &&
         !request.resource.data.diff(resource.data).affectedKeys()
-          .hasAny(['totalExp', 'rank', 'role', 'badges', 'equippedRabbits', 'totalCorrect', 'totalAttemptedQuestions', 'professorQuizzesCompleted']);
+          .hasAny(['totalExp', 'rank', 'role', 'badges', 'equippedRabbits', 'totalCorrect', 'totalAttemptedQuestions', 'professorQuizzesCompleted', 'lastGachaExp']);
 
       // 삭제: 불가
       allow delete: if false;

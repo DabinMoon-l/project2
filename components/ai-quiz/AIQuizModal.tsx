@@ -4,16 +4,12 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import * as pdfjsLib from 'pdfjs-dist';
-import JSZip from 'jszip';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { storage, db, auth, functions } from '@/lib/firebase';
+import { auth, functions } from '@/lib/firebase';
 import { useCourse } from '@/lib/contexts/CourseContext';
 import { useVisionOcr } from '@/lib/hooks/useVisionOcr';
 import { generateCourseTags, COMMON_TAGS, type TagOption } from '@/lib/courseIndex';
 import PageSelectionModal from './PageSelectionModal';
-import PptxProgressModal from './PptxProgressModal';
 // PDF.js worker - CDN 사용 (버전 일치 필수)
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
 
@@ -29,7 +25,8 @@ export interface AIQuizData {
   difficulty: 'easy' | 'medium' | 'hard';
   questionCount: number;
   tags: string[]; // 태그 배열
-  textContent?: string; // PPT 텍스트 내용 (선택적)
+  textContent?: string; // OCR/PPT 텍스트 내용 (선택적)
+  courseCustomized?: boolean; // 과목 맞춤형 (교수 스타일/범위/포커스 반영)
 }
 
 interface DocumentPage {
@@ -91,6 +88,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz }: AIQuizModa
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
   const [questionCount, setQuestionCount] = useState(5);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [courseCustomized, setCourseCustomized] = useState(true);
   const [showTagFilter, setShowTagFilter] = useState(false);
   const [documentPages, setDocumentPages] = useState<DocumentPage[]>([]);
   const [isLoadingDocument, setIsLoadingDocument] = useState(false);
@@ -118,6 +116,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz }: AIQuizModa
       setDifficulty('medium');
       setQuestionCount(5);
       setSelectedTags([]);
+      setCourseCustomized(true);
       setShowTagFilter(false);
       setDocumentPages([]);
       setUploadType(null);
@@ -126,12 +125,9 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz }: AIQuizModa
       setPdfArrayBuffer(null);
       setShowPageSelectionModal(false);
       setPageSelectionTitle('');
-      setPendingPptxFile(null);
-      setPptxFullText('');
       setOcrExtractedText('');
       setIsOcrProcessing(false);
       setPendingOcrImages([]);
-      // PPTX 진행 모달 관련 상태는 진행 중일 수 있으므로 완료/실패 시에만 초기화
     }
   }, [isOpen]);
 
@@ -252,43 +248,12 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz }: AIQuizModa
     if (e.target) e.target.value = '';
   }, []);
 
-  // PPTX 진행 상황 모달 상태
-  const [showPptxProgressModal, setShowPptxProgressModal] = useState(false);
-  const [pptxJobId, setPptxJobId] = useState<string | null>(null);
-
-  // PPTX 파일 임시 저장
-  const [pendingPptxFile, setPendingPptxFile] = useState<File | null>(null);
-  // PPTX 전체 텍스트
-  const [pptxFullText, setPptxFullText] = useState<string>('');
   // OCR 추출 텍스트 (이미지/PDF용)
   const [ocrExtractedText, setOcrExtractedText] = useState<string>('');
   // OCR 진행 중
   const [isOcrProcessing, setIsOcrProcessing] = useState(false);
 
-  // PPTX 슬라이드에서 텍스트 추출
-  const extractTextFromSlideXml = (xmlContent: string): { title: string; content: string } => {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(xmlContent, 'application/xml');
-
-    // 모든 텍스트 요소 추출 (a:t 태그)
-    const textElements = doc.getElementsByTagName('a:t');
-    const texts: string[] = [];
-
-    for (let i = 0; i < textElements.length; i++) {
-      const text = textElements[i].textContent?.trim();
-      if (text) {
-        texts.push(text);
-      }
-    }
-
-    // 첫 번째 텍스트를 제목으로, 나머지를 내용으로
-    const title = texts[0] || '';
-    const content = texts.slice(1).join('\n');
-
-    return { title, content };
-  };
-
-  // PPTX 파일 선택 및 텍스트 추출
+  // PPTX 파일 선택 → Cloud Run에서 PDF 변환 후 페이지 미리보기
   const handlePptSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (e.target) e.target.value = '';
@@ -304,56 +269,88 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz }: AIQuizModa
       return;
     }
 
-    setPendingPptxFile(file);
+    const user = auth.currentUser;
+    if (!user) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+
+    setIsLoadingDocument(true);
+    setLoadingMessage('PPT를 PDF로 변환 중...');
+    setDocumentPages([]);
     setUploadType('ppt');
-    setIsOcrProcessing(true);
 
     try {
-      const arrayBuffer = await file.arrayBuffer();
-      const zip = await JSZip.loadAsync(arrayBuffer);
-
-      // 슬라이드 파일들 찾기
-      const slideFiles: { num: number; file: JSZip.JSZipObject }[] = [];
-
-      zip.forEach((relativePath, zipEntry) => {
-        const match = relativePath.match(/^ppt\/slides\/slide(\d+)\.xml$/);
-        if (match) {
-          slideFiles.push({
-            num: parseInt(match[1]),
-            file: zipEntry
-          });
-        }
+      // 1. PPTX → base64로 변환 (FileReader 네이티브 인코딩 — reduce 방식보다 훨씬 빠름)
+      setLoadingMessage('PPT 파일 준비 중...');
+      const pptxBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result as string;
+          const base64 = dataUrl.split(',')[1];
+          resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
       });
 
-      // 슬라이드 번호순 정렬
-      slideFiles.sort((a, b) => a.num - b.num);
+      // 2. Cloud Function으로 PDF 변환 요청 (CORS 자동 처리)
+      setLoadingMessage('PPT를 PDF로 변환 중... (최대 1~2분 소요)');
+      const convertFn = httpsCallable<{ pptxBase64: string }, { pdfBase64: string }>(functions, 'convertPptxToPdf', { timeout: 180000 });
+      const result = await convertFn({ pptxBase64 });
 
-      // 전체 텍스트 추출
-      let fullText = '';
+      // 3. base64 PDF → ArrayBuffer 변환
+      const pdfBinaryString = atob(result.data.pdfBase64);
+      const pdfBytes = new Uint8Array(pdfBinaryString.length);
+      for (let i = 0; i < pdfBinaryString.length; i++) {
+        pdfBytes[i] = pdfBinaryString.charCodeAt(i);
+      }
+      const arrayBuffer = pdfBytes.buffer;
 
-      for (const { num, file } of slideFiles) {
-        const xmlContent = await file.async('string');
-        const { title, content } = extractTextFromSlideXml(xmlContent);
-        fullText += `${title} ${content} `;
+      // ArrayBuffer 복사본 저장 (PDF.js가 원본을 transfer하므로)
+      setPdfArrayBuffer(arrayBuffer.slice(0));
+
+      // 3. pdfjs-dist로 페이지 썸네일 생성 (기존 PDF 플로우 재사용)
+      setLoadingMessage('페이지 로딩 중...');
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
+      const pages: DocumentPage[] = [];
+
+      for (let i = 1; i <= pdf.numPages; i++) {
+        setLoadingMessage(`페이지 로딩 중... (${i}/${pdf.numPages})`);
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 0.8 });
+
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d')!;
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+
+        await page.render({
+          canvasContext: context,
+          viewport: viewport,
+        }).promise;
+
+        const thumbnail = canvas.toDataURL('image/jpeg', 0.9);
+
+        pages.push({
+          pageNum: i,
+          thumbnail,
+          selected: false,
+        });
       }
 
-      if (!fullText.trim()) {
-        alert('슬라이드에서 텍스트를 찾을 수 없습니다.');
-        setPendingPptxFile(null);
-        setUploadType(null);
-        return;
-      }
-
-      // 전체 텍스트 저장
-      setPptxFullText(fullText.trim());
+      setDocumentPages(pages);
+      // 페이지 선택 모달 열기
+      setPageSelectionTitle('PPT 페이지 선택');
+      setShowPageSelectionModal(true);
 
     } catch (error: any) {
-      console.error('PPTX 분석 오류:', error);
-      alert(error.message || 'PPTX 파일을 분석할 수 없습니다.');
-      setPendingPptxFile(null);
+      console.error('PPTX 변환 오류:', error);
+      alert(error.message || 'PPT 파일을 변환할 수 없습니다.\nPDF로 변환 후 업로드해주세요.');
       setUploadType(null);
     } finally {
-      setIsOcrProcessing(false);
+      setIsLoadingDocument(false);
+      setLoadingMessage('');
     }
   }, []);
 
@@ -362,73 +359,6 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz }: AIQuizModa
 
   // 챕터 태그가 선택되었는지 확인
   const hasChapterTag = selectedTags.some(tag => !EXCLUDED_TAGS.includes(tag));
-
-  // PPTX 업로드 및 처리 시작
-  const startPptxProcessing = useCallback(async () => {
-    if (!pendingPptxFile) return;
-
-    // 텍스트 확인
-    if (!pptxFullText.trim()) {
-      alert('PPTX 텍스트가 없습니다. 파일을 다시 선택해주세요.');
-      return;
-    }
-
-    const user = auth.currentUser;
-    if (!user) {
-      alert('로그인이 필요합니다.');
-      return;
-    }
-
-    try {
-      // 작업 ID 생성
-      const jobId = `pptx_${user.uid}_${Date.now()}`;
-      setPptxJobId(jobId);
-      setShowPptxProgressModal(true);
-
-      // Firebase Storage에 파일 업로드
-      const storagePath = `pptx-uploads/${user.uid}/${jobId}.pptx`;
-      const storageRef = ref(storage, storagePath);
-      await uploadBytes(storageRef, pendingPptxFile);
-
-      // Firestore에 작업 문서 생성 (Cloud Functions 트리거)
-      await setDoc(doc(db, 'quizJobs', jobId), {
-        jobId,
-        storagePath,
-        userId: user.uid,
-        folderName: folderName.trim(),
-        difficulty,
-        questionCount,
-        tags: selectedTags,
-        textContent: pptxFullText, // 추출된 텍스트
-        status: 'pending',
-        progress: 0,
-        message: '업로드 완료. 처리 대기 중...',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-
-    } catch (error) {
-      console.error('PPTX 업로드 오류:', error);
-      alert('파일 업로드에 실패했습니다. 다시 시도해주세요.');
-      setShowPptxProgressModal(false);
-      setPptxJobId(null);
-    }
-  }, [pendingPptxFile, folderName, selectedTags, difficulty, questionCount, pptxFullText]);
-
-  // PPTX 처리 완료 시
-  const handlePptxComplete = useCallback((quizId: string) => {
-    setShowPptxProgressModal(false);
-    setPptxJobId(null);
-    onClose();
-    // 생성된 퀴즈로 이동 (라우터 사용 대신 window.location)
-    window.location.href = `/quiz/${quizId}`;
-  }, [onClose]);
-
-  // PPTX 진행 모달 닫기
-  const handlePptxProgressClose = useCallback(() => {
-    setShowPptxProgressModal(false);
-    setPptxJobId(null);
-  }, []);
 
   // 페이지 선택/해제 토글
   const togglePage = useCallback((pageNum: number) => {
@@ -497,7 +427,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz }: AIQuizModa
         // OCR 추출 텍스트 저장 (퀴즈 생성 시 사용)
         setOcrExtractedText(result.text);
       } else {
-        alert('PDF에서 텍스트를 인식할 수 없습니다.');
+        alert('문서에서 텍스트를 인식할 수 없습니다.');
       }
     } catch (error: any) {
       console.error('OCR 오류:', error);
@@ -510,11 +440,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz }: AIQuizModa
 
   // 페이지 선택 모달 다시 열기
   const handleReopenPageSelection = useCallback(() => {
-    if (uploadType === 'pdf') {
-      setPageSelectionTitle('PDF 페이지 선택');
-    } else if (uploadType === 'ppt') {
-      setPageSelectionTitle('PPT 이미지 선택');
-    }
+    setPageSelectionTitle(uploadType === 'ppt' ? 'PPT 페이지 선택' : 'PDF 페이지 선택');
     setShowPageSelectionModal(true);
   }, [uploadType]);
 
@@ -524,10 +450,10 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz }: AIQuizModa
     setPdfArrayBuffer(null);
     setOcrExtractedText(''); // OCR 텍스트도 초기화
     // 다른 콘텐츠가 있으면 uploadType 유지
-    if (images.length === 0 && !pendingPptxFile) {
+    if (images.length === 0) {
       setUploadType(null);
     }
-  }, [images.length, pendingPptxFile]);
+  }, [images.length]);
 
   // 선택된 PDF 페이지를 고해상도 이미지로 변환
   const convertSelectedPdfPagesToImages = useCallback(async (): Promise<string[]> => {
@@ -559,19 +485,6 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz }: AIQuizModa
     return images;
   }, [documentPages, pdfArrayBuffer]);
 
-  // 선택된 PPT 이미지 가져오기
-  const getSelectedPptImages = useCallback((): string[] => {
-    return documentPages.filter(p => p.selected).map(p => p.thumbnail);
-  }, [documentPages]);
-
-  // 선택된 PPT 텍스트 가져오기
-  const getSelectedPptText = useCallback((): string => {
-    return documentPages
-      .filter(p => p.selected && p.text)
-      .map(p => `[슬라이드 ${p.pageNum}]\n${p.text}`)
-      .join('\n\n');
-  }, [documentPages]);
-
   // 이미지 삭제
   const removeImage = useCallback((index: number) => {
     setImages(prev => prev.filter((_, i) => i !== index));
@@ -589,19 +502,13 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz }: AIQuizModa
       return;
     }
 
-    // 챕터 태그 필수 체크 (중간, 기말, 기타 제외)
-    if (!hasChapterTag) {
+    // 챕터 태그 필수 체크 (과목 맞춤형일 때만)
+    if (courseCustomized && !hasChapterTag) {
       alert('챕터 태그를 1개 이상 선택해주세요.\n(#중간, #기말, #기타는 챕터 태그가 아닙니다)');
       return;
     }
 
-    // PPTX 파일이 선택된 경우 Cloud Run 처리
-    if (pendingPptxFile && pptxFullText.trim()) {
-      await startPptxProcessing();
-      return;
-    }
-
-    // 이미지 + PDF 페이지 합치기
+    // 이미지 + PDF/PPT 페이지 합치기
     let finalImages = [...images];
 
     // PDF 페이지가 있으면 이미지로 변환하여 추가
@@ -622,9 +529,10 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz }: AIQuizModa
       difficulty,
       questionCount,
       tags: selectedTags,
-      textContent: ocrExtractedText || undefined, // OCR 추출 텍스트 전달
+      textContent: ocrExtractedText || undefined,
+      courseCustomized,
     });
-  }, [folderName, images, difficulty, questionCount, documentPages, pendingPptxFile, pptxFullText, convertSelectedPdfPagesToImages, startPptxProcessing, onStartQuiz, selectedTags, ocrExtractedText, hasChapterTag]);
+  }, [folderName, images, difficulty, questionCount, documentPages, convertSelectedPdfPagesToImages, onStartQuiz, selectedTags, ocrExtractedText, hasChapterTag, courseCustomized]);
 
   // ESC 키로 닫기
   useEffect(() => {
@@ -650,10 +558,8 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz }: AIQuizModa
   const gridCols = isMobile ? 'grid-cols-4' : 'grid-cols-3';
 
   const selectedPageCount = documentPages.filter(p => p.selected).length;
-  // 어떤 유형이든 콘텐츠가 있으면 true (중복 업로드 지원)
-  const hasContent = images.length > 0 ||
-    selectedPageCount > 0 ||
-    (pendingPptxFile !== null && pptxFullText.trim().length > 0);
+  // 어떤 유형이든 콘텐츠가 있으면 true
+  const hasContent = images.length > 0 || selectedPageCount > 0;
 
   if (typeof window === 'undefined') return null;
 
@@ -713,7 +619,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz }: AIQuizModa
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-sm font-semibold text-[#1A1A1A]">
-                    태그 <span className="text-[#8B1A1A] font-normal text-xs">(챕터 필수)</span>
+                    태그 {courseCustomized && <span className="text-[#8B1A1A] font-normal text-xs">(챕터 필수)</span>}
                   </label>
                   <button
                     type="button"
@@ -734,15 +640,10 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz }: AIQuizModa
                 {selectedTags.length > 0 && (
                   <div className="flex flex-wrap gap-2 mb-2">
                     {selectedTags.map((tag) => {
-                      const isChapterTag = !EXCLUDED_TAGS.includes(tag);
                       return (
                         <div
                           key={tag}
-                          className={`flex items-center gap-1 px-2 py-1 text-sm font-bold ${
-                            isChapterTag
-                              ? 'bg-[#1A6B1A] text-white'
-                              : 'bg-[#5C5C5C] text-white'
-                          }`}
+                          className="flex items-center gap-1 px-2 py-1 text-sm font-bold bg-[#1A1A1A] text-white"
                         >
                           #{tag}
                           <button
@@ -758,8 +659,8 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz }: AIQuizModa
                   </div>
                 )}
 
-                {/* 챕터 태그 미선택 경고 */}
-                {selectedTags.length > 0 && !hasChapterTag && (
+                {/* 챕터 태그 미선택 경고 (과목 맞춤형일 때만) */}
+                {courseCustomized && selectedTags.length > 0 && !hasChapterTag && (
                   <p className="text-xs text-[#8B1A1A] mb-2">
                     챕터 태그를 1개 이상 선택해주세요
                   </p>
@@ -775,7 +676,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz }: AIQuizModa
                       transition={{ duration: 0.2 }}
                       className="overflow-hidden"
                     >
-                      <div className="flex flex-wrap gap-2 p-3 bg-white border-2 border-[#1A1A1A] max-h-40 overflow-y-auto">
+                      <div className="flex flex-wrap gap-2 p-3 bg-white border-2 border-[#1A1A1A] max-h-40 overflow-y-auto overscroll-contain">
                         {tagOptions
                           .filter(tag => !selectedTags.includes(tag.value))
                           .map((tag) => (
@@ -899,40 +800,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz }: AIQuizModa
                   </div>
                 )}
 
-                {/* PPTX 파일 선택 상태 */}
-                {pendingPptxFile && pptxFullText.trim() && (
-                  <div className="border-2 border-[#1A1A1A] p-4 bg-white">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 border-2 border-[#1A1A1A] bg-[#EDEAE4] flex items-center justify-center">
-                          <svg className="w-5 h-5 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                          </svg>
-                        </div>
-                        <div>
-                          <p className="font-bold text-[#1A1A1A] text-sm truncate max-w-[180px]">{pendingPptxFile.name}</p>
-                          <p className="text-xs text-[#1A6B1A] font-semibold">텍스트 추출 완료</p>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPendingPptxFile(null);
-                          setPptxFullText('');
-                          // 다른 콘텐츠가 있으면 uploadType 유지
-                          if (images.length === 0 && documentPages.length === 0) {
-                            setUploadType(null);
-                          }
-                        }}
-                        className="px-3 py-1.5 text-sm font-bold border border-[#8B1A1A] text-[#8B1A1A] hover:bg-[#FEE2E2] transition-colors"
-                      >
-                        삭제
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* PDF 문서 페이지 선택 완료 요약 */}
+                {/* 문서 페이지 선택 완료 요약 (PDF/PPT 공통) */}
                 {documentPages.length > 0 && (
                   <div className="border-2 border-[#1A1A1A] p-4 bg-white">
                     <div className="flex items-center justify-between">
@@ -944,7 +812,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz }: AIQuizModa
                           </svg>
                         </div>
                         <div>
-                          <p className="font-bold text-[#1A1A1A]">PDF 파일</p>
+                          <p className="font-bold text-[#1A1A1A]">{uploadType === 'ppt' ? 'PPT 파일' : 'PDF 파일'}</p>
                           <p className="text-sm text-[#5C5C5C]">
                             {selectedPageCount > 0 ? (
                               <span className="text-[#1A6B1A] font-semibold">{selectedPageCount}개 페이지 선택됨</span>
@@ -1045,6 +913,24 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz }: AIQuizModa
                 </div>
               </div>
 
+              {/* 과목 맞춤형 */}
+              <label className="flex items-center gap-3 p-3 border-2 border-[#1A1A1A] bg-white cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={courseCustomized}
+                  onChange={(e) => setCourseCustomized(e.target.checked)}
+                  className="w-5 h-5 accent-[#1A1A1A] flex-shrink-0"
+                />
+                <div>
+                  <p className="text-sm font-semibold text-[#1A1A1A]">과목 맞춤형</p>
+                  <p className="text-xs text-[#5C5C5C]">
+                    {courseCustomized
+                      ? '교수님 출제 스타일과 과목 범위를 반영합니다'
+                      : '업로드한 자료에서만 문제를 생성합니다'}
+                  </p>
+                </div>
+              </label>
+
               {/* AI 할루시네이션 경고 */}
               <div className="p-3 border-2 border-[#8B1A1A]">
                 <div className="flex gap-2">
@@ -1065,9 +951,9 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz }: AIQuizModa
             <div className="px-5 py-4 border-t-2 border-[#1A1A1A] bg-[#EDEAE4]">
               <button
                 onClick={handleStart}
-                disabled={!folderName.trim() || !hasContent || !hasChapterTag}
+                disabled={!folderName.trim() || !hasContent || (courseCustomized && !hasChapterTag)}
                 className={`w-full py-3 font-bold text-lg border-2 border-[#1A1A1A] transition-all ${
-                  folderName.trim() && hasContent && hasChapterTag
+                  folderName.trim() && hasContent && (!courseCustomized || hasChapterTag)
                     ? 'bg-[#1A1A1A] text-white hover:bg-[#3A3A3A] shadow-[2px_2px_0px_#1A1A1A] active:shadow-none active:translate-x-[2px] active:translate-y-[2px]'
                     : 'bg-[#E5E5E5] text-[#9A9A9A] cursor-not-allowed'
                 }`}
@@ -1093,13 +979,6 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz }: AIQuizModa
         loadingMessage={loadingMessage}
       />
 
-      {/* PPTX 처리 진행 모달 */}
-      <PptxProgressModal
-        isOpen={showPptxProgressModal}
-        jobId={pptxJobId}
-        onClose={handlePptxProgressClose}
-        onComplete={handlePptxComplete}
-      />
     </>
   );
 }
@@ -1114,102 +993,3 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-// 텍스트 미리보기 이미지 생성 (PPT 슬라이드용)
-function createTextPreviewImage(pageNum: number, title: string, content: string): string {
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d')!;
-
-  // 캔버스 크기 설정 (4:3 비율)
-  canvas.width = 400;
-  canvas.height = 300;
-
-  // 배경
-  ctx.fillStyle = '#FFFFFF';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  // 테두리
-  ctx.strokeStyle = '#1A1A1A';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
-
-  // 슬라이드 번호 헤더
-  ctx.fillStyle = '#1A1A1A';
-  ctx.fillRect(0, 0, canvas.width, 36);
-  ctx.fillStyle = '#FFFFFF';
-  ctx.font = 'bold 14px sans-serif';
-  ctx.fillText(`슬라이드 ${pageNum}`, 12, 24);
-
-  // 제목 표시
-  let currentY = 52;
-  if (title) {
-    ctx.fillStyle = '#1A1A1A';
-    ctx.font = 'bold 16px sans-serif';
-    const titleLines = wrapText(ctx, title, canvas.width - 24, 2);
-    for (const line of titleLines) {
-      ctx.fillText(line, 12, currentY);
-      currentY += 20;
-    }
-    currentY += 8;
-  }
-
-  // 구분선
-  if (title && content) {
-    ctx.strokeStyle = '#D4CFC4';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(12, currentY - 4);
-    ctx.lineTo(canvas.width - 12, currentY - 4);
-    ctx.stroke();
-    currentY += 8;
-  }
-
-  // 내용 표시
-  if (content) {
-    ctx.fillStyle = '#5C5C5C';
-    ctx.font = '12px sans-serif';
-    const maxContentLines = Math.floor((canvas.height - currentY - 10) / 16);
-    const contentLines = wrapText(ctx, content.replace(/\n/g, ' '), canvas.width - 24, maxContentLines);
-    for (const line of contentLines) {
-      ctx.fillText(line, 12, currentY);
-      currentY += 16;
-    }
-  }
-
-  // 텍스트가 없는 경우
-  if (!title && !content) {
-    ctx.fillStyle = '#9A9A9A';
-    ctx.font = '14px sans-serif';
-    ctx.fillText('(텍스트 없음)', 12, 70);
-  }
-
-  return canvas.toDataURL('image/png');
-}
-
-// 텍스트 줄바꿈 헬퍼 함수
-function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines: number): string[] {
-  const words = text.split(' ');
-  const lines: string[] = [];
-  let currentLine = '';
-
-  for (const word of words) {
-    const testLine = currentLine + (currentLine ? ' ' : '') + word;
-    const metrics = ctx.measureText(testLine);
-
-    if (metrics.width > maxWidth && currentLine) {
-      lines.push(currentLine);
-      currentLine = word;
-      if (lines.length >= maxLines) {
-        lines[lines.length - 1] += '...';
-        return lines;
-      }
-    } else {
-      currentLine = testLine;
-    }
-  }
-
-  if (currentLine && lines.length < maxLines) {
-    lines.push(currentLine);
-  }
-
-  return lines;
-}

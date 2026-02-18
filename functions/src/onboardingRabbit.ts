@@ -7,6 +7,7 @@
 
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { getBaseStats } from "./utils/rabbitStats";
 
 export const onOnboardingComplete = onDocumentUpdated(
   {
@@ -46,6 +47,8 @@ export const onOnboardingComplete = onDocumentUpdated(
       courseId,
       discoveryOrder: 1,
       discoveredAt: FieldValue.serverTimestamp(),
+      level: 1,
+      stats: getBaseStats(rabbitId),
     });
 
     // 2. rabbits 컬렉션에 기본 토끼 문서 생성 (없을 때만)

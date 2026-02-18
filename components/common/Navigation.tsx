@@ -3,7 +3,7 @@
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 
 export type UserRole = 'student' | 'professor';
 
@@ -110,7 +110,22 @@ export default function Navigation({ role }: NavigationProps) {
   const pathname = usePathname();
   const [isHidden, setIsHidden] = useState(false);
 
-  // body의 data-hide-nav attribute를 감지하여 네비게이션 숨김
+  // 경로 기반 네비게이션 숨김
+  const shouldHideByPath = useMemo(() => {
+    // /quiz/[id] 하위 경로 (풀이, 결과, 피드백)
+    if (/^\/quiz\/[^/]+/.test(pathname) && pathname !== '/quiz/create') return true;
+    // /edit 포함 경로 (퀴즈 수정)
+    if (pathname.includes('/edit')) return true;
+    // /ranking 경로
+    if (pathname === '/ranking') return true;
+    // /review/random 경로
+    if (pathname === '/review/random') return true;
+    // /review/[type]/[id] 상세 경로
+    if (/^\/review\/[^/]+\/[^/]+/.test(pathname)) return true;
+    return false;
+  }, [pathname]);
+
+  // body의 data-hide-nav attribute를 감지하여 네비게이션 숨김 (모달 등)
   useEffect(() => {
     const checkHideNav = () => {
       const shouldHide = document.body.hasAttribute('data-hide-nav');
@@ -129,8 +144,8 @@ export default function Navigation({ role }: NavigationProps) {
 
   const tabs = role === 'professor' ? professorTabs : studentTabs;
 
-  // 숨김 상태면 렌더링하지 않음
-  if (isHidden) return null;
+  // 숨김 상태면 렌더링하지 않음 (경로 기반 또는 data-hide-nav attribute)
+  if (isHidden || shouldHideByPath) return null;
 
   return (
     <nav className="fixed bottom-4 left-4 right-4 z-50 flex justify-center">

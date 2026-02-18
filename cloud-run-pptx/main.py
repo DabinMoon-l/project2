@@ -330,6 +330,66 @@ def convert_pdf():
         return resp, 500
 
 
+@app.route('/convert-to-pdf-direct', methods=['POST'])
+def convert_to_pdf_direct():
+    """
+    PPT → PDF 변환 (JSON base64 I/O, Cloud Functions에서 호출)
+    Request: { "pptxBase64": "..." }
+    Response: { "success": true, "pdfBase64": "..." }
+    """
+    import base64
+
+    data = request.get_json(force=True)
+    pptx_base64 = data.get('pptxBase64')
+    if not pptx_base64:
+        return jsonify({'error': 'pptxBase64가 필요합니다.'}), 400
+
+    try:
+        pptx_bytes = base64.b64decode(pptx_base64)
+
+        with tempfile.NamedTemporaryFile(suffix='.pptx', delete=False) as tmp:
+            tmp.write(pptx_bytes)
+            pptx_path = tmp.name
+
+        try:
+            output_dir = tempfile.mkdtemp()
+            subprocess.run(
+                ['libreoffice', '--headless', '--convert-to', 'pdf', '--outdir', output_dir, pptx_path],
+                check=True,
+                timeout=120,
+                capture_output=True,
+                text=True,
+            )
+
+            pdf_filename = os.path.basename(pptx_path).replace('.pptx', '.pdf')
+            pdf_path = os.path.join(output_dir, pdf_filename)
+
+            if not os.path.exists(pdf_path):
+                return jsonify({'error': 'PDF 변환 결과 파일을 찾을 수 없습니다.'}), 500
+
+            with open(pdf_path, 'rb') as f:
+                pdf_base64 = base64.b64encode(f.read()).decode('utf-8')
+
+            # 임시 파일 정리
+            os.unlink(pdf_path)
+            os.rmdir(output_dir)
+
+            return jsonify({'success': True, 'pdfBase64': pdf_base64})
+
+        finally:
+            if os.path.exists(pptx_path):
+                os.unlink(pptx_path)
+
+    except subprocess.TimeoutExpired:
+        return jsonify({'error': 'PDF 변환 시간 초과 (120초)'}), 504
+    except subprocess.CalledProcessError as e:
+        print(f"LibreOffice 변환 오류: {e.stderr}")
+        return jsonify({'error': f'LibreOffice 변환 실패: {e.stderr}'}), 500
+    except Exception as e:
+        print(f"PDF 변환 오류: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/process-pptx', methods=['POST'])
 def process_pptx():
     """

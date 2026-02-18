@@ -14,19 +14,8 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
 
 // ── 랭킹 계산 유틸 (클라이언트 ranking.ts와 동일 로직) ──
 
-function computeProfessorCorrectRate(correct: number, attempted: number): number {
-  if (attempted === 0) return 0;
-  return (correct / attempted) * 100;
-}
-
-function computeExpPercentile(myExp: number, allExps: number[]): number {
-  if (allExps.length <= 1) return 100;
-  const below = allExps.filter(e => e < myExp).length;
-  return (below / allExps.length) * 100;
-}
-
-function computeRankScore(professorCorrectRate: number, expPercentile: number): number {
-  return professorCorrectRate * 0.4 + expPercentile * 0.6;
+function computeRankScore(profCorrectCount: number, totalExp: number): number {
+  return 100 + profCorrectCount * 4 + totalExp * 0.6;
 }
 
 function computeTeamScore(normalizedAvgExp: number, avgCorrectRate: number, avgCompletionRate: number): number {
@@ -40,7 +29,7 @@ interface RankedUserDoc {
   nickname: string;
   classType: string;
   totalExp: number;
-  profCorrectRate: number;
+  profCorrectCount: number;
   rankScore: number;
   profileRabbitId: number | null;
   equippedRabbitNames: string;
@@ -132,14 +121,11 @@ async function computeRankingsForCourse(courseId: string) {
   });
 
   // ── 개인 랭킹 ──
-  const allExps = students.map((u: any) => u.totalExp || 0);
 
   const rankedUsers: RankedUserDoc[] = students.map((u: any) => {
     const exp = u.totalExp || 0;
     const profStat = studentProfStats[u.id] || { correct: 0, attempted: 0 };
-    const profCorrectRate = computeProfessorCorrectRate(profStat.correct, profStat.attempted);
-    const expPercentile = computeExpPercentile(exp, allExps);
-    const rankScore = computeRankScore(profCorrectRate, expPercentile);
+    const rankScore = computeRankScore(profStat.correct, exp);
 
     // 장착 토끼 이름
     const allEquipped = u.equippedRabbits || [];
@@ -163,7 +149,7 @@ async function computeRankingsForCourse(courseId: string) {
       nickname: u.nickname || "익명",
       classType: u.classId || "A",
       totalExp: exp,
-      profCorrectRate: Math.round(profCorrectRate),
+      profCorrectCount: profStat.correct,
       rankScore,
       profileRabbitId: u.profileRabbitId ?? null,
       equippedRabbitNames,
@@ -189,7 +175,8 @@ async function computeRankingsForCourse(courseId: string) {
 
     const correctRates = members.map((u: any) => {
       const stat = studentProfStats[u.id];
-      return computeProfessorCorrectRate(stat?.correct || 0, stat?.attempted || 0);
+      if (!stat || stat.attempted === 0) return 0;
+      return (stat.correct / stat.attempted) * 100;
     });
     const avgCorrectRate = correctRates.reduce((s, r) => s + r, 0) / correctRates.length;
 

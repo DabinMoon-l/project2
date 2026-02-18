@@ -23,6 +23,13 @@ import { db } from '@/lib/firebase';
 // 타입 정의
 // ============================================================
 
+/** 토끼 스탯 */
+export interface RabbitStats {
+  hp: number;
+  atk: number;
+  def: number;
+}
+
 /** 토끼 보유 정보 (서브컬렉션 문서) */
 export interface RabbitHolding {
   id: string; // "{courseId}_{rabbitId}"
@@ -30,6 +37,8 @@ export interface RabbitHolding {
   courseId: string;
   discoveryOrder: number; // 1=최초발견, 2+=후속
   discoveredAt: any;
+  level?: number;
+  stats?: RabbitStats;
 }
 
 /** 발견자 정보 */
@@ -51,6 +60,27 @@ export interface RabbitDoc {
   discoverers: RabbitDiscoverer[]; // 전체 발견자 목록
   createdAt: any;
   updatedAt: any;
+}
+
+// ============================================================
+// 헬퍼: 홀딩에서 스탯 가져오기 (없으면 베이스 스탯 폴백)
+// ============================================================
+
+/** rabbitId 기반 베이스 스탯 (Lv.1) — CF의 getBaseStats와 동일 공식 */
+function getBaseStats(rabbitId: number): RabbitStats {
+  return {
+    hp: 10 + ((rabbitId * 3) % 20),
+    atk: 3 + ((rabbitId * 7) % 12),
+    def: 2 + ((rabbitId * 5) % 8),
+  };
+}
+
+/** 홀딩에서 실제 스탯 반환 (level/stats 없으면 Lv.1 베이스 폴백) */
+export function getRabbitStats(holding: RabbitHolding): { level: number; stats: RabbitStats } {
+  return {
+    level: holding.level ?? 1,
+    stats: holding.stats ?? getBaseStats(holding.rabbitId),
+  };
 }
 
 // ============================================================
