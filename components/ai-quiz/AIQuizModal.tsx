@@ -678,6 +678,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz }: AIQuizModa
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             className="relative w-full max-w-md bg-[#F5F0E8] border-2 border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
           >
             {/* 헤더 */}
             <div className="flex items-center justify-between px-5 py-4 border-b-2 border-[#1A1A1A]">
