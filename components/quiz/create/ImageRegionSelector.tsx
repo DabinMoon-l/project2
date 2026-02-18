@@ -87,6 +87,9 @@ export default function ImageRegionSelector({
   // 추출 성공 피드백
   const [extractFeedback, setExtractFeedback] = useState(false);
 
+  // 커서 스타일
+  const [cursorStyle, setCursorStyle] = useState<string>('crosshair');
+
   // Refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -331,6 +334,19 @@ export default function ImageRegionSelector({
     return 'create';
   }, [selection, scale]);
 
+  // 드래그 모드 → 커서 스타일 매핑
+  const getCursorForMode = useCallback((mode: DragMode): string => {
+    switch (mode) {
+      case 'resize-tl': case 'resize-br': return 'nwse-resize';
+      case 'resize-tr': case 'resize-bl': return 'nesw-resize';
+      case 'resize-t': case 'resize-b': return 'ns-resize';
+      case 'resize-l': case 'resize-r': return 'ew-resize';
+      case 'move': return 'move';
+      case 'create': return 'crosshair';
+      default: return 'crosshair';
+    }
+  }, []);
+
   const handleDragStart = useCallback((clientX: number, clientY: number) => {
     if (!originalImageUrl || !displayImageRef.current) return;
 
@@ -344,6 +360,7 @@ export default function ImageRegionSelector({
     const mode = getDragMode(clientX, clientY);
 
     setDragMode(mode);
+    setCursorStyle(getCursorForMode(mode));
     setDragStart(coords);
 
     if (mode === 'create') {
@@ -418,6 +435,7 @@ export default function ImageRegionSelector({
       }
     }
     setDragMode('none');
+    setCursorStyle('crosshair');
   }, [dragMode, selection]);
 
   // 마우스 이벤트
@@ -427,8 +445,13 @@ export default function ImageRegionSelector({
   }, [handleDragStart]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (dragMode === 'none') {
+      // 드래그 중이 아닐 때 커서 스타일 업데이트
+      const mode = getDragMode(e.clientX, e.clientY);
+      setCursorStyle(getCursorForMode(mode));
+    }
     handleDragMove(e.clientX, e.clientY);
-  }, [handleDragMove]);
+  }, [dragMode, getDragMode, getCursorForMode, handleDragMove]);
 
   const handleMouseUp = useCallback(() => {
     handleDragEnd();
@@ -595,7 +618,7 @@ export default function ImageRegionSelector({
       <div
         ref={containerRef}
         className="flex-1 relative overflow-hidden flex items-center justify-center select-none touch-none min-h-0"
-        style={{ cursor: originalImageUrl && !isLoadingPdf ? 'crosshair' : 'default' }}
+        style={{ cursor: originalImageUrl && !isLoadingPdf ? cursorStyle : 'default' }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}

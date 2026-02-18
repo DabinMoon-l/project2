@@ -638,7 +638,7 @@ export default function ExtractedImagePicker({
         onClick={(e) => e.stopPropagation()}
       >
         {/* 헤더 */}
-        <div className="flex items-center justify-between px-4 py-3 border-b-2 border-[#1A1A1A]">
+        <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b-2 border-[#1A1A1A]">
           <h2 className="font-bold text-[#1A1A1A]">추출 이미지 선택</h2>
           <button
             type="button"
@@ -651,8 +651,8 @@ export default function ExtractedImagePicker({
           </button>
         </div>
 
-        {/* 내용 */}
-        <div className="flex-1 overflow-auto p-4">
+        {/* 내용 — 스크롤 가능 */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-4">
           {displayImages.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12">
               <svg className="w-16 h-16 mb-4 text-[#D4CFC4]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -664,7 +664,7 @@ export default function ExtractedImagePicker({
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 pt-1 pr-1">
               {displayImages.map((img, idx) => {
                 const isCropped = img.id.startsWith('cropped-');
 
@@ -687,7 +687,7 @@ export default function ExtractedImagePicker({
                       {isCropped ? '크롭' : idx + 1}
                     </div>
 
-                    {/* 삭제 버튼 - 크롭 이미지가 아니고 onRemove가 제공된 경우에만 표시 */}
+                    {/* 삭제 버튼 - 크롭 이미지가 아니고 onRemove가 제공된 경우 항상 표시 */}
                     {!isCropped && onRemove && (
                       <button
                         type="button"
@@ -695,10 +695,10 @@ export default function ExtractedImagePicker({
                           e.stopPropagation();
                           onRemove(img.id);
                         }}
-                        className="absolute top-1 right-1 w-6 h-6 bg-[#8B1A1A] text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute -top-2 -right-2 w-6 h-6 bg-[#8B1A1A] text-white rounded-full flex items-center justify-center shadow-md active:scale-90 transition-transform z-10"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                       </button>
                     )}
@@ -742,7 +742,7 @@ export default function ExtractedImagePicker({
 
         {/* 하단 안내 */}
         {displayImages.length > 0 && (
-          <div className="px-4 py-3 border-t border-[#D4CFC4] bg-[#EDEAE4]">
+          <div className="flex-shrink-0 px-4 py-3 border-t border-[#D4CFC4] bg-[#EDEAE4]">
             <p className="text-xs text-[#5C5C5C] text-center">
               &quot;선택&quot;으로 바로 삽입 / &quot;수정&quot;으로 크롭 후 삽입
             </p>
