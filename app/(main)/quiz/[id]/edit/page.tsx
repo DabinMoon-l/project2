@@ -1,16 +1,17 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { doc, getDoc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db, auth } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse } from '@/lib/contexts';
 import { Skeleton } from '@/components/common';
 import QuestionEditor, { type QuestionData, type SubQuestion } from '@/components/quiz/create/QuestionEditor';
 import QuestionList from '@/components/quiz/create/QuestionList';
 import QuizMetaForm, { type QuizMeta, validateRequiredTags, getChapterTags } from '@/components/quiz/create/QuizMetaForm';
+import ImageRegionSelector, { type UploadedFileItem } from '@/components/quiz/create/ImageRegionSelector';
 
 /**
  * 퀴즈 수정 페이지 (학생용)
@@ -57,6 +58,96 @@ export default function EditQuizPage() {
 
   // 현재 편집 모드 (meta: 메타정보 수정, questions: 문제 수정)
   const [editMode, setEditMode] = useState<'meta' | 'questions'>('questions');
+
+  // 추출 이미지 관련 상태
+  const [extractedImages, setExtractedImages] = useState<Array<{ id: string; dataUrl: string; sourceFileName?: string }>>([]);
+  const [showImageExtractor, setShowImageExtractor] = useState(false);
+  const [extractorFiles, setExtractorFiles] = useState<UploadedFileItem[]>([]);
+  const [isExtractProcessing, setIsExtractProcessing] = useState(false);
+  const extractFileInputRef = useRef<HTMLInputElement>(null);
+
+  // blob → dataUrl 변환
+  const blobToDataUrl = useCallback((blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }, []);
+
+  // 이미지 추출용 파일 선택 핸들러
+  const handleExtractFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileArray = Array.from(e.target.files || []);
+    if (fileArray.length === 0) return;
+    e.target.value = '';
+
+    setIsExtractProcessing(true);
+    const items: UploadedFileItem[] = [];
+
+    try {
+      for (const file of fileArray) {
+        if (file.name.endsWith('.pptx') || file.type.includes('presentation')) {
+          try {
+            const idToken = await auth.currentUser!.getIdToken();
+            const formData = new FormData();
+            formData.append('file', file);
+            const resp = await fetch(
+              `${process.env.NEXT_PUBLIC_PPTX_CLOUD_RUN_URL}/convert-pdf`,
+              {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${idToken}` },
+                body: formData,
+              }
+            );
+            if (!resp.ok) {
+              const errData = await resp.json().catch(() => ({ error: resp.statusText }));
+              throw new Error(errData.error || 'PDF 변환 실패');
+            }
+            const pdfBlob = await resp.blob();
+            const pdfFile = new File(
+              [pdfBlob],
+              file.name.replace(/\.pptx$/i, '.pdf'),
+              { type: 'application/pdf' }
+            );
+            items.push({ id: `pdf-${Date.now()}-${file.name}`, file: pdfFile, preview: 'pdf' });
+          } catch (err) {
+            console.error('PPT 변환 실패:', err);
+            alert('PPT 파일을 변환하는 중 오류가 발생했습니다.');
+          }
+        } else if (file.type === 'application/pdf') {
+          items.push({ id: `pdf-${Date.now()}-${file.name}`, file, preview: 'pdf' });
+        } else if (file.type.startsWith('image/')) {
+          items.push({
+            id: `img-${Date.now()}-${file.name}`,
+            file,
+            preview: await blobToDataUrl(file),
+          });
+        }
+      }
+      if (items.length > 0) {
+        setExtractorFiles(items);
+        setShowImageExtractor(true);
+      }
+    } finally {
+      setIsExtractProcessing(false);
+    }
+  }, [blobToDataUrl]);
+
+  // 추출 이미지 추가
+  const handleExtractImage = useCallback((dataUrl: string, sourceFileName?: string) => {
+    const newImage = {
+      id: `extracted-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      dataUrl,
+      sourceFileName,
+    };
+    setExtractedImages((prev) => [...prev, newImage]);
+  }, []);
+
+  // 추출 이미지 삭제
+  const handleRemoveExtractedImage = useCallback((id: string) => {
+    setExtractedImages((prev) => prev.filter((img) => img.id !== id));
+  }, []);
 
   // 퀴즈 로드
   useEffect(() => {
@@ -679,6 +770,49 @@ export default function EditQuizPage() {
         {/* 문제 수정 모드 */}
         {editMode === 'questions' && (
           <>
+            {/* 이미지 추출 버튼 */}
+            <div className="space-y-2">
+              <input
+                ref={extractFileInputRef}
+                type="file"
+                accept="image/*,.pdf,.pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                multiple
+                className="hidden"
+                onChange={handleExtractFileSelect}
+              />
+              <button
+                type="button"
+                onClick={() => extractFileInputRef.current?.click()}
+                disabled={isExtractProcessing}
+                className="w-full py-2.5 text-sm font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isExtractProcessing ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    변환 중...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    이미지 추출 (이미지 / PDF / PPT)
+                  </>
+                )}
+              </button>
+
+              {extractedImages.length > 0 && (
+                <div className="bg-[#E8F5E9] p-3 border border-[#1A6B1A]">
+                  <p className="text-xs text-[#1A6B1A] font-bold">
+                    추출된 이미지 {extractedImages.length}개가 있습니다.
+                  </p>
+                </div>
+              )}
+            </div>
+
             {/* 문제 편집기 */}
             <AnimatePresence>
               {(editingIndex !== null || isAddingNew) && (
@@ -688,6 +822,9 @@ export default function EditQuizPage() {
                   onCancel={handleCancelEdit}
                   questionNumber={editingIndex !== null ? editingIndex + 1 : questions.length + 1}
                   courseId={userCourseId || undefined}
+                  extractedImages={extractedImages}
+                  onAddExtracted={handleExtractImage}
+                  onRemoveExtracted={handleRemoveExtractedImage}
                 />
               )}
             </AnimatePresence>
@@ -750,6 +887,20 @@ export default function EditQuizPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* 이미지 추출 모달 (ImageRegionSelector) */}
+      {showImageExtractor && extractorFiles.length > 0 && (
+        <ImageRegionSelector
+          uploadedFiles={extractorFiles}
+          extractedImages={extractedImages}
+          onExtract={handleExtractImage}
+          onRemoveExtracted={handleRemoveExtractedImage}
+          onClose={() => {
+            setShowImageExtractor(false);
+            setExtractorFiles([]);
+          }}
+        />
       )}
     </div>
   );
