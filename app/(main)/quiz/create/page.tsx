@@ -1684,6 +1684,7 @@ export default function QuizCreatePage() {
                     courseId={userCourseId || undefined}
                     extractedImages={extractedImages}
                     onAddExtracted={handleExtractImage}
+                    onRemoveExtracted={handleRemoveExtractedImage}
                   />
                 )}
               </AnimatePresence>
