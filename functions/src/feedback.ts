@@ -1,6 +1,6 @@
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
-import { addExpInTransaction, EXP_REWARDS } from "./utils/gold";
+import { readUserForExp, addExpInTransaction, EXP_REWARDS } from "./utils/gold";
 
 /**
  * 피드백 문서 타입
@@ -57,15 +57,17 @@ export const onFeedbackSubmit = onDocumentCreated(
 
     try {
       await db.runTransaction(async (transaction) => {
-        // 피드백 문서에 보상 지급 플래그 설정
+        // READ 먼저
+        const userDoc = await readUserForExp(transaction, userId);
+
+        // WRITE
         transaction.update(snapshot.ref, {
           rewarded: true,
           rewardedAt: FieldValue.serverTimestamp(),
           expRewarded: expReward,
         });
 
-        // 경험치 지급
-        await addExpInTransaction(transaction, userId, expReward, reason);
+        addExpInTransaction(transaction, userId, expReward, reason, userDoc);
       });
 
       console.log(`피드백 보상 지급 완료: ${userId}`, {

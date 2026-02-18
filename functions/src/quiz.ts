@@ -2,6 +2,7 @@ import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/fire
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import {
   calculateQuizExp,
+  readUserForExp,
   addExpInTransaction,
   EXP_REWARDS,
 } from "./utils/gold";
@@ -74,7 +75,19 @@ export const onQuizComplete = onDocumentCreated(
 
     try {
       // 트랜잭션으로 보상 지급
+      // 주의: Firestore 트랜잭션은 모든 READ가 WRITE보다 먼저 실행되어야 함
       await db.runTransaction(async (transaction) => {
+        // ── 모든 READ를 먼저 수행 ──
+        const userDoc = await readUserForExp(transaction, userId);
+
+        let creatorDoc = null;
+        if (!isUpdate && correctCount !== undefined && totalCount !== undefined && quizCreatorId) {
+          creatorDoc = await transaction.get(
+            db.collection("users").doc(quizCreatorId)
+          );
+        }
+
+        // ── 모든 WRITE 수행 ──
         // 결과 문서에 보상 지급 플래그 설정 (중복 방지)
         transaction.update(snapshot.ref, {
           rewarded: true,
@@ -83,7 +96,7 @@ export const onQuizComplete = onDocumentCreated(
         });
 
         // 경험치 지급
-        await addExpInTransaction(transaction, userId, expReward, reason);
+        addExpInTransaction(transaction, userId, expReward, reason, userDoc);
 
         // 첫 시도에만 누적 통계 업데이트 (랭킹용)
         if (!isUpdate && correctCount !== undefined && totalCount !== undefined) {
@@ -93,14 +106,8 @@ export const onQuizComplete = onDocumentCreated(
             totalAttemptedQuestions: FieldValue.increment(totalCount),
           };
 
-          // 교수 출제 퀴즈인 경우 참여 횟수 카운트
-          if (quizCreatorId) {
-            const creatorDoc = await transaction.get(
-              db.collection("users").doc(quizCreatorId)
-            );
-            if (creatorDoc.exists && creatorDoc.data()?.role === "professor") {
-              statsUpdate.professorQuizzesCompleted = FieldValue.increment(1);
-            }
+          if (creatorDoc?.exists && creatorDoc.data()?.role === "professor") {
+            statsUpdate.professorQuizzesCompleted = FieldValue.increment(1);
           }
 
           transaction.update(userRef, statsUpdate);
@@ -255,13 +262,17 @@ export const onQuizCreate = onDocumentCreated(
 
     try {
       await db.runTransaction(async (transaction) => {
+        // READ 먼저
+        const userDoc = await readUserForExp(transaction, creatorId);
+
+        // WRITE
         transaction.update(snapshot.ref, {
           rewarded: true,
           rewardedAt: FieldValue.serverTimestamp(),
           expRewarded: expReward,
         });
 
-        await addExpInTransaction(transaction, creatorId, expReward, reason);
+        addExpInTransaction(transaction, creatorId, expReward, reason, userDoc);
       });
 
       console.log(`퀴즈 생성 보상 지급 완료: ${creatorId}`, {
@@ -310,13 +321,17 @@ export const onQuizMakePublic = onDocumentWritten(
 
     try {
       await db.runTransaction(async (transaction) => {
+        // READ 먼저
+        const userDoc = await readUserForExp(transaction, creatorId);
+
+        // WRITE
         const quizRef = db.collection("quizzes").doc(quizId);
         transaction.update(quizRef, {
           publicRewarded: true,
           publicRewardedAt: FieldValue.serverTimestamp(),
         });
 
-        await addExpInTransaction(transaction, creatorId, expReward, reason);
+        addExpInTransaction(transaction, creatorId, expReward, reason, userDoc);
       });
 
       console.log(`퀴즈 공개 전환 보상 지급: ${creatorId}`, { quizId, expReward });

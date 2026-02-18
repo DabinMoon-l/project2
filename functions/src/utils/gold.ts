@@ -39,29 +39,46 @@ export function calculateQuizExp(score: number): number {
 }
 
 /**
+ * 사용자 문서를 트랜잭션 내에서 읽기 (reads-before-writes 보장용)
+ *
+ * Firestore 트랜잭션에서는 모든 read가 write보다 먼저 실행되어야 합니다.
+ * 이 함수로 먼저 읽은 후, addExpInTransaction에 전달하세요.
+ */
+export async function readUserForExp(
+  transaction: Transaction,
+  userId: string
+): Promise<FirebaseFirestore.DocumentSnapshot> {
+  const db = getFirestore();
+  const userRef = db.collection("users").doc(userId);
+  return transaction.get(userRef);
+}
+
+/**
  * 사용자에게 경험치 지급 (트랜잭션 내에서 사용)
  *
  * XP만 증가시키고 히스토리 기록.
+ * 주의: Firestore 트랜잭션의 reads-before-writes 규칙을 지키기 위해
+ * readUserForExp()로 미리 읽은 userDoc을 전달해야 합니다.
  *
  * @param transaction Firestore 트랜잭션
  * @param userId 사용자 ID
  * @param amount 지급할 경험치량
  * @param reason 지급 사유
+ * @param userDoc 미리 읽은 사용자 문서 스냅샷
  */
-export async function addExpInTransaction(
+export function addExpInTransaction(
   transaction: Transaction,
   userId: string,
   amount: number,
-  reason: string
-): Promise<{ rankUp: boolean }> {
-  const db = getFirestore();
-  const userRef = db.collection("users").doc(userId);
-
-  // 현재 사용자 정보 가져오기
-  const userDoc = await transaction.get(userRef);
+  reason: string,
+  userDoc: FirebaseFirestore.DocumentSnapshot
+): { rankUp: boolean } {
   if (!userDoc.exists) {
     throw new Error("사용자를 찾을 수 없습니다.");
   }
+
+  const db = getFirestore();
+  const userRef = db.collection("users").doc(userId);
 
   const userData = userDoc.data()!;
   const currentExp = userData.totalExp || 0;
@@ -85,6 +102,5 @@ export async function addExpInTransaction(
     createdAt: FieldValue.serverTimestamp(),
   });
 
-  // 하위 호환용 반환 (항상 rankUp: false)
   return { rankUp: false };
 }

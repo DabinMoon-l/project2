@@ -1,6 +1,6 @@
 import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
-import { addExpInTransaction, EXP_REWARDS } from "./utils/gold";
+import { readUserForExp, addExpInTransaction, EXP_REWARDS } from "./utils/gold";
 import { enforceRateLimit } from "./rateLimit";
 
 /**
@@ -99,13 +99,17 @@ export const onPostCreate = onDocumentCreated(
       const reason = "게시글 작성";
 
       await db.runTransaction(async (transaction) => {
+        // READ 먼저
+        const userDoc = await readUserForExp(transaction, userId);
+
+        // WRITE
         transaction.update(snapshot.ref, {
           rewarded: true,
           rewardedAt: FieldValue.serverTimestamp(),
           expRewarded: expReward,
         });
 
-        await addExpInTransaction(transaction, userId, expReward, reason);
+        addExpInTransaction(transaction, userId, expReward, reason, userDoc);
       });
 
       console.log(`게시글 보상 지급 완료: ${userId}`, { postId, expReward });
@@ -203,20 +207,17 @@ export const onCommentCreate = onDocumentCreated(
       const reason = "댓글 작성";
 
       await db.runTransaction(async (transaction) => {
+        // READ 먼저
+        const userDoc = await readUserForExp(transaction, userId);
+
+        // WRITE
         transaction.update(snapshot.ref, {
           rewarded: true,
           rewardedAt: FieldValue.serverTimestamp(),
           expRewarded: expReward,
         });
 
-        // 클라이언트에서 이미 commentCount를 증가시키므로 여기서는 하지 않음
-        // const postRef = db.collection("posts").doc(postId);
-        // transaction.update(postRef, {
-        //   commentCount: FieldValue.increment(1),
-        //   updatedAt: FieldValue.serverTimestamp(),
-        // });
-
-        await addExpInTransaction(transaction, userId, expReward, reason);
+        addExpInTransaction(transaction, userId, expReward, reason, userDoc);
       });
 
       console.log(`댓글 보상 지급 완료: ${userId}`, { postId, commentId, expReward });
