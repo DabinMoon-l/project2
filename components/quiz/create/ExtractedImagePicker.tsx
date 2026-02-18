@@ -651,8 +651,8 @@ export default function ExtractedImagePicker({
           </button>
         </div>
 
-        {/* 내용 — 스크롤 가능 */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-4">
+        {/* 내용 — 4개(2행)까지 보이고 이후 스크롤 */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-4" style={{ maxHeight: 'calc(80vh - 100px)' }}>
           {displayImages.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12">
               <svg className="w-16 h-16 mb-4 text-[#D4CFC4]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -664,17 +664,17 @@ export default function ExtractedImagePicker({
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3 pt-1 pr-1">
+            <div className="grid grid-cols-2 gap-3">
               {displayImages.map((img, idx) => {
                 const isCropped = img.id.startsWith('cropped-');
 
                 return (
                   <div
                     key={img.id}
-                    className={`relative group border-2 ${isCropped ? 'border-[#1A6B1A]' : 'border-[#1A1A1A]'} bg-white overflow-hidden`}
+                    className={`relative group border-2 ${isCropped ? 'border-[#1A6B1A]' : 'border-[#1A1A1A]'} bg-white`}
                   >
                     {/* 이미지 미리보기 */}
-                    <div className="w-full aspect-square">
+                    <div className="w-full aspect-square overflow-hidden">
                       <img
                         src={img.dataUrl}
                         alt={`추출 이미지 ${idx + 1}`}
@@ -687,7 +687,7 @@ export default function ExtractedImagePicker({
                       {isCropped ? '크롭' : idx + 1}
                     </div>
 
-                    {/* 삭제 버튼 - 크롭 이미지가 아니고 onRemove가 제공된 경우 항상 표시 */}
+                    {/* 삭제 버튼 — 카드 내부 우측상단, 잘리지 않게 */}
                     {!isCropped && onRemove && (
                       <button
                         type="button"
@@ -695,7 +695,7 @@ export default function ExtractedImagePicker({
                           e.stopPropagation();
                           onRemove(img.id);
                         }}
-                        className="absolute -top-2 -right-2 w-6 h-6 bg-[#8B1A1A] text-white rounded-full flex items-center justify-center shadow-md active:scale-90 transition-transform z-10"
+                        className="absolute top-1 right-1 w-6 h-6 bg-[#8B1A1A] text-white rounded-full flex items-center justify-center shadow-md active:scale-90 transition-transform z-10"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
@@ -711,7 +711,7 @@ export default function ExtractedImagePicker({
                     )}
 
                     {/* 버튼 영역 */}
-                    <div className="absolute bottom-0 left-0 right-0 flex border-t-2 border-[#1A1A1A]">
+                    <div className="flex border-t-2 border-[#1A1A1A]">
                       <button
                         type="button"
                         onClick={(e) => {
