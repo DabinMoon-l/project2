@@ -64,6 +64,13 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
     return () => document.body.removeAttribute('data-hide-nav');
   }, [isOpen]);
 
+  // 모달 열림 시 body 스크롤 방지
+  useEffect(() => {
+    if (!isOpen) return;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, [isOpen]);
+
   const displaySettings = settings || DEFAULT_SETTINGS;
 
   const milestoneInfo = profile ? calculateMilestoneInfo(profile.totalExp, profile.lastGachaExp || 0) : null;
@@ -184,7 +191,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
             <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
 
             {/* 스크롤 영역 */}
-            <div className="relative z-10 overflow-y-auto max-h-[85vh]">
+            <div className="relative z-10 overflow-y-auto overscroll-contain max-h-[85vh]">
               {/* 드래그 핸들 */}
               <div className="flex justify-center pt-3 pb-1">
                 <div className="w-10 h-1 bg-white/40 rounded-full" />

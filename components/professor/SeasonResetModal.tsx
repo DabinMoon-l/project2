@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '@/styles/themes/useTheme';
 import {
@@ -68,6 +68,13 @@ export function SeasonResetModal({
   const { theme } = useTheme();
   const [confirmText, setConfirmText] = useState('');
 
+  // 모달 열림 시 body 스크롤 방지
+  useEffect(() => {
+    if (!isOpen) return;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, [isOpen]);
+
   // 확인용 텍스트
   const requiredText = targetClass ? `${targetClass}반 리셋` : '전체 리셋';
   const isConfirmEnabled = confirmText === requiredText && !loading;
@@ -96,7 +103,7 @@ export function SeasonResetModal({
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-md mx-auto z-50 rounded-2xl p-5 max-h-[85vh] overflow-y-auto"
+            className="fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-md mx-auto z-50 rounded-2xl p-5 max-h-[85vh] overflow-y-auto overscroll-contain"
             style={{ backgroundColor: theme.colors.background }}
           >
             {/* 경고 아이콘 */}

@@ -172,7 +172,7 @@ export default function KeywordBottomSheet({
             </div>
 
             {/* 키워드 목록 */}
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+            <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-5">
               {isLoading ? (
                 <div className="flex flex-col items-center justify-center py-8">
                   <div className="w-8 h-8 border-2 border-[#1A1A1A] border-t-transparent rounded-full animate-spin mb-3" />

@@ -54,6 +54,13 @@ export default function StyleProfileModal({
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<StyleProfileData | null>(null);
 
+  // 모달 열림 시 body 스크롤 방지
+  useEffect(() => {
+    if (!isOpen) return;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, [isOpen]);
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -96,7 +103,7 @@ export default function StyleProfileModal({
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.9, opacity: 0 }}
-          className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[80vh] overflow-y-auto"
+          className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[80vh] overflow-y-auto overscroll-contain"
           onClick={(e) => e.stopPropagation()}
         >
           {/* 헤더 */}

@@ -83,6 +83,14 @@ export default function ExtractedImagePicker({
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
 
+  // body 스크롤 방지
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, []);
+
   // ============================================================
   // 드래그 이벤트 핸들러
   // ============================================================
@@ -567,7 +575,7 @@ export default function ExtractedImagePicker({
           </div>
 
           {/* 미리보기 이미지 */}
-          <div className="flex-1 overflow-auto p-4 bg-[#2A2A2A] flex items-center justify-center">
+          <div className="flex-1 overflow-auto overscroll-contain p-4 bg-[#2A2A2A] flex items-center justify-center">
             <img
               src={croppedImage.dataUrl}
               alt="크롭된 이미지"
@@ -652,7 +660,14 @@ export default function ExtractedImagePicker({
         </div>
 
         {/* 내용 — 4개(2행)까지 보이고 이후 스크롤 */}
-        <div className="overflow-y-auto p-4" style={{ maxHeight: 'min(55vh, 500px)' }}>
+        <div
+          className="overflow-y-auto overscroll-contain p-4"
+          style={{
+            maxHeight: 'min(55vh, 500px)',
+            // 5개+ 이미지일 때 스크롤바 항상 표시
+            ...(displayImages.length > 4 ? { scrollbarWidth: 'thin', scrollbarColor: '#999 transparent' } : {}),
+          }}
+        >
           {displayImages.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12">
               <svg className="w-16 h-16 mb-4 text-[#D4CFC4]" fill="none" stroke="currentColor" viewBox="0 0 24 24">

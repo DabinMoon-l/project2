@@ -228,7 +228,7 @@ export default function BottomSheet({
             {/* 본문 */}
             <div
               className={`
-                px-6 py-4 overflow-y-auto
+                px-6 py-4 overflow-y-auto overscroll-contain
                 ${height === 'auto' ? 'max-h-[70vh]' : 'flex-1'}
               `}
             >

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -81,6 +81,12 @@ export default function ReviewPractice({
   headerTitle = '복습',
   showFeedback = true,
 }: ReviewPracticeProps) {
+  // 전체화면 오버레이 body 스크롤 방지
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
+
   // 현재 화면 단계
   const [phase, setPhase] = useState<Phase>('practice');
   // 현재 문제 인덱스
@@ -562,7 +568,7 @@ export default function ReviewPractice({
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="fixed inset-0 z-[60] overflow-y-auto"
+        className="fixed inset-0 z-[60] overflow-y-auto overscroll-contain"
         style={{ backgroundColor: '#F5F0E8' }}
       >
         {/* 헤더 */}
@@ -1466,7 +1472,7 @@ export default function ReviewPractice({
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="fixed inset-0 z-[60] overflow-y-auto"
+        className="fixed inset-0 z-[60] overflow-y-auto overscroll-contain"
         style={{ backgroundColor: '#F5F0E8' }}
       >
         {/* 헤더 */}
@@ -1542,7 +1548,7 @@ export default function ReviewPractice({
               {customFolders.length > 0 && (
                 <div className="mb-4">
                   <p className="text-xs text-[#5C5C5C] mb-2">기존 폴더 선택</p>
-                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                  <div className="space-y-1 max-h-32 overflow-y-auto overscroll-contain">
                     {customFolders.map(folder => (
                       <button
                         key={folder.id}
@@ -1702,7 +1708,7 @@ export default function ReviewPractice({
       </header>
 
       {/* 문제 영역 */}
-      <main className="px-4 py-6 pb-40 overflow-y-auto flex-1 min-h-0">
+      <main className="px-4 py-6 pb-40 overflow-y-auto overscroll-contain flex-1 min-h-0">
         <AnimatePresence mode="wait">
           <motion.div
             key={currentGroup?.groupId || currentItem?.id || `group-${currentIndex}`}

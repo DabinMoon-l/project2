@@ -159,7 +159,7 @@ export default function PageSelectionModal({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="flex-1 overflow-y-auto p-4"
+            className="flex-1 overflow-y-auto overscroll-contain p-4"
           >
             {isLoading ? (
               <div className="flex flex-col items-center justify-center h-full">

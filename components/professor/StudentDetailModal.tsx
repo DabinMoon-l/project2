@@ -79,6 +79,13 @@ export default function StudentDetailModal({
   }, [student, onLoadDetail]);
 
   const isOpen = student !== null;
+
+  // 모달 열림 시 body 스크롤 방지
+  useEffect(() => {
+    if (!isOpen) return;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, [isOpen]);
   const classColor = student ? CLASS_COLORS[student.classId] : '#6366F1';
 
   return (
@@ -160,7 +167,7 @@ export default function StudentDetailModal({
             </div>
 
             {/* 스크롤 영역 */}
-            <div className="flex-1 overflow-y-auto px-5 py-4">
+            <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4">
               {loading ? (
                 // 로딩
                 <div className="flex items-center justify-center py-12">

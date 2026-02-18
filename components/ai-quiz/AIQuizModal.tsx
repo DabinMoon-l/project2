@@ -693,7 +693,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz }: AIQuizModa
             </div>
 
             {/* 본문 */}
-            <div className="px-5 py-4 max-h-[70vh] overflow-y-auto space-y-5">
+            <div className="px-5 py-4 max-h-[70vh] overflow-y-auto overscroll-contain space-y-5">
               {/* 퀴즈 이름 */}
               <div>
                 <label className="block text-sm font-semibold text-[#1A1A1A] mb-2">

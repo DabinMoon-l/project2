@@ -176,7 +176,7 @@ function MediaDrawer({
           </button>
           <span className="font-bold text-white/90 text-sm">미디어 · 파일</span>
         </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-5">
+        <div className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-5">
           {images.length > 0 && (
             <div>
               <p className="text-[11px] font-bold text-white/50 mb-2 tracking-wider">이미지</p>
@@ -258,6 +258,13 @@ export default function AnnouncementChannel() {
     if (showModal) document.body.setAttribute('data-hide-nav', '');
     else document.body.removeAttribute('data-hide-nav');
     return () => document.body.removeAttribute('data-hide-nav');
+  }, [showModal]);
+
+  // ─── 모달 열림 시 body 스크롤 방지
+  useEffect(() => {
+    if (!showModal) return;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
   }, [showModal]);
 
   // ─── 공지 구독
@@ -467,7 +474,7 @@ export default function AnnouncementChannel() {
 
                 {/* ── 메시지 영역 ── */}
                 <div
-                  className="relative z-10 flex-1 overflow-y-auto px-3 py-4"
+                  className="relative z-10 flex-1 overflow-y-auto overscroll-contain px-3 py-4"
                   onClick={() => setShowEmojiPicker(null)}
                 >
                   {!announcements.length ? (

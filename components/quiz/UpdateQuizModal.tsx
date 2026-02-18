@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   doc,
@@ -100,6 +100,13 @@ export default function UpdateQuizModal({
       combinedIndex?: number;
     }[];
   } | null>(null);
+
+  // 모달 열림 시 body 스크롤 방지
+  useEffect(() => {
+    if (!isOpen) return;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, [isOpen]);
 
   const questions = updateInfo.updatedQuestions;
 
@@ -436,7 +443,7 @@ export default function UpdateQuizModal({
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="w-full max-w-md bg-[#F5F0E8] border-2 border-[#1A1A1A] max-h-[90vh] overflow-auto"
+          className="w-full max-w-md bg-[#F5F0E8] border-2 border-[#1A1A1A] max-h-[90vh] overflow-auto overscroll-contain"
         >
           {/* 헤더 */}
           <div className="p-4 border-b border-[#1A1A1A]">
@@ -577,7 +584,7 @@ export default function UpdateQuizModal({
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="w-full max-w-md bg-[#F5F0E8] border-2 border-[#1A1A1A] max-h-[90vh] overflow-auto"
+        className="w-full max-w-md bg-[#F5F0E8] border-2 border-[#1A1A1A] max-h-[90vh] overflow-auto overscroll-contain"
       >
         {/* 헤더 */}
         <div className="p-4 border-b border-[#1A1A1A] flex items-center justify-between">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -42,6 +42,13 @@ export default function BoardManagementModal({
     courseId,
     classFilter === 'all' ? undefined : classFilter
   );
+
+  // 모달 열림 시 body 스크롤 방지
+  useEffect(() => {
+    if (!isOpen) return;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, [isOpen]);
 
   // 고정글 가로 스크롤 ref
   const pinnedScrollRef = useRef<HTMLDivElement>(null);
@@ -141,7 +148,7 @@ export default function BoardManagementModal({
           </div>
 
           {/* 컨텐츠 영역 */}
-          <div className="flex-1 overflow-y-auto p-4">
+          <div className="flex-1 overflow-y-auto overscroll-contain p-4">
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
                 <div className="text-[#5C5C5C]">로딩 중...</div>

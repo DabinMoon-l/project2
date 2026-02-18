@@ -538,6 +538,13 @@ export default function QuizStatsModal({
     };
   }, [isOpen]);
 
+  // 모달 열림 시 body 스크롤 방지
+  useEffect(() => {
+    if (!isOpen) return;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, [isOpen]);
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -1065,7 +1072,7 @@ export default function QuizStatsModal({
         </div>
 
         {/* 컨텐츠 */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto overscroll-contain">
           {loading && (
             <div className="flex items-center justify-center py-12">
               <div className="w-8 h-8 border-2 border-[#1A1A1A] border-t-transparent animate-spin" />

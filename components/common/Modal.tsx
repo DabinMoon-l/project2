@@ -245,7 +245,7 @@ export default function Modal({
             )}
 
             {/* 본문 */}
-            <div className="px-6 py-4 max-h-[60vh] overflow-y-auto">
+            <div className="px-6 py-4 max-h-[60vh] overflow-y-auto overscroll-contain">
               {children}
             </div>
 

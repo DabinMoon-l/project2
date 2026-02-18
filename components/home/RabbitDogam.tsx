@@ -37,6 +37,13 @@ export default function RabbitDogam({
     return () => document.body.removeAttribute('data-hide-nav');
   }, [isOpen]);
 
+  // 도감 열림 시 body 스크롤 방지
+  useEffect(() => {
+    if (!isOpen) return;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, [isOpen]);
+
   const { rabbits: allRabbits, loading: rabbitsLoading } = useRabbitsForCourse(courseId);
   const { holdings, loading: holdingsLoading } = useRabbitHoldings(userId);
   const [selectedRabbitId, setSelectedRabbitId] = useState<number | null>(null);
@@ -101,7 +108,7 @@ export default function RabbitDogam({
             </div>
 
             {/* 본문 */}
-            <div className="relative z-10 flex-1 overflow-y-auto p-4">
+            <div className="relative z-10 flex-1 overflow-y-auto overscroll-contain p-4">
               {loading ? (
                 <div className="text-center py-8 text-white/50">로딩 중...</div>
               ) : selectedRabbitId !== null && selectedRabbit && selectedHolding ? (
@@ -246,7 +253,7 @@ function ButlerList({
   return (
     <div className="mb-4 p-4 bg-white/10 border border-white/15 rounded-xl">
       <p className="text-base font-bold mb-3 text-white">보유 집사</p>
-      <div className="max-h-[200px] overflow-y-auto space-y-3">
+      <div className="max-h-[200px] overflow-y-auto overscroll-contain space-y-3">
         {groups.map(([left, right], gi) => (
           <div key={gi}>
             {gi > 0 && <hr className="border-white/15 mb-3" />}
