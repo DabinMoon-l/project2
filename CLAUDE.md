@@ -110,6 +110,11 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 **경험치 흐름:**
 - 클라이언트에서 `totalExp`, `rank`, `role`, `badges` 직접 수정 불가
 - Cloud Functions에서만 검증 후 지급 (Firestore Security Rules로 강제)
+- EXP 토스트 (`ExpToast.tsx`): Firestore `onSnapshot`으로 실시간 `totalExp` 구독 → `RealtimeExpContext`로 공유. 토스트 아이템이 항상 최신 값 사용 (race condition 방지)
+
+**복습 네비게이션:**
+- 퀴즈탭 복습 버튼 → `/review/library/[id]?from=quiz` (퀴즈 풀이 `/quiz/[id]`가 아님)
+- 오답만 복습 → `/review/wrong/[id]?from=quiz`
 
 ### Cloud Functions 모듈 (`functions/src/`)
 
@@ -126,6 +131,7 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 | `imageCropping.ts` | 이미지 크롭 → Firebase Storage 업로드 |
 | `pptx.ts` | PPTX 업로드 → Cloud Run 트리거 |
 | `rabbitGacha.ts` | 토끼 뽑기 2단계 (spinRabbitGacha → claimGachaRabbit) |
+| `rabbitLevelUp.ts` | 토끼 레벨업 (levelUpRabbit) — 스탯 랜덤 증가 |
 | `rabbitEquip.ts` | 토끼 장착/해제 (equipRabbit, unequipRabbit) |
 | `onboardingRabbit.ts` | 온보딩 완료 시 기본 토끼(#0) 자동 지급 (Firestore trigger) |
 | `migrateDefaultRabbit.ts` | 기존 유저 기본 토끼 일괄 지급 (1회성, 교수님 전용) |
@@ -137,6 +143,7 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 | `professorQuizAnalysis.ts` | 교수 대시보드 분석 데이터 |
 | `courseScope.ts` | 과목/반 범위 쿼리 유틸 |
 | `utils/shardedCounter.ts` | 분산 카운터 (동시쓰기 대응) |
+| `utils/rabbitStats.ts` | 토끼 기본 스탯·레벨업 스탯 증가 계산 |
 
 ## UI 테마 시스템
 
@@ -259,14 +266,36 @@ generateScoreSummary(result)                // 텍스트 요약
 **핵심 데이터 모델:**
 - `users/{uid}` 필드: `equippedRabbits: Array<{rabbitId, courseId}>` (max 2), `lastGachaExp`
 - `rabbits/{courseId_rabbitId}`: 토끼 문서 (`name` 영구, `firstDiscovererUserId`, `discovererCount`, `discoverers[]`)
-- `users/{uid}/rabbitHoldings/{courseId_rabbitId}`: 발견 정보 (`discoveryOrder`, `discoveredAt`)
+- `users/{uid}/rabbitHoldings/{courseId_rabbitId}`: 발견 정보 (`discoveryOrder`, `discoveredAt`, `level`, `stats: {hp, atk, def}`)
 
 **관련 파일:**
-- CF: `functions/src/rabbitGacha.ts`, `functions/src/rabbitEquip.ts`, `functions/src/onboardingRabbit.ts`
-- 훅: `lib/hooks/useRabbit.ts` (useRabbitHoldings, useRabbitDoc, useRabbitsForCourse)
-- UI: `components/home/CharacterBox.tsx` (홈 히어로, 2마리 표시), `GachaResultModal.tsx`, `RabbitDogam.tsx` (도감 + 데려오기)
-- 유틸: `lib/utils/rabbitDisplayName.ts`
+- CF: `functions/src/rabbitGacha.ts`, `functions/src/rabbitLevelUp.ts`, `functions/src/rabbitEquip.ts`, `functions/src/onboardingRabbit.ts`
+- 훅: `lib/hooks/useRabbit.ts` (useRabbitHoldings, useRabbitDoc, useRabbitsForCourse, getRabbitStats)
+- UI: `components/home/CharacterBox.tsx` (홈 히어로, 2마리 궤도 캐러셀), `GachaResultModal.tsx`, `RabbitDogam.tsx` (도감 + 데려오기), `LevelUpBottomSheet.tsx`, `MilestoneChoiceModal.tsx`
+- 유틸: `lib/utils/rabbitDisplayName.ts`, `lib/utils/milestone.ts`, `lib/utils/rabbitProfile.ts`
 - 마이그레이션: `functions/src/migrateRabbitSystem.ts`, `functions/src/migrateDefaultRabbit.ts`
+
+### 마일스톤 시스템 (50XP 보상 선택)
+
+50XP 달성마다 `MilestoneChoiceModal`이 자동으로 표시되어 보상을 선택:
+- **토끼 뽑기**: `spinRabbitGacha` → `claimGachaRabbit` (2단계)
+- **토끼 레벨업**: `LevelUpBottomSheet` → `levelUpRabbit` CF 호출
+
+**마일스톤 계산** (`lib/utils/milestone.ts`):
+- `getPendingMilestones(totalExp, lastGachaExp)`: 미수령 마일스톤 횟수
+- `getExpBarDisplay(totalExp, lastGachaExp)`: EXP 바 표시용 (current/max, 오버플로우 여부)
+- 마일스톤 자동 표시: `CharacterBox`에서 `pendingCount`가 0→>0이 되면 600ms 후 자동 오픈
+
+**레벨업 바텀시트** (`components/home/LevelUpBottomSheet.tsx`):
+- 글래스모피즘 UI (home-bg.jpg + backdrop-blur-2xl)
+- 토끼 선택: 그리드 레이아웃 (최대 4줄 × 20마리), 각 줄마다 좌우 화살표 스크롤
+- 레벨업 전: Lv.N 스탯 → Lv.N+1 ? 비교 표시
+- 레벨업 후: 확정 스탯 + 증가량 표시 (흰색 텍스트 유지, 골드 변경 없음)
+
+**토끼 레벨/스탯** (`lib/hooks/useRabbit.ts`):
+- `getRabbitStats(holding)`: holding의 `level`, `stats` 읽기 (기본 Lv.1, HP/ATK/DEF 10)
+- CF `levelUpRabbit`: level +1, HP/ATK/DEF 각각 1~3 랜덤 증가 (`utils/rabbitStats.ts`)
+- 홀딩 데이터: `rabbitHoldings/{id}` 문서에 `level`, `stats: {hp, atk, def}` 필드
 
 ### 캐릭터/게이미피케이션
 
@@ -335,7 +364,10 @@ await setDoc(doc(db, 'users', uid), { onboardingCompleted: true, updatedAt: serv
 
 ### 홈 화면 구조
 
-- `CharacterBox`: 캐릭터 히어로 (60vh), 배경 이미지, XP 배지, 도감 버튼, EXP 바 (게임 HUD 스타일 `bg-black/40 rounded-full backdrop-blur-sm`)
+- `CharacterBox`: 캐릭터 히어로, 배경 이미지, XP 배지, 도감 버튼, EXP 바 (게임 HUD 스타일 `bg-black/40 rounded-full backdrop-blur-xl`)
+  - 2마리 궤도 캐러셀 (타원 공전, Framer Motion `useSpring`/`useTransform`)
+  - 빈 슬롯은 "?" 플레이스홀더 표시, 스탯은 "-" 표시
+  - 마일스톤 버튼 (EXP 바 좌측, pendingCount > 0일 때 표시)
 - 바텀시트: 프로필 닉네임, 공지 채널, 랭킹 섹션
 - 홈은 `h-screen overflow-hidden` 컨테이너로 스크롤 방지 (body style 직접 조작 금지)
 - **z-index 주의**: 바텀시트 콘텐츠 영역이 `relative z-10` stacking context를 생성. 그 안의 모달(공지 채널 등)은 `createPortal(... , document.body)`로 body에 렌더링해야 CharacterBox의 z-20 EXP 바 위에 표시됨
@@ -371,6 +403,9 @@ firebase deploy --only functions
 
 `rabbits/` 디렉토리에 80개 PNG 파일 (rabbit-001.png ~ rabbit-080.png). 81~100번은 삭제됨.
 주의: `rabbit-092-.png` 파일명에 불필요한 대시(-) 포함.
+
+**rabbitId ↔ 파일명 매핑**: rabbitId는 0~79 (0-indexed), 파일명은 001~080 (1-indexed).
+`getRabbitProfileUrl(rabbitId)` → `rabbit-${(rabbitId+1).padStart(3,'0')}-pf.png` (`lib/utils/rabbitProfile.ts`)
 
 ### Cloud Run PPTX 서비스
 
