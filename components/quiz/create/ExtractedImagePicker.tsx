@@ -652,7 +652,7 @@ export default function ExtractedImagePicker({
         </div>
 
         {/* 내용 — 4개(2행)까지 보이고 이후 스크롤 */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-4" style={{ maxHeight: 'calc(80vh - 100px)' }}>
+        <div className="overflow-y-auto p-4" style={{ maxHeight: 'min(55vh, 500px)' }}>
           {displayImages.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12">
               <svg className="w-16 h-16 mb-4 text-[#D4CFC4]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
