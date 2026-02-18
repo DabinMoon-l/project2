@@ -6,6 +6,7 @@
  */
 
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { GoogleAuth } from "google-auth-library";
 
@@ -154,5 +155,54 @@ export const cleanupOldQuizJobs = onSchedule(
 
     await batch.commit();
     console.log(`${oldJobsSnapshot.size}개의 오래된 quizJobs 삭제 완료`);
+  }
+);
+
+/**
+ * PPT → PDF 직접 변환 (Callable Function)
+ * Storage 미경유 — base64로 PPTX 전송, base64 PDF 수신
+ */
+export const convertPptxToPdf = onCall(
+  { region: REGION, timeoutSeconds: 300, memory: "512MiB" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+    }
+
+    const { pptxBase64 } = request.data as { pptxBase64: string };
+    if (!pptxBase64) {
+      throw new HttpsError("invalid-argument", "pptxBase64가 필요합니다.");
+    }
+
+    // Cloud Run 서비스 호출
+    const cloudRunUrl = process.env.PPTX_CLOUD_RUN_URL;
+    if (!cloudRunUrl) {
+      throw new HttpsError("internal", "PPTX_CLOUD_RUN_URL 환경 변수가 설정되지 않았습니다.");
+    }
+
+    const auth = new GoogleAuth();
+    const client = await auth.getIdTokenClient(cloudRunUrl);
+    const idToken = await client.idTokenProvider.fetchIdToken(cloudRunUrl);
+
+    const response = await fetch(`${cloudRunUrl}/convert-to-pdf-direct`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ pptxBase64 }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new HttpsError("internal", `PDF 변환 실패: ${errorText}`);
+    }
+
+    const result = await response.json() as { success: boolean; pdfBase64: string };
+    if (!result.success || !result.pdfBase64) {
+      throw new HttpsError("internal", "PDF 변환 실패");
+    }
+
+    return { pdfBase64: result.pdfBase64 };
   }
 );

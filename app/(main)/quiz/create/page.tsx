@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '@/lib/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { auth, db, storage, functions } from '@/lib/firebase';
 import { compressImage, formatFileSize } from '@/lib/imageUtils';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse, useUser } from '@/lib/contexts';
@@ -27,9 +28,11 @@ import {
   type QuizMeta,
 } from '@/components/quiz/create';
 import ImageCropper from '@/components/quiz/create/ImageCropper';
+import ImageRegionSelector, { type UploadedFileItem } from '@/components/quiz/create/ImageRegionSelector';
 import PageSelectionModal from '@/components/ai-quiz/PageSelectionModal';
 import type { ParseResult, ParsedQuestion } from '@/lib/ocr';
 import * as pdfjsLib from 'pdfjs-dist';
+
 
 // PDF.js worker 설정
 if (typeof window !== 'undefined') {
@@ -85,8 +88,17 @@ export default function QuizCreatePage() {
   // OCR 대상 파일
   const [ocrTargetFile, setOcrTargetFile] = useState<File | null>(null);
 
-  // 추출된 이미지 목록 (퀴즈 생성 세션 동안만 유지)
-  const [extractedImages, setExtractedImages] = useState<Array<{ id: string; dataUrl: string; sourceFileName?: string }>>([]);
+  // 추출된 이미지 목록 (localStorage에 영구 저장)
+  const EXTRACTED_IMAGES_KEY = 'quiz_extracted_images';
+  const [extractedImages, setExtractedImages] = useState<Array<{ id: string; dataUrl: string; sourceFileName?: string }>>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const saved = localStorage.getItem('quiz_extracted_images');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
   // 자동 추출 이미지 매핑 (문제 번호 -> 이미지 데이터)
   const [autoExtractedImages, setAutoExtractedImages] = useState<Map<number, string>>(new Map());
@@ -121,6 +133,12 @@ export default function QuizCreatePage() {
   // 유효성 검사 에러
   const [metaErrors, setMetaErrors] = useState<{ title?: string; tags?: string }>({});
 
+  // 이미지 추출 모드 상태
+  const [showImageExtractor, setShowImageExtractor] = useState(false);
+  const [extractorFiles, setExtractorFiles] = useState<UploadedFileItem[]>([]);
+  const [isExtractProcessing, setIsExtractProcessing] = useState(false);
+  const extractFileInputRef = useRef<HTMLInputElement>(null);
+
   // 초안 저장/복원 관련 상태
   const [showExitModal, setShowExitModal] = useState(false);
   const [showResumeModal, setShowResumeModal] = useState(false);
@@ -128,6 +146,19 @@ export default function QuizCreatePage() {
 
   // localStorage 키
   const DRAFT_KEY = 'quiz_create_draft';
+
+  // extractedImages 변경 시 localStorage에 동기화
+  useEffect(() => {
+    try {
+      if (extractedImages.length > 0) {
+        localStorage.setItem(EXTRACTED_IMAGES_KEY, JSON.stringify(extractedImages));
+      } else {
+        localStorage.removeItem(EXTRACTED_IMAGES_KEY);
+      }
+    } catch (err) {
+      console.error('추출 이미지 저장 실패:', err);
+    }
+  }, [extractedImages]);
 
   /**
    * 데이터 정리 (undefined, null, 빈 배열 제거)
@@ -284,6 +315,93 @@ export default function QuizCreatePage() {
       reader.readAsDataURL(file);
     });
   }, []);
+
+  /**
+   * Blob을 dataUrl로 변환
+   */
+  const blobToDataUrl = useCallback((blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }, []);
+
+  /**
+   * 이미지 추출용 파일 선택 핸들러
+   * 이미지/PDF/PPT를 받아서 ImageRegionSelector에 전달
+   */
+  const handleExtractFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileArray = Array.from(e.target.files || []); // value 리셋 전에 복사
+    if (fileArray.length === 0) return;
+    e.target.value = ''; // 같은 파일 재선택 허용
+
+    setIsExtractProcessing(true);
+    const items: UploadedFileItem[] = [];
+
+    try {
+      for (const file of fileArray) {
+        if (file.name.endsWith('.pptx') || file.type.includes('presentation')) {
+          // PPT → Cloud Run LibreOffice로 PDF 변환 후 ImageRegionSelector에 전달
+          try {
+            // 1. Firebase ID 토큰 획득
+            const idToken = await auth.currentUser!.getIdToken();
+
+            // 2. Cloud Run 직접 호출 (CF 미경유, 바이너리 전송)
+            const formData = new FormData();
+            formData.append('file', file);
+            const resp = await fetch(
+              `${process.env.NEXT_PUBLIC_PPTX_CLOUD_RUN_URL}/convert-pdf`,
+              {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${idToken}` },
+                body: formData,
+              }
+            );
+
+            if (!resp.ok) {
+              const errData = await resp.json().catch(() => ({ error: resp.statusText }));
+              throw new Error(errData.error || 'PDF 변환 실패');
+            }
+
+            // 3. PDF 바이너리 직접 수신 → File 객체
+            const pdfBlob = await resp.blob();
+            const pdfFile = new File(
+              [pdfBlob],
+              file.name.replace(/\.pptx$/i, '.pdf'),
+              { type: 'application/pdf' }
+            );
+
+            // 4. PDF로 ImageRegionSelector에 전달
+            items.push({
+              id: `pdf-${Date.now()}-${file.name}`,
+              file: pdfFile,
+              preview: 'pdf',
+            });
+          } catch (err) {
+            console.error('PPT 변환 실패:', err);
+            alert('PPT 파일을 변환하는 중 오류가 발생했습니다. PDF로 변환 후 업로드해주세요.');
+          }
+        } else if (file.type === 'application/pdf') {
+          items.push({ id: `pdf-${Date.now()}-${file.name}`, file, preview: 'pdf' });
+        } else if (file.type.startsWith('image/')) {
+          items.push({
+            id: `img-${Date.now()}-${file.name}`,
+            file,
+            preview: await blobToDataUrl(file),
+          });
+        }
+      }
+
+      if (items.length > 0) {
+        setExtractorFiles(items);
+        setShowImageExtractor(true);
+      }
+    } finally {
+      setIsExtractProcessing(false);
+    }
+  }, [blobToDataUrl, user]);
 
   /**
    * 파일 선택 핸들러 - 이미지는 바로 OCR, PDF는 페이지 선택 모달 표시
@@ -1450,6 +1568,63 @@ export default function QuizCreatePage() {
                 />
               )}
 
+              {/* 이미지 추출 섹션 */}
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-[#1A1A1A]" />
+                </div>
+                <div className="relative flex justify-center">
+                  <span className="px-3 text-sm text-[#5C5C5C]" style={{ backgroundColor: '#F5F0E8' }}>또는</span>
+                </div>
+              </div>
+
+              <div className="bg-[#EDEAE4] p-3 border border-[#1A1A1A]">
+                <p className="text-xs text-[#5C5C5C]">
+                  <strong className="text-[#1A1A1A]">이미지 추출:</strong> 이미지/PDF/PPT에서 원하는 영역을 크롭하여 문제에 삽입합니다.
+                </p>
+              </div>
+
+              <input
+                ref={extractFileInputRef}
+                type="file"
+                accept="image/*,application/pdf,.pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                multiple
+                onChange={handleExtractFileSelect}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => extractFileInputRef.current?.click()}
+                disabled={isOCRProcessing || isExtractProcessing}
+                className="w-full py-3 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isExtractProcessing ? (
+                  <>
+                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    파일 처리 중...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    이미지 추출 (이미지 / PDF / PPT)
+                  </>
+                )}
+              </button>
+
+              {/* 이전에 추출한 이미지가 있으면 표시 */}
+              {extractedImages.length > 0 && (
+                <div className="bg-[#E8F5E9] p-3 border border-[#1A6B1A]">
+                  <p className="text-xs text-[#1A6B1A] font-bold">
+                    추출된 이미지 {extractedImages.length}개가 있습니다.
+                  </p>
+                </div>
+              )}
+
               {/* 직접 입력 버튼 */}
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
@@ -1508,6 +1683,7 @@ export default function QuizCreatePage() {
                     userRole={profile?.role === 'professor' ? 'professor' : 'student'}
                     courseId={userCourseId || undefined}
                     extractedImages={extractedImages}
+                    onAddExtracted={handleExtractImage}
                   />
                 )}
               </AnimatePresence>
@@ -1958,6 +2134,20 @@ export default function QuizCreatePage() {
         isLoading={isLoadingDocument}
         loadingMessage={pdfLoadingMessage}
       />
+
+      {/* 이미지 추출 모달 (ImageRegionSelector) */}
+      {showImageExtractor && extractorFiles.length > 0 && (
+        <ImageRegionSelector
+          uploadedFiles={extractorFiles}
+          extractedImages={extractedImages}
+          onExtract={handleExtractImage}
+          onRemoveExtracted={handleRemoveExtractedImage}
+          onClose={() => {
+            setShowImageExtractor(false);
+            setExtractorFiles([]);
+          }}
+        />
+      )}
 
     </div>
   );

@@ -37,6 +37,33 @@ export interface UpdatedQuestion {
   correctAnswer: string;
   explanation?: string;
   questionUpdatedAt: Timestamp;
+  // 이미지
+  image?: string;
+  imageUrl?: string;
+  // 제시문
+  passage?: string;
+  passageType?: 'text' | 'korean_abc' | 'mixed';
+  passageImage?: string;
+  koreanAbcItems?: string[];
+  passageMixedExamples?: any[];
+  commonQuestion?: string;
+  // 보기
+  mixedExamples?: any[];
+  bogi?: { questionText?: string; items: Array<{ label: string; content: string }> } | null;
+  subQuestionOptions?: string[];
+  subQuestionOptionsType?: 'text' | 'labeled' | 'mixed';
+  subQuestionImage?: string;
+  // 발문
+  passagePrompt?: string;
+  bogiQuestionText?: string;
+  // 결합형
+  combinedGroupId?: string;
+  combinedIndex?: number;
+  combinedTotal?: number;
+  // 기타
+  hasMultipleAnswers?: boolean;
+  choiceExplanations?: string[];
+  quizCreatorId?: string;
 }
 
 /**
@@ -150,32 +177,102 @@ export const useQuizUpdate = (): UseQuizUpdateReturn => {
         if (questionUpdatedAt) {
           const updatedTime = questionUpdatedAt.toMillis ? questionUpdatedAt.toMillis() : 0;
 
+          // 공통 필드 추출 헬퍼
+          const extractFields = (): UpdatedQuestion => ({
+            questionId: q.id,
+            questionText: q.text || q.question || '',
+            questionType: q.type,
+            choices: q.choices || q.options,
+            correctAnswer: q.answer?.toString() || q.correctAnswer?.toString() || '',
+            explanation: q.explanation,
+            questionUpdatedAt,
+            // 이미지
+            image: q.image || undefined,
+            imageUrl: q.imageUrl || undefined,
+            // 제시문
+            passage: q.passage || undefined,
+            passageType: q.passageType || undefined,
+            passageImage: q.passageImage || undefined,
+            koreanAbcItems: q.koreanAbcItems || undefined,
+            passageMixedExamples: q.passageMixedExamples || undefined,
+            commonQuestion: q.commonQuestion || undefined,
+            // 보기
+            mixedExamples: q.mixedExamples || undefined,
+            bogi: q.bogi || undefined,
+            subQuestionOptions: q.subQuestionOptions || undefined,
+            subQuestionOptionsType: q.subQuestionOptionsType || undefined,
+            subQuestionImage: q.subQuestionImage || undefined,
+            // 발문
+            passagePrompt: q.passagePrompt || undefined,
+            bogiQuestionText: q.bogiQuestionText || undefined,
+            // 결합형
+            combinedGroupId: q.combinedGroupId || undefined,
+            combinedIndex: q.combinedIndex,
+            combinedTotal: q.combinedTotal,
+            // 기타
+            hasMultipleAnswers: q.hasMultipleAnswers || undefined,
+            choiceExplanations: q.choiceExplanations || undefined,
+            quizCreatorId: quizData.creatorId || undefined,
+          });
+
           if (!userScore) {
             // 새로 추가된 문제
-            updatedQuestions.push({
-              questionId: q.id,
-              questionText: q.text || q.question || '',
-              questionType: q.type,
-              choices: q.choices || q.options,
-              correctAnswer: q.answer?.toString() || q.correctAnswer?.toString() || '',
-              explanation: q.explanation,
-              questionUpdatedAt,
-            });
+            updatedQuestions.push(extractFields());
           } else {
             const answeredTime = userScore.answeredAt?.toMillis ? userScore.answeredAt.toMillis() : 0;
 
             if (updatedTime > answeredTime) {
               // 수정된 문제
-              updatedQuestions.push({
-                questionId: q.id,
-                questionText: q.text || q.question || '',
-                questionType: q.type,
-                choices: q.choices || q.options,
-                correctAnswer: q.answer?.toString() || q.correctAnswer?.toString() || '',
-                explanation: q.explanation,
-                questionUpdatedAt,
-              });
+              updatedQuestions.push(extractFields());
             }
+          }
+        }
+      }
+
+      // 결합형 그룹: 첫 번째 하위문제(combinedIndex===0)의 공통 지문을 같은 그룹 후속 문제에 전파
+      const passageByGroup = new Map<string, {
+        passage?: string; passageType?: 'text' | 'korean_abc' | 'mixed';
+        passageImage?: string; koreanAbcItems?: string[];
+        passageMixedExamples?: any[]; commonQuestion?: string;
+      }>();
+      for (const q of updatedQuestions) {
+        if (q.combinedGroupId && q.combinedIndex === 0) {
+          passageByGroup.set(q.combinedGroupId, {
+            passage: q.passage, passageType: q.passageType,
+            passageImage: q.passageImage, koreanAbcItems: q.koreanAbcItems,
+            passageMixedExamples: q.passageMixedExamples, commonQuestion: q.commonQuestion,
+          });
+        }
+      }
+      // combinedIndex===0이 updatedQuestions에 없을 수 있음 → 원본 questions에서 보충
+      for (const q of updatedQuestions) {
+        if (q.combinedGroupId && !passageByGroup.has(q.combinedGroupId)) {
+          const firstInGroup = questions.find(
+            (orig: any) => orig.combinedGroupId === q.combinedGroupId && orig.combinedIndex === 0
+          );
+          if (firstInGroup) {
+            passageByGroup.set(q.combinedGroupId, {
+              passage: firstInGroup.passage || undefined,
+              passageType: firstInGroup.passageType || undefined,
+              passageImage: firstInGroup.passageImage || undefined,
+              koreanAbcItems: firstInGroup.koreanAbcItems || undefined,
+              passageMixedExamples: firstInGroup.passageMixedExamples || undefined,
+              commonQuestion: firstInGroup.commonQuestion || undefined,
+            });
+          }
+        }
+      }
+      // 후속 문제에 공통 지문 전파
+      for (const q of updatedQuestions) {
+        if (q.combinedGroupId && (q.combinedIndex ?? 0) > 0) {
+          const groupPassage = passageByGroup.get(q.combinedGroupId);
+          if (groupPassage) {
+            if (!q.passage && groupPassage.passage) q.passage = groupPassage.passage;
+            if (!q.passageType && groupPassage.passageType) q.passageType = groupPassage.passageType;
+            if (!q.passageImage && groupPassage.passageImage) q.passageImage = groupPassage.passageImage;
+            if (!q.koreanAbcItems && groupPassage.koreanAbcItems) q.koreanAbcItems = groupPassage.koreanAbcItems;
+            if (!q.passageMixedExamples && groupPassage.passageMixedExamples) q.passageMixedExamples = groupPassage.passageMixedExamples;
+            if (!q.commonQuestion && groupPassage.commonQuestion) q.commonQuestion = groupPassage.commonQuestion;
           }
         }
       }

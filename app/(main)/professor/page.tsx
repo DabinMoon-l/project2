@@ -32,6 +32,8 @@ const StyleProfileModal = dynamic(() => import('@/components/professor/StyleProf
 
 // 피드백 타입 라벨
 const FEEDBACK_TYPE_LABELS: Record<string, string> = {
+  praise: '문제가 좋아요!',
+  wantmore: '더 풀고 싶어요',
   unclear: '문제가 이해가 안 돼요',
   wrong: '정답이 틀린 것 같아요',
   typo: '오타가 있어요',

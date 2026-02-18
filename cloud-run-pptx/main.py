@@ -9,13 +9,16 @@ import os
 import json
 import tempfile
 import re
+import subprocess
+import uuid
 from datetime import datetime
 from flask import Flask, request, jsonify
 from pptx import Presentation
 from pptx.util import Inches
 import google.generativeai as genai
 import firebase_admin
-from firebase_admin import credentials, firestore, storage
+from firebase_admin import credentials, firestore, storage, auth as fb_auth
+from flask import send_file
 
 # Flask 앱 초기화
 app = Flask(__name__)
@@ -223,6 +226,108 @@ def update_job_status(job_id: str, status: str, progress: int = 0, **kwargs):
     update_data.update(kwargs)
 
     db.collection('quizJobs').document(job_id).update(update_data)
+
+
+def verify_firebase_token(req):
+    """Authorization 헤더에서 Firebase ID 토큰 검증"""
+    auth_header = req.headers.get('Authorization', '')
+    if not auth_header.startswith('Bearer '):
+        return None
+    token = auth_header[7:]
+    try:
+        return fb_auth.verify_id_token(token)
+    except Exception:
+        return None
+
+
+@app.route('/convert-pdf', methods=['POST', 'OPTIONS'])
+def convert_pdf():
+    """
+    PPT → PDF 직접 변환 (클라이언트 직접 호출)
+    PPTX 바이너리를 multipart로 받아 PDF 바이너리 반환
+    Firebase Auth 토큰으로 인증
+    """
+    # CORS preflight
+    if request.method == 'OPTIONS':
+        resp = app.make_default_options_response()
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        resp.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        resp.headers['Access-Control-Allow-Headers'] = 'Authorization, Content-Type'
+        resp.headers['Access-Control-Max-Age'] = '3600'
+        return resp
+
+    # Firebase Auth 검증
+    decoded = verify_firebase_token(request)
+    if not decoded:
+        return jsonify({'error': '인증 실패'}), 401
+
+    try:
+        # multipart 파일 수신
+        if 'file' not in request.files:
+            return jsonify({'error': 'file이 필요합니다.'}), 400
+
+        pptx_file = request.files['file']
+        with tempfile.NamedTemporaryFile(suffix='.pptx', delete=False) as tmp:
+            pptx_file.save(tmp.name)
+            pptx_path = tmp.name
+
+        try:
+            # LibreOffice로 PDF 변환
+            output_dir = tempfile.mkdtemp()
+            subprocess.run(
+                ['libreoffice', '--headless', '--convert-to', 'pdf', '--outdir', output_dir, pptx_path],
+                check=True,
+                timeout=120,
+                capture_output=True,
+                text=True,
+            )
+
+            pdf_filename = os.path.basename(pptx_path).replace('.pptx', '.pdf')
+            pdf_path = os.path.join(output_dir, pdf_filename)
+
+            if not os.path.exists(pdf_path):
+                return jsonify({'error': 'PDF 변환 결과 파일을 찾을 수 없습니다.'}), 500
+
+            # PDF 바이너리 직접 반환
+            resp = send_file(
+                pdf_path,
+                mimetype='application/pdf',
+                as_attachment=False,
+            )
+            resp.headers['Access-Control-Allow-Origin'] = '*'
+
+            # 임시 PPTX 파일 정리 (send_file 후 정리는 Flask가 처리)
+            # output_dir 정리는 after_request로 처리
+            @resp.call_on_close
+            def cleanup():
+                try:
+                    if os.path.exists(pdf_path):
+                        os.unlink(pdf_path)
+                    if os.path.exists(output_dir):
+                        os.rmdir(output_dir)
+                except Exception:
+                    pass
+
+            return resp
+
+        finally:
+            if os.path.exists(pptx_path):
+                os.unlink(pptx_path)
+
+    except subprocess.TimeoutExpired:
+        resp = jsonify({'error': 'PDF 변환 시간 초과 (120초)'})
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        return resp, 504
+    except subprocess.CalledProcessError as e:
+        print(f"LibreOffice 변환 오류: {e.stderr}")
+        resp = jsonify({'error': f'LibreOffice 변환 실패: {e.stderr}'})
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        return resp, 500
+    except Exception as e:
+        print(f"PDF 변환 오류: {e}")
+        resp = jsonify({'error': str(e)})
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        return resp, 500
 
 
 @app.route('/process-pptx', methods=['POST'])

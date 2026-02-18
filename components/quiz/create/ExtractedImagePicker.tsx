@@ -34,6 +34,8 @@ interface ExtractedImagePickerProps {
   onClose: () => void;
   /** 이미지 삭제 콜백 (선택) */
   onRemove?: (id: string) => void;
+  /** 크롭 이미지를 추출 이미지 풀에 추가하는 콜백 (선택) */
+  onAddExtracted?: (dataUrl: string, sourceFileName?: string) => void;
 }
 
 // ============================================================
@@ -55,6 +57,7 @@ export default function ExtractedImagePicker({
   onSelect,
   onClose,
   onRemove,
+  onAddExtracted,
 }: ExtractedImagePickerProps) {
   // ============================================================
   // 상태 관리
@@ -312,11 +315,15 @@ export default function ExtractedImagePicker({
     setViewState('crop');
   }, []);
 
-  // 크롭된 이미지 선택 (미리보기에서) → 목록으로 돌아감
+  // 크롭된 이미지 선택 (미리보기에서) → 풀에 저장 + 목록으로 돌아감
   const handleSelectCroppedToList = useCallback(() => {
-    // croppedImage는 유지하고 목록으로 이동
+    // 크롭 이미지를 추출 이미지 풀에 영구 저장
+    if (croppedImage && onAddExtracted) {
+      onAddExtracted(croppedImage.dataUrl, croppedImage.sourceFileName);
+    }
+    setCroppedImage(null);
     setViewState('list');
-  }, []);
+  }, [croppedImage, onAddExtracted]);
 
   // 최종 이미지 선택 (목록에서) → 삽입 + 모달 닫힘
   const handleFinalSelect = useCallback((img: ExtractedImageData) => {

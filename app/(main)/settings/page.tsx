@@ -2,9 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
-import { Header, Modal } from '@/components/common';
 import { SettingsList } from '@/components/profile';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useUser, useCourse } from '@/lib/contexts';
@@ -17,20 +16,16 @@ import {
   type PrivacySettings,
   DEFAULT_SETTINGS,
 } from '@/lib/hooks/useSettings';
-import { useTheme } from '@/styles/themes/useTheme';
 
 // ============================================================
 // 컴포넌트
 // ============================================================
 
 /**
- * 설정 페이지
- *
- * 알림, 표시, 개인정보 설정을 관리합니다.
+ * 설정 페이지 (글래스모피즘)
  */
 export default function SettingsPage() {
   const router = useRouter();
-  const { theme } = useTheme();
   const { user, logout } = useAuth();
   const { profile, updateProfile } = useUser();
   const { userCourseId } = useCourse();
@@ -48,12 +43,17 @@ export default function SettingsPage() {
     clearError,
   } = useSettings();
 
-  // 로그아웃 확인 모달
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-  // 초기화 확인 모달
   const [showResetModal, setShowResetModal] = useState(false);
-  // 로딩 상태
   const [actionLoading, setActionLoading] = useState(false);
+
+  // 네비게이션 숨김
+  useEffect(() => {
+    document.body.setAttribute('data-hide-nav', 'true');
+    return () => {
+      document.body.removeAttribute('data-hide-nav');
+    };
+  }, []);
 
   // 설정 로드
   useEffect(() => {
@@ -62,12 +62,8 @@ export default function SettingsPage() {
     }
   }, [user?.uid, fetchSettings]);
 
-  // 실제 설정 또는 기본값 사용
   const displaySettings = settings || DEFAULT_SETTINGS;
 
-  /**
-   * 알림 설정 변경 핸들러
-   */
   const handleNotificationChange = useCallback(
     async (key: keyof NotificationSettings, value: boolean) => {
       if (!user?.uid) return;
@@ -76,9 +72,6 @@ export default function SettingsPage() {
     [user?.uid, updateNotifications]
   );
 
-  /**
-   * 표시 설정 변경 핸들러
-   */
   const handleDisplayChange = useCallback(
     async (key: keyof DisplaySettings, value: boolean) => {
       if (!user?.uid) return;
@@ -87,9 +80,6 @@ export default function SettingsPage() {
     [user?.uid, updateDisplay]
   );
 
-  /**
-   * 개인정보 설정 변경 핸들러
-   */
   const handlePrivacyChange = useCallback(
     async (key: keyof PrivacySettings, value: boolean) => {
       if (!user?.uid) return;
@@ -98,9 +88,6 @@ export default function SettingsPage() {
     [user?.uid, updatePrivacy]
   );
 
-  /**
-   * 로그아웃 핸들러
-   */
   const handleLogout = useCallback(async () => {
     try {
       setActionLoading(true);
@@ -114,12 +101,8 @@ export default function SettingsPage() {
     }
   }, [logout, router]);
 
-  /**
-   * 설정 초기화 핸들러
-   */
   const handleResetSettings = useCallback(async () => {
     if (!user?.uid) return;
-
     try {
       setActionLoading(true);
       await resetSettings(user.uid);
@@ -132,25 +115,40 @@ export default function SettingsPage() {
   }, [user?.uid, resetSettings]);
 
   return (
-    <div
-      className="min-h-screen pb-24"
-      style={{ backgroundColor: theme.colors.background }}
-    >
+    <div className="relative min-h-screen pb-8">
+      {/* 배경 이미지 + 글래스 오버레이 */}
+      <div className="fixed inset-0">
+        <img src="/images/home-bg.jpg" alt="" className="w-full h-full object-cover" />
+      </div>
+      <div className="fixed inset-0 bg-white/10 backdrop-blur-2xl" />
+
       {/* 헤더 */}
-      <Header title="설정" showBack />
+      <header className="relative z-10 flex items-center justify-between px-4 pt-4 pb-2">
+        <button
+          onClick={() => router.back()}
+          className="w-10 h-10 flex items-center justify-center"
+          aria-label="닫기"
+        >
+          <svg className="w-7 h-7 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+        <h1 className="text-lg font-bold text-white">설정</h1>
+        <div className="w-10" />
+      </header>
 
       {/* 에러 메시지 */}
       {error && (
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mx-4 mb-4 p-3 bg-red-50 border border-red-200 rounded-xl"
+          className="relative z-10 mx-4 mb-4 p-3 bg-red-500/20 border border-red-400/30 rounded-xl backdrop-blur-sm"
         >
-          <p className="text-sm text-red-600">{error}</p>
+          <p className="text-sm text-red-200">{error}</p>
           <button
             type="button"
             onClick={clearError}
-            className="text-xs text-red-500 underline mt-1"
+            className="text-xs text-red-300 underline mt-1"
           >
             닫기
           </button>
@@ -158,24 +156,20 @@ export default function SettingsPage() {
       )}
 
       {/* 프로필 사진 설정 */}
-      <div className="px-4 pt-4 pb-2">
+      <div className="relative z-10 px-4 pt-2 pb-2">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl overflow-hidden"
-          style={{
-            backgroundColor: theme.colors.backgroundSecondary,
-            border: `1px solid ${theme.colors.border}`,
-          }}
+          className="rounded-2xl overflow-hidden bg-white/10 border border-white/15 backdrop-blur-sm"
         >
-          <div className="px-4 py-3 border-b" style={{ borderColor: theme.colors.border }}>
-            <h3 className="font-bold" style={{ color: theme.colors.text }}>프로필 사진</h3>
+          <div className="px-4 py-3 border-b border-white/10">
+            <h3 className="font-bold text-white">프로필 사진</h3>
           </div>
           <button
             onClick={() => setShowProfilePicker(true)}
-            className="w-full flex items-center gap-4 px-4 py-4 transition-colors hover:bg-black/5"
+            className="w-full flex items-center gap-4 px-4 py-4 transition-colors hover:bg-white/5"
           >
-            <div className="w-16 h-16 flex-shrink-0 border-2 border-[#1A1A1A] overflow-hidden flex items-center justify-center bg-[#FDFBF7]">
+            <div className="w-16 h-16 flex-shrink-0 border-2 border-white/30 rounded-xl overflow-hidden flex items-center justify-center bg-white/10">
               {profile?.profileRabbitId != null ? (
                 <Image
                   src={getRabbitProfileUrl(profile.profileRabbitId)}
@@ -185,17 +179,17 @@ export default function SettingsPage() {
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <svg width={32} height={32} viewBox="0 0 24 24" fill="#1A1A1A">
+                <svg width={32} height={32} viewBox="0 0 24 24" fill="rgba(255,255,255,0.5)">
                   <circle cx="12" cy="8" r="4" />
                   <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
                 </svg>
               )}
             </div>
             <div className="flex-1 text-left">
-              <p className="font-bold text-[#1A1A1A]">프로필 사진 변경</p>
-              <p className="text-sm text-[#5C5C5C]">발견한 토끼로 프로필을 꾸며보세요</p>
+              <p className="font-bold text-white">프로필 사진 변경</p>
+              <p className="text-sm text-white/50">발견한 토끼로 프로필을 꾸며보세요</p>
             </div>
-            <svg className="w-5 h-5 text-[#9A9A9A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </button>
@@ -203,7 +197,7 @@ export default function SettingsPage() {
       </div>
 
       {/* 메인 컨텐츠 */}
-      <main className="px-4 pt-2">
+      <main className="relative z-10 px-4 pt-2">
         <SettingsList
           notifications={displaySettings.notifications}
           display={displaySettings.display}
@@ -218,173 +212,198 @@ export default function SettingsPage() {
       </main>
 
       {/* 로그아웃 확인 모달 */}
-      <Modal
-        isOpen={showLogoutModal}
-        onClose={() => setShowLogoutModal(false)}
-        title="로그아웃"
-      >
-        <div className="p-4 text-center">
-          <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
-            <span className="text-3xl">🚪</span>
-          </div>
-          <p
-            className="mb-2"
-            style={{ color: theme.colors.text }}
+      <AnimatePresence>
+        {showLogoutModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/50"
           >
-            정말 로그아웃 하시겠습니까?
-          </p>
-          <p
-            className="text-sm mb-6"
-            style={{ color: theme.colors.textSecondary }}
-          >
-            다시 로그인하면 모든 데이터가 복구됩니다.
-          </p>
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => setShowLogoutModal(false)}
-              disabled={actionLoading}
-              className="flex-1 py-3 rounded-xl font-medium"
-              style={{
-                backgroundColor: theme.colors.backgroundSecondary,
-                color: theme.colors.text,
-              }}
+            <motion.div
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.9 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-sm rounded-2xl overflow-hidden p-6"
             >
-              취소
-            </button>
-            <button
-              type="button"
-              onClick={handleLogout}
-              disabled={actionLoading}
-              className="flex-1 py-3 rounded-xl font-medium bg-red-500 text-white"
-            >
-              {actionLoading ? '처리 중...' : '로그아웃'}
-            </button>
-          </div>
-        </div>
-      </Modal>
+              <div className="absolute inset-0 rounded-2xl overflow-hidden">
+                <img src="/images/home-bg.jpg" alt="" className="w-full h-full object-cover" />
+              </div>
+              <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
+              <div className="relative z-10 text-center">
+                <p className="text-white font-bold text-lg mb-2">정말 로그아웃 하시겠습니까?</p>
+                <p className="text-sm text-white/50 mb-6">다시 로그인하면 모든 데이터가 복구됩니다.</p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowLogoutModal(false)}
+                    disabled={actionLoading}
+                    className="flex-1 py-3 rounded-xl font-medium bg-white/15 text-white hover:bg-white/20 transition-colors"
+                  >
+                    취소
+                  </button>
+                  <button
+                    onClick={handleLogout}
+                    disabled={actionLoading}
+                    className="flex-1 py-3 rounded-xl font-medium bg-red-500/80 text-white hover:bg-red-500 transition-colors"
+                  >
+                    {actionLoading ? '처리 중...' : '로그아웃'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* 프로필 사진 선택 모달 */}
-      <Modal
-        isOpen={showProfilePicker}
-        onClose={() => setShowProfilePicker(false)}
-        title="프로필 사진 선택"
-      >
-        <div className="p-4">
-          <p className="text-sm text-[#5C5C5C] mb-4">발견한 토끼 중 하나를 선택하세요</p>
-
-          {/* 기본 프로필 (초기화) */}
-          <button
-            onClick={async () => {
-              await updateProfile({ profileRabbitId: null  });
-              setShowProfilePicker(false);
-            }}
-            className={`w-full flex items-center gap-3 p-3 mb-3 border-2 transition-colors ${
-              profile?.profileRabbitId == null
-                ? 'border-[#1A1A1A] bg-[#EDEAE4]'
-                : 'border-[#D4CFC4]'
-            }`}
+      <AnimatePresence>
+        {showProfilePicker && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowProfilePicker(false)}
+            className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/50"
           >
-            <div className="w-12 h-12 flex items-center justify-center bg-[#FDFBF7] border border-[#D4CFC4]">
-              <svg width={24} height={24} viewBox="0 0 24 24" fill="#1A1A1A">
-                <circle cx="12" cy="8" r="4" />
-                <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
-              </svg>
-            </div>
-            <span className="font-bold text-[#1A1A1A]">기본 프로필</span>
-            {profile?.profileRabbitId == null && (
-              <span className="ml-auto text-sm text-[#5C5C5C]">선택됨</span>
-            )}
-          </button>
-
-          {/* 발견한 토끼 그리드 */}
-          {holdings.length > 0 ? (
-            <div className="grid grid-cols-4 gap-2 max-h-[50vh] overflow-y-auto">
-              {holdings
-                .filter(h => h.rabbitId > 0)
-                .sort((a, b) => a.rabbitId - b.rabbitId)
-                .map(h => (
+            <motion.div
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.9 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-sm rounded-2xl overflow-hidden"
+            >
+              <div className="absolute inset-0 rounded-2xl overflow-hidden">
+                <img src="/images/home-bg.jpg" alt="" className="w-full h-full object-cover" />
+              </div>
+              <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
+              <div className="relative z-10">
+                {/* 헤더 */}
+                <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+                  <h2 className="text-lg font-bold text-white">프로필 사진 선택</h2>
                   <button
-                    key={h.id}
+                    onClick={() => setShowProfilePicker(false)}
+                    className="w-8 h-8 flex items-center justify-center"
+                  >
+                    <svg className="w-5 h-5 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                <div className="p-5">
+                  <p className="text-sm text-white/50 mb-4">발견한 토끼 중 하나를 선택하세요</p>
+
+                  {/* 기본 프로필 */}
+                  <button
                     onClick={async () => {
-                      await updateProfile({ profileRabbitId: h.rabbitId } );
+                      await updateProfile({ profileRabbitId: null });
                       setShowProfilePicker(false);
                     }}
-                    className={`aspect-square border-2 overflow-hidden transition-all ${
-                      profile?.profileRabbitId === h.rabbitId
-                        ? 'border-[#1A1A1A] scale-95 bg-[#EDEAE4]'
-                        : 'border-[#D4CFC4] hover:border-[#9A9A9A]'
+                    className={`w-full flex items-center gap-3 p-3 mb-3 rounded-xl border transition-colors ${
+                      profile?.profileRabbitId == null
+                        ? 'border-white/40 bg-white/15'
+                        : 'border-white/15 hover:bg-white/5'
                     }`}
                   >
-                    <Image
-                      src={getRabbitProfileUrl(h.rabbitId)}
-                      alt={`토끼 #${h.rabbitId}`}
-                      width={80}
-                      height={80}
-                      className="w-full h-full object-cover"
-                    />
+                    <div className="w-12 h-12 flex items-center justify-center bg-white/10 border border-white/20 rounded-lg">
+                      <svg width={24} height={24} viewBox="0 0 24 24" fill="rgba(255,255,255,0.6)">
+                        <circle cx="12" cy="8" r="4" />
+                        <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
+                      </svg>
+                    </div>
+                    <span className="font-bold text-white">기본 프로필</span>
+                    {profile?.profileRabbitId == null && (
+                      <span className="ml-auto text-sm text-white/50">선택됨</span>
+                    )}
                   </button>
-                ))}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-[#5C5C5C]">
-              <p className="text-lg mb-1">아직 발견한 토끼가 없어요</p>
-              <p className="text-sm">퀴즈를 풀어 토끼를 발견해보세요!</p>
-            </div>
-          )}
-        </div>
-      </Modal>
+
+                  {/* 발견한 토끼 그리드 */}
+                  {holdings.length > 0 ? (
+                    <div className="grid grid-cols-4 gap-2 max-h-[50vh] overflow-y-auto">
+                      {holdings
+                        .filter(h => h.rabbitId > 0)
+                        .sort((a, b) => a.rabbitId - b.rabbitId)
+                        .map(h => (
+                          <button
+                            key={h.id}
+                            onClick={async () => {
+                              await updateProfile({ profileRabbitId: h.rabbitId });
+                              setShowProfilePicker(false);
+                            }}
+                            className={`aspect-square rounded-xl border overflow-hidden transition-all ${
+                              profile?.profileRabbitId === h.rabbitId
+                                ? 'border-white/50 scale-95 bg-white/20'
+                                : 'border-white/15 hover:border-white/30'
+                            }`}
+                          >
+                            <Image
+                              src={getRabbitProfileUrl(h.rabbitId)}
+                              alt={`토끼 #${h.rabbitId}`}
+                              width={80}
+                              height={80}
+                              className="w-full h-full object-cover"
+                            />
+                          </button>
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-lg text-white/60 mb-1">아직 발견한 토끼가 없어요</p>
+                      <p className="text-sm text-white/40">퀴즈를 풀어 토끼를 발견해보세요!</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* 초기화 확인 모달 */}
-      <Modal
-        isOpen={showResetModal}
-        onClose={() => setShowResetModal(false)}
-        title="설정 초기화"
-      >
-        <div className="p-4 text-center">
-          <div className="w-16 h-16 rounded-full bg-yellow-100 flex items-center justify-center mx-auto mb-4">
-            <span className="text-3xl">🔄</span>
-          </div>
-          <p
-            className="mb-2"
-            style={{ color: theme.colors.text }}
+      <AnimatePresence>
+        {showResetModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/50"
           >
-            모든 설정을 초기화하시겠습니까?
-          </p>
-          <p
-            className="text-sm mb-6"
-            style={{ color: theme.colors.textSecondary }}
-          >
-            알림, 표시, 개인정보 설정이 기본값으로 돌아갑니다.
-          </p>
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => setShowResetModal(false)}
-              disabled={actionLoading}
-              className="flex-1 py-3 rounded-xl font-medium"
-              style={{
-                backgroundColor: theme.colors.backgroundSecondary,
-                color: theme.colors.text,
-              }}
+            <motion.div
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.9 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-sm rounded-2xl overflow-hidden p-6"
             >
-              취소
-            </button>
-            <button
-              type="button"
-              onClick={handleResetSettings}
-              disabled={actionLoading}
-              className="flex-1 py-3 rounded-xl font-medium"
-              style={{
-                backgroundColor: theme.colors.accent,
-                color: theme.colors.background,
-              }}
-            >
-              {actionLoading ? '처리 중...' : '초기화'}
-            </button>
-          </div>
-        </div>
-      </Modal>
+              <div className="absolute inset-0 rounded-2xl overflow-hidden">
+                <img src="/images/home-bg.jpg" alt="" className="w-full h-full object-cover" />
+              </div>
+              <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
+              <div className="relative z-10 text-center">
+                <p className="text-white font-bold text-lg mb-2">모든 설정을 초기화하시겠습니까?</p>
+                <p className="text-sm text-white/50 mb-6">알림, 표시, 개인정보 설정이 기본값으로 돌아갑니다.</p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowResetModal(false)}
+                    disabled={actionLoading}
+                    className="flex-1 py-3 rounded-xl font-medium bg-white/15 text-white hover:bg-white/20 transition-colors"
+                  >
+                    취소
+                  </button>
+                  <button
+                    onClick={handleResetSettings}
+                    disabled={actionLoading}
+                    className="flex-1 py-3 rounded-xl font-medium bg-white/30 text-white hover:bg-white/40 transition-colors"
+                  >
+                    {actionLoading ? '처리 중...' : '초기화'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

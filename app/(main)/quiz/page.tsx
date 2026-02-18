@@ -1307,6 +1307,10 @@ function QuizListPageContent() {
   // 자작 섹션 탭 (퀴즈 / 복습)
   const [customSectionTab, setCustomSectionTab] = useState<'quiz' | 'review'>('quiz');
 
+  // 스크롤 맨 위로 버튼
+  const customSectionRef = useRef<HTMLDivElement>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+
   // 복습 탭 Details 모달
   const [reviewDetailsQuiz, setReviewDetailsQuiz] = useState<QuizCardData | null>(null);
 
@@ -1602,6 +1606,23 @@ function QuizListPageContent() {
       router.replace(newUrl, { scroll: false });
     }
   }, [isManageMode, searchParams, router]);
+
+  // 자작 섹션 가시성 감지 (스크롤 맨 위로 버튼)
+  useEffect(() => {
+    const el = customSectionRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setShowScrollTop(!entry.isIntersecting),
+      { threshold: 0 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const scrollToTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
 
   // ============================================================
   // 핸들러 함수들
@@ -2009,7 +2030,7 @@ function QuizListPageContent() {
 
       {/* 자작 섹션 */}
       <section className="px-4">
-        <div className="flex items-center justify-between mb-4">
+        <div ref={customSectionRef} className="flex items-center justify-between mb-4">
           <h2 className="font-serif-display text-xl font-black text-[#1A1A1A] shrink-0">자작</h2>
 
           {/* 탭 버튼 */}
@@ -2213,7 +2234,7 @@ function QuizListPageContent() {
                   >
                     <ReviewQuizCard
                       quiz={quiz}
-                      onCardClick={() => router.push(`/review/solved/${quiz.id}`)}
+                      onCardClick={() => router.push(`/review/library/${quiz.id}?from=quiz`)}
                       onDetails={() => setReviewDetailsQuiz(quiz)}
                       onReview={() => router.push(`/quiz/${quiz.id}`)}
                       onReviewWrongOnly={() => router.push(`/quiz/${quiz.id}?wrongOnly=true`)}
@@ -2610,6 +2631,34 @@ function QuizListPageContent() {
           </motion.div>
         </div>
       )}
+
+      {/* 스크롤 맨 위로 버튼 */}
+      <AnimatePresence>
+        {showScrollTop && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            onClick={scrollToTop}
+            className="fixed bottom-[120px] left-4 z-40 w-12 h-12 bg-[#1A1A1A] text-[#F5F0E8] rounded-full shadow-lg flex items-center justify-center hover:bg-[#3A3A3A] transition-colors"
+            aria-label="맨 위로"
+          >
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M5 10l7-7m0 0l7 7m-7-7v18"
+              />
+            </svg>
+          </motion.button>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

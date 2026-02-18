@@ -1097,6 +1097,7 @@ export default function FolderDetailPage() {
   const folderType = params.type as string; // solved, wrong, bookmark, custom
   const folderId = params.id as string;
   const chapterFilter = searchParams.get('chapter'); // 챕터 필터 (오답 탭에서 챕터별 클릭 시)
+  const fromQuizPage = searchParams.get('from') === 'quiz'; // 퀴즈 페이지 복습탭에서 접근 시 수정 비활성화
 
   // 과목별 리본 이미지 (solved 타입은 퀴즈 리본, 나머지는 리뷰 리본)
   const ribbonImage = folderType === 'solved'
@@ -1109,6 +1110,7 @@ export default function FolderDetailPage() {
   const {
     groupedSolvedItems,
     groupedWrongItems,
+    groupedBookmarkedItems,
     customFolders,
     solvedItems,
     wrongItems,
@@ -1213,14 +1215,14 @@ export default function FolderDetailPage() {
         : group.items;
       return { title: group.quizTitle, items: filteredItems };
     } else if (folderType === 'bookmark') {
-      // 퀴즈 단위 찜: solved items에서 가져오기
-      const solvedGroup = groupedSolvedItems.find(g => g.quizId === folderId);
-      return solvedGroup ? { title: solvedGroup.quizTitle, items: solvedGroup.items } : null;
+      // 퀴즈 단위 찜: bookmark items에서 가져오기
+      const bookmarkGroup = groupedBookmarkedItems.find(g => g.quizId === folderId);
+      return bookmarkGroup ? { title: bookmarkGroup.quizTitle, items: bookmarkGroup.items } : null;
     } else if (folderType === 'custom' && customFolder) {
       return { title: customFolder.name, items: null as ReviewItem[] | null };
     }
     return null;
-  }, [folderType, folderId, groupedSolvedItems, groupedWrongItems, customFolder, chapterFilter, libraryQuizTitle, libraryQuestions]);
+  }, [folderType, folderId, groupedSolvedItems, groupedWrongItems, groupedBookmarkedItems, customFolder, chapterFilter, libraryQuizTitle, libraryQuestions]);
 
   // 비서재 타입(wrong/solved/bookmark)에서 choiceExplanations가 빠진 경우 퀴즈 문서에서 보충
   useEffect(() => {
@@ -1501,6 +1503,31 @@ export default function FolderDetailPage() {
             reviewCount: 0,
             lastReviewedAt: null,
             createdAt: quizData.createdAt,
+            // 이미지
+            image: q.image || undefined,
+            imageUrl: q.imageUrl || undefined,
+            // 제시문
+            passage: q.passage || undefined,
+            passageType: q.passageType || undefined,
+            passageImage: q.passageImage || undefined,
+            koreanAbcItems: q.koreanAbcItems || undefined,
+            passageMixedExamples: q.passageMixedExamples || undefined,
+            commonQuestion: q.commonQuestion || undefined,
+            // 보기
+            mixedExamples: q.mixedExamples || undefined,
+            bogi: q.bogi || undefined,
+            subQuestionOptions: q.subQuestionOptions || undefined,
+            subQuestionOptionsType: q.subQuestionOptionsType || undefined,
+            subQuestionImage: q.subQuestionImage || undefined,
+            // 발문
+            passagePrompt: q.passagePrompt || undefined,
+            bogiQuestionText: q.bogiQuestionText || undefined,
+            // 결합형
+            combinedGroupId: q.combinedGroupId || undefined,
+            combinedIndex: q.combinedIndex,
+            combinedTotal: q.combinedTotal,
+            // 기타
+            quizCreatorId: quizData.creatorId || undefined,
           };
         });
 
@@ -2166,12 +2193,17 @@ export default function FolderDetailPage() {
     // quizCreatorId 결정: 1) 리뷰 아이템에서, 2) quizCreatorsMap에서
     const creatorId = item?.quizCreatorId || quizCreatorsMap.get(quizId) || null;
 
+    // questionId에서 문제 번호 추출 (예: "q0" → 1, "q2-1" → 3)
+    const [mainIdx] = parseQuestionId(questionId);
+    const questionNumber = mainIdx + 1;
+
     const feedbackRef = collection(db, 'questionFeedbacks');
     await addDoc(feedbackRef, {
       questionId,
       quizId,
       quizCreatorId: creatorId, // 퀴즈 생성자 ID (조회 최적화용)
       userId: user.uid,
+      questionNumber, // 문제 번호 (표시용)
       type,
       content,
       createdAt: serverTimestamp(),
@@ -2716,7 +2748,7 @@ export default function FolderDetailPage() {
                     <h2 className="text-2xl font-black text-[#1A1A1A] flex-1">
                       {folderTitle}
                     </h2>
-                    {folderType === 'library' && !isSelectMode && (
+                    {folderType === 'library' && !isSelectMode && !fromQuizPage && (
                       <button
                         onClick={handleEnterEditMode}
                         className="p-1.5 text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors flex-shrink-0"

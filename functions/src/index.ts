@@ -287,7 +287,7 @@ export {
 // ============================================
 // PPTX 퀴즈 생성 Functions (Cloud Run 연동)
 // ============================================
-export { onPptxJobCreated, cleanupOldQuizJobs } from "./pptx";
+export { onPptxJobCreated, cleanupOldQuizJobs, convertPptxToPdf } from "./pptx";
 
 // ============================================
 // 교수 퀴즈 분석 Functions (AI 문제 생성 스타일 학습)
@@ -313,6 +313,11 @@ export { workerProcessJob, retryQueuedJobs, cleanupExpiredJobs } from "./workerP
 
 
 // ============================================
+// 랭킹 사전 계산 Functions
+// ============================================
+export { refreshRankings, computeRankingsScheduled } from "./computeRankings";
+
+// ============================================
 // 토끼 시스템 Functions (발견 + 장착)
 // ============================================
 export { spinRabbitGacha, claimGachaRabbit } from "./rabbitGacha";
@@ -323,6 +328,7 @@ export { onOnboardingComplete } from "./onboardingRabbit";
 // 디버그/테스트 Functions
 // ============================================
 export { fillDogam } from "./fillDogam";
+export { cleanupExtraRabbits } from "./cleanupExtraRabbits";
 
 // ============================================
 // 마이그레이션 Functions

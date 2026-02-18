@@ -252,6 +252,8 @@ interface QuestionEditorProps {
   courseId?: string;
   /** 추출된 이미지 목록 (이미지 영역 선택에서 추출) */
   extractedImages?: ExtractedImageForEditor[];
+  /** 크롭 이미지를 추출 이미지 풀에 추가하는 콜백 */
+  onAddExtracted?: (dataUrl: string, sourceFileName?: string) => void;
 }
 
 // ============================================================
@@ -1749,6 +1751,7 @@ export default function QuestionEditor({
   userRole = 'student',
   courseId,
   extractedImages = [],
+  onAddExtracted,
 }: QuestionEditorProps) {
   // 초기 상태 설정
   const getInitialData = (): QuestionData => {
@@ -4380,6 +4383,7 @@ export default function QuestionEditor({
             extractedImages={extractedImages}
             onSelect={handleSelectExtractedImage}
             onClose={() => setShowExtractedImagePicker(false)}
+            onAddExtracted={onAddExtracted}
           />
         )}
       </AnimatePresence>

@@ -12,6 +12,8 @@ interface RabbitImageProps {
   className?: string;
   /** 우선 로딩 (홈 히어로 등 LCP 요소) */
   priority?: boolean;
+  /** 인라인 스타일 */
+  style?: React.CSSProperties;
 }
 
 /**
@@ -19,7 +21,7 @@ interface RabbitImageProps {
  *
  * Next.js Image로 자동 WebP/AVIF 변환 + 리사이즈 + lazy loading
  */
-export default function RabbitImage({ rabbitId, size, className = '', priority = false }: RabbitImageProps) {
+export default function RabbitImage({ rabbitId, size, className = '', priority = false, style }: RabbitImageProps) {
   return (
     <Image
       src={getRabbitImageSrc(rabbitId)}
@@ -29,6 +31,7 @@ export default function RabbitImage({ rabbitId, size, className = '', priority =
       className={className}
       priority={priority}
       draggable={false}
+      style={style}
     />
   );
 }

@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   doc,
@@ -36,6 +36,9 @@ interface UpdateQuizModalProps {
   totalQuestionCount: number;
   onComplete: (newScore: number, newCorrectCount: number) => void;
 }
+
+// ㄱㄴㄷ 라벨
+const KOREAN_LABELS = ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
 
 // ============================================================
 // 컴포넌트
@@ -77,30 +80,74 @@ export default function UpdateQuizModal({
       questionText: string;
       questionType: string;
       choices?: string[];
+      explanation?: string;
+      choiceExplanations?: string[];
+      image?: string;
+      imageUrl?: string;
+      passage?: string;
+      passageType?: string;
+      passageImage?: string;
+      koreanAbcItems?: string[];
+      passageMixedExamples?: any[];
+      mixedExamples?: any[];
+      bogi?: { questionText?: string; items: Array<{ label: string; content: string }> } | null;
+      subQuestionOptions?: string[];
+      subQuestionOptionsType?: string;
+      subQuestionImage?: string;
+      passagePrompt?: string;
+      bogiQuestionText?: string;
+      combinedGroupId?: string;
+      combinedIndex?: number;
     }[];
   } | null>(null);
 
   const questions = updateInfo.updatedQuestions;
-  const currentQuestion = questions[currentIndex];
+
+  // 결합형 문제를 그룹핑한 displayItems 생성
+  type DisplayItem =
+    | { type: 'single'; question: UpdatedQuestion }
+    | { type: 'combined_group'; questions: UpdatedQuestion[]; combinedGroupId: string };
+
+  const displayItems = useMemo<DisplayItem[]>(() => {
+    const items: DisplayItem[] = [];
+    const processedGroupIds = new Set<string>();
+
+    for (const q of questions) {
+      if (q.combinedGroupId) {
+        if (processedGroupIds.has(q.combinedGroupId)) continue;
+        processedGroupIds.add(q.combinedGroupId);
+        // 같은 그룹의 문제를 모아서 combinedIndex 순으로 정렬
+        const groupQuestions = questions
+          .filter((gq) => gq.combinedGroupId === q.combinedGroupId)
+          .sort((a, b) => (a.combinedIndex ?? 0) - (b.combinedIndex ?? 0));
+        items.push({ type: 'combined_group', questions: groupQuestions, combinedGroupId: q.combinedGroupId });
+      } else {
+        items.push({ type: 'single', question: q });
+      }
+    }
+    return items;
+  }, [questions]);
+
+  const currentDisplayItem = displayItems[currentIndex];
 
   /**
-   * 답변 선택
+   * 답변 선택 (questionId 지정)
    */
-  const handleSelectAnswer = useCallback((answer: string) => {
+  const handleSelectAnswer = useCallback((questionId: string, answer: string) => {
     setUserAnswers((prev) => ({
       ...prev,
-      [currentQuestion.questionId]: answer,
+      [questionId]: answer,
     }));
-  }, [currentQuestion]);
+  }, []);
 
   /**
    * 다음 문제로
    */
   const handleNext = useCallback(() => {
-    if (currentIndex < questions.length - 1) {
+    if (currentIndex < displayItems.length - 1) {
       setCurrentIndex((prev) => prev + 1);
     }
-  }, [currentIndex, questions.length]);
+  }, [currentIndex, displayItems.length]);
 
   /**
    * 이전 문제로
@@ -110,6 +157,17 @@ export default function UpdateQuizModal({
       setCurrentIndex((prev) => prev - 1);
     }
   }, [currentIndex]);
+
+  /**
+   * 현재 displayItem의 모든 문제에 답변했는지 확인
+   */
+  const isCurrentItemAnswered = useMemo(() => {
+    if (!currentDisplayItem) return false;
+    if (currentDisplayItem.type === 'single') {
+      return !!userAnswers[currentDisplayItem.question.questionId];
+    }
+    return currentDisplayItem.questions.every((q) => !!userAnswers[q.questionId]);
+  }, [currentDisplayItem, userAnswers]);
 
   /**
    * 제출
@@ -131,6 +189,24 @@ export default function UpdateQuizModal({
         questionText: string;
         questionType: string;
         choices?: string[];
+        explanation?: string;
+        choiceExplanations?: string[];
+        image?: string;
+        imageUrl?: string;
+        passage?: string;
+        passageType?: string;
+        passageImage?: string;
+        koreanAbcItems?: string[];
+        passageMixedExamples?: any[];
+        mixedExamples?: any[];
+        bogi?: { questionText?: string; items: Array<{ label: string; content: string }> } | null;
+        subQuestionOptions?: string[];
+        subQuestionOptionsType?: string;
+        subQuestionImage?: string;
+        passagePrompt?: string;
+        bogiQuestionText?: string;
+        combinedGroupId?: string;
+        combinedIndex?: number;
       }[] = [];
 
       for (const q of questions) {
@@ -183,17 +259,36 @@ export default function UpdateQuizModal({
           questionText: q.questionText,
           questionType: q.questionType,
           choices: q.choices,
+          explanation: q.explanation,
+          choiceExplanations: q.choiceExplanations,
+          image: q.image,
+          imageUrl: q.imageUrl,
+          passage: q.passage,
+          passageType: q.passageType,
+          passageImage: q.passageImage,
+          koreanAbcItems: q.koreanAbcItems,
+          passageMixedExamples: q.passageMixedExamples,
+          mixedExamples: q.mixedExamples,
+          bogi: q.bogi,
+          subQuestionOptions: q.subQuestionOptions,
+          subQuestionOptionsType: q.subQuestionOptionsType,
+          subQuestionImage: q.subQuestionImage,
+          passagePrompt: q.passagePrompt,
+          bogiQuestionText: q.bogiQuestionText,
+          combinedGroupId: q.combinedGroupId,
+          combinedIndex: q.combinedIndex,
         });
       }
 
       // 2. 기존 점수와 병합
-      const mergedScores: Record<string, { isCorrect: boolean; userAnswer: string; answeredAt: any }> = { ...originalScores };
+      const mergedScores: Record<string, { isCorrect: boolean; userAnswer: string; correctAnswer?: string; answeredAt: any }> = { ...originalScores };
 
       // 새로 푼 문제로 교체
       for (const result of questionResults) {
         mergedScores[result.questionId] = {
           isCorrect: result.isCorrect,
           userAnswer: result.userAnswer,
+          correctAnswer: result.correctAnswer,
           answeredAt: serverTimestamp(),
         };
       }
@@ -365,73 +460,100 @@ export default function UpdateQuizModal({
               </p>
             </div>
 
-            {/* 문제별 결과 */}
-            <div className="space-y-3 text-left">
-              {resultData.questionResults.map((r, idx) => {
-                // 답 표시 포맷
-                const formatAnswer = (answer: string, type: string, choices?: string[]) => {
-                  if (!answer) return '-';
-                  if (type === 'ox') return answer.toUpperCase();
-                  if (type === 'multiple' && choices) {
-                    const indices = answer.split(',').map(s => parseInt(s.trim(), 10) - 1);
-                    return indices.map(i => choices[i] || `${i + 1}번`).join(', ');
+            {/* 문제별 결과 — 결합형 그룹핑 */}
+            <div className="space-y-4 text-left">
+              {(() => {
+                // 결합형 그룹핑
+                type ResultDisplayItem =
+                  | { type: 'single'; result: typeof resultData.questionResults[0]; globalIdx: number }
+                  | { type: 'combined_group'; results: typeof resultData.questionResults; globalStartIdx: number };
+
+                const resultDisplayItems: ResultDisplayItem[] = [];
+                const processedGroupIds = new Set<string>();
+                resultData.questionResults.forEach((r, idx) => {
+                  if (r.combinedGroupId) {
+                    if (processedGroupIds.has(r.combinedGroupId)) return;
+                    processedGroupIds.add(r.combinedGroupId);
+                    const groupResults = resultData.questionResults
+                      .filter((gr) => gr.combinedGroupId === r.combinedGroupId)
+                      .sort((a, b) => (a.combinedIndex ?? 0) - (b.combinedIndex ?? 0));
+                    resultDisplayItems.push({ type: 'combined_group', results: groupResults, globalStartIdx: idx });
+                  } else {
+                    resultDisplayItems.push({ type: 'single', result: r, globalIdx: idx });
                   }
-                  return answer;
-                };
+                });
 
-                const formattedUserAnswer = formatAnswer(r.userAnswer, r.questionType, r.choices);
-                const formattedPreviousAnswer = formatAnswer(r.previousAnswer, r.questionType, r.choices);
-                const formattedCorrectAnswer = formatAnswer(r.correctAnswer, r.questionType, r.choices);
-                const sameAnswer = r.userAnswer === r.previousAnswer;
-
-                return (
-                  <div
-                    key={r.questionId}
-                    className={`p-3 border ${r.isCorrect ? 'border-[#1A6B1A] bg-[#E8F5E9]' : 'border-[#8B1A1A] bg-[#FDEAEA]'}`}
-                  >
-                    {/* 문제 헤더 */}
-                    <div className="flex items-center justify-between mb-2">
-                      <span className={`text-sm font-bold ${r.isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>
-                        문제 {idx + 1}
-                      </span>
-                      <span className={`text-xs px-2 py-0.5 ${r.isCorrect ? 'bg-[#1A6B1A] text-white' : 'bg-[#8B1A1A] text-white'}`}>
-                        {r.isCorrect ? '정답' : '오답'}
-                      </span>
-                    </div>
-
-                    {/* 문제 내용 */}
-                    <p className="text-sm text-[#1A1A1A] mb-2">{r.questionText}</p>
-
-                    {/* 객관식 선지 */}
-                    {r.questionType === 'multiple' && r.choices && (
-                      <div className="text-xs text-[#5C5C5C] mb-2 space-y-0.5">
-                        {r.choices.map((choice, i) => (
-                          <p key={i}>{i + 1}. {choice}</p>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* 정답 */}
-                    <div className="text-xs space-y-1">
-                      <p className="text-[#1A6B1A]">
-                        <span className="font-bold">정답:</span> {formattedCorrectAnswer}
-                      </p>
-
-                      {/* 내가 쓴 답 & 수정 전 내가 쓴 답 */}
-                      <div className="flex flex-wrap gap-2">
-                        <p className={r.isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}>
-                          <span className="font-bold">{sameAnswer ? '(내 답)' : ''}</span> {formattedUserAnswer}
-                        </p>
-                        {r.previousAnswer && (
-                          <p className="text-[#5C5C5C]">
-                            <span className="font-bold">{sameAnswer ? '(수정 전 내 답)' : ''}</span> {formattedPreviousAnswer}
-                          </p>
+                return resultDisplayItems.map((item, displayIdx) => {
+                  if (item.type === 'combined_group') {
+                    const groupCorrect = item.results.filter((r) => r.isCorrect).length;
+                    const first = item.results[0];
+                    return (
+                      <div key={`group-${first.combinedGroupId}`} className="border-2 border-[#1A1A1A] bg-[#EDEAE4]">
+                        {/* 결합형 헤더 */}
+                        <div className="p-3 border-b border-[#1A1A1A] flex items-center justify-between">
+                          <span className="text-sm font-bold text-[#1A1A1A]">결합형 문제</span>
+                          <span className="text-xs px-2 py-0.5 bg-[#1A1A1A] text-[#F5F0E8]">
+                            {groupCorrect}/{item.results.length} 정답
+                          </span>
+                        </div>
+                        {/* 공통 제시문 */}
+                        {(first.passage || first.passageImage || (first.koreanAbcItems && first.koreanAbcItems.length > 0) || (first.passageMixedExamples && first.passageMixedExamples.length > 0)) && (
+                          <div className="mx-3 mt-3 p-2 border border-[#8B6914] bg-[#FFF8E1] text-xs">
+                            {first.passage && first.passageType !== 'korean_abc' && (
+                              <p className="text-[#1A1A1A] whitespace-pre-wrap">{first.passage}</p>
+                            )}
+                            {first.passageType === 'korean_abc' && first.koreanAbcItems && first.koreanAbcItems.length > 0 && (
+                              <div className="space-y-0.5">
+                                {first.koreanAbcItems.map((itm, i) => (
+                                  <p key={i} className="text-[#1A1A1A]"><span className="font-bold">{KOREAN_LABELS[i]}.</span> {itm}</p>
+                                ))}
+                              </div>
+                            )}
+                            {first.passageMixedExamples && first.passageMixedExamples.length > 0 && (
+                              <div className="space-y-1">
+                                {first.passageMixedExamples.map((block: any) => (
+                                  <div key={block.id}>
+                                    {block.type === 'text' && <p className="text-[#1A1A1A] whitespace-pre-wrap">{block.content}</p>}
+                                    {block.type === 'labeled' && (block.items || []).map((i: any) => (
+                                      <p key={i.id}><span className="font-bold">{i.label}.</span> {i.content}</p>
+                                    ))}
+                                    {block.type === 'gana' && (block.items || []).map((i: any) => (
+                                      <p key={i.id}><span className="font-bold">({i.label})</span> {i.content}</p>
+                                    ))}
+                                    {block.type === 'grouped' && (block.children || []).map((child: any) => (
+                                      <div key={child.id}>
+                                        {child.type === 'text' && <p className="text-[#5C5C5C] whitespace-pre-wrap">{child.content}</p>}
+                                        {child.type === 'labeled' && (child.items || []).map((ci: any) => (
+                                          <p key={ci.id}><span className="font-bold">{ci.label}.</span> {ci.content}</p>
+                                        ))}
+                                        {child.type === 'gana' && (child.items || []).map((ci: any) => (
+                                          <p key={ci.id}><span className="font-bold">({ci.label})</span> {ci.content}</p>
+                                        ))}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {first.passageImage && (
+                              <img src={first.passageImage} alt="공통 이미지" className="max-w-full max-h-[200px] object-contain mt-2" />
+                            )}
+                          </div>
                         )}
+                        {/* 하위 문제 결과들 */}
+                        <div className="p-3 space-y-3">
+                          {item.results.map((r, subIdx) => (
+                            <QuestionResultCard key={r.questionId} result={r} label={`하위 ${subIdx + 1}`} />
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                );
-              })}
+                    );
+                  }
+
+                  // 단일 문제
+                  return <QuestionResultCard key={item.result.questionId} result={item.result} label={`문제 ${displayIdx + 1}`} />;
+                });
+              })()}
             </div>
           </div>
 
@@ -476,91 +598,97 @@ export default function UpdateQuizModal({
         {/* 진행 표시 */}
         <div className="px-4 py-2 border-b border-[#EDEAE4]">
           <div className="flex items-center justify-between text-xs text-[#5C5C5C]">
-            <span>문제 {currentIndex + 1} / {questions.length}</span>
+            <span>문제 {currentIndex + 1} / {displayItems.length}</span>
             <span>{Object.keys(userAnswers).length}개 답변</span>
           </div>
           <div className="mt-1 h-1 bg-[#EDEAE4]">
             <div
               className="h-full bg-[#1A1A1A] transition-all"
-              style={{ width: `${((currentIndex + 1) / questions.length) * 100}%` }}
+              style={{ width: `${((currentIndex + 1) / displayItems.length) * 100}%` }}
             />
           </div>
         </div>
 
         {/* 문제 */}
         <div className="p-4">
-          <div className="mb-4">
-            <span className="text-xs text-[#5C5C5C]">
-              {currentQuestion.questionType === 'ox' ? 'OX' :
-               currentQuestion.questionType === 'multiple' ? '객관식' :
-               currentQuestion.questionType === 'short_answer' ? '단답형' : '주관식'}
-            </span>
-            <p className="text-[#1A1A1A] font-medium mt-1">{currentQuestion.questionText}</p>
-          </div>
+          {currentDisplayItem && currentDisplayItem.type === 'combined_group' ? (
+            /* ===== 결합형 그룹: 공통 지문 + 하위 문제들 ===== */
+            <div>
+              <span className="text-xs text-[#5C5C5C]">결합형 문제 ({currentDisplayItem.questions.length}개 하위 문제)</span>
 
-          {/* 선지 / 입력 */}
-          {currentQuestion.questionType === 'ox' ? (
-            <div className="space-y-2">
-              {['O', 'X'].map((opt) => (
-                <button
-                  key={opt}
-                  onClick={() => handleSelectAnswer(opt)}
-                  className={`w-full p-3 border-2 text-left font-bold transition-colors ${
-                    userAnswers[currentQuestion.questionId] === opt
-                      ? 'border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8]'
-                      : 'border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] hover:bg-[#EDEAE4]'
-                  }`}
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
-          ) : currentQuestion.questionType === 'multiple' && currentQuestion.choices ? (
-            <div className="space-y-2">
-              {currentQuestion.choices.map((choice, idx) => {
-                const optionValue = (idx + 1).toString();
-                const isSelected = userAnswers[currentQuestion.questionId]?.split(',').includes(optionValue);
+              {/* 공통 제시문 (첫 번째 문제에서 가져옴) */}
+              {(() => {
+                const first = currentDisplayItem.questions[0];
+                const hasPassage = first.passage || first.passageImage || (first.koreanAbcItems && first.koreanAbcItems.length > 0) || (first.passageMixedExamples && first.passageMixedExamples.length > 0);
+                if (!hasPassage) return null;
                 return (
-                  <button
-                    key={idx}
-                    onClick={() => {
-                      const currentAnswers = userAnswers[currentQuestion.questionId]?.split(',').filter(Boolean) || [];
-                      // 복수정답 체크
-                      const correctAnswer = currentQuestion.correctAnswer;
-                      const isMultipleAnswer = correctAnswer.includes(',');
-
-                      if (isMultipleAnswer) {
-                        // 복수정답: 토글
-                        if (currentAnswers.includes(optionValue)) {
-                          handleSelectAnswer(currentAnswers.filter((a) => a !== optionValue).join(','));
-                        } else {
-                          handleSelectAnswer([...currentAnswers, optionValue].join(','));
-                        }
-                      } else {
-                        // 단일정답
-                        handleSelectAnswer(optionValue);
-                      }
-                    }}
-                    className={`w-full p-3 border-2 text-left transition-colors ${
-                      isSelected
-                        ? 'border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8]'
-                        : 'border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] hover:bg-[#EDEAE4]'
-                    }`}
-                  >
-                    <span className="font-bold">{idx + 1}.</span> {choice}
-                  </button>
+                  <div className="p-3 border-2 border-[#8B6914] bg-[#FFF8E1] mt-2 mb-3">
+                    {first.passage && first.passageType !== 'korean_abc' && (
+                      <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{first.passage}</p>
+                    )}
+                    {first.passageType === 'korean_abc' && first.koreanAbcItems && first.koreanAbcItems.length > 0 && (
+                      <div className="space-y-1">
+                        {first.koreanAbcItems.map((itm, i) => (
+                          <p key={i} className="text-sm text-[#1A1A1A]"><span className="font-bold">{KOREAN_LABELS[i]}.</span> {itm}</p>
+                        ))}
+                      </div>
+                    )}
+                    {first.passageMixedExamples && first.passageMixedExamples.length > 0 && (
+                      <div className="space-y-1">
+                        {first.passageMixedExamples.map((block: any) => (
+                          <div key={block.id}>
+                            {block.type === 'text' && <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{block.content}</p>}
+                            {block.type === 'labeled' && (block.items || []).map((i: any) => (
+                              <p key={i.id} className="text-sm"><span className="font-bold">{i.label}.</span> {i.content}</p>
+                            ))}
+                            {block.type === 'gana' && (block.items || []).map((i: any) => (
+                              <p key={i.id} className="text-sm"><span className="font-bold">({i.label})</span> {i.content}</p>
+                            ))}
+                            {block.type === 'grouped' && (block.children || []).map((child: any) => (
+                              <div key={child.id}>
+                                {child.type === 'text' && <p className="text-sm text-[#5C5C5C] whitespace-pre-wrap">{child.content}</p>}
+                                {child.type === 'labeled' && (child.items || []).map((ci: any) => (
+                                  <p key={ci.id} className="text-sm"><span className="font-bold">{ci.label}.</span> {ci.content}</p>
+                                ))}
+                                {child.type === 'gana' && (child.items || []).map((ci: any) => (
+                                  <p key={ci.id} className="text-sm"><span className="font-bold">({ci.label})</span> {ci.content}</p>
+                                ))}
+                                {child.type === 'image' && child.imageUrl && <img src={child.imageUrl} alt="" className="max-w-full h-auto" />}
+                              </div>
+                            ))}
+                            {block.type === 'image' && block.imageUrl && <img src={block.imageUrl} alt="" className="max-w-full h-auto" />}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {first.passageImage && (
+                      <img src={first.passageImage} alt="공통 이미지" className={`max-w-full max-h-[300px] object-contain border border-[#1A1A1A] ${first.passage || (first.koreanAbcItems && first.koreanAbcItems.length > 0) ? 'mt-2' : ''}`} />
+                    )}
+                  </div>
                 );
-              })}
+              })()}
+
+              {/* 하위 문제들 */}
+              <div className="space-y-4">
+                {currentDisplayItem.questions.map((sq, sqIdx) => (
+                  <SubQuestionSolve
+                    key={sq.questionId}
+                    question={sq}
+                    subIndex={sqIdx + 1}
+                    userAnswer={userAnswers[sq.questionId] || ''}
+                    onSelectAnswer={(answer) => handleSelectAnswer(sq.questionId, answer)}
+                  />
+                ))}
+              </div>
             </div>
-          ) : (
-            <input
-              type="text"
-              value={userAnswers[currentQuestion.questionId] || ''}
-              onChange={(e) => handleSelectAnswer(e.target.value)}
-              placeholder="답을 입력하세요"
-              className="w-full p-3 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] outline-none focus:border-[#5C5C5C]"
+          ) : currentDisplayItem && currentDisplayItem.type === 'single' ? (
+            /* ===== 단일 문제 ===== */
+            <SingleQuestionSolve
+              question={currentDisplayItem.question}
+              userAnswer={userAnswers[currentDisplayItem.question.questionId] || ''}
+              onSelectAnswer={(answer) => handleSelectAnswer(currentDisplayItem.question.questionId, answer)}
             />
-          )}
+          ) : null}
         </div>
 
         {/* 네비게이션 버튼 */}
@@ -573,10 +701,10 @@ export default function UpdateQuizModal({
               이전
             </button>
           )}
-          {currentIndex < questions.length - 1 ? (
+          {currentIndex < displayItems.length - 1 ? (
             <button
               onClick={handleNext}
-              disabled={!userAnswers[currentQuestion.questionId]}
+              disabled={!isCurrentItemAnswered}
               className="flex-1 py-3 font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#333] transition-colors disabled:opacity-50"
             >
               다음
@@ -598,6 +726,548 @@ export default function UpdateQuizModal({
           )}
         </div>
       </motion.div>
+    </div>
+  );
+}
+
+// ============================================================
+// 하위 컴포넌트: 단일 문제 풀이
+// ============================================================
+
+function SingleQuestionSolve({
+  question: q,
+  userAnswer,
+  onSelectAnswer,
+}: {
+  question: UpdatedQuestion;
+  userAnswer: string;
+  onSelectAnswer: (answer: string) => void;
+}) {
+  return (
+    <div>
+      <div className="mb-4">
+        <span className="text-xs text-[#5C5C5C]">
+          {q.questionType === 'ox' ? 'OX' :
+           q.questionType === 'multiple' ? (q.hasMultipleAnswers || q.correctAnswer.includes(',') ? '객관식 (복수정답)' : '객관식') :
+           '주관식'}
+        </span>
+
+        {/* 공통 제시문 (결합형이 아닌 단일 문제에 포함된 경우) */}
+        {(q.passage || q.passageImage || (q.koreanAbcItems && q.koreanAbcItems.length > 0) || (q.passageMixedExamples && q.passageMixedExamples.length > 0)) && (
+          <PassageBlock question={q} />
+        )}
+
+        <p className="text-[#1A1A1A] font-medium mt-1">{q.questionText}</p>
+      </div>
+
+      <QuestionExtras question={q} />
+      <AnswerInput question={q} userAnswer={userAnswer} onSelectAnswer={onSelectAnswer} />
+    </div>
+  );
+}
+
+// ============================================================
+// 하위 컴포넌트: 결합형 하위 문제 풀이
+// ============================================================
+
+function SubQuestionSolve({
+  question: q,
+  subIndex,
+  userAnswer,
+  onSelectAnswer,
+}: {
+  question: UpdatedQuestion;
+  subIndex: number;
+  userAnswer: string;
+  onSelectAnswer: (answer: string) => void;
+}) {
+  return (
+    <div className="p-3 border border-[#1A1A1A] bg-[#F5F0E8]">
+      <div className="mb-3">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-xs font-bold text-[#5C5C5C]">하위 문제 {subIndex}</span>
+          <span className="text-xs text-[#5C5C5C]">
+            {q.questionType === 'ox' ? 'OX' :
+             q.questionType === 'multiple' ? (q.hasMultipleAnswers || q.correctAnswer.includes(',') ? '객관식 (복수정답)' : '객관식') :
+             '주관식'}
+          </span>
+        </div>
+        <p className="text-[#1A1A1A] font-medium text-sm">{q.questionText}</p>
+      </div>
+
+      <QuestionExtras question={q} />
+      <AnswerInput question={q} userAnswer={userAnswer} onSelectAnswer={onSelectAnswer} />
+    </div>
+  );
+}
+
+// ============================================================
+// 공통: 제시문 블록
+// ============================================================
+
+function PassageBlock({ question: q }: { question: UpdatedQuestion }) {
+  return (
+    <div className="p-3 border-2 border-[#8B6914] bg-[#FFF8E1] mt-2 mb-2">
+      {q.passage && q.passageType !== 'korean_abc' && (
+        <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{q.passage}</p>
+      )}
+      {q.passageType === 'korean_abc' && q.koreanAbcItems && q.koreanAbcItems.length > 0 && (
+        <div className="space-y-1">
+          {q.koreanAbcItems.map((itm, i) => (
+            <p key={i} className="text-sm text-[#1A1A1A]"><span className="font-bold">{KOREAN_LABELS[i]}.</span> {itm}</p>
+          ))}
+        </div>
+      )}
+      {q.passageMixedExamples && q.passageMixedExamples.length > 0 && (
+        <div className="space-y-1">
+          {q.passageMixedExamples.map((block: any) => (
+            <div key={block.id}>
+              {block.type === 'text' && <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{block.content}</p>}
+              {block.type === 'labeled' && (block.items || []).map((i: any) => (
+                <p key={i.id} className="text-sm"><span className="font-bold">{i.label}.</span> {i.content}</p>
+              ))}
+              {block.type === 'gana' && (block.items || []).map((i: any) => (
+                <p key={i.id} className="text-sm"><span className="font-bold">({i.label})</span> {i.content}</p>
+              ))}
+              {block.type === 'grouped' && (block.children || []).map((child: any) => (
+                <div key={child.id}>
+                  {child.type === 'text' && <p className="text-sm text-[#5C5C5C] whitespace-pre-wrap">{child.content}</p>}
+                  {child.type === 'labeled' && (child.items || []).map((ci: any) => (
+                    <p key={ci.id} className="text-sm"><span className="font-bold">{ci.label}.</span> {ci.content}</p>
+                  ))}
+                  {child.type === 'gana' && (child.items || []).map((ci: any) => (
+                    <p key={ci.id} className="text-sm"><span className="font-bold">({ci.label})</span> {ci.content}</p>
+                  ))}
+                  {child.type === 'image' && child.imageUrl && <img src={child.imageUrl} alt="" className="max-w-full h-auto" />}
+                </div>
+              ))}
+              {block.type === 'image' && block.imageUrl && <img src={block.imageUrl} alt="" className="max-w-full h-auto" />}
+            </div>
+          ))}
+        </div>
+      )}
+      {q.passageImage && (
+        <img src={q.passageImage} alt="공통 이미지" className={`max-w-full max-h-[300px] object-contain border border-[#1A1A1A] ${q.passage || (q.koreanAbcItems && q.koreanAbcItems.length > 0) ? 'mt-2' : ''}`} />
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// 공통: 보기/이미지/발문 등 부가 요소
+// ============================================================
+
+function QuestionExtras({ question: q }: { question: UpdatedQuestion }) {
+  return (
+    <>
+      {/* 혼합 보기 */}
+      {q.mixedExamples && q.mixedExamples.length > 0 && (
+        <div className="mb-3">
+          {q.mixedExamples.filter((b: any) => b.type === 'grouped').map((block: any) => (
+            <div key={block.id} className="p-3 border-2 border-[#8B6914] bg-[#FFF8E1] mb-2">
+              <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
+              <div className="space-y-1">
+                {block.children?.map((child: any) => (
+                  <div key={child.id}>
+                    {child.type === 'text' && child.content?.trim() && <p className="text-sm text-[#5C5C5C] whitespace-pre-wrap">{child.content}</p>}
+                    {child.type === 'labeled' && (child.items || []).map((li: any) => (
+                      <p key={li.id} className="text-sm text-[#1A1A1A]"><span className="font-bold">{li.label}.</span> {li.content}</p>
+                    ))}
+                    {child.type === 'gana' && (child.items || []).map((li: any) => (
+                      <p key={li.id} className="text-sm text-[#1A1A1A]"><span className="font-bold">({li.label})</span> {li.content}</p>
+                    ))}
+                    {child.type === 'image' && child.imageUrl && <img src={child.imageUrl} alt="" className="max-w-full h-auto border border-[#1A1A1A]" />}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          {q.mixedExamples.filter((b: any) => b.type !== 'grouped').map((block: any) => {
+            if (block.type === 'text' && block.content?.trim()) return (
+              <div key={block.id} className="p-3 border border-[#8B6914] bg-[#FFF8E1] mb-2">
+                <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
+                <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{block.content}</p>
+              </div>
+            );
+            if (block.type === 'labeled') return (
+              <div key={block.id} className="p-3 border border-[#8B6914] bg-[#FFF8E1] mb-2">
+                <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
+                <div className="space-y-1">
+                  {(block.items || []).map((li: any) => (
+                    <p key={li.id} className="text-sm text-[#1A1A1A]"><span className="font-bold">{li.label}.</span> {li.content}</p>
+                  ))}
+                </div>
+              </div>
+            );
+            if (block.type === 'gana') return (
+              <div key={block.id} className="p-3 border border-[#8B6914] bg-[#FFF8E1] mb-2">
+                <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
+                <div className="space-y-1">
+                  {(block.items || []).map((li: any) => (
+                    <p key={li.id} className="text-sm text-[#1A1A1A]"><span className="font-bold">({li.label})</span> {li.content}</p>
+                  ))}
+                </div>
+              </div>
+            );
+            return null;
+          })}
+        </div>
+      )}
+
+      {/* 레거시 하위 문제 보기 */}
+      {!(q.mixedExamples && q.mixedExamples.length > 0) && q.subQuestionOptions && q.subQuestionOptions.length > 0 && (
+        <div className="p-3 border border-[#8B6914] bg-[#FFF8E1] mb-3">
+          <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
+          {q.subQuestionOptionsType === 'text' ? (
+            <p className="text-sm text-[#1A1A1A]">{q.subQuestionOptions.join(', ')}</p>
+          ) : (
+            <div className="space-y-1">
+              {q.subQuestionOptions.map((opt, i) => (
+                <p key={i} className="text-sm text-[#1A1A1A]"><span className="font-bold">{KOREAN_LABELS[i]}.</span> {opt}</p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 문제 이미지 */}
+      {(q.image || q.imageUrl) && (
+        <div className="mb-3">
+          <img src={q.image || q.imageUrl} alt="문제 이미지" className="max-w-full max-h-[300px] object-contain border border-[#1A1A1A]" />
+        </div>
+      )}
+
+      {/* 하위 문제 이미지 */}
+      {q.subQuestionImage && (
+        <div className="mb-3">
+          <img src={q.subQuestionImage} alt="보기 이미지" className="max-w-full max-h-[300px] object-contain border border-[#1A1A1A]" />
+        </div>
+      )}
+
+      {/* 보기 (<보기> 박스) */}
+      {q.bogi && q.bogi.items && q.bogi.items.some(i => i.content?.trim()) && (
+        <div className="mb-3 p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A]">
+          <p className="text-xs text-center text-[#5C5C5C] mb-2 font-bold">&lt;보 기&gt;</p>
+          <div className="space-y-1">
+            {q.bogi.items.filter(i => i.content?.trim()).map((bi, i) => (
+              <p key={i} className="text-sm text-[#1A1A1A]"><span className="font-bold mr-1">{bi.label}.</span>{bi.content}</p>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 발문 */}
+      {(q.passagePrompt || q.bogiQuestionText) && (
+        <div className="mb-3 p-3 border border-[#1A1A1A] bg-[#F5F0E8]">
+          <p className="text-sm text-[#1A1A1A]">
+            {q.passagePrompt && q.bogiQuestionText
+              ? `${q.passagePrompt} ${q.bogiQuestionText}`
+              : q.passagePrompt || q.bogiQuestionText}
+          </p>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ============================================================
+// 공통: 답변 입력 (OX / 객관식 / 단답형)
+// ============================================================
+
+function AnswerInput({
+  question: q,
+  userAnswer,
+  onSelectAnswer,
+}: {
+  question: UpdatedQuestion;
+  userAnswer: string;
+  onSelectAnswer: (answer: string) => void;
+}) {
+  if (q.questionType === 'ox') {
+    return (
+      <div className="space-y-2">
+        {['O', 'X'].map((opt) => (
+          <button
+            key={opt}
+            onClick={() => onSelectAnswer(opt)}
+            className={`w-full p-3 border-2 text-left font-bold transition-colors ${
+              userAnswer === opt
+                ? 'border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8]'
+                : 'border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] hover:bg-[#EDEAE4]'
+            }`}
+          >
+            {opt}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  if (q.questionType === 'multiple' && q.choices) {
+    const isMultipleAnswer = q.correctAnswer.includes(',') || q.hasMultipleAnswers;
+    return (
+      <div className="space-y-2">
+        {q.choices.map((choice, idx) => {
+          const optionValue = (idx + 1).toString();
+          const isSelected = userAnswer?.split(',').includes(optionValue);
+          return (
+            <button
+              key={idx}
+              onClick={() => {
+                const currentAnswers = userAnswer?.split(',').filter(Boolean) || [];
+                if (isMultipleAnswer) {
+                  if (currentAnswers.includes(optionValue)) {
+                    onSelectAnswer(currentAnswers.filter((a) => a !== optionValue).join(','));
+                  } else {
+                    onSelectAnswer([...currentAnswers, optionValue].join(','));
+                  }
+                } else {
+                  onSelectAnswer(optionValue);
+                }
+              }}
+              className={`w-full p-3 border-2 text-left transition-colors ${
+                isSelected
+                  ? 'border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8]'
+                  : 'border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] hover:bg-[#EDEAE4]'
+              }`}
+            >
+              <span className="font-bold">{idx + 1}.</span> {choice}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // 단답형
+  return (
+    <input
+      type="text"
+      value={userAnswer || ''}
+      onChange={(e) => onSelectAnswer(e.target.value)}
+      placeholder="답을 입력하세요"
+      className="w-full p-3 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] outline-none focus:border-[#5C5C5C]"
+    />
+  );
+}
+
+// ============================================================
+// 결과 화면: 개별 문제 결과 카드
+// ============================================================
+
+function QuestionResultCard({
+  result: r,
+  label,
+}: {
+  result: {
+    questionId: string; isCorrect: boolean; userAnswer: string; correctAnswer: string;
+    previousAnswer: string; questionText: string; questionType: string; choices?: string[];
+    explanation?: string; choiceExplanations?: string[]; image?: string; imageUrl?: string;
+    mixedExamples?: any[]; bogi?: any; subQuestionOptions?: string[];
+    subQuestionOptionsType?: string; subQuestionImage?: string;
+    passagePrompt?: string; bogiQuestionText?: string;
+  };
+  label: string;
+}) {
+  const formatAnswer = (answer: string, type: string, choices?: string[]) => {
+    if (!answer) return '-';
+    if (type === 'ox') return answer.toUpperCase();
+    if (type === 'multiple' && choices) {
+      const indices = answer.split(',').map(s => parseInt(s.trim(), 10) - 1);
+      return indices.map(i => choices[i] || `${i + 1}번`).join(', ');
+    }
+    return answer;
+  };
+
+  const correctAnswerIndex = r.questionType === 'multiple'
+    ? r.correctAnswer.split(',').map(s => parseInt(s.trim(), 10))
+    : [];
+  const userAnswerIndex = r.questionType === 'multiple' && r.userAnswer
+    ? r.userAnswer.split(',').map(s => parseInt(s.trim(), 10))
+    : [];
+  const displayImage = r.image || r.imageUrl;
+
+  return (
+    <div className={`p-3 border ${r.isCorrect ? 'border-[#1A6B1A] bg-[#E8F5E9]' : 'border-[#8B1A1A] bg-[#FDEAEA]'}`}>
+      {/* 헤더 */}
+      <div className="flex items-center justify-between mb-2">
+        <span className={`text-sm font-bold ${r.isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>{label}</span>
+        <span className={`text-xs px-2 py-0.5 ${r.isCorrect ? 'bg-[#1A6B1A] text-white' : 'bg-[#8B1A1A] text-white'}`}>
+          {r.isCorrect ? '정답' : '오답'}
+        </span>
+      </div>
+
+      {/* 문제 텍스트 */}
+      <p className="text-sm text-[#1A1A1A] mb-2">{r.questionText}</p>
+
+      {/* 혼합 보기 */}
+      {r.mixedExamples && r.mixedExamples.length > 0 && (
+        <div className="mb-2">
+          {r.mixedExamples.filter((b: any) => b.type === 'grouped').map((block: any) => (
+            <div key={block.id} className="p-2 border border-[#8B6914] bg-[#FFF8E1] mb-1 text-xs">
+              {block.children?.map((child: any) => (
+                <div key={child.id}>
+                  {child.type === 'text' && child.content?.trim() && <p className="text-[#5C5C5C] whitespace-pre-wrap">{child.content}</p>}
+                  {child.type === 'labeled' && (child.items || []).map((li: any) => (
+                    <p key={li.id}><span className="font-bold">{li.label}.</span> {li.content}</p>
+                  ))}
+                  {child.type === 'gana' && (child.items || []).map((li: any) => (
+                    <p key={li.id}><span className="font-bold">({li.label})</span> {li.content}</p>
+                  ))}
+                </div>
+              ))}
+            </div>
+          ))}
+          {r.mixedExamples.filter((b: any) => b.type !== 'grouped').map((block: any) => {
+            if (block.type === 'text' && block.content?.trim()) return (
+              <div key={block.id} className="p-2 border border-[#8B6914] bg-[#FFF8E1] mb-1 text-xs">
+                <p className="text-[#1A1A1A] whitespace-pre-wrap">{block.content}</p>
+              </div>
+            );
+            if (block.type === 'labeled') return (
+              <div key={block.id} className="p-2 border border-[#8B6914] bg-[#FFF8E1] mb-1 text-xs">
+                {(block.items || []).map((li: any) => (
+                  <p key={li.id}><span className="font-bold">{li.label}.</span> {li.content}</p>
+                ))}
+              </div>
+            );
+            if (block.type === 'gana') return (
+              <div key={block.id} className="p-2 border border-[#8B6914] bg-[#FFF8E1] mb-1 text-xs">
+                {(block.items || []).map((li: any) => (
+                  <p key={li.id}><span className="font-bold">({li.label})</span> {li.content}</p>
+                ))}
+              </div>
+            );
+            return null;
+          })}
+        </div>
+      )}
+
+      {/* 레거시 보기 */}
+      {!r.mixedExamples?.length && r.subQuestionOptions && r.subQuestionOptions.length > 0 && (
+        <div className="p-2 border border-[#8B6914] bg-[#FFF8E1] mb-2 text-xs">
+          {r.subQuestionOptionsType === 'text' ? (
+            <p className="text-[#1A1A1A]">{r.subQuestionOptions.join(', ')}</p>
+          ) : (
+            <div className="space-y-0.5">
+              {r.subQuestionOptions.map((opt, i) => (
+                <p key={i} className="text-[#1A1A1A]"><span className="font-bold">{KOREAN_LABELS[i]}.</span> {opt}</p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 문제 이미지 */}
+      {displayImage && (
+        <div className="mb-2">
+          <img src={displayImage} alt="문제 이미지" className="max-w-full max-h-[200px] object-contain border border-[#1A1A1A]" />
+        </div>
+      )}
+
+      {/* 하위 문제 이미지 */}
+      {r.subQuestionImage && (
+        <div className="mb-2">
+          <img src={r.subQuestionImage} alt="보기 이미지" className="max-w-full max-h-[200px] object-contain border border-[#1A1A1A]" />
+        </div>
+      )}
+
+      {/* 보기 박스 */}
+      {r.bogi && r.bogi.items && r.bogi.items.some((i: any) => i.content?.trim()) && (
+        <div className="mb-2 p-2 bg-[#EDEAE4] border border-[#1A1A1A] text-xs">
+          <p className="text-center text-[#5C5C5C] mb-1 font-bold">&lt;보 기&gt;</p>
+          <div className="space-y-0.5">
+            {r.bogi.items.filter((i: any) => i.content?.trim()).map((bi: any, i: number) => (
+              <p key={i} className="text-[#1A1A1A]"><span className="font-bold mr-1">{bi.label}.</span>{bi.content}</p>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 발문 */}
+      {(r.passagePrompt || r.bogiQuestionText) && (
+        <div className="mb-2 p-2 border border-[#1A1A1A] bg-[#F5F0E8] text-xs">
+          <p className="text-[#1A1A1A]">
+            {r.passagePrompt && r.bogiQuestionText
+              ? `${r.passagePrompt} ${r.bogiQuestionText}`
+              : r.passagePrompt || r.bogiQuestionText}
+          </p>
+        </div>
+      )}
+
+      {/* OX */}
+      {r.questionType === 'ox' && (
+        <div className="flex gap-2 mb-2">
+          {['O', 'X'].map((opt) => {
+            const normalizedCorrect = r.correctAnswer === '0' ? 'O' : r.correctAnswer === '1' ? 'X' : r.correctAnswer.toUpperCase();
+            const normalizedUser = r.userAnswer === '0' ? 'O' : r.userAnswer === '1' ? 'X' : r.userAnswer.toUpperCase();
+            const isCorrectOpt = normalizedCorrect === opt;
+            const isUserOpt = normalizedUser === opt;
+            return (
+              <div key={opt} className={`flex-1 py-2 text-center text-sm font-bold border-2 ${
+                isCorrectOpt && isUserOpt ? 'border-[#1A6B1A] bg-[#C8E6C9] text-[#1A6B1A]'
+                : isCorrectOpt ? 'border-[#1A6B1A] bg-white text-[#1A6B1A]'
+                : isUserOpt ? 'border-[#8B1A1A] bg-[#FFCDD2] text-[#8B1A1A]'
+                : 'border-[#ccc] bg-white text-[#999]'
+              }`}>
+                {opt}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 객관식 선지 */}
+      {r.questionType === 'multiple' && r.choices && (
+        <div className="mb-2 space-y-1">
+          {r.choices.map((choice, i) => {
+            const choiceNum = i + 1;
+            const isCorrectChoice = correctAnswerIndex.includes(choiceNum);
+            const isUserChoice = userAnswerIndex.includes(choiceNum);
+            return (
+              <div key={i} className={`p-2 text-xs border ${
+                isCorrectChoice && isUserChoice ? 'border-[#1A6B1A] bg-[#C8E6C9] text-[#1A6B1A]'
+                : isCorrectChoice ? 'border-[#1A6B1A] bg-white text-[#1A6B1A]'
+                : isUserChoice ? 'border-[#8B1A1A] bg-[#FFCDD2] text-[#8B1A1A]'
+                : 'border-[#ddd] bg-white text-[#5C5C5C]'
+              }`}>
+                <span className="font-bold">{choiceNum}.</span> {choice}
+                {correctAnswerIndex.length > 1 && isCorrectChoice && <span className="ml-1 font-bold">(정답)</span>}
+                {correctAnswerIndex.length > 1 && isUserChoice && <span className="ml-1 font-bold">(내 답)</span>}
+                {r.choiceExplanations && r.choiceExplanations[i] && (
+                  <p className="mt-1 text-[10px] text-[#5C5C5C] italic">{r.choiceExplanations[i]}</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 단답형 */}
+      {r.questionType !== 'ox' && r.questionType !== 'multiple' && (
+        <div className="text-xs space-y-1 mb-2">
+          <p className="text-[#1A6B1A]"><span className="font-bold">정답:</span> {r.correctAnswer.includes('|||') ? r.correctAnswer.split('|||').join(' / ') : r.correctAnswer}</p>
+          <p className={r.isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}><span className="font-bold">내 답:</span> {r.userAnswer || '-'}</p>
+          {r.previousAnswer && r.previousAnswer !== r.userAnswer && (
+            <p className="text-[#5C5C5C]"><span className="font-bold">수정 전 답:</span> {r.previousAnswer}</p>
+          )}
+        </div>
+      )}
+
+      {/* 수정 전 답 (OX/객관식) */}
+      {(r.questionType === 'ox' || r.questionType === 'multiple') && r.previousAnswer && r.previousAnswer !== r.userAnswer && (
+        <p className="text-xs text-[#5C5C5C] mb-2">
+          <span className="font-bold">수정 전 답:</span> {formatAnswer(r.previousAnswer, r.questionType, r.choices)}
+        </p>
+      )}
+
+      {/* 해설 */}
+      {r.explanation && (
+        <div className="p-2 bg-[#EDEAE4] border border-[#ccc] text-xs">
+          <p className="font-bold text-[#5C5C5C] mb-1">해설</p>
+          <p className="text-[#1A1A1A] whitespace-pre-wrap">{r.explanation}</p>
+        </div>
+      )}
     </div>
   );
 }

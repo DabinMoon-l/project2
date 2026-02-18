@@ -1384,18 +1384,30 @@ export const useReview = (): UseReviewReturn => {
         console.error('퀴즈 제목 로드 실패:', e);
       }
 
-      // 해당 퀴즈의 모든 bookmark 리뷰 가져오기
-      const reviewsQuery = query(
+      // 해당 퀴즈의 bookmark 전용 리뷰 가져오기
+      const bookmarkQuery = query(
+        collection(db, 'reviews'),
+        where('userId', '==', user.uid),
+        where('quizId', '==', quizId),
+        where('reviewType', '==', 'bookmark')
+      );
+      const bookmarkDocs = await getDocs(bookmarkQuery);
+
+      // 다른 타입(solved/wrong)에서 isBookmarked=true인 리뷰도 가져오기
+      const flaggedQuery = query(
         collection(db, 'reviews'),
         where('userId', '==', user.uid),
         where('quizId', '==', quizId),
         where('isBookmarked', '==', true)
       );
-      const reviewsDocs = await getDocs(reviewsQuery);
+      const flaggedDocs = await getDocs(flaggedQuery);
+      // bookmark 타입이 아닌 문서만 필터
+      const nonBookmarkFlagged = flaggedDocs.docs.filter(d => d.data().reviewType !== 'bookmark');
 
       // 휴지통에 저장 (복원용 review ID 목록)
       const restoreData = {
-        bookmarkedReviewIds: reviewsDocs.docs.map(d => d.id),
+        bookmarkedReviewIds: bookmarkDocs.docs.map(d => d.id),
+        flaggedReviewIds: nonBookmarkFlagged.map(d => d.id),
       };
 
       await addDoc(collection(db, 'deletedReviewItems'), {
@@ -1404,13 +1416,17 @@ export const useReview = (): UseReviewReturn => {
         type: 'bookmark',
         originalId: quizId,
         title: quizTitle,
-        questionCount: reviewsDocs.size,
+        questionCount: bookmarkDocs.size,
         deletedAt: serverTimestamp(),
         restoreData,
       });
 
-      // isBookmarked를 false로 변경
-      for (const docSnap of reviewsDocs.docs) {
+      // bookmark 전용 리뷰는 삭제
+      for (const docSnap of bookmarkDocs.docs) {
+        await deleteDoc(docSnap.ref);
+      }
+      // 다른 타입 리뷰의 isBookmarked 플래그만 해제
+      for (const docSnap of nonBookmarkFlagged) {
         await updateDoc(docSnap.ref, { isBookmarked: false });
       }
     } catch (err) {
@@ -1808,6 +1824,7 @@ export const useReview = (): UseReviewReturn => {
         const bookmarkQuery = query(
           collection(db, 'reviews'),
           where('userId', '==', user.uid),
+          where('quizId', '==', item.quizId),
           where('questionId', '==', item.questionId),
           where('reviewType', '==', 'bookmark')
         );
@@ -1835,11 +1852,35 @@ export const useReview = (): UseReviewReturn => {
           explanation: item.explanation || '',
           reviewType: 'bookmark',
           isBookmarked: true,
-          isCorrect: item.isCorrect ?? null, // undefined면 null로 변환
+          isCorrect: item.isCorrect ?? null,
           reviewCount: 0,
           lastReviewedAt: null,
           quizUpdatedAt: item.quizUpdatedAt || null,
           courseId: userCourseId || null,
+          // 결합형 문제 필드
+          ...(item.combinedGroupId && { combinedGroupId: item.combinedGroupId }),
+          ...(item.combinedIndex !== undefined && { combinedIndex: item.combinedIndex }),
+          ...(item.combinedTotal !== undefined && { combinedTotal: item.combinedTotal }),
+          ...(item.passage && { passage: item.passage }),
+          ...(item.passageType && { passageType: item.passageType }),
+          ...(item.passageImage && { passageImage: item.passageImage }),
+          ...(item.koreanAbcItems && { koreanAbcItems: item.koreanAbcItems }),
+          ...(item.passageMixedExamples && { passageMixedExamples: item.passageMixedExamples }),
+          ...(item.commonQuestion && { commonQuestion: item.commonQuestion }),
+          // 이미지/보기 필드
+          ...(item.image && { image: item.image }),
+          ...(item.imageUrl && { imageUrl: item.imageUrl }),
+          ...(item.subQuestionOptions && { subQuestionOptions: item.subQuestionOptions }),
+          ...(item.subQuestionOptionsType && { subQuestionOptionsType: item.subQuestionOptionsType }),
+          ...(item.subQuestionImage && { subQuestionImage: item.subQuestionImage }),
+          ...(item.mixedExamples && { mixedExamples: item.mixedExamples }),
+          // 챕터/해설 필드
+          ...(item.chapterId && { chapterId: item.chapterId }),
+          ...(item.chapterDetailId && { chapterDetailId: item.chapterDetailId }),
+          ...(item.choiceExplanations && { choiceExplanations: item.choiceExplanations }),
+          ...(item.passagePrompt && { passagePrompt: item.passagePrompt }),
+          ...(item.bogiQuestionText && { bogiQuestionText: item.bogiQuestionText }),
+          ...(item.bogi && { bogi: item.bogi }),
           createdAt: serverTimestamp(),
         });
 

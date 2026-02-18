@@ -309,9 +309,11 @@ function SingleQuestionCard({
             const correctAnswerStr = question.correctAnswer?.toString() || '';
             const userAnswerStr = question.userAnswer?.toString() || '';
 
-            const isCorrect = correctAnswerStr.includes(',')
-              ? correctAnswerStr.split(',').map(s => s.trim()).includes(optionNum)
-              : correctAnswerStr === optionNum;
+            const correctAnswers = correctAnswerStr.includes(',')
+              ? correctAnswerStr.split(',').map(s => s.trim())
+              : [correctAnswerStr];
+            const isCorrect = correctAnswers.includes(optionNum);
+            const isMultipleAnswer = correctAnswers.length > 1;
 
             const isUserAnswer = userAnswerStr.includes(',')
               ? userAnswerStr.split(',').map(s => s.trim()).includes(optionNum)
@@ -330,9 +332,8 @@ function SingleQuestionCard({
               >
                 <span className="font-bold mr-2">{idx + 1}.</span>
                 {option}
-                {isCorrect && isUserAnswer && <span className="ml-2 font-bold">(정답) (내 답)</span>}
-                {isCorrect && !isUserAnswer && <span className="ml-2 font-bold">(정답)</span>}
-                {!isCorrect && isUserAnswer && <span className="ml-2 font-bold">(내 답)</span>}
+                {isMultipleAnswer && isCorrect && <span className="ml-2 font-bold">(정답)</span>}
+                {isMultipleAnswer && isUserAnswer && <span className="ml-2 font-bold">(내 답)</span>}
               </div>
             );
           })}
@@ -378,15 +379,6 @@ function SingleQuestionCard({
                     style={{ backgroundColor: bgColor, color: textColor, borderColor }}
                   >
                     <span>{option}</span>
-                    {isCorrect && isUserAnswer && (
-                      <span className="text-[10px] mt-1">정답/내 답</span>
-                    )}
-                    {isCorrect && !isUserAnswer && (
-                      <span className="text-[10px] mt-1">정답</span>
-                    )}
-                    {!isCorrect && isUserAnswer && (
-                      <span className="text-[10px] mt-1">내 답</span>
-                    )}
                   </div>
                 );
               })}
@@ -808,9 +800,11 @@ function CombinedQuestionCard({
                   const correctAnswerStr = question.correctAnswer?.toString() || '';
                   const userAnswerStr = question.userAnswer?.toString() || '';
 
-                  const isCorrect = correctAnswerStr.includes(',')
-                    ? correctAnswerStr.split(',').map(s => s.trim()).includes(optionNum)
-                    : correctAnswerStr === optionNum;
+                  const correctAnswers = correctAnswerStr.includes(',')
+                    ? correctAnswerStr.split(',').map(s => s.trim())
+                    : [correctAnswerStr];
+                  const isCorrect = correctAnswers.includes(optionNum);
+                  const isMultipleAnswer = correctAnswers.length > 1;
 
                   const isUserAnswer = userAnswerStr.includes(',')
                     ? userAnswerStr.split(',').map(s => s.trim()).includes(optionNum)
@@ -829,9 +823,8 @@ function CombinedQuestionCard({
                     >
                       <span className="font-bold mr-2">{optIdx + 1}.</span>
                       {option}
-                      {isCorrect && isUserAnswer && <span className="ml-2 font-bold">(정답)</span>}
-                      {isCorrect && !isUserAnswer && <span className="ml-2 font-bold">(정답)</span>}
-                      {!isCorrect && isUserAnswer && <span className="ml-2 font-bold">(내 선택)</span>}
+                      {isMultipleAnswer && isCorrect && <span className="ml-2 font-bold">(정답)</span>}
+                      {isMultipleAnswer && isUserAnswer && <span className="ml-2 font-bold">(내 답)</span>}
                     </div>
                   );
                 })}
@@ -877,15 +870,6 @@ function CombinedQuestionCard({
                           style={{ backgroundColor: bgColor, color: textColor, borderColor }}
                         >
                           <span>{option}</span>
-                          {isCorrect && isUserAnswer && (
-                            <span className="text-[10px] mt-1">정답/내 답</span>
-                          )}
-                          {isCorrect && !isUserAnswer && (
-                            <span className="text-[10px] mt-1">정답</span>
-                          )}
-                          {!isCorrect && isUserAnswer && (
-                            <span className="text-[10px] mt-1">내 답</span>
-                          )}
                         </div>
                       );
                     })}

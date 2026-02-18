@@ -160,8 +160,10 @@ export default function ReviewQuestionCard({
                   <div className="space-y-1">
                     {item.options.map((option, index) => {
                       const optionNumber = (index + 1).toString();
-                      const isCorrectOption = item.correctAnswer === optionNumber;
-                      const isUserChoice = item.userAnswer === optionNumber;
+                      const correctAnswers = item.correctAnswer.toString().split(',').map(s => s.trim());
+                      const userAnswers = (item.userAnswer || '').toString().split(',').map(s => s.trim());
+                      const isCorrectOption = correctAnswers.includes(optionNumber);
+                      const isUserChoice = userAnswers.includes(optionNumber);
 
                       return (
                         <div
@@ -189,7 +191,7 @@ export default function ReviewQuestionCard({
               )}
 
               {/* OX/주관식 정답 비교 */}
-              {(item.type === 'ox' || item.type === 'short') && (
+              {(item.type === 'ox' || item.type === 'short' || item.type === 'short_answer' || item.type === 'subjective') && (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <p className="text-xs font-semibold text-gray-500 mb-1">정답</p>

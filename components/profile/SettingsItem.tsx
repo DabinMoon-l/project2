@@ -1,7 +1,6 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { useTheme } from '@/styles/themes/useTheme';
 
 // ============================================================
 // 타입 정의
@@ -35,9 +34,7 @@ interface SettingsItemProps {
 // ============================================================
 
 /**
- * 설정 항목 컴포넌트
- *
- * 토글, 링크, 버튼 타입을 지원합니다.
+ * 설정 항목 컴포넌트 (글래스모피즘)
  */
 export default function SettingsItem({
   icon,
@@ -51,8 +48,6 @@ export default function SettingsItem({
   danger = false,
   rightText,
 }: SettingsItemProps) {
-  const { theme } = useTheme();
-
   const handleClick = () => {
     if (disabled) return;
 
@@ -70,33 +65,24 @@ export default function SettingsItem({
       disabled={disabled}
       className={`
         w-full flex items-center gap-3 px-4 py-3 text-left transition-colors
-        ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50 active:bg-gray-100'}
+        ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/5 active:bg-white/10'}
       `}
       whileTap={!disabled ? { scale: 0.99 } : undefined}
     >
       {/* 아이콘 */}
       {icon && (
-        <span
-          className="text-xl w-8 h-8 flex items-center justify-center rounded-lg"
-          style={{ backgroundColor: `${theme.colors.accent}15` }}
-        >
+        <span className="text-xl w-8 h-8 flex items-center justify-center rounded-lg bg-white/10">
           {icon}
         </span>
       )}
 
       {/* 레이블 & 설명 */}
       <div className="flex-1 min-w-0">
-        <p
-          className="font-medium truncate"
-          style={{ color: danger ? '#EF4444' : theme.colors.text }}
-        >
+        <p className={`font-medium truncate ${danger ? 'text-red-400' : 'text-white'}`}>
           {label}
         </p>
         {description && (
-          <p
-            className="text-sm truncate"
-            style={{ color: theme.colors.textSecondary }}
-          >
+          <p className="text-sm truncate text-white/50">
             {description}
           </p>
         )}
@@ -109,10 +95,8 @@ export default function SettingsItem({
           className={`
             relative w-12 h-7 rounded-full transition-colors
             ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}
+            ${value ? 'bg-white/40' : 'bg-white/15'}
           `}
-          style={{
-            backgroundColor: value ? theme.colors.accent : theme.colors.border,
-          }}
         >
           <motion.div
             className="absolute top-1 w-5 h-5 bg-white rounded-full shadow-sm"
@@ -124,17 +108,14 @@ export default function SettingsItem({
         // 링크 화살표
         <div className="flex items-center gap-2">
           {rightText && (
-            <span
-              className="text-sm"
-              style={{ color: theme.colors.textSecondary }}
-            >
+            <span className="text-sm text-white/50">
               {rightText}
             </span>
           )}
           <svg
-            className="w-5 h-5"
+            className="w-5 h-5 text-white/40"
             fill="none"
-            stroke={theme.colors.textSecondary}
+            stroke="currentColor"
             viewBox="0 0 24 24"
           >
             <path

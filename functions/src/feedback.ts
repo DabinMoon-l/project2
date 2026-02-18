@@ -9,8 +9,8 @@ interface Feedback {
   userId: string;         // 작성자 ID
   quizId: string;         // 퀴즈 ID
   questionId: string;     // 문제 ID
-  type: "error" | "suggestion" | "other";  // 피드백 유형
-  content: string;        // 피드백 내용
+  type: "praise" | "wantmore" | "unclear" | "wrong" | "typo" | "other";  // 피드백 유형
+  content?: string;       // 피드백 내용 (선택)
   status: "pending" | "reviewed" | "resolved";  // 처리 상태
   rewarded?: boolean;     // 보상 지급 여부
   createdAt: FirebaseFirestore.Timestamp;
@@ -43,17 +43,11 @@ export const onFeedbackSubmit = onDocumentCreated(
       return;
     }
 
-    const { userId, questionId, content } = feedback;
+    const { userId, questionId, type } = feedback;
 
-    // 필수 데이터 검증
-    if (!userId || !questionId || !content) {
-      console.error("필수 데이터가 누락되었습니다", { userId, questionId });
-      return;
-    }
-
-    // 피드백 내용 최소 길이 검증 (스팸 방지)
-    if (content.trim().length < 10) {
-      console.log("피드백 내용이 너무 짧습니다:", feedbackId);
+    // 필수 데이터 검증 (type 선택만으로 제출 가능, content는 선택)
+    if (!userId || !questionId || !type) {
+      console.error("필수 데이터가 누락되었습니다", { userId, questionId, type });
       return;
     }
 
@@ -84,7 +78,7 @@ export const onFeedbackSubmit = onDocumentCreated(
       const quizDoc = await db.collection("quizzes").doc(feedback.quizId).get();
       if (quizDoc.exists) {
         const quizData = quizDoc.data();
-        const professorId = quizData?.professorId;
+        const professorId = quizData?.creatorId;
 
         if (professorId) {
           await db.collection("notifications").add({

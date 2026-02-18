@@ -53,22 +53,6 @@ export default function RabbitDogam({
 
   const discoveredCount = myHoldingMap.size;
   const loading = rabbitsLoading || holdingsLoading;
-  const [filling, setFilling] = useState(false);
-
-  // 도감 전체 채우기 (디버그)
-  const handleFillDogam = async () => {
-    if (filling) return;
-    setFilling(true);
-    try {
-      const fillDogam = httpsCallable(functions, 'fillDogam');
-      await fillDogam({ courseId });
-      window.location.reload();
-    } catch (err) {
-      console.error('도감 채우기 실패:', err);
-      setFilling(false);
-    }
-  };
-
   // 선택된 토끼의 상세 정보
   const selectedRabbit = selectedRabbitId !== null ? rabbitDocMap.get(selectedRabbitId) : null;
   const selectedHolding = selectedRabbitId !== null ? myHoldingMap.get(selectedRabbitId) : null;
@@ -81,52 +65,49 @@ export default function RabbitDogam({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
-          onClick={() => {
-            if (selectedRabbitId !== null) {
-              setSelectedRabbitId(null);
-            } else {
-              onClose();
-            }
-          }}
         >
           <motion.div
             initial={{ scale: 0.9 }}
             animate={{ scale: 1 }}
             exit={{ scale: 0.9 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-lg max-h-[80vh] bg-[#F5F0E8] border-2 border-[#1A1A1A] flex flex-col"
+            className="relative w-full max-w-lg max-h-[80vh] flex flex-col overflow-hidden rounded-2xl"
           >
+            {/* 배경 이미지 + 글래스 오버레이 */}
+            <div className="absolute inset-0 rounded-2xl overflow-hidden">
+              <img src="/images/home-bg.jpg" alt="" className="w-full h-full object-cover" />
+            </div>
+            <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
+
             {/* 헤더 */}
-            <div className="flex items-center justify-between p-4 border-b-2 border-[#1A1A1A]">
-              <span className="font-bold text-xl">
+            <div className="relative z-10 flex items-center justify-between p-4 border-b border-white/15">
+              <span className="font-bold text-xl text-white">
                 {selectedRabbitId !== null ? '토끼 상세' : '토끼 도감'}
               </span>
-              <div className="flex items-center gap-2">
-                {selectedRabbitId === null && discoveredCount < 80 && (
-                  <button
-                    onClick={handleFillDogam}
-                    disabled={filling}
-                    className="text-xs px-2 py-1 border border-[#1A1A1A] bg-[#EDEAE4] disabled:opacity-50"
-                  >
-                    {filling ? '채우는 중...' : '전체 채우기'}
-                  </button>
-                )}
-                <span className="font-bold text-xl">
+              <div className="flex items-center gap-3">
+                <span className="font-bold text-xl text-white/80">
                   {selectedRabbitId !== null
                     ? `#${selectedRabbitId + 1}`
                     : `${discoveredCount}/80`}
                 </span>
+                {selectedRabbitId === null && (
+                  <button onClick={onClose} className="w-8 h-8 flex items-center justify-center">
+                    <svg className="w-6 h-6 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
               </div>
             </div>
 
             {/* 본문 */}
-            <div className="flex-1 overflow-y-auto p-4">
+            <div className="relative z-10 flex-1 overflow-y-auto p-4">
               {loading ? (
-                <div className="text-center py-8 text-[#5C5C5C]">로딩 중...</div>
+                <div className="text-center py-8 text-white/50">로딩 중...</div>
               ) : selectedRabbitId !== null && selectedRabbit && selectedHolding ? (
                 <RabbitDetail rabbit={selectedRabbit} holding={selectedHolding} />
               ) : (
-                /* 100칸 그리드 */
+                /* 80칸 그리드 */
                 <div className="grid grid-cols-4 gap-2">
                   {Array.from({ length: 80 }).map((_, index) => {
                     const isDiscovered = myHoldingMap.has(index);
@@ -134,16 +115,16 @@ export default function RabbitDogam({
                       <button
                         key={index}
                         onClick={() => isDiscovered && setSelectedRabbitId(index)}
-                        className={`aspect-square border-2 flex flex-col items-center justify-center p-1 ${
+                        className={`aspect-square border flex flex-col items-center justify-center p-1 rounded-lg ${
                           isDiscovered
-                            ? 'border-[#1A1A1A] bg-[#EDEAE4] cursor-pointer hover:bg-[#E5E0D8]'
-                            : 'border-[#D4CFC4] bg-[#E5E0D8] cursor-default'
+                            ? 'border-white/30 bg-white/15 cursor-pointer hover:bg-white/25'
+                            : 'border-white/10 bg-white/5 cursor-default'
                         }`}
                       >
                         {isDiscovered ? (
                           <RabbitImage rabbitId={index} size={64} className="object-contain" />
                         ) : (
-                          <span className="text-2xl text-[#D4CFC4]">?</span>
+                          <span className="text-2xl text-white/20">?</span>
                         )}
                       </button>
                     );
@@ -152,24 +133,21 @@ export default function RabbitDogam({
               )}
             </div>
 
-            {/* 푸터 */}
-            <div className="p-4 border-t border-[#D4CFC4]">
-              {selectedRabbitId !== null && selectedRabbit && selectedHolding ? (
+            {/* 푸터 — 상세 보기일 때만 */}
+            {selectedRabbitId !== null && selectedRabbit && selectedHolding && (
+              <div className="relative z-10 p-4 border-t border-white/10">
                 <FooterWithEquip
                   rabbit={selectedRabbit}
                   equippedRabbits={equippedRabbits}
                   courseId={courseId}
                   onBack={() => setSelectedRabbitId(null)}
+                  rabbitNames={equippedRabbits.map((e) => {
+                    const doc = rabbitDocMap.get(e.rabbitId);
+                    return doc?.name || (e.rabbitId === 0 ? '기본 토끼' : `토끼 #${e.rabbitId + 1}`);
+                  })}
                 />
-              ) : (
-                <button
-                  onClick={onClose}
-                  className="w-full py-2 border-2 border-[#1A1A1A] font-bold"
-                >
-                  닫기
-                </button>
-              )}
-            </div>
+              </div>
+            )}
           </motion.div>
         </motion.div>
       )}
@@ -206,8 +184,8 @@ function RabbitDetail({
         <div className="flex justify-center mb-2">
           <RabbitImage rabbitId={rabbit.rabbitId} size={120} className="drop-shadow-md" />
         </div>
-        <p className="text-2xl font-bold">{myDisplayName}</p>
-        <p className="text-sm text-[#5C5C5C]">
+        <p className="text-2xl font-bold text-white">{myDisplayName}</p>
+        <p className="text-sm text-white/50">
           {rabbit.discovererCount}명 발견
         </p>
       </div>
@@ -250,14 +228,14 @@ function ButlerList({
       {d.discoveryOrder === 1 ? (
         <span className="text-xs font-bold text-[#D4AF37] shrink-0">부모</span>
       ) : (
-        <span className="text-xs font-bold text-[#5C5C5C] shrink-0">
+        <span className="text-xs font-bold text-white/50 shrink-0">
           {d.discoveryOrder - 1}대
         </span>
       )}
-      <span className="text-sm font-bold truncate">
+      <span className="text-sm font-bold text-white/90 truncate">
         {d.nickname}
         {d.discoveryOrder > 1 && (
-          <span className="text-xs text-[#5C5C5C] ml-1">
+          <span className="text-xs text-white/50 ml-1">
             ({baseName} {d.discoveryOrder}세)
           </span>
         )}
@@ -266,12 +244,12 @@ function ButlerList({
   );
 
   return (
-    <div className="mb-4 p-4 bg-[#EDEAE4] border border-[#D4CFC4]">
-      <p className="text-base font-bold mb-3">보유 집사</p>
+    <div className="mb-4 p-4 bg-white/10 border border-white/15 rounded-xl">
+      <p className="text-base font-bold mb-3 text-white">보유 집사</p>
       <div className="max-h-[200px] overflow-y-auto space-y-3">
         {groups.map(([left, right], gi) => (
           <div key={gi}>
-            {gi > 0 && <hr className="border-[#D4CFC4] mb-3" />}
+            {gi > 0 && <hr className="border-white/15 mb-3" />}
             <div className="flex gap-4">
               {/* 좌측 열 */}
               <div className="flex-1 space-y-1">
@@ -298,7 +276,7 @@ function DefaultRabbitMessage() {
   const { profile } = useUser();
   const nickname = profile?.nickname || '여러분';
   return (
-    <p className="mb-4 text-center text-base font-bold">
+    <p className="mb-4 text-center text-base font-bold text-white">
       토끼는 언제나 {nickname} 편!
     </p>
   );
@@ -312,11 +290,13 @@ function FooterWithEquip({
   equippedRabbits,
   courseId,
   onBack,
+  rabbitNames,
 }: {
   rabbit: RabbitDoc;
   equippedRabbits: Array<{ rabbitId: number; courseId: string }>;
   courseId: string;
   onBack: () => void;
+  rabbitNames?: string[];
 }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
@@ -350,22 +330,26 @@ function FooterWithEquip({
     <div className="space-y-3">
       {/* 슬롯 가득 찼을 때 선택 UI */}
       {!isEquipped && slotsAreFull && (
-        <div className="p-3 bg-[#EDEAE4] border border-[#D4CFC4]">
-          <p className="text-xs text-[#5C5C5C] mb-2">교체할 슬롯을 선택하세요:</p>
+        <div className="p-3 bg-white/10 border border-white/15 rounded-xl">
+          <p className="text-xs text-white/60 mb-2">교체할 토끼를 선택하세요:</p>
           <div className="flex gap-2">
-            {[0, 1].map((slot) => (
-              <button
-                key={slot}
-                onClick={() => setSelectedSlot(slot)}
-                className={`flex-1 py-2 border-2 text-sm font-bold ${
-                  selectedSlot === slot
-                    ? 'border-[#D4AF37] bg-[#D4AF37]/10'
-                    : 'border-[#D4CFC4]'
-                }`}
-              >
-                슬롯 {slot + 1}
-              </button>
-            ))}
+            {equippedRabbits.map((slot, idx) => {
+              const slotName = slot.rabbitId === 0 ? '기본 토끼' : (rabbitNames?.[idx] || `토끼 #${slot.rabbitId + 1}`);
+              return (
+                <button
+                  key={idx}
+                  onClick={() => setSelectedSlot(idx)}
+                  className={`flex-1 py-2 px-2 border-2 text-sm font-bold text-white flex items-center justify-center gap-2 rounded-lg ${
+                    selectedSlot === idx
+                      ? 'border-[#D4AF37] bg-[#D4AF37]/20'
+                      : 'border-white/20'
+                  }`}
+                >
+                  <RabbitImage rabbitId={slot.rabbitId} size={28} />
+                  <span className="truncate">{slotName}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -374,19 +358,19 @@ function FooterWithEquip({
       <div className="flex gap-2">
         <button
           onClick={onBack}
-          className="flex-1 py-2 border-2 border-[#1A1A1A] font-bold"
+          className="flex-1 py-2 border-2 border-white/30 text-white font-bold rounded-lg hover:bg-white/10 transition-colors"
         >
           도감으로 돌아가기
         </button>
         {isEquipped ? (
-          <div className="flex-1 py-2 text-center text-[#5C5C5C] bg-[#EDEAE4] border border-[#D4CFC4] font-bold">
+          <div className="flex-1 py-2 text-center text-white/50 bg-white/10 border border-white/15 font-bold rounded-lg">
             데려옴
           </div>
         ) : (
           <button
             onClick={handleEquip}
             disabled={isProcessing || (slotsAreFull && selectedSlot === null)}
-            className="flex-1 py-2 bg-[#1A1A1A] text-white font-bold disabled:opacity-50"
+            className="flex-1 py-2 bg-white/20 backdrop-blur-sm text-white font-bold rounded-lg disabled:opacity-50 hover:bg-white/30 transition-colors"
           >
             {isProcessing ? '처리 중...' : '데려오기'}
           </button>

@@ -234,7 +234,7 @@ generateScoreSummary(result)                // 텍스트 요약
 ### 토끼 발견/장착 시스템
 
 **2단계 뽑기 (Roll → Claim):**
-1. `spinRabbitGacha` (Roll): 50XP 마일스톤마다 랜덤 토끼(0~99) 선택, `lastGachaExp` 갱신만 수행
+1. `spinRabbitGacha` (Roll): 50XP 마일스톤마다 랜덤 토끼(0~79) 선택, `lastGachaExp` 갱신만 수행
 2. `claimGachaRabbit` (Claim): 사용자 선택에 따라 발견/놓아주기
    - 미발견 토끼 → 최초 발견 (이름 짓기, 영구)
    - 발견된 토끼 → 후속 발견 (N세)
@@ -369,7 +369,7 @@ firebase deploy --only functions
 
 ### 토끼 에셋
 
-`rabbits/` 디렉토리에 100개 PNG 파일 (rabbit-001.png ~ rabbit-100.png, 총 ~110MB). git 미추적 상태 — `.gitignore`에 포함하거나 LFS 사용 권장.
+`rabbits/` 디렉토리에 80개 PNG 파일 (rabbit-001.png ~ rabbit-080.png). 81~100번은 삭제됨.
 주의: `rabbit-092-.png` 파일명에 불필요한 대시(-) 포함.
 
 ### Cloud Run PPTX 서비스

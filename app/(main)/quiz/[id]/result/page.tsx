@@ -1176,43 +1176,29 @@ export default function QuizResultPage() {
 
             // O 버튼 스타일 결정
             let oClassName = 'border-2 border-[#EDEAE4] bg-white text-[#5C5C5C]';
-            let oLabel = '';
             if (correctOX === 'O') {
               oClassName = 'border-2 border-[#1A6B1A] bg-[#E8F5E9] text-[#1A6B1A]';
-              oLabel = '(정답)';
             }
             if (userOX === 'O' && correctOX !== 'O') {
               oClassName = 'border-2 border-[#8B1A1A] bg-[#FDEAEA] text-[#8B1A1A]';
-              oLabel = '(내 답)';
-            }
-            if (userOX === 'O' && correctOX === 'O') {
-              oLabel = '(정답) (내 답)';
             }
 
             // X 버튼 스타일 결정
             let xClassName = 'border-2 border-[#EDEAE4] bg-white text-[#5C5C5C]';
-            let xLabel = '';
             if (correctOX === 'X') {
               xClassName = 'border-2 border-[#1A6B1A] bg-[#E8F5E9] text-[#1A6B1A]';
-              xLabel = '(정답)';
             }
             if (userOX === 'X' && correctOX !== 'X') {
               xClassName = 'border-2 border-[#8B1A1A] bg-[#FDEAEA] text-[#8B1A1A]';
-              xLabel = '(내 답)';
-            }
-            if (userOX === 'X' && correctOX === 'X') {
-              xLabel = '(정답) (내 답)';
             }
 
             return (
               <div className="flex gap-3 justify-center py-2">
-                <div className={`w-20 h-20 flex flex-col items-center justify-center font-bold text-2xl ${oClassName}`}>
-                  <span>O</span>
-                  {oLabel && <span className="text-xs mt-1">{oLabel}</span>}
+                <div className={`w-20 h-20 flex items-center justify-center font-bold text-2xl ${oClassName}`}>
+                  O
                 </div>
-                <div className={`w-20 h-20 flex flex-col items-center justify-center font-bold text-2xl ${xClassName}`}>
-                  <span>X</span>
-                  {xLabel && <span className="text-xs mt-1">{xLabel}</span>}
+                <div className={`w-20 h-20 flex items-center justify-center font-bold text-2xl ${xClassName}`}>
+                  X
                 </div>
               </div>
             );

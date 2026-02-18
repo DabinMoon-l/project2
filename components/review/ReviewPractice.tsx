@@ -328,11 +328,13 @@ export default function ReviewPractice({
     }
 
     if (item.type === 'ox') {
-      const userAnswerUpper = userAnswer.toString().toUpperCase();
+      let normalizedUser = userAnswer.toString().toUpperCase();
+      if (normalizedUser === '0') normalizedUser = 'O';
+      else if (normalizedUser === '1') normalizedUser = 'X';
       let normalizedCorrect = correctAnswerStr.toUpperCase();
       if (normalizedCorrect === '0') normalizedCorrect = 'O';
       else if (normalizedCorrect === '1') normalizedCorrect = 'X';
-      return userAnswerUpper === normalizedCorrect;
+      return normalizedUser === normalizedCorrect;
     }
 
     const userAnswerNormalized = userAnswer.toString().trim().toLowerCase();
@@ -523,12 +525,17 @@ export default function ReviewPractice({
         }
       }
 
+      // questionId에서 문제 번호 추출 (예: "q0" → 1, "q2-1" → 3)
+      const qMatch = feedbackTargetItem.questionId.match(/^q(\d+)/);
+      const questionNumber = qMatch ? parseInt(qMatch[1], 10) + 1 : 1;
+
       const feedbackRef = collection(db, 'questionFeedbacks');
       await addDoc(feedbackRef, {
         questionId: feedbackTargetItem.questionId,
         quizId: feedbackTargetItem.quizId,
         quizCreatorId: creatorId, // 퀴즈 생성자 ID (조회 최적화용)
         userId: user.uid,
+        questionNumber, // 문제 번호 (표시용)
         type: selectedFeedbackType,
         content: feedbackContent,
         createdAt: serverTimestamp(),
@@ -898,9 +905,8 @@ export default function ReviewPractice({
                                                   return (
                                                     <div key={optIdx} className={`px-2 py-1 text-sm border ${className}`}>
                                                       {optIdx + 1}. {opt}
-                                                      {isCorrectOption && isUserAnswer && (isMultipleAnswer ? ' (정답) (내 선택)' : ' (정답)')}
-                                                      {isCorrectOption && !isUserAnswer && ' (정답)'}
-                                                      {!isCorrectOption && isUserAnswer && ' (내 선택)'}
+                                                      {isMultipleAnswer && isCorrectOption && ' (정답)'}
+                                                      {isMultipleAnswer && isUserAnswer && ' (내 선택)'}
                                                     </div>
                                                   );
                                                 })}
@@ -1279,9 +1285,8 @@ export default function ReviewPractice({
                                 return (
                                   <p key={optIdx} className={`text-sm p-2 border ${className}`}>
                                     {optIdx + 1}. {opt}
-                                    {isCorrectOption && isUserAnswer && (isMultipleAnswer ? ' (정답) (내 선택)' : ' (정답)')}
-                                    {isCorrectOption && !isUserAnswer && ' (정답)'}
-                                    {!isCorrectOption && isUserAnswer && ' (내 선택)'}
+                                    {isMultipleAnswer && isCorrectOption && ' (정답)'}
+                                    {isMultipleAnswer && isUserAnswer && ' (내 선택)'}
                                   </p>
                                 );
                               })}

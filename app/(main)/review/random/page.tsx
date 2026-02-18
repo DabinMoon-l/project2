@@ -125,9 +125,9 @@ export default function RandomReviewPage() {
     if (!question || !userAnswer) return false;
 
     if (question.questionType === 'ox') {
-      const normalizedUser = userAnswer.toUpperCase() === 'O' || userAnswer === '0' ? 'O' : 'X';
-      const normalizedCorrect = question.correctAnswer.toString().toUpperCase() === 'O' ||
-        question.correctAnswer === '0' ? 'O' : 'X';
+      const normalizedUser = (userAnswer.toUpperCase() === 'O' || userAnswer === '0') ? 'O' : 'X';
+      const normalizedCorrect = (question.correctAnswer.toString().toUpperCase() === 'O' ||
+        question.correctAnswer.toString() === '0') ? 'O' : 'X';
       return normalizedUser === normalizedCorrect;
     }
 
@@ -135,7 +135,7 @@ export default function RandomReviewPage() {
   };
 
   // 결과 계산
-  const correctCount = Object.keys(userAnswers).filter((_, idx) => isCorrect(idx)).length;
+  const correctCount = Object.keys(userAnswers).filter((key) => isCorrect(Number(key))).length;
 
   if (loading) {
     return (
@@ -262,7 +262,7 @@ export default function RandomReviewPage() {
                   const isSelected = userAnswers[currentIndex] === opt;
                   const isCorrectAnswer = showAnswer && (
                     (currentQuestion.correctAnswer.toString().toUpperCase() === 'O' ||
-                      currentQuestion.correctAnswer === '0') ? opt === 'O' : opt === 'X'
+                      currentQuestion.correctAnswer.toString() === '0') ? opt === 'O' : opt === 'X'
                   );
                   const isWrongSelected = showAnswer && isSelected && !isCorrectAnswer;
 

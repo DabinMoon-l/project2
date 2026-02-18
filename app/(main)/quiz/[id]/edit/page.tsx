@@ -248,7 +248,7 @@ export default function EditQuizPage() {
     } else if (current.type === 'multiple') {
       const origAnswer = typeof original.answer === 'number' ? original.answer - 1 : -1;
       if (origAnswer !== current.answerIndex) return true;
-    } else {
+    } else if (current.type === 'ox') {
       if (original.answer !== current.answerIndex) return true;
     }
 
@@ -293,7 +293,7 @@ export default function EditQuizPage() {
     } else if (current.type === 'multiple') {
       const origAnswer = typeof original.answer === 'number' ? original.answer - 1 : -1;
       if (origAnswer !== (current.answerIndex ?? -1)) return true;
-    } else {
+    } else if (current.type === 'ox') {
       if (original.answer !== (current.answerIndex ?? 0)) return true;
     }
 
@@ -448,6 +448,20 @@ export default function EditQuizPage() {
           const combinedGroupId = q.id || `combined_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
           const subQuestionsCount = q.subQuestions.length;
 
+          // 공통 지문 변경 감지 (원본 첫 번째 하위 문제와 비교)
+          const originalFirst = originalQuestions.find(
+            (oq) => oq.combinedGroupId === combinedGroupId && oq.combinedIndex === 0
+          );
+          const passageChanged = originalFirst ? (
+            (originalFirst.passage || '') !== (q.passage || '') ||
+            (originalFirst.passageType || '') !== (q.passageType || '') ||
+            (originalFirst.passageImage || '') !== (q.passageImage || '') ||
+            (originalFirst.commonQuestion || '') !== (q.commonQuestion || '') ||
+            (originalFirst.combinedMainText || '') !== (q.text || '') ||
+            JSON.stringify(originalFirst.koreanAbcItems || null) !== JSON.stringify(q.koreanAbcItems || null) ||
+            JSON.stringify(originalFirst.passageMixedExamples || null) !== JSON.stringify(q.passageMixedExamples || null)
+          ) : false;
+
           q.subQuestions.forEach((sq, sqIndex) => {
             // 정답 처리
             let answer: string | number;
@@ -461,7 +475,7 @@ export default function EditQuizPage() {
 
             // 기존 문제 찾기 (ID로 찾기)
             const originalQ = originalQuestions.find((oq) => oq.id === sq.id);
-            const hasChanged = !originalQ || isQuestionChangedForSubQuestion(originalQ, sq);
+            const hasChanged = !originalQ || passageChanged || isQuestionChangedForSubQuestion(originalQ, sq);
 
             const subQuestionData: any = {
               id: sq.id || `${combinedGroupId}_${sqIndex}`,
@@ -509,8 +523,8 @@ export default function EditQuizPage() {
             answer = q.answerIndex;
           }
 
-          // 기존 문제 찾기
-          const originalQ = originalQuestions.find((oq) => oq.id === q.id) || originalQuestions[orderIndex];
+          // 기존 문제 찾기 (ID로만)
+          const originalQ = originalQuestions.find((oq) => oq.id === q.id);
           const hasChanged = isQuestionChanged(originalQ, q);
 
           flattenedQuestions.push(sanitizeForFirestore({

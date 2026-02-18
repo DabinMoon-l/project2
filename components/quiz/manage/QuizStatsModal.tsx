@@ -10,7 +10,7 @@
 
 'use client';
 
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   collection,
@@ -277,6 +277,8 @@ interface FlattenedQuestion {
   passageType?: string;
   passageImage?: string;
   koreanAbcItems?: string[];
+  // 문제 수정 시간 (수정된 문제만)
+  questionUpdatedAt?: number;
 }
 
 interface QuestionStats {
@@ -325,7 +327,8 @@ interface ResultWithClass {
   userId: string;
   classType: 'A' | 'B' | 'C' | 'D' | null;
   score: number;
-  questionScores: Record<string, { isCorrect: boolean; userAnswer: string }>;
+  questionScores: Record<string, { isCorrect: boolean; userAnswer: string; answeredAt?: any }>;
+  createdAt?: any;
 }
 
 type ClassFilter = 'all' | 'A' | 'B' | 'C' | 'D';
@@ -372,6 +375,17 @@ function convertAnswerTo1Indexed(type: string, answer: any): string | undefined 
   return answer?.toString();
 }
 
+/**
+ * questionUpdatedAt 타임스탬프를 밀리초로 변환
+ */
+function toMillis(ts: any): number {
+  if (!ts) return 0;
+  if (ts.toMillis) return ts.toMillis();
+  if (ts.seconds) return ts.seconds * 1000;
+  if (typeof ts === 'number') return ts;
+  return 0;
+}
+
 function flattenQuestions(questions: any[]): FlattenedQuestion[] {
   const result: FlattenedQuestion[] = [];
 
@@ -400,12 +414,14 @@ function flattenQuestions(questions: any[]): FlattenedQuestion[] {
         passageType: q.combinedIndex === 0 ? q.passageType : undefined,
         passageImage: q.combinedIndex === 0 ? q.passageImage : undefined,
         koreanAbcItems: q.combinedIndex === 0 ? q.koreanAbcItems : undefined,
+        questionUpdatedAt: toMillis(q.questionUpdatedAt) || undefined,
       });
     }
     // 레거시 결합형 문제 (type === 'combined' + subQuestions)
     else if (q.type === 'combined' && q.subQuestions && q.subQuestions.length > 0) {
       const groupId = `legacy_${questionId}`;
       q.subQuestions.forEach((sq: any, idx: number) => {
+        const updatedAt = toMillis(sq.questionUpdatedAt || q.questionUpdatedAt);
         result.push({
           id: sq.id || `${questionId}_sub${idx}`,
           text: sq.text || '',
@@ -428,6 +444,7 @@ function flattenQuestions(questions: any[]): FlattenedQuestion[] {
           passageType: idx === 0 ? q.passageType : undefined,
           passageImage: idx === 0 ? q.passageImage : undefined,
           koreanAbcItems: idx === 0 ? q.koreanAbcItems : undefined,
+          questionUpdatedAt: updatedAt || undefined,
         });
       });
     }
@@ -445,6 +462,7 @@ function flattenQuestions(questions: any[]): FlattenedQuestion[] {
         mixedExamples: q.mixedExamples,
         passagePrompt: q.passagePrompt,
         bogi: q.bogi,
+        questionUpdatedAt: toMillis(q.questionUpdatedAt) || undefined,
       });
     }
   });
@@ -492,44 +510,16 @@ export default function QuizStatsModal({
   const [selectedQuestionIndex, setSelectedQuestionIndex] = useState(0);
   const [showQuestionDropdown, setShowQuestionDropdown] = useState(false);
 
-  // 스와이프 상태
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [touchEnd, setTouchEnd] = useState<number | null>(null);
-
-  // 호버 상태
-  const [isHovering, setIsHovering] = useState(false);
-
-  // 슬라이드 방향 (1: 오른쪽으로, -1: 왼쪽으로)
-  const [slideDirection, setSlideDirection] = useState(0);
-
-  // CSS 페이드 전환용
-  const [fadeIn, setFadeIn] = useState(true);
-
-  // 스와이프 감지 최소 거리
-  const minSwipeDistance = 50;
-
-  const onTouchStart = (e: React.TouchEvent) => {
-    setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientX);
-  };
-
-  const onTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd(e.targetTouches[0].clientX);
-  };
-
-  const onTouchEnd = () => {
-    if (!touchStart || !touchEnd) return;
-    const distance = touchStart - touchEnd;
-    const isLeftSwipe = distance > minSwipeDistance;
-    const isRightSwipe = distance < -minSwipeDistance;
-
-    if (isLeftSwipe && stats && selectedQuestionIndex < stats.questionStats.length - 1) {
-      goToQuestion(selectedQuestionIndex + 1);
-    }
-    if (isRightSwipe && selectedQuestionIndex > 0) {
-      goToQuestion(selectedQuestionIndex - 1);
-    }
-  };
+  // 문제 스와이프 (가로 슬라이드)
+  const questionContentRef = useRef<HTMLDivElement>(null);
+  const slideEnterFromRef = useRef<'left' | 'right' | null>(null);
+  const swipeTransitioning = useRef(false);
+  const swipeRef = useRef({
+    startX: 0,
+    startY: 0,
+    direction: 'none' as 'none' | 'horizontal' | 'vertical',
+    offsetX: 0,
+  });
 
   // 원본 데이터
   const [questions, setQuestions] = useState<FlattenedQuestion[]>([]);
@@ -586,23 +576,34 @@ export default function QuizStatsModal({
           return;
         }
 
-        // 3. 결과에서 classId 추출 (없으면 users 컬렉션에서 가져오기)
+        // 3. userId 중복 제거 — 동일 사용자의 가장 최근 결과만 사용
+        const latestByUser = new Map<string, any>();
+        firstResults.forEach((docSnapshot) => {
+          const data = docSnapshot.data();
+          const uid = data.userId;
+          const ts = data.createdAt?.toMillis?.() || data.createdAt?.seconds * 1000 || 0;
+          const existing = latestByUser.get(uid);
+          if (!existing || ts > (existing.data.createdAt?.toMillis?.() || existing.data.createdAt?.seconds * 1000 || 0)) {
+            latestByUser.set(uid, { docSnapshot, data });
+          }
+        });
+        const dedupedResults = Array.from(latestByUser.values());
+
+        // 4. 결과에서 classId 추출 (없으면 users 컬렉션에서 가져오기)
         const resultsNeedingClass: { docSnapshot: any; data: any }[] = [];
         const resultsWithClassDirect: ResultWithClass[] = [];
 
-        firstResults.forEach((docSnapshot) => {
-          const data = docSnapshot.data();
+        dedupedResults.forEach(({ data }) => {
           if (data.classId) {
-            // quizResults에 classId가 있으면 바로 사용
             resultsWithClassDirect.push({
               userId: data.userId,
               classType: data.classId as 'A' | 'B' | 'C' | 'D',
               score: data.score || 0,
               questionScores: data.questionScores || {},
+              createdAt: data.createdAt,
             });
           } else {
-            // classId가 없으면 나중에 users에서 가져오기
-            resultsNeedingClass.push({ docSnapshot, data });
+            resultsNeedingClass.push({ docSnapshot: null, data });
           }
         });
 
@@ -627,13 +628,14 @@ export default function QuizStatsModal({
           );
         }
 
-        // 4. 결과에 classType 추가
+        // 5. 결과에 classType 추가
         const resultsFromUsers: ResultWithClass[] = resultsNeedingClass.map(({ data }) => {
           return {
             userId: data.userId,
             classType: userClassMap.get(data.userId) || null,
             score: data.score || 0,
             questionScores: data.questionScores || {},
+            createdAt: data.createdAt,
           };
         });
 
@@ -693,7 +695,19 @@ export default function QuizStatsModal({
       };
     }
 
+    // 문제 ID → 문제 객체 맵 (O(1) 룩업용)
+    const questionMap = new Map<string, FlattenedQuestion>();
+    const questionUpdatedAtMap = new Map<string, number>();
+    questions.forEach((q) => {
+      questionMap.set(q.id, q);
+      if (q.questionUpdatedAt) {
+        questionUpdatedAtMap.set(q.id, q.questionUpdatedAt);
+      }
+    });
+
     // 통계 계산
+    // 참여자 수/점수: 모든 유니크 사용자 포함 (수정 문제 풀었든 안 풀었든)
+    // 문제별 정답률/선지: 수정된 문제는 수정 후 응답만, 비수정 문제는 전체
     const scores: number[] = [];
     const questionCorrectCounts: Record<string, number> = {};
     const questionAttemptCounts: Record<string, number> = {};
@@ -707,6 +721,16 @@ export default function QuizStatsModal({
       // 문제별 점수 분석
       Object.entries(result.questionScores).forEach(
         ([questionId, scoreData]) => {
+          const question = questionMap.get(questionId);
+          if (!question) return;
+
+          // 수정된 문제의 경우 수정 이후 응답만 포함
+          const updatedAt = questionUpdatedAtMap.get(questionId);
+          if (updatedAt) {
+            const answeredAt = toMillis(scoreData.answeredAt) || toMillis(result.createdAt);
+            if (answeredAt > 0 && answeredAt < updatedAt) return;
+          }
+
           if (!questionCorrectCounts[questionId]) {
             questionCorrectCounts[questionId] = 0;
             questionAttemptCounts[questionId] = 0;
@@ -715,9 +739,6 @@ export default function QuizStatsModal({
           if (scoreData.isCorrect) {
             questionCorrectCounts[questionId]++;
           }
-
-          const question = questions.find((q) => q.id === questionId);
-          if (!question) return;
 
           // OX 선택 분포
           if (question.type === 'ox') {
@@ -834,7 +855,7 @@ export default function QuizStatsModal({
     };
   }, [questions, resultsWithClass, classFilter, courseId]);
 
-  // 반별 참여자 수 계산
+  // 반별 참여자 수 계산 (모든 유니크 사용자 포함)
   const classParticipantCounts = useMemo(() => {
     const counts: Record<ClassFilter, number> = {
       all: resultsWithClass.length,
@@ -878,24 +899,116 @@ export default function QuizStatsModal({
     }
   };
 
-  // 문제 전환 (페이드 포함)
+  // 문제 전환 (비스와이프: 즉시)
   const goToQuestion = useCallback((newIdx: number) => {
     if (newIdx === selectedQuestionIndex) return;
-    setFadeIn(false);
-    setTimeout(() => {
-      setSlideDirection(newIdx > selectedQuestionIndex ? 1 : -1);
-      setSelectedQuestionIndex(newIdx);
-      setFadeIn(true);
-    }, 80);
+    setSelectedQuestionIndex(newIdx);
   }, [selectedQuestionIndex]);
 
-  const goToPrevQuestion = () => {
-    if (selectedQuestionIndex > 0) goToQuestion(selectedQuestionIndex - 1);
-  };
+  // 스와이프 슬라이드 인 애니메이션
+  useLayoutEffect(() => {
+    const enterFrom = slideEnterFromRef.current;
+    if (!enterFrom || !questionContentRef.current) return;
+    slideEnterFromRef.current = null;
 
-  const goToNextQuestion = () => {
-    if (stats && selectedQuestionIndex < stats.questionStats.length - 1) goToQuestion(selectedQuestionIndex + 1);
-  };
+    const el = questionContentRef.current;
+    const startX = enterFrom === 'left' ? '-100%' : '100%';
+    el.style.transition = 'none';
+    el.style.transform = `translateX(${startX})`;
+    el.getBoundingClientRect();
+    el.style.transition = 'transform 250ms cubic-bezier(0.25, 0.1, 0.25, 1)';
+    el.style.transform = 'translateX(0)';
+
+    const cleanup = () => {
+      el.style.transition = '';
+      el.style.transform = '';
+      swipeTransitioning.current = false;
+    };
+    el.addEventListener('transitionend', cleanup, { once: true });
+    const timer = setTimeout(cleanup, 350);
+    return () => clearTimeout(timer);
+  }, [selectedQuestionIndex]);
+
+  // 문제 영역 터치 핸들러
+  const handleQSwipeStart = useCallback((e: React.TouchEvent) => {
+    if (swipeTransitioning.current) return;
+    const s = swipeRef.current;
+    s.startX = e.touches[0].clientX;
+    s.startY = e.touches[0].clientY;
+    s.direction = 'none';
+    s.offsetX = 0;
+  }, []);
+
+  const handleQSwipeMove = useCallback((e: React.TouchEvent) => {
+    if (swipeTransitioning.current) return;
+    const s = swipeRef.current;
+    const deltaX = e.touches[0].clientX - s.startX;
+    const deltaY = e.touches[0].clientY - s.startY;
+
+    // 방향 잠금
+    if (s.direction === 'none') {
+      if (Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) return;
+      s.direction = Math.abs(deltaX) > Math.abs(deltaY) ? 'horizontal' : 'vertical';
+    }
+
+    if (s.direction !== 'horizontal' || !questionContentRef.current) return;
+
+    const totalQ = stats?.questionStats.length || 0;
+    const isAtStart = selectedQuestionIndex === 0;
+    const isAtEnd = selectedQuestionIndex >= totalQ - 1;
+
+    if ((isAtStart && deltaX > 0) || (isAtEnd && deltaX < 0)) {
+      s.offsetX = deltaX * 0.15;
+    } else {
+      s.offsetX = deltaX * 0.5;
+    }
+
+    questionContentRef.current.style.transition = 'none';
+    questionContentRef.current.style.transform = `translateX(${s.offsetX}px)`;
+  }, [selectedQuestionIndex, stats]);
+
+  const handleQSwipeEnd = useCallback(() => {
+    const s = swipeRef.current;
+    if (s.direction !== 'horizontal' || !questionContentRef.current) {
+      s.direction = 'none';
+      return;
+    }
+
+    const el = questionContentRef.current;
+    const deltaX = s.offsetX;
+    s.direction = 'none';
+
+    const SWIPE_THRESHOLD = 60;
+    const totalQ = stats?.questionStats.length || 0;
+
+    if (deltaX < -SWIPE_THRESHOLD && selectedQuestionIndex < totalQ - 1) {
+      // 왼쪽 스와이프 → 다음 문제
+      swipeTransitioning.current = true;
+      el.style.transition = 'transform 200ms ease-out';
+      el.style.transform = `translateX(${-el.offsetWidth}px)`;
+      setTimeout(() => {
+        slideEnterFromRef.current = 'right';
+        setSelectedQuestionIndex(selectedQuestionIndex + 1);
+      }, 200);
+      return;
+    }
+
+    if (deltaX > SWIPE_THRESHOLD && selectedQuestionIndex > 0) {
+      // 오른쪽 스와이프 → 이전 문제
+      swipeTransitioning.current = true;
+      el.style.transition = 'transform 200ms ease-out';
+      el.style.transform = `translateX(${el.offsetWidth}px)`;
+      setTimeout(() => {
+        slideEnterFromRef.current = 'left';
+        setSelectedQuestionIndex(selectedQuestionIndex - 1);
+      }, 200);
+      return;
+    }
+
+    // 원위치 복귀
+    el.style.transition = 'transform 250ms cubic-bezier(0.25, 0.1, 0.25, 1)';
+    el.style.transform = 'translateX(0)';
+  }, [selectedQuestionIndex, stats]);
 
   // 현재 선택된 문제
   const currentQuestion = stats?.questionStats[selectedQuestionIndex];
@@ -1057,11 +1170,7 @@ export default function QuizStatsModal({
                               min={0}
                               max={totalQ - 1}
                               value={selectedQuestionIndex}
-                              onChange={(e) => {
-                                const newIdx = parseInt(e.target.value);
-                                setSlideDirection(newIdx > selectedQuestionIndex ? 1 : -1);
-                                setSelectedQuestionIndex(newIdx);
-                              }}
+                              onChange={(e) => goToQuestion(parseInt(e.target.value))}
                               className="w-full h-2 bg-[#D4CFC4] appearance-none cursor-pointer accent-[#1A1A1A] relative z-10"
                               style={{
                                 background: `linear-gradient(to right, #1A1A1A 0%, #1A1A1A ${(selectedQuestionIndex / (totalQ - 1)) * 100}%, #D4CFC4 ${(selectedQuestionIndex / (totalQ - 1)) * 100}%, #D4CFC4 100%)`
@@ -1079,12 +1188,16 @@ export default function QuizStatsModal({
 
                   {/* 현재 문제 정보 - 고정 높이 스크롤 영역 + 스와이프 지원 */}
                   {currentQuestion && (
-                    <div className="relative h-[600px] overflow-hidden">
+                    <div
+                      className="relative h-[600px] overflow-hidden"
+                      onTouchStart={handleQSwipeStart}
+                      onTouchMove={handleQSwipeMove}
+                      onTouchEnd={handleQSwipeEnd}
+                      style={{ touchAction: 'pan-y' }}
+                    >
                       <div
+                        ref={questionContentRef}
                         className="h-full overflow-y-auto overflow-x-hidden scrollbar-hide"
-                        onTouchStart={onTouchStart}
-                        onTouchMove={onTouchMove}
-                        onTouchEnd={onTouchEnd}
                       >
                       {/* 참여자가 없는 반일 경우 */}
                       {stats.participantCount === 0 ? (
@@ -1094,10 +1207,7 @@ export default function QuizStatsModal({
                           </p>
                         </div>
                       ) : (
-                      <div
-                          className="min-h-full flex flex-col justify-center p-4 transition-opacity duration-150 ease-in-out"
-                          style={{ opacity: fadeIn ? 1 : 0 }}
-                        >
+                      <div className="min-h-full flex flex-col justify-center p-4">
                         {/* 문제 헤더 */}
                         <div className="flex items-center justify-center mb-4">
                           <span className="text-xl font-bold text-[#1A1A1A]">

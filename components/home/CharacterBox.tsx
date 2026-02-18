@@ -31,7 +31,7 @@ const SWIPE_THRESHOLD = 40;
 /* 궤도 파라미터 */
 const ORBIT_RX = 175;
 const ORBIT_RY = 50;
-const CHAR_SIZE = 200;
+const CHAR_SIZE = 180;
 const CHAR_HALF = CHAR_SIZE / 2;
 const ORBIT_Y_SHIFT = 195; // 궤도를 아래로 — 앞 캐릭터 하체
 
@@ -214,14 +214,14 @@ export default function CharacterBox() {
     <>
       <div className="flex flex-col items-center w-full">
         {/* XP / 도감 */}
-        <div className="w-full flex items-center justify-center gap-72 mb-8 mt-14">
-          <div className="h-14 flex items-center gap-2.5 px-6 bg-black/30 rounded-full backdrop-blur-sm">
+        <div className="w-full flex items-center justify-between px-8 mb-8 mt-20 relative z-20">
+          <div className="h-11 flex items-center gap-12 px-9 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl">
             <span className="text-xl font-bold text-white">XP</span>
-            <span className="font-bold text-xl text-white leading-none min-w-[3ch] text-right">{totalExp}</span>
+            <span className="font-bold text-xl text-white leading-none text-right">{totalExp}</span>
           </div>
           <button
             onClick={() => setShowDogam(true)}
-            className="h-14 flex items-center justify-center px-9 bg-black/30 rounded-full backdrop-blur-sm transition-transform duration-200 hover:scale-110 active:scale-95"
+            className="h-11 flex items-center justify-center px-9 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl transition-transform duration-200 hover:scale-110 active:scale-95"
           >
             <span className="text-xl font-bold text-white">도감</span>
           </button>
@@ -250,8 +250,9 @@ export default function CharacterBox() {
                 right: CHAR_HALF,
                 top: CHAR_HALF + ORBIT_Y_SHIFT,
                 bottom: CHAR_HALF - ORBIT_Y_SHIFT,
-                border: '5px solid rgba(0,0,0,0.2)',
+                border: '3px solid rgba(0,0,0,0.25)',
                 borderRadius: '50%',
+                boxShadow: '0 0 12px 4px rgba(0,0,0,0.15), 0 0 24px 8px rgba(0,0,0,0.1), inset 0 0 8px 2px rgba(0,0,0,0.1)',
                 zIndex: 0,
               }}
             />
@@ -277,7 +278,7 @@ export default function CharacterBox() {
                   transition={{ duration: 0.2 }}
                   className="absolute flex flex-col gap-1.5"
                   style={{
-                    right: 30,
+                    right: 50,
                     top: '58%',
                     zIndex: 15,
                   }}
@@ -292,12 +293,15 @@ export default function CharacterBox() {
         ) : slots[0] ? (
           /* 1마리 — 가운데 + 스탯 옆 */
           <div className="flex items-center gap-8 -mt-20">
-            <RabbitImage
-              rabbitId={slots[0].rabbitId}
-              size={200}
-              priority
-              className="drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
-            />
+            <FloatingWrapper seed={0}>
+              <RabbitImage
+                rabbitId={slots[0].rabbitId}
+                size={180}
+                priority
+                className="drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
+                style={{ filter: 'sepia(0.08) saturate(1.1) brightness(1.03) hue-rotate(-5deg)' }}
+              />
+            </FloatingWrapper>
             {frontStats && (
               <div className="flex flex-col gap-1.5">
                 <StatBadge icon="heart" value={frontStats.hp} color="#f87171" />
@@ -331,7 +335,7 @@ export default function CharacterBox() {
               {currentExp}/50 XP
             </span>
           </div>
-          <div className="px-3 py-1.5 bg-black/30 rounded-full backdrop-blur-sm">
+          <div className="px-3 py-1.5 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl">
             <div className="h-3.5 overflow-hidden bg-white/20 rounded-full">
               <motion.div
                 className="h-full rounded-full"
@@ -408,12 +412,37 @@ function OrbitalCharacter({
       className="absolute"
       style={{ left: 0, top: 0, x, y, scale, zIndex, opacity }}
     >
-      <RabbitImage
-        rabbitId={rabbitId}
-        size={CHAR_SIZE}
-        priority
-        className="drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
-      />
+      <FloatingWrapper seed={charIndex}>
+        <RabbitImage
+          rabbitId={rabbitId}
+          size={CHAR_SIZE}
+          priority
+          className="drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
+          style={{ filter: 'sepia(0.08) saturate(1.1) brightness(1.03) hue-rotate(-5deg)' }}
+        />
+      </FloatingWrapper>
+    </motion.div>
+  );
+}
+
+/**
+ * 둥실둥실 떠다니는 래퍼
+ * seed로 캐릭터마다 타이밍을 살짝 다르게 하여 자연스러움 연출
+ */
+function FloatingWrapper({ children, seed = 0 }: { children: React.ReactNode; seed?: number }) {
+  const duration = 2.6 + seed * 0.4;
+  return (
+    <motion.div
+      animate={{
+        y: [0, -18, 0],
+        rotate: [0, 2.5, 0, -2.5, 0],
+      }}
+      transition={{
+        y: { duration, repeat: Infinity, ease: 'easeInOut' },
+        rotate: { duration: duration * 1.6, repeat: Infinity, ease: 'easeInOut' },
+      }}
+    >
+      {children}
     </motion.div>
   );
 }
@@ -421,7 +450,7 @@ function OrbitalCharacter({
 /** 스탯 배지 */
 function StatBadge({ icon, value, color }: { icon: string; value: number; color: string }) {
   return (
-    <div className="flex items-center gap-2 px-3.5 py-1.5 bg-black/30 rounded-full backdrop-blur-sm">
+    <div className="flex items-center gap-2 px-3.5 py-1.5 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl">
       {icon === 'heart' && (
         <svg className="w-6 h-6" viewBox="0 0 24 24" fill={color}>
           <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />

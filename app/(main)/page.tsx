@@ -119,14 +119,6 @@ export default function HomePage() {
     return () => window.removeEventListener('wheel', handleWheel);
   }, [transitioning, navigateReturn]);
 
-  // 앱 최초 접속 시 /quiz로 리다이렉트 (세션당 1회)
-  useEffect(() => {
-    const key = 'session_home_visited';
-    if (!sessionStorage.getItem(key)) {
-      sessionStorage.setItem(key, '1');
-      router.replace('/quiz');
-    }
-  }, [router]);
 
   if (!profile) {
     return (
@@ -181,8 +173,11 @@ export default function HomePage() {
           {/* 프로필 + 닉네임 */}
           <div className="px-5 flex items-center gap-4 mb-5">
             <button
-              className="w-20 h-20 flex items-center justify-center flex-shrink-0 border-2 border-white/50 rounded-xl overflow-hidden"
-              style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}
+              className="w-20 h-20 flex items-center justify-center flex-shrink-0 rounded-xl overflow-hidden"
+              style={{
+                background: 'rgba(0, 0, 0, 0.3)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+              }}
               onClick={() => setShowProfileDrawer(true)}
             >
               {profile.profileRabbitId != null ? (
@@ -216,6 +211,23 @@ export default function HomePage() {
           {/* 랭킹 — 하단 */}
           <div className="mt-auto -translate-y-[100px]">
             <RankingSection />
+          </div>
+
+          {/* 스와이프 힌트 — 하단 고정 */}
+          <div className="absolute bottom-8 left-0 right-0 flex flex-col items-center gap-1 pointer-events-none">
+            <span className="text-sm font-bold text-white/60 backdrop-blur-sm">
+              아래로 스와이프하여 학습 시작
+            </span>
+            <motion.svg
+              className="w-5 h-5 text-white/50"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              animate={{ y: [0, 6, 0] }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+            </motion.svg>
           </div>
         </div>
 

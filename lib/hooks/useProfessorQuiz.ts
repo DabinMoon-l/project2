@@ -499,24 +499,6 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
         );
         const resultsSnapshot = await getDocs(resultsQuery);
 
-        console.log('[fetchQuizStatistics] 퀴즈 ID:', quizId);
-        console.log('[fetchQuizStatistics] 원본 질문 수:', questions.length);
-        console.log('[fetchQuizStatistics] 펼친 질문 수:', flattenedQuestions.length);
-        console.log('[fetchQuizStatistics] 결과 문서 수:', resultsSnapshot.size);
-        console.log('[fetchQuizStatistics] 수정된 문제 인덱스:', Array.from(questionModifiedMap.keys()));
-
-        if (!resultsSnapshot.empty) {
-          // 첫 번째 결과 문서 디버깅
-          const firstResult = resultsSnapshot.docs[0].data();
-          console.log('[fetchQuizStatistics] 첫 번째 결과 문서:', {
-            userId: firstResult.userId,
-            answersLength: firstResult.answers?.length,
-            answers: firstResult.answers,
-            score: firstResult.score,
-          });
-          console.log('[fetchQuizStatistics] 질문 타입들:', flattenedQuestions.map((q, i) => ({ idx: i, id: q.id, type: q.type, answer: q.answer })));
-        }
-
         if (resultsSnapshot.empty) {
           // 결과가 없으면 빈 통계 반환
           const emptyStats: QuestionStats[] = flattenedQuestions.map((q, idx) => ({
@@ -581,19 +563,6 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
               if (answeredAt > 0 && answeredAt < questionUpdatedAt) {
                 return;
               }
-            }
-
-            // 첫 번째 문제와 첫 번째 결과만 디버깅
-            if (idx === 0 && docIdx === 0) {
-              console.log(`[fetchQuizStatistics] 문제 ${idx} 분석:`, {
-                questionId: question.id,
-                questionType: question.type,
-                correctAnswer: question.answer,
-                answersArrayLength: answers.length,
-                userAnswer,
-                answerType: typeof userAnswer,
-                isModified,
-              });
             }
 
             if (userAnswer === undefined || userAnswer === null || userAnswer === '') {

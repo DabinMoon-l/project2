@@ -32,7 +32,7 @@ interface ClaimResult {
  * spinRabbitGacha — Roll Only (Phase 1)
  *
  * 1. 마일스톤 검증 (floor(totalExp/50)*50 > lastGachaExp && totalExp >= 50)
- * 2. 랜덤 rabbitId (0-99) 선택
+ * 2. 랜덤 rabbitId (0-79) 선택
  * 3. rabbit 문서 존재 확인 → undiscovered / discovered 판별
  * 4. holding 존재 확인 → already_discovered 판별
  * 5. lastGachaExp 갱신 (스핀 소모)

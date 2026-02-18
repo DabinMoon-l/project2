@@ -4,9 +4,12 @@ FROM python:3.11-slim
 # 작업 디렉토리 설정
 WORKDIR /app
 
-# 시스템 의존성 설치 (python-pptx에 필요)
+# 시스템 의존성 설치 (python-pptx + LibreOffice PPT→PDF 변환)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    libreoffice-impress \
+    libreoffice-writer \
+    fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/*
 
 # Python 의존성 설치
