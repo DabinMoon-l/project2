@@ -17,3 +17,4 @@ export { default as AnnouncementChannel } from './AnnouncementChannel';
 export { default as CharacterBox } from './CharacterBox';
 export { default as RankingSection } from './RankingSection';
 export { default as RandomReviewBanner } from './RandomReviewBanner';
+export { default as ProfessorCharacterBox } from './ProfessorCharacterBox';

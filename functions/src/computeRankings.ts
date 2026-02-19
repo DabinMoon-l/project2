@@ -15,7 +15,7 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
 // ── 랭킹 계산 유틸 (클라이언트 ranking.ts와 동일 로직) ──
 
 function computeRankScore(profCorrectCount: number, totalExp: number): number {
-  return 100 + profCorrectCount * 4 + totalExp * 0.6;
+  return profCorrectCount * 4 + totalExp * 0.6;
 }
 
 function computeTeamScore(normalizedAvgExp: number, avgCorrectRate: number, avgCompletionRate: number): number {

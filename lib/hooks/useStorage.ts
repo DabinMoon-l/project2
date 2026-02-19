@@ -53,11 +53,14 @@ const ALLOWED_FILE_TYPES = [
   'application/zip',
 ];
 
-/** 최대 파일 크기 (10MB) */
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
+/** 확장자 기반 폴백 허용 목록 (브라우저가 MIME을 octet-stream으로 보고하는 경우 대비) */
+const ALLOWED_EXTENSIONS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'zip'];
 
-/** 최대 이미지 크기 (5MB) */
-const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+/** 최대 파일 크기 (500MB) */
+const MAX_FILE_SIZE = 500 * 1024 * 1024;
+
+/** 최대 이미지 크기 (50MB) */
+const MAX_IMAGE_SIZE = 50 * 1024 * 1024;
 
 /**
  * 파일 업로드 훅
@@ -132,7 +135,14 @@ export const useUpload = (): UseUploadReturn => {
       }
 
       // 파일 타입 검증 (이미지도 허용)
-      const isAllowedType = [...ALLOWED_FILE_TYPES, ...ALLOWED_IMAGE_TYPES].includes(file.type);
+      let isAllowedType = [...ALLOWED_FILE_TYPES, ...ALLOWED_IMAGE_TYPES].includes(file.type);
+      // MIME 타입 매치 안 되면 확장자로 재검증 (일부 브라우저/OS에서 PPT 등이 octet-stream으로 보고됨)
+      if (!isAllowedType) {
+        const ext = file.name.split('.').pop()?.toLowerCase();
+        if (ext && ALLOWED_EXTENSIONS.includes(ext)) {
+          isAllowedType = true;
+        }
+      }
       if (!isAllowedType) {
         setError('지원하지 않는 파일 형식입니다.');
         return null;

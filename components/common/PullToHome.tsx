@@ -7,9 +7,15 @@ const THRESHOLD = 120;
 const WHEEL_THRESHOLD = 80;
 const DIRECTION_LOCK_THRESHOLD = 10; // 방향 판별 최소 이동 거리
 const SWIPE_X_THRESHOLD = 80; // 가로 스와이프 전환 임계값
-const TAB_PATHS = ['/quiz', '/review', '/board'];
+const DEFAULT_TAB_PATHS = ['/quiz', '/review', '/board'];
 
 type Direction = 'none' | 'horizontal' | 'vertical';
+
+interface PullToHomeProps {
+  children: React.ReactNode;
+  homePath?: string;    // 홈 경로 (기본: '/')
+  tabPaths?: string[];  // 탭 경로 목록 (기본: 학생용)
+}
 
 /**
  * 스와이프/휠 다운으로 홈 이동 + 가로 스와이프로 탭 전환 래퍼
@@ -17,7 +23,7 @@ type Direction = 'none' | 'horizontal' | 'vertical';
  * 세로: 페이지가 아래로 밀리면서 뒤에 홈 배경이 보이고, 밀려나면 홈으로 전환
  * 가로: 좌우 스와이프로 퀴즈 ↔ 복습 ↔ 게시판 탭 전환
  */
-export default function PullToHome({ children }: { children: React.ReactNode }) {
+export default function PullToHome({ children, homePath = '/', tabPaths = DEFAULT_TAB_PATHS }: PullToHomeProps) {
   const router = useRouter();
   const pathname = usePathname();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -39,14 +45,14 @@ export default function PullToHome({ children }: { children: React.ReactNode }) 
   const wheelAccum = useRef(0);
   const wheelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const tabIndex = TAB_PATHS.indexOf(pathname);
+  const tabIndex = tabPaths.indexOf(pathname);
 
   // 홈 + 인접 탭 프리페치
   useEffect(() => {
-    router.prefetch('/');
-    if (tabIndex > 0) router.prefetch(TAB_PATHS[tabIndex - 1]);
-    if (tabIndex < TAB_PATHS.length - 1) router.prefetch(TAB_PATHS[tabIndex + 1]);
-  }, [router, tabIndex]);
+    router.prefetch(homePath);
+    if (tabIndex > 0) router.prefetch(tabPaths[tabIndex - 1]);
+    if (tabIndex < tabPaths.length - 1) router.prefetch(tabPaths[tabIndex + 1]);
+  }, [router, tabIndex, homePath, tabPaths]);
 
   // 입장 슬라이드 인 애니메이션
   useLayoutEffect(() => {
@@ -80,9 +86,9 @@ export default function PullToHome({ children }: { children: React.ReactNode }) 
     sessionStorage.setItem('home_return_path', pathname);
     setPullY(window.innerHeight);
     setTimeout(() => {
-      router.push('/');
+      router.push(homePath);
     }, 300);
-  }, [router, pathname]);
+  }, [router, pathname, homePath]);
 
   const navigateTab = useCallback((targetIndex: number, swipeDirection: 'left' | 'right') => {
     setTransitioningX(true);
@@ -92,7 +98,7 @@ export default function PullToHome({ children }: { children: React.ReactNode }) 
     // 새 페이지의 입장 방향 저장
     sessionStorage.setItem('tab_swipe_enter', swipeDirection === 'left' ? 'right' : 'left');
     setTimeout(() => {
-      router.push(TAB_PATHS[targetIndex]);
+      router.push(tabPaths[targetIndex]);
     }, 250);
   }, [router]);
 
@@ -174,7 +180,7 @@ export default function PullToHome({ children }: { children: React.ReactNode }) 
     // 가로 스와이프 처리
     if (direction.current === 'horizontal' && swipingX.current) {
       const isAtStart = tabIndex === 0;
-      const isAtEnd = tabIndex === TAB_PATHS.length - 1;
+      const isAtEnd = tabIndex === tabPaths.length - 1;
       const goingRight = deltaX > 0; // 이전 탭으로
       const goingLeft = deltaX < 0;  // 다음 탭으로
 
@@ -206,7 +212,7 @@ export default function PullToHome({ children }: { children: React.ReactNode }) 
 
       const absPullX = Math.abs(pullX);
       if (absPullX > SWIPE_X_THRESHOLD) {
-        if (pullX < 0 && tabIndex < TAB_PATHS.length - 1) {
+        if (pullX < 0 && tabIndex < tabPaths.length - 1) {
           // 왼쪽으로 밀기 → 다음 탭
           navigateTab(tabIndex + 1, 'left');
           return;

@@ -8,6 +8,7 @@ import Navigation from '@/components/common/Navigation';
 import { NotificationProvider, ExpToastProvider, PullToHome } from '@/components/common';
 import { AIQuizContainer } from '@/components/ai-quiz';
 import { UserProvider, useUser, CourseProvider, useCourse } from '@/lib/contexts';
+import { useActivityTracker } from '@/lib/hooks/useActivityTracker';
 import type { ClassType } from '@/styles/themes';
 
 /**
@@ -28,20 +29,32 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
   // - 수정 페이지 (/edit 포함)
   // - 랭킹 페이지 (/ranking)
   // - 랜덤 복습 페이지 (/review/random)
+  // 접속 추적 (lastActiveAt + currentActivity)
+  useActivityTracker();
+
   const isHome = pathname === '/';
+  const isProfHome = pathname === '/professor';
 
   const hideNavigation =
     isHome ||
+    isProfHome ||
     pathname?.match(/^\/quiz\/[^/]+/) !== null ||
     pathname?.includes('/edit') ||
     pathname === '/ranking' ||
     pathname === '/review/random';
 
-  // 스와이프 다운으로 홈 이동 가능한 페이지
+  // 학생용 스와이프 다운으로 홈 이동 가능한 페이지
   const enablePullToHome =
     !isProfessor &&
     !isHome &&
     (pathname === '/quiz' || pathname === '/review' || pathname === '/board');
+
+  // 교수용 PullToHome (통계/퀴즈/학생/게시판 → /professor 홈)
+  const isProfessorHome = pathname === '/professor';
+  const enableProfessorPullToHome =
+    isProfessor &&
+    !isProfessorHome &&
+    (pathname === '/professor/stats' || pathname === '/professor/quiz' || pathname === '/professor/students' || pathname === '/board');
 
   // 프로필이 없으면 온보딩으로 리다이렉트
   useEffect(() => {
@@ -106,20 +119,26 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                   {pathname === '/quiz' && searchParams.get('manage') !== 'true' && <AIQuizContainer />}
                   {/* 네비게이션도 같이 슬라이드 */}
                   {!hideNavigation && (
-                    <Navigation role={isProfessor ? 'professor' : 'student'} />
+                    <Navigation role="student" />
+                  )}
+                </PullToHome>
+              ) : enableProfessorPullToHome ? (
+                <PullToHome homePath="/professor" tabPaths={['/professor/stats', '/professor/quiz', '/professor/students', '/board']}>
+                  {children}
+                  {!hideNavigation && (
+                    <Navigation role="professor" />
                   )}
                 </PullToHome>
               ) : (
                 <>
                   {children}
-                  {/* AI 퀴즈 플로팅 버튼 (교수 모드 등 PullToHome 미적용 시) */}
                   {!isProfessor && pathname === '/quiz' && searchParams.get('manage') !== 'true' && <AIQuizContainer />}
                 </>
               )}
             </main>
 
             {/* 하단 네비게이션 바 (PullToHome 미적용 페이지) */}
-            {!enablePullToHome && !hideNavigation && (
+            {!enablePullToHome && !enableProfessorPullToHome && !hideNavigation && (
               <Navigation role={isProfessor ? 'professor' : 'student'} />
             )}
           </div>

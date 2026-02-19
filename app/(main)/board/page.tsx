@@ -494,6 +494,9 @@ export default function BoardPage() {
 
   // 교수님용 과목 선택 (기본값: biology)
   const [selectedCourseId, setSelectedCourseId] = useState<CourseId>('biology');
+  // 과목 스와이프 터치 좌표
+  const courseTouchStartX = useRef<number>(0);
+  const courseTouchEndX = useRef<number>(0);
 
   // 교수님 관리 모달 상태
   const [showManagementModal, setShowManagementModal] = useState(false);
@@ -713,26 +716,7 @@ export default function BoardPage() {
 
   return (
     <div className="min-h-screen pb-28 overflow-x-hidden" style={{ backgroundColor: '#F5F0E8' }}>
-      {/* 교수님용 과목 탭 */}
-      {isProfessor && (
-        <div className="sticky top-0 z-30 bg-[#1A1A1A] border-b-2 border-[#D4AF37]">
-          <div className="flex">
-            {courseList.map((course) => (
-              <button
-                key={course.id}
-                onClick={() => setSelectedCourseId(course.id)}
-                className={`flex-1 py-3 text-sm font-bold transition-colors ${
-                  selectedCourseId === course.id
-                    ? 'bg-[#D4AF37] text-[#1A1A1A]'
-                    : 'text-[#F5F0E8] hover:bg-[#3A3A3A]'
-                }`}
-              >
-                {course.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* 교수님용 과목 탭 — 타이틀 영역에 통합됨 */}
 
       {/* 헤더 */}
       <header ref={headerRef} className="mx-4 mt-4 pb-6 border-b-4 border-double border-[#1A1A1A]">
@@ -746,10 +730,77 @@ export default function BoardPage() {
         {/* 상단 장식선 */}
         <div className="border-t-2 border-[#1A1A1A] mb-2" />
 
-        {/* 타이틀 */}
-        <h1 className="font-serif-display text-5xl md:text-7xl font-black tracking-tight text-[#1A1A1A] text-center py-6 border-y-4 border-[#1A1A1A]">
-          JIBDAN JISUNG
-        </h1>
+        {/* 타이틀 — 교수님은 과목 체인지, 학생은 JIBDAN JISUNG */}
+        {isProfessor ? (
+          <div
+            className="border-y-4 border-[#1A1A1A] py-6 flex items-center justify-center gap-2 select-none overflow-hidden"
+            onTouchStart={(e) => { courseTouchStartX.current = e.touches[0].clientX; }}
+            onTouchMove={(e) => { courseTouchEndX.current = e.touches[0].clientX; }}
+            onTouchEnd={() => {
+              const diff = courseTouchStartX.current - courseTouchEndX.current;
+              const idx = courseList.findIndex(c => c.id === selectedCourseId);
+              if (diff > 50 && idx < courseList.length - 1) {
+                setSelectedCourseId(courseList[idx + 1].id);
+              } else if (diff < -50 && idx > 0) {
+                setSelectedCourseId(courseList[idx - 1].id);
+              }
+            }}
+          >
+            {/* 좌측 화살표 */}
+            <button
+              type="button"
+              onClick={() => {
+                const idx = courseList.findIndex(c => c.id === selectedCourseId);
+                if (idx > 0) setSelectedCourseId(courseList[idx - 1].id);
+              }}
+              className={`p-1 transition-opacity ${
+                courseList.findIndex(c => c.id === selectedCourseId) === 0 ? 'opacity-20 pointer-events-none' : 'opacity-60 hover:opacity-100'
+              }`}
+            >
+              <svg className="w-7 h-7" fill="none" stroke="#1A1A1A" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+
+            {/* 과목명 */}
+            <AnimatePresence mode="wait">
+              <motion.h1
+                key={selectedCourseId}
+                initial={{ opacity: 0, x: 30 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -30 }}
+                transition={{ duration: 0.2 }}
+                className="font-serif-display text-5xl md:text-7xl font-black tracking-tight text-[#1A1A1A] text-center whitespace-nowrap"
+              >
+                {(() => {
+                  const name = courseList.find(c => c.id === selectedCourseId)?.nameEn.toUpperCase() || 'BIOLOGY';
+                  const isLong = name.length > 10;
+                  return <span className={isLong ? 'text-[2.6rem] md:text-6xl' : ''}>{name}</span>;
+                })()}
+              </motion.h1>
+            </AnimatePresence>
+
+            {/* 우측 화살표 */}
+            <button
+              type="button"
+              onClick={() => {
+                const idx = courseList.findIndex(c => c.id === selectedCourseId);
+                if (idx < courseList.length - 1) setSelectedCourseId(courseList[idx + 1].id);
+              }}
+              className={`p-1 transition-opacity ${
+                courseList.findIndex(c => c.id === selectedCourseId) === courseList.length - 1 ? 'opacity-20 pointer-events-none' : 'opacity-60 hover:opacity-100'
+              }`}
+            >
+              <svg className="w-7 h-7" fill="none" stroke="#1A1A1A" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        ) : (
+          <h1 className="font-serif-display text-5xl md:text-7xl font-black tracking-tight text-[#1A1A1A] text-center py-6 border-y-4 border-[#1A1A1A]">
+            JIBDAN JISUNG
+          </h1>
+        )}
 
         {/* 서브타이틀 및 슬로건 */}
         <div className="flex justify-between items-center mt-3 mb-4">

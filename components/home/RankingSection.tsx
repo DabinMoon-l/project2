@@ -21,10 +21,11 @@ const ordinalSuffix = (n: number) => {
  * 랭킹 섹션 컴포넌트 (홈 하단, 흰색 텍스트)
  * rankings/{courseId} 문서 1개만 읽어서 표시
  */
-export default function RankingSection() {
+export default function RankingSection({ overrideCourseId }: { overrideCourseId?: string } = {}) {
   const router = useRouter();
   const { profile } = useUser();
-  const { userCourseId } = useCourse();
+  const { userCourseId: contextCourseId } = useCourse();
+  const userCourseId = overrideCourseId ?? contextCourseId;
   const { classType } = useTheme();
 
   const [teamRank, setTeamRank] = useState<number>(0);

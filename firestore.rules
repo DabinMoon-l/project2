@@ -132,7 +132,7 @@ service cloud.firestore {
         isValidString(request.resource.data.content, 1, 5000) &&
         request.resource.data.category in ['toProfessor', 'community'];
 
-      // 수정: 작성자가 제목/내용 수정 OR 로그인 사용자가 좋아요/댓글수 업데이트
+      // 수정: 작성자가 제목/내용 수정 OR 로그인 사용자가 좋아요/댓글수 업데이트 OR 교수님이 고정
       allow update: if isAuthenticated() && (
         // 작성자가 제목, 내용, 이미지, 파일 수정
         (isOwner(resource.data.authorId) &&
@@ -140,7 +140,11 @@ service cloud.firestore {
             .hasOnly(['title', 'content', 'imageUrl', 'imageUrls', 'fileUrls', 'isAnonymous', 'updatedAt'])) ||
         // 로그인 사용자가 좋아요/댓글수 업데이트
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['likes', 'likedBy', 'commentCount'])
+          .hasOnly(['likes', 'likedBy', 'commentCount']) ||
+        // 교수님이 게시글 고정/해제
+        (isProfessor() &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['isPinned', 'pinnedAt', 'pinnedBy']))
       );
 
       // 삭제: 작성자 또는 교수님

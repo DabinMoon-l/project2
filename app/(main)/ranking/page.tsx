@@ -168,6 +168,13 @@ export default function RankingPage() {
       <header className="relative z-10 pt-4">
         <div className="px-4 mb-0 flex items-center justify-between">
           <button
+            onClick={() => setShowInfo(true)}
+            className="w-10 h-10 flex items-center justify-center border-2 border-white/30 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+            aria-label="랭킹 안내"
+          >
+            <span className="text-lg font-black text-white leading-none">i</span>
+          </button>
+          <button
             onClick={() => router.back()}
             className="w-10 h-10 flex items-center justify-center"
             aria-label="닫기"
@@ -175,13 +182,6 @@ export default function RankingPage() {
             <svg className="w-7 h-7 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
-          </button>
-          <button
-            onClick={() => setShowInfo(true)}
-            className="w-10 h-10 flex items-center justify-center border-2 border-white/30 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-            aria-label="랭킹 안내"
-          >
-            <span className="text-lg font-black text-white leading-none">i</span>
           </button>
         </div>
         {/* 배너 — 좌우 꽉 채움 */}
@@ -464,12 +464,12 @@ export default function RankingPage() {
                 {/* 안내 */}
                 <div className="text-sm text-white/60 space-y-1.5 mb-6">
                   <p className="font-bold text-white">개인 랭킹</p>
-                  <p>- 교수님 퀴즈 정답 수 + EXP로 계산됩니다</p>
-                  <p>- 퀴즈를 많이 맞히고, 활동을 많이 할수록 점수가 올라요</p>
+                  <p>- 교수님 퀴즈 정답 수 + EXP로 계산됩니다.</p>
+                  <p>- 퀴즈를 많이 맞히고, 활동을 많이 할수록 점수가 올라요.</p>
                   <div className="pt-2" />
                   <p className="font-bold text-white">팀 랭킹</p>
-                  <p>- 평균 참여도(40%) + 평균 성적(40%) + 퀴즈 응시율(20%)</p>
-                  <p>- 응시율 = 교수님 퀴즈 중 반 평균 풀이 비율</p>
+                  <p>- 평균 참여도(40%) + 평균 성적(40%) + 퀴즈 응시율(20%).</p>
+                  <p>- 응시율 = 교수님 퀴즈 중 반 평균 풀이 비율.</p>
                 </div>
 
                 {/* 버튼 */}

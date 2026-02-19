@@ -577,7 +577,7 @@ export default function QuizResultPage() {
               combinedFields.combinedIndex = questionResult.combinedIndex ?? null;
               combinedFields.combinedTotal = questionResult.combinedTotal ?? null;
               // 첫 번째 하위 문제에만 공통 지문 정보 저장
-              if (questionResult.combinedIndex === 0 || questionResult.combinedIndex === 1) {
+              if (questionResult.combinedIndex === 0) {
                 if (questionResult.passage) combinedFields.passage = questionResult.passage;
                 if (questionResult.passageType) combinedFields.passageType = questionResult.passageType;
                 if (questionResult.passageImage) combinedFields.passageImage = questionResult.passageImage;
@@ -808,7 +808,7 @@ export default function QuizResultPage() {
             bookmarkCombinedFields.combinedGroupId = question.combinedGroupId;
             bookmarkCombinedFields.combinedIndex = question.combinedIndex ?? null;
             bookmarkCombinedFields.combinedTotal = question.combinedTotal ?? null;
-            if (question.combinedIndex === 0 || question.combinedIndex === 1) {
+            if (question.combinedIndex === 0) {
               if (question.passage) bookmarkCombinedFields.passage = question.passage;
               if (question.passageType) bookmarkCombinedFields.passageType = question.passageType;
               if (question.passageImage) bookmarkCombinedFields.passageImage = question.passageImage;

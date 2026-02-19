@@ -457,12 +457,8 @@ function SingleQuestionCard({
               onClick={() => onFeedbackTypeChange(question.id, type)}
               className={`p-2 text-xs font-bold border-2 transition-colors ${
                 feedbackTypes[question.id] === type
-                  ? positive
-                    ? 'border-[#1A6B1A] bg-[#1A6B1A] text-[#F5F0E8]'
-                    : 'border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8]'
-                  : positive
-                    ? 'border-[#1A6B1A] bg-[#E8F5E9] text-[#1A6B1A] hover:bg-[#D0EBD0]'
-                    : 'border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] hover:bg-[#EDEAE4]'
+                  ? 'border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8]'
+                  : 'border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] hover:bg-[#EDEAE4]'
               }`}
             >
               {label}
@@ -1193,6 +1189,10 @@ export default function FeedbackPage() {
             subQuestionOptions,
             subQuestionOptionsType,
             mixedExamples,
+            // 발문/보기 정보 (결합형 하위 문제에서 사용)
+            passagePrompt: q.passagePrompt || undefined,
+            bogiQuestionText: q.bogi?.questionText || undefined,
+            bogi: q.bogi || undefined,
           };
         }
       );

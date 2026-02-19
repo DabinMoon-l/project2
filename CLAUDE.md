@@ -144,14 +144,18 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 | `courseScope.ts` | 과목/반 범위 쿼리 유틸 |
 | `utils/shardedCounter.ts` | 분산 카운터 (동시쓰기 대응) |
 | `utils/rabbitStats.ts` | 토끼 기본 스탯·레벨업 스탯 증가 계산 |
+| `computeRankings.ts` | 랭킹 사전 계산 (5분 스케줄 + Callable) |
+| `reviewsGenerator.ts` | 퀴즈 완료 시 복습 데이터 자동 생성 |
+| `rateLimit.ts` | 도배 방지 레이트 리밋 |
+| `ocr.ts` / `visionOcr.ts` | OCR 처리 (Clova, Gemini Vision) |
 
 ## UI 테마 시스템
 
 ### 빈티지 신문 스타일 (기본)
 
-- **배경**: #F5F0E8 (크림), **보조 배경**: #EDEAE4
+- **배경**: #F5F0E8 (크림), **보조 배경**: #EBE5D9, **카드**: #FDFBF7
 - **텍스트**: #1A1A1A (검정), **음소거**: #5C5C5C
-- **성공**: #1A6B1A, **오류**: #8B1A1A
+- **테두리**: #D4CFC4 (밝은), #1A1A1A (진한)
 - **둥근 모서리 없음** (`rounded-none`)
 
 ### CSS 변수 기반 테마
@@ -165,14 +169,18 @@ ThemeProvider가 반(A/B/C/D)에 따라 `<html>`에 CSS 변수 설정:
 
 Tailwind에서 `bg-theme-background`, `text-theme-accent` 등으로 사용 (`tailwind.config.ts`에 정의)
 
-### 반별 테마 색상
+### 반별 테마 색상 (`styles/themes/index.ts`)
 
-| 반 | 메인 배경 | 강조색 | 온보딩 아이콘 |
-|---|----------|--------|-------------|
-| A | #4A0E0E (버건디) | #D4AF37 (골드) | #EF4444 (빨강) |
-| B | #F5E6C8 (크림) | #3D2B1F (브라운) | #EAB308 (노랑) |
-| C | #0D3D2E (에메랄드) | #C0C0C0 (실버) | #22C55E (초록) |
-| D | #1A2744 (네이비) | #CD7F32 (브론즈) | #3B82F6 (파랑) |
+모든 반은 동일한 빈티지 크림 배경(#F5F0E8)을 공유하며, 강조색만 다름:
+
+| 반 | 강조색 (accent) | 강조색 밝은 (accentLight) | 분위기 |
+|---|----------------|--------------------------|--------|
+| A | #8B1A1A (버건디/레드) | #D4A5A5 | 열정적이고 용맹함 |
+| B | #B8860B (다크 골드) | #E8D5A3 | 따뜻하고 밝음 |
+| C | #1D5D4A (에메랄드 그린) | #A8D4C5 | 차분하고 안정적 |
+| D | #1E3A5F (네이비 블루) | #A8C4E0 | 지적이고 신뢰감 |
+
+**생물학 단일 테마**: `courseId === 'biology'`이면 반별 테마 대신 `accent: #2E7D32` (자연 녹색) 단일 테마 적용
 
 ### 글꼴
 
@@ -188,6 +196,75 @@ Tailwind에서 `bg-theme-background`, `text-theme-accent` 등으로 사용 (`tai
 - `.pb-navigation` — 네비게이션 바 + safe area 패딩
 - 전역 스크롤바 숨김 (`* { scrollbar-width: none }`, `*::-webkit-scrollbar { display: none }`)
 - `html, body { overflow-x: hidden }` — 모바일 PWA 가로 스크롤 방지
+
+### 과목 시스템 (`lib/types/course.ts`)
+
+학년/학기 기반 자동 과목 결정:
+
+| 과목 ID | 이름 | 학년/학기 |
+|---------|------|----------|
+| `biology` | 생물학 | 1학년 1학기 |
+| `pathophysiology` | 병태생리학 | 1학년 2학기 |
+| `microbiology` | 미생물학 | 2학년 1학기 |
+
+- `CourseId = 'biology' | 'pathophysiology' | 'microbiology'`
+- 학기 자동 판별: 02-22~08-21 → 1학기, 08-22~02-21 → 2학기
+- 퀴즈 필터 탭 (`QuizFilterTab`): `midterm | final | past | custom`, 날짜 기반 기본 탭 자동 선택
+
+### 네비게이션 탭
+
+**학생 탭** (홈은 스와이프로 접근, nav에 없음):
+- `/quiz` — 퀴즈
+- `/review` — 복습
+- `/board` — 게시판
+
+**교수 탭**:
+- `/professor` — 홈 (exact match)
+- `/professor/quiz` — 퀴즈
+- `/professor/students` — 학생
+- `/professor/analysis` — 분석
+
+### PullToHome (`components/common/PullToHome.tsx`)
+
+학생 전용, `/quiz` `/review` `/board` 페이지에서만 활성화 (`app/(main)/layout.tsx`의 `enablePullToHome`).
+
+- **세로 스와이프**: 페이지 상단에서 아래로 당기면 홈으로 이동 (배경에 home-bg.jpg 미리보기)
+- **가로 스와이프**: 퀴즈 ↔ 복습 ↔ 게시판 탭 전환 (`TAB_PATHS = ['/quiz', '/review', '/board']`)
+- 방향 잠금: 10px 이상 이동 시 가로/세로 판별 후 잠금
+- `sessionStorage` 키: `tab_swipe_enter` (입장 방향), `home_return_path` (홈에서 돌아갈 경로)
+- PullToHome 활성화 시 Navigation도 PullToHome 안에 배치되어 같이 슬라이드됨
+
+### 공지 채널 (`components/home/AnnouncementChannel.tsx`)
+
+홈 바텀시트에 표시되는 교수님 공지 시스템:
+- Firestore `announcements` 컬렉션 실시간 구독
+- 텍스트/이미지/파일 첨부, 투표(poll), 이모지 리액션
+- **다중 이미지/파일 업로드**: `imageUrls: string[]`, `files: Array<{url,name,type,size}>` (하위 호환: 기존 `imageUrl`/`fileUrl` 단일 필드도 읽기 지원)
+- **이미지/파일 캐러셀**: 2개 이상일 때 좌우 화살표 + 스냅 스크롤, 점 인디케이터
+- 읽음 표시 (`readBy` 배열, 교수님 본인 제외), 미읽음 뱃지
+- **교수님 메시지 우측 정렬**: `isProfessor && createdBy === profile.uid` → `flex-row-reverse`
+- **검색 기능**: 상단 검색 아이콘 → 키워드 입력 → 매칭 메시지 하이라이트 + 좌측 하단 상/하 화살표 FAB로 탐색
+- **캘린더**: 년도(교수님만)/월 선택, 메시지 있는 날 표시, 클릭 시 해당 날짜로 스크롤
+- **입력창 인라인 확장**: 2줄 이상 입력 시 확장 버튼 표시 → 클릭 시 max-height 해제하여 전체 내용 표시
+- **스크롤 FAB**: 최신 메시지가 안 보이면 좌측 하단에 스크롤 초기화 버튼 (검색 중에는 숨김)
+- `createPortal(... , document.body)`로 렌더링 (z-index 우회)
+- 미디어 드로어: 좌측 슬라이드, 이미지 전체화면 뷰어, 과목 체인지 헤더
+- 학생 홈 미리보기: 첫 글자/나머지 2줄 분리, 이미지→"사진을/보냈습니다", 파일→"파일을/보냈습니다"
+
+### 게시판 (`app/(main)/board/page.tsx`)
+
+신문 스타일 레이아웃의 게시판:
+- 교수님: 타이틀 영역에 과목 체인지 캐러셀 (BIOLOGY/PATHOPHYSIOLOGY/MICROBIOLOGY, 좌우 화살표 + 스와이프)
+- 학생: "JIBDAN JISUNG" 타이틀 고정
+- 게시글 고정/해제: 교수님 전용 (Firestore rules에 `isPinned/pinnedAt/pinnedBy` 허용)
+- 고정글 캐러셀 + Masonry 2열 레이아웃
+
+### 랭킹 시스템 (`lib/utils/ranking.ts`)
+
+- **개인**: `profCorrectCount × 4 + totalExp × 0.6`
+- **팀**: `normalizedAvgExp × 0.4 + avgCorrectRate × 0.4 + avgCompletionRate × 0.2`
+- 사전 계산: CF `computeRankingsScheduled` (5분마다) → `rankings/{courseId}` 문서 1개로 캐싱
+- 클라이언트: sessionStorage SWR 캐시 (TTL 2분/10분)
 
 ## 코딩 컨벤션
 
@@ -336,6 +413,9 @@ await setDoc(doc(db, 'users', uid), { onboardingCompleted: true, updatedAt: serv
 - `quizzes/{quizId}/submissions/{submissionId}` — 제출 답안 (CF 전용 쓰기)
 - `quizzes/{quizId}/feedback/{feedbackId}` — 피드백 (CF 전용 쓰기)
 - `rabbits/{courseId_rabbitId}` — 토끼 문서 (name, firstDiscovererUserId, discovererCount)
+- `announcements/{id}` — 공지 (content, imageUrls[], files[], poll, reactions, readBy) (하위 호환: imageUrl, fileUrl 단일 필드도 지원)
+- `rankings/{courseId}` — 사전 계산된 랭킹 (rankedUsers[], teamRanks[])
+- `quizResults/{id}` — 퀴즈 결과 집계 (CF에서 쓰기)
 
 ### Firestore Rules — users 읽기 규칙
 
@@ -352,11 +432,13 @@ await setDoc(doc(db, 'users', uid), { onboardingCompleted: true, updatedAt: serv
 
 ### 네비게이션 숨김 규칙
 
-경로 기반 (Navigation 컴포넌트):
+경로 기반 (`app/(main)/layout.tsx`의 `hideNavigation`):
+- 홈 (`/`) — 항상 숨김
 - `/quiz/[id]/*` 경로: 퀴즈 풀이, 결과, 피드백 페이지
 - `/edit` 포함 경로: 퀴즈 수정 페이지
 - `/ranking` 경로: 랭킹 페이지
 - `/review/random` 경로: 랜덤 복습 페이지
+- `/review/[type]/[id]` 경로: 복습 상세 페이지
 
 모달 기반 (`data-hide-nav` body 속성):
 - 토끼 도감, 뽑기 모달, 공지 채널 모달 열림 시 `document.body.setAttribute('data-hide-nav', '')` → 닫힘 시 제거
@@ -401,11 +483,13 @@ firebase deploy --only functions
 
 ### 토끼 에셋
 
-`rabbits/` 디렉토리에 80개 PNG 파일 (rabbit-001.png ~ rabbit-080.png). 81~100번은 삭제됨.
-주의: `rabbit-092-.png` 파일명에 불필요한 대시(-) 포함.
+두 디렉토리에 80개 PNG 파일씩:
+- `/public/rabbit/rabbit-001.png` ~ `rabbit-080.png` — 전신 이미지 (종횡비 520:969)
+- `/public/rabbit_profile/rabbit-001-pf.png` ~ `rabbit-080-pf.png` — 프로필 이미지
 
 **rabbitId ↔ 파일명 매핑**: rabbitId는 0~79 (0-indexed), 파일명은 001~080 (1-indexed).
-`getRabbitProfileUrl(rabbitId)` → `rabbit-${(rabbitId+1).padStart(3,'0')}-pf.png` (`lib/utils/rabbitProfile.ts`)
+- `getRabbitImageSrc(rabbitId)` → `/rabbit/rabbit-{id+1}.png` (`lib/utils/rabbitImage.ts`)
+- `getRabbitProfileUrl(rabbitId)` → `/rabbit_profile/rabbit-{id+1}-pf.png` (`lib/utils/rabbitProfile.ts`)
 
 ### Cloud Run PPTX 서비스
 
