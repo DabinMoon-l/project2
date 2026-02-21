@@ -25,6 +25,7 @@ export interface HomeCacheData {
   teamRanks: Record<string, number>;
   personalRank: number;
   totalStudents: number;
+  participationRate?: number;
 }
 
 const HOME_KEY = (courseId: string) => `ranking_home_${courseId}`;

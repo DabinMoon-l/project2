@@ -32,9 +32,16 @@ const HOME_BG_IMAGE = '/images/home-bg.jpg';
  */
 export default function HomePage() {
   const { theme } = useTheme();
-  const { profile } = useUser();
+  const { profile, isProfessor } = useUser();
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
   const router = useRouter();
+
+  // 교수님은 /professor 홈으로 리다이렉트
+  useEffect(() => {
+    if (isProfessor) {
+      router.replace('/professor');
+    }
+  }, [isProfessor, router]);
 
   // 스와이프 업 → 이전 페이지로 복귀
   const [pullY, setPullY] = useState(0);

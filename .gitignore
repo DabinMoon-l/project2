@@ -45,6 +45,9 @@ firebase-adminsdk*.json
 *.p12
 *.pfx
 
+# rabbit image backup
+/public/rabbit_backup/
+
 # vercel
 .vercel
 

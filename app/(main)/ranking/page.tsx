@@ -470,6 +470,14 @@ export default function RankingPage() {
                   <p className="font-bold text-white">팀 랭킹</p>
                   <p>- 평균 참여도(40%) + 평균 성적(40%) + 퀴즈 응시율(20%).</p>
                   <p>- 응시율 = 교수님 퀴즈 중 반 평균 풀이 비율.</p>
+                  {profile?.role === 'professor' && (
+                    <>
+                      <div className="pt-2" />
+                      <p className="font-bold text-white">홈 화면 OVERVIEW %</p>
+                      <p>- 이번 주(월~일) 퀴즈에 참여한 학생 비율입니다.</p>
+                      <p>- 5분마다 자동 갱신됩니다.</p>
+                    </>
+                  )}
                 </div>
 
                 {/* 버튼 */}

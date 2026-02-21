@@ -25,6 +25,7 @@ import {
   COURSES,
   determineCourse,
   getAvailableGrades,
+  getCurrentSemesterByDate,
 } from '../types/course';
 
 /**
@@ -117,11 +118,15 @@ export function CourseProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe();
   }, [refreshKey]);
 
+  // 교수님 courseId 미설정 여부 (학기 기반 기본값 적용용)
+  const [isProfessorNoCourse, setIsProfessorNoCourse] = useState(false);
+
   // 사용자 과목 정보 구독
   useEffect(() => {
     if (!user) {
       setUserCourseId(null);
       setUserClassId(null);
+      setIsProfessorNoCourse(false);
       return;
     }
 
@@ -132,7 +137,19 @@ export function CourseProvider({ children }: { children: ReactNode }) {
       (snapshot) => {
         if (snapshot.exists()) {
           const data = snapshot.data();
-          setUserCourseId(data.courseId || null);
+
+          if (data.courseId) {
+            setUserCourseId(data.courseId);
+            setIsProfessorNoCourse(false);
+          } else if (data.role === 'professor') {
+            setIsProfessorNoCourse(true);
+            // 즉시 폴백: semesterSettings 로딩 전이면 날짜 기반 판별
+            const semester = semesterSettings?.currentSemester ?? getCurrentSemesterByDate();
+            setUserCourseId(semester === 1 ? 'microbiology' : 'pathophysiology');
+          } else {
+            setUserCourseId(null);
+            setIsProfessorNoCourse(false);
+          }
           setUserClassId(data.classId || null);
         }
       },
@@ -142,7 +159,15 @@ export function CourseProvider({ children }: { children: ReactNode }) {
     );
 
     return () => unsubscribe();
-  }, [user, refreshKey]);
+  }, [user, refreshKey]); // semesterSettings는 의도적으로 제외 (아래 별도 effect에서 보정)
+
+  // 교수님 기본 과목: Firestore 학기 설정이 로드되면 보정
+  useEffect(() => {
+    if (isProfessorNoCourse && semesterSettings) {
+      const semester = semesterSettings.currentSemester;
+      setUserCourseId(semester === 1 ? 'microbiology' : 'pathophysiology');
+    }
+  }, [isProfessorNoCourse, semesterSettings]);
 
   // 현재 사용자의 과목 정보
   const userCourse = userCourseId ? COURSES[userCourseId] : null;

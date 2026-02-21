@@ -20,6 +20,7 @@
     "pdfjs-dist": "^4.0.379",
     "react": "^19",
     "react-dom": "^19",
+    "react-window": "^2.2.7",
     "tesseract.js": "^5.0.4",
     "web-vitals": "^4.0.0"
   },

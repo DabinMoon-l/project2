@@ -22,6 +22,22 @@ function computeTeamScore(normalizedAvgExp: number, avgCorrectRate: number, avgC
   return normalizedAvgExp * 0.4 + avgCorrectRate * 0.4 + avgCompletionRate * 0.2;
 }
 
+/**
+ * 이번 주 월요일 00:00 KST를 UTC Date로 반환
+ */
+function getWeekStartUTC(): Date {
+  const KST_OFFSET = 9 * 60 * 60 * 1000;
+  const now = new Date();
+  const kstNow = new Date(now.getTime() + KST_OFFSET);
+  const day = kstNow.getUTCDay(); // 0=일, 1=월, ...
+  const daysSinceMonday = day === 0 ? 6 : day - 1;
+  const mondayKST = new Date(kstNow);
+  mondayKST.setUTCHours(0, 0, 0, 0);
+  mondayKST.setUTCDate(mondayKST.getUTCDate() - daysSinceMonday);
+  // KST 월요일 00:00 → UTC로 변환
+  return new Date(mondayKST.getTime() - KST_OFFSET);
+}
+
 // ── 랭킹 계산 핵심 로직 ──
 
 interface RankedUserDoc {
@@ -55,7 +71,7 @@ async function computeRankingsForCourse(courseId: string) {
   const professorUids = allUsers.filter((u: any) => u.role === "professor").map((u: any) => u.id);
 
   if (students.length === 0) {
-    return { rankedUsers: [], teamRanks: [], totalStudents: 0 };
+    return { rankedUsers: [], teamRanks: [], totalStudents: 0, weeklyParticipationRate: 0 };
   }
 
   // 장착 토끼 ID 수집
@@ -162,6 +178,22 @@ async function computeRankingsForCourse(courseId: string) {
   rankedUsers.sort((a, b) => b.rankScore - a.rankScore);
   rankedUsers.forEach((user, idx) => { user.rank = idx + 1; });
 
+  // ── 주간 참여율 (월~일, KST 기준) ──
+  const studentIdSet = new Set(students.map((u: any) => u.id));
+  const weekStartUTC = getWeekStartUTC();
+  const weeklyActiveIds = new Set<string>();
+  resultsSnap.docs.forEach(d => {
+    const r = d.data();
+    const ts = r.completedAt?.toDate?.() || r.createdAt?.toDate?.();
+    if (ts && ts >= weekStartUTC) {
+      const uid = r.userId as string;
+      if (studentIdSet.has(uid)) weeklyActiveIds.add(uid);
+    }
+  });
+  const weeklyParticipationRate = students.length > 0
+    ? Math.round((weeklyActiveIds.size / students.length) * 100)
+    : 0;
+
   // ── 팀 랭킹 ──
   const classes = ["A", "B", "C", "D"];
   const maxExp = Math.max(...students.map((u: any) => u.totalExp || 0), 1);
@@ -198,7 +230,7 @@ async function computeRankingsForCourse(courseId: string) {
   teamRanks.sort((a, b) => b.score - a.score);
   teamRanks.forEach((t, i) => { t.rank = i + 1; });
 
-  return { rankedUsers, teamRanks, totalStudents: students.length };
+  return { rankedUsers, teamRanks, totalStudents: students.length, weeklyParticipationRate };
 }
 
 // ── Callable: 특정 courseId 강제 갱신 ──

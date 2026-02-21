@@ -63,7 +63,8 @@ export default function RankingSection({ overrideCourseId }: { overrideCourseId?
           // 개인 랭킹
           const me = rankedUsers.find((u: any) => u.id === profile.uid);
           if (me) setPersonalRank(me.rank);
-          setTotalStudents(data.totalStudents || rankedUsers.length);
+          // rankedUsers.length 기준 — 랭킹 페이지 실제 인원과 일치
+          setTotalStudents(rankedUsers.length);
 
           // sessionStorage 캐시 갱신
           const teamRanksMap: Record<string, number> = {};
@@ -72,7 +73,7 @@ export default function RankingSection({ overrideCourseId }: { overrideCourseId?
           writeHomeCache(userCourseId, {
             teamRanks: teamRanksMap,
             personalRank: me?.rank || 0,
-            totalStudents: data.totalStudents || rankedUsers.length,
+            totalStudents: rankedUsers.length,
           });
         } else {
           // rankings 문서 없음 → 클라이언트 폴백

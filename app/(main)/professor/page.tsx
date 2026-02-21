@@ -9,7 +9,8 @@ import { useUser, useCourse } from '@/lib/contexts';
 import { ProfileDrawer } from '@/components/common';
 import CourseSwitcher from '@/components/common/CourseSwitcher';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
-import { AnnouncementChannel, RankingSection } from '@/components/home';
+import { AnnouncementChannel } from '@/components/home';
+import ProfessorRankingSection from '@/components/home/ProfessorRankingSection';
 import ProfessorCharacterBox from '@/components/home/ProfessorCharacterBox';
 import type { CourseId } from '@/lib/types/course';
 
@@ -28,10 +29,17 @@ export default function ProfessorHomePage() {
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
   const router = useRouter();
 
-  // 과목 전환 (공지 + 랭킹 공유)
+  // 과목 전환 (공지 + 랭킹 공유) — CourseContext에서 학기 기반 기본값 제공
   const [selectedCourse, setSelectedCourse] = useState<CourseId>(
-    (userCourseId as CourseId) || 'biology'
+    (userCourseId as CourseId) || 'microbiology'
   );
+
+  // CourseContext의 userCourseId가 로딩되면 동기화
+  useEffect(() => {
+    if (userCourseId) {
+      setSelectedCourse(userCourseId as CourseId);
+    }
+  }, [userCourseId]);
 
   // 스와이프 업 → 이전 페이지로 복귀
   const [pullY, setPullY] = useState(0);
@@ -146,6 +154,7 @@ export default function ProfessorHomePage() {
           transform: pullY > 5 ? `translateY(-${pullY}px)` : undefined,
           transition: pulling.current ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0, 0, 1)',
           willChange: pullY > 5 ? 'transform' : undefined,
+          overscrollBehavior: 'none',
         }}
       >
         <div className="relative z-[2] flex-1 flex flex-col pt-16 pb-16">
@@ -196,14 +205,14 @@ export default function ProfessorHomePage() {
           {/* 랭킹 — 하단 (과목 전환 포함) */}
           <div className="mt-auto -translate-y-[120px]">
             {/* 과목 스위처 */}
-            <div className="mb-3">
+            <div className="mb-5">
               <CourseSwitcher
                 value={selectedCourse}
                 onChange={setSelectedCourse}
-                textClassName="text-4xl font-bold text-white/50 tracking-widest inline-block"
+                textClassName="text-4xl font-bold text-white tracking-widest inline-block"
               />
             </div>
-            <RankingSection overrideCourseId={selectedCourse} />
+            <ProfessorRankingSection overrideCourseId={selectedCourse} />
           </div>
 
           {/* 스와이프 힌트 */}

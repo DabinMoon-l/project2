@@ -30,3 +30,11 @@ export function getRabbitImageSrc(rabbitId: number): string {
 export function isRabbitImageFinalized(rabbitId: number): boolean {
   return !EDITING_RABBIT_IDS.has(rabbitId);
 }
+
+/**
+ * 128px WebP 썸네일 경로 반환 (도감 그리드용)
+ */
+export function getRabbitThumbSrc(rabbitId: number): string {
+  const paddedId = String(rabbitId + 1).padStart(3, '0');
+  return `/rabbit_thumb/rabbit-${paddedId}.webp`;
+}

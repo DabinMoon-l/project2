@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -8,6 +8,7 @@ import {
   query,
   where,
   orderBy,
+  limit,
   onSnapshot,
   addDoc,
   updateDoc,
@@ -30,6 +31,21 @@ interface FileAttachment {
   size: number;
 }
 
+interface Poll {
+  question: string;
+  options: string[];
+  votes: Record<string, string[]>;
+  allowMultiple: boolean;
+  maxSelections?: number;
+}
+
+interface EditingPoll {
+  question: string;
+  options: string[];
+  allowMultiple: boolean;
+  maxSelections: number;
+}
+
 interface Announcement {
   id: string;
   content: string;
@@ -40,12 +56,8 @@ interface Announcement {
   fileType?: string;
   fileSize?: number;
   files?: FileAttachment[];
-  poll?: {
-    question: string;
-    options: string[];
-    votes: Record<string, string[]>;
-    allowMultiple: boolean;
-  };
+  poll?: Poll;
+  polls?: Poll[];
   reactions: Record<string, string[]>;
   readBy?: string[];
   createdAt: Timestamp;
@@ -56,13 +68,28 @@ interface Announcement {
 // ─── 상수 ───────────────────────────────────────────────
 
 const REACTION_EMOJIS = ['❤️', '👍', '🔥', '😂', '😮', '😢'];
-const BUBBLE_C = 20;
+const BUBBLE_C = 14;
+const BUBBLE_SIDE_MULTI = 26; // 다중 아이템 버블 좌우 패딩 (화살표 공간)
+const ARROW_ZONE = 30; // BUBBLE_SIDE_MULTI + content px-1(4px) = 화살표 영역 너비
 
 // ─── 유틸 ───────────────────────────────────────────────
 
 /** 이미지 URL 배열 추출 (하위 호환) */
 function getImageUrls(a: Announcement): string[] {
   return a.imageUrls ?? (a.imageUrl ? [a.imageUrl] : []);
+}
+
+/** 투표 배열 추출 (하위 호환 + 객체→배열 복구 + 유효성 필터) */
+function getPolls(a: Announcement): Poll[] {
+  let polls: Poll[] = [];
+  if (a.polls) {
+    // Firestore가 배열을 객체로 변환한 경우 복구
+    polls = Array.isArray(a.polls) ? a.polls : Object.values(a.polls as Record<string, Poll>);
+  } else if (a.poll) {
+    polls = [a.poll];
+  }
+  // options 없는 깨진 데이터 필터
+  return polls.filter((p) => p && Array.isArray(p.options) && p.options.length > 0);
 }
 
 /** 파일 배열 추출 (하위 호환) */
@@ -101,39 +128,46 @@ function lastReadKey(cid: string) {
 
 // ─── 9-slice 말풍선 ─────────────────────────────────────
 
-function Bubble({ children }: { children: React.ReactNode }) {
-  const c = BUBBLE_C;
-  const bg = (name: string, size = '100% 100%') => ({
-    backgroundImage: `url(/notice/bubble_professor_${name}.png)`,
-    backgroundSize: size,
-    backgroundRepeat: 'no-repeat' as const,
-  });
+// 9-slice 스타일 상수 (매 렌더마다 객체 재생성 방지)
+// 가장자리를 코너와 1px 겹쳐서 서브픽셀 갭(절단선) 방지
+const _bg = (name: string) => `url(/notice/bubble_professor_${name}.png)`;
+const _C = BUBBLE_C;
+const _O = 1; // overlap
+const BUBBLE_STYLES = {
+  tl: { width: _C, height: _C, backgroundImage: _bg('tl'), backgroundSize: 'cover' } as React.CSSProperties,
+  tr: { width: _C, height: _C, backgroundImage: _bg('tr'), backgroundSize: 'cover' } as React.CSSProperties,
+  bl: { width: _C, height: _C, backgroundImage: _bg('bl'), backgroundSize: 'cover' } as React.CSSProperties,
+  br: { width: _C, height: _C, backgroundImage: _bg('br'), backgroundSize: 'cover' } as React.CSSProperties,
+  top: { top: 0, left: _C - _O, right: _C - _O, height: _C, backgroundImage: _bg('top'), backgroundSize: '100% 100%' } as React.CSSProperties,
+  bottom: { bottom: 0, left: _C - _O, right: _C - _O, height: _C, backgroundImage: _bg('bottom'), backgroundSize: '100% 100%' } as React.CSSProperties,
+  left: { top: _C - _O, left: 0, width: _C, bottom: _C - _O, backgroundImage: _bg('left'), backgroundSize: '100% 100%' } as React.CSSProperties,
+  right: { top: _C - _O, right: 0, width: _C, bottom: _C - _O, backgroundImage: _bg('right'), backgroundSize: '100% 100%' } as React.CSSProperties,
+  center: { top: _C - _O, left: _C - _O, right: _C - _O, bottom: _C - _O, backgroundImage: _bg('center'), backgroundSize: '100% 100%' } as React.CSSProperties,
+  padDefault: { padding: `${_C}px` } as React.CSSProperties,
+  padMulti: { padding: `${_C}px ${BUBBLE_SIDE_MULTI}px` } as React.CSSProperties,
+};
+
+const Bubble = memo(function Bubble({ children, className, sidePadding }: { children: React.ReactNode; className?: string; sidePadding?: number }) {
+  const padStyle = sidePadding ? BUBBLE_STYLES.padMulti : BUBBLE_STYLES.padDefault;
   return (
-    <div
-      className="grid"
-      style={{
-        gridTemplateColumns: `${c}px 1fr ${c}px`,
-        gridTemplateRows: `${c}px 1fr ${c}px`,
-      }}
-    >
-      <div style={bg('tl', 'cover')} />
-      <div style={bg('top')} />
-      <div style={bg('tr', 'cover')} />
-      <div style={bg('left')} />
-      <div style={bg('center')}>
-        <div className="px-3 py-2">{children}</div>
-      </div>
-      <div style={bg('right')} />
-      <div style={bg('bl', 'cover')} />
-      <div style={bg('bottom')} />
-      <div style={bg('br', 'cover')} />
+    <div className={`relative ${className || ''}`} style={padStyle}>
+      <div className="absolute top-0 left-0" style={BUBBLE_STYLES.tl} />
+      <div className="absolute top-0 right-0" style={BUBBLE_STYLES.tr} />
+      <div className="absolute bottom-0 left-0" style={BUBBLE_STYLES.bl} />
+      <div className="absolute bottom-0 right-0" style={BUBBLE_STYLES.br} />
+      <div className="absolute" style={BUBBLE_STYLES.top} />
+      <div className="absolute" style={BUBBLE_STYLES.bottom} />
+      <div className="absolute" style={BUBBLE_STYLES.left} />
+      <div className="absolute" style={BUBBLE_STYLES.right} />
+      <div className="absolute" style={BUBBLE_STYLES.center} />
+      <div className="relative px-1 py-0.5">{children}</div>
     </div>
   );
-}
+});
 
 // ─── 이미지 캐러셀 ─────────────────────────────────────
 
-function ImageCarousel({
+const ImageCarousel = memo(function ImageCarousel({
   urls,
   onImageClick,
 }: {
@@ -147,26 +181,26 @@ function ImageCarousel({
 
   if (urls.length === 1) {
     return (
-      <button onClick={() => onImageClick(urls[0])} className="mt-2 block w-full">
+      <button onClick={() => onImageClick(urls[0])} className="mt-1 block w-full">
         <img src={urls[0]} alt="이미지" className="w-full aspect-[4/3] object-cover border border-[#D4CFC4]" />
       </button>
     );
   }
 
   return (
-    <div className="mt-2">
-      <div className="flex items-center gap-1">
-        {/* 좌측 화살표 */}
+    <div className="mt-1">
+      <div className="flex items-center -mx-[30px]">
+        {/* 좌측 화살표 — 버블 패딩 영역 중앙 */}
         <button
           onClick={() => { if (idx > 0) containerRef.current?.scrollTo({ left: (idx - 1) * (containerRef.current?.clientWidth || 0), behavior: 'smooth' }); }}
-          className={`w-5 h-5 shrink-0 flex items-center justify-center text-[#5C5C5C] ${idx > 0 ? '' : 'invisible'}`}
+          className={`w-[30px] shrink-0 flex items-center justify-center text-[#5C5C5C] ${idx > 0 ? '' : 'invisible'}`}
         >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
         </button>
         {/* 이미지 영역 */}
         <div
           ref={containerRef}
-          className="flex-1 overflow-x-auto snap-x snap-mandatory flex scrollbar-hide"
+          className="flex-1 overflow-x-auto snap-x snap-mandatory flex gap-0.5 scrollbar-hide"
           onScroll={() => {
             const el = containerRef.current;
             if (!el) return;
@@ -175,32 +209,32 @@ function ImageCarousel({
           }}
         >
           {urls.map((url, i) => (
-            <button key={i} onClick={() => onImageClick(url)} className="w-full shrink-0 snap-center">
+            <button key={i} onClick={() => onImageClick(url)} className="w-full shrink-0 snap-start">
               <img src={url} alt={`이미지 ${i + 1}`} className="w-full aspect-[4/3] object-cover border border-[#D4CFC4]" />
             </button>
           ))}
         </div>
-        {/* 우측 화살표 */}
+        {/* 우측 화살표 — 버블 패딩 영역 중앙 */}
         <button
           onClick={() => { if (idx < urls.length - 1) containerRef.current?.scrollTo({ left: (idx + 1) * (containerRef.current?.clientWidth || 0), behavior: 'smooth' }); }}
-          className={`w-5 h-5 shrink-0 flex items-center justify-center text-[#5C5C5C] ${idx < urls.length - 1 ? '' : 'invisible'}`}
+          className={`w-[30px] shrink-0 flex items-center justify-center text-[#5C5C5C] ${idx < urls.length - 1 ? '' : 'invisible'}`}
         >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
         </button>
       </div>
       {/* 점 인디케이터 */}
-      <div className="flex justify-center gap-1 mt-1.5">
+      <div className="flex justify-center gap-1 mt-1">
         {urls.map((_, i) => (
           <div key={i} className={`w-1.5 h-1.5 rounded-full transition-colors ${i === idx ? 'bg-[#1A1A1A]' : 'bg-[#D4CFC4]'}`} />
         ))}
       </div>
     </div>
   );
-}
+});
 
 // ─── 파일 캐러셀 ────────────────────────────────────────
 
-function FileCarousel({ files }: { files: FileAttachment[] }) {
+const FileCarousel = memo(function FileCarousel({ files }: { files: FileAttachment[] }) {
   const [idx, setIdx] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -208,9 +242,9 @@ function FileCarousel({ files }: { files: FileAttachment[] }) {
 
   const FileCard = ({ f }: { f: FileAttachment }) => (
     <a href={f.url} target="_blank" rel="noopener noreferrer" download={f.name}
-      className="flex items-center gap-2 p-2 border border-[#D4CFC4] bg-[#F5F0E8]/60 hover:bg-[#F5F0E8] transition-colors"
+      className="flex items-center gap-1.5 p-1.5 border border-[#D4CFC4] bg-[#F5F0E8]/60 hover:bg-[#F5F0E8] transition-colors"
     >
-      <svg className="w-5 h-5 text-[#5C5C5C] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-4 h-4 text-[#5C5C5C] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
       </svg>
       <div className="flex-1 min-w-0">
@@ -224,23 +258,23 @@ function FileCarousel({ files }: { files: FileAttachment[] }) {
   );
 
   if (files.length === 1) {
-    return <div className="mt-2"><FileCard f={files[0]} /></div>;
+    return <div className="mt-1"><FileCard f={files[0]} /></div>;
   }
 
   return (
-    <div className="mt-2">
-      <div className="flex items-center gap-1">
-        {/* 좌측 화살표 */}
+    <div className="mt-1">
+      <div className="flex items-center -mx-[30px]">
+        {/* 좌측 화살표 — 버블 패딩 영역 중앙 */}
         <button
           onClick={() => { if (idx > 0) containerRef.current?.scrollTo({ left: (idx - 1) * (containerRef.current?.clientWidth || 0), behavior: 'smooth' }); }}
-          className={`w-5 h-5 shrink-0 flex items-center justify-center text-[#5C5C5C] ${idx > 0 ? '' : 'invisible'}`}
+          className={`w-[30px] shrink-0 flex items-center justify-center text-[#5C5C5C] ${idx > 0 ? '' : 'invisible'}`}
         >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
         </button>
         {/* 파일 영역 */}
         <div
           ref={containerRef}
-          className="flex-1 overflow-x-auto snap-x snap-mandatory flex scrollbar-hide"
+          className="flex-1 overflow-x-auto snap-x snap-mandatory flex gap-0.5 scrollbar-hide"
           onScroll={() => {
             const el = containerRef.current;
             if (!el) return;
@@ -249,32 +283,263 @@ function FileCarousel({ files }: { files: FileAttachment[] }) {
           }}
         >
           {files.map((f, i) => (
-            <div key={i} className="w-full shrink-0 snap-center">
+            <div key={i} className="w-full shrink-0 snap-start">
               <FileCard f={f} />
             </div>
           ))}
         </div>
-        {/* 우측 화살표 */}
+        {/* 우측 화살표 — 버블 패딩 영역 중앙 */}
         <button
           onClick={() => { if (idx < files.length - 1) containerRef.current?.scrollTo({ left: (idx + 1) * (containerRef.current?.clientWidth || 0), behavior: 'smooth' }); }}
-          className={`w-5 h-5 shrink-0 flex items-center justify-center text-[#5C5C5C] ${idx < files.length - 1 ? '' : 'invisible'}`}
+          className={`w-[30px] shrink-0 flex items-center justify-center text-[#5C5C5C] ${idx < files.length - 1 ? '' : 'invisible'}`}
         >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
         </button>
       </div>
       {/* 점 인디케이터 */}
-      <div className="flex justify-center gap-1 mt-1.5">
+      <div className="flex justify-center gap-1 mt-1">
         {files.map((_, i) => (
           <div key={i} className={`w-1.5 h-1.5 rounded-full transition-colors ${i === idx ? 'bg-[#1A1A1A]' : 'bg-[#D4CFC4]'}`} />
         ))}
       </div>
     </div>
   );
-}
+});
+
+// ─── 투표 캐러셀 ─────────────────────────────────────────
+
+// ─── 투표 카드 (PollCarousel 밖에 정의 — 복수선택 state 유지) ──
+
+const PollCard = memo(function PollCard({
+  poll,
+  pollIdx,
+  profileUid,
+  shouldAnimate,
+  selected,
+  onToggle,
+  onSingleVote,
+  onSubmitMulti,
+}: {
+  poll: Poll;
+  pollIdx: number;
+  profileUid?: string;
+  shouldAnimate: boolean;
+  selected: Set<number>;
+  onToggle: (optIdx: number) => void;
+  onSingleVote: (optIdx: number) => void;
+  onSubmitMulti: () => void;
+}) {
+  if (!poll || !poll.options) return null;
+  const votes = poll.votes || {};
+  const hasVoted = profileUid && Object.values(votes).some((arr) => Array.isArray(arr) && arr.includes(profileUid));
+  const maxSel = poll.allowMultiple ? (poll.maxSelections || poll.options.length) : 1;
+
+  return (
+    <div className="p-2 border border-[#D4CFC4]">
+      <p className="font-bold text-base mb-1.5 text-[#1A1A1A] break-words">{poll.question}</p>
+      {/* 복수선택 안내 */}
+      {poll.allowMultiple && !hasVoted && (
+        <p className="text-[10px] text-[#8C8478] mb-1.5">복수선택 (최대 {maxSel}개)</p>
+      )}
+      <div className="space-y-1">
+        {poll.options.map((opt, oi) => {
+          const v = votes[oi.toString()] || [];
+          const total = new Set(Object.values(votes).flat()).size;
+          const pct = total > 0 ? Math.round((v.length / total) * 100) : 0;
+          const isMyVote = profileUid && v.includes(profileUid);
+          const isSelected = selected.has(oi);
+
+          // 투표 전
+          if (!hasVoted) {
+            if (poll.allowMultiple) {
+              // 복수선택: 체크박스 토글
+              return (
+                <button
+                  key={oi}
+                  onClick={(e) => { e.stopPropagation(); onToggle(oi); }}
+                  className="w-full text-left py-1"
+                >
+                  <div className="flex items-start gap-1.5">
+                    <span className={`w-3.5 h-3.5 border-[1.5px] border-[#1A1A1A] shrink-0 mt-px flex items-center justify-center transition-colors ${isSelected ? 'bg-[#1A1A1A]' : ''}`}>
+                      {isSelected && <span className="text-white text-[8px]">✓</span>}
+                    </span>
+                    <span className="flex-1 text-base min-w-0 break-words">{opt}</span>
+                  </div>
+                </button>
+              );
+            }
+            // 단일선택: 즉시 투표
+            return (
+              <button key={oi} onClick={(e) => { e.stopPropagation(); onSingleVote(oi); }} className="w-full text-left py-0.5">
+                <div className="flex items-start gap-1.5">
+                  <span className="w-3.5 h-3.5 border-[1.5px] border-[#1A1A1A] shrink-0 mt-px" />
+                  <span className="flex-1 text-xs min-w-0 break-words">{opt}</span>
+                </div>
+              </button>
+            );
+          }
+
+          // 투표 후: 결과 표시
+          return (
+            <div key={oi} className="py-0.5">
+              <div className="flex items-start gap-1.5">
+                <span className={`w-3.5 h-3.5 border-[1.5px] border-[#1A1A1A] shrink-0 mt-px flex items-center justify-center ${isMyVote ? 'bg-[#1A1A1A]' : ''}`}>
+                  {isMyVote && <span className="text-white text-[8px]">✓</span>}
+                </span>
+                <span className="flex-1 text-xs min-w-0 break-words">{opt}</span>
+                <span className="text-[11px] text-[#8C8478] shrink-0">{pct}%</span>
+              </div>
+              <div className="mt-0.5 h-1 bg-[#D4CFC4] rounded-full overflow-hidden">
+                {shouldAnimate ? (
+                  <motion.div
+                    className="h-full bg-[#1A1A1A] rounded-full"
+                    initial={{ width: '0%' }}
+                    animate={{ width: `${pct}%` }}
+                    transition={{ type: 'spring', stiffness: 80, damping: 18, delay: 0.15 * oi }}
+                  />
+                ) : (
+                  <div className="h-full bg-[#1A1A1A] rounded-full" style={{ width: `${pct}%` }} />
+                )}
+              </div>
+            </div>
+          );
+        })}
+        {/* 복수선택 투표 버튼 */}
+        {poll.allowMultiple && !hasVoted && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onSubmitMulti(); }}
+            disabled={selected.size === 0}
+            className="w-full mt-0.5 py-1 text-xs font-bold border-[1.5px] border-[#1A1A1A] text-[#1A1A1A] disabled:opacity-30 transition-opacity"
+          >
+            투표하기 ({selected.size}/{maxSel})
+          </button>
+        )}
+        {hasVoted && (
+          <p className="text-xs text-[#8C8478] text-right">
+            {new Set(Object.values(votes).flat()).size}명 참여
+          </p>
+        )}
+      </div>
+    </div>
+  );
+});
+
+// ─── 투표 캐러셀 ─────────────────────────────────────────
+
+const PollCarousel = memo(function PollCarousel({
+  polls,
+  announcementId,
+  profileUid,
+  onVote,
+}: {
+  polls: Poll[];
+  announcementId: string;
+  profileUid?: string;
+  onVote: (aid: string, pollIdx: number, optIndices: number[]) => void;
+}) {
+  const [idx, setIdx] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  // 이번 세션에서 방금 투표한 poll만 애니메이션
+  const [justVoted, setJustVoted] = useState<Set<number>>(new Set());
+  // 복수선택 임시 선택 상태
+  const [selections, setSelections] = useState<Map<number, Set<number>>>(new Map());
+
+  const toggleSelection = useCallback((pollIdx: number, optIdx: number, maxSel: number) => {
+    setSelections((prev) => {
+      const next = new Map(prev);
+      const cur = new Set(next.get(pollIdx) || []);
+      if (cur.has(optIdx)) {
+        cur.delete(optIdx);
+      } else if (cur.size < maxSel) {
+        cur.add(optIdx);
+      }
+      next.set(pollIdx, cur);
+      return next;
+    });
+  }, []);
+
+  const handleSingleVote = useCallback((pollIdx: number, optIdx: number) => {
+    setJustVoted((prev) => new Set(prev).add(pollIdx));
+    onVote(announcementId, pollIdx, [optIdx]);
+  }, [onVote, announcementId]);
+
+  const handleMultiVote = useCallback((pollIdx: number) => {
+    const sel = selections.get(pollIdx);
+    if (!sel || sel.size === 0) return;
+    setJustVoted((prev) => new Set(prev).add(pollIdx));
+    onVote(announcementId, pollIdx, Array.from(sel));
+  }, [onVote, announcementId, selections]);
+
+  if (polls.length === 0) return null;
+
+  const EMPTY_SET = new Set<number>();
+
+  const renderCard = (poll: Poll, pi: number) => (
+    <PollCard
+      key={pi}
+      poll={poll}
+      pollIdx={pi}
+      profileUid={profileUid}
+      shouldAnimate={justVoted.has(pi)}
+      selected={selections.get(pi) || EMPTY_SET}
+      onToggle={(oi) => toggleSelection(pi, oi, poll.maxSelections || poll.options.length)}
+      onSingleVote={(oi) => handleSingleVote(pi, oi)}
+      onSubmitMulti={() => handleMultiVote(pi)}
+    />
+  );
+
+  if (polls.length === 1) {
+    return <div className="mt-1">{renderCard(polls[0], 0)}</div>;
+  }
+
+  return (
+    <div className="mt-1">
+      <div className="flex items-center -mx-[30px]">
+        {/* 좌측 화살표 — 버블 패딩 영역 중앙 */}
+        <button
+          onClick={() => { if (idx > 0) containerRef.current?.scrollTo({ left: (idx - 1) * (containerRef.current?.clientWidth || 0), behavior: 'smooth' }); }}
+          className={`w-[30px] shrink-0 flex items-center justify-center text-[#5C5C5C] ${idx > 0 ? '' : 'invisible'}`}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
+        </button>
+        {/* 투표 영역 */}
+        <div
+          ref={containerRef}
+          className="flex-1 overflow-x-auto snap-x snap-mandatory flex items-center gap-0.5 scrollbar-hide"
+          onScroll={() => {
+            const el = containerRef.current;
+            if (!el) return;
+            const newIdx = Math.round(el.scrollLeft / el.clientWidth);
+            setIdx(newIdx);
+          }}
+        >
+          {polls.map((poll, i) => (
+            <div key={i} className="w-full shrink-0 snap-start flex items-center">
+              <div className="w-full">{renderCard(poll, i)}</div>
+            </div>
+          ))}
+        </div>
+        {/* 우측 화살표 — 버블 패딩 영역 중앙 */}
+        <button
+          onClick={() => { if (idx < polls.length - 1) containerRef.current?.scrollTo({ left: (idx + 1) * (containerRef.current?.clientWidth || 0), behavior: 'smooth' }); }}
+          className={`w-[30px] shrink-0 flex items-center justify-center text-[#5C5C5C] ${idx < polls.length - 1 ? '' : 'invisible'}`}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+        </button>
+      </div>
+      {/* 점 인디케이터 */}
+      <div className="flex justify-center gap-1 mt-1">
+        {polls.map((_, i) => (
+          <div key={i} className={`w-1.5 h-1.5 rounded-full transition-colors ${i === idx ? 'bg-[#1A1A1A]' : 'bg-[#D4CFC4]'}`} />
+        ))}
+      </div>
+    </div>
+  );
+});
 
 // ─── 이미지 전체화면 뷰어 ──────────────────────────────
 
-function ImageViewer({ src, onClose }: { src: string; onClose: () => void }) {
+const ImageViewer = memo(function ImageViewer({ src, onClose }: { src: string; onClose: () => void }) {
   return (
     <div
       className="fixed inset-0 z-[70] bg-black/90 flex items-center justify-center"
@@ -309,18 +574,20 @@ function ImageViewer({ src, onClose }: { src: string; onClose: () => void }) {
       />
     </div>
   );
-}
+});
 
 // ─── 펼치기/접기 메시지 본문 ────────────────────────────
 
-function MessageContent({
+const MessageContent = memo(function MessageContent({
   content,
   expanded,
   onToggle,
+  textRight,
 }: {
   content: string;
   expanded: boolean;
   onToggle: () => void;
+  textRight?: boolean;
 }) {
   const textRef = useRef<HTMLParagraphElement>(null);
   const [isClamped, setIsClamped] = useState(false);
@@ -338,7 +605,7 @@ function MessageContent({
     <div className="relative">
       <p
         ref={textRef}
-        className={`text-lg text-[#1A1A1A] whitespace-pre-wrap break-words leading-relaxed ${!expanded ? 'line-clamp-2' : ''}`}
+        className={`text-base text-[#1A1A1A] whitespace-pre-wrap break-words leading-snug ${!expanded ? 'line-clamp-2' : ''} ${textRight ? 'text-right' : ''}`}
       >
         {content}
       </p>
@@ -362,11 +629,11 @@ function MessageContent({
       )}
     </div>
   );
-}
+});
 
 // ─── 미디어/파일 드로어 (좌측 슬라이드) ─────────────────
 
-function MediaDrawer({
+const MediaDrawer = memo(function MediaDrawer({
   announcements, onClose, onImageClick, headerContent,
 }: {
   announcements: Announcement[];
@@ -448,7 +715,104 @@ function MediaDrawer({
       </motion.div>
     </>
   );
-}
+});
+
+// ─── 메시지 아이템 (memo로 불필요한 리렌더 방지) ────────
+
+const AnnouncementMessageItem = memo(function AnnouncementMessageItem({
+  announcement: a,
+  showDate,
+  isOwnProfessor,
+  isExpanded,
+  isHighlighted,
+  showEmojiPickerForThis,
+  profileUid,
+  onToggleExpand,
+  onReaction,
+  onToggleEmojiPicker,
+  onVote,
+  onImageClick,
+}: {
+  announcement: Announcement;
+  showDate: boolean;
+  isOwnProfessor: boolean;
+  isExpanded: boolean;
+  isHighlighted: boolean;
+  showEmojiPickerForThis: boolean;
+  profileUid?: string;
+  onToggleExpand: (id: string) => void;
+  onReaction: (aid: string, emoji: string) => void;
+  onToggleEmojiPicker: (aid: string | null) => void;
+  onVote: (aid: string, pollIdx: number, optIndices: number[]) => void;
+  onImageClick: (url: string) => void;
+}) {
+  const readCount = useMemo(() => (a.readBy?.filter((uid) => uid !== a.createdBy) || []).length, [a.readBy, a.createdBy]);
+  const reactions = useMemo(() => Object.entries(a.reactions || {}), [a.reactions]);
+  const imgUrls = useMemo(() => getImageUrls(a), [a.imageUrls, a.imageUrl]);
+  const fileList = useMemo(() => getFiles(a), [a.files, a.fileUrl, a.fileName, a.fileType, a.fileSize]);
+  const pollList = useMemo(() => getPolls(a), [a.polls, a.poll]);
+
+  const hasMedia = imgUrls.length > 0 || fileList.length > 0 || pollList.length > 0;
+  const hasMultiItems = imgUrls.length > 1 || fileList.length > 1 || pollList.length > 1;
+
+  const handleToggleExpand = useCallback(() => onToggleExpand(a.id), [onToggleExpand, a.id]);
+
+  return (
+    <div data-msg-id={a.id}>
+      {showDate && a.createdAt && (
+        <div className="flex items-center gap-3 my-1.5">
+          <div className="flex-1 border-t border-dashed border-white/20" />
+          <span className="text-xs text-white/60 whitespace-nowrap">{fmtDate(a.createdAt)}</span>
+          <div className="flex-1 border-t border-dashed border-white/20" />
+        </div>
+      )}
+      <div className={`flex gap-2 ${isOwnProfessor ? 'flex-row-reverse' : ''} ${isHighlighted ? 'bg-black/15 rounded-xl p-1 -m-1' : ''}`}>
+        <img src="/notice/avatar_professor.png" alt="교수님" className="w-14 h-14 shrink-0 object-cover rounded-full mt-0.5" />
+        <div className={`min-w-0 ${hasMedia ? 'w-[65%]' : 'min-w-[50%] max-w-[70%]'} ${isOwnProfessor ? 'flex flex-col items-end' : ''}`}>
+          <p className={`text-base font-bold text-white/70 mb-0.5 ${isOwnProfessor ? 'text-right' : ''}`}>Prof. Kim</p>
+          <Bubble className={hasMedia ? 'w-full' : 'w-fit'} sidePadding={hasMultiItems ? BUBBLE_SIDE_MULTI : undefined}>
+            <MessageContent content={a.content} expanded={isExpanded} onToggle={handleToggleExpand} textRight={isOwnProfessor && hasMedia} />
+            <ImageCarousel urls={imgUrls} onImageClick={onImageClick} />
+            <FileCarousel files={fileList} />
+            <PollCarousel polls={pollList} announcementId={a.id} profileUid={profileUid} onVote={onVote} />
+          </Bubble>
+          <p className={`text-xs text-white/50 mt-1 ${isOwnProfessor ? 'text-right' : ''}`}>
+            {readCount > 0 && <>{readCount}명 읽음</>}
+            {readCount > 0 && a.createdAt && ' · '}
+            {a.createdAt && fmtTime(a.createdAt)}
+          </p>
+          <div className={`flex items-center gap-1 mt-1 relative flex-wrap ${isOwnProfessor ? 'flex-row-reverse' : ''}`}>
+            {reactions.map(([emoji, uids]) => (
+              <button key={emoji} onClick={() => onReaction(a.id, emoji)}
+                className={`text-sm px-1 py-0.5 rounded border ${profileUid && uids.includes(profileUid) ? 'border-white/40 bg-white/20' : 'border-white/20 bg-white/10'}`}
+              >
+                {emoji} <span className="text-xs text-white/60">{uids.length}</span>
+              </button>
+            ))}
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleEmojiPicker(showEmojiPickerForThis ? null : a.id); }}
+              className="text-white/30 hover:text-white/60 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </button>
+            {showEmojiPickerForThis && (
+              <div
+                className={`absolute ${isOwnProfessor ? 'right-0' : 'left-0'} bottom-full mb-1 bg-black/60 backdrop-blur-md border border-white/20 rounded-lg p-1.5 flex gap-1 z-20 shadow-lg`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {REACTION_EMOJIS.map((em) => (
+                  <button key={em} onClick={() => onReaction(a.id, em)} className="text-lg hover:scale-110 transition-transform">{em}</button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
 
 // ─── 메인 컴포넌트 ──────────────────────────────────────
 
@@ -469,11 +833,15 @@ export default function AnnouncementChannel({
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showMedia, setShowMedia] = useState(false);
-  const [newContent, setNewContent] = useState('');
+  const [hasText, setHasText] = useState(false);
+  const prevOverflowRef = useRef(false);
+  const [isDragOver, setIsDragOver] = useState(false);
   const [showToolbar, setShowToolbar] = useState(false);
   const [showPollCreator, setShowPollCreator] = useState(false);
-  const [pollQuestion, setPollQuestion] = useState('');
-  const [pollOptions, setPollOptions] = useState(['', '']);
+  // 캐러셀 투표 편집기: 각 항목이 하나의 투표 폼
+  const [editingPolls, setEditingPolls] = useState<EditingPoll[]>([{ question: '', options: ['', ''], allowMultiple: false, maxSelections: 2 }]);
+  const [editingPollIdx, setEditingPollIdx] = useState(0);
+  const [showMaxSelDropdown, setShowMaxSelDropdown] = useState(false);
   const [pendingImages, setPendingImages] = useState<File[]>([]);
   const [pendingImagePreviews, setPendingImagePreviews] = useState<string[]>([]);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -483,6 +851,8 @@ export default function AnnouncementChannel({
   const [sheetTop, setSheetTop] = useState(0);
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
   const [showScrollFab, setShowScrollFab] = useState(false);
+  // 모달 콘텐츠 지연 렌더링 (애니메이션 후 메시지 표시)
+  const [modalReady, setModalReady] = useState(false);
   // 검색
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -492,11 +862,19 @@ export default function AnnouncementChannel({
   const [showCalendar, setShowCalendar] = useState(false);
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
+  // 캘린더 닫힐 때 년도/월 초기화
+  useEffect(() => {
+    if (!showCalendar) {
+      setCalYear(new Date().getFullYear());
+      setCalMonth(new Date().getMonth());
+    }
+  }, [showCalendar]);
   // 입력창 확장 (2줄 이상일 때 max-height 해제)
   const [inputExpanded, setInputExpanded] = useState(false);
   const [inputOverflows, setInputOverflows] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const scrollFabRef = useRef(false);
   const previewRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const msgAreaRef = useRef<HTMLDivElement>(null);
@@ -518,17 +896,47 @@ export default function AnnouncementChannel({
     return () => { document.body.style.overflow = ''; };
   }, [showModal]);
 
-  // ─── 공지 구독
+  // ─── 모달 콘텐츠 지연 렌더링 (닫힐 때 초기화)
+  useEffect(() => {
+    if (!showModal) setModalReady(false);
+  }, [showModal]);
+
+  // ─── 공지 구독 (증분 업데이트: 변경된 문서만 새 객체 생성 → memo 유지)
   useEffect(() => {
     if (!userCourseId) return;
+    let isFirst = true;
     const q = query(
       collection(db, 'announcements'),
       where('courseId', '==', userCourseId),
       orderBy('createdAt', 'desc'),
+      limit(100),
     );
     const unsub = onSnapshot(q, (snap) => {
-      setAnnouncements(snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Announcement[]);
-      setLoading(false);
+      if (isFirst) {
+        // 최초 로드: 전부 생성
+        isFirst = false;
+        setAnnouncements(snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Announcement[]);
+        setLoading(false);
+        return;
+      }
+      // 증분: 변경된 문서만 교체, 나머지는 기존 참조 유지
+      const changes = snap.docChanges();
+      if (changes.length === 0) return;
+      setAnnouncements((prev) => {
+        const map = new Map(prev.map((a) => [a.id, a]));
+        changes.forEach((change) => {
+          if (change.type === 'removed') {
+            map.delete(change.doc.id);
+          } else {
+            map.set(change.doc.id, { id: change.doc.id, ...change.doc.data() } as Announcement);
+          }
+        });
+        return Array.from(map.values()).sort((a, b) => {
+          const ta = a.createdAt?.toMillis() ?? 0;
+          const tb = b.createdAt?.toMillis() ?? 0;
+          return tb - ta;
+        });
+      });
     });
     return () => unsub();
   }, [userCourseId]);
@@ -543,13 +951,17 @@ export default function AnnouncementChannel({
     setHasUnread(latest.createdAt.toDate().getTime() > new Date(lr).getTime());
   }, [announcements, userCourseId, showModal]);
 
-  // ─── 읽음 처리
+  // ─── 읽음 처리 (모달 열릴 때 1회만 실행 — 캐스케이드 방지)
+  const readMarkedRef = useRef(false);
   useEffect(() => {
-    if (!showModal || !userCourseId || !profile) return;
+    if (!showModal) { readMarkedRef.current = false; return; }
+    if (readMarkedRef.current || !userCourseId || !profile || !announcements.length) return;
+    readMarkedRef.current = true;
     localStorage.setItem(lastReadKey(userCourseId), new Date().toISOString());
     setHasUnread(false);
-    announcements.forEach((a) => {
-      if (a.readBy?.includes(profile.uid)) return;
+    // 아직 읽지 않은 공지만 업데이트
+    const unread = announcements.filter((a) => !a.readBy?.includes(profile.uid));
+    unread.forEach((a) => {
       updateDoc(doc(db, 'announcements', a.id), { readBy: arrayUnion(profile.uid) }).catch(() => {});
     });
   }, [showModal, userCourseId, profile, announcements]);
@@ -599,6 +1011,38 @@ export default function AnnouncementChannel({
     setPendingFiles((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  // ─── 드래그 앤 드롭 (PC에서 파일/이미지 드래그로 첨부)
+  const dragCountRef = useRef(0);
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    dragCountRef.current++;
+    if (dragCountRef.current === 1) setIsDragOver(true);
+  }, []);
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    dragCountRef.current--;
+    if (dragCountRef.current <= 0) { dragCountRef.current = 0; setIsDragOver(false); }
+  }, []);
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault(); e.stopPropagation();
+  }, []);
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    dragCountRef.current = 0;
+    setIsDragOver(false);
+    const files = Array.from(e.dataTransfer.files);
+    if (!files.length) return;
+    const images = files.filter((f) => f.type.startsWith('image/'));
+    const others = files.filter((f) => !f.type.startsWith('image/'));
+    if (images.length > 0) {
+      setPendingImages((prev) => [...prev, ...images]);
+      setPendingImagePreviews((prev) => [...prev, ...images.map((f) => URL.createObjectURL(f))]);
+    }
+    if (others.length > 0) {
+      setPendingFiles((prev) => [...prev, ...others]);
+    }
+  }, []);
+
   // ─── 검색 로직
   useEffect(() => {
     if (!searchQuery.trim()) { setSearchResults([]); setSearchIdx(0); return; }
@@ -615,9 +1059,8 @@ export default function AnnouncementChannel({
 
   const navigateSearch = useCallback((dir: 'up' | 'down') => {
     if (!searchResults.length) return;
-    const next = dir === 'up'
-      ? (searchIdx - 1 + searchResults.length) % searchResults.length
-      : (searchIdx + 1) % searchResults.length;
+    const next = dir === 'up' ? searchIdx - 1 : searchIdx + 1;
+    if (next < 0 || next >= searchResults.length) return;
     setSearchIdx(next);
     scrollToMessage(searchResults[next]);
   }, [searchResults, searchIdx, scrollToMessage]);
@@ -649,11 +1092,13 @@ export default function AnnouncementChannel({
 
   // ─── 공지 작성
   const handlePost = async () => {
-    const hasPoll = showPollCreator && pollQuestion.trim() && pollOptions.filter((o) => o.trim()).length >= 2;
-    if (!profile || !userCourseId || (!newContent.trim() && !pendingImages.length && !pendingFiles.length && !hasPoll)) return;
+    const validPolls = showPollCreator ? editingPolls.filter((p) => p.question.trim() && p.options.filter((o) => o.trim()).length >= 2) : [];
+    const hasPoll = validPolls.length > 0;
+    const content = textareaRef.current?.value?.trim() || '';
+    if (!profile || !userCourseId || (!content && !pendingImages.length && !pendingFiles.length && !hasPoll)) return;
     try {
       const data: Record<string, unknown> = {
-        content: newContent.trim(), reactions: {}, readBy: [],
+        content, reactions: {}, readBy: [],
         createdAt: serverTimestamp(), createdBy: profile.uid, courseId: userCourseId,
       };
       // 다중 이미지 업로드
@@ -668,19 +1113,28 @@ export default function AnnouncementChannel({
           data.files = fileInfos.map((fi) => ({ url: fi.url, name: fi.name, type: fi.type, size: fi.size }));
         }
       }
-      if (showPollCreator && pollQuestion.trim() && pollOptions.filter((o) => o.trim()).length >= 2) {
-        data.poll = { question: pollQuestion.trim(), options: pollOptions.filter((o) => o.trim()), votes: {}, allowMultiple: false };
+      // 다중 투표 수집
+      if (validPolls.length > 0) {
+        data.polls = validPolls.map((p) => {
+          const opts = p.options.filter((o) => o.trim());
+          return {
+            question: p.question.trim(), options: opts, votes: {}, allowMultiple: p.allowMultiple,
+            ...(p.allowMultiple ? { maxSelections: Math.min(p.maxSelections, opts.length) } : {}),
+          };
+        });
       }
       await addDoc(collection(db, 'announcements'), data);
-      setNewContent(''); setShowPollCreator(false); setPollQuestion(''); setPollOptions(['', '']);
-      clearAllImgs(); setPendingFiles([]); setShowToolbar(false);
+      if (textareaRef.current) textareaRef.current.value = '';
+      setHasText(false); setShowPollCreator(false);
+      setEditingPolls([{ question: '', options: ['', ''], allowMultiple: false, maxSelections: 2 }]);
+      setEditingPollIdx(0); clearAllImgs(); setPendingFiles([]); setShowToolbar(false);
       setInputExpanded(false); setInputOverflows(false);
       requestAnimationFrame(() => { const t = textareaRef.current; if (t) t.style.height = '36px'; });
     } catch (err) { console.error('공지 작성 실패:', err); }
   };
 
   // ─── 이모지 반응
-  const handleReaction = async (aid: string, emoji: string) => {
+  const handleReaction = useCallback(async (aid: string, emoji: string) => {
     if (!profile) return;
     const a = announcements.find((x) => x.id === aid); if (!a) return;
     const cur = a.reactions || {}; const arr = cur[emoji] || [];
@@ -690,23 +1144,58 @@ export default function AnnouncementChannel({
     else { upd[emoji] = [...arr, profile.uid]; }
     try { await updateDoc(doc(db, 'announcements', aid), { reactions: upd }); } catch {}
     setShowEmojiPicker(null);
-  };
+  }, [profile, announcements]);
 
-  // ─── 투표
-  const handleVote = async (aid: string, optIdx: number) => {
-    if (!profile) return;
-    const a = announcements.find((x) => x.id === aid); if (!a?.poll) return;
-    const cur = a.poll.votes || {};
+  // ─── 투표 (단일/복수 공통)
+  const handleVote = useCallback(async (aid: string, pollIdx: number, optIndices: number[]) => {
+    if (!profile || optIndices.length === 0) return;
+    const a = announcements.find((x) => x.id === aid); if (!a) return;
+    const allPolls = getPolls(a);
+    const poll = allPolls[pollIdx]; if (!poll) return;
+    const cur = poll.votes || {};
     const upd: Record<string, string[]> = {};
     Object.keys(cur).forEach((k) => { upd[k] = cur[k].filter((id) => id !== profile.uid); });
-    const key = optIdx.toString(); if (!upd[key]) upd[key] = [];
-    upd[key].push(profile.uid);
-    try { await updateDoc(doc(db, 'announcements', aid), { 'poll.votes': upd }); } catch (err) { console.error('투표 실패:', err); }
-  };
+    optIndices.forEach((optIdx) => {
+      const key = optIdx.toString(); if (!upd[key]) upd[key] = [];
+      upd[key].push(profile.uid);
+    });
+    // polls 배열 전체를 복사 후 해당 투표의 votes만 교체하여 통째로 업데이트
+    // (dot notation polls.0.votes 사용 시 Firestore가 배열→객체로 변환하는 버그 방지)
+    if (a.polls) {
+      const newPolls = allPolls.map((p, i) => i === pollIdx ? { ...p, votes: upd } : p);
+      try { await updateDoc(doc(db, 'announcements', aid), { polls: newPolls }); } catch (err) { console.error('투표 실패:', err); }
+    } else {
+      try { await updateDoc(doc(db, 'announcements', aid), { 'poll.votes': upd }); } catch (err) { console.error('투표 실패:', err); }
+    }
+  }, [profile, announcements]);
+
+  // ─── 이모지 피커 토글
+  const handleToggleEmojiPicker = useCallback((aid: string | null) => {
+    setShowEmojiPicker(aid);
+  }, []);
+
+  // ─── 이미지 클릭
+  const handleImageClick = useCallback((url: string) => {
+    setViewerImage(url);
+  }, []);
 
   // ─── 파생
   const latest = announcements[0];
-  const closeModal = () => { setShowModal(false); setShowEmojiPicker(null); setShowMedia(false); setSearchOpen(false); setSearchQuery(''); setShowCalendar(false); };
+  const closeModal = useCallback(() => { setShowModal(false); setShowEmojiPicker(null); setShowMedia(false); setSearchOpen(false); setSearchQuery(''); setShowCalendar(false); }, []);
+
+  // ─── 캘린더 msgDays 메모이제이션
+  const calendarYear = isProfessor ? calYear : new Date().getFullYear();
+  const msgDays = useMemo(() => {
+    const days = new Set<number>();
+    chrono.forEach((a) => {
+      if (!a.createdAt) return;
+      const d = a.createdAt.toDate();
+      if (d.getFullYear() === calendarYear && d.getMonth() === calMonth) {
+        days.add(d.getDate());
+      }
+    });
+    return days;
+  }, [chrono, calendarYear, calMonth]);
 
   // ═══════════════════════════════════════════════════════
   // 렌더링
@@ -729,7 +1218,7 @@ export default function AnnouncementChannel({
             raw = '사진을 보냈습니다.';
           } else if (hasFiles) {
             raw = '파일을 보냈습니다.';
-          } else if (latest.poll) {
+          } else if (getPolls(latest).length > 0) {
             raw = '투표를 보냈습니다.';
           }
         }
@@ -773,19 +1262,20 @@ export default function AnnouncementChannel({
                 animate={{ y: 0 }}
                 exit={{ y: '100%' }}
                 transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+                onAnimationComplete={() => setModalReady(true)}
                 onClick={(e) => e.stopPropagation()}
-                className="relative w-full flex flex-col overflow-hidden rounded-t-2xl"
+                className="relative w-full flex flex-col overflow-hidden rounded-t-2xl will-change-transform"
                 style={{ height: sheetTop > 0 ? `calc(100vh - ${sheetTop + 16}px)` : '92vh' }}
               >
-                {/* ── 배경 이미지 ── */}
+                {/* ── 배경 이미지 (blur를 이미지에 직접 적용 — backdrop-blur보다 GPU 효율적) ── */}
                 <div className="absolute inset-0 rounded-t-2xl overflow-hidden">
                   <img
                     src="/images/home-bg.jpg" alt=""
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover blur-2xl scale-110"
                   />
                 </div>
                 {/* ── 글래스 오버레이 ── */}
-                <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
+                <div className="absolute inset-0 bg-white/10" />
 
                 {/* ── 상단 바 ── */}
                 <div className="relative z-10 shrink-0 pt-3 pb-2 px-4">
@@ -915,20 +1405,8 @@ export default function AnnouncementChannel({
                         </div>
                         {/* 달력 그리드 */}
                         {(() => {
-                          const year = isProfessor ? calYear : new Date().getFullYear();
-                          const firstDay = new Date(year, calMonth, 1).getDay();
-                          const daysInMonth = new Date(year, calMonth + 1, 0).getDate();
-                          // 메시지가 있는 날짜 집합
-                          const msgDays = new Set<number>();
-                          chrono.forEach((a) => {
-                            if (!a.createdAt) return;
-                            const d = a.createdAt.toDate();
-                            if (d.getFullYear() === year && d.getMonth() === calMonth) {
-                              msgDays.add(d.getDate());
-                            }
-                          });
-                          const cells: React.ReactNode[] = [];
-                          // 요일 헤더
+                          const firstDay = new Date(calendarYear, calMonth, 1).getDay();
+                          const daysInMonth = new Date(calendarYear, calMonth + 1, 0).getDate();
                           const dayLabels = ['일', '월', '화', '수', '목', '금', '토'];
                           return (
                             <div>
@@ -937,7 +1415,7 @@ export default function AnnouncementChannel({
                                   <div key={d} className="text-center text-[10px] text-white/40 py-0.5">{d}</div>
                                 ))}
                               </div>
-                              <div className="grid grid-cols-7 gap-0.5">
+                              <div className="grid grid-cols-7 gap-1 px-1">
                                 {Array.from({ length: firstDay }).map((_, i) => (
                                   <div key={`e-${i}`} />
                                 ))}
@@ -949,18 +1427,17 @@ export default function AnnouncementChannel({
                                       key={day}
                                       onClick={() => {
                                         if (!hasMsg) return;
-                                        // 해당 날짜의 첫 메시지로 스크롤
                                         const target = chrono.find((a) => {
                                           if (!a.createdAt) return false;
                                           const d = a.createdAt.toDate();
-                                          return d.getFullYear() === year && d.getMonth() === calMonth && d.getDate() === day;
+                                          return d.getFullYear() === calendarYear && d.getMonth() === calMonth && d.getDate() === day;
                                         });
                                         if (target) {
                                           setShowCalendar(false);
                                           setTimeout(() => scrollToMessage(target.id), 100);
                                         }
                                       }}
-                                      className={`aspect-square flex items-center justify-center text-xs rounded-full ${hasMsg ? 'bg-white/20 text-white font-bold ring-1 ring-white/40' : 'text-white/40'}`}
+                                      className={`w-7 h-7 mx-auto flex items-center justify-center text-[11px] rounded-full ${hasMsg ? 'bg-white/20 text-white font-bold ring-1 ring-white/40' : 'text-white/40'}`}
                                     >
                                       {day}
                                     </button>
@@ -978,139 +1455,46 @@ export default function AnnouncementChannel({
                 {/* ── 메시지 영역 ── */}
                 <div
                   ref={msgAreaRef}
-                  className="relative z-10 flex-1 overflow-y-auto overscroll-contain px-3 py-4"
+                  className="relative z-10 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-4"
                   onClick={() => setShowEmojiPicker(null)}
                   onScroll={() => {
                     const el = msgAreaRef.current;
                     if (!el) return;
-                    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-                    setShowScrollFab(distFromBottom > 200);
+                    const shouldShow = (el.scrollHeight - el.scrollTop - el.clientHeight) > 200;
+                    if (shouldShow !== scrollFabRef.current) {
+                      scrollFabRef.current = shouldShow;
+                      setShowScrollFab(shouldShow);
+                    }
                   }}
                 >
-                  {!announcements.length ? (
+                  {!modalReady || !announcements.length ? (
                     <div className="h-full flex items-center justify-center text-white/50 text-sm">
-                      {loading ? '불러오는 중...' : '아직 공지가 없습니다.'}
+                      {loading || !modalReady ? '불러오는 중...' : '아직 공지가 없습니다.'}
                     </div>
                   ) : (
-                    <div className="space-y-4">
+                    <div className="space-y-2">
                       {chrono.map((a, i) => {
                         const prev = chrono[i - 1];
                         const showDate = i === 0 || !prev?.createdAt || dateKey(prev.createdAt) !== dateKey(a.createdAt);
-                        const readCount = (a.readBy?.filter((uid) => uid !== a.createdBy) || []).length;
-                        const reactions = Object.entries(a.reactions || {});
-                        const imgUrls = getImageUrls(a);
-                        const fileList = getFiles(a);
-
-                        // 교수님 본인 메시지 → 우측 정렬
-                        const isOwnProfessor = isProfessor && profile && a.createdBy === profile.uid;
+                        const isOwnProfessor = !!(isProfessor && profile && a.createdBy === profile.uid);
+                        const isHighlighted = searchResults.length > 0 && searchResults[searchIdx] === a.id;
 
                         return (
-                          <div key={a.id} data-msg-id={a.id}>
-                            {/* 날짜 구분선 */}
-                            {showDate && a.createdAt && (
-                              <div className="flex items-center gap-3 my-3">
-                                <div className="flex-1 border-t border-dashed border-white/20" />
-                                <span className="text-xs text-white/60 whitespace-nowrap">
-                                  {fmtDate(a.createdAt)}
-                                </span>
-                                <div className="flex-1 border-t border-dashed border-white/20" />
-                              </div>
-                            )}
-
-                            {/* 메시지 */}
-                            <div className={`flex gap-2 ${isOwnProfessor ? 'flex-row-reverse' : ''} ${searchResults.length > 0 && searchResults[searchIdx] === a.id ? 'bg-black/15 rounded-xl p-1 -m-1' : ''}`}>
-                              {/* 아바타 */}
-                              <img
-                                src="/notice/avatar_professor.png" alt="교수님"
-                                className="w-14 h-14 shrink-0 object-cover rounded-full mt-0.5"
-                              />
-
-                              <div className={`min-w-0 max-w-[60%] ${isOwnProfessor ? 'flex flex-col items-end' : ''}`}>
-                                {/* 이름 */}
-                                <p className={`text-sm font-bold text-white/70 mb-1 ${isOwnProfessor ? 'text-right' : ''}`}>Prof. Kim</p>
-
-                                {/* 9-slice 말풍선 */}
-                                <Bubble>
-                                  {/* 텍스트 본문 — 펼치기/접기 */}
-                                  <MessageContent
-                                    content={a.content}
-                                    expanded={expandedMessages.has(a.id)}
-                                    onToggle={() => toggleExpand(a.id)}
-                                  />
-
-                                  {/* 이미지 캐러셀 */}
-                                  <ImageCarousel urls={imgUrls} onImageClick={setViewerImage} />
-
-                                  {/* 파일 캐러셀 */}
-                                  <FileCarousel files={fileList} />
-
-                                  {/* 투표 */}
-                                  {a.poll && (
-                                    <div className="mt-2 p-3 border border-[#D4CFC4]">
-                                      <p className="font-bold text-base mb-2 text-[#1A1A1A]">{a.poll.question}</p>
-                                      <div className="space-y-2">
-                                        {a.poll.options.map((opt, oi) => {
-                                          const v = a.poll!.votes[oi.toString()] || [];
-                                          const total = Object.values(a.poll!.votes).flat().length;
-                                          const pct = total > 0 ? Math.round((v.length / total) * 100) : 0;
-                                          const voted = profile && v.includes(profile.uid);
-                                          return (
-                                            <button key={oi} onClick={(e) => { e.stopPropagation(); handleVote(a.id, oi); }} className="w-full text-left">
-                                              <div className="flex items-center gap-2">
-                                                <span className={`w-4 h-4 border-2 border-[#1A1A1A] flex items-center justify-center ${voted ? 'bg-[#1A1A1A]' : ''}`}>
-                                                  {voted && <span className="text-white text-[9px]">✓</span>}
-                                                </span>
-                                                <span className="flex-1 text-base">{opt}</span>
-                                                <span className="text-sm text-[#8C8478]">{pct}%</span>
-                                              </div>
-                                              <div className="mt-1 h-1.5 bg-[#D4CFC4] rounded-full">
-                                                <div className="h-full bg-[#1A1A1A] rounded-full transition-all" style={{ width: `${pct}%` }} />
-                                              </div>
-                                            </button>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  )}
-                                </Bubble>
-
-                                {/* 시각 + 읽음 */}
-                                <div className={`flex items-center gap-1.5 mt-1 ${isOwnProfessor ? 'flex-row-reverse' : ''}`}>
-                                  {a.createdAt && <span className="text-xs text-white/50">{fmtTime(a.createdAt)}</span>}
-                                  {readCount > 0 && <span className="text-xs text-white/50">· {readCount}명 읽음</span>}
-                                </div>
-
-                                {/* 이모지 리액션 */}
-                                <div className={`flex items-center gap-1 mt-1 relative flex-wrap ${isOwnProfessor ? 'flex-row-reverse' : ''}`}>
-                                  {reactions.map(([emoji, uids]) => (
-                                    <button key={emoji} onClick={() => handleReaction(a.id, emoji)}
-                                      className={`text-sm px-1 py-0.5 rounded border ${profile && uids.includes(profile.uid) ? 'border-white/40 bg-white/20' : 'border-white/20 bg-white/10'}`}
-                                    >
-                                      {emoji} <span className="text-xs text-white/60">{uids.length}</span>
-                                    </button>
-                                  ))}
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); setShowEmojiPicker(showEmojiPicker === a.id ? null : a.id); }}
-                                    className="text-white/30 hover:text-white/60 transition-colors"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                  </button>
-                                  {showEmojiPicker === a.id && (
-                                    <div
-                                      className={`absolute ${isOwnProfessor ? 'left-0' : 'right-0'} bottom-full mb-1 bg-black/60 backdrop-blur-md border border-white/20 rounded-lg p-1.5 flex gap-1 z-20 shadow-lg`}
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      {REACTION_EMOJIS.map((em) => (
-                                        <button key={em} onClick={() => handleReaction(a.id, em)} className="text-lg hover:scale-110 transition-transform">{em}</button>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
+                          <AnnouncementMessageItem
+                            key={a.id}
+                            announcement={a}
+                            showDate={showDate}
+                            isOwnProfessor={isOwnProfessor}
+                            isExpanded={expandedMessages.has(a.id)}
+                            isHighlighted={isHighlighted}
+                            showEmojiPickerForThis={showEmojiPicker === a.id}
+                            profileUid={profile?.uid}
+                            onToggleExpand={toggleExpand}
+                            onReaction={handleReaction}
+                            onToggleEmojiPicker={handleToggleEmojiPicker}
+                            onVote={handleVote}
+                            onImageClick={handleImageClick}
+                          />
                         );
                       })}
                       <div ref={endRef} />
@@ -1118,8 +1502,8 @@ export default function AnnouncementChannel({
                   )}
                 </div>
 
-                {/* ── 좌측 하단 FAB 영역 ── */}
-                <div className="absolute left-4 bottom-20 z-20 flex flex-col gap-2">
+                {/* ── 하단 FAB 영역 (교수: 좌측, 학생: 우측) ── */}
+                <div className={`absolute ${isProfessor ? 'left-4' : 'right-4'} bottom-20 z-20 flex flex-col gap-2`}>
                   {/* 검색 네비게이션 (검색 중일 때만) */}
                   <AnimatePresence>
                     {searchResults.length > 0 && (
@@ -1129,22 +1513,26 @@ export default function AnnouncementChannel({
                         exit={{ opacity: 0, scale: 0.8 }}
                         className="flex flex-col gap-1"
                       >
-                        <button
-                          onClick={() => navigateSearch('up')}
-                          className="w-10 h-10 bg-black/50 backdrop-blur-md border border-white/20 rounded-full flex items-center justify-center text-white/70 hover:text-white shadow-lg"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => navigateSearch('down')}
-                          className="w-10 h-10 bg-black/50 backdrop-blur-md border border-white/20 rounded-full flex items-center justify-center text-white/70 hover:text-white shadow-lg"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                          </svg>
-                        </button>
+                        {searchIdx > 0 && (
+                          <button
+                            onClick={() => navigateSearch('up')}
+                            className="w-10 h-10 bg-black/50 backdrop-blur-md border border-white/20 rounded-full flex items-center justify-center text-white/70 hover:text-white shadow-lg"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                            </svg>
+                          </button>
+                        )}
+                        {searchIdx < searchResults.length - 1 && (
+                          <button
+                            onClick={() => navigateSearch('down')}
+                            className="w-10 h-10 bg-black/50 backdrop-blur-md border border-white/20 rounded-full flex items-center justify-center text-white/70 hover:text-white shadow-lg"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                            </svg>
+                          </button>
+                        )}
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -1168,7 +1556,19 @@ export default function AnnouncementChannel({
 
                 {/* ── 하단 입력 (교수님 전용) ── */}
                 {isProfessor && (
-                  <div className="relative z-10 shrink-0 border-t border-white/10 bg-black/20 backdrop-blur-sm px-3 py-3">
+                  <div
+                    className="relative z-10 shrink-0 border-t border-white/10 bg-black/20 backdrop-blur-sm px-3 py-3"
+                    onDragEnter={handleDragEnter}
+                    onDragLeave={handleDragLeave}
+                    onDragOver={handleDragOver}
+                    onDrop={handleDrop}
+                  >
+                    {/* 드래그 오버레이 */}
+                    {isDragOver && (
+                      <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/10 backdrop-blur-sm border-2 border-dashed border-white/40 rounded-xl pointer-events-none">
+                        <p className="text-sm font-bold text-white/70">파일을 여기에 놓으세요</p>
+                      </div>
+                    )}
                     {/* 첨부 미리보기 */}
                     {(pendingImagePreviews.length > 0 || pendingFiles.length > 0 || showPollCreator) && (
                       <div className="mb-2 space-y-1.5">
@@ -1191,19 +1591,157 @@ export default function AnnouncementChannel({
                             <button onClick={() => clearFile(idx)} className="text-white/60 font-bold shrink-0">✕</button>
                           </div>
                         ))}
-                        {showPollCreator && (
-                          <div className="p-2 border border-white/15 bg-white/5 rounded-lg space-y-1">
-                            <input value={pollQuestion} onChange={(e) => setPollQuestion(e.target.value)} placeholder="투표 질문"
-                              className="w-full p-1.5 border border-white/15 bg-white/10 rounded-lg text-[11px] text-white placeholder:text-white/40 focus:outline-none" />
-                            {pollOptions.map((o, idx) => (
-                              <input key={idx} value={o}
-                                onChange={(e) => { const opts = [...pollOptions]; opts[idx] = e.target.value; setPollOptions(opts); }}
-                                placeholder={`선택지 ${idx + 1}`}
-                                className="w-full p-1.5 border border-white/15 bg-white/10 rounded-lg text-[11px] text-white placeholder:text-white/40 focus:outline-none" />
-                            ))}
-                            <button onClick={() => setPollOptions([...pollOptions, ''])} className="text-[11px] text-white/40 hover:text-white/70">+ 선택지 추가</button>
-                          </div>
-                        )}
+                        {/* 투표 캐러셀 편집기 */}
+                        {showPollCreator && (() => {
+                          const cur = editingPolls[editingPollIdx] || editingPolls[0];
+                          const pi = editingPollIdx;
+                          const updateCur = (fn: (p: EditingPoll) => EditingPoll) => {
+                            setEditingPolls((prev) => prev.map((p, i) => i === pi ? fn(p) : p));
+                          };
+                          return (
+                            <div className="flex items-stretch gap-1.5">
+                              {/* 메인 투표 폼 */}
+                              <div className="flex-1 min-w-0 p-2 border border-white/15 bg-white/5 rounded-lg space-y-1">
+                                {/* 투표 인디케이터 (2개 이상일 때) */}
+                                {editingPolls.length > 1 && (
+                                  <div className="flex items-center justify-between mb-1">
+                                    <button
+                                      onClick={() => setEditingPollIdx(Math.max(0, pi - 1))}
+                                      disabled={pi === 0}
+                                      className="p-0.5 text-white/40 hover:text-white/80 disabled:text-white/15 transition-colors"
+                                    >
+                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+                                      </svg>
+                                    </button>
+                                    <div className="flex items-center gap-1">
+                                      {editingPolls.map((_, di) => (
+                                        <button
+                                          key={di}
+                                          onClick={() => setEditingPollIdx(di)}
+                                          className={`w-1.5 h-1.5 rounded-full transition-colors ${di === pi ? 'bg-white/80' : 'bg-white/25'}`}
+                                        />
+                                      ))}
+                                    </div>
+                                    <button
+                                      onClick={() => setEditingPollIdx(Math.min(editingPolls.length - 1, pi + 1))}
+                                      disabled={pi === editingPolls.length - 1}
+                                      className="p-0.5 text-white/40 hover:text-white/80 disabled:text-white/15 transition-colors"
+                                    >
+                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                                      </svg>
+                                    </button>
+                                  </div>
+                                )}
+                                <input value={cur.question} onChange={(e) => updateCur((p) => ({ ...p, question: e.target.value }))} placeholder="투표 질문"
+                                  className="w-full p-1.5 border border-white/15 bg-white/10 rounded-lg text-[11px] text-white placeholder:text-white/40 focus:outline-none" />
+                                {cur.options.map((o, idx) => (
+                                  <div key={idx} className="flex items-center w-full border border-white/15 bg-white/10 rounded-lg">
+                                    <input value={o}
+                                      onChange={(e) => updateCur((p) => {
+                                        const opts = [...p.options]; opts[idx] = e.target.value; return { ...p, options: opts };
+                                      })}
+                                      placeholder={`선택지 ${idx + 1}`}
+                                      className="flex-1 min-w-0 p-1.5 bg-transparent text-[11px] text-white placeholder:text-white/40 focus:outline-none" />
+                                    {cur.options.length > 2 && (
+                                      <button
+                                        onClick={() => updateCur((p) => ({ ...p, options: p.options.filter((_, i) => i !== idx) }))}
+                                        className="px-1.5 shrink-0 text-white/30 hover:text-white/70 transition-colors"
+                                      >
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
+                                <button onClick={() => updateCur((p) => ({ ...p, options: [...p.options, ''] }))} className="text-[11px] text-white/40 hover:text-white/70">+ 선택지 추가</button>
+                                {/* 복수선택 + 삭제 */}
+                                <div className="flex items-center gap-2 pt-1 border-t border-white/10">
+                                  <label className="flex items-center gap-1.5 text-[11px] text-white/70 cursor-pointer select-none">
+                                    <input
+                                      type="checkbox" checked={cur.allowMultiple}
+                                      onChange={(e) => { updateCur((p) => ({ ...p, allowMultiple: e.target.checked, maxSelections: 2 })); setShowMaxSelDropdown(false); }}
+                                      className="w-3 h-3 accent-white"
+                                    />
+                                    복수선택
+                                  </label>
+                                  {cur.allowMultiple && (() => {
+                                    const totalSlots = Math.max(cur.options.length, 1);
+                                    const choices = Array.from({ length: totalSlots }, (_, i) => i + 1);
+                                    return (
+                                      <div className="flex items-center gap-1">
+                                        <span className="text-[11px] text-white/50">최대</span>
+                                        <div className="relative">
+                                          <button
+                                            onClick={() => setShowMaxSelDropdown((v) => !v)}
+                                            className="flex items-center gap-0.5 px-2 py-0.5 border border-white/20 bg-white/10 rounded-md text-[11px] text-white hover:bg-white/20 transition-colors"
+                                          >
+                                            {cur.maxSelections}개
+                                            <svg className={`w-2.5 h-2.5 text-white/50 transition-transform ${showMaxSelDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                                            </svg>
+                                          </button>
+                                          <AnimatePresence>
+                                            {showMaxSelDropdown && (
+                                              <>
+                                                <div className="fixed inset-0 z-30" onClick={() => setShowMaxSelDropdown(false)} />
+                                                <motion.div
+                                                  initial={{ opacity: 0, y: 4 }}
+                                                  animate={{ opacity: 1, y: 0 }}
+                                                  exit={{ opacity: 0, y: 4 }}
+                                                  transition={{ duration: 0.15 }}
+                                                  className="absolute left-0 right-0 bottom-full mb-1 bg-black/70 backdrop-blur-md border border-white/20 rounded-lg overflow-hidden shadow-lg z-40"
+                                                >
+                                                  {choices.map((n) => (
+                                                    <button
+                                                      key={n}
+                                                      onClick={() => { updateCur((p) => ({ ...p, maxSelections: n })); setShowMaxSelDropdown(false); }}
+                                                      className={`w-full px-2 py-1.5 text-[11px] text-center hover:bg-white/15 transition-colors ${n === cur.maxSelections ? 'text-white font-bold bg-white/10' : 'text-white/70'}`}
+                                                    >
+                                                      {n}개
+                                                    </button>
+                                                  ))}
+                                                </motion.div>
+                                              </>
+                                            )}
+                                          </AnimatePresence>
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
+                                  <div className="flex-1" />
+                                  {/* 이 투표 삭제 (2개 이상일 때만) */}
+                                  {editingPolls.length > 1 && (
+                                    <button
+                                      onClick={() => {
+                                        setEditingPolls((prev) => prev.filter((_, i) => i !== pi));
+                                        setEditingPollIdx(Math.max(0, pi - 1));
+                                      }}
+                                      className="text-[11px] text-red-400/60 hover:text-red-400 transition-colors"
+                                    >
+                                      삭제
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                              {/* 우측 + 버튼 */}
+                              <button
+                                onClick={() => {
+                                  setEditingPolls((prev) => [...prev, { question: '', options: ['', ''], allowMultiple: false, maxSelections: 2 }]);
+                                  setEditingPollIdx(editingPolls.length);
+                                }}
+                                className="shrink-0 w-8 flex items-center justify-center border border-white/15 bg-white/5 rounded-lg text-white/40 hover:text-white/80 hover:bg-white/10 transition-colors"
+                                title="투표 추가"
+                              >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                </svg>
+                              </button>
+                            </div>
+                          );
+                        })()}
                       </div>
                     )}
 
@@ -1220,19 +1758,22 @@ export default function AnnouncementChannel({
                       <div className="flex-1 relative">
                         <textarea
                           ref={textareaRef}
-                          value={newContent}
-                          onChange={(e) => {
-                            setNewContent(e.target.value);
-                            const t = e.target;
+                          onInput={(e) => {
+                            const t = e.currentTarget;
+                            // 빈↔비어있지않음 경계에서만 상태 업데이트 (리렌더 최소화)
+                            const hasNow = t.value.trim().length > 0;
+                            if (hasNow !== hasText) setHasText(hasNow);
+                            // 높이 조절 (직접 DOM, 상태 X)
                             t.style.height = 'auto';
-                            // 1줄 높이 ≈ 36px, 2줄부터 오버플로우 감지
                             const oneLineH = 36;
                             const isMultiLine = t.scrollHeight > oneLineH + 4;
-                            setInputOverflows(isMultiLine);
+                            if (isMultiLine !== prevOverflowRef.current) {
+                              prevOverflowRef.current = isMultiLine;
+                              setInputOverflows(isMultiLine);
+                            }
                             if (inputExpanded) {
                               t.style.height = t.scrollHeight + 'px';
                             } else {
-                              // 확장 안 됐으면 1줄 고정, 스크롤은 맨 아래(입력 중인 줄)로
                               t.style.height = oneLineH + 'px';
                               t.scrollTop = t.scrollHeight;
                             }
@@ -1261,7 +1802,7 @@ export default function AnnouncementChannel({
                       </div>
 
                       <button onClick={handlePost}
-                        disabled={(!newContent.trim() && !pendingImages.length && !pendingFiles.length && !(showPollCreator && pollQuestion.trim())) || uploadLoading}
+                        disabled={(!hasText && !pendingImages.length && !pendingFiles.length && !(showPollCreator && editingPolls.some((p) => p.question.trim() && p.options.filter((o) => o.trim()).length >= 2))) || uploadLoading}
                         className="w-9 h-9 flex items-center justify-center shrink-0 text-white/70 disabled:text-white/20 transition-colors -mt-1"
                       >
                         {uploadLoading ? (
@@ -1289,7 +1830,15 @@ export default function AnnouncementChannel({
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                               </svg>
                             </button>
-                            <button onClick={() => setShowPollCreator(!showPollCreator)}
+                            <button onClick={() => {
+                              if (showPollCreator) {
+                                setShowPollCreator(false);
+                                setEditingPolls([{ question: '', options: ['', ''], allowMultiple: false, maxSelections: 2 }]);
+                                setEditingPollIdx(0);
+                              } else {
+                                setShowPollCreator(true);
+                              }
+                            }}
                               className={`p-1.5 transition-colors ${showPollCreator ? 'text-white/80' : 'text-white/50'} hover:text-white/80`} title="투표"
                             >
                               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

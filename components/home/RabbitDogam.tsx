@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { httpsCallable } from 'firebase/functions';
@@ -8,6 +8,7 @@ import { functions } from '@/lib/firebase';
 import { useUser } from '@/lib/contexts';
 import { useRabbitHoldings, useRabbitsForCourse, type RabbitDoc, type RabbitHolding } from '@/lib/hooks/useRabbit';
 import RabbitImage from '@/components/common/RabbitImage';
+import VirtualRabbitGrid from '@/components/common/VirtualRabbitGrid';
 
 interface RabbitDogamProps {
   isOpen: boolean;
@@ -114,29 +115,11 @@ export default function RabbitDogam({
               ) : selectedRabbitId !== null && selectedRabbit && selectedHolding ? (
                 <RabbitDetail rabbit={selectedRabbit} holding={selectedHolding} />
               ) : (
-                /* 80칸 그리드 */
-                <div className="grid grid-cols-4 gap-2">
-                  {Array.from({ length: 80 }).map((_, index) => {
-                    const isDiscovered = myHoldingMap.has(index);
-                    return (
-                      <button
-                        key={index}
-                        onClick={() => isDiscovered && setSelectedRabbitId(index)}
-                        className={`aspect-square border flex flex-col items-center justify-center p-1 rounded-lg ${
-                          isDiscovered
-                            ? 'border-white/30 bg-white/15 cursor-pointer hover:bg-white/25'
-                            : 'border-white/10 bg-white/5 cursor-default'
-                        }`}
-                      >
-                        {isDiscovered ? (
-                          <RabbitImage rabbitId={index} size={64} className="object-contain" />
-                        ) : (
-                          <span className="text-2xl text-white/20">?</span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
+                <StudentRabbitGrid
+                  onSelect={setSelectedRabbitId}
+                  myHoldingMap={myHoldingMap}
+                  equippedRabbits={equippedRabbits}
+                />
               )}
             </div>
 
@@ -161,6 +144,44 @@ export default function RabbitDogam({
     </AnimatePresence>,
     document.body
   );
+}
+
+/**
+ * 80칸 가상 그리드 — 발견/장착 상태에 따라 셀 스타일링
+ */
+function StudentRabbitGrid({
+  onSelect,
+  myHoldingMap,
+  equippedRabbits,
+}: {
+  onSelect: (id: number) => void;
+  myHoldingMap: Map<number, RabbitHolding>;
+  equippedRabbits: Array<{ rabbitId: number; courseId: string }>;
+}) {
+  const renderCell = useCallback((index: number) => {
+    const isDiscovered = myHoldingMap.has(index);
+    const isEquippedInGrid = equippedRabbits.some(e => e.rabbitId === index);
+    return (
+      <button
+        onClick={() => isDiscovered && onSelect(index)}
+        className={`w-full aspect-square flex items-center justify-center p-1 rounded-lg overflow-hidden ${
+          isEquippedInGrid
+            ? 'border-[3px] border-black bg-black/25 cursor-pointer hover:bg-black/30'
+            : isDiscovered
+              ? 'border-2 border-white/30 bg-white/15 cursor-pointer hover:bg-white/25'
+              : 'border border-white/10 bg-white/5 cursor-default'
+        }`}
+      >
+        {isDiscovered ? (
+          <RabbitImage rabbitId={index} size={64} className="w-full h-full object-contain" thumbnail />
+        ) : (
+          <span className="text-2xl text-white/20">?</span>
+        )}
+      </button>
+    );
+  }, [myHoldingMap, equippedRabbits, onSelect]);
+
+  return <VirtualRabbitGrid renderCell={renderCell} />;
 }
 
 /**
@@ -346,13 +367,13 @@ function FooterWithEquip({
                 <button
                   key={idx}
                   onClick={() => setSelectedSlot(idx)}
-                  className={`flex-1 py-2 px-2 border-2 text-sm font-bold text-white flex items-center justify-center gap-2 rounded-lg ${
+                  className={`flex-1 py-2 px-2 text-sm font-bold text-white flex items-center justify-center gap-2 rounded-lg ${
                     selectedSlot === idx
-                      ? 'border-[#D4AF37] bg-[#D4AF37]/20'
-                      : 'border-white/20'
+                      ? 'border-[3px] border-black bg-black/25'
+                      : 'border-2 border-white/20'
                   }`}
                 >
-                  <RabbitImage rabbitId={slot.rabbitId} size={28} />
+                  <RabbitImage rabbitId={slot.rabbitId} size={28} thumbnail />
                   <span className="truncate">{slotName}</span>
                 </button>
               );

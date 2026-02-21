@@ -553,7 +553,7 @@ service cloud.firestore {
       allow update: if isAuthenticated() && (
         isProfessor() ||
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['reactions', 'poll.votes', 'readBy'])
+          .hasOnly(['reactions', 'poll.votes', 'polls', 'readBy'])
       );
 
       // 삭제: 교수님만

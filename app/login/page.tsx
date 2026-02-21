@@ -136,7 +136,7 @@ export default function LoginPage() {
               });
             }
 
-            router.replace('/');
+            router.replace('/professor');
           } else {
             // 학생: 온보딩 완료 여부 확인
             const userDocRef = doc(db, 'users', user.uid);

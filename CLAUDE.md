@@ -36,11 +36,16 @@ npm run deploy       # Firebase 배포
 npm run logs         # 로그 확인
 ```
 
+- **Node 20 필수** (`engines.node: "20"`)
+- tsconfig가 프론트보다 엄격: `noUnusedLocals`, `noImplicitReturns` 활성화
+
 ### 환경 변수
 
 프론트엔드: `.env.local` 파일 (`.env.local.example` 참고)
-- `NEXT_PUBLIC_FIREBASE_*` — Firebase 프로젝트 설정
-- `NEXT_PUBLIC_NAVER_CLIENT_ID` — 네이버 OAuth (선택)
+- `NEXT_PUBLIC_FIREBASE_*` — Firebase 프로젝트 설정 (API_KEY, AUTH_DOMAIN, PROJECT_ID, STORAGE_BUCKET, MESSAGING_SENDER_ID, APP_ID, MEASUREMENT_ID)
+- `NEXT_PUBLIC_FIREBASE_VAPID_KEY` — FCM 웹 푸시 인증서 키
+- `NEXT_PUBLIC_NAVER_CLIENT_ID` / `NEXT_PUBLIC_NAVER_CALLBACK_URL` — 네이버 OAuth (선택)
+- `NEXT_PUBLIC_PPTX_CLOUD_RUN_URL` — PPT→PDF 변환 Cloud Run 서비스 URL
 
 Cloud Functions 시크릿:
 ```bash
@@ -238,11 +243,35 @@ Tailwind에서 `bg-theme-background`, `text-theme-accent` 등으로 사용 (`tai
 
 홈 바텀시트에 표시되는 교수님 공지 시스템:
 - Firestore `announcements` 컬렉션 실시간 구독
-- 텍스트/이미지/파일 첨부, 투표(poll), 이모지 리액션
+- 텍스트/이미지/파일 첨부, **다중 투표(polls)**, 이모지 리액션
 - **다중 이미지/파일 업로드**: `imageUrls: string[]`, `files: Array<{url,name,type,size}>` (하위 호환: 기존 `imageUrl`/`fileUrl` 단일 필드도 읽기 지원)
-- **이미지/파일 캐러셀**: 2개 이상일 때 좌우 화살표 + 스냅 스크롤, 점 인디케이터
-- 읽음 표시 (`readBy` 배열, 교수님 본인 제외), 미읽음 뱃지
-- **교수님 메시지 우측 정렬**: `isProfessor && createdBy === profile.uid` → `flex-row-reverse`
+- **다중 투표**: `polls: Poll[]` 배열 (하위 호환: 기존 `poll` 단일 필드도 `getPolls()` 유틸로 배열 변환). 복수 선택 투표 지원 (`allowMultiple`, `maxSelections`)
+- **투표 생성 캐러셀**: `editingPolls: EditingPoll[]` + `editingPollIdx`로 여러 투표를 캐러셀 UI에서 생성/편집
+- **이미지/파일/투표 캐러셀**: 2개 이상일 때 좌우 화살표 + 스냅 스크롤(`snap-start`) + 점 인디케이터 + `gap-0.5` (인접 아이템 테두리 겹침 방지)
+
+**9-slice 말풍선 (Bubble 컴포넌트):**
+- CSS Grid가 아닌 **absolute positioning + padding** 방식으로 구현 (Grid 방식은 오른쪽 잘림 버그 발생)
+- `BUBBLE_C = 14` (기본 패딩), `BUBBLE_SIDE_MULTI = 26` (다중 아이템 캐러셀 좌우 패딩)
+- 9개 배경 이미지(`/notice/bubble_professor_*.png`)를 absolute로 배치, 콘텐츠는 `relative`로 위에 올림
+- `sidePadding` prop으로 단일/다중 아이템 패딩 분기
+- 텍스트 전용: `w-fit` (내용 크기 맞춤), 미디어 포함: `w-full` (래퍼 채움)
+
+**캐러셀 화살표 배치:**
+- `-mx-[30px]`로 flex를 버블 패딩 영역까지 확장, 화살표 `w-[30px]`으로 패딩 중앙 배치
+- `ARROW_ZONE = 30` (BUBBLE_SIDE_MULTI + content px-1 = 26 + 4)
+- 단일 아이템은 캐러셀 없이 렌더링, 버블 기본 패딩(14px) 유지
+
+**투표 Firestore 주의사항:**
+- `polls.0.votes` 같은 dot notation으로 업데이트하면 Firestore가 배열을 객체로 변환 → 반드시 전체 `polls` 배열로 업데이트: `{ polls: newPolls }`
+- `getPolls()` 유틸: `polls` 우선, 없으면 `poll` 단일값 래핑, 객체→배열 복구, 유효성 필터
+- 투표 참여자 수: `new Set(Object.values(votes).flat()).size` (중복 제거)
+
+**교수/학생 정렬:**
+- 교수님 본인 메시지: 우측 정렬 (`flex-row-reverse`), 미디어 위 본문 `text-right`
+- 학생 화면: 좌측 정렬, 본문 `text-left`
+- 읽음/시각: `{readCount}명 읽음 · {시각}` 순서
+- 이모지 피커: 교수님은 `right-0`, 학생은 `left-0`
+
 - **검색 기능**: 상단 검색 아이콘 → 키워드 입력 → 매칭 메시지 하이라이트 + 좌측 하단 상/하 화살표 FAB로 탐색
 - **캘린더**: 년도(교수님만)/월 선택, 메시지 있는 날 표시, 클릭 시 해당 날짜로 스크롤
 - **입력창 인라인 확장**: 2줄 이상 입력 시 확장 버튼 표시 → 클릭 시 max-height 해제하여 전체 내용 표시
@@ -413,7 +442,7 @@ await setDoc(doc(db, 'users', uid), { onboardingCompleted: true, updatedAt: serv
 - `quizzes/{quizId}/submissions/{submissionId}` — 제출 답안 (CF 전용 쓰기)
 - `quizzes/{quizId}/feedback/{feedbackId}` — 피드백 (CF 전용 쓰기)
 - `rabbits/{courseId_rabbitId}` — 토끼 문서 (name, firstDiscovererUserId, discovererCount)
-- `announcements/{id}` — 공지 (content, imageUrls[], files[], poll, reactions, readBy) (하위 호환: imageUrl, fileUrl 단일 필드도 지원)
+- `announcements/{id}` — 공지 (content, imageUrls[], files[], polls[], reactions, readBy) (하위 호환: imageUrl, fileUrl, poll 단일 필드도 지원)
 - `rankings/{courseId}` — 사전 계산된 랭킹 (rankedUsers[], teamRanks[])
 - `quizResults/{id}` — 퀴즈 결과 집계 (CF에서 쓰기)
 
@@ -475,11 +504,30 @@ firebase deploy --only firestore:indexes
 firebase deploy --only functions
 ```
 
+## 철권퀴즈 (2/21 구현 예정)
+
+실시간 1v1 토끼 배틀. Firebase Realtime Database 사용.
+- 매치 시간 3분, 문제 타임아웃 20초, 크리티컬 4초 이내 x1.5
+- 데미지 = max(ceil(ATK²/(ATK+상대DEF)), 1), 오답 셀프데미지 3
+- 연타 미니게임 (눈빛보내기 스타일 게이지 땅따먹기, 3초)
+- XP: 승리 30, 패배 10, 연승 +5 (최대 50)
+- 봇 매칭: 30초 대기 초과 시
+- 상세 설계: 이전 대화 참조
+
+## 개선 예정 사항
+
+- **복습 시스템**: 에빙하우스 간격 반복 추가 검토
+- **랭킹**: 실시간 변동 애니메이션
+- **교수 대시보드**: 위험 학생 인사이트 강화
+- **오프라인 대응**: PWA 오프라인 캐시 전략 (22일 작업)
+
 ## 배포
 
 ### 프론트엔드 (Vercel)
 
 `npm run build` → Vercel 자동 배포. PWA 서비스 워커 자동 등록.
+- **PWA는 개발 모드에서 비활성화** (`next.config.mjs`에서 `disable: NODE_ENV === "development"`)
+- **프로덕션 빌드 시 `console.log` 자동 제거** — `console.error`/`console.warn`만 유지 (`compiler.removeConsole`)
 
 ### 토끼 에셋
 
