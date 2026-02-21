@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   motion,
-  AnimatePresence,
   useMotionValue,
   useSpring,
   useTransform,
@@ -11,49 +10,38 @@ import {
 } from 'framer-motion';
 
 import RabbitImage from '@/components/common/RabbitImage';
-import ProfessorRabbitDogam from './ProfessorRabbitDogam';
-import {
-  getProfessorEquipped,
-  setProfessorEquipped,
-  getProfessorRabbitName,
-} from '@/lib/utils/professorRabbit';
 
 const SWIPE_THRESHOLD = 40;
 
-/* 궤도 파라미터 (학생 CharacterBox와 동일) */
-const ORBIT_RX = 175;
-const ORBIT_RY = 50;
-const CHAR_SIZE = 180;
+/* 궤도 파라미터 (교수님 전용 — 캐릭터 크게) */
+const ORBIT_RX = 180;
+const ORBIT_RY = 52;
+const CHAR_SIZE = 200;
 const CHAR_HALF = CHAR_SIZE / 2;
 const ORBIT_Y_SHIFT = 195;
 
+/* 교수님 홈에 표시할 토끼 후보 (rabbitId 0-indexed) */
+const PROFESSOR_RABBIT_POOL = [21, 26, 56, 58, 59, 61];
+
+/** 풀에서 랜덤 2마리 선택 */
+function pickTwo(): [number, number] {
+  const pool = [...PROFESSOR_RABBIT_POOL];
+  const i1 = Math.floor(Math.random() * pool.length);
+  const id1 = pool[i1];
+  pool.splice(i1, 1);
+  const i2 = Math.floor(Math.random() * pool.length);
+  const id2 = pool[i2];
+  return [id1, id2];
+}
+
 /**
- * 교수님 홈 캐릭터 박스 — 궤도 캐러셀 + 도감 + 토끼 이름
+ * 교수님 홈 캐릭터 박스 — 궤도 캐러셀 (이름/도감 없음)
  */
 export default function ProfessorCharacterBox() {
-  // localStorage에서 장착 토끼 로드 (없으면 랜덤 2마리)
   const [equipped, setEquipped] = useState<number[]>([]);
-  const [showDogam, setShowDogam] = useState(false);
-  const [nameRefreshKey, setNameRefreshKey] = useState(0);
 
   useEffect(() => {
-    let saved = getProfessorEquipped();
-    if (saved.length === 0) {
-      // 초기: 랜덤 2마리 배정
-      const id1 = Math.floor(Math.random() * 80);
-      let id2 = Math.floor(Math.random() * 79);
-      if (id2 >= id1) id2++;
-      saved = [id1, id2];
-      setProfessorEquipped(saved);
-    }
-    setEquipped(saved);
-  }, []);
-
-  // 장착 변경 핸들러 (도감에서 호출)
-  const handleEquipChange = useCallback((newEquipped: number[]) => {
-    setEquipped([...newEquipped]);
-    setProfessorEquipped(newEquipped);
-    setNameRefreshKey(k => k + 1);
+    setEquipped(pickTwo());
   }, []);
 
   // 캐러셀
@@ -69,19 +57,6 @@ export default function ProfessorCharacterBox() {
   const springRotation = useSpring(rotationMV, { stiffness: 100, damping: 18 });
 
   const slotCount = equipped.length;
-
-  // 앞 토끼 이름
-  const frontRabbitId = equipped[activeIndex] ?? equipped[0] ?? null;
-  const frontName = useMemo(() => {
-    if (frontRabbitId === null) return null;
-    return getProfessorRabbitName(frontRabbitId) || null;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frontRabbitId, nameRefreshKey]);
-
-  // activeIndex 범위 보정
-  useEffect(() => {
-    if (activeIndex >= slotCount && slotCount > 0) setActiveIndex(0);
-  }, [slotCount, activeIndex]);
 
   // 공전 실행
   const doOrbitSwap = useCallback((dx: number) => {
@@ -138,104 +113,50 @@ export default function ProfessorCharacterBox() {
   if (equipped.length === 0) return null;
 
   return (
-    <>
-      <div className="flex flex-col items-center w-full">
-        {/* 도감 버튼 */}
-        <div className="w-full flex items-center justify-end px-8 mb-4 mt-6 relative z-20">
-          <button
-            onClick={() => setShowDogam(true)}
-            className="h-11 flex items-center justify-center px-9 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl transition-transform duration-200 hover:scale-110 active:scale-95"
-          >
-            <span className="text-xl font-bold text-white">도감</span>
-          </button>
-        </div>
+    <div className="flex flex-col items-center w-full">
+      {/* 학생 XP/도감 영역과 동일한 높이 확보 */}
+      <div className="w-full mb-8 mt-14 h-11" />
 
-        {/* 캐릭터 궤도 영역 */}
-        {slotCount >= 2 ? (
-          <div
-            className="relative select-none -mt-20"
-            style={{
-              width: containerW,
-              height: containerH,
-              isolation: 'isolate',
-              cursor: 'grab',
-            }}
-            onTouchStart={onTouchStart}
-            onTouchMove={onTouchMove}
-            onTouchEnd={onTouchEnd}
-            onMouseDown={onMouseDown}
-          >
-            {/* 궤도 타원 */}
-            <div
-              className="absolute pointer-events-none"
-              style={{
-                left: CHAR_HALF,
-                right: CHAR_HALF,
-                top: CHAR_HALF + ORBIT_Y_SHIFT,
-                bottom: CHAR_HALF - ORBIT_Y_SHIFT,
-                border: '3px solid rgba(0,0,0,0.25)',
-                borderRadius: '50%',
-                boxShadow: '0 0 12px 4px rgba(0,0,0,0.15), 0 0 24px 8px rgba(0,0,0,0.1), inset 0 0 8px 2px rgba(0,0,0,0.1)',
-                zIndex: 0,
-              }}
-            />
+      {/* 캐릭터 궤도 영역 */}
+      <div
+        className="relative select-none -mt-32"
+        style={{
+          width: containerW,
+          height: containerH,
+          isolation: 'isolate',
+          cursor: 'grab',
+        }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onMouseDown={onMouseDown}
+      >
+        {/* 궤도 타원 */}
+        <div
+          className="absolute pointer-events-none"
+          style={{
+            left: CHAR_HALF,
+            right: CHAR_HALF,
+            top: CHAR_HALF + ORBIT_Y_SHIFT,
+            bottom: CHAR_HALF - ORBIT_Y_SHIFT,
+            border: '3px solid rgba(0,0,0,0.25)',
+            borderRadius: '50%',
+            boxShadow: '0 0 12px 4px rgba(0,0,0,0.15), 0 0 24px 8px rgba(0,0,0,0.1), inset 0 0 8px 2px rgba(0,0,0,0.1)',
+            zIndex: 0,
+          }}
+        />
 
-            {/* 공전 캐릭터 2마리 */}
-            {equipped.map((rabbitId, idx) => (
-              <OrbitalCharacter
-                key={`${rabbitId}-${idx}`}
-                rabbitId={rabbitId}
-                springRotation={springRotation}
-                charIndex={idx}
-              />
-            ))}
-          </div>
-        ) : equipped.length === 1 ? (
-          /* 1마리만 장착 시 단독 표시 */
-          <div className="flex justify-center -mt-10">
-            <FloatingWrapper seed={0}>
-              <RabbitImage
-                rabbitId={equipped[0]}
-                size={CHAR_SIZE}
-                priority
-                className="drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
-                style={{ filter: 'sepia(0.08) saturate(1.1) brightness(1.03) hue-rotate(-5deg)' }}
-              />
-            </FloatingWrapper>
-          </div>
-        ) : null}
-
-        {/* 토끼 이름 (레벨 없이) — 캐릭터와 과목체인지 중간 */}
-        <div className={slotCount >= 2 ? 'mt-[160px]' : 'mt-4'}>
-          <AnimatePresence mode="wait">
-            {frontName ? (
-              <motion.div
-                key={`${activeIndex}-${frontName}`}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="px-5 py-1.5 bg-black/30 border border-white/10 rounded-full backdrop-blur-xl"
-              >
-                <span className="text-2xl font-bold text-white tracking-wide">
-                  {frontName}
-                </span>
-              </motion.div>
-            ) : (
-              <motion.div className="h-[38px]" />
-            )}
-          </AnimatePresence>
-        </div>
+        {/* 공전 캐릭터 2마리 */}
+        {equipped.map((rabbitId, idx) => (
+          <OrbitalCharacter
+            key={`${rabbitId}-${idx}`}
+            rabbitId={rabbitId}
+            springRotation={springRotation}
+            charIndex={idx}
+          />
+        ))}
       </div>
-
-      {/* 도감 모달 */}
-      <ProfessorRabbitDogam
-        isOpen={showDogam}
-        onClose={() => setShowDogam(false)}
-        equipped={equipped}
-        onEquipChange={handleEquipChange}
-      />
-    </>
+    </div>
   );
 }
 

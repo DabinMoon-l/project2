@@ -34,10 +34,13 @@ export default function ProfessorHomePage() {
     (userCourseId as CourseId) || 'microbiology'
   );
 
-  // CourseContext의 userCourseId가 로딩되면 동기화
+  // CourseContext의 userCourseId가 최초 로딩되면 1회만 동기화
+  // (이후 교수님이 CourseSwitcher로 변경한 값은 보존)
+  const initialSynced = useRef(false);
   useEffect(() => {
-    if (userCourseId) {
+    if (userCourseId && !initialSynced.current) {
       setSelectedCourse(userCourseId as CourseId);
+      initialSynced.current = true;
     }
   }, [userCourseId]);
 
@@ -203,7 +206,7 @@ export default function ProfessorHomePage() {
           <ProfessorCharacterBox />
 
           {/* 랭킹 — 하단 (과목 전환 포함) */}
-          <div className="mt-auto -translate-y-[120px]">
+          <div className="mt-auto -translate-y-[80px]">
             {/* 과목 스위처 */}
             <div className="mb-5">
               <CourseSwitcher

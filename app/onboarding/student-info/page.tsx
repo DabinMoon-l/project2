@@ -15,6 +15,7 @@ import {
   type SemesterSettings,
   determineCourse,
   getAvailableGrades,
+  getCurrentSemesterByDate,
 } from '@/lib/types/course';
 
 /**
@@ -48,7 +49,7 @@ const CLASS_OPTIONS: { value: ClassType; label: string; color: string }[] = [
  */
 const DEFAULT_SEMESTER_SETTINGS: SemesterSettings = {
   currentYear: new Date().getFullYear(),
-  currentSemester: new Date().getMonth() < 8 ? 1 : 2,
+  currentSemester: getCurrentSemesterByDate(),
   semesterDates: {
     spring: { start: '03-01', end: '08-31' },
     fall: { start: '09-01', end: '02-28' },

@@ -192,39 +192,23 @@ export const useUpload = (): UseUploadReturn => {
   );
 
   /**
-   * 여러 이미지 업로드
+   * 여러 이미지 병렬 업로드
    */
   const uploadMultipleImages = useCallback(
     async (files: File[]): Promise<string[]> => {
-      const urls: string[] = [];
-
-      for (const file of files) {
-        const url = await uploadImage(file);
-        if (url) {
-          urls.push(url);
-        }
-      }
-
-      return urls;
+      const results = await Promise.all(files.map((f) => uploadImage(f)));
+      return results.filter((url): url is string => url !== null);
     },
     [uploadImage]
   );
 
   /**
-   * 여러 파일 업로드
+   * 여러 파일 병렬 업로드
    */
   const uploadMultipleFiles = useCallback(
     async (files: File[]): Promise<FileInfo[]> => {
-      const fileInfos: FileInfo[] = [];
-
-      for (const file of files) {
-        const info = await uploadFile(file);
-        if (info) {
-          fileInfos.push(info);
-        }
-      }
-
-      return fileInfos;
+      const results = await Promise.all(files.map((f) => uploadFile(f)));
+      return results.filter((info): info is FileInfo => info !== null);
     },
     [uploadFile]
   );

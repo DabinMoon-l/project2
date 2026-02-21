@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -12,6 +12,7 @@ import {
   onSnapshot,
   addDoc,
   updateDoc,
+  deleteDoc,
   doc,
   serverTimestamp,
   arrayUnion,
@@ -150,7 +151,7 @@ const BUBBLE_STYLES = {
 const Bubble = memo(function Bubble({ children, className, sidePadding }: { children: React.ReactNode; className?: string; sidePadding?: number }) {
   const padStyle = sidePadding ? BUBBLE_STYLES.padMulti : BUBBLE_STYLES.padDefault;
   return (
-    <div className={`relative ${className || ''}`} style={padStyle}>
+    <div className={`relative overflow-hidden ${className || ''}`} style={padStyle}>
       <div className="absolute top-0 left-0" style={BUBBLE_STYLES.tl} />
       <div className="absolute top-0 right-0" style={BUBBLE_STYLES.tr} />
       <div className="absolute bottom-0 left-0" style={BUBBLE_STYLES.bl} />
@@ -172,7 +173,7 @@ const ImageCarousel = memo(function ImageCarousel({
   onImageClick,
 }: {
   urls: string[];
-  onImageClick: (url: string) => void;
+  onImageClick: (urls: string[], index: number) => void;
 }) {
   const [idx, setIdx] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -181,7 +182,7 @@ const ImageCarousel = memo(function ImageCarousel({
 
   if (urls.length === 1) {
     return (
-      <button onClick={() => onImageClick(urls[0])} className="mt-1 block w-full">
+      <button onClick={() => onImageClick(urls, 0)} className="mt-1 block w-full">
         <img src={urls[0]} alt="이미지" className="w-full aspect-[4/3] object-cover border border-[#D4CFC4]" />
       </button>
     );
@@ -209,7 +210,7 @@ const ImageCarousel = memo(function ImageCarousel({
           }}
         >
           {urls.map((url, i) => (
-            <button key={i} onClick={() => onImageClick(url)} className="w-full shrink-0 snap-start">
+            <button key={i} onClick={() => onImageClick(urls, i)} className="w-full shrink-0 snap-start">
               <img src={url} alt={`이미지 ${i + 1}`} className="w-full aspect-[4/3] object-cover border border-[#D4CFC4]" />
             </button>
           ))}
@@ -319,6 +320,7 @@ const PollCard = memo(function PollCard({
   onToggle,
   onSingleVote,
   onSubmitMulti,
+  isProfessor,
 }: {
   poll: Poll;
   pollIdx: number;
@@ -328,31 +330,62 @@ const PollCard = memo(function PollCard({
   onToggle: (optIdx: number) => void;
   onSingleVote: (optIdx: number) => void;
   onSubmitMulti: () => void;
+  isProfessor?: boolean;
 }) {
   if (!poll || !poll.options) return null;
   const votes = poll.votes || {};
   const hasVoted = profileUid && Object.values(votes).some((arr) => Array.isArray(arr) && arr.includes(profileUid));
   const maxSel = poll.allowMultiple ? (poll.maxSelections || poll.options.length) : 1;
+  // 교수님은 투표 안 해도 결과 항상 표시
+  const showResults = hasVoted || isProfessor;
+  const total = new Set(Object.values(votes).flat()).size;
 
   return (
     <div className="p-2 border border-[#D4CFC4]">
       <p className="font-bold text-base mb-1.5 text-[#1A1A1A] break-words">{poll.question}</p>
       {/* 복수선택 안내 */}
-      {poll.allowMultiple && !hasVoted && (
+      {poll.allowMultiple && !hasVoted && !isProfessor && (
         <p className="text-[10px] text-[#8C8478] mb-1.5">복수선택 (최대 {maxSel}개)</p>
       )}
       <div className="space-y-1">
         {poll.options.map((opt, oi) => {
           const v = votes[oi.toString()] || [];
-          const total = new Set(Object.values(votes).flat()).size;
           const pct = total > 0 ? Math.round((v.length / total) * 100) : 0;
           const isMyVote = profileUid && v.includes(profileUid);
           const isSelected = selected.has(oi);
 
-          // 투표 전
+          // 교수님: 결과 + 투표 가능 (클릭 시 투표)
+          if (isProfessor) {
+            return (
+              <button key={oi} onClick={(e) => { e.stopPropagation(); if (!hasVoted) { if (poll.allowMultiple) onToggle(oi); else onSingleVote(oi); } }}
+                className="w-full text-left py-0.5"
+              >
+                <div className="flex items-start gap-1.5">
+                  <span className={`w-3.5 h-3.5 border-[1.5px] border-[#1A1A1A] shrink-0 mt-px flex items-center justify-center ${isMyVote || isSelected ? 'bg-[#1A1A1A]' : ''}`}>
+                    {(isMyVote || isSelected) && <span className="text-white text-[8px]">✓</span>}
+                  </span>
+                  <span className="flex-1 text-xs min-w-0 break-words">{opt}</span>
+                  <span className="text-[11px] text-[#8C8478] shrink-0">{v.length}표 {pct}%</span>
+                </div>
+                <div className="mt-0.5 h-1 bg-[#D4CFC4] rounded-full overflow-hidden">
+                  {shouldAnimate ? (
+                    <motion.div
+                      className="h-full bg-[#1A1A1A] rounded-full"
+                      initial={{ width: '0%' }}
+                      animate={{ width: `${pct}%` }}
+                      transition={{ type: 'spring', stiffness: 80, damping: 18, delay: 0.15 * oi }}
+                    />
+                  ) : (
+                    <div className="h-full bg-[#1A1A1A] rounded-full" style={{ width: `${pct}%` }} />
+                  )}
+                </div>
+              </button>
+            );
+          }
+
+          // 학생: 투표 전
           if (!hasVoted) {
             if (poll.allowMultiple) {
-              // 복수선택: 체크박스 토글
               return (
                 <button
                   key={oi}
@@ -368,7 +401,6 @@ const PollCard = memo(function PollCard({
                 </button>
               );
             }
-            // 단일선택: 즉시 투표
             return (
               <button key={oi} onClick={(e) => { e.stopPropagation(); onSingleVote(oi); }} className="w-full text-left py-0.5">
                 <div className="flex items-start gap-1.5">
@@ -379,7 +411,7 @@ const PollCard = memo(function PollCard({
             );
           }
 
-          // 투표 후: 결과 표시
+          // 학생: 투표 후 결과 표시
           return (
             <div key={oi} className="py-0.5">
               <div className="flex items-start gap-1.5">
@@ -404,7 +436,7 @@ const PollCard = memo(function PollCard({
             </div>
           );
         })}
-        {/* 복수선택 투표 버튼 */}
+        {/* 복수선택 투표 버튼 (학생 + 교수님 미투표 시) */}
         {poll.allowMultiple && !hasVoted && (
           <button
             onClick={(e) => { e.stopPropagation(); onSubmitMulti(); }}
@@ -414,11 +446,9 @@ const PollCard = memo(function PollCard({
             투표하기 ({selected.size}/{maxSel})
           </button>
         )}
-        {hasVoted && (
-          <p className="text-xs text-[#8C8478] text-right">
-            {new Set(Object.values(votes).flat()).size}명 참여
-          </p>
-        )}
+        <p className="text-xs text-[#8C8478] text-right">
+          {total}명 참여
+        </p>
       </div>
     </div>
   );
@@ -431,11 +461,13 @@ const PollCarousel = memo(function PollCarousel({
   announcementId,
   profileUid,
   onVote,
+  isProfessor,
 }: {
   polls: Poll[];
   announcementId: string;
   profileUid?: string;
   onVote: (aid: string, pollIdx: number, optIndices: number[]) => void;
+  isProfessor?: boolean;
 }) {
   const [idx, setIdx] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -485,6 +517,7 @@ const PollCarousel = memo(function PollCarousel({
       onToggle={(oi) => toggleSelection(pi, oi, poll.maxSelections || poll.options.length)}
       onSingleVote={(oi) => handleSingleVote(pi, oi)}
       onSubmitMulti={() => handleMultiVote(pi)}
+      isProfessor={isProfessor}
     />
   );
 
@@ -539,38 +572,112 @@ const PollCarousel = memo(function PollCarousel({
 
 // ─── 이미지 전체화면 뷰어 ──────────────────────────────
 
-const ImageViewer = memo(function ImageViewer({ src, onClose }: { src: string; onClose: () => void }) {
+const ImageViewer = memo(function ImageViewer({
+  urls, initialIndex, onClose,
+}: {
+  urls: string[];
+  initialIndex: number;
+  onClose: () => void;
+}) {
+  const [idx, setIdx] = useState(initialIndex);
+  const [showControls, setShowControls] = useState(true);
+  const touchStartX = useRef(0);
+  const touchDeltaX = useRef(0);
+  const swiping = useRef(false);
+
+  const src = urls[idx];
+  const hasPrev = idx > 0;
+  const hasNext = idx < urls.length - 1;
+
+  const goPrev = useCallback(() => { if (hasPrev) setIdx(i => i - 1); }, [hasPrev]);
+  const goNext = useCallback(() => { if (hasNext) setIdx(i => i + 1); }, [hasNext]);
+
+  // 키보드 좌우
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') goPrev();
+      else if (e.key === 'ArrowRight') goNext();
+      else if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [goPrev, goNext, onClose]);
+
   return (
     <div
       className="fixed inset-0 z-[70] bg-black/90 flex items-center justify-center"
       onClick={onClose}
+      onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; touchDeltaX.current = 0; swiping.current = true; }}
+      onTouchMove={(e) => { if (swiping.current) touchDeltaX.current = e.touches[0].clientX - touchStartX.current; }}
+      onTouchEnd={() => {
+        if (!swiping.current) return;
+        swiping.current = false;
+        if (touchDeltaX.current > 50) goPrev();
+        else if (touchDeltaX.current < -50) goNext();
+      }}
     >
-      <motion.button
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        transition={{ delay: 0.15 }}
-        onClick={onClose} className="absolute top-4 right-4 text-white p-2 z-10"
-      >
-        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </motion.button>
-      <motion.a
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        transition={{ delay: 0.15 }}
-        href={src} target="_blank" rel="noopener noreferrer" download
-        onClick={(e) => e.stopPropagation()}
-        className="absolute top-4 left-4 text-white p-2 z-10"
-      >
-        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-        </svg>
-      </motion.a>
+      {/* 컨트롤 (닫기, 다운로드, 화살표, 카운터) */}
+      <div className={`transition-opacity duration-200 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+        {/* 닫기 */}
+        <motion.button
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          transition={{ delay: 0.15 }}
+          onClick={onClose} className="absolute top-4 right-4 text-white p-2 z-10"
+        >
+          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </motion.button>
+        {/* 다운로드 */}
+        <motion.a
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          transition={{ delay: 0.15 }}
+          href={src} target="_blank" rel="noopener noreferrer" download
+          onClick={(e) => e.stopPropagation()}
+          className="absolute top-4 left-4 text-white p-2 z-10"
+        >
+          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+        </motion.a>
+        {/* 좌측 화살표 */}
+        {hasPrev && (
+          <button
+            onClick={(e) => { e.stopPropagation(); goPrev(); }}
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-full bg-black/40 text-white/80 hover:text-white z-10"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+        )}
+        {/* 우측 화살표 */}
+        {hasNext && (
+          <button
+            onClick={(e) => { e.stopPropagation(); goNext(); }}
+            className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-full bg-black/40 text-white/80 hover:text-white z-10"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        )}
+        {/* 카운터 */}
+        {urls.length > 1 && (
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-white/70 text-sm font-medium bg-black/40 px-3 py-1 rounded-full">
+            {idx + 1} / {urls.length}
+          </div>
+        )}
+      </div>
+      {/* 이미지 */}
       <motion.img
+        key={src}
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
         transition={{ duration: 0.2 }}
-        src={src} alt="" className="max-w-[90vw] max-h-[85vh] object-contain" onClick={(e) => e.stopPropagation()}
+        src={src} alt="" className="max-w-[90vw] max-h-[85vh] object-contain"
+        onClick={(e) => { e.stopPropagation(); setShowControls(v => !v); }}
       />
     </div>
   );
@@ -578,72 +685,101 @@ const ImageViewer = memo(function ImageViewer({ src, onClose }: { src: string; o
 
 // ─── 펼치기/접기 메시지 본문 ────────────────────────────
 
-const MessageContent = memo(function MessageContent({
-  content,
-  expanded,
-  onToggle,
-  textRight,
-}: {
-  content: string;
-  expanded: boolean;
-  onToggle: () => void;
-  textRight?: boolean;
-}) {
-  const textRef = useRef<HTMLParagraphElement>(null);
-  const [isClamped, setIsClamped] = useState(false);
+/** URL 정규식 */
+const URL_RE = /https?:\/\/[^\s<>"']+/g;
 
-  useEffect(() => {
-    const el = textRef.current;
-    if (!el) return;
-    // scrollHeight > clientHeight → 2줄 초과
-    setIsClamped(el.scrollHeight > el.clientHeight + 1);
-  }, [content]);
+/** 텍스트에서 URL을 <a> 태그로 변환 */
+function linkify(text: string): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  URL_RE.lastIndex = 0;
+  while ((match = URL_RE.exec(text)) !== null) {
+    if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
+    const url = match[0];
+    parts.push(
+      <a key={match.index} href={url} target="_blank" rel="noopener noreferrer"
+        className="text-blue-600 underline break-all"
+        onClick={(e) => e.stopPropagation()}
+      >{url}</a>
+    );
+    lastIndex = match.index + url.length;
+  }
+  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+  return parts;
+}
 
+const MessageContent = memo(function MessageContent({ content }: { content: string }) {
   if (!content) return null;
-
+  const linked = linkify(content);
   return (
-    <div className="relative">
-      <p
-        ref={textRef}
-        className={`text-base text-[#1A1A1A] whitespace-pre-wrap break-words leading-snug ${!expanded ? 'line-clamp-2' : ''} ${textRight ? 'text-right' : ''}`}
-      >
-        {content}
-      </p>
-      {isClamped && !expanded && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onToggle(); }}
-          className="absolute right-0 bottom-0 bg-gradient-to-l from-[#FDFBF7] via-[#FDFBF7] to-transparent pl-6 pr-0.5 text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 13l-7 7-7-7" />
-          </svg>
-        </button>
-      )}
-      {expanded && isClamped && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onToggle(); }}
-          className="mt-1 text-xs text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors"
-        >
-          접기
-        </button>
-      )}
-    </div>
+    <p
+      className="text-base text-[#1A1A1A] whitespace-pre-wrap break-words leading-snug"
+      style={{ overflowWrap: 'anywhere' }}
+    >
+      {linked}
+    </p>
   );
 });
 
 // ─── 미디어/파일 드로어 (좌측 슬라이드) ─────────────────
 
+interface DatedImage { url: string; date: Date }
+interface DatedFile { file: FileAttachment; date: Date }
+
+/** 날짜별 그룹핑 (이미 최신순 정렬된 데이터 기준) */
+function groupByDate<T extends { date: Date }>(items: T[]): { label: string; items: T[] }[] {
+  const groups = new Map<string, T[]>();
+  items.forEach(item => {
+    const key = item.date.toDateString();
+    const arr = groups.get(key);
+    if (arr) arr.push(item);
+    else groups.set(key, [item]);
+  });
+  return Array.from(groups.entries()).map(([key, gItems]) => ({
+    label: new Date(key).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' }),
+    items: gItems,
+  }));
+}
+
+const PREVIEW_IMAGES = 6;
+const PREVIEW_FILES = 3;
+
 const MediaDrawer = memo(function MediaDrawer({
-  announcements, onClose, onImageClick, headerContent,
+  announcements, onClose, onImageClick, filter, onFilterChange,
 }: {
   announcements: Announcement[];
   onClose: () => void;
-  onImageClick: (url: string) => void;
-  headerContent?: React.ReactNode;
+  onImageClick: (urls: string[], index: number) => void;
+  filter?: 'images' | 'files';
+  onFilterChange: (f: 'images' | 'files' | undefined) => void;
 }) {
-  // 다중 이미지/파일 지원 (하위 호환)
-  const images = announcements.flatMap(getImageUrls);
-  const files = announcements.flatMap(getFiles);
+  // 날짜 포함 데이터 수집
+  const datedImages = useMemo<DatedImage[]>(() =>
+    announcements.flatMap(a => {
+      const date = a.createdAt?.toDate() ?? new Date(0);
+      return getImageUrls(a).map(url => ({ url, date }));
+    }), [announcements]);
+
+  const datedFiles = useMemo<DatedFile[]>(() =>
+    announcements.flatMap(a => {
+      const date = a.createdAt?.toDate() ?? new Date(0);
+      return getFiles(a).map(file => ({ file, date }));
+    }), [announcements]);
+
+  // 날짜별 그룹 (필터 뷰용)
+  const imageGroups = useMemo(() => groupByDate(datedImages), [datedImages]);
+  const fileGroups = useMemo(() => groupByDate(datedFiles), [datedFiles]);
+
+  const isAllView = !filter;
+  const hasMoreImages = datedImages.length > PREVIEW_IMAGES;
+  const hasMoreFiles = datedFiles.length > PREVIEW_FILES;
+
+  // < 버튼: 필터 뷰 → 기본 뷰, 기본 뷰 → 닫기
+  const onBack = useCallback(() => {
+    if (filter) onFilterChange(undefined);
+    else onClose();
+  }, [filter, onFilterChange, onClose]);
 
   return (
     <>
@@ -660,57 +796,141 @@ const MediaDrawer = memo(function MediaDrawer({
         className="absolute left-0 top-0 bottom-0 w-[280px] z-30 flex flex-col bg-black/60 backdrop-blur-2xl"
       >
         <div className="flex items-center gap-3 px-4 h-[52px] shrink-0 border-b border-white/10">
-          <button onClick={onClose} className="p-1">
+          <button onClick={onBack} className="p-1">
             <svg className="w-5 h-5 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <span className="font-bold text-white/90 text-sm">미디어 · 파일</span>
+          <span className="font-bold text-white/90 text-base">
+            {filter === 'images' ? '이미지' : filter === 'files' ? '파일' : '미디어 · 파일'}
+          </span>
         </div>
-        {headerContent && (
-          <div className="shrink-0 px-4 py-2 border-b border-white/10">{headerContent}</div>
-        )}
         <div className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-5">
-          {images.length > 0 && (
-            <div>
-              <p className="text-[11px] font-bold text-white/50 mb-2 tracking-wider">이미지</p>
-              <div className="grid grid-cols-3 gap-1.5">
-                {images.map((url, i) => (
-                  <button key={i} onClick={() => onImageClick(url)} className="aspect-square overflow-hidden rounded-md border border-white/10">
-                    <img src={url} alt="" className="w-full h-full object-cover" />
-                  </button>
-                ))}
-              </div>
-            </div>
+
+          {/* ── 기본 뷰: 미리보기 + 더보기 ── */}
+          {isAllView && (
+            <>
+              {datedImages.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm font-bold text-white/50 tracking-wider">이미지</p>
+                    <span className="text-sm text-white/40">{datedImages.length}장</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {datedImages.slice(0, PREVIEW_IMAGES).map((d, i) => (
+                      <button key={i} onClick={() => onImageClick(datedImages.slice(0, PREVIEW_IMAGES).map(x => x.url), i)} className="aspect-square overflow-hidden rounded-md border border-white/10">
+                        <img src={d.url} alt="" className="w-full h-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                  {hasMoreImages && (
+                    <button
+                      onClick={() => onFilterChange('images')}
+                      className="w-full mt-2 py-2 text-sm text-white/60 hover:text-white/80 border border-white/10 rounded-lg hover:bg-white/5 transition-colors"
+                    >
+                      더보기
+                    </button>
+                  )}
+                </div>
+              )}
+              {datedFiles.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm font-bold text-white/50 tracking-wider">파일</p>
+                    <span className="text-sm text-white/40">{datedFiles.length}개</span>
+                  </div>
+                  <div className="space-y-2">
+                    {datedFiles.slice(0, PREVIEW_FILES).map((d, i) => (
+                      <a key={i} href={d.file.url} target="_blank" rel="noopener noreferrer" download={d.file.name}
+                        className="flex items-center gap-3 p-3 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
+                      >
+                        <svg className="w-5 h-5 text-white/50 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-white/90 truncate">{d.file.name}</p>
+                          {d.file.size > 0 && <p className="text-[10px] text-white/40">{fmtSize(d.file.size)}</p>}
+                        </div>
+                        <svg className="w-4 h-4 text-white/40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                      </a>
+                    ))}
+                  </div>
+                  {hasMoreFiles && (
+                    <button
+                      onClick={() => onFilterChange('files')}
+                      className="w-full mt-2 py-2 text-sm text-white/60 hover:text-white/80 border border-white/10 rounded-lg hover:bg-white/5 transition-colors"
+                    >
+                      더보기
+                    </button>
+                  )}
+                </div>
+              )}
+              {datedImages.length === 0 && datedFiles.length === 0 && (
+                <div className="flex items-center justify-center text-sm text-white/40 py-20">
+                  아직 올린 미디어가 없습니다.
+                </div>
+              )}
+            </>
           )}
-          {files.length > 0 && (
-            <div>
-              <p className="text-[11px] font-bold text-white/50 mb-2 tracking-wider">파일</p>
-              <div className="space-y-2">
-                {files.map((f, i) => (
-                  <a key={i} href={f.url} target="_blank" rel="noopener noreferrer" download={f.name}
-                    className="flex items-center gap-3 p-3 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
-                  >
-                    <svg className="w-5 h-5 text-white/50 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                    </svg>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-white/90 truncate">{f.name}</p>
-                      {f.size > 0 && <p className="text-[10px] text-white/40">{fmtSize(f.size)}</p>}
-                    </div>
-                    <svg className="w-4 h-4 text-white/40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                  </a>
-                ))}
-              </div>
-            </div>
+
+          {/* ── 필터 뷰: 날짜별 그룹핑 ── */}
+          {filter === 'images' && (
+            <>
+              {imageGroups.length > 0 ? imageGroups.map((group, gi) => {
+                const groupUrls = group.items.map(x => x.url);
+                return (
+                <div key={gi}>
+                  <p className="text-xs font-bold text-white/40 tracking-wider mb-2">{group.label}</p>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {group.items.map((d, i) => (
+                      <button key={i} onClick={() => onImageClick(groupUrls, i)} className="aspect-square overflow-hidden rounded-md border border-white/10">
+                        <img src={d.url} alt="" className="w-full h-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                );
+              }) : (
+                <div className="flex items-center justify-center text-sm text-white/40 py-20">
+                  아직 올린 이미지가 없습니다.
+                </div>
+              )}
+            </>
           )}
-          {images.length === 0 && files.length === 0 && (
-            <div className="flex items-center justify-center text-sm text-white/40 py-20">
-              아직 올린 미디어가 없습니다.
-            </div>
+          {filter === 'files' && (
+            <>
+              {fileGroups.length > 0 ? fileGroups.map((group, gi) => (
+                <div key={gi}>
+                  <p className="text-xs font-bold text-white/40 tracking-wider mb-2">{group.label}</p>
+                  <div className="space-y-2">
+                    {group.items.map((d, i) => (
+                      <a key={i} href={d.file.url} target="_blank" rel="noopener noreferrer" download={d.file.name}
+                        className="flex items-center gap-3 p-3 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
+                      >
+                        <svg className="w-5 h-5 text-white/50 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-white/90 truncate">{d.file.name}</p>
+                          {d.file.size > 0 && <p className="text-[10px] text-white/40">{fmtSize(d.file.size)}</p>}
+                        </div>
+                        <svg className="w-4 h-4 text-white/40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )) : (
+                <div className="flex items-center justify-center text-sm text-white/40 py-20">
+                  아직 올린 파일이 없습니다.
+                </div>
+              )}
+            </>
           )}
+
         </div>
       </motion.div>
     </>
@@ -719,32 +939,43 @@ const MediaDrawer = memo(function MediaDrawer({
 
 // ─── 메시지 아이템 (memo로 불필요한 리렌더 방지) ────────
 
+/** 수정 제출 데이터 */
+interface EditSubmitData {
+  content: string;
+  keepImageUrls: string[];
+  newImageFiles: File[];
+  keepFiles: FileAttachment[];
+  newFiles: File[];
+  polls: Poll[];
+  resetPollIndices: number[]; // 투표 결과 초기화할 인덱스
+}
+
 const AnnouncementMessageItem = memo(function AnnouncementMessageItem({
   announcement: a,
   showDate,
   isOwnProfessor,
-  isExpanded,
+  isProfessor,
   isHighlighted,
   showEmojiPickerForThis,
   profileUid,
-  onToggleExpand,
   onReaction,
   onToggleEmojiPicker,
   onVote,
   onImageClick,
+  onEditSubmit,
 }: {
   announcement: Announcement;
   showDate: boolean;
   isOwnProfessor: boolean;
-  isExpanded: boolean;
+  isProfessor?: boolean;
   isHighlighted: boolean;
   showEmojiPickerForThis: boolean;
   profileUid?: string;
-  onToggleExpand: (id: string) => void;
   onReaction: (aid: string, emoji: string) => void;
   onToggleEmojiPicker: (aid: string | null) => void;
   onVote: (aid: string, pollIdx: number, optIndices: number[]) => void;
-  onImageClick: (url: string) => void;
+  onImageClick: (urls: string[], index: number) => void;
+  onEditSubmit?: (id: string, data: EditSubmitData) => Promise<void>;
 }) {
   const readCount = useMemo(() => (a.readBy?.filter((uid) => uid !== a.createdBy) || []).length, [a.readBy, a.createdBy]);
   const reactions = useMemo(() => Object.entries(a.reactions || {}), [a.reactions]);
@@ -755,7 +986,119 @@ const AnnouncementMessageItem = memo(function AnnouncementMessageItem({
   const hasMedia = imgUrls.length > 0 || fileList.length > 0 || pollList.length > 0;
   const hasMultiItems = imgUrls.length > 1 || fileList.length > 1 || pollList.length > 1;
 
-  const handleToggleExpand = useCallback(() => onToggleExpand(a.id), [onToggleExpand, a.id]);
+  const textNeedsFullWidth = useMemo(() => {
+    if (!a.content) return false;
+    // URL_RE는 글로벌 정규식이므로 test() 전 lastIndex 초기화 필수
+    // (다른 메시지의 test()/exec()와 lastIndex 공유 → 오감지 방지)
+    URL_RE.lastIndex = 0;
+    if (URL_RE.test(a.content)) return true;
+    if (a.content.includes('\n')) return true;
+    return a.content.length > 15;
+  }, [a.content]);
+
+  const useFullWidth = hasMedia || textNeedsFullWidth;
+
+  // ── 롱프레스 수정/삭제 (교수님 본인 메시지만)
+  const [showActions, setShowActions] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editRef = useRef<HTMLTextAreaElement>(null);
+  const editImgRef = useRef<HTMLInputElement>(null);
+  const editFileRef = useRef<HTMLInputElement>(null);
+
+  // 수정 상태
+  const [editText, setEditText] = useState('');
+  const [editKeepImages, setEditKeepImages] = useState<string[]>([]);
+  const [editNewImages, setEditNewImages] = useState<File[]>([]);
+  const [editNewImagePreviews, setEditNewImagePreviews] = useState<string[]>([]);
+  const [editKeepFiles, setEditKeepFiles] = useState<FileAttachment[]>([]);
+  const [editNewFiles, setEditNewFiles] = useState<File[]>([]);
+  const [editPolls, setEditPolls] = useState<Poll[]>([]);
+  const [editResetPolls, setEditResetPolls] = useState<Set<number>>(new Set());
+
+  // 수정 모드 이미지 프리뷰 URL 메모리 누수 방지 (언마운트 시 해제)
+  useEffect(() => {
+    return () => { editNewImagePreviews.forEach(u => URL.revokeObjectURL(u)); };
+  }, [editNewImagePreviews]);
+
+  const onLongPressStart = useCallback(() => {
+    if (!isOwnProfessor) return;
+    longPressTimer.current = setTimeout(() => setShowActions(v => !v), 500);
+  }, [isOwnProfessor]);
+
+  const onLongPressEnd = useCallback(() => {
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+  }, []);
+
+  const handleDelete = useCallback(async () => {
+    try { await deleteDoc(doc(db, 'announcements', a.id)); } catch {}
+    setShowActions(false);
+  }, [a.id]);
+
+  const handleEditStart = useCallback(() => {
+    setEditText(a.content || '');
+    setEditKeepImages([...imgUrls]);
+    setEditNewImages([]);
+    setEditNewImagePreviews([]);
+    setEditKeepFiles([...fileList]);
+    setEditNewFiles([]);
+    setEditPolls(pollList.map(p => ({ ...p, votes: { ...p.votes } })));
+    setEditResetPolls(new Set());
+    setEditing(true);
+    setShowActions(false);
+    setTimeout(() => {
+      const el = editRef.current;
+      if (el) { el.focus(); el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
+    }, 50);
+  }, [a.content, imgUrls, fileList, pollList]);
+
+  const handleEditCancel = useCallback(() => {
+    setEditing(false);
+    // 미리보기 URL 해제
+    editNewImagePreviews.forEach(u => URL.revokeObjectURL(u));
+    setEditNewImagePreviews([]);
+    setEditNewImages([]);
+    setEditNewFiles([]);
+  }, [editNewImagePreviews]);
+
+  const handleEditSubmit = useCallback(async () => {
+    if (!onEditSubmit || editSubmitting) return;
+    const hasContent = editText.trim() || editKeepImages.length || editNewImages.length || editKeepFiles.length || editNewFiles.length || editPolls.length || editResetPolls.size;
+    if (!hasContent) return;
+    setEditSubmitting(true);
+    try {
+      await onEditSubmit(a.id, {
+        content: editText.trim(),
+        keepImageUrls: editKeepImages,
+        newImageFiles: editNewImages,
+        keepFiles: editKeepFiles,
+        newFiles: editNewFiles,
+        polls: editPolls,
+        resetPollIndices: Array.from(editResetPolls),
+      });
+      editNewImagePreviews.forEach(u => URL.revokeObjectURL(u));
+      setEditing(false);
+    } catch {} finally { setEditSubmitting(false); }
+  }, [a.id, onEditSubmit, editSubmitting, editText, editKeepImages, editNewImages, editKeepFiles, editNewFiles, editPolls, editResetPolls, editNewImagePreviews]);
+
+  // 이미지/파일 추가 핸들러
+  const onEditImgSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    setEditNewImages(prev => [...prev, ...files]);
+    setEditNewImagePreviews(prev => [...prev, ...files.map(f => URL.createObjectURL(f))]);
+    e.target.value = '';
+  }, []);
+
+  const onEditFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    setEditNewFiles(prev => [...prev, ...files]);
+    e.target.value = '';
+  }, []);
+
+  const bubbleWidth = editing ? 'w-full' : (useFullWidth ? 'w-full' : 'w-fit');
 
   return (
     <div data-msg-id={a.id}>
@@ -768,14 +1111,170 @@ const AnnouncementMessageItem = memo(function AnnouncementMessageItem({
       )}
       <div className={`flex gap-2 ${isOwnProfessor ? 'flex-row-reverse' : ''} ${isHighlighted ? 'bg-black/15 rounded-xl p-1 -m-1' : ''}`}>
         <img src="/notice/avatar_professor.png" alt="교수님" className="w-14 h-14 shrink-0 object-cover rounded-full mt-0.5" />
-        <div className={`min-w-0 ${hasMedia ? 'w-[65%]' : 'min-w-[50%] max-w-[70%]'} ${isOwnProfessor ? 'flex flex-col items-end' : ''}`}>
+        <div className={`min-w-0 ${editing ? 'w-[65%]' : (useFullWidth ? 'w-[65%]' : 'max-w-[65%]')} ${isOwnProfessor ? 'flex flex-col items-end' : ''}`}>
           <p className={`text-base font-bold text-white/70 mb-0.5 ${isOwnProfessor ? 'text-right' : ''}`}>Prof. Kim</p>
-          <Bubble className={hasMedia ? 'w-full' : 'w-fit'} sidePadding={hasMultiItems ? BUBBLE_SIDE_MULTI : undefined}>
-            <MessageContent content={a.content} expanded={isExpanded} onToggle={handleToggleExpand} textRight={isOwnProfessor && hasMedia} />
-            <ImageCarousel urls={imgUrls} onImageClick={onImageClick} />
-            <FileCarousel files={fileList} />
-            <PollCarousel polls={pollList} announcementId={a.id} profileUid={profileUid} onVote={onVote} />
-          </Bubble>
+          <div className={`flex items-center gap-1.5 ${useFullWidth || editing ? 'self-stretch' : ''}`}
+            style={{ flexDirection: isOwnProfessor ? 'row' : 'row-reverse' }}
+          >
+            {/* 수정·삭제 (버블 왼쪽 중앙) */}
+            <AnimatePresence>
+              {showActions && !editing && (
+                <motion.div
+                  initial={{ opacity: 0, y: 3 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 3 }}
+                  transition={{ duration: 0.15 }}
+                  className="flex flex-col items-center gap-1 shrink-0"
+                >
+                  <button onClick={handleEditStart} className="text-base text-white/70 hover:text-white transition-colors">수정</button>
+                  <button onClick={handleDelete} className="text-base text-red-400 hover:text-red-300 transition-colors">삭제</button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+            <div className="min-w-0 flex-1"
+              onTouchStart={onLongPressStart}
+              onTouchEnd={onLongPressEnd}
+              onTouchCancel={onLongPressEnd}
+              onMouseDown={onLongPressStart}
+              onMouseUp={onLongPressEnd}
+              onMouseLeave={onLongPressEnd}
+            >
+            <Bubble className={bubbleWidth} sidePadding={(!editing && hasMultiItems) ? BUBBLE_SIDE_MULTI : undefined}>
+              {editing ? (
+                <div className="space-y-2">
+                  {/* 텍스트 편집 */}
+                  <div className="flex items-end gap-1">
+                    <textarea
+                      ref={editRef}
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleEditSubmit(); } if (e.key === 'Escape') handleEditCancel(); }}
+                      className="flex-1 bg-transparent text-base text-[#1A1A1A] resize-none outline-none leading-snug"
+                      style={{ overflowWrap: 'anywhere' }}
+                      onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
+                      placeholder="내용을 입력하세요"
+                    />
+                  </div>
+
+                  {/* 이미지 편집: 그리드 + 추가 플레이스홀더 */}
+                  <div className="grid grid-cols-3 gap-1">
+                    {editKeepImages.map((url, i) => (
+                      <div key={`keep-${i}`} className="relative aspect-square">
+                        <img src={url} alt="" className="w-full h-full object-cover border border-[#D4CFC4]" />
+                        <button onClick={() => setEditKeepImages(prev => prev.filter((_, j) => j !== i))}
+                          className="absolute -top-1 -right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white text-xs">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                      </div>
+                    ))}
+                    {editNewImagePreviews.map((url, i) => (
+                      <div key={`new-${i}`} className="relative aspect-square">
+                        <img src={url} alt="" className="w-full h-full object-cover border border-[#D4CFC4] opacity-80" />
+                        <button onClick={() => { URL.revokeObjectURL(url); setEditNewImages(prev => prev.filter((_, j) => j !== i)); setEditNewImagePreviews(prev => prev.filter((_, j) => j !== i)); }}
+                          className="absolute -top-1 -right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white text-xs">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                      </div>
+                    ))}
+                    {/* + 이미지 추가 플레이스홀더 */}
+                    <button onClick={() => editImgRef.current?.click()}
+                      className="aspect-square border border-dashed border-[#D4CFC4] flex items-center justify-center text-[#5C5C5C] hover:text-[#1A1A1A] hover:border-[#1A1A1A] transition-colors">
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" /></svg>
+                    </button>
+                  </div>
+
+                  {/* 파일 편집: 리스트 + 추가 플레이스홀더 */}
+                  <div className="space-y-1">
+                    {editKeepFiles.map((f, i) => (
+                      <div key={`keep-${i}`} className="flex items-center gap-2 text-xs text-[#1A1A1A]">
+                        <svg className="w-3.5 h-3.5 text-[#5C5C5C] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                        <span className="truncate flex-1">{f.name}</span>
+                        <button onClick={() => setEditKeepFiles(prev => prev.filter((_, j) => j !== i))}
+                          className="shrink-0 text-red-400 hover:text-red-600">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                      </div>
+                    ))}
+                    {editNewFiles.map((f, i) => (
+                      <div key={`new-${i}`} className="flex items-center gap-2 text-xs text-[#5C5C5C]">
+                        <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                        <span className="truncate flex-1">{f.name}</span>
+                        <button onClick={() => setEditNewFiles(prev => prev.filter((_, j) => j !== i))}
+                          className="shrink-0 text-red-400 hover:text-red-600">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                      </div>
+                    ))}
+                    {/* + 파일 추가 플레이스홀더 */}
+                    <button onClick={() => editFileRef.current?.click()}
+                      className="w-full flex items-center justify-center gap-1 py-1.5 border border-dashed border-[#D4CFC4] text-[#5C5C5C] hover:text-[#1A1A1A] hover:border-[#1A1A1A] text-xs transition-colors">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" /></svg>
+                      파일 추가
+                    </button>
+                  </div>
+
+                  {/* 투표 편집 */}
+                  {editPolls.map((poll, pi) => (
+                    <div key={pi} className="border border-[#D4CFC4] p-2 space-y-1">
+                      <div className="flex items-center gap-1">
+                        <input value={poll.question} onChange={(e) => setEditPolls(prev => prev.map((p, i) => i === pi ? { ...p, question: e.target.value } : p))}
+                          className="flex-1 bg-transparent text-sm text-[#1A1A1A] font-bold outline-none border-b border-[#D4CFC4] pb-0.5" placeholder="투표 질문" />
+                        <button onClick={() => { setEditPolls(prev => prev.filter((_, i) => i !== pi)); setEditResetPolls(prev => { const s = new Set(prev); s.delete(pi); return s; }); }}
+                          className="text-red-400 hover:text-red-600 shrink-0">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                      </div>
+                      {poll.options.map((opt, oi) => (
+                        <div key={oi} className="flex items-center gap-1 pl-2">
+                          <span className="text-xs text-[#5C5C5C] shrink-0">{oi + 1}.</span>
+                          <input value={opt} onChange={(e) => setEditPolls(prev => prev.map((p, i) => i === pi ? { ...p, options: p.options.map((o, j) => j === oi ? e.target.value : o) } : p))}
+                            className="flex-1 bg-transparent text-xs text-[#1A1A1A] outline-none border-b border-[#D4CFC4]/50 pb-0.5" placeholder={`선지 ${oi + 1}`} />
+                          {poll.options.length > 2 && (
+                            <button onClick={() => setEditPolls(prev => prev.map((p, i) => i === pi ? { ...p, options: p.options.filter((_, j) => j !== oi) } : p))}
+                              className="text-[#5C5C5C] hover:text-red-400 shrink-0">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-between">
+                        <button onClick={() => setEditPolls(prev => prev.map((p, i) => i === pi ? { ...p, options: [...p.options, ''] } : p))}
+                          className="text-[10px] text-[#5C5C5C] hover:text-[#1A1A1A] pl-2">+ 선지 추가</button>
+                        <label className="flex items-center gap-1 cursor-pointer select-none">
+                          <input type="checkbox" checked={editResetPolls.has(pi)}
+                            onChange={(e) => setEditResetPolls(prev => { const s = new Set(prev); if (e.target.checked) s.add(pi); else s.delete(pi); return s; })}
+                            className="w-3 h-3 accent-[#1A1A1A]" />
+                          <span className="text-[10px] text-[#5C5C5C]">결과 초기화</span>
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* 하단: 전송 */}
+                  <div className="flex items-center justify-end pt-1 border-t border-[#D4CFC4]/50">
+                    <button onClick={handleEditSubmit} disabled={editSubmitting}
+                      className="text-[#5C5C5C] hover:text-[#1A1A1A] disabled:text-[#D4CFC4] transition-colors">
+                      {editSubmitting ? (
+                        <div className="w-5 h-5 border-2 border-[#D4CFC4] border-t-[#5C5C5C] rounded-full animate-spin" />
+                      ) : (
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                  <input ref={editImgRef} type="file" accept="image/*" multiple className="hidden" onChange={onEditImgSelect} />
+                  <input ref={editFileRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip" multiple className="hidden" onChange={onEditFileSelect} />
+                </div>
+              ) : (
+                <>
+                  <MessageContent content={a.content} />
+                  <ImageCarousel urls={imgUrls} onImageClick={onImageClick} />
+                  <FileCarousel files={fileList} />
+                  <PollCarousel polls={pollList} announcementId={a.id} profileUid={profileUid} onVote={onVote} isProfessor={isProfessor} />
+                </>
+              )}
+            </Bubble>
+            </div>
+          </div>
           <p className={`text-xs text-white/50 mt-1 ${isOwnProfessor ? 'text-right' : ''}`}>
             {readCount > 0 && <>{readCount}명 읽음</>}
             {readCount > 0 && a.createdAt && ' · '}
@@ -832,7 +1331,7 @@ export default function AnnouncementChannel({
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [showMedia, setShowMedia] = useState(false);
+  const [showMedia, setShowMedia] = useState<false | 'all' | 'images' | 'files'>(false);
   const [hasText, setHasText] = useState(false);
   const prevOverflowRef = useRef(false);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -846,10 +1345,9 @@ export default function AnnouncementChannel({
   const [pendingImagePreviews, setPendingImagePreviews] = useState<string[]>([]);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null);
-  const [viewerImage, setViewerImage] = useState<string | null>(null);
+  const [viewerImages, setViewerImages] = useState<{ urls: string[]; index: number } | null>(null);
   const [hasUnread, setHasUnread] = useState(false);
   const [sheetTop, setSheetTop] = useState(0);
-  const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
   const [showScrollFab, setShowScrollFab] = useState(false);
   // 모달 콘텐츠 지연 렌더링 (애니메이션 후 메시지 표시)
   const [modalReady, setModalReady] = useState(false);
@@ -896,9 +1394,15 @@ export default function AnnouncementChannel({
     return () => { document.body.style.overflow = ''; };
   }, [showModal]);
 
-  // ─── 모달 콘텐츠 지연 렌더링 (닫힐 때 초기화)
+  // ─── 모달 콘텐츠 지연 렌더링 (입장 애니메이션 후 표시, 닫힐 때 초기화)
   useEffect(() => {
-    if (!showModal) setModalReady(false);
+    if (!showModal) {
+      setModalReady(false);
+      return;
+    }
+    // 입장 애니메이션 완료 후 메시지 표시 (spring damping:28, stiffness:300 ≈ 350ms)
+    const timer = setTimeout(() => setModalReady(true), 350);
+    return () => clearTimeout(timer);
   }, [showModal]);
 
   // ─── 공지 구독 (증분 업데이트: 변경된 문서만 새 객체 생성 → memo 유지)
@@ -951,12 +1455,9 @@ export default function AnnouncementChannel({
     setHasUnread(latest.createdAt.toDate().getTime() > new Date(lr).getTime());
   }, [announcements, userCourseId, showModal]);
 
-  // ─── 읽음 처리 (모달 열릴 때 1회만 실행 — 캐스케이드 방지)
-  const readMarkedRef = useRef(false);
+  // ─── 읽음 처리 (모달 열려있는 동안 새 공지도 읽음 처리)
   useEffect(() => {
-    if (!showModal) { readMarkedRef.current = false; return; }
-    if (readMarkedRef.current || !userCourseId || !profile || !announcements.length) return;
-    readMarkedRef.current = true;
+    if (!showModal || !userCourseId || !profile || !announcements.length) return;
     localStorage.setItem(lastReadKey(userCourseId), new Date().toISOString());
     setHasUnread(false);
     // 아직 읽지 않은 공지만 업데이트
@@ -967,19 +1468,33 @@ export default function AnnouncementChannel({
   }, [showModal, userCourseId, profile, announcements]);
 
   // ─── 스크롤
-  const scrollToBottom = useCallback(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollPendingRef = useRef(false);
+
+  const scrollToBottom = useCallback((instant?: boolean) => {
+    const el = msgAreaRef.current;
+    if (!el) return;
+    if (instant) {
+      el.scrollTop = el.scrollHeight;
+    } else {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    }
   }, []);
 
-  useEffect(() => {
-    if (showModal && !showMedia) {
-      const t = setTimeout(scrollToBottom, 100);
-      return () => clearTimeout(t);
-    }
-  }, [showModal, showMedia, announcements.length, scrollToBottom]);
+  // modalReady 또는 과목 전환 시 스크롤 예약 (paint 전)
+  useLayoutEffect(() => {
+    if (modalReady) scrollPendingRef.current = true;
+  }, [modalReady, userCourseId]);
+
+  // 예약된 스크롤 실행 (paint 전에 scrollTop 설정 → 깜빡임 방지)
+  useLayoutEffect(() => {
+    if (!scrollPendingRef.current || !modalReady || !announcements.length || showMedia) return;
+    scrollPendingRef.current = false;
+    scrollToBottom(true);
+  }, [modalReady, announcements, showMedia, scrollToBottom]);
 
   // ─── 시간순 정렬 (검색/렌더링에서 사용)
   const chrono = useMemo(() => [...announcements].reverse(), [announcements]);
+
 
   // ─── 이미지 선택 (다중)
   const onImgSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1080,16 +1595,6 @@ export default function AnnouncementChannel({
     });
   }, []);
 
-  // ─── 펼치기/접기 토글
-  const toggleExpand = useCallback((id: string) => {
-    setExpandedMessages((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
   // ─── 공지 작성
   const handlePost = async () => {
     const validPolls = showPollCreator ? editingPolls.filter((p) => p.question.trim() && p.options.filter((o) => o.trim()).length >= 2) : [];
@@ -1101,17 +1606,14 @@ export default function AnnouncementChannel({
         content, reactions: {}, readBy: [],
         createdAt: serverTimestamp(), createdBy: profile.uid, courseId: userCourseId,
       };
-      // 다중 이미지 업로드
-      if (pendingImages.length > 0) {
-        const urls = await uploadMultipleImages(pendingImages);
-        if (urls.length > 0) data.imageUrls = urls;
-      }
-      // 다중 파일 업로드
-      if (pendingFiles.length > 0) {
-        const fileInfos = await uploadMultipleFiles(pendingFiles);
-        if (fileInfos.length > 0) {
-          data.files = fileInfos.map((fi) => ({ url: fi.url, name: fi.name, type: fi.type, size: fi.size }));
-        }
+      // 이미지 + 파일 동시 병렬 업로드
+      const [imgUrls, fileInfos] = await Promise.all([
+        pendingImages.length > 0 ? uploadMultipleImages(pendingImages) : Promise.resolve([]),
+        pendingFiles.length > 0 ? uploadMultipleFiles(pendingFiles) : Promise.resolve([]),
+      ]);
+      if (imgUrls.length > 0) data.imageUrls = imgUrls;
+      if (fileInfos.length > 0) {
+        data.files = fileInfos.map((fi) => ({ url: fi.url, name: fi.name, type: fi.type, size: fi.size }));
       }
       // 다중 투표 수집
       if (validPolls.length > 0) {
@@ -1132,6 +1634,30 @@ export default function AnnouncementChannel({
       requestAnimationFrame(() => { const t = textareaRef.current; if (t) t.style.height = '36px'; });
     } catch (err) { console.error('공지 작성 실패:', err); }
   };
+
+  // ─── 메시지 수정 제출 (업로드 + Firestore 업데이트)
+  const handleEditSubmitMsg = useCallback(async (id: string, data: EditSubmitData) => {
+    const update: Record<string, unknown> = { content: data.content };
+    // 이미지/파일 병렬 업로드
+    const [newImgUrls, newFileInfos] = await Promise.all([
+      data.newImageFiles.length > 0 ? uploadMultipleImages(data.newImageFiles) : Promise.resolve([]),
+      data.newFiles.length > 0 ? uploadMultipleFiles(data.newFiles) : Promise.resolve([]),
+    ]);
+    update.imageUrls = [...data.keepImageUrls, ...newImgUrls];
+    update.files = [
+      ...data.keepFiles,
+      ...newFileInfos.map(fi => ({ url: fi.url, name: fi.name, type: fi.type, size: fi.size })),
+    ];
+    // 투표: 빈 선지 제거, 빈 질문 투표 제거, 초기화 대상은 votes 리셋
+    update.polls = data.polls
+      .map((p, i) => {
+        const cleaned = { ...p, options: p.options.filter(o => o.trim()) };
+        if (data.resetPollIndices.includes(i)) cleaned.votes = {};
+        return cleaned;
+      })
+      .filter(p => p.question.trim() && p.options.length >= 2);
+    await updateDoc(doc(db, 'announcements', id), update);
+  }, [uploadMultipleImages, uploadMultipleFiles]);
 
   // ─── 이모지 반응
   const handleReaction = useCallback(async (aid: string, emoji: string) => {
@@ -1174,9 +1700,9 @@ export default function AnnouncementChannel({
     setShowEmojiPicker(aid);
   }, []);
 
-  // ─── 이미지 클릭
-  const handleImageClick = useCallback((url: string) => {
-    setViewerImage(url);
+  // ─── 이미지 클릭 (배열 + 인덱스)
+  const handleImageClick = useCallback((urls: string[], index: number) => {
+    setViewerImages({ urls, index });
   }, []);
 
   // ─── 파생
@@ -1213,7 +1739,12 @@ export default function AnnouncementChannel({
           const hasImages = getImageUrls(latest).length > 0;
           const hasFiles = getFiles(latest).length > 0;
           if (latest.content) {
-            raw = latest.content;
+            // URL만으로 이루어진 텍스트인 경우
+            if (/^\s*https?:\/\/\S+\s*$/.test(latest.content)) {
+              raw = '링크를 보냈습니다.';
+            } else {
+              raw = latest.content;
+            }
           } else if (hasImages) {
             raw = '사진을 보냈습니다.';
           } else if (hasFiles) {
@@ -1235,8 +1766,8 @@ export default function AnnouncementChannel({
             setShowModal(true);
           }} className="w-full text-left flex items-center">
             <div className="flex-1 min-w-0">
-              <p className="text-4xl font-bold text-white">{firstWord}</p>
-              <p className="text-4xl font-bold text-white truncate">{rest || '\u00A0'}</p>
+              <p className="text-4xl font-bold text-white truncate leading-tight">{firstWord}</p>
+              <p className="text-4xl font-bold text-white truncate leading-tight">{rest || '\u00A0'}</p>
             </div>
             <div className="flex-shrink-0 ml-3 self-center">
               <svg className="w-6 h-6 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1262,7 +1793,6 @@ export default function AnnouncementChannel({
                 animate={{ y: 0 }}
                 exit={{ y: '100%' }}
                 transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-                onAnimationComplete={() => setModalReady(true)}
                 onClick={(e) => e.stopPropagation()}
                 className="relative w-full flex flex-col overflow-hidden rounded-t-2xl will-change-transform"
                 style={{ height: sheetTop > 0 ? `calc(100vh - ${sheetTop + 16}px)` : '92vh' }}
@@ -1286,7 +1816,7 @@ export default function AnnouncementChannel({
                   {/* 메뉴 + 아이콘 + 닫기 */}
                   <div className="flex items-center gap-1">
                     {/* 메뉴 (미디어) */}
-                    <button onClick={() => setShowMedia(true)} className="w-9 h-9 flex items-center justify-center">
+                    <button onClick={() => setShowMedia('all')} className="w-9 h-9 flex items-center justify-center">
                       <svg className="w-6 h-6 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                       </svg>
@@ -1309,7 +1839,7 @@ export default function AnnouncementChannel({
                               autoFocus
                               className="flex-1 bg-white/10 border border-white/20 rounded-lg text-sm text-white placeholder:text-white/40 px-2 py-1 focus:outline-none"
                             />
-                            <span className="text-xs text-white/50 shrink-0">{searchResults.length > 0 ? `${searchIdx + 1}/${searchResults.length}` : '0'}</span>
+                            <span className="text-xs text-white/50 shrink-0">{searchResults.length > 0 && `${searchIdx + 1}/${searchResults.length}`}</span>
                             <button onClick={() => { setSearchOpen(false); setSearchQuery(''); }} className="w-7 h-7 flex items-center justify-center text-white/60">
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
@@ -1352,7 +1882,7 @@ export default function AnnouncementChannel({
                             autoFocus
                             className="w-32 bg-white/10 border border-white/20 rounded-lg text-sm text-white placeholder:text-white/40 px-2 py-1 focus:outline-none"
                           />
-                          <span className="text-xs text-white/50">{searchResults.length > 0 ? `${searchIdx + 1}/${searchResults.length}` : '0'}</span>
+                          <span className="text-xs text-white/50">{searchResults.length > 0 && `${searchIdx + 1}/${searchResults.length}`}</span>
                           <button onClick={() => { setSearchOpen(false); setSearchQuery(''); }} className="w-7 h-7 flex items-center justify-center text-white/60">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                           </button>
@@ -1485,15 +2015,15 @@ export default function AnnouncementChannel({
                             announcement={a}
                             showDate={showDate}
                             isOwnProfessor={isOwnProfessor}
-                            isExpanded={expandedMessages.has(a.id)}
+                            isProfessor={isProfessor}
                             isHighlighted={isHighlighted}
                             showEmojiPickerForThis={showEmojiPicker === a.id}
                             profileUid={profile?.uid}
-                            onToggleExpand={toggleExpand}
                             onReaction={handleReaction}
                             onToggleEmojiPicker={handleToggleEmojiPicker}
                             onVote={handleVote}
                             onImageClick={handleImageClick}
+                            onEditSubmit={isProfessor ? handleEditSubmitMsg : undefined}
                           />
                         );
                       })}
@@ -1543,7 +2073,7 @@ export default function AnnouncementChannel({
                         initial={{ opacity: 0, scale: 0.8 }}
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.8 }}
-                        onClick={scrollToBottom}
+                        onClick={() => scrollToBottom()}
                         className="w-10 h-10 bg-black/50 backdrop-blur-md border border-white/20 rounded-full flex items-center justify-center text-white/70 hover:text-white shadow-lg"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1861,8 +2391,9 @@ export default function AnnouncementChannel({
                     <MediaDrawer
                       announcements={announcements}
                       onClose={() => setShowMedia(false)}
-                      onImageClick={(url) => { setViewerImage(url); setShowMedia(false); }}
-                      headerContent={headerContent}
+                      onImageClick={(urls, index) => setViewerImages({ urls, index })}
+                      filter={showMedia === 'all' ? undefined : showMedia}
+                      onFilterChange={(f) => setShowMedia(f ?? 'all')}
                     />
                   )}
                 </AnimatePresence>
@@ -1876,9 +2407,9 @@ export default function AnnouncementChannel({
       {/* 전체화면 편집 모달 제거됨 — 입력창 인라인 확장으로 대체 */}
 
       {/* ═══ 이미지 뷰어 ═══ */}
-      {typeof document !== 'undefined' && viewerImage && createPortal(
+      {typeof document !== 'undefined' && viewerImages && createPortal(
         <AnimatePresence>
-          <ImageViewer src={viewerImage} onClose={() => setViewerImage(null)} />
+          <ImageViewer urls={viewerImages.urls} initialIndex={viewerImages.index} onClose={() => setViewerImages(null)} />
         </AnimatePresence>,
         document.body,
       )}

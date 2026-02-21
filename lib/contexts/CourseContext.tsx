@@ -63,7 +63,7 @@ const CourseContext = createContext<CourseContextType | null>(null);
  */
 const DEFAULT_SEMESTER_SETTINGS: SemesterSettings = {
   currentYear: new Date().getFullYear(),
-  currentSemester: new Date().getMonth() < 8 ? 1 : 2, // 8월 이전이면 1학기
+  currentSemester: getCurrentSemesterByDate(),
   semesterDates: {
     spring: {
       start: `${new Date().getFullYear()}-02-22`,
