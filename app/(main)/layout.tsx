@@ -57,20 +57,10 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
     !isProfessorHome &&
     (pathname === '/professor/stats' || pathname === '/professor/quiz' || pathname === '/professor/students' || pathname === '/board');
 
-  // 프로필이 없으면 온보딩으로 리다이렉트
+  // 프로필이 없으면 로그인으로 리다이렉트
   useEffect(() => {
     if (!profileLoading && !profile) {
-      // 온보딩 방금 완료한 경우 플래그 확인
-      const justCompleted = localStorage.getItem('onboarding_just_completed');
-
-      if (justCompleted) {
-        // 플래그가 있으면 잠시 대기 후 다시 체크
-        localStorage.removeItem('onboarding_just_completed');
-        setWaitCount(prev => prev + 1);
-        return;
-      }
-
-      // 3번까지 대기 (총 약 3초)
+      // 가입 직후 프로필 로딩 대기 (Firestore 반영 지연)
       if (waitCount < 3) {
         const timer = setTimeout(() => {
           setWaitCount(prev => prev + 1);
@@ -78,8 +68,8 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
         return () => clearTimeout(timer);
       }
 
-      // 대기 후에도 profile이 없으면 학적정보 입력으로 직접 이동
-      router.replace('/onboarding/student-info');
+      // 대기 후에도 profile이 없으면 로그인으로 이동
+      router.replace('/login');
     }
   }, [profile, profileLoading, router, waitCount]);
 

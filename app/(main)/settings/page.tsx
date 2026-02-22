@@ -4,6 +4,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '@/lib/firebase';
+import { isStudentEmail, extractStudentId } from '@/lib/auth';
 import { SettingsList } from '@/components/profile';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useUser, useCourse } from '@/lib/contexts';
@@ -196,6 +199,11 @@ export default function SettingsPage() {
         </motion.div>
       </div>
 
+      {/* 복구 이메일 (학생만) */}
+      {user?.email && isStudentEmail(user.email) && (
+        <RecoveryEmailSection />
+      )}
+
       {/* 메인 컨텐츠 */}
       <main className="relative z-10 px-4 pt-2">
         <SettingsList
@@ -322,7 +330,7 @@ export default function SettingsPage() {
                   {holdings.length > 0 ? (
                     <div className="grid grid-cols-4 gap-2 max-h-[50vh] overflow-y-auto">
                       {holdings
-                        .filter(h => h.rabbitId > 0)
+                        .slice()
                         .sort((a, b) => a.rabbitId - b.rabbitId)
                         .map(h => (
                           <button
@@ -406,4 +414,125 @@ export default function SettingsPage() {
       </AnimatePresence>
     </div>
   );
+}
+
+// ============================================================
+// 복구 이메일 섹션 컴포넌트
+// ============================================================
+
+function RecoveryEmailSection() {
+  const { profile } = useUser();
+  const [email, setEmail] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const maskedEmail = profile?.recoveryEmail
+    ? maskEmailForDisplay(profile.recoveryEmail)
+    : null;
+
+  const handleSave = async () => {
+    if (!email) return;
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setMessage('유효하지 않은 이메일 형식입니다.');
+      return;
+    }
+
+    setSaving(true);
+    setMessage(null);
+
+    try {
+      const updateFn = httpsCallable<
+        { recoveryEmail: string },
+        { success: boolean; maskedEmail: string }
+      >(functions, 'updateRecoveryEmail');
+
+      const result = await updateFn({ recoveryEmail: email });
+      setMessage('복구 이메일이 등록되었습니다.');
+      setIsEditing(false);
+      setEmail('');
+    } catch (err: unknown) {
+      const firebaseError = err as { message?: string };
+      setMessage(firebaseError.message || '등록에 실패했습니다.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="relative z-10 px-4 pt-2 pb-2">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        className="rounded-2xl overflow-hidden bg-white/10 border border-white/15 backdrop-blur-sm"
+      >
+        <div className="px-4 py-3 border-b border-white/10">
+          <h3 className="font-bold text-white">복구 이메일</h3>
+          <p className="text-xs text-white/50 mt-0.5">비밀번호 찾기에 사용됩니다</p>
+        </div>
+        <div className="px-4 py-3">
+          {!isEditing ? (
+            <div className="flex items-center justify-between">
+              <div>
+                {maskedEmail ? (
+                  <p className="text-sm text-white">{maskedEmail}</p>
+                ) : (
+                  <p className="text-sm text-white/40">등록된 이메일 없음</p>
+                )}
+              </div>
+              <button
+                onClick={() => setIsEditing(true)}
+                className="px-3 py-1.5 text-xs font-medium text-white bg-white/15 rounded-lg hover:bg-white/20 transition-colors"
+              >
+                {maskedEmail ? '변경' : '등록'}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <input
+                type="email"
+                placeholder="개인 이메일 입력"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white text-sm placeholder-white/40 focus:outline-none focus:border-white/40"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setIsEditing(false);
+                    setEmail('');
+                    setMessage(null);
+                  }}
+                  className="flex-1 py-2 text-xs font-medium text-white/70 bg-white/10 rounded-lg hover:bg-white/15"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving || !email}
+                  className="flex-1 py-2 text-xs font-medium text-white bg-white/25 rounded-lg hover:bg-white/30 disabled:opacity-50"
+                >
+                  {saving ? '저장 중...' : '저장'}
+                </button>
+              </div>
+            </div>
+          )}
+          {message && (
+            <p className={`mt-2 text-xs ${message.includes('등록되었') ? 'text-green-400' : 'text-red-400'}`}>
+              {message}
+            </p>
+          )}
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function maskEmailForDisplay(email: string): string {
+  const [local, domain] = email.split('@');
+  if (local.length <= 2) return `${local[0]}***@${domain}`;
+  return `${local[0]}${local[1]}***@${domain}`;
 }

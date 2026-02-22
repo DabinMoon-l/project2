@@ -50,6 +50,7 @@ const HeadlineArticle = memo(function HeadlineArticle({
   isProfessor = false,
   isPinned = false,
   onPin,
+  onUnpin,
 }: {
   post: Post;
   onClick?: () => void;
@@ -57,6 +58,7 @@ const HeadlineArticle = memo(function HeadlineArticle({
   isProfessor?: boolean;
   isPinned?: boolean;
   onPin?: () => void;
+  onUnpin?: () => void;
 }) {
   const imageUrl = post.imageUrl || post.imageUrls?.[0] || DEFAULT_RABBIT_IMAGE;
   // 헤드라인/고정글은 총 3개 댓글까지 (대댓글 포함)
@@ -84,12 +86,24 @@ const HeadlineArticle = memo(function HeadlineArticle({
       onClick={onClick}
       className={`group border border-[#1A1A1A] bg-[#F5F0E8] relative transition-all ${onClick ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-md' : ''}`}
     >
-      {/* 고정 버튼 (교수님 전용, 미고정 헤드라인에서만) */}
+      {/* 고정 아이콘 — 교수 전용 (헤더카드는 좌측 상단) */}
+      {isProfessor && isPinned && onUnpin && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onUnpin(); }}
+          className="absolute top-1 left-1 z-10 p-1 text-[#8B1A1A] transition-transform hover:scale-125"
+          title="고정 해제"
+        >
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+          </svg>
+        </button>
+      )}
       {isProfessor && !isPinned && onPin && (
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onPin(); }}
-          className="absolute top-1 right-1 z-10 p-1 text-[#1A1A1A]/30 hover:text-[#8B1A1A] transition-colors opacity-0 group-hover:opacity-100"
+          className="absolute top-1 left-1 z-10 p-1 text-[#1A1A1A]/20 hover:text-[#8B1A1A] transition-colors"
           title="글 고정"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -169,10 +183,14 @@ const PinnedPostsCarousel = memo(function PinnedPostsCarousel({
   posts,
   commentsMap,
   onPostClick,
+  isProfessor = false,
+  onUnpin,
 }: {
   posts: Post[];
   commentsMap: CommentsMap;
   onPostClick: (postId: string) => void;
+  isProfessor?: boolean;
+  onUnpin?: (postId: string) => void;
 }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const touchStartX = useRef<number>(0);
@@ -221,41 +239,24 @@ const PinnedPostsCarousel = memo(function PinnedPostsCarousel({
             post={posts[currentIndex]}
             comments={commentsMap.get(posts[currentIndex].id) || []}
             isPinned={true}
+            isProfessor={isProfessor}
+            onUnpin={onUnpin ? () => onUnpin(posts[currentIndex].id) : undefined}
           />
         </div>
       </div>
 
-      {/* 네비게이션 화살표 (PC) */}
+      {/* 점 인디케이터 + 화살표 */}
       {posts.length > 1 && (
-        <>
-          {currentIndex > 0 && (
-            <button
-              type="button"
-              onClick={() => setCurrentIndex(currentIndex - 1)}
-              className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 flex items-center justify-center bg-[#1A1A1A]/80 text-[#F5F0E8] hover:bg-[#1A1A1A]"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-          )}
-          {currentIndex < posts.length - 1 && (
-            <button
-              type="button"
-              onClick={() => setCurrentIndex(currentIndex + 1)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 flex items-center justify-center bg-[#1A1A1A]/80 text-[#F5F0E8] hover:bg-[#1A1A1A]"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          )}
-        </>
-      )}
-
-      {/* 점 인디케이터 */}
-      {posts.length > 1 && (
-        <div className="flex justify-center gap-2 mt-3">
+        <div className="flex items-center justify-center gap-3 mt-3">
+          <button
+            type="button"
+            onClick={() => setCurrentIndex(currentIndex > 0 ? currentIndex - 1 : posts.length - 1)}
+            className="text-[#1A1A1A]/40 hover:text-[#1A1A1A] transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
           {posts.map((_, index) => (
             <button
               key={index}
@@ -268,6 +269,15 @@ const PinnedPostsCarousel = memo(function PinnedPostsCarousel({
               }`}
             />
           ))}
+          <button
+            type="button"
+            onClick={() => setCurrentIndex(currentIndex < posts.length - 1 ? currentIndex + 1 : 0)}
+            className="text-[#1A1A1A]/40 hover:text-[#1A1A1A] transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
         </div>
       )}
     </div>
@@ -345,7 +355,7 @@ const MasonryItem = memo(function MasonryItem({
       onClick={onClick}
       className="cursor-pointer group break-inside-avoid mb-4 p-3 border border-[#1A1A1A] bg-[#F5F0E8] relative hover:-translate-y-0.5 hover:shadow-md transition-all"
     >
-      {/* 고정 아이콘 — 교수: 클릭으로 고정/해제 토글, 학생: 정적 표시 */}
+      {/* 고정 아이콘 — 교수: 클릭으로 고정/해제 토글, 학생: 고정글만 정적 표시 */}
       {isPinned ? (
         isProfessor && onUnpin ? (
           <button
@@ -369,7 +379,7 @@ const MasonryItem = memo(function MasonryItem({
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onPin?.(); }}
-          className="absolute top-1 right-1 z-10 p-1 text-[#1A1A1A]/30 hover:text-[#8B1A1A] transition-colors opacity-0 group-hover:opacity-100"
+          className="absolute top-1 right-1 z-10 p-1 text-[#1A1A1A]/20 hover:text-[#8B1A1A] transition-colors"
           title="글 고정"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -526,14 +536,22 @@ export default function BoardPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
-  // postIds 문자열 키 (onSnapshot 무한 루프 방지)
-  const postIdsKey = useMemo(() => posts.map(p => p.id).join(','), [posts]);
+  // 댓글 미리보기 대상 postId (고정글 + 최신 20개만 — 카드 미리보기용)
+  const commentTargetIds = useMemo(() => {
+    const pinnedIds = pinnedPosts.map(p => p.id);
+    const pinnedSet = new Set(pinnedIds);
+    const otherIds = posts.filter(p => !pinnedSet.has(p.id)).slice(0, 20).map(p => p.id);
+    return [...pinnedIds, ...otherIds];
+  }, [pinnedPosts, posts]);
 
-  // 게시글 ID 목록이 변경되면 댓글 실시간 구독
+  const postIdsKey = useMemo(() => commentTargetIds.join(','), [commentTargetIds]);
+
+  // 댓글 미리보기 구독 (상위 글만 — 카드에서 3~4개 미리보기용)
   useEffect(() => {
     if (!postIdsKey) return;
 
-    const postIds = postIdsKey.split(',');
+    const postIds = postIdsKey.split(',').filter(Boolean);
+    if (postIds.length === 0) return;
 
     // Firestore는 'in' 쿼리에 최대 30개까지만 지원
     const chunks: string[][] = [];
@@ -656,10 +674,12 @@ export default function BoardPage() {
   }, [posts, searchQuery]);
 
   const handlePostClick = useCallback((postId: string) => {
+    sessionStorage.setItem('board_scroll_y', String(window.scrollY));
     router.push(`/board/${postId}`);
   }, [router]);
 
   const handleWriteClick = useCallback(() => {
+    sessionStorage.setItem('board_scroll_y', String(window.scrollY));
     router.push('/board/write');
   }, [router]);
 
@@ -690,6 +710,16 @@ export default function BoardPage() {
       showPinToast('고정이 해제되었습니다');
     }
   }, [unpinPost, showPinToast]);
+
+  // 스크롤 위치 복원 (글 상세/작성에서 돌아왔을 때)
+  useEffect(() => {
+    if (loading || posts.length === 0) return;
+    const saved = sessionStorage.getItem('board_scroll_y');
+    if (saved) {
+      sessionStorage.removeItem('board_scroll_y');
+      requestAnimationFrame(() => window.scrollTo(0, Number(saved)));
+    }
+  }, [loading, posts.length]);
 
   // 고정 글이 있으면 캐러셀 표시, 없으면 최신 글 표시
   const hasPinnedPosts = pinnedPosts.length > 0;
@@ -929,6 +959,8 @@ export default function BoardPage() {
               posts={pinnedPosts}
               commentsMap={commentsMap}
               onPostClick={handlePostClick}
+              isProfessor={isProfessor}
+              onUnpin={isProfessor ? (postId) => handleUnpinPost(postId) : undefined}
             />
           </div>
         ) : headline && (

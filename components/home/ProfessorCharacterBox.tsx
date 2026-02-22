@@ -9,16 +9,15 @@ import {
   type MotionValue,
 } from 'framer-motion';
 
-import RabbitImage from '@/components/common/RabbitImage';
 
 const SWIPE_THRESHOLD = 40;
 
-/* 궤도 파라미터 (교수님 전용 — 캐릭터 크게) */
-const ORBIT_RX = 180;
-const ORBIT_RY = 52;
-const CHAR_SIZE = 200;
+/* 궤도 파라미터 (학생 비율 × 1.05) */
+const ORBIT_RX = 184;
+const ORBIT_RY = 53;
+const CHAR_SIZE = 190;
 const CHAR_HALF = CHAR_SIZE / 2;
-const ORBIT_Y_SHIFT = 195;
+const ORBIT_Y_SHIFT = 205;
 
 /* 교수님 홈에 표시할 토끼 후보 (rabbitId 0-indexed) */
 const PROFESSOR_RABBIT_POOL = [21, 26, 56, 58, 59, 61];
@@ -113,13 +112,10 @@ export default function ProfessorCharacterBox() {
   if (equipped.length === 0) return null;
 
   return (
-    <div className="flex flex-col items-center w-full">
-      {/* 학생 XP/도감 영역과 동일한 높이 확보 */}
-      <div className="w-full mb-8 mt-14 h-11" />
-
+    <div className="flex flex-col items-center w-full mt-4 -mb-24">
       {/* 캐릭터 궤도 영역 */}
       <div
-        className="relative select-none -mt-32"
+        className="relative select-none"
         style={{
           width: containerW,
           height: containerH,
@@ -198,10 +194,13 @@ function OrbitalCharacter({
       style={{ left: 0, top: 0, x, y, scale, zIndex, opacity }}
     >
       <FloatingWrapper seed={charIndex}>
-        <RabbitImage
-          rabbitId={rabbitId}
-          size={CHAR_SIZE}
-          priority
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={`/rabbit/rabbit-${String(rabbitId + 1).padStart(3, '0')}.png`}
+          alt=""
+          width={CHAR_SIZE}
+          height={Math.round(CHAR_SIZE * (969 / 520))}
+          draggable={false}
           className="drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
           style={{ filter: 'sepia(0.08) saturate(1.1) brightness(1.03) hue-rotate(-5deg)' }}
         />

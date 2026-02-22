@@ -8,6 +8,11 @@
 
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
+import { defineSecret } from "firebase-functions/params";
+import fetch from "node-fetch";
+
+// ANTHROPIC_API_KEY 시크릿 (monthlyReport.ts와 공유)
+const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
 
 // ============================================================
 // 타입
@@ -58,6 +63,7 @@ interface WeeklyStats {
     commentCount: number;
     totalViews: number;
     classParticipationScores: Record<string, number>;
+    keywords: { text: string; value: number }[];
   };
 }
 
@@ -105,10 +111,81 @@ const FEEDBACK_SCORES: Record<string, number> = {
 const COURSE_IDS = ["biology", "pathophysiology", "microbiology"];
 
 // ============================================================
+// Claude Haiku 키워드 추출
+// ============================================================
+
+/** Haiku API 호출하여 게시글 텍스트에서 키워드 추출 */
+async function extractKeywordsWithHaiku(
+  apiKey: string,
+  texts: string[],
+): Promise<{ text: string; value: number }[]> {
+  if (texts.length === 0) return [];
+
+  const combined = texts.join("\n---\n").slice(0, 4000); // 토큰 절약
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 512,
+      messages: [
+        {
+          role: "user",
+          content: `다음은 대학 수업 게시판의 게시글 제목과 본문입니다. 의미 있는 핵심 키워드를 추출해주세요.
+
+규칙:
+- 조사, 접속사, 대명사, 일반 동사 제외
+- 1글자 단어 제외
+- 빈도가 높은 순으로 최대 30개
+- JSON 배열로만 응답: [{"text":"키워드","value":빈도수}]
+- 다른 설명 없이 JSON만 출력
+
+게시글:
+${combined}`,
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    console.error(`Haiku API 오류 (${response.status}):`, await response.text());
+    return [];
+  }
+
+  const data = await response.json() as {
+    content: Array<{ type: string; text: string }>;
+  };
+
+  const textBlock = data.content.find((c: { type: string }) => c.type === "text");
+  if (!textBlock?.text) return [];
+
+  try {
+    // JSON 파싱 (마크다운 코드블록 제거)
+    const cleaned = textBlock.text.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
+    const parsed = JSON.parse(cleaned);
+    if (Array.isArray(parsed)) {
+      return parsed
+        .filter((item: { text?: string; value?: number }) => item.text && typeof item.value === "number")
+        .slice(0, 30)
+        .map((item: { text: string; value: number }) => ({ text: item.text, value: item.value }));
+    }
+  } catch (err) {
+    console.error("키워드 JSON 파싱 실패:", err);
+  }
+
+  return [];
+}
+
+// ============================================================
 // 수집 함수
 // ============================================================
 
-async function collectWeeklyStats(courseId: string, start: Date, end: Date, label: string): Promise<WeeklyStats> {
+async function collectWeeklyStats(courseId: string, start: Date, end: Date, label: string, apiKey: string): Promise<WeeklyStats> {
   const db = getFirestore();
   const startTs = Timestamp.fromDate(start);
   const endTs = Timestamp.fromDate(end);
@@ -228,11 +305,16 @@ async function collectWeeklyStats(courseId: string, start: Date, end: Date, labe
 
   let totalViews = 0;
   const classPostCounts: Record<string, number> = { A: 0, B: 0, C: 0, D: 0 };
+  const postTexts: string[] = [];
   postsSnap.docs.forEach(d => {
     const data = d.data();
     totalViews += data.viewCount || 0;
     const cls = data.authorClassType;
     if (cls && classPostCounts[cls] !== undefined) classPostCounts[cls]++;
+    // 키워드 추출용 텍스트 수집
+    const title = data.title || "";
+    const content = data.content || "";
+    if (title || content) postTexts.push(`${title} ${content}`);
   });
 
   const postIds = postsSnap.docs.map(d => d.id);
@@ -243,6 +325,17 @@ async function collectWeeklyStats(courseId: string, start: Date, end: Date, labe
       .where("postId", "in", chunk)
       .get();
     commentCount += commSnap.size;
+  }
+
+  // ── Haiku 키워드 추출 ──
+  let keywords: { text: string; value: number }[] = [];
+  if (postTexts.length > 0 && apiKey) {
+    try {
+      keywords = await extractKeywordsWithHaiku(apiKey, postTexts);
+      console.log(`[${courseId}] 키워드 ${keywords.length}개 추출 완료`);
+    } catch (err) {
+      console.error(`[${courseId}] 키워드 추출 실패:`, err);
+    }
   }
 
   return {
@@ -276,6 +369,7 @@ async function collectWeeklyStats(courseId: string, start: Date, end: Date, labe
       commentCount,
       totalViews,
       classParticipationScores: classPostCounts,
+      keywords,
     },
   };
 }
@@ -295,16 +389,18 @@ export const collectWeeklyStatsScheduled = onSchedule(
     timeZone: "Asia/Seoul",
     timeoutSeconds: 540,
     memory: "512MiB",
+    secrets: [ANTHROPIC_API_KEY],
   },
   async () => {
     const db = getFirestore();
     const { start, end, label } = getLastWeekRange();
+    const apiKey = ANTHROPIC_API_KEY.value();
 
     console.log(`주별 통계 수집 시작: ${label} (${start.toISOString()} ~ ${end.toISOString()})`);
 
     for (const courseId of COURSE_IDS) {
       try {
-        const stats = await collectWeeklyStats(courseId, start, end, label);
+        const stats = await collectWeeklyStats(courseId, start, end, label, apiKey);
 
         // weeklyStats/{courseId}/{year-Wxx}
         await db.collection("weeklyStats")

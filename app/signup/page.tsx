@@ -1,26 +1,23 @@
 /**
  * 회원가입 페이지
  *
- * 이메일/비밀번호로 회원가입 후 인증 메일 발송
- * 로그인 페이지와 동일한 비디오 배경 사용
+ * 학년(→과목 자동), 학번, 반, 닉네임, 비밀번호로 가입
+ * CF registerStudent를 호출하여 enrolledStudents 검증 후 가입
  */
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import Image from 'next/image';
 import Link from 'next/link';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { getCurrentSemesterByDate, determineCourse, getAvailableGrades } from '@/lib/types/course';
 
-// ============================================================
-// 비디오 배경 컴포넌트
-// ============================================================
+// 반 옵션
+const CLASS_OPTIONS = ['A', 'B', 'C', 'D'] as const;
 
-/** 비디오 배경 (MP4) */
+// 비디오 배경
 function VideoBackground() {
   return (
     <div className="absolute inset-0 overflow-hidden">
@@ -30,7 +27,6 @@ function VideoBackground() {
         muted
         playsInline
         className="absolute inset-0 w-full h-full object-cover"
-        poster="/images/login-poster.jpg"
       >
         <source src="/videos/login-bg.mp4" type="video/mp4" />
       </video>
@@ -39,12 +35,7 @@ function VideoBackground() {
   );
 }
 
-// 교수님 이메일 목록
-const PROFESSOR_EMAILS = [
-  'jkim@ccn.ac.kr',
-];
-
-// 애니메이션 설정
+// 애니메이션
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
@@ -61,10 +52,7 @@ const itemVariants = {
   visible: {
     opacity: 1,
     y: 0,
-    transition: {
-      duration: 0.5,
-      ease: 'easeOut',
-    },
+    transition: { duration: 0.5, ease: 'easeOut' },
   },
 };
 
@@ -74,44 +62,33 @@ export default function SignupPage() {
     user,
     loading,
     error,
-    signUpWithEmailPassword,
-    emailVerified,
+    signUpWithStudentId,
     clearError,
   } = useAuth();
 
-  const [email, setEmail] = useState('');
+  const [grade, setGrade] = useState<number>(0);
+  const [studentId, setStudentId] = useState('');
+  const [classId, setClassId] = useState('');
+  const [nickname, setNickname] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
-  const [signupSuccess, setSignupSuccess] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 이미 로그인된 경우
+  // 현재 학기 + 학년 → 과목 자동 결정
+  const currentSemester = useMemo(() => getCurrentSemesterByDate(), []);
+  const availableGrades = useMemo(() => getAvailableGrades(currentSemester), [currentSemester]);
+  const courseAssignment = useMemo(
+    () => (grade ? determineCourse(grade, currentSemester) : null),
+    [grade, currentSemester]
+  );
+
+  // 이미 로그인된 경우 → 홈으로
   useEffect(() => {
-    const handleLoggedIn = async () => {
-      if (user && emailVerified) {
-        // 교수님 이메일 체크
-        const isProfessor = PROFESSOR_EMAILS.includes(user.email || '');
-
-        if (isProfessor) {
-          // 교수님은 Firestore에 바로 저장하고 홈으로 이동
-          const userDocRef = doc(db, 'users', user.uid);
-          await setDoc(userDocRef, {
-            email: user.email,
-            nickname: '교수님',
-            role: 'professor',
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          }, { merge: true });
-
-          router.replace('/');
-        } else {
-          router.replace('/onboarding');
-        }
-      }
-    };
-
-    handleLoggedIn();
-  }, [user, emailVerified, router]);
+    if (user && !loading) {
+      router.replace('/');
+    }
+  }, [user, loading, router]);
 
   // 에러 자동 초기화
   useEffect(() => {
@@ -128,14 +105,28 @@ export default function SignupPage() {
     e.preventDefault();
     setLocalError(null);
 
-    // 유효성 검사
-    if (!email || !password || !passwordConfirm) {
+    if (!grade || !studentId || !classId || !nickname || !password || !passwordConfirm) {
       setLocalError('모든 필드를 입력해주세요.');
       return;
     }
 
-    if (password !== passwordConfirm) {
-      setLocalError('비밀번호가 일치하지 않습니다.');
+    if (!courseAssignment) {
+      setLocalError('해당 학년/학기에 배정된 과목이 없습니다.');
+      return;
+    }
+
+    if (!/^\d{7,10}$/.test(studentId)) {
+      setLocalError('학번은 7-10자리 숫자입니다.');
+      return;
+    }
+
+    if (nickname.length < 2 || nickname.length > 10) {
+      setLocalError('닉네임은 2-10자 사이여야 합니다.');
+      return;
+    }
+
+    if (!/^[가-힣a-zA-Z0-9]+$/.test(nickname)) {
+      setLocalError('닉네임은 한글, 영문, 숫자만 가능합니다.');
       return;
     }
 
@@ -144,88 +135,30 @@ export default function SignupPage() {
       return;
     }
 
-    await signUpWithEmailPassword(email, password);
+    if (password !== passwordConfirm) {
+      setLocalError('비밀번호가 일치하지 않습니다.');
+      return;
+    }
 
-    // 에러가 없으면 성공
-    if (!error) {
-      setSignupSuccess(true);
+    setIsSubmitting(true);
+    const result = await signUpWithStudentId(
+      studentId,
+      password,
+      courseAssignment.courseId,
+      classId,
+      nickname
+    );
+    setIsSubmitting(false);
+
+    if (result.success) {
+      // 가입 성공 → 로그인 처리 후 홈으로 이동
+      // user 상태 변경 → useEffect에서 리다이렉트
     }
   };
-
-  // 회원가입 성공 후 인증 메일 안내
-  if (signupSuccess && user && !emailVerified) {
-    return (
-      <main className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden">
-        <VideoBackground />
-
-        {/* 좌측 상단 이미지 */}
-        <div className="absolute top-0 left-0 z-10">
-          <Image
-            src="/images/corner-image.png"
-            alt="장식 이미지"
-            width={360}
-            height={360}
-            className="drop-shadow-lg"
-          />
-        </div>
-
-        <motion.div
-          className="relative z-10 w-full max-w-sm px-6 text-center"
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-        >
-          <motion.div variants={itemVariants} className="mb-8">
-            <div className="w-20 h-20 mx-auto mb-4 bg-green-500 rounded-full flex items-center justify-center">
-              <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-            </div>
-            <h1 className="text-2xl font-bold text-white mb-2">인증 메일 발송 완료</h1>
-            <p className="text-white/80 text-sm">
-              <span className="text-green-400 font-medium">{email}</span>
-              <br />
-              위 이메일로 인증 메일을 보냈습니다.
-            </p>
-          </motion.div>
-
-          <motion.div variants={itemVariants} className="bg-white/10 backdrop-blur-sm rounded-xl p-4 mb-6">
-            <p className="text-white/90 text-sm leading-relaxed">
-              1. 이메일에서 인증 링크를 클릭해주세요
-              <br />
-              2. 인증 완료 후 다시 앱을 열어주세요
-              <br />
-              3. 학적정보 입력으로 이동합니다
-            </p>
-          </motion.div>
-
-          <motion.div variants={itemVariants}>
-            <Link
-              href="/login"
-              className="block w-full py-3 bg-white/20 text-white font-medium rounded-xl hover:bg-white/30 transition-colors"
-            >
-              로그인 페이지로 돌아가기
-            </Link>
-          </motion.div>
-        </motion.div>
-      </main>
-    );
-  }
 
   return (
     <main className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden">
       <VideoBackground />
-
-      {/* 좌측 상단 이미지 */}
-      <div className="absolute top-0 left-0 z-10">
-        <Image
-          src="/images/corner-image.png"
-          alt="장식 이미지"
-          width={360}
-          height={360}
-          className="drop-shadow-lg"
-        />
-      </div>
 
       <motion.div
         className="relative z-10 w-full max-w-sm px-6"
@@ -233,21 +166,9 @@ export default function SignupPage() {
         initial="hidden"
         animate="visible"
       >
-        {/* 로고 */}
-        <motion.div className="flex justify-center mb-8" variants={itemVariants}>
-          <Image
-            src="/images/logo.png"
-            alt="RabbiTory"
-            width={200}
-            height={70}
-            className="drop-shadow-lg"
-            priority
-          />
-        </motion.div>
-
         {/* 타이틀 */}
         <motion.h1
-          className="text-2xl font-bold text-white text-center mb-6"
+          className="text-2xl font-bold text-white text-center mb-4"
           variants={itemVariants}
         >
           회원가입
@@ -266,51 +187,120 @@ export default function SignupPage() {
 
         {/* 회원가입 폼 */}
         <motion.form onSubmit={handleSubmit} variants={itemVariants}>
-          <div className="space-y-4">
+          <div className="space-y-3">
+            {/* 학년 선택 */}
             <div>
-              <input
-                type="email"
-                placeholder="이메일"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-white/50 transition-colors"
-                disabled={loading}
-              />
+              <label className="block text-sm font-medium text-white/80 mb-2">학년</label>
+              <div className="grid grid-cols-2 gap-2">
+                {availableGrades.map((g) => (
+                  <button
+                    key={g}
+                    type="button"
+                    onClick={() => setGrade(g)}
+                    className={`px-3 py-2.5 rounded-xl text-center transition-all ${
+                      grade === g
+                        ? 'bg-white text-black'
+                        : 'bg-white/10 border border-white/20 text-white hover:bg-white/20'
+                    }`}
+                  >
+                    <p className="text-sm font-bold">{g}학년</p>
+                  </button>
+                ))}
+              </div>
+              {/* 과목 자동 표시 */}
+              {courseAssignment && (
+                <p className="mt-1.5 text-xs text-white/60 text-center">
+                  과목: {courseAssignment.courseName}
+                </p>
+              )}
             </div>
+
+            {/* 반 선택 */}
             <div>
-              <input
-                type="password"
-                placeholder="비밀번호 (6자 이상)"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-white/50 transition-colors"
-                disabled={loading}
-              />
+              <label className="block text-sm font-medium text-white/80 mb-2">반</label>
+              <div className="grid grid-cols-4 gap-2">
+                {CLASS_OPTIONS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setClassId(c)}
+                    className={`px-3 py-2.5 rounded-xl text-center transition-all ${
+                      classId === c
+                        ? 'bg-white text-black'
+                        : 'bg-white/10 border border-white/20 text-white hover:bg-white/20'
+                    }`}
+                  >
+                    <p className="text-sm font-bold">{c}</p>
+                  </button>
+                ))}
+              </div>
             </div>
-            <div>
-              <input
-                type="password"
-                placeholder="비밀번호 확인"
-                value={passwordConfirm}
-                onChange={(e) => setPasswordConfirm(e.target.value)}
-                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-white/50 transition-colors"
-                disabled={loading}
-              />
-            </div>
+
+            {/* 학번 */}
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder="학번"
+              value={studentId}
+              onChange={(e) => setStudentId(e.target.value.replace(/\D/g, ''))}
+              maxLength={10}
+              className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-white/50 transition-colors"
+              disabled={isSubmitting}
+            />
+
+            {/* 닉네임 */}
+            <input
+              type="text"
+              placeholder="닉네임 (2-10자)"
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              maxLength={10}
+              className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-white/50 transition-colors"
+              disabled={isSubmitting}
+            />
+
+            {/* 비밀번호 */}
+            <input
+              type="password"
+              placeholder="비밀번호 (6자 이상)"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-white/50 transition-colors"
+              disabled={isSubmitting}
+            />
+
+            {/* 비밀번호 확인 */}
+            <input
+              type="password"
+              placeholder="비밀번호 확인"
+              value={passwordConfirm}
+              onChange={(e) => setPasswordConfirm(e.target.value)}
+              className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-white/50 transition-colors"
+              disabled={isSubmitting}
+            />
           </div>
 
           <button
             type="submit"
-            disabled={loading}
-            className="w-full mt-6 py-3 bg-white text-gray-900 font-medium rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={isSubmitting || loading}
+            className="w-full mt-5 py-3 bg-white text-gray-900 font-medium rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? '처리 중...' : '회원가입'}
+            {isSubmitting ? '가입 처리 중...' : '회원가입'}
           </button>
         </motion.form>
 
+        {/* 익명 안내 */}
+        <motion.p
+          className="mt-3 text-xs text-white/60 text-center leading-relaxed"
+          variants={itemVariants}
+        >
+          앱 내 활동은 닉네임으로만 표시되며,<br />
+          개인정보는 수집되지 않습니다.
+        </motion.p>
+
         {/* 로그인 링크 */}
         <motion.p
-          className="mt-6 text-center text-white/70 text-sm"
+          className="mt-4 text-center text-white/70 text-sm"
           variants={itemVariants}
         >
           이미 계정이 있으신가요?{' '}

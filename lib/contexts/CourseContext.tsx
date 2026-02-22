@@ -28,6 +28,9 @@ import {
   getCurrentSemesterByDate,
 } from '../types/course';
 
+const PROFESSOR_COURSE_KEY = 'professor-selected-course';
+const VALID_COURSE_IDS: CourseId[] = ['biology', 'pathophysiology', 'microbiology'];
+
 /**
  * Context 타입
  */
@@ -50,6 +53,8 @@ interface CourseContextType {
   getCourseForGrade: (grade: number) => ReturnType<typeof determineCourse>;
   /** 학기 설정 업데이트 (교수님 전용) */
   updateSemesterSettings: (settings: Partial<SemesterSettings>) => Promise<void>;
+  /** 교수님 과목 선택 (sessionStorage 저장) */
+  setProfessorCourse: (courseId: CourseId) => void;
   /** 설정 새로고침 */
   refresh: () => void;
 }
@@ -121,6 +126,30 @@ export function CourseProvider({ children }: { children: ReactNode }) {
   // 교수님 courseId 미설정 여부 (학기 기반 기본값 적용용)
   const [isProfessorNoCourse, setIsProfessorNoCourse] = useState(false);
 
+  // 교수님 sessionStorage에서 저장된 과목 읽기
+  const getSavedProfessorCourse = useCallback((): CourseId | null => {
+    if (typeof window === 'undefined') return null;
+    const saved = sessionStorage.getItem(PROFESSOR_COURSE_KEY);
+    if (saved && VALID_COURSE_IDS.includes(saved as CourseId)) return saved as CourseId;
+    return null;
+  }, []);
+
+  // 교수님 학기 기반 기본 과목
+  const getProfessorDefaultCourse = useCallback((semester?: number): CourseId => {
+    const saved = getSavedProfessorCourse();
+    if (saved) return saved;
+    const sem = semester ?? getCurrentSemesterByDate();
+    return sem === 1 ? 'microbiology' : 'pathophysiology';
+  }, [getSavedProfessorCourse]);
+
+  // 교수님 과목 선택 (sessionStorage 저장 + state 업데이트)
+  const setProfessorCourse = useCallback((courseId: CourseId) => {
+    setUserCourseId(courseId);
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem(PROFESSOR_COURSE_KEY, courseId);
+    }
+  }, []);
+
   // 사용자 과목 정보 구독
   useEffect(() => {
     if (!user) {
@@ -143,9 +172,10 @@ export function CourseProvider({ children }: { children: ReactNode }) {
             setIsProfessorNoCourse(false);
           } else if (data.role === 'professor') {
             setIsProfessorNoCourse(true);
-            // 즉시 폴백: semesterSettings 로딩 전이면 날짜 기반 판별
-            const semester = semesterSettings?.currentSemester ?? getCurrentSemesterByDate();
-            setUserCourseId(semester === 1 ? 'microbiology' : 'pathophysiology');
+            // sessionStorage에 저장된 과목 우선, 없으면 학기 기반 기본값
+            setUserCourseId(getProfessorDefaultCourse(
+              semesterSettings?.currentSemester
+            ));
           } else {
             setUserCourseId(null);
             setIsProfessorNoCourse(false);
@@ -159,15 +189,14 @@ export function CourseProvider({ children }: { children: ReactNode }) {
     );
 
     return () => unsubscribe();
-  }, [user, refreshKey]); // semesterSettings는 의도적으로 제외 (아래 별도 effect에서 보정)
+  }, [user, refreshKey, getProfessorDefaultCourse]); // semesterSettings는 의도적으로 제외 (아래 별도 effect에서 보정)
 
   // 교수님 기본 과목: Firestore 학기 설정이 로드되면 보정
   useEffect(() => {
     if (isProfessorNoCourse && semesterSettings) {
-      const semester = semesterSettings.currentSemester;
-      setUserCourseId(semester === 1 ? 'microbiology' : 'pathophysiology');
+      setUserCourseId(getProfessorDefaultCourse(semesterSettings.currentSemester));
     }
-  }, [isProfessorNoCourse, semesterSettings]);
+  }, [isProfessorNoCourse, semesterSettings, getProfessorDefaultCourse]);
 
   // 현재 사용자의 과목 정보
   const userCourse = userCourseId ? COURSES[userCourseId] : null;
@@ -217,6 +246,7 @@ export function CourseProvider({ children }: { children: ReactNode }) {
         availableGrades,
         getCourseForGrade,
         updateSemesterSettings,
+        setProfessorCourse,
         refresh,
       }}
     >

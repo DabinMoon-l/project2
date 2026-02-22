@@ -114,22 +114,33 @@ export default function PostDetailPage() {
 
   const isOwner = user?.uid === post?.authorId;
 
+  // 안전한 뒤로가기 — 내부 히스토리 없으면 게시판 목록으로
+  const goBack = useCallback(() => {
+    if (window.history.length > 1 && document.referrer.includes(window.location.host)) {
+      router.back();
+    } else {
+      router.push('/board');
+    }
+  }, [router]);
+
   // 조회수 기록 (세션 내 1회만)
   useEffect(() => {
     if (!postId) return;
     const key = `viewed_${postId}`;
     if (sessionStorage.getItem(key)) return;
     sessionStorage.setItem(key, '1');
-    updateDoc(doc(db, 'posts', postId), { viewCount: increment(1) }).catch(() => {});
+    updateDoc(doc(db, 'posts', postId), { viewCount: increment(1) }).catch((err) => {
+      console.error('조회수 업데이트 실패:', err);
+    });
   }, [postId]);
 
   const handleDelete = useCallback(async () => {
     if (!window.confirm('정말 삭제하시겠습니까?')) return;
     const success = await deletePost(postId);
     if (success) {
-      router.back();
+      goBack();
     }
-  }, [deletePost, postId, router]);
+  }, [deletePost, postId, goBack]);
 
   const handleLike = useCallback(async () => {
     await toggleLike(postId);
@@ -141,7 +152,7 @@ export default function PostDetailPage() {
     return (
       <div className="min-h-screen pb-6" style={{ backgroundColor: '#F5F0E8' }}>
         <header className="mx-4 mt-4 pb-4 border-b-2 border-[#1A1A1A]">
-          <button onClick={() => router.back()} className="flex items-center gap-2 text-sm py-2">
+          <button onClick={() => goBack()} className="flex items-center gap-2 text-sm py-2">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
@@ -162,7 +173,7 @@ export default function PostDetailPage() {
     return (
       <div className="min-h-screen pb-6" style={{ backgroundColor: '#F5F0E8' }}>
         <header className="mx-4 mt-4 pb-4 border-b-2 border-[#1A1A1A]">
-          <button onClick={() => router.back()} className="flex items-center gap-2 text-sm py-2">
+          <button onClick={() => goBack()} className="flex items-center gap-2 text-sm py-2">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
@@ -172,7 +183,7 @@ export default function PostDetailPage() {
         <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
           <h3 className="text-xl font-bold mb-2 text-[#1A1A1A]">글을 찾을 수 없습니다</h3>
           <p className="text-sm mb-4 text-[#3A3A3A]">{error || '삭제되었거나 존재하지 않는 글입니다.'}</p>
-          <button onClick={() => router.back()} className="px-6 py-2" style={{ border: '1px solid #1A1A1A' }}>
+          <button onClick={() => goBack()} className="px-6 py-2" style={{ border: '1px solid #1A1A1A' }}>
             돌아가기
           </button>
         </div>
@@ -194,7 +205,7 @@ export default function PostDetailPage() {
       {/* 헤더 */}
       <header className="mx-4 mt-4 pb-4">
         <button
-          onClick={() => router.back()}
+          onClick={() => goBack()}
           className="flex items-center gap-2 text-sm py-2 text-[#3A3A3A]"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

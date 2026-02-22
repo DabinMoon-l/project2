@@ -106,7 +106,7 @@ export function UserProvider({ children }: UserProviderProps) {
             uid: user.uid,
             email: data.email || user.email || '',
             nickname: data.nickname || '용사',
-            classType: data.classId || 'A', // Firestore 필드명은 classId
+            classType: data.role === 'professor' ? '' : (data.classId || 'A'), // 교수님은 반 없음
             studentId: data.studentId,
             department: data.department,
             // courseId에서 따옴표 제거 (Firestore 데이터 문제 대응)
@@ -135,6 +135,7 @@ export function UserProvider({ children }: UserProviderProps) {
             createdAt: data.createdAt,
             updatedAt: data.updatedAt,
             lastNicknameChangeAt: data.lastNicknameChangeAt,
+            recoveryEmail: data.recoveryEmail,
           });
           setError(null);
         } else {

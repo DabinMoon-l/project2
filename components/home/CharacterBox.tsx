@@ -357,25 +357,33 @@ export default function CharacterBox() {
         </div>
 
         {/* EXP 바 */}
-        <div className="w-full px-8 mt-3">
-          <div className="flex items-center justify-between mb-1">
-            {/* 마일스톤 버튼 (pending > 0일 때 좌측 하단) */}
-            {pendingCount > 0 ? (
-              <button
-                onClick={handleMilestoneClick}
-                className="relative flex-shrink-0 w-9 h-9 flex items-center justify-center bg-[#D4AF37] rounded-full shadow-lg active:scale-95 transition-transform"
-              >
-                <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
-                </svg>
-                <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] flex items-center justify-center bg-[#8B1A1A] text-white text-[9px] font-bold rounded-full px-0.5">
-                  {pendingCount}
-                </span>
-              </button>
-            ) : (
-              <div />
-            )}
-            <span className={`text-base font-bold ${expBar.overflow ? 'text-[#F5D76E]' : 'text-white/70'}`}>
+        <div className="w-full px-8 mt-3 relative">
+          {/* 마일스톤 버튼 — EXP 바 위에 absolute로 띄움 */}
+          {pendingCount > 0 && (
+            <motion.button
+              onClick={handleMilestoneClick}
+              className="absolute -top-8 left-8 z-10 flex items-center gap-1.5 h-11 px-4 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl active:scale-95"
+              animate={{ scale: [1, 1.05, 1] }}
+              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              <svg className="w-7 h-7" viewBox="0 0 24 24">
+                <defs>
+                  <linearGradient id="starGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#BBA46A" />
+                    <stop offset="40%" stopColor="#C89A82" />
+                    <stop offset="70%" stopColor="#C0929E" />
+                    <stop offset="100%" stopColor="#AB96B4" />
+                  </linearGradient>
+                </defs>
+                <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" fill="url(#starGrad)" />
+              </svg>
+              <span className="text-lg font-bold text-white">
+                ×{pendingCount}
+              </span>
+            </motion.button>
+          )}
+          <div className="flex items-center justify-end mb-1">
+            <span className="text-base font-bold text-white/70">
               {expBar.current}/{expBar.max} XP
             </span>
           </div>
@@ -384,9 +392,7 @@ export default function CharacterBox() {
               <motion.div
                 className="h-full rounded-full"
                 style={{
-                  background: expBar.overflow
-                    ? 'linear-gradient(90deg, #D4AF37, #F5D76E, #D4AF37)'
-                    : 'linear-gradient(90deg, #BBA46A, #C89A82, #C0929E, #AB96B4)',
+                  background: 'linear-gradient(90deg, #BBA46A, #C89A82, #C0929E, #AB96B4)',
                 }}
                 initial={{ width: 0 }}
                 animate={{
@@ -580,9 +586,9 @@ function OrbitalPlaceholder({
       <FloatingWrapper seed={charIndex}>
         <div
           className="flex items-center justify-center drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
-          style={{ width: CHAR_SIZE, height: CHAR_SIZE, paddingTop: CHAR_SIZE * 0.15 }}
+          style={{ width: CHAR_SIZE, height: CHAR_SIZE, paddingTop: CHAR_SIZE * 0.55 }}
         >
-          <span className="text-white font-black" style={{ fontSize: CHAR_SIZE * 0.55, lineHeight: 1, textShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
+          <span className="text-white font-black" style={{ fontSize: CHAR_SIZE * 0.7, lineHeight: 1, textShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
             ?
           </span>
         </div>

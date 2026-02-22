@@ -2,9 +2,8 @@
 
 import { useCallback, useState, useMemo, useRef, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useTheme } from '@/styles/themes/useTheme';
 import { Skeleton } from '@/components/common';
@@ -20,10 +19,103 @@ import {
   type Comment,
 } from '@/lib/hooks/useBoard';
 import { type CourseId, getCourseList } from '@/lib/types/course';
-import { extractKeywords } from '@/lib/utils/koreanStopwords';
 
-// react-d3-cloud는 canvas 측정 사용 → SSR 불가
-const WordCloud = dynamic(() => import('react-d3-cloud'), { ssr: false });
+// ============================================================
+// 나선형 배치 워드클라우드
+// ============================================================
+interface WordPos { x: number; y: number; size: number; text: string; color: string }
+
+function SpiralWordCloud({ data, colors }: { data: { text: string; value: number }[]; colors: string[] }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [positions, setPositions] = useState<WordPos[]>([]);
+  const [size, setSize] = useState(0);
+
+  // 컨테이너 너비 관찰 → 1:1 정사각형
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver(entries => {
+      const w = entries[0]?.contentRect.width || 0;
+      if (w > 0) setSize(w);
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (size === 0 || data.length === 0) { setPositions([]); return; }
+
+    const W = size;
+    const H = size; // 1:1
+    const maxVal = Math.max(...data.map(d => d.value), 1);
+    const sorted = [...data].sort((a, b) => b.value - a.value);
+
+    // canvas로 텍스트 너비 측정 (시스템 폰트 — 확실한 측정)
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) { setPositions([]); return; }
+
+    const placed: { x: number; y: number; w: number; h: number }[] = [];
+    const result: WordPos[] = [];
+
+    for (let i = 0; i < sorted.length; i++) {
+      const word = sorted[i];
+      const normalized = word.value / maxVal;
+      const fontSize = Math.round(14 + normalized * 38); // 14~52px
+      ctx.font = `bold ${fontSize}px sans-serif`;
+      const wordW = ctx.measureText(word.text).width + 6;
+      const wordH = fontSize * 1.3;
+
+      let found = false;
+      // 아르키메데스 나선 탐색
+      for (let t = 0; t < 2000; t++) {
+        const angle = t * 0.15;
+        const radius = t * 0.25;
+        const x = W / 2 + radius * Math.cos(angle) - wordW / 2;
+        const y = H / 2 + radius * Math.sin(angle) - wordH / 2;
+
+        if (x < 4 || y < 4 || x + wordW > W - 4 || y + wordH > H - 4) continue;
+
+        const collides = placed.some(p =>
+          x < p.x + p.w + 3 && x + wordW + 3 > p.x &&
+          y < p.y + p.h + 3 && y + wordH + 3 > p.y
+        );
+
+        if (!collides) {
+          placed.push({ x, y, w: wordW, h: wordH });
+          result.push({
+            x, y, size: fontSize, text: word.text,
+            color: colors[i % colors.length],
+          });
+          found = true;
+          break;
+        }
+      }
+      if (!found && result.length >= 8) break;
+    }
+
+    setPositions(result);
+  }, [data, colors, size]);
+
+  return (
+    <div ref={containerRef} className="relative w-full h-full overflow-hidden">
+      {positions.map((pos) => (
+        <span
+          key={pos.text}
+          className="absolute font-bold whitespace-nowrap"
+          style={{
+            left: pos.x,
+            top: pos.y,
+            fontSize: pos.size,
+            color: pos.color,
+            fontFamily: '"Noto Sans KR", sans-serif',
+          }}
+        >
+          {pos.text}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 // ============================================================
 // 반별 테마 색상
@@ -241,21 +333,25 @@ function ActivitySection({ posts, courseId }: { posts: Post[]; courseId: string 
   const [activeTab, setActiveTab] = useState<ActivityTab>('참여도');
   const [comments, setComments] = useState<ActivityComment[]>([]);
   const [classStudents, setClassStudents] = useState<ClassStudentCounts>({ A: 0, B: 0, C: 0, D: 0 });
+  const [studentIds, setStudentIds] = useState<Set<string>>(new Set());
   const [dataLoading, setDataLoading] = useState(true);
   const touchStartX = useRef(0);
 
-  // 댓글 + 반별 학생 수 로드
+  // postId 목록이 실제로 변할 때만 의존 (조회수/좋아요 변화에는 무반응)
+  const postIdKey = useMemo(() => posts.map(p => p.id).sort().join(','), [posts]);
+
+  // 댓글 1회 로드 — postId 목록 변경 시에만 재로드 (통계용이라 실시간 불필요)
   useEffect(() => {
-    if (!courseId || posts.length === 0) {
-      setDataLoading(false);
+    if (!courseId || !postIdKey) {
+      setComments([]);
       return;
     }
 
-    const loadData = async () => {
-      setDataLoading(true);
+    const postIds = postIdKey.split(',').filter(Boolean);
+    if (postIds.length === 0) { setComments([]); return; }
 
-      // 댓글 로드 — postId들로 30개씩 chunk 쿼리
-      const postIds = posts.map(p => p.id);
+    let cancelled = false;
+    const loadComments = async () => {
       const allComments: ActivityComment[] = [];
       for (let i = 0; i < postIds.length; i += 30) {
         const chunk = postIds.slice(i, i + 30);
@@ -274,52 +370,73 @@ function ActivitySection({ posts, courseId }: { posts: Post[]; courseId: string 
           });
         });
       }
-      setComments(allComments);
+      if (!cancelled) setComments(allComments);
+    };
+    loadComments();
 
-      // 반별 학생 수 로드
-      const usersQ = query(
-        collection(db, 'users'),
-        where('courseId', '==', courseId),
-        where('role', '==', 'student')
-      );
-      const usersSnap = await getDocs(usersQ);
+    return () => { cancelled = true; };
+  }, [courseId, postIdKey]);
+
+  // 반별 학생 수 실시간 구독
+  useEffect(() => {
+    if (!courseId) {
+      setDataLoading(false);
+      return;
+    }
+
+    setDataLoading(true);
+    const usersQ = query(
+      collection(db, 'users'),
+      where('courseId', '==', courseId),
+      where('role', '==', 'student')
+    );
+    const unsub = onSnapshot(usersQ, (snap) => {
       const counts: ClassStudentCounts = { A: 0, B: 0, C: 0, D: 0 };
-      usersSnap.docs.forEach(d => {
+      const ids = new Set<string>();
+      snap.docs.forEach(d => {
+        ids.add(d.id);
         const cls = d.data().classId;
         if (cls && counts[cls] !== undefined) counts[cls]++;
       });
       setClassStudents(counts);
-
+      setStudentIds(ids);
       setDataLoading(false);
-    };
+    });
 
-    loadData();
-  }, [courseId, posts]);
+    return () => unsub();
+  }, [courseId]);
 
   const totalPosts = posts.length;
   const totalStudents = Object.values(classStudents).reduce((a, b) => a + b, 0);
 
-  // 참여 학생 수 (글 또는 댓글 작성자 unique)
+  // 참여 학생 수 (학생만, 교수 제외)
   const uniqueParticipants = useMemo(() => {
     const ids = new Set<string>();
-    posts.forEach(p => ids.add(p.authorId));
-    comments.forEach(c => ids.add(c.authorId));
+    posts.forEach(p => { if (studentIds.has(p.authorId)) ids.add(p.authorId); });
+    comments.forEach(c => { if (studentIds.has(c.authorId)) ids.add(c.authorId); });
     return ids.size;
-  }, [posts, comments]);
+  }, [posts, comments, studentIds]);
 
-  // 글당 상호작용 = (좋아요 + 댓글수 합) / 총 게시글
-  const avgInteraction = useMemo(() => {
-    if (totalPosts === 0) return '0';
-    const total = posts.reduce((s, p) => s + p.likes + Math.max(0, p.commentCount), 0);
-    return (total / totalPosts).toFixed(1);
+  // 참여율 (%)
+  const participationRate = totalStudents > 0 ? Math.min(100, Math.round((uniqueParticipants / totalStudents) * 100)) : 0;
+
+  // 총 활동 (글 + 댓글)
+  const totalComments = comments.length;
+  const totalActivity = totalPosts + totalComments;
+
+  // 반응률 (반응 있는 글 비율)
+  const responseRate = useMemo(() => {
+    if (totalPosts === 0) return 0;
+    const withReaction = posts.filter(p => p.likes > 0 || p.commentCount > 0).length;
+    return Math.round((withReaction / totalPosts) * 100);
   }, [posts, totalPosts]);
 
-  // 읽기→반응 전환율 = (좋아요+댓글수 합) / 조회수 합 × 100
+  // 읽기→반응 전환율 (조회 탭용)
   const conversionRate = useMemo(() => {
     const totalViews = posts.reduce((s, p) => s + p.viewCount, 0);
     if (totalViews === 0) return '0';
     const totalReactions = posts.reduce((s, p) => s + p.likes + Math.max(0, p.commentCount), 0);
-    return Math.round((totalReactions / totalViews) * 100).toString();
+    return Math.min(100, Math.round((totalReactions / totalViews) * 100)).toString();
   }, [posts]);
 
   // ── 탭 1: 참여도 데이터 ──
@@ -352,67 +469,206 @@ function ActivitySection({ posts, courseId }: { posts: Post[]; courseId: string 
 
   const maxScore = Math.max(...classScores.map(c => c.score), 1);
 
-  // 반응 없는 글 비율
-  const noReactionRate = useMemo(() => {
-    if (totalPosts === 0) return 0;
-    const noReaction = posts.filter(p => p.likes === 0 && p.commentCount === 0).length;
-    return Math.round((noReaction / totalPosts) * 100);
-  }, [posts, totalPosts]);
+  // 참여 TOP 3 학생 (글×3 + 댓글×2 + 받은 좋아요×1)
+  const topParticipants = useMemo(() => {
+    const scores: Record<string, { nickname: string; classType?: string; posts: number; comments: number; likes: number }> = {};
+
+    // 닉네임 매핑 (posts에서 추출)
+    const nicknameMap: Record<string, string> = {};
+    const classMap: Record<string, string | undefined> = {};
+    posts.forEach(p => {
+      nicknameMap[p.authorId] = p.authorNickname;
+      classMap[p.authorId] = p.authorClassType;
+    });
+
+    // 글 수
+    posts.forEach(p => {
+      if (!scores[p.authorId]) scores[p.authorId] = { nickname: p.authorNickname, classType: p.authorClassType, posts: 0, comments: 0, likes: 0 };
+      scores[p.authorId].posts++;
+      scores[p.authorId].likes += p.likes;
+    });
+
+    // 댓글 수
+    comments.forEach(c => {
+      if (!scores[c.authorId]) scores[c.authorId] = { nickname: nicknameMap[c.authorId] || '알 수 없음', classType: c.authorClassType || classMap[c.authorId], posts: 0, comments: 0, likes: 0 };
+      scores[c.authorId].comments++;
+    });
+
+    return Object.entries(scores)
+      .map(([id, s]) => ({
+        id,
+        nickname: s.nickname,
+        classType: s.classType,
+        score: s.posts * 3 + s.comments * 2 + s.likes,
+        posts: s.posts,
+        comments: s.comments,
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3);
+  }, [posts, comments]);
 
   // ── 탭 2: 트렌드 데이터 ──
+  const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'];
+
+  // 요일별 참여 추이 (최근 7일)
   const last7Days = useMemo(() => {
     const today = new Date();
-    const days: { label: string; count: number }[] = [];
+    const days: { date: string; day: string; count: number }[] = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date(today);
       d.setDate(d.getDate() - i);
-      const label = `${d.getMonth() + 1}/${d.getDate()}`;
+      const date = `${d.getMonth() + 1}/${d.getDate()}`;
+      const day = DAY_NAMES[d.getDay()];
       const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
       const dayEnd = new Date(dayStart.getTime() + 86400000);
 
       const postCount = posts.filter(p => p.createdAt >= dayStart && p.createdAt < dayEnd).length;
       const commentCount = comments.filter(c => c.createdAt >= dayStart && c.createdAt < dayEnd).length;
-      days.push({ label, count: postCount + commentCount });
+      days.push({ date, day, count: postCount + commentCount });
     }
     return days;
   }, [posts, comments]);
 
   const maxDayCount = Math.max(...last7Days.map(d => d.count), 1);
 
-  // 월별 참여 추이
-  const monthlyPattern = useMemo(() => {
-    const monthCounts: Record<string, number> = {};
-    const addToMonth = (date: Date) => {
-      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      monthCounts[key] = (monthCounts[key] || 0) + 1;
-    };
-    posts.forEach(p => addToMonth(p.createdAt));
-    comments.forEach(c => addToMonth(c.createdAt));
+  // 최근 7일이 속한 월·주차 라벨 (월요일 기준)
+  const weekRangeLabel = useMemo(() => {
+    const today = new Date();
+    const dow = today.getDay(); // 0=일
+    // 이번 주 월요일
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1));
+    const m = monday.getMonth();
+    const y = monday.getFullYear();
+    // 해당 월 1일의 요일
+    const first = new Date(y, m, 1);
+    const firstDow = first.getDay();
+    // 1일이 속한 주의 월요일 (이전 달일 수 있음)
+    let firstMonday: Date;
+    if (firstDow === 1) firstMonday = new Date(first);
+    else if (firstDow === 0) firstMonday = new Date(y, m, 2); // 일요일이면 다음날 월요일
+    else firstMonday = new Date(y, m, 1 + (8 - firstDow));
+    // 1일이 화~토면 1일부터가 1주차
+    const weekNum = firstDow >= 2
+      ? Math.ceil((monday.getDate() - 1) / 7) + 1
+      : Math.floor((monday.getDate() - firstMonday.getDate()) / 7) + 1;
+    return `${m + 1}월 ${weekNum}주차`;
+  }, []);
 
-    return Object.entries(monthCounts)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, count]) => ({
-        label: `${parseInt(key.split('-')[1])}월`,
-        count,
-      }));
+  // 주간별 참여 추이 (이번 달, 월~일 기준 주차)
+  const weeklyPattern = useMemo(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const lastDay = new Date(year, month + 1, 0);
+
+    // 이번 달 1일 이후 첫 번째 월요일 찾기
+    const first = new Date(year, month, 1);
+    const firstDow = first.getDay(); // 0=일, 1=월, ...
+    // 1일이 월요일(1)이면 그대로, 아니면 다음 월요일
+    let firstMonday: Date;
+    if (firstDow === 1) {
+      firstMonday = new Date(first);
+    } else {
+      const daysToMon = firstDow === 0 ? 1 : 8 - firstDow;
+      firstMonday = new Date(year, month, 1 + daysToMon);
+    }
+
+    const weeks: { label: string; sub: string; start: Date; end: Date }[] = [];
+
+    // 1일이 월요일이 아니면 → 1일~첫 월요일 전날을 "0주차"(이전 달 마지막 주)로 표시하지 않고 건너뜀
+    // 대신 그 날들은 1주차에 포함
+    // → 더 직관적: 1일 포함 첫 월~일 블록을 1주차로
+    let weekStart = new Date(firstMonday);
+    let weekNum = 1;
+
+    // 1일이 월~토가 아닌 경우(일요일), 1일은 이전 주에 속하므로 건너뜀
+    // 1일이 화~일인 경우, 1일~첫 일요일을 1주차 앞부분으로 포함
+    if (firstDow !== 1 && firstDow !== 0) {
+      // 1일(화~토) ~ 가장 가까운 일요일
+      const firstSunday = new Date(year, month, 1 + (7 - firstDow));
+      const clampedSun = firstSunday > lastDay ? lastDay : firstSunday;
+      weeks.push({
+        label: `${weekNum}주차`,
+        sub: `${first.getDate()}~${clampedSun.getDate()}일`,
+        start: new Date(first),
+        end: new Date(clampedSun.getFullYear(), clampedSun.getMonth(), clampedSun.getDate() + 1),
+      });
+      weekNum++;
+      weekStart = new Date(clampedSun);
+      weekStart.setDate(weekStart.getDate() + 1); // 다음 월요일
+    }
+
+    // 남은 월~일 블록 생성
+    while (weekStart <= lastDay) {
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 6); // 일요일
+      const clampedEnd = weekEnd > lastDay ? lastDay : weekEnd;
+      weeks.push({
+        label: `${weekNum}주차`,
+        sub: `${weekStart.getDate()}~${clampedEnd.getDate()}일`,
+        start: new Date(weekStart),
+        end: new Date(clampedEnd.getFullYear(), clampedEnd.getMonth(), clampedEnd.getDate() + 1),
+      });
+      weekNum++;
+      weekStart = new Date(weekEnd);
+      weekStart.setDate(weekStart.getDate() + 1);
+    }
+
+    return weeks.map(w => {
+      const postCount = posts.filter(p => p.createdAt >= w.start && p.createdAt < w.end).length;
+      const commentCount = comments.filter(c => c.createdAt >= w.start && c.createdAt < w.end).length;
+      return { label: w.label, sub: w.sub, count: postCount + commentCount };
+    });
+  }, [posts, comments]);
+
+  const maxWeekly = Math.max(...weeklyPattern.map(d => d.count), 1);
+
+  // 월별 참여 추이 (학기 단위 ~4개월)
+  const monthlyPattern = useMemo(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth(); // 0-indexed
+
+    // 학기: 1학기 3~6월, 2학기 9~12월, 그 외 최근 4개월
+    let semesterStart: Date;
+    const year = now.getFullYear();
+    if (currentMonth >= 2 && currentMonth <= 5) {
+      semesterStart = new Date(year, 2, 1); // 3월
+    } else if (currentMonth >= 8 && currentMonth <= 11) {
+      semesterStart = new Date(year, 8, 1); // 9월
+    } else {
+      // 학기 외 — 현재 월 포함 최근 4개월 역산
+      const d = new Date(year, currentMonth - 3, 1);
+      semesterStart = d;
+    }
+
+    const months: { label: string; start: Date; end: Date }[] = [];
+    const cursor = new Date(semesterStart);
+    for (let i = 0; i < 6; i++) {
+      const mStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+      const mEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+      if (mStart > now) break;
+      months.push({ label: `${cursor.getMonth() + 1}월`, start: mStart, end: mEnd });
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+
+    return months.map(m => {
+      const postCount = posts.filter(p => p.createdAt >= m.start && p.createdAt < m.end).length;
+      const commentCount = comments.filter(c => c.createdAt >= m.start && c.createdAt < m.end).length;
+      return { label: m.label, count: postCount + commentCount };
+    });
   }, [posts, comments]);
 
   const maxMonthly = Math.max(...monthlyPattern.map(d => d.count), 1);
 
   // ── 탭 3: 조회 데이터 ──
   const avgViews = useMemo(() => {
-    if (totalPosts === 0) return '0';
+    if (totalPosts === 0) return { value: '0', reachRate: 0 };
     const total = posts.reduce((s, p) => s + p.viewCount, 0);
-    return (total / totalPosts).toFixed(1);
-  }, [posts, totalPosts]);
-
-  // 잠수 비율: 조회만 하고 반응 안 한 글 비율
-  const lurkerRate = useMemo(() => {
-    const viewedPosts = posts.filter(p => p.viewCount > 0);
-    if (viewedPosts.length === 0) return 0;
-    const reactedPosts = viewedPosts.filter(p => p.likes > 0 || p.commentCount > 0);
-    return Math.round((1 - reactedPosts.length / viewedPosts.length) * 100);
-  }, [posts]);
+    const avg = total / totalPosts;
+    const reachRate = totalStudents > 0 ? Math.min(100, Math.round((avg / totalStudents) * 100)) : 0;
+    return { value: avg.toFixed(1), reachRate };
+  }, [posts, totalPosts, totalStudents]);
 
   // 조회 TOP 3
   const topViewed = useMemo(() => {
@@ -423,7 +679,7 @@ function ActivitySection({ posts, courseId }: { posts: Post[]; courseId: string 
         title: p.title,
         views: p.viewCount,
         conversion: p.viewCount > 0
-          ? Math.round(((p.likes + Math.max(0, p.commentCount)) / p.viewCount) * 100)
+          ? Math.min(100, Math.round(((p.likes + Math.max(0, p.commentCount)) / p.viewCount) * 100))
           : 0,
       }));
   }, [posts]);
@@ -456,24 +712,30 @@ function ActivitySection({ posts, courseId }: { posts: Post[]; courseId: string 
   return (
     <div className="space-y-4">
       {/* 상단 요약 카드 3개 */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-2.5">
         {[
           {
-            label: '참여 학생',
-            value: `${uniqueParticipants}명`,
-            sub: totalStudents > 0 ? `(${Math.round((uniqueParticipants / totalStudents) * 100)}%)` : '',
+            label: '참여율',
+            value: `${participationRate}%`,
+            sub: `${uniqueParticipants}/${totalStudents}명`,
           },
-          { label: '상호작용', value: avgInteraction, sub: '글당' },
-          { label: '전환율', value: `${conversionRate}%`, sub: '읽기→반응' },
+          {
+            label: '총 활동',
+            value: `${totalActivity}건`,
+            sub: `글 ${totalPosts}·댓글 ${totalComments}`,
+          },
+          {
+            label: '반응률',
+            value: `${responseRate}%`,
+            sub: '반응 있는 글',
+          },
         ].map(item => (
-          <div key={item.label} className="p-3 border border-[#1A1A1A] bg-[#FDFBF7] text-center">
-            <p className="text-xl font-black text-[#1A1A1A] leading-tight">
+          <div key={item.label} className="min-w-0 px-1.5 py-3.5 border border-[#1A1A1A] bg-[#FDFBF7] text-center overflow-hidden">
+            <p className="text-[22px] font-black text-[#1A1A1A] leading-none truncate">
               {item.value}
             </p>
-            {item.sub && (
-              <p className="text-[9px] text-[#5C5C5C]">{item.sub}</p>
-            )}
-            <p className="text-[10px] text-[#5C5C5C] mt-1">{item.label}</p>
+            <p className="text-[11px] text-[#8A8A8A] mt-0.5 truncate">{item.sub}</p>
+            <p className="text-xs text-[#5C5C5C] font-medium mt-1.5 truncate">{item.label}</p>
           </div>
         ))}
       </div>
@@ -485,10 +747,10 @@ function ActivitySection({ posts, courseId }: { posts: Post[]; courseId: string 
             key={tab}
             type="button"
             onClick={() => setActiveTab(tab)}
-            className={`flex-1 py-2 text-sm font-bold transition-colors ${
+            className={`flex-1 py-2.5 text-[13px] font-bold tracking-wide transition-colors ${
               activeTab === tab
                 ? 'text-[#1A1A1A] border-b-2 border-[#1A1A1A]'
-                : 'text-[#9A9A9A]'
+                : 'text-[#ACACAC]'
             }`}
           >
             {tab}
@@ -513,41 +775,58 @@ function ActivitySection({ posts, courseId }: { posts: Post[]; courseId: string 
               className="space-y-4"
             >
               {/* 반별 참여 점수 */}
-              <div className="border border-[#1A1A1A] bg-[#FDFBF7] p-3">
-                <p className="text-xs font-bold text-[#1A1A1A] mb-3">반별 참여 점수</p>
-                <p className="text-[9px] text-[#5C5C5C] mb-2">
+              <div className="border border-[#1A1A1A] bg-[#FDFBF7] p-4">
+                <p className="text-sm font-bold text-[#1A1A1A]">반별 참여 점수</p>
+                <p className="text-[11px] text-[#8A8A8A] mt-0.5 mb-4">
                   (글×3 + 댓글×2 + 좋아요×1) / 학생 수
                 </p>
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {classScores.map(({ cls, score }) => {
-                    const pct = (score / maxScore) * 100;
+                    const pct = Math.max((score / maxScore) * 100, score > 0 ? 3 : 0);
                     return (
-                      <div key={cls} className="flex items-center gap-2">
-                        <span className="text-xs font-bold w-6 text-[#1A1A1A]">{cls}반</span>
-                        <div className="flex-1 h-5 bg-[#EDEAE4] relative">
+                      <div key={cls} className="flex items-center gap-2.5">
+                        <span className="text-[13px] font-black w-7 text-[#1A1A1A]">{cls}반</span>
+                        <div className="flex-1 h-7 bg-[#EDEAE4] relative rounded-sm overflow-hidden">
                           <motion.div
                             initial={{ width: 0 }}
                             animate={{ width: `${pct}%` }}
                             transition={{ duration: 0.6, ease: 'easeOut' }}
-                            className="h-full"
+                            className="h-full rounded-sm"
                             style={{ backgroundColor: CLASS_COLORS[cls] }}
                           />
                         </div>
-                        <span className="text-xs text-[#5C5C5C] w-10 text-right">{score}</span>
+                        <span className="text-sm font-bold text-[#1A1A1A] w-10 text-right tabular-nums">{score}</span>
                       </div>
                     );
                   })}
                 </div>
               </div>
 
-              {/* 반응 없는 글 비율 */}
-              <div className="border border-[#1A1A1A] bg-[#FDFBF7] p-3 flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-bold text-[#1A1A1A]">반응 없는 글</p>
-                  <p className="text-[9px] text-[#5C5C5C]">좋아요·댓글 0인 글</p>
-                </div>
-                <p className="text-2xl font-black text-[#1A1A1A]">{noReactionRate}%</p>
+              {/* 참여 TOP 3 */}
+              <div className="border border-[#1A1A1A] bg-[#FDFBF7] p-4">
+                <p className="text-sm font-bold text-[#1A1A1A] mb-3">참여 TOP 3</p>
+                {topParticipants.length === 0 ? (
+                  <p className="text-sm text-[#8A8A8A] text-center py-4">데이터가 부족합니다</p>
+                ) : (
+                  <div className="space-y-0">
+                    {topParticipants.map((s, i) => (
+                      <div key={s.id} className="flex items-center gap-2.5 py-2.5 border-b border-[#EDEAE4] last:border-0">
+                        <span className="text-base font-black text-[#1A1A1A] w-5">{i + 1}</span>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-[13px] font-bold text-[#1A1A1A] truncate block">
+                            {s.nickname}{s.classType ? ` · ${s.classType}반` : ''}
+                          </span>
+                          <span className="text-[10px] text-[#8A8A8A]">
+                            글 {s.posts} · 댓글 {s.comments}
+                          </span>
+                        </div>
+                        <span className="text-sm font-black text-[#1A1A1A] tabular-nums">{s.score}점</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
+
             </motion.div>
           )}
 
@@ -560,27 +839,34 @@ function ActivitySection({ posts, courseId }: { posts: Post[]; courseId: string 
               transition={{ duration: 0.2 }}
               className="space-y-4"
             >
-              {/* 7일 참여 추이 */}
-              <div className="border border-[#1A1A1A] bg-[#FDFBF7] p-3">
-                <p className="text-xs font-bold text-[#1A1A1A] mb-3">7일 참여 추이</p>
-                <p className="text-[9px] text-[#5C5C5C] mb-2">글 + 댓글 수</p>
-                <svg viewBox="0 0 280 100" className="w-full">
+              {/* 요일별 참여 추이 */}
+              <div className="border border-[#1A1A1A] bg-[#FDFBF7] p-4">
+                <div className="flex items-baseline justify-between">
+                  <p className="text-sm font-bold text-[#1A1A1A]">요일별 참여 추이</p>
+                  <p className="text-sm font-bold text-[#1A1A1A]">{weekRangeLabel}</p>
+                </div>
+                <p className="text-[11px] text-[#8A8A8A] mt-0.5 mb-3">글 + 댓글 수</p>
+                <svg viewBox="0 0 280 125" className="w-full">
                   {last7Days.map((day, i) => {
-                    const barW = 24;
+                    const barW = 26;
                     const gap = (280 - barW * 7) / 8;
                     const x = gap + i * (barW + gap);
-                    const barH = (day.count / maxDayCount) * 65;
-                    const y = 75 - barH;
+                    const barH = (day.count / maxDayCount) * 68;
+                    const y = 82 - barH;
+                    const isWeekend = day.day === '토' || day.day === '일';
                     return (
                       <g key={i}>
-                        <rect x={x} y={y} width={barW} height={barH} fill="#1A1A1A" />
+                        <rect x={x} y={y} width={barW} height={Math.max(barH, day.count > 0 ? 2 : 0)} fill="#1A1A1A" rx="1" />
                         {day.count > 0 && (
-                          <text x={x + barW / 2} y={y - 4} textAnchor="middle" className="text-[8px] fill-[#1A1A1A]">
+                          <text x={x + barW / 2} y={y - 6} textAnchor="middle" fontSize="11" fontWeight="700" fill="#1A1A1A">
                             {day.count}
                           </text>
                         )}
-                        <text x={x + barW / 2} y={92} textAnchor="middle" className="text-[8px] fill-[#5C5C5C]">
-                          {day.label}
+                        <text x={x + barW / 2} y={98} textAnchor="middle" fontSize="10" fill="#8A8A8A">
+                          {day.date}
+                        </text>
+                        <text x={x + barW / 2} y={113} textAnchor="middle" fontSize="10" fontWeight="600" fill={isWeekend ? '#C47A7A' : '#5C5C5C'}>
+                          {day.day}
                         </text>
                       </g>
                     );
@@ -588,32 +874,66 @@ function ActivitySection({ posts, courseId }: { posts: Post[]; courseId: string 
                 </svg>
               </div>
 
-              {/* 월별 참여 추이 */}
-              <div className="border border-[#1A1A1A] bg-[#FDFBF7] p-3">
-                <p className="text-xs font-bold text-[#1A1A1A] mb-3">월별 참여 추이</p>
-                <p className="text-[9px] text-[#5C5C5C] mb-2">글 + 댓글 수</p>
-                {monthlyPattern.length === 0 ? (
-                  <p className="text-sm text-[#5C5C5C] text-center py-4">데이터가 부족합니다</p>
+              {/* 주간별 참여 추이 */}
+              <div className="border border-[#1A1A1A] bg-[#FDFBF7] p-4">
+                <p className="text-sm font-bold text-[#1A1A1A]">주간별 참여 추이</p>
+                <p className="text-[11px] text-[#8A8A8A] mt-0.5 mb-4">{new Date().getMonth() + 1}월 주차별 · 글 + 댓글 수</p>
+                {weeklyPattern.length === 0 ? (
+                  <p className="text-sm text-[#8A8A8A] text-center py-4">데이터가 부족합니다</p>
                 ) : (
-                  <div className="space-y-1.5">
-                    {monthlyPattern.map(({ label, count }) => {
-                      const pct = (count / maxMonthly) * 100;
+                  <div className="space-y-3">
+                    {weeklyPattern.map(({ label, sub, count }) => {
+                      const pct = Math.max((count / maxWeekly) * 100, count > 0 ? 3 : 0);
                       return (
-                        <div key={label} className="flex items-center gap-2">
-                          <span className="text-xs font-bold w-8 text-[#1A1A1A]">{label}</span>
-                          <div className="flex-1 h-5 bg-[#EDEAE4] relative">
+                        <div key={label} className="flex items-center gap-2.5">
+                          <div className="w-16 shrink-0">
+                            <span className="text-[13px] font-bold text-[#1A1A1A] block leading-tight">{label}</span>
+                            <span className="text-[10px] text-[#8A8A8A] block leading-tight">{sub}</span>
+                          </div>
+                          <div className="flex-1 h-7 bg-[#EDEAE4] relative rounded-sm overflow-hidden">
                             <motion.div
                               initial={{ width: 0 }}
                               animate={{ width: `${pct}%` }}
                               transition={{ duration: 0.6, ease: 'easeOut' }}
-                              className="h-full bg-[#1A1A1A]"
+                              className="h-full bg-[#1A1A1A] rounded-sm"
                             />
                           </div>
-                          <span className="text-[10px] text-[#5C5C5C] w-8 text-right">{count}</span>
+                          <span className="text-sm font-bold text-[#1A1A1A] w-8 text-right tabular-nums">{count}</span>
                         </div>
                       );
                     })}
                   </div>
+                )}
+              </div>
+
+              {/* 월별 참여 추이 */}
+              <div className="border border-[#1A1A1A] bg-[#FDFBF7] p-4">
+                <p className="text-sm font-bold text-[#1A1A1A]">월별 참여 추이</p>
+                <p className="text-[11px] text-[#8A8A8A] mt-0.5 mb-3">학기 단위 · 글 + 댓글 수</p>
+                {monthlyPattern.length === 0 ? (
+                  <p className="text-sm text-[#8A8A8A] text-center py-4">데이터가 부족합니다</p>
+                ) : (
+                  <svg viewBox="0 0 280 130" className="w-full">
+                    {monthlyPattern.map((m, i) => {
+                      const total = monthlyPattern.length;
+                      const barW = Math.min(50, (280 - (total + 1) * 20) / total);
+                      const gap = (280 - barW * total) / (total + 1);
+                      const x = gap + i * (barW + gap);
+                      const barH = (m.count / maxMonthly) * 70;
+                      const y = 95 - barH;
+                      return (
+                        <g key={i}>
+                          <rect x={x} y={y} width={barW} height={Math.max(barH, m.count > 0 ? 2 : 0)} fill="#1A1A1A" rx="1" />
+                          <text x={x + barW / 2} y={y - 7} textAnchor="middle" fontSize="12" fontWeight="700" fill="#1A1A1A">
+                            {m.count}
+                          </text>
+                          <text x={x + barW / 2} y={115} textAnchor="middle" fontSize="11" fontWeight="600" fill="#5C5C5C">
+                            {m.label}
+                          </text>
+                        </g>
+                      );
+                    })}
+                  </svg>
                 )}
               </div>
             </motion.div>
@@ -629,29 +949,35 @@ function ActivitySection({ posts, courseId }: { posts: Post[]; courseId: string 
               className="space-y-4"
             >
               {/* 조회 요약 */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="border border-[#1A1A1A] bg-[#FDFBF7] p-3 text-center">
-                  <p className="text-2xl font-black text-[#1A1A1A]">{avgViews}</p>
-                  <p className="text-[10px] text-[#5C5C5C] mt-1">평균 조회수</p>
+              <div className="grid grid-cols-3 gap-2.5">
+                <div className="min-w-0 border border-[#1A1A1A] bg-[#FDFBF7] px-1.5 py-3.5 text-center overflow-hidden">
+                  <p className="text-[22px] font-black text-[#1A1A1A] leading-none truncate">{avgViews.value}</p>
+                  <p className="text-xs text-[#5C5C5C] font-medium mt-1.5 truncate">평균 조회수</p>
                 </div>
-                <div className="border border-[#1A1A1A] bg-[#FDFBF7] p-3 text-center">
-                  <p className="text-2xl font-black text-[#1A1A1A]">{lurkerRate}%</p>
-                  <p className="text-[10px] text-[#5C5C5C] mt-1">잠수 비율</p>
+                <div className="min-w-0 border border-[#1A1A1A] bg-[#FDFBF7] px-1.5 py-3.5 text-center overflow-hidden">
+                  <p className="text-[22px] font-black text-[#1A1A1A] leading-none truncate">{avgViews.reachRate}%</p>
+                  <p className="text-[11px] text-[#8A8A8A] mt-0.5 truncate">글당 학생</p>
+                  <p className="text-xs text-[#5C5C5C] font-medium mt-1 truncate">열람률</p>
+                </div>
+                <div className="min-w-0 border border-[#1A1A1A] bg-[#FDFBF7] px-1.5 py-3.5 text-center overflow-hidden">
+                  <p className="text-[22px] font-black text-[#1A1A1A] leading-none truncate">{conversionRate}%</p>
+                  <p className="text-[11px] text-[#8A8A8A] mt-0.5 truncate">읽기→반응</p>
+                  <p className="text-xs text-[#5C5C5C] font-medium mt-1 truncate">전환율</p>
                 </div>
               </div>
 
               {/* 조회 TOP 3 */}
-              <div className="border border-[#1A1A1A] bg-[#FDFBF7] p-3">
-                <p className="text-xs font-bold text-[#1A1A1A] mb-3">조회 TOP 3</p>
+              <div className="border border-[#1A1A1A] bg-[#FDFBF7] p-4">
+                <p className="text-sm font-bold text-[#1A1A1A] mb-3">조회 TOP 3</p>
                 {topViewed.length === 0 ? (
-                  <p className="text-sm text-[#5C5C5C] text-center py-4">데이터가 부족합니다</p>
+                  <p className="text-sm text-[#8A8A8A] text-center py-4">데이터가 부족합니다</p>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-0">
                     {topViewed.map((item, i) => (
-                      <div key={i} className="flex items-center gap-2 py-1.5 border-b border-[#EDEAE4] last:border-0">
-                        <span className="text-xs font-black text-[#1A1A1A] w-5">{i + 1}</span>
-                        <span className="text-xs text-[#1A1A1A] flex-1 truncate">{item.title}</span>
-                        <span className="text-[10px] text-[#5C5C5C] whitespace-nowrap">
+                      <div key={i} className="flex items-center gap-2.5 py-2.5 border-b border-[#EDEAE4] last:border-0">
+                        <span className="text-base font-black text-[#1A1A1A] w-5">{i + 1}</span>
+                        <span className="text-[13px] text-[#1A1A1A] flex-1 truncate">{item.title}</span>
+                        <span className="text-xs text-[#5C5C5C] font-medium whitespace-nowrap">
                           {item.views}회 · {item.conversion}%
                         </span>
                       </div>
@@ -693,12 +1019,63 @@ export default function ManagePostsPage() {
     isProfessor ? selectedCourseId : undefined
   );
 
-  // 워드클라우드 데이터
+  // 과목 scope 키워드 로드 (courseScopes/{courseId}/chapters/* 의 keywords)
+  // Map<소문자, 원문> 으로 저장 — 매칭은 소문자로, 표시는 원문으로
+  const [scopeTerms, setScopeTerms] = useState<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    if (!isProfessor || !selectedCourseId) return;
+    setScopeTerms(new Map()); // 과목 전환 시 이전 데이터 초기화
+
+    const loadScopeKeywords = async () => {
+      try {
+        const chaptersRef = collection(db, 'courseScopes', selectedCourseId, 'chapters');
+        const snap = await getDocs(chaptersRef);
+        const terms = new Map<string, string>();
+        snap.docs.forEach(d => {
+          const kws = d.data()?.keywords;
+          if (Array.isArray(kws)) {
+            kws.forEach((kw: string) => {
+              if (kw && kw.length >= 2) {
+                const lower = kw.toLowerCase();
+                // 더 짧은 원문 우선 (중복 시)
+                if (!terms.has(lower)) terms.set(lower, kw);
+              }
+            });
+          }
+        });
+        setScopeTerms(terms);
+      } catch (err) {
+        console.error('scope 키워드 로드 실패:', err);
+      }
+    };
+
+    loadScopeKeywords();
+  }, [isProfessor, selectedCourseId]);
+
+  // 워드클라우드 데이터 — 게시글에서 과목 scope 키워드만 추출
   const keywords = useMemo(() => {
-    if (!allPosts.length) return [];
-    const texts = allPosts.flatMap(p => [p.title, p.content]);
-    return extractKeywords(texts);
-  }, [allPosts]);
+    if (!allPosts.length || scopeTerms.size === 0) return [];
+
+    // 게시글 전체 텍스트
+    const allText = allPosts.map(p => `${p.title} ${p.content}`).join(' ').toLowerCase();
+
+    // scope 키워드가 게시글에 몇 번 등장하는지 카운트
+    const freq = new Map<string, number>();
+    scopeTerms.forEach((original, lower) => {
+      // 정규식 특수문자 이스케이프
+      const escaped = lower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const matches = allText.match(new RegExp(escaped, 'gi'));
+      if (matches && matches.length > 0) {
+        freq.set(original, matches.length); // 원문 대소문자로 저장
+      }
+    });
+
+    return Array.from(freq.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 40)
+      .map(([text, value]) => ({ text, value }));
+  }, [allPosts, scopeTerms]);
 
   // 학생 훅
   const { posts, loading: postsLoading, error: postsError, hasMore, loadMore, refresh: refreshPosts } = useMyPosts();
@@ -830,33 +1207,6 @@ export default function ManagePostsPage() {
             </div>
           ) : (
             <>
-              {/* ── KEYWORD CLOUD ── */}
-              <section>
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="flex-1 h-px bg-[#1A1A1A]" />
-                  <h2 className="font-serif-display text-lg font-bold text-[#1A1A1A]">KEYWORD CLOUD</h2>
-                  <div className="flex-1 h-px bg-[#1A1A1A]" />
-                </div>
-
-                <div className="border border-[#1A1A1A] bg-[#FDFBF7] min-h-[350px] flex items-center justify-center overflow-hidden">
-                  {keywords.length === 0 ? (
-                    <p className="text-sm text-[#5C5C5C]">데이터가 부족합니다</p>
-                  ) : (
-                    <WordCloud
-                      data={keywords}
-                      width={360}
-                      height={340}
-                      font="Playfair Display"
-                      fontWeight="bold"
-                      fontSize={(word) => Math.max(14, Math.min(60, word.value * 8))}
-                      rotate={0}
-                      padding={3}
-                      fill={(_: unknown, i: number) => CLOUD_COLORS[i % CLOUD_COLORS.length]}
-                    />
-                  )}
-                </div>
-              </section>
-
               {/* ── ACTIVITY ── */}
               <section>
                 <div className="flex items-center gap-3 mb-3">
@@ -866,6 +1216,27 @@ export default function ManagePostsPage() {
                 </div>
 
                 <ActivitySection posts={allPosts} courseId={selectedCourseId} />
+              </section>
+
+              {/* ── KEYWORD CLOUD ── */}
+              <section>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="flex-1 h-px bg-[#1A1A1A]" />
+                  <h2 className="font-serif-display text-lg font-bold text-[#1A1A1A]">KEYWORD CLOUD</h2>
+                  <div className="flex-1 h-px bg-[#1A1A1A]" />
+                </div>
+
+                <div className="border border-[#1A1A1A] bg-[#FDFBF7] overflow-hidden" style={{ aspectRatio: '1 / 1' }}>
+                  {keywords.length === 0 ? (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <p className="text-sm text-[#5C5C5C]">
+                        {scopeTerms.size === 0 ? '과목 범위(scope)가 업로드되지 않았습니다' : '매칭되는 키워드가 없습니다'}
+                      </p>
+                    </div>
+                  ) : (
+                    <SpiralWordCloud data={keywords} colors={CLOUD_COLORS} />
+                  )}
+                </div>
               </section>
             </>
           )}

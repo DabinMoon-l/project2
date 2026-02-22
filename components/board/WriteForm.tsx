@@ -68,7 +68,7 @@ export default function WriteForm({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 유효성 검사
-  const isValid = title.trim().length >= 2 && content.trim().length >= 10;
+  const isValid = title.trim().length >= 2 && content.trim().length >= 5;
 
   /**
    * 이미지 선택 핸들러
@@ -447,6 +447,13 @@ export default function WriteForm({
         >
           {error || uploadError}
         </motion.div>
+      )}
+
+      {/* 유효성 안내 */}
+      {!isValid && (title.trim().length > 0 || content.trim().length > 0) && (
+        <p className="text-xs text-[#8B1A1A] text-center">
+          {title.trim().length < 2 ? '제목을 2자 이상 입력해주세요' : '본문을 5자 이상 입력해주세요'}
+        </p>
       )}
 
       {/* 작성 버튼 */}

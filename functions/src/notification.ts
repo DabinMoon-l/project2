@@ -9,7 +9,6 @@ import { getMessaging } from "firebase-admin/messaging";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import {
   onDocumentCreated,
-  onDocumentUpdated,
 } from "firebase-functions/v2/firestore";
 
 // ============================================
@@ -68,6 +67,69 @@ async function getTopicTokens(topic: string): Promise<string[]> {
     .get();
 
   return tokensSnapshot.docs.map((doc) => doc.data().token);
+}
+
+/**
+ * 사용자 알림 설정 확인
+ * 교수님 계정은 항상 false, 학생은 appSettings.notifications 체크
+ */
+async function isNotificationEnabled(
+  userId: string,
+  settingKey: string
+): Promise<boolean> {
+  const db = getFirestore();
+  const userDoc = await db.collection("users").doc(userId).get();
+  if (!userDoc.exists) return true;
+  const userData = userDoc.data()!;
+  // 교수님 계정은 알림 보내지 않음
+  if (userData.role === "professor") return false;
+  const settings = userData.appSettings?.notifications;
+  if (!settings || settings[settingKey] === undefined) return true;
+  return settings[settingKey] !== false;
+}
+
+/**
+ * 알림 설정을 고려한 토픽 토큰 필터링
+ * 각 토큰의 uid를 확인 → 해당 사용자의 설정이 false면 제외
+ */
+async function getFilteredTopicTokens(
+  topic: string,
+  settingKey: string
+): Promise<string[]> {
+  const db = getFirestore();
+  const tokensSnapshot = await db
+    .collection("fcmTokens")
+    .where("topics", "array-contains", topic)
+    .get();
+
+  // uid별 토큰 그룹핑
+  const tokensByUid = new Map<string, string[]>();
+  for (const tokenDoc of tokensSnapshot.docs) {
+    const { token, uid } = tokenDoc.data();
+    if (!uid) continue;
+    if (!tokensByUid.has(uid)) tokensByUid.set(uid, []);
+    tokensByUid.get(uid)!.push(token);
+  }
+
+  const uids = Array.from(tokensByUid.keys());
+  if (uids.length === 0) return [];
+
+  // 사용자 문서 일괄 조회
+  const userRefs = uids.map(uid => db.collection("users").doc(uid));
+  const userDocs = await db.getAll(...userRefs);
+
+  const eligibleTokens: string[] = [];
+  for (const userDoc of userDocs) {
+    const userData = userDoc.data();
+    // 교수님 계정 제외
+    if (userData?.role === "professor") continue;
+    const settings = userData?.appSettings?.notifications;
+    if (settings && settings[settingKey] === false) continue;
+    const tokens = tokensByUid.get(userDoc.id);
+    if (tokens) eligibleTokens.push(...tokens);
+  }
+
+  return eligibleTokens;
 }
 
 /**
@@ -253,6 +315,9 @@ export const onNewQuizCreated = onDocumentCreated(
     // 공개된 퀴즈만 알림
     if (!quizData.isPublished) return;
 
+    // 교수님이 올린 퀴즈만 알림 (custom, ai-generated 제외)
+    if (quizData.type === "custom" || quizData.type === "ai-generated") return;
+
     const { title, targetClass, creatorNickname } = quizData;
     const quizId = event.params.quizId;
 
@@ -274,48 +339,11 @@ export const onNewQuizCreated = onDocumentCreated(
       topic = TOPICS[`CLASS_${targetClass}` as keyof typeof TOPICS] || TOPICS.ALL;
     }
 
-    const tokens = await getTopicTokens(topic);
+    // 알림 설정 확인 후 필터링
+    const tokens = await getFilteredTopicTokens(topic, "newQuiz");
     await sendPushNotification(tokens, payload);
 
     console.log(`새 퀴즈 알림 전송: ${quizId}`, { targetClass, tokenCount: tokens.length });
-  }
-);
-
-/**
- * 피드백 답변 시 알림 전송
- */
-export const onFeedbackReplied = onDocumentUpdated(
-  {
-    document: "feedbacks/{feedbackId}",
-    region: "asia-northeast3",
-  },
-  async (event) => {
-    const before = event.data?.before.data();
-    const after = event.data?.after.data();
-
-    if (!before || !after) return;
-
-    // 답변이 새로 추가된 경우에만
-    if (before.reply || !after.reply) return;
-
-    const { userId, quizId, questionText } = after;
-    const feedbackId = event.params.feedbackId;
-
-    // 알림 데이터
-    const payload: NotificationPayload = {
-      title: "피드백 답변이 도착했어요!",
-      body: `"${questionText?.slice(0, 30)}..." 문제에 대한 피드백 답변이 등록되었습니다.`,
-      data: {
-        type: "feedback_reply",
-        feedbackId,
-        quizId: quizId || "",
-      },
-    };
-
-    const tokens = await getUserTokens(userId);
-    await sendPushNotification(tokens, payload);
-
-    console.log(`피드백 답변 알림 전송: ${feedbackId}`, { userId });
   }
 );
 
@@ -344,6 +372,9 @@ export const onBoardCommentCreated = onDocumentCreated(
 
     // 자신의 글에 댓글을 단 경우 알림 제외
     if (postAuthorId === commentAuthorId) return;
+
+    // 알림 설정 확인
+    if (!(await isNotificationEnabled(postAuthorId, "boardComment"))) return;
 
     // 알림 데이터
     const payload: NotificationPayload = {
@@ -394,6 +425,9 @@ export const onBoardReplyCreated = onDocumentCreated(
     // 자신의 댓글에 대댓글을 단 경우 알림 제외
     if (commentAuthorId === replyAuthorId) return;
 
+    // 알림 설정 확인 (댓글 알림 설정 공유)
+    if (!(await isNotificationEnabled(commentAuthorId, "boardComment"))) return;
+
     // 알림 데이터
     const payload: NotificationPayload = {
       title: "답글이 달렸어요!",
@@ -414,57 +448,3 @@ export const onBoardReplyCreated = onDocumentCreated(
   }
 );
 
-/**
- * 랭킹 변동 알림 (1등 달성 시)
- */
-export const onRankingChange = onDocumentUpdated(
-  {
-    document: "users/{userId}",
-    region: "asia-northeast3",
-  },
-  async (event) => {
-    const before = event.data?.before.data();
-    const after = event.data?.after.data();
-
-    if (!before || !after) return;
-
-    // 경험치가 변경된 경우에만
-    if (before.exp === after.exp) return;
-
-    const userId = event.params.userId;
-    const { classId, userName, exp } = after;
-
-    // 해당 반에서 1등인지 확인
-    const db = getFirestore();
-    const topUserSnapshot = await db
-      .collection("users")
-      .where("classId", "==", classId)
-      .orderBy("exp", "desc")
-      .limit(1)
-      .get();
-
-    if (topUserSnapshot.empty) return;
-
-    const topUser = topUserSnapshot.docs[0];
-    if (topUser.id !== userId) return;
-
-    // 이전에 1등이 아니었는데 1등이 된 경우에만 알림
-    // (간단히 경험치가 증가한 경우만 체크)
-    if (before.exp >= after.exp) return;
-
-    // 알림 데이터
-    const payload: NotificationPayload = {
-      title: "축하해요! 1등 달성!",
-      body: `${userName || "용사"}님이 ${classId}반 1등에 올랐습니다!`,
-      data: {
-        type: "ranking_change",
-        userId,
-      },
-    };
-
-    const tokens = await getUserTokens(userId);
-    await sendPushNotification(tokens, payload);
-
-    console.log(`랭킹 1등 알림: ${userId}`, { classId, exp });
-  }
-);

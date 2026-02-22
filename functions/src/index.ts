@@ -59,10 +59,8 @@ export {
   sendNotificationToUser,
   sendNotificationToClass,
   onNewQuizCreated,
-  onFeedbackReplied,
   onBoardCommentCreated,
   onBoardReplyCreated,
-  onRankingChange,
 } from "./notification";
 
 // ============================================
@@ -343,6 +341,19 @@ export { migrateDefaultRabbit } from "./migrateDefaultRabbit";
 // ============================================
 export { collectWeeklyStatsScheduled } from "./weeklyStats";
 export { generateMonthlyReport } from "./monthlyReport";
+
+// ============================================
+// 학번+비밀번호 인증 시스템 Functions
+// ============================================
+export {
+  bulkEnrollStudents,
+  registerStudent,
+  resetStudentPassword,
+  requestPasswordReset,
+  updateRecoveryEmail,
+  migrateExistingAccounts,
+  deleteStudentAccount,
+} from "./studentAuth";
 
 // ============================================
 // 시즌 관련 Functions

@@ -88,6 +88,9 @@ export interface UserProfile {
   // 프로필 사진 (토끼 ID, 미설정 시 null/undefined)
   profileRabbitId?: number | null;
 
+  // 복구 이메일 (비밀번호 찾기용)
+  recoveryEmail?: string;
+
   // 타임스탬프
   createdAt: Timestamp;
   updatedAt: Timestamp;

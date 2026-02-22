@@ -69,6 +69,20 @@ service cloud.firestore {
     }
 
     // ============================================================
+    // 학생 등록 컬렉션 (교수님 전용 읽기/쓰기, CF도 쓰기)
+    // ============================================================
+
+    match /enrolledStudents/{courseId} {
+      allow read: if isProfessor();
+      allow write: if false;
+
+      match /students/{studentId} {
+        allow read: if isProfessor();
+        allow write: if isProfessor();
+      }
+    }
+
+    // ============================================================
     // 퀴즈 컬렉션
     // ============================================================
 
@@ -563,6 +577,16 @@ service cloud.firestore {
     }
 
     // ============================================================
+    // 문의 컬렉션 (학생 문의 → 관리자 확인)
+    // ============================================================
+    match /inquiries/{inquiryId} {
+      allow create: if isAuthenticated();
+      allow read: if isAuthenticated();
+      allow update: if isAuthenticated();  // isRead 업데이트용
+      allow delete: if isAuthenticated();
+    }
+
+    // ============================================================
     // 랭킹 사전 계산 결과 (CF 전용 쓰기)
     // ============================================================
     match /rankings/{courseId} {
@@ -688,6 +712,28 @@ service cloud.firestore {
     // 스타일 기반 AI 문제 생성 사용량
     match /styledQuizUsage/{path=**} {
       allow read, write: if false;
+    }
+
+    // 주별 통계 (CF에서 쓰기, 교수님만 읽기)
+    match /weeklyStats/{courseId} {
+      allow read: if isProfessor();
+      allow write: if false;
+
+      match /weeks/{weekLabel} {
+        allow read: if isProfessor();
+        allow write: if false;
+      }
+    }
+
+    // 월별 리포트 (CF에서 쓰기, 교수님만 읽기)
+    match /monthlyReports/{courseId} {
+      allow read: if isProfessor();
+      allow write: if false;
+
+      match /months/{monthLabel} {
+        allow read: if isProfessor();
+        allow write: if false;
+      }
     }
   }
 }

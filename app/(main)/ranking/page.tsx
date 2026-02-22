@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import Image from 'next/image';
 import { db, functions } from '@/lib/firebase';
@@ -41,12 +41,13 @@ export default function RankingPage() {
   const router = useRouter();
   const { profile } = useUser();
   const { userCourseId } = useCourse();
-  const { theme } = useTheme();
+  useTheme();
 
   const [rankedUsers, setRankedUsers] = useState<RankedUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [myRank, setMyRank] = useState<RankedUser | null>(null);
   const [showInfo, setShowInfo] = useState(false);
+  const [displayCount, setDisplayCount] = useState(30);
 
   // 스크롤 업 버튼
   const topSectionRef = useRef<HTMLDivElement>(null);
@@ -81,80 +82,96 @@ export default function RankingPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
-  // 랭킹 데이터 로드 — rankings/{courseId} 문서 1개만 읽기
+  // 랭킹 데이터를 현재 유저 프로필로 보정하는 헬퍼
+  const applyRankings = useCallback((users: RankedUser[]) => {
+    // 현재 유저의 profileRabbitId를 최신 프로필로 오버라이드
+    if (profile?.uid) {
+      const me = users.find(u => u.id === profile.uid);
+      if (me) {
+        me.profileRabbitId = profile.profileRabbitId ?? undefined;
+        me.nickname = profile.nickname || me.nickname;
+      }
+    }
+    setRankedUsers(users);
+    const me = profile?.uid ? users.find(u => u.id === profile.uid) : null;
+    if (me) setMyRank(me);
+    else setMyRank(null);
+  }, [profile?.uid, profile?.profileRabbitId, profile?.nickname]);
+
+  // 랭킹 데이터 로드 — onSnapshot 실시간 구독
   useEffect(() => {
     if (!userCourseId || !profile) return;
 
     // 1. sessionStorage 캐시에서 즉시 표시
-    const { data: cached, isFresh } = readFullCache(userCourseId);
+    const { data: cached } = readFullCache(userCourseId);
     if (cached) {
       const users = cached.rankedUsers as RankedUser[];
-      setRankedUsers(users);
-      const me = users.find(u => u.id === profile.uid);
-      if (me) setMyRank(me);
+      applyRankings(users);
       setLoading(false);
-      if (isFresh) return;
     }
 
-    // 2. Firestore rankings/{courseId} 문서 읽기
-    const loadRankings = async () => {
-      if (!cached) setLoading(true);
-
-      try {
-        const rankDoc = await getDoc(doc(db, 'rankings', userCourseId));
-
-        if (rankDoc.exists()) {
-          const data = rankDoc.data();
+    // 2. Firestore rankings/{courseId} 실시간 구독
+    let fallbackAttempted = false;
+    const unsubscribe = onSnapshot(
+      doc(db, 'rankings', userCourseId),
+      async (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data();
           const users = (data.rankedUsers || []) as RankedUser[];
-
-          setRankedUsers(users);
-          const me = users.find(u => u.id === profile.uid);
-          if (me) setMyRank(me);
-
-          // sessionStorage 캐시 갱신
+          applyRankings(users);
           writeFullCache(userCourseId, { rankedUsers: users });
-        } else {
-          // 문서 없으면 Cloud Function 호출 시도 → 실패 시 클라이언트 폴백
+          setLoading(false);
+        } else if (!fallbackAttempted) {
+          // 문서 없으면 1회만 CF 호출 또는 클라이언트 폴백
+          fallbackAttempted = true;
+          if (!cached) setLoading(true);
+
           let generated = false;
           try {
             const refresh = httpsCallable(functions, 'refreshRankings');
             await refresh({ courseId: userCourseId });
-            const retryDoc = await getDoc(doc(db, 'rankings', userCourseId));
-            if (retryDoc.exists()) {
-              const users = (retryDoc.data().rankedUsers || []) as RankedUser[];
-              setRankedUsers(users);
-              const me = users.find(u => u.id === profile.uid);
-              if (me) setMyRank(me);
-              writeFullCache(userCourseId, { rankedUsers: users });
-              generated = true;
-            }
+            // onSnapshot이 자동으로 새 문서를 감지
+            generated = true;
           } catch {
-            // Cloud Function 미배포 — 클라이언트 폴백
+            // Cloud Function 미배포
           }
 
           if (!generated) {
             const users = await computeRankingsClientSide(userCourseId);
-            setRankedUsers(users);
-            const me = users.find(u => u.id === profile.uid);
-            if (me) setMyRank(me);
+            applyRankings(users);
             if (users.length > 0) {
               writeFullCache(userCourseId, { rankedUsers: users });
             }
+            setLoading(false);
           }
         }
-
-        setLoading(false);
-      } catch (error) {
-        console.error('랭킹 로드 실패:', error);
+      },
+      (error) => {
+        console.error('랭킹 구독 실패:', error);
         setLoading(false);
       }
-    };
+    );
 
-    loadRankings();
-  }, [userCourseId, profile]);
+    return () => unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userCourseId, profile?.uid]);
 
-  const top3 = rankedUsers.slice(0, 3);
-  const restUsers = rankedUsers.slice(3);
+  // 프로필 변경 시 현재 유저 데이터 즉시 반영
+  useEffect(() => {
+    if (!profile?.uid || rankedUsers.length === 0) return;
+    const me = rankedUsers.find(u => u.id === profile.uid);
+    if (me && (me.profileRabbitId !== (profile.profileRabbitId ?? undefined) || me.nickname !== profile.nickname)) {
+      me.profileRabbitId = profile.profileRabbitId ?? undefined;
+      me.nickname = profile.nickname || me.nickname;
+      setRankedUsers([...rankedUsers]);
+      setMyRank({ ...me });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.profileRabbitId, profile?.nickname]);
+
+  const top3 = useMemo(() => rankedUsers.slice(0, 3), [rankedUsers]);
+  const restUsers = useMemo(() => rankedUsers.slice(3), [rankedUsers]);
+  const visibleUsers = useMemo(() => restUsers.slice(0, displayCount), [restUsers, displayCount]);
 
   return (
     <div className="relative min-h-screen pb-28 scrollbar-hide overflow-x-hidden" style={{ overscrollBehavior: 'none' }}>
@@ -295,12 +312,9 @@ export default function RankingPage() {
 
           {/* 나머지 유저 목록 */}
           <div className="relative z-10 mx-4">
-            {restUsers.map((user, idx) => (
-              <motion.div
+            {visibleUsers.map((user) => (
+              <div
                 key={user.id}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: idx * 0.02 }}
                 className={`flex items-center gap-3 py-3 border-b border-white/15 ${
                   user.id === profile?.uid ? 'bg-white/10 -mx-2 px-2 rounded-lg' : ''
                 }`}
@@ -313,7 +327,7 @@ export default function RankingPage() {
                 {/* 프로필 */}
                 <div className="w-10 h-10 flex items-center justify-center border-2 border-white/30 rounded-lg overflow-hidden flex-shrink-0 bg-white/10">
                   {user.profileRabbitId != null ? (
-                    <Image src={getRabbitProfileUrl(user.profileRabbitId)} alt="" width={40} height={40} className="w-full h-full object-cover" />
+                    <Image src={getRabbitProfileUrl(user.profileRabbitId)} alt="" width={40} height={40} className="w-full h-full object-cover" loading="lazy" />
                   ) : (
                     <svg width={20} height={20} viewBox="0 0 24 24" fill="rgba(255,255,255,0.5)">
                       <circle cx="12" cy="8" r="4" />
@@ -340,8 +354,18 @@ export default function RankingPage() {
                     {Math.round(user.rankScore)}점
                   </p>
                 </div>
-              </motion.div>
+              </div>
             ))}
+
+            {/* 더보기 버튼 */}
+            {displayCount < restUsers.length && (
+              <button
+                onClick={() => setDisplayCount(prev => prev + 30)}
+                className="w-full py-4 text-center text-sm font-medium text-white/50 hover:text-white/70 transition-colors"
+              >
+                더보기 ({visibleUsers.length}/{restUsers.length})
+              </button>
+            )}
 
             {rankedUsers.length === 0 && (
               <div className="text-center py-12">
@@ -434,6 +458,7 @@ export default function RankingPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/50"
+            onClick={() => setShowInfo(false)}
           >
             <motion.div
               initial={{ scale: 0.9 }}

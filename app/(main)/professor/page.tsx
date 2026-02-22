@@ -12,7 +12,7 @@ import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 import { AnnouncementChannel } from '@/components/home';
 import ProfessorRankingSection from '@/components/home/ProfessorRankingSection';
 import ProfessorCharacterBox from '@/components/home/ProfessorCharacterBox';
-import type { CourseId } from '@/lib/types/course';
+
 
 const SWIPE_THRESHOLD = 120;
 const WHEEL_THRESHOLD = 80;
@@ -25,24 +25,12 @@ const HOME_BG_IMAGE = '/images/home-bg.jpg';
 export default function ProfessorHomePage() {
   const { theme } = useTheme();
   const { profile } = useUser();
-  const { userCourseId } = useCourse();
+  const { userCourseId, setProfessorCourse } = useCourse();
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
   const router = useRouter();
 
-  // 과목 전환 (공지 + 랭킹 공유) — CourseContext에서 학기 기반 기본값 제공
-  const [selectedCourse, setSelectedCourse] = useState<CourseId>(
-    (userCourseId as CourseId) || 'microbiology'
-  );
-
-  // CourseContext의 userCourseId가 최초 로딩되면 1회만 동기화
-  // (이후 교수님이 CourseSwitcher로 변경한 값은 보존)
-  const initialSynced = useRef(false);
-  useEffect(() => {
-    if (userCourseId && !initialSynced.current) {
-      setSelectedCourse(userCourseId as CourseId);
-      initialSynced.current = true;
-    }
-  }, [userCourseId]);
+  // 과목 전환: CourseContext에서 관리 (sessionStorage로 유지됨)
+  const selectedCourse = (userCourseId as 'biology' | 'pathophysiology' | 'microbiology') || 'microbiology';
 
   // 스와이프 업 → 이전 페이지로 복귀
   const [pullY, setPullY] = useState(0);
@@ -195,7 +183,7 @@ export default function ProfessorHomePage() {
               headerContent={
                 <CourseSwitcher
                   value={selectedCourse}
-                  onChange={setSelectedCourse}
+                  onChange={setProfessorCourse}
                   textClassName="text-4xl font-black text-white/90 tracking-wide inline-block"
                 />
               }
@@ -211,7 +199,7 @@ export default function ProfessorHomePage() {
             <div className="mb-5">
               <CourseSwitcher
                 value={selectedCourse}
-                onChange={setSelectedCourse}
+                onChange={setProfessorCourse}
                 textClassName="text-4xl font-bold text-white tracking-widest inline-block"
               />
             </div>

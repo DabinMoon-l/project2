@@ -1711,9 +1711,8 @@ interface UseAllPostsForCourseReturn {
 }
 
 /**
- * 과목별 전체 게시글을 한 번에 로드하는 훅 (교수님 관리 대시보드용)
- * 페이지네이션 없이 limit(200)으로 전체 로드하여
- * 워드클라우드, 인기글 TOP, 활동 요약 등 여러 섹션에서 공유합니다.
+ * 과목별 전체 게시글을 실시간 구독하는 훅 (교수님 관리 대시보드용)
+ * onSnapshot으로 실시간 업데이트 (조회수, 좋아요, 댓글수 등 즉시 반영)
  *
  * @param courseId - 과목 ID
  * @returns 전체 글 목록, 로딩 상태, 에러
@@ -1730,29 +1729,30 @@ export const useAllPostsForCourse = (courseId?: string): UseAllPostsForCourseRet
       return;
     }
 
-    const loadAll = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+    setLoading(true);
+    setError(null);
 
-        const allQuery = query(
-          collection(db, 'posts'),
-          where('courseId', '==', courseId),
-          orderBy('createdAt', 'desc'),
-          limit(200)
-        );
+    const allQuery = query(
+      collection(db, 'posts'),
+      where('courseId', '==', courseId),
+      orderBy('createdAt', 'desc'),
+      limit(200)
+    );
 
-        const snapshot = await getDocs(allQuery);
+    const unsubscribe = onSnapshot(
+      allQuery,
+      (snapshot) => {
         setPosts(snapshot.docs.map(docToPost));
-      } catch (err) {
-        console.error('전체 게시글 로드 실패:', err);
+        setLoading(false);
+      },
+      (err) => {
+        console.error('전체 게시글 실시간 구독 실패:', err);
         setError('게시글을 불러오는데 실패했습니다.');
-      } finally {
         setLoading(false);
       }
-    };
+    );
 
-    loadAll();
+    return () => unsubscribe();
   }, [courseId]);
 
   return { posts, loading, error };

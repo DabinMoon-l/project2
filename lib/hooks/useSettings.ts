@@ -24,6 +24,8 @@ import { db } from '../firebase';
  * 알림 설정 타입
  */
 export interface NotificationSettings {
+  // 공지 알림
+  announcement: boolean;
   // 퀴즈 알림
   quizReminder: boolean;
   // 새 퀴즈 알림
@@ -98,6 +100,7 @@ interface UseSettingsReturn {
  */
 export const DEFAULT_SETTINGS: AppSettings = {
   notifications: {
+    announcement: true,
     quizReminder: true,
     newQuiz: true,
     feedbackReply: true,
