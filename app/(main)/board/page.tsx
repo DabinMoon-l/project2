@@ -87,35 +87,37 @@ const HeadlineArticle = memo(function HeadlineArticle({
     <article
       className="cursor-pointer group border-2 border-[#1A1A1A] flex relative"
     >
-      {/* 고정 표시 (좌측 상단) */}
+      {/* 고정 표시 (좌측 상단) — 헤더 카드에서만 */}
       {isPinned && (
-        <div className="absolute top-2 left-2 z-10 p-1 text-[#8B1A1A]">
-          <svg className="w-5 h-5" fill="currentColor" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-          </svg>
-        </div>
+        isProfessor ? (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onUnpin?.(); }}
+            className="absolute top-2 left-2 z-10 p-1 text-[#8B1A1A] hover:text-[#1A1A1A] transition-colors"
+            title="고정 해제"
+          >
+            <svg className="w-5 h-5" fill="currentColor" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+            </svg>
+          </button>
+        ) : (
+          <div className="absolute top-2 left-2 z-10 p-1 text-[#8B1A1A]">
+            <svg className="w-5 h-5" fill="currentColor" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+            </svg>
+          </div>
+        )
       )}
 
-      {/* 고정/해제 버튼 (교수님 전용, 우측 상단) */}
-      {isProfessor && (
+      {/* 고정 버튼 (교수님 전용, 미고정 헤드라인에서만) */}
+      {isProfessor && !isPinned && (
         <button
           type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (isPinned) {
-              onUnpin?.();
-            } else {
-              onPin?.();
-            }
-          }}
-          className={`absolute top-2 right-2 z-10 p-1 transition-colors ${
-            isPinned
-              ? 'text-[#8B1A1A]/60 hover:text-[#1A1A1A]'
-              : 'text-[#1A1A1A]/30 hover:text-[#8B1A1A]'
-          }`}
-          title={isPinned ? '고정 해제' : '글 고정'}
+          onClick={(e) => { e.stopPropagation(); onPin?.(); }}
+          className="absolute top-2 right-2 z-10 p-1 text-[#1A1A1A]/30 hover:text-[#8B1A1A] transition-colors"
+          title="글 고정"
         >
-          <svg className="w-5 h-5" fill={isPinned ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
           </svg>
         </button>
@@ -371,9 +373,9 @@ const MasonryItem = memo(function MasonryItem({
       onClick={onClick}
       className="cursor-pointer group break-inside-avoid mb-4 p-3 border border-[#1A1A1A] relative"
     >
-      {/* 고정 표시 (좌측 상단) */}
+      {/* 고정 표시 (우측 상단) */}
       {isPinned && (
-        <div className="absolute top-1 left-1 z-10 p-1 text-[#8B1A1A]">
+        <div className="absolute top-1 right-1 z-10 p-1 text-[#8B1A1A]">
           <svg className="w-5 h-5" fill="currentColor" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
           </svg>
@@ -977,10 +979,10 @@ export default function BoardPage() {
       <AnimatePresence>
         {pinToast && (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 bg-[#1A1A1A] text-[#F5F0E8] text-sm font-bold shadow-lg"
+            exit={{ opacity: 0, y: -20 }}
+            className="fixed top-12 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 bg-[#1A1A1A] text-[#F5F0E8] text-sm font-bold shadow-lg"
           >
             {pinToast}
           </motion.div>
