@@ -87,40 +87,31 @@ const HeadlineArticle = memo(function HeadlineArticle({
     <article
       className="cursor-pointer group border-2 border-[#1A1A1A] flex relative"
     >
-      {/* 고정 표시 (좌측 상단) — 헤더 카드에서만 */}
-      {isPinned && (
-        isProfessor ? (
+      {/* 고정/해제 버튼 (교수님 전용) */}
+      {isProfessor && (
+        isPinned ? (
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onUnpin?.(); }}
-            className="absolute top-2 left-2 z-10 p-1 text-[#8B1A1A] hover:text-[#1A1A1A] transition-colors"
+            className="absolute top-2 right-2 z-10 p-1 text-[#1A1A1A]/30 hover:text-[#8B1A1A] transition-colors"
             title="고정 해제"
           >
             <svg className="w-5 h-5" fill="currentColor" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-            </svg>
+          </svg>
           </button>
         ) : (
-          <div className="absolute top-2 left-2 z-10 p-1 text-[#8B1A1A]">
-            <svg className="w-5 h-5" fill="currentColor" stroke="currentColor" viewBox="0 0 24 24">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onPin?.(); }}
+            className="absolute top-2 right-2 z-10 p-1 text-[#1A1A1A]/30 hover:text-[#8B1A1A] transition-colors"
+            title="글 고정"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
             </svg>
-          </div>
+          </button>
         )
-      )}
-
-      {/* 고정 버튼 (교수님 전용, 미고정 헤드라인에서만) */}
-      {isProfessor && !isPinned && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onPin?.(); }}
-          className="absolute top-2 right-2 z-10 p-1 text-[#1A1A1A]/30 hover:text-[#8B1A1A] transition-colors"
-          title="글 고정"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-          </svg>
-        </button>
       )}
 
       {/* 좌측 - 이미지 */}
