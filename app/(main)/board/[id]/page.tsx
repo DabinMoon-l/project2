@@ -234,7 +234,7 @@ export default function PostDetailPage() {
   }
 
   return (
-    <div className="min-h-screen pb-6" style={{ backgroundColor: '#F5F0E8' }}>
+    <div className="min-h-screen pb-16 overflow-x-hidden" style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 */}
       <header className="mx-4 mt-4 pb-4">
         <button
@@ -342,7 +342,7 @@ export default function PostDetailPage() {
 
         {/* 댓글 */}
         <section className="pt-4 border-t-2 border-[#1A1A1A]">
-          <h3 className="font-bold text-lg mb-4 text-[#1A1A1A]">댓글</h3>
+          <h3 className="font-bold text-lg mb-2 text-[#1A1A1A]">댓글</h3>
           <CommentSection postId={postId} />
         </section>
       </main>

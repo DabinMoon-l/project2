@@ -85,6 +85,7 @@ const HeadlineArticle = memo(function HeadlineArticle({
 
   return (
     <article
+      onClick={onClick}
       className="cursor-pointer group border-2 border-[#1A1A1A] flex relative"
     >
       {/* 고정/해제 버튼 (교수님 전용) */}
@@ -116,7 +117,6 @@ const HeadlineArticle = memo(function HeadlineArticle({
 
       {/* 좌측 - 이미지 */}
       <div
-        onClick={onClick}
         className="relative w-1/3 min-h-[160px] flex-shrink-0 bg-[#EDEAE4]"
       >
         <Image
@@ -130,7 +130,7 @@ const HeadlineArticle = memo(function HeadlineArticle({
       </div>
 
       {/* 우측 - 제목, 본문, 댓글 */}
-      <div onClick={onClick} className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col">
         {/* 제목 - 검정 박스 */}
         <div className="bg-[#1A1A1A] px-3 py-3">
           <h1 className="font-serif-display text-3xl md:text-4xl font-black text-[#F5F0E8] leading-tight">

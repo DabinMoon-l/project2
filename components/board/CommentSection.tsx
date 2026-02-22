@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '@/styles/themes/useTheme';
 import { Skeleton, useExpToast } from '@/components/common';
@@ -21,136 +21,50 @@ interface CommentSectionProps {
 }
 
 /**
- * 댓글 입력 폼
- */
-function CommentForm({
-  postId,
-  parentId,
-  onSuccess,
-  onCancel,
-  placeholder = '의견을 남겨주세요...',
-}: {
-  postId: string;
-  parentId?: string;
-  onSuccess: () => void;
-  onCancel?: () => void;
-  placeholder?: string;
-}) {
-  const { theme } = useTheme();
-  const { user } = useAuth();
-  const { profile } = useUser();
-  const { showExpToast } = useExpToast();
-  const { createComment, loading: creating, error: createError } = useCreateComment();
-  const [content, setContent] = useState('');
-
-  const handleSubmit = useCallback(async () => {
-    if (!content.trim() || !user) return;
-
-    const result = await createComment({
-      postId,
-      content: content.trim(),
-      isAnonymous: false,
-      parentId,
-    });
-
-    if (result) {
-      setContent('');
-      // EXP 토스트 표시 (댓글 작성 2 XP)
-      // Cloud Functions에서 자동으로 EXP가 지급되므로 약간 지연 후 최신 profile을 사용
-      setTimeout(() => {
-        const earnedExp = 2;
-        showExpToast(earnedExp, '댓글 작성');
-      }, 500);
-      onSuccess();
-    }
-  }, [content, user, postId, parentId, createComment, onSuccess, profile, showExpToast]);
-
-  if (!user) {
-    return (
-      <div className="p-3 text-center text-sm italic text-[#3A3A3A]">
-        댓글을 작성하려면 로그인이 필요합니다.
-      </div>
-    );
-  }
-
-  return (
-    <div className={parentId ? 'pl-6 pt-2' : 'p-4 border-b border-[#D4CFC4]'}>
-      <textarea
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        placeholder={placeholder}
-        rows={parentId ? 2 : 3}
-        maxLength={500}
-        className="w-full px-3 py-2 outline-none resize-none leading-relaxed text-sm"
-        style={{
-          border: '1px solid #1A1A1A',
-          backgroundColor: theme.colors.background,
-          color: theme.colors.text,
-        }}
-      />
-
-      <div className="flex items-center justify-end mt-2">
-        <div className="flex gap-2">
-          {onCancel && (
-            <button
-              type="button"
-              onClick={onCancel}
-              className="px-3 py-1 text-xs text-[#3A3A3A]"
-            >
-              취소
-            </button>
-          )}
-          <motion.button
-            type="button"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={handleSubmit}
-            disabled={!content.trim() || creating}
-            className="px-3 py-1 text-xs disabled:opacity-50"
-            style={{
-              backgroundColor: '#1A1A1A',
-              color: '#F5F0E8',
-            }}
-          >
-            {creating ? '작성 중...' : parentId ? '답글 작성' : '댓글 작성'}
-          </motion.button>
-        </div>
-      </div>
-
-      {createError && (
-        <p className="mt-1 text-xs" style={{ color: '#8B1A1A' }}>{createError}</p>
-      )}
-    </div>
-  );
-}
-
-/**
- * 댓글 섹션 컴포넌트 (대댓글 지원)
+ * 댓글 섹션 컴포넌트 — 하단 고정 입력바
  */
 export default function CommentSection({ postId }: CommentSectionProps) {
   const { theme } = useTheme();
   const { user } = useAuth();
+  const { profile } = useUser();
+  const { showExpToast } = useExpToast();
   const { comments, loading, refresh } = useComments(postId);
-  const { updateComment, loading: updating } = useUpdateComment();
+  const { createComment, loading: creating } = useCreateComment();
+  const { updateComment } = useUpdateComment();
   const { deleteComment } = useDeleteComment();
-  const { toggleCommentLike, isCommentLiked } = useCommentLike();
+  const { toggleCommentLike } = useCommentLike();
 
-  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyingTo, setReplyingTo] = useState<{ id: string; nickname: string } | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [content, setContent] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const inputBarRef = useRef<HTMLDivElement>(null);
+
+  // textarea 높이 자동 조절
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = `${Math.min(ta.scrollHeight, 120)}px`;
+  }, [content]);
+
+  // 답글 시 포커스
+  useEffect(() => {
+    if (replyingTo) {
+      textareaRef.current?.focus();
+    }
+  }, [replyingTo]);
 
   // 댓글을 계층 구조로 구성하고 좋아요순 > 최신순으로 정렬
-  // 대댓글 좋아요가 높으면 모댓글도 함께 위로 올라감
   const organizeComments = (flatComments: Comment[]): Comment[] => {
     const commentMap = new Map<string, Comment>();
     const rootComments: Comment[] = [];
 
-    // 먼저 모든 댓글을 맵에 저장
     flatComments.forEach(comment => {
       commentMap.set(comment.id, { ...comment, replies: [] });
     });
 
-    // 계층 구조 구성
     flatComments.forEach(comment => {
       const commentWithReplies = commentMap.get(comment.id)!;
       if (comment.parentId) {
@@ -159,7 +73,6 @@ export default function CommentSection({ postId }: CommentSectionProps) {
           parent.replies = parent.replies || [];
           parent.replies.push(commentWithReplies);
         } else {
-          // 부모가 없으면 루트로 처리
           rootComments.push(commentWithReplies);
         }
       } else {
@@ -167,7 +80,6 @@ export default function CommentSection({ postId }: CommentSectionProps) {
       }
     });
 
-    // 대댓글 정렬: 좋아요순 > 오래된순
     rootComments.forEach(comment => {
       if (comment.replies && comment.replies.length > 0) {
         comment.replies.sort((a, b) => {
@@ -178,9 +90,7 @@ export default function CommentSection({ postId }: CommentSectionProps) {
       }
     });
 
-    // 모댓글 정렬: max(모댓글 좋아요, 대댓글 중 최대 좋아요)순 > 오래된순
     rootComments.sort((a, b) => {
-      // 각 댓글의 점수 = max(본인 좋아요, 대댓글들의 최대 좋아요)
       const getMaxLikes = (comment: Comment): number => {
         const ownLikes = comment.likes || 0;
         const replyMaxLikes = comment.replies && comment.replies.length > 0
@@ -191,11 +101,7 @@ export default function CommentSection({ postId }: CommentSectionProps) {
 
       const aMaxLikes = getMaxLikes(a);
       const bMaxLikes = getMaxLikes(b);
-
-      // 좋아요순 (내림차순)
       if (bMaxLikes !== aMaxLikes) return bMaxLikes - aMaxLikes;
-
-      // 오래된순 (오름차순)
       return a.createdAt.getTime() - b.createdAt.getTime();
     });
 
@@ -204,54 +110,57 @@ export default function CommentSection({ postId }: CommentSectionProps) {
 
   const organizedComments = organizeComments(comments);
 
+  // 댓글 제출
+  const handleSubmit = useCallback(async () => {
+    if (!content.trim() || !user) return;
+
+    const result = await createComment({
+      postId,
+      content: content.trim(),
+      isAnonymous: false,
+      parentId: replyingTo?.id,
+    });
+
+    if (result) {
+      setContent('');
+      setReplyingTo(null);
+      setTimeout(() => {
+        showExpToast(2, '댓글 작성');
+      }, 500);
+      refresh();
+    }
+  }, [content, user, postId, replyingTo, createComment, refresh, showExpToast]);
+
   const handleDelete = useCallback(async (commentId: string) => {
     setDeletingId(commentId);
     const success = await deleteComment(commentId, postId);
-    if (success) {
-      refresh();
-    }
+    if (success) refresh();
     setDeletingId(null);
   }, [deleteComment, postId, refresh]);
 
-  const handleEdit = useCallback(async (commentId: string, content: string) => {
+  const handleEdit = useCallback(async (commentId: string, newContent: string) => {
     setEditingId(commentId);
-    const success = await updateComment(commentId, content);
-    if (success) {
-      refresh();
-    }
+    const success = await updateComment(commentId, newContent);
+    if (success) refresh();
     setEditingId(null);
   }, [updateComment, refresh]);
 
-  const handleReplySuccess = useCallback(() => {
-    setReplyingTo(null);
-    refresh();
-  }, [refresh]);
-
-  // 댓글 좋아요 토글
   const handleLike = useCallback(async (commentId: string) => {
     const success = await toggleCommentLike(commentId);
-    if (success) {
-      refresh();
-    }
+    if (success) refresh();
   }, [toggleCommentLike, refresh]);
 
-  // 사용자가 좋아요한 댓글인지 확인 (댓글 데이터 기반)
   const checkIsLiked = useCallback((commentId: string) => {
     const comment = comments.find(c => c.id === commentId);
     return comment?.likedBy?.includes(user?.uid || '') || false;
   }, [comments, user?.uid]);
 
-  return (
-    <div
-      className="border border-[#1A1A1A]"
-      style={{ backgroundColor: theme.colors.backgroundCard }}
-    >
-      {/* 댓글 작성 폼 */}
-      <CommentForm
-        postId={postId}
-        onSuccess={refresh}
-      />
+  const handleReply = useCallback((commentId: string, nickname: string) => {
+    setReplyingTo({ id: commentId, nickname });
+  }, []);
 
+  return (
+    <>
       {/* 댓글 목록 */}
       <div className="p-4">
         {loading && (
@@ -280,7 +189,7 @@ export default function CommentSection({ postId }: CommentSectionProps) {
                   currentUserId={user?.uid}
                   onDelete={handleDelete}
                   onEdit={handleEdit}
-                  onReply={() => setReplyingTo(comment.id)}
+                  onReply={() => handleReply(comment.id, comment.authorNickname)}
                   onLike={handleLike}
                   isLiked={checkIsLiked(comment.id)}
                   isDeleting={deletingId === comment.id}
@@ -306,22 +215,83 @@ export default function CommentSection({ postId }: CommentSectionProps) {
                     ))}
                   </div>
                 )}
-
-                {/* 대댓글 작성 폼 */}
-                {replyingTo === comment.id && (
-                  <CommentForm
-                    postId={postId}
-                    parentId={comment.id}
-                    onSuccess={handleReplySuccess}
-                    onCancel={() => setReplyingTo(null)}
-                    placeholder={`${comment.authorNickname}님에게 답글...`}
-                  />
-                )}
               </div>
             ))}
           </AnimatePresence>
         )}
       </div>
-    </div>
+
+      {/* 하단 고정 입력바 */}
+      {user && (
+        <div
+          ref={inputBarRef}
+          className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#1A1A1A]"
+          style={{ backgroundColor: '#F5F0E8' }}
+        >
+          {/* 답글 대상 표시 */}
+          <AnimatePresence>
+            {replyingTo && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="flex items-center justify-between px-4 py-1.5 bg-[#EDEAE4] border-b border-[#D4CFC4]">
+                  <span className="text-xs text-[#3A3A3A]">
+                    {replyingTo.nickname}님에게 답글
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setReplyingTo(null)}
+                    className="text-[#3A3A3A] p-0.5"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* 입력 영역 */}
+          <div className="flex items-end gap-2 px-4 py-2.5" style={{ paddingBottom: 'max(0.625rem, env(safe-area-inset-bottom))' }}>
+            <textarea
+              ref={textareaRef}
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSubmit();
+                }
+              }}
+              placeholder={replyingTo ? `${replyingTo.nickname}님에게 답글...` : '의견을 남겨주세요...'}
+              rows={1}
+              maxLength={500}
+              className="flex-1 px-3 py-2 outline-none resize-none leading-relaxed text-sm"
+              style={{
+                border: '1px solid #1A1A1A',
+                backgroundColor: theme.colors.background,
+                color: theme.colors.text,
+                maxHeight: '120px',
+              }}
+            />
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={!content.trim() || creating}
+              className="flex-shrink-0 w-9 h-9 flex items-center justify-center disabled:opacity-30 transition-opacity"
+              style={{ backgroundColor: '#1A1A1A' }}
+            >
+              <svg className="w-4 h-4 text-[#F5F0E8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
