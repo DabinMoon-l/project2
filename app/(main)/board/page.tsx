@@ -88,31 +88,18 @@ const HeadlineArticle = memo(function HeadlineArticle({
       onClick={onClick}
       className="cursor-pointer group border-2 border-[#1A1A1A] flex relative"
     >
-      {/* 고정/해제 버튼 (교수님 전용) */}
-      {isProfessor && (
-        isPinned ? (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); e.preventDefault(); onUnpin?.(); }}
-            className="absolute top-1 right-1 z-20 p-2.5 text-[#1A1A1A]/30 hover:text-[#8B1A1A] transition-colors"
-            title="고정 해제"
-          >
-            <svg className="w-5 h-5" fill="currentColor" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-            </svg>
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); e.preventDefault(); onPin?.(); }}
-            className="absolute top-1 right-1 z-20 p-2.5 text-[#1A1A1A]/30 hover:text-[#8B1A1A] transition-colors"
-            title="글 고정"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-            </svg>
-          </button>
-        )
+      {/* 고정 버튼 (교수님 전용, 미고정 헤드라인에서만) */}
+      {isProfessor && !isPinned && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onPin?.(); }}
+          className="absolute top-1 right-1 z-20 p-2.5 text-[#1A1A1A]/30 hover:text-[#8B1A1A] transition-colors"
+          title="글 고정"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+          </svg>
+        </button>
       )}
 
       {/* 좌측 - 이미지 */}
@@ -245,6 +232,20 @@ const PinnedPostsCarousel = memo(function PinnedPostsCarousel({
           </motion.div>
         </AnimatePresence>
       </div>
+
+      {/* 고정 해제 버튼 (교수님 전용, 캐러셀 위 오버레이) */}
+      {isProfessor && (
+        <button
+          type="button"
+          onClick={() => onUnpin(posts[currentIndex].id)}
+          className="absolute top-2 right-2 z-20 p-2.5 text-[#1A1A1A]/30 hover:text-[#8B1A1A] active:text-[#8B1A1A] transition-colors"
+          title="고정 해제"
+        >
+          <svg className="w-5 h-5" fill="currentColor" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+          </svg>
+        </button>
+      )}
 
       {/* 네비게이션 화살표 (PC) */}
       {posts.length > 1 && (
