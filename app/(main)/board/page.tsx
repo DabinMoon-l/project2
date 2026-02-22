@@ -87,7 +87,16 @@ const HeadlineArticle = memo(function HeadlineArticle({
     <article
       className="cursor-pointer group border-2 border-[#1A1A1A] flex relative"
     >
-      {/* 고정 버튼 (교수님 전용) */}
+      {/* 고정 표시 (좌측 상단) */}
+      {isPinned && (
+        <div className="absolute top-2 left-2 z-10 p-1 text-[#8B1A1A]">
+          <svg className="w-5 h-5" fill="currentColor" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+          </svg>
+        </div>
+      )}
+
+      {/* 고정/해제 버튼 (교수님 전용, 우측 상단) */}
       {isProfessor && (
         <button
           type="button"
@@ -99,34 +108,17 @@ const HeadlineArticle = memo(function HeadlineArticle({
               onPin?.();
             }
           }}
-          className={`absolute top-2 right-2 z-10 p-1.5 transition-colors ${
+          className={`absolute top-2 right-2 z-10 p-1 transition-colors ${
             isPinned
-              ? 'bg-[#D4AF37] text-[#1A1A1A]'
-              : 'bg-[#1A1A1A]/80 text-[#F5F0E8] hover:bg-[#D4AF37] hover:text-[#1A1A1A]'
+              ? 'text-[#8B1A1A]/60 hover:text-[#1A1A1A]'
+              : 'text-[#1A1A1A]/30 hover:text-[#8B1A1A]'
           }`}
           title={isPinned ? '고정 해제' : '글 고정'}
         >
-          <svg
-            className="w-4 h-4"
-            fill={isPinned ? 'currentColor' : 'none'}
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-            />
+          <svg className="w-5 h-5" fill={isPinned ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
           </svg>
         </button>
-      )}
-
-      {/* 고정됨 표시 */}
-      {isPinned && (
-        <div className="absolute top-2 left-2 z-10 px-2 py-0.5 bg-[#D4AF37] text-[#1A1A1A] text-xs font-bold">
-          📌 PINNED
-        </div>
       )}
 
       {/* 좌측 - 이미지 */}
@@ -379,6 +371,15 @@ const MasonryItem = memo(function MasonryItem({
       onClick={onClick}
       className="cursor-pointer group break-inside-avoid mb-4 p-3 border border-[#1A1A1A] relative"
     >
+      {/* 고정 표시 (좌측 상단) */}
+      {isPinned && (
+        <div className="absolute top-1 left-1 z-10 p-1 text-[#8B1A1A]">
+          <svg className="w-5 h-5" fill="currentColor" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+          </svg>
+        </div>
+      )}
+
       {/* 고정 버튼 (교수님 전용) */}
       {isProfessor && !isPinned && (
         <button
@@ -387,21 +388,11 @@ const MasonryItem = memo(function MasonryItem({
             e.stopPropagation();
             onPin?.();
           }}
-          className="absolute top-1 right-1 z-10 p-1 bg-[#1A1A1A]/60 text-[#F5F0E8] hover:bg-[#D4AF37] hover:text-[#1A1A1A] transition-colors opacity-0 group-hover:opacity-100"
+          className="absolute top-1 right-1 z-10 p-1 text-[#1A1A1A]/30 hover:text-[#8B1A1A] transition-colors opacity-0 group-hover:opacity-100"
           title="글 고정"
         >
-          <svg
-            className="w-3 h-3"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-            />
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
           </svg>
         </button>
       )}
@@ -500,6 +491,10 @@ export default function BoardPage() {
 
   // 교수님 관리 모달 상태
   const [showManagementModal, setShowManagementModal] = useState(false);
+
+  // 핀 피드백 토스트
+  const [pinToast, setPinToast] = useState<string | null>(null);
+  const pinToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 사용자의 과목 ID (교수님은 선택한 과목, 학생은 자신의 과목)
   const activeCourseId = isProfessor ? selectedCourseId : profile?.courseId;
@@ -668,21 +663,30 @@ export default function BoardPage() {
     }
   }, [router, isProfessor]);
 
+  // 핀 토스트 표시
+  const showPinToast = useCallback((message: string) => {
+    if (pinToastTimer.current) clearTimeout(pinToastTimer.current);
+    setPinToast(message);
+    pinToastTimer.current = setTimeout(() => setPinToast(null), 2000);
+  }, []);
+
   // 게시글 고정 핸들러
   const handlePinPost = useCallback(async (postId: string) => {
     const success = await pinPost(postId);
     if (success) {
       refreshPinned();
+      showPinToast('게시글이 고정되었습니다');
     }
-  }, [pinPost, refreshPinned]);
+  }, [pinPost, refreshPinned, showPinToast]);
 
   // 게시글 고정 해제 핸들러
   const handleUnpinPost = useCallback(async (postId: string) => {
     const success = await unpinPost(postId);
     if (success) {
       refreshPinned();
+      showPinToast('고정이 해제되었습니다');
     }
-  }, [unpinPost, refreshPinned]);
+  }, [unpinPost, refreshPinned, showPinToast]);
 
   // 고정 글이 있으면 캐러셀 표시, 없으면 최신 글 표시
   const hasPinnedPosts = pinnedPosts.length > 0;
@@ -966,6 +970,20 @@ export default function BoardPage() {
               />
             </svg>
           </motion.button>
+        )}
+      </AnimatePresence>
+
+      {/* 핀 피드백 토스트 */}
+      <AnimatePresence>
+        {pinToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 bg-[#1A1A1A] text-[#F5F0E8] text-sm font-bold shadow-lg"
+          >
+            {pinToast}
+          </motion.div>
         )}
       </AnimatePresence>
 

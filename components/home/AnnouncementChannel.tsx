@@ -699,7 +699,7 @@ function linkify(text: string): React.ReactNode[] {
     const url = match[0];
     parts.push(
       <a key={match.index} href={url} target="_blank" rel="noopener noreferrer"
-        className="text-blue-600 underline break-all"
+        className="text-[#5C5C5C] underline break-all"
         onClick={(e) => e.stopPropagation()}
       >{url}</a>
     );
