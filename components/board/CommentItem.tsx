@@ -61,6 +61,11 @@ export default function CommentItem({
 
   const isOwner = currentUserId === comment.authorId;
 
+  // 작성자 표시: 반 정보 있으면 닉네임·반, 없으면(교수님) 닉네임만
+  const authorDisplay = comment.authorClassType
+    ? `${comment.authorNickname}·${comment.authorClassType}반`
+    : comment.authorNickname;
+
   const handleDeleteClick = () => {
     setShowDeleteConfirm(true);
   };
@@ -101,15 +106,17 @@ export default function CommentItem({
       {/* 댓글 헤더 */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          {/* ㄴ 표시 */}
-          <span className="text-base font-bold text-[#3A3A3A]">ㄴ</span>
+          {/* ㄴ 표시 — 대댓글만 */}
+          {isReply && (
+            <span className="text-base font-bold text-[#3A3A3A]">ㄴ</span>
+          )}
 
-          {/* 작성자 이름: 닉네임·반·계급 형식 */}
+          {/* 작성자 */}
           <span
             className="text-sm font-semibold"
             style={{ color: theme.colors.text }}
           >
-            {comment.authorNickname}·{comment.authorClassType || '?'}반
+            {authorDisplay}
           </span>
 
           {/* 구분선 */}
@@ -175,7 +182,7 @@ export default function CommentItem({
 
       {/* 댓글 내용 (수정 모드 / 일반 모드) */}
       {isEditMode ? (
-        <div className="pl-5 space-y-2">
+        <div className={isReply ? 'pl-5 space-y-2' : 'space-y-2'}>
           <textarea
             value={editContent}
             onChange={(e) => setEditContent(e.target.value)}
@@ -216,7 +223,7 @@ export default function CommentItem({
           </div>
         </div>
       ) : (
-        <div className="pl-5 overflow-hidden max-w-full">
+        <div className={`overflow-hidden max-w-full ${isReply ? 'pl-5' : ''}`}>
           <p
             className={`text-sm whitespace-pre-wrap leading-relaxed ${
               !isExpanded && isLongContent ? 'line-clamp-3' : ''
@@ -248,7 +255,7 @@ export default function CommentItem({
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="mt-3 ml-5 p-3"
+          className={`mt-3 p-3 ${isReply ? 'ml-5' : ''}`}
           style={{
             border: '1px solid #8B1A1A',
             backgroundColor: '#FEE2E2',

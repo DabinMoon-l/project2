@@ -29,6 +29,7 @@ import {
   DocumentSnapshot,
   QueryDocumentSnapshot,
   Timestamp,
+  onSnapshot,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from './useAuth';
@@ -737,39 +738,40 @@ export const useComments = (postId: string): UseCommentsReturn => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadComments = useCallback(async () => {
+  // onSnapshot 실시간 구독
+  useEffect(() => {
     if (!postId) {
       setLoading(false);
       return;
     }
 
-    try {
-      setLoading(true);
-      setError(null);
+    setLoading(true);
+    setError(null);
 
-      const commentsQuery = query(
-        collection(db, 'comments'),
-        where('postId', '==', postId),
-        orderBy('createdAt', 'asc')
-      );
+    const commentsQuery = query(
+      collection(db, 'comments'),
+      where('postId', '==', postId),
+      orderBy('createdAt', 'asc')
+    );
 
-      const snapshot = await getDocs(commentsQuery);
-      setComments(snapshot.docs.map(docToComment));
-    } catch (err) {
-      console.error('댓글 로드 실패:', err);
-      setError('댓글을 불러오는데 실패했습니다.');
-    } finally {
-      setLoading(false);
-    }
+    const unsubscribe = onSnapshot(
+      commentsQuery,
+      (snapshot) => {
+        setComments(snapshot.docs.map(docToComment));
+        setLoading(false);
+      },
+      (err) => {
+        console.error('댓글 실시간 구독 실패:', err);
+        setError('댓글을 불러오는데 실패했습니다.');
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
   }, [postId]);
 
-  const refresh = useCallback(async () => {
-    await loadComments();
-  }, [loadComments]);
-
-  useEffect(() => {
-    loadComments();
-  }, [loadComments]);
+  // refresh는 onSnapshot이 자동 처리하므로 no-op
+  const refresh = useCallback(async () => {}, []);
 
   return { comments, loading, error, refresh };
 };
