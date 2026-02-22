@@ -86,6 +86,7 @@ export interface Comment {
   authorNickname: string;
   authorClassType?: 'A' | 'B' | 'C' | 'D'; // 작성자 반
   content: string;
+  imageUrls?: string[]; // 댓글 이미지
   isAnonymous: boolean;
   createdAt: Date;
   replies?: Comment[]; // 대댓글 목록 (클라이언트에서 구성)
@@ -112,6 +113,7 @@ export interface CreateCommentData {
   content: string;
   isAnonymous: boolean;
   parentId?: string; // 대댓글인 경우 부모 댓글 ID
+  imageUrls?: string[]; // 댓글 이미지 URL
 }
 
 /** usePosts 훅 반환 타입 */
@@ -365,6 +367,7 @@ const docToComment = (doc: QueryDocumentSnapshot | DocumentSnapshot): Comment =>
     authorNickname: data?.authorNickname || '알 수 없음',
     authorClassType: data?.authorClassType,
     content: data?.content || '',
+    imageUrls: data?.imageUrls || [],
     isAnonymous: data?.isAnonymous || false,
     createdAt: data?.createdAt?.toDate() || new Date(),
     likes: data?.likes || 0,
@@ -1038,6 +1041,7 @@ export const useCreateComment = (): UseCreateCommentReturn => {
           authorNickname: userNickname,
           authorClassType: userClassType || null,
           content: data.content,
+          imageUrls: data.imageUrls || [],
           isAnonymous: false, // 익명 기능 사용 안 함
           createdAt: serverTimestamp(),
         };

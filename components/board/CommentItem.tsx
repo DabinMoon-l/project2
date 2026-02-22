@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useTheme } from '@/styles/themes/useTheme';
 import type { Comment } from '@/lib/hooks/useBoard';
@@ -55,9 +55,14 @@ export default function CommentItem({
   const [isEditMode, setIsEditMode] = useState(false);
   const [editContent, setEditContent] = useState(comment.content);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
+  const [imageCurrentPage, setImageCurrentPage] = useState(0);
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+  const isLongPress = useRef(false);
 
   // 댓글이 3줄 이상인지 확인 (약 57자 이상 또는 줄바꿈 3개 이상)
   const isLongContent = comment.content.length > 57 || (comment.content.match(/\n/g) || []).length >= 3;
+  const images = comment.imageUrls || [];
 
   const isOwner = currentUserId === comment.authorId;
 
@@ -247,6 +252,63 @@ export default function CommentItem({
               {isExpanded ? '접기' : '...더보기'}
             </button>
           )}
+        </div>
+      )}
+
+      {/* 이미지 갤러리 */}
+      {images.length > 0 && !isEditMode && (() => {
+        // 2장씩 페이지 분할
+        const pages: string[][] = [];
+        for (let i = 0; i < images.length; i += 2) {
+          pages.push(images.slice(i, i + 2));
+        }
+        const totalPages = pages.length;
+
+        return (
+          <div className={`mt-2 ${isReply ? 'pl-5' : ''}`}>
+            <div className="grid grid-cols-2 gap-2">
+              {pages[imageCurrentPage]?.map((url, index) => (
+                <div
+                  key={`${imageCurrentPage}-${index}`}
+                  className="relative aspect-square bg-gray-100 cursor-pointer"
+                  onTouchStart={() => {
+                    isLongPress.current = false;
+                    longPressTimer.current = setTimeout(() => {
+                      isLongPress.current = true;
+                      const link = document.createElement('a');
+                      link.href = url;
+                      link.download = `image_${Date.now()}.jpg`;
+                      link.target = '_blank';
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    }, 800);
+                  }}
+                  onTouchEnd={() => {
+                    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+                  }}
+                  onClick={() => { if (!isLongPress.current) setViewingImage(url); isLongPress.current = false; }}
+                >
+                  <img src={url} alt={`이미지 ${imageCurrentPage * 2 + index + 1}`} className="w-full h-full object-cover" draggable={false} />
+                </div>
+              ))}
+            </div>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-4 mt-2">
+                <button onClick={() => setImageCurrentPage(p => Math.max(0, p - 1))} disabled={imageCurrentPage === 0} className="px-2 py-0.5 text-xs disabled:opacity-30" style={{ border: '1px solid #1A1A1A' }}>←</button>
+                <span className="text-xs text-[#3A3A3A]">{imageCurrentPage + 1} / {totalPages}</span>
+                <button onClick={() => setImageCurrentPage(p => Math.min(totalPages - 1, p + 1))} disabled={imageCurrentPage === totalPages - 1} className="px-2 py-0.5 text-xs disabled:opacity-30" style={{ border: '1px solid #1A1A1A' }}>→</button>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* 이미지 크게 보기 모달 */}
+      {viewingImage && (
+        <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4" onClick={() => setViewingImage(null)}>
+          <button className="absolute top-4 right-4 text-white text-3xl font-bold z-10" onClick={() => setViewingImage(null)}>×</button>
+          <img src={viewingImage} alt="크게 보기" className="max-w-full max-h-full object-contain" onClick={(e) => e.stopPropagation()} />
         </div>
       )}
 

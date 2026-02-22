@@ -15,13 +15,14 @@ import {
 } from '@/lib/hooks/useBoard';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useUser } from '@/lib/contexts';
+import { useUpload } from '@/lib/hooks/useStorage';
 
 interface CommentSectionProps {
   postId: string;
 }
 
 /**
- * 댓글 섹션 컴포넌트 — 하단 고정 입력바
+ * 댓글 섹션 컴포넌트 — 하단 고정 입력바 + 이미지 첨부
  */
 export default function CommentSection({ postId }: CommentSectionProps) {
   const { theme } = useTheme();
@@ -33,13 +34,16 @@ export default function CommentSection({ postId }: CommentSectionProps) {
   const { updateComment } = useUpdateComment();
   const { deleteComment } = useDeleteComment();
   const { toggleCommentLike } = useCommentLike();
+  const { uploadMultipleImages, loading: uploading } = useUpload();
 
   const [replyingTo, setReplyingTo] = useState<{ id: string; nickname: string } | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [content, setContent] = useState('');
+  const [pendingImages, setPendingImages] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const inputBarRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // textarea 높이 자동 조절
   useEffect(() => {
@@ -55,6 +59,34 @@ export default function CommentSection({ postId }: CommentSectionProps) {
       textareaRef.current?.focus();
     }
   }, [replyingTo]);
+
+  // 이미지 프리뷰 URL 정리
+  useEffect(() => {
+    return () => { imagePreviews.forEach(u => URL.revokeObjectURL(u)); };
+  }, [imagePreviews]);
+
+  // 이미지 선택
+  const handleImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const newFiles = [...pendingImages, ...files].slice(0, 5); // 최대 5장
+    setPendingImages(newFiles);
+
+    // 프리뷰 생성
+    imagePreviews.forEach(u => URL.revokeObjectURL(u));
+    setImagePreviews(newFiles.map(f => URL.createObjectURL(f)));
+
+    // input 초기화
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, [pendingImages, imagePreviews]);
+
+  // 이미지 제거
+  const removeImage = useCallback((index: number) => {
+    URL.revokeObjectURL(imagePreviews[index]);
+    setPendingImages(prev => prev.filter((_, i) => i !== index));
+    setImagePreviews(prev => prev.filter((_, i) => i !== index));
+  }, [imagePreviews]);
 
   // 댓글을 계층 구조로 구성하고 좋아요순 > 최신순으로 정렬
   const organizeComments = (flatComments: Comment[]): Comment[] => {
@@ -112,24 +144,34 @@ export default function CommentSection({ postId }: CommentSectionProps) {
 
   // 댓글 제출
   const handleSubmit = useCallback(async () => {
-    if (!content.trim() || !user) return;
+    if ((!content.trim() && pendingImages.length === 0) || !user) return;
+
+    // 이미지 업로드
+    let imageUrls: string[] = [];
+    if (pendingImages.length > 0) {
+      imageUrls = await uploadMultipleImages(pendingImages);
+    }
 
     const result = await createComment({
       postId,
       content: content.trim(),
       isAnonymous: false,
       parentId: replyingTo?.id,
+      imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
     });
 
     if (result) {
       setContent('');
+      setPendingImages([]);
+      imagePreviews.forEach(u => URL.revokeObjectURL(u));
+      setImagePreviews([]);
       setReplyingTo(null);
       setTimeout(() => {
         showExpToast(2, '댓글 작성');
       }, 500);
       refresh();
     }
-  }, [content, user, postId, replyingTo, createComment, refresh, showExpToast]);
+  }, [content, pendingImages, user, postId, replyingTo, createComment, uploadMultipleImages, refresh, showExpToast, imagePreviews]);
 
   const handleDelete = useCallback(async (commentId: string) => {
     setDeletingId(commentId);
@@ -158,6 +200,8 @@ export default function CommentSection({ postId }: CommentSectionProps) {
   const handleReply = useCallback((commentId: string, nickname: string) => {
     setReplyingTo({ id: commentId, nickname });
   }, []);
+
+  const isSending = creating || uploading;
 
   return (
     <>
@@ -224,7 +268,6 @@ export default function CommentSection({ postId }: CommentSectionProps) {
       {/* 하단 고정 입력바 */}
       {user && (
         <div
-          ref={inputBarRef}
           className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#1A1A1A]"
           style={{ backgroundColor: '#F5F0E8' }}
         >
@@ -255,8 +298,46 @@ export default function CommentSection({ postId }: CommentSectionProps) {
             )}
           </AnimatePresence>
 
+          {/* 이미지 프리뷰 */}
+          {imagePreviews.length > 0 && (
+            <div className="flex gap-2 px-4 pt-2 overflow-x-auto">
+              {imagePreviews.map((preview, index) => (
+                <div key={index} className="relative flex-shrink-0 w-16 h-16">
+                  <img src={preview} alt="" className="w-full h-full object-cover border border-[#1A1A1A]" />
+                  <button
+                    type="button"
+                    onClick={() => removeImage(index)}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#1A1A1A] text-[#F5F0E8] rounded-full flex items-center justify-center text-xs"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* 입력 영역 */}
           <div className="flex items-end gap-2 px-4 py-2.5" style={{ paddingBottom: 'max(0.625rem, env(safe-area-inset-bottom))' }}>
+            {/* 이미지 첨부 버튼 */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isSending}
+              className="flex-shrink-0 w-9 h-9 flex items-center justify-center text-[#3A3A3A] hover:text-[#1A1A1A] disabled:opacity-30 transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={handleImageSelect}
+            />
+
             <textarea
               ref={textareaRef}
               value={content}
@@ -281,13 +362,17 @@ export default function CommentSection({ postId }: CommentSectionProps) {
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={!content.trim() || creating}
+              disabled={(!content.trim() && pendingImages.length === 0) || isSending}
               className="flex-shrink-0 w-9 h-9 flex items-center justify-center disabled:opacity-30 transition-opacity"
               style={{ backgroundColor: '#1A1A1A' }}
             >
-              <svg className="w-4 h-4 text-[#F5F0E8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-              </svg>
+              {isSending ? (
+                <div className="w-4 h-4 border-2 border-[#F5F0E8] border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <svg className="w-4 h-4 text-[#F5F0E8]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                </svg>
+              )}
             </button>
           </div>
         </div>
