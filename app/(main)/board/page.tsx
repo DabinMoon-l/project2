@@ -92,19 +92,19 @@ const HeadlineArticle = memo(function HeadlineArticle({
         isPinned ? (
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); onUnpin?.(); }}
-            className="absolute top-2 right-2 z-10 p-1 text-[#1A1A1A]/30 hover:text-[#8B1A1A] transition-colors"
+            onClick={(e) => { e.stopPropagation(); e.preventDefault(); onUnpin?.(); }}
+            className="absolute top-1 right-1 z-20 p-2.5 text-[#1A1A1A]/30 hover:text-[#8B1A1A] transition-colors"
             title="고정 해제"
           >
             <svg className="w-5 h-5" fill="currentColor" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-          </svg>
+            </svg>
           </button>
         ) : (
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); onPin?.(); }}
-            className="absolute top-2 right-2 z-10 p-1 text-[#1A1A1A]/30 hover:text-[#8B1A1A] transition-colors"
+            onClick={(e) => { e.stopPropagation(); e.preventDefault(); onPin?.(); }}
+            className="absolute top-1 right-1 z-20 p-2.5 text-[#1A1A1A]/30 hover:text-[#8B1A1A] transition-colors"
             title="글 고정"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
