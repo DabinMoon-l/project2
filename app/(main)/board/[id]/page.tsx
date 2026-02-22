@@ -183,7 +183,7 @@ export default function PostDetailPage() {
   // 로딩
   if (loading) {
     return (
-      <div className="min-h-screen pb-28" style={{ backgroundColor: '#F5F0E8' }}>
+      <div className="min-h-screen pb-6" style={{ backgroundColor: '#F5F0E8' }}>
         <header className="mx-4 mt-4 pb-4 border-b-2 border-[#1A1A1A]">
           <button onClick={() => router.back()} className="flex items-center gap-2 text-sm py-2">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -204,7 +204,7 @@ export default function PostDetailPage() {
   // 에러
   if (error || !post) {
     return (
-      <div className="min-h-screen pb-28" style={{ backgroundColor: '#F5F0E8' }}>
+      <div className="min-h-screen pb-6" style={{ backgroundColor: '#F5F0E8' }}>
         <header className="mx-4 mt-4 pb-4 border-b-2 border-[#1A1A1A]">
           <button onClick={() => router.back()} className="flex items-center gap-2 text-sm py-2">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -234,7 +234,7 @@ export default function PostDetailPage() {
   }
 
   return (
-    <div className="min-h-screen pb-28" style={{ backgroundColor: '#F5F0E8' }}>
+    <div className="min-h-screen pb-6" style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 */}
       <header className="mx-4 mt-4 pb-4">
         <button

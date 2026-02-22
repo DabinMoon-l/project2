@@ -40,6 +40,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
     isProfHome ||
     pathname?.match(/^\/quiz\/[^/]+/) !== null ||
     pathname?.includes('/edit') ||
+    (pathname?.match(/^\/board\/[^/]+/) !== null && pathname !== '/board/write' && pathname !== '/board/manage') ||
     pathname === '/ranking' ||
     pathname === '/review/random';
 
