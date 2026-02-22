@@ -11,6 +11,9 @@
   },
   "dependencies": {
     "date-fns": "^3.0.0",
+    "docx": "^9.5.3",
+    "exceljs": "^4.4.0",
+    "file-saver": "^2.0.5",
     "firebase": "^10.7.0",
     "framer-motion": "^11.0.0",
     "jszip": "^3.10.1",
@@ -19,6 +22,7 @@
     "next-pwa": "^5.6.0",
     "pdfjs-dist": "^4.0.379",
     "react": "^19",
+    "react-d3-cloud": "^1.0.6",
     "react-dom": "^19",
     "react-window": "^2.2.7",
     "tesseract.js": "^5.0.4",
@@ -27,6 +31,7 @@
   "devDependencies": {
     "@next/bundle-analyzer": "^15.0.0",
     "@opentelemetry/api": "^1.9.0",
+    "@types/file-saver": "^2.0.7",
     "@types/jszip": "^3.4.0",
     "@types/node": "^22",
     "@types/react": "^19",

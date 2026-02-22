@@ -51,7 +51,7 @@ export default function RabbitImage({ rabbitId, size, className = '', priority =
       className={className}
       priority={priority}
       draggable={false}
-      style={style}
+      style={{ width: 'auto', height: 'auto', ...style }}
     />
   );
 }

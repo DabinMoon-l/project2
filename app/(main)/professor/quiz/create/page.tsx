@@ -48,6 +48,7 @@ export default function CreateQuizPage() {
     description: '',
     targetClass: 'all',
     difficulty: 'normal',
+    quizType: undefined,
   });
 
   // 문제 목록
@@ -537,6 +538,7 @@ export default function CreateQuizPage() {
           questions: flattenedQuestions,
           questionCount: calculateQuestionCount(questions),
           courseId: selectedCourseId,
+          quizType: quizMeta.quizType,
         };
 
         const quizId = await createQuiz(
@@ -675,7 +677,7 @@ export default function CreateQuizPage() {
                 <Button
                   fullWidth
                   onClick={handleNextStep}
-                  disabled={!selectedCourseId}
+                  disabled={!selectedCourseId || !quizMeta.quizType}
                 >
                   다음: 문제 편집
                 </Button>

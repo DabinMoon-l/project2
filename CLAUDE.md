@@ -13,7 +13,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **애니메이션**: Framer Motion (페이지 전환, UI), Lottie (캐릭터)
 - **Backend**: Firebase (Auth, Firestore, Cloud Functions, Cloud Messaging, Storage)
 - **OCR**: Tesseract.js, pdfjs-dist
-- **AI**: Gemini API (문제 생성, 이미지 분석), Claude API (서술형 채점)
+- **AI**: Gemini API (문제 생성, 이미지 분석), Claude API (월별 리포트 인사이트)
+- **리포트 출력**: exceljs (Excel), docx (Word), file-saver
 - **배포**: Vercel (PWA, next-pwa)
 
 ## 개발 명령어
@@ -130,7 +131,9 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 | `feedback.ts` | 피드백 저장 + EXP 지급 |
 | `board.ts` | 게시판 글/댓글/좋아요 + EXP 지급 |
 | `notification.ts` | FCM 푸시 알림 |
-| `essay.ts` | AI 보조 채점 (Claude API 연동) |
+| `essay.ts` | AI 보조 채점 (deprecated — Claude는 monthlyReport로 이전) |
+| `weeklyStats.ts` | 매주 월요일 퀴즈/피드백/학생/게시판 데이터 자동 수집 (Scheduled) |
+| `monthlyReport.ts` | Claude Sonnet 월별 리포트 생성 (Callable, 교수 전용) |
 | `styledQuizGenerator.ts` | 교수 출제 스타일 학습 → AI 문제 생성 (Gemini) |
 | `imageRegionAnalysis.ts` | Gemini Vision 이미지 영역 감지 |
 | `imageCropping.ts` | 이미지 크롭 → Firebase Storage 업로드 |
@@ -287,6 +290,43 @@ Tailwind에서 `bg-theme-background`, `text-theme-accent` 등으로 사용 (`tai
 - 학생: "JIBDAN JISUNG" 타이틀 고정
 - 게시글 고정/해제: 교수님 전용 (Firestore rules에 `isPinned/pinnedAt/pinnedBy` 허용)
 - 고정글 캐러셀 + Masonry 2열 레이아웃
+
+### 교수 퀴즈 시스템
+
+**시험 유형** (`QuizType`): 교수 퀴즈 생성 시 필수 선택
+- `midterm` (중간), `final` (기말), `past` (기출)
+- Firestore `quizzes` 문서의 `type` 필드에 저장 (기존 `'professor'` → 시험 유형으로 변경)
+- `useProfessorQuiz.fetchQuizzes()`: `type in ['midterm', 'final', 'past', 'professor']`로 쿼리
+
+**교수 퀴즈탭** (`app/(main)/professor/quiz/page.tsx`):
+- 신문 스타일 카드 레이아웃 (학생 UI 패턴 차용)
+- 중간/기말/기출 필터 탭 (시즌 자동 기본값)
+- BEST Q 모달: `questionFeedbacks`에서 피드백 점수 높은 문제 Top 20
+- 하단 FAB으로 출제 페이지 이동, 카드 클릭 → 통계 상세
+
+### 피드백 점수 시스템 (`lib/utils/feedbackScore.ts`)
+
+피드백 타입별 점수: praise(+2), wantmore(+1), other(0), typo(-1), unclear(-1), wrong(-2)
+- `calcFeedbackScore(feedbacks)`: 평균 점수 (-2 ~ +2)
+- `getFeedbackLabel(score)`: 좋음(초록) / 보통(회색) / 나쁨(빨강)
+
+### 주별 수집 + 월별 리포트
+
+**주별 자동 수집** (`functions/src/weeklyStats.ts`):
+- Scheduled CF: 매주 월요일 00:00 KST
+- 저장: `weeklyStats/{courseId}/weeks/{year-Wxx}`
+- 수집: 퀴즈, 피드백, 학생(군집 포함), 게시판 데이터
+
+**월별 리포트** (`functions/src/monthlyReport.ts`):
+- Callable CF: 교수님 수동 트리거
+- Claude Sonnet (`claude-sonnet-4-20250514`) 호출 → 인사이트 생성
+- 저장: `monthlyReports/{courseId}/months/{year-MM}`
+- `ANTHROPIC_API_KEY` 시크릿 사용
+
+**리포트 다운로드** (`lib/utils/reportExport.ts`):
+- Excel (exceljs): 요약/퀴즈/학생/게시판/인사이트 시트
+- Word (docx): 마크다운 → Word 변환, 연구용 보고서 형식
+- 교수 통계 탭 하단 "MONTHLY REPORT" 섹션에서 생성/다운로드
 
 ### 랭킹 시스템 (`lib/utils/ranking.ts`)
 
@@ -445,6 +485,8 @@ await setDoc(doc(db, 'users', uid), { onboardingCompleted: true, updatedAt: serv
 - `announcements/{id}` — 공지 (content, imageUrls[], files[], polls[], reactions, readBy) (하위 호환: imageUrl, fileUrl, poll 단일 필드도 지원)
 - `rankings/{courseId}` — 사전 계산된 랭킹 (rankedUsers[], teamRanks[])
 - `quizResults/{id}` — 퀴즈 결과 집계 (CF에서 쓰기)
+- `weeklyStats/{courseId}/weeks/{year-Wxx}` — 주별 자동 수집 통계 (CF에서 쓰기)
+- `monthlyReports/{courseId}/months/{year-MM}` — 월별 Claude 리포트 (CF에서 쓰기)
 
 ### Firestore Rules — users 읽기 규칙
 
@@ -518,8 +560,9 @@ firebase deploy --only functions
 
 - **복습 시스템**: 에빙하우스 간격 반복 추가 검토
 - **랭킹**: 실시간 변동 애니메이션
-- **교수 대시보드**: 위험 학생 인사이트 강화
+- **교수 대시보드**: 위험 학생 인사이트 강화 (참여도 군집 시각화 구현 완료, 추가 강화 가능)
 - **오프라인 대응**: PWA 오프라인 캐시 전략 (22일 작업)
+- **철권퀴즈**: 실시간 1v1 토끼 배틀 (2/21 구현 예정)
 
 ## 배포
 

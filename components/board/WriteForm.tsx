@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { useTheme } from '@/styles/themes/useTheme';
@@ -14,6 +14,12 @@ interface WriteFormProps {
   isSubmitting?: boolean;
   /** 에러 메시지 */
   error?: string | null;
+  /** 초기 제목 (임시저장 복원용) */
+  initialTitle?: string;
+  /** 초기 본문 (임시저장 복원용) */
+  initialContent?: string;
+  /** 제목/본문 변경 시 콜백 (임시저장용) */
+  onDraftChange?: (title: string, content: string) => void;
 }
 
 /**
@@ -23,12 +29,35 @@ export default function WriteForm({
   onSubmit,
   isSubmitting = false,
   error,
+  initialTitle = '',
+  initialContent = '',
+  onDraftChange,
 }: WriteFormProps) {
   const { theme } = useTheme();
   const { uploadImage, uploadFile, loading: uploading, error: uploadError } = useUpload();
 
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
+  const [title, setTitle] = useState(initialTitle);
+  const [content, setContent] = useState(initialContent);
+
+  // 부모에서 임시저장 복원 시 반영 (useState는 초기값만 사용하므로 동기화 필요)
+  useEffect(() => {
+    if (initialTitle) setTitle(initialTitle);
+  }, [initialTitle]);
+
+  useEffect(() => {
+    if (initialContent) setContent(initialContent);
+  }, [initialContent]);
+
+  // 제목/본문 변경 시 부모에 알림
+  const handleTitleChange = useCallback((value: string) => {
+    setTitle(value);
+    onDraftChange?.(value, content);
+  }, [content, onDraftChange]);
+
+  const handleContentChange = useCallback((value: string) => {
+    setContent(value);
+    onDraftChange?.(title, value);
+  }, [title, onDraftChange]);
 
   // 첨부 파일 상태
   const [images, setImages] = useState<{ file: File; preview: string }[]>([]);
@@ -182,12 +211,12 @@ export default function WriteForm({
           className="block text-sm font-bold mb-2"
           style={{ color: theme.colors.text }}
         >
-          HEADLINE <span style={{ color: '#8B1A1A' }}>*</span>
+          제목 <span style={{ color: '#8B1A1A' }}>*</span>
         </label>
         <input
           type="text"
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={(e) => handleTitleChange(e.target.value)}
           placeholder="기사 제목을 입력하세요 (2자 이상)"
           maxLength={100}
           className="w-full px-4 py-3 outline-none transition-colors text-lg"
@@ -211,11 +240,11 @@ export default function WriteForm({
           className="block text-sm font-bold mb-2"
           style={{ color: theme.colors.text }}
         >
-          ARTICLE BODY <span style={{ color: '#8B1A1A' }}>*</span>
+          본문 <span style={{ color: '#8B1A1A' }}>*</span>
         </label>
         <textarea
           value={content}
-          onChange={(e) => setContent(e.target.value)}
+          onChange={(e) => handleContentChange(e.target.value)}
           placeholder="기사 내용을 입력하세요 (10자 이상)"
           rows={8}
           maxLength={2000}
@@ -241,7 +270,7 @@ export default function WriteForm({
           className="block text-sm font-bold mb-2"
           style={{ color: theme.colors.text }}
         >
-          PHOTOS
+          사진
           <span className="font-normal text-xs ml-2" style={{ color: theme.colors.textSecondary }}>
             (최대 5장)
           </span>
@@ -321,7 +350,7 @@ export default function WriteForm({
           className="block text-sm font-bold mb-2"
           style={{ color: theme.colors.text }}
         >
-          FILES
+          파일
           <span className="font-normal text-xs ml-2" style={{ color: theme.colors.textSecondary }}>
             (최대 3개, 10MB 이하)
           </span>
@@ -433,7 +462,7 @@ export default function WriteForm({
           color: '#F5F0E8',
         }}
       >
-        {uploading ? 'Uploading...' : isSubmitting ? 'Publishing...' : 'PUBLISH ARTICLE'}
+        {uploading ? '업로드 중...' : isSubmitting ? '게시 중...' : '게시하기'}
       </motion.button>
     </motion.div>
   );

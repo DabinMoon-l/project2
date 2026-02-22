@@ -1,9 +1,11 @@
 'use client';
 
-import { useCallback, useState, useRef } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Skeleton } from '@/components/common';
+import { doc, updateDoc, increment } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { Skeleton, ImageViewer } from '@/components/common';
 import LikeButton from '@/components/board/LikeButton';
 import CommentSection from '@/components/board/CommentSection';
 import { usePost, useDeletePost, useLike } from '@/lib/hooks/useBoard';
@@ -21,13 +23,11 @@ function formatDate(date: Date) {
 }
 
 /**
- * 이미지 갤러리 컴포넌트 (2장씩, 슬라이드, 꾹 눌러 다운로드, 클릭 시 크게 보기)
+ * 이미지 갤러리 컴포넌트 (2장씩, 슬라이드, 클릭 시 전체화면 뷰어)
  */
 function ImageGallery({ images }: { images: string[] }) {
   const [currentPage, setCurrentPage] = useState(0);
-  const [viewingImage, setViewingImage] = useState<string | null>(null);
-  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
-  const isLongPress = useRef(false);
+  const [viewerInfo, setViewerInfo] = useState<{ index: number } | null>(null);
 
   // 2장씩 페이지 분할
   const pages: string[][] = [];
@@ -37,77 +37,36 @@ function ImageGallery({ images }: { images: string[] }) {
 
   const totalPages = pages.length;
 
-  const handlePrev = () => {
-    setCurrentPage((prev) => (prev > 0 ? prev - 1 : prev));
-  };
-
-  const handleNext = () => {
-    setCurrentPage((prev) => (prev < totalPages - 1 ? prev + 1 : prev));
-  };
-
-  // 꾹 눌러 다운로드
-  const handleLongPressStart = (imageUrl: string) => {
-    isLongPress.current = false;
-    longPressTimer.current = setTimeout(() => {
-      isLongPress.current = true;
-      // 다운로드 링크 생성
-      const link = document.createElement('a');
-      link.href = imageUrl;
-      link.download = `image_${Date.now()}.jpg`;
-      link.target = '_blank';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }, 800); // 0.8초 꾹 누르면 다운로드
-  };
-
-  const handleLongPressEnd = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  };
-
-  // 클릭 시 크게 보기 (롱프레스가 아닌 경우만)
-  const handleImageClick = (imageUrl: string) => {
-    if (!isLongPress.current) {
-      setViewingImage(imageUrl);
-    }
-    isLongPress.current = false;
-  };
-
   if (images.length === 0) return null;
 
   return (
     <div className="mt-4">
       {/* 이미지 그리드 - 2장씩 동일 크기 */}
       <div className="grid grid-cols-2 gap-2">
-        {pages[currentPage]?.map((url, index) => (
-          <div
-            key={`${currentPage}-${index}`}
-            className="relative aspect-square bg-gray-100 cursor-pointer"
-            onMouseDown={() => handleLongPressStart(url)}
-            onMouseUp={handleLongPressEnd}
-            onMouseLeave={handleLongPressEnd}
-            onTouchStart={() => handleLongPressStart(url)}
-            onTouchEnd={handleLongPressEnd}
-            onClick={() => handleImageClick(url)}
-          >
-            <img
-              src={url}
-              alt={`이미지 ${currentPage * 2 + index + 1}`}
-              className="w-full h-full object-cover"
-              draggable={false}
-            />
-          </div>
-        ))}
+        {pages[currentPage]?.map((url, index) => {
+          const globalIndex = currentPage * 2 + index;
+          return (
+            <div
+              key={`${currentPage}-${index}`}
+              className="relative aspect-square bg-gray-100 cursor-pointer"
+              onClick={() => setViewerInfo({ index: globalIndex })}
+            >
+              <img
+                src={url}
+                alt={`이미지 ${globalIndex + 1}`}
+                className="w-full h-full object-cover"
+                draggable={false}
+              />
+            </div>
+          );
+        })}
       </div>
 
       {/* 슬라이드 컨트롤 (2장 초과 시) */}
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-4 mt-3">
           <button
-            onClick={handlePrev}
+            onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
             disabled={currentPage === 0}
             className="px-3 py-1 text-sm disabled:opacity-30"
             style={{ border: '1px solid #1A1A1A' }}
@@ -118,7 +77,7 @@ function ImageGallery({ images }: { images: string[] }) {
             {currentPage + 1} / {totalPages}
           </span>
           <button
-            onClick={handleNext}
+            onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
             disabled={currentPage === totalPages - 1}
             className="px-3 py-1 text-sm disabled:opacity-30"
             style={{ border: '1px solid #1A1A1A' }}
@@ -128,25 +87,13 @@ function ImageGallery({ images }: { images: string[] }) {
         </div>
       )}
 
-      {/* 이미지 크게 보기 모달 */}
-      {viewingImage && (
-        <div
-          className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4"
-          onClick={() => setViewingImage(null)}
-        >
-          <button
-            className="absolute top-4 right-4 text-white text-3xl font-bold z-10"
-            onClick={() => setViewingImage(null)}
-          >
-            ×
-          </button>
-          <img
-            src={viewingImage}
-            alt="크게 보기"
-            className="max-w-full max-h-full object-contain"
-            onClick={(e) => e.stopPropagation()}
-          />
-        </div>
+      {/* 전체화면 이미지 뷰어 */}
+      {viewerInfo && (
+        <ImageViewer
+          urls={images}
+          initialIndex={viewerInfo.index}
+          onClose={() => setViewerInfo(null)}
+        />
       )}
     </div>
   );
@@ -167,6 +114,15 @@ export default function PostDetailPage() {
 
   const isOwner = user?.uid === post?.authorId;
 
+  // 조회수 기록 (세션 내 1회만)
+  useEffect(() => {
+    if (!postId) return;
+    const key = `viewed_${postId}`;
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, '1');
+    updateDoc(doc(db, 'posts', postId), { viewCount: increment(1) }).catch(() => {});
+  }, [postId]);
+
   const handleDelete = useCallback(async () => {
     if (!window.confirm('정말 삭제하시겠습니까?')) return;
     const success = await deletePost(postId);
@@ -177,8 +133,8 @@ export default function PostDetailPage() {
 
   const handleLike = useCallback(async () => {
     await toggleLike(postId);
-    refresh();
-  }, [toggleLike, postId, refresh]);
+    // onSnapshot이 자동 반영하므로 refresh() 불필요
+  }, [toggleLike, postId]);
 
   // 로딩
   if (loading) {
@@ -246,9 +202,6 @@ export default function PostDetailPage() {
           </svg>
           뒤로가기
         </button>
-        <h1 className="font-serif-display text-3xl font-black text-center text-[#1A1A1A] mt-2">
-          JIBDAN JISUNG
-        </h1>
       </header>
 
       <div className="mx-4 border-b-2 border-[#1A1A1A] mb-4" />
@@ -267,7 +220,7 @@ export default function PostDetailPage() {
           )}
 
           {/* 제목 */}
-          <h2 className="font-serif-display text-2xl md:text-3xl font-black leading-tight mb-3 text-[#1A1A1A]">
+          <h2 className="font-serif-display text-3xl md:text-4xl font-black leading-tight mb-3 text-[#1A1A1A]">
             {post.title}
           </h2>
 
@@ -280,13 +233,15 @@ export default function PostDetailPage() {
             <span>·</span>
             <span>{formatDate(post.createdAt)}</span>
             <span>·</span>
+            <span>조회 {post.viewCount}</span>
+            <span>·</span>
             <span>♥ {post.likes}</span>
             <span>·</span>
             <span>댓글 {post.commentCount}</span>
           </div>
 
           {/* 본문 */}
-          <p className="text-base leading-relaxed whitespace-pre-wrap text-[#1A1A1A] mb-4">
+          <p className="text-[17px] leading-relaxed whitespace-pre-wrap text-[#1A1A1A] mb-4">
             {post.content}
           </p>
 
@@ -319,19 +274,18 @@ export default function PostDetailPage() {
             <LikeButton count={post.likes} isLiked={isLiked(postId)} onToggle={handleLike} />
 
             {isOwner && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <button
                   onClick={() => router.push(`/board/${postId}/edit`)}
-                  className="px-3 py-1 text-sm"
-                  style={{ border: '1px solid #1A1A1A', color: '#1A1A1A' }}
+                  className="text-sm text-[#3A3A3A] hover:text-[#1A1A1A] transition-colors"
                 >
                   수정
                 </button>
                 <button
                   onClick={handleDelete}
                   disabled={deleting}
-                  className="px-3 py-1 text-sm disabled:opacity-50"
-                  style={{ border: '1px solid #8B1A1A', color: '#8B1A1A' }}
+                  className="text-sm transition-colors disabled:opacity-50"
+                  style={{ color: '#8B1A1A' }}
                 >
                   {deleting ? '삭제중...' : '삭제'}
                 </button>

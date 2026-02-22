@@ -138,9 +138,9 @@ service cloud.firestore {
         (isOwner(resource.data.authorId) &&
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['title', 'content', 'imageUrl', 'imageUrls', 'fileUrls', 'isAnonymous', 'updatedAt'])) ||
-        // 로그인 사용자가 좋아요/댓글수 업데이트
+        // 로그인 사용자가 좋아요/댓글수/조회수 업데이트
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['likes', 'likedBy', 'commentCount']) ||
+          .hasOnly(['likes', 'likedBy', 'commentCount', 'viewCount']) ||
         // 교수님이 게시글 고정/해제
         (isProfessor() &&
           request.resource.data.diff(resource.data).affectedKeys()
@@ -156,11 +156,12 @@ service cloud.firestore {
 
         allow create: if isAuthenticated() &&
           request.resource.data.authorId == request.auth.uid &&
-          isValidString(request.resource.data.content, 1, 1000);
+          request.resource.data.content is string &&
+          request.resource.data.content.size() <= 1000;
 
         allow update: if isOwner(resource.data.authorId) &&
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['content', 'updatedAt']);
+            .hasOnly(['content', 'imageUrls', 'updatedAt']);
 
         allow delete: if isOwner(resource.data.authorId) || isProfessor();
       }
@@ -174,17 +175,18 @@ service cloud.firestore {
       // 읽기: 모든 로그인 사용자
       allow read: if isAuthenticated();
 
-      // 생성: 로그인 사용자 (유효성 검증)
+      // 생성: 로그인 사용자 (유효성 검증, 이미지만 보낼 수도 있으므로 content 최소 0자)
       allow create: if isAuthenticated() &&
         request.resource.data.authorId == request.auth.uid &&
-        isValidString(request.resource.data.content, 1, 1000);
+        request.resource.data.content is string &&
+        request.resource.data.content.size() <= 1000;
 
       // 수정: 작성자가 내용 수정 OR 로그인 사용자가 좋아요 업데이트
       allow update: if isAuthenticated() && (
-        // 작성자가 내용 수정
+        // 작성자가 내용/이미지 수정
         (isOwner(resource.data.authorId) &&
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['content', 'updatedAt'])) ||
+            .hasOnly(['content', 'imageUrls', 'updatedAt'])) ||
         // 로그인 사용자가 좋아요 업데이트 (likes, likedBy 필드만 변경)
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['likes', 'likedBy'])

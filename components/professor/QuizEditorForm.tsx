@@ -10,12 +10,16 @@ import type { TargetClass, Difficulty } from '@/lib/hooks/useProfessorQuiz';
 // 타입 정의
 // ============================================================
 
+/** 시험 유형 */
+export type QuizType = 'midterm' | 'final' | 'past';
+
 /** 퀴즈 메타 데이터 */
 export interface QuizMetaData {
   title: string;
   description: string;
   targetClass: TargetClass;
   difficulty: Difficulty;
+  quizType?: QuizType;
 }
 
 interface QuizEditorFormProps {
@@ -37,6 +41,13 @@ interface QuizEditorFormProps {
 // ============================================================
 // 상수
 // ============================================================
+
+/** 시험 유형 옵션 */
+const QUIZ_TYPE_OPTIONS: { value: QuizType; label: string }[] = [
+  { value: 'midterm', label: '중간' },
+  { value: 'final', label: '기말' },
+  { value: 'past', label: '기출' },
+];
 
 /** 난이도 옵션 */
 const DIFFICULTY_OPTIONS: { value: Difficulty; label: string; color: string; description: string }[] = [
@@ -116,6 +127,16 @@ export default function QuizEditorForm({
   );
 
   /**
+   * 시험 유형 변경 핸들러
+   */
+  const handleQuizTypeChange = useCallback(
+    (quizType: QuizType) => {
+      onChange({ ...data, quizType });
+    },
+    [data, onChange]
+  );
+
+  /**
    * 난이도 변경 핸들러
    */
   const handleDifficultyChange = useCallback(
@@ -127,6 +148,54 @@ export default function QuizEditorForm({
 
   return (
     <div className={`space-y-6 ${className}`}>
+      {/* 시험 유형 선택 */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          시험 유형 <span className="text-red-500">*</span>
+        </label>
+        <div className="grid grid-cols-3 gap-3">
+          {QUIZ_TYPE_OPTIONS.map((option) => {
+            const isSelected = data.quizType === option.value;
+            return (
+              <motion.button
+                key={option.value}
+                type="button"
+                whileHover={!disabled ? { scale: 1.02 } : undefined}
+                whileTap={!disabled ? { scale: 0.98 } : undefined}
+                onClick={() => !disabled && handleQuizTypeChange(option.value)}
+                disabled={disabled}
+                className={`
+                  relative py-3 px-4 border-2 rounded-xl text-sm font-bold
+                  transition-all duration-200
+                  disabled:opacity-50 disabled:cursor-not-allowed
+                  ${
+                    isSelected
+                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                  }
+                `}
+              >
+                {option.label}
+                {isSelected && (
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-indigo-500 rounded-full flex items-center justify-center"
+                  >
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </motion.div>
+                )}
+              </motion.button>
+            );
+          })}
+        </div>
+        {!data.quizType && (
+          <p className="text-xs text-amber-600 mt-2">* 시험 유형을 선택해주세요</p>
+        )}
+      </div>
+
       {/* 퀴즈 제목 */}
       <div>
         <Input

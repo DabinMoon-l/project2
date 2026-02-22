@@ -49,12 +49,15 @@ export interface QuizQuestion {
   explanation?: string;
 }
 
+/** 시험 유형 */
+export type QuizTypeFilter = 'midterm' | 'final' | 'past';
+
 /** 퀴즈 데이터 */
 export interface ProfessorQuiz {
   id: string;
   title: string;
   description?: string;
-  type: 'professor';
+  type: QuizTypeFilter | 'professor';
   targetClass: TargetClass;
   difficulty: Difficulty;
   isPublished: boolean;
@@ -81,12 +84,15 @@ export interface QuizInput {
   questionCount?: number;
   /** 과목 ID (선택) */
   courseId?: string | null;
+  /** 시험 유형 */
+  quizType?: QuizTypeFilter;
 }
 
 /** 필터 옵션 */
 export interface QuizFilterOptions {
   isPublished?: boolean | 'all';
   targetClass?: TargetClass | 'all';
+  quizType?: QuizTypeFilter;
 }
 
 /** 문제별 선택 통계 */
@@ -254,11 +260,16 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
         setCurrentCreatorUid(creatorUid);
         setCurrentFilters(options);
 
+        // type 필터: 특정 quizType이면 해당 타입만, 아니면 모든 교수 퀴즈 타입
+        const typeFilter = options.quizType
+          ? [options.quizType]
+          : ['midterm', 'final', 'past', 'professor'];
+
         // 기본 쿼리: 생성자 필터 + 최신순 정렬
         let q = query(
           collection(db, QUIZZES_COLLECTION),
           where('creatorUid', '==', creatorUid),
-          where('type', '==', 'professor'),
+          where('type', 'in', typeFilter),
           orderBy('createdAt', 'desc'),
           limit(PAGE_SIZE)
         );
@@ -268,7 +279,7 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
           q = query(
             collection(db, QUIZZES_COLLECTION),
             where('creatorUid', '==', creatorUid),
-            where('type', '==', 'professor'),
+            where('type', 'in', typeFilter),
             where('isPublished', '==', options.isPublished),
             orderBy('createdAt', 'desc'),
             limit(PAGE_SIZE)
@@ -308,10 +319,14 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
     try {
       setLoadingMore(true);
 
+      const typeFilter = currentFilters.quizType
+        ? [currentFilters.quizType]
+        : ['midterm', 'final', 'past', 'professor'];
+
       let q = query(
         collection(db, QUIZZES_COLLECTION),
         where('creatorUid', '==', currentCreatorUid),
-        where('type', '==', 'professor'),
+        where('type', 'in', typeFilter),
         orderBy('createdAt', 'desc'),
         startAfter(lastDoc),
         limit(PAGE_SIZE)
@@ -322,7 +337,7 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
         q = query(
           collection(db, QUIZZES_COLLECTION),
           where('creatorUid', '==', currentCreatorUid),
-          where('type', '==', 'professor'),
+          where('type', 'in', typeFilter),
           where('isPublished', '==', currentFilters.isPublished),
           orderBy('createdAt', 'desc'),
           startAfter(lastDoc),
@@ -696,7 +711,7 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
 
         const quizData = {
           ...cleanedInput,
-          type: 'professor',
+          type: input.quizType || 'professor',
           questionCount: actualQuestionCount,
           oxCount,
           multipleChoiceCount,
@@ -717,7 +732,7 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
         const newQuiz: ProfessorQuiz = {
           ...input,
           id: docRef.id,
-          type: 'professor',
+          type: input.quizType || 'professor',
           questionCount: actualQuestionCount,
           creatorUid,
           creatorNickname,

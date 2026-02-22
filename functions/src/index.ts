@@ -215,9 +215,9 @@ export const getLeaderboard = onCall(
 export { februaryTransition, augustTransition } from "./semesterTransition";
 
 // ============================================
-// 서술형 AI 채점 Functions
+// 서술형 AI 채점 Functions (deprecated — Claude는 monthlyReport에서 사용)
 // ============================================
-export { gradeEssay, gradeEssayBatch } from "./essay";
+// export { gradeEssay, gradeEssayBatch } from "./essay";
 
 // ============================================
 // OCR Functions (Naver CLOVA OCR)
@@ -337,6 +337,12 @@ export { cleanupExtraRabbits } from "./cleanupExtraRabbits";
 export { migrateCharactersToRabbits } from "./migrateCharacters";
 export { migrateRabbitSystem } from "./migrateRabbitSystem";
 export { migrateDefaultRabbit } from "./migrateDefaultRabbit";
+
+// ============================================
+// 주별 자동 수집 & 월별 리포트 Functions
+// ============================================
+export { collectWeeklyStatsScheduled } from "./weeklyStats";
+export { generateMonthlyReport } from "./monthlyReport";
 
 // ============================================
 // 시즌 관련 Functions

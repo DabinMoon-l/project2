@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useTheme } from '@/styles/themes/useTheme';
+import { ImageViewer } from '@/components/common';
 import type { Comment } from '@/lib/hooks/useBoard';
 
 interface CommentItemProps {
@@ -55,10 +56,8 @@ export default function CommentItem({
   const [isEditMode, setIsEditMode] = useState(false);
   const [editContent, setEditContent] = useState(comment.content);
   const [isExpanded, setIsExpanded] = useState(false);
-  const [viewingImage, setViewingImage] = useState<string | null>(null);
+  const [viewerInfo, setViewerInfo] = useState<{ index: number } | null>(null);
   const [imageCurrentPage, setImageCurrentPage] = useState(0);
-  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
-  const isLongPress = useRef(false);
 
   // 댓글이 3줄 이상인지 확인 (약 57자 이상 또는 줄바꿈 3개 이상)
   const isLongContent = comment.content.length > 57 || (comment.content.match(/\n/g) || []).length >= 3;
@@ -106,88 +105,55 @@ export default function CommentItem({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
-      className={`py-3 ${!isReply ? 'border-b border-dashed border-[#D4CFC4]' : ''}`}
+      className={`py-3 ${isReply ? 'pl-6' : 'border-b border-dashed border-[#D4CFC4]'}`}
     >
-      {/* 댓글 헤더 */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          {/* ㄴ 표시 — 대댓글만 */}
+      {/* 댓글 헤더 — 좌: 작성자·시간 / 우: 답글·좋아요 */}
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-1.5">
           {isReply && (
-            <span className="text-base font-bold text-[#3A3A3A]">ㄴ</span>
+            <span className="text-sm font-bold text-[#3A3A3A]">ㄴ</span>
           )}
-
-          {/* 작성자 */}
           <span
-            className="text-sm font-semibold"
+            className="text-[15px] font-semibold"
             style={{ color: theme.colors.text }}
           >
             {authorDisplay}
           </span>
-
-          {/* 구분선 */}
-          <span className="text-[#3A3A3A]">·</span>
-
-          {/* 시간 */}
-          <span className="text-sm text-[#3A3A3A]">
+          <span className="text-[#AAAAAA] text-[12px]">·</span>
+          <span className="text-[13px] text-[#999999]">
             {formatDate(comment.createdAt)}
           </span>
         </div>
 
-        {/* 버튼들 */}
-        <div className="flex items-center gap-2">
-          {/* 좋아요 버튼 */}
-          {onLike && !isEditMode && (
-            <button
-              type="button"
-              onClick={() => onLike(comment.id)}
-              className="flex items-center gap-1 text-xs transition-colors"
-              style={{ color: isLiked ? '#8B1A1A' : '#3A3A3A' }}
-            >
-              <span>{isLiked ? '♥' : '♡'}</span>
-              {(comment.likes || 0) > 0 && <span>{comment.likes}</span>}
-            </button>
-          )}
-
-          {/* 답글 버튼 (대댓글이 아닌 경우만) */}
-          {!isReply && onReply && !isEditMode && (
-            <button
-              type="button"
-              onClick={onReply}
-              className="text-xs text-[#3A3A3A] hover:text-[#1A1A1A] transition-colors"
-            >
-              답글
-            </button>
-          )}
-
-          {/* 수정 버튼 (내 댓글인 경우만) */}
-          {isOwner && onEdit && !isEditMode && (
-            <button
-              type="button"
-              onClick={handleEditClick}
-              className="text-xs text-[#3A3A3A] hover:text-[#1A1A1A] transition-colors"
-            >
-              수정
-            </button>
-          )}
-
-          {/* 삭제 버튼 */}
-          {isOwner && onDelete && !isEditMode && (
-            <button
-              type="button"
-              onClick={handleDeleteClick}
-              disabled={isDeleting}
-              className="text-xs transition-colors disabled:opacity-50"
-              style={{ color: '#8B1A1A' }}
-            >
-              {isDeleting ? '삭제 중...' : '삭제'}
-            </button>
-          )}
-        </div>
+        {!isEditMode && (
+          <div className="flex items-center gap-2.5">
+            {!isReply && onReply && (
+              <button
+                type="button"
+                onClick={onReply}
+                className="text-[13px] text-[#999999] hover:text-[#1A1A1A] transition-colors"
+              >
+                답글
+              </button>
+            )}
+            {onLike && (
+              <button
+                type="button"
+                onClick={() => onLike(comment.id)}
+                className="flex items-center gap-1 text-[13px] transition-colors"
+                style={{ color: isLiked ? '#8B1A1A' : '#999999' }}
+              >
+                <span>{isLiked ? '♥' : '♡'}</span>
+                {(comment.likes || 0) > 0 && <span>{comment.likes}</span>}
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 댓글 내용 (수정 모드 / 일반 모드) */}
       {isEditMode ? (
-        <div className={isReply ? 'pl-5 space-y-2' : 'space-y-2'}>
+        <div className="space-y-2">
           <textarea
             value={editContent}
             onChange={(e) => setEditContent(e.target.value)}
@@ -228,9 +194,9 @@ export default function CommentItem({
           </div>
         </div>
       ) : (
-        <div className={`overflow-hidden max-w-full ${isReply ? 'pl-5' : ''}`}>
+        <div className="overflow-hidden max-w-full">
           <p
-            className={`text-sm whitespace-pre-wrap leading-relaxed ${
+            className={`text-[17px] whitespace-pre-wrap leading-relaxed ${
               !isExpanded && isLongContent ? 'line-clamp-3' : ''
             }`}
             style={{
@@ -265,33 +231,20 @@ export default function CommentItem({
         const totalPages = pages.length;
 
         return (
-          <div className={`mt-2 ${isReply ? 'pl-5' : ''}`}>
+          <div className="mt-2">
             <div className="grid grid-cols-2 gap-2">
-              {pages[imageCurrentPage]?.map((url, index) => (
-                <div
-                  key={`${imageCurrentPage}-${index}`}
-                  className="relative aspect-square bg-gray-100 cursor-pointer"
-                  onTouchStart={() => {
-                    isLongPress.current = false;
-                    longPressTimer.current = setTimeout(() => {
-                      isLongPress.current = true;
-                      const link = document.createElement('a');
-                      link.href = url;
-                      link.download = `image_${Date.now()}.jpg`;
-                      link.target = '_blank';
-                      document.body.appendChild(link);
-                      link.click();
-                      document.body.removeChild(link);
-                    }, 800);
-                  }}
-                  onTouchEnd={() => {
-                    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
-                  }}
-                  onClick={() => { if (!isLongPress.current) setViewingImage(url); isLongPress.current = false; }}
-                >
-                  <img src={url} alt={`이미지 ${imageCurrentPage * 2 + index + 1}`} className="w-full h-full object-cover" draggable={false} />
-                </div>
-              ))}
+              {pages[imageCurrentPage]?.map((url, index) => {
+                const globalIndex = imageCurrentPage * 2 + index;
+                return (
+                  <div
+                    key={`${imageCurrentPage}-${index}`}
+                    className="relative aspect-square bg-gray-100 cursor-pointer"
+                    onClick={() => setViewerInfo({ index: globalIndex })}
+                  >
+                    <img src={url} alt={`이미지 ${globalIndex + 1}`} className="w-full h-full object-cover" draggable={false} />
+                  </div>
+                );
+              })}
             </div>
             {totalPages > 1 && (
               <div className="flex items-center justify-center gap-4 mt-2">
@@ -304,12 +257,39 @@ export default function CommentItem({
         );
       })()}
 
-      {/* 이미지 크게 보기 모달 */}
-      {viewingImage && (
-        <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4" onClick={() => setViewingImage(null)}>
-          <button className="absolute top-4 right-4 text-white text-3xl font-bold z-10" onClick={() => setViewingImage(null)}>×</button>
-          <img src={viewingImage} alt="크게 보기" className="max-w-full max-h-full object-contain" onClick={(e) => e.stopPropagation()} />
+      {/* 수정·삭제 (작성자만, 우측 하단) */}
+      {!isEditMode && isOwner && (onEdit || onDelete) && (
+        <div className="flex items-center justify-end gap-3 mt-1">
+          {onEdit && (
+            <button
+              type="button"
+              onClick={handleEditClick}
+              className="text-[12px] text-[#999999] hover:text-[#1A1A1A] transition-colors"
+            >
+              수정
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              onClick={handleDeleteClick}
+              disabled={isDeleting}
+              className="text-[12px] transition-colors disabled:opacity-50"
+              style={{ color: '#CC3333' }}
+            >
+              {isDeleting ? '삭제 중...' : '삭제'}
+            </button>
+          )}
         </div>
+      )}
+
+      {/* 전체화면 이미지 뷰어 */}
+      {viewerInfo && (
+        <ImageViewer
+          urls={images}
+          initialIndex={viewerInfo.index}
+          onClose={() => setViewerInfo(null)}
+        />
       )}
 
       {/* 삭제 확인 */}
@@ -317,7 +297,7 @@ export default function CommentItem({
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className={`mt-3 p-3 ${isReply ? 'ml-5' : ''}`}
+          className="mt-3 p-3"
           style={{
             border: '1px solid #8B1A1A',
             backgroundColor: '#FEE2E2',

@@ -60,3 +60,6 @@ export { default as ExpToastProvider, useExpToast } from './ExpToast';
 
 // SplashScreen 컴포넌트 (앱 진입 스플래시)
 export { default as SplashScreen } from './SplashScreen';
+
+// ImageViewer 컴포넌트 (이미지 전체화면 뷰어)
+export { default as ImageViewer } from './ImageViewer';

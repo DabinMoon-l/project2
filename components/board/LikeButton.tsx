@@ -101,7 +101,7 @@ export default function LikeButton({
         )}
       </motion.div>
       <span className={textSizeClasses[size]}>
-        {count} {isLiked ? 'Liked' : 'Likes'}
+        {count}
       </span>
     </button>
   );

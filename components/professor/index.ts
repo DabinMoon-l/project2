@@ -34,5 +34,5 @@ export { default as SeasonResetModal } from './SeasonResetModal';
 export { default as SeasonHistoryList } from './SeasonHistoryList';
 export { default as SemesterSettingsCard } from './SemesterSettingsCard';
 
-// 채점 컴포넌트
-export { default as EssayGrading } from './EssayGrading';
+// 채점 컴포넌트 (deprecated — 서술형 채점 제거)
+// export { default as EssayGrading } from './EssayGrading';

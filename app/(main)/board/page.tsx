@@ -4,15 +4,13 @@ import { useCallback, useState, useMemo, memo, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Skeleton } from '@/components/common';
 import { usePosts, usePinnedPosts, type Post, type Comment } from '@/lib/hooks/useBoard';
 import { useCourse } from '@/lib/contexts/CourseContext';
 import { useUser } from '@/lib/contexts/UserContext';
 import { COURSES, type CourseId, getCourseList } from '@/lib/types/course';
-import BoardManagementModal from '@/components/professor/BoardManagementModal';
-
 /** 기본 토끼 이미지 경로 */
 const DEFAULT_RABBIT_IMAGE = '/rabbit/default-news.png';
 
@@ -52,15 +50,13 @@ const HeadlineArticle = memo(function HeadlineArticle({
   isProfessor = false,
   isPinned = false,
   onPin,
-  onUnpin,
 }: {
   post: Post;
-  onClick: () => void;
+  onClick?: () => void;
   comments?: Comment[];
   isProfessor?: boolean;
   isPinned?: boolean;
   onPin?: () => void;
-  onUnpin?: () => void;
 }) {
   const imageUrl = post.imageUrl || post.imageUrls?.[0] || DEFAULT_RABBIT_IMAGE;
   // 헤드라인/고정글은 총 3개 댓글까지 (대댓글 포함)
@@ -86,14 +82,14 @@ const HeadlineArticle = memo(function HeadlineArticle({
   return (
     <article
       onClick={onClick}
-      className="cursor-pointer group border-2 border-[#1A1A1A] flex relative"
+      className={`group border border-[#1A1A1A] bg-[#F5F0E8] relative transition-all ${onClick ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-md' : ''}`}
     >
       {/* 고정 버튼 (교수님 전용, 미고정 헤드라인에서만) */}
-      {isProfessor && !isPinned && (
+      {isProfessor && !isPinned && onPin && (
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); onPin?.(); }}
-          className="absolute top-1 right-1 z-20 p-2.5 text-[#1A1A1A]/30 hover:text-[#8B1A1A] transition-colors"
+          onClick={(e) => { e.stopPropagation(); onPin(); }}
+          className="absolute top-1 right-1 z-10 p-1 text-[#1A1A1A]/30 hover:text-[#8B1A1A] transition-colors opacity-0 group-hover:opacity-100"
           title="글 고정"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -102,61 +98,64 @@ const HeadlineArticle = memo(function HeadlineArticle({
         </button>
       )}
 
-      {/* 좌측 - 이미지 */}
-      <div
-        className="relative w-1/3 min-h-[160px] flex-shrink-0 bg-[#EDEAE4]"
-      >
-        <Image
-          src={imageUrl}
-          alt={post.title}
-          fill
-          sizes="(max-width: 768px) 33vw, 200px"
-          className="object-contain grayscale-[20%] group-hover:grayscale-0 transition-all"
-          priority
-        />
-      </div>
-
-      {/* 우측 - 제목, 본문, 댓글 */}
-      <div className="flex-1 flex flex-col">
-        {/* 제목 - 검정 박스 */}
-        <div className="bg-[#1A1A1A] px-3 py-3">
-          <h1 className="font-serif-display text-3xl md:text-4xl font-black text-[#F5F0E8] leading-tight">
-            {post.title}
-          </h1>
+      {/* 콘텐츠 래퍼 */}
+      <div className="flex">
+        {/* 좌측 - 이미지 */}
+        <div
+          className="relative w-1/3 min-h-[160px] flex-shrink-0 bg-[#EDEAE4]"
+        >
+          <Image
+            src={imageUrl}
+            alt={post.title}
+            fill
+            sizes="(max-width: 768px) 33vw, 200px"
+            className="object-contain grayscale-[20%] group-hover:grayscale-0 transition-all"
+            priority
+          />
         </div>
 
-        {/* 본문 및 댓글 */}
-        <div className="p-3 flex-1">
-          <p className="text-sm text-[#1A1A1A] leading-relaxed line-clamp-3">
-            {post.content}
-          </p>
+        {/* 우측 - 제목, 본문, 댓글 */}
+        <div className="flex-1 flex flex-col">
+          {/* 제목 - 검정 박스 */}
+          <div className="bg-[#1A1A1A] px-3 py-3">
+            <h1 className="font-serif-display text-3xl md:text-4xl font-black text-[#F5F0E8] leading-tight">
+              {post.title}
+            </h1>
+          </div>
 
-          {/* 댓글 및 대댓글 표시 (최대 3개, 대댓글 포함) */}
-          {displayItems.length > 0 && (
-            <div className="mt-2 pt-2 border-t border-dashed border-[#1A1A1A] overflow-hidden">
-              {displayItems.map(({ comment, replies }) => (
-                <div key={comment.id} className="overflow-hidden">
-                  <p className="text-sm text-[#1A1A1A] leading-snug py-0.5 overflow-hidden text-ellipsis" style={{ wordBreak: 'break-all', maxWidth: '100%' }}>
-                    <span className="whitespace-nowrap">ㄴ </span>{truncateComment(comment.content)}
-                  </p>
-                  {/* 대댓글 표시 */}
-                  {replies.map((reply) => (
-                    <p key={reply.id} className="text-sm text-[#5C5C5C] leading-snug py-0.5 pl-4 overflow-hidden text-ellipsis" style={{ wordBreak: 'break-all', maxWidth: '100%' }}>
-                      <span className="whitespace-nowrap">ㄴ </span>{truncateComment(reply.content)}
+          {/* 본문 및 댓글 */}
+          <div className="p-3 flex-1">
+            <p className="text-sm text-[#1A1A1A] leading-relaxed line-clamp-3">
+              {post.content}
+            </p>
+
+            {/* 댓글 및 대댓글 표시 (최대 3개, 대댓글 포함) */}
+            {displayItems.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-dashed border-[#1A1A1A] overflow-hidden">
+                {displayItems.map(({ comment, replies }) => (
+                  <div key={comment.id} className="overflow-hidden">
+                    <p className="text-sm text-[#1A1A1A] leading-snug py-0.5 overflow-hidden text-ellipsis" style={{ wordBreak: 'break-all', maxWidth: '100%' }}>
+                      <span className="whitespace-nowrap">ㄴ </span>{truncateComment(comment.content)}
                     </p>
-                  ))}
-                </div>
-              ))}
-              {/* 더보기 버튼 (검정 테두리 네모박스, 하단 중앙) */}
-              {remainingCount > 0 && (
-                <div className="flex justify-center mt-2">
-                  <span className="px-3 py-1 text-xs border border-[#1A1A1A] text-[#1A1A1A]">
-                    더보기→
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
+                    {/* 대댓글 표시 */}
+                    {replies.map((reply) => (
+                      <p key={reply.id} className="text-sm text-[#5C5C5C] leading-snug py-0.5 pl-4 overflow-hidden text-ellipsis" style={{ wordBreak: 'break-all', maxWidth: '100%' }}>
+                        <span className="whitespace-nowrap">ㄴ </span>{truncateComment(reply.content)}
+                      </p>
+                    ))}
+                  </div>
+                ))}
+                {/* 더보기 버튼 (검정 테두리 네모박스, 하단 중앙) */}
+                {remainingCount > 0 && (
+                  <div className="flex justify-center mt-2">
+                    <span className="px-3 py-1 text-xs border border-[#1A1A1A] text-[#1A1A1A]">
+                      더보기→
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </article>
@@ -170,28 +169,30 @@ const PinnedPostsCarousel = memo(function PinnedPostsCarousel({
   posts,
   commentsMap,
   onPostClick,
-  isProfessor,
-  onUnpin,
 }: {
   posts: Post[];
   commentsMap: CommentsMap;
   onPostClick: (postId: string) => void;
-  isProfessor: boolean;
-  onUnpin: (postId: string) => void;
 }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const touchStartX = useRef<number>(0);
   const touchEndX = useRef<number>(0);
 
+  const isSwiping = useRef(false);
+
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
+    touchEndX.current = e.touches[0].clientX; // 탭 시 diff=0이 되도록 초기화
+    isSwiping.current = false;
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
     touchEndX.current = e.touches[0].clientX;
+    isSwiping.current = true;
   };
 
   const handleTouchEnd = () => {
+    if (!isSwiping.current) return; // 순수 탭이면 스와이프 무시
     const diff = touchStartX.current - touchEndX.current;
     const threshold = 50;
 
@@ -206,47 +207,22 @@ const PinnedPostsCarousel = memo(function PinnedPostsCarousel({
 
   return (
     <div className="relative">
-      {/* 캐러셀 컨테이너 */}
+      {/* 캐러셀 컨테이너 — overflow-hidden 제거 (pointer-events 차단 원인) */}
       <div
-        className="overflow-hidden"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={currentIndex}
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -50 }}
-            transition={{ duration: 0.3 }}
-            className="relative"
-          >
-            <HeadlineArticle
-              post={posts[currentIndex]}
-              onClick={() => onPostClick(posts[currentIndex].id)}
-              comments={commentsMap.get(posts[currentIndex].id) || []}
-              isProfessor={isProfessor}
-              isPinned={true}
-            />
-            {/* 고정 해제 버튼 (교수님 전용) */}
-            {isProfessor && (
-              <div
-                role="button"
-                tabIndex={0}
-                onTouchEnd={(e) => { e.preventDefault(); e.stopPropagation(); onUnpin(posts[currentIndex].id); }}
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onUnpin(posts[currentIndex].id); }}
-                className="absolute top-0 right-0 z-30 p-3 text-[#1A1A1A]/40 hover:text-[#8B1A1A] active:text-[#8B1A1A] transition-colors cursor-pointer"
-                title="고정 해제"
-                style={{ touchAction: 'none' }}
-              >
-                <svg className="w-5 h-5" fill="currentColor" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                </svg>
-              </div>
-            )}
-          </motion.div>
-        </AnimatePresence>
+        <div
+          onClick={() => onPostClick(posts[currentIndex].id)}
+          className="cursor-pointer"
+        >
+          <HeadlineArticle
+            post={posts[currentIndex]}
+            comments={commentsMap.get(posts[currentIndex].id) || []}
+            isPinned={true}
+          />
+        </div>
       </div>
 
       {/* 네비게이션 화살표 (PC) */}
@@ -311,6 +287,7 @@ const MasonryItem = memo(function MasonryItem({
   isProfessor = false,
   isPinned = false,
   onPin,
+  onUnpin,
 }: {
   post: Post;
   onClick: () => void;
@@ -320,6 +297,7 @@ const MasonryItem = memo(function MasonryItem({
   isProfessor?: boolean;
   isPinned?: boolean;
   onPin?: () => void;
+  onUnpin?: () => void;
 }) {
   const hasImage = post.imageUrl || (post.imageUrls && post.imageUrls.length > 0);
   const imageUrl = post.imageUrl || post.imageUrls?.[0];
@@ -365,25 +343,32 @@ const MasonryItem = memo(function MasonryItem({
   return (
     <article
       onClick={onClick}
-      className="cursor-pointer group break-inside-avoid mb-4 p-3 border border-[#1A1A1A] relative"
+      className="cursor-pointer group break-inside-avoid mb-4 p-3 border border-[#1A1A1A] bg-[#F5F0E8] relative hover:-translate-y-0.5 hover:shadow-md transition-all"
     >
-      {/* 고정 표시 (우측 상단) */}
-      {isPinned && (
-        <div className="absolute top-1 right-1 z-10 p-1 text-[#8B1A1A]">
-          <svg className="w-5 h-5" fill="currentColor" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-          </svg>
-        </div>
-      )}
-
-      {/* 고정 버튼 (교수님 전용) */}
-      {isProfessor && !isPinned && (
+      {/* 고정 아이콘 — 교수: 클릭으로 고정/해제 토글, 학생: 정적 표시 */}
+      {isPinned ? (
+        isProfessor && onUnpin ? (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onUnpin(); }}
+            className="absolute top-1 right-1 z-10 p-1 text-[#8B1A1A] transition-transform hover:scale-125"
+            title="고정 해제"
+          >
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+            </svg>
+          </button>
+        ) : (
+          <div className="absolute top-1 right-1 z-10 p-1 text-[#8B1A1A]">
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+            </svg>
+          </div>
+        )
+      ) : isProfessor && (
         <button
           type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onPin?.();
-          }}
+          onClick={(e) => { e.stopPropagation(); onPin?.(); }}
           className="absolute top-1 right-1 z-10 p-1 text-[#1A1A1A]/30 hover:text-[#8B1A1A] transition-colors opacity-0 group-hover:opacity-100"
           title="글 고정"
         >
@@ -473,20 +458,30 @@ function NewspaperSkeleton() {
  */
 export default function BoardPage() {
   const router = useRouter();
-  const { semesterSettings } = useCourse();
+  const { semesterSettings, userCourseId } = useCourse();
   const { profile } = useUser();
 
   // 교수님 여부 확인
   const isProfessor = profile?.role === 'professor';
 
-  // 교수님용 과목 선택 (기본값: biology)
-  const [selectedCourseId, setSelectedCourseId] = useState<CourseId>('biology');
+  // 교수님용 과목 선택 (sessionStorage → 학기별 기본값)
+  const [selectedCourseId, setSelectedCourseId] = useState<CourseId>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('board-selected-course');
+      if (saved) return saved as CourseId;
+    }
+    return (userCourseId as CourseId) || 'microbiology';
+  });
+  // 과목 변경 시 sessionStorage에 저장
+  useEffect(() => {
+    if (isProfessor) {
+      sessionStorage.setItem('board-selected-course', selectedCourseId);
+    }
+  }, [selectedCourseId, isProfessor]);
+
   // 과목 스와이프 터치 좌표
   const courseTouchStartX = useRef<number>(0);
   const courseTouchEndX = useRef<number>(0);
-
-  // 교수님 관리 모달 상태
-  const [showManagementModal, setShowManagementModal] = useState(false);
 
   // 핀 피드백 토스트
   const [pinToast, setPinToast] = useState<string | null>(null);
@@ -495,7 +490,7 @@ export default function BoardPage() {
   // 사용자의 과목 ID (교수님은 선택한 과목, 학생은 자신의 과목)
   const activeCourseId = isProfessor ? selectedCourseId : profile?.courseId;
   const { posts, loading, error, hasMore, loadMore, refresh } = usePosts('all', activeCourseId);
-  const { pinnedPosts, pinPost, unpinPost, refresh: refreshPinned } = usePinnedPosts(activeCourseId);
+  const { pinnedPosts, pinPost, unpinPost } = usePinnedPosts(activeCourseId);
 
   // 과목 목록 (교수님용)
   const courseList = useMemo(() => getCourseList(), []);
@@ -531,31 +526,87 @@ export default function BoardPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
-  // 게시글 ID 목록이 변경되면 댓글 한 번에 로드
+  // postIds 문자열 키 (onSnapshot 무한 루프 방지)
+  const postIdsKey = useMemo(() => posts.map(p => p.id).join(','), [posts]);
+
+  // 게시글 ID 목록이 변경되면 댓글 실시간 구독
   useEffect(() => {
-    if (posts.length === 0) return;
+    if (!postIdsKey) return;
 
-    const loadAllComments = async () => {
-      try {
-        // 모든 게시글의 댓글을 한 번에 조회
-        const postIds = posts.map(p => p.id);
+    const postIds = postIdsKey.split(',');
 
-        // Firestore는 'in' 쿼리에 최대 30개까지만 지원
-        // 필요시 청크로 나눠서 쿼리
-        const chunks: string[][] = [];
-        for (let i = 0; i < postIds.length; i += 30) {
-          chunks.push(postIds.slice(i, i + 30));
-        }
+    // Firestore는 'in' 쿼리에 최대 30개까지만 지원
+    const chunks: string[][] = [];
+    for (let i = 0; i < postIds.length; i += 30) {
+      chunks.push(postIds.slice(i, i + 30));
+    }
 
-        const newMap = new Map<string, Comment[]>();
+    // chunk별 댓글 결과를 저장할 맵
+    const chunkResults = new Map<number, Map<string, Comment[]>>();
+    const unsubscribes: (() => void)[] = [];
 
-        for (const chunk of chunks) {
-          const commentsQuery = query(
-            collection(db, 'comments'),
-            where('postId', 'in', chunk)
-          );
+    // 모든 chunk 결과를 합쳐서 정렬 후 setCommentsMap
+    const mergeAllChunks = () => {
+      const newMap = new Map<string, Comment[]>();
 
-          const snapshot = await getDocs(commentsQuery);
+      chunkResults.forEach((chunkMap) => {
+        chunkMap.forEach((comments, postId) => {
+          const existing = newMap.get(postId) || [];
+          existing.push(...comments);
+          newMap.set(postId, existing);
+        });
+      });
+
+      // 각 게시글의 댓글을 좋아요순 > 오래된순으로 정렬
+      newMap.forEach((comments, postId) => {
+        const rootComments = comments.filter(c => !c.parentId);
+        const replies = comments.filter(c => c.parentId);
+
+        const getMaxLikes = (rootComment: Comment): number => {
+          const ownLikes = rootComment.likes || 0;
+          const childReplies = replies.filter(r => r.parentId === rootComment.id);
+          const replyMaxLikes = childReplies.length > 0
+            ? Math.max(...childReplies.map(r => r.likes || 0))
+            : 0;
+          return Math.max(ownLikes, replyMaxLikes);
+        };
+
+        rootComments.sort((a, b) => {
+          const aMaxLikes = getMaxLikes(a);
+          const bMaxLikes = getMaxLikes(b);
+          if (bMaxLikes !== aMaxLikes) return bMaxLikes - aMaxLikes;
+          return a.createdAt.getTime() - b.createdAt.getTime();
+        });
+
+        const sortedComments: Comment[] = [];
+        rootComments.forEach(root => {
+          sortedComments.push(root);
+          const childReplies = replies
+            .filter(r => r.parentId === root.id)
+            .sort((a, b) => {
+              const likeDiff = (b.likes || 0) - (a.likes || 0);
+              if (likeDiff !== 0) return likeDiff;
+              return a.createdAt.getTime() - b.createdAt.getTime();
+            });
+          sortedComments.push(...childReplies);
+        });
+
+        newMap.set(postId, sortedComments);
+      });
+
+      setCommentsMap(newMap);
+    };
+
+    chunks.forEach((chunk, chunkIndex) => {
+      const commentsQuery = query(
+        collection(db, 'comments'),
+        where('postId', 'in', chunk)
+      );
+
+      const unsub = onSnapshot(
+        commentsQuery,
+        (snapshot) => {
+          const chunkMap = new Map<string, Comment[]>();
           snapshot.forEach((doc) => {
             const data = doc.data();
             const comment: Comment = {
@@ -570,64 +621,25 @@ export default function BoardPage() {
               likes: data.likes || 0,
               likedBy: data.likedBy || [],
             };
-
-            const existing = newMap.get(comment.postId) || [];
+            const existing = chunkMap.get(comment.postId) || [];
             existing.push(comment);
-            newMap.set(comment.postId, existing);
+            chunkMap.set(comment.postId, existing);
           });
+          chunkResults.set(chunkIndex, chunkMap);
+          mergeAllChunks();
+        },
+        (err) => {
+          console.error('댓글 실시간 구독 실패:', err);
         }
+      );
 
-        // 각 게시글의 댓글을 좋아요순 > 오래된순으로 정렬
-        // 대댓글의 좋아요도 고려하여 루트 댓글 정렬
-        newMap.forEach((comments, postId) => {
-          // 루트 댓글과 대댓글 분리
-          const rootComments = comments.filter(c => !c.parentId);
-          const replies = comments.filter(c => c.parentId);
+      unsubscribes.push(unsub);
+    });
 
-          // 각 루트 댓글의 점수 계산 (본인 좋아요 + 대댓글 최대 좋아요)
-          const getMaxLikes = (rootComment: Comment): number => {
-            const ownLikes = rootComment.likes || 0;
-            const childReplies = replies.filter(r => r.parentId === rootComment.id);
-            const replyMaxLikes = childReplies.length > 0
-              ? Math.max(...childReplies.map(r => r.likes || 0))
-              : 0;
-            return Math.max(ownLikes, replyMaxLikes);
-          };
-
-          // 루트 댓글 정렬: 좋아요순 > 오래된순
-          rootComments.sort((a, b) => {
-            const aMaxLikes = getMaxLikes(a);
-            const bMaxLikes = getMaxLikes(b);
-            if (bMaxLikes !== aMaxLikes) return bMaxLikes - aMaxLikes;
-            return a.createdAt.getTime() - b.createdAt.getTime();
-          });
-
-          // 정렬된 순서로 재구성 (루트 댓글 뒤에 해당 대댓글들)
-          const sortedComments: Comment[] = [];
-          rootComments.forEach(root => {
-            sortedComments.push(root);
-            // 대댓글도 좋아요순 > 오래된순으로 정렬
-            const childReplies = replies
-              .filter(r => r.parentId === root.id)
-              .sort((a, b) => {
-                const likeDiff = (b.likes || 0) - (a.likes || 0);
-                if (likeDiff !== 0) return likeDiff;
-                return a.createdAt.getTime() - b.createdAt.getTime();
-              });
-            sortedComments.push(...childReplies);
-          });
-
-          newMap.set(postId, sortedComments);
-        });
-
-        setCommentsMap(newMap);
-      } catch (err) {
-        console.error('댓글 로드 실패:', err);
-      }
+    return () => {
+      unsubscribes.forEach(unsub => unsub());
     };
-
-    loadAllComments();
-  }, [posts]);
+  }, [postIdsKey]);
 
   // 검색 필터링 및 정렬 (최신순)
   const filteredPosts = useMemo(() => {
@@ -652,12 +664,8 @@ export default function BoardPage() {
   }, [router]);
 
   const handleManageClick = useCallback(() => {
-    if (isProfessor) {
-      setShowManagementModal(true);
-    } else {
-      router.push('/board/manage');
-    }
-  }, [router, isProfessor]);
+    router.push(isProfessor ? `/board/manage?course=${selectedCourseId}` : '/board/manage');
+  }, [router, isProfessor, selectedCourseId]);
 
   // 핀 토스트 표시
   const showPinToast = useCallback((message: string) => {
@@ -670,19 +678,18 @@ export default function BoardPage() {
   const handlePinPost = useCallback(async (postId: string) => {
     const success = await pinPost(postId);
     if (success) {
-      refreshPinned();
       showPinToast('게시글이 고정되었습니다');
     }
-  }, [pinPost, refreshPinned, showPinToast]);
+  }, [pinPost, showPinToast]);
 
   // 게시글 고정 해제 핸들러
   const handleUnpinPost = useCallback(async (postId: string) => {
+    // unpinPost 내부에서 낙관적 UI 업데이트 수행 (즉시 상태 반영)
     const success = await unpinPost(postId);
     if (success) {
-      refreshPinned();
       showPinToast('고정이 해제되었습니다');
     }
-  }, [unpinPost, refreshPinned, showPinToast]);
+  }, [unpinPost, showPinToast]);
 
   // 고정 글이 있으면 캐러셀 표시, 없으면 최신 글 표시
   const hasPinnedPosts = pinnedPosts.length > 0;
@@ -719,7 +726,7 @@ export default function BoardPage() {
       {/* 교수님용 과목 탭 — 타이틀 영역에 통합됨 */}
 
       {/* 헤더 */}
-      <header ref={headerRef} className="mx-4 mt-4 pb-6 border-b-4 border-double border-[#1A1A1A]">
+      <header ref={headerRef} className="mx-4 mt-4 pb-4 border-b-4 border-double border-[#1A1A1A]">
         {/* 상단 날짜 및 에디션 */}
         <div className="flex justify-between items-center text-xs text-[#3A3A3A] mb-3">
           <span>{dateString}</span>
@@ -733,29 +740,30 @@ export default function BoardPage() {
         {/* 타이틀 — 교수님은 과목 체인지, 학생은 JIBDAN JISUNG */}
         {isProfessor ? (
           <div
-            className="border-y-4 border-[#1A1A1A] py-6 flex items-center justify-center gap-2 select-none overflow-hidden"
+            className="border-y-4 border-[#1A1A1A] pt-5 pb-7 flex items-center justify-center gap-2 select-none overflow-hidden"
             onTouchStart={(e) => { courseTouchStartX.current = e.touches[0].clientX; }}
             onTouchMove={(e) => { courseTouchEndX.current = e.touches[0].clientX; }}
             onTouchEnd={() => {
               const diff = courseTouchStartX.current - courseTouchEndX.current;
               const idx = courseList.findIndex(c => c.id === selectedCourseId);
-              if (diff > 50 && idx < courseList.length - 1) {
-                setSelectedCourseId(courseList[idx + 1].id);
-              } else if (diff < -50 && idx > 0) {
-                setSelectedCourseId(courseList[idx - 1].id);
+              if (diff > 50) {
+                const next = idx >= courseList.length - 1 ? 0 : idx + 1;
+                setSelectedCourseId(courseList[next].id);
+              } else if (diff < -50) {
+                const prev = idx <= 0 ? courseList.length - 1 : idx - 1;
+                setSelectedCourseId(courseList[prev].id);
               }
             }}
           >
-            {/* 좌측 화살표 */}
+            {/* 좌측 화살표 (순환) */}
             <button
               type="button"
               onClick={() => {
                 const idx = courseList.findIndex(c => c.id === selectedCourseId);
-                if (idx > 0) setSelectedCourseId(courseList[idx - 1].id);
+                const prev = idx <= 0 ? courseList.length - 1 : idx - 1;
+                setSelectedCourseId(courseList[prev].id);
               }}
-              className={`p-1 transition-opacity ${
-                courseList.findIndex(c => c.id === selectedCourseId) === 0 ? 'opacity-20 pointer-events-none' : 'opacity-60 hover:opacity-100'
-              }`}
+              className="p-1 opacity-60 hover:opacity-100 transition-opacity"
             >
               <svg className="w-7 h-7" fill="none" stroke="#1A1A1A" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
@@ -780,16 +788,15 @@ export default function BoardPage() {
               </motion.h1>
             </AnimatePresence>
 
-            {/* 우측 화살표 */}
+            {/* 우측 화살표 (순환) */}
             <button
               type="button"
               onClick={() => {
                 const idx = courseList.findIndex(c => c.id === selectedCourseId);
-                if (idx < courseList.length - 1) setSelectedCourseId(courseList[idx + 1].id);
+                const next = idx >= courseList.length - 1 ? 0 : idx + 1;
+                setSelectedCourseId(courseList[next].id);
               }}
-              className={`p-1 transition-opacity ${
-                courseList.findIndex(c => c.id === selectedCourseId) === courseList.length - 1 ? 'opacity-20 pointer-events-none' : 'opacity-60 hover:opacity-100'
-              }`}
+              className="p-1 opacity-60 hover:opacity-100 transition-opacity"
             >
               <svg className="w-7 h-7" fill="none" stroke="#1A1A1A" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
@@ -797,7 +804,7 @@ export default function BoardPage() {
             </button>
           </div>
         ) : (
-          <h1 className="font-serif-display text-5xl md:text-7xl font-black tracking-tight text-[#1A1A1A] text-center py-6 border-y-4 border-[#1A1A1A]">
+          <h1 className="font-serif-display text-5xl md:text-7xl font-black tracking-tight text-[#1A1A1A] text-center pt-5 pb-7 border-y-4 border-[#1A1A1A]">
             JIBDAN JISUNG
           </h1>
         )}
@@ -817,45 +824,77 @@ export default function BoardPage() {
 
         {/* 버튼 + 검색 */}
         <div className="flex items-center gap-2">
-          {/* 버튼들 - 동일한 너비로 좌측 절반 차지 */}
-          <div className="flex gap-2 flex-1">
-            <button
-              onClick={handleWriteClick}
-              className="flex-1 px-4 py-2.5 text-sm font-bold"
-              style={{
-                backgroundColor: '#1A1A1A',
-                color: '#F5F0E8',
-              }}
-            >
-              글 작성
-            </button>
-            <button
-              onClick={handleManageClick}
-              className="flex-1 px-4 py-2.5 text-sm font-bold"
-              style={{
-                backgroundColor: 'transparent',
-                color: '#1A1A1A',
-                border: '1px solid #1A1A1A',
-              }}
-            >
-              관리
-            </button>
-          </div>
-
-          {/* 검색창 - 우측 절반 */}
-          <div className="flex-1">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="제목 검색..."
-              className="w-full px-3 py-2.5 text-sm outline-none"
-              style={{
-                border: '1px solid #1A1A1A',
-                backgroundColor: '#F5F0E8',
-              }}
-            />
-          </div>
+          {isProfessor ? (
+            /* 교수님: 관리 버튼 1개 + 검색 (1:1 비율) */
+            <>
+              <div className="flex-1 min-w-0">
+                <button
+                  onClick={handleManageClick}
+                  className="w-full px-4 py-2.5 text-sm font-bold"
+                  style={{
+                    border: '1px solid #1A1A1A',
+                    backgroundColor: 'transparent',
+                    color: '#1A1A1A',
+                  }}
+                >
+                  관리
+                </button>
+              </div>
+              <div className="flex-1 min-w-0">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="제목 검색..."
+                  className="w-full px-3 py-2.5 text-sm outline-none"
+                  style={{
+                    border: '1px solid #1A1A1A',
+                    backgroundColor: '#F5F0E8',
+                  }}
+                />
+              </div>
+            </>
+          ) : (
+            /* 학생: 글 작성 + 관리 + 검색 */
+            <>
+              <div className="flex gap-2 flex-1">
+                <button
+                  onClick={handleWriteClick}
+                  className="flex-1 px-4 py-2.5 text-sm font-bold"
+                  style={{
+                    backgroundColor: '#1A1A1A',
+                    color: '#F5F0E8',
+                  }}
+                >
+                  글 작성
+                </button>
+                <button
+                  onClick={handleManageClick}
+                  className="flex-1 px-4 py-2.5 text-sm font-bold"
+                  style={{
+                    backgroundColor: 'transparent',
+                    color: '#1A1A1A',
+                    border: '1px solid #1A1A1A',
+                  }}
+                >
+                  관리
+                </button>
+              </div>
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="제목 검색..."
+                  className="w-full px-3 py-2.5 text-sm outline-none"
+                  style={{
+                    border: '1px solid #1A1A1A',
+                    backgroundColor: '#F5F0E8',
+                  }}
+                />
+              </div>
+            </>
+          )}
         </div>
       </header>
 
@@ -890,8 +929,6 @@ export default function BoardPage() {
               posts={pinnedPosts}
               commentsMap={commentsMap}
               onPostClick={handlePostClick}
-              isProfessor={isProfessor}
-              onUnpin={handleUnpinPost}
             />
           </div>
         ) : headline && (
@@ -921,6 +958,7 @@ export default function BoardPage() {
                 isProfessor={isProfessor}
                 isPinned={post.isPinned}
                 onPin={() => handlePinPost(post.id)}
+                onUnpin={() => handleUnpinPost(post.id)}
               />
             ))}
           </div>
@@ -976,21 +1014,12 @@ export default function BoardPage() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="fixed top-12 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 bg-[#1A1A1A] text-[#F5F0E8] text-sm font-bold shadow-lg"
+            className="fixed top-12 inset-x-0 z-50 mx-auto w-fit px-5 py-2.5 bg-[#1A1A1A] text-[#F5F0E8] text-sm font-bold shadow-lg"
           >
             {pinToast}
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* 교수님 관리 모달 */}
-      {isProfessor && (
-        <BoardManagementModal
-          isOpen={showManagementModal}
-          onClose={() => setShowManagementModal(false)}
-          courseId={selectedCourseId}
-        />
-      )}
 
     </div>
   );
