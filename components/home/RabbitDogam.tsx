@@ -254,9 +254,9 @@ function ButlerList({
   const renderEntry = (d: { userId: string; nickname: string; discoveryOrder: number }) => (
     <div key={d.userId} className="flex items-baseline gap-1.5">
       {d.discoveryOrder === 1 ? (
-        <span className="text-xs font-bold text-[#D4AF37] shrink-0">부모</span>
+        <span className="text-sm font-bold text-[#D4AF37] shrink-0">부모</span>
       ) : (
-        <span className="text-xs font-bold text-white/50 shrink-0">
+        <span className="text-sm font-bold text-white/50 shrink-0">
           {d.discoveryOrder - 1}대
         </span>
       )}
