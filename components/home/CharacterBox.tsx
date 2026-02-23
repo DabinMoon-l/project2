@@ -17,7 +17,7 @@ import { useRabbitHoldings, useRabbitDoc, getRabbitStats } from '@/lib/hooks/use
 import { getPendingMilestones, getExpBarDisplay } from '@/lib/utils/milestone';
 import { computeRabbitDisplayName } from '@/lib/utils/rabbitDisplayName';
 
-import RabbitImage from '@/components/common/RabbitImage';
+
 import GachaResultModal, { type RollResultData } from './GachaResultModal';
 import RabbitDogam from './RabbitDogam';
 import MilestoneChoiceModal from './MilestoneChoiceModal';
@@ -491,10 +491,13 @@ function OrbitalCharacter({
       style={{ left: 0, top: 0, x, y, scale, zIndex, opacity }}
     >
       <FloatingWrapper seed={charIndex}>
-        <RabbitImage
-          rabbitId={rabbitId}
-          size={CHAR_SIZE}
-          priority
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={`/rabbit/rabbit-${String(rabbitId + 1).padStart(3, '0')}.png`}
+          alt=""
+          width={CHAR_SIZE}
+          height={Math.round(CHAR_SIZE * (969 / 520))}
+          draggable={false}
           className="drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
           style={{ filter: 'sepia(0.08) saturate(1.1) brightness(1.03) hue-rotate(-5deg)' }}
         />
