@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import Image from 'next/image';
 import { useTheme } from '@/styles/themes/useTheme';
 import { useUser } from '@/lib/contexts';
 import { ProfileDrawer } from '@/components/common';
@@ -188,7 +187,8 @@ export default function HomePage() {
               onClick={() => setShowProfileDrawer(true)}
             >
               {profile.profileRabbitId != null ? (
-                <Image
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
                   src={getRabbitProfileUrl(profile.profileRabbitId)}
                   alt="프로필"
                   width={80}

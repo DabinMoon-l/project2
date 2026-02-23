@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
   reauthenticateWithCredential,
@@ -667,7 +666,8 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                     className="w-14 h-14 flex items-center justify-center flex-shrink-0 overflow-hidden rounded-xl border-2 border-white/30 bg-white/10 transition-transform active:scale-95"
                   >
                     {profile.profileRabbitId != null ? (
-                      <Image
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
                         src={getRabbitProfileUrl(profile.profileRabbitId)}
                         alt="프로필"
                         width={56}

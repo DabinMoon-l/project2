@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { doc, getDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import Image from 'next/image';
 import { db, functions } from '@/lib/firebase';
 import { useUser, useCourse } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
@@ -84,19 +83,23 @@ export default function RankingPage() {
 
   // 랭킹 데이터를 현재 유저 프로필로 보정하는 헬퍼
   const applyRankings = useCallback((users: RankedUser[]) => {
-    // 현재 유저의 profileRabbitId를 최신 프로필로 오버라이드
     if (profile?.uid) {
       const me = users.find(u => u.id === profile.uid);
       if (me) {
         me.profileRabbitId = profile.profileRabbitId ?? undefined;
         me.nickname = profile.nickname || me.nickname;
+        // 장착 토끼도 최신 프로필 반영
+        const equipped: Array<{ rabbitId: number }> = profile.equippedRabbits || [];
+        if (equipped.length > 0) {
+          me.firstEquippedRabbitId = equipped[0]?.rabbitId;
+        }
       }
     }
     setRankedUsers(users);
     const me = profile?.uid ? users.find(u => u.id === profile.uid) : null;
     if (me) setMyRank(me);
     else setMyRank(null);
-  }, [profile?.uid, profile?.profileRabbitId, profile?.nickname]);
+  }, [profile?.uid, profile?.profileRabbitId, profile?.nickname, profile?.equippedRabbits]);
 
   // 랭킹 데이터 로드 — onSnapshot 실시간 구독
   useEffect(() => {
@@ -156,18 +159,42 @@ export default function RankingPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userCourseId, profile?.uid]);
 
-  // 프로필 변경 시 현재 유저 데이터 즉시 반영
+  // 프로필/장착 토끼 변경 시 현재 유저 데이터 즉시 반영
+  const equippedJSON = JSON.stringify(profile?.equippedRabbits || []);
   useEffect(() => {
     if (!profile?.uid || rankedUsers.length === 0) return;
     const me = rankedUsers.find(u => u.id === profile.uid);
-    if (me && (me.profileRabbitId !== (profile.profileRabbitId ?? undefined) || me.nickname !== profile.nickname)) {
+    if (!me) return;
+
+    const equipped: Array<{ rabbitId: number; courseId?: string }> = profile.equippedRabbits || [];
+    const firstSlot = equipped[0];
+
+    // 토끼 이름 조회 후 업데이트
+    const updateMe = async () => {
+      const names: string[] = [];
+      for (const r of equipped) {
+        if (r.rabbitId === 0) { names.push('토끼'); continue; }
+        const key = r.courseId ? `${r.courseId}_${r.rabbitId}` : null;
+        if (key) {
+          try {
+            const snap = await getDoc(doc(db, 'rabbits', key));
+            names.push(snap.exists() ? (snap.data()?.name || `토끼 #${r.rabbitId + 1}`) : `토끼 #${r.rabbitId + 1}`);
+          } catch { names.push(`토끼 #${r.rabbitId + 1}`); }
+        } else { names.push(`토끼 #${r.rabbitId + 1}`); }
+      }
+
       me.profileRabbitId = profile.profileRabbitId ?? undefined;
       me.nickname = profile.nickname || me.nickname;
+      me.equippedRabbitNames = names.length > 0 ? names.join(' & ') : '';
+      me.firstEquippedRabbitId = firstSlot?.rabbitId;
+      me.firstEquippedRabbitName = names[0] || undefined;
       setRankedUsers([...rankedUsers]);
       setMyRank({ ...me });
-    }
+    };
+
+    updateMe();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile?.profileRabbitId, profile?.nickname]);
+  }, [profile?.profileRabbitId, profile?.nickname, equippedJSON]);
 
   const top3 = useMemo(() => rankedUsers.slice(0, 3), [rankedUsers]);
   const restUsers = useMemo(() => rankedUsers.slice(3), [rankedUsers]);
@@ -327,7 +354,8 @@ export default function RankingPage() {
                 {/* 프로필 */}
                 <div className="w-10 h-10 flex items-center justify-center border-2 border-white/30 rounded-lg overflow-hidden flex-shrink-0 bg-white/10">
                   {user.profileRabbitId != null ? (
-                    <Image src={getRabbitProfileUrl(user.profileRabbitId)} alt="" width={40} height={40} className="w-full h-full object-cover" loading="lazy" />
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={getRabbitProfileUrl(user.profileRabbitId)} alt="" width={40} height={40} className="w-full h-full object-cover" loading="lazy" />
                   ) : (
                     <svg width={20} height={20} viewBox="0 0 24 24" fill="rgba(255,255,255,0.5)">
                       <circle cx="12" cy="8" r="4" />
@@ -391,7 +419,8 @@ export default function RankingPage() {
             {/* 프로필 */}
             <div className="w-10 h-10 flex items-center justify-center border-2 border-white/30 rounded-lg overflow-hidden flex-shrink-0 bg-white/10">
               {myRank.profileRabbitId != null ? (
-                <Image src={getRabbitProfileUrl(myRank.profileRabbitId)} alt="" width={40} height={40} className="w-full h-full object-cover" />
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={getRabbitProfileUrl(myRank.profileRabbitId)} alt="" width={40} height={40} className="w-full h-full object-cover" />
               ) : (
                 <svg width={20} height={20} viewBox="0 0 24 24" fill="rgba(255,255,255,0.5)">
                   <circle cx="12" cy="8" r="4" />
@@ -627,7 +656,8 @@ async function computeRankingsClientSide(courseId: string): Promise<RankedUser[]
 function PodiumRabbit({ rabbitId, size }: { rabbitId?: number; size: number }) {
   if (rabbitId != null) {
     return (
-      <Image
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
         src={getRabbitImageSrc(rabbitId)}
         alt=""
         width={size}

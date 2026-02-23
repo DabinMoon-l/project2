@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import Image from 'next/image';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 import { type RabbitHolding, getRabbitStats } from '@/lib/hooks/useRabbit';
@@ -172,7 +171,8 @@ export default function LevelUpBottomSheet({
                             style={{ scrollSnapAlign: 'center' }}
                             disabled={isLoading}
                           >
-                            <Image
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
                               src={getRabbitProfileUrl(h.rabbitId)}
                               alt={`토끼 #${h.rabbitId + 1}`}
                               width={56}

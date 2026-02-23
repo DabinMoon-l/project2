@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import Image from 'next/image';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 import { isStudentEmail, extractStudentId } from '@/lib/auth';
@@ -174,7 +173,8 @@ export default function SettingsPage() {
           >
             <div className="w-16 h-16 flex-shrink-0 border-2 border-white/30 rounded-xl overflow-hidden flex items-center justify-center bg-white/10">
               {profile?.profileRabbitId != null ? (
-                <Image
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
                   src={getRabbitProfileUrl(profile.profileRabbitId)}
                   alt="프로필"
                   width={64}
@@ -345,7 +345,8 @@ export default function SettingsPage() {
                                 : 'border-white/15 hover:border-white/30'
                             }`}
                           >
-                            <Image
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
                               src={getRabbitProfileUrl(h.rabbitId)}
                               alt={`토끼 #${h.rabbitId}`}
                               width={80}
