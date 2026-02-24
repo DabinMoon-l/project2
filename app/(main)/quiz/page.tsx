@@ -65,9 +65,25 @@ interface QuizCardData {
 
 const NEWS_CARDS: { type: NewsCardType; title: string; subtitle: string }[] = [
   { type: 'midterm', title: 'MIDTERM PREP', subtitle: 'Vol.1 · Midterm Edition' },
-  { type: 'final', title: 'FINAL PREP', subtitle: 'Vol.2 · Final Edition' },
   { type: 'past', title: 'PAST EXAM', subtitle: 'Official Archive' },
+  { type: 'final', title: 'FINAL PREP', subtitle: 'Vol.2 · Final Edition' },
 ];
+
+// 캐러셀 위치 저장 키
+const QUIZ_CAROUSEL_KEY = 'quiz-carousel-index';
+
+// getDefaultQuizTab → 캐러셀 인덱스 매핑 (midterm=0, past=1, final=2)
+function getDefaultCarouselIndex(): number {
+  if (typeof window !== 'undefined') {
+    const saved = sessionStorage.getItem(QUIZ_CAROUSEL_KEY);
+    if (saved !== null) return parseInt(saved, 10);
+  }
+  const tab = getDefaultQuizTab();
+  if (tab === 'midterm') return 0;
+  if (tab === 'past') return 1;
+  if (tab === 'final') return 2;
+  return 0;
+}
 
 const MOTIVATIONAL_QUOTES = [
   "Success is not final, failure is not fatal.",
@@ -614,11 +630,19 @@ function NewsCarousel({
   onDownload: (url: string) => void;
   onShowDetails?: (quiz: QuizCardData) => void;
 }) {
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(getDefaultCarouselIndex);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const goToPrev = () => setCurrentIndex((prev) => Math.max(0, prev - 1));
-  const goToNext = () => setCurrentIndex((prev) => Math.min(2, prev + 1));
+  // 위치 변경 시 sessionStorage에 저장
+  const updateIndex = useCallback((idx: number) => {
+    setCurrentIndex(idx);
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem(QUIZ_CAROUSEL_KEY, String(idx));
+    }
+  }, []);
+
+  const goToPrev = () => updateIndex(Math.max(0, currentIndex - 1));
+  const goToNext = () => updateIndex(Math.min(2, currentIndex + 1));
 
   const handleDragEnd = (e: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     if (info.offset.x > 50) {
@@ -669,9 +693,7 @@ function NewsCarousel({
           {/* 중간 카드 */}
           <motion.div
             className="w-full flex-shrink-0 px-2"
-            style={{
-              perspective: 1000,
-            }}
+            style={{ perspective: 1000 }}
           >
             <motion.div
               animate={{
@@ -695,47 +717,16 @@ function NewsCarousel({
             </motion.div>
           </motion.div>
 
-          {/* 기말 카드 */}
+          {/* 기출 카드 */}
           <motion.div
             className="w-full flex-shrink-0 px-2"
-            style={{
-              perspective: 1000,
-            }}
+            style={{ perspective: 1000 }}
           >
             <motion.div
               animate={{
                 rotateY: currentIndex === 1 ? 0 : currentIndex < 1 ? 15 : -15,
                 scale: currentIndex === 1 ? 1 : 0.9,
                 opacity: currentIndex === 1 ? 1 : 0.7,
-              }}
-              transition={{ duration: 0.3 }}
-              className="h-[420px]"
-            >
-              <NewsCard
-                type="final"
-                title="FINAL PREP"
-                subtitle="Vol.2 · Final Edition"
-                quizzes={finalQuizzes}
-                isLoading={isLoading.final}
-                onStart={onStart}
-                onUpdate={onUpdate}
-                onShowDetails={onShowDetails}
-              />
-            </motion.div>
-          </motion.div>
-
-          {/* 기출 카드 */}
-          <motion.div
-            className="w-full flex-shrink-0 px-2"
-            style={{
-              perspective: 1000,
-            }}
-          >
-            <motion.div
-              animate={{
-                rotateY: currentIndex === 2 ? 0 : currentIndex < 2 ? 15 : -15,
-                scale: currentIndex === 2 ? 1 : 0.9,
-                opacity: currentIndex === 2 ? 1 : 0.7,
               }}
               transition={{ duration: 0.3 }}
               className="h-[420px]"
@@ -752,6 +743,33 @@ function NewsCarousel({
               />
             </motion.div>
           </motion.div>
+
+          {/* 기말 카드 */}
+          <motion.div
+            className="w-full flex-shrink-0 px-2"
+            style={{ perspective: 1000 }}
+          >
+            <motion.div
+              animate={{
+                rotateY: currentIndex === 2 ? 0 : currentIndex < 2 ? 15 : -15,
+                scale: currentIndex === 2 ? 1 : 0.9,
+                opacity: currentIndex === 2 ? 1 : 0.7,
+              }}
+              transition={{ duration: 0.3 }}
+              className="h-[420px]"
+            >
+              <NewsCard
+                type="final"
+                title="FINAL PREP"
+                subtitle="Vol.2 · Final Edition"
+                quizzes={finalQuizzes}
+                isLoading={isLoading.final}
+                onStart={onStart}
+                onUpdate={onUpdate}
+                onShowDetails={onShowDetails}
+              />
+            </motion.div>
+          </motion.div>
         </motion.div>
       </div>
 
@@ -760,7 +778,7 @@ function NewsCarousel({
         {[0, 1, 2].map((index) => (
           <button
             key={index}
-            onClick={() => setCurrentIndex(index)}
+            onClick={() => updateIndex(index)}
             className={`w-2 h-2 rounded-full transition-all ${
               currentIndex === index ? 'bg-[#1A1A1A] w-4' : 'bg-[#CCCCCC]'
             }`}
@@ -1313,6 +1331,18 @@ function QuizListPageContent() {
 
   // 복습 탭 Details 모달
   const [reviewDetailsQuiz, setReviewDetailsQuiz] = useState<QuizCardData | null>(null);
+
+  // Details 모달 열릴 때 네비게이션 숨김
+  useEffect(() => {
+    if (selectedQuiz || reviewDetailsQuiz) {
+      document.body.setAttribute('data-hide-nav', 'true');
+    } else {
+      document.body.removeAttribute('data-hide-nav');
+    }
+    return () => {
+      document.body.removeAttribute('data-hide-nav');
+    };
+  }, [selectedQuiz, reviewDetailsQuiz]);
 
   // 삭제 확인 모달
   const [quizToDelete, setQuizToDelete] = useState<QuizCardData | null>(null);

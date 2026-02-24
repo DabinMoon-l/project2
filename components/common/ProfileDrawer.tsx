@@ -200,6 +200,13 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
+  // 관리자 비밀번호 초기화 상태
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
+  const [adminResetStudentId, setAdminResetStudentId] = useState('');
+  const [adminResetPassword, setAdminResetPassword] = useState('');
+  const [adminResetResult, setAdminResetResult] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [adminResetting, setAdminResetting] = useState(false);
+
   const isAdmin = profile?.studentId === ADMIN_STUDENT_ID;
 
   // ============================================================
@@ -608,6 +615,45 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
     await updateDoc(doc(db, 'inquiries', inquiryId), { isRead: true });
   }, []);
 
+  // 관리자: 비밀번호 초기화
+  const handleAdminResetPassword = useCallback(async () => {
+    if (!adminResetStudentId || !adminResetPassword || !userCourseId) return;
+
+    if (!/^\d{7,10}$/.test(adminResetStudentId)) {
+      setAdminResetResult({ message: '학번은 7-10자리 숫자입니다.', type: 'error' });
+      return;
+    }
+    if (adminResetPassword.length < 6) {
+      setAdminResetResult({ message: '비밀번호는 6자 이상이어야 합니다.', type: 'error' });
+      return;
+    }
+
+    setAdminResetting(true);
+    setAdminResetResult(null);
+    try {
+      const resetStudentPasswordFn = httpsCallable<
+        { studentId: string; courseId: string; newPassword: string },
+        { success: boolean; message: string }
+      >(functions, 'resetStudentPassword');
+      const res = await resetStudentPasswordFn({
+        studentId: adminResetStudentId,
+        courseId: userCourseId,
+        newPassword: adminResetPassword,
+      });
+      setAdminResetResult({ message: res.data.message, type: 'success' });
+      setAdminResetStudentId('');
+      setAdminResetPassword('');
+    } catch (err: unknown) {
+      const firebaseError = err as { message?: string };
+      setAdminResetResult({
+        message: firebaseError.message || '비밀번호 초기화에 실패했습니다.',
+        type: 'error',
+      });
+    } finally {
+      setAdminResetting(false);
+    }
+  }, [adminResetStudentId, adminResetPassword, userCourseId]);
+
   if (!profile) return null;
 
   return (
@@ -936,6 +982,67 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                         </motion.div>
                       )}
                     </AnimatePresence>
+
+                    {/* 관리자 비밀번호 초기화 */}
+                    {isAdmin && (
+                      <>
+                        <div className="border-t border-white/5 my-1" />
+                        <button
+                          onClick={() => setShowPasswordReset(prev => !prev)}
+                          className="w-full flex items-center justify-between py-2.5"
+                        >
+                          <span className="text-base text-white/80">비밀번호 초기화</span>
+                          <svg
+                            className={`w-4 h-4 text-white/30 transition-transform ${showPasswordReset ? 'rotate-90' : ''}`}
+                            fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+
+                        <AnimatePresence>
+                          {showPasswordReset && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="space-y-2 pb-2">
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  placeholder="학번 (7-10자리)"
+                                  value={adminResetStudentId}
+                                  onChange={(e) => setAdminResetStudentId(e.target.value.replace(/\D/g, ''))}
+                                  maxLength={10}
+                                  className="w-full px-3 py-2.5 rounded-xl text-sm outline-none bg-white/10 text-white placeholder:text-white/40 border border-white/15"
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="새 비밀번호 (6자 이상)"
+                                  value={adminResetPassword}
+                                  onChange={(e) => setAdminResetPassword(e.target.value)}
+                                  className="w-full px-3 py-2.5 rounded-xl text-sm outline-none bg-white/10 text-white placeholder:text-white/40 border border-white/15"
+                                />
+                                <button
+                                  onClick={handleAdminResetPassword}
+                                  disabled={adminResetting || !adminResetStudentId || !adminResetPassword}
+                                  className="w-full py-2.5 rounded-xl text-sm font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-40"
+                                >
+                                  {adminResetting ? '초기화 중...' : '비밀번호 초기화'}
+                                </button>
+                                {adminResetResult && (
+                                  <p className={`text-xs text-center ${adminResetResult.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+                                    {adminResetResult.message}
+                                  </p>
+                                )}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </>
+                    )}
                   </div>
                 </div>
 

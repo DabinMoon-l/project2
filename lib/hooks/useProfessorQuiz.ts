@@ -47,6 +47,9 @@ export interface QuizQuestion {
   choices?: string[];
   answer: number | string;
   explanation?: string;
+  chapterId?: string;
+  chapterDetailId?: string;
+  rubric?: Array<{ criteria: string; percentage: number; description?: string }>;
 }
 
 /** 시험 유형 */
@@ -58,6 +61,7 @@ export interface ProfessorQuiz {
   title: string;
   description?: string;
   type: QuizTypeFilter | 'professor';
+  courseId?: string;
   targetClass: TargetClass;
   difficulty: Difficulty;
   isPublished: boolean;
@@ -68,6 +72,9 @@ export interface ProfessorQuiz {
   participantCount: number;
   averageScore: number;
   feedbackCount: number;
+  tags?: string[];
+  pastYear?: number;
+  pastExamType?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -86,6 +93,12 @@ export interface QuizInput {
   courseId?: string | null;
   /** 시험 유형 */
   quizType?: QuizTypeFilter;
+  /** 기출 년도 (past 타입 전용) */
+  pastYear?: number;
+  /** 기출 시험 구분: 중간 or 기말 (past 타입 전용) */
+  pastExamType?: 'midterm' | 'final';
+  /** 태그 목록 */
+  tags?: string[];
 }
 
 /** 필터 옵션 */
@@ -93,6 +106,7 @@ export interface QuizFilterOptions {
   isPublished?: boolean | 'all';
   targetClass?: TargetClass | 'all';
   quizType?: QuizTypeFilter;
+  pageSize?: number;
 }
 
 /** 문제별 선택 통계 */
@@ -190,6 +204,7 @@ const docToQuiz = (doc: DocumentSnapshot | QueryDocumentSnapshot): ProfessorQuiz
     title: data.title,
     description: data.description,
     type: data.type,
+    courseId: data.courseId,
     targetClass: data.targetClass,
     difficulty: data.difficulty,
     isPublished: data.isPublished,
@@ -200,6 +215,9 @@ const docToQuiz = (doc: DocumentSnapshot | QueryDocumentSnapshot): ProfessorQuiz
     participantCount: data.participantCount || 0,
     averageScore: data.averageScore || 0,
     feedbackCount: data.feedbackCount || 0,
+    tags: data.tags || [],
+    pastYear: data.pastYear,
+    pastExamType: data.pastExamType,
     createdAt: data.createdAt?.toDate() || new Date(),
     updatedAt: data.updatedAt?.toDate() || new Date(),
   };
@@ -265,13 +283,15 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
           ? [options.quizType]
           : ['midterm', 'final', 'past', 'professor'];
 
+        const effectivePageSize = options.pageSize || PAGE_SIZE;
+
         // 기본 쿼리: 생성자 필터 + 최신순 정렬
         let q = query(
           collection(db, QUIZZES_COLLECTION),
           where('creatorUid', '==', creatorUid),
           where('type', 'in', typeFilter),
           orderBy('createdAt', 'desc'),
-          limit(PAGE_SIZE)
+          limit(effectivePageSize)
         );
 
         // 공개 상태 필터
@@ -282,7 +302,7 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
             where('type', 'in', typeFilter),
             where('isPublished', '==', options.isPublished),
             orderBy('createdAt', 'desc'),
-            limit(PAGE_SIZE)
+            limit(effectivePageSize)
           );
         }
 
@@ -298,7 +318,7 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
 
         setQuizzes(fetchedQuizzes);
         setLastDoc(snapshot.docs[snapshot.docs.length - 1] || null);
-        setHasMore(snapshot.docs.length === PAGE_SIZE);
+        setHasMore(snapshot.docs.length === effectivePageSize);
       } catch (err) {
         const message = err instanceof Error ? err.message : '퀴즈 목록을 불러오는데 실패했습니다.';
         setError(message);
@@ -732,6 +752,7 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
         const newQuiz: ProfessorQuiz = {
           ...input,
           id: docRef.id,
+          courseId: input.courseId || undefined,
           type: input.quizType || 'professor',
           questionCount: actualQuestionCount,
           creatorUid,
@@ -790,6 +811,7 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
               ? {
                   ...quiz,
                   ...input,
+                  courseId: input.courseId !== undefined ? (input.courseId || undefined) : quiz.courseId,
                   questionCount: actualQuestionCount ?? quiz.questionCount,
                   updatedAt: new Date(),
                 }

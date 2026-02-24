@@ -42,7 +42,11 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
     pathname?.includes('/edit') ||
     pathname?.match(/^\/board\/[^/]+/) !== null ||
     pathname === '/ranking' ||
-    pathname === '/review/random';
+    pathname === '/review/random' ||
+    pathname === '/professor/quiz/best-q' ||
+    pathname?.match(/^\/professor\/quiz\/[^/]+\/preview/) !== null ||
+    pathname === '/quiz/create' ||
+    pathname === '/professor/quiz/create';
 
   // 학생용 스와이프 다운으로 홈 이동 가능한 페이지
   const enablePullToHome =

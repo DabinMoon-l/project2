@@ -1,0 +1,61 @@
+{
+  "rules": {
+    "tekken": {
+      "matchmaking": {
+        "$courseId": {
+          "$odlerId": {
+            ".read": "auth != null",
+            ".write": "auth != null && auth.uid === $odlerId"
+          },
+          ".read": "auth != null"
+        }
+      },
+      "battles": {
+        "$battleId": {
+          ".read": "auth != null",
+          "status": {
+            ".write": false
+          },
+          "players": {
+            "$userId": {
+              "activeRabbitIndex": {
+                ".write": "auth != null && auth.uid === $userId"
+              },
+              "connected": {
+                ".write": "auth != null && auth.uid === $userId"
+              }
+            }
+          },
+          "rounds": {
+            "$n": {
+              "correctAnswer": {
+                ".read": false
+              },
+              "answers": {
+                "$userId": {
+                  ".write": "auth != null && auth.uid === $userId && !data.exists()",
+                  ".validate": "newData.hasChildren(['answer', 'answeredAt'])"
+                }
+              }
+            }
+          },
+          "mash": {
+            "taps": {
+              "$userId": {
+                ".write": "auth != null && auth.uid === $userId"
+              }
+            }
+          }
+        }
+      },
+      "streaks": {
+        "$userId": {
+          ".read": "auth != null && auth.uid === $userId",
+          ".write": false
+        }
+      }
+    },
+    ".read": false,
+    ".write": false
+  }
+}

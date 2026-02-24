@@ -941,6 +941,25 @@ export default function ReviewPractice({
                                               </div>
                                             )}
 
+                                            {/* 루브릭 (서술형) */}
+                                            {subItem.type === 'essay' && (subItem as any).rubric?.length > 0 && (subItem as any).rubric.some((r: any) => r.criteria?.trim()) && (
+                                              <div className="p-2 bg-[#F5F0E8] border border-[#1A1A1A]">
+                                                <p className="text-xs font-bold text-[#5C5C5C]">평가 기준</p>
+                                                <ul className="space-y-1 text-sm">
+                                                  {(subItem as any).rubric.filter((r: any) => r.criteria?.trim()).map((r: any, idx: number) => (
+                                                    <li key={idx} className="flex items-start gap-2">
+                                                      <span className="text-[#1A1A1A] font-bold shrink-0">·</span>
+                                                      <span className="text-[#1A1A1A]">
+                                                        {r.criteria}
+                                                        {r.percentage > 0 && <span className="text-[#5C5C5C] font-bold"> ({r.percentage}%)</span>}
+                                                        {r.description && <span className="text-[#5C5C5C]"> — {r.description}</span>}
+                                                      </span>
+                                                    </li>
+                                                  ))}
+                                                </ul>
+                                              </div>
+                                            )}
+
                                             {/* 해설 */}
                                             <div className="p-2 bg-[#F5F0E8] border border-[#1A1A1A]">
                                               <p className="text-xs font-bold text-[#5C5C5C]">해설</p>
@@ -1318,6 +1337,25 @@ export default function ReviewPractice({
                                   </span>
                                 </p>
                               )}
+                            </div>
+                          )}
+
+                          {/* 루브릭 (서술형) */}
+                          {item.type === 'essay' && (item as any).rubric?.length > 0 && (item as any).rubric.some((r: any) => r.criteria?.trim()) && (
+                            <div className="p-2 bg-[#F5F0E8] border border-[#1A1A1A]">
+                              <p className="text-xs font-bold text-[#5C5C5C] mb-1">평가 기준</p>
+                              <ul className="space-y-1 text-sm">
+                                {(item as any).rubric.filter((r: any) => r.criteria?.trim()).map((r: any, idx: number) => (
+                                  <li key={idx} className="flex items-start gap-2">
+                                    <span className="text-[#1A1A1A] font-bold shrink-0">·</span>
+                                    <span className="text-[#1A1A1A]">
+                                      {r.criteria}
+                                      {r.percentage > 0 && <span className="text-[#5C5C5C] font-bold"> ({r.percentage}%)</span>}
+                                      {r.description && <span className="text-[#5C5C5C]"> — {r.description}</span>}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
                             </div>
                           )}
 
@@ -2035,6 +2073,25 @@ export default function ReviewPractice({
                               </p>
                             )}
                           </div>
+                          {/* 루브릭 (서술형) */}
+                          {subItem.type === 'essay' && (subItem as any).rubric?.length > 0 && (subItem as any).rubric.some((r: any) => r.criteria?.trim()) && (
+                            <div className="p-2 bg-[#F5F0E8] border border-[#1A1A1A]">
+                              <p className="text-xs font-bold text-[#5C5C5C]">평가 기준</p>
+                              <ul className="space-y-1 text-sm">
+                                {(subItem as any).rubric.filter((r: any) => r.criteria?.trim()).map((r: any, idx: number) => (
+                                  <li key={idx} className="flex items-start gap-2">
+                                    <span className="text-[#1A1A1A] font-bold shrink-0">·</span>
+                                    <span className="text-[#1A1A1A]">
+                                      {r.criteria}
+                                      {r.percentage > 0 && <span className="text-[#5C5C5C] font-bold"> ({r.percentage}%)</span>}
+                                      {r.description && <span className="text-[#5C5C5C]"> — {r.description}</span>}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
                           {/* 해설 */}
                           <div className="p-2 bg-[#F5F0E8] border border-[#1A1A1A]">
                             <p className="text-xs font-bold text-[#5C5C5C]">해설</p>
@@ -2324,6 +2381,25 @@ export default function ReviewPractice({
                       </div>
                     )}
                   </div>
+
+                  {/* 루브릭 (서술형) */}
+                  {currentItem.type === 'essay' && (currentItem as any).rubric?.length > 0 && (currentItem as any).rubric.some((r: any) => r.criteria?.trim()) && (
+                    <div className="mt-4 p-4 bg-[#EDEAE4] border-2 border-[#1A1A1A]">
+                      <p className="text-xs font-bold text-[#5C5C5C] mb-1">평가 기준</p>
+                      <ul className="space-y-1 text-sm">
+                        {(currentItem as any).rubric.filter((r: any) => r.criteria?.trim()).map((r: any, idx: number) => (
+                          <li key={idx} className="flex items-start gap-2">
+                            <span className="text-[#1A1A1A] font-bold shrink-0">·</span>
+                            <span className="text-[#1A1A1A]">
+                              {r.criteria}
+                              {r.percentage > 0 && <span className="text-[#5C5C5C] font-bold"> ({r.percentage}%)</span>}
+                              {r.description && <span className="text-[#5C5C5C]"> — {r.description}</span>}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
 
                   {currentItem.explanation && (
                     <div className="mt-4 p-4 bg-[#EDEAE4] border-2 border-[#1A1A1A]">

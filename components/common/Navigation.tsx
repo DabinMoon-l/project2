@@ -172,6 +172,7 @@ export default function Navigation({ role }: NavigationProps) {
             bottom: 4,
             backgroundColor: 'rgba(26, 26, 26, 0.85)',
           }}
+          initial={false}
           animate={{
             left: `calc(${(tabs.findIndex((tab) => isActiveTab(pathname, tab.path)) / tabs.length) * 100}% + 4px)`,
           }}

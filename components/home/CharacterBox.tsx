@@ -22,6 +22,11 @@ import GachaResultModal, { type RollResultData } from './GachaResultModal';
 import RabbitDogam from './RabbitDogam';
 import MilestoneChoiceModal from './MilestoneChoiceModal';
 import LevelUpBottomSheet from './LevelUpBottomSheet';
+import TekkenMatchmakingModal from '@/components/tekken/TekkenMatchmakingModal';
+import TekkenBattleConfirmModal from '@/components/tekken/TekkenBattleConfirmModal';
+import TekkenBattleOverlay from '@/components/tekken/TekkenBattleOverlay';
+import { useTekkenBattle } from '@/lib/hooks/useTekkenBattle';
+import { BATTLE_CONFIG } from '@/lib/types/tekken';
 
 const SWIPE_THRESHOLD = 40;
 
@@ -67,6 +72,16 @@ export default function CharacterBox() {
 
   // 도감
   const [showDogam, setShowDogam] = useState(false);
+
+  // 철권퀴즈 — long press 진입
+  const [showBattleConfirm, setShowBattleConfirm] = useState(false);
+  const [showMatchmaking, setShowMatchmaking] = useState(false);
+  const [showBattle, setShowBattle] = useState(false);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressStartPos = useRef({ x: 0, y: 0 });
+  const longPressTriggered = useRef(false);
+  const tekken = useTekkenBattle(profile?.uid);
+  const isStudent = profile?.role !== 'professor';
 
   // 장착된 토끼 (항상 2슬롯: 빈 슬롯은 null로 표시)
   const equippedRabbits = profile?.equippedRabbits || [];
@@ -133,44 +148,109 @@ export default function CharacterBox() {
     }
   }, [slotCount, rotationMV]);
 
+  // 철권퀴즈 long press 핸들러 (터치/마우스 핸들러보다 앞에 선언)
+  const clearLongPress = useCallback(() => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }, []);
+
+  const onLongPressStart = useCallback((x: number, y: number) => {
+    if (!isStudent || !userCourseId || equippedRabbits.length === 0) return;
+    longPressStartPos.current = { x, y };
+    longPressTriggered.current = false;
+    clearLongPress();
+    longPressTimer.current = setTimeout(() => {
+      longPressTriggered.current = true;
+      if (navigator.vibrate) navigator.vibrate(50);
+      setShowBattleConfirm(true);
+    }, BATTLE_CONFIG.LONG_PRESS_MS);
+  }, [isStudent, userCourseId, equippedRabbits.length, clearLongPress]);
+
+  // 배틀 확인 → 매칭 시작
+  const handleConfirmBattle = useCallback(() => {
+    if (!userCourseId) return;
+    setShowBattleConfirm(false);
+    setShowMatchmaking(true);
+    tekken.startMatchmaking(userCourseId);
+  }, [userCourseId, tekken]);
+
+  const onLongPressMove = useCallback((x: number, y: number) => {
+    const dx = Math.abs(x - longPressStartPos.current.x);
+    const dy = Math.abs(y - longPressStartPos.current.y);
+    if (dx > 10 || dy > 10) {
+      clearLongPress();
+    }
+  }, [clearLongPress]);
+
+  const onLongPressEnd = useCallback(() => {
+    clearLongPress();
+  }, [clearLongPress]);
+
   // 모바일 터치
   const onTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
     swipeDir.current = null;
-  }, []);
+    onLongPressStart(e.touches[0].clientX, e.touches[0].clientY);
+  }, [onLongPressStart]);
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
+    onLongPressMove(e.touches[0].clientX, e.touches[0].clientY);
     if (swipeDir.current === 'v') return;
     const dx = Math.abs(e.touches[0].clientX - touchStartX.current);
     const dy = Math.abs(e.touches[0].clientY - touchStartY.current);
     if (swipeDir.current === null && (dx > 8 || dy > 8)) {
       swipeDir.current = dx > dy ? 'h' : 'v';
     }
-  }, []);
+  }, [onLongPressMove]);
 
   const onTouchEnd = useCallback((e: React.TouchEvent) => {
+    onLongPressEnd();
+    if (longPressTriggered.current) return;
     if (swipeDir.current !== 'h') return;
     doOrbitSwap(e.changedTouches[0].clientX - touchStartX.current);
-  }, [doOrbitSwap]);
+  }, [doOrbitSwap, onLongPressEnd]);
 
   // PC 마우스 드래그
   const onMouseDown = useCallback((e: React.MouseEvent) => {
-    if (slotCount <= 1) return;
     isDragging.current = true;
     touchStartX.current = e.clientX;
+    onLongPressStart(e.clientX, e.clientY);
     e.preventDefault();
-  }, [slotCount]);
+  }, [onLongPressStart]);
 
   useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDragging.current) onLongPressMove(e.clientX, e.clientY);
+    };
     const handleMouseUp = (e: MouseEvent) => {
+      onLongPressEnd();
       if (!isDragging.current) return;
       isDragging.current = false;
+      if (longPressTriggered.current) return;
+      if (slotCount <= 1) return;
       doOrbitSwap(e.clientX - touchStartX.current);
     };
+    window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
-    return () => window.removeEventListener('mouseup', handleMouseUp);
-  }, [doOrbitSwap]);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [doOrbitSwap, onLongPressMove, onLongPressEnd, slotCount]);
+
+  // 매칭 성공 → 배틀 오버레이로 전환
+  useEffect(() => {
+    if (tekken.matchState === 'matched') {
+      const timer = setTimeout(() => {
+        setShowMatchmaking(false);
+        setShowBattle(true);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [tekken.matchState]);
 
   // 뽑기 (스핀)
   const [spinError, setSpinError] = useState<string | null>(null);
@@ -237,7 +317,7 @@ export default function CharacterBox() {
     <>
       <div className="flex flex-col items-center w-full">
         {/* XP / 도감 */}
-        <div className="w-full flex items-center justify-between px-8 mb-8 mt-14 relative z-20">
+        <div className="w-full flex items-center justify-between px-8 mb-2 mt-10 relative z-20">
           <div className="h-11 flex items-center gap-4 px-9 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl">
             <span className="text-xl font-bold text-white">XP</span>
             <span className="font-bold text-xl text-white leading-none text-right">{totalExp}</span>
@@ -356,37 +436,46 @@ export default function CharacterBox() {
           </AnimatePresence>
         </div>
 
-        {/* EXP 바 */}
-        <div className="w-full px-8 mt-3 relative">
-          {/* 마일스톤 버튼 — EXP 바 위에 absolute로 띄움 */}
-          {pendingCount > 0 && (
-            <motion.button
-              onClick={handleMilestoneClick}
-              className="absolute -top-8 left-8 z-10 flex items-center gap-1.5 h-11 px-4 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl active:scale-95"
-              animate={{ scale: [1, 1.05, 1] }}
-              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-            >
-              <svg className="w-7 h-7" viewBox="0 0 24 24">
-                <defs>
-                  <linearGradient id="starGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#BBA46A" />
-                    <stop offset="40%" stopColor="#C89A82" />
-                    <stop offset="70%" stopColor="#C0929E" />
-                    <stop offset="100%" stopColor="#AB96B4" />
-                  </linearGradient>
-                </defs>
-                <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" fill="url(#starGrad)" />
-              </svg>
-              <span className="text-lg font-bold text-white">
-                ×{pendingCount}
-              </span>
-            </motion.button>
-          )}
-          <div className="flex items-center justify-end mb-1">
+        {/* EXP 바 섹션 */}
+        <div className="w-full px-8 mt-2 mb-6">
+          {/* XP 라벨 */}
+          <div className="flex items-center justify-end">
             <span className="text-base font-bold text-white/70">
               {expBar.current}/{expBar.max} XP
             </span>
           </div>
+          {/* 마일스톤 버튼 + 배틀 힌트 */}
+          <div className="flex items-center justify-between mb-1">
+            {pendingCount > 0 && (
+              <motion.button
+                onClick={handleMilestoneClick}
+                className="flex items-center gap-1.5 h-11 px-4 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl active:scale-95 mr-2"
+                animate={{ scale: [1, 1.05, 1] }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+              >
+                <svg className="w-7 h-7" viewBox="0 0 24 24">
+                  <defs>
+                    <linearGradient id="starGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#BBA46A" />
+                      <stop offset="40%" stopColor="#C89A82" />
+                      <stop offset="70%" stopColor="#C0929E" />
+                      <stop offset="100%" stopColor="#AB96B4" />
+                    </linearGradient>
+                  </defs>
+                  <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" fill="url(#starGrad)" />
+                </svg>
+                <span className="text-lg font-bold text-white">
+                  ×{pendingCount}
+                </span>
+              </motion.button>
+            )}
+            {isStudent && equippedRabbits.length > 0 && (
+              <p className="text-sm text-white/70 font-bold ml-auto">
+                캐릭터를 꾹 눌러서 배틀
+              </p>
+            )}
+          </div>
+          {/* EXP 바 */}
           <div className="px-3 py-1.5 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl">
             <div className="h-3.5 overflow-hidden bg-white/20 rounded-full">
               <motion.div
@@ -447,6 +536,43 @@ export default function CharacterBox() {
           courseId={userCourseId}
           userId={profile.uid}
           equippedRabbits={equippedRabbits}
+        />
+      )}
+
+      {/* 철권퀴즈 배틀 확인 모달 */}
+      <TekkenBattleConfirmModal
+        isOpen={showBattleConfirm}
+        onConfirm={handleConfirmBattle}
+        onCancel={() => setShowBattleConfirm(false)}
+        equippedRabbits={equippedRabbits}
+        holdings={holdings}
+      />
+
+      {/* 철권퀴즈 매칭 모달 */}
+      <TekkenMatchmakingModal
+        isOpen={showMatchmaking}
+        onClose={() => {
+          setShowMatchmaking(false);
+          tekken.cancelMatch();
+        }}
+        matchState={tekken.matchState}
+        waitTime={tekken.waitTime}
+        error={tekken.error}
+        onCancel={() => {
+          setShowMatchmaking(false);
+          tekken.cancelMatch();
+        }}
+      />
+
+      {/* 철권퀴즈 배틀 오버레이 */}
+      {showBattle && profile && (
+        <TekkenBattleOverlay
+          tekken={tekken}
+          userId={profile.uid}
+          onClose={() => {
+            setShowBattle(false);
+            tekken.leaveBattle();
+          }}
         />
       )}
     </>

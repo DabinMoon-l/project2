@@ -12,6 +12,8 @@ import {
   type QuestionStats,
   type QuizQuestion,
 } from '@/lib/hooks/useProfessorQuiz';
+import { useCourse } from '@/lib/contexts';
+import { formatChapterLabel } from '@/lib/courseIndex';
 
 // ============================================================
 // 타입 정의
@@ -45,6 +47,7 @@ interface QuestionAnalysisProps {
   questionIndex: number;
   stats: QuestionStats | undefined;
   totalQuestions: number;
+  courseId?: string;
   onPrev: () => void;
   onNext: () => void;
   onSelect: (index: number) => void;
@@ -55,6 +58,7 @@ function QuestionAnalysis({
   questionIndex,
   stats,
   totalQuestions,
+  courseId,
   onPrev,
   onNext,
   onSelect,
@@ -150,8 +154,13 @@ function QuestionAnalysis({
                 ? '결합형'
                 : question.type === 'essay'
                   ? '서술형'
-                  : '단답형'}
+                  : '주관식'}
         </span>
+        {courseId && question.chapterId && (
+          <span className="px-1.5 py-0.5 bg-[#E8F0FE] border border-[#4A6DA7] text-[#4A6DA7] text-xs font-medium rounded">
+            {formatChapterLabel(courseId, question.chapterId, question.chapterDetailId)}
+          </span>
+        )}
         {stats && stats.totalResponses > 0 && (
           <span className="text-xs text-gray-500">
             응답 {stats.totalResponses}명
@@ -251,8 +260,13 @@ function QuestionAnalysis({
                       }
                     `}
                   >
-                    {sub.type === 'ox' ? 'OX' : sub.type === 'multiple' ? '객관식' : '단답형'}
+                    {sub.type === 'ox' ? 'OX' : sub.type === 'multiple' ? '객관식' : '주관식'}
                   </span>
+                  {courseId && sub.chapterId && (
+                    <span className="px-1.5 py-0.5 bg-[#E8F0FE] border border-[#4A6DA7] text-[#4A6DA7] text-[10px] font-medium rounded">
+                      {formatChapterLabel(courseId, sub.chapterId, sub.chapterDetailId)}
+                    </span>
+                  )}
                 </div>
                 <p className="text-gray-800 text-sm mb-2">{sub.text}</p>
 
@@ -383,7 +397,7 @@ function QuestionAnalysis({
           )}
 
           {/* 주관식/단답형 문제 */}
-          {(question.type === 'short_answer' || question.type === 'subjective' || question.type === 'essay') && (
+          {(question.type === 'short_answer' || question.type === 'subjective') && (
             <div className="space-y-3">
               {/* 정답 */}
               <div className="p-3 bg-green-50 rounded-lg">
@@ -430,6 +444,37 @@ function QuestionAnalysis({
                       );
                     })()}
                   </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 서술형 문제 — 정답 없음, 루브릭/해설만 표시 */}
+          {question.type === 'essay' && (
+            <div className="space-y-3">
+              {/* 루브릭 */}
+              {question.rubric && question.rubric.length > 0 && question.rubric.some((r: any) => r.criteria?.trim()) && (
+                <div className="p-3 bg-blue-50 rounded-lg">
+                  <p className="text-xs text-blue-600 font-medium mb-1">평가 기준</p>
+                  <ul className="space-y-1 text-sm text-blue-800">
+                    {question.rubric.filter((r: any) => r.criteria?.trim()).map((r: any, idx: number) => (
+                      <li key={idx} className="flex items-start gap-2">
+                        <span className="font-bold shrink-0">·</span>
+                        <span>
+                          {r.criteria}
+                          {r.percentage > 0 && <span className="opacity-70 font-bold"> ({r.percentage}%)</span>}
+                          {r.description && <span className="opacity-70"> — {r.description}</span>}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {/* 해설 */}
+              {question.explanation && (
+                <div className="p-3 bg-yellow-50 rounded-lg">
+                  <p className="text-xs text-yellow-700 font-medium mb-1">해설</p>
+                  <p className="text-sm text-yellow-800">{question.explanation}</p>
                 </div>
               )}
             </div>
@@ -488,6 +533,7 @@ export default function QuizDetailPage() {
   const quizId = params.id as string;
 
   const { fetchQuiz, fetchQuizStatistics, togglePublish, deleteQuiz } = useProfessorQuiz();
+  const { userCourseId } = useCourse();
 
   const [quiz, setQuiz] = useState<ProfessorQuiz | null>(null);
   const [statistics, setStatistics] = useState<QuizStatistics | null>(null);
@@ -790,6 +836,7 @@ export default function QuizDetailPage() {
                 questionIndex={currentQuestionIndex}
                 stats={statistics?.questionStats[currentQuestionIndex]}
                 totalQuestions={quiz.questions.length}
+                courseId={userCourseId || quiz.courseId}
                 onPrev={handlePrevQuestion}
                 onNext={handleNextQuestion}
                 onSelect={handleSelectQuestion}
@@ -845,7 +892,7 @@ export default function QuizDetailPage() {
                           ? '결합형'
                           : question.type === 'essay'
                             ? '서술형'
-                            : '단답형'}
+                            : '주관식'}
                   </span>
 
                   {/* 오답률 표시 */}

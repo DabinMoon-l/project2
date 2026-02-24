@@ -72,6 +72,8 @@ export interface ReviewItem {
   userAnswer: string;
   /** 해설 */
   explanation?: string;
+  /** 서술형 루브릭 */
+  rubric?: Array<{ criteria: string; percentage: number; description?: string }>;
   /** 복습 유형 (오답/찜/푼문제) */
   reviewType: ReviewType;
   /** 찜 여부 */

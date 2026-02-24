@@ -12,12 +12,14 @@ import { getAuth, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getFunctions, Functions } from 'firebase/functions';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
+import { getDatabase, Database } from 'firebase/database';
 
 // Firebase 설정 객체
 // 환경 변수에서 Firebase 프로젝트 설정값을 가져옵니다
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || '',
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || '',
+  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || '',
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '',
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || '',
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '',
@@ -58,6 +60,19 @@ const functions: Functions = getFunctions(app, 'asia-northeast3');
  * 이미지, 파일 등을 저장하고 관리할 수 있습니다.
  */
 const storage: FirebaseStorage = getStorage(app);
+
+/**
+ * Firebase Realtime Database (지연 초기화)
+ * 철권퀴즈 등 RTDB가 필요한 곳에서만 getRtdb()로 호출
+ * databaseURL이 없으면 에러 방지
+ */
+let _rtdb: Database | null = null;
+export function getRtdb(): Database {
+  if (!_rtdb) {
+    _rtdb = getDatabase(app);
+  }
+  return _rtdb;
+}
 
 // 각 서비스 인스턴스를 내보냅니다
 export { app, auth, db, functions, storage };

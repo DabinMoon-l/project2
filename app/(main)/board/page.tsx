@@ -468,26 +468,17 @@ function NewspaperSkeleton() {
  */
 export default function BoardPage() {
   const router = useRouter();
-  const { semesterSettings, userCourseId } = useCourse();
+  const { semesterSettings, userCourseId, setProfessorCourse } = useCourse();
   const { profile } = useUser();
 
   // 교수님 여부 확인
   const isProfessor = profile?.role === 'professor';
 
-  // 교수님용 과목 선택 (sessionStorage → 학기별 기본값)
-  const [selectedCourseId, setSelectedCourseId] = useState<CourseId>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = sessionStorage.getItem('board-selected-course');
-      if (saved) return saved as CourseId;
-    }
-    return (userCourseId as CourseId) || 'microbiology';
-  });
-  // 과목 변경 시 sessionStorage에 저장
-  useEffect(() => {
-    if (isProfessor) {
-      sessionStorage.setItem('board-selected-course', selectedCourseId);
-    }
-  }, [selectedCourseId, isProfessor]);
+  // 교수님용 과목 선택 (CourseContext에서 통합 관리)
+  const selectedCourseId = (userCourseId as CourseId) || 'microbiology';
+  const setSelectedCourseId = useCallback((courseId: CourseId) => {
+    setProfessorCourse(courseId);
+  }, [setProfessorCourse]);
 
   // 과목 스와이프 터치 좌표
   const courseTouchStartX = useRef<number>(0);

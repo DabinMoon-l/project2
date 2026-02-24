@@ -324,6 +324,25 @@ export { onOnboardingComplete } from "./onboardingRabbit";
 export { levelUpRabbit } from "./rabbitLevelUp";
 
 // ============================================
+// 철권퀴즈 (실시간 1v1 배틀) Functions
+// ============================================
+export {
+  joinMatchmaking,
+  cancelMatchmaking,
+  matchWithBot,
+  submitAnswer,
+  swapRabbit,
+  submitMashResult,
+  startBattleRound,
+} from "./tekkenBattle";
+export { tekkenCleanup } from "./tekkenCleanup";
+
+// ============================================
+// 비로그인 문의 Functions
+// ============================================
+export { submitInquiry } from "./inquiry";
+
+// ============================================
 // 디버그/테스트 Functions
 // ============================================
 export { fillDogam } from "./fillDogam";

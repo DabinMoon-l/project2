@@ -215,7 +215,7 @@ export default function CombinedQuestionGroup({
               <span className="px-2 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold">
                 {question.type === 'ox' ? 'OX' :
                  question.type === 'multiple' ? '객관식' :
-                 question.type === 'short' || question.type === 'short_answer' ? '단답형' :
+                 question.type === 'short' || question.type === 'short_answer' ? '주관식' :
                  question.type}
               </span>
               {question.hasMultipleAnswers && (

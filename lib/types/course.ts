@@ -115,7 +115,7 @@ export const COURSES: Record<CourseId, Course> = {
     semester: 2,
     isUniverseSeparated: false, // 전체 학년 공통
     classes: ['A', 'B', 'C', 'D'],
-    order: 2,
+    order: 3,
     quizRibbonImage: '/images/pathophysiology-quiz-ribbon.png',
     reviewRibbonImage: '/images/pathophysiology-review-ribbon.png',
     quizRibbonScale: 1,
@@ -129,7 +129,7 @@ export const COURSES: Record<CourseId, Course> = {
     semester: 1,
     isUniverseSeparated: false, // 전체 학년 공통
     classes: ['A', 'B', 'C', 'D'],
-    order: 3,
+    order: 2,
     quizRibbonImage: '/images/microbiology-quiz-ribbon.png',
     reviewRibbonImage: '/images/microbiology-review-ribbon.png',
     quizRibbonScale: 1,
@@ -275,13 +275,6 @@ export function getPastExamOptions(courseId: CourseId | string | null): PastExam
   const options: PastExamOption[] = [];
   const now = new Date();
   const currentYear = now.getFullYear();
-  const month = now.getMonth() + 1;
-  const day = now.getDate();
-  const mmdd = month * 100 + day;
-
-  // 과목별 학기 확인 (1학기 or 2학기)
-  const course = courseId ? COURSES[courseId as CourseId] : null;
-  const courseSemester = course?.semester || 1;
 
   // 2025년: 기본으로 중간/기말 둘 다 표시
   options.push(
@@ -289,38 +282,12 @@ export function getPastExamOptions(courseId: CourseId | string | null): PastExam
     { year: 2025, examType: 'final', label: '2025-기말', value: '2025-final' }
   );
 
-  // 2026년부터: 시즌에 따라 자동 추가
+  // 2026년부터 현재 연도까지: 중간/기말 모두 표시
   for (let year = 2026; year <= currentYear; year++) {
-    if (year < currentYear) {
-      // 이전 연도는 중간/기말 둘 다 추가
-      options.push(
-        { year, examType: 'midterm', label: `${year}-중간`, value: `${year}-midterm` },
-        { year, examType: 'final', label: `${year}-기말`, value: `${year}-final` }
-      );
-    } else {
-      // 현재 연도: 과목 학기와 현재 날짜로 판단
-      if (courseSemester === 1) {
-        // 1학기 과목 (생물학, 미생물학): 봄학기 기준
-        // 중간고사 시즌 시작: 02-22
-        if (mmdd >= 222) {
-          options.push({ year, examType: 'midterm', label: `${year}-중간`, value: `${year}-midterm` });
-        }
-        // 기말고사 시즌 시작: 05-01
-        if (mmdd >= 501) {
-          options.push({ year, examType: 'final', label: `${year}-기말`, value: `${year}-final` });
-        }
-      } else {
-        // 2학기 과목 (병태생리학): 가을학기 기준
-        // 중간고사 시즌 시작: 08-22
-        if (mmdd >= 822) {
-          options.push({ year, examType: 'midterm', label: `${year}-중간`, value: `${year}-midterm` });
-        }
-        // 기말고사 시즌 시작: 11-01
-        if (mmdd >= 1101) {
-          options.push({ year, examType: 'final', label: `${year}-기말`, value: `${year}-final` });
-        }
-      }
-    }
+    options.push(
+      { year, examType: 'midterm', label: `${year}-중간`, value: `${year}-midterm` },
+      { year, examType: 'final', label: `${year}-기말`, value: `${year}-final` }
+    );
   }
 
   // 최신순 정렬 (2026-기말, 2026-중간, 2025-기말, 2025-중간)

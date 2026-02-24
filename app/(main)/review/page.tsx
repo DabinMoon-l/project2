@@ -2541,7 +2541,7 @@ function QuestionListModal({
     switch (type) {
       case 'ox': return 'OX';
       case 'multiple': return '객관식';
-      case 'short_answer': return '단답형';
+      case 'short_answer': return '주관식';
       case 'essay': return '서술형';
       case 'combined': return '결합형';
       default: return type;

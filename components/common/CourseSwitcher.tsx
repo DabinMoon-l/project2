@@ -6,8 +6,8 @@ import type { CourseId } from '@/lib/types/course';
 
 const COURSES: { id: CourseId; name: string }[] = [
   { id: 'biology', name: 'Biology' },
-  { id: 'pathophysiology', name: 'Pathophysiology' },
   { id: 'microbiology', name: 'Microbiology' },
+  { id: 'pathophysiology', name: 'Pathophysiology' },
 ];
 
 interface Props {

@@ -178,7 +178,7 @@ export default function QuestionCard({ question, courseId }: QuestionCardProps) 
     ox: 'OX',
     multiple: '객관식',
     short: '주관식',
-    short_answer: '단답형',
+    short_answer: '주관식',
     essay: '서술형',
     combined: '결합형',
   };

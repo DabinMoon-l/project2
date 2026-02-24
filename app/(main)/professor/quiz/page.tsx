@@ -1,22 +1,23 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { motion, AnimatePresence, type PanInfo } from 'framer-motion';
+import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Skeleton } from '@/components/common';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse } from '@/lib/contexts';
+import { COURSES, type CourseId, getDefaultQuizTab, getPastExamOptions, type PastExamOption } from '@/lib/types/course';
 import { useProfessorQuiz, type ProfessorQuiz, type QuizTypeFilter } from '@/lib/hooks/useProfessorQuiz';
 import { calcFeedbackScore, getFeedbackLabel } from '@/lib/utils/feedbackScore';
+import { generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
+import QuizStatsModal from '@/components/quiz/manage/QuizStatsModal';
 import type { FeedbackType } from '@/components/quiz/InstantFeedbackButton';
 
 // ============================================================
 // 타입
 // ============================================================
-
-type ProfessorFilterTab = 'midterm' | 'final' | 'past';
 
 interface QuizFeedbackInfo {
   quizId: string;
@@ -24,211 +25,750 @@ interface QuizFeedbackInfo {
   count: number;
 }
 
-interface BestQuestion {
-  quizId: string;
-  quizTitle: string;
-  questionId: string;
-  questionIndex: number;
-  score: number;
-  feedbackCount: number;
-}
-
 // ============================================================
 // 상수
 // ============================================================
 
-const FILTER_TABS: { value: ProfessorFilterTab; label: string }[] = [
-  { value: 'midterm', label: '중간' },
-  { value: 'final', label: '기말' },
-  { value: 'past', label: '기출' },
+const NEWS_CARDS: { type: QuizTypeFilter; title: string; subtitle: string }[] = [
+  { type: 'midterm', title: 'MIDTERM PREP', subtitle: 'Vol.1 · Midterm Edition' },
+  { type: 'past', title: 'PAST EXAM', subtitle: 'Official Archive' },
+  { type: 'final', title: 'FINAL PREP', subtitle: 'Vol.2 · Final Edition' },
 ];
 
-/** 시즌별 기본 탭 */
-function getDefaultProfessorFilter(): ProfessorFilterTab {
-  const month = new Date().getMonth() + 1;
-  if (month >= 3 && month <= 5) return 'midterm';
-  if ((month >= 6 && month <= 7) || (month >= 11 && month <= 12)) return 'final';
-  return 'midterm';
+// 캐러셀 위치 저장 키
+const PROF_QUIZ_CAROUSEL_KEY = 'prof-quiz-carousel-index';
+
+const COURSE_IDS: CourseId[] = ['biology', 'microbiology', 'pathophysiology'];
+
+// 신문 배경 텍스트
+const NEWSPAPER_BG_TEXT = `The cell membrane, also known as the plasma membrane, is a biological membrane that separates and protects the interior of all cells from the outside environment. The cell membrane consists of a lipid bilayer, including cholesterols that sit between phospholipids to maintain their fluidity at various temperatures. The membrane also contains membrane proteins, including integral proteins that span the membrane serving as membrane transporters, and peripheral proteins that loosely attach to the outer side of the cell membrane, acting as enzymes to facilitate interaction with the cell's environment.`;
+
+
+// 난이도별 비디오 경로
+function getDifficultyVideo(difficulty: string): string {
+  switch (difficulty) {
+    case 'easy': return '/videos/difficulty-easy.mp4';
+    case 'hard': return '/videos/difficulty-hard.mp4';
+    default: return '/videos/difficulty-normal.mp4';
+  }
 }
 
 // ============================================================
-// 신문 스타일 퀴즈 카드
+// 뉴스 기사 컴포넌트 (교수용 — 난이도 이미지 + 왼쪽 정렬)
 // ============================================================
 
-function ProfessorQuizCard({
+function ProfessorNewsArticle({
+  quiz,
+  onDetails,
+  onStats,
+  onPublish,
+}: {
+  quiz: ProfessorQuiz;
+  onDetails: () => void;
+  onStats: () => void;
+  onPublish?: () => void;
+}) {
+  return (
+    <div className="h-full flex flex-col">
+      {/* 난이도 비디오 — 전체 너비, 크게 */}
+      <video
+        autoPlay
+        loop
+        muted
+        playsInline
+        preload="metadata"
+        className="w-full aspect-[2/1] object-cover flex-shrink-0"
+      >
+        <source src={getDifficultyVideo(quiz.difficulty)} type="video/mp4" />
+      </video>
+
+      {/* 제목 — 왼쪽 정렬, 크게 */}
+      <div className="px-4 mt-2">
+        <h3 className="text-2xl font-black text-[#1A1A1A] line-clamp-2 leading-tight">
+          {quiz.title}
+        </h3>
+      </div>
+
+      {/* 메타 + 공개 아이콘 — 같은 줄, 간격 타이트 */}
+      <div className="px-4 mt-0.5 flex items-center justify-between">
+        <p className="text-sm text-[#1A1A1A]">
+          {quiz.questionCount}문제 · {quiz.participantCount}명 참여
+          {quiz.participantCount > 0 && ` · 평균 ${quiz.averageScore}점`}
+        </p>
+        {!quiz.isPublished ? (
+          <button
+            onClick={(e) => { e.stopPropagation(); onPublish?.(); }}
+            className="w-5 h-5 flex items-center justify-center text-[#5C5C5C] hover:text-[#1A1A1A] hover:scale-110 transition-all flex-shrink-0"
+            title="비공개 — 클릭하여 공개"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </button>
+        ) : (
+          <span className="w-5 h-5 flex items-center justify-center text-[#5C5C5C] flex-shrink-0" title="공개됨">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.6 9h16.8M3.6 15h16.8" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3a15.3 15.3 0 0 1 4 9 15.3 15.3 0 0 1-4 9 15.3 15.3 0 0 1-4-9 15.3 15.3 0 0 1 4-9z" />
+            </svg>
+          </span>
+        )}
+      </div>
+
+      {/* 버튼 — 가로 배치, 하단 고정, 간격 타이트 */}
+      <div className="mt-auto px-4 pb-3 flex gap-2">
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onDetails(); }}
+          className="flex-1 py-2 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+        >
+          Details
+        </button>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onStats(); }}
+          className={`flex-1 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] transition-colors ${
+            !quiz.isPublished ? 'opacity-40 pointer-events-none' : 'hover:bg-[#3A3A3A]'
+          }`}
+        >
+          Stats
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// 뉴스 카드 컴포넌트 (교수용)
+// ============================================================
+
+function ProfessorNewsCard({
+  title,
+  subtitle,
+  quizzes,
+  isLoading,
+  onDetails,
+  onStats,
+  onPublish,
+}: {
+  title: string;
+  subtitle: string;
+  quizzes: ProfessorQuiz[];
+  isLoading: boolean;
+  onDetails: (quiz: ProfessorQuiz) => void;
+  onStats: (quiz: ProfessorQuiz) => void;
+  onPublish?: (quizId: string) => void;
+}) {
+  return (
+    <div className="w-full h-full border-4 border-[#1A1A1A] bg-[#F5F0E8] flex flex-col overflow-hidden">
+      {/* 축소된 헤더 */}
+      <div className="bg-[#1A1A1A] text-[#F5F0E8] px-4 py-2 text-center flex-shrink-0">
+        <h1 className="font-serif text-lg font-black tracking-tight">{title}</h1>
+        <p className="text-[9px] tracking-widest">{subtitle}</p>
+      </div>
+
+      {/* 퀴즈 목록 — 스냅 스크롤 */}
+      <div className="flex-1 overflow-y-auto snap-y snap-mandatory overscroll-contain">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="animate-pulse text-[#5C5C5C]">로딩 중...</div>
+          </div>
+        ) : quizzes.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-center">
+            <h3 className="font-bold text-lg mb-2 text-[#1A1A1A]">퀴즈가 없습니다</h3>
+            <p className="text-sm text-[#5C5C5C]">아직 출제한 퀴즈가 없습니다.</p>
+          </div>
+        ) : (
+          quizzes.map((quiz) => (
+            <div key={quiz.id} className="snap-start h-full flex-shrink-0">
+              <ProfessorNewsArticle
+                quiz={quiz}
+                onDetails={() => onDetails(quiz)}
+                onStats={() => onStats(quiz)}
+                onPublish={() => onPublish?.(quiz.id)}
+              />
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// 기출 전용 뉴스 카드 (학생과 동일한 드롭다운 스타일)
+// ============================================================
+
+function ProfessorPastExamNewsCard({
+  quizzes,
+  isLoading,
+  onDetails,
+  onStats,
+  onPublish,
+  selectedPastExam,
+  pastExamOptions,
+  onSelectPastExam,
+}: {
+  quizzes: ProfessorQuiz[];
+  isLoading: boolean;
+  onDetails: (quiz: ProfessorQuiz) => void;
+  onStats: (quiz: ProfessorQuiz) => void;
+  onPublish?: (quizId: string) => void;
+  selectedPastExam: string;
+  pastExamOptions: PastExamOption[];
+  onSelectPastExam: (value: string) => void;
+}) {
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const selectedOption = pastExamOptions.find((opt) => opt.value === selectedPastExam);
+
+  // 선택된 년도/시험으로 필터링
+  const [yearStr, examType] = selectedPastExam.split('-');
+  const year = parseInt(yearStr, 10);
+  const filteredQuiz = quizzes.find(
+    (q) => q.pastYear === year && q.pastExamType === examType
+  ) || null;
+
+  return (
+    <div className="w-full h-full border-4 border-[#1A1A1A] bg-[#F5F0E8] flex flex-col overflow-hidden">
+      {/* 축소된 헤더 + 드롭다운 — 수직 중앙 정렬 */}
+      <div className="bg-[#1A1A1A] text-[#F5F0E8] px-4 py-2 flex items-center justify-between flex-shrink-0">
+        <div>
+          <p className="text-[7px] tracking-[0.2em] mb-0.5 opacity-60">━━━━━━━━━━━━━━━━</p>
+          <h1 className="font-serif text-xl font-black tracking-tight">PAST EXAM</h1>
+        </div>
+
+        {/* 드롭다운 — 터치 이벤트 캐러셀 전파 차단 */}
+        <div className="relative" onPointerDownCapture={(e) => e.stopPropagation()}>
+          <button
+            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+            className="px-3 py-1.5 bg-[#F5F0E8] text-[#1A1A1A] text-sm font-bold flex items-center justify-between gap-2 min-w-[100px]"
+          >
+            <span>{selectedOption?.label || '선택'}</span>
+            <svg
+              className={`w-3 h-3 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+          </button>
+
+          <AnimatePresence>
+            {isDropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setIsDropdownOpen(false)} onPointerDownCapture={(e) => e.stopPropagation()} />
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="absolute right-0 top-full mt-1 z-20 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg min-w-[100px]"
+                >
+                  {pastExamOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => {
+                        onSelectPastExam(option.value);
+                        setIsDropdownOpen(false);
+                      }}
+                      className={`w-full px-3 py-2 text-left text-sm font-medium transition-colors ${
+                        selectedPastExam === option.value
+                          ? 'bg-[#1A1A1A] text-[#F5F0E8]'
+                          : 'text-[#1A1A1A] hover:bg-[#EDEAE4]'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+
+      {/* 기출 내용 — 넓은 레이아웃 (단일 퀴즈) */}
+      <div className="flex-1 overflow-y-auto">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="animate-pulse text-[#5C5C5C]">로딩 중...</div>
+          </div>
+        ) : !filteredQuiz ? (
+          <div className="flex flex-col items-center justify-center h-full text-center">
+            <h3 className="font-bold text-lg mb-2 text-[#1A1A1A]">기출문제가 없습니다</h3>
+            <p className="text-sm text-[#5C5C5C]">해당 시험의 기출문제가 아직 등록되지 않았습니다.</p>
+          </div>
+        ) : (
+          <div className="flex flex-col h-full">
+            {/* 난이도 비디오 — 전체 너비, 크게 */}
+            <video
+              autoPlay
+              loop
+              muted
+              playsInline
+              preload="metadata"
+              className="w-full aspect-[2/1] object-cover flex-shrink-0"
+            >
+              <source src={getDifficultyVideo(filteredQuiz.difficulty)} type="video/mp4" />
+            </video>
+
+            {/* 제목 — 왼쪽 정렬, 크게 */}
+            <div className="px-4 mt-2">
+              <h3 className="text-2xl font-black text-[#1A1A1A] leading-tight line-clamp-2">
+                {filteredQuiz.title}
+              </h3>
+            </div>
+
+            {/* 메타 + 공개 아이콘 — 같은 줄, 간격 타이트 */}
+            <div className="px-4 mt-0.5 flex items-center justify-between">
+              <p className="text-sm text-[#1A1A1A]">
+                {filteredQuiz.questionCount}문제 · {filteredQuiz.participantCount}명 참여
+                {filteredQuiz.participantCount > 0 && ` · 평균 ${filteredQuiz.averageScore}점`}
+              </p>
+              {!filteredQuiz.isPublished ? (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onPublish?.(filteredQuiz.id); }}
+                  className="w-5 h-5 flex items-center justify-center text-[#5C5C5C] hover:text-[#1A1A1A] hover:scale-110 transition-all flex-shrink-0"
+                  title="비공개 — 클릭하여 공개"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </button>
+              ) : (
+                <span className="w-5 h-5 flex items-center justify-center text-[#5C5C5C] flex-shrink-0" title="공개됨">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.6 9h16.8M3.6 15h16.8" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3a15.3 15.3 0 0 1 4 9 15.3 15.3 0 0 1-4 9 15.3 15.3 0 0 1-4-9 15.3 15.3 0 0 1 4-9z" />
+                  </svg>
+                </span>
+              )}
+            </div>
+
+            {/* 버튼 — 가로 배치, 하단 고정, 간격 타이트 */}
+            <div className="mt-auto px-4 pb-3 flex gap-2">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onDetails(filteredQuiz); }}
+                className="flex-1 py-2 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+              >
+                Details
+              </button>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onStats(filteredQuiz); }}
+                className={`flex-1 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] transition-colors ${
+                  !filteredQuiz.isPublished ? 'opacity-40 pointer-events-none' : 'hover:bg-[#3A3A3A]'
+                }`}
+              >
+                Stats
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// 뉴스 캐러셀 (학생과 동일한 3D perspective 효과)
+// ============================================================
+
+function getProfCarouselDefault(): number {
+  if (typeof window !== 'undefined') {
+    const saved = sessionStorage.getItem(PROF_QUIZ_CAROUSEL_KEY);
+    if (saved !== null) return parseInt(saved, 10);
+  }
+  const tab = getDefaultQuizTab();
+  if (tab === 'midterm') return 0;
+  if (tab === 'past') return 1;
+  if (tab === 'final') return 2;
+  return 0;
+}
+
+function ProfessorNewsCarousel({
+  midtermQuizzes,
+  finalQuizzes,
+  pastQuizzes,
+  isLoading,
+  onDetails,
+  onStats,
+  onPublish,
+  selectedPastExam,
+  pastExamOptions,
+  onSelectPastExam,
+}: {
+  midtermQuizzes: ProfessorQuiz[];
+  finalQuizzes: ProfessorQuiz[];
+  pastQuizzes: ProfessorQuiz[];
+  isLoading: { midterm: boolean; final: boolean; past: boolean };
+  onDetails: (quiz: ProfessorQuiz) => void;
+  onStats: (quiz: ProfessorQuiz) => void;
+  onPublish?: (quizId: string) => void;
+  selectedPastExam: string;
+  pastExamOptions: PastExamOption[];
+  onSelectPastExam: (value: string) => void;
+}) {
+  const TOTAL = NEWS_CARDS.length; // 3
+  // visualIndex: 0=clone_last, 1~3=real cards, 4=clone_first
+  const [visualIndex, setVisualIndex] = useState(() => getProfCarouselDefault() + 1);
+  const [transitionOn, setTransitionOn] = useState(true);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // 실제 인덱스 (0~2)
+  const realIndex = useMemo(() => {
+    if (visualIndex <= 0) return TOTAL - 1;
+    if (visualIndex > TOTAL) return 0;
+    return visualIndex - 1;
+  }, [visualIndex, TOTAL]);
+
+  // sessionStorage 저장
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem(PROF_QUIZ_CAROUSEL_KEY, String(realIndex));
+    }
+  }, [realIndex]);
+
+  const goToNext = useCallback(() => {
+    setTransitionOn(true);
+    setVisualIndex((prev) => prev + 1);
+  }, []);
+
+  const goToPrev = useCallback(() => {
+    setTransitionOn(true);
+    setVisualIndex((prev) => prev - 1);
+  }, []);
+
+  const handleDragEnd = (_e: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    if (info.offset.x > 50) goToPrev();
+    else if (info.offset.x < -50) goToNext();
+  };
+
+  // 클론 위치 도달 시 → 즉시 실제 위치로 점프 (애니메이션 없이)
+  const handleAnimationComplete = useCallback(() => {
+    if (visualIndex === 0) {
+      setTransitionOn(false);
+      setVisualIndex(TOTAL);
+      requestAnimationFrame(() => requestAnimationFrame(() => setTransitionOn(true)));
+    } else if (visualIndex === TOTAL + 1) {
+      setTransitionOn(false);
+      setVisualIndex(1);
+      requestAnimationFrame(() => requestAnimationFrame(() => setTransitionOn(true)));
+    }
+  }, [visualIndex, TOTAL]);
+
+  // 확장 카드: [clone_last, card_0, card_1, card_2, clone_first]
+  const extendedCardIndices = useMemo(
+    () => [TOTAL - 1, ...Array.from({ length: TOTAL }, (_, i) => i), 0],
+    [TOTAL]
+  );
+
+  // 순서: midterm(0), past(1), final(2)
+  const quizzesByType = [midtermQuizzes, pastQuizzes, finalQuizzes];
+  const loadingByType = [isLoading.midterm, isLoading.past, isLoading.final];
+
+  const CARD_WIDTH_PERCENT = 82;
+  const SIDE_PEEK_PERCENT = (100 - CARD_WIDTH_PERCENT) / 2;
+
+  return (
+    <div className="relative select-none" style={{ perspective: 1200 }}>
+      <div ref={containerRef} className="overflow-hidden">
+        <motion.div
+          className="flex cursor-grab active:cursor-grabbing"
+          initial={false}
+          animate={{
+            x: `calc(-${visualIndex * CARD_WIDTH_PERCENT}% + ${SIDE_PEEK_PERCENT}%)`,
+          }}
+          transition={
+            transitionOn
+              ? { type: 'spring', stiffness: 260, damping: 28 }
+              : { duration: 0 }
+          }
+          onAnimationComplete={handleAnimationComplete}
+          drag="x"
+          dragConstraints={{ left: 0, right: 0 }}
+          dragElastic={0.15}
+          onDragEnd={handleDragEnd}
+        >
+          {extendedCardIndices.map((cardIdx, i) => {
+            const card = NEWS_CARDS[cardIdx];
+            const isActive = i === visualIndex;
+            const offset = i - visualIndex;
+
+            return (
+              <motion.div
+                key={`${card.type}-${i}`}
+                className="flex-shrink-0 px-1.5"
+                style={{ width: `${CARD_WIDTH_PERCENT}%` }}
+              >
+                <motion.div
+                  animate={{
+                    rotateY: isActive ? 0 : offset < 0 ? 8 : -8,
+                    scale: isActive ? 1 : 0.92,
+                    opacity: isActive ? 1 : 0.9,
+                  }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                  className="h-[440px] origin-center"
+                  style={{ transformStyle: 'preserve-3d' }}
+                >
+                  {card.type === 'past' ? (
+                    <ProfessorPastExamNewsCard
+                      quizzes={pastQuizzes}
+                      isLoading={loadingByType[cardIdx]}
+                      onDetails={onDetails}
+                      onStats={onStats}
+                      onPublish={onPublish}
+                      selectedPastExam={selectedPastExam}
+                      pastExamOptions={pastExamOptions}
+                      onSelectPastExam={onSelectPastExam}
+                    />
+                  ) : (
+                    <ProfessorNewsCard
+                      title={card.title}
+                      subtitle={card.subtitle}
+                      quizzes={quizzesByType[cardIdx]}
+                      isLoading={loadingByType[cardIdx]}
+                      onDetails={onDetails}
+                      onStats={onStats}
+                      onPublish={onPublish}
+                    />
+                  )}
+                </motion.div>
+              </motion.div>
+            );
+          })}
+        </motion.div>
+      </div>
+
+      {/* 인디케이터 — realIndex 기반 */}
+      <div className="flex justify-center gap-2 mt-3">
+        {Array.from({ length: TOTAL }, (_, index) => (
+          <button
+            key={index}
+            onClick={() => {
+              setTransitionOn(true);
+              setVisualIndex(index + 1);
+            }}
+            className={`h-2 rounded-full transition-all duration-300 ${
+              realIndex === index ? 'bg-[#1A1A1A] w-5' : 'bg-[#CCCCCC] w-2'
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// 과목 리본 스와이프 헤더
+// ============================================================
+
+function CourseRibbonHeader({
+  currentCourseId,
+  onCourseChange,
+}: {
+  currentCourseId: CourseId;
+  onCourseChange: (courseId: CourseId) => void;
+}) {
+  const currentIndex = COURSE_IDS.indexOf(currentCourseId);
+  const course = COURSES[currentCourseId];
+  const ribbonImage = course?.quizRibbonImage || '/images/biology-quiz-ribbon.png';
+  const ribbonScale = course?.quizRibbonScale || 1;
+
+  const goToPrev = () => {
+    const prevIdx = (currentIndex - 1 + COURSE_IDS.length) % COURSE_IDS.length;
+    onCourseChange(COURSE_IDS[prevIdx]);
+  };
+
+  const goToNext = () => {
+    const nextIdx = (currentIndex + 1) % COURSE_IDS.length;
+    onCourseChange(COURSE_IDS[nextIdx]);
+  };
+
+  // 터치 + 마우스 드래그 스와이프
+  const startX = useRef(0);
+  const isDragging = useRef(false);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    startX.current = e.clientX;
+    isDragging.current = true;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (!isDragging.current) return;
+    isDragging.current = false;
+    const diff = e.clientX - startX.current;
+    if (diff > 40) goToPrev();
+    else if (diff < -40) goToNext();
+  };
+
+  return (
+    <div className="flex flex-col items-center">
+      {/* 리본 이미지 — 터치/마우스 드래그로 과목 전환 */}
+      <div
+        className="w-full h-[260px] pt-2 cursor-grab active:cursor-grabbing select-none"
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+      >
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentCourseId}
+            initial={{ opacity: 0, x: 30 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -30 }}
+            transition={{ duration: 0.2 }}
+            className="w-full h-full"
+          >
+            <img
+              src={ribbonImage}
+              alt={course?.name || 'Quiz'}
+              className="w-full h-full object-contain pointer-events-none"
+              style={{ transform: `scale(${ribbonScale}) scaleX(1.15)` }}
+              draggable={false}
+            />
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
+      {/* 페이지네이션 도트 */}
+      <div className="flex justify-center gap-2 mt-1">
+        {COURSE_IDS.map((id, idx) => (
+          <button
+            key={id}
+            onClick={() => onCourseChange(id)}
+            className={`w-2 h-2 rounded-full transition-all ${
+              idx === currentIndex ? 'bg-[#1A1A1A] w-4' : 'bg-[#CCCCCC]'
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// 자작 퀴즈 카드 (학생 CustomQuizCard 스타일)
+// ============================================================
+
+function ProfessorCustomQuizCard({
   quiz,
   feedbackInfo,
+  onStats,
+  onDetails,
   onClick,
 }: {
   quiz: ProfessorQuiz;
   feedbackInfo?: QuizFeedbackInfo;
+  onStats: () => void;
+  onDetails: () => void;
   onClick: () => void;
 }) {
   const fbLabel = feedbackInfo ? getFeedbackLabel(feedbackInfo.score) : null;
 
   return (
-    <motion.article
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
+    <motion.div
+      whileHover={{ y: -4, boxShadow: '0 8px 25px rgba(26, 26, 26, 0.15)' }}
+      transition={{ duration: 0.2 }}
+      className="relative border border-[#1A1A1A] bg-[#F5F0E8] overflow-hidden shadow-md cursor-pointer"
       onClick={onClick}
-      className="border border-[#1A1A1A] bg-[#FDFBF7] p-4 cursor-pointer hover:shadow-md transition-shadow"
     >
-      {/* 상단: 타입 뱃지 + 날짜 */}
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-[#5C5C5C]">
-          {quiz.type === 'midterm' ? '중간' : quiz.type === 'final' ? '기말' : quiz.type === 'past' ? '기출' : '교수'}
-          {' '}
-          {quiz.targetClass !== 'all' && `· ${quiz.targetClass}반`}
-        </span>
-        <span className="text-[10px] text-[#5C5C5C]">
-          {quiz.createdAt.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
-        </span>
+      {/* 신문 배경 텍스트 */}
+      <div className="absolute inset-0 p-2 overflow-hidden pointer-events-none">
+        <p className="text-[5px] text-[#E8E8E8] leading-tight break-words">
+          {NEWSPAPER_BG_TEXT.slice(0, 300)}
+        </p>
       </div>
 
-      {/* 제목 */}
-      <h3 className="font-serif-display text-base font-bold text-[#1A1A1A] leading-tight mb-2 line-clamp-2">
-        {quiz.title}
-      </h3>
-
-      {/* 통계 행 */}
-      <div className="flex items-center gap-3 text-[11px] text-[#5C5C5C]">
-        <span>{quiz.questionCount}문제</span>
-        <span className="w-px h-3 bg-[#D4CFC4]" />
-        <span>{quiz.participantCount}명 참여</span>
-        {quiz.participantCount > 0 && (
-          <>
-            <span className="w-px h-3 bg-[#D4CFC4]" />
-            <span>평균 {quiz.averageScore}점</span>
-          </>
+      {/* 비공개 + 반 뱃지 */}
+      <div className="absolute top-2 right-2 z-30 flex items-center gap-1">
+        {quiz.targetClass !== 'all' && (
+          <span className="text-[10px] px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] font-medium">
+            {quiz.targetClass}반
+          </span>
+        )}
+        {!quiz.isPublished && (
+          <span className="text-[10px] text-[#8B1A1A] border border-[#8B1A1A] px-1.5 py-0.5 bg-[#F5F0E8]">
+            비공개
+          </span>
         )}
       </div>
 
-      {/* 피드백 점수 */}
-      {fbLabel && feedbackInfo && feedbackInfo.count > 0 && (
-        <div className="mt-2 flex items-center gap-2">
-          <span
-            className="text-[10px] font-bold px-1.5 py-0.5 border"
-            style={{ color: fbLabel.color, borderColor: fbLabel.color }}
-          >
-            {fbLabel.label}
-          </span>
-          <span className="text-[10px] text-[#5C5C5C]">
-            피드백 {feedbackInfo.count}건 · {feedbackInfo.score > 0 ? '+' : ''}{feedbackInfo.score.toFixed(1)}
-          </span>
+      {/* 카드 내용 */}
+      <div className="relative z-10 p-4 bg-[#F5F0E8]/90">
+        {/* 제목 (2줄 고정 높이) */}
+        <div className="h-[44px] mb-2">
+          <h3 className="font-serif-display font-bold text-base line-clamp-2 text-[#1A1A1A] pr-6 leading-snug">
+            {quiz.title}
+          </h3>
         </div>
-      )}
 
-      {/* 비공개 표시 */}
-      {!quiz.isPublished && (
-        <div className="mt-2">
-          <span className="text-[10px] text-[#8B1A1A] border border-[#8B1A1A] px-1.5 py-0.5">
-            비공개
-          </span>
+        {/* 메타 정보 */}
+        <p className="text-sm text-[#5C5C5C] mb-1">
+          {quiz.questionCount}문제 · {quiz.participantCount}명 참여
+          {quiz.participantCount > 0 && ` · 평균 ${quiz.averageScore}점`}
+        </p>
+
+        {/* 태그 (2줄 고정 높이) */}
+        <div className="h-[48px] mb-2 overflow-hidden">
+          {quiz.tags && quiz.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {quiz.tags.slice(0, 8).map((tag) => (
+                <span
+                  key={tag}
+                  className="px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-medium"
+                >
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
-      )}
-    </motion.article>
+
+        {/* 버튼 */}
+        <div className="flex gap-2 mt-3">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDetails();
+            }}
+            className="flex-1 py-2 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+          >
+            Details
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onStats();
+            }}
+            className="flex-1 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors"
+          >
+            Stats
+          </button>
+        </div>
+      </div>
+    </motion.div>
   );
 }
 
 // ============================================================
-// BEST Q 모달
+// 스켈레톤 카드
 // ============================================================
 
-function BestQModal({
-  isOpen,
-  onClose,
-  bestQuestions,
-  loading: bestLoading,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  bestQuestions: BestQuestion[];
-  loading: boolean;
-}) {
-  if (!isOpen) return null;
-
+function SkeletonCard() {
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-end justify-center"
-      >
-        {/* 백드롭 */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
-          className="absolute inset-0 bg-black/50"
-        />
-
-        {/* 바텀시트 */}
-        <motion.div
-          initial={{ y: '100%' }}
-          animate={{ y: 0 }}
-          exit={{ y: '100%' }}
-          transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-          className="relative w-full max-w-lg bg-[#FDFBF7] border-t-2 border-[#1A1A1A] max-h-[70vh] flex flex-col"
-        >
-          {/* 헤더 */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-[#D4CFC4]">
-            <h2 className="font-serif-display text-lg font-bold text-[#1A1A1A]">BEST Q</h2>
-            <button type="button" onClick={onClose} className="text-[#5C5C5C] p-1">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-
-          {/* 내용 */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {bestLoading ? (
-              <div className="space-y-3">
-                {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 rounded-none" />)}
-              </div>
-            ) : bestQuestions.length === 0 ? (
-              <p className="text-sm text-[#5C5C5C] text-center py-8">
-                피드백이 있는 문제가 아직 없습니다
-              </p>
-            ) : (
-              bestQuestions.map((bq, idx) => {
-                const fbLabel = getFeedbackLabel(bq.score);
-                return (
-                  <div
-                    key={`${bq.quizId}-${bq.questionId}`}
-                    className="border border-[#D4CFC4] bg-white p-3"
-                  >
-                    <div className="flex items-start gap-3">
-                      <span className="text-lg font-black text-[#1A1A1A] w-6 flex-shrink-0">
-                        {idx + 1}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs text-[#5C5C5C] mb-1 truncate">
-                          {bq.quizTitle} · {bq.questionIndex + 1}번
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="text-[10px] font-bold px-1.5 py-0.5 border"
-                            style={{ color: fbLabel.color, borderColor: fbLabel.color }}
-                          >
-                            {fbLabel.label}
-                          </span>
-                          <span className="text-[11px] text-[#5C5C5C]">
-                            점수 {bq.score > 0 ? '+' : ''}{bq.score.toFixed(1)} · {bq.feedbackCount}건
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>
+    <div className="border border-[#1A1A1A] bg-[#F5F0E8] p-4 shadow-md">
+      <Skeleton className="w-3/4 h-4 mb-2 rounded-none" />
+      <Skeleton className="w-1/2 h-3 mb-3 rounded-none" />
+      <div className="flex gap-2">
+        <Skeleton className="flex-1 h-8 rounded-none" />
+        <Skeleton className="flex-1 h-8 rounded-none" />
+      </div>
+    </div>
   );
 }
 
@@ -239,42 +779,156 @@ function BestQModal({
 export default function ProfessorQuizListPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const { userCourseId } = useCourse();
-  const {
-    quizzes,
-    loading,
-    error,
-    fetchQuizzes,
-    clearError,
-  } = useProfessorQuiz();
+  const { userCourseId, setProfessorCourse } = useCourse();
 
-  // 필터 상태
-  const [activeFilter, setActiveFilter] = useState<ProfessorFilterTab>(getDefaultProfessorFilter);
+  // 과목별 퀴즈 로드용 인스턴스 3개 (중간/기말/기출 캐러셀)
+  const midtermHook = useProfessorQuiz();
+  const finalHook = useProfessorQuiz();
+  const pastHook = useProfessorQuiz();
+
+  // 자작 섹션 (type: 'custom' 퀴즈, 학생과 동일한 데이터)
+  const [customLoading, setCustomLoading] = useState(true);
+  const [customError, setCustomError] = useState<string | null>(null);
+
+  // 태그 검색
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [showTagFilter, setShowTagFilter] = useState(false);
+
+  const fixedTagOptions = useMemo(() => {
+    const courseTags = generateCourseTags(userCourseId);
+    return [...COMMON_TAGS.map(t => t.value), ...courseTags.map(t => t.value)];
+  }, [userCourseId]);
+
+  // 기출 드롭다운
+  const pastExamOptions = useMemo(() => getPastExamOptions(userCourseId), [userCourseId]);
+  const [selectedPastExam, setSelectedPastExam] = useState<string>(() => {
+    const options = getPastExamOptions(userCourseId);
+    return options.length > 0 ? options[0].value : '2025-midterm';
+  });
+
+  // 공개 전환 모달
+  const [publishConfirmQuizId, setPublishConfirmQuizId] = useState<string | null>(null);
+  const publishHook = useProfessorQuiz();
 
   // 피드백 점수 데이터
   const [feedbackMap, setFeedbackMap] = useState<Record<string, QuizFeedbackInfo>>({});
 
-  // BEST Q 상태
-  const [showBestQ, setShowBestQ] = useState(false);
-  const [bestQuestions, setBestQuestions] = useState<BestQuestion[]>([]);
-  const [bestLoading, setBestLoading] = useState(false);
-
-  // 퀴즈 목록 로드
+  // 중간/기말/기출 퀴즈 전체 로드 (과목 전환은 클라이언트 필터링)
   useEffect(() => {
     if (user?.uid) {
-      fetchQuizzes(user.uid, { quizType: activeFilter });
+      midtermHook.fetchQuizzes(user.uid, { quizType: 'midterm', pageSize: 50 });
+      finalHook.fetchQuizzes(user.uid, { quizType: 'final', pageSize: 50 });
+      pastHook.fetchQuizzes(user.uid, { quizType: 'past', pageSize: 50 });
     }
-  }, [user?.uid, activeFilter, fetchQuizzes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid]);
+
+  // 과목별 클라이언트 사이드 필터링 (과목 전환 시 즉시 반영)
+  const filteredMidterm = useMemo(() => {
+    if (!userCourseId) return midtermHook.quizzes;
+    return midtermHook.quizzes.filter(q => q.courseId === userCourseId);
+  }, [midtermHook.quizzes, userCourseId]);
+
+  const filteredFinal = useMemo(() => {
+    if (!userCourseId) return finalHook.quizzes;
+    return finalHook.quizzes.filter(q => q.courseId === userCourseId);
+  }, [finalHook.quizzes, userCourseId]);
+
+  const filteredPast = useMemo(() => {
+    if (!userCourseId) return pastHook.quizzes;
+    return pastHook.quizzes.filter(q => q.courseId === userCourseId);
+  }, [pastHook.quizzes, userCourseId]);
+
+  // 자작 퀴즈 전체 로드 (과목 전환은 클라이언트 필터링)
+  const [allCustomQuizzes, setAllCustomQuizzes] = useState<ProfessorQuiz[]>([]);
+  useEffect(() => {
+    if (!user) return;
+
+    setCustomLoading(true);
+    setCustomError(null);
+
+    const q = query(
+      collection(db, 'quizzes'),
+      where('type', '==', 'custom')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const quizzes: ProfessorQuiz[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        quizzes.push({
+          id: docSnap.id,
+          title: data.title || '',
+          description: data.description,
+          type: data.type,
+          courseId: data.courseId,
+          targetClass: data.targetClass || 'all',
+          difficulty: data.difficulty || 'normal',
+          isPublished: data.isPublished ?? true,
+          questions: data.questions || [],
+          questionCount: data.questionCount || 0,
+          creatorUid: data.creatorUid || data.creatorId || '',
+          creatorNickname: data.creatorNickname || '',
+          participantCount: data.participantCount || 0,
+          averageScore: data.averageScore || 0,
+          feedbackCount: data.feedbackCount || 0,
+          tags: data.tags || [],
+          createdAt: data.createdAt?.toDate() || new Date(),
+          updatedAt: data.updatedAt?.toDate() || new Date(),
+        });
+      });
+      // 최신순 정렬
+      quizzes.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      setAllCustomQuizzes(quizzes);
+      setCustomLoading(false);
+    }, (err) => {
+      console.error('자작 퀴즈 로드 실패:', err);
+      setCustomError('자작 퀴즈를 불러오는데 실패했습니다.');
+      setCustomLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  // 자작 퀴즈 과목별 필터링
+  const customQuizzes = useMemo(() => {
+    if (!userCourseId) return allCustomQuizzes;
+    return allCustomQuizzes.filter(q => !q.courseId || q.courseId === userCourseId);
+  }, [allCustomQuizzes, userCourseId]);
+
+  // 과목 변경 시 태그 초기화
+  useEffect(() => {
+    setSelectedTags([]);
+    setShowTagFilter(false);
+  }, [userCourseId]);
+
+  // 전체 퀴즈 목록 합산 (피드백 로드용 — 전체 데이터로 1회만 로드)
+  const allQuizzes = useMemo(() => {
+    const carouselQuizzes = [...midtermHook.quizzes, ...finalHook.quizzes, ...pastHook.quizzes];
+    const ids = new Set(carouselQuizzes.map(q => q.id));
+    const uniqueCustomQuizzes = allCustomQuizzes.filter(q => !ids.has(q.id));
+    return [...carouselQuizzes, ...uniqueCustomQuizzes];
+  }, [midtermHook.quizzes, finalHook.quizzes, pastHook.quizzes, allCustomQuizzes]);
+
+  // 태그 필터링된 자작 퀴즈
+  const filteredCustomQuizzes = useMemo(() => {
+    if (selectedTags.length === 0) return customQuizzes;
+    return customQuizzes.filter(quiz =>
+      quiz.tags && selectedTags.some(tag => quiz.tags!.includes(tag))
+    );
+  }, [customQuizzes, selectedTags]);
 
   // 피드백 점수 로드
   useEffect(() => {
-    if (quizzes.length === 0) return;
+    if (allQuizzes.length === 0) {
+      setFeedbackMap({});
+      return;
+    }
 
     const loadFeedbacks = async () => {
-      const quizIds = quizzes.map(q => q.id);
+      const quizIds = allQuizzes.map(q => q.id);
       const newMap: Record<string, QuizFeedbackInfo> = {};
 
-      // 30개씩 chunk 쿼리
       for (let i = 0; i < quizIds.length; i += 30) {
         const chunk = quizIds.slice(i, i + 30);
         const q = query(
@@ -283,7 +937,6 @@ export default function ProfessorQuizListPage() {
         );
         const snap = await getDocs(q);
 
-        // 퀴즈별 피드백 집계
         const byQuiz: Record<string, { type: FeedbackType }[]> = {};
         snap.docs.forEach(d => {
           const data = d.data();
@@ -305,216 +958,443 @@ export default function ProfessorQuizListPage() {
     };
 
     loadFeedbacks();
-  }, [quizzes]);
+  }, [allQuizzes]);
 
-  // BEST Q 로드
-  const loadBestQuestions = useCallback(async () => {
-    if (!userCourseId) return;
+  // Details 모달 상태
+  const [detailsQuiz, setDetailsQuiz] = useState<ProfessorQuiz | null>(null);
+  // Stats 모달 상태
+  const [statsQuizId, setStatsQuizId] = useState<{ id: string; title: string } | null>(null);
 
-    setBestLoading(true);
-    try {
-      const q = query(
-        collection(db, 'questionFeedbacks'),
-        where('courseId', '==', userCourseId)
-      );
-      const snap = await getDocs(q);
-
-      // 문제별 피드백 집계
-      const byQuestion: Record<string, {
-        quizId: string;
-        questionId: string;
-        questionNumber: number;
-        feedbacks: { type: FeedbackType }[];
-      }> = {};
-
-      snap.docs.forEach(d => {
-        const data = d.data();
-        const key = `${data.quizId}_${data.questionId}`;
-        if (!byQuestion[key]) {
-          byQuestion[key] = {
-            quizId: data.quizId,
-            questionId: data.questionId,
-            questionNumber: data.questionNumber || 0,
-            feedbacks: [],
-          };
-        }
-        byQuestion[key].feedbacks.push({ type: data.type as FeedbackType });
-      });
-
-      // 퀴즈 제목 조회 (고유 quizId 목록)
-      const uniqueQuizIds = [...new Set(Object.values(byQuestion).map(q => q.quizId))];
-      const quizTitleMap: Record<string, string> = {};
-      for (let i = 0; i < uniqueQuizIds.length; i += 30) {
-        const chunk = uniqueQuizIds.slice(i, i + 30);
-        const quizQ = query(
-          collection(db, 'quizzes'),
-          where('__name__', 'in', chunk)
-        );
-        const quizSnap = await getDocs(quizQ);
-        quizSnap.docs.forEach(d => {
-          quizTitleMap[d.id] = d.data().title || '퀴즈';
-        });
-      }
-
-      // 점수 계산 후 정렬
-      const results: BestQuestion[] = Object.values(byQuestion)
-        .map(item => ({
-          quizId: item.quizId,
-          quizTitle: quizTitleMap[item.quizId] || '퀴즈',
-          questionId: item.questionId,
-          questionIndex: item.questionNumber,
-          score: calcFeedbackScore(item.feedbacks),
-          feedbackCount: item.feedbacks.length,
-        }))
-        .filter(item => item.feedbackCount >= 1)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 20);
-
-      setBestQuestions(results);
-    } catch (err) {
-      console.error('BEST Q 로드 실패:', err);
-    } finally {
-      setBestLoading(false);
+  // Details/Stats 모달 열릴 때 네비게이션 숨김
+  useEffect(() => {
+    if (detailsQuiz) {
+      document.body.setAttribute('data-hide-nav', 'true');
+    } else {
+      document.body.removeAttribute('data-hide-nav');
     }
-  }, [userCourseId]);
+    return () => {
+      document.body.removeAttribute('data-hide-nav');
+    };
+  }, [detailsQuiz]);
 
-  const handleBestQ = useCallback(() => {
-    setShowBestQ(true);
-    loadBestQuestions();
-  }, [loadBestQuestions]);
+  // 문제 유형 포맷
+  const formatQuestionTypes = useCallback((quiz: ProfessorQuiz): string => {
+    const questions = quiz.questions || [];
+    let oxCount = 0;
+    let multipleCount = 0;
+    let subjectiveCount = 0;
+    questions.forEach(q => {
+      if (q.type === 'ox') oxCount++;
+      else if (q.type === 'multiple') multipleCount++;
+      else if (q.type === 'short_answer' || q.type === 'subjective' || q.type === 'essay') subjectiveCount++;
+    });
+    const parts: string[] = [];
+    if (oxCount > 0) parts.push(`OX ${oxCount}`);
+    if (multipleCount > 0) parts.push(`객관식 ${multipleCount}`);
+    if (subjectiveCount > 0) parts.push(`주관식 ${subjectiveCount}`);
+    return parts.length > 0 ? parts.join(' · ') : '-';
+  }, []);
 
-  const handleQuizClick = useCallback(
+  // 캐러셀 내부 Details → 모달
+  const handleCarouselDetails = useCallback(
     (quiz: ProfessorQuiz) => {
-      router.push(`/professor/quiz/${quiz.id}`);
+      setDetailsQuiz(quiz);
     },
-    [router]
+    []
   );
 
-  const handleCreateQuiz = useCallback(() => {
-    router.push('/professor/quiz/create');
-  }, [router]);
+  // 캐러셀 내부 Stats → 통계 모달 (비공개면 무시)
+  const handleCarouselStats = useCallback(
+    (quiz: ProfessorQuiz) => {
+      if (!quiz.isPublished) return;
+      setStatsQuizId({ id: quiz.id, title: quiz.title });
+    },
+    []
+  );
+
+  const handleCourseChange = useCallback(
+    (courseId: CourseId) => {
+      setProfessorCourse(courseId);
+    },
+    [setProfessorCourse]
+  );
 
   return (
-    <div className="min-h-screen bg-[#F5F0E8] pb-24">
-      {/* 타이틀 */}
-      <div className="px-4 pt-6 pb-4">
-        <div className="border-y-4 border-[#1A1A1A] py-4">
-          <h1 className="font-serif-display text-4xl font-black text-center text-[#1A1A1A] tracking-tight">
-            QUIZ
-          </h1>
+    <div className="min-h-screen pb-24" style={{ backgroundColor: '#F5F0E8' }}>
+      {/* 리본 헤더 — 과목 스와이프 전환 */}
+      <header className="flex flex-col items-center">
+        <CourseRibbonHeader
+          currentCourseId={userCourseId || 'biology'}
+          onCourseChange={handleCourseChange}
+        />
+
+        {/* 버튼 영역 */}
+        <div className="w-full px-4 py-2 flex items-center justify-between">
+          <button
+            onClick={() => router.push('/professor/quiz/best-q')}
+            className="px-4 py-3 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] whitespace-nowrap hover:bg-[#EDEAE4] transition-colors"
+          >
+            BEST Q
+          </button>
+          <button
+            onClick={() => router.push('/professor/quiz/create')}
+            className="px-4 py-3 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] whitespace-nowrap hover:bg-[#3A3A3A] transition-colors"
+          >
+            퀴즈 만들기
+          </button>
         </div>
-      </div>
+      </header>
 
-      {/* 필터 탭 + BEST Q 버튼 */}
-      <div className="px-4 mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {FILTER_TABS.map(tab => {
-            const isActive = activeFilter === tab.value;
-            return (
-              <motion.button
-                key={tab.value}
-                onClick={() => setActiveFilter(tab.value)}
-                whileTap={{ scale: 0.95 }}
-                className={`
-                  relative px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap
-                  transition-colors duration-200
-                  ${isActive ? 'text-white' : 'text-[#5C5C5C] bg-[#EDEAE4]'}
-                `}
-              >
-                {isActive && (
-                  <motion.div
-                    layoutId="profQuizFilterTab"
-                    className="absolute inset-0 bg-[#1A1A1A] rounded-full"
-                    initial={false}
-                    transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-                  />
-                )}
-                <span className="relative z-10">{tab.label}</span>
-              </motion.button>
-            );
-          })}
-        </div>
+      {/* 뉴스 캐러셀 (중간/기말/기출) */}
+      <section className="mb-8 px-4">
+        <ProfessorNewsCarousel
+          midtermQuizzes={filteredMidterm}
+          finalQuizzes={filteredFinal}
+          pastQuizzes={filteredPast}
+          isLoading={{
+            midterm: midtermHook.loading,
+            final: finalHook.loading,
+            past: pastHook.loading,
+          }}
+          onDetails={handleCarouselDetails}
+          onStats={handleCarouselStats}
+          onPublish={(quizId) => setPublishConfirmQuizId(quizId)}
+          selectedPastExam={selectedPastExam}
+          pastExamOptions={pastExamOptions}
+          onSelectPastExam={setSelectedPastExam}
+        />
+      </section>
 
-        <motion.button
-          type="button"
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={handleBestQ}
-          className="px-3 py-1.5 border-2 border-[#1A1A1A] bg-[#FDFBF7] text-[#1A1A1A] text-xs font-bold"
-        >
-          BEST Q
-        </motion.button>
-      </div>
+      {/* 자작 섹션 */}
+      <section className="px-4">
+        {/* 자작 타이틀 + 태그 검색 (같은 줄) */}
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-serif-display text-xl font-black text-[#1A1A1A] shrink-0">자작</h2>
 
-      {/* 에러 메시지 */}
-      {error && (
-        <div className="mx-4 mb-4 p-3 border border-[#1A1A1A] bg-[#FDFBF7]">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-[#8B1A1A]">{error}</p>
-            <button type="button" onClick={clearError} className="text-[#5C5C5C]">
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 퀴즈 목록 */}
-      <main className="px-4">
-        {loading ? (
-          <div className="space-y-3">
-            {[1, 2, 3, 4].map(i => (
-              <Skeleton key={i} className="h-28 rounded-none" />
-            ))}
-          </div>
-        ) : quizzes.length === 0 ? (
-          <div className="border border-[#D4CFC4] bg-[#FDFBF7] p-8 text-center">
-            <p className="text-sm text-[#5C5C5C] mb-4">
-              아직 출제한 퀴즈가 없습니다
-            </p>
-            <button
-              type="button"
-              onClick={handleCreateQuiz}
-              className="text-sm font-bold text-[#1A1A1A] underline"
+          <div className="flex items-center gap-2">
+            {/* 선택된 태그들 */}
+            {selectedTags.map((tag) => (
+            <div
+              key={tag}
+              className="flex items-center gap-1 px-2 py-1 bg-[#F5F0E8] text-[#1A1A1A] text-sm font-bold border border-[#1A1A1A]"
             >
-              첫 퀴즈 출제하기
-            </button>
+              #{tag}
+              <button
+                onClick={() => setSelectedTags(prev => prev.filter(t => t !== tag))}
+                className="ml-0.5 hover:text-[#5C5C5C]"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+
+          {/* 태그 검색 버튼 */}
+          <button
+            onClick={() => setShowTagFilter(!showTagFilter)}
+            className={`flex items-center justify-center w-11 h-11 border transition-colors shrink-0 ${
+              showTagFilter
+                ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                : 'bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A]'
+            }`}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+            </svg>
+          </button>
           </div>
-        ) : (
-          <div className="space-y-3">
-            {quizzes.map(quiz => (
-              <ProfessorQuizCard
-                key={quiz.id}
-                quiz={quiz}
-                feedbackInfo={feedbackMap[quiz.id]}
-                onClick={() => handleQuizClick(quiz)}
-              />
+        </div>
+
+        {/* 태그 필터 목록 */}
+        <AnimatePresence>
+          {showTagFilter && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden mb-4"
+            >
+              <div className="flex flex-wrap gap-2 p-3 bg-[#EDEAE4] border border-[#D4CFC4]">
+                {fixedTagOptions
+                  .filter(tag => !selectedTags.includes(tag))
+                  .map((tag) => (
+                    <button
+                      key={tag}
+                      onClick={() => {
+                        setSelectedTags(prev => [...prev, tag]);
+                        setShowTagFilter(false);
+                      }}
+                      className="px-3 py-1.5 text-sm font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#E5E0D8] transition-colors"
+                    >
+                      #{tag}
+                    </button>
+                  ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* 퀴즈 카드 그리드 */}
+        {customLoading && (
+          <div className="grid grid-cols-2 gap-3">
+            {[1, 2, 3, 4].map((i) => (
+              <SkeletonCard key={i} />
             ))}
           </div>
         )}
-      </main>
 
-      {/* 하단 고정 FAB */}
-      <motion.button
-        type="button"
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        onClick={handleCreateQuiz}
-        className="fixed bottom-24 right-4 w-14 h-14 bg-[#1A1A1A] text-white flex items-center justify-center shadow-lg z-30"
-      >
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6v12m6-6H6" />
-        </svg>
-      </motion.button>
+        {!customLoading && customQuizzes.length === 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex flex-col items-center justify-center text-center py-12"
+          >
+            <h3 className="font-serif-display text-lg font-black mb-2 text-[#1A1A1A]">
+              자작 퀴즈가 없습니다
+            </h3>
+            <p className="text-sm text-[#5C5C5C]">
+              첫 번째 퀴즈를 만들어보세요!
+            </p>
+          </motion.div>
+        )}
 
-      {/* BEST Q 모달 */}
-      <BestQModal
-        isOpen={showBestQ}
-        onClose={() => setShowBestQ(false)}
-        bestQuestions={bestQuestions}
-        loading={bestLoading}
-      />
+        {/* 필터링 결과가 없을 때 */}
+        {!customLoading && customQuizzes.length > 0 && filteredCustomQuizzes.length === 0 && selectedTags.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex flex-col items-center justify-center text-center py-8"
+          >
+            <p className="text-sm text-[#5C5C5C]">
+              {selectedTags.map(t => `#${t}`).join(' ')} 태그가 있는 퀴즈가 없습니다
+            </p>
+          </motion.div>
+        )}
+
+        {!customLoading && filteredCustomQuizzes.length > 0 && (
+          <div className="grid grid-cols-2 gap-3">
+            {filteredCustomQuizzes.map((quiz, index) => (
+              <motion.div
+                key={quiz.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.03 }}
+              >
+                <ProfessorCustomQuizCard
+                  quiz={quiz}
+                  feedbackInfo={feedbackMap[quiz.id]}
+                  onDetails={() => setDetailsQuiz(quiz)}
+                  onStats={() => setStatsQuizId({ id: quiz.id, title: quiz.title })}
+                  onClick={() => router.push(`/professor/quiz/${quiz.id}/preview`)}
+                />
+              </motion.div>
+            ))}
+          </div>
+        )}
+
+        {/* 에러 메시지 */}
+        {customError && (
+          <div className="mt-4 p-3 border border-[#1A1A1A] bg-[#FDFBF7]">
+            <p className="text-sm text-[#8B1A1A]">{customError}</p>
+          </div>
+        )}
+      </section>
+
+      {/* Details 모달 */}
+      {detailsQuiz && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          onClick={() => setDetailsQuiz(null)}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
+          >
+            <h2 className="font-serif-display text-lg font-bold text-[#1A1A1A] mb-2">{detailsQuiz.title}</h2>
+
+            {/* 총평 */}
+            {detailsQuiz.description && (
+              <p className="text-sm text-[#5C5C5C] mb-4 line-clamp-3">{detailsQuiz.description}</p>
+            )}
+            {!detailsQuiz.description && <div className="mb-2" />}
+
+            {/* 평균 점수 대형 박스 */}
+            <div className="text-center py-4 mb-4 border-2 border-dashed border-[#1A1A1A] bg-[#EDEAE4]">
+              <p className="text-xs text-[#5C5C5C] mb-1">평균 점수</p>
+              <p className="text-4xl font-black text-[#1A1A1A]">
+                {detailsQuiz.participantCount > 0
+                  ? <>{(detailsQuiz.averageScore ?? 0).toFixed(0)}<span className="text-lg font-bold">점</span></>
+                  : '-'}
+              </p>
+            </div>
+
+            <div className="space-y-2 mb-6">
+              <div className="flex justify-between text-sm">
+                <span className="text-[#5C5C5C]">문제 수</span>
+                <span className="font-bold text-[#1A1A1A]">{detailsQuiz.questionCount}문제</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-[#5C5C5C]">참여자</span>
+                <span className="font-bold text-[#1A1A1A]">{detailsQuiz.participantCount}명</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-[#5C5C5C]">난이도</span>
+                <span className="font-bold text-[#1A1A1A]">
+                  {detailsQuiz.difficulty === 'easy' ? '쉬움' : detailsQuiz.difficulty === 'hard' ? '어려움' : '보통'}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-[#5C5C5C]">문제 유형</span>
+                <span className="font-bold text-[#1A1A1A]">
+                  {formatQuestionTypes(detailsQuiz)}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-[#5C5C5C]">제작자</span>
+                <span className="font-bold text-[#1A1A1A]">
+                  {detailsQuiz.creatorNickname || '익명'}
+                </span>
+              </div>
+              {/* 피드백 점수 */}
+              {(() => {
+                const fb = feedbackMap[detailsQuiz.id];
+                const label = fb ? getFeedbackLabel(fb.score) : null;
+                return fb && label && fb.count > 0 ? (
+                  <div className="flex justify-between text-sm items-center">
+                    <span className="text-[#5C5C5C]">피드백</span>
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className="text-xs font-bold px-1.5 py-0.5 border"
+                        style={{ color: label.color, borderColor: label.color }}
+                      >
+                        {label.label}
+                      </span>
+                      <span className="text-xs text-[#5C5C5C]">{fb.count}건</span>
+                    </div>
+                  </div>
+                ) : null;
+              })()}
+
+              {detailsQuiz.tags && detailsQuiz.tags.length > 0 && (
+                <div className="pt-2 border-t border-[#A0A0A0]">
+                  <div className="flex flex-wrap gap-1.5">
+                    {detailsQuiz.tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="px-2 py-1 bg-[#1A1A1A] text-[#F5F0E8] text-sm font-medium"
+                      >
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setDetailsQuiz(null)}
+                className="py-3 px-4 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+              >
+                닫기
+              </button>
+              <button
+                onClick={() => {
+                  const quiz = detailsQuiz;
+                  setDetailsQuiz(null);
+                  router.push(`/professor/quiz/${quiz.id}/preview`);
+                }}
+                className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+              >
+                미리보기
+              </button>
+              <button
+                onClick={() => {
+                  const quiz = detailsQuiz;
+                  setDetailsQuiz(null);
+                  setStatsQuizId({ id: quiz.id, title: quiz.title });
+                }}
+                className="flex-1 py-3 font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
+              >
+                Stats
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Stats 모달 */}
+      {statsQuizId && (
+        <QuizStatsModal
+          quizId={statsQuizId.id}
+          quizTitle={statsQuizId.title}
+          isOpen={true}
+          onClose={() => setStatsQuizId(null)}
+        />
+      )}
+
+      {/* 공개 확인 모달 */}
+      <AnimatePresence>
+        {publishConfirmQuizId && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+            onClick={() => setPublishConfirmQuizId(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-xs bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
+            >
+              <div className="flex justify-center mb-4">
+                <div className="w-12 h-12 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
+                  <svg className="w-6 h-6 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.6 9h16.8M3.6 15h16.8" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3a15.3 15.3 0 0 1 4 9 15.3 15.3 0 0 1-4 9 15.3 15.3 0 0 1-4-9 15.3 15.3 0 0 1 4-9z" />
+                  </svg>
+                </div>
+              </div>
+              <h3 className="text-center font-bold text-lg text-[#1A1A1A] mb-2">
+                퀴즈를 공개할까요?
+              </h3>
+              <p className="text-center text-sm text-[#5C5C5C] mb-6">
+                공개하면 학생들이 풀 수 있어요.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setPublishConfirmQuizId(null)}
+                  className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={async () => {
+                    if (publishConfirmQuizId) {
+                      await publishHook.togglePublish(publishConfirmQuizId, true);
+                      // 각 hook의 퀴즈 목록에서도 업데이트 반영
+                      midtermHook.fetchQuizzes(user!.uid, { quizType: 'midterm', pageSize: 50 });
+                      finalHook.fetchQuizzes(user!.uid, { quizType: 'final', pageSize: 50 });
+                      pastHook.fetchQuizzes(user!.uid, { quizType: 'past', pageSize: 50 });
+                    }
+                    setPublishConfirmQuizId(null);
+                  }}
+                  className="flex-1 py-3 font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
+                >
+                  공개
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

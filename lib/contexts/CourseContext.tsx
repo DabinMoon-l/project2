@@ -29,7 +29,7 @@ import {
 } from '../types/course';
 
 const PROFESSOR_COURSE_KEY = 'professor-selected-course';
-const VALID_COURSE_IDS: CourseId[] = ['biology', 'pathophysiology', 'microbiology'];
+const VALID_COURSE_IDS: CourseId[] = ['biology', 'microbiology', 'pathophysiology'];
 
 /**
  * Context 타입

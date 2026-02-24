@@ -20,7 +20,7 @@ const typeLabels: Record<string, string> = {
   ox: 'OX',
   multiple: '객관식',
   short: '주관식',
-  short_answer: '단답형',
+  short_answer: '주관식',
   subjective: '주관식',
   essay: '서술형',
   combined: '결합형',
@@ -204,6 +204,27 @@ export default function ReviewQuestionCard({
                     <p className="text-sm bg-red-50 text-red-800 p-3 rounded-xl border border-red-200">
                       {item.userAnswer || '(미입력)'}
                     </p>
+                  </div>
+                </div>
+              )}
+
+              {/* 루브릭 (서술형) */}
+              {item.type === 'essay' && item.rubric && item.rubric.length > 0 && item.rubric.some((r: any) => r.criteria?.trim()) && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 mb-1">평가 기준</p>
+                  <div className="bg-yellow-50 p-3 rounded-xl border border-yellow-100">
+                    <ul className="space-y-1 text-sm text-gray-700">
+                      {item.rubric.filter((r: any) => r.criteria?.trim()).map((r: any, idx: number) => (
+                        <li key={idx} className="flex items-start gap-2">
+                          <span className="font-bold shrink-0">·</span>
+                          <span>
+                            {r.criteria}
+                            {r.percentage > 0 && <span className="font-bold text-gray-500"> ({r.percentage}%)</span>}
+                            {r.description && <span className="text-gray-500"> — {r.description}</span>}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 </div>
               )}

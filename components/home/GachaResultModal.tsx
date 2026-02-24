@@ -38,7 +38,7 @@ function GachaAnimation({ onSkip }: { onSkip: () => void }) {
       {/* 건너뛰기 버튼 */}
       <button
         onClick={onSkip}
-        className="absolute top-0 right-0 text-sm text-[#5C5C5C] px-3 py-1"
+        className="absolute top-0 right-0 text-sm text-white/50 px-3 py-1"
       >
         건너뛰기
       </button>
@@ -76,18 +76,14 @@ function GachaAnimation({ onSkip }: { onSkip: () => void }) {
         </motion.div>
       </motion.div>
 
-      <p className="mt-4 font-bold text-[#5C5C5C]">새로운 토끼를 찾고 있어요...</p>
+      <p className="mt-4 font-bold text-white/60">새로운 토끼를 찾고 있어요...</p>
     </div>
   );
 }
 
 /**
  * 뽑기 결과 모달 (2단계: Roll → 사용자 선택)
- *
- * - 뽑기 애니메이션 → 결과:
- *   - undiscovered: "새로운 토끼 발견!" + 이름 입력 + [발견하기] / [놓아주기]
- *   - discovered: "이름 N세" + [발견하기] / [놓아주기]
- * - 슬롯 2개 찼을 때: 발견하기 버튼 아래에 인라인 슬롯 선택 UI
+ * 홈 스타일 (home-bg + 글래스모피즘)
  */
 export default function GachaResultModal({
   isOpen,
@@ -163,170 +159,180 @@ export default function GachaResultModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
         >
           <motion.div
             initial={{ scale: 0.8 }}
             animate={{ scale: 1 }}
             exit={{ scale: 0.8 }}
-            className="w-full max-w-sm mx-4 bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
+            className="w-full max-w-sm mx-4 relative overflow-hidden rounded-2xl"
           >
-            {isAnimating && !skipped ? (
-              /* 뽑기 애니메이션 */
-              <GachaAnimation onSkip={() => setSkipped(true)} />
-            ) : isAnimating && skipped ? (
-              /* 건너뛰기 후 결과 대기 */
-              <div className="text-center py-12">
-                <motion.div
-                  className="w-16 h-16 mx-auto rounded-full border-4 border-[#D4AF37] border-t-transparent"
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                />
-                <p className="mt-4 font-bold text-[#5C5C5C]">결과를 기다리는 중...</p>
-              </div>
-            ) : showResult ? (
-              /* 결과 표시 */
-              <div className="text-center">
-                {/* 토끼 이미지 — 골든 글로우 + scale-up */}
-                <motion.div
-                  className="flex justify-center mb-4"
-                  initial={{ scale: 0.5, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ type: 'spring', damping: 12, stiffness: 150 }}
-                >
-                  <div
-                    className="relative"
+            {/* 배경 이미지 + 글래스 오버레이 */}
+            <div className="absolute inset-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/images/home-bg.jpg" alt="" className="w-full h-full object-cover" />
+            </div>
+            <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
+
+            {/* 컨텐츠 */}
+            <div className="relative z-10 p-6">
+              {isAnimating && !skipped ? (
+                /* 뽑기 애니메이션 */
+                <GachaAnimation onSkip={() => setSkipped(true)} />
+              ) : isAnimating && skipped ? (
+                /* 건너뛰기 후 결과 대기 */
+                <div className="text-center py-12">
+                  <motion.div
+                    className="w-16 h-16 mx-auto rounded-full border-4 border-[#D4AF37] border-t-transparent"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                  />
+                  <p className="mt-4 font-bold text-white/60">결과를 기다리는 중...</p>
+                </div>
+              ) : showResult ? (
+                /* 결과 표시 */
+                <div className="text-center">
+                  {/* 토끼 이미지 — 골든 글로우 + scale-up */}
+                  <motion.div
+                    className="flex justify-center mb-4"
+                    initial={{ scale: 0.5, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: 'spring', damping: 12, stiffness: 150 }}
+                  >
+                    <div
+                      className="relative"
+                      style={{
+                        filter: 'drop-shadow(0 0 12px rgba(212,175,55,0.5))',
+                      }}
+                    >
+                      <RabbitImage rabbitId={result.rabbitId} size={120} className="drop-shadow-lg" />
+                    </div>
+                  </motion.div>
+
+                  {result.type === 'undiscovered' ? (
+                    /* 미발견 — 최초 발견 + 이름 짓기 */
+                    <>
+                      <div className="mb-4">
+                        <span className="px-3 py-1 bg-[#D4AF37] text-white text-sm font-bold rounded-full">
+                          새로운 토끼 발견!
+                        </span>
+                      </div>
+                      <p className="text-lg font-bold text-white mb-2">
+                        토끼 #{result.rabbitId + 1}을 처음 발견했어요!
+                      </p>
+                      <p className="text-sm text-white/60 mb-4">
+                        이름을 지어주세요
+                      </p>
+                      <input
+                        type="text"
+                        value={newName}
+                        onChange={(e) => { setNewName(e.target.value); setNameError(null); }}
+                        placeholder="토끼 이름 (1-10자)"
+                        maxLength={10}
+                        className={`w-full p-3 bg-white/15 border rounded-xl text-center text-lg font-bold text-white placeholder-white/40 mb-2 outline-none focus:ring-2 focus:ring-white/30 ${
+                          nameError ? 'border-red-400' : 'border-white/20'
+                        }`}
+                      />
+                      {nameError && (
+                        <p className="text-sm text-red-400 mb-2">{nameError}</p>
+                      )}
+
+                      {/* 슬롯 선택 (가득 찼을 때) */}
+                      {slotsAreFull && (
+                        <SlotSelector
+                          selectedSlot={selectedSlot}
+                          onSelect={setSelectedSlot}
+                        />
+                      )}
+
+                      <button
+                        onClick={handleDiscover}
+                        disabled={!newName.trim() || (slotsAreFull && selectedSlot === null) || isDiscovering}
+                        className="w-full py-3 bg-white/25 text-white font-bold border border-white/30 rounded-full disabled:opacity-40 mb-2"
+                      >
+                        {isDiscovering ? '발견 중...' : '발견하기'}
+                      </button>
+                      <button
+                        onClick={handlePass}
+                        className="w-full py-2 text-white/50"
+                      >
+                        놓아주기
+                      </button>
+                    </>
+                  ) : (
+                    /* 기발견 — 후속 발견 */
+                    <>
+                      <p className="text-lg font-bold text-white mb-2">
+                        {result.rabbitName || `토끼 #${result.rabbitId + 1}`}
+                      </p>
+                      <p className="text-sm text-white/60 mb-1">
+                        {result.nextDiscoveryOrder}번째 발견자가 될 수 있어요!
+                      </p>
+                      <p className="text-sm text-white/60 mb-4">
+                        발견하면 도감에 추가됩니다
+                      </p>
+
+                      {nameError && (
+                        <p className="text-sm text-red-400 mb-2">{nameError}</p>
+                      )}
+
+                      {/* 슬롯 선택 (가득 찼을 때) */}
+                      {slotsAreFull && (
+                        <SlotSelector
+                          selectedSlot={selectedSlot}
+                          onSelect={setSelectedSlot}
+                        />
+                      )}
+
+                      <button
+                        onClick={handleDiscover}
+                        disabled={(slotsAreFull && selectedSlot === null) || isDiscovering}
+                        className="w-full py-3 bg-white/25 text-white font-bold border border-white/30 rounded-full disabled:opacity-40 mb-2"
+                      >
+                        {isDiscovering ? '발견 중...' : '발견하기'}
+                      </button>
+                      <button
+                        onClick={handlePass}
+                        className="w-full py-2 text-white/50"
+                      >
+                        놓아주기
+                      </button>
+                    </>
+                  )}
+                </div>
+              ) : (
+                /* 뽑기 준비 (스핀 전) */
+                <div className="text-center">
+                  <div className="w-24 h-24 mx-auto mb-4 rounded-full flex items-center justify-center"
                     style={{
-                      filter: 'drop-shadow(0 0 12px rgba(212,175,55,0.5))',
+                      background: 'radial-gradient(circle, rgba(212,175,55,0.2) 0%, transparent 70%)',
                     }}
                   >
-                    <RabbitImage rabbitId={result.rabbitId} size={120} className="drop-shadow-lg" />
+                    <span className="text-5xl text-white/60">?</span>
                   </div>
-                </motion.div>
-
-                {result.type === 'undiscovered' ? (
-                  /* 미발견 — 최초 발견 + 이름 짓기 */
-                  <>
-                    <div className="mb-4">
-                      <span className="px-3 py-1 bg-[#D4AF37] text-white text-sm font-bold">
-                        새로운 토끼 발견!
-                      </span>
-                    </div>
-                    <p className="text-lg font-bold mb-2">
-                      토끼 #{result.rabbitId + 1}을 처음 발견했어요!
-                    </p>
-                    <p className="text-sm text-[#5C5C5C] mb-4">
-                      이름을 지어주세요
-                    </p>
-                    <input
-                      type="text"
-                      value={newName}
-                      onChange={(e) => { setNewName(e.target.value); setNameError(null); }}
-                      placeholder="토끼 이름 (1-10자)"
-                      maxLength={10}
-                      className={`w-full p-3 border-2 text-center text-lg font-bold mb-2 ${
-                        nameError ? 'border-[#8B1A1A]' : 'border-[#1A1A1A]'
-                      }`}
-                    />
-                    {nameError && (
-                      <p className="text-sm text-[#8B1A1A] mb-2">{nameError}</p>
-                    )}
-
-                    {/* 슬롯 선택 (가득 찼을 때) */}
-                    {slotsAreFull && (
-                      <SlotSelector
-                        selectedSlot={selectedSlot}
-                        onSelect={setSelectedSlot}
-                      />
-                    )}
-
-                    <button
-                      onClick={handleDiscover}
-                      disabled={!newName.trim() || (slotsAreFull && selectedSlot === null) || isDiscovering}
-                      className="w-full py-3 bg-[#1A1A1A] text-white font-bold disabled:opacity-50 mb-2"
-                    >
-                      {isDiscovering ? '발견 중...' : '발견하기'}
-                    </button>
-                    <button
-                      onClick={handlePass}
-                      className="w-full py-2 text-[#5C5C5C]"
-                    >
-                      놓아주기
-                    </button>
-                  </>
-                ) : (
-                  /* 기발견 — 후속 발견 */
-                  <>
-                    <p className="text-lg font-bold mb-2">
-                      {result.rabbitName || `토끼 #${result.rabbitId + 1}`}
-                    </p>
-                    <p className="text-sm text-[#5C5C5C] mb-1">
-                      {result.nextDiscoveryOrder}번째 발견자가 될 수 있어요!
-                    </p>
-                    <p className="text-sm text-[#5C5C5C] mb-4">
-                      발견하면 도감에 추가됩니다
-                    </p>
-
-                    {nameError && (
-                      <p className="text-sm text-[#8B1A1A] mb-2">{nameError}</p>
-                    )}
-
-                    {/* 슬롯 선택 (가득 찼을 때) */}
-                    {slotsAreFull && (
-                      <SlotSelector
-                        selectedSlot={selectedSlot}
-                        onSelect={setSelectedSlot}
-                      />
-                    )}
-
-                    <button
-                      onClick={handleDiscover}
-                      disabled={(slotsAreFull && selectedSlot === null) || isDiscovering}
-                      className="w-full py-3 bg-[#1A1A1A] text-white font-bold disabled:opacity-50 mb-2"
-                    >
-                      {isDiscovering ? '발견 중...' : '발견하기'}
-                    </button>
-                    <button
-                      onClick={handlePass}
-                      className="w-full py-2 text-[#5C5C5C]"
-                    >
-                      놓아주기
-                    </button>
-                  </>
-                )}
-              </div>
-            ) : (
-              /* 뽑기 준비 (스핀 전) */
-              <div className="text-center">
-                <div className="w-24 h-24 mx-auto mb-4 rounded-full flex items-center justify-center"
-                  style={{
-                    background: 'radial-gradient(circle, rgba(212,175,55,0.2) 0%, transparent 70%)',
-                  }}
-                >
-                  <span className="text-5xl">?</span>
+                  <p className="text-lg font-bold text-white mb-2">새 토끼 뽑기</p>
+                  <p className="text-sm text-white/60 mb-6">
+                    어떤 토끼를 만나게 될까요?
+                  </p>
+                  {spinError && (
+                    <p className="text-sm text-red-400 mb-4">{spinError}</p>
+                  )}
+                  <button
+                    onClick={onSpin}
+                    disabled={!canGacha || !!spinError}
+                    className="w-full py-3 bg-white/25 text-white font-bold border border-white/30 rounded-full disabled:opacity-40"
+                  >
+                    뽑기!
+                  </button>
+                  <button
+                    onClick={onClose}
+                    className="w-full py-2 mt-2 text-white/50"
+                  >
+                    나중에 하기
+                  </button>
                 </div>
-                <p className="text-lg font-bold mb-2">새 토끼 뽑기</p>
-                <p className="text-sm text-[#5C5C5C] mb-6">
-                  어떤 토끼를 만나게 될까요?
-                </p>
-                {spinError && (
-                  <p className="text-sm text-[#8B1A1A] mb-4">{spinError}</p>
-                )}
-                <button
-                  onClick={onSpin}
-                  disabled={!canGacha || !!spinError}
-                  className="w-full py-3 bg-[#1A1A1A] text-white font-bold disabled:opacity-50"
-                >
-                  뽑기!
-                </button>
-                <button
-                  onClick={onClose}
-                  className="w-full py-2 mt-2 text-[#5C5C5C]"
-                >
-                  나중에 하기
-                </button>
-              </div>
-            )}
+              )}
+            </div>
           </motion.div>
         </motion.div>
       )}
@@ -346,8 +352,8 @@ function SlotSelector({
   onSelect: (slot: number) => void;
 }) {
   return (
-    <div className="mb-4 p-3 bg-[#EDEAE4] border border-[#D4CFC4]">
-      <p className="text-xs text-[#5C5C5C] mb-2">
+    <div className="mb-4 p-3 bg-white/10 border border-white/15 rounded-xl">
+      <p className="text-xs text-white/50 mb-2">
         장착 슬롯이 가득 찼어요. 교체할 슬롯을 선택하세요:
       </p>
       <div className="flex gap-2">
@@ -355,10 +361,10 @@ function SlotSelector({
           <button
             key={slot}
             onClick={() => onSelect(slot)}
-            className={`flex-1 py-2 border-2 text-sm font-bold ${
+            className={`flex-1 py-2 border rounded-lg text-sm font-bold text-white ${
               selectedSlot === slot
-                ? 'border-[#D4AF37] bg-[#D4AF37]/10'
-                : 'border-[#D4CFC4]'
+                ? 'border-[#D4AF37] bg-[#D4AF37]/20'
+                : 'border-white/20 bg-white/5'
             }`}
           >
             슬롯 {slot + 1}

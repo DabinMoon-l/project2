@@ -44,12 +44,14 @@ interface QuestionResult {
   id: string;
   number: number;
   question: string;
-  type: 'ox' | 'multiple' | 'short';
+  type: 'ox' | 'multiple' | 'short' | 'essay' | 'combined';
   options?: string[];
   correctAnswer: string;
   userAnswer: string;
   isCorrect: boolean;
   explanation?: string;
+  /** 서술형 루브릭 */
+  rubric?: Array<{ criteria: string; percentage: number; description?: string }>;
   // 결합형 문제 관련
   combinedGroupId?: string;
   subQuestionIndex?: number;
@@ -434,6 +436,25 @@ function SingleQuestionCard({
         </div>
       )}
 
+      {/* 루브릭 (서술형) */}
+      {question.type === 'essay' && question.rubric && question.rubric.length > 0 && question.rubric.some(r => r.criteria.trim()) && (
+        <div className="mb-4 p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
+          <p className="text-xs font-bold text-[#1A1A1A] mb-1">평가 기준</p>
+          <ul className="space-y-1">
+            {question.rubric.filter(r => r.criteria.trim()).map((item, idx) => (
+              <li key={idx} className="flex items-start gap-2 text-xs text-[#5C5C5C]">
+                <span className="text-[#1A1A1A] font-bold shrink-0">·</span>
+                <span>
+                  {item.criteria}
+                  {item.percentage > 0 && <span className="font-bold"> ({item.percentage}%)</span>}
+                  {item.description && <span> — {item.description}</span>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* 해설 */}
       {question.explanation && (
         <div className="mb-4 p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
@@ -668,7 +689,7 @@ function CombinedQuestionCard({
               <span className="px-2 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold">
                 {question.type === 'ox' ? 'OX' :
                  question.type === 'multiple' ? '객관식' :
-                 question.type === 'short' ? '단답형' :
+                 question.type === 'short' ? '주관식' :
                  question.type}
               </span>
             </div>
@@ -918,6 +939,25 @@ function CombinedQuestionCard({
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* 루브릭 (서술형) */}
+            {question.type === 'essay' && question.rubric && question.rubric.length > 0 && question.rubric.some(r => r.criteria.trim()) && (
+              <div className="mb-4 p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
+                <p className="text-xs font-bold text-[#1A1A1A] mb-1">평가 기준</p>
+                <ul className="space-y-1">
+                  {question.rubric.filter(r => r.criteria.trim()).map((item, idx) => (
+                    <li key={idx} className="flex items-start gap-2 text-xs text-[#5C5C5C]">
+                      <span className="text-[#1A1A1A] font-bold shrink-0">·</span>
+                      <span>
+                        {item.criteria}
+                        {item.percentage > 0 && <span className="font-bold"> ({item.percentage}%)</span>}
+                        {item.description && <span> — {item.description}</span>}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
 
@@ -1183,6 +1223,7 @@ export default function FeedbackPage() {
             userAnswer: displayUserAnswer,
             isCorrect,
             explanation: q.explanation || '',
+            rubric: q.rubric || undefined,
             combinedGroupId: q.combinedGroupId,
             subQuestionIndex: q.subQuestionIndex,
             image: q.image || q.imageUrl || null,

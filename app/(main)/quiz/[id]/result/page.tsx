@@ -37,6 +37,8 @@ interface QuestionResult {
   userAnswer: string;
   isCorrect: boolean;
   explanation: string;
+  /** 서술형 루브릭 */
+  rubric?: Array<{ criteria: string; percentage: number; description?: string }>;
   isBookmarked: boolean;
   /** 결합형 그룹 ID */
   combinedGroupId?: string;
@@ -292,6 +294,8 @@ export default function QuizResultPage() {
               if (q.answer === 0) correctAnswer = 'O';
               else if (q.answer === 1) correctAnswer = 'X';
               else correctAnswer = q.answer;
+            } else if (q.type === 'essay') {
+              correctAnswer = '';
             } else {
               correctAnswer = q.answer;
             }
@@ -358,6 +362,7 @@ export default function QuizResultPage() {
             userAnswer,
             isCorrect,
             explanation: q.explanation || '해설이 없습니다.',
+            rubric: q.rubric || undefined,
             isBookmarked: false,
             // 문제 이미지/보기 필드
             image: q.image || q.imageUrl || null,
@@ -600,6 +605,7 @@ export default function QuizResultPage() {
               correctAnswer: questionResult.correctAnswer,
               userAnswer: questionResult.userAnswer,
               explanation: questionResult.explanation || '',
+              rubric: questionResult.rubric || null,
               isCorrect: questionResult.isCorrect,
               reviewType: 'solved',
               isBookmarked: false,
@@ -678,6 +684,7 @@ export default function QuizResultPage() {
                   correctAnswer: subQ.correctAnswer,
                   userAnswer: subQ.userAnswer,
                   explanation: subQ.explanation || '',
+                  rubric: subQ.rubric || null,
                   isCorrect: subQ.isCorrect, // 개별 정답 여부 저장
                   reviewType: 'wrong',
                   isBookmarked: false,
@@ -716,6 +723,7 @@ export default function QuizResultPage() {
                 correctAnswer: wrongAnswer.correctAnswer,
                 userAnswer: wrongAnswer.userAnswer,
                 explanation: wrongAnswer.explanation || '',
+                rubric: wrongAnswer.rubric || null,
                 isCorrect: false, // 비결합형은 오답만 저장
                 reviewType: 'wrong',
                 isBookmarked: false,
@@ -830,6 +838,7 @@ export default function QuizResultPage() {
             correctAnswer: question.correctAnswer,
             userAnswer: question.userAnswer,
             explanation: question.explanation || '',
+            rubric: question.rubric || null,
             reviewType: 'bookmark',
             isBookmarked: true,
             reviewCount: 0,
@@ -1206,8 +1215,8 @@ export default function QuizResultPage() {
         </div>
       )}
 
-      {/* 주관식 답 */}
-      {result.type !== 'ox' && (!result.options || result.options.length === 0) && (
+      {/* 주관식/서술형 답 */}
+      {result.type !== 'ox' && result.type !== 'essay' && (!result.options || result.options.length === 0) && (
         <div className="space-y-2">
           <p className="text-sm">
             <span className="text-[#5C5C5C]">내 답: </span>
@@ -1232,13 +1241,58 @@ export default function QuizResultPage() {
         </div>
       )}
 
-      {/* 해설 */}
-      <div>
-        <p className="text-xs font-bold text-[#5C5C5C] mb-1">해설</p>
-        <p className="text-sm text-[#1A1A1A] bg-[#EDEAE4] p-3 border border-[#1A1A1A]">
-          {result.explanation}
-        </p>
-      </div>
+      {/* 서술형: 내 답만 표시 (정답 없음) */}
+      {result.type === 'essay' && (
+        <div>
+          <p className="text-sm">
+            <span className="text-[#5C5C5C]">내 답: </span>
+            <span className="font-bold text-[#1A1A1A]">
+              {result.userAnswer || '(미응답)'}
+            </span>
+          </p>
+        </div>
+      )}
+
+      {/* 서술형: 루브릭 → 해설 (있는 것만) */}
+      {result.type === 'essay' ? (
+        <>
+          {result.rubric && result.rubric.length > 0 && result.rubric.some(r => r.criteria.trim()) && (
+            <div>
+              <p className="text-xs font-bold text-[#5C5C5C] mb-1">평가 기준</p>
+              <div className="bg-[#EDEAE4] p-3 border border-[#1A1A1A]">
+                <ul className="space-y-1 text-sm">
+                  {result.rubric.filter(r => r.criteria.trim()).map((item, idx) => (
+                    <li key={idx} className="flex items-start gap-2">
+                      <span className="text-[#1A1A1A] font-bold shrink-0">·</span>
+                      <span>
+                        {item.criteria}
+                        {item.percentage > 0 && <span className="text-[#5C5C5C] font-bold"> ({item.percentage}%)</span>}
+                        {item.description && <span className="text-[#5C5C5C]"> — {item.description}</span>}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+          {result.explanation && result.explanation !== '해설이 없습니다.' && (
+            <div>
+              <p className="text-xs font-bold text-[#5C5C5C] mb-1">해설</p>
+              <p className="text-sm text-[#1A1A1A] bg-[#EDEAE4] p-3 border border-[#1A1A1A]">
+                {result.explanation}
+              </p>
+            </div>
+          )}
+        </>
+      ) : (
+        /* 비서술형: 해설 항상 표시 */
+        <div>
+          <p className="text-xs font-bold text-[#5C5C5C] mb-1">해설</p>
+          <p className="text-sm text-[#1A1A1A] bg-[#EDEAE4] p-3 border border-[#1A1A1A]">
+            {result.explanation}
+          </p>
+        </div>
+      )}
     </>
     );
   };

@@ -275,7 +275,7 @@ const generateId = (): string => {
 const typeLabels: Record<QuestionType, string> = {
   ox: 'OX',
   multiple: '객관식',
-  short_answer: '단답형',
+  short_answer: '주관식',
   subjective: '주관식',
   essay: '서술형',
   combined: '결합형',
@@ -287,7 +287,7 @@ const typeLabels: Record<QuestionType, string> = {
 const subQuestionTypeLabels: Record<Exclude<QuestionType, 'combined' | 'essay' | 'subjective'>, string> = {
   ox: 'OX',
   multiple: '객관식',
-  short_answer: '단답형',
+  short_answer: '주관식',
 };
 
 /**
@@ -322,53 +322,103 @@ function RubricEditor({
   error?: string;
   hideLabel?: boolean;
 }) {
-  const totalPercentage = rubric.reduce((sum, item) => sum + item.percentage, 0);
+  // 배점 입력 모드: 하나라도 percentage > 0이면 기본 켜짐
+  const [showPercentage, setShowPercentage] = useState(() =>
+    rubric.some(r => r.percentage > 0)
+  );
+  const totalPercentage = showPercentage ? rubric.reduce((sum, item) => sum + item.percentage, 0) : 0;
+
+  // 균등 배분 유틸: 100을 n개로 나누되 나머지는 마지막에 몰아줌
+  const distributeEvenly = (items: RubricItem[]): RubricItem[] => {
+    const n = items.length;
+    if (n === 0) return items;
+    const base = Math.floor(100 / n);
+    const remainder = 100 - base * n;
+    return items.map((r, i) => ({
+      ...r,
+      percentage: base + (i >= n - remainder ? 1 : 0),
+    }));
+  };
 
   const handleAdd = () => {
-    onChange([
+    const newRubric = [
       ...rubric,
       { criteria: '', percentage: 0, description: '' },
-    ]);
+    ];
+    onChange(showPercentage ? distributeEvenly(newRubric) : newRubric);
   };
 
   const handleRemove = (index: number) => {
     if (rubric.length <= 1) return;
-    onChange(rubric.filter((_, i) => i !== index));
+    const filtered = rubric.filter((_, i) => i !== index);
+    onChange(showPercentage ? distributeEvenly(filtered) : filtered);
   };
 
   const handleChange = (index: number, field: keyof RubricItem, value: string | number) => {
     const newRubric = [...rubric];
     newRubric[index] = { ...newRubric[index], [field]: value };
+
+    // 배점 변경 시 나머지 항목 자동 조정
+    if (showPercentage && field === 'percentage') {
+      const changed = Math.min(100, Math.max(0, value as number));
+      newRubric[index] = { ...newRubric[index], percentage: changed };
+      const others = newRubric.filter((_, i) => i !== index);
+      const remaining = Math.max(0, 100 - changed);
+      if (others.length > 0) {
+        const base = Math.floor(remaining / others.length);
+        const rem = remaining - base * others.length;
+        let otherIdx = 0;
+        for (let i = 0; i < newRubric.length; i++) {
+          if (i !== index) {
+            newRubric[i] = {
+              ...newRubric[i],
+              percentage: base + (otherIdx >= others.length - rem ? 1 : 0),
+            };
+            otherIdx++;
+          }
+        }
+      }
+    }
+
     onChange(newRubric);
+  };
+
+  // 배점 토글
+  const handleTogglePercentage = () => {
+    if (showPercentage) {
+      // OFF: 모든 percentage 0으로
+      onChange(rubric.map(r => ({ ...r, percentage: 0 })));
+    } else {
+      // ON: 균등 배분
+      onChange(distributeEvenly(rubric));
+    }
+    setShowPercentage(!showPercentage);
   };
 
   return (
     <div className="space-y-3">
       {!hideLabel && (
-        <div className="flex items-center justify-between">
-          <label className="text-sm font-bold text-[#1A1A1A]">
-            루브릭 (평가 기준)
-          </label>
-          <span className={`text-xs ${totalPercentage === 100 ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>
-            합계: {totalPercentage}%
-          </span>
-        </div>
+        <label className="text-sm font-bold text-[#1A1A1A]">
+          루브릭 (평가 기준)
+        </label>
       )}
-      {hideLabel && (
-        <div className="flex justify-end">
-          <span className={`text-xs ${totalPercentage === 100 ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>
-            합계: {totalPercentage}%
-          </span>
-        </div>
-      )}
-      <p className="text-xs text-[#5C5C5C]">
-        부분점수 채점을 위한 평가 기준을 설정하세요
-      </p>
-      <div className="p-2 bg-[#EDEAE4] border border-[#1A1A1A]">
+      <div className="flex items-center justify-between">
         <p className="text-xs text-[#5C5C5C]">
-          <span className="font-bold">TIP:</span> 평가요소별로 점수가 배점되어 부분점수가 자동 계산됩니다.
-          예: 논리성 50% + 정확성 50% = 총점 100%
+          학생 답안을 평가할 기준을 설정하세요
         </p>
+        <button
+          type="button"
+          onClick={handleTogglePercentage}
+          className={`
+            px-2 py-0.5 text-xs font-bold border border-[#1A1A1A] transition-colors
+            ${showPercentage
+              ? 'bg-[#1A1A1A] text-[#F5F0E8]'
+              : 'bg-[#EDEAE4] text-[#5C5C5C] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
+            }
+          `}
+        >
+          배점 {showPercentage ? 'ON' : 'OFF'}
+        </button>
       </div>
 
       <div className="space-y-2">
@@ -384,17 +434,19 @@ function RubricEditor({
                     placeholder="평가요소 이름"
                     className="flex-1 px-3 py-2 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-sm focus:outline-none"
                   />
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      value={item.percentage}
-                      onChange={(e) => handleChange(index, 'percentage', Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
-                      min="0"
-                      max="100"
-                      className="w-16 px-2 py-2 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-sm text-center focus:outline-none"
-                    />
-                    <span className="text-sm font-bold">%</span>
-                  </div>
+                  {showPercentage && (
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        value={item.percentage}
+                        onChange={(e) => handleChange(index, 'percentage', Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
+                        min="0"
+                        max="100"
+                        className="w-16 px-2 py-2 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-sm text-center focus:outline-none"
+                      />
+                      <span className="text-sm font-bold">%</span>
+                    </div>
+                  )}
                 </div>
                 <textarea
                   value={item.description || ''}
@@ -430,30 +482,38 @@ function RubricEditor({
 
       {error && <p className="text-sm text-[#8B1A1A]">{error}</p>}
 
+      {/* 배점 안내 + 합계 (배점 모드일 때만) */}
+      {showPercentage && (
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-[#5C5C5C]">
+            배점 비율의 합계가 100%가 되어야 합니다
+          </p>
+          {rubric.some(r => r.criteria.trim()) && (
+            <span className={`text-xs font-bold ${totalPercentage === 100 ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>
+              합계: {totalPercentage}%
+            </span>
+          )}
+        </div>
+      )}
+
       {/* 루브릭 미리보기 */}
       {rubric.some(r => r.criteria.trim()) && (
         <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
           <p className="text-xs text-[#5C5C5C] mb-2">미리보기</p>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[#1A1A1A]">
-                <th className="text-left py-1">평가요소</th>
-                <th className="text-right py-1 w-20">배점</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rubric.filter(r => r.criteria.trim()).map((item, idx) => (
-                <tr key={idx} className="border-b border-[#1A1A1A]/30">
-                  <td className="py-1">{item.criteria}</td>
-                  <td className="text-right py-1">{item.percentage}%</td>
-                </tr>
-              ))}
-              <tr className="font-bold">
-                <td className="py-1">합계</td>
-                <td className="text-right py-1">{totalPercentage}%</td>
-              </tr>
-            </tbody>
-          </table>
+          <ul className="space-y-1 text-sm">
+            {rubric.filter(r => r.criteria.trim()).map((item, idx) => (
+              <li key={idx} className="flex items-start gap-2">
+                <span className="text-[#1A1A1A] font-bold shrink-0">·</span>
+                <span className="flex-1">
+                  {item.criteria}
+                  {showPercentage && item.percentage > 0 && (
+                    <span className="text-[#5C5C5C] font-bold"> ({item.percentage}%)</span>
+                  )}
+                  {item.description && <span className="text-[#5C5C5C]"> — {item.description}</span>}
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>
@@ -1924,7 +1984,7 @@ export default function QuestionEditor({
       // 객관식일 때만 선지 유지
       choices: type === 'multiple' ? (prev.choices.length >= 2 ? prev.choices : ['', '']) : ['', ''],
       // 서술형일 때 루브릭 및 채점방식 초기화
-      rubric: type === 'essay' ? [{ criteria: '', percentage: 100, description: '' }] : [],
+      rubric: type === 'essay' ? [{ criteria: '', percentage: 0, description: '' }] : [],
       scoringMethod: type === 'essay' ? 'manual' : prev.scoringMethod,
       // 결합형일 때 하위 문제 초기화
       subQuestions: type === 'combined' ? [{
@@ -2756,30 +2816,13 @@ export default function QuestionEditor({
         newErrors.answer = '정답을 입력해주세요.';
       }
     } else if (question.type === 'essay') {
-      // 루브릭 검사 - AI 보조 채점일 때만 필수
+      // 루브릭이 있고 배점이 설정된 경우 합계 100% 검증
       const rubric = question.rubric || [];
-      const isAiAssisted = question.scoringMethod === 'ai_assisted';
-
-      if (isAiAssisted) {
-        // AI 보조 채점: 루브릭 필수
-        if (rubric.length === 0) {
-          newErrors.rubric = '최소 1개 이상의 평가요소를 추가해주세요.';
-        } else {
+      if (rubric.length > 0) {
+        const hasPercentage = rubric.some(r => r.percentage > 0);
+        if (hasPercentage) {
           const totalPercentage = rubric.reduce((sum, item) => sum + item.percentage, 0);
           if (totalPercentage !== 100) {
-            newErrors.rubric = `배점 비율의 합계가 100%가 되어야 합니다. (현재: ${totalPercentage}%)`;
-          }
-          const hasEmptyCriteria = rubric.some(r => !r.criteria.trim());
-          if (hasEmptyCriteria) {
-            newErrors.rubric = '모든 평가요소의 이름을 입력해주세요.';
-          }
-        }
-      } else {
-        // 수동 채점: 루브릭이 있으면 유효성 검사
-        if (rubric.length > 0) {
-          const totalPercentage = rubric.reduce((sum, item) => sum + item.percentage, 0);
-          const hasContent = rubric.some(r => r.criteria.trim());
-          if (hasContent && totalPercentage !== 100) {
             newErrors.rubric = `배점 비율의 합계가 100%가 되어야 합니다. (현재: ${totalPercentage}%)`;
           }
         }
@@ -2873,7 +2916,7 @@ export default function QuestionEditor({
             문제 유형
           </label>
           {/* 학생용: OX, 객관식, 주관식(short_answer), 결합형 - 4개 */}
-          {/* 교수용: OX, 객관식, 단답형, 서술형, 결합형 - 5개 */}
+          {/* 교수용: OX, 객관식, 주관식, 서술형, 결합형 - 5개 */}
           {userRole === 'student' ? (
             <div className="grid grid-cols-4 gap-2">
               {(['ox', 'multiple', 'short_answer', 'combined'] as QuestionType[]).map((type) => {
@@ -4154,111 +4197,38 @@ export default function QuestionEditor({
               exit={{ opacity: 0, height: 0 }}
               className="space-y-4"
             >
-              {/* 채점 방식 선택 (교수 전용) */}
-              {userRole === 'professor' && (
-                <div>
-                  <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
-                    채점 방식
-                  </label>
-                  <div className="grid grid-cols-2 gap-2 mb-3">
-                    <button
-                      type="button"
-                      onClick={() => setQuestion(prev => ({ ...prev, scoringMethod: 'ai_assisted' }))}
-                      className={`
-                        w-full py-2.5 font-bold text-sm border-2 transition-colors
-                        ${question.scoringMethod === 'ai_assisted'
-                          ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                          : 'bg-[#EDEAE4] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
-                        }
-                      `}
-                    >
-                      AI 보조 채점
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setQuestion(prev => ({ ...prev, scoringMethod: 'manual' }))}
-                      className={`
-                        w-full py-2.5 font-bold text-sm border-2 transition-colors
-                        ${question.scoringMethod !== 'ai_assisted'
-                          ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                          : 'bg-[#EDEAE4] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
-                        }
-                      `}
-                    >
-                      수동 채점
-                    </button>
-                  </div>
 
-                  {/* 채점 방식 안내 */}
-                  <div className="bg-[#F5F0E8] border border-[#1A1A1A] p-3">
-                    {question.scoringMethod === 'ai_assisted' ? (
-                      <>
-                        <p className="text-sm text-[#1A1A1A] mb-2">
-                          AI가 루브릭 기준에 따라 점수를 제안하고, 교수님이 검토/수정합니다.
-                        </p>
-                        <p className="text-xs text-[#5C5C5C]">
-                          예상 비용: 160명 기준 약 3,000원 (Sonnet 모델)
-                        </p>
-                      </>
-                    ) : (
-                      <p className="text-sm text-[#1A1A1A]">
-                        교수님이 직접 채점합니다. 루브릭은 채점 가이드로 활용됩니다.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* 모범답안 입력 */}
-              <div>
-                <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
-                  완벽한 답 (모범답안)
-                </label>
-                <p className="text-xs text-[#5C5C5C] mb-2">
-                  채점 시 참고할 모범 답안을 입력하세요. 학생에게 직접 표시되지 않습니다.
-                </p>
-                <textarea
-                  value={question.answerText}
-                  onChange={(e) => handleTextChange('answerText', e.target.value)}
-                  placeholder="완벽한 모범 답안을 입력하세요"
-                  rows={4}
-                  className="w-full px-4 py-3 border-2 border-[#1A1A1A] bg-[#F5F0E8] resize-none focus:outline-none"
-                />
-              </div>
-
-              {/* 루브릭 - 교수용: 채점 방식에 따라 필수/선택 */}
+              {/* 루브릭 - 선택 */}
               {userRole === 'professor' ? (
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-sm font-bold text-[#1A1A1A]">
-                      루브릭 {question.scoringMethod === 'ai_assisted' ? '(필수)' : '(선택)'}
+                      루브릭 (선택)
                     </label>
-                    {question.scoringMethod !== 'ai_assisted' && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const hasRubric = (question.rubric || []).length > 0;
-                          if (hasRubric) {
-                            setQuestion(prev => ({ ...prev, rubric: [] }));
-                          } else {
-                            setQuestion(prev => ({ ...prev, rubric: [{ criteria: '', percentage: 100, description: '' }] }));
-                          }
-                        }}
-                        className={`
-                          px-3 py-1 text-xs font-bold border border-[#1A1A1A] transition-colors
-                          ${(question.rubric || []).length > 0
-                            ? 'bg-[#1A1A1A] text-[#F5F0E8]'
-                            : 'bg-[#EDEAE4] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
-                          }
-                        `}
-                      >
-                        {(question.rubric || []).length > 0 ? '루브릭 삭제' : '루브릭 추가'}
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const hasRubric = (question.rubric || []).length > 0;
+                        if (hasRubric) {
+                          setQuestion(prev => ({ ...prev, rubric: [] }));
+                        } else {
+                          setQuestion(prev => ({ ...prev, rubric: [{ criteria: '', percentage: 0, description: '' }] }));
+                        }
+                      }}
+                      className={`
+                        px-3 py-1 text-xs font-bold border border-[#1A1A1A] transition-colors
+                        ${(question.rubric || []).length > 0
+                          ? 'bg-[#1A1A1A] text-[#F5F0E8]'
+                          : 'bg-[#EDEAE4] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
+                        }
+                      `}
+                    >
+                      {(question.rubric || []).length > 0 ? '루브릭 삭제' : '루브릭 추가'}
+                    </button>
                   </div>
-                  {(question.scoringMethod === 'ai_assisted' || (question.rubric || []).length > 0) && (
+                  {(question.rubric || []).length > 0 && (
                     <RubricEditor
-                      rubric={question.rubric || [{ criteria: '', percentage: 100, description: '' }]}
+                      rubric={question.rubric || [{ criteria: '', percentage: 0, description: '' }]}
                       onChange={handleRubricChange}
                       error={errors.rubric}
                       hideLabel
@@ -4268,7 +4238,7 @@ export default function QuestionEditor({
               ) : (
                 /* 학생용: 기존 루브릭 UI 유지 */
                 <RubricEditor
-                  rubric={question.rubric || [{ criteria: '', percentage: 100, description: '' }]}
+                  rubric={question.rubric || [{ criteria: '', percentage: 0, description: '' }]}
                   onChange={handleRubricChange}
                   error={errors.rubric}
                 />

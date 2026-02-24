@@ -31,6 +31,10 @@ const SeasonHistoryList = dynamic(() => import('@/components/professor/SeasonHis
   loading: () => <Skeleton className="h-60 rounded-2xl" />,
 });
 
+const TekkenKeywordsCard = dynamic(() => import('@/components/professor/TekkenKeywordsCard'), {
+  loading: () => <Skeleton className="h-48 rounded-2xl" />,
+});
+
 // ============================================================
 // 타입
 // ============================================================
@@ -199,6 +203,9 @@ export default function ProfessorSettingsPage() {
           onResetClass={handleResetClass}
           onResetAll={handleResetAll}
         />
+
+        {/* 배틀 퀴즈 범위 설정 */}
+        <TekkenKeywordsCard />
 
         {/* 시즌 히스토리 */}
         <SeasonHistoryList
