@@ -156,6 +156,11 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 | `reviewsGenerator.ts` | 퀴즈 완료 시 복습 데이터 자동 생성 |
 | `rateLimit.ts` | 도배 방지 레이트 리밋 |
 | `ocr.ts` / `visionOcr.ts` | OCR 처리 (Clova, Gemini Vision) |
+| `inquiry.ts` | 비로그인 문의 저장 (비밀번호 찾기 페이지) |
+| `tekkenBattle.ts` | 철권퀴즈 실시간 1v1 배틀 (매칭, 라운드, 결과) |
+| `tekkenCleanup.ts` | 철권퀴즈 매치 정리 (타임아웃, 비활성) |
+| `utils/tekkenBot.ts` | 철권퀴즈 봇 AI 로직 |
+| `utils/tekkenDamage.ts` | 철권퀴즈 데미지 계산 |
 
 ## UI 테마 시스템
 
@@ -299,10 +304,23 @@ Tailwind에서 `bg-theme-background`, `text-theme-accent` 등으로 사용 (`tai
 - `useProfessorQuiz.fetchQuizzes()`: `type in ['midterm', 'final', 'past', 'professor']`로 쿼리
 
 **교수 퀴즈탭** (`app/(main)/professor/quiz/page.tsx`):
-- 신문 스타일 카드 레이아웃 (학생 UI 패턴 차용)
-- 중간/기말/기출 필터 탭 (시즌 자동 기본값)
-- BEST Q 모달: `questionFeedbacks`에서 피드백 점수 높은 문제 Top 20
-- 하단 FAB으로 출제 페이지 이동, 카드 클릭 → 통계 상세
+- 3D perspective 순환 캐러셀 (MIDTERM / PAST EXAM / FINAL 3장, 클론 카드 방식 무한 루프)
+- 캐러셀 peek 효과: 82% 너비 카드 + 양쪽 9% 사이드 피크, PC 드래그 지원
+- 3D 전환: rotateY ±8°, scale 0.92, opacity 0.9 (비활성 카드)
+- 난이도별 MP4 비디오 카드 (`/videos/difficulty-easy|normal|hard.mp4`)
+- 기출 카드: PAST EXAM 헤더에 장식선 + 년도/시험 드롭다운
+- BEST Q 별도 페이지 (`/professor/quiz/best-q`)
+- 퀴즈 미리보기 페이지 (`/professor/quiz/[id]/preview`)
+- 자작 퀴즈: 신문 스타일 카드 그리드 + 태그 검색
+- 과목별 리본 이미지 스와이프 전환 (CourseRibbonHeader)
+
+### 교수 설정 (`app/(main)/professor/settings/page.tsx`)
+
+- 학기 설정 (SemesterSettingsCard)
+- 시즌 리셋 (SeasonResetCard + SeasonResetModal)
+- 배틀 퀴즈 키워드 범위 (TekkenKeywordsCard)
+- 시즌 히스토리 (SeasonHistoryList)
+- 기타 설정 (프로필, 알림, 앱 버전)
 
 ### 피드백 점수 시스템 (`lib/utils/feedbackScore.ts`)
 
@@ -487,6 +505,7 @@ await setDoc(doc(db, 'users', uid), { onboardingCompleted: true, updatedAt: serv
 - `quizResults/{id}` — 퀴즈 결과 집계 (CF에서 쓰기)
 - `weeklyStats/{courseId}/weeks/{year-Wxx}` — 주별 자동 수집 통계 (CF에서 쓰기)
 - `monthlyReports/{courseId}/months/{year-MM}` — 월별 Claude 리포트 (CF에서 쓰기)
+- `inquiries/{id}` — 비로그인 문의 (studentId, message, type, isRead)
 
 ### Firestore Rules — users 읽기 규칙
 
@@ -500,6 +519,13 @@ await setDoc(doc(db, 'users', uid), { onboardingCompleted: true, updatedAt: serv
 ### 온보딩 리다이렉트
 
 `onboarding_just_completed` localStorage 플래그로 온보딩 직후 홈 → 온보딩 재리다이렉트 방지
+
+### 비밀번호 찾기 (`app/forgot-password/page.tsx`)
+
+- 학번 입력 → `requestPasswordReset` CF 호출
+- 복구 이메일 등록된 경우: 재설정 링크 발송 안내
+- 미등록: "문의하기" 인라인 폼 펼침 → `submitInquiry` CF로 Firestore `inquiries`에 저장
+- 교수님 설정(`/professor/settings`)에서 문의 확인 가능
 
 ### 네비게이션 숨김 규칙
 
@@ -546,7 +572,7 @@ firebase deploy --only firestore:indexes
 firebase deploy --only functions
 ```
 
-## 철권퀴즈 (2/21 구현 예정)
+## 철권퀴즈 (배틀 퀴즈)
 
 실시간 1v1 토끼 배틀. Firebase Realtime Database 사용.
 - 매치 시간 3분, 문제 타임아웃 20초, 크리티컬 4초 이내 x1.5
@@ -554,7 +580,15 @@ firebase deploy --only functions
 - 연타 미니게임 (눈빛보내기 스타일 게이지 땅따먹기, 3초)
 - XP: 승리 30, 패배 10, 연승 +5 (최대 50)
 - 봇 매칭: 30초 대기 초과 시
-- 상세 설계: 이전 대화 참조
+- 교수 설정에서 배틀 키워드 범위 지정 (TekkenKeywordsCard)
+
+**관련 파일:**
+- CF: `functions/src/tekkenBattle.ts`, `functions/src/tekkenCleanup.ts`, `functions/src/utils/tekkenBot.ts`, `functions/src/utils/tekkenDamage.ts`
+- 훅: `lib/hooks/useTekkenBattle.ts`
+- UI: `components/tekken/` (TekkenBattleOverlay, TekkenBattleHUD, TekkenMatchmakingModal, TekkenQuestionCard, TekkenMashMinigame 등)
+- 타입: `lib/types/tekken.ts`
+- 데미지 유틸: `lib/utils/tekkenDamage.ts`
+- DB 규칙: `database.rules.json` (Realtime Database)
 
 ## 개선 예정 사항
 
@@ -562,7 +596,6 @@ firebase deploy --only functions
 - **랭킹**: 실시간 변동 애니메이션
 - **교수 대시보드**: 위험 학생 인사이트 강화 (참여도 군집 시각화 구현 완료, 추가 강화 가능)
 - **오프라인 대응**: PWA 오프라인 캐시 전략 (22일 작업)
-- **철권퀴즈**: 실시간 1v1 토끼 배틀 (2/21 구현 예정)
 
 ## 배포
 

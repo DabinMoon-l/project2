@@ -1,396 +1,146 @@
-# 🗺️ 용사 퀴즈 - ROADMAP
+# RabbiTory - ROADMAP
 
 ## 1. 기술 스택
 
 ### 1.1 Frontend
 | 기술 | 용도 |
 |------|------|
-| Next.js 14 | 프레임워크 (App Router) |
+| Next.js 16 | 프레임워크 (App Router, Turbopack) |
+| React 19 | UI 라이브러리 |
 | TypeScript | 타입 안정성 |
-| Tailwind CSS | 스타일링 |
+| Tailwind CSS 3 | 스타일링 |
 | Framer Motion | 페이지 전환, UI 애니메이션 |
-| Lottie | 캐릭터/레이스 애니메이션 |
-| React Query | 데이터 캐싱, 상태 관리 |
+| Lottie | 캐릭터 애니메이션 |
 
 ### 1.2 Backend
 | 기술 | 용도 |
 |------|------|
-| Firebase Auth | 소셜 로그인 (Apple/Google/Naver) |
-| Firebase Firestore | 데이터베이스 |
-| Firebase Cloud Functions | 서버 로직 (골드/경험치 처리) |
+| Firebase Auth | 소셜 로그인 (Apple/Google/Naver/Email) |
+| Firebase Firestore | 메인 데이터베이스 |
+| Firebase Realtime DB | 철권퀴즈 실시간 배틀 |
+| Firebase Cloud Functions | 서버 로직 (채점, EXP, 매칭 등) |
 | Firebase Cloud Messaging | 푸시 알림 |
+| Firebase Storage | 이미지/파일 업로드 |
 
-### 1.3 기타
+### 1.3 AI / OCR
 | 기술 | 용도 |
 |------|------|
+| Gemini API | AI 문제 생성, 이미지 분석, 스타일 학습 |
+| Claude API | 월별 리포트 인사이트 |
 | Tesseract.js | OCR (사진/PDF → 텍스트) |
-| jsPDF | 퀴즈 PDF 다운로드 |
+| pdfjs-dist | PDF 파싱 |
+
+### 1.4 기타
+| 기술 | 용도 |
+|------|------|
+| Cloud Run | PPTX → PDF 변환 (LibreOffice) |
+| exceljs / docx | 리포트 Excel/Word 출력 |
 | next-pwa | PWA 설정 |
-| Vercel | 배포 |
+| Vercel | 프론트엔드 배포 |
 
 ---
 
-## 2. MCP 설정
+## 2. 개발 완료 현황
 
-### 2.1 Playwright MCP
-**브라우저 자동화/테스트**
+### Phase 1~2: 프로젝트 골격 + 공통 컴포넌트 ✅
+- Next.js + TypeScript + Tailwind 세팅
+- Firebase 연동
+- PWA 설정
+- 공통 UI (Button, Input, Card, Modal, BottomSheet, Skeleton)
+- 네비게이션, 헤더, 반별 테마 시스템
 
-```json
-{
-  "mcpServers": {
-    "playwright": {
-      "command": "npx",
-      "args": ["@anthropic/mcp-playwright"]
-    }
-  }
-}
-```
+### Phase 3: 인증 + 온보딩 ✅
+- 소셜 로그인 (Apple/Google/Naver/Email)
+- 온보딩 (학적정보, 캐릭터, 닉네임, 튜토리얼)
+- 비밀번호 찾기 + 문의하기
 
-용도:
-- 앱 자동 테스트
-- 로그인 → 퀴즈 풀기 → 결과 확인 자동화
-- 버그 탐지
+### Phase 4: 홈 화면 ✅
+- 토끼 2마리 궤도 캐러셀 (CharacterBox)
+- EXP 바 + 마일스톤 시스템
+- 공지 채널 (9-slice 말풍선, 다중 투표, 이모지)
+- 랭킹 섹션 + PullToHome 스와이프
 
-### 2.2 Context7 MCP
-**최신 문서 실시간 검색**
+### Phase 5: 퀴즈 기능 ✅
+- 퀴즈 목록 (탭 필터, 카드, 완료 오버레이)
+- 퀴즈 풀이/결과/피드백
+- 퀴즈 생성 (OCR, PPTX, AI, 직접 입력)
+- 결합형 문제 (공통 지문 + 하위 문제)
+- 서술형 채점 (루브릭)
+- 퀴즈 관리 (통계/수정/삭제)
 
-```json
-{
-  "mcpServers": {
-    "context7": {
-      "command": "npx",
-      "args": ["@anthropic/mcp-context7"]
-    }
-  }
-}
-```
+### Phase 6: 복습 기능 ✅
+- 4개 탭 (오답/찜/푼 문제/서재)
+- 폴더 관리 + 연습 모드
+- 랜덤 풀기 + 셔플 기능
+- AI 문제 선지별 해설
 
-용도:
-- Next.js 14 최신 문법
-- Firebase v10 최신 API
-- Framer Motion / Tailwind 최신 사용법
-- deprecated 코드 방지
+### Phase 7: 게시판 ✅
+- To 교수님 / 우리들끼리
+- 고정글 캐러셀 + Masonry 2열
+- 댓글/대댓글 + 도배 방지
 
-### 2.3 전체 MCP 설정 파일
-```json
-{
-  "mcpServers": {
-    "playwright": {
-      "command": "npx",
-      "args": ["@anthropic/mcp-playwright"]
-    },
-    "context7": {
-      "command": "npx",
-      "args": ["@anthropic/mcp-context7"]
-    }
-  }
-}
-```
+### Phase 8: 교수님 기능 ✅
+- 대시보드 (현황, 참여율, 군집 시각화)
+- 퀴즈 관리 (3D 캐러셀, BEST Q, 미리보기, 과목 리본)
+- 학생 모니터링 + 문제 분석
+- 주별 수집 + 월별 Claude 리포트
+- 시즌 리셋 + 학기 전환
+- 교수 설정 (학기/시즌/배틀 키워드)
 
----
+### Phase 9: 토끼 시스템 ✅
+- 80종 토끼 발견/장착 (2단계 뽑기)
+- 토끼 레벨업 (HP/ATK/DEF)
+- 50XP 마일스톤 보상 선택
+- 토끼 도감 (보유 집사 목록)
 
-## 3. Agent 활용 가이드
+### Phase 10: 철권퀴즈 (배틀) ✅
+- 실시간 1v1 매칭 (Realtime Database)
+- 라운드 진행 + 데미지 계산 + 봇 AI
+- 연타 미니게임 + 결과 + XP 지급
 
-### 3.1 명확한 지시
-```
-❌ "퀴즈 만들어줘"
-✅ "퀴즈 풀이 화면 만들어줘. 객관식 4지선다, 이전/다음 버튼, 상단에 진행도 표시, Framer Motion으로 페이지 전환"
-```
-
-### 3.2 단계별 작업
-```
-1단계: "프로젝트 세팅해줘"
-2단계: "공통 컴포넌트 만들어줘"
-3단계: "홈 화면 만들어줘"
-...
-```
-
-### 3.3 컨텍스트 제공
-- CLAUDE.md: 프로젝트 규칙
-- PRD.md: 기획서
-- ROADMAP.md: 개발 계획
-
-### 3.4 피드백
-- "버튼 왼쪽으로"
-- "색상 더 진하게"
-- "애니메이션 더 부드럽게"
+### Phase 11: 시스템 + 배포 ✅
+- 알림 (FCM)
+- 랭킹 사전 계산 (5분 스케줄)
+- Vercel 배포 (PWA)
+- Firebase Security Rules
+- Cloud Run PPTX 서비스
 
 ---
 
-## 4. 성능 최적화
+## 3. 향후 계획
 
-### 4.1 애니메이션 (60fps 유지)
-- Framer Motion: 페이지 전환, 모달, 버튼
-- Lottie: 캐릭터, 레이스, 이펙트
-- GPU 가속: transform, opacity 사용
-- will-change 속성 활용
+### 반응형 UI (예정)
+- 현재: 모바일/패드(세로) UI
+- 추가: Tailwind `lg:` 브레이크포인트로 패드(가로)/PC UI
+- 한 링크로 자동 감지
 
-### 4.2 로딩 최적화
-- Next.js Image 최적화
-- 코드 스플리팅 (dynamic import)
-- Skeleton UI (로딩 중 표시)
-- React Query 캐싱
-
-### 4.3 PWA 최적화
+### PWA 오프라인 (예정)
 - Service Worker 캐싱 전략
-- 오프라인 모드 지원
-- 앱 설치 프롬프트
+- 오프라인 퀴즈 풀이
+- iOS/Android PWA 테스트
+
+### 추가 개선 (검토 중)
+- 에빙하우스 간격 반복 (복습)
+- 실시간 랭킹 애니메이션
+- E2E 테스트 (Playwright)
+- 번들 크기 추가 최적화
 
 ---
 
-## 5. 보안
+## 4. 성능 최적화 (적용 완료)
 
-### 5.1 인증
-- Firebase Auth (소셜 로그인)
-- 교수님: 특정 이메일로 자동 관리자 전환
-
-### 5.2 데이터 접근 제어
-```javascript
-// Firestore Security Rules
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    
-    // 본인 데이터만 접근
-    match /users/{userId} {
-      allow read, write: if request.auth.uid == userId;
-    }
-    
-    // 퀴즈는 로그인한 사람만
-    match /quizzes/{quizId} {
-      allow read: if request.auth != null;
-    }
-    
-    // 교수님만 퀴즈 생성/삭제
-    match /quizzes/{quizId} {
-      allow create, delete: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'professor';
-    }
-  }
-}
-```
-
-### 5.3 골드/경험치 조작 방지
-- 클라이언트에서 직접 수정 ❌
-- Cloud Functions에서 검증 후 지급
-
-### 5.4 도배 방지
-- 글 작성: 1분에 3개 제한
-- 댓글: 30초에 1개 제한
+- 프로덕션 `console.log` 자동 제거
+- `optimizePackageImports` (framer-motion, firebase)
+- 이미지: AVIF/WebP 포맷
+- 코드 스플리팅 (dynamic import)
+- 비디오: ffmpeg crf 28 압축 (~400KB)
+- 스크롤바 숨김 + overflow-x hidden (모바일 PWA)
 
 ---
 
-## 6. 개발 단계
+## 5. 보안 (적용 완료)
 
-### Phase 1: 프로젝트 골격 (1주)
-- [ ] Next.js 14 + TypeScript + Tailwind 세팅
-- [ ] Firebase 프로젝트 생성 및 연동
-- [ ] PWA 설정 (next-pwa)
-- [ ] 폴더 구조 잡기
-- [ ] MCP 설정 (Playwright, Context7)
-- [ ] CLAUDE.md 작성
-
-### Phase 2: 공통 컴포넌트 (1주)
-- [ ] 버튼, 인풋, 카드, 모달, 바텀시트
-- [ ] 네비게이션 바 (학생용 4탭, 교수님용 5탭)
-- [ ] 헤더 (인사말, 공지, 프로필)
-- [ ] 반별 테마 시스템 (A빨강/B노랑/C초록/D파랑)
-- [ ] Skeleton UI
-
-### Phase 3: 인증 + 온보딩 (1주)
-- [ ] 소셜 로그인 (Apple/Google/Naver)
-- [ ] 학적정보 입력 화면
-- [ ] 캐릭터 생성 화면 (귀여운 토끼 / 머리/피부/수염)
-- [ ] 닉네임 설정
-- [ ] 튜토리얼 (4장 슬라이드)
-- [ ] 교수님 계정 자동 전환
-
-### Phase 4: 홈 화면 (1주)
-- [ ] 토끼 캐릭터 표시 (크게, 표정 변화)
-- [ ] 반 등수별 배경 (1등 번영 ~ 4등 불바다)
-- [ ] 진급 게이지 + 계급 + 뱃지
-- [ ] 골드 표시
-- [ ] Shop 화면
-- [ ] 공지 (최근 1개 + 목록)
-- [ ] 내 전적 (퀴즈 수/정답률/기여도)
-- [ ] 프로필 바텀시트 (설정)
-
-### Phase 5: 퀴즈 기능 (2주)
-- [ ] 퀴즈 목록 (카드 2열)
-- [ ] 필터 탭 (전체/중간/기말/족보/자체제작)
-- [ ] TOP3 레이스 애니메이션
-- [ ] 반 참여도 순위
-- [ ] 퀴즈 풀이 화면 (객관식/OX/주관식)
-- [ ] 즉시 피드백 버튼 (❗)
-- [ ] 결과 줌아웃 화면
-- [ ] 피드백 입력 화면
-- [ ] 해설 표시
-- [ ] 자체제작 퀴즈 (Tesseract OCR)
-- [ ] 좋아요 기능
-- [ ] PDF 다운로드
-- [ ] 골드/경험치 지급 (Cloud Functions)
-
-### Phase 6: 복습 기능 (1주) ✅
-- [x] 탭 (오답/찜/푼 문제/내맘대로)
-- [x] 퀴즈별 문제 폴더 그룹화
-- [x] 랜덤 풀기 버튼
-- [x] 문제 상세 (다시 풀기/삭제)
-- [x] 오답 자동 저장
-- [x] 찜 기능
-- [x] 푼 문제 자동 저장
-- [x] 폴더 삭제 시 퀴즈 목록 복원
-- [x] 커스텀 폴더 문제 추가/삭제
-
-### Phase 7: 게시판 (1주)
-- [ ] To 교수님 탭 (닉네임 고정)
-- [ ] 우리들끼리 탭 (닉네임/익명 선택)
-- [ ] 글쓰기 (사진 첨부)
-- [ ] 댓글 (닉네임/익명 선택)
-- [ ] 좋아요
-- [ ] 공지 전환 (교수님)
-- [ ] 골드 지급
-
-### Phase 8: 교수님 기능 (1주)
-- [ ] 홈 대시보드 (현황, 주의 필요)
-- [ ] 퀴즈 출제 (Tesseract OCR)
-- [ ] 퀴즈 수정/삭제
-- [ ] 학생 모니터링 (검색, 필터)
-- [ ] 학생 상세 (성취도, 기록, 피드백, 글)
-- [ ] 문제 분석 (오답률, 응답 분포, 피드백)
-- [ ] 시즌 설정 (중간/기말 날짜)
-- [ ] 공지 작성
-- [ ] 글/퀴즈 삭제 권한
-
-### Phase 9: 시스템 기능 (0.5주)
-- [ ] 알림 시스템 (FCM)
-- [ ] 시즌 리셋 로직
-- [ ] 학기/과목 자동 전환
-- [ ] 데이터 보관 (졸업생)
-
-### Phase 10: 최적화 + 배포 (0.5주)
-- [x] 성능 테스트 (Lighthouse)
-- [x] 애니메이션 최적화
-- [x] 피드백 페이지 스와이프 기반 재구현
-- [x] 복습 시스템 완성 (푼 문제, 폴더 관리)
-- [ ] 오프라인 모드 테스트
-- [ ] Playwright 자동 테스트
-- [ ] Vercel 배포
-- [ ] PWA 테스트 (iOS/Android)
-
----
-
-## 7. 폴더 구조 (예상)
-
-```
-yongsa-quiz/
-├── CLAUDE.md
-├── PRD.md
-├── ROADMAP.md
-├── app/
-│   ├── layout.tsx
-│   ├── page.tsx (홈)
-│   ├── login/
-│   ├── onboarding/
-│   ├── quiz/
-│   ├── review/
-│   ├── board/
-│   └── professor/
-├── components/
-│   ├── common/
-│   │   ├── Button.tsx
-│   │   ├── Input.tsx
-│   │   ├── Card.tsx
-│   │   ├── Modal.tsx
-│   │   ├── BottomSheet.tsx
-│   │   ├── Skeleton.tsx
-│   │   └── Navigation.tsx
-│   ├── home/
-│   ├── quiz/
-│   ├── review/
-│   ├── board/
-│   └── professor/
-├── lib/
-│   ├── firebase.ts
-│   ├── auth.ts
-│   ├── hooks/
-│   └── utils/
-├── styles/
-│   └── themes/ (반별 테마)
-├── public/
-│   ├── rabbit/          (토끼 캐릭터 에셋)
-│   ├── items/
-│   └── animations/
-└── functions/ (Cloud Functions)
-```
-
----
-
-## 8. UI 테마 가이드
-
-### 8.1 반별 색감 (호그와트 참고, 표절 방지)
-
-| 반 | 메인 배경 | 강조색 | 분위기 |
-|----|----------|--------|--------|
-| A반 | 짙은 버건디/다크레드 (#4A0E0E) | 골드 (#D4AF37) | 따뜻하고 용맹한 느낌 |
-| B반 | 따뜻한 옐로/크림 (#F5E6C8) | 브라운/블랙 (#3D2B1F) | 아늑하고 포근한 느낌 |
-| C반 | 짙은 에메랄드 그린 (#0D3D2E) | 실버/골드 (#C0C0C0) | 고급스럽고 차분한 느낌 |
-| D반 | 딥 네이비/다크블루 (#1A2744) | 브론즈/골드 (#CD7F32) | 지적이고 우아한 느낌 |
-
-### 8.2 적용 범위
-- 배경: 메인 배경색 그라데이션
-- 헤더: 메인 배경색 + 강조색 텍스트
-- 버튼: 강조색 테두리/배경
-- 카드: 메인 배경 연한 버전 + 강조색 악센트
-- 프로그레스 바: 강조색
-- 토끼 캐릭터 갑옷: 반별 색상 반영
-
-### 8.3 표절 방지
-- 호그와트 동물/문양 직접 사용 ❌ (사자, 뱀, 독수리, 오소리)
-- 색감 + 분위기만 참고
-- 우리만의 토끼 캐릭터 + 퀴즈 앱 UI로 차별화
-
-### 8.4 세련된 UI
-- 그라데이션 활용 (배경 상단→하단 자연스럽게)
-- 미묘한 그림자 (카드, 버튼)
-- 부드러운 라운드 (8px~16px)
-- 골드/실버 악센트로 고급스러움
-
----
-
-## 9. 예상 일정 (클로드 코드 사용)
-
-| 단계 | 시간 | 누적 |
-|------|------|------|
-| Phase 1: 프로젝트 골격 | 2시간 | 2시간 |
-| Phase 2: 공통 컴포넌트 | 3시간 | 5시간 |
-| Phase 3: 인증 + 온보딩 | 3시간 | 8시간 |
-| Phase 4: 홈 화면 | 3시간 | 11시간 |
-| Phase 5: 퀴즈 기능 | 5시간 | 16시간 |
-| Phase 6: 복습 기능 | 2시간 | 18시간 |
-| Phase 7: 게시판 | 2시간 | 20시간 |
-| Phase 8: 교수님 기능 | 3시간 | 23시간 |
-| Phase 9-10: 시스템 + 배포 | 2시간 | 25시간 |
-
-**총 예상: 약 25시간 (2~3일)**
-
----
-
-## 10. 체크리스트
-
-### 개발 시작 전
-- [x] Firebase 프로젝트 생성
-- [x] Vercel 계정 준비
-- [x] MCP 설정 완료
-- [x] CLAUDE.md 작성
-
-### MVP 기준
-- [x] 로그인 가능
-- [x] 퀴즈 풀기 가능
-- [x] 피드백 남기기 가능
-- [x] 게시판 글쓰기 가능
-- [x] 교수님 피드백 확인 가능
-
-### 배포 전
-- [ ] Lighthouse 성능 90점 이상
-- [ ] 오프라인 모드 동작
-- [ ] iOS/Android PWA 설치 테스트
-- [ ] 주요 플로우 Playwright 테스트
+- Firestore Security Rules (역할 기반 접근 제어)
+- 보호 필드 (totalExp, rank, role, badges, equippedRabbits) — CF 전용
+- 도배 방지 (글 1분 3개, 댓글 30초 1개)
+- Realtime Database Rules (철권퀴즈)

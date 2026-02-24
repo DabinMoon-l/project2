@@ -1,403 +1,132 @@
-# 용사 퀴즈 개발 진행 상황
+# RabbiTory 개발 진행 상황
 
 ## 현재 상태
-- **마지막 업데이트**: Phase 4-30 피드백 페이지 및 복습 시스템 완성
-- **다음 단계**: Phase 4-31 PWA 및 오프라인 모드 테스트
+- **마지막 업데이트**: 2026-02-24
+- **프로젝트 단계**: 프로덕션 운영 중 (Vercel 배포 완료)
+- **다음 단계**: 반응형 UI (패드 가로/PC), PWA 오프라인 캐시
 
-## 개선 사항 (Phase 4-27 후속)
+## 최근 작업 (2026-02-24)
 
-### P0: UserContext 추가 ✅
-- `lib/contexts/UserContext.tsx` - 프로필 전역 상태 관리
-- `lib/contexts/index.ts` - 모듈 내보내기
-- `app/(main)/layout.tsx` - UserProvider 적용
-- Firestore 실시간 구독으로 N+1 쿼리 문제 해결
+### 교수 퀴즈탭 3D 캐러셀 전면 개편
+- 3D perspective 순환 캐러셀 (클론 카드 방식 무한 루프)
+- 난이도별 MP4 비디오 카드 (easy/normal/hard, ffmpeg 압축 ~400KB)
+- PAST EXAM 헤더: 장식선 + 년도/시험 드롭다운
+- 캐러셀 peek 효과 (82% 카드 너비, 양쪽 9% 사이드 피크)
+- PC 드래그 지원, 3D rotateY/scale/opacity 전환
 
-### P1: Firestore Security Rules 작성 ✅
-- `firestore.rules` - 전체 보안 규칙 파일 생성
-  - users, quizzes, posts, feedbacks, rateLimits, fcmTokens, seasonLogs, notifications 컬렉션 규칙
-  - 역할 기반 접근 제어 (학생/교수님)
-  - 유효성 검증 함수
+### 비밀번호 찾기 + 문의하기
+- 학번 입력 → requestPasswordReset CF → 복구 이메일 확인
+- 미등록 시 인라인 "문의하기" 폼 → submitInquiry CF
+- 교수님 설정에서 문의 확인 가능
 
-### P1: 에러 바운더리 추가 ✅
-- `components/common/ErrorBoundary.tsx` - 에러 바운더리 컴포넌트
-  - ErrorBoundary (전체 앱용)
-  - ErrorFallback (재사용 가능한 에러 UI)
-  - SectionErrorBoundary (작은 영역용)
-- `components/common/index.ts` - export 추가
+### 철권퀴즈 (배틀 퀴즈)
+- 실시간 1v1 토끼 배틀 (Firebase Realtime Database)
+- 매칭/라운드/결과/봇 AI 구현
+- 교수 설정에서 배틀 키워드 범위 지정
+- 데미지 계산, 연타 미니게임
 
-### P1: 닉네임 보안 개선 ✅
-- `lib/hooks/useBoard.ts` - useCreatePost, useCreateComment 수정
-  - Firebase Auth displayName 대신 Firestore에서 닉네임 조회
+### 기타
+- 퀴즈 미리보기 페이지 (/professor/quiz/[id]/preview)
+- BEST Q 별도 페이지 (/professor/quiz/best-q)
+- 과목별 리본 이미지 스와이프 전환
+- 복습 셔플 기능
+- 피드백/결과/게시판/가챠/마일스톤 UI 다수 개선
 
-### P2: 중복 코드 리팩토링 ✅
-- `lib/utils/firestore.ts` - Firestore 유틸리티 함수
-  - docToObject, docsToArray (문서 변환)
-  - getUserNickname, getUserRole (사용자 정보 조회)
-  - docExists, isDocAuthor (헬퍼 함수)
-- `lib/utils/asyncHandler.ts` - 비동기 작업 핸들러
-  - safeAsync, getErrorMessage (에러 처리)
-  - useAsyncState, useLoadingState (상태 관리 훅)
-  - handleFirebaseError (Firebase 에러 한글화)
-- `lib/utils/index.ts` - 모듈 내보내기
+## 완료된 기능
 
-### P2: 메모이제이션 추가 ✅
-- `components/quiz/QuizCard.tsx` - React.memo, useMemo, useCallback 적용
-- `components/board/PostCard.tsx` - React.memo, useMemo, useCallback 적용
+### 핵심 기능 (100%)
+- [x] 소셜 로그인 (Google, Apple, Naver, 이메일)
+- [x] 온보딩 플로우 (학적정보, 캐릭터, 닉네임, 튜토리얼)
+- [x] 홈 화면 (토끼 궤도 캐러셀, 마일스톤, EXP 바, 공지 채널, 랭킹)
+- [x] 퀴즈 (목록/풀이/결과/피드백/생성/수정)
+- [x] 복습 (오답/찜/푼 문제/서재/랜덤/셔플)
+- [x] 게시판 (To 교수님 / 우리들끼리, 고정글, Masonry)
+- [x] 알림 시스템 (FCM 푸시)
+- [x] 비밀번호 찾기 + 문의하기
 
-## 완료된 단계
+### 토끼 시스템 (100%)
+- [x] 80종 토끼 발견/장착
+- [x] 2단계 뽑기 (Roll → Claim)
+- [x] 토끼 레벨업 (HP/ATK/DEF 스탯)
+- [x] 50XP 마일스톤 보상 선택
+- [x] 토끼 도감 (보유 집사 목록)
 
-### Phase 1: 프로젝트 골격 ✅
-- [x] #1 Next.js 14 + TypeScript + Tailwind 프로젝트 생성
-- [x] #2 Firebase 프로젝트 연동
-- [x] #3 PWA 설정 (next-pwa)
-- [x] #4 폴더 구조 및 기본 레이아웃 생성
+### 교수님 기능 (100%)
+- [x] 대시보드 (현황, 참여율, 군집 시각화)
+- [x] 퀴즈 관리 (3D 캐러셀, 통계, BEST Q)
+- [x] 학생 모니터링 (검색/필터/상세)
+- [x] 문제 분석 (정답률, 오답 패턴)
+- [x] 시즌 리셋 + 학기 전환
+- [x] 주별 자동 수집 + 월별 Claude 리포트
+- [x] 교수 설정 (학기/시즌/배틀 키워드)
 
-### Phase 2: 공통 컴포넌트 ✅
-- [x] #5 공통 UI 컴포넌트 (Button, Input, Card, Modal, BottomSheet, Skeleton)
-- [x] #6 네비게이션 바 (학생 4탭, 교수님 5탭)
-- [x] #7 헤더 컴포넌트
-- [x] #8 반별 테마 시스템 (A/B/C/D 4개 반)
+### AI 기능 (100%)
+- [x] AI 퀴즈 생성 (Gemini, 교수 스타일 학습)
+- [x] OCR 퀴즈 업로드 (Tesseract, Gemini Vision)
+- [x] PPTX → 문제 파싱 (Cloud Run)
+- [x] 월별 리포트 인사이트 (Claude Sonnet)
 
-### Phase 3: 세부 기능 (진행 중)
-- [x] #9 소셜 로그인 (Apple/Google/Naver)
-- [x] #10 온보딩 플로우 (학적정보, 캐릭터 생성, 닉네임, 튜토리얼)
-- [x] #11 홈 화면 (학생)
-- [x] #12 Shop 화면 (8개 카테고리, 41개 아이템)
-- [x] #13 퀴즈 목록 화면
-- [x] #14 퀴즈 풀이 화면
-- [x] #15 퀴즈 결과 및 피드백 화면
-- [x] #16 자체제작 퀴즈 업로드 (OCR)
-- [x] #17 복습 화면 (오답노트, 찜한 문제)
-- [x] #18 게시판 (To 교수님, 우리들끼리)
-- [x] #24 Cloud Functions (골드/경험치 처리)
-- [x] #19 교수님 홈 대시보드 ✅
-- [x] #20 교수님 퀴즈 관리 ✅
-- [x] #21 교수님 학생 모니터링 ✅
-- [x] #22 교수님 문제 분석 ✅
-- [x] #23 프로필 및 설정 화면 ✅
-- [x] #25 알림 시스템 (FCM) ✅
-- [x] #26 시즌 리셋 및 학기 전환 로직 ✅
+### 철권퀴즈 (90%)
+- [x] 실시간 매칭 + 봇 매칭
+- [x] 라운드 진행 + 데미지 계산
+- [x] 연타 미니게임
+- [x] 배틀 결과 + XP 지급
+- [x] 교수 키워드 범위 설정
+- [ ] 최종 밸런스 조정
 
-### Phase 4: 최적화 및 배포
-- [x] #27 아키텍처 리뷰 및 코드 리뷰 ✅
-- [x] #28 성능 테스트 및 최적화 ✅
-- [x] #29 애니메이션 최적화 ✅
-- [x] #30 피드백 페이지 및 복습 시스템 ✅
-- [ ] #31 PWA 및 오프라인 모드 테스트
-- [ ] #32 Playwright E2E 테스트
-- [ ] #33 Vercel 배포
+### 인프라 (100%)
+- [x] Vercel 배포 (PWA)
+- [x] Firebase 보안 규칙
+- [x] Cloud Functions 배포
+- [x] Cloud Run PPTX 서비스
+- [x] 성능 최적화 (번들, 애니메이션)
+
+## 향후 계획
+- [ ] 반응형 UI (패드 가로/PC — Tailwind lg: 브레이크포인트)
+- [ ] PWA 오프라인 캐시 전략
+- [ ] 에빙하우스 간격 반복 (복습)
+- [ ] 실시간 랭킹 애니메이션
+- [ ] E2E 테스트 (Playwright)
 
 ## 주요 파일 구조
 
 ```
 app/
-├── (main)/           # 메인 레이아웃 (Navigation 포함)
-│   ├── page.tsx      # 홈 화면 ✅
-│   ├── shop/         # Shop ✅
-│   ├── quiz/         # 퀴즈 목록/풀이/결과/피드백/생성 ✅
-│   ├── review/       # 복습 ✅
-│   └── board/        # 게시판 ✅
-├── login/            # 소셜 로그인 ✅
-├── onboarding/       # 온보딩 플로우 ✅
-└── professor/        # 교수님 전용 ✅
+├── (main)/           # 인증 필요 라우트 그룹
+│   ├── page.tsx      # 홈 화면
+│   ├── quiz/         # 퀴즈 (목록/풀이/결과/피드백/생성)
+│   ├── review/       # 복습 (오답/찜/푼/서재/랜덤)
+│   ├── board/        # 게시판
+│   ├── ranking/      # 랭킹
+│   ├── profile/      # 프로필
+│   ├── settings/     # 설정
+│   └── professor/    # 교수님 전용
+│       ├── quiz/     # 퀴즈 관리 (3D 캐러셀, BEST Q, 미리보기)
+│       ├── students/ # 학생 모니터링
+│       ├── analysis/ # 문제 분석
+│       ├── stats/    # 통계 + 월별 리포트
+│       └── settings/ # 교수 설정 (시즌, 배틀 키워드)
+├── login/            # 소셜 로그인
+├── signup/           # 이메일 회원가입
+├── forgot-password/  # 비밀번호 찾기 + 문의
+├── onboarding/       # 온보딩 플로우
+└── verify-email/     # 이메일 인증
 
 components/
-├── common/           # 공통 UI ✅
-├── home/             # 홈 화면 ✅
-├── quiz/             # 퀴즈 관련 ✅
-├── review/           # 복습 관련 ✅
-├── board/            # 게시판 관련 ✅
-├── shop/             # Shop 관련 ✅
-├── onboarding/       # 온보딩 관련 ✅
-├── auth/             # 인증 관련 ✅
-└── professor/        # 교수님 전용 ✅
+├── common/           # 공통 UI
+├── home/             # 홈 (CharacterBox, 가챠, 도감, 마일스톤)
+├── quiz/             # 퀴즈 관련
+├── review/           # 복습 관련
+├── board/            # 게시판 관련
+├── professor/        # 교수님 전용
+├── tekken/           # 철권퀴즈 배틀 UI
+├── ai-quiz/          # AI 퀴즈 생성
+├── onboarding/       # 온보딩 관련
+└── auth/             # 인증 관련
 
-lib/
-├── firebase.ts       # Firebase 설정 ✅
-├── auth.ts           # 인증 로직 ✅
-├── ocr.ts            # OCR 유틸리티 ✅
-├── hooks/            # 커스텀 훅 ✅
-└── data/             # 데이터 (shopItems 등) ✅
-
-functions/            # Cloud Functions ✅
-```
-
-## Git 커밋 히스토리
-1. `a888cd5` - Phase 1-2 완료: 프로젝트 골격 및 공통 컴포넌트
-2. `881b054` - Phase 3-9: 복습 화면 구현
-3. `18aa6d8` - Phase 3-10: 게시판 구현
-4. `a7eef92` - 진행상황 추적 파일 추가
-5. (다음) - Phase 3-11: 교수님 홈 대시보드
-
-## 다음 단계 작업 내용
-
-### #20 교수님 퀴즈 관리 ✅ 완료
-
-#### 생성된 파일:
-- [x] `lib/hooks/useProfessorQuiz.ts` - Firestore CRUD 훅
-- [x] `components/professor/TargetClassSelector.tsx` - 대상 반 선택 UI
-- [x] `components/professor/PublishToggle.tsx` - 공개/비공개 토글
-- [x] `components/professor/QuizListItem.tsx` - 개별 퀴즈 카드
-- [x] `components/professor/QuizList.tsx` - 목록 컴포넌트
-- [x] `components/professor/QuizDeleteModal.tsx` - 삭제 확인 모달
-- [x] `components/professor/QuizEditorForm.tsx` - 퀴즈 메타정보 폼
-- [x] `app/(main)/professor/quiz/page.tsx` - 퀴즈 목록 페이지
-- [x] `app/(main)/professor/quiz/create/page.tsx` - 퀴즈 출제 페이지
-- [x] `app/(main)/professor/quiz/[id]/page.tsx` - 퀴즈 상세 페이지
-- [x] `app/(main)/professor/quiz/[id]/edit/page.tsx` - 퀴즈 수정 페이지
-- [x] `components/professor/index.ts` - export 업데이트
-
-### #21 학생 모니터링 ✅ 완료
-
-#### 생성된 파일:
-- [x] `lib/hooks/useProfessorStudents.ts` - 학생 데이터 조회 훅
-- [x] `components/professor/StudentListItem.tsx` - 학생 카드 컴포넌트
-- [x] `components/professor/StudentList.tsx` - 학생 목록 (무한 스크롤)
-- [x] `components/professor/StudentDetailModal.tsx` - 학생 상세 모달
-- [x] `components/professor/StudentStats.tsx` - 반별 통계 요약
-- [x] `app/(main)/professor/students/page.tsx` - 학생 모니터링 페이지
-- [x] `components/professor/index.ts` - export 업데이트
-
-#### 주요 기능:
-- 학생 목록 조회 (반별 필터, 검색, 정렬)
-- 학생 상세 정보 (퀴즈 기록, 피드백 내역)
-- 반별 통계 (참여율, 평균 점수, 1등 학생)
-- 무한 스크롤 지원
-
-### #22 문제 분석 ✅ 완료
-
-#### 생성된 파일:
-- [x] `lib/hooks/useProfessorAnalysis.ts` - 문제 분석 데이터 훅
-- [x] `components/professor/QuestionAnalysisCard.tsx` - 문제별 분석 카드
-- [x] `components/professor/DifficultyChart.tsx` - 난이도 분포 차트
-- [x] `components/professor/AnalysisSummary.tsx` - 분석 요약 컴포넌트
-- [x] `app/(main)/professor/analysis/page.tsx` - 문제 분석 페이지
-- [x] `components/professor/index.ts` - export 업데이트
-
-#### 주요 기능:
-- 전체 분석 요약 (총 퀴즈, 총 문제, 평균 정답률)
-- 퀴즈별 분석 (가장 어려운/쉬운 문제)
-- 문제별 상세 분석 (정답률, 오답 패턴)
-- 난이도/유형별 분포 차트
-- 필터링 (난이도, 유형, 정렬)
-
-### #23 프로필 및 설정 화면 ✅ 완료
-
-#### 생성된 파일:
-- [x] `lib/hooks/useProfile.ts` - 프로필 CRUD 훅
-- [x] `lib/hooks/useSettings.ts` - 설정 관리 훅
-- [x] `components/profile/ProfileCard.tsx` - 프로필 카드
-- [x] `components/profile/CharacterEditor.tsx` - 캐릭터 편집기
-- [x] `components/profile/StatsSummary.tsx` - 통계 요약
-- [x] `components/profile/SettingsItem.tsx` - 설정 항목
-- [x] `components/profile/SettingsList.tsx` - 설정 목록
-- [x] `components/profile/index.ts` - export
-- [x] `app/(main)/profile/page.tsx` - 프로필 페이지
-- [x] `app/(main)/settings/page.tsx` - 설정 페이지
-
-#### 주요 기능:
-- 프로필 카드 (캐릭터, 닉네임, 계급, 레벨)
-- 캐릭터 커스터마이징 (머리, 피부색, 수염)
-- 퀴즈/피드백 통계
-- 알림 설정 (퀴즈, 피드백, 게시판, 랭킹, 시즌)
-- 표시 설정 (애니메이션, 진동, 사운드)
-- 개인정보 설정 (프로필 공개, 랭킹 표시)
-- 로그아웃 기능
-- 설정 초기화 기능
-
-### #25 알림 시스템 (FCM) ✅ 완료
-
-#### 생성된 파일:
-- [x] `lib/fcm.ts` - FCM 초기화 및 유틸리티
-- [x] `lib/hooks/useNotification.ts` - 알림 관리 커스텀 훅
-- [x] `public/firebase-messaging-sw.js` - FCM 서비스 워커
-- [x] `components/common/NotificationProvider.tsx` - 알림 프로바이더
-- [x] `components/common/NotificationPrompt.tsx` - 알림 권한 요청 배너
-- [x] `functions/src/notification.ts` - 알림 전송 Cloud Functions
-
-#### 수정된 파일:
-- [x] `components/common/index.ts` - NotificationProvider, NotificationPrompt export 추가
-- [x] `functions/src/index.ts` - 알림 Functions export 추가
-- [x] `public/manifest.json` - gcm_sender_id 추가
-- [x] `app/(main)/layout.tsx` - NotificationProvider 적용
-- [x] `app/(main)/page.tsx` - NotificationPrompt 추가
-
-#### 주요 기능:
-- FCM 푸시 알림 권한 요청 및 토큰 관리
-- 포그라운드/백그라운드 알림 처리
-- 알림 토스트 UI (포그라운드)
-- 알림 클릭 시 해당 페이지로 라우팅
-- Cloud Functions를 통한 알림 전송:
-  - 새 퀴즈 생성 시 대상 반 알림
-  - 피드백 답변 시 작성자 알림
-  - 게시판 댓글/대댓글 알림
-  - 랭킹 1등 달성 알림
-- 교수님 전용 알림 전송 기능 (개인/반별)
-- 알림 토픽 구독/해제
-
-### #26 시즌 리셋 및 학기 전환 로직 ✅ 완료
-
-#### 생성된 파일:
-- [x] `lib/hooks/useSeasonReset.ts` - 시즌 리셋 관리 훅
-- [x] `components/professor/SeasonResetCard.tsx` - 시즌 리셋 카드 UI
-- [x] `components/professor/SeasonResetModal.tsx` - 시즌 리셋 확인 모달
-- [x] `components/professor/SeasonHistoryList.tsx` - 시즌 히스토리 목록
-- [x] `app/(main)/professor/settings/page.tsx` - 교수님 설정 페이지
-
-#### 수정된 파일:
-- [x] `components/professor/index.ts` - 시즌 관리 컴포넌트 export 추가
-- [x] `components/professor/QuickActions.tsx` - 설정 버튼 추가
-- [x] `app/(main)/professor/page.tsx` - 설정 핸들러 추가
-
-#### 주요 기능:
-- 시즌 전환 UI (중간고사 ↔ 기말고사)
-- 반별/전체 시즌 리셋 기능
-- 시즌 전환 확인 모달 (안전 검증 텍스트 입력)
-- 시즌 리셋 히스토리 조회
-- 초기화/유지 항목 안내:
-  - 초기화: 경험치, 계급, 갑옷, 무기, Shop 아이템
-  - 유지: 골드, 캐릭터 외형, 뱃지
-- 교수님 설정 페이지 (시즌 관리 + 기타 설정)
-- Cloud Functions `resetSeason` 연동
-
-### #30 피드백 페이지 및 복습 시스템 ✅ 완료
-
-#### 수정/생성된 파일:
-- [x] `app/(main)/quiz/[id]/feedback/page.tsx` - 스와이프 기반 피드백 페이지 재구현
-- [x] `app/(main)/quiz/[id]/result/page.tsx` - 푼 문제 저장 로직 추가
-- [x] `app/(main)/quiz/page.tsx` - 완료된 퀴즈 필터링, Image sizes prop 추가
-- [x] `app/(main)/review/page.tsx` - 폴더 삭제 기능, groupedSolvedItems 사용
-- [x] `app/(main)/review/[type]/[id]/page.tsx` - 폴더 상세 페이지 (새로 생성)
-- [x] `lib/hooks/useReview.ts` - ReviewType 확장, deleteSolvedQuiz 함수, 클라이언트 정렬
-- [x] `firestore.rules` - completedUsers 업데이트 권한 추가
-- [x] `firestore.indexes.json` - 복합 인덱스 추가
-- [x] `components/common/index.ts` - CurvedRibbon export 제거
-
-#### 주요 기능:
-- **피드백 페이지**: Framer Motion 스와이프로 문제 간 이동, 문제/선지/정답/내 답안/해설 표시
-- **푼 문제 저장**: 퀴즈 완료 시 모든 문제를 `reviewType: 'solved'`로 저장
-- **완료된 퀴즈 필터링**: `completedUsers` 배열로 추적, 퀴즈 목록에서 숨김
-- **폴더 삭제**: 푼 문제 폴더 삭제 시 퀴즈 목록에 다시 표시
-- **폴더 상세 페이지**: 문제 목록, 연습 모드, 커스텀 폴더 문제 추가/삭제
-- **클라이언트 정렬**: Firestore 복합 인덱스 오류 방지를 위해 orderBy 제거
-
-### #29 애니메이션 최적화 ✅ 완료
-
-#### 생성된 파일:
-- [x] `lib/animations/index.ts` - 공통 애니메이션 설정
-  - 공통 Transition 설정 (quick, smooth, spring, softSpring)
-  - 페이지 전환 Variants (fade, slideUp, slideRight, slideLeft)
-  - 컴포넌트 Variants (scale, cardHover, buttonTap, stagger)
-  - 모달/오버레이 Variants (backdrop, modal, bottomSheet)
-  - 특수 효과 Variants (pulse, shake)
-  - reduce-motion 지원 유틸리티
-
-- [x] `lib/hooks/useReducedMotion.ts` - 접근성 지원 훅
-  - prefers-reduced-motion 미디어 쿼리 감지
-  - 실시간 설정 변경 감지
-  - useAnimationDuration 헬퍼
-
-#### 수정된 파일:
-- [x] `components/common/Modal.tsx` - useReducedMotion 적용
-- [x] `components/common/BottomSheet.tsx` - useReducedMotion 적용
-- [x] `components/quiz/MultipleChoice.tsx` - correctIndex prop 추가 (정답/오답 표시)
-- [x] `components/profile/CharacterEditor.tsx` - 불필요한 @ts-expect-error 제거
-- [x] `components/shop/CategoryTabs.tsx` - focusRingColor → CSS 변수 수정
-- [x] `lib/hooks/useProfessorAnalysis.ts` - TypeScript 타입 오류 수정
-- [x] `lib/hooks/useReview.ts` - Set 순회 오류 수정
-- [x] `tsconfig.json` - functions 폴더 제외
-
-#### 주요 기능:
-- **접근성 지원**: prefers-reduced-motion 설정 존중
-- **일관된 애니메이션**: 공통 variants로 통일된 애니메이션 경험
-- **성능 최적화**: transform/opacity 기반 애니메이션 권장
-- **재사용성**: 모든 컴포넌트에서 공통 애니메이션 사용 가능
-
-### #28 성능 테스트 및 최적화 ✅ 완료
-
-#### 기존 설정 확인
-- **번들 분석기**: `@next/bundle-analyzer` 설치 및 `npm run analyze` 스크립트 설정 완료
-- **Web Vitals**: `web-vitals` 패키지 설치, `WebVitalsReporter` 컴포넌트 적용
-- **폰트 최적화**: `next/font` (Inter) 설정 완료 (`display: swap`, `preload`)
-- **이미지 최적화**: next.config.mjs에 AVIF/WebP 포맷 설정
-- **DNS Prefetch**: Firebase 도메인 사전 연결 설정
-
-#### 최적화 설정 (next.config.mjs)
-- `optimizePackageImports`: framer-motion, firebase 번들 최적화
-- `removeConsole`: 프로덕션 빌드 시 console.log 자동 제거 (error, warn 유지)
-- 이미지 최적화: AVIF/WebP 포맷, 다양한 디바이스 크기 대응
-
-#### 빌드 결과
-- 빌드 성공 ✅
-- 주요 청크 크기:
-  - 공통 프레임워크: ~122KB (React, Next.js)
-  - Firebase 관련: ~111KB
-  - Framer Motion: ~107KB
-  - 페이지별 청크: 6KB ~ 49KB
-
-### #27 아키텍처 리뷰 및 코드 리뷰 ✅ 완료
-
-#### 아키텍처 리뷰 (점수: 7.5/10)
-
-**강점:**
-- Route Group `(main)` 활용한 명확한 레이아웃 분리
-- Firebase Auth + 소셜 로그인 통합 우수
-- Cloud Functions에서 검증/도배 방지 구현
-- 공통 컴포넌트 재사용성 양호
-- Context + 커스텀 훅 조합 적절
-
-**개선 필요:**
-- 상태 관리: 프로필 등 데이터가 분산 → UserContext로 통합 필요
-- Firestore Security Rules 명시적 작성 필수
-- 에러 바운더리 추가 필요
-- 타입 정의 중앙화 (`lib/types/`) 권장
-
-#### 코드 리뷰 (점수: 7.2/10)
-
-**강점:**
-- TypeScript 타입 정의 대부분 정확
-- 훅 기반 상태 관리가 체계적
-- 에러 처리 한글화 우수
-- UI 컴포넌트 라이브러리화 진행 양호
-
-**개선 필요:**
-- 중복 코드 리팩토링 필요 (에러 처리 패턴, Firestore 변환 함수)
-- 큰 컴포넌트 분할 필요 (quiz/page.tsx 392줄, profile/page.tsx 405줄)
-- 메모이제이션 부족 (useMemo, React.memo 거의 미사용)
-- 보안: 닉네임 검증 개선 필요 (Firestore에서 조회)
-- 테스트 코드 부재
-
-#### 발견된 주요 이슈
-
-**P0 (즉시):**
-- [x] UserContext 추가 (N+1 쿼리 해결) ✅
-
-**P1 (1주 내):**
-- [x] Firestore Security Rules 작성 ✅
-- [x] 닉네임 보안 개선 (useBoard.ts) ✅
-- [x] 에러 바운더리 추가 ✅
-- [ ] console.log 제거
-
-**P2 (2주 내):**
-- [ ] ESLint exhaustive-deps 활성화
-- [ ] 큰 컴포넌트 분할
-- [x] 메모이제이션 추가 ✅
-- [x] 중복 코드 리팩토링 ✅
-
-**P3 (1개월):**
-- [ ] 테스트 환경 구축
-- [ ] 번들 크기 최적화
-- [ ] 성능 모니터링 도입
-
-## 명령어
-
-```bash
-# 다음 단계 시작 시
-cd /c/Users/user/Desktop/project2
-
-# 진행상황 확인
-cat PROGRESS.md
-
-# Git 상태 확인
-git log --oneline -5
+functions/src/        # Cloud Functions
+├── tekkenBattle.ts   # 철권퀴즈 배틀
+├── tekkenCleanup.ts  # 배틀 정리
+├── inquiry.ts        # 문의하기
+└── ...               # 기존 CF 모듈들
 ```
