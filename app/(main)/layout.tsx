@@ -10,6 +10,7 @@ import { AIQuizContainer } from '@/components/ai-quiz';
 import { UserProvider, useUser, CourseProvider, useCourse } from '@/lib/contexts';
 import { useActivityTracker } from '@/lib/hooks/useActivityTracker';
 import type { ClassType } from '@/styles/themes';
+import LibraryJobToast from '@/components/professor/library/LibraryJobToast';
 
 /**
  * 내부 레이아웃 컴포넌트
@@ -104,6 +105,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
     <ThemeProvider initialClassType={userClassType} courseId={userCourseId}>
       <NotificationProvider>
         <ExpToastProvider>
+          <LibraryJobToast />
           <div className={`min-h-screen ${hideNavigation ? '' : 'pb-20'}`}>
             {/* 메인 콘텐츠 */}
             <main>

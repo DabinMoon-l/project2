@@ -1161,6 +1161,7 @@ export default function ProfessorQuizListPage() {
 
   // Details 모달 상태
   const [detailsQuiz, setDetailsQuiz] = useState<ProfessorQuiz | null>(null);
+  const [detailsSource, setDetailsSource] = useState<'carousel' | 'custom'>('carousel');
   // Stats 모달 상태
   const [statsQuizId, setStatsQuizId] = useState<{ id: string; title: string } | null>(null);
 
@@ -1197,6 +1198,7 @@ export default function ProfessorQuizListPage() {
   // 캐러셀 내부 Details → 모달
   const handleCarouselDetails = useCallback(
     (quiz: ProfessorQuiz) => {
+      setDetailsSource('carousel');
       setDetailsQuiz(quiz);
     },
     []
@@ -1233,7 +1235,7 @@ export default function ProfessorQuizListPage() {
             onClick={() => router.push('/professor/quiz/best-q')}
             className="px-4 py-3 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] whitespace-nowrap hover:bg-[#EDEAE4] transition-colors"
           >
-            BEST Q
+            퀴즈 관리
           </button>
           <button
             onClick={() => router.push('/professor/quiz/create')}
@@ -1382,7 +1384,7 @@ export default function ProfessorQuizListPage() {
                 <ProfessorCustomQuizCard
                   quiz={quiz}
                   feedbackInfo={feedbackMap[quiz.id]}
-                  onDetails={() => setDetailsQuiz(quiz)}
+                  onDetails={() => { setDetailsSource('custom'); setDetailsQuiz(quiz); }}
                   onStats={() => setStatsQuizId({ id: quiz.id, title: quiz.title })}
                   onClick={() => router.push(`/professor/quiz/${quiz.id}/preview`)}
                 />
@@ -1500,16 +1502,18 @@ export default function ProfessorQuizListPage() {
               >
                 닫기
               </button>
-              <button
-                onClick={() => {
-                  const quiz = detailsQuiz;
-                  setDetailsQuiz(null);
-                  router.push(`/professor/quiz/${quiz.id}/preview`);
-                }}
-                className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
-              >
-                미리보기
-              </button>
+              {detailsSource === 'carousel' && (
+                <button
+                  onClick={() => {
+                    const quiz = detailsQuiz;
+                    setDetailsQuiz(null);
+                    router.push(`/professor/quiz/${quiz.id}/preview`);
+                  }}
+                  className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+                >
+                  미리보기
+                </button>
+              )}
               <button
                 onClick={() => {
                   const quiz = detailsQuiz;

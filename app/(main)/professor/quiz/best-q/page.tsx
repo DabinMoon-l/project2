@@ -15,6 +15,7 @@ import type { MixedExampleItem, BogiData, LabeledItem, ExamplesData } from '@/co
 import { useCustomFolders, type CustomFolder } from '@/lib/hooks/useCustomFolders';
 import FolderSelectModal from '@/components/common/FolderSelectModal';
 import type { QuestionExportData } from '@/lib/utils/questionDocExport';
+import ProfessorLibraryTab from '@/components/professor/library/ProfessorLibraryTab';
 
 // ============================================================
 // 타입
@@ -669,7 +670,7 @@ export default function BestQPage() {
   const { fetchQuiz, fetchQuizStatistics } = useProfessorQuiz();
 
   // 탭
-  const [activeTab, setActiveTab] = useState<'feedback' | 'custom'>('feedback');
+  const [activeTab, setActiveTab] = useState<'feedback' | 'library' | 'custom'>('feedback');
 
   // 피드백 탭
   const [bestQuestions, setBestQuestions] = useState<BestQuestionData[]>([]);
@@ -1379,18 +1380,24 @@ export default function BestQPage() {
           {/* 탭 필터 - 좌측 */}
           <div className="relative border border-[#1A1A1A] flex">
             <div
-              className="absolute top-0 bottom-0 w-1/2 bg-[#1A1A1A] transition-transform duration-200"
-              style={{ transform: activeTab === 'custom' ? 'translateX(100%)' : 'translateX(0)' }}
+              className="absolute top-0 bottom-0 w-1/3 bg-[#1A1A1A] transition-transform duration-200"
+              style={{
+                transform: activeTab === 'library'
+                  ? 'translateX(100%)'
+                  : activeTab === 'custom'
+                    ? 'translateX(200%)'
+                    : 'translateX(0)',
+              }}
             />
-            {(['feedback', 'custom'] as const).map((tab) => (
+            {(['feedback', 'library', 'custom'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-7 py-2.5 text-sm font-bold relative z-10 transition-colors ${
+                className={`px-5 py-2.5 text-sm font-bold relative z-10 transition-colors ${
                   activeTab === tab ? 'text-[#F5F0E8]' : 'text-[#5C5C5C]'
                 }`}
               >
-                {tab === 'feedback' ? '피드백' : '커스텀'}
+                {tab === 'feedback' ? '피드백' : tab === 'library' ? '서재' : '커스텀'}
               </button>
             ))}
           </div>
@@ -1537,6 +1544,13 @@ export default function BestQPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* ============================================================ */}
+      {/* 서재 탭 */}
+      {/* ============================================================ */}
+      {activeTab === 'library' && !openFolderId && (
+        <ProfessorLibraryTab />
       )}
 
       {/* ============================================================ */}

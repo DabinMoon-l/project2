@@ -659,13 +659,29 @@ export function buildFullPrompt(
   isShortText: boolean = false,
   isVeryShortText: boolean = false,
   availableImages: CroppedImage[] = [],
-  courseCustomized: boolean = true
+  courseCustomized: boolean = true,
+  sliderWeights?: { style: number; scope: number; focusGuide: number },
+  professorPrompt?: string
 ): string {
-  const styleContext = courseCustomized ? buildStyleContextPrompt(context) : "";
+  // 슬라이더 가중치에 따른 조건부 포함
+  const skipStyle = sliderWeights && sliderWeights.style < 10;
+  const skipScope = sliderWeights && sliderWeights.scope < 10;
+  const skipFocusGuide = sliderWeights && sliderWeights.focusGuide < 10;
+
+  const styleContext = courseCustomized && !skipStyle ? buildStyleContextPrompt(context) : "";
   const difficultyPrompt = buildDifficultyPrompt(difficulty, context);
-  const scopeContext = courseCustomized ? buildScopeContextPrompt(context) : "";
+  const scopeContext = courseCustomized && !skipScope ? buildScopeContextPrompt(context) : "";
   const chapterIndexPrompt = courseCustomized ? buildChapterIndexPrompt(courseId) : "";
-  const focusGuide = courseCustomized ? getFocusGuide(courseId) : null;
+  const focusGuide = courseCustomized && !skipFocusGuide ? getFocusGuide(courseId) : null;
+
+  // 슬라이더 가중치별 프롬프트 강도 접두사
+  const getWeightPrefix = (value: number): string => {
+    if (value < 10) return "";
+    if (value < 50) return "(참고용입니다. 반드시 따르지 않아도 됩니다.)";
+    if (value < 75) return "(적극적으로 참고하여 출제하세요.)";
+    if (value < 95) return "(최대한 반영하여 출제하세요. 이 기준에서 벗어나지 마세요.)";
+    return "(반드시 따르세요. 이 지시사항을 벗어나는 문제는 생성하지 마세요.)";
+  };
 
   // Scope가 있으면 "출제 범위"로, 없으면 "학습 자료"로 표현
   const hasScope = !!context.scope?.content;
@@ -820,13 +836,28 @@ ${focusInstruction}
 `;
   }
 
+  // 교수 프롬프트 섹션
+  const professorPromptSection = professorPrompt ? `
+## 교수님 지시사항
+${professorPrompt}
+` : "";
+
+  // 슬라이더 가중치 접두사를 각 섹션에 적용
+  const stylePrefix = sliderWeights ? getWeightPrefix(sliderWeights.style) : "";
+  const scopePrefix = sliderWeights ? getWeightPrefix(sliderWeights.scope) : "";
+  const focusPrefix = sliderWeights ? getWeightPrefix(sliderWeights.focusGuide) : "";
+
+  const styledStyleContext = styleContext && stylePrefix ? `${stylePrefix}\n${styleContext}` : styleContext;
+  const styledScopeContext = scopeContext && scopePrefix ? `${scopePrefix}\n${scopeContext}` : scopeContext;
+  const styledFocusGuide = focusGuideSection && focusPrefix ? `${focusPrefix}\n${focusGuideSection}` : focusGuideSection;
+
   return `당신은 ${courseName} 과목의 대학 교수입니다.
 학생들의 시험을 준비시키기 위한 객관식 문제 ${questionCount}개를 만들어주세요.
-
-${styleContext}
+${professorPromptSection}
+${styledStyleContext}
 ${difficultyPrompt}
-${focusGuideSection}
-${scopeContext}
+${styledFocusGuide}
+${styledScopeContext}
 ${chapterIndexPrompt}
 ${imageSection}
 ## ${uploadedTextLabel}

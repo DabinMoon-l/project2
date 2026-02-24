@@ -1,0 +1,216 @@
+/**
+ * 교수 서재 — 백그라운드 AI 문제 생성 Job 매니저 (모듈 싱글톤)
+ *
+ * 컴포넌트 라이프사이클과 독립적으로 동작.
+ * 페이지를 벗어나도 폴링이 유지되고, 완료 시 Firestore 저장 + 이벤트 발행.
+ */
+
+import { httpsCallable } from 'firebase/functions';
+import {
+  getFirestore,
+  doc,
+  setDoc,
+  collection,
+  serverTimestamp,
+} from 'firebase/firestore';
+import { functions } from '@/lib/firebase';
+
+// ============================================================
+// 타입
+// ============================================================
+
+export type JobEventType = 'started' | 'progress' | 'completed' | 'failed' | 'cancelled';
+
+export interface JobEvent {
+  type: JobEventType;
+  step?: string; // uploading | analyzing | generating
+  questionCount?: number;
+  error?: string;
+}
+
+export interface QuizSaveConfig {
+  uid: string;
+  nickname: string;
+  courseId: string;
+  semester: string;
+  questionCount: number;
+  difficulty: string;
+}
+
+interface GeneratedQuestion {
+  text: string;
+  choices: string[];
+  answer: number | number[];
+  explanation: string;
+  choiceExplanations?: string[];
+  chapterId?: string;
+  chapterDetailId?: string;
+  imageUrl?: string;
+  imageDescription?: string;
+}
+
+// ============================================================
+// 모듈 레벨 싱글톤 상태
+// ============================================================
+
+let activeJobId: string | null = null;
+let pollingActive = false;
+let saveConfig: QuizSaveConfig | null = null;
+let listeners: Array<(event: JobEvent) => void> = [];
+
+// ============================================================
+// 이벤트 리스너
+// ============================================================
+
+export function onLibraryJobEvent(listener: (event: JobEvent) => void): () => void {
+  listeners.push(listener);
+  return () => {
+    listeners = listeners.filter(l => l !== listener);
+  };
+}
+
+function emit(event: JobEvent) {
+  for (const l of listeners) {
+    try { l(event); } catch {}
+  }
+}
+
+// ============================================================
+// 상태 조회
+// ============================================================
+
+export function isLibraryJobActive(): boolean {
+  return pollingActive;
+}
+
+export function getActiveJobId(): string | null {
+  return activeJobId;
+}
+
+// ============================================================
+// Job 시작 (fire-and-forget)
+// ============================================================
+
+export function startLibraryJob(jobId: string, config: QuizSaveConfig): void {
+  // 이미 진행 중이면 무시
+  if (pollingActive) return;
+
+  activeJobId = jobId;
+  saveConfig = config;
+  pollingActive = true;
+
+  emit({ type: 'started' });
+
+  // 백그라운드 폴링 시작 (detached promise)
+  pollAndSave(jobId, config).catch(() => {});
+}
+
+// ============================================================
+// Job 취소
+// ============================================================
+
+export function cancelLibraryJob(): void {
+  pollingActive = false;
+  activeJobId = null;
+  saveConfig = null;
+  emit({ type: 'cancelled' });
+}
+
+// ============================================================
+// 내부: 폴링 + Firestore 저장
+// ============================================================
+
+async function pollAndSave(jobId: string, config: QuizSaveConfig) {
+  const checkStatus = httpsCallable<
+    { jobId: string },
+    {
+      jobId: string;
+      status: string;
+      result?: { questions: GeneratedQuestion[]; meta?: any };
+      error?: string;
+    }
+  >(functions, 'checkJobStatus');
+
+  const MAX_POLLS = 90; // 최대 3분
+  let pollCount = 0;
+
+  try {
+    let questions: GeneratedQuestion[] = [];
+
+    while (pollingActive && pollCount < MAX_POLLS) {
+      const statusResult = await checkStatus({ jobId });
+      const { status, result, error } = statusResult.data;
+
+      if (status === 'RUNNING') {
+        emit({ type: 'progress', step: 'generating' });
+      }
+
+      if (status === 'COMPLETED' && result) {
+        questions = result.questions.slice(0, config.questionCount);
+        break;
+      }
+
+      if (status === 'FAILED') {
+        throw new Error(error || '문제 생성에 실패했습니다.');
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      pollCount++;
+    }
+
+    if (!pollingActive) return; // 취소됨
+
+    if (questions.length === 0) {
+      throw new Error('문제 생성 시간이 초과되었습니다.');
+    }
+
+    // Firestore 저장
+    const firestoreDb = getFirestore();
+    const quizRef = doc(collection(firestoreDb, 'quizzes'));
+
+    const quizData = {
+      title: `AI 생성 (${new Date().toLocaleDateString('ko-KR')})`,
+      tags: [],
+      isPublic: false,
+      difficulty: config.difficulty,
+      type: 'professor-ai',
+      questions: questions.map((q, idx) => ({
+        id: `q${idx + 1}`,
+        order: idx + 1,
+        type: 'multiple' as const,
+        text: q.text,
+        choices: q.choices,
+        answer: q.answer,
+        explanation: q.explanation || '',
+        ...(q.choiceExplanations ? { choiceExplanations: q.choiceExplanations } : {}),
+        chapterId: q.chapterId || null,
+        chapterDetailId: q.chapterDetailId || null,
+        imageUrl: q.imageUrl || null,
+        imageDescription: q.imageDescription || null,
+      })),
+      questionCount: questions.length,
+      oxCount: 0,
+      multipleChoiceCount: questions.length,
+      subjectiveCount: 0,
+      participantCount: 0,
+      userScores: {},
+      creatorId: config.uid,
+      creatorNickname: config.nickname,
+      courseId: config.courseId,
+      semester: config.semester,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    await setDoc(quizRef, quizData);
+
+    emit({ type: 'completed', questionCount: questions.length });
+
+  } catch (err: any) {
+    emit({ type: 'failed', error: err?.message || '문제 생성 중 오류가 발생했습니다.' });
+  } finally {
+    pollingActive = false;
+    activeJobId = null;
+    saveConfig = null;
+  }
+}

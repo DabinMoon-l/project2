@@ -18,6 +18,7 @@ import {
   where,
   doc,
   getDoc,
+  getDocs,
   onSnapshot,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -280,6 +281,9 @@ interface FlattenedQuestion {
   passageType?: string;
   passageImage?: string;
   koreanAbcItems?: string[];
+  // 해설
+  explanation?: string;
+  choiceExplanations?: string[];
   // 문제 수정 시간 (수정된 문제만)
   questionUpdatedAt?: number;
 }
@@ -310,6 +314,9 @@ interface QuestionStats {
   passageType?: string;
   passageImage?: string;
   koreanAbcItems?: string[];
+  // 해설
+  explanation?: string;
+  choiceExplanations?: string[];
   // OX 선택 분포
   oxDistribution?: { o: number; x: number };
   // 객관식 선지별 선택 분포
@@ -418,6 +425,8 @@ function flattenQuestions(questions: any[]): FlattenedQuestion[] {
         passageType: q.combinedIndex === 0 ? q.passageType : undefined,
         passageImage: q.combinedIndex === 0 ? q.passageImage : undefined,
         koreanAbcItems: q.combinedIndex === 0 ? q.koreanAbcItems : undefined,
+        explanation: q.explanation,
+        choiceExplanations: q.choiceExplanations,
         questionUpdatedAt: toMillis(q.questionUpdatedAt) || undefined,
       });
     }
@@ -448,6 +457,8 @@ function flattenQuestions(questions: any[]): FlattenedQuestion[] {
           passageType: idx === 0 ? q.passageType : undefined,
           passageImage: idx === 0 ? q.passageImage : undefined,
           koreanAbcItems: idx === 0 ? q.koreanAbcItems : undefined,
+          explanation: sq.explanation,
+          choiceExplanations: sq.choiceExplanations,
           questionUpdatedAt: updatedAt || undefined,
         });
       });
@@ -466,6 +477,8 @@ function flattenQuestions(questions: any[]): FlattenedQuestion[] {
         mixedExamples: q.mixedExamples,
         passagePrompt: q.passagePrompt,
         bogi: q.bogi,
+        explanation: q.explanation,
+        choiceExplanations: q.choiceExplanations,
         questionUpdatedAt: toMillis(q.questionUpdatedAt) || undefined,
       });
     }
@@ -519,6 +532,11 @@ export default function QuizStatsModal({
   const { customFolders, createCustomFolder, addToCustomFolder } = useCustomFolders();
   const [showFolderModal, setShowFolderModal] = useState(false);
   const [folderSaveToast, setFolderSaveToast] = useState<string | null>(null);
+
+  // 피드백 모달
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [feedbackList, setFeedbackList] = useState<any[]>([]);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
 
   // 문제 스와이프 (가로 슬라이드)
   const questionContentRef = useRef<HTMLDivElement>(null);
@@ -732,6 +750,8 @@ export default function QuizStatsModal({
           passageType: q.passageType,
           passageImage: q.passageImage,
           koreanAbcItems: q.koreanAbcItems,
+          explanation: q.explanation,
+          choiceExplanations: q.choiceExplanations,
         })),
       };
     }
@@ -880,6 +900,9 @@ export default function QuizStatsModal({
         passageType: q.passageType,
         passageImage: q.passageImage,
         koreanAbcItems: q.koreanAbcItems,
+        explanation: q.explanation,
+        // 수정된 문제는 선지별 해설이 맞지 않을 수 있으므로, 수정되지 않은 문제만 표시
+        choiceExplanations: q.questionUpdatedAt ? undefined : q.choiceExplanations,
       };
 
       // OX 분포
@@ -1087,6 +1110,41 @@ export default function QuizStatsModal({
   const hasValidMixedExamples = currentQuestion?.mixedExamples &&
     currentQuestion.mixedExamples.length > 0 &&
     currentQuestion.mixedExamples.some(item => isValidMixedItem(item));
+
+  // 피드백 로드
+  const handleOpenFeedback = useCallback(async () => {
+    setShowFeedbackModal(true);
+    setFeedbackLoading(true);
+    try {
+      const feedbacksRef = collection(db, 'questionFeedbacks');
+      const q = query(feedbacksRef, where('quizId', '==', quizId));
+      const snapshot = await getDocs(q);
+
+      const items: any[] = [];
+      snapshot.forEach((d) => {
+        const data = d.data();
+        items.push({
+          id: d.id,
+          ...data,
+          feedbackType: data.type || data.feedbackType,
+          feedback: data.content || data.feedback || '',
+        });
+      });
+
+      // 최신순 정렬
+      items.sort((a, b) => {
+        const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
+        const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
+        return bTime - aTime;
+      });
+
+      setFeedbackList(items);
+    } catch (err) {
+      console.error('피드백 로드 실패:', err);
+    } finally {
+      setFeedbackLoading(false);
+    }
+  }, [quizId]);
 
   // 현재 문제를 폴더에 저장
   const handleFolderSelect = async (folderId: string) => {
@@ -1584,66 +1642,76 @@ export default function QuizStatsModal({
                           const maxWrongPercentage = wrongOptions.length > 0
                             ? Math.max(...wrongOptions.map(o => o.percentage))
                             : 0;
+                          const choiceExpls = currentQuestion.choiceExplanations;
 
                           return (
                             <div className="space-y-2 mb-4">
                               {currentQuestion.optionDistribution.map((opt, optIdx) => {
                                 // 오답 중에서 선택률이 가장 높은 경우 빨간 테두리
                                 const isHighestWrong = !opt.isCorrect && opt.percentage === maxWrongPercentage && maxWrongPercentage > 0;
+                                const choiceExpl = choiceExpls?.[optIdx];
 
                                 // 정답 선지 - 선택률만큼 초록 배경 채움
                                 if (opt.isCorrect) {
                                   return (
-                                    <div
-                                      key={optIdx}
-                                      className="relative flex items-center gap-3 p-3 border-2 border-[#1A6B1A] overflow-hidden"
-                                      style={{ backgroundColor: '#F5F0E8' }}
-                                    >
-                                      {opt.percentage > 0 && (
-                                        <motion.div
-                                          initial={{ width: 0 }}
-                                          animate={{ width: `${opt.percentage}%` }}
-                                          transition={{ duration: 0.6, ease: 'easeOut', delay: 0.1 + optIdx * 0.05 }}
-                                          className="absolute left-0 top-0 bottom-0 bg-[#E8F5E9]"
-                                        />
+                                    <div key={optIdx}>
+                                      <div
+                                        className="relative flex items-center gap-3 p-3 border-2 border-[#1A6B1A] overflow-hidden"
+                                        style={{ backgroundColor: '#F5F0E8' }}
+                                      >
+                                        {opt.percentage > 0 && (
+                                          <motion.div
+                                            initial={{ width: 0 }}
+                                            animate={{ width: `${opt.percentage}%` }}
+                                            transition={{ duration: 0.6, ease: 'easeOut', delay: 0.1 + optIdx * 0.05 }}
+                                            className="absolute left-0 top-0 bottom-0 bg-[#E8F5E9]"
+                                          />
+                                        )}
+                                        <span className="relative z-10 text-base font-bold min-w-[24px] text-[#1A6B1A]">
+                                          {optIdx + 1}.
+                                        </span>
+                                        <span className="relative z-10 flex-1 text-base text-[#1A1A1A]">{opt.option}</span>
+                                        <span className="relative z-10 text-base font-bold text-[#1A6B1A]">
+                                          {opt.percentage}%
+                                        </span>
+                                      </div>
+                                      {choiceExpl && (
+                                        <p className="mt-1 ml-2 text-xs text-[#5C5C5C] italic">{choiceExpl}</p>
                                       )}
-                                      <span className="relative z-10 text-base font-bold min-w-[24px] text-[#1A6B1A]">
-                                        {optIdx + 1}.
-                                      </span>
-                                      <span className="relative z-10 flex-1 text-base text-[#1A1A1A]">{opt.option}</span>
-                                      <span className="relative z-10 text-base font-bold text-[#1A6B1A]">
-                                        {opt.percentage}%
-                                      </span>
                                     </div>
                                   );
                                 }
 
                                 // 오답 선지 - 선택률만큼 배경 그래프 채움
                                 return (
-                                  <div
-                                    key={optIdx}
-                                    className={`relative flex items-center gap-3 p-3 border-2 overflow-hidden ${
-                                      isHighestWrong ? 'border-[#8B1A1A]' : 'border-[#D4CFC4]'
-                                    }`}
-                                    style={{ backgroundColor: '#F5F0E8' }}
-                                  >
-                                    {/* 선택률 배경 그래프 */}
-                                    {opt.percentage > 0 && (
-                                      <motion.div
-                                        initial={{ width: 0 }}
-                                        animate={{ width: `${opt.percentage}%` }}
-                                        transition={{ duration: 0.6, ease: 'easeOut', delay: 0.1 + optIdx * 0.05 }}
-                                        className="absolute left-0 top-0 bottom-0 bg-[#FDEAEA]"
-                                      />
+                                  <div key={optIdx}>
+                                    <div
+                                      className={`relative flex items-center gap-3 p-3 border-2 overflow-hidden ${
+                                        isHighestWrong ? 'border-[#8B1A1A]' : 'border-[#D4CFC4]'
+                                      }`}
+                                      style={{ backgroundColor: '#F5F0E8' }}
+                                    >
+                                      {/* 선택률 배경 그래프 */}
+                                      {opt.percentage > 0 && (
+                                        <motion.div
+                                          initial={{ width: 0 }}
+                                          animate={{ width: `${opt.percentage}%` }}
+                                          transition={{ duration: 0.6, ease: 'easeOut', delay: 0.1 + optIdx * 0.05 }}
+                                          className="absolute left-0 top-0 bottom-0 bg-[#FDEAEA]"
+                                        />
+                                      )}
+                                      {/* 콘텐츠 */}
+                                      <span className={`relative z-10 text-base font-bold min-w-[24px] ${isHighestWrong ? 'text-[#8B1A1A]' : 'text-[#5C5C5C]'}`}>
+                                        {optIdx + 1}.
+                                      </span>
+                                      <span className="relative z-10 flex-1 text-base text-[#1A1A1A]">{opt.option}</span>
+                                      <span className={`relative z-10 text-base font-bold ${isHighestWrong ? 'text-[#8B1A1A]' : 'text-[#5C5C5C]'}`}>
+                                        {opt.percentage}%
+                                      </span>
+                                    </div>
+                                    {choiceExpl && (
+                                      <p className="mt-1 ml-2 text-xs text-[#5C5C5C] italic">{choiceExpl}</p>
                                     )}
-                                    {/* 콘텐츠 */}
-                                    <span className={`relative z-10 text-base font-bold min-w-[24px] ${isHighestWrong ? 'text-[#8B1A1A]' : 'text-[#5C5C5C]'}`}>
-                                      {optIdx + 1}.
-                                    </span>
-                                    <span className="relative z-10 flex-1 text-base text-[#1A1A1A]">{opt.option}</span>
-                                    <span className={`relative z-10 text-base font-bold ${isHighestWrong ? 'text-[#8B1A1A]' : 'text-[#5C5C5C]'}`}>
-                                      {opt.percentage}%
-                                    </span>
                                   </div>
                                 );
                               })}
@@ -1674,6 +1742,16 @@ export default function QuizStatsModal({
                           </div>
                         )}
 
+                        {/* 해설 */}
+                        <div className="mt-4 p-3 border border-dashed border-[#A0A0A0] bg-[#FDFBF7]">
+                          <p className="text-xs font-bold text-[#5C5C5C] mb-1">해설</p>
+                          {currentQuestion.explanation ? (
+                            <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{currentQuestion.explanation}</p>
+                          ) : (
+                            <p className="text-sm text-[#A0A0A0] italic">해설 없음</p>
+                          )}
+                        </div>
+
                       </div>
                       )}
                       </div>
@@ -1685,7 +1763,113 @@ export default function QuizStatsModal({
             </div>
           )}
         </div>
+
+        {/* 피드백 아이콘 (우측 하단) */}
+        <button
+          onClick={handleOpenFeedback}
+          className="absolute bottom-3 right-3 w-10 h-10 flex items-center justify-center text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors"
+          title="피드백 보기"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+          </svg>
+        </button>
       </motion.div>
+
+      {/* 피드백 모달 */}
+      <AnimatePresence>
+        {showFeedbackModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/50"
+            onClick={() => { setShowFeedbackModal(false); setFeedbackList([]); }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md bg-[#F5F0E8] border-2 border-[#1A1A1A] max-h-[80vh] overflow-visible flex flex-col"
+            >
+              <div className="p-4 border-b border-[#1A1A1A]">
+                <h2 className="text-lg font-bold text-[#1A1A1A]">피드백</h2>
+                <p className="text-sm text-[#5C5C5C]">{quizTitle}</p>
+              </div>
+
+              <div className="flex-1 overflow-y-auto overscroll-contain p-4">
+                {feedbackLoading && (
+                  <div className="py-8 text-center">
+                    <p className="text-[#5C5C5C]">로딩 중...</p>
+                  </div>
+                )}
+
+                {!feedbackLoading && feedbackList.length === 0 && (
+                  <div className="py-8 text-center">
+                    <p className="text-[#5C5C5C]">아직 피드백이 없습니다.</p>
+                  </div>
+                )}
+
+                {!feedbackLoading && feedbackList.length > 0 && (
+                  <div className="space-y-3">
+                    {feedbackList.map((feedback) => {
+                      const typeLabels: Record<string, string> = {
+                        praise: '문제가 좋아요!',
+                        wantmore: '더 풀고 싶어요',
+                        unclear: '문제가 이해가 안 돼요',
+                        wrong: '정답이 틀린 것 같아요',
+                        typo: '오타가 있어요',
+                        other: '기타 의견',
+                      };
+                      const typeLabel = typeLabels[feedback.feedbackType] || feedback.feedbackType || '피드백';
+                      let questionNum = 0;
+                      if (feedback.questionNumber && feedback.questionNumber > 0 && feedback.questionNumber < 1000) {
+                        questionNum = feedback.questionNumber;
+                      } else if (feedback.questionId) {
+                        const match = feedback.questionId.match(/^q(\d{1,3})$/);
+                        if (match) {
+                          questionNum = parseInt(match[1], 10) + 1;
+                        }
+                      }
+
+                      return (
+                        <div
+                          key={feedback.id}
+                          className="p-4 border border-[#1A1A1A] bg-[#EDEAE4]"
+                        >
+                          {questionNum > 0 && (
+                            <p className="text-sm text-[#5C5C5C] mb-1">
+                              문제 {questionNum}.
+                            </p>
+                          )}
+                          <p className="text-base font-bold text-[#8B6914] mb-2">
+                            {typeLabel}
+                          </p>
+                          {feedback.feedback && (
+                            <p className="text-base text-[#1A1A1A]">
+                              {feedback.feedback}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="p-4 border-t border-[#1A1A1A]">
+                <button
+                  onClick={() => { setShowFeedbackModal(false); setFeedbackList([]); }}
+                  className="w-full py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4]"
+                >
+                  닫기
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* 폴더 선택 모달 */}
       <FolderSelectModal

@@ -134,7 +134,9 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 | `essay.ts` | AI 보조 채점 (deprecated — Claude는 monthlyReport로 이전) |
 | `weeklyStats.ts` | 매주 월요일 퀴즈/피드백/학생/게시판 데이터 자동 수집 (Scheduled) |
 | `monthlyReport.ts` | Claude Sonnet 월별 리포트 생성 (Callable, 교수 전용) |
-| `styledQuizGenerator.ts` | 교수 출제 스타일 학습 → AI 문제 생성 (Gemini) |
+| `styledQuizGenerator.ts` | 교수 출제 스타일 학습 → AI 문제 생성 (Gemini, sliderWeights/professorPrompt 지원) |
+| `enqueueGenerationJob.ts` | AI 문제 생성 Job 큐 등록 (Callable) |
+| `workerProcessJob.ts` | AI 문제 생성 백그라운드 워커 (Firestore trigger) |
 | `imageRegionAnalysis.ts` | Gemini Vision 이미지 영역 감지 |
 | `imageCropping.ts` | 이미지 크롭 → Firebase Storage 업로드 |
 | `pptx.ts` | PPTX 업로드 → Cloud Run 트리거 |
@@ -309,10 +311,23 @@ Tailwind에서 `bg-theme-background`, `text-theme-accent` 등으로 사용 (`tai
 - 3D 전환: rotateY ±8°, scale 0.92, opacity 0.9 (비활성 카드)
 - 난이도별 MP4 비디오 카드 (`/videos/difficulty-easy|normal|hard.mp4`)
 - 기출 카드: PAST EXAM 헤더에 장식선 + 년도/시험 드롭다운
-- BEST Q 별도 페이지 (`/professor/quiz/best-q`)
+- 퀴즈 관리 페이지 (`/professor/quiz/best-q`): 3탭 (피드백 / 서재 / 커스텀)
 - 퀴즈 미리보기 페이지 (`/professor/quiz/[id]/preview`)
 - 자작 퀴즈: 신문 스타일 카드 그리드 + 태그 검색
+- 자작 Details 모달: 미리보기 버튼 없음 (캐러셀 Details에만 표시)
 - 과목별 리본 이미지 스와이프 전환 (CourseRibbonHeader)
+
+**교수 서재 (AI 문제 생성)** (`components/professor/library/ProfessorLibraryTab.tsx`):
+- 프롬프트 입력 + 파일 업로드(이미지/PDF/PPT) + 슬라이더(스타일/범위/포커스가이드/난이도/문제수)
+- `enqueueGenerationJob` CF 호출 → 백그라운드 폴링 (`lib/utils/libraryJobManager.ts`)
+- 생성 중 다른 페이지 이동 가능, 완료 시 상단 토스트 (`LibraryJobToast.tsx`, layout.tsx에 마운트)
+- 생성된 퀴즈는 `type: 'professor-ai'`로 저장, `useProfessorAiQuizzes` 훅으로 실시간 구독
+- 슬라이더 가중치: 0-9% OFF, 10-49% 낮음, 50-74% 보통, 75-94% 높음, 95-100% 강력
+
+**퀴즈 통계 모달** (`components/quiz/manage/QuizStatsModal.tsx`):
+- 반별 필터링, 문제별 스와이프 분석, 변별도 (4명 이상 응답 시 표시)
+- 선지별 해설 표시 (수정된 문제는 choiceExplanations 제외), 해설 섹션 (없으면 "해설 없음")
+- 우측 하단 피드백 아이콘 → questionFeedbacks 조회 모달
 
 ### 교수 설정 (`app/(main)/professor/settings/page.tsx`)
 
@@ -473,7 +488,10 @@ generateScoreSummary(result)                // 텍스트 요약
 - **보통**: 객관식 + 제시문
 - **어려움**: 객관식 + 제시문 + ㄱㄴㄷ 보기 + 이미지 자동 크롭 (Gemini Vision)
 
-관련: `functions/src/styledQuizGenerator.ts`, `functions/src/imageRegionAnalysis.ts`, `components/ai-quiz/AIQuizContainer.tsx`
+**학생용**: `components/ai-quiz/AIQuizContainer.tsx` (플로팅 버튼)
+**교수용 서재**: `components/professor/library/ProfessorLibraryTab.tsx` (슬라이더 가중치 + 교수 프롬프트)
+
+관련 CF: `styledQuizGenerator.ts`, `enqueueGenerationJob.ts`, `workerProcessJob.ts`, `imageRegionAnalysis.ts`
 
 ## 알려진 제약 및 주의사항
 

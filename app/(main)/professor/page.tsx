@@ -194,7 +194,7 @@ export default function ProfessorHomePage() {
           <ProfessorCharacterBox />
 
           {/* 랭킹 — 하단 (과목 전환 포함) */}
-          <div className="mt-auto -translate-y-[80px]">
+          <div className="mt-auto -translate-y-[120px]">
             {/* 과목 스위처 */}
             <div className="mb-5">
               <CourseSwitcher

@@ -33,6 +33,16 @@ export interface GenerationJob {
   courseName: string;
   courseCustomized: boolean; // 과목 맞춤형 (false면 스타일/범위/포커스 제외)
 
+  // 교수 서재 옵션
+  sliderWeights?: {
+    style: number;       // 0-100
+    scope: number;       // 0-100
+    focusGuide: number;  // 0-100
+    difficulty: number;  // 0-100
+    questionCount: number; // 5-20
+  };
+  professorPrompt?: string;
+
   // 중복 방지
   dedupeKey: string;
 
@@ -68,7 +78,9 @@ function buildDedupeKey(
   difficulty: string,
   questionCount: number,
   courseId: string,
-  courseCustomized: boolean
+  courseCustomized: boolean,
+  sliderWeights?: { style: number; scope: number; focusGuide: number; difficulty: number; questionCount: number },
+  professorPrompt?: string
 ): string {
   const hash = crypto.createHash("sha256");
   hash.update(userId);
@@ -77,6 +89,14 @@ function buildDedupeKey(
   hash.update(String(questionCount));
   hash.update(courseId);
   hash.update(String(courseCustomized));
+
+  // 슬라이더 + 프롬프트 포함
+  if (sliderWeights) {
+    hash.update(JSON.stringify(sliderWeights));
+  }
+  if (professorPrompt) {
+    hash.update(professorPrompt.slice(0, 500));
+  }
 
   // 이미지는 앞 100바이트씩만 해싱 (전체 base64는 너무 큼)
   for (const img of images.slice(0, 5)) {
@@ -108,6 +128,14 @@ export const enqueueGenerationJob = onCall(
       courseId?: string;
       courseName?: string;
       courseCustomized?: boolean;
+      sliderWeights?: {
+        style: number;
+        scope: number;
+        focusGuide: number;
+        difficulty: number;
+        questionCount: number;
+      } | null;
+      professorPrompt?: string | null;
     };
     // Firebase SDK가 undefined → null로 직렬화하므로 ?? 로 안전하게 처리
     const text = raw.text ?? "";
@@ -117,6 +145,8 @@ export const enqueueGenerationJob = onCall(
     const courseId = raw.courseId ?? "general";
     const courseName = raw.courseName ?? "일반";
     const courseCustomized = raw.courseCustomized ?? true;
+    const sliderWeights = raw.sliderWeights ?? undefined;
+    const professorPrompt = raw.professorPrompt ?? undefined;
 
     // Rate limit 검사
     try {
@@ -139,7 +169,9 @@ export const enqueueGenerationJob = onCall(
       difficulty,
       questionCount,
       courseId,
-      courseCustomized
+      courseCustomized,
+      sliderWeights,
+      professorPrompt
     );
 
     // 중복 Job 확인 (최근 10분 이내 같은 dedupeKey)
@@ -210,6 +242,8 @@ export const enqueueGenerationJob = onCall(
       courseId,
       courseName,
       courseCustomized,
+      ...(sliderWeights ? { sliderWeights } : {}),
+      ...(professorPrompt ? { professorPrompt } : {}),
       dedupeKey,
       materialFingerprint,
       createdAt: FieldValue.serverTimestamp(),

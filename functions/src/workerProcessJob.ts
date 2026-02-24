@@ -119,6 +119,8 @@ export const workerProcessJob = onDocumentCreated(
       courseName,
       userId,
       courseCustomized = true,
+      sliderWeights,
+      professorPrompt,
     } = jobData;
 
     // Storage 경로인 경우 실제 base64 데이터 다운로드
@@ -172,23 +174,32 @@ export const workerProcessJob = onDocumentCreated(
 
       // ========================================
       // 과목 맞춤형일 때만 스타일/키워드/스코프 로드
+      // 슬라이더 가중치 < 10이면 해당 섹션 로드 스킵
       // ========================================
       if (courseCustomized) {
         const analysisRef = db.collection("professorQuizAnalysis").doc(courseId);
         const shouldLoadScope = !cacheHit && (isShortText || validDifficulty !== "easy");
 
+        // 슬라이더 가중치에 따른 조건부 로드
+        const skipStyle = sliderWeights && sliderWeights.style < 10;
+        const skipScope = sliderWeights && sliderWeights.scope < 10;
+
         const [profileDoc, keywordsDoc, scopeResult] = await Promise.all([
-          analysisRef.collection("data").doc("styleProfile").get(),
-          analysisRef.collection("data").doc("keywords").get(),
-          shouldLoadScope
+          !skipStyle
+            ? analysisRef.collection("data").doc("styleProfile").get()
+            : Promise.resolve(null),
+          !skipStyle
+            ? analysisRef.collection("data").doc("keywords").get()
+            : Promise.resolve(null),
+          shouldLoadScope && !skipScope
             ? loadScopeForQuiz(courseId, trimmedText || "general", validDifficulty)
             : Promise.resolve(null),
         ]);
 
-        if (profileDoc.exists) {
+        if (profileDoc && profileDoc.exists) {
           styleContext.profile = profileDoc.data() as StyleProfile;
         }
-        if (keywordsDoc.exists) {
+        if (keywordsDoc && keywordsDoc.exists) {
           styleContext.keywords = keywordsDoc.data() as KeywordStore;
         }
         if (scopeResult) {
@@ -246,12 +257,15 @@ export const workerProcessJob = onDocumentCreated(
         isShortText,
         isVeryShortText,
         croppedImages,
-        courseCustomized
+        courseCustomized,
+        sliderWeights ? { style: sliderWeights.style, scope: sliderWeights.scope, focusGuide: sliderWeights.focusGuide } : undefined,
+        professorPrompt
       );
 
       console.log(
         `[Worker] Job ${jobId} 문제 생성 시작: ` +
-        `과목=${courseName}, 난이도=${validDifficulty}, 개수=${validQuestionCount}, 맞춤형=${courseCustomized}`
+        `과목=${courseName}, 난이도=${validDifficulty}, 개수=${validQuestionCount}, 맞춤형=${courseCustomized}` +
+        (sliderWeights ? `, 슬라이더=${JSON.stringify(sliderWeights)}` : "")
       );
 
       const questions = await generateWithGemini(
@@ -457,6 +471,8 @@ async function processJobData(
     courseName,
     userId,
     courseCustomized = true,
+    sliderWeights,
+    professorPrompt,
   } = jobData;
 
   // Storage 경로인 경우 실제 base64 데이터 다운로드
@@ -498,22 +514,30 @@ async function processJobData(
   }
 
   // 과목 맞춤형일 때만 스타일/키워드/스코프 로드
+  // 슬라이더 가중치 < 10이면 해당 섹션 로드 스킵
   if (courseCustomized) {
     const analysisRef = db.collection("professorQuizAnalysis").doc(courseId);
     const shouldLoadScope = !cacheHit && (isShortText || validDifficulty !== "easy");
 
+    const skipStyle = sliderWeights && sliderWeights.style < 10;
+    const skipScope = sliderWeights && sliderWeights.scope < 10;
+
     const [profileDoc, keywordsDoc, scopeResult] = await Promise.all([
-      analysisRef.collection("data").doc("styleProfile").get(),
-      analysisRef.collection("data").doc("keywords").get(),
-      shouldLoadScope
+      !skipStyle
+        ? analysisRef.collection("data").doc("styleProfile").get()
+        : Promise.resolve(null),
+      !skipStyle
+        ? analysisRef.collection("data").doc("keywords").get()
+        : Promise.resolve(null),
+      shouldLoadScope && !skipScope
         ? loadScopeForQuiz(courseId, trimmedText || "general", validDifficulty)
         : Promise.resolve(null),
     ]);
 
-    if (profileDoc.exists) {
+    if (profileDoc && profileDoc.exists) {
       styleContext.profile = profileDoc.data() as StyleProfile;
     }
-    if (keywordsDoc.exists) {
+    if (keywordsDoc && keywordsDoc.exists) {
       styleContext.keywords = keywordsDoc.data() as KeywordStore;
     }
     if (scopeResult) {
@@ -557,7 +581,9 @@ async function processJobData(
     isShortText,
     isVeryShortText,
     croppedImages,
-    courseCustomized
+    courseCustomized,
+    sliderWeights ? { style: sliderWeights.style, scope: sliderWeights.scope, focusGuide: sliderWeights.focusGuide } : undefined,
+    professorPrompt
   );
 
   const questions = await generateWithGemini(
