@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>RABBITORY 시험지</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  @page { size: A4; margin: 0; }
+
+  body {
+    font-family: 'Noto Sans CJK KR', 'Malgun Gothic', sans-serif;
+    font-size: 10pt;
+    line-height: 1.6;
+    color: #000;
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .page {
+    width: 210mm;
+    height: 297mm;
+    padding: 9mm 11mm 14mm 11mm;
+    page-break-after: always;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* ═══════════ HEADER ═══════════ */
+  .header {
+    border: 2.5pt solid #000;
+  }
+  .header-top {
+    display: table;
+    width: 100%;
+    border-bottom: 1.2pt solid #000;
+  }
+  .h-date-cell {
+    display: table-cell;
+    width: 88px;
+    border-right: 2.5pt solid #000;
+    padding: 6px 12px;
+    vertical-align: middle;
+    text-align: center;
+    font-weight: 700;
+    font-size: 10.5pt;
+  }
+  .h-brand-cell {
+    display: table-cell;
+    vertical-align: middle;
+    text-align: center;
+    padding: 7px 0;
+  }
+  .brand {
+    font-family: 'Noto Serif CJK KR', 'Georgia', 'Times New Roman', serif;
+    font-weight: 900;
+    font-size: 30pt;
+    letter-spacing: 5px;
+  }
+  .header-info {
+    display: table;
+    width: 100%;
+  }
+  .h-info-cell {
+    display: table-cell;
+    width: 50%;
+    padding: 5px 12px;
+    font-size: 9.5pt;
+    vertical-align: middle;
+  }
+  .h-info-cell + .h-info-cell {
+    border-left: 0.8pt solid #000;
+  }
+  .label { font-weight: 700; margin-right: 8px; }
+  .value { font-weight: 400; color: #222; }
+
+  .sep-thick {
+    border: none;
+    border-top: 2pt solid #000;
+    margin: 0 0 8px 0;
+  }
+
+  /* ═══════════ 2-COLUMN TABLE ═══════════ */
+  .col-layout {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    height: calc(297mm - 9mm - 14mm - 52px - 20px); /* fill remaining page */
+  }
+  .col-layout > tbody > tr > td {
+    width: 50%;
+    vertical-align: top;
+    padding: 0;
+  }
+  .col-layout > tbody > tr > td:first-child {
+    padding-right: 10px;
+    border-right: 0.4pt solid #bbb;
+  }
+  .col-layout > tbody > tr > td:last-child {
+    padding-left: 10px;
+  }
+
+  /* ═══════════ QUESTION ═══════════ */
+  .q {
+    margin-bottom: 85px;
+    padding-bottom: 50px;
+    border-bottom: 0.4pt solid #ccc;
+  }
+  .q:last-child { border-bottom: none; margin-bottom: 0; }
+
+  .q-head {
+    margin-bottom: 8px;
+    line-height: 1.6;
+  }
+  .q-num {
+    font-weight: 900;
+    font-size: 11pt;
+  }
+  .q-txt {
+    font-size: 10pt;
+  }
+  .q-pts {
+    font-size: 8.5pt;
+    color: #444;
+  }
+
+  /* 제시문 */
+  .passage {
+    border: 0.8pt solid #000;
+    padding: 8px 10px;
+    margin: 8px 4px 8px 4px;
+    font-size: 9.5pt;
+    line-height: 1.65;
+  }
+
+  /* 보기 */
+  .bogi {
+    border: 0.8pt solid #000;
+    padding: 6px 10px;
+    margin: 8px 4px 8px 4px;
+  }
+  .bogi-title {
+    text-align: center;
+    font-size: 9pt;
+    font-weight: 700;
+    margin-bottom: 4px;
+    letter-spacing: 6px;
+  }
+  .bogi-item {
+    font-size: 9.5pt;
+    line-height: 1.6;
+    margin-bottom: 1px;
+  }
+  .bogi-lbl { font-weight: 600; }
+
+  /* 이미지 */
+  .q-img {
+    text-align: center;
+    margin: 6px 0;
+  }
+  .q-img img {
+    max-width: 90%;
+    max-height: 130px;
+  }
+
+  /* 선택지 inline */
+  .ch-inline {
+    margin: 10px 0 0 2px;
+    font-size: 9.5pt;
+    line-height: 1.8;
+  }
+  .ch-inline .ci {
+    margin-right: 10px;
+    white-space: nowrap;
+  }
+
+  /* 선택지 block */
+  .ch-block {
+    margin: 10px 0 0 2px;
+  }
+  .ch-block .cb {
+    font-size: 9.5pt;
+    line-height: 1.75;
+  }
+  .c-n { font-weight: 500; margin-right: 3px; }
+
+  /* ═══════════ FOOTER ═══════════ */
+  .pg-footer {
+    position: absolute;
+    bottom: 7mm;
+    left: 0; right: 0;
+    text-align: center;
+    font-size: 9pt;
+  }
+
+  /* ═══════════ ANSWER PAGE ═══════════ */
+  .ans-header {
+    border: 2.5pt solid #000;
+  }
+  .ans-brand-row {
+    text-align: center;
+    padding: 4px 0 0 0;
+  }
+  .ans-brand-row .brand {
+    font-size: 14pt;
+    letter-spacing: 3px;
+  }
+  .ans-main {
+    display: table;
+    width: 100%;
+    border-top: 1.2pt solid #000;
+  }
+  .ans-title-cell {
+    display: table-cell;
+    vertical-align: middle;
+    text-align: center;
+    padding: 6px 0;
+  }
+  .ans-title {
+    font-family: 'Noto Sans CJK KR', sans-serif;
+    font-weight: 900;
+    font-size: 28pt;
+    letter-spacing: 4px;
+  }
+
+  .ans-item {
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 0.3pt solid #ddd;
+  }
+  .ans-item:last-child { border-bottom: none; }
+
+  .ans-num-line {
+    font-weight: 900;
+    font-size: 10.5pt;
+    margin-bottom: 3px;
+  }
+  .ans-val {
+    font-weight: 900;
+    font-size: 11pt;
+  }
+  .ans-exp {
+    font-size: 9.5pt;
+    line-height: 1.7;
+    color: #111;
+    margin-left: 16px;
+    margin-top: 4px;
+    white-space: pre-wrap;
+  }
+</style>
+</head>
+<body>
+
+<!-- ════════ 문제지 페이지 1 ════════ -->
+<div class="page">
+
+  <div class="header">
+    <div class="header-top">
+      <div class="h-date-cell">2025.02.25</div>
+      <div class="h-brand-cell"><span class="brand">RABBITORY</span></div>
+    </div>
+    <div class="header-info">
+      <div class="h-info-cell"><span class="label">성명</span><span class="value">용사님</span></div>
+      <div class="h-info-cell"><span class="label">학번</span><span class="value">20240001</span></div>
+    </div>
+  </div>
+  <hr class="sep-thick">
+
+  <table class="col-layout"><tr>
+    <!-- ── 좌측 칼럼 ── -->
+    <td>
+
+      <div class="q">
+        <div class="q-head">
+          <span class="q-num">1.</span>
+          <span class="q-txt">다음은 세포의 구조와 기능에 대한 설명이다. 이에 대한 설명으로 옳은 것만을 &lt;보기&gt;에서 있는 대로 고른 것은?</span>
+        </div>
+        <div class="passage">
+          세포막은 인지질 이중층으로 구성되어 있으며, 선택적 투과성을 가진다. 세포막을 통한 물질의 이동은 확산, 삼투, 능동 수송 등의 방식으로 이루어진다.
+        </div>
+        <div class="bogi">
+          <div class="bogi-title">&lt; 보 기 &gt;</div>
+          <div class="bogi-item"><span class="bogi-lbl">ㄱ.</span> 확산은 에너지를 필요로 하지 않는다.</div>
+          <div class="bogi-item"><span class="bogi-lbl">ㄴ.</span> 삼투는 반투과성 막을 통한 용매의 이동이다.</div>
+          <div class="bogi-item"><span class="bogi-lbl">ㄷ.</span> 능동 수송은 농도 기울기를 따라 일어난다.</div>
+        </div>
+        <div class="ch-inline">
+          <span class="ci"><span class="c-n">①</span> ㄱ</span>
+          <span class="ci"><span class="c-n">②</span> ㄴ</span>
+          <span class="ci"><span class="c-n">③</span> ㄱ, ㄴ</span>
+          <span class="ci"><span class="c-n">④</span> ㄴ, ㄷ</span>
+          <span class="ci"><span class="c-n">⑤</span> ㄱ, ㄴ, ㄷ</span>
+        </div>
+      </div>
+
+      <div class="q">
+        <div class="q-head">
+          <span class="q-num">2.</span>
+          <span class="q-txt">그림은 사람의 혈액 순환 경로를 나타낸 것이다. 이에 대한 설명으로 옳은 것은?</span>
+        </div>
+        <div class="ch-block">
+          <div class="cb"><span class="c-n">①</span> A는 체순환 경로이다.</div>
+          <div class="cb"><span class="c-n">②</span> B에서 혈액의 산소 농도가 증가한다.</div>
+          <div class="cb"><span class="c-n">③</span> 폐동맥에는 동맥혈이 흐른다.</div>
+          <div class="cb"><span class="c-n">④</span> 대동맥에는 정맥혈이 흐른다.</div>
+          <div class="cb"><span class="c-n">⑤</span> 좌심실은 체순환의 시작점이다.</div>
+        </div>
+      </div>
+
+      <div class="q">
+        <div class="q-head">
+          <span class="q-num">3.</span>
+          <span class="q-txt">다음은 DNA 복제 과정에 대한 설명이다. 빈칸에 들어갈 말로 가장 적절한 것은?</span>
+        </div>
+        <div class="passage">
+          DNA 복제는 ( ㉠ ) 방식으로 이루어지며, 새로 합성된 DNA는 원래 DNA의 한 가닥과 새로 합성된 한 가닥으로 구성된다.
+        </div>
+        <div class="ch-inline">
+          <span class="ci"><span class="c-n">①</span> 보존적</span>
+          <span class="ci"><span class="c-n">②</span> 반보존적</span>
+          <span class="ci"><span class="c-n">③</span> 분산적</span>
+          <span class="ci"><span class="c-n">④</span> 비연속적</span>
+          <span class="ci"><span class="c-n">⑤</span> 연속적</span>
+        </div>
+      </div>
+
+    </td>
+
+    <!-- ── 우측 칼럼 ── -->
+    <td>
+
+      <div class="q">
+        <div class="q-head">
+          <span class="q-num">4.</span>
+          <span class="q-txt">표는 사람의 내분비샘과 호르몬에 대한 자료이다. 이에 대한 설명으로 옳은 것만을 &lt;보기&gt;에서 있는 대로 고른 것은?</span>
+          <span class="q-pts">[3점]</span>
+        </div>
+        <div class="bogi">
+          <div class="bogi-title">&lt; 보 기 &gt;</div>
+          <div class="bogi-item"><span class="bogi-lbl">ㄱ.</span> 갑상샘 호르몬은 물질대사를 촉진한다.</div>
+          <div class="bogi-item"><span class="bogi-lbl">ㄴ.</span> 인슐린은 혈당량을 낮추는 역할을 한다.</div>
+          <div class="bogi-item"><span class="bogi-lbl">ㄷ.</span> 부신 겉질에서 분비되는 호르몬은 스테로이드계이다.</div>
+        </div>
+        <div class="ch-inline">
+          <span class="ci"><span class="c-n">①</span> ㄱ</span>
+          <span class="ci"><span class="c-n">②</span> ㄴ</span>
+          <span class="ci"><span class="c-n">③</span> ㄱ, ㄷ</span>
+          <span class="ci"><span class="c-n">④</span> ㄴ, ㄷ</span>
+          <span class="ci"><span class="c-n">⑤</span> ㄱ, ㄴ, ㄷ</span>
+        </div>
+      </div>
+
+      <div class="q">
+        <div class="q-head">
+          <span class="q-num">5.</span>
+          <span class="q-txt">그림은 어떤 생태계에서 에너지 흐름을 나타낸 것이다. 이에 대한 설명으로 옳은 것은?</span>
+        </div>
+        <!--
+        <div class="q-img">
+          <img src="{{image_url}}" alt="">
+        </div>
+        -->
+        <div class="ch-block">
+          <div class="cb"><span class="c-n">①</span> 에너지 효율은 상위 영양 단계로 갈수록 증가한다.</div>
+          <div class="cb"><span class="c-n">②</span> 생산자의 호흡량은 순생산량에 포함된다.</div>
+          <div class="cb"><span class="c-n">③</span> 각 영양 단계에서 에너지의 일부는 열에너지로 방출된다.</div>
+          <div class="cb"><span class="c-n">④</span> 2차 소비자의 에너지양은 1차 소비자보다 크다.</div>
+          <div class="cb"><span class="c-n">⑤</span> 에너지는 생태계 내에서 순환한다.</div>
+        </div>
+      </div>
+
+      <div class="q">
+        <div class="q-head">
+          <span class="q-num">6.</span>
+          <span class="q-txt">다음은 유전자와 형질의 관계에 대한 설명이다. 이에 대한 설명으로 옳은 것만을 &lt;보기&gt;에서 있는 대로 고른 것은?</span>
+          <span class="q-pts">[3점]</span>
+        </div>
+        <div class="passage">
+          하나의 형질이 여러 유전자에 의해 결정되는 것을 다인자 유전이라 하며, 키, 피부색 등이 이에 해당한다. 다인자 유전 형질은 환경의 영향을 많이 받는다.
+        </div>
+        <div class="bogi">
+          <div class="bogi-title">&lt; 보 기 &gt;</div>
+          <div class="bogi-item"><span class="bogi-lbl">ㄱ.</span> 다인자 유전 형질은 표현형이 연속적으로 나타난다.</div>
+          <div class="bogi-item"><span class="bogi-lbl">ㄴ.</span> ABO식 혈액형은 다인자 유전의 예이다.</div>
+          <div class="bogi-item"><span class="bogi-lbl">ㄷ.</span> 다인자 유전은 멘델의 분리 법칙을 따르지 않는다.</div>
+        </div>
+        <div class="ch-inline">
+          <span class="ci"><span class="c-n">①</span> ㄱ</span>
+          <span class="ci"><span class="c-n">②</span> ㄴ</span>
+          <span class="ci"><span class="c-n">③</span> ㄱ, ㄷ</span>
+          <span class="ci"><span class="c-n">④</span> ㄴ, ㄷ</span>
+          <span class="ci"><span class="c-n">⑤</span> ㄱ, ㄴ, ㄷ</span>
+        </div>
+      </div>
+
+    </td>
+  </tr></table>
+
+  <div class="pg-footer">- 1 -</div>
+</div>
+
+<!-- ════════ 정답 및 해설 ════════ -->
+<div class="page">
+
+  <div class="ans-header">
+    <div class="ans-main">
+      <div class="h-date-cell" style="border-right: 2.5pt solid #000;">2025.02.25</div>
+      <div class="ans-title-cell"><span class="ans-title">정답 및 해설</span></div>
+    </div>
+    <div style="text-align:center; padding:4px 0; border-top:1.2pt solid #000;">
+      <span class="brand" style="font-size:13pt; letter-spacing:2px;">RABBITORY</span>
+    </div>
+  </div>
+  <hr class="sep-thick">
+
+  <table class="col-layout"><tr>
+    <td>
+
+      <div class="ans-item">
+        <div class="ans-num-line"><span>1.</span> <span class="ans-val">③</span></div>
+        <div class="ans-exp">ㄱ. 확산은 농도 기울기를 따라 물질이 이동하는 현상으로 에너지가 필요하지 않다. (○)
+ㄴ. 삼투는 반투과성 막을 통해 용매가 저농도에서 고농도로 이동하는 현상이다. (○)
+ㄷ. 능동 수송은 농도 기울기를 거슬러 일어나므로 ATP 에너지가 필요하다. (×)</div>
+      </div>
+
+      <div class="ans-item">
+        <div class="ans-num-line"><span>2.</span> <span class="ans-val">⑤</span></div>
+        <div class="ans-exp">좌심실에서 대동맥을 통해 온몸으로 혈액을 보내므로 체순환의 시작점이다. 폐동맥에는 정맥혈이, 대동맥에는 동맥혈이 흐른다.</div>
+      </div>
+
+      <div class="ans-item">
+        <div class="ans-num-line"><span>3.</span> <span class="ans-val">②</span></div>
+        <div class="ans-exp">DNA 복제는 반보존적 복제 방식으로 이루어진다. 메셀슨과 스탈의 실험으로 증명되었으며, 각 딸 DNA는 원래의 가닥 하나와 새로운 가닥 하나로 이루어진다.</div>
+      </div>
+
+    </td>
+    <td>
+
+      <div class="ans-item">
+        <div class="ans-num-line"><span>4.</span> <span class="ans-val">⑤</span></div>
+        <div class="ans-exp">ㄱ. 갑상샘 호르몬(T3, T4)은 세포 호흡과 물질대사를 촉진한다. (○)
+ㄴ. 이자의 β세포에서 분비되는 인슐린은 간에서 글리코겐 합성을 촉진하여 혈당량을 낮춘다. (○)
+ㄷ. 부신 겉질에서 분비되는 당질 코르티코이드 등은 스테로이드계 호르몬이다. (○)</div>
+      </div>
+
+      <div class="ans-item">
+        <div class="ans-num-line"><span>5.</span> <span class="ans-val">③</span></div>
+        <div class="ans-exp">각 영양 단계에서 생물은 세포 호흡을 통해 에너지의 일부를 열에너지로 방출한다. 상위 영양 단계로 갈수록 사용 가능한 에너지양은 줄어들며, 에너지는 순환하지 않고 한 방향으로 흐른다.</div>
+      </div>
+
+      <div class="ans-item">
+        <div class="ans-num-line"><span>6.</span> <span class="ans-val">③</span></div>
+        <div class="ans-exp">ㄱ. 다인자 유전 형질은 관여하는 유전자가 많아 표현형이 연속적 분포를 보인다. (○)
+ㄴ. ABO식 혈액형은 하나의 유전자좌에 복대립 유전이므로 다인자 유전이 아니다. (×)
+ㄷ. 각 유전자는 분리 법칙을 따르지만, 여러 유전자가 합산되어 연속 변이를 보인다. (○)</div>
+      </div>
+
+    </td>
+  </tr></table>
+
+  <div class="pg-footer">- 2 -</div>
+</div>
+
+</body>
+</html>

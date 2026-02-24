@@ -18,6 +18,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse } from '@/lib/contexts';
 import { COURSES, getPastExamOptions, type PastExamOption } from '@/lib/types/course';
 import { getChapterById, generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
+import type { QuestionExportData as PdfQuestionData } from '@/lib/utils/questionPdfExport';
 
 /** 완료된 퀴즈 데이터 타입 */
 interface CompletedQuizData {
@@ -3699,6 +3700,58 @@ function ReviewPageContent() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
               카테고리 설정
+            </button>
+            <button
+              onClick={async () => {
+                if (customFoldersData.length === 0) return;
+                const includeAnswers = confirm('정답을 포함하시겠습니까?');
+                const includeExplanations = includeAnswers ? confirm('해설도 포함하시겠습니까?') : false;
+
+                try {
+                  const { exportQuestionsToPdf } = await import('@/lib/utils/questionPdfExport');
+                  const allQuestions: PdfQuestionData[] = [];
+
+                  for (const folder of customFoldersData) {
+                    for (const q of folder.questions) {
+                      const quizDoc = await getDoc(doc(db, 'quizzes', q.quizId));
+                      if (!quizDoc.exists()) continue;
+                      const quizData = quizDoc.data();
+                      const question = quizData.questions?.find((qq: any) => qq.id === q.questionId);
+                      if (!question) continue;
+                      allQuestions.push({
+                        text: question.text || '',
+                        type: question.type || 'multiple',
+                        choices: question.choices,
+                        answer: String(question.answer ?? ''),
+                        explanation: question.explanation,
+                        imageUrl: question.imageUrl,
+                        passage: question.passage,
+                        passageType: question.passageType,
+                        koreanAbcItems: question.koreanAbcItems,
+                        bogi: question.bogi,
+                        passagePrompt: question.passagePrompt,
+                        hasMultipleAnswers: question.hasMultipleAnswers,
+                      });
+                    }
+                  }
+
+                  if (allQuestions.length === 0) return;
+
+                  await exportQuestionsToPdf(allQuestions, {
+                    includeAnswers,
+                    includeExplanations,
+                    folderName: '커스텀 문제집',
+                  });
+                } catch (err) {
+                  console.error('PDF 다운로드 실패:', err);
+                }
+              }}
+              className="py-2 px-3 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors flex items-center justify-center"
+              title="PDF 다운로드"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
             </button>
           </div>
         )}

@@ -330,7 +330,15 @@ const ACTIVITY_TABS = ['참여도', '트렌드', '조회'] as const;
 type ActivityTab = typeof ACTIVITY_TABS[number];
 
 function ActivitySection({ posts, courseId }: { posts: Post[]; courseId: string }) {
-  const [activeTab, setActiveTab] = useState<ActivityTab>('참여도');
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<ActivityTab>(() => {
+    // 뒤로가기 시 이전 탭 복원
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('manage_activity_tab');
+      if (saved && ACTIVITY_TABS.includes(saved as ActivityTab)) return saved as ActivityTab;
+    }
+    return '참여도';
+  });
   const [comments, setComments] = useState<ActivityComment[]>([]);
   const [classStudents, setClassStudents] = useState<ClassStudentCounts>({ A: 0, B: 0, C: 0, D: 0 });
   const [studentIds, setStudentIds] = useState<Set<string>>(new Set());
@@ -340,7 +348,7 @@ function ActivitySection({ posts, courseId }: { posts: Post[]; courseId: string 
   // postId 목록이 실제로 변할 때만 의존 (조회수/좋아요 변화에는 무반응)
   const postIdKey = useMemo(() => posts.map(p => p.id).sort().join(','), [posts]);
 
-  // 댓글 1회 로드 — postId 목록 변경 시에만 재로드 (통계용이라 실시간 불필요)
+  // 댓글 실시간 구독 — postId 목록 변경 시 재구독
   useEffect(() => {
     if (!courseId || !postIdKey) {
       setComments([]);
@@ -350,31 +358,33 @@ function ActivitySection({ posts, courseId }: { posts: Post[]; courseId: string 
     const postIds = postIdKey.split(',').filter(Boolean);
     if (postIds.length === 0) { setComments([]); return; }
 
-    let cancelled = false;
-    const loadComments = async () => {
-      const allComments: ActivityComment[] = [];
-      for (let i = 0; i < postIds.length; i += 30) {
-        const chunk = postIds.slice(i, i + 30);
-        const q = query(
-          collection(db, 'comments'),
-          where('postId', 'in', chunk)
-        );
-        const snap = await getDocs(q);
-        snap.docs.forEach(d => {
+    const unsubscribes: (() => void)[] = [];
+    const chunkData: Record<number, ActivityComment[]> = {};
+
+    for (let i = 0; i < postIds.length; i += 30) {
+      const chunkIdx = Math.floor(i / 30);
+      const chunk = postIds.slice(i, i + 30);
+      const q = query(
+        collection(db, 'comments'),
+        where('postId', 'in', chunk)
+      );
+
+      const unsub = onSnapshot(q, (snap) => {
+        chunkData[chunkIdx] = snap.docs.map(d => {
           const data = d.data();
-          allComments.push({
+          return {
             authorId: data.authorId || '',
             authorClassType: data.authorClassType,
             postId: data.postId || '',
             createdAt: data.createdAt?.toDate() || new Date(),
-          });
+          };
         });
-      }
-      if (!cancelled) setComments(allComments);
-    };
-    loadComments();
+        setComments(Object.values(chunkData).flat());
+      });
+      unsubscribes.push(unsub);
+    }
 
-    return () => { cancelled = true; };
+    return () => { unsubscribes.forEach(fn => fn()); };
   }, [courseId, postIdKey]);
 
   // 반별 학생 수 실시간 구독
@@ -676,6 +686,7 @@ function ActivitySection({ posts, courseId }: { posts: Post[]; courseId: string 
       .sort((a, b) => b.viewCount - a.viewCount)
       .slice(0, 3)
       .map(p => ({
+        id: p.id,
         title: p.title,
         views: p.viewCount,
         conversion: p.viewCount > 0
@@ -746,7 +757,7 @@ function ActivitySection({ posts, courseId }: { posts: Post[]; courseId: string 
           <button
             key={tab}
             type="button"
-            onClick={() => setActiveTab(tab)}
+            onClick={() => { setActiveTab(tab); sessionStorage.setItem('manage_activity_tab', tab); }}
             className={`flex-1 py-2.5 text-[13px] font-bold tracking-wide transition-colors ${
               activeTab === tab
                 ? 'text-[#1A1A1A] border-b-2 border-[#1A1A1A]'
@@ -952,7 +963,8 @@ function ActivitySection({ posts, courseId }: { posts: Post[]; courseId: string 
               <div className="grid grid-cols-3 gap-2.5">
                 <div className="min-w-0 border border-[#1A1A1A] bg-[#FDFBF7] px-1.5 py-3.5 text-center overflow-hidden">
                   <p className="text-[22px] font-black text-[#1A1A1A] leading-none truncate">{avgViews.value}</p>
-                  <p className="text-xs text-[#5C5C5C] font-medium mt-1.5 truncate">평균 조회수</p>
+                  <p className="text-[11px] text-[#8A8A8A] mt-0.5 truncate">글당 평균</p>
+                  <p className="text-xs text-[#5C5C5C] font-medium mt-1 truncate">조회수</p>
                 </div>
                 <div className="min-w-0 border border-[#1A1A1A] bg-[#FDFBF7] px-1.5 py-3.5 text-center overflow-hidden">
                   <p className="text-[22px] font-black text-[#1A1A1A] leading-none truncate">{avgViews.reachRate}%</p>
@@ -974,13 +986,18 @@ function ActivitySection({ posts, courseId }: { posts: Post[]; courseId: string 
                 ) : (
                   <div className="space-y-0">
                     {topViewed.map((item, i) => (
-                      <div key={i} className="flex items-center gap-2.5 py-2.5 border-b border-[#EDEAE4] last:border-0">
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => router.push(`/board/${item.id}`)}
+                        className="w-full flex items-center gap-2.5 py-2.5 border-b border-[#EDEAE4] last:border-0 text-left"
+                      >
                         <span className="text-base font-black text-[#1A1A1A] w-5">{i + 1}</span>
                         <span className="text-[13px] text-[#1A1A1A] flex-1 truncate">{item.title}</span>
                         <span className="text-xs text-[#5C5C5C] font-medium whitespace-nowrap">
                           {item.views}회 · {item.conversion}%
                         </span>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 )}

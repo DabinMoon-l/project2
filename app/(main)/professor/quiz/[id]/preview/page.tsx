@@ -1,12 +1,139 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { createPortal } from 'react-dom';
 import { useRouter, useParams } from 'next/navigation';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useCourse } from '@/lib/contexts';
-import { formatChapterLabel } from '@/lib/courseIndex';
+import { formatChapterLabel, generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
+import QuestionEditor, { type QuestionData, type SubQuestion } from '@/components/quiz/create/QuestionEditor';
+import QuestionList from '@/components/quiz/create/QuestionList';
+import { useProfessorQuiz, type QuizInput } from '@/lib/hooks/useProfessorQuiz';
+
+// ============================================================
+// 수정 나가기 확인 모달
+// ============================================================
+
+const backdropVariants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1 },
+  exit: { opacity: 0 },
+};
+
+const modalVariants = {
+  hidden: { opacity: 0, scale: 0.95, y: 10 },
+  visible: { opacity: 1, scale: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 25 } },
+  exit: { opacity: 0, scale: 0.95, y: 10, transition: { duration: 0.15 } },
+};
+
+function EditExitModal({
+  isOpen,
+  onClose,
+  onSaveAndExit,
+  onExitWithoutSave,
+  isSaving,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSaveAndExit: () => void;
+  onExitWithoutSave: () => void;
+  isSaving: boolean;
+}) {
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previousActiveElement = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      previousActiveElement.current = document.activeElement as HTMLElement;
+      modalRef.current?.focus();
+      document.body.style.overflow = 'hidden';
+    }
+    return () => {
+      document.body.style.overflow = '';
+      if (previousActiveElement.current) previousActiveElement.current.focus();
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isSaving) onClose();
+    };
+    if (isOpen) document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose, isSaving]);
+
+  if (typeof window === 'undefined') return null;
+
+  return createPortal(
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <motion.div
+            variants={backdropVariants}
+            initial="hidden" animate="visible" exit="exit"
+            onClick={(e) => { if (e.target === e.currentTarget && !isSaving) onClose(); }}
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+          />
+          <motion.div
+            ref={modalRef}
+            variants={modalVariants}
+            initial="hidden" animate="visible" exit="exit"
+            role="alertdialog" aria-modal="true" tabIndex={-1}
+            className="relative w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] shadow-xl overflow-hidden focus:outline-none"
+          >
+            <div className="flex justify-center pt-6">
+              <div className="w-16 h-16 border-2 border-[#8B6914] bg-[#FFF8E1] flex items-center justify-center">
+                <svg className="w-8 h-8 text-[#8B6914]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+            </div>
+            <div className="px-6 py-4 text-center">
+              <h2 className="text-lg font-bold text-[#1A1A1A] mb-2">수정을 중단하시겠습니까?</h2>
+              <p className="text-sm text-[#5C5C5C] leading-relaxed">
+                저장하지 않으면 변경사항이<br />모두 사라집니다.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 px-6 py-4 border-t-2 border-[#1A1A1A] bg-[#EDEAE4]">
+              <motion.button
+                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                onClick={onClose} disabled={isSaving}
+                className="w-full py-3 font-bold text-[#F5F0E8] bg-[#1A1A1A] border-2 border-[#1A1A1A] transition-all duration-200 hover:bg-[#2A2A2A] disabled:opacity-50"
+              >
+                계속 수정하기
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                onClick={onSaveAndExit} disabled={isSaving}
+                className="w-full py-3 font-bold bg-[#F5F0E8] text-[#1A1A1A] border-2 border-[#1A1A1A] hover:bg-[#E5E0D8] transition-all duration-200 disabled:opacity-50 flex items-center justify-center"
+              >
+                {isSaving ? (
+                  <>
+                    <svg className="animate-spin w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    저장 중...
+                  </>
+                ) : '저장하고 나가기'}
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                onClick={onExitWithoutSave} disabled={isSaving}
+                className="w-full py-3 font-bold bg-[#F5F0E8] text-[#8B1A1A] border-2 border-[#8B1A1A] hover:bg-[#FDEAEA] transition-all duration-200 disabled:opacity-50"
+              >
+                저장하지 않고 나가기
+              </motion.button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>,
+    document.body
+  );
+}
 
 // ============================================================
 // 타입
@@ -58,6 +185,101 @@ interface DisplayItem {
 }
 
 // ============================================================
+// 유틸리티: Firestore 문제 → QuestionData 변환
+// ============================================================
+
+const convertToQuestionDataList = (rawQuestions: any[]): QuestionData[] => {
+  const loadedQuestions: QuestionData[] = [];
+  const processedCombinedGroups = new Set<string>();
+
+  rawQuestions.forEach((q: any, index: number) => {
+    if (q.combinedGroupId) {
+      if (processedCombinedGroups.has(q.combinedGroupId)) return;
+      processedCombinedGroups.add(q.combinedGroupId);
+
+      const groupQuestions = rawQuestions
+        .filter((gq: any) => gq.combinedGroupId === q.combinedGroupId)
+        .sort((a: any, b: any) => (a.combinedIndex || 0) - (b.combinedIndex || 0));
+
+      const firstQ = groupQuestions[0] as any;
+
+      const subQuestions: SubQuestion[] = groupQuestions.map((sq: any) => {
+        let answerIndex = -1;
+        if (sq.type === 'multiple' && typeof sq.answer === 'number' && sq.answer > 0) {
+          answerIndex = sq.answer - 1;
+        } else if (sq.type === 'ox' && typeof sq.answer === 'number') {
+          answerIndex = sq.answer;
+        }
+        return {
+          id: sq.id || `${q.combinedGroupId}_${sq.combinedIndex || 0}`,
+          text: sq.text || '',
+          type: sq.type || 'multiple',
+          choices: sq.choices || undefined,
+          answerIndex: sq.type === 'multiple' || sq.type === 'ox' ? answerIndex : undefined,
+          answerText: typeof sq.answer === 'string' ? sq.answer : undefined,
+          explanation: sq.explanation || undefined,
+          mixedExamples: sq.examples || sq.mixedExamples || undefined,
+          image: sq.imageUrl || undefined,
+          chapterId: sq.chapterId || undefined,
+          chapterDetailId: sq.chapterDetailId || undefined,
+          // 추가 필드 보존
+          passagePrompt: sq.passagePrompt || undefined,
+          bogi: sq.bogi || null,
+          passageBlocks: sq.passageBlocks || undefined,
+        };
+      });
+
+      loadedQuestions.push({
+        id: q.combinedGroupId,
+        text: firstQ.combinedMainText || '',
+        type: 'combined',
+        choices: [],
+        answerIndex: -1,
+        answerText: '',
+        explanation: '',
+        subQuestions,
+        passageType: firstQ.passageType || undefined,
+        passage: firstQ.passage || undefined,
+        koreanAbcItems: firstQ.koreanAbcItems || undefined,
+        passageMixedExamples: firstQ.passageMixedExamples || undefined,
+        passageImage: firstQ.passageImage || undefined,
+        commonQuestion: firstQ.commonQuestion || undefined,
+      });
+    } else {
+      let answerIndex = -1;
+      if (q.type === 'multiple' && typeof q.answer === 'number' && q.answer > 0) {
+        answerIndex = q.answer - 1;
+      } else if (q.type === 'ox' && typeof q.answer === 'number') {
+        answerIndex = q.answer;
+      }
+
+      loadedQuestions.push({
+        id: q.id || `q_${index}`,
+        text: q.text || '',
+        type: q.type || 'multiple',
+        choices: q.choices || ['', '', '', ''],
+        answerIndex,
+        answerText: typeof q.answer === 'string' ? q.answer : '',
+        explanation: q.explanation || '',
+        imageUrl: q.imageUrl || null,
+        examples: q.examples || null,
+        mixedExamples: q.mixedExamples || null,
+        chapterId: q.chapterId || undefined,
+        chapterDetailId: q.chapterDetailId || undefined,
+        // 추가 필드 보존 (수정 시 유실 방지)
+        passagePrompt: q.passagePrompt || undefined,
+        bogi: q.bogi || null,
+        rubric: q.rubric || undefined,
+        scoringMethod: q.scoringMethod || undefined,
+        passageBlocks: q.passageBlocks || undefined,
+      });
+    }
+  });
+
+  return loadedQuestions;
+};
+
+// ============================================================
 // 미리보기 페이지
 // ============================================================
 
@@ -77,6 +299,30 @@ export default function QuizPreviewPage() {
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(new Set());
   const [expandedChoices, setExpandedChoices] = useState<Set<string>>(new Set());
 
+  // 수정 모드 상태
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [rawQuizData, setRawQuizData] = useState<any>(null);
+  const [editableQuestions, setEditableQuestions] = useState<QuestionData[]>([]);
+  const [originalQuestions, setOriginalQuestions] = useState<any[]>([]);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDifficulty, setEditDifficulty] = useState<'easy' | 'normal' | 'hard'>('normal');
+  const [editTags, setEditTags] = useState<string[]>([]);
+  const [editDescription, setEditDescription] = useState('');
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [showTagPicker, setShowTagPicker] = useState(false);
+  const [showExitModal, setShowExitModal] = useState(false);
+
+  const { updateQuiz, clearError } = useProfessorQuiz();
+
+  // 태그 옵션 (과목별)
+  const tagOptions = useMemo(() => {
+    const courseId = userCourseId || 'biology';
+    const courseTags = generateCourseTags(courseId);
+    return [...COMMON_TAGS.map(t => t.value), ...courseTags.map(t => t.value)];
+  }, [userCourseId]);
+
   // 선지별 해설 접두사 제거
   const stripChoicePrefix = (text: string) =>
     text.replace(/^선지\s*\d+\s*해설\s*[:：]\s*/i, '');
@@ -95,6 +341,7 @@ export default function QuizPreviewPage() {
         }
 
         const data = quizDoc.data();
+        setRawQuizData(data);
         setQuizTitle(data.title || '퀴즈');
         setAverageScore(data.averageScore || 0);
         setParticipantCount(data.participantCount || 0);
@@ -195,7 +442,7 @@ export default function QuizPreviewPage() {
     };
 
     loadQuiz();
-  }, [quizId]);
+  }, [quizId, reloadKey]);
 
   // displayItems: 결합형 그룹 처리
   const displayItems = useMemo<DisplayItem[]>(() => {
@@ -240,6 +487,315 @@ export default function QuizPreviewPage() {
       if (next.has(groupId)) next.delete(groupId); else next.add(groupId);
       return next;
     });
+  };
+
+  // ============================================================
+  // 수정 모드 함수들
+  // ============================================================
+
+  const enterEditMode = () => {
+    if (!rawQuizData) return;
+    const converted = convertToQuestionDataList(rawQuizData.questions || []);
+    setEditableQuestions(converted);
+    setOriginalQuestions(rawQuizData.questions || []);
+    setEditTitle(rawQuizData.title || '');
+    setEditDifficulty(rawQuizData.difficulty || 'normal');
+    setEditTags(rawQuizData.tags || []);
+    setEditDescription(rawQuizData.description || '');
+    setEditingIndex(null);
+    setShowTagPicker(false);
+    setIsEditMode(true);
+  };
+
+  // 저장하고 나가기
+  const handleSaveAndExit = async () => {
+    if (editableQuestions.length < 1) {
+      alert('최소 1개 이상의 문제를 추가해주세요.');
+      return;
+    }
+    try {
+      setSaving(true);
+      clearError();
+      const flattenedQuestions = flattenQuestionsForSave();
+      const quizInput: Partial<QuizInput> = {
+        title: editTitle,
+        description: editDescription,
+        difficulty: editDifficulty,
+        tags: editTags,
+        questions: flattenedQuestions,
+      };
+      await updateQuiz(quizId, quizInput);
+      setShowExitModal(false);
+      setIsEditMode(false);
+      setEditingIndex(null);
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      console.error('퀴즈 저장 실패:', err);
+      alert('저장에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // 저장하지 않고 나가기
+  const handleExitWithoutSave = () => {
+    setShowExitModal(false);
+    setIsEditMode(false);
+    setEditingIndex(null);
+  };
+
+  // 수정 모드에서 브라우저 뒤로가기/새로고침 방지
+  useEffect(() => {
+    if (!isEditMode) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isEditMode]);
+
+  const toggleEditMode = () => {
+    if (isEditMode) {
+      setShowExitModal(true);
+    } else {
+      enterEditMode();
+    }
+  };
+
+  // 문제 편집 핸들러
+  const handleEditQuestion = (index: number) => setEditingIndex(index);
+  const handleAddQuestion = () => setEditingIndex(-1);
+  const handleCancelEdit = () => setEditingIndex(null);
+  const handleSaveQuestion = (question: QuestionData) => {
+    if (editingIndex === -1) {
+      setEditableQuestions((prev) => [...prev, question]);
+    } else if (editingIndex !== null) {
+      setEditableQuestions((prev) =>
+        prev.map((q, i) => (i === editingIndex ? question : q))
+      );
+    }
+    setEditingIndex(null);
+  };
+
+  // 태그 추가/삭제
+  const handleRemoveTag = (tag: string) => {
+    setEditTags((prev) => prev.filter((t) => t !== tag));
+  };
+
+  // 변경 감지
+  const isQuestionChanged = (original: any | undefined, current: QuestionData): boolean => {
+    if (!original) return true;
+    if (original.text !== current.text) return true;
+    if (original.type !== current.type) return true;
+    if (current.type === 'subjective' || current.type === 'short_answer') {
+      if (original.answer !== current.answerText) return true;
+    } else if (current.type === 'multiple') {
+      const origAnswer = typeof original.answer === 'number' ? original.answer - 1 : -1;
+      if (origAnswer !== current.answerIndex) return true;
+    } else {
+      if (original.answer !== current.answerIndex) return true;
+    }
+    if (current.type === 'multiple') {
+      const origChoices = original.choices || [];
+      const currChoices = current.choices?.filter((c) => c.trim()) || [];
+      if (origChoices.length !== currChoices.length) return true;
+      for (let i = 0; i < currChoices.length; i++) {
+        if (origChoices[i] !== currChoices[i]) return true;
+      }
+    }
+    if ((original.explanation || '') !== (current.explanation || '')) return true;
+    // 이미지 비교
+    if ((original.imageUrl || null) !== (current.imageUrl || null)) return true;
+    // 발문 비교
+    if ((original.passagePrompt || '') !== (current.passagePrompt || '')) return true;
+    // 보기/루브릭 비교
+    if (JSON.stringify(original.bogi || null) !== JSON.stringify(current.bogi || null)) return true;
+    if (JSON.stringify(original.rubric || null) !== JSON.stringify(current.rubric || null)) return true;
+    return false;
+  };
+
+  const isQuestionChangedForSubQuestion = (original: any, current: SubQuestion): boolean => {
+    if (!original) return true;
+    if (original.text !== current.text) return true;
+    if (original.type !== current.type) return true;
+    if (current.type === 'subjective' || current.type === 'short_answer') {
+      if (original.answer !== (current.answerText || '')) return true;
+    } else if (current.type === 'multiple') {
+      const origAnswer = typeof original.answer === 'number' ? original.answer - 1 : -1;
+      if (origAnswer !== (current.answerIndex ?? -1)) return true;
+    } else {
+      if (original.answer !== (current.answerIndex ?? 0)) return true;
+    }
+    if (current.type === 'multiple') {
+      const origChoices = original.choices || [];
+      const currChoices = (current.choices || []).filter((c) => c.trim());
+      if (origChoices.length !== currChoices.length) return true;
+      for (let i = 0; i < currChoices.length; i++) {
+        if (origChoices[i] !== currChoices[i]) return true;
+      }
+    }
+    if ((original.explanation || '') !== (current.explanation || '')) return true;
+    if ((original.imageUrl || null) !== (current.image || null)) return true;
+    // 발문/보기 비교
+    if ((original.passagePrompt || '') !== (current.passagePrompt || '')) return true;
+    if (JSON.stringify(original.bogi || null) !== JSON.stringify(current.bogi || null)) return true;
+    return false;
+  };
+
+  // QuestionData[] → Firestore 저장 형식 변환
+  const flattenQuestionsForSave = (): any[] => {
+    const flattenedQuestions: any[] = [];
+    let orderIndex = 0;
+
+    editableQuestions.forEach((q) => {
+      if (q.type === 'combined' && q.subQuestions && q.subQuestions.length > 0) {
+        const combinedGroupId = q.id || `combined_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const subQuestionsCount = q.subQuestions.length;
+
+        // 결합형 공통 지문 변경 감지 (지문/이미지만 수정 시에도 뱃지 표시)
+        let parentChanged = false;
+        const origFirstQ = originalQuestions.find(
+          (oq) => oq.combinedGroupId === combinedGroupId && (oq.combinedIndex === 0 || oq.combinedIndex === undefined)
+        );
+        if (!origFirstQ) {
+          parentChanged = true;
+        } else {
+          if ((origFirstQ.passage || '') !== (q.passage || '')) parentChanged = true;
+          if ((origFirstQ.passageImage || null) !== (q.passageImage || null)) parentChanged = true;
+          if ((origFirstQ.commonQuestion || '') !== (q.commonQuestion || '')) parentChanged = true;
+          if ((origFirstQ.combinedMainText || '') !== (q.text || '')) parentChanged = true;
+          if (JSON.stringify(origFirstQ.koreanAbcItems || null) !== JSON.stringify(q.koreanAbcItems || null)) parentChanged = true;
+          if (JSON.stringify(origFirstQ.passageMixedExamples || null) !== JSON.stringify(q.passageMixedExamples || null)) parentChanged = true;
+        }
+
+        q.subQuestions.forEach((sq, sqIndex) => {
+          let answer: string | number;
+          if (sq.type === 'subjective' || sq.type === 'short_answer') {
+            answer = sq.answerText || '';
+          } else if (sq.type === 'multiple') {
+            answer = (sq.answerIndex !== undefined && sq.answerIndex >= 0) ? sq.answerIndex + 1 : -1;
+          } else {
+            answer = sq.answerIndex ?? 0;
+          }
+
+          const originalQ = originalQuestions.find((oq) => oq.id === sq.id);
+          const hasChanged = parentChanged || !originalQ || isQuestionChangedForSubQuestion(originalQ, sq);
+
+          const subQuestionData: any = {
+            // 원본 필드 보존 (choiceExplanations 등 QuestionData에 없는 필드)
+            ...(originalQ || {}),
+            // 수정 가능한 필드 덮어쓰기
+            id: sq.id || `${combinedGroupId}_${sqIndex}`,
+            order: orderIndex++,
+            text: sq.text,
+            type: sq.type,
+            choices: sq.type === 'multiple' ? (sq.choices || []).filter((c) => c.trim()) : undefined,
+            answer,
+            explanation: sq.explanation || undefined,
+            imageUrl: sq.image || undefined,
+            examples: sq.mixedExamples || undefined,
+            mixedExamples: sq.mixedExamples || undefined,
+            passagePrompt: sq.passagePrompt || undefined,
+            bogi: sq.bogi || undefined,
+            passageBlocks: sq.passageBlocks || undefined,
+            combinedGroupId,
+            combinedIndex: sqIndex,
+            combinedTotal: subQuestionsCount,
+            chapterId: sq.chapterId || undefined,
+            chapterDetailId: sq.chapterDetailId || undefined,
+            questionUpdatedAt: hasChanged ? Timestamp.now() : (originalQ?.questionUpdatedAt || null),
+          };
+
+          if (sqIndex === 0) {
+            subQuestionData.passageType = q.passageType || undefined;
+            subQuestionData.passage = q.passage || undefined;
+            subQuestionData.koreanAbcItems = q.koreanAbcItems || undefined;
+            subQuestionData.passageMixedExamples = q.passageMixedExamples || undefined;
+            subQuestionData.passageImage = q.passageImage || undefined;
+            subQuestionData.commonQuestion = q.commonQuestion || undefined;
+            subQuestionData.combinedMainText = q.text || '';
+          }
+
+          flattenedQuestions.push(subQuestionData);
+        });
+      } else {
+        let answer: string | number;
+        if (q.type === 'subjective' || q.type === 'short_answer') {
+          answer = q.answerText;
+        } else if (q.type === 'multiple') {
+          answer = q.answerIndex >= 0 ? q.answerIndex + 1 : -1;
+        } else {
+          answer = q.answerIndex;
+        }
+
+        // ID 기반 매칭만 사용 (인덱스 폴백 제거 — 삭제/순서변경 시 오매칭 방지)
+        const originalQ = originalQuestions.find((oq) => oq.id === q.id);
+        const hasChanged = !originalQ || isQuestionChanged(originalQ, q);
+
+        flattenedQuestions.push({
+          // 원본 필드 보존 (choiceExplanations 등 QuestionData에 없는 필드)
+          ...(originalQ || {}),
+          // 수정 가능한 필드 덮어쓰기
+          id: q.id,
+          order: orderIndex++,
+          text: q.text,
+          type: q.type,
+          choices: q.type === 'multiple' ? q.choices?.filter((c) => c.trim()) : undefined,
+          answer,
+          explanation: q.explanation || undefined,
+          imageUrl: q.imageUrl || undefined,
+          examples: q.examples || undefined,
+          mixedExamples: q.mixedExamples || undefined,
+          passagePrompt: q.passagePrompt || undefined,
+          bogi: q.bogi || undefined,
+          rubric: q.rubric || undefined,
+          scoringMethod: q.scoringMethod || undefined,
+          passageBlocks: q.passageBlocks || undefined,
+          chapterId: q.chapterId || undefined,
+          chapterDetailId: q.chapterDetailId || undefined,
+          questionUpdatedAt: hasChanged ? Timestamp.now() : (originalQ?.questionUpdatedAt || null),
+        });
+      }
+    });
+
+    return flattenedQuestions;
+  };
+
+  // 저장 핸들러
+  const handleSave = async () => {
+    if (editableQuestions.length < 1) {
+      alert('최소 1개 이상의 문제를 추가해주세요.');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      clearError();
+
+      const flattenedQuestions = flattenQuestionsForSave();
+
+      const quizInput: Partial<QuizInput> = {
+        title: editTitle,
+        description: editDescription,
+        difficulty: editDifficulty,
+        tags: editTags,
+        questions: flattenedQuestions,
+      };
+
+      await updateQuiz(quizId, quizInput);
+
+      // 저장 성공 → 수정 모드 해제 + 데이터 리로드
+      setIsEditMode(false);
+      setEditingIndex(null);
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      console.error('퀴즈 저장 실패:', err);
+      alert('저장에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   // 문제 상세 렌더링
@@ -592,23 +1148,37 @@ export default function QuizPreviewPage() {
   }
 
   return (
-    <div className="min-h-screen pb-8" style={{ backgroundColor: '#F5F0E8' }}>
+    <div className={`min-h-screen ${isEditMode ? 'pb-24' : 'pb-8'}`} style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 */}
       <header className="sticky top-0 z-50 w-full border-b-2 border-[#1A1A1A]" style={{ backgroundColor: '#F5F0E8' }}>
         <div className="flex items-center h-14 px-4">
+          {isEditMode ? (
+            <div className="w-12 h-12" />
+          ) : (
+            <button
+              onClick={() => router.back()}
+              className="flex items-center gap-2 text-sm text-[#1A1A1A] hover:text-[#5C5C5C] transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              뒤로가기
+            </button>
+          )}
+          <h1 className="flex-1 text-center text-base font-bold text-[#1A1A1A] truncate px-4">
+            {isEditMode ? '퀴즈 수정' : '문제 미리보기'}
+          </h1>
           <button
-            onClick={() => router.back()}
-            className="flex items-center gap-1 text-sm font-bold text-[#1A1A1A] hover:text-[#5C5C5C] transition-colors"
+            onClick={toggleEditMode}
+            className={`w-12 h-12 flex items-center justify-center transition-colors ${
+              isEditMode ? 'text-[#8B1A1A]' : 'text-[#5C5C5C] hover:text-[#1A1A1A]'
+            }`}
+            aria-label={isEditMode ? '수정 모드 해제' : '수정 모드'}
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
             </svg>
-            이전
           </button>
-          <h1 className="flex-1 text-center text-base font-bold text-[#1A1A1A] truncate px-4">
-            문제 미리보기
-          </h1>
-          <div className="w-12" />
         </div>
       </header>
 
@@ -619,23 +1189,202 @@ export default function QuizPreviewPage() {
         className="px-4 pt-6 space-y-6"
       >
         {/* 퀴즈 정보 */}
-        <div className="bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6 text-center">
-          <p className="text-sm text-[#5C5C5C] mb-2">{quizTitle}</p>
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <span className="text-xs text-[#5C5C5C]">평균</span>
-            <span className="text-5xl font-bold text-[#1A1A1A]">
-              {participantCount > 0 ? averageScore.toFixed(0) : '-'}
-            </span>
-            {participantCount > 0 && <span className="text-lg font-bold text-[#1A1A1A]">점</span>}
+        {isEditMode ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="border-2 border-[#1A1A1A] p-6 space-y-6"
+            style={{ backgroundColor: '#F5F0E8' }}
+          >
+            {/* 퀴즈 제목 */}
+            <div>
+              <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
+                퀴즈 제목 <span className="text-[#8B1A1A]">*</span>
+              </label>
+              <input
+                type="text"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                placeholder="예: 중간고사 대비 퀴즈"
+                className="w-full px-4 py-3 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] placeholder:text-[#9A9A9A] outline-none focus:bg-[#FDFBF7]"
+              />
+            </div>
+
+            {/* 난이도 */}
+            <div>
+              <label className="block text-sm font-bold text-[#1A1A1A] mb-2">난이도</label>
+              <div className="flex gap-2">
+                {([
+                  { value: 'easy' as const, label: '쉬움' },
+                  { value: 'normal' as const, label: '보통' },
+                  { value: 'hard' as const, label: '어려움' },
+                ]).map(({ value, label }) => (
+                  <motion.button
+                    key={value}
+                    type="button"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setEditDifficulty(value)}
+                    className={`flex-1 py-2.5 px-4 font-bold text-sm border-2 transition-all duration-200 ${
+                      editDifficulty === value
+                        ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                        : 'bg-[#EDEAE4] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
+                    }`}
+                  >
+                    {label}
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+
+            {/* 태그 (선택) */}
+            <div>
+              <label className="block text-sm font-bold text-[#1A1A1A] mb-2">태그 (선택)</label>
+              {editTags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {editTags.map((tag) => (
+                    <div
+                      key={tag}
+                      className="flex items-center gap-1 px-2 py-1 bg-[#1A1A1A] text-[#F5F0E8] text-sm font-medium"
+                    >
+                      #{tag}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveTag(tag)}
+                        className="ml-0.5 hover:text-[#D4CFC4]"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowTagPicker(!showTagPicker)}
+                className={`w-full py-2.5 text-sm font-bold border-2 transition-all duration-200 ${
+                  showTagPicker
+                    ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                    : 'bg-[#EDEAE4] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
+                }`}
+              >
+                {showTagPicker ? '태그 목록 닫기' : '태그 선택하기'}
+              </button>
+              <AnimatePresence>
+                {showTagPicker && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden mt-2"
+                  >
+                    <div className="flex flex-wrap gap-2 p-3 bg-[#EDEAE4] border border-[#D4CFC4]">
+                      {tagOptions
+                        .filter(tag => !editTags.includes(tag))
+                        .map((tag) => (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() => setEditTags(prev => [...prev, tag])}
+                            className="px-3 py-1.5 text-sm font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+                          >
+                            #{tag}
+                          </button>
+                        ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* 총평 (선택) */}
+            <div>
+              <label className="block text-sm font-bold text-[#1A1A1A] mb-2">총평 (선택)</label>
+              <textarea
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                placeholder="학생들에게 전할 한마디를 입력하세요"
+                rows={3}
+                className="w-full px-4 py-3 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] placeholder:text-[#9A9A9A] outline-none focus:bg-[#FDFBF7] resize-none"
+              />
+            </div>
+          </motion.div>
+        ) : (
+          <div>
+            <h2 className="text-2xl font-bold text-[#1A1A1A]">{quizTitle}</h2>
+            <p className="text-sm text-[#5C5C5C] mt-1">
+              {totalCount}문제 · {participantCount}명 참여
+              {rawQuizData?.difficulty && (
+                <span>
+                  {' '}· {rawQuizData.difficulty === 'easy' ? '쉬움' : rawQuizData.difficulty === 'hard' ? '어려움' : '보통'}
+                </span>
+              )}
+            </p>
+            {rawQuizData?.tags && rawQuizData.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {rawQuizData.tags.map((tag: string) => (
+                  <span key={tag} className="px-2 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold">
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            )}
+            {rawQuizData?.description && (
+              <p className="text-sm text-[#5C5C5C] mt-2">
+                &ldquo;{rawQuizData.description}&rdquo;
+              </p>
+            )}
           </div>
-          <p className="text-sm text-[#5C5C5C]">
-            총 {totalCount}문제 · {participantCount}명 참여
-          </p>
-        </div>
+        )}
 
         {/* 문제 리스트 */}
+        {isEditMode ? (
+          <div className="space-y-4">
+            {/* 문제 편집기 */}
+            <AnimatePresence>
+              {editingIndex !== null && (
+                <QuestionEditor
+                  initialQuestion={editingIndex >= 0 ? editableQuestions[editingIndex] : undefined}
+                  questionNumber={editingIndex >= 0 ? editingIndex + 1 : editableQuestions.length + 1}
+                  onSave={handleSaveQuestion}
+                  onCancel={handleCancelEdit}
+                  userRole="professor"
+                  courseId={userCourseId || undefined}
+                />
+              )}
+            </AnimatePresence>
+
+            {/* 문제 목록 */}
+            {editingIndex === null && (
+              <QuestionList
+                questions={editableQuestions}
+                onQuestionsChange={setEditableQuestions}
+                onEditQuestion={handleEditQuestion}
+                userRole="professor"
+                courseId={userCourseId || undefined}
+              />
+            )}
+
+            {/* 새 문제 추가 — 목록 아래 */}
+            {editingIndex === null && (
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.01 }}
+                whileTap={{ scale: 0.99 }}
+                onClick={handleAddQuestion}
+                className="w-full p-4 border-2 border-dashed border-[#D4CFC4] text-[#5C5C5C] hover:border-[#1A1A1A] hover:text-[#1A1A1A] transition-colors flex items-center justify-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                새 문제 추가
+              </motion.button>
+            )}
+          </div>
+        ) : (
         <div className="space-y-3">
-          <h3 className="font-bold text-[#1A1A1A]">문제 목록</h3>
+          <h3 className="font-bold text-[#1A1A1A]">문제 정보</h3>
           {displayItems.map((item) => {
             // 단일 문제
             if (item.type === 'single' && item.result) {
@@ -877,7 +1626,39 @@ export default function QuizPreviewPage() {
             return null;
           })}
         </div>
+        )}
       </motion.main>
+
+      {/* 수정 모드 하단 저장 버튼 */}
+      {isEditMode && editingIndex === null && (
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#F5F0E8] border-t-2 border-[#1A1A1A] z-50">
+          <button
+            onClick={handleSave}
+            disabled={saving || editableQuestions.length === 0}
+            className={`w-full py-3 font-bold border-2 border-[#1A1A1A] transition-colors ${
+              saving || editableQuestions.length === 0
+                ? 'bg-[#D4CFC4] text-[#5C5C5C] cursor-not-allowed'
+                : 'bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#333]'
+            }`}
+          >
+            {saving ? '저장 중...' : '변경사항 저장'}
+          </button>
+          {editableQuestions.length === 0 && (
+            <p className="text-xs text-center text-[#5C5C5C] mt-2">
+              최소 1개 이상의 문제가 필요합니다
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* 수정 나가기 확인 모달 */}
+      <EditExitModal
+        isOpen={showExitModal}
+        onClose={() => setShowExitModal(false)}
+        onSaveAndExit={handleSaveAndExit}
+        onExitWithoutSave={handleExitWithoutSave}
+        isSaving={saving}
+      />
     </div>
   );
 }

@@ -621,12 +621,36 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
               choiceCounts[choiceKey] = (choiceCounts[choiceKey] || 0) + 1;
             } else if (question.type === 'multiple') {
               // 객관식
-              const userIdx = typeof userAnswer === 'string' ? parseInt(userAnswer, 10) : userAnswer;
-              isCorrect = userIdx === correctAnswer;
+              // answers 배열은 1-indexed 문자열 ("1","2","3"...)로 저장됨 (recordAttempt CF)
+              // 복수 선택: "1,3" 형태
+              const rawStr = String(userAnswer);
+              const selections = rawStr.includes(',')
+                ? rawStr.split(',').map(s => parseInt(s.trim(), 10))
+                : [typeof userAnswer === 'string' ? parseInt(userAnswer, 10) : userAnswer];
 
-              // 선택 카운트
-              const choiceKey = String(userIdx);
-              choiceCounts[choiceKey] = (choiceCounts[choiceKey] || 0) + 1;
+              // 1-indexed → 0-indexed 변환
+              const choiceCount = question.choices?.length || 0;
+              const zeroIndexed = selections.map(s => {
+                // 값이 1 이상이고 choices 범위를 벗어나면 1-indexed로 판단
+                if (s >= 1 && s > choiceCount - 1) return s - 1;
+                // 값이 1 이상이면 1-indexed로 판단 (recordAttempt 기본 동작)
+                if (s >= 1) return s - 1;
+                return s;
+              });
+
+              if (Array.isArray(correctAnswer)) {
+                const userSorted = [...zeroIndexed].sort();
+                const correctSorted = [...correctAnswer].sort();
+                isCorrect = JSON.stringify(userSorted) === JSON.stringify(correctSorted);
+              } else {
+                isCorrect = zeroIndexed.length === 1 && zeroIndexed[0] === correctAnswer;
+              }
+
+              // 선택 카운트 (0-indexed 기준)
+              zeroIndexed.forEach(idx => {
+                const choiceKey = String(idx);
+                choiceCounts[choiceKey] = (choiceCounts[choiceKey] || 0) + 1;
+              });
             } else {
               // 주관식/단답형
               const userStr = String(userAnswer).trim().toLowerCase();
@@ -640,9 +664,9 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
                 isCorrect = userStr === correctStr.trim().toLowerCase();
               }
 
-              // 오답 수집
+              // 오답 수집 (소문자 정규화로 중복 제거)
               if (!isCorrect && userStr) {
-                wrongAnswerSet.add(String(userAnswer).trim());
+                wrongAnswerSet.add(userStr);
               }
             }
 

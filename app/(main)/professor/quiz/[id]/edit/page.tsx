@@ -69,6 +69,10 @@ const convertToQuestionDataList = (
           image: sq.imageUrl || undefined,
           chapterId: sq.chapterId || undefined,
           chapterDetailId: sq.chapterDetailId || undefined,
+          // 추가 필드 보존
+          passagePrompt: sq.passagePrompt || undefined,
+          bogi: sq.bogi || null,
+          passageBlocks: sq.passageBlocks || undefined,
         };
       });
 
@@ -113,6 +117,12 @@ const convertToQuestionDataList = (
         mixedExamples: q.mixedExamples || null,
         chapterId: q.chapterId || undefined,
         chapterDetailId: q.chapterDetailId || undefined,
+        // 추가 필드 보존 (수정 시 유실 방지)
+        passagePrompt: q.passagePrompt || undefined,
+        bogi: q.bogi || null,
+        rubric: q.rubric || undefined,
+        scoringMethod: q.scoringMethod || undefined,
+        passageBlocks: q.passageBlocks || undefined,
       });
     }
   });
@@ -305,6 +315,16 @@ export default function EditQuizPage() {
     // 해설 비교
     if ((original.explanation || '') !== (current.explanation || '')) return true;
 
+    // 이미지 비교
+    if (((original as any).imageUrl || null) !== (current.imageUrl || null)) return true;
+
+    // 발문 비교
+    if (((original as any).passagePrompt || '') !== (current.passagePrompt || '')) return true;
+
+    // 보기/루브릭 비교
+    if (JSON.stringify((original as any).bogi || null) !== JSON.stringify(current.bogi || null)) return true;
+    if (JSON.stringify((original as any).rubric || null) !== JSON.stringify(current.rubric || null)) return true;
+
     return false;
   };
 
@@ -346,6 +366,10 @@ export default function EditQuizPage() {
     // 이미지 비교
     if ((original.imageUrl || null) !== (current.image || null)) return true;
 
+    // 발문/보기 비교
+    if ((original.passagePrompt || '') !== (current.passagePrompt || '')) return true;
+    if (JSON.stringify(original.bogi || null) !== JSON.stringify(current.bogi || null)) return true;
+
     return false;
   };
 
@@ -362,6 +386,22 @@ export default function EditQuizPage() {
         const combinedGroupId = q.id || `combined_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         const subQuestionsCount = q.subQuestions.length;
 
+        // 결합형 공통 지문 변경 감지 (지문/이미지만 수정 시에도 뱃지 표시)
+        let parentChanged = false;
+        const origFirstQ = originalQuestions.find(
+          (oq: any) => oq.combinedGroupId === combinedGroupId && (oq.combinedIndex === 0 || oq.combinedIndex === undefined)
+        );
+        if (!origFirstQ) {
+          parentChanged = true;
+        } else {
+          if (((origFirstQ as any).passage || '') !== (q.passage || '')) parentChanged = true;
+          if (((origFirstQ as any).passageImage || null) !== (q.passageImage || null)) parentChanged = true;
+          if (((origFirstQ as any).commonQuestion || '') !== (q.commonQuestion || '')) parentChanged = true;
+          if (((origFirstQ as any).combinedMainText || '') !== (q.text || '')) parentChanged = true;
+          if (JSON.stringify((origFirstQ as any).koreanAbcItems || null) !== JSON.stringify(q.koreanAbcItems || null)) parentChanged = true;
+          if (JSON.stringify((origFirstQ as any).passageMixedExamples || null) !== JSON.stringify(q.passageMixedExamples || null)) parentChanged = true;
+        }
+
         q.subQuestions.forEach((sq, sqIndex) => {
           // 정답 처리
           let answer: string | number;
@@ -374,10 +414,13 @@ export default function EditQuizPage() {
           }
 
           // 기존 문제 찾기 (ID로 찾기)
-          const originalQ = originalQuestions.find((oq) => oq.id === sq.id);
-          const hasChanged = !originalQ || isQuestionChangedForSubQuestion(originalQ, sq);
+          const originalQ = originalQuestions.find((oq: any) => oq.id === sq.id);
+          const hasChanged = parentChanged || !originalQ || isQuestionChangedForSubQuestion(originalQ, sq);
 
           const subQuestionData: any = {
+            // 원본 필드 보존 (choiceExplanations 등 QuestionData에 없는 필드)
+            ...(originalQ || {}),
+            // 수정 가능한 필드 덮어쓰기
             id: sq.id || `${combinedGroupId}_${sqIndex}`,
             order: orderIndex++,
             text: sq.text,
@@ -388,6 +431,9 @@ export default function EditQuizPage() {
             imageUrl: sq.image || undefined,
             examples: sq.mixedExamples || undefined,
             mixedExamples: sq.mixedExamples || undefined,
+            passagePrompt: sq.passagePrompt || undefined,
+            bogi: sq.bogi || undefined,
+            passageBlocks: sq.passageBlocks || undefined,
             // 결합형 그룹 정보
             combinedGroupId,
             combinedIndex: sqIndex,
@@ -423,11 +469,14 @@ export default function EditQuizPage() {
           answer = q.answerIndex;
         }
 
-        // 기존 문제 찾기
-        const originalQ = originalQuestions.find((oq) => oq.id === q.id) || originalQuestions[orderIndex];
-        const hasChanged = isQuestionChanged(originalQ, q);
+        // ID 기반 매칭만 사용 (인덱스 폴백 제거 — 삭제/순서변경 시 오매칭 방지)
+        const originalQ = originalQuestions.find((oq: any) => oq.id === q.id);
+        const hasChanged = !originalQ || isQuestionChanged(originalQ, q);
 
         flattenedQuestions.push({
+          // 원본 필드 보존 (choiceExplanations 등 QuestionData에 없는 필드)
+          ...(originalQ || {}),
+          // 수정 가능한 필드 덮어쓰기
           id: q.id,
           order: orderIndex++,
           text: q.text,
@@ -438,6 +487,11 @@ export default function EditQuizPage() {
           imageUrl: q.imageUrl || undefined,
           examples: q.examples || undefined,
           mixedExamples: q.mixedExamples || undefined,
+          passagePrompt: q.passagePrompt || undefined,
+          bogi: q.bogi || undefined,
+          rubric: q.rubric || undefined,
+          scoringMethod: q.scoringMethod || undefined,
+          passageBlocks: q.passageBlocks || undefined,
           chapterId: q.chapterId || undefined,
           chapterDetailId: q.chapterDetailId || undefined,
           questionUpdatedAt: hasChanged ? Timestamp.now() : ((originalQ as any)?.questionUpdatedAt || null),

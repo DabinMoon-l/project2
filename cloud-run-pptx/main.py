@@ -541,6 +541,68 @@ def process_pptx():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/render-pdf', methods=['POST', 'OPTIONS'])
+def render_pdf():
+    """
+    HTML → PDF 변환 (Playwright/Chromium)
+    Request: POST { "html": "<html>...</html>" }
+    Response: PDF 바이너리 (application/pdf)
+    Firebase Auth 토큰으로 인증
+    """
+    # CORS preflight
+    if request.method == 'OPTIONS':
+        resp = app.make_default_options_response()
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        resp.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        resp.headers['Access-Control-Allow-Headers'] = 'Authorization, Content-Type'
+        resp.headers['Access-Control-Max-Age'] = '3600'
+        return resp
+
+    # Firebase Auth 검증
+    decoded = verify_firebase_token(request)
+    if not decoded:
+        resp = jsonify({'error': '인증 실패'})
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        return resp, 401
+
+    try:
+        data = request.get_json(force=True)
+        html_content = data.get('html', '')
+        if not html_content:
+            resp = jsonify({'error': 'html 필드가 필요합니다.'})
+            resp.headers['Access-Control-Allow-Origin'] = '*'
+            return resp, 400
+
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch(args=['--no-sandbox', '--disable-dev-shm-usage'])
+            page = browser.new_page()
+            page.set_content(html_content, wait_until='networkidle')
+            pdf_bytes = page.pdf(
+                format='A4',
+                margin={'top': '0', 'right': '0', 'bottom': '0', 'left': '0'},
+                print_background=True,
+            )
+            browser.close()
+
+        # PDF 바이너리 직접 반환
+        import io
+        resp = send_file(
+            io.BytesIO(pdf_bytes),
+            mimetype='application/pdf',
+            as_attachment=False,
+        )
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        return resp
+
+    except Exception as e:
+        print(f"HTML→PDF 변환 오류: {e}")
+        resp = jsonify({'error': str(e)})
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        return resp, 500
+
+
 @app.route('/health', methods=['GET'])
 def health_check():
     """헬스 체크 엔드포인트"""

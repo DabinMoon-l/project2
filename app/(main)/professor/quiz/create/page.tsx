@@ -1030,13 +1030,14 @@ export default function ProfessorQuizCreatePage() {
       {/* 헤더 */}
       <header className="sticky top-0 z-20 border-b-2 border-[#1A1A1A]" style={{ backgroundColor: '#F5F0E8' }}>
         <div className="flex items-center justify-between px-4 py-3">
-          <button type="button" onClick={handleBackButton} className="w-10 h-10 flex items-center justify-center border border-[#1A1A1A]">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <button type="button" onClick={handleBackButton} className="flex items-center gap-2 text-sm text-[#1A1A1A]">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
+            뒤로가기
           </button>
           <h1 className="font-serif-display text-lg font-bold text-[#1A1A1A]">퀴즈 출제</h1>
-          <div className="w-10" />
+          <div className="w-20" />
         </div>
       </header>
 

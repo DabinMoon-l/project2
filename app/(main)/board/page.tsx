@@ -224,7 +224,7 @@ const PinnedPostsCarousel = memo(function PinnedPostsCarousel({
   if (posts.length === 0) return null;
 
   return (
-    <div className="relative">
+    <div className="relative" data-no-pull style={{ touchAction: 'pan-y' }}>
       {/* 캐러셀 컨테이너 — overflow-hidden 제거 (pointer-events 차단 원인) */}
       <div
         onTouchStart={handleTouchStart}
@@ -762,6 +762,8 @@ export default function BoardPage() {
         {isProfessor ? (
           <div
             className="border-y-4 border-[#1A1A1A] pt-5 pb-7 flex items-center justify-center gap-2 select-none overflow-hidden"
+            data-no-pull
+            style={{ touchAction: 'pan-y' }}
             onTouchStart={(e) => { courseTouchStartX.current = e.touches[0].clientX; }}
             onTouchMove={(e) => { courseTouchEndX.current = e.touches[0].clientX; }}
             onTouchEnd={() => {
@@ -799,12 +801,12 @@ export default function BoardPage() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -30 }}
                 transition={{ duration: 0.2 }}
-                className="font-serif-display text-5xl md:text-7xl font-black tracking-tight text-[#1A1A1A] text-center whitespace-nowrap"
+                className="font-serif-display font-black tracking-tight text-[#1A1A1A] text-center whitespace-nowrap h-[3.5rem] flex items-center justify-center"
               >
                 {(() => {
                   const name = courseList.find(c => c.id === selectedCourseId)?.nameEn.toUpperCase() || 'BIOLOGY';
                   const isLong = name.length > 10;
-                  return <span className={isLong ? 'text-[2.6rem] md:text-6xl' : ''}>{name}</span>;
+                  return <span className={isLong ? 'text-[2.6rem] md:text-6xl' : 'text-5xl md:text-7xl'}>{name}</span>;
                 })()}
               </motion.h1>
             </AnimatePresence>

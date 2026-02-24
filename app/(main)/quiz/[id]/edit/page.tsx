@@ -718,14 +718,15 @@ export default function EditQuizPage() {
                 handleGoBack();
               }
             }}
-            className="w-10 h-10 flex items-center justify-center border border-[#1A1A1A]"
+            className="flex items-center gap-2 text-sm text-[#1A1A1A]"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
+            뒤로가기
           </button>
           <h1 className="font-bold text-lg text-[#1A1A1A]">퀴즈 수정</h1>
-          <div className="w-10" />
+          <div className="w-20" />
         </div>
 
         {/* 탭 */}

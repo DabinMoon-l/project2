@@ -653,7 +653,7 @@ function NewsCarousel({
   };
 
   return (
-    <div className="relative px-4">
+    <div className="relative px-4" data-no-pull style={{ touchAction: 'pan-y' }}>
       {/* 좌측 화살표 */}
       <button
         onClick={goToPrev}
@@ -686,9 +686,6 @@ function NewsCarousel({
           className="flex"
           animate={{ x: `${-currentIndex * 100}%` }}
           transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-          drag="x"
-          dragConstraints={{ left: 0, right: 0 }}
-          onDragEnd={handleDragEnd}
         >
           {/* 중간 카드 */}
           <motion.div

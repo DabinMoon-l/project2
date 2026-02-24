@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { Header, Button, Skeleton } from '@/components/common';
 import { PublishToggle, QuizDeleteModal } from '@/components/professor';
 import {
@@ -549,8 +551,12 @@ export default function QuizDetailPage() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [showAnalysis, setShowAnalysis] = useState(false);
 
-  // 데이터 로드
+  // 데이터 로드 + 통계 실시간 구독
   useEffect(() => {
+    if (!quizId) return;
+
+    let unsubResults: (() => void) | null = null;
+
     const loadQuiz = async () => {
       try {
         setLoading(true);
@@ -558,11 +564,27 @@ export default function QuizDetailPage() {
         if (data) {
           setQuiz(data);
 
-          // 통계 로드
+          // 초기 통계 로드
           setStatsLoading(true);
           const stats = await fetchQuizStatistics(quizId, data.questions);
           setStatistics(stats);
           setStatsLoading(false);
+
+          // quizResults 실시간 구독 — 변경 시 통계 재계산
+          const resultsQuery = query(
+            collection(db, 'quizResults'),
+            where('quizId', '==', quizId)
+          );
+          let isFirst = true;
+          unsubResults = onSnapshot(resultsQuery, async () => {
+            // 초기 스냅샷은 위에서 이미 로드했으므로 스킵
+            if (isFirst) {
+              isFirst = false;
+              return;
+            }
+            const updatedStats = await fetchQuizStatistics(quizId, data.questions);
+            setStatistics(updatedStats);
+          });
         } else {
           setError('퀴즈를 찾을 수 없습니다.');
         }
@@ -573,9 +595,11 @@ export default function QuizDetailPage() {
       }
     };
 
-    if (quizId) {
-      loadQuiz();
-    }
+    loadQuiz();
+
+    return () => {
+      if (unsubResults) unsubResults();
+    };
   }, [quizId, fetchQuiz, fetchQuizStatistics]);
 
   // 공개 상태 토글

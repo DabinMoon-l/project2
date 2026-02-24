@@ -104,13 +104,15 @@ export default function PullToHome({ children, homePath = '/', tabPaths = DEFAUL
 
   const touchTarget = useRef<EventTarget | null>(null);
 
-  // 터치 대상이 모달/오버레이 내부인지 확인
-  // data-hide-nav, body scroll lock, 또는 fixed 포지션 조상 (모달 백드롭) 감지
+  // 터치 대상이 모달/오버레이 내부이거나 캐러셀 영역인지 확인
+  // data-hide-nav, body scroll lock, fixed 포지션 조상 (모달 백드롭),
+  // 또는 data-no-pull (캐러셀 등 자체 스와이프가 있는 영역) 감지
   const shouldBlockGesture = useCallback((target: EventTarget | null): boolean => {
     if (document.body.hasAttribute('data-hide-nav')) return true;
     if (document.body.style.overflow === 'hidden') return true;
     let el = target as HTMLElement | null;
     while (el && el !== containerRef.current) {
+      if (el.hasAttribute('data-no-pull')) return true;
       if (window.getComputedStyle(el).position === 'fixed') return true;
       el = el.parentElement;
     }
@@ -250,6 +252,12 @@ export default function PullToHome({ children, homePath = '/', tabPaths = DEFAUL
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
       if (transitioning || document.body.hasAttribute('data-hide-nav') || document.body.style.overflow === 'hidden') return;
+      // 캐러셀 등 data-no-pull 영역에서는 휠 제스처 차단
+      let el = e.target as HTMLElement | null;
+      while (el && el !== containerRef.current) {
+        if (el.hasAttribute('data-no-pull')) return;
+        el = el.parentElement;
+      }
       const scrollTop = document.documentElement.scrollTop || document.body.scrollTop;
       if (scrollTop > 0) return;
       if (e.deltaY < 0) {

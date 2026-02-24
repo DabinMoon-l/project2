@@ -16,23 +16,17 @@ interface HeaderProps {
   rightAction?: React.ReactNode;
 }
 
-// 뒤로가기 아이콘 컴포넌트
+// 뒤로가기 아이콘 컴포넌트 (chevron left)
 function BackIcon() {
   return (
     <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
+      className="w-4 h-4"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+      viewBox="0 0 24 24"
       aria-hidden="true"
     >
-      <path d="M19 12H5" />
-      <path d="M12 19l-7-7 7-7" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
     </svg>
   );
 }
@@ -124,29 +118,23 @@ export default function Header({
       {/* 헤더 컨텐츠 */}
       <div className="relative flex items-center justify-between h-14 px-4">
         {/* 좌측 영역: 뒤로가기 버튼 */}
-        <div className="w-10 flex justify-start">
+        <div className="flex justify-start">
           {showBack && (
             <motion.button
               variants={buttonVariants}
               initial="initial"
               animate="animate"
               transition={{ duration: 0.2, delay: 0.1 }}
-              whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.95 }}
               onClick={handleBack}
-              className="p-2 -ml-2 rounded-full transition-colors duration-200"
+              className="flex items-center gap-2 text-sm py-2 -ml-2 px-2 transition-colors duration-200"
               style={{
                 color: colors.text,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = `${colors.accent}20`;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
               }}
               aria-label="뒤로가기"
             >
               <BackIcon />
+              뒤로가기
             </motion.button>
           )}
         </div>

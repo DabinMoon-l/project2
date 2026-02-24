@@ -16,12 +16,14 @@ import {
   collection,
   query,
   where,
-  getDocs,
   doc,
   getDoc,
+  onSnapshot,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { formatChapterLabel } from '@/lib/courseIndex';
+import { useCustomFolders } from '@/lib/hooks/useCustomFolders';
+import FolderSelectModal from '@/components/common/FolderSelectModal';
 
 // ============================================================
 // 애니메이션 컴포넌트
@@ -231,6 +233,7 @@ interface QuizStatsModalProps {
   quizTitle: string;
   isOpen: boolean;
   onClose: () => void;
+  isProfessor?: boolean;
 }
 
 interface LabeledItem {
@@ -288,6 +291,7 @@ interface QuestionStats {
   questionType: string;
   correctRate: number;
   wrongRate: number;
+  discrimination: number;
   totalAttempts: number;
   correctCount: number;
   correctAnswer?: string;
@@ -503,12 +507,18 @@ export default function QuizStatsModal({
   quizTitle,
   isOpen,
   onClose,
+  isProfessor = false,
 }: QuizStatsModalProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [classFilter, setClassFilter] = useState<ClassFilter>('all');
   const [selectedQuestionIndex, setSelectedQuestionIndex] = useState(0);
   const [showQuestionDropdown, setShowQuestionDropdown] = useState(false);
+
+  // 폴더 저장
+  const { customFolders, createCustomFolder, addToCustomFolder } = useCustomFolders();
+  const [showFolderModal, setShowFolderModal] = useState(false);
+  const [folderSaveToast, setFolderSaveToast] = useState<string | null>(null);
 
   // 문제 스와이프 (가로 슬라이드)
   const questionContentRef = useRef<HTMLDivElement>(null);
@@ -526,10 +536,11 @@ export default function QuizStatsModal({
   const [resultsWithClass, setResultsWithClass] = useState<ResultWithClass[]>([]);
   const [courseId, setCourseId] = useState<string | undefined>();
 
-  // 모달이 열릴 때 네비게이션 숨김
+  // 모달이 열릴 때 네비게이션 숨김 + 문제 인덱스 리셋
   useEffect(() => {
     if (isOpen) {
       document.body.setAttribute('data-hide-nav', 'true');
+      setSelectedQuestionIndex(0);
     } else {
       document.body.removeAttribute('data-hide-nav');
     }
@@ -548,15 +559,20 @@ export default function QuizStatsModal({
   useEffect(() => {
     if (!isOpen) return;
 
-    const fetchData = async () => {
+    let unsubResults: (() => void) | null = null;
+    // classId 캐시 (유저별 1회만 조회)
+    const userClassCache = new Map<string, 'A' | 'B' | 'C' | 'D' | null>();
+
+    const setup = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        // 1. 퀴즈 데이터 가져오기
+        // 1. 퀴즈 데이터 가져오기 (1회)
         const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
         if (!quizDoc.exists()) {
           setError('퀴즈를 찾을 수 없습니다.');
+          setLoading(false);
           return;
         }
 
@@ -565,99 +581,116 @@ export default function QuizStatsModal({
         setQuestions(flatQuestions);
         setCourseId(quizData.courseId);
 
-        // 2. 퀴즈 결과 가져오기
+        // 2. 퀴즈 결과 실시간 구독
         const resultsQuery = query(
           collection(db, 'quizResults'),
           where('quizId', '==', quizId)
         );
-        const resultsSnapshot = await getDocs(resultsQuery);
 
-        // 첫 번째 결과만 필터링 (isUpdate가 아닌 것)
-        const firstResults = resultsSnapshot.docs.filter(
-          (doc) => !doc.data().isUpdate
-        );
+        unsubResults = onSnapshot(resultsQuery, async (resultsSnapshot) => {
+          try {
+            // 첫 번째 결과만 필터링 (isUpdate가 아닌 것)
+            const firstResults = resultsSnapshot.docs.filter(
+              (d) => !d.data().isUpdate
+            );
 
-        if (firstResults.length === 0) {
-          setResultsWithClass([]);
-          setLoading(false);
-          return;
-        }
+            if (firstResults.length === 0) {
+              setResultsWithClass([]);
+              setLoading(false);
+              return;
+            }
 
-        // 3. userId 중복 제거 — 동일 사용자의 가장 최근 결과만 사용
-        const latestByUser = new Map<string, any>();
-        firstResults.forEach((docSnapshot) => {
-          const data = docSnapshot.data();
-          const uid = data.userId;
-          const ts = data.createdAt?.toMillis?.() || data.createdAt?.seconds * 1000 || 0;
-          const existing = latestByUser.get(uid);
-          if (!existing || ts > (existing.data.createdAt?.toMillis?.() || existing.data.createdAt?.seconds * 1000 || 0)) {
-            latestByUser.set(uid, { docSnapshot, data });
-          }
-        });
-        const dedupedResults = Array.from(latestByUser.values());
-
-        // 4. 결과에서 classId 추출 (없으면 users 컬렉션에서 가져오기)
-        const resultsNeedingClass: { docSnapshot: any; data: any }[] = [];
-        const resultsWithClassDirect: ResultWithClass[] = [];
-
-        dedupedResults.forEach(({ data }) => {
-          if (data.classId) {
-            resultsWithClassDirect.push({
-              userId: data.userId,
-              classType: data.classId as 'A' | 'B' | 'C' | 'D',
-              score: data.score || 0,
-              questionScores: data.questionScores || {},
-              createdAt: data.createdAt,
-            });
-          } else {
-            resultsNeedingClass.push({ docSnapshot: null, data });
-          }
-        });
-
-        // classId가 없는 결과들에 대해 users 컬렉션에서 가져오기
-        const userIds = [...new Set(resultsNeedingClass.map((r) => r.data.userId))];
-        const userClassMap = new Map<string, 'A' | 'B' | 'C' | 'D' | null>();
-
-        if (userIds.length > 0) {
-          await Promise.all(
-            userIds.map(async (userId) => {
-              try {
-                const userDoc = await getDoc(doc(db, 'users', userId));
-                if (userDoc.exists()) {
-                  userClassMap.set(userId, userDoc.data().classId || null);
-                } else {
-                  userClassMap.set(userId, null);
-                }
-              } catch {
-                userClassMap.set(userId, null);
+            // userId 중복 제거 — 동일 사용자의 가장 최근 결과만 사용
+            const latestByUser = new Map<string, any>();
+            firstResults.forEach((docSnapshot) => {
+              const data = docSnapshot.data();
+              const uid = data.userId;
+              const ts = data.createdAt?.toMillis?.() || data.createdAt?.seconds * 1000 || 0;
+              const existing = latestByUser.get(uid);
+              if (!existing || ts > (existing.data.createdAt?.toMillis?.() || existing.data.createdAt?.seconds * 1000 || 0)) {
+                latestByUser.set(uid, { docSnapshot, data });
               }
-            })
-          );
-        }
+            });
+            const dedupedResults = Array.from(latestByUser.values());
 
-        // 5. 결과에 classType 추가
-        const resultsFromUsers: ResultWithClass[] = resultsNeedingClass.map(({ data }) => {
-          return {
-            userId: data.userId,
-            classType: userClassMap.get(data.userId) || null,
-            score: data.score || 0,
-            questionScores: data.questionScores || {},
-            createdAt: data.createdAt,
-          };
+            // 결과에서 classId 추출 (없으면 users 컬렉션에서 가져오기)
+            const resultsNeedingClass: { docSnapshot: any; data: any }[] = [];
+            const resultsWithClassDirect: ResultWithClass[] = [];
+
+            dedupedResults.forEach(({ data }) => {
+              if (data.classId) {
+                resultsWithClassDirect.push({
+                  userId: data.userId,
+                  classType: data.classId as 'A' | 'B' | 'C' | 'D',
+                  score: data.score || 0,
+                  questionScores: data.questionScores || {},
+                  createdAt: data.createdAt,
+                });
+              } else if (userClassCache.has(data.userId)) {
+                // 캐시된 classId 사용
+                resultsWithClassDirect.push({
+                  userId: data.userId,
+                  classType: userClassCache.get(data.userId) || null,
+                  score: data.score || 0,
+                  questionScores: data.questionScores || {},
+                  createdAt: data.createdAt,
+                });
+              } else {
+                resultsNeedingClass.push({ docSnapshot: null, data });
+              }
+            });
+
+            // classId가 없는 결과들에 대해 users 컬렉션에서 가져오기
+            const userIds = [...new Set(resultsNeedingClass.map((r) => r.data.userId))];
+
+            if (userIds.length > 0) {
+              await Promise.all(
+                userIds.map(async (userId) => {
+                  try {
+                    const userDoc = await getDoc(doc(db, 'users', userId));
+                    if (userDoc.exists()) {
+                      userClassCache.set(userId, userDoc.data().classId || null);
+                    } else {
+                      userClassCache.set(userId, null);
+                    }
+                  } catch {
+                    userClassCache.set(userId, null);
+                  }
+                })
+              );
+            }
+
+            // 결과에 classType 추가
+            const resultsFromUsers: ResultWithClass[] = resultsNeedingClass.map(({ data }) => {
+              return {
+                userId: data.userId,
+                classType: userClassCache.get(data.userId) || null,
+                score: data.score || 0,
+                questionScores: data.questionScores || {},
+                createdAt: data.createdAt,
+              };
+            });
+
+            const results: ResultWithClass[] = [...resultsWithClassDirect, ...resultsFromUsers];
+            setResultsWithClass(results);
+          } catch (err) {
+            console.error('통계 업데이트 실패:', err);
+          } finally {
+            setLoading(false);
+          }
         });
-
-        const results: ResultWithClass[] = [...resultsWithClassDirect, ...resultsFromUsers];
-
-        setResultsWithClass(results);
       } catch (err) {
         console.error('통계 로드 실패:', err);
         setError('통계를 불러오는데 실패했습니다.');
-      } finally {
         setLoading(false);
       }
     };
 
-    fetchData();
+    setup();
+
+    return () => {
+      if (unsubResults) unsubResults();
+    };
   }, [isOpen, quizId]);
 
   // 필터링된 결과 기반으로 통계 계산
@@ -684,6 +717,7 @@ export default function QuizStatsModal({
           questionType: q.type || 'multiple',
           correctRate: 0,
           wrongRate: 100,
+          discrimination: 0,
           totalAttempts: 0,
           correctCount: 0,
           correctAnswer: q.answer,
@@ -718,12 +752,20 @@ export default function QuizStatsModal({
     const scores: number[] = [];
     const questionCorrectCounts: Record<string, number> = {};
     const questionAttemptCounts: Record<string, number> = {};
+    // 유저별 정답(1)/오답(0) 기록 — 변별도 계산용
+    const questionScoreArrays: Record<string, number[]> = {};
+    // 유저별 총점 — 변별도에서 상/하위 구분용
+    const userTotalScores: Record<string, number> = {};
     const oxSelections: Record<string, { o: number; x: number }> = {};
     const optionSelections: Record<string, Record<string, number>> = {};
     const shortAnswerResponses: Record<string, Record<string, number>> = {};
 
+    // 변별도 계산용: 문제별로 { userId, isCorrect }[] 기록
+    const questionUserScores: Record<string, { userId: string; isCorrect: boolean }[]> = {};
+
     filteredResults.forEach((result) => {
       scores.push(result.score);
+      userTotalScores[result.userId] = result.score;
 
       // 문제별 점수 분석
       Object.entries(result.questionScores).forEach(
@@ -741,8 +783,12 @@ export default function QuizStatsModal({
           if (!questionCorrectCounts[questionId]) {
             questionCorrectCounts[questionId] = 0;
             questionAttemptCounts[questionId] = 0;
+            questionScoreArrays[questionId] = [];
+            questionUserScores[questionId] = [];
           }
           questionAttemptCounts[questionId]++;
+          questionScoreArrays[questionId].push(scoreData.isCorrect ? 1 : 0);
+          questionUserScores[questionId].push({ userId: result.userId, isCorrect: scoreData.isCorrect });
           if (scoreData.isCorrect) {
             questionCorrectCounts[questionId]++;
           }
@@ -777,7 +823,7 @@ export default function QuizStatsModal({
             if (!shortAnswerResponses[questionId]) {
               shortAnswerResponses[questionId] = {};
             }
-            const userAnswer = scoreData.userAnswer.toString().trim() || '(미입력)';
+            const userAnswer = scoreData.userAnswer.toString().trim().toLowerCase() || '(미입력)';
             shortAnswerResponses[questionId][userAnswer] = (shortAnswerResponses[questionId][userAnswer] || 0) + 1;
           }
         }
@@ -796,6 +842,22 @@ export default function QuizStatsModal({
       const correctRate = attempts > 0 ? Math.round((correct / attempts) * 100) : 0;
       const wrongRate = 100 - correctRate;
 
+      // 변별도 계산 (상위 27% 정답률 - 하위 27% 정답률)
+      let discrimination = 0;
+      const userScores = questionUserScores[q.id];
+      if (userScores && userScores.length >= 4) {
+        // 총점 기준 정렬
+        const sorted = [...userScores].sort(
+          (a, b) => (userTotalScores[b.userId] ?? 0) - (userTotalScores[a.userId] ?? 0)
+        );
+        const n27 = Math.max(1, Math.ceil(sorted.length * 0.27));
+        const upper = sorted.slice(0, n27);
+        const lower = sorted.slice(-n27);
+        const upperRate = upper.filter(u => u.isCorrect).length / upper.length;
+        const lowerRate = lower.filter(u => u.isCorrect).length / lower.length;
+        discrimination = Math.round((upperRate - lowerRate) * 100) / 100;
+      }
+
       const stat: QuestionStats = {
         questionId: `${q.id}_${idx}`,
         questionIndex: idx,
@@ -803,6 +865,7 @@ export default function QuizStatsModal({
         questionType: q.type || 'multiple',
         correctRate,
         wrongRate,
+        discrimination,
         totalAttempts: attempts,
         correctCount: correct,
         correctAnswer: q.answer,
@@ -1025,6 +1088,25 @@ export default function QuizStatsModal({
     currentQuestion.mixedExamples.length > 0 &&
     currentQuestion.mixedExamples.some(item => isValidMixedItem(item));
 
+  // 현재 문제를 폴더에 저장
+  const handleFolderSelect = async (folderId: string) => {
+    if (!currentQuestion) return;
+    try {
+      await addToCustomFolder(folderId, [{
+        questionId: currentQuestion.questionId,
+        quizId: quizId,
+        quizTitle: quizTitle,
+        combinedGroupId: null,
+      }]);
+      setShowFolderModal(false);
+      setFolderSaveToast('폴더에 추가되었습니다');
+      setTimeout(() => setFolderSaveToast(null), 2000);
+    } catch {
+      setFolderSaveToast('추가에 실패했습니다');
+      setTimeout(() => setFolderSaveToast(null), 2000);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -1051,25 +1133,27 @@ export default function QuizStatsModal({
           </button>
         </div>
 
-        {/* 반별 필터 탭 */}
-        <div className="flex border-b border-[#D4CFC4] flex-shrink-0 bg-[#EDEAE4]">
-          {CLASS_FILTERS.map((filter) => (
-            <button
-              key={filter.value}
-              onClick={() => setClassFilter(filter.value)}
-              className={`flex-1 py-3 text-base font-medium transition-colors ${
-                classFilter === filter.value
-                  ? 'text-[#1A1A1A] border-b-2 border-[#1A1A1A] bg-[#F5F0E8]'
-                  : 'text-[#5C5C5C] hover:text-[#1A1A1A]'
-              }`}
-            >
-              {filter.label}
-              <span className="ml-0.5 text-sm">
-                ({classParticipantCounts[filter.value]})
-              </span>
-            </button>
-          ))}
-        </div>
+        {/* 반별 필터 탭 — 교수님만 표시 */}
+        {isProfessor && (
+          <div className="flex border-b border-[#D4CFC4] flex-shrink-0 bg-[#EDEAE4]">
+            {CLASS_FILTERS.map((filter) => (
+              <button
+                key={filter.value}
+                onClick={() => setClassFilter(filter.value)}
+                className={`flex-1 py-3 text-base font-medium transition-colors ${
+                  classFilter === filter.value
+                    ? 'text-[#1A1A1A] border-b-2 border-[#1A1A1A] bg-[#F5F0E8]'
+                    : 'text-[#5C5C5C] hover:text-[#1A1A1A]'
+                }`}
+              >
+                {filter.label}
+                <span className="ml-0.5 text-sm">
+                  ({classParticipantCounts[filter.value]})
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* 컨텐츠 */}
         <div className="flex-1 overflow-y-auto overscroll-contain">
@@ -1202,6 +1286,16 @@ export default function QuizStatsModal({
                       onTouchEnd={handleQSwipeEnd}
                       style={{ touchAction: 'pan-y' }}
                     >
+                      {/* 폴더 저장 아이콘 */}
+                      <button
+                        onClick={() => setShowFolderModal(true)}
+                        className="absolute top-2 right-2 z-10 w-10 h-10 flex items-center justify-center text-[#8B6914] hover:text-[#6B4F0E] transition-colors"
+                        title="폴더에 저장"
+                      >
+                        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                        </svg>
+                      </button>
                       <div
                         ref={questionContentRef}
                         className="h-full overflow-y-auto overflow-x-hidden scrollbar-hide overscroll-contain"
@@ -1216,10 +1310,23 @@ export default function QuizStatsModal({
                       ) : (
                       <div className="min-h-full flex flex-col justify-center p-4">
                         {/* 문제 헤더 */}
-                        <div className="flex items-center justify-center mb-4">
+                        <div className="flex items-center justify-center gap-3 mb-4">
                           <span className="text-xl font-bold text-[#1A1A1A]">
                             정답률 {currentQuestion.correctRate}%
                           </span>
+                          {currentQuestion.totalAttempts >= 4 && (() => {
+                            const d = currentQuestion.discrimination;
+                            const label = d >= 0.4 ? '우수' : d >= 0.2 ? '양호' : d >= 0 ? '미흡' : '역변별';
+                            const color = d >= 0.4 ? '#16A34A' : d >= 0.2 ? '#1A1A1A' : d >= 0 ? '#D97706' : '#DC2626';
+                            return (
+                              <>
+                                <span className="text-base text-[#5C5C5C]">·</span>
+                                <span className="text-base font-bold" style={{ color }}>
+                                  변별도 {d.toFixed(2)} <span className="text-xs font-normal">({label})</span>
+                                </span>
+                              </>
+                            );
+                          })()}
                         </div>
 
                         {/* 문제 텍스트 (박스 없이) */}
@@ -1423,15 +1530,24 @@ export default function QuizStatsModal({
                                 const isCorrect = opt === correctAnswer;
                                 const percentage = opt === 'O' ? oPercentage : xPercentage;
 
-                                // 정답 선지
+                                // 정답 선지 - 선택률만큼 초록 배경 채움
                                 if (isCorrect) {
                                   return (
                                     <div
                                       key={opt}
-                                      className="w-24 h-24 text-4xl font-bold border-2 flex flex-col items-center justify-center bg-[#E8F5E9] border-[#1A6B1A] text-[#1A6B1A]"
+                                      className="relative w-24 h-24 text-4xl font-bold border-2 border-[#1A6B1A] flex flex-col items-center justify-center overflow-hidden"
+                                      style={{ backgroundColor: '#EDEAE4' }}
                                     >
-                                      <span>{opt}</span>
-                                      <span className="text-sm font-normal mt-1">{percentage}%</span>
+                                      {percentage > 0 && (
+                                        <motion.div
+                                          initial={{ height: 0 }}
+                                          animate={{ height: `${percentage}%` }}
+                                          transition={{ duration: 0.6, ease: 'easeOut', delay: 0.1 }}
+                                          className="absolute left-0 right-0 bottom-0 bg-[#E8F5E9]"
+                                        />
+                                      )}
+                                      <span className="relative z-10 text-[#1A6B1A]">{opt}</span>
+                                      <span className="relative z-10 text-sm font-normal mt-1 text-[#1A6B1A]">{percentage}%</span>
                                     </div>
                                   );
                                 }
@@ -1475,18 +1591,27 @@ export default function QuizStatsModal({
                                 // 오답 중에서 선택률이 가장 높은 경우 빨간 테두리
                                 const isHighestWrong = !opt.isCorrect && opt.percentage === maxWrongPercentage && maxWrongPercentage > 0;
 
-                                // 정답 선지
+                                // 정답 선지 - 선택률만큼 초록 배경 채움
                                 if (opt.isCorrect) {
                                   return (
                                     <div
                                       key={optIdx}
-                                      className="flex items-center gap-3 p-3 border-2 bg-[#E8F5E9] border-[#1A6B1A]"
+                                      className="relative flex items-center gap-3 p-3 border-2 border-[#1A6B1A] overflow-hidden"
+                                      style={{ backgroundColor: '#F5F0E8' }}
                                     >
-                                      <span className="text-base font-bold min-w-[24px] text-[#1A6B1A]">
+                                      {opt.percentage > 0 && (
+                                        <motion.div
+                                          initial={{ width: 0 }}
+                                          animate={{ width: `${opt.percentage}%` }}
+                                          transition={{ duration: 0.6, ease: 'easeOut', delay: 0.1 + optIdx * 0.05 }}
+                                          className="absolute left-0 top-0 bottom-0 bg-[#E8F5E9]"
+                                        />
+                                      )}
+                                      <span className="relative z-10 text-base font-bold min-w-[24px] text-[#1A6B1A]">
                                         {optIdx + 1}.
                                       </span>
-                                      <span className="flex-1 text-base text-[#1A1A1A]">{opt.option}</span>
-                                      <span className="text-base font-bold text-[#1A6B1A]">
+                                      <span className="relative z-10 flex-1 text-base text-[#1A1A1A]">{opt.option}</span>
+                                      <span className="relative z-10 text-base font-bold text-[#1A6B1A]">
                                         {opt.percentage}%
                                       </span>
                                     </div>
@@ -1561,6 +1686,29 @@ export default function QuizStatsModal({
           )}
         </div>
       </motion.div>
+
+      {/* 폴더 선택 모달 */}
+      <FolderSelectModal
+        isOpen={showFolderModal}
+        onClose={() => setShowFolderModal(false)}
+        onSelect={handleFolderSelect}
+        folders={customFolders}
+        onCreateFolder={createCustomFolder}
+      />
+
+      {/* 폴더 저장 토스트 */}
+      <AnimatePresence>
+        {folderSaveToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="fixed top-6 left-0 right-0 mx-auto w-fit z-[110] px-4 py-2 bg-[#1A1A1A] text-[#F5F0E8] text-sm font-bold"
+          >
+            {folderSaveToast}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

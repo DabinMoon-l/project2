@@ -1,4 +1,5 @@
 import withPWA from "next-pwa";
+import defaultCache from "next-pwa/cache.js";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -36,6 +37,15 @@ const pwaConfig = withPWA({
   register: true, // 서비스 워커 자동 등록
   skipWaiting: true, // 새 서비스 워커 즉시 활성화
   disable: process.env.NODE_ENV === "development", // 개발 모드에서는 PWA 비활성화
+  runtimeCaching: [
+    // 비디오 파일은 캐시하지 않음 (ERR_CACHE_OPERATION_NOT_SUPPORTED 방지)
+    {
+      urlPattern: /\.(?:mp4|webm|ogg)$/i,
+      handler: "NetworkOnly",
+    },
+    // 기본 캐싱 규칙 (비디오 CacheFirst 제거)
+    ...defaultCache.filter(entry => entry.options?.cacheName !== "static-video-assets"),
+  ],
 });
 
 // 번들 분석기 설정 (조건부 적용)

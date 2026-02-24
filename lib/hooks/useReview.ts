@@ -33,6 +33,10 @@ import { db } from '../firebase';
 import { useAuth } from './useAuth';
 import { useCourse } from '../contexts/CourseContext';
 import { getChapterById } from '../courseIndex';
+import { useCustomFolders, type CustomFolder, type CustomFolderQuestion, type FolderCategory } from './useCustomFolders';
+
+// 커스텀 폴더 타입 재내보내기 (기존 사용처 호환)
+export type { CustomFolder, CustomFolderQuestion, FolderCategory } from './useCustomFolders';
 
 // ============================================================
 // 타입 정의
@@ -253,44 +257,8 @@ export interface QuizAttempt {
   completedAt: Timestamp;
 }
 
-/**
- * 커스텀 폴더 카테고리
- */
-export interface FolderCategory {
-  /** 카테고리 ID */
-  id: string;
-  /** 카테고리 이름 */
-  name: string;
-}
-
-/**
- * 커스텀 폴더 문제 항목
- */
-export interface CustomFolderQuestion {
-  questionId: string;
-  quizId: string;
-  quizTitle: string;
-  /** 배정된 카테고리 ID (없으면 미분류) */
-  categoryId?: string;
-  /** 결합형 그룹 ID (결합형 문제의 경우) */
-  combinedGroupId?: string | null;
-}
-
-/**
- * 커스텀 폴더
- */
-export interface CustomFolder {
-  /** 폴더 ID */
-  id: string;
-  /** 폴더 이름 */
-  name: string;
-  /** 생성 일시 */
-  createdAt: Timestamp;
-  /** 문제 목록 */
-  questions: CustomFolderQuestion[];
-  /** 카테고리 목록 */
-  categories?: FolderCategory[];
-}
+// CustomFolder, CustomFolderQuestion, FolderCategory 타입은
+// useCustomFolders.ts에서 정의하고 위에서 재내보내기함
 
 /**
  * 퀴즈 업데이트 정보
@@ -602,7 +570,18 @@ export const useReview = (): UseReviewReturn => {
   const wrongQueryBaseRef = useRef<ReturnType<typeof query> | null>(null);
   const bookmarkQueryBaseRef = useRef<ReturnType<typeof query> | null>(null);
   const [quizAttempts, setQuizAttempts] = useState<QuizAttempt[]>([]);
-  const [customFolders, setCustomFolders] = useState<CustomFolder[]>([]);
+  // 커스텀 폴더는 별도 훅에서 관리
+  const {
+    customFolders,
+    createCustomFolder,
+    deleteCustomFolder,
+    addToCustomFolder,
+    removeFromCustomFolder,
+    addCategoryToFolder,
+    removeCategoryFromFolder,
+    assignQuestionToCategory,
+    updateCategoryName,
+  } = useCustomFolders();
   const [privateQuizzes, setPrivateQuizzes] = useState<PrivateQuiz[]>([]);
   const [deletedItems, setDeletedItems] = useState<DeletedItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -981,46 +960,7 @@ export const useReview = (): UseReviewReturn => {
       }
     );
 
-    // 커스텀 폴더 구독
-    const foldersQuery = userCourseId
-      ? query(
-          collection(db, 'customFolders'),
-          where('userId', '==', user.uid),
-          where('courseId', '==', userCourseId)
-        )
-      : query(
-          collection(db, 'customFolders'),
-          where('userId', '==', user.uid)
-        );
-
-    const unsubscribeFolders = onSnapshot(
-      foldersQuery,
-      (snapshot) => {
-        const folders: CustomFolder[] = [];
-
-        snapshot.forEach((docSnap) => {
-          const data = docSnap.data();
-          folders.push({
-            id: docSnap.id,
-            name: data.name,
-            createdAt: data.createdAt,
-            questions: data.questions || [],
-            categories: data.categories || [],
-          });
-        });
-
-        folders.sort((a, b) => {
-          const aTime = a.createdAt?.toMillis?.() || Date.now();
-          const bTime = b.createdAt?.toMillis?.() || Date.now();
-          return bTime - aTime;
-        });
-
-        if (isMounted) setCustomFolders(folders);
-      },
-      (err) => {
-        console.error('커스텀 폴더 로드 실패:', err);
-      }
-    );
+    // 커스텀 폴더 구독은 useCustomFolders 훅으로 이동됨
 
     // 비공개 퀴즈 구독
     const privateQuizzesQuery = userCourseId
@@ -1108,7 +1048,6 @@ export const useReview = (): UseReviewReturn => {
       unsubscribeBookmark();
       unsubscribeSolved();
       unsubscribeAttempts();
-      unsubscribeFolders();
       unsubscribePrivateQuizzes();
       unsubscribeDeleted();
     };
@@ -1682,137 +1621,10 @@ export const useReview = (): UseReviewReturn => {
     }
   }, [user, userCourseId]);
 
-  /**
-   * 커스텀 폴더 생성
-   */
-  const createCustomFolder = useCallback(async (name: string): Promise<string | null> => {
-    if (!user) {
-      console.error('커스텀 폴더 생성 실패: 로그인 필요');
-      return null;
-    }
-
-    try {
-      console.log('[useReview] 폴더 생성 시도:', name, 'userId:', user.uid);
-      const docRef = await addDoc(collection(db, 'customFolders'), {
-        userId: user.uid,
-        name,
-        questions: [],
-        courseId: userCourseId || null,
-        createdAt: serverTimestamp(),
-      });
-      console.log('[useReview] 폴더 생성 성공:', docRef.id);
-      return docRef.id;
-    } catch (err: any) {
-      console.error('커스텀 폴더 생성 실패:', err);
-      console.error('에러 코드:', err.code);
-      console.error('에러 메시지:', err.message);
-      return null;
-    }
-  }, [user, userCourseId]);
-
-  /**
-   * 커스텀 폴더 삭제
-   */
-  const deleteCustomFolder = useCallback(async (folderId: string): Promise<void> => {
-    if (!user) return;
-
-    try {
-      // 폴더 데이터 가져오기
-      const folderRef = doc(db, 'customFolders', folderId);
-      const folderDoc = await getDoc(folderRef);
-
-      if (!folderDoc.exists()) {
-        throw new Error('폴더를 찾을 수 없습니다.');
-      }
-
-      const folderData = folderDoc.data();
-
-      // 휴지통에 저장
-      await addDoc(collection(db, 'deletedReviewItems'), {
-        userId: user.uid,
-        courseId: userCourseId || null,
-        type: 'custom',
-        originalId: folderId,
-        title: folderData.name || '폴더',
-        questionCount: folderData.questions?.length || 0,
-        deletedAt: serverTimestamp(),
-        restoreData: {
-          folderData: { ...folderData, id: folderId },
-        },
-      });
-
-      // 삭제
-      await deleteDoc(folderRef);
-    } catch (err) {
-      console.error('커스텀 폴더 삭제 실패:', err);
-      throw new Error('폴더 삭제에 실패했습니다.');
-    }
-  }, [user, userCourseId]);
-
-  /**
-   * 문제를 커스텀 폴더에 추가
-   */
-  const addToCustomFolder = useCallback(async (
-    folderId: string,
-    questions: { questionId: string; quizId: string; quizTitle: string; combinedGroupId?: string | null }[]
-  ): Promise<void> => {
-    if (!user) return;
-
-    try {
-      const folderRef = doc(db, 'customFolders', folderId);
-      const folderDoc = await getDoc(folderRef);
-
-      if (!folderDoc.exists()) {
-        throw new Error('폴더를 찾을 수 없습니다.');
-      }
-
-      const currentQuestions = folderDoc.data().questions || [];
-      const newQuestions = [...currentQuestions];
-
-      // 중복 제거하며 추가 (questionId + quizId 조합으로 확인)
-      for (const q of questions) {
-        if (!newQuestions.some(existing =>
-          existing.questionId === q.questionId && existing.quizId === q.quizId
-        )) {
-          newQuestions.push(q);
-        }
-      }
-
-      await updateDoc(folderRef, { questions: newQuestions });
-    } catch (err) {
-      console.error('문제 추가 실패:', err);
-      throw new Error('문제 추가에 실패했습니다.');
-    }
-  }, [user]);
-
-  /**
-   * 커스텀 폴더에서 문제 제거
-   */
-  const removeFromCustomFolder = useCallback(async (
-    folderId: string,
-    questionId: string
-  ): Promise<void> => {
-    if (!user) return;
-
-    try {
-      const folderRef = doc(db, 'customFolders', folderId);
-      const folderDoc = await getDoc(folderRef);
-
-      if (!folderDoc.exists()) {
-        throw new Error('폴더를 찾을 수 없습니다.');
-      }
-
-      const currentQuestions = folderDoc.data().questions || [];
-      const newQuestions = currentQuestions.filter(
-        (q: { questionId: string }) => q.questionId !== questionId
-      );
-
-      await updateDoc(folderRef, { questions: newQuestions });
-    } catch (err) {
-      console.error('문제 제거 실패:', err);
-      throw new Error('문제 제거에 실패했습니다.');
-    }
-  }, [user]);
+  // createCustomFolder, deleteCustomFolder, addToCustomFolder,
+  // removeFromCustomFolder, addCategoryToFolder, removeCategoryFromFolder,
+  // assignQuestionToCategory, updateCategoryName은
+  // useCustomFolders 훅에서 제공됨 (위에서 destructuring)
 
   /**
    * 문제 찜 토글 (찜한 문제로 추가/제거)
@@ -1896,154 +1708,6 @@ export const useReview = (): UseReviewReturn => {
       throw new Error('찜 처리에 실패했습니다.');
     }
   }, [user, userCourseId]);
-
-  /**
-   * 커스텀 폴더에 카테고리 추가
-   */
-  const addCategoryToFolder = useCallback(async (
-    folderId: string,
-    categoryName: string
-  ): Promise<string | null> => {
-    if (!user) return null;
-
-    try {
-      const folderRef = doc(db, 'customFolders', folderId);
-      const folderDoc = await getDoc(folderRef);
-
-      if (!folderDoc.exists()) {
-        throw new Error('폴더를 찾을 수 없습니다.');
-      }
-
-      const currentCategories = folderDoc.data().categories || [];
-      const newCategoryId = `cat_${Date.now()}`;
-      const newCategory: FolderCategory = {
-        id: newCategoryId,
-        name: categoryName,
-      };
-
-      await updateDoc(folderRef, {
-        categories: [...currentCategories, newCategory],
-      });
-
-      return newCategoryId;
-    } catch (err) {
-      console.error('카테고리 추가 실패:', err);
-      return null;
-    }
-  }, [user]);
-
-  /**
-   * 커스텀 폴더에서 카테고리 삭제
-   * 해당 카테고리에 배정된 문제들은 미분류로 변경
-   */
-  const removeCategoryFromFolder = useCallback(async (
-    folderId: string,
-    categoryId: string
-  ): Promise<void> => {
-    if (!user) return;
-
-    try {
-      const folderRef = doc(db, 'customFolders', folderId);
-      const folderDoc = await getDoc(folderRef);
-
-      if (!folderDoc.exists()) {
-        throw new Error('폴더를 찾을 수 없습니다.');
-      }
-
-      const data = folderDoc.data();
-      const currentCategories = data.categories || [];
-      const currentQuestions = data.questions || [];
-
-      // 카테고리 삭제
-      const newCategories = currentCategories.filter(
-        (cat: FolderCategory) => cat.id !== categoryId
-      );
-
-      // 해당 카테고리의 문제들은 미분류로 변경
-      const newQuestions = currentQuestions.map((q: CustomFolderQuestion) => ({
-        ...q,
-        categoryId: q.categoryId === categoryId ? undefined : q.categoryId,
-      }));
-
-      await updateDoc(folderRef, {
-        categories: newCategories,
-        questions: newQuestions,
-      });
-    } catch (err) {
-      console.error('카테고리 삭제 실패:', err);
-      throw new Error('카테고리 삭제에 실패했습니다.');
-    }
-  }, [user]);
-
-  /**
-   * 문제를 카테고리에 배정
-   * categoryId가 null이면 미분류로 변경
-   */
-  const assignQuestionToCategory = useCallback(async (
-    folderId: string,
-    questionId: string,
-    categoryId: string | null
-  ): Promise<void> => {
-    if (!user) return;
-
-    try {
-      const folderRef = doc(db, 'customFolders', folderId);
-      const folderDoc = await getDoc(folderRef);
-
-      if (!folderDoc.exists()) {
-        throw new Error('폴더를 찾을 수 없습니다.');
-      }
-
-      const currentQuestions = folderDoc.data().questions || [];
-      const newQuestions = currentQuestions.map((q: CustomFolderQuestion) => {
-        if (q.questionId === questionId) {
-          return {
-            ...q,
-            categoryId: categoryId || undefined,
-          };
-        }
-        return q;
-      });
-
-      await updateDoc(folderRef, { questions: newQuestions });
-    } catch (err) {
-      console.error('문제 카테고리 배정 실패:', err);
-      throw new Error('카테고리 배정에 실패했습니다.');
-    }
-  }, [user]);
-
-  /**
-   * 카테고리 이름 수정
-   */
-  const updateCategoryName = useCallback(async (
-    folderId: string,
-    categoryId: string,
-    newName: string
-  ): Promise<void> => {
-    if (!user) return;
-
-    try {
-      const folderRef = doc(db, 'customFolders', folderId);
-      const folderDoc = await getDoc(folderRef);
-
-      if (!folderDoc.exists()) {
-        throw new Error('폴더를 찾을 수 없습니다.');
-      }
-
-      const currentCategories = folderDoc.data().categories || [];
-      const newCategories = currentCategories.map((cat: FolderCategory) => {
-        if (cat.id === categoryId) {
-          return { ...cat, name: newName };
-        }
-        return cat;
-      });
-
-      await updateDoc(folderRef, { categories: newCategories });
-    } catch (err) {
-      console.error('카테고리 이름 수정 실패:', err);
-      throw new Error('카테고리 수정에 실패했습니다.');
-    }
-  }, [user]);
 
   // 그룹핑된 데이터 (useMemo로 메모이제이션하여 무한 루프 방지)
   const groupedWrongItems = useMemo(() => groupByQuiz(wrongItems), [wrongItems]);

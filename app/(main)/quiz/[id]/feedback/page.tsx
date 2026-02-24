@@ -1580,23 +1580,13 @@ export default function FeedbackPage() {
             onClick={() => {
               router.push(`/quiz/${quizId}/result`);
             }}
-            className="p-2 -ml-2 text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+            className="flex items-center gap-2 text-sm text-[#1A1A1A]"
             aria-label="결과 페이지로"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M19 12H5" />
-              <path d="M12 19l-7-7 7-7" />
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
+            뒤로가기
           </button>
           <div className="text-center">
             <h1 className="text-lg font-bold text-[#1A1A1A]">
@@ -1606,7 +1596,7 @@ export default function FeedbackPage() {
               문제에 대한 의견을 남겨주세요
             </p>
           </div>
-          <div className="w-10" /> {/* 버튼 균형용 */}
+          <div className="w-20" /> {/* 버튼 균형용 */}
         </div>
       </header>
 

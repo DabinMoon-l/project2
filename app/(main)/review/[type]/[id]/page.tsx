@@ -2782,7 +2782,7 @@ export default function FolderDetailPage() {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
-                  뒤로
+                  뒤로가기
                 </button>
               </div>
               <h2 className="text-3xl font-black text-[#1A1A1A] mb-3 truncate">
@@ -2824,11 +2824,11 @@ export default function FolderDetailPage() {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
-                이전
+                뒤로가기
               </button>
             </div>
           ) : (
-            /* 서재/오답/찜/커스텀: 필터 + 이전 버튼 */
+            /* 서재/오답/찜/커스텀: 필터 + 뒤로가기 버튼 */
             <div className="flex items-stretch justify-between">
               <SlideFilter
                 activeFilter={folderType as ReviewFilter}
@@ -2841,7 +2841,7 @@ export default function FolderDetailPage() {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
-                이전
+                뒤로가기
               </button>
             </div>
           )}
