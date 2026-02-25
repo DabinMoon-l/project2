@@ -47,6 +47,10 @@ interface GeneratedQuestion {
   chapterDetailId?: string;
   imageUrl?: string;
   imageDescription?: string;
+  bogi?: {
+    questionText: string;
+    items: Array<{ label: string; content: string }>;
+  };
 }
 
 // ============================================================
@@ -136,6 +140,7 @@ async function pollAndSave(jobId: string, config: QuizSaveConfig) {
 
   try {
     let questions: GeneratedQuestion[] = [];
+    let generatedTitle: string | undefined;
 
     while (pollingActive && pollCount < MAX_POLLS) {
       const statusResult = await checkStatus({ jobId });
@@ -147,6 +152,7 @@ async function pollAndSave(jobId: string, config: QuizSaveConfig) {
 
       if (status === 'COMPLETED' && result) {
         questions = result.questions.slice(0, config.questionCount);
+        generatedTitle = result.meta?.title || undefined;
         break;
       }
 
@@ -169,7 +175,11 @@ async function pollAndSave(jobId: string, config: QuizSaveConfig) {
     const quizRef = doc(collection(firestoreDb, 'quizzes'));
 
     const quizData = {
-      title: `AI 생성 (${new Date().toLocaleDateString('ko-KR')})`,
+      title: generatedTitle || (() => {
+        const now = new Date();
+        const pad = (n: number) => String(n).padStart(2, '0');
+        return `${now.getFullYear()}. ${now.getMonth() + 1}. ${now.getDate()}. ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+      })(),
       tags: [],
       isPublic: false,
       difficulty: config.difficulty,
@@ -183,6 +193,7 @@ async function pollAndSave(jobId: string, config: QuizSaveConfig) {
         answer: q.answer,
         explanation: q.explanation || '',
         ...(q.choiceExplanations ? { choiceExplanations: q.choiceExplanations } : {}),
+        ...(q.bogi ? { bogi: q.bogi } : {}),
         chapterId: q.chapterId || null,
         chapterDetailId: q.chapterDetailId || null,
         imageUrl: q.imageUrl || null,
@@ -195,6 +206,7 @@ async function pollAndSave(jobId: string, config: QuizSaveConfig) {
       participantCount: 0,
       userScores: {},
       creatorId: config.uid,
+      creatorUid: config.uid,
       creatorNickname: config.nickname,
       courseId: config.courseId,
       semester: config.semester,

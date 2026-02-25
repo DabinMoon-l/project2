@@ -56,17 +56,21 @@ export interface MaterialCacheDoc {
  * @param text - 학습 자료 텍스트
  * @param courseId - 과목 ID (scope 결정에 영향)
  * @param images - Base64 이미지 배열 (크롭 결과 캐시용)
+ * @param difficulty - 난이도 (scope 범위에 영향 — HARD는 인접 챕터 확장)
  */
 export function buildMaterialFingerprint(
   text: string,
   courseId: string,
-  images: string[] = []
+  images: string[] = [],
+  difficulty: string = "medium"
 ): string {
   const hash = crypto.createHash("sha256");
 
   // 텍스트 앞 5000자 (주요 내용 커버 + 성능)
   hash.update(text.slice(0, 5000));
   hash.update(courseId);
+  // 난이도별 scope 범위가 다름 (HARD는 인접 챕터 확장)
+  hash.update(difficulty);
 
   // 이미지: 앞 200바이트씩 (서로 다른 이미지 구분 충분)
   for (const img of images.slice(0, 10)) {
@@ -141,8 +145,8 @@ export async function setMaterialCache(
   const db = getFirestore();
   const cacheRef = db.collection("materials").doc(fingerprint);
 
-  // TTL: 24시간
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  // TTL: 4시간 (교수가 새 퀴즈 추가하면 styleProfile/keywords 변경 → stale 방지)
+  const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000);
 
   // scope content가 너무 크면 잘라서 저장 (Firestore 1MB 제한)
   let trimmedScopeData = scopeData;

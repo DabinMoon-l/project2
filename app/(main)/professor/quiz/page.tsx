@@ -13,6 +13,8 @@ import { useProfessorQuiz, type ProfessorQuiz, type QuizTypeFilter } from '@/lib
 import { calcFeedbackScore, getFeedbackLabel } from '@/lib/utils/feedbackScore';
 import { generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import QuizStatsModal from '@/components/quiz/manage/QuizStatsModal';
+import ProfessorLibraryTab from '@/components/professor/library/ProfessorLibraryTab';
+import { useCustomFolders } from '@/lib/hooks/useCustomFolders';
 import type { FeedbackType } from '@/components/quiz/InstantFeedbackButton';
 
 // ============================================================
@@ -955,6 +957,23 @@ export default function ProfessorQuizListPage() {
   const finalHook = useProfessorQuiz();
   const pastHook = useProfessorQuiz();
 
+  // 섹션 필터 (자작/서재/커스텀) — sessionStorage로 유지
+  const [sectionFilter, setSectionFilter] = useState<'custom' | 'library' | 'folder'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('prof_quiz_section_filter');
+      if (saved === 'custom' || saved === 'library' || saved === 'folder') return saved;
+    }
+    return 'custom';
+  });
+
+  // 필터 변경 시 sessionStorage에 저장
+  useEffect(() => {
+    sessionStorage.setItem('prof_quiz_section_filter', sectionFilter);
+  }, [sectionFilter]);
+
+  // 서재 탭 인라인 프리뷰 모드
+  const [isLibraryPreview, setIsLibraryPreview] = useState(false);
+
   // 자작 섹션 (type: 'custom' 퀴즈, 학생과 동일한 데이터)
   const [customLoading, setCustomLoading] = useState(true);
   const [customError, setCustomError] = useState<string | null>(null);
@@ -962,6 +981,12 @@ export default function ProfessorQuizListPage() {
   // 태그 검색
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [showTagFilter, setShowTagFilter] = useState(false);
+
+  // 커스텀 폴더
+  const { customFolders, createCustomFolder, deleteCustomFolder } = useCustomFolders();
+  const [showNewFolderInput, setShowNewFolderInput] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [deleteFolderTarget, setDeleteFolderTarget] = useState<{ id: string; name: string } | null>(null);
 
   const fixedTagOptions = useMemo(() => {
     const courseTags = generateCourseTags(userCourseId);
@@ -1165,16 +1190,24 @@ export default function ProfessorQuizListPage() {
   // Stats 모달 상태
   const [statsQuizId, setStatsQuizId] = useState<{ id: string; title: string } | null>(null);
 
-  // Details/Stats 모달 열릴 때 네비게이션 숨김
+  // Details 모달 열릴 때 네비게이션 숨김 + 스크롤 완전 잠금
   useEffect(() => {
     if (detailsQuiz) {
       document.body.setAttribute('data-hide-nav', 'true');
-    } else {
-      document.body.removeAttribute('data-hide-nav');
+      const scrollY = window.scrollY;
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.left = '0';
+      document.body.style.right = '0';
+      return () => {
+        document.body.removeAttribute('data-hide-nav');
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.left = '';
+        document.body.style.right = '';
+        window.scrollTo(0, scrollY);
+      };
     }
-    return () => {
-      document.body.removeAttribute('data-hide-nav');
-    };
   }, [detailsQuiz]);
 
   // 문제 유형 포맷
@@ -1228,26 +1261,10 @@ export default function ProfessorQuizListPage() {
           currentCourseId={userCourseId || 'biology'}
           onCourseChange={handleCourseChange}
         />
-
-        {/* 버튼 영역 */}
-        <div className="w-full px-4 py-2 flex items-center justify-between">
-          <button
-            onClick={() => router.push('/professor/quiz/best-q')}
-            className="px-4 py-3 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] whitespace-nowrap hover:bg-[#EDEAE4] transition-colors"
-          >
-            퀴즈 관리
-          </button>
-          <button
-            onClick={() => router.push('/professor/quiz/create')}
-            className="px-4 py-3 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] whitespace-nowrap hover:bg-[#3A3A3A] transition-colors"
-          >
-            퀴즈 만들기
-          </button>
-        </div>
       </header>
 
       {/* 뉴스 캐러셀 (중간/기말/기출) */}
-      <section className="mt-4 mb-8 px-4">
+      <section className="mt-6 mb-8 px-4">
         <ProfessorNewsCarousel
           midtermQuizzes={filteredMidterm}
           finalQuizzes={filteredFinal}
@@ -1266,54 +1283,104 @@ export default function ProfessorQuizListPage() {
         />
       </section>
 
-      {/* 자작 섹션 */}
+      {/* 하단 섹션 */}
       <section className="px-4">
-        {/* 자작 타이틀 + 태그 검색 (같은 줄) */}
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-serif-display text-xl font-black text-[#1A1A1A] shrink-0">자작</h2>
-
-          <div className="flex items-center gap-2">
-            {/* 선택된 태그들 */}
-            {selectedTags.map((tag) => (
-            <div
-              key={tag}
-              className="flex items-center gap-1 px-2 py-1 bg-[#F5F0E8] text-[#1A1A1A] text-sm font-bold border border-[#1A1A1A]"
-            >
-              #{tag}
+        {/* 필터 탭 (자작|서재|커스텀) + 퀴즈 만들기 / 뒤로가기 */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="relative flex w-[252px] bg-[#EDEAE4] border border-[#1A1A1A] overflow-hidden">
+            <motion.div
+              className="absolute inset-y-0 bg-[#1A1A1A]"
+              initial={false}
+              animate={{ left: `${(['custom', 'library', 'folder'].indexOf(sectionFilter)) * (100 / 3)}%` }}
+              style={{ width: `${100 / 3}%` }}
+              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            />
+            {([
+              { key: 'custom' as const, label: '자작' },
+              { key: 'library' as const, label: '서재' },
+              { key: 'folder' as const, label: '커스텀' },
+            ]).map(({ key, label }) => (
               <button
-                onClick={() => setSelectedTags(prev => prev.filter(t => t !== tag))}
-                className="ml-0.5 hover:text-[#5C5C5C]"
+                key={key}
+                onClick={() => {
+                  // 프리뷰 모드에서 다른 탭 클릭하면 프리뷰 해제
+                  if (isLibraryPreview) setIsLibraryPreview(false);
+                  setSectionFilter(key);
+                }}
+                className={`relative z-10 w-1/3 py-3 text-sm font-bold transition-colors text-center whitespace-nowrap ${
+                  sectionFilter === key ? 'text-[#F5F0E8]' : 'text-[#1A1A1A]'
+                }`}
               >
-                ✕
+                {label}
               </button>
-            </div>
-          ))}
-
-          {/* 태그 검색 버튼 */}
-          <button
-            onClick={() => setShowTagFilter(!showTagFilter)}
-            className={`flex items-center justify-center w-11 h-11 border transition-colors shrink-0 ${
-              showTagFilter
-                ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                : 'bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A]'
-            }`}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-            </svg>
-          </button>
+            ))}
           </div>
+
+          {isLibraryPreview ? (
+            <button
+              onClick={() => setIsLibraryPreview(false)}
+              className="px-4 py-3 text-xs font-bold bg-[#EDEAE4] text-[#1A1A1A] border border-[#1A1A1A] whitespace-nowrap hover:bg-[#F5F0E8] transition-colors flex items-center gap-1.5"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              뒤로가기
+            </button>
+          ) : (
+            <button
+              onClick={() => router.push('/professor/quiz/create')}
+              className="px-6 py-3 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] whitespace-nowrap hover:bg-[#3A3A3A] transition-colors border border-[#1A1A1A]"
+            >
+              퀴즈 만들기
+            </button>
+          )}
         </div>
 
-        {/* 태그 필터 목록 */}
+        {/* 태그 검색 버튼 — 자작 탭에서만, 밑줄 우측 배치 (프리뷰 모드에서 숨김) */}
+        {sectionFilter === 'custom' && !isLibraryPreview && (
+          <div className="flex justify-end mb-2">
+            <button
+              onClick={() => setShowTagFilter(!showTagFilter)}
+              className={`flex items-center justify-center w-11 h-11 border transition-colors shrink-0 ${
+                showTagFilter
+                  ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                  : 'bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A]'
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+              </svg>
+            </button>
+          </div>
+        )}
+
+        {/* 선택된 태그 + 태그 필터 목록 — 자작 탭에서만 */}
+        {sectionFilter === 'custom' && !isLibraryPreview && selectedTags.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {selectedTags.map((tag) => (
+              <div
+                key={tag}
+                className="flex items-center gap-1 px-2 py-1 bg-[#F5F0E8] text-[#1A1A1A] text-sm font-bold border border-[#1A1A1A]"
+              >
+                #{tag}
+                <button
+                  onClick={() => setSelectedTags(prev => prev.filter(t => t !== tag))}
+                  className="ml-0.5 hover:text-[#5C5C5C]"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         <AnimatePresence>
-          {showTagFilter && (
+          {sectionFilter === 'custom' && !isLibraryPreview && showTagFilter && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="overflow-hidden mb-4"
+              className="overflow-hidden mb-3"
             >
               <div className="flex flex-wrap gap-2 p-3 bg-[#EDEAE4] border border-[#D4CFC4]">
                 {fixedTagOptions
@@ -1335,68 +1402,183 @@ export default function ProfessorQuizListPage() {
           )}
         </AnimatePresence>
 
-        {/* 퀴즈 카드 그리드 */}
-        {customLoading && (
-          <div className="grid grid-cols-2 gap-3">
-            {[1, 2, 3, 4].map((i) => (
-              <SkeletonCard key={i} />
-            ))}
-          </div>
-        )}
+        {/* ====== 자작 탭 ====== */}
+        {sectionFilter === 'custom' && !isLibraryPreview && (
+          <>
+            {customLoading && (
+              <div className="grid grid-cols-2 gap-3">
+                {[1, 2, 3, 4].map((i) => (
+                  <SkeletonCard key={i} />
+                ))}
+              </div>
+            )}
 
-        {!customLoading && customQuizzes.length === 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex flex-col items-center justify-center text-center py-12"
-          >
-            <h3 className="font-serif-display text-lg font-black mb-2 text-[#1A1A1A]">
-              자작 퀴즈가 없습니다
-            </h3>
-            <p className="text-sm text-[#5C5C5C]">
-              첫 번째 퀴즈를 만들어보세요!
-            </p>
-          </motion.div>
-        )}
-
-        {/* 필터링 결과가 없을 때 */}
-        {!customLoading && customQuizzes.length > 0 && filteredCustomQuizzes.length === 0 && selectedTags.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex flex-col items-center justify-center text-center py-8"
-          >
-            <p className="text-sm text-[#5C5C5C]">
-              {selectedTags.map(t => `#${t}`).join(' ')} 태그가 있는 퀴즈가 없습니다
-            </p>
-          </motion.div>
-        )}
-
-        {!customLoading && filteredCustomQuizzes.length > 0 && (
-          <div className="grid grid-cols-2 gap-3">
-            {filteredCustomQuizzes.map((quiz, index) => (
+            {!customLoading && customQuizzes.length === 0 && (
               <motion.div
-                key={quiz.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.03 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="flex flex-col items-center justify-center text-center py-12"
               >
-                <ProfessorCustomQuizCard
-                  quiz={quiz}
-                  feedbackInfo={feedbackMap[quiz.id]}
-                  onDetails={() => { setDetailsSource('custom'); setDetailsQuiz(quiz); }}
-                  onStats={() => setStatsQuizId({ id: quiz.id, title: quiz.title })}
-                  onClick={() => router.push(`/professor/quiz/${quiz.id}/preview`)}
-                />
+                <h3 className="font-serif-display text-lg font-black mb-2 text-[#1A1A1A]">
+                  자작 퀴즈가 없습니다
+                </h3>
+                <p className="text-sm text-[#5C5C5C]">
+                  첫 번째 퀴즈를 만들어보세요!
+                </p>
               </motion.div>
-            ))}
-          </div>
+            )}
+
+            {!customLoading && customQuizzes.length > 0 && filteredCustomQuizzes.length === 0 && selectedTags.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="flex flex-col items-center justify-center text-center py-8"
+              >
+                <p className="text-sm text-[#5C5C5C]">
+                  {selectedTags.map(t => `#${t}`).join(' ')} 태그가 있는 퀴즈가 없습니다
+                </p>
+              </motion.div>
+            )}
+
+            {!customLoading && filteredCustomQuizzes.length > 0 && (
+              <div className="grid grid-cols-2 gap-3">
+                {filteredCustomQuizzes.map((quiz, index) => (
+                  <motion.div
+                    key={quiz.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.03 }}
+                  >
+                    <ProfessorCustomQuizCard
+                      quiz={quiz}
+                      feedbackInfo={feedbackMap[quiz.id]}
+                      onDetails={() => { setDetailsSource('custom'); setDetailsQuiz(quiz); }}
+                      onStats={() => setStatsQuizId({ id: quiz.id, title: quiz.title })}
+                      onClick={() => router.push(`/professor/quiz/${quiz.id}/preview`)}
+                    />
+                  </motion.div>
+                ))}
+              </div>
+            )}
+
+            {customError && (
+              <div className="mt-4 p-3 border border-[#1A1A1A] bg-[#FDFBF7]">
+                <p className="text-sm text-[#8B1A1A]">{customError}</p>
+              </div>
+            )}
+          </>
         )}
 
-        {/* 에러 메시지 */}
-        {customError && (
-          <div className="mt-4 p-3 border border-[#1A1A1A] bg-[#FDFBF7]">
-            <p className="text-sm text-[#8B1A1A]">{customError}</p>
+        {/* ====== 서재 탭 ====== */}
+        {(sectionFilter === 'library' || isLibraryPreview) && (
+          <ProfessorLibraryTab
+            onPreviewChange={setIsLibraryPreview}
+            isPreviewActive={isLibraryPreview}
+            onPublish={() => {
+              if (user?.uid) {
+                midtermHook.fetchQuizzes(user.uid, { quizType: 'midterm', pageSize: 50 });
+                finalHook.fetchQuizzes(user.uid, { quizType: 'final', pageSize: 50 });
+              }
+            }}
+          />
+        )}
+
+        {/* ====== 커스텀 탭 (폴더) ====== */}
+        {sectionFilter === 'folder' && !isLibraryPreview && (
+          <div>
+            {/* 새 폴더 입력 */}
+            {showNewFolderInput && (
+              <div className="mb-3 flex gap-2">
+                <input
+                  type="text"
+                  autoFocus
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  onKeyDown={async (e) => {
+                    if (e.key === 'Enter' && newFolderName.trim()) {
+                      await createCustomFolder(newFolderName.trim());
+                      setNewFolderName('');
+                      setShowNewFolderInput(false);
+                    } else if (e.key === 'Escape') {
+                      setNewFolderName('');
+                      setShowNewFolderInput(false);
+                    }
+                  }}
+                  placeholder="폴더 이름"
+                  className="flex-1 px-3 py-2 border-2 border-[#1A1A1A] bg-[#FDFBF7] text-sm text-[#1A1A1A] placeholder-[#5C5C5C] outline-none"
+                />
+                <button
+                  onClick={async () => {
+                    if (newFolderName.trim()) {
+                      await createCustomFolder(newFolderName.trim());
+                      setNewFolderName('');
+                      setShowNewFolderInput(false);
+                    }
+                  }}
+                  className="px-3 py-2 border-2 border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8] text-sm font-bold"
+                >
+                  만들기
+                </button>
+                <button
+                  onClick={() => { setNewFolderName(''); setShowNewFolderInput(false); }}
+                  className="px-3 py-2 border-2 border-[#D4CFC4] text-sm text-[#5C5C5C]"
+                >
+                  취소
+                </button>
+              </div>
+            )}
+
+            {/* 폴더 그리드 */}
+            <div className="grid grid-cols-3 gap-3 p-1">
+              {/* 새 폴더 버튼 */}
+              <button
+                onClick={() => setShowNewFolderInput(true)}
+                className="aspect-square border-2 border-dashed border-[#D4CFC4] flex flex-col items-center justify-center gap-2 hover:border-[#1A1A1A] transition-colors"
+              >
+                <svg className="w-8 h-8 text-[#5C5C5C]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+                </svg>
+                <span className="text-[10px] text-[#5C5C5C] font-bold">새 폴더</span>
+              </button>
+
+              {/* 폴더 목록 */}
+              {customFolders.map((folder) => (
+                <div
+                  key={folder.id}
+                  className="relative aspect-square flex flex-col items-center justify-center gap-1 cursor-pointer hover:scale-105 active:scale-95 transition-transform duration-150"
+                  onClick={() => router.push(`/professor/quiz/best-q?tab=custom&folder=${folder.id}`)}
+                >
+                  {/* 삭제 버튼 */}
+                  {deleteFolderTarget?.id === folder.id ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#F5F0E8]/90 z-10 gap-1">
+                      <p className="text-xs font-bold text-[#8B1A1A]">삭제?</p>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); deleteCustomFolder(folder.id); setDeleteFolderTarget(null); }}
+                          className="px-2 py-1 text-xs bg-[#8B1A1A] text-[#F5F0E8] font-bold"
+                        >
+                          삭제
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setDeleteFolderTarget(null); }}
+                          className="px-2 py-1 text-xs border border-[#1A1A1A] text-[#1A1A1A] font-bold"
+                        >
+                          취소
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <svg className="w-20 h-20 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                  </svg>
+                  <span className="text-sm font-bold text-[#1A1A1A] text-center px-1 truncate w-full">
+                    {folder.name}
+                  </span>
+                  <span className="text-xs text-[#5C5C5C]">{folder.questions.length}문제</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </section>
@@ -1404,7 +1586,7 @@ export default function ProfessorQuizListPage() {
       {/* Details 모달 */}
       {detailsQuiz && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 overflow-hidden overscroll-none"
           onClick={() => setDetailsQuiz(null)}
         >
           <motion.div
@@ -1498,7 +1680,7 @@ export default function ProfessorQuizListPage() {
             <div className="flex gap-2">
               <button
                 onClick={() => setDetailsQuiz(null)}
-                className="py-3 px-4 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+                className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
               >
                 닫기
               </button>
@@ -1514,16 +1696,6 @@ export default function ProfessorQuizListPage() {
                   미리보기
                 </button>
               )}
-              <button
-                onClick={() => {
-                  const quiz = detailsQuiz;
-                  setDetailsQuiz(null);
-                  setStatsQuizId({ id: quiz.id, title: quiz.title });
-                }}
-                className="flex-1 py-3 font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
-              >
-                Stats
-              </button>
             </div>
           </motion.div>
         </div>
@@ -1600,9 +1772,9 @@ export default function ProfessorQuizListPage() {
         )}
       </AnimatePresence>
 
-      {/* 스크롤 맨 위로 버튼 */}
+      {/* 스크롤 맨 위로 버튼 (프리뷰 모드에서 숨김) */}
       <AnimatePresence>
-        {showScrollTop && (
+        {showScrollTop && !isLibraryPreview && (
           <motion.button
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}

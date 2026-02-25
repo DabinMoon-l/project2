@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { collection, query, where, getDocs, doc, getDoc, onSnapshot } from 'firebase/firestore';
@@ -666,11 +666,14 @@ function DownloadOptionsModal({
 
 export default function BestQPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { userCourseId } = useCourse();
   const { fetchQuiz, fetchQuizStatistics } = useProfessorQuiz();
 
-  // 탭
-  const [activeTab, setActiveTab] = useState<'feedback' | 'library' | 'custom'>('feedback');
+  // 탭 (URL 파라미터로 초기값 결정)
+  const [activeTab, setActiveTab] = useState<'library' | 'custom'>(
+    searchParams.get('tab') === 'custom' ? 'custom' : 'library'
+  );
 
   // 피드백 탭
   const [bestQuestions, setBestQuestions] = useState<BestQuestionData[]>([]);
@@ -1191,6 +1194,21 @@ export default function BestQPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchQuiz, fetchQuizStatistics]);
 
+  // URL ?folder=xxx 파라미터로 진입 시 자동 폴더 열기
+  const folderParamHandled = useRef(false);
+  useEffect(() => {
+    if (folderParamHandled.current) return;
+    const folderId = searchParams.get('folder');
+    if (!folderId || customFolders.length === 0) return;
+
+    const folder = customFolders.find(f => f.id === folderId);
+    if (folder) {
+      folderParamHandled.current = true;
+      setActiveTab('custom');
+      openFolder(folder);
+    }
+  }, [searchParams, customFolders, openFolder]);
+
   // 선택된 번호를 스크롤 중앙으로 이동
   useEffect(() => {
     const idx = openFolderId ? folderCurrentIndex : currentIndex;
@@ -1335,7 +1353,7 @@ export default function BestQPage() {
   const activeIndex = openFolderId ? folderCurrentIndex : currentIndex;
   const total = activeQuestions.length;
   const current = activeQuestions[activeIndex] || null;
-  const isLoading = openFolderId ? folderLoading : feedbackLoading;
+  const isLoading = openFolderId ? folderLoading : false;
 
   // ============================================================
   // JSX
@@ -1380,16 +1398,14 @@ export default function BestQPage() {
           {/* 탭 필터 - 좌측 */}
           <div className="relative border border-[#1A1A1A] flex">
             <div
-              className="absolute top-0 bottom-0 w-1/3 bg-[#1A1A1A] transition-transform duration-200"
+              className="absolute top-0 bottom-0 w-1/2 bg-[#1A1A1A] transition-transform duration-200"
               style={{
-                transform: activeTab === 'library'
+                transform: activeTab === 'custom'
                   ? 'translateX(100%)'
-                  : activeTab === 'custom'
-                    ? 'translateX(200%)'
-                    : 'translateX(0)',
+                  : 'translateX(0)',
               }}
             />
-            {(['feedback', 'library', 'custom'] as const).map((tab) => (
+            {(['library', 'custom'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -1397,7 +1413,7 @@ export default function BestQPage() {
                   activeTab === tab ? 'text-[#F5F0E8]' : 'text-[#5C5C5C]'
                 }`}
               >
-                {tab === 'feedback' ? '피드백' : tab === 'library' ? '서재' : '커스텀'}
+                {tab === 'library' ? '서재' : '커스텀'}
               </button>
             ))}
           </div>
@@ -1437,113 +1453,6 @@ export default function BestQPage() {
             </div>
           )}
         </div>
-      )}
-
-      {/* ============================================================ */}
-      {/* 피드백 탭 */}
-      {/* ============================================================ */}
-      {activeTab === 'feedback' && !openFolderId && (
-        <>
-          {/* 메인 콘텐츠 */}
-          <div className="flex-1 overflow-hidden flex flex-col">
-            {feedbackLoading ? (
-              <div className="space-y-4 pt-4 px-4">
-                <Skeleton className="h-12 rounded-none" />
-                <Skeleton className="h-32 rounded-none" />
-                <Skeleton className="h-24 rounded-none" />
-              </div>
-            ) : total === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-                <p className="text-lg font-bold text-[#1A1A1A] mb-2">피드백이 있는 문제가 없습니다</p>
-                <p className="text-sm text-[#5C5C5C]">학생들의 피드백이 쌓이면 여기에 표시됩니다</p>
-              </div>
-            ) : current && (
-              <>
-              {/* 슬라이더 — 스와이프 영역 밖 */}
-              {total > 1 && (
-                <div className="px-4 pt-3 pb-2 flex-shrink-0">
-                  <div className="flex items-center gap-3">
-                    <span className="text-base font-bold text-[#5C5C5C] flex-shrink-0">Q{currentIndex + 1}.</span>
-                    <input
-                      type="range"
-                      min={0}
-                      max={total - 1}
-                      value={currentIndex}
-                      onChange={(e) => setCurrentIndex(parseInt(e.target.value))}
-                      className="w-full h-2 bg-[#D4CFC4] appearance-none cursor-pointer accent-[#1A1A1A]"
-                      style={{
-                        background: `linear-gradient(to right, #1A1A1A 0%, #1A1A1A ${(currentIndex / Math.max(total - 1, 1)) * 100}%, #D4CFC4 ${(currentIndex / Math.max(total - 1, 1)) * 100}%, #D4CFC4 100%)`
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
-              {/* 스크롤 + 스와이프 영역 */}
-              <div
-                className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col cursor-grab active:cursor-grabbing select-none"
-                onTouchStart={onTouchStart}
-                onTouchMove={onTouchMove}
-                onTouchEnd={handleSwipeEnd}
-                onMouseDown={onMouseDown}
-                onMouseMove={onMouseMove}
-                onMouseUp={onMouseUp}
-                onMouseLeave={onMouseLeave}
-                style={{ touchAction: 'pan-y' }}
-              >
-                <div ref={contentRef} className="my-auto w-full">
-                  {current.question ? (
-                    <StatsQuestionView
-                      question={current.question}
-                      stats={current.stats}
-                      onFolderSave={() => setShowFolderSaveModal(true)}
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center p-8">
-                      <p className="text-sm text-[#5C5C5C]">문제 내용을 불러올 수 없습니다</p>
-                    </div>
-                  )}
-
-                  {/* 피드백 아이콘 (하단 우측) */}
-                  <div className="flex justify-end px-4 pb-6">
-                    <button
-                      onClick={() => setShowFeedbackModal(true)}
-                      className="flex items-center gap-1.5 text-[#8B6914] hover:opacity-70 transition-opacity"
-                    >
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                      </svg>
-                      <span className="text-sm font-bold">피드백 {current.feedbackCount}</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-              </>
-            )}
-          </div>
-
-          {/* 하단 페이지네이션 */}
-          {total > 0 && (
-            <div
-              ref={paginationRef}
-              className="flex gap-3 px-4 py-4 overflow-x-auto scrollbar-hide border-t-2 border-[#1A1A1A] bg-[#F5F0E8] flex-shrink-0"
-            >
-              {bestQuestions.map((_, idx) => (
-                <button
-                  key={idx}
-                  ref={el => { buttonRefs.current[idx] = el; }}
-                  onClick={() => setCurrentIndex(idx)}
-                  className={`flex-shrink-0 w-11 h-11 flex items-center justify-center text-base font-bold border-2 transition-colors ${
-                    idx === currentIndex
-                      ? 'bg-[#1A1A1A] border-[#1A1A1A] text-[#F5F0E8]'
-                      : 'bg-[#FDFBF7] border-[#D4CFC4] text-[#5C5C5C] hover:border-[#1A1A1A]'
-                  }`}
-                >
-                  {idx + 1}
-                </button>
-              ))}
-            </div>
-          )}
-        </>
       )}
 
       {/* ============================================================ */}
@@ -1781,15 +1690,6 @@ export default function BestQPage() {
       {/* ============================================================ */}
       {/* 모달들 */}
       {/* ============================================================ */}
-
-      {/* 피드백 모달 */}
-      {showFeedbackModal && current && !openFolderId && (
-        <FeedbackListModal
-          feedbacks={current.feedbacks}
-          questionLabel={`${current.quizTitle} — ${current.questionIndex + 1}번`}
-          onClose={() => setShowFeedbackModal(false)}
-        />
-      )}
 
       {/* 폴더 저장 모달 */}
       <FolderSelectModal

@@ -567,11 +567,21 @@ export default function QuizStatsModal({
     };
   }, [isOpen]);
 
-  // 모달 열림 시 body 스크롤 방지
+  // 모달 열림 시 body 스크롤 완전 잠금
   useEffect(() => {
     if (!isOpen) return;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
+    const scrollY = window.scrollY;
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.left = '0';
+    document.body.style.right = '0';
+    return () => {
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.left = '';
+      document.body.style.right = '';
+      window.scrollTo(0, scrollY);
+    };
   }, [isOpen]);
 
   useEffect(() => {
@@ -901,8 +911,7 @@ export default function QuizStatsModal({
         passageImage: q.passageImage,
         koreanAbcItems: q.koreanAbcItems,
         explanation: q.explanation,
-        // 수정된 문제는 선지별 해설이 맞지 않을 수 있으므로, 수정되지 않은 문제만 표시
-        choiceExplanations: q.questionUpdatedAt ? undefined : q.choiceExplanations,
+        choiceExplanations: q.choiceExplanations,
       };
 
       // OX 분포
@@ -1169,7 +1178,7 @@ export default function QuizStatsModal({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 overflow-hidden overscroll-none"
       onClick={onClose}
     >
       <motion.div
@@ -1344,13 +1353,23 @@ export default function QuizStatsModal({
                       onTouchEnd={handleQSwipeEnd}
                       style={{ touchAction: 'pan-y' }}
                     >
-                      {/* 폴더 저장 아이콘 */}
+                      {/* 피드백 아이콘 (좌측 상단) */}
                       <button
-                        onClick={() => setShowFolderModal(true)}
-                        className="absolute top-2 right-2 z-10 w-10 h-10 flex items-center justify-center text-[#8B6914] hover:text-[#6B4F0E] transition-colors"
-                        title="폴더에 저장"
+                        onClick={handleOpenFeedback}
+                        className="absolute top-2 left-2 z-10 w-11 h-11 flex items-center justify-center text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors"
+                        title="피드백 보기"
                       >
                         <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                        </svg>
+                      </button>
+                      {/* 폴더 저장 아이콘 (우측 상단) */}
+                      <button
+                        onClick={() => setShowFolderModal(true)}
+                        className="absolute top-2 right-2 z-10 w-11 h-11 flex items-center justify-center text-[#8B6914] hover:text-[#6B4F0E] transition-colors"
+                        title="폴더에 저장"
+                      >
+                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
                         </svg>
                       </button>
@@ -1764,16 +1783,6 @@ export default function QuizStatsModal({
           )}
         </div>
 
-        {/* 피드백 아이콘 (우측 하단) */}
-        <button
-          onClick={handleOpenFeedback}
-          className="absolute bottom-3 right-3 w-10 h-10 flex items-center justify-center text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors"
-          title="피드백 보기"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-          </svg>
-        </button>
       </motion.div>
 
       {/* 피드백 모달 */}

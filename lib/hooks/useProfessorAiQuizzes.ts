@@ -26,6 +26,7 @@ import { useCourse } from '@/lib/contexts/CourseContext';
 export interface ProfessorAiQuiz {
   id: string;
   title: string;
+  description?: string;
   difficulty: string;
   questionCount: number;
   questions: any[];
@@ -87,15 +88,44 @@ export function useProfessorAiQuizzes() {
     await deleteDoc(doc(db, 'quizzes', quizId));
   }, []);
 
-  // 퀴즈 공개 (type을 midterm/final/past로 변경)
+  // 퀴즈 공개 (type을 midterm/final/past로 변경 + creatorUid 보정)
   const publishQuiz = useCallback(async (quizId: string, publishType: string) => {
-    await updateDoc(doc(db, 'quizzes', quizId), {
+    const updateData: Record<string, any> = {
       type: publishType,
       isPublished: true,
       isPublic: true,
       updatedAt: serverTimestamp(),
+    };
+    // creatorUid가 없는 기존 서재 퀴즈를 위해 공개 시 보정
+    if (profile?.uid) {
+      updateData.creatorUid = profile.uid;
+    }
+    await updateDoc(doc(db, 'quizzes', quizId), updateData);
+  }, [profile?.uid]);
+
+  // 퀴즈 제목 수정
+  const updateTitle = useCallback(async (quizId: string, newTitle: string) => {
+    await updateDoc(doc(db, 'quizzes', quizId), {
+      title: newTitle,
+      updatedAt: serverTimestamp(),
     });
   }, []);
 
-  return { quizzes, loading, deleteQuiz, publishQuiz };
+  // 퀴즈 문제 수정 (questions 배열 전체 교체)
+  const updateQuestions = useCallback(async (quizId: string, questions: any[]) => {
+    await updateDoc(doc(db, 'quizzes', quizId), {
+      questions,
+      updatedAt: serverTimestamp(),
+    });
+  }, []);
+
+  // 퀴즈 메타 수정 (description, tags 등)
+  const updateMeta = useCallback(async (quizId: string, meta: { description?: string; tags?: string[] }) => {
+    const data: Record<string, any> = { updatedAt: serverTimestamp() };
+    if (meta.description !== undefined) data.description = meta.description;
+    if (meta.tags !== undefined) data.tags = meta.tags;
+    await updateDoc(doc(db, 'quizzes', quizId), data);
+  }, []);
+
+  return { quizzes, loading, deleteQuiz, publishQuiz, updateTitle, updateQuestions, updateMeta };
 }

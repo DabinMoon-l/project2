@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
@@ -26,8 +26,9 @@ import AIQuizProgress from './AIQuizProgress';
 
 interface GeneratedQuestion {
   text: string;
-  choices: string[];
-  answer: number | number[]; // 복수정답 지원
+  type?: 'multiple' | 'ox';  // 문제 형식 (기본: multiple)
+  choices?: string[];         // 객관식 선지 (ox는 없을 수 있음)
+  answer: number | number[] | string; // 객관식: 0-based index, OX: 'O'/'X'
   explanation: string;
   choiceExplanations?: string[]; // 각 선지별 해설
   questionType?: string;
@@ -36,6 +37,10 @@ interface GeneratedQuestion {
   chapterDetailId?: string; // Gemini가 할당한 세부 챕터 ID
   imageUrl?: string;        // 학습 자료에서 크롭된 이미지 URL (HARD 난이도)
   imageDescription?: string; // 이미지 설명 (그래프, 표, 그림 등)
+  bogi?: {
+    questionText: string;
+    items: Array<{ label: string; content: string }>;
+  };
 }
 
 interface QuizDocument {
@@ -46,10 +51,10 @@ interface QuizDocument {
   questions: Array<{
     id: string;
     order: number;
-    type: 'multiple';
+    type: 'multiple' | 'ox';
     text: string;
-    choices: string[];
-    answer: number | number[]; // 복수정답 지원
+    choices?: string[];
+    answer: number | number[] | string; // 복수정답 + OX 지원
     explanation: string;
     choiceExplanations?: string[]; // 각 선지별 해설
     chapterId: string | null;
@@ -85,6 +90,13 @@ export default function AIQuizContainer() {
 
   // 저장된 퀴즈 정보 (연습 모드용)
   const [savedQuiz, setSavedQuiz] = useState<QuizDocument | null>(null);
+
+  // 연습 모드 시 네비게이션 숨김
+  useEffect(() => {
+    if (isPracticeOpen) document.body.setAttribute('data-hide-nav', '');
+    else document.body.removeAttribute('data-hide-nav');
+    return () => document.body.removeAttribute('data-hide-nav');
+  }, [isPracticeOpen]);
 
   // Job polling 중단용 ref
   const pollingRef = useRef(false);
@@ -215,31 +227,39 @@ export default function AIQuizContainer() {
       const quizRef = doc(collection(db, 'quizzes'));
       const quizId = quizRef.id;
 
+      // OX / 객관식 카운트 계산
+      const oxQuestions = questions.filter(q => q.type === 'ox' || (typeof q.answer === 'string' && (q.answer === 'O' || q.answer === 'X')));
+      const multipleQuestions = questions.filter(q => q.type !== 'ox' && !(typeof q.answer === 'string' && (q.answer === 'O' || q.answer === 'X')));
+
       const quizData = {
         title: data.folderName,
         tags: data.tags,
         isPublic: false,
         difficulty: data.difficulty,
         type: 'ai-generated', // AI 생성 퀴즈 표시
-        questions: questions.map((q, idx) => ({
-          id: `q${idx + 1}`,
-          order: idx + 1,
-          type: 'multiple' as const,
-          text: q.text,
-          choices: q.choices,
-          answer: q.answer,
-          explanation: q.explanation || '',
-          ...(q.choiceExplanations ? { choiceExplanations: q.choiceExplanations } : {}), // 각 선지별 해설
-          // Gemini가 할당한 챕터 ID 사용, 없으면 태그에서 추출한 폴백 사용
-          chapterId: q.chapterId || fallbackChapterId,
-          chapterDetailId: q.chapterDetailId || null,
-          // 학습 자료에서 크롭된 이미지 (HARD 난이도)
-          imageUrl: q.imageUrl || null,
-          imageDescription: q.imageDescription || null,
-        })),
+        questions: questions.map((q, idx) => {
+          const isOx = q.type === 'ox' || (typeof q.answer === 'string' && (q.answer === 'O' || q.answer === 'X'));
+          return {
+            id: `q${idx + 1}`,
+            order: idx + 1,
+            type: isOx ? 'ox' as const : 'multiple' as const,
+            text: q.text,
+            ...(isOx ? {} : { choices: q.choices || [] }),
+            answer: q.answer,
+            explanation: q.explanation || '',
+            ...(q.choiceExplanations && !isOx ? { choiceExplanations: q.choiceExplanations } : {}),
+            ...(q.bogi ? { bogi: q.bogi } : {}),
+            // Gemini가 할당한 챕터 ID 사용, 없으면 태그에서 추출한 폴백 사용
+            chapterId: q.chapterId || fallbackChapterId,
+            chapterDetailId: q.chapterDetailId || null,
+            // 학습 자료에서 크롭된 이미지 (HARD 난이도)
+            imageUrl: q.imageUrl || null,
+            imageDescription: q.imageDescription || null,
+          };
+        }),
         questionCount: questions.length,
-        oxCount: 0,
-        multipleChoiceCount: questions.length,
+        oxCount: oxQuestions.length,
+        multipleChoiceCount: multipleQuestions.length,
         subjectiveCount: 0,
         participantCount: 0,
         userScores: {},
@@ -286,10 +306,13 @@ export default function AIQuizContainer() {
     if (!savedQuiz || !profile?.uid) return [];
 
     return savedQuiz.questions.map((q) => {
-      // 복수정답 지원: 배열이면 쉼표로 구분
-      const correctAnswer = Array.isArray(q.answer)
-        ? q.answer.map(a => String(a + 1)).join(',')
-        : String(q.answer + 1);
+      const isOx = q.type === 'ox';
+      // OX 문제: 'O'/'X' 그대로, 객관식: 0-indexed → 1-indexed
+      const correctAnswer = isOx
+        ? String(q.answer)
+        : Array.isArray(q.answer)
+          ? q.answer.map(a => String(a + 1)).join(',')
+          : String(Number(q.answer) + 1);
 
       return {
         id: `temp_${q.id}`, // 임시 ID (아직 reviews에 저장 안됨)
@@ -298,9 +321,9 @@ export default function AIQuizContainer() {
         quizTitle: savedQuiz.title,
         questionId: q.id,
         question: q.text,
-        type: 'multiple',
-        options: q.choices,
-        correctAnswer, // 0-indexed → 1-indexed
+        type: isOx ? 'ox' : 'multiple',
+        options: isOx ? undefined : q.choices,
+        correctAnswer,
         userAnswer: '',
         explanation: q.explanation,
         reviewType: 'solved',

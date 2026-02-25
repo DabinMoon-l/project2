@@ -809,19 +809,23 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
       try {
         setError(null);
 
-        const updateData: Record<string, unknown> = {
+        const raw: Record<string, unknown> = {
           ...input,
           updatedAt: Timestamp.now(),
         };
 
         // 문제 목록이 변경되면 questionCount와 유형별 개수도 업데이트
         if (input.questions) {
-          // input.questionCount가 있으면 사용, 없으면 questions.length 사용
-          updateData.questionCount = input.questionCount ?? input.questions.length;
-          // 문제 유형별 개수 계산
-          updateData.oxCount = input.questions.filter(q => q.type === 'ox').length;
-          updateData.multipleChoiceCount = input.questions.filter(q => q.type === 'multiple').length;
-          updateData.subjectiveCount = input.questions.filter(q => q.type === 'short_answer' || q.type === 'subjective' || q.type === 'essay').length;
+          raw.questionCount = input.questionCount ?? input.questions.length;
+          raw.oxCount = input.questions.filter(q => q.type === 'ox').length;
+          raw.multipleChoiceCount = input.questions.filter(q => q.type === 'multiple').length;
+          raw.subjectiveCount = input.questions.filter(q => q.type === 'short_answer' || q.type === 'subjective' || q.type === 'essay').length;
+        }
+
+        // Firestore는 undefined 값을 허용하지 않으므로 제거
+        const updateData: Record<string, unknown> = {};
+        for (const [key, val] of Object.entries(raw)) {
+          if (val !== undefined) updateData[key] = val;
         }
 
         const docRef = doc(db, QUIZZES_COLLECTION, quizId);

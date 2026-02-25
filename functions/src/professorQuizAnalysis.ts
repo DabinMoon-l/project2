@@ -556,9 +556,10 @@ export const onProfessorQuizCreated = onDocumentCreated(
       courseName?: string;
       type?: string;
       questions?: Array<{
-        stem: string;
+        text?: string;   // 실제 Firestore 필드명
+        stem?: string;   // 레거시 호환
         type: string;
-        choices?: Array<{ label: string; text: string }>;
+        choices?: string[] | Array<{ label: string; text: string }>;
       }>;
     };
 
@@ -591,13 +592,41 @@ export const onProfessorQuizCreated = onDocumentCreated(
       return;
     }
 
+    // 문제 데이터 정규화: text→stem, choices 형식 통일
+    const normalizedQuestions = questions.map((q) => {
+      // stem 필드: text 우선, stem 폴백
+      const stem = q.text || q.stem || "";
+
+      // choices 정규화: string[] → [{label, text}] 변환
+      let choices: Array<{ label: string; text: string }> | undefined;
+      if (Array.isArray(q.choices) && q.choices.length > 0) {
+        if (typeof q.choices[0] === "string") {
+          // 신규 형식: string[]
+          choices = (q.choices as string[]).map((c, i) => ({
+            label: String(i + 1),
+            text: c,
+          }));
+        } else {
+          // 레거시 형식: [{label, text}]
+          choices = q.choices as Array<{ label: string; text: string }>;
+        }
+      }
+
+      return { stem, type: q.type, choices };
+    }).filter((q) => q.stem.length > 0); // 빈 문제 제외
+
+    if (normalizedQuestions.length === 0) {
+      console.log(`[분석 스킵] 유효한 문제가 없는 퀴즈: ${quizId}`);
+      return;
+    }
+
     try {
       // 4. Gemini로 문제 스타일 분석
-      const taggedQuestions = await analyzeQuestionsWithGemini(questions, apiKey);
+      const taggedQuestions = await analyzeQuestionsWithGemini(normalizedQuestions, apiKey);
       console.log(`[스타일 분석 완료] ${taggedQuestions.length}개 문제 분석됨`);
 
       // 5. Gemini로 문제에서 키워드 추출
-      const keywords = await extractKeywordsFromQuestions(questions, courseId, apiKey);
+      const keywords = await extractKeywordsFromQuestions(normalizedQuestions, courseId, apiKey);
       console.log(`[키워드 추출 완료] mainConcepts: ${keywords.mainConcepts.length}, caseTriggers: ${keywords.caseTriggers.length}`);
 
       // 6. Firestore에 저장

@@ -399,9 +399,29 @@ export async function inferChaptersFromText(
     }
   }
 
-  // 점수 높은 순 정렬, 상위 3개 반환
-  return matchedChapters
-    .sort((a, b) => b.score - a.score)
+  // 점수 높은 순 정렬
+  matchedChapters.sort((a, b) => b.score - a.score);
+
+  if (matchedChapters.length === 0) return [];
+
+  const topScore = matchedChapters[0].score;
+
+  // 최소 점수 기준 (3점 미만은 약한 매칭 → 제외)
+  // + 1위 대비 30% 미만 점수는 무관 챕터로 판단하여 제외
+  const MIN_SCORE = 3;
+  const RATIO_THRESHOLD = 0.3;
+
+  const filtered = matchedChapters.filter(
+    c => c.score >= MIN_SCORE && c.score >= topScore * RATIO_THRESHOLD
+  );
+
+  console.log(
+    `[inferChapters] courseId=${courseId}, ` +
+    `전체=${matchedChapters.map(c => `${c.chapterNumber}(${c.score})`).join(",")} → ` +
+    `필터=${filtered.map(c => `${c.chapterNumber}(${c.score})`).join(",")}`
+  );
+
+  return filtered
     .slice(0, 3)
     .map(c => c.chapterNumber);
 }

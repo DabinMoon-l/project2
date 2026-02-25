@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react';
-import { motion, AnimatePresence, PanInfo } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import {
@@ -57,6 +57,8 @@ interface QuizCardData {
   oxCount?: number;
   difficultyImageUrl?: string;
   isAiGenerated?: boolean;
+  pastYear?: number;
+  pastExamType?: string;
 }
 
 // ============================================================
@@ -71,6 +73,8 @@ const NEWS_CARDS: { type: NewsCardType; title: string; subtitle: string }[] = [
 
 // 캐러셀 위치 저장 키
 const QUIZ_CAROUSEL_KEY = 'quiz-carousel-index';
+// 캐러셀 내 스크롤 위치 저장 키 (타입별)
+const QUIZ_SCROLL_KEY = (type: string) => `quiz-scroll-${type}`;
 
 // getDefaultQuizTab → 캐러셀 인덱스 매핑 (midterm=0, past=1, final=2)
 function getDefaultCarouselIndex(): number {
@@ -85,38 +89,51 @@ function getDefaultCarouselIndex(): number {
   return 0;
 }
 
-const MOTIVATIONAL_QUOTES = [
-  "Success is not final, failure is not fatal.",
-  "The secret of getting ahead is getting started.",
-  "Believe you can and you're halfway there.",
-  "Education is the passport to the future.",
-  "The harder you work, the luckier you get.",
-  "Knowledge is power, wisdom is freedom.",
-  "Every expert was once a beginner.",
-  "Dream big, work hard, stay focused.",
-];
 
 // 신문 배경 텍스트 (생물학 관련)
 const NEWSPAPER_BG_TEXT = `The cell membrane, also known as the plasma membrane, is a biological membrane that separates and protects the interior of all cells from the outside environment. The cell membrane consists of a lipid bilayer, including cholesterols that sit between phospholipids to maintain their fluidity at various temperatures. The membrane also contains membrane proteins, including integral proteins that span the membrane serving as membrane transporters, and peripheral proteins that loosely attach to the outer side of the cell membrane, acting as enzymes to facilitate interaction with the cell's environment. Glycolipids embedded in the outer lipid layer serve a similar purpose. The cell membrane controls the movement of substances in and out of cells and organelles, being selectively permeable to ions and organic molecules. In addition, cell membranes are involved in a variety of cellular processes such as cell adhesion, ion conductivity, and cell signaling.`;
 
+// 난이도별 비디오 경로
+function getDifficultyVideo(difficulty: string): string {
+  switch (difficulty) {
+    case 'easy': return '/videos/difficulty-easy.mp4';
+    case 'hard': return '/videos/difficulty-hard.mp4';
+    default: return '/videos/difficulty-normal.mp4';
+  }
+}
+
+// 자동재생 비디오 — 탭 전환 시에도 안정적으로 재생
+function AutoVideo({ src, className }: { src: string; className?: string }) {
+  const ref = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.play().catch(() => {});
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') el.play().catch(() => {});
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [src]);
+
+  return (
+    <video
+      ref={ref}
+      autoPlay
+      loop
+      muted
+      playsInline
+      className={className}
+    >
+      <source src={src} type="video/mp4" />
+    </video>
+  );
+}
+
 // ============================================================
 // 유틸리티 함수
 // ============================================================
-
-function getRandomQuote(): string {
-  return MOTIVATIONAL_QUOTES[Math.floor(Math.random() * MOTIVATIONAL_QUOTES.length)];
-}
-
-function getQuestionTypeLabel(quiz: QuizCardData): string {
-  const multiple = quiz.multipleChoiceCount || 0;
-  const subjective = quiz.subjectiveCount || 0;
-  if (multiple > 0 && subjective > 0) {
-    return `객관 ${multiple} · 주관 ${subjective}`;
-  }
-  if (multiple > 0) return `객관 ${multiple}문제`;
-  if (subjective > 0) return `주관 ${subjective}문제`;
-  return `${quiz.questionCount}문제`;
-}
 
 /**
  * 문제 유형을 포맷하여 표시
@@ -168,18 +185,16 @@ function CompletedBadge({ size = 'normal' }: { size?: 'normal' | 'small' }) {
 }
 
 // ============================================================
-// 뉴스 기사 컴포넌트 (퀴즈)
+// 뉴스 기사 컴포넌트 (퀴즈 — 교수 스타일)
 // ============================================================
 
 function NewsArticle({
   quiz,
-  size = 'normal',
   onStart,
   onUpdate,
   onDetails,
 }: {
   quiz: QuizCardData;
-  size?: 'large' | 'normal' | 'small';
   onStart: () => void;
   onUpdate?: () => void;
   onDetails?: () => void;
@@ -187,52 +202,12 @@ function NewsArticle({
   const isCompleted = quiz.isCompleted && !quiz.hasUpdate;
   const hasUpdate = quiz.isCompleted && quiz.hasUpdate;
 
-  // 크기별 스타일
-  const sizeStyles = {
-    large: {
-      container: 'col-span-2 row-span-2',
-      title: 'text-lg font-black',
-      meta: 'text-sm',
-      tags: 'text-xs',
-      button: 'py-2.5 px-4 text-sm',
-      image: 'w-20 h-28',
-    },
-    normal: {
-      container: 'col-span-1 row-span-2',
-      title: 'text-base font-bold',
-      meta: 'text-xs',
-      tags: 'text-[10px]',
-      button: 'py-2 px-3 text-xs',
-      image: 'w-14 h-20',
-    },
-    small: {
-      container: 'col-span-1 row-span-1',
-      title: 'text-sm font-bold',
-      meta: 'text-[10px]',
-      tags: 'text-[10px]',
-      button: 'py-1.5 px-2 text-[10px]',
-      image: 'w-10 h-14',
-    },
-  };
-
-  const styles = sizeStyles[size];
-
   return (
-    <div
-      onClick={!isCompleted ? onDetails : undefined}
-      className={`relative border border-[#1A1A1A] bg-[#F5F0E8] overflow-hidden ${!isCompleted ? 'cursor-pointer' : ''} ${styles.container}`}
-    >
-      {/* 신문 배경 텍스트 */}
-      <div className="absolute inset-0 p-2 overflow-hidden pointer-events-none">
-        <p className="text-[6px] text-[#D0D0D0] leading-tight break-words">
-          {NEWSPAPER_BG_TEXT.slice(0, size === 'large' ? 800 : size === 'normal' ? 400 : 200)}
-        </p>
-      </div>
-
+    <div className="h-full flex flex-col relative">
       {/* 완료 오버레이 */}
       {isCompleted && (
         <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/70">
-          <CompletedBadge size={size === 'small' ? 'small' : 'normal'} />
+          <CompletedBadge />
         </div>
       )}
 
@@ -249,59 +224,49 @@ function NewsArticle({
         </button>
       )}
 
-      {/* 기사 내용 */}
-      <div className={`relative z-10 p-3 h-full flex ${size === 'small' ? 'flex-col' : 'gap-3'}`}>
-        {/* 난이도 이미지 */}
-        {quiz.difficultyImageUrl && size !== 'small' && (
-          <div className={`${styles.image} flex-shrink-0 border border-[#1A1A1A] bg-white`}>
-            <img
-              src={quiz.difficultyImageUrl}
-              alt="난이도"
-              className="w-full h-full object-cover"
-            />
-          </div>
-        )}
+      {/* 난이도 비디오 — 남은 공간 전부 채움 */}
+      <div className="flex-1 min-h-0 relative overflow-hidden">
+        <AutoVideo src={getDifficultyVideo(quiz.difficulty)} className="absolute inset-0 w-full h-full object-cover" />
+      </div>
 
-        {/* 텍스트 영역 */}
-        <div className="flex-1 flex flex-col justify-between bg-[#F5F0E8]/90 p-2">
-          <div>
-            {/* 제목 */}
-            <h3 className={`${styles.title} text-[#1A1A1A] mb-1 line-clamp-2`}>
-              {quiz.title}
-            </h3>
-
-            {/* 문제 양식 */}
-            <p className={`${styles.meta} text-[#5C5C5C] mb-1`}>
-              {getQuestionTypeLabel(quiz)}
-            </p>
-
-            {/* 태그 */}
-            {quiz.tags && quiz.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1 mb-2">
-                {quiz.tags.slice(0, 3).map((tag) => (
-                  <span
-                    key={tag}
-                    className={`${styles.tags} px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] font-medium`}
-                  >
-                    #{tag}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Start 버튼 */}
-          {!isCompleted && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onStart();
-              }}
-              className={`${styles.button} font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors self-start`}
-            >
-              Start
-            </button>
+      {/* 하단 정보 — 고정 높이, 절대 줄어들지 않음 */}
+      <div className="flex-shrink-0">
+        <div className="px-4 mt-2">
+          <h3 className="text-3xl font-black text-[#1A1A1A] overflow-hidden whitespace-nowrap leading-tight" style={{ textOverflow: '".."' }}>
+            {quiz.title}
+          </h3>
+        </div>
+        <div className="px-4 mt-0.5">
+          <p className="text-sm text-[#1A1A1A]">
+            {quiz.questionCount}문제 · {formatQuestionTypes(quiz.oxCount, quiz.multipleChoiceCount, quiz.subjectiveCount)}
+          </p>
+          {quiz.tags && quiz.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1">
+              {quiz.tags.slice(0, 4).map((tag) => (
+                <span key={tag} className="text-[10px] px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] font-medium">
+                  #{tag}
+                </span>
+              ))}
+            </div>
           )}
+        </div>
+        <div className="px-4 pb-3 pt-2 flex gap-2">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onDetails?.(); }}
+            className="flex-1 py-2 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+          >
+            Details
+          </button>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onStart(); }}
+            className={`flex-1 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] transition-colors ${
+              isCompleted ? 'opacity-40 pointer-events-none' : 'hover:bg-[#3A3A3A]'
+            }`}
+          >
+            Start
+          </button>
         </div>
       </div>
     </div>
@@ -309,27 +274,7 @@ function NewsArticle({
 }
 
 // ============================================================
-// 명언 기사 컴포넌트
-// ============================================================
-
-function QuoteArticle({ size = 'small' }: { size?: 'normal' | 'small' }) {
-  const quote = useMemo(() => getRandomQuote(), []);
-
-  return (
-    <div className={`relative border border-[#1A1A1A] bg-[#EDEAE4] p-3 flex items-center justify-center ${
-      size === 'small' ? 'col-span-1 row-span-1' : 'col-span-1 row-span-2'
-    }`}>
-      <p className={`text-center italic text-[#1A1A1A] font-serif ${
-        size === 'small' ? 'text-xs' : 'text-sm'
-      }`}>
-        "{quote}"
-      </p>
-    </div>
-  );
-}
-
-// ============================================================
-// 뉴스 카드 컴포넌트 (중간/기말)
+// 뉴스 카드 컴포넌트 (중간/기말 — 교수 스타일 세로 스크롤)
 // ============================================================
 
 function NewsCard({
@@ -351,26 +296,48 @@ function NewsCard({
   onUpdate: (quiz: QuizCardData) => void;
   onShowDetails?: (quiz: QuizCardData) => void;
 }) {
-  // 기사 크기 배분 (가지각색)
-  const getArticleSize = (index: number, total: number): 'large' | 'normal' | 'small' => {
-    if (total === 1) return 'large';
-    if (total === 2) return index === 0 ? 'large' : 'normal';
-    if (index === 0) return 'large';
-    if (index === 1 || index === 2) return 'normal';
-    return 'small';
-  };
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [itemHeight, setItemHeight] = useState(0);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const measure = () => setItemHeight(el.clientHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // 스크롤 위치 복원
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !itemHeight || isLoading || quizzes.length === 0) return;
+    const saved = sessionStorage.getItem(QUIZ_SCROLL_KEY(type));
+    if (saved) el.scrollTop = parseInt(saved, 10);
+  }, [type, itemHeight, isLoading, quizzes.length]);
+
+  // 스크롤 위치 저장
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const handleScroll = () => {
+      sessionStorage.setItem(QUIZ_SCROLL_KEY(type), String(el.scrollTop));
+    };
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, [type]);
 
   return (
-    <div className="w-full h-full border-4 border-[#1A1A1A] bg-[#F5F0E8] flex flex-col overflow-hidden">
-      {/* 헤더 */}
-      <div className="bg-[#1A1A1A] text-[#F5F0E8] px-4 py-3 text-center flex-shrink-0">
-        <p className="text-[8px] tracking-[0.3em] mb-1">━━━━━━━━━━━━━━━━━━━━</p>
-        <h1 className="font-serif text-2xl font-black tracking-tight">{title}</h1>
-        <p className="text-[10px] tracking-widest mt-1">{subtitle}</p>
+    <div className="w-full h-full border-4 border-[#1A1A1A] bg-[#1A1A1A] flex flex-col overflow-hidden">
+      {/* 축소된 헤더 */}
+      <div className="bg-[#1A1A1A] text-[#F5F0E8] px-4 py-2 text-center flex-shrink-0">
+        <h1 className="font-serif text-lg font-black tracking-tight">{title}</h1>
+        <p className="text-[9px] tracking-widest">{subtitle}</p>
       </div>
 
-      {/* 기사 영역 (스크롤 가능) */}
-      <div className="flex-1 overflow-y-auto p-3">
+      {/* 퀴즈 목록 — 자유 스크롤, 각 아이템 px 높이로 고정 */}
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain bg-[#F5F0E8]" data-scroll-inner>
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
             <div className="animate-pulse text-[#5C5C5C]">로딩 중...</div>
@@ -381,21 +348,16 @@ function NewsCard({
             <p className="text-sm text-[#5C5C5C]">곧 새로운 퀴즈가 추가될 예정입니다.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 auto-rows-[minmax(80px,auto)] gap-2">
-            {quizzes.slice(0, 4).map((quiz, index) => (
+          quizzes.map((quiz) => (
+            <div key={quiz.id} style={itemHeight ? { height: itemHeight } : undefined}>
               <NewsArticle
-                key={quiz.id}
                 quiz={quiz}
-                size={getArticleSize(index, Math.min(quizzes.length, 4))}
                 onStart={() => onStart(quiz.id)}
                 onUpdate={() => onUpdate(quiz)}
                 onDetails={onShowDetails ? () => onShowDetails(quiz) : undefined}
               />
-            ))}
-            {/* Dead space를 명언으로 채우기 */}
-            {quizzes.length === 1 && <QuoteArticle size="normal" />}
-            {quizzes.length === 3 && <QuoteArticle size="small" />}
-          </div>
+            </div>
+          ))
         )}
       </div>
     </div>
@@ -403,196 +365,152 @@ function NewsCard({
 }
 
 // ============================================================
-// 기출 뉴스 카드 컴포넌트 (특별)
+// 기출 뉴스 카드 컴포넌트 (교수 스타일)
 // ============================================================
 
 function PastExamNewsCard({
-  quiz,
+  quizzes,
   selectedPastExam,
   pastExamOptions,
   onSelectPastExam,
   isLoading,
   onStart,
-  onDownload,
   onShowDetails,
 }: {
-  quiz: QuizCardData | null;
+  quizzes: QuizCardData[];
   selectedPastExam: string;
   pastExamOptions: PastExamOption[];
   onSelectPastExam: (value: string) => void;
   isLoading: boolean;
-  onStart: () => void;
-  onDownload: () => void;
+  onStart: (quizId: string) => void;
   onShowDetails?: (quiz: QuizCardData) => void;
 }) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const selectedOption = pastExamOptions.find((opt) => opt.value === selectedPastExam);
 
+  // 선택된 년도/시험으로 필터링
+  const [yearStr, examType] = selectedPastExam.split('-');
+  const year = parseInt(yearStr, 10);
+  const filteredQuiz = quizzes.find(
+    (q) => q.pastYear === year && q.pastExamType === examType
+  ) || null;
+
+  const isCompleted = filteredQuiz?.isCompleted && !filteredQuiz?.hasUpdate;
+
   return (
-    <div className="w-full h-full border-4 border-[#1A1A1A] bg-[#F5F0E8] flex flex-col overflow-hidden">
-      {/* 헤더 + 드롭다운 */}
-      <div className="bg-[#1A1A1A] text-[#F5F0E8] px-4 py-3 flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-[8px] tracking-[0.3em] mb-1">━━━━━━━━━━━━</p>
-            <h1 className="font-serif text-2xl font-black tracking-tight">PAST EXAM</h1>
-          </div>
-
-          {/* 드롭다운 */}
-          <div className="relative">
-            <button
-              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              className="px-3 py-1.5 bg-[#F5F0E8] text-[#1A1A1A] text-sm font-bold flex items-center justify-between gap-2 min-w-[100px]"
-            >
-              <span>{selectedOption?.label || '선택'}</span>
-              <svg
-                className={`w-3 h-3 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-            </button>
-
-            <AnimatePresence>
-              {isDropdownOpen && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setIsDropdownOpen(false)} />
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="absolute right-0 top-full mt-1 z-20 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg min-w-[100px]"
-                  >
-                    {pastExamOptions.map((option) => (
-                      <button
-                        key={option.value}
-                        onClick={() => {
-                          onSelectPastExam(option.value);
-                          setIsDropdownOpen(false);
-                        }}
-                        className={`w-full px-3 py-2 text-left text-sm font-medium transition-colors ${
-                          selectedPastExam === option.value
-                            ? 'bg-[#1A1A1A] text-[#F5F0E8]'
-                            : 'text-[#1A1A1A] hover:bg-[#EDEAE4]'
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </motion.div>
-                </>
-              )}
-            </AnimatePresence>
-          </div>
+    <div className="w-full h-full border-4 border-[#1A1A1A] bg-[#1A1A1A] flex flex-col overflow-hidden">
+      {/* 축소된 헤더 + 드롭다운 */}
+      <div className="bg-[#1A1A1A] text-[#F5F0E8] px-4 py-2 flex items-center justify-between flex-shrink-0">
+        <div>
+          <p className="text-[7px] tracking-[0.2em] mb-0.5 opacity-60">━━━━━━━━━━━━━━━━</p>
+          <h1 className="font-serif text-xl font-black tracking-tight">PAST EXAM</h1>
         </div>
-        <p className="text-[10px] tracking-widest mt-1">Official Archive · {selectedOption?.label}</p>
+
+        {/* 드롭다운 — 터치 이벤트 캐러셀 전파 차단 */}
+        <div className="relative" onPointerDownCapture={(e) => e.stopPropagation()}>
+          <button
+            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+            className="px-3 py-1.5 bg-[#F5F0E8] text-[#1A1A1A] text-sm font-bold flex items-center justify-between gap-2 min-w-[100px]"
+          >
+            <span>{selectedOption?.label || '선택'}</span>
+            <svg
+              className={`w-3 h-3 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+          </button>
+
+          <AnimatePresence>
+            {isDropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setIsDropdownOpen(false)} onPointerDownCapture={(e) => e.stopPropagation()} />
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="absolute right-0 top-full mt-1 z-20 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg min-w-[100px]"
+                >
+                  {pastExamOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => {
+                        onSelectPastExam(option.value);
+                        setIsDropdownOpen(false);
+                      }}
+                      className={`w-full px-3 py-2 text-left text-sm font-medium transition-colors ${
+                        selectedPastExam === option.value
+                          ? 'bg-[#1A1A1A] text-[#F5F0E8]'
+                          : 'text-[#1A1A1A] hover:bg-[#EDEAE4]'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
-      {/* 큰 기사 하나 */}
-      <div className="flex-1 overflow-y-auto p-4">
+      {/* 기출 내용 — 단일 퀴즈 full-height */}
+      <div className="flex-1 overflow-y-auto" data-scroll-inner>
         {isLoading ? (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex items-center justify-center h-full bg-[#F5F0E8]">
             <div className="animate-pulse text-[#5C5C5C]">로딩 중...</div>
           </div>
-        ) : !quiz ? (
-          <div className="flex flex-col items-center justify-center h-full text-center">
+        ) : !filteredQuiz ? (
+          <div className="flex flex-col items-center justify-center h-full text-center bg-[#F5F0E8]">
             <h3 className="font-bold text-lg mb-2 text-[#1A1A1A]">기출문제가 없습니다</h3>
             <p className="text-sm text-[#5C5C5C]">해당 시험의 기출문제가 아직 등록되지 않았습니다.</p>
           </div>
         ) : (
-          <div
-            onClick={!quiz.isCompleted ? () => onShowDetails?.(quiz) : undefined}
-            className={`relative border-2 border-[#1A1A1A] bg-[#F5F0E8] h-full ${!quiz.isCompleted ? 'cursor-pointer' : ''}`}
-          >
-            {/* 신문 배경 텍스트 */}
-            <div className="absolute inset-0 p-3 overflow-hidden pointer-events-none">
-              <p className="text-[7px] text-[#D8D8D8] leading-tight break-words">
-                {NEWSPAPER_BG_TEXT}
-              </p>
-            </div>
-
+          <div className="flex flex-col h-full relative">
             {/* 완료 오버레이 */}
-            {quiz.isCompleted && (
+            {isCompleted && (
               <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/70">
                 <CompletedBadge />
               </div>
             )}
 
-            {/* 기사 내용 */}
-            <div className="relative z-10 p-4 h-full flex flex-col">
-              <div className="flex gap-4 flex-1">
-                {/* 난이도 이미지 */}
-                {quiz.difficultyImageUrl && (
-                  <div className="w-28 h-40 flex-shrink-0 border-2 border-[#1A1A1A] bg-white">
-                    <img
-                      src={quiz.difficultyImageUrl}
-                      alt="난이도"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                )}
+            {/* 난이도 비디오 — 전체 너비, 크게 */}
+            <div className="flex-1 min-h-0 relative overflow-hidden">
+              <AutoVideo src={getDifficultyVideo(filteredQuiz.difficulty)} className="absolute inset-0 w-full h-full object-cover" />
+            </div>
 
-                {/* 텍스트 */}
-                <div className="flex-1 bg-[#F5F0E8]/95 p-3">
-                  <h2 className="text-xl font-black text-[#1A1A1A] mb-2">
-                    {quiz.title}
-                  </h2>
-
-                  <p className="text-sm text-[#5C5C5C] mb-2">
-                    객관 {quiz.multipleChoiceCount || 0} · 주관 {quiz.subjectiveCount || 0} · 총 {quiz.questionCount}문제
-                  </p>
-
-                  <p className="text-sm text-[#5C5C5C] mb-3">
-                    {quiz.participantCount}명 참여
-                  </p>
-
-                  {quiz.tags && quiz.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mb-3">
-                      {quiz.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="px-2 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-medium"
-                        >
-                          #{tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  {quiz.oneLineSummary && (
-                    <p className="text-sm italic text-[#5C5C5C] border-l-2 border-[#1A1A1A] pl-2 mb-3">
-                      "{quiz.oneLineSummary}"
-                    </p>
-                  )}
-                </div>
+            {/* 하단 정보 */}
+            <div className="flex-shrink-0 bg-[#F5F0E8]">
+              <div className="px-4 mt-2">
+                <h3 className="text-3xl font-black text-[#1A1A1A] overflow-hidden whitespace-nowrap leading-tight" style={{ textOverflow: '".."' }}>
+                  {filteredQuiz.title}
+                </h3>
               </div>
-
-              {/* 버튼 영역 */}
-              {!quiz.isCompleted && (
-                <div className="flex gap-3 mt-4">
-                  {quiz.attachmentUrl && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDownload();
-                      }}
-                      className="flex-1 py-3 font-bold text-sm border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
-                    >
-                      다운로드
-                    </button>
-                  )}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onStart();
-                    }}
-                    className="flex-1 py-3 font-bold text-sm bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
-                  >
-                    Start
-                  </button>
-                </div>
-              )}
+              <div className="px-4 mt-0.5">
+                <p className="text-sm text-[#1A1A1A]">
+                  {filteredQuiz.questionCount}문제 · {filteredQuiz.participantCount}명 참여
+                  {filteredQuiz.participantCount > 0 && ` · 평균 ${filteredQuiz.averageScore}점`}
+                </p>
+              </div>
+              <div className="px-4 pb-3 pt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onShowDetails?.(filteredQuiz); }}
+                  className="flex-1 py-2 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+                >
+                  Details
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onStart(filteredQuiz.id); }}
+                  className={`flex-1 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] transition-colors ${
+                    isCompleted ? 'opacity-40 pointer-events-none' : 'hover:bg-[#3A3A3A]'
+                  }`}
+                >
+                  Start
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -602,182 +520,260 @@ function PastExamNewsCard({
 }
 
 // ============================================================
-// 뉴스 캐러셀 컴포넌트
+// 뉴스 캐러셀 (교수와 동일한 3D perspective + 무한 루프)
 // ============================================================
 
 function NewsCarousel({
   midtermQuizzes,
   finalQuizzes,
-  pastQuiz,
+  pastQuizzes,
   pastExamOptions,
   selectedPastExam,
   onSelectPastExam,
   isLoading,
   onStart,
   onUpdate,
-  onDownload,
   onShowDetails,
 }: {
   midtermQuizzes: QuizCardData[];
   finalQuizzes: QuizCardData[];
-  pastQuiz: QuizCardData | null;
+  pastQuizzes: QuizCardData[];
   pastExamOptions: PastExamOption[];
   selectedPastExam: string;
   onSelectPastExam: (value: string) => void;
   isLoading: { midterm: boolean; final: boolean; past: boolean };
   onStart: (quizId: string) => void;
   onUpdate: (quiz: QuizCardData) => void;
-  onDownload: (url: string) => void;
   onShowDetails?: (quiz: QuizCardData) => void;
 }) {
-  const [currentIndex, setCurrentIndex] = useState(getDefaultCarouselIndex);
+  const TOTAL = NEWS_CARDS.length; // 3
+  // visualIndex: 0=clone_last, 1~3=real cards, 4=clone_first
+  const [visualIndex, setVisualIndex] = useState(() => getDefaultCarouselIndex() + 1);
+  const [transitionOn, setTransitionOn] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
+  // 카드별 래퍼 ref (클론 스크롤 동기화용)
+  const cardWrapperRefs = useRef<(HTMLDivElement | null)[]>([]);
 
-  // 위치 변경 시 sessionStorage에 저장
-  const updateIndex = useCallback((idx: number) => {
-    setCurrentIndex(idx);
+  // 실제 인덱스 (0~2)
+  const realIndex = useMemo(() => {
+    if (visualIndex <= 0) return TOTAL - 1;
+    if (visualIndex > TOTAL) return 0;
+    return visualIndex - 1;
+  }, [visualIndex, TOTAL]);
+
+  // sessionStorage 저장
+  useEffect(() => {
     if (typeof window !== 'undefined') {
-      sessionStorage.setItem(QUIZ_CAROUSEL_KEY, String(idx));
+      sessionStorage.setItem(QUIZ_CAROUSEL_KEY, String(realIndex));
     }
-  }, []);
+  }, [realIndex]);
 
-  const goToPrev = () => updateIndex(Math.max(0, currentIndex - 1));
-  const goToNext = () => updateIndex(Math.min(2, currentIndex + 1));
+  // 클론 카드 스크롤을 실제 카드와 동기화
+  const syncCloneScroll = useCallback(() => {
+    const refs = cardWrapperRefs.current;
+    const getScroller = (el: HTMLDivElement | null) =>
+      el?.querySelector<HTMLElement>('[data-scroll-inner]');
+    // clone_last(0) ← real_last(TOTAL)
+    const clone0 = getScroller(refs[0]);
+    const realLast = getScroller(refs[TOTAL]);
+    if (clone0 && realLast) clone0.scrollTop = realLast.scrollTop;
+    // clone_first(TOTAL+1) ← real_first(1)
+    const cloneEnd = getScroller(refs[TOTAL + 1]);
+    const realFirst = getScroller(refs[1]);
+    if (cloneEnd && realFirst) cloneEnd.scrollTop = realFirst.scrollTop;
+  }, [TOTAL]);
 
-  const handleDragEnd = (e: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    if (info.offset.x > 50) {
-      goToPrev();
-    } else if (info.offset.x < -50) {
-      goToNext();
+  const goToNext = useCallback(() => {
+    syncCloneScroll();
+    setTransitionOn(true);
+    setVisualIndex((prev) => prev + 1);
+  }, [syncCloneScroll]);
+
+  const goToPrev = useCallback(() => {
+    syncCloneScroll();
+    setTransitionOn(true);
+    setVisualIndex((prev) => prev - 1);
+  }, [syncCloneScroll]);
+
+  // 터치 스와이프로 카드 전환 (세로 스크롤 허용)
+  const swipeStartX = useRef(0);
+  const swipeStartY = useRef(0);
+  const swipeLocked = useRef<'none' | 'horizontal' | 'vertical'>('none');
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    swipeStartX.current = e.touches[0].clientX;
+    swipeStartY.current = e.touches[0].clientY;
+    swipeLocked.current = 'none';
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (swipeLocked.current !== 'none') return;
+    const dx = Math.abs(e.touches[0].clientX - swipeStartX.current);
+    const dy = Math.abs(e.touches[0].clientY - swipeStartY.current);
+    if (dx > 10 || dy > 10) {
+      swipeLocked.current = dx > dy ? 'horizontal' : 'vertical';
     }
   };
 
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (swipeLocked.current === 'vertical') return;
+    const dx = e.changedTouches[0].clientX - swipeStartX.current;
+    if (Math.abs(dx) > 40) {
+      if (dx > 0) goToPrev();
+      else goToNext();
+    }
+  };
+
+  // PC 마우스 드래그로 카드 전환
+  const mouseStartX = useRef(0);
+  const isMouseDown = useRef(false);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    mouseStartX.current = e.clientX;
+    isMouseDown.current = true;
+  };
+
+  const handleMouseUp = (e: React.MouseEvent) => {
+    if (!isMouseDown.current) return;
+    isMouseDown.current = false;
+    const dx = e.clientX - mouseStartX.current;
+    if (Math.abs(dx) > 40) {
+      if (dx > 0) goToPrev();
+      else goToNext();
+    }
+  };
+
+  const handleMouseLeave = () => { isMouseDown.current = false; };
+
+  // 클론 위치 도달 시 → 즉시 실제 위치로 점프 (애니메이션 없이)
+  const handleAnimationComplete = useCallback(() => {
+    if (visualIndex === 0) {
+      setTransitionOn(false);
+      setVisualIndex(TOTAL);
+      requestAnimationFrame(() => requestAnimationFrame(() => setTransitionOn(true)));
+    } else if (visualIndex === TOTAL + 1) {
+      setTransitionOn(false);
+      setVisualIndex(1);
+      requestAnimationFrame(() => requestAnimationFrame(() => setTransitionOn(true)));
+    }
+  }, [visualIndex, TOTAL]);
+
+  // 확장 카드: [clone_last, card_0, card_1, card_2, clone_first]
+  const extendedCardIndices = useMemo(
+    () => [TOTAL - 1, ...Array.from({ length: TOTAL }, (_, i) => i), 0],
+    [TOTAL]
+  );
+
+  // 순서: midterm(0), past(1), final(2)
+  const quizzesByType = [midtermQuizzes, pastQuizzes, finalQuizzes];
+  const loadingByType = [isLoading.midterm, isLoading.past, isLoading.final];
+
+  const CARD_WIDTH_PERCENT = 82;
+  const SIDE_PEEK_PERCENT = (100 - CARD_WIDTH_PERCENT) / 2;
+
   return (
-    <div className="relative px-4" data-no-pull style={{ touchAction: 'pan-y' }}>
-      {/* 좌측 화살표 */}
-      <button
-        onClick={goToPrev}
-        disabled={currentIndex === 0}
-        className={`absolute left-0 top-1/2 -translate-y-1/2 z-20 w-10 h-10 flex items-center justify-center rounded-full border-2 border-[#1A1A1A] bg-[#F5F0E8] shadow-md transition-all ${
-          currentIndex === 0 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
-        }`}
-      >
-        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
-        </svg>
-      </button>
-
-      {/* 우측 화살표 */}
-      <button
-        onClick={goToNext}
-        disabled={currentIndex === 2}
-        className={`absolute right-0 top-1/2 -translate-y-1/2 z-20 w-10 h-10 flex items-center justify-center rounded-full border-2 border-[#1A1A1A] bg-[#F5F0E8] shadow-md transition-all ${
-          currentIndex === 2 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
-        }`}
-      >
-        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-        </svg>
-      </button>
-
-      {/* 카드 컨테이너 */}
-      <div ref={containerRef} className="overflow-hidden mx-6">
+    <div
+      className="relative select-none cursor-grab active:cursor-grabbing"
+      style={{ perspective: 1200, touchAction: 'pan-y' }}
+      data-no-pull
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onMouseDown={handleMouseDown}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseLeave}
+    >
+      <div ref={containerRef} className="overflow-x-clip overflow-y-visible">
         <motion.div
           className="flex"
-          animate={{ x: `${-currentIndex * 100}%` }}
-          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          initial={false}
+          animate={{
+            x: `calc(-${visualIndex * CARD_WIDTH_PERCENT}% + ${SIDE_PEEK_PERCENT}%)`,
+          }}
+          transition={
+            transitionOn
+              ? { duration: 0.35, ease: [0.25, 0.1, 0.25, 1] }
+              : { duration: 0 }
+          }
+          onAnimationComplete={handleAnimationComplete}
         >
-          {/* 중간 카드 */}
-          <motion.div
-            className="w-full flex-shrink-0 px-2"
-            style={{ perspective: 1000 }}
-          >
-            <motion.div
-              animate={{
-                rotateY: currentIndex === 0 ? 0 : currentIndex < 0 ? 15 : -15,
-                scale: currentIndex === 0 ? 1 : 0.9,
-                opacity: currentIndex === 0 ? 1 : 0.7,
-              }}
-              transition={{ duration: 0.3 }}
-              className="h-[420px]"
-            >
-              <NewsCard
-                type="midterm"
-                title="MIDTERM PREP"
-                subtitle="Vol.1 · Midterm Edition"
-                quizzes={midtermQuizzes}
-                isLoading={isLoading.midterm}
-                onStart={onStart}
-                onUpdate={onUpdate}
-                onShowDetails={onShowDetails}
-              />
-            </motion.div>
-          </motion.div>
+          {extendedCardIndices.map((cardIdx, i) => {
+            const card = NEWS_CARDS[cardIdx];
+            const isActive = i === visualIndex;
+            const offset = i - visualIndex;
 
-          {/* 기출 카드 */}
-          <motion.div
-            className="w-full flex-shrink-0 px-2"
-            style={{ perspective: 1000 }}
-          >
-            <motion.div
-              animate={{
-                rotateY: currentIndex === 1 ? 0 : currentIndex < 1 ? 15 : -15,
-                scale: currentIndex === 1 ? 1 : 0.9,
-                opacity: currentIndex === 1 ? 1 : 0.7,
-              }}
-              transition={{ duration: 0.3 }}
-              className="h-[420px]"
-            >
-              <PastExamNewsCard
-                quiz={pastQuiz}
-                selectedPastExam={selectedPastExam}
-                pastExamOptions={pastExamOptions}
-                onSelectPastExam={onSelectPastExam}
-                isLoading={isLoading.past}
-                onStart={() => pastQuiz && onStart(pastQuiz.id)}
-                onDownload={() => pastQuiz?.attachmentUrl && onDownload(pastQuiz.attachmentUrl)}
-                onShowDetails={onShowDetails}
-              />
-            </motion.div>
-          </motion.div>
-
-          {/* 기말 카드 */}
-          <motion.div
-            className="w-full flex-shrink-0 px-2"
-            style={{ perspective: 1000 }}
-          >
-            <motion.div
-              animate={{
-                rotateY: currentIndex === 2 ? 0 : currentIndex < 2 ? 15 : -15,
-                scale: currentIndex === 2 ? 1 : 0.9,
-                opacity: currentIndex === 2 ? 1 : 0.7,
-              }}
-              transition={{ duration: 0.3 }}
-              className="h-[420px]"
-            >
-              <NewsCard
-                type="final"
-                title="FINAL PREP"
-                subtitle="Vol.2 · Final Edition"
-                quizzes={finalQuizzes}
-                isLoading={isLoading.final}
-                onStart={onStart}
-                onUpdate={onUpdate}
-                onShowDetails={onShowDetails}
-              />
-            </motion.div>
-          </motion.div>
+            return (
+              <motion.div
+                key={`${card.type}-${i}`}
+                ref={(el: HTMLDivElement | null) => { cardWrapperRefs.current[i] = el; }}
+                className="flex-shrink-0 px-1.5"
+                style={{ width: `${CARD_WIDTH_PERCENT}%` }}
+              >
+                {/* 카드 + 바닥 그림자 */}
+                <div className="relative h-[440px]">
+                  {/* 바닥 그림자 — 지면에 드리워지는 타원 */}
+                  <motion.div
+                    animate={{
+                      opacity: isActive ? 0.25 : 0.06,
+                      scaleX: isActive ? 0.92 : 0.82,
+                    }}
+                    transition={transitionOn ? { duration: 0.35, ease: 'easeOut' } : { duration: 0 }}
+                    className="absolute left-[2%] right-[2%] -bottom-2 h-8 rounded-[50%] bg-black pointer-events-none"
+                    style={{ filter: 'blur(16px)' }}
+                  />
+                  {/* 카드 본체 */}
+                  <motion.div
+                    animate={{
+                      rotateY: isActive ? 0 : offset < 0 ? 4 : -4,
+                      scale: isActive ? 1 : 0.92,
+                      opacity: isActive ? 1 : 0.85,
+                      y: isActive ? -10 : 2,
+                    }}
+                    transition={transitionOn ? { duration: 0.35, ease: 'easeOut' } : { duration: 0 }}
+                    className="absolute inset-0 origin-center rounded-sm"
+                    style={{ transformStyle: 'preserve-3d' }}
+                  >
+                  {card.type === 'past' ? (
+                    <PastExamNewsCard
+                      quizzes={pastQuizzes}
+                      isLoading={loadingByType[cardIdx]}
+                      onStart={onStart}
+                      onShowDetails={onShowDetails}
+                      selectedPastExam={selectedPastExam}
+                      pastExamOptions={pastExamOptions}
+                      onSelectPastExam={onSelectPastExam}
+                    />
+                  ) : (
+                    <NewsCard
+                      title={card.title}
+                      subtitle={card.subtitle}
+                      type={card.type}
+                      quizzes={quizzesByType[cardIdx]}
+                      isLoading={loadingByType[cardIdx]}
+                      onStart={onStart}
+                      onUpdate={onUpdate}
+                      onShowDetails={onShowDetails}
+                    />
+                  )}
+                  </motion.div>
+                </div>
+              </motion.div>
+            );
+          })}
         </motion.div>
       </div>
 
-      {/* 인디케이터 */}
-      <div className="flex justify-center gap-2 mt-4">
-        {[0, 1, 2].map((index) => (
+      {/* 인디케이터 — realIndex 기반 */}
+      <div className="relative z-10 flex justify-center gap-2 mt-1">
+        {Array.from({ length: TOTAL }, (_, index) => (
           <button
             key={index}
-            onClick={() => updateIndex(index)}
-            className={`w-2 h-2 rounded-full transition-all ${
-              currentIndex === index ? 'bg-[#1A1A1A] w-4' : 'bg-[#CCCCCC]'
+            onClick={() => {
+              setTransitionOn(true);
+              setVisualIndex(index + 1);
+            }}
+            className={`h-2 rounded-full transition-all duration-300 ${
+              realIndex === index ? 'bg-[#1A1A1A] w-5' : 'bg-[#CCCCCC] w-2'
             }`}
           />
         ))}
@@ -1512,6 +1508,8 @@ function QuizListPageContent() {
       subjectiveCount: data.subjectiveCount || 0,
       oxCount: data.oxCount || 0,
       isAiGenerated: data.isAiGenerated || data.type === 'ai-generated' || !!data.uploadedAt,
+      pastYear: data.pastYear,
+      pastExamType: data.pastExamType,
     };
   }, []); // 의존성 제거 - updatedQuizzes 변경 시 재로딩 방지
 
@@ -1556,22 +1554,17 @@ function QuizListPageContent() {
     };
   }, [user, userCourseId, parseQuizData]);
 
-  // 기출 퀴즈 로드
+  // 기출 퀴즈 로드 (전체 — PastExamNewsCard에서 드롭다운 선택에 따라 필터링)
   useEffect(() => {
     if (!user || !userCourseId) return;
 
     setIsLoading((prev) => ({ ...prev, past: true }));
 
-    const [yearStr, examType] = selectedPastExam.split('-');
-    const year = parseInt(yearStr, 10);
-
     const quizzesRef = collection(db, 'quizzes');
     const q = query(
       quizzesRef,
       where('type', '==', 'past'),
-      where('courseId', '==', userCourseId),
-      where('pastYear', '==', year),
-      where('pastExamType', '==', examType)
+      where('courseId', '==', userCourseId)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -1584,7 +1577,7 @@ function QuizListPageContent() {
     });
 
     return () => unsubscribe();
-  }, [user, userCourseId, selectedPastExam, parseQuizData]);
+  }, [user, userCourseId, parseQuizData]);
 
   // 자작 퀴즈 로드
   useEffect(() => {
@@ -2060,18 +2053,17 @@ function QuizListPageContent() {
       </header>
 
       {/* 뉴스 캐러셀 (중간/기말/기출) */}
-      <section className="mb-8 px-4">
+      <section className="mb-8">
         <NewsCarousel
           midtermQuizzes={midtermQuizzesWithUpdate}
           finalQuizzes={finalQuizzesWithUpdate}
-          pastQuiz={pastQuizzesWithUpdate.length > 0 ? pastQuizzesWithUpdate[0] : null}
+          pastQuizzes={pastQuizzesWithUpdate}
           pastExamOptions={pastExamOptions}
           selectedPastExam={selectedPastExam}
           onSelectPastExam={setSelectedPastExam}
           isLoading={actualLoading}
           onStart={handleStartQuiz}
           onUpdate={handleOpenUpdateModal}
-          onDownload={(url) => window.open(url, '_blank')}
           onShowDetails={handleShowDetails}
         />
       </section>
@@ -2082,23 +2074,26 @@ function QuizListPageContent() {
           <h2 className="font-serif-display text-xl font-black text-[#1A1A1A] shrink-0">자작</h2>
 
           {/* 탭 버튼 */}
-          <div className="flex border border-[#1A1A1A]">
+          <div className="relative flex items-stretch bg-[#EDEAE4] border border-[#1A1A1A] overflow-hidden">
+            <motion.div
+              className="absolute h-full bg-[#1A1A1A]"
+              initial={false}
+              animate={{ left: customSectionTab === 'quiz' ? '0%' : '50%' }}
+              style={{ width: '50%' }}
+              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            />
             <button
               onClick={() => setCustomSectionTab('quiz')}
-              className={`px-6 py-3 text-sm font-bold transition-colors ${
-                customSectionTab === 'quiz'
-                  ? 'bg-[#1A1A1A] text-[#F5F0E8]'
-                  : 'bg-[#F5F0E8] text-[#1A1A1A] hover:bg-[#EDEAE4]'
+              className={`relative z-10 w-1/2 px-6 py-3 text-sm font-bold transition-colors text-center ${
+                customSectionTab === 'quiz' ? 'text-[#F5F0E8]' : 'text-[#1A1A1A]'
               }`}
             >
               퀴즈
             </button>
             <button
               onClick={() => setCustomSectionTab('review')}
-              className={`px-6 py-3 text-sm font-bold transition-colors ${
-                customSectionTab === 'review'
-                  ? 'bg-[#1A1A1A] text-[#F5F0E8]'
-                  : 'bg-[#F5F0E8] text-[#1A1A1A] hover:bg-[#EDEAE4]'
+              className={`relative z-10 w-1/2 px-6 py-3 text-sm font-bold transition-colors text-center ${
+                customSectionTab === 'review' ? 'text-[#F5F0E8]' : 'text-[#1A1A1A]'
               }`}
             >
               복습

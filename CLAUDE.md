@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Frontend**: Next.js 16 (App Router) + React 19 + TypeScript + Tailwind CSS 3
 - **애니메이션**: Framer Motion (페이지 전환, UI), Lottie (캐릭터)
-- **Backend**: Firebase (Auth, Firestore, Cloud Functions, Cloud Messaging, Storage)
+- **Backend**: Firebase (Auth, Firestore, Realtime Database, Cloud Functions, Cloud Messaging, Storage)
 - **OCR**: Tesseract.js, pdfjs-dist
 - **AI**: Gemini API (문제 생성, 이미지 분석), Claude API (월별 리포트 인사이트)
 - **리포트 출력**: exceljs (Excel), docx (Word), file-saver
@@ -38,7 +38,9 @@ npm run logs         # 로그 확인
 ```
 
 - **Node 20 필수** (`engines.node: "20"`)
-- tsconfig가 프론트보다 엄격: `noUnusedLocals`, `noImplicitReturns` 활성화
+- tsconfig가 프론트보다 엄격: `noUnusedLocals`, `noImplicitReturns`, `strict` 활성화
+- `firebase.json` predeploy 훅: `npm run build` 자동 실행 (배포 시 수동 빌드 불필요)
+- **테스트 프레임워크 없음**: Jest/Vitest/Playwright 등 미설정. 수동 테스트 기반
 
 ### 환경 변수
 
@@ -592,7 +594,8 @@ firebase deploy --only functions
 
 ## 철권퀴즈 (배틀 퀴즈)
 
-실시간 1v1 토끼 배틀. Firebase Realtime Database 사용.
+실시간 1v1 토끼 배틀. **Firebase Realtime Database** 사용 (프로젝트에서 Realtime DB를 사용하는 유일한 기능).
+- Realtime DB 경로: `tekken/matchmaking/{courseId}/{userId}`, `tekken/battles/{battleId}`, `tekken/streaks/{userId}`
 - 매치 시간 3분, 문제 타임아웃 20초, 크리티컬 4초 이내 x1.5
 - 데미지 = max(ceil(ATK²/(ATK+상대DEF)), 1), 오답 셀프데미지 3
 - 연타 미니게임 (눈빛보내기 스타일 게이지 땅따먹기, 3초)
@@ -622,6 +625,8 @@ firebase deploy --only functions
 `npm run build` → Vercel 자동 배포. PWA 서비스 워커 자동 등록.
 - **PWA는 개발 모드에서 비활성화** (`next.config.mjs`에서 `disable: NODE_ENV === "development"`)
 - **프로덕션 빌드 시 `console.log` 자동 제거** — `console.error`/`console.warn`만 유지 (`compiler.removeConsole`)
+- **PWA 비디오 캐싱 제외**: `/videos/` 경로는 `NetworkOnly` 핸들러 사용 (캐시 시 `ERR_CACHE_OPERATION_NOT_SUPPORTED` 발생 방지)
+- **Next.js Image 원격 패턴**: `firebasestorage.googleapis.com` 허용 (Firebase Storage 이미지 최적화)
 
 ### 토끼 에셋
 

@@ -1193,147 +1193,159 @@ export default function QuizPreviewPage() {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="border-2 border-[#1A1A1A] p-6 space-y-6"
-            style={{ backgroundColor: '#F5F0E8' }}
+            className="space-y-4"
           >
-            {/* 퀴즈 제목 */}
-            <div>
-              <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
-                퀴즈 제목 <span className="text-[#8B1A1A]">*</span>
-              </label>
-              <input
-                type="text"
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                placeholder="예: 중간고사 대비 퀴즈"
-                className="w-full px-4 py-3 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] placeholder:text-[#9A9A9A] outline-none focus:bg-[#FDFBF7]"
-              />
-            </div>
-
-            {/* 난이도 */}
-            <div>
-              <label className="block text-sm font-bold text-[#1A1A1A] mb-2">난이도</label>
-              <div className="flex gap-2">
-                {([
-                  { value: 'easy' as const, label: '쉬움' },
-                  { value: 'normal' as const, label: '보통' },
-                  { value: 'hard' as const, label: '어려움' },
-                ]).map(({ value, label }) => (
-                  <motion.button
-                    key={value}
-                    type="button"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setEditDifficulty(value)}
-                    className={`flex-1 py-2.5 px-4 font-bold text-sm border-2 transition-all duration-200 ${
-                      editDifficulty === value
-                        ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                        : 'bg-[#EDEAE4] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
-                    }`}
-                  >
-                    {label}
-                  </motion.button>
-                ))}
+            {/* 퀴즈 제목 + 난이도 */}
+            <div className="border-2 border-[#1A1A1A] p-6 space-y-6 bg-[#F5F0E8]">
+              <div>
+                <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
+                  퀴즈 제목 <span className="text-[#8B1A1A]">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  placeholder="예: 중간고사 대비 퀴즈"
+                  className="w-full px-4 py-3 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] placeholder:text-[#9A9A9A] outline-none focus:bg-[#FDFBF7]"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-[#1A1A1A] mb-2">난이도</label>
+                <div className="flex gap-2">
+                  {([
+                    { value: 'easy' as const, label: '쉬움' },
+                    { value: 'normal' as const, label: '보통' },
+                    { value: 'hard' as const, label: '어려움' },
+                  ]).map(({ value, label }) => (
+                    <motion.button
+                      key={value}
+                      type="button"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setEditDifficulty(value)}
+                      className={`flex-1 py-2.5 px-4 font-bold text-sm border-2 transition-all duration-200 ${
+                        editDifficulty === value
+                          ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                          : 'bg-[#EDEAE4] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
+                      }`}
+                    >
+                      {label}
+                    </motion.button>
+                  ))}
+                </div>
               </div>
             </div>
 
-            {/* 태그 (선택) */}
-            <div>
-              <label className="block text-sm font-bold text-[#1A1A1A] mb-2">태그 (선택)</label>
-              {editTags.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {editTags.map((tag) => (
-                    <div
-                      key={tag}
-                      className="flex items-center gap-1 px-2 py-1 bg-[#1A1A1A] text-[#F5F0E8] text-sm font-medium"
-                    >
-                      #{tag}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveTag(tag)}
-                        className="ml-0.5 hover:text-[#D4CFC4]"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() => setShowTagPicker(!showTagPicker)}
-                className={`w-full py-2.5 text-sm font-bold border-2 transition-all duration-200 ${
-                  showTagPicker
-                    ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                    : 'bg-[#EDEAE4] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
-                }`}
-              >
-                {showTagPicker ? '태그 목록 닫기' : '태그 선택하기'}
-              </button>
-              <AnimatePresence>
-                {showTagPicker && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="overflow-hidden mt-2"
-                  >
-                    <div className="flex flex-wrap gap-2 p-3 bg-[#EDEAE4] border border-[#D4CFC4]">
-                      {tagOptions
-                        .filter(tag => !editTags.includes(tag))
-                        .map((tag) => (
-                          <button
-                            key={tag}
-                            type="button"
-                            onClick={() => setEditTags(prev => [...prev, tag])}
-                            className="px-3 py-1.5 text-sm font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
-                          >
-                            #{tag}
-                          </button>
-                        ))}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+            {/* 총평 + 태그 (간격 영역) */}
+            <div className="space-y-4">
+              {/* 총평 (선택) */}
+              <div>
+                <label className="block text-sm font-bold text-[#5C5C5C] mb-2">총평 (선택)</label>
+                <textarea
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  placeholder="학생들에게 전할 한마디를 입력하세요"
+                  rows={2}
+                  className="w-full px-4 py-3 border border-[#D4CFC4] bg-[#FDFBF7] text-[#1A1A1A] placeholder:text-[#9A9A9A] outline-none focus:border-[#1A1A1A] resize-none text-sm"
+                />
+              </div>
 
-            {/* 총평 (선택) */}
-            <div>
-              <label className="block text-sm font-bold text-[#1A1A1A] mb-2">총평 (선택)</label>
-              <textarea
-                value={editDescription}
-                onChange={(e) => setEditDescription(e.target.value)}
-                placeholder="학생들에게 전할 한마디를 입력하세요"
-                rows={3}
-                className="w-full px-4 py-3 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] placeholder:text-[#9A9A9A] outline-none focus:bg-[#FDFBF7] resize-none"
-              />
+              {/* 태그 (선택) */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="text-sm font-bold text-[#5C5C5C]">태그</label>
+                  <button
+                    type="button"
+                    onClick={() => setShowTagPicker(!showTagPicker)}
+                    className={`px-2.5 py-0.5 text-xs font-bold border transition-colors ${
+                      showTagPicker
+                        ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                        : 'bg-transparent text-[#5C5C5C] border-[#D4CFC4] hover:border-[#1A1A1A]'
+                    }`}
+                  >
+                    {showTagPicker ? '닫기' : '+ 추가'}
+                  </button>
+                </div>
+                {editTags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {editTags.map((tag) => (
+                      <div
+                        key={tag}
+                        className="flex items-center gap-1 px-2 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold"
+                      >
+                        #{tag}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveTag(tag)}
+                          className="ml-0.5 hover:text-[#D4CFC4]"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <AnimatePresence>
+                  {showTagPicker && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="flex flex-wrap gap-2 p-3 bg-[#EDEAE4] border border-[#D4CFC4]">
+                        {tagOptions
+                          .filter(tag => !editTags.includes(tag))
+                          .map((tag) => (
+                            <button
+                              key={tag}
+                              type="button"
+                              onClick={() => setEditTags(prev => [...prev, tag])}
+                              className="px-3 py-1.5 text-sm font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+                            >
+                              #{tag}
+                            </button>
+                          ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
           </motion.div>
         ) : (
-          <div>
-            <h2 className="text-2xl font-bold text-[#1A1A1A]">{quizTitle}</h2>
-            <p className="text-sm text-[#5C5C5C] mt-1">
-              {totalCount}문제 · {participantCount}명 참여
-              {rawQuizData?.difficulty && (
-                <span>
-                  {' '}· {rawQuizData.difficulty === 'easy' ? '쉬움' : rawQuizData.difficulty === 'hard' ? '어려움' : '보통'}
-                </span>
-              )}
-            </p>
-            {rawQuizData?.tags && rawQuizData.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {rawQuizData.tags.map((tag: string) => (
-                  <span key={tag} className="px-2 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold">
-                    #{tag}
+          <div className="space-y-4">
+            <div>
+              <h2 className={`text-2xl font-bold text-[#1A1A1A] ${
+                /^\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\.\s*\d{1,2}:\d{2}$/.test(quizTitle.trim()) ? '' : 'font-serif-display'
+              }`}>{quizTitle}</h2>
+              <p className="text-sm text-[#5C5C5C] mt-1">
+                {totalCount}문제 · {participantCount}명 참여
+                {rawQuizData?.difficulty && (
+                  <span>
+                    {' '}· {rawQuizData.difficulty === 'easy' ? '쉬움' : rawQuizData.difficulty === 'hard' ? '어려움' : '보통'}
                   </span>
-                ))}
-              </div>
-            )}
-            {rawQuizData?.description && (
-              <p className="text-sm text-[#5C5C5C] mt-2">
-                &ldquo;{rawQuizData.description}&rdquo;
+                )}
               </p>
+            </div>
+            {(rawQuizData?.description || (rawQuizData?.tags && rawQuizData.tags.length > 0)) && (
+              <div className="space-y-2">
+                {rawQuizData?.description && (
+                  <p className="text-sm text-[#5C5C5C] italic">
+                    &ldquo;{rawQuizData.description}&rdquo;
+                  </p>
+                )}
+                {rawQuizData?.tags && rawQuizData.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {rawQuizData.tags.map((tag: string) => (
+                      <span key={tag} className="px-2 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold">
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}

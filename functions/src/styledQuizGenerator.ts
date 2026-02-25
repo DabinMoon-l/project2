@@ -313,28 +313,74 @@ const BIOLOGY_FOCUS_GUIDE = `## 생물학 퀴즈 출제 포커스
 - **(고빈도) 활동전위**: 분극(-60mV) → 탈분극(+50mV) → 재분극
 - **(고빈도) 신경전달물질**: 아세틸콜린, 노르아드레날린, 세로토닌, 도파민`;
 
-const PATHOPHYSIOLOGY_FOCUS_GUIDE = `## 병태생리학 퀴즈 출제 포커스
-
-(추후 pathophysiologyFocusGuide.md 추가 예정)`;
-
-const MICROBIOLOGY_FOCUS_GUIDE = `## 미생물학 퀴즈 출제 포커스
-
-(추후 microFocusGuide.md 추가 예정)`;
+// 병태생리학/미생물학 Focus Guide: 아직 미작성 → null 처리
+// 작성 완료 시 BIOLOGY_FOCUS_GUIDE와 같은 형식으로 추가
+const PATHOPHYSIOLOGY_FOCUS_GUIDE: string | null = null;
+const MICROBIOLOGY_FOCUS_GUIDE: string | null = null;
 
 /**
  * 과목 ID로 Focus Guide 가져오기
+ * @param chapterNumbers - 추론된 챕터 번호 목록 (있으면 해당 챕터만 필터링)
  */
-function getFocusGuide(courseId: string): string | null {
+function getFocusGuide(courseId: string, chapterNumbers?: string[]): string | null {
+  let fullGuide: string | null = null;
   switch (courseId) {
     case "biology":
-      return BIOLOGY_FOCUS_GUIDE;
+      fullGuide = BIOLOGY_FOCUS_GUIDE;
+      break;
     case "pathophysiology":
-      return PATHOPHYSIOLOGY_FOCUS_GUIDE;
+      fullGuide = PATHOPHYSIOLOGY_FOCUS_GUIDE;
+      break;
     case "microbiology":
-      return MICROBIOLOGY_FOCUS_GUIDE;
+      fullGuide = MICROBIOLOGY_FOCUS_GUIDE;
+      break;
     default:
       return null;
   }
+
+  if (!fullGuide || !chapterNumbers || chapterNumbers.length === 0) {
+    return fullGuide;
+  }
+
+  // 챕터 번호로 해당 섹션만 필터링
+  // Focus Guide는 "### N장." 패턴으로 챕터 구분
+  return filterFocusGuideByChapters(fullGuide, chapterNumbers);
+}
+
+/**
+ * Focus Guide에서 특정 챕터 섹션만 추출
+ */
+function filterFocusGuideByChapters(guide: string, chapterNumbers: string[]): string | null {
+  const lines = guide.split("\n");
+  const filteredLines: string[] = [];
+  let currentChapter: string | null = null;
+  let includeCurrentChapter = false;
+  let headerAdded = false;
+
+  for (const line of lines) {
+    // 메인 헤더 (## 로 시작) — 항상 포함
+    if (line.startsWith("## ") && !line.startsWith("### ")) {
+      if (!headerAdded) {
+        filteredLines.push(line);
+        headerAdded = true;
+      }
+      continue;
+    }
+
+    // 챕터 섹션 감지: "### N장." 또는 "### N. " 패턴
+    const chapterMatch = line.match(/^###\s+(\d+)(?:장)?[.\s]/);
+    if (chapterMatch) {
+      currentChapter = chapterMatch[1];
+      includeCurrentChapter = chapterNumbers.includes(currentChapter);
+    }
+
+    if (includeCurrentChapter) {
+      filteredLines.push(line);
+    }
+  }
+
+  const result = filteredLines.join("\n").trim();
+  return result.length > 20 ? result : null; // 너무 짧으면 null
 }
 
 /**
@@ -356,14 +402,24 @@ function getCourseIndex(courseId: string): CourseIndex | null {
 /**
  * 챕터 인덱스를 프롬프트용 텍스트로 변환
  */
-function buildChapterIndexPrompt(courseId: string): string {
+function buildChapterIndexPrompt(courseId: string, filterChapters?: string[]): string {
   const index = getCourseIndex(courseId);
   if (!index) return "";
+
+  // filterChapters가 있으면 해당 챕터만 포함 (프롬프트 효율화)
+  const chapters = filterChapters && filterChapters.length > 0
+    ? index.chapters.filter(ch => {
+        const num = ch.id.split("_")[1];
+        return filterChapters.includes(num);
+      })
+    : index.chapters;
+
+  if (chapters.length === 0) return "";
 
   let text = `## 챕터 분류 체계 (각 문제에 반드시 할당)\n\n`;
   text += `과목: ${index.courseName}\n\n`;
 
-  for (const chapter of index.chapters) {
+  for (const chapter of chapters) {
     text += `- **${chapter.id}**: ${chapter.name}\n`;
     for (const detail of chapter.details) {
       text += `  - **${detail.id}**: ${detail.name}\n`;
@@ -390,6 +446,10 @@ export interface StyleContext {
 /**
  * 퀴즈 생성을 위한 Scope 로드 (최적화 버전)
  * 챕터 추론 + 난이도별 확장을 한번에 처리
+ *
+ * 핵심 원칙:
+ * - 추론된 챕터의 Scope만 메인 컨텐츠로 로드 (발문 근거)
+ * - HARD 난이도: 인접 챕터는 별도 섹션으로 분리 (오답 선지 참고용)
  */
 export async function loadScopeForQuiz(
   courseId: string,
@@ -400,31 +460,46 @@ export async function loadScopeForQuiz(
     // 텍스트에서 관련 챕터 추론
     const inferredChapters = await inferChaptersFromText(courseId, text);
 
-    let chaptersToLoad = inferredChapters;
-    let maxScopeLength = 12000;  // 기본값 줄여서 속도 향상
+    const maxScopeLength = 12000;
 
-    // HARD 난이도: 인접 챕터 확장
+    // 추론된 챕터만 Scope 로드 (발문 근거)
+    const scopeData = await loadScopeForAI(
+      courseId,
+      inferredChapters.length > 0 ? inferredChapters : undefined,
+      maxScopeLength
+    );
+
+    if (!scopeData) return null;
+
+    // HARD 난이도: 인접 챕터 내용을 별도로 로드 (오답 선지 참고용)
     if (difficulty === "hard" && inferredChapters.length > 0) {
-      const expandedChapters = new Set<string>();
+      const adjacentChapters = new Set<string>();
       for (const ch of inferredChapters) {
         const num = parseInt(ch);
         if (!isNaN(num)) {
-          expandedChapters.add(String(num - 1));
-          expandedChapters.add(String(num));
-          expandedChapters.add(String(num + 1));
-        } else {
-          expandedChapters.add(ch);
+          adjacentChapters.add(String(num - 1));
+          adjacentChapters.add(String(num + 1));
         }
       }
-      chaptersToLoad = Array.from(expandedChapters).filter(ch => parseInt(ch) > 0);
-      maxScopeLength = 18000;  // HARD는 좀 더 많이
+      // 이미 로드된 챕터 제외
+      const extraChapters = Array.from(adjacentChapters)
+        .filter(ch => parseInt(ch) > 0 && !inferredChapters.includes(ch));
+
+      if (extraChapters.length > 0) {
+        const adjacentScope = await loadScopeForAI(courseId, extraChapters, 6000);
+        if (adjacentScope && adjacentScope.content) {
+          // 메인 컨텐츠와 분리하여 오답 선지 참고용으로 표시
+          scopeData.content += `\n\n--- [오답 선지 참고용 인접 챕터] ---\n` +
+            `⚠️ 아래 내용은 발문(질문) 출제에 사용하지 마세요. 오답 선지 구성에만 참고하세요.\n` +
+            adjacentScope.content.slice(0, 4000);
+          scopeData.keywords.push(...adjacentScope.keywords);
+        }
+      }
     }
 
-    // Scope 로드
-    const scopeData = await loadScopeForAI(
-      courseId,
-      chaptersToLoad.length > 0 ? chaptersToLoad : undefined,
-      maxScopeLength
+    console.log(
+      `[loadScopeForQuiz] courseId=${courseId}, difficulty=${difficulty}, ` +
+      `추론 챕터=${inferredChapters.join(",")}, 로드 챕터=${scopeData.chaptersLoaded.join(",")}`
     );
 
     return scopeData;
@@ -446,7 +521,7 @@ const DIFFICULTY_PARAMS = {
     preferredTypes: ["OX", "DEFINITION_MATCH", "CLASSIFICATION"],
     cognitiveLevel: "기억/이해",
     trapStyle: "없음 (명확한 정오 구분)",
-    choiceStyle: "명확하게 구분되는 선지",
+    choiceStyle: "핵심 개념 중심의 명확한 선지 — 개념 정의, 특징, 분류를 직접적으로 물어보세요. 선지 간 차이가 분명해야 합니다.",
     stemLength: "짧은 발문 (1-2문장)",
     typeRatio: "OX 30%, 정의 매칭 40%, 분류 20%, 기타 10%",
     allowedFormats: ["multiple", "ox"],  // OX 허용
@@ -457,7 +532,7 @@ const DIFFICULTY_PARAMS = {
     preferredTypes: ["MECHANISM", "CLASSIFICATION", "COMPARISON"],
     cognitiveLevel: "적용/분석",
     trapStyle: "유사 용어 혼동, 시간 순서 교란",
-    choiceStyle: "유사한 개념이 섞인 선지",
+    choiceStyle: "유사 개념이 섞인 복잡한 선지 — 세부 특징 비교, 과정 순서, 기전 연결 등을 물어보세요.",
     stemLength: "중간 길이 발문 (2-3문장)",
     typeRatio: "기전 40%, 분류 30%, 비교 20%, 기타 10%",
     allowedFormats: ["multiple"],
@@ -468,7 +543,7 @@ const DIFFICULTY_PARAMS = {
     preferredTypes: ["NEGATIVE", "MULTI_SELECT", "CLINICAL_CASE", "MECHANISM", "BOGI_SELECT"],
     cognitiveLevel: "분석/평가",
     trapStyle: "정상비정상 뒤집기, 수치방향 뒤집기, 부분전체 혼동",
-    choiceStyle: "미묘한 차이가 있는 선지, 복수 정답 가능성",
+    choiceStyle: "미묘한 차이가 있는 선지, 복수 정답 가능 — 단, 문제 주제는 반드시 학습 자료/지시사항 범위 내에서만. 다른 챕터 주제로 문제를 내면 안 됩니다.",
     stemLength: "긴 발문 또는 케이스 시나리오",
     typeRatio: "부정형 25%, 보기문제 20%, 임상케이스 20%, 다중선택 20%, 기전 15%",
     allowedFormats: ["multiple"],
@@ -628,21 +703,25 @@ ${formatInstructions}
 /**
  * Scope 컨텍스트 프롬프트 생성
  */
-function buildScopeContextPrompt(context: StyleContext): string {
+function buildScopeContextPrompt(context: StyleContext, hasProfessorPrompt: boolean): string {
   if (!context.scope || !context.scope.content) {
     return "";
   }
 
   const { content, chaptersLoaded } = context.scope;
 
+  // professorPrompt가 있으면 scope를 8000자로 축소 (프롬프트 주제에 집중하도록)
+  const maxLen = hasProfessorPrompt ? 8000 : 12000;
+
   return `
-## 과목 전체 범위 (참고용 — 출제 원천 아님)
-> ⚠️ 아래는 용어 정확성 확인과 오답 선지 구성을 위한 참고 자료입니다.
-> **문제의 발문(질문)은 반드시 위 '학습 자료'에서 출제하세요.**
-> 이 과목 범위에만 있고 학습 자료에 없는 내용으로 문제를 만들지 마세요.
+## 참고 자료 (⛔ 발문 출제 금지 — 선지 검증 전용)
+> 🚫 **절대 금지**: 이 섹션의 내용으로 문제의 발문(질문 주제)을 만드는 것.
+> ✅ **허용 용도만**: (1) 오답 선지에 쓸 유사 용어 확인 (2) 정답의 학술 정확성 검증 (3) 어려움 난이도에서 함정 오답 구성
+> **발문(질문)은 반드시 위의 '학습 자료' + '최우선 지시사항' + '포커스 가이드'에서만 출제하세요.**
+> 이 참고 자료에만 있고 위 출제 원천에 없는 내용으로 문제를 만들면 탈락입니다.
 > 로드된 챕터: ${chaptersLoaded.join(", ")}장
 
-${content.slice(0, 12000)}
+${content.slice(0, maxLen)}
 `;
 }
 
@@ -661,26 +740,40 @@ export function buildFullPrompt(
   availableImages: CroppedImage[] = [],
   courseCustomized: boolean = true,
   sliderWeights?: { style: number; scope: number; focusGuide: number },
-  professorPrompt?: string
+  professorPrompt?: string,
+  hasPageImages: boolean = false
 ): string {
   // 슬라이더 가중치에 따른 조건부 포함
   const skipStyle = sliderWeights && sliderWeights.style < 10;
   const skipScope = sliderWeights && sliderWeights.scope < 10;
   const skipFocusGuide = sliderWeights && sliderWeights.focusGuide < 10;
 
+  // Scope에서 로드된 챕터 번호 (여러 곳에서 사용)
+  const scopeChapters = context.scope?.chaptersLoaded;
+
   const styleContext = courseCustomized && !skipStyle ? buildStyleContextPrompt(context) : "";
   const difficultyPrompt = buildDifficultyPrompt(difficulty, context);
-  const scopeContext = courseCustomized && !skipScope ? buildScopeContextPrompt(context) : "";
-  const chapterIndexPrompt = courseCustomized ? buildChapterIndexPrompt(courseId) : "";
-  const focusGuide = courseCustomized && !skipFocusGuide ? getFocusGuide(courseId) : null;
+  const scopeContext = courseCustomized && !skipScope ? buildScopeContextPrompt(context, !!professorPrompt) : "";
+  const chapterIndexPrompt = courseCustomized ? buildChapterIndexPrompt(courseId, scopeChapters) : "";
+  const focusGuide = courseCustomized && !skipFocusGuide ? getFocusGuide(courseId, scopeChapters) : null;
 
-  // 슬라이더 가중치별 프롬프트 강도 접두사
-  const getWeightPrefix = (value: number): string => {
+  // 슬라이더 가중치 → 문제 수 비율로 변환
+  // scope와 focusGuide의 비율을 문제 수로 분배
+  const scopeWeight = sliderWeights ? sliderWeights.scope : 50;
+  const focusWeight = sliderWeights ? sliderWeights.focusGuide : 50;
+
+  // focusGuide vs scope 문제 수 분배 (둘 다 10 이상일 때)
+  const totalWeight = (skipScope ? 0 : scopeWeight) + (skipFocusGuide ? 0 : focusWeight);
+  const focusQuestionCount = totalWeight > 0 && !skipFocusGuide
+    ? Math.round(questionCount * (focusWeight / totalWeight))
+    : 0;
+  const scopeQuestionCount = questionCount - focusQuestionCount;
+
+  // 스타일 반영 강도 (문제 수 비율은 아니지만 명확한 지시로 변환)
+  const getStylePrefix = (value: number): string => {
     if (value < 10) return "";
-    if (value < 50) return "(참고용입니다. 반드시 따르지 않아도 됩니다.)";
-    if (value < 75) return "(적극적으로 참고하여 출제하세요.)";
-    if (value < 95) return "(최대한 반영하여 출제하세요. 이 기준에서 벗어나지 마세요.)";
-    return "(반드시 따르세요. 이 지시사항을 벗어나는 문제는 생성하지 마세요.)";
+    const ratio = Math.round((value / 100) * questionCount);
+    return `(${questionCount}문제 중 약 ${ratio}문제는 아래 출제 스타일을 따르세요. 나머지는 자유롭게 출제하세요.)`;
   };
 
   // Scope가 있으면 "출제 범위"로, 없으면 "학습 자료"로 표현
@@ -760,24 +853,51 @@ export function buildFullPrompt(
     contentRule = "**내용 기반**: 위 학습 자료에 있는 내용으로만 문제를 만드세요. 학습 자료에 없는 내용을 지어내지 마세요.";
   }
 
+  // professorPrompt가 있으면 모든 contentRule에 최우선 규칙 추가
+  if (professorPrompt) {
+    contentRule = `**최우선**: 위 '최우선 출제 지시사항'의 키워드/주제를 반드시 반영하세요. ` + contentRule;
+  }
+
+  // 추론된 챕터가 있으면 contentRule 앞에 명시적 챕터 제한 추가
+  // (매우 짧은 텍스트에서도 적용 — 다른 챕터 침범 방지)
+  if (scopeChapters && scopeChapters.length > 0) {
+    const chapterList = scopeChapters.join(", ");
+    contentRule = `🔒 **챕터 제한**: ${chapterList}장 범위에서만 출제하세요. ` +
+      `다른 챕터의 내용으로 문제를 만들면 탈락입니다.\n   ` +
+      contentRule;
+  }
+
   // HARD 난이도 추가 지침
-  const hardModeExtra = isHard && hasScope ? `
-## 어려움 난이도 선지 구성 전략
+  const hardModeExtra = isHard ? `
+## 어려움 난이도 추가 지침
 
-⚠️ **주의**: 아래 전략은 오답 선지 구성에만 적용하세요. 발문(질문) 자체는 반드시 학습 자료 내용에서 출제해야 합니다.
+### 형식 비율 (${questionCount}문제 기준 — 반드시 지켜주세요)
+- 부정형 ("옳지 않은 것"): **${Math.max(1, Math.round(questionCount * 0.25))}문제**
+- 보기 문제 (ㄱ,ㄴ,ㄷ + bogi 필드 포함): **${Math.max(1, Math.round(questionCount * 0.2))}문제**
+- 복수정답 (answer를 배열로): **${Math.max(1, Math.round(questionCount * 0.15))}문제**
+- 나머지: 기전/임상케이스/일반 객관식
 
-1. **유사 용어 혼동**: 학습 자료에 나온 개념과 비슷한 이름의 다른 개념을 오답으로 활용
-2. **교차 챕터 함정**: 학습 자료의 개념과 비슷하지만 다른 챕터의 개념을 오답으로 배치
-3. **기전 연결 오류**: 원인-결과 관계를 다른 챕터의 기전과 섞어서 오답으로 구성
-4. **복수 정답 가능성**: 부분적으로 맞는 선지를 배치하여 "가장 적절한 것" 판단 요구
-5. **지엽적 내용 허용**: 학습 자료의 세부 내용에서도 문제 출제 가능
+### 오답 선지 구성 전략
+⚠️ 아래 전략은 **오답 선지 구성에만** 적용됩니다.
+🚫 **절대 금지**: 발문(질문 주제) 자체를 학습 자료/지시사항과 다른 챕터에서 가져오는 것.
+
+1. **유사 용어 혼동**: 학습 자료의 개념과 비슷한 이름의 다른 개념을 오답으로 활용
+2. **교차 챕터 함정**: 다른 챕터의 유사 개념을 오답 선지에 배치
+3. **기전 연결 오류**: 원인-결과 관계를 다른 기전과 섞어서 오답 구성
+4. **복수 정답 가능성**: 부분적으로 맞는 선지로 "가장 적절한 것" 판단 요구
 ` : "";
 
-  // 사용 가능한 이미지 정보 (HARD 난이도 전용)
+  // 사용 가능한 이미지 정보
   let imageSection = "";
   let imageRule = "9. **이미지 참조 금지**: 그림, 도표, 그래프를 참조하는 문제는 생성하지 마세요. 학습자료에 이미지가 있어도 텍스트 기반 문제만 출제하세요";
 
-  if (isHard && availableImages.length > 0) {
+  // 페이지 이미지가 inlineData로 첨부된 경우 (모든 난이도) — HARD 크롭 이미지보다 우선
+  if (hasPageImages) {
+    imageRule = `9. **첨부 이미지 참고**: 이 요청에는 학습 자료의 페이지 이미지가 함께 첨부되어 있습니다.
+   - 이미지에 포함된 도표, 그래프, 해부도, 그림 등의 시각 자료를 적극 참고하여 문제를 출제하세요.
+   - 텍스트에 누락된 내용이 이미지에 있을 수 있으니, 텍스트와 이미지를 함께 분석하세요.
+   - 단, 문제 자체에 "다음 그림을 보고"와 같은 이미지 참조 문구는 사용하지 마세요 (학생에게는 이미지가 표시되지 않습니다).`;
+  } else if (isHard && availableImages.length > 0) {
     imageSection = `
 ## 사용 가능한 이미지 (HARD 난이도 전용)
 학습 자료에서 추출된 그림/표/그래프입니다. 일부 문제에 이미지를 활용할 수 있습니다.
@@ -836,38 +956,49 @@ ${focusInstruction}
 `;
   }
 
-  // 교수 프롬프트 섹션
-  const professorPromptSection = professorPrompt ? `
-## 교수님 지시사항
-${professorPrompt}
+  // 교수 프롬프트 섹션 — 최상위 우선순위 (최대 1000자)
+  const trimmedProfessorPrompt = professorPrompt?.slice(0, 1000);
+  const professorPromptSection = trimmedProfessorPrompt ? `
+## 🔴 최우선 출제 지시사항
+> **경고: 이 지시사항은 모든 다른 규칙보다 우선합니다.**
+> 아래 내용에 언급된 키워드/주제/범위를 중심으로 문제를 출제하세요.
+> 아래 학습 자료가 있다면, 이 지시사항의 키워드가 학습 자료에서 다루는 부분을 집중 출제하세요.
+> 이 지시사항과 무관한 주제로 문제를 만들면 탈락입니다.
+
+${trimmedProfessorPrompt}
 ` : "";
 
-  // 슬라이더 가중치 접두사를 각 섹션에 적용
-  const stylePrefix = sliderWeights ? getWeightPrefix(sliderWeights.style) : "";
-  const scopePrefix = sliderWeights ? getWeightPrefix(sliderWeights.scope) : "";
-  const focusPrefix = sliderWeights ? getWeightPrefix(sliderWeights.focusGuide) : "";
+  // 슬라이더 가중치 → 문제 수 비율 접두사
+  const stylePrefix = sliderWeights ? getStylePrefix(sliderWeights.style) : "";
+
+  const scopeRatioPrefix = !skipScope && !skipFocusGuide && totalWeight > 0
+    ? `(${questionCount}문제 중 약 ${scopeQuestionCount}문제는 이 넓은 범위에서 출제하세요.)`
+    : "";
+  const focusRatioPrefix = !skipFocusGuide && !skipScope && totalWeight > 0
+    ? `(${questionCount}문제 중 약 ${focusQuestionCount}문제는 아래 핵심 포인트에서 출제하세요.)`
+    : "";
 
   const styledStyleContext = styleContext && stylePrefix ? `${stylePrefix}\n${styleContext}` : styleContext;
-  const styledScopeContext = scopeContext && scopePrefix ? `${scopePrefix}\n${scopeContext}` : scopeContext;
-  const styledFocusGuide = focusGuideSection && focusPrefix ? `${focusPrefix}\n${focusGuideSection}` : focusGuideSection;
+  const styledScopeContext = scopeContext && scopeRatioPrefix ? `${scopeRatioPrefix}\n${scopeContext}` : scopeContext;
+  const styledFocusGuide = focusGuideSection && focusRatioPrefix ? `${focusRatioPrefix}\n${focusGuideSection}` : focusGuideSection;
 
   return `당신은 ${courseName} 과목의 대학 교수입니다.
 학생들의 시험을 준비시키기 위한 객관식 문제 ${questionCount}개를 만들어주세요.
 ${professorPromptSection}
-${styledStyleContext}
-${difficultyPrompt}
-${styledFocusGuide}
-${styledScopeContext}
-${chapterIndexPrompt}
-${imageSection}
 ## ${uploadedTextLabel}
 ${ocrText.slice(0, 6000)}
+${styledFocusGuide}
+${difficultyPrompt}
+${styledStyleContext}
 ${hardModeExtra}
+${chapterIndexPrompt}
+${imageSection}
+${styledScopeContext}
 ## Step 1: 문제 생성 규칙
 
 1. ${contentRule}
 2. **문제 수**: 정확히 ${questionCount}개
-3. **선지 수**: 각 문제당 4~5개 (OX 문제 제외)
+3. **선지 수**: 객관식은 반드시 **5개** 선지 (OX 문제 제외)
 4. **난이도 일관성**: 모든 문제가 ${difficulty.toUpperCase()} 난이도에 맞아야 합니다
 5. **다양성**: 같은 개념을 반복하지 말고 다양한 주제를 다루세요
 6. **한국어**: 모든 내용을 한국어로 작성하세요
@@ -876,34 +1007,42 @@ ${hardModeExtra}
 ${imageRule}
 10. **핵심 집중도**: ${allowDetailedQuestions ? "세부 출제 허용 - 핵심 개념 + 학습 자료의 세부 사항 모두 출제 가능합니다." : isLowQuestionCount ? "핵심 집중 - 문제 수가 적으므로 가장 핵심적인 내용만 출제하세요. 지엽적인 내용, 예외 케이스, 세부 사항은 제외합니다." : "핵심 우선 - 핵심 개념 위주로 출제하되, 일부 세부 내용도 포함할 수 있습니다."}
 
-## Step 2: 자기 검증 (필수 - 매우 중요!)
-생성한 각 문제에 대해 다음 체크리스트를 **철저히** 수행하세요:
+## Step 2: 내부 검증 규칙 (JSON 출력 전 반드시 적용)
+각 문제를 JSON에 포함하기 **전에** 아래 기준을 통과하는지 내부적으로 확인하세요.
+통과하지 못하는 문제는 **JSON에 포함하지 말고 새로운 문제로 교체**하세요.
 
-1. **정답 근거 확인**: 정답으로 선택한 보기가 학습자료의 어느 부분에 근거하는지 확인. 학습자료에 명시되지 않은 내용은 정답이 될 수 없음
-2. **오답 소거법**: 각 오답 보기가 왜 틀린지 학습자료 기반으로 명확한 근거 확인
-3. **함정 검증**: 문제가 "옳은 것"을 묻는지 "틀린 것"을 묻는지, "해당하는 것"인지 "해당하지 않는 것"인지 재확인하고, 정답이 문제의 방향과 일치하는지 점검
-4. **사실 정확성**: 모든 선지의 내용이 학술적으로 정확한지 재확인. 틀린 정보를 포함한 선지는 반드시 오답이어야 함
-5. **정답 번호 확인**: answer 인덱스가 실제 정답 선지의 위치와 일치하는지 최종 확인
-6. **선지별 해설 검증**: 각 선지가 왜 정답/오답인지 설명이 학습자료에 근거하는지 확인
+❌ **탈락 기준** (하나라도 해당되면 해당 문제를 JSON에 포함하지 마세요):
+- 정답 근거가 학습자료에 없는 문제
+- 발문 방향("옳은 것"/"틀린 것")과 answer가 불일치하는 문제
+- 학술적으로 부정확한 선지가 정답으로 설정된 문제
+- answer 인덱스가 choices 배열 범위를 벗어나는 문제
+- 학습 자료와 무관한 챕터(chapterId)의 문제
+- 불확실하거나 추측에 기반한 문제
+- 최우선 지시사항이 있는데 해당 주제와 무관한 문제
 
-⚠️ **경고**: 틀린 정보를 정답으로 제시하거나, 맞는 정보를 오답으로 제시하면 안 됩니다. 불확실하면 해당 문제를 생성하지 마세요.
-
-검증에서 오류 발견 시 반드시 수정 후 출력하세요.
+✅ **포함 기준** (모두 충족해야 함):
+- 정답의 근거가 학습자료에 명확히 존재
+- 모든 오답 선지가 왜 틀린지 학습자료 기반으로 설명 가능
+- choiceExplanations이 각 선지별로 정확한 근거 포함
+- chapterId가 학습 자료의 실제 챕터와 일치
+- 최우선 지시사항의 키워드가 문제에 반영됨 (지시사항이 있는 경우)
 
 ## Step 3: 출력 형식
 반드시 아래 JSON 형식으로만 응답하세요:
 {
+  "title": "핵심 키워드 한 단어 (예: 세포분열, 염증, DNA복제 — 이 문제들의 주제를 대표하는 한국어 키워드)",
   "questions": [
     {
       "text": "문제 내용",
-      "choices": ["선지1", "선지2", "선지3", "선지4"],
+      "choices": ["선지1", "선지2", "선지3", "선지4", "선지5"],
       "answer": 0,
       "explanation": "정답 해설 (왜 이것이 정답인지)",
       "choiceExplanations": [
         "선지1 해설: 정답인 이유 또는 오답인 이유",
         "선지2 해설: 오답인 이유 (구체적으로)",
         "선지3 해설: 오답인 이유 (구체적으로)",
-        "선지4 해설: 오답인 이유 (구체적으로)"
+        "선지4 해설: 오답인 이유 (구체적으로)",
+        "선지5 해설: 오답인 이유 (구체적으로)"
       ],
       "questionType": "DEFINITION_MATCH",
       "trapPattern": "유사용어_혼동",
@@ -930,32 +1069,128 @@ ${imageRule}
 - trapPattern은 사용한 함정 패턴이며, 없으면 생략하세요.
 - chapterId는 문제가 속하는 챕터 ID입니다 (필수).
 - chapterDetailId는 세부 주제 ID입니다 (세부 주제가 있으면 필수, 없으면 생략).
-- figureId는 이미지를 참조할 때만 포함하세요 (예: "figure_1"). 이미지가 없으면 생략.`;
+- figureId는 이미지를 참조할 때만 포함하세요 (예: "figure_1"). 이미지가 없으면 생략.
+- bogi는 어려움 난이도에서 ㄱ,ㄴ,ㄷ 보기 문제일 때만 포함. 예: {"questionText": "옳은 것만을 <보기>에서 있는 대로 고른 것은?", "items": [{"label": "ㄱ", "content": "내용1"}, {"label": "ㄴ", "content": "내용2"}, {"label": "ㄷ", "content": "내용3"}]}. 보기 문제가 아니면 생략.`;
 }
 
 // ============================================================
 // Gemini API 호출
 // ============================================================
 
+/**
+ * Truncated JSON에서 유효한 문제들을 복구
+ * maxOutputTokens 도달로 JSON이 중간에 잘렸을 때 사용
+ */
+function recoverTruncatedQuestions(jsonText: string): GeneratedQuestion[] {
+  // questions 배열 시작 지점 찾기
+  const questionsStart = jsonText.indexOf('"questions"');
+  if (questionsStart === -1) return [];
+
+  const arrayStart = jsonText.indexOf("[", questionsStart);
+  if (arrayStart === -1) return [];
+
+  // 개별 문제 객체를 하나씩 추출 시도
+  const questions: GeneratedQuestion[] = [];
+  let depth = 0;
+  let objStart = -1;
+
+  for (let i = arrayStart + 1; i < jsonText.length; i++) {
+    const ch = jsonText[i];
+
+    // 문자열 내부 스킵
+    if (ch === '"') {
+      i++;
+      while (i < jsonText.length && jsonText[i] !== '"') {
+        if (jsonText[i] === "\\") i++; // 이스케이프 문자 스킵
+        i++;
+      }
+      continue;
+    }
+
+    if (ch === "{") {
+      if (depth === 0) objStart = i;
+      depth++;
+    } else if (ch === "}") {
+      depth--;
+      if (depth === 0 && objStart !== -1) {
+        const objStr = jsonText.slice(objStart, i + 1);
+        try {
+          const q = JSON.parse(objStr);
+          if (q.text && (q.answer !== undefined)) {
+            questions.push({
+              text: q.text,
+              type: q.type || "multiple",
+              choices: q.choices,
+              answer: q.answer,
+              explanation: q.explanation || "",
+              choiceExplanations: q.choiceExplanations,
+              questionType: q.questionType,
+              chapterId: q.chapterId,
+              chapterDetailId: q.chapterDetailId,
+              bogi: q.bogi || undefined,
+            });
+          }
+        } catch {
+          // 개별 객체 파싱 실패 → 스킵
+        }
+        objStart = -1;
+      }
+    }
+  }
+
+  return questions;
+}
+
+export interface GeminiResult {
+  questions: GeneratedQuestion[];
+  title?: string; // Gemini가 생성한 키워드 제목
+}
+
 export async function generateWithGemini(
   prompt: string,
   apiKey: string,
   questionCount: number = 5,
-  availableImages: CroppedImage[] = []
-): Promise<GeneratedQuestion[]> {
-  // 문제 수에 따라 토큰 수 조절 (속도 최적화)
-  const estimatedTokensPerQuestion = 350;
-  const maxTokens = Math.min(questionCount * estimatedTokensPerQuestion + 500, 4096);
+  availableImages: CroppedImage[] = [],
+  pageImages: string[] = []
+): Promise<GeminiResult> {
+  // 문제 수에 따라 토큰 수 조절
+  // 각 문제당 ~500토큰 필요 (선지별 해설 포함)
+  const estimatedTokensPerQuestion = 500;
+  const baseMaxTokens = Math.min(questionCount * estimatedTokensPerQuestion + 500, 8192);
+  // 최소 8192 보장 (truncation 방지)
+  const maxTokens = Math.max(baseMaxTokens, 8192);
+
+  // 페이지 이미지를 inlineData parts로 변환 (최대 10장)
+  const imageParts: Array<{ inlineData: { mimeType: string; data: string } }> = [];
+  for (const img of pageImages.slice(0, 10)) {
+    // data:image/jpeg;base64,... 형식에서 base64 데이터 추출
+    const match = img.match(/^data:(image\/[^;]+);base64,(.+)$/);
+    if (match) {
+      imageParts.push({
+        inlineData: { mimeType: match[1], data: match[2] },
+      });
+    }
+  }
+
+  const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
+    ...imageParts,
+    { text: prompt },
+  ];
 
   const requestBody = {
-    contents: [{ parts: [{ text: prompt }] }],
+    contents: [{ parts }],
     generationConfig: {
       temperature: 0.5,  // 낮은 temperature = 더 빠른 생성
       topK: 32,
       topP: 0.9,
       maxOutputTokens: maxTokens,
+      responseMimeType: "application/json", // JSON 모드 강제 — 파싱 실패 방지
     },
   };
+
+  if (imageParts.length > 0) {
+    console.log(`[Gemini API] 페이지 이미지 ${imageParts.length}장 inlineData로 전송`);
+  }
 
   const startTime = Date.now();
 
@@ -986,16 +1221,32 @@ export async function generateWithGemini(
     throw new Error("AI 응답을 받지 못했습니다.");
   }
 
+  // 토큰 한도 도달 여부 확인
+  const finishReason = result.candidates[0].finishReason;
+  if (finishReason === "MAX_TOKENS") {
+    console.warn(`[Gemini] ⚠️ maxOutputTokens(${maxTokens}) 도달 — 응답이 잘렸을 수 있음`);
+  }
+
   const textContent = result.candidates[0].content.parts
     .filter((p: any) => p.text)
     .map((p: any) => p.text)
     .join("");
 
-  // JSON 추출
-  let jsonText = textContent;
-  const jsonMatch = textContent.match(/```(?:json)?\s*([\s\S]*?)```/);
+  // JSON 추출 (여러 전략 시도)
+  let jsonText = textContent.trim();
+
+  // 전략 1: 코드 블록에서 추출 (greedy — 가장 큰 블록 매칭)
+  const jsonMatch = textContent.match(/```(?:json)?\s*([\s\S]*)```/);
   if (jsonMatch) {
     jsonText = jsonMatch[1].trim();
+  }
+  // 전략 2: 코드 블록이 없으면 첫 번째 { 부터 마지막 } 까지 추출
+  else {
+    const firstBrace = textContent.indexOf("{");
+    const lastBrace = textContent.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      jsonText = textContent.slice(firstBrace, lastBrace + 1);
+    }
   }
 
   try {
@@ -1017,23 +1268,32 @@ export async function generateWithGemini(
     // 문제 유효성 검사
     const validQuestions: GeneratedQuestion[] = [];
     for (const q of parsed.questions) {
-      // 정답 유효성 검사 (단일 정답 또는 복수 정답)
+      // OX 문제 감지 (type이 "ox"이거나 answer가 "O"/"X" 문자열)
+      const isOxQuestion = q.type === "ox" ||
+        (typeof q.answer === "string" && (q.answer === "O" || q.answer === "X"));
+
+      // 정답 유효성 검사 (단일 정답, 복수 정답, OX)
       let isValidAnswer = false;
-      if (typeof q.answer === "number") {
+      if (isOxQuestion) {
+        // OX 문제: "O" 또는 "X" 문자열
+        isValidAnswer = q.answer === "O" || q.answer === "X";
+      } else if (typeof q.answer === "number") {
         // 단일 정답: 0-indexed
-        isValidAnswer = q.answer >= 0 && q.answer < q.choices.length;
+        isValidAnswer = q.choices && q.answer >= 0 && q.answer < q.choices.length;
       } else if (Array.isArray(q.answer)) {
         // 복수 정답: 모든 인덱스가 유효해야 함
-        isValidAnswer = q.answer.length > 0 &&
+        isValidAnswer = q.choices && q.answer.length > 0 &&
           q.answer.every((a: number) =>
             typeof a === "number" && a >= 0 && a < q.choices.length
           );
       }
 
+      // OX 문제는 choices 없어도 유효
+      const hasValidChoices = isOxQuestion || (Array.isArray(q.choices) && q.choices.length >= 2);
+
       if (
         q.text &&
-        Array.isArray(q.choices) &&
-        q.choices.length >= 2 &&
+        hasValidChoices &&
         isValidAnswer
       ) {
         // figureId가 있으면 imageUrl로 매핑
@@ -1047,14 +1307,16 @@ export async function generateWithGemini(
 
         validQuestions.push({
           text: q.text,
-          choices: q.choices,
+          type: isOxQuestion ? "ox" : (q.type || "multiple"),
+          choices: isOxQuestion ? undefined : q.choices,
           answer: q.answer,
           explanation: q.explanation || "",
-          choiceExplanations: Array.isArray(q.choiceExplanations) ? q.choiceExplanations : undefined,
+          choiceExplanations: isOxQuestion ? undefined : (Array.isArray(q.choiceExplanations) ? q.choiceExplanations : undefined),
           questionType: q.questionType,
           trapPattern: q.trapPattern,
           chapterId: q.chapterId,           // 챕터 ID (Gemini 할당)
           chapterDetailId: q.chapterDetailId, // 세부 챕터 ID (Gemini 할당)
+          bogi: q.bogi || undefined,         // 보기 (ㄱㄴㄷ)
           imageUrl,                          // 크롭된 이미지 URL
           imageDescription,                  // 이미지 설명
         });
@@ -1065,9 +1327,25 @@ export async function generateWithGemini(
       throw new Error("유효한 문제가 없습니다.");
     }
 
-    return validQuestions;
+    // Gemini가 생성한 키워드 제목 추출
+    const generatedTitle = typeof parsed.title === "string" ? parsed.title.trim() : undefined;
+
+    return { questions: validQuestions, title: generatedTitle };
   } catch (parseError) {
-    console.error("JSON 파싱 오류:", parseError);
+    // Truncated JSON 복구 시도: maxOutputTokens 도달로 잘린 경우
+    console.warn("JSON 파싱 실패, truncated JSON 복구 시도...");
+    console.error("원본 응답 (앞 500자):", textContent.slice(0, 500));
+
+    try {
+      const recovered = recoverTruncatedQuestions(jsonText);
+      if (recovered.length > 0) {
+        console.log(`[Gemini] Truncated JSON에서 ${recovered.length}개 문제 복구 성공`);
+        return { questions: recovered };
+      }
+    } catch (recoveryError) {
+      console.error("Truncated JSON 복구 실패:", recoveryError);
+    }
+
     throw new Error("AI 응답을 파싱할 수 없습니다. 다시 시도해주세요.");
   }
 }
@@ -1223,7 +1501,7 @@ export const generateStyledQuiz = onCall(
       console.log(`[문제 생성 시작] 과목: ${courseName}, 난이도: ${validDifficulty}, 개수: ${validQuestionCount}, 이미지: ${croppedImages.length}개`);
 
       // Gemini 호출 (문제 수와 이미지 전달)
-      const questions = await generateWithGemini(
+      const { questions } = await generateWithGemini(
         prompt,
         apiKey,
         validQuestionCount,

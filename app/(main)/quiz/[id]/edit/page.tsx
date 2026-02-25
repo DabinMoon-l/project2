@@ -569,6 +569,7 @@ export default function EditQuizPage() {
             const hasChanged = !originalQ || passageChanged || isQuestionChangedForSubQuestion(originalQ, sq);
 
             const subQuestionData: any = {
+              ...(originalQ || {}),
               id: sq.id || `${combinedGroupId}_${sqIndex}`,
               order: orderIndex++,
               text: sq.text,
@@ -619,6 +620,7 @@ export default function EditQuizPage() {
           const hasChanged = isQuestionChanged(originalQ, q);
 
           flattenedQuestions.push(sanitizeForFirestore({
+            ...(originalQ || {}),
             id: q.id,
             order: orderIndex++,
             text: q.text,

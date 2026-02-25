@@ -1739,7 +1739,7 @@ export default function FolderDetailPage() {
           // quizQuestions를 questionId로 매핑
           const questionMap = new Map<string, any>();
           quizQuestions.forEach((q: any, idx: number) => {
-            const qId = q.questionId || `q${idx}`;
+            const qId = q.id || `q${idx}`;
             questionMap.set(qId, q);
           });
 

@@ -153,7 +153,7 @@ export const workerProcessJob = onDocumentCreated(
       // materialFingerprint 캐시 조회
       // ========================================
       const startTime = Date.now();
-      const fingerprint = buildMaterialFingerprint(trimmedText, courseId, images);
+      const fingerprint = buildMaterialFingerprint(trimmedText, courseId, images, validDifficulty);
       const cached = await getMaterialCache(fingerprint);
       let cacheHit = false;
 
@@ -184,6 +184,9 @@ export const workerProcessJob = onDocumentCreated(
         const skipStyle = sliderWeights && sliderWeights.style < 10;
         const skipScope = sliderWeights && sliderWeights.scope < 10;
 
+        // professorPrompt와 OCR 텍스트를 합쳐서 챕터 추론 정확도 향상
+        const combinedText = [trimmedText, professorPrompt].filter(Boolean).join("\n");
+
         const [profileDoc, keywordsDoc, scopeResult] = await Promise.all([
           !skipStyle
             ? analysisRef.collection("data").doc("styleProfile").get()
@@ -192,7 +195,7 @@ export const workerProcessJob = onDocumentCreated(
             ? analysisRef.collection("data").doc("keywords").get()
             : Promise.resolve(null),
           shouldLoadScope && !skipScope
-            ? loadScopeForQuiz(courseId, trimmedText || "general", validDifficulty)
+            ? loadScopeForQuiz(courseId, combinedText || "general", validDifficulty)
             : Promise.resolve(null),
         ]);
 
@@ -247,6 +250,9 @@ export const workerProcessJob = onDocumentCreated(
       // ========================================
       // 프롬프트 생성 + Gemini 호출
       // ========================================
+      // 페이지 이미지 필터링 (data:image 형식만 — Gemini inlineData 전송용)
+      const pageImages = images.filter((img: string) => img.startsWith("data:image/"));
+
       const prompt = buildFullPrompt(
         trimmedText,
         validDifficulty,
@@ -259,20 +265,23 @@ export const workerProcessJob = onDocumentCreated(
         croppedImages,
         courseCustomized,
         sliderWeights ? { style: sliderWeights.style, scope: sliderWeights.scope, focusGuide: sliderWeights.focusGuide } : undefined,
-        professorPrompt
+        professorPrompt,
+        pageImages.length > 0
       );
 
       console.log(
         `[Worker] Job ${jobId} 문제 생성 시작: ` +
         `과목=${courseName}, 난이도=${validDifficulty}, 개수=${validQuestionCount}, 맞춤형=${courseCustomized}` +
+        `, 페이지이미지=${pageImages.length}장` +
         (sliderWeights ? `, 슬라이더=${JSON.stringify(sliderWeights)}` : "")
       );
 
-      const questions = await generateWithGemini(
+      const { questions, title: generatedTitle } = await generateWithGemini(
         prompt,
         apiKey,
         validQuestionCount,
-        croppedImages
+        croppedImages,
+        pageImages
       );
 
       const questionsWithImages = questions.filter((q) => q.imageUrl).length;
@@ -315,6 +324,7 @@ export const workerProcessJob = onDocumentCreated(
             croppedImagesCount: croppedImages.length,
             questionsWithImages,
             materialCacheHit: cacheHit,
+            ...(generatedTitle ? { title: generatedTitle } : {}),
           },
         },
         completedAt: FieldValue.serverTimestamp(),
@@ -499,7 +509,7 @@ async function processJobData(
   const validQuestionCount = Math.min(Math.max(questionCount, 5), 20);
 
   // materialFingerprint 캐시 조회
-  const fingerprint = buildMaterialFingerprint(trimmedText, courseId, images);
+  const fingerprint = buildMaterialFingerprint(trimmedText, courseId, images, validDifficulty);
   const cached = await getMaterialCache(fingerprint);
   let cacheHit = false;
 
@@ -522,6 +532,9 @@ async function processJobData(
     const skipStyle = sliderWeights && sliderWeights.style < 10;
     const skipScope = sliderWeights && sliderWeights.scope < 10;
 
+    // professorPrompt와 OCR 텍스트를 합쳐서 챕터 추론 정확도 향상
+    const combinedText = [trimmedText, professorPrompt].filter(Boolean).join("\n");
+
     const [profileDoc, keywordsDoc, scopeResult] = await Promise.all([
       !skipStyle
         ? analysisRef.collection("data").doc("styleProfile").get()
@@ -530,7 +543,7 @@ async function processJobData(
         ? analysisRef.collection("data").doc("keywords").get()
         : Promise.resolve(null),
       shouldLoadScope && !skipScope
-        ? loadScopeForQuiz(courseId, trimmedText || "general", validDifficulty)
+        ? loadScopeForQuiz(courseId, combinedText || "general", validDifficulty)
         : Promise.resolve(null),
     ]);
 
@@ -570,6 +583,9 @@ async function processJobData(
     ).catch(() => {});
   }
 
+  // 페이지 이미지 필터링 (data:image 형식만 — Gemini inlineData 전송용)
+  const pageImages = images.filter((img: string) => img.startsWith("data:image/"));
+
   // 프롬프트 + Gemini
   const prompt = buildFullPrompt(
     trimmedText,
@@ -583,14 +599,16 @@ async function processJobData(
     croppedImages,
     courseCustomized,
     sliderWeights ? { style: sliderWeights.style, scope: sliderWeights.scope, focusGuide: sliderWeights.focusGuide } : undefined,
-    professorPrompt
+    professorPrompt,
+    pageImages.length > 0
   );
 
-  const questions = await generateWithGemini(
+  const { questions, title: generatedTitle } = await generateWithGemini(
     prompt,
     apiKey,
     validQuestionCount,
-    croppedImages
+    croppedImages,
+    pageImages
   );
 
   const questionsWithImages = questions.filter((q) => q.imageUrl).length;
@@ -624,6 +642,7 @@ async function processJobData(
       croppedImagesCount: croppedImages.length,
       questionsWithImages,
       materialCacheHit: cacheHit,
+      ...(generatedTitle ? { title: generatedTitle } : {}),
     },
   };
 }

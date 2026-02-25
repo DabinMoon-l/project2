@@ -48,6 +48,13 @@ firebase-adminsdk*.json
 # rabbit image backup
 /public/rabbit_backup/
 
+# PWA (next-pwa 빌드 생성물)
+/public/sw.js
+/public/sw.js.map
+/public/workbox-*.js
+/public/workbox-*.js.map
+/public/swe-worker-*.js
+
 # vercel
 .vercel
 
