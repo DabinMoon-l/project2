@@ -43,6 +43,9 @@ export interface GenerationJob {
   };
   professorPrompt?: string;
 
+  // 챕터 태그 (예: ["12_신경계", "11_내분비계"]) — 챕터 추론 대신 직접 범위 확정
+  tags?: string[];
+
   // 중복 방지
   dedupeKey: string;
 
@@ -80,7 +83,8 @@ function buildDedupeKey(
   courseId: string,
   courseCustomized: boolean,
   sliderWeights?: { style: number; scope: number; focusGuide: number; difficulty: number; questionCount: number },
-  professorPrompt?: string
+  professorPrompt?: string,
+  tags?: string[]
 ): string {
   const hash = crypto.createHash("sha256");
   hash.update(userId);
@@ -96,6 +100,10 @@ function buildDedupeKey(
   }
   if (professorPrompt) {
     hash.update(professorPrompt.slice(0, 500));
+  }
+  // 태그 포함
+  if (tags && tags.length > 0) {
+    hash.update(tags.sort().join(","));
   }
 
   // 이미지는 앞 100바이트씩만 해싱 (전체 base64는 너무 큼)
@@ -136,6 +144,7 @@ export const enqueueGenerationJob = onCall(
         questionCount: number;
       } | null;
       professorPrompt?: string | null;
+      tags?: string[] | null;
     };
     // Firebase SDK가 undefined → null로 직렬화하므로 ?? 로 안전하게 처리
     const text = raw.text ?? "";
@@ -147,6 +156,7 @@ export const enqueueGenerationJob = onCall(
     const courseCustomized = raw.courseCustomized ?? true;
     const sliderWeights = raw.sliderWeights ?? undefined;
     const professorPrompt = raw.professorPrompt ?? undefined;
+    const tags = raw.tags ?? undefined;
 
     // Rate limit 검사
     try {
@@ -171,7 +181,8 @@ export const enqueueGenerationJob = onCall(
       courseId,
       courseCustomized,
       sliderWeights,
-      professorPrompt
+      professorPrompt,
+      tags
     );
 
     // 중복 Job 확인 (최근 10분 이내 같은 dedupeKey)
@@ -244,6 +255,7 @@ export const enqueueGenerationJob = onCall(
       courseCustomized,
       ...(sliderWeights ? { sliderWeights } : {}),
       ...(professorPrompt ? { professorPrompt } : {}),
+      ...(tags && tags.length > 0 ? { tags } : {}),
       dedupeKey,
       materialFingerprint,
       createdAt: FieldValue.serverTimestamp(),

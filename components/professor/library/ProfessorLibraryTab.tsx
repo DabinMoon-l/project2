@@ -8,7 +8,7 @@
  * 생성된 퀴즈: 2열 그리드 + 신문 배경 카드 + Details 모달 + Preview 인라인 뷰
  */
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { httpsCallable } from 'firebase/functions';
@@ -436,6 +436,15 @@ export default function ProfessorLibraryTab({
   // 프롬프트
   const [prompt, setPrompt] = useState('');
 
+  // 챕터 태그 (생성 시 필수)
+  const [selectedGenTags, setSelectedGenTags] = useState<string[]>([]);
+  const [showGenTagPicker, setShowGenTagPicker] = useState(false);
+  const genTagOptions = useMemo(() => {
+    const courseTags = generateCourseTags(userCourseId);
+    // 챕터 태그만 (중간/기말/기타 제외)
+    return courseTags;
+  }, [userCourseId]);
+
   // 슬라이더
   const [showSliderPanel, setShowSliderPanel] = useState(false);
   const [sliders, setSliders] = useState<SliderWeights>({
@@ -451,14 +460,16 @@ export default function ProfessorLibraryTab({
   const [isGenerating, setIsGenerating] = useState(() => isLibraryJobActive());
   const [progressStep, setProgressStep] = useState<'uploading' | 'analyzing' | 'generating'>('uploading');
   const [showProgressModal, setShowProgressModal] = useState(false);
+  // 사용자가 모달을 직접 닫았으면 같은 Job 동안 다시 띄우지 않음
+  const modalDismissedRef = useRef(false);
 
   // Job 이벤트 구독 — 완료/실패 시 isGenerating 해제
   useEffect(() => {
     const unsub = onLibraryJobEvent((event) => {
       if (event.type === 'started') {
         setIsGenerating(true);
-        setShowProgressModal(true);
         setProgressStep('analyzing');
+        // handleGenerate에서 이미 모달을 띄우므로 여기서는 생략
       }
       if (event.type === 'progress' && event.step === 'generating') {
         setProgressStep('generating');
@@ -466,6 +477,7 @@ export default function ProfessorLibraryTab({
       if (event.type === 'completed' || event.type === 'failed' || event.type === 'cancelled') {
         setIsGenerating(false);
         setShowProgressModal(false);
+        modalDismissedRef.current = false;
       }
     });
     return unsub;
@@ -608,6 +620,10 @@ export default function ProfessorLibraryTab({
       alert('프롬프트를 입력해주세요.');
       return;
     }
+    if (selectedGenTags.length === 0) {
+      alert('챕터 태그를 1개 이상 선택해주세요.\nAI가 정확한 범위에서 문제를 생성합니다.');
+      return;
+    }
     if (!difficulty) {
       alert('난이도를 선택해주세요.');
       return;
@@ -618,6 +634,7 @@ export default function ProfessorLibraryTab({
     }
 
     // 즉시 프로그레스 모달 표시
+    modalDismissedRef.current = false;
     setShowProgressModal(true);
     setProgressStep('uploading');
 
@@ -637,6 +654,7 @@ export default function ProfessorLibraryTab({
           courseCustomized?: boolean;
           sliderWeights?: { style: number; scope: number; focusGuide: number; questionCount: number };
           professorPrompt?: string;
+          tags?: string[];
         },
         { jobId: string; status: string; deduplicated: boolean }
       >(functions, 'enqueueGenerationJob');
@@ -655,6 +673,7 @@ export default function ProfessorLibraryTab({
           questionCount: sliders.questionCount,
         },
         professorPrompt: prompt.trim() || undefined,
+        tags: selectedGenTags,
       });
 
       const { jobId } = enqueueResult.data;
@@ -677,6 +696,8 @@ export default function ProfessorLibraryTab({
 
       // 입력 초기화
       setPrompt('');
+      setSelectedGenTags([]);
+      setShowGenTagPicker(false);
 
     } catch (err: any) {
       setShowProgressModal(false);
@@ -687,7 +708,7 @@ export default function ProfessorLibraryTab({
         alert(`오류: ${msg}`);
       }
     }
-  }, [profile, prompt, sliders, difficulty, userCourseId, userCourse]);
+  }, [profile, prompt, sliders, difficulty, userCourseId, userCourse, selectedGenTags]);
 
   // ============================================================
   // 슬라이더 라벨
@@ -718,12 +739,10 @@ export default function ProfessorLibraryTab({
                 autoFocus
                 value={editedTitle}
                 onChange={(e) => setEditedTitle(e.target.value)}
-                className="flex-1 text-2xl font-black text-[#1A1A1A] bg-transparent border-b-2 border-[#1A1A1A] outline-none"
+                className="flex-1 text-3xl font-black text-[#1A1A1A] bg-transparent border-b-2 border-[#1A1A1A] outline-none"
               />
             ) : (
-              <h2 className={`text-2xl font-black text-[#1A1A1A] flex-1 ${
-                isDefaultAiTitle(previewQuiz.title) ? '' : 'font-serif-display'
-              }`}>
+              <h2 className="text-3xl font-black text-[#1A1A1A] flex-1">
                 {previewQuiz.title}
               </h2>
             )}
@@ -748,14 +767,14 @@ export default function ProfessorLibraryTab({
                     setEditedTags([]);
                     setEditedQuestions({});
                   }}
-                  className="px-3 py-1.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+                  className="px-4 py-2 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
                 >
                   취소
                 </button>
                 <button
                   onClick={handleSaveEdit}
                   disabled={isSavingEdit}
-                  className="px-3 py-1.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors"
+                  className="px-4 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors"
                 >
                   {isSavingEdit ? '저장 중...' : '저장'}
                 </button>
@@ -770,14 +789,14 @@ export default function ProfessorLibraryTab({
           {!isEditMode && (previewQuiz.description || (previewQuiz.tags && previewQuiz.tags.length > 0)) && (
             <div className="space-y-2">
               {previewQuiz.description && (
-                <p className="text-sm text-[#5C5C5C] italic">
+                <p className="text-base text-[#5C5C5C] italic">
                   &ldquo;{previewQuiz.description}&rdquo;
                 </p>
               )}
               {previewQuiz.tags && previewQuiz.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-2">
                   {previewQuiz.tags.map((tag: string) => (
-                    <span key={tag} className="px-2 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold">
+                    <span key={tag} className="px-2.5 py-1 bg-[#1A1A1A] text-[#F5F0E8] text-sm font-bold">
                       #{tag}
                     </span>
                   ))}
@@ -788,27 +807,27 @@ export default function ProfessorLibraryTab({
 
           {/* 수정 모드: 총평/태그 편집 */}
           {isEditMode && (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {/* 총평 */}
               <div>
-                <label className="block text-xs font-bold text-[#5C5C5C] mb-1.5">총평</label>
-                <textarea
+                <label className="block text-base font-bold text-[#1A1A1A] mb-2">총평</label>
+                <input
+                  type="text"
                   value={editedDescription}
                   onChange={(e) => setEditedDescription(e.target.value)}
                   placeholder="학생들에게 전할 한마디를 입력하세요"
-                  rows={2}
-                  className="w-full px-3 py-2 border border-[#D4CFC4] bg-[#FDFBF7] text-[#1A1A1A] placeholder:text-[#9A9A9A] outline-none focus:border-[#1A1A1A] resize-none text-sm"
+                  className="w-full bg-transparent border-b-2 border-[#D4CFC4] focus:border-[#1A1A1A] text-[#1A1A1A] placeholder:text-[#9A9A9A] outline-none text-base py-1.5 transition-colors"
                 />
               </div>
 
               {/* 태그 */}
               <div>
-                <div className="flex items-center gap-2 mb-1.5">
-                  <label className="text-xs font-bold text-[#5C5C5C]">태그</label>
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="text-base font-bold text-[#1A1A1A]">태그</label>
                   <button
                     type="button"
                     onClick={() => setShowEditTagPicker(!showEditTagPicker)}
-                    className={`px-2 py-0.5 text-xs font-bold border transition-colors ${
+                    className={`px-3 py-1 text-sm font-bold border transition-colors ${
                       showEditTagPicker
                         ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
                         : 'bg-transparent text-[#5C5C5C] border-[#D4CFC4] hover:border-[#1A1A1A]'
@@ -822,7 +841,7 @@ export default function ProfessorLibraryTab({
                     {editedTags.map((tag) => (
                       <div
                         key={tag}
-                        className="flex items-center gap-1 px-2 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold"
+                        className="flex items-center gap-1 px-2.5 py-1 bg-[#1A1A1A] text-[#F5F0E8] text-sm font-bold"
                       >
                         #{tag}
                         <button
@@ -845,7 +864,7 @@ export default function ProfessorLibraryTab({
                       transition={{ duration: 0.2 }}
                       className="overflow-hidden"
                     >
-                      <div className="flex flex-wrap gap-1.5 p-3 bg-[#EDEAE4] border border-[#D4CFC4]">
+                      <div className="flex flex-wrap gap-2 p-3 bg-[#EDEAE4] border border-[#D4CFC4]">
                         {editTagOptions
                           .filter(tag => !editedTags.includes(tag))
                           .map((tag) => (
@@ -853,7 +872,7 @@ export default function ProfessorLibraryTab({
                               key={tag}
                               type="button"
                               onClick={() => setEditedTags(prev => [...prev, tag])}
-                              className="px-2.5 py-1 text-xs font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+                              className="px-3 py-1.5 text-sm font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
                             >
                               #{tag}
                             </button>
@@ -904,7 +923,7 @@ export default function ProfessorLibraryTab({
       {/* ============================================================ */}
       {/* 프롬프트 입력 영역 */}
       {/* ============================================================ */}
-      <div className="border-2 border-[#1A1A1A] bg-[#FDFBF7] mb-4">
+      <div className="border-2 border-[#1A1A1A] bg-[#F5F0E8] mb-4">
         {/* 텍스트 입력 */}
         <textarea
           value={prompt}
@@ -914,12 +933,37 @@ export default function ProfessorLibraryTab({
           rows={3}
         />
 
-        {/* 하단 아이콘 + 생성 버튼 */}
+        {/* 선택된 태그 + 난이도 표시 */}
+        {(selectedGenTags.length > 0 || difficulty) && (
+          <div className="flex flex-wrap gap-1 px-3 pb-2">
+            {selectedGenTags.map(tag => (
+              <button
+                key={tag}
+                onClick={() => setSelectedGenTags(prev => prev.filter(t => t !== tag))}
+                className="flex items-center gap-0.5 px-2 py-0.5 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors"
+              >
+                #{tag}
+                <span className="opacity-50 text-[9px] ml-0.5">✕</span>
+              </button>
+            ))}
+            {difficulty && (
+              <button
+                onClick={() => setDifficulty(null)}
+                className="flex items-center gap-0.5 px-2 py-0.5 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors"
+              >
+                #{difficulty === 'easy' ? '쉬움' : difficulty === 'medium' ? '보통' : '어려움'}
+                <span className="opacity-50 text-[9px] ml-0.5">✕</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* 하단 바: 슬라이더 > 태그 + 생성 */}
         <div className="flex items-center justify-between px-3 py-2 border-t border-[#EDEAE4]">
           <div className="flex items-center gap-1">
             {/* 슬라이더 아이콘 */}
             <button
-              onClick={() => setShowSliderPanel(!showSliderPanel)}
+              onClick={() => { setShowSliderPanel(!showSliderPanel); setShowGenTagPicker(false); }}
               className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
                 showSliderPanel ? 'bg-[#1A1A1A] text-[#F5F0E8]' : 'text-[#5C5C5C] hover:bg-[#EDEAE4]'
               }`}
@@ -928,28 +972,30 @@ export default function ProfessorLibraryTab({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
               </svg>
             </button>
-            {/* 난이도 태그 버튼 */}
-            {(['easy', 'medium', 'hard'] as const).map(d => (
-              <button
-                key={d}
-                onClick={() => setDifficulty(prev => prev === d ? null : d)}
-                className={`px-2.5 py-1 text-xs font-bold border transition-colors ${
-                  difficulty === d
-                    ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                    : 'bg-transparent text-[#5C5C5C] border-[#D4CFC4] hover:border-[#1A1A1A]'
-                }`}
-              >
-                #{d === 'easy' ? '쉬움' : d === 'medium' ? '보통' : '어려움'}
-              </button>
-            ))}
+            {/* 태그 아이콘 (챕터+난이도 피커 토글) */}
+            <button
+              onClick={() => { setShowGenTagPicker(!showGenTagPicker); setShowSliderPanel(false); }}
+              className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors relative ${
+                showGenTagPicker ? 'bg-[#1A1A1A] text-[#F5F0E8]' : (selectedGenTags.length > 0 || difficulty) ? 'text-[#1A1A1A]' : 'text-[#5C5C5C] hover:bg-[#EDEAE4]'
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+              </svg>
+              {selectedGenTags.length > 0 && !showGenTagPicker && (
+                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-[#1A1A1A] text-[#F5F0E8] text-[9px] font-bold flex items-center justify-center rounded-full">
+                  {selectedGenTags.length}
+                </span>
+              )}
+            </button>
           </div>
 
           {/* 생성 버튼 */}
           <button
             onClick={handleGenerate}
-            disabled={isGenerating || !hasContent || !difficulty}
+            disabled={isGenerating || !hasContent || !difficulty || selectedGenTags.length === 0}
             className={`px-5 py-2 text-sm font-bold transition-colors ${
-              isGenerating || !hasContent || !difficulty
+              isGenerating || !hasContent || !difficulty || selectedGenTags.length === 0
                 ? 'bg-[#D4CFC4] text-[#999] cursor-not-allowed'
                 : 'bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A]'
             }`}
@@ -958,6 +1004,66 @@ export default function ProfessorLibraryTab({
           </button>
         </div>
       </div>
+
+      {/* 태그 피커 패널: 챕터 + 구분선 + 난이도 */}
+      <AnimatePresence>
+        {showGenTagPicker && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden mb-4"
+          >
+            <div className="border-2 border-[#1A1A1A] bg-[#F5F0E8] p-4 space-y-3">
+              {/* 챕터 태그 */}
+              <div>
+                <span className="text-xs font-bold text-[#5C5C5C]">챕터</span>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {genTagOptions.map(tag => {
+                    const selected = selectedGenTags.includes(tag.value);
+                    return (
+                      <button
+                        key={tag.value}
+                        onClick={() => setSelectedGenTags(prev =>
+                          selected ? prev.filter(t => t !== tag.value) : [...prev, tag.value]
+                        )}
+                        className={`px-3 py-1.5 text-sm font-bold border-2 transition-colors ${
+                          selected
+                            ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                            : 'bg-transparent text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
+                        }`}
+                      >
+                        {tag.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              {/* 구분선 */}
+              <div className="border-t border-[#1A1A1A]" />
+              {/* 난이도 */}
+              <div>
+                <span className="text-xs font-bold text-[#5C5C5C]">난이도</span>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {(['easy', 'medium', 'hard'] as const).map(d => (
+                    <button
+                      key={d}
+                      onClick={() => setDifficulty(prev => prev === d ? null : d)}
+                      className={`px-3 py-1.5 text-sm font-bold border-2 transition-colors ${
+                        difficulty === d
+                          ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                          : 'bg-transparent text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
+                      }`}
+                    >
+                      #{d === 'easy' ? '쉬움' : d === 'medium' ? '보통' : '어려움'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ============================================================ */}
       {/* 슬라이더 패널 */}
@@ -970,7 +1076,7 @@ export default function ProfessorLibraryTab({
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden mb-4"
           >
-            <div className="border border-[#D4CFC4] bg-[#FDFBF7] p-4 space-y-4">
+            <div className="border-2 border-[#1A1A1A] bg-[#F5F0E8] p-4 space-y-4">
               <SliderRow
                 label="출제 스타일"
                 value={sliders.style}
@@ -1012,14 +1118,18 @@ export default function ProfessorLibraryTab({
       <LibraryProgressModal
         isOpen={showProgressModal}
         progress={progressStep}
+        onClose={() => {
+          setShowProgressModal(false);
+          modalDismissedRef.current = true;
+        }}
       />
 
       {/* ============================================================ */}
       {/* 백그라운드 생성 진행 인라인 뱃지 (모달 닫힌 뒤에도 표시) */}
       {/* ============================================================ */}
       {isGenerating && !showProgressModal && (
-        <div className="flex items-center gap-2 px-3 py-2 mb-4 border border-[#D4CFC4] bg-[#EDEAE4]">
-          <div className="w-4 h-4 flex-shrink-0 border-2 border-[#1A1A1A] border-t-transparent rounded-full animate-spin" />
+        <div className="flex items-center gap-2 px-1 py-2 mb-4">
+          <div className="w-3.5 h-3.5 flex-shrink-0 border-2 border-[#1A1A1A] border-t-transparent rounded-full animate-spin" />
           <span className="text-xs font-bold text-[#1A1A1A]">AI 문제 생성 중... 다른 페이지로 이동해도 계속 생성됩니다.</span>
         </div>
       )}
@@ -1088,9 +1198,7 @@ export default function ProfessorLibraryTab({
               <div className="relative z-10 p-4 bg-[#F5F0E8]/90">
                 {/* 제목 (2줄 고정 높이, AI 기본 제목은 serif 비적용) */}
                 <div className="h-[44px] mb-2">
-                  <h3 className={`font-bold text-base line-clamp-2 text-[#1A1A1A] leading-snug pr-8 ${
-                    isDefaultAiTitle(quiz.title) ? '' : 'font-serif-display'
-                  }`}>
+                  <h3 className="font-bold text-base line-clamp-2 text-[#1A1A1A] leading-snug pr-8">
                     {quiz.title}
                   </h3>
                 </div>
@@ -1159,9 +1267,7 @@ export default function ProfessorLibraryTab({
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
           >
-            <h2 className={`text-2xl font-bold text-[#1A1A1A] mb-4 ${
-              isDefaultAiTitle(selectedDetailQuiz.title) ? '' : 'font-serif-display'
-            }`}>
+            <h2 className="text-2xl font-bold text-[#1A1A1A] mb-4">
               {selectedDetailQuiz.title}
             </h2>
 
@@ -1185,9 +1291,19 @@ export default function ProfessorLibraryTab({
                 </span>
               </div>
 
+              {/* 총평 */}
+              <div className="flex justify-between text-sm">
+                <span className="text-[#5C5C5C]">총평</span>
+                {selectedDetailQuiz.description && (
+                  <span className="font-bold text-[#1A1A1A]">
+                    &ldquo;{selectedDetailQuiz.description}&rdquo;
+                  </span>
+                )}
+              </div>
+
               {/* 태그 */}
-              {selectedDetailQuiz.tags && selectedDetailQuiz.tags.length > 0 && (
-                <div className="pt-2 border-t border-[#A0A0A0]">
+              <div className="pt-2 border-t border-[#A0A0A0]">
+                {selectedDetailQuiz.tags && selectedDetailQuiz.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
                     {selectedDetailQuiz.tags.map((tag) => (
                       <span
@@ -1198,54 +1314,28 @@ export default function ProfessorLibraryTab({
                       </span>
                     ))}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
-            {/* 액션 버튼 (편집 / 공개 / 삭제) */}
-            <div className="flex gap-3 mb-3">
+            {/* 닫기 / 삭제 */}
+            <div className="flex gap-3">
               <button
-                onClick={() => {
-                  router.push(`/professor/quiz/${selectedDetailQuiz.id}/edit`);
-                  setSelectedDetailQuiz(null);
-                }}
+                onClick={() => setSelectedDetailQuiz(null)}
                 className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
               >
-                편집
+                닫기
               </button>
-              {!selectedDetailQuiz.isPublished ? (
-                <button
-                  onClick={() => {
-                    setPublishTarget(selectedDetailQuiz.id);
-                    setSelectedDetailQuiz(null);
-                  }}
-                  className="flex-1 py-3 font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
-                >
-                  공개
-                </button>
-              ) : (
-                <div className="flex-1 py-3 font-bold text-center text-[#8B6914] border-2 border-[#8B6914]">
-                  공개됨
-                </div>
-              )}
               <button
                 onClick={() => {
                   setDeleteTarget(selectedDetailQuiz.id);
                   setSelectedDetailQuiz(null);
                 }}
-                className="py-3 px-4 font-bold border-2 border-[#C44] text-[#C44] hover:bg-[#FEE] transition-colors"
+                className="flex-1 py-3 font-bold border-2 border-[#C44] text-[#C44] hover:bg-[#FEE] transition-colors"
               >
                 삭제
               </button>
             </div>
-
-            {/* 닫기 */}
-            <button
-              onClick={() => setSelectedDetailQuiz(null)}
-              className="w-full py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
-            >
-              닫기
-            </button>
           </motion.div>
         </div>,
         document.body
@@ -1429,10 +1519,19 @@ const PROGRESS_MESSAGES = {
 function LibraryProgressModal({
   isOpen,
   progress,
+  onClose,
 }: {
   isOpen: boolean;
   progress: 'uploading' | 'analyzing' | 'generating';
+  onClose: () => void;
 }) {
+  // 2초 후 자동으로 닫기 (토스트가 이어서 표시)
+  useEffect(() => {
+    if (!isOpen) return;
+    const timer = setTimeout(onClose, 2000);
+    return () => clearTimeout(timer);
+  }, [isOpen, onClose]);
+
   if (typeof window === 'undefined') return null;
 
   const { title, subtitle } = PROGRESS_MESSAGES[progress];
@@ -1440,7 +1539,10 @@ function LibraryProgressModal({
   return createPortal(
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={onClose}
+        >
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -1451,6 +1553,7 @@ function LibraryProgressModal({
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
+            onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A] p-8"
           >
             <div className="flex flex-col items-center text-center">

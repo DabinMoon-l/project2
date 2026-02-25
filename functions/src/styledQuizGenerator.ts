@@ -454,11 +454,18 @@ export interface StyleContext {
 export async function loadScopeForQuiz(
   courseId: string,
   text: string,
-  difficulty: Difficulty
+  difficulty: Difficulty,
+  forcedChapters?: string[]  // 태그에서 추출한 챕터 번호 (있으면 추론 우회)
 ): Promise<{ content: string; keywords: string[]; chaptersLoaded: string[] } | null> {
   try {
-    // 텍스트에서 관련 챕터 추론
-    const inferredChapters = await inferChaptersFromText(courseId, text);
+    // forcedChapters가 있으면 추론 우회 (태그 기반 확정)
+    const inferredChapters = forcedChapters && forcedChapters.length > 0
+      ? forcedChapters
+      : await inferChaptersFromText(courseId, text);
+
+    if (forcedChapters && forcedChapters.length > 0) {
+      console.log(`[loadScopeForQuiz] 태그 기반 챕터 확정: ${forcedChapters.join(",")}`);
+    }
 
     const maxScopeLength = 12000;
 
@@ -741,7 +748,8 @@ export function buildFullPrompt(
   courseCustomized: boolean = true,
   sliderWeights?: { style: number; scope: number; focusGuide: number },
   professorPrompt?: string,
-  hasPageImages: boolean = false
+  hasPageImages: boolean = false,
+  tags?: string[]  // 챕터 태그 (예: ["12_신경계"])
 ): string {
   // 슬라이더 가중치에 따른 조건부 포함
   const skipStyle = sliderWeights && sliderWeights.style < 10;
@@ -750,6 +758,16 @@ export function buildFullPrompt(
 
   // Scope에서 로드된 챕터 번호 (여러 곳에서 사용)
   const scopeChapters = context.scope?.chaptersLoaded;
+
+  // 태그에서 사람이 읽을 수 있는 챕터 라벨 생성 (예: "12장(신경계), 11장(내분비계)")
+  const tagChapterLabels = tags && tags.length > 0
+    ? tags
+        .filter(t => /^\d+_/.test(t))
+        .map(t => {
+          const [num, ...rest] = t.split("_");
+          return `${num}장(${rest.join("_")})`;
+        })
+    : [];
 
   const styleContext = courseCustomized && !skipStyle ? buildStyleContextPrompt(context) : "";
   const difficultyPrompt = buildDifficultyPrompt(difficulty, context);
@@ -793,17 +811,27 @@ export function buildFullPrompt(
 
   // 1. 매우 짧은 텍스트 (50자 미만) + FocusGuide 있음: FocusGuide 기반 출제
   if (isVeryShortText && hasFocusGuide) {
-    uploadedTextLabel = "키워드/힌트 (선택적)";
-    contentRule = `**포커스 가이드 기반 출제 규칙**:
-   - '키워드/힌트'가 있다면 해당 키워드와 관련된 포커스 가이드 내용을 우선 출제
-   - '키워드/힌트'가 비어있거나 짧다면 포커스 가이드 전체에서 골고루 출제
+    uploadedTextLabel = "키워드/힌트";
+    if (professorPrompt || ocrText.trim().length > 0) {
+      // 키워드가 있으면 해당 주제 챕터의 포커스 가이드에서만 출제
+      contentRule = `**포커스 가이드 + 키워드 연계 출제 규칙**:
+   - **필수**: 위 '키워드/힌트'("${(professorPrompt || ocrText).trim().slice(0, 30)}")와 직접 관련된 챕터의 포커스 가이드 내용에서만 문제를 출제하세요
+   - **금지**: 키워드와 무관한 다른 챕터의 포커스 가이드 내용으로 문제를 만들면 탈락입니다
+   - **${questionCount}문제 전부** 키워드 주제에 관한 문제여야 합니다
+   - '과목 전체 범위'는 정확한 개념과 용어 확인 참고용입니다`;
+    } else {
+      // 키워드 없이 빈 텍스트: 포커스 가이드 전체에서 골고루 출제
+      contentRule = `**포커스 가이드 기반 출제 규칙**:
+   - 포커스 가이드 전체에서 골고루 출제하세요
    - '과목 전체 범위'에서 정확한 개념과 용어를 확인하세요`;
+    }
   }
   // 2. 매우 짧은 텍스트 + FocusGuide 없음: 텍스트 기반 일반 지식 문제
   else if (isVeryShortText && !hasFocusGuide) {
     uploadedTextLabel = "키워드/주제";
     contentRule = `**일반 주제 출제 규칙**:
-   - 제공된 '키워드/주제'와 관련된 일반적인 사실을 바탕으로 문제를 출제하세요
+   - 제공된 '키워드/주제'("${(professorPrompt || ocrText).trim().slice(0, 30)}")와 관련된 내용으로만 문제를 출제하세요
+   - **금지**: 이 키워드와 무관한 주제의 문제를 만들면 탈락입니다
    - **중요**: 확실하지 않거나 추측성 내용은 절대 포함하지 마세요
    - 널리 알려진 기본 개념, 정의, 특징만 문제로 만드세요`;
   }
@@ -855,12 +883,19 @@ export function buildFullPrompt(
 
   // professorPrompt가 있으면 모든 contentRule에 최우선 규칙 추가
   if (professorPrompt) {
-    contentRule = `**최우선**: 위 '최우선 출제 지시사항'의 키워드/주제를 반드시 반영하세요. ` + contentRule;
+    contentRule = `**🔴 최우선**: 위 '최우선 출제 지시사항'의 키워드/주제("${professorPrompt.slice(0, 50)}")와 직접 관련된 내용에서만 문제를 출제하세요. ` +
+      `이 키워드와 무관한 챕터나 주제의 문제는 절대 포함하지 마세요. ` + contentRule;
   }
 
-  // 추론된 챕터가 있으면 contentRule 앞에 명시적 챕터 제한 추가
-  // (매우 짧은 텍스트에서도 적용 — 다른 챕터 침범 방지)
-  if (scopeChapters && scopeChapters.length > 0) {
+  // 태그 기반 챕터 확정 (최우선) 또는 추론된 챕터 제한
+  if (tagChapterLabels.length > 0) {
+    // 사용자가 직접 선택한 챕터 태그 → 가장 확실한 범위 제한
+    const tagList = tagChapterLabels.join(", ");
+    contentRule = `🔒 **출제 범위 확정 (사용자 지정)**: ${tagList} 범위에서만 출제하세요. ` +
+      `이 챕터 외의 내용으로 문제를 만들면 탈락입니다. ` +
+      `${questionCount}문제 전부 위 챕터 범위 내에서 출제해야 합니다.\n   ` +
+      contentRule;
+  } else if (scopeChapters && scopeChapters.length > 0) {
     const chapterList = scopeChapters.join(", ");
     contentRule = `🔒 **챕터 제한**: ${chapterList}장 범위에서만 출제하세요. ` +
       `다른 챕터의 내용으로 문제를 만들면 탈락입니다.\n   ` +
@@ -959,11 +994,12 @@ ${focusInstruction}
   // 교수 프롬프트 섹션 — 최상위 우선순위 (최대 1000자)
   const trimmedProfessorPrompt = professorPrompt?.slice(0, 1000);
   const professorPromptSection = trimmedProfessorPrompt ? `
-## 🔴 최우선 출제 지시사항
+## 🔴 최우선 출제 지시사항 (반드시 준수)
 > **경고: 이 지시사항은 모든 다른 규칙보다 우선합니다.**
-> 아래 내용에 언급된 키워드/주제/범위를 중심으로 문제를 출제하세요.
-> 아래 학습 자료가 있다면, 이 지시사항의 키워드가 학습 자료에서 다루는 부분을 집중 출제하세요.
-> 이 지시사항과 무관한 주제로 문제를 만들면 탈락입니다.
+> 아래 키워드/주제와 **직접 관련된 내용에서만** 문제를 출제하세요.
+> 포커스 가이드나 과목 범위에 여러 챕터가 있더라도, **아래 키워드에 해당하는 챕터의 내용만** 사용하세요.
+> 이 지시사항과 무관한 챕터/주제의 문제가 하나라도 포함되면 탈락입니다.
+> **${questionCount}문제 전부** 아래 키워드/주제에 관한 문제여야 합니다.
 
 ${trimmedProfessorPrompt}
 ` : "";
@@ -971,10 +1007,11 @@ ${trimmedProfessorPrompt}
   // 슬라이더 가중치 → 문제 수 비율 접두사
   const stylePrefix = sliderWeights ? getStylePrefix(sliderWeights.style) : "";
 
-  const scopeRatioPrefix = !skipScope && !skipFocusGuide && totalWeight > 0
+  // professorPrompt가 있으면 scope는 순수 참고용 — 비율 할당 금지 (발문 출제 금지와 모순 방지)
+  const scopeRatioPrefix = !skipScope && !skipFocusGuide && totalWeight > 0 && !professorPrompt
     ? `(${questionCount}문제 중 약 ${scopeQuestionCount}문제는 이 넓은 범위에서 출제하세요.)`
     : "";
-  const focusRatioPrefix = !skipFocusGuide && !skipScope && totalWeight > 0
+  const focusRatioPrefix = !skipFocusGuide && !skipScope && totalWeight > 0 && !professorPrompt
     ? `(${questionCount}문제 중 약 ${focusQuestionCount}문제는 아래 핵심 포인트에서 출제하세요.)`
     : "";
 

@@ -1195,7 +1195,7 @@ export default function QuizPreviewPage() {
             animate={{ opacity: 1 }}
             className="space-y-4"
           >
-            {/* 퀴즈 제목 + 난이도 */}
+            {/* 퀴즈 제목 + 난이도 + 총평 + 태그 */}
             <div className="border-2 border-[#1A1A1A] p-6 space-y-6 bg-[#F5F0E8]">
               <div>
                 <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
@@ -1226,7 +1226,7 @@ export default function QuizPreviewPage() {
                       className={`flex-1 py-2.5 px-4 font-bold text-sm border-2 transition-all duration-200 ${
                         editDifficulty === value
                           ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                          : 'bg-[#EDEAE4] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
+                          : 'bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
                       }`}
                     >
                       {label}
@@ -1234,33 +1234,33 @@ export default function QuizPreviewPage() {
                   ))}
                 </div>
               </div>
-            </div>
 
-            {/* 총평 + 태그 (간격 영역) */}
-            <div className="space-y-4">
+              {/* 구분선 */}
+              <div className="border-t-2 border-[#1A1A1A]" />
+
               {/* 총평 (선택) */}
               <div>
-                <label className="block text-sm font-bold text-[#5C5C5C] mb-2">총평 (선택)</label>
+                <label className="block text-sm font-bold text-[#1A1A1A] mb-2">총평 (선택)</label>
                 <textarea
                   value={editDescription}
                   onChange={(e) => setEditDescription(e.target.value)}
                   placeholder="학생들에게 전할 한마디를 입력하세요"
                   rows={2}
-                  className="w-full px-4 py-3 border border-[#D4CFC4] bg-[#FDFBF7] text-[#1A1A1A] placeholder:text-[#9A9A9A] outline-none focus:border-[#1A1A1A] resize-none text-sm"
+                  className="w-full px-4 py-3 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] placeholder:text-[#9A9A9A] outline-none focus:bg-[#FDFBF7] resize-none text-sm"
                 />
               </div>
 
               {/* 태그 (선택) */}
               <div>
                 <div className="flex items-center gap-2 mb-2">
-                  <label className="text-sm font-bold text-[#5C5C5C]">태그</label>
+                  <label className="text-sm font-bold text-[#1A1A1A]">태그</label>
                   <button
                     type="button"
                     onClick={() => setShowTagPicker(!showTagPicker)}
-                    className={`px-2.5 py-0.5 text-xs font-bold border transition-colors ${
+                    className={`px-2.5 py-0.5 text-xs font-bold border-2 transition-colors ${
                       showTagPicker
                         ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                        : 'bg-transparent text-[#5C5C5C] border-[#D4CFC4] hover:border-[#1A1A1A]'
+                        : 'bg-transparent text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
                     }`}
                   >
                     {showTagPicker ? '닫기' : '+ 추가'}
@@ -1271,7 +1271,7 @@ export default function QuizPreviewPage() {
                     {editTags.map((tag) => (
                       <div
                         key={tag}
-                        className="flex items-center gap-1 px-2 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold"
+                        className="flex items-center gap-1 px-2.5 py-1 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold"
                       >
                         #{tag}
                         <button
@@ -1294,7 +1294,7 @@ export default function QuizPreviewPage() {
                       transition={{ duration: 0.2 }}
                       className="overflow-hidden"
                     >
-                      <div className="flex flex-wrap gap-2 p-3 bg-[#EDEAE4] border border-[#D4CFC4]">
+                      <div className="flex flex-wrap gap-2 p-3 border-2 border-[#1A1A1A] bg-[#F5F0E8]">
                         {tagOptions
                           .filter(tag => !editTags.includes(tag))
                           .map((tag) => (
@@ -1302,7 +1302,7 @@ export default function QuizPreviewPage() {
                               key={tag}
                               type="button"
                               onClick={() => setEditTags(prev => [...prev, tag])}
-                              className="px-3 py-1.5 text-sm font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+                              className="px-3 py-1.5 text-sm font-bold bg-transparent text-[#1A1A1A] border-2 border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
                             >
                               #{tag}
                             </button>
@@ -1317,9 +1317,7 @@ export default function QuizPreviewPage() {
         ) : (
           <div className="space-y-4">
             <div>
-              <h2 className={`text-2xl font-bold text-[#1A1A1A] ${
-                /^\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\.\s*\d{1,2}:\d{2}$/.test(quizTitle.trim()) ? '' : 'font-serif-display'
-              }`}>{quizTitle}</h2>
+              <h2 className="text-2xl font-bold text-[#1A1A1A]">{quizTitle}</h2>
               <p className="text-sm text-[#5C5C5C] mt-1">
                 {totalCount}문제 · {participantCount}명 참여
                 {rawQuizData?.difficulty && (

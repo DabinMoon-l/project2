@@ -1357,7 +1357,7 @@ function CustomReviewQuizCard({
       <div className="relative z-10 p-4 bg-[#F5F0E8]/90">
         {/* 제목 (2줄 고정 높이) */}
         <div className="h-[44px] mb-2">
-          <h3 className="font-serif-display font-bold text-base line-clamp-2 text-[#1A1A1A] leading-snug">
+          <h3 className="font-bold text-base line-clamp-2 text-[#1A1A1A] leading-snug">
             {quiz.title}
           </h3>
         </div>
@@ -1726,7 +1726,7 @@ function LibraryQuizCard({
       <div className="relative z-10 p-4 bg-[#F5F0E8]/90">
         {/* 제목 (2줄 고정 높이) */}
         <div className="h-[44px] mb-2">
-          <h3 className="font-serif-display font-bold text-base line-clamp-2 text-[#1A1A1A] leading-snug pr-8">
+          <h3 className="font-bold text-base line-clamp-2 text-[#1A1A1A] leading-snug pr-8">
             {quiz.title}
           </h3>
         </div>
@@ -1950,7 +1950,7 @@ function BookmarkQuizCard({
 
       {/* 제목 (2줄 고정 높이) - 가독성 향상 */}
       <div className="h-[44px] mb-2">
-        <h3 className="font-serif-display font-bold text-base line-clamp-2 text-[#1A1A1A] pr-6 leading-snug">
+        <h3 className="font-bold text-base line-clamp-2 text-[#1A1A1A] pr-6 leading-snug">
           {quiz.title}
         </h3>
       </div>

@@ -32,6 +32,7 @@ import {
   setMaterialCache,
   cleanupExpiredMaterials,
 } from "./utils/materialCache";
+import { extractChapterNumbersFromTags } from "./courseScope";
 
 // Gemini API 키
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
@@ -121,6 +122,7 @@ export const workerProcessJob = onDocumentCreated(
       courseCustomized = true,
       sliderWeights,
       professorPrompt,
+      tags,
     } = jobData;
 
     // Storage 경로인 경우 실제 base64 데이터 다운로드
@@ -184,8 +186,17 @@ export const workerProcessJob = onDocumentCreated(
         const skipStyle = sliderWeights && sliderWeights.style < 10;
         const skipScope = sliderWeights && sliderWeights.scope < 10;
 
+        // 태그에서 챕터 번호 추출 (있으면 추론 우회)
+        const forcedChapters = tags && tags.length > 0
+          ? extractChapterNumbersFromTags(tags)
+          : undefined;
+
         // professorPrompt와 OCR 텍스트를 합쳐서 챕터 추론 정확도 향상
         const combinedText = [trimmedText, professorPrompt].filter(Boolean).join("\n");
+
+        if (forcedChapters && forcedChapters.length > 0) {
+          console.log(`[Worker] Job ${jobId} 태그 기반 챕터 확정: ${forcedChapters.join(",")}`);
+        }
 
         const [profileDoc, keywordsDoc, scopeResult] = await Promise.all([
           !skipStyle
@@ -195,7 +206,7 @@ export const workerProcessJob = onDocumentCreated(
             ? analysisRef.collection("data").doc("keywords").get()
             : Promise.resolve(null),
           shouldLoadScope && !skipScope
-            ? loadScopeForQuiz(courseId, combinedText || "general", validDifficulty)
+            ? loadScopeForQuiz(courseId, combinedText || "general", validDifficulty, forcedChapters)
             : Promise.resolve(null),
         ]);
 
@@ -266,7 +277,8 @@ export const workerProcessJob = onDocumentCreated(
         courseCustomized,
         sliderWeights ? { style: sliderWeights.style, scope: sliderWeights.scope, focusGuide: sliderWeights.focusGuide } : undefined,
         professorPrompt,
-        pageImages.length > 0
+        pageImages.length > 0,
+        tags
       );
 
       console.log(

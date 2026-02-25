@@ -321,8 +321,11 @@ Tailwind에서 `bg-theme-background`, `text-theme-accent` 등으로 사용 (`tai
 
 **교수 서재 (AI 문제 생성)** (`components/professor/library/ProfessorLibraryTab.tsx`):
 - 프롬프트 입력 + 파일 업로드(이미지/PDF/PPT) + 슬라이더(스타일/범위/포커스가이드/난이도/문제수)
+- **챕터 태그 필수 선택**: 생성 시 챕터 태그를 강제 선택 → `extractChapterNumbersFromTags()`로 챕터 번호 추출 → `loadScopeForQuiz(forcedChapters)`로 정확한 범위 로드 (텍스트 추론 우회)
+- 태그+난이도 통합 피커: 하단바 태그 아이콘 클릭 → 챕터/난이도 태그 패널 (슬라이더 패널과 상호 배타)
 - `enqueueGenerationJob` CF 호출 → 백그라운드 폴링 (`lib/utils/libraryJobManager.ts`)
 - 생성 중 다른 페이지 이동 가능, 완료 시 상단 토스트 (`LibraryJobToast.tsx`, layout.tsx에 마운트)
+- 생성 중 모달: 사용자가 닫으면 같은 Job 동안 재표시 안 함 (`modalDismissedRef`)
 - 생성된 퀴즈는 `type: 'professor-ai'`로 저장, `useProfessorAiQuizzes` 훅으로 실시간 구독
 - 슬라이더 가중치: 0-9% OFF, 10-49% 낮음, 50-74% 보통, 75-94% 높음, 95-100% 강력
 
@@ -490,10 +493,21 @@ generateScoreSummary(result)                // 텍스트 요약
 - **보통**: 객관식 + 제시문
 - **어려움**: 객관식 + 제시문 + ㄱㄴㄷ 보기 + 이미지 자동 크롭 (Gemini Vision)
 
-**학생용**: `components/ai-quiz/AIQuizContainer.tsx` (플로팅 버튼)
-**교수용 서재**: `components/professor/library/ProfessorLibraryTab.tsx` (슬라이더 가중치 + 교수 프롬프트)
+**챕터 태그 기반 범위 결정** (텍스트 추론 대체):
+- 교수/학생 모두 생성 시 챕터 태그 필수 선택
+- `extractChapterNumbersFromTags(tags)`: 태그("12_신경계") → 챕터 번호("12") 추출
+- `loadScopeForQuiz(forcedChapters)`: 강제 챕터로 정확한 범위 로드 (기존 `inferChaptersFromText` 우회)
+- `buildFullPrompt(tags)`: 태그 기반 출제 범위 확정 프롬프트 생성
 
-관련 CF: `styledQuizGenerator.ts`, `enqueueGenerationJob.ts`, `workerProcessJob.ts`, `imageRegionAnalysis.ts`
+**학생용**: `components/ai-quiz/AIQuizContainer.tsx` (플로팅 버튼, 태그 전달)
+**교수용 서재**: `components/professor/library/ProfessorLibraryTab.tsx` (슬라이더 가중치 + 교수 프롬프트 + 태그/난이도 통합 피커)
+
+관련 CF: `styledQuizGenerator.ts`, `enqueueGenerationJob.ts`, `workerProcessJob.ts`, `imageRegionAnalysis.ts`, `courseScope.ts`
+
+### UI 스타일 규칙
+
+- **퀴즈 제목**: `font-serif-display` 사용 금지 (산세리프 기본 폰트 사용)
+- **패널/박스/태그**: `bg-[#F5F0E8]` + `border-2 border-[#1A1A1A]` 통일 (흰색/누리끼리 배경 금지)
 
 ## 알려진 제약 및 주의사항
 

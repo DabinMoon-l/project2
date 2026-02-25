@@ -148,6 +148,7 @@ export default function AIQuizContainer() {
           courseId: string;
           courseName?: string;
           courseCustomized?: boolean;
+          tags?: string[];
         },
         { jobId: string; status: string; deduplicated: boolean }
       >(functions, 'enqueueGenerationJob');
@@ -160,6 +161,7 @@ export default function AIQuizContainer() {
         courseId: userCourseId || 'biology',
         courseName: userCourse?.name || '일반',
         courseCustomized: data.courseCustomized ?? true,
+        tags: data.tags.length > 0 ? data.tags : undefined,
       });
 
       const { jobId, status: initialStatus, deduplicated } = enqueueResult.data;

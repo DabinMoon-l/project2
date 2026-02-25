@@ -886,7 +886,7 @@ function ReviewQuizCard({
       <div className="relative z-10 p-4 bg-[#F5F0E8]/90">
         {/* 제목 (2줄 고정 높이) */}
         <div className="h-[44px] mb-2">
-          <h3 className="font-serif-display font-bold text-base line-clamp-2 text-[#1A1A1A] leading-snug">
+          <h3 className="font-bold text-base line-clamp-2 text-[#1A1A1A] leading-snug">
             {quiz.title}
           </h3>
         </div>
@@ -2071,7 +2071,7 @@ function QuizListPageContent() {
       {/* 자작 섹션 */}
       <section className="px-4">
         <div ref={customSectionRef} className="flex items-center justify-between mb-4">
-          <h2 className="font-serif-display text-xl font-black text-[#1A1A1A] shrink-0">자작</h2>
+          <h2 className="text-xl font-black text-[#1A1A1A] shrink-0">자작</h2>
 
           {/* 탭 버튼 */}
           <div className="relative flex items-stretch bg-[#EDEAE4] border border-[#1A1A1A] overflow-hidden">
@@ -2686,18 +2686,8 @@ function QuizListPageContent() {
             className="fixed bottom-[120px] left-4 z-40 w-12 h-12 bg-[#1A1A1A] text-[#F5F0E8] rounded-full shadow-lg flex items-center justify-center hover:bg-[#3A3A3A] transition-colors"
             aria-label="맨 위로"
           >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 10l7-7m0 0l7 7m-7-7v18"
-              />
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
             </svg>
           </motion.button>
         )}

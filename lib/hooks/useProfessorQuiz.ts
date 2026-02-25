@@ -822,11 +822,19 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
           raw.subjectiveCount = input.questions.filter(q => q.type === 'short_answer' || q.type === 'subjective' || q.type === 'essay').length;
         }
 
-        // Firestore는 undefined 값을 허용하지 않으므로 제거
-        const updateData: Record<string, unknown> = {};
-        for (const [key, val] of Object.entries(raw)) {
-          if (val !== undefined) updateData[key] = val;
-        }
+        // Firestore는 undefined 값을 허용하지 않으므로 재귀적으로 제거
+        const removeUndefined = (obj: unknown): unknown => {
+          if (obj === undefined) return null;
+          if (obj === null || typeof obj !== 'object') return obj;
+          if (obj instanceof Timestamp || obj instanceof Date) return obj;
+          if (Array.isArray(obj)) return obj.map(removeUndefined);
+          const cleaned: Record<string, unknown> = {};
+          for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+            if (v !== undefined) cleaned[k] = removeUndefined(v);
+          }
+          return cleaned;
+        };
+        const updateData = removeUndefined(raw) as Record<string, unknown>;
 
         const docRef = doc(db, QUIZZES_COLLECTION, quizId);
         await updateDoc(docRef, updateData);

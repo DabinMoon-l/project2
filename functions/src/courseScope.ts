@@ -362,6 +362,8 @@ export async function loadScopeForAI(
  * 업로드된 텍스트에서 관련 챕터 추론
  *
  * 텍스트 내용을 분석하여 어떤 챕터와 관련있는지 추론
+ * 1차: Firestore scope 키워드 매칭
+ * 2차 (폴백): 짧은 텍스트일 경우 챕터명/shortName 직접 매칭
  */
 export async function inferChaptersFromText(
   courseId: string,
@@ -371,40 +373,37 @@ export async function inferChaptersFromText(
   const scopeRef = db.collection("courseScopes").doc(courseId);
   const chaptersSnapshot = await scopeRef.collection("chapters").get();
 
-  if (chaptersSnapshot.empty) {
-    return [];
-  }
-
   const textLower = text.toLowerCase();
   const matchedChapters: { chapterNumber: string; score: number }[] = [];
 
-  for (const doc of chaptersSnapshot.docs) {
-    const chapter = doc.data() as ChapterScope;
-    let score = 0;
+  // 1차: Firestore scope 챕터 키워드 매칭
+  if (!chaptersSnapshot.empty) {
+    for (const doc of chaptersSnapshot.docs) {
+      const chapter = doc.data() as ChapterScope;
+      let score = 0;
 
-    // 챕터명 매칭
-    if (textLower.includes(chapter.chapterName.toLowerCase())) {
-      score += 10;
-    }
-
-    // 키워드 매칭
-    for (const keyword of chapter.keywords) {
-      if (textLower.includes(keyword.toLowerCase())) {
-        score += 1;
+      // 챕터명 매칭
+      if (textLower.includes(chapter.chapterName.toLowerCase())) {
+        score += 10;
       }
-    }
 
-    if (score > 0) {
-      matchedChapters.push({ chapterNumber: chapter.chapterNumber, score });
+      // 키워드 매칭
+      for (const keyword of chapter.keywords) {
+        if (textLower.includes(keyword.toLowerCase())) {
+          score += 1;
+        }
+      }
+
+      if (score > 0) {
+        matchedChapters.push({ chapterNumber: chapter.chapterNumber, score });
+      }
     }
   }
 
   // 점수 높은 순 정렬
   matchedChapters.sort((a, b) => b.score - a.score);
 
-  if (matchedChapters.length === 0) return [];
-
-  const topScore = matchedChapters[0].score;
+  const topScore = matchedChapters.length > 0 ? matchedChapters[0].score : 0;
 
   // 최소 점수 기준 (3점 미만은 약한 매칭 → 제외)
   // + 1위 대비 30% 미만 점수는 무관 챕터로 판단하여 제외
@@ -415,6 +414,18 @@ export async function inferChaptersFromText(
     c => c.score >= MIN_SCORE && c.score >= topScore * RATIO_THRESHOLD
   );
 
+  // 2차 폴백: scope 매칭 실패 시 코스 인덱스의 챕터명/shortName으로 직접 매칭
+  // (짧은 프롬프트 "신경계", "내분비계" 등이 scope 키워드에 없어도 챕터 추론 가능)
+  if (filtered.length === 0 && text.trim().length > 0) {
+    const indexMatched = inferChaptersFromCourseIndex(courseId, text);
+    if (indexMatched.length > 0) {
+      console.log(
+        `[inferChapters] scope 매칭 실패 → 코스 인덱스 폴백: ${indexMatched.join(",")}`
+      );
+      return indexMatched;
+    }
+  }
+
   console.log(
     `[inferChapters] courseId=${courseId}, ` +
     `전체=${matchedChapters.map(c => `${c.chapterNumber}(${c.score})`).join(",")} → ` +
@@ -424,4 +435,100 @@ export async function inferChaptersFromText(
   return filtered
     .slice(0, 3)
     .map(c => c.chapterNumber);
+}
+
+/**
+ * 코스 인덱스(하드코딩)에서 챕터명/shortName/details로 챕터 추론 (폴백용)
+ *
+ * Firestore scope가 없거나 키워드 매칭이 안 될 때 사용
+ */
+function inferChaptersFromCourseIndex(
+  courseId: string,
+  text: string
+): string[] {
+  // 코스 인덱스 정의 (styledQuizGenerator.ts와 동기화)
+  const COURSE_CHAPTERS: Record<string, Array<{ num: string; names: string[] }>> = {
+    biology: [
+      { num: "1", names: ["생명현상의 특성", "생명현상"] },
+      { num: "2", names: ["세포의 특성", "원핵세포", "진핵세포", "세포소기관"] },
+      { num: "3", names: ["생명체의 화학적 이해", "화학적 이해", "핵산", "단백질", "탄수화물", "지질"] },
+      { num: "4", names: ["영양과 물질대사", "물질대사", "소화", "효소", "에너지대사", "ATP"] },
+      { num: "5", names: ["유전과 분자생물학", "유전", "DNA", "멘델", "염색체", "DNA 복제"] },
+      { num: "6", names: ["유전자의 발현과 조절", "유전자 발현", "전사", "번역", "코돈", "돌연변이"] },
+      { num: "7", names: ["세포의 주기와 죽음", "세포주기", "세포분열", "감수분열", "체세포분열"] },
+      { num: "8", names: ["생식", "발생", "분화", "수정", "배엽"] },
+      { num: "9", names: ["동물의 조직", "상피조직", "근육조직", "결합조직", "혈액", "혈액형"] },
+      { num: "10", names: ["동물의 기관", "소화계", "호흡계", "비뇨계", "순환계", "네프론", "심장"] },
+      { num: "11", names: ["내분비계", "호르몬", "항상성", "갑상샘", "뇌하수체"] },
+      { num: "12", names: ["신경계", "뉴런", "시냅스", "활동전위", "자율신경", "교감신경", "부교감신경", "신경전달물질"] },
+    ],
+    pathophysiology: [
+      { num: "3", names: ["세포손상", "세포적응", "석회화", "괴사"] },
+      { num: "4", names: ["염증", "급성 염증", "만성 염증"] },
+      { num: "5", names: ["치유", "재생", "섬유화", "상처 치유"] },
+      { num: "7", names: ["면역", "과민반응", "자가면역", "AIDS"] },
+      { num: "8", names: ["순환장애", "혈전", "색전", "경색", "쇼크", "부종"] },
+      { num: "9", names: ["종양", "암", "양성 종양", "악성 종양"] },
+      { num: "10", names: ["호흡기계", "폐질환", "호흡기 질환"] },
+      { num: "11", names: ["소화기계", "위장 질환", "간담췌"] },
+      { num: "12", names: ["신장계", "사구체", "신부전"] },
+      { num: "13", names: ["심혈관계", "심장 질환", "고혈압"] },
+      { num: "14", names: ["내분비계", "갑상선", "당뇨병", "부신"] },
+      { num: "15", names: ["근골격계", "근육 질환", "골격 질환", "관절"] },
+      { num: "16", names: ["신경계", "중추신경", "말초신경", "퇴행성 질환"] },
+    ],
+    microbiology: [
+      { num: "1", names: ["미생물학 개론", "미생물"] },
+      { num: "2", names: ["세균학", "세균"] },
+      { num: "3", names: ["바이러스학", "바이러스"] },
+      { num: "4", names: ["진균학", "진균", "곰팡이"] },
+      { num: "5", names: ["기생충학", "기생충"] },
+    ],
+  };
+
+  const chapters = COURSE_CHAPTERS[courseId];
+  if (!chapters) return [];
+
+  const textLower = text.toLowerCase();
+  const matched: { num: string; score: number }[] = [];
+
+  for (const ch of chapters) {
+    let score = 0;
+    for (const name of ch.names) {
+      if (textLower.includes(name.toLowerCase())) {
+        // 챕터 대표명(첫번째)은 높은 점수, 나머지 키워드는 낮은 점수
+        score += name === ch.names[0] ? 10 : 5;
+      }
+    }
+    if (score > 0) {
+      matched.push({ num: ch.num, score });
+    }
+  }
+
+  matched.sort((a, b) => b.score - a.score);
+  return matched.slice(0, 3).map(c => c.num);
+}
+
+/**
+ * 태그 배열에서 챕터 번호 추출
+ *
+ * 태그 형식: "12_신경계", "11_내분비계" 등
+ * 챕터 번호만 추출하여 반환: ["12", "11"]
+ *
+ * "중간", "기말", "기타" 등 챕터 태그가 아닌 것은 제외
+ */
+export function extractChapterNumbersFromTags(tags: string[]): string[] {
+  const EXCLUDED = new Set(["중간", "기말", "기타"]);
+  const chapters: string[] = [];
+
+  for (const tag of tags) {
+    if (EXCLUDED.has(tag)) continue;
+    // "12_신경계" → "12"
+    const match = tag.match(/^(\d+)_/);
+    if (match) {
+      chapters.push(match[1]);
+    }
+  }
+
+  return [...new Set(chapters)]; // 중복 제거
 }

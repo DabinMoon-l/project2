@@ -871,7 +871,7 @@ function ProfessorCustomQuizCard({
       <div className="relative z-10 p-4 bg-[#F5F0E8]/90">
         {/* 제목 (2줄 고정 높이) */}
         <div className="h-[44px] mb-2">
-          <h3 className="font-serif-display font-bold text-base line-clamp-2 text-[#1A1A1A] pr-6 leading-snug">
+          <h3 className="font-bold text-base line-clamp-2 text-[#1A1A1A] pr-6 leading-snug">
             {quiz.title}
           </h3>
         </div>
@@ -1596,7 +1596,7 @@ export default function ProfessorQuizListPage() {
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
           >
-            <h2 className="font-serif-display text-lg font-bold text-[#1A1A1A] mb-2">{detailsQuiz.title}</h2>
+            <h2 className="text-lg font-bold text-[#1A1A1A] mb-2">{detailsQuiz.title}</h2>
 
             {/* 총평 */}
             {detailsQuiz.description && (
