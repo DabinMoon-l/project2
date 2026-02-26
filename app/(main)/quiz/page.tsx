@@ -1024,7 +1024,7 @@ function CustomQuizCard({
       <div className="relative z-10 p-4 bg-[#F5F0E8]/60">
         {/* 제목 (2줄 고정 높이) */}
         <div className="h-[44px] mb-2">
-          <h3 className="font-serif-display font-bold text-base line-clamp-2 text-[#1A1A1A] pr-6 leading-snug">
+          <h3 className="font-bold text-base line-clamp-2 text-[#1A1A1A] pr-6 leading-snug">
             {quiz.title}
           </h3>
         </div>
@@ -1122,7 +1122,7 @@ function ManageQuizCard({
       className="border border-[#999] bg-[#F5F0E8]/70 backdrop-blur-sm p-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] cursor-pointer"
     >
       <div className="h-[44px] mb-2">
-        <h3 className="font-serif-display font-bold text-base line-clamp-2 text-[#1A1A1A] leading-snug">
+        <h3 className="font-bold text-base line-clamp-2 text-[#1A1A1A] leading-snug">
           {quiz.title}
         </h3>
       </div>
@@ -1444,25 +1444,22 @@ function QuizListPageContent() {
     return () => unsubscribe();
   }, [user, userCourseId, parseQuizData]);
 
-  // 자작 퀴즈 로드
+  // 자작 퀴즈 로드 (courseId 서버 필터)
   useEffect(() => {
-    if (!user) return;
+    if (!user || !userCourseId) return;
 
     setIsLoading((prev) => ({ ...prev, custom: true }));
 
     const q = query(
       collection(db, 'quizzes'),
-      where('type', '==', 'custom')
+      where('type', '==', 'custom'),
+      where('courseId', '==', userCourseId)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const quizzes: QuizCardData[] = [];
       snapshot.forEach((d) => {
-        const data = d.data();
-        // 현재 과목의 자작 퀴즈만 (courseId가 없거나 일치하는 경우)
-        if (!userCourseId || !data.courseId || data.courseId === userCourseId) {
-          quizzes.push(parseQuizData(d, user.uid));
-        }
+        quizzes.push(parseQuizData(d, user.uid));
       });
       setCustomQuizzes(quizzes);
       setIsLoading((prev) => ({ ...prev, custom: false }));
@@ -1471,13 +1468,13 @@ function QuizListPageContent() {
     return () => unsubscribe();
   }, [user, userCourseId, parseQuizData]);
 
-  // 내 퀴즈 로드 (관리 모드) - 최신순 정렬
+  // 내 퀴즈 로드 (관리 모드) - 최신순 정렬, courseId 필터
   const fetchMyQuizzes = useCallback(async () => {
-    if (!user) return;
+    if (!user || !userCourseId) return;
 
     setIsLoadingMyQuizzes(true);
     const quizzesRef = collection(db, 'quizzes');
-    const q = query(quizzesRef, where('creatorId', '==', user.uid), where('isPublic', '==', true));
+    const q = query(quizzesRef, where('creatorId', '==', user.uid), where('isPublic', '==', true), where('courseId', '==', userCourseId));
 
     const snapshot = await getDocs(q);
     const quizzes: QuizCardData[] = [];
@@ -1490,7 +1487,7 @@ function QuizListPageContent() {
 
     setMyQuizzes(quizzes);
     setIsLoadingMyQuizzes(false);
-  }, [user, parseQuizData]);
+  }, [user, userCourseId, parseQuizData]);
 
   useEffect(() => {
     if (isManageMode) {
@@ -2036,7 +2033,7 @@ function QuizListPageContent() {
                 animate={{ opacity: 1 }}
                 className="flex flex-col items-center justify-center text-center py-12"
               >
-                <h3 className="font-serif-display text-lg font-black mb-2 text-[#1A1A1A]">
+                <h3 className="text-lg font-black mb-2 text-[#1A1A1A]">
                   자작 퀴즈가 없습니다
                 </h3>
                 <p className="text-sm text-[#5C5C5C]">
@@ -2099,7 +2096,7 @@ function QuizListPageContent() {
                 animate={{ opacity: 1 }}
                 className="flex flex-col items-center justify-center text-center py-12"
               >
-                <h3 className="font-serif-display text-lg font-black mb-2 text-[#1A1A1A]">
+                <h3 className="text-lg font-black mb-2 text-[#1A1A1A]">
                   복습할 퀴즈가 없습니다
                 </h3>
                 <p className="text-sm text-[#5C5C5C]">
@@ -2162,7 +2159,7 @@ function QuizListPageContent() {
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
           >
-            <h2 className="font-serif-display text-lg font-bold text-[#1A1A1A] mb-4">{selectedQuiz.title}</h2>
+            <h2 className="text-lg font-bold text-[#1A1A1A] mb-4">{selectedQuiz.title}</h2>
 
             {/* 미완료: 평균 점수 대형 박스 (Start 버전) */}
             {!selectedQuiz.isCompleted && (
@@ -2264,7 +2261,11 @@ function QuizListPageContent() {
               <button
                 onClick={() => {
                   setSelectedQuiz(null);
-                  handleStartQuiz(selectedQuiz.id);
+                  if (selectedQuiz.isCompleted) {
+                    router.push(`/review/library/${selectedQuiz.id}?from=quiz`);
+                  } else {
+                    handleStartQuiz(selectedQuiz.id);
+                  }
                 }}
                 className="flex-1 py-3 font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
               >
@@ -2288,7 +2289,7 @@ function QuizListPageContent() {
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
           >
-            <h2 className="font-serif-display text-2xl font-bold text-[#1A1A1A] mb-4">
+            <h2 className="text-2xl font-bold text-[#1A1A1A] mb-4">
               {reviewDetailsQuiz.title}
             </h2>
 
