@@ -44,7 +44,6 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
     pathname?.match(/^\/board\/[^/]+/) !== null ||
     pathname === '/ranking' ||
     pathname === '/review/random' ||
-    pathname === '/professor/quiz/best-q' ||
     pathname?.match(/^\/professor\/quiz\/[^/]+\/preview/) !== null ||
     pathname === '/quiz/create' ||
     pathname === '/professor/quiz/create';

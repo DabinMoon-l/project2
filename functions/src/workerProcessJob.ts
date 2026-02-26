@@ -320,7 +320,11 @@ export const workerProcessJob = onDocumentCreated(
       // COMPLETED
       // ========================================
       // Gemini 응답에 undefined 필드가 포함될 수 있음 → Firestore 저장 전 제거
-      const cleanQuestions = JSON.parse(JSON.stringify(questions));
+      // + 문제별 고유 ID 부여
+      const cleanQuestions = JSON.parse(JSON.stringify(questions)).map((q: any) => {
+        if (q.id) return q;
+        return { ...q, id: `q_${crypto.randomUUID().slice(0, 8)}` };
+      });
       await jobRef.update({
         status: "COMPLETED",
         result: {

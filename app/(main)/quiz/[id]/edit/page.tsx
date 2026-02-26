@@ -641,12 +641,16 @@ export default function EditQuizPage() {
       // 실제 문제 수 계산 (결합형 하위 문제 포함)
       const questionCount = flattenedQuestions.length;
 
+      // 문제별 고유 ID 부여
+      const { ensureQuestionIds } = await import('@/lib/utils/questionId');
+      const questionsWithIds = ensureQuestionIds(flattenedQuestions);
+
       const quizData = {
         title: quizMeta.title.trim(),
         tags: quizMeta.tags,
         difficulty: quizMeta.difficulty,
         isPublic: quizMeta.isPublic,
-        questions: flattenedQuestions,
+        questions: questionsWithIds,
         questionCount,
         // 문제 유형별 개수
         oxCount: flattenedQuestions.filter(q => q.type === 'ox').length,

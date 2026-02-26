@@ -31,6 +31,9 @@ import {
   Timestamp,
   onSnapshot,
   deleteField,
+  arrayUnion,
+  arrayRemove,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from './useAuth';
@@ -878,20 +881,20 @@ export const useDeletePost = (): UseDeletePostReturn => {
           return false;
         }
 
-        // 해당 글의 모든 댓글도 삭제
+        // 해당 글의 모든 댓글 + 글을 배치로 원자적 삭제
         const commentsQuery = query(
           collection(db, 'comments'),
           where('postId', '==', postId)
         );
         const commentsSnapshot = await getDocs(commentsQuery);
 
-        const deletePromises = commentsSnapshot.docs.map((doc) =>
-          deleteDoc(doc.ref)
-        );
-        await Promise.all(deletePromises);
-
-        // 글 삭제
-        await deleteDoc(postRef);
+        // Firestore writeBatch는 500건 제한 — 댓글이 많을 경우 분할
+        const allDocs = [...commentsSnapshot.docs.map(d => d.ref), postRef];
+        for (let i = 0; i < allDocs.length; i += 500) {
+          const batch = writeBatch(db);
+          allDocs.slice(i, i + 500).forEach(ref => batch.delete(ref));
+          await batch.commit();
+        }
 
         return true;
       } catch (err) {
@@ -1237,22 +1240,12 @@ export const useLike = (): UseLikeReturn => {
         setError(null);
 
         const postRef = doc(db, 'posts', postId);
-        const postSnap = await getDoc(postRef);
-
-        if (!postSnap.exists()) {
-          setError('게시글을 찾을 수 없습니다.');
-          return false;
-        }
-
-        const postData = postSnap.data();
-        const likedBy: string[] = postData.likedBy || [];
-        const isCurrentlyLiked = likedBy.includes(user.uid);
+        const isCurrentlyLiked = likedPosts.has(postId);
 
         if (isCurrentlyLiked) {
-          // 좋아요 취소
-          const newLikedBy = likedBy.filter((id) => id !== user.uid);
+          // 좋아요 취소 — arrayRemove는 원자적으로 중복 없이 제거
           await updateDoc(postRef, {
-            likedBy: newLikedBy,
+            likedBy: arrayRemove(user.uid),
             likes: increment(-1),
           });
           setLikedPosts((prev) => {
@@ -1261,9 +1254,9 @@ export const useLike = (): UseLikeReturn => {
             return newSet;
           });
         } else {
-          // 좋아요
+          // 좋아요 — arrayUnion은 원자적으로 중복 없이 추가
           await updateDoc(postRef, {
-            likedBy: [...likedBy, user.uid],
+            likedBy: arrayUnion(user.uid),
             likes: increment(1),
           });
           setLikedPosts((prev) => new Set(prev).add(postId));
@@ -1339,22 +1332,12 @@ export const useCommentLike = (): UseCommentLikeReturn => {
         setError(null);
 
         const commentRef = doc(db, 'comments', commentId);
-        const commentSnap = await getDoc(commentRef);
-
-        if (!commentSnap.exists()) {
-          setError('댓글을 찾을 수 없습니다.');
-          return false;
-        }
-
-        const commentData = commentSnap.data();
-        const likedBy: string[] = commentData.likedBy || [];
-        const isCurrentlyLiked = likedBy.includes(user.uid);
+        const isCurrentlyLiked = likedComments.has(commentId);
 
         if (isCurrentlyLiked) {
-          // 좋아요 취소
-          const newLikedBy = likedBy.filter((id) => id !== user.uid);
+          // 좋아요 취소 — arrayRemove 원자적 제거
           await updateDoc(commentRef, {
-            likedBy: newLikedBy,
+            likedBy: arrayRemove(user.uid),
             likes: increment(-1),
           });
           setLikedComments((prev) => {
@@ -1363,9 +1346,9 @@ export const useCommentLike = (): UseCommentLikeReturn => {
             return newSet;
           });
         } else {
-          // 좋아요
+          // 좋아요 — arrayUnion 원자적 추가
           await updateDoc(commentRef, {
-            likedBy: [...likedBy, user.uid],
+            likedBy: arrayUnion(user.uid),
             likes: increment(1),
           });
           setLikedComments((prev) => new Set(prev).add(commentId));
@@ -1510,7 +1493,7 @@ export const usePinnedPosts = (courseId?: string): UsePinnedPostsReturn => {
     return () => unsubscribe();
   }, [courseId]);
 
-  // 게시글 고정
+  // 게시글 고정 (교수만 가능 — Firestore Rules에서도 검증)
   const pinPost = useCallback(async (postId: string): Promise<boolean> => {
     if (!user) {
       setError('로그인이 필요합니다.');
@@ -1524,16 +1507,20 @@ export const usePinnedPosts = (courseId?: string): UsePinnedPostsReturn => {
         pinnedAt: serverTimestamp(),
         pinnedBy: user.uid,
       });
-      // onSnapshot이 자동으로 상태 업데이트
       return true;
-    } catch (err) {
+    } catch (err: any) {
       console.error('게시글 고정 실패:', err);
-      setError('게시글 고정에 실패했습니다.');
+      // Firestore 권한 거부 시 명확한 메시지
+      if (err?.code === 'permission-denied') {
+        setError('교수님만 게시글을 고정할 수 있습니다.');
+      } else {
+        setError('게시글 고정에 실패했습니다.');
+      }
       return false;
     }
   }, [user]);
 
-  // 게시글 고정 해제
+  // 게시글 고정 해제 (교수만 가능)
   const unpinPost = useCallback(async (postId: string): Promise<boolean> => {
     if (!user) {
       setError('로그인이 필요합니다.');
@@ -1541,20 +1528,21 @@ export const usePinnedPosts = (courseId?: string): UsePinnedPostsReturn => {
     }
 
     try {
-      // 낙관적 UI 업데이트: 서버 응답 전에 로컬 상태에서 즉시 제거
-      setPinnedPosts(prev => prev.filter(p => p.id !== postId));
-
       const postRef = doc(db, 'posts', postId);
       await updateDoc(postRef, {
         isPinned: false,
         pinnedAt: deleteField(),
         pinnedBy: deleteField(),
       });
-      // onSnapshot이 자동으로 상태 확인/업데이트
+      // onSnapshot이 자동으로 상태 업데이트
       return true;
-    } catch (err) {
+    } catch (err: any) {
       console.error('게시글 고정 해제 실패:', err);
-      setError('게시글 고정 해제에 실패했습니다.');
+      if (err?.code === 'permission-denied') {
+        setError('교수님만 게시글 고정을 해제할 수 있습니다.');
+      } else {
+        setError('게시글 고정 해제에 실패했습니다.');
+      }
       return false;
     }
   }, [user]);

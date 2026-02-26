@@ -101,9 +101,10 @@ export const generateMonthlyReport = onCall(
 
     const db = getFirestore();
 
-    // 교수님 권한 확인
+    // 교수님 권한 + 과목 소유권 확인
     const userDoc = await db.collection("users").doc(request.auth.uid).get();
-    if (!userDoc.exists || userDoc.data()?.role !== "professor") {
+    const userData = userDoc.data();
+    if (!userDoc.exists || userData?.role !== "professor") {
       throw new HttpsError("permission-denied", "교수님만 리포트를 생성할 수 있습니다.");
     }
 
@@ -116,6 +117,11 @@ export const generateMonthlyReport = onCall(
 
     if (!courseId || !year || !month) {
       throw new HttpsError("invalid-argument", "courseId, year, month가 필요합니다.");
+    }
+
+    // 교수가 담당하는 과목인지 확인
+    if (userData?.courseId && userData.courseId !== courseId) {
+      throw new HttpsError("permission-denied", "담당 과목의 리포트만 생성할 수 있습니다.");
     }
 
     const monthLabel = `${year}-${String(month).padStart(2, "0")}`;
@@ -146,7 +152,7 @@ export const generateMonthlyReport = onCall(
       throw new HttpsError("not-found", `${monthLabel}에 해당하는 주별 통계가 없습니다.`);
     }
 
-    const weeklyData = weeksSnap.docs.map(d => ({
+    const weeklyData: any[] = weeksSnap.docs.map(d => ({
       label: d.id,
       ...d.data(),
     }));
@@ -187,9 +193,18 @@ ${JSON.stringify(weeklyData, null, 2)}
     try {
       insight = await callClaudeSonnet(apiKey, prompt);
     } catch (err) {
-      const errMsg = err instanceof Error ? err.message : "Claude API 호출 실패";
-      console.error("Claude API 호출 실패:", err);
-      throw new HttpsError("internal", errMsg);
+      console.warn("Claude API 실패, 기본 요약으로 대체:", err);
+      // fallback: 수집된 데이터 기반 기본 요약
+      const totalQuizzes = weeklyData.reduce((s, w) => s + (w.quiz?.newCount || 0), 0);
+      const totalFeedback = weeklyData.reduce((s, w) => s + (w.feedback?.total || 0), 0);
+      const avgActive = weeklyData.length > 0
+        ? Math.round(weeklyData.reduce((s, w) => s + (w.student?.activeCount || 0), 0) / weeklyData.length)
+        : 0;
+      insight = `## ${monthLabel} 월간 요약\n\n` +
+        `- 신규 퀴즈: ${totalQuizzes}개\n` +
+        `- 피드백: ${totalFeedback}건\n` +
+        `- 주 평균 활동 학생: ${avgActive}명\n\n` +
+        `> AI 인사이트 생성에 실패하여 기본 요약으로 대체되었습니다.`;
     }
 
     // 리포트 저장

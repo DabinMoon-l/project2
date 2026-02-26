@@ -85,8 +85,8 @@ async function computeRankingsForCourse(courseId: string) {
     });
   });
 
-  // ── 2단계: quizzes + quizResults + rabbits 병렬 조회 ──
-  const [quizSnap, resultsSnap, rabbitNames] = await Promise.all([
+  // ── 2단계: quizzes + quizResults + rabbits 병렬 조회 (토끼 실패해도 계속) ──
+  const [quizResult, resultsResult, rabbitResult] = await Promise.allSettled([
     professorUids.length > 0
       ? db.collection("quizzes").where("courseId", "==", courseId).get()
       : Promise.resolve(null),
@@ -94,7 +94,6 @@ async function computeRankingsForCourse(courseId: string) {
     (async () => {
       const names: Record<string, string> = {};
       const ids = Array.from(rabbitDocIds);
-      // 10개씩 배치 조회
       for (let i = 0; i < ids.length; i += 10) {
         const batch = ids.slice(i, i + 10);
         const snaps = await Promise.all(
@@ -109,6 +108,15 @@ async function computeRankingsForCourse(courseId: string) {
       return names;
     })(),
   ]);
+
+  if (resultsResult.status === "rejected") {
+    console.error("quizResults 조회 실패:", resultsResult.reason);
+    return { rankedUsers: [], teamRanks: [], totalStudents: students.length, weeklyParticipationRate: 0 };
+  }
+
+  const quizSnap = quizResult.status === "fulfilled" ? quizResult.value : null;
+  const resultsSnap = resultsResult.value;
+  const rabbitNames: Record<string, string> = rabbitResult.status === "fulfilled" ? rabbitResult.value : {};
 
   // 교수 퀴즈 ID 수집
   const profQuizIds = new Set<string>();
@@ -175,8 +183,15 @@ async function computeRankingsForCourse(courseId: string) {
     };
   });
 
+  // 동점자 공동순위 배정 (A 100점, B 100점, C 90점 → 1위, 1위, 3위)
   rankedUsers.sort((a, b) => b.rankScore - a.rankScore);
-  rankedUsers.forEach((user, idx) => { user.rank = idx + 1; });
+  let currentRank = 1;
+  rankedUsers.forEach((user, idx) => {
+    if (idx > 0 && user.rankScore < rankedUsers[idx - 1].rankScore) {
+      currentRank = idx + 1;
+    }
+    user.rank = currentRank;
+  });
 
   // ── 주간 참여율 (월~일, KST 기준) ──
   const studentIdSet = new Set(students.map((u: any) => u.id));
@@ -205,12 +220,13 @@ async function computeRankingsForCourse(courseId: string) {
     const avgExp = members.reduce((s: number, u: any) => s + (u.totalExp || 0), 0) / members.length;
     const normalizedAvgExp = (avgExp / maxExp) * 100;
 
+    // 미참여자는 0%로 포함 (전체 멤버 기준 평균)
     const correctRates = members.map((u: any) => {
       const stat = studentProfStats[u.id];
       if (!stat || stat.attempted === 0) return 0;
       return (stat.correct / stat.attempted) * 100;
     });
-    const avgCorrectRate = correctRates.reduce((s, r) => s + r, 0) / correctRates.length;
+    const avgCorrectRate = correctRates.reduce((s, r) => s + r, 0) / members.length;
 
     let avgCompletionRate = 0;
     if (totalProfQuizzes > 0) {
@@ -227,8 +243,15 @@ async function computeRankingsForCourse(courseId: string) {
     };
   });
 
+  // 팀 동점 처리
   teamRanks.sort((a, b) => b.score - a.score);
-  teamRanks.forEach((t, i) => { t.rank = i + 1; });
+  let teamCurrentRank = 1;
+  teamRanks.forEach((t, i) => {
+    if (i > 0 && t.score < teamRanks[i - 1].score) {
+      teamCurrentRank = i + 1;
+    }
+    t.rank = teamCurrentRank;
+  });
 
   return { rankedUsers, teamRanks, totalStudents: students.length, weeklyParticipationRate };
 }

@@ -27,7 +27,6 @@
 
 ### 기타
 - 퀴즈 미리보기 페이지 (/professor/quiz/[id]/preview)
-- BEST Q 별도 페이지 (/professor/quiz/best-q)
 - 과목별 리본 이미지 스와이프 전환
 - 복습 셔플 기능
 - 피드백/결과/게시판/가챠/마일스톤 UI 다수 개선

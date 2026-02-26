@@ -207,8 +207,8 @@ export default function HomePage() {
             </p>
           </div>
 
-          {/* 공지 */}
-          <div className="px-5 -mb-4">
+          {/* 공지 — CharacterBox -mt-24 겹침 방지: relative z-30 */}
+          <div className="px-5 -mb-4 relative z-30">
             <AnnouncementChannel />
           </div>
 

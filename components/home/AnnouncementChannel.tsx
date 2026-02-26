@@ -23,6 +23,7 @@ import { useUser, useCourse } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
 import { useUpload } from '@/lib/hooks/useStorage';
 import { ImageViewer } from '@/components/common';
+import { useKeyboardAware } from '@/lib/hooks/useKeyboardAware';
 
 // ─── 타입 ───────────────────────────────────────────────
 
@@ -1217,6 +1218,7 @@ export default function AnnouncementChannel({
   const userCourseId = overrideCourseId ?? contextCourseId;
   const { theme } = useTheme();
   const { uploadImage, uploadFile, uploadMultipleImages, uploadMultipleFiles, loading: uploadLoading } = useUpload();
+  const { bottomOffset } = useKeyboardAware();
 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1648,7 +1650,7 @@ export default function AnnouncementChannel({
         const firstWord = spaceIdx > 0 ? raw.slice(0, spaceIdx) : raw.slice(0, 1);
         const rest = spaceIdx > 0 ? raw.slice(spaceIdx + 1) : (raw.length > 1 ? raw.slice(1) : '');
         return (
-          <div ref={previewRef}>
+          <div ref={previewRef} onTouchStart={e => e.stopPropagation()}>
           <button onClick={() => {
             if (previewRef.current) {
               setSheetTop(previewRef.current.getBoundingClientRect().bottom);
@@ -1685,7 +1687,7 @@ export default function AnnouncementChannel({
                 transition={{ type: 'spring', damping: 28, stiffness: 300 }}
                 onClick={(e) => e.stopPropagation()}
                 className="relative w-full flex flex-col overflow-hidden rounded-t-2xl will-change-transform"
-                style={{ height: sheetTop > 0 ? `calc(100vh - ${sheetTop + 16}px)` : '92vh' }}
+                style={{ height: sheetTop > 0 ? `calc(100vh - ${sheetTop + 16 + bottomOffset}px)` : bottomOffset > 0 ? `calc(92vh - ${bottomOffset}px)` : '92vh' }}
               >
                 {/* ── 배경 이미지 (blur를 이미지에 직접 적용 — backdrop-blur보다 GPU 효율적) ── */}
                 <div className="absolute inset-0 rounded-t-2xl overflow-hidden">
@@ -1977,7 +1979,7 @@ export default function AnnouncementChannel({
                 {/* ── 하단 입력 (교수님 전용) ── */}
                 {isProfessor && (
                   <div
-                    className="relative z-10 shrink-0 border-t border-white/10 bg-black/20 backdrop-blur-sm px-3 py-3"
+                    className="relative z-10 shrink-0 mx-3 mb-3 rounded-2xl bg-white/8 backdrop-blur-xl border border-white/15 shadow-[0_4px_24px_rgba(0,0,0,0.25)] px-3 py-3"
                     onDragEnter={handleDragEnter}
                     onDragLeave={handleDragLeave}
                     onDragOver={handleDragOver}
@@ -2199,7 +2201,7 @@ export default function AnnouncementChannel({
                             }
                           }}
                           placeholder="공지를 입력하세요..."
-                          className={`w-full bg-white/10 border border-white/15 rounded-xl resize-none focus:outline-none text-sm text-white placeholder:text-white/40 px-3 py-2 pr-8 min-h-[36px] ${inputExpanded ? '' : 'max-h-[36px] overflow-hidden'}`}
+                          className={`w-full bg-white/10 border border-white/15 rounded-2xl resize-none focus:outline-none text-sm text-white placeholder:text-white/40 px-3 py-2 pr-8 min-h-[36px] ${inputExpanded ? '' : 'max-h-[36px] overflow-hidden'}`}
                           rows={1}
                           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handlePost(); } }}
                         />
@@ -2256,6 +2258,8 @@ export default function AnnouncementChannel({
                                 setEditingPolls([{ question: '', options: ['', ''], allowMultiple: false, maxSelections: 2 }]);
                                 setEditingPollIdx(0);
                               } else {
+                                // 키보드 닫고 투표 편집기 열기
+                                if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
                                 setShowPollCreator(true);
                               }
                             }}

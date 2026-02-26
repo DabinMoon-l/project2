@@ -554,14 +554,20 @@ export default function BoardPage() {
     const chunkResults = new Map<number, Map<string, Comment[]>>();
     const unsubscribes: (() => void)[] = [];
 
-    // 모든 chunk 결과를 합쳐서 정렬 후 setCommentsMap
+    // 모든 chunk 결과를 합쳐서 정렬 후 setCommentsMap (ID 기반 중복 제거)
     const mergeAllChunks = () => {
       const newMap = new Map<string, Comment[]>();
 
       chunkResults.forEach((chunkMap) => {
         chunkMap.forEach((comments, postId) => {
           const existing = newMap.get(postId) || [];
-          existing.push(...comments);
+          const seenIds = new Set(existing.map(c => c.id));
+          for (const c of comments) {
+            if (!seenIds.has(c.id)) {
+              existing.push(c);
+              seenIds.add(c.id);
+            }
+          }
           newMap.set(postId, existing);
         });
       });

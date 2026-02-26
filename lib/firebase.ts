@@ -9,7 +9,7 @@
 
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth, Auth } from 'firebase/auth';
-import { getFirestore, Firestore } from 'firebase/firestore';
+import { initializeFirestore, getFirestore, Firestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getFunctions, Functions } from 'firebase/functions';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { getDatabase, Database } from 'firebase/database';
@@ -44,9 +44,22 @@ const auth: Auth = getAuth(app);
 
 /**
  * Firestore 데이터베이스 인스턴스
- * 실시간 데이터 동기화를 지원하는 NoSQL 클라우드 데이터베이스입니다.
+ * IndexedDB 기반 오프라인 캐시 활성화 (재방문 시 즉시 표시 + 멀티탭 지원)
+ * 핫 리로드 시 initializeFirestore 중복 호출 방지: 앱이 이미 초기화되었으면 getFirestore로 fallback
  */
-const db: Firestore = getFirestore(app);
+const db: Firestore = getApps().length > 1
+  ? getFirestore(app)
+  : (() => {
+    try {
+      return initializeFirestore(app, {
+        localCache: persistentLocalCache({
+          tabManager: persistentMultipleTabManager(),
+        }),
+      });
+    } catch {
+      return getFirestore(app);
+    }
+  })();
 
 /**
  * Firebase Functions 인스턴스

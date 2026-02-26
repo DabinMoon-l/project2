@@ -15,11 +15,11 @@ import { useAuth } from '@/lib/hooks/useAuth';
  * 날짜 포맷
  */
 function formatDate(date: Date) {
-  return date.toLocaleDateString('ko-KR', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
+  const m = date.getMonth() + 1;
+  const d = date.getDate();
+  const h = String(date.getHours()).padStart(2, '0');
+  const min = String(date.getMinutes()).padStart(2, '0');
+  return `${m}. ${d}. ${h}:${min}`;
 }
 
 /**
@@ -219,11 +219,11 @@ export default function PostDetailPage() {
 
       {/* 본문 */}
       <main className="px-4">
-        <motion.article initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pb-6">
+        <motion.article initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pb-1">
           {/* 공지 */}
           {post.isNotice && (
             <span
-              className="inline-block px-3 py-1 text-xs font-bold mb-3"
+              className="inline-block px-3 py-1 text-sm font-bold mb-3"
               style={{ backgroundColor: '#1A1A1A', color: '#F5F0E8' }}
             >
               NOTICE
@@ -235,24 +235,16 @@ export default function PostDetailPage() {
             {post.title}
           </h2>
 
-          {/* 메타 정보 */}
-          <div className="flex items-center gap-2 text-sm text-[#3A3A3A] mb-4 pb-4 border-b border-dashed border-[#1A1A1A]">
-            {/* 작성자: 닉네임·반 형식 */}
+          {/* 메타 정보: 좌=글쓴이, 우=월일시 */}
+          <div className="flex items-center justify-between text-[15px] text-[#3A3A3A] mb-4 pb-4 border-b border-dashed border-[#1A1A1A]">
             <span>
               {post.authorNickname}·{post.authorClassType || '?'}반
             </span>
-            <span>·</span>
             <span>{formatDate(post.createdAt)}</span>
-            <span>·</span>
-            <span>조회 {post.viewCount}</span>
-            <span>·</span>
-            <span>♥ {post.likes}</span>
-            <span>·</span>
-            <span>댓글 {post.commentCount}</span>
           </div>
 
           {/* 본문 */}
-          <p className="text-[17px] leading-relaxed whitespace-pre-wrap text-[#1A1A1A] mb-4">
+          <p className="text-[18px] leading-relaxed whitespace-pre-wrap text-[#1A1A1A] mb-4">
             {post.content}
           </p>
 
@@ -262,14 +254,14 @@ export default function PostDetailPage() {
           {/* 첨부파일 */}
           {post.fileUrls && post.fileUrls.length > 0 && (
             <div className="mt-4 p-3 bg-[#EDEAE4]">
-              <p className="text-sm font-bold text-[#1A1A1A] mb-2">첨부파일</p>
+              <p className="text-[15px] font-bold text-[#1A1A1A] mb-2">첨부파일</p>
               {post.fileUrls.map((file, index) => (
                 <a
                   key={index}
                   href={file.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-sm text-[#1A1A1A] hover:underline py-1"
+                  className="flex items-center gap-2 text-[15px] text-[#1A1A1A] hover:underline py-1"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
@@ -280,34 +272,39 @@ export default function PostDetailPage() {
             </div>
           )}
 
-          {/* 좋아요 / 수정삭제 */}
-          <div className="flex items-center justify-between py-4 mt-4 border-t border-dashed border-[#1A1A1A]">
+          {/* 찜 줄: 좌=찜, 우=조회·댓글 */}
+          <div className="flex items-center justify-between py-2 mt-4 border-t border-dashed border-[#1A1A1A]">
             <LikeButton count={post.likes} isLiked={isLiked(postId)} onToggle={handleLike} />
-
-            {isOwner && (
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => router.push(`/board/${postId}/edit`)}
-                  className="text-sm text-[#3A3A3A] hover:text-[#1A1A1A] transition-colors"
-                >
-                  수정
-                </button>
-                <button
-                  onClick={handleDelete}
-                  disabled={deleting}
-                  className="text-sm transition-colors disabled:opacity-50"
-                  style={{ color: '#8B1A1A' }}
-                >
-                  {deleting ? '삭제중...' : '삭제'}
-                </button>
-              </div>
-            )}
+            <div className="flex items-center gap-3 text-[15px] text-[#5C5C5C]">
+              <span>조회 {post.viewCount}</span>
+              <span>댓글 {post.commentCount}</span>
+            </div>
           </div>
+
+          {/* 수정/삭제 (작성자만) */}
+          {isOwner && (
+            <div className="flex items-center justify-end gap-3 pt-1">
+              <button
+                onClick={() => router.push(`/board/${postId}/edit`)}
+                className="text-[13px] text-[#999999] hover:text-[#1A1A1A] transition-colors"
+              >
+                수정
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="text-[13px] transition-colors disabled:opacity-50"
+                style={{ color: '#8B1A1A' }}
+              >
+                {deleting ? '삭제중...' : '삭제'}
+              </button>
+            </div>
+          )}
         </motion.article>
 
         {/* 댓글 */}
         <section className="pt-4 border-t-2 border-[#1A1A1A]">
-          <h3 className="font-bold text-lg mb-2 text-[#1A1A1A]">댓글</h3>
+          <h3 className="font-bold text-xl mb-2 text-[#1A1A1A]">댓글</h3>
           <CommentSection postId={postId} />
         </section>
       </main>

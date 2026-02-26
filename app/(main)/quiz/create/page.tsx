@@ -1411,7 +1411,13 @@ export default function QuizCreatePage() {
       const quizDataWithUrls = await processImagesInQuizData(JSON.parse(JSON.stringify(quizData)));
       console.log('=== 이미지 업로드 완료 ===');
 
-      // 2. 데이터 정리 (중첩 배열 제거 등)
+      // 2. 문제별 고유 ID 부여
+      if (Array.isArray(quizDataWithUrls.questions)) {
+        const { ensureQuestionIds } = await import('@/lib/utils/questionId');
+        quizDataWithUrls.questions = ensureQuestionIds(quizDataWithUrls.questions);
+      }
+
+      // 3. 데이터 정리 (중첩 배열 제거 등)
       const cleanedQuizData = sanitizeForFirestore(quizDataWithUrls);
 
       // 3. 데이터 크기 확인

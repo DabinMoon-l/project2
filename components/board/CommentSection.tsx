@@ -16,6 +16,7 @@ import {
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useUser } from '@/lib/contexts';
 import { useUpload } from '@/lib/hooks/useStorage';
+import { useKeyboardAware } from '@/lib/hooks/useKeyboardAware';
 
 interface CommentSectionProps {
   postId: string;
@@ -29,12 +30,13 @@ export default function CommentSection({ postId }: CommentSectionProps) {
   const { user } = useAuth();
   const { profile } = useUser();
   const { showExpToast } = useExpToast();
-  const { comments, loading, refresh } = useComments(postId);
+  const { comments, loading, error: commentsError, refresh } = useComments(postId);
   const { createComment, loading: creating } = useCreateComment();
   const { updateComment } = useUpdateComment();
   const { deleteComment } = useDeleteComment();
   const { toggleCommentLike } = useCommentLike();
   const { uploadMultipleImages, loading: uploading } = useUpload();
+  const { bottomOffset } = useKeyboardAware();
 
   const [replyingTo, setReplyingTo] = useState<{ id: string; nickname: string } | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -220,7 +222,14 @@ export default function CommentSection({ postId }: CommentSectionProps) {
           </div>
         )}
 
-        {!loading && comments.length === 0 && (
+        {!loading && commentsError && (
+          <div className="py-6 text-center text-sm text-[#8B1A1A]">
+            댓글을 불러오지 못했습니다.
+            <button onClick={refresh} className="ml-2 underline font-bold">다시 시도</button>
+          </div>
+        )}
+
+        {!loading && !commentsError && comments.length === 0 && (
           <div className="py-6 text-center text-base italic text-[#3A3A3A]">
             첫 번째 의견을 남겨주세요
           </div>
@@ -268,8 +277,8 @@ export default function CommentSection({ postId }: CommentSectionProps) {
       {/* 하단 고정 입력바 */}
       {user && (
         <div
-          className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#1A1A1A]"
-          style={{ backgroundColor: '#F5F0E8' }}
+          className="fixed left-3 right-3 z-40 rounded-2xl bg-[#F5F0E8]/80 backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.12)] border border-[#D4CFC4]/60 overflow-hidden transition-[bottom] duration-100"
+          style={{ bottom: bottomOffset ? bottomOffset : 'max(0.75rem, env(safe-area-inset-bottom))' }}
         >
           {/* 답글 대상 표시 */}
           <AnimatePresence>
@@ -280,7 +289,7 @@ export default function CommentSection({ postId }: CommentSectionProps) {
                 exit={{ height: 0, opacity: 0 }}
                 className="overflow-hidden"
               >
-                <div className="flex items-center justify-between px-4 py-1.5 bg-[#EDEAE4] border-b border-[#D4CFC4]">
+                <div className="flex items-center justify-between px-4 py-1.5 bg-[#EDEAE4]/60 border-b border-[#D4CFC4]/40">
                   <span className="text-xs text-[#3A3A3A]">
                     {replyingTo.nickname}님에게 답글
                   </span>
@@ -351,10 +360,10 @@ export default function CommentSection({ postId }: CommentSectionProps) {
               placeholder={replyingTo ? `${replyingTo.nickname}님에게 답글...` : '의견을 남겨주세요...'}
               rows={1}
               maxLength={500}
-              className="flex-1 px-3 py-2 outline-none resize-none leading-relaxed text-sm"
+              className="flex-1 px-3 py-2 outline-none resize-none leading-relaxed text-sm rounded-xl"
               style={{
-                border: '1px solid #1A1A1A',
-                backgroundColor: theme.colors.background,
+                border: '1px solid rgba(180, 175, 165, 0.6)',
+                backgroundColor: 'rgba(245, 240, 232, 0.5)',
                 color: theme.colors.text,
                 maxHeight: '120px',
               }}

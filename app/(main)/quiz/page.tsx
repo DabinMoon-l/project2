@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, Suspense, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
@@ -24,6 +24,8 @@ import { Skeleton } from '@/components/common';
 import { useCourse } from '@/lib/contexts';
 import { COURSES, getCurrentSemesterByDate, getDefaultQuizTab, getPastExamOptions, type PastExamOption } from '@/lib/types/course';
 import { generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
+import AutoVideo, { getDifficultyVideo } from '@/components/quiz/AutoVideo';
+import { NEWSPAPER_BG_TEXT, parseAverageScore, sortByLatest, formatQuestionTypes } from '@/lib/utils/quizHelpers';
 
 // ============================================================
 // 타입 정의
@@ -90,72 +92,7 @@ function getDefaultCarouselIndex(): number {
 }
 
 
-// 신문 배경 텍스트 (생물학 관련)
-const NEWSPAPER_BG_TEXT = `The cell membrane, also known as the plasma membrane, is a biological membrane that separates and protects the interior of all cells from the outside environment. The cell membrane consists of a lipid bilayer, including cholesterols that sit between phospholipids to maintain their fluidity at various temperatures. The membrane also contains membrane proteins, including integral proteins that span the membrane serving as membrane transporters, and peripheral proteins that loosely attach to the outer side of the cell membrane, acting as enzymes to facilitate interaction with the cell's environment. Glycolipids embedded in the outer lipid layer serve a similar purpose. The cell membrane controls the movement of substances in and out of cells and organelles, being selectively permeable to ions and organic molecules. In addition, cell membranes are involved in a variety of cellular processes such as cell adhesion, ion conductivity, and cell signaling.`;
-
-// 난이도별 비디오 경로
-function getDifficultyVideo(difficulty: string): string {
-  switch (difficulty) {
-    case 'easy': return '/videos/difficulty-easy.mp4';
-    case 'hard': return '/videos/difficulty-hard.mp4';
-    default: return '/videos/difficulty-normal.mp4';
-  }
-}
-
-// 자동재생 비디오 — 탭 전환 시에도 안정적으로 재생
-function AutoVideo({ src, className }: { src: string; className?: string }) {
-  const ref = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.play().catch(() => {});
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') el.play().catch(() => {});
-    };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [src]);
-
-  return (
-    <video
-      ref={ref}
-      autoPlay
-      loop
-      muted
-      playsInline
-      className={className}
-    >
-      <source src={src} type="video/mp4" />
-    </video>
-  );
-}
-
-// ============================================================
-// 유틸리티 함수
-// ============================================================
-
-/**
- * 문제 유형을 포맷하여 표시
- * 예: "OX 2 / 객관식 5 / 주관식 2"
- */
-function formatQuestionTypes(
-  oxCount: number = 0,
-  multipleChoiceCount: number = 0,
-  subjectiveCount: number = 0
-): string {
-  const parts: string[] = [];
-  if (oxCount > 0) parts.push(`OX ${oxCount}`);
-  if (multipleChoiceCount > 0) parts.push(`객관식 ${multipleChoiceCount}`);
-  if (subjectiveCount > 0) parts.push(`주관식 ${subjectiveCount}`);
-
-  if (parts.length === 0) {
-    const total = oxCount + multipleChoiceCount + subjectiveCount;
-    return total > 0 ? `${total}문제` : '-';
-  }
-
-  return parts.join(' / ');
-}
+// (AutoVideo, getDifficultyVideo, NEWSPAPER_BG_TEXT, formatQuestionTypes → 공유 모듈에서 import)
 
 // ============================================================
 // 완료 뱃지 컴포넌트
@@ -188,7 +125,7 @@ function CompletedBadge({ size = 'normal' }: { size?: 'normal' | 'small' }) {
 // 뉴스 기사 컴포넌트 (퀴즈 — 교수 스타일)
 // ============================================================
 
-function NewsArticle({
+const NewsArticle = memo(function NewsArticle({
   quiz,
   onStart,
   onUpdate,
@@ -271,13 +208,13 @@ function NewsArticle({
       </div>
     </div>
   );
-}
+});
 
 // ============================================================
 // 뉴스 카드 컴포넌트 (중간/기말 — 교수 스타일 세로 스크롤)
 // ============================================================
 
-function NewsCard({
+const NewsCard = memo(function NewsCard({
   type,
   title,
   subtitle,
@@ -329,7 +266,7 @@ function NewsCard({
   }, [type]);
 
   return (
-    <div className="w-full h-full border-4 border-[#1A1A1A] bg-[#1A1A1A] flex flex-col overflow-hidden">
+    <div className="w-full h-full border border-[#999] bg-[#1A1A1A] flex flex-col overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.3)]">
       {/* 축소된 헤더 */}
       <div className="bg-[#1A1A1A] text-[#F5F0E8] px-4 py-2 text-center flex-shrink-0">
         <h1 className="font-serif text-lg font-black tracking-tight">{title}</h1>
@@ -362,13 +299,13 @@ function NewsCard({
       </div>
     </div>
   );
-}
+});
 
 // ============================================================
 // 기출 뉴스 카드 컴포넌트 (교수 스타일)
 // ============================================================
 
-function PastExamNewsCard({
+const PastExamNewsCard = memo(function PastExamNewsCard({
   quizzes,
   selectedPastExam,
   pastExamOptions,
@@ -398,7 +335,7 @@ function PastExamNewsCard({
   const isCompleted = filteredQuiz?.isCompleted && !filteredQuiz?.hasUpdate;
 
   return (
-    <div className="w-full h-full border-4 border-[#1A1A1A] bg-[#1A1A1A] flex flex-col overflow-hidden">
+    <div className="w-full h-full border border-[#999] bg-[#1A1A1A] flex flex-col overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.3)]">
       {/* 축소된 헤더 + 드롭다운 */}
       <div className="bg-[#1A1A1A] text-[#F5F0E8] px-4 py-2 flex items-center justify-between flex-shrink-0">
         <div>
@@ -517,7 +454,7 @@ function PastExamNewsCard({
       </div>
     </div>
   );
-}
+});
 
 // ============================================================
 // 뉴스 캐러셀 (교수와 동일한 3D perspective + 무한 루프)
@@ -828,10 +765,10 @@ function ReviewQuizCard({
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -4, boxShadow: '0 8px 25px rgba(26, 26, 26, 0.15)' }}
+      whileHover={{ y: -4, boxShadow: '0 8px 20px rgba(0, 0, 0, 0.08)' }}
       transition={{ duration: 0.2 }}
       onClick={onCardClick}
-      className="relative border border-[#1A1A1A] bg-[#F5F0E8] overflow-hidden cursor-pointer shadow-md"
+      className="relative border border-[#999] bg-[#F5F0E8]/70 backdrop-blur-sm overflow-hidden cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
     >
       {/* 신문 배경 텍스트 */}
       <div className="absolute inset-0 p-2 overflow-hidden pointer-events-none">
@@ -883,7 +820,7 @@ function ReviewQuizCard({
       </div>
 
       {/* 카드 내용 */}
-      <div className="relative z-10 p-4 bg-[#F5F0E8]/90">
+      <div className="relative z-10 p-4 bg-[#F5F0E8]/60">
         {/* 제목 (2줄 고정 높이) */}
         <div className="h-[44px] mb-2">
           <h3 className="font-bold text-base line-clamp-2 text-[#1A1A1A] leading-snug">
@@ -1010,9 +947,9 @@ function CustomQuizCard({
 
   return (
     <motion.div
-      whileHover={isCompleted ? {} : { y: -4, boxShadow: '0 8px 25px rgba(26, 26, 26, 0.15)' }}
+      whileHover={isCompleted ? {} : { y: -4, boxShadow: '0 8px 20px rgba(0, 0, 0, 0.08)' }}
       transition={{ duration: 0.2 }}
-      className={`relative border border-[#1A1A1A] bg-[#F5F0E8] overflow-hidden shadow-md ${
+      className={`relative border border-[#999] bg-[#F5F0E8]/70 backdrop-blur-sm overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)] ${
         isCompleted ? 'pointer-events-none' : ''
       }`}
     >
@@ -1084,7 +1021,7 @@ function CustomQuizCard({
       </div>
 
       {/* 카드 내용 */}
-      <div className="relative z-10 p-4 bg-[#F5F0E8]/90">
+      <div className="relative z-10 p-4 bg-[#F5F0E8]/60">
         {/* 제목 (2줄 고정 높이) */}
         <div className="h-[44px] mb-2">
           <h3 className="font-serif-display font-bold text-base line-clamp-2 text-[#1A1A1A] pr-6 leading-snug">
@@ -1147,7 +1084,7 @@ function CustomQuizCard({
 
 function SkeletonCard() {
   return (
-    <div className="border border-[#1A1A1A] bg-[#F5F0E8] p-4 shadow-md">
+    <div className="border border-[#999] bg-[#F5F0E8]/70 backdrop-blur-sm p-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
       <Skeleton className="w-3/4 h-4 mb-2 rounded-none" />
       <Skeleton className="w-1/2 h-3 mb-3 rounded-none" />
       <div className="flex gap-2">
@@ -1180,9 +1117,9 @@ function ManageQuizCard({
 
   return (
     <motion.div
-      whileHover={{ y: -4, boxShadow: '0 8px 25px rgba(26, 26, 26, 0.15)' }}
+      whileHover={{ y: -4, boxShadow: '0 8px 20px rgba(0, 0, 0, 0.08)' }}
       transition={{ duration: 0.2 }}
-      className="border border-[#1A1A1A] bg-[#F5F0E8] p-4 shadow-md cursor-pointer"
+      className="border border-[#999] bg-[#F5F0E8]/70 backdrop-blur-sm p-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] cursor-pointer"
     >
       <div className="h-[44px] mb-2">
         <h3 className="font-serif-display font-bold text-base line-clamp-2 text-[#1A1A1A] leading-snug">
@@ -1271,8 +1208,9 @@ function QuizListPageContent() {
   const [pastQuizzes, setPastQuizzes] = useState<QuizCardData[]>([]);
   const [customQuizzes, setCustomQuizzes] = useState<QuizCardData[]>([]);
 
-  // quiz_completions 기반 완료 데이터 (completedUsers 배열 대체)
-  const [completionMap, setCompletionMap] = useState<Map<string, number>>(new Map());
+  // quiz_completions 기반 완료 데이터 (useRef로 구독 재시작 방지)
+  const completionMapRef = useRef<Map<string, number>>(new Map());
+  const [completionVer, setCompletionVer] = useState(0);
 
   const [isLoading, setIsLoading] = useState({
     midterm: true,
@@ -1340,26 +1278,12 @@ function QuizListPageContent() {
   // 삭제 확인 모달
   const [quizToDelete, setQuizToDelete] = useState<QuizCardData | null>(null);
 
-  // 삭제 모달 열림 시 body 스크롤 방지 (PullToHome 스와이프 방지)
+  // body 스크롤 방지 통합 (모달/관리모드 열림 시 PullToHome 스와이프 방지)
   useEffect(() => {
-    if (!quizToDelete) return;
-    document.body.style.overflow = 'hidden';
+    const lock = !!quizToDelete || !!feedbackQuiz || isManageMode;
+    document.body.style.overflow = lock ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };
-  }, [quizToDelete]);
-
-  // 피드백 모달 열림 시 body 스크롤 방지 (PullToHome 스와이프 방지)
-  useEffect(() => {
-    if (!feedbackQuiz) return;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
-  }, [feedbackQuiz]);
-
-  // 퀴즈 관리 모드 시 body 스크롤 방지 (PullToHome 스와이프 방지)
-  useEffect(() => {
-    if (!isManageMode) return;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
-  }, [isManageMode]);
+  }, [quizToDelete, feedbackQuiz, isManageMode]);
 
   // 태그 필터링 상태
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -1371,45 +1295,30 @@ function QuizListPageContent() {
     return [...COMMON_TAGS.map(t => t.value), ...courseTags.map(t => t.value)];
   }, [userCourseId]);
 
-  // 완료 상태 병합 + 정렬 헬퍼 (퀴즈탭: 수정 뱃지 없이 완료 유지)
-  const applyUpdateStatusAndSort = useCallback((quizzes: QuizCardData[]): QuizCardData[] => {
-    // 1. quiz_completions 기반 완료 상태 병합
+  // 완료 상태 병합 + 정렬 (completionMapRef 사용 → completionVer로 갱신 트리거)
+  const applyCompletionAndSort = useCallback((quizzes: QuizCardData[]): QuizCardData[] => {
+    const cm = completionMapRef.current;
     const withCompletion = quizzes.map(quiz => {
-      const completionScore = completionMap.get(quiz.id);
+      const completionScore = cm.get(quiz.id);
       const isCompleted = completionScore !== undefined || quiz.isCompleted;
       const myScore = completionScore ?? quiz.myScore;
       return { ...quiz, isCompleted, myScore };
     });
-
-    // 2. 정렬: 미완료 > 완료 > 최신순
     return [...withCompletion].sort((a, b) => {
       if (!a.isCompleted && b.isCompleted) return -1;
       if (a.isCompleted && !b.isCompleted) return 1;
-      const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
-      const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
-      return bTime - aTime;
+      return sortByLatest(a, b);
     });
-  }, [completionMap]);
+  }, []);
 
-  // 업데이트 상태가 적용된 중간 퀴즈 (정렬 포함)
-  const midtermQuizzesWithUpdate = useMemo(() => {
-    return applyUpdateStatusAndSort(midtermQuizzes);
-  }, [midtermQuizzes, applyUpdateStatusAndSort]);
-
-  // 업데이트 상태가 적용된 기말 퀴즈 (정렬 포함)
-  const finalQuizzesWithUpdate = useMemo(() => {
-    return applyUpdateStatusAndSort(finalQuizzes);
-  }, [finalQuizzes, applyUpdateStatusAndSort]);
-
-  // 업데이트 상태가 적용된 기출 퀴즈 (정렬 포함)
-  const pastQuizzesWithUpdate = useMemo(() => {
-    return applyUpdateStatusAndSort(pastQuizzes);
-  }, [pastQuizzes, applyUpdateStatusAndSort]);
-
-  // 업데이트 상태가 적용된 자작 퀴즈 (정렬 포함)
-  const customQuizzesWithUpdate = useMemo(() => {
-    return applyUpdateStatusAndSort(customQuizzes);
-  }, [customQuizzes, applyUpdateStatusAndSort]);
+  // 단일 useMemo — completionVer 변경 시 1회 정렬
+  const { midtermQuizzesWithUpdate, finalQuizzesWithUpdate, pastQuizzesWithUpdate, customQuizzesWithUpdate } = useMemo(() => ({
+    midtermQuizzesWithUpdate: applyCompletionAndSort(midtermQuizzes),
+    finalQuizzesWithUpdate: applyCompletionAndSort(finalQuizzes),
+    pastQuizzesWithUpdate: applyCompletionAndSort(pastQuizzes),
+    customQuizzesWithUpdate: applyCompletionAndSort(customQuizzes),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [midtermQuizzes, finalQuizzes, pastQuizzes, customQuizzes, completionVer, applyCompletionAndSort]);
 
   // 태그 필터링된 자작 퀴즈 (퀴즈 탭)
   const filteredCustomQuizzes = useMemo(() => {
@@ -1437,9 +1346,7 @@ function QuizListPageContent() {
     }).sort((a, b) => {
       if (a.hasUpdate && !b.hasUpdate) return -1;
       if (!a.hasUpdate && b.hasUpdate) return 1;
-      const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
-      const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
-      return bTime - aTime;
+      return sortByLatest(a, b);
     });
   }, [customQuizzesWithUpdate, selectedTags, updatedQuizzes]);
 
@@ -1447,7 +1354,7 @@ function QuizListPageContent() {
   // 데이터 로드 함수들
   // ============================================================
 
-  // quiz_completions 구독 (completedUsers 배열 대체)
+  // quiz_completions 구독 (useRef로 다른 구독에 영향 안 줌)
   useEffect(() => {
     if (!user) return;
     const q = query(
@@ -1460,7 +1367,8 @@ function QuizListPageContent() {
         const data = d.data();
         map.set(data.quizId, data.score ?? 0);
       });
-      setCompletionMap(map);
+      completionMapRef.current = map;
+      setCompletionVer(v => v + 1);
     });
     return unsub;
   }, [user]);
@@ -1468,19 +1376,9 @@ function QuizListPageContent() {
   // 퀴즈 데이터 파싱 (updatedQuizzes 의존성 제거 - 재로딩 방지)
   const parseQuizData = useCallback((docSnapshot: any, userId: string): QuizCardData => {
     const data = docSnapshot.data();
-    // isCompleted는 applyUpdateStatusAndSort에서 completionMap으로 병합
     const isCompleted = data.completedUsers?.includes(userId) || false;
-
     const participantCount = data.participantCount || 0;
-
-    // averageScore fallback: userScores에서 계산
-    let averageScore = data.averageScore || 0;
-    if (!averageScore && data.userScores) {
-      const scores = Object.values(data.userScores) as number[];
-      if (scores.length > 0) {
-        averageScore = Math.round((scores.reduce((sum, s) => sum + s, 0) / scores.length) * 10) / 10;
-      }
-    }
+    const averageScore = parseAverageScore(data);
 
     return {
       id: docSnapshot.id,
@@ -1496,7 +1394,7 @@ function QuizListPageContent() {
       creatorNickname: data.creatorNickname,
       creatorClassType: data.creatorClassType,
       creatorId: data.creatorId,
-      hasUpdate: false, // 나중에 applyUpdateStatus에서 적용
+      hasUpdate: false,
       updatedQuestionCount: undefined,
       tags: data.tags || [],
       bookmarkCount: data.bookmarkCount || 0,
@@ -1511,69 +1409,36 @@ function QuizListPageContent() {
       pastYear: data.pastYear,
       pastExamType: data.pastExamType,
     };
-  }, []); // 의존성 제거 - updatedQuizzes 변경 시 재로딩 방지
+  }, []);
 
-  // 중간/기말 퀴즈 로드
+  // 중간/기말/기출 통합 구독 (3개 → 1개: type in ['midterm','final','past'] AND courseId)
   useEffect(() => {
     if (!user || !userCourseId) return;
 
-    const loadQuizzes = async (type: 'midterm' | 'final') => {
-      setIsLoading((prev) => ({ ...prev, [type]: true }));
+    setIsLoading((prev) => ({ ...prev, midterm: true, final: true, past: true }));
 
-      const quizzesRef = collection(db, 'quizzes');
-      const q = query(
-        quizzesRef,
-        where('type', '==', type),
-        where('courseId', '==', userCourseId)
-      );
-
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const quizzes: QuizCardData[] = [];
-        snapshot.forEach((doc) => {
-          quizzes.push(parseQuizData(doc, user.uid));
-        });
-
-        // 정렬은 useMemo(applyUpdateStatusAndSort)에서 처리
-        if (type === 'midterm') {
-          setMidtermQuizzes(quizzes);
-        } else {
-          setFinalQuizzes(quizzes);
-        }
-        setIsLoading((prev) => ({ ...prev, [type]: false }));
-      });
-
-      return unsubscribe;
-    };
-
-    const unsubMidterm = loadQuizzes('midterm');
-    const unsubFinal = loadQuizzes('final');
-
-    return () => {
-      unsubMidterm.then((unsub) => unsub());
-      unsubFinal.then((unsub) => unsub());
-    };
-  }, [user, userCourseId, parseQuizData]);
-
-  // 기출 퀴즈 로드 (전체 — PastExamNewsCard에서 드롭다운 선택에 따라 필터링)
-  useEffect(() => {
-    if (!user || !userCourseId) return;
-
-    setIsLoading((prev) => ({ ...prev, past: true }));
-
-    const quizzesRef = collection(db, 'quizzes');
     const q = query(
-      quizzesRef,
-      where('type', '==', 'past'),
+      collection(db, 'quizzes'),
+      where('type', 'in', ['midterm', 'final', 'past']),
       where('courseId', '==', userCourseId)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const quizzes: QuizCardData[] = [];
+      const midterm: QuizCardData[] = [];
+      const final_: QuizCardData[] = [];
+      const past: QuizCardData[] = [];
+
       snapshot.forEach((doc) => {
-        quizzes.push(parseQuizData(doc, user.uid));
+        const quiz = parseQuizData(doc, user.uid);
+        if (quiz.type === 'midterm') midterm.push(quiz);
+        else if (quiz.type === 'final') final_.push(quiz);
+        else if (quiz.type === 'past') past.push(quiz);
       });
-      setPastQuizzes(quizzes);
-      setIsLoading((prev) => ({ ...prev, past: false }));
+
+      setMidtermQuizzes(midterm);
+      setFinalQuizzes(final_);
+      setPastQuizzes(past);
+      setIsLoading((prev) => ({ ...prev, midterm: false, final: false, past: false }));
     });
 
     return () => unsubscribe();
@@ -1585,22 +1450,20 @@ function QuizListPageContent() {
 
     setIsLoading((prev) => ({ ...prev, custom: true }));
 
-    const quizzesRef = collection(db, 'quizzes');
     const q = query(
-      quizzesRef,
+      collection(db, 'quizzes'),
       where('type', '==', 'custom')
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const quizzes: QuizCardData[] = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
+      snapshot.forEach((d) => {
+        const data = d.data();
         // 현재 과목의 자작 퀴즈만 (courseId가 없거나 일치하는 경우)
         if (!userCourseId || !data.courseId || data.courseId === userCourseId) {
-          quizzes.push(parseQuizData(doc, user.uid));
+          quizzes.push(parseQuizData(d, user.uid));
         }
       });
-      // 정렬은 useMemo(applyUpdateStatusAndSort)에서 처리
       setCustomQuizzes(quizzes);
       setIsLoading((prev) => ({ ...prev, custom: false }));
     });
@@ -1623,11 +1486,7 @@ function QuizListPageContent() {
     });
 
     // 관리 모드는 최신순만 적용
-    quizzes.sort((a, b) => {
-      const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
-      const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
-      return bTime - aTime;
-    });
+    quizzes.sort(sortByLatest);
 
     setMyQuizzes(quizzes);
     setIsLoadingMyQuizzes(false);
@@ -1751,11 +1610,7 @@ function QuizListPageContent() {
       });
 
       // 최신순 정렬
-      feedbackList.sort((a, b) => {
-        const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
-        const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
-        return bTime - aTime;
-      });
+      feedbackList.sort(sortByLatest);
 
       setFeedbacks(feedbackList);
     } catch (error) {
@@ -2053,7 +1908,7 @@ function QuizListPageContent() {
       </header>
 
       {/* 뉴스 캐러셀 (중간/기말/기출) */}
-      <section className="mb-8">
+      <section className="mt-3 mb-8">
         <NewsCarousel
           midtermQuizzes={midtermQuizzesWithUpdate}
           finalQuizzes={finalQuizzesWithUpdate}

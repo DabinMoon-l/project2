@@ -176,8 +176,8 @@ export default function ProfessorHomePage() {
             </p>
           </div>
 
-          {/* 공지 — 과목 전환은 바텀시트 내부 */}
-          <div className="px-5 -mb-4">
+          {/* 공지 — CharacterBox 겹침 방지: relative z-30 */}
+          <div className="px-5 -mb-4 relative z-30">
             <AnnouncementChannel
               overrideCourseId={selectedCourse}
               headerContent={

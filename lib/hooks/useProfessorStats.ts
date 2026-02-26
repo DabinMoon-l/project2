@@ -142,13 +142,13 @@ export function useProfessorStats() {
         return;
       }
 
-      // 2) 학생 목록 조회 → userId → classType 맵
+      // 2) 학생 목록 조회 → userId → classType 맵 (서버에서 courseId 필터)
       const usersRef = collection(db, 'users');
-      const usersSnap = await getDocs(query(usersRef, where('role', '==', 'student')));
+      const usersSnap = await getDocs(query(usersRef, where('role', '==', 'student'), where('courseId', '==', courseId)));
       const userClassMap: Record<string, ClassType> = {};
       usersSnap.forEach(d => {
         const u = d.data();
-        if (u.classType && u.courseId === courseId) {
+        if (u.classType) {
           userClassMap[d.id] = u.classType as ClassType;
         }
       });
@@ -157,15 +157,17 @@ export function useProfessorStats() {
       const results: ResultDoc[] = [];
       const quizMap = new Map(quizzes.map(q => [q.id, q]));
 
-      // Firestore `in` 쿼리는 최대 30개까지 — 배치 처리
+      // Firestore `in` 쿼리는 최대 30개까지 — 배치 병렬 처리
+      const batchPromises = [];
       for (let i = 0; i < quizIds.length; i += 30) {
         const batch = quizIds.slice(i, i + 30);
-        const resSnap = await getDocs(
-          query(collection(db, 'quizResults'), where('quizId', 'in', batch))
-        );
+        batchPromises.push(getDocs(query(collection(db, 'quizResults'), where('quizId', 'in', batch))));
+      }
+      const batchResults = await Promise.all(batchPromises);
+      batchResults.forEach(resSnap => {
         resSnap.forEach(d => {
           const r = d.data();
-          if (!userClassMap[r.userId]) return; // 해당 과목 학생 아닌 경우 건너뜀
+          if (!userClassMap[r.userId]) return;
           results.push({
             userId: r.userId,
             quizId: r.quizId,
@@ -176,7 +178,7 @@ export function useProfessorStats() {
             createdAt: r.createdAt instanceof Timestamp ? r.createdAt.toDate() : new Date(r.createdAt),
           });
         });
-      }
+      });
 
       // 4) 반별 점수 집계
       const classBucket: Record<ClassType, Record<string, number[]>> = {

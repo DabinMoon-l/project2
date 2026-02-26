@@ -105,14 +105,16 @@ export default function PullToHome({ children, homePath = '/', tabPaths = DEFAUL
   const touchTarget = useRef<EventTarget | null>(null);
 
   // 터치 대상이 모달/오버레이 내부이거나 캐러셀 영역인지 확인
-  // data-hide-nav, body scroll lock, fixed 포지션 조상 (모달 백드롭),
-  // 또는 data-no-pull (캐러셀 등 자체 스와이프가 있는 영역) 감지
-  const shouldBlockGesture = useCallback((target: EventTarget | null): boolean => {
+  // data-hide-nav: 전체 제스처 차단 (모달 등)
+  // data-no-pull: 세로+가로 모두 차단
+  // data-no-pull-x: 가로 스와이프만 차단, 세로 PullToHome은 허용 (좌우 캐러셀 등)
+  const shouldBlockGesture = useCallback((target: EventTarget | null, dir?: 'horizontal' | 'vertical'): boolean => {
     if (document.body.hasAttribute('data-hide-nav')) return true;
     if (document.body.style.overflow === 'hidden') return true;
     let el = target as HTMLElement | null;
     while (el && el !== containerRef.current) {
       if (el.hasAttribute('data-no-pull')) return true;
+      if (dir === 'horizontal' && el.hasAttribute('data-no-pull-x')) return true;
       if (window.getComputedStyle(el).position === 'fixed') return true;
       el = el.parentElement;
     }
@@ -166,7 +168,8 @@ export default function PullToHome({ children, homePath = '/', tabPaths = DEFAUL
       if (absDx < DIRECTION_LOCK_THRESHOLD && absDy < DIRECTION_LOCK_THRESHOLD) return;
 
       if (absDx > absDy) {
-        // 가로 모드
+        // 가로 모드 — data-no-pull-x 영역이면 가로 스와이프 차단
+        if (shouldBlockGesture(touchTarget.current, 'horizontal')) return;
         direction.current = 'horizontal';
         swipingX.current = true;
       } else {
@@ -258,7 +261,8 @@ export default function PullToHome({ children, homePath = '/', tabPaths = DEFAUL
         if (el.hasAttribute('data-no-pull')) return;
         el = el.parentElement;
       }
-      const scrollTop = document.documentElement.scrollTop || document.body.scrollTop;
+      // 내부 스크롤 컨테이너도 체크 (캐러셀 내부 스크롤 등)
+      const scrollTop = getScrollTop(e.target);
       if (scrollTop > 0) return;
       if (e.deltaY < 0) {
         wheelAccum.current += Math.abs(e.deltaY);
@@ -281,7 +285,7 @@ export default function PullToHome({ children, homePath = '/', tabPaths = DEFAUL
     };
     window.addEventListener('wheel', handleWheel, { passive: true });
     return () => window.removeEventListener('wheel', handleWheel);
-  }, [transitioning, navigateHome]);
+  }, [transitioning, navigateHome, getScrollTop]);
 
   // 현재 변환 계산
   const isSwipingHorizontal = direction.current === 'horizontal' && swipingX.current;

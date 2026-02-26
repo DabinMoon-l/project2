@@ -71,27 +71,35 @@ interface WeeklyStats {
 // 유틸
 // ============================================================
 
-/** 해당 주의 월요일~일요일 범위 계산 */
+/** 해당 주의 월요일~일요일 범위 계산 (KST 기준, UTC Date 반환) */
 function getLastWeekRange(): { start: Date; end: Date; label: string } {
+  const KST_OFFSET = 9 * 60 * 60 * 1000;
   const now = new Date();
-  // 지난 주 월요일 00:00 KST
-  const dayOfWeek = now.getDay(); // 0=일, 1=월, ...
+  // KST 기준 현재 시각
+  const kstNow = new Date(now.getTime() + KST_OFFSET);
+  const dayOfWeek = kstNow.getUTCDay(); // 0=일, 1=월, ...
   const daysToLastMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-  const lastMonday = new Date(now);
-  lastMonday.setDate(now.getDate() - daysToLastMonday - 7);
-  lastMonday.setHours(0, 0, 0, 0);
 
-  const lastSunday = new Date(lastMonday);
-  lastSunday.setDate(lastMonday.getDate() + 7);
-  lastSunday.setHours(0, 0, 0, 0);
+  // KST 기준 지난주 월요일 00:00
+  const lastMondayKST = new Date(kstNow);
+  lastMondayKST.setUTCDate(lastMondayKST.getUTCDate() - daysToLastMonday - 7);
+  lastMondayKST.setUTCHours(0, 0, 0, 0);
 
-  // ISO 주 번호 계산
-  const jan1 = new Date(lastMonday.getFullYear(), 0, 1);
-  const daysSinceJan1 = Math.floor((lastMonday.getTime() - jan1.getTime()) / 86400000);
-  const weekNum = Math.ceil((daysSinceJan1 + jan1.getDay() + 1) / 7);
-  const label = `${lastMonday.getFullYear()}-W${String(weekNum).padStart(2, "0")}`;
+  // KST 기준 지난주 일요일 24:00 (= 이번주 월요일 00:00)
+  const lastSundayKST = new Date(lastMondayKST);
+  lastSundayKST.setUTCDate(lastMondayKST.getUTCDate() + 7);
 
-  return { start: lastMonday, end: lastSunday, label };
+  // KST → UTC 변환
+  const start = new Date(lastMondayKST.getTime() - KST_OFFSET);
+  const end = new Date(lastSundayKST.getTime() - KST_OFFSET);
+
+  // ISO 주 번호 계산 (KST 기준)
+  const jan1 = new Date(Date.UTC(lastMondayKST.getUTCFullYear(), 0, 1));
+  const daysSinceJan1 = Math.floor((lastMondayKST.getTime() - jan1.getTime()) / 86400000);
+  const weekNum = Math.ceil((daysSinceJan1 + jan1.getUTCDay() + 1) / 7);
+  const label = `${lastMondayKST.getUTCFullYear()}-W${String(weekNum).padStart(2, "0")}`;
+
+  return { start, end, label };
 }
 
 /** 피드백 점수 매핑 */
@@ -254,7 +262,9 @@ async function collectWeeklyStats(courseId: string, start: Date, end: Date, labe
     .get();
 
   const totalStudents = usersSnap.size;
-  let activeCount = 0;
+  const studentIdSet = new Set(usersSnap.docs.map(d => d.id));
+  // 활동 학생: 해당 주에 퀴즈 결과 또는 게시글을 작성한 학생 (updatedAt 대신 실제 활동 기반)
+  const activeStudentIds = new Set<string>();
   let totalExpGain = 0;
   let milestoneCount = 0;
   let rabbitDiscoveries = 0;
@@ -287,13 +297,23 @@ async function collectWeeklyStats(courseId: string, start: Date, end: Date, labe
     const rate = data.profCorrectCount
       ? ((data.profCorrectCount / Math.max(data.profAttemptCount || 1, 1)) * 100)
       : 0;
-    const updatedAt = data.updatedAt?.toDate();
-    if (updatedAt && updatedAt >= start && updatedAt < end) activeCount++;
+    // (활동 학생은 퀴즈 결과 + 게시글 기반으로 아래에서 집계)
 
     if (exp >= medianExp && rate >= medianRate) passionate++;
     else if (exp >= medianExp) hardworking++;
     else if (rate >= medianRate) efficient++;
     else atRisk++;
+  });
+
+  // ── 활동 학생 집계: 기간 내 퀴즈 결과 userId ──
+  const weekResultsSnap = await db.collection("quizResults")
+    .where("courseId", "==", courseId)
+    .where("createdAt", ">=", startTs)
+    .where("createdAt", "<", endTs)
+    .get();
+  weekResultsSnap.docs.forEach(d => {
+    const uid = d.data().userId as string;
+    if (studentIdSet.has(uid)) activeStudentIds.add(uid);
   });
 
   // ── 게시판 데이터 ──
@@ -311,6 +331,9 @@ async function collectWeeklyStats(courseId: string, start: Date, end: Date, labe
     totalViews += data.viewCount || 0;
     const cls = data.authorClassType;
     if (cls && classPostCounts[cls] !== undefined) classPostCounts[cls]++;
+    // 게시글 작성자도 활동 학생에 포함
+    const authorId = data.authorId as string;
+    if (authorId && studentIdSet.has(authorId)) activeStudentIds.add(authorId);
     // 키워드 추출용 텍스트 수집
     const title = data.title || "";
     const content = data.content || "";
@@ -357,7 +380,7 @@ async function collectWeeklyStats(courseId: string, start: Date, end: Date, labe
       avgScore: fbAvg,
     },
     student: {
-      activeCount,
+      activeCount: activeStudentIds.size,
       totalCount: totalStudents,
       avgExpGain: totalStudents > 0 ? Math.round(totalExpGain / totalStudents) : 0,
       milestoneCount,

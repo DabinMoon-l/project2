@@ -37,6 +37,14 @@ export interface QuestionExportData {
   } | null;
   passagePrompt?: string;
   hasMultipleAnswers?: boolean;
+  // 결합형 문제
+  passageImage?: string;
+  combinedGroupId?: string;
+  combinedIndex?: number;
+  combinedTotal?: number;
+  // 복합 제시문
+  passageMixedExamples?: any[];
+  mixedExamples?: any[];
 }
 
 export interface ExportOptions {

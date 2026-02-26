@@ -33,7 +33,12 @@ function formatDate(date: Date) {
   if (minutes < 60) return `${minutes}분 전`;
   if (hours < 24) return `${hours}시간 전`;
   if (days < 7) return `${days}일 전`;
-  return date.toLocaleDateString('ko-KR');
+  // 년도 제외, 월.일.시:분 형식
+  const m = date.getMonth() + 1;
+  const d = date.getDate();
+  const h = String(date.getHours()).padStart(2, '0');
+  const min = String(date.getMinutes()).padStart(2, '0');
+  return `${m}. ${d}. ${h}:${min}`;
 }
 
 /**
@@ -105,22 +110,20 @@ export default function CommentItem({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
-      className={`py-3 ${isReply ? 'pl-6' : 'border-b border-dashed border-[#D4CFC4]'}`}
+      className={`py-3 ${isReply ? 'pl-4 bg-[#EDE8DF]' : 'border-b border-dashed border-[#D4CFC4]'}`}
     >
       {/* 댓글 헤더 — 좌: 작성자·시간 / 우: 답글·좋아요 */}
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-1.5">
-          {isReply && (
-            <span className="text-sm font-bold text-[#3A3A3A]">ㄴ</span>
-          )}
           <span
-            className="text-[15px] font-semibold"
+            className="text-[16px] font-semibold"
             style={{ color: theme.colors.text }}
           >
+            {isReply && <span className="text-[13px] font-bold text-[#999] mr-1">ㄴ</span>}
             {authorDisplay}
           </span>
-          <span className="text-[#AAAAAA] text-[12px]">·</span>
-          <span className="text-[13px] text-[#999999]">
+          <span className="text-[#AAAAAA] text-[13px]">·</span>
+          <span className="text-[14px] text-[#999999]">
             {formatDate(comment.createdAt)}
           </span>
         </div>
@@ -131,7 +134,7 @@ export default function CommentItem({
               <button
                 type="button"
                 onClick={onReply}
-                className="text-[13px] text-[#999999] hover:text-[#1A1A1A] transition-colors"
+                className="text-[14px] text-[#999999] hover:text-[#1A1A1A] transition-colors"
               >
                 답글
               </button>
@@ -140,7 +143,7 @@ export default function CommentItem({
               <button
                 type="button"
                 onClick={() => onLike(comment.id)}
-                className="flex items-center gap-1 text-[13px] transition-colors"
+                className="flex items-center gap-1 text-[14px] transition-colors"
                 style={{ color: isLiked ? '#8B1A1A' : '#999999' }}
               >
                 <span>{isLiked ? '♥' : '♡'}</span>
@@ -196,7 +199,7 @@ export default function CommentItem({
       ) : (
         <div className="overflow-hidden max-w-full">
           <p
-            className={`text-[17px] whitespace-pre-wrap leading-relaxed ${
+            className={`text-[18px] whitespace-pre-wrap leading-relaxed ${
               !isExpanded && isLongContent ? 'line-clamp-3' : ''
             }`}
             style={{
@@ -264,7 +267,7 @@ export default function CommentItem({
             <button
               type="button"
               onClick={handleEditClick}
-              className="text-[12px] text-[#999999] hover:text-[#1A1A1A] transition-colors"
+              className="text-[13px] text-[#999999] hover:text-[#1A1A1A] transition-colors"
             >
               수정
             </button>
@@ -274,7 +277,7 @@ export default function CommentItem({
               type="button"
               onClick={handleDeleteClick}
               disabled={isDeleting}
-              className="text-[12px] transition-colors disabled:opacity-50"
+              className="text-[13px] transition-colors disabled:opacity-50"
               style={{ color: '#CC3333' }}
             >
               {isDeleting ? '삭제 중...' : '삭제'}

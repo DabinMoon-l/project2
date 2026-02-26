@@ -129,10 +129,12 @@ export default function Navigation({ role }: NavigationProps) {
     return false;
   }, [pathname]);
 
-  // body의 data-hide-nav attribute를 감지하여 네비게이션 숨김 (모달 등)
+  // body의 data-hide-nav / data-hide-nav-only attribute를 감지하여 네비게이션 숨김
+  // data-hide-nav: 네비게이션 + PullToHome 제스처 모두 차단 (모달 등)
+  // data-hide-nav-only: 네비게이션만 숨김, PullToHome은 유지 (서재 탭 등)
   useEffect(() => {
     const checkHideNav = () => {
-      const shouldHide = document.body.hasAttribute('data-hide-nav');
+      const shouldHide = document.body.hasAttribute('data-hide-nav') || document.body.hasAttribute('data-hide-nav-only');
       setIsHidden(shouldHide);
     };
 
@@ -141,7 +143,7 @@ export default function Navigation({ role }: NavigationProps) {
 
     // MutationObserver로 body attribute 변경 감지
     const observer = new MutationObserver(checkHideNav);
-    observer.observe(document.body, { attributes: true, attributeFilter: ['data-hide-nav'] });
+    observer.observe(document.body, { attributes: true, attributeFilter: ['data-hide-nav', 'data-hide-nav-only'] });
 
     return () => observer.disconnect();
   }, []);
