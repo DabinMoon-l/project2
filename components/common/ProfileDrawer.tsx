@@ -338,8 +338,8 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
       return;
     }
     const trimmed = newNickname.trim();
-    if (trimmed.length < 2 || trimmed.length > 10) {
-      setNicknameError('닉네임은 2-10자 사이여야 합니다.');
+    if (trimmed.length < 2 || trimmed.length > 6) {
+      setNicknameError('닉네임은 2-6자 사이여야 합니다.');
       return;
     }
     if (!/^[가-힣a-zA-Z0-9]+$/.test(trimmed)) {
@@ -1238,8 +1238,8 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                     setNewNickname(e.target.value);
                     setNicknameError('');
                   }}
-                  placeholder="새 닉네임 (2-10자)"
-                  maxLength={10}
+                  placeholder="새 닉네임 (2-6자)"
+                  maxLength={6}
                   disabled={nicknameCooldownDays > 0}
                   className={`w-full px-4 py-3 rounded-xl outline-none bg-white/10 text-white placeholder:text-white/40 disabled:opacity-50 border ${
                     nicknameError ? 'border-red-400/50' : 'border-white/15'
@@ -1257,7 +1257,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                   </button>
                   <button
                     onClick={handleNicknameChange}
-                    disabled={savingNickname || newNickname.length < 2 || nicknameCooldownDays > 0}
+                    disabled={savingNickname || newNickname.length < 2 || newNickname.length > 6 || nicknameCooldownDays > 0}
                     className="flex-1 py-3 rounded-xl font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
                   >
                     {savingNickname ? '저장 중...' : '변경'}

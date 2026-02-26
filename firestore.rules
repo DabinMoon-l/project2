@@ -291,9 +291,9 @@ service cloud.firestore {
     // ============================================================
 
     match /reviews/{reviewId} {
-      // 읽기: 본인 문제만
+      // 읽기: 본인 또는 교수님
       allow read: if isAuthenticated() &&
-        resource.data.userId == request.auth.uid;
+        (resource.data.userId == request.auth.uid || isProfessor());
 
       // 생성: 로그인 사용자 (본인 것만)
       allow create: if isAuthenticated() &&

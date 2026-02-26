@@ -769,7 +769,7 @@ function CourseRibbonHeader({
       </div>
 
       {/* 페이지네이션 도트 */}
-      <div className="flex justify-center gap-2 mt-1">
+      <div className="flex justify-center gap-2 mt-3">
         {COURSE_IDS.map((id, idx) => (
           <button
             key={id}
@@ -1290,6 +1290,28 @@ export default function ProfessorQuizListPage() {
   const [detailsSource, setDetailsSource] = useState<'carousel' | 'custom'>('carousel');
   // Stats 모달 상태
   const [statsQuizId, setStatsQuizId] = useState<{ id: string; title: string } | null>(null);
+
+  // 제작자 실명 캐시 (uid → { name, classId })
+  const creatorInfoCache = useRef<Map<string, { name?: string; classId?: string }>>(new Map());
+  const [detailsCreatorInfo, setDetailsCreatorInfo] = useState<{ role?: string; name?: string; nickname?: string; classId?: string } | null>(null);
+
+  // Details 모달 열릴 때 제작자 실명 조회
+  useEffect(() => {
+    if (!detailsQuiz?.creatorUid) { setDetailsCreatorInfo(null); return; }
+    const uid = detailsQuiz.creatorUid;
+    const cached = creatorInfoCache.current.get(uid);
+    if (cached) { setDetailsCreatorInfo(cached); return; }
+    getDoc(doc(db, 'users', uid)).then(snap => {
+      if (snap.exists()) {
+        const data = snap.data();
+        const info = { role: data.role || 'student', name: data.name || undefined, nickname: data.nickname || undefined, classId: data.classId || undefined };
+        creatorInfoCache.current.set(uid, info);
+        setDetailsCreatorInfo(info);
+      } else {
+        setDetailsCreatorInfo(null);
+      }
+    }).catch(() => setDetailsCreatorInfo(null));
+  }, [detailsQuiz?.creatorUid]);
 
   // Details 모달 열릴 때 네비게이션 숨김 + 스크롤 완전 잠금
   useEffect(() => {
@@ -1997,7 +2019,10 @@ export default function ProfessorQuizListPage() {
               <div className="flex justify-between text-sm">
                 <span className="text-[#5C5C5C]">제작자</span>
                 <span className="font-bold text-[#1A1A1A]">
-                  {detailsQuiz.creatorNickname || '익명'}
+                  {detailsCreatorInfo?.role === 'professor'
+                    ? `${detailsCreatorInfo.name || '교수'} ${detailsCreatorInfo.nickname || detailsQuiz.creatorNickname || ''}`
+                    : `${detailsCreatorInfo?.nickname || detailsQuiz.creatorNickname || '익명'} ${detailsCreatorInfo?.classId ? detailsCreatorInfo.classId + '반' : ''}`
+                  }
                 </span>
               </div>
               {/* 피드백 점수 */}

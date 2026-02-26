@@ -120,8 +120,8 @@ export default function SignupPage() {
       return;
     }
 
-    if (nickname.length < 2 || nickname.length > 10) {
-      setLocalError('닉네임은 2-10자 사이여야 합니다.');
+    if (nickname.length < 2 || nickname.length > 6) {
+      setLocalError('닉네임은 2-6자 사이여야 합니다.');
       return;
     }
 
@@ -251,10 +251,10 @@ export default function SignupPage() {
             {/* 닉네임 */}
             <input
               type="text"
-              placeholder="닉네임 (2-10자)"
+              placeholder="닉네임 (2-6자)"
               value={nickname}
               onChange={(e) => setNickname(e.target.value)}
-              maxLength={10}
+              maxLength={6}
               className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-white/50 transition-colors"
               disabled={isSubmitting}
             />

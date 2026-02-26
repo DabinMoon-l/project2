@@ -143,3 +143,10 @@ export function growthRate(current: number, previous: number): number {
   if (previous === 0) return current > 0 ? 100 : 0;
   return ((current - previous) / previous) * 100;
 }
+
+// 순위 백분위 (0~100) — 정렬된 배열에서 value보다 작은 비율
+export function rankPercentile(value: number, sortedValues: number[]): number {
+  if (sortedValues.length <= 1) return 50;
+  const below = sortedValues.filter(v => v < value).length;
+  return Math.round((below / (sortedValues.length - 1)) * 100);
+}
