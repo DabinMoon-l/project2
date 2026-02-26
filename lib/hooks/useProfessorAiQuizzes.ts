@@ -85,22 +85,35 @@ export function useProfessorAiQuizzes() {
 
   // 퀴즈 삭제
   const deleteQuiz = useCallback(async (quizId: string) => {
-    await deleteDoc(doc(db, 'quizzes', quizId));
+    try {
+      await deleteDoc(doc(db, 'quizzes', quizId));
+    } catch (err: any) {
+      console.error('[deleteQuiz] 삭제 실패:', err);
+      alert('퀴즈 삭제에 실패했습니다: ' + (err?.message || ''));
+      throw err;
+    }
   }, []);
 
   // 퀴즈 공개 (type을 midterm/final/past로 변경 + creatorUid 보정)
   const publishQuiz = useCallback(async (quizId: string, publishType: string) => {
-    const updateData: Record<string, any> = {
-      type: publishType,
-      isPublished: true,
-      isPublic: true,
-      updatedAt: serverTimestamp(),
-    };
-    // creatorUid가 없는 기존 서재 퀴즈를 위해 공개 시 보정
-    if (profile?.uid) {
-      updateData.creatorUid = profile.uid;
+    try {
+      const updateData: Record<string, any> = {
+        type: publishType,
+        originalType: 'professor-ai', // AI 출처 기록 (PDF 정답 인덱싱용)
+        isPublished: true,
+        isPublic: true,
+        updatedAt: serverTimestamp(),
+      };
+      // creatorUid가 없는 기존 서재 퀴즈를 위해 공개 시 보정
+      if (profile?.uid) {
+        updateData.creatorUid = profile.uid;
+      }
+      await updateDoc(doc(db, 'quizzes', quizId), updateData);
+    } catch (err: any) {
+      console.error('[publishQuiz] 공개 실패:', err);
+      alert('퀴즈 공개에 실패했습니다: ' + (err?.message || ''));
+      throw err;
     }
-    await updateDoc(doc(db, 'quizzes', quizId), updateData);
   }, [profile?.uid]);
 
   // 퀴즈 제목 수정
@@ -111,10 +124,16 @@ export function useProfessorAiQuizzes() {
     });
   }, []);
 
-  // 퀴즈 문제 수정 (questions 배열 전체 교체)
+  // 퀴즈 문제 수정 (questions 배열 전체 교체 + questionCount 동기화)
   const updateQuestions = useCallback(async (quizId: string, questions: any[]) => {
+    // 문제별 고유 ID 부여
+    const questionsWithIds = questions.map((q: any) => {
+      if (q.id) return q;
+      return { ...q, id: `q_${crypto.randomUUID().slice(0, 8)}` };
+    });
     await updateDoc(doc(db, 'quizzes', quizId), {
-      questions,
+      questions: questionsWithIds,
+      questionCount: questionsWithIds.length,
       updatedAt: serverTimestamp(),
     });
   }, []);

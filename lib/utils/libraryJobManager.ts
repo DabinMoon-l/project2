@@ -35,6 +35,7 @@ export interface QuizSaveConfig {
   semester: string;
   questionCount: number;
   difficulty: string;
+  tags?: string[];
 }
 
 interface GeneratedQuestion {
@@ -180,7 +181,7 @@ async function pollAndSave(jobId: string, config: QuizSaveConfig) {
         const pad = (n: number) => String(n).padStart(2, '0');
         return `${now.getFullYear()}. ${now.getMonth() + 1}. ${now.getDate()}. ${pad(now.getHours())}:${pad(now.getMinutes())}`;
       })(),
-      tags: [],
+      tags: config.tags || [],
       isPublic: false,
       difficulty: config.difficulty,
       type: 'professor-ai',

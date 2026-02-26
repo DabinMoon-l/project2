@@ -23,8 +23,11 @@ import {
 } from '@/lib/utils/libraryJobManager';
 import { useRouter } from 'next/navigation';
 import { Skeleton } from '@/components/common';
+import MobileBottomSheet from '@/components/common/MobileBottomSheet';
 import { getDefaultQuizTab } from '@/lib/types/course';
 import { generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
+import { useKeyboardAware } from '@/lib/hooks/useKeyboardAware';
+import PreviewQuestionCard from '@/components/professor/PreviewQuestionCard';
 
 // ============================================================
 // 타입
@@ -70,345 +73,6 @@ function formatQuestionTypes(questions: any[]): string {
   return parts.length > 0 ? parts.join(' / ') : `${questions.length}문제`;
 }
 
-// 선지 번호 라벨 (최대 8개 지원)
-const choiceLabels = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧'];
-
-// ============================================================
-// 인라인 프리뷰 문제 카드 (학생 QuestionCard와 동일)
-// ============================================================
-
-function PreviewQuestionCard({
-  question,
-  questionNumber,
-  isEditMode,
-  editData,
-  onEditChange,
-}: {
-  question: any;
-  questionNumber: number;
-  isEditMode?: boolean;
-  editData?: { text?: string; choices?: string[]; explanation?: string; choiceExplanations?: string[] };
-  onEditChange?: (field: string, value: any) => void;
-}) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [expandedChoices, setExpandedChoices] = useState<Set<number>>(new Set());
-
-  // 수정 모드 진입 시 자동 펼침
-  useEffect(() => {
-    if (isEditMode) setIsExpanded(true);
-  }, [isEditMode]);
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="border border-[#1A1A1A] bg-[#F5F0E8] transition-all"
-    >
-      {/* 헤더 */}
-      <div
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="p-3 cursor-pointer"
-      >
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1 min-w-0">
-            {/* 문항 번호 + 타입 뱃지 */}
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <span className="inline-block px-2 py-0.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8]">
-                Q{questionNumber}
-              </span>
-              {question.type && question.type !== 'multiple' && (
-                <span className="inline-block px-2 py-0.5 text-xs font-bold border border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A]">
-                  {question.type === 'ox' ? 'OX' : question.type === 'short_answer' ? '주관식' : question.type}
-                </span>
-              )}
-            </div>
-            <p className="text-sm text-[#1A1A1A]">{editData?.text ?? question.text}</p>
-          </div>
-
-          {/* 확장 아이콘 */}
-          <div className="flex flex-col items-end gap-1 flex-shrink-0">
-            <svg
-              className={`w-5 h-5 text-[#5C5C5C] transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </div>
-        </div>
-      </div>
-
-      {/* 상세 정보 */}
-      <AnimatePresence>
-        {isExpanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="border-t border-[#1A1A1A] p-4 space-y-4 bg-[#EDEAE4]">
-              {/* 수정 모드: 문제 텍스트 수정 */}
-              {isEditMode && onEditChange && (
-                <div>
-                  <label className="block text-xs font-bold text-[#5C5C5C] mb-1">문제</label>
-                  <textarea
-                    value={editData?.text ?? question.text}
-                    onChange={(e) => onEditChange('text', e.target.value)}
-                    className="w-full p-3 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-sm text-[#1A1A1A] focus:outline-none resize-none"
-                    rows={3}
-                    onInput={(e) => {
-                      const target = e.target as HTMLTextAreaElement;
-                      target.style.height = 'auto';
-                      target.style.height = target.scrollHeight + 'px';
-                    }}
-                  />
-                </div>
-              )}
-
-              {/* 문제 이미지 */}
-              {question.imageUrl && (
-                <div className="mb-3">
-                  <img
-                    src={question.imageUrl}
-                    alt="문제 이미지"
-                    className="max-w-full max-h-[300px] object-contain border border-[#1A1A1A]"
-                  />
-                  {question.imageDescription && (
-                    <p className="text-xs text-[#5C5C5C] mt-1">{question.imageDescription}</p>
-                  )}
-                </div>
-              )}
-
-              {/* OX 문제 */}
-              {question.type === 'ox' && (() => {
-                const answer = question.answer;
-                const isOCorrect = answer === 0 || answer === 'O' || answer === 'o' || answer === true;
-                const isXCorrect = answer === 1 || answer === 'X' || answer === 'x' || answer === false;
-
-                return (
-                  <div className="space-y-3">
-                    <div className="flex gap-4 justify-center py-2">
-                      <div
-                        className={`w-20 h-20 text-4xl font-bold border-2 flex items-center justify-center ${
-                          isOCorrect
-                            ? 'bg-[#1A6B1A] border-[#1A6B1A] text-[#F5F0E8]'
-                            : 'bg-[#F5F0E8] border-[#1A1A1A] text-[#5C5C5C]'
-                        }`}
-                      >
-                        O
-                      </div>
-                      <div
-                        className={`w-20 h-20 text-4xl font-bold border-2 flex items-center justify-center ${
-                          isXCorrect
-                            ? 'bg-[#1A6B1A] border-[#1A6B1A] text-[#F5F0E8]'
-                            : 'bg-[#F5F0E8] border-[#1A1A1A] text-[#5C5C5C]'
-                        }`}
-                      >
-                        X
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* 객관식 문제 */}
-              {(question.type === 'multiple' || (!question.type && question.choices)) && question.choices && question.choices.length > 0 && (
-                <div className="space-y-3">
-                  {/* 복수 정답 표시 */}
-                  {Array.isArray(question.answer) && question.answer.length > 1 && (
-                    <p className="text-xs text-[#8B6914] font-bold flex items-center gap-1">
-                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                      </svg>
-                      복수 정답 ({question.answer.length}개)
-                    </p>
-                  )}
-                  <div className="space-y-2">
-                    {(editData?.choices ?? question.choices).map((choice: string, idx: number) => {
-                      // 정답 판별 (answer가 0-indexed 숫자 또는 배열)
-                      const correctAnswers: number[] = Array.isArray(question.answer)
-                        ? question.answer
-                        : typeof question.answer === 'number'
-                          ? [question.answer]
-                          : [];
-                      const isCorrectOption = correctAnswers.includes(idx);
-
-                      let bgColor = '#F5F0E8';
-                      let borderColor = '#1A1A1A';
-                      let textColor = '#1A1A1A';
-
-                      if (!isEditMode && isCorrectOption) {
-                        bgColor = '#1A6B1A';
-                        borderColor = '#1A6B1A';
-                        textColor = '#F5F0E8';
-                      }
-
-                      // 선지별 해설
-                      const currentChoiceExps = editData?.choiceExplanations ?? question.choiceExplanations;
-                      const choiceExp = currentChoiceExps?.[idx];
-                      const isChoiceExpanded = expandedChoices.has(idx);
-
-                      return (
-                        <div key={idx}>
-                          <div
-                            style={isEditMode ? {} : { backgroundColor: bgColor, borderColor, color: textColor }}
-                            className={`w-full p-3 border-2 flex items-start gap-3 text-left ${
-                              isEditMode
-                                ? 'border-[#1A1A1A] bg-[#F5F0E8]'
-                                : choiceExp ? 'cursor-pointer' : ''
-                            }`}
-                            onClick={!isEditMode && choiceExp ? () => {
-                              setExpandedChoices(prev => {
-                                const next = new Set(prev);
-                                if (next.has(idx)) next.delete(idx);
-                                else next.add(idx);
-                                return next;
-                              });
-                            } : undefined}
-                          >
-                            {/* 선지 번호 */}
-                            <span
-                              className={`flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm font-bold ${
-                                isEditMode
-                                  ? 'bg-[#EDEAE4] text-[#1A1A1A]'
-                                  : isCorrectOption
-                                    ? 'bg-[#F5F0E8]/20 text-[#F5F0E8]'
-                                    : 'bg-[#EDEAE4] text-[#1A1A1A]'
-                              }`}
-                            >
-                              {choiceLabels[idx] || `${idx + 1}`}
-                            </span>
-                            {/* 선지 텍스트 */}
-                            {isEditMode && onEditChange ? (
-                              <input
-                                type="text"
-                                value={choice}
-                                onChange={(e) => {
-                                  const newChoices = [...(editData?.choices ?? question.choices ?? [])];
-                                  newChoices[idx] = e.target.value;
-                                  onEditChange('choices', newChoices);
-                                }}
-                                className="flex-1 text-sm bg-transparent border-b border-[#5C5C5C] focus:outline-none focus:border-[#1A1A1A] text-[#1A1A1A]"
-                              />
-                            ) : (
-                              <span className="flex-1 text-sm leading-relaxed break-words">
-                                {choice}
-                                {Array.isArray(question.answer) && question.answer.length > 1 && isCorrectOption && (
-                                  <span className="ml-1 font-bold">(정답)</span>
-                                )}
-                              </span>
-                            )}
-                            {/* 체크 아이콘 또는 아코디언 화살표 (수정 모드에서는 숨김) */}
-                            {!isEditMode && (
-                              isCorrectOption ? (
-                                <div className="flex items-center gap-1 flex-shrink-0">
-                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                  </svg>
-                                  {choiceExp && (
-                                    <svg className={`w-4 h-4 transition-transform ${isChoiceExpanded ? 'rotate-180' : ''}`}
-                                      fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                    </svg>
-                                  )}
-                                </div>
-                              ) : choiceExp ? (
-                                <svg className={`w-4 h-4 flex-shrink-0 transition-transform ${isChoiceExpanded ? 'rotate-180' : ''}`}
-                                  fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                </svg>
-                              ) : null
-                            )}
-                          </div>
-                          {/* 선지별 해설 — 수정 모드면 전부 펼침 + textarea */}
-                          {isEditMode && onEditChange ? (
-                            <div className="px-4 py-3 border-x-2 border-b-2 border-[#1A1A1A] bg-[#EDEAE4]">
-                              <label className="block text-xs text-[#5C5C5C] mb-1">선지 {idx + 1} 해설</label>
-                              <textarea
-                                value={(editData?.choiceExplanations ?? question.choiceExplanations ?? [])[idx] || ''}
-                                onChange={(e) => {
-                                  const newExps = [...(editData?.choiceExplanations ?? question.choiceExplanations ?? [])];
-                                  while (newExps.length <= idx) newExps.push('');
-                                  newExps[idx] = e.target.value;
-                                  onEditChange('choiceExplanations', newExps);
-                                }}
-                                className="w-full p-2 border border-[#5C5C5C] bg-[#F5F0E8] text-sm text-[#5C5C5C] focus:outline-none resize-none"
-                                rows={2}
-                              />
-                            </div>
-                          ) : choiceExp && isChoiceExpanded ? (
-                            <div
-                              style={{ borderColor }}
-                              className="px-4 py-3 border-x-2 border-b-2 bg-[#EDEAE4]"
-                            >
-                              <p className={`text-sm whitespace-pre-wrap ${
-                                isCorrectOption ? 'text-[#1A6B1A]' : 'text-[#5C5C5C]'
-                              }`}>
-                                {choiceExp.replace(/^선지\d+\s*해설\s*[:：]\s*/i, '')}
-                              </p>
-                            </div>
-                          ) : null}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* 단답형 답 */}
-              {(question.type === 'short_answer' || question.type === 'short') && (
-                <div className="space-y-3">
-                  <div className="p-3 border-2 border-[#1A6B1A] bg-[#E8F5E9]">
-                    <p className="text-xs text-[#1A6B1A] mb-1">정답</p>
-                    <p className="text-sm font-medium text-[#1A6B1A] whitespace-pre-wrap">
-                      {typeof question.answer === 'string'
-                        ? question.answer.includes('|||')
-                          ? question.answer.split('|||').map((a: string) => a.trim()).join(', ')
-                          : question.answer
-                        : String(question.answer ?? '')}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* 해설 */}
-              {isEditMode && onEditChange ? (
-                <div className="p-3 border border-[#1A1A1A] bg-[#F5F0E8]">
-                  <label className="block text-xs font-bold text-[#5C5C5C] mb-1">해설</label>
-                  <textarea
-                    value={editData?.explanation ?? question.explanation ?? ''}
-                    onChange={(e) => onEditChange('explanation', e.target.value)}
-                    className="w-full p-2 border border-[#5C5C5C] bg-[#EDEAE4] text-sm text-[#5C5C5C] focus:outline-none resize-none"
-                    rows={3}
-                    onInput={(e) => {
-                      const target = e.target as HTMLTextAreaElement;
-                      target.style.height = 'auto';
-                      target.style.height = target.scrollHeight + 'px';
-                    }}
-                  />
-                </div>
-              ) : question.explanation ? (
-                <div className="p-3 border border-[#1A1A1A] bg-[#F5F0E8]">
-                  <p className="text-xs font-bold text-[#5C5C5C] mb-1">해설</p>
-                  <p className="text-sm text-[#5C5C5C] whitespace-pre-wrap">
-                    {question.explanation}
-                  </p>
-                </div>
-              ) : (
-                <div className="p-3 border border-[#D4CFC4] bg-[#F5F0E8]">
-                  <p className="text-xs font-bold text-[#5C5C5C]">해설 없음</p>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
-  );
-}
-
 // ============================================================
 // 컴포넌트
 // ============================================================
@@ -438,7 +102,6 @@ export default function ProfessorLibraryTab({
 
   // 챕터 태그 (생성 시 필수)
   const [selectedGenTags, setSelectedGenTags] = useState<string[]>([]);
-  const [showGenTagPicker, setShowGenTagPicker] = useState(false);
   const genTagOptions = useMemo(() => {
     const courseTags = generateCourseTags(userCourseId);
     // 챕터 태그만 (중간/기말/기타 제외)
@@ -446,7 +109,6 @@ export default function ProfessorLibraryTab({
   }, [userCourseId]);
 
   // 슬라이더
-  const [showSliderPanel, setShowSliderPanel] = useState(false);
   const [sliders, setSliders] = useState<SliderWeights>({
     style: 50,
     scopeFocusGuide: 50,
@@ -462,6 +124,12 @@ export default function ProfessorLibraryTab({
   const [showProgressModal, setShowProgressModal] = useState(false);
   // 사용자가 모달을 직접 닫았으면 같은 Job 동안 다시 띄우지 않음
   const modalDismissedRef = useRef(false);
+
+  // 모바일 키보드 인식
+  const { isKeyboardOpen, bottomOffset, dismissKeyboard } = useKeyboardAware();
+  const promptTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const [isPromptFocused, setIsPromptFocused] = useState(false);
+  const [mobilePanel, setMobilePanel] = useState<'slider' | 'tags' | null>(null);
 
   // Job 이벤트 구독 — 완료/실패 시 isGenerating 해제
   useEffect(() => {
@@ -598,11 +266,15 @@ export default function ProfessorLibraryTab({
     }
   }, [isPreviewActive]);
 
-  // previewQuiz가 onSnapshot으로 업데이트되면 반영
+  // previewQuiz가 onSnapshot으로 업데이트되면 반영 (updatedAt 비교로 불필요한 갱신 방지)
   useEffect(() => {
     if (!previewQuiz) return;
     const updated = quizzes.find(q => q.id === previewQuiz.id);
-    if (updated && updated !== previewQuiz) {
+    if (!updated) return;
+    // updatedAt 타임스탬프가 다를 때만 갱신
+    const prevTime = previewQuiz.updatedAt?.seconds ?? previewQuiz.updatedAt?.getTime?.() ?? 0;
+    const nextTime = updated.updatedAt?.seconds ?? updated.updatedAt?.getTime?.() ?? 0;
+    if (nextTime !== prevTime) {
       setPreviewQuiz(updated);
     }
   }, [quizzes, previewQuiz]);
@@ -692,12 +364,13 @@ export default function ProfessorLibraryTab({
         semester,
         questionCount: sliders.questionCount,
         difficulty,
+        tags: selectedGenTags.length > 0 ? selectedGenTags : undefined,
       });
 
       // 입력 초기화
       setPrompt('');
       setSelectedGenTags([]);
-      setShowGenTagPicker(false);
+      setMobilePanel(null);
 
     } catch (err: any) {
       setShowProgressModal(false);
@@ -758,7 +431,7 @@ export default function ProfessorLibraryTab({
                 </svg>
               </button>
             ) : (
-              <div className="flex gap-2 flex-shrink-0">
+              <div className="flex gap-1.5 flex-shrink-0">
                 <button
                   onClick={() => {
                     setIsEditMode(false);
@@ -767,14 +440,14 @@ export default function ProfessorLibraryTab({
                     setEditedTags([]);
                     setEditedQuestions({});
                   }}
-                  className="px-4 py-2 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+                  className="px-2.5 py-1.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
                 >
                   취소
                 </button>
                 <button
                   onClick={handleSaveEdit}
                   disabled={isSavingEdit}
-                  className="px-4 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors"
+                  className="px-2.5 py-1.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors"
                 >
                   {isSavingEdit ? '저장 중...' : '저장'}
                 </button>
@@ -919,249 +592,41 @@ export default function ProfessorLibraryTab({
   const hasContent = !!prompt.trim();
 
   return (
-    <div className="flex-1 flex flex-col px-4 pb-8">
-      {/* ============================================================ */}
-      {/* 프롬프트 입력 영역 */}
-      {/* ============================================================ */}
-      <div className="border-2 border-[#1A1A1A] bg-[#F5F0E8] mb-4">
-        {/* 텍스트 입력 */}
-        <textarea
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          placeholder="AI에게 문제 생성 지시사항을 입력하세요...&#10;예: 세포 분열 관련 문제를 만들어주세요."
-          className="w-full px-4 pt-3 pb-2 text-sm text-[#1A1A1A] placeholder-[#999] bg-transparent outline-none resize-none min-h-[80px]"
-          rows={3}
-        />
-
-        {/* 선택된 태그 + 난이도 표시 */}
-        {(selectedGenTags.length > 0 || difficulty) && (
-          <div className="flex flex-wrap gap-1 px-3 pb-2">
-            {selectedGenTags.map(tag => (
-              <button
-                key={tag}
-                onClick={() => setSelectedGenTags(prev => prev.filter(t => t !== tag))}
-                className="flex items-center gap-0.5 px-2 py-0.5 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors"
-              >
-                #{tag}
-                <span className="opacity-50 text-[9px] ml-0.5">✕</span>
-              </button>
-            ))}
-            {difficulty && (
-              <button
-                onClick={() => setDifficulty(null)}
-                className="flex items-center gap-0.5 px-2 py-0.5 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors"
-              >
-                #{difficulty === 'easy' ? '쉬움' : difficulty === 'medium' ? '보통' : '어려움'}
-                <span className="opacity-50 text-[9px] ml-0.5">✕</span>
-              </button>
-            )}
+    <div className="flex-1 flex flex-col pb-[140px]">
+        {/* 백그라운드 생성 진행 인라인 뱃지 */}
+        {isGenerating && !showProgressModal && (
+          <div className="flex items-center gap-2 px-1 py-2 mb-4">
+            <div className="w-3.5 h-3.5 flex-shrink-0 border-2 border-[#1A1A1A] border-t-transparent rounded-full animate-spin" />
+            <span className="text-xs font-bold text-[#1A1A1A]">AI 문제 생성 중... 다른 페이지로 이동해도 계속 생성됩니다.</span>
           </div>
         )}
 
-        {/* 하단 바: 슬라이더 > 태그 + 생성 */}
-        <div className="flex items-center justify-between px-3 py-2 border-t border-[#EDEAE4]">
-          <div className="flex items-center gap-1">
-            {/* 슬라이더 아이콘 */}
-            <button
-              onClick={() => { setShowSliderPanel(!showSliderPanel); setShowGenTagPicker(false); }}
-              className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors ${
-                showSliderPanel ? 'bg-[#1A1A1A] text-[#F5F0E8]' : 'text-[#5C5C5C] hover:bg-[#EDEAE4]'
-              }`}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-              </svg>
-            </button>
-            {/* 태그 아이콘 (챕터+난이도 피커 토글) */}
-            <button
-              onClick={() => { setShowGenTagPicker(!showGenTagPicker); setShowSliderPanel(false); }}
-              className={`w-9 h-9 flex items-center justify-center rounded-lg transition-colors relative ${
-                showGenTagPicker ? 'bg-[#1A1A1A] text-[#F5F0E8]' : (selectedGenTags.length > 0 || difficulty) ? 'text-[#1A1A1A]' : 'text-[#5C5C5C] hover:bg-[#EDEAE4]'
-              }`}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-              </svg>
-              {selectedGenTags.length > 0 && !showGenTagPicker && (
-                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-[#1A1A1A] text-[#F5F0E8] text-[9px] font-bold flex items-center justify-center rounded-full">
-                  {selectedGenTags.length}
-                </span>
-              )}
-            </button>
+        {/* 생성된 퀴즈 카드 그리드 (2열) */}
+        {quizzesLoading ? (
+          <div className="grid grid-cols-2 gap-3">
+            <Skeleton className="h-48 rounded-none" />
+            <Skeleton className="h-48 rounded-none" />
+            <Skeleton className="h-48 rounded-none" />
+            <Skeleton className="h-48 rounded-none" />
           </div>
-
-          {/* 생성 버튼 */}
-          <button
-            onClick={handleGenerate}
-            disabled={isGenerating || !hasContent || !difficulty || selectedGenTags.length === 0}
-            className={`px-5 py-2 text-sm font-bold transition-colors ${
-              isGenerating || !hasContent || !difficulty || selectedGenTags.length === 0
-                ? 'bg-[#D4CFC4] text-[#999] cursor-not-allowed'
-                : 'bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A]'
-            }`}
-          >
-            {isGenerating ? '생성 중...' : '생성'}
-          </button>
-        </div>
-      </div>
-
-      {/* 태그 피커 패널: 챕터 + 구분선 + 난이도 */}
-      <AnimatePresence>
-        {showGenTagPicker && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden mb-4"
-          >
-            <div className="border-2 border-[#1A1A1A] bg-[#F5F0E8] p-4 space-y-3">
-              {/* 챕터 태그 */}
-              <div>
-                <span className="text-xs font-bold text-[#5C5C5C]">챕터</span>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {genTagOptions.map(tag => {
-                    const selected = selectedGenTags.includes(tag.value);
-                    return (
-                      <button
-                        key={tag.value}
-                        onClick={() => setSelectedGenTags(prev =>
-                          selected ? prev.filter(t => t !== tag.value) : [...prev, tag.value]
-                        )}
-                        className={`px-3 py-1.5 text-sm font-bold border-2 transition-colors ${
-                          selected
-                            ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                            : 'bg-transparent text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
-                        }`}
-                      >
-                        {tag.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              {/* 구분선 */}
-              <div className="border-t border-[#1A1A1A]" />
-              {/* 난이도 */}
-              <div>
-                <span className="text-xs font-bold text-[#5C5C5C]">난이도</span>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {(['easy', 'medium', 'hard'] as const).map(d => (
-                    <button
-                      key={d}
-                      onClick={() => setDifficulty(prev => prev === d ? null : d)}
-                      className={`px-3 py-1.5 text-sm font-bold border-2 transition-colors ${
-                        difficulty === d
-                          ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                          : 'bg-transparent text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
-                      }`}
-                    >
-                      #{d === 'easy' ? '쉬움' : d === 'medium' ? '보통' : '어려움'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ============================================================ */}
-      {/* 슬라이더 패널 */}
-      {/* ============================================================ */}
-      <AnimatePresence>
-        {showSliderPanel && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden mb-4"
-          >
-            <div className="border-2 border-[#1A1A1A] bg-[#F5F0E8] p-4 space-y-4">
-              <SliderRow
-                label="출제 스타일"
-                value={sliders.style}
-                weightLabel={getWeightLabel(sliders.style)}
-                onChange={(v) => setSliders(prev => ({ ...prev, style: v }))}
-              />
-              <SliderRow
-                label="출제 범위"
-                value={sliders.scopeFocusGuide}
-                weightLabel={getScopeFocusLabel(sliders.scopeFocusGuide)}
-                onChange={(v) => setSliders(prev => ({ ...prev, scopeFocusGuide: v }))}
-              />
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-bold text-[#1A1A1A]">문제 수</span>
-                  <span className="text-sm font-bold text-[#1A1A1A]">{sliders.questionCount}문제</span>
-                </div>
-                <input
-                  type="range"
-                  min={5}
-                  max={20}
-                  step={1}
-                  value={sliders.questionCount}
-                  onChange={(e) => setSliders(prev => ({ ...prev, questionCount: parseInt(e.target.value) }))}
-                  className="w-full h-2 bg-[#D4CFC4] appearance-none cursor-pointer accent-[#1A1A1A]"
-                  style={{
-                    background: `linear-gradient(to right, #1A1A1A 0%, #1A1A1A ${((sliders.questionCount - 5) / 15) * 100}%, #D4CFC4 ${((sliders.questionCount - 5) / 15) * 100}%, #D4CFC4 100%)`
-                  }}
-                />
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ============================================================ */}
-      {/* 생성 진행 모달 (AIQuizProgress 재사용) */}
-      {/* ============================================================ */}
-      <LibraryProgressModal
-        isOpen={showProgressModal}
-        progress={progressStep}
-        onClose={() => {
-          setShowProgressModal(false);
-          modalDismissedRef.current = true;
-        }}
-      />
-
-      {/* ============================================================ */}
-      {/* 백그라운드 생성 진행 인라인 뱃지 (모달 닫힌 뒤에도 표시) */}
-      {/* ============================================================ */}
-      {isGenerating && !showProgressModal && (
-        <div className="flex items-center gap-2 px-1 py-2 mb-4">
-          <div className="w-3.5 h-3.5 flex-shrink-0 border-2 border-[#1A1A1A] border-t-transparent rounded-full animate-spin" />
-          <span className="text-xs font-bold text-[#1A1A1A]">AI 문제 생성 중... 다른 페이지로 이동해도 계속 생성됩니다.</span>
-        </div>
-      )}
-
-      {/* ============================================================ */}
-      {/* 생성된 퀴즈 카드 그리드 (2열) */}
-      {/* ============================================================ */}
-      {quizzesLoading ? (
-        <div className="grid grid-cols-2 gap-3">
-          <Skeleton className="h-48 rounded-none" />
-          <Skeleton className="h-48 rounded-none" />
-          <Skeleton className="h-48 rounded-none" />
-          <Skeleton className="h-48 rounded-none" />
-        </div>
-      ) : quizzes.length === 0 && !isGenerating ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <svg className="w-12 h-12 text-[#D4CFC4] mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-          </svg>
-          <p className="text-base font-bold text-[#1A1A1A] mb-1">아직 생성된 퀴즈가 없습니다</p>
-          <p className="text-sm text-[#5C5C5C]">위에서 프롬프트를 입력하고 문제를 생성해보세요.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-3">
-          {quizzes.map((quiz) => (
+        ) : quizzes.length === 0 && !isGenerating ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <svg className="w-12 h-12 text-[#D4CFC4] mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+            </svg>
+            <p className="text-base font-bold text-[#1A1A1A] mb-1">아직 생성된 퀴즈가 없습니다</p>
+            <p className="text-sm text-[#5C5C5C]">아래에서 프롬프트를 입력하고 문제를 생성해보세요.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            {quizzes.map((quiz) => (
             <motion.div
               key={quiz.id}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              whileHover={{ y: -4, boxShadow: '0 8px 25px rgba(26, 26, 26, 0.15)' }}
+              whileHover={{ y: -4, boxShadow: '0 8px 20px rgba(0, 0, 0, 0.08)' }}
               transition={{ duration: 0.2 }}
-              className="relative border border-[#1A1A1A] bg-[#F5F0E8] overflow-hidden shadow-md cursor-default"
+              className="relative border border-[#999] bg-[#F5F0E8]/70 backdrop-blur-sm overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)] cursor-default"
             >
               {/* 신문 배경 텍스트 */}
               <div className="absolute inset-0 p-2 overflow-hidden pointer-events-none">
@@ -1195,7 +660,7 @@ export default function ProfessorLibraryTab({
               )}
 
               {/* 카드 내용 */}
-              <div className="relative z-10 p-4 bg-[#F5F0E8]/90">
+              <div className="relative z-10 p-4 bg-[#F5F0E8]/60">
                 {/* 제목 (2줄 고정 높이, AI 기본 제목은 serif 비적용) */}
                 <div className="h-[44px] mb-2">
                   <h3 className="font-bold text-base line-clamp-2 text-[#1A1A1A] leading-snug pr-8">
@@ -1232,7 +697,7 @@ export default function ProfessorLibraryTab({
                       e.stopPropagation();
                       setSelectedDetailQuiz(quiz);
                     }}
-                    className="flex-1 py-2 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+                    className="flex-1 py-2 text-sm font-bold border border-[#3A3A3A] text-[#1A1A1A] bg-white/30 hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
                   >
                     Details
                   </button>
@@ -1242,7 +707,7 @@ export default function ProfessorLibraryTab({
                       e.stopPropagation();
                       openPreview(quiz);
                     }}
-                    className="flex-1 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors"
+                    className="flex-1 py-2 text-sm font-bold bg-[#1A1A1A]/85 text-[#F5F0E8] hover:bg-[#1A1A1A] transition-colors"
                   >
                     Preview
                   </button>
@@ -1252,6 +717,262 @@ export default function ProfessorLibraryTab({
           ))}
         </div>
       )}
+      {/* ============================================================ */}
+      {/* 프롬프트 입력 — 플로팅 글래스 카드 */}
+      {/* ============================================================ */}
+      <div
+        className="fixed left-3 right-3 z-40 rounded-2xl bg-[#F5F0E8]/80 backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.12)] border border-[#D4CFC4]/60"
+        style={{ bottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+      >
+        {/* 선택된 태그 + 난이도 표시 */}
+        {(selectedGenTags.length > 0 || difficulty) && (
+          <div className="flex flex-wrap gap-1.5 px-3.5 pt-2.5">
+            {selectedGenTags.map(tag => (
+              <button
+                key={tag}
+                onClick={() => setSelectedGenTags(prev => prev.filter(t => t !== tag))}
+                className="flex items-center gap-0.5 px-2.5 py-1 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8] rounded-full hover:bg-[#3A3A3A] transition-colors"
+              >
+                #{tag}
+                <span className="opacity-50 text-[9px] ml-0.5">✕</span>
+              </button>
+            ))}
+            {difficulty && (
+              <button
+                onClick={() => setDifficulty(null)}
+                className="flex items-center gap-0.5 px-2.5 py-1 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8] rounded-full hover:bg-[#3A3A3A] transition-colors"
+              >
+                #{difficulty === 'easy' ? '쉬움' : difficulty === 'medium' ? '보통' : '어려움'}
+                <span className="opacity-50 text-[9px] ml-0.5">✕</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* textarea */}
+        <textarea
+          ref={promptTextareaRef}
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          onFocus={() => setIsPromptFocused(true)}
+          onBlur={() => setIsPromptFocused(false)}
+          placeholder="AI에게 문제 생성 지시사항을 입력하세요..."
+          className="w-full px-4 pt-2.5 pb-1 text-sm text-[#1A1A1A] placeholder-[#999] bg-transparent outline-none resize-none"
+          rows={2}
+        />
+
+        {/* 하단 바: 슬라이더 > 태그 + 생성 */}
+        <div className="flex items-center justify-between px-3 pb-2.5">
+          <div className="flex items-center gap-1">
+            {/* 슬라이더 아이콘 → MobileBottomSheet */}
+            <button
+              onClick={() => setMobilePanel(mobilePanel === 'slider' ? null : 'slider')}
+              className={`w-9 h-9 flex items-center justify-center rounded-xl transition-colors ${
+                mobilePanel === 'slider' ? 'bg-[#1A1A1A] text-[#F5F0E8]' : 'text-[#5C5C5C] hover:bg-[#EDEAE4]/80'
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+              </svg>
+            </button>
+            {/* 태그 아이콘 → MobileBottomSheet */}
+            <button
+              onClick={() => setMobilePanel(mobilePanel === 'tags' ? null : 'tags')}
+              className={`w-9 h-9 flex items-center justify-center rounded-xl transition-colors relative ${
+                mobilePanel === 'tags' ? 'bg-[#1A1A1A] text-[#F5F0E8]' : (selectedGenTags.length > 0 || difficulty) ? 'text-[#1A1A1A]' : 'text-[#5C5C5C] hover:bg-[#EDEAE4]/80'
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+              </svg>
+              {selectedGenTags.length > 0 && mobilePanel !== 'tags' && (
+                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-[#1A1A1A] text-[#F5F0E8] text-[9px] font-bold flex items-center justify-center rounded-full">
+                  {selectedGenTags.length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* 생성 버튼 */}
+          <button
+            onClick={handleGenerate}
+            disabled={isGenerating || !hasContent || !difficulty || selectedGenTags.length === 0}
+            className={`px-5 py-2 text-sm font-bold rounded-xl transition-colors ${
+              isGenerating || !hasContent || !difficulty || selectedGenTags.length === 0
+                ? 'bg-[#D4CFC4]/80 text-[#999] cursor-not-allowed'
+                : 'bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A]'
+            }`}
+          >
+            {isGenerating ? '생성 중...' : '생성'}
+          </button>
+        </div>
+
+        {/* 태그/난이도 미선택 안내 */}
+        {hasContent && (selectedGenTags.length === 0 || !difficulty) && !isGenerating && (
+          <p className="text-xs text-[#999] px-4 pb-2 text-right">
+            {selectedGenTags.length === 0 && !difficulty
+              ? '태그 아이콘에서 챕터·난이도를 설정해주세요'
+              : selectedGenTags.length === 0
+                ? '태그 아이콘에서 챕터를 선택해주세요'
+                : '태그 아이콘에서 난이도를 선택해주세요'}
+          </p>
+        )}
+      </div>
+
+      {/* ============================================================ */}
+      {/* 모바일: 키보드 위 플로팅 툴바 */}
+      {/* ============================================================ */}
+      {typeof document !== 'undefined' && isPromptFocused && isKeyboardOpen && createPortal(
+        <div
+          className="fixed left-3 right-3 z-50 flex items-center justify-between px-3 py-2 rounded-2xl bg-[#F5F0E8]/80 backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.12)] border border-[#D4CFC4]/60"
+          style={{ bottom: bottomOffset }}
+        >
+          <div className="flex items-center gap-1">
+            {/* 슬라이더 */}
+            <button
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => { dismissKeyboard(); setMobilePanel('slider'); }}
+              className="w-9 h-9 flex items-center justify-center rounded-xl text-[#5C5C5C] hover:bg-[#EDEAE4]/80 transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+              </svg>
+            </button>
+            {/* 태그 */}
+            <button
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => { dismissKeyboard(); setMobilePanel('tags'); }}
+              className="w-9 h-9 flex items-center justify-center rounded-xl transition-colors relative text-[#5C5C5C] hover:bg-[#EDEAE4]/80"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+              </svg>
+              {selectedGenTags.length > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-[#1A1A1A] text-[#F5F0E8] text-[9px] font-bold flex items-center justify-center rounded-full">
+                  {selectedGenTags.length}
+                </span>
+              )}
+            </button>
+          </div>
+          {/* 생성 */}
+          <button
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => { dismissKeyboard(); handleGenerate(); }}
+            disabled={isGenerating || !hasContent || !difficulty || selectedGenTags.length === 0}
+            className={`px-5 py-2 text-sm font-bold rounded-xl transition-colors ${
+              isGenerating || !hasContent || !difficulty || selectedGenTags.length === 0
+                ? 'bg-[#D4CFC4]/80 text-[#999] cursor-not-allowed'
+                : 'bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A]'
+            }`}
+          >
+            {isGenerating ? '생성 중...' : '생성'}
+          </button>
+        </div>,
+        document.body,
+      )}
+
+      {/* ============================================================ */}
+      {/* 슬라이더 바텀시트 */}
+      {/* ============================================================ */}
+      <MobileBottomSheet open={mobilePanel === 'slider'} onClose={() => setMobilePanel(null)}>
+        <div className="p-4 space-y-4">
+          <SliderRow
+            label="출제 스타일"
+            value={sliders.style}
+            weightLabel={getWeightLabel(sliders.style)}
+            onChange={(v) => setSliders(prev => ({ ...prev, style: v }))}
+          />
+          <SliderRow
+            label="출제 범위"
+            value={sliders.scopeFocusGuide}
+            weightLabel={getScopeFocusLabel(sliders.scopeFocusGuide)}
+            onChange={(v) => setSliders(prev => ({ ...prev, scopeFocusGuide: v }))}
+          />
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-sm font-bold text-[#1A1A1A]">문제 수</span>
+              <span className="text-sm font-bold text-[#1A1A1A]">{sliders.questionCount}문제</span>
+            </div>
+            <input
+              type="range"
+              min={5}
+              max={20}
+              step={1}
+              value={sliders.questionCount}
+              onChange={(e) => setSliders(prev => ({ ...prev, questionCount: parseInt(e.target.value) }))}
+              className="w-full h-2 bg-[#D4CFC4] appearance-none cursor-pointer accent-[#1A1A1A]"
+              style={{
+                background: `linear-gradient(to right, #1A1A1A 0%, #1A1A1A ${((sliders.questionCount - 5) / 15) * 100}%, #D4CFC4 ${((sliders.questionCount - 5) / 15) * 100}%, #D4CFC4 100%)`
+              }}
+            />
+          </div>
+        </div>
+      </MobileBottomSheet>
+
+      {/* ============================================================ */}
+      {/* 태그/난이도 바텀시트 */}
+      {/* ============================================================ */}
+      <MobileBottomSheet open={mobilePanel === 'tags'} onClose={() => setMobilePanel(null)}>
+        <div className="p-4 space-y-3">
+          {/* 챕터 태그 */}
+          <div>
+            <span className="text-xs font-bold text-[#5C5C5C]">챕터</span>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {genTagOptions.map(tag => {
+                const selected = selectedGenTags.includes(tag.value);
+                return (
+                  <button
+                    key={tag.value}
+                    onClick={() => setSelectedGenTags(prev =>
+                      selected ? prev.filter(t => t !== tag.value) : [...prev, tag.value]
+                    )}
+                    className={`px-3 py-1.5 text-sm font-bold border-2 transition-colors ${
+                      selected
+                        ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                        : 'bg-transparent text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
+                    }`}
+                  >
+                    {tag.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {/* 구분선 */}
+          <div className="border-t border-[#1A1A1A]" />
+          {/* 난이도 */}
+          <div>
+            <span className="text-xs font-bold text-[#5C5C5C]">난이도</span>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {(['easy', 'medium', 'hard'] as const).map(d => (
+                <button
+                  key={d}
+                  onClick={() => setDifficulty(prev => prev === d ? null : d)}
+                  className={`px-3 py-1.5 text-sm font-bold border-2 transition-colors ${
+                    difficulty === d
+                      ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                      : 'bg-transparent text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
+                  }`}
+                >
+                  #{d === 'easy' ? '쉬움' : d === 'medium' ? '보통' : '어려움'}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </MobileBottomSheet>
+
+      {/* ============================================================ */}
+      {/* 생성 진행 모달 (AIQuizProgress 재사용) */}
+      {/* ============================================================ */}
+      <LibraryProgressModal
+        isOpen={showProgressModal}
+        progress={progressStep}
+        onClose={() => {
+          setShowProgressModal(false);
+          modalDismissedRef.current = true;
+        }}
+      />
 
       {/* ============================================================ */}
       {/* Details 모달 (학생 서재탭과 동일한 레이아웃) */}

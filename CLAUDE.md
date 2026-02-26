@@ -46,6 +46,7 @@ npm run logs         # 로그 확인
 
 프론트엔드: `.env.local` 파일 (`.env.local.example` 참고)
 - `NEXT_PUBLIC_FIREBASE_*` — Firebase 프로젝트 설정 (API_KEY, AUTH_DOMAIN, PROJECT_ID, STORAGE_BUCKET, MESSAGING_SENDER_ID, APP_ID, MEASUREMENT_ID)
+- `NEXT_PUBLIC_FIREBASE_DATABASE_URL` — Firebase Realtime Database URL (철권퀴즈)
 - `NEXT_PUBLIC_FIREBASE_VAPID_KEY` — FCM 웹 푸시 인증서 키
 - `NEXT_PUBLIC_NAVER_CLIENT_ID` / `NEXT_PUBLIC_NAVER_CALLBACK_URL` — 네이버 OAuth (선택)
 - `NEXT_PUBLIC_PPTX_CLOUD_RUN_URL` — PPT→PDF 변환 Cloud Run 서비스 URL
@@ -313,7 +314,6 @@ Tailwind에서 `bg-theme-background`, `text-theme-accent` 등으로 사용 (`tai
 - 3D 전환: rotateY ±8°, scale 0.92, opacity 0.9 (비활성 카드)
 - 난이도별 MP4 비디오 카드 (`/videos/difficulty-easy|normal|hard.mp4`)
 - 기출 카드: PAST EXAM 헤더에 장식선 + 년도/시험 드롭다운
-- 퀴즈 관리 페이지 (`/professor/quiz/best-q`): 3탭 (피드백 / 서재 / 커스텀)
 - 퀴즈 미리보기 페이지 (`/professor/quiz/[id]/preview`)
 - 자작 퀴즈: 신문 스타일 카드 그리드 + 태그 검색
 - 자작 Details 모달: 미리보기 버튼 없음 (캐러셀 Details에만 표시)
@@ -508,6 +508,24 @@ generateScoreSummary(result)                // 텍스트 요약
 
 - **퀴즈 제목**: `font-serif-display` 사용 금지 (산세리프 기본 폰트 사용)
 - **패널/박스/태그**: `bg-[#F5F0E8]` + `border-2 border-[#1A1A1A]` 통일 (흰색/누리끼리 배경 금지)
+- **플로팅 글래스 카드 (입력 영역 공통 패턴)**:
+  - 밝은 배경: `fixed left-3 right-3 rounded-2xl bg-[#F5F0E8]/80 backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.12)] border border-[#D4CFC4]/60`
+  - 어두운 배경 (공지채널): `mx-3 mb-3 rounded-2xl bg-white/8 backdrop-blur-xl border border-white/15 shadow-[0_4px_24px_rgba(0,0,0,0.25)]`
+  - 적용 대상: 교수 서재 프롬프트, 게시판 댓글 입력, 공지채널 입력
+  - 내부 textarea/버튼: `rounded-xl`, 태그: `rounded-full`
+
+### MobileBottomSheet (`components/common/MobileBottomSheet.tsx`)
+
+- 바텀시트: `bg-[#F5F0E8] rounded-t-2xl shadow-[0_-8px_32px_rgba(0,0,0,0.12)] border border-[#D4CFC4]/60`
+- Framer Motion `drag="y"` + `onDragEnd` 스와이프 닫기 (80px 또는 velocity 300 임계치)
+- `createPortal(... , document.body)`로 렌더링
+
+### AI 퀴즈 answer 인덱싱 주의
+
+- **수동 퀴즈**: answer가 **1-indexed** (answer=1 → 첫 번째 선지). `quiz/create/page.tsx`에서 `answerIndex + 1`로 저장
+- **AI 퀴즈**: answer가 **0-indexed** (answer=0 → 첫 번째 선지). Gemini 프롬프트에서 0-based 강제
+- **publishQuiz 시**: `originalType: 'professor-ai'` 필드 추가하여 AI 출처 추적 (type이 midterm/final로 변경되어도)
+- **PDF 내보내기**: `QuestionExportData.answerZeroIndexed` 플래그로 구분하여 `formatAnswer`에서 올바른 보정 적용
 
 ## 알려진 제약 및 주의사항
 

@@ -26,6 +26,16 @@ export interface QuestionExportData {
   bogi?: { questionText?: string; items: Array<{ label: string; content: string }> } | null;
   passagePrompt?: string;
   hasMultipleAnswers?: boolean;
+  /** true면 answer가 0-indexed (AI 퀴즈), false/undefined면 1-indexed (수동 퀴즈) */
+  answerZeroIndexed?: boolean;
+  // 결합형 문제
+  passageImage?: string;
+  combinedGroupId?: string;
+  combinedIndex?: number;
+  combinedTotal?: number;
+  // 복합 제시문
+  passageMixedExamples?: any[];
+  mixedExamples?: any[];
 }
 
 export interface PdfExportOptions {
@@ -34,6 +44,7 @@ export interface PdfExportOptions {
   folderName: string;
   userName?: string;
   studentId?: string;
+  courseName?: string;
 }
 
 // ============================================================

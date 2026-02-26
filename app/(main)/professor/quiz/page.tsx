@@ -1,21 +1,25 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs, getDoc, updateDoc, doc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Skeleton } from '@/components/common';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { useCourse } from '@/lib/contexts';
+import { useCourse, useUser } from '@/lib/contexts';
 import { COURSES, type CourseId, getDefaultQuizTab, getPastExamOptions, type PastExamOption } from '@/lib/types/course';
-import { useProfessorQuiz, type ProfessorQuiz, type QuizTypeFilter } from '@/lib/hooks/useProfessorQuiz';
+import { type ProfessorQuiz, type QuizTypeFilter } from '@/lib/hooks/useProfessorQuiz';
 import { calcFeedbackScore, getFeedbackLabel } from '@/lib/utils/feedbackScore';
 import { generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import QuizStatsModal from '@/components/quiz/manage/QuizStatsModal';
+import PreviewQuestionCard from '@/components/professor/PreviewQuestionCard';
 import ProfessorLibraryTab from '@/components/professor/library/ProfessorLibraryTab';
 import { useCustomFolders } from '@/lib/hooks/useCustomFolders';
 import type { FeedbackType } from '@/components/quiz/InstantFeedbackButton';
+import AutoVideo, { getDifficultyVideo } from '@/components/quiz/AutoVideo';
+import { NEWSPAPER_BG_TEXT } from '@/lib/utils/quizHelpers';
+import type { QuestionExportData as PdfQuestionData } from '@/lib/utils/questionPdfExport';
 
 // ============================================================
 // 타입
@@ -44,53 +48,13 @@ const PROF_QUIZ_SCROLL_KEY = (type: string) => `prof-quiz-scroll-${type}`;
 
 const COURSE_IDS: CourseId[] = ['biology', 'microbiology', 'pathophysiology'];
 
-// 신문 배경 텍스트
-const NEWSPAPER_BG_TEXT = `The cell membrane, also known as the plasma membrane, is a biological membrane that separates and protects the interior of all cells from the outside environment. The cell membrane consists of a lipid bilayer, including cholesterols that sit between phospholipids to maintain their fluidity at various temperatures. The membrane also contains membrane proteins, including integral proteins that span the membrane serving as membrane transporters, and peripheral proteins that loosely attach to the outer side of the cell membrane, acting as enzymes to facilitate interaction with the cell's environment.`;
-
-
-// 난이도별 비디오 경로
-function getDifficultyVideo(difficulty: string): string {
-  switch (difficulty) {
-    case 'easy': return '/videos/difficulty-easy.mp4';
-    case 'hard': return '/videos/difficulty-hard.mp4';
-    default: return '/videos/difficulty-normal.mp4';
-  }
-}
-
-// 자동재생 비디오 — 탭 전환 시에도 안정적으로 재생
-function AutoVideo({ src, className }: { src: string; className?: string }) {
-  const ref = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.play().catch(() => {});
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') el.play().catch(() => {});
-    };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [src]);
-
-  return (
-    <video
-      ref={ref}
-      autoPlay
-      loop
-      muted
-      playsInline
-      className={className}
-    >
-      <source src={src} type="video/mp4" />
-    </video>
-  );
-}
+// (AutoVideo, getDifficultyVideo, NEWSPAPER_BG_TEXT → 공유 모듈에서 import)
 
 // ============================================================
 // 뉴스 기사 컴포넌트 (교수용 — 난이도 이미지 + 왼쪽 정렬)
 // ============================================================
 
-function ProfessorNewsArticle({
+const ProfessorNewsArticle = memo(function ProfessorNewsArticle({
   quiz,
   onDetails,
   onStats,
@@ -161,13 +125,13 @@ function ProfessorNewsArticle({
       </div>
     </div>
   );
-}
+});
 
 // ============================================================
 // 뉴스 카드 컴포넌트 (교수용)
 // ============================================================
 
-function ProfessorNewsCard({
+const ProfessorNewsCard = memo(function ProfessorNewsCard({
   title,
   subtitle,
   type,
@@ -219,7 +183,7 @@ function ProfessorNewsCard({
   }, [type]);
 
   return (
-    <div className="w-full h-full border-4 border-[#1A1A1A] bg-[#1A1A1A] flex flex-col overflow-hidden">
+    <div className="w-full h-full border border-[#999] bg-[#1A1A1A] flex flex-col overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.3)]">
       {/* 축소된 헤더 */}
       <div className="bg-[#1A1A1A] text-[#F5F0E8] px-4 py-2 text-center flex-shrink-0">
         <h1 className="font-serif text-lg font-black tracking-tight">{title}</h1>
@@ -252,13 +216,13 @@ function ProfessorNewsCard({
       </div>
     </div>
   );
-}
+});
 
 // ============================================================
 // 기출 전용 뉴스 카드 (학생과 동일한 드롭다운 스타일)
 // ============================================================
 
-function ProfessorPastExamNewsCard({
+const ProfessorPastExamNewsCard = memo(function ProfessorPastExamNewsCard({
   quizzes,
   isLoading,
   onDetails,
@@ -288,7 +252,7 @@ function ProfessorPastExamNewsCard({
   ) || null;
 
   return (
-    <div className="w-full h-full border-4 border-[#1A1A1A] bg-[#1A1A1A] flex flex-col overflow-hidden">
+    <div className="w-full h-full border border-[#999] bg-[#1A1A1A] flex flex-col overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.3)]">
       {/* 축소된 헤더 + 드롭다운 — 수직 중앙 정렬 */}
       <div className="bg-[#1A1A1A] text-[#F5F0E8] px-4 py-2 flex items-center justify-between flex-shrink-0">
         <div>
@@ -419,7 +383,7 @@ function ProfessorPastExamNewsCard({
       </div>
     </div>
   );
-}
+});
 
 // ============================================================
 // 뉴스 캐러셀 (학생과 동일한 3D perspective 효과)
@@ -781,7 +745,7 @@ function CourseRibbonHeader({
         onTouchEnd={handleTouchEnd}
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
-        data-no-pull
+        data-no-pull-x
         style={{ touchAction: 'pan-y' }}
       >
         <AnimatePresence mode="wait">
@@ -841,9 +805,9 @@ function ProfessorCustomQuizCard({
 
   return (
     <motion.div
-      whileHover={{ y: -4, boxShadow: '0 8px 25px rgba(26, 26, 26, 0.15)' }}
+      whileHover={{ y: -4, boxShadow: '0 8px 20px rgba(0, 0, 0, 0.08)' }}
       transition={{ duration: 0.2 }}
-      className="relative border border-[#1A1A1A] bg-[#F5F0E8] overflow-hidden shadow-md cursor-pointer"
+      className="relative border border-[#999] bg-[#F5F0E8]/70 backdrop-blur-sm overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)] cursor-pointer"
       onClick={onClick}
     >
       {/* 신문 배경 텍스트 */}
@@ -868,7 +832,7 @@ function ProfessorCustomQuizCard({
       </div>
 
       {/* 카드 내용 */}
-      <div className="relative z-10 p-4 bg-[#F5F0E8]/90">
+      <div className="relative z-10 p-4 bg-[#F5F0E8]/60">
         {/* 제목 (2줄 고정 높이) */}
         <div className="h-[44px] mb-2">
           <h3 className="font-bold text-base line-clamp-2 text-[#1A1A1A] pr-6 leading-snug">
@@ -932,7 +896,7 @@ function ProfessorCustomQuizCard({
 
 function SkeletonCard() {
   return (
-    <div className="border border-[#1A1A1A] bg-[#F5F0E8] p-4 shadow-md">
+    <div className="border border-[#999] bg-[#F5F0E8]/70 backdrop-blur-sm p-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
       <Skeleton className="w-3/4 h-4 mb-2 rounded-none" />
       <Skeleton className="w-1/2 h-3 mb-3 rounded-none" />
       <div className="flex gap-2">
@@ -951,11 +915,13 @@ export default function ProfessorQuizListPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { userCourseId, setProfessorCourse } = useCourse();
+  const { profile } = useUser();
 
-  // 과목별 퀴즈 로드용 인스턴스 3개 (중간/기말/기출 캐러셀)
-  const midtermHook = useProfessorQuiz();
-  const finalHook = useProfessorQuiz();
-  const pastHook = useProfessorQuiz();
+  // 과목별 퀴즈 통합 로드 (useProfessorQuiz ×3 → 단일 fetch + state)
+  const [allMidterm, setAllMidterm] = useState<ProfessorQuiz[]>([]);
+  const [allFinal, setAllFinal] = useState<ProfessorQuiz[]>([]);
+  const [allPast, setAllPast] = useState<ProfessorQuiz[]>([]);
+  const [examLoading, setExamLoading] = useState(true);
 
   // 섹션 필터 (자작/서재/커스텀) — sessionStorage로 유지
   const [sectionFilter, setSectionFilter] = useState<'custom' | 'library' | 'folder'>(() => {
@@ -969,6 +935,17 @@ export default function ProfessorQuizListPage() {
   // 필터 변경 시 sessionStorage에 저장
   useEffect(() => {
     sessionStorage.setItem('prof_quiz_section_filter', sectionFilter);
+  }, [sectionFilter]);
+
+  // 서재 탭 시 네비게이션만 숨김 (PullToHome은 유지)
+  // data-hide-nav는 PullToHome 제스처도 차단하므로 data-hide-nav-only 사용
+  useEffect(() => {
+    if (sectionFilter === 'library') {
+      document.body.setAttribute('data-hide-nav-only', '');
+    } else {
+      document.body.removeAttribute('data-hide-nav-only');
+    }
+    return () => document.body.removeAttribute('data-hide-nav-only');
   }, [sectionFilter]);
 
   // 서재 탭 인라인 프리뷰 모드
@@ -988,6 +965,80 @@ export default function ProfessorQuizListPage() {
   const [newFolderName, setNewFolderName] = useState('');
   const [deleteFolderTarget, setDeleteFolderTarget] = useState<{ id: string; name: string } | null>(null);
 
+  // 폴더 상세 뷰
+  const [openFolderId, setOpenFolderId] = useState<string | null>(null);
+  const [folderQuestions, setFolderQuestions] = useState<any[]>([]);
+  const [folderLoading, setFolderLoading] = useState(false);
+
+  // 폴더 클릭 시 문제 로드 (useEffect 대신 직접 호출 — onSnapshot이 customFolders를 갱신하면 useEffect가 cancelled되는 문제 방지)
+  const handleOpenFolder = useCallback(async (folder: { id: string; questions: any[] }) => {
+    setOpenFolderId(folder.id);
+    setFolderQuestions([]);
+
+    if (!folder.questions || folder.questions.length === 0) {
+      setFolderLoading(false);
+      return;
+    }
+
+    setFolderLoading(true);
+
+    try {
+      const quizIdSet = new Set<string>();
+      for (const q of folder.questions) quizIdSet.add(q.quizId);
+
+      const quizCache = new Map<string, any>();
+      for (const quizId of quizIdSet) {
+        try {
+          const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
+          if (quizDoc.exists()) quizCache.set(quizId, quizDoc.data());
+        } catch (e) {
+          console.error('퀴즈 로드 실패:', quizId, e);
+        }
+      }
+
+      const questions: any[] = [];
+      // questionId가 없는 기존 데이터 대응: 같은 퀴즈에서 몇 번째인지 추적
+      const quizIndexCounters: Record<string, number> = {};
+      for (const q of folder.questions) {
+        const quizData = quizCache.get(q.quizId);
+        if (!quizData) continue;
+        const quizQuestions = (quizData.questions as any[]) || [];
+
+        let question: any = null;
+
+        if (q.questionId) {
+          // 정상 매칭: questionId로 찾기
+          question = quizQuestions.find((qq: any, idx: number) => {
+            const qId = qq.id || `q${idx}`;
+            return qId === q.questionId;
+          });
+        }
+
+        if (!question) {
+          // 폴백: questionId가 없거나 매칭 실패 → 같은 퀴즈 내 순서대로 매칭
+          const counter = quizIndexCounters[q.quizId] || 0;
+          if (counter < quizQuestions.length) {
+            question = quizQuestions[counter];
+          }
+          quizIndexCounters[q.quizId] = counter + 1;
+        }
+
+        if (!question) continue;
+        questions.push({ ...question, _quizTitle: q.quizTitle });
+      }
+      setFolderQuestions(questions);
+    } catch (e) {
+      console.error('폴더 문제 로드 실패:', e);
+      setFolderQuestions([]);
+    } finally {
+      setFolderLoading(false);
+    }
+  }, []);
+
+  // PDF 폴더 선택 모드
+  const [isProfPdfSelectMode, setIsProfPdfSelectMode] = useState(false);
+  const [selectedProfPdfFolders, setSelectedProfPdfFolders] = useState<Set<string>>(new Set());
+
   const fixedTagOptions = useMemo(() => {
     const courseTags = generateCourseTags(userCourseId);
     return [...COMMON_TAGS.map(t => t.value), ...courseTags.map(t => t.value)];
@@ -1002,7 +1053,6 @@ export default function ProfessorQuizListPage() {
 
   // 공개 전환 모달
   const [publishConfirmQuizId, setPublishConfirmQuizId] = useState<string | null>(null);
-  const publishHook = useProfessorQuiz();
 
   // 스크롤 맨 위로 버튼
   const headerRef = useRef<HTMLElement>(null);
@@ -1026,70 +1076,113 @@ export default function ProfessorQuizListPage() {
   // 피드백 점수 데이터
   const [feedbackMap, setFeedbackMap] = useState<Record<string, QuizFeedbackInfo>>({});
 
-  // 중간/기말/기출 퀴즈 전체 로드 (과목 전환은 클라이언트 필터링)
-  useEffect(() => {
-    if (user?.uid) {
-      midtermHook.fetchQuizzes(user.uid, { quizType: 'midterm', pageSize: 50 });
-      finalHook.fetchQuizzes(user.uid, { quizType: 'final', pageSize: 50 });
-      pastHook.fetchQuizzes(user.uid, { quizType: 'past', pageSize: 50 });
+  // 퀴즈 문서 → ProfessorQuiz 파싱 헬퍼
+  const docToQuiz = useCallback((docSnap: any): ProfessorQuiz => {
+    const data = docSnap.data();
+    return {
+      id: docSnap.id,
+      title: data.title || '',
+      description: data.description,
+      type: data.type,
+      courseId: data.courseId,
+      targetClass: data.targetClass || 'all',
+      difficulty: data.difficulty || 'normal',
+      isPublished: data.isPublished ?? true,
+      questions: data.questions || [],
+      questionCount: data.questionCount || 0,
+      creatorUid: data.creatorUid || data.creatorId || '',
+      creatorNickname: data.creatorNickname || '',
+      participantCount: data.participantCount || 0,
+      averageScore: data.averageScore || 0,
+      feedbackCount: data.feedbackCount || 0,
+      tags: data.tags || [],
+      pastYear: data.pastYear,
+      pastExamType: data.pastExamType,
+      createdAt: data.createdAt?.toDate() || new Date(),
+      updatedAt: data.updatedAt?.toDate() || new Date(),
+    };
+  }, []);
+
+  // 중간/기말/기출 통합 fetch (단일 쿼리 → 클라이언트 분류)
+  const refreshExamQuizzes = useCallback(async () => {
+    if (!user?.uid) return;
+    setExamLoading(true);
+
+    try {
+      // creatorUid 또는 creatorId로 조회 (AI 퀴즈는 creatorId만 있을 수 있음)
+      const [byUid, byId] = await Promise.all([
+        getDocs(query(
+          collection(db, 'quizzes'),
+          where('creatorUid', '==', user.uid),
+          where('type', 'in', ['midterm', 'final', 'past', 'professor']),
+        )),
+        getDocs(query(
+          collection(db, 'quizzes'),
+          where('creatorId', '==', user.uid),
+          where('type', 'in', ['midterm', 'final', 'past', 'professor']),
+        )),
+      ]);
+
+      // 중복 제거 (creatorUid와 creatorId 둘 다 있는 문서)
+      const seen = new Set<string>();
+      const allQuizzes: ProfessorQuiz[] = [];
+      for (const snapshot of [byUid, byId]) {
+        for (const d of snapshot.docs) {
+          if (!seen.has(d.id)) {
+            seen.add(d.id);
+            allQuizzes.push(docToQuiz(d));
+          }
+        }
+      }
+
+      const sortDesc = (a: ProfessorQuiz, b: ProfessorQuiz) =>
+        b.createdAt.getTime() - a.createdAt.getTime();
+
+      setAllMidterm(allQuizzes.filter(q => q.type === 'midterm').sort(sortDesc));
+      setAllFinal(allQuizzes.filter(q => q.type === 'final').sort(sortDesc));
+      setAllPast(allQuizzes.filter(q => q.type === 'past').sort(sortDesc));
+    } catch (err) {
+      console.error('[refreshExamQuizzes] 오류:', err);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.uid]);
+    setExamLoading(false);
+  }, [user?.uid, docToQuiz]);
+
+  useEffect(() => {
+    refreshExamQuizzes();
+  }, [refreshExamQuizzes]);
 
   // 과목별 클라이언트 사이드 필터링 (과목 전환 시 즉시 반영)
   const filteredMidterm = useMemo(() => {
-    if (!userCourseId) return midtermHook.quizzes;
-    return midtermHook.quizzes.filter(q => q.courseId === userCourseId);
-  }, [midtermHook.quizzes, userCourseId]);
+    if (!userCourseId) return allMidterm;
+    return allMidterm.filter(q => q.courseId === userCourseId);
+  }, [allMidterm, userCourseId]);
 
   const filteredFinal = useMemo(() => {
-    if (!userCourseId) return finalHook.quizzes;
-    return finalHook.quizzes.filter(q => q.courseId === userCourseId);
-  }, [finalHook.quizzes, userCourseId]);
+    if (!userCourseId) return allFinal;
+    return allFinal.filter(q => q.courseId === userCourseId);
+  }, [allFinal, userCourseId]);
 
   const filteredPast = useMemo(() => {
-    if (!userCourseId) return pastHook.quizzes;
-    return pastHook.quizzes.filter(q => q.courseId === userCourseId);
-  }, [pastHook.quizzes, userCourseId]);
+    if (!userCourseId) return allPast;
+    return allPast.filter(q => q.courseId === userCourseId);
+  }, [allPast, userCourseId]);
 
-  // 자작 퀴즈 전체 로드 (과목 전환은 클라이언트 필터링)
+  // 자작 퀴즈 로드 (courseId 필터로 해당 과목만 구독)
   const [allCustomQuizzes, setAllCustomQuizzes] = useState<ProfessorQuiz[]>([]);
   useEffect(() => {
-    if (!user) return;
+    if (!user || !userCourseId) return;
 
     setCustomLoading(true);
     setCustomError(null);
 
     const q = query(
       collection(db, 'quizzes'),
-      where('type', '==', 'custom')
+      where('type', '==', 'custom'),
+      where('courseId', '==', userCourseId)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const quizzes: ProfessorQuiz[] = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        quizzes.push({
-          id: docSnap.id,
-          title: data.title || '',
-          description: data.description,
-          type: data.type,
-          courseId: data.courseId,
-          targetClass: data.targetClass || 'all',
-          difficulty: data.difficulty || 'normal',
-          isPublished: data.isPublished ?? true,
-          questions: data.questions || [],
-          questionCount: data.questionCount || 0,
-          creatorUid: data.creatorUid || data.creatorId || '',
-          creatorNickname: data.creatorNickname || '',
-          participantCount: data.participantCount || 0,
-          averageScore: data.averageScore || 0,
-          feedbackCount: data.feedbackCount || 0,
-          tags: data.tags || [],
-          createdAt: data.createdAt?.toDate() || new Date(),
-          updatedAt: data.updatedAt?.toDate() || new Date(),
-        });
-      });
+      const quizzes: ProfessorQuiz[] = snapshot.docs.map(docToQuiz);
       // 최신순 정렬
       quizzes.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
       setAllCustomQuizzes(quizzes);
@@ -1101,13 +1194,10 @@ export default function ProfessorQuizListPage() {
     });
 
     return () => unsubscribe();
-  }, [user]);
+  }, [user, userCourseId, docToQuiz]);
 
-  // 자작 퀴즈 과목별 필터링
-  const customQuizzes = useMemo(() => {
-    if (!userCourseId) return allCustomQuizzes;
-    return allCustomQuizzes.filter(q => !q.courseId || q.courseId === userCourseId);
-  }, [allCustomQuizzes, userCourseId]);
+  // 자작 퀴즈 (이미 courseId로 필터됨)
+  const customQuizzes = allCustomQuizzes;
 
   // 과목 변경 시 태그 초기화
   useEffect(() => {
@@ -1117,11 +1207,11 @@ export default function ProfessorQuizListPage() {
 
   // 전체 퀴즈 목록 합산 (피드백 로드용 — 전체 데이터로 1회만 로드)
   const allQuizzes = useMemo(() => {
-    const carouselQuizzes = [...midtermHook.quizzes, ...finalHook.quizzes, ...pastHook.quizzes];
+    const carouselQuizzes = [...allMidterm, ...allFinal, ...allPast];
     const ids = new Set(carouselQuizzes.map(q => q.id));
     const uniqueCustomQuizzes = allCustomQuizzes.filter(q => !ids.has(q.id));
     return [...carouselQuizzes, ...uniqueCustomQuizzes];
-  }, [midtermHook.quizzes, finalHook.quizzes, pastHook.quizzes, allCustomQuizzes]);
+  }, [allMidterm, allFinal, allPast, allCustomQuizzes]);
 
   // 태그 필터링된 자작 퀴즈
   const filteredCustomQuizzes = useMemo(() => {
@@ -1131,34 +1221,44 @@ export default function ProfessorQuizListPage() {
     );
   }, [customQuizzes, selectedTags]);
 
-  // 피드백 점수 실시간 구독
+  // 피드백 구독용 quizId 목록 — ID가 실제로 변경될 때만 재구독 (churn 방지)
+  const feedbackQuizIdsKey = useMemo(
+    () => allQuizzes.map(q => q.id).sort().join(','),
+    [allQuizzes]
+  );
+
+  // 피드백 점수 실시간 구독 (debounce로 배치 처리)
   useEffect(() => {
-    if (allQuizzes.length === 0) {
+    if (!feedbackQuizIdsKey) {
       setFeedbackMap({});
       return;
     }
 
-    const quizIds = allQuizzes.map(q => q.id);
+    const quizIds = feedbackQuizIdsKey.split(',');
     const unsubscribes: (() => void)[] = [];
-    // 청크별 피드백 데이터 저장
     const chunkData: Record<number, { quizId: string; type: FeedbackType }[]> = {};
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
     const recalcFeedbackMap = () => {
-      const byQuiz: Record<string, { type: FeedbackType }[]> = {};
-      Object.values(chunkData).flat().forEach(({ quizId: qid, type }) => {
-        if (!byQuiz[qid]) byQuiz[qid] = [];
-        byQuiz[qid].push({ type });
-      });
+      // debounce: 여러 chunk가 연속 도착해도 150ms 후 1회만 계산
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        const byQuiz: Record<string, { type: FeedbackType }[]> = {};
+        Object.values(chunkData).flat().forEach(({ quizId: qid, type }) => {
+          if (!byQuiz[qid]) byQuiz[qid] = [];
+          byQuiz[qid].push({ type });
+        });
 
-      const newMap: Record<string, QuizFeedbackInfo> = {};
-      Object.entries(byQuiz).forEach(([qid, feedbacks]) => {
-        newMap[qid] = {
-          quizId: qid,
-          score: calcFeedbackScore(feedbacks),
-          count: feedbacks.length,
-        };
-      });
-      setFeedbackMap(newMap);
+        const newMap: Record<string, QuizFeedbackInfo> = {};
+        Object.entries(byQuiz).forEach(([qid, feedbacks]) => {
+          newMap[qid] = {
+            quizId: qid,
+            score: calcFeedbackScore(feedbacks),
+            count: feedbacks.length,
+          };
+        });
+        setFeedbackMap(newMap);
+      }, 150);
     };
 
     for (let i = 0; i < quizIds.length; i += 30) {
@@ -1180,9 +1280,10 @@ export default function ProfessorQuizListPage() {
     }
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       unsubscribes.forEach(fn => fn());
     };
-  }, [allQuizzes]);
+  }, [feedbackQuizIdsKey]);
 
   // Details 모달 상태
   const [detailsQuiz, setDetailsQuiz] = useState<ProfessorQuiz | null>(null);
@@ -1264,15 +1365,15 @@ export default function ProfessorQuizListPage() {
       </header>
 
       {/* 뉴스 캐러셀 (중간/기말/기출) */}
-      <section className="mt-6 mb-8 px-4">
+      <section className="mt-6 mb-8">
         <ProfessorNewsCarousel
           midtermQuizzes={filteredMidterm}
           finalQuizzes={filteredFinal}
           pastQuizzes={filteredPast}
           isLoading={{
-            midterm: midtermHook.loading,
-            final: finalHook.loading,
-            past: pastHook.loading,
+            midterm: examLoading,
+            final: examLoading,
+            past: examLoading,
           }}
           onDetails={handleCarouselDetails}
           onStats={handleCarouselStats}
@@ -1284,7 +1385,7 @@ export default function ProfessorQuizListPage() {
       </section>
 
       {/* 하단 섹션 */}
-      <section className="px-4">
+      <section className="px-4 pb-16">
         {/* 필터 탭 (자작|서재|커스텀) + 퀴즈 만들기 / 뒤로가기 */}
         <div className="flex items-center justify-between mb-3">
           <div className="relative flex w-[252px] bg-[#EDEAE4] border border-[#1A1A1A] overflow-hidden">
@@ -1326,6 +1427,129 @@ export default function ProfessorQuizListPage() {
               </svg>
               뒤로가기
             </button>
+          ) : isProfPdfSelectMode ? (
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setIsProfPdfSelectMode(false); setSelectedProfPdfFolders(new Set()); }}
+                className="px-4 py-3 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] whitespace-nowrap hover:bg-[#EDEAE4] transition-colors"
+              >
+                취소
+              </button>
+              <button
+                disabled={selectedProfPdfFolders.size === 0}
+                onClick={async () => {
+                  const includeAnswers = true;
+                  const includeExplanations = true;
+
+                  try {
+                    const { exportQuestionsToPdf } = await import('@/lib/utils/questionPdfExport');
+                    const allQuestions: PdfQuestionData[] = [];
+
+                    const selectedFolders = customFolders.filter(f => selectedProfPdfFolders.has(f.id));
+
+                    // 고유 quizId 수집 → 한 번씩만 fetch
+                    const quizIdSet = new Set<string>();
+                    for (const folder of selectedFolders) {
+                      for (const q of folder.questions) quizIdSet.add(q.quizId);
+                    }
+
+                    // 배치 fetch → Map 캐시
+                    const quizCache = new Map<string, any>();
+                    let fetchFailed = 0;
+                    for (const quizId of quizIdSet) {
+                      try {
+                        const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
+                        if (quizDoc.exists()) quizCache.set(quizId, quizDoc.data());
+                        else fetchFailed++;
+                      } catch { fetchFailed++; }
+                    }
+
+                    // 문제 매핑 (누락 카운트)
+                    let skippedCount = 0;
+                    const quizIndexCounters: Record<string, number> = {};
+                    for (const folder of selectedFolders) {
+                      for (const q of folder.questions) {
+                        const quizData = quizCache.get(q.quizId);
+                        if (!quizData) { skippedCount++; continue; }
+                        const quizQuestions = (quizData.questions as any[]) || [];
+                        let question: any = q.questionId
+                          ? quizQuestions.find((qq: any, idx: number) => (qq.id || `q${idx}`) === q.questionId)
+                          : null;
+                        if (!question) {
+                          const counter = quizIndexCounters[q.quizId] || 0;
+                          if (counter < quizQuestions.length) question = quizQuestions[counter];
+                          quizIndexCounters[q.quizId] = counter + 1;
+                        }
+                        if (!question) { skippedCount++; continue; }
+                        // answer 안전 변환 (배열/숫자/문자열 모두 대응)
+                        const rawAnswer = question.answer;
+                        const answerStr = Array.isArray(rawAnswer)
+                          ? rawAnswer.map((a: any) => String(a)).join(',')
+                          : String(rawAnswer ?? '');
+
+                        // AI 퀴즈(0-indexed) vs 수동 퀴즈(1-indexed) 구분
+                        const isAiQuiz = quizData.type === 'professor-ai' || quizData.type === 'ai-generated' || quizData.originalType === 'professor-ai';
+
+                        allQuestions.push({
+                          text: question.text || '',
+                          type: question.type || 'multiple',
+                          choices: Array.isArray(question.choices) ? question.choices : undefined,
+                          answer: answerStr,
+                          explanation: question.explanation || '',
+                          imageUrl: question.imageUrl || undefined,
+                          passage: question.passage || undefined,
+                          passageType: question.passageType || undefined,
+                          koreanAbcItems: question.koreanAbcItems || undefined,
+                          bogi: question.bogi || undefined,
+                          passagePrompt: question.commonQuestion || question.passagePrompt || undefined,
+                          hasMultipleAnswers: answerStr.includes(','),
+                          answerZeroIndexed: isAiQuiz,
+                          // 결합형 문제 필드
+                          passageImage: question.passageImage || undefined,
+                          combinedGroupId: question.combinedGroupId || undefined,
+                          combinedIndex: question.combinedIndex ?? undefined,
+                          combinedTotal: question.combinedTotal ?? undefined,
+                          // 복합 제시문
+                          passageMixedExamples: question.passageMixedExamples || undefined,
+                          mixedExamples: question.mixedExamples || undefined,
+                        });
+                      }
+                    }
+
+                    // 누락 알림
+                    if (skippedCount > 0) {
+                      alert(`${skippedCount}개 문제를 찾을 수 없어 제외되었습니다.`);
+                    }
+                    if (allQuestions.length === 0) {
+                      alert('내보낼 문제가 없습니다.');
+                      return;
+                    }
+
+                    const folderName = selectedFolders.length === 1 ? selectedFolders[0].name : '커스텀 문제집';
+                    await exportQuestionsToPdf(allQuestions, {
+                      includeAnswers,
+                      includeExplanations,
+                      folderName,
+                      userName: profile?.nickname || '',
+                      studentId: '',
+                      courseName: userCourseId ? COURSES[userCourseId]?.name : undefined,
+                    });
+                  } catch (err) {
+                    console.error('PDF 다운로드 실패:', err);
+                  } finally {
+                    setIsProfPdfSelectMode(false);
+                    setSelectedProfPdfFolders(new Set());
+                  }
+                }}
+                className={`px-4 py-3 text-sm font-bold whitespace-nowrap transition-colors ${
+                  selectedProfPdfFolders.size > 0
+                    ? 'bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A]'
+                    : 'bg-[#D4CFC4] text-[#EDEAE4] cursor-not-allowed'
+                }`}
+              >
+                PDF 다운 {selectedProfPdfFolders.size > 0 && `(${selectedProfPdfFolders.size})`}
+              </button>
+            </div>
           ) : (
             <button
               onClick={() => router.push('/professor/quiz/create')}
@@ -1475,10 +1699,7 @@ export default function ProfessorQuizListPage() {
             onPreviewChange={setIsLibraryPreview}
             isPreviewActive={isLibraryPreview}
             onPublish={() => {
-              if (user?.uid) {
-                midtermHook.fetchQuizzes(user.uid, { quizType: 'midterm', pageSize: 50 });
-                finalHook.fetchQuizzes(user.uid, { quizType: 'final', pageSize: 50 });
-              }
+              refreshExamQuizzes();
             }}
           />
         )}
@@ -1486,8 +1707,31 @@ export default function ProfessorQuizListPage() {
         {/* ====== 커스텀 탭 (폴더) ====== */}
         {sectionFilter === 'folder' && !isLibraryPreview && (
           <div>
+            {/* 상단 버튼 행: 폴더 생성 + PDF 다운 (PDF 선택 모드/상세 뷰에서 숨김) */}
+            {!isProfPdfSelectMode && !openFolderId && <div className="flex gap-2 mb-3">
+              <button
+                onClick={() => setShowNewFolderInput(true)}
+                className="flex-1 py-2 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+              >
+                + 폴더 생성
+              </button>
+              <button
+                onClick={() => {
+                  if (customFolders.length === 0) return;
+                  setIsProfPdfSelectMode(true);
+                  setSelectedProfPdfFolders(new Set());
+                }}
+                className="flex-1 py-2 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors flex items-center justify-center gap-1"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                PDF 다운
+              </button>
+            </div>}
+
             {/* 새 폴더 입력 */}
-            {showNewFolderInput && (
+            {showNewFolderInput && !openFolderId && (
               <div className="mb-3 flex gap-2">
                 <input
                   type="text"
@@ -1528,40 +1772,52 @@ export default function ProfessorQuizListPage() {
               </div>
             )}
 
-            {/* 폴더 그리드 */}
-            <div className="grid grid-cols-3 gap-3 p-1">
-              {/* 새 폴더 버튼 */}
-              <button
-                onClick={() => setShowNewFolderInput(true)}
-                className="aspect-square border-2 border-dashed border-[#D4CFC4] flex flex-col items-center justify-center gap-2 hover:border-[#1A1A1A] transition-colors"
-              >
-                <svg className="w-8 h-8 text-[#5C5C5C]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
-                </svg>
-                <span className="text-[10px] text-[#5C5C5C] font-bold">새 폴더</span>
-              </button>
-
-              {/* 폴더 목록 */}
+            {/* 폴더 그리드 (상세 뷰 열려있으면 숨김) */}
+            {!openFolderId && <div className="grid grid-cols-3 gap-3 p-1">
               {customFolders.map((folder) => (
                 <div
                   key={folder.id}
-                  className="relative aspect-square flex flex-col items-center justify-center gap-1 cursor-pointer hover:scale-105 active:scale-95 transition-transform duration-150"
-                  onClick={() => router.push(`/professor/quiz/best-q?tab=custom&folder=${folder.id}`)}
+                  className={`relative flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all duration-150 ${
+                    isProfPdfSelectMode
+                      ? selectedProfPdfFolders.has(folder.id)
+                        ? ''
+                        : ''
+                      : 'hover:scale-105 active:scale-95'
+                  }`}
+                  onClick={() => {
+                    if (isProfPdfSelectMode) {
+                      const newSelected = new Set(selectedProfPdfFolders);
+                      if (newSelected.has(folder.id)) newSelected.delete(folder.id);
+                      else newSelected.add(folder.id);
+                      setSelectedProfPdfFolders(newSelected);
+                    } else {
+                      handleOpenFolder(folder);
+                    }
+                  }}
                 >
-                  {/* 삭제 버튼 */}
-                  {deleteFolderTarget?.id === folder.id ? (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#F5F0E8]/90 z-10 gap-1">
+                  {/* PDF 선택 체크마크 */}
+                  {isProfPdfSelectMode && selectedProfPdfFolders.has(folder.id) && (
+                    <div className="absolute top-0.5 right-0.5 w-5 h-5 bg-[#1A1A1A] rounded-full flex items-center justify-center z-10">
+                      <svg className="w-3 h-3 text-[#F5F0E8]" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  )}
+
+                  {/* 삭제 확인 */}
+                  {!isProfPdfSelectMode && deleteFolderTarget?.id === folder.id ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center z-10 gap-1">
                       <p className="text-xs font-bold text-[#8B1A1A]">삭제?</p>
                       <div className="flex gap-1">
                         <button
                           onClick={(e) => { e.stopPropagation(); deleteCustomFolder(folder.id); setDeleteFolderTarget(null); }}
-                          className="px-2 py-1 text-xs bg-[#8B1A1A] text-[#F5F0E8] font-bold"
+                          className="px-2 py-1 text-xs bg-[#8B1A1A] text-[#F5F0E8] font-bold rounded"
                         >
                           삭제
                         </button>
                         <button
                           onClick={(e) => { e.stopPropagation(); setDeleteFolderTarget(null); }}
-                          className="px-2 py-1 text-xs border border-[#1A1A1A] text-[#1A1A1A] font-bold"
+                          className="px-2 py-1 text-xs border border-[#1A1A1A] text-[#1A1A1A] font-bold rounded"
                         >
                           취소
                         </button>
@@ -1569,19 +1825,122 @@ export default function ProfessorQuizListPage() {
                     </div>
                   ) : null}
 
-                  <svg className="w-20 h-20 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                  {/* 폴더 아이콘 — 다크 글래스 */}
+                  <svg className={`w-28 h-28 drop-shadow-lg ${
+                    isProfPdfSelectMode && selectedProfPdfFolders.has(folder.id) ? 'opacity-100' : ''
+                  }`} viewBox="0 0 24 24" fill="none">
+                    <defs>
+                      <linearGradient id={`fg-${folder.id}`} x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stopColor="rgba(50,50,50,0.85)" />
+                        <stop offset="100%" stopColor="rgba(25,25,25,0.9)" />
+                      </linearGradient>
+                    </defs>
+                    <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" fill={`url(#fg-${folder.id})`} />
+                    <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" stroke="rgba(255,255,255,0.1)" strokeWidth="0.4" fill="none" />
                   </svg>
-                  <span className="text-sm font-bold text-[#1A1A1A] text-center px-1 truncate w-full">
+                  <span className="text-base font-bold text-[#1A1A1A] text-center px-1 truncate w-full">
                     {folder.name}
                   </span>
-                  <span className="text-xs text-[#5C5C5C]">{folder.questions.length}문제</span>
+                  <span className="text-sm text-[#5C5C5C]">{folder.questions.length}문제</span>
                 </div>
               ))}
-            </div>
+            </div>}
+
+            {/* 폴더 상세 뷰 */}
+            {openFolderId && (() => {
+              const folder = customFolders.find(f => f.id === openFolderId);
+              if (!folder) return null;
+              return (
+                <div>
+                  {/* 헤더 */}
+                  <div className="flex items-center gap-2 mb-4">
+                    <button
+                      onClick={() => { setOpenFolderId(null); setFolderQuestions([]); }}
+                      className="p-1"
+                    >
+                      <svg className="w-5 h-5 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+                    <h3 className="text-base font-bold text-[#1A1A1A] flex-1 truncate">{folder.name}</h3>
+                    <span className="text-xs text-[#5C5C5C]">{folder.questions.length}문제</span>
+                    <button
+                      onClick={() => setDeleteFolderTarget({ id: folder.id, name: folder.name })}
+                      className="p-1 text-[#5C5C5C] hover:text-[#8B1A1A] transition-colors flex-shrink-0"
+                      title="폴더 삭제"
+                    >
+                      <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  {/* 로딩 */}
+                  {folderLoading && (
+                    <div className="flex justify-center py-8">
+                      <div className="w-6 h-6 border-2 border-[#1A1A1A] border-t-transparent animate-spin" style={{ borderRadius: '50%' }} />
+                    </div>
+                  )}
+
+                  {/* 문제 목록 */}
+                  {!folderLoading && folderQuestions.length === 0 && (
+                    <p className="text-sm text-[#5C5C5C] text-center py-8">문제가 없습니다.</p>
+                  )}
+
+                  {!folderLoading && folderQuestions.length > 0 && (
+                    <div className="space-y-2">
+                      {folderQuestions.map((q, idx) => (
+                        <PreviewQuestionCard
+                          key={q.id || `fq${idx}`}
+                          question={q}
+                          questionNumber={idx + 1}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
       </section>
+
+      {/* 폴더 삭제 확인 모달 */}
+      {deleteFolderTarget && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50"
+          onClick={() => setDeleteFolderTarget(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-xs bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
+          >
+            <h3 className="text-center font-bold text-lg text-[#1A1A1A] mb-2">폴더 삭제</h3>
+            <p className="text-center text-sm text-[#5C5C5C] mb-6">
+              &lsquo;{deleteFolderTarget.name}&rsquo; 폴더를 삭제하시겠습니까?<br />이 작업은 되돌릴 수 없습니다.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteFolderTarget(null)}
+                className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={async () => {
+                  await deleteCustomFolder(deleteFolderTarget.id);
+                  setDeleteFolderTarget(null);
+                  setOpenFolderId(null);
+                  setFolderQuestions([]);
+                }}
+                className="flex-1 py-3 font-bold bg-[#C44] text-white border-2 border-[#C44] hover:bg-[#A33] transition-colors"
+              >
+                삭제
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Details 모달 */}
       {detailsQuiz && (
@@ -1754,11 +2113,12 @@ export default function ProfessorQuizListPage() {
                 <button
                   onClick={async () => {
                     if (publishConfirmQuizId) {
-                      await publishHook.togglePublish(publishConfirmQuizId, true);
-                      // 각 hook의 퀴즈 목록에서도 업데이트 반영
-                      midtermHook.fetchQuizzes(user!.uid, { quizType: 'midterm', pageSize: 50 });
-                      finalHook.fetchQuizzes(user!.uid, { quizType: 'final', pageSize: 50 });
-                      pastHook.fetchQuizzes(user!.uid, { quizType: 'past', pageSize: 50 });
+                      // 인라인 togglePublish (publishHook 인스턴스 제거)
+                      await updateDoc(doc(db, 'quizzes', publishConfirmQuizId), {
+                        isPublished: true,
+                        updatedAt: Timestamp.now(),
+                      });
+                      refreshExamQuizzes();
                     }
                     setPublishConfirmQuizId(null);
                   }}

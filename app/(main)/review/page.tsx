@@ -15,7 +15,7 @@ import UpdateQuizModal from '@/components/quiz/UpdateQuizModal';
 import { useQuizBookmark, type BookmarkedQuiz } from '@/lib/hooks/useQuizBookmark';
 import { useLearningQuizzes, type LearningQuiz } from '@/lib/hooks/useLearningQuizzes';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { useCourse } from '@/lib/contexts';
+import { useCourse, useUser } from '@/lib/contexts';
 import { COURSES, getPastExamOptions, type PastExamOption } from '@/lib/types/course';
 import { getChapterById, generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import type { QuestionExportData as PdfQuestionData } from '@/lib/utils/questionPdfExport';
@@ -159,18 +159,21 @@ function FolderCard({
   /** 카드 스타일: folder(폴더 아이콘) 또는 quiz(퀴즈 카드 스타일) */
   variant?: 'folder' | 'quiz';
 }) {
+  // gradient ID 충돌 방지용 고유 키
+  const gradId = `fc-${title.replace(/\s/g, '')}-${count}`;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       onClick={onClick}
       className={`
-        relative border bg-[#F5F0E8] p-3 cursor-pointer transition-all
+        relative flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all duration-150
         ${isSelectMode
           ? isSelected
-            ? 'border-2 border-dashed border-[#1A1A1A] bg-[#EDEAE4]'
-            : 'border border-dashed border-[#5C5C5C] hover:border-[#1A1A1A]'
-          : 'border-[#1A1A1A] hover:bg-[#EDEAE4]'
+            ? ''
+            : ''
+          : 'hover:scale-105 active:scale-95'
         }
       `}
     >
@@ -181,7 +184,7 @@ function FolderCard({
             e.stopPropagation();
             onDelete();
           }}
-          className="absolute top-1 right-1 w-6 h-6 border border-[#8B1A1A] text-[#8B1A1A] bg-[#F5F0E8] hover:bg-[#FDEAEA] flex items-center justify-center transition-colors"
+          className="absolute top-0 right-0 w-6 h-6 border border-[#8B1A1A] text-[#8B1A1A] bg-[#F5F0E8] hover:bg-[#FDEAEA] flex items-center justify-center transition-colors z-10"
         >
           <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
@@ -191,28 +194,38 @@ function FolderCard({
 
       {/* 선택 표시 */}
       {isSelectMode && isSelected && (
-        <div className="flex justify-end mb-1">
-          <div className="w-5 h-5 bg-[#1A1A1A] flex items-center justify-center">
-            <svg className="w-3 h-3 text-[#F5F0E8]" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-            </svg>
-          </div>
+        <div className="absolute top-0.5 right-0.5 w-5 h-5 bg-[#1A1A1A] rounded-full flex items-center justify-center z-10">
+          <svg className="w-3 h-3 text-[#F5F0E8]" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+          </svg>
         </div>
       )}
 
       {/* 아이콘 영역 */}
-      <div className="flex justify-center mb-2 relative">
+      <div className="relative">
         {variant === 'quiz' ? (
-          // 퀴즈 카드 스타일 아이콘
-          <div className={`w-12 h-12 border-2 flex items-center justify-center ${isSelectMode && !isSelected ? 'border-[#5C5C5C] text-[#5C5C5C]' : 'border-[#1A1A1A] text-[#1A1A1A]'}`}>
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-          </div>
+          // 퀴즈 카드 스타일 아이콘 — 검정 글래스 fill
+          <svg className="w-28 h-28 drop-shadow-lg" viewBox="0 0 24 24" fill="none">
+            <defs>
+              <linearGradient id={`${gradId}-q`} x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="rgba(50,50,50,0.85)" />
+                <stop offset="100%" stopColor="rgba(25,25,25,0.9)" />
+              </linearGradient>
+            </defs>
+            <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" fill={`url(#${gradId}-q)`} />
+            <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke="rgba(255,255,255,0.1)" strokeWidth="0.4" fill="none" />
+          </svg>
         ) : (
-          // 폴더 아이콘 (기본)
-          <svg className={`w-12 h-12 ${isSelectMode && !isSelected ? 'text-[#5C5C5C]' : 'text-[#1A1A1A]'}`} fill="currentColor" viewBox="0 0 24 24">
-            <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
+          // 폴더 아이콘 — 검정 글래스 fill
+          <svg className="w-28 h-28 drop-shadow-lg" viewBox="0 0 24 24" fill="none">
+            <defs>
+              <linearGradient id={gradId} x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="rgba(50,50,50,0.85)" />
+                <stop offset="100%" stopColor="rgba(25,25,25,0.9)" />
+              </linearGradient>
+            </defs>
+            <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" fill={`url(#${gradId})`} />
+            <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" stroke="rgba(255,255,255,0.1)" strokeWidth="0.4" fill="none" />
           </svg>
         )}
         {/* 업데이트 알림 아이콘 */}
@@ -230,14 +243,14 @@ function FolderCard({
       </div>
 
       {/* 제목 */}
-      <h3 className={`font-bold text-xs text-center line-clamp-2 mb-1 ${isSelectMode && !isSelected ? 'text-[#5C5C5C]' : 'text-[#1A1A1A]'}`}>
+      <span className={`text-base font-bold text-center px-1 truncate w-full ${isSelectMode && !isSelected ? 'text-[#5C5C5C]' : 'text-[#1A1A1A]'}`}>
         {title}
-      </h3>
+      </span>
 
       {/* 문제 수 */}
-      <p className="text-xs text-center text-[#5C5C5C]">
+      <span className="text-sm text-center text-[#5C5C5C]">
         {count}문제
-      </p>
+      </span>
     </motion.div>
   );
 }
@@ -754,7 +767,7 @@ function ReviewNewsArticle({
         )}
 
         {/* 텍스트 영역 */}
-        <div className="flex-1 flex flex-col justify-between bg-[#F5F0E8]/90 p-2">
+        <div className="flex-1 flex flex-col justify-between bg-[#F5F0E8]/60 p-2">
           <div>
             {/* 제목 */}
             <h3 className={`${styles.title} text-[#1A1A1A] mb-1 line-clamp-2`}>
@@ -1287,15 +1300,15 @@ function CustomReviewQuizCard({
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      whileHover={isSelectMode ? {} : { y: -4, boxShadow: '0 8px 25px rgba(26, 26, 26, 0.15)' }}
+      whileHover={isSelectMode ? {} : { y: -4, boxShadow: '0 8px 20px rgba(0, 0, 0, 0.08)' }}
       transition={{ duration: 0.2 }}
       onClick={onCardClick}
-      className={`relative border bg-[#F5F0E8] overflow-hidden cursor-pointer shadow-md ${
+      className={`relative border bg-[#F5F0E8]/70 backdrop-blur-sm overflow-hidden cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.06)] ${
         isSelectMode
           ? isSelected
             ? 'border-2 border-dashed border-[#1A1A1A] bg-[#EDEAE4]'
             : 'border border-dashed border-[#5C5C5C] hover:border-[#1A1A1A]'
-          : 'border-[#1A1A1A]'
+          : 'border-[#999]'
       }`}
     >
       {/* 신문 배경 텍스트 */}
@@ -1354,7 +1367,7 @@ function CustomReviewQuizCard({
       )}
 
       {/* 카드 내용 */}
-      <div className="relative z-10 p-4 bg-[#F5F0E8]/90">
+      <div className="relative z-10 p-4 bg-[#F5F0E8]/60">
         {/* 제목 (2줄 고정 높이) */}
         <div className="h-[44px] mb-2">
           <h3 className="font-bold text-base line-clamp-2 text-[#1A1A1A] leading-snug">
@@ -1673,15 +1686,15 @@ function LibraryQuizCard({
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -4, boxShadow: '0 8px 25px rgba(26, 26, 26, 0.15)' }}
+      whileHover={{ y: -4, boxShadow: '0 8px 20px rgba(0, 0, 0, 0.08)' }}
       transition={{ duration: 0.2 }}
       onClick={onCardClick}
-      className={`relative border bg-[#F5F0E8] overflow-hidden shadow-md cursor-pointer ${
+      className={`relative border bg-[#F5F0E8]/70 backdrop-blur-sm overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)] cursor-pointer ${
         isSelectMode
           ? isSelected
             ? 'border-2 border-[#8B1A1A] bg-[#FDEAEA]'
-            : 'border border-[#1A1A1A] hover:bg-[#EDEAE4]'
-          : 'border-[#1A1A1A]'
+            : 'border border-[#999] hover:bg-[#EDEAE4]'
+          : 'border-[#999]'
       }`}
     >
       {/* 신문 배경 텍스트 */}
@@ -1723,7 +1736,7 @@ function LibraryQuizCard({
       )}
 
       {/* 카드 내용 */}
-      <div className="relative z-10 p-4 bg-[#F5F0E8]/90">
+      <div className="relative z-10 p-4 bg-[#F5F0E8]/60">
         {/* 제목 (2줄 고정 높이) */}
         <div className="h-[44px] mb-2">
           <h3 className="font-bold text-base line-clamp-2 text-[#1A1A1A] leading-snug pr-8">
@@ -1890,17 +1903,17 @@ function BookmarkQuizCard({
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      whileHover={isSelectMode ? {} : { y: -4, boxShadow: '0 8px 25px rgba(26, 26, 26, 0.15)' }}
+      whileHover={isSelectMode ? {} : { y: -4, boxShadow: '0 8px 20px rgba(0, 0, 0, 0.08)' }}
       transition={{ duration: 0.2 }}
       onClick={handleCardClick}
-      className={`relative border bg-[#F5F0E8] p-4 shadow-md ${
+      className={`relative border bg-[#F5F0E8]/70 backdrop-blur-sm p-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] ${
         isSelectMode
           ? isSelected
             ? 'border-2 border-dashed border-[#1A1A1A] bg-[#EDEAE4] cursor-pointer'
             : 'border border-dashed border-[#5C5C5C] hover:border-[#1A1A1A] cursor-pointer'
           : hasCompletedQuiz
-            ? 'border-[#1A1A1A] cursor-pointer'
-            : 'border-[#1A1A1A] cursor-default'
+            ? 'border-[#999] cursor-pointer'
+            : 'border-[#999] cursor-default'
       }`}
     >
       {/* 선택 모드 체크 아이콘 */}
@@ -2711,6 +2724,7 @@ function ReviewPageContent() {
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const { userCourseId, semesterSettings } = useCourse();
+  const { profile } = useUser();
 
   // 과목별 리본 이미지
   const currentCourse = userCourseId && COURSES[userCourseId] ? COURSES[userCourseId] : null;
@@ -2764,6 +2778,10 @@ function ReviewPageContent() {
   // 문제 상세보기 모달 (문제 목록 표시)
   const [questionListQuiz, setQuestionListQuiz] = useState<CompletedQuizData | null>(null);
 
+  // PDF 폴더 선택 모드
+  const [isPdfSelectMode, setIsPdfSelectMode] = useState(false);
+  const [selectedPdfFolders, setSelectedPdfFolders] = useState<Set<string>>(new Set());
+
   // 폴더 정렬(카테고리) 관련 상태
   const [isSortMode, setIsSortMode] = useState(false);
   const [folderCategories, setFolderCategories] = useState<{ id: string; name: string }[]>([]);
@@ -2772,6 +2790,16 @@ function ReviewPageContent() {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isAssignMode, setIsAssignMode] = useState(false);
   const [selectedFolderForAssign, setSelectedFolderForAssign] = useState<string | null>(null);
+
+  // 새 폴더 생성 / 카테고리 설정 모드일 때 네비게이션 숨김
+  useEffect(() => {
+    if (showCreateFolder || isSortMode) {
+      document.body.setAttribute('data-hide-nav', '');
+    } else {
+      document.body.removeAttribute('data-hide-nav');
+    }
+    return () => document.body.removeAttribute('data-hide-nav');
+  }, [showCreateFolder, isSortMode]);
 
   // 로컬 스토리지에서 카테고리 정보 로드
   useEffect(() => {
@@ -3548,6 +3576,143 @@ function ReviewPageContent() {
                     삭제 {librarySelectedIds.size > 0 && `(${librarySelectedIds.size})`}
                   </motion.button>
                 </>
+              ) : isPdfSelectMode ? (
+                // PDF 폴더 선택 모드 버튼들
+                <>
+                  <motion.button
+                    key="cancel-pdf"
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.8, opacity: 0 }}
+                    onClick={() => {
+                      setIsPdfSelectMode(false);
+                      setSelectedPdfFolders(new Set());
+                    }}
+                    className="px-4 py-3 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] whitespace-nowrap hover:bg-[#EDEAE4] transition-colors"
+                  >
+                    취소
+                  </motion.button>
+                  <motion.button
+                    key="download-pdf"
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.8, opacity: 0 }}
+                    disabled={selectedPdfFolders.size === 0}
+                    onClick={async () => {
+                      const includeAnswers = true;
+                      const includeExplanations = true;
+
+                      try {
+                        const { exportQuestionsToPdf } = await import('@/lib/utils/questionPdfExport');
+                        const allQuestions: PdfQuestionData[] = [];
+
+                        const selectedFolders = customFoldersData.filter(f => selectedPdfFolders.has(f.id));
+
+                        // 고유 quizId 수집 → 한 번씩만 fetch
+                        const quizIdSet = new Set<string>();
+                        for (const folder of selectedFolders) {
+                          for (const q of folder.questions) quizIdSet.add(q.quizId);
+                        }
+
+                        // 배치 fetch → Map 캐시
+                        const quizCache = new Map<string, any>();
+                        let fetchFailed = 0;
+                        for (const quizId of quizIdSet) {
+                          try {
+                            const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
+                            if (quizDoc.exists()) quizCache.set(quizId, quizDoc.data());
+                            else fetchFailed++;
+                          } catch { fetchFailed++; }
+                        }
+
+                        // 문제 매핑 (누락 카운트)
+                        let skippedCount = 0;
+                        const quizIndexCounters: Record<string, number> = {};
+                        for (const folder of selectedFolders) {
+                          for (const q of folder.questions) {
+                            const quizData = quizCache.get(q.quizId);
+                            if (!quizData) { skippedCount++; continue; }
+                            const quizQuestions = (quizData.questions as any[]) || [];
+                            // questionId로 매칭 시도
+                            let question: any = q.questionId
+                              ? quizQuestions.find((qq: any, idx: number) => (qq.id || `q${idx}`) === q.questionId)
+                              : null;
+                            // 폴백: questionId 누락/매칭 실패 시 같은 퀴즈 내 순서대로 매칭
+                            if (!question) {
+                              const counter = quizIndexCounters[q.quizId] || 0;
+                              if (counter < quizQuestions.length) question = quizQuestions[counter];
+                              quizIndexCounters[q.quizId] = counter + 1;
+                            }
+                            if (!question) { skippedCount++; continue; }
+                            // answer 안전 변환 (배열/숫자/문자열 모두 대응)
+                            const rawAnswer = question.answer;
+                            const answerStr = Array.isArray(rawAnswer)
+                              ? rawAnswer.map((a: any) => String(a)).join(',')
+                              : String(rawAnswer ?? '');
+
+                            // AI 퀴즈(0-indexed) vs 수동 퀴즈(1-indexed) 구분
+                            const isAiQuiz = quizData.type === 'professor-ai' || quizData.type === 'ai-generated' || quizData.originalType === 'professor-ai';
+
+                            allQuestions.push({
+                              text: question.text || '',
+                              type: question.type || 'multiple',
+                              choices: Array.isArray(question.choices) ? question.choices : undefined,
+                              answer: answerStr,
+                              explanation: question.explanation || '',
+                              imageUrl: question.imageUrl || undefined,
+                              passage: question.passage || undefined,
+                              passageType: question.passageType || undefined,
+                              koreanAbcItems: question.koreanAbcItems || undefined,
+                              bogi: question.bogi || undefined,
+                              passagePrompt: question.commonQuestion || question.passagePrompt || undefined,
+                              hasMultipleAnswers: answerStr.includes(','),
+                              answerZeroIndexed: isAiQuiz,
+                              // 결합형 문제 필드
+                              passageImage: question.passageImage || undefined,
+                              combinedGroupId: question.combinedGroupId || undefined,
+                              combinedIndex: question.combinedIndex ?? undefined,
+                              combinedTotal: question.combinedTotal ?? undefined,
+                              // 복합 제시문
+                              passageMixedExamples: question.passageMixedExamples || undefined,
+                              mixedExamples: question.mixedExamples || undefined,
+                            });
+                          }
+                        }
+
+                        // 누락 알림
+                        if (skippedCount > 0) {
+                          alert(`${skippedCount}개 문제를 찾을 수 없어 제외되었습니다.`);
+                        }
+                        if (allQuestions.length === 0) {
+                          alert('내보낼 문제가 없습니다.');
+                          return;
+                        }
+
+                        const folderName = selectedFolders.length === 1 ? selectedFolders[0].name : '커스텀 문제집';
+                        await exportQuestionsToPdf(allQuestions, {
+                          includeAnswers,
+                          includeExplanations,
+                          folderName,
+                          userName: profile?.nickname || '',
+                          studentId: profile?.studentId || '',
+                          courseName: userCourseId ? COURSES[userCourseId]?.name : undefined,
+                        });
+                      } catch (err) {
+                        console.error('PDF 다운로드 실패:', err);
+                      } finally {
+                        setIsPdfSelectMode(false);
+                        setSelectedPdfFolders(new Set());
+                      }
+                    }}
+                    className={`px-4 py-3 text-sm font-bold whitespace-nowrap transition-colors ${
+                      selectedPdfFolders.size > 0
+                        ? 'bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A]'
+                        : 'bg-[#D4CFC4] text-[#EDEAE4] cursor-not-allowed'
+                    }`}
+                  >
+                    PDF 다운 {selectedPdfFolders.size > 0 && `(${selectedPdfFolders.size})`}
+                  </motion.button>
+                </>
               ) : isReviewSelectMode ? (
                 // 복습 선택 모드 버튼들
                 <>
@@ -3682,8 +3847,8 @@ function ReviewPageContent() {
           )}
         </AnimatePresence>
 
-        {/* 내맘대로 탭일 때 폴더 만들기 + 정렬 버튼 */}
-        {activeFilter === 'custom' && !isAssignMode && !isFolderDeleteMode && (
+        {/* 내맘대로 탭일 때 폴더 만들기 + 정렬 + PDF 버튼 */}
+        {activeFilter === 'custom' && !isAssignMode && !isFolderDeleteMode && !isPdfSelectMode && (
           <div className="w-full px-4 mt-3 flex gap-2">
             <button
               onClick={() => setShowCreateFolder(true)}
@@ -3702,56 +3867,17 @@ function ReviewPageContent() {
               카테고리 설정
             </button>
             <button
-              onClick={async () => {
+              onClick={() => {
                 if (customFoldersData.length === 0) return;
-                const includeAnswers = confirm('정답을 포함하시겠습니까?');
-                const includeExplanations = includeAnswers ? confirm('해설도 포함하시겠습니까?') : false;
-
-                try {
-                  const { exportQuestionsToPdf } = await import('@/lib/utils/questionPdfExport');
-                  const allQuestions: PdfQuestionData[] = [];
-
-                  for (const folder of customFoldersData) {
-                    for (const q of folder.questions) {
-                      const quizDoc = await getDoc(doc(db, 'quizzes', q.quizId));
-                      if (!quizDoc.exists()) continue;
-                      const quizData = quizDoc.data();
-                      const question = quizData.questions?.find((qq: any) => qq.id === q.questionId);
-                      if (!question) continue;
-                      allQuestions.push({
-                        text: question.text || '',
-                        type: question.type || 'multiple',
-                        choices: question.choices,
-                        answer: String(question.answer ?? ''),
-                        explanation: question.explanation,
-                        imageUrl: question.imageUrl,
-                        passage: question.passage,
-                        passageType: question.passageType,
-                        koreanAbcItems: question.koreanAbcItems,
-                        bogi: question.bogi,
-                        passagePrompt: question.passagePrompt,
-                        hasMultipleAnswers: question.hasMultipleAnswers,
-                      });
-                    }
-                  }
-
-                  if (allQuestions.length === 0) return;
-
-                  await exportQuestionsToPdf(allQuestions, {
-                    includeAnswers,
-                    includeExplanations,
-                    folderName: '커스텀 문제집',
-                  });
-                } catch (err) {
-                  console.error('PDF 다운로드 실패:', err);
-                }
+                setIsPdfSelectMode(true);
+                setSelectedPdfFolders(new Set());
               }}
-              className="py-2 px-3 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors flex items-center justify-center"
-              title="PDF 다운로드"
+              className="flex-1 py-2 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors flex items-center justify-center gap-1"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
+              PDF 다운
             </button>
           </div>
         )}
@@ -4369,13 +4495,19 @@ function ReviewPageContent() {
                                 const canDelete = true;
                                 const updateKey = `${folder.filterType}-${folder.id}`;
                                 const hasUpdate = updatedQuizzes.has(updateKey);
+                                const isPdfMode = isPdfSelectMode && activeFilter === 'custom';
                                 return (
                                   <FolderCard
                                     key={updateKey}
                                     title={folder.title}
                                     count={folder.count}
                                     onClick={() => {
-                                      if (isFolderDeleteMode) {
+                                      if (isPdfMode) {
+                                        const newSelected = new Set(selectedPdfFolders);
+                                        if (newSelected.has(folder.id)) newSelected.delete(folder.id);
+                                        else newSelected.add(folder.id);
+                                        setSelectedPdfFolders(newSelected);
+                                      } else if (isFolderDeleteMode) {
                                         const newSelected = new Set(deleteFolderIds);
                                         if (newSelected.has(updateKey)) {
                                           newSelected.delete(updateKey);
@@ -4397,11 +4529,13 @@ function ReviewPageContent() {
                                         handleFolderClick(folder);
                                       }
                                     }}
-                                    isSelectMode={(isFolderDeleteMode && canDelete) || isReviewSelectMode || isAssignMode}
+                                    isSelectMode={(isFolderDeleteMode && canDelete) || isReviewSelectMode || isAssignMode || isPdfMode}
                                     isSelected={
-                                      isAssignMode
-                                        ? selectedFolderForAssign === folder.id
-                                        : (isFolderDeleteMode ? deleteFolderIds : reviewSelectedIds).has(updateKey)
+                                      isPdfMode
+                                        ? selectedPdfFolders.has(folder.id)
+                                        : isAssignMode
+                                          ? selectedFolderForAssign === folder.id
+                                          : (isFolderDeleteMode ? deleteFolderIds : reviewSelectedIds).has(updateKey)
                                     }
                                     showDelete={false}
                                     hasUpdate={hasUpdate}
@@ -4494,13 +4628,19 @@ function ReviewPageContent() {
                                 const canDelete = true;
                                 const updateKey = `${folder.filterType}-${folder.id}`;
                                 const hasUpdate = updatedQuizzes.has(updateKey);
+                                const isPdfMode = isPdfSelectMode && activeFilter === 'custom';
                                 return (
                                   <FolderCard
                                     key={updateKey}
                                     title={folder.title}
                                     count={folder.count}
                                     onClick={() => {
-                                      if (isFolderDeleteMode) {
+                                      if (isPdfMode) {
+                                        const newSelected = new Set(selectedPdfFolders);
+                                        if (newSelected.has(folder.id)) newSelected.delete(folder.id);
+                                        else newSelected.add(folder.id);
+                                        setSelectedPdfFolders(newSelected);
+                                      } else if (isFolderDeleteMode) {
                                         const newSelected = new Set(deleteFolderIds);
                                         if (newSelected.has(updateKey)) {
                                           newSelected.delete(updateKey);
@@ -4522,11 +4662,13 @@ function ReviewPageContent() {
                                         handleFolderClick(folder);
                                       }
                                     }}
-                                    isSelectMode={(isFolderDeleteMode && canDelete) || isReviewSelectMode || isAssignMode}
+                                    isSelectMode={(isFolderDeleteMode && canDelete) || isReviewSelectMode || isAssignMode || isPdfMode}
                                     isSelected={
-                                      isAssignMode
-                                        ? selectedFolderForAssign === folder.id
-                                        : (isFolderDeleteMode ? deleteFolderIds : reviewSelectedIds).has(updateKey)
+                                      isPdfMode
+                                        ? selectedPdfFolders.has(folder.id)
+                                        : isAssignMode
+                                          ? selectedFolderForAssign === folder.id
+                                          : (isFolderDeleteMode ? deleteFolderIds : reviewSelectedIds).has(updateKey)
                                     }
                                     showDelete={false}
                                     hasUpdate={hasUpdate}
@@ -4647,13 +4789,19 @@ function ReviewPageContent() {
                                 const canDelete = true;
                                 const updateKey = `${folder.filterType}-${folder.id}`;
                                 const hasUpdate = updatedQuizzes.has(updateKey);
+                                const isPdfMode = isPdfSelectMode && activeFilter === 'custom';
                                 return (
                                   <FolderCard
                                     key={updateKey}
                                     title={folder.title}
                                     count={folder.count}
                                     onClick={() => {
-                                      if (isFolderDeleteMode) {
+                                      if (isPdfMode) {
+                                        const newSelected = new Set(selectedPdfFolders);
+                                        if (newSelected.has(folder.id)) newSelected.delete(folder.id);
+                                        else newSelected.add(folder.id);
+                                        setSelectedPdfFolders(newSelected);
+                                      } else if (isFolderDeleteMode) {
                                         const newSelected = new Set(deleteFolderIds);
                                         if (newSelected.has(updateKey)) {
                                           newSelected.delete(updateKey);
@@ -4675,11 +4823,13 @@ function ReviewPageContent() {
                                         handleFolderClick(folder);
                                       }
                                     }}
-                                    isSelectMode={(isFolderDeleteMode && canDelete) || isReviewSelectMode || isAssignMode}
+                                    isSelectMode={(isFolderDeleteMode && canDelete) || isReviewSelectMode || isAssignMode || isPdfMode}
                                     isSelected={
-                                      isAssignMode
-                                        ? selectedFolderForAssign === folder.id
-                                        : (isFolderDeleteMode ? deleteFolderIds : reviewSelectedIds).has(updateKey)
+                                      isPdfMode
+                                        ? selectedPdfFolders.has(folder.id)
+                                        : isAssignMode
+                                          ? selectedFolderForAssign === folder.id
+                                          : (isFolderDeleteMode ? deleteFolderIds : reviewSelectedIds).has(updateKey)
                                     }
                                     showDelete={false}
                                     hasUpdate={hasUpdate}
@@ -4702,13 +4852,19 @@ function ReviewPageContent() {
                                 const canDelete = true;
                                 const updateKey = `${folder.filterType}-${folder.id}`;
                                 const hasUpdate = updatedQuizzes.has(updateKey);
+                                const isPdfMode = isPdfSelectMode && activeFilter === 'custom';
                                 return (
                                   <FolderCard
                                     key={updateKey}
                                     title={folder.title}
                                     count={folder.count}
                                     onClick={() => {
-                                      if (isFolderDeleteMode) {
+                                      if (isPdfMode) {
+                                        const newSelected = new Set(selectedPdfFolders);
+                                        if (newSelected.has(folder.id)) newSelected.delete(folder.id);
+                                        else newSelected.add(folder.id);
+                                        setSelectedPdfFolders(newSelected);
+                                      } else if (isFolderDeleteMode) {
                                         const newSelected = new Set(deleteFolderIds);
                                         if (newSelected.has(updateKey)) {
                                           newSelected.delete(updateKey);
@@ -4730,11 +4886,13 @@ function ReviewPageContent() {
                                         handleFolderClick(folder);
                                       }
                                     }}
-                                    isSelectMode={(isFolderDeleteMode && canDelete) || isReviewSelectMode || isAssignMode}
+                                    isSelectMode={(isFolderDeleteMode && canDelete) || isReviewSelectMode || isAssignMode || isPdfMode}
                                     isSelected={
-                                      isAssignMode
-                                        ? selectedFolderForAssign === folder.id
-                                        : (isFolderDeleteMode ? deleteFolderIds : reviewSelectedIds).has(updateKey)
+                                      isPdfMode
+                                        ? selectedPdfFolders.has(folder.id)
+                                        : isAssignMode
+                                          ? selectedFolderForAssign === folder.id
+                                          : (isFolderDeleteMode ? deleteFolderIds : reviewSelectedIds).has(updateKey)
                                     }
                                     showDelete={false}
                                     hasUpdate={hasUpdate}
@@ -4830,13 +4988,19 @@ function ReviewPageContent() {
                             const canDelete = true;
                             const updateKey = `${folder.filterType}-${folder.id}`;
                             const hasUpdate = updatedQuizzes.has(updateKey);
+                            const isPdfMode = isPdfSelectMode && activeFilter === 'custom';
                             return (
                               <FolderCard
                                 key={updateKey}
                                 title={folder.title}
                                 count={folder.count}
                                 onClick={() => {
-                                  if (isFolderDeleteMode) {
+                                  if (isPdfMode) {
+                                    const newSelected = new Set(selectedPdfFolders);
+                                    if (newSelected.has(folder.id)) newSelected.delete(folder.id);
+                                    else newSelected.add(folder.id);
+                                    setSelectedPdfFolders(newSelected);
+                                  } else if (isFolderDeleteMode) {
                                     const newSelected = new Set(deleteFolderIds);
                                     if (newSelected.has(updateKey)) {
                                       newSelected.delete(updateKey);
@@ -4858,11 +5022,13 @@ function ReviewPageContent() {
                                     handleFolderClick(folder);
                                   }
                                 }}
-                                isSelectMode={(isFolderDeleteMode && canDelete) || isReviewSelectMode || isAssignMode}
+                                isSelectMode={(isFolderDeleteMode && canDelete) || isReviewSelectMode || isAssignMode || isPdfMode}
                                 isSelected={
-                                  isAssignMode
-                                    ? selectedFolderForAssign === folder.id
-                                    : (isFolderDeleteMode ? deleteFolderIds : reviewSelectedIds).has(updateKey)
+                                  isPdfMode
+                                    ? selectedPdfFolders.has(folder.id)
+                                    : isAssignMode
+                                      ? selectedFolderForAssign === folder.id
+                                      : (isFolderDeleteMode ? deleteFolderIds : reviewSelectedIds).has(updateKey)
                                 }
                                 showDelete={false}
                                 hasUpdate={hasUpdate}
@@ -4885,13 +5051,19 @@ function ReviewPageContent() {
                             const canDelete = true;
                             const updateKey = `${folder.filterType}-${folder.id}`;
                             const hasUpdate = updatedQuizzes.has(updateKey);
+                            const isPdfMode = isPdfSelectMode && activeFilter === 'custom';
                             return (
                               <FolderCard
                                 key={updateKey}
                                 title={folder.title}
                                 count={folder.count}
                                 onClick={() => {
-                                  if (isFolderDeleteMode) {
+                                  if (isPdfMode) {
+                                    const newSelected = new Set(selectedPdfFolders);
+                                    if (newSelected.has(folder.id)) newSelected.delete(folder.id);
+                                    else newSelected.add(folder.id);
+                                    setSelectedPdfFolders(newSelected);
+                                  } else if (isFolderDeleteMode) {
                                     const newSelected = new Set(deleteFolderIds);
                                     if (newSelected.has(updateKey)) {
                                       newSelected.delete(updateKey);
@@ -4913,11 +5085,13 @@ function ReviewPageContent() {
                                     handleFolderClick(folder);
                                   }
                                 }}
-                                isSelectMode={(isFolderDeleteMode && canDelete) || isReviewSelectMode || isAssignMode}
+                                isSelectMode={(isFolderDeleteMode && canDelete) || isReviewSelectMode || isAssignMode || isPdfMode}
                                 isSelected={
-                                  isAssignMode
-                                    ? selectedFolderForAssign === folder.id
-                                    : (isFolderDeleteMode ? deleteFolderIds : reviewSelectedIds).has(updateKey)
+                                  isPdfMode
+                                    ? selectedPdfFolders.has(folder.id)
+                                    : isAssignMode
+                                      ? selectedFolderForAssign === folder.id
+                                      : (isFolderDeleteMode ? deleteFolderIds : reviewSelectedIds).has(updateKey)
                                 }
                                 showDelete={false}
                                 hasUpdate={hasUpdate}
@@ -4947,13 +5121,22 @@ function ReviewPageContent() {
                   const updateKey = `${folder.filterType}-${folder.id}`;
                   const hasUpdate = updatedQuizzes.has(updateKey);
                   const variant = 'folder';
+                  const isPdfMode = isPdfSelectMode && activeFilter === 'custom';
                   return (
                     <FolderCard
                       key={updateKey}
                       title={folder.title}
                       count={folder.count}
                       onClick={() => {
-                        if (isFolderDeleteMode) {
+                        if (isPdfMode) {
+                          const newSelected = new Set(selectedPdfFolders);
+                          if (newSelected.has(folder.id)) {
+                            newSelected.delete(folder.id);
+                          } else {
+                            newSelected.add(folder.id);
+                          }
+                          setSelectedPdfFolders(newSelected);
+                        } else if (isFolderDeleteMode) {
                           const newSelected = new Set(deleteFolderIds);
                           if (newSelected.has(updateKey)) {
                             newSelected.delete(updateKey);
@@ -4973,9 +5156,11 @@ function ReviewPageContent() {
                           handleFolderClick(folder);
                         }
                       }}
-                      isSelectMode={(isFolderDeleteMode && canDelete) || isReviewSelectMode}
+                      isSelectMode={(isFolderDeleteMode && canDelete) || isReviewSelectMode || isPdfMode}
                       isSelected={
-                        (isFolderDeleteMode ? deleteFolderIds : reviewSelectedIds).has(updateKey)
+                        isPdfMode
+                          ? selectedPdfFolders.has(folder.id)
+                          : (isFolderDeleteMode ? deleteFolderIds : reviewSelectedIds).has(updateKey)
                       }
                       showDelete={false}
                       hasUpdate={hasUpdate}

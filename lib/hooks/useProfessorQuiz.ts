@@ -283,7 +283,10 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
           ? [options.quizType]
           : ['midterm', 'final', 'past', 'professor'];
 
-        const effectivePageSize = options.pageSize || PAGE_SIZE;
+        const basePageSize = options.pageSize || PAGE_SIZE;
+        // targetClass 클라이언트 필터 시 넉넉히 가져옴 (필터 후에도 충분한 결과 확보)
+        const hasClassFilter = options.targetClass && options.targetClass !== 'all';
+        const effectivePageSize = hasClassFilter ? basePageSize * 3 : basePageSize;
 
         // 기본 쿼리: 생성자 필터 + 최신순 정렬
         let q = query(
@@ -310,7 +313,7 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
         let fetchedQuizzes = snapshot.docs.map(docToQuiz);
 
         // 대상 반 필터 (클라이언트 측 필터링 - Firestore 복합 쿼리 제한 회피)
-        if (options.targetClass && options.targetClass !== 'all') {
+        if (hasClassFilter) {
           fetchedQuizzes = fetchedQuizzes.filter(
             (quiz) => quiz.targetClass === options.targetClass || quiz.targetClass === 'all'
           );
@@ -343,13 +346,16 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
         ? [currentFilters.quizType]
         : ['midterm', 'final', 'past', 'professor'];
 
+      const hasClassFilter = currentFilters.targetClass && currentFilters.targetClass !== 'all';
+      const effectivePageSize = hasClassFilter ? PAGE_SIZE * 3 : PAGE_SIZE;
+
       let q = query(
         collection(db, QUIZZES_COLLECTION),
         where('creatorUid', '==', currentCreatorUid),
         where('type', 'in', typeFilter),
         orderBy('createdAt', 'desc'),
         startAfter(lastDoc),
-        limit(PAGE_SIZE)
+        limit(effectivePageSize)
       );
 
       // 공개 상태 필터
@@ -361,7 +367,7 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
           where('isPublished', '==', currentFilters.isPublished),
           orderBy('createdAt', 'desc'),
           startAfter(lastDoc),
-          limit(PAGE_SIZE)
+          limit(effectivePageSize)
         );
       }
 
@@ -369,7 +375,7 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
       let fetchedQuizzes = snapshot.docs.map(docToQuiz);
 
       // 대상 반 필터
-      if (currentFilters.targetClass && currentFilters.targetClass !== 'all') {
+      if (hasClassFilter) {
         fetchedQuizzes = fetchedQuizzes.filter(
           (quiz) => quiz.targetClass === currentFilters.targetClass || quiz.targetClass === 'all'
         );
@@ -377,7 +383,7 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
 
       setQuizzes((prev) => [...prev, ...fetchedQuizzes]);
       setLastDoc(snapshot.docs[snapshot.docs.length - 1] || null);
-      setHasMore(snapshot.docs.length === PAGE_SIZE);
+      setHasMore(snapshot.docs.length === effectivePageSize);
     } catch (err) {
       const message = err instanceof Error ? err.message : '더 불러오는데 실패했습니다.';
       setError(message);
@@ -413,21 +419,24 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
    */
   const flattenQuestionsForStats = (questions: any[]): QuizQuestion[] => {
     const result: QuizQuestion[] = [];
+    let globalIdx = 0;
 
     questions.forEach((q) => {
       // 이미 펼쳐진 결합형 문제 (combinedGroupId가 있는 경우)
       if (q.combinedGroupId) {
         result.push({
-          id: q.id,
+          id: q.id || `q${globalIdx}`,
           text: q.text || '',
           type: q.type,
           choices: q.choices,
           answer: q.answer,
           explanation: q.explanation,
         });
+        globalIdx++;
       }
       // 레거시 결합형 문제 (type === 'combined' + subQuestions)
       else if (q.type === 'combined' && q.subQuestions && q.subQuestions.length > 0) {
+        const parentId = q.id || `q${globalIdx}`;
         q.subQuestions.forEach((sq: any, idx: number) => {
           // 정답 형식 변환
           let answer: number | string;
@@ -446,7 +455,7 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
           }
 
           result.push({
-            id: sq.id || `${q.id}_sub${idx}`,
+            id: sq.id || `${parentId}_sub${idx}`,
             text: sq.text || '',
             type: sq.type || 'short_answer',
             choices: sq.choices,
@@ -454,17 +463,19 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
             explanation: sq.explanation,
           });
         });
+        globalIdx++;
       }
       // 일반 문제
       else {
         result.push({
-          id: q.id,
+          id: q.id || `q${globalIdx}`,
           text: q.text || '',
           type: q.type,
           choices: q.choices,
           answer: q.answer,
           explanation: q.explanation,
         });
+        globalIdx++;
       }
     });
 
@@ -747,6 +758,14 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
         // undefined 값 제거 (Firestore는 undefined를 허용하지 않음)
         const cleanedInput = JSON.parse(JSON.stringify(input));
 
+        // 문제별 고유 ID 부여
+        if (Array.isArray(cleanedInput.questions)) {
+          cleanedInput.questions = cleanedInput.questions.map((q: any) => {
+            if (q.id) return q;
+            return { ...q, id: `q_${crypto.randomUUID().slice(0, 8)}` };
+          });
+        }
+
         // 문제 유형별 개수 계산
         const questions = input.questions || [];
         const oxCount = questions.filter(q => q.type === 'ox').length;
@@ -813,6 +832,14 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
           ...input,
           updatedAt: Timestamp.now(),
         };
+
+        // 문제별 고유 ID 부여 (기존 퀴즈 수정 시에도 ID 없는 문제에 부여)
+        if (input.questions) {
+          raw.questions = (input.questions as any[]).map((q: any) => {
+            if (q.id) return q;
+            return { ...q, id: `q_${crypto.randomUUID().slice(0, 8)}` };
+          });
+        }
 
         // 문제 목록이 변경되면 questionCount와 유형별 개수도 업데이트
         if (input.questions) {
