@@ -147,9 +147,6 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 | `rabbitLevelUp.ts` | 토끼 레벨업 (levelUpRabbit) — 스탯 랜덤 증가 |
 | `rabbitEquip.ts` | 토끼 장착/해제 (equipRabbit, unequipRabbit) |
 | `onboardingRabbit.ts` | 온보딩 완료 시 기본 토끼(#0) 자동 지급 (Firestore trigger) |
-| `migrateDefaultRabbit.ts` | 기존 유저 기본 토끼 일괄 지급 (1회성, 교수님 전용) |
-| `migrateRabbitSystem.ts` | 집사→발견 모델 마이그레이션 (1회성) |
-| `migrateCharacters.ts` | 레거시 캐릭터 → 토끼 시스템 마이그레이션 |
 | `gemini.ts` / `geminiQueue.ts` | Gemini API 래퍼 + 큐 관리 |
 | `questionParser*.ts` (v1~v4) | OCR 결과 → 문제 파싱 (다중 버전) |
 | `semesterTransition.ts` | 시즌(중간→기말) 전환 로직 |
@@ -334,6 +331,31 @@ Tailwind에서 `bg-theme-background`, `text-theme-accent` 등으로 사용 (`tai
 - 선지별 해설 표시 (수정된 문제는 choiceExplanations 제외), 해설 섹션 (없으면 "해설 없음")
 - 우측 하단 피드백 아이콘 → questionFeedbacks 조회 모달
 
+### 교수 학생 모니터링 (`app/(main)/professor/students/page.tsx`)
+
+**핵심 훅**: `lib/hooks/useProfessorStudents.ts` — 학생 목록 구독 + 상세 조회 + 정규화 캐시
+
+**모듈 레벨 과목별 Map 캐시** (페이지 이동·과목 전환에도 유지):
+- `_normCacheMap<courseId, CourseNormCache>` — 6축 레이더 정규화 데이터 (5분 TTL, stale-while-revalidate)
+- `_weightedCacheMap<courseId, WeightedScoreCache>` — 가중 석차 점수
+- `_studentsListCacheMap<courseId, StudentData[]>` — 학생 목록 즉시 복원용
+- `_studentsSnapshotMap<courseId, snapshot[]>` — onSnapshot 데이터 (users 쿼리 대체)
+- `_normBuildPromiseMap<courseId, Promise>` — 중복 빌드 방지
+
+**Progressive Loading (Phase 0→1→2)**:
+- Phase 0: 캐시에서 레이더 즉시 계산 (쿼리 0개, 0초). growth=50 임시값
+- Phase 1: user doc + 6개 per-student 쿼리 병렬 → 실제 growth 계산 + 상세 데이터
+- Phase 2: norm 캐시 없을 때만 빌드 완료 후 레이더 재계산
+
+**가중 석차 점수 시스템**:
+- 각 퀴즈별: `rankScore = ((N - rank + 1) / N) × 100` (석차 기반)
+- 가중 평균: 교수 퀴즈(`midterm|final|past|professor|professor-ai`) 가중치 6, 학생 퀴즈 가중치 4
+- `quizResults` 컬렉션에서 계산, norm 캐시에 포함
+
+**6축 레이더 차트** (`StudentRadar.tsx`):
+- 정답률(절대값), 성장세(Tier1 재시도 + Tier2 오답극복), 출제력/소통/복습력/활동량(백분위)
+- 값 라벨: 축 방향 바깥 배치 (겹침 방지), ⓘ 버튼: HTML 오버레이 (SVG 좌표→CSS % 변환)
+
 ### 교수 설정 (`app/(main)/professor/settings/page.tsx`)
 
 - 학기 설정 (SemesterSettingsCard)
@@ -457,7 +479,6 @@ generateScoreSummary(result)                // 텍스트 요약
 - 훅: `lib/hooks/useRabbit.ts` (useRabbitHoldings, useRabbitDoc, useRabbitsForCourse, getRabbitStats)
 - UI: `components/home/CharacterBox.tsx` (홈 히어로, 2마리 궤도 캐러셀), `GachaResultModal.tsx`, `RabbitDogam.tsx` (도감 + 데려오기), `LevelUpBottomSheet.tsx`, `MilestoneChoiceModal.tsx`
 - 유틸: `lib/utils/rabbitDisplayName.ts`, `lib/utils/milestone.ts`, `lib/utils/rabbitProfile.ts`
-- 마이그레이션: `functions/src/migrateRabbitSystem.ts`, `functions/src/migrateDefaultRabbit.ts`
 
 ### 마일스톤 시스템 (50XP 보상 선택)
 

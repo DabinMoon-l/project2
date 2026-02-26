@@ -18,6 +18,8 @@ interface PostListProps {
   onPostClick: (postId: string) => void;
   /** 빈 상태 메시지 */
   emptyMessage?: string;
+  /** 교수님 여부 (이름 표시용) */
+  isProfessor?: boolean;
 }
 
 /**
@@ -33,6 +35,7 @@ export default function PostList({
   onLoadMore,
   onPostClick,
   emptyMessage = '게시글이 없습니다.',
+  isProfessor,
 }: PostListProps) {
   // 무한 스크롤을 위한 observer ref
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -109,7 +112,7 @@ export default function PostList({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: index * 0.05 }}
         >
-          <PostCard post={post} onClick={() => onPostClick(post.id)} />
+          <PostCard post={post} onClick={() => onPostClick(post.id)} isProfessor={isProfessor} />
         </motion.div>
       ))}
 

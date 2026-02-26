@@ -297,6 +297,7 @@ export const useQuizUpdate = (): UseQuizUpdateReturn => {
 
   /**
    * 완료된 모든 퀴즈의 업데이트 확인
+   * 최적화: quizResults 1회 조회 후 결과를 퀴즈별로 그룹핑 → 퀴즈 문서만 배치 조회
    */
   const checkAllUpdates = useCallback(async () => {
     if (!user) return;
@@ -305,7 +306,7 @@ export const useQuizUpdate = (): UseQuizUpdateReturn => {
       setLoading(true);
       setError(null);
 
-      // 사용자의 모든 퀴즈 결과 가져오기
+      // 1. 사용자의 모든 퀴즈 결과 1회 조회
       const resultsQuery = userCourseId
         ? query(
             collection(db, 'quizResults'),
@@ -318,28 +319,101 @@ export const useQuizUpdate = (): UseQuizUpdateReturn => {
           );
 
       const resultsSnapshot = await getDocs(resultsQuery);
-      const quizIds = new Set<string>();
 
+      // quizId별로 그룹핑 (isUpdate가 아닌 첫 번째 결과만)
+      const resultsByQuiz = new Map<string, { docId: string; data: any }>();
       resultsSnapshot.forEach((docSnapshot) => {
         const data = docSnapshot.data();
-        // 업데이트 결과가 아닌 것만
-        if (!data.isUpdate) {
-          quizIds.add(data.quizId);
+        if (!data.isUpdate && !resultsByQuiz.has(data.quizId)) {
+          resultsByQuiz.set(data.quizId, { docId: docSnapshot.id, data });
         }
       });
 
-      // 각 퀴즈의 업데이트 확인 (병렬 실행으로 최적화)
+      if (resultsByQuiz.size === 0) {
+        setUpdatedQuizzes(new Map());
+        return;
+      }
+
+      // 2. 퀴즈 문서만 배치 조회 (quizResults 재조회 없음)
+      const quizIds = Array.from(resultsByQuiz.keys());
+      const quizDocPromises = quizIds.map(qid => getDoc(doc(db, 'quizzes', qid)));
+      const quizDocs = await Promise.all(quizDocPromises);
+
+      // 3. 클라이언트에서 업데이트 판별
       const newUpdatedQuizzes = new Map<string, QuizUpdateInfo>();
 
-      const updateChecks = await Promise.all(
-        Array.from(quizIds).map(quizId => checkQuizUpdate(quizId))
-      );
+      for (let i = 0; i < quizIds.length; i++) {
+        const quizId = quizIds[i];
+        const quizDoc = quizDocs[i];
+        if (!quizDoc.exists()) continue;
 
-      updateChecks.forEach((updateInfo) => {
-        if (updateInfo?.hasUpdate) {
-          newUpdatedQuizzes.set(updateInfo.quizId, updateInfo);
+        const result = resultsByQuiz.get(quizId)!;
+        const quizData = quizDoc.data();
+        const questions = quizData.questions || [];
+        const questionScores = result.data.questionScores || {};
+
+        const updatedQuestions: UpdatedQuestion[] = [];
+
+        for (const q of questions) {
+          const questionUpdatedAt = q.questionUpdatedAt;
+          if (!questionUpdatedAt) continue;
+
+          const updatedTime = questionUpdatedAt.toMillis ? questionUpdatedAt.toMillis() : 0;
+          const userScore = questionScores[q.id];
+
+          const shouldAdd = !userScore || (
+            userScore.answeredAt?.toMillis
+              ? updatedTime > userScore.answeredAt.toMillis()
+              : true
+          );
+
+          if (shouldAdd) {
+            updatedQuestions.push({
+              questionId: q.id,
+              questionText: q.text || q.question || '',
+              questionType: q.type,
+              choices: q.choices || q.options,
+              correctAnswer: q.answer?.toString() || q.correctAnswer?.toString() || '',
+              explanation: q.explanation,
+              questionUpdatedAt,
+              image: q.image || undefined,
+              imageUrl: q.imageUrl || undefined,
+              passage: q.passage || undefined,
+              passageType: q.passageType || undefined,
+              passageImage: q.passageImage || undefined,
+              koreanAbcItems: q.koreanAbcItems || undefined,
+              passageMixedExamples: q.passageMixedExamples || undefined,
+              commonQuestion: q.commonQuestion || undefined,
+              mixedExamples: q.mixedExamples || undefined,
+              bogi: q.bogi || undefined,
+              subQuestionOptions: q.subQuestionOptions || undefined,
+              subQuestionOptionsType: q.subQuestionOptionsType || undefined,
+              subQuestionImage: q.subQuestionImage || undefined,
+              passagePrompt: q.passagePrompt || undefined,
+              bogiQuestionText: q.bogiQuestionText || undefined,
+              combinedGroupId: q.combinedGroupId || undefined,
+              combinedIndex: q.combinedIndex,
+              combinedTotal: q.combinedTotal,
+              hasMultipleAnswers: q.hasMultipleAnswers || undefined,
+              choiceExplanations: q.choiceExplanations || undefined,
+              quizCreatorId: quizData.creatorId || undefined,
+            });
+          }
         }
-      });
+
+        if (updatedQuestions.length > 0) {
+          newUpdatedQuizzes.set(quizId, {
+            quizId,
+            quizTitle: quizData.title || '퀴즈',
+            quizCreatorId: quizData.creatorId || null,
+            hasUpdate: true,
+            updatedQuestionCount: updatedQuestions.length,
+            updatedQuestions,
+            originalResultId: result.docId,
+            originalQuestionScores: questionScores,
+          });
+        }
+      }
 
       setUpdatedQuizzes(newUpdatedQuizzes);
     } catch (err) {
@@ -348,7 +422,7 @@ export const useQuizUpdate = (): UseQuizUpdateReturn => {
     } finally {
       setLoading(false);
     }
-  }, [user, userCourseId, checkQuizUpdate]);
+  }, [user, userCourseId]);
 
   // 초기 로드
   useEffect(() => {

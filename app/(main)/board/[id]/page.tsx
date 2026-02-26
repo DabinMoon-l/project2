@@ -3,13 +3,14 @@
 import { useCallback, useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { doc, updateDoc, increment } from 'firebase/firestore';
+import { doc, updateDoc, increment, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Skeleton, ImageViewer } from '@/components/common';
 import LikeButton from '@/components/board/LikeButton';
 import CommentSection from '@/components/board/CommentSection';
 import { usePost, useDeletePost, useLike } from '@/lib/hooks/useBoard';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { useUser } from '@/lib/contexts';
 
 /**
  * 날짜 포맷
@@ -108,11 +109,22 @@ export default function PostDetailPage() {
   const postId = params.id as string;
 
   const { user } = useAuth();
+  const { profile } = useUser();
+  const isProfessor = profile?.role === 'professor';
   const { post, loading, error, refresh } = usePost(postId);
   const { deletePost, loading: deleting } = useDeletePost();
   const { toggleLike, isLiked } = useLike();
 
   const isOwner = user?.uid === post?.authorId;
+
+  // 교수님일 때 작성자 실명 조회
+  const [authorName, setAuthorName] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isProfessor || !post?.authorId) return;
+    getDoc(doc(db, 'users', post.authorId)).then(snap => {
+      if (snap.exists()) setAuthorName(snap.data().name || null);
+    }).catch(() => {});
+  }, [isProfessor, post?.authorId]);
 
   // 안전한 뒤로가기 — 내부 히스토리 없으면 게시판 목록으로
   const goBack = useCallback(() => {
@@ -238,7 +250,7 @@ export default function PostDetailPage() {
           {/* 메타 정보: 좌=글쓴이, 우=월일시 */}
           <div className="flex items-center justify-between text-[15px] text-[#3A3A3A] mb-4 pb-4 border-b border-dashed border-[#1A1A1A]">
             <span>
-              {post.authorNickname}·{post.authorClassType || '?'}반
+              {isProfessor && authorName ? `${authorName} ` : ''}{post.authorNickname}·{post.authorClassType || '?'}반
             </span>
             <span>{formatDate(post.createdAt)}</span>
           </div>
@@ -305,7 +317,7 @@ export default function PostDetailPage() {
         {/* 댓글 */}
         <section className="pt-4 border-t-2 border-[#1A1A1A]">
           <h3 className="font-bold text-xl mb-2 text-[#1A1A1A]">댓글</h3>
-          <CommentSection postId={postId} />
+          <CommentSection postId={postId} postAuthorId={post.authorId} />
         </section>
       </main>
     </div>

@@ -16,6 +16,7 @@ import {
 import { doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../hooks/useAuth';
+import { useUser } from './UserContext';
 import {
   type CourseId,
   type ClassId,
@@ -86,6 +87,7 @@ const DEFAULT_SEMESTER_SETTINGS: SemesterSettings = {
  */
 export function CourseProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const { profile } = useUser(); // UserContext에서 이미 구독 중인 프로필 재사용
   const [semesterSettings, setSemesterSettings] = useState<SemesterSettings | null>(null);
   const [userCourseId, setUserCourseId] = useState<CourseId | null>(null);
   const [userClassId, setUserClassId] = useState<ClassId | null>(null);
@@ -150,46 +152,30 @@ export function CourseProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // 사용자 과목 정보 구독
+  // 사용자 과목 정보 — UserContext의 profile에서 파생 (중복 onSnapshot 제거)
   useEffect(() => {
-    if (!user) {
+    if (!user || !profile) {
       setUserCourseId(null);
       setUserClassId(null);
       setIsProfessorNoCourse(false);
       return;
     }
 
-    const userRef = doc(db, 'users', user.uid);
-
-    const unsubscribe = onSnapshot(
-      userRef,
-      (snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.data();
-
-          if (data.courseId) {
-            setUserCourseId(data.courseId);
-            setIsProfessorNoCourse(false);
-          } else if (data.role === 'professor') {
-            setIsProfessorNoCourse(true);
-            // sessionStorage에 저장된 과목 우선, 없으면 학기 기반 기본값
-            setUserCourseId(getProfessorDefaultCourse(
-              semesterSettings?.currentSemester
-            ));
-          } else {
-            setUserCourseId(null);
-            setIsProfessorNoCourse(false);
-          }
-          setUserClassId(data.classId || null);
-        }
-      },
-      (err) => {
-        console.error('사용자 과목 정보 로드 실패:', err);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [user, refreshKey, getProfessorDefaultCourse]); // semesterSettings는 의도적으로 제외 (아래 별도 effect에서 보정)
+    if (profile.courseId) {
+      setUserCourseId(profile.courseId as CourseId);
+      setIsProfessorNoCourse(false);
+    } else if (profile.role === 'professor') {
+      setIsProfessorNoCourse(true);
+      setUserCourseId(getProfessorDefaultCourse(
+        semesterSettings?.currentSemester
+      ));
+    } else {
+      setUserCourseId(null);
+      setIsProfessorNoCourse(false);
+    }
+    // classType은 UserContext에서 변환된 값 (교수='' , 학생=classId)
+    setUserClassId(profile.role === 'professor' ? null : (profile.classType as ClassId || null));
+  }, [user, profile, refreshKey, getProfessorDefaultCourse]); // semesterSettings는 의도적으로 제외 (아래 별도 effect에서 보정)
 
   // 교수님 기본 과목: Firestore 학기 설정이 로드되면 보정
   useEffect(() => {

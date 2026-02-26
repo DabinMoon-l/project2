@@ -917,7 +917,7 @@ export const useReview = (): UseReviewReturn => {
       }
     );
 
-    // 퀴즈 풀이 기록 구독
+    // 퀴즈 풀이 기록 — 1회 조회 (실시간 구독 불필요, onSnapshot → getDocs)
     const attemptsQuery = userCourseId
       ? query(
           collection(db, 'quizResults'),
@@ -929,36 +929,32 @@ export const useReview = (): UseReviewReturn => {
           where('userId', '==', user.uid)
         );
 
-    const unsubscribeAttempts = onSnapshot(
-      attemptsQuery,
-      async (snapshot) => {
-        try {
-          const attempts: QuizAttempt[] = [];
-          snapshot.forEach((docSnap) => {
-            const data = docSnap.data();
-            attempts.push({
-              id: docSnap.id,
-              quizId: data.quizId,
-              quizTitle: '',
-              correctCount: data.correctCount || 0,
-              totalCount: data.totalCount || 0,
-              earnedGold: data.earnedGold || 0,
-              earnedExp: data.earnedExp || 0,
-              timeSpentSeconds: data.timeSpentSeconds || 0,
-              completedAt: data.createdAt,
-            });
+    getDocs(attemptsQuery).then(async (snapshot) => {
+      try {
+        const attempts: QuizAttempt[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          attempts.push({
+            id: docSnap.id,
+            quizId: data.quizId,
+            quizTitle: '',
+            correctCount: data.correctCount || 0,
+            totalCount: data.totalCount || 0,
+            earnedGold: data.earnedGold || 0,
+            earnedExp: data.earnedExp || 0,
+            timeSpentSeconds: data.timeSpentSeconds || 0,
+            completedAt: data.createdAt,
           });
-          await fillQuizTitles(attempts);
-          attempts.sort((a, b) => (b.completedAt?.toMillis?.() || 0) - (a.completedAt?.toMillis?.() || 0));
-          if (isMounted) setQuizAttempts(attempts);
-        } catch (e) {
-          console.error('퀴즈 풀이 기록 처리 실패:', e);
-        }
-      },
-      (err) => {
-        console.error('퀴즈 풀이 기록 로드 실패:', err);
+        });
+        await fillQuizTitles(attempts);
+        attempts.sort((a, b) => (b.completedAt?.toMillis?.() || 0) - (a.completedAt?.toMillis?.() || 0));
+        if (isMounted) setQuizAttempts(attempts);
+      } catch (e) {
+        console.error('퀴즈 풀이 기록 처리 실패:', e);
       }
-    );
+    }).catch((err) => {
+      console.error('퀴즈 풀이 기록 로드 실패:', err);
+    });
 
     // 커스텀 폴더 구독은 useCustomFolders 훅으로 이동됨
 
@@ -1047,7 +1043,6 @@ export const useReview = (): UseReviewReturn => {
       unsubscribeWrong();
       unsubscribeBookmark();
       unsubscribeSolved();
-      unsubscribeAttempts();
       unsubscribePrivateQuizzes();
       unsubscribeDeleted();
     };

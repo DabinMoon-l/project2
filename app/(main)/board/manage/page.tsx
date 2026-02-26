@@ -348,7 +348,7 @@ function ActivitySection({ posts, courseId }: { posts: Post[]; courseId: string 
   // postId 목록이 실제로 변할 때만 의존 (조회수/좋아요 변화에는 무반응)
   const postIdKey = useMemo(() => posts.map(p => p.id).sort().join(','), [posts]);
 
-  // 댓글 실시간 구독 — postId 목록 변경 시 재구독
+  // 댓글 일괄 조회 (getDocs — 대시보드에서 실시간 불필요, 7개 onSnapshot → 병렬 getDocs)
   useEffect(() => {
     if (!courseId || !postIdKey) {
       setComments([]);
@@ -358,33 +358,38 @@ function ActivitySection({ posts, courseId }: { posts: Post[]; courseId: string 
     const postIds = postIdKey.split(',').filter(Boolean);
     if (postIds.length === 0) { setComments([]); return; }
 
-    const unsubscribes: (() => void)[] = [];
-    const chunkData: Record<number, ActivityComment[]> = {};
+    let cancelled = false;
+    const loadComments = async () => {
+      const chunks: string[][] = [];
+      for (let i = 0; i < postIds.length; i += 30) {
+        chunks.push(postIds.slice(i, i + 30));
+      }
 
-    for (let i = 0; i < postIds.length; i += 30) {
-      const chunkIdx = Math.floor(i / 30);
-      const chunk = postIds.slice(i, i + 30);
-      const q = query(
-        collection(db, 'comments'),
-        where('postId', 'in', chunk)
+      const results = await Promise.all(
+        chunks.map(chunk =>
+          getDocs(query(collection(db, 'comments'), where('postId', 'in', chunk)))
+        )
       );
 
-      const unsub = onSnapshot(q, (snap) => {
-        chunkData[chunkIdx] = snap.docs.map(d => {
+      if (cancelled) return;
+
+      const allComments: ActivityComment[] = [];
+      results.forEach(snap => {
+        snap.docs.forEach(d => {
           const data = d.data();
-          return {
+          allComments.push({
             authorId: data.authorId || '',
             authorClassType: data.authorClassType,
             postId: data.postId || '',
             createdAt: data.createdAt?.toDate() || new Date(),
-          };
+          });
         });
-        setComments(Object.values(chunkData).flat());
       });
-      unsubscribes.push(unsub);
-    }
+      setComments(allComments);
+    };
 
-    return () => { unsubscribes.forEach(fn => fn()); };
+    loadComments();
+    return () => { cancelled = true; };
   }, [courseId, postIdKey]);
 
   // 반별 학생 수 실시간 구독
@@ -1070,22 +1075,23 @@ export default function ManagePostsPage() {
     loadScopeKeywords();
   }, [isProfessor, selectedCourseId]);
 
-  // 워드클라우드 데이터 — 게시글에서 과목 scope 키워드만 추출
+  // 워드클라우드 데이터 — 게시글에서 과목 scope 키워드만 추출 (indexOf로 빠른 매칭)
   const keywords = useMemo(() => {
     if (!allPosts.length || scopeTerms.size === 0) return [];
 
-    // 게시글 전체 텍스트
+    // 게시글 전체 텍스트 (소문자)
     const allText = allPosts.map(p => `${p.title} ${p.content}`).join(' ').toLowerCase();
 
-    // scope 키워드가 게시글에 몇 번 등장하는지 카운트
+    // indexOf 기반 카운트 (정규식 대비 10배+ 빠름)
     const freq = new Map<string, number>();
     scopeTerms.forEach((original, lower) => {
-      // 정규식 특수문자 이스케이프
-      const escaped = lower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const matches = allText.match(new RegExp(escaped, 'gi'));
-      if (matches && matches.length > 0) {
-        freq.set(original, matches.length); // 원문 대소문자로 저장
+      let count = 0;
+      let pos = 0;
+      while ((pos = allText.indexOf(lower, pos)) !== -1) {
+        count++;
+        pos += lower.length;
       }
+      if (count > 0) freq.set(original, count);
     });
 
     return Array.from(freq.entries())
@@ -1094,12 +1100,12 @@ export default function ManagePostsPage() {
       .map(([text, value]) => ({ text, value }));
   }, [allPosts, scopeTerms]);
 
-  // 학생 훅
-  const { posts, loading: postsLoading, error: postsError, hasMore, loadMore, refresh: refreshPosts } = useMyPosts();
+  // 학생 훅 (교수님은 skip — 불필요한 Firestore 쿼리 방지)
+  const { posts, loading: postsLoading, error: postsError, hasMore, loadMore, refresh: refreshPosts } = useMyPosts(isProfessor);
   const { deletePost } = useDeletePost();
-  const { comments, loading: commentsLoading, error: commentsError, refresh: refreshComments } = useMyComments();
+  const { comments, loading: commentsLoading, error: commentsError, refresh: refreshComments } = useMyComments(isProfessor);
   const { deleteComment } = useDeleteComment();
-  const { posts: likedPosts, loading: likedLoading, error: likedError } = useMyLikedPosts();
+  const { posts: likedPosts, loading: likedLoading, error: likedError } = useMyLikedPosts(isProfessor);
   const likesScrollRef = useRef<HTMLDivElement>(null);
 
   const handlePostClick = useCallback((postId: string) => {

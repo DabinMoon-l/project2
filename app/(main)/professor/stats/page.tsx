@@ -1,30 +1,32 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Header } from '@/components/common';
 import { useCourse } from '@/lib/contexts';
 import { useProfessorStats, type QuestionSource, type DispersionMode } from '@/lib/hooks/useProfessorStats';
 import { calcFeedbackScore, FEEDBACK_SCORES } from '@/lib/utils/feedbackScore';
-import { exportToExcel, exportToWord, type ReportData, type WeeklyStatSummary } from '@/lib/utils/reportExport';
+import { exportToExcel, exportToWord, type WeeklyStatSummary } from '@/lib/utils/reportExport';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 import type { FeedbackType } from '@/components/quiz/InstantFeedbackButton';
 import type { CourseId } from '@/lib/types/course';
-import { getCourseList } from '@/lib/types/course';
+import { getCourseList, COURSES } from '@/lib/types/course';
 
-import SubjectFilter from '@/components/professor/stats/SubjectFilter';
 import SourceFilter from '@/components/professor/stats/SourceFilter';
 import DispersionToggle from '@/components/professor/stats/DispersionToggle';
 import ClassComparison from '@/components/professor/stats/ClassComparison';
-import WeeklyTrend from '@/components/professor/stats/WeeklyTrend';
+import WeeklyBoxPlot from '@/components/professor/stats/WeeklyBoxPlot';
 import StabilityIndex from '@/components/professor/stats/StabilityIndex';
 import RadarChart from '@/components/professor/stats/RadarChart';
 import ChapterTable from '@/components/professor/stats/ChapterTable';
 import AIDifficultyAnalysis from '@/components/professor/stats/AIDifficultyAnalysis';
 import ClassSummaryTable from '@/components/professor/stats/ClassSummaryTable';
+import ClassProfileRadar from '@/components/professor/stats/ClassProfileRadar';
+
+// ── 과목 ID 목록 ──
+const COURSE_IDS: CourseId[] = ['biology', 'microbiology', 'pathophysiology'];
 
 function SummaryCard({ value, label, accent }: { value: string; label: string; accent?: boolean }) {
   return (
@@ -42,12 +44,18 @@ function SummaryCard({ value, label, accent }: { value: string; label: string; a
 }
 
 export default function ProfessorStatsPage() {
-  const { userCourseId } = useCourse();
+  const { userCourseId, setProfessorCourse } = useCourse();
   const { data, loading, error, fetchStats } = useProfessorStats();
 
   const [courseId, setCourseId] = useState<CourseId>(userCourseId || 'biology');
   const [source, setSource] = useState<QuestionSource>('professor');
   const [dispersion, setDispersion] = useState<DispersionMode>('sd');
+
+  // 과목 변경 핸들러 (sessionStorage 저장 포함)
+  const handleCourseChange = useCallback((newCourseId: CourseId) => {
+    setCourseId(newCourseId);
+    setProfessorCourse(newCourseId);
+  }, [setProfessorCourse]);
 
   // 리포트 상태
   const [reportLoading, setReportLoading] = useState(false);
@@ -68,10 +76,10 @@ export default function ProfessorStatsPage() {
 
   // 참여도 군집 데이터
   const [clusterData, setClusterData] = useState<{
-    passionate: number;   // 높은 참여 + 높은 성취
-    hardworking: number;  // 높은 참여 + 낮은 성취
-    efficient: number;    // 낮은 참여 + 높은 성취
-    atRisk: number;       // 낮은 참여 + 낮은 성취
+    passionate: number;
+    hardworking: number;
+    efficient: number;
+    atRisk: number;
     total: number;
   } | null>(null);
 
@@ -82,39 +90,49 @@ export default function ProfessorStatsPage() {
     totalStudents: number;
   } | null>(null);
 
+  // 반별 프로필 데이터 (ClassProfileRadar용)
+  const [classProfileData, setClassProfileData] = useState<Record<string, {
+    score: number;
+    stability: number;
+    participation: number;
+    feedback: number;
+    board: number;
+    gamification: number;
+  }> | null>(null);
+
   // 초기 + 필터 변경 시 데이터 조회
   useEffect(() => {
     fetchStats(courseId, source);
   }, [courseId, source, fetchStats]);
 
-  // 피드백 분석 데이터 로드
+  // 피드백 + 군집 + 게이미피케이션 + 반별 프로필 데이터 (questionFeedbacks 1회만 조회)
   useEffect(() => {
-    const loadFeedbackAnalysis = async () => {
+    const loadAllExtraData = async () => {
       try {
-        // 해당 과목의 피드백 조회
-        const fbQ = query(
-          collection(db, 'questionFeedbacks'),
-          where('courseId', '==', courseId)
-        );
-        const fbSnap = await getDocs(fbQ);
+        // questionFeedbacks + users + posts 병렬 조회 (중복 제거)
+        const [fbSnap, usersSnap, postSnap] = await Promise.all([
+          getDocs(query(collection(db, 'questionFeedbacks'), where('courseId', '==', courseId))),
+          getDocs(query(collection(db, 'users'), where('courseId', '==', courseId), where('role', '==', 'student'))),
+          getDocs(query(collection(db, 'posts'), where('courseId', '==', courseId))),
+        ]);
 
+        // ── 피드백 분석 ──
         const byType: Record<string, number> = {};
         const aiF: { type: FeedbackType }[] = [];
         const profF: { type: FeedbackType }[] = [];
         const allF: { type: FeedbackType }[] = [];
+        const fbByClass: Record<string, number> = {};
 
         fbSnap.docs.forEach(d => {
           const data = d.data();
           const t = data.type as string;
           byType[t] = (byType[t] || 0) + 1;
           allF.push({ type: t as FeedbackType });
-
-          // AI vs 교수 분리 (quizCreatorId가 없거나 isAiGenerated인 경우 AI)
-          if (data.isAiGenerated) {
-            aiF.push({ type: t as FeedbackType });
-          } else {
-            profF.push({ type: t as FeedbackType });
-          }
+          if (data.isAiGenerated) aiF.push({ type: t as FeedbackType });
+          else profF.push({ type: t as FeedbackType });
+          // 반별 집계 (ClassProfileRadar용)
+          const cls = data.classId as string;
+          if (cls) fbByClass[cls] = (fbByClass[cls] || 0) + 1;
         });
 
         setFeedbackData({
@@ -126,34 +144,19 @@ export default function ProfessorStatsPage() {
           profAvgScore: calcFeedbackScore(profF),
           profCount: profF.length,
         });
-      } catch (err) {
-        console.error('피드백 분석 로드 실패:', err);
-      }
-    };
 
-    loadFeedbackAnalysis();
-  }, [courseId]);
-
-  // 참여도 군집 + 게이미피케이션 데이터 로드
-  useEffect(() => {
-    const loadStudentClusters = async () => {
-      try {
-        const usersQ = query(
-          collection(db, 'users'),
-          where('courseId', '==', courseId),
-          where('role', '==', 'student')
-        );
-        const usersSnap = await getDocs(usersQ);
-
+        // ── 학생 군집 + 게이미피케이션 ──
         if (usersSnap.empty) {
           setClusterData({ passionate: 0, hardworking: 0, efficient: 0, atRisk: 0, total: 0 });
           setGamificationData({ avgRabbits: 0, avgMilestones: 0, totalStudents: 0 });
+          setClassProfileData(null);
           return;
         }
 
         const students = usersSnap.docs.map(d => {
           const data = d.data();
           return {
+            classId: (data.classId || 'A') as string,
             totalExp: data.totalExp || 0,
             correctRate: data.profCorrectCount
               ? ((data.profCorrectCount / Math.max(data.profAttemptCount || 1, 1)) * 100)
@@ -163,7 +166,6 @@ export default function ProfessorStatsPage() {
           };
         });
 
-        // 중위값 계산
         const exps = students.map(s => s.totalExp).sort((a, b) => a - b);
         const rates = students.map(s => s.correctRate).sort((a, b) => a - b);
         const medianExp = exps[Math.floor(exps.length / 2)] || 0;
@@ -181,7 +183,6 @@ export default function ProfessorStatsPage() {
 
         setClusterData({ passionate, hardworking, efficient, atRisk, total: students.length });
 
-        // 게이미피케이션
         const totalRabbits = students.reduce((s, st) => s + st.rabbitCount, 0);
         const totalMilestones = students.reduce((s, st) => s + Math.floor(st.lastGachaExp / 50), 0);
         setGamificationData({
@@ -189,28 +190,79 @@ export default function ProfessorStatsPage() {
           avgMilestones: students.length > 0 ? Math.round((totalMilestones / students.length) * 10) / 10 : 0,
           totalStudents: students.length,
         });
+
+        // ── 반별 프로필 데이터 (ClassProfileRadar) ──
+        const classIds = ['A', 'B', 'C', 'D'];
+        const profileData: Record<string, { score: number; stability: number; participation: number; feedback: number; board: number; gamification: number }> = {};
+
+        // 게시판 반별 집계 (postSnap 재사용)
+        const boardByClass: Record<string, number> = {};
+        postSnap.docs.forEach(d => {
+          const cls = d.data().authorClassType as string;
+          if (cls) boardByClass[cls] = (boardByClass[cls] || 0) + 1;
+        });
+
+        const maxFb = Math.max(1, ...Object.values(fbByClass));
+        const maxBoard = Math.max(1, ...Object.values(boardByClass));
+        const maxMilestone = Math.max(1, ...students.map(s => Math.floor(s.lastGachaExp / 50)));
+
+        for (const cls of classIds) {
+          const classStudents = students.filter(s => s.classId === cls);
+          const count = classStudents.length;
+          if (count === 0) {
+            profileData[cls] = { score: 0, stability: 0, participation: 0, feedback: 0, board: 0, gamification: 0 };
+            continue;
+          }
+
+          const avgRate = classStudents.reduce((s, st) => s + st.correctRate, 0) / count;
+          const activeCount = classStudents.filter(s => s.totalExp > 0).length;
+          const participation = (activeCount / count) * 100;
+          const rateValues = classStudents.map(s => s.correctRate);
+          const rateM = rateValues.reduce((a, b) => a + b, 0) / rateValues.length;
+          const rateStd = Math.sqrt(rateValues.reduce((a, b) => a + (b - rateM) ** 2, 0) / Math.max(rateValues.length - 1, 1));
+          const rateCV = rateM > 0 ? rateStd / rateM : 1;
+          const stability = Math.min(100, Math.max(0, (1 - rateCV) * 100));
+
+          const classFb = fbByClass[cls] || 0;
+          const classBoard = boardByClass[cls] || 0;
+          const classMilestones = classStudents.reduce((s, st) => s + Math.floor(st.lastGachaExp / 50), 0) / count;
+
+          profileData[cls] = {
+            score: Math.min(100, avgRate),
+            stability,
+            participation: Math.min(100, participation),
+            feedback: Math.min(100, (classFb / maxFb) * 100),
+            board: Math.min(100, (classBoard / maxBoard) * 100),
+            gamification: Math.min(100, maxMilestone > 0 ? (classMilestones / maxMilestone) * 100 : 0),
+          };
+        }
+
+        setClassProfileData(profileData);
       } catch (err) {
-        console.error('군집 데이터 로드 실패:', err);
+        console.error('통계 부가 데이터 로드 실패:', err);
       }
     };
 
-    loadStudentClusters();
+    loadAllExtraData();
   }, [courseId]);
 
   return (
-    <div className="min-h-screen bg-[#F5F0E8] pb-24">
-      <Header title="통계" />
+    <div className="min-h-screen pb-24 bg-[#F5F0E8]">
+      {/* 리본 헤더 */}
+      <header className="flex flex-col items-center">
+        <DashboardRibbonHeader
+          currentCourseId={courseId}
+          onCourseChange={handleCourseChange}
+        />
+      </header>
 
-      <div className="px-4 py-3 space-y-4">
+      <div className="px-4 space-y-4">
         {/* 필터 영역 */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           className="space-y-3"
         >
-          {/* 과목 선택 */}
-          <SubjectFilter value={courseId} onChange={setCourseId} />
-
           {/* 문제 출처 + 산포도 모드 */}
           <div className="flex items-end justify-between gap-3">
             <div>
@@ -271,19 +323,24 @@ export default function ProfessorStatsPage() {
             {/* A) 반별 비교 */}
             <ClassComparison classStats={data.classStats} mode={dispersion} />
 
-            {/* B) 주간 트렌드 */}
-            <WeeklyTrend weeklyTrend={data.weeklyTrend} mode={dispersion} />
+            {/* B) 주차별 박스플롯 */}
+            <WeeklyBoxPlot weeklyTrend={data.weeklyTrend} />
 
-            {/* C) 안정성 지표 */}
+            {/* C) 반별 종합 역량 레이더 */}
+            {classProfileData && (
+              <ClassProfileRadar classProfileData={classProfileData} />
+            )}
+
+            {/* D) 안정성 지표 */}
             <StabilityIndex classStats={data.classStats} />
 
-            {/* D) 이해도 레이더 */}
+            {/* E) 이해도 레이더 */}
             <RadarChart chapterStats={data.chapterStats} />
 
-            {/* E) 챕터/소주제 분석 */}
+            {/* F) 챕터/소주제 분석 */}
             <ChapterTable chapterStats={data.chapterStats} />
 
-            {/* F) AI 난이도 분석 */}
+            {/* G) AI 난이도 분석 */}
             <AIDifficultyAnalysis
               aiDifficultyStats={data.aiDifficultyStats}
               professorMean={data.professorMean}
@@ -436,7 +493,6 @@ export default function ProfessorStatsPage() {
                   <p className="text-xs text-[#8B1A1A] border border-[#8B1A1A] p-2">{reportError}</p>
                 )}
 
-                {/* 리포트 생성 버튼 */}
                 <button
                   type="button"
                   disabled={reportLoading}
@@ -453,7 +509,6 @@ export default function ProfessorStatsPage() {
                       const resultData = result.data as { insight: string; weeklyStatsUsed: string[] };
                       setReportInsight(resultData.insight);
 
-                      // weeklyStats 로드 (간략 요약용)
                       const weeksSnap = await getDocs(
                         query(
                           collection(db, 'weeklyStats', courseId, 'weeks'),
@@ -484,7 +539,6 @@ export default function ProfessorStatsPage() {
                   {reportLoading ? '분석 중...' : '이번 달 리포트 생성'}
                 </button>
 
-                {/* 인사이트 미리보기 + 다운로드 */}
                 {reportInsight && (
                   <div className="space-y-3">
                     <div className="border border-[#D4CFC4] bg-white p-3 max-h-60 overflow-y-auto">
@@ -540,6 +594,125 @@ export default function ProfessorStatsPage() {
             </div>
           </motion.div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── 대시보드 리본 헤더 ──
+function DashboardRibbonHeader({
+  currentCourseId,
+  onCourseChange,
+}: {
+  currentCourseId: CourseId;
+  onCourseChange: (courseId: CourseId) => void;
+}) {
+  const currentIndex = COURSE_IDS.indexOf(currentCourseId);
+  const course = COURSES[currentCourseId];
+  const ribbonImage = course?.dashboardRibbonImage || '/images/biology-dashboard-ribbon.png';
+  const ribbonScale = course?.dashboardRibbonScale || 1;
+
+  const goToPrev = () => {
+    const prevIdx = (currentIndex - 1 + COURSE_IDS.length) % COURSE_IDS.length;
+    onCourseChange(COURSE_IDS[prevIdx]);
+  };
+
+  const goToNext = () => {
+    const nextIdx = (currentIndex + 1) % COURSE_IDS.length;
+    onCourseChange(COURSE_IDS[nextIdx]);
+  };
+
+  // 터치 스와이프
+  const swipeStartX = useRef(0);
+  const swipeStartY = useRef(0);
+  const swipeDir = useRef<'none' | 'horizontal' | 'vertical'>('none');
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    swipeStartX.current = e.touches[0].clientX;
+    swipeStartY.current = e.touches[0].clientY;
+    swipeDir.current = 'none';
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (swipeDir.current !== 'none') return;
+    const dx = Math.abs(e.touches[0].clientX - swipeStartX.current);
+    const dy = Math.abs(e.touches[0].clientY - swipeStartY.current);
+    if (dx > 10 || dy > 10) {
+      swipeDir.current = dx > dy ? 'horizontal' : 'vertical';
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (swipeDir.current !== 'none') return;
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - swipeStartX.current;
+    const dy = touch.clientY - swipeStartY.current;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
+      if (dx > 0) goToPrev();
+      else goToNext();
+    }
+  };
+
+  // PC 마우스 드래그
+  const mouseStartX = useRef(0);
+  const isMouseDragging = useRef(false);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    mouseStartX.current = e.clientX;
+    isMouseDragging.current = true;
+  };
+
+  const handleMouseUp = (e: React.MouseEvent) => {
+    if (!isMouseDragging.current) return;
+    isMouseDragging.current = false;
+    const diff = e.clientX - mouseStartX.current;
+    if (diff > 40) goToPrev();
+    else if (diff < -40) goToNext();
+  };
+
+  return (
+    <div className="flex flex-col items-center">
+      <div
+        className="w-full h-[260px] pt-2 cursor-grab active:cursor-grabbing select-none"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onMouseDown={handleMouseDown}
+        onMouseUp={handleMouseUp}
+        data-no-pull-x
+        style={{ touchAction: 'pan-y' }}
+      >
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentCourseId}
+            initial={{ opacity: 0, x: 30 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -30 }}
+            transition={{ duration: 0.2 }}
+            className="w-full h-full"
+          >
+            <img
+              src={ribbonImage}
+              alt={course?.name || 'Dashboard'}
+              className="w-full h-full object-contain pointer-events-none"
+              style={{ transform: `scale(${ribbonScale}) scaleX(1.15)` }}
+              draggable={false}
+            />
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
+      {/* 페이지네이션 도트 */}
+      <div className="flex justify-center gap-2 mt-3">
+        {COURSE_IDS.map((id, idx) => (
+          <button
+            key={id}
+            onClick={() => onCourseChange(id)}
+            className={`w-2 h-2 rounded-full transition-all ${
+              idx === currentIndex ? 'bg-[#1A1A1A] w-4' : 'bg-[#D4CFC4]'
+            }`}
+          />
+        ))}
       </div>
     </div>
   );

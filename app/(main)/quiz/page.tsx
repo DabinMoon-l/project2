@@ -710,7 +710,7 @@ function NewsCarousel({
               setVisualIndex(index + 1);
             }}
             className={`h-2 rounded-full transition-all duration-300 ${
-              realIndex === index ? 'bg-[#1A1A1A] w-5' : 'bg-[#CCCCCC] w-2'
+              realIndex === index ? 'bg-[#1A1A1A] w-5' : 'bg-[#D4CFC4] w-2'
             }`}
           />
         ))}
@@ -1103,18 +1103,13 @@ function ManageQuizCard({
   quiz,
   onEdit,
   onDelete,
-  onFeedback,
   onStats,
 }: {
   quiz: QuizCardData;
   onEdit: () => void;
   onDelete: () => void;
-  onFeedback: () => void;
   onStats: () => void;
 }) {
-  // AI 생성 퀴즈는 피드백 버튼 숨김
-  const isAiGenerated = quiz.isAiGenerated || quiz.type === 'ai-generated';
-
   return (
     <motion.div
       whileHover={{ y: -4, boxShadow: '0 8px 20px rgba(0, 0, 0, 0.08)' }}
@@ -1147,24 +1142,14 @@ function ManageQuizCard({
       </div>
 
       <div className="flex flex-col gap-2">
-        {/* 윗줄: 통계 (+ 피드백) */}
-        <div className="flex gap-2">
-          <button
-            onClick={onStats}
-            className="flex-1 py-2 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
-          >
-            통계
-          </button>
-          {!isAiGenerated && (
-            <button
-              onClick={onFeedback}
-              className="flex-1 py-2 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
-            >
-              피드백
-            </button>
-          )}
-        </div>
-        {/* 아랫줄: 수정 + 삭제 */}
+        {/* 통계 */}
+        <button
+          onClick={onStats}
+          className="w-full py-2 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+        >
+          통계
+        </button>
+        {/* 수정 + 삭제 */}
         <div className="flex gap-2">
           <button
             onClick={onEdit}
@@ -1244,9 +1229,6 @@ function QuizListPageContent() {
   const [isLoadingMyQuizzes, setIsLoadingMyQuizzes] = useState(false);
 
   // 모달 상태
-  const [feedbackQuiz, setFeedbackQuiz] = useState<QuizCardData | null>(null);
-  const [feedbacks, setFeedbacks] = useState<any[]>([]);
-  const [isLoadingFeedbacks, setIsLoadingFeedbacks] = useState(false);
   const [updateModalInfo, setUpdateModalInfo] = useState<QuizUpdateInfo | null>(null);
   const [updateModalQuizCount, setUpdateModalQuizCount] = useState(0);
   const [updateConfirmQuiz, setUpdateConfirmQuiz] = useState<QuizCardData | null>(null);
@@ -1280,10 +1262,20 @@ function QuizListPageContent() {
 
   // body 스크롤 방지 통합 (모달/관리모드 열림 시 PullToHome 스와이프 방지)
   useEffect(() => {
-    const lock = !!quizToDelete || !!feedbackQuiz || isManageMode;
+    const lock = !!quizToDelete || isManageMode;
     document.body.style.overflow = lock ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };
-  }, [quizToDelete, feedbackQuiz, isManageMode]);
+  }, [quizToDelete, isManageMode]);
+
+  // 삭제 모달 열림 시 네비게이션 숨기기
+  useEffect(() => {
+    if (quizToDelete) {
+      document.body.setAttribute('data-hide-nav', '');
+    } else {
+      document.body.removeAttribute('data-hide-nav');
+    }
+    return () => { document.body.removeAttribute('data-hide-nav'); };
+  }, [quizToDelete]);
 
   // 태그 필터링 상태
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -1584,39 +1576,6 @@ function QuizListPageContent() {
     }
   };
 
-  const handleViewFeedback = async (quiz: QuizCardData) => {
-    setFeedbackQuiz(quiz);
-    setIsLoadingFeedbacks(true);
-
-    try {
-      // questionFeedbacks 컬렉션에서 조회 (모든 피드백이 여기에 저장됨)
-      const feedbacksRef = collection(db, 'questionFeedbacks');
-      const q = query(feedbacksRef, where('quizId', '==', quiz.id));
-      const snapshot = await getDocs(q);
-
-      const feedbackList: any[] = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        feedbackList.push({
-          id: doc.id,
-          ...data,
-          // 필드명 정규화 (기존 feedbackType → type으로 통일됨)
-          feedbackType: data.type || data.feedbackType,
-          feedback: data.content || data.feedback || '',
-        });
-      });
-
-      // 최신순 정렬
-      feedbackList.sort(sortByLatest);
-
-      setFeedbacks(feedbackList);
-    } catch (error) {
-      console.error('피드백 로드 실패:', error);
-    } finally {
-      setIsLoadingFeedbacks(false);
-    }
-  };
-
   // ============================================================
   // 렌더링
   // ============================================================
@@ -1695,110 +1654,12 @@ function QuizListPageContent() {
                   quiz={quiz}
                   onEdit={() => handleEditQuiz(quiz.id)}
                   onDelete={() => handleDeleteQuiz(quiz)}
-                  onFeedback={() => handleViewFeedback(quiz)}
                   onStats={() => setStatsQuiz(quiz)}
                 />
               ))}
             </div>
           )}
         </main>
-
-        {/* 피드백 모달 */}
-        {feedbackQuiz && (
-          <div
-            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
-            onClick={() => {
-              setFeedbackQuiz(null);
-              setFeedbacks([]);
-            }}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md bg-[#F5F0E8] border-2 border-[#1A1A1A] max-h-[80vh] overflow-visible flex flex-col"
-            >
-              <div className="p-4 border-b border-[#1A1A1A]">
-                <h2 className="text-lg font-bold text-[#1A1A1A]">피드백</h2>
-                <p className="text-sm text-[#5C5C5C]">{feedbackQuiz.title}</p>
-              </div>
-
-              <div className="flex-1 overflow-y-auto overscroll-contain p-4">
-                {isLoadingFeedbacks && (
-                  <div className="py-8 text-center">
-                    <p className="text-[#5C5C5C]">로딩 중...</p>
-                  </div>
-                )}
-
-                {!isLoadingFeedbacks && feedbacks.length === 0 && (
-                  <div className="py-8 text-center">
-                    <p className="text-[#5C5C5C]">아직 피드백이 없습니다.</p>
-                  </div>
-                )}
-
-                {!isLoadingFeedbacks && feedbacks.length > 0 && (
-                  <div className="space-y-3">
-                    {feedbacks.map((feedback) => {
-                      const typeLabels: Record<string, string> = {
-                        praise: '문제가 좋아요!',
-                        wantmore: '더 풀고 싶어요',
-                        unclear: '문제가 이해가 안 돼요',
-                        wrong: '정답이 틀린 것 같아요',
-                        typo: '오타가 있어요',
-                        other: '기타 의견',
-                      };
-                      const typeLabel = typeLabels[feedback.feedbackType] || feedback.feedbackType || '피드백';
-                      // questionNumber가 있으면 사용, 없으면 questionId가 "q0", "q1" 형식일 때만 추출
-                      let questionNum = 0;
-                      if (feedback.questionNumber && feedback.questionNumber > 0 && feedback.questionNumber < 1000) {
-                        questionNum = feedback.questionNumber;
-                      } else if (feedback.questionId) {
-                        // "q0", "q1", "q2" 형식인 경우에만 숫자 추출
-                        const match = feedback.questionId.match(/^q(\d{1,3})$/);
-                        if (match) {
-                          questionNum = parseInt(match[1], 10) + 1;
-                        }
-                      }
-
-                      return (
-                        <div
-                          key={feedback.id}
-                          className="p-4 border border-[#1A1A1A] bg-[#EDEAE4]"
-                        >
-                          {questionNum > 0 && (
-                            <p className="text-sm text-[#5C5C5C] mb-1">
-                              문제 {questionNum}.
-                            </p>
-                          )}
-                          <p className="text-base font-bold text-[#8B6914] mb-2">
-                            {typeLabel}
-                          </p>
-                          {feedback.feedback && (
-                            <p className="text-base text-[#1A1A1A]">
-                              {feedback.feedback}
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              <div className="p-4 border-t border-[#1A1A1A]">
-                <button
-                  onClick={() => {
-                    setFeedbackQuiz(null);
-                    setFeedbacks([]);
-                  }}
-                  className="w-full py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4]"
-                >
-                  닫기
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
 
         {/* 통계 모달 */}
         {statsQuiz && (

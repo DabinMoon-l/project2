@@ -652,7 +652,7 @@ function ProfessorNewsCarousel({
               setVisualIndex(index + 1);
             }}
             className={`h-2 rounded-full transition-all duration-300 ${
-              realIndex === index ? 'bg-[#1A1A1A] w-5' : 'bg-[#CCCCCC] w-2'
+              realIndex === index ? 'bg-[#1A1A1A] w-5' : 'bg-[#D4CFC4] w-2'
             }`}
           />
         ))}
@@ -775,7 +775,7 @@ function CourseRibbonHeader({
             key={id}
             onClick={() => onCourseChange(id)}
             className={`w-2 h-2 rounded-full transition-all ${
-              idx === currentIndex ? 'bg-[#1A1A1A] w-4' : 'bg-[#CCCCCC]'
+              idx === currentIndex ? 'bg-[#1A1A1A] w-4' : 'bg-[#D4CFC4]'
             }`}
           />
         ))}
@@ -2165,7 +2165,9 @@ export default function ProfessorQuizListPage() {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.8 }}
             onClick={scrollToTop}
-            className="fixed bottom-24 right-4 z-40 w-12 h-12 bg-[#1A1A1A] text-[#F5F0E8] rounded-full shadow-lg flex items-center justify-center hover:bg-[#3A3A3A] transition-colors"
+            className={`fixed right-4 z-40 w-12 h-12 bg-[#1A1A1A] text-[#F5F0E8] rounded-full shadow-lg flex items-center justify-center hover:bg-[#3A3A3A] transition-all ${
+              sectionFilter === 'library' ? 'bottom-44' : 'bottom-24'
+            }`}
             aria-label="맨 위로"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

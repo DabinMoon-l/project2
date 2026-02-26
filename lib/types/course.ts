@@ -49,6 +49,14 @@ export interface Course {
   reviewRibbonScale?: number;
   /** 퀴즈 리본 Y축 오프셋 (px, 양수=아래로) */
   quizRibbonOffsetY?: number;
+  /** 과목별 리본 이미지 (학생탭) */
+  studentsRibbonImage: string;
+  /** 학생 리본 이미지 스케일 (기본값 1) */
+  studentsRibbonScale?: number;
+  /** 과목별 리본 이미지 (대시보드/통계탭) */
+  dashboardRibbonImage: string;
+  /** 대시보드 리본 이미지 스케일 (기본값 1) */
+  dashboardRibbonScale?: number;
 }
 
 /**
@@ -106,6 +114,10 @@ export const COURSES: Record<CourseId, Course> = {
     reviewRibbonImage: '/images/biology-review-ribbon.png',
     quizRibbonScale: 1,
     reviewRibbonScale: 1,
+    studentsRibbonImage: '/images/biology-students-ribbon.png',
+    studentsRibbonScale: 1,
+    dashboardRibbonImage: '/images/biology-dashboard-ribbon.png',
+    dashboardRibbonScale: 1,
   },
   pathophysiology: {
     id: 'pathophysiology',
@@ -120,6 +132,10 @@ export const COURSES: Record<CourseId, Course> = {
     reviewRibbonImage: '/images/pathophysiology-review-ribbon.png',
     quizRibbonScale: 1,
     reviewRibbonScale: 1,
+    studentsRibbonImage: '/images/pathophysiology-students-ribbon.png',
+    studentsRibbonScale: 1,
+    dashboardRibbonImage: '/images/pathophysiology-dashboard-ribbon.png',
+    dashboardRibbonScale: 1,
   },
   microbiology: {
     id: 'microbiology',
@@ -134,6 +150,10 @@ export const COURSES: Record<CourseId, Course> = {
     reviewRibbonImage: '/images/microbiology-review-ribbon.png',
     quizRibbonScale: 1,
     reviewRibbonScale: 1,
+    studentsRibbonImage: '/images/microbiology-students-ribbon.png',
+    studentsRibbonScale: 1,
+    dashboardRibbonImage: '/images/microbiology-dashboard-ribbon.png',
+    dashboardRibbonScale: 1,
   },
 };
 

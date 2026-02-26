@@ -111,18 +111,19 @@ export function useProfessorStats() {
     setError(null);
 
     try {
-      // 1) 해당 과목의 퀴즈 문서 조회
+      // 1+2) 퀴즈 + 학생 목록 병렬 조회
       const quizzesRef = collection(db, 'quizzes');
-      let quizQuery;
-      if (source === 'all') {
-        quizQuery = query(quizzesRef, where('courseId', '==', courseId));
-      } else {
-        quizQuery = query(quizzesRef, where('courseId', '==', courseId), where('type', '==', source));
-      }
-      const quizSnap = await getDocs(quizQuery);
+      const quizQuery = source === 'all'
+        ? query(quizzesRef, where('courseId', '==', courseId))
+        : query(quizzesRef, where('courseId', '==', courseId), where('type', '==', source));
+
+      const [quizSnap, usersSnap] = await Promise.all([
+        getDocs(quizQuery),
+        getDocs(query(collection(db, 'users'), where('role', '==', 'student'), where('courseId', '==', courseId))),
+      ]);
+
       const quizzes: QuizDoc[] = [];
       const quizIds: string[] = [];
-
       quizSnap.forEach(d => {
         const data = d.data();
         quizzes.push({
@@ -142,9 +143,6 @@ export function useProfessorStats() {
         return;
       }
 
-      // 2) 학생 목록 조회 → userId → classType 맵 (서버에서 courseId 필터)
-      const usersRef = collection(db, 'users');
-      const usersSnap = await getDocs(query(usersRef, where('role', '==', 'student'), where('courseId', '==', courseId)));
       const userClassMap: Record<string, ClassType> = {};
       usersSnap.forEach(d => {
         const u = d.data();

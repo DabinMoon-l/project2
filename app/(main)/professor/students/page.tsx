@@ -1,41 +1,66 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { httpsCallable } from 'firebase/functions';
-import { collection, getDocs } from 'firebase/firestore';
-import { db, functions } from '@/lib/firebase';
-import { Header } from '@/components/common';
+/* eslint-disable @next/next/no-img-element */
+import { COURSES, type CourseId } from '@/lib/types/course';
 import {
   useProfessorStudents,
   type StudentDetail,
-  type StudentFilterOptions,
   type ClassType,
 } from '@/lib/hooks/useProfessorStudents';
 import { useCourse } from '@/lib/contexts';
 import { mean, sd, zScore } from '@/lib/utils/statistics';
 
-import LiveSessionPanel from '@/components/professor/students/LiveSessionPanel';
 import StudentListView, { type SortKey } from '@/components/professor/students/StudentListView';
 import StudentDetailModal from '@/components/professor/students/StudentDetailModal';
-import EarlyWarning, { type WarningItem } from '@/components/professor/students/EarlyWarning';
 import StudentEnrollment from '@/components/professor/StudentEnrollment';
+
+// ============================================================
+// 접속 상태 유틸
+// ============================================================
+
+function getOnlineStatus(lastActiveAt: Date): 'online' | 'offline' {
+  const diff = Date.now() - lastActiveAt.getTime();
+  if (diff < 60 * 1000) return 'online'; // 1분 이내 활동 = 접속 중 (하트비트 30초 기준)
+  return 'offline';
+}
+
+// ============================================================
+// 경고 아이템 타입 (StudentListView에 전달)
+// ============================================================
+
+export interface WarningItem {
+  uid: string;
+  level: 'caution' | 'danger';
+}
+
+// ============================================================
+// 메인 페이지
+// ============================================================
 
 export default function StudentMonitoringPage() {
   const {
     students,
     loading,
     error,
-    fetchStudents,
+    subscribeStudents,
     fetchStudentDetail,
     clearError,
   } = useProfessorStudents();
 
-  const { userCourseId } = useCourse();
+  const { userCourseId, setProfessorCourse } = useCourse();
 
   const [selectedClass, setSelectedClass] = useState<ClassType | 'all'>('all');
-  const [sortBy, setSortBy] = useState<SortKey>('status');
+  const [sortBy, setSortBy] = useState<SortKey>('studentId');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // 검색 디바운스 (300ms)
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // 학생 상세 모달
   const [selectedStudentDetail, setSelectedStudentDetail] = useState<StudentDetail | null>(null);
@@ -44,84 +69,99 @@ export default function StudentMonitoringPage() {
   // 학생 등록 모달
   const [showEnrollment, setShowEnrollment] = useState(false);
 
-  // 비밀번호 초기화 모달
-  const [showResetPw, setShowResetPw] = useState(false);
-  const [resetStudentId, setResetStudentId] = useState('');
-  const [resetNewPassword, setResetNewPassword] = useState('');
-  const [resetLoading, setResetLoading] = useState(false);
-  const [resetResult, setResetResult] = useState<string | null>(null);
+  // students ref (handleStudentClick에서 참조 — 콜백 재생성 방지)
+  const studentsRef = useRef(students);
+  studentsRef.current = students;
 
-  // 가입 현황
-  const [enrolledCount, setEnrolledCount] = useState<{ total: number; registered: number } | null>(null);
-
-  // 데이터 로드
-  useEffect(() => {
-    const options: StudentFilterOptions = {
-      classId: selectedClass,
-      sortBy: 'activity',
-      sortOrder: 'desc',
-      searchQuery: searchQuery.trim() || undefined,
-    };
-    fetchStudents(options);
-  }, [selectedClass, searchQuery, fetchStudents]);
-
-  // 가입 현황 로드
-  const loadEnrolledCount = useCallback(async () => {
-    if (!userCourseId) return;
-    try {
-      const snapshot = await getDocs(
-        collection(db, 'enrolledStudents', userCourseId, 'students')
-      );
-      let total = 0;
-      let registered = 0;
-      snapshot.forEach(doc => {
-        total++;
-        if (doc.data().isRegistered) registered++;
-      });
-      setEnrolledCount({ total, registered });
-    } catch {
-      // enrolledStudents 컬렉션이 없을 수 있음
-    }
-  }, [userCourseId]);
+  // 스크롤 맨 위로 (도넛 섹션 기준)
+  const donutRef = useRef<HTMLDivElement>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
 
   useEffect(() => {
-    loadEnrolledCount();
-  }, [loadEnrolledCount]);
+    const el = donutRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      setShowScrollTop(!entry.isIntersecting);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
-  // 필터된 학생
+  const scrollToTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  // 실시간 구독 (courseId 변경 시 재구독)
+  useEffect(() => {
+    if (userCourseId) subscribeStudents(userCourseId);
+  }, [userCourseId, subscribeStudents]);
+
+  // 필터된 학생 (반 + 검색)
   const filteredStudents = useMemo(() => {
-    if (selectedClass === 'all') return students;
-    return students.filter(s => s.classId === selectedClass);
-  }, [students, selectedClass]);
+    let list = students;
+    if (selectedClass !== 'all') {
+      list = list.filter(s => s.classId === selectedClass);
+    }
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.trim().toLowerCase();
+      list = list.filter(s =>
+        s.nickname.toLowerCase().includes(q) ||
+        s.studentId.toLowerCase().includes(q) ||
+        (s.name && s.name.toLowerCase().includes(q))
+      );
+    }
+    return list;
+  }, [students, selectedClass, debouncedSearch]);
 
-  // 경고 시스템
-  const warnings = useMemo((): WarningItem[] => {
+  // 실시간 접속 통계
+  const sessionStats = useMemo(() => {
+    let onlineCount = 0;
+    for (const s of filteredStudents) {
+      if (getOnlineStatus(s.lastActiveAt) === 'online') onlineCount++;
+    }
+    return { onlineCount, totalCount: filteredStudents.length };
+  }, [filteredStudents]);
+
+  // 경고 시스템 (StudentListView에 전달)
+  const warningMap = useMemo((): Map<string, WarningItem> => {
+    const map = new Map<string, WarningItem>();
     const scores = filteredStudents.map(s => s.quizStats.averageScore);
     const m = mean(scores);
     const s = sd(scores);
-    if (s === 0) return [];
+    if (s === 0) return map;
 
-    return filteredStudents
-      .map(student => {
-        const z = zScore(student.quizStats.averageScore, m, s);
-        if (z < -2.0) {
-          return { uid: student.uid, nickname: student.nickname, classId: student.classId, zScore: z, level: 'danger' as const, reason: 'Z < -2.0' };
-        }
-        if (z < -1.5) {
-          return { uid: student.uid, nickname: student.nickname, classId: student.classId, zScore: z, level: 'caution' as const, reason: 'Z < -1.5' };
-        }
-        return null;
-      })
-      .filter((w): w is WarningItem => w !== null);
+    filteredStudents.forEach(student => {
+      const z = zScore(student.quizStats.averageScore, m, s);
+      if (z < -2.0) {
+        map.set(student.uid, { uid: student.uid, level: 'danger' });
+      } else if (z < -1.5) {
+        map.set(student.uid, { uid: student.uid, level: 'caution' });
+      }
+    });
+    return map;
   }, [filteredStudents]);
 
-  // 학생 클릭
+  // 학생 클릭 — 즉시 모달 열기 + 백그라운드 로드
   const handleStudentClick = useCallback(async (uid: string) => {
-    const detail = await fetchStudentDetail(uid);
-    if (detail) {
-      setSelectedStudentDetail(detail);
-      setDetailOpen(true);
-    }
+    const basicStudent = studentsRef.current.find(s => s.uid === uid);
+    if (!basicStudent) return;
+
+    // 기본 데이터로 즉시 모달 열기 (상세 데이터는 빈값)
+    setSelectedStudentDetail({
+      ...basicStudent,
+      recentQuizzes: [],
+      recentFeedbacks: [],
+      boardPostCount: 0,
+      boardCommentCount: 0,
+      boardPosts: [],
+      boardCommentsList: [],
+      // radarMetrics: undefined → 로딩 상태
+    });
+    setDetailOpen(true);
+
+    // 상세 데이터 백그라운드 로드 (Phase 1 → 즉시 업데이트, Phase 2 → 최종 업데이트)
+    const detail = await fetchStudentDetail(uid, setSelectedStudentDetail);
+    if (detail) setSelectedStudentDetail(detail);
   }, [fetchStudentDetail]);
 
   // allStudents (모달에 전달)
@@ -133,113 +173,74 @@ export default function StudentMonitoringPage() {
     })),
   [students]);
 
-  // 비밀번호 초기화 처리
-  const handleResetPassword = useCallback(async () => {
-    if (!resetStudentId || !resetNewPassword || !userCourseId) return;
-
-    if (resetNewPassword.length < 6) {
-      setResetResult('비밀번호는 6자 이상이어야 합니다.');
-      return;
-    }
-
-    setResetLoading(true);
-    setResetResult(null);
-
-    try {
-      const resetFn = httpsCallable<
-        { studentId: string; courseId: string; newPassword: string },
-        { success: boolean; message: string }
-      >(functions, 'resetStudentPassword');
-
-      const response = await resetFn({
-        studentId: resetStudentId,
-        courseId: userCourseId,
-        newPassword: resetNewPassword,
-      });
-
-      setResetResult(response.data.message);
-      setResetNewPassword('');
-    } catch (err: unknown) {
-      const firebaseError = err as { message?: string };
-      setResetResult(firebaseError.message || '비밀번호 초기화에 실패했습니다.');
-    } finally {
-      setResetLoading(false);
-    }
-  }, [resetStudentId, resetNewPassword, userCourseId]);
-
   const CLASS_OPTIONS: (ClassType | 'all')[] = ['all', 'A', 'B', 'C', 'D'];
 
+  const handleCourseChange = useCallback((courseId: CourseId) => {
+    setProfessorCourse(courseId);
+  }, [setProfessorCourse]);
+
   return (
-    <div className="min-h-screen bg-[#F5F0E8] pb-24">
-      <Header title="학생 모니터링" showBack />
+    <div className="min-h-screen pb-24 bg-[#F5F0E8]">
+      <header className="flex flex-col items-center">
+        <StudentsRibbonHeader
+          currentCourseId={userCourseId || 'biology'}
+          onCourseChange={handleCourseChange}
+        />
+      </header>
 
-      <div className="px-4 py-3 space-y-4">
-        {/* 학생 등록 + 비밀번호 초기화 버튼 */}
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowEnrollment(true)}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 border-2 border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold hover:bg-[#333]"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-            </svg>
-            학생 등록
-          </button>
-          <button
-            onClick={() => setShowResetPw(true)}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 border-2 border-[#1A1A1A] bg-[#FDFBF7] text-[#1A1A1A] text-xs font-bold hover:bg-[#EBE5D9]"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-            </svg>
-            비번 초기화
-          </button>
-        </div>
-
-        {/* 가입 현황 */}
-        {enrolledCount && (
-          <div className="flex items-center gap-2 px-3 py-2 bg-[#FDFBF7] border border-[#D4CFC4] text-xs text-[#5C5C5C]">
-            <span>등록: <b className="text-[#1A1A1A]">{enrolledCount.total}명</b></span>
-            <span>·</span>
-            <span>가입 완료: <b className="text-green-700">{enrolledCount.registered}명</b></span>
-            <span>·</span>
-            <span>미가입: <b className="text-orange-600">{enrolledCount.total - enrolledCount.registered}명</b></span>
+      <div className="px-4 mt-2">
+        {/* 반 필터 (퀴즈탭 토글 스타일) + 검색 — 같은 줄 */}
+        <div className="flex items-center justify-between">
+          {/* 세그먼트 토글 */}
+          <div className="relative flex w-[252px] bg-[#EDEAE4] border border-[#1A1A1A] overflow-hidden flex-shrink-0">
+            <motion.div
+              className="absolute inset-y-0 bg-[#1A1A1A]"
+              initial={false}
+              animate={{ left: `${CLASS_OPTIONS.indexOf(selectedClass) * (100 / CLASS_OPTIONS.length)}%` }}
+              style={{ width: `${100 / CLASS_OPTIONS.length}%` }}
+              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            />
+            {CLASS_OPTIONS.map(cls => (
+              <button
+                key={cls}
+                onClick={() => setSelectedClass(cls)}
+                className={`relative z-10 w-1/5 py-3 text-sm font-bold transition-colors text-center whitespace-nowrap ${
+                  selectedClass === cls ? 'text-[#F5F0E8]' : 'text-[#1A1A1A]'
+                }`}
+              >
+                {cls === 'all' ? 'ALL' : cls}
+              </button>
+            ))}
           </div>
-        )}
 
-        {/* 검색 + 반 필터 */}
-        <div className="space-y-2">
-          <div className="relative">
+          {/* 검색 */}
+          <div className="relative w-[145px]">
             <input
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="학생 이름 또는 학번 검색..."
-              className="w-full pl-9 pr-4 py-2 bg-[#FDFBF7] border-2 border-[#1A1A1A] text-sm text-[#1A1A1A] placeholder-[#5C5C5C] outline-none"
+              placeholder="이름·학번·닉네임"
+              className="w-full pl-6 pr-3 py-3 bg-[#EDEAE4] border border-[#1A1A1A] text-sm text-center text-[#1A1A1A] placeholder-[#5C5C5C] outline-none"
             />
-            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5C5C5C]"
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5C5C5C]"
               fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </div>
-
-          <div className="flex gap-1">
-            {CLASS_OPTIONS.map(cls => (
-              <button
-                key={cls}
-                onClick={() => setSelectedClass(cls)}
-                className={`px-3 py-1 text-xs font-bold border border-[#1A1A1A] ${
-                  selectedClass === cls
-                    ? 'bg-[#1A1A1A] text-[#F5F0E8]'
-                    : 'bg-[#FDFBF7] text-[#1A1A1A]'
-                }`}
-              >
-                {cls === 'all' ? '전체' : `${cls}반`}
-              </button>
-            ))}
-          </div>
         </div>
+
+        <div className="h-3" />
+
+        {/* 실시간 접속 — 도넛 차트 + 범례 */}
+        <div ref={donutRef} />
+        <SessionDonut
+          online={sessionStats.onlineCount}
+          total={sessionStats.totalCount}
+          classFilter={selectedClass}
+        />
+
+        <div className="h-3" />
 
         {/* 에러 */}
         {error && (
@@ -262,24 +263,25 @@ export default function StudentMonitoringPage() {
 
         {!loading && (
           <>
-            {/* 실시간 세션 패널 */}
-            <LiveSessionPanel students={filteredStudents} />
-
-            {/* 조기 경고 */}
-            <EarlyWarning warnings={warnings} onStudentClick={handleStudentClick} />
-
             {/* 학생 목록 */}
-            <div className="border-2 border-[#1A1A1A] bg-[#FDFBF7] p-3">
-              <h3 className="text-sm font-bold text-[#1A1A1A] mb-3">
-                학생 목록 ({filteredStudents.length}명)
-              </h3>
-              <StudentListView
-                students={filteredStudents}
-                sortBy={sortBy}
-                onSortChange={setSortBy}
-                onStudentClick={handleStudentClick}
-              />
-            </div>
+            <StudentListView
+              students={filteredStudents}
+              sortBy={sortBy}
+              onSortChange={setSortBy}
+              onStudentClick={handleStudentClick}
+              warningMap={warningMap}
+            />
+
+            <div className="h-8" />
+
+            {/* 학생 등록 버튼 (목록 하단) */}
+            <button
+              onClick={() => setShowEnrollment(true)}
+              className="w-full py-3 border-2 border-dashed border-[#D4CFC4] text-sm font-bold text-[#5C5C5C]
+                hover:border-[#1A1A1A] hover:text-[#1A1A1A] transition-colors"
+            >
+              + 학생 등록
+            </button>
           </>
         )}
       </div>
@@ -292,6 +294,24 @@ export default function StudentMonitoringPage() {
         onClose={() => setDetailOpen(false)}
       />
 
+      {/* 스크롤 맨 위로 */}
+      <AnimatePresence>
+        {showScrollTop && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            onClick={scrollToTop}
+            className="fixed bottom-24 right-4 z-40 w-12 h-12 bg-[#1A1A1A] text-[#F5F0E8] rounded-full shadow-lg flex items-center justify-center hover:bg-[#3A3A3A] transition-colors"
+            aria-label="맨 위로"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+            </svg>
+          </motion.button>
+        )}
+      </AnimatePresence>
+
       {/* 학생 등록 모달 */}
       <AnimatePresence>
         {showEnrollment && userCourseId && (
@@ -299,87 +319,214 @@ export default function StudentMonitoringPage() {
             courseId={userCourseId}
             onClose={() => setShowEnrollment(false)}
             onComplete={() => {
-              loadEnrolledCount();
-              fetchStudents({ classId: selectedClass, sortBy: 'activity', sortOrder: 'desc' });
+              // onSnapshot이 자동으로 갱신하므로 별도 호출 불필요
             }}
           />
         )}
       </AnimatePresence>
 
-      {/* 비밀번호 초기화 모달 */}
-      <AnimatePresence>
-        {showResetPw && (
+    </div>
+  );
+}
+
+// ============================================================
+// 과목 리본 스와이프 헤더
+// ============================================================
+
+const COURSE_IDS: CourseId[] = ['biology', 'microbiology', 'pathophysiology'];
+
+function StudentsRibbonHeader({
+  currentCourseId,
+  onCourseChange,
+}: {
+  currentCourseId: CourseId;
+  onCourseChange: (courseId: CourseId) => void;
+}) {
+  const currentIndex = COURSE_IDS.indexOf(currentCourseId);
+  const course = COURSES[currentCourseId];
+  const ribbonImage = course?.studentsRibbonImage || '/images/biology-students-ribbon.png';
+  const ribbonScale = course?.studentsRibbonScale || 1;
+
+  const goToPrev = () => {
+    const prevIdx = (currentIndex - 1 + COURSE_IDS.length) % COURSE_IDS.length;
+    onCourseChange(COURSE_IDS[prevIdx]);
+  };
+
+  const goToNext = () => {
+    const nextIdx = (currentIndex + 1) % COURSE_IDS.length;
+    onCourseChange(COURSE_IDS[nextIdx]);
+  };
+
+  // 터치 + 마우스 드래그 스와이프 (세로 스크롤 허용)
+  const swipeStartX = useRef(0);
+  const swipeStartY = useRef(0);
+  const swipeDir = useRef<'none' | 'horizontal' | 'vertical'>('none');
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    swipeStartX.current = e.touches[0].clientX;
+    swipeStartY.current = e.touches[0].clientY;
+    swipeDir.current = 'none';
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (swipeDir.current !== 'none') return;
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - swipeStartX.current;
+    const dy = touch.clientY - swipeStartY.current;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
+      if (dx > 0) goToPrev();
+      else goToNext();
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (swipeDir.current !== 'none') return;
+    const dx = Math.abs(e.touches[0].clientX - swipeStartX.current);
+    const dy = Math.abs(e.touches[0].clientY - swipeStartY.current);
+    if (dx > 10 || dy > 10) {
+      swipeDir.current = dx > dy ? 'horizontal' : 'vertical';
+    }
+  };
+
+  // PC 마우스 드래그
+  const mouseStartX = useRef(0);
+  const isMouseDragging = useRef(false);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    mouseStartX.current = e.clientX;
+    isMouseDragging.current = true;
+  };
+
+  const handleMouseUp = (e: React.MouseEvent) => {
+    if (!isMouseDragging.current) return;
+    isMouseDragging.current = false;
+    const diff = e.clientX - mouseStartX.current;
+    if (diff > 40) goToPrev();
+    else if (diff < -40) goToNext();
+  };
+
+  return (
+    <div className="flex flex-col items-center">
+      {/* 리본 이미지 — 터치/마우스 드래그로 과목 전환 */}
+      <div
+        className="w-full h-[260px] pt-2 cursor-grab active:cursor-grabbing select-none"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onMouseDown={handleMouseDown}
+        onMouseUp={handleMouseUp}
+        data-no-pull-x
+        style={{ touchAction: 'pan-y' }}
+      >
+        <AnimatePresence mode="wait">
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setShowResetPw(false)}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+            key={currentCourseId}
+            initial={{ opacity: 0, x: 30 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -30 }}
+            transition={{ duration: 0.2 }}
+            className="w-full h-full"
           >
-            <motion.div
-              initial={{ scale: 0.95 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.95 }}
-              onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-sm bg-[#FDFBF7] border-2 border-[#1A1A1A] p-4 space-y-4"
-            >
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-[#1A1A1A]">비밀번호 초기화</h3>
-                <button
-                  onClick={() => {
-                    setShowResetPw(false);
-                    setResetResult(null);
-                    setResetStudentId('');
-                    setResetNewPassword('');
-                  }}
-                  className="text-[#5C5C5C]"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              <div className="space-y-3">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="학번"
-                  value={resetStudentId}
-                  onChange={(e) => setResetStudentId(e.target.value.replace(/\D/g, ''))}
-                  maxLength={10}
-                  className="w-full px-3 py-2 border border-[#D4CFC4] text-sm bg-white focus:outline-none focus:border-[#1A1A1A]"
-                />
-                <input
-                  type="text"
-                  placeholder="새 비밀번호 (6자 이상)"
-                  value={resetNewPassword}
-                  onChange={(e) => setResetNewPassword(e.target.value)}
-                  className="w-full px-3 py-2 border border-[#D4CFC4] text-sm bg-white focus:outline-none focus:border-[#1A1A1A]"
-                />
-              </div>
-
-              {resetResult && (
-                <div className={`p-2 text-xs border ${
-                  resetResult.includes('초기화되었습니다')
-                    ? 'border-green-300 bg-green-50 text-green-700'
-                    : 'border-red-300 bg-red-50 text-red-700'
-                }`}>
-                  {resetResult}
-                </div>
-              )}
-
-              <button
-                onClick={handleResetPassword}
-                disabled={resetLoading || !resetStudentId || !resetNewPassword}
-                className="w-full py-2.5 bg-[#1A1A1A] text-[#F5F0E8] font-bold text-sm disabled:opacity-50"
-              >
-                {resetLoading ? '처리 중...' : '비밀번호 초기화'}
-              </button>
-            </motion.div>
+            <img
+              src={ribbonImage}
+              alt={course?.name || 'Students'}
+              className="w-full h-full object-contain pointer-events-none"
+              style={{ transform: `scale(${ribbonScale}) scaleX(1.15)` }}
+              draggable={false}
+            />
           </motion.div>
-        )}
-      </AnimatePresence>
+        </AnimatePresence>
+      </div>
+
+      {/* 페이지네이션 도트 — mb-2로 아래 콘텐츠와 간격 확보 */}
+      <div className="flex justify-center gap-2 mt-3 mb-2">
+        {COURSE_IDS.map((id, idx) => (
+          <button
+            key={id}
+            onClick={() => onCourseChange(id)}
+            className={`w-2 h-2 rounded-full transition-all ${
+              idx === currentIndex ? 'bg-[#1A1A1A] w-4' : 'bg-[#D4CFC4]'
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// 접속 도넛 차트 + 범례
+// ============================================================
+
+function SessionDonut({ online, total, classFilter }: { online: number; total: number; classFilter: string }) {
+  const offline = total - online;
+  const onlinePct = total > 0 ? Math.round((online / total) * 100) : 0;
+
+  // SVG 도넛
+  const R = 42;
+  const C = 2 * Math.PI * R;
+  const onlineLen = (onlinePct / 100) * C;
+
+  // 애니메이션 키 — classFilter가 바뀔 때만 리트리거 (모달/탭 변경은 무시)
+  const animKey = `donut-${classFilter}`;
+
+  return (
+    <div className="flex items-center justify-center gap-14 py-2">
+      {/* 도넛 차트 */}
+      <div className="flex-shrink-0 w-[225px] h-[225px]">
+        <svg width="225" height="225" viewBox="0 0 100 100">
+          {/* 오프라인 링 */}
+          <circle
+            cx="50" cy="50" r={R} fill="none"
+            stroke="#1A1A1A" strokeWidth="13" opacity="0.12"
+          />
+          {/* 접속 중 — 채움 애니메이션 */}
+          {onlinePct > 0 && (
+            <motion.circle
+              key={animKey}
+              cx="50" cy="50" r={R} fill="none"
+              stroke="#1A1A1A" strokeWidth="13"
+              strokeLinecap="round"
+              transform="rotate(-90 50 50)"
+              initial={{ strokeDasharray: `0 ${C}` }}
+              animate={{ strokeDasharray: `${onlineLen} ${C - onlineLen}` }}
+              transition={{ duration: 0.8, ease: 'easeOut' }}
+            />
+          )}
+          {/* 중앙 퍼센트 */}
+          <text x="50" y="50" textAnchor="middle" dominantBaseline="central" className="font-bold text-[20px] fill-[#1A1A1A]">
+            {onlinePct}%
+          </text>
+        </svg>
+      </div>
+
+      {/* 범례 */}
+      <div className="w-[195px] space-y-3">
+        {/* 전체 */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-5 h-5 rounded-full flex-shrink-0 border-2 border-[#1A1A1A] bg-[#1A1A1A]/50" />
+            <span className="text-xl font-bold text-[#1A1A1A]">전체</span>
+          </div>
+          <span className="text-3xl font-bold text-[#1A1A1A]">{total}<span className="text-lg text-[#5C5C5C] font-normal ml-0.5">명</span></span>
+        </div>
+        {/* 접속 중 */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-5 h-5 rounded-full bg-[#1A1A1A] flex-shrink-0" />
+            <span className="text-xl font-bold text-[#1A1A1A]">접속 중</span>
+          </div>
+          <span className="text-3xl font-bold text-[#1A1A1A]">{online}<span className="text-lg text-[#5C5C5C] font-normal ml-0.5">명</span></span>
+        </div>
+        {/* 오프라인 */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-5 h-5 rounded-full border-2 border-[#1A1A1A] bg-[#F5F0E8] flex-shrink-0" />
+            <span className="text-xl font-bold text-[#1A1A1A]">오프라인</span>
+          </div>
+          <span className="text-3xl font-bold text-[#1A1A1A]">{offline}<span className="text-lg text-[#5C5C5C] font-normal ml-0.5">명</span></span>
+        </div>
+      </div>
     </div>
   );
 }

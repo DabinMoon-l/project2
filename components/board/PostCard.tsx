@@ -10,6 +10,8 @@ interface PostCardProps {
   post: Post;
   /** 클릭 핸들러 */
   onClick: () => void;
+  /** 교수님 여부 (이름 표시용) */
+  isProfessor?: boolean;
 }
 
 /**
@@ -40,7 +42,7 @@ function formatDate(date: Date): string {
  * 제목, 작성자, 좋아요 수, 댓글 수를 표시합니다.
  * React.memo로 불필요한 리렌더링 방지
  */
-function PostCard({ post, onClick }: PostCardProps) {
+function PostCard({ post, onClick, isProfessor }: PostCardProps) {
   // 날짜 메모이제이션
   const formattedDate = useMemo(
     () => formatDate(post.createdAt),
@@ -85,9 +87,9 @@ function PostCard({ post, onClick }: PostCardProps) {
 
       {/* 푸터: 작성자, 좋아요, 댓글 */}
       <div className="flex items-center justify-between">
-        {/* 작성자: 닉네임·반 형식 */}
+        {/* 작성자: 교수님에겐 이름 닉넴·반, 학생에겐 닉넴·반 */}
         <span className="text-xs text-gray-500">
-          {post.authorNickname}·{post.authorClassType || '?'}반
+          {isProfessor && post.authorName ? `${post.authorName} ` : ''}{post.authorNickname}·{post.authorClassType || '?'}반
         </span>
 
         {/* 좋아요, 댓글 수 */}

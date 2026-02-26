@@ -17,6 +17,12 @@ interface CommentItemProps {
   isDeleting?: boolean;
   isEditing?: boolean;
   isReply?: boolean;
+  /** 교수님 여부 (이름 표시용) */
+  isProfessor?: boolean;
+  /** 작성자 실명 맵 (uid → name) */
+  authorNameMap?: Map<string, string>;
+  /** 게시글 작성자 uid (글쓴이 표시용) */
+  postAuthorId?: string;
 }
 
 /**
@@ -55,8 +61,12 @@ export default function CommentItem({
   isDeleting = false,
   isEditing: isEditingProp = false,
   isReply = false,
+  isProfessor = false,
+  authorNameMap,
+  postAuthorId,
 }: CommentItemProps) {
   const { theme } = useTheme();
+  const isPostAuthor = !!(postAuthorId && comment.authorId === postAuthorId);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editContent, setEditContent] = useState(comment.content);
@@ -70,9 +80,10 @@ export default function CommentItem({
 
   const isOwner = currentUserId === comment.authorId;
 
-  // 작성자 표시: 반 정보 있으면 닉네임·반, 없으면(교수님) 닉네임만
+  // 작성자 표시: 교수님에겐 이름 닉네임·반, 학생에겐 닉네임·반
+  const realName = isProfessor && authorNameMap ? authorNameMap.get(comment.authorId) : undefined;
   const authorDisplay = comment.authorClassType
-    ? `${comment.authorNickname}·${comment.authorClassType}반`
+    ? `${realName ? `${realName} ` : ''}${comment.authorNickname}·${comment.authorClassType}반`
     : comment.authorNickname;
 
   const handleDeleteClick = () => {
@@ -117,11 +128,19 @@ export default function CommentItem({
         <div className="flex items-center gap-1.5">
           <span
             className="text-[16px] font-semibold"
-            style={{ color: theme.colors.text }}
+            style={{ color: isPostAuthor ? theme.colors.accent : theme.colors.text }}
           >
             {isReply && <span className="text-[13px] font-bold text-[#999] mr-1">ㄴ</span>}
             {authorDisplay}
           </span>
+          {isPostAuthor && (
+            <span
+              className="text-[10px] font-bold px-1.5 py-0.5 border"
+              style={{ color: theme.colors.accent, borderColor: theme.colors.accent }}
+            >
+              글쓴이
+            </span>
+          )}
           <span className="text-[#AAAAAA] text-[13px]">·</span>
           <span className="text-[14px] text-[#999999]">
             {formatDate(comment.createdAt)}

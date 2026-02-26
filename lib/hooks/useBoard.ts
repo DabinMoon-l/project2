@@ -58,6 +58,7 @@ export interface Post {
   id: string;
   title: string;
   content: string;
+  authorName?: string; // 실명 (교수님 화면에서 사용)
   imageUrl?: string; // 대표 이미지 (하위 호환)
   imageUrls?: string[]; // 여러 이미지
   fileUrls?: AttachedFile[]; // 첨부 파일 목록
@@ -508,17 +509,17 @@ interface UseMyPostsReturn {
  *
  * @returns 내 글 목록, 로딩 상태, 에러, 추가 로드 함수
  */
-export const useMyPosts = (): UseMyPostsReturn => {
+export const useMyPosts = (skip = false): UseMyPostsReturn => {
   const { user } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!skip);
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot | null>(null);
 
   // 초기 로드
   const loadPosts = useCallback(async () => {
-    if (!user) {
+    if (!user || skip) {
       setLoading(false);
       return;
     }
@@ -546,11 +547,11 @@ export const useMyPosts = (): UseMyPostsReturn => {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, skip]);
 
   // 추가 로드 (무한 스크롤)
   const loadMore = useCallback(async () => {
-    if (!hasMore || loading || !lastDoc || !user) return;
+    if (!hasMore || loading || !lastDoc || !user || skip) return;
 
     try {
       setLoading(true);
@@ -1069,14 +1070,14 @@ export const useDeleteComment = (): UseDeleteCommentReturn => {
  *
  * @returns 내 댓글 목록, 로딩 상태, 에러
  */
-export const useMyComments = (): UseMyCommentsReturn => {
+export const useMyComments = (skip = false): UseMyCommentsReturn => {
   const { user } = useAuth();
   const [comments, setComments] = useState<(Comment & { postTitle?: string })[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!skip);
   const [error, setError] = useState<string | null>(null);
 
   const loadComments = useCallback(async () => {
-    if (!user) {
+    if (!user || skip) {
       setLoading(false);
       return;
     }
@@ -1132,7 +1133,7 @@ export const useMyComments = (): UseMyCommentsReturn => {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, skip]);
 
   const refresh = useCallback(async () => {
     await loadComments();
@@ -1385,14 +1386,14 @@ export const useCommentLike = (): UseCommentLikeReturn => {
  *
  * @returns 좋아요한 글 목록, 로딩 상태, 에러
  */
-export const useMyLikedPosts = (): UseMyLikedPostsReturn => {
+export const useMyLikedPosts = (skip = false): UseMyLikedPostsReturn => {
   const { user } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!skip);
   const [error, setError] = useState<string | null>(null);
 
   const loadLikedPosts = useCallback(async () => {
-    if (!user) {
+    if (!user || skip) {
       setLoading(false);
       return;
     }
@@ -1420,7 +1421,7 @@ export const useMyLikedPosts = (): UseMyLikedPostsReturn => {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, skip]);
 
   const refresh = useCallback(async () => {
     await loadLikedPosts();
@@ -1720,27 +1721,31 @@ export const useAllPostsForCourse = (courseId?: string): UseAllPostsForCourseRet
     setLoading(true);
     setError(null);
 
-    const allQuery = query(
-      collection(db, 'posts'),
-      where('courseId', '==', courseId),
-      orderBy('createdAt', 'desc'),
-      limit(200)
-    );
-
-    const unsubscribe = onSnapshot(
-      allQuery,
-      (snapshot) => {
-        setPosts(snapshot.docs.map(docToPost));
-        setLoading(false);
-      },
-      (err) => {
-        console.error('전체 게시글 실시간 구독 실패:', err);
-        setError('게시글을 불러오는데 실패했습니다.');
-        setLoading(false);
+    let cancelled = false;
+    const loadPosts = async () => {
+      try {
+        const allQuery = query(
+          collection(db, 'posts'),
+          where('courseId', '==', courseId),
+          orderBy('createdAt', 'desc'),
+          limit(200)
+        );
+        const snapshot = await getDocs(allQuery);
+        if (!cancelled) {
+          setPosts(snapshot.docs.map(docToPost));
+          setLoading(false);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error('전체 게시글 로드 실패:', err);
+          setError('게시글을 불러오는데 실패했습니다.');
+          setLoading(false);
+        }
       }
-    );
+    };
 
-    return () => unsubscribe();
+    loadPosts();
+    return () => { cancelled = true; };
   }, [courseId]);
 
   return { posts, loading, error };

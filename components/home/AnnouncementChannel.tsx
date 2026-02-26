@@ -1204,6 +1204,9 @@ const AnnouncementMessageItem = memo(function AnnouncementMessageItem({
   );
 });
 
+// ─── 모듈 레벨 캐시 (재마운트 시 즉시 표시) ──────────────
+const announcementCache = new Map<string, Announcement[]>();
+
 // ─── 메인 컴포넌트 ──────────────────────────────────────
 
 export default function AnnouncementChannel({
@@ -1220,8 +1223,10 @@ export default function AnnouncementChannel({
   const { uploadImage, uploadFile, uploadMultipleImages, uploadMultipleFiles, loading: uploadLoading } = useUpload();
   const { bottomOffset } = useKeyboardAware();
 
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [loading, setLoading] = useState(true);
+  // 캐시된 데이터가 있으면 즉시 표시 (loading=false)
+  const cached = userCourseId ? announcementCache.get(userCourseId) : undefined;
+  const [announcements, setAnnouncements] = useState<Announcement[]>(cached ?? []);
+  const [loading, setLoading] = useState(!cached);
   const [showModal, setShowModal] = useState(false);
   const [showMedia, setShowMedia] = useState<false | 'all' | 'images' | 'files'>(false);
   const [hasText, setHasText] = useState(false);
@@ -1264,6 +1269,22 @@ export default function AnnouncementChannel({
   const [inputOverflows, setInputOverflows] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // courseId 변경 시 캐시에서 즉시 복원 (과목 전환)
+  const prevCourseRef = useRef(userCourseId);
+  useEffect(() => {
+    if (userCourseId && userCourseId !== prevCourseRef.current) {
+      prevCourseRef.current = userCourseId;
+      const c = announcementCache.get(userCourseId);
+      if (c) {
+        setAnnouncements(c);
+        setLoading(false);
+      } else {
+        setAnnouncements([]);
+        setLoading(true);
+      }
+    }
+  }, [userCourseId]);
+
   const scrollFabRef = useRef(false);
   const previewRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -1300,10 +1321,11 @@ export default function AnnouncementChannel({
   // ─── 공지 구독 (증분 업데이트: 변경된 문서만 새 객체 생성 → memo 유지)
   useEffect(() => {
     if (!userCourseId) return;
+    const cid = userCourseId;
     let isFirst = true;
     const q = query(
       collection(db, 'announcements'),
-      where('courseId', '==', userCourseId),
+      where('courseId', '==', cid),
       orderBy('createdAt', 'desc'),
       limit(100),
     );
@@ -1311,7 +1333,9 @@ export default function AnnouncementChannel({
       if (isFirst) {
         // 최초 로드: 전부 생성
         isFirst = false;
-        setAnnouncements(snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Announcement[]);
+        const data = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Announcement[];
+        setAnnouncements(data);
+        announcementCache.set(cid, data);
         setLoading(false);
         return;
       }
@@ -1327,11 +1351,13 @@ export default function AnnouncementChannel({
             map.set(change.doc.id, { id: change.doc.id, ...change.doc.data() } as Announcement);
           }
         });
-        return Array.from(map.values()).sort((a, b) => {
+        const sorted = Array.from(map.values()).sort((a, b) => {
           const ta = a.createdAt?.toMillis() ?? 0;
           const tb = b.createdAt?.toMillis() ?? 0;
           return tb - ta;
         });
+        announcementCache.set(cid, sorted);
+        return sorted;
       });
     });
     return () => unsub();

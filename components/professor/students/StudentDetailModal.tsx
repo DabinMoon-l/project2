@@ -54,6 +54,15 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
   const [detailsData, setDetailsData] = useState<QuizDetailsData | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
 
+  // 학생 변경 시 탭 초기화 (종합 역량으로)
+  useEffect(() => {
+    if (student?.uid) {
+      setActiveTab('radar');
+      setQuizLog([]);
+      setDetailsData(null);
+    }
+  }, [student?.uid]);
+
   // 퀴즈 로그 로드 — quizCreatorId로 사용자 역할/이름 조회
   const loadQuizLog = useCallback(async (uid: string) => {
     setLogLoading(true);
@@ -207,12 +216,10 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
 
   if (!student || !isOpen) return null;
 
-  // 학업 성취도 — quizLog에서 직접 평균 계산 (Firestore averageScore가 갱신되지 않으므로)
-  const studentAvg = quizLog.length > 0
-    ? quizLog.reduce((sum, q) => sum + q.score, 0) / quizLog.length
-    : 0;
-  const classMates = allStudents.filter(s => s.classId === student.classId);
-  const classScores = classMates.map(s => s.averageScore);
+  // 학업 성취도 — 가중 석차 점수 기반 (교수 퀴즈 ×6, 학생 퀴즈 ×4)
+  const studentAvg = student.weightedScore ?? 0;
+  const classMates = (student.classWeightedScores ?? []).filter(s => s.classId === student.classId);
+  const classScores = classMates.map(s => s.score);
   const classMean = mean(classScores);
   const classSd = sd(classScores);
   const studentZ = zScore(studentAvg, classMean, classSd);
@@ -328,18 +335,29 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
               </div>
             )}
 
-            {/* A) 학업 성취도 — 박스 없이 */}
+            {/* A) 학업 성취도 — 가중 석차 점수 기반 */}
             {activeTab === 'academic' && (
               <div className="space-y-6">
                 {/* 핵심 지표 — 그리드, 박스 없이 */}
+                {student.weightedScore === undefined ? (
+                  /* 데이터 로딩 중 스켈레톤 */
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-4">
+                    {[1, 2, 3, 4].map(i => (
+                      <div key={i}>
+                        <div className="h-4 w-16 bg-[#D4CFC4]/50 rounded animate-pulse mb-1" />
+                        <div className="h-6 w-20 bg-[#D4CFC4]/50 rounded animate-pulse" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
                 <div className="grid grid-cols-2 gap-x-4 gap-y-4">
                   <div>
-                    <p className="text-sm text-[#5C5C5C]">평균 점수</p>
-                    <p className="text-xl font-bold text-[#1A1A1A]">{studentAvg.toFixed(1)}점</p>
+                    <p className="text-sm text-[#5C5C5C]">성취 지수</p>
+                    <p className="text-xl font-bold text-[#1A1A1A]">{studentAvg.toFixed(1)}</p>
                   </div>
                   <div>
                     <p className="text-sm text-[#5C5C5C]">반 평균</p>
-                    <p className="text-xl font-bold text-[#1A1A1A]">{classMean.toFixed(1)}점</p>
+                    <p className="text-xl font-bold text-[#1A1A1A]">{classMean.toFixed(1)}</p>
                   </div>
                   <div>
                     <p className="text-sm text-[#5C5C5C]">Z-score</p>
@@ -352,6 +370,7 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
                     <p className="text-xl font-bold text-[#1A1A1A]">상위 {100 - studentPercentile}%</p>
                   </div>
                 </div>
+                )}
 
                 {/* 구분선 */}
                 <div className="border-t border-[#D4CFC4]" />

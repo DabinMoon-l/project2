@@ -165,14 +165,45 @@ export function useProfessorAnalysis(): UseProfessorAnalysisReturn {
         const difficultyCount = { easy: 0, normal: 0, hard: 0 };
         const typeCount = { ox: 0, multiple: 0, subjective: 0 };
 
-        // 2. 각 퀴즈의 문제별 분석 데이터 수집
+        // 2. quizResults + feedbacks 배치 병렬 조회 (N+1 제거)
+        const allQuizIds = quizzesSnap.docs.map(d => d.id);
+        const filteredQuizIds = options.quizId
+          ? allQuizIds.filter(id => id === options.quizId)
+          : allQuizIds;
+
+        // Firestore `in` 최대 30개 → 배치 병렬
+        const resultsBatchPromises = [];
+        const feedbacksBatchPromises = [];
+        for (let i = 0; i < filteredQuizIds.length; i += 30) {
+          const batch = filteredQuizIds.slice(i, i + 30);
+          resultsBatchPromises.push(getDocs(query(collection(db, 'quizResults'), where('quizId', 'in', batch))));
+          feedbacksBatchPromises.push(getDocs(query(collection(db, 'feedbacks'), where('quizId', 'in', batch))));
+        }
+        const [resultsBatches, feedbacksBatches] = await Promise.all([
+          Promise.all(resultsBatchPromises),
+          Promise.all(feedbacksBatchPromises),
+        ]);
+
+        // quizId별로 그룹핑
+        const resultsByQuiz = new Map<string, any[]>();
+        resultsBatches.forEach(snap => snap.docs.forEach(d => {
+          const data = d.data();
+          if (!resultsByQuiz.has(data.quizId)) resultsByQuiz.set(data.quizId, []);
+          resultsByQuiz.get(data.quizId)!.push(data);
+        }));
+        const feedbacksByQuiz = new Map<string, any[]>();
+        feedbacksBatches.forEach(snap => snap.docs.forEach(d => {
+          const data = d.data();
+          if (!feedbacksByQuiz.has(data.quizId)) feedbacksByQuiz.set(data.quizId, []);
+          feedbacksByQuiz.get(data.quizId)!.push(data);
+        }));
+
+        // 3. 각 퀴즈의 문제별 분석 (DB 조회 없이 메모리에서 처리)
         for (const quizDoc of quizzesSnap.docs) {
           const quizData = quizDoc.data();
           const quizId = quizDoc.id;
 
-          // 특정 퀴즈 필터
           if (options.quizId && options.quizId !== quizId) continue;
-
           totalQuizzes++;
 
           const quizQuestions: Array<{
@@ -186,13 +217,8 @@ export function useProfessorAnalysis(): UseProfessorAnalysisReturn {
           let hardest: QuestionAnalysis | null = null;
           let easiest: QuestionAnalysis | null = null;
 
-          // 퀴즈 결과 조회
-          const resultsRef = collection(db, 'quizResults');
-          const resultsQuery = query(
-            resultsRef,
-            where('quizId', '==', quizId)
-          );
-          const resultsSnap = await getDocs(resultsQuery);
+          const quizResults = resultsByQuiz.get(quizId) || [];
+          const quizFeedbacks = feedbacksByQuiz.get(quizId) || [];
 
           // 문제별 통계 계산
           const questionStats = new Map<string, {
@@ -202,7 +228,6 @@ export function useProfessorAnalysis(): UseProfessorAnalysisReturn {
             feedbacks: number;
           }>();
 
-          // 초기화
           quizQuestions.forEach((q: { id: string }) => {
             questionStats.set(q.id, {
               correct: 0,
@@ -212,11 +237,9 @@ export function useProfessorAnalysis(): UseProfessorAnalysisReturn {
             });
           });
 
-          // 결과 집계
-          resultsSnap.docs.forEach((resultDoc) => {
-            const resultData = resultDoc.data();
+          // 결과 집계 (메모리에서)
+          quizResults.forEach((resultData: any) => {
             const answers = resultData.answers || [];
-
             answers.forEach((answer: {
               questionId: string;
               isCorrect: boolean;
@@ -224,12 +247,8 @@ export function useProfessorAnalysis(): UseProfessorAnalysisReturn {
             }) => {
               const stats = questionStats.get(answer.questionId);
               if (stats) {
-                if (answer.isCorrect) {
-                  stats.correct++;
-                } else {
-                  stats.incorrect++;
-                }
-
+                if (answer.isCorrect) stats.correct++;
+                else stats.incorrect++;
                 if (answer.selectedAnswer !== undefined) {
                   const count = stats.answerCounts.get(answer.selectedAnswer) || 0;
                   stats.answerCounts.set(answer.selectedAnswer, count + 1);
@@ -238,22 +257,12 @@ export function useProfessorAnalysis(): UseProfessorAnalysisReturn {
             });
           });
 
-          // 피드백 수 조회
-          const feedbacksRef = collection(db, 'feedbacks');
-          const feedbacksQuery = query(
-            feedbacksRef,
-            where('quizId', '==', quizId)
-          );
-          const feedbacksSnap = await getDocs(feedbacksQuery);
-
-          feedbacksSnap.docs.forEach((feedbackDoc) => {
-            const feedbackData = feedbackDoc.data();
+          // 피드백 집계 (메모리에서)
+          quizFeedbacks.forEach((feedbackData: any) => {
             const questionId = feedbackData.questionId;
             if (questionId) {
               const stats = questionStats.get(questionId);
-              if (stats) {
-                stats.feedbacks++;
-              }
+              if (stats) stats.feedbacks++;
             }
           });
 
@@ -341,7 +350,7 @@ export function useProfessorAnalysis(): UseProfessorAnalysisReturn {
                 text: easiestQ.questionText,
                 correctRate: easiestQ.correctRate,
               } : undefined,
-              participantCount: resultsSnap.size,
+              participantCount: quizResults.length,
             });
           }
         }

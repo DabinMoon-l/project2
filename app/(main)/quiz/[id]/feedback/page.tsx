@@ -1087,10 +1087,9 @@ export default function FeedbackPage() {
       const quizData = quizDoc.data();
       const questions = quizData.questions || [];
 
-      // AI 생성 퀴즈이거나 자기 퀴즈인 경우 피드백 페이지 건너뛰기
-      const isAIGenerated = quizData.type === 'ai-generated' || quizData.isAiGenerated;
+      // 자기 퀴즈인 경우 피드백 페이지 건너뛰기
       const isOwnQuiz = quizData.creatorId === user.uid;
-      if (isAIGenerated || isOwnQuiz) {
+      if (isOwnQuiz) {
         router.replace(`/quiz/${quizId}/exp`);
         return;
       }

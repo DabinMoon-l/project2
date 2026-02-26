@@ -1246,7 +1246,7 @@ function ReviewNewsCarousel({
             key={index}
             onClick={() => setCurrentIndex(index)}
             className={`w-2 h-2 rounded-full transition-all ${
-              currentIndex === index ? 'bg-[#1A1A1A] w-4' : 'bg-[#CCCCCC]'
+              currentIndex === index ? 'bg-[#1A1A1A] w-4' : 'bg-[#D4CFC4]'
             }`}
           />
         ))}
@@ -3753,25 +3753,6 @@ function ReviewPageContent() {
               ) : (
                 // 일반 모드 버튼들
                 <>
-                  {/* 삭제 버튼 (커스텀/서재 탭에서) */}
-                  {(activeFilter === 'custom' || activeFilter === 'library') && (
-                    <motion.button
-                      key="select"
-                      initial={{ scale: 0.8, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0.8, opacity: 0 }}
-                      onClick={() => {
-                        if (activeFilter === 'library') {
-                          setIsLibrarySelectMode(true);
-                        } else {
-                          setIsFolderDeleteMode(true);
-                        }
-                      }}
-                      className="px-4 py-3 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] whitespace-nowrap hover:bg-[#EDEAE4] transition-colors"
-                    >
-                      삭제
-                    </motion.button>
-                  )}
                   {/* 선택 복습 버튼 */}
                   <motion.button
                     key="review"
@@ -3800,55 +3781,56 @@ function ReviewPageContent() {
               exit={{ opacity: 0, height: 0 }}
               className="w-full px-4 mt-3"
             >
-              <div className={`p-2 border border-dashed text-center ${
-                isFolderDeleteMode || isLibrarySelectMode
-                  ? 'bg-[#FDEAEA] border-[#8B1A1A]'
-                  : isReviewSelectMode
-                    ? 'bg-[#E8EFF5] border-[#1A1A1A]'
-                    : 'bg-[#E8F5E9] border-[#1A6B1A]'
-              }`}>
-                <p className={`text-xs ${
+              {isReviewSelectMode ? (
+                <p className="text-center text-xs text-[#5C5C5C]">
+                  {reviewSelectedIds.size > 0
+                    ? `${reviewSelectedIds.size}개 선택됨 (다른 탭에서도 추가 선택 가능)`
+                    : '복습할 폴더나 문제지를 선택하세요 (다른 탭에서도 추가 선택 가능)'
+                  }
+                </p>
+              ) : (
+                <div className={`p-2 border border-dashed text-center ${
                   isFolderDeleteMode || isLibrarySelectMode
-                    ? 'text-[#8B1A1A]'
-                    : isReviewSelectMode
-                      ? 'text-[#1A1A1A]'
-                      : 'text-[#1A6B1A]'
+                    ? 'bg-[#FDEAEA] border-[#8B1A1A]'
+                    : 'bg-[#E8F5E9] border-[#1A6B1A]'
                 }`}>
-                  {isFolderDeleteMode
-                    ? deleteFolderIds.size > 0
-                      ? `${deleteFolderIds.size}개 선택됨 (다른 탭에서도 추가 선택 가능)`
-                      : '삭제할 폴더나 문제지를 선택하세요 (다른 탭에서도 추가 선택 가능)'
-                    : isLibrarySelectMode
-                      ? librarySelectedIds.size > 0
-                        ? `${librarySelectedIds.size}개 선택됨`
-                        : '삭제할 퀴즈를 선택하세요'
-                      : isReviewSelectMode
-                        ? reviewSelectedIds.size > 0
-                          ? `${reviewSelectedIds.size}개 선택됨 (다른 탭에서도 추가 선택 가능)`
-                          : '복습할 폴더나 문제지를 선택하세요 (다른 탭에서도 추가 선택 가능)'
+                  <p className={`text-xs ${
+                    isFolderDeleteMode || isLibrarySelectMode
+                      ? 'text-[#8B1A1A]'
+                      : 'text-[#1A6B1A]'
+                  }`}>
+                    {isFolderDeleteMode
+                      ? deleteFolderIds.size > 0
+                        ? `${deleteFolderIds.size}개 선택됨 (다른 탭에서도 추가 선택 가능)`
+                        : '삭제할 폴더나 문제지를 선택하세요 (다른 탭에서도 추가 선택 가능)'
+                      : isLibrarySelectMode
+                        ? librarySelectedIds.size > 0
+                          ? `${librarySelectedIds.size}개 선택됨`
+                          : '삭제할 퀴즈를 선택하세요'
                         : selectedFolderForAssign
                           ? '카테고리 영역 또는 다른 폴더를 탭하세요'
                           : '이동할 폴더를 선택하세요'
-                  }
-                </p>
-                {isAssignMode && (
-                  <button
-                    onClick={() => {
-                      setIsAssignMode(false);
-                      setSelectedFolderForAssign(null);
-                    }}
-                    className="mt-2 px-3 py-1 text-xs font-bold border border-[#1A6B1A] text-[#1A6B1A] hover:bg-[#C8E6C9] transition-colors"
-                  >
-                    카테고리 배정 종료
-                  </button>
-                )}
-              </div>
+                    }
+                  </p>
+                  {isAssignMode && (
+                    <button
+                      onClick={() => {
+                        setIsAssignMode(false);
+                        setSelectedFolderForAssign(null);
+                      }}
+                      className="mt-2 px-3 py-1 text-xs font-bold border border-[#1A6B1A] text-[#1A6B1A] hover:bg-[#C8E6C9] transition-colors"
+                    >
+                      카테고리 배정 종료
+                    </button>
+                  )}
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
 
         {/* 내맘대로 탭일 때 폴더 만들기 + 정렬 + PDF 버튼 */}
-        {activeFilter === 'custom' && !isAssignMode && !isFolderDeleteMode && !isPdfSelectMode && (
+        {activeFilter === 'custom' && !isAssignMode && !isFolderDeleteMode && !isPdfSelectMode && !isReviewSelectMode && (
           <div className="w-full px-4 mt-3 flex gap-2">
             <button
               onClick={() => setShowCreateFolder(true)}

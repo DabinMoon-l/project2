@@ -12,9 +12,9 @@ const UPDATE_INTERVAL = 30_000; // 30초
 function getCurrentActivity(pathname: string): string {
   if (pathname.startsWith('/quiz/create')) return '퀴즈 출제';
   if (/^\/quiz\/[^/]+/.test(pathname)) return '퀴즈 풀이';
+  if (pathname === '/quiz') return '퀴즈 탐색';
   if (pathname.startsWith('/review')) return '복습';
   if (pathname.startsWith('/board')) return '게시판';
-  if (pathname === '/quiz') return '퀴즈 탐색';
   if (pathname === '/' || pathname === '/professor') return '홈';
   if (pathname.startsWith('/professor')) return '교수 대시보드';
   if (pathname.startsWith('/profile') || pathname.startsWith('/settings')) return '설정';

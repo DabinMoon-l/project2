@@ -216,7 +216,10 @@ export const recordAttempt = onCall(
       {
         quizId,
         userId,
+        courseId: quizData.courseId || null,
         score,
+        correctCount,
+        totalCount,
         attemptNo,
         completedAt: FieldValue.serverTimestamp(),
       },
@@ -243,6 +246,40 @@ export const recordAttempt = onCall(
     });
 
     // ── ⑨ reviews 생성은 generateReviewsOnResult 트리거에서 비동기 처리 ──
+
+    // ── ⑩ users/{uid}.quizStats.averageScore 갱신 ──
+    // quiz_completions에서 퀴즈별 최신 점수를 기반으로 평균 계산
+    try {
+      const completionsSnap = await db.collection("quiz_completions")
+        .where("userId", "==", userId)
+        .get();
+
+      if (!completionsSnap.empty) {
+        let totalScore = 0;
+        let totalCorrectAll = 0;
+        let totalQuestionsAll = 0;
+        const quizCount = completionsSnap.size;
+
+        completionsSnap.forEach((doc) => {
+          const d = doc.data();
+          totalScore += d.score || 0;
+          totalCorrectAll += d.correctCount || 0;
+          totalQuestionsAll += d.totalCount || 0;
+        });
+
+        const avgScore = Math.round((totalScore / quizCount) * 100) / 100;
+
+        await db.doc(`users/${userId}`).update({
+          "quizStats.averageScore": avgScore,
+          "quizStats.totalAttempts": quizCount,
+          "quizStats.totalCorrect": totalCorrectAll,
+          "quizStats.totalQuestions": totalQuestionsAll,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (e) {
+      console.warn(`users/${userId} quizStats 갱신 실패 (무시 가능):`, e);
+    }
 
     console.log(
       `퀴즈 제출 처리 완료: userId=${userId}, quizId=${quizId}, ` +

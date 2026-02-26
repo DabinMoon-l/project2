@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { useTheme } from '@/styles/themes/useTheme';
 import { Skeleton, useExpToast } from '@/components/common';
 import CommentItem from './CommentItem';
@@ -20,12 +22,14 @@ import { useKeyboardAware } from '@/lib/hooks/useKeyboardAware';
 
 interface CommentSectionProps {
   postId: string;
+  /** 게시글 작성자 uid (글쓴이 표시용) */
+  postAuthorId?: string;
 }
 
 /**
  * 댓글 섹션 컴포넌트 — 하단 고정 입력바 + 이미지 첨부
  */
-export default function CommentSection({ postId }: CommentSectionProps) {
+export default function CommentSection({ postId, postAuthorId }: CommentSectionProps) {
   const { theme } = useTheme();
   const { user } = useAuth();
   const { profile } = useUser();
@@ -37,6 +41,44 @@ export default function CommentSection({ postId }: CommentSectionProps) {
   const { toggleCommentLike } = useCommentLike();
   const { uploadMultipleImages, loading: uploading } = useUpload();
   const { bottomOffset } = useKeyboardAware();
+
+  const isProfessor = profile?.role === 'professor';
+
+  // 교수님일 때 댓글 작성자 실명 맵 구축
+  const authorNameCacheRef = useRef<Map<string, string>>(new Map());
+  const [authorNameMap, setAuthorNameMap] = useState<Map<string, string>>(new Map());
+
+  // 댓글 작성자 uid 목록
+  const commentAuthorIds = useMemo(() => {
+    if (!isProfessor) return [];
+    return [...new Set(comments.map(c => c.authorId))];
+  }, [isProfessor, comments]);
+
+  // 교수님일 때 작성자 실명 일괄 조회
+  useEffect(() => {
+    if (!isProfessor || commentAuthorIds.length === 0) return;
+    const cache = authorNameCacheRef.current;
+    const missing = commentAuthorIds.filter(uid => !cache.has(uid));
+    if (missing.length === 0) {
+      // 캐시에 모두 있으면 바로 설정
+      setAuthorNameMap(new Map(cache));
+      return;
+    }
+    Promise.all(
+      missing.map(uid =>
+        getDoc(doc(db, 'users', uid))
+          .then(snap => {
+            if (snap.exists()) {
+              const name = snap.data().name;
+              if (name) cache.set(uid, name);
+            }
+          })
+          .catch(() => {})
+      )
+    ).then(() => {
+      setAuthorNameMap(new Map(cache));
+    });
+  }, [isProfessor, commentAuthorIds]);
 
   const [replyingTo, setReplyingTo] = useState<{ id: string; nickname: string } | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -249,6 +291,9 @@ export default function CommentSection({ postId }: CommentSectionProps) {
                   isLiked={checkIsLiked(comment.id)}
                   isDeleting={deletingId === comment.id}
                   isEditing={editingId === comment.id}
+                  isProfessor={isProfessor}
+                  authorNameMap={authorNameMap}
+                  postAuthorId={postAuthorId}
                 />
 
                 {/* 대댓글 목록 */}
@@ -265,6 +310,9 @@ export default function CommentSection({ postId }: CommentSectionProps) {
                       isDeleting={deletingId === reply.id}
                       isEditing={editingId === reply.id}
                       isReply
+                      isProfessor={isProfessor}
+                      authorNameMap={authorNameMap}
+                      postAuthorId={postAuthorId}
                     />
                   ))
                 }

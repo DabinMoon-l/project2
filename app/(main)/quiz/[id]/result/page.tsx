@@ -123,7 +123,6 @@ interface QuizResultData {
   quizTitle: string;
   quizCreatorId?: string; // 퀴즈 제작자 ID
   quizType?: string; // 퀴즈 타입 (ai-generated, custom 등)
-  isAiGenerated?: boolean; // AI 생성 퀴즈 여부 (서재→공개 전환 포함)
   correctCount: number;
   totalCount: number;
   earnedExp: number;
@@ -458,7 +457,6 @@ export default function QuizResultPage() {
         quizTitle: quizData.title || '퀴즈',
         quizCreatorId,
         quizType: quizData.type || 'custom',
-        isAiGenerated: quizData.isAiGenerated || false,
         correctCount,
         totalCount: questions.length,
         earnedExp,
@@ -882,11 +880,10 @@ export default function QuizResultPage() {
   };
 
   const handleNext = () => {
-    // 자기가 만든 퀴즈 또는 AI 생성 퀴즈인 경우 바로 EXP 페이지로 이동 (피드백 건너뜀)
+    // 자기가 만든 퀴즈인 경우 바로 EXP 페이지로 이동 (피드백 건너뜀)
     const isOwnQuiz = user && resultData?.quizCreatorId === user.uid;
-    const isAIGenerated = resultData?.quizType === 'ai-generated' || resultData?.isAiGenerated;
 
-    if (isOwnQuiz || isAIGenerated) {
+    if (isOwnQuiz) {
       router.push(`/quiz/${quizId}/exp`);
     } else {
       router.push(`/quiz/${quizId}/feedback`);

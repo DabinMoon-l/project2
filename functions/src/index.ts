@@ -349,13 +349,6 @@ export { fillDogam } from "./fillDogam";
 export { cleanupExtraRabbits } from "./cleanupExtraRabbits";
 
 // ============================================
-// 마이그레이션 Functions
-// ============================================
-export { migrateCharactersToRabbits } from "./migrateCharacters";
-export { migrateRabbitSystem } from "./migrateRabbitSystem";
-export { migrateDefaultRabbit } from "./migrateDefaultRabbit";
-
-// ============================================
 // 주별 자동 수집 & 월별 리포트 Functions
 // ============================================
 export { collectWeeklyStatsScheduled } from "./weeklyStats";

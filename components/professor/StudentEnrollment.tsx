@@ -9,8 +9,8 @@
 
 'use client';
 
-import { useState, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useCallback, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 
@@ -47,6 +47,14 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
 
   // 텍스트 붙여넣기 상태
   const [pasteText, setPasteText] = useState('');
+
+  // 네비게이션 숨김
+  useEffect(() => {
+    document.body.setAttribute('data-hide-nav', '');
+    return () => {
+      document.body.removeAttribute('data-hide-nav');
+    };
+  }, []);
 
   // ============================================
   // 엑셀 업로드 처리
@@ -196,61 +204,48 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
   ];
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50"
       onClick={onClose}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
     >
       <motion.div
-        initial={{ scale: 0.95, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.95, y: 20 }}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md max-h-[85vh] overflow-y-auto bg-[#FDFBF7] border-2 border-[#1A1A1A]"
+        className="w-full max-w-sm max-h-[80vh] overflow-y-auto bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
       >
-        {/* 헤더 */}
-        <div className="sticky top-0 z-10 bg-[#1A1A1A] text-[#F5F0E8] px-4 py-3 flex items-center justify-between">
-          <h2 className="font-bold">학생 등록</h2>
-          <button onClick={onClose} className="text-[#F5F0E8]/70 hover:text-[#F5F0E8]">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
         {/* 결과 표시 */}
         {result ? (
-          <div className="p-4 space-y-4">
-            <div className="text-center py-4">
-              <div className="w-16 h-16 mx-auto mb-3 bg-green-100 rounded-full flex items-center justify-center">
-                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-bold text-[#1A1A1A]">등록 완료</h3>
+          <div className="text-center">
+            {/* 완료 아이콘 */}
+            <div className="w-12 h-12 mx-auto mb-4 flex items-center justify-center border-2 border-[#1D5D4A] bg-[#E8F5E9]">
+              <svg className="w-6 h-6 text-[#1D5D4A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
             </div>
 
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between px-3 py-2 bg-green-50 border border-green-200">
-                <span>성공</span>
-                <span className="font-bold text-green-700">{result.successCount}명</span>
+            <h3 className="text-lg font-bold text-[#1A1A1A] mb-4">등록 완료</h3>
+
+            <div className="space-y-2 text-sm mb-6 text-left">
+              <div className="flex justify-between px-3 py-2 border border-[#D4CFC4]">
+                <span className="text-[#5C5C5C]">성공</span>
+                <span className="font-bold text-[#1D5D4A]">{result.successCount}명</span>
               </div>
               {result.duplicateCount > 0 && (
-                <div className="flex justify-between px-3 py-2 bg-yellow-50 border border-yellow-200">
-                  <span>중복 (스킵)</span>
-                  <span className="font-bold text-yellow-700">{result.duplicateCount}명</span>
+                <div className="flex justify-between px-3 py-2 border border-[#D4CFC4]">
+                  <span className="text-[#5C5C5C]">중복 (스킵)</span>
+                  <span className="font-bold text-[#B8860B]">{result.duplicateCount}명</span>
                 </div>
               )}
               {result.errorCount > 0 && (
-                <div className="px-3 py-2 bg-red-50 border border-red-200">
+                <div className="px-3 py-2 border border-[#8B1A1A]">
                   <div className="flex justify-between">
-                    <span>오류</span>
-                    <span className="font-bold text-red-700">{result.errorCount}건</span>
+                    <span className="text-[#5C5C5C]">오류</span>
+                    <span className="font-bold text-[#8B1A1A]">{result.errorCount}건</span>
                   </div>
                   {result.errors.length > 0 && (
-                    <ul className="mt-2 text-xs text-red-600 space-y-1">
+                    <ul className="mt-2 text-xs text-[#8B1A1A] space-y-1">
                       {result.errors.map((e, i) => (
                         <li key={i}>• {e}</li>
                       ))}
@@ -265,15 +260,28 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
                 onComplete();
                 onClose();
               }}
-              className="w-full py-2.5 bg-[#1A1A1A] text-[#F5F0E8] font-bold text-sm"
+              className="w-full py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
             >
               확인
             </button>
           </div>
         ) : (
-          <div className="p-4 space-y-4">
+          <>
+            {/* 헤더 */}
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-bold text-[#1A1A1A]">학생 등록</h2>
+              <button
+                onClick={onClose}
+                className="w-8 h-8 flex items-center justify-center border-2 border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
             {/* 탭 */}
-            <div className="flex border-2 border-[#1A1A1A]">
+            <div className="flex border-2 border-[#1A1A1A] mb-4">
               {tabs.map(tab => (
                 <button
                   key={tab.key}
@@ -282,10 +290,10 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
                     setPreviewRows([]);
                     setError(null);
                   }}
-                  className={`flex-1 py-2 text-xs font-bold transition-colors ${
+                  className={`flex-1 py-2.5 text-sm font-bold transition-colors ${
                     activeTab === tab.key
                       ? 'bg-[#1A1A1A] text-[#F5F0E8]'
-                      : 'bg-[#FDFBF7] text-[#1A1A1A] hover:bg-[#EBE5D9]'
+                      : 'text-[#1A1A1A] hover:bg-[#EBE5D9]'
                   }`}
                 >
                   {tab.label}
@@ -295,7 +303,7 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
 
             {/* 에러 */}
             {error && (
-              <div className="p-2 border border-red-300 bg-red-50 text-xs text-red-700">
+              <div className="p-3 mb-4 border-2 border-[#8B1A1A] text-sm text-[#8B1A1A]">
                 {error}
               </div>
             )}
@@ -303,15 +311,21 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
             {/* 엑셀 탭 */}
             {activeTab === 'excel' && (
               <div className="space-y-3">
-                <p className="text-xs text-[#5C5C5C]">
-                  엑셀 파일 (xlsx)을 업로드하세요. 컬럼: 이름, 학번
+                <p className="text-sm text-[#5C5C5C]">
+                  엑셀 파일 (.xlsx)을 업로드하세요.
+                  <br />컬럼: 이름, 학번
                 </p>
                 <label className="block">
                   <input
                     type="file"
                     accept=".xlsx,.xls"
                     onChange={handleExcelUpload}
-                    className="block w-full text-xs text-[#5C5C5C] file:mr-2 file:py-2 file:px-4 file:border file:border-[#1A1A1A] file:text-xs file:font-bold file:bg-[#FDFBF7] file:text-[#1A1A1A] hover:file:bg-[#EBE5D9]"
+                    className="block w-full text-sm text-[#5C5C5C]
+                      file:mr-3 file:py-2.5 file:px-4
+                      file:border-2 file:border-[#1A1A1A]
+                      file:text-sm file:font-bold
+                      file:bg-[#F5F0E8] file:text-[#1A1A1A]
+                      hover:file:bg-[#EBE5D9]"
                   />
                 </label>
               </div>
@@ -326,7 +340,7 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
                     placeholder="이름"
                     value={manualName}
                     onChange={(e) => setManualName(e.target.value)}
-                    className="px-2 py-2 border border-[#D4CFC4] text-sm bg-white focus:outline-none focus:border-[#1A1A1A]"
+                    className="px-3 py-2.5 border-2 border-[#1A1A1A] text-sm bg-[#F5F0E8] placeholder-[#5C5C5C] focus:outline-none"
                   />
                   <input
                     type="text"
@@ -335,12 +349,12 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
                     value={manualStudentId}
                     onChange={(e) => setManualStudentId(e.target.value.replace(/\D/g, ''))}
                     maxLength={10}
-                    className="px-2 py-2 border border-[#D4CFC4] text-sm bg-white focus:outline-none focus:border-[#1A1A1A]"
+                    className="px-3 py-2.5 border-2 border-[#1A1A1A] text-sm bg-[#F5F0E8] placeholder-[#5C5C5C] focus:outline-none"
                   />
                 </div>
                 <button
                   onClick={handleManualAdd}
-                  className="w-full py-2 border-2 border-[#1A1A1A] text-sm font-bold hover:bg-[#EBE5D9] transition-colors"
+                  className="w-full py-2.5 border-2 border-[#1A1A1A] text-sm font-bold hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
                 >
                   + 추가
                 </button>
@@ -350,19 +364,19 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
             {/* 텍스트 붙여넣기 탭 */}
             {activeTab === 'paste' && (
               <div className="space-y-3">
-                <p className="text-xs text-[#5C5C5C]">
-                  이름, 학번을 탭 또는 쉼표로 구분하여 입력하세요 (한 줄에 한 명)
+                <p className="text-sm text-[#5C5C5C]">
+                  이름, 학번을 탭 또는 쉼표로 구분 (한 줄에 한 명)
                 </p>
                 <textarea
                   value={pasteText}
                   onChange={(e) => setPasteText(e.target.value)}
-                  placeholder="홍길동	25010501&#10;김철수	25010502"
+                  placeholder={"홍길동\t25010501\n김철수\t25010502"}
                   rows={5}
-                  className="w-full px-3 py-2 border border-[#D4CFC4] text-sm bg-white focus:outline-none focus:border-[#1A1A1A] resize-none"
+                  className="w-full px-3 py-2.5 border-2 border-[#1A1A1A] text-sm bg-[#F5F0E8] placeholder-[#5C5C5C] focus:outline-none resize-none"
                 />
                 <button
                   onClick={handleParse}
-                  className="w-full py-2 border-2 border-[#1A1A1A] text-sm font-bold hover:bg-[#EBE5D9] transition-colors"
+                  className="w-full py-2.5 border-2 border-[#1A1A1A] text-sm font-bold hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
                 >
                   파싱
                 </button>
@@ -371,30 +385,30 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
 
             {/* 미리보기 테이블 */}
             {previewRows.length > 0 && (
-              <div className="border-2 border-[#1A1A1A]">
-                <div className="bg-[#1A1A1A] text-[#F5F0E8] px-3 py-1.5 text-xs font-bold">
+              <div className="border-2 border-[#1A1A1A] mt-4">
+                <div className="bg-[#1A1A1A] text-[#F5F0E8] px-3 py-2 text-sm font-bold">
                   미리보기 ({previewRows.length}명)
                 </div>
                 <div className="max-h-48 overflow-y-auto">
-                  <table className="w-full text-xs">
+                  <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-[#D4CFC4] bg-[#EBE5D9]">
-                        <th className="px-2 py-1.5 text-left font-bold">이름</th>
-                        <th className="px-2 py-1.5 text-left font-bold">학번</th>
-                        <th className="w-8"></th>
+                      <tr className="border-b-2 border-[#1A1A1A] bg-[#EBE5D9]">
+                        <th className="px-3 py-2 text-left font-bold">이름</th>
+                        <th className="px-3 py-2 text-left font-bold">학번</th>
+                        <th className="w-10" />
                       </tr>
                     </thead>
                     <tbody>
                       {previewRows.map((row, i) => (
                         <tr key={i} className="border-b border-[#D4CFC4] last:border-b-0">
-                          <td className="px-2 py-1.5">{row.name}</td>
-                          <td className="px-2 py-1.5">{row.studentId}</td>
-                          <td className="px-1 py-1.5">
+                          <td className="px-3 py-2">{row.name}</td>
+                          <td className="px-3 py-2">{row.studentId}</td>
+                          <td className="px-2 py-2">
                             <button
                               onClick={() => removeRow(i)}
-                              className="text-red-500 hover:text-red-700"
+                              className="text-[#8B1A1A] hover:text-[#6B1414]"
                             >
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                               </svg>
                             </button>
@@ -407,19 +421,34 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
               </div>
             )}
 
-            {/* 등록 버튼 */}
-            {previewRows.length > 0 && (
+            {/* 등록 / 취소 버튼 */}
+            <div className="flex gap-3 mt-6">
               <button
-                onClick={handleEnroll}
-                disabled={isSubmitting}
-                className="w-full py-2.5 bg-[#1A1A1A] text-[#F5F0E8] font-bold text-sm disabled:opacity-50"
+                onClick={onClose}
+                className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
               >
-                {isSubmitting ? '등록 중...' : `${previewRows.length}명 등록하기`}
+                취소
               </button>
-            )}
-          </div>
+              {previewRows.length > 0 ? (
+                <button
+                  onClick={handleEnroll}
+                  disabled={isSubmitting}
+                  className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#333] transition-colors disabled:opacity-50"
+                >
+                  {isSubmitting ? '등록 중...' : `${previewRows.length}명 등록`}
+                </button>
+              ) : (
+                <button
+                  disabled
+                  className="flex-1 py-3 font-bold border-2 border-[#D4CFC4] text-[#D4CFC4] cursor-not-allowed"
+                >
+                  등록
+                </button>
+              )}
+            </div>
+          </>
         )}
       </motion.div>
-    </motion.div>
+    </div>
   );
 }
