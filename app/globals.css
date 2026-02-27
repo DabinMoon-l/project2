@@ -147,6 +147,14 @@ input, textarea {
   -webkit-text-security: none;
 }
 
+/* 이미지 길게 누르기 방지 (모바일 PWA — 다운로드/콜아웃 차단) */
+img {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  pointer-events: auto;
+}
+
 /* 스크롤바 숨김 (모바일 PWA) */
 * {
   -ms-overflow-style: none;

@@ -276,10 +276,8 @@ export default function HomeOverlay() {
         {/* 캐릭터 영역 */}
         <CharacterBox />
 
-        {/* 랭킹 — 하단 */}
-        <div className="mt-auto">
-          <RankingSection />
-        </div>
+        {/* 랭킹 */}
+        <RankingSection />
 
         {/* 스와이프 힌트 — 하단 (가로모드에서는 숨김) */}
         {!isWide && (

@@ -1655,10 +1655,6 @@ export default function AnnouncementChannel({
             raw = '투표를 보냈습니다.';
           }
         }
-        const spaceIdx = raw.indexOf(' ');
-        // 띄어쓰기가 없으면 첫 글자 / 나머지로 분리
-        const firstWord = spaceIdx > 0 ? raw.slice(0, spaceIdx) : raw.slice(0, 1);
-        const rest = spaceIdx > 0 ? raw.slice(spaceIdx + 1) : (raw.length > 1 ? raw.slice(1) : '');
         return (
           <div ref={previewRef} onTouchStart={e => e.stopPropagation()}>
           <button onClick={() => {
@@ -1668,8 +1664,7 @@ export default function AnnouncementChannel({
             setShowModal(true);
           }} className="w-full text-left flex items-center">
             <div className="flex-1 min-w-0">
-              <p className="text-4xl font-bold text-white truncate leading-tight">{firstWord}</p>
-              <p className="text-4xl font-bold text-white truncate leading-tight">{rest || '\u00A0'}</p>
+              <p className="text-4xl font-bold text-white truncate leading-tight">{raw}</p>
             </div>
             <div className="flex-shrink-0 ml-3 self-center">
               <svg className="w-6 h-6 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
