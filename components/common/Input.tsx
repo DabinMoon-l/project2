@@ -98,6 +98,9 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             id={inputId}
             disabled={disabled}
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
             aria-invalid={hasError}
             aria-describedby={
               hasError ? errorId : helperText ? helperId : undefined

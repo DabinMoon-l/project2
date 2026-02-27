@@ -14,13 +14,22 @@
   --border-dark: #8B7355;
 }
 
-html, body {
+html {
   height: 100%;
   overflow-x: hidden;
-  /* iOS 오버스크롤(rubber banding) 차단 — position:fixed 없이 */
+  overscroll-behavior: none;
+  /* 둥근 모서리 뒤 검정 (상태바와 통합) */
+  background-color: #000;
+  color: var(--text-dark);
+}
+
+body {
+  height: 100%;
+  overflow-x: hidden;
   overscroll-behavior: none;
   background-color: #F5F0E8;
-  color: var(--text-dark);
+  /* 상단 안전 영역 (아이폰 노치/다이내믹 아일랜드) */
+  padding-top: env(safe-area-inset-top, 0px);
 }
 
 /* 세리프 폰트 클래스 */
@@ -125,6 +134,11 @@ html, body {
   line-height: 1;
   padding-right: 0.5rem;
   font-weight: 700;
+}
+
+/* 모바일 입력 자동완성/자동수정 방지 */
+input, textarea {
+  -webkit-text-security: none;
 }
 
 /* 스크롤바 숨김 (모바일 PWA) */

@@ -244,6 +244,9 @@ export default function SignupPage() {
               value={studentId}
               onChange={(e) => setStudentId(e.target.value.replace(/\D/g, ''))}
               maxLength={10}
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
               className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-white/50 transition-colors"
               disabled={isSubmitting}
             />
@@ -255,6 +258,9 @@ export default function SignupPage() {
               value={nickname}
               onChange={(e) => setNickname(e.target.value)}
               maxLength={6}
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
               className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-white/50 transition-colors"
               disabled={isSubmitting}
             />
@@ -265,6 +271,7 @@ export default function SignupPage() {
               placeholder="비밀번호 (6자 이상)"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              autoComplete="new-password"
               className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-white/50 transition-colors"
               disabled={isSubmitting}
             />
@@ -275,6 +282,7 @@ export default function SignupPage() {
               placeholder="비밀번호 확인"
               value={passwordConfirm}
               onChange={(e) => setPasswordConfirm(e.target.value)}
+              autoComplete="new-password"
               className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-white/50 transition-colors"
               disabled={isSubmitting}
             />

@@ -233,9 +233,12 @@ export default function Navigation({ role }: NavigationProps) {
     );
   }
 
-  // 세로모드: 기존 하단 바
+  // 세로모드: 기존 하단 바 (safe-area-inset-bottom 적용)
   return (
-    <nav className="fixed bottom-4 left-4 right-4 z-50 flex justify-center">
+    <nav
+      className="fixed left-4 right-4 z-50 flex justify-center"
+      style={{ bottom: 'max(1rem, calc(env(safe-area-inset-bottom, 0px) + 0.5rem))' }}
+    >
       <div
         className="relative flex items-stretch rounded-2xl overflow-hidden"
         style={{

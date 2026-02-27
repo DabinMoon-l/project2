@@ -408,6 +408,9 @@ export default function CommentSection({ postId, postAuthorId }: CommentSectionP
               placeholder={replyingTo ? `${replyingTo.nickname}님에게 답글...` : '의견을 남겨주세요...'}
               rows={1}
               maxLength={500}
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
               className="flex-1 px-3 py-2 outline-none resize-none leading-relaxed text-sm rounded-xl"
               style={{
                 border: '1px solid rgba(180, 175, 165, 0.6)',

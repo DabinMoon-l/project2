@@ -1042,6 +1042,9 @@ const AnnouncementMessageItem = memo(function AnnouncementMessageItem({
                       style={{ overflowWrap: 'anywhere' }}
                       onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
                       placeholder="내용을 입력하세요"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="off"
                     />
                   </div>
 
@@ -2210,6 +2213,9 @@ export default function AnnouncementChannel({
                           placeholder="공지를 입력하세요..."
                           className={`w-full bg-white/10 border border-white/15 rounded-2xl resize-none focus:outline-none text-sm text-white placeholder:text-white/40 px-3 py-2 pr-8 min-h-[36px] ${inputExpanded ? '' : 'max-h-[36px] overflow-hidden'}`}
                           rows={1}
+                          autoComplete="off"
+                          autoCorrect="off"
+                          autoCapitalize="off"
                           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handlePost(); } }}
                         />
                         {/* 입력창 확장/축소 버튼 (2줄 이상일 때만) */}

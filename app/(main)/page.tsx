@@ -157,15 +157,18 @@ export default function HomePage() {
         />
       )}
 
-      {/* 홈 화면 (슬라이드) */}
+      {/* 홈 화면 (슬라이드) — safe-area 확장: 배경이 노치 위까지 채움 */}
       <div
-        className="h-screen overflow-hidden flex flex-col scrollbar-hide"
+        className="overflow-hidden flex flex-col scrollbar-hide"
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
         style={{
           position: 'relative',
           zIndex: 1,
+          height: '100dvh',
+          marginTop: 'calc(-1 * env(safe-area-inset-top, 0px))',
+          paddingTop: 'env(safe-area-inset-top, 0px)',
           backgroundImage: `url(${HOME_BG_IMAGE})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center 5%',
