@@ -166,15 +166,15 @@ export default function ProfessorStatsPage() {
           };
         });
 
+        // 군집 분류: EXP는 상대 기준(중위수), 정답률은 절대 기준(50%)
         const exps = students.map(s => s.totalExp).sort((a, b) => a - b);
-        const rates = students.map(s => s.correctRate).sort((a, b) => a - b);
         const medianExp = exps[Math.floor(exps.length / 2)] || 0;
-        const medianRate = rates[Math.floor(rates.length / 2)] || 0;
+        const RATE_THRESHOLD = 50; // 정답률 절대 기준
 
         let passionate = 0, hardworking = 0, efficient = 0, atRisk = 0;
         students.forEach(s => {
-          const highExp = s.totalExp >= medianExp;
-          const highRate = s.correctRate >= medianRate;
+          const highExp = s.totalExp >= medianExp && s.totalExp > 0;
+          const highRate = s.correctRate >= RATE_THRESHOLD;
           if (highExp && highRate) passionate++;
           else if (highExp && !highRate) hardworking++;
           else if (!highExp && highRate) efficient++;

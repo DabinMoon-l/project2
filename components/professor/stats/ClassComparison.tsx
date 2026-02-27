@@ -29,20 +29,12 @@ function SectionTitle({ title, subtitle }: { title: string; subtitle?: string })
 }
 
 export default function ClassComparison({ classStats, mode }: Props) {
-  const hasData = classStats.some(c => c.scores.length > 0);
   const modeLabel = mode === 'sd' ? '± SD' : mode === 'ci' ? '95% CI' : 'CV';
 
-  if (!hasData) {
-    return (
-      <div className="bg-[#FDFBF7] border border-[#D4CFC4] p-6">
-        <SectionTitle title="반별 비교" />
-        <p className="text-sm text-[#5C5C5C] text-center py-8">데이터가 없습니다</p>
-      </div>
-    );
-  }
-
+  // 항상 A/B/C/D 모두 표시
+  const allClasses = classStats;
   const activeClasses = classStats.filter(c => c.scores.length > 0);
-  const maxMean = Math.max(...activeClasses.map(c => c.mean));
+  const maxMean = Math.max(1, ...activeClasses.map(c => c.mean));
 
   return (
     <div className="space-y-4">
@@ -51,9 +43,9 @@ export default function ClassComparison({ classStats, mode }: Props) {
         <SectionTitle title="반별 성적 비교" subtitle={`평균 점수 (${modeLabel})`} />
 
         <div className="space-y-4">
-          {activeClasses.map((cls, i) => {
+          {allClasses.map((cls, i) => {
             const c = CLASS_COLORS[cls.classId];
-            const barPct = maxMean > 0 ? (cls.mean / 100) * 100 : 0;
+            const barPct = cls.scores.length > 0 ? (cls.mean / 100) * 100 : 0;
 
             // Error bar 범위
             let errLow = cls.mean;
@@ -161,7 +153,7 @@ export default function ClassComparison({ classStats, mode }: Props) {
             );
           })}
 
-          {activeClasses.map((cls, i) => {
+          {allClasses.map((cls, i) => {
             const x = 80 + i * 80;
             const bp = cls.boxplot;
             const c = CLASS_COLORS[cls.classId];

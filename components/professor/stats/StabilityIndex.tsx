@@ -15,22 +15,8 @@ interface Props {
 }
 
 export default function StabilityIndex({ classStats }: Props) {
-  const activeClasses = classStats.filter(c => c.scores.length > 0);
-  if (activeClasses.length === 0) {
-    return (
-      <div className="bg-[#FDFBF7] border border-[#D4CFC4] p-5 shadow-[2px_2px_0px_#D4CFC4]">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-1 h-6 bg-[#1A1A1A]" />
-          <h3 className="text-sm font-bold text-[#1A1A1A] tracking-wide uppercase">안정성 지표</h3>
-          <div className="flex-1 h-px bg-[#D4CFC4]" />
-        </div>
-        <p className="text-sm text-[#5C5C5C] text-center py-4">데이터가 없습니다</p>
-      </div>
-    );
-  }
-
-  // 안정성 순서 정렬 (높→낮)
-  const sorted = [...activeClasses].sort((a, b) => b.stability - a.stability);
+  // 항상 A/B/C/D 모두 표시, 안정성 순서 정렬
+  const sorted = [...classStats].sort((a, b) => b.stability - a.stability);
   const maxVal = Math.max(...sorted.map(c => Math.max(c.mean, c.stability)), 100);
 
   return (

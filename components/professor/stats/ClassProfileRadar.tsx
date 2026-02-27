@@ -39,24 +39,8 @@ interface Props {
 export default function ClassProfileRadar({ classProfileData }: Props) {
   const [hoveredClass, setHoveredClass] = useState<string | null>(null);
 
-  // 데이터 있는 반만 필터
-  const activeClasses = ['A', 'B', 'C', 'D'].filter(cls => {
-    const p = classProfileData[cls];
-    return p && (p.score > 0 || p.stability > 0 || p.participation > 0);
-  });
-
-  if (activeClasses.length === 0) {
-    return (
-      <div className="bg-[#FDFBF7] border border-[#D4CFC4] p-5 shadow-[2px_2px_0px_#D4CFC4]">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-1 h-6 bg-[#1A1A1A]" />
-          <h3 className="text-sm font-bold text-[#1A1A1A] tracking-wide uppercase">반별 종합 역량</h3>
-          <div className="flex-1 h-px bg-[#D4CFC4]" />
-        </div>
-        <p className="text-sm text-[#5C5C5C] text-center py-8">데이터가 없습니다</p>
-      </div>
-    );
-  }
+  // 항상 A/B/C/D 모두 표시
+  const activeClasses = ['A', 'B', 'C', 'D'];
 
   const CX = 200;
   const CY = 170;
@@ -71,10 +55,11 @@ export default function ClassProfileRadar({ classProfileData }: Props) {
 
   const gridLevels = [25, 50, 75, 100];
 
+  const emptyProfile: ClassProfile = { score: 0, stability: 0, participation: 0, feedback: 0, board: 0, gamification: 0 };
+
   // 반별 다각형 path 생성
   const getClassPath = (cls: string) => {
-    const profile = classProfileData[cls];
-    if (!profile) return '';
+    const profile = classProfileData[cls] || emptyProfile;
     const points = AXES.map((axis, i) => getPoint(i, profile[axis.key]));
     return points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ') + 'Z';
   };
@@ -153,8 +138,7 @@ export default function ClassProfileRadar({ classProfileData }: Props) {
 
         {/* 반별 꼭짓점 포인트 */}
         {activeClasses.map(cls => {
-          const profile = classProfileData[cls];
-          if (!profile) return null;
+          const profile = classProfileData[cls] || emptyProfile;
           const cc = CLASS_COLORS[cls];
           const isOtherHovered = hoveredClass !== null && hoveredClass !== cls;
 
