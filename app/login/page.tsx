@@ -50,13 +50,13 @@ const itemVariants = {
 
 function VideoBackground() {
   return (
-    <div className="absolute inset-0 overflow-hidden">
+    <div className="fixed inset-0 -z-10">
       <video
         autoPlay
         loop
         muted
         playsInline
-        className="absolute inset-0 w-full h-full object-cover"
+        className="w-full h-full object-cover"
       >
         <source src="/videos/login-bg.mp4" type="video/mp4" />
       </video>
@@ -146,12 +146,12 @@ export default function LoginPage() {
   // 로딩 중이거나 이미 로그인된 경우
   if (loading || user) {
     return (
-      <div className="relative flex flex-col items-center justify-center" style={{ minHeight: '100dvh' }}>
+      <div className="flex flex-col items-center justify-center px-4 py-6" style={{ minHeight: '100dvh' }}>
         <VideoBackground />
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="relative z-10 flex flex-col items-center gap-4"
+          className="flex flex-col items-center gap-4"
         >
           <div className="w-12 h-12 border-4 border-white/30 border-t-white rounded-full animate-spin" />
           <p className="text-white text-sm font-medium drop-shadow-md">로딩 중...</p>
@@ -162,34 +162,30 @@ export default function LoginPage() {
 
   return (
     <main
-      className="relative flex flex-col items-center px-4 py-6 overflow-y-auto"
+      className="flex flex-col items-center px-4 py-6 overflow-y-auto"
       style={{ minHeight: '100dvh' }}
     >
       <VideoBackground />
 
-      {/* 좌측 상단 장식 이미지 */}
-      <div className="absolute top-8 left-4 z-10">
+      {/* 상단: 장식 이미지 */}
+      <div className="w-full max-w-md mt-2 mb-4">
         <Image
           src="/images/corner-image.png"
           alt="장식 이미지"
-          width={220}
-          height={110}
-          style={{ width: 'auto', height: 'auto', maxWidth: '60vw' }}
+          width={200}
+          height={100}
+          style={{ width: 'auto', height: 'auto', maxWidth: '55vw' }}
           className="drop-shadow-lg"
         />
       </div>
 
-      {/* 상단 여백 — 장식 이미지 아래로 밀어줌 */}
-      <div className="flex-1 min-h-[120px] max-h-[200px]" />
-
-      {/* 콘텐츠 영역 */}
+      {/* 중간: 로고 */}
       <motion.div
-        className="relative z-10 w-full max-w-md px-2"
+        className="w-full max-w-md"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
       >
-        {/* 로고 이미지 */}
         <motion.div
           className="flex justify-center mb-6"
           variants={itemVariants}
@@ -205,9 +201,9 @@ export default function LoginPage() {
           />
         </motion.div>
 
-        {/* 로그인 폼 */}
+        {/* 하단: 로그인 폼 */}
         <motion.div
-          className="w-full space-y-2"
+          className="w-full space-y-3"
           variants={itemVariants}
         >
           <input
@@ -268,9 +264,6 @@ export default function LoginPage() {
           </motion.div>
         )}
       </motion.div>
-
-      {/* 하단 여백 */}
-      <div className="flex-1 min-h-[24px]" />
     </main>
   );
 }
