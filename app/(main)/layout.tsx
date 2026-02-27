@@ -11,6 +11,7 @@ import { UserProvider, useUser, CourseProvider, useCourse, MilestoneProvider } f
 import { useActivityTracker } from '@/lib/hooks/useActivityTracker';
 import type { ClassType } from '@/styles/themes';
 import LibraryJobToast from '@/components/professor/library/LibraryJobToast';
+import { useViewportScale, useWideMode } from '@/lib/hooks/useViewportScale';
 
 /**
  * 내부 레이아웃 컴포넌트
@@ -25,20 +26,19 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
   const [userClassType, setUserClassType] = useState<ClassType>('A');
   const [waitCount, setWaitCount] = useState(0);
 
-  // 네비게이션 바를 숨길 페이지
-  // - 퀴즈 풀이/결과/피드백 (/quiz/[id]/*)
-  // - 수정 페이지 (/edit 포함)
-  // - 랭킹 페이지 (/ranking)
-  // - 랜덤 복습 페이지 (/review/random)
+  // 뷰포트 스케일링 (세로모드: zoom, 가로모드: 1)
+  useViewportScale();
+  const isWide = useWideMode();
+
   // 접속 추적 (lastActiveAt + currentActivity)
   useActivityTracker();
 
   const isHome = pathname === '/';
   const isProfHome = pathname === '/professor';
 
+  // 가로모드에서는 홈/교수홈에서도 사이드바 표시
   const hideNavigation =
-    isHome ||
-    isProfHome ||
+    (!isWide && (isHome || isProfHome)) ||
     pathname?.match(/^\/quiz\/[^/]+/) !== null ||
     pathname?.includes('/edit') ||
     pathname?.match(/^\/board\/[^/]+/) !== null ||
@@ -48,15 +48,17 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
     pathname === '/quiz/create' ||
     pathname === '/professor/quiz/create';
 
-  // 학생용 스와이프 다운으로 홈 이동 가능한 페이지
+  // 학생용 스와이프 다운으로 홈 이동 가능한 페이지 (가로모드에서는 비활성화)
   const enablePullToHome =
+    !isWide &&
     !isProfessor &&
     !isHome &&
     (pathname === '/quiz' || pathname === '/review' || pathname === '/board');
 
-  // 교수용 PullToHome (통계/퀴즈/학생/게시판 → /professor 홈)
+  // 교수용 PullToHome (가로모드에서는 비활성화)
   const isProfessorHome = pathname === '/professor';
   const enableProfessorPullToHome =
+    !isWide &&
     isProfessor &&
     !isProfessorHome &&
     (pathname === '/professor/stats' || pathname === '/professor/quiz' || pathname === '/professor/students' || pathname === '/board');
@@ -106,9 +108,11 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
         <ExpToastProvider>
           <MilestoneWrapper isProfessor={isProfessor}>
             <LibraryJobToast />
-            <div className={`min-h-screen ${hideNavigation ? '' : 'pb-20'}`}>
+            <div className={`min-h-screen ${hideNavigation || isWide ? '' : 'pb-20'}`}
+              style={isWide ? { marginLeft: '72px' } : undefined}
+            >
               {/* 메인 콘텐츠 */}
-              <main>
+              <main className={isWide ? 'max-w-[640px] mx-auto' : ''}>
                 {enablePullToHome ? (
                   <PullToHome>
                     {children}

@@ -8,6 +8,7 @@ import { useUser, useCourse } from '@/lib/contexts';
 import { readHomeCache, writeHomeCache } from '@/lib/utils/rankingCache';
 import { computeRankScore, computeTeamScore } from '@/lib/utils/ranking';
 import { AnimatePresence, motion } from 'framer-motion';
+import { scaleCoord } from '@/lib/hooks/useViewportScale';
 
 // 순위 접미사
 const ordinalSuffix = (n: number) => {
@@ -170,16 +171,16 @@ export default function ProfessorRankingSection({ overrideCourseId }: { override
   // ── 터치 스와이프 (touchMove에서 임계값 넘으면 즉시 발동) ──
   const onTouchStart = useCallback((e: React.TouchEvent) => {
     e.stopPropagation();
-    pointerStartX.current = e.touches[0].clientX;
-    pointerStartY.current = e.touches[0].clientY;
+    pointerStartX.current = scaleCoord(e.touches[0].clientX);
+    pointerStartY.current = scaleCoord(e.touches[0].clientY);
     swipeFired.current = false;
   }, []);
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
     e.stopPropagation();
     if (swipeFired.current) return;
-    const dx = e.touches[0].clientX - pointerStartX.current;
-    const dy = e.touches[0].clientY - pointerStartY.current;
+    const dx = scaleCoord(e.touches[0].clientX) - pointerStartX.current;
+    const dy = scaleCoord(e.touches[0].clientY) - pointerStartY.current;
     if (Math.abs(dy) >= SWIPE_MIN && Math.abs(dy) > Math.abs(dx)) {
       swipeFired.current = true;
       fireSwipe(dy);
@@ -192,16 +193,16 @@ export default function ProfessorRankingSection({ overrideCourseId }: { override
 
   // ── 마우스 드래그 스와이프 (PC) ──
   const onMouseDown = useCallback((e: React.MouseEvent) => {
-    pointerStartX.current = e.clientX;
-    pointerStartY.current = e.clientY;
+    pointerStartX.current = scaleCoord(e.clientX);
+    pointerStartY.current = scaleCoord(e.clientY);
     isDragging.current = true;
     swipeFired.current = false;
   }, []);
 
   const onMouseMove = useCallback((e: React.MouseEvent) => {
     if (!isDragging.current || swipeFired.current) return;
-    const dx = e.clientX - pointerStartX.current;
-    const dy = e.clientY - pointerStartY.current;
+    const dx = scaleCoord(e.clientX) - pointerStartX.current;
+    const dy = scaleCoord(e.clientY) - pointerStartY.current;
     if (Math.abs(dy) >= SWIPE_MIN && Math.abs(dy) > Math.abs(dx)) {
       swipeFired.current = true;
       isDragging.current = false;

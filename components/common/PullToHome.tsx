@@ -2,6 +2,7 @@
 
 import { useRef, useState, useCallback, useEffect, useLayoutEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import { scaleCoord } from '@/lib/hooks/useViewportScale';
 
 const THRESHOLD = 120;
 const WHEEL_THRESHOLD = 80;
@@ -137,8 +138,8 @@ export default function PullToHome({ children, homePath = '/', tabPaths = DEFAUL
   const onTouchStart = useCallback((e: React.TouchEvent) => {
     if (transitioning || transitioningX || shouldBlockGesture(e.target)) return;
     touchTarget.current = e.target;
-    startX.current = e.touches[0].clientX;
-    startY.current = e.touches[0].clientY;
+    startX.current = scaleCoord(e.touches[0].clientX);
+    startY.current = scaleCoord(e.touches[0].clientY);
     direction.current = 'none';
     pulling.current = false;
     swipingX.current = false;
@@ -156,8 +157,8 @@ export default function PullToHome({ children, homePath = '/', tabPaths = DEFAUL
       return;
     }
 
-    const currentX = e.touches[0].clientX;
-    const currentY = e.touches[0].clientY;
+    const currentX = scaleCoord(e.touches[0].clientX);
+    const currentY = scaleCoord(e.touches[0].clientY);
     const deltaX = currentX - startX.current;
     const deltaY = currentY - startY.current;
 

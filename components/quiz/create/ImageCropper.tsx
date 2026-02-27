@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { scaleCoord } from '@/lib/hooks/useViewportScale';
 
 // ============================================================
 // 타입 정의
@@ -97,7 +98,7 @@ export default function ImageCropper({
    */
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-    const { x, y } = getImageCoordinates(e.clientX, e.clientY);
+    const { x, y } = getImageCoordinates(scaleCoord(e.clientX), scaleCoord(e.clientY));
 
     setIsSelecting(true);
     setCropArea({
@@ -114,7 +115,7 @@ export default function ImageCropper({
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (!isSelecting || !cropArea) return;
 
-    const { x, y } = getImageCoordinates(e.clientX, e.clientY);
+    const { x, y } = getImageCoordinates(scaleCoord(e.clientX), scaleCoord(e.clientY));
 
     setCropArea((prev) => prev ? {
       ...prev,
@@ -136,7 +137,7 @@ export default function ImageCropper({
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (e.touches.length !== 1) return;
     const touch = e.touches[0];
-    const { x, y } = getImageCoordinates(touch.clientX, touch.clientY);
+    const { x, y } = getImageCoordinates(scaleCoord(touch.clientX), scaleCoord(touch.clientY));
 
     setIsSelecting(true);
     setCropArea({
@@ -150,7 +151,7 @@ export default function ImageCropper({
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (!isSelecting || !cropArea || e.touches.length !== 1) return;
     const touch = e.touches[0];
-    const { x, y } = getImageCoordinates(touch.clientX, touch.clientY);
+    const { x, y } = getImageCoordinates(scaleCoord(touch.clientX), scaleCoord(touch.clientY));
 
     setCropArea((prev) => prev ? {
       ...prev,

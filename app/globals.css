@@ -15,8 +15,11 @@
 }
 
 html, body {
+  height: 100%;
   overflow-x: hidden;
-  background-color: var(--background-cream);
+  /* iOS 오버스크롤(rubber banding) 차단 — position:fixed 없이 */
+  overscroll-behavior: none;
+  background-color: #F5F0E8;
   color: var(--text-dark);
 }
 

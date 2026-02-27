@@ -8,6 +8,7 @@ import {
   useTransform,
   type MotionValue,
 } from 'framer-motion';
+import { scaleCoord } from '@/lib/hooks/useViewportScale';
 
 
 const SWIPE_THRESHOLD = 40;
@@ -69,15 +70,15 @@ export default function ProfessorCharacterBox() {
 
   // 모바일 터치
   const onTouchStart = useCallback((e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX;
-    touchStartY.current = e.touches[0].clientY;
+    touchStartX.current = scaleCoord(e.touches[0].clientX);
+    touchStartY.current = scaleCoord(e.touches[0].clientY);
     swipeDir.current = null;
   }, []);
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
     if (swipeDir.current === 'v') return;
-    const dx = Math.abs(e.touches[0].clientX - touchStartX.current);
-    const dy = Math.abs(e.touches[0].clientY - touchStartY.current);
+    const dx = Math.abs(scaleCoord(e.touches[0].clientX) - touchStartX.current);
+    const dy = Math.abs(scaleCoord(e.touches[0].clientY) - touchStartY.current);
     if (swipeDir.current === null && (dx > 8 || dy > 8)) {
       swipeDir.current = dx > dy ? 'h' : 'v';
     }
@@ -85,14 +86,14 @@ export default function ProfessorCharacterBox() {
 
   const onTouchEnd = useCallback((e: React.TouchEvent) => {
     if (swipeDir.current !== 'h') return;
-    doOrbitSwap(e.changedTouches[0].clientX - touchStartX.current);
+    doOrbitSwap(scaleCoord(e.changedTouches[0].clientX) - touchStartX.current);
   }, [doOrbitSwap]);
 
   // PC 마우스 드래그
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     if (slotCount <= 1) return;
     isDragging.current = true;
-    touchStartX.current = e.clientX;
+    touchStartX.current = scaleCoord(e.clientX);
     e.preventDefault();
   }, [slotCount]);
 
@@ -100,7 +101,7 @@ export default function ProfessorCharacterBox() {
     const handleMouseUp = (e: MouseEvent) => {
       if (!isDragging.current) return;
       isDragging.current = false;
-      doOrbitSwap(e.clientX - touchStartX.current);
+      doOrbitSwap(scaleCoord(e.clientX) - touchStartX.current);
     };
     window.addEventListener('mouseup', handleMouseUp);
     return () => window.removeEventListener('mouseup', handleMouseUp);

@@ -15,6 +15,7 @@ import { mean, sd, zScore } from '@/lib/utils/statistics';
 import StudentListView, { type SortKey } from '@/components/professor/students/StudentListView';
 import StudentDetailModal from '@/components/professor/students/StudentDetailModal';
 import StudentEnrollment from '@/components/professor/StudentEnrollment';
+import { scaleCoord } from '@/lib/hooks/useViewportScale';
 
 // ============================================================
 // 접속 상태 유틸
@@ -375,16 +376,16 @@ function StudentsRibbonHeader({
   const swipeDir = useRef<'none' | 'horizontal' | 'vertical'>('none');
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    swipeStartX.current = e.touches[0].clientX;
-    swipeStartY.current = e.touches[0].clientY;
+    swipeStartX.current = scaleCoord(e.touches[0].clientX);
+    swipeStartY.current = scaleCoord(e.touches[0].clientY);
     swipeDir.current = 'none';
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
     if (swipeDir.current !== 'none') return;
     const touch = e.changedTouches[0];
-    const dx = touch.clientX - swipeStartX.current;
-    const dy = touch.clientY - swipeStartY.current;
+    const dx = scaleCoord(touch.clientX) - swipeStartX.current;
+    const dy = scaleCoord(touch.clientY) - swipeStartY.current;
     if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
       if (dx > 0) goToPrev();
       else goToNext();
@@ -393,8 +394,8 @@ function StudentsRibbonHeader({
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (swipeDir.current !== 'none') return;
-    const dx = Math.abs(e.touches[0].clientX - swipeStartX.current);
-    const dy = Math.abs(e.touches[0].clientY - swipeStartY.current);
+    const dx = Math.abs(scaleCoord(e.touches[0].clientX) - swipeStartX.current);
+    const dy = Math.abs(scaleCoord(e.touches[0].clientY) - swipeStartY.current);
     if (dx > 10 || dy > 10) {
       swipeDir.current = dx > dy ? 'horizontal' : 'vertical';
     }
@@ -405,14 +406,14 @@ function StudentsRibbonHeader({
   const isMouseDragging = useRef(false);
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    mouseStartX.current = e.clientX;
+    mouseStartX.current = scaleCoord(e.clientX);
     isMouseDragging.current = true;
   };
 
   const handleMouseUp = (e: React.MouseEvent) => {
     if (!isMouseDragging.current) return;
     isMouseDragging.current = false;
-    const diff = e.clientX - mouseStartX.current;
+    const diff = scaleCoord(e.clientX) - mouseStartX.current;
     if (diff > 40) goToPrev();
     else if (diff < -40) goToNext();
   };

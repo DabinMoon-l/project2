@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { scaleCoord } from '@/lib/hooks/useViewportScale';
 
 // ============================================================
 // 타입 정의
@@ -102,13 +103,13 @@ export default function ExtractedImagePicker({
 
     if ('touches' in e && e.touches.length > 0) {
       return {
-        x: e.touches[0].clientX - rect.left,
-        y: e.touches[0].clientY - rect.top,
+        x: scaleCoord(e.touches[0].clientX) - rect.left,
+        y: scaleCoord(e.touches[0].clientY) - rect.top,
       };
     } else if ('clientX' in e) {
       return {
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top,
+        x: scaleCoord(e.clientX) - rect.left,
+        y: scaleCoord(e.clientY) - rect.top,
       };
     }
     return { x: 0, y: 0 };
@@ -224,11 +225,11 @@ export default function ExtractedImagePicker({
 
     let x: number, y: number;
     if ('touches' in e && e.touches.length > 0) {
-      x = e.touches[0].clientX - rect.left;
-      y = e.touches[0].clientY - rect.top;
+      x = scaleCoord(e.touches[0].clientX) - rect.left;
+      y = scaleCoord(e.touches[0].clientY) - rect.top;
     } else if ('clientX' in e) {
-      x = e.clientX - rect.left;
-      y = e.clientY - rect.top;
+      x = scaleCoord(e.clientX) - rect.left;
+      y = scaleCoord(e.clientY) - rect.top;
     } else {
       return;
     }

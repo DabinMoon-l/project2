@@ -19,6 +19,7 @@ import {
   type Comment,
 } from '@/lib/hooks/useBoard';
 import { type CourseId, getCourseList } from '@/lib/types/course';
+import { scaleCoord } from '@/lib/hooks/useViewportScale';
 
 // ============================================================
 // 나선형 배치 워드클라우드
@@ -702,10 +703,10 @@ function ActivitySection({ posts, courseId }: { posts: Post[]; courseId: string 
 
   // 탭 스와이프 핸들러
   const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX;
+    touchStartX.current = scaleCoord(e.touches[0].clientX);
   };
   const handleTouchEnd = (e: React.TouchEvent) => {
-    const diff = touchStartX.current - e.changedTouches[0].clientX;
+    const diff = touchStartX.current - scaleCoord(e.changedTouches[0].clientX);
     const idx = ACTIVITY_TABS.indexOf(activeTab);
     if (diff > 50 && idx < ACTIVITY_TABS.length - 1) {
       setActiveTab(ACTIVITY_TABS[idx + 1]);
@@ -1156,8 +1157,8 @@ export default function ManagePostsPage() {
           {/* 과목 캐러셀 */}
           <div
             className="border-y-4 border-[#1A1A1A] py-5 flex items-center justify-center gap-2 select-none overflow-hidden"
-            onTouchStart={(e) => { courseTouchStartX.current = e.touches[0].clientX; }}
-            onTouchMove={(e) => { courseTouchEndX.current = e.touches[0].clientX; }}
+            onTouchStart={(e) => { courseTouchStartX.current = scaleCoord(e.touches[0].clientX); }}
+            onTouchMove={(e) => { courseTouchEndX.current = scaleCoord(e.touches[0].clientX); }}
             onTouchEnd={() => {
               const diff = courseTouchStartX.current - courseTouchEndX.current;
               const idx = courseList.findIndex(c => c.id === selectedCourseId);

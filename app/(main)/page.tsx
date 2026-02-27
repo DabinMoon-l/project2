@@ -12,6 +12,7 @@ import {
   CharacterBox,
   RankingSection,
 } from '@/components/home';
+import { useWideMode, scaleCoord } from '@/lib/hooks/useViewportScale';
 
 const SWIPE_THRESHOLD = 120;
 const WHEEL_THRESHOLD = 80;
@@ -34,6 +35,7 @@ export default function HomePage() {
   const { profile, isProfessor } = useUser();
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
   const router = useRouter();
+  const isWide = useWideMode();
 
   // 교수님은 /professor 홈으로 리다이렉트
   useEffect(() => {
@@ -71,13 +73,13 @@ export default function HomePage() {
   // 모바일 터치
   const onTouchStart = useCallback((e: React.TouchEvent) => {
     if (transitioning || isModalOpen()) return;
-    startY.current = e.touches[0].clientY;
+    startY.current = scaleCoord(e.touches[0].clientY);
     pulling.current = true;
   }, [transitioning]);
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
     if (!pulling.current || transitioning) return;
-    const delta = startY.current - e.touches[0].clientY;
+    const delta = startY.current - scaleCoord(e.touches[0].clientY);
     if (delta > 0) {
       setPullY(delta * 0.4);
     } else {
@@ -220,26 +222,28 @@ export default function HomePage() {
             <RankingSection />
           </div>
 
-          {/* 스와이프 힌트 — 하단 고정 */}
-          <div className="absolute bottom-8 left-0 right-0 flex flex-col items-center gap-1 pointer-events-none">
-            <span className="text-sm font-bold text-white/60 backdrop-blur-sm">
-              아래로 스와이프하여 학습 시작
-            </span>
-            <motion.svg
-              className="w-5 h-5 text-white/50"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              animate={{ y: [0, 6, 0] }}
-              transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-            </motion.svg>
-          </div>
+          {/* 스와이프 힌트 — 하단 고정 (가로모드에서는 사이드바로 탐색하므로 숨김) */}
+          {!isWide && (
+            <div className="absolute bottom-8 left-0 right-0 flex flex-col items-center gap-1 pointer-events-none">
+              <span className="text-sm font-bold text-white/60 backdrop-blur-sm">
+                아래로 스와이프하여 학습 시작
+              </span>
+              <motion.svg
+                className="w-5 h-5 text-white/50"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                animate={{ y: [0, 6, 0] }}
+                transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+              </motion.svg>
+            </div>
+          )}
         </div>
 
-        {/* 스와이프 업 인디케이터 */}
-        {pullY > 10 && !transitioning && (
+        {/* 스와이프 업 인디케이터 (가로모드에서는 숨김) */}
+        {!isWide && pullY > 10 && !transitioning && (
           <div
             className="fixed bottom-0 left-0 right-0 z-50 flex justify-center pb-4 pointer-events-none"
             style={{ opacity: Math.min(pullY / SWIPE_THRESHOLD, 1) }}

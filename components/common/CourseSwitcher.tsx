@@ -3,6 +3,7 @@
 import { useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { CourseId } from '@/lib/types/course';
+import { scaleCoord } from '@/lib/hooks/useViewportScale';
 
 const COURSES: { id: CourseId; name: string }[] = [
   { id: 'biology', name: 'Biology' },
@@ -34,11 +35,11 @@ export default function CourseSwitcher({ value, onChange, textClassName }: Props
   }, [currentIndex, onChange]);
 
   const onTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX;
+    touchStartX.current = scaleCoord(e.touches[0].clientX);
   };
 
   const onTouchEnd = (e: React.TouchEvent) => {
-    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    const dx = scaleCoord(e.changedTouches[0].clientX) - touchStartX.current;
     if (Math.abs(dx) > 40) {
       if (dx < 0) goNext();
       else goPrev();

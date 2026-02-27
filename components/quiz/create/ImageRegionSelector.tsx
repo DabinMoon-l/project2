@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as pdfjsLib from 'pdfjs-dist';
+import { scaleCoord } from '@/lib/hooks/useViewportScale';
 
 // PDF.js 워커 설정
 if (typeof window !== 'undefined') {
@@ -441,16 +442,16 @@ export default function ImageRegionSelector({
   // 마우스 이벤트
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-    handleDragStart(e.clientX, e.clientY);
+    handleDragStart(scaleCoord(e.clientX), scaleCoord(e.clientY));
   }, [handleDragStart]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (dragMode === 'none') {
       // 드래그 중이 아닐 때 커서 스타일 업데이트
-      const mode = getDragMode(e.clientX, e.clientY);
+      const mode = getDragMode(scaleCoord(e.clientX), scaleCoord(e.clientY));
       setCursorStyle(getCursorForMode(mode));
     }
-    handleDragMove(e.clientX, e.clientY);
+    handleDragMove(scaleCoord(e.clientX), scaleCoord(e.clientY));
   }, [dragMode, getDragMode, getCursorForMode, handleDragMove]);
 
   const handleMouseUp = useCallback(() => {
@@ -460,14 +461,14 @@ export default function ImageRegionSelector({
   // 터치 이벤트
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (e.touches.length === 1) {
-      handleDragStart(e.touches[0].clientX, e.touches[0].clientY);
+      handleDragStart(scaleCoord(e.touches[0].clientX), scaleCoord(e.touches[0].clientY));
     }
   }, [handleDragStart]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (e.touches.length === 1) {
       e.preventDefault();
-      handleDragMove(e.touches[0].clientX, e.touches[0].clientY);
+      handleDragMove(scaleCoord(e.touches[0].clientX), scaleCoord(e.touches[0].clientY));
     }
   }, [handleDragMove]);
 

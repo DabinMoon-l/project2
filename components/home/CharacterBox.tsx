@@ -20,6 +20,7 @@ import TekkenBattleConfirmModal from '@/components/tekken/TekkenBattleConfirmMod
 import TekkenBattleOverlay from '@/components/tekken/TekkenBattleOverlay';
 import { useTekkenBattle } from '@/lib/hooks/useTekkenBattle';
 import { BATTLE_CONFIG } from '@/lib/types/tekken';
+import { scaleCoord } from '@/lib/hooks/useViewportScale';
 
 const SWIPE_THRESHOLD = 40;
 
@@ -163,17 +164,19 @@ export default function CharacterBox() {
 
   // 모바일 터치
   const onTouchStart = useCallback((e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX;
-    touchStartY.current = e.touches[0].clientY;
+    touchStartX.current = scaleCoord(e.touches[0].clientX);
+    touchStartY.current = scaleCoord(e.touches[0].clientY);
     swipeDir.current = null;
-    onLongPressStart(e.touches[0].clientX, e.touches[0].clientY);
+    onLongPressStart(scaleCoord(e.touches[0].clientX), scaleCoord(e.touches[0].clientY));
   }, [onLongPressStart]);
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
-    onLongPressMove(e.touches[0].clientX, e.touches[0].clientY);
+    const cx = scaleCoord(e.touches[0].clientX);
+    const cy = scaleCoord(e.touches[0].clientY);
+    onLongPressMove(cx, cy);
     if (swipeDir.current === 'v') return;
-    const dx = Math.abs(e.touches[0].clientX - touchStartX.current);
-    const dy = Math.abs(e.touches[0].clientY - touchStartY.current);
+    const dx = Math.abs(cx - touchStartX.current);
+    const dy = Math.abs(cy - touchStartY.current);
     if (swipeDir.current === null && (dx > 8 || dy > 8)) {
       swipeDir.current = dx > dy ? 'h' : 'v';
     }
@@ -183,20 +186,20 @@ export default function CharacterBox() {
     onLongPressEnd();
     if (longPressTriggered.current) return;
     if (swipeDir.current !== 'h') return;
-    doOrbitSwap(e.changedTouches[0].clientX - touchStartX.current);
+    doOrbitSwap(scaleCoord(e.changedTouches[0].clientX) - touchStartX.current);
   }, [doOrbitSwap, onLongPressEnd]);
 
   // PC 마우스 드래그
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     isDragging.current = true;
-    touchStartX.current = e.clientX;
-    onLongPressStart(e.clientX, e.clientY);
+    touchStartX.current = scaleCoord(e.clientX);
+    onLongPressStart(scaleCoord(e.clientX), scaleCoord(e.clientY));
     e.preventDefault();
   }, [onLongPressStart]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (isDragging.current) onLongPressMove(e.clientX, e.clientY);
+      if (isDragging.current) onLongPressMove(scaleCoord(e.clientX), scaleCoord(e.clientY));
     };
     const handleMouseUp = (e: MouseEvent) => {
       onLongPressEnd();
@@ -204,7 +207,7 @@ export default function CharacterBox() {
       isDragging.current = false;
       if (longPressTriggered.current) return;
       if (slotCount <= 1) return;
-      doOrbitSwap(e.clientX - touchStartX.current);
+      doOrbitSwap(scaleCoord(e.clientX) - touchStartX.current);
     };
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);

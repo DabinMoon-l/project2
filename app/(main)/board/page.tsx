@@ -11,6 +11,7 @@ import { usePosts, usePinnedPosts, type Post, type Comment } from '@/lib/hooks/u
 import { useCourse } from '@/lib/contexts/CourseContext';
 import { useUser } from '@/lib/contexts/UserContext';
 import { COURSES, type CourseId, getCourseList } from '@/lib/types/course';
+import { scaleCoord } from '@/lib/hooks/useViewportScale';
 /** 기본 토끼 이미지 경로 */
 const DEFAULT_RABBIT_IMAGE = '/rabbit/default-news.png';
 
@@ -199,13 +200,13 @@ const PinnedPostsCarousel = memo(function PinnedPostsCarousel({
   const isSwiping = useRef(false);
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX;
-    touchEndX.current = e.touches[0].clientX; // 탭 시 diff=0이 되도록 초기화
+    touchStartX.current = scaleCoord(e.touches[0].clientX);
+    touchEndX.current = scaleCoord(e.touches[0].clientX); // 탭 시 diff=0이 되도록 초기화
     isSwiping.current = false;
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    touchEndX.current = e.touches[0].clientX;
+    touchEndX.current = scaleCoord(e.touches[0].clientX);
     isSwiping.current = true;
   };
 
@@ -770,8 +771,8 @@ export default function BoardPage() {
             className="border-y-4 border-[#1A1A1A] pt-5 pb-7 flex items-center justify-center gap-2 select-none overflow-hidden"
             data-no-pull
             style={{ touchAction: 'pan-y' }}
-            onTouchStart={(e) => { courseTouchStartX.current = e.touches[0].clientX; }}
-            onTouchMove={(e) => { courseTouchEndX.current = e.touches[0].clientX; }}
+            onTouchStart={(e) => { courseTouchStartX.current = scaleCoord(e.touches[0].clientX); }}
+            onTouchMove={(e) => { courseTouchEndX.current = scaleCoord(e.touches[0].clientX); }}
             onTouchEnd={() => {
               const diff = courseTouchStartX.current - courseTouchEndX.current;
               const idx = courseList.findIndex(c => c.id === selectedCourseId);

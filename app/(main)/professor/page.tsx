@@ -11,6 +11,7 @@ import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 import { AnnouncementChannel } from '@/components/home';
 import ProfessorRankingSection from '@/components/home/ProfessorRankingSection';
 import ProfessorCharacterBox from '@/components/home/ProfessorCharacterBox';
+import { scaleCoord } from '@/lib/hooks/useViewportScale';
 
 
 const SWIPE_THRESHOLD = 120;
@@ -57,13 +58,13 @@ export default function ProfessorHomePage() {
 
   const onTouchStart = useCallback((e: React.TouchEvent) => {
     if (transitioning || isModalOpen()) return;
-    startY.current = e.touches[0].clientY;
+    startY.current = scaleCoord(e.touches[0].clientY);
     pulling.current = true;
   }, [transitioning]);
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
     if (!pulling.current || transitioning) return;
-    const delta = startY.current - e.touches[0].clientY;
+    const delta = startY.current - scaleCoord(e.touches[0].clientY);
     if (delta > 0) {
       setPullY(delta * 0.4);
     } else {

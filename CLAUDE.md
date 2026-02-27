@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 기술 스택
 
 - **Frontend**: Next.js 16 (App Router) + React 19 + TypeScript + Tailwind CSS 3
-- **애니메이션**: Framer Motion (페이지 전환, UI), Lottie (캐릭터)
+- **애니메이션**: Framer Motion (페이지 전환, UI), Lottie (퀴즈 결과 연출)
 - **Backend**: Firebase (Auth, Firestore, Realtime Database, Cloud Functions, Cloud Messaging, Storage)
 - **OCR**: Tesseract.js, pdfjs-dist
 - **AI**: Gemini API (문제 생성, 이미지 분석), Claude API (월별 리포트 인사이트)
@@ -66,19 +66,15 @@ app/
 ├── login/              # 소셜 로그인 (Google, Apple, Naver, 이메일)
 ├── signup/             # 이메일 회원가입
 ├── verify-email/       # 이메일 인증
-├── onboarding/         # 온보딩 플로우
-│   ├── student-info/   #   학적정보 입력
-│   ├── character/      #   캐릭터 커스터마이징
-│   ├── nickname/       #   닉네임 설정
-│   └── tutorial/       #   튜토리얼
+├── onboarding/         # 온보딩 (폐기됨 — 회원가입에 통합, 홈으로 리다이렉트)
 └── (main)/             # 인증 필요 라우트 그룹
     ├── page.tsx        #   홈
     ├── quiz/           #   퀴즈 목록/풀이/결과/피드백
     ├── review/         #   복습 (오답/찜/푼 문제)
-    ├── board/          #   게시판 (To 교수님 / 우리들끼리)
+    ├── board/          #   게시판 (통합 피드)
     ├── profile/        #   프로필
     ├── settings/       #   설정
-    └── professor/      #   교수님 전용 (대시보드, 학생 모니터링, 분석)
+    └── professor/      #   교수님 전용 (대시보드, 학생 모니터링, 통계)
 ```
 
 ### Provider 계층 구조 (핵심)
@@ -210,7 +206,7 @@ Tailwind에서 `bg-theme-background`, `text-theme-accent` 등으로 사용 (`tai
 - `.decorative-corner` — 신문 스타일 코너 장식
 - `.pb-navigation` — 네비게이션 바 + safe area 패딩
 - 전역 스크롤바 숨김 (`* { scrollbar-width: none }`, `*::-webkit-scrollbar { display: none }`)
-- `html, body { overflow-x: hidden }` — 모바일 PWA 가로 스크롤 방지
+- `html, body { overflow-x: hidden; overscroll-behavior: none; background: #F5F0E8 }` — 모바일 PWA 가로 스크롤/오버스크롤 바운스 방지
 
 ### 과목 시스템 (`lib/types/course.ts`)
 
@@ -234,14 +230,16 @@ Tailwind에서 `bg-theme-background`, `text-theme-accent` 등으로 사용 (`tai
 - `/board` — 게시판
 
 **교수 탭**:
-- `/professor` — 홈 (exact match)
+- `/professor/stats` — 통계
 - `/professor/quiz` — 퀴즈
 - `/professor/students` — 학생
-- `/professor/analysis` — 분석
+- `/board` — 게시판
+
+교수 홈(`/professor`)은 탭에 없음 — 사이드바 홈 아이콘 또는 PullToHome으로 접근
 
 ### PullToHome (`components/common/PullToHome.tsx`)
 
-학생 전용, `/quiz` `/review` `/board` 페이지에서만 활성화 (`app/(main)/layout.tsx`의 `enablePullToHome`).
+학생 전용, `/quiz` `/review` `/board` 페이지에서만 활성화 (`app/(main)/layout.tsx`의 `enablePullToHome`). **가로모드(wide)에서는 비활성화.**
 
 - **세로 스와이프**: 페이지 상단에서 아래로 당기면 홈으로 이동 (배경에 home-bg.jpg 미리보기)
 - **가로 스와이프**: 퀴즈 ↔ 복습 ↔ 게시판 탭 전환 (`TAB_PATHS = ['/quiz', '/review', '/board']`)
@@ -395,6 +393,52 @@ Tailwind에서 `bg-theme-background`, `text-theme-accent` 등으로 사용 (`tai
 - 사전 계산: CF `computeRankingsScheduled` (5분마다) → `rankings/{courseId}` 문서 1개로 캐싱
 - 클라이언트: sessionStorage SWR 캐시 (TTL 2분/10분)
 
+## 반응형 레이아웃 시스템
+
+### 2버전 레이아웃
+
+| 모드 | 조건 | 전략 |
+|------|------|------|
+| **세로모드** | 폰/패드 세로/좁은 창 (< 1024px 또는 portrait) | CSS `zoom`으로 576px 기준 스케일 |
+| **가로모드** | PC/패드 가로 (landscape + 1024px 이상) | 좌측 사이드바(72px) + 중앙 컨텐츠(max-w 640px) |
+
+### 핵심 훅/유틸 (`lib/hooks/useViewportScale.ts`)
+
+- **`useViewportScale()`**: `app/(main)/layout.tsx`에서 호출. 세로모드 시 `document.documentElement.style.zoom = physicalWidth / 576`
+- **`useWideMode()`**: 가로모드 감지 상태 반환 (`orientation: landscape` + `min-width: 1024px`)
+- **`getZoom()`**: 현재 zoom 값 반환
+- **`scaleCoord(value)`**: **CSS zoom 좌표 보정** — `clientX/Y`가 물리 픽셀을 반환하므로 `value / zoom`으로 CSS 논리 픽셀 변환. **모든 터치/마우스 좌표 처리에 필수**
+
+### zoom 피드백 루프 방지
+
+`window.innerWidth`는 zoom이 적용된 값을 반환. 정확한 물리 너비를 읽으려면 반드시 `zoom='1'`로 리셋 후 읽기:
+```typescript
+document.documentElement.style.zoom = '1';  // 리셋 먼저
+const physicalWidth = window.innerWidth;      // 이제 정확한 값
+document.documentElement.style.zoom = String(physicalWidth / 576);
+```
+
+### scaleCoord 적용 필요 파일들
+
+터치/마우스 이벤트에서 `clientX/Y`를 사용하는 모든 컴포넌트에 `scaleCoord()` 래핑 필수:
+- PullToHome, CourseSwitcher, ImageViewer, CharacterBox, ProfessorCharacterBox
+- QuizStatsModal, ImageRegionSelector, ImageCropper, ExtractedImagePicker
+- board/page, board/manage/page, quiz/page, professor/page, professor/quiz/page, professor/stats/page, professor/students/page
+
+### 가로모드 레이아웃
+
+- **사이드바** (`Navigation.tsx`): 좌측 72px, 홈 아이콘 + 탭 아이콘 세로 배치
+- **컨텐츠**: `ml-[72px] max-w-[640px] mx-auto`
+- **PullToHome 비활성화**: `!isWide && ...` 조건 추가
+- **Tailwind 커스텀 스크린**: `wide: { raw: '(orientation: landscape) and (min-width: 1024px)' }`
+
+### PWA 뷰포트 설정
+
+- `viewport-fit: cover` — iPhone 안전 영역까지 확장
+- `apple-mobile-web-app-capable: yes` + `status-bar-style: black-translucent`
+- manifest `orientation: any` — 세로/가로 모두 지원
+- `overscroll-behavior: none` — iOS 오버스크롤 바운스 방지
+
 ## 코딩 컨벤션
 
 - 응답 및 코드 주석: 한국어
@@ -504,7 +548,8 @@ generateScoreSummary(result)                // 텍스트 요약
 
 ### 캐릭터/게이미피케이션
 
-- 토끼 캐릭터 커스터마이징: 머리스타일, 피부색, 수염
+- 사람 캐릭터 커스터마이징 (`HomeCharacter.tsx`, `CharacterEditor.tsx`): 머리스타일(0-16), 피부색(0-14), 수염(0-3)
+- 참여도에 따른 표정 변화 (웃음/무표정/찡그림)
 - 시즌 전환(중간→기말): 토끼 장착(equippedRabbits) 초기화, 발견 기록/외형/뱃지는 유지
 
 ### AI 문제 생성 (`generateStyledQuiz`)
@@ -589,8 +634,9 @@ await setDoc(doc(db, 'users', uid), { onboardingCompleted: true, updatedAt: serv
 
 글 1분 3개, 댓글 30초 1개 제한 (Cloud Functions `checkRateLimitCall`에서 검증)
 
-### 온보딩 리다이렉트
+### 온보딩 (폐기됨)
 
+온보딩 플로우는 회원가입에 통합됨. `/onboarding/*` 경로는 모두 홈(`/`)으로 리다이렉트.
 `onboarding_just_completed` localStorage 플래그로 온보딩 직후 홈 → 온보딩 재리다이렉트 방지
 
 ### 비밀번호 찾기 (`app/forgot-password/page.tsx`)
@@ -603,7 +649,7 @@ await setDoc(doc(db, 'users', uid), { onboardingCompleted: true, updatedAt: serv
 ### 네비게이션 숨김 규칙
 
 경로 기반 (`app/(main)/layout.tsx`의 `hideNavigation`):
-- 홈 (`/`) — 항상 숨김
+- 홈 (`/`) — 세로모드에서만 숨김 (가로모드에서는 사이드바 항상 표시)
 - `/quiz/[id]/*` 경로: 퀴즈 풀이, 결과, 피드백 페이지
 - `/edit` 포함 경로: 퀴즈 수정 페이지
 - `/ranking` 경로: 랭킹 페이지
@@ -663,13 +709,6 @@ firebase deploy --only functions
 - 타입: `lib/types/tekken.ts`
 - 데미지 유틸: `lib/utils/tekkenDamage.ts`
 - DB 규칙: `database.rules.json` (Realtime Database)
-
-## 개선 예정 사항
-
-- **복습 시스템**: 에빙하우스 간격 반복 추가 검토
-- **랭킹**: 실시간 변동 애니메이션
-- **교수 대시보드**: 위험 학생 인사이트 강화 (참여도 군집 시각화 구현 완료, 추가 강화 가능)
-- **오프라인 대응**: PWA 오프라인 캐시 전략 (22일 작업)
 
 ## 배포
 

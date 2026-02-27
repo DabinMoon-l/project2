@@ -10,6 +10,10 @@ const config: Config = {
   darkMode: "class",
   theme: {
     extend: {
+      screens: {
+        // 가로모드 레이아웃: 사이드바 네비게이션 + 중앙 컨텐츠
+        'wide': { raw: '(orientation: landscape) and (min-width: 1024px)' },
+      },
       // 테마 색상 (CSS 변수 활용)
       colors: {
         theme: {

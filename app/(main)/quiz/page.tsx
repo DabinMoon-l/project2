@@ -26,6 +26,7 @@ import { COURSES, getCurrentSemesterByDate, getDefaultQuizTab, getPastExamOption
 import { generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import AutoVideo, { getDifficultyVideo } from '@/components/quiz/AutoVideo';
 import { NEWSPAPER_BG_TEXT, parseAverageScore, sortByLatest, formatQuestionTypes } from '@/lib/utils/quizHelpers';
+import { scaleCoord } from '@/lib/hooks/useViewportScale';
 
 // ============================================================
 // 타입 정의
@@ -538,15 +539,15 @@ function NewsCarousel({
   const swipeLocked = useRef<'none' | 'horizontal' | 'vertical'>('none');
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    swipeStartX.current = e.touches[0].clientX;
-    swipeStartY.current = e.touches[0].clientY;
+    swipeStartX.current = scaleCoord(e.touches[0].clientX);
+    swipeStartY.current = scaleCoord(e.touches[0].clientY);
     swipeLocked.current = 'none';
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (swipeLocked.current !== 'none') return;
-    const dx = Math.abs(e.touches[0].clientX - swipeStartX.current);
-    const dy = Math.abs(e.touches[0].clientY - swipeStartY.current);
+    const dx = Math.abs(scaleCoord(e.touches[0].clientX) - swipeStartX.current);
+    const dy = Math.abs(scaleCoord(e.touches[0].clientY) - swipeStartY.current);
     if (dx > 10 || dy > 10) {
       swipeLocked.current = dx > dy ? 'horizontal' : 'vertical';
     }
@@ -554,7 +555,7 @@ function NewsCarousel({
 
   const handleTouchEnd = (e: React.TouchEvent) => {
     if (swipeLocked.current === 'vertical') return;
-    const dx = e.changedTouches[0].clientX - swipeStartX.current;
+    const dx = scaleCoord(e.changedTouches[0].clientX) - swipeStartX.current;
     if (Math.abs(dx) > 40) {
       if (dx > 0) goToPrev();
       else goToNext();
@@ -566,14 +567,14 @@ function NewsCarousel({
   const isMouseDown = useRef(false);
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    mouseStartX.current = e.clientX;
+    mouseStartX.current = scaleCoord(e.clientX);
     isMouseDown.current = true;
   };
 
   const handleMouseUp = (e: React.MouseEvent) => {
     if (!isMouseDown.current) return;
     isMouseDown.current = false;
-    const dx = e.clientX - mouseStartX.current;
+    const dx = scaleCoord(e.clientX) - mouseStartX.current;
     if (Math.abs(dx) > 40) {
       if (dx > 0) goToPrev();
       else goToNext();

@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
+import { scaleCoord } from '@/lib/hooks/useViewportScale';
 
 interface ImageViewerProps {
   urls: string[];
@@ -45,8 +46,8 @@ const ImageViewer = memo(function ImageViewer({
     <div
       className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center"
       onClick={onClose}
-      onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; touchDeltaX.current = 0; swiping.current = true; }}
-      onTouchMove={(e) => { if (swiping.current) touchDeltaX.current = e.touches[0].clientX - touchStartX.current; }}
+      onTouchStart={(e) => { touchStartX.current = scaleCoord(e.touches[0].clientX); touchDeltaX.current = 0; swiping.current = true; }}
+      onTouchMove={(e) => { if (swiping.current) touchDeltaX.current = scaleCoord(e.touches[0].clientX) - touchStartX.current; }}
       onTouchEnd={() => {
         if (!swiping.current) return;
         swiping.current = false;

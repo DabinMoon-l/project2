@@ -25,6 +25,7 @@ import { db } from '@/lib/firebase';
 import { formatChapterLabel } from '@/lib/courseIndex';
 import { useCustomFolders } from '@/lib/hooks/useCustomFolders';
 import FolderSelectModal from '@/components/common/FolderSelectModal';
+import { scaleCoord } from '@/lib/hooks/useViewportScale';
 
 // ============================================================
 // 애니메이션 컴포넌트
@@ -1035,8 +1036,8 @@ export default function QuizStatsModal({
   const handleQSwipeStart = useCallback((e: React.TouchEvent) => {
     if (swipeTransitioning.current) return;
     const s = swipeRef.current;
-    s.startX = e.touches[0].clientX;
-    s.startY = e.touches[0].clientY;
+    s.startX = scaleCoord(e.touches[0].clientX);
+    s.startY = scaleCoord(e.touches[0].clientY);
     s.direction = 'none';
     s.offsetX = 0;
   }, []);
@@ -1044,8 +1045,8 @@ export default function QuizStatsModal({
   const handleQSwipeMove = useCallback((e: React.TouchEvent) => {
     if (swipeTransitioning.current) return;
     const s = swipeRef.current;
-    const deltaX = e.touches[0].clientX - s.startX;
-    const deltaY = e.touches[0].clientY - s.startY;
+    const deltaX = scaleCoord(e.touches[0].clientX) - s.startX;
+    const deltaY = scaleCoord(e.touches[0].clientY) - s.startY;
 
     // 방향 잠금
     if (s.direction === 'none') {
