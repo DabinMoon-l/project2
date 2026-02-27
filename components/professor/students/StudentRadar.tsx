@@ -5,12 +5,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 // 6축 라벨 + 설명
 const AXES = [
-  { key: 'quizScore', label: '정답률', info: '퀴즈 평균 정답률. 현재 학업 수준.' },
-  { key: 'growth', label: '성장세', info: '오답 복습 후 극복률. 앱이 학습에 기여한 정도. 50이 기준선.' },
-  { key: 'quizCreation', label: '출제력', info: '직접 만든 퀴즈 수의 백분위. 능동적 학습 참여.' },
-  { key: 'community', label: '소통', info: '글·댓글·피드백 가중합의 백분위. 사회적 학습 참여.' },
-  { key: 'review', label: '복습력', info: '실제 재풀이한 복습 수의 백분위. 학습 정착 노력.' },
-  { key: 'activity', label: '활동량', info: '총 EXP의 백분위. 철권퀴즈 등 포함 종합 참여.' },
+  { key: 'quizScore', label: '정답률', info: '퀴즈 평균 정답률 (절대값)' },
+  { key: 'growth', label: '성장세', info: '오답 복습 후 극복률. 50 기준선' },
+  { key: 'quizCreation', label: '출제력', info: '직접 만든 퀴즈 수 백분위' },
+  { key: 'community', label: '소통', info: '글×3 + 피드백 가중합 백분위' },
+  { key: 'review', label: '복습력', info: '재풀이한 복습 수 백분위' },
+  { key: 'activity', label: '활동량', info: '총 EXP 백분위' },
 ] as const;
 
 interface RadarData {
@@ -69,7 +69,7 @@ export default function StudentRadar({ data, classColor }: Props) {
   });
 
   return (
-    <div className="relative">
+    <div className="relative" onClick={() => setActiveTooltip(null)}>
       <svg viewBox={`0 0 ${VIEWBOX_W} ${VIEWBOX_H}`} className="w-full">
         {/* 배경 그리드 */}
         {gridLevels.map(level => {
@@ -157,7 +157,7 @@ export default function StudentRadar({ data, classColor }: Props) {
           key={`info-${i}`}
           className="absolute w-7 h-7 flex items-center justify-center -ml-3.5 -mt-3.5"
           style={{ left: `${pos.pctX}%`, top: `${pos.pctY}%` }}
-          onClick={() => setActiveTooltip(activeTooltip === i ? null : i)}
+          onClick={(e) => { e.stopPropagation(); setActiveTooltip(activeTooltip === i ? null : i); }}
         >
           <span
             className={`w-4 h-4 rounded-full border text-[10px] font-semibold leading-none flex items-center justify-center transition-colors ${

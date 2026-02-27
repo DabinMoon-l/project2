@@ -85,14 +85,16 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
             <div className="w-10 h-1 bg-[#D4CFC4]/80 rounded-full" />
           </div>
 
-          {/* 헤더 — 이름 / 반 · 닉네임 / 학번 */}
+          {/* 헤더 — 이름 · 반 · 닉네임 / 학번 */}
           <div className="px-5 pb-3 border-b border-[#D4CFC4]">
             <div className="flex items-start gap-3">
               <div className="flex-1 min-w-0">
-                <h2 className="text-xl font-bold text-[#1A1A1A]">{displayName}</h2>
-                <p className="text-base text-[#5C5C5C]">{student.classId}반 · {student.nickname}</p>
+                <div className="flex items-baseline gap-2">
+                  <h2 className="text-xl font-bold text-[#1A1A1A]">{displayName}</h2>
+                  <p className="text-sm text-[#5C5C5C]">{student.classId}반 · {student.nickname}</p>
+                </div>
                 {student.studentId && (
-                  <p className="text-base text-[#5C5C5C]">{student.studentId}</p>
+                  <p className="text-sm text-[#5C5C5C]">{student.studentId}</p>
                 )}
               </div>
               <button onClick={onClose} className="p-1 text-[#5C5C5C] flex-shrink-0">

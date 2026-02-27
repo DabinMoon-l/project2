@@ -130,7 +130,11 @@ async function computeRadarNormForCourse(courseId: string) {
     let rank = 1;
     sorted.forEach((p, idx) => {
       if (idx > 0 && sorted[idx].score < sorted[idx - 1].score) rank = idx + 1;
-      const rankScore = N === 1 ? 100 : ((N - rank + 1) / N) * 100;
+      // 참여자 5명 미만: 실제 점수 사용 (소수 참여 시 석차 부풀림 방지)
+      // 참여자 5명 이상: 석차 기반 점수 사용
+      const rankScore = N < 5
+        ? (p.score ?? 0)
+        : ((N - rank + 1) / N) * 100;
       const pairs = studentScorePairs.get(p.userId) ?? [];
       pairs.push({ rankScore, weight });
       studentScorePairs.set(p.userId, pairs);
