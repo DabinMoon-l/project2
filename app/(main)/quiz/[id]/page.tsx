@@ -84,6 +84,15 @@ export default function QuizPage() {
   const colors = useThemeColors();
   const quizId = params.id as string;
 
+  // 최초 진입 시에만 슬라이드 애니메이션 (뒤로가기 시 재발동 방지)
+  const [slideIn] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const key = `visited_quiz_${params.id}`;
+    if (sessionStorage.getItem(key)) return false;
+    sessionStorage.setItem(key, '1');
+    return true;
+  });
+
   // 퀴즈 데이터 상태
   const [quiz, setQuiz] = useState<QuizData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -772,9 +781,9 @@ export default function QuizPage() {
   return (
     <motion.div
       className="min-h-screen pb-24" style={{ backgroundColor: '#F5F0E8' }}
-      initial={{ opacity: 0, y: 30 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+      initial={slideIn ? { opacity: 0, x: 60 } : false}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 35 }}
     >
       {/* 퀴즈 헤더 */}
       <QuizHeader

@@ -1664,7 +1664,7 @@ export default function AnnouncementChannel({
             setShowModal(true);
           }} className="w-full text-left flex items-center">
             <div className="flex-1 min-w-0">
-              <p className="text-4xl font-bold text-white truncate leading-tight">{raw}</p>
+              <p className="text-2xl font-bold text-white truncate leading-tight">{raw}</p>
             </div>
             <div className="flex-shrink-0 ml-3 self-center">
               <svg className="w-6 h-6 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">

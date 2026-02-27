@@ -146,7 +146,7 @@ export default function LoginPage() {
   // 로딩 중이거나 이미 로그인된 경우
   if (loading || user) {
     return (
-      <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
+      <div className="relative flex flex-col items-center justify-center" style={{ minHeight: '100dvh' }}>
         <VideoBackground />
         <motion.div
           initial={{ opacity: 0 }}
@@ -161,39 +161,45 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="relative min-h-screen flex flex-col items-center justify-start pt-52 overflow-hidden">
+    <main
+      className="relative flex flex-col items-center px-4 py-6 overflow-y-auto"
+      style={{ minHeight: '100dvh' }}
+    >
       <VideoBackground />
 
-      {/* 좌측 상단 이미지 */}
-      <div className="absolute top-12 left-6 z-10">
+      {/* 좌측 상단 장식 이미지 */}
+      <div className="absolute top-8 left-4 z-10">
         <Image
           src="/images/corner-image.png"
           alt="장식 이미지"
-          width={280}
-          height={140}
-          style={{ width: 'auto', height: 'auto' }}
+          width={220}
+          height={110}
+          style={{ width: 'auto', height: 'auto', maxWidth: '60vw' }}
           className="drop-shadow-lg"
         />
       </div>
 
+      {/* 상단 여백 — 장식 이미지 아래로 밀어줌 */}
+      <div className="flex-1 min-h-[120px] max-h-[200px]" />
+
       {/* 콘텐츠 영역 */}
       <motion.div
-        className="relative z-10 w-full px-6"
+        className="relative z-10 w-full max-w-md px-2"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
       >
         {/* 로고 이미지 */}
         <motion.div
-          className="flex justify-center"
+          className="flex justify-center mb-6"
           variants={itemVariants}
         >
           <Image
             src="/images/logo.png"
             alt="RabbiTory"
-            width={300}
-            height={100}
-            style={{ width: 'auto', height: 'auto' }}
+            width={260}
+            height={87}
+            style={{ width: 'auto', height: 'auto', maxWidth: '70vw' }}
             className="drop-shadow-lg"
             priority
           />
@@ -201,7 +207,7 @@ export default function LoginPage() {
 
         {/* 로그인 폼 */}
         <motion.div
-          className="max-w-xs mx-auto mt-4 space-y-2"
+          className="w-full space-y-2"
           variants={itemVariants}
         >
           <input
@@ -256,12 +262,15 @@ export default function LoginPage() {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="max-w-sm mx-auto mt-4 p-3 bg-red-500/90 backdrop-blur-sm rounded-xl"
+            className="w-full mt-4 p-3 bg-red-500/90 backdrop-blur-sm rounded-xl"
           >
             <p className="text-white text-sm text-center">{error}</p>
           </motion.div>
         )}
       </motion.div>
+
+      {/* 하단 여백 */}
+      <div className="flex-1 min-h-[24px]" />
     </main>
   );
 }

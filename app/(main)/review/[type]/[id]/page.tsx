@@ -1098,6 +1098,15 @@ export default function FolderDetailPage() {
 
   const folderType = params.type as string; // solved, wrong, bookmark, custom
   const folderId = params.id as string;
+
+  // 최초 진입 시에만 슬라이드 애니메이션 (뒤로가기 시 재발동 방지)
+  const [slideIn] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const key = `visited_review_${params.id}`;
+    if (sessionStorage.getItem(key)) return false;
+    sessionStorage.setItem(key, '1');
+    return true;
+  });
   const chapterFilter = searchParams.get('chapter'); // 챕터 필터 (오답 탭에서 챕터별 클릭 시)
   const fromQuizPage = searchParams.get('from') === 'quiz'; // 퀴즈 페이지 복습탭에서 접근 시 수정 비활성화
   const autoStart = searchParams.get('autoStart'); // 'all' | 'wrongOnly' — 퀴즈 페이지에서 바로 복습 시작
@@ -2853,9 +2862,9 @@ export default function FolderDetailPage() {
   return (
     <motion.div
       className="min-h-screen pb-24" style={{ backgroundColor: '#F5F0E8' }}
-      initial={{ opacity: 0, y: 30 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+      initial={slideIn ? { opacity: 0, x: 60 } : false}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 35 }}
     >
       {/* 헤더 - 배너 이미지 */}
       <header className="pt-4 pb-2 flex flex-col items-center">

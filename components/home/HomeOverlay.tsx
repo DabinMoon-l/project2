@@ -16,6 +16,7 @@ import { useWideMode, scaleCoord } from '@/lib/hooks/useViewportScale';
 
 const SWIPE_THRESHOLD = 120;
 const WHEEL_THRESHOLD = 80;
+const PULL_DEAD_ZONE = 15; // 탭과 스와이프 구분 최소 이동 거리 (px)
 const HOME_BG_IMAGE = '/images/home-bg.jpg';
 const OPEN_MS = 400;   // 열기: 스케일 확장
 const CLOSE_MS = 350;  // 닫기: 슬라이드 다운
@@ -121,14 +122,26 @@ export default function HomeOverlay() {
   const onTouchStart = useCallback((e: React.TouchEvent) => {
     if (phaseRef.current !== 'open' || isModalOpen()) return;
     startY.current = scaleCoord(e.touches[0].clientY);
-    pulling.current = true;
-    noTransitionRef.current = true;
+    // 바로 pulling 시작하지 않음 — dead zone 통과 후 시작
+    pulling.current = false;
   }, []);
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!pulling.current || phaseRef.current !== 'open') return;
-    // 위로 스와이프 → 오버레이 위로 올라감
-    const delta = startY.current - scaleCoord(e.touches[0].clientY);
+    if (phaseRef.current !== 'open') return;
+    const cy = scaleCoord(e.touches[0].clientY);
+    const delta = startY.current - cy;
+
+    // 아직 pulling 시작 전 → dead zone 체크
+    if (!pulling.current) {
+      if (delta > PULL_DEAD_ZONE) {
+        pulling.current = true;
+        noTransitionRef.current = true;
+        startY.current = cy; // 기준점 리셋
+      }
+      return;
+    }
+
+    // pulling 중 — 위로 스와이프
     if (delta > 0) {
       setPullY(delta * 0.6);
     } else {
@@ -139,7 +152,8 @@ export default function HomeOverlay() {
   }, []);
 
   const onTouchEnd = useCallback(() => {
-    if (!pulling.current || phaseRef.current !== 'open') return;
+    if (!pulling.current) return; // 탭이었으면 무시
+    if (phaseRef.current !== 'open') return;
     pulling.current = false;
     noTransitionRef.current = false;
     if (pullY > SWIPE_THRESHOLD) {
@@ -240,7 +254,7 @@ export default function HomeOverlay() {
         {/* 프로필 + 닉네임 */}
         <div className="px-5 flex items-center gap-4 mb-2">
           <button
-            className="w-20 h-20 flex items-center justify-center flex-shrink-0 rounded-xl overflow-hidden"
+            className="w-16 h-16 flex items-center justify-center flex-shrink-0 rounded-xl overflow-hidden"
             style={{
               background: 'rgba(0, 0, 0, 0.3)',
               border: '1px solid rgba(255, 255, 255, 0.1)',
@@ -263,7 +277,7 @@ export default function HomeOverlay() {
               </svg>
             )}
           </button>
-          <p className="font-bold text-6xl text-white truncate leading-normal flex-1">
+          <p className="font-bold text-4xl text-white truncate leading-normal flex-1">
             {profile.nickname}
           </p>
         </div>

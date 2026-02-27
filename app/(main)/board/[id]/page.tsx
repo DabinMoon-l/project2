@@ -108,6 +108,15 @@ export default function PostDetailPage() {
   const router = useRouter();
   const postId = params.id as string;
 
+  // 최초 진입 시에만 슬라이드 애니메이션 (뒤로가기 시 재발동 방지)
+  const [slideIn] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const key = `visited_board_${params.id}`;
+    if (sessionStorage.getItem(key)) return false;
+    sessionStorage.setItem(key, '1');
+    return true;
+  });
+
   const { user } = useAuth();
   const { profile } = useUser();
   const isProfessor = profile?.role === 'professor';
@@ -215,9 +224,9 @@ export default function PostDetailPage() {
   return (
     <motion.div
       className="min-h-screen pb-24 overflow-x-hidden" data-board-detail style={{ backgroundColor: '#F5F0E8' }}
-      initial={{ opacity: 0, y: 30 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+      initial={slideIn ? { opacity: 0, x: 60 } : false}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 35 }}
     >
       {/* 헤더 */}
       <header className="mx-4 mt-4 pb-4">

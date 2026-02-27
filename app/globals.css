@@ -18,8 +18,8 @@ html {
   height: 100%;
   overflow-x: hidden;
   overscroll-behavior: none;
-  /* 둥근 모서리 뒤 검정 (상태바와 통합) */
-  background-color: #000;
+  /* 아이폰 safe area 배경 — 앱 테마와 통일 */
+  background-color: #F5F0E8;
   color: var(--text-dark);
 }
 
