@@ -45,6 +45,7 @@ export default function StudentMonitoringPage() {
     loading,
     error,
     subscribeStudents,
+    getInstantDetail,
     fetchStudentDetail,
     clearError,
   } = useProfessorStudents();
@@ -141,28 +142,39 @@ export default function StudentMonitoringPage() {
     return map;
   }, [filteredStudents]);
 
-  // 학생 클릭 — 즉시 모달 열기 + 백그라운드 로드
+  // 학생 클릭 — 동기 캐시에서 즉시 레이더+학업 표시 + 백그라운드 보충
   const handleStudentClick = useCallback(async (uid: string) => {
-    const basicStudent = studentsRef.current.find(s => s.uid === uid);
-    if (!basicStudent) return;
+    // 캐시에서 동기적으로 데이터 가져오기 (레이더+학업 즉시 표시)
+    const instant = getInstantDetail(uid);
 
-    // 기본 데이터로 즉시 모달 열기 (상세 데이터는 빈값)
-    setSelectedStudentDetail({
-      ...basicStudent,
-      recentQuizzes: [],
-      recentFeedbacks: [],
-      boardPostCount: 0,
-      boardCommentCount: 0,
-      boardPosts: [],
-      boardCommentsList: [],
-      // radarMetrics: undefined → 로딩 상태
-    });
+    if (instant) {
+      setSelectedStudentDetail(instant);
+    } else {
+      const basicStudent = studentsRef.current.find(s => s.uid === uid);
+      if (!basicStudent) return;
+      setSelectedStudentDetail({
+        ...basicStudent,
+        recentQuizzes: [],
+        recentFeedbacks: [],
+      });
+    }
     setDetailOpen(true);
 
-    // 상세 데이터 백그라운드 로드 (Phase 1 → 즉시 업데이트, Phase 2 → 최종 업데이트)
-    const detail = await fetchStudentDetail(uid, setSelectedStudentDetail);
-    if (detail) setSelectedStudentDetail(detail);
-  }, [fetchStudentDetail]);
+    // 백그라운드에서 보충 데이터 로드 (recentQuizzes, recentFeedbacks)
+    // 기존 레이더/학업 데이터는 절대 덮어쓰지 않음
+    const detail = await fetchStudentDetail(uid);
+    if (detail) {
+      setSelectedStudentDetail(prev => {
+        if (!prev) return detail;
+        return {
+          ...detail,
+          radarMetrics: detail.radarMetrics ?? prev.radarMetrics,
+          weightedScore: detail.weightedScore ?? prev.weightedScore,
+          classWeightedScores: detail.classWeightedScores ?? prev.classWeightedScores,
+        };
+      });
+    }
+  }, [getInstantDetail, fetchStudentDetail]);
 
   // allStudents (모달에 전달)
   const allStudentsForModal = useMemo(() =>

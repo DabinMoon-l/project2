@@ -316,6 +316,11 @@ export { workerProcessJob, retryQueuedJobs, cleanupExpiredJobs } from "./workerP
 export { refreshRankings, computeRankingsScheduled } from "./computeRankings";
 
 // ============================================
+// 레이더 정규화 사전 계산 Functions
+// ============================================
+export { refreshRadarNorm, computeRadarNormScheduled } from "./computeRadarNorm";
+
+// ============================================
 // 토끼 시스템 Functions (발견 + 장착)
 // ============================================
 export { spinRabbitGacha, claimGachaRabbit } from "./rabbitGacha";
