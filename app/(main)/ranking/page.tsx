@@ -13,6 +13,7 @@ import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 import { getRabbitImageSrc } from '@/lib/utils/rabbitImage';
 import { readFullCache, writeFullCache } from '@/lib/utils/rankingCache';
 import { computeRankScore } from '@/lib/utils/ranking';
+import { ScrollToTopButton } from '@/components/common';
 
 /**
  * 랭킹 유저 데이터
@@ -50,7 +51,6 @@ export default function RankingPage() {
 
   // 스크롤 업 버튼
   const topSectionRef = useRef<HTMLDivElement>(null);
-  const [showScrollTop, setShowScrollTop] = useState(false);
 
   // 네비게이션 숨김
   useEffect(() => {
@@ -60,26 +60,6 @@ export default function RankingPage() {
     };
   }, []);
 
-  // Top 3 가시성 감지 — 로딩 완료 후 observer 연결
-  useEffect(() => {
-    if (loading) return;
-    const el = topSectionRef.current;
-    if (!el) return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        setShowScrollTop(!entry.isIntersecting);
-      },
-      { threshold: 0 }
-    );
-
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [loading]);
-
-  const scrollToTop = useCallback(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, []);
 
   // 랭킹 데이터를 현재 유저 프로필로 보정하는 헬퍼
   const applyRankings = useCallback((users: RankedUser[]) => {
@@ -452,32 +432,7 @@ export default function RankingPage() {
       )}
 
       {/* 스크롤 맨 위로 버튼 */}
-      <AnimatePresence>
-        {showScrollTop && (
-          <motion.button
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            onClick={scrollToTop}
-            className="fixed bottom-24 right-4 z-40 w-12 h-12 bg-white/20 backdrop-blur-sm text-white rounded-full shadow-lg flex items-center justify-center hover:bg-white/30 transition-colors"
-            aria-label="맨 위로"
-          >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 10l7-7m0 0l7 7m-7-7v18"
-              />
-            </svg>
-          </motion.button>
-        )}
-      </AnimatePresence>
+      <ScrollToTopButton targetRef={topSectionRef} variant="glass" />
 
       {/* 랭킹 안내 모달 */}
       <AnimatePresence>

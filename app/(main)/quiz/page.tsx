@@ -20,7 +20,8 @@ import { useQuizBookmark } from '@/lib/hooks/useQuizBookmark';
 import { useQuizUpdate, type QuizUpdateInfo } from '@/lib/hooks/useQuizUpdate';
 import UpdateQuizModal from '@/components/quiz/UpdateQuizModal';
 import QuizStatsModal from '@/components/quiz/manage/QuizStatsModal';
-import { Skeleton } from '@/components/common';
+import { Skeleton, ScrollToTopButton, ExpandModal } from '@/components/common';
+import { useExpandSource } from '@/lib/hooks/useExpandSource';
 import { useCourse } from '@/lib/contexts';
 import { COURSES, getCurrentSemesterByDate, getDefaultQuizTab, getPastExamOptions, type PastExamOption } from '@/lib/types/course';
 import { generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
@@ -798,6 +799,7 @@ function NewsCarousel({
                       opacity: isActive ? 1 : 0.85,
                       y: isActive ? -10 : 2,
                     }}
+                    whileTap={{ scale: 0.97 }}
                     transition={transitionOn ? { duration: 0.35, ease: 'easeOut' } : { duration: 0 }}
                     className="absolute inset-0 origin-center rounded-sm"
                     style={{ transformStyle: 'preserve-3d' }}
@@ -902,7 +904,8 @@ function ReviewQuizCard({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -4, boxShadow: '0 8px 20px rgba(0, 0, 0, 0.08)' }}
-      transition={{ duration: 0.2 }}
+      whileTap={{ scale: 0.95, opacity: 0.7 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
       onClick={(e) => {
         // 버튼/드롭다운 클릭은 카드 네비게이션 무시
         if ((e.target as HTMLElement).closest('button') || showReviewMenu) return;
@@ -1107,7 +1110,8 @@ function CustomQuizCard({
   return (
     <motion.div
       whileHover={{ y: -4, boxShadow: '0 8px 20px rgba(0, 0, 0, 0.08)' }}
-      transition={{ duration: 0.2 }}
+      whileTap={{ scale: 0.95, opacity: 0.7 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
       className="relative border border-[#999] bg-[#F5F0E8]/70 backdrop-blur-sm overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
     >
       {/* 신문 배경 텍스트 */}
@@ -1314,7 +1318,8 @@ function ManageQuizCard({
   return (
     <motion.div
       whileHover={{ y: -4, boxShadow: '0 8px 20px rgba(0, 0, 0, 0.08)' }}
-      transition={{ duration: 0.2 }}
+      whileTap={{ scale: 0.95, opacity: 0.7 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
       className="border border-[#999] bg-[#F5F0E8]/70 backdrop-blur-sm p-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] cursor-pointer"
     >
       <div className="h-[44px] mb-2">
@@ -1414,6 +1419,8 @@ function QuizListPageContent() {
   }), [isLoading, updatesLoading]);
 
   const [selectedQuiz, setSelectedQuiz] = useState<QuizCardData | null>(null);
+  const { sourceRect, registerRef, captureRect, clearRect } = useExpandSource();
+  const { sourceRect: reviewSourceRect, registerRef: registerReviewRef, captureRect: captureReviewRect, clearRect: clearReviewRect } = useExpandSource();
 
   // 기출 드롭다운
   const pastExamOptions = useMemo(() => getPastExamOptions(userCourseId), [userCourseId]);
@@ -1441,7 +1448,6 @@ function QuizListPageContent() {
 
   // 스크롤 맨 위로 버튼
   const customSectionRef = useRef<HTMLDivElement>(null);
-  const [showScrollTop, setShowScrollTop] = useState(false);
 
   // 복습 탭 Details 모달
   const [reviewDetailsQuiz, setReviewDetailsQuiz] = useState<QuizCardData | null>(null);
@@ -1697,22 +1703,6 @@ function QuizListPageContent() {
     }
   }, [isManageMode, searchParams, router]);
 
-  // 자작 섹션 가시성 감지 (스크롤 맨 위로 버튼)
-  useEffect(() => {
-    const el = customSectionRef.current;
-    if (!el) return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => setShowScrollTop(!entry.isIntersecting),
-      { threshold: 0 }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
-  const scrollToTop = useCallback(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, []);
 
   // ============================================================
   // 핸들러 함수들
@@ -1723,6 +1713,7 @@ function QuizListPageContent() {
   };
 
   const handleShowDetails = (quiz: QuizCardData) => {
+    captureRect(quiz.id);
     setSelectedQuiz(quiz);
   };
 
@@ -2124,6 +2115,7 @@ function QuizListPageContent() {
                 {filteredCustomQuizzes.map((quiz, index) => (
                   <motion.div
                     key={quiz.id}
+                    ref={(el) => registerRef(quiz.id, el)}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.03 }}
@@ -2189,6 +2181,7 @@ function QuizListPageContent() {
                 {filteredCompletedQuizzes.map((quiz, index) => (
                   <motion.div
                     key={quiz.id}
+                    ref={(el) => registerReviewRef(quiz.id, el)}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.03 }}
@@ -2196,7 +2189,7 @@ function QuizListPageContent() {
                     <ReviewQuizCard
                       quiz={quiz}
                       onCardClick={() => router.push(`/review/library/${quiz.id}?from=quiz`)}
-                      onDetails={() => setReviewDetailsQuiz(quiz)}
+                      onDetails={() => { captureReviewRect(quiz.id); setReviewDetailsQuiz(quiz); }}
                       onReview={() => router.push(`/review/library/${quiz.id}?from=quiz&autoStart=all`)}
                       onReviewWrongOnly={() => router.push(`/review/library/${quiz.id}?from=quiz&autoStart=wrongOnly`)}
                       isBookmarked={isBookmarked(quiz.id)}
@@ -2213,18 +2206,14 @@ function QuizListPageContent() {
       </section>
 
       {/* 퀴즈 상세 모달 */}
-      {selectedQuiz && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
-          onClick={() => setSelectedQuiz(null)}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
-          >
+      <ExpandModal
+        isOpen={!!selectedQuiz}
+        onClose={() => { setSelectedQuiz(null); clearRect(); }}
+        sourceRect={sourceRect}
+        className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
+      >
+        {selectedQuiz && (
+          <>
             <h2 className="text-lg font-bold text-[#1A1A1A] mb-4">{selectedQuiz.title}</h2>
 
             {/* 미완료: 평균 점수 대형 박스 (Start 버전) */}
@@ -2319,18 +2308,20 @@ function QuizListPageContent() {
 
             <div className="flex gap-3">
               <button
-                onClick={() => setSelectedQuiz(null)}
+                onClick={() => { setSelectedQuiz(null); clearRect(); }}
                 className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
               >
                 닫기
               </button>
               <button
                 onClick={() => {
+                  const quiz = selectedQuiz;
                   setSelectedQuiz(null);
-                  if (selectedQuiz.isCompleted) {
-                    router.push(`/review/library/${selectedQuiz.id}?from=quiz`);
+                  clearRect();
+                  if (quiz.isCompleted) {
+                    router.push(`/review/library/${quiz.id}?from=quiz`);
                   } else {
-                    handleStartQuiz(selectedQuiz.id);
+                    handleStartQuiz(quiz.id);
                   }
                 }}
                 className="flex-1 py-3 font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
@@ -2338,23 +2329,20 @@ function QuizListPageContent() {
                 {selectedQuiz.isCompleted ? '복습하기' : '시작하기'}
               </button>
             </div>
-          </motion.div>
-        </div>
-      )}
+          </>
+        )}
+      </ExpandModal>
 
       {/* 복습 탭 Details 모달 */}
-      {reviewDetailsQuiz && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
-          onClick={() => setReviewDetailsQuiz(null)}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
-          >
+      <ExpandModal
+        isOpen={!!reviewDetailsQuiz}
+        onClose={() => { setReviewDetailsQuiz(null); clearReviewRect(); }}
+        sourceRect={reviewSourceRect}
+        className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
+        zIndex={60}
+      >
+        {reviewDetailsQuiz && (
+          <>
             <h2 className="text-2xl font-bold text-[#1A1A1A] mb-4">
               {reviewDetailsQuiz.title}
             </h2>
@@ -2432,24 +2420,26 @@ function QuizListPageContent() {
 
             <div className="flex gap-3">
               <button
-                onClick={() => setReviewDetailsQuiz(null)}
+                onClick={() => { setReviewDetailsQuiz(null); clearReviewRect(); }}
                 className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
               >
                 닫기
               </button>
               <button
                 onClick={() => {
-                  router.push(`/review/library/${reviewDetailsQuiz.id}?from=quiz`);
+                  const quiz = reviewDetailsQuiz;
                   setReviewDetailsQuiz(null);
+                  clearReviewRect();
+                  router.push(`/review/library/${quiz.id}?from=quiz`);
                 }}
                 className="flex-1 py-3 font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
               >
                 복습하기
               </button>
             </div>
-          </motion.div>
-        </div>
-      )}
+          </>
+        )}
+      </ExpandModal>
 
       {/* 업데이트 확인 모달 */}
       {updateConfirmQuiz && (
@@ -2598,22 +2588,7 @@ function QuizListPageContent() {
       )}
 
       {/* 스크롤 맨 위로 버튼 */}
-      <AnimatePresence>
-        {showScrollTop && (
-          <motion.button
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            onClick={scrollToTop}
-            className="fixed bottom-[120px] left-4 z-40 w-12 h-12 bg-[#1A1A1A] text-[#F5F0E8] rounded-full shadow-lg flex items-center justify-center hover:bg-[#3A3A3A] transition-colors"
-            aria-label="맨 위로"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-            </svg>
-          </motion.button>
-        )}
-      </AnimatePresence>
+      <ScrollToTopButton targetRef={customSectionRef} bottom="bottom-[120px]" side="left" />
     </div>
   );
 }

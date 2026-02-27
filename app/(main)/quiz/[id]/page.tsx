@@ -770,7 +770,12 @@ export default function QuizPage() {
   const currentAnswer = currentQuestion ? answers[currentQuestion.id] : null;
 
   return (
-    <div className="min-h-screen pb-24" style={{ backgroundColor: '#F5F0E8' }}>
+    <motion.div
+      className="min-h-screen pb-24" style={{ backgroundColor: '#F5F0E8' }}
+      initial={{ opacity: 0, y: 30 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+    >
       {/* 퀴즈 헤더 */}
       <QuizHeader
         title={quiz.title}
@@ -967,6 +972,6 @@ export default function QuizPage() {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { ButtonHTMLAttributes, forwardRef } from 'react';
 import { motion, HTMLMotionProps } from 'framer-motion';
+import { SPRING_TAP, TAP_SCALE } from '@/lib/constants/springs';
 
 // 버튼 variant 타입
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'white';
@@ -74,8 +75,8 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <motion.button
         ref={ref}
-        whileTap={!isDisabled ? { scale: 0.97 } : undefined}
-        transition={{ duration: 0.1 }}
+        whileTap={!isDisabled ? TAP_SCALE : undefined}
+        transition={SPRING_TAP}
         disabled={isDisabled}
         className={`
           inline-flex items-center justify-center gap-2

@@ -63,3 +63,9 @@ export { default as SplashScreen } from './SplashScreen';
 
 // ImageViewer 컴포넌트 (이미지 전체화면 뷰어)
 export { default as ImageViewer } from './ImageViewer';
+
+// ScrollToTopButton 컴포넌트 (스크롤 맨 위로 FAB)
+export { default as ScrollToTopButton } from './ScrollToTopButton';
+
+// ExpandModal 컴포넌트 (Apple Music 스타일 확장/축소 모달)
+export { default as ExpandModal } from './ExpandModal';

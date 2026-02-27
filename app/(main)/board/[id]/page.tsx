@@ -213,7 +213,12 @@ export default function PostDetailPage() {
   }
 
   return (
-    <div className="min-h-screen pb-24 overflow-x-hidden" data-board-detail style={{ backgroundColor: '#F5F0E8' }}>
+    <motion.div
+      className="min-h-screen pb-24 overflow-x-hidden" data-board-detail style={{ backgroundColor: '#F5F0E8' }}
+      initial={{ opacity: 0, y: 30 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+    >
       {/* 헤더 */}
       <header className="mx-4 mt-4 pb-4">
         <button
@@ -320,6 +325,6 @@ export default function PostDetailPage() {
           <CommentSection postId={postId} postAuthorId={post.authorId} />
         </section>
       </main>
-    </div>
+    </motion.div>
   );
 }

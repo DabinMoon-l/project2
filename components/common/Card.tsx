@@ -2,6 +2,7 @@
 
 import { HTMLAttributes, forwardRef } from 'react';
 import { motion, HTMLMotionProps } from 'framer-motion';
+import { TAP_SCALE } from '@/lib/constants/springs';
 
 // Card variant 타입
 type CardVariant = 'default' | 'elevated' | 'outlined';
@@ -75,7 +76,7 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
               }
             : undefined
         }
-        whileTap={clickable || onClick ? { scale: 0.99 } : undefined}
+        whileTap={clickable || onClick ? TAP_SCALE : undefined}
         transition={{ type: 'spring', stiffness: 400, damping: 25 }}
         onClick={onClick}
         role={clickable || onClick ? 'button' : undefined}

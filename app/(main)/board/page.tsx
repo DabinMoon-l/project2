@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Skeleton } from '@/components/common';
+import { Skeleton, ScrollToTopButton } from '@/components/common';
+import { SPRING_TAP, TAP_SCALE } from '@/lib/constants/springs';
 import { usePosts, usePinnedPosts, type Post, type Comment } from '@/lib/hooks/useBoard';
 import { useCourse } from '@/lib/contexts/CourseContext';
 import { useUser } from '@/lib/contexts/UserContext';
@@ -83,8 +84,10 @@ const HeadlineArticle = memo(function HeadlineArticle({
   const remainingCount = totalCommentCount - displayCount;
 
   return (
-    <article
+    <motion.article
       onClick={onClick}
+      whileTap={onClick ? TAP_SCALE : undefined}
+      transition={SPRING_TAP}
       className={`group border border-[#1A1A1A] bg-[#F5F0E8] relative transition-all ${onClick ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-md' : ''}`}
     >
       {/* 고정 아이콘 — 교수 전용 (헤더카드는 좌측 상단) */}
@@ -173,7 +176,7 @@ const HeadlineArticle = memo(function HeadlineArticle({
           </div>
         </div>
       </div>
-    </article>
+    </motion.article>
   );
 });
 
@@ -352,8 +355,10 @@ const MasonryItem = memo(function MasonryItem({
   );
 
   return (
-    <article
+    <motion.article
       onClick={onClick}
+      whileTap={TAP_SCALE}
+      transition={SPRING_TAP}
       className="cursor-pointer group break-inside-avoid mb-4 p-3 border border-[#1A1A1A] bg-[#F5F0E8] relative hover:-translate-y-0.5 hover:shadow-md transition-all"
     >
       {/* 고정 아이콘 — 교수: 클릭으로 고정/해제 토글, 학생: 고정글만 정적 표시 */}
@@ -432,7 +437,7 @@ const MasonryItem = memo(function MasonryItem({
           )}
         </div>
       )}
-    </article>
+    </motion.article>
   );
 });
 
@@ -504,29 +509,6 @@ export default function BoardPage() {
 
   // 헤더 가시성 추적 (스크롤 맨 위로 버튼용)
   const headerRef = useRef<HTMLElement>(null);
-  const [showScrollTop, setShowScrollTop] = useState(false);
-
-  // 헤더 가시성 감지
-  useEffect(() => {
-    const header = headerRef.current;
-    if (!header) return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        // 헤더가 화면에서 사라지면 버튼 표시
-        setShowScrollTop(!entry.isIntersecting);
-      },
-      { threshold: 0 }
-    );
-
-    observer.observe(header);
-    return () => observer.disconnect();
-  }, []);
-
-  // 맨 위로 스크롤
-  const scrollToTop = useCallback(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, []);
 
   // 댓글 미리보기 대상 postId (고정글 + 최신 20개만 — 카드 미리보기용)
   const commentTargetIds = useMemo(() => {
@@ -1011,32 +993,7 @@ export default function BoardPage() {
       </main>
 
       {/* 스크롤 맨 위로 버튼 */}
-      <AnimatePresence>
-        {showScrollTop && (
-          <motion.button
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            onClick={scrollToTop}
-            className="fixed bottom-24 right-4 z-40 w-12 h-12 bg-[#1A1A1A] text-[#F5F0E8] rounded-full shadow-lg flex items-center justify-center hover:bg-[#3A3A3A] transition-colors"
-            aria-label="맨 위로"
-          >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 10l7-7m0 0l7 7m-7-7v18"
-              />
-            </svg>
-          </motion.button>
-        )}
-      </AnimatePresence>
+      <ScrollToTopButton targetRef={headerRef} />
 
       {/* 핀 피드백 토스트 */}
       <AnimatePresence>

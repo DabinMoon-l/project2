@@ -2851,7 +2851,12 @@ export default function FolderDetailPage() {
   };
 
   return (
-    <div className="min-h-screen pb-24" style={{ backgroundColor: '#F5F0E8' }}>
+    <motion.div
+      className="min-h-screen pb-24" style={{ backgroundColor: '#F5F0E8' }}
+      initial={{ opacity: 0, y: 30 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+    >
       {/* 헤더 - 배너 이미지 */}
       <header className="pt-4 pb-2 flex flex-col items-center">
         {/* 리본 이미지 */}
@@ -3787,6 +3792,6 @@ export default function FolderDetailPage() {
           </motion.div>
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }

@@ -10,6 +10,7 @@ import {
   type ClassType,
 } from '@/lib/hooks/useProfessorStudents';
 import { useCourse } from '@/lib/contexts';
+import { ScrollToTopButton } from '@/components/common';
 import { mean, sd, zScore } from '@/lib/utils/statistics';
 
 import StudentListView, { type SortKey } from '@/components/professor/students/StudentListView';
@@ -77,21 +78,6 @@ export default function StudentMonitoringPage() {
 
   // 스크롤 맨 위로 (도넛 섹션 기준)
   const donutRef = useRef<HTMLDivElement>(null);
-  const [showScrollTop, setShowScrollTop] = useState(false);
-
-  useEffect(() => {
-    const el = donutRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(([entry]) => {
-      setShowScrollTop(!entry.isIntersecting);
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
-  const scrollToTop = useCallback(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, []);
 
   // 실시간 구독 (courseId 변경 시 재구독)
   useEffect(() => {
@@ -308,22 +294,7 @@ export default function StudentMonitoringPage() {
       />
 
       {/* 스크롤 맨 위로 */}
-      <AnimatePresence>
-        {showScrollTop && (
-          <motion.button
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            onClick={scrollToTop}
-            className="fixed bottom-24 right-4 z-40 w-12 h-12 bg-[#1A1A1A] text-[#F5F0E8] rounded-full shadow-lg flex items-center justify-center hover:bg-[#3A3A3A] transition-colors"
-            aria-label="맨 위로"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-            </svg>
-          </motion.button>
-        )}
-      </AnimatePresence>
+      <ScrollToTopButton targetRef={donutRef} />
 
       {/* 학생 등록 모달 */}
       <AnimatePresence>

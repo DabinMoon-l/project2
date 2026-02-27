@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { collection, query, where, onSnapshot, getDocs, getDoc, updateDoc, doc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Skeleton } from '@/components/common';
+import { Skeleton, ScrollToTopButton, ExpandModal } from '@/components/common';
+import { useExpandSource } from '@/lib/hooks/useExpandSource';
+import { TAP_SCALE } from '@/lib/constants/springs';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse, useUser } from '@/lib/contexts';
 import { COURSES, type CourseId, getDefaultQuizTab, getPastExamOptions, type PastExamOption } from '@/lib/types/course';
@@ -805,6 +807,7 @@ function ProfessorCustomQuizCard({
   return (
     <motion.div
       whileHover={{ y: -4, boxShadow: '0 8px 20px rgba(0, 0, 0, 0.08)' }}
+      whileTap={TAP_SCALE}
       transition={{ duration: 0.2 }}
       className="relative border border-[#999] bg-[#F5F0E8]/70 backdrop-blur-sm overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)] cursor-pointer"
       onClick={onClick}
@@ -1055,22 +1058,6 @@ export default function ProfessorQuizListPage() {
 
   // 스크롤 맨 위로 버튼
   const headerRef = useRef<HTMLElement>(null);
-  const [showScrollTop, setShowScrollTop] = useState(false);
-
-  useEffect(() => {
-    const header = headerRef.current;
-    if (!header) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setShowScrollTop(!entry.isIntersecting),
-      { threshold: 0 }
-    );
-    observer.observe(header);
-    return () => observer.disconnect();
-  }, []);
-
-  const scrollToTop = useCallback(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, []);
 
   // 피드백 점수 데이터
   const [feedbackMap, setFeedbackMap] = useState<Record<string, QuizFeedbackInfo>>({});
@@ -1287,6 +1274,7 @@ export default function ProfessorQuizListPage() {
   // Details 모달 상태
   const [detailsQuiz, setDetailsQuiz] = useState<ProfessorQuiz | null>(null);
   const [detailsSource, setDetailsSource] = useState<'carousel' | 'custom'>('carousel');
+  const { sourceRect: detailsSourceRect, registerRef: registerDetailsRef, captureRect: captureDetailsRect, clearRect: clearDetailsRect } = useExpandSource();
   // Stats 모달 상태
   const [statsQuizId, setStatsQuizId] = useState<{ id: string; title: string } | null>(null);
 
@@ -1353,10 +1341,11 @@ export default function ProfessorQuizListPage() {
   // 캐러셀 내부 Details → 모달
   const handleCarouselDetails = useCallback(
     (quiz: ProfessorQuiz) => {
+      captureDetailsRect(quiz.id);
       setDetailsSource('carousel');
       setDetailsQuiz(quiz);
     },
-    []
+    [captureDetailsRect]
   );
 
   // 캐러셀 내부 Stats → 통계 모달 (비공개면 무시)
@@ -1690,6 +1679,7 @@ export default function ProfessorQuizListPage() {
                 {filteredCustomQuizzes.map((quiz, index) => (
                   <motion.div
                     key={quiz.id}
+                    ref={(el) => registerDetailsRef(quiz.id, el)}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.03 }}
@@ -1697,7 +1687,7 @@ export default function ProfessorQuizListPage() {
                     <ProfessorCustomQuizCard
                       quiz={quiz}
                       feedbackInfo={feedbackMap[quiz.id]}
-                      onDetails={() => { setDetailsSource('custom'); setDetailsQuiz(quiz); }}
+                      onDetails={() => { captureDetailsRect(quiz.id); setDetailsSource('custom'); setDetailsQuiz(quiz); }}
                       onStats={() => setStatsQuizId({ id: quiz.id, title: quiz.title })}
                       onClick={() => router.push(`/professor/quiz/${quiz.id}/preview`)}
                     />
@@ -1964,18 +1954,14 @@ export default function ProfessorQuizListPage() {
       )}
 
       {/* Details 모달 */}
-      {detailsQuiz && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 overflow-hidden overscroll-none"
-          onClick={() => setDetailsQuiz(null)}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
-          >
+      <ExpandModal
+        isOpen={!!detailsQuiz}
+        onClose={() => { setDetailsQuiz(null); clearDetailsRect(); }}
+        sourceRect={detailsSourceRect}
+        className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
+      >
+        {detailsQuiz && (
+          <>
             <h2 className="text-lg font-bold text-[#1A1A1A] mb-2">{detailsQuiz.title}</h2>
 
             {/* 총평 */}
@@ -2062,7 +2048,7 @@ export default function ProfessorQuizListPage() {
 
             <div className="flex gap-2">
               <button
-                onClick={() => setDetailsQuiz(null)}
+                onClick={() => { setDetailsQuiz(null); clearDetailsRect(); }}
                 className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
               >
                 닫기
@@ -2072,6 +2058,7 @@ export default function ProfessorQuizListPage() {
                   onClick={() => {
                     const quiz = detailsQuiz;
                     setDetailsQuiz(null);
+                    clearDetailsRect();
                     router.push(`/professor/quiz/${quiz.id}/preview`);
                   }}
                   className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
@@ -2080,9 +2067,9 @@ export default function ProfessorQuizListPage() {
                 </button>
               )}
             </div>
-          </motion.div>
-        </div>
-      )}
+          </>
+        )}
+      </ExpandModal>
 
       {/* Stats 모달 */}
       {statsQuizId && (
@@ -2157,24 +2144,11 @@ export default function ProfessorQuizListPage() {
       </AnimatePresence>
 
       {/* 스크롤 맨 위로 버튼 (프리뷰 모드에서 숨김) */}
-      <AnimatePresence>
-        {showScrollTop && !isLibraryPreview && (
-          <motion.button
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            onClick={scrollToTop}
-            className={`fixed right-4 z-40 w-12 h-12 bg-[#1A1A1A] text-[#F5F0E8] rounded-full shadow-lg flex items-center justify-center hover:bg-[#3A3A3A] transition-all ${
-              sectionFilter === 'library' ? 'bottom-44' : 'bottom-24'
-            }`}
-            aria-label="맨 위로"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-            </svg>
-          </motion.button>
-        )}
-      </AnimatePresence>
+      <ScrollToTopButton
+        targetRef={headerRef}
+        hidden={isLibraryPreview}
+        bottom={sectionFilter === 'library' ? 'bottom-44' : 'bottom-24'}
+      />
     </div>
   );
 }
