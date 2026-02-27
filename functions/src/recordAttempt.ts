@@ -116,7 +116,7 @@ export const recordAttempt = onCall(
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
     }
     const userId = request.auth.uid;
-    const { quizId, answers, attemptNo = 1 } = request.data as RecordAttemptInput;
+    const { quizId, answers } = request.data as RecordAttemptInput;
 
     if (!quizId || !answers || !Array.isArray(answers)) {
       throw new HttpsError("invalid-argument", "quizId와 answers 배열이 필요합니다.");
@@ -129,7 +129,16 @@ export const recordAttempt = onCall(
       throw new HttpsError("resource-exhausted", e.message);
     }
 
-    // ── ② Idempotency 검사 ──
+    // ── ② attemptNo를 서버에서 계산 (클라이언트 조작 방지) ──
+    const prevAttempts = await db
+      .collection("quizResults")
+      .where("userId", "==", userId)
+      .where("quizId", "==", quizId)
+      .count()
+      .get();
+    const attemptNo = prevAttempts.data().count + 1;
+
+    // ── ③ Idempotency 검사 ──
     const attemptKey = `${userId}_${quizId}_${attemptNo}`;
     const existingSnap = await db
       .collection("quizResults")

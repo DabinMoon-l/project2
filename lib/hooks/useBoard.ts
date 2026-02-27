@@ -22,17 +22,15 @@ import {
   getDocs,
   getDoc,
   addDoc,
+  setDoc,
   updateDoc,
   deleteDoc,
-  increment,
   serverTimestamp,
   DocumentSnapshot,
   QueryDocumentSnapshot,
   Timestamp,
   onSnapshot,
   deleteField,
-  arrayUnion,
-  arrayRemove,
   writeBatch,
 } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -974,11 +972,7 @@ export const useCreateComment = (): UseCreateCommentReturn => {
 
         const docRef = await addDoc(collection(db, 'comments'), commentData);
 
-        // 게시글의 댓글 수 증가
-        const postRef = doc(db, 'posts', data.postId);
-        await updateDoc(postRef, {
-          commentCount: increment(1),
-        });
+        // commentCount 증가는 CF(onCommentCreate)에서 서버사이드 처리
 
         // 작성 시간 기록
         recordCommentTime();
@@ -1037,14 +1031,8 @@ export const useDeleteComment = (): UseDeleteCommentReturn => {
           return false;
         }
 
-        // 댓글 삭제
+        // 댓글 삭제 → CF(onCommentDeleted)에서 commentCount 서버사이드 감소
         await deleteDoc(commentRef);
-
-        // 게시글의 댓글 수 감소
-        const postRef = doc(db, 'posts', postId);
-        await updateDoc(postRef, {
-          commentCount: increment(-1),
-        });
 
         return true;
       } catch (err) {
@@ -1240,25 +1228,28 @@ export const useLike = (): UseLikeReturn => {
         setLoading(true);
         setError(null);
 
-        const postRef = doc(db, 'posts', postId);
         const isCurrentlyLiked = likedPosts.has(postId);
+        const likeDocId = `${user.uid}_post_${postId}`;
+        const likeRef = doc(db, 'likes', likeDocId);
 
         if (isCurrentlyLiked) {
-          // 좋아요 취소 — arrayRemove는 원자적으로 중복 없이 제거
-          await updateDoc(postRef, {
-            likedBy: arrayRemove(user.uid),
-            likes: increment(-1),
-          });
+          // 좋아요 취소 — likes 컬렉션에서 삭제 → CF가 posts.likes/likedBy 업데이트
+          await deleteDoc(likeRef);
           setLikedPosts((prev) => {
             const newSet = new Set(prev);
             newSet.delete(postId);
             return newSet;
           });
         } else {
-          // 좋아요 — arrayUnion은 원자적으로 중복 없이 추가
-          await updateDoc(postRef, {
-            likedBy: arrayUnion(user.uid),
-            likes: increment(1),
+          // 좋아요 — likes 컬렉션에 생성 → CF가 posts.likes/likedBy 업데이트
+          const postSnap = await getDoc(doc(db, 'posts', postId));
+          const postAuthorId = postSnap.data()?.authorId || postSnap.data()?.userId || '';
+          await setDoc(likeRef, {
+            userId: user.uid,
+            targetType: 'post',
+            targetId: postId,
+            targetUserId: postAuthorId,
+            createdAt: serverTimestamp(),
           });
           setLikedPosts((prev) => new Set(prev).add(postId));
         }
@@ -1320,7 +1311,7 @@ export const useCommentLike = (): UseCommentLikeReturn => {
     [likedComments]
   );
 
-  // 좋아요 토글
+  // 좋아요 토글 — likes 컬렉션 기반 (CF가 comments.likes/likedBy 업데이트)
   const toggleCommentLike = useCallback(
     async (commentId: string): Promise<boolean> => {
       if (!user) {
@@ -1332,25 +1323,28 @@ export const useCommentLike = (): UseCommentLikeReturn => {
         setLoading(true);
         setError(null);
 
-        const commentRef = doc(db, 'comments', commentId);
         const isCurrentlyLiked = likedComments.has(commentId);
+        const likeDocId = `${user.uid}_comment_${commentId}`;
+        const likeRef = doc(db, 'likes', likeDocId);
 
         if (isCurrentlyLiked) {
-          // 좋아요 취소 — arrayRemove 원자적 제거
-          await updateDoc(commentRef, {
-            likedBy: arrayRemove(user.uid),
-            likes: increment(-1),
-          });
+          // 좋아요 취소 — likes 컬렉션에서 삭제 → CF가 comments.likes/likedBy 업데이트
+          await deleteDoc(likeRef);
           setLikedComments((prev) => {
             const newSet = new Set(prev);
             newSet.delete(commentId);
             return newSet;
           });
         } else {
-          // 좋아요 — arrayUnion 원자적 추가
-          await updateDoc(commentRef, {
-            likedBy: arrayUnion(user.uid),
-            likes: increment(1),
+          // 좋아요 — likes 컬렉션에 생성 → CF가 comments.likes/likedBy 업데이트
+          const commentSnap = await getDoc(doc(db, 'comments', commentId));
+          const commentAuthorId = commentSnap.data()?.authorId || commentSnap.data()?.userId || '';
+          await setDoc(likeRef, {
+            userId: user.uid,
+            targetType: 'comment',
+            targetId: commentId,
+            targetUserId: commentAuthorId,
+            createdAt: serverTimestamp(),
           });
           setLikedComments((prev) => new Set(prev).add(commentId));
         }

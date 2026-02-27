@@ -1137,7 +1137,28 @@ export default function FeedbackPage() {
       const questionResults: QuestionResult[] = questions.map(
         (q: any, index: number) => {
           const userAnswer = userAnswers[index] || '';
-          const correctAnswer = q.correctAnswer ?? q.answer ?? '';
+          // correctAnswer가 있으면 그대로 사용, 없으면 answer 필드에서 변환
+          let correctAnswer: any = '';
+          if (q.correctAnswer !== undefined && q.correctAnswer !== null) {
+            correctAnswer = q.correctAnswer;
+          } else if (q.answer !== undefined && q.answer !== null) {
+            // AI 퀴즈: answer가 0-indexed 숫자인 경우 1-indexed로 변환
+            if (q.type === 'multiple') {
+              if (Array.isArray(q.answer)) {
+                correctAnswer = q.answer.map((a: number) => String(a + 1)).join(',');
+              } else if (typeof q.answer === 'number') {
+                correctAnswer = String(q.answer + 1);
+              } else {
+                correctAnswer = q.answer;
+              }
+            } else if (q.type === 'ox') {
+              if (q.answer === 0) correctAnswer = 'O';
+              else if (q.answer === 1) correctAnswer = 'X';
+              else correctAnswer = q.answer;
+            } else {
+              correctAnswer = q.answer;
+            }
+          }
 
           // 정답 여부 계산 (result/page.tsx와 동일한 로직)
           let isCorrect = false;
@@ -1232,7 +1253,13 @@ export default function FeedbackPage() {
             // 발문/보기 정보 (결합형 하위 문제에서 사용)
             passagePrompt: q.passagePrompt || undefined,
             bogiQuestionText: q.bogi?.questionText || undefined,
-            bogi: q.bogi || undefined,
+            bogi: q.bogi ? {
+              questionText: q.bogi.questionText,
+              items: (q.bogi.items || []).map((item: any) => ({
+                label: item.label,
+                content: item.content,
+              })),
+            } : undefined,
           };
         }
       );

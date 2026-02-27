@@ -143,13 +143,6 @@ export default function GachaResultModal({
     }
   }, [result, newName, slotsAreFull, selectedSlot, onDiscover]);
 
-  const handlePass = () => {
-    setNewName('');
-    setSelectedSlot(null);
-    setNameError(null);
-    onClose();
-  };
-
   const showResult = result && (!isAnimating || skipped);
 
   return createPortal(
@@ -210,7 +203,7 @@ export default function GachaResultModal({
                   </motion.div>
 
                   {result.type === 'undiscovered' ? (
-                    /* 미발견 — 최초 발견 + 이름 짓기 */
+                    /* 미발견 — 최초 발견 (부모) + 이름 짓기 */
                     <>
                       <div className="mb-4">
                         <span className="px-3 py-1 bg-[#D4AF37] text-white text-sm font-bold rounded-full">
@@ -218,7 +211,7 @@ export default function GachaResultModal({
                         </span>
                       </div>
                       <p className="text-lg font-bold text-white mb-2">
-                        토끼 #{result.rabbitId + 1}을 처음 발견했어요!
+                        토끼 #{result.rabbitId + 1}의 부모가 되었어요!
                       </p>
                       <p className="text-sm text-white/60 mb-4">
                         이름을 지어주세요
@@ -248,28 +241,22 @@ export default function GachaResultModal({
                       <button
                         onClick={handleDiscover}
                         disabled={!newName.trim() || (slotsAreFull && selectedSlot === null) || isDiscovering}
-                        className="w-full py-3 bg-white/25 text-white font-bold border border-white/30 rounded-full disabled:opacity-40 mb-2"
+                        className="w-full py-3 bg-white/25 text-white font-bold border border-white/30 rounded-full disabled:opacity-40"
                       >
-                        {isDiscovering ? '발견 중...' : '발견하기'}
-                      </button>
-                      <button
-                        onClick={handlePass}
-                        className="w-full py-2 text-white/50"
-                      >
-                        놓아주기
+                        {isDiscovering ? '이름 짓는 중...' : '이름 짓고 데려가기'}
                       </button>
                     </>
                   ) : (
-                    /* 기발견 — 후속 발견 */
+                    /* 기발견 — 후속 발견 (N대 집사) */
                     <>
                       <p className="text-lg font-bold text-white mb-2">
                         {result.rabbitName || `토끼 #${result.rabbitId + 1}`}
                       </p>
                       <p className="text-sm text-white/60 mb-1">
-                        {result.nextDiscoveryOrder}번째 발견자가 될 수 있어요!
+                        {result.nextDiscoveryOrder}대 집사가 될 수 있어요!
                       </p>
                       <p className="text-sm text-white/60 mb-4">
-                        발견하면 도감에 추가됩니다
+                        데려가면 도감에 추가됩니다
                       </p>
 
                       {nameError && (
@@ -287,15 +274,9 @@ export default function GachaResultModal({
                       <button
                         onClick={handleDiscover}
                         disabled={(slotsAreFull && selectedSlot === null) || isDiscovering}
-                        className="w-full py-3 bg-white/25 text-white font-bold border border-white/30 rounded-full disabled:opacity-40 mb-2"
+                        className="w-full py-3 bg-white/25 text-white font-bold border border-white/30 rounded-full disabled:opacity-40"
                       >
-                        {isDiscovering ? '발견 중...' : '발견하기'}
-                      </button>
-                      <button
-                        onClick={handlePass}
-                        className="w-full py-2 text-white/50"
-                      >
-                        놓아주기
+                        {isDiscovering ? '데려가는 중...' : '데려가기'}
                       </button>
                     </>
                   )}

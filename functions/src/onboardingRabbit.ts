@@ -33,15 +33,22 @@ export const onOnboardingComplete = onDocumentUpdated(
     const rabbitId = 0;
     const holdingKey = `${courseId}_${rabbitId}`;
 
-    const batch = db.batch();
-
-    // 1. rabbitHoldings 서브컬렉션에 기본 토끼 추가
+    // 홀딩 문서 존재 확인 (중복 지급 방지)
     const holdingRef = db
       .collection("users")
       .doc(uid)
       .collection("rabbitHoldings")
       .doc(holdingKey);
 
+    const holdingDoc = await holdingRef.get();
+    if (holdingDoc.exists) {
+      console.log(`이미 홀딩 존재: uid=${uid}, holdingKey=${holdingKey}`);
+      return;
+    }
+
+    const batch = db.batch();
+
+    // 1. rabbitHoldings 서브컬렉션에 기본 토끼 추가
     batch.set(holdingRef, {
       rabbitId,
       courseId,

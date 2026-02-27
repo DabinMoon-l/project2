@@ -28,9 +28,6 @@
           },
           "rounds": {
             "$n": {
-              "correctAnswer": {
-                ".read": false
-              },
               "answers": {
                 "$userId": {
                   ".write": "auth != null && auth.uid === $userId && !data.exists()",
@@ -46,6 +43,12 @@
               }
             }
           }
+        }
+      },
+      "battleAnswers": {
+        "$battleId": {
+          ".read": false,
+          ".write": false
         }
       },
       "streaks": {

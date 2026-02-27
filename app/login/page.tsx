@@ -11,15 +11,11 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
 import Link from 'next/link';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { isStudentEmail } from '@/lib/auth';
-
-// 교수님 이메일 목록
-const PROFESSOR_EMAILS = [
-  'jkim@ccn.ac.kr',
-];
 
 // ============================================================
 // 애니메이션 설정
@@ -98,30 +94,19 @@ export default function LoginPage() {
         isRedirecting.current = true;
 
         try {
-          // 교수님 이메일 체크
-          const isProfessor = PROFESSOR_EMAILS.includes(user.email || '');
+          // 교수님 도메인 체크 → 서버에서 정확한 이메일 검증
+          const email = user.email || '';
+          const isProfessorDomain = email.endsWith('@ccn.ac.kr');
 
-          if (isProfessor) {
-            const userDocRef = doc(db, 'users', user.uid);
-            const userDoc = await getDoc(userDocRef);
-
-            if (!userDoc.exists()) {
-              await setDoc(userDocRef, {
-                email: user.email,
-                nickname: '교수님',
-                role: 'professor',
-                onboardingCompleted: true,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-              });
+          if (isProfessorDomain) {
+            try {
+              await httpsCallable(functions, 'initProfessorAccount')();
+              router.replace('/professor');
+            } catch {
+              // CF에서 권한 거부 → 일반 사용자로 처리
+              router.replace('/');
             }
-
-            router.replace('/professor');
           } else {
-            // 학생: 온보딩 완료 여부 확인
-            const userDocRef = doc(db, 'users', user.uid);
-            const userDoc = await getDoc(userDocRef);
-
             router.replace('/');
           }
         } catch (err) {

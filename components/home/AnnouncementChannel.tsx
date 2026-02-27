@@ -15,10 +15,10 @@ import {
   deleteDoc,
   doc,
   serverTimestamp,
-  arrayUnion,
   Timestamp,
 } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db, functions } from '@/lib/firebase';
+import { httpsCallable } from 'firebase/functions';
 import { useUser, useCourse } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
 import { useUpload } from '@/lib/hooks/useStorage';
@@ -1378,11 +1378,11 @@ export default function AnnouncementChannel({
     if (!showModal || !userCourseId || !profile || !announcements.length) return;
     localStorage.setItem(lastReadKey(userCourseId), new Date().toISOString());
     setHasUnread(false);
-    // 아직 읽지 않은 공지만 업데이트
-    const unread = announcements.filter((a) => !a.readBy?.includes(profile.uid));
-    unread.forEach((a) => {
-      updateDoc(doc(db, 'announcements', a.id), { readBy: arrayUnion(profile.uid) }).catch(() => {});
-    });
+    // 아직 읽지 않은 공지만 CF로 읽음 처리
+    const unreadIds = announcements.filter((a) => !a.readBy?.includes(profile.uid)).map((a) => a.id);
+    if (unreadIds.length > 0) {
+      httpsCallable(functions, 'markAnnouncementsRead')({ announcementIds: unreadIds }).catch(() => {});
+    }
   }, [showModal, userCourseId, profile, announcements]);
 
   // ─── 스크롤
@@ -1577,41 +1577,22 @@ export default function AnnouncementChannel({
     await updateDoc(doc(db, 'announcements', id), update);
   }, [uploadMultipleImages, uploadMultipleFiles]);
 
-  // ─── 이모지 반응
+  // ─── 이모지 반응 (CF에서 호출자 UID만 토글)
   const handleReaction = useCallback(async (aid: string, emoji: string) => {
     if (!profile) return;
-    const a = announcements.find((x) => x.id === aid); if (!a) return;
-    const cur = a.reactions || {}; const arr = cur[emoji] || [];
-    const has = arr.includes(profile.uid);
-    const upd = { ...cur };
-    if (has) { upd[emoji] = arr.filter((id) => id !== profile.uid); if (!upd[emoji].length) delete upd[emoji]; }
-    else { upd[emoji] = [...arr, profile.uid]; }
-    try { await updateDoc(doc(db, 'announcements', aid), { reactions: upd }); } catch {}
+    try {
+      await httpsCallable(functions, 'reactToAnnouncement')({ announcementId: aid, emoji });
+    } catch {}
     setShowEmojiPicker(null);
-  }, [profile, announcements]);
+  }, [profile]);
 
-  // ─── 투표 (단일/복수 공통)
+  // ─── 투표 (단일/복수 공통, CF에서 호출자 UID만 처리)
   const handleVote = useCallback(async (aid: string, pollIdx: number, optIndices: number[]) => {
     if (!profile || optIndices.length === 0) return;
-    const a = announcements.find((x) => x.id === aid); if (!a) return;
-    const allPolls = getPolls(a);
-    const poll = allPolls[pollIdx]; if (!poll) return;
-    const cur = poll.votes || {};
-    const upd: Record<string, string[]> = {};
-    Object.keys(cur).forEach((k) => { upd[k] = cur[k].filter((id) => id !== profile.uid); });
-    optIndices.forEach((optIdx) => {
-      const key = optIdx.toString(); if (!upd[key]) upd[key] = [];
-      upd[key].push(profile.uid);
-    });
-    // polls 배열 전체를 복사 후 해당 투표의 votes만 교체하여 통째로 업데이트
-    // (dot notation polls.0.votes 사용 시 Firestore가 배열→객체로 변환하는 버그 방지)
-    if (a.polls) {
-      const newPolls = allPolls.map((p, i) => i === pollIdx ? { ...p, votes: upd } : p);
-      try { await updateDoc(doc(db, 'announcements', aid), { polls: newPolls }); } catch (err) { console.error('투표 실패:', err); }
-    } else {
-      try { await updateDoc(doc(db, 'announcements', aid), { 'poll.votes': upd }); } catch (err) { console.error('투표 실패:', err); }
-    }
-  }, [profile, announcements]);
+    try {
+      await httpsCallable(functions, 'voteOnPoll')({ announcementId: aid, pollIdx, optIndices });
+    } catch (err) { console.error('투표 실패:', err); }
+  }, [profile]);
 
   // ─── 이모지 피커 토글
   const handleToggleEmojiPicker = useCallback((aid: string | null) => {

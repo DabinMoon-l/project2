@@ -7,3 +7,5 @@ export type { default as UserContext } from './UserContext';
 
 export { CourseProvider, useCourse } from './CourseContext';
 export type { default as CourseContext } from './CourseContext';
+
+export { MilestoneProvider, useMilestone } from './MilestoneContext';

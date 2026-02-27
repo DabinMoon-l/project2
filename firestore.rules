@@ -44,7 +44,7 @@ service cloud.firestore {
       // exp, rank 등은 Cloud Functions에서만 수정 가능
       allow update: if isOwner(uid) &&
         !request.resource.data.diff(resource.data).affectedKeys()
-          .hasAny(['totalExp', 'rank', 'role', 'badges', 'equippedRabbits', 'totalCorrect', 'totalAttemptedQuestions', 'professorQuizzesCompleted', 'lastGachaExp']);
+          .hasAny(['totalExp', 'rank', 'role', 'badges', 'equippedRabbits', 'totalCorrect', 'totalAttemptedQuestions', 'professorQuizzesCompleted', 'lastGachaExp', 'spinLock']);
 
       // 삭제: 불가
       allow delete: if false;
@@ -97,14 +97,13 @@ service cloud.firestore {
           request.resource.data.creatorId == request.auth.uid));
 
       // 수정: 교수님 또는 본인이 만든 자체제작/AI생성 퀴즈 또는 퀴즈 완료/찜 관련 필드만 수정
+      // 통계 필드(userScores, participantCount, averageScore)는 CF(Admin SDK)에서만 수정
       allow update: if isAuthenticated() &&
         (isProfessor() ||
          (resource.data.type in ['custom', 'ai-generated'] &&
           resource.data.creatorId == request.auth.uid) ||
-         // 로그인 사용자가 퀴즈 완료/통계 관련 필드만 수정하는 경우 허용
-         // completedUsers, userScores, userFirstReviewScores, participantCount, bookmarkCount
          request.resource.data.diff(resource.data).affectedKeys()
-           .hasOnly(['completedUsers', 'userScores', 'userFirstReviewScores', 'participantCount', 'bookmarkCount', 'averageScore', 'updatedAt']));
+           .hasOnly(['completedUsers', 'userFirstReviewScores', 'bookmarkCount', 'updatedAt']));
 
       // 삭제: 교수님 또는 본인이 만든 자체제작/AI생성 퀴즈
       allow delete: if isProfessor() ||
@@ -146,15 +145,16 @@ service cloud.firestore {
         isValidString(request.resource.data.content, 1, 5000) &&
         request.resource.data.category in ['toProfessor', 'community'];
 
-      // 수정: 작성자가 제목/내용 수정 OR 로그인 사용자가 좋아요/댓글수 업데이트 OR 교수님이 고정
+      // 수정: 작성자가 제목/내용 수정 OR 로그인 사용자가 조회수 업데이트 OR 교수님이 고정
+      // likes/likedBy/commentCount는 CF(Admin SDK)에서만 수정 (보안 강화)
       allow update: if isAuthenticated() && (
         // 작성자가 제목, 내용, 이미지, 파일 수정
         (isOwner(resource.data.authorId) &&
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['title', 'content', 'imageUrl', 'imageUrls', 'fileUrls', 'isAnonymous', 'updatedAt'])) ||
-        // 로그인 사용자가 좋아요/댓글수/조회수 업데이트
+        // 로그인 사용자가 조회수 업데이트
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['likes', 'likedBy', 'commentCount', 'viewCount']) ||
+          .hasOnly(['viewCount']) ||
         // 교수님이 게시글 고정/해제
         (isProfessor() &&
           request.resource.data.diff(resource.data).affectedKeys()
@@ -195,16 +195,12 @@ service cloud.firestore {
         request.resource.data.content is string &&
         request.resource.data.content.size() <= 1000;
 
-      // 수정: 작성자가 내용 수정 OR 로그인 사용자가 좋아요 업데이트
-      allow update: if isAuthenticated() && (
-        // 작성자가 내용/이미지 수정
-        (isOwner(resource.data.authorId) &&
-          request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['content', 'imageUrls', 'updatedAt'])) ||
-        // 로그인 사용자가 좋아요 업데이트 (likes, likedBy 필드만 변경)
+      // 수정: 작성자가 내용 수정만 허용
+      // likes/likedBy는 CF(Admin SDK)에서만 수정 (보안 강화)
+      allow update: if isAuthenticated() &&
+        isOwner(resource.data.authorId) &&
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['likes', 'likedBy'])
-      );
+          .hasOnly(['content', 'imageUrls', 'updatedAt']);
 
       // 삭제: 작성자 또는 교수님
       allow delete: if isOwner(resource.data.authorId) || isProfessor();
@@ -234,10 +230,12 @@ service cloud.firestore {
     // ============================================================
 
     match /rateLimits/{uid} {
-      allow read, write: if isOwner(uid);
+      allow read: if isOwner(uid);
+      allow write: if false; // CF에서만 쓰기 (도배 방지 우회 차단)
 
       match /{type}/{recordId} {
-        allow read, write: if isOwner(uid);
+        allow read: if isOwner(uid);
+        allow write: if false;
       }
     }
 
@@ -565,12 +563,8 @@ service cloud.firestore {
       // 생성: 교수님만
       allow create: if isProfessor();
 
-      // 수정: 교수님 (내용 수정) 또는 로그인 사용자 (리액션/투표)
-      allow update: if isAuthenticated() && (
-        isProfessor() ||
-        request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['reactions', 'poll.votes', 'polls', 'readBy'])
-      );
+      // 수정: 교수님만 (내용 수정). 리액션/투표/읽음은 CF에서만 처리
+      allow update: if isProfessor();
 
       // 삭제: 교수님만
       allow delete: if isProfessor();
@@ -580,10 +574,12 @@ service cloud.firestore {
     // 문의 컬렉션 (학생 문의 → 관리자 확인)
     // ============================================================
     match /inquiries/{inquiryId} {
+      // 생성: 로그인 사용자 (비로그인 문의는 CF에서 처리)
       allow create: if isAuthenticated();
-      allow read: if isAuthenticated();
-      allow update: if isAuthenticated();  // isRead 업데이트용
-      allow delete: if isAuthenticated();
+      // 읽기/수정: 교수님만
+      allow read, update: if isProfessor();
+      // 삭제: 교수님만
+      allow delete: if isProfessor();
     }
 
     // ============================================================
@@ -608,6 +604,14 @@ service cloud.firestore {
     // 캐릭터 도감 (레거시 — 읽기 전용 보존)
     // ============================================================
     match /characterDiscoveries/{discoveryId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
+    // ============================================================
+    // 토끼 이름 인덱스 (CF 전용 쓰기, 이름 중복 방지)
+    // ============================================================
+    match /rabbitNames/{nameDocId} {
       allow read: if isAuthenticated();
       allow write: if false;
     }

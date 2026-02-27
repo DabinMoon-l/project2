@@ -347,8 +347,9 @@ async function createBattle(
     ? (player2 as any).rabbits || []
     : await getPlayerBattleRabbits(player2.userId, player2.equippedRabbits);
 
-  // 라운드 데이터 구성
+  // 라운드 데이터 구성 (correctAnswer는 별도 서버전용 경로에 저장)
   const rounds: Record<string, any> = {};
+  const battleAnswersData: Record<string, number> = {};
   for (let i = 0; i < questions.length; i++) {
     const q = questions[i];
     rounds[i] = {
@@ -357,10 +358,10 @@ async function createBattle(
         type: q.type,
         choices: q.choices,
       },
-      correctAnswer: q.correctAnswer, // 보안규칙으로 클라이언트 읽기 차단
       startedAt: 0, // 라운드 시작 시 설정
       timeoutAt: 0,
     };
+    battleAnswersData[i] = q.correctAnswer;
   }
 
   const battleData = {
@@ -392,6 +393,10 @@ async function createBattle(
   };
 
   await rtdb.ref(`tekken/battles/${battleId}`).set(battleData);
+
+  // 정답을 클라이언트가 읽을 수 없는 별도 경로에 저장
+  await rtdb.ref(`tekken/battleAnswers/${battleId}`).set(battleAnswersData);
+
   return battleId;
 }
 
@@ -648,8 +653,11 @@ export const submitAnswer = onCall(
       answeredAt: now,
     });
 
-    // 정답 확인
-    const correctAnswer = round.correctAnswer;
+    // 정답 확인 (별도 서버전용 경로에서 읽기)
+    const correctAnswerSnap = await rtdb
+      .ref(`tekken/battleAnswers/${battleId}/${roundIndex}`)
+      .once("value");
+    const correctAnswer = correctAnswerSnap.val();
     const isCorrect = answer === correctAnswer;
 
     // 플레이어 정보
@@ -915,18 +923,18 @@ async function endBattle(
   const battleSnap = await battleRef.once("value");
   const battle = battleSnap.val();
 
-  // 이미 종료된 경우
-  if (battle?.result?.xpGranted) return;
+  // 이미 XP가 지급된 경우 조기 종료
+  if (battle?.result?.xpGranted === true) return;
 
+  // xpGranted: true를 먼저 설정하여 동시 호출 시 중복 지급 차단
+  // (이후 batch.commit 실패 시 XP 미지급이지만 중복보다 안전)
   await battleRef.update({
     status: "finished",
-    result: {
-      winnerId,
-      loserId,
-      isDraw,
-      endReason,
-      xpGranted: false,
-    },
+    "result/winnerId": winnerId,
+    "result/loserId": loserId,
+    "result/isDraw": isDraw,
+    "result/endReason": endReason,
+    "result/xpGranted": true,
   });
 
   // XP 지급 (실제 유저만, 봇 제외)
@@ -977,7 +985,6 @@ async function endBattle(
   }
 
   await batch.commit();
-  await battleRef.child("result/xpGranted").set(true);
 }
 
 // ============================================
@@ -1055,8 +1062,12 @@ export const submitMashResult = onCall(
       throw new HttpsError("not-found", "연타 미니게임을 찾을 수 없습니다.");
     }
 
+    // taps 범위 검증 (3초 미니게임, 인간 최대 ~15taps/sec = ~45)
+    const MAX_TAPS = 60;
+    const validTaps = Math.max(0, Math.min(Math.floor(taps), MAX_TAPS));
+
     // 탭 수 기록
-    await battleRef.child(`mash/taps/${userId}`).set(taps);
+    await battleRef.child(`mash/taps/${userId}`).set(validTaps);
 
     // 봇 처리
     const players = battle.players;

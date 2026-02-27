@@ -1,24 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '@/styles/themes/useTheme';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
-
-/** 뽑기 마일스톤 정보 계산 */
-function getMilestoneInfo(totalExp: number) {
-  const currentExp = totalExp % 50;
-  const maxExp = 50;
-  const progress = (currentExp / maxExp) * 100;
-
-  return {
-    currentExp,
-    maxExp,
-    progress: Math.min(progress, 100),
-  };
-}
+import { getExpBarDisplay } from '@/lib/utils/milestone';
 
 /** 토스트 데이터 타입 */
 interface ExpToastData {
@@ -34,19 +22,23 @@ interface ExpToastContextType {
 
 const ExpToastContext = createContext<ExpToastContextType | null>(null);
 
-/** 실시간 totalExp context (토스트 아이템에서 사용) */
-const RealtimeExpContext = createContext<number>(0);
+/** 실시간 totalExp + lastGachaExp context (토스트 아이템에서 사용) */
+interface RealtimeExpData {
+  totalExp: number;
+  lastGachaExp: number;
+}
+const RealtimeExpContext = createContext<RealtimeExpData>({ totalExp: 0, lastGachaExp: 0 });
 
 /** ExpToast Provider */
 export function ExpToastProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [toasts, setToasts] = useState<ExpToastData[]>([]);
-  const [realtimeTotalExp, setRealtimeTotalExp] = useState<number>(0);
+  const [realtimeExp, setRealtimeExp] = useState<RealtimeExpData>({ totalExp: 0, lastGachaExp: 0 });
 
-  // Firestore 실시간 구독으로 최신 totalExp 추적
+  // Firestore 실시간 구독으로 최신 totalExp + lastGachaExp 추적
   useEffect(() => {
     if (!user?.uid) {
-      setRealtimeTotalExp(0);
+      setRealtimeExp({ totalExp: 0, lastGachaExp: 0 });
       return;
     }
 
@@ -54,7 +46,10 @@ export function ExpToastProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        setRealtimeTotalExp(data.totalExp || 0);
+        setRealtimeExp({
+          totalExp: data.totalExp || 0,
+          lastGachaExp: data.lastGachaExp || 0,
+        });
       }
     });
 
@@ -76,7 +71,7 @@ export function ExpToastProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <ExpToastContext.Provider value={{ showExpToast }}>
-      <RealtimeExpContext.Provider value={realtimeTotalExp}>
+      <RealtimeExpContext.Provider value={realtimeExp}>
         {children}
         <ExpToastContainer toasts={toasts} />
       </RealtimeExpContext.Provider>
@@ -109,8 +104,20 @@ function ExpToastContainer({ toasts }: { toasts: ExpToastData[] }) {
 /** 개별 토스트 아이템 — realtimeTotalExp를 실시간으로 반영 */
 function ExpToastItem({ toast }: { toast: ExpToastData }) {
   const { theme } = useTheme();
-  const realtimeTotalExp = useContext(RealtimeExpContext);
-  const milestoneInfo = getMilestoneInfo(realtimeTotalExp);
+  const { totalExp, lastGachaExp } = useContext(RealtimeExpContext);
+  const expBar = getExpBarDisplay(totalExp, lastGachaExp);
+
+  // 토스트 마운트 시점의 "이전 값" 저장 (얻기 전 위치에서 애니메이션)
+  const prevProgressRef = useRef<number | null>(null);
+  if (prevProgressRef.current === null) {
+    // 마운트 시점: 획득 전 위치 = 현재 위치 - 획득량 (0 미만이면 0)
+    const prevCurrent = Math.max(expBar.current - toast.amount, 0);
+    prevProgressRef.current = (prevCurrent / expBar.max) * 100;
+  }
+
+  const currentProgress = expBar.overflow
+    ? 100
+    : (expBar.current / expBar.max) * 100;
   const [showParticles, setShowParticles] = useState(true);
 
   useEffect(() => {
@@ -214,7 +221,7 @@ function ExpToastItem({ toast }: { toast: ExpToastData }) {
                 다음 뽑기
               </span>
               <span style={{ color: theme.colors.textSecondary }}>
-                {milestoneInfo.currentExp} / {milestoneInfo.maxExp} XP
+                {expBar.current} / {expBar.max} XP
               </span>
             </div>
             <div
@@ -225,8 +232,8 @@ function ExpToastItem({ toast }: { toast: ExpToastData }) {
               }}
             >
               <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${milestoneInfo.progress}%` }}
+                initial={{ width: `${prevProgressRef.current}%` }}
+                animate={{ width: `${currentProgress}%` }}
                 transition={{ duration: 0.5, delay: 0.2 }}
                 className="h-full"
                 style={{ backgroundColor: theme.colors.accent }}

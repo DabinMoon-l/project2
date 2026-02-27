@@ -182,6 +182,34 @@ export const registerStudent = onCall(
       throw new HttpsError("invalid-argument", "모든 필드를 입력해주세요.");
     }
 
+    // IP 기반 rate limit (학번 열거 공격 방지)
+    const db0 = getFirestore();
+    const ip = (request.rawRequest as any)?.ip ||
+      (request.rawRequest as any)?.headers?.["x-forwarded-for"] || "unknown";
+    const ipKey = String(ip).replace(/[./:\\]/g, "_").slice(0, 60);
+    const rateLimitRef = db0.collection("rateLimits_v2").doc(`register_${ipKey}`);
+    const rateLimitDoc = await rateLimitRef.get();
+
+    if (rateLimitDoc.exists) {
+      const rlData = rateLimitDoc.data()!;
+      const attempts = rlData.attempts || 0;
+      const firstAttempt = rlData.firstAttempt?.toDate?.() || new Date();
+      const elapsed = Date.now() - firstAttempt.getTime();
+
+      // 10분 내 5회 초과 시 차단
+      if (elapsed < 10 * 60 * 1000 && attempts >= 5) {
+        throw new HttpsError("resource-exhausted", "너무 많은 시도입니다. 잠시 후 다시 시도해주세요.");
+      }
+
+      if (elapsed >= 10 * 60 * 1000) {
+        await rateLimitRef.set({ attempts: 1, firstAttempt: FieldValue.serverTimestamp() });
+      } else {
+        await rateLimitRef.update({ attempts: FieldValue.increment(1) });
+      }
+    } else {
+      await rateLimitRef.set({ attempts: 1, firstAttempt: FieldValue.serverTimestamp() });
+    }
+
     if (!/^\d{7,10}$/.test(studentId)) {
       throw new HttpsError("invalid-argument", "학번은 7-10자리 숫자입니다.");
     }
@@ -401,7 +429,19 @@ export const requestPasswordReset = onCall(
       }
 
       if (codeData.code !== verificationCode) {
-        throw new HttpsError("invalid-argument", "인증 코드가 올바르지 않습니다.");
+        // 인증 코드 시도 횟수 제한 (무차별 대입 방지)
+        const attempts = (codeData.attempts || 0) + 1;
+
+        if (attempts >= 5) {
+          // 5회 실패 시 코드 무효화
+          await db.collection("verificationCodes").doc(codeDocId).delete();
+          throw new HttpsError("resource-exhausted", "인증 코드가 무효화되었습니다. 다시 요청해주세요.");
+        }
+
+        await db.collection("verificationCodes").doc(codeDocId).update({
+          attempts: FieldValue.increment(1),
+        });
+        throw new HttpsError("invalid-argument", `인증 코드가 올바르지 않습니다. (${5 - attempts}회 남음)`);
       }
 
       // Admin SDK로 비밀번호 변경
@@ -505,9 +545,19 @@ export const updateRecoveryEmail = onCall(
         throw new HttpsError("deadline-exceeded", "인증 코드가 만료되었습니다. 다시 시도해주세요.");
       }
 
-      // 코드 확인
+      // 코드 확인 (시도 횟수 제한 — 무차별 대입 방지)
       if (codeData.code !== verificationCode) {
-        throw new HttpsError("invalid-argument", "인증 코드가 올바르지 않습니다.");
+        const attempts = (codeData.attempts || 0) + 1;
+
+        if (attempts >= 5) {
+          await db.collection("verificationCodes").doc(uid).delete();
+          throw new HttpsError("resource-exhausted", "인증 코드가 무효화되었습니다. 다시 요청해주세요.");
+        }
+
+        await db.collection("verificationCodes").doc(uid).update({
+          attempts: FieldValue.increment(1),
+        });
+        throw new HttpsError("invalid-argument", `인증 코드가 올바르지 않습니다. (${5 - attempts}회 남음)`);
       }
 
       // 이메일 일치 확인
@@ -805,10 +855,59 @@ export const deleteStudentAccount = onCall(
         }
       }
 
-      // 3. users/{uid} 문서 삭제
+      // 3. 최상위 컬렉션에서 사용자 관련 데이터 삭제
+      const userIdCollections = [
+        "quizResults",
+        "reviews",
+        "quiz_completions",
+        "quizProgress",
+        "questionFeedbacks",
+        "quizBookmarks",
+        "customFolders",
+        "deletedReviewItems",
+        "submissions",
+        "likes",
+      ];
+
+      for (const col of userIdCollections) {
+        const snapshot = await db.collection(col)
+          .where("userId", "==", uid)
+          .limit(500)
+          .get();
+
+        if (!snapshot.empty) {
+          const b = db.batch();
+          snapshot.docs.forEach((d) => b.delete(d.ref));
+          await b.commit();
+        }
+      }
+
+      // posts (authorId 필드)
+      const postsSnap = await db.collection("posts")
+        .where("authorId", "==", uid)
+        .limit(500)
+        .get();
+      if (!postsSnap.empty) {
+        const b = db.batch();
+        postsSnap.docs.forEach((d) => b.delete(d.ref));
+        await b.commit();
+      }
+
+      // comments (authorId 필드)
+      const commentsSnap = await db.collection("comments")
+        .where("authorId", "==", uid)
+        .limit(500)
+        .get();
+      if (!commentsSnap.empty) {
+        const b = db.batch();
+        commentsSnap.docs.forEach((d) => b.delete(d.ref));
+        await b.commit();
+      }
+
+      // 4. users/{uid} 문서 삭제
       await db.collection("users").doc(uid).delete();
 
-      // 4. Firebase Auth 계정 삭제
+      // 5. Firebase Auth 계정 삭제
       await adminAuth.deleteUser(uid);
 
       console.log(`계정 삭제 완료: ${studentId} (${uid})`);

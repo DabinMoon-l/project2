@@ -57,21 +57,63 @@ export const onQuizComplete = onDocumentCreated(
       return;
     }
 
-    const { userId, quizId, score, correctCount, totalCount } = result;
+    const { userId, quizId, correctCount, totalCount } = result;
     const isUpdate = result.isUpdate === true;
     const quizCreatorId = result.quizCreatorId || null;
 
     // 필수 데이터 검증
-    if (!userId || !quizId || score === undefined) {
-      console.error("필수 데이터가 누락되었습니다:", { userId, quizId, score });
+    if (!userId || !quizId) {
+      console.error("필수 데이터가 누락되었습니다:", { userId, quizId });
       return;
     }
+
+    // 서버 채점 점수 검증: gradedOnServer가 true이면 score 신뢰,
+    // 그렇지 않으면 (클라이언트 폴백) submissions에서 실제 점수 확인
+    let verifiedScore = result.score;
+    if ((result as any).gradedOnServer !== true) {
+      // 클라이언트 생성 문서 — submissions에서 서버 채점 결과 확인
+      const db2 = getFirestore();
+      const subsSnap = await db2
+        .collection("quizzes").doc(quizId)
+        .collection("submissions")
+        .where("userId", "==", userId)
+        .orderBy("createdAt", "desc")
+        .limit(1)
+        .get();
+
+      if (!subsSnap.empty) {
+        const subData = subsSnap.docs[0].data();
+        verifiedScore = subData.score ?? result.score;
+        console.log(`클라이언트 폴백 문서 점수 검증: 문서=${result.score}, 서버=${verifiedScore}`);
+      } else {
+        // submissions도 없으면 최소 보상만 지급
+        console.warn(`서버 채점 결과 없음, 최소 보상 적용: userId=${userId}, quizId=${quizId}`);
+        verifiedScore = 0;
+      }
+    }
+
+    const score = typeof verifiedScore === "number" ? verifiedScore : 0;
 
     // 경험치 보상 계산
     const expReward = calculateQuizExp(score);
     const reason = `퀴즈 완료 (점수: ${score}점)`;
 
     const db = getFirestore();
+
+    // 동일 유저+퀴즈 중복 보상 방지 (isUpdate 무시, 항상 체크 — 클라이언트 조작 방지)
+    const existingRewards = await db
+      .collection("quizResults")
+      .where("userId", "==", userId)
+      .where("quizId", "==", quizId)
+      .where("rewarded", "==", true)
+      .limit(1)
+      .get();
+    if (!existingRewards.empty) {
+      console.log(`이미 보상이 지급된 퀴즈입니다: userId=${userId}, quizId=${quizId}`);
+      // 현재 문서도 rewarded 처리 (재트리거 방지)
+      await snapshot.ref.update({ rewarded: true, rewardedAt: FieldValue.serverTimestamp(), expRewarded: 0 });
+      return;
+    }
 
     try {
       // 트랜잭션으로 보상 지급
@@ -98,8 +140,8 @@ export const onQuizComplete = onDocumentCreated(
         // 경험치 지급
         addExpInTransaction(transaction, userId, expReward, reason, userDoc);
 
-        // 첫 시도에만 누적 통계 업데이트 (랭킹용)
-        if (!isUpdate && correctCount !== undefined && totalCount !== undefined) {
+        // 첫 시도 + 서버 채점된 결과에만 누적 통계 업데이트 (랭킹용)
+        if (!isUpdate && correctCount !== undefined && totalCount !== undefined && (result as any).gradedOnServer === true) {
           const userRef = db.collection("users").doc(userId);
           const statsUpdate: Record<string, FirebaseFirestore.FieldValue> = {
             totalCorrect: FieldValue.increment(correctCount),

@@ -1,4 +1,4 @@
-import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentDeleted, onDocumentWritten } from "firebase-functions/v2/firestore";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { readUserForExp, addExpInTransaction, EXP_REWARDS } from "./utils/gold";
 import { enforceRateLimit } from "./rateLimit";
@@ -220,6 +220,11 @@ export const onCommentCreate = onDocumentCreated(
         addExpInTransaction(transaction, userId, expReward, reason, userDoc);
       });
 
+      // 게시글의 댓글 수 서버사이드 증가
+      await db.collection("posts").doc(postId).update({
+        commentCount: FieldValue.increment(1),
+      }).catch((e) => console.warn("commentCount 증가 실패:", e));
+
       console.log(`댓글 보상 지급 완료: ${userId}`, { postId, commentId, expReward });
 
       // 게시글 작성자에게 알림 (본인 댓글은 제외)
@@ -279,16 +284,20 @@ export const onLikeReceived = onDocumentCreated(
     const db = getFirestore();
 
     try {
-      // likeCount 증가 (EXP 지급 없음)
+      // likeCount/likes/likedBy 증가 (EXP 지급 없음)
       if (targetType === "post") {
         const postRef = db.collection("posts").doc(targetId);
         await postRef.update({
           likeCount: FieldValue.increment(1),
+          likes: FieldValue.increment(1),
+          likedBy: FieldValue.arrayUnion(userId),
         });
       } else if (targetType === "comment") {
         const commentRef = db.collection("comments").doc(targetId);
         await commentRef.update({
           likeCount: FieldValue.increment(1),
+          likes: FieldValue.increment(1),
+          likedBy: FieldValue.arrayUnion(userId),
         });
       }
 
@@ -332,7 +341,7 @@ export const onLikeRemoved = onDocumentWritten(
       return;
     }
 
-    const { targetType, targetId } = beforeData;
+    const { userId, targetType, targetId } = beforeData;
     const db = getFirestore();
 
     try {
@@ -340,18 +349,50 @@ export const onLikeRemoved = onDocumentWritten(
         const postRef = db.collection("posts").doc(targetId);
         await postRef.update({
           likeCount: FieldValue.increment(-1),
+          likes: FieldValue.increment(-1),
+          ...(userId ? { likedBy: FieldValue.arrayRemove(userId) } : {}),
         });
       } else if (targetType === "comment") {
-        // 댓글은 comments 컬렉션에 저장됨
         const commentRef = db.collection("comments").doc(targetId);
         await commentRef.update({
           likeCount: FieldValue.increment(-1),
+          likes: FieldValue.increment(-1),
+          ...(userId ? { likedBy: FieldValue.arrayRemove(userId) } : {}),
         });
       }
 
       console.log("좋아요 취소 처리 완료:", { targetType, targetId });
     } catch (error) {
       console.error("좋아요 취소 처리 실패:", error);
+    }
+  }
+);
+
+/**
+ * 댓글 삭제 시 게시글 댓글 수 감소
+ */
+export const onCommentDeleted = onDocumentDeleted(
+  {
+    document: "comments/{commentId}",
+    region: "asia-northeast3",
+  },
+  async (event) => {
+    const snapshot = event.data;
+    if (!snapshot) return;
+
+    const comment = snapshot.data() as Comment;
+    const { postId } = comment;
+
+    if (!postId) return;
+
+    const db = getFirestore();
+    try {
+      await db.collection("posts").doc(postId).update({
+        commentCount: FieldValue.increment(-1),
+      });
+      console.log(`댓글 삭제 → commentCount 감소: postId=${postId}`);
+    } catch (error) {
+      console.error("댓글 삭제 commentCount 감소 실패:", error);
     }
   }
 );

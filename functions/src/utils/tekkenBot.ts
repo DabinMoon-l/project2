@@ -25,8 +25,9 @@ export function createBotProfile() {
   const level1 = 3 + Math.floor(Math.random() * 5);
   const level2 = 3 + Math.floor(Math.random() * 5);
 
+  // 플레이어 레벨업(3-5 총합/레벨)과 유사한 비율
   const boost = (base: number, lv: number) =>
-    base + Math.floor((lv - 1) * 3);
+    base + Math.floor((lv - 1) * 1.5);
 
   return {
     nickname,

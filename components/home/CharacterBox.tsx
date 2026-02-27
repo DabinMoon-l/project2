@@ -9,19 +9,12 @@ import {
   useTransform,
   type MotionValue,
 } from 'framer-motion';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/lib/firebase';
-import { useUser, useCourse } from '@/lib/contexts';
+import { useUser, useCourse, useMilestone } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
 import { useRabbitHoldings, useRabbitDoc, getRabbitStats } from '@/lib/hooks/useRabbit';
-import { getPendingMilestones, getExpBarDisplay } from '@/lib/utils/milestone';
 import { computeRabbitDisplayName } from '@/lib/utils/rabbitDisplayName';
 
-
-import GachaResultModal, { type RollResultData } from './GachaResultModal';
 import RabbitDogam from './RabbitDogam';
-import MilestoneChoiceModal from './MilestoneChoiceModal';
-import LevelUpBottomSheet from './LevelUpBottomSheet';
 import TekkenMatchmakingModal from '@/components/tekken/TekkenMatchmakingModal';
 import TekkenBattleConfirmModal from '@/components/tekken/TekkenBattleConfirmModal';
 import TekkenBattleOverlay from '@/components/tekken/TekkenBattleOverlay';
@@ -45,6 +38,9 @@ export default function CharacterBox() {
   const { userCourseId } = useCourse();
   const { theme } = useTheme();
 
+  // 마일스톤 Context
+  const milestone = useMilestone();
+
   // 토끼 홀딩 구독 (실제 스탯)
   const { holdings } = useRabbitHoldings(profile?.uid);
 
@@ -59,16 +55,6 @@ export default function CharacterBox() {
   const rotationTarget = useRef(Math.PI / 2);
   const rotationMV = useMotionValue(Math.PI / 2);
   const springRotation = useSpring(rotationMV, { stiffness: 100, damping: 18 });
-
-  // 뽑기 상태
-  const [showGachaModal, setShowGachaModal] = useState(false);
-  const [rollResult, setRollResult] = useState<RollResultData | null>(null);
-  const [isGachaAnimating, setIsGachaAnimating] = useState(false);
-
-  // 마일스톤 / 레벨업 모달
-  const [showMilestoneModal, setShowMilestoneModal] = useState(false);
-  const [showLevelUpSheet, setShowLevelUpSheet] = useState(false);
-  const prevPendingRef = useRef<number | null>(null);
 
   // 도감
   const [showDogam, setShowDogam] = useState(false);
@@ -91,14 +77,9 @@ export default function CharacterBox() {
   const slots: (typeof slot0)[] = slot0 ? [slot0, slot1] : [];
   const slotCount = slots.length;
 
-  // EXP & 마일스톤
+  // EXP & 마일스톤 (Context)
   const totalExp = profile?.totalExp || 0;
-  const lastGachaExp = profile?.lastGachaExp || 0;
-  const pendingCount = getPendingMilestones(totalExp, lastGachaExp);
-  const expBar = getExpBarDisplay(totalExp, lastGachaExp);
-  const allRabbitsDiscovered = userCourseId
-    ? holdings.filter((h) => h.courseId === userCourseId).length >= 80
-    : false;
+  const { pendingCount, expBar } = milestone;
 
   // 앞 캐릭터의 실제 스탯 (홀딩에서)
   const frontSlot = slots[activeIndex] || slots[0] || null;
@@ -120,18 +101,10 @@ export default function CharacterBox() {
         ? '토끼'
         : null;
 
-  // 마일스톤 자동 표시 (pendingCount가 >0이 되면)
+  // 도감/철권퀴즈 모달 열릴 때 자동 트리거 억제
   useEffect(() => {
-    if (pendingCount > 0 && !showMilestoneModal && !showGachaModal && !showDogam && !showLevelUpSheet) {
-      // 이전 값이 없거나(초기 로드) 0이었을 때만
-      if (prevPendingRef.current === null || prevPendingRef.current === 0) {
-        const timer = setTimeout(() => setShowMilestoneModal(true), 600);
-        prevPendingRef.current = pendingCount;
-        return () => clearTimeout(timer);
-      }
-    }
-    prevPendingRef.current = pendingCount;
-  }, [pendingCount, showMilestoneModal, showGachaModal, showDogam, showLevelUpSheet]);
+    milestone.setSuppressAutoTrigger(showDogam || showBattleConfirm || showMatchmaking || showBattle);
+  }, [showDogam, showBattleConfirm, showMatchmaking, showBattle, milestone]);
 
   // activeIndex 범위 보정
   useEffect(() => {
@@ -251,64 +224,6 @@ export default function CharacterBox() {
       return () => clearTimeout(timer);
     }
   }, [tekken.matchState]);
-
-  // 뽑기 (스핀)
-  const [spinError, setSpinError] = useState<string | null>(null);
-  const handleSpin = useCallback(async () => {
-    if (!profile || !userCourseId || pendingCount <= 0) return;
-    setIsGachaAnimating(true);
-    setSpinError(null);
-    try {
-      const spinRabbitGacha = httpsCallable<{ courseId: string }, RollResultData>(
-        functions, 'spinRabbitGacha'
-      );
-      const [result] = await Promise.all([
-        spinRabbitGacha({ courseId: userCourseId }),
-        new Promise(resolve => setTimeout(resolve, 2000)),
-      ]);
-      setRollResult(result.data);
-    } catch (error: any) {
-      console.error('뽑기 실패:', error);
-      const msg = error?.message || '';
-      if (msg.includes('모든 토끼를 발견')) {
-        setSpinError('모든 토끼를 발견했습니다!');
-      } else {
-        setSpinError('뽑기에 실패했습니다.');
-      }
-    } finally {
-      setIsGachaAnimating(false);
-    }
-  }, [profile, userCourseId, pendingCount]);
-
-  // 발견하기 (에러를 throw하여 GachaResultModal에서 catch)
-  const handleDiscover = useCallback(async (
-    result: RollResultData,
-    name?: string,
-    equipSlot?: number
-  ) => {
-    if (!userCourseId) return;
-    const claimGachaRabbit = httpsCallable(functions, 'claimGachaRabbit');
-    await claimGachaRabbit({
-      courseId: userCourseId,
-      rabbitId: result.rabbitId,
-      action: 'discover',
-      name,
-      equipSlot,
-    });
-    setShowGachaModal(false);
-    setRollResult(null);
-  }, [userCourseId]);
-
-  // 마일스톤 모달 핸들러
-  const handleMilestoneClick = () => setShowMilestoneModal(true);
-  const handleChooseLevelUp = () => {
-    setShowMilestoneModal(false);
-    setShowLevelUpSheet(true);
-  };
-  const handleChooseGacha = () => {
-    setShowMilestoneModal(false);
-    setShowGachaModal(true);
-  };
 
   const containerW = ORBIT_RX * 2 + CHAR_SIZE;
   const containerH = ORBIT_RY * 2 + CHAR_SIZE;
@@ -448,7 +363,7 @@ export default function CharacterBox() {
           <div className="flex items-center justify-between mb-1">
             {pendingCount > 0 && (
               <motion.button
-                onClick={handleMilestoneClick}
+                onClick={milestone.openMilestoneModal}
                 className="flex items-center gap-1.5 h-11 px-4 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl active:scale-95 mr-2"
                 animate={{ scale: [1, 1.05, 1] }}
                 transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
@@ -495,38 +410,6 @@ export default function CharacterBox() {
           </div>
         </div>
       </div>
-
-      {/* 마일스톤 선택 모달 */}
-      <MilestoneChoiceModal
-        isOpen={showMilestoneModal}
-        onClose={() => setShowMilestoneModal(false)}
-        pendingCount={pendingCount}
-        onChooseLevelUp={handleChooseLevelUp}
-        onChooseGacha={handleChooseGacha}
-        allRabbitsDiscovered={allRabbitsDiscovered}
-      />
-
-      {/* 레벨업 바텀시트 */}
-      {userCourseId && (
-        <LevelUpBottomSheet
-          isOpen={showLevelUpSheet}
-          onClose={() => setShowLevelUpSheet(false)}
-          courseId={userCourseId}
-          holdings={holdings}
-        />
-      )}
-
-      {/* 뽑기 모달 */}
-      <GachaResultModal
-        isOpen={showGachaModal}
-        onClose={() => { setShowGachaModal(false); setRollResult(null); setSpinError(null); }}
-        result={rollResult}
-        isAnimating={isGachaAnimating}
-        onSpin={handleSpin}
-        canGacha={pendingCount > 0}
-        onDiscover={handleDiscover}
-        spinError={spinError}
-      />
 
       {/* 도감 모달 */}
       {userCourseId && profile && (

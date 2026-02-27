@@ -7,7 +7,7 @@ import { useRequireAuth } from '@/lib/hooks/useAuth';
 import Navigation from '@/components/common/Navigation';
 import { NotificationProvider, ExpToastProvider, PullToHome } from '@/components/common';
 import { AIQuizContainer } from '@/components/ai-quiz';
-import { UserProvider, useUser, CourseProvider, useCourse } from '@/lib/contexts';
+import { UserProvider, useUser, CourseProvider, useCourse, MilestoneProvider } from '@/lib/contexts';
 import { useActivityTracker } from '@/lib/hooks/useActivityTracker';
 import type { ClassType } from '@/styles/themes';
 import LibraryJobToast from '@/components/professor/library/LibraryJobToast';
@@ -104,44 +104,54 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
     <ThemeProvider initialClassType={userClassType} courseId={userCourseId}>
       <NotificationProvider>
         <ExpToastProvider>
-          <LibraryJobToast />
-          <div className={`min-h-screen ${hideNavigation ? '' : 'pb-20'}`}>
-            {/* 메인 콘텐츠 */}
-            <main>
-              {enablePullToHome ? (
-                <PullToHome>
-                  {children}
-                  {/* AI 퀴즈 플로팅 버튼 — PullToHome 안에 넣어야 같이 슬라이드됨 */}
-                  {pathname === '/quiz' && searchParams.get('manage') !== 'true' && <AIQuizContainer />}
-                  {/* 네비게이션도 같이 슬라이드 */}
-                  {!hideNavigation && (
-                    <Navigation role="student" />
-                  )}
-                </PullToHome>
-              ) : enableProfessorPullToHome ? (
-                <PullToHome homePath="/professor" tabPaths={['/professor/stats', '/professor/quiz', '/professor/students', '/board']}>
-                  {children}
-                  {!hideNavigation && (
-                    <Navigation role="professor" />
-                  )}
-                </PullToHome>
-              ) : (
-                <>
-                  {children}
-                  {!isProfessor && pathname === '/quiz' && searchParams.get('manage') !== 'true' && <AIQuizContainer />}
-                </>
-              )}
-            </main>
+          <MilestoneWrapper isProfessor={isProfessor}>
+            <LibraryJobToast />
+            <div className={`min-h-screen ${hideNavigation ? '' : 'pb-20'}`}>
+              {/* 메인 콘텐츠 */}
+              <main>
+                {enablePullToHome ? (
+                  <PullToHome>
+                    {children}
+                    {/* AI 퀴즈 플로팅 버튼 — PullToHome 안에 넣어야 같이 슬라이드됨 */}
+                    {pathname === '/quiz' && searchParams.get('manage') !== 'true' && <AIQuizContainer />}
+                    {/* 네비게이션도 같이 슬라이드 */}
+                    {!hideNavigation && (
+                      <Navigation role="student" />
+                    )}
+                  </PullToHome>
+                ) : enableProfessorPullToHome ? (
+                  <PullToHome homePath="/professor" tabPaths={['/professor/stats', '/professor/quiz', '/professor/students', '/board']}>
+                    {children}
+                    {!hideNavigation && (
+                      <Navigation role="professor" />
+                    )}
+                  </PullToHome>
+                ) : (
+                  <>
+                    {children}
+                    {!isProfessor && pathname === '/quiz' && searchParams.get('manage') !== 'true' && <AIQuizContainer />}
+                  </>
+                )}
+              </main>
 
-            {/* 하단 네비게이션 바 (PullToHome 미적용 페이지) */}
-            {!enablePullToHome && !enableProfessorPullToHome && !hideNavigation && (
-              <Navigation role={isProfessor ? 'professor' : 'student'} />
-            )}
-          </div>
+              {/* 하단 네비게이션 바 (PullToHome 미적용 페이지) */}
+              {!enablePullToHome && !enableProfessorPullToHome && !hideNavigation && (
+                <Navigation role={isProfessor ? 'professor' : 'student'} />
+              )}
+            </div>
+          </MilestoneWrapper>
         </ExpToastProvider>
       </NotificationProvider>
     </ThemeProvider>
   );
+}
+
+/**
+ * 학생 전용 MilestoneProvider 래퍼 — 교수는 뽑기 없으므로 passthrough
+ */
+function MilestoneWrapper({ isProfessor, children }: { isProfessor: boolean; children: React.ReactNode }) {
+  if (isProfessor) return <>{children}</>;
+  return <MilestoneProvider>{children}</MilestoneProvider>;
 }
 
 /**

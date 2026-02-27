@@ -67,6 +67,11 @@ export const spinRabbitGacha = onCall(
       const totalExp = userData.totalExp || 0;
       const lastGachaExp = userData.lastGachaExp || 0;
 
+      // 스핀 잠금 체크 (10초 이내 중복 방지)
+      if (userData.spinLock && Date.now() - userData.spinLock < 10000) {
+        throw new HttpsError("failed-precondition", "이미 뽑기가 진행 중입니다.");
+      }
+
       // 마일스톤 검증 (pending = floor(totalExp/50) - floor(lastGachaExp/50))
       const pendingMilestones =
         Math.floor(totalExp / 50) - Math.floor(lastGachaExp / 50);
@@ -105,9 +110,10 @@ export const spinRabbitGacha = onCall(
       const rabbitDoc = await transaction.get(rabbitRef);
       const rabbitData = rabbitDoc.exists ? rabbitDoc.data()! : null;
 
-      // lastGachaExp += 50 (마일스톤 1개만 소비)
+      // lastGachaExp += 50 (마일스톤 1개만 소비) + 스핀 잠금 설정
       transaction.update(userRef, {
         lastGachaExp: lastGachaExp + 50,
+        spinLock: Date.now(),
         updatedAt: FieldValue.serverTimestamp(),
       });
 
@@ -174,6 +180,11 @@ export const claimGachaRabbit = onCall(
       throw new HttpsError("invalid-argument", "courseId, rabbitId, action이 필요합니다.");
     }
 
+    // rabbitId 범위 검증
+    if (typeof rabbitId !== "number" || rabbitId < 0 || rabbitId > 79) {
+      throw new HttpsError("invalid-argument", "rabbitId는 0-79 범위여야 합니다.");
+    }
+
     // 놓아주기 → 아무 변경 없음
     if (action === "pass") {
       return { success: true, passed: true };
@@ -186,22 +197,6 @@ export const claimGachaRabbit = onCall(
     }
 
     const db = getFirestore();
-
-    // 이름 중복 체크 (트랜잭션 밖에서 선행 검사)
-    if (trimmedName) {
-      const existing = await db
-        .collection("rabbits")
-        .where("courseId", "==", courseId)
-        .where("name", "==", trimmedName)
-        .limit(1)
-        .get();
-      if (!existing.empty) {
-        throw new HttpsError(
-          "already-exists",
-          "이미 같은 이름의 토끼가 있어요!"
-        );
-      }
-    }
     const rabbitDocId = `${courseId}_${rabbitId}`;
 
     const result = await db.runTransaction(async (transaction) => {
@@ -237,9 +232,25 @@ export const claimGachaRabbit = onCall(
           throw new HttpsError("invalid-argument", "최초 발견 시 이름이 필요합니다.");
         }
 
+        // 이름 중복 체크 (트랜잭션 내 원자적 — rabbitNames 인덱스 문서)
+        const nameDocId = `${courseId}_${trimmedName}`;
+        const nameRef = db.collection("rabbitNames").doc(nameDocId);
+        const nameDoc = await transaction.get(nameRef);
+        if (nameDoc.exists) {
+          throw new HttpsError("already-exists", "이미 같은 이름의 토끼가 있어요!");
+        }
+
         discoveryOrder = 1;
         needsNaming = true;
         rabbitName = trimmedName;
+
+        // 이름 인덱스 문서 생성 (원자적)
+        transaction.set(nameRef, {
+          courseId,
+          rabbitId,
+          rabbitDocId: `${courseId}_${rabbitId}`,
+          createdAt: FieldValue.serverTimestamp(),
+        });
 
         // 토끼 문서 생성
         transaction.set(rabbitRef, {
@@ -290,23 +301,26 @@ export const claimGachaRabbit = onCall(
         userData.equippedRabbits || [];
 
       if (equippedRabbits.length < 2) {
-        // 빈 슬롯에 자동 장착
+        // 빈 슬롯에 자동 장착 + 스핀 잠금 해제
         const newEquipped = [...equippedRabbits, { rabbitId, courseId }];
         transaction.update(userRef, {
           equippedRabbits: newEquipped,
+          spinLock: null,
           updatedAt: FieldValue.serverTimestamp(),
         });
       } else if (equipSlot !== undefined && (equipSlot === 0 || equipSlot === 1)) {
-        // 슬롯 지정 교체
+        // 슬롯 지정 교체 + 스핀 잠금 해제
         const newEquipped = [...equippedRabbits];
         newEquipped[equipSlot] = { rabbitId, courseId };
         transaction.update(userRef, {
           equippedRabbits: newEquipped,
+          spinLock: null,
           updatedAt: FieldValue.serverTimestamp(),
         });
       } else {
-        // 슬롯 가득 & 미지정 → 장착하지 않음
+        // 슬롯 가득 & 미지정 → 장착하지 않음 + 스핀 잠금 해제
         transaction.update(userRef, {
+          spinLock: null,
           updatedAt: FieldValue.serverTimestamp(),
         });
       }

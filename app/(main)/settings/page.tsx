@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
@@ -11,6 +12,10 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { useUser, useCourse } from '@/lib/contexts';
 import { useRabbitHoldings } from '@/lib/hooks/useRabbit';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
+
+const TekkenKeywordsCard = dynamic(() => import('@/components/professor/TekkenKeywordsCard'), {
+  ssr: false,
+});
 import {
   useSettings,
   type NotificationSettings,
@@ -217,6 +222,13 @@ export default function SettingsPage() {
           onResetSettings={() => setShowResetModal(true)}
           loading={loading}
         />
+
+        {/* 교수 전용: 배틀 퀴즈 범위 설정 */}
+        {profile?.role === 'professor' && (
+          <div className="mt-4">
+            <TekkenKeywordsCard />
+          </div>
+        )}
       </main>
 
       {/* 로그아웃 확인 모달 */}

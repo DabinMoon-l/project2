@@ -52,6 +52,22 @@ export const onFeedbackSubmit = onDocumentCreated(
     }
 
     const db = getFirestore();
+
+    // 동일 유저+문제 중복 EXP 지급 방지
+    const existingFeedbacks = await db
+      .collection("questionFeedbacks")
+      .where("userId", "==", userId)
+      .where("questionId", "==", questionId)
+      .where("rewarded", "==", true)
+      .limit(1)
+      .get();
+
+    if (!existingFeedbacks.empty) {
+      console.log(`이미 보상이 지급된 피드백입니다: userId=${userId}, questionId=${questionId}`);
+      await snapshot.ref.update({ rewarded: true, expRewarded: 0 });
+      return;
+    }
+
     const expReward = EXP_REWARDS.FEEDBACK_SUBMIT;
     const reason = "퀴즈 피드백 작성";
 
