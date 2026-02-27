@@ -269,7 +269,7 @@ export default function WritePage() {
       localStorage.removeItem(DRAFT_KEY);
 
       if (profile?.role !== 'professor') {
-        showExpToast(5, '게시글 작성');
+        showExpToast(15, '게시글 작성');
       }
       setTimeout(() => {
         router.replace(`/board/${postId}`);

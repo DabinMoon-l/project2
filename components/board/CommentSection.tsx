@@ -212,7 +212,7 @@ export default function CommentSection({ postId, postAuthorId }: CommentSectionP
       setReplyingTo(null);
       if (profile?.role !== 'professor') {
         setTimeout(() => {
-          showExpToast(2, '댓글 작성');
+          showExpToast(15, '댓글 작성');
         }, 500);
       }
       refresh();

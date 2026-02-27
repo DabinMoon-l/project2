@@ -1431,9 +1431,8 @@ export default function QuizCreatePage() {
       // 5. Firestore에 저장
       await addDoc(collection(db, 'quizzes'), cleanedQuizData);
 
-      // EXP 토스트 표시 (퀴즈 생성 15 EXP)
-      // Cloud Functions에서 자동으로 EXP가 지급됨
-      const earnedExp = 15;
+      // EXP 토스트 표시 — 실제 지급은 CF onQuizCreate에서 수행
+      const earnedExp = cleanedQuizData.isPublic ? 50 : 25;
       showExpToast(earnedExp, '퀴즈 생성');
 
       // 저장된 초안 삭제

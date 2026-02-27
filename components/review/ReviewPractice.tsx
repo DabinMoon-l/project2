@@ -428,11 +428,7 @@ export default function ReviewPractice({
 
   // 피드백 화면에서 완료
   const handleFinish = () => {
-    // EXP 계산 (정답당 2 EXP)
-    const earnedExp = correctCount * 2;
-    if (earnedExp > 0) {
-      showExpToast(earnedExp, `${headerTitle} 완료`);
-    }
+    // 복습은 서버에서 XP를 지급하지 않음 (토스트 제거)
     onComplete(resultsArray);
   };
 

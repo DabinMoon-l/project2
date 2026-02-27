@@ -15,7 +15,6 @@ import {
 } from 'firebase/firestore';
 import { useUser } from '@/lib/contexts';
 import { useCourse } from '@/lib/contexts/CourseContext';
-import { useExpToast } from '@/components/common';
 import { getChapterIdFromTag } from '@/lib/courseIndex';
 import ReviewPractice, { type PracticeResult } from '@/components/review/ReviewPractice';
 import type { ReviewItem } from '@/lib/hooks/useReview';
@@ -77,7 +76,6 @@ export default function AIQuizContainer() {
   const router = useRouter();
   const { profile } = useUser();
   const { userCourseId, userClassId, userCourse } = useCourse();
-  const { showExpToast } = useExpToast();
 
   // 모달 상태
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -425,7 +423,7 @@ export default function AIQuizContainer() {
         score,
         correctCount,
         totalCount,
-        earnedExp: 10, // AI 퀴즈 완료 EXP
+        earnedExp: 0, // AI 퀴즈 풀이는 서버 XP 미지급 (생성 시 지급됨)
         questionScores,
         isUpdate: false,
         courseId: userCourseId || null,
@@ -511,8 +509,7 @@ export default function AIQuizContainer() {
         }
       }
 
-      // EXP 표시
-      showExpToast(10, 'AI 퀴즈 완료');
+      // AI 퀴즈 풀이는 서버에서 XP를 지급하지 않음 (생성 시 이미 지급됨)
 
     } catch (err) {
       console.error('퀴즈 결과 저장 오류:', err);
@@ -520,7 +517,7 @@ export default function AIQuizContainer() {
 
     setSavedQuiz(null);
     setCurrentFolderName('');
-  }, [profile, savedQuiz, showExpToast]);
+  }, [profile, savedQuiz]);
 
   return (
     <>
