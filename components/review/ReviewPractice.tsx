@@ -544,6 +544,8 @@ export default function ReviewPractice({
       });
       setSubmittedFeedbackIds(prev => new Set(prev).add(feedbackTargetItem.questionId));
       closeFeedbackSheet();
+      // 피드백 EXP 토스트 (CF onFeedbackSubmit 트리거로 15 EXP 지급)
+      showExpToast(15, '피드백 작성');
     } catch (err) {
       console.error('피드백 제출 실패:', err);
       alert('피드백 제출에 실패했습니다.');
@@ -1436,18 +1438,14 @@ export default function ReviewPractice({
             <div>
               <p className="text-sm text-[#5C5C5C] mb-3">이 문제에 대한 의견을 선택해주세요</p>
               <div className="grid grid-cols-2 gap-2">
-                {FEEDBACK_TYPES.map(({ type, label, positive }) => (
+                {FEEDBACK_TYPES.map(({ type, label }) => (
                   <button
                     key={type}
                     onClick={() => setSelectedFeedbackType(type)}
                     className={`p-3 border-2 text-sm font-bold transition-all ${
                       selectedFeedbackType === type
-                        ? positive
-                          ? 'border-[#1A6B1A] bg-[#1A6B1A] text-[#F5F0E8]'
-                          : 'border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8]'
-                        : positive
-                          ? 'border-[#1A6B1A] bg-[#E8F5E9] text-[#1A6B1A]'
-                          : 'border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A]'
+                        ? 'border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8]'
+                        : 'border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A]'
                     }`}
                   >
                     {label}

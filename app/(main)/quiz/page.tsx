@@ -131,24 +131,36 @@ const NewsArticle = memo(function NewsArticle({
   onStart,
   onUpdate,
   onDetails,
+  onReview,
+  onReviewWrongOnly,
 }: {
   quiz: QuizCardData;
   onStart: () => void;
   onUpdate?: () => void;
   onDetails?: () => void;
+  onReview?: () => void;
+  onReviewWrongOnly?: () => void;
 }) {
   const isCompleted = quiz.isCompleted && !quiz.hasUpdate;
   const hasUpdate = quiz.isCompleted && quiz.hasUpdate;
+  const [showReviewMenu, setShowReviewMenu] = useState(false);
+  const reviewMenuRef = useRef<HTMLDivElement>(null);
+
+  // 외부 클릭 시 메뉴 닫기
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (reviewMenuRef.current && !reviewMenuRef.current.contains(event.target as Node)) {
+        setShowReviewMenu(false);
+      }
+    };
+    if (showReviewMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showReviewMenu]);
 
   return (
     <div className="h-full flex flex-col relative">
-      {/* 완료 오버레이 */}
-      {isCompleted && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/70">
-          <CompletedBadge />
-        </div>
-      )}
-
       {/* 업데이트 뱃지 */}
       {hasUpdate && (
         <button
@@ -163,7 +175,7 @@ const NewsArticle = memo(function NewsArticle({
       )}
 
       {/* 난이도 비디오 — 남은 공간 전부 채움 */}
-      <div className="flex-1 min-h-0 relative overflow-hidden">
+      <div className="flex-1 min-h-[120px] relative overflow-hidden bg-black">
         <AutoVideo src={getDifficultyVideo(quiz.difficulty)} className="absolute inset-0 w-full h-full object-cover" />
       </div>
 
@@ -196,15 +208,64 @@ const NewsArticle = memo(function NewsArticle({
           >
             Details
           </button>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onStart(); }}
-            className={`flex-1 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] transition-colors ${
-              isCompleted ? 'opacity-40 pointer-events-none' : 'hover:bg-[#3A3A3A]'
-            }`}
-          >
-            Start
-          </button>
+          {isCompleted ? (
+            <div className="relative flex-1" ref={reviewMenuRef}>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowReviewMenu(!showReviewMenu);
+                }}
+                className="w-full py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors flex items-center justify-center gap-1"
+              >
+                Review
+                <svg className={`w-3 h-3 transition-transform ${showReviewMenu ? 'rotate-180' : ''}`} fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+              <AnimatePresence>
+                {showReviewMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -5 }}
+                    className="absolute bottom-full left-0 right-0 mb-1 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg z-50"
+                  >
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowReviewMenu(false);
+                        onReview?.();
+                      }}
+                      className="w-full px-3 py-2 text-sm font-bold text-[#1A1A1A] hover:bg-[#EDEAE4] text-left border-b border-[#EDEAE4]"
+                    >
+                      모두
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowReviewMenu(false);
+                        onReviewWrongOnly?.();
+                      }}
+                      className="w-full px-3 py-2 text-sm font-bold text-[#8B1A1A] hover:bg-[#FDEAEA] text-left"
+                    >
+                      오답만
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onStart(); }}
+              className="flex-1 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors"
+            >
+              Start
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -224,6 +285,8 @@ const NewsCard = memo(function NewsCard({
   onStart,
   onUpdate,
   onShowDetails,
+  onReview,
+  onReviewWrongOnly,
 }: {
   type: NewsCardType;
   title: string;
@@ -233,6 +296,8 @@ const NewsCard = memo(function NewsCard({
   onStart: (quizId: string) => void;
   onUpdate: (quiz: QuizCardData) => void;
   onShowDetails?: (quiz: QuizCardData) => void;
+  onReview: (quizId: string) => void;
+  onReviewWrongOnly: (quizId: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [itemHeight, setItemHeight] = useState(0);
@@ -293,6 +358,8 @@ const NewsCard = memo(function NewsCard({
                 onStart={() => onStart(quiz.id)}
                 onUpdate={() => onUpdate(quiz)}
                 onDetails={onShowDetails ? () => onShowDetails(quiz) : undefined}
+                onReview={() => onReview(quiz.id)}
+                onReviewWrongOnly={() => onReviewWrongOnly(quiz.id)}
               />
             </div>
           ))
@@ -314,6 +381,8 @@ const PastExamNewsCard = memo(function PastExamNewsCard({
   isLoading,
   onStart,
   onShowDetails,
+  onReview,
+  onReviewWrongOnly,
 }: {
   quizzes: QuizCardData[];
   selectedPastExam: string;
@@ -322,8 +391,25 @@ const PastExamNewsCard = memo(function PastExamNewsCard({
   isLoading: boolean;
   onStart: (quizId: string) => void;
   onShowDetails?: (quiz: QuizCardData) => void;
+  onReview?: (quizId: string) => void;
+  onReviewWrongOnly?: (quizId: string) => void;
 }) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [showReviewMenu, setShowReviewMenu] = useState(false);
+  const reviewMenuRef = useRef<HTMLDivElement>(null);
+
+  // 외부 클릭 시 리뷰 메뉴 닫기
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (reviewMenuRef.current && !reviewMenuRef.current.contains(event.target as Node)) {
+        setShowReviewMenu(false);
+      }
+    };
+    if (showReviewMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showReviewMenu]);
   const selectedOption = pastExamOptions.find((opt) => opt.value === selectedPastExam);
 
   // 선택된 년도/시험으로 필터링
@@ -406,15 +492,8 @@ const PastExamNewsCard = memo(function PastExamNewsCard({
           </div>
         ) : (
           <div className="flex flex-col h-full relative">
-            {/* 완료 오버레이 */}
-            {isCompleted && (
-              <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/70">
-                <CompletedBadge />
-              </div>
-            )}
-
             {/* 난이도 비디오 — 전체 너비, 크게 */}
-            <div className="flex-1 min-h-0 relative overflow-hidden">
+            <div className="flex-1 min-h-[120px] relative overflow-hidden bg-black">
               <AutoVideo src={getDifficultyVideo(filteredQuiz.difficulty)} className="absolute inset-0 w-full h-full object-cover" />
             </div>
 
@@ -439,15 +518,64 @@ const PastExamNewsCard = memo(function PastExamNewsCard({
                 >
                   Details
                 </button>
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onStart(filteredQuiz.id); }}
-                  className={`flex-1 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] transition-colors ${
-                    isCompleted ? 'opacity-40 pointer-events-none' : 'hover:bg-[#3A3A3A]'
-                  }`}
-                >
-                  Start
-                </button>
+                {isCompleted ? (
+                  <div className="relative flex-1" ref={reviewMenuRef}>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowReviewMenu(!showReviewMenu);
+                      }}
+                      className="w-full py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors flex items-center justify-center gap-1"
+                    >
+                      Review
+                      <svg className={`w-3 h-3 transition-transform ${showReviewMenu ? 'rotate-180' : ''}`} fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                    <AnimatePresence>
+                      {showReviewMenu && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -5 }}
+                          className="absolute bottom-full left-0 right-0 mb-1 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg z-50"
+                        >
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowReviewMenu(false);
+                              onReview?.(filteredQuiz.id);
+                            }}
+                            className="w-full px-3 py-2 text-sm font-bold text-[#1A1A1A] hover:bg-[#EDEAE4] text-left border-b border-[#EDEAE4]"
+                          >
+                            모두
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowReviewMenu(false);
+                              onReviewWrongOnly?.(filteredQuiz.id);
+                            }}
+                            className="w-full px-3 py-2 text-sm font-bold text-[#8B1A1A] hover:bg-[#FDEAEA] text-left"
+                          >
+                            오답만
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onStart(filteredQuiz.id); }}
+                    className="flex-1 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors"
+                  >
+                    Start
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -472,6 +600,8 @@ function NewsCarousel({
   onStart,
   onUpdate,
   onShowDetails,
+  onReview,
+  onReviewWrongOnly,
 }: {
   midtermQuizzes: QuizCardData[];
   finalQuizzes: QuizCardData[];
@@ -483,6 +613,8 @@ function NewsCarousel({
   onStart: (quizId: string) => void;
   onUpdate: (quiz: QuizCardData) => void;
   onShowDetails?: (quiz: QuizCardData) => void;
+  onReview: (quizId: string) => void;
+  onReviewWrongOnly: (quizId: string) => void;
 }) {
   const TOTAL = NEWS_CARDS.length; // 3
   // visualIndex: 0=clone_last, 1~3=real cards, 4=clone_first
@@ -613,7 +745,6 @@ function NewsCarousel({
     <div
       className="relative select-none cursor-grab active:cursor-grabbing"
       style={{ perspective: 1200, touchAction: 'pan-y' }}
-      data-no-pull
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -680,6 +811,8 @@ function NewsCarousel({
                       selectedPastExam={selectedPastExam}
                       pastExamOptions={pastExamOptions}
                       onSelectPastExam={onSelectPastExam}
+                      onReview={onReview}
+                      onReviewWrongOnly={onReviewWrongOnly}
                     />
                   ) : (
                     <NewsCard
@@ -691,6 +824,8 @@ function NewsCarousel({
                       onStart={onStart}
                       onUpdate={onUpdate}
                       onShowDetails={onShowDetails}
+                      onReview={onReview}
+                      onReviewWrongOnly={onReviewWrongOnly}
                     />
                   )}
                   </motion.div>
@@ -768,7 +903,11 @@ function ReviewQuizCard({
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -4, boxShadow: '0 8px 20px rgba(0, 0, 0, 0.08)' }}
       transition={{ duration: 0.2 }}
-      onClick={onCardClick}
+      onClick={(e) => {
+        // 버튼/드롭다운 클릭은 카드 네비게이션 무시
+        if ((e.target as HTMLElement).closest('button') || showReviewMenu) return;
+        onCardClick();
+      }}
       className="relative border border-[#999] bg-[#F5F0E8]/70 backdrop-blur-sm overflow-hidden cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
     >
       {/* 신문 배경 텍스트 */}
@@ -935,6 +1074,8 @@ function CustomQuizCard({
   isBookmarked,
   onToggleBookmark,
   onUpdate,
+  onReview,
+  onReviewWrongOnly,
 }: {
   quiz: QuizCardData;
   onStart: () => void;
@@ -942,17 +1083,32 @@ function CustomQuizCard({
   isBookmarked?: boolean;
   onToggleBookmark?: () => void;
   onUpdate?: () => void;
+  onReview?: () => void;
+  onReviewWrongOnly?: () => void;
 }) {
   const isCompleted = quiz.isCompleted && !quiz.hasUpdate;
   const hasUpdate = quiz.isCompleted && quiz.hasUpdate;
+  const [showReviewMenu, setShowReviewMenu] = useState(false);
+  const reviewMenuRef = useRef<HTMLDivElement>(null);
+
+  // 외부 클릭 시 메뉴 닫기
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (reviewMenuRef.current && !reviewMenuRef.current.contains(event.target as Node)) {
+        setShowReviewMenu(false);
+      }
+    };
+    if (showReviewMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showReviewMenu]);
 
   return (
     <motion.div
-      whileHover={isCompleted ? {} : { y: -4, boxShadow: '0 8px 20px rgba(0, 0, 0, 0.08)' }}
+      whileHover={{ y: -4, boxShadow: '0 8px 20px rgba(0, 0, 0, 0.08)' }}
       transition={{ duration: 0.2 }}
-      className={`relative border border-[#999] bg-[#F5F0E8]/70 backdrop-blur-sm overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)] ${
-        isCompleted ? 'pointer-events-none' : ''
-      }`}
+      className="relative border border-[#999] bg-[#F5F0E8]/70 backdrop-blur-sm overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
     >
       {/* 신문 배경 텍스트 */}
       <div className="absolute inset-0 p-2 overflow-hidden pointer-events-none">
@@ -960,13 +1116,6 @@ function CustomQuizCard({
           {NEWSPAPER_BG_TEXT.slice(0, 300)}
         </p>
       </div>
-
-      {/* 완료 오버레이 */}
-      {isCompleted && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/70">
-          <CompletedBadge size="small" />
-        </div>
-      )}
 
       {/* 업데이트 뱃지 + 지구 아이콘 (AI 공개) + 북마크 버튼 */}
       <div className="absolute top-2 right-2 z-30 flex items-center gap-2">
@@ -1063,16 +1212,67 @@ function CustomQuizCard({
           >
             Details
           </button>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onStart();
-            }}
-            className="flex-1 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors"
-          >
-            Start
-          </button>
+          {isCompleted ? (
+            <div className="relative flex-1" ref={reviewMenuRef}>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowReviewMenu(!showReviewMenu);
+                }}
+                className="w-full py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors flex items-center justify-center gap-1"
+              >
+                Review
+                <svg className={`w-3 h-3 transition-transform ${showReviewMenu ? 'rotate-180' : ''}`} fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+              <AnimatePresence>
+                {showReviewMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -5 }}
+                    className="absolute bottom-full left-0 right-0 mb-1 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg z-50"
+                  >
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowReviewMenu(false);
+                        onReview?.();
+                      }}
+                      className="w-full px-3 py-2 text-sm font-bold text-[#1A1A1A] hover:bg-[#EDEAE4] text-left border-b border-[#EDEAE4]"
+                    >
+                      모두
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowReviewMenu(false);
+                        onReviewWrongOnly?.();
+                      }}
+                      className="w-full px-3 py-2 text-sm font-bold text-[#8B1A1A] hover:bg-[#FDEAEA] text-left"
+                    >
+                      오답만
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onStart();
+              }}
+              className="flex-1 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors"
+            >
+              Start
+            </button>
+          )}
         </div>
       </div>
     </motion.div>
@@ -1740,7 +1940,7 @@ function QuizListPageContent() {
     <div className="min-h-screen pb-72" style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 - 배너 이미지 */}
       <header className="flex flex-col items-center">
-        <div className="w-full h-[260px] pt-2">
+        <div className="w-full h-[230px]">
           <img
             src={ribbonImage}
             alt="Quiz"
@@ -1779,6 +1979,8 @@ function QuizListPageContent() {
           onStart={handleStartQuiz}
           onUpdate={handleOpenUpdateModal}
           onShowDetails={handleShowDetails}
+          onReview={(quizId) => router.push(`/review/library/${quizId}?from=quiz&autoStart=all`)}
+          onReviewWrongOnly={(quizId) => router.push(`/review/library/${quizId}?from=quiz&autoStart=wrongOnly`)}
         />
       </section>
 
@@ -1933,6 +2135,8 @@ function QuizListPageContent() {
                       isBookmarked={isBookmarked(quiz.id)}
                       onToggleBookmark={() => toggleBookmark(quiz.id)}
                       onUpdate={() => handleOpenUpdateModal(quiz)}
+                      onReview={() => router.push(`/review/library/${quiz.id}?from=quiz&autoStart=all`)}
+                      onReviewWrongOnly={() => router.push(`/review/library/${quiz.id}?from=quiz&autoStart=wrongOnly`)}
                     />
                   </motion.div>
                 ))}
@@ -1993,8 +2197,8 @@ function QuizListPageContent() {
                       quiz={quiz}
                       onCardClick={() => router.push(`/review/library/${quiz.id}?from=quiz`)}
                       onDetails={() => setReviewDetailsQuiz(quiz)}
-                      onReview={() => router.push(`/review/library/${quiz.id}?from=quiz`)}
-                      onReviewWrongOnly={() => router.push(`/review/wrong/${quiz.id}?from=quiz`)}
+                      onReview={() => router.push(`/review/library/${quiz.id}?from=quiz&autoStart=all`)}
+                      onReviewWrongOnly={() => router.push(`/review/library/${quiz.id}?from=quiz&autoStart=wrongOnly`)}
                       isBookmarked={isBookmarked(quiz.id)}
                       onToggleBookmark={() => toggleBookmark(quiz.id)}
                       hasUpdate={quiz.hasUpdate}

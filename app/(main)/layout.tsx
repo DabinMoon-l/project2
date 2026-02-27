@@ -5,9 +5,10 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { ThemeProvider } from '@/styles/themes/ThemeProvider';
 import { useRequireAuth } from '@/lib/hooks/useAuth';
 import Navigation from '@/components/common/Navigation';
-import { NotificationProvider, ExpToastProvider, PullToHome, SwipeBack } from '@/components/common';
+import { NotificationProvider, ExpToastProvider, SwipeBack } from '@/components/common';
 import { AIQuizContainer } from '@/components/ai-quiz';
-import { UserProvider, useUser, CourseProvider, useCourse, MilestoneProvider } from '@/lib/contexts';
+import { UserProvider, useUser, CourseProvider, useCourse, MilestoneProvider, HomeOverlayProvider } from '@/lib/contexts';
+import { HomeOverlay, ProfessorHomeOverlay } from '@/components/home';
 import { useActivityTracker } from '@/lib/hooks/useActivityTracker';
 import type { ClassType } from '@/styles/themes';
 import LibraryJobToast from '@/components/professor/library/LibraryJobToast';
@@ -33,12 +34,8 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
   // 접속 추적 (lastActiveAt + currentActivity)
   useActivityTracker();
 
-  const isHome = pathname === '/';
-  const isProfHome = pathname === '/professor';
-
-  // 가로모드에서는 홈/교수홈에서도 사이드바 표시
+  // 네비게이션 숨김 (홈 오버레이는 body attribute으로 처리)
   const hideNavigation =
-    (!isWide && (isHome || isProfHome)) ||
     pathname?.match(/^\/quiz\/[^/]+/) !== null ||
     pathname?.includes('/edit') ||
     pathname?.match(/^\/board\/[^/]+/) !== null ||
@@ -47,21 +44,6 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
     pathname?.match(/^\/professor\/quiz\/[^/]+\/preview/) !== null ||
     pathname === '/quiz/create' ||
     pathname === '/professor/quiz/create';
-
-  // 학생용 스와이프 다운으로 홈 이동 가능한 페이지 (가로모드에서는 비활성화)
-  const enablePullToHome =
-    !isWide &&
-    !isProfessor &&
-    !isHome &&
-    (pathname === '/quiz' || pathname === '/review' || pathname === '/board');
-
-  // 교수용 PullToHome (가로모드에서는 비활성화)
-  const isProfessorHome = pathname === '/professor';
-  const enableProfessorPullToHome =
-    !isWide &&
-    isProfessor &&
-    !isProfessorHome &&
-    (pathname === '/professor/stats' || pathname === '/professor/quiz' || pathname === '/professor/students' || pathname === '/board');
 
   // 프로필이 없으면 로그인으로 리다이렉트
   useEffect(() => {
@@ -107,44 +89,28 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
       <NotificationProvider>
         <ExpToastProvider>
           <MilestoneWrapper isProfessor={isProfessor}>
-            <LibraryJobToast />
-            <SwipeBack enabled={!isWide && !isHome && !isProfHome}>
-              <div className={`min-h-screen ${hideNavigation || isWide ? '' : 'pb-20'}`}
-                style={isWide ? { marginLeft: '72px' } : undefined}
-              >
-                {/* 메인 콘텐츠 */}
-                <main className={isWide ? 'max-w-[640px] mx-auto' : ''}>
-                  {enablePullToHome ? (
-                    <PullToHome>
-                      {children}
-                      {/* AI 퀴즈 플로팅 버튼 — PullToHome 안에 넣어야 같이 슬라이드됨 */}
-                      {pathname === '/quiz' && searchParams.get('manage') !== 'true' && <AIQuizContainer />}
-                      {/* 네비게이션도 같이 슬라이드 */}
-                      {!hideNavigation && (
-                        <Navigation role="student" />
-                      )}
-                    </PullToHome>
-                  ) : enableProfessorPullToHome ? (
-                    <PullToHome homePath="/professor" tabPaths={['/professor/stats', '/professor/quiz', '/professor/students', '/board']}>
-                      {children}
-                      {!hideNavigation && (
-                        <Navigation role="professor" />
-                      )}
-                    </PullToHome>
-                  ) : (
-                    <>
-                      {children}
-                      {!isProfessor && pathname === '/quiz' && searchParams.get('manage') !== 'true' && <AIQuizContainer />}
-                    </>
-                  )}
-                </main>
+            <HomeOverlayProvider>
+              <LibraryJobToast />
+              <SwipeBack enabled={!isWide}>
+                <div
+                  data-main-content
+                  className={`min-h-screen ${hideNavigation || isWide ? '' : 'pb-20'}`}
+                  style={isWide ? { marginLeft: '72px' } : undefined}
+                >
+                  {/* 메인 콘텐츠 */}
+                  <main className={isWide ? 'max-w-[640px] mx-auto' : ''}>
+                    {children}
+                    {!isProfessor && pathname === '/quiz' && searchParams.get('manage') !== 'true' && <AIQuizContainer />}
+                  </main>
 
-                {/* 하단 네비게이션 바 (PullToHome 미적용 페이지) */}
-                {!enablePullToHome && !enableProfessorPullToHome && !hideNavigation && (
-                  <Navigation role={isProfessor ? 'professor' : 'student'} />
-                )}
-              </div>
-            </SwipeBack>
+                  {/* 하단 네비게이션 바 */}
+                  {!hideNavigation && (
+                    <Navigation role={isProfessor ? 'professor' : 'student'} />
+                  )}
+                </div>
+              </SwipeBack>
+              {!isProfessor ? <HomeOverlay /> : <ProfessorHomeOverlay />}
+            </HomeOverlayProvider>
           </MilestoneWrapper>
         </ExpToastProvider>
       </NotificationProvider>

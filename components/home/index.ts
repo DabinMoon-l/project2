@@ -19,3 +19,5 @@ export { default as RankingSection } from './RankingSection';
 export { default as RandomReviewBanner } from './RandomReviewBanner';
 export { default as ProfessorCharacterBox } from './ProfessorCharacterBox';
 export { default as ProfessorRankingSection } from './ProfessorRankingSection';
+export { default as HomeOverlay } from './HomeOverlay';
+export { default as ProfessorHomeOverlay } from './ProfessorHomeOverlay';

@@ -554,7 +554,6 @@ function ProfessorNewsCarousel({
     <div
       className="relative select-none cursor-grab active:cursor-grabbing"
       style={{ perspective: 1200, touchAction: 'pan-y' }}
-      data-no-pull
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -746,7 +745,6 @@ function CourseRibbonHeader({
         onTouchEnd={handleTouchEnd}
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
-        data-no-pull-x
         style={{ touchAction: 'pan-y' }}
       >
         <AnimatePresence mode="wait">

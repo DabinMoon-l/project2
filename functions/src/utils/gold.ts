@@ -15,10 +15,13 @@ export const EXP_REWARDS = {
   QUIZ_FAIL: 25,          // 50% 미만 (참여 보상)
   QUIZ_CREATE: 50,        // 커스텀 퀴즈 생성 (isPublic: true)
   QUIZ_AI_SAVE: 25,       // AI 퀴즈 서재 저장 (isPublic: false)
-  QUIZ_MAKE_PUBLIC: 10,   // 서재 퀴즈 공개 전환
+  QUIZ_MAKE_PUBLIC: 15,   // 서재 퀴즈 공개 전환
 
   // 피드백 관련
-  FEEDBACK_SUBMIT: 10,    // 피드백 작성 (1개당)
+  FEEDBACK_SUBMIT: 15,    // 피드백 작성 (1개당)
+
+  // 복습 관련
+  REVIEW_PRACTICE: 25,    // 복습 연습 완료 (퀴즈당 1회)
 
   // 게시판 관련
   POST_CREATE: 15,        // 글 작성

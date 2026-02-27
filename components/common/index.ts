@@ -37,9 +37,6 @@ export type { UserRole } from './Navigation';
 // ProfileDrawer 컴포넌트
 export { default as ProfileDrawer } from './ProfileDrawer';
 
-// PullToHome 컴포넌트 (스와이프 다운 → 홈 이동)
-export { default as PullToHome } from './PullToHome';
-
 // SwipeBack 컴포넌트 (왼쪽 가장자리 스와이프 → 뒤로가기)
 export { default as SwipeBack } from './SwipeBack';
 

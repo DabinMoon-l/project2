@@ -63,3 +63,57 @@ export function useKeyboardAware(): KeyboardAwareState {
 
   return { isKeyboardOpen, bottomOffset, dismissKeyboard };
 }
+
+/**
+ * 키보드 열림 시 스크롤 컨테이너의 paddingBottom을 동적 조정하는 훅
+ *
+ * iOS Safari에서 fixed 입력바가 키보드 위로 올라갈 때
+ * 스크롤 가능한 콘텐츠가 입력바 뒤에 가려지는 문제를 해결합니다.
+ *
+ * useKeyboardAware의 bottomOffset을 재사용하므로 visualViewport 리스너를 중복 생성하지 않습니다.
+ *
+ * @param bottomOffset - useKeyboardAware에서 받은 키보드 오프셋 (px)
+ * @param inputBarHeight - 하단 고정 입력바 높이 (px)
+ * @param containerSelector - 스크롤 컨테이너 CSS 선택자
+ */
+export function useKeyboardScrollAdjust(
+  bottomOffset: number,
+  inputBarHeight: number = 80,
+  containerSelector: string = '[data-board-detail]'
+) {
+  const origPaddingRef = useRef<string | null>(null);
+  const containerRef = useRef<HTMLElement | null>(null);
+
+  // 컨테이너 참조를 마운트 시 한 번만 캐시
+  useEffect(() => {
+    containerRef.current = document.querySelector(containerSelector);
+    return () => {
+      // 언마운트 시 원래 패딩 복원
+      if (containerRef.current && origPaddingRef.current !== null) {
+        containerRef.current.style.paddingBottom = origPaddingRef.current;
+        origPaddingRef.current = null;
+      }
+      containerRef.current = null;
+    };
+  }, [containerSelector]);
+
+  // bottomOffset 변화에 따라 패딩 조정
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    if (bottomOffset > 150) {
+      // 키보드 열림 → paddingBottom 증가
+      if (origPaddingRef.current === null) {
+        origPaddingRef.current = container.style.paddingBottom || '';
+      }
+      container.style.paddingBottom = `${bottomOffset + inputBarHeight}px`;
+    } else {
+      // 키보드 닫힘 → 원래 패딩 복원
+      if (origPaddingRef.current !== null) {
+        container.style.paddingBottom = origPaddingRef.current;
+        origPaddingRef.current = null;
+      }
+    }
+  }, [bottomOffset, inputBarHeight]);
+}

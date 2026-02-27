@@ -240,7 +240,7 @@ export default function GachaResultModal({
 
                       <button
                         onClick={handleDiscover}
-                        disabled={!newName.trim() || (slotsAreFull && selectedSlot === null) || isDiscovering}
+                        disabled={!newName.trim() || isDiscovering}
                         className="w-full py-3 bg-white/25 text-white font-bold border border-white/30 rounded-full disabled:opacity-40"
                       >
                         {isDiscovering ? '이름 짓는 중...' : '이름 짓고 데려가기'}
@@ -273,7 +273,7 @@ export default function GachaResultModal({
 
                       <button
                         onClick={handleDiscover}
-                        disabled={(slotsAreFull && selectedSlot === null) || isDiscovering}
+                        disabled={isDiscovering}
                         className="w-full py-3 bg-white/25 text-white font-bold border border-white/30 rounded-full disabled:opacity-40"
                       >
                         {isDiscovering ? '데려가는 중...' : '데려가기'}
@@ -335,7 +335,7 @@ function SlotSelector({
   return (
     <div className="mb-4 p-3 bg-white/10 border border-white/15 rounded-xl">
       <p className="text-xs text-white/50 mb-2">
-        장착 슬롯이 가득 찼어요. 교체할 슬롯을 선택하세요:
+        장착도 하려면 교체할 슬롯을 선택하세요 (선택):
       </p>
       <div className="flex gap-2">
         {[0, 1].map((slot) => (

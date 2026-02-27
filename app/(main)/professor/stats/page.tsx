@@ -680,7 +680,6 @@ function DashboardRibbonHeader({
         onTouchEnd={handleTouchEnd}
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
-        data-no-pull-x
         style={{ touchAction: 'pan-y' }}
       >
         <AnimatePresence mode="wait">

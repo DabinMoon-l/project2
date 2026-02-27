@@ -2,7 +2,7 @@
 
 import { useRef, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
+import { useMotionValue, useSpring } from 'framer-motion';
 
 const EDGE_WIDTH = 25; // 왼쪽 가장자리 감지 너비
 const THRESHOLD_RATIO = 0.35; // 화면 폭의 35% 초과 시 트리거
@@ -17,19 +17,50 @@ interface SwipeBackProps {
 
 /**
  * 왼쪽 가장자리에서 오른쪽 스와이프 → router.back()
- * Framer Motion spring 기반, 뒤에 반투명 검은 오버레이
+ *
+ * 일반 div 래퍼 + ref로 직접 transform 적용.
+ * motion.div를 사용하면 transform이 항상 적용되어
+ * 자식의 position: fixed 가 뷰포트 대신 래퍼 기준으로 동작하는 버그 발생.
+ * spring 값이 0일 때는 transform을 제거하여 fixed 정상 동작 보장.
  */
 export default function SwipeBack({ children, enabled = true }: SwipeBackProps) {
   const router = useRouter();
   const motionX = useMotionValue(0);
   const springX = useSpring(motionX, SPRING_CONFIG);
-  const overlayOpacity = useTransform(springX, [0, typeof window !== 'undefined' ? window.innerWidth * 0.5 : 200], [0, 0.4]);
+
+  const contentRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
 
   const startX = useRef(0);
   const startY = useRef(0);
   const active = useRef(false);
   const locked = useRef(false); // 방향 잠금: 세로이면 비활성화
   const navigating = useRef(false);
+
+  // spring 값 변경 시 DOM 직접 업데이트 (re-render 없음)
+  useEffect(() => {
+    const unsubContent = springX.on('change', (x) => {
+      if (!contentRef.current) return;
+      if (Math.abs(x) < 0.5) {
+        // 0에 수렴하면 transform 제거 → position: fixed 정상 동작
+        contentRef.current.style.transform = '';
+      } else {
+        contentRef.current.style.transform = `translateX(${x}px)`;
+      }
+    });
+
+    const halfScreen = typeof window !== 'undefined' ? window.innerWidth * 0.5 : 200;
+    const unsubOverlay = springX.on('change', (x) => {
+      if (!overlayRef.current) return;
+      const opacity = Math.max(0, Math.min(x / halfScreen * 0.4, 0.4));
+      overlayRef.current.style.opacity = String(opacity);
+    });
+
+    return () => {
+      unsubContent();
+      unsubOverlay();
+    };
+  }, [springX]);
 
   const onTouchStart = useCallback((e: TouchEvent) => {
     if (!enabled || navigating.current) return;
@@ -64,7 +95,7 @@ export default function SwipeBack({ children, enabled = true }: SwipeBackProps) 
     }
   }, [motionX]);
 
-  const onTouchEnd = useCallback((e: TouchEvent) => {
+  const onTouchEnd = useCallback(() => {
     if (!active.current || navigating.current) return;
     active.current = false;
 
@@ -93,7 +124,6 @@ export default function SwipeBack({ children, enabled = true }: SwipeBackProps) 
 
   useEffect(() => {
     if (!enabled) return;
-    // passive: false로 등록하여 preventDefault 가능 (필요 시)
     document.addEventListener('touchstart', onTouchStart, { passive: true });
     document.addEventListener('touchmove', onTouchMove, { passive: true });
     document.addEventListener('touchend', onTouchEnd, { passive: true });
@@ -107,18 +137,19 @@ export default function SwipeBack({ children, enabled = true }: SwipeBackProps) 
   return (
     <>
       {/* 검은 오버레이 */}
-      <motion.div
+      <div
+        ref={overlayRef}
         className="fixed inset-0 pointer-events-none"
         style={{
           zIndex: 9998,
           backgroundColor: '#000',
-          opacity: overlayOpacity,
+          opacity: 0,
         }}
       />
-      {/* 컨텐츠 — SwipeBack 시 전체가 슬라이드 */}
-      <motion.div style={{ x: springX }}>
+      {/* 컨텐츠 — 일반 div, 스와이프 시에만 transform 적용 */}
+      <div ref={contentRef}>
         {children}
-      </motion.div>
+      </div>
     </>
   );
 }

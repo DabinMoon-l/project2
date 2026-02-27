@@ -18,7 +18,7 @@ import {
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useUser } from '@/lib/contexts';
 import { useUpload } from '@/lib/hooks/useStorage';
-import { useKeyboardAware } from '@/lib/hooks/useKeyboardAware';
+import { useKeyboardAware, useKeyboardScrollAdjust } from '@/lib/hooks/useKeyboardAware';
 
 interface CommentSectionProps {
   postId: string;
@@ -41,6 +41,7 @@ export default function CommentSection({ postId, postAuthorId }: CommentSectionP
   const { toggleCommentLike } = useCommentLike();
   const { uploadMultipleImages, loading: uploading } = useUpload();
   const { bottomOffset } = useKeyboardAware();
+  useKeyboardScrollAdjust(bottomOffset);
 
   const isProfessor = profile?.role === 'professor';
 
@@ -391,6 +392,7 @@ export default function CommentSection({ postId, postAuthorId }: CommentSectionP
               type="file"
               accept="image/*"
               multiple
+              tabIndex={-1}
               className="hidden"
               onChange={handleImageSelect}
             />

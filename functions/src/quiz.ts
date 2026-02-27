@@ -59,6 +59,7 @@ export const onQuizComplete = onDocumentCreated(
 
     const { userId, quizId, correctCount, totalCount } = result;
     const isUpdate = result.isUpdate === true;
+    const isReviewPractice = (result as any).isReviewPractice === true;
     const quizCreatorId = result.quizCreatorId || null;
 
     // 필수 데이터 검증
@@ -66,6 +67,49 @@ export const onQuizComplete = onDocumentCreated(
       console.error("필수 데이터가 누락되었습니다:", { userId, quizId });
       return;
     }
+
+    const db = getFirestore();
+
+    // ── 복습 연습 EXP (별도 처리) ──
+    if (isReviewPractice) {
+      // 동일 유저+퀴즈 복습 중복 보상 방지
+      const existingReviewRewards = await db
+        .collection("quizResults")
+        .where("userId", "==", userId)
+        .where("quizId", "==", quizId)
+        .where("isReviewPractice", "==", true)
+        .where("rewarded", "==", true)
+        .limit(1)
+        .get();
+
+      if (!existingReviewRewards.empty) {
+        console.log(`이미 복습 보상이 지급된 퀴즈입니다: userId=${userId}, quizId=${quizId}`);
+        await snapshot.ref.update({ rewarded: true, rewardedAt: FieldValue.serverTimestamp(), expRewarded: 0 });
+        return;
+      }
+
+      const expReward = EXP_REWARDS.REVIEW_PRACTICE;
+      const reason = "복습 연습 완료";
+
+      try {
+        await db.runTransaction(async (transaction) => {
+          const userDoc = await readUserForExp(transaction, userId);
+          transaction.update(snapshot.ref, {
+            rewarded: true,
+            rewardedAt: FieldValue.serverTimestamp(),
+            expRewarded: expReward,
+          });
+          addExpInTransaction(transaction, userId, expReward, reason, userDoc);
+        });
+        console.log(`복습 보상 지급 완료: ${userId}`, { resultId, expReward });
+      } catch (error) {
+        console.error("복습 보상 지급 실패:", error);
+        throw error;
+      }
+      return;
+    }
+
+    // ── 퀴즈 완료 EXP (기존 로직) ──
 
     // 서버 채점 점수 검증: gradedOnServer가 true이면 score 신뢰,
     // 그렇지 않으면 (클라이언트 폴백) submissions에서 실제 점수 확인
@@ -97,8 +141,6 @@ export const onQuizComplete = onDocumentCreated(
     // 경험치 보상 계산
     const expReward = calculateQuizExp(score);
     const reason = `퀴즈 완료 (점수: ${score}점)`;
-
-    const db = getFirestore();
 
     // 동일 유저+퀴즈 중복 보상 방지 (isUpdate 무시, 항상 체크 — 클라이언트 조작 방지)
     const existingRewards = await db

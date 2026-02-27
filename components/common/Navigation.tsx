@@ -3,8 +3,9 @@
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { useState, useEffect, useMemo } from 'react';
+import { Fragment, useState, useEffect, useMemo, useCallback } from 'react';
 import { useWideMode } from '@/lib/hooks/useViewportScale';
+import { useHomeOverlay } from '@/lib/contexts/HomeOverlayContext';
 
 export type UserRole = 'student' | 'professor';
 
@@ -25,8 +26,20 @@ const INACTIVE_COLOR = '#1A1A1A';
 // 사이드바 색상
 const SIDEBAR_ACTIVE_BG = 'rgba(26, 26, 26, 0.85)';
 
-// 학생용 네비게이션 탭 (홈은 스와이프로 접근)
+// 홈 아이콘 (탭바 + 사이드바 공용)
+const homeIcon = (isActive: boolean) => (
+  <svg className="w-7 h-7" fill="none" stroke={isActive ? ACTIVE_COLOR : INACTIVE_COLOR} strokeWidth={isActive ? 2 : 1.5} viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
+  </svg>
+);
+
+// 학생용 네비게이션 탭
 const studentTabs: NavItem[] = [
+  {
+    icon: homeIcon,
+    path: '/',
+    label: '홈',
+  },
   {
     // 퀴즈 아이콘 - 물음표
     icon: (isActive) => (
@@ -60,8 +73,13 @@ const studentTabs: NavItem[] = [
   },
 ];
 
-// 교수님용 네비게이션 탭: 통계 / 퀴즈 / 학생 / 게시판 (홈은 스와이프로 접근)
+// 교수님용 네비게이션 탭: 홈 / 통계 / 퀴즈 / 학생 / 게시판
 const professorTabs: NavItem[] = [
+  {
+    icon: homeIcon,
+    path: '/professor',
+    label: '홈',
+  },
   {
     // 통계 아이콘 - 막대 차트
     icon: (isActive) => (
@@ -104,15 +122,8 @@ const professorTabs: NavItem[] = [
   },
 ];
 
-// 홈 아이콘 (사이드바 전용)
-const homeIcon = (isActive: boolean) => (
-  <svg className="w-7 h-7" fill="none" stroke={isActive ? ACTIVE_COLOR : INACTIVE_COLOR} strokeWidth={isActive ? 2 : 1.5} viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
-  </svg>
-);
-
 function isActiveTab(pathname: string, tabPath: string): boolean {
-  if (tabPath === '/') {
+  if (tabPath === '/' || tabPath === '/professor') {
     return pathname === tabPath;
   }
   return pathname.startsWith(tabPath);
@@ -120,56 +131,74 @@ function isActiveTab(pathname: string, tabPath: string): boolean {
 
 /**
  * 네비게이션 — 세로모드: 하단 바 / 가로모드: 좌측 사이드바
+ * 오버레이가 열려 있어도 항상 표시 (z-50 > 오버레이 z-45)
  */
 export default function Navigation({ role }: NavigationProps) {
   const pathname = usePathname();
   const [isHidden, setIsHidden] = useState(false);
   const isWide = useWideMode();
+  const {
+    open: openHomeOverlay,
+    close: closeOverlay,
+    closeAnimated: closeOverlayAnimated,
+    isOpen: isOverlayOpen,
+    homeButtonRef,
+  } = useHomeOverlay();
 
   // 경로 기반 네비게이션 숨김
   const shouldHideByPath = useMemo(() => {
-    // /quiz/[id] 하위 경로 (풀이, 결과, 피드백)
     if (/^\/quiz\/[^/]+/.test(pathname) && pathname !== '/quiz/create') return true;
-    // /edit 포함 경로 (퀴즈 수정)
     if (pathname.includes('/edit')) return true;
-    // /ranking 경로
     if (pathname === '/ranking') return true;
-    // /review/random 경로
     if (pathname === '/review/random') return true;
-    // /review/[type]/[id] 상세 경로
     if (/^\/review\/[^/]+\/[^/]+/.test(pathname)) return true;
     return false;
   }, [pathname]);
 
-  // body의 data-hide-nav / data-hide-nav-only attribute를 감지하여 네비게이션 숨김
-  // data-hide-nav: 네비게이션 + PullToHome 제스처 모두 차단 (모달 등)
-  // data-hide-nav-only: 네비게이션만 숨김, PullToHome은 유지 (서재 탭 등)
+  // body attribute 감지 (모달, 홈 오버레이 등)
   useEffect(() => {
     const checkHideNav = () => {
-      const shouldHide = document.body.hasAttribute('data-hide-nav') || document.body.hasAttribute('data-hide-nav-only');
+      const shouldHide =
+        document.body.hasAttribute('data-hide-nav') ||
+        document.body.hasAttribute('data-hide-nav-only') ||
+        document.body.hasAttribute('data-home-overlay-open');
       setIsHidden(shouldHide);
     };
-
-    // 초기 체크
     checkHideNav();
-
-    // MutationObserver로 body attribute 변경 감지
     const observer = new MutationObserver(checkHideNav);
-    observer.observe(document.body, { attributes: true, attributeFilter: ['data-hide-nav', 'data-hide-nav-only'] });
-
+    observer.observe(document.body, { attributes: true, attributeFilter: ['data-hide-nav', 'data-hide-nav-only', 'data-home-overlay-open'] });
     return () => observer.disconnect();
   }, []);
 
   const tabs = role === 'professor' ? professorTabs : studentTabs;
   const homePath = role === 'professor' ? '/professor' : '/';
 
-  // 숨김 상태면 렌더링하지 않음 (경로 기반 또는 data-hide-nav attribute)
-  if (isHidden || shouldHideByPath) return null;
+  // 홈 버튼: 오버레이 토글 (열려있으면 축소 애니메이션으로 닫기)
+  const handleHomeClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    if (isOverlayOpen) {
+      closeOverlayAnimated();
+    } else {
+      sessionStorage.setItem('home_return_path', pathname);
+      openHomeOverlay();
+    }
+  }, [pathname, openHomeOverlay, closeOverlayAnimated, isOverlayOpen]);
+
+  // 다른 탭 클릭: 오버레이가 열려있으면 즉시 닫기
+  const handleTabClick = useCallback(() => {
+    if (isOverlayOpen) {
+      closeOverlay();
+    }
+  }, [isOverlayOpen, closeOverlay]);
+
+  // 가로모드 사이드바는 오버레이 열려도 유지 (오버레이가 left:72px로 사이드바 오른쪽에만)
+  const overlayOpen = document.body.hasAttribute('data-home-overlay-open');
+  if (shouldHideByPath) return null;
+  if (isHidden && !isWide) return null;
+  if (isHidden && isWide && !overlayOpen) return null;
 
   // 가로모드: 좌측 사이드바
   if (isWide) {
-    const isHomeActive = pathname === homePath;
-
     return (
       <nav
         className="fixed left-0 top-0 bottom-0 z-50 flex flex-col items-center py-6 gap-2"
@@ -179,61 +208,44 @@ export default function Navigation({ role }: NavigationProps) {
           borderRight: '2px solid #1A1A1A',
         }}
       >
-        {/* 홈 버튼 */}
-        <Link
-          href={homePath}
-          className="flex flex-col items-center justify-center gap-0.5 w-14 h-14 rounded-xl transition-all duration-200"
-          style={{
-            backgroundColor: isHomeActive ? SIDEBAR_ACTIVE_BG : 'transparent',
-          }}
-          aria-label="홈"
-        >
-          {homeIcon(isHomeActive)}
-          <span
-            className="text-[10px] font-bold"
-            style={{ color: isHomeActive ? ACTIVE_COLOR : INACTIVE_COLOR }}
-          >
-            홈
-          </span>
-        </Link>
-
-        {/* 구분선 */}
-        <div className="w-10 border-t border-[#1A1A1A]/20 my-1" />
-
-        {/* 탭 목록 */}
-        {tabs.map((tab) => {
+        {tabs.map((tab, index) => {
           const isActive = isActiveTab(pathname, tab.path);
+          const isHome = tab.path === homePath;
 
           return (
-            <Link
-              key={tab.path}
-              href={tab.path}
-              className="flex flex-col items-center justify-center gap-0.5 w-14 h-14 rounded-xl transition-all duration-200"
-              style={{
-                backgroundColor: isActive ? SIDEBAR_ACTIVE_BG : 'transparent',
-              }}
-              aria-label={tab.label}
-            >
-              <motion.div
-                animate={{ scale: isActive ? 1.1 : 1 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+            <Fragment key={tab.path}>
+              {index === 1 && <div className="w-10 border-t border-[#1A1A1A]/20 my-1" />}
+              <Link
+                href={tab.path}
+                ref={isHome ? (el: HTMLAnchorElement | null) => { homeButtonRef.current = el; } : undefined}
+                onClick={isHome ? handleHomeClick : handleTabClick}
+                className="flex flex-col items-center justify-center gap-0.5 w-14 h-14 rounded-xl transition-all duration-200"
+                style={{
+                  backgroundColor: isActive ? SIDEBAR_ACTIVE_BG : 'transparent',
+                }}
+                aria-label={tab.label}
               >
-                {tab.icon(isActive)}
-              </motion.div>
-              <span
-                className="text-[10px] font-bold"
-                style={{ color: isActive ? ACTIVE_COLOR : INACTIVE_COLOR }}
-              >
-                {tab.label}
-              </span>
-            </Link>
+                <motion.div
+                  animate={{ scale: isActive ? 1.1 : 1 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+                >
+                  {tab.icon(isActive)}
+                </motion.div>
+                <span
+                  className="text-[10px] font-bold"
+                  style={{ color: isActive ? ACTIVE_COLOR : INACTIVE_COLOR }}
+                >
+                  {tab.label}
+                </span>
+              </Link>
+            </Fragment>
           );
         })}
       </nav>
     );
   }
 
-  // 세로모드: 기존 하단 바 (safe-area-inset-bottom 적용)
+  // 세로모드: 하단 바
   return (
     <nav
       className="fixed left-4 right-4 z-50 flex justify-center"
@@ -245,7 +257,7 @@ export default function Navigation({ role }: NavigationProps) {
           backgroundColor: '#F5F0E8',
           border: '2px solid #1A1A1A',
           boxShadow: '4px 4px 0px #1A1A1A',
-          maxWidth: '340px',
+          maxWidth: role === 'professor' ? '420px' : '340px',
           width: '100%',
         }}
       >
@@ -271,23 +283,23 @@ export default function Navigation({ role }: NavigationProps) {
 
         {tabs.map((tab) => {
           const isActive = isActiveTab(pathname, tab.path);
+          const isHome = tab.path === homePath;
 
           return (
             <Link
               key={tab.path}
               href={tab.path}
+              ref={isHome ? (el: HTMLAnchorElement | null) => { homeButtonRef.current = el; } : undefined}
+              onClick={isHome ? handleHomeClick : handleTabClick}
               className="relative z-10 flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 transition-all duration-200"
               aria-label={tab.label}
             >
-              {/* 아이콘 */}
               <motion.div
                 animate={{ scale: isActive ? 1.1 : 1 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 20 }}
               >
                 {tab.icon(isActive)}
               </motion.div>
-
-              {/* 라벨 */}
               <span
                 className="text-sm font-bold"
                 style={{ color: isActive ? ACTIVE_COLOR : INACTIVE_COLOR }}

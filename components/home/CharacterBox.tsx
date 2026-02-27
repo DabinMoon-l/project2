@@ -235,7 +235,7 @@ export default function CharacterBox() {
     <>
       <div className="flex flex-col items-center w-full">
         {/* XP / 도감 */}
-        <div className="w-full flex items-center justify-between px-8 mb-2 mt-10 relative z-20">
+        <div className="w-full flex items-center justify-between px-8 mb-2 mt-6 relative z-20">
           <div className="h-11 flex items-center gap-4 px-9 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl">
             <span className="text-xl font-bold text-white">XP</span>
             <span className="font-bold text-xl text-white leading-none text-right">{totalExp}</span>
@@ -320,7 +320,7 @@ export default function CharacterBox() {
         ) : null}
 
         {/* 토끼 이름 + 레벨 */}
-        <div className="mt-[188px]">
+        <div className="mt-[120px]">
           <AnimatePresence mode="wait">
             {isEmptySlot ? (
               <motion.div
@@ -355,7 +355,7 @@ export default function CharacterBox() {
         </div>
 
         {/* EXP 바 섹션 */}
-        <div className="w-full px-8 mt-2 mb-6">
+        <div className="w-full px-8 mt-2 mb-3">
           {/* XP 라벨 */}
           <div className="flex items-center justify-end">
             <span className="text-base font-bold text-white/70">

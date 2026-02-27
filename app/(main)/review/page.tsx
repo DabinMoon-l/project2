@@ -3452,7 +3452,7 @@ function ReviewPageContent() {
     <div className="min-h-screen pb-28" style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 - 배너 이미지 */}
       <header className="flex flex-col items-center">
-        <div className="w-full h-[260px] pt-2">
+        <div className="w-full h-[230px]">
           <img
             src={ribbonImage}
             alt="Review"

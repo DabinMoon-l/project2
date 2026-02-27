@@ -224,28 +224,20 @@ Tailwind에서 `bg-theme-background`, `text-theme-accent` 등으로 사용 (`tai
 
 ### 네비게이션 탭
 
-**학생 탭** (홈은 스와이프로 접근, nav에 없음):
+**학생 탭** (4개):
+- `/` — 홈
 - `/quiz` — 퀴즈
 - `/review` — 복습
 - `/board` — 게시판
 
-**교수 탭**:
+**교수 탭** (5개, maxWidth 420px):
+- `/professor` — 홈
 - `/professor/stats` — 통계
 - `/professor/quiz` — 퀴즈
 - `/professor/students` — 학생
 - `/board` — 게시판
 
-교수 홈(`/professor`)은 탭에 없음 — 사이드바 홈 아이콘 또는 PullToHome으로 접근
-
-### PullToHome (`components/common/PullToHome.tsx`)
-
-학생 전용, `/quiz` `/review` `/board` 페이지에서만 활성화 (`app/(main)/layout.tsx`의 `enablePullToHome`). **가로모드(wide)에서는 비활성화.**
-
-- **세로 스와이프**: 페이지 상단에서 아래로 당기면 홈으로 이동 (배경에 home-bg.jpg 미리보기)
-- **가로 스와이프**: 퀴즈 ↔ 복습 ↔ 게시판 탭 전환 (`TAB_PATHS = ['/quiz', '/review', '/board']`)
-- 방향 잠금: 10px 이상 이동 시 가로/세로 판별 후 잠금
-- `sessionStorage` 키: `tab_swipe_enter` (입장 방향), `home_return_path` (홈에서 돌아갈 경로)
-- PullToHome 활성화 시 Navigation도 PullToHome 안에 배치되어 같이 슬라이드됨
+홈 버튼 클릭 시 `sessionStorage.setItem('home_return_path', pathname)` 설정 → 홈 페이지의 스와이프 업 복귀가 올바른 경로를 알 수 있도록
 
 ### 공지 채널 (`components/home/AnnouncementChannel.tsx`)
 
@@ -399,37 +391,20 @@ Tailwind에서 `bg-theme-background`, `text-theme-accent` 등으로 사용 (`tai
 
 | 모드 | 조건 | 전략 |
 |------|------|------|
-| **세로모드** | 폰/패드 세로/좁은 창 (< 1024px 또는 portrait) | CSS `zoom`으로 576px 기준 스케일 |
+| **세로모드** | 폰/패드 세로/좁은 창 (< 1024px 또는 portrait) | 네이티브 반응형 (CSS zoom 제거됨) |
 | **가로모드** | PC/패드 가로 (landscape + 1024px 이상) | 좌측 사이드바(72px) + 중앙 컨텐츠(max-w 640px) |
 
 ### 핵심 훅/유틸 (`lib/hooks/useViewportScale.ts`)
 
-- **`useViewportScale()`**: `app/(main)/layout.tsx`에서 호출. 세로모드 시 `document.documentElement.style.zoom = physicalWidth / 576`
+- **`useViewportScale()`**: no-op (하위 호환용으로 유지, CSS zoom 제거됨)
 - **`useWideMode()`**: 가로모드 감지 상태 반환 (`orientation: landscape` + `min-width: 1024px`)
-- **`getZoom()`**: 현재 zoom 값 반환
-- **`scaleCoord(value)`**: **CSS zoom 좌표 보정** — `clientX/Y`가 물리 픽셀을 반환하므로 `value / zoom`으로 CSS 논리 픽셀 변환. **모든 터치/마우스 좌표 처리에 필수**
-
-### zoom 피드백 루프 방지
-
-`window.innerWidth`는 zoom이 적용된 값을 반환. 정확한 물리 너비를 읽으려면 반드시 `zoom='1'`로 리셋 후 읽기:
-```typescript
-document.documentElement.style.zoom = '1';  // 리셋 먼저
-const physicalWidth = window.innerWidth;      // 이제 정확한 값
-document.documentElement.style.zoom = String(physicalWidth / 576);
-```
-
-### scaleCoord 적용 필요 파일들
-
-터치/마우스 이벤트에서 `clientX/Y`를 사용하는 모든 컴포넌트에 `scaleCoord()` 래핑 필수:
-- PullToHome, CourseSwitcher, ImageViewer, CharacterBox, ProfessorCharacterBox
-- QuizStatsModal, ImageRegionSelector, ImageCropper, ExtractedImagePicker
-- board/page, board/manage/page, quiz/page, professor/page, professor/quiz/page, professor/stats/page, professor/students/page
+- **`getZoom()`**: 항상 1 반환 (하위 호환용)
+- **`scaleCoord(value)`**: identity 함수 (하위 호환용, `value`를 그대로 반환)
 
 ### 가로모드 레이아웃
 
 - **사이드바** (`Navigation.tsx`): 좌측 72px, 홈 아이콘 + 탭 아이콘 세로 배치
 - **컨텐츠**: `ml-[72px] max-w-[640px] mx-auto`
-- **PullToHome 비활성화**: `!isWide && ...` 조건 추가
 - **Tailwind 커스텀 스크린**: `wide: { raw: '(orientation: landscape) and (min-width: 1024px)' }`
 
 ### PWA 뷰포트 설정

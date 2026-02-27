@@ -213,7 +213,7 @@ export default function PostDetailPage() {
   }
 
   return (
-    <div className="min-h-screen pb-16 overflow-x-hidden" style={{ backgroundColor: '#F5F0E8' }}>
+    <div className="min-h-screen pb-24 overflow-x-hidden" data-board-detail style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 */}
       <header className="mx-4 mt-4 pb-4">
         <button

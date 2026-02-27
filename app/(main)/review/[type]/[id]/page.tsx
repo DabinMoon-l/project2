@@ -21,7 +21,7 @@ import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useReview, calculateCustomFolderQuestionCount, type ReviewItem, type FolderCategory, type CustomFolderQuestion } from '@/lib/hooks/useReview';
 import { useCourse } from '@/lib/contexts/CourseContext';
-import { Skeleton, BottomSheet } from '@/components/common';
+import { Skeleton, BottomSheet, useExpToast } from '@/components/common';
 import ReviewPractice, { type PracticeResult } from '@/components/review/ReviewPractice';
 import { formatChapterLabel, getChapterById } from '@/lib/courseIndex';
 
@@ -1094,11 +1094,13 @@ export default function FolderDetailPage() {
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const { userCourse, userClassId } = useCourse();
+  const { showExpToast } = useExpToast();
 
   const folderType = params.type as string; // solved, wrong, bookmark, custom
   const folderId = params.id as string;
   const chapterFilter = searchParams.get('chapter'); // 챕터 필터 (오답 탭에서 챕터별 클릭 시)
   const fromQuizPage = searchParams.get('from') === 'quiz'; // 퀴즈 페이지 복습탭에서 접근 시 수정 비활성화
+  const autoStart = searchParams.get('autoStart'); // 'all' | 'wrongOnly' — 퀴즈 페이지에서 바로 복습 시작
 
   // 과목별 리본 이미지 (solved 타입 또는 퀴즈 페이지에서 온 경우 퀴즈 리본, 나머지는 리뷰 리본)
   const ribbonImage = (folderType === 'solved' || fromQuizPage)
@@ -2002,6 +2004,39 @@ export default function FolderDetailPage() {
     return questions.filter(q => wrongQuestionKeys.has(`${q.quizId}:${q.questionId}`)).length;
   }, [folderType, folderId, questions, wrongItems]);
 
+  // 퀴즈 페이지에서 autoStart 파라미터로 바로 복습 시작
+  const autoStartedRef = useRef(false);
+  useEffect(() => {
+    if (!autoStart || autoStartedRef.current || loading || questions.length === 0) return;
+    autoStartedRef.current = true;
+
+    if (autoStart === 'wrongOnly') {
+      // wrong 타입: 이미 오답만 로드됨 → 전체 복습
+      if (folderType === 'wrong') {
+        setPracticeMode('wrongOnly');
+        setPracticeItems(questions);
+      } else {
+        // library 타입에서 오답만 필터링
+        const wrongQuestionKeys = new Set(
+          wrongItems
+            .filter(w => w.quizId === folderId)
+            .map(w => `${w.quizId}:${w.questionId}`)
+        );
+        const wrongOnlyItems = questions.filter(q =>
+          wrongQuestionKeys.has(`${q.quizId}:${q.questionId}`)
+        );
+        if (wrongOnlyItems.length > 0) {
+          setPracticeMode('wrongOnly');
+          setPracticeItems(wrongOnlyItems);
+        }
+      }
+    } else {
+      // autoStart === 'all'
+      setPracticeMode('all');
+      setPracticeItems(questions);
+    }
+  }, [autoStart, loading, questions, wrongItems, folderType, folderId]);
+
   // 선택된 퀴즈의 문제 목록 가져오기
   const getSelectedQuizItems = () => {
     if (!selectedQuizForAdd) return [];
@@ -2321,6 +2356,18 @@ export default function FolderDetailPage() {
     });
   };
 
+  // autoStart 모드: 데이터 로딩 중이면 로딩 스피너만 표시 (폴더 상세 안 보여줌)
+  if (autoStart && !practiceItems && (loading || questions.length === 0)) {
+    return (
+      <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor: '#F5F0E8' }}>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 border-2 border-[#1A1A1A] border-t-transparent rounded-full animate-spin" />
+          <p className="text-[#3A3A3A] text-sm">복습 준비 중...</p>
+        </div>
+      </div>
+    );
+  }
+
   // 연습 모드
   if (practiceItems) {
     return (
@@ -2411,7 +2458,43 @@ export default function FolderDetailPage() {
                   }
                 }
 
-                // 2. 해당 퀴즈의 모든 reviews 문서 업데이트 (뱃지 제거)
+                // 2. 첫 복습 점수 저장 (전체 복습 모드에서만, 최초 1회)
+                if (practiceMode === 'all' && results.length > 0) {
+                  const existingReviewScore = quizData.userFirstReviewScores?.[user.uid];
+                  if (existingReviewScore === undefined) {
+                    const correctCount = results.filter(r => r.isCorrect).length;
+                    const totalCount = quizData.questions?.length || results.length;
+                    const reviewScore = Math.round((correctCount / totalCount) * 100);
+                    await updateDoc(doc(db, 'quizzes', folderId), {
+                      [`userFirstReviewScores.${user.uid}`]: reviewScore,
+                    });
+                  }
+                }
+
+                // 3. 복습 연습 EXP 지급용 quizResults 문서 생성 (CF 트리거)
+                if (results.length > 0) {
+                  const correctCount = results.filter(r => r.isCorrect).length;
+                  const totalCount = quizData.questions?.length || results.length;
+                  const reviewScore = Math.round((correctCount / totalCount) * 100);
+
+                  await addDoc(collection(db, 'quizResults'), {
+                    userId: user.uid,
+                    quizId: folderId,
+                    quizTitle: quizData.title || '퀴즈',
+                    score: reviewScore,
+                    correctCount,
+                    totalCount,
+                    isReviewPractice: true,
+                    courseId: quizData.courseId || null,
+                    classId: userClassId || null,
+                    createdAt: serverTimestamp(),
+                  });
+
+                  // EXP 토스트 (CF에서 25 EXP 지급)
+                  showExpToast(25, '복습 연습 완료');
+                }
+
+                // 4. 해당 퀴즈의 모든 reviews 문서 업데이트 (뱃지 제거)
                 const reviewsQuery = query(
                   collection(db, 'reviews'),
                   where('userId', '==', user.uid),
@@ -2428,12 +2511,20 @@ export default function FolderDetailPage() {
             }
           }
 
-          setPracticeItems(null);
-          setPracticeMode(null);
+          if (autoStart) {
+            router.back();
+          } else {
+            setPracticeItems(null);
+            setPracticeMode(null);
+          }
         }}
         onClose={() => {
-          setPracticeItems(null);
-          setPracticeMode(null);
+          if (autoStart) {
+            router.back();
+          } else {
+            setPracticeItems(null);
+            setPracticeMode(null);
+          }
         }}
         currentUserId={user?.uid}
       />

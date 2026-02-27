@@ -225,7 +225,7 @@ const PinnedPostsCarousel = memo(function PinnedPostsCarousel({
   if (posts.length === 0) return null;
 
   return (
-    <div className="relative" data-no-pull style={{ touchAction: 'pan-y' }}>
+    <div className="relative" style={{ touchAction: 'pan-y' }}>
       {/* 캐러셀 컨테이너 — overflow-hidden 제거 (pointer-events 차단 원인) */}
       <div
         onTouchStart={handleTouchStart}
@@ -754,7 +754,7 @@ export default function BoardPage() {
       {/* 교수님용 과목 탭 — 타이틀 영역에 통합됨 */}
 
       {/* 헤더 */}
-      <header ref={headerRef} className="mx-4 mt-4 pb-4 border-b-4 border-double border-[#1A1A1A]">
+      <header ref={headerRef} className="mx-4 mt-2 pb-4 border-b-4 border-double border-[#1A1A1A]">
         {/* 상단 날짜 및 에디션 */}
         <div className="flex justify-between items-center text-xs text-[#3A3A3A] mb-3">
           <span>{dateString}</span>
@@ -769,7 +769,6 @@ export default function BoardPage() {
         {isProfessor ? (
           <div
             className="border-y-4 border-[#1A1A1A] pt-5 pb-7 flex items-center justify-center gap-2 select-none overflow-hidden"
-            data-no-pull
             style={{ touchAction: 'pan-y' }}
             onTouchStart={(e) => { courseTouchStartX.current = scaleCoord(e.touches[0].clientX); }}
             onTouchMove={(e) => { courseTouchEndX.current = scaleCoord(e.touches[0].clientX); }}
