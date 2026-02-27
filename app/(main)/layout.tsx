@@ -45,6 +45,19 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
     pathname === '/quiz/create' ||
     pathname === '/professor/quiz/create';
 
+  // 탭 루트 페이지에서는 SwipeBack 비활성화 (router.back()이 엉뚱한 곳으로 감)
+  const isTabRoot =
+    pathname === '/' ||
+    pathname === '/quiz' ||
+    pathname === '/review' ||
+    pathname === '/board' ||
+    pathname === '/professor' ||
+    pathname === '/professor/stats' ||
+    pathname === '/professor/quiz' ||
+    pathname === '/professor/students' ||
+    pathname === '/profile' ||
+    pathname === '/settings';
+
   // 프로필이 없으면 로그인으로 리다이렉트
   useEffect(() => {
     if (!profileLoading && !profile) {
@@ -91,7 +104,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
           <MilestoneWrapper isProfessor={isProfessor}>
             <HomeOverlayProvider>
               <LibraryJobToast />
-              <SwipeBack enabled={!isWide}>
+              <SwipeBack enabled={!isWide && !isTabRoot}>
                 <div
                   data-main-content
                   className={`min-h-screen ${hideNavigation || isWide ? '' : 'pb-20'}`}

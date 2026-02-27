@@ -109,13 +109,13 @@ export default function SwipeBack({ children, enabled = true }: SwipeBackProps) 
       // 화면 밖으로 슬라이드 후 뒤로가기
       motionX.set(screenWidth);
       setTimeout(() => {
+        // 뒤로가기 전에 transform 즉시 리셋 (페이지 전환 시 깜빡임 방지)
+        motionX.jump(0);
         router.back();
-        // 복귀 후 리셋
         setTimeout(() => {
-          motionX.jump(0);
           navigating.current = false;
-        }, 100);
-      }, 200);
+        }, 300);
+      }, 180);
     } else {
       // spring으로 원위치 복귀
       motionX.set(0);
