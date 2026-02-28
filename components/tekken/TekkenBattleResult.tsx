@@ -4,6 +4,7 @@
  * 배틀 결과 화면
  *
  * 승/패/무승부 + XP 표시
+ * 부모 컨테이너 내부에서 전체 영역 차지
  */
 
 import { motion } from 'framer-motion';
@@ -25,7 +26,7 @@ export default function TekkenBattleResult({
 }: TekkenBattleResultProps) {
   const isWinner = result.winnerId === userId;
   const isDraw = result.isDraw;
-  const xp = calcBattleXp(isWinner, 0); // 클라이언트에서는 연승 모르므로 기본값
+  const xp = calcBattleXp(isWinner, 0);
 
   const endReasonText = {
     ko: 'K.O!',
@@ -34,11 +35,7 @@ export default function TekkenBattleResult({
   }[result.endReason] || '';
 
   return (
-    <motion.div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-    >
+    <div className="flex-1 flex flex-col items-center justify-center px-6">
       {/* 결과 텍스트 */}
       <motion.div
         className="text-center mb-8"
@@ -69,7 +66,7 @@ export default function TekkenBattleResult({
 
       {/* XP 획득 */}
       <motion.div
-        className="flex items-center gap-3 px-8 py-4 bg-black/40 border border-white/10 rounded-2xl backdrop-blur-xl mb-10"
+        className="flex items-center gap-3 px-8 py-4 bg-black/40 border border-white/15 rounded-2xl backdrop-blur-xl mb-10"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.9 }}
@@ -91,6 +88,6 @@ export default function TekkenBattleResult({
       >
         돌아가기
       </motion.button>
-    </motion.div>
+    </div>
   );
 }

@@ -32,7 +32,7 @@ const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 
 interface GeneratedQuestion {
   text: string;
-  type: "ox" | "multiple";
+  type: "multiple";
   choices: string[];
   correctAnswer: number;
 }
@@ -64,14 +64,8 @@ async function fetchExistingQuestions(
     const quiz = doc.data();
     const questions = quiz.questions || [];
     for (const q of questions) {
-      if (q.type === "ox" && q.correctAnswer !== undefined) {
-        allQuestions.push({
-          text: q.text || q.question || "",
-          type: "ox",
-          choices: ["O", "X"],
-          correctAnswer: q.correctAnswer,
-        });
-      } else if (
+      // 객관식만 수집 (OX 제외)
+      if (
         q.type === "multiple" &&
         Array.isArray(q.choices) &&
         q.correctAnswer !== undefined
@@ -146,10 +140,8 @@ async function generateBattleQuestions(
         .slice(0, 10)
         .map(
           (q, i) =>
-            `${i + 1}. [${q.type === "ox" ? "OX" : "객관식"}] ${q.text}` +
-            (q.type === "multiple"
-              ? ` (선지: ${q.choices.join(", ")} / 정답: ${q.choices[q.correctAnswer]})`
-              : ` (정답: ${q.choices[q.correctAnswer]})`)
+            `${i + 1}. [객관식] ${q.text}` +
+            ` (선지: ${q.choices.join(", ")} / 정답: ${q.choices[q.correctAnswer]})`
         )
         .join("\n")
     : "";
@@ -159,50 +151,51 @@ async function generateBattleQuestions(
       ? `\n출제 범위 키워드: ${keywords.join(", ")}\n이 키워드와 관련된 주제를 우선적으로 출제하세요.`
       : "";
 
-  // 3) 프롬프트 구성
+  // 3) 프롬프트 구성 — 5지선다 객관식만, 챕터 1~3 범위, 적절한 난이도
+  const chapterScope = "\n출제 범위: 챕터 1, 2, 3 내용으로만 출제하세요.";
+
   const prompt = hasReference
     ? `
 아래는 대학교 ${courseName} 과목의 기존 퀴즈 문제입니다:
 
 ${referenceBlock}
 ${keywordBlock}
+${chapterScope}
 
 위 문제들을 **참고**하여 비슷하지만 새로운 문제 ${count}개를 만들어주세요.
 
 변형 방법 (다양하게 섞어서):
 - 같은 주제의 다른 측면을 묻기 (예: "A는 B이다" → "B의 기능은 무엇인가?")
-- OX 문제의 참/거짓을 뒤집어서 새 문제 만들기
 - 객관식 선지를 바꾸거나 오답 선지를 비슷한 용어로 교체
 - 같은 개념을 다른 표현으로 물어보기
 - 원본과 완전히 똑같은 문제는 절대 금지
 
 요구사항:
-- OX 문제 5개 + 4지선다 객관식 5개
-- 빠르게 풀 수 있는 쉬운 난이도 (배틀용)
+- 5지선다 객관식 ${count}개 (OX 문제 금지)
+- 적절한 중간 난이도: 수업을 들은 학생이라면 20초 안에 풀 수 있지만, 단순 암기가 아닌 이해를 요구하는 수준
+- 오답 선지는 그럴듯하게 (명백히 틀린 보기 금지)
 - 간결한 문제 (1~2문장)
-- OX 문제: choices는 ["O", "X"], correctAnswer는 0(O) 또는 1(X)
-- 객관식: choices 4개, correctAnswer는 0~3
+- choices 5개, correctAnswer는 0~4
 
 반드시 아래 JSON 형식만 출력 (다른 텍스트 없이):
 [
-  {"text": "문제 내용", "type": "ox", "choices": ["O", "X"], "correctAnswer": 0},
-  {"text": "문제 내용", "type": "multiple", "choices": ["선지1", "선지2", "선지3", "선지4"], "correctAnswer": 2}
+  {"text": "문제 내용", "type": "multiple", "choices": ["선지1", "선지2", "선지3", "선지4", "선지5"], "correctAnswer": 2}
 ]`
     : `
-대학교 ${courseName} 과목의 쉬운 배틀 퀴즈 문제 ${count}개를 만들어주세요.
+대학교 ${courseName} 과목의 배틀 퀴즈 문제 ${count}개를 만들어주세요.
 ${keywordBlock}
+${chapterScope}
 
 요구사항:
-- OX 문제 5개 + 4지선다 객관식 5개
-- 빠르게 풀 수 있는 쉬운 난이도 (배틀용, 1학년 학부생 수준)
+- 5지선다 객관식 ${count}개 (OX 문제 금지)
+- 적절한 중간 난이도: 수업을 들은 학생이라면 20초 안에 풀 수 있지만, 단순 암기가 아닌 이해를 요구하는 수준
+- 오답 선지는 그럴듯하게 (명백히 틀린 보기 금지)
 - 간결한 문제 (1~2문장)
-- OX 문제: choices는 ["O", "X"], correctAnswer는 0(O) 또는 1(X)
-- 객관식: choices 4개, correctAnswer는 0~3
+- choices 5개, correctAnswer는 0~4
 
 반드시 아래 JSON 형식만 출력 (다른 텍스트 없이):
 [
-  {"text": "문제 내용", "type": "ox", "choices": ["O", "X"], "correctAnswer": 0},
-  {"text": "문제 내용", "type": "multiple", "choices": ["선지1", "선지2", "선지3", "선지4"], "correctAnswer": 2}
+  {"text": "문제 내용", "type": "multiple", "choices": ["선지1", "선지2", "선지3", "선지4", "선지5"], "correctAnswer": 2}
 ]`;
 
   // 4) Gemini 호출
@@ -405,16 +398,16 @@ async function createBattle(
  */
 function getEmergencyQuestions(): GeneratedQuestion[] {
   return [
-    { text: "세포의 기본 단위는 세포막으로 둘러싸여 있다.", type: "ox", choices: ["O", "X"], correctAnswer: 0 },
-    { text: "미토콘드리아는 세포의 에너지 생산을 담당한다.", type: "ox", choices: ["O", "X"], correctAnswer: 0 },
-    { text: "DNA의 이중나선 구조를 발견한 과학자는?", type: "multiple", choices: ["왓슨과 크릭", "멘델", "다윈", "파스퇴르"], correctAnswer: 0 },
-    { text: "광합성이 일어나는 세포 소기관은?", type: "multiple", choices: ["리보솜", "엽록체", "골지체", "리소좀"], correctAnswer: 1 },
-    { text: "적혈구는 핵을 가지고 있다.", type: "ox", choices: ["O", "X"], correctAnswer: 1 },
-    { text: "인체에서 가장 큰 장기는?", type: "multiple", choices: ["간", "폐", "피부", "뇌"], correctAnswer: 2 },
-    { text: "효소는 화학 반응의 활성화 에너지를 낮춘다.", type: "ox", choices: ["O", "X"], correctAnswer: 0 },
-    { text: "혈액형이 AB형인 사람은 만능 수혈자이다.", type: "ox", choices: ["O", "X"], correctAnswer: 1 },
-    { text: "단백질 합성이 일어나는 세포 소기관은?", type: "multiple", choices: ["미토콘드리아", "리보솜", "소포체", "핵"], correctAnswer: 1 },
-    { text: "인슐린은 혈당을 높이는 호르몬이다.", type: "ox", choices: ["O", "X"], correctAnswer: 1 },
+    { text: "세포막의 주요 구성 성분으로 유동 모자이크 모델의 기반이 되는 것은?", type: "multiple", choices: ["인지질 이중층", "콜레스테롤", "당단백질", "셀룰로스", "케라틴"], correctAnswer: 0 },
+    { text: "미토콘드리아에서 ATP가 가장 많이 생성되는 단계는?", type: "multiple", choices: ["해당과정", "시트르산 회로", "산화적 인산화", "발효", "베타 산화"], correctAnswer: 2 },
+    { text: "DNA 복제 시 선도 가닥(leading strand)의 합성 방향은?", type: "multiple", choices: ["5'→3' 연속 합성", "3'→5' 연속 합성", "5'→3' 불연속 합성", "3'→5' 불연속 합성", "양방향 동시 합성"], correctAnswer: 0 },
+    { text: "광합성의 명반응이 일어나는 장소는?", type: "multiple", choices: ["스트로마", "틸라코이드 막", "세포질", "내막", "크리스타"], correctAnswer: 1 },
+    { text: "성숙한 적혈구에 없는 세포 소기관은?", type: "multiple", choices: ["세포막", "헤모글로빈", "핵", "세포질", "탄산탈수효소"], correctAnswer: 2 },
+    { text: "인체에서 가장 넓은 면적을 차지하는 장기는?", type: "multiple", choices: ["간", "폐", "피부", "소장", "뇌"], correctAnswer: 2 },
+    { text: "효소의 활성 부위에 기질이 결합하는 모델 중, 결합 시 효소 구조가 변하는 모델은?", type: "multiple", choices: ["자물쇠-열쇠 모델", "유도적합 모델", "경쟁적 억제 모델", "알로스테릭 모델", "피드백 모델"], correctAnswer: 1 },
+    { text: "ABO 혈액형에서 만능 수혈자(모든 혈액형에 수혈 가능)는?", type: "multiple", choices: ["A형", "B형", "AB형", "O형", "Rh+ 형"], correctAnswer: 3 },
+    { text: "리보솜에서 mRNA의 코돈을 읽어 아미노산을 운반하는 RNA는?", type: "multiple", choices: ["mRNA", "tRNA", "rRNA", "snRNA", "miRNA"], correctAnswer: 1 },
+    { text: "인슐린이 분비되는 곳은?", type: "multiple", choices: ["부신 피질", "갑상선", "이자의 베타 세포", "뇌하수체 전엽", "간세포"], correctAnswer: 2 },
   ];
 }
 

@@ -40,7 +40,7 @@ export interface BattlePlayer {
 /** 문제 데이터 (클라이언트용 — 정답 미포함) */
 export interface BattleQuestion {
   text: string;
-  type: 'ox' | 'multiple';
+  type: 'multiple';
   choices: string[];
 }
 

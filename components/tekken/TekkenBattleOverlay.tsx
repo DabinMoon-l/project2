@@ -1,9 +1,11 @@
 'use client';
 
 /**
- * 배틀 오버레이 — 전체 배틀 컨테이너
+ * 배틀 오버레이 — 포켓몬 스타일 전체 배틀 컨테이너
  *
- * portal → body, z-50
+ * portal → body, z-[110] (HomeOverlay z-100 위)
+ * 배경: home-bg.jpg + 어두운 오버레이
+ * 2분할: 상단 퀴즈(flex-[5.5]) + 하단 캐릭터(flex-[4.5])
  * 카운트다운 → 배틀 → 결과까지 전체 흐름 관리
  */
 
@@ -11,12 +13,10 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import TekkenCountdown from './TekkenCountdown';
-import TekkenBattleHUD from './TekkenBattleHUD';
 import TekkenQuestionCard from './TekkenQuestionCard';
-import TekkenSwapButton from './TekkenSwapButton';
-import TekkenRoundResult from './TekkenRoundResult';
 import TekkenMashMinigame from './TekkenMashMinigame';
 import TekkenBattleResult from './TekkenBattleResult';
+import TekkenBattleArena from './TekkenBattleArena';
 import type { RoundResultData } from '@/lib/types/tekken';
 
 interface TekkenBattleOverlayProps {
@@ -86,15 +86,7 @@ export default function TekkenBattleOverlay({
     const result = await tekken.submitAnswer(answer);
     if (result) {
       setLastAnswerResult(result);
-      if (result.mashTriggered) {
-        // 연타 미니게임으로 전환됨 (배틀 상태가 mash로 변경)
-      }
     }
-  }, [tekken]);
-
-  // 토끼 교체
-  const handleSwap = useCallback(async () => {
-    await tekken.swapRabbit();
   }, [tekken]);
 
   // 연타 결과 제출
@@ -110,96 +102,110 @@ export default function TekkenBattleOverlay({
     return opponentIds.length > 0 ? round.result[opponentIds[0]] : null;
   })();
 
+  // 타이머 + 라운드 표시
+  const minutes = Math.floor((tekken.battleTimeLeft ?? 0) / 60000);
+  const seconds = Math.floor(((tekken.battleTimeLeft ?? 0) % 60000) / 1000);
+  const timeStr = `${minutes}:${String(seconds).padStart(2, '0')}`;
+
   if (typeof window === 'undefined') return null;
 
   return createPortal(
     <motion.div
-      className="fixed inset-0 z-50 bg-[#1a1020] flex flex-col overflow-hidden"
+      className="fixed inset-0 z-[110] flex flex-col overflow-hidden"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      style={{
-        backgroundImage: 'radial-gradient(ellipse at 50% 0%, rgba(139,26,26,0.15) 0%, transparent 60%)',
-      }}
     >
-      {/* 카운트다운 */}
-      {phase === 'countdown' && (
-        <TekkenCountdown onComplete={handleCountdownComplete} />
-      )}
+      {/* 배경: home-bg.jpg + 어두운 오버레이 */}
+      <div
+        className="absolute inset-0 bg-cover bg-center"
+        style={{ backgroundImage: 'url(/home-bg.jpg)' }}
+      />
+      <div className="absolute inset-0 bg-black/50" />
 
-      {/* 배틀 */}
-      {phase === 'battle' && (
-        <>
-          {/* HUD */}
-          <div className="pt-[env(safe-area-inset-top)]">
-            <TekkenBattleHUD
-              myPlayer={tekken.myPlayer}
-              opponent={tekken.opponent}
-              myActiveRabbit={tekken.myActiveRabbit}
-              opponentActiveRabbit={tekken.opponentActiveRabbit}
-              battleTimeLeft={tekken.battleTimeLeft}
-              currentRound={tekken.currentRoundIndex}
-              totalRounds={tekken.totalRounds}
-            />
-          </div>
+      {/* 콘텐츠 */}
+      <div className="relative flex flex-col flex-1 z-10">
+        {/* 카운트다운 */}
+        {phase === 'countdown' && (
+          <TekkenCountdown onComplete={handleCountdownComplete} />
+        )}
 
-          {/* 문제 카드 */}
-          {tekken.battleStatus === 'question' && tekken.currentRound && (
-            <TekkenQuestionCard
-              question={tekken.currentRound.questionData}
-              questionTimeLeft={tekken.questionTimeLeft}
-              onAnswer={handleAnswer}
-              disabled={hasAnswered}
-              roundIndex={tekken.currentRoundIndex}
-            />
-          )}
+        {/* 배틀 */}
+        {phase === 'battle' && (
+          <>
+            {/* ── 상단 바: 타이머 + 라운드 ── */}
+            <div className="pt-[env(safe-area-inset-top)]">
+              <div className="flex items-center justify-center gap-3 px-4 py-2">
+                <div className="px-4 py-1 bg-black/40 border border-white/15 rounded-full backdrop-blur-sm">
+                  <span className={`text-lg font-black ${(tekken.battleTimeLeft ?? 0) < 30000 ? 'text-red-400' : 'text-white'}`}>
+                    {timeStr}
+                  </span>
+                </div>
+                <span className="text-sm text-white/60 font-bold">
+                  R{tekken.currentRoundIndex + 1}/{tekken.totalRounds}
+                </span>
+              </div>
+            </div>
 
-          {/* 라운드 결과 오버레이 */}
-          {showRoundResult && (
-            <TekkenRoundResult
-              myResult={lastAnswerResult}
-              opponentResult={opponentResult}
-            />
-          )}
+            {/* ── 퀴즈 영역 (55%) ── */}
+            <div className="flex-[5.5] flex flex-col min-h-0">
+              {/* 문제 카드 */}
+              {tekken.battleStatus === 'question' && tekken.currentRound && (
+                <TekkenQuestionCard
+                  question={tekken.currentRound.questionData}
+                  questionTimeLeft={tekken.questionTimeLeft}
+                  onAnswer={handleAnswer}
+                  disabled={hasAnswered}
+                  roundIndex={tekken.currentRoundIndex}
+                />
+              )}
 
-          {/* 연타 미니게임 */}
-          {tekken.battleStatus === 'mash' && tekken.mash && (
-            <TekkenMashMinigame
-              endsAt={tekken.mash.endsAt}
-              triggeredBy={tekken.mash.triggeredBy}
-              userId={userId}
-              onSubmit={handleMashSubmit}
-            />
-          )}
+              {/* 연타 미니게임 (퀴즈 영역 내에서 표시) */}
+              {tekken.battleStatus === 'mash' && tekken.mash && (
+                <TekkenMashMinigame
+                  endsAt={tekken.mash.endsAt}
+                  triggeredBy={tekken.mash.triggeredBy}
+                  userId={userId}
+                  onSubmit={handleMashSubmit}
+                />
+              )}
 
-          {/* 교체 버튼 + 하단 여백 */}
-          <div className="px-4 pb-4 pt-2 flex items-center justify-between">
-            <TekkenSwapButton
-              myPlayer={tekken.myPlayer}
-              onSwap={handleSwap}
-              disabled={tekken.battleStatus !== 'question'}
-              hasAnswered={hasAnswered}
-            />
+              {/* 대기 상태 */}
+              {hasAnswered && tekken.battleStatus === 'question' && (
+                <div className="flex items-center justify-center py-2">
+                  <span className="text-sm text-white/40 font-bold">
+                    상대 대기 중...
+                  </span>
+                </div>
+              )}
+            </div>
 
-            {/* 대기 상태 텍스트 */}
-            {hasAnswered && tekken.battleStatus === 'question' && (
-              <span className="text-sm text-white/40 font-bold">
-                상대 대기 중...
-              </span>
-            )}
-          </div>
-          <div className="pb-[env(safe-area-inset-bottom)]" />
-        </>
-      )}
+            {/* ── 캐릭터 영역 (45%) ── */}
+            <div className="flex-[4.5] min-h-0">
+              <TekkenBattleArena
+                myPlayer={tekken.myPlayer}
+                opponent={tekken.opponent}
+                myActiveRabbit={tekken.myActiveRabbit}
+                opponentActiveRabbit={tekken.opponentActiveRabbit}
+                myResult={lastAnswerResult}
+                opponentResult={opponentResult}
+                showResult={showRoundResult}
+              />
+            </div>
 
-      {/* 결과 */}
-      {phase === 'result' && tekken.result && (
-        <TekkenBattleResult
-          result={tekken.result}
-          userId={userId}
-          opponentNickname={tekken.opponent?.nickname ?? '상대방'}
-          onClose={onClose}
-        />
-      )}
+            <div className="pb-[env(safe-area-inset-bottom)]" />
+          </>
+        )}
+
+        {/* 결과 */}
+        {phase === 'result' && tekken.result && (
+          <TekkenBattleResult
+            result={tekken.result}
+            userId={userId}
+            opponentNickname={tekken.opponent?.nickname ?? '상대방'}
+            onClose={onClose}
+          />
+        )}
+      </div>
     </motion.div>,
     document.body
   );
