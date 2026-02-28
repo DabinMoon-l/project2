@@ -86,14 +86,15 @@ export default function SplashScreen({ children }: SplashScreenProps) {
         )}
       </AnimatePresence>
 
-      {/* 메인 콘텐츠 */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: showSplash ? 0 : 1 }}
-        transition={{ duration: 0.3, delay: showSplash ? 0 : 0.2 }}
+      {/* 메인 콘텐츠 — plain div 사용 (motion.div는 transform을 적용해 fixed 자식의 기준점을 깨뜨림) */}
+      <div
+        style={{
+          opacity: showSplash ? 0 : 1,
+          transition: showSplash ? 'none' : 'opacity 0.3s ease 0.2s',
+        }}
       >
         {children}
-      </motion.div>
+      </div>
     </>
   );
 }
