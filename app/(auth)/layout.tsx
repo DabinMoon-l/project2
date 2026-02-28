@@ -4,35 +4,55 @@
  * 로그인/회원가입/비밀번호찾기에서 비디오 배경과 코너 이미지를
  * 공유하여 페이지 전환 시 깜빡임 방지
  *
- * fixed inset-0: 비디오가 노치 영역까지 덮고, 키보드가 올라와도 스크롤 방지
+ * 모든 위치/크기를 인라인 스타일로 지정 (CSS shorthand 호환성 이슈 방지)
  */
 
 import Image from 'next/image';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 overflow-hidden">
-      {/* 비디오 배경 — 노치 영역까지 덮음 */}
-      <div className="absolute inset-0 overflow-hidden">
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        overflow: 'hidden',
+        backgroundColor: '#000',
+      }}
+    >
+      {/* 비디오 배경 */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden' }}>
         <video
           autoPlay
           loop
           muted
           playsInline
-          className="absolute inset-0 w-full h-full object-cover"
+          style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
         >
           <source src="/videos/login-bg.mp4" type="video/mp4" />
         </video>
-        <div className="absolute inset-0 bg-black/20" />
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.2)' }} />
       </div>
 
-      {/* 콘텐츠 영역 — safe area 패딩 적용 */}
+      {/* 콘텐츠 영역 */}
       <div
-        className="absolute inset-0 flex flex-col items-center justify-center"
-        style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          paddingTop: 'env(safe-area-inset-top, 0px)',
+        }}
       >
         {/* 좌측 상단 장식 이미지 */}
-        <div className="absolute top-16 left-8 z-10">
+        <div style={{ position: 'absolute', top: 64, left: 32, zIndex: 10 }}>
           <Image
             src="/images/corner-image.png"
             alt="장식 이미지"

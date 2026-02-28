@@ -8,35 +8,11 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
 import Image from 'next/image';
 import Link from 'next/link';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
-
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.15,
-      delayChildren: 0.3,
-    },
-  },
-};
-
-const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: {
-      duration: 0.5,
-      ease: 'easeOut',
-    },
-  },
-};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -115,29 +91,17 @@ export default function LoginPage() {
   // 로딩 중이거나 이미 로그인된 경우
   if (loading || user) {
     return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="relative z-10 flex flex-col items-center gap-4"
-      >
+      <div className="relative z-10 flex flex-col items-center gap-4">
         <div className="w-12 h-12 border-4 border-white/30 border-t-white rounded-full animate-spin" />
         <p className="text-white text-sm font-medium drop-shadow-md">로딩 중...</p>
-      </motion.div>
+      </div>
     );
   }
 
   return (
-    <motion.div
-      className="relative z-10 w-full max-w-sm px-6"
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-    >
+    <div className="relative z-10 w-full max-w-sm px-6">
       {/* 로고 */}
-      <motion.div
-        className="flex justify-center mb-3"
-        variants={itemVariants}
-      >
+      <div className="flex justify-center mb-3">
         <Image
           src="/images/logo.png"
           alt="RabbiTory"
@@ -147,13 +111,10 @@ export default function LoginPage() {
           className="drop-shadow-lg"
           priority
         />
-      </motion.div>
+      </div>
 
       {/* 로그인 폼 */}
-      <motion.div
-        className="w-full flex flex-col items-center space-y-2"
-        variants={itemVariants}
-      >
+      <div className="w-full flex flex-col items-center space-y-2">
         <input
           type="text"
           inputMode="numeric"
@@ -198,19 +159,14 @@ export default function LoginPage() {
         >
           {loading ? '로그인 중...' : '로그인'}
         </button>
-      </motion.div>
+      </div>
 
       {/* 에러 메시지 */}
       {error && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          className="w-full mt-4 p-3 bg-red-500/90 backdrop-blur-sm rounded-xl"
-        >
+        <div className="w-full mt-4 p-3 bg-red-500/90 backdrop-blur-sm rounded-xl">
           <p className="text-white text-sm text-center">{error}</p>
-        </motion.div>
+        </div>
       )}
-    </motion.div>
+    </div>
   );
 }
