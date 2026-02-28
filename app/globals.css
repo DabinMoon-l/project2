@@ -172,3 +172,27 @@ img {
   display: none;
 }
 
+/* Auth 페이지 전체 화면 래퍼 (iOS dvh 폴백 체인) */
+/* 배경은 safe area 무시하고 전체 커버, 콘텐츠만 safe area 패딩 */
+.auth-viewport {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
+  overflow: hidden;
+  background-color: #000;
+}
+
+.auth-content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
+  padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px);
+}
+
