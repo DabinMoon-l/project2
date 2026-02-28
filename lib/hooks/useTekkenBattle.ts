@@ -8,7 +8,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ref, onValue, off, onDisconnect } from 'firebase/database';
+import { ref, onValue, off, onDisconnect, remove } from 'firebase/database';
 import { httpsCallable } from 'firebase/functions';
 import { getRtdb, functions } from '@/lib/firebase';
 import type {
@@ -75,12 +75,17 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
   const waitTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const matchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const battleTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const matchResultUnsubRef = useRef<(() => void) | null>(null);
 
-  // 타이머 정리
+  // 타이머 + 리스너 정리
   const clearTimers = useCallback(() => {
     if (waitTimerRef.current) clearInterval(waitTimerRef.current);
     if (matchTimeoutRef.current) clearTimeout(matchTimeoutRef.current);
     if (battleTimerRef.current) clearInterval(battleTimerRef.current);
+    if (matchResultUnsubRef.current) {
+      matchResultUnsubRef.current();
+      matchResultUnsubRef.current = null;
+    }
     waitTimerRef.current = null;
     matchTimeoutRef.current = null;
     battleTimerRef.current = null;
@@ -168,47 +173,33 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
 
       if (result.data.status === 'matched' && result.data.battleId) {
         // 즉시 매칭 성공
-        setMatchState('matched');
         battleIdRef.current = result.data.battleId;
+        setMatchState('matched');
         clearTimers();
-        // 대기 타이머만 정리, 리스너는 useEffect에서 자동 설정
         return;
       }
 
-      // 대기 상태 — RTDB 매칭 큐 리스너 설정
-      const queueRef = ref(getRtdb(), `tekken/matchmaking/${courseId}`);
-      const queueUnsub = onValue(queueRef, (snapshot) => {
+      // 대기 상태 — 개인 매칭 결과 리스너 설정
+      // CF가 상대를 찾으면 tekken/matchResults/{userId}에 battleId를 씀
+      const matchResultRef = ref(getRtdb(), `tekken/matchResults/${userId}`);
+      const unsubMatchResult = onValue(matchResultRef, (snapshot) => {
         const data = snapshot.val();
-        // 큐에서 내가 사라졌다면 → 누군가 매칭해줌
-        if (data && !data[userId]) {
-          // 매칭됨 → battles에서 내 배틀 찾기
-          off(queueRef);
+        if (data?.battleId) {
+          battleIdRef.current = data.battleId;
+          setMatchState('matched');
+          clearTimers();
+          // 매칭 결과 정리
+          remove(matchResultRef).catch(() => {});
         }
       });
-
-      // 배틀 리스너로 매칭 감지
-      const battlesRef = ref(getRtdb(), 'tekken/battles');
-      const battlesUnsub = onValue(battlesRef, (snapshot) => {
-        const battles = snapshot.val();
-        if (!battles) return;
-
-        for (const [bid, bdata] of Object.entries(battles)) {
-          const b = bdata as any;
-          if (b.players?.[userId] && b.status !== 'finished') {
-            battleIdRef.current = bid;
-            setMatchState('matched');
-            clearTimers();
-            off(battlesRef);
-            off(queueRef);
-            return;
-          }
-        }
-      });
+      matchResultUnsubRef.current = unsubMatchResult;
 
       // 30초 후 봇 매칭
       matchTimeoutRef.current = setTimeout(async () => {
-        off(battlesRef);
-        off(queueRef);
+        // 이미 매칭됐으면 봇 생성 안 함
+        if (battleIdRef.current) return;
+
+        clearTimers();
 
         try {
           const botFn = httpsCallable<{ courseId: string }, JoinMatchmakingResult>(
@@ -226,7 +217,6 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
           setMatchState('error');
           setError('매칭에 실패했습니다.');
         }
-        clearTimers();
       }, BATTLE_CONFIG.MATCH_TIMEOUT);
     } catch (err: any) {
       console.error('매칭 실패:', err);

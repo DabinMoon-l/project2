@@ -66,6 +66,7 @@ export default function CharacterBox() {
   const [showBattleConfirm, setShowBattleConfirm] = useState(false);
   const [showMatchmaking, setShowMatchmaking] = useState(false);
   const [showBattle, setShowBattle] = useState(false);
+  const [isPressing, setIsPressing] = useState(false);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressStartPos = useRef({ x: 0, y: 0 });
   const longPressTriggered = useRef(false);
@@ -133,16 +134,18 @@ export default function CharacterBox() {
   }, []);
 
   const onLongPressStart = useCallback((x: number, y: number) => {
-    if (!isStudent || !userCourseId || equippedRabbits.length === 0) return;
+    if (!isStudent || !userCourseId || slotCount === 0) return;
     longPressStartPos.current = { x, y };
     longPressTriggered.current = false;
+    setIsPressing(true);
     clearLongPress();
     longPressTimer.current = setTimeout(() => {
       longPressTriggered.current = true;
+      setIsPressing(false);
       if (navigator.vibrate) navigator.vibrate(50);
       setShowBattleConfirm(true);
     }, BATTLE_CONFIG.LONG_PRESS_MS);
-  }, [isStudent, userCourseId, equippedRabbits.length, clearLongPress]);
+  }, [isStudent, userCourseId, slotCount, clearLongPress]);
 
   // 배틀 확인 → 매칭 시작
   const handleConfirmBattle = useCallback(() => {
@@ -157,11 +160,13 @@ export default function CharacterBox() {
     const dy = Math.abs(y - longPressStartPos.current.y);
     if (dx > 10 || dy > 10) {
       clearLongPress();
+      setIsPressing(false);
     }
   }, [clearLongPress]);
 
   const onLongPressEnd = useCallback(() => {
     clearLongPress();
+    setIsPressing(false);
   }, [clearLongPress]);
 
   // 모바일 터치
@@ -219,16 +224,17 @@ export default function CharacterBox() {
     };
   }, [doOrbitSwap, onLongPressMove, onLongPressEnd, slotCount]);
 
-  // 매칭 성공 → 배틀 오버레이로 전환
+  // 매칭 성공 + 배틀 데이터 수신 확인 후 전환
+  const hasBattleData = !!tekken.battle;
   useEffect(() => {
-    if (tekken.matchState === 'matched') {
+    if (tekken.matchState === 'matched' && hasBattleData) {
       const timer = setTimeout(() => {
         setShowMatchmaking(false);
         setShowBattle(true);
       }, 1000);
       return () => clearTimeout(timer);
     }
-  }, [tekken.matchState]);
+  }, [tekken.matchState, hasBattleData]);
 
   const containerW = ORBIT_RX * 2 + CHAR_SIZE;
   const containerH = ORBIT_RY * 2 + CHAR_SIZE;
@@ -266,11 +272,13 @@ export default function CharacterBox() {
               height: containerH,
               isolation: 'isolate',
               cursor: 'grab',
+              WebkitTouchCallout: 'none',
             }}
             onTouchStart={onTouchStart}
             onTouchMove={onTouchMove}
             onTouchEnd={onTouchEnd}
             onMouseDown={onMouseDown}
+            onContextMenu={(e) => e.preventDefault()}
           >
             {/* 궤도 타원 */}
             <div
@@ -295,6 +303,7 @@ export default function CharacterBox() {
                   rabbitId={slot.rabbitId}
                   springRotation={springRotation}
                   charIndex={idx}
+                  isPressing={isPressing}
                 />
               ) : (
                 <OrbitalPlaceholder
@@ -399,7 +408,7 @@ export default function CharacterBox() {
               <span className="text-[11px] font-bold text-white/70">
                 {expBar.current}/{expBar.max} XP
               </span>
-              {isStudent && equippedRabbits.length > 0 && (
+              {isStudent && slotCount > 0 && (
                 <p className="text-[10px] text-white/60 font-bold">
                   캐릭터를 꾹 눌러서 배틀
                 </p>
@@ -486,10 +495,12 @@ function OrbitalCharacter({
   rabbitId,
   springRotation,
   charIndex,
+  isPressing = false,
 }: {
   rabbitId: number;
   springRotation: MotionValue<number>;
   charIndex: number;
+  isPressing?: boolean;
 }) {
   const offset = charIndex * Math.PI;
 
@@ -518,14 +529,21 @@ function OrbitalCharacter({
     >
       <FloatingWrapper seed={charIndex}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <motion.img
           src={`/rabbit/rabbit-${String(rabbitId + 1).padStart(3, '0')}.png`}
           alt=""
           width={CHAR_SIZE}
           height={Math.round(CHAR_SIZE * (969 / 520))}
           draggable={false}
-          className="drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
-          style={{ filter: 'sepia(0.08) saturate(1.1) brightness(1.03) hue-rotate(-5deg)' }}
+          onContextMenu={(e) => e.preventDefault()}
+          className="drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)] pointer-events-none"
+          animate={{ scale: isPressing ? 0.9 : 1 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+          style={{
+            filter: 'sepia(0.08) saturate(1.1) brightness(1.03) hue-rotate(-5deg)',
+            WebkitTouchCallout: 'none',
+            userSelect: 'none',
+          }}
         />
       </FloatingWrapper>
     </motion.div>

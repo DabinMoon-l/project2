@@ -51,6 +51,12 @@
           ".write": false
         }
       },
+      "matchResults": {
+        "$userId": {
+          ".read": "auth != null && auth.uid === $userId",
+          ".write": "auth != null && auth.uid === $userId"
+        }
+      },
       "streaks": {
         "$userId": {
           ".read": "auth != null && auth.uid === $userId",

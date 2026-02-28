@@ -455,24 +455,53 @@ export const joinMatchmaking = onCall(
       );
     }
 
-    // 매칭 큐 확인
+    const queueEntry = {
+      userId,
+      nickname: userData.nickname || "플레이어",
+      profileRabbitId: equippedRabbits[0]?.rabbitId || 0,
+      equippedRabbits,
+      joinedAt: Date.now(),
+    };
+
+    // 트랜잭션으로 원자적 매칭 (동시 요청 race condition 방지)
     const queueRef = rtdb.ref(`tekken/matchmaking/${courseId}`);
-    const queueSnap = await queueRef.once("value");
-    const queueData = queueSnap.val() || {};
+    let matchedOpponentId: string | null = null;
+    let matchedOpponentData: any = null;
 
-    // 이미 큐에 있는 상대 찾기
-    const opponents = Object.entries(queueData).filter(
-      ([uid]) => uid !== userId
-    );
+    const txResult = await queueRef.transaction((currentData) => {
+      // 트랜잭션 재시도 시 리셋
+      matchedOpponentId = null;
+      matchedOpponentData = null;
 
-    if (opponents.length > 0) {
-      // 상대 발견 → 즉시 매칭
-      const [opponentId, opponentData] = opponents[0] as [string, any];
+      if (!currentData) {
+        // 큐 비어있음 → 자신 추가
+        return { [userId]: queueEntry };
+      }
 
-      // 양쪽 큐에서 제거
-      await queueRef.child(userId).remove();
-      await queueRef.child(opponentId).remove();
+      // 이미 큐에 있으면 제거 (재진입 방지)
+      delete currentData[userId];
 
+      const opponentIds = Object.keys(currentData);
+      if (opponentIds.length > 0) {
+        // 상대 발견 → 양쪽 모두 큐에서 제거
+        matchedOpponentId = opponentIds[0];
+        matchedOpponentData = JSON.parse(JSON.stringify(currentData[matchedOpponentId]));
+        delete currentData[matchedOpponentId];
+        // 나머지 큐 반환 (비어있으면 null)
+        return Object.keys(currentData).length === 0 ? null : currentData;
+      }
+
+      // 상대 없음 → 자신 추가
+      currentData[userId] = queueEntry;
+      return currentData;
+    });
+
+    if (!txResult.committed) {
+      throw new HttpsError("aborted", "매칭 처리 실패, 다시 시도해주세요.");
+    }
+
+    if (matchedOpponentId && matchedOpponentData) {
+      // 매칭 성공 → 배틀 생성
       const player1: PlayerSetup = {
         userId,
         nickname: userData.nickname || "플레이어",
@@ -482,11 +511,11 @@ export const joinMatchmaking = onCall(
       };
 
       const player2: PlayerSetup = {
-        userId: opponentId,
-        nickname: opponentData.nickname || "상대방",
-        profileRabbitId: opponentData.profileRabbitId || 0,
+        userId: matchedOpponentId,
+        nickname: matchedOpponentData.nickname || "상대방",
+        profileRabbitId: matchedOpponentData.profileRabbitId || 0,
         isBot: false,
-        equippedRabbits: opponentData.equippedRabbits || [],
+        equippedRabbits: matchedOpponentData.equippedRabbits || [],
       };
 
       const battleId = await createBattle(
@@ -496,17 +525,14 @@ export const joinMatchmaking = onCall(
         GEMINI_API_KEY.value()
       );
 
+      // 대기 중인 상대에게 매칭 결과 전달 (상대의 리스너가 감지)
+      await rtdb.ref(`tekken/matchResults/${matchedOpponentId}`).set({
+        battleId,
+        matchedAt: Date.now(),
+      });
+
       return { status: "matched", battleId };
     }
-
-    // 상대 없음 → 큐에 추가
-    await queueRef.child(userId).set({
-      userId,
-      nickname: userData.nickname || "플레이어",
-      profileRabbitId: equippedRabbits[0]?.rabbitId || 0,
-      equippedRabbits,
-      joinedAt: Date.now(),
-    });
 
     return { status: "waiting" };
   }
