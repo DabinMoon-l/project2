@@ -16,14 +16,14 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         position: 'fixed',
         top: 0,
         left: 0,
-        right: 0,
-        bottom: 0,
+        width: '100%',
+        height: '100%',
         overflow: 'hidden',
         backgroundColor: '#000',
       }}
     >
       {/* 비디오 배경 */}
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden' }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', overflow: 'hidden' }}>
         <video
           autoPlay
           loop
@@ -42,8 +42,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           position: 'absolute',
           top: 0,
           left: 0,
-          right: 0,
-          bottom: 0,
+          width: '100%',
+          height: '100%',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
