@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence, type PanInfo } from 'framer-motion';
 import type { StudentDetail, ClassType } from '@/lib/hooks/useProfessorStudents';
-import { mean, sd, zScore, percentile } from '@/lib/utils/statistics';
+import { mean, sd, zScore, rankPercentile } from '@/lib/utils/statistics';
 import StudentRadar from './StudentRadar';
 
 const CLASS_COLORS: Record<ClassType, string> = {
@@ -49,9 +49,9 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
   // 전체 과목 기준 백분위 + 전체 평균
   const allCourseScores = allScoresInCourse.map(s => s.score);
   const overallMean = mean(allCourseScores);
-  const overallSd = sd(allCourseScores);
-  const overallZ = zScore(studentAvg, overallMean, overallSd);
-  const overallPercentile = percentile(overallZ);
+  // 순위 기반 백분위 (Z-score CDF 대신 — 비정규 분포에서도 정확)
+  const sortedCourseScores = [...allCourseScores].sort((a, b) => a - b);
+  const overallPercentile = rankPercentile(studentAvg, sortedCourseScores);
 
   // 표시 이름
   const displayName = student.name || student.nickname;
@@ -247,7 +247,7 @@ const ACHIEVEMENT_ROWS: { key: string; label: string; info: string }[][] = [
   ],
   [
     { key: 'overallMean', label: '전체 평균', info: '과목 전체 학생의 성취 지수 평균 (A~D반)' },
-    { key: 'pct', label: '전체 백분위', info: '과목 전체 학생 중 상위 몇 %인지 (Z-score 기반)' },
+    { key: 'pct', label: '전체 백분위', info: '과목 전체 학생 중 성취 지수 순위 기반 상위 %' },
   ],
   [
     { key: 'zscore', label: 'Z-score', info: '반 평균 대비 표준편차 위치 (-1.5 이하 주의)' },

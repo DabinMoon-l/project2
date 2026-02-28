@@ -60,6 +60,11 @@ async function computeRadarNormForCourse(courseId: string) {
     db.collection("quizResults").where("courseId", "==", courseId).select("userId", "quizId", "score", "isUpdate").get(),
   ]);
 
+  if (quizzesResult.status === "rejected") console.error(`quizzes 쿼리 실패 (${courseId}):`, quizzesResult.reason);
+  if (postsResult.status === "rejected") console.error(`posts 쿼리 실패 (${courseId}):`, postsResult.reason);
+  if (reviewsResult.status === "rejected") console.error(`reviews 쿼리 실패 (${courseId}):`, reviewsResult.reason);
+  if (quizResultsResult.status === "rejected") console.error(`quizResults 쿼리 실패 (${courseId}):`, quizResultsResult.reason);
+
   const quizzesDocs = quizzesResult.status === "fulfilled" ? quizzesResult.value.docs : [];
   const postsDocs = postsResult.status === "fulfilled" ? postsResult.value.docs : [];
   const reviewsDocs = reviewsResult.status === "fulfilled" ? reviewsResult.value.docs : [];
@@ -88,17 +93,19 @@ async function computeRadarNormForCourse(courseId: string) {
     communityByUid[uid] = (postCountByUid[uid] ?? 0) * 3 + (fbCountByUid[uid] ?? 0);
   });
 
-  // 5. 복습력 (리뷰 문서 수 — 퀴즈 완료 시 생성됨)
-  // reviewCount 조건 제거: markAsReviewed가 library 타입에서 사일런트 실패하고
-  // 퀴즈 재시도 시 reviewCount가 0으로 리셋되므로, 문서 존재 자체를 복습력으로 산정
+  // 5. 복습력 (능동적 복습 활동 — reviewCount 합계)
+  // reviewCount = markAsReviewed 호출 횟수 (학생이 실제로 복습한 횟수)
+  // 퀴즈 재시도 시 reviewCount 보존됨 (reviewsGenerator에서 처리)
   const activeReviewByUid: Record<string, number> = {};
   reviewsDocs.forEach(d => {
     const data = d.data();
     const userId = data.userId as string;
-    if (userId && studentUids.has(userId)) {
-      activeReviewByUid[userId] = (activeReviewByUid[userId] ?? 0) + 1;
+    const reviewCount = data.reviewCount ?? 0;
+    if (userId && studentUids.has(userId) && reviewCount > 0) {
+      activeReviewByUid[userId] = (activeReviewByUid[userId] ?? 0) + reviewCount;
     }
   });
+  console.log(`[${courseId}] reviews 쿼리: ${reviewsDocs.length}건, 복습 활동 학생: ${Object.keys(activeReviewByUid).length}명`);
 
   // 6. 백분위 배열 (오름차순 정렬)
   const uids = Array.from(studentUids);
@@ -112,7 +119,7 @@ async function computeRadarNormForCourse(courseId: string) {
   const quizTypeMap = new Map<string, boolean>();
   quizzesDocs.forEach(d => quizTypeMap.set(d.id, PROF_TYPES.has(d.data().type || "")));
 
-  // 첫 시도 / 재시도 분리 수집 (성장세 계산에도 사용)
+  // 첫 시도 / 재시도 분리 수집 (가중 석차 + 성장세 계산)
   const completionsByQuiz = new Map<string, { userId: string; score: number }[]>();
   // 성장세용: 학생별 퀴즈별 { firstScore, bestRetryScore }
   const retryMap = new Map<string, Map<string, { first: number; retries: number[] }>>();
@@ -197,6 +204,11 @@ async function computeRadarNormForCourse(courseId: string) {
     }
   });
   const growthValues = uids.map(u => growthByUid[u] ?? 50).sort((a, b) => a - b);
+
+  // 진단 로그
+  const nonZeroReview = Object.values(activeReviewByUid).filter(v => v > 0).length;
+  const nonZeroGrowth = Object.values(growthByUid).filter(v => v !== 50).length;
+  console.log(`[${courseId}] 복습력: ${nonZeroReview}/${studentUids.size}명 비영, 성장세: ${nonZeroGrowth}/${studentUids.size}명 변동, quizResults: ${quizResultsDocs.length}건`);
 
   return {
     quizCreationByUid,

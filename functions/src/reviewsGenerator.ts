@@ -60,12 +60,22 @@ export const generateReviewsOnResult = onDocumentCreated(
       .get();
 
     if (!existingReviews.empty) {
-      // 기존 reviews의 isBookmarked 상태 보존 (찜 상태 유지)
+      // 기존 reviews의 isBookmarked + reviewCount 보존 (복습 기록 유지)
       const bookmarkedQuestionIds = new Set<string>();
+      const preservedReviewCounts = new Map<string, { count: number; lastAt: any }>();
       existingReviews.docs.forEach(d => {
         const data = d.data();
         if (data.isBookmarked) {
           bookmarkedQuestionIds.add(data.questionId);
+        }
+        // 능동적 복습 기록 보존 (퀴즈 재시도로 리셋되지 않도록)
+        const existing = preservedReviewCounts.get(data.questionId);
+        const rc = data.reviewCount || 0;
+        if (!existing || rc > existing.count) {
+          preservedReviewCounts.set(data.questionId, {
+            count: rc,
+            lastAt: data.lastReviewedAt || null,
+          });
         }
       });
 
@@ -84,13 +94,15 @@ export const generateReviewsOnResult = onDocumentCreated(
         await deleteBatch.commit();
       }
 
-      // bookmarkedQuestionIds를 아래에서 사용
-      // (변수를 클로저로 캡처)
+      // 보존된 데이터를 아래에서 사용 (클로저 캡처)
       (result as any)._bookmarkedQuestionIds = bookmarkedQuestionIds;
+      (result as any)._preservedReviewCounts = preservedReviewCounts;
     }
 
     const bookmarkedQuestionIds: Set<string> =
       (result as any)._bookmarkedQuestionIds || new Set<string>();
+    const preservedReviewCounts: Map<string, { count: number; lastAt: any }> =
+      (result as any)._preservedReviewCounts || new Map();
 
     // reviews 배치 생성
     const batch = db.batch();
@@ -105,6 +117,9 @@ export const generateReviewsOnResult = onDocumentCreated(
       let normalizedType = q.type || "multiple";
       if (normalizedType === "short") normalizedType = "short_answer";
 
+      // 기존 복습 기록 복원 (퀴즈 재시도 시 리셋 방지)
+      const preserved = preservedReviewCounts.get(qId);
+
       const reviewBase: Record<string, any> = {
         userId,
         quizId,
@@ -118,8 +133,8 @@ export const generateReviewsOnResult = onDocumentCreated(
         explanation: q.explanation || "",
         isCorrect: qs.isCorrect,
         isBookmarked: bookmarkedQuestionIds.has(qId),
-        reviewCount: 0,
-        lastReviewedAt: null,
+        reviewCount: preserved?.count ?? 0,
+        lastReviewedAt: preserved?.lastAt ?? null,
         courseId: quizData.courseId || null,
         quizUpdatedAt: quizData.updatedAt || quizData.createdAt || null,
         quizCreatorId: quizData.creatorId || null,
