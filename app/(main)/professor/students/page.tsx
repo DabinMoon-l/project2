@@ -175,6 +175,7 @@ export default function StudentMonitoringPage() {
 
   const handleCourseChange = useCallback((courseId: CourseId) => {
     setProfessorCourse(courseId);
+    setSearchQuery(''); // 과목 변경 시 검색 초기화
   }, [setProfessorCourse]);
 
   return (
@@ -190,7 +191,7 @@ export default function StudentMonitoringPage() {
         {/* 반 필터 (언더라인 탭) + 검색 — 같은 줄 */}
         <div className="flex items-center justify-between">
           {/* 언더라인 탭 */}
-          <ClassFilterTabs selectedClass={selectedClass} onClassChange={setSelectedClass} />
+          <ClassFilterTabs selectedClass={selectedClass} onClassChange={(cls) => { setSelectedClass(cls); setSearchQuery(''); }} />
 
           {/* 검색 */}
           <div className="relative w-[145px]">
@@ -199,13 +200,26 @@ export default function StudentMonitoringPage() {
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="이름·학번·닉네임"
-              className="w-full pl-6 pr-3 py-3 bg-[#EDEAE4] border border-[#1A1A1A] rounded-lg text-sm text-center text-[#1A1A1A] placeholder-[#5C5C5C] outline-none"
+              className={`w-full pl-6 pr-8 py-3 border rounded-lg text-sm text-center text-[#1A1A1A] placeholder-[#5C5C5C] outline-none ${
+                searchQuery ? 'bg-[#1A1A1A]/5 border-[#1A1A1A] border-2' : 'bg-[#EDEAE4] border-[#1A1A1A]'
+              }`}
             />
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5C5C5C]"
               fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
+            {/* 검색 초기화 X 버튼 */}
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-[#1A1A1A] text-white"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
 

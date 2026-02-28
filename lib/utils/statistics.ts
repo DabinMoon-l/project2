@@ -147,6 +147,8 @@ export function growthRate(current: number, previous: number): number {
 // 순위 백분위 (0~100) — 정렬된 배열에서 value보다 작은 비율
 export function rankPercentile(value: number, sortedValues: number[]): number {
   if (sortedValues.length <= 1) return 50;
+  // 모든 값이 동일하면 구분 불가 → 50% (중간)
+  if (sortedValues[0] === sortedValues[sortedValues.length - 1]) return 50;
   const below = sortedValues.filter(v => v < value).length;
   return Math.round((below / (sortedValues.length - 1)) * 100);
 }
