@@ -55,23 +55,20 @@ export function createBotProfile() {
 }
 
 /**
- * 봇 답변 생성
- * correctAnswer: 정답 인덱스
- * choiceCount: 선택지 수
- * 봇은 60% 확률로 정답, 1~8초 랜덤 딜레이
+ * 봇 답변 생성 (순발력 시스템에서 봇은 질문에 답하지 않음)
+ * 유지: 하위 호환용
  */
 export function generateBotAnswer(
   correctAnswer: number,
   choiceCount: number
 ): { answer: number; delay: number } {
   const isCorrect = Math.random() < 0.6;
-  const delay = 1000 + Math.floor(Math.random() * 7000); // 1~8초
+  const delay = 1000 + Math.floor(Math.random() * 7000);
 
   if (isCorrect) {
     return { answer: correctAnswer, delay };
   }
 
-  // 오답: 정답이 아닌 랜덤 선택
   let wrong = Math.floor(Math.random() * choiceCount);
   while (wrong === correctAnswer) {
     wrong = Math.floor(Math.random() * choiceCount);
@@ -80,9 +77,13 @@ export function generateBotAnswer(
 }
 
 /**
- * 봇 연타 탭 수 생성 (10~25)
+ * 봇 연타 탭 수 생성 (플레이어 탭의 60~90%)
+ * 시간제한 없는 줄다리기에서 봇이 적당히 지도록
  */
-export function generateBotMashTaps(): number {
+export function generateBotMashTaps(playerTaps?: number): number {
+  if (playerTaps !== undefined && playerTaps > 0) {
+    return Math.floor(playerTaps * (0.6 + Math.random() * 0.3));
+  }
   return 10 + Math.floor(Math.random() * 16);
 }
 

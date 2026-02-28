@@ -59,24 +59,26 @@ export const tekkenCleanup = onSchedule(
 
     let forcedEnd = 0;
     for (const [battleId, battle] of Object.entries(activeBattles)) {
-      const b = battle as { status?: string; endsAt?: number };
-      if (
-        b.status &&
-        b.status !== "finished" &&
-        b.endsAt &&
-        now > b.endsAt + 30000 // 30초 여유
-      ) {
-        await battlesRef.child(battleId).update({
-          status: "finished",
-          result: {
-            winnerId: null,
-            loserId: null,
-            isDraw: true,
-            endReason: "timeout",
-            xpGranted: false,
-          },
-        });
-        forcedEnd++;
+      const b = battle as { status?: string; endsAt?: number; createdAt?: number };
+      if (b.status && b.status !== "finished") {
+        // endsAt 기반 타임아웃 (endsAt이 설정된 배틀)
+        const endsAtTimeout = b.endsAt && now > b.endsAt + 30000;
+        // createdAt 기반 타임아웃 (loading 상태에서 endsAt=0인 배틀 — 5분 초과)
+        const loadingTimeout = !b.endsAt && b.createdAt && now - b.createdAt > 300000;
+
+        if (endsAtTimeout || loadingTimeout) {
+          await battlesRef.child(battleId).update({
+            status: "finished",
+            result: {
+              winnerId: null,
+              loserId: null,
+              isDraw: true,
+              endReason: "timeout",
+              xpGranted: false,
+            },
+          });
+          forcedEnd++;
+        }
       }
     }
 

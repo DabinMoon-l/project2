@@ -1,76 +1,123 @@
 'use client';
 
 /**
- * 연타 미니게임 — 땅따먹기 게이지
+ * 연타 미니게임 — 줄다리기 (15초 시간제한)
  *
- * 퀴즈 영역 크기 컴포넌트 (fixed 제거)
- * 한 줄 바: 왼=나(채도 낮은 빨강), 우=상대(채도 낮은 파랑)
- * 50:50 시작, 연타 속도에 따라 비율 변동
- * 3초 제한
+ * 게이지: 중앙(50%) 시작, 탭으로 밀고 당기기
+ * - 내 탭 → 게이지가 상대쪽(100%)으로 이동
+ * - 상대 탭 → 게이지가 내쪽(0%)으로 이동
+ * - 승리 조건: 100% (내 승) 또는 0% (상대 승) 도달
+ * - 타임아웃: 15초 내 미결정 시 현재 탭 차로 승패 결정
+ *
+ * RTDB 실시간 동기화:
+ * - writeMashTap(count): 내 탭 수 RTDB 쓰기 (100ms 스로틀)
+ * - opponentMashTaps: 상대 탭 수 리스너로 수신
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { BATTLE_CONFIG } from '@/lib/types/tekken';
 
 interface TekkenMashMinigameProps {
-  endsAt: number;
-  triggeredBy: string; // 오답 낸 사람
   userId: string;
+  battleId: string;
+  mashEndsAt: number; // 연타 종료 시각
+  opponentMashTaps: number;
+  writeMashTap: (count: number) => void;
   onSubmit: (taps: number) => void;
 }
 
+const STEP = BATTLE_CONFIG.MASH_STEP_PER_TAP;
+
 export default function TekkenMashMinigame({
-  endsAt,
-  triggeredBy,
   userId,
+  battleId,
+  mashEndsAt,
+  opponentMashTaps,
+  writeMashTap,
   onSubmit,
 }: TekkenMashMinigameProps) {
-  const [taps, setTaps] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(3000);
+  const [myTaps, setMyTaps] = useState(0);
   const [submitted, setSubmitted] = useState(false);
-  const tapsRef = useRef(0);
-  const isMyFault = triggeredBy === userId;
+  const [timeLeft, setTimeLeft] = useState<number>(BATTLE_CONFIG.MASH_TIMEOUT);
+  const myTapsRef = useRef(0);
+  const lastWriteRef = useRef(0);
+
+  // 게이지: 50 + (내 탭 - 상대 탭) × STEP
+  const myPercent = Math.min(100, Math.max(0, 50 + (myTaps - opponentMashTaps) * STEP));
 
   // 타이머
   useEffect(() => {
-    const tick = setInterval(() => {
-      const remaining = Math.max(0, endsAt - Date.now());
+    if (submitted || !mashEndsAt) return;
+
+    const tick = () => {
+      const remaining = Math.max(0, mashEndsAt - Date.now());
       setTimeLeft(remaining);
 
-      if (remaining === 0 && !submitted) {
+      // 타임아웃 → 현재 탭으로 제출
+      if (remaining <= 0) {
         setSubmitted(true);
-        onSubmit(tapsRef.current);
+        // 마지막 탭 수 RTDB 동기화
+        writeMashTap(myTapsRef.current);
+        onSubmit(myTapsRef.current);
       }
-    }, 50);
+    };
 
-    return () => clearInterval(tick);
-  }, [endsAt, submitted, onSubmit]);
+    tick();
+    const timer = setInterval(tick, 100);
+    return () => clearInterval(timer);
+  }, [mashEndsAt, submitted, writeMashTap, onSubmit]);
+
+  // 승패 판정 (게이지 끝까지 도달)
+  useEffect(() => {
+    if (submitted) return;
+
+    if (myPercent >= 100 || myPercent <= 0) {
+      setSubmitted(true);
+      writeMashTap(myTapsRef.current);
+      onSubmit(myTapsRef.current);
+    }
+  }, [myPercent, submitted, onSubmit, writeMashTap]);
 
   // 탭 핸들러
   const handleTap = useCallback(() => {
-    if (submitted || timeLeft <= 0) return;
-    tapsRef.current += 1;
-    setTaps(tapsRef.current);
-    if (navigator.vibrate) navigator.vibrate(10);
-  }, [submitted, timeLeft]);
+    if (submitted) return;
+    myTapsRef.current += 1;
+    setMyTaps(myTapsRef.current);
 
-  // 50:50 시작, 내 탭으로 비율 이동 (30탭 기준으로 한쪽 끝 도달)
-  // myPercent: 0(상대 완승) ~ 100(내 완승), 50이 균형
-  const myPercent = Math.min(100, Math.max(0, 50 + (taps / 30) * 50));
+    // 100ms 스로틀로 RTDB 쓰기
+    const now = Date.now();
+    if (now - lastWriteRef.current >= 100) {
+      writeMashTap(myTapsRef.current);
+      lastWriteRef.current = now;
+    }
+
+    if (navigator.vibrate) navigator.vibrate(10);
+  }, [submitted, writeMashTap]);
+
+  // 게이지 색상
+  const gaugeColor = myPercent > 50 ? 'bg-[#C06060]' : 'bg-[#6060A0]';
+  const bgColor = 'bg-[#6060A0]';
+  const timeSeconds = Math.ceil(timeLeft / 1000);
 
   return (
     <div className="w-full px-4 flex-1 flex flex-col items-center justify-center">
-      {/* 제목 */}
+      {/* 제목 + 타이머 */}
       <div className="text-center mb-5">
         <h2 className="text-2xl font-black text-white mb-1">
           연타 배틀!
         </h2>
         <p className="text-sm text-white/60">
-          {isMyFault ? '오답 패널티! 버튼을 연타하세요!' : '보너스 찬스! 버튼을 연타하세요!'}
+          게이지를 끝까지 밀어라!
         </p>
+        <span className={`text-lg font-black mt-1 inline-block ${
+          timeSeconds <= 5 ? 'text-red-400' : 'text-white/70'
+        }`}>
+          {timeSeconds}초
+        </span>
       </div>
 
-      {/* 땅따먹기 게이지 */}
+      {/* 줄다리기 게이지 */}
       <div className="w-full max-w-xs mb-3">
         {/* 라벨 */}
         <div className="flex justify-between mb-1">
@@ -79,23 +126,20 @@ export default function TekkenMashMinigame({
         </div>
 
         {/* 게이지 바 */}
-        <div className="h-8 rounded-full overflow-hidden border-2 border-white/20 relative bg-[#6060A0]">
+        <div className={`h-8 rounded-full overflow-hidden border-2 border-white/20 relative ${bgColor}`}>
           <motion.div
-            className="h-full rounded-full bg-[#C06060]"
-            initial={{ width: '50%' }}
-            animate={{ width: `${myPercent}%` }}
-            transition={{ duration: 0.08 }}
+            className={`h-full rounded-full ${gaugeColor}`}
+            style={{ width: `${myPercent}%` }}
+            transition={{ duration: 0.05 }}
           />
           {/* 중앙 기준선 */}
           <div className="absolute top-0 left-1/2 -translate-x-px h-full w-0.5 bg-white/30" />
         </div>
 
-        {/* 탭 수 + 타이머 */}
+        {/* 탭 수 표시 */}
         <div className="flex justify-between mt-1.5">
-          <span className="text-sm font-bold text-white/60">{taps}탭</span>
-          <span className={`text-sm font-bold ${timeLeft < 1000 ? 'text-red-400' : 'text-white/60'}`}>
-            {(timeLeft / 1000).toFixed(1)}초
-          </span>
+          <span className="text-sm font-bold text-white/60">{myTaps}탭</span>
+          <span className="text-sm font-bold text-white/60">{opponentMashTaps}탭</span>
         </div>
       </div>
 
@@ -111,7 +155,7 @@ export default function TekkenMashMinigame({
         disabled={submitted}
       >
         <span className="text-3xl font-black text-white">
-          {submitted ? '대기 중...' : '연타!'}
+          {submitted ? '완료!' : '연타!'}
         </span>
       </motion.button>
     </div>

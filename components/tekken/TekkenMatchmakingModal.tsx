@@ -81,7 +81,7 @@ export default function TekkenMatchmakingModal({
                     {waitTime}초
                   </span>
                 </div>
-                {waitTime >= 20 && (
+                {waitTime >= 15 && (
                   <p className="text-xs text-white/50 mt-1.5">
                     곧 봇과 매칭됩니다...
                   </p>

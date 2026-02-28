@@ -337,6 +337,7 @@ export {
   cancelMatchmaking,
   matchWithBot,
   submitAnswer,
+  submitTimeout,
   swapRabbit,
   submitMashResult,
   startBattleRound,

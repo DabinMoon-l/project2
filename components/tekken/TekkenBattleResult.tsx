@@ -26,7 +26,9 @@ export default function TekkenBattleResult({
 }: TekkenBattleResultProps) {
   const isWinner = result.winnerId === userId;
   const isDraw = result.isDraw;
-  const xp = calcBattleXp(isWinner, 0);
+  // 서버에서 실제 지급한 XP가 있으면 사용, 없으면 기본값 (연승 미반영)
+  const xpByPlayer = (result as any).xpByPlayer as Record<string, number> | undefined;
+  const xp = xpByPlayer?.[userId] ?? calcBattleXp(isWinner, 0);
 
   const endReasonText = {
     ko: 'K.O!',

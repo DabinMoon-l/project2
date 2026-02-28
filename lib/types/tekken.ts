@@ -68,12 +68,11 @@ export interface RoundState {
   firstAnswerer?: string | null;
 }
 
-/** 연타 미니게임 상태 */
+/** 연타 미니게임 상태 (줄다리기) */
 export interface MashState {
   mashId: string;
   startedAt: number;
-  endsAt: number;
-  triggeredBy: string; // 오답 낸 플레이어
+  endsAt: number; // 연타 시간제한 (startedAt + 15000)
   taps?: Record<string, number>;
   result?: {
     winnerId: string;
@@ -98,6 +97,7 @@ export interface BattleState {
   createdAt: number;
   endsAt: number; // createdAt + 180000 (3분)
   currentRound: number;
+  nextRound?: number; // roundResult 상태에서 다음 라운드 인덱스
   players: Record<string, BattlePlayer>;
   rounds?: Record<number, RoundState>;
   mash?: MashState;
@@ -154,14 +154,12 @@ export const BATTLE_XP = {
 
 /** 배틀 설정 상수 */
 export const BATTLE_CONFIG = {
-  MATCH_TIMEOUT: 30000,     // 매칭 대기 30초
+  MATCH_TIMEOUT: 20000,     // 매칭 대기 20초 (봇 매칭)
   BATTLE_DURATION: 180000,  // 배틀 3분
   QUESTION_TIMEOUT: 20000,  // 문제 타임아웃 20초
   CRITICAL_TIME: 4000,      // 크리티컬 기준 4초
-  MASH_DURATION: 3000,      // 연타 미니게임 3초
-  SELF_DAMAGE: 3,           // 오답 셀프데미지
-  MASH_BONUS_DAMAGE: 5,     // 연타 승자 보너스
-  MAX_ROUNDS: 10,           // 최대 라운드 수
+  MASH_STEP_PER_TAP: 1.5,  // 연타 게이지 이동량 (탭당 %)
+  MASH_TIMEOUT: 15000,      // 연타 줄다리기 시간제한 15초
   COUNTDOWN_SECONDS: 3,     // 카운트다운 3초
   LONG_PRESS_MS: 500,       // 롱프레스 500ms
 } as const;

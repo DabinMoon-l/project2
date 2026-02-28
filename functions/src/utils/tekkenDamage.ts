@@ -7,11 +7,19 @@ export const BATTLE_CONFIG = {
   BATTLE_DURATION: 180000,
   QUESTION_TIMEOUT: 20000,
   CRITICAL_TIME: 4000,
-  MASH_DURATION: 3000,
-  SELF_DAMAGE: 3,
-  MASH_BONUS_DAMAGE: 5,
-  MAX_ROUNDS: 10,
+  SELF_DAMAGE_MULTIPLIER: 1.5, // 범실 데미지 = 기본 데미지 × 1.5 (고의 오답 방지)
+  MATCH_TIMEOUT: 20000,
+  MASH_TIMEOUT: 15000, // 연타 줄다리기 시간제한 15초
 };
+
+/**
+ * 범실(오답) 셀프 데미지 = 기본 데미지 × 1.5
+ * 내 ATK vs 상대 DEF 기준으로 계산 (고의 오답 방지)
+ */
+export function calcSelfDamage(myAtk: number, opponentDef: number): number {
+  const base = calcBaseDamage(myAtk, opponentDef);
+  return Math.max(Math.ceil(base * BATTLE_CONFIG.SELF_DAMAGE_MULTIPLIER), 3);
+}
 
 /** XP 보상 상수 */
 export const BATTLE_XP = {
@@ -22,10 +30,11 @@ export const BATTLE_XP = {
 };
 
 /**
- * 기본 데미지 = max(ceil(ATK² / (ATK + DEF)), 1)
+ * 기본 데미지 = max(ceil(ATK² / (ATK + DEF) * 1.5), 2)
+ * 1.5x 배율: 7라운드 내 게임 종료를 위한 높은 데미지
  */
 export function calcBaseDamage(atk: number, opponentDef: number): number {
-  return Math.max(Math.ceil((atk * atk) / (atk + opponentDef)), 1);
+  return Math.max(Math.ceil((atk * atk) / (atk + opponentDef) * 1.5), 2);
 }
 
 /**

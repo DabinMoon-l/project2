@@ -1,11 +1,14 @@
 'use client';
 
 /**
- * 포켓몬 스타일 캐릭터 영역
+ * 포켓몬 스타일 캐릭터 영역 (v2)
  *
  * 상단: 상대 이름/Lv/HP(좌) + 상대 토끼(우) + 발판
  * 하단: 내 토끼(좌) + 발판 + 내 이름/Lv/HP(우)
- * 데미지 숫자 팝업 + 사망 교체 애니메이션
+ *
+ * 변경사항:
+ * - 데미지 텍스트: 숫자만, 빨간 굵은 글씨, 토끼 머리맡
+ * - 발판: 포켓몬 스타일 회색 글래스 그라데이션 타원
  */
 
 import { useState, useEffect, useRef } from 'react';
@@ -16,48 +19,29 @@ import type { BattlePlayer, BattleRabbit, RoundResultData } from '@/lib/types/te
 interface DamagePopupData {
   id: number;
   value: number;
-  type: 'damage' | 'critical' | 'self' | 'opponent';
   target: 'opponent' | 'me';
 }
 
 let popupIdCounter = 0;
 
 function DamagePopup({ data }: { data: DamagePopupData }) {
-  const isCritical = data.type === 'critical';
-  const isSelf = data.type === 'self';
-
-  const color = isCritical
-    ? 'text-yellow-300'
-    : isSelf
-      ? 'text-orange-400'
-      : data.type === 'opponent'
-        ? 'text-red-400'
-        : 'text-red-400';
-
-  const text = isSelf ? `미스! -${data.value}` : `-${data.value}`;
+  // 상대 토끼 맞음 → 상대 토끼 머리맡 (우상단)
+  // 내 토끼 맞음 → 내 토끼 머리맡 (좌하단)
+  const isOpponentHit = data.target === 'opponent';
 
   return (
     <motion.div
-      className={`absolute pointer-events-none z-20 ${
-        data.target === 'opponent' ? 'top-2 right-4' : 'bottom-2 left-4'
+      className={`absolute z-20 pointer-events-none ${
+        isOpponentHit ? 'top-4 right-8' : 'bottom-4 left-8'
       }`}
       initial={{ opacity: 0, scale: 0.5, y: 0 }}
-      animate={{ opacity: 1, scale: 1, y: data.target === 'opponent' ? -16 : 16 }}
-      exit={{ opacity: 0, y: data.target === 'opponent' ? -40 : 40 }}
+      animate={{ opacity: 1, scale: 1.2, y: isOpponentHit ? -20 : 20 }}
+      exit={{ opacity: 0, y: isOpponentHit ? -50 : 50, scale: 0.8 }}
       transition={{ type: 'spring', damping: 10, stiffness: 200, duration: 1.2 }}
     >
-      <span className={`text-3xl font-black drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)] ${color}`}>
-        {text}
+      <span className="text-4xl font-black text-red-500 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]">
+        -{data.value}
       </span>
-      {isCritical && (
-        <motion.span
-          className="block text-xs font-black text-yellow-300 text-center drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)]"
-          animate={{ scale: [1, 1.2, 1] }}
-          transition={{ duration: 0.3, repeat: 2 }}
-        >
-          CRITICAL!
-        </motion.span>
-      )}
     </motion.div>
   );
 }
@@ -131,7 +115,7 @@ function PokemonHpBar({
   );
 }
 
-// ── 토끼 캐릭터 (발판 포함) ──
+// ── 토끼 캐릭터 (글래스 그라데이션 발판) ──
 function RabbitCharacter({
   rabbitId,
   isOpponent,
@@ -173,12 +157,14 @@ function RabbitCharacter({
         </motion.div>
       </AnimatePresence>
 
-      {/* 발판 (타원 그림자) */}
+      {/* 포켓몬 스타일 글래스 그라데이션 타원 발판 */}
       <div
-        className="rounded-[50%] bg-black/20 blur-sm -mt-2"
+        className="rounded-[50%] -mt-3"
         style={{
-          width: size * 0.8,
-          height: size * 0.15,
+          width: size * 1.2,
+          height: size * 0.25,
+          background: 'radial-gradient(ellipse at center, rgba(180,180,190,0.5) 0%, rgba(120,120,130,0.3) 40%, rgba(80,80,90,0.1) 70%, transparent 100%)',
+          boxShadow: '0 2px 16px rgba(0,0,0,0.3), inset 0 1px 2px rgba(255,255,255,0.15)',
         }}
       />
     </div>
@@ -210,7 +196,7 @@ export default function TekkenBattleArena({
   const prevMyRabbitId = useRef(myActiveRabbit?.rabbitId);
   const prevOpponentRabbitId = useRef(opponentActiveRabbit?.rabbitId);
 
-  // 토끼 교체 감지 → 교체 애니메이션
+  // 토끼 교체 감지
   useEffect(() => {
     if (myActiveRabbit && prevMyRabbitId.current !== undefined && prevMyRabbitId.current !== myActiveRabbit.rabbitId) {
       setSwappingTarget('me');
@@ -229,7 +215,7 @@ export default function TekkenBattleArena({
     prevOpponentRabbitId.current = opponentActiveRabbit?.rabbitId;
   }, [opponentActiveRabbit?.rabbitId, opponentActiveRabbit]);
 
-  // 라운드 결과 → 데미지 팝업
+  // 라운드 결과 → 데미지 팝업 (숫자만)
   useEffect(() => {
     if (!showResult) return;
 
@@ -240,17 +226,15 @@ export default function TekkenBattleArena({
       newPopups.push({
         id: ++popupIdCounter,
         value: myResult.damage,
-        type: myResult.isCritical ? 'critical' : 'damage',
         target: 'opponent',
       });
     }
 
-    // 내 오답 → 셀프 데미지
+    // 내 오답 → 범실 셀프 데미지
     if (myResult && !myResult.isCorrect && myResult.selfDamage > 0) {
       newPopups.push({
         id: ++popupIdCounter,
         value: myResult.selfDamage,
-        type: 'self',
         target: 'me',
       });
     }
@@ -260,7 +244,6 @@ export default function TekkenBattleArena({
       newPopups.push({
         id: ++popupIdCounter,
         value: opponentResult.damage,
-        type: 'opponent',
         target: 'me',
       });
     }
@@ -270,7 +253,6 @@ export default function TekkenBattleArena({
       newPopups.push({
         id: ++popupIdCounter,
         value: opponentResult.selfDamage,
-        type: 'self',
         target: 'opponent',
       });
     }
@@ -326,7 +308,7 @@ export default function TekkenBattleArena({
         />
       </div>
 
-      {/* ── 데미지 팝업 오버레이 ── */}
+      {/* ── 데미지 팝업 오버레이 (숫자만, 빨간색) ── */}
       <AnimatePresence>
         {popups.map((p) => (
           <DamagePopup key={p.id} data={p} />

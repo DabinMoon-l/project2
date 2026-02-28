@@ -1,14 +1,20 @@
 'use client';
 
 /**
- * 철권퀴즈 메인 훅
+ * 철권퀴즈 메인 훅 (v2 — 순발력 리워크)
  *
  * RTDB 리스너 + CF 호출 통합
  * 매칭 → 배틀 → 결과까지 전체 흐름 관리
+ *
+ * 변경사항:
+ * - 순발력 시스템: 먼저 푼 사람이 라운드 결정
+ * - loading 상태: 문제 생성 중 스피너
+ * - 연타 줄다리기: RTDB 실시간 탭 동기화
+ * - 대기 로직 제거 (bothAnswered 없음)
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ref, onValue, off, onDisconnect, remove } from 'firebase/database';
+import { ref, onValue, off, onDisconnect, remove, set } from 'firebase/database';
 import { httpsCallable } from 'firebase/functions';
 import { getRtdb, functions } from '@/lib/firebase';
 import type {
@@ -50,6 +56,11 @@ interface UseTekkenBattleReturn {
   swapRabbit: () => Promise<void>;
   submitMashTaps: (taps: number) => Promise<void>;
   startRound: (roundIndex: number) => Promise<void>;
+  submitTimeout: () => Promise<void>;
+
+  // 연타 RTDB
+  writeMashTap: (count: number) => void;
+  opponentMashTaps: number;
 
   // 연타
   mash: MashState | null;
@@ -69,6 +80,8 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
   const [error, setError] = useState<string | null>(null);
   const [battleTimeLeft, setBattleTimeLeft] = useState(0);
   const [questionTimeLeft, setQuestionTimeLeft] = useState(0);
+  const [opponentMashTaps, setOpponentMashTaps] = useState(0);
+  const [activeBattleId, setActiveBattleId] = useState<string | null>(null);
 
   const battleIdRef = useRef<string | null>(null);
   const courseIdRef = useRef<string | null>(null);
@@ -76,46 +89,82 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
   const matchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const battleTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const matchResultUnsubRef = useRef<(() => void) | null>(null);
+  const mashTapUnsubRef = useRef<(() => void) | null>(null);
+  const roundResultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 타이머 + 리스너 정리
   const clearTimers = useCallback(() => {
     if (waitTimerRef.current) clearInterval(waitTimerRef.current);
     if (matchTimeoutRef.current) clearTimeout(matchTimeoutRef.current);
     if (battleTimerRef.current) clearInterval(battleTimerRef.current);
+    if (roundResultTimerRef.current) clearTimeout(roundResultTimerRef.current);
     if (matchResultUnsubRef.current) {
       matchResultUnsubRef.current();
       matchResultUnsubRef.current = null;
     }
+    if (mashTapUnsubRef.current) {
+      mashTapUnsubRef.current();
+      mashTapUnsubRef.current = null;
+    }
     waitTimerRef.current = null;
     matchTimeoutRef.current = null;
     battleTimerRef.current = null;
+    roundResultTimerRef.current = null;
   }, []);
 
-  // RTDB 배틀 리스너
+  // RTDB 배틀 리스너 (activeBattleId state로 dependency 관리)
   useEffect(() => {
-    if (!battleIdRef.current) return;
+    if (!activeBattleId) return;
 
-    const battleRef = ref(getRtdb(), `tekken/battles/${battleIdRef.current}`);
+    const battleRef = ref(getRtdb(), `tekken/battles/${activeBattleId}`);
     const unsubscribe = onValue(battleRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
         setBattle({
           ...data,
-          battleId: battleIdRef.current!,
+          battleId: activeBattleId,
         });
       }
     });
 
     // 연결 끊김 시 처리
     if (userId) {
-      const connectedRef = ref(getRtdb(), `tekken/battles/${battleIdRef.current}/players/${userId}/connected`);
+      const connectedRef = ref(getRtdb(), `tekken/battles/${activeBattleId}/players/${userId}/connected`);
       onDisconnect(connectedRef).set(false);
     }
 
     return () => {
       off(battleRef);
     };
-  }, [battleIdRef.current, userId]);
+  }, [activeBattleId, userId]);
+
+  // 연타 상대 탭 RTDB 리스너
+  useEffect(() => {
+    if (!battle?.mash || !battleIdRef.current || !userId) {
+      setOpponentMashTaps(0);
+      if (mashTapUnsubRef.current) {
+        mashTapUnsubRef.current();
+        mashTapUnsubRef.current = null;
+      }
+      return;
+    }
+
+    // 상대 ID 찾기
+    const playerIds = Object.keys(battle.players || {});
+    const opponentId = playerIds.find((id) => id !== userId);
+    if (!opponentId) return;
+
+    const opTapsRef = ref(getRtdb(), `tekken/battles/${battleIdRef.current}/mash/taps/${opponentId}`);
+    const unsub = onValue(opTapsRef, (snapshot) => {
+      setOpponentMashTaps(snapshot.val() || 0);
+    });
+    mashTapUnsubRef.current = unsub;
+
+    return () => {
+      unsub();
+      mashTapUnsubRef.current = null;
+    };
+  }, [battle?.mash?.mashId, userId]);
 
   // 배틀/문제 타이머
   useEffect(() => {
@@ -129,12 +178,10 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     const tick = () => {
       const now = Date.now();
 
-      // 배틀 전체 타이머
       if (battle.endsAt) {
         setBattleTimeLeft(Math.max(0, battle.endsAt - now));
       }
 
-      // 현재 라운드 문제 타이머
       const round = battle.rounds?.[battle.currentRound];
       if (round?.timeoutAt && battle.status === 'question') {
         setQuestionTimeLeft(Math.max(0, round.timeoutAt - now));
@@ -151,6 +198,31 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     };
   }, [battle?.status, battle?.currentRound, battle?.endsAt]);
 
+  // roundResult 감지 → 2초 후 다음 라운드 시작 (CF setTimeout 대체)
+  useEffect(() => {
+    if (battle?.status !== 'roundResult' || battle?.nextRound === undefined) return;
+
+    const nextRound = battle.nextRound;
+    roundResultTimerRef.current = setTimeout(async () => {
+      try {
+        const fn = httpsCallable(functions, 'startBattleRound');
+        await fn({ battleId: battleIdRef.current, roundIndex: nextRound });
+      } catch (err: any) {
+        // 이미 시작된 경우 무시
+        if (err?.code !== 'functions/failed-precondition') {
+          console.error('다음 라운드 시작 실패:', err);
+        }
+      }
+    }, 2000);
+
+    return () => {
+      if (roundResultTimerRef.current) {
+        clearTimeout(roundResultTimerRef.current);
+        roundResultTimerRef.current = null;
+      }
+    };
+  }, [battle?.status, battle?.nextRound]);
+
   // 매칭 시작
   const startMatchmaking = useCallback(async (courseId: string) => {
     if (!userId) return;
@@ -159,7 +231,6 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     setError(null);
     courseIdRef.current = courseId;
 
-    // 대기 시간 타이머
     waitTimerRef.current = setInterval(() => {
       setWaitTime((prev) => prev + 1);
     }, 1000);
@@ -172,31 +243,29 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
       const result = await joinFn({ courseId });
 
       if (result.data.status === 'matched' && result.data.battleId) {
-        // 즉시 매칭 성공
         battleIdRef.current = result.data.battleId;
+        setActiveBattleId(result.data.battleId);
         setMatchState('matched');
         clearTimers();
         return;
       }
 
-      // 대기 상태 — 개인 매칭 결과 리스너 설정
-      // CF가 상대를 찾으면 tekken/matchResults/{userId}에 battleId를 씀
+      // 대기 상태 — 매칭 결과 리스너
       const matchResultRef = ref(getRtdb(), `tekken/matchResults/${userId}`);
       const unsubMatchResult = onValue(matchResultRef, (snapshot) => {
         const data = snapshot.val();
         if (data?.battleId) {
           battleIdRef.current = data.battleId;
+          setActiveBattleId(data.battleId);
           setMatchState('matched');
           clearTimers();
-          // 매칭 결과 정리
           remove(matchResultRef).catch(() => {});
         }
       });
       matchResultUnsubRef.current = unsubMatchResult;
 
-      // 30초 후 봇 매칭
+      // 봇 매칭 타임아웃 (20초)
       matchTimeoutRef.current = setTimeout(async () => {
-        // 이미 매칭됐으면 봇 생성 안 함
         if (battleIdRef.current) return;
 
         clearTimers();
@@ -210,6 +279,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
 
           if (botResult.data.battleId) {
             battleIdRef.current = botResult.data.battleId;
+            setActiveBattleId(botResult.data.battleId);
             setMatchState('matched');
           }
         } catch (err: any) {
@@ -252,6 +322,10 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
       });
       return result.data;
     } catch (err: any) {
+      // 라운드 이미 종료된 경우 (상대가 먼저 풀었음)
+      if (err?.code === 'functions/failed-precondition') {
+        return null;
+      }
       console.error('답변 제출 실패:', err);
       return null;
     }
@@ -269,7 +343,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     }
   }, []);
 
-  // 연타 결과 제출
+  // 연타 결과 제출 (CF 호출)
   const handleSubmitMashTaps = useCallback(async (taps: number) => {
     if (!battleIdRef.current) return;
 
@@ -281,7 +355,29 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     }
   }, []);
 
-  // 라운드 시작 (카운트다운 후 클라이언트에서 호출)
+  // 연타 탭 수 RTDB 직접 쓰기 (실시간 동기화용)
+  const writeMashTap = useCallback((count: number) => {
+    if (!battleIdRef.current || !userId) return;
+    const tapRef = ref(getRtdb(), `tekken/battles/${battleIdRef.current}/mash/taps/${userId}`);
+    set(tapRef, count).catch(() => {});
+  }, [userId]);
+
+  // 타임아웃 제출 (아무도 안 풀었을 때)
+  const handleSubmitTimeout = useCallback(async () => {
+    if (!battleIdRef.current || !battle) return;
+
+    try {
+      const fn = httpsCallable(functions, 'submitTimeout');
+      await fn({
+        battleId: battleIdRef.current,
+        roundIndex: battle.currentRound,
+      });
+    } catch (err: any) {
+      console.error('타임아웃 제출 실패:', err);
+    }
+  }, [battle?.currentRound]);
+
+  // 라운드 시작
   const handleStartRound = useCallback(async (roundIndex: number) => {
     if (!battleIdRef.current) return;
 
@@ -301,10 +397,12 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     }
     battleIdRef.current = null;
     courseIdRef.current = null;
+    setActiveBattleId(null);
     setBattle(null);
     setMatchState('idle');
     setWaitTime(0);
     setError(null);
+    setOpponentMashTaps(0);
     clearTimers();
   }, [clearTimers]);
 
@@ -338,7 +436,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     opponentActiveRabbit,
     currentRound,
     currentRoundIndex: battle?.currentRound ?? 0,
-    totalRounds: (battle as any)?.totalRounds ?? BATTLE_CONFIG.MAX_ROUNDS,
+    totalRounds: (battle as any)?.totalRounds ?? 10,
     battleTimeLeft,
     questionTimeLeft,
 
@@ -346,6 +444,10 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     swapRabbit: handleSwapRabbit,
     submitMashTaps: handleSubmitMashTaps,
     startRound: handleStartRound,
+    submitTimeout: handleSubmitTimeout,
+
+    writeMashTap,
+    opponentMashTaps,
 
     mash: battle?.mash ?? null,
 
