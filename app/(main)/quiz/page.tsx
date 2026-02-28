@@ -2566,7 +2566,7 @@ function QuizListPageContent() {
       </AnimatePresence>
 
       {/* 스크롤 맨 위로 버튼 */}
-      <ScrollToTopButton targetRef={customSectionRef} bottom="bottom-[90px]" side="left" />
+      <ScrollToTopButton targetRef={customSectionRef} bottomPx={90} side="left" />
     </div>
 
     {/* 관리 모드 오버레이 (들어갈 때 + 나갈 때 슬라이드 애니메이션) */}

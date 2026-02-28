@@ -65,6 +65,57 @@ export function useKeyboardAware(): KeyboardAwareState {
 }
 
 /**
+ * 스크롤 시 키보드 자동 닫기 훅 (모바일 UX 표준 패턴)
+ *
+ * iOS 네이티브 앱의 keyboardDismissMode: .onDrag와 동일한 동작.
+ * 터치가 입력 요소 바깥에서 시작된 경우, 20px 이상 스크롤 시 키보드를 닫습니다.
+ * 입력 요소 내부 스크롤(긴 텍스트 스크롤)은 키보드를 유지합니다.
+ */
+export function useScrollDismissKeyboard() {
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    let startY = 0;
+    let dismissed = false;
+    let touchInInput = false;
+
+    const onTouchStart = (e: TouchEvent) => {
+      startY = e.touches[0].clientY;
+      dismissed = false;
+      // 터치가 현재 포커스된 입력 요소 내부에서 시작되면 스크롤해도 키보드 유지
+      const active = document.activeElement;
+      touchInInput =
+        active instanceof HTMLElement &&
+        (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') &&
+        active.contains(e.target as Node);
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (dismissed || touchInInput) return;
+      const active = document.activeElement;
+      if (
+        !(active instanceof HTMLInputElement) &&
+        !(active instanceof HTMLTextAreaElement)
+      )
+        return;
+
+      const dy = Math.abs(e.touches[0].clientY - startY);
+      if (dy > 20) {
+        active.blur();
+        dismissed = true;
+      }
+    };
+
+    document.addEventListener('touchstart', onTouchStart, { passive: true });
+    document.addEventListener('touchmove', onTouchMove, { passive: true });
+    return () => {
+      document.removeEventListener('touchstart', onTouchStart);
+      document.removeEventListener('touchmove', onTouchMove);
+    };
+  }, []);
+}
+
+/**
  * 키보드 열림 시 스크롤 컨테이너의 paddingBottom을 동적 조정하는 훅
  *
  * iOS Safari에서 fixed 입력바가 키보드 위로 올라갈 때

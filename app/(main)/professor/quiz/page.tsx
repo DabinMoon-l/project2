@@ -2146,7 +2146,7 @@ export default function ProfessorQuizListPage() {
       <ScrollToTopButton
         targetRef={headerRef}
         hidden={isLibraryPreview}
-        bottom={sectionFilter === 'library' ? 'bottom-44' : 'bottom-24'}
+        bottomPx={sectionFilter === 'library' ? 176 : 96}
       />
     </div>
   );

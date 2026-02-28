@@ -6,8 +6,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 interface ScrollToTopButtonProps {
   /** 이 요소가 화면에서 사라지면 버튼 표시 */
   targetRef: RefObject<HTMLElement | null>;
-  /** Tailwind bottom 클래스 (기본: 'bottom-24') */
-  bottom?: string;
+  /** 네비 바 위 기준 bottom offset (px). 기본 24 */
+  bottomPx?: number;
   /** 좌/우 배치 (기본: 'right') */
   side?: 'left' | 'right';
   /** dark: 검정, glass: 반투명 (기본: 'dark') */
@@ -18,7 +18,7 @@ interface ScrollToTopButtonProps {
 
 export default function ScrollToTopButton({
   targetRef,
-  bottom = 'bottom-24',
+  bottomPx = 96,
   side = 'right',
   variant = 'dark',
   hidden = false,
@@ -75,8 +75,10 @@ export default function ScrollToTopButton({
           whileTap={{ scale: 0.95, opacity: 0.7 }}
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
           onClick={scrollToTop}
-          className={`fixed ${bottom} ${sideClass} z-40 w-10 h-10 ${variantClass} rounded-full shadow-lg flex items-center justify-center transition-colors`}
+          className={`fixed ${sideClass} z-40 w-10 h-10 ${variantClass} rounded-full shadow-lg flex items-center justify-center transition-colors`}
           style={{
+            // safe-area-inset-bottom 반영: 네비 바 위치 + 지정 offset
+            bottom: `calc(${bottomPx}px + env(safe-area-inset-bottom, 0px))`,
             WebkitTapHighlightColor: 'transparent',
             touchAction: 'manipulation',
           }}

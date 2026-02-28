@@ -31,6 +31,12 @@ body {
   /* safe-area padding은 (main) layout에서 처리 — body에 두면 fixed inset-0 깨짐 */
 }
 
+/* 메인 콘텐츠 영역 — dvh 폴백으로 모든 기종에서 화면 채움 보장 */
+[data-main-content] {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
 /* Samsung Internet 자체 "맨 위로" FAB 억제 */
 html::-webkit-scrollbar-button,
 body::-webkit-scrollbar-button {

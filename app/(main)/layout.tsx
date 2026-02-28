@@ -13,6 +13,7 @@ import { useActivityTracker } from '@/lib/hooks/useActivityTracker';
 import type { ClassType } from '@/styles/themes';
 import LibraryJobToast from '@/components/professor/library/LibraryJobToast';
 import { useViewportScale, useWideMode } from '@/lib/hooks/useViewportScale';
+import { useScrollDismissKeyboard } from '@/lib/hooks/useKeyboardAware';
 
 /**
  * 내부 레이아웃 컴포넌트
@@ -30,6 +31,9 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
   // 뷰포트 스케일링 (세로모드: zoom, 가로모드: 1)
   useViewportScale();
   const isWide = useWideMode();
+
+  // 스크롤 시 키보드 자동 닫기 (iOS 네이티브 앱 UX 패턴)
+  useScrollDismissKeyboard();
 
   // 접속 추적 (lastActiveAt + currentActivity)
   useActivityTracker();
@@ -107,9 +111,14 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
               <SwipeBack enabled={!isWide && !isTabRoot}>
                 <div
                   data-main-content
-                  className={`min-h-screen ${hideNavigation || isWide ? '' : 'pb-20'}`}
+                  className="min-h-screen"
                   style={{
                     paddingTop: 'env(safe-area-inset-top, 0px)',
+                    // 네비 바가 표시될 때: 네비 높이(~68px) + 네비 bottom offset(safe-area + 0.5rem) + 여유
+                    // pb-20(80px)은 safe-area 미포함이라 iPhone 15 Pro 등에서 콘텐츠가 가려짐
+                    ...(!hideNavigation && !isWide
+                      ? { paddingBottom: 'calc(5rem + env(safe-area-inset-bottom, 0px))' }
+                      : {}),
                     ...(isWide ? { marginLeft: '72px' } : {}),
                   }}
                 >
