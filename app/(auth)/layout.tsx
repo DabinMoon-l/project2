@@ -1,9 +1,8 @@
 /**
  * 인증 페이지 공통 레이아웃
  *
- * fixed 대신 일반 플로우 래퍼 + min-height dvh 폴백 체인
- * 배경(비디오)은 safe area 무시하고 전체 커버
- * 콘텐츠만 safe area 패딩 적용
+ * 배경(비디오): position fixed → 화면 전체 커버 (safe area 뒤까지)
+ * 콘텐츠: normal flow + min-height dvh + safe area 패딩
  */
 
 'use client';
@@ -25,37 +24,49 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   }, []);
 
   return (
-    <div className="auth-viewport">
-      {/* 비디오 배경 — 래퍼 전체 커버 (safe area 포함) */}
-      <video
-        autoPlay
-        loop
-        muted
-        playsInline
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-        }}
-      >
-        <source src="/videos/login-bg.mp4" type="video/mp4" />
-      </video>
-      {/* 어두운 오버레이 */}
+    <>
+      {/* 비디오 배경 — fixed로 전체 물리 화면 커버 */}
       <div
         style={{
-          position: 'absolute',
+          position: 'fixed',
           top: 0,
           left: 0,
-          width: '100%',
-          height: '100%',
-          backgroundColor: 'rgba(0,0,0,0.2)',
+          right: 0,
+          bottom: 0,
+          zIndex: 0,
+          backgroundColor: '#000',
+          overflow: 'hidden',
         }}
-      />
+      >
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+          }}
+        >
+          <source src="/videos/login-bg.mp4" type="video/mp4" />
+        </video>
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            backgroundColor: 'rgba(0,0,0,0.2)',
+          }}
+        />
+      </div>
 
-      {/* 콘텐츠 영역 — safe area 패딩 적용 */}
+      {/* 콘텐츠 — normal flow, 배경 위에 표시 */}
       <div className="auth-content">
         {/* 좌측 상단 장식 이미지 */}
         <div style={{ position: 'absolute', top: 64, left: 32, zIndex: 10 }}>
@@ -71,6 +82,6 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
 
         {children}
       </div>
-    </div>
+    </>
   );
 }
