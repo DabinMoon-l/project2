@@ -24,7 +24,8 @@ import { scaleCoord } from '@/lib/hooks/useViewportScale';
 
 function getOnlineStatus(lastActiveAt: Date): 'online' | 'offline' {
   const diff = Date.now() - lastActiveAt.getTime();
-  if (diff < 60 * 1000) return 'online'; // 1분 이내 활동 = 접속 중 (하트비트 30초 기준)
+  // useActivityTracker 간격(120초) + 여유 30초 = 150초
+  if (diff < 150 * 1000) return 'online';
   return 'offline';
 }
 

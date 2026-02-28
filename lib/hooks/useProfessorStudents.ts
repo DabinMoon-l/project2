@@ -234,7 +234,7 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
       profileRabbitId: data.profileRabbitId ?? undefined,
       feedbackCount: data.feedbackCount || 0,
       createdAt: data.createdAt?.toDate?.() || new Date(),
-      lastActiveAt: data.lastActiveAt?.toDate?.() || new Date(),
+      lastActiveAt: data.lastActiveAt?.toDate?.() || new Date(0),
     };
   };
 

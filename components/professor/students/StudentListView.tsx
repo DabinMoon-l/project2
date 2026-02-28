@@ -61,8 +61,8 @@ const PAGE_LABELS: Record<PageCategory, string> = {
   review: '복습',
 };
 
-function getPageCategory(activity?: string): PageCategory {
-  if (!activity) return 'home';
+function getPageCategory(activity?: string): PageCategory | null {
+  if (!activity) return null;
   if (activity.includes('퀴즈') || activity.includes('출제') || activity.includes('배틀') || activity.includes('철권')) return 'quiz';
   if (activity.includes('복습') || activity.includes('리뷰')) return 'review';
   if (activity.includes('게시판') || activity.includes('게시글')) return 'board';
@@ -71,6 +71,8 @@ function getPageCategory(activity?: string): PageCategory {
 
 /** N일전 표시 */
 function getTimeAgo(date: Date): string {
+  // lastActiveAt 미설정 (new Date(0)) 시
+  if (date.getTime() < 86400000) return '미접속';
   const diffMs = Date.now() - date.getTime();
   const diffMin = Math.floor(diffMs / 60000);
   if (diffMin < 1) return '방금';
@@ -101,9 +103,16 @@ export default function StudentListView({ students, onStudentClick, warningMap }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [students, tick]);
 
-  // 항상 학번순 정렬
+  // 접속 중 우선 → 학번순 정렬
   const sorted = useMemo(() => {
-    return [...enrichedStudents].sort((a, b) => compareStudentId(a.studentId, b.studentId));
+    return [...enrichedStudents].sort((a, b) => {
+      // 접속 중인 학생이 상단으로
+      const aOnline = a.status === 'online' ? 0 : 1;
+      const bOnline = b.status === 'online' ? 0 : 1;
+      if (aOnline !== bOnline) return aOnline - bOnline;
+      // 같은 그룹 내에서 학번순
+      return compareStudentId(a.studentId, b.studentId);
+    });
   }, [enrichedStudents]);
 
   // 프로필 크기
@@ -170,7 +179,7 @@ export default function StudentListView({ students, onStudentClick, warningMap }
                   {/* 체류 상태 — 프로필에 겹치게 */}
                   <motion.div
                     className="absolute bottom-0.5 right-0.5 w-[20px] h-[20px] rounded-full border-[1.5px] border-white/30 shadow-md"
-                    style={{ backgroundColor: isOnline && pageCategory ? PAGE_COLORS[pageCategory] : '#D4CFC4' }}
+                    style={{ backgroundColor: isOnline ? (pageCategory ? PAGE_COLORS[pageCategory] : '#4CAF50') : '#D4CFC4' }}
                     animate={isOnline ? { opacity: [1, 0.75, 1] } : undefined}
                     transition={isOnline ? { duration: 2, repeat: Infinity, ease: 'easeInOut' } : undefined}
                   />
@@ -196,9 +205,9 @@ export default function StudentListView({ students, onStudentClick, warningMap }
                 {/* 체류 페이지 또는 N일전 */}
                 <p
                   className={`text-xs mt-0.5 font-bold`}
-                  style={{ color: isOnline && pageCategory ? PAGE_COLORS[pageCategory] : '#5C5C5C' }}
+                  style={{ color: isOnline ? (pageCategory ? PAGE_COLORS[pageCategory] : '#4CAF50') : '#5C5C5C' }}
                 >
-                  {isOnline && pageCategory ? PAGE_LABELS[pageCategory] : getTimeAgo(student.lastActiveAt)}
+                  {isOnline ? (pageCategory ? PAGE_LABELS[pageCategory] : '접속 중') : getTimeAgo(student.lastActiveAt)}
                 </p>
               </motion.button>
             );
