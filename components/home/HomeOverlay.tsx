@@ -253,7 +253,7 @@ export default function HomeOverlay() {
     >
       <div className="relative z-[2] flex-1 flex flex-col pt-1 pb-2">
         {/* 프로필 + 닉네임 */}
-        <div className="px-8 flex items-center gap-3 mb-2" style={{ marginTop: 'clamp(24px, 5dvh, 44px)' }}>
+        <div className="px-8 flex items-center gap-3 mb-2 mt-10">
           <button
             className="w-14 h-14 flex items-center justify-center flex-shrink-0 rounded-xl overflow-hidden"
             style={{

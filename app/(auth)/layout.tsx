@@ -32,7 +32,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
       >
         {/* 좌측 상단 장식 이미지 */}
-        <div className="absolute left-8 z-10" style={{ top: 'clamp(40px, 8dvh, 68px)' }}>
+        <div className="absolute top-16 left-8 z-10">
           <Image
             src="/images/corner-image.png"
             alt="장식 이미지"
