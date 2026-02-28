@@ -111,7 +111,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                   style={isWide ? { marginLeft: '72px' } : undefined}
                 >
                   {/* 메인 콘텐츠 */}
-                  <main className={isWide ? 'max-w-[640px] mx-auto' : 'max-w-[430px] mx-auto'}>
+                  <main className={isWide ? 'max-w-[640px] mx-auto' : ''}>
                     {children}
                     {!isProfessor && pathname === '/quiz' && searchParams.get('manage') !== 'true' && <AIQuizContainer />}
                   </main>
