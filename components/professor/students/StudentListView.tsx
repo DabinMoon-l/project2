@@ -179,7 +179,7 @@ export default function StudentListView({ students, onStudentClick, warningMap }
                   {/* 체류 상태 — 프로필에 겹치게 */}
                   <motion.div
                     className="absolute bottom-0.5 right-0.5 w-[20px] h-[20px] rounded-full border-[1.5px] border-white/30 shadow-md"
-                    style={{ backgroundColor: isOnline ? (pageCategory ? PAGE_COLORS[pageCategory] : '#4CAF50') : '#D4CFC4' }}
+                    style={{ backgroundColor: isOnline ? '#4CAF50' : '#D4CFC4' }}
                     animate={isOnline ? { opacity: [1, 0.75, 1] } : undefined}
                     transition={isOnline ? { duration: 2, repeat: Infinity, ease: 'easeInOut' } : undefined}
                   />
@@ -205,7 +205,7 @@ export default function StudentListView({ students, onStudentClick, warningMap }
                 {/* 체류 페이지 또는 N일전 */}
                 <p
                   className={`text-xs mt-0.5 font-bold`}
-                  style={{ color: isOnline ? (pageCategory ? PAGE_COLORS[pageCategory] : '#4CAF50') : '#5C5C5C' }}
+                  style={{ color: isOnline ? '#4CAF50' : '#5C5C5C' }}
                 >
                   {isOnline ? (pageCategory ? PAGE_LABELS[pageCategory] : '접속 중') : getTimeAgo(student.lastActiveAt)}
                 </p>
