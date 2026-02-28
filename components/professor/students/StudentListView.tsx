@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import type { StudentData, ClassType } from '@/lib/hooks/useProfessorStudents';
 import type { WarningItem } from '@/app/(main)/professor/students/page';
@@ -23,7 +23,8 @@ interface Props {
 
 function getOnlineStatus(lastActiveAt: Date): 'online' | 'offline' {
   const diff = Date.now() - lastActiveAt.getTime();
-  if (diff < 60 * 1000) return 'online';
+  // useActivityTracker 간격(120초) + 여유 30초 = 150초
+  if (diff < 150 * 1000) return 'online';
   return 'offline';
 }
 
@@ -81,6 +82,13 @@ function getTimeAgo(date: Date): string {
 }
 
 export default function StudentListView({ students, onStudentClick, warningMap }: Props) {
+  // 30초마다 tick → 온라인 상태 재계산 (isPresenceOnly 최적화로 students가 안 바뀌어도 상태 갱신)
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
   const enrichedStudents = useMemo(() => {
     const scores = students.map(s => s.quizStats.averageScore);
     const m = mean(scores);
@@ -90,7 +98,8 @@ export default function StudentListView({ students, onStudentClick, warningMap }
       zScore: zScore(student.quizStats.averageScore, m, s),
       status: getOnlineStatus(student.lastActiveAt),
     }));
-  }, [students]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [students, tick]);
 
   // 항상 학번순 정렬
   const sorted = useMemo(() => {
@@ -176,6 +185,13 @@ export default function StudentListView({ students, onStudentClick, warningMap }
                 <p className="text-sm text-[#5C5C5C] mt-0.5 truncate w-full">
                   {student.classId}반{student.name ? ` · ${student.nickname}` : ''}
                 </p>
+
+                {/* 퀴즈 평균 */}
+                {student.quizStats.totalAttempts > 0 && (
+                  <p className="text-xs text-[#5C5C5C] mt-0.5">
+                    퀴즈 평균 {student.quizStats.averageScore.toFixed(0)}점
+                  </p>
+                )}
 
                 {/* 체류 페이지 또는 N일전 */}
                 <p

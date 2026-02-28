@@ -88,12 +88,14 @@ async function computeRadarNormForCourse(courseId: string) {
     communityByUid[uid] = (postCountByUid[uid] ?? 0) * 3 + (fbCountByUid[uid] ?? 0);
   });
 
-  // 5. 복습력 (reviewCount > 0인 리뷰 수)
+  // 5. 복습력 (리뷰 문서 수 — 퀴즈 완료 시 생성됨)
+  // reviewCount 조건 제거: markAsReviewed가 library 타입에서 사일런트 실패하고
+  // 퀴즈 재시도 시 reviewCount가 0으로 리셋되므로, 문서 존재 자체를 복습력으로 산정
   const activeReviewByUid: Record<string, number> = {};
   reviewsDocs.forEach(d => {
     const data = d.data();
     const userId = data.userId as string;
-    if (userId && studentUids.has(userId) && (data.reviewCount ?? 0) > 0) {
+    if (userId && studentUids.has(userId)) {
       activeReviewByUid[userId] = (activeReviewByUid[userId] ?? 0) + 1;
     }
   });

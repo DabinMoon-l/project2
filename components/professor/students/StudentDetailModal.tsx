@@ -145,23 +145,17 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
             {/* 학업 성취도 */}
             <div className="space-y-6">
               {student.weightedScore === undefined ? (
-                <div>
-                  <div className="grid grid-cols-3 gap-x-3 mb-4">
-                    {[1, 2, 3].map(i => (
-                      <div key={i}>
-                        <div className="h-4 w-14 bg-[#D4CFC4]/50 rounded animate-pulse mb-1" />
-                        <div className="h-6 w-16 bg-[#D4CFC4]/50 rounded animate-pulse" />
-                      </div>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-2 gap-x-4">
-                    {[4, 5].map(i => (
-                      <div key={i}>
-                        <div className="h-4 w-16 bg-[#D4CFC4]/50 rounded animate-pulse mb-1" />
-                        <div className="h-6 w-20 bg-[#D4CFC4]/50 rounded animate-pulse" />
-                      </div>
-                    ))}
-                  </div>
+                <div className="space-y-4">
+                  {[0, 1, 2].map(row => (
+                    <div key={row} className="grid grid-cols-2 gap-x-4">
+                      {(row < 2 ? [1, 2] : [1]).map(col => (
+                        <div key={col}>
+                          <div className="h-4 w-16 bg-[#D4CFC4]/50 rounded animate-pulse mb-1" />
+                          <div className="h-6 w-20 bg-[#D4CFC4]/50 rounded animate-pulse" />
+                        </div>
+                      ))}
+                    </div>
+                  ))}
                 </div>
               ) : (
               <AchievementGrid
@@ -246,13 +240,19 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
 // 학업 성취도 그리드 (ⓘ 툴팁 포함)
 // ============================================================
 
-const ACHIEVEMENT_ITEMS = [
-  { key: 'avg', label: '성취 지수', info: '교수 퀴즈 ×6 + 학생 퀴즈 ×4 가중 석차 점수' },
-  { key: 'classMean', label: '반 평균', info: '같은 반 학생들의 성취 지수 평균' },
-  { key: 'overallMean', label: '전체 평균', info: '과목 전체 학생의 성취 지수 평균 (A~D반)' },
-  { key: 'zscore', label: 'Z-score', info: '반 평균 대비 표준편차 위치 (-1.5 이하 주의)' },
-  { key: 'pct', label: '전체 백분위', info: '과목 전체 학생 중 상위 몇 %인지 (Z-score 기반)' },
-] as const;
+const ACHIEVEMENT_ROWS: { key: string; label: string; info: string }[][] = [
+  [
+    { key: 'avg', label: '성취 지수', info: '교수 퀴즈 ×6 + 학생 퀴즈 ×4 가중 석차 점수' },
+    { key: 'classMean', label: '반 평균', info: '같은 반 학생들의 성취 지수 평균' },
+  ],
+  [
+    { key: 'overallMean', label: '전체 평균', info: '과목 전체 학생의 성취 지수 평균 (A~D반)' },
+    { key: 'pct', label: '전체 백분위', info: '과목 전체 학생 중 상위 몇 %인지 (Z-score 기반)' },
+  ],
+  [
+    { key: 'zscore', label: 'Z-score', info: '반 평균 대비 표준편차 위치 (-1.5 이하 주의)' },
+  ],
+];
 
 function AchievementGrid({
   studentAvg,
@@ -278,19 +278,14 @@ function AchievementGrid({
   };
 
   return (
-    <div onClick={() => setActiveInfo(null)}>
-      {/* 첫 줄: 성취 지수 / 반 평균 / 전체 평균 (3열) */}
-      <div className="grid grid-cols-3 gap-x-3 mb-4">
-        {ACHIEVEMENT_ITEMS.slice(0, 3).map(item => (
-          <AchievementItem key={item.key} item={item} value={values[item.key]} activeInfo={activeInfo} setActiveInfo={setActiveInfo} />
-        ))}
-      </div>
-      {/* 둘째 줄: Z-score / 전체 백분위 (2열) */}
-      <div className="grid grid-cols-2 gap-x-4">
-        {ACHIEVEMENT_ITEMS.slice(3).map(item => (
-          <AchievementItem key={item.key} item={item} value={values[item.key]} activeInfo={activeInfo} setActiveInfo={setActiveInfo} />
-        ))}
-      </div>
+    <div onClick={() => setActiveInfo(null)} className="space-y-4">
+      {ACHIEVEMENT_ROWS.map((row, ri) => (
+        <div key={ri} className="grid grid-cols-2 gap-x-4">
+          {row.map((item, ci) => (
+            <AchievementItem key={item.key} item={item} value={values[item.key]} activeInfo={activeInfo} setActiveInfo={setActiveInfo} alignRight={ci === 1} />
+          ))}
+        </div>
+      ))}
     </div>
   );
 }
@@ -300,11 +295,13 @@ function AchievementItem({
   value,
   activeInfo,
   setActiveInfo,
+  alignRight,
 }: {
   item: { key: string; label: string; info: string };
   value: React.ReactNode;
   activeInfo: string | null;
   setActiveInfo: (v: string | null) => void;
+  alignRight?: boolean;
 }) {
   return (
     <div className="relative">
@@ -322,7 +319,7 @@ function AchievementItem({
         </button>
       </div>
       <p className="text-xl font-bold text-[#1A1A1A] mt-0.5">{value}</p>
-      {/* 툴팁 */}
+      {/* 툴팁 — 오른쪽 열은 right-0으로 배치 (잘림 방지) */}
       <AnimatePresence>
         {activeInfo === item.key && (
           <motion.div
@@ -330,7 +327,7 @@ function AchievementItem({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.12 }}
-            className="absolute left-0 top-full mt-1 z-10 bg-[#1A1A1A] text-white text-[11px] leading-relaxed px-2.5 py-1.5 rounded-lg shadow-lg whitespace-nowrap"
+            className={`absolute top-full mt-1 z-10 bg-[#1A1A1A] text-white text-[11px] leading-relaxed px-2.5 py-1.5 rounded-lg shadow-lg whitespace-nowrap ${alignRight ? 'right-0' : 'left-0'}`}
             onClick={() => setActiveInfo(null)}
           >
             {item.info}

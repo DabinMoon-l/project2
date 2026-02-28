@@ -54,12 +54,14 @@ export default function StudentRadar({ data, classColor }: Props) {
 
   // 축 라벨 위치 (차트 바깥 충분히 먼 곳 — 값 라벨과 겹치지 않게)
   const LABEL_R = R + 48;
+  // 라벨 + ⓘ를 하나의 그룹으로 보고, ⓘ 폭(~10px)의 절반만큼 라벨을 왼쪽으로 이동하여 전체 중앙 정렬
+  const INFO_ICON_OFFSET = 6; // ⓘ 아이콘 반폭 보정
   const labelPositions = angles.map(angle => ({
-    x: CX + LABEL_R * Math.cos(angle),
+    x: CX + LABEL_R * Math.cos(angle) - INFO_ICON_OFFSET,
     y: CY + LABEL_R * Math.sin(angle),
   }));
 
-  // ⓘ 버튼: 라벨 텍스트 바로 오른쪽에 배치 (잘리지 않는 안전한 위치)
+  // ⓘ 버튼: 라벨 텍스트 바로 오른쪽에 배치
   const infoPositions = AXES.map((axis, i) => {
     const lp = labelPositions[i];
     const halfW = axis.label.length * 7.5; // 한글 문자 폭 추정
