@@ -63,7 +63,7 @@ export default function StudentRadar({ data, classColor }: Props) {
   const infoPositions = AXES.map((axis, i) => {
     const lp = labelPositions[i];
     const halfW = axis.label.length * 7.5; // 한글 문자 폭 추정
-    const ix = lp.x + halfW + 5;
+    const ix = lp.x + halfW + 10;
     const iy = lp.y;
     return { pctX: (ix / VIEWBOX_W) * 100, pctY: (iy / VIEWBOX_H) * 100 };
   });

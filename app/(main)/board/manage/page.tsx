@@ -1139,7 +1139,7 @@ export default function ManagePostsPage() {
         <div className="px-4 space-y-6 pb-navigation">
           {/* 과목 캐러셀 */}
           <div
-            className="border-y-4 border-[#1A1A1A] py-5 flex items-center justify-center gap-2 select-none overflow-hidden"
+            className="border-y-4 border-[#1A1A1A] py-2 flex items-center justify-center gap-2 select-none overflow-hidden"
             onTouchStart={(e) => { courseTouchStartX.current = scaleCoord(e.touches[0].clientX); }}
             onTouchMove={(e) => { courseTouchEndX.current = scaleCoord(e.touches[0].clientX); }}
             onTouchEnd={() => {
@@ -1175,12 +1175,12 @@ export default function ManagePostsPage() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -30 }}
                 transition={{ duration: 0.2 }}
-                className="font-serif-display text-4xl md:text-5xl font-black tracking-tight text-[#1A1A1A] text-center whitespace-nowrap"
+                className="font-serif-display font-black tracking-tight text-[#1A1A1A] text-center whitespace-nowrap"
               >
                 {(() => {
                   const name = courseList.find(c => c.id === selectedCourseId)?.nameEn.toUpperCase() || '';
                   const isLong = name.length > 10;
-                  return <span className={isLong ? 'text-[2rem] md:text-4xl' : ''}>{name}</span>;
+                  return <span className={isLong ? 'text-[1.6rem] md:text-4xl' : 'text-[1.85rem] md:text-5xl'}>{name}</span>;
                 })()}
               </motion.h1>
             </AnimatePresence>

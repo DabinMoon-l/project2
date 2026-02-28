@@ -1134,6 +1134,7 @@ export default function FolderDetailPage() {
     removeCategoryFromFolder,
     assignQuestionToCategory,
     loading: reviewLoading,
+    markAsReviewed,
   } = useReview();
 
   const [customQuestions, setCustomQuestions] = useState<ReviewItem[]>([]);
@@ -2384,6 +2385,11 @@ export default function FolderDetailPage() {
         items={practiceItems}
         quizTitle={folderTitle}
         onComplete={async (results: PracticeResult[]) => {
+          // 복습 완료된 문제 reviewCount 증가 (복습력 측정용)
+          for (const r of results) {
+            try { await markAsReviewed(r.reviewId); } catch { /* 개별 실패 무시 */ }
+          }
+
           // 수정된 문제 재풀이 완료 시:
           // 1. quizResults에 새 응답 저장 (통계 반영용)
           // 2. reviews.quizUpdatedAt 업데이트 (뱃지 제거용)

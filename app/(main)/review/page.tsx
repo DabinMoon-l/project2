@@ -3011,6 +3011,7 @@ function ReviewPageContent() {
     deletedItems,
     restoreDeletedItem,
     permanentlyDeleteItem,
+    markAsReviewed,
   } = useReview();
 
   // 퀴즈 북마크 훅
@@ -3440,6 +3441,17 @@ function ReviewPageContent() {
   }, [groupedWrongItems]);
 
   const handleEndPractice = useCallback(async (results?: PracticeResult[]) => {
+    // 복습 완료된 문제 reviewCount 증가 (복습력 측정용)
+    if (results && results.length > 0) {
+      for (const r of results) {
+        try {
+          await markAsReviewed(r.reviewId);
+        } catch {
+          // 개별 실패 무시
+        }
+      }
+    }
+
     // 복습 결과가 있고, "모두" 복습 모드일 때만 첫번째 복습 점수 저장
     // "오답만" 복습은 첫 복습 점수에 포함되지 않음
     if (results && results.length > 0 && user && practiceMode === 'all') {
@@ -3473,7 +3485,7 @@ function ReviewPageContent() {
     }
     setPracticeItems(null);
     setPracticeMode(null);
-  }, [user, practiceMode]);
+  }, [user, practiceMode, markAsReviewed]);
 
   // 연습 모드
   if (practiceItems) {
