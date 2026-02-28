@@ -669,11 +669,10 @@ function DashboardRibbonHeader({
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (swipeDir.current !== 'none') return;
+    if (swipeDir.current === 'vertical') return;
     const touch = e.changedTouches[0];
     const dx = scaleCoord(touch.clientX) - swipeStartX.current;
-    const dy = scaleCoord(touch.clientY) - swipeStartY.current;
-    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
+    if (Math.abs(dx) > 40) {
       if (dx > 0) goToPrev();
       else goToNext();
     }

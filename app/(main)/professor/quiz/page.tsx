@@ -759,11 +759,10 @@ function CourseRibbonHeader({
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (swipeDir.current !== 'none') return; // 방향 판별 이후는 touchMove에서 처리
+    if (swipeDir.current === 'vertical') return; // 세로 스크롤 중이면 무시
     const touch = e.changedTouches[0];
     const dx = scaleCoord(touch.clientX) - swipeStartX.current;
-    const dy = scaleCoord(touch.clientY) - swipeStartY.current;
-    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
+    if (Math.abs(dx) > 40) {
       if (dx > 0) goToPrev();
       else goToNext();
     }
