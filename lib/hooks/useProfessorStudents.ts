@@ -168,9 +168,10 @@ function computeRadarFromNorm(
   uid: string,
   norm: RadarNormData,
   quizScore: number,
-  growth: number,
   totalExp: number,
 ): NonNullable<StudentDetail['radarMetrics']> {
+  // 성장세: norm에 growthByUid가 있으면 사용, 없으면 50(기준선)
+  const growth = norm.growthByUid?.[uid] ?? 50;
   return {
     quizScore,
     growth,
@@ -383,7 +384,6 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
           ...cached.detail,
           radarMetrics: computeRadarFromNorm(
             uid, norm, cached.detail.quizStats.averageScore,
-            cached.detail.radarMetrics?.growth ?? 50,
             norm.expByUid[uid] ?? cached.detail.experience,
           ),
           weightedScore: norm.weightedScoreByUid[uid],
@@ -402,7 +402,7 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
         ...student,
         recentQuizzes: [],
         recentFeedbacks: [],
-        radarMetrics: computeRadarFromNorm(uid, norm, student.quizStats.averageScore, 50, totalExp),
+        radarMetrics: computeRadarFromNorm(uid, norm, student.quizStats.averageScore, totalExp),
         weightedScore: norm.weightedScoreByUid[uid],
         classWeightedScores: buildClassWeightedScores(norm),
       };
@@ -467,7 +467,7 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
       // radarNorm에서 레이더 계산 (있으면)
       const norm = courseId ? _radarNormMap.get(courseId) : null;
       const radarMetrics = norm
-        ? computeRadarFromNorm(uid, norm, baseData.quizStats.averageScore, 50, norm.expByUid[uid] ?? baseData.experience)
+        ? computeRadarFromNorm(uid, norm, baseData.quizStats.averageScore, norm.expByUid[uid] ?? baseData.experience)
         : undefined;
 
       const detail: StudentDetail = {

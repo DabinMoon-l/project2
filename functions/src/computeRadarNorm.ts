@@ -57,7 +57,7 @@ async function computeRadarNormForCourse(courseId: string) {
     db.collection("quizzes").where("courseId", "==", courseId).select("creatorId", "type").get(),
     db.collection("posts").where("courseId", "==", courseId).select("authorId").get(),
     db.collection("reviews").where("courseId", "==", courseId).select("userId", "reviewCount").get(),
-    db.collection("quizResults").where("courseId", "==", courseId).select("userId", "quizId", "score").get(),
+    db.collection("quizResults").where("courseId", "==", courseId).select("userId", "quizId", "score", "isUpdate").get(),
   ]);
 
   const quizzesDocs = quizzesResult.status === "fulfilled" ? quizzesResult.value.docs : [];
@@ -107,20 +107,40 @@ async function computeRadarNormForCourse(courseId: string) {
   const activeReviewCounts = uids.map(u => activeReviewByUid[u] ?? 0).sort((a, b) => a - b);
   const expValues = uids.map(u => expByUid[u] ?? 0).sort((a, b) => a - b);
 
-  // 7. 가중 석차 점수
+  // 7. 가중 석차 점수 (첫 시도만 사용)
   const PROF_TYPES = new Set(["midterm", "final", "past", "professor", "professor-ai"]);
   const quizTypeMap = new Map<string, boolean>();
   quizzesDocs.forEach(d => quizTypeMap.set(d.id, PROF_TYPES.has(d.data().type || "")));
 
+  // 첫 시도 / 재시도 분리 수집 (성장세 계산에도 사용)
   const completionsByQuiz = new Map<string, { userId: string; score: number }[]>();
+  // 성장세용: 학생별 퀴즈별 { firstScore, bestRetryScore }
+  const retryMap = new Map<string, Map<string, { first: number; retries: number[] }>>();
+
   quizResultsDocs.forEach(d => {
     const qr = d.data();
     if (!studentUids.has(qr.userId)) return;
     const qid = qr.quizId as string;
     if (!qid) return;
-    const arr = completionsByQuiz.get(qid) ?? [];
-    arr.push({ userId: qr.userId, score: qr.score ?? 0 });
-    completionsByQuiz.set(qid, arr);
+    const isRetry = qr.isUpdate === true;
+
+    if (!isRetry) {
+      // 첫 시도 → 가중 석차에 사용
+      const arr = completionsByQuiz.get(qid) ?? [];
+      arr.push({ userId: qr.userId, score: qr.score ?? 0 });
+      completionsByQuiz.set(qid, arr);
+    }
+
+    // 성장세 데이터 수집 (첫 시도 + 재시도 모두)
+    if (!retryMap.has(qr.userId)) retryMap.set(qr.userId, new Map());
+    const userQuizMap = retryMap.get(qr.userId)!;
+    if (!userQuizMap.has(qid)) userQuizMap.set(qid, { first: -1, retries: [] });
+    const entry = userQuizMap.get(qid)!;
+    if (!isRetry) {
+      entry.first = qr.score ?? 0;
+    } else {
+      entry.retries.push(qr.score ?? 0);
+    }
   });
 
   const studentScorePairs = new Map<string, { rankScore: number; weight: number }[]>();
@@ -152,17 +172,45 @@ async function computeRadarNormForCourse(courseId: string) {
     weightedScoreByUid[uid] = Math.round((tws / tw) * 100) / 100;
   });
 
+  // 8. 성장세 (재시도 개선율)
+  // 재시도가 있는 퀴즈에서 (최고 재시도 점수 - 첫 시도 점수)의 평균
+  // 0~100 스케일, 50이 기준선(변화 없음), 100이 만점 개선
+  const growthByUid: Record<string, number> = {};
+  studentUids.forEach(uid => {
+    const userQuizMap = retryMap.get(uid);
+    if (!userQuizMap) { growthByUid[uid] = 50; return; }
+
+    const improvements: number[] = [];
+    userQuizMap.forEach(({ first, retries }) => {
+      if (first < 0 || retries.length === 0) return;
+      const bestRetry = Math.max(...retries);
+      // 개선폭: (bestRetry - first) — -100 ~ +100 범위
+      improvements.push(bestRetry - first);
+    });
+
+    if (improvements.length === 0) {
+      growthByUid[uid] = 50; // 재시도 없음 → 기준선
+    } else {
+      const avgImprovement = improvements.reduce((s, v) => s + v, 0) / improvements.length;
+      // -100~+100 → 0~100 스케일 (50이 기준선)
+      growthByUid[uid] = Math.round(Math.max(0, Math.min(100, 50 + avgImprovement / 2)));
+    }
+  });
+  const growthValues = uids.map(u => growthByUid[u] ?? 50).sort((a, b) => a - b);
+
   return {
     quizCreationByUid,
     communityByUid,
     activeReviewByUid,
     expByUid,
     weightedScoreByUid,
+    growthByUid,
     studentClassMap,
     quizCreationCounts,
     communityScores,
     activeReviewCounts,
     expValues,
+    growthValues,
     totalStudents: studentUids.size,
   };
 }

@@ -94,6 +94,7 @@ interface ResultDoc {
   totalCount: number;
   questionScores: Record<string, { isCorrect: boolean }>;
   createdAt: Date;
+  isUpdate?: boolean; // 재시도 여부 (true면 첫 시도 아님)
 }
 
 // === 모듈 레벨 캐시 (과목 전환·페이지 이동 시에도 유지) ===
@@ -224,6 +225,7 @@ export function useProfessorStats() {
                 totalCount: r.totalCount ?? 0,
                 questionScores: r.questionScores || {},
                 createdAt: r.createdAt instanceof Timestamp ? r.createdAt.toDate() : new Date(r.createdAt),
+                isUpdate: r.isUpdate === true,
               });
             });
           });
@@ -258,7 +260,9 @@ export function useProfessorStats() {
         return;
       }
 
-      const results = raw.results.filter(r => filteredQuizIds.has(r.quizId));
+      // 첫 시도만 필터링 (재시도 점수는 통계에서 제외 — 성적 왜곡 방지)
+      const allResults = raw.results.filter(r => filteredQuizIds.has(r.quizId));
+      const results = allResults.filter(r => !r.isUpdate);
       const userClassMap = raw.userClassMap;
 
       // 4. 반별 점수 집계 (항상 A/B/C/D 포함)
@@ -417,7 +421,7 @@ export function useProfessorStats() {
         aiDifficultyStats,
         professorMean: mean(profScores),
         totalStudents: uniqueStudents,
-        totalAttempts: results.length,
+        totalAttempts: allResults.length, // 재시도 포함 전체 시도 횟수
       };
 
       setData(statsData);

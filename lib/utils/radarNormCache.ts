@@ -20,11 +20,13 @@ export interface RadarNormData {
   activeReviewByUid: Record<string, number>;
   expByUid: Record<string, number>;
   weightedScoreByUid: Record<string, number>;
+  growthByUid: Record<string, number>;  // 성장세 (0-100, 50=기준선)
   studentClassMap: Record<string, string>;
   quizCreationCounts: number[];
   communityScores: number[];
   activeReviewCounts: number[];
   expValues: number[];
+  growthValues: number[];               // 성장세 백분위 배열
   totalStudents: number;
 }
 
