@@ -600,32 +600,33 @@ export default function ProfessorLibraryTab({
             onClick={() => setDeleteTarget(null)}
           >
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
+              initial={{ opacity: 0, scale: 0.88 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
+              exit={{ opacity: 0, scale: 0.88 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-xs bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
+              className="w-full max-w-[280px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
             >
-              <div className="flex justify-center mb-4">
-                <div className="w-12 h-12 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
-                  <svg className="w-6 h-6 text-[#8B1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="flex justify-center mb-3">
+                <div className="w-9 h-9 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
+                  <svg className="w-4 h-4 text-[#8B1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
                 </div>
               </div>
-              <h3 className="text-center font-bold text-lg text-[#1A1A1A] mb-2">
+              <h3 className="text-center font-bold text-sm text-[#1A1A1A] mb-2">
                 퀴즈를 삭제할까요?
               </h3>
-              <p className="text-sm text-[#5C5C5C] mb-1">
+              <p className="text-xs text-[#5C5C5C] mb-1">
                 - 삭제된 퀴즈는 복구할 수 없습니다.
               </p>
-              <p className="text-sm text-[#5C5C5C] mb-6">
+              <p className="text-xs text-[#5C5C5C] mb-4">
                 - 이미 푼 사람은 복습 가능합니다.
               </p>
-              <div className="flex gap-3">
+              <div className="flex gap-2">
                 <button
                   onClick={() => setDeleteTarget(null)}
-                  className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+                  className="flex-1 py-1.5 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
                 >
                   취소
                 </button>
@@ -637,7 +638,7 @@ export default function ProfessorLibraryTab({
                       closePreview();
                     }
                   }}
-                  className="flex-1 py-3 font-bold border-2 border-[#8B1A1A] text-[#8B1A1A] bg-[#F5F0E8] hover:bg-[#FDEAEA] transition-colors"
+                  className="flex-1 py-1.5 text-xs font-bold border-2 border-[#8B1A1A] text-[#8B1A1A] bg-[#F5F0E8] hover:bg-[#FDEAEA] transition-colors"
                 >
                   삭제
                 </button>
@@ -724,27 +725,27 @@ export default function ProfessorLibraryTab({
               )}
 
               {/* 카드 내용 */}
-              <div className="relative z-10 p-4 bg-[#F5F0E8]/60">
+              <div className="relative z-10 p-3 bg-[#F5F0E8]/60">
                 {/* 제목 (2줄 고정 높이, AI 기본 제목은 serif 비적용) */}
-                <div className="h-[44px] mb-2">
-                  <h3 className="font-bold text-base line-clamp-2 text-[#1A1A1A] leading-snug pr-8">
+                <div className="h-[38px] mb-1.5">
+                  <h3 className="font-bold text-sm line-clamp-2 text-[#1A1A1A] leading-snug pr-8">
                     {quiz.title}
                   </h3>
                 </div>
 
                 {/* 메타 정보 */}
-                <p className="text-sm text-[#5C5C5C] mb-1">
+                <p className="text-xs text-[#5C5C5C] mb-1">
                   {quiz.questionCount}문제
                 </p>
 
                 {/* 태그 (2줄 고정 높이) */}
-                <div className="h-[48px] mb-2 overflow-hidden">
+                <div className="h-[40px] mb-1.5 overflow-hidden">
                   {quiz.tags && quiz.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       {quiz.tags.slice(0, 8).map((tag) => (
                         <span
                           key={tag}
-                          className="px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-medium"
+                          className="px-1 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-[10px] font-medium"
                         >
                           #{tag}
                         </span>
@@ -754,14 +755,14 @@ export default function ProfessorLibraryTab({
                 </div>
 
                 {/* 버튼 */}
-                <div className="flex gap-2 mt-3">
+                <div className="flex gap-1.5 mt-2">
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedDetailQuiz(quiz);
                     }}
-                    className="flex-1 py-2 text-sm font-bold border border-[#3A3A3A] text-[#1A1A1A] bg-white/30 hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+                    className="flex-1 py-1 text-[10px] font-bold border border-[#3A3A3A] text-[#1A1A1A] bg-white/30 hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
                   >
                     Details
                   </button>
@@ -771,7 +772,7 @@ export default function ProfessorLibraryTab({
                       e.stopPropagation();
                       openPreview(quiz);
                     }}
-                    className="flex-1 py-2 text-sm font-bold bg-[#1A1A1A]/85 text-[#F5F0E8] hover:bg-[#1A1A1A] transition-colors"
+                    className="flex-1 py-1 text-[10px] font-bold bg-[#1A1A1A]/85 text-[#F5F0E8] hover:bg-[#1A1A1A] transition-colors"
                   >
                     Preview
                   </button>
@@ -1047,27 +1048,28 @@ export default function ProfessorLibraryTab({
           onClick={() => setSelectedDetailQuiz(null)}
         >
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
+            initial={{ opacity: 0, scale: 0.88 }}
             animate={{ opacity: 1, scale: 1 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
+            className="w-full max-w-[300px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
           >
-            <h2 className="text-2xl font-bold text-[#1A1A1A] mb-4">
+            <h2 className="text-sm font-bold text-[#1A1A1A] mb-3">
               {selectedDetailQuiz.title}
             </h2>
 
-            <div className="space-y-2 mb-6">
-              <div className="flex justify-between text-sm">
+            <div className="space-y-1.5 mb-4">
+              <div className="flex justify-between text-xs">
                 <span className="text-[#5C5C5C]">문제 수</span>
                 <span className="font-bold text-[#1A1A1A]">{selectedDetailQuiz.questionCount}문제</span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-xs">
                 <span className="text-[#5C5C5C]">난이도</span>
                 <span className="font-bold text-[#1A1A1A]">
                   {{ easy: '쉬움', medium: '보통', hard: '어려움' }[selectedDetailQuiz.difficulty] || selectedDetailQuiz.difficulty}
                 </span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-xs">
                 <span className="text-[#5C5C5C]">문제 유형</span>
                 <span className="font-bold text-[#1A1A1A]">
                   {selectedDetailQuiz.questions && selectedDetailQuiz.questions.length > 0
@@ -1077,7 +1079,7 @@ export default function ProfessorLibraryTab({
               </div>
 
               {/* 총평 */}
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-xs">
                 <span className="text-[#5C5C5C]">총평</span>
                 {selectedDetailQuiz.description && (
                   <span className="font-bold text-[#1A1A1A]">
@@ -1093,7 +1095,7 @@ export default function ProfessorLibraryTab({
                     {selectedDetailQuiz.tags.map((tag) => (
                       <span
                         key={tag}
-                        className="px-2 py-1 bg-[#1A1A1A] text-[#F5F0E8] text-sm font-medium"
+                        className="px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-medium"
                       >
                         #{tag}
                       </span>
@@ -1104,10 +1106,10 @@ export default function ProfessorLibraryTab({
             </div>
 
             {/* 닫기 / 삭제 */}
-            <div className="flex gap-3">
+            <div className="flex gap-2">
               <button
                 onClick={() => setSelectedDetailQuiz(null)}
-                className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+                className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
               >
                 닫기
               </button>
@@ -1116,7 +1118,7 @@ export default function ProfessorLibraryTab({
                   setDeleteTarget(selectedDetailQuiz.id);
                   setSelectedDetailQuiz(null);
                 }}
-                className="flex-1 py-3 font-bold border-2 border-[#C44] text-[#C44] hover:bg-[#FEE] transition-colors"
+                className="flex-1 py-2 text-xs font-bold border-2 border-[#C44] text-[#C44] hover:bg-[#FEE] transition-colors"
               >
                 삭제
               </button>
@@ -1136,12 +1138,12 @@ export default function ProfessorLibraryTab({
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-xs bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
+            className="w-full max-w-[280px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
           >
             {/* 지구본 아이콘 */}
-            <div className="flex justify-center mb-4">
-              <div className="w-12 h-12 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
-                <svg className="w-6 h-6 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="flex justify-center mb-3">
+              <div className="w-9 h-9 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
+                <svg className="w-4 h-4 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.6 9h16.8M3.6 15h16.8" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3a15.3 15.3 0 0 1 4 9 15.3 15.3 0 0 1-4 9 15.3 15.3 0 0 1-4-9 15.3 15.3 0 0 1 4-9z" />
@@ -1150,18 +1152,18 @@ export default function ProfessorLibraryTab({
             </div>
 
             {/* 텍스트 */}
-            <h3 className="text-center font-bold text-lg text-[#1A1A1A] mb-2">
+            <h3 className="text-center font-bold text-sm text-[#1A1A1A] mb-2">
               퀴즈를 공개할까요?
             </h3>
-            <p className="text-center text-sm text-[#5C5C5C] mb-6">
+            <p className="text-center text-xs text-[#5C5C5C] mb-4">
               공개하면 다른 학생들도 풀 수 있어요.<br />참여 통계도 확인할 수 있어요.
             </p>
 
             {/* 버튼: 취소 + 공개(드롭다운) */}
-            <div className="flex gap-3">
+            <div className="flex gap-2">
               <button
                 onClick={() => { setPublishTarget(null); setShowPublishDropdown(false); }}
-                className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+                className="flex-1 py-1.5 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
               >
                 취소
               </button>
@@ -1183,7 +1185,7 @@ export default function ProfessorLibraryTab({
                             onPublish?.();
                           }
                         }}
-                        className="w-full py-2.5 text-sm font-bold text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+                        className="w-full py-2 text-xs font-bold text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
                       >
                         {opt.label}
                       </button>
@@ -1193,10 +1195,10 @@ export default function ProfessorLibraryTab({
                 {/* 공개 버튼 — 클릭 시 드롭다운 토글 */}
                 <button
                   onClick={() => setShowPublishDropdown(!showPublishDropdown)}
-                  className="w-full flex items-center justify-center gap-3 py-3 font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
+                  className="w-full flex items-center justify-center gap-2 py-1.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
                 >
                   공개
-                  <svg className={`w-3.5 h-3.5 transition-transform ${showPublishDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className={`w-3 h-3 transition-transform ${showPublishDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
                   </svg>
                 </button>
@@ -1215,32 +1217,33 @@ export default function ProfessorLibraryTab({
           onClick={() => setDeleteTarget(null)}
         >
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
+            initial={{ opacity: 0, scale: 0.88 }}
             animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
+            exit={{ opacity: 0, scale: 0.88 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-xs bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
+            className="w-full max-w-[280px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
           >
-            <div className="flex justify-center mb-4">
-              <div className="w-12 h-12 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
-                <svg className="w-6 h-6 text-[#8B1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="flex justify-center mb-3">
+              <div className="w-9 h-9 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
+                <svg className="w-4 h-4 text-[#8B1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                 </svg>
               </div>
             </div>
-            <h3 className="text-center font-bold text-lg text-[#1A1A1A] mb-2">
+            <h3 className="text-center font-bold text-sm text-[#1A1A1A] mb-2">
               퀴즈를 삭제할까요?
             </h3>
-            <p className="text-sm text-[#5C5C5C] mb-1">
+            <p className="text-xs text-[#5C5C5C] mb-1">
               - 삭제된 퀴즈는 복구할 수 없습니다.
             </p>
-            <p className="text-sm text-[#5C5C5C] mb-6">
+            <p className="text-xs text-[#5C5C5C] mb-4">
               - 이미 푼 사람은 복습 가능합니다.
             </p>
-            <div className="flex gap-3">
+            <div className="flex gap-2">
               <button
                 onClick={() => setDeleteTarget(null)}
-                className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+                className="flex-1 py-1.5 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
               >
                 취소
               </button>
@@ -1251,7 +1254,7 @@ export default function ProfessorLibraryTab({
                     setDeleteTarget(null);
                   }
                 }}
-                className="flex-1 py-3 font-bold border-2 border-[#8B1A1A] text-[#8B1A1A] bg-[#F5F0E8] hover:bg-[#FDEAEA] transition-colors"
+                className="flex-1 py-1.5 text-xs font-bold border-2 border-[#8B1A1A] text-[#8B1A1A] bg-[#F5F0E8] hover:bg-[#FDEAEA] transition-colors"
               >
                 삭제
               </button>

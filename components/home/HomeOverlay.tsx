@@ -252,9 +252,9 @@ export default function HomeOverlay() {
     >
       <div className="relative z-[2] flex-1 flex flex-col pt-1 pb-2">
         {/* 프로필 + 닉네임 */}
-        <div className="px-5 flex items-center gap-4 mb-2">
+        <div className="px-8 flex items-center gap-3 mb-2 mt-10">
           <button
-            className="w-16 h-16 flex items-center justify-center flex-shrink-0 rounded-xl overflow-hidden"
+            className="w-14 h-14 flex items-center justify-center flex-shrink-0 rounded-xl overflow-hidden"
             style={{
               background: 'rgba(0, 0, 0, 0.3)',
               border: '1px solid rgba(255, 255, 255, 0.1)',
@@ -283,7 +283,7 @@ export default function HomeOverlay() {
         </div>
 
         {/* 공지 */}
-        <div className="px-5 -mb-4 relative z-30">
+        <div className="px-8 mb-2 mt-1 relative z-30">
           <AnnouncementChannel />
         </div>
 
@@ -295,9 +295,9 @@ export default function HomeOverlay() {
 
         {/* 스와이프 힌트 — 하단 (가로모드에서는 숨김) */}
         {!isWide && (
-          <div className="absolute bottom-2 left-0 right-0 flex flex-col items-center gap-1 pointer-events-none">
+          <div className="absolute bottom-5 left-0 right-0 flex flex-col items-center gap-0.5 pointer-events-none">
             <motion.svg
-              className="w-5 h-5 text-white/50"
+              className="w-4 h-4 text-white/50"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -306,7 +306,7 @@ export default function HomeOverlay() {
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
             </motion.svg>
-            <span className="text-sm font-bold text-white/60 backdrop-blur-sm">
+            <span className="text-[10px] font-bold text-white/50 backdrop-blur-sm">
               위로 스와이프하여 학습 시작
             </span>
           </div>

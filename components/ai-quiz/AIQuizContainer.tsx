@@ -89,11 +89,12 @@ export default function AIQuizContainer() {
   // 저장된 퀴즈 정보 (연습 모드용)
   const [savedQuiz, setSavedQuiz] = useState<QuizDocument | null>(null);
 
-  // 연습 모드 시 네비게이션 숨김
+  // 연습 모드 시 네비게이션 숨김 (언마운트 시 다른 컴포넌트의 data-hide-nav 보존)
   useEffect(() => {
-    if (isPracticeOpen) document.body.setAttribute('data-hide-nav', '');
-    else document.body.removeAttribute('data-hide-nav');
-    return () => document.body.removeAttribute('data-hide-nav');
+    if (isPracticeOpen) {
+      document.body.setAttribute('data-hide-nav', '');
+      return () => document.body.removeAttribute('data-hide-nav');
+    }
   }, [isPracticeOpen]);
 
   // Job polling 중단용 ref

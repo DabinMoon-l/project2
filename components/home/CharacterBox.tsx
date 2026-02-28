@@ -25,11 +25,11 @@ import { scaleCoord } from '@/lib/hooks/useViewportScale';
 const SWIPE_THRESHOLD = 40;
 
 /* 궤도 파라미터 */
-const ORBIT_RX = 140;
-const ORBIT_RY = 40;
-const CHAR_SIZE = 150;
+const ORBIT_RX = 110;
+const ORBIT_RY = 32;
+const CHAR_SIZE = 115;
 const CHAR_HALF = CHAR_SIZE / 2;
-const ORBIT_Y_SHIFT = 160;
+const ORBIT_Y_SHIFT = 135;
 
 /**
  * 캐릭터 섹션 — 궤도 캐러셀 + XP/도감 + EXP 바 + 마일스톤
@@ -59,6 +59,8 @@ export default function CharacterBox() {
 
   // 도감
   const [showDogam, setShowDogam] = useState(false);
+  const dogamBtnRef = useRef<HTMLButtonElement>(null);
+  const [dogamRect, setDogamRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
 
   // 철권퀴즈 — long press 진입
   const [showBattleConfirm, setShowBattleConfirm] = useState(false);
@@ -235,23 +237,30 @@ export default function CharacterBox() {
     <>
       <div className="flex flex-col items-center w-full">
         {/* XP / 도감 */}
-        <div className="w-full flex items-center justify-between px-8 mb-2 mt-4 relative z-20">
-          <div className="h-9 flex items-center gap-3 px-6 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl">
-            <span className="text-base font-bold text-white">XP</span>
-            <span className="font-bold text-base text-white leading-none text-right">{totalExp}</span>
+        <div className="w-full flex items-center justify-between px-8 mb-1 mt-3 relative z-20">
+          <div className="h-[30px] flex items-center gap-2.5 px-4 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl">
+            <span className="text-[15px] font-bold text-white">XP</span>
+            <span className="font-bold text-[15px] text-white leading-none text-right">{totalExp}</span>
           </div>
           <button
-            onClick={() => setShowDogam(true)}
-            className="h-9 flex items-center justify-center px-6 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl transition-transform duration-200 hover:scale-110 active:scale-95"
+            ref={dogamBtnRef}
+            onClick={() => {
+              if (dogamBtnRef.current) {
+                const r = dogamBtnRef.current.getBoundingClientRect();
+                setDogamRect({ x: r.x, y: r.y, width: r.width, height: r.height });
+              }
+              setShowDogam(true);
+            }}
+            className="h-[30px] flex items-center justify-center px-4 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl transition-transform duration-200 hover:scale-110 active:scale-95"
           >
-            <span className="text-base font-bold text-white">도감</span>
+            <span className="text-[15px] font-bold text-white">도감</span>
           </button>
         </div>
 
         {/* 캐릭터 영역 — 항상 2슬롯 궤도 캐러셀 */}
         {slotCount >= 2 ? (
           <div
-            className="relative select-none -mt-20"
+            className="relative select-none -mt-14"
             style={{
               width: containerW,
               height: containerH,
@@ -304,9 +313,9 @@ export default function CharacterBox() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 5 }}
                 transition={{ duration: 0.2 }}
-                className="absolute flex flex-col gap-1.5"
+                className="absolute flex flex-col gap-1"
                 style={{
-                  right: 50,
+                  right: 40,
                   top: '58%',
                   zIndex: 15,
                 }}
@@ -320,7 +329,7 @@ export default function CharacterBox() {
         ) : null}
 
         {/* 토끼 이름 + 레벨 */}
-        <div className="mt-[72px]">
+        <div className="mt-[88px] relative top-[16px]">
           <AnimatePresence mode="wait">
             {isEmptySlot ? (
               <motion.div
@@ -329,9 +338,9 @@ export default function CharacterBox() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
-                className="px-5 py-1.5 bg-black/30 border border-white/10 rounded-full backdrop-blur-xl"
+                className="px-4 py-1.5 flex items-center justify-center bg-black/30 border border-white/10 rounded-full backdrop-blur-xl"
               >
-                <span className="text-lg font-bold text-white/50 tracking-wide">
+                <span className="text-[11px] font-bold text-white/50 tracking-wide leading-none">
                   빈 슬롯
                 </span>
               </motion.div>
@@ -342,60 +351,64 @@ export default function CharacterBox() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
-                className="px-5 py-1.5 bg-black/30 border border-white/10 rounded-full backdrop-blur-xl"
+                className="px-4 py-1.5 flex items-center justify-center bg-black/30 border border-white/10 rounded-full backdrop-blur-xl"
               >
-                <span className="text-lg font-bold text-white tracking-wide">
+                <span className="text-[11px] font-bold text-white tracking-wide leading-none">
                   Lv {frontInfo.level}.&nbsp; {frontDisplayName}
                 </span>
               </motion.div>
             ) : (
-              <motion.div className="h-[38px]" />
+              <motion.div className="h-[22px]" />
             )}
           </AnimatePresence>
         </div>
 
         {/* EXP 바 섹션 */}
-        <div className="w-full px-8 mt-2 mb-3">
-          {/* XP 라벨 */}
-          <div className="flex items-center justify-end">
-            <span className="text-sm font-bold text-white/70">
-              {expBar.current}/{expBar.max} XP
-            </span>
-          </div>
-          {/* 마일스톤 버튼 + 배틀 힌트 */}
-          <div className="flex items-center justify-between mb-1">
-            {pendingCount > 0 && (
-              <motion.button
-                onClick={milestone.openMilestoneModal}
-                className="flex items-center gap-1.5 h-9 px-3 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl active:scale-95 mr-2"
-                animate={{ scale: [1, 1.05, 1] }}
-                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-              >
-                <svg className="w-5 h-5" viewBox="0 0 24 24">
-                  <defs>
-                    <linearGradient id="starGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                      <stop offset="0%" stopColor="#BBA46A" />
-                      <stop offset="40%" stopColor="#C89A82" />
-                      <stop offset="70%" stopColor="#C0929E" />
-                      <stop offset="100%" stopColor="#AB96B4" />
-                    </linearGradient>
-                  </defs>
-                  <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" fill="url(#starGrad)" />
-                </svg>
-                <span className="text-base font-bold text-white">
-                  ×{pendingCount}
-                </span>
-              </motion.button>
-            )}
-            {isStudent && equippedRabbits.length > 0 && (
-              <p className="text-xs text-white/70 font-bold ml-auto">
-                캐릭터를 꾹 눌러서 배틀
-              </p>
-            )}
+        <div className="w-full px-8 mt-1 mb-1">
+          {/* XP라벨 + 배틀힌트 + 마일스톤 별 */}
+          <div className="flex items-end justify-between mb-1">
+            {/* 마일스톤 별 (좌측) */}
+            <div>
+              {pendingCount > 0 && (
+                <motion.button
+                  ref={milestone.milestoneButtonRef as React.RefObject<HTMLButtonElement>}
+                  onClick={milestone.openMilestoneModal}
+                  className="flex items-center gap-1 h-7 px-2.5 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl active:scale-95"
+                  animate={{ scale: [1, 1.05, 1] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24">
+                    <defs>
+                      <linearGradient id="starGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#BBA46A" />
+                        <stop offset="40%" stopColor="#C89A82" />
+                        <stop offset="70%" stopColor="#C0929E" />
+                        <stop offset="100%" stopColor="#AB96B4" />
+                      </linearGradient>
+                    </defs>
+                    <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" fill="url(#starGrad)" />
+                  </svg>
+                  <span className="text-sm font-bold text-white">
+                    ×{pendingCount}
+                  </span>
+                </motion.button>
+              )}
+            </div>
+            {/* XP라벨 + 배틀힌트 (우측) */}
+            <div className="flex flex-col items-end">
+              <span className="text-[11px] font-bold text-white/70">
+                {expBar.current}/{expBar.max} XP
+              </span>
+              {isStudent && equippedRabbits.length > 0 && (
+                <p className="text-[10px] text-white/60 font-bold">
+                  캐릭터를 꾹 눌러서 배틀
+                </p>
+              )}
+            </div>
           </div>
           {/* EXP 바 */}
           <div className="px-3 py-1.5 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl">
-            <div className="h-3.5 overflow-hidden bg-white/20 rounded-full">
+            <div className="h-3 overflow-hidden bg-white/20 rounded-full">
               <motion.div
                 className="h-full rounded-full"
                 style={{
@@ -422,6 +435,7 @@ export default function CharacterBox() {
           courseId={userCourseId}
           userId={profile.uid}
           equippedRabbits={equippedRabbits}
+          buttonRect={dogamRect}
         />
       )}
 
@@ -542,19 +556,19 @@ function FloatingWrapper({ children, seed = 0 }: { children: React.ReactNode; se
 /** 스탯 배지 (빈 슬롯은 '-' 표시) */
 function StatBadge({ icon, value, color }: { icon: string; value: number | string; color: string }) {
   return (
-    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl">
+    <div className="flex items-center gap-1 px-2.5 py-0.5 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl">
       {icon === 'heart' && (
-        <svg className="w-5 h-5" viewBox="0 0 24 24" fill={color}>
+        <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill={color}>
           <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
         </svg>
       )}
       {icon === 'attack' && (
-        <svg className="w-5 h-5" viewBox="0 0 24 24" fill={color}>
+        <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill={color}>
           <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" />
         </svg>
       )}
       {icon === 'shield' && (
-        <svg className="w-5 h-5" viewBox="0 0 24 24" fill={color}>
+        <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill={color}>
           <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" />
         </svg>
       )}

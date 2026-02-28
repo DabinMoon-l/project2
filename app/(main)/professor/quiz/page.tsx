@@ -77,12 +77,12 @@ const ProfessorNewsArticle = memo(function ProfessorNewsArticle({
 
       {/* 하단 정보 — 고정 높이, 절대 줄어들지 않음 */}
       <div className="flex-shrink-0">
-        <div className="px-4 mt-2">
+        <div className="px-3 mt-1.5">
           <h3 className="text-3xl font-black text-[#1A1A1A] overflow-hidden whitespace-nowrap leading-tight" style={{ textOverflow: '".."' }}>
             {quiz.title}
           </h3>
         </div>
-        <div className="px-4 mt-0.5 flex items-center justify-between">
+        <div className="px-3 mt-0.5 flex items-center justify-between">
           <p className="text-sm text-[#1A1A1A]">
             {quiz.questionCount}문제 · {quiz.participantCount}명 참여
             {quiz.participantCount > 0 && ` · 평균 ${quiz.averageScore}점`}
@@ -107,7 +107,7 @@ const ProfessorNewsArticle = memo(function ProfessorNewsArticle({
             </span>
           )}
         </div>
-        <div className="px-4 pb-3 pt-2 flex gap-2">
+        <div className="px-3 pb-3 pt-1.5 flex gap-2">
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onDetails(); }}
@@ -257,9 +257,9 @@ const ProfessorPastExamNewsCard = memo(function ProfessorPastExamNewsCard({
   return (
     <div className="w-full h-full border border-[#999] bg-[#1A1A1A] flex flex-col overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.3)]">
       {/* 축소된 헤더 + 드롭다운 — 수직 중앙 정렬 */}
-      <div className="bg-[#1A1A1A] text-[#F5F0E8] px-4 py-2 flex items-center justify-between flex-shrink-0">
+      <div className="bg-[#1A1A1A] text-[#F5F0E8] px-3 py-1.5 flex items-center justify-between flex-shrink-0">
         <div>
-          <p className="text-[7px] tracking-[0.2em] mb-0.5 opacity-60">━━━━━━━━━━━━━━━━</p>
+          <p className="text-[6px] tracking-[0.2em] mb-0.5 opacity-60">━━━━━━━━━━━━━━━━</p>
           <h1 className="font-serif text-xl font-black tracking-tight">PAST EXAM</h1>
         </div>
 
@@ -267,7 +267,7 @@ const ProfessorPastExamNewsCard = memo(function ProfessorPastExamNewsCard({
         <div className="relative" onPointerDownCapture={(e) => e.stopPropagation()}>
           <button
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className="px-3 py-1.5 bg-[#F5F0E8] text-[#1A1A1A] text-sm font-bold flex items-center justify-between gap-2 min-w-[100px]"
+            className="px-2 py-1 bg-[#F5F0E8] text-[#1A1A1A] text-sm font-bold flex items-center justify-between gap-1.5 min-w-[90px]"
           >
             <span>{selectedOption?.label || '선택'}</span>
             <svg
@@ -287,7 +287,7 @@ const ProfessorPastExamNewsCard = memo(function ProfessorPastExamNewsCard({
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="absolute right-0 top-full mt-1 z-20 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg min-w-[100px]"
+                  className="absolute right-0 top-full mt-1 z-20 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg min-w-[90px]"
                 >
                   {pastExamOptions.map((option) => (
                     <button
@@ -296,7 +296,7 @@ const ProfessorPastExamNewsCard = memo(function ProfessorPastExamNewsCard({
                         onSelectPastExam(option.value);
                         setIsDropdownOpen(false);
                       }}
-                      className={`w-full px-3 py-2 text-left text-sm font-medium transition-colors ${
+                      className={`w-full px-2 py-1.5 text-left text-xs font-medium transition-colors ${
                         selectedPastExam === option.value
                           ? 'bg-[#1A1A1A] text-[#F5F0E8]'
                           : 'text-[#1A1A1A] hover:bg-[#EDEAE4]'
@@ -332,12 +332,12 @@ const ProfessorPastExamNewsCard = memo(function ProfessorPastExamNewsCard({
 
             {/* 하단 정보 — 고정, 절대 줄어들지 않음 */}
             <div className="flex-shrink-0 bg-[#F5F0E8]">
-              <div className="px-4 mt-2">
+              <div className="px-3 mt-1.5">
                 <h3 className="text-3xl font-black text-[#1A1A1A] overflow-hidden whitespace-nowrap leading-tight" style={{ textOverflow: '".."' }}>
                   {filteredQuiz.title}
                 </h3>
               </div>
-              <div className="px-4 mt-0.5 flex items-center justify-between">
+              <div className="px-3 mt-0.5 flex items-center justify-between">
                 <p className="text-sm text-[#1A1A1A]">
                   {filteredQuiz.questionCount}문제 · {filteredQuiz.participantCount}명 참여
                   {filteredQuiz.participantCount > 0 && ` · 평균 ${filteredQuiz.averageScore}점`}
@@ -362,7 +362,7 @@ const ProfessorPastExamNewsCard = memo(function ProfessorPastExamNewsCard({
                   </span>
                 )}
               </div>
-              <div className="px-4 pb-3 pt-2 flex gap-2">
+              <div className="px-3 pb-3 pt-1.5 flex gap-2">
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onDetails(filteredQuiz); }}
@@ -741,7 +741,7 @@ function CourseRibbonHeader({
     <div className="flex flex-col items-center">
       {/* 리본 이미지 — 터치/마우스 드래그로 과목 전환 */}
       <div
-        className="w-full h-[260px] pt-2 cursor-grab active:cursor-grabbing select-none"
+        className="w-full h-[160px] mt-2 cursor-grab active:cursor-grabbing select-none"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -1375,7 +1375,7 @@ export default function ProfessorQuizListPage() {
       </header>
 
       {/* 뉴스 캐러셀 (중간/기말/기출) */}
-      <section className="mt-6 mb-8">
+      <section className="mt-6" style={{ transform: 'scale(0.85)', transformOrigin: 'top center', width: '117.65%', marginLeft: '-8.825%', marginBottom: '-16px' }}>
         <ProfessorNewsCarousel
           midtermQuizzes={filteredMidterm}
           finalQuizzes={filteredFinal}
@@ -1575,13 +1575,13 @@ export default function ProfessorQuizListPage() {
           <div className="flex justify-end mb-2">
             <button
               onClick={() => setShowTagFilter(!showTagFilter)}
-              className={`flex items-center justify-center w-11 h-11 border transition-colors shrink-0 ${
+              className={`flex items-center justify-center w-9 h-9 border transition-colors shrink-0 ${
                 showTagFilter
                   ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
                   : 'bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A]'
               }`}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
               </svg>
             </button>
@@ -1594,7 +1594,7 @@ export default function ProfessorQuizListPage() {
             {selectedTags.map((tag) => (
               <div
                 key={tag}
-                className="flex items-center gap-1 px-2 py-1 bg-[#F5F0E8] text-[#1A1A1A] text-sm font-bold border border-[#1A1A1A]"
+                className="flex items-center gap-1 px-2.5 h-9 bg-[#F5F0E8] text-[#1A1A1A] text-sm font-bold border border-[#1A1A1A]"
               >
                 #{tag}
                 <button
@@ -1958,50 +1958,50 @@ export default function ProfessorQuizListPage() {
         isOpen={!!detailsQuiz}
         onClose={() => { setDetailsQuiz(null); clearDetailsRect(); }}
         sourceRect={detailsSourceRect}
-        className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
+        className="w-full max-w-[300px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
       >
         {detailsQuiz && (
           <>
-            <h2 className="text-lg font-bold text-[#1A1A1A] mb-2">{detailsQuiz.title}</h2>
+            <h2 className="text-sm font-bold text-[#1A1A1A] mb-2">{detailsQuiz.title}</h2>
 
             {/* 총평 */}
             {detailsQuiz.description && (
-              <p className="text-sm text-[#5C5C5C] mb-4 line-clamp-3">&ldquo;{detailsQuiz.description}&rdquo;</p>
+              <p className="text-xs text-[#5C5C5C] mb-3 line-clamp-3">&ldquo;{detailsQuiz.description}&rdquo;</p>
             )}
-            {!detailsQuiz.description && <div className="mb-2" />}
+            {!detailsQuiz.description && <div className="mb-1" />}
 
             {/* 평균 점수 대형 박스 */}
-            <div className="text-center py-4 mb-4 border-2 border-dashed border-[#1A1A1A] bg-[#EDEAE4]">
-              <p className="text-xs text-[#5C5C5C] mb-1">평균 점수</p>
-              <p className="text-4xl font-black text-[#1A1A1A]">
+            <div className="text-center py-2 mb-2 border-2 border-dashed border-[#1A1A1A] bg-[#EDEAE4]">
+              <p className="text-[10px] text-[#5C5C5C] mb-0.5">평균 점수</p>
+              <p className="text-2xl font-black text-[#1A1A1A]">
                 {detailsQuiz.participantCount > 0
-                  ? <>{(detailsQuiz.averageScore ?? 0).toFixed(0)}<span className="text-lg font-bold">점</span></>
+                  ? <>{(detailsQuiz.averageScore ?? 0).toFixed(0)}<span className="text-xs font-bold">점</span></>
                   : '-'}
               </p>
             </div>
 
-            <div className="space-y-2 mb-6">
-              <div className="flex justify-between text-sm">
+            <div className="space-y-1.5 mb-4">
+              <div className="flex justify-between text-xs">
                 <span className="text-[#5C5C5C]">문제 수</span>
                 <span className="font-bold text-[#1A1A1A]">{detailsQuiz.questionCount}문제</span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-xs">
                 <span className="text-[#5C5C5C]">참여자</span>
                 <span className="font-bold text-[#1A1A1A]">{detailsQuiz.participantCount}명</span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-xs">
                 <span className="text-[#5C5C5C]">난이도</span>
                 <span className="font-bold text-[#1A1A1A]">
                   {detailsQuiz.difficulty === 'easy' ? '쉬움' : detailsQuiz.difficulty === 'hard' ? '어려움' : '보통'}
                 </span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-xs">
                 <span className="text-[#5C5C5C]">문제 유형</span>
                 <span className="font-bold text-[#1A1A1A]">
                   {formatQuestionTypes(detailsQuiz)}
                 </span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-xs">
                 <span className="text-[#5C5C5C]">제작자</span>
                 <span className="font-bold text-[#1A1A1A]">
                   {detailsCreatorInfo?.role === 'professor'
@@ -2015,16 +2015,16 @@ export default function ProfessorQuizListPage() {
                 const fb = feedbackMap[detailsQuiz.id];
                 const label = fb ? getFeedbackLabel(fb.score) : null;
                 return fb && label && fb.count > 0 ? (
-                  <div className="flex justify-between text-sm items-center">
+                  <div className="flex justify-between text-xs items-center">
                     <span className="text-[#5C5C5C]">피드백</span>
                     <div className="flex items-center gap-1.5">
                       <span
-                        className="text-xs font-bold px-1.5 py-0.5 border"
+                        className="text-[10px] font-bold px-1.5 py-0.5 border"
                         style={{ color: label.color, borderColor: label.color }}
                       >
                         {label.label}
                       </span>
-                      <span className="text-xs text-[#5C5C5C]">{fb.count}건</span>
+                      <span className="text-[10px] text-[#5C5C5C]">{fb.count}건</span>
                     </div>
                   </div>
                 ) : null;
@@ -2036,7 +2036,7 @@ export default function ProfessorQuizListPage() {
                     {detailsQuiz.tags.map((tag) => (
                       <span
                         key={tag}
-                        className="px-2 py-1 bg-[#1A1A1A] text-[#F5F0E8] text-sm font-medium"
+                        className="px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-medium"
                       >
                         #{tag}
                       </span>
@@ -2049,7 +2049,7 @@ export default function ProfessorQuizListPage() {
             <div className="flex gap-2">
               <button
                 onClick={() => { setDetailsQuiz(null); clearDetailsRect(); }}
-                className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+                className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
               >
                 닫기
               </button>
@@ -2061,7 +2061,7 @@ export default function ProfessorQuizListPage() {
                     clearDetailsRect();
                     router.push(`/professor/quiz/${quiz.id}/preview`);
                   }}
-                  className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+                  className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
                 >
                   미리보기
                 </button>
@@ -2072,15 +2072,13 @@ export default function ProfessorQuizListPage() {
       </ExpandModal>
 
       {/* Stats 모달 */}
-      {statsQuizId && (
-        <QuizStatsModal
-          quizId={statsQuizId.id}
-          quizTitle={statsQuizId.title}
-          isOpen={true}
-          onClose={() => setStatsQuizId(null)}
-          isProfessor
-        />
-      )}
+      <QuizStatsModal
+        quizId={statsQuizId?.id || ''}
+        quizTitle={statsQuizId?.title || ''}
+        isOpen={!!statsQuizId}
+        onClose={() => setStatsQuizId(null)}
+        isProfessor
+      />
 
       {/* 공개 확인 모달 */}
       <AnimatePresence>
@@ -2093,31 +2091,32 @@ export default function ProfessorQuizListPage() {
             onClick={() => setPublishConfirmQuizId(null)}
           >
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
+              initial={{ scale: 0.88, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
+              exit={{ scale: 0.88, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-xs bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
+              className="w-full max-w-[280px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
             >
-              <div className="flex justify-center mb-4">
-                <div className="w-12 h-12 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
-                  <svg className="w-6 h-6 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="flex justify-center mb-3">
+                <div className="w-9 h-9 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
+                  <svg className="w-4 h-4 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.6 9h16.8M3.6 15h16.8" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3a15.3 15.3 0 0 1 4 9 15.3 15.3 0 0 1-4 9 15.3 15.3 0 0 1-4-9 15.3 15.3 0 0 1 4-9z" />
                   </svg>
                 </div>
               </div>
-              <h3 className="text-center font-bold text-lg text-[#1A1A1A] mb-2">
+              <h3 className="text-center font-bold text-sm text-[#1A1A1A] mb-2">
                 퀴즈를 공개할까요?
               </h3>
-              <p className="text-center text-sm text-[#5C5C5C] mb-6">
+              <p className="text-center text-xs text-[#5C5C5C] mb-4">
                 공개하면 학생들이 풀 수 있어요.
               </p>
-              <div className="flex gap-3">
+              <div className="flex gap-2">
                 <button
                   onClick={() => setPublishConfirmQuizId(null)}
-                  className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+                  className="flex-1 py-1.5 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
                 >
                   취소
                 </button>
@@ -2133,7 +2132,7 @@ export default function ProfessorQuizListPage() {
                     }
                     setPublishConfirmQuizId(null);
                   }}
-                  className="flex-1 py-3 font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
+                  className="flex-1 py-1.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
                 >
                   공개
                 </button>

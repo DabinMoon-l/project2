@@ -71,9 +71,9 @@ interface Announcement {
 // ─── 상수 ───────────────────────────────────────────────
 
 const REACTION_EMOJIS = ['❤️', '👍', '🔥', '😂', '😮', '😢'];
-const BUBBLE_C = 14;
-const BUBBLE_SIDE_MULTI = 26; // 다중 아이템 버블 좌우 패딩 (화살표 공간)
-const ARROW_ZONE = 30; // BUBBLE_SIDE_MULTI + content px-1(4px) = 화살표 영역 너비
+const BUBBLE_C = 10;
+const BUBBLE_SIDE_MULTI = 20; // 다중 아이템 버블 좌우 패딩 (화살표 공간)
+const ARROW_ZONE = 24; // BUBBLE_SIDE_MULTI + content px-1(4px) = 화살표 영역 너비
 
 // ─── 유틸 ───────────────────────────────────────────────
 
@@ -251,8 +251,8 @@ const FileCarousel = memo(function FileCarousel({ files }: { files: FileAttachme
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
       </svg>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-[#1A1A1A] truncate">{f.name}</p>
-        {f.size > 0 && <p className="text-xs text-[#8C8478]">{fmtSize(f.size)}</p>}
+        <p className="text-xs font-medium text-[#1A1A1A] truncate">{f.name}</p>
+        {f.size > 0 && <p className="text-[10px] text-[#8C8478]">{fmtSize(f.size)}</p>}
       </div>
       <svg className="w-4 h-4 text-[#8C8478] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
@@ -605,7 +605,7 @@ const MessageContent = memo(function MessageContent({ content }: { content: stri
   const linked = linkify(content);
   return (
     <p
-      className="text-base text-[#1A1A1A] whitespace-pre-wrap break-words leading-snug"
+      className="text-sm text-[#1A1A1A] whitespace-pre-wrap break-words leading-snug"
       style={{ overflowWrap: 'anywhere' }}
     >
       {linked}
@@ -684,15 +684,15 @@ const MediaDrawer = memo(function MediaDrawer({
       <motion.div
         initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
         transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-        className="absolute left-0 top-0 bottom-0 w-[280px] z-30 flex flex-col bg-black/60 backdrop-blur-2xl"
+        className="absolute left-0 top-0 bottom-0 w-[220px] z-30 flex flex-col bg-black/60 backdrop-blur-2xl"
       >
-        <div className="flex items-center gap-3 px-4 h-[52px] shrink-0 border-b border-white/10">
+        <div className="flex items-center gap-2 px-3 h-[44px] shrink-0 border-b border-white/10">
           <button onClick={onBack} className="p-1">
-            <svg className="w-5 h-5 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <span className="font-bold text-white/90 text-base">
+          <span className="font-bold text-white/90 text-sm">
             {filter === 'images' ? '이미지' : filter === 'files' ? '파일' : '미디어 · 파일'}
           </span>
         </div>
@@ -717,7 +717,7 @@ const MediaDrawer = memo(function MediaDrawer({
                   {hasMoreImages && (
                     <button
                       onClick={() => onFilterChange('images')}
-                      className="w-full mt-2 py-2 text-sm text-white/60 hover:text-white/80 border border-white/10 rounded-lg hover:bg-white/5 transition-colors"
+                      className="w-full mt-1.5 py-1.5 text-xs text-white/60 hover:text-white/80 border border-white/10 rounded-lg hover:bg-white/5 transition-colors"
                     >
                       더보기
                     </button>
@@ -751,7 +751,7 @@ const MediaDrawer = memo(function MediaDrawer({
                   {hasMoreFiles && (
                     <button
                       onClick={() => onFilterChange('files')}
-                      className="w-full mt-2 py-2 text-sm text-white/60 hover:text-white/80 border border-white/10 rounded-lg hover:bg-white/5 transition-colors"
+                      className="w-full mt-1.5 py-1.5 text-xs text-white/60 hover:text-white/80 border border-white/10 rounded-lg hover:bg-white/5 transition-colors"
                     >
                       더보기
                     </button>
@@ -1001,9 +1001,9 @@ const AnnouncementMessageItem = memo(function AnnouncementMessageItem({
         </div>
       )}
       <div className={`flex gap-2 ${isOwnProfessor ? 'flex-row-reverse' : ''} ${isHighlighted ? 'bg-black/15 rounded-xl p-1 -m-1' : ''}`}>
-        <img src="/notice/avatar_professor.png" alt="교수님" className="w-14 h-14 shrink-0 object-cover rounded-full mt-0.5" />
+        <img src="/notice/avatar_professor.png" alt="교수님" className="w-10 h-10 shrink-0 object-cover rounded-full mt-0.5" />
         <div className={`min-w-0 ${editing ? 'w-[65%]' : (useFullWidth ? 'w-[65%]' : 'max-w-[65%]')} ${isOwnProfessor ? 'flex flex-col items-end' : ''}`}>
-          <p className={`text-base font-bold text-white/70 mb-0.5 ${isOwnProfessor ? 'text-right' : ''}`}>Prof. Kim</p>
+          <p className={`text-xs font-bold text-white/70 mb-0.5 ${isOwnProfessor ? 'text-right' : ''}`}>Prof. Kim</p>
           <div className={`flex items-center gap-1.5 ${useFullWidth || editing ? 'self-stretch' : ''}`}
             style={{ flexDirection: isOwnProfessor ? 'row' : 'row-reverse' }}
           >
@@ -1177,16 +1177,16 @@ const AnnouncementMessageItem = memo(function AnnouncementMessageItem({
           <div className={`flex items-center gap-1 mt-1 relative flex-wrap ${isOwnProfessor ? 'flex-row-reverse' : ''}`}>
             {reactions.map(([emoji, uids]) => (
               <button key={emoji} onClick={() => onReaction(a.id, emoji)}
-                className={`text-sm px-1 py-0.5 rounded border ${profileUid && uids.includes(profileUid) ? 'border-white/40 bg-white/20' : 'border-white/20 bg-white/10'}`}
+                className={`text-xs px-1 py-px rounded border ${profileUid && uids.includes(profileUid) ? 'border-white/40 bg-white/20' : 'border-white/20 bg-white/10'}`}
               >
-                {emoji} <span className="text-xs text-white/60">{uids.length}</span>
+                {emoji} <span className="text-[10px] text-white/60">{uids.length}</span>
               </button>
             ))}
             <button
               onClick={(e) => { e.stopPropagation(); onToggleEmojiPicker(showEmojiPickerForThis ? null : a.id); }}
               className="text-white/30 hover:text-white/60 transition-colors"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </button>
@@ -1196,7 +1196,7 @@ const AnnouncementMessageItem = memo(function AnnouncementMessageItem({
                 onClick={(e) => e.stopPropagation()}
               >
                 {REACTION_EMOJIS.map((em) => (
-                  <button key={em} onClick={() => onReaction(a.id, em)} className="text-lg hover:scale-110 transition-transform">{em}</button>
+                  <button key={em} onClick={() => onReaction(a.id, em)} className="text-sm hover:scale-110 transition-transform">{em}</button>
                 ))}
               </div>
             )}
@@ -1664,7 +1664,7 @@ export default function AnnouncementChannel({
             setShowModal(true);
           }} className="w-full text-left flex items-center">
             <div className="flex-1 min-w-0">
-              <p className="text-2xl font-bold text-white truncate leading-tight">{raw}</p>
+              <p className="text-3xl font-bold text-white truncate leading-tight">{raw}</p>
             </div>
             <div className="flex-shrink-0 ml-3 self-center">
               <svg className="w-6 h-6 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1682,7 +1682,7 @@ export default function AnnouncementChannel({
           {showModal && (
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-end bg-black/40"
+              className="fixed inset-0 z-[110] flex items-end bg-black/40"
               onClick={closeModal}
             >
               <motion.div

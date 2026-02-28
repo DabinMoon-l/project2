@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Input } from '@/components/common';
 import { getCourseIndex } from '@/lib/courseIndex';
 
 // ============================================================
@@ -44,7 +43,7 @@ interface QuizMetaFormProps {
 // ============================================================
 
 /** 제목 최대 글자수 */
-const TITLE_MAX_LENGTH = 20;
+const TITLE_MAX_LENGTH = 10;
 
 /** 사용자 직접 입력 태그 최대 글자수 */
 const CUSTOM_TAG_MAX_LENGTH = 10;
@@ -190,20 +189,31 @@ export default function QuizMetaForm({
     <div className={`space-y-6 ${className}`}>
       {/* 퀴즈 제목 */}
       <div>
-        <Input
-          label={`퀴즈 제목 (${meta.title.length}/${TITLE_MAX_LENGTH})`}
+        <label className="block text-xs font-bold text-[#1A1A1A] mb-1.5">
+          퀴즈 제목 ({meta.title.length}/{TITLE_MAX_LENGTH})
+        </label>
+        <input
+          type="text"
           value={meta.title}
           onChange={handleTitleChange}
           placeholder="예: 1주차 복습 퀴즈"
-          error={errors.title}
           maxLength={TITLE_MAX_LENGTH}
-          helperText="다른 학생들이 퀴즈를 찾을 때 도움이 되는 제목을 입력하세요."
+          className={`
+            w-full px-2 py-1.5 text-xs
+            bg-[#F5F0E8] border-2
+            outline-none transition-colors duration-200
+            placeholder:text-[#999]
+            ${errors.title ? 'border-[#8B1A1A]' : 'border-[#1A1A1A]'}
+          `}
         />
+        {errors.title && (
+          <p className="mt-1 text-xs text-[#8B1A1A]">{errors.title}</p>
+        )}
       </div>
 
       {/* 태그 */}
       <div>
-        <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
+        <label className="block text-xs font-bold text-[#1A1A1A] mb-1.5">
           태그
           <span className="ml-1 text-[#5C5C5C] font-normal">(최대 5개)</span>
         </label>
@@ -211,8 +221,8 @@ export default function QuizMetaForm({
         {/* 태그 입력 영역 */}
         <div
           className={`
-            flex flex-wrap items-center gap-2
-            p-3 border-2 bg-[#F5F0E8]
+            flex flex-wrap items-center gap-1.5
+            p-2 border-2 bg-[#F5F0E8]
             transition-colors duration-200
             ${
               errors.tags
@@ -232,9 +242,9 @@ export default function QuizMetaForm({
                 layout
                 className="
                   inline-flex items-center gap-1
-                  px-2.5 py-1
+                  px-2 py-0.5
                   bg-[#1A1A1A] text-[#F5F0E8]
-                  text-sm font-bold
+                  text-xs font-bold
                 "
               >
                 #{tag}
@@ -268,7 +278,7 @@ export default function QuizMetaForm({
               onKeyDown={handleTagKeyDown}
               placeholder={meta.tags.length === 0 ? '태그 입력 (10자)' : ''}
               maxLength={CUSTOM_TAG_MAX_LENGTH}
-              className="flex-1 min-w-[100px] py-1 px-1 outline-none text-sm bg-transparent"
+              className="flex-1 min-w-[80px] py-0.5 px-1 outline-none text-xs bg-transparent"
             />
           )}
         </div>
@@ -280,7 +290,7 @@ export default function QuizMetaForm({
         {/* 시험 유형 태그 (필수) */}
         <div className="mt-3">
           <p className="text-xs text-[#5C5C5C] mb-2">
-            시험 유형 <span className="text-[#8B1A1A]">*필수</span>
+            시험 유형
           </p>
           <div className="flex flex-wrap gap-2">
             {EXAM_TYPE_TAGS.map((tag) => {
@@ -311,7 +321,7 @@ export default function QuizMetaForm({
         {chapterTags.length > 0 && (
           <div className="mt-3">
             <p className="text-xs text-[#5C5C5C] mb-2">
-              챕터 <span className="text-[#8B1A1A]">*필수</span>
+              챕터
             </p>
             <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
               {chapterTags.map((tag) => {
@@ -325,8 +335,8 @@ export default function QuizMetaForm({
                     className={`
                       px-2.5 py-1 text-xs font-bold border transition-colors
                       ${isSelected
-                        ? 'bg-[#4A6DA7] text-[#F5F0E8] border-[#4A6DA7]'
-                        : 'bg-[#E8F0FE] text-[#4A6DA7] border-[#4A6DA7] hover:bg-[#4A6DA7] hover:text-[#F5F0E8]'
+                        ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                        : 'bg-[#EDEAE4] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
                       }
                       disabled:opacity-50 disabled:cursor-not-allowed
                     `}
@@ -343,7 +353,7 @@ export default function QuizMetaForm({
 
       {/* 난이도 */}
       <div>
-        <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
+        <label className="block text-xs font-bold text-[#1A1A1A] mb-1.5">
           난이도
         </label>
         <div className="flex gap-2">
@@ -355,8 +365,8 @@ export default function QuizMetaForm({
               whileTap={{ scale: 0.98 }}
               onClick={() => handleDifficultyChange(option.value)}
               className={`
-                flex-1 py-2.5 px-4
-                font-bold text-sm
+                flex-1 py-1.5 px-3
+                font-bold text-xs
                 border-2 transition-all duration-200
                 ${
                   meta.difficulty === option.value

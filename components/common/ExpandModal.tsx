@@ -1,26 +1,27 @@
 'use client';
 
-import { useRef, useLayoutEffect, useState, useEffect, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
-import { SPRING_EXPAND, SPRING_COLLAPSE } from '@/lib/constants/springs';
 import type { SourceRect } from '@/lib/hooks/useExpandSource';
+
+const SPRING_GENIE = { type: 'spring' as const, stiffness: 400, damping: 30 };
 
 interface ExpandModalProps {
   isOpen: boolean;
   onClose: () => void;
-  sourceRect: SourceRect | null; // null이면 센터 페이드인 폴백
+  /** 클릭한 요소의 위치 — 요술지니 애니메이션 원점 */
+  sourceRect?: SourceRect | null;
   children: React.ReactNode;
-  className?: string; // 모달 내부 스타일
-  zIndex?: number; // 기본 50
+  className?: string;
+  zIndex?: number;
 }
 
 /**
- * Apple Music 스타일 확장/축소 모달
+ * 요술지니 스타일 모달
  *
- * sourceRect가 있으면 해당 위치에서 확장, 없으면 센터 페이드인 폴백.
- * GPU 가속 transform만 사용 (top/left/width/height 애니메이션 NO).
+ * sourceRect가 있으면: 클릭한 버튼/카드 위치에서 모달이 나오고, 닫으면 다시 돌아감
+ * sourceRect가 없으면: 중앙 scale 애니메이션 (fallback)
  */
 export default function ExpandModal({
   isOpen,
@@ -30,33 +31,20 @@ export default function ExpandModal({
   className = '',
   zIndex = 50,
 }: ExpandModalProps) {
-  const prefersReducedMotion = useReducedMotion();
-  const contentRef = useRef<HTMLDivElement>(null);
-  const [transform, setTransform] = useState<{
-    dx: number;
-    dy: number;
-    scaleX: number;
-    scaleY: number;
-  } | null>(null);
-  const [contentVisible, setContentVisible] = useState(false);
   const [mounted, setMounted] = useState(false);
+  // 모달이 열릴 때 sourceRect를 캡처 (닫힐 때 부모가 clearRect해도 exit 애니메이션 유지)
+  const capturedRef = useRef<SourceRect | null>(null);
 
-  // 클라이언트 마운트 확인
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // 네비게이션 숨김
+  // 모달 열릴 때 sourceRect 캡처
   useEffect(() => {
-    if (isOpen) {
-      document.body.setAttribute('data-hide-nav', '');
-    } else {
-      document.body.removeAttribute('data-hide-nav');
+    if (isOpen && sourceRect) {
+      capturedRef.current = sourceRect;
     }
-    return () => {
-      document.body.removeAttribute('data-hide-nav');
-    };
-  }, [isOpen]);
+  }, [isOpen, sourceRect]);
 
   // ESC 키로 닫기
   useEffect(() => {
@@ -68,69 +56,34 @@ export default function ExpandModal({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  // 소스 rect → 타겟 rect 간의 transform 계산
-  useLayoutEffect(() => {
-    if (!isOpen || !sourceRect || !contentRef.current || prefersReducedMotion) {
-      setTransform(null);
-      return;
-    }
-
-    // 약간의 지연으로 DOM 렌더 완료 보장
-    const frame = requestAnimationFrame(() => {
-      const targetEl = contentRef.current;
-      if (!targetEl) return;
-
-      const targetRect = targetEl.getBoundingClientRect();
-
-      // 소스 중심점과 타겟 중심점의 차이
-      const sourceCenterX = sourceRect.x + sourceRect.width / 2;
-      const sourceCenterY = sourceRect.y + sourceRect.height / 2;
-      const targetCenterX = targetRect.left + targetRect.width / 2;
-      const targetCenterY = targetRect.top + targetRect.height / 2;
-
-      const dx = sourceCenterX - targetCenterX;
-      const dy = sourceCenterY - targetCenterY;
-
-      // 크기 비율
-      const scaleX = sourceRect.width / targetRect.width;
-      const scaleY = sourceRect.height / targetRect.height;
-
-      setTransform({ dx, dy, scaleX, scaleY });
-    });
-
-    return () => cancelAnimationFrame(frame);
-  }, [isOpen, sourceRect, prefersReducedMotion]);
-
-  // 콘텐츠 페이드인 (확장 완료 후)
-  const handleAnimationComplete = useCallback(() => {
-    if (isOpen) {
-      setContentVisible(true);
-    }
-  }, [isOpen]);
-
-  // 열릴 때 콘텐츠 숨기기 리셋
-  useEffect(() => {
-    if (isOpen && sourceRect && !prefersReducedMotion) {
-      setContentVisible(false);
-    } else if (isOpen) {
-      // 폴백 또는 reduced motion: 즉시 표시
-      setContentVisible(true);
-    }
-  }, [isOpen, sourceRect, prefersReducedMotion]);
-
   if (!mounted) return null;
 
-  // 확장 애니메이션 사용 여부
-  const useExpand = sourceRect && transform && !prefersReducedMotion;
+  // 요술지니 initial/exit 계산
+  const rect = capturedRef.current || sourceRect;
+  let genieInitial: Record<string, number>;
+  let genieAnimate: Record<string, number>;
+
+  if (rect && typeof window !== 'undefined') {
+    const viewCenterX = window.innerWidth / 2;
+    const viewCenterY = window.innerHeight / 2;
+    const srcCenterX = rect.x + rect.width / 2;
+    const srcCenterY = rect.y + rect.height / 2;
+
+    genieInitial = {
+      opacity: 0,
+      scale: 0.15,
+      x: srcCenterX - viewCenterX,
+      y: srcCenterY - viewCenterY,
+    };
+    genieAnimate = { opacity: 1, scale: 1, x: 0, y: 0 };
+  } else {
+    // sourceRect 없으면 중앙 scale fallback
+    genieInitial = { opacity: 0, scale: 0.88 };
+    genieAnimate = { opacity: 1, scale: 1 };
+  }
 
   const modalContent = (
-    <AnimatePresence
-      mode="wait"
-      onExitComplete={() => {
-        setContentVisible(false);
-        setTransform(null);
-      }}
-    >
+    <AnimatePresence>
       {isOpen && (
         <>
           {/* 백드롭 */}
@@ -153,60 +106,15 @@ export default function ExpandModal({
             style={{ zIndex: zIndex + 1 }}
           >
             <motion.div
-              ref={contentRef}
               key="expand-content"
               className={`pointer-events-auto ${className}`}
               onClick={(e) => e.stopPropagation()}
-              initial={
-                useExpand
-                  ? {
-                      x: transform.dx,
-                      y: transform.dy,
-                      scaleX: transform.scaleX,
-                      scaleY: transform.scaleY,
-                      opacity: 0.5,
-                    }
-                  : prefersReducedMotion
-                    ? { opacity: 0 }
-                    : { opacity: 0, scale: 0.95 }
-              }
-              animate={
-                useExpand
-                  ? { x: 0, y: 0, scaleX: 1, scaleY: 1, opacity: 1 }
-                  : { opacity: 1, scale: 1 }
-              }
-              exit={
-                useExpand
-                  ? {
-                      x: transform.dx,
-                      y: transform.dy,
-                      scaleX: transform.scaleX,
-                      scaleY: transform.scaleY,
-                      opacity: 0,
-                    }
-                  : prefersReducedMotion
-                    ? { opacity: 0 }
-                    : { opacity: 0, scale: 0.95 }
-              }
-              transition={
-                prefersReducedMotion
-                  ? { duration: 0.15 }
-                  : isOpen
-                    ? SPRING_EXPAND
-                    : SPRING_COLLAPSE
-              }
-              onAnimationComplete={handleAnimationComplete}
-              style={{ transformOrigin: 'center center', willChange: 'transform, opacity' }}
+              initial={genieInitial}
+              animate={genieAnimate}
+              exit={genieInitial}
+              transition={SPRING_GENIE}
             >
-              {/* 콘텐츠 페이드 래퍼: 확장 중에는 숨기고, 완료 후 표시 */}
-              <div
-                style={{
-                  opacity: useExpand && !contentVisible ? 0 : 1,
-                  transition: 'opacity 150ms ease-out',
-                }}
-              >
-                {children}
-              </div>
+              {children}
             </motion.div>
           </div>
         </>

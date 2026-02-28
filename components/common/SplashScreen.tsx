@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import Image from 'next/image';
 
 interface SplashScreenProps {
   children: React.ReactNode;
@@ -57,28 +56,6 @@ export default function SplashScreen({ children }: SplashScreenProps) {
               {/* 어두운 오버레이 */}
               <div className="absolute inset-0 bg-black/40" />
             </div>
-
-            {/* 로고 - 상단에서 30% 위치 */}
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{
-                duration: 0.6,
-                ease: [0.34, 1.56, 0.64, 1], // 바운스 효과
-                delay: 0.2
-              }}
-              className="relative z-10 mt-[15vh]"
-            >
-              <Image
-                src="/images/logo.png"
-                alt="RabbiTory"
-                width={360}
-                height={360}
-                priority
-                className="drop-shadow-2xl"
-                style={{ width: 'auto', height: 'auto' }}
-              />
-            </motion.div>
 
             {/* 로딩 인디케이터 */}
             <motion.div

@@ -8,6 +8,7 @@ import {
   useCallback,
   useRef,
   type ReactNode,
+  type MutableRefObject,
 } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
@@ -30,11 +31,16 @@ interface MilestoneContextValue {
   openMilestoneModal: () => void;
   closeMilestoneModal: () => void;
 
+  // 별 버튼 ref (요술지니 origin용)
+  milestoneButtonRef: MutableRefObject<HTMLElement | null>;
+  buttonRect: { x: number; y: number; width: number; height: number } | null;
+
   // 외부 모달 억제 (도감/철권퀴즈 등)
   suppressAutoTrigger: boolean;
   setSuppressAutoTrigger: (v: boolean) => void;
 }
 
+const defaultRef = { current: null };
 const MilestoneContext = createContext<MilestoneContextValue | null>(null);
 
 export function useMilestone() {
@@ -52,6 +58,10 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
   const [showMilestoneModal, setShowMilestoneModal] = useState(false);
   const [showGachaModal, setShowGachaModal] = useState(false);
   const [showLevelUpSheet, setShowLevelUpSheet] = useState(false);
+
+  // 별 버튼 ref + rect (요술지니 origin용)
+  const milestoneButtonRef = useRef<HTMLElement | null>(null);
+  const [buttonRect, setButtonRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
 
   // 뽑기 상태
   const [rollResult, setRollResult] = useState<RollResultData | null>(null);
@@ -73,23 +83,65 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
     ? holdings.filter((h) => h.courseId === userCourseId).length >= 80
     : false;
 
-  // 마일스톤 자동 트리거 (pendingCount가 0→>0 되면)
+  // 네비게이션 숨김 (마일스톤 관련 모달 중 하나라도 열려있을 때)
+  const milestoneNavHiddenRef = useRef(false);
   useEffect(() => {
+    const anyOpen = showMilestoneModal || showGachaModal || showLevelUpSheet;
+    if (anyOpen) {
+      document.body.setAttribute('data-hide-nav', '');
+      milestoneNavHiddenRef.current = true;
+    } else if (milestoneNavHiddenRef.current) {
+      // 우리가 설정한 경우에만 제거
+      document.body.removeAttribute('data-hide-nav');
+      milestoneNavHiddenRef.current = false;
+    }
+    return () => {
+      if (milestoneNavHiddenRef.current) {
+        document.body.removeAttribute('data-hide-nav');
+        milestoneNavHiddenRef.current = false;
+      }
+    };
+  }, [showMilestoneModal, showGachaModal, showLevelUpSheet]);
+
+  // 프로필 초기 로드 완료 여부 (초기 로드 시 자동 트리거 방지)
+  const profileStableRef = useRef(false);
+
+  // 마일스톤 자동 트리거 (세션 중 pendingCount가 0→>0 되었을 때만)
+  useEffect(() => {
+    // 프로필이 아직 로드 안 됨 — 무시
+    if (!profile) {
+      prevPendingRef.current = 0;
+      return;
+    }
+
+    // 프로필 최초 로드 완료 — 현재 값 기록만, 자동 트리거 안 함
+    if (!profileStableRef.current) {
+      profileStableRef.current = true;
+      prevPendingRef.current = pendingCount;
+      return;
+    }
+
     if (
       pendingCount > 0 &&
+      prevPendingRef.current === 0 &&
       !showMilestoneModal &&
       !showGachaModal &&
       !showLevelUpSheet &&
       !suppressAutoTrigger
     ) {
-      if (prevPendingRef.current === null || prevPendingRef.current === 0) {
-        const timer = setTimeout(() => setShowMilestoneModal(true), 600);
-        prevPendingRef.current = pendingCount;
-        return () => clearTimeout(timer);
-      }
+      const timer = setTimeout(() => {
+        // 별 버튼 위치 캡쳐 (자동 트리거)
+        if (milestoneButtonRef.current) {
+          const r = milestoneButtonRef.current.getBoundingClientRect();
+          setButtonRect({ x: r.x, y: r.y, width: r.width, height: r.height });
+        }
+        setShowMilestoneModal(true);
+      }, 600);
+      prevPendingRef.current = pendingCount;
+      return () => clearTimeout(timer);
     }
     prevPendingRef.current = pendingCount;
-  }, [pendingCount, showMilestoneModal, showGachaModal, showLevelUpSheet, suppressAutoTrigger]);
+  }, [profile, pendingCount, showMilestoneModal, showGachaModal, showLevelUpSheet, suppressAutoTrigger]);
 
   // 마일스톤 모달 → 선택
   const handleChooseGacha = useCallback(() => {
@@ -153,8 +205,16 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
     expBar,
     allRabbitsDiscovered,
     showMilestoneModal,
-    openMilestoneModal: () => setShowMilestoneModal(true),
+    openMilestoneModal: () => {
+      if (milestoneButtonRef.current) {
+        const r = milestoneButtonRef.current.getBoundingClientRect();
+        setButtonRect({ x: r.x, y: r.y, width: r.width, height: r.height });
+      }
+      setShowMilestoneModal(true);
+    },
     closeMilestoneModal: () => setShowMilestoneModal(false),
+    milestoneButtonRef,
+    buttonRect,
     suppressAutoTrigger,
     setSuppressAutoTrigger,
   };
@@ -171,6 +231,7 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
         onChooseLevelUp={handleChooseLevelUp}
         onChooseGacha={handleChooseGacha}
         allRabbitsDiscovered={allRabbitsDiscovered}
+        buttonRect={buttonRect}
       />
 
       {/* 레벨업 바텀시트 */}

@@ -11,6 +11,10 @@ import { isImageFile, isPDFFile, isSupportedFile, checkFileSize } from '@/lib/oc
 interface ImageUploaderProps {
   /** 파일 선택 시 콜백 */
   onFileSelect: (file: File) => void;
+  /** 이미지 추출 버튼 클릭 콜백 */
+  onExtractClick?: () => void;
+  /** 이미지 추출 처리 중 */
+  isExtractProcessing?: boolean;
   /** 로딩 상태 */
   isLoading?: boolean;
   /** 에러 메시지 */
@@ -31,6 +35,8 @@ interface ImageUploaderProps {
  */
 export default function ImageUploader({
   onFileSelect,
+  onExtractClick,
+  isExtractProcessing = false,
   isLoading = false,
   error,
   className = '',
@@ -244,12 +250,12 @@ export default function ImageUploader({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex flex-col items-center justify-center py-8"
+              className="flex flex-col items-center justify-center py-6"
             >
               {/* 업로드 아이콘 */}
-              <div className="w-16 h-16 bg-[#EDEAE4] flex items-center justify-center mb-4 border-2 border-[#1A1A1A]">
+              <div className="w-12 h-12 bg-[#EDEAE4] flex items-center justify-center mb-3 border-2 border-[#1A1A1A]">
                 <svg
-                  className="w-8 h-8 text-[#1A1A1A]"
+                  className="w-6 h-6 text-[#1A1A1A]"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -264,10 +270,10 @@ export default function ImageUploader({
               </div>
 
               {/* 안내 텍스트 */}
-              <p className="text-[#1A1A1A] text-center mb-2 font-bold">
+              <p className="text-sm text-[#1A1A1A] text-center mb-1 font-bold">
                 이미지 또는 PDF를 업로드하세요
               </p>
-              <p className="text-xs text-[#5C5C5C] text-center">
+              <p className="text-[10px] text-[#5C5C5C] text-center">
                 드래그 앤 드롭 또는 버튼 클릭
               </p>
             </motion.div>
@@ -285,40 +291,48 @@ export default function ImageUploader({
         />
       </motion.div>
 
-      {/* 갤러리/PDF 버튼 (카메라 버튼 제거) */}
+      {/* 갤러리/PDF + 이미지 추출 버튼 */}
       {!preview && !fileName && !isLoading && (
-        <div className="flex">
+        <div className="flex gap-2">
           <motion.button
             type="button"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => fileInputRef.current?.click()}
-            className="
-              flex-1
-              flex items-center justify-center gap-2
-              px-4 py-3
-              bg-[#1A1A1A]
-              text-[#F5F0E8] font-bold
-              border-2 border-[#1A1A1A]
-              hover:bg-[#333]
-              transition-colors
-            "
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
           >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            <span>갤러리 / PDF</span>
+            갤러리 / PDF
           </motion.button>
+          {onExtractClick && (
+            <motion.button
+              type="button"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={onExtractClick}
+              disabled={isExtractProcessing}
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors disabled:opacity-50"
+            >
+              {isExtractProcessing ? (
+                <>
+                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  처리 중...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5" />
+                  </svg>
+                  이미지 추출
+                </>
+              )}
+            </motion.button>
+          )}
         </div>
       )}
 
@@ -347,11 +361,11 @@ export default function ImageUploader({
         )}
       </AnimatePresence>
 
-      {/* OCR 정확도 안내 */}
-      <div className="p-3 bg-[#FFF8E7] border border-[#D4A84B]">
+      {/* OCR 및 이미지 추출 안내 */}
+      <div className="p-2.5 bg-[#FFF8E7] border border-[#D4A84B]">
         <div className="flex items-start gap-2">
           <svg
-            className="w-5 h-5 text-[#D4A84B] flex-shrink-0 mt-0.5"
+            className="w-4 h-4 text-[#D4A84B] flex-shrink-0 mt-0.5"
             fill="currentColor"
             viewBox="0 0 20 20"
           >
@@ -361,11 +375,13 @@ export default function ImageUploader({
               clipRule="evenodd"
             />
           </svg>
-          <div className="text-xs text-[#8B6914]">
-            <p className="font-bold mb-1">OCR 인식 안내</p>
+          <div className="text-[11px] text-[#8B6914]">
+            <p className="font-bold mb-0.5">안내</p>
             <p>
-              OCR 기술로 텍스트를 추출하므로 100% 정확하지 않을 수 있습니다.
-              추출된 내용을 반드시 확인하고 수정해주세요.
+              <strong>갤러리/PDF:</strong> OCR로 텍스트를 추출합니다. 100% 정확하지 않을 수 있으니 확인 후 수정해주세요.
+            </p>
+            <p className="mt-0.5">
+              <strong>이미지 추출:</strong> 이미지/PDF/PPT에서 원하는 영역을 크롭하여 문제에 첨부합니다.
             </p>
           </div>
         </div>

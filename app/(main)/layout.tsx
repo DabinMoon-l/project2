@@ -39,7 +39,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
     pathname?.match(/^\/quiz\/[^/]+/) !== null ||
     pathname?.includes('/edit') ||
     pathname?.match(/^\/board\/[^/]+/) !== null ||
-    pathname === '/ranking' ||
+    pathname === '/ranking' || // 직접 URL 접근 시 (바텀시트 전환 전 하위 호환)
     pathname === '/review/random' ||
     pathname?.match(/^\/professor\/quiz\/[^/]+\/preview/) !== null ||
     pathname === '/quiz/create' ||

@@ -45,10 +45,10 @@ export default function FloatingAIButton({ onClick }: FloatingAIButtonProps) {
         onTouchEnd={() => setIsPressed(false)}
         className="fixed z-40 flex items-center justify-center"
         style={{
-          right: '-25px',
-          bottom: '100px',
-          width: '220px',
-          height: '220px',
+          right: '-20px',
+          bottom: '76px',
+          width: '160px',
+          height: '160px',
           filter: isPressed
             ? 'brightness(0.9) drop-shadow(3px 3px 0px #1A1A1A)'
             : 'drop-shadow(5px 5px 0px rgba(26, 26, 26, 0.25))',

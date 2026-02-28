@@ -117,14 +117,14 @@ export default function QuestionList({
         animate={{ opacity: 1 }}
         className={`
           flex flex-col items-center justify-center
-          py-12 px-6
+          py-8 px-4
           bg-[#F5F0E8] border-2 border-dashed border-[#1A1A1A]
           ${className}
         `}
       >
-        <div className="w-16 h-16 bg-[#EDEAE4] border-2 border-[#1A1A1A] flex items-center justify-center mb-4">
+        <div className="w-12 h-12 bg-[#EDEAE4] border-2 border-[#1A1A1A] flex items-center justify-center mb-3">
           <svg
-            className="w-8 h-8 text-[#5C5C5C]"
+            className="w-6 h-6 text-[#5C5C5C]"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -137,12 +137,10 @@ export default function QuestionList({
             />
           </svg>
         </div>
-        <p className="text-[#5C5C5C] text-center">
+        <p className="text-[#5C5C5C] text-center text-xs">
           아직 추가된 문제가 없습니다.
           <br />
-          <span className="text-sm">
-            OCR로 추출하거나 직접 문제를 추가해주세요.
-          </span>
+          직접 문제를 추가해주세요.
         </p>
       </motion.div>
     );
@@ -154,14 +152,14 @@ export default function QuestionList({
   return (
     <div className={className}>
       {/* 목록 헤더 */}
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-bold text-[#1A1A1A]">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-bold text-[#1A1A1A]">
           문제 목록
-          <span className="ml-2 text-sm font-normal text-[#5C5C5C]">
+          <span className="ml-1.5 text-xs font-normal text-[#5C5C5C]">
             ({totalQuestionCount}개)
           </span>
         </h3>
-        <p className="text-xs text-[#5C5C5C]">드래그하여 순서 변경</p>
+        <p className="text-[10px] text-[#5C5C5C]">드래그하여 순서 변경</p>
       </div>
 
       {/* 문제 목록 (드래그 가능) */}
@@ -182,11 +180,11 @@ export default function QuestionList({
               whileDrag={{ scale: 1.02, boxShadow: '4px 4px 0px #1A1A1A' }}
               className="relative"
             >
-              <div className="bg-[#F5F0E8] p-4 border-2 border-[#1A1A1A] cursor-grab active:cursor-grabbing">
+              <div className="bg-[#F5F0E8] p-3 border-2 border-[#1A1A1A] cursor-grab active:cursor-grabbing">
                 {/* 드래그 핸들 */}
-                <div className="absolute left-2 top-1/2 -translate-y-1/2 text-[#5C5C5C]">
+                <div className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[#5C5C5C]">
                   <svg
-                    className="w-5 h-5"
+                    className="w-4 h-4"
                     fill="currentColor"
                     viewBox="0 0 20 20"
                   >
@@ -195,12 +193,12 @@ export default function QuestionList({
                 </div>
 
                 {/* 문제 내용 */}
-                <div className="ml-6">
+                <div className="ml-5">
                   {/* 상단: 번호, 유형, 액션 버튼 */}
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-1.5">
                       {/* 문제 번호 */}
-                      <span className="w-7 h-7 bg-[#1A1A1A] text-[#F5F0E8] flex items-center justify-center text-sm font-bold">
+                      <span className="w-6 h-6 bg-[#1A1A1A] text-[#F5F0E8] flex items-center justify-center text-xs font-bold">
                         {index + 1}
                       </span>
 
@@ -445,13 +443,13 @@ export default function QuestionList({
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="relative bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6 max-w-sm w-full"
+              className="relative bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 max-w-[280px] w-full"
             >
               <div className="text-center">
                 {/* 아이콘 */}
-                <div className="w-12 h-12 bg-[#FDEAEA] border-2 border-[#8B1A1A] flex items-center justify-center mx-auto mb-4">
+                <div className="w-9 h-9 bg-[#FDEAEA] border-2 border-[#8B1A1A] flex items-center justify-center mx-auto mb-3">
                   <svg
-                    className="w-6 h-6 text-[#8B1A1A]"
+                    className="w-4 h-4 text-[#8B1A1A]"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -466,24 +464,24 @@ export default function QuestionList({
                 </div>
 
                 {/* 제목 */}
-                <h3 className="text-lg font-bold text-[#1A1A1A] mb-2">
+                <h3 className="text-sm font-bold text-[#1A1A1A] mb-1.5">
                   문제를 삭제할까요?
                 </h3>
 
                 {/* 설명 */}
-                <p className="text-sm text-[#5C5C5C] mb-6">
+                <p className="text-xs text-[#5C5C5C] mb-4">
                   문제 {deleteIndex + 1}번이 삭제됩니다.
                   <br />이 작업은 되돌릴 수 없습니다.
                 </p>
 
                 {/* 버튼 */}
-                <div className="flex gap-3">
+                <div className="flex gap-2">
                   <motion.button
                     type="button"
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => setDeleteIndex(null)}
-                    className="flex-1 py-2.5 px-4 bg-[#EDEAE4] text-[#1A1A1A] font-bold border-2 border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+                    className="flex-1 py-1.5 px-3 text-xs bg-[#EDEAE4] text-[#1A1A1A] font-bold border-2 border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
                   >
                     취소
                   </motion.button>
@@ -492,7 +490,7 @@ export default function QuestionList({
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => handleDelete(deleteIndex)}
-                    className="flex-1 py-2.5 px-4 bg-[#8B1A1A] text-[#F5F0E8] font-bold border-2 border-[#8B1A1A] hover:bg-[#6B1414] transition-colors"
+                    className="flex-1 py-1.5 px-3 text-xs bg-[#8B1A1A] text-[#F5F0E8] font-bold border-2 border-[#8B1A1A] hover:bg-[#6B1414] transition-colors"
                   >
                     삭제
                   </motion.button>

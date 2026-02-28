@@ -24,9 +24,9 @@ export default function RibbonBanner({
   className = '',
 }: RibbonBannerProps) {
   const sizeConfig = {
-    sm: { width: 200, height: 60, fontSize: 16, ribbonHeight: 32 },
-    md: { width: 280, height: 80, fontSize: 22, ribbonHeight: 44 },
-    lg: { width: 340, height: 100, fontSize: 28, ribbonHeight: 56 },
+    sm: { width: 160, height: 48, fontSize: 14, ribbonHeight: 26 },
+    md: { width: 220, height: 64, fontSize: 18, ribbonHeight: 36 },
+    lg: { width: 280, height: 80, fontSize: 22, ribbonHeight: 44 },
   };
 
   const config = sizeConfig[size];

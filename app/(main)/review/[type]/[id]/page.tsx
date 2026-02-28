@@ -2867,19 +2867,19 @@ export default function FolderDetailPage() {
       transition={{ type: 'spring', stiffness: 400, damping: 35 }}
     >
       {/* 헤더 - 배너 이미지 */}
-      <header className="pt-4 pb-2 flex flex-col items-center">
+      <header className="pt-2 pb-1 flex flex-col items-center">
         {/* 리본 이미지 */}
-        <div className="w-full flex justify-center">
+        <div className="w-full h-[160px] mt-2 flex justify-center">
           <img
             src={ribbonImage}
             alt="Review"
-            className="w-[85%] sm:w-[80%] md:w-[75%] min-w-[280px] max-w-[800px] h-auto"
+            className="w-[85%] sm:w-[80%] md:w-[75%] min-w-[280px] max-w-[800px] h-full object-contain"
             style={{ transform: `scale(${ribbonScale})` }}
           />
         </div>
 
         {/* 필터 + 이전 버튼 영역 */}
-        <div className="w-full px-4 py-4">
+        <div className="w-full px-4 py-1">
           {folderType === 'solved' ? (
             <>
               {/* solved 타입: 뒤로 버튼 (우측 정렬) */}

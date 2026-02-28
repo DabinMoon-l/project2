@@ -96,7 +96,7 @@ function SlideFilter({
   const activeIndex = FILTER_OPTIONS.findIndex((opt) => opt.value === activeFilter);
 
   return (
-    <div className="relative flex items-stretch bg-[#EDEAE4] border border-[#1A1A1A] overflow-hidden min-w-[320px]">
+    <div className="relative flex items-stretch bg-[#EDEAE4] border border-[#1A1A1A] overflow-hidden min-w-[280px]">
       {/* 슬라이드 배경 */}
       <motion.div
         className="absolute h-full bg-[#1A1A1A]"
@@ -116,7 +116,7 @@ function SlideFilter({
           key={option.value}
           type="button"
           onClick={() => onFilterChange(option.value)}
-          className={`relative z-10 w-1/4 px-3 py-3 text-xs font-bold transition-colors text-center flex flex-col items-center justify-center ${
+          className={`relative z-10 w-1/4 px-2 py-2 text-[11px] font-bold transition-colors text-center flex flex-col items-center justify-center ${
             activeFilter === option.value ? 'text-[#F5F0E8]' : 'text-[#1A1A1A]'
           }`}
         >
@@ -1378,27 +1378,27 @@ function CustomReviewQuizCard({
       )}
 
       {/* 카드 내용 */}
-      <div className="relative z-10 p-4 bg-[#F5F0E8]/60">
+      <div className="relative z-10 p-3 bg-[#F5F0E8]/60">
         {/* 제목 (2줄 고정 높이) */}
-        <div className="h-[44px] mb-2">
-          <h3 className="font-bold text-base line-clamp-2 text-[#1A1A1A] leading-snug">
+        <div className="h-[36px] mb-1.5">
+          <h3 className="font-bold text-sm line-clamp-2 text-[#1A1A1A] leading-snug">
             {quiz.title}
           </h3>
         </div>
 
         {/* 메타 정보 */}
-        <p className="text-sm text-[#5C5C5C] mb-1">
+        <p className="text-xs text-[#5C5C5C] mb-1">
           {quiz.questionCount}문제 · {quiz.participantCount}명 참여
         </p>
 
         {/* 태그 (2줄 고정 높이) */}
-        <div className="h-[48px] mb-2 overflow-hidden">
+        <div className="h-[38px] mb-1.5 overflow-hidden">
           {tags.length > 0 && (
-            <div className="flex flex-wrap gap-1">
+            <div className="flex flex-wrap gap-0.5">
               {tags.slice(0, 8).map((tag) => (
                 <span
                   key={tag}
-                  className="px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-medium"
+                  className="px-1 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-[10px] font-normal"
                 >
                   #{tag}
                 </span>
@@ -1409,14 +1409,14 @@ function CustomReviewQuizCard({
 
         {/* 버튼 */}
         {!isSelectMode && (
-          <div className="flex gap-2 mt-3">
+          <div className="flex gap-2 mt-2">
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 onDetails();
               }}
-              className="flex-1 py-2 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+              className="flex-1 py-1.5 text-[11px] font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
             >
               Details
             </button>
@@ -1432,7 +1432,7 @@ function CustomReviewQuizCard({
                     onReview();
                   }
                 }}
-                className="w-full py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors flex items-center justify-center gap-1"
+                className="w-full py-1.5 text-[11px] font-semibold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors flex items-center justify-center gap-0.5"
               >
                 Review
                 {onReviewWrongOnly && (
@@ -1457,7 +1457,7 @@ function CustomReviewQuizCard({
                         setShowReviewMenu(false);
                         onReview();
                       }}
-                      className="w-full px-3 py-2 text-sm font-bold text-[#1A1A1A] hover:bg-[#EDEAE4] text-left border-b border-[#EDEAE4]"
+                      className="w-full px-2 py-1.5 text-xs font-bold text-[#1A1A1A] hover:bg-[#EDEAE4] text-center border-b border-[#EDEAE4]"
                     >
                       모두
                     </button>
@@ -1468,7 +1468,7 @@ function CustomReviewQuizCard({
                         setShowReviewMenu(false);
                         onReviewWrongOnly();
                       }}
-                      className="w-full px-3 py-2 text-sm font-bold text-[#8B1A1A] hover:bg-[#FDEAEA] text-left"
+                      className="w-full px-2 py-1.5 text-xs font-bold text-[#8B1A1A] hover:bg-[#FDEAEA] text-center"
                     >
                       오답만
                     </button>
@@ -1748,27 +1748,27 @@ function LibraryQuizCard({
       )}
 
       {/* 카드 내용 */}
-      <div className="relative z-10 p-4 bg-[#F5F0E8]/60">
+      <div className="relative z-10 p-3 bg-[#F5F0E8]/60">
         {/* 제목 (2줄 고정 높이) */}
-        <div className="h-[44px] mb-2">
-          <h3 className="font-bold text-base line-clamp-2 text-[#1A1A1A] leading-snug pr-8">
+        <div className="h-[36px] mb-1.5">
+          <h3 className="font-bold text-sm line-clamp-2 text-[#1A1A1A] leading-snug pr-8">
             {quiz.title}
           </h3>
         </div>
 
         {/* 메타 정보 */}
-        <p className="text-sm text-[#5C5C5C] mb-1">
+        <p className="text-xs text-[#5C5C5C] mb-1">
           {quiz.questionCount}문제
         </p>
 
         {/* 태그 (2줄 고정 높이) */}
-        <div className="h-[48px] mb-2 overflow-hidden">
+        <div className="h-[38px] mb-1.5 overflow-hidden">
           {tags.length > 0 && (
-            <div className="flex flex-wrap gap-1">
+            <div className="flex flex-wrap gap-0.5">
               {tags.slice(0, 8).map((tag) => (
                 <span
                   key={tag}
-                  className="px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-medium"
+                  className="px-1 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-[10px] font-normal"
                 >
                   #{tag}
                 </span>
@@ -1779,14 +1779,14 @@ function LibraryQuizCard({
 
         {/* 버튼 (선택 모드가 아닐 때만 표시) */}
         {!isSelectMode && (
-          <div className="flex gap-2 mt-3">
+          <div className="flex gap-2 mt-2">
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 onDetails();
               }}
-              className="flex-1 py-2 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+              className="flex-1 py-1.5 text-[11px] font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
             >
               Details
             </button>
@@ -1802,7 +1802,7 @@ function LibraryQuizCard({
                     onReview();
                   }
                 }}
-                className="w-full py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors flex items-center justify-center gap-1"
+                className="w-full py-1.5 text-[11px] font-semibold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors flex items-center justify-center gap-0.5"
               >
                 Review
                 {onReviewWrongOnly && (
@@ -1827,7 +1827,7 @@ function LibraryQuizCard({
                         setShowReviewMenu(false);
                         onReview();
                       }}
-                      className="w-full px-3 py-2 text-sm font-bold text-[#1A1A1A] hover:bg-[#EDEAE4] text-left border-b border-[#EDEAE4]"
+                      className="w-full px-2 py-1.5 text-xs font-bold text-[#1A1A1A] hover:bg-[#EDEAE4] text-center border-b border-[#EDEAE4]"
                     >
                       모두
                     </button>
@@ -1838,7 +1838,7 @@ function LibraryQuizCard({
                         setShowReviewMenu(false);
                         onReviewWrongOnly();
                       }}
-                      className="w-full px-3 py-2 text-sm font-bold text-[#8B1A1A] hover:bg-[#FDEAEA] text-left"
+                      className="w-full px-2 py-1.5 text-xs font-bold text-[#8B1A1A] hover:bg-[#FDEAEA] text-center"
                     >
                       오답만
                     </button>
@@ -1918,7 +1918,7 @@ function BookmarkQuizCard({
       whileHover={isSelectMode ? {} : { y: -4, boxShadow: '0 8px 20px rgba(0, 0, 0, 0.08)' }}
       transition={{ duration: 0.2 }}
       onClick={handleCardClick}
-      className={`relative border bg-[#F5F0E8]/70 backdrop-blur-sm p-4 shadow-[0_2px_8px_rgba(0,0,0,0.06)] ${
+      className={`relative border bg-[#F5F0E8]/70 backdrop-blur-sm p-3 shadow-[0_2px_8px_rgba(0,0,0,0.06)] ${
         isSelectMode
           ? isSelected
             ? 'border-2 border-dashed border-[#1A1A1A] bg-[#EDEAE4] cursor-pointer'
@@ -1974,25 +1974,25 @@ function BookmarkQuizCard({
       )}
 
       {/* 제목 (2줄 고정 높이) - 가독성 향상 */}
-      <div className="h-[44px] mb-2">
-        <h3 className="font-bold text-base line-clamp-2 text-[#1A1A1A] pr-6 leading-snug">
+      <div className="h-[36px] mb-1.5">
+        <h3 className="font-bold text-sm line-clamp-2 text-[#1A1A1A] pr-6 leading-snug">
           {quiz.title}
         </h3>
       </div>
 
       {/* 메타 정보 - 가독성 향상 */}
-      <p className="text-sm text-[#5C5C5C] mb-1">
+      <p className="text-xs text-[#5C5C5C] mb-1">
         {quiz.questionCount}문제 · {quiz.participantCount}명 참여
       </p>
 
       {/* 태그 (2줄 고정 높이) */}
-      <div className="h-[48px] mb-2 overflow-hidden">
+      <div className="h-[38px] mb-1.5 overflow-hidden">
         {tags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-0.5">
             {tags.slice(0, 8).map((tag) => (
               <span
                 key={tag}
-                className="px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-medium"
+                className="px-1 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-[10px] font-normal"
               >
                 #{tag}
               </span>
@@ -2003,14 +2003,14 @@ function BookmarkQuizCard({
 
       {/* 버튼 영역 - 상태에 따라 버튼 텍스트와 동작 변경 */}
       {!isSelectMode && (
-        <div className="flex gap-2 mt-3">
+        <div className="flex gap-2 mt-2">
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               onDetails();
             }}
-            className="flex-1 py-2 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+            className="flex-1 py-1.5 text-[11px] font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
           >
             Details
           </button>
@@ -2027,7 +2027,7 @@ function BookmarkQuizCard({
                     onStartReview();
                   }
                 }}
-                className="w-full py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors flex items-center justify-center gap-1"
+                className="w-full py-1.5 text-[11px] font-semibold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors flex items-center justify-center gap-0.5"
               >
                 Review
                 {onStartReviewWrongOnly && (
@@ -2052,7 +2052,7 @@ function BookmarkQuizCard({
                         setShowReviewMenu(false);
                         onStartReview();
                       }}
-                      className="w-full px-3 py-2 text-sm font-bold text-[#1A1A1A] hover:bg-[#EDEAE4] text-left border-b border-[#EDEAE4]"
+                      className="w-full px-2 py-1.5 text-xs font-bold text-[#1A1A1A] hover:bg-[#EDEAE4] text-center border-b border-[#EDEAE4]"
                     >
                       모두
                     </button>
@@ -2063,7 +2063,7 @@ function BookmarkQuizCard({
                         setShowReviewMenu(false);
                         onStartReviewWrongOnly();
                       }}
-                      className="w-full px-3 py-2 text-sm font-bold text-[#8B1A1A] hover:bg-[#FDEAEA] text-left"
+                      className="w-full px-2 py-1.5 text-xs font-bold text-[#8B1A1A] hover:bg-[#FDEAEA] text-center"
                     >
                       오답만
                     </button>
@@ -2079,7 +2079,7 @@ function BookmarkQuizCard({
                 e.stopPropagation();
                 onStartQuiz();
               }}
-              className="flex-1 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors"
+              className="flex-1 py-1.5 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors"
             >
               Start
             </button>
@@ -2452,7 +2452,7 @@ function SolvedQuizLayout({
               transition={{ duration: 0.2 }}
               className="overflow-hidden mb-4"
             >
-              <div className="flex flex-wrap gap-2 p-3 bg-[#EDEAE4] border border-[#D4CFC4]">
+              <div className="flex flex-wrap gap-1.5 p-2 bg-[#EDEAE4] border border-[#D4CFC4]">
                 {/* 태그 버튼들 (이미 선택된 태그 제외) */}
                 {fixedTagOptions
                   .filter(tag => !selectedCustomTags.includes(tag))
@@ -2463,7 +2463,7 @@ function SolvedQuizLayout({
                         setSelectedCustomTags(prev => [...prev, tag]);
                         setShowTagFilter(false);
                       }}
-                      className="px-3 py-1.5 text-sm font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#E5E0D8] transition-colors"
+                      className="px-2 py-1 text-xs font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#E5E0D8] transition-colors"
                     >
                       #{tag}
                     </button>
@@ -2580,30 +2580,31 @@ function QuestionListModal({
       onClick={onClose}
     >
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 0, scale: 0.88 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
+        exit={{ opacity: 0, scale: 0.88 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md max-h-[80vh] bg-[#F5F0E8] border-2 border-[#1A1A1A] flex flex-col"
+        className="w-full max-w-[340px] max-h-[80vh] bg-[#F5F0E8] border-2 border-[#1A1A1A] flex flex-col"
       >
         {/* 헤더 */}
-        <div className="p-4 border-b border-[#1A1A1A]">
+        <div className="p-3 border-b border-[#1A1A1A]">
           {/* 문제지 이름 */}
-          <h3 className="font-serif-display font-bold text-lg text-[#1A1A1A] mb-2">
+          <h3 className="font-bold text-sm text-[#1A1A1A] mb-1.5">
             {quiz.title}
           </h3>
           {/* 점수 표시: 퀴즈 점수 / 첫번째 복습 점수 (숫자만 크게) */}
           <div className="flex items-center gap-2 text-[#5C5C5C]">
-            <span className="text-sm">점수:</span>
-            <span className="text-2xl font-black text-[#1A1A1A]">
+            <span className="text-xs">점수:</span>
+            <span className="text-lg font-black text-[#1A1A1A]">
               {quiz.myScore !== undefined ? quiz.myScore : '-'}
             </span>
-            <span className="text-lg text-[#5C5C5C]">/</span>
-            <span className="text-2xl font-black text-[#1A1A1A]">
+            <span className="text-sm text-[#5C5C5C]">/</span>
+            <span className="text-lg font-black text-[#1A1A1A]">
               {quiz.myFirstReviewScore !== undefined ? quiz.myFirstReviewScore : '-'}
             </span>
           </div>
-          <p className="text-xs text-[#5C5C5C] mt-1">퀴즈 점수 / 첫번째 복습 점수</p>
+          <p className="text-[10px] text-[#5C5C5C] mt-0.5">퀴즈 점수 / 첫번째 복습 점수</p>
         </div>
 
         {/* 문제 목록 */}
@@ -2804,15 +2805,15 @@ function ReviewPageContent() {
   const [isAssignMode, setIsAssignMode] = useState(false);
   const [selectedFolderForAssign, setSelectedFolderForAssign] = useState<string | null>(null);
 
-  // 새 폴더 생성 / 카테고리 설정 모드일 때 네비게이션 숨김
+  // 네비게이션 숨김 (폴더생성/정렬모드/서재상세)
   useEffect(() => {
-    if (showCreateFolder || isSortMode) {
+    if (showCreateFolder || isSortMode || selectedLibraryQuiz) {
       document.body.setAttribute('data-hide-nav', '');
     } else {
       document.body.removeAttribute('data-hide-nav');
     }
     return () => document.body.removeAttribute('data-hide-nav');
-  }, [showCreateFolder, isSortMode]);
+  }, [showCreateFolder, isSortMode, selectedLibraryQuiz]);
 
   // 로컬 스토리지에서 카테고리 정보 로드
   useEffect(() => {
@@ -3465,7 +3466,7 @@ function ReviewPageContent() {
     <div className="min-h-screen pb-28" style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 - 배너 이미지 */}
       <header className="flex flex-col items-center">
-        <div className="w-full h-[230px]">
+        <div className="w-full h-[160px] mt-2">
           <img
             src={ribbonImage}
             alt="Review"
@@ -3475,7 +3476,7 @@ function ReviewPageContent() {
         </div>
 
         {/* 필터 + 버튼 영역 */}
-        <div className="w-full px-4 py-2 flex items-center justify-between gap-4">
+        <div className="w-full px-4 py-1 flex items-center justify-between gap-4">
           {/* 슬라이드 필터 - 좌측 */}
           <SlideFilter
             activeFilter={activeFilter}
@@ -3941,7 +3942,7 @@ function ReviewPageContent() {
                       transition={{ duration: 0.2 }}
                       className="overflow-hidden"
                     >
-                      <div className="flex flex-wrap gap-2 p-3 bg-[#EDEAE4] border border-[#D4CFC4]">
+                      <div className="flex flex-wrap gap-1.5 p-2 bg-[#EDEAE4] border border-[#D4CFC4]">
                         {/* 태그 버튼들 (이미 선택된 태그 제외) */}
                         {libraryTagOptions
                           .filter(tag => !librarySelectedTags.includes(tag))
@@ -3952,7 +3953,7 @@ function ReviewPageContent() {
                                 setLibrarySelectedTags(prev => [...prev, tag]);
                                 setShowLibraryTagFilter(false);
                               }}
-                              className="px-3 py-1.5 text-sm font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#E5E0D8] transition-colors"
+                              className="px-2 py-1 text-xs font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#E5E0D8] transition-colors"
                             >
                               #{tag}
                             </button>
@@ -4106,7 +4107,7 @@ function ReviewPageContent() {
                       transition={{ duration: 0.2 }}
                       className="overflow-hidden"
                     >
-                      <div className="flex flex-wrap gap-2 p-3 bg-[#EDEAE4] border border-[#D4CFC4]">
+                      <div className="flex flex-wrap gap-1.5 p-2 bg-[#EDEAE4] border border-[#D4CFC4]">
                         {bookmarkTagOptions
                           .filter(tag => !bookmarkSelectedTags.includes(tag))
                           .map((tag) => (
@@ -4116,7 +4117,7 @@ function ReviewPageContent() {
                                 setBookmarkSelectedTags(prev => [...prev, tag]);
                                 setShowBookmarkTagFilter(false);
                               }}
-                              className="px-3 py-1.5 text-sm font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#E5E0D8] transition-colors"
+                              className="px-2 py-1 text-xs font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#E5E0D8] transition-colors"
                             >
                               #{tag}
                             </button>
@@ -5192,44 +5193,45 @@ function ReviewPageContent() {
           onClick={() => setSelectedBookmarkedQuiz(null)}
         >
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
+            initial={{ opacity: 0, scale: 0.88 }}
             animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
+            exit={{ opacity: 0, scale: 0.88 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
+            className="w-full max-w-[300px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
           >
-            <h2 className="font-serif-display text-lg font-bold text-[#1A1A1A] mb-4">
+            <h2 className="text-sm font-bold text-[#1A1A1A] mb-3">
               {selectedBookmarkedQuiz.title}
             </h2>
 
             {/* 미완료 퀴즈: 평균 점수 대형 표시 (Start 버전) */}
             {!selectedBookmarkedQuiz.hasCompleted && (
-              <div className="text-center py-4 mb-4 border-2 border-dashed border-[#1A1A1A] bg-[#EDEAE4]">
-                <p className="text-xs text-[#5C5C5C] mb-1">평균 점수</p>
-                <p className="text-4xl font-black text-[#1A1A1A]">
+              <div className="text-center py-2 mb-2 border-2 border-dashed border-[#1A1A1A] bg-[#EDEAE4]">
+                <p className="text-[10px] text-[#5C5C5C] mb-0.5">평균 점수</p>
+                <p className="text-2xl font-black text-[#1A1A1A]">
                   {selectedBookmarkedQuiz.participantCount > 0
-                    ? <>{(selectedBookmarkedQuiz.averageScore ?? 0).toFixed(0)}<span className="text-lg font-bold">점</span></>
+                    ? <>{(selectedBookmarkedQuiz.averageScore ?? 0).toFixed(0)}<span className="text-xs font-bold">점</span></>
                     : '-'}
                 </p>
               </div>
             )}
 
-            <div className="space-y-2 mb-6">
-              <div className="flex justify-between text-sm">
+            <div className="space-y-1.5 mb-4">
+              <div className="flex justify-between text-xs">
                 <span className="text-[#5C5C5C]">문제 수</span>
                 <span className="font-bold text-[#1A1A1A]">{selectedBookmarkedQuiz.questionCount}문제</span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-xs">
                 <span className="text-[#5C5C5C]">참여자</span>
                 <span className="font-bold text-[#1A1A1A]">{selectedBookmarkedQuiz.participantCount}명</span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-xs">
                 <span className="text-[#5C5C5C]">난이도</span>
                 <span className="font-bold text-[#1A1A1A]">
                   {selectedBookmarkedQuiz.difficulty === 'easy' ? '쉬움' : selectedBookmarkedQuiz.difficulty === 'hard' ? '어려움' : '보통'}
                 </span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-xs">
                 <span className="text-[#5C5C5C]">문제 유형</span>
                 <span className="font-bold text-[#1A1A1A]">
                   {formatQuestionTypes(
@@ -5239,7 +5241,7 @@ function ReviewPageContent() {
                   )}
                 </span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-xs">
                 <span className="text-[#5C5C5C]">제작자</span>
                 <span className="font-bold text-[#1A1A1A]">
                   {selectedBookmarkedQuiz.creatorNickname || '익명'}
@@ -5249,7 +5251,7 @@ function ReviewPageContent() {
               {/* 완료된 퀴즈: 평균 점수 행 + 점수 표시 (Review 버전) */}
               {selectedBookmarkedQuiz.hasCompleted && (
                 <>
-                  <div className="flex justify-between text-sm">
+                  <div className="flex justify-between text-xs">
                     <span className="text-[#5C5C5C]">평균 점수</span>
                     <span className="font-bold text-[#1A1A1A]">
                       {selectedBookmarkedQuiz.participantCount > 0
@@ -5257,19 +5259,19 @@ function ReviewPageContent() {
                         : '-'}
                     </span>
                   </div>
-                  <div className="py-3 border-t border-[#A0A0A0]">
-                    <div className="flex items-center justify-center gap-3">
-                      <span className="text-5xl font-black text-[#1A1A1A]">
+                  <div className="py-2 border-t border-[#A0A0A0]">
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-2xl font-black text-[#1A1A1A]">
                         {selectedBookmarkedQuiz.myScore !== undefined ? selectedBookmarkedQuiz.myScore : '-'}
                       </span>
-                      <span className="text-xl text-[#5C5C5C]">/</span>
-                      <span className="text-5xl font-black text-[#1A1A1A]">
+                      <span className="text-sm text-[#5C5C5C]">/</span>
+                      <span className="text-3xl font-black text-[#1A1A1A]">
                         {selectedBookmarkedQuiz.myFirstReviewScore !== undefined ? selectedBookmarkedQuiz.myFirstReviewScore : '-'}
                       </span>
                     </div>
-                    <div className="flex items-center justify-center gap-6 mt-1">
-                      <span className="text-xs text-[#5C5C5C]">퀴즈</span>
-                      <span className="text-xs text-[#5C5C5C]">복습</span>
+                    <div className="flex items-center justify-center gap-6 mt-0.5">
+                      <span className="text-[10px] text-[#5C5C5C]">퀴즈</span>
+                      <span className="text-[10px] text-[#5C5C5C]">복습</span>
                     </div>
                   </div>
                 </>
@@ -5281,7 +5283,7 @@ function ReviewPageContent() {
                     {selectedBookmarkedQuiz.tags.map((tag) => (
                       <span
                         key={tag}
-                        className="px-2 py-1 bg-[#1A1A1A] text-[#F5F0E8] text-sm font-medium"
+                        className="px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-medium"
                       >
                         #{tag}
                       </span>
@@ -5291,10 +5293,10 @@ function ReviewPageContent() {
               )}
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex gap-2">
               <button
                 onClick={() => setSelectedBookmarkedQuiz(null)}
-                className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+                className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
               >
                 닫기
               </button>
@@ -5303,7 +5305,7 @@ function ReviewPageContent() {
                   router.push(`/quiz/${selectedBookmarkedQuiz.quizId}`);
                   setSelectedBookmarkedQuiz(null);
                 }}
-                className="flex-1 py-3 font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
+                className="flex-1 py-2 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
               >
                 {selectedBookmarkedQuiz.hasCompleted ? '복습하기' : '시작하기'}
               </button>
@@ -5355,17 +5357,18 @@ function ReviewPageContent() {
           onClick={() => !updateModalLoading && setUpdateModalInfo(null)}
         >
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
+            initial={{ opacity: 0, scale: 0.88 }}
             animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
+            exit={{ opacity: 0, scale: 0.88 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-xs bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
+            className="w-full max-w-[280px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
           >
             {/* 아이콘 */}
-            <div className="flex justify-center mb-4">
-              <div className="w-12 h-12 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
+            <div className="flex justify-center mb-3">
+              <div className="w-9 h-9 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
                 <svg
-                  className="w-6 h-6 text-[#1A1A1A]"
+                  className="w-4 h-4 text-[#1A1A1A]"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -5380,24 +5383,24 @@ function ReviewPageContent() {
               </div>
             </div>
 
-            <h3 className="text-center font-bold text-lg text-[#1A1A1A] mb-2">
+            <h3 className="text-center font-bold text-sm text-[#1A1A1A] mb-2">
               수정된 문제를 풀까요?
             </h3>
-            <p className="text-sm text-[#5C5C5C] mb-1">
+            <p className="text-xs text-[#5C5C5C] mb-1">
               - 수정된 문제만 다시 풀 수 있습니다.
             </p>
-            <p className="text-sm text-[#5C5C5C] mb-1">
+            <p className="text-xs text-[#5C5C5C] mb-1">
               - 새로운 답변이 복습 기록에 반영됩니다.
             </p>
-            <p className="text-sm text-[#5C5C5C] mb-6">
+            <p className="text-xs text-[#5C5C5C] mb-4">
               - 정답 여부와 복습 횟수가 업데이트됩니다.
             </p>
 
-            <div className="flex gap-3">
+            <div className="flex gap-2">
               <button
                 onClick={() => setUpdateModalInfo(null)}
                 disabled={updateModalLoading}
-                className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors disabled:opacity-50"
+                className="flex-1 py-1.5 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors disabled:opacity-50"
               >
                 취소
               </button>
@@ -5424,7 +5427,7 @@ function ReviewPageContent() {
                   }
                 }}
                 disabled={updateModalLoading}
-                className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#333] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 py-1.5 text-xs font-bold border-2 border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#333] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {updateModalLoading ? (
                   <>
@@ -5815,28 +5818,28 @@ function ReviewPageContent() {
         isOpen={!!selectedLibraryQuiz}
         onClose={() => { setSelectedLibraryQuiz(null); clearLibraryRect(); }}
         sourceRect={librarySourceRect}
-        className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
+        className="w-full max-w-[300px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
         zIndex={60}
       >
         {selectedLibraryQuiz && (
           <>
-            <h2 className="font-serif-display text-2xl font-bold text-[#1A1A1A] mb-4">
+            <h2 className="text-sm font-bold text-[#1A1A1A] mb-3">
               {selectedLibraryQuiz.title}
             </h2>
 
-            <div className="space-y-2 mb-6">
-              <div className="flex justify-between text-sm">
+            <div className="space-y-1.5 mb-4">
+              <div className="flex justify-between text-xs">
                 <span className="text-[#5C5C5C]">문제 수</span>
                 <span className="font-bold text-[#1A1A1A]">{selectedLibraryQuiz.questionCount}문제</span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-xs">
                 <span className="text-[#5C5C5C]">난이도</span>
                 <span className="font-bold text-[#1A1A1A]">
                   {selectedLibraryQuiz.difficulty === 'easy' ? '쉬움' :
                    selectedLibraryQuiz.difficulty === 'hard' ? '어려움' : '보통'}
                 </span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-xs">
                 <span className="text-[#5C5C5C]">문제 유형</span>
                 <span className="font-bold text-[#1A1A1A]">
                   {formatQuestionTypes(
@@ -5847,19 +5850,19 @@ function ReviewPageContent() {
                 </span>
               </div>
               {/* 점수 표시: 퀴즈 점수 / 첫번째 복습 점수 */}
-              <div className="py-3 border-t border-[#A0A0A0]">
-                <div className="flex items-center justify-center gap-3">
-                  <span className="text-5xl font-black text-[#1A1A1A]">
+              <div className="py-2 border-t border-[#A0A0A0]">
+                <div className="flex items-center justify-center gap-2">
+                  <span className="text-2xl font-black text-[#1A1A1A]">
                     {selectedLibraryQuiz.myScore !== undefined ? selectedLibraryQuiz.myScore : selectedLibraryQuiz.score}
                   </span>
-                  <span className="text-xl text-[#5C5C5C]">/</span>
-                  <span className="text-5xl font-black text-[#1A1A1A]">
+                  <span className="text-sm text-[#5C5C5C]">/</span>
+                  <span className="text-3xl font-black text-[#1A1A1A]">
                     {selectedLibraryQuiz.myFirstReviewScore !== undefined ? selectedLibraryQuiz.myFirstReviewScore : '-'}
                   </span>
                 </div>
-                <div className="flex items-center justify-center gap-6 mt-1">
-                  <span className="text-xs text-[#5C5C5C]">퀴즈</span>
-                  <span className="text-xs text-[#5C5C5C]">복습</span>
+                <div className="flex items-center justify-center gap-6 mt-0.5">
+                  <span className="text-[10px] text-[#5C5C5C]">퀴즈</span>
+                  <span className="text-[10px] text-[#5C5C5C]">복습</span>
                 </div>
               </div>
               {selectedLibraryQuiz.tags && selectedLibraryQuiz.tags.length > 0 && (
@@ -5868,7 +5871,7 @@ function ReviewPageContent() {
                     {selectedLibraryQuiz.tags.map((tag) => (
                       <span
                         key={tag}
-                        className="px-2 py-1 bg-[#1A1A1A] text-[#F5F0E8] text-sm font-medium"
+                        className="px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-medium"
                       >
                         #{tag}
                       </span>
@@ -5878,10 +5881,10 @@ function ReviewPageContent() {
               )}
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex gap-2">
               <button
                 onClick={() => { setSelectedLibraryQuiz(null); clearLibraryRect(); }}
-                className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+                className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
               >
                 닫기
               </button>
@@ -5892,7 +5895,7 @@ function ReviewPageContent() {
                   clearLibraryRect();
                   router.push(`/review/library/${quiz.id}?mode=review`);
                 }}
-                className="flex-1 py-3 font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
+                className="flex-1 py-2 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
               >
                 복습하기
               </button>

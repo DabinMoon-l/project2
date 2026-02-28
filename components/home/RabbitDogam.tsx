@@ -1,14 +1,20 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'framer-motion';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 import { useUser } from '@/lib/contexts';
-import { useRabbitHoldings, useRabbitsForCourse, type RabbitDoc, type RabbitHolding } from '@/lib/hooks/useRabbit';
+import { useRabbitHoldings, useRabbitsForCourse, getRabbitStats, type RabbitDoc, type RabbitHolding } from '@/lib/hooks/useRabbit';
 import RabbitImage from '@/components/common/RabbitImage';
 import VirtualRabbitGrid from '@/components/common/VirtualRabbitGrid';
+
+const OPEN_MS = 380;
+const CLOSE_MS = 320;
+const EASE_OPEN = 'cubic-bezier(0.4, 0, 0.2, 1)';
+
+interface Rect { x: number; y: number; width: number; height: number }
+type Phase = 'hidden' | 'entering' | 'open' | 'exiting';
 
 interface RabbitDogamProps {
   isOpen: boolean;
@@ -16,10 +22,13 @@ interface RabbitDogamProps {
   courseId: string;
   userId: string;
   equippedRabbits: Array<{ rabbitId: number; courseId: string }>;
+  buttonRect?: Rect | null;
 }
 
 /**
- * 토끼 도감 — 내가 발견한 토끼 기반 80칸 그리드
+ * 토끼 도감 — 요술지니 애니메이션
+ * 도감 버튼 → 도감 모달 (요술지니)
+ * 토끼 셀 → 상세 모달 (별도 레이어, 셀 위치에서 요술지니)
  */
 export default function RabbitDogam({
   isOpen,
@@ -27,6 +36,7 @@ export default function RabbitDogam({
   courseId,
   userId,
   equippedRabbits,
+  buttonRect,
 }: RabbitDogamProps) {
   // 도감 열림 시 네비게이션 숨김
   useEffect(() => {
@@ -47,114 +57,275 @@ export default function RabbitDogam({
 
   const { rabbits: allRabbits, loading: rabbitsLoading } = useRabbitsForCourse(courseId);
   const { holdings, loading: holdingsLoading } = useRabbitHoldings(userId);
-  const [selectedRabbitId, setSelectedRabbitId] = useState<number | null>(null);
 
-  // 내가 발견한 토끼의 rabbitId Set
+  // === 도감 모달 요술지니 ===
+  const [visible, setVisible] = useState(false);
+  const [phase, setPhase] = useState<Phase>('hidden');
+  const phaseRef = useRef<Phase>('hidden');
+
+  // === 상세 모달 요술지니 ===
+  const [selectedRabbitId, setSelectedRabbitId] = useState<number | null>(null);
+  const [detailVisible, setDetailVisible] = useState(false);
+  const [detailPhase, setDetailPhase] = useState<Phase>('hidden');
+  const detailPhaseRef = useRef<Phase>('hidden');
+  const [cellOrigin, setCellOrigin] = useState('center center');
+
+  // 도감 열기
+  useEffect(() => {
+    if (isOpen && phaseRef.current === 'hidden') {
+      setVisible(true);
+      setPhase('entering');
+      phaseRef.current = 'entering';
+      const raf1 = requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (phaseRef.current === 'entering') {
+            setPhase('open');
+            phaseRef.current = 'open';
+          }
+        });
+      });
+      return () => cancelAnimationFrame(raf1);
+    }
+  }, [isOpen]);
+
+  // 외부 즉시 닫기
+  useEffect(() => {
+    if (!isOpen && phaseRef.current !== 'hidden' && phaseRef.current !== 'exiting') {
+      setVisible(false);
+      setPhase('hidden');
+      phaseRef.current = 'hidden';
+      setSelectedRabbitId(null);
+      setDetailVisible(false);
+      setDetailPhase('hidden');
+      detailPhaseRef.current = 'hidden';
+    }
+  }, [isOpen]);
+
+  // 도감 닫기 (요술지니 축소)
+  const runCloseAnimation = useCallback(() => {
+    if (phaseRef.current === 'exiting') return;
+    // 상세가 열려있으면 먼저 닫기
+    if (detailPhaseRef.current === 'open') {
+      setDetailPhase('exiting');
+      detailPhaseRef.current = 'exiting';
+    }
+    setPhase('exiting');
+    phaseRef.current = 'exiting';
+    setTimeout(() => {
+      onClose();
+      setVisible(false);
+      setPhase('hidden');
+      phaseRef.current = 'hidden';
+      setSelectedRabbitId(null);
+      setDetailVisible(false);
+      setDetailPhase('hidden');
+      detailPhaseRef.current = 'hidden';
+    }, CLOSE_MS);
+  }, [onClose]);
+
+  // 상세 열기 (셀에서 요술지니 확장)
+  const openDetail = useCallback((id: number, cellRect?: DOMRect) => {
+    if (cellRect) {
+      const cx = cellRect.x + cellRect.width / 2;
+      const cy = cellRect.y + cellRect.height / 2;
+      setCellOrigin(`${cx}px ${cy}px`);
+    } else {
+      setCellOrigin('center center');
+    }
+    setSelectedRabbitId(id);
+    setDetailVisible(true);
+    setDetailPhase('entering');
+    detailPhaseRef.current = 'entering';
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (detailPhaseRef.current === 'entering') {
+          setDetailPhase('open');
+          detailPhaseRef.current = 'open';
+        }
+      });
+    });
+  }, []);
+
+  // 상세 닫기 (셀로 요술지니 축소)
+  const closeDetail = useCallback(() => {
+    if (detailPhaseRef.current === 'exiting') return;
+    setDetailPhase('exiting');
+    detailPhaseRef.current = 'exiting';
+    setTimeout(() => {
+      setSelectedRabbitId(null);
+      setDetailVisible(false);
+      setDetailPhase('hidden');
+      detailPhaseRef.current = 'hidden';
+    }, CLOSE_MS);
+  }, []);
+
+  // 데이터
   const myHoldingMap = new Map<number, RabbitHolding>();
   holdings
     .filter((h) => h.courseId === courseId)
     .forEach((h) => myHoldingMap.set(h.rabbitId, h));
 
-  // rabbitId → RabbitDoc 맵
   const rabbitDocMap = new Map<number, RabbitDoc>();
   allRabbits.forEach((r) => rabbitDocMap.set(r.rabbitId, r));
 
   const discoveredCount = myHoldingMap.size;
   const loading = rabbitsLoading || holdingsLoading;
-  // 선택된 토끼의 상세 정보
-  const selectedRabbit = selectedRabbitId !== null ? rabbitDocMap.get(selectedRabbitId) : null;
-  const selectedHolding = selectedRabbitId !== null ? myHoldingMap.get(selectedRabbitId) : null;
+  const selectedRabbit = selectedRabbitId !== null ? rabbitDocMap.get(selectedRabbitId) : undefined;
+  const selectedHolding = selectedRabbitId !== null ? myHoldingMap.get(selectedRabbitId) : undefined;
+
+  // 도감 모달 origin
+  const modalOrigin = buttonRect
+    ? `${buttonRect.x + buttonRect.width / 2}px ${buttonRect.y + buttonRect.height / 2}px`
+    : 'center center';
+
+  const makeStyle = (p: Phase, origin: string) => ({
+    transform: p === 'entering' || p === 'exiting' ? 'scale(0)' : 'scale(1)',
+    opacity: p === 'entering' || p === 'exiting' ? 0 : 1,
+    transformOrigin: origin,
+    transition: `transform ${p === 'exiting' ? CLOSE_MS : OPEN_MS}ms ${EASE_OPEN}, opacity ${p === 'exiting' ? CLOSE_MS : OPEN_MS}ms ${EASE_OPEN}`,
+    willChange: p !== 'open' ? 'transform, opacity' as const : undefined,
+  });
+
+  const backdropStyle = (p: Phase) => ({
+    opacity: p === 'entering' || p === 'exiting' ? 0 : 1,
+    transition: `opacity ${p === 'exiting' ? CLOSE_MS : OPEN_MS}ms ease`,
+  });
+
+  if (!visible) return null;
 
   return createPortal(
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
+    <>
+      {/* ====== 도감 모달 ====== */}
+      {/* 백드롭 */}
+      <div
+        className="fixed inset-0 z-[110] bg-black/60"
+        style={backdropStyle(phase)}
+        onClick={runCloseAnimation}
+      />
+      {/* 도감 — 요술지니 */}
+      <div
+        className="fixed inset-0 z-[111] flex items-center justify-center p-4 pointer-events-none"
+        style={makeStyle(phase, modalOrigin)}
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="pointer-events-auto relative w-full max-w-[320px] max-h-[70vh] flex flex-col overflow-hidden rounded-2xl"
         >
-          <motion.div
-            initial={{ scale: 0.9 }}
-            animate={{ scale: 1 }}
-            exit={{ scale: 0.9 }}
-            onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-lg max-h-[80vh] flex flex-col overflow-hidden rounded-2xl"
-          >
-            {/* 배경 이미지 + 글래스 오버레이 */}
-            <div className="absolute inset-0 rounded-2xl overflow-hidden">
-              <img src="/images/home-bg.jpg" alt="" className="w-full h-full object-cover" />
-            </div>
-            <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
+          {/* 배경 */}
+          <div className="absolute inset-0 rounded-2xl overflow-hidden">
+            <img src="/images/home-bg.jpg" alt="" className="w-full h-full object-cover" />
+          </div>
+          <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
 
-            {/* 헤더 */}
-            <div className="relative z-10 flex items-center justify-between p-4 border-b border-white/15">
-              <span className="font-bold text-xl text-white">
-                {selectedRabbitId !== null ? '토끼 상세' : '토끼 도감'}
-              </span>
-              <div className="flex items-center gap-3">
-                <span className="font-bold text-xl text-white/80">
-                  {selectedRabbitId !== null
-                    ? `#${selectedRabbitId + 1}`
-                    : `${discoveredCount}/80`}
-                </span>
-                {selectedRabbitId === null && (
-                  <button onClick={onClose} className="w-8 h-8 flex items-center justify-center">
+          {/* 헤더 */}
+          <div className="relative z-10 flex items-center justify-between px-3 py-2.5 border-b border-white/15">
+            <span className="font-bold text-base text-white">토끼 도감</span>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-base text-white/80">{discoveredCount}/80</span>
+              <button onClick={runCloseAnimation} className="w-8 h-8 flex items-center justify-center">
+                <svg className="w-6 h-6 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* 그리드 */}
+          <div className="relative z-10 flex-1 overflow-y-auto overscroll-contain p-3">
+            {loading ? (
+              <div className="text-center py-8 text-white/50">로딩 중...</div>
+            ) : (
+              <StudentRabbitGrid
+                onSelect={openDetail}
+                myHoldingMap={myHoldingMap}
+                equippedRabbits={equippedRabbits}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ====== 상세 모달 (별도 레이어, 셀에서 요술지니) ====== */}
+      {detailVisible && (
+        <>
+          {/* 상세 백드롭 */}
+          <div
+            className="fixed inset-0 z-[112] bg-black/40"
+            style={backdropStyle(detailPhase)}
+            onClick={closeDetail}
+          />
+          {/* 상세 모달 — 셀 위치에서 요술지니 */}
+          <div
+            className="fixed inset-0 z-[113] flex items-center justify-center p-4 pointer-events-none"
+            style={makeStyle(detailPhase, cellOrigin)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="pointer-events-auto relative w-full max-w-[320px] max-h-[70vh] flex flex-col overflow-hidden rounded-2xl"
+            >
+              {/* 배경 */}
+              <div className="absolute inset-0 rounded-2xl overflow-hidden">
+                <img src="/images/home-bg.jpg" alt="" className="w-full h-full object-cover" />
+              </div>
+              <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
+
+              {/* 헤더 */}
+              <div className="relative z-10 flex items-center justify-between px-3 py-2.5 border-b border-white/15">
+                <span className="font-bold text-base text-white">토끼 상세</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-base text-white/80">
+                    {selectedRabbitId !== null ? `#${selectedRabbitId + 1}` : ''}
+                  </span>
+                  <button onClick={closeDetail} className="w-8 h-8 flex items-center justify-center">
                     <svg className="w-6 h-6 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>
+                </div>
+              </div>
+
+              {/* 상세 본문 */}
+              <div className="relative z-10 flex-1 overflow-y-auto overscroll-contain p-3">
+                {selectedRabbit && selectedHolding ? (
+                  <RabbitDetail rabbit={selectedRabbit} holding={selectedHolding} />
+                ) : (
+                  <div className="text-center py-8 text-white/50">로딩 중...</div>
                 )}
               </div>
-            </div>
 
-            {/* 본문 */}
-            <div className="relative z-10 flex-1 overflow-y-auto overscroll-contain p-4">
-              {loading ? (
-                <div className="text-center py-8 text-white/50">로딩 중...</div>
-              ) : selectedRabbitId !== null && selectedRabbit && selectedHolding ? (
-                <RabbitDetail rabbit={selectedRabbit} holding={selectedHolding} />
-              ) : (
-                <StudentRabbitGrid
-                  onSelect={setSelectedRabbitId}
-                  myHoldingMap={myHoldingMap}
-                  equippedRabbits={equippedRabbits}
-                />
+              {/* 푸터 */}
+              {selectedRabbit && selectedHolding && (
+                <div className="relative z-10 px-3 py-2 border-t border-white/10">
+                  <FooterWithEquip
+                    rabbit={selectedRabbit}
+                    equippedRabbits={equippedRabbits}
+                    courseId={courseId}
+                    onBack={closeDetail}
+                    rabbitNames={equippedRabbits.map((e) => {
+                      const doc = rabbitDocMap.get(e.rabbitId);
+                      return doc?.name || (e.rabbitId === 0 ? '기본 토끼' : `토끼 #${e.rabbitId + 1}`);
+                    })}
+                  />
+                </div>
               )}
             </div>
-
-            {/* 푸터 — 상세 보기일 때만 */}
-            {selectedRabbitId !== null && selectedRabbit && selectedHolding && (
-              <div className="relative z-10 p-4 border-t border-white/10">
-                <FooterWithEquip
-                  rabbit={selectedRabbit}
-                  equippedRabbits={equippedRabbits}
-                  courseId={courseId}
-                  onBack={() => setSelectedRabbitId(null)}
-                  rabbitNames={equippedRabbits.map((e) => {
-                    const doc = rabbitDocMap.get(e.rabbitId);
-                    return doc?.name || (e.rabbitId === 0 ? '기본 토끼' : `토끼 #${e.rabbitId + 1}`);
-                  })}
-                />
-              </div>
-            )}
-          </motion.div>
-        </motion.div>
+          </div>
+        </>
       )}
-    </AnimatePresence>,
+    </>,
     document.body
   );
 }
 
 /**
- * 80칸 가상 그리드 — 발견/장착 상태에 따라 셀 스타일링
+ * 80칸 가상 그리드
  */
 function StudentRabbitGrid({
   onSelect,
   myHoldingMap,
   equippedRabbits,
 }: {
-  onSelect: (id: number) => void;
+  onSelect: (id: number, cellRect?: DOMRect) => void;
   myHoldingMap: Map<number, RabbitHolding>;
   equippedRabbits: Array<{ rabbitId: number; courseId: string }>;
 }) {
@@ -163,7 +334,12 @@ function StudentRabbitGrid({
     const isEquippedInGrid = equippedRabbits.some(e => e.rabbitId === index);
     return (
       <button
-        onClick={() => isDiscovered && onSelect(index)}
+        onClick={(e) => {
+          if (isDiscovered) {
+            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+            onSelect(index, rect);
+          }
+        }}
         className={`w-full aspect-square flex items-center justify-center p-1 rounded-lg overflow-hidden ${
           isEquippedInGrid
             ? 'border-[3px] border-black bg-black/25 cursor-pointer hover:bg-black/30'
@@ -185,7 +361,7 @@ function StudentRabbitGrid({
 }
 
 /**
- * 토끼 상세 보기 — 보유 집사 섹션 (실시간)
+ * 토끼 상세 보기
  */
 function RabbitDetail({
   rabbit,
@@ -198,31 +374,51 @@ function RabbitDetail({
   const baseName = rabbit.name || '토끼';
   const discoverers = rabbit.discoverers || [];
 
-  // 내 표시 이름 계산
   const myDisplayName = isDefaultRabbit
     ? '토끼'
     : holding.discoveryOrder === 1
       ? baseName
       : `${baseName} ${holding.discoveryOrder}세`;
 
+  const { level, stats } = getRabbitStats(holding);
+
   return (
     <div>
-      {/* 토끼 기본 정보 */}
-      <div className="text-center mb-6">
-        <div className="flex justify-center mb-2">
-          <RabbitImage rabbitId={rabbit.rabbitId} size={120} className="drop-shadow-md" />
+      <div className="flex items-center justify-center gap-3.5 mb-3">
+        <div className="flex-shrink-0">
+          <RabbitImage rabbitId={rabbit.rabbitId} size={72} className="drop-shadow-md" />
         </div>
-        <p className="text-2xl font-bold text-white">{myDisplayName}</p>
-        <p className="text-sm text-white/50">
-          {rabbit.discovererCount}명 발견
-        </p>
+        <div className="flex flex-col items-center">
+          <p className="text-sm font-bold text-white truncate">{myDisplayName}</p>
+          <p className="text-[10px] text-white/50 mb-1.5">
+            {rabbit.discovererCount}명 발견 · Lv.{level}
+          </p>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1 px-2 py-0.5 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl">
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="#f87171">
+                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+              </svg>
+              <span className="text-white font-bold text-xs">{stats.hp}</span>
+            </div>
+            <div className="flex items-center gap-1 px-2 py-0.5 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl">
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="#fb923c">
+                <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" />
+              </svg>
+              <span className="text-white font-bold text-xs">{stats.atk}</span>
+            </div>
+            <div className="flex items-center gap-1 px-2 py-0.5 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl">
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="#60a5fa">
+                <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" />
+              </svg>
+              <span className="text-white font-bold text-xs">{stats.def}</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       {isDefaultRabbit ? (
-        /* 기본 토끼 — 특별 메시지 */
         <DefaultRabbitMessage />
       ) : (
-        /* 보유 집사 — 2열, 20명 단위 구분선 */
         <ButlerList discoverers={discoverers} baseName={baseName} />
       )}
     </div>
@@ -231,7 +427,6 @@ function RabbitDetail({
 
 /**
  * 보유 집사 2열 레이아웃
- * 좌: 부모~9대 (10명), 우: 10대~19대 (10명) → 구분선 → 반복
  */
 function ButlerList({
   discoverers,
@@ -242,7 +437,6 @@ function ButlerList({
 }) {
   const sorted = [...discoverers].sort((a, b) => a.discoveryOrder - b.discoveryOrder);
 
-  // 20명 단위로 그룹 (각 그룹: 좌10 + 우10)
   const groups: Array<typeof sorted>[] = [];
   for (let i = 0; i < sorted.length; i += 20) {
     groups.push([
@@ -252,18 +446,18 @@ function ButlerList({
   }
 
   const renderEntry = (d: { userId: string; nickname: string; discoveryOrder: number }) => (
-    <div key={d.userId} className="flex items-baseline gap-1.5">
+    <div key={d.userId} className="flex items-baseline gap-1">
       {d.discoveryOrder === 1 ? (
-        <span className="text-sm font-bold text-[#D4AF37] shrink-0">부모</span>
+        <span className="text-xs font-bold text-[#D4AF37] shrink-0">부모</span>
       ) : (
-        <span className="text-sm font-bold text-white/50 shrink-0">
+        <span className="text-xs font-bold text-white/50 shrink-0">
           {d.discoveryOrder - 1}대
         </span>
       )}
-      <span className="text-sm font-bold text-white/90 truncate">
+      <span className="text-xs font-bold text-white/90 truncate">
         {d.nickname}
         {d.discoveryOrder > 1 && (
-          <span className="text-xs text-white/50 ml-1">
+          <span className="text-[10px] text-white/50 ml-0.5">
             ({baseName} {d.discoveryOrder}세)
           </span>
         )}
@@ -272,18 +466,16 @@ function ButlerList({
   );
 
   return (
-    <div className="mb-4 p-4 bg-white/10 border border-white/15 rounded-xl">
-      <p className="text-base font-bold mb-3 text-white">보유 집사</p>
+    <div className="mb-3 p-3 bg-white/10 border border-white/15 rounded-xl">
+      <p className="text-sm font-bold mb-2 text-white">보유 집사</p>
       <div className="max-h-[200px] overflow-y-auto overscroll-contain space-y-3">
         {groups.map(([left, right], gi) => (
           <div key={gi}>
             {gi > 0 && <hr className="border-white/15 mb-3" />}
             <div className="flex gap-4">
-              {/* 좌측 열 */}
               <div className="flex-1 space-y-1">
                 {left.map(renderEntry)}
               </div>
-              {/* 우측 열 */}
               {right.length > 0 && (
                 <div className="flex-1 space-y-1">
                   {right.map(renderEntry)}
@@ -304,14 +496,14 @@ function DefaultRabbitMessage() {
   const { profile } = useUser();
   const nickname = profile?.nickname || '여러분';
   return (
-    <p className="mb-4 text-center text-base font-bold text-white">
+    <p className="mb-3 text-center text-sm font-bold text-white">
       토끼는 언제나 {nickname} 편!
     </p>
   );
 }
 
 /**
- * 상세 보기 푸터 — 도감으로 돌아가기 + 데려오기/데려옴 버튼 한 줄
+ * 상세 보기 푸터
  */
 function FooterWithEquip({
   rabbit,
@@ -356,10 +548,9 @@ function FooterWithEquip({
 
   return (
     <div className="space-y-3">
-      {/* 슬롯 가득 찼을 때 선택 UI */}
       {!isEquipped && slotsAreFull && (
-        <div className="p-3 bg-white/10 border border-white/15 rounded-xl">
-          <p className="text-xs text-white/60 mb-2">교체할 토끼를 선택하세요:</p>
+        <div className="p-2.5 bg-white/10 border border-white/15 rounded-xl">
+          <p className="text-xs text-white/60 mb-1.5">교체할 토끼를 선택하세요:</p>
           <div className="flex gap-2">
             {equippedRabbits.map((slot, idx) => {
               const slotName = slot.rabbitId === 0 ? '기본 토끼' : (rabbitNames?.[idx] || `토끼 #${slot.rabbitId + 1}`);
@@ -382,23 +573,22 @@ function FooterWithEquip({
         </div>
       )}
 
-      {/* 버튼 한 줄 */}
       <div className="flex gap-2">
         <button
           onClick={onBack}
-          className="flex-1 py-2 border-2 border-white/30 text-white font-bold rounded-lg hover:bg-white/10 transition-colors"
+          className="flex-1 py-1.5 text-xs border-2 border-white/30 text-white font-bold rounded-lg hover:bg-white/10 transition-colors"
         >
-          도감으로 돌아가기
+          도감으로
         </button>
         {isEquipped ? (
-          <div className="flex-1 py-2 text-center text-white/50 bg-white/10 border border-white/15 font-bold rounded-lg">
+          <div className="flex-1 py-1.5 text-center text-xs text-white/50 bg-white/10 border border-white/15 font-bold rounded-lg">
             데려옴
           </div>
         ) : (
           <button
             onClick={handleEquip}
             disabled={isProcessing || (slotsAreFull && selectedSlot === null)}
-            className="flex-1 py-2 bg-white/20 backdrop-blur-sm text-white font-bold rounded-lg disabled:opacity-50 hover:bg-white/30 transition-colors"
+            className="flex-1 py-1.5 text-xs bg-white/20 backdrop-blur-sm text-white font-bold rounded-lg disabled:opacity-50 hover:bg-white/30 transition-colors"
           >
             {isProcessing ? '처리 중...' : '데려오기'}
           </button>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, type RefObject } from 'react';
+import { useState, useEffect, useCallback, useRef, type RefObject } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface ScrollToTopButtonProps {
@@ -24,43 +24,38 @@ export default function ScrollToTopButton({
   hidden = false,
 }: ScrollToTopButtonProps) {
   const [show, setShow] = useState(false);
+  const observerRef = useRef<IntersectionObserver | null>(null);
 
-  // 콜백 ref 패턴: targetRef.current가 나중에 마운트되어도 관찰 시작
+  // 레이아웃 안정 후 IntersectionObserver 시작 (초기 깜빡임 방지)
   useEffect(() => {
-    const el = targetRef.current;
-    if (!el) {
-      // ref가 아직 null → 짧은 간격으로 재시도
-      const timer = setInterval(() => {
-        const target = targetRef.current;
-        if (!target) return;
-        clearInterval(timer);
+    setShow(false);
+    observerRef.current?.disconnect();
 
-        const obs = new IntersectionObserver(
-          ([entry]) => setShow(!entry.isIntersecting),
-          { threshold: 0 }
-        );
-        obs.observe(target);
-        // cleanup에서 disconnect할 수 있도록 외부 변수에 저장
-        observerRef = obs;
-      }, 200);
+    const startObserving = () => {
+      const el = targetRef.current;
+      if (!el) return;
 
-      let observerRef: IntersectionObserver | null = null;
-      return () => {
-        clearInterval(timer);
-        observerRef?.disconnect();
-      };
-    }
+      const obs = new IntersectionObserver(
+        ([entry]) => setShow(!entry.isIntersecting),
+        { threshold: 0 }
+      );
+      obs.observe(el);
+      observerRef.current = obs;
+    };
 
-    const observer = new IntersectionObserver(
-      ([entry]) => setShow(!entry.isIntersecting),
-      { threshold: 0 }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
+    // 마운트 직후 레이아웃이 안정될 때까지 대기
+    const timer = setTimeout(startObserving, 800);
+
+    return () => {
+      clearTimeout(timer);
+      observerRef.current?.disconnect();
+    };
   }, [targetRef]);
 
   const scrollToTop = useCallback(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
   }, []);
 
   const sideClass = side === 'left' ? 'left-4' : 'right-4';
@@ -80,14 +75,14 @@ export default function ScrollToTopButton({
           whileTap={{ scale: 0.95, opacity: 0.7 }}
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
           onClick={scrollToTop}
-          className={`fixed ${bottom} ${sideClass} z-40 w-12 h-12 ${variantClass} rounded-full shadow-lg flex items-center justify-center transition-colors`}
+          className={`fixed ${bottom} ${sideClass} z-40 w-10 h-10 ${variantClass} rounded-full shadow-lg flex items-center justify-center transition-colors`}
           style={{
             WebkitTapHighlightColor: 'transparent',
             touchAction: 'manipulation',
           }}
           aria-label="맨 위로"
         >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
           </svg>
         </motion.button>

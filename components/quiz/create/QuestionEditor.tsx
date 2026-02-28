@@ -398,7 +398,7 @@ function RubricEditor({
   return (
     <div className="space-y-3">
       {!hideLabel && (
-        <label className="text-sm font-bold text-[#1A1A1A]">
+        <label className="text-xs font-bold text-[#1A1A1A]">
           루브릭 (평가 기준)
         </label>
       )}
@@ -475,7 +475,7 @@ function RubricEditor({
       <button
         type="button"
         onClick={handleAdd}
-        className="w-full py-2 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
+        className="w-full py-1.5 text-xs font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
       >
         + 평가요소 추가
       </button>
@@ -1055,21 +1055,21 @@ function SubQuestionMixedExamplesEditor({
           <button
             type="button"
             onClick={handleAddTextBlock}
-            className="flex-1 py-2 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
+            className="flex-1 py-1.5 text-xs font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
           >
             + 텍스트박스
           </button>
           <button
             type="button"
             onClick={handleAddGanaBlock}
-            className="flex-1 py-2 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
+            className="flex-1 py-1.5 text-xs font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
           >
             + (가)(나)(다)
           </button>
           <button
             type="button"
             onClick={handleAddBulletBlock}
-            className="flex-1 py-2 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
+            className="flex-1 py-1.5 text-xs font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
           >
             + ◦ 항목
           </button>
@@ -1306,7 +1306,7 @@ function SubQuestionEditor({
     <div className="p-4 border-2 border-[#1A1A1A] bg-[#EDEAE4]">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-bold text-[#1A1A1A]">
+          <span className="text-xs font-bold text-[#1A1A1A]">
             하위 문제 {index + 1}
           </span>
           {courseId && (
@@ -2880,21 +2880,21 @@ export default function QuestionEditor({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
-      className={`p-6 border-2 border-[#1A1A1A] ${className}`}
+      className={`p-4 border-2 border-[#1A1A1A] ${className}`}
       style={{ backgroundColor: '#F5F0E8' }}
     >
       {/* 헤더 */}
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-lg font-bold text-[#1A1A1A]">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-xs font-bold text-[#1A1A1A]">
           문제 {questionNumber}
         </h3>
         <button
           type="button"
           onClick={onCancel}
-          className="p-2 text-[#5C5C5C] hover:text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+          className="p-1.5 text-[#5C5C5C] hover:text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
         >
           <svg
-            className="w-5 h-5"
+            className="w-4 h-4"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -2909,10 +2909,10 @@ export default function QuestionEditor({
         </button>
       </div>
 
-      <div className="space-y-6">
+      <div className="space-y-4">
         {/* 문제 유형 선택 */}
         <div>
-          <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
+          <label className="block text-xs font-bold text-[#1A1A1A] mb-1.5">
             문제 유형
           </label>
           {/* 학생용: OX, 객관식, 주관식(short_answer), 결합형 - 4개 */}
@@ -2937,7 +2937,7 @@ export default function QuestionEditor({
                     whileTap={{ scale: 0.98 }}
                     onClick={() => handleTypeChange(type)}
                     className={`
-                      w-full py-2.5 font-bold text-sm border-2
+                      w-full py-1.5 font-bold text-xs border-2
                       transition-colors duration-200
                       ${
                         question.type === type
@@ -2961,7 +2961,7 @@ export default function QuestionEditor({
                   whileTap={{ scale: 0.98 }}
                   onClick={() => handleTypeChange(type)}
                   className={`
-                    w-full py-2.5 font-bold text-sm border-2
+                    w-full py-1.5 font-bold text-xs border-2
                     transition-colors duration-200
                     ${
                       question.type === type
@@ -2979,7 +2979,7 @@ export default function QuestionEditor({
           {/* 챕터 선택 (결합형이 아닌 문제만) */}
           {courseId && question.type !== 'combined' && (
             <div className="mt-3 flex items-center gap-2">
-              <span className="text-sm text-[#5C5C5C]">챕터:</span>
+              <span className="text-xs text-[#5C5C5C]">챕터:</span>
               <ChapterSelector
                 courseId={courseId}
                 chapterId={question.chapterId}
@@ -3001,7 +3001,7 @@ export default function QuestionEditor({
         {/* 결합형 공통 문제 (공통 지문 위에 표시) */}
         {question.type === 'combined' && (
           <div className="mb-4">
-            <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
+            <label className="block text-xs font-bold text-[#1A1A1A] mb-1.5">
               공통 문제 <span className="text-[#8B1A1A]">*</span>
             </label>
             <textarea
@@ -3012,7 +3012,7 @@ export default function QuestionEditor({
               }}
               placeholder="공통 문제를 입력하세요 (예: 다음 자료를 보고 물음에 답하시오.)"
               rows={2}
-              className={`w-full px-4 py-3 border-2 bg-white resize-none transition-colors duration-200 focus:outline-none ${
+              className={`w-full px-3 py-2 text-sm border-2 bg-white resize-none transition-colors duration-200 focus:outline-none ${
                 errors.commonQuestion ? 'border-[#8B1A1A]' : 'border-[#1A1A1A]'
               }`}
             />
@@ -3025,7 +3025,7 @@ export default function QuestionEditor({
         {/* 문제 텍스트 (결합형 제외) */}
         {question.type !== 'combined' && (
           <div>
-            <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
+            <label className="block text-xs font-bold text-[#1A1A1A] mb-1.5">
               문제
             </label>
             <textarea
@@ -3034,7 +3034,7 @@ export default function QuestionEditor({
               placeholder="문제를 입력하세요"
               rows={3}
               className={`
-                w-full px-4 py-3 border-2 bg-white
+                w-full px-3 py-2 text-sm border-2 bg-white
                 resize-none
                 transition-colors duration-200
                 focus:outline-none
@@ -3051,7 +3051,7 @@ export default function QuestionEditor({
         {question.type === 'combined' && (
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-bold text-[#1A1A1A]">
+              <label className="block text-xs font-bold text-[#1A1A1A]">
                 공통 제시문
               </label>
               <button
@@ -3099,7 +3099,7 @@ export default function QuestionEditor({
         {/* 이미지 업로드 - 결합형이 아닐 때 */}
         {question.type !== 'combined' && (
           <div>
-            <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
+            <label className="block text-xs font-bold text-[#1A1A1A] mb-1.5">
               문제 이미지 <span className="text-[#5C5C5C] font-normal">(선택)</span>
             </label>
 
@@ -3193,7 +3193,7 @@ export default function QuestionEditor({
         {/* 공통 이미지 업로드 - 결합형일 때 */}
         {question.type === 'combined' && (
           <div>
-            <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
+            <label className="block text-xs font-bold text-[#1A1A1A] mb-1.5">
               공통 이미지
             </label>
 
@@ -3261,7 +3261,7 @@ export default function QuestionEditor({
         {question.type !== 'combined' && (
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-bold text-[#1A1A1A]">
+              <label className="block text-xs font-bold text-[#1A1A1A]">
                 제시문 <span className="text-[#5C5C5C] font-normal">(선택)</span>
               </label>
               <div className="flex gap-2">
@@ -3641,21 +3641,21 @@ export default function QuestionEditor({
                       <button
                         type="button"
                         onClick={handleAddTextExample}
-                        className="py-2 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
+                        className="py-1.5 text-xs font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
                       >
                         + 텍스트박스
                       </button>
                       <button
                         type="button"
                         onClick={handleAddGanaExample}
-                        className="py-2 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
+                        className="py-1.5 text-xs font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
                       >
                         + (가)(나)(다)
                       </button>
                       <button
                         type="button"
                         onClick={handleAddBulletExample}
-                        className="py-2 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
+                        className="py-1.5 text-xs font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
                       >
                         + ◦ 항목
                       </button>
@@ -3768,7 +3768,7 @@ export default function QuestionEditor({
         {(question.type === 'multiple' || question.type === 'short_answer') && (
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-bold text-[#1A1A1A]">
+              <label className="block text-xs font-bold text-[#1A1A1A]">
                 보기 <span className="text-[#5C5C5C] font-normal">(선택)</span>
               </label>
               <button
@@ -3973,7 +3973,7 @@ export default function QuestionEditor({
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
             >
-              <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
+              <label className="block text-xs font-bold text-[#1A1A1A] mb-1.5">
                 정답 선택
               </label>
               <div className="flex gap-4">
@@ -4013,7 +4013,7 @@ export default function QuestionEditor({
               exit={{ opacity: 0, height: 0 }}
             >
               <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-bold text-[#1A1A1A]">
+                <label className="text-xs font-bold text-[#1A1A1A]">
                   선지 (정답 클릭) - {question.choices.length}개
                 </label>
                 {/* 복수정답 토글 */}
@@ -4077,7 +4077,7 @@ export default function QuestionEditor({
                         onChange={(e) => handleChoiceChange(index, e.target.value)}
                         placeholder={`선지 ${index + 1}`}
                         className={`
-                          flex-1 px-4 py-2.5 border-2 bg-[#F5F0E8]
+                          flex-1 px-3 py-2 text-sm border-2 bg-[#F5F0E8]
                           transition-colors duration-200
                           focus:outline-none
                           ${
@@ -4112,7 +4112,7 @@ export default function QuestionEditor({
                 <button
                   type="button"
                   onClick={handleAddChoice}
-                  className="mt-2 w-full py-2 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
+                  className="mt-2 w-full py-1.5 text-xs font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
                 >
                   + 선지 추가 (최대 8개)
                 </button>
@@ -4136,7 +4136,7 @@ export default function QuestionEditor({
               exit={{ opacity: 0, height: 0 }}
             >
               <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-bold text-[#1A1A1A]">
+                <label className="text-xs font-bold text-[#1A1A1A]">
                   정답
                 </label>
                 <span className="text-xs text-[#5C5C5C]">
@@ -4153,7 +4153,7 @@ export default function QuestionEditor({
                       value={text}
                       onChange={(e) => handleAnswerTextChange(index, e.target.value)}
                       placeholder={`정답 ${index + 1}`}
-                      className="flex-1 px-4 py-2.5 border-2 border-[#1A1A1A] bg-[#F5F0E8] focus:outline-none"
+                      className="flex-1 px-3 py-2 text-sm border-2 border-[#1A1A1A] bg-[#F5F0E8] focus:outline-none"
                     />
                     {/* 삭제 버튼 (2개 이상일 때만) */}
                     {(question.answerTexts || []).length > 1 && (
@@ -4176,7 +4176,7 @@ export default function QuestionEditor({
                 <button
                   type="button"
                   onClick={handleAddAnswerText}
-                  className="mt-2 w-full py-2 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
+                  className="mt-2 w-full py-1.5 text-xs font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
                 >
                   + 정답 추가 (최대 5개)
                 </button>
@@ -4202,7 +4202,7 @@ export default function QuestionEditor({
               {userRole === 'professor' ? (
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm font-bold text-[#1A1A1A]">
+                    <label className="text-xs font-bold text-[#1A1A1A]">
                       루브릭 (선택)
                     </label>
                     <button
@@ -4256,7 +4256,7 @@ export default function QuestionEditor({
               className="space-y-4"
             >
               <div className="flex items-center justify-between">
-                <label className="text-sm font-bold text-[#1A1A1A]">
+                <label className="text-xs font-bold text-[#1A1A1A]">
                   하위 문제 ({(question.subQuestions || []).length}/10)
                 </label>
               </div>
@@ -4279,7 +4279,7 @@ export default function QuestionEditor({
                 <button
                   type="button"
                   onClick={handleAddSubQuestion}
-                  className="w-full py-2.5 text-sm font-bold border-2 border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
+                  className="w-full py-2 text-xs font-bold border-2 border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
                 >
                   + 하위 문제 추가 (최대 10개)
                 </button>
@@ -4298,7 +4298,7 @@ export default function QuestionEditor({
         {/* 해설 (선택) - 결합형 제외 */}
         {question.type !== 'combined' && (
           <div>
-            <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
+            <label className="block text-xs font-bold text-[#1A1A1A] mb-1.5">
               해설 <span className="text-[#5C5C5C] font-normal">(선택)</span>
             </label>
             <textarea
@@ -4307,7 +4307,7 @@ export default function QuestionEditor({
               placeholder="해설을 입력하세요 (선택)"
               rows={2}
               className="
-                w-full px-4 py-3 border-2 border-[#1A1A1A] bg-[#F5F0E8]
+                w-full px-3 py-2 text-sm border-2 border-[#1A1A1A] bg-[#F5F0E8]
                 resize-none
                 transition-colors duration-200
                 focus:outline-none
@@ -4317,14 +4317,14 @@ export default function QuestionEditor({
         )}
 
         {/* 액션 버튼 */}
-        <div className="flex gap-3 pt-2">
+        <div className="flex gap-2 pt-2">
           <motion.button
             type="button"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={onCancel}
             className="
-              flex-1 py-3 px-4 border-2 border-[#1A1A1A]
+              flex-1 py-2 px-3 text-xs border-2 border-[#1A1A1A]
               bg-[#EDEAE4] text-[#1A1A1A] font-bold
               hover:bg-[#1A1A1A] hover:text-[#F5F0E8]
               transition-colors
@@ -4338,7 +4338,7 @@ export default function QuestionEditor({
             whileTap={{ scale: 0.98 }}
             onClick={handleSave}
             className="
-              flex-1 py-3 px-4 border-2 border-[#1A1A1A]
+              flex-1 py-2 px-3 text-xs border-2 border-[#1A1A1A]
               bg-[#1A1A1A] text-[#F5F0E8] font-bold
               hover:bg-[#333]
               transition-colors

@@ -100,7 +100,7 @@ function GlassModal({ children, onClose }: { children: React.ReactNode; onClose:
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/50"
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
       onClick={onClose}
     >
       <motion.div
@@ -108,7 +108,7 @@ function GlassModal({ children, onClose }: { children: React.ReactNode; onClose:
         animate={{ scale: 1 }}
         exit={{ scale: 0.9 }}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-sm rounded-2xl overflow-hidden p-6"
+        className="relative w-full max-w-[300px] rounded-2xl overflow-hidden p-4"
       >
         <div className="absolute inset-0 rounded-2xl overflow-hidden">
           <img src="/images/home-bg.jpg" alt="" className="w-full h-full object-cover" />
@@ -676,7 +676,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            className="fixed left-0 right-0 bottom-0 z-50 max-h-[85vh] rounded-t-2xl overflow-hidden"
+            className="fixed left-0 right-0 bottom-0 z-50 max-h-[75vh] rounded-t-2xl overflow-hidden"
           >
             {/* 글래스 배경 레이어 */}
             <div className="absolute inset-0 rounded-t-2xl overflow-hidden">
@@ -685,16 +685,16 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
             <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
 
             {/* 스크롤 영역 */}
-            <div ref={sheetRef} className="relative z-10 overflow-y-auto overscroll-contain max-h-[85vh]">
+            <div ref={sheetRef} className="relative z-10 overflow-y-auto overscroll-contain max-h-[75vh]">
               {/* 드래그 핸들 */}
               <div className="flex justify-center pt-3 pb-1">
                 <div className="w-10 h-1 bg-white/40 rounded-full" />
               </div>
 
               {/* 헤더 */}
-              <div className="px-5 pt-2 pb-4">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-white">Settings</h2>
+              <div className="px-5 pt-1 pb-3">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-bold text-white">Settings</h2>
                   <button onClick={onClose} className="p-2 -mr-2">
                     <svg className="w-6 h-6 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -788,18 +788,18 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
               <div className="h-px mx-5 bg-white/15" />
 
               {/* 설정 목록 */}
-              <div className="px-5 py-6">
+              <div className="px-5 py-4">
                 {/* 알림 설정 (학생만) */}
                 {!isProfessor && (
-                  <div className="mb-8">
-                    <h3 className="text-lg font-bold text-white mb-4">
+                  <div className="mb-6">
+                    <h3 className="text-sm font-bold text-white/70 mb-3">
                       Notifications
                     </h3>
                     <div className="space-y-4">
                       {NOTIFICATION_ITEMS.map((item) => (
                         <div key={item.key} className="flex items-center justify-between">
                           <div>
-                            <span className="text-base text-white/80">
+                            <span className="text-sm text-white/80">
                               {item.label}
                             </span>
                             <p className="text-xs text-white/40">{item.desc}</p>
@@ -816,8 +816,8 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                 )}
 
                 {/* Account 섹션 */}
-                <div className="mb-8">
-                  <h3 className="text-lg font-bold text-white mb-4">
+                <div className="mb-6">
+                  <h3 className="text-sm font-bold text-white/70 mb-3">
                     Account
                   </h3>
                   <div className="space-y-3">
@@ -836,7 +836,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                         className="w-full flex items-center justify-between py-2.5"
                       >
                         <div className="text-left">
-                          <span className="text-base text-white/80">복구 이메일</span>
+                          <span className="text-sm text-white/80">복구 이메일</span>
                           <p className="text-xs text-white/40">
                             {maskedRecovery || '미등록'}
                           </p>
@@ -859,7 +859,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                       }}
                       className="w-full flex items-center justify-between py-2.5"
                     >
-                      <span className="text-base text-white/80">비밀번호 변경</span>
+                      <span className="text-sm text-white/80">비밀번호 변경</span>
                       <svg className="w-4 h-4 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>
@@ -868,8 +868,8 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                 </div>
 
                 {/* Support 섹션 */}
-                <div className="mb-8">
-                  <h3 className="text-lg font-bold text-white mb-4">
+                <div className="mb-6">
+                  <h3 className="text-sm font-bold text-white/70 mb-3">
                     Support
                   </h3>
                   <div className="space-y-3">
@@ -879,7 +879,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                       className="w-full flex items-center justify-between py-2.5"
                     >
                       <div className="text-left">
-                        <span className="text-base text-white/80">캐시 초기화</span>
+                        <span className="text-sm text-white/80">캐시 초기화</span>
                         <p className="text-xs text-white/40">앱 데이터 초기화</p>
                       </div>
                       <svg className="w-4 h-4 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -894,7 +894,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                         className="w-full flex items-center justify-between py-2.5"
                       >
                         <div className="flex items-center gap-2">
-                          <span className="text-base text-white/80">문의 확인</span>
+                          <span className="text-sm text-white/80">문의 확인</span>
                           {unreadCount > 0 && (
                             <span className="px-1.5 py-0.5 text-[10px] font-bold bg-red-500 text-white rounded-full min-w-[18px] text-center">
                               {unreadCount}
@@ -917,7 +917,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                         }}
                         className="w-full flex items-center justify-between py-2.5"
                       >
-                        <span className="text-base text-white/80">문의하기</span>
+                        <span className="text-sm text-white/80">문의하기</span>
                         <svg className="w-4 h-4 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                         </svg>
@@ -991,7 +991,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                           onClick={() => setShowPasswordReset(prev => !prev)}
                           className="w-full flex items-center justify-between py-2.5"
                         >
-                          <span className="text-base text-white/80">비밀번호 초기화</span>
+                          <span className="text-sm text-white/80">비밀번호 초기화</span>
                           <svg
                             className={`w-4 h-4 text-white/30 transition-transform ${showPasswordReset ? 'rotate-90' : ''}`}
                             fill="none" stroke="currentColor" viewBox="0 0 24 24"
@@ -1050,7 +1050,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                 <button
                   onClick={handleLogout}
                   disabled={loggingOut}
-                  className="w-full py-3 rounded-xl text-center font-medium transition-colors bg-red-500/20 border border-red-400/30 text-red-300 hover:bg-red-500/30 disabled:opacity-50"
+                  className="w-full py-2 rounded-xl text-center text-sm font-medium transition-colors bg-red-500/20 border border-red-400/30 text-red-300 hover:bg-red-500/30 disabled:opacity-50"
                 >
                   {loggingOut ? '로그아웃 중...' : '로그아웃'}
                 </button>
@@ -1094,7 +1094,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                   animate={{ x: 0 }}
                   exit={{ x: '-100%' }}
                   transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                  className="fixed left-0 bottom-0 z-[60] w-72 rounded-tr-2xl overflow-hidden"
+                  className="fixed left-0 bottom-0 z-[60] w-56 rounded-tr-2xl overflow-hidden"
                   style={{ height: pickerHeight > 0 ? pickerHeight : '85vh' }}
                 >
                   {/* 글래스 배경 */}
@@ -1221,10 +1221,10 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
           <AnimatePresence>
             {showNicknameModal && (
               <GlassModal onClose={() => setShowNicknameModal(false)}>
-                <h3 className="text-lg font-bold text-white mb-4">닉네임 변경</h3>
+                <h3 className="text-base font-bold text-white mb-3">닉네임 변경</h3>
 
                 {nicknameCooldownDays > 0 && (
-                  <p className="text-sm text-white/50 mb-3">
+                  <p className="text-xs text-white/50 mb-2">
                     닉네임은 변경 후 30일이 지나야 다시 변경할 수 있습니다.
                     <br />
                     <span className="text-red-300">({nicknameCooldownDays}일 후 변경 가능)</span>
@@ -1241,7 +1241,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                   placeholder="새 닉네임 (2-6자)"
                   maxLength={6}
                   disabled={nicknameCooldownDays > 0}
-                  className={`w-full px-4 py-3 rounded-xl outline-none bg-white/10 text-white placeholder:text-white/40 disabled:opacity-50 border ${
+                  className={`w-full px-3 py-2 rounded-xl outline-none text-sm bg-white/10 text-white placeholder:text-white/40 disabled:opacity-50 border ${
                     nicknameError ? 'border-red-400/50' : 'border-white/15'
                   }`}
                 />
@@ -1251,14 +1251,14 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                 <div className="flex gap-3 mt-4">
                   <button
                     onClick={() => setShowNicknameModal(false)}
-                    className="flex-1 py-3 rounded-xl font-medium bg-white/15 text-white hover:bg-white/20 transition-colors"
+                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/15 text-white hover:bg-white/20 transition-colors"
                   >
                     취소
                   </button>
                   <button
                     onClick={handleNicknameChange}
                     disabled={savingNickname || newNickname.length < 2 || newNickname.length > 6 || nicknameCooldownDays > 0}
-                    className="flex-1 py-3 rounded-xl font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
+                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
                   >
                     {savingNickname ? '저장 중...' : '변경'}
                   </button>
@@ -1289,13 +1289,13 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                   </div>
                   <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
                   <div className="relative z-10">
-                    <h3 className="text-lg font-bold text-white mb-4">반 변경</h3>
+                    <h3 className="text-sm font-bold text-white/70 mb-3">반 변경</h3>
                     <div className="grid grid-cols-4 gap-2">
                       {CLASS_OPTIONS.map((cls) => (
                         <button
                           key={cls}
                           onClick={() => setSelectedClass(cls)}
-                          className={`py-3 rounded-xl font-bold text-white transition-colors ${
+                          className={`py-2 rounded-xl text-sm font-bold text-white transition-colors ${
                             selectedClass === cls
                               ? 'bg-white/30 border border-white/50'
                               : 'bg-white/10 border border-white/15 hover:bg-white/20'
@@ -1345,12 +1345,12 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                 setRecoveryPassword('');
                 setRecoveryMessage('');
               }}>
-                <h3 className="text-lg font-bold text-white mb-1">복구 이메일</h3>
+                <h3 className="text-base font-bold text-white mb-1">복구 이메일</h3>
                 <p className="text-xs text-white/40 mb-4">비밀번호 찾기에 사용됩니다</p>
 
                 {!passwordVerified ? (
                   <>
-                    <p className="text-sm text-white/50 mb-3">
+                    <p className="text-xs text-white/50 mb-2">
                       본인 확인을 위해 비밀번호를 입력해주세요
                     </p>
                     <input
@@ -1361,13 +1361,13 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                         setRecoveryMessage('');
                       }}
                       placeholder="현재 비밀번호"
-                      className="w-full px-4 py-3 rounded-xl outline-none bg-white/10 text-white placeholder:text-white/40 border border-white/15"
+                      className="w-full px-3 py-2 rounded-xl outline-none text-sm bg-white/10 text-white placeholder:text-white/40 border border-white/15"
                     />
                   </>
                 ) : (
                   <>
                     {maskedRecovery && !verificationSent && (
-                      <p className="text-sm text-white/50 mb-3">
+                      <p className="text-xs text-white/50 mb-2">
                         현재: {maskedRecovery}
                       </p>
                     )}
@@ -1381,7 +1381,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                       }}
                       placeholder="이메일 주소"
                       disabled={verificationSent}
-                      className="w-full px-4 py-3 rounded-xl outline-none bg-white/10 text-white placeholder:text-white/40 border border-white/15 disabled:opacity-50"
+                      className="w-full px-3 py-2 rounded-xl outline-none text-sm bg-white/10 text-white placeholder:text-white/40 border border-white/15 disabled:opacity-50"
                     />
 
                     {verificationSent && (
@@ -1399,7 +1399,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                           placeholder="인증 코드 6자리"
                           maxLength={6}
                           inputMode="numeric"
-                          className="w-full px-4 py-3 rounded-xl outline-none bg-white/10 text-white placeholder:text-white/40 border border-white/15 text-center tracking-[0.3em] text-lg"
+                          className="w-full px-3 py-2 rounded-xl outline-none text-sm bg-white/10 text-white placeholder:text-white/40 border border-white/15 text-center tracking-[0.3em]"
                         />
                       </div>
                     )}
@@ -1422,7 +1422,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                       setRecoveryPassword('');
                       setRecoveryMessage('');
                     }}
-                    className="flex-1 py-3 rounded-xl font-medium bg-white/15 text-white hover:bg-white/20 transition-colors"
+                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/15 text-white hover:bg-white/20 transition-colors"
                   >
                     취소
                   </button>
@@ -1430,7 +1430,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                     <button
                       onClick={handleRecoveryPasswordCheck}
                       disabled={savingRecovery || !recoveryPassword}
-                      className="flex-1 py-3 rounded-xl font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
+                      className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
                     >
                       {savingRecovery ? '확인 중...' : '확인'}
                     </button>
@@ -1438,7 +1438,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                     <button
                       onClick={handleVerifyCode}
                       disabled={verifyingCode || verificationCode.length !== 6}
-                      className="flex-1 py-3 rounded-xl font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
+                      className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
                     >
                       {verifyingCode ? '확인 중...' : '인증 완료'}
                     </button>
@@ -1446,7 +1446,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                     <button
                       onClick={handleSendVerification}
                       disabled={savingRecovery || !recoveryEmail}
-                      className="flex-1 py-3 rounded-xl font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
+                      className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
                     >
                       {savingRecovery ? '전송 중...' : '인증 코드 전송'}
                     </button>
@@ -1460,7 +1460,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
           <AnimatePresence>
             {showPasswordModal && (
               <GlassModal onClose={() => setShowPasswordModal(false)}>
-                <h3 className="text-lg font-bold text-white mb-4">비밀번호 변경</h3>
+                <h3 className="text-base font-bold text-white mb-3">비밀번호 변경</h3>
 
                 <div className="space-y-3">
                   <input
@@ -1471,7 +1471,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                       setPasswordError('');
                     }}
                     placeholder="현재 비밀번호"
-                    className="w-full px-4 py-3 rounded-xl outline-none bg-white/10 text-white placeholder:text-white/40 border border-white/15"
+                    className="w-full px-3 py-2 rounded-xl outline-none text-sm bg-white/10 text-white placeholder:text-white/40 border border-white/15"
                   />
                   <input
                     type="password"
@@ -1481,7 +1481,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                       setPasswordError('');
                     }}
                     placeholder="새 비밀번호 (6자 이상)"
-                    className="w-full px-4 py-3 rounded-xl outline-none bg-white/10 text-white placeholder:text-white/40 border border-white/15"
+                    className="w-full px-3 py-2 rounded-xl outline-none text-sm bg-white/10 text-white placeholder:text-white/40 border border-white/15"
                   />
                   <input
                     type="password"
@@ -1491,7 +1491,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                       setPasswordError('');
                     }}
                     placeholder="새 비밀번호 확인"
-                    className="w-full px-4 py-3 rounded-xl outline-none bg-white/10 text-white placeholder:text-white/40 border border-white/15"
+                    className="w-full px-3 py-2 rounded-xl outline-none text-sm bg-white/10 text-white placeholder:text-white/40 border border-white/15"
                   />
                 </div>
                 {passwordError && (
@@ -1511,14 +1511,14 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                 <div className="flex gap-3 mt-4">
                   <button
                     onClick={() => setShowPasswordModal(false)}
-                    className="flex-1 py-3 rounded-xl font-medium bg-white/15 text-white hover:bg-white/20 transition-colors"
+                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/15 text-white hover:bg-white/20 transition-colors"
                   >
                     취소
                   </button>
                   <button
                     onClick={handlePasswordChange}
                     disabled={savingPassword || !currentPassword || newPassword.length < 6}
-                    className="flex-1 py-3 rounded-xl font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
+                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
                   >
                     {savingPassword ? '변경 중...' : '변경'}
                   </button>
@@ -1531,7 +1531,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
           <AnimatePresence>
             {showResetModal && (
               <GlassModal onClose={() => setShowResetModal(false)}>
-                <h3 className="text-lg font-bold text-white mb-1">비밀번호 재설정</h3>
+                <h3 className="text-base font-bold text-white mb-1">비밀번호 재설정</h3>
 
                 {resetLoading && !resetCodeSent && (
                   <div className="flex items-center gap-2 py-6 justify-center">
@@ -1559,7 +1559,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                       placeholder="인증 코드 6자리"
                       maxLength={6}
                       inputMode="numeric"
-                      className="w-full px-4 py-3 rounded-xl outline-none bg-white/10 text-white placeholder:text-white/40 border border-white/15 text-center tracking-[0.3em] text-lg"
+                      className="w-full px-3 py-2 rounded-xl outline-none text-sm bg-white/10 text-white placeholder:text-white/40 border border-white/15 text-center tracking-[0.3em]"
                     />
                   </>
                 )}
@@ -1576,7 +1576,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                           setResetMessage('');
                         }}
                         placeholder="새 비밀번호 (6자 이상)"
-                        className="w-full px-4 py-3 rounded-xl outline-none bg-white/10 text-white placeholder:text-white/40 border border-white/15"
+                        className="w-full px-3 py-2 rounded-xl outline-none text-sm bg-white/10 text-white placeholder:text-white/40 border border-white/15"
                       />
                       <input
                         type="password"
@@ -1586,7 +1586,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                           setResetMessage('');
                         }}
                         placeholder="새 비밀번호 확인"
-                        className="w-full px-4 py-3 rounded-xl outline-none bg-white/10 text-white placeholder:text-white/40 border border-white/15"
+                        className="w-full px-3 py-2 rounded-xl outline-none text-sm bg-white/10 text-white placeholder:text-white/40 border border-white/15"
                       />
                     </div>
                   </>
@@ -1602,7 +1602,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                   <div className="flex gap-3 mt-4">
                     <button
                       onClick={() => setShowResetModal(false)}
-                      className="flex-1 py-3 rounded-xl font-medium bg-white/15 text-white hover:bg-white/20 transition-colors"
+                      className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/15 text-white hover:bg-white/20 transition-colors"
                     >
                       취소
                     </button>
@@ -1610,7 +1610,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                       <button
                         onClick={handleVerifyResetCode}
                         disabled={resetCode.length !== 6}
-                        className="flex-1 py-3 rounded-xl font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
+                        className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
                       >
                         확인
                       </button>
@@ -1619,7 +1619,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                       <button
                         onClick={handleResetNewPassword}
                         disabled={resetLoading || resetNewPassword.length < 6}
-                        className="flex-1 py-3 rounded-xl font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
+                        className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
                       >
                         {resetLoading ? '변경 중...' : '변경'}
                       </button>
@@ -1634,7 +1634,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
           <AnimatePresence>
             {showCacheConfirm && (
               <GlassModal onClose={() => setShowCacheConfirm(false)}>
-                <h3 className="text-lg font-bold text-white mb-2">캐시 초기화</h3>
+                <h3 className="text-base font-bold text-white mb-2">캐시 초기화</h3>
                 <p className="text-sm text-white/60 mb-2">
                   앱 데이터를 초기화합니다. 로그인은 유지됩니다.
                 </p>
@@ -1644,13 +1644,13 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                 <div className="flex gap-3">
                   <button
                     onClick={() => setShowCacheConfirm(false)}
-                    className="flex-1 py-3 rounded-xl font-medium bg-white/15 text-white hover:bg-white/20 transition-colors"
+                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/15 text-white hover:bg-white/20 transition-colors"
                   >
                     취소
                   </button>
                   <button
                     onClick={handleClearCache}
-                    className="flex-1 py-3 rounded-xl font-medium bg-red-500/30 border border-red-400/30 text-red-200 hover:bg-red-500/40 transition-colors"
+                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-red-500/30 border border-red-400/30 text-red-200 hover:bg-red-500/40 transition-colors"
                   >
                     초기화
                   </button>
@@ -1665,12 +1665,12 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
               <GlassModal onClose={() => setShowInquiryModal(false)}>
                 {inquirySent ? (
                   <div className="text-center py-4">
-                    <p className="text-lg font-bold text-white mb-1">전송 완료</p>
+                    <p className="text-base font-bold text-white mb-1">전송 완료</p>
                     <p className="text-sm text-white/50">문의가 접수되었습니다.</p>
                   </div>
                 ) : (
                   <>
-                    <h3 className="text-lg font-bold text-white mb-1">문의하기</h3>
+                    <h3 className="text-base font-bold text-white mb-1">문의하기</h3>
                     <p className="text-xs text-white/40 mb-4">개발자에게 익명으로 전달됩니다</p>
                     <textarea
                       value={inquiryMessage}
@@ -1678,19 +1678,19 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                       placeholder="문의 내용을 입력하세요"
                       rows={4}
                       maxLength={500}
-                      className="w-full px-4 py-3 rounded-xl outline-none bg-white/10 text-white placeholder:text-white/40 border border-white/15 resize-none"
+                      className="w-full px-3 py-2 rounded-xl outline-none text-sm bg-white/10 text-white placeholder:text-white/40 border border-white/15 resize-none"
                     />
                     <div className="flex gap-3 mt-4">
                       <button
                         onClick={() => setShowInquiryModal(false)}
-                        className="flex-1 py-3 rounded-xl font-medium bg-white/15 text-white hover:bg-white/20 transition-colors"
+                        className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/15 text-white hover:bg-white/20 transition-colors"
                       >
                         취소
                       </button>
                       <button
                         onClick={handleSendInquiry}
                         disabled={sendingInquiry || !inquiryMessage.trim()}
-                        className="flex-1 py-3 rounded-xl font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
+                        className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
                       >
                         {sendingInquiry ? '전송 중...' : '전송'}
                       </button>
@@ -1721,20 +1721,20 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                     value={deleteInput}
                     onChange={(e) => setDeleteInput(e.target.value)}
                     placeholder="삭제"
-                    className="w-full px-4 py-3 rounded-xl outline-none bg-white/10 text-white placeholder:text-white/40 border border-red-400/30"
+                    className="w-full px-3 py-2 rounded-xl outline-none text-sm bg-white/10 text-white placeholder:text-white/40 border border-red-400/30"
                   />
                 </div>
                 <div className="flex gap-3">
                   <button
                     onClick={() => setShowDeleteConfirm(false)}
-                    className="flex-1 py-3 rounded-xl font-medium bg-white/15 text-white hover:bg-white/20 transition-colors"
+                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/15 text-white hover:bg-white/20 transition-colors"
                   >
                     취소
                   </button>
                   <button
                     onClick={handleDeleteAccount}
                     disabled={deletingAccount || deleteInput !== '삭제'}
-                    className="flex-1 py-3 rounded-xl font-medium bg-red-500/30 border border-red-400/30 text-red-200 hover:bg-red-500/40 transition-colors disabled:opacity-50"
+                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-red-500/30 border border-red-400/30 text-red-200 hover:bg-red-500/40 transition-colors disabled:opacity-50"
                   >
                     {deletingAccount ? '삭제 중...' : '계정 삭제'}
                   </button>

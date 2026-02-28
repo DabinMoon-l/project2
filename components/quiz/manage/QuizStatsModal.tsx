@@ -230,12 +230,20 @@ function ClassPieChart({
 // 타입 정의
 // ============================================================
 
+interface SourceRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 interface QuizStatsModalProps {
   quizId: string;
   quizTitle: string;
   isOpen: boolean;
   onClose: () => void;
   isProfessor?: boolean;
+  sourceRect?: SourceRect | null;
 }
 
 interface LabeledItem {
@@ -522,6 +530,7 @@ export default function QuizStatsModal({
   isOpen,
   onClose,
   isProfessor = false,
+  sourceRect = null,
 }: QuizStatsModalProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -538,6 +547,7 @@ export default function QuizStatsModal({
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [feedbackList, setFeedbackList] = useState<any[]>([]);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const [feedbackSourceRect, setFeedbackSourceRect] = useState<SourceRect | null>(null);
 
   // 문제 스와이프 (가로 슬라이드)
   const questionContentRef = useRef<HTMLDivElement>(null);
@@ -555,17 +565,11 @@ export default function QuizStatsModal({
   const [resultsWithClass, setResultsWithClass] = useState<ResultWithClass[]>([]);
   const [courseId, setCourseId] = useState<string | undefined>();
 
-  // 모달이 열릴 때 네비게이션 숨김 + 문제 인덱스 리셋
+  // 모달이 열릴 때 문제 인덱스 리셋
   useEffect(() => {
     if (isOpen) {
-      document.body.setAttribute('data-hide-nav', 'true');
       setSelectedQuestionIndex(0);
-    } else {
-      document.body.removeAttribute('data-hide-nav');
     }
-    return () => {
-      document.body.removeAttribute('data-hide-nav');
-    };
   }, [isOpen]);
 
   // 모달 열림 시 body 스크롤 완전 잠금
@@ -1122,7 +1126,8 @@ export default function QuizStatsModal({
     currentQuestion.mixedExamples.some(item => isValidMixedItem(item));
 
   // 피드백 로드
-  const handleOpenFeedback = useCallback(async () => {
+  const handleOpenFeedback = useCallback(async (rect?: SourceRect) => {
+    if (rect) setFeedbackSourceRect(rect);
     setShowFeedbackModal(true);
     setFeedbackLoading(true);
     try {
@@ -1175,27 +1180,44 @@ export default function QuizStatsModal({
     }
   };
 
-  if (!isOpen) return null;
+  // 요술지니 애니메이션 계산 (sourceRect → 화면 중앙)
+  const genieOffset = useMemo(() => {
+    if (!sourceRect || typeof window === 'undefined') return { dx: 0, dy: 0 };
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight / 2;
+    return {
+      dx: sourceRect.x + sourceRect.width / 2 - cx,
+      dy: sourceRect.y + sourceRect.height / 2 - cy,
+    };
+  }, [sourceRect]);
 
   return (
-    <div
+    <AnimatePresence>
+    {isOpen && (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.15 }}
       className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 overflow-hidden overscroll-none"
       onClick={onClose}
     >
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
+        initial={{ opacity: 0, scale: 0.05, x: genieOffset.dx, y: genieOffset.dy }}
+        animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
+        exit={{ opacity: 0, scale: 0.05, x: genieOffset.dx, y: genieOffset.dy }}
+        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg bg-[#F5F0E8] border-2 border-[#1A1A1A] max-h-[95vh] overflow-hidden flex flex-col"
+        className="w-full max-w-lg bg-[#F5F0E8] border-2 border-[#1A1A1A] h-[82vh] overflow-hidden flex flex-col"
       >
         {/* 헤더 */}
-        <div className="p-4 border-b-2 border-[#1A1A1A] flex items-center justify-between flex-shrink-0">
-          <h2 className="text-xl font-bold text-[#1A1A1A] flex-1 pr-4 truncate">{quizTitle}</h2>
+        <div className="px-3 py-2 border-b-2 border-[#1A1A1A] flex items-center justify-between flex-shrink-0">
+          <h2 className="text-sm font-bold text-[#1A1A1A] flex-1 pr-3 truncate">{quizTitle}</h2>
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center text-[#5C5C5C] hover:text-[#1A1A1A] flex-shrink-0"
+            className="w-7 h-7 flex items-center justify-center text-[#5C5C5C] hover:text-[#1A1A1A] flex-shrink-0"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -1208,14 +1230,14 @@ export default function QuizStatsModal({
               <button
                 key={filter.value}
                 onClick={() => setClassFilter(filter.value)}
-                className={`flex-1 py-3 text-base font-medium transition-colors ${
+                className={`flex-1 py-1.5 text-xs font-medium transition-colors ${
                   classFilter === filter.value
                     ? 'text-[#1A1A1A] border-b-2 border-[#1A1A1A] bg-[#F5F0E8]'
                     : 'text-[#5C5C5C] hover:text-[#1A1A1A]'
                 }`}
               >
                 {filter.label}
-                <span className="ml-0.5 text-sm">
+                <span className="ml-0.5 text-[10px]">
                   ({classParticipantCounts[filter.value]})
                 </span>
               </button>
@@ -1223,59 +1245,59 @@ export default function QuizStatsModal({
           </div>
         )}
 
-        {/* 컨텐츠 */}
-        <div className="flex-1 overflow-y-auto overscroll-contain">
-          {loading && (
-            <div className="flex items-center justify-center py-12">
-              <div className="w-8 h-8 border-2 border-[#1A1A1A] border-t-transparent animate-spin" />
-            </div>
-          )}
+        {loading && (
+          <div className="flex items-center justify-center py-8 flex-shrink-0">
+            <div className="w-6 h-6 border-2 border-[#1A1A1A] border-t-transparent animate-spin" />
+          </div>
+        )}
 
-          {error && (
-            <div className="text-center py-12">
-              <p className="text-[#8B1A1A]">{error}</p>
-            </div>
-          )}
+        {error && (
+          <div className="text-center py-8 flex-shrink-0">
+            <p className="text-sm text-[#8B1A1A]">{error}</p>
+          </div>
+        )}
 
-          {!loading && !error && stats && (
-            <div className="p-4 space-y-4">
-              {/* 요약 카드 */}
-              <div className="grid grid-cols-4 gap-2 p-4 border-2 border-[#1A1A1A] bg-[#EDEAE4]">
+        {!loading && !error && stats && (
+          <>
+            {/* 요약 카드 — 고정 */}
+            <div className="flex-shrink-0 px-3 pt-2 pb-1">
+              <div className="grid grid-cols-4 gap-1 p-2 border-2 border-[#1A1A1A] bg-[#EDEAE4]">
                 <div className="text-center">
-                  <p className="text-sm text-[#5C5C5C]">참여자</p>
-                  <p className="text-4xl font-bold text-[#1A1A1A]">
+                  <p className="text-[10px] text-[#5C5C5C]">참여자</p>
+                  <p className="text-lg font-bold text-[#1A1A1A]">
                     <CountUp key={`participant-${classFilter}`} value={stats.participantCount} duration={800} />
                   </p>
                 </div>
                 <div className="text-center">
-                  <p className="text-sm text-[#5C5C5C]">평균</p>
-                  <p className="text-4xl font-bold text-[#1A1A1A]">
+                  <p className="text-[10px] text-[#5C5C5C]">평균</p>
+                  <p className="text-lg font-bold text-[#1A1A1A]">
                     <CountUp key={`average-${classFilter}`} value={stats.averageScore} duration={800} />
                   </p>
                 </div>
                 <div className="text-center">
-                  <p className="text-sm text-[#5C5C5C]">최고</p>
-                  <p className="text-4xl font-bold text-[#1A1A1A]">
+                  <p className="text-[10px] text-[#5C5C5C]">최고</p>
+                  <p className="text-lg font-bold text-[#1A1A1A]">
                     <CountUp key={`highest-${classFilter}`} value={stats.highestScore} duration={800} />
                   </p>
                 </div>
                 <div className="text-center">
-                  <p className="text-sm text-[#5C5C5C]">최저</p>
-                  <p className="text-4xl font-bold text-[#1A1A1A]">
+                  <p className="text-[10px] text-[#5C5C5C]">최저</p>
+                  <p className="text-lg font-bold text-[#1A1A1A]">
                     <CountUp key={`lowest-${classFilter}`} value={stats.lowestScore} duration={800} />
                   </p>
                 </div>
               </div>
+            </div>
 
-              {/* 문제별 분석 */}
-              {stats.questionStats.length > 0 && (
-                <div className="border-2 border-[#1A1A1A] bg-[#EDEAE4]">
-                  {/* 헤더: 문제 슬라이더 + 킬러 Top 3 */}
-                  <div className="p-4 border-b-2 border-[#1A1A1A] bg-[#F5F0E8]">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-3xl font-bold text-[#1A1A1A]">Q{selectedQuestionIndex + 1}.</span>
-                      <span className="text-3xl font-bold text-[#1A1A1A]">{stats.questionStats.length}문제</span>
-                    </div>
+            {/* 문제별 분석 */}
+            {stats.questionStats.length > 0 && (
+              <div className="flex-1 flex flex-col min-h-0 mx-3 mb-2 border-2 border-[#1A1A1A] bg-[#EDEAE4]">
+                {/* 슬라이더 헤더 — 고정 */}
+                <div className="flex-shrink-0 px-3 py-2 border-b border-[#1A1A1A] bg-[#F5F0E8]">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-bold text-[#1A1A1A]">Q{selectedQuestionIndex + 1}.</span>
+                    <span className="text-xs text-[#5C5C5C]">{stats.questionStats.length}문제</span>
+                  </div>
                     {/* 슬라이더 + 킬러 마커 */}
                     {stats.questionStats.length > 1 && (() => {
                       const totalQ = stats.questionStats.length;
@@ -1294,19 +1316,18 @@ export default function QuizStatsModal({
 
                       const renderMarker = (item: typeof markers[0], placeAbove: boolean) => {
                         const rankLabel = item.rank === 1 ? '1st' : item.rank === 2 ? '2nd' : '3rd';
-                        // 양 끝 텍스트 잘림 방지
                         const align = item.position < 8 ? 'translateX(0)' : item.position > 92 ? 'translateX(-100%)' : 'translateX(-50%)';
                         return (
                           <span
                             key={item.rank}
                             onClick={() => goToQuestion(item.questionNum - 1)}
-                            className="absolute text-xs font-bold text-[#1A1A1A] cursor-pointer hover:text-[#5C5C5C] text-center leading-tight whitespace-nowrap"
+                            className="absolute text-[10px] font-bold text-[#1A1A1A] cursor-pointer hover:text-[#5C5C5C] text-center leading-tight whitespace-nowrap"
                             style={{
                               left: `${item.position}%`,
                               transform: align,
                               ...(placeAbove
-                                ? { bottom: '100%', marginBottom: '4px' }
-                                : { top: '100%', marginTop: '4px' }),
+                                ? { bottom: '100%', marginBottom: '2px' }
+                                : { top: '100%', marginTop: '2px' }),
                             }}
                           >
                             {rankLabel}<br />{item.correctRate}%
@@ -1316,12 +1337,11 @@ export default function QuizStatsModal({
 
                       return (
                         <div>
-                          {/* 슬라이더 + 마커 */}
                           <div
                             className="relative"
                             style={{
-                              marginTop: needsStagger ? '40px' : '0',
-                              marginBottom: markers.length > 0 ? '36px' : '0',
+                              marginTop: needsStagger ? '28px' : '0',
+                              marginBottom: markers.length > 0 ? '24px' : '0',
                             }}
                           >
                             <input
@@ -1345,10 +1365,10 @@ export default function QuizStatsModal({
                     })()}
                   </div>
 
-                  {/* 현재 문제 정보 - 고정 높이 스크롤 영역 + 스와이프 지원 */}
+                  {/* 문제 상세 — 남은 공간에서 스크롤 */}
                   {currentQuestion && (
                     <div
-                      className="relative h-[600px] overflow-hidden"
+                      className="relative flex-1 min-h-0 overflow-hidden"
                       onTouchStart={handleQSwipeStart}
                       onTouchMove={handleQSwipeMove}
                       onTouchEnd={handleQSwipeEnd}
@@ -1356,11 +1376,14 @@ export default function QuizStatsModal({
                     >
                       {/* 피드백 아이콘 (좌측 상단) */}
                       <button
-                        onClick={handleOpenFeedback}
-                        className="absolute top-2 left-2 z-10 w-11 h-11 flex items-center justify-center text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors"
+                        onClick={(e) => {
+                          const r = e.currentTarget.getBoundingClientRect();
+                          handleOpenFeedback({ x: r.x, y: r.y, width: r.width, height: r.height });
+                        }}
+                        className="absolute top-1 left-1 z-10 w-8 h-8 flex items-center justify-center text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors"
                         title="피드백 보기"
                       >
-                        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
                         </svg>
                       </button>
@@ -1368,10 +1391,10 @@ export default function QuizStatsModal({
                       {isProfessor && (
                         <button
                           onClick={() => setShowFolderModal(true)}
-                          className="absolute top-2 right-2 z-10 w-11 h-11 flex items-center justify-center text-[#8B6914] hover:text-[#6B4F0E] transition-colors"
+                          className="absolute top-1 right-1 z-10 w-8 h-8 flex items-center justify-center text-[#8B6914] hover:text-[#6B4F0E] transition-colors"
                           title="폴더에 저장"
                         >
-                          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
                           </svg>
                         </button>
@@ -1383,15 +1406,15 @@ export default function QuizStatsModal({
                       {/* 참여자가 없는 반일 경우 */}
                       {stats.participantCount === 0 ? (
                         <div className="h-full flex items-center justify-center">
-                          <p className="text-lg text-[#5C5C5C]">
+                          <p className="text-sm text-[#5C5C5C]">
                             {classFilter === 'all' ? '참여자가 없습니다.' : `${classFilter}반 참여자가 없습니다.`}
                           </p>
                         </div>
                       ) : (
-                      <div className="min-h-full flex flex-col justify-center p-4">
+                      <div className="p-3 min-h-full flex flex-col justify-center items-stretch">
                         {/* 문제 헤더 */}
-                        <div className="flex items-center justify-center gap-3 mb-4">
-                          <span className="text-xl font-bold text-[#1A1A1A]">
+                        <div className="flex items-center justify-center gap-2 mb-2">
+                          <span className="text-sm font-bold text-[#1A1A1A]">
                             정답률 {currentQuestion.correctRate}%
                           </span>
                           {currentQuestion.totalAttempts >= 4 && (() => {
@@ -1400,9 +1423,9 @@ export default function QuizStatsModal({
                             const color = d >= 0.4 ? '#16A34A' : d >= 0.2 ? '#1A1A1A' : d >= 0 ? '#D97706' : '#DC2626';
                             return (
                               <>
-                                <span className="text-base text-[#5C5C5C]">·</span>
-                                <span className="text-base font-bold" style={{ color }}>
-                                  변별도 {d.toFixed(2)} <span className="text-xs font-normal">({label})</span>
+                                <span className="text-xs text-[#5C5C5C]">·</span>
+                                <span className="text-xs font-bold" style={{ color }}>
+                                  변별도 {d.toFixed(2)} <span className="text-[10px] font-normal">({label})</span>
                                 </span>
                               </>
                             );
@@ -1410,25 +1433,25 @@ export default function QuizStatsModal({
                         </div>
 
                         {/* 문제 텍스트 (박스 없이) */}
-                        <p className="text-base text-[#1A1A1A] whitespace-pre-wrap mb-4 text-center">{currentQuestion.questionText || '(문제 텍스트 없음)'}</p>
+                        <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap mb-3">{currentQuestion.questionText || '(문제 텍스트 없음)'}</p>
 
                         {/* 결합형 공통 지문 */}
                         {(currentQuestion.passage || currentQuestion.passageImage || (currentQuestion.koreanAbcItems && currentQuestion.koreanAbcItems.length > 0)) && (
                           <div className="space-y-3 mb-4">
                             {/* 텍스트 형식 공통 지문 */}
                             {currentQuestion.passage && (!currentQuestion.passageType || currentQuestion.passageType === 'text') && (
-                              <div className="p-3 bg-[#F5F0E8] border border-[#1A1A1A]">
-                                <p className="text-sm text-[#5C5C5C] mb-2 font-bold">공통 제시문</p>
-                                <p className="text-base text-[#1A1A1A] whitespace-pre-wrap">{currentQuestion.passage}</p>
+                              <div className="p-2 bg-[#F5F0E8] border border-[#1A1A1A]">
+                                <p className="text-[10px] text-[#5C5C5C] mb-1 font-bold">공통 제시문</p>
+                                <p className="text-xs text-[#1A1A1A] whitespace-pre-wrap">{currentQuestion.passage}</p>
                               </div>
                             )}
 
                             {/* ㄱㄴㄷ 형식 공통 지문 */}
                             {currentQuestion.passageType === 'korean_abc' && currentQuestion.koreanAbcItems && currentQuestion.koreanAbcItems.length > 0 && (
-                              <div className="p-3 bg-[#F5F0E8] border border-[#1A1A1A] space-y-1">
-                                <p className="text-sm text-[#5C5C5C] mb-2 font-bold">제시문</p>
+                              <div className="p-2 bg-[#F5F0E8] border border-[#1A1A1A] space-y-0.5">
+                                <p className="text-[10px] text-[#5C5C5C] mb-1 font-bold">제시문</p>
                                 {currentQuestion.koreanAbcItems.filter(i => i.trim()).map((item, idx) => (
-                                  <p key={idx} className="text-base text-[#1A1A1A]">
+                                  <p key={idx} className="text-xs text-[#1A1A1A]">
                                     <span className="font-bold mr-1">{['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ'][idx]}.</span>
                                     {item}
                                   </p>
@@ -1454,21 +1477,21 @@ export default function QuizStatsModal({
                         {hasValidMixedExamples && currentQuestion.mixedExamples!
                           .filter(item => item.type === 'grouped' && isValidMixedItem(item))
                           .map((item) => (
-                            <div key={item.id} className="mb-4 p-4 bg-[#F5F0E8] border border-[#1A1A1A] space-y-2">
+                            <div key={item.id} className="mb-2 p-2 bg-[#F5F0E8] border border-[#1A1A1A] space-y-1">
                               {item.children?.filter(child => isValidMixedItem(child)).map((child) => (
                                 <div key={child.id}>
                                   {child.type === 'text' && child.content && (
-                                    <p className="text-[#5C5C5C] text-base whitespace-pre-wrap">{child.content}</p>
+                                    <p className="text-[#5C5C5C] text-xs whitespace-pre-wrap">{child.content}</p>
                                   )}
                                   {child.type === 'labeled' && (
                                     <>
                                       {child.content && (
-                                        <p className="text-[#1A1A1A] text-base">
+                                        <p className="text-[#1A1A1A] text-xs">
                                           <span className="font-bold mr-1">{child.label}.</span>{child.content}
                                         </p>
                                       )}
                                       {child.items?.map((labeledItem, idx) => (
-                                        <p key={idx} className="text-[#1A1A1A] text-base">
+                                        <p key={idx} className="text-[#1A1A1A] text-xs">
                                           <span className="font-bold mr-1">{labeledItem.label}.</span>{labeledItem.content}
                                         </p>
                                       ))}
@@ -1477,12 +1500,12 @@ export default function QuizStatsModal({
                                   {child.type === 'gana' && (
                                     <>
                                       {child.content && (
-                                        <p className="text-[#1A1A1A] text-base">
+                                        <p className="text-[#1A1A1A] text-xs">
                                           <span className="font-bold mr-1">({child.label})</span>{child.content}
                                         </p>
                                       )}
                                       {child.items?.map((labeledItem, idx) => (
-                                        <p key={idx} className="text-[#1A1A1A] text-base">
+                                        <p key={idx} className="text-[#1A1A1A] text-xs">
                                           <span className="font-bold mr-1">({labeledItem.label})</span>{labeledItem.content}
                                         </p>
                                       ))}
@@ -1491,12 +1514,12 @@ export default function QuizStatsModal({
                                   {child.type === 'bullet' && (
                                     <>
                                       {child.content && (
-                                        <p className="text-[#1A1A1A] text-base">
+                                        <p className="text-[#1A1A1A] text-xs">
                                           <span className="font-bold mr-1">◦</span>{child.content}
                                         </p>
                                       )}
                                       {child.items?.map((labeledItem, idx) => (
-                                        <p key={idx} className="text-[#1A1A1A] text-base">
+                                        <p key={idx} className="text-[#1A1A1A] text-xs">
                                           <span className="font-bold mr-1">◦</span>{labeledItem.content}
                                         </p>
                                       ))}
@@ -1516,21 +1539,21 @@ export default function QuizStatsModal({
                           .map((item) => {
                             if (item.type === 'text') {
                               return (
-                                <div key={item.id} className="mb-4 p-4 bg-[#F5F0E8] border border-[#1A1A1A]">
-                                  <p className="text-base text-[#1A1A1A] whitespace-pre-wrap">{item.content}</p>
+                                <div key={item.id} className="mb-2 p-2 bg-[#F5F0E8] border border-[#1A1A1A]">
+                                  <p className="text-xs text-[#1A1A1A] whitespace-pre-wrap">{item.content}</p>
                                 </div>
                               );
                             }
                             if (item.type === 'labeled') {
                               return (
-                                <div key={item.id} className="mb-4 p-4 bg-[#F5F0E8] border border-[#1A1A1A] space-y-2">
+                                <div key={item.id} className="mb-2 p-2 bg-[#F5F0E8] border border-[#1A1A1A] space-y-1">
                                   {item.content && (
-                                    <p className="text-base text-[#1A1A1A]">
+                                    <p className="text-xs text-[#1A1A1A]">
                                       <span className="font-bold mr-1">{item.label}.</span>{item.content}
                                     </p>
                                   )}
                                   {item.items?.map((labeledItem, idx) => (
-                                    <p key={idx} className="text-base text-[#1A1A1A]">
+                                    <p key={idx} className="text-xs text-[#1A1A1A]">
                                       <span className="font-bold mr-1">{labeledItem.label}.</span>{labeledItem.content}
                                     </p>
                                   ))}
@@ -1539,14 +1562,14 @@ export default function QuizStatsModal({
                             }
                             if (item.type === 'gana') {
                               return (
-                                <div key={item.id} className="mb-4 p-4 bg-[#F5F0E8] border border-[#1A1A1A] space-y-2">
+                                <div key={item.id} className="mb-2 p-2 bg-[#F5F0E8] border border-[#1A1A1A] space-y-1">
                                   {item.content && (
-                                    <p className="text-base text-[#1A1A1A]">
+                                    <p className="text-xs text-[#1A1A1A]">
                                       <span className="font-bold mr-1">({item.label})</span>{item.content}
                                     </p>
                                   )}
                                   {item.items?.map((labeledItem, idx) => (
-                                    <p key={idx} className="text-base text-[#1A1A1A]">
+                                    <p key={idx} className="text-xs text-[#1A1A1A]">
                                       <span className="font-bold mr-1">({labeledItem.label})</span>{labeledItem.content}
                                     </p>
                                   ))}
@@ -1558,22 +1581,22 @@ export default function QuizStatsModal({
 
                         {/* 문제 이미지 */}
                         {currentQuestion.imageUrl && (
-                          <div className="mb-4 overflow-hidden bg-[#F5F0E8] border border-[#1A1A1A]">
+                          <div className="mb-2 overflow-hidden bg-[#F5F0E8] border border-[#1A1A1A]">
                             <img
                               src={currentQuestion.imageUrl}
                               alt="문제 이미지"
-                              className="w-full h-auto object-contain max-h-48"
+                              className="w-full h-auto object-contain max-h-32"
                             />
                           </div>
                         )}
 
                         {/* 보기 (<보기> 박스) */}
                         {currentQuestion.bogi && currentQuestion.bogi.items && currentQuestion.bogi.items.some(i => i.content?.trim()) && (
-                          <div className="mb-4 p-4 bg-[#F5F0E8] border-2 border-[#1A1A1A]">
-                            <p className="text-sm text-center text-[#5C5C5C] mb-3 font-bold">&lt;보 기&gt;</p>
-                            <div className="space-y-2">
+                          <div className="mb-2 p-2 bg-[#F5F0E8] border-2 border-[#1A1A1A]">
+                            <p className="text-[10px] text-center text-[#5C5C5C] mb-1.5 font-bold">&lt;보 기&gt;</p>
+                            <div className="space-y-1">
                               {currentQuestion.bogi.items.filter(i => i.content?.trim()).map((item) => (
-                                <p key={item.label} className="text-base text-[#1A1A1A]">
+                                <p key={item.label} className="text-xs text-[#1A1A1A]">
                                   <span className="font-bold mr-1">{item.label}.</span>
                                   {item.content}
                                 </p>
@@ -1584,20 +1607,19 @@ export default function QuizStatsModal({
 
                         {/* 발문 (제시문 발문 + 보기 발문) */}
                         {(currentQuestion.passagePrompt || currentQuestion.bogi?.questionText) && (
-                          <p className="mb-4 text-base text-[#1A1A1A]">
+                          <p className="mb-2 text-xs text-[#1A1A1A]">
                             {currentQuestion.passagePrompt && currentQuestion.bogi?.questionText
                               ? `${currentQuestion.passagePrompt} ${currentQuestion.bogi.questionText}`
                               : currentQuestion.passagePrompt || currentQuestion.bogi?.questionText}
                           </p>
                         )}
 
-                        {/* OX 선지 - 퀴즈 풀이와 동일한 스타일, 오답은 그래프 채움 */}
+                        {/* OX 선지 */}
                         {currentQuestion.questionType === 'ox' && (() => {
                           const oCount = currentQuestion.oxDistribution?.o || 0;
                           const xCount = currentQuestion.oxDistribution?.x || 0;
                           const totalSelections = oCount + xCount;
 
-                          // 정답 확인
                           const correctAnswer = currentQuestion.correctAnswer?.toUpperCase() === 'O' ||
                             currentQuestion.correctAnswer === '0' ? 'O' : 'X';
 
@@ -1605,51 +1627,29 @@ export default function QuizStatsModal({
                           const xPercentage = totalSelections > 0 ? Math.round((xCount / totalSelections) * 100) : 0;
 
                           return (
-                            <div className="flex gap-4 justify-center py-3 mb-4">
+                            <div className="flex gap-3 justify-center py-2 mb-2">
                               {['O', 'X'].map((opt) => {
                                 const isCorrect = opt === correctAnswer;
                                 const percentage = opt === 'O' ? oPercentage : xPercentage;
 
-                                // 정답 선지 - 선택률만큼 초록 배경 채움
-                                if (isCorrect) {
-                                  return (
-                                    <div
-                                      key={opt}
-                                      className="relative w-24 h-24 text-4xl font-bold border-2 border-[#1A6B1A] flex flex-col items-center justify-center overflow-hidden"
-                                      style={{ backgroundColor: '#EDEAE4' }}
-                                    >
-                                      {percentage > 0 && (
-                                        <motion.div
-                                          initial={{ height: 0 }}
-                                          animate={{ height: `${percentage}%` }}
-                                          transition={{ duration: 0.6, ease: 'easeOut', delay: 0.1 }}
-                                          className="absolute left-0 right-0 bottom-0 bg-[#E8F5E9]"
-                                        />
-                                      )}
-                                      <span className="relative z-10 text-[#1A6B1A]">{opt}</span>
-                                      <span className="relative z-10 text-sm font-normal mt-1 text-[#1A6B1A]">{percentage}%</span>
-                                    </div>
-                                  );
-                                }
-
-                                // 오답 선지 - 선택률만큼 아래에서 위로 그래프 채움
                                 return (
                                   <div
                                     key={opt}
-                                    className="relative w-24 h-24 text-4xl font-bold border-2 border-[#8B1A1A] flex flex-col items-center justify-center overflow-hidden"
+                                    className={`relative w-16 h-16 text-2xl font-bold border-2 flex flex-col items-center justify-center overflow-hidden ${
+                                      isCorrect ? 'border-[#1A6B1A]' : 'border-[#8B1A1A]'
+                                    }`}
                                     style={{ backgroundColor: '#EDEAE4' }}
                                   >
-                                    {/* 선택률 배경 그래프 (아래에서 위로) */}
                                     {percentage > 0 && (
                                       <motion.div
                                         initial={{ height: 0 }}
                                         animate={{ height: `${percentage}%` }}
                                         transition={{ duration: 0.6, ease: 'easeOut', delay: 0.1 }}
-                                        className="absolute left-0 right-0 bottom-0 bg-[#FDEAEA]"
+                                        className={`absolute left-0 right-0 bottom-0 ${isCorrect ? 'bg-[#E8F5E9]' : 'bg-[#FDEAEA]'}`}
                                       />
                                     )}
-                                    <span className="relative z-10 text-[#8B1A1A]">{opt}</span>
-                                    <span className="relative z-10 text-sm font-normal mt-1 text-[#8B1A1A]">{percentage}%</span>
+                                    <span className={`relative z-10 ${isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>{opt}</span>
+                                    <span className={`relative z-10 text-[10px] font-normal ${isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>{percentage}%</span>
                                   </div>
                                 );
                               })}
@@ -1657,9 +1657,8 @@ export default function QuizStatsModal({
                           );
                         })()}
 
-                        {/* 객관식 선지 - 정답은 초록 배경, 오답은 선택률만큼 빨강 그래프 채움 */}
+                        {/* 객관식 선지 */}
                         {currentQuestion.questionType === 'multiple' && currentQuestion.optionDistribution && (() => {
-                          // 오답 선지들 중 가장 높은 선택률 찾기
                           const wrongOptions = currentQuestion.optionDistribution.filter(o => !o.isCorrect);
                           const maxWrongPercentage = wrongOptions.length > 0
                             ? Math.max(...wrongOptions.map(o => o.percentage))
@@ -1667,72 +1666,41 @@ export default function QuizStatsModal({
                           const choiceExpls = currentQuestion.choiceExplanations;
 
                           return (
-                            <div className="space-y-2 mb-4">
+                            <div className="space-y-1 mb-2">
                               {currentQuestion.optionDistribution.map((opt, optIdx) => {
-                                // 오답 중에서 선택률이 가장 높은 경우 빨간 테두리
                                 const isHighestWrong = !opt.isCorrect && opt.percentage === maxWrongPercentage && maxWrongPercentage > 0;
                                 const choiceExpl = choiceExpls?.[optIdx];
 
-                                // 정답 선지 - 선택률만큼 초록 배경 채움
-                                if (opt.isCorrect) {
-                                  return (
-                                    <div key={optIdx}>
-                                      <div
-                                        className="relative flex items-center gap-3 p-3 border-2 border-[#1A6B1A] overflow-hidden"
-                                        style={{ backgroundColor: '#F5F0E8' }}
-                                      >
-                                        {opt.percentage > 0 && (
-                                          <motion.div
-                                            initial={{ width: 0 }}
-                                            animate={{ width: `${opt.percentage}%` }}
-                                            transition={{ duration: 0.6, ease: 'easeOut', delay: 0.1 + optIdx * 0.05 }}
-                                            className="absolute left-0 top-0 bottom-0 bg-[#E8F5E9]"
-                                          />
-                                        )}
-                                        <span className="relative z-10 text-base font-bold min-w-[24px] text-[#1A6B1A]">
-                                          {optIdx + 1}.
-                                        </span>
-                                        <span className="relative z-10 flex-1 text-base text-[#1A1A1A]">{opt.option}</span>
-                                        <span className="relative z-10 text-base font-bold text-[#1A6B1A]">
-                                          {opt.percentage}%
-                                        </span>
-                                      </div>
-                                      {choiceExpl && (
-                                        <p className="mt-1 ml-2 text-xs text-[#5C5C5C] italic">{choiceExpl}</p>
-                                      )}
-                                    </div>
-                                  );
-                                }
-
-                                // 오답 선지 - 선택률만큼 배경 그래프 채움
                                 return (
                                   <div key={optIdx}>
                                     <div
-                                      className={`relative flex items-center gap-3 p-3 border-2 overflow-hidden ${
-                                        isHighestWrong ? 'border-[#8B1A1A]' : 'border-[#D4CFC4]'
+                                      className={`relative flex items-center gap-2 px-2 py-1.5 border overflow-hidden ${
+                                        opt.isCorrect ? 'border-[#1A6B1A]' : isHighestWrong ? 'border-[#8B1A1A]' : 'border-[#D4CFC4]'
                                       }`}
                                       style={{ backgroundColor: '#F5F0E8' }}
                                     >
-                                      {/* 선택률 배경 그래프 */}
                                       {opt.percentage > 0 && (
                                         <motion.div
                                           initial={{ width: 0 }}
                                           animate={{ width: `${opt.percentage}%` }}
                                           transition={{ duration: 0.6, ease: 'easeOut', delay: 0.1 + optIdx * 0.05 }}
-                                          className="absolute left-0 top-0 bottom-0 bg-[#FDEAEA]"
+                                          className={`absolute left-0 top-0 bottom-0 ${opt.isCorrect ? 'bg-[#E8F5E9]' : 'bg-[#FDEAEA]'}`}
                                         />
                                       )}
-                                      {/* 콘텐츠 */}
-                                      <span className={`relative z-10 text-base font-bold min-w-[24px] ${isHighestWrong ? 'text-[#8B1A1A]' : 'text-[#5C5C5C]'}`}>
+                                      <span className={`relative z-10 text-xs font-bold min-w-[18px] ${
+                                        opt.isCorrect ? 'text-[#1A6B1A]' : isHighestWrong ? 'text-[#8B1A1A]' : 'text-[#5C5C5C]'
+                                      }`}>
                                         {optIdx + 1}.
                                       </span>
-                                      <span className="relative z-10 flex-1 text-base text-[#1A1A1A]">{opt.option}</span>
-                                      <span className={`relative z-10 text-base font-bold ${isHighestWrong ? 'text-[#8B1A1A]' : 'text-[#5C5C5C]'}`}>
+                                      <span className="relative z-10 flex-1 text-xs text-[#1A1A1A]">{opt.option}</span>
+                                      <span className={`relative z-10 text-xs font-bold ${
+                                        opt.isCorrect ? 'text-[#1A6B1A]' : isHighestWrong ? 'text-[#8B1A1A]' : 'text-[#5C5C5C]'
+                                      }`}>
                                         {opt.percentage}%
                                       </span>
                                     </div>
-                                    {choiceExpl && (
-                                      <p className="mt-1 ml-2 text-xs text-[#5C5C5C] italic">{choiceExpl}</p>
+                                    {isProfessor && choiceExpl && (
+                                      <p className="mt-0.5 ml-2 text-[10px] text-[#5C5C5C] italic">{choiceExpl}</p>
                                     )}
                                   </div>
                                 );
@@ -1741,21 +1709,21 @@ export default function QuizStatsModal({
                           );
                         })()}
 
-                        {/* 주관식 - 정답과 오답 표시 */}
+                        {/* 주관식 */}
                         {(currentQuestion.questionType === 'short_answer' || currentQuestion.questionType === 'short') && (
-                          <div className="space-y-3">
-                            <div className="p-3 bg-[#E8F5E9] border-2 border-[#1A6B1A]">
-                              <span className="text-base text-[#1A6B1A] font-bold">정답: </span>
-                              <span className="text-base text-[#1A6B1A]">
+                          <div className="space-y-1.5 mb-2">
+                            <div className="p-2 bg-[#E8F5E9] border border-[#1A6B1A]">
+                              <span className="text-xs text-[#1A6B1A] font-bold">정답: </span>
+                              <span className="text-xs text-[#1A6B1A]">
                                 {currentQuestion.correctAnswer?.includes('|||')
                                   ? currentQuestion.correctAnswer.split('|||').map(a => a.trim()).join(', ')
                                   : currentQuestion.correctAnswer || '-'}
                               </span>
                             </div>
                             {currentQuestion.wrongAnswers && currentQuestion.wrongAnswers.length > 0 && (
-                              <div className="p-3 bg-[#FDEAEA] border-2 border-[#8B1A1A]">
-                                <span className="text-base text-[#8B1A1A] font-bold">오답: </span>
-                                <span className="text-base text-[#8B1A1A]">
+                              <div className="p-2 bg-[#FDEAEA] border border-[#8B1A1A]">
+                                <span className="text-xs text-[#8B1A1A] font-bold">오답: </span>
+                                <span className="text-xs text-[#8B1A1A]">
                                   {currentQuestion.wrongAnswers.slice(0, 5).map(w => w.answer).join(', ')}
                                   {currentQuestion.wrongAnswers.length > 5 && ` 외 ${currentQuestion.wrongAnswers.length - 5}개`}
                                 </span>
@@ -1764,15 +1732,17 @@ export default function QuizStatsModal({
                           </div>
                         )}
 
-                        {/* 해설 */}
-                        <div className="mt-4 p-3 border border-dashed border-[#A0A0A0] bg-[#FDFBF7]">
-                          <p className="text-xs font-bold text-[#5C5C5C] mb-1">해설</p>
-                          {currentQuestion.explanation ? (
-                            <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{currentQuestion.explanation}</p>
-                          ) : (
-                            <p className="text-sm text-[#A0A0A0] italic">해설 없음</p>
-                          )}
-                        </div>
+                        {/* 해설 — 교수님만 표시 */}
+                        {isProfessor && (
+                          <div className="mt-2 p-2 border border-dashed border-[#A0A0A0] bg-[#FDFBF7]">
+                            <p className="text-[10px] font-bold text-[#5C5C5C] mb-0.5">해설</p>
+                            {currentQuestion.explanation ? (
+                              <p className="text-xs text-[#1A1A1A] whitespace-pre-wrap">{currentQuestion.explanation}</p>
+                            ) : (
+                              <p className="text-xs text-[#A0A0A0] italic">해설 없음</p>
+                            )}
+                          </div>
+                        )}
 
                       </div>
                       )}
@@ -1781,50 +1751,55 @@ export default function QuizStatsModal({
                   )}
                 </div>
               )}
-
-            </div>
+            </>
           )}
-        </div>
 
       </motion.div>
 
       {/* 피드백 모달 */}
       <AnimatePresence>
-        {showFeedbackModal && (
+        {showFeedbackModal && (() => {
+          const sr = feedbackSourceRect;
+          const cx = typeof window !== 'undefined' ? window.innerWidth / 2 : 0;
+          const cy = typeof window !== 'undefined' ? window.innerHeight / 2 : 0;
+          const fdx = sr ? (sr.x + sr.width / 2 - cx) : 0;
+          const fdy = sr ? (sr.y + sr.height / 2 - cy) : 0;
+          return (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/50"
-            onClick={() => { setShowFeedbackModal(false); setFeedbackList([]); }}
+            className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/50"
+            onClick={(e) => { e.stopPropagation(); setShowFeedbackModal(false); setFeedbackList([]); }}
           >
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
+              initial={{ opacity: 0, scale: 0.05, x: fdx, y: fdy }}
+              animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
+              exit={{ opacity: 0, scale: 0.05, x: fdx, y: fdy }}
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md bg-[#F5F0E8] border-2 border-[#1A1A1A] max-h-[80vh] overflow-visible flex flex-col"
+              className="w-full max-w-xs bg-[#F5F0E8] border-2 border-[#1A1A1A] max-h-[60vh] overflow-visible flex flex-col"
             >
-              <div className="p-4 border-b border-[#1A1A1A]">
-                <h2 className="text-lg font-bold text-[#1A1A1A]">피드백</h2>
-                <p className="text-sm text-[#5C5C5C]">{quizTitle}</p>
+              <div className="px-3 py-1.5 border-b border-[#1A1A1A]">
+                <h2 className="text-xs font-bold text-[#1A1A1A]">피드백</h2>
+                <p className="text-[10px] text-[#5C5C5C] truncate">{quizTitle}</p>
               </div>
 
-              <div className="flex-1 overflow-y-auto overscroll-contain p-4">
+              <div className="flex-1 overflow-y-auto overscroll-contain p-2">
                 {feedbackLoading && (
-                  <div className="py-8 text-center">
-                    <p className="text-[#5C5C5C]">로딩 중...</p>
+                  <div className="py-6 text-center">
+                    <p className="text-xs text-[#5C5C5C]">로딩 중...</p>
                   </div>
                 )}
 
                 {!feedbackLoading && feedbackList.length === 0 && (
-                  <div className="py-8 text-center">
-                    <p className="text-[#5C5C5C]">아직 피드백이 없습니다.</p>
+                  <div className="py-6 text-center">
+                    <p className="text-xs text-[#5C5C5C]">아직 피드백이 없습니다.</p>
                   </div>
                 )}
 
                 {!feedbackLoading && feedbackList.length > 0 && (
-                  <div className="space-y-3">
+                  <div className="space-y-1.5">
                     {feedbackList.map((feedback) => {
                       const typeLabels: Record<string, string> = {
                         praise: '문제가 좋아요!',
@@ -1848,18 +1823,18 @@ export default function QuizStatsModal({
                       return (
                         <div
                           key={feedback.id}
-                          className="p-4 border border-[#1A1A1A] bg-[#EDEAE4]"
+                          className="p-1.5 border border-[#1A1A1A] bg-[#EDEAE4]"
                         >
                           {questionNum > 0 && (
-                            <p className="text-sm text-[#5C5C5C] mb-1">
+                            <p className="text-[10px] text-[#5C5C5C] mb-0.5">
                               문제 {questionNum}.
                             </p>
                           )}
-                          <p className="text-base font-bold text-[#8B6914] mb-2">
+                          <p className="text-[11px] font-bold text-[#8B6914] mb-0.5">
                             {typeLabel}
                           </p>
                           {feedback.feedback && (
-                            <p className="text-base text-[#1A1A1A]">
+                            <p className="text-[11px] text-[#1A1A1A]">
                               {feedback.feedback}
                             </p>
                           )}
@@ -1870,17 +1845,18 @@ export default function QuizStatsModal({
                 )}
               </div>
 
-              <div className="p-4 border-t border-[#1A1A1A]">
+              <div className="p-1.5 border-t border-[#1A1A1A]">
                 <button
                   onClick={() => { setShowFeedbackModal(false); setFeedbackList([]); }}
-                  className="w-full py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4]"
+                  className="w-full py-1.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4]"
                 >
                   닫기
                 </button>
               </div>
             </motion.div>
           </motion.div>
-        )}
+          );
+        })()}
       </AnimatePresence>
 
       {/* 폴더 선택 모달 */}
@@ -1905,6 +1881,8 @@ export default function QuizStatsModal({
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
+    )}
+    </AnimatePresence>
   );
 }

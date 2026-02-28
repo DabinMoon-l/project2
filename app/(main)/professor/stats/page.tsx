@@ -674,7 +674,7 @@ function DashboardRibbonHeader({
   return (
     <div className="flex flex-col items-center">
       <div
-        className="w-full h-[260px] pt-2 cursor-grab active:cursor-grabbing select-none"
+        className="w-full h-[160px] mt-2 cursor-grab active:cursor-grabbing select-none"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
