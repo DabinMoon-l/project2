@@ -91,7 +91,7 @@ export function useExpToast() {
 /** 토스트 컨테이너 */
 function ExpToastContainer({ toasts }: { toasts: ExpToastData[] }) {
   return (
-    <div className="fixed top-20 left-0 right-0 z-[100] pointer-events-none flex flex-col items-center gap-2 px-4">
+    <div className="fixed top-20 left-0 right-0 z-[120] pointer-events-none flex flex-col items-center gap-2 px-4">
       <AnimatePresence>
         {toasts.map((toast) => (
           <ExpToastItem key={toast.id} toast={toast} />

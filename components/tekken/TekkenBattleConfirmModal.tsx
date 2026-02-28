@@ -35,11 +35,11 @@ function RabbitSlotCard({
   if (!slot) {
     // 빈 슬롯
     return (
-      <div className="flex flex-col items-center gap-2">
-        <div className="w-24 h-24 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center">
-          <span className="text-4xl font-black text-white/30">?</span>
+      <div className="flex flex-col items-center gap-1.5">
+        <div className="w-[72px] h-[72px] rounded-xl bg-white/10 border border-white/20 flex items-center justify-center">
+          <span className="text-2xl font-black text-white/30">?</span>
         </div>
-        <span className="text-sm text-white/40 font-bold">빈 슬롯</span>
+        <span className="text-xs text-white/40 font-bold">빈 슬롯</span>
       </div>
     );
   }
@@ -55,9 +55,9 @@ function RabbitSlotCard({
       : '...';
 
   return (
-    <div className="flex flex-col items-center gap-2">
+    <div className="flex flex-col items-center gap-1.5">
       {/* 프로필 이미지 */}
-      <div className="w-24 h-24 rounded-2xl bg-white/10 border border-white/20 overflow-hidden">
+      <div className="w-[72px] h-[72px] rounded-xl bg-white/10 border border-white/20 overflow-hidden">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={getRabbitProfileUrl(slot.rabbitId)}
@@ -69,11 +69,11 @@ function RabbitSlotCard({
 
       {/* 이름 + 레벨 */}
       <div className="text-center">
-        <p className="text-white font-bold text-base leading-tight">
+        <p className="text-white font-bold text-sm leading-tight">
           {displayName}
         </p>
         {info && (
-          <p className="text-white/60 text-sm font-bold">
+          <p className="text-white/60 text-xs font-bold">
             Lv.{info.level}
           </p>
         )}
@@ -81,21 +81,21 @@ function RabbitSlotCard({
 
       {/* 스탯 */}
       {info && (
-        <div className="flex items-center gap-3 text-sm font-bold">
+        <div className="flex items-center gap-2 text-xs font-bold">
           <span className="text-red-400">
-            <svg className="w-3.5 h-3.5 inline mr-0.5 -mt-0.5" viewBox="0 0 24 24" fill="currentColor">
+            <svg className="w-3 h-3 inline mr-0.5 -mt-0.5" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
             </svg>
             {info.stats.hp}
           </span>
           <span className="text-orange-400">
-            <svg className="w-3.5 h-3.5 inline mr-0.5 -mt-0.5" viewBox="0 0 24 24" fill="currentColor">
+            <svg className="w-3 h-3 inline mr-0.5 -mt-0.5" viewBox="0 0 24 24" fill="currentColor">
               <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" />
             </svg>
             {info.stats.atk}
           </span>
           <span className="text-blue-400">
-            <svg className="w-3.5 h-3.5 inline mr-0.5 -mt-0.5" viewBox="0 0 24 24" fill="currentColor">
+            <svg className="w-3 h-3 inline mr-0.5 -mt-0.5" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" />
             </svg>
             {info.stats.def}
@@ -135,40 +135,40 @@ export default function TekkenBattleConfirmModal({
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm"
+          className="fixed inset-0 z-[110] flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
           <motion.div
-            className="flex flex-col items-center gap-6"
+            className="flex flex-col items-center gap-4"
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.9, opacity: 0 }}
             transition={{ type: 'spring', damping: 20, stiffness: 300 }}
           >
             {/* 타이틀 */}
-            <div className="flex items-center gap-3 mb-2">
-              <svg className="w-8 h-8 text-red-400" viewBox="0 0 24 24" fill="currentColor">
+            <div className="flex items-center gap-2 mb-1">
+              <svg className="w-6 h-6 text-red-400" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" />
               </svg>
-              <h2 className="text-3xl font-black text-white">배틀 준비</h2>
-              <svg className="w-8 h-8 text-red-400" viewBox="0 0 24 24" fill="currentColor">
+              <h2 className="text-2xl font-black text-white">배틀 준비</h2>
+              <svg className="w-6 h-6 text-red-400" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" />
               </svg>
             </div>
 
             {/* 토끼 라인업 */}
-            <div className="flex items-start gap-10">
+            <div className="flex items-start gap-8">
               <RabbitSlotCard slot={slot0} holdings={holdings} />
               <RabbitSlotCard slot={slot1} holdings={holdings} />
             </div>
 
             {/* 버튼 */}
-            <div className="flex items-center gap-4 mt-4">
+            <div className="flex items-center gap-3 mt-2 w-full px-6">
               <motion.button
                 onClick={onConfirm}
-                className="px-10 py-3 bg-red-500 rounded-full text-white font-black text-lg active:scale-95 transition-transform"
+                className="flex-1 py-2.5 bg-red-500 rounded-full text-white font-black text-sm active:scale-95 transition-transform"
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
@@ -176,7 +176,7 @@ export default function TekkenBattleConfirmModal({
               </motion.button>
               <button
                 onClick={onCancel}
-                className="px-8 py-3 bg-white/10 border border-white/20 rounded-full text-white font-bold active:scale-95 transition-transform"
+                className="flex-1 py-2.5 bg-white/10 border border-white/20 rounded-full text-white text-sm font-bold active:scale-95 transition-transform"
               >
                 취소
               </button>

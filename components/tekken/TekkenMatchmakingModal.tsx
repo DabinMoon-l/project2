@@ -47,42 +47,42 @@ export default function TekkenMatchmakingModal({
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm"
+          className="fixed inset-0 z-[110] flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
           {/* 배틀 아이콘 */}
           <motion.div
-            className="mb-8"
+            className="mb-5"
             animate={{ rotate: [0, 10, -10, 0], scale: [1, 1.1, 1] }}
             transition={{ duration: 1.5, repeat: Infinity }}
           >
-            <svg className="w-24 h-24 text-red-400" viewBox="0 0 24 24" fill="currentColor">
+            <svg className="w-16 h-16 text-red-400" viewBox="0 0 24 24" fill="currentColor">
               <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" />
             </svg>
           </motion.div>
 
           {/* 상태 텍스트 */}
-          <div className="text-center mb-6">
+          <div className="text-center mb-5">
             {matchState === 'searching' && (
               <>
-                <h2 className="text-2xl font-black text-white mb-2">
+                <h2 className="text-xl font-black text-white mb-1.5">
                   상대를 찾는 중...
                 </h2>
                 <div className="flex items-center justify-center gap-2">
                   {/* 스피너 */}
                   <motion.div
-                    className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full"
+                    className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full"
                     animate={{ rotate: 360 }}
                     transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
                   />
-                  <span className="text-lg text-white/70">
+                  <span className="text-base text-white/70">
                     {waitTime}초
                   </span>
                 </div>
                 {waitTime >= 20 && (
-                  <p className="text-sm text-white/50 mt-2">
+                  <p className="text-xs text-white/50 mt-1.5">
                     곧 봇과 매칭됩니다...
                   </p>
                 )}
@@ -91,7 +91,7 @@ export default function TekkenMatchmakingModal({
 
             {matchState === 'matched' && (
               <motion.h2
-                className="text-3xl font-black text-red-400"
+                className="text-2xl font-black text-red-400"
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ type: 'spring', damping: 10 }}
@@ -102,10 +102,10 @@ export default function TekkenMatchmakingModal({
 
             {matchState === 'error' && (
               <>
-                <h2 className="text-2xl font-black text-red-400 mb-2">
+                <h2 className="text-xl font-black text-red-400 mb-1.5">
                   매칭 실패
                 </h2>
-                <p className="text-sm text-white/70">{error}</p>
+                <p className="text-xs text-white/70">{error}</p>
               </>
             )}
           </div>
@@ -114,7 +114,7 @@ export default function TekkenMatchmakingModal({
           {matchState === 'searching' && (
             <button
               onClick={onCancel}
-              className="px-8 py-3 bg-white/10 border border-white/20 rounded-full text-white font-bold active:scale-95 transition-transform"
+              className="w-40 py-2.5 bg-white/10 border border-white/20 rounded-full text-white text-sm font-bold active:scale-95 transition-transform"
             >
               취소
             </button>
@@ -123,7 +123,7 @@ export default function TekkenMatchmakingModal({
           {matchState === 'error' && (
             <button
               onClick={onClose}
-              className="px-8 py-3 bg-white/10 border border-white/20 rounded-full text-white font-bold active:scale-95 transition-transform"
+              className="w-40 py-2.5 bg-white/10 border border-white/20 rounded-full text-white text-sm font-bold active:scale-95 transition-transform"
             >
               닫기
             </button>

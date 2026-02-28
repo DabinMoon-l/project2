@@ -13,6 +13,8 @@ import { useUser, useCourse, useMilestone } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
 import { useRabbitHoldings, useRabbitDoc, getRabbitStats } from '@/lib/hooks/useRabbit';
 import { computeRabbitDisplayName } from '@/lib/utils/rabbitDisplayName';
+import { useExpToast } from '@/components/common/ExpToast';
+import { calcBattleXp } from '@/lib/utils/tekkenDamage';
 
 import RabbitDogam from './RabbitDogam';
 import TekkenMatchmakingModal from '@/components/tekken/TekkenMatchmakingModal';
@@ -41,6 +43,7 @@ export default function CharacterBox() {
 
   // 마일스톤 Context
   const milestone = useMilestone();
+  const { showExpToast } = useExpToast();
 
   // 토끼 홀딩 구독 (실제 스탯)
   const { holdings } = useRabbitHoldings(profile?.uid);
@@ -273,6 +276,7 @@ export default function CharacterBox() {
               isolation: 'isolate',
               cursor: 'grab',
               WebkitTouchCallout: 'none',
+              touchAction: 'none',
             }}
             onTouchStart={onTouchStart}
             onTouchMove={onTouchMove}
@@ -479,6 +483,12 @@ export default function CharacterBox() {
           tekken={tekken}
           userId={profile.uid}
           onClose={() => {
+            // 배틀 결과에서 XP 토스트 표시
+            if (tekken.result && profile) {
+              const isWinner = tekken.result.winnerId === profile.uid;
+              const xp = calcBattleXp(isWinner, 0);
+              showExpToast(xp, isWinner ? '배틀 승리' : '배틀 참여');
+            }
             setShowBattle(false);
             tekken.leaveBattle();
           }}
@@ -536,7 +546,7 @@ function OrbitalCharacter({
           height={Math.round(CHAR_SIZE * (969 / 520))}
           draggable={false}
           onContextMenu={(e) => e.preventDefault()}
-          className="drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)] pointer-events-none"
+          className="drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
           animate={{ scale: isPressing ? 0.9 : 1 }}
           transition={{ type: 'spring', stiffness: 300, damping: 20 }}
           style={{
