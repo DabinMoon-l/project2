@@ -13,12 +13,12 @@ import { scaleCoord } from '@/lib/hooks/useViewportScale';
 
 const SWIPE_THRESHOLD = 40;
 
-/* 궤도 파라미터 (교수님 — 학생보다 살짝 크게) */
-const ORBIT_RX = 190;
-const ORBIT_RY = 55;
-const CHAR_SIZE = 200;
+/* 궤도 파라미터 (학생과 동일) */
+const ORBIT_RX = 110;
+const ORBIT_RY = 32;
+const CHAR_SIZE = 115;
 const CHAR_HALF = CHAR_SIZE / 2;
-const ORBIT_Y_SHIFT = 212;
+const ORBIT_Y_SHIFT = 135;
 
 /* 교수님 홈에 표시할 토끼 후보 (rabbitId 0-indexed) */
 const PROFESSOR_RABBIT_POOL = [21, 26, 56, 58, 59, 61];
@@ -113,10 +113,10 @@ export default function ProfessorCharacterBox() {
   if (equipped.length === 0) return null;
 
   return (
-    <div className="flex flex-col items-center w-full -mt-8 -mb-28">
+    <div className="flex flex-col items-center w-full">
       {/* 캐릭터 궤도 영역 */}
       <div
-        className="relative select-none"
+        className="relative select-none -mt-14"
         style={{
           width: containerW,
           height: containerH,

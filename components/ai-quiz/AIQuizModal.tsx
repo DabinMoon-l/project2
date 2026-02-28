@@ -138,12 +138,15 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    // input 초기화 (먼저 실행)
+    // 파일 배열을 먼저 복사 (input 초기화 전에)
+    const fileArray = Array.from(files);
+
+    // input 초기화 (파일 복사 후 실행)
     if (e.target) e.target.value = '';
 
     const newImages: string[] = [];
 
-    for (const file of Array.from(files)) {
+    for (const file of fileArray) {
       if (file.type.startsWith('image/')) {
         const base64 = await fileToBase64(file);
         newImages.push(base64);
@@ -556,8 +559,8 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
 
   return (
     <>
-      <ExpandModal isOpen={isOpen} onClose={onClose} sourceRect={sourceRect} className="w-full max-w-md" zIndex={50}>
-        <div className="bg-[#F5F0E8] border-2 border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A] overflow-hidden">
+      <ExpandModal isOpen={isOpen} onClose={onClose} sourceRect={sourceRect} className="w-[85%] max-w-sm" zIndex={50}>
+        <div className="bg-[#F5F0E8] border-2 border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A] overflow-hidden rounded-2xl">
           {/* 헤더 */}
           <div className="flex items-center justify-between px-4 py-3 border-b-2 border-[#1A1A1A]">
             <h2 className="text-sm font-bold text-[#1A1A1A]">퀴즈로 학습하기</h2>
@@ -572,7 +575,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
           </div>
 
           {/* 본문 */}
-          <div className="px-4 py-3 max-h-[70vh] overflow-y-auto overscroll-contain space-y-3">
+          <div className="px-4 py-3 max-h-[80vh] overflow-y-auto overscroll-contain space-y-2.5">
             {/* 퀴즈 이름 */}
             <div>
               <label className="block text-xs font-semibold text-[#1A1A1A] mb-1.5">
@@ -583,7 +586,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
                 value={folderName}
                 onChange={(e) => setFolderName(e.target.value)}
                 placeholder="퀴즈 이름을 입력하세요"
-                className="w-full px-3 py-2 text-sm border-2 border-[#1A1A1A] bg-white text-[#1A1A1A] placeholder-[#9A9A9A] focus:outline-none focus:ring-2 focus:ring-[#1A1A1A] focus:ring-offset-2"
+                className="w-full px-3 py-2 text-sm border-2 border-[#1A1A1A] bg-white text-[#1A1A1A] placeholder-[#9A9A9A] focus:outline-none focus:ring-2 focus:ring-[#1A1A1A] focus:ring-offset-2 rounded-lg"
               />
             </div>
 
@@ -596,7 +599,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
                 <button
                   type="button"
                   onClick={() => setShowTagFilter(!showTagFilter)}
-                  className={`flex items-center justify-center w-7 h-7 border transition-colors ${
+                  className={`flex items-center justify-center w-7 h-7 border rounded-lg transition-colors ${
                     showTagFilter
                       ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
                       : 'bg-white text-[#1A1A1A] border-[#1A1A1A]'
@@ -615,7 +618,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
                     return (
                       <div
                         key={tag}
-                        className="flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-bold bg-[#1A1A1A] text-white"
+                        className="flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-bold bg-[#1A1A1A] text-white rounded-md"
                       >
                         #{tag}
                         <button
@@ -648,7 +651,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
                     transition={{ duration: 0.2 }}
                     className="overflow-hidden"
                   >
-                    <div className="flex flex-wrap gap-1.5 p-2 bg-white border-2 border-[#1A1A1A] max-h-36 overflow-y-auto overscroll-contain">
+                    <div className="flex flex-wrap gap-1.5 p-2 bg-white border-2 border-[#1A1A1A] rounded-lg max-h-36 overflow-y-auto overscroll-contain">
                       {tagOptions
                         .filter(tag => !selectedTags.includes(tag.value))
                         .map((tag) => (
@@ -658,7 +661,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
                             onClick={() => {
                               setSelectedTags(prev => [...prev, tag.value]);
                             }}
-                            className="px-2 py-1 text-xs font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+                            className="px-2 py-1 text-xs font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] rounded-md hover:bg-[#EDEAE4] transition-colors"
                           >
                             {tag.label}
                           </button>
@@ -685,7 +688,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
                   <>
                     <button
                       onClick={() => cameraInputRef.current?.click()}
-                      className="flex flex-col items-center gap-0.5 p-2 border-2 border-[#1A1A1A] bg-white hover:bg-[#EDEAE4] transition-colors"
+                      className="flex flex-col items-center gap-0.5 p-2 border-2 border-[#1A1A1A] bg-white hover:bg-[#EDEAE4] transition-colors rounded-lg"
                     >
                       <svg className="w-5 h-5 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -707,7 +710,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
                 {/* 갤러리/이미지 */}
                 <button
                   onClick={() => galleryInputRef.current?.click()}
-                  className="flex flex-col items-center gap-0.5 p-2 border-2 border-[#1A1A1A] bg-white hover:bg-[#EDEAE4] transition-colors"
+                  className="flex flex-col items-center gap-0.5 p-2 border-2 border-[#1A1A1A] bg-white hover:bg-[#EDEAE4] transition-colors rounded-lg"
                 >
                   <svg className="w-5 h-5 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -726,7 +729,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
                 {/* PDF */}
                 <button
                   onClick={() => pdfInputRef.current?.click()}
-                  className="flex flex-col items-center gap-0.5 p-2 border-2 border-[#1A1A1A] bg-white hover:bg-[#EDEAE4] transition-colors"
+                  className="flex flex-col items-center gap-0.5 p-2 border-2 border-[#1A1A1A] bg-white hover:bg-[#EDEAE4] transition-colors rounded-lg"
                 >
                   <svg className="w-5 h-5 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
@@ -745,7 +748,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
                 {/* PPT */}
                 <button
                   onClick={() => pptInputRef.current?.click()}
-                  className="flex flex-col items-center gap-0.5 p-2 border-2 border-[#1A1A1A] bg-white hover:bg-[#EDEAE4] transition-colors"
+                  className="flex flex-col items-center gap-0.5 p-2 border-2 border-[#1A1A1A] bg-white hover:bg-[#EDEAE4] transition-colors rounded-lg"
                 >
                   <svg className="w-5 h-5 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
@@ -774,7 +777,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
 
               {/* 문서 페이지 선택 완료 요약 (PDF/PPT 공통) */}
               {documentPages.length > 0 && (
-                <div className="border-2 border-[#1A1A1A] p-3 bg-white">
+                <div className="border-2 border-[#1A1A1A] p-3 bg-white rounded-lg">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       {/* 문서 아이콘 */}
@@ -798,14 +801,14 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
                       <button
                         type="button"
                         onClick={handleReopenPageSelection}
-                        className="px-2 py-1.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+                        className="px-2 py-1.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors rounded-lg"
                       >
                         {selectedPageCount > 0 ? '다시 선택' : '선택하기'}
                       </button>
                       <button
                         type="button"
                         onClick={handleClearDocumentSelection}
-                        className="px-2 py-1.5 text-xs font-bold border border-[#8B1A1A] text-[#8B1A1A] hover:bg-[#FEE2E2] transition-colors"
+                        className="px-2 py-1.5 text-xs font-bold border border-[#8B1A1A] text-[#8B1A1A] hover:bg-[#FEE2E2] transition-colors rounded-lg"
                       >
                         삭제
                       </button>
@@ -848,7 +851,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
                   <button
                     key={opt.value}
                     onClick={() => setDifficulty(opt.value)}
-                    className={`p-2 border-2 transition-all ${
+                    className={`p-2 border-2 rounded-lg transition-all ${
                       difficulty === opt.value
                         ? 'border-[#1A1A1A] bg-[#1A1A1A] text-white'
                         : 'border-[#1A1A1A] bg-white text-[#1A1A1A] hover:bg-[#EDEAE4]'
@@ -886,7 +889,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
             </div>
 
             {/* 과목 맞춤형 */}
-            <label className="flex items-center gap-2.5 p-2 border-2 border-[#1A1A1A] bg-white cursor-pointer select-none">
+            <label className="flex items-center gap-2.5 p-2 border-2 border-[#1A1A1A] bg-white cursor-pointer select-none rounded-lg">
               <input
                 type="checkbox"
                 checked={courseCustomized}
@@ -904,7 +907,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
             </label>
 
             {/* AI 할루시네이션 경고 */}
-            <div className="p-2 border-2 border-[#8B1A1A]">
+            <div className="p-2 border-2 border-[#8B1A1A] rounded-lg">
               <div className="flex gap-1.5">
                 <svg className="w-4 h-4 text-[#8B1A1A] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -924,7 +927,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
             <button
               onClick={handleStart}
               disabled={!folderName.trim() || !hasContent || (courseCustomized && !hasChapterTag)}
-              className={`w-full py-2 font-bold text-xs border-2 border-[#1A1A1A] transition-all ${
+              className={`w-full py-2.5 font-bold text-sm border-2 border-[#1A1A1A] rounded-lg transition-all ${
                 folderName.trim() && hasContent && (!courseCustomized || hasChapterTag)
                   ? 'bg-[#1A1A1A] text-white hover:bg-[#3A3A3A] shadow-[2px_2px_0px_#1A1A1A] active:shadow-none active:translate-x-[2px] active:translate-y-[2px]'
                   : 'bg-[#E5E5E5] text-[#9A9A9A] cursor-not-allowed'

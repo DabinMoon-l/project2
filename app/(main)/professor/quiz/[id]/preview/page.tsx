@@ -69,66 +69,83 @@ function EditExitModal({
   return createPortal(
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        >
+          {/* 백드롭 */}
           <motion.div
-            variants={backdropVariants}
-            initial="hidden" animate="visible" exit="exit"
-            onClick={(e) => { if (e.target === e.currentTarget && !isSaving) onClose(); }}
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => { if (!isSaving) onClose(); }}
+            className="absolute inset-0 bg-black/50"
           />
+
+          {/* 모달 */}
           <motion.div
             ref={modalRef}
-            variants={modalVariants}
-            initial="hidden" animate="visible" exit="exit"
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
             role="alertdialog" aria-modal="true" tabIndex={-1}
-            className="relative w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] shadow-xl overflow-hidden focus:outline-none"
+            className="relative bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 max-w-[280px] w-full rounded-xl focus:outline-none"
           >
-            <div className="flex justify-center pt-6">
-              <div className="w-16 h-16 border-2 border-[#8B6914] bg-[#FFF8E1] flex items-center justify-center">
-                <svg className="w-8 h-8 text-[#8B6914]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="text-center">
+              {/* 아이콘 */}
+              <div className="w-9 h-9 bg-[#FFF8E7] border-2 border-[#D4A84B] flex items-center justify-center mx-auto mb-3">
+                <svg className="w-4 h-4 text-[#D4A84B]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
               </div>
-            </div>
-            <div className="px-6 py-4 text-center">
-              <h2 className="text-lg font-bold text-[#1A1A1A] mb-2">수정을 중단하시겠습니까?</h2>
-              <p className="text-sm text-[#5C5C5C] leading-relaxed">
-                저장하지 않으면 변경사항이<br />모두 사라집니다.
+
+              {/* 제목 */}
+              <h3 className="text-sm font-bold text-[#1A1A1A] mb-1.5">
+                수정 중인 내용이 있습니다
+              </h3>
+
+              {/* 설명 */}
+              <p className="text-xs text-[#5C5C5C] mb-4">
+                저장하지 않고 나가면 변경사항이 사라집니다.
               </p>
-            </div>
-            <div className="flex flex-col gap-2 px-6 py-4 border-t-2 border-[#1A1A1A] bg-[#EDEAE4]">
-              <motion.button
-                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                onClick={onClose} disabled={isSaving}
-                className="w-full py-3 font-bold text-[#F5F0E8] bg-[#1A1A1A] border-2 border-[#1A1A1A] transition-all duration-200 hover:bg-[#2A2A2A] disabled:opacity-50"
-              >
-                계속 수정하기
-              </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                onClick={onSaveAndExit} disabled={isSaving}
-                className="w-full py-3 font-bold bg-[#F5F0E8] text-[#1A1A1A] border-2 border-[#1A1A1A] hover:bg-[#E5E0D8] transition-all duration-200 disabled:opacity-50 flex items-center justify-center"
-              >
-                {isSaving ? (
-                  <>
-                    <svg className="animate-spin w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    저장 중...
-                  </>
-                ) : '저장하고 나가기'}
-              </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                onClick={onExitWithoutSave} disabled={isSaving}
-                className="w-full py-3 font-bold bg-[#F5F0E8] text-[#8B1A1A] border-2 border-[#8B1A1A] hover:bg-[#FDEAEA] transition-all duration-200 disabled:opacity-50"
-              >
-                저장하지 않고 나가기
-              </motion.button>
+
+              {/* 버튼 */}
+              <div className="space-y-1.5">
+                <motion.button
+                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                  onClick={onSaveAndExit} disabled={isSaving}
+                  className="w-full py-1.5 px-3 text-xs bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors rounded-lg disabled:opacity-50 flex items-center justify-center"
+                >
+                  {isSaving ? (
+                    <>
+                      <svg className="animate-spin w-3.5 h-3.5 mr-1.5" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      저장 중...
+                    </>
+                  ) : '저장하고 나가기'}
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                  onClick={onExitWithoutSave} disabled={isSaving}
+                  className="w-full py-1.5 px-3 text-xs bg-[#EDEAE4] text-[#8B1A1A] font-bold border-2 border-[#8B1A1A] hover:bg-[#FDEAEA] transition-colors rounded-lg disabled:opacity-50"
+                >
+                  저장하지 않고 나가기
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                  onClick={onClose} disabled={isSaving}
+                  className="w-full py-1.5 px-3 text-xs bg-[#EDEAE4] text-[#1A1A1A] font-bold border-2 border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors rounded-lg disabled:opacity-50"
+                >
+                  계속 수정하기
+                </motion.button>
+              </div>
             </div>
           </motion.div>
-        </div>
+        </motion.div>
       )}
     </AnimatePresence>,
     document.body
@@ -808,7 +825,7 @@ export default function QuizPreviewPage() {
       <>
         {/* 묶은 보기 (grouped) */}
         {groupedBlocks.map((block: any) => (
-          <div key={block.id} className="mb-3 p-3 border-2 border-[#1A1A1A] bg-[#FFF8E1]">
+          <div key={block.id} className="mb-3 p-3 border-2 border-[#1A1A1A] bg-[#FFF8E1] rounded-lg">
             <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
             <div className="space-y-1">
               {block.children?.map((child: any) => (
@@ -827,7 +844,7 @@ export default function QuizPreviewPage() {
                     </p>
                   ))}
                   {child.type === 'image' && child.imageUrl && (
-                    <img src={child.imageUrl} alt="보기 이미지" className="max-w-full h-auto border border-[#1A1A1A]" />
+                    <img src={child.imageUrl} alt="보기 이미지" className="max-w-full h-auto border border-[#1A1A1A] rounded-lg" />
                   )}
                 </div>
               ))}
@@ -839,7 +856,7 @@ export default function QuizPreviewPage() {
         {nonGroupedBlocks.map((block: any) => {
           if (block.type === 'text' && block.content?.trim()) {
             return (
-              <div key={block.id} className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1]">
+              <div key={block.id} className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-lg">
                 <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
                 <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{block.content}</p>
               </div>
@@ -847,7 +864,7 @@ export default function QuizPreviewPage() {
           }
           if (block.type === 'labeled') {
             return (
-              <div key={block.id} className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1]">
+              <div key={block.id} className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-lg">
                 <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
                 <div className="space-y-1">
                   {(block.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
@@ -861,7 +878,7 @@ export default function QuizPreviewPage() {
           }
           if (block.type === 'gana') {
             return (
-              <div key={block.id} className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1]">
+              <div key={block.id} className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-lg">
                 <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
                 <div className="space-y-1">
                   {(block.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
@@ -878,7 +895,7 @@ export default function QuizPreviewPage() {
 
         {/* 레거시 보기 - 텍스트 */}
         {!hasMixedExamples && q.subQuestionOptions && q.subQuestionOptions.length > 0 && q.subQuestionOptionsType === 'text' && (
-          <div className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1]">
+          <div className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-lg">
             <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
             <p className="text-sm text-[#1A1A1A]">{q.subQuestionOptions.join(', ')}</p>
           </div>
@@ -886,7 +903,7 @@ export default function QuizPreviewPage() {
 
         {/* 레거시 보기 - ㄱㄴㄷ */}
         {!hasMixedExamples && q.subQuestionOptions && q.subQuestionOptions.length > 0 && q.subQuestionOptionsType === 'labeled' && (
-          <div className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1]">
+          <div className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-lg">
             <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
             <div className="space-y-1">
               {q.subQuestionOptions.map((itm, idx) => (
@@ -902,7 +919,7 @@ export default function QuizPreviewPage() {
         {q.image && (
           <div className="mb-3">
             <p className="text-xs font-bold text-[#5C5C5C] mb-2">문제 이미지</p>
-            <img src={q.image} alt="문제 이미지" className="max-w-full h-auto border border-[#1A1A1A]" />
+            <img src={q.image} alt="문제 이미지" className="max-w-full h-auto border border-[#1A1A1A] rounded-lg" />
           </div>
         )}
 
@@ -910,13 +927,13 @@ export default function QuizPreviewPage() {
         {q.subQuestionImage && (
           <div className="mb-3">
             <p className="text-xs font-bold text-[#5C5C5C] mb-2">이미지</p>
-            <img src={q.subQuestionImage} alt="하위 문제 이미지" className="max-w-full h-auto border border-[#1A1A1A]" />
+            <img src={q.subQuestionImage} alt="하위 문제 이미지" className="max-w-full h-auto border border-[#1A1A1A] rounded-lg" />
           </div>
         )}
 
         {/* 보기 (<보기> 박스) */}
         {q.bogi && q.bogi.items && q.bogi.items.some(i => i.content?.trim()) && (
-          <div className="mb-3 p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A]">
+          <div className="mb-3 p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A] rounded-lg">
             <p className="text-xs text-center text-[#5C5C5C] mb-2 font-bold">&lt;보 기&gt;</p>
             <div className="space-y-1">
               {q.bogi.items.filter(i => i.content?.trim()).map((item, idx) => (
@@ -931,7 +948,7 @@ export default function QuizPreviewPage() {
 
         {/* 발문 */}
         {(q.passagePrompt || q.bogiQuestionText) && (
-          <div className="mb-3 p-3 border border-[#1A1A1A] bg-[#F5F0E8]">
+          <div className="mb-3 p-3 border border-[#1A1A1A] bg-[#F5F0E8] rounded-lg">
             <p className="text-sm text-[#1A1A1A]">
               {q.passagePrompt && q.bogiQuestionText
                 ? `${q.passagePrompt} ${q.bogiQuestionText}`
@@ -974,7 +991,7 @@ export default function QuizPreviewPage() {
                 return (
                   <div key={idx}>
                     <div
-                      className={`text-sm p-2 border ${
+                      className={`text-sm p-2 border rounded-lg ${
                         isCorrectOption
                           ? 'border-[#1A6B1A] bg-[#E8F5E9] text-[#1A6B1A]'
                           : 'border-[#EDEAE4] text-[#1A1A1A]'
@@ -1011,7 +1028,7 @@ export default function QuizPreviewPage() {
                           className="overflow-hidden"
                         >
                           <div className="px-3 py-2">
-                            <p className="text-sm text-[#5C5C5C] bg-[#EDEAE4] p-2 border-l-2 border-[#8B6914]">
+                            <p className="text-sm text-[#5C5C5C] bg-[#EDEAE4] p-2 border-l-2 border-[#8B6914] rounded-lg">
                               {stripChoicePrefix(choiceExp)}
                             </p>
                           </div>
@@ -1034,12 +1051,12 @@ export default function QuizPreviewPage() {
 
               return (
                 <div className="flex gap-3 justify-center py-2">
-                  <div className={`w-20 h-20 flex items-center justify-center font-bold text-2xl border-2 ${
+                  <div className={`w-20 h-20 flex items-center justify-center font-bold text-2xl border-2 rounded-xl ${
                     correctOX === 'O' ? 'border-[#1A6B1A] bg-[#E8F5E9] text-[#1A6B1A]' : 'border-[#EDEAE4] bg-white text-[#5C5C5C]'
                   }`}>
                     O
                   </div>
-                  <div className={`w-20 h-20 flex items-center justify-center font-bold text-2xl border-2 ${
+                  <div className={`w-20 h-20 flex items-center justify-center font-bold text-2xl border-2 rounded-xl ${
                     correctOX === 'X' ? 'border-[#1A6B1A] bg-[#E8F5E9] text-[#1A6B1A]' : 'border-[#EDEAE4] bg-white text-[#5C5C5C]'
                   }`}>
                     X
@@ -1075,7 +1092,7 @@ export default function QuizPreviewPage() {
             {q.rubric && q.rubric.length > 0 && q.rubric.some(r => r.criteria.trim()) && (
               <div>
                 <p className="text-xs font-bold text-[#5C5C5C] mb-1">평가 기준</p>
-                <div className="bg-[#EDEAE4] p-3 border border-[#1A1A1A]">
+                <div className="bg-[#EDEAE4] p-3 border border-[#1A1A1A] rounded-lg">
                   <ul className="space-y-1 text-sm">
                     {q.rubric.filter(r => r.criteria.trim()).map((item, idx) => (
                       <li key={idx} className="flex items-start gap-2">
@@ -1094,7 +1111,7 @@ export default function QuizPreviewPage() {
             {q.explanation && (
               <div>
                 <p className="text-xs font-bold text-[#5C5C5C] mb-1">해설</p>
-                <p className="text-sm text-[#1A1A1A] bg-[#EDEAE4] p-3 border border-[#1A1A1A]">
+                <p className="text-sm text-[#1A1A1A] bg-[#EDEAE4] p-3 border border-[#1A1A1A] rounded-lg">
                   {q.explanation}
                 </p>
               </div>
@@ -1105,7 +1122,7 @@ export default function QuizPreviewPage() {
           q.explanation ? (
             <div>
               <p className="text-xs font-bold text-[#5C5C5C] mb-1">해설</p>
-              <p className="text-sm text-[#1A1A1A] bg-[#EDEAE4] p-3 border border-[#1A1A1A]">
+              <p className="text-sm text-[#1A1A1A] bg-[#EDEAE4] p-3 border border-[#1A1A1A] rounded-lg">
                 {q.explanation}
               </p>
             </div>
@@ -1153,16 +1170,15 @@ export default function QuizPreviewPage() {
       <header className="sticky z-50 w-full border-b-2 border-[#1A1A1A]" style={{ top: 'env(safe-area-inset-top, 0px)', backgroundColor: '#F5F0E8' }}>
         <div className="flex items-center h-14 px-4">
           {isEditMode ? (
-            <div className="w-12 h-12" />
+            <div className="w-10 h-10" />
           ) : (
             <button
               onClick={() => router.back()}
-              className="flex items-center gap-2 text-sm text-[#1A1A1A] hover:text-[#5C5C5C] transition-colors"
+              className="w-10 h-10 flex items-center justify-center text-[#1A1A1A] hover:text-[#5C5C5C] transition-colors"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
-              뒤로가기
             </button>
           )}
           <h1 className="flex-1 text-center text-base font-bold text-[#1A1A1A] truncate px-4">
@@ -1170,7 +1186,7 @@ export default function QuizPreviewPage() {
           </h1>
           <button
             onClick={toggleEditMode}
-            className={`w-12 h-12 flex items-center justify-center transition-colors ${
+            className={`w-10 h-10 flex items-center justify-center transition-colors ${
               isEditMode ? 'text-[#8B1A1A]' : 'text-[#5C5C5C] hover:text-[#1A1A1A]'
             }`}
             aria-label={isEditMode ? '수정 모드 해제' : '수정 모드'}
@@ -1196,9 +1212,9 @@ export default function QuizPreviewPage() {
             className="space-y-4"
           >
             {/* 퀴즈 제목 + 난이도 + 총평 + 태그 */}
-            <div className="border-2 border-[#1A1A1A] p-6 space-y-6 bg-[#F5F0E8]">
+            <div className="border-2 border-[#1A1A1A] p-4 space-y-4 bg-[#F5F0E8]">
               <div>
-                <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
+                <label className="block text-xs font-bold text-[#1A1A1A] mb-1.5">
                   퀴즈 제목 <span className="text-[#8B1A1A]">*</span>
                 </label>
                 <input
@@ -1206,11 +1222,11 @@ export default function QuizPreviewPage() {
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
                   placeholder="예: 중간고사 대비 퀴즈"
-                  className="w-full px-4 py-3 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] placeholder:text-[#9A9A9A] outline-none focus:bg-[#FDFBF7]"
+                  className="w-full px-3 py-2.5 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-sm text-[#1A1A1A] placeholder:text-[#9A9A9A] outline-none focus:bg-[#FDFBF7]"
                 />
               </div>
               <div>
-                <label className="block text-sm font-bold text-[#1A1A1A] mb-2">난이도</label>
+                <label className="block text-xs font-bold text-[#1A1A1A] mb-1.5">난이도</label>
                 <div className="flex gap-2">
                   {([
                     { value: 'easy' as const, label: '쉬움' },
@@ -1223,7 +1239,7 @@ export default function QuizPreviewPage() {
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => setEditDifficulty(value)}
-                      className={`flex-1 py-2.5 px-4 font-bold text-sm border-2 transition-all duration-200 ${
+                      className={`flex-1 py-2 px-3 font-bold text-xs border-2 transition-all duration-200 ${
                         editDifficulty === value
                           ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
                           : 'bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
@@ -1240,20 +1256,20 @@ export default function QuizPreviewPage() {
 
               {/* 총평 (선택) */}
               <div>
-                <label className="block text-sm font-bold text-[#1A1A1A] mb-2">총평 (선택)</label>
+                <label className="block text-xs font-bold text-[#1A1A1A] mb-1.5">총평 (선택)</label>
                 <textarea
                   value={editDescription}
                   onChange={(e) => setEditDescription(e.target.value)}
                   placeholder="학생들에게 전할 한마디를 입력하세요"
                   rows={2}
-                  className="w-full px-4 py-3 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] placeholder:text-[#9A9A9A] outline-none focus:bg-[#FDFBF7] resize-none text-sm"
+                  className="w-full px-3 py-2.5 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] placeholder:text-[#9A9A9A] outline-none focus:bg-[#FDFBF7] resize-none text-xs"
                 />
               </div>
 
               {/* 태그 (선택) */}
               <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <label className="text-sm font-bold text-[#1A1A1A]">태그</label>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <label className="text-xs font-bold text-[#1A1A1A]">태그</label>
                   <button
                     type="button"
                     onClick={() => setShowTagPicker(!showTagPicker)}
@@ -1294,7 +1310,7 @@ export default function QuizPreviewPage() {
                       transition={{ duration: 0.2 }}
                       className="overflow-hidden"
                     >
-                      <div className="flex flex-wrap gap-2 p-3 border-2 border-[#1A1A1A] bg-[#F5F0E8]">
+                      <div className="flex flex-wrap gap-1.5 p-2.5 border-2 border-[#1A1A1A] bg-[#F5F0E8]">
                         {tagOptions
                           .filter(tag => !editTags.includes(tag))
                           .map((tag) => (
@@ -1302,7 +1318,7 @@ export default function QuizPreviewPage() {
                               key={tag}
                               type="button"
                               onClick={() => setEditTags(prev => [...prev, tag])}
-                              className="px-3 py-1.5 text-sm font-bold bg-transparent text-[#1A1A1A] border-2 border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+                              className="px-2.5 py-1 text-xs font-bold bg-transparent text-[#1A1A1A] border-2 border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
                             >
                               #{tag}
                             </button>
@@ -1394,7 +1410,7 @@ export default function QuizPreviewPage() {
           </div>
         ) : (
         <div className="space-y-3">
-          <h3 className="font-bold text-[#1A1A1A]">문제 정보</h3>
+          <h3 className="font-bold text-[15px] text-[#1A1A1A]">문제 정보</h3>
           {displayItems.map((item) => {
             // 단일 문제
             if (item.type === 'single' && item.result) {
@@ -1403,22 +1419,22 @@ export default function QuizPreviewPage() {
                 <div key={q.id}>
                   <button
                     onClick={() => toggleExpand(q.id)}
-                    className="w-full border-2 border-[#1A1A1A] p-4 text-left bg-[#F5F0E8]"
+                    className="w-full border-2 border-[#1A1A1A] p-2.5 text-left bg-[#F5F0E8] rounded-xl"
                   >
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-bold text-[#1A1A1A]">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[11px] font-bold text-[#1A1A1A] px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8]">
                           Q{item.displayNumber}
                         </span>
                         {/* 챕터 */}
                         {userCourseId && q.chapterId && (
-                          <span className="px-1.5 py-0.5 bg-[#E8F0FE] border border-[#4A6DA7] text-[#4A6DA7] text-xs font-medium">
+                          <span className="px-1.5 py-0.5 bg-[#E8F0FE] border border-[#4A6DA7] text-[#4A6DA7] text-[11px] font-medium">
                             {formatChapterLabel(userCourseId, q.chapterId, q.chapterDetailId)}
                           </span>
                         )}
                       </div>
                       <svg
-                        className={`w-5 h-5 text-[#5C5C5C] transition-transform ${expandedIds.has(q.id) ? 'rotate-180' : ''}`}
+                        className={`w-4 h-4 text-[#5C5C5C] transition-transform ${expandedIds.has(q.id) ? 'rotate-180' : ''}`}
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -1426,7 +1442,7 @@ export default function QuizPreviewPage() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                       </svg>
                     </div>
-                    <p className="text-sm text-[#1A1A1A] mt-2 line-clamp-2">
+                    <p className="text-xs text-[#1A1A1A] mt-1.5 line-clamp-2">
                       {q.question}
                       {(q.passagePrompt || q.bogiQuestionText) && (
                         <span className="ml-1 text-[#5C5C5C]">
@@ -1444,7 +1460,7 @@ export default function QuizPreviewPage() {
                         exit={{ height: 0, opacity: 0 }}
                         className="overflow-hidden"
                       >
-                        <div className="border-2 border-t-0 border-[#1A1A1A] bg-[#F5F0E8] p-4 space-y-3">
+                        <div className="border-2 border-t-0 border-[#1A1A1A] bg-[#F5F0E8] p-4 space-y-3 rounded-b-xl">
                           {renderQuestionDetail(q)}
                         </div>
                       </motion.div>
@@ -1465,19 +1481,19 @@ export default function QuizPreviewPage() {
                 <div key={groupId}>
                   <button
                     onClick={() => toggleGroupExpand(groupId)}
-                    className="w-full border border-[#1A1A1A] bg-[#F5F0E8] p-4 text-left"
+                    className="w-full border-2 border-[#1A1A1A] bg-[#F5F0E8] p-2.5 text-left rounded-xl"
                   >
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-[#1A1A1A]">
-                          Q{item.displayNumber}. 결합형 문제
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] font-bold px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8]">
+                          Q{item.displayNumber}. 결합형
                         </span>
-                        <span className="text-xs px-2 py-0.5 bg-[#1A1A1A] text-[#F5F0E8]">
+                        <span className="text-[11px] px-1.5 py-0.5 border border-[#1A1A1A] text-[#1A1A1A] font-bold">
                           {groupResults.length}문제
                         </span>
                       </div>
                       <svg
-                        className={`w-5 h-5 text-[#5C5C5C] transition-transform ${isGroupExpanded ? 'rotate-180' : ''}`}
+                        className={`w-4 h-4 text-[#5C5C5C] transition-transform ${isGroupExpanded ? 'rotate-180' : ''}`}
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -1486,7 +1502,7 @@ export default function QuizPreviewPage() {
                       </svg>
                     </div>
                     {(firstResult.commonQuestion || firstResult.passagePrompt) && (
-                      <p className="text-sm text-[#1A1A1A] mt-2 line-clamp-2">
+                      <p className="text-xs text-[#1A1A1A] mt-1.5 line-clamp-2">
                         {firstResult.commonQuestion || ''}
                         {firstResult.passagePrompt && (
                           <span className={firstResult.commonQuestion ? 'ml-1 text-[#5C5C5C]' : ''}>
@@ -1505,10 +1521,10 @@ export default function QuizPreviewPage() {
                         exit={{ height: 0, opacity: 0 }}
                         className="overflow-hidden"
                       >
-                        <div className="border border-t-0 border-[#1A1A1A] bg-[#F5F0E8] p-4 space-y-4">
+                        <div className="border-2 border-t-0 border-[#1A1A1A] bg-[#F5F0E8] p-4 space-y-4 rounded-b-xl">
                           {/* 공통 지문 */}
                           {(firstResult.passage || firstResult.passageImage || firstResult.koreanAbcItems || (firstResult.passageMixedExamples && firstResult.passageMixedExamples.length > 0)) && (
-                            <div className="p-3 border border-[#8B6914] bg-[#FFF8E1]">
+                            <div className="p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-lg">
                               <p className="text-xs font-bold text-[#8B6914] mb-2">
                                 {firstResult.passageType === 'korean_abc' ? '보기' : '공통 지문'}
                               </p>
@@ -1565,22 +1581,22 @@ export default function QuizPreviewPage() {
                                 </div>
                               )}
                               {firstResult.passageImage && (
-                                <img src={firstResult.passageImage} alt="공통 이미지" className="mt-2 max-w-full h-auto border border-[#1A1A1A]" />
+                                <img src={firstResult.passageImage} alt="공통 이미지" className="mt-2 max-w-full h-auto border border-[#1A1A1A] rounded-lg" />
                               )}
                             </div>
                           )}
 
                           {/* 하위 문제들 */}
-                          <div className="space-y-3 p-3 bg-[#EDEAE4] border border-[#D4CFC4]">
+                          <div className="space-y-3 p-3 bg-[#EDEAE4] border border-[#D4CFC4] rounded-lg">
                             {groupResults.map((subQ, subIdx) => (
                               <div key={subQ.id}>
                                 <button
                                   onClick={() => toggleExpand(subQ.id)}
-                                  className="w-full border border-[#1A1A1A] p-3 text-left bg-[#F5F0E8]"
+                                  className="w-full border border-[#1A1A1A] p-2.5 text-left bg-[#F5F0E8] rounded-lg"
                                 >
                                   <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="text-xs font-bold text-[#1A1A1A]">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="text-[11px] font-bold px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8]">
                                         Q{item.displayNumber}-{subIdx + 1}
                                       </span>
                                       {userCourseId && subQ.chapterId && (
@@ -1598,7 +1614,7 @@ export default function QuizPreviewPage() {
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                     </svg>
                                   </div>
-                                  <p className="text-sm text-[#1A1A1A] mt-1 line-clamp-2">
+                                  <p className="text-xs text-[#1A1A1A] mt-1 line-clamp-2">
                                     {subQ.question}
                                     {(subQ.passagePrompt || subQ.bogiQuestionText) && (
                                       <span className="ml-1 text-[#5C5C5C]">
@@ -1616,7 +1632,7 @@ export default function QuizPreviewPage() {
                                       exit={{ height: 0, opacity: 0 }}
                                       className="overflow-hidden"
                                     >
-                                      <div className="border-2 border-t-0 border-[#1A1A1A] bg-white p-3 space-y-2">
+                                      <div className="border-2 border-t-0 border-[#1A1A1A] bg-white p-3 space-y-2 rounded-b-lg">
                                         {renderQuestionDetail(subQ)}
                                       </div>
                                     </motion.div>
@@ -1645,7 +1661,7 @@ export default function QuizPreviewPage() {
           <button
             onClick={handleSave}
             disabled={saving || editableQuestions.length === 0}
-            className={`w-full py-3 font-bold border-2 border-[#1A1A1A] transition-colors ${
+            className={`w-full py-3 font-bold border-2 border-[#1A1A1A] transition-colors rounded-lg ${
               saving || editableQuestions.length === 0
                 ? 'bg-[#D4CFC4] text-[#5C5C5C] cursor-not-allowed'
                 : 'bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#333]'

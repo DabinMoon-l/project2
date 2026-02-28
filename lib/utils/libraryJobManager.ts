@@ -14,6 +14,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { functions } from '@/lib/firebase';
+import { getCourseIndex } from '@/lib/courseIndex';
 
 // ============================================================
 // 타입
@@ -122,6 +123,38 @@ export function cancelLibraryJob(): void {
 }
 
 // ============================================================
+// 태그 → chapterId 폴백 (Gemini가 chapterId를 누락했을 때)
+// ============================================================
+
+/**
+ * 태그 배열에서 chapterId 후보 목록을 추출
+ * 예: courseId="biology", tags=["2_세포의 특성"] → ["bio_2"]
+ */
+function extractChapterIdsFromTags(courseId: string, tags: string[]): string[] {
+  const courseIndex = getCourseIndex(courseId);
+  if (!courseIndex) return [];
+
+  const EXCLUDED = new Set(['중간', '기말', '기타']);
+  const chapterIds: string[] = [];
+
+  for (const tag of tags) {
+    if (EXCLUDED.has(tag)) continue;
+    // "2_세포의 특성" → 챕터 번호 "2"
+    const match = tag.match(/^(\d+)_/);
+    if (match) {
+      const num = match[1];
+      // courseIndex에서 해당 번호의 챕터 ID 찾기
+      const chapter = courseIndex.chapters.find(c => c.name.startsWith(`${num}.`));
+      if (chapter) {
+        chapterIds.push(chapter.id);
+      }
+    }
+  }
+
+  return [...new Set(chapterIds)];
+}
+
+// ============================================================
 // 내부: 폴링 + Firestore 저장
 // ============================================================
 
@@ -175,6 +208,13 @@ async function pollAndSave(jobId: string, config: QuizSaveConfig) {
     const firestoreDb = getFirestore();
     const quizRef = doc(collection(firestoreDb, 'quizzes'));
 
+    // 태그에서 chapterId 폴백 후보 추출 (Gemini가 chapterId 누락 시 사용)
+    const fallbackChapterIds = extractChapterIdsFromTags(
+      config.courseId,
+      config.tags || []
+    );
+    const defaultChapterId = fallbackChapterIds.length > 0 ? fallbackChapterIds[0] : null;
+
     const quizData = {
       title: generatedTitle || (() => {
         const now = new Date();
@@ -185,21 +225,29 @@ async function pollAndSave(jobId: string, config: QuizSaveConfig) {
       isPublic: false,
       difficulty: config.difficulty,
       type: 'professor-ai',
-      questions: questions.map((q, idx) => ({
-        id: `q${idx + 1}`,
-        order: idx + 1,
-        type: 'multiple' as const,
-        text: q.text,
-        choices: q.choices,
-        answer: q.answer,
-        explanation: q.explanation || '',
-        ...(q.choiceExplanations ? { choiceExplanations: q.choiceExplanations } : {}),
-        ...(q.bogi ? { bogi: q.bogi } : {}),
-        chapterId: q.chapterId || null,
-        chapterDetailId: q.chapterDetailId || null,
-        imageUrl: q.imageUrl || null,
-        imageDescription: q.imageDescription || null,
-      })),
+      questions: questions.map((q, idx) => {
+        // chapterId 폴백: Gemini 응답 → 태그 기반 추론
+        let chapterId = q.chapterId || null;
+        if (!chapterId && defaultChapterId) {
+          // 태그가 1개면 해당 챕터로 배정, 여러 개면 첫 번째 챕터로 배정
+          chapterId = defaultChapterId;
+        }
+        return {
+          id: `q${idx + 1}`,
+          order: idx + 1,
+          type: 'multiple' as const,
+          text: q.text,
+          choices: q.choices,
+          answer: q.answer,
+          explanation: q.explanation || '',
+          ...(q.choiceExplanations ? { choiceExplanations: q.choiceExplanations } : {}),
+          ...(q.bogi ? { bogi: q.bogi } : {}),
+          chapterId,
+          chapterDetailId: q.chapterDetailId || null,
+          imageUrl: q.imageUrl || null,
+          imageDescription: q.imageDescription || null,
+        };
+      }),
       questionCount: questions.length,
       oxCount: 0,
       multipleChoiceCount: questions.length,

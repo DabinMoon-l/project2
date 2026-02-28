@@ -229,13 +229,7 @@ export default function ExpPage() {
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-4"
         >
-          <div className="inline-block px-4 py-2.5 bg-[#F5F0E8] border-2 border-[#1A1A1A]">
-            <p className="text-xs text-[#5C5C5C] mb-0.5">퀴즈 점수</p>
-            <p className="text-2xl font-bold text-[#1A1A1A]">{expInfo.score}점</p>
-            <p className="text-[10px] text-[#5C5C5C] mt-0.5">
-              {expInfo.correctCount} / {expInfo.totalCount} 문제 정답
-            </p>
-          </div>
+          <p className="text-4xl font-black text-[#1A1A1A]">{expInfo.score}점</p>
         </motion.div>
 
         {/* EXP 상세 정보 */}
@@ -246,7 +240,7 @@ export default function ExpPage() {
           className="space-y-3"
         >
           {/* 기본 EXP */}
-          <div className="flex justify-between items-center p-2.5 bg-[#EDEAE4] border border-[#1A1A1A]">
+          <div className="flex justify-between items-center p-2.5 bg-[#EDEAE4] border border-[#1A1A1A] rounded-lg">
             <div>
               <p className="text-xs font-bold text-[#1A1A1A]">퀴즈 풀이 기본</p>
               <p className="text-[10px] text-[#5C5C5C]">퀴즈 완료 보상</p>
@@ -255,7 +249,7 @@ export default function ExpPage() {
           </div>
 
           {/* 성적 보너스 EXP */}
-          <div className="flex justify-between items-center p-2.5 bg-[#EDEAE4] border border-[#1A1A1A]">
+          <div className="flex justify-between items-center p-2.5 bg-[#EDEAE4] border border-[#1A1A1A] rounded-lg">
             <div>
               <p className="text-xs font-bold text-[#1A1A1A]">성적 보너스</p>
               <p className="text-[10px] text-[#5C5C5C]">
@@ -271,7 +265,7 @@ export default function ExpPage() {
           </div>
 
           {/* 피드백 EXP */}
-          <div className="flex justify-between items-center p-2.5 bg-[#EDEAE4] border border-[#1A1A1A]">
+          <div className="flex justify-between items-center p-2.5 bg-[#EDEAE4] border border-[#1A1A1A] rounded-lg">
             <div>
               <p className="text-xs font-bold text-[#1A1A1A]">피드백 보너스</p>
               <p className="text-[10px] text-[#5C5C5C]">
@@ -292,7 +286,7 @@ export default function ExpPage() {
             initial={{ scale: 0.95 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.3, type: 'spring', stiffness: 200 }}
-            className="flex justify-between items-center p-3 bg-[#1A1A1A] text-[#F5F0E8]"
+            className="flex justify-between items-center p-3 bg-[#1A1A1A] text-[#F5F0E8] rounded-lg"
           >
             <p className="text-sm font-bold">총 획득 경험치</p>
             <span className="text-base font-bold">+{expInfo.totalExp} XP</span>
@@ -305,7 +299,7 @@ export default function ExpPage() {
         <button
           onClick={handleComplete}
           disabled={isCompleting}
-          className="w-full py-2.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#3A3A3A] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          className="w-full py-3 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#3A3A3A] transition-colors disabled:opacity-50 flex items-center justify-center gap-2 rounded-lg"
         >
           {isCompleting ? (
             <>

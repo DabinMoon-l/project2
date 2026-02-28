@@ -96,7 +96,7 @@ export default function LibraryJobToast() {
         >
           {/* 진행 중 토스트 */}
           {toast.type === 'progress' && (
-            <div className="flex items-center gap-3 px-4 py-3 bg-[#1A1A1A] border-2 border-[#1A1A1A] shadow-lg">
+            <div className="flex items-center gap-3 px-4 py-3 bg-[#1A1A1A] border-2 border-[#1A1A1A] shadow-lg rounded-lg">
               <div className="w-5 h-5 flex-shrink-0 border-2 border-[#F5F0E8] border-t-transparent rounded-full animate-spin" />
               <span className="text-sm font-bold text-[#F5F0E8] flex-1">{stepLabel}</span>
               <button
@@ -111,7 +111,7 @@ export default function LibraryJobToast() {
           {/* 완료 토스트 */}
           {toast.type === 'completed' && (
             <div
-              className="flex items-center gap-3 px-4 py-3 bg-[#1A1A1A] border-2 border-[#1A1A1A] shadow-lg cursor-pointer"
+              className="flex items-center gap-3 px-4 py-3 bg-[#1A1A1A] border-2 border-[#1A1A1A] shadow-lg cursor-pointer rounded-lg"
               onClick={handleDismiss}
             >
               <svg className="w-5 h-5 text-[#4CAF50] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -126,7 +126,7 @@ export default function LibraryJobToast() {
           {/* 실패 토스트 */}
           {toast.type === 'failed' && (
             <div
-              className="flex items-center gap-3 px-4 py-3 bg-[#C44] border-2 border-[#C44] shadow-lg cursor-pointer"
+              className="flex items-center gap-3 px-4 py-3 bg-[#C44] border-2 border-[#C44] shadow-lg cursor-pointer rounded-lg"
               onClick={handleDismiss}
             >
               <svg className="w-5 h-5 text-white flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">

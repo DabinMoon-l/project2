@@ -26,7 +26,7 @@ interface EnrollResult {
   errors: string[];
 }
 
-type TabType = 'excel' | 'manual' | 'paste';
+type TabType = 'excel' | 'manual';
 
 interface Props {
   courseId: string;
@@ -44,9 +44,6 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
   // 직접 입력 상태
   const [manualName, setManualName] = useState('');
   const [manualStudentId, setManualStudentId] = useState('');
-
-  // 텍스트 붙여넣기 상태
-  const [pasteText, setPasteText] = useState('');
 
   // 네비게이션 숨김
   useEffect(() => {
@@ -124,42 +121,6 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
   }, [manualName, manualStudentId]);
 
   // ============================================
-  // 텍스트 붙여넣기 처리
-  // ============================================
-
-  const handleParse = useCallback(() => {
-    if (!pasteText.trim()) {
-      setError('텍스트를 입력해주세요.');
-      return;
-    }
-
-    const lines = pasteText.trim().split('\n');
-    const rows: StudentRow[] = [];
-
-    for (const line of lines) {
-      // 탭 또는 쉼표로 분리
-      const parts = line.includes('\t')
-        ? line.split('\t')
-        : line.split(',');
-
-      const name = parts[0]?.trim();
-      const studentId = parts[1]?.trim();
-
-      if (name && studentId) {
-        rows.push({ name, studentId });
-      }
-    }
-
-    if (rows.length === 0) {
-      setError('유효한 데이터가 없습니다. 형식: 이름, 학번');
-      return;
-    }
-
-    setPreviewRows(rows);
-    setError(null);
-  }, [pasteText]);
-
-  // ============================================
   // 등록 실행 (CF 호출)
   // ============================================
 
@@ -200,7 +161,6 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
   const tabs: { key: TabType; label: string }[] = [
     { key: 'excel', label: '엑셀' },
     { key: 'manual', label: '직접 입력' },
-    { key: 'paste', label: '텍스트' },
   ];
 
   return (
@@ -213,13 +173,13 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-sm max-h-[80vh] overflow-y-auto bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
+        className="w-full max-w-xs max-h-[70vh] overflow-y-auto bg-[#F5F0E8] border-2 border-[#1A1A1A] rounded-2xl p-5"
       >
         {/* 결과 표시 */}
         {result ? (
           <div className="text-center">
             {/* 완료 아이콘 */}
-            <div className="w-12 h-12 mx-auto mb-4 flex items-center justify-center border-2 border-[#1D5D4A] bg-[#E8F5E9]">
+            <div className="w-12 h-12 mx-auto mb-4 flex items-center justify-center border-2 border-[#1D5D4A] bg-[#E8F5E9] rounded-full">
               <svg className="w-6 h-6 text-[#1D5D4A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
@@ -260,7 +220,7 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
                 onComplete();
                 onClose();
               }}
-              className="w-full py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+              className="w-full py-3 font-bold border-2 border-[#1A1A1A] rounded-lg text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
             >
               확인
             </button>
@@ -272,7 +232,7 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
               <h2 className="text-lg font-bold text-[#1A1A1A]">학생 등록</h2>
               <button
                 onClick={onClose}
-                className="w-8 h-8 flex items-center justify-center border-2 border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+                className="w-8 h-8 flex items-center justify-center border-2 border-[#1A1A1A] rounded-lg hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -340,7 +300,7 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
                     placeholder="이름"
                     value={manualName}
                     onChange={(e) => setManualName(e.target.value)}
-                    className="px-3 py-2.5 border-2 border-[#1A1A1A] text-sm bg-[#F5F0E8] placeholder-[#5C5C5C] focus:outline-none"
+                    className="px-3 py-2.5 border-2 border-[#1A1A1A] rounded-lg text-sm bg-[#F5F0E8] placeholder-[#5C5C5C] focus:outline-none"
                   />
                   <input
                     type="text"
@@ -349,36 +309,14 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
                     value={manualStudentId}
                     onChange={(e) => setManualStudentId(e.target.value.replace(/\D/g, ''))}
                     maxLength={10}
-                    className="px-3 py-2.5 border-2 border-[#1A1A1A] text-sm bg-[#F5F0E8] placeholder-[#5C5C5C] focus:outline-none"
+                    className="px-3 py-2.5 border-2 border-[#1A1A1A] rounded-lg text-sm bg-[#F5F0E8] placeholder-[#5C5C5C] focus:outline-none"
                   />
                 </div>
                 <button
                   onClick={handleManualAdd}
-                  className="w-full py-2.5 border-2 border-[#1A1A1A] text-sm font-bold hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+                  className="w-full py-2.5 border-2 border-[#1A1A1A] rounded-lg text-sm font-bold hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
                 >
                   + 추가
-                </button>
-              </div>
-            )}
-
-            {/* 텍스트 붙여넣기 탭 */}
-            {activeTab === 'paste' && (
-              <div className="space-y-3">
-                <p className="text-sm text-[#5C5C5C]">
-                  이름, 학번을 탭 또는 쉼표로 구분 (한 줄에 한 명)
-                </p>
-                <textarea
-                  value={pasteText}
-                  onChange={(e) => setPasteText(e.target.value)}
-                  placeholder={"홍길동\t25010501\n김철수\t25010502"}
-                  rows={5}
-                  className="w-full px-3 py-2.5 border-2 border-[#1A1A1A] text-sm bg-[#F5F0E8] placeholder-[#5C5C5C] focus:outline-none resize-none"
-                />
-                <button
-                  onClick={handleParse}
-                  className="w-full py-2.5 border-2 border-[#1A1A1A] text-sm font-bold hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
-                >
-                  파싱
                 </button>
               </div>
             )}
@@ -425,7 +363,7 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
             <div className="flex gap-3 mt-6">
               <button
                 onClick={onClose}
-                className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+                className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] rounded-lg text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
               >
                 취소
               </button>
@@ -433,14 +371,14 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
                 <button
                   onClick={handleEnroll}
                   disabled={isSubmitting}
-                  className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#333] transition-colors disabled:opacity-50"
+                  className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] rounded-lg bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#333] transition-colors disabled:opacity-50"
                 >
                   {isSubmitting ? '등록 중...' : `${previewRows.length}명 등록`}
                 </button>
               ) : (
                 <button
                   disabled
-                  className="flex-1 py-3 font-bold border-2 border-[#D4CFC4] text-[#D4CFC4] cursor-not-allowed"
+                  className="flex-1 py-3 font-bold border-2 border-[#D4CFC4] rounded-lg text-[#D4CFC4] cursor-not-allowed"
                 >
                   등록
                 </button>

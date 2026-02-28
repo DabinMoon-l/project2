@@ -1501,7 +1501,7 @@ export default function FeedbackPage() {
         <p className="text-[#5C5C5C] text-center mb-6">{error || '알 수 없는 오류가 발생했습니다.'}</p>
         <button
           onClick={() => router.push('/quiz')}
-          className="px-6 py-2 bg-[#1A1A1A] text-[#F5F0E8] font-bold"
+          className="px-6 py-2 bg-[#1A1A1A] text-[#F5F0E8] font-bold rounded-lg"
         >
           퀴즈 목록으로
         </button>
@@ -1529,7 +1529,7 @@ export default function FeedbackPage() {
         </p>
         <button
           onClick={() => router.push('/review')}
-          className="px-6 py-2.5 bg-[#1A1A1A] text-[#F5F0E8] font-bold"
+          className="px-6 py-2.5 bg-[#1A1A1A] text-[#F5F0E8] font-bold rounded-lg"
         >
           리뷰창으로 이동
         </button>
@@ -1549,7 +1549,7 @@ export default function FeedbackPage() {
         </p>
         <button
           onClick={() => router.push('/quiz')}
-          className="px-6 py-2.5 bg-[#1A1A1A] text-[#F5F0E8] font-bold"
+          className="px-6 py-2.5 bg-[#1A1A1A] text-[#F5F0E8] font-bold rounded-lg"
         >
           퀴즈 목록으로
         </button>
@@ -1569,7 +1569,7 @@ export default function FeedbackPage() {
         </p>
         <button
           onClick={() => router.push('/quiz')}
-          className="px-6 py-2.5 bg-[#1A1A1A] text-[#F5F0E8] font-bold"
+          className="px-6 py-2.5 bg-[#1A1A1A] text-[#F5F0E8] font-bold rounded-lg"
         >
           퀴즈 목록으로
         </button>
@@ -1583,7 +1583,7 @@ export default function FeedbackPage() {
   // 슬라이드 애니메이션 variants
   const slideVariants = {
     enter: (direction: number) => ({
-      x: direction > 0 ? 300 : -300,
+      x: direction > 0 ? 200 : -200,
       opacity: 0,
     }),
     center: {
@@ -1591,7 +1591,7 @@ export default function FeedbackPage() {
       opacity: 1,
     },
     exit: (direction: number) => ({
-      x: direction < 0 ? 300 : -300,
+      x: direction < 0 ? 200 : -200,
       opacity: 0,
     }),
   };
@@ -1661,10 +1661,10 @@ export default function FeedbackPage() {
             initial="enter"
             animate="center"
             exit="exit"
-            transition={{ duration: 0.3 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             drag="x"
             dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={0.2}
+            dragElastic={0.15}
             onDragEnd={handleDragEnd}
             className="absolute inset-0 p-4 overflow-y-auto"
           >
@@ -1696,7 +1696,7 @@ export default function FeedbackPage() {
         <button
           onClick={goToPrev}
           disabled={currentIndex === 0}
-          className={`px-4 py-2 text-sm font-bold border-2 border-[#1A1A1A] ${
+          className={`px-5 py-2.5 text-sm font-bold border-2 border-[#1A1A1A] rounded-lg ${
             currentIndex === 0
               ? 'opacity-30 cursor-not-allowed text-[#1A1A1A]'
               : 'text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
@@ -1707,7 +1707,7 @@ export default function FeedbackPage() {
         <button
           onClick={goToNext}
           disabled={currentIndex === totalPages - 1}
-          className={`px-4 py-2 text-sm font-bold border-2 border-[#1A1A1A] ${
+          className={`px-5 py-2.5 text-sm font-bold border-2 border-[#1A1A1A] rounded-lg ${
             currentIndex === totalPages - 1
               ? 'opacity-30 cursor-not-allowed text-[#1A1A1A]'
               : 'text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
@@ -1724,7 +1724,7 @@ export default function FeedbackPage() {
           <button
             onClick={handleSkip}
             disabled={isSubmitting}
-            className="flex-1 py-2.5 text-sm font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors disabled:opacity-50"
+            className="flex-1 py-2.5 text-sm font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors disabled:opacity-50 rounded-lg"
           >
             Skip
           </button>
@@ -1733,7 +1733,7 @@ export default function FeedbackPage() {
           <button
             onClick={handleSubmit}
             disabled={isSubmitting}
-            className="flex-[2] py-2.5 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#3A3A3A] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            className="flex-[2] py-2.5 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#3A3A3A] transition-colors disabled:opacity-50 flex items-center justify-center gap-2 rounded-lg"
           >
             {isSubmitting ? (
               <>

@@ -229,10 +229,10 @@ export default function ProfessorHomeOverlay() {
       }}
     >
       <div className="relative z-[2] flex-1 flex flex-col pt-1 pb-2">
-        {/* 프로필 + 닉네임 */}
-        <div className="px-5 flex items-center gap-4 mb-2">
+        {/* 프로필 + 닉네임 (학생과 동일) */}
+        <div className="px-8 flex items-center gap-3 mb-2 mt-10">
           <button
-            className="w-20 h-20 flex items-center justify-center flex-shrink-0 rounded-xl overflow-hidden"
+            className="w-14 h-14 flex items-center justify-center flex-shrink-0 rounded-xl overflow-hidden"
             style={{ background: 'rgba(0, 0, 0, 0.3)', border: '1px solid rgba(255, 255, 255, 0.1)' }}
             onClick={() => setShowProfileDrawer(true)}
           >
@@ -252,43 +252,46 @@ export default function ProfessorHomeOverlay() {
               </svg>
             )}
           </button>
-          <p className="font-bold text-6xl text-white truncate leading-normal flex-1">
+          <p className="font-bold text-4xl text-white truncate leading-normal flex-1">
             {profile.nickname}
           </p>
         </div>
 
-        {/* 공지 — CourseSwitcher 헤더 포함 */}
-        <div className="px-5 -mb-4 relative z-30">
+        {/* 공지 — CourseSwitcher 헤더 포함 (학생과 동일 패딩) */}
+        <div className="px-10 mb-2 mt-1 relative z-30">
           <AnnouncementChannel
             overrideCourseId={selectedCourse}
             headerContent={
               <CourseSwitcher
                 value={selectedCourse}
                 onChange={setProfessorCourse}
-                textClassName="text-4xl font-black text-white/90 tracking-wide inline-block"
+                textClassName="text-2xl font-black text-white/90 tracking-wide inline-block"
               />
             }
           />
         </div>
 
-        <ProfessorCharacterBox />
+        {/* 캐릭터 영역 — 아래로 내림 */}
+        <div className="mt-8">
+          <ProfessorCharacterBox />
+        </div>
 
-        <div className="mt-auto">
-          <div className="mb-3">
+        <div className="mt-32">
+          <div className="mb-2">
             <CourseSwitcher
               value={selectedCourse}
               onChange={setProfessorCourse}
-              textClassName="text-4xl font-bold text-white tracking-widest inline-block"
+              textClassName="text-2xl font-bold text-white tracking-widest inline-block"
             />
           </div>
           <ProfessorRankingSection overrideCourseId={selectedCourse} />
         </div>
 
-        {/* 스와이프 힌트 */}
+        {/* 스와이프 힌트 (학생과 동일) */}
         {!isWide && (
-          <div className="absolute bottom-2 left-0 right-0 flex flex-col items-center gap-1 pointer-events-none">
+          <div className="absolute bottom-5 left-0 right-0 flex flex-col items-center gap-0.5 pointer-events-none">
             <motion.svg
-              className="w-5 h-5 text-white/50"
+              className="w-4 h-4 text-white/50"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -297,7 +300,7 @@ export default function ProfessorHomeOverlay() {
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
             </motion.svg>
-            <span className="text-sm font-bold text-white/60 backdrop-blur-sm">
+            <span className="text-[10px] font-bold text-white/50 backdrop-blur-sm">
               위로 스와이프하여 시작
             </span>
           </div>

@@ -62,7 +62,7 @@ export default function StudentRadar({ data, classColor }: Props) {
   // ⓘ 버튼: 라벨 텍스트 바로 오른쪽에 배치 (잘리지 않는 안전한 위치)
   const infoPositions = AXES.map((axis, i) => {
     const lp = labelPositions[i];
-    const halfW = axis.label.length * 6.5; // 한글 문자 폭 추정
+    const halfW = axis.label.length * 7.5; // 한글 문자 폭 추정
     const ix = lp.x + halfW + 5;
     const iy = lp.y;
     return { pctX: (ix / VIEWBOX_W) * 100, pctY: (iy / VIEWBOX_H) * 100 };
@@ -99,7 +99,7 @@ export default function StudentRadar({ data, classColor }: Props) {
               <text
                 x={lp.x} y={lp.y}
                 textAnchor="middle" dominantBaseline="middle"
-                fontSize={12} fill="#1A1A1A" fontWeight="700"
+                fontSize={14} fill="#1A1A1A" fontWeight="700"
               >
                 {axis.label}
               </text>
@@ -137,12 +137,12 @@ export default function StudentRadar({ data, classColor }: Props) {
             <motion.g key={i}
               initial={{ scale: 0 }} animate={{ scale: 1 }}
               transition={{ delay: 0.2 + i * 0.05 }}>
-              <circle cx={p.x} cy={p.y} r={4.5} fill="#FDFBF7"
+              <circle cx={p.x} cy={p.y} r={5} fill="#FDFBF7"
                 stroke={classColor} strokeWidth={2} />
-              <circle cx={p.x} cy={p.y} r={1.5} fill={classColor} />
+              <circle cx={p.x} cy={p.y} r={2} fill={classColor} />
               {val > 0 && (
                 <text x={nx} y={ny} textAnchor="middle" dominantBaseline="middle"
-                  fontSize={11} fontWeight="bold" fill={classColor}>
+                  fontSize={13} fontWeight="bold" fill={classColor}>
                   {val.toFixed(0)}
                 </text>
               )}

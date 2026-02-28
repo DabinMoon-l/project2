@@ -43,22 +43,22 @@ export default function PreviewQuestionCard({
       {/* 헤더 */}
       <div
         onClick={() => setIsExpanded(!isExpanded)}
-        className="p-3 cursor-pointer"
+        className="p-2.5 cursor-pointer"
       >
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             {/* 문항 번호 + 타입 뱃지 */}
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <span className="inline-block px-2 py-0.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8]">
+            <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+              <span className="inline-block px-1.5 py-0.5 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8]">
                 Q{questionNumber}
               </span>
               {question.type && question.type !== 'multiple' && (
-                <span className="inline-block px-2 py-0.5 text-xs font-bold border border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A]">
+                <span className="inline-block px-1.5 py-0.5 text-[11px] font-bold border border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A]">
                   {question.type === 'ox' ? 'OX' : question.type === 'short_answer' ? '주관식' : question.type}
                 </span>
               )}
             </div>
-            <p className="text-sm text-[#1A1A1A]">{editData?.text ?? question.text}</p>
+            <p className="text-xs text-[#1A1A1A]">{editData?.text ?? question.text}</p>
           </div>
 
           {/* 확장 아이콘 */}
@@ -84,7 +84,7 @@ export default function PreviewQuestionCard({
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden"
           >
-            <div className="border-t border-[#1A1A1A] p-4 space-y-4 bg-[#EDEAE4]">
+            <div className="border-t border-[#1A1A1A] p-3 space-y-3 bg-[#EDEAE4]">
               {/* 수정 모드: 문제 텍스트 수정 */}
               {isEditMode && onEditChange && (
                 <div>

@@ -118,11 +118,11 @@ export default function QuestionList({
         className={`
           flex flex-col items-center justify-center
           py-8 px-4
-          bg-[#F5F0E8] border-2 border-dashed border-[#1A1A1A]
+          bg-[#F5F0E8] border-2 border-dashed border-[#1A1A1A] rounded-xl
           ${className}
         `}
       >
-        <div className="w-12 h-12 bg-[#EDEAE4] border-2 border-[#1A1A1A] flex items-center justify-center mb-3">
+        <div className="w-12 h-12 bg-[#EDEAE4] border-2 border-[#1A1A1A] flex items-center justify-center mb-3 rounded-lg">
           <svg
             className="w-6 h-6 text-[#5C5C5C]"
             fill="none"
@@ -501,29 +501,6 @@ export default function QuestionList({
         )}
       </AnimatePresence>
 
-      {/* 최소 문제 수 안내 */}
-      {totalQuestionCount < 3 && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mt-4 p-3 bg-[#FFF8E7] border border-[#D4A84B] flex items-center gap-2"
-        >
-          <svg
-            className="w-5 h-5 text-[#D4A84B] flex-shrink-0"
-            fill="currentColor"
-            viewBox="0 0 20 20"
-          >
-            <path
-              fillRule="evenodd"
-              d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-              clipRule="evenodd"
-            />
-          </svg>
-          <span className="text-sm text-[#8B6914]">
-            최소 3문제 이상 필요합니다. (현재 {totalQuestionCount}개)
-          </span>
-        </motion.div>
-      )}
     </div>
   );
 }

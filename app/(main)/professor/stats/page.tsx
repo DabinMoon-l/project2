@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useCourse } from '@/lib/contexts';
-import { useProfessorStats, type QuestionSource, type DispersionMode } from '@/lib/hooks/useProfessorStats';
+import { useProfessorStats, getRawUserClassMap, type QuestionSource, type DispersionMode } from '@/lib/hooks/useProfessorStats';
 import { calcFeedbackScore, FEEDBACK_SCORES } from '@/lib/utils/feedbackScore';
 import { exportToExcel, exportToWord, type WeeklyStatSummary } from '@/lib/utils/reportExport';
 import { httpsCallable } from 'firebase/functions';
@@ -13,6 +13,42 @@ import { functions } from '@/lib/firebase';
 import type { FeedbackType } from '@/components/quiz/InstantFeedbackButton';
 import type { CourseId } from '@/lib/types/course';
 import { getCourseList, COURSES } from '@/lib/types/course';
+
+// ── 부가 데이터 모듈 레벨 캐시 (과목 전환 시 즉시 복원) ──
+interface ExtraData {
+  feedbackData: {
+    byType: Record<string, number>;
+    avgScore: number;
+    total: number;
+    aiAvgScore: number;
+    aiCount: number;
+    profAvgScore: number;
+    profCount: number;
+  } | null;
+  clusterData: {
+    passionate: number;
+    hardworking: number;
+    efficient: number;
+    atRisk: number;
+    total: number;
+  } | null;
+  gamificationData: {
+    avgRabbits: number;
+    avgMilestones: number;
+    totalStudents: number;
+  } | null;
+  classProfileData: Record<string, {
+    score: number;
+    stability: number;
+    participation: number;
+    feedback: number;
+    board: number;
+    gamification: number;
+  }> | null;
+}
+
+const _extraCacheMap = new Map<string, { data: ExtraData; ts: number }>();
+const EXTRA_CACHE_TTL = 5 * 60 * 1000; // 5분
 
 import SourceFilter from '@/components/professor/stats/SourceFilter';
 import DispersionToggle from '@/components/professor/stats/DispersionToggle';
@@ -64,58 +100,40 @@ export default function ProfessorStatsPage() {
   const [reportWeeklyStats, setReportWeeklyStats] = useState<WeeklyStatSummary[]>([]);
   const [reportError, setReportError] = useState<string | null>(null);
 
-  // 피드백 분석 데이터
-  const [feedbackData, setFeedbackData] = useState<{
-    byType: Record<string, number>;
-    avgScore: number;
-    total: number;
-    aiAvgScore: number;
-    aiCount: number;
-    profAvgScore: number;
-    profCount: number;
-  } | null>(null);
-
-  // 참여도 군집 데이터
-  const [clusterData, setClusterData] = useState<{
-    passionate: number;
-    hardworking: number;
-    efficient: number;
-    atRisk: number;
-    total: number;
-  } | null>(null);
-
-  // 게이미피케이션 데이터
-  const [gamificationData, setGamificationData] = useState<{
-    avgRabbits: number;
-    avgMilestones: number;
-    totalStudents: number;
-  } | null>(null);
-
-  // 반별 프로필 데이터 (ClassProfileRadar용)
-  const [classProfileData, setClassProfileData] = useState<Record<string, {
-    score: number;
-    stability: number;
-    participation: number;
-    feedback: number;
-    board: number;
-    gamification: number;
-  }> | null>(null);
+  // 부가 데이터 (피드백 + 군집 + 게이미피케이션 + 반별 프로필) — 단일 state로 배칭
+  const [extraData, setExtraData] = useState<ExtraData>({
+    feedbackData: null,
+    clusterData: null,
+    gamificationData: null,
+    classProfileData: null,
+  });
 
   // 초기 + 필터 변경 시 데이터 조회
   useEffect(() => {
     fetchStats(courseId, source);
   }, [courseId, source, fetchStats]);
 
-  // 피드백 + 군집 + 게이미피케이션 + 반별 프로필 데이터 (questionFeedbacks 1회만 조회)
+  // 피드백 + 군집 + 게이미피케이션 + 반별 프로필 데이터 (캐시 + 단일 setState)
   useEffect(() => {
+    let cancelled = false;
+
     const loadAllExtraData = async () => {
+      // 캐시 확인
+      const cached = _extraCacheMap.get(courseId);
+      if (cached && Date.now() - cached.ts < EXTRA_CACHE_TTL) {
+        setExtraData(cached.data);
+        return;
+      }
+
       try {
-        // questionFeedbacks + users + posts 병렬 조회 (중복 제거)
+        // questionFeedbacks + posts만 조회 (users는 useProfessorStats raw 캐시 재사용)
         const [fbSnap, usersSnap, postSnap] = await Promise.all([
           getDocs(query(collection(db, 'questionFeedbacks'), where('courseId', '==', courseId))),
           getDocs(query(collection(db, 'users'), where('courseId', '==', courseId), where('role', '==', 'student'))),
           getDocs(query(collection(db, 'posts'), where('courseId', '==', courseId))),
         ]);
+
+        if (cancelled) return;
 
         // ── 피드백 분석 ──
         const byType: Record<string, number> = {};
@@ -131,12 +149,11 @@ export default function ProfessorStatsPage() {
           allF.push({ type: t as FeedbackType });
           if (data.isAiGenerated) aiF.push({ type: t as FeedbackType });
           else profF.push({ type: t as FeedbackType });
-          // 반별 집계 (ClassProfileRadar용)
           const cls = data.classId as string;
           if (cls) fbByClass[cls] = (fbByClass[cls] || 0) + 1;
         });
 
-        setFeedbackData({
+        const feedbackData = {
           byType,
           avgScore: calcFeedbackScore(allF),
           total: allF.length,
@@ -144,13 +161,18 @@ export default function ProfessorStatsPage() {
           aiCount: aiF.length,
           profAvgScore: calcFeedbackScore(profF),
           profCount: profF.length,
-        });
+        };
 
         // ── 학생 군집 + 게이미피케이션 ──
         if (usersSnap.empty) {
-          setClusterData({ passionate: 0, hardworking: 0, efficient: 0, atRisk: 0, total: 0 });
-          setGamificationData({ avgRabbits: 0, avgMilestones: 0, totalStudents: 0 });
-          setClassProfileData(null);
+          const result: ExtraData = {
+            feedbackData,
+            clusterData: { passionate: 0, hardworking: 0, efficient: 0, atRisk: 0, total: 0 },
+            gamificationData: { avgRabbits: 0, avgMilestones: 0, totalStudents: 0 },
+            classProfileData: null,
+          };
+          _extraCacheMap.set(courseId, { data: result, ts: Date.now() });
+          if (!cancelled) setExtraData(result);
           return;
         }
 
@@ -167,10 +189,10 @@ export default function ProfessorStatsPage() {
           };
         });
 
-        // 군집 분류: EXP는 상대 기준(중위수), 정답률은 절대 기준(50%)
+        // 군집 분류
         const exps = students.map(s => s.totalExp).sort((a, b) => a - b);
         const medianExp = exps[Math.floor(exps.length / 2)] || 0;
-        const RATE_THRESHOLD = 50; // 정답률 절대 기준
+        const RATE_THRESHOLD = 50;
 
         let passionate = 0, hardworking = 0, efficient = 0, atRisk = 0;
         students.forEach(s => {
@@ -182,21 +204,20 @@ export default function ProfessorStatsPage() {
           else atRisk++;
         });
 
-        setClusterData({ passionate, hardworking, efficient, atRisk, total: students.length });
+        const clusterData = { passionate, hardworking, efficient, atRisk, total: students.length };
 
         const totalRabbits = students.reduce((s, st) => s + st.rabbitCount, 0);
         const totalMilestones = students.reduce((s, st) => s + Math.floor(st.lastGachaExp / 50), 0);
-        setGamificationData({
+        const gamificationData = {
           avgRabbits: students.length > 0 ? Math.round((totalRabbits / students.length) * 10) / 10 : 0,
           avgMilestones: students.length > 0 ? Math.round((totalMilestones / students.length) * 10) / 10 : 0,
           totalStudents: students.length,
-        });
+        };
 
-        // ── 반별 프로필 데이터 (ClassProfileRadar) ──
+        // ── 반별 프로필 데이터 ──
         const classIds = ['A', 'B', 'C', 'D'];
         const profileData: Record<string, { score: number; stability: number; participation: number; feedback: number; board: number; gamification: number }> = {};
 
-        // 게시판 반별 집계 (postSnap 재사용)
         const boardByClass: Record<string, number> = {};
         postSnap.docs.forEach(d => {
           const cls = d.data().authorClassType as string;
@@ -238,13 +259,17 @@ export default function ProfessorStatsPage() {
           };
         }
 
-        setClassProfileData(profileData);
+        // 단일 setState로 배칭 (리렌더링 1회)
+        const result: ExtraData = { feedbackData, clusterData, gamificationData, classProfileData: profileData };
+        _extraCacheMap.set(courseId, { data: result, ts: Date.now() });
+        if (!cancelled) setExtraData(result);
       } catch (err) {
         console.error('통계 부가 데이터 로드 실패:', err);
       }
     };
 
     loadAllExtraData();
+    return () => { cancelled = true; };
   }, [courseId]);
 
   return (
@@ -328,8 +353,8 @@ export default function ProfessorStatsPage() {
             <WeeklyBoxPlot weeklyTrend={data.weeklyTrend} />
 
             {/* C) 반별 종합 역량 레이더 */}
-            {classProfileData && (
-              <ClassProfileRadar classProfileData={classProfileData} />
+            {extraData.classProfileData && (
+              <ClassProfileRadar classProfileData={extraData.classProfileData} />
             )}
 
             {/* D) 안정성 지표 */}
@@ -351,7 +376,7 @@ export default function ProfessorStatsPage() {
             <ClassSummaryTable classStats={data.classStats} />
 
             {/* ── 피드백 분석 ── */}
-            {feedbackData && feedbackData.total > 0 && (
+            {extraData.feedbackData && extraData.feedbackData!.total > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
                   <div className="flex-1 h-px bg-[#1A1A1A]" />
@@ -364,10 +389,10 @@ export default function ProfessorStatsPage() {
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-xs font-bold text-[#1A1A1A]">평균 피드백 점수</p>
                     <p className="text-xl font-black text-[#1A1A1A]">
-                      {feedbackData.avgScore > 0 ? '+' : ''}{feedbackData.avgScore.toFixed(1)}
+                      {extraData.feedbackData.avgScore > 0 ? '+' : ''}{extraData.feedbackData.avgScore.toFixed(1)}
                     </p>
                   </div>
-                  <p className="text-[10px] text-[#5C5C5C]">총 {feedbackData.total}건</p>
+                  <p className="text-[10px] text-[#5C5C5C]">총 {extraData.feedbackData!.total}건</p>
                 </div>
 
                 {/* 타입별 분포 */}
@@ -375,8 +400,8 @@ export default function ProfessorStatsPage() {
                   <p className="text-xs font-bold text-[#1A1A1A] mb-2">타입별 분포</p>
                   <div className="space-y-1.5">
                     {(['praise', 'wantmore', 'other', 'typo', 'unclear', 'wrong'] as const).map(type => {
-                      const count = feedbackData.byType[type] || 0;
-                      const pct = feedbackData.total > 0 ? (count / feedbackData.total) * 100 : 0;
+                      const count = extraData.feedbackData!.byType[type] || 0;
+                      const pct = extraData.feedbackData!.total > 0 ? (count / extraData.feedbackData!.total) * 100 : 0;
                       const label = type === 'praise' ? '좋아요' : type === 'wantmore' ? '더 풀고 싶어요'
                         : type === 'other' ? '기타' : type === 'typo' ? '오타'
                         : type === 'unclear' ? '이해 안 됨' : '정답 틀림';
@@ -401,21 +426,21 @@ export default function ProfessorStatsPage() {
                 </div>
 
                 {/* AI vs 교수 비교 */}
-                {(feedbackData.aiCount > 0 || feedbackData.profCount > 0) && (
+                {(extraData.feedbackData!.aiCount > 0 || extraData.feedbackData!.profCount > 0) && (
                   <div className="bg-[#FDFBF7] border border-[#D4CFC4] p-3">
                     <p className="text-xs font-bold text-[#1A1A1A] mb-2">AI 생성 vs 교수 출제</p>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="text-center p-2 border border-[#D4CFC4]">
                         <p className="text-lg font-black text-[#1A1A1A]">
-                          {feedbackData.profCount > 0 ? (feedbackData.profAvgScore > 0 ? '+' : '') + feedbackData.profAvgScore.toFixed(1) : '-'}
+                          {extraData.feedbackData!.profCount > 0 ? (extraData.feedbackData!.profAvgScore > 0 ? '+' : '') + extraData.feedbackData!.profAvgScore.toFixed(1) : '-'}
                         </p>
-                        <p className="text-[10px] text-[#5C5C5C]">교수 ({feedbackData.profCount}건)</p>
+                        <p className="text-[10px] text-[#5C5C5C]">교수 ({extraData.feedbackData!.profCount}건)</p>
                       </div>
                       <div className="text-center p-2 border border-[#D4CFC4]">
                         <p className="text-lg font-black text-[#1A1A1A]">
-                          {feedbackData.aiCount > 0 ? (feedbackData.aiAvgScore > 0 ? '+' : '') + feedbackData.aiAvgScore.toFixed(1) : '-'}
+                          {extraData.feedbackData!.aiCount > 0 ? (extraData.feedbackData!.aiAvgScore > 0 ? '+' : '') + extraData.feedbackData!.aiAvgScore.toFixed(1) : '-'}
                         </p>
-                        <p className="text-[10px] text-[#5C5C5C]">AI ({feedbackData.aiCount}건)</p>
+                        <p className="text-[10px] text-[#5C5C5C]">AI ({extraData.feedbackData!.aiCount}건)</p>
                       </div>
                     </div>
                   </div>
@@ -424,7 +449,7 @@ export default function ProfessorStatsPage() {
             )}
 
             {/* ── 참여도 군집 요약 ── */}
-            {clusterData && clusterData.total > 0 && (
+            {extraData.clusterData && extraData.clusterData!.total > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
                   <div className="flex-1 h-px bg-[#1A1A1A]" />
@@ -434,12 +459,12 @@ export default function ProfessorStatsPage() {
 
                 <div className="grid grid-cols-2 gap-2">
                   {[
-                    { label: '열정적 학습자', count: clusterData.passionate, color: '#16a34a', desc: '높은 참여 + 높은 성취' },
-                    { label: '노력형 학습자', count: clusterData.hardworking, color: '#B8860B', desc: '높은 참여 + 낮은 성취' },
-                    { label: '효율형 학습자', count: clusterData.efficient, color: '#1E3A5F', desc: '낮은 참여 + 높은 성취' },
-                    { label: '이탈 위험군', count: clusterData.atRisk, color: '#8B1A1A', desc: '낮은 참여 + 낮은 성취' },
+                    { label: '열정적 학습자', count: extraData.clusterData!.passionate, color: '#16a34a', desc: '높은 참여 + 높은 성취' },
+                    { label: '노력형 학습자', count: extraData.clusterData!.hardworking, color: '#B8860B', desc: '높은 참여 + 낮은 성취' },
+                    { label: '효율형 학습자', count: extraData.clusterData!.efficient, color: '#1E3A5F', desc: '낮은 참여 + 높은 성취' },
+                    { label: '이탈 위험군', count: extraData.clusterData!.atRisk, color: '#8B1A1A', desc: '낮은 참여 + 낮은 성취' },
                   ].map(cluster => {
-                    const pct = clusterData.total > 0 ? Math.round((cluster.count / clusterData.total) * 100) : 0;
+                    const pct = extraData.clusterData!.total > 0 ? Math.round((cluster.count / extraData.clusterData!.total) * 100) : 0;
                     return (
                       <div key={cluster.label} className="bg-[#FDFBF7] border border-[#D4CFC4] p-3">
                         <div className="flex items-baseline gap-1 mb-1">
@@ -456,7 +481,7 @@ export default function ProfessorStatsPage() {
             )}
 
             {/* ── 게이미피케이션 효과 ── */}
-            {gamificationData && gamificationData.totalStudents > 0 && (
+            {extraData.gamificationData && extraData.gamificationData.totalStudents > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
                   <div className="flex-1 h-px bg-[#1A1A1A]" />
@@ -466,11 +491,11 @@ export default function ProfessorStatsPage() {
 
                 <div className="grid grid-cols-2 gap-2">
                   <div className="bg-[#FDFBF7] border border-[#D4CFC4] p-3 text-center">
-                    <p className="text-2xl font-black text-[#1A1A1A]">{gamificationData.avgRabbits}</p>
+                    <p className="text-2xl font-black text-[#1A1A1A]">{extraData.gamificationData!.avgRabbits}</p>
                     <p className="text-[10px] text-[#5C5C5C] mt-1">평균 토끼 장착 수</p>
                   </div>
                   <div className="bg-[#FDFBF7] border border-[#D4CFC4] p-3 text-center">
-                    <p className="text-2xl font-black text-[#1A1A1A]">{gamificationData.avgMilestones}</p>
+                    <p className="text-2xl font-black text-[#1A1A1A]">{extraData.gamificationData!.avgMilestones}</p>
                     <p className="text-[10px] text-[#5C5C5C] mt-1">평균 마일스톤 달성</p>
                   </div>
                 </div>

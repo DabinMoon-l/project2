@@ -54,6 +54,64 @@ const COURSE_IDS: CourseId[] = ['biology', 'microbiology', 'pathophysiology'];
 // (AutoVideo, getDifficultyVideo, NEWSPAPER_BG_TEXT → 공유 모듈에서 import)
 
 // ============================================================
+// 자작/서재/커스텀 탭 (밑줄 스타일)
+// ============================================================
+
+const SECTION_OPTIONS: { key: 'custom' | 'library' | 'folder'; label: string }[] = [
+  { key: 'custom', label: '자작' },
+  { key: 'library', label: '서재' },
+  { key: 'folder', label: '커스텀' },
+];
+
+function ProfSectionTabs({
+  sectionFilter,
+  onChangeFilter,
+}: {
+  sectionFilter: 'custom' | 'library' | 'folder';
+  onChangeFilter: (key: 'custom' | 'library' | 'folder') => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const btnRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [underline, setUnderline] = useState({ left: 0, width: 0 });
+  const activeIdx = SECTION_OPTIONS.findIndex(o => o.key === sectionFilter);
+
+  const measureUnderline = useCallback(() => {
+    if (activeIdx < 0 || !containerRef.current || !btnRefs.current[activeIdx]) return;
+    const container = containerRef.current.getBoundingClientRect();
+    const btn = btnRefs.current[activeIdx]!.getBoundingClientRect();
+    setUnderline({ left: btn.left - container.left, width: btn.width });
+  }, [activeIdx]);
+
+  useEffect(() => {
+    measureUnderline();
+  }, [measureUnderline]);
+
+  return (
+    <div ref={containerRef} className="relative flex gap-4">
+      {SECTION_OPTIONS.map((opt, i) => (
+        <button
+          key={opt.key}
+          ref={el => { btnRefs.current[i] = el; }}
+          onClick={() => onChangeFilter(opt.key)}
+          className={`pb-1.5 text-base font-bold transition-colors ${
+            sectionFilter === opt.key ? 'text-[#1A1A1A]' : 'text-[#5C5C5C]'
+          }`}
+        >
+          {opt.label}
+        </button>
+      ))}
+      {activeIdx >= 0 && underline.width > 0 && (
+        <motion.div
+          className="absolute bottom-0 h-[2px] bg-[#1A1A1A]"
+          animate={{ left: underline.left, width: underline.width }}
+          transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ============================================================
 // 뉴스 기사 컴포넌트 (교수용 — 난이도 이미지 + 왼쪽 정렬)
 // ============================================================
 
@@ -71,13 +129,13 @@ const ProfessorNewsArticle = memo(function ProfessorNewsArticle({
   return (
     <div className="h-full flex flex-col">
       {/* 난이도 비디오 — 남은 공간 전부 채움 */}
-      <div className="flex-1 min-h-0 relative overflow-hidden">
+      <div className="flex-1 min-h-0 relative overflow-hidden bg-black -mb-px">
         <AutoVideo src={getDifficultyVideo(quiz.difficulty)} className="absolute inset-0 w-full h-full object-cover" />
       </div>
 
       {/* 하단 정보 — 고정 높이, 절대 줄어들지 않음 */}
-      <div className="flex-shrink-0">
-        <div className="px-3 mt-1.5">
+      <div className="flex-shrink-0 relative bg-[#F5F0E8]">
+        <div className="px-3 pt-1.5">
           <h3 className="text-3xl font-black text-[#1A1A1A] overflow-hidden whitespace-nowrap leading-tight" style={{ textOverflow: '".."' }}>
             {quiz.title}
           </h3>
@@ -111,14 +169,14 @@ const ProfessorNewsArticle = memo(function ProfessorNewsArticle({
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onDetails(); }}
-            className="flex-1 py-2 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+            className="flex-1 py-3 text-base font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors rounded-lg"
           >
             Details
           </button>
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onStats(); }}
-            className={`flex-1 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] transition-colors ${
+            className={`flex-1 py-3 text-base font-bold bg-[#1A1A1A] text-[#F5F0E8] transition-colors rounded-lg ${
               !quiz.isPublished ? 'opacity-40 pointer-events-none' : 'hover:bg-[#3A3A3A]'
             }`}
           >
@@ -186,21 +244,21 @@ const ProfessorNewsCard = memo(function ProfessorNewsCard({
   }, [type]);
 
   return (
-    <div className="w-full h-full border border-[#999] bg-[#1A1A1A] flex flex-col overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.3)]">
+    <div className="w-full h-full border border-[#999] bg-[#1A1A1A] flex flex-col overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.3)] rounded-xl">
       {/* 축소된 헤더 */}
       <div className="bg-[#1A1A1A] text-[#F5F0E8] px-4 py-2 text-center flex-shrink-0">
         <h1 className="font-serif text-lg font-black tracking-tight">{title}</h1>
         <p className="text-[9px] tracking-widest">{subtitle}</p>
       </div>
 
-      {/* 퀴즈 목록 — 자유 스크롤, 각 아이템 px 높이로 고정 */}
-      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain bg-[#F5F0E8]" data-scroll-inner>
+      {/* 퀴즈 목록 — 자유 스크롤. bg를 검정으로 → 헤더-비디오 사이 틈 안 보임 */}
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain bg-[#1A1A1A]" data-scroll-inner>
         {isLoading ? (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex items-center justify-center h-full bg-[#F5F0E8]">
             <div className="animate-pulse text-[#5C5C5C]">로딩 중...</div>
           </div>
         ) : quizzes.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center">
+          <div className="flex flex-col items-center justify-center h-full text-center bg-[#F5F0E8]">
             <h3 className="font-bold text-lg mb-2 text-[#1A1A1A]">퀴즈가 없습니다</h3>
             <p className="text-sm text-[#5C5C5C]">아직 출제한 퀴즈가 없습니다.</p>
           </div>
@@ -255,7 +313,7 @@ const ProfessorPastExamNewsCard = memo(function ProfessorPastExamNewsCard({
   ) || null;
 
   return (
-    <div className="w-full h-full border border-[#999] bg-[#1A1A1A] flex flex-col overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.3)]">
+    <div className="w-full h-full border border-[#999] bg-[#1A1A1A] flex flex-col overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.3)] rounded-xl">
       {/* 축소된 헤더 + 드롭다운 — 수직 중앙 정렬 */}
       <div className="bg-[#1A1A1A] text-[#F5F0E8] px-3 py-1.5 flex items-center justify-between flex-shrink-0">
         <div>
@@ -267,7 +325,7 @@ const ProfessorPastExamNewsCard = memo(function ProfessorPastExamNewsCard({
         <div className="relative" onPointerDownCapture={(e) => e.stopPropagation()}>
           <button
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className="px-2 py-1 bg-[#F5F0E8] text-[#1A1A1A] text-sm font-bold flex items-center justify-between gap-1.5 min-w-[90px]"
+            className="px-2 py-1 bg-[#F5F0E8] text-[#1A1A1A] text-sm font-bold flex items-center justify-between gap-1.5 min-w-[90px] rounded-lg"
           >
             <span>{selectedOption?.label || '선택'}</span>
             <svg
@@ -287,7 +345,7 @@ const ProfessorPastExamNewsCard = memo(function ProfessorPastExamNewsCard({
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="absolute right-0 top-full mt-1 z-20 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg min-w-[90px]"
+                  className="absolute right-0 top-full mt-1 z-20 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg min-w-[90px] rounded-lg overflow-hidden"
                 >
                   {pastExamOptions.map((option) => (
                     <button
@@ -296,7 +354,7 @@ const ProfessorPastExamNewsCard = memo(function ProfessorPastExamNewsCard({
                         onSelectPastExam(option.value);
                         setIsDropdownOpen(false);
                       }}
-                      className={`w-full px-2 py-1.5 text-left text-xs font-medium transition-colors ${
+                      className={`w-full px-3 py-2 text-left text-sm font-medium transition-colors ${
                         selectedPastExam === option.value
                           ? 'bg-[#1A1A1A] text-[#F5F0E8]'
                           : 'text-[#1A1A1A] hover:bg-[#EDEAE4]'
@@ -326,13 +384,13 @@ const ProfessorPastExamNewsCard = memo(function ProfessorPastExamNewsCard({
         ) : (
           <div className="flex flex-col h-full">
             {/* 난이도 비디오 — 전체 너비, 크게 */}
-            <div className="flex-1 min-h-0 relative overflow-hidden">
+            <div className="flex-1 min-h-0 relative overflow-hidden bg-black -mb-px">
               <AutoVideo src={getDifficultyVideo(filteredQuiz.difficulty)} className="absolute inset-0 w-full h-full object-cover" />
             </div>
 
             {/* 하단 정보 — 고정, 절대 줄어들지 않음 */}
-            <div className="flex-shrink-0 bg-[#F5F0E8]">
-              <div className="px-3 mt-1.5">
+            <div className="flex-shrink-0 bg-[#F5F0E8] relative">
+              <div className="px-3 pt-1.5">
                 <h3 className="text-3xl font-black text-[#1A1A1A] overflow-hidden whitespace-nowrap leading-tight" style={{ textOverflow: '".."' }}>
                   {filteredQuiz.title}
                 </h3>
@@ -366,14 +424,14 @@ const ProfessorPastExamNewsCard = memo(function ProfessorPastExamNewsCard({
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onDetails(filteredQuiz); }}
-                  className="flex-1 py-2 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+                  className="flex-1 py-3 text-base font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors rounded-lg"
                 >
                   Details
                 </button>
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onStats(filteredQuiz); }}
-                  className={`flex-1 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] transition-colors ${
+                  className={`flex-1 py-3 text-base font-bold bg-[#1A1A1A] text-[#F5F0E8] transition-colors rounded-lg ${
                     !filteredQuiz.isPublished ? 'opacity-40 pointer-events-none' : 'hover:bg-[#3A3A3A]'
                   }`}
                 >
@@ -590,7 +648,7 @@ function ProfessorNewsCarousel({
                 style={{ width: `${CARD_WIDTH_PERCENT}%` }}
               >
                 {/* 카드 + 바닥 그림자 */}
-                <div className="relative h-[440px]">
+                <div className="relative h-[400px]">
                   {/* 바닥 그림자 — 지면에 드리워지는 타원 */}
                   <motion.div
                     animate={{
@@ -598,8 +656,8 @@ function ProfessorNewsCarousel({
                       scaleX: isActive ? 0.92 : 0.82,
                     }}
                     transition={transitionOn ? { duration: 0.35, ease: 'easeOut' } : { duration: 0 }}
-                    className="absolute left-[2%] right-[2%] -bottom-2 h-8 rounded-[50%] bg-black pointer-events-none"
-                    style={{ filter: 'blur(16px)' }}
+                    className="absolute left-[4%] right-[4%] -bottom-1 h-5 rounded-[50%] bg-black pointer-events-none"
+                    style={{ filter: 'blur(10px)' }}
                   />
                   {/* 카드 본체 */}
                   <motion.div
@@ -610,7 +668,7 @@ function ProfessorNewsCarousel({
                       y: isActive ? -10 : 2,
                     }}
                     transition={transitionOn ? { duration: 0.35, ease: 'easeOut' } : { duration: 0 }}
-                    className="absolute inset-0 origin-center rounded-sm"
+                    className="absolute inset-0 origin-center rounded-xl"
                     style={{ transformStyle: 'preserve-3d' }}
                   >
                   {card.type === 'past' ? (
@@ -645,7 +703,7 @@ function ProfessorNewsCarousel({
       </div>
 
       {/* 인디케이터 — realIndex 기반 */}
-      <div className="relative z-10 flex justify-center gap-2 mt-1">
+      <div className="relative z-10 flex justify-center gap-2 mt-3">
         {Array.from({ length: TOTAL }, (_, index) => (
           <button
             key={index}
@@ -809,7 +867,7 @@ function ProfessorCustomQuizCard({
       whileHover={{ y: -4, boxShadow: '0 8px 20px rgba(0, 0, 0, 0.08)' }}
       whileTap={TAP_SCALE}
       transition={{ duration: 0.2 }}
-      className="relative border border-[#999] bg-[#F5F0E8]/70 backdrop-blur-sm overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)] cursor-pointer"
+      className="relative border border-[#999] bg-[#F5F0E8]/70 backdrop-blur-sm overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)] cursor-pointer rounded-xl"
       onClick={onClick}
     >
       {/* 신문 배경 텍스트 */}
@@ -834,28 +892,28 @@ function ProfessorCustomQuizCard({
       </div>
 
       {/* 카드 내용 */}
-      <div className="relative z-10 p-4 bg-[#F5F0E8]/60">
+      <div className="relative z-10 p-3 bg-[#F5F0E8]/60">
         {/* 제목 (2줄 고정 높이) */}
-        <div className="h-[44px] mb-2">
-          <h3 className="font-bold text-base line-clamp-2 text-[#1A1A1A] pr-6 leading-snug">
+        <div className="h-[36px] mb-1.5">
+          <h3 className="font-bold text-sm line-clamp-2 text-[#1A1A1A] pr-6 leading-snug">
             {quiz.title}
           </h3>
         </div>
 
         {/* 메타 정보 */}
-        <p className="text-sm text-[#5C5C5C] mb-1">
+        <p className="text-xs text-[#5C5C5C] mb-1">
           {quiz.questionCount}문제 · {quiz.participantCount}명 참여
           {quiz.participantCount > 0 && ` · 평균 ${quiz.averageScore}점`}
         </p>
 
         {/* 태그 (2줄 고정 높이) */}
-        <div className="h-[48px] mb-2 overflow-hidden">
+        <div className="h-[42px] mb-1.5 overflow-hidden">
           {quiz.tags && quiz.tags.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {quiz.tags.slice(0, 8).map((tag) => (
                 <span
                   key={tag}
-                  className="px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-medium"
+                  className="px-1 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-[10px] font-medium"
                 >
                   #{tag}
                 </span>
@@ -865,14 +923,14 @@ function ProfessorCustomQuizCard({
         </div>
 
         {/* 버튼 */}
-        <div className="flex gap-2 mt-3">
+        <div className="flex gap-2 mt-2">
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               onDetails();
             }}
-            className="flex-1 py-2 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+            className="flex-1 py-1.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors rounded-lg"
           >
             Details
           </button>
@@ -882,7 +940,7 @@ function ProfessorCustomQuizCard({
               e.stopPropagation();
               onStats();
             }}
-            className="flex-1 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors"
+            className="flex-1 py-1.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors rounded-lg"
           >
             Stats
           </button>
@@ -1375,7 +1433,7 @@ export default function ProfessorQuizListPage() {
       </header>
 
       {/* 뉴스 캐러셀 (중간/기말/기출) */}
-      <section className="mt-6" style={{ transform: 'scale(0.85)', transformOrigin: 'top center', width: '117.65%', marginLeft: '-8.825%', marginBottom: '16px' }}>
+      <section className="mt-6" style={{ transform: 'scale(0.85)', transformOrigin: 'top center', width: '117.65%', marginLeft: '-8.825%', marginBottom: '-12px' }}>
         <ProfessorNewsCarousel
           midtermQuizzes={filteredMidterm}
           finalQuizzes={filteredFinal}
@@ -1397,51 +1455,22 @@ export default function ProfessorQuizListPage() {
       {/* 하단 섹션 */}
       <section className="px-4 pb-16">
         {/* 필터 탭 (자작|서재|커스텀) + 퀴즈 만들기 / 뒤로가기 */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="relative flex w-[252px] bg-[#EDEAE4] border border-[#1A1A1A] overflow-hidden">
-            <motion.div
-              className="absolute inset-y-0 bg-[#1A1A1A]"
-              initial={false}
-              animate={{ left: `${(['custom', 'library', 'folder'].indexOf(sectionFilter)) * (100 / 3)}%` }}
-              style={{ width: `${100 / 3}%` }}
-              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            />
-            {([
-              { key: 'custom' as const, label: '자작' },
-              { key: 'library' as const, label: '서재' },
-              { key: 'folder' as const, label: '커스텀' },
-            ]).map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => {
-                  // 프리뷰 모드에서 다른 탭 클릭하면 프리뷰 해제
-                  if (isLibraryPreview) setIsLibraryPreview(false);
-                  setSectionFilter(key);
-                }}
-                className={`relative z-10 w-1/3 py-3 text-sm font-bold transition-colors text-center whitespace-nowrap ${
-                  sectionFilter === key ? 'text-[#F5F0E8]' : 'text-[#1A1A1A]'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+        <div className="flex items-center justify-between mb-2">
+          <ProfSectionTabs
+            sectionFilter={sectionFilter}
+            onChangeFilter={(key) => {
+              if (isLibraryPreview) setIsLibraryPreview(false);
+              setSectionFilter(key);
+            }}
+          />
 
           {isLibraryPreview ? (
-            <button
-              onClick={() => setIsLibraryPreview(false)}
-              className="px-4 py-3 text-xs font-bold bg-[#EDEAE4] text-[#1A1A1A] border border-[#1A1A1A] whitespace-nowrap hover:bg-[#F5F0E8] transition-colors flex items-center gap-1.5"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              뒤로가기
-            </button>
+            <div />
           ) : isProfPdfSelectMode ? (
             <div className="flex gap-2">
               <button
                 onClick={() => { setIsProfPdfSelectMode(false); setSelectedProfPdfFolders(new Set()); }}
-                className="px-4 py-3 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] whitespace-nowrap hover:bg-[#EDEAE4] transition-colors"
+                className="px-4 py-3 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] whitespace-nowrap hover:bg-[#EDEAE4] transition-colors rounded-lg"
               >
                 취소
               </button>
@@ -1551,7 +1580,7 @@ export default function ProfessorQuizListPage() {
                     setSelectedProfPdfFolders(new Set());
                   }
                 }}
-                className={`px-4 py-3 text-sm font-bold whitespace-nowrap transition-colors ${
+                className={`px-4 py-3 text-sm font-bold whitespace-nowrap transition-colors rounded-lg ${
                   selectedProfPdfFolders.size > 0
                     ? 'bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A]'
                     : 'bg-[#D4CFC4] text-[#EDEAE4] cursor-not-allowed'
@@ -1563,7 +1592,7 @@ export default function ProfessorQuizListPage() {
           ) : (
             <button
               onClick={() => router.push('/professor/quiz/create')}
-              className="px-6 py-3 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] whitespace-nowrap hover:bg-[#3A3A3A] transition-colors border border-[#1A1A1A]"
+              className="px-4 py-3 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] whitespace-nowrap hover:bg-[#3A3A3A] transition-colors rounded-lg"
             >
               퀴즈 만들기
             </button>
@@ -1575,7 +1604,7 @@ export default function ProfessorQuizListPage() {
           <div className="flex justify-end mb-2">
             <button
               onClick={() => setShowTagFilter(!showTagFilter)}
-              className={`flex items-center justify-center w-9 h-9 border transition-colors shrink-0 ${
+              className={`flex items-center justify-center w-9 h-9 border transition-colors shrink-0 rounded-lg ${
                 showTagFilter
                   ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
                   : 'bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A]'
@@ -1616,7 +1645,7 @@ export default function ProfessorQuizListPage() {
               transition={{ duration: 0.2 }}
               className="overflow-hidden mb-3"
             >
-              <div className="flex flex-wrap gap-2 p-3 bg-[#EDEAE4] border border-[#D4CFC4]">
+              <div className="flex flex-wrap gap-1.5 p-2 bg-[#EDEAE4] border border-[#D4CFC4] rounded-lg">
                 {fixedTagOptions
                   .filter(tag => !selectedTags.includes(tag))
                   .map((tag) => (
@@ -1626,7 +1655,7 @@ export default function ProfessorQuizListPage() {
                         setSelectedTags(prev => [...prev, tag]);
                         setShowTagFilter(false);
                       }}
-                      className="px-3 py-1.5 text-sm font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#E5E0D8] transition-colors"
+                      className="px-2 py-1 text-xs font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#E5E0D8] transition-colors rounded"
                     >
                       #{tag}
                     </button>
@@ -1742,8 +1771,8 @@ export default function ProfessorQuizListPage() {
             </div>}
 
             {/* 새 폴더 입력 */}
-            {showNewFolderInput && !openFolderId && (
-              <div className="mb-3 flex gap-2">
+            {showNewFolderInput && !openFolderId && !isProfPdfSelectMode && (
+              <div className="mb-3 flex gap-2 items-center">
                 <input
                   type="text"
                   autoFocus
@@ -1760,7 +1789,7 @@ export default function ProfessorQuizListPage() {
                     }
                   }}
                   placeholder="폴더 이름"
-                  className="flex-1 px-3 py-2 border-2 border-[#1A1A1A] bg-[#FDFBF7] text-sm text-[#1A1A1A] placeholder-[#5C5C5C] outline-none"
+                  className="min-w-0 flex-1 max-w-[50%] px-3 py-2 border-2 border-[#1A1A1A] bg-[#FDFBF7] text-sm text-[#1A1A1A] placeholder-[#5C5C5C] outline-none rounded-lg"
                 />
                 <button
                   onClick={async () => {
@@ -1770,13 +1799,13 @@ export default function ProfessorQuizListPage() {
                       setShowNewFolderInput(false);
                     }
                   }}
-                  className="px-3 py-2 border-2 border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8] text-sm font-bold"
+                  className="px-4 py-2.5 border-2 border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8] text-sm font-bold whitespace-nowrap rounded-lg"
                 >
                   만들기
                 </button>
                 <button
                   onClick={() => { setNewFolderName(''); setShowNewFolderInput(false); }}
-                  className="px-3 py-2 border-2 border-[#D4CFC4] text-sm text-[#5C5C5C]"
+                  className="px-4 py-2.5 border-2 border-[#1A1A1A] text-sm text-[#1A1A1A] font-bold whitespace-nowrap rounded-lg"
                 >
                   취소
                 </button>
@@ -1837,7 +1866,7 @@ export default function ProfessorQuizListPage() {
                   ) : null}
 
                   {/* 폴더 아이콘 — 다크 글래스 */}
-                  <svg className={`w-28 h-28 drop-shadow-lg ${
+                  <svg className={`w-28 h-28 drop-shadow-lg -mb-1 ${
                     isProfPdfSelectMode && selectedProfPdfFolders.has(folder.id) ? 'opacity-100' : ''
                   }`} viewBox="0 0 24 24" fill="none">
                     <defs>
@@ -1849,7 +1878,7 @@ export default function ProfessorQuizListPage() {
                     <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" fill={`url(#fg-${folder.id})`} />
                     <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" stroke="rgba(255,255,255,0.1)" strokeWidth="0.4" fill="none" />
                   </svg>
-                  <span className="text-base font-bold text-[#1A1A1A] text-center px-1 truncate w-full">
+                  <span className="text-sm font-bold text-[#1A1A1A] text-center px-1 truncate w-full -mt-0.5">
                     {folder.name}
                   </span>
                   <span className="text-sm text-[#5C5C5C]">{folder.questions.length}문제</span>
@@ -1867,13 +1896,13 @@ export default function ProfessorQuizListPage() {
                   <div className="flex items-center gap-2 mb-4">
                     <button
                       onClick={() => { setOpenFolderId(null); setFolderQuestions([]); }}
-                      className="p-1"
+                      className="p-1 text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors"
                     >
-                      <svg className="w-5 h-5 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
                       </svg>
                     </button>
-                    <h3 className="text-base font-bold text-[#1A1A1A] flex-1 truncate">{folder.name}</h3>
+                    <h3 className="text-3xl font-black text-[#1A1A1A] flex-1 truncate">{folder.name}</h3>
                     <span className="text-xs text-[#5C5C5C]">{folder.questions.length}문제</span>
                     <button
                       onClick={() => setDeleteFolderTarget({ id: folder.id, name: folder.name })}
@@ -1958,7 +1987,7 @@ export default function ProfessorQuizListPage() {
         isOpen={!!detailsQuiz}
         onClose={() => { setDetailsQuiz(null); clearDetailsRect(); }}
         sourceRect={detailsSourceRect}
-        className="w-full max-w-[300px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
+        className="w-full max-w-[260px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 rounded-xl"
       >
         {detailsQuiz && (
           <>
@@ -1971,7 +2000,7 @@ export default function ProfessorQuizListPage() {
             {!detailsQuiz.description && <div className="mb-1" />}
 
             {/* 평균 점수 대형 박스 */}
-            <div className="text-center py-2 mb-2 border-2 border-dashed border-[#1A1A1A] bg-[#EDEAE4]">
+            <div className="text-center py-2 mb-2 border-2 border-dashed border-[#1A1A1A] bg-[#EDEAE4] rounded-lg">
               <p className="text-[10px] text-[#5C5C5C] mb-0.5">평균 점수</p>
               <p className="text-2xl font-black text-[#1A1A1A]">
                 {detailsQuiz.participantCount > 0
@@ -2019,7 +2048,7 @@ export default function ProfessorQuizListPage() {
                     <span className="text-[#5C5C5C]">피드백</span>
                     <div className="flex items-center gap-1.5">
                       <span
-                        className="text-[10px] font-bold px-1.5 py-0.5 border"
+                        className="text-[10px] font-bold px-1.5 py-0.5 border rounded"
                         style={{ color: label.color, borderColor: label.color }}
                       >
                         {label.label}
@@ -2049,7 +2078,7 @@ export default function ProfessorQuizListPage() {
             <div className="flex gap-2">
               <button
                 onClick={() => { setDetailsQuiz(null); clearDetailsRect(); }}
-                className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+                className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors rounded-lg"
               >
                 닫기
               </button>
@@ -2061,7 +2090,7 @@ export default function ProfessorQuizListPage() {
                     clearDetailsRect();
                     router.push(`/professor/quiz/${quiz.id}/preview`);
                   }}
-                  className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+                  className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors rounded-lg"
                 >
                   미리보기
                 </button>
@@ -2146,7 +2175,8 @@ export default function ProfessorQuizListPage() {
       <ScrollToTopButton
         targetRef={headerRef}
         hidden={isLibraryPreview}
-        bottomPx={sectionFilter === 'library' ? 176 : 96}
+        bottomPx={90}
+        side="right"
       />
     </div>
   );

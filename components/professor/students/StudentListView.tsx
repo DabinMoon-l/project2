@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState, useEffect, useCallback } from 'react';
+import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import type { StudentData, ClassType } from '@/lib/hooks/useProfessorStudents';
 import type { WarningItem } from '@/app/(main)/professor/students/page';
@@ -15,8 +15,8 @@ export type SortKey = 'studentId' | 'status' | 'zscore' | 'score';
 
 interface Props {
   students: StudentData[];
-  sortBy: SortKey;
-  onSortChange: (key: SortKey) => void;
+  sortBy?: SortKey;
+  onSortChange?: (key: SortKey) => void;
   onStudentClick: (uid: string) => void;
   warningMap: Map<string, WarningItem>;
 }
@@ -27,7 +27,6 @@ function getOnlineStatus(lastActiveAt: Date): 'online' | 'offline' {
   return 'offline';
 }
 
-const STATUS_ORDER = { online: 0, offline: 1 };
 
 /** 학번 기반 정렬 */
 function compareStudentId(a: string | undefined, b: string | undefined): number {
@@ -44,15 +43,29 @@ function compareStudentId(a: string | undefined, b: string | undefined): number 
   return a.localeCompare(b);
 }
 
-/** 활동 레이블 */
-function getActivityLabel(activity?: string): string {
-  if (!activity) return '접속 중';
-  if (activity.includes('퀴즈 풀이') || activity.includes('퀴즈 탐색') || activity.includes('퀴즈 출제')) return '퀴즈 푸는 중';
-  if (activity.includes('복습')) return '복습 중';
-  if (activity.includes('게시판')) return '게시글 보는 중';
-  if (activity.includes('배틀') || activity.includes('철권')) return '철권 중';
-  if (activity.includes('홈')) return '접속 중';
-  return '접속 중';
+/** 체류 페이지 분류 */
+type PageCategory = 'quiz' | 'home' | 'board' | 'review';
+
+const PAGE_COLORS: Record<PageCategory, string> = {
+  quiz: '#8B1A1A',
+  home: '#1D5D4A',
+  board: '#B8860B',
+  review: '#1E3A5F',
+};
+
+const PAGE_LABELS: Record<PageCategory, string> = {
+  quiz: '퀴즈',
+  home: '홈',
+  board: '게시판',
+  review: '복습',
+};
+
+function getPageCategory(activity?: string): PageCategory {
+  if (!activity) return 'home';
+  if (activity.includes('퀴즈') || activity.includes('출제') || activity.includes('배틀') || activity.includes('철권')) return 'quiz';
+  if (activity.includes('복습') || activity.includes('리뷰')) return 'review';
+  if (activity.includes('게시판') || activity.includes('게시글')) return 'board';
+  return 'home';
 }
 
 /** N일전 표시 */
@@ -67,7 +80,7 @@ function getTimeAgo(date: Date): string {
   return `${diffDay}일전`;
 }
 
-export default function StudentListView({ students, sortBy, onSortChange, onStudentClick, warningMap }: Props) {
+export default function StudentListView({ students, onStudentClick, warningMap }: Props) {
   const enrichedStudents = useMemo(() => {
     const scores = students.map(s => s.quizStats.averageScore);
     const m = mean(scores);
@@ -79,92 +92,35 @@ export default function StudentListView({ students, sortBy, onSortChange, onStud
     }));
   }, [students]);
 
+  // 항상 학번순 정렬
   const sorted = useMemo(() => {
-    return [...enrichedStudents].sort((a, b) => {
-      switch (sortBy) {
-        case 'studentId':
-          return compareStudentId(a.studentId, b.studentId);
-        case 'status':
-          return STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
-        case 'zscore':
-          return b.zScore - a.zScore;
-        case 'score':
-          return b.quizStats.averageScore - a.quizStats.averageScore;
-        default:
-          return compareStudentId(a.studentId, b.studentId);
-      }
-    });
-  }, [enrichedStudents, sortBy]);
-
-  const SORT_OPTIONS: { key: SortKey; label: string }[] = [
-    { key: 'studentId', label: '학번' },
-    { key: 'status', label: '접속' },
-    { key: 'zscore', label: 'Z-score' },
-    { key: 'score', label: '평균' },
-  ];
-
-  // 언더라인 위치 측정
-  const containerRef = useRef<HTMLDivElement>(null);
-  const btnRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const [underline, setUnderline] = useState({ left: 0, width: 0 });
-  const activeIdx = SORT_OPTIONS.findIndex(o => o.key === sortBy);
-
-  const measureUnderline = useCallback(() => {
-    if (activeIdx < 0 || !containerRef.current || !btnRefs.current[activeIdx]) return;
-    const container = containerRef.current.getBoundingClientRect();
-    const btn = btnRefs.current[activeIdx]!.getBoundingClientRect();
-    setUnderline({ left: btn.left - container.left, width: btn.width });
-  }, [activeIdx]);
-
-  useEffect(() => {
-    measureUnderline();
-  }, [measureUnderline]);
+    return [...enrichedStudents].sort((a, b) => compareStudentId(a.studentId, b.studentId));
+  }, [enrichedStudents]);
 
   // 프로필 크기
-  const PROFILE_SIZE = 120;
-  const DOT_SIZE = 22;
+  const PROFILE_SIZE = 90;
 
   return (
     <div>
-      {/* 헤더 + 정렬 */}
-      <div className="flex items-center justify-between mb-5">
+      {/* 헤더 */}
+      <div className="flex items-center mb-5">
         <span className="text-[22px] font-bold text-[#1A1A1A] pb-1.5">
           학생 목록 ({students.length}명)
         </span>
-        <div ref={containerRef} className="relative flex gap-4">
-          {SORT_OPTIONS.map((opt, i) => (
-            <button
-              key={opt.key}
-              ref={el => { btnRefs.current[i] = el; }}
-              onClick={() => onSortChange(opt.key)}
-              className={`pb-1.5 text-[22px] font-bold transition-colors ${
-                sortBy === opt.key ? 'text-[#1A1A1A]' : 'text-[#5C5C5C]'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-          {activeIdx >= 0 && underline.width > 0 && (
-            <motion.div
-              className="absolute bottom-0 h-[2px] bg-[#1A1A1A]"
-              animate={{ left: underline.left, width: underline.width }}
-              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-            />
-          )}
-        </div>
       </div>
 
       {/* 학생 카드 그리드 — 3열 */}
       {sorted.length === 0 ? (
         <p className="text-lg text-[#5C5C5C] text-center py-12">학생이 없습니다</p>
       ) : (
-        <div className="grid grid-cols-3 gap-y-6 gap-x-3">
+        <div className="grid grid-cols-3 gap-y-5 gap-x-3">
           {sorted.map((student, i) => {
             const warning = warningMap.get(student.uid);
             const isDanger = warning?.level === 'danger';
             const isCaution = warning?.level === 'caution';
             const isOnline = student.status === 'online';
             const displayName = student.name || student.nickname;
+            const pageCategory = isOnline ? getPageCategory(student.currentActivity) : null;
 
             return (
               <motion.button
@@ -202,18 +158,17 @@ export default function StudentListView({ students, sortBy, onSortChange, onStud
                       </div>
                     )}
                   </div>
-                  {/* 접속 상태 — 프로필에 겹치게 */}
+                  {/* 체류 상태 — 프로필에 겹치게 */}
                   <motion.div
-                    className={`absolute bottom-1 right-1 w-[26px] h-[26px] rounded-full border-[1.5px] border-white/30 shadow-md ${
-                      isOnline ? 'bg-[#1D5D4A]' : 'bg-[#D4CFC4]'
-                    }`}
+                    className="absolute bottom-0.5 right-0.5 w-[20px] h-[20px] rounded-full border-[1.5px] border-white/30 shadow-md"
+                    style={{ backgroundColor: isOnline && pageCategory ? PAGE_COLORS[pageCategory] : '#D4CFC4' }}
                     animate={isOnline ? { opacity: [1, 0.75, 1] } : undefined}
                     transition={isOnline ? { duration: 2, repeat: Infinity, ease: 'easeInOut' } : undefined}
                   />
                 </div>
 
                 {/* 이름 */}
-                <p className="text-base font-bold text-[#1A1A1A] mt-2 truncate w-full">
+                <p className="text-base font-bold text-[#1A1A1A] mt-1.5 truncate w-full">
                   {displayName}
                 </p>
 
@@ -222,9 +177,12 @@ export default function StudentListView({ students, sortBy, onSortChange, onStud
                   {student.classId}반{student.name ? ` · ${student.nickname}` : ''}
                 </p>
 
-                {/* 활동 또는 N일전 */}
-                <p className={`text-xs mt-0.5 ${isOnline ? 'text-[#1D5D4A] font-bold' : 'text-[#5C5C5C]'}`}>
-                  {isOnline ? getActivityLabel(student.currentActivity) : getTimeAgo(student.lastActiveAt)}
+                {/* 체류 페이지 또는 N일전 */}
+                <p
+                  className={`text-xs mt-0.5 font-bold`}
+                  style={{ color: isOnline && pageCategory ? PAGE_COLORS[pageCategory] : '#5C5C5C' }}
+                >
+                  {isOnline && pageCategory ? PAGE_LABELS[pageCategory] : getTimeAgo(student.lastActiveAt)}
                 </p>
               </motion.button>
             );

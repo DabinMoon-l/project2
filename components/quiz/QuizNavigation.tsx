@@ -72,7 +72,7 @@ export default function QuizNavigation({
           onClick={onPrev}
           disabled={isFirstQuestion}
           className={`
-            flex-1 py-2 font-bold text-xs
+            flex-1 py-3 font-bold text-sm rounded-lg
             border-2 transition-all duration-200
             ${isFirstQuestion
               ? 'bg-[#EDEAE4] text-[#5C5C5C] border-[#5C5C5C] cursor-not-allowed'
@@ -108,7 +108,7 @@ export default function QuizNavigation({
             onClick={onSubmit}
             disabled={isSubmitting}
             className={`
-              flex-1 py-2 font-bold text-xs
+              flex-1 py-3 font-bold text-sm rounded-lg
               border-2 border-[#1A1A1A] transition-all duration-200
               bg-[#1A1A1A] text-[#F5F0E8]
               ${isSubmitting ? 'cursor-not-allowed opacity-70' : 'hover:bg-[#2A2A2A]'}
@@ -166,7 +166,7 @@ export default function QuizNavigation({
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={onNext}
-            className="flex-1 py-2 font-bold text-xs border-2 border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8] transition-all duration-200 hover:bg-[#2A2A2A]"
+            className="flex-1 py-3 font-bold text-sm rounded-lg border-2 border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8] transition-all duration-200 hover:bg-[#2A2A2A]"
             aria-label="다음 문제"
           >
             <span className="flex items-center justify-center gap-2">

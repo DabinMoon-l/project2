@@ -41,7 +41,7 @@ export default function FolderSelectModal({
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50"
+          className="fixed inset-0 z-[105] flex items-center justify-center p-6 bg-black/50"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -52,14 +52,14 @@ export default function FolderSelectModal({
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] max-h-[70vh] flex flex-col"
+            className="w-full max-w-[280px] bg-[#F5F0E8] border-2 border-[#1A1A1A] max-h-[60vh] flex flex-col rounded-xl"
           >
             {/* 헤더 */}
-            <div className="p-4 border-b border-[#1A1A1A] flex items-center justify-between">
-              <h2 className="text-lg font-bold text-[#1A1A1A]">폴더에 저장</h2>
+            <div className="p-3 border-b border-[#1A1A1A] flex items-center justify-between">
+              <h2 className="text-sm font-bold text-[#1A1A1A]">폴더에 저장</h2>
               <button
                 onClick={onClose}
-                className="w-8 h-8 flex items-center justify-center border border-[#1A1A1A] hover:bg-[#EDEAE4]"
+                className="w-7 h-7 flex items-center justify-center border border-[#1A1A1A] hover:bg-[#EDEAE4] rounded-lg"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -75,12 +75,12 @@ export default function FolderSelectModal({
                 onChange={(e) => setNewFolderName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
                 placeholder="새 폴더 이름"
-                className="flex-1 px-3 py-2 text-sm border border-[#1A1A1A] bg-[#FDFBF7] text-[#1A1A1A] placeholder-[#5C5C5C] focus:outline-none"
+                className="flex-1 px-3 py-2 text-xs border border-[#1A1A1A] bg-[#FDFBF7] text-[#1A1A1A] placeholder-[#5C5C5C] focus:outline-none rounded-lg"
               />
               <button
                 onClick={handleCreate}
                 disabled={!newFolderName.trim() || creating}
-                className="px-3 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#333] disabled:opacity-40 transition-colors"
+                className="px-3 py-2 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#333] disabled:opacity-40 transition-colors rounded-lg"
               >
                 {creating ? '...' : '생성'}
               </button>

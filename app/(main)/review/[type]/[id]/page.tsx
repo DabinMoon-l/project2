@@ -318,23 +318,23 @@ function QuestionCard({
             setIsExpanded(!isExpanded);
           }
         }}
-        className="p-3 cursor-pointer"
+        className="p-2.5 cursor-pointer"
       >
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             {/* 문항 번호 + 정답/오답 표시 + 챕터 */}
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <span className="inline-block px-2 py-0.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8]">
+            <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+              <span className="inline-block px-1.5 py-0.5 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8]">
                 Q{questionNumber}{subQuestionNumber ? `-${subQuestionNumber}` : (item.combinedGroupId && item.combinedIndex !== undefined ? `-${item.combinedIndex + 1}` : '')}
               </span>
               {/* 결합형 표시 */}
               {item.combinedGroupId && !subQuestionNumber && (
-                <span className="inline-block px-2 py-0.5 text-xs font-bold border border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A]">
+                <span className="inline-block px-1.5 py-0.5 text-[11px] font-bold border border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A]">
                   결합형 문제
                 </span>
               )}
               {item.isCorrect !== undefined && (
-                <span className={`inline-block px-2 py-0.5 text-xs font-bold ${
+                <span className={`inline-block px-1.5 py-0.5 text-[11px] font-bold ${
                   item.isCorrect
                     ? 'bg-[#E8F5E9] text-[#1A6B1A] border border-[#1A6B1A]'
                     : 'bg-[#FFEBEE] text-[#8B1A1A] border border-[#8B1A1A]'
@@ -344,12 +344,12 @@ function QuestionCard({
               )}
               {/* 챕터 표시 */}
               {courseId && item.chapterId && (
-                <span className="inline-block px-1.5 py-0.5 text-xs font-medium bg-[#E8F0FE] border border-[#4A6DA7] text-[#4A6DA7]">
+                <span className="inline-block px-1.5 py-0.5 text-[11px] font-medium bg-[#E8F0FE] border border-[#4A6DA7] text-[#4A6DA7]">
                   {formatChapterLabel(courseId, item.chapterId, item.chapterDetailId)}
                 </span>
               )}
             </div>
-            <p className="text-sm text-[#1A1A1A]">
+            <p className="text-xs text-[#1A1A1A]">
               {item.question}
               {/* 제시문 발문 또는 보기 발문 표시 */}
               {(item.passagePrompt || item.bogiQuestionText) && (
@@ -2499,8 +2499,8 @@ export default function FolderDetailPage() {
                     createdAt: serverTimestamp(),
                   });
 
-                  // EXP 토스트 (CF에서 25 EXP 지급)
-                  showExpToast(25, '복습 연습 완료');
+                  // EXP 토스트는 ReviewPractice의 handleFinish에서 이미 표시됨
+                  // CF에서 25 EXP 지급하지만 토스트 중복 방지
                 }
 
                 // 4. 해당 퀴즈의 모든 reviews 문서 업데이트 (뱃지 제거)
@@ -2868,13 +2868,13 @@ export default function FolderDetailPage() {
     >
       {/* 헤더 - 배너 이미지 */}
       <header className="pt-2 pb-1 flex flex-col items-center">
-        {/* 리본 이미지 */}
-        <div className="w-full h-[140px] mt-2 flex justify-center">
+        {/* 리본 이미지 — 퀴즈 페이지와 동일 크기 */}
+        <div className="w-full h-[160px] mt-2">
           <img
             src={ribbonImage}
             alt="Review"
-            className="w-[85%] sm:w-[80%] md:w-[75%] min-w-[280px] max-w-[800px] h-full object-contain"
-            style={{ transform: `scale(${ribbonScale})` }}
+            className="w-full h-full object-contain"
+            style={{ transform: `scale(${ribbonScale}) scaleX(1.15)` }}
           />
         </div>
 
@@ -2882,21 +2882,19 @@ export default function FolderDetailPage() {
         <div className="w-full px-4 py-1">
           {folderType === 'solved' ? (
             <>
-              {/* solved 타입: 뒤로 버튼 (우측 정렬) */}
-              <div className="flex justify-end mb-2">
+              <div className="flex items-center gap-2 mb-2">
                 <button
                   onClick={() => router.back()}
-                  className="px-2.5 py-1.5 text-[11px] font-bold bg-[#EDEAE4] text-[#1A1A1A] border border-[#1A1A1A] whitespace-nowrap hover:bg-[#F5F0E8] transition-colors flex items-center gap-1"
+                  className="p-1 text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors flex-shrink-0"
                 >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
                   </svg>
-                  뒤로가기
                 </button>
+                <h2 className="text-2xl font-black text-[#1A1A1A] truncate flex-1">
+                  {folderTitle}
+                </h2>
               </div>
-              <h2 className="text-2xl font-black text-[#1A1A1A] mb-2 truncate">
-                {folderTitle}
-              </h2>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="flex flex-col items-center">
@@ -2924,57 +2922,44 @@ export default function FolderDetailPage() {
               </div>
             </>
           ) : fromQuizPage ? (
-            /* 퀴즈 페이지 복습탭에서 온 경우: 필터 없이 이전 버튼만 */
-            <div className="flex justify-end">
-              <button
-                onClick={() => router.back()}
-                className="px-2.5 py-1.5 text-[11px] font-bold bg-[#EDEAE4] text-[#1A1A1A] border border-[#1A1A1A] whitespace-nowrap hover:bg-[#F5F0E8] transition-colors flex items-center gap-1"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-                뒤로가기
-              </button>
-            </div>
+            /* 퀴즈 페이지 복습탭에서 온 경우: 빈 — 제목은 아래 섹션에서 표시 */
+            <div />
           ) : (
-            /* 서재/오답/찜/커스텀: 필터 + 뒤로가기 버튼 */
-            <div className="flex items-stretch justify-between">
-              <SlideFilter
-                activeFilter={folderType as ReviewFilter}
-                onFilterChange={handleFilterChange}
-              />
-              <button
-                onClick={() => router.push(`/review?filter=${folderType}`)}
-                className="px-2.5 py-1.5 text-[11px] font-bold bg-[#EDEAE4] text-[#1A1A1A] border border-[#1A1A1A] whitespace-nowrap hover:bg-[#F5F0E8] transition-colors flex items-center gap-1 flex-shrink-0 ml-2"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-                뒤로가기
-              </button>
-            </div>
+            /* 서재/오답/찜/커스텀: 필터 숨김 (상세 페이지에서는 불필요) */
+            <div />
           )}
         </div>
       </header>
 
       {/* 폴더 제목 + 점수 (solved 타입 제외) */}
       {folderType !== 'solved' && (
-        <div className="px-4 py-3 border-b border-[#EDEAE4]">
+        <div className="px-4 py-3">
           {/* bookmark/library 타입일 때 제목 + 점수 표시 */}
           {(folderType === 'bookmark' || folderType === 'library') ? (
             <>
               <div className="flex items-center gap-2 mb-2">
+                {/* 뒤로가기 < 화살표 */}
+                {!isEditMode && (
+                  <button
+                    onClick={() => router.back()}
+                    className="p-1 text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors flex-shrink-0"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                )}
                 {folderType === 'library' && isEditMode ? (
                   <input
                     type="text"
                     value={editedTitle}
                     onChange={(e) => setEditedTitle(e.target.value)}
-                    className="flex-1 min-w-0 max-w-[160px] text-lg font-black text-[#1A1A1A] bg-[#EDEAE4] border-2 border-[#1A1A1A] px-2 py-1 focus:outline-none"
+                    className="flex-1 min-w-0 max-w-[160px] text-2xl font-black text-[#1A1A1A] bg-[#EDEAE4] border-2 border-[#1A1A1A] px-2 py-1 focus:outline-none"
                     autoFocus
                   />
                 ) : (
                   <>
-                    <h2 className="text-lg font-black text-[#1A1A1A] flex-1">
+                    <h2 className="text-2xl font-black text-[#1A1A1A] flex-1">
                       {folderTitle}
                     </h2>
                     {folderType === 'library' && !isSelectMode && !fromQuizPage && (
@@ -3031,7 +3016,15 @@ export default function FolderDetailPage() {
             </>
           ) : (
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold text-[#1A1A1A] truncate flex-1">
+              <button
+                onClick={() => router.back()}
+                className="p-1 text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors flex-shrink-0"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <h2 className="text-2xl font-black text-[#1A1A1A] truncate flex-1">
                 {folderTitle}
               </h2>
               {folderType === 'custom' && !isSelectMode && (
@@ -3064,7 +3057,7 @@ export default function FolderDetailPage() {
 
       {/* 상단 정보 */}
       <div className="px-4 py-3 flex items-center justify-between">
-        <p className="text-sm text-[#5C5C5C]">
+        <p className="text-lg font-bold text-[#5C5C5C]">
           {loading ? '불러오는 중...' : `총 ${questions.length}문제`}
           {isSelectMode && selectedIds.size > 0 && (
             <span className="ml-2 text-[#1A1A1A] font-bold">
@@ -3085,7 +3078,7 @@ export default function FolderDetailPage() {
                     setSelectedIds(new Set(questions.map(q => q.id)));
                   }
                 }}
-                className="px-3 py-1.5 text-xs font-bold border transition-colors bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#EDEAE4]"
+                className="px-4 py-2 text-sm font-bold border transition-colors bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#EDEAE4] rounded-lg"
               >
                 {selectedIds.size === questions.length ? '전체 해제' : '전체'}
               </button>
@@ -3103,10 +3096,10 @@ export default function FolderDetailPage() {
                   setIsDeleteMode(false);
                 }
               }}
-              className={`px-3 py-1.5 text-xs font-bold border transition-colors ${
+              className={`px-4 py-2 text-sm font-bold border-2 transition-colors rounded-lg ${
                 isSelectMode
                   ? 'bg-[#EDEAE4] text-[#1A1A1A] border-[#1A1A1A]'
-                  : 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                  : 'bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#EDEAE4]'
               }`}
             >
               {isSelectMode ? '취소' : '선택'}
@@ -3474,14 +3467,14 @@ export default function FolderDetailPage() {
               <button
                 onClick={handleCancelEdit}
                 disabled={isSavingEdit}
-                className="flex-1 py-2 text-xs font-bold bg-[#F5F0E8] text-[#1A1A1A] border-2 border-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+                className="flex-1 py-3 text-sm font-bold bg-[#F5F0E8] text-[#1A1A1A] border-2 border-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors rounded-lg"
               >
                 취소
               </button>
               <button
                 onClick={handleSaveEdits}
                 disabled={isSavingEdit || (Object.keys(editedQuestions).length === 0 && !(editedTitle.trim() && editedTitle.trim() !== libraryQuizTitle))}
-                className={`flex-1 py-2 text-xs font-bold border-2 transition-colors ${
+                className={`flex-1 py-3 text-sm font-bold border-2 transition-colors rounded-lg ${
                   (Object.keys(editedQuestions).length > 0 || (editedTitle.trim() && editedTitle.trim() !== libraryQuizTitle))
                     ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A] hover:bg-[#3A3A3A]'
                     : 'bg-[#EDEAE4] text-[#5C5C5C] border-[#5C5C5C] cursor-not-allowed'
@@ -3494,7 +3487,7 @@ export default function FolderDetailPage() {
             /* 선택 모드일 때 - 선택한 문제 복습 */
             <button
               onClick={handleStartPractice}
-              className="w-full py-2 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#3A3A3A] transition-colors"
+              className="w-full py-3 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#3A3A3A] transition-colors rounded-lg"
             >
               선택 복습하기 ({selectedIds.size})
             </button>
@@ -3503,14 +3496,14 @@ export default function FolderDetailPage() {
             <div className="flex gap-2">
               <button
                 onClick={handleStartPractice}
-                className="flex-1 py-2 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#3A3A3A] transition-colors"
+                className="flex-1 py-2.5 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#3A3A3A] transition-colors rounded-lg"
               >
                 전체 복습
               </button>
               <button
                 onClick={handleStartWrongOnlyPractice}
                 disabled={wrongCount === 0}
-                className={`flex-1 py-2 text-xs font-bold border-2 transition-colors ${
+                className={`flex-1 py-2.5 text-sm font-bold border-2 transition-colors rounded-lg ${
                   wrongCount > 0
                     ? 'bg-[#8B1A1A] text-[#F5F0E8] border-[#8B1A1A] hover:bg-[#6B1414]'
                     : 'bg-[#EDEAE4] text-[#5C5C5C] border-[#5C5C5C] cursor-not-allowed'
@@ -3751,11 +3744,11 @@ export default function FolderDetailPage() {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-xs bg-[#F5F0E8] border-2 border-[#1A1A1A] p-5"
+            className="w-[85%] max-w-[280px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 rounded-2xl"
           >
-            <div className="flex justify-center mb-4">
-              <div className="w-12 h-12 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
-                <svg className="w-6 h-6 text-[#8B1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="flex justify-center mb-3">
+              <div className="w-10 h-10 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4] rounded-lg">
+                <svg className="w-5 h-5 text-[#8B1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                 </svg>
               </div>
@@ -3763,13 +3756,13 @@ export default function FolderDetailPage() {
             <h3 className="text-center font-bold text-base text-[#1A1A1A] mb-2">
               {folderType === 'custom' ? '폴더를 삭제할까요?' : '퀴즈를 삭제할까요?'}
             </h3>
-            <p className="text-sm text-[#5C5C5C] mb-1">
+            <p className="text-xs text-[#5C5C5C] mb-1">
               {folderType === 'custom'
                 ? '- 삭제된 폴더는 복구할 수 없습니다.'
                 : '- 삭제된 퀴즈는 복구할 수 없습니다.'
               }
             </p>
-            <p className="text-sm text-[#5C5C5C] mb-6">
+            <p className="text-xs text-[#5C5C5C] mb-5">
               {folderType === 'custom'
                 ? '- 폴더 안의 문제는 원본에 남아있습니다.'
                 : '- 이미 푼 사람은 복습 가능합니다.'
@@ -3778,7 +3771,7 @@ export default function FolderDetailPage() {
             <div className="flex gap-3">
               <button
                 onClick={() => setShowDeleteModal(false)}
-                className="flex-1 py-2.5 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+                className="flex-1 py-2.5 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors rounded-lg"
               >
                 취소
               </button>
@@ -3796,7 +3789,7 @@ export default function FolderDetailPage() {
                     console.error('삭제 실패:', err);
                   }
                 }}
-                className="flex-1 py-2.5 font-bold border-2 border-[#8B1A1A] text-[#8B1A1A] bg-[#F5F0E8] hover:bg-[#FDEAEA] transition-colors"
+                className="flex-1 py-2.5 font-bold border-2 border-[#8B1A1A] text-[#8B1A1A] bg-[#F5F0E8] hover:bg-[#FDEAEA] transition-colors rounded-lg"
               >
                 삭제
               </button>

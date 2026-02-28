@@ -84,7 +84,7 @@ const FILTER_OPTIONS: { value: ReviewFilter; line1: string; line2?: string }[] =
 ];
 
 /**
- * 슬라이드 필터 컴포넌트
+ * 밑줄 스타일 필터 탭 (교수 퀴즈 페이지 ProfSectionTabs와 동일)
  */
 function SlideFilter({
   activeFilter,
@@ -93,43 +93,43 @@ function SlideFilter({
   activeFilter: ReviewFilter;
   onFilterChange: (filter: ReviewFilter) => void;
 }) {
-  const activeIndex = FILTER_OPTIONS.findIndex((opt) => opt.value === activeFilter);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const btnRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [underline, setUnderline] = useState({ left: 0, width: 0 });
+  const activeIdx = FILTER_OPTIONS.findIndex(o => o.value === activeFilter);
+
+  const measureUnderline = useCallback(() => {
+    if (activeIdx < 0 || !containerRef.current || !btnRefs.current[activeIdx]) return;
+    const container = containerRef.current.getBoundingClientRect();
+    const btn = btnRefs.current[activeIdx]!.getBoundingClientRect();
+    setUnderline({ left: btn.left - container.left, width: btn.width });
+  }, [activeIdx]);
+
+  useEffect(() => {
+    measureUnderline();
+  }, [measureUnderline]);
 
   return (
-    <div className="relative flex items-stretch bg-[#EDEAE4] border border-[#1A1A1A] overflow-hidden min-w-0 w-[220px]">
-      {/* 슬라이드 배경 */}
-      <motion.div
-        className="absolute h-full bg-[#1A1A1A]"
-        initial={false}
-        animate={{
-          left: `${activeIndex * 25}%`,
-        }}
-        style={{
-          width: '25%',
-        }}
-        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-      />
-
-      {/* 필터 옵션들 */}
-      {FILTER_OPTIONS.map((option) => (
+    <div ref={containerRef} className="relative flex gap-4">
+      {FILTER_OPTIONS.map((opt, i) => (
         <button
-          key={option.value}
-          type="button"
-          onClick={() => onFilterChange(option.value)}
-          className={`relative z-10 w-1/4 px-1.5 py-1.5 text-[11px] font-bold transition-colors text-center whitespace-nowrap flex flex-col items-center justify-center ${
-            activeFilter === option.value ? 'text-[#F5F0E8]' : 'text-[#1A1A1A]'
+          key={opt.value}
+          ref={el => { btnRefs.current[i] = el; }}
+          onClick={() => onFilterChange(opt.value)}
+          className={`pb-1.5 text-base font-bold transition-colors ${
+            activeFilter === opt.value ? 'text-[#1A1A1A]' : 'text-[#5C5C5C]'
           }`}
         >
-          {option.line2 ? (
-            <>
-              <span className="leading-tight">{option.line1}</span>
-              <span className="leading-tight">{option.line2}</span>
-            </>
-          ) : (
-            <span className="whitespace-nowrap">{option.line1}</span>
-          )}
+          {opt.line1}
         </button>
       ))}
+      {activeIdx >= 0 && underline.width > 0 && (
+        <motion.div
+          className="absolute bottom-0 h-[2px] bg-[#1A1A1A]"
+          animate={{ left: underline.left, width: underline.width }}
+          transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+        />
+      )}
     </div>
   );
 }
@@ -161,8 +161,8 @@ function FolderCard({
   /** 카드 스타일: folder(폴더 아이콘) 또는 quiz(퀴즈 카드 스타일) */
   variant?: 'folder' | 'quiz';
 }) {
-  // gradient ID 충돌 방지용 고유 키
-  const gradId = `fc-${title.replace(/\s/g, '')}-${count}`;
+  // gradient ID 충돌 방지용 고유 키 (특수문자 제거 — SVG url() 참조 깨짐 방지)
+  const gradId = `fc-${title.replace(/[^a-zA-Z0-9가-힣]/g, '')}-${count}`;
 
   return (
     <motion.div
@@ -286,7 +286,7 @@ function BookmarkedQuizCard({
       whileTap={TAP_SCALE}
       transition={SPRING_TAP}
       onClick={onClick}
-      className="relative border border-[#1A1A1A] bg-[#F5F0E8] p-3 cursor-pointer hover:bg-[#EDEAE4] transition-all"
+      className="relative border border-[#1A1A1A] bg-[#F5F0E8] p-3 cursor-pointer hover:bg-[#EDEAE4] transition-all rounded-xl"
     >
       {/* 우측 상단 아이콘 그룹: [업데이트] [지구] [찜] */}
       <div className="absolute top-2 right-2 flex items-start gap-1 z-10">
@@ -335,7 +335,7 @@ function BookmarkedQuizCard({
 
       {/* 퀴즈 카드 스타일 아이콘 */}
       <div className="flex justify-center mb-2">
-        <div className="w-12 h-12 border-2 border-[#1A1A1A] flex items-center justify-center">
+        <div className="w-12 h-12 border-2 border-[#1A1A1A] flex items-center justify-center rounded-lg">
           <svg className="w-6 h-6 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
@@ -430,7 +430,7 @@ function LargeBookmarkedQuizCard({
       whileTap={TAP_SCALE}
       transition={SPRING_TAP}
       onClick={onClick}
-      className="relative border-2 border-[#1A1A1A] bg-[#F5F0E8] cursor-pointer hover:bg-[#EDEAE4] transition-all"
+      className="relative border-2 border-[#1A1A1A] bg-[#F5F0E8] cursor-pointer hover:bg-[#EDEAE4] transition-all rounded-xl overflow-hidden"
     >
       {/* 우측 상단 아이콘 그룹: [업데이트] [지구] [찜] */}
       <div className="absolute top-3 right-3 flex items-start gap-1.5 z-10">
@@ -520,7 +520,7 @@ function LargeBookmarkedQuizCard({
  */
 function LargeBookmarkedQuizPlaceholder() {
   return (
-    <div className="border-2 border-dashed border-[#D4CFC4] bg-[#EDEAE4]">
+    <div className="border-2 border-dashed border-[#D4CFC4] bg-[#EDEAE4] rounded-xl overflow-hidden">
       {/* 상단: 검정색 박스 플레이스홀더 */}
       <div className="bg-[#D4CFC4] px-4 py-3">
         <div className="h-6 w-3/4 bg-[#C4BFB4]" />
@@ -657,7 +657,7 @@ function LargeSolvedQuizCard({
  */
 function LargeSolvedQuizPlaceholder() {
   return (
-    <div className="border-2 border-dashed border-[#D4CFC4] bg-[#EDEAE4]">
+    <div className="border-2 border-dashed border-[#D4CFC4] bg-[#EDEAE4] rounded-xl overflow-hidden">
       {/* 상단: 검정색 박스 플레이스홀더 */}
       <div className="bg-[#D4CFC4] px-4 py-3">
         <div className="h-6 w-3/4 bg-[#C4BFB4]" />
@@ -1416,7 +1416,7 @@ function CustomReviewQuizCard({
                 e.stopPropagation();
                 onDetails();
               }}
-              className="flex-1 py-1.5 text-[11px] font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+              className="flex-1 py-1.5 text-[11px] font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors rounded-lg"
             >
               Details
             </button>
@@ -1432,7 +1432,7 @@ function CustomReviewQuizCard({
                     onReview();
                   }
                 }}
-                className="w-full py-1.5 text-[11px] font-semibold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors flex items-center justify-center gap-0.5"
+                className="w-full py-1.5 text-[11px] font-semibold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors flex items-center justify-center gap-0.5 rounded-lg"
               >
                 Review
                 {onReviewWrongOnly && (
@@ -1448,7 +1448,7 @@ function CustomReviewQuizCard({
                     initial={{ opacity: 0, y: -5 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -5 }}
-                    className="absolute bottom-full left-0 right-0 mb-1 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg z-50"
+                    className="absolute bottom-full left-0 right-0 mb-1 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg z-50 rounded-lg overflow-hidden"
                   >
                     <button
                       type="button"
@@ -1701,7 +1701,7 @@ function LibraryQuizCard({
       whileTap={TAP_SCALE}
       transition={{ duration: 0.2 }}
       onClick={onCardClick}
-      className={`relative border bg-[#F5F0E8]/70 backdrop-blur-sm overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)] cursor-pointer ${
+      className={`relative border bg-[#F5F0E8]/70 backdrop-blur-sm overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)] cursor-pointer rounded-xl ${
         isSelectMode
           ? isSelected
             ? 'border-2 border-[#8B1A1A] bg-[#FDEAEA]'
@@ -1786,7 +1786,7 @@ function LibraryQuizCard({
                 e.stopPropagation();
                 onDetails();
               }}
-              className="flex-1 py-1.5 text-[11px] font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+              className="flex-1 py-1.5 text-[11px] font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors rounded-lg"
             >
               Details
             </button>
@@ -1802,7 +1802,7 @@ function LibraryQuizCard({
                     onReview();
                   }
                 }}
-                className="w-full py-1.5 text-[11px] font-semibold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors flex items-center justify-center gap-0.5"
+                className="w-full py-1.5 text-[11px] font-semibold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors flex items-center justify-center gap-0.5 rounded-lg"
               >
                 Review
                 {onReviewWrongOnly && (
@@ -1818,7 +1818,7 @@ function LibraryQuizCard({
                     initial={{ opacity: 0, y: -5 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -5 }}
-                    className="absolute bottom-full left-0 right-0 mb-1 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg z-50"
+                    className="absolute bottom-full left-0 right-0 mb-1 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg z-50 rounded-lg overflow-hidden"
                   >
                     <button
                       type="button"
@@ -1918,7 +1918,7 @@ function BookmarkQuizCard({
       whileHover={isSelectMode ? {} : { y: -4, boxShadow: '0 8px 20px rgba(0, 0, 0, 0.08)' }}
       transition={{ duration: 0.2 }}
       onClick={handleCardClick}
-      className={`relative border bg-[#F5F0E8]/70 backdrop-blur-sm p-3 shadow-[0_2px_8px_rgba(0,0,0,0.06)] ${
+      className={`relative border bg-[#F5F0E8]/70 backdrop-blur-sm p-3 shadow-[0_2px_8px_rgba(0,0,0,0.06)] rounded-xl ${
         isSelectMode
           ? isSelected
             ? 'border-2 border-dashed border-[#1A1A1A] bg-[#EDEAE4] cursor-pointer'
@@ -2010,7 +2010,7 @@ function BookmarkQuizCard({
               e.stopPropagation();
               onDetails();
             }}
-            className="flex-1 py-1.5 text-[11px] font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+            className="flex-1 py-1.5 text-[11px] font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors rounded-lg"
           >
             Details
           </button>
@@ -2027,7 +2027,7 @@ function BookmarkQuizCard({
                     onStartReview();
                   }
                 }}
-                className="w-full py-1.5 text-[11px] font-semibold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors flex items-center justify-center gap-0.5"
+                className="w-full py-1.5 text-[11px] font-semibold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors flex items-center justify-center gap-0.5 rounded-lg"
               >
                 Review
                 {onStartReviewWrongOnly && (
@@ -2043,7 +2043,7 @@ function BookmarkQuizCard({
                     initial={{ opacity: 0, y: -5 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -5 }}
-                    className="absolute bottom-full left-0 right-0 mb-1 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg z-50"
+                    className="absolute bottom-full left-0 right-0 mb-1 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg z-50 rounded-lg overflow-hidden"
                   >
                     <button
                       type="button"
@@ -2079,7 +2079,7 @@ function BookmarkQuizCard({
                 e.stopPropagation();
                 onStartQuiz();
               }}
-              className="flex-1 py-1.5 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors"
+              className="flex-1 py-1.5 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors rounded-lg"
             >
               Start
             </button>
@@ -2429,13 +2429,13 @@ function SolvedQuizLayout({
             {/* 태그 검색 버튼 */}
             <button
               onClick={() => setShowTagFilter(!showTagFilter)}
-              className={`flex items-center justify-center w-9 h-9 border transition-colors shrink-0 ${
+              className={`flex items-center justify-center w-9 h-9 border transition-colors shrink-0 rounded-lg ${
                 showTagFilter
                   ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
                   : 'bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A]'
               }`}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
               </svg>
             </button>
@@ -2708,7 +2708,7 @@ function CreateFolderModal({
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-[#F5F0E8] border-2 border-[#1A1A1A] p-3 mx-4 max-w-sm w-full"
+        className="bg-[#F5F0E8] border-2 border-[#1A1A1A] p-3 mx-4 max-w-sm w-full rounded-2xl"
       >
         <h3 className="font-bold text-base text-[#1A1A1A] mb-3">새 폴더 만들기</h3>
 
@@ -2717,7 +2717,7 @@ function CreateFolderModal({
           value={folderName}
           onChange={(e) => setFolderName(e.target.value)}
           placeholder="폴더 이름"
-          className="w-full px-2.5 py-1.5 text-sm border border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] mb-3 outline-none focus:border-2"
+          className="w-full px-2.5 py-1.5 text-sm border border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] mb-3 outline-none focus:border-2 rounded-lg"
           autoFocus
           autoComplete="off"
           autoCorrect="off"
@@ -2731,7 +2731,7 @@ function CreateFolderModal({
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 py-1.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+            className="flex-1 py-1.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors rounded-lg"
           >
             취소
           </button>
@@ -2739,7 +2739,7 @@ function CreateFolderModal({
             type="button"
             onClick={handleCreate}
             disabled={!folderName.trim()}
-            className="flex-1 py-1.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors disabled:opacity-50"
+            className="flex-1 py-1.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors disabled:opacity-50 rounded-lg"
           >
             만들기
           </button>
@@ -3627,7 +3627,7 @@ function ReviewPageContent() {
                       setIsPdfSelectMode(false);
                       setSelectedPdfFolders(new Set());
                     }}
-                    className="px-3 py-2 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] whitespace-nowrap hover:bg-[#EDEAE4] transition-colors"
+                    className="px-3 py-2 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] whitespace-nowrap hover:bg-[#EDEAE4] transition-colors rounded-lg"
                   >
                     취소
                   </motion.button>
@@ -3743,7 +3743,7 @@ function ReviewPageContent() {
                         setSelectedPdfFolders(new Set());
                       }
                     }}
-                    className={`px-3 py-2 text-xs font-bold whitespace-nowrap transition-colors ${
+                    className={`px-3 py-2 text-xs font-bold whitespace-nowrap transition-colors rounded-lg ${
                       selectedPdfFolders.size > 0
                         ? 'bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A]'
                         : 'bg-[#D4CFC4] text-[#EDEAE4] cursor-not-allowed'
@@ -3764,7 +3764,7 @@ function ReviewPageContent() {
                       setIsReviewSelectMode(false);
                       setReviewSelectedIds(new Set());
                     }}
-                    className="px-2.5 py-1.5 text-[11px] font-bold border border-[#1A1A1A] text-[#1A1A1A] whitespace-nowrap hover:bg-[#EDEAE4] transition-colors"
+                    className="px-3 py-2 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] whitespace-nowrap hover:bg-[#EDEAE4] transition-colors rounded-lg"
                   >
                     취소
                   </motion.button>
@@ -3780,7 +3780,7 @@ function ReviewPageContent() {
                       }
                     }}
                     disabled={reviewSelectedIds.size === 0}
-                    className={`px-2.5 py-1.5 text-[11px] font-bold whitespace-nowrap transition-colors ${
+                    className={`px-3 py-2 text-xs font-bold whitespace-nowrap transition-colors rounded-lg ${
                       reviewSelectedIds.size > 0
                         ? 'bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A]'
                         : 'bg-[#D4CFC4] text-[#EDEAE4] cursor-not-allowed'
@@ -3801,7 +3801,7 @@ function ReviewPageContent() {
                     onClick={() => {
                       setIsReviewSelectMode(true);
                     }}
-                    className="px-2.5 py-1.5 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8] whitespace-nowrap hover:bg-[#3A3A3A] transition-colors flex items-center gap-1 overflow-visible"
+                    className="px-3 py-2 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] whitespace-nowrap hover:bg-[#3A3A3A] transition-colors flex items-center gap-1 overflow-visible rounded-lg"
                   >
                     선택 복습
                   </motion.button>
@@ -3944,13 +3944,13 @@ function ReviewPageContent() {
                     {/* 태그 검색 버튼 */}
                     <button
                       onClick={() => setShowLibraryTagFilter(!showLibraryTagFilter)}
-                      className={`flex items-center justify-center w-9 h-9 border transition-colors shrink-0 ${
+                      className={`flex items-center justify-center w-9 h-9 border transition-colors shrink-0 rounded-lg ${
                         showLibraryTagFilter
                           ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
                           : 'bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A]'
                       }`}
                     >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                       </svg>
                     </button>
@@ -4109,13 +4109,13 @@ function ReviewPageContent() {
                     {/* 태그 검색 버튼 */}
                     <button
                       onClick={() => setShowBookmarkTagFilter(!showBookmarkTagFilter)}
-                      className={`flex items-center justify-center w-9 h-9 border transition-colors shrink-0 ${
+                      className={`flex items-center justify-center w-9 h-9 border transition-colors shrink-0 rounded-lg ${
                         showBookmarkTagFilter
                           ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
                           : 'bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A]'
                       }`}
                     >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                       </svg>
                     </button>
@@ -5702,7 +5702,7 @@ function ReviewPageContent() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="relative bg-[#F5F0E8] border-2 border-[#1A1A1A] w-full max-w-sm max-h-[80vh] overflow-y-auto"
+              className="relative bg-[#F5F0E8] border-2 border-[#1A1A1A] w-full max-w-sm max-h-[80vh] overflow-y-auto rounded-2xl"
             >
               {/* 헤더 */}
               <div className="flex items-center justify-between p-3 border-b-2 border-[#1A1A1A]">
@@ -5736,7 +5736,7 @@ function ReviewPageContent() {
                         value={newCategoryName}
                         onChange={(e) => setNewCategoryName(e.target.value)}
                         placeholder="카테고리 이름 입력"
-                        className="flex-1 px-2.5 py-1.5 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-xs focus:outline-none"
+                        className="flex-1 px-2.5 py-1.5 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-xs focus:outline-none rounded-lg"
                         maxLength={20}
                         autoComplete="off"
                         autoCorrect="off"
@@ -5751,7 +5751,7 @@ function ReviewPageContent() {
                       <button
                         onClick={handleAddFolderCategory}
                         disabled={!newCategoryName.trim()}
-                        className="px-3 py-1.5 bg-[#1A1A1A] text-[#F5F0E8] font-bold text-xs disabled:opacity-30"
+                        className="px-3 py-1.5 bg-[#1A1A1A] text-[#F5F0E8] font-bold text-xs disabled:opacity-30 rounded-lg"
                       >
                         추가
                       </button>
@@ -5778,7 +5778,7 @@ function ReviewPageContent() {
                         return (
                           <div
                             key={cat.id}
-                            className="flex items-center justify-between p-2.5 border-2 border-[#1A1A1A] bg-[#EDEAE4]"
+                            className="flex items-center justify-between p-2.5 border-2 border-[#1A1A1A] bg-[#EDEAE4] rounded-lg"
                           >
                             <div className="flex items-center gap-1.5">
                               <span className="font-bold text-xs text-[#1A1A1A]">{cat.name}</span>
@@ -5786,7 +5786,7 @@ function ReviewPageContent() {
                             </div>
                             <button
                               onClick={() => handleRemoveFolderCategory(cat.id)}
-                              className="px-1.5 py-0.5 text-[11px] font-bold text-[#8B1A1A] border border-[#8B1A1A] hover:bg-[#FDEAEA] transition-colors"
+                              className="px-1.5 py-0.5 text-[11px] font-bold text-[#8B1A1A] border border-[#8B1A1A] hover:bg-[#FDEAEA] transition-colors rounded-md"
                             >
                               삭제
                             </button>
@@ -5805,7 +5805,7 @@ function ReviewPageContent() {
                         setIsSortMode(false);
                         setIsAssignMode(true);
                       }}
-                      className="w-full py-2.5 font-bold text-xs bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#3A3A3A] transition-colors"
+                      className="w-full py-2.5 font-bold text-xs bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#3A3A3A] transition-colors rounded-lg"
                     >
                       폴더 배정하기
                     </button>
@@ -5984,11 +5984,11 @@ function ReviewPageContent() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-xs bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
+              className="w-[85%] max-w-[280px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 rounded-2xl"
             >
               {/* 아이콘 */}
               <div className="flex justify-center mb-3">
-                <div className="w-10 h-10 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
+                <div className="w-10 h-10 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4] rounded-lg">
                   <svg className="w-5 h-5 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.6 9h16.8M3.6 15h16.8" />
@@ -6012,7 +6012,7 @@ function ReviewPageContent() {
               <div className="flex gap-3">
                 <button
                   onClick={() => setPublishConfirmQuizId(null)}
-                  className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+                  className="flex-1 py-2.5 text-sm font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors rounded-lg"
                 >
                   취소
                 </button>
@@ -6021,7 +6021,7 @@ function ReviewPageContent() {
                     uploadToPublic(publishConfirmQuizId);
                     setPublishConfirmQuizId(null);
                   }}
-                  className="flex-1 py-2 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
+                  className="flex-1 py-2.5 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors rounded-lg"
                 >
                   공개
                 </button>
@@ -6036,7 +6036,7 @@ function ReviewPageContent() {
         isOpen={!!selectedLibraryQuiz}
         onClose={() => { setSelectedLibraryQuiz(null); clearLibraryRect(); }}
         sourceRect={librarySourceRect}
-        className="w-full max-w-[300px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
+        className="w-full max-w-[300px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 rounded-2xl"
         zIndex={60}
       >
         {selectedLibraryQuiz && (
@@ -6102,7 +6102,7 @@ function ReviewPageContent() {
             <div className="flex gap-2">
               <button
                 onClick={() => { setSelectedLibraryQuiz(null); clearLibraryRect(); }}
-                className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+                className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors rounded-lg"
               >
                 닫기
               </button>
@@ -6113,7 +6113,7 @@ function ReviewPageContent() {
                   clearLibraryRect();
                   router.push(`/review/library/${quiz.id}?mode=review`);
                 }}
-                className="flex-1 py-2 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
+                className="flex-1 py-2 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors rounded-lg"
               >
                 복습하기
               </button>

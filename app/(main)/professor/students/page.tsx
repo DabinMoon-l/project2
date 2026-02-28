@@ -13,7 +13,7 @@ import { useCourse } from '@/lib/contexts';
 import { ScrollToTopButton } from '@/components/common';
 import { mean, sd, zScore } from '@/lib/utils/statistics';
 
-import StudentListView, { type SortKey } from '@/components/professor/students/StudentListView';
+import StudentListView from '@/components/professor/students/StudentListView';
 import StudentDetailModal from '@/components/professor/students/StudentDetailModal';
 import StudentEnrollment from '@/components/professor/StudentEnrollment';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
@@ -55,7 +55,6 @@ export default function StudentMonitoringPage() {
   const { userCourseId, setProfessorCourse } = useCourse();
 
   const [selectedClass, setSelectedClass] = useState<ClassType | 'all'>('all');
-  const [sortBy, setSortBy] = useState<SortKey>('studentId');
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
@@ -188,29 +187,10 @@ export default function StudentMonitoringPage() {
       </header>
 
       <div className="px-4 mt-2">
-        {/* 반 필터 (퀴즈탭 토글 스타일) + 검색 — 같은 줄 */}
+        {/* 반 필터 (언더라인 탭) + 검색 — 같은 줄 */}
         <div className="flex items-center justify-between">
-          {/* 세그먼트 토글 */}
-          <div className="relative flex w-[252px] bg-[#EDEAE4] border border-[#1A1A1A] overflow-hidden flex-shrink-0">
-            <motion.div
-              className="absolute inset-y-0 bg-[#1A1A1A]"
-              initial={false}
-              animate={{ left: `${CLASS_OPTIONS.indexOf(selectedClass) * (100 / CLASS_OPTIONS.length)}%` }}
-              style={{ width: `${100 / CLASS_OPTIONS.length}%` }}
-              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            />
-            {CLASS_OPTIONS.map(cls => (
-              <button
-                key={cls}
-                onClick={() => setSelectedClass(cls)}
-                className={`relative z-10 w-1/5 py-3 text-sm font-bold transition-colors text-center whitespace-nowrap ${
-                  selectedClass === cls ? 'text-[#F5F0E8]' : 'text-[#1A1A1A]'
-                }`}
-              >
-                {cls === 'all' ? 'ALL' : cls}
-              </button>
-            ))}
-          </div>
+          {/* 언더라인 탭 */}
+          <ClassFilterTabs selectedClass={selectedClass} onClassChange={setSelectedClass} />
 
           {/* 검색 */}
           <div className="relative w-[145px]">
@@ -219,7 +199,7 @@ export default function StudentMonitoringPage() {
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="이름·학번·닉네임"
-              className="w-full pl-6 pr-3 py-3 bg-[#EDEAE4] border border-[#1A1A1A] text-sm text-center text-[#1A1A1A] placeholder-[#5C5C5C] outline-none"
+              className="w-full pl-6 pr-3 py-3 bg-[#EDEAE4] border border-[#1A1A1A] rounded-lg text-sm text-center text-[#1A1A1A] placeholder-[#5C5C5C] outline-none"
             />
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5C5C5C]"
               fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -265,8 +245,6 @@ export default function StudentMonitoringPage() {
             {/* 학생 목록 */}
             <StudentListView
               students={filteredStudents}
-              sortBy={sortBy}
-              onSortChange={setSortBy}
               onStudentClick={handleStudentClick}
               warningMap={warningMap}
             />
@@ -276,7 +254,7 @@ export default function StudentMonitoringPage() {
             {/* 학생 등록 버튼 (목록 하단) */}
             <button
               onClick={() => setShowEnrollment(true)}
-              className="w-full py-3 border-2 border-dashed border-[#D4CFC4] text-sm font-bold text-[#5C5C5C]
+              className="w-full py-2 border border-dashed border-[#D4CFC4] text-xs font-bold text-[#5C5C5C]
                 hover:border-[#1A1A1A] hover:text-[#1A1A1A] transition-colors"
             >
               + 학생 등록
@@ -438,6 +416,66 @@ function StudentsRibbonHeader({
 }
 
 // ============================================================
+// 반 필터 언더라인 탭
+// ============================================================
+
+const CLASS_FILTER_OPTIONS: { key: ClassType | 'all'; label: string }[] = [
+  { key: 'all', label: 'ALL' },
+  { key: 'A', label: 'A' },
+  { key: 'B', label: 'B' },
+  { key: 'C', label: 'C' },
+  { key: 'D', label: 'D' },
+];
+
+function ClassFilterTabs({
+  selectedClass,
+  onClassChange,
+}: {
+  selectedClass: ClassType | 'all';
+  onClassChange: (cls: ClassType | 'all') => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const btnRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [underline, setUnderline] = useState({ left: 0, width: 0 });
+  const activeIdx = CLASS_FILTER_OPTIONS.findIndex(o => o.key === selectedClass);
+
+  const measureUnderline = useCallback(() => {
+    if (activeIdx < 0 || !containerRef.current || !btnRefs.current[activeIdx]) return;
+    const container = containerRef.current.getBoundingClientRect();
+    const btn = btnRefs.current[activeIdx]!.getBoundingClientRect();
+    setUnderline({ left: btn.left - container.left, width: btn.width });
+  }, [activeIdx]);
+
+  useEffect(() => {
+    measureUnderline();
+  }, [measureUnderline]);
+
+  return (
+    <div ref={containerRef} className="relative flex gap-4">
+      {CLASS_FILTER_OPTIONS.map((opt, i) => (
+        <button
+          key={opt.key}
+          ref={el => { btnRefs.current[i] = el; }}
+          onClick={() => onClassChange(opt.key)}
+          className={`pb-1.5 text-xl font-bold transition-colors ${
+            selectedClass === opt.key ? 'text-[#1A1A1A]' : 'text-[#5C5C5C]'
+          }`}
+        >
+          {opt.label}
+        </button>
+      ))}
+      {activeIdx >= 0 && underline.width > 0 && (
+        <motion.div
+          className="absolute bottom-0 h-[2px] bg-[#1A1A1A]"
+          animate={{ left: underline.left, width: underline.width }}
+          transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ============================================================
 // 접속 도넛 차트 + 범례
 // ============================================================
 
@@ -454,10 +492,10 @@ function SessionDonut({ online, total, classFilter }: { online: number; total: n
   const animKey = `donut-${classFilter}`;
 
   return (
-    <div className="flex items-center justify-center gap-14 py-2">
+    <div className="flex items-center justify-center gap-6 py-2">
       {/* 도넛 차트 */}
-      <div className="flex-shrink-0 w-[225px] h-[225px]">
-        <svg width="225" height="225" viewBox="0 0 100 100">
+      <div className="flex-shrink-0 w-[160px] h-[160px]">
+        <svg width="160" height="160" viewBox="0 0 100 100">
           {/* 오프라인 링 */}
           <circle
             cx="50" cy="50" r={R} fill="none"
@@ -477,37 +515,37 @@ function SessionDonut({ online, total, classFilter }: { online: number; total: n
             />
           )}
           {/* 중앙 퍼센트 */}
-          <text x="50" y="50" textAnchor="middle" dominantBaseline="central" className="font-bold text-[20px] fill-[#1A1A1A]">
+          <text x="50" y="50" textAnchor="middle" dominantBaseline="central" className="font-bold text-[16px] fill-[#1A1A1A]">
             {onlinePct}%
           </text>
         </svg>
       </div>
 
       {/* 범례 */}
-      <div className="w-[195px] space-y-3">
+      <div className="w-[160px] space-y-2.5">
         {/* 전체 */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-5 h-5 rounded-full flex-shrink-0 border-2 border-[#1A1A1A] bg-[#1A1A1A]/50" />
-            <span className="text-xl font-bold text-[#1A1A1A]">전체</span>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded-full flex-shrink-0 border-2 border-[#1A1A1A] bg-[#1A1A1A]/50" />
+            <span className="text-base font-bold text-[#1A1A1A]">전체</span>
           </div>
-          <span className="text-3xl font-bold text-[#1A1A1A]">{total}<span className="text-lg text-[#5C5C5C] font-normal ml-0.5">명</span></span>
+          <span className="text-2xl font-bold text-[#1A1A1A]">{total}<span className="text-sm text-[#5C5C5C] font-normal ml-0.5">명</span></span>
         </div>
         {/* 접속 중 */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-5 h-5 rounded-full bg-[#1A1A1A] flex-shrink-0" />
-            <span className="text-xl font-bold text-[#1A1A1A]">접속 중</span>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded-full bg-[#1A1A1A] flex-shrink-0" />
+            <span className="text-base font-bold text-[#1A1A1A]">접속 중</span>
           </div>
-          <span className="text-3xl font-bold text-[#1A1A1A]">{online}<span className="text-lg text-[#5C5C5C] font-normal ml-0.5">명</span></span>
+          <span className="text-2xl font-bold text-[#1A1A1A]">{online}<span className="text-sm text-[#5C5C5C] font-normal ml-0.5">명</span></span>
         </div>
         {/* 오프라인 */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-5 h-5 rounded-full border-2 border-[#1A1A1A] bg-[#F5F0E8] flex-shrink-0" />
-            <span className="text-xl font-bold text-[#1A1A1A]">오프라인</span>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded-full border-2 border-[#1A1A1A] bg-[#F5F0E8] flex-shrink-0" />
+            <span className="text-base font-bold text-[#1A1A1A]">오프라인</span>
           </div>
-          <span className="text-3xl font-bold text-[#1A1A1A]">{offline}<span className="text-lg text-[#5C5C5C] font-normal ml-0.5">명</span></span>
+          <span className="text-2xl font-bold text-[#1A1A1A]">{offline}<span className="text-sm text-[#5C5C5C] font-normal ml-0.5">명</span></span>
         </div>
       </div>
     </div>

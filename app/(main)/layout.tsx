@@ -6,7 +6,6 @@ import { ThemeProvider } from '@/styles/themes/ThemeProvider';
 import { useRequireAuth } from '@/lib/hooks/useAuth';
 import Navigation from '@/components/common/Navigation';
 import { NotificationProvider, ExpToastProvider, SwipeBack } from '@/components/common';
-import TabSwipeNav from '@/components/common/TabSwipeNav';
 import { AIQuizContainer } from '@/components/ai-quiz';
 import { UserProvider, useUser, CourseProvider, useCourse, MilestoneProvider, HomeOverlayProvider } from '@/lib/contexts';
 import { HomeOverlay, ProfessorHomeOverlay } from '@/components/home';
@@ -15,10 +14,6 @@ import type { ClassType } from '@/styles/themes';
 import LibraryJobToast from '@/components/professor/library/LibraryJobToast';
 import { useViewportScale, useWideMode } from '@/lib/hooks/useViewportScale';
 import { useScrollDismissKeyboard } from '@/lib/hooks/useKeyboardAware';
-
-// 탭 스와이프 경로 배열
-const STUDENT_TABS = ['/', '/quiz', '/review', '/board'];
-const PROFESSOR_TABS = ['/professor', '/professor/stats', '/professor/quiz', '/professor/students', '/board'];
 
 /**
  * 내부 레이아웃 컴포넌트
@@ -114,10 +109,6 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
             <HomeOverlayProvider>
               <LibraryJobToast />
               <SwipeBack enabled={!isWide && !isTabRoot}>
-                <TabSwipeNav
-                  tabs={isProfessor ? PROFESSOR_TABS : STUDENT_TABS}
-                  enabled={!isWide && isTabRoot}
-                >
                   <div
                     data-main-content
                     className="min-h-screen"
@@ -142,7 +133,6 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                       <Navigation role={isProfessor ? 'professor' : 'student'} />
                     )}
                   </div>
-                </TabSwipeNav>
               </SwipeBack>
               {!isProfessor ? <HomeOverlay /> : <ProfessorHomeOverlay />}
             </HomeOverlayProvider>

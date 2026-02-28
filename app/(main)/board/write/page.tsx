@@ -329,7 +329,7 @@ export default function WritePage() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="fixed top-12 inset-x-0 z-50 mx-auto w-fit px-5 py-2.5 bg-[#1A1A1A] text-[#F5F0E8] text-sm font-bold shadow-lg"
+            className="fixed top-12 inset-x-0 z-50 mx-auto w-fit px-5 py-2.5 bg-[#1A1A1A] text-[#F5F0E8] text-sm font-bold shadow-lg rounded-lg"
           >
             임시저장된 글을 불러왔습니다
           </motion.div>

@@ -1514,17 +1514,17 @@ export default function QuizCreatePage() {
       </header>
 
       {/* 진행률 바 */}
-      <div className="sticky top-[41px] z-10 border-b border-[#1A1A1A]" style={{ backgroundColor: '#F5F0E8' }}>
+      <div className="sticky z-10 border-b border-[#1A1A1A]" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 42px)', backgroundColor: '#F5F0E8' }}>
         <div className="px-3 py-2">
           {/* 단계 표시 */}
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs font-bold text-[#1A1A1A]">
+            <span className="text-sm font-bold text-[#1A1A1A]">
               {step === 'upload' && '1. 업로드'}
               {step === 'questions' && '2. 문제 편집'}
               {step === 'meta' && '3. 퀴즈 정보'}
               {step === 'confirm' && '4. 확인'}
             </span>
-            <span className="text-xs text-[#5C5C5C]">{getProgress()}%</span>
+            <span className="text-sm text-[#5C5C5C]">{getProgress()}%</span>
           </div>
 
           {/* 진행률 바 */}
@@ -1553,11 +1553,7 @@ export default function QuizCreatePage() {
               className="space-y-4"
             >
               {/* 모드 설명 */}
-              <div className="bg-[#EDEAE4] p-2.5 border border-[#1A1A1A]">
-                <p className="text-[11px] text-[#5C5C5C]">
-                  <strong className="text-[#1A1A1A]">문제지 스캔:</strong> 기존 문제지 이미지/PDF에서 문제를 추출합니다.
-                </p>
-              </div>
+              <p className="text-base font-bold text-[#1A1A1A]">문제지 스캔</p>
 
               {/* 이미지 업로더 - 파일 선택 시 바로 OCR 시작 (PDF는 페이지 선택 모달) */}
               <ImageUploader
@@ -1602,7 +1598,7 @@ export default function QuizCreatePage() {
 
               {/* 이전에 추출한 이미지가 있으면 표시 */}
               {extractedImages.length > 0 && (
-                <div className="bg-[#E8F5E9] p-3 border border-[#1A6B1A]">
+                <div className="bg-[#E8F5E9] p-3 border border-[#1A6B1A] rounded-lg">
                   <p className="text-xs text-[#1A6B1A] font-bold">
                     추출된 이미지 {extractedImages.length}개가 있습니다.
                   </p>
@@ -1610,15 +1606,6 @@ export default function QuizCreatePage() {
               )}
 
               {/* 직접 입력 버튼 */}
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-[#1A1A1A]" />
-                </div>
-                <div className="relative flex justify-center">
-                  <span className="px-3 text-xs text-[#5C5C5C]" style={{ backgroundColor: '#F5F0E8' }}>또는</span>
-                </div>
-              </div>
-
               <button
                 type="button"
                 onClick={() => {
@@ -1626,7 +1613,7 @@ export default function QuizCreatePage() {
                   setIsAddingNew(true);
                 }}
                 disabled={isOCRProcessing}
-                className="w-full py-2.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-2.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors disabled:opacity-50 disabled:cursor-not-allowed rounded-lg"
               >
                 직접 문제 입력하기
               </button>
@@ -1643,15 +1630,6 @@ export default function QuizCreatePage() {
               exit="exit"
               className="space-y-4"
             >
-              <div>
-                <h2 className="text-base font-bold text-[#1A1A1A] mb-1">
-                  문제 편집
-                </h2>
-                <p className="text-xs text-[#5C5C5C]">
-                  문제를 추가하거나 수정하세요. 최소 3문제 이상 필요합니다.
-                </p>
-              </div>
-
               {/* 문제 편집기 (편집 또는 새 문제 추가 중일 때) */}
               <AnimatePresence>
                 {(editingIndex !== null || isAddingNew) && (
@@ -1690,7 +1668,7 @@ export default function QuizCreatePage() {
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={handleStartAddQuestion}
-                    className="w-full py-2.5 px-4 flex items-center justify-center gap-2 border-2 border-dashed border-[#1A1A1A] text-[#1A1A1A] text-xs font-bold hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+                    className="w-full py-2.5 px-4 flex items-center justify-center gap-2 border-2 border-dashed border-[#1A1A1A] text-[#1A1A1A] text-xs font-bold hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors rounded-lg"
                   >
                     <svg
                       className="w-4 h-4"
@@ -1722,15 +1700,6 @@ export default function QuizCreatePage() {
               exit="exit"
               className="space-y-4"
             >
-              <div>
-                <h2 className="text-base font-bold text-[#1A1A1A] mb-1">
-                  퀴즈 정보
-                </h2>
-                <p className="text-xs text-[#5C5C5C]">
-                  퀴즈 제목과 태그를 입력해주세요.
-                </p>
-              </div>
-
               <QuizMetaForm
                 meta={quizMeta}
                 onChange={setQuizMeta}
@@ -1750,17 +1719,8 @@ export default function QuizCreatePage() {
               exit="exit"
               className="space-y-4"
             >
-              <div>
-                <h2 className="text-base font-bold text-[#1A1A1A] mb-1">
-                  퀴즈 확인
-                </h2>
-                <p className="text-xs text-[#5C5C5C]">
-                  내용을 확인하고 퀴즈를 저장하세요.
-                </p>
-              </div>
-
               {/* 퀴즈 요약 카드 */}
-              <div className="p-4 border border-[#1A1A1A] space-y-3" style={{ backgroundColor: '#F5F0E8' }}>
+              <div className="p-4 border border-[#1A1A1A] space-y-3 rounded-xl" style={{ backgroundColor: '#F5F0E8' }}>
                 {/* 제목 */}
                 <div>
                   <span className="text-[10px] text-[#5C5C5C]">퀴즈 제목</span>
@@ -1806,7 +1766,7 @@ export default function QuizCreatePage() {
               </div>
 
               {/* 문제 미리보기 */}
-              <div className="p-3 border border-[#1A1A1A]" style={{ backgroundColor: '#F5F0E8' }}>
+              <div className="p-3 border border-[#1A1A1A] rounded-xl" style={{ backgroundColor: '#F5F0E8' }}>
                 <h3 className="text-xs font-bold text-[#1A1A1A] mb-2">문제 미리보기</h3>
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {questions.map((q, index) => (
@@ -1883,23 +1843,21 @@ export default function QuizCreatePage() {
         </AnimatePresence>
       </main>
 
-      {/* 하단 버튼 - 고정 */}
-      <div className="sticky bottom-0 border-t-2 border-[#1A1A1A] px-3 py-3" style={{ backgroundColor: '#F5F0E8' }}>
+      {/* 하단 버튼 - 고정 (업로드 단계에서는 숨김) */}
+      {step !== 'upload' && <div className="sticky bottom-0 border-t-2 border-[#1A1A1A] px-3 py-3" style={{ backgroundColor: '#F5F0E8' }}>
         <div className="max-w-lg mx-auto flex gap-2">
           {/* 이전 버튼 */}
-          {step !== 'upload' && (
-            <button
-              type="button"
-              onClick={handlePrevStep}
-              disabled={isSaving}
-              className="px-4 py-2 text-xs border-2 border-[#1A1A1A] text-[#1A1A1A] font-bold hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              이전
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={handlePrevStep}
+            disabled={isSaving}
+            className="px-4 py-3 text-sm border-2 border-[#1A1A1A] text-[#1A1A1A] font-bold hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors disabled:opacity-50 disabled:cursor-not-allowed rounded-lg"
+          >
+            이전
+          </button>
 
-          {/* 다음/저장 버튼 - upload 단계에서는 숨김 (직접 입력하기 버튼 사용) */}
-          {step === 'upload' ? null : step !== 'confirm' ? (
+          {/* 다음/저장 버튼 */}
+          {step !== 'confirm' ? (
             <button
               type="button"
               onClick={handleNextStep}
@@ -1909,7 +1867,7 @@ export default function QuizCreatePage() {
                 editingIndex !== null ||
                 isAddingNew
               }
-              className="flex-1 py-2 text-xs bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 py-3 text-sm bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors disabled:opacity-50 disabled:cursor-not-allowed rounded-lg"
             >
               다음
             </button>
@@ -1918,7 +1876,7 @@ export default function QuizCreatePage() {
               type="button"
               onClick={handleSaveQuiz}
               disabled={isSaving}
-              className="flex-1 py-2 text-xs bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="flex-1 py-3 text-sm bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 rounded-lg"
             >
               {isSaving && (
                 <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
@@ -1930,7 +1888,7 @@ export default function QuizCreatePage() {
             </button>
           )}
         </div>
-      </div>
+      </div>}
 
       {/* 나가기 확인 모달 */}
       <AnimatePresence>
@@ -1955,7 +1913,7 @@ export default function QuizCreatePage() {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="relative bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 max-w-[280px] w-full"
+              className="relative bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 max-w-[280px] w-full rounded-xl"
             >
               <div className="text-center">
                 {/* 아이콘 */}
@@ -1983,7 +1941,7 @@ export default function QuizCreatePage() {
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={handleSaveAndExit}
-                    className="w-full py-1.5 px-3 text-xs bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
+                    className="w-full py-1.5 px-3 text-xs bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors rounded-lg"
                   >
                     저장하고 나가기
                   </motion.button>
@@ -1992,7 +1950,7 @@ export default function QuizCreatePage() {
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={handleExitWithoutSave}
-                    className="w-full py-1.5 px-3 text-xs bg-[#EDEAE4] text-[#8B1A1A] font-bold border-2 border-[#8B1A1A] hover:bg-[#FDEAEA] transition-colors"
+                    className="w-full py-1.5 px-3 text-xs bg-[#EDEAE4] text-[#8B1A1A] font-bold border-2 border-[#8B1A1A] hover:bg-[#FDEAEA] transition-colors rounded-lg"
                   >
                     저장하지 않고 나가기
                   </motion.button>
@@ -2001,7 +1959,7 @@ export default function QuizCreatePage() {
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => setShowExitModal(false)}
-                    className="w-full py-1.5 px-3 text-xs bg-[#EDEAE4] text-[#1A1A1A] font-bold border-2 border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+                    className="w-full py-1.5 px-3 text-xs bg-[#EDEAE4] text-[#1A1A1A] font-bold border-2 border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors rounded-lg"
                   >
                     계속 작성하기
                   </motion.button>
@@ -2034,7 +1992,7 @@ export default function QuizCreatePage() {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="relative bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 max-w-[280px] w-full"
+              className="relative bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 max-w-[280px] w-full rounded-xl"
             >
               <div className="text-center">
                 {/* 아이콘 */}
@@ -2075,7 +2033,7 @@ export default function QuizCreatePage() {
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={handleStartFresh}
-                    className="flex-1 py-1.5 px-3 text-xs bg-[#EDEAE4] text-[#1A1A1A] font-bold border-2 border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+                    className="flex-1 py-1.5 px-3 text-xs bg-[#EDEAE4] text-[#1A1A1A] font-bold border-2 border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors rounded-lg"
                   >
                     처음부터
                   </motion.button>
@@ -2084,7 +2042,7 @@ export default function QuizCreatePage() {
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={handleResumeDraft}
-                    className="flex-1 py-1.5 px-3 text-xs bg-[#1A6B1A] text-[#F5F0E8] font-bold border-2 border-[#1A6B1A] hover:bg-[#145214] transition-colors"
+                    className="flex-1 py-1.5 px-3 text-xs bg-[#1A6B1A] text-[#F5F0E8] font-bold border-2 border-[#1A6B1A] hover:bg-[#145214] transition-colors rounded-lg"
                   >
                     이어서 작성
                   </motion.button>

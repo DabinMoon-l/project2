@@ -113,6 +113,7 @@ export default function QuizMetaForm({
 }: QuizMetaFormProps) {
   // 태그 입력 상태
   const [tagInput, setTagInput] = useState('');
+  const [showTagPicker, setShowTagPicker] = useState(false);
 
   // 챕터 태그 목록 (과목별)
   const chapterTags = useMemo(() => getChapterTags(courseId), [courseId]);
@@ -189,7 +190,7 @@ export default function QuizMetaForm({
     <div className={`space-y-6 ${className}`}>
       {/* 퀴즈 제목 */}
       <div>
-        <label className="block text-xs font-bold text-[#1A1A1A] mb-1.5">
+        <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
           퀴즈 제목 ({meta.title.length}/{TITLE_MAX_LENGTH})
         </label>
         <input
@@ -199,7 +200,7 @@ export default function QuizMetaForm({
           placeholder="예: 1주차 복습 퀴즈"
           maxLength={TITLE_MAX_LENGTH}
           className={`
-            w-full px-2 py-1.5 text-xs
+            w-full px-3 py-2.5 text-sm
             bg-[#F5F0E8] border-2
             outline-none transition-colors duration-200
             placeholder:text-[#999]
@@ -207,153 +208,118 @@ export default function QuizMetaForm({
           `}
         />
         {errors.title && (
-          <p className="mt-1 text-xs text-[#8B1A1A]">{errors.title}</p>
+          <p className="mt-1 text-sm text-[#8B1A1A]">{errors.title}</p>
         )}
       </div>
 
       {/* 태그 */}
       <div>
-        <label className="block text-xs font-bold text-[#1A1A1A] mb-1.5">
-          태그
-          <span className="ml-1 text-[#5C5C5C] font-normal">(최대 5개)</span>
-        </label>
-
-        {/* 태그 입력 영역 */}
-        <div
-          className={`
-            flex flex-wrap items-center gap-1.5
-            p-2 border-2 bg-[#F5F0E8]
-            transition-colors duration-200
-            ${
-              errors.tags
-                ? 'border-[#8B1A1A]'
-                : 'border-[#1A1A1A]'
-            }
-          `}
-        >
-          {/* 추가된 태그 */}
-          <AnimatePresence mode="popLayout">
-            {meta.tags.map((tag) => (
-              <motion.span
-                key={tag}
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.8, opacity: 0 }}
-                layout
-                className="
-                  inline-flex items-center gap-1
-                  px-2 py-0.5
-                  bg-[#1A1A1A] text-[#F5F0E8]
-                  text-xs font-bold
-                "
-              >
-                #{tag}
-                <button
-                  type="button"
-                  onClick={() => handleRemoveTag(tag)}
-                  className="ml-0.5 hover:text-[#EDEAE4]"
-                >
-                  <svg
-                    className="w-3.5 h-3.5"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </button>
-              </motion.span>
-            ))}
-          </AnimatePresence>
-
-          {/* 태그 입력 (10자 제한) */}
-          {meta.tags.length < 5 && (
-            <input
-              type="text"
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value.slice(0, CUSTOM_TAG_MAX_LENGTH))}
-              onKeyDown={handleTagKeyDown}
-              placeholder={meta.tags.length === 0 ? '태그 입력 (10자)' : ''}
-              maxLength={CUSTOM_TAG_MAX_LENGTH}
-              className="flex-1 min-w-[80px] py-0.5 px-1 outline-none text-xs bg-transparent"
-            />
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-sm font-bold text-[#1A1A1A]">
+            태그
+          </label>
+          {showTagPicker && (
+            <button
+              type="button"
+              onClick={() => setShowTagPicker(false)}
+              className="px-2.5 py-1 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] rounded-lg"
+            >
+              닫기
+            </button>
           )}
         </div>
+
+        {/* 선택된 태그 표시 */}
+        {meta.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            <AnimatePresence mode="popLayout">
+              {meta.tags.map((tag) => (
+                <motion.div
+                  key={tag}
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.8, opacity: 0 }}
+                  layout
+                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#1A1A1A] text-[#F5F0E8] text-sm font-bold rounded"
+                >
+                  #{tag}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveTag(tag)}
+                    className="ml-0.5 hover:text-[#D4CFC4]"
+                  >
+                    ✕
+                  </button>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
+
+        {/* 태그 선택 토글 버튼 */}
+        {!showTagPicker && (
+          <button
+            type="button"
+            onClick={() => setShowTagPicker(true)}
+            className="w-full py-2.5 text-sm font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#EDEAE4] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors rounded-lg"
+          >
+            태그 선택하기
+          </button>
+        )}
 
         {errors.tags && (
           <p className="mt-1 text-sm text-[#8B1A1A]">{errors.tags}</p>
         )}
 
-        {/* 시험 유형 태그 (필수) */}
-        <div className="mt-3">
-          <p className="text-xs text-[#5C5C5C] mb-2">
-            시험 유형
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {EXAM_TYPE_TAGS.map((tag) => {
-              const isSelected = meta.tags.includes(tag);
-              return (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => isSelected ? handleRemoveTag(tag) : handleAddTag(tag, true)}
-                  disabled={!isSelected && meta.tags.length >= 5}
-                  className={`
-                    px-2.5 py-1 text-xs font-bold border transition-colors
-                    ${isSelected
-                      ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                      : 'bg-[#EDEAE4] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
-                    }
-                    disabled:opacity-50 disabled:cursor-not-allowed
-                  `}
-                >
-                  {isSelected ? `✓ ${tag}` : `+ ${tag}`}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        {/* 태그 목록 (펼침) */}
+        <AnimatePresence>
+          {showTagPicker && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <div className="flex flex-wrap gap-2 p-3 bg-[#EDEAE4] border border-[#D4CFC4] rounded-lg">
+                {/* 시험 유형 */}
+                {EXAM_TYPE_TAGS
+                  .filter(tag => !meta.tags.includes(tag))
+                  .map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => handleAddTag(tag, true)}
+                      disabled={meta.tags.length >= 5}
+                      className="px-3 py-1.5 text-sm font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      #{tag}
+                    </button>
+                  ))}
 
-        {/* 챕터 태그 (필수) */}
-        {chapterTags.length > 0 && (
-          <div className="mt-3">
-            <p className="text-xs text-[#5C5C5C] mb-2">
-              챕터
-            </p>
-            <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
-              {chapterTags.map((tag) => {
-                const isSelected = meta.tags.includes(tag);
-                return (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => isSelected ? handleRemoveTag(tag) : handleAddTag(tag, true)}
-                    disabled={!isSelected && meta.tags.length >= 5}
-                    className={`
-                      px-2.5 py-1 text-xs font-bold border transition-colors
-                      ${isSelected
-                        ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                        : 'bg-[#EDEAE4] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
-                      }
-                      disabled:opacity-50 disabled:cursor-not-allowed
-                    `}
-                  >
-                    {isSelected ? `✓ ${tag}` : `+ ${tag}`}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
+                {/* 챕터 태그 */}
+                {chapterTags
+                  .filter(tag => !meta.tags.includes(tag))
+                  .map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => handleAddTag(tag, true)}
+                      disabled={meta.tags.length >= 5}
+                      className="px-3 py-1.5 text-sm font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      #{tag}
+                    </button>
+                  ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* 난이도 */}
       <div>
-        <label className="block text-xs font-bold text-[#1A1A1A] mb-1.5">
+        <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
           난이도
         </label>
         <div className="flex gap-2">
@@ -365,8 +331,8 @@ export default function QuizMetaForm({
               whileTap={{ scale: 0.98 }}
               onClick={() => handleDifficultyChange(option.value)}
               className={`
-                flex-1 py-1.5 px-3
-                font-bold text-xs
+                flex-1 py-2.5 px-4
+                font-bold text-sm
                 border-2 transition-all duration-200
                 ${
                   meta.difficulty === option.value

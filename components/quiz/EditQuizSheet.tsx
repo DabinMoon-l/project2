@@ -476,7 +476,7 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
   return (
     <>
       <div
-        className="fixed inset-0 z-50 flex items-end"
+        className="fixed inset-0 z-[65] flex items-end"
         style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}
         onClick={onClose}
       >
@@ -605,7 +605,7 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
                       type="button"
                       onClick={handleSave}
                       disabled={isSaving || questions.length < 3}
-                      className="w-full py-2.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      className="w-full py-2.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 rounded-lg"
                     >
                       {isSaving && (
                         <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">

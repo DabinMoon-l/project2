@@ -57,6 +57,7 @@ interface QuizCardData {
   createdAt?: any;
   attachmentUrl?: string;
   oneLineSummary?: string;
+  description?: string;
   multipleChoiceCount?: number;
   subjectiveCount?: number;
   oxCount?: number;
@@ -96,6 +97,63 @@ function getDefaultCarouselIndex(): number {
 
 
 // (AutoVideo, getDifficultyVideo, NEWSPAPER_BG_TEXT, formatQuestionTypes → 공유 모듈에서 import)
+
+// ============================================================
+// 학생 퀴즈/복습 탭 (밑줄 스타일 — 교수 자작/서재/커스텀과 동일)
+// ============================================================
+
+const STUDENT_SECTION_OPTIONS: { key: 'quiz' | 'review'; label: string }[] = [
+  { key: 'quiz', label: '퀴즈' },
+  { key: 'review', label: '복습' },
+];
+
+function StudentSectionTabs({
+  activeTab,
+  onChangeTab,
+}: {
+  activeTab: 'quiz' | 'review';
+  onChangeTab: (key: 'quiz' | 'review') => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const btnRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [underline, setUnderline] = useState({ left: 0, width: 0 });
+  const activeIdx = STUDENT_SECTION_OPTIONS.findIndex(o => o.key === activeTab);
+
+  const measureUnderline = useCallback(() => {
+    if (activeIdx < 0 || !containerRef.current || !btnRefs.current[activeIdx]) return;
+    const container = containerRef.current.getBoundingClientRect();
+    const btn = btnRefs.current[activeIdx]!.getBoundingClientRect();
+    setUnderline({ left: btn.left - container.left, width: btn.width });
+  }, [activeIdx]);
+
+  useEffect(() => {
+    measureUnderline();
+  }, [measureUnderline]);
+
+  return (
+    <div ref={containerRef} className="relative flex gap-4">
+      {STUDENT_SECTION_OPTIONS.map((opt, i) => (
+        <button
+          key={opt.key}
+          ref={el => { btnRefs.current[i] = el; }}
+          onClick={() => onChangeTab(opt.key)}
+          className={`pb-1.5 text-base font-bold transition-colors ${
+            activeTab === opt.key ? 'text-[#1A1A1A]' : 'text-[#5C5C5C]'
+          }`}
+        >
+          {opt.label}
+        </button>
+      ))}
+      {activeIdx >= 0 && underline.width > 0 && (
+        <motion.div
+          className="absolute bottom-0 h-[2px] bg-[#1A1A1A]"
+          animate={{ left: underline.left, width: underline.width }}
+          transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+        />
+      )}
+    </div>
+  );
+}
 
 // ============================================================
 // 완료 뱃지 컴포넌트
@@ -182,30 +240,22 @@ const NewsArticle = memo(function NewsArticle({
       </div>
 
       {/* 하단 정보 — 고정 높이, 절대 줄어들지 않음 */}
-      <div className="flex-shrink-0">
+      <div className="flex-shrink-0 bg-[#F5F0E8]">
         <div className="px-3 mt-1.5">
-          <h3 className="text-xl font-black text-[#1A1A1A] overflow-hidden whitespace-nowrap leading-tight" style={{ textOverflow: '".."' }}>
+          <h3 className="text-3xl font-black text-[#1A1A1A] overflow-hidden whitespace-nowrap leading-tight" style={{ textOverflow: '".."' }}>
             {quiz.title}
           </h3>
         </div>
         <div className="px-3 mt-0.5">
-          <p className="text-xs text-[#1A1A1A]">
+          <p className="text-sm text-[#1A1A1A]">
             {quiz.questionCount}문제 · {formatQuestionTypes(quiz.oxCount, quiz.multipleChoiceCount, quiz.subjectiveCount)}
           </p>
-          {/* 태그 — 없어도 공간 유지 */}
-          <div className="flex flex-wrap gap-1 mt-0.5 min-h-[20px]">
-            {quiz.tags && quiz.tags.length > 0 && quiz.tags.slice(0, 4).map((tag) => (
-              <span key={tag} className="text-[10px] px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] font-medium">
-                #{tag}
-              </span>
-            ))}
-          </div>
         </div>
         <div className="px-3 pb-3 pt-1.5 flex gap-2">
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onDetails?.(); }}
-            className="flex-1 py-1.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+            className="flex-1 py-3 text-base font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors rounded-lg"
           >
             Details
           </button>
@@ -217,7 +267,7 @@ const NewsArticle = memo(function NewsArticle({
                   e.stopPropagation();
                   setShowReviewMenu(!showReviewMenu);
                 }}
-                className="w-full py-1.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors flex items-center justify-center gap-1"
+                className="w-full py-3 text-base font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors flex items-center justify-center gap-1 rounded-lg"
               >
                 Review
                 <svg className={`w-3 h-3 transition-transform ${showReviewMenu ? 'rotate-180' : ''}`} fill="currentColor" viewBox="0 0 20 20">
@@ -230,7 +280,7 @@ const NewsArticle = memo(function NewsArticle({
                     initial={{ opacity: 0, y: -5 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -5 }}
-                    className="absolute bottom-full left-0 right-0 mb-1 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg z-50"
+                    className="absolute bottom-full left-0 right-0 mb-1 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg z-50 rounded-lg overflow-hidden"
                   >
                     <button
                       type="button"
@@ -239,7 +289,7 @@ const NewsArticle = memo(function NewsArticle({
                         setShowReviewMenu(false);
                         onReview?.();
                       }}
-                      className="w-full px-2 py-1.5 text-xs font-bold text-[#1A1A1A] hover:bg-[#EDEAE4] text-left border-b border-[#EDEAE4]"
+                      className="w-full px-3 py-2 text-sm font-bold text-[#1A1A1A] hover:bg-[#EDEAE4] text-left border-b border-[#EDEAE4]"
                     >
                       모두
                     </button>
@@ -250,7 +300,7 @@ const NewsArticle = memo(function NewsArticle({
                         setShowReviewMenu(false);
                         onReviewWrongOnly?.();
                       }}
-                      className="w-full px-2 py-1.5 text-xs font-bold text-[#8B1A1A] hover:bg-[#FDEAEA] text-left"
+                      className="w-full px-3 py-2 text-sm font-bold text-[#8B1A1A] hover:bg-[#FDEAEA] text-left"
                     >
                       오답만
                     </button>
@@ -262,7 +312,7 @@ const NewsArticle = memo(function NewsArticle({
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onStart(); }}
-              className="flex-1 py-1.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors"
+              className="flex-1 py-3 text-base font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors rounded-lg"
             >
               Start
             </button>
@@ -333,21 +383,21 @@ const NewsCard = memo(function NewsCard({
   }, [type]);
 
   return (
-    <div className="w-full h-full border border-[#999] bg-[#1A1A1A] flex flex-col overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.3)]">
+    <div className="w-full h-full border border-[#999] bg-[#1A1A1A] flex flex-col overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.3)] rounded-xl">
       {/* 축소된 헤더 */}
       <div className="bg-[#1A1A1A] text-[#F5F0E8] px-4 py-1.5 text-center flex-shrink-0">
-        <h1 className="font-serif text-base font-black tracking-tight">{title}</h1>
-        <p className="text-[8px] tracking-widest">{subtitle}</p>
+        <h1 className="font-serif text-lg font-black tracking-tight">{title}</h1>
+        <p className="text-[9px] tracking-widest">{subtitle}</p>
       </div>
 
-      {/* 퀴즈 목록 — 자유 스크롤, 각 아이템 px 높이로 고정 */}
-      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain bg-[#F5F0E8]" data-scroll-inner>
+      {/* 퀴즈 목록 — 자유 스크롤. bg 검정 → 헤더-비디오 사이 틈 안 보임 */}
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain bg-[#1A1A1A]" data-scroll-inner>
         {isLoading ? (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex items-center justify-center h-full bg-[#F5F0E8]">
             <div className="animate-pulse text-[#5C5C5C]">로딩 중...</div>
           </div>
         ) : quizzes.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center">
+          <div className="flex flex-col items-center justify-center h-full text-center bg-[#F5F0E8]">
             <h3 className="font-bold text-lg mb-2 text-[#1A1A1A]">퀴즈가 없습니다</h3>
             <p className="text-sm text-[#5C5C5C]">곧 새로운 퀴즈가 추가될 예정입니다.</p>
           </div>
@@ -423,19 +473,19 @@ const PastExamNewsCard = memo(function PastExamNewsCard({
   const isCompleted = filteredQuiz?.isCompleted && !filteredQuiz?.hasUpdate;
 
   return (
-    <div className="w-full h-full border border-[#999] bg-[#1A1A1A] flex flex-col overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.3)]">
+    <div className="w-full h-full border border-[#999] bg-[#1A1A1A] flex flex-col overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.3)] rounded-xl">
       {/* 축소된 헤더 + 드롭다운 */}
       <div className="bg-[#1A1A1A] text-[#F5F0E8] px-3 py-1.5 flex items-center justify-between flex-shrink-0">
         <div>
           <p className="text-[6px] tracking-[0.2em] mb-0.5 opacity-60">━━━━━━━━━━━━━━━━</p>
-          <h1 className="font-serif text-base font-black tracking-tight">PAST EXAM</h1>
+          <h1 className="font-serif text-xl font-black tracking-tight">PAST EXAM</h1>
         </div>
 
         {/* 드롭다운 — 터치 이벤트 캐러셀 전파 차단 */}
         <div className="relative" onPointerDownCapture={(e) => e.stopPropagation()}>
           <button
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className="px-2 py-1 bg-[#F5F0E8] text-[#1A1A1A] text-xs font-bold flex items-center justify-between gap-1.5 min-w-[80px]"
+            className="px-2 py-1 bg-[#F5F0E8] text-[#1A1A1A] text-sm font-bold flex items-center justify-between gap-1.5 min-w-[90px] rounded-lg"
           >
             <span>{selectedOption?.label || '선택'}</span>
             <svg
@@ -455,7 +505,7 @@ const PastExamNewsCard = memo(function PastExamNewsCard({
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="absolute right-0 top-full mt-1 z-20 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg min-w-[100px]"
+                  className="absolute right-0 top-full mt-1 z-20 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg min-w-[100px] rounded-lg overflow-hidden"
                 >
                   {pastExamOptions.map((option) => (
                     <button
@@ -500,22 +550,22 @@ const PastExamNewsCard = memo(function PastExamNewsCard({
 
             {/* 하단 정보 */}
             <div className="flex-shrink-0 bg-[#F5F0E8]">
-              <div className="px-3 mt-1.5">
-                <h3 className="text-xl font-black text-[#1A1A1A] overflow-hidden whitespace-nowrap leading-tight" style={{ textOverflow: '".."' }}>
+              <div className="px-3 pt-1.5">
+                <h3 className="text-3xl font-black text-[#1A1A1A] overflow-hidden whitespace-nowrap leading-tight" style={{ textOverflow: '".."' }}>
                   {filteredQuiz.title}
                 </h3>
               </div>
               <div className="px-3 mt-0.5">
-                <p className="text-xs text-[#1A1A1A]">
+                <p className="text-sm text-[#1A1A1A]">
                   {filteredQuiz.questionCount}문제 · {filteredQuiz.participantCount}명 참여
                   {filteredQuiz.participantCount > 0 && ` · 평균 ${filteredQuiz.averageScore}점`}
                 </p>
               </div>
-              <div className="px-3 pb-2.5 pt-1.5 flex gap-2">
+              <div className="px-3 pb-3 pt-1.5 flex gap-2">
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onShowDetails?.(filteredQuiz); }}
-                  className="flex-1 py-1.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+                  className="flex-1 py-3 text-base font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors rounded-lg"
                 >
                   Details
                 </button>
@@ -527,7 +577,7 @@ const PastExamNewsCard = memo(function PastExamNewsCard({
                         e.stopPropagation();
                         setShowReviewMenu(!showReviewMenu);
                       }}
-                      className="w-full py-1.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors flex items-center justify-center gap-1"
+                      className="w-full py-3 text-base font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors flex items-center justify-center gap-1 rounded-lg"
                     >
                       Review
                       <svg className={`w-3 h-3 transition-transform ${showReviewMenu ? 'rotate-180' : ''}`} fill="currentColor" viewBox="0 0 20 20">
@@ -540,7 +590,7 @@ const PastExamNewsCard = memo(function PastExamNewsCard({
                           initial={{ opacity: 0, y: -5 }}
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: -5 }}
-                          className="absolute bottom-full left-0 right-0 mb-1 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg z-50"
+                          className="absolute bottom-full left-0 right-0 mb-1 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg z-50 rounded-lg overflow-hidden"
                         >
                           <button
                             type="button"
@@ -549,7 +599,7 @@ const PastExamNewsCard = memo(function PastExamNewsCard({
                               setShowReviewMenu(false);
                               onReview?.(filteredQuiz.id);
                             }}
-                            className="w-full px-2 py-1.5 text-xs font-bold text-[#1A1A1A] hover:bg-[#EDEAE4] text-left border-b border-[#EDEAE4]"
+                            className="w-full px-3 py-2 text-sm font-bold text-[#1A1A1A] hover:bg-[#EDEAE4] text-left border-b border-[#EDEAE4]"
                           >
                             모두
                           </button>
@@ -560,7 +610,7 @@ const PastExamNewsCard = memo(function PastExamNewsCard({
                               setShowReviewMenu(false);
                               onReviewWrongOnly?.(filteredQuiz.id);
                             }}
-                            className="w-full px-2 py-1.5 text-xs font-bold text-[#8B1A1A] hover:bg-[#FDEAEA] text-left"
+                            className="w-full px-3 py-2 text-sm font-bold text-[#8B1A1A] hover:bg-[#FDEAEA] text-left"
                           >
                             오답만
                           </button>
@@ -572,7 +622,7 @@ const PastExamNewsCard = memo(function PastExamNewsCard({
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); onStart(filteredQuiz.id); }}
-                    className="flex-1 py-1.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors"
+                    className="flex-1 py-3 text-base font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors rounded-lg"
                   >
                     Start
                   </button>
@@ -780,7 +830,7 @@ function NewsCarousel({
                 style={{ width: `${CARD_WIDTH_PERCENT}%` }}
               >
                 {/* 카드 + 바닥 그림자 */}
-                <div className="relative h-[320px]">
+                <div className="relative h-[400px]">
                   {/* 바닥 그림자 — 지면에 드리워지는 타원 */}
                   <motion.div
                     animate={{
@@ -801,7 +851,7 @@ function NewsCarousel({
                     }}
                     whileTap={{ scale: 0.97 }}
                     transition={transitionOn ? { duration: 0.35, ease: 'easeOut' } : { duration: 0 }}
-                    className="absolute inset-0 origin-center rounded-sm"
+                    className="absolute inset-0 origin-center rounded-xl"
                     style={{ transformStyle: 'preserve-3d' }}
                   >
                   {card.type === 'past' ? (
@@ -1000,7 +1050,7 @@ function ReviewQuizCard({
               e.stopPropagation();
               onDetails();
             }}
-            className="flex-1 py-1.5 text-[11px] font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+            className="flex-1 py-1.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors rounded-lg"
           >
             Details
           </button>
@@ -1016,7 +1066,7 @@ function ReviewQuizCard({
                   onReview();
                 }
               }}
-              className="w-full py-1.5 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors flex items-center justify-center gap-0.5"
+              className="w-full py-1.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors flex items-center justify-center gap-0.5 rounded-lg"
             >
               Review
               {onReviewWrongOnly && (
@@ -1032,7 +1082,7 @@ function ReviewQuizCard({
                   initial={{ opacity: 0, y: -5 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -5 }}
-                  className="absolute bottom-full left-0 right-0 mb-1 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg z-50"
+                  className="absolute bottom-full left-0 right-0 mb-1 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg z-50 rounded-lg overflow-hidden"
                 >
                   <button
                     type="button"
@@ -1041,7 +1091,7 @@ function ReviewQuizCard({
                       setShowReviewMenu(false);
                       onReview();
                     }}
-                    className="w-full px-2 py-1.5 text-[11px] font-bold text-[#1A1A1A] hover:bg-[#EDEAE4] text-left border-b border-[#EDEAE4]"
+                    className="w-full px-2.5 py-1.5 text-xs font-bold text-[#1A1A1A] hover:bg-[#EDEAE4] text-left border-b border-[#EDEAE4]"
                   >
                     모두
                   </button>
@@ -1052,7 +1102,7 @@ function ReviewQuizCard({
                       setShowReviewMenu(false);
                       onReviewWrongOnly();
                     }}
-                    className="w-full px-2 py-1.5 text-[11px] font-bold text-[#8B1A1A] hover:bg-[#FDEAEA] text-left"
+                    className="w-full px-2.5 py-1.5 text-xs font-bold text-[#8B1A1A] hover:bg-[#FDEAEA] text-left"
                   >
                     오답만
                   </button>
@@ -1112,7 +1162,7 @@ function CustomQuizCard({
       whileHover={{ y: -4, boxShadow: '0 8px 20px rgba(0, 0, 0, 0.08)' }}
       whileTap={{ scale: 0.95, opacity: 0.7 }}
       transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-      className="relative border border-[#999] bg-[#F5F0E8]/70 backdrop-blur-sm overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
+      className="relative border border-[#999] bg-[#F5F0E8]/70 backdrop-blur-sm overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)] rounded-xl"
     >
       {/* 신문 배경 텍스트 */}
       <div className="absolute inset-0 p-2 overflow-hidden pointer-events-none">
@@ -1219,7 +1269,7 @@ function CustomQuizCard({
               e.stopPropagation();
               onDetails();
             }}
-            className="flex-1 py-1.5 text-[11px] font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+            className="flex-1 py-1.5 text-[11px] font-bold border border-[#1A1A1A] text-[#1A1A1A] bg-transparent hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors rounded-lg"
           >
             Details
           </button>
@@ -1231,7 +1281,7 @@ function CustomQuizCard({
                   e.stopPropagation();
                   setShowReviewMenu(!showReviewMenu);
                 }}
-                className="w-full py-1.5 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors flex items-center justify-center gap-1"
+                className="w-full py-1.5 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors flex items-center justify-center gap-1 rounded-lg"
               >
                 Review
                 <svg className={`w-3 h-3 transition-transform ${showReviewMenu ? 'rotate-180' : ''}`} fill="currentColor" viewBox="0 0 20 20">
@@ -1279,7 +1329,7 @@ function CustomQuizCard({
                 e.stopPropagation();
                 onStart();
               }}
-              className="flex-1 py-1.5 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors"
+              className="flex-1 py-1.5 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors rounded-lg"
             >
               Start
             </button>
@@ -1327,7 +1377,7 @@ function ManageQuizCard({
       whileHover={{ y: -4, boxShadow: '0 8px 20px rgba(0, 0, 0, 0.08)' }}
       whileTap={{ scale: 0.95, opacity: 0.7 }}
       transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-      className="relative border border-[#999] bg-[#F5F0E8]/70 backdrop-blur-sm overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
+      className="relative border border-[#999] bg-[#F5F0E8]/70 backdrop-blur-sm overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)] rounded-xl"
     >
       {/* 신문 배경 */}
       <div className="absolute inset-0 p-2 overflow-hidden pointer-events-none">
@@ -1337,45 +1387,26 @@ function ManageQuizCard({
       </div>
 
       <div className="relative z-10 p-3 bg-[#F5F0E8]/60">
-        <div className="h-[36px] mb-1.5">
+        <div className="mb-2">
           <h3 className="font-bold text-sm line-clamp-2 text-[#1A1A1A] leading-snug">
             {quiz.title}
           </h3>
         </div>
 
-        <p className="text-xs text-[#5C5C5C] mb-1">
-          {quiz.questionCount}문제 · {quiz.participantCount}명
-        </p>
-
-        <div className="h-[42px] mb-1.5 overflow-hidden">
-          {quiz.tags && quiz.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {quiz.tags.slice(0, 6).map((tag) => (
-                <span
-                  key={tag}
-                  className="px-1 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-[10px] font-medium"
-                >
-                  #{tag}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="flex flex-col gap-1.5 mt-2">
+        <div className="flex flex-col gap-1.5">
           <button
             onClick={(e) => {
               const r = e.currentTarget.getBoundingClientRect();
               onStats({ x: r.x, y: r.y, width: r.width, height: r.height });
             }}
-            className="w-full py-1.5 text-[11px] font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+            className="w-full py-1.5 text-[11px] font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors rounded-lg"
           >
             통계
           </button>
           <div className="flex gap-1.5">
             <button
               onClick={onEdit}
-              className="flex-1 py-1.5 text-[11px] font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+              className="flex-1 py-1.5 text-[11px] font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors rounded-lg"
             >
               수정
             </button>
@@ -1384,7 +1415,7 @@ function ManageQuizCard({
                 const r = e.currentTarget.getBoundingClientRect();
                 onDelete({ x: r.x, y: r.y, width: r.width, height: r.height });
               }}
-              className="flex-1 py-1.5 text-[11px] font-bold border border-[#8B1A1A] text-[#8B1A1A] hover:bg-[#FDEAEA] transition-colors"
+              className="flex-1 py-1.5 text-[11px] font-bold border border-[#8B1A1A] text-[#8B1A1A] hover:bg-[#FDEAEA] transition-colors rounded-lg"
             >
               삭제
             </button>
@@ -1616,6 +1647,7 @@ function QuizListPageContent() {
       createdAt: data.createdAt,
       attachmentUrl: data.attachmentUrl,
       oneLineSummary: data.oneLineSummary,
+      description: data.description,
       difficultyImageUrl: data.difficultyImageUrl,
       multipleChoiceCount: data.multipleChoiceCount || 0,
       subjectiveCount: data.subjectiveCount || 0,
@@ -1893,7 +1925,7 @@ function QuizListPageContent() {
               exit={{ opacity: 0, scale: 0.05, x: dx, y: dy }}
               transition={{ type: 'spring', stiffness: 400, damping: 30 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-[260px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
+              className="w-full max-w-[260px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 rounded-xl"
             >
               <div className="flex justify-center mb-3">
                 <div className="w-10 h-10 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
@@ -1906,8 +1938,8 @@ function QuizListPageContent() {
               <p className="text-xs text-[#5C5C5C] mb-0.5">- 삭제된 퀴즈는 복구할 수 없습니다.</p>
               <p className="text-xs text-[#5C5C5C] mb-4">- 이미 푼 사람은 복습 가능합니다.</p>
               <div className="flex gap-2">
-                <button onClick={() => setQuizToDelete(null)} className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors">취소</button>
-                <button onClick={confirmDeleteQuiz} className="flex-1 py-2 text-xs font-bold border-2 border-[#8B1A1A] text-[#8B1A1A] bg-[#F5F0E8] hover:bg-[#FDEAEA] transition-colors">삭제</button>
+                <button onClick={() => setQuizToDelete(null)} className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors rounded-lg">취소</button>
+                <button onClick={confirmDeleteQuiz} className="flex-1 py-2 text-xs font-bold border-2 border-[#8B1A1A] text-[#8B1A1A] bg-[#F5F0E8] hover:bg-[#FDEAEA] transition-colors rounded-lg">삭제</button>
               </div>
             </motion.div>
           </motion.div>
@@ -1937,13 +1969,13 @@ function QuizListPageContent() {
         <div className="w-full px-4 py-1.5 flex items-center justify-between">
           <button
             onClick={() => setIsManageMode(true)}
-            className="px-3 py-2 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] whitespace-nowrap hover:bg-[#EDEAE4] transition-colors"
+            className="px-4 py-3 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] whitespace-nowrap hover:bg-[#EDEAE4] transition-colors rounded-lg"
           >
             퀴즈 관리
           </button>
           <button
             onClick={() => router.push('/quiz/create')}
-            className="px-3 py-2 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] whitespace-nowrap hover:bg-[#3A3A3A] transition-colors"
+            className="px-4 py-3 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] whitespace-nowrap hover:bg-[#3A3A3A] transition-colors rounded-lg"
           >
             퀴즈 만들기
           </button>
@@ -1951,7 +1983,7 @@ function QuizListPageContent() {
       </header>
 
       {/* 뉴스 캐러셀 (중간/기말/기출) */}
-      <section data-no-tab-swipe className="mt-4" style={{ transform: 'scale(0.85)', transformOrigin: 'top center', width: '117.65%', marginLeft: '-8.825%', marginBottom: '-55px' }}>
+      <section data-no-tab-swipe className="mt-4" style={{ transform: 'scale(0.85)', transformOrigin: 'top center', width: '117.65%', marginLeft: '-8.825%', marginBottom: '-12px' }}>
         <NewsCarousel
           midtermQuizzes={midtermQuizzesWithUpdate}
           finalQuizzes={finalQuizzesWithUpdate}
@@ -1971,34 +2003,10 @@ function QuizListPageContent() {
       {/* 자작 섹션 */}
       <section className="px-4">
         <div ref={customSectionRef} className="flex items-center justify-between mb-2">
-          <h2 className="text-xl font-black text-[#1A1A1A] shrink-0">자작</h2>
-
-          {/* 탭 버튼 */}
-          <div className="relative flex items-stretch bg-[#EDEAE4] border border-[#1A1A1A] overflow-hidden">
-            <motion.div
-              className="absolute h-full bg-[#1A1A1A]"
-              initial={false}
-              animate={{ left: customSectionTab === 'quiz' ? '0%' : '50%' }}
-              style={{ width: '50%' }}
-              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            />
-            <button
-              onClick={() => setCustomSectionTab('quiz')}
-              className={`relative z-10 w-1/2 px-4 py-2 text-xs font-bold transition-colors text-center ${
-                customSectionTab === 'quiz' ? 'text-[#F5F0E8]' : 'text-[#1A1A1A]'
-              }`}
-            >
-              퀴즈
-            </button>
-            <button
-              onClick={() => setCustomSectionTab('review')}
-              className={`relative z-10 w-1/2 px-4 py-2 text-xs font-bold transition-colors text-center ${
-                customSectionTab === 'review' ? 'text-[#F5F0E8]' : 'text-[#1A1A1A]'
-              }`}
-            >
-              복습
-            </button>
-          </div>
+          <StudentSectionTabs
+            activeTab={customSectionTab}
+            onChangeTab={setCustomSectionTab}
+          />
         </div>
 
         {/* 태그 검색 영역 (우측 정렬) */}
@@ -2022,7 +2030,7 @@ function QuizListPageContent() {
           {/* 태그 검색 버튼 */}
           <button
             onClick={() => setShowTagFilter(!showTagFilter)}
-            className={`flex items-center justify-center w-8 h-8 border transition-colors shrink-0 ${
+            className={`flex items-center justify-center w-9 h-9 border transition-colors shrink-0 rounded-lg ${
               showTagFilter
                 ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
                 : 'bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A]'
@@ -2203,15 +2211,21 @@ function QuizListPageContent() {
         isOpen={!!selectedQuiz}
         onClose={() => { setSelectedQuiz(null); clearRect(); }}
         sourceRect={sourceRect}
-        className="w-full max-w-[300px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
+        className="w-full max-w-[260px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 rounded-xl"
       >
         {selectedQuiz && (
           <>
-            <h2 className="text-sm font-bold text-[#1A1A1A] mb-3">{selectedQuiz.title}</h2>
+            <h2 className="text-sm font-bold text-[#1A1A1A] mb-2">{selectedQuiz.title}</h2>
+
+            {/* 총평 */}
+            {selectedQuiz.description && (
+              <p className="text-xs text-[#5C5C5C] mb-3 line-clamp-3">&ldquo;{selectedQuiz.description}&rdquo;</p>
+            )}
+            {!selectedQuiz.description && <div className="mb-1" />}
 
             {/* 미완료: 평균 점수 대형 박스 (Start 버전) */}
             {!selectedQuiz.isCompleted && (
-              <div className="text-center py-2 mb-2 border-2 border-dashed border-[#1A1A1A] bg-[#EDEAE4]">
+              <div className="text-center py-2 mb-2 border-2 border-dashed border-[#1A1A1A] bg-[#EDEAE4] rounded-lg">
                 <p className="text-[10px] text-[#5C5C5C] mb-0.5">평균 점수</p>
                 <p className="text-2xl font-black text-[#1A1A1A]">
                   {selectedQuiz.participantCount > 0
@@ -2302,7 +2316,7 @@ function QuizListPageContent() {
             <div className="flex gap-2">
               <button
                 onClick={() => { setSelectedQuiz(null); clearRect(); }}
-                className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+                className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors rounded-lg"
               >
                 닫기
               </button>
@@ -2317,7 +2331,7 @@ function QuizListPageContent() {
                     handleStartQuiz(quiz.id);
                   }
                 }}
-                className="flex-1 py-2 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
+                className="flex-1 py-2 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors rounded-lg"
               >
                 {selectedQuiz.isCompleted ? '복습하기' : '시작하기'}
               </button>
@@ -2331,7 +2345,7 @@ function QuizListPageContent() {
         isOpen={!!reviewDetailsQuiz}
         onClose={() => { setReviewDetailsQuiz(null); clearReviewRect(); }}
         sourceRect={reviewSourceRect}
-        className="w-full max-w-[300px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
+        className="w-full max-w-[260px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 rounded-xl"
         zIndex={60}
       >
         {reviewDetailsQuiz && (
@@ -2414,7 +2428,7 @@ function QuizListPageContent() {
             <div className="flex gap-2">
               <button
                 onClick={() => { setReviewDetailsQuiz(null); clearReviewRect(); }}
-                className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+                className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors rounded-lg"
               >
                 닫기
               </button>
@@ -2425,7 +2439,7 @@ function QuizListPageContent() {
                   clearReviewRect();
                   router.push(`/review/library/${quiz.id}?from=quiz`);
                 }}
-                className="flex-1 py-2 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
+                className="flex-1 py-2 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors rounded-lg"
               >
                 복습하기
               </button>
@@ -2446,7 +2460,7 @@ function QuizListPageContent() {
             exit={{ opacity: 0, scale: 0.88 }}
             transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-[240px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-3"
+            className="w-full max-w-[240px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-3 rounded-xl"
           >
             {/* 아이콘 */}
             <div className="flex justify-center mb-2">
@@ -2484,7 +2498,7 @@ function QuizListPageContent() {
               <button
                 onClick={() => setUpdateConfirmQuiz(null)}
                 disabled={updateConfirmLoading}
-                className="flex-1 py-1.5 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors disabled:opacity-50"
+                className="flex-1 py-1.5 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors disabled:opacity-50 rounded-lg"
               >
                 취소
               </button>
@@ -2543,7 +2557,7 @@ function QuizListPageContent() {
             exit={{ opacity: 0, scale: 0.05, x: dx, y: dy }}
             transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-[260px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
+            className="w-full max-w-[260px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 rounded-xl"
           >
             <div className="flex justify-center mb-3">
               <div className="w-10 h-10 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
@@ -2556,8 +2570,8 @@ function QuizListPageContent() {
             <p className="text-xs text-[#5C5C5C] mb-0.5">- 삭제된 퀴즈는 복구할 수 없습니다.</p>
             <p className="text-xs text-[#5C5C5C] mb-4">- 이미 푼 사람은 복습 가능합니다.</p>
             <div className="flex gap-2">
-              <button onClick={() => setQuizToDelete(null)} className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors">취소</button>
-              <button onClick={confirmDeleteQuiz} className="flex-1 py-2 text-xs font-bold border-2 border-[#8B1A1A] text-[#8B1A1A] bg-[#F5F0E8] hover:bg-[#FDEAEA] transition-colors">삭제</button>
+              <button onClick={() => setQuizToDelete(null)} className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors rounded-lg">취소</button>
+              <button onClick={confirmDeleteQuiz} className="flex-1 py-2 text-xs font-bold border-2 border-[#8B1A1A] text-[#8B1A1A] bg-[#F5F0E8] hover:bg-[#FDEAEA] transition-colors rounded-lg">삭제</button>
             </div>
           </motion.div>
         </motion.div>
@@ -2665,7 +2679,7 @@ function QuizListPageContent() {
                   exit={{ opacity: 0, scale: 0.05, x: dx, y: dy }}
                   transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                   onClick={(e) => e.stopPropagation()}
-                  className="w-full max-w-[260px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
+                  className="w-full max-w-[260px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 rounded-xl"
                 >
                   <div className="flex justify-center mb-3">
                     <div className="w-10 h-10 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
@@ -2678,8 +2692,8 @@ function QuizListPageContent() {
                   <p className="text-xs text-[#5C5C5C] mb-0.5">- 삭제된 퀴즈는 복구할 수 없습니다.</p>
                   <p className="text-xs text-[#5C5C5C] mb-4">- 이미 푼 사람은 복습 가능합니다.</p>
                   <div className="flex gap-2">
-                    <button onClick={() => setQuizToDelete(null)} className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors">취소</button>
-                    <button onClick={confirmDeleteQuiz} className="flex-1 py-2 text-xs font-bold border-2 border-[#8B1A1A] text-[#8B1A1A] bg-[#F5F0E8] hover:bg-[#FDEAEA] transition-colors">삭제</button>
+                    <button onClick={() => setQuizToDelete(null)} className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors rounded-lg">취소</button>
+                    <button onClick={confirmDeleteQuiz} className="flex-1 py-2 text-xs font-bold border-2 border-[#8B1A1A] text-[#8B1A1A] bg-[#F5F0E8] hover:bg-[#FDEAEA] transition-colors rounded-lg">삭제</button>
                   </div>
                 </motion.div>
               </motion.div>

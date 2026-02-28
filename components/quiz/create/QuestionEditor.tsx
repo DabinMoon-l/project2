@@ -4188,63 +4188,6 @@ export default function QuestionEditor({
             </motion.div>
           )}
 
-          {/* 서술형 모범답안 및 루브릭 */}
-          {question.type === 'essay' && (
-            <motion.div
-              key="essay"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="space-y-4"
-            >
-
-              {/* 루브릭 - 선택 */}
-              {userRole === 'professor' ? (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs font-bold text-[#1A1A1A]">
-                      루브릭 (선택)
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const hasRubric = (question.rubric || []).length > 0;
-                        if (hasRubric) {
-                          setQuestion(prev => ({ ...prev, rubric: [] }));
-                        } else {
-                          setQuestion(prev => ({ ...prev, rubric: [{ criteria: '', percentage: 0, description: '' }] }));
-                        }
-                      }}
-                      className={`
-                        px-3 py-1 text-xs font-bold border border-[#1A1A1A] transition-colors
-                        ${(question.rubric || []).length > 0
-                          ? 'bg-[#1A1A1A] text-[#F5F0E8]'
-                          : 'bg-[#EDEAE4] text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
-                        }
-                      `}
-                    >
-                      {(question.rubric || []).length > 0 ? '루브릭 삭제' : '루브릭 추가'}
-                    </button>
-                  </div>
-                  {(question.rubric || []).length > 0 && (
-                    <RubricEditor
-                      rubric={question.rubric || [{ criteria: '', percentage: 0, description: '' }]}
-                      onChange={handleRubricChange}
-                      error={errors.rubric}
-                      hideLabel
-                    />
-                  )}
-                </div>
-              ) : (
-                /* 학생용: 기존 루브릭 UI 유지 */
-                <RubricEditor
-                  rubric={question.rubric || [{ criteria: '', percentage: 0, description: '' }]}
-                  onChange={handleRubricChange}
-                  error={errors.rubric}
-                />
-              )}
-            </motion.div>
-          )}
 
           {/* 결합형 하위 문제 */}
           {question.type === 'combined' && (

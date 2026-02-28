@@ -222,10 +222,10 @@ export default function QuestionCard({ question, courseId }: QuestionCardProps) 
     >
       {/* 문제 번호 및 유형 */}
       <div className="flex items-center gap-1.5 mb-2">
-        <span className="text-sm font-bold text-[#1A1A1A]">
+        <span className="text-base font-bold text-[#1A1A1A]">
           Q{question.number}.
         </span>
-        <span className="px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-[10px] font-bold">
+        <span className="px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold">
           {typeLabels[question.type]}
         </span>
         {/* 복수정답 표시 */}
@@ -243,7 +243,7 @@ export default function QuestionCard({ question, courseId }: QuestionCardProps) 
       </div>
 
       {/* 문제 텍스트 */}
-      <p className="text-[#1A1A1A] text-xs leading-relaxed whitespace-pre-wrap">
+      <p className="text-[#1A1A1A] text-sm leading-relaxed whitespace-pre-wrap">
         {question.text}
       </p>
 
@@ -444,7 +444,7 @@ export default function QuestionCard({ question, courseId }: QuestionCardProps) 
             <p className="text-[10px] text-center text-[#5C5C5C] mb-1.5 font-bold">&lt;보 기&gt;</p>
             <div className="space-y-1">
               {question.bogi.items.filter(i => i.content?.trim()).map((item) => (
-                <p key={item.label} className="text-[#1A1A1A] text-xs">
+                <p key={item.label} className="text-[#1A1A1A] text-sm">
                   <span className="font-bold mr-1">{item.label}.</span>
                   {item.content}
                 </p>
@@ -456,7 +456,7 @@ export default function QuestionCard({ question, courseId }: QuestionCardProps) 
 
       {/* 6. 발문 (제시문 발문 + 보기 발문 합침, 선지 전에 표시) */}
       {(question.passagePrompt || question.bogi?.questionText) && (
-        <p className="mt-3 text-[#1A1A1A] text-xs leading-relaxed">
+        <p className="mt-3 text-[#1A1A1A] text-sm leading-relaxed">
           {question.passagePrompt && question.bogi?.questionText
             ? `${question.passagePrompt} ${question.bogi.questionText}`
             : question.passagePrompt || question.bogi?.questionText}
@@ -477,7 +477,7 @@ export default function QuestionCard({ question, courseId }: QuestionCardProps) 
           {question.passage && (!question.passageType || question.passageType === 'text') && (
             <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
               <p className="text-[10px] text-[#5C5C5C] mb-1.5 font-bold">공통 제시문</p>
-              <p className="text-[#1A1A1A] text-xs leading-relaxed whitespace-pre-wrap">
+              <p className="text-[#1A1A1A] text-sm leading-relaxed whitespace-pre-wrap">
                 {question.passage}
               </p>
             </div>

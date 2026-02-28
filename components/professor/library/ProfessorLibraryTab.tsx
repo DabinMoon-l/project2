@@ -406,13 +406,24 @@ export default function ProfessorLibraryTab({
         {/* 제목 영역 (학생 서재 상세보기와 동일 — 연필 아이콘 포함) */}
         <div className="py-3">
           <div className="flex items-start gap-2">
+            {/* 뒤로가기 화살표 (수정 모드에서는 숨김) */}
+            {!isEditMode && (
+              <button
+                onClick={closePreview}
+                className="mt-1 p-1 text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors flex-shrink-0"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+            )}
             {isEditMode ? (
               <input
                 type="text"
                 autoFocus
                 value={editedTitle}
                 onChange={(e) => setEditedTitle(e.target.value)}
-                className="flex-1 text-3xl font-black text-[#1A1A1A] bg-transparent border-b-2 border-[#1A1A1A] outline-none"
+                className="w-2/3 text-3xl font-black text-[#1A1A1A] bg-transparent border-b-2 border-[#1A1A1A] outline-none"
               />
             ) : (
               <h2 className="text-3xl font-black text-[#1A1A1A] flex-1">
@@ -451,14 +462,14 @@ export default function ProfessorLibraryTab({
                     setEditedTags([]);
                     setEditedQuestions({});
                   }}
-                  className="px-2.5 py-1.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+                  className="px-3.5 py-2 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors rounded-lg"
                 >
                   취소
                 </button>
                 <button
                   onClick={handleSaveEdit}
                   disabled={isSavingEdit}
-                  className="px-2.5 py-1.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors"
+                  className="px-3.5 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors rounded-lg"
                 >
                   {isSavingEdit ? '저장 중...' : '저장'}
                 </button>
@@ -506,12 +517,12 @@ export default function ProfessorLibraryTab({
 
               {/* 태그 */}
               <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <label className="text-base font-bold text-[#1A1A1A]">태그</label>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <label className="text-sm font-bold text-[#1A1A1A]">태그</label>
                   <button
                     type="button"
                     onClick={() => setShowEditTagPicker(!showEditTagPicker)}
-                    className={`px-3 py-1 text-sm font-bold border transition-colors ${
+                    className={`px-2 py-0.5 text-xs font-bold border rounded transition-colors ${
                       showEditTagPicker
                         ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
                         : 'bg-transparent text-[#5C5C5C] border-[#D4CFC4] hover:border-[#1A1A1A]'
@@ -521,11 +532,11 @@ export default function ProfessorLibraryTab({
                   </button>
                 </div>
                 {editedTags.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mb-2">
+                  <div className="flex flex-wrap gap-1 mb-1.5">
                     {editedTags.map((tag) => (
                       <div
                         key={tag}
-                        className="flex items-center gap-1 px-2.5 py-1 bg-[#1A1A1A] text-[#F5F0E8] text-sm font-bold"
+                        className="flex items-center gap-0.5 px-2 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold rounded"
                       >
                         #{tag}
                         <button
@@ -548,7 +559,7 @@ export default function ProfessorLibraryTab({
                       transition={{ duration: 0.2 }}
                       className="overflow-hidden"
                     >
-                      <div className="flex flex-wrap gap-2 p-3 bg-[#EDEAE4] border border-[#D4CFC4]">
+                      <div className="flex flex-wrap gap-1.5 p-2 bg-[#EDEAE4] border border-[#D4CFC4] rounded-lg">
                         {editTagOptions
                           .filter(tag => !editedTags.includes(tag))
                           .map((tag) => (
@@ -556,7 +567,7 @@ export default function ProfessorLibraryTab({
                               key={tag}
                               type="button"
                               onClick={() => setEditedTags(prev => [...prev, tag])}
-                              className="px-3 py-1.5 text-sm font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+                              className="px-2 py-1 text-xs font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors rounded"
                             >
                               #{tag}
                             </button>
@@ -605,10 +616,10 @@ export default function ProfessorLibraryTab({
               exit={{ opacity: 0, scale: 0.88 }}
               transition={{ type: 'spring', stiffness: 400, damping: 30 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-[280px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
+              className="w-full max-w-[280px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 rounded-xl"
             >
               <div className="flex justify-center mb-3">
-                <div className="w-9 h-9 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
+                <div className="w-9 h-9 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4] rounded-lg">
                   <svg className="w-4 h-4 text-[#8B1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
@@ -626,7 +637,7 @@ export default function ProfessorLibraryTab({
               <div className="flex gap-2">
                 <button
                   onClick={() => setDeleteTarget(null)}
-                  className="flex-1 py-1.5 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+                  className="flex-1 py-1.5 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors rounded-lg"
                 >
                   취소
                 </button>
@@ -638,7 +649,7 @@ export default function ProfessorLibraryTab({
                       closePreview();
                     }
                   }}
-                  className="flex-1 py-1.5 text-xs font-bold border-2 border-[#8B1A1A] text-[#8B1A1A] bg-[#F5F0E8] hover:bg-[#FDEAEA] transition-colors"
+                  className="flex-1 py-1.5 text-xs font-bold border-2 border-[#8B1A1A] text-[#8B1A1A] bg-[#F5F0E8] hover:bg-[#FDEAEA] transition-colors rounded-lg"
                 >
                   삭제
                 </button>
@@ -691,7 +702,7 @@ export default function ProfessorLibraryTab({
               animate={{ opacity: 1, y: 0 }}
               whileHover={{ y: -4, boxShadow: '0 8px 20px rgba(0, 0, 0, 0.08)' }}
               transition={{ duration: 0.2 }}
-              className="relative border border-[#999] bg-[#F5F0E8]/70 backdrop-blur-sm overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)] cursor-default"
+              className="relative border border-[#999] bg-[#F5F0E8]/70 backdrop-blur-sm overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)] cursor-default rounded-xl"
             >
               {/* 신문 배경 텍스트 */}
               <div className="absolute inset-0 p-2 overflow-hidden pointer-events-none">
@@ -727,7 +738,7 @@ export default function ProfessorLibraryTab({
               {/* 카드 내용 */}
               <div className="relative z-10 p-3 bg-[#F5F0E8]/60">
                 {/* 제목 (2줄 고정 높이, AI 기본 제목은 serif 비적용) */}
-                <div className="h-[38px] mb-1.5">
+                <div className="h-[36px] mb-1.5">
                   <h3 className="font-bold text-sm line-clamp-2 text-[#1A1A1A] leading-snug pr-8">
                     {quiz.title}
                   </h3>
@@ -739,7 +750,7 @@ export default function ProfessorLibraryTab({
                 </p>
 
                 {/* 태그 (2줄 고정 높이) */}
-                <div className="h-[40px] mb-1.5 overflow-hidden">
+                <div className="h-[42px] mb-1.5 overflow-hidden">
                   {quiz.tags && quiz.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       {quiz.tags.slice(0, 8).map((tag) => (
@@ -762,7 +773,7 @@ export default function ProfessorLibraryTab({
                       e.stopPropagation();
                       setSelectedDetailQuiz(quiz);
                     }}
-                    className="flex-1 py-1 text-[10px] font-bold border border-[#3A3A3A] text-[#1A1A1A] bg-white/30 hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+                    className="flex-1 py-1.5 text-xs font-bold border border-[#3A3A3A] text-[#1A1A1A] bg-white/30 hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors rounded-lg"
                   >
                     Details
                   </button>
@@ -772,7 +783,7 @@ export default function ProfessorLibraryTab({
                       e.stopPropagation();
                       openPreview(quiz);
                     }}
-                    className="flex-1 py-1 text-[10px] font-bold bg-[#1A1A1A]/85 text-[#F5F0E8] hover:bg-[#1A1A1A] transition-colors"
+                    className="flex-1 py-1.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors rounded-lg"
                   >
                     Preview
                   </button>
@@ -978,11 +989,11 @@ export default function ProfessorLibraryTab({
       {/* 태그/난이도 바텀시트 */}
       {/* ============================================================ */}
       <MobileBottomSheet open={mobilePanel === 'tags'} onClose={() => setMobilePanel(null)}>
-        <div className="p-4 space-y-3">
+        <div className="p-3 space-y-2">
           {/* 챕터 태그 */}
           <div>
-            <span className="text-xs font-bold text-[#5C5C5C]">챕터</span>
-            <div className="flex flex-wrap gap-2 mt-2">
+            <span className="text-[11px] font-bold text-[#5C5C5C]">챕터</span>
+            <div className="flex flex-wrap gap-1.5 mt-1.5">
               {genTagOptions.map(tag => {
                 const selected = selectedGenTags.includes(tag.value);
                 return (
@@ -991,7 +1002,7 @@ export default function ProfessorLibraryTab({
                     onClick={() => setSelectedGenTags(prev =>
                       selected ? prev.filter(t => t !== tag.value) : [...prev, tag.value]
                     )}
-                    className={`px-3 py-1.5 text-sm font-bold border-2 transition-colors ${
+                    className={`px-2 py-1 text-xs font-bold border-2 rounded transition-colors ${
                       selected
                         ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
                         : 'bg-transparent text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
@@ -1007,13 +1018,13 @@ export default function ProfessorLibraryTab({
           <div className="border-t border-[#1A1A1A]" />
           {/* 난이도 */}
           <div>
-            <span className="text-xs font-bold text-[#5C5C5C]">난이도</span>
-            <div className="flex flex-wrap gap-2 mt-2">
+            <span className="text-[11px] font-bold text-[#5C5C5C]">난이도</span>
+            <div className="flex flex-wrap gap-1.5 mt-1.5">
               {(['easy', 'medium', 'hard'] as const).map(d => (
                 <button
                   key={d}
                   onClick={() => setDifficulty(prev => prev === d ? null : d)}
-                  className={`px-3 py-1.5 text-sm font-bold border-2 transition-colors ${
+                  className={`px-2 py-1 text-xs font-bold border-2 rounded transition-colors ${
                     difficulty === d
                       ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
                       : 'bg-transparent text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
@@ -1052,9 +1063,9 @@ export default function ProfessorLibraryTab({
             animate={{ opacity: 1, scale: 1 }}
             transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-[300px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
+            className="w-full max-w-[300px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 rounded-xl"
           >
-            <h2 className="text-sm font-bold text-[#1A1A1A] mb-3">
+            <h2 className="text-base font-bold text-[#1A1A1A] mb-3">
               {selectedDetailQuiz.title}
             </h2>
 
@@ -1109,7 +1120,7 @@ export default function ProfessorLibraryTab({
             <div className="flex gap-2">
               <button
                 onClick={() => setSelectedDetailQuiz(null)}
-                className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+                className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors rounded-lg"
               >
                 닫기
               </button>
@@ -1118,7 +1129,7 @@ export default function ProfessorLibraryTab({
                   setDeleteTarget(selectedDetailQuiz.id);
                   setSelectedDetailQuiz(null);
                 }}
-                className="flex-1 py-2 text-xs font-bold border-2 border-[#C44] text-[#C44] hover:bg-[#FEE] transition-colors"
+                className="flex-1 py-2 text-xs font-bold border-2 border-[#C44] text-[#C44] hover:bg-[#FEE] transition-colors rounded-lg"
               >
                 삭제
               </button>
@@ -1138,7 +1149,7 @@ export default function ProfessorLibraryTab({
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-[280px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
+            className="w-full max-w-[280px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 rounded-xl"
           >
             {/* 지구본 아이콘 */}
             <div className="flex justify-center mb-3">
@@ -1163,14 +1174,14 @@ export default function ProfessorLibraryTab({
             <div className="flex gap-2">
               <button
                 onClick={() => { setPublishTarget(null); setShowPublishDropdown(false); }}
-                className="flex-1 py-1.5 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+                className="flex-1 py-1.5 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors rounded-lg"
               >
                 취소
               </button>
               <div className="flex-1 relative">
                 {/* 드롭다운 (위로 열림) */}
                 {showPublishDropdown && (
-                  <div className="absolute bottom-full left-0 w-full border-2 border-[#1A1A1A] border-b-0 bg-[#F5F0E8]">
+                  <div className="absolute bottom-full left-0 w-full border-2 border-[#1A1A1A] border-b-0 bg-[#F5F0E8] rounded-t-lg overflow-hidden">
                     {[
                       { value: 'midterm', label: '중간 대비' },
                       { value: 'final', label: '기말 대비' },
@@ -1195,7 +1206,7 @@ export default function ProfessorLibraryTab({
                 {/* 공개 버튼 — 클릭 시 드롭다운 토글 */}
                 <button
                   onClick={() => setShowPublishDropdown(!showPublishDropdown)}
-                  className="w-full flex items-center justify-center gap-2 py-1.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
+                  className="w-full flex items-center justify-center gap-2 py-1.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors rounded-lg"
                 >
                   공개
                   <svg className={`w-3 h-3 transition-transform ${showPublishDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -936,7 +936,7 @@ export default function QuizResultPage() {
     <>
       {/* 1. 묶은 보기 (grouped) - 먼저 표시 */}
       {groupedBlocks.map((block) => (
-        <div key={block.id} className="mb-3 p-3 border-2 border-[#1A1A1A] bg-[#FFF8E1]">
+        <div key={block.id} className="mb-3 p-3 border-2 border-[#1A1A1A] bg-[#FFF8E1] rounded-lg">
           <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
           <div className="space-y-1">
             {block.children?.map((child) => (
@@ -967,7 +967,7 @@ export default function QuizResultPage() {
       {nonGroupedBlocks.map((block) => {
         if (block.type === 'text' && block.content?.trim()) {
           return (
-            <div key={block.id} className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1]">
+            <div key={block.id} className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-lg">
               <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
               <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{block.content}</p>
             </div>
@@ -975,7 +975,7 @@ export default function QuizResultPage() {
         }
         if (block.type === 'labeled') {
           return (
-            <div key={block.id} className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1]">
+            <div key={block.id} className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-lg">
               <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
               <div className="space-y-1">
                 {(block.items || []).filter(i => i.content?.trim()).map((item) => (
@@ -989,7 +989,7 @@ export default function QuizResultPage() {
         }
         if (block.type === 'gana') {
           return (
-            <div key={block.id} className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1]">
+            <div key={block.id} className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-lg">
               <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
               <div className="space-y-1">
                 {(block.items || []).filter(i => i.content?.trim()).map((item) => (
@@ -1006,7 +1006,7 @@ export default function QuizResultPage() {
 
       {/* 레거시 보기 - 텍스트 형식 (혼합 보기가 없을 때만) */}
       {!hasMixedExamples && result.subQuestionOptions && result.subQuestionOptions.length > 0 && result.subQuestionOptionsType === 'text' && (
-        <div className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1]">
+        <div className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-lg">
           <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
           <p className="text-sm text-[#1A1A1A]">
             {result.subQuestionOptions.join(', ')}
@@ -1016,7 +1016,7 @@ export default function QuizResultPage() {
 
       {/* 레거시 보기 - ㄱㄴㄷ 형식 (혼합 보기가 없을 때만) */}
       {!hasMixedExamples && result.subQuestionOptions && result.subQuestionOptions.length > 0 && result.subQuestionOptionsType === 'labeled' && (
-        <div className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1]">
+        <div className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-lg">
           <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
           <div className="space-y-1">
             {result.subQuestionOptions.map((itm, idx) => (
@@ -1046,7 +1046,7 @@ export default function QuizResultPage() {
 
       {/* 5. 보기 (<보기> 박스) - 이미지 다음, 발문 전에 표시 */}
       {result.bogi && result.bogi.items && result.bogi.items.some(i => i.content?.trim()) && (
-        <div className="mb-3 p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A]">
+        <div className="mb-3 p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A] rounded-lg">
           <p className="text-xs text-center text-[#5C5C5C] mb-2 font-bold">&lt;보 기&gt;</p>
           <div className="space-y-1">
             {result.bogi.items.filter(i => i.content?.trim()).map((item, idx) => (
@@ -1061,7 +1061,7 @@ export default function QuizResultPage() {
 
       {/* 6. 발문 (제시문 발문 + 보기 발문 합침, 선지 전에 표시) */}
       {(result.passagePrompt || result.bogiQuestionText) && (
-        <div className="mb-3 p-3 border border-[#1A1A1A] bg-[#F5F0E8]">
+        <div className="mb-3 p-3 border border-[#1A1A1A] bg-[#F5F0E8] rounded-lg">
           <p className="text-sm text-[#1A1A1A]">
             {result.passagePrompt && result.bogiQuestionText
               ? `${result.passagePrompt} ${result.bogiQuestionText}`
@@ -1340,7 +1340,7 @@ export default function QuizResultPage() {
       {/* 헤더 */}
       <header className="sticky z-50 w-full border-b-2 border-[#1A1A1A]" style={{ top: 'env(safe-area-inset-top, 0px)', backgroundColor: '#F5F0E8' }}>
         <div className="flex items-center justify-center h-14 px-4">
-          <h1 className="text-base font-bold text-[#1A1A1A]">퀴즈 결과</h1>
+          <h1 className="text-xl font-black text-[#1A1A1A]">퀴즈 결과</h1>
         </div>
       </header>
 
@@ -1351,14 +1351,13 @@ export default function QuizResultPage() {
         className="px-4 pt-4 space-y-4"
       >
         {/* 점수 표시 */}
-        <div className="bg-[#F5F0E8] border-2 border-[#1A1A1A] p-3 text-center">
-          <p className="text-xs text-[#5C5C5C] mb-1">{resultData.quizTitle}</p>
-          <div className="flex items-center justify-center gap-1.5 mb-2">
-            <span className="text-3xl font-bold text-[#1A1A1A]">{resultData.correctCount}</span>
-            <span className="text-lg text-[#5C5C5C]">/</span>
-            <span className="text-lg text-[#5C5C5C]">{resultData.totalCount}</span>
+        <div className="text-center py-2">
+          <div className="flex items-center justify-center gap-2 mb-1">
+            <span className="text-5xl font-black text-[#1A1A1A]">{resultData.correctCount}</span>
+            <span className="text-2xl text-[#5C5C5C]">/</span>
+            <span className="text-2xl text-[#5C5C5C]">{resultData.totalCount}</span>
           </div>
-          <p className="text-xs text-[#5C5C5C]">
+          <p className="text-base text-[#5C5C5C]">
             {isPerfectScore
               ? '만점!'
               : `정답률 ${Math.round((resultData.correctCount / resultData.totalCount) * 100)}%`}
@@ -1377,7 +1376,7 @@ export default function QuizResultPage() {
                 <div key={result.id}>
                   <button
                     onClick={() => toggleExpand(result.id)}
-                    className={`w-full border-2 p-3 text-left ${
+                    className={`w-full border-2 p-3 text-left rounded-lg ${
                       result.isCorrect
                         ? 'border-[#1A6B1A] bg-[#E8F5E9]'
                         : 'border-[#8B1A1A] bg-[#FDEAEA]'
@@ -1426,7 +1425,7 @@ export default function QuizResultPage() {
                         exit={{ height: 0, opacity: 0 }}
                         className="overflow-hidden"
                       >
-                        <div className="border-2 border-t-0 border-[#1A1A1A] bg-[#F5F0E8] p-3 space-y-3">
+                        <div className="border-2 border-t-0 border-[#1A1A1A] bg-[#F5F0E8] p-3 space-y-3 rounded-b-lg">
                           {renderQuestionDetail(result)}
                         </div>
                       </motion.div>
@@ -1619,7 +1618,7 @@ export default function QuizResultPage() {
                                       exit={{ height: 0, opacity: 0 }}
                                       className="overflow-hidden"
                                     >
-                                      <div className="border-2 border-t-0 border-[#1A1A1A] bg-white p-3 space-y-2">
+                                      <div className="border-2 border-t-0 border-[#1A1A1A] bg-white p-3 space-y-2 rounded-b-lg">
                                         {renderQuestionDetail(subResult)}
                                       </div>
                                     </motion.div>
@@ -1645,7 +1644,7 @@ export default function QuizResultPage() {
       <div className="fixed bottom-0 left-0 right-0 p-3 bg-[#F5F0E8] border-t-2 border-[#1A1A1A]">
         <button
           onClick={handleNext}
-          className="w-full py-2.5 text-sm bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
+          className="w-full py-3 text-sm bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors rounded-lg"
         >
           다음
         </button>

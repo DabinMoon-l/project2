@@ -173,21 +173,28 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
               {recentFive.length > 0 && (
                 <div>
                   <p className="text-base font-bold text-[#1A1A1A] mb-3">최근 퀴즈 성적</p>
-                  <svg viewBox="0 0 300 120" className="w-full">
-                    <line x1={20} y1={80} x2={280} y2={80} stroke="#D4CFC4" strokeWidth={0.5} />
+                  <svg viewBox="0 0 300 140" className="w-full">
+                    {/* Y축 가이드라인 */}
+                    <line x1={20} y1={30} x2={280} y2={30} stroke="#D4CFC4" strokeWidth={0.3} strokeDasharray="3,3" />
+                    <line x1={20} y1={62.5} x2={280} y2={62.5} stroke="#D4CFC4" strokeWidth={0.3} strokeDasharray="3,3" />
+                    <line x1={20} y1={95} x2={280} y2={95} stroke="#D4CFC4" strokeWidth={0.5} />
+                    {/* Y축 레이블 */}
+                    <text x={14} y={33} textAnchor="end" fontSize={7} fill="#5C5C5C">100</text>
+                    <text x={14} y={66} textAnchor="end" fontSize={7} fill="#5C5C5C">50</text>
+                    <text x={14} y={98} textAnchor="end" fontSize={7} fill="#5C5C5C">0</text>
                     {recentFive.map((q, i, arr) => {
                       const x = arr.length === 1 ? 150 : 30 + (i / (arr.length - 1)) * 240;
-                      const y = 75 - (q.score / 100) * 65;
+                      const y = 95 - (q.score / 100) * 65;
                       const prevX = i > 0 ? (30 + ((i - 1) / (arr.length - 1)) * 240) : x;
-                      const prevY = i > 0 ? (75 - (arr[i - 1].score / 100) * 65) : y;
+                      const prevY = i > 0 ? (95 - (arr[i - 1].score / 100) * 65) : y;
                       return (
                         <g key={i}>
                           {i > 0 && (
                             <line x1={prevX} y1={prevY} x2={x} y2={y}
                               stroke="#1A1A1A" strokeWidth={1.5} />
                           )}
-                          <circle cx={x} cy={y} r={4} fill="#1A1A1A" />
-                          <text x={x} y={y - 8} textAnchor="middle" fontSize={9}
+                          <circle cx={x} cy={y} r={4.5} fill="#F5F0E8" stroke="#1A1A1A" strokeWidth={2} />
+                          <text x={x} y={y - 10} textAnchor="middle" fontSize={10}
                             fontWeight="bold" fill="#1A1A1A">
                             {q.score}
                           </text>
@@ -198,7 +205,7 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
                       const x = arr.length === 1 ? 150 : 30 + (i / (arr.length - 1)) * 240;
                       const name = q.quizTitle.length > 6 ? q.quizTitle.slice(0, 6) + '..' : q.quizTitle;
                       return (
-                        <text key={`label-${i}`} x={x} y={95} textAnchor="middle" fontSize={8}
+                        <text key={`label-${i}`} x={x} y={112} textAnchor="middle" fontSize={9}
                           fill="#1A1A1A" fontWeight="600">
                           {name}
                         </text>

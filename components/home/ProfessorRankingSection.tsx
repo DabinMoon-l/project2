@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useUser, useCourse } from '@/lib/contexts';
@@ -9,6 +8,7 @@ import { readHomeCache, writeHomeCache } from '@/lib/utils/rankingCache';
 import { computeRankScore, computeTeamScore } from '@/lib/utils/ranking';
 import { AnimatePresence, motion } from 'framer-motion';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
+import RankingBottomSheet from './RankingBottomSheet';
 
 // 순위 접미사
 const ordinalSuffix = (n: number) => {
@@ -31,7 +31,6 @@ interface TeamRankEntry {
  * 교수님 전용 랭킹 섹션 — 4개 팀 자동/수동 롤링
  */
 export default function ProfessorRankingSection({ overrideCourseId }: { overrideCourseId?: string } = {}) {
-  const router = useRouter();
   const { profile } = useUser();
   const { userCourseId: contextCourseId } = useCourse();
   const userCourseId = overrideCourseId ?? contextCourseId;
@@ -40,6 +39,9 @@ export default function ProfessorRankingSection({ overrideCourseId }: { override
   const [teamEntries, setTeamEntries] = useState<TeamRankEntry[]>([]);
   const [participationRate, setParticipationRate] = useState<number>(0);
   const [loading, setLoading] = useState(true);
+
+  // 랭킹 바텀시트
+  const [showRanking, setShowRanking] = useState(false);
 
   // 롤링 인덱스 (teamEntries 배열 인덱스)
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -220,10 +222,10 @@ export default function ProfessorRankingSection({ overrideCourseId }: { override
 
   return (
     <div className="w-full">
-      <div className="flex items-center justify-center gap-7">
-        {/* TEAM + TEAM RANK (스와이프 전용, 클릭 시 랭킹 이동 안 함) */}
+      <div className="flex items-center justify-center gap-4">
+        {/* TEAM + TEAM RANK (스와이프 전용) */}
         <div
-          className="flex items-center gap-7 select-none cursor-grab active:cursor-grabbing"
+          className="flex items-center gap-4 select-none cursor-grab active:cursor-grabbing"
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
@@ -232,18 +234,18 @@ export default function ProfessorRankingSection({ overrideCourseId }: { override
           onMouseUp={onMouseUp}
         >
           {/* TEAM */}
-          <div className="text-center w-[72px]">
-            <span className="text-base font-bold text-white/50 tracking-widest">TEAM</span>
-            <div className="h-[64px] relative overflow-hidden mt-1">
+          <div className="text-center">
+            <span className="text-[10px] font-bold text-white/50 tracking-widest">TEAM</span>
+            <div className="h-[40px] relative overflow-hidden">
               <AnimatePresence mode="popLayout" initial={false} custom={direction}>
                 <motion.div
                   key={`team-${currentIdx}`}
                   custom={direction}
-                  initial={{ y: direction > 0 ? 40 : -40, opacity: 0 }}
+                  initial={{ y: direction > 0 ? 30 : -30, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: direction > 0 ? -40 : 40, opacity: 0 }}
+                  exit={{ y: direction > 0 ? -30 : 30, opacity: 0 }}
                   transition={{ duration: 0.3, ease: 'easeInOut' }}
-                  className="text-6xl font-black text-white"
+                  className="text-4xl font-black text-white leading-tight"
                 >
                   {teamLabel}
                 </motion.div>
@@ -252,21 +254,21 @@ export default function ProfessorRankingSection({ overrideCourseId }: { override
           </div>
 
           {/* 구분선 */}
-          <div className="w-px h-14 bg-white/20" />
+          <div className="w-px h-8 bg-white/20" />
 
           {/* TEAM RANK */}
-          <div className="text-center w-[140px]">
-            <span className="text-base font-bold text-white/50 tracking-widest">TEAM RANK</span>
-            <div className="h-[64px] relative overflow-hidden mt-1">
+          <div className="text-center">
+            <span className="text-[10px] font-bold text-white/50 tracking-widest">TEAM RANK</span>
+            <div className="h-[40px] relative overflow-hidden">
               <AnimatePresence mode="popLayout" initial={false} custom={direction}>
                 <motion.div
                   key={`rank-${currentIdx}`}
                   custom={direction}
-                  initial={{ y: direction > 0 ? 40 : -40, opacity: 0 }}
+                  initial={{ y: direction > 0 ? 30 : -30, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: direction > 0 ? -40 : 40, opacity: 0 }}
+                  exit={{ y: direction > 0 ? -30 : 30, opacity: 0 }}
                   transition={{ duration: 0.3, ease: 'easeInOut' }}
-                  className={`text-6xl font-black text-white ${loading ? 'animate-pulse' : ''}`}
+                  className={`text-4xl font-black text-white leading-tight ${loading ? 'animate-pulse' : ''}`}
                 >
                   {rankLabel}
                 </motion.div>
@@ -276,24 +278,24 @@ export default function ProfessorRankingSection({ overrideCourseId }: { override
         </div>
 
         {/* 구분선 */}
-        <div className="w-px h-14 bg-white/20" />
+        <div className="w-px h-8 bg-white/20" />
 
-        {/* OVERVIEW (클릭 시 랭킹 페이지 이동) */}
+        {/* OVERVIEW (클릭 시 랭킹 바텀시트) */}
         <button
-          onClick={() => !loading && router.push('/ranking')}
-          className="flex items-center gap-3 active:scale-95 transition-transform"
+          onClick={() => !loading && setShowRanking(true)}
+          className="flex items-center gap-2 active:scale-95 transition-transform"
         >
           <div className="text-center">
-            <span className="text-base font-bold text-white/50 tracking-widest">OVERVIEW</span>
-            <div className="flex items-baseline justify-center mt-1">
-              <span className={`text-6xl font-black text-white ${loading ? 'animate-pulse' : ''}`}>
+            <span className="text-[10px] font-bold text-white/50 tracking-widest">OVERVIEW</span>
+            <div className="flex items-baseline justify-center">
+              <span className={`text-4xl font-black text-white leading-tight ${loading ? 'animate-pulse' : ''}`}>
                 {loading ? '-' : `${participationRate}%`}
               </span>
             </div>
           </div>
 
           {/* 화살표 */}
-          <svg className="w-6 h-6 text-white/50 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 text-white/50 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
           </svg>
         </button>
@@ -312,6 +314,12 @@ export default function ProfessorRankingSection({ overrideCourseId }: { override
           ))}
         </div>
       )}
+
+      {/* 랭킹 바텀시트 */}
+      <RankingBottomSheet
+        isOpen={showRanking}
+        onClose={() => setShowRanking(false)}
+      />
     </div>
   );
 }

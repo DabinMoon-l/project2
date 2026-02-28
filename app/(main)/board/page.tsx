@@ -90,37 +90,11 @@ const HeadlineArticle = memo(function HeadlineArticle({
       transition={SPRING_TAP}
       className={`group border border-[#1A1A1A] bg-[#F5F0E8] relative transition-all ${onClick ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-md' : ''}`}
     >
-      {/* 고정 아이콘 — 교수 전용 (헤더카드는 좌측 상단) */}
-      {isProfessor && isPinned && onUnpin && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onUnpin(); }}
-          className="absolute top-1 left-1 z-10 p-1 text-[#8B1A1A] transition-transform hover:scale-125"
-          title="고정 해제"
-        >
-          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-          </svg>
-        </button>
-      )}
-      {isProfessor && !isPinned && onPin && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onPin(); }}
-          className="absolute top-1 left-1 z-10 p-1 text-[#1A1A1A]/20 hover:text-[#8B1A1A] transition-colors"
-          title="글 고정"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-          </svg>
-        </button>
-      )}
-
       {/* 콘텐츠 래퍼 */}
       <div className="flex">
         {/* 좌측 - 이미지 */}
         <div
-          className="relative w-1/3 min-h-[160px] flex-shrink-0 bg-[#EDEAE4]"
+          className="relative w-1/3 min-h-[130px] flex-shrink-0 bg-[#EDEAE4]"
         >
           <Image
             src={imageUrl}
@@ -136,7 +110,7 @@ const HeadlineArticle = memo(function HeadlineArticle({
         <div className="flex-1 flex flex-col">
           {/* 제목 - 검정 박스 */}
           <div className="bg-[#1A1A1A] px-3 py-3">
-            <h1 className="font-serif-display text-2xl md:text-3xl font-black text-[#F5F0E8] leading-tight">
+            <h1 className="font-serif-display text-2xl md:text-3xl font-black text-[#F5F0E8] leading-tight" style={{ fontWeight: 900 }}>
               {post.title}
             </h1>
           </div>
@@ -349,7 +323,7 @@ const MasonryItem = memo(function MasonryItem({
   );
 
   const TitleSection = (
-    <h2 className="font-serif-display text-2xl md:text-3xl font-black leading-tight text-[#1A1A1A]">
+    <h2 className="font-serif-display text-2xl md:text-3xl font-black leading-tight text-[#1A1A1A]" style={{ fontWeight: 900 }}>
       {post.title}
     </h2>
   );
@@ -361,39 +335,6 @@ const MasonryItem = memo(function MasonryItem({
       transition={SPRING_TAP}
       className="cursor-pointer group break-inside-avoid mb-4 p-3 border border-[#1A1A1A] bg-[#F5F0E8] relative hover:-translate-y-0.5 hover:shadow-md transition-all"
     >
-      {/* 고정 아이콘 — 교수: 클릭으로 고정/해제 토글, 학생: 고정글만 정적 표시 */}
-      {isPinned ? (
-        isProfessor && onUnpin ? (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onUnpin(); }}
-            className="absolute top-1 right-1 z-10 p-1 text-[#8B1A1A] transition-transform hover:scale-125"
-            title="고정 해제"
-          >
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-            </svg>
-          </button>
-        ) : (
-          <div className="absolute top-1 right-1 z-10 p-1 text-[#8B1A1A]">
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-            </svg>
-          </div>
-        )
-      ) : isProfessor && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onPin?.(); }}
-          className="absolute top-1 right-1 z-10 p-1 text-[#1A1A1A]/20 hover:text-[#8B1A1A] transition-colors"
-          title="글 고정"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-          </svg>
-        </button>
-      )}
-
       {imagePosition === 'top' ? (
         <>
           {ImageSection && <div className="mb-2">{ImageSection}</div>}
@@ -701,11 +642,9 @@ export default function BoardPage() {
     }
   }, [loading, posts.length]);
 
-  // 고정 글이 있으면 캐러셀 표시, 없으면 최신 글 표시
-  const hasPinnedPosts = pinnedPosts.length > 0;
-  const headline = !hasPinnedPosts && filteredPosts.length > 0 ? filteredPosts[0] : null;
-  // 고정글이 있으면 모든 글을 masonry에, 없으면 첫 글 제외
-  const masonryPosts = hasPinnedPosts ? filteredPosts : filteredPosts.slice(1);
+  // 최신 글을 헤드라인으로, 나머지를 masonry에
+  const headline = filteredPosts.length > 0 ? filteredPosts[0] : null;
+  const masonryPosts = filteredPosts.slice(1);
 
   // 랜덤 명언 (컴포넌트 마운트 시 한 번만 선택)
   const randomQuote = useMemo(() => {
@@ -736,7 +675,7 @@ export default function BoardPage() {
       {/* 교수님용 과목 탭 — 타이틀 영역에 통합됨 */}
 
       {/* 헤더 */}
-      <header ref={headerRef} className="mx-4 mt-2 pb-4 border-b-4 border-double border-[#1A1A1A]">
+      <header ref={headerRef} className="mx-4 mt-2 pb-2 border-b-4 border-double border-[#1A1A1A]">
         {/* 상단 날짜 및 에디션 */}
         <div className="flex justify-between items-center text-[10px] text-[#3A3A3A] mb-3 whitespace-nowrap">
           <span>{dateString}</span>
@@ -750,7 +689,7 @@ export default function BoardPage() {
         {/* 타이틀 — 교수님은 과목 체인지, 학생은 JIBDAN JISUNG */}
         {isProfessor ? (
           <div
-            className="border-y-4 border-[#1A1A1A] pt-3 pb-4 flex items-center justify-center gap-2 select-none overflow-hidden"
+            className="border-y-4 border-[#1A1A1A] pt-2 pb-2 flex items-center justify-center gap-2 select-none overflow-hidden"
             style={{ touchAction: 'pan-y' }}
             onTouchStart={(e) => { courseTouchStartX.current = scaleCoord(e.touches[0].clientX); }}
             onTouchMove={(e) => { courseTouchEndX.current = scaleCoord(e.touches[0].clientX); }}
@@ -789,12 +728,12 @@ export default function BoardPage() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -30 }}
                 transition={{ duration: 0.2 }}
-                className="font-serif-display font-black tracking-tight text-[#1A1A1A] text-center whitespace-nowrap h-[3.5rem] flex items-center justify-center"
+                className="font-serif-display font-black tracking-tight text-[#1A1A1A] text-center whitespace-nowrap h-[2.5rem] flex items-center justify-center"
               >
                 {(() => {
                   const name = courseList.find(c => c.id === selectedCourseId)?.nameEn.toUpperCase() || 'BIOLOGY';
                   const isLong = name.length > 10;
-                  return <span className={isLong ? 'text-[2.2rem] md:text-5xl' : 'text-4xl md:text-6xl'}>{name}</span>;
+                  return <span className={isLong ? 'text-[1.6rem] md:text-4xl' : 'text-[1.85rem] md:text-5xl'}>{name}</span>;
                 })()}
               </motion.h1>
             </AnimatePresence>
@@ -815,13 +754,13 @@ export default function BoardPage() {
             </button>
           </div>
         ) : (
-          <h1 className="font-serif-display text-4xl md:text-6xl font-black tracking-tight text-[#1A1A1A] text-center pt-3 pb-4 border-y-4 border-[#1A1A1A]">
+          <h1 className="font-serif-display text-4xl md:text-6xl font-black tracking-tight text-[#1A1A1A] text-center pt-2 pb-2 border-y-4 border-[#1A1A1A]">
             JIBDAN JISUNG
           </h1>
         )}
 
         {/* 서브타이틀 및 슬로건 */}
-        <div className="flex justify-between items-center mt-3 mb-4">
+        <div className="flex justify-between items-center mt-2 mb-2">
           <p className="text-[10px] text-[#3A3A3A] italic">
             "{randomQuote}"
           </p>
@@ -831,7 +770,7 @@ export default function BoardPage() {
         </div>
 
         {/* 하단 장식선 */}
-        <div className="border-t border-[#1A1A1A] mb-4" />
+        <div className="border-t border-[#1A1A1A] mb-2" />
 
         {/* 버튼 + 검색 */}
         <div className="flex items-center gap-2">
@@ -933,26 +872,13 @@ export default function BoardPage() {
           </div>
         )}
 
-        {/* 고정 글 캐러셀 또는 헤드라인 */}
-        {hasPinnedPosts ? (
-          <div className="mb-4">
-            <PinnedPostsCarousel
-              posts={pinnedPosts}
-              commentsMap={commentsMap}
-              onPostClick={handlePostClick}
-              isProfessor={isProfessor}
-              onUnpin={isProfessor ? (postId) => handleUnpinPost(postId) : undefined}
-            />
-          </div>
-        ) : headline && (
+        {/* 헤드라인 (최신 글) */}
+        {headline && (
           <div className="mb-4">
             <HeadlineArticle
               post={headline}
               onClick={() => handlePostClick(headline.id)}
               comments={commentsMap.get(headline.id) || []}
-              isProfessor={isProfessor}
-              isPinned={false}
-              onPin={() => handlePinPost(headline.id)}
             />
           </div>
         )}
@@ -968,10 +894,6 @@ export default function BoardPage() {
                 imagePosition={index % 2 === 0 ? 'top' : 'bottom'}
                 comments={commentsMap.get(post.id) || []}
                 isPriority={index < 4}
-                isProfessor={isProfessor}
-                isPinned={post.isPinned}
-                onPin={() => handlePinPost(post.id)}
-                onUnpin={() => handleUnpinPost(post.id)}
               />
             ))}
           </div>
@@ -1002,7 +924,7 @@ export default function BoardPage() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="fixed top-12 inset-x-0 z-50 mx-auto w-fit px-5 py-2.5 bg-[#1A1A1A] text-[#F5F0E8] text-sm font-bold shadow-lg"
+            className="fixed top-12 inset-x-0 z-50 mx-auto w-fit px-5 py-2.5 bg-[#1A1A1A] text-[#F5F0E8] text-sm font-bold shadow-lg rounded-lg"
           >
             {pinToast}
           </motion.div>

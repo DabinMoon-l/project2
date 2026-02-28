@@ -340,15 +340,8 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
                       >
                         <div className="w-8 text-center font-black text-white/60">{user.rank}</div>
                         <div className="w-10 h-10 flex items-center justify-center border-2 border-white/30 rounded-lg overflow-hidden flex-shrink-0 bg-white/10">
-                          {user.profileRabbitId != null ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={getRabbitProfileUrl(user.profileRabbitId)} alt="" width={40} height={40} className="w-full h-full object-cover" loading="lazy" />
-                          ) : (
-                            <svg width={20} height={20} viewBox="0 0 24 24" fill="rgba(255,255,255,0.5)">
-                              <circle cx="12" cy="8" r="4" />
-                              <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
-                            </svg>
-                          )}
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={getRabbitProfileUrl(user.profileRabbitId ?? 0)} alt="" width={40} height={40} className="w-full h-full object-cover" loading="lazy" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-bold text-white truncate">{user.nickname} · {user.classType}반</p>
@@ -414,15 +407,8 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
                     {myRank.rank}
                   </div>
                   <div className="w-10 h-10 flex items-center justify-center border-2 border-white/30 rounded-lg overflow-hidden flex-shrink-0 bg-white/10">
-                    {myRank.profileRabbitId != null ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={getRabbitProfileUrl(myRank.profileRabbitId)} alt="" width={40} height={40} className="w-full h-full object-cover" />
-                    ) : (
-                      <svg width={20} height={20} viewBox="0 0 24 24" fill="rgba(255,255,255,0.5)">
-                        <circle cx="12" cy="8" r="4" />
-                        <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
-                      </svg>
-                    )}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={getRabbitProfileUrl(myRank.profileRabbitId ?? 0)} alt="" width={40} height={40} className="w-full h-full object-cover" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-bold text-white truncate">{myRank.nickname} · {myRank.classType}반</p>
@@ -510,25 +496,17 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
  * 단상 위 토끼 이미지
  */
 function PodiumRabbit({ rabbitId, size }: { rabbitId?: number; size: number }) {
-  if (rabbitId != null) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={getRabbitImageSrc(rabbitId)}
-        alt=""
-        width={size}
-        height={Math.round(size * (969 / 520))}
-        className="object-contain"
-      />
-    );
-  }
+  // 장착 토끼가 없으면 기본 토끼(#0) 표시 (모든 유저는 온보딩 시 기본 토끼 지급)
+  const displayId = rabbitId ?? 0;
   return (
-    <div className="flex items-center justify-center" style={{ width: size, height: size }}>
-      <svg width={size * 0.5} height={size * 0.5} viewBox="0 0 24 24" fill="#9A9A9A">
-        <circle cx="12" cy="8" r="4" />
-        <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
-      </svg>
-    </div>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={getRabbitImageSrc(displayId)}
+      alt=""
+      width={size}
+      height={Math.round(size * (969 / 520))}
+      className="object-contain"
+    />
   );
 }
 

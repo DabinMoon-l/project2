@@ -1208,7 +1208,7 @@ export default function QuizStatsModal({
         exit={{ opacity: 0, scale: 0.05, x: genieOffset.dx, y: genieOffset.dy }}
         transition={{ type: 'spring', stiffness: 400, damping: 30 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg bg-[#F5F0E8] border-2 border-[#1A1A1A] h-[82vh] overflow-hidden flex flex-col"
+        className="w-full max-w-lg bg-[#F5F0E8] border-2 border-[#1A1A1A] h-[82vh] overflow-hidden flex flex-col rounded-xl"
       >
         {/* 헤더 */}
         <div className="px-3 py-2 border-b-2 border-[#1A1A1A] flex items-center justify-between flex-shrink-0">
@@ -1440,7 +1440,7 @@ export default function QuizStatsModal({
                           <div className="space-y-3 mb-4">
                             {/* 텍스트 형식 공통 지문 */}
                             {currentQuestion.passage && (!currentQuestion.passageType || currentQuestion.passageType === 'text') && (
-                              <div className="p-2 bg-[#F5F0E8] border border-[#1A1A1A]">
+                              <div className="p-2 bg-[#F5F0E8] border border-[#1A1A1A] rounded-lg">
                                 <p className="text-[10px] text-[#5C5C5C] mb-1 font-bold">공통 제시문</p>
                                 <p className="text-xs text-[#1A1A1A] whitespace-pre-wrap">{currentQuestion.passage}</p>
                               </div>
@@ -1448,7 +1448,7 @@ export default function QuizStatsModal({
 
                             {/* ㄱㄴㄷ 형식 공통 지문 */}
                             {currentQuestion.passageType === 'korean_abc' && currentQuestion.koreanAbcItems && currentQuestion.koreanAbcItems.length > 0 && (
-                              <div className="p-2 bg-[#F5F0E8] border border-[#1A1A1A] space-y-0.5">
+                              <div className="p-2 bg-[#F5F0E8] border border-[#1A1A1A] space-y-0.5 rounded-lg">
                                 <p className="text-[10px] text-[#5C5C5C] mb-1 font-bold">제시문</p>
                                 {currentQuestion.koreanAbcItems.filter(i => i.trim()).map((item, idx) => (
                                   <p key={idx} className="text-xs text-[#1A1A1A]">
@@ -1461,7 +1461,7 @@ export default function QuizStatsModal({
 
                             {/* 공통 이미지 */}
                             {currentQuestion.passageImage && (
-                              <div className="relative overflow-hidden bg-[#F5F0E8] border border-[#1A1A1A]">
+                              <div className="relative overflow-hidden bg-[#F5F0E8] border border-[#1A1A1A] rounded-lg">
                                 <p className="absolute top-2 left-2 text-xs text-[#5C5C5C] font-bold bg-[#F5F0E8]/80 px-2 py-0.5 z-10">공통 이미지</p>
                                 <img
                                   src={currentQuestion.passageImage}
@@ -1477,7 +1477,7 @@ export default function QuizStatsModal({
                         {hasValidMixedExamples && currentQuestion.mixedExamples!
                           .filter(item => item.type === 'grouped' && isValidMixedItem(item))
                           .map((item) => (
-                            <div key={item.id} className="mb-2 p-2 bg-[#F5F0E8] border border-[#1A1A1A] space-y-1">
+                            <div key={item.id} className="mb-2 p-2 bg-[#F5F0E8] border border-[#1A1A1A] space-y-1 rounded-lg">
                               {item.children?.filter(child => isValidMixedItem(child)).map((child) => (
                                 <div key={child.id}>
                                   {child.type === 'text' && child.content && (
@@ -1526,7 +1526,7 @@ export default function QuizStatsModal({
                                     </>
                                   )}
                                   {child.type === 'image' && child.imageUrl && (
-                                    <img src={child.imageUrl} alt="제시문 이미지" className="w-full max-w-xs h-auto border border-[#1A1A1A]" />
+                                    <img src={child.imageUrl} alt="제시문 이미지" className="w-full max-w-xs h-auto border border-[#1A1A1A] rounded-lg" />
                                   )}
                                 </div>
                               ))}
@@ -1539,14 +1539,14 @@ export default function QuizStatsModal({
                           .map((item) => {
                             if (item.type === 'text') {
                               return (
-                                <div key={item.id} className="mb-2 p-2 bg-[#F5F0E8] border border-[#1A1A1A]">
+                                <div key={item.id} className="mb-2 p-2 bg-[#F5F0E8] border border-[#1A1A1A] rounded-lg">
                                   <p className="text-xs text-[#1A1A1A] whitespace-pre-wrap">{item.content}</p>
                                 </div>
                               );
                             }
                             if (item.type === 'labeled') {
                               return (
-                                <div key={item.id} className="mb-2 p-2 bg-[#F5F0E8] border border-[#1A1A1A] space-y-1">
+                                <div key={item.id} className="mb-2 p-2 bg-[#F5F0E8] border border-[#1A1A1A] space-y-1 rounded-lg">
                                   {item.content && (
                                     <p className="text-xs text-[#1A1A1A]">
                                       <span className="font-bold mr-1">{item.label}.</span>{item.content}
@@ -1562,7 +1562,7 @@ export default function QuizStatsModal({
                             }
                             if (item.type === 'gana') {
                               return (
-                                <div key={item.id} className="mb-2 p-2 bg-[#F5F0E8] border border-[#1A1A1A] space-y-1">
+                                <div key={item.id} className="mb-2 p-2 bg-[#F5F0E8] border border-[#1A1A1A] space-y-1 rounded-lg">
                                   {item.content && (
                                     <p className="text-xs text-[#1A1A1A]">
                                       <span className="font-bold mr-1">({item.label})</span>{item.content}
@@ -1581,7 +1581,7 @@ export default function QuizStatsModal({
 
                         {/* 문제 이미지 */}
                         {currentQuestion.imageUrl && (
-                          <div className="mb-2 overflow-hidden bg-[#F5F0E8] border border-[#1A1A1A]">
+                          <div className="mb-2 overflow-hidden bg-[#F5F0E8] border border-[#1A1A1A] rounded-lg">
                             <img
                               src={currentQuestion.imageUrl}
                               alt="문제 이미지"
@@ -1592,7 +1592,7 @@ export default function QuizStatsModal({
 
                         {/* 보기 (<보기> 박스) */}
                         {currentQuestion.bogi && currentQuestion.bogi.items && currentQuestion.bogi.items.some(i => i.content?.trim()) && (
-                          <div className="mb-2 p-2 bg-[#F5F0E8] border-2 border-[#1A1A1A]">
+                          <div className="mb-2 p-2 bg-[#F5F0E8] border-2 border-[#1A1A1A] rounded-lg">
                             <p className="text-[10px] text-center text-[#5C5C5C] mb-1.5 font-bold">&lt;보 기&gt;</p>
                             <div className="space-y-1">
                               {currentQuestion.bogi.items.filter(i => i.content?.trim()).map((item) => (
@@ -1635,7 +1635,7 @@ export default function QuizStatsModal({
                                 return (
                                   <div
                                     key={opt}
-                                    className={`relative w-16 h-16 text-2xl font-bold border-2 flex flex-col items-center justify-center overflow-hidden ${
+                                    className={`relative w-16 h-16 text-2xl font-bold border-2 overflow-hidden ${
                                       isCorrect ? 'border-[#1A6B1A]' : 'border-[#8B1A1A]'
                                     }`}
                                     style={{ backgroundColor: '#EDEAE4' }}
@@ -1648,8 +1648,10 @@ export default function QuizStatsModal({
                                         className={`absolute left-0 right-0 bottom-0 ${isCorrect ? 'bg-[#E8F5E9]' : 'bg-[#FDEAEA]'}`}
                                       />
                                     )}
-                                    <span className={`relative z-10 ${isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>{opt}</span>
-                                    <span className={`relative z-10 text-[10px] font-normal ${isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>{percentage}%</span>
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                      <span className={`relative z-10 ${isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>{opt}</span>
+                                      <span className={`relative z-10 text-[10px] font-normal ${isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>{percentage}%</span>
+                                    </div>
                                   </div>
                                 );
                               })}
@@ -1778,11 +1780,10 @@ export default function QuizStatsModal({
               exit={{ opacity: 0, scale: 0.05, x: fdx, y: fdy }}
               transition={{ type: 'spring', stiffness: 400, damping: 30 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-xs bg-[#F5F0E8] border-2 border-[#1A1A1A] max-h-[60vh] overflow-visible flex flex-col"
+              className="w-full max-w-xs bg-[#F5F0E8] border-2 border-[#1A1A1A] max-h-[60vh] overflow-visible flex flex-col rounded-xl"
             >
-              <div className="px-3 py-1.5 border-b border-[#1A1A1A]">
-                <h2 className="text-xs font-bold text-[#1A1A1A]">피드백</h2>
-                <p className="text-[10px] text-[#5C5C5C] truncate">{quizTitle}</p>
+              <div className="px-3 py-2 border-b border-[#1A1A1A]">
+                <h2 className="text-sm font-bold text-[#1A1A1A] text-center truncate">{quizTitle}</h2>
               </div>
 
               <div className="flex-1 overflow-y-auto overscroll-contain p-2">
@@ -1823,7 +1824,7 @@ export default function QuizStatsModal({
                       return (
                         <div
                           key={feedback.id}
-                          className="p-1.5 border border-[#1A1A1A] bg-[#EDEAE4]"
+                          className="p-1.5 border border-[#1A1A1A] bg-[#EDEAE4] rounded-lg"
                         >
                           {questionNum > 0 && (
                             <p className="text-[10px] text-[#5C5C5C] mb-0.5">
@@ -1848,7 +1849,7 @@ export default function QuizStatsModal({
               <div className="p-1.5 border-t border-[#1A1A1A]">
                 <button
                   onClick={() => { setShowFeedbackModal(false); setFeedbackList([]); }}
-                  className="w-full py-1.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4]"
+                  className="w-full py-1.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] rounded-lg"
                 >
                   닫기
                 </button>
@@ -1875,7 +1876,7 @@ export default function QuizStatsModal({
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="fixed top-6 left-0 right-0 mx-auto w-fit z-[110] px-4 py-2 bg-[#1A1A1A] text-[#F5F0E8] text-sm font-bold"
+            className="fixed top-6 left-0 right-0 mx-auto w-fit z-[110] px-4 py-2 bg-[#1A1A1A] text-[#F5F0E8] text-sm font-bold rounded-lg"
           >
             {folderSaveToast}
           </motion.div>

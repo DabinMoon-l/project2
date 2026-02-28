@@ -111,7 +111,14 @@ const _rawCacheMap = new Map<string, RawCache>();
 const RAW_CACHE_TTL = 5 * 60 * 1000; // 5분
 
 const _statsCacheMap = new Map<string, { data: StatsData; ts: number }>();
-const STATS_CACHE_TTL = 3 * 60 * 1000; // 3분
+const STATS_CACHE_TTL = 5 * 60 * 1000; // 5분 (raw 캐시와 통일)
+
+/** raw 캐시에서 학생 classMap 조회 (중복 쿼리 방지) */
+export function getRawUserClassMap(courseId: string): Record<string, ClassType> | null {
+  const raw = _rawCacheMap.get(courseId);
+  if (!raw || Date.now() - raw.ts > RAW_CACHE_TTL) return null;
+  return raw.userClassMap;
+}
 
 // === 훅 ===
 

@@ -160,7 +160,7 @@ function ExpToastItem({ toast }: { toast: ExpToastData }) {
 
       {/* 일반 EXP 토스트 - 빈티지 신문 스타일 */}
         <div
-          className="relative px-4 py-2 shadow-lg min-w-[180px]"
+          className="relative px-4 py-2 shadow-lg min-w-[180px] rounded-lg"
           style={{
             backgroundColor: theme.colors.background,
             border: '2px solid #1A1A1A',

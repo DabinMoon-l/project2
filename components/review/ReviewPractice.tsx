@@ -604,10 +604,12 @@ export default function ReviewPractice({
         <main className="px-4 py-5 pb-24">
           {/* 점수 */}
           <div className="text-center mb-5">
-            <p className="text-3xl font-bold text-[#1A1A1A]">
-              {correctCount}/{totalQuestionCount}
-            </p>
-            <p className="text-xs text-[#5C5C5C] mt-1.5">
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <span className="text-5xl font-black text-[#1A1A1A]">{correctCount}</span>
+              <span className="text-2xl text-[#5C5C5C]">/</span>
+              <span className="text-2xl text-[#5C5C5C]">{totalQuestionCount}</span>
+            </div>
+            <p className="text-base text-[#5C5C5C]">
               정답률 {Math.round((correctCount / totalQuestionCount) * 100)}%
             </p>
           </div>
@@ -1397,7 +1399,7 @@ export default function ReviewPractice({
                                   openFeedbackSheet(item);
                                 }}
                                 disabled={submittedFeedbackIds.has(item.questionId)}
-                                className={`flex items-center gap-2 px-3 py-2 text-xs font-bold border transition-colors ${
+                                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold border transition-colors rounded-lg ${
                                   submittedFeedbackIds.has(item.questionId)
                                     ? 'bg-[#E8F5E9] border-[#1A6B1A] text-[#1A6B1A] cursor-default'
                                     : 'bg-[#FFF8E1] border-[#8B6914] text-[#8B6914] hover:bg-[#FFECB3]'
@@ -1435,13 +1437,13 @@ export default function ReviewPractice({
           <div className="flex gap-2.5">
             <button
               onClick={() => setPhase('practice')}
-              className="flex-1 py-2.5 text-xs bg-[#F5F0E8] text-[#1A1A1A] font-bold border-2 border-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+              className="flex-1 py-3 text-sm bg-[#F5F0E8] text-[#1A1A1A] font-bold border-2 border-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors rounded-lg"
             >
               이전
             </button>
             <button
               onClick={handleGoToFeedback}
-              className="flex-[2] py-2.5 text-xs bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
+              className="flex-[2] py-3 text-sm bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors rounded-lg"
             >
               다음
             </button>
@@ -1465,7 +1467,7 @@ export default function ReviewPractice({
                   <button
                     key={type}
                     onClick={() => setSelectedFeedbackType(type)}
-                    className={`p-1.5 border-2 text-[10px] font-bold transition-all ${
+                    className={`p-2 border-2 text-xs font-bold transition-all rounded-lg ${
                       selectedFeedbackType === type
                         ? 'border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8]'
                         : 'border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A]'
@@ -1503,7 +1505,7 @@ export default function ReviewPractice({
             <button
               onClick={handleFeedbackSubmit}
               disabled={!selectedFeedbackType || isFeedbackSubmitting}
-              className={`w-full py-2 text-xs font-bold border-2 transition-colors ${
+              className={`w-full py-2.5 text-sm font-bold border-2 transition-colors rounded-lg ${
                 selectedFeedbackType
                   ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
                   : 'bg-[#EDEAE4] text-[#5C5C5C] border-[#5C5C5C] cursor-not-allowed'
@@ -1535,19 +1537,10 @@ export default function ReviewPractice({
         className="fixed inset-0 z-[60] flex flex-col overscroll-contain"
         style={{ backgroundColor: '#F5F0E8' }}
       >
-        {/* 헤더 — 축소 h-10 */}
+        {/* 헤더 */}
         <header className="shrink-0 border-b-2 border-[#1A1A1A] bg-[#F5F0E8]">
-          <div className="flex items-center justify-between h-10 px-4">
-            <button
-              onClick={() => setPhase('result')}
-              className="p-1 -ml-2"
-            >
-              <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <h1 className="text-xs font-bold text-[#1A1A1A]">{headerTitle} 완료</h1>
-            <div className="w-8" />
+          <div className="flex items-center justify-center h-12 px-4">
+            <h1 className="text-base font-bold text-[#1A1A1A]">{headerTitle} 완료</h1>
           </div>
         </header>
 
@@ -1560,36 +1553,24 @@ export default function ReviewPractice({
                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
               </svg>
             </div>
-            <h2 className="text-sm font-bold text-[#1A1A1A]">{headerTitle}을 완료했습니다!</h2>
-            <p className="text-[10px] text-[#5C5C5C] mt-1">
+            <h2 className="text-lg font-bold text-[#1A1A1A]">{headerTitle}을 완료했습니다!</h2>
+            <p className="text-sm text-[#5C5C5C] mt-1">
               {totalQuestionCount}문제 중 {correctCount}문제 정답
             </p>
           </div>
 
-          {/* 총 획득 EXP — 축소, 복습+피드백 합산 표시 */}
-          <div className="border-2 border-[#D4AF37] bg-[#FFF8E1] p-2 mb-3">
+          {/* 총 획득 EXP */}
+          <div className="bg-[#1A1A1A] p-3 mb-3 rounded-lg">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 bg-[#D4AF37] flex items-center justify-center">
-                  <svg className="w-4 h-4 text-[#1A1A1A]" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-[11px] font-bold text-[#1A1A1A]">총 획득 경험치</p>
-                  <p className="text-[10px] text-[#5C5C5C]">
-                    복습 {reviewExp}{feedbackExp > 0 ? ` + 피드백 ${feedbackExp}` : ''} EXP
-                  </p>
-                </div>
-              </div>
-              <p className="text-base font-bold text-[#D4AF37]">+{totalDisplayExp}</p>
+              <p className="text-sm font-bold text-[#F5F0E8]">총 획득 경험치</p>
+              <p className="text-base font-bold text-[#F5F0E8]">+{totalDisplayExp} XP</p>
             </div>
           </div>
 
           {/* 틀린 문제 폴더 저장 — 축소 */}
           {wrongItems.length > 0 && !saveSuccess && (
-            <div className="border-2 border-[#1A1A1A] bg-[#F5F0E8] p-1.5">
-              <h3 className="text-[11px] font-bold text-[#1A1A1A] mb-1">
+            <div className="border-2 border-[#1A1A1A] bg-[#F5F0E8] p-3 rounded-lg">
+              <h3 className="text-sm font-bold text-[#1A1A1A] mb-2">
                 틀린 문제 {wrongItems.length}개를 폴더에 저장
               </h3>
 
@@ -1616,7 +1597,7 @@ export default function ReviewPractice({
                       <button
                         key={folder.id}
                         onClick={() => setSelectedFolderId(folder.id)}
-                        className={`w-full text-left px-2 py-0.5 text-[11px] border transition-colors ${
+                        className={`w-full text-left px-3 py-1.5 text-xs border transition-colors rounded-lg ${
                           selectedFolderId === folder.id
                             ? 'border-[#1A1A1A] bg-[#EDEAE4] font-bold'
                             : 'border-[#EDEAE4] hover:border-[#1A1A1A]'
@@ -1630,20 +1611,20 @@ export default function ReviewPractice({
               )}
 
               {/* 새 폴더 생성 */}
-              <div className="mb-1.5">
-                <p className="text-[10px] text-[#5C5C5C] mb-0.5">새 폴더 만들기</p>
-                <div className="flex gap-1">
+              <div className="mb-2">
+                <p className="text-xs text-[#5C5C5C] mb-1">새 폴더 만들기</p>
+                <div className="flex gap-1.5">
                   <input
                     type="text"
                     value={newFolderName}
                     onChange={(e) => setNewFolderName(e.target.value)}
                     placeholder="폴더 이름 입력"
-                    className="flex-1 px-2 py-0.5 text-[11px] border border-[#1A1A1A] bg-[#F5F0E8] outline-none focus:border-2"
+                    className="flex-1 px-3 py-1.5 text-xs border border-[#1A1A1A] bg-[#F5F0E8] outline-none focus:border-2 rounded-lg"
                   />
                   <button
                     onClick={handleCreateFolder}
                     disabled={!newFolderName.trim() || isCreatingFolder}
-                    className="shrink-0 whitespace-nowrap px-2.5 py-1 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8] disabled:opacity-50"
+                    className="shrink-0 whitespace-nowrap px-3 py-1.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] disabled:opacity-50 rounded-lg"
                   >
                     {isCreatingFolder ? '...' : '생성'}
                   </button>
@@ -1655,7 +1636,7 @@ export default function ReviewPractice({
                 <button
                   onClick={handleSaveToFolder}
                   disabled={isSaving}
-                  className="w-full py-1 text-[11px] font-bold bg-[#1A6B1A] text-[#F5F0E8] hover:bg-[#155415] transition-colors disabled:opacity-50"
+                  className="w-full py-2 text-xs font-bold bg-[#1A6B1A] text-[#F5F0E8] hover:bg-[#155415] transition-colors disabled:opacity-50 rounded-lg"
                 >
                   {isSaving ? '저장 중...' : `선택한 폴더에 ${wrongItems.length}문제 저장`}
                 </button>
@@ -1665,12 +1646,12 @@ export default function ReviewPractice({
 
           {/* 저장 완료 메시지 — 축소 */}
           {saveSuccess && (
-            <div className="border-2 border-[#1A6B1A] bg-[#E8F5E9] p-2 text-center">
+            <div className="border-2 border-[#1A6B1A] bg-[#E8F5E9] p-3 text-center rounded-lg">
               <svg className="w-8 h-8 mx-auto mb-1 text-[#1A6B1A]" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
               </svg>
-              <p className="text-[11px] font-bold text-[#1A6B1A]">저장되었습니다!</p>
-              <p className="text-[10px] text-[#5C5C5C] mt-0.5">
+              <p className="text-xs font-bold text-[#1A6B1A]">저장되었습니다!</p>
+              <p className="text-xs text-[#5C5C5C] mt-0.5">
                 커스텀 폴더에서 확인할 수 있습니다.
               </p>
             </div>
@@ -1678,7 +1659,7 @@ export default function ReviewPractice({
 
           {/* 틀린 문제가 없는 경우 — 축소 */}
           {wrongItems.length === 0 && (
-            <div className="border-2 border-[#1A6B1A] bg-[#E8F5E9] p-2 text-center">
+            <div className="border-2 border-[#1A6B1A] bg-[#E8F5E9] p-3 text-center rounded-lg">
               <svg className="w-8 h-8 mx-auto mb-1 text-[#1A6B1A]" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
               </svg>
@@ -1692,13 +1673,13 @@ export default function ReviewPractice({
           <div className="flex gap-2">
             <button
               onClick={() => setPhase('result')}
-              className="flex-1 py-2 text-xs bg-[#F5F0E8] text-[#1A1A1A] font-bold border-2 border-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+              className="flex-1 py-3 text-sm bg-[#F5F0E8] text-[#1A1A1A] font-bold border-2 border-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors rounded-lg"
             >
               이전
             </button>
             <button
               onClick={handleFinish}
-              className="flex-[2] py-2 text-xs bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
+              className="flex-[2] py-3 text-sm bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors rounded-lg"
             >
               완료
             </button>
@@ -1797,7 +1778,7 @@ export default function ReviewPractice({
 
                   {/* 공통 문제 */}
                   {currentGroup.items[0]?.commonQuestion && (
-                    <p className="text-[#1A1A1A] text-xs leading-relaxed whitespace-pre-wrap">
+                    <p className="text-[#1A1A1A] text-sm leading-relaxed whitespace-pre-wrap">
                       {currentGroup.items[0].commonQuestion}
                     </p>
                   )}
@@ -1925,7 +1906,7 @@ export default function ReviewPractice({
                       </div>
 
                       {/* 하위 문제 텍스트 */}
-                      <p className="text-[#1A1A1A] text-xs leading-relaxed whitespace-pre-wrap mb-3">
+                      <p className="text-[#1A1A1A] text-sm leading-relaxed whitespace-pre-wrap mb-3">
                         {subItem.question}
                       </p>
 
@@ -2151,7 +2132,7 @@ export default function ReviewPractice({
                       </span>
                     )}
                   </div>
-                  <p className="text-[#1A1A1A] text-xs leading-relaxed whitespace-pre-wrap">
+                  <p className="text-[#1A1A1A] text-sm leading-relaxed whitespace-pre-wrap">
                     {currentItem.question}
                   </p>
                   {/* 문제 이미지 */}
@@ -2525,7 +2506,7 @@ export default function ReviewPractice({
           {currentIndex > 0 && (
             <button
               onClick={handlePrev}
-              className="flex-1 py-3 bg-[#F5F0E8] text-[#1A1A1A] font-bold border-2 border-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+              className="flex-1 py-3 bg-[#F5F0E8] text-[#1A1A1A] font-bold border-2 border-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors rounded-lg"
             >
               이전
             </button>
@@ -2547,14 +2528,14 @@ export default function ReviewPractice({
                   return answer === null || (Array.isArray(answer) && answer.length === 0);
                 }
               })()}
-              className={`${currentIndex > 0 ? 'flex-[2]' : 'w-full'} py-3 bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
+              className={`${currentIndex > 0 ? 'flex-[2]' : 'w-full'} py-3 bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors disabled:opacity-50 disabled:cursor-not-allowed rounded-lg`}
             >
               제출하기
             </button>
           ) : (
             <button
               onClick={handleNext}
-              className={`${currentIndex > 0 ? 'flex-[2]' : 'w-full'} py-3 bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors`}
+              className={`${currentIndex > 0 ? 'flex-[2]' : 'w-full'} py-3 bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors rounded-lg`}
             >
               {isLastQuestion ? '결과 보기' : '다음 문제'}
             </button>
