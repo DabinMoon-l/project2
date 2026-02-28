@@ -134,7 +134,7 @@ export default function TekkenBattleOverlay({
           <>
             {/* ── 상단 바: 타이머 + 라운드 ── */}
             <div className="pt-[env(safe-area-inset-top)]">
-              <div className="flex items-center justify-center gap-3 px-4 py-2">
+              <div className="flex items-center justify-center gap-3 px-4" style={{ paddingBlock: 'clamp(6px, 1.2dvh, 12px)' }}>
                 <div className="px-4 py-1 bg-black/40 border border-white/15 rounded-full backdrop-blur-sm">
                   <span className={`text-lg font-black ${(tekken.battleTimeLeft ?? 0) < 30000 ? 'text-red-400' : 'text-white'}`}>
                     {timeStr}
