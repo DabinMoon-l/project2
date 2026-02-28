@@ -1921,7 +1921,7 @@ function QuizListPageContent() {
   // 메인 페이지
   return (
     <>
-    <div className="min-h-screen pb-72" style={{ backgroundColor: '#F5F0E8' }}>
+    <div className={`min-h-screen pb-72 ${isManageMode ? 'pointer-events-none' : ''}`} style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 - 배너 이미지 */}
       <header className="flex flex-col items-center">
         <div className="w-full h-[160px] mt-2">
@@ -1951,7 +1951,7 @@ function QuizListPageContent() {
       </header>
 
       {/* 뉴스 캐러셀 (중간/기말/기출) */}
-      <section className="mt-4" style={{ transform: 'scale(0.85)', transformOrigin: 'top center', width: '117.65%', marginLeft: '-8.825%', marginBottom: '-55px' }}>
+      <section data-no-tab-swipe className="mt-4" style={{ transform: 'scale(0.85)', transformOrigin: 'top center', width: '117.65%', marginLeft: '-8.825%', marginBottom: '-55px' }}>
         <NewsCarousel
           midtermQuizzes={midtermQuizzesWithUpdate}
           finalQuizzes={finalQuizzesWithUpdate}
@@ -2578,11 +2578,11 @@ function QuizListPageContent() {
           animate={{ x: 0 }}
           exit={{ x: '-100%' }}
           transition={{ type: 'spring', stiffness: 400, damping: 35 }}
-          className="fixed inset-0 overflow-y-auto overscroll-contain pb-28 z-[5]"
+          className="fixed inset-0 overflow-y-auto overscroll-contain pb-28 z-[60]"
           style={{ backgroundColor: '#F5F0E8' }}
         >
           {/* 헤더: 제목 + 오른쪽 화살표(닫기) */}
-          <header className="px-4 pt-4 pb-3 border-b border-[#EDEAE4]">
+          <header className="px-4 pb-3 border-b border-[#EDEAE4]" style={{ paddingTop: 'calc(1rem + env(safe-area-inset-top, 0px))' }}>
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-black text-[#1A1A1A]">내가 만든 퀴즈</h2>

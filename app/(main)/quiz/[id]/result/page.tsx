@@ -1338,7 +1338,7 @@ export default function QuizResultPage() {
   return (
     <div className="min-h-screen pb-24" style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 */}
-      <header className="sticky top-0 z-50 w-full border-b-2 border-[#1A1A1A]" style={{ backgroundColor: '#F5F0E8' }}>
+      <header className="sticky z-50 w-full border-b-2 border-[#1A1A1A]" style={{ top: 'env(safe-area-inset-top, 0px)', backgroundColor: '#F5F0E8' }}>
         <div className="flex items-center justify-center h-14 px-4">
           <h1 className="text-base font-bold text-[#1A1A1A]">퀴즈 결과</h1>
         </div>

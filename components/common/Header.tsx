@@ -94,8 +94,9 @@ export default function Header({
       initial="initial"
       animate="animate"
       transition={{ duration: 0.3, ease: 'easeOut' }}
-      className="sticky top-0 z-50 w-full"
+      className="sticky z-50 w-full"
       style={{
+        top: 'env(safe-area-inset-top, 0px)',
         backgroundColor: `${colors.background}e6`, // 90% 불투명도
       }}
     >

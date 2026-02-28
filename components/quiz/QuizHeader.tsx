@@ -44,8 +44,8 @@ export default function QuizHeader({
 
   return (
     <header
-      className="sticky top-0 z-50 w-full border-b-2 border-[#1A1A1A]"
-      style={{ backgroundColor: '#F5F0E8' }}
+      className="sticky z-50 w-full border-b-2 border-[#1A1A1A]"
+      style={{ top: 'env(safe-area-inset-top, 0px)', backgroundColor: '#F5F0E8' }}
     >
       {/* 헤더 컨텐츠 */}
       <div className="flex items-center justify-between h-14 px-4">

@@ -1028,7 +1028,7 @@ export default function ProfessorQuizCreatePage() {
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 */}
-      <header className="sticky top-0 z-20 border-b-2 border-[#1A1A1A]" style={{ backgroundColor: '#F5F0E8' }}>
+      <header className="sticky z-20 border-b-2 border-[#1A1A1A]" style={{ top: 'env(safe-area-inset-top, 0px)', backgroundColor: '#F5F0E8' }}>
         <div className="flex items-center justify-between px-4 py-3">
           <button type="button" onClick={handleBackButton} className="flex items-center gap-2 text-sm text-[#1A1A1A]">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

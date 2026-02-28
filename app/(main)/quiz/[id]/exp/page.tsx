@@ -213,7 +213,7 @@ export default function ExpPage() {
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 */}
-      <header className="sticky top-0 z-50 px-4 py-3 border-b-2 border-[#1A1A1A] bg-[#F5F0E8]">
+      <header className="sticky z-50 px-4 py-3 border-b-2 border-[#1A1A1A] bg-[#F5F0E8]" style={{ top: 'env(safe-area-inset-top, 0px)' }}>
         <div className="flex items-center justify-center">
           <h1 className="text-sm font-bold text-[#1A1A1A]">
             획득 경험치

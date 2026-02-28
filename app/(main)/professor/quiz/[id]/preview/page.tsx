@@ -1150,7 +1150,7 @@ export default function QuizPreviewPage() {
   return (
     <div className={`min-h-screen ${isEditMode ? 'pb-24' : 'pb-8'}`} style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 */}
-      <header className="sticky top-0 z-50 w-full border-b-2 border-[#1A1A1A]" style={{ backgroundColor: '#F5F0E8' }}>
+      <header className="sticky z-50 w-full border-b-2 border-[#1A1A1A]" style={{ top: 'env(safe-area-inset-top, 0px)', backgroundColor: '#F5F0E8' }}>
         <div className="flex items-center h-14 px-4">
           {isEditMode ? (
             <div className="w-12 h-12" />

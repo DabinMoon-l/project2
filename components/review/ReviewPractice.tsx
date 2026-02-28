@@ -593,7 +593,7 @@ export default function ReviewPractice({
         style={{ backgroundColor: '#F5F0E8' }}
       >
         {/* 헤더 */}
-        <header className="sticky top-0 z-50 border-b-2 border-[#1A1A1A] bg-[#F5F0E8]">
+        <header className="sticky z-50 border-b-2 border-[#1A1A1A] bg-[#F5F0E8]" style={{ top: 'env(safe-area-inset-top, 0px)' }}>
           <div className="flex items-center justify-between h-12 px-4">
             <div className="w-10" />
             <h1 className="text-sm font-bold text-[#1A1A1A]">{headerTitle} 결과</h1>
@@ -1719,8 +1719,8 @@ export default function ReviewPractice({
     >
       {/* 헤더 */}
       <header
-        className="sticky top-0 z-[60] w-full border-b-2 border-[#1A1A1A]"
-        style={{ backgroundColor: '#F5F0E8' }}
+        className="sticky z-[60] w-full border-b-2 border-[#1A1A1A]"
+        style={{ top: 'env(safe-area-inset-top, 0px)', backgroundColor: '#F5F0E8' }}
       >
         <div className="flex items-center justify-between h-14 px-4">
           <motion.button

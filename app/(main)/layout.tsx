@@ -6,6 +6,7 @@ import { ThemeProvider } from '@/styles/themes/ThemeProvider';
 import { useRequireAuth } from '@/lib/hooks/useAuth';
 import Navigation from '@/components/common/Navigation';
 import { NotificationProvider, ExpToastProvider, SwipeBack } from '@/components/common';
+import TabSwipeNav from '@/components/common/TabSwipeNav';
 import { AIQuizContainer } from '@/components/ai-quiz';
 import { UserProvider, useUser, CourseProvider, useCourse, MilestoneProvider, HomeOverlayProvider } from '@/lib/contexts';
 import { HomeOverlay, ProfessorHomeOverlay } from '@/components/home';
@@ -14,6 +15,10 @@ import type { ClassType } from '@/styles/themes';
 import LibraryJobToast from '@/components/professor/library/LibraryJobToast';
 import { useViewportScale, useWideMode } from '@/lib/hooks/useViewportScale';
 import { useScrollDismissKeyboard } from '@/lib/hooks/useKeyboardAware';
+
+// 탭 스와이프 경로 배열
+const STUDENT_TABS = ['/', '/quiz', '/review', '/board'];
+const PROFESSOR_TABS = ['/professor', '/professor/stats', '/professor/quiz', '/professor/students', '/board'];
 
 /**
  * 내부 레이아웃 컴포넌트
@@ -109,30 +114,35 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
             <HomeOverlayProvider>
               <LibraryJobToast />
               <SwipeBack enabled={!isWide && !isTabRoot}>
-                <div
-                  data-main-content
-                  className="min-h-screen"
-                  style={{
-                    paddingTop: 'env(safe-area-inset-top, 0px)',
-                    // 네비 바가 표시될 때: 네비 높이(~68px) + 네비 bottom offset(safe-area + 0.5rem) + 여유
-                    // pb-20(80px)은 safe-area 미포함이라 iPhone 15 Pro 등에서 콘텐츠가 가려짐
-                    ...(!hideNavigation && !isWide
-                      ? { paddingBottom: 'calc(5rem + env(safe-area-inset-bottom, 0px))' }
-                      : {}),
-                    ...(isWide ? { marginLeft: '72px' } : {}),
-                  }}
+                <TabSwipeNav
+                  tabs={isProfessor ? PROFESSOR_TABS : STUDENT_TABS}
+                  enabled={!isWide && isTabRoot}
                 >
-                  {/* 메인 콘텐츠 */}
-                  <main className={isWide ? 'max-w-[640px] mx-auto' : ''}>
-                    {children}
-                    {!isProfessor && pathname === '/quiz' && searchParams.get('manage') !== 'true' && <AIQuizContainer />}
-                  </main>
+                  <div
+                    data-main-content
+                    className="min-h-screen"
+                    style={{
+                      paddingTop: 'env(safe-area-inset-top, 0px)',
+                      // 네비 바가 표시될 때: 네비 높이(~68px) + 네비 bottom offset(safe-area + 0.5rem) + 여유
+                      // pb-20(80px)은 safe-area 미포함이라 iPhone 15 Pro 등에서 콘텐츠가 가려짐
+                      ...(!hideNavigation && !isWide
+                        ? { paddingBottom: 'calc(5rem + env(safe-area-inset-bottom, 0px))' }
+                        : {}),
+                      ...(isWide ? { marginLeft: '72px' } : {}),
+                    }}
+                  >
+                    {/* 메인 콘텐츠 */}
+                    <main className={isWide ? 'max-w-[640px] mx-auto' : ''}>
+                      {children}
+                      {!isProfessor && pathname === '/quiz' && searchParams.get('manage') !== 'true' && <AIQuizContainer />}
+                    </main>
 
-                  {/* 하단 네비게이션 바 */}
-                  {!hideNavigation && (
-                    <Navigation role={isProfessor ? 'professor' : 'student'} />
-                  )}
-                </div>
+                    {/* 하단 네비게이션 바 */}
+                    {!hideNavigation && (
+                      <Navigation role={isProfessor ? 'professor' : 'student'} />
+                    )}
+                  </div>
+                </TabSwipeNav>
               </SwipeBack>
               {!isProfessor ? <HomeOverlay /> : <ProfessorHomeOverlay />}
             </HomeOverlayProvider>
