@@ -443,26 +443,26 @@ export default function UpdateQuizModal({
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="w-full max-w-md bg-[#F5F0E8] border-2 border-[#1A1A1A] max-h-[90vh] overflow-auto overscroll-contain"
+          className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] max-h-[85vh] overflow-auto overscroll-contain"
         >
           {/* 헤더 */}
-          <div className="p-4 border-b border-[#1A1A1A]">
-            <h2 className="text-lg font-bold text-[#1A1A1A]">업데이트 완료</h2>
+          <div className="px-3 py-2 border-b border-[#1A1A1A]">
+            <h2 className="text-sm font-bold text-[#1A1A1A]">업데이트 완료</h2>
           </div>
 
           {/* 결과 */}
-          <div className="p-6 text-center">
-            <p className="text-sm text-[#5C5C5C] mb-2">업데이트 결과</p>
-            <div className="flex items-center justify-center gap-2 mb-4">
-              <span className="text-4xl font-bold text-[#1A1A1A]">{correctCount}</span>
-              <span className="text-xl text-[#5C5C5C]">/</span>
-              <span className="text-xl text-[#5C5C5C]">{questions.length}</span>
+          <div className="p-4 text-center">
+            <p className="text-xs text-[#5C5C5C] mb-1">업데이트 결과</p>
+            <div className="flex items-center justify-center gap-1.5 mb-3">
+              <span className="text-2xl font-bold text-[#1A1A1A]">{correctCount}</span>
+              <span className="text-base text-[#5C5C5C]">/</span>
+              <span className="text-base text-[#5C5C5C]">{questions.length}</span>
             </div>
 
-            <div className="p-4 border border-[#1A1A1A] bg-[#EDEAE4] mb-4">
-              <p className="text-sm text-[#5C5C5C] mb-1">새 점수</p>
-              <p className="text-2xl font-bold text-[#1A1A1A]">{resultData.newScore}점</p>
-              <p className="text-xs text-[#5C5C5C]">
+            <div className="p-3 border border-[#1A1A1A] bg-[#EDEAE4] mb-3">
+              <p className="text-xs text-[#5C5C5C] mb-0.5">새 점수</p>
+              <p className="text-xl font-bold text-[#1A1A1A]">{resultData.newScore}점</p>
+              <p className="text-[10px] text-[#5C5C5C]">
                 ({resultData.newCorrectCount}/{totalQuestionCount} 정답)
               </p>
             </div>
@@ -565,10 +565,10 @@ export default function UpdateQuizModal({
           </div>
 
           {/* 완료 버튼 */}
-          <div className="p-4 border-t border-[#1A1A1A]">
+          <div className="px-3 py-2 border-t border-[#1A1A1A]">
             <button
               onClick={handleComplete}
-              className="w-full py-3 font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#333] transition-colors"
+              className="w-full py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#333] transition-colors"
             >
               완료
             </button>
@@ -584,31 +584,31 @@ export default function UpdateQuizModal({
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="w-full max-w-md bg-[#F5F0E8] border-2 border-[#1A1A1A] max-h-[90vh] overflow-auto overscroll-contain"
+        className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] max-h-[85vh] overflow-auto overscroll-contain"
       >
         {/* 헤더 */}
-        <div className="p-4 border-b border-[#1A1A1A] flex items-center justify-between">
+        <div className="px-3 py-2 border-b border-[#1A1A1A] flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-bold text-[#1A1A1A]">수정된 문제 풀기</h2>
-            <p className="text-xs text-[#5C5C5C]">{updateInfo.quizTitle}</p>
+            <h2 className="text-sm font-bold text-[#1A1A1A]">수정된 문제 풀기</h2>
+            <p className="text-[10px] text-[#5C5C5C]">{updateInfo.quizTitle}</p>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center border border-[#1A1A1A] hover:bg-[#EDEAE4]"
+            className="w-6 h-6 flex items-center justify-center border border-[#1A1A1A] hover:bg-[#EDEAE4]"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
         {/* 진행 표시 */}
-        <div className="px-4 py-2 border-b border-[#EDEAE4]">
-          <div className="flex items-center justify-between text-xs text-[#5C5C5C]">
+        <div className="px-3 py-1.5 border-b border-[#EDEAE4]">
+          <div className="flex items-center justify-between text-[10px] text-[#5C5C5C]">
             <span>문제 {currentIndex + 1} / {displayItems.length}</span>
             <span>{Object.keys(userAnswers).length}개 답변</span>
           </div>
-          <div className="mt-1 h-1 bg-[#EDEAE4]">
+          <div className="mt-0.5 h-0.5 bg-[#EDEAE4]">
             <div
               className="h-full bg-[#1A1A1A] transition-all"
               style={{ width: `${((currentIndex + 1) / displayItems.length) * 100}%` }}
@@ -617,7 +617,7 @@ export default function UpdateQuizModal({
         </div>
 
         {/* 문제 */}
-        <div className="p-4">
+        <div className="p-3">
           {currentDisplayItem && currentDisplayItem.type === 'combined_group' ? (
             /* ===== 결합형 그룹: 공통 지문 + 하위 문제들 ===== */
             <div>
@@ -699,11 +699,11 @@ export default function UpdateQuizModal({
         </div>
 
         {/* 네비게이션 버튼 */}
-        <div className="p-4 border-t border-[#1A1A1A] flex gap-2">
+        <div className="px-3 py-2 border-t border-[#1A1A1A] flex gap-2">
           {currentIndex > 0 && (
             <button
               onClick={handlePrev}
-              className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+              className="flex-1 py-2 text-sm font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
             >
               이전
             </button>
@@ -712,7 +712,7 @@ export default function UpdateQuizModal({
             <button
               onClick={handleNext}
               disabled={!isCurrentItemAnswered}
-              className="flex-1 py-3 font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#333] transition-colors disabled:opacity-50"
+              className="flex-1 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#333] transition-colors disabled:opacity-50"
             >
               다음
             </button>
@@ -720,7 +720,7 @@ export default function UpdateQuizModal({
             <button
               onClick={handleSubmit}
               disabled={isSubmitting || Object.keys(userAnswers).length !== questions.length}
-              className="flex-1 py-3 font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#333] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex-1 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#333] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {isSubmitting && (
                 <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">

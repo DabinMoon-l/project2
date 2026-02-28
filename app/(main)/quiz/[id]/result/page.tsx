@@ -21,7 +21,7 @@ import {
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { useCourse } from '@/lib/contexts';
+import { useCourse, useMilestone } from '@/lib/contexts';
 import { formatChapterLabel } from '@/lib/courseIndex';
 
 /**
@@ -139,8 +139,15 @@ export default function QuizResultPage() {
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const { userCourseId, userClassId } = useCourse();
+  const { setSuppressAutoTrigger } = useMilestone();
 
   const quizId = params.id as string;
+
+  // 퀴즈 결과 페이지에서는 마일스톤 모달 자동 트리거 억제
+  useEffect(() => {
+    setSuppressAutoTrigger(true);
+    return () => setSuppressAutoTrigger(false);
+  }, [setSuppressAutoTrigger]);
 
   const [resultData, setResultData] = useState<QuizResultData | null>(null);
   const [isLoading, setIsLoading] = useState(true);

@@ -170,9 +170,9 @@ const NewsArticle = memo(function NewsArticle({
             e.stopPropagation();
             onUpdate?.();
           }}
-          className="absolute top-2 right-2 z-30 w-8 h-8 bg-[#F5C518] rounded-full flex items-center justify-center border-2 border-[#1A1A1A] hover:scale-110 transition-transform"
+          className="absolute top-2 right-2 z-30 w-5 h-5 bg-[#F5C518] rounded-full flex items-center justify-center border border-[#1A1A1A] hover:scale-110 transition-transform"
         >
-          <span className="text-[#1A1A1A] font-bold text-sm">!</span>
+          <span className="text-[#1A1A1A] font-bold text-[9px] leading-none">!</span>
         </button>
       )}
 
@@ -929,9 +929,9 @@ function ReviewQuizCard({
               e.stopPropagation();
               onUpdate?.();
             }}
-            className="w-6 h-6 bg-[#F5C518] rounded-full flex items-center justify-center border-2 border-[#1A1A1A] hover:scale-110 transition-transform"
+            className="w-5 h-5 bg-[#F5C518] rounded-full flex items-center justify-center border border-[#1A1A1A] hover:scale-110 transition-transform"
           >
-            <span className="text-[#1A1A1A] font-bold text-xs">!</span>
+            <span className="text-[#1A1A1A] font-bold text-[9px] leading-none">!</span>
           </button>
         )}
 
@@ -1130,9 +1130,9 @@ function CustomQuizCard({
               e.stopPropagation();
               onUpdate?.();
             }}
-            className="w-6 h-6 bg-[#F5C518] rounded-full flex items-center justify-center border-2 border-[#1A1A1A] hover:scale-110 transition-transform"
+            className="w-5 h-5 bg-[#F5C518] rounded-full flex items-center justify-center border border-[#1A1A1A] hover:scale-110 transition-transform"
           >
-            <span className="text-[#1A1A1A] font-bold text-xs">!</span>
+            <span className="text-[#1A1A1A] font-bold text-[9px] leading-none">!</span>
           </button>
         )}
 
@@ -2446,13 +2446,13 @@ function QuizListPageContent() {
             exit={{ opacity: 0, scale: 0.88 }}
             transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-[280px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
+            className="w-full max-w-[240px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-3"
           >
             {/* 아이콘 */}
-            <div className="flex justify-center mb-3">
-              <div className="w-9 h-9 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
+            <div className="flex justify-center mb-2">
+              <div className="w-7 h-7 flex items-center justify-center border border-[#1A1A1A] bg-[#EDEAE4]">
                 <svg
-                  className="w-4 h-4 text-[#1A1A1A]"
+                  className="w-3.5 h-3.5 text-[#1A1A1A]"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -2467,16 +2467,16 @@ function QuizListPageContent() {
               </div>
             </div>
 
-            <h3 className="text-center font-bold text-sm text-[#1A1A1A] mb-2">
+            <h3 className="text-center font-bold text-xs text-[#1A1A1A] mb-1.5">
               수정된 문제를 풀까요?
             </h3>
-            <p className="text-xs text-[#5C5C5C] mb-1">
+            <p className="text-[10px] text-[#5C5C5C] mb-0.5">
               - 수정된 {updateConfirmQuiz.updatedQuestionCount || '일부'}문제만 다시 풀 수 있습니다.
             </p>
-            <p className="text-xs text-[#5C5C5C] mb-1">
+            <p className="text-[10px] text-[#5C5C5C] mb-0.5">
               - 새로운 답변이 점수에 반영됩니다.
             </p>
-            <p className="text-xs text-[#5C5C5C] mb-4">
+            <p className="text-[10px] text-[#5C5C5C] mb-3">
               - 정답 여부와 복습 기록이 업데이트됩니다.
             </p>
 
