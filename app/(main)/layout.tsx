@@ -108,7 +108,10 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                 <div
                   data-main-content
                   className={`min-h-screen ${hideNavigation || isWide ? '' : 'pb-20'}`}
-                  style={isWide ? { marginLeft: '72px' } : undefined}
+                  style={{
+                    paddingTop: 'env(safe-area-inset-top, 0px)',
+                    ...(isWide ? { marginLeft: '72px' } : {}),
+                  }}
                 >
                   {/* 메인 콘텐츠 */}
                   <main className={isWide ? 'max-w-[640px] mx-auto' : ''}>

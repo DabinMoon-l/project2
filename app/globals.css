@@ -28,8 +28,7 @@ body {
   overflow-x: hidden;
   overscroll-behavior: none;
   background-color: #F5F0E8;
-  /* 상단 안전 영역 (아이폰 노치/다이내믹 아일랜드) */
-  padding-top: env(safe-area-inset-top, 0px);
+  /* safe-area padding은 (main) layout에서 처리 — body에 두면 fixed inset-0 깨짐 */
 }
 
 /* Samsung Internet 자체 "맨 위로" FAB 억제 */
