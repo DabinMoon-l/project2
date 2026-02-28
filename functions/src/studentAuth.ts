@@ -372,39 +372,72 @@ export const resetStudentPassword = onCall(
 );
 
 // ============================================================
-// 4) requestPasswordReset — 학생 본인: 복구 이메일로 안내
+// 4) requestPasswordReset — 비로그인: 학번+이메일로 인증 코드 발송
 // ============================================================
 
 export const requestPasswordReset = onCall(
   { region: "asia-northeast3", secrets: [GMAIL_ADDRESS, GMAIL_APP_PASSWORD] },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
-    }
-
-    const uid = request.auth.uid;
-    const { verificationCode, newPassword } = request.data as {
+    const { studentId, email, verificationCode, newPassword } = request.data as {
+      studentId: string;
+      email?: string;
       verificationCode?: string;
       newPassword?: string;
     };
 
+    if (!studentId || !/^\d{7,10}$/.test(studentId)) {
+      throw new HttpsError("invalid-argument", "학번은 7-10자리 숫자입니다.");
+    }
+
     const db = getFirestore();
     const adminAuth = getAuth();
 
-    // 사용자 정보 조회
-    const userDoc = await db.collection("users").doc(uid).get();
-    if (!userDoc.exists) {
-      throw new HttpsError("not-found", "사용자를 찾을 수 없습니다.");
+    // IP 기반 rate limit (무차별 시도 방지)
+    const ip = (request.rawRequest as any)?.ip ||
+      (request.rawRequest as any)?.headers?.["x-forwarded-for"] || "unknown";
+    const ipKey = String(ip).replace(/[./:\\]/g, "_").slice(0, 60);
+    const rateLimitRef = db.collection("rateLimits_v2").doc(`pwreset_${ipKey}`);
+    const rateLimitDoc = await rateLimitRef.get();
+
+    if (rateLimitDoc.exists) {
+      const rlData = rateLimitDoc.data()!;
+      const attempts = rlData.attempts || 0;
+      const firstAttempt = rlData.firstAttempt?.toDate?.() || new Date();
+      const elapsed = Date.now() - firstAttempt.getTime();
+
+      if (elapsed < 10 * 60 * 1000 && attempts >= 10) {
+        throw new HttpsError("resource-exhausted", "너무 많은 시도입니다. 잠시 후 다시 시도해주세요.");
+      }
+
+      if (elapsed >= 10 * 60 * 1000) {
+        await rateLimitRef.set({ attempts: 1, firstAttempt: FieldValue.serverTimestamp() });
+      } else {
+        await rateLimitRef.update({ attempts: FieldValue.increment(1) });
+      }
+    } else {
+      await rateLimitRef.set({ attempts: 1, firstAttempt: FieldValue.serverTimestamp() });
     }
 
-    const userData = userDoc.data()!;
+    // 학번으로 사용자 조회
+    const usersSnapshot = await db.collection("users")
+      .where("studentId", "==", studentId)
+      .limit(1)
+      .get();
+
+    if (usersSnapshot.empty) {
+      throw new HttpsError("not-found", "등록되지 않은 학번입니다.");
+    }
+
+    const userDoc = usersSnapshot.docs[0];
+    const uid = userDoc.id;
+    const userData = userDoc.data();
     const recoveryEmail = userData.recoveryEmail;
 
     if (!recoveryEmail) {
       return {
         success: false,
         hasRecoveryEmail: false,
-        message: "복구 이메일이 등록되어 있지 않습니다. 먼저 복구 이메일을 등록해주세요.",
+        message: "복구 이메일이 등록되어 있지 않습니다.",
       };
     }
 
@@ -429,11 +462,9 @@ export const requestPasswordReset = onCall(
       }
 
       if (codeData.code !== verificationCode) {
-        // 인증 코드 시도 횟수 제한 (무차별 대입 방지)
         const attempts = (codeData.attempts || 0) + 1;
 
         if (attempts >= 5) {
-          // 5회 실패 시 코드 무효화
           await db.collection("verificationCodes").doc(codeDocId).delete();
           throw new HttpsError("resource-exhausted", "인증 코드가 무효화되었습니다. 다시 요청해주세요.");
         }
@@ -450,7 +481,7 @@ export const requestPasswordReset = onCall(
       // 인증 코드 삭제
       await db.collection("verificationCodes").doc(codeDocId).delete();
 
-      console.log(`비밀번호 재설정 완료: ${userData.studentId}`);
+      console.log(`비밀번호 재설정 완료: ${studentId}`);
 
       return {
         success: true,
@@ -458,7 +489,15 @@ export const requestPasswordReset = onCall(
       };
     }
 
-    // Phase 1: 인증 코드 전송
+    // Phase 1: 이메일 확인 + 인증 코드 전송
+    if (!email) {
+      throw new HttpsError("invalid-argument", "이메일을 입력해주세요.");
+    }
+
+    if (email !== recoveryEmail) {
+      throw new HttpsError("invalid-argument", "등록된 복구 이메일과 일치하지 않습니다.");
+    }
+
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const codeDocId = `${uid}_reset`;
 
@@ -490,7 +529,7 @@ export const requestPasswordReset = onCall(
       `
     );
 
-    console.log(`비밀번호 재설정 코드 전송: ${userData.studentId} → ${maskEmail(recoveryEmail)}`);
+    console.log(`비밀번호 재설정 코드 전송: ${studentId} → ${maskEmail(recoveryEmail)}`);
 
     return {
       success: true,

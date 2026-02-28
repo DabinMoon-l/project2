@@ -186,8 +186,8 @@ export default function SignupPage() {
         )}
 
         {/* 회원가입 폼 */}
-        <motion.form onSubmit={handleSubmit} variants={itemVariants}>
-          <div className="space-y-2">
+        <motion.form onSubmit={handleSubmit} className="flex flex-col items-center" variants={itemVariants}>
+          <div className="w-[80%] space-y-2">
             {/* 학년 선택 */}
             <div>
               <label className="block text-xs font-medium text-white/80 mb-1">학년</label>
@@ -291,20 +291,11 @@ export default function SignupPage() {
           <button
             type="submit"
             disabled={isSubmitting || loading}
-            className="w-full mt-3 py-2.5 text-sm bg-white text-gray-900 font-medium rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-[80%] mt-3 py-2.5 text-sm bg-white text-gray-900 font-medium rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSubmitting ? '가입 처리 중...' : '회원가입'}
           </button>
         </motion.form>
-
-        {/* 익명 안내 */}
-        <motion.p
-          className="mt-2 text-xs text-white/60 text-center leading-relaxed"
-          variants={itemVariants}
-        >
-          앱 내 활동은 닉네임으로만 표시되며,<br />
-          개인정보는 수집되지 않습니다.
-        </motion.p>
 
         {/* 로그인 링크 */}
         <motion.p

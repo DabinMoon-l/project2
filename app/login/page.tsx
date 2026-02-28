@@ -168,13 +168,13 @@ export default function LoginPage() {
       <VideoBackground />
 
       {/* 좌측 상단: 장식 이미지 */}
-      <div className="absolute top-0 left-0 z-10">
+      <div className="absolute top-16 left-8 z-10">
         <Image
           src="/images/corner-image.png"
           alt="장식 이미지"
-          width={150}
-          height={75}
-          style={{ width: 'auto', height: 'auto', maxWidth: '38vw' }}
+          width={180}
+          height={90}
+          style={{ width: 'auto', height: 'auto', maxWidth: '46vw' }}
           className="drop-shadow-lg"
         />
       </div>
@@ -203,7 +203,7 @@ export default function LoginPage() {
 
         {/* 하단: 로그인 폼 */}
         <motion.div
-          className="w-full space-y-2"
+          className="w-full flex flex-col items-center space-y-2"
           variants={itemVariants}
         >
           <input
@@ -215,7 +215,7 @@ export default function LoginPage() {
             autoComplete="off"
             autoCorrect="off"
             autoCapitalize="off"
-            className="w-full px-3 py-2 text-sm bg-white/10 border border-white/30 text-white placeholder-white/50 rounded-xl focus:outline-none focus:border-white/60"
+            className="w-[80%] px-3 py-2 text-sm bg-white/10 border border-white/30 text-white placeholder-white/50 rounded-xl focus:outline-none focus:border-white/60"
           />
           <input
             type="password"
@@ -224,11 +224,11 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
             autoComplete="off"
-            className="w-full px-3 py-2 text-sm bg-white/10 border border-white/30 text-white placeholder-white/50 rounded-xl focus:outline-none focus:border-white/60"
+            className="w-[80%] px-3 py-2 text-sm bg-white/10 border border-white/30 text-white placeholder-white/50 rounded-xl focus:outline-none focus:border-white/60"
           />
 
           {/* 회원가입 / 비밀번호 찾기 링크 */}
-          <div className="flex items-center justify-between">
+          <div className="w-[80%] flex items-center justify-between">
             <Link
               href="/signup"
               className="text-white/70 text-xs hover:text-white transition-colors"
@@ -246,7 +246,7 @@ export default function LoginPage() {
           <button
             onClick={handleLogin}
             disabled={loading || !idInput || !password}
-            className="w-full py-2 text-sm bg-white text-black font-medium rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-50"
+            className="w-[80%] py-2 text-sm bg-white text-black font-medium rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-50"
           >
             {loading ? '로그인 중...' : '로그인'}
           </button>
