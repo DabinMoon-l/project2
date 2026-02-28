@@ -39,12 +39,19 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
 
   // 학업 성취도 — 가중 석차 점수 기반 (교수 퀴즈 ×6, 학생 퀴즈 ×4)
   const studentAvg = student.weightedScore ?? 0;
-  const classMates = (student.classWeightedScores ?? []).filter(s => s.classId === student.classId);
+  const allScoresInCourse = (student.classWeightedScores ?? []);
+  const classMates = allScoresInCourse.filter(s => s.classId === student.classId);
   const classScores = classMates.map(s => s.score);
   const classMean = mean(classScores);
   const classSd = sd(classScores);
   const studentZ = zScore(studentAvg, classMean, classSd);
-  const studentPercentile = percentile(studentZ);
+
+  // 전체 과목 기준 백분위 + 전체 평균
+  const allCourseScores = allScoresInCourse.map(s => s.score);
+  const overallMean = mean(allCourseScores);
+  const overallSd = sd(allCourseScores);
+  const overallZ = zScore(studentAvg, overallMean, overallSd);
+  const overallPercentile = percentile(overallZ);
 
   // 표시 이름
   const displayName = student.name || student.nickname;
@@ -138,20 +145,31 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
             {/* 학업 성취도 */}
             <div className="space-y-6">
               {student.weightedScore === undefined ? (
-                <div className="grid grid-cols-2 gap-x-4 gap-y-4">
-                  {[1, 2, 3, 4].map(i => (
-                    <div key={i}>
-                      <div className="h-4 w-16 bg-[#D4CFC4]/50 rounded animate-pulse mb-1" />
-                      <div className="h-6 w-20 bg-[#D4CFC4]/50 rounded animate-pulse" />
-                    </div>
-                  ))}
+                <div>
+                  <div className="grid grid-cols-3 gap-x-3 mb-4">
+                    {[1, 2, 3].map(i => (
+                      <div key={i}>
+                        <div className="h-4 w-14 bg-[#D4CFC4]/50 rounded animate-pulse mb-1" />
+                        <div className="h-6 w-16 bg-[#D4CFC4]/50 rounded animate-pulse" />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4">
+                    {[4, 5].map(i => (
+                      <div key={i}>
+                        <div className="h-4 w-16 bg-[#D4CFC4]/50 rounded animate-pulse mb-1" />
+                        <div className="h-6 w-20 bg-[#D4CFC4]/50 rounded animate-pulse" />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ) : (
               <AchievementGrid
                 studentAvg={studentAvg}
                 classMean={classMean}
+                overallMean={overallMean}
                 studentZ={studentZ}
-                studentPercentile={studentPercentile}
+                overallPercentile={overallPercentile}
               />
               )}
 
@@ -230,66 +248,95 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
 
 const ACHIEVEMENT_ITEMS = [
   { key: 'avg', label: '성취 지수', info: '교수 퀴즈 ×6 + 학생 퀴즈 ×4 가중 석차 점수' },
-  { key: 'mean', label: '반 평균', info: '같은 반 학생들의 성취 지수 평균' },
+  { key: 'classMean', label: '반 평균', info: '같은 반 학생들의 성취 지수 평균' },
+  { key: 'overallMean', label: '전체 평균', info: '과목 전체 학생의 성취 지수 평균 (A~D반)' },
   { key: 'zscore', label: 'Z-score', info: '반 평균 대비 표준편차 위치 (-1.5 이하 주의)' },
-  { key: 'pct', label: '반 내 백분위', info: '반에서 상위 몇 %인지 (Z-score 기반)' },
+  { key: 'pct', label: '전체 백분위', info: '과목 전체 학생 중 상위 몇 %인지 (Z-score 기반)' },
 ] as const;
 
 function AchievementGrid({
   studentAvg,
   classMean,
+  overallMean,
   studentZ,
-  studentPercentile,
+  overallPercentile,
 }: {
   studentAvg: number;
   classMean: number;
+  overallMean: number;
   studentZ: number;
-  studentPercentile: number;
+  overallPercentile: number;
 }) {
   const [activeInfo, setActiveInfo] = useState<string | null>(null);
 
   const values: Record<string, React.ReactNode> = {
     avg: studentAvg.toFixed(1),
-    mean: classMean.toFixed(1),
+    classMean: classMean.toFixed(1),
+    overallMean: overallMean.toFixed(1),
     zscore: <span className={studentZ < -1.5 ? 'text-[#8B1A1A]' : ''}>{studentZ.toFixed(2)}</span>,
-    pct: `상위 ${100 - studentPercentile}%`,
+    pct: `상위 ${100 - overallPercentile}%`,
   };
 
   return (
-    <div className="grid grid-cols-2 gap-x-4 gap-y-4" onClick={() => setActiveInfo(null)}>
-      {ACHIEVEMENT_ITEMS.map(item => (
-        <div key={item.key} className="relative">
-          <div className="flex items-center gap-1.5">
-            <p className="text-sm text-[#5C5C5C]">{item.label}</p>
-            <button
-              onClick={(e) => { e.stopPropagation(); setActiveInfo(activeInfo === item.key ? null : item.key); }}
-              className={`w-4 h-4 rounded-full border text-[9px] font-semibold leading-none flex items-center justify-center transition-colors ${
-                activeInfo === item.key
-                  ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
-                  : 'bg-transparent text-[#999] border-[#999]'
-              }`}
-            >
-              i
-            </button>
-          </div>
-          <p className="text-xl font-bold text-[#1A1A1A] mt-0.5">{values[item.key]}</p>
-          {/* 툴팁 */}
-          <AnimatePresence>
-            {activeInfo === item.key && (
-              <motion.div
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                transition={{ duration: 0.12 }}
-                className="absolute left-0 top-full mt-1 z-10 bg-[#1A1A1A] text-white text-[11px] leading-relaxed px-2.5 py-1.5 rounded-lg shadow-lg whitespace-nowrap"
-                onClick={() => setActiveInfo(null)}
-              >
-                {item.info}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      ))}
+    <div onClick={() => setActiveInfo(null)}>
+      {/* 첫 줄: 성취 지수 / 반 평균 / 전체 평균 (3열) */}
+      <div className="grid grid-cols-3 gap-x-3 mb-4">
+        {ACHIEVEMENT_ITEMS.slice(0, 3).map(item => (
+          <AchievementItem key={item.key} item={item} value={values[item.key]} activeInfo={activeInfo} setActiveInfo={setActiveInfo} />
+        ))}
+      </div>
+      {/* 둘째 줄: Z-score / 전체 백분위 (2열) */}
+      <div className="grid grid-cols-2 gap-x-4">
+        {ACHIEVEMENT_ITEMS.slice(3).map(item => (
+          <AchievementItem key={item.key} item={item} value={values[item.key]} activeInfo={activeInfo} setActiveInfo={setActiveInfo} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AchievementItem({
+  item,
+  value,
+  activeInfo,
+  setActiveInfo,
+}: {
+  item: { key: string; label: string; info: string };
+  value: React.ReactNode;
+  activeInfo: string | null;
+  setActiveInfo: (v: string | null) => void;
+}) {
+  return (
+    <div className="relative">
+      <div className="flex items-center gap-1.5">
+        <p className="text-sm text-[#5C5C5C]">{item.label}</p>
+        <button
+          onClick={(e) => { e.stopPropagation(); setActiveInfo(activeInfo === item.key ? null : item.key); }}
+          className={`w-4 h-4 rounded-full border text-[9px] font-semibold leading-none flex items-center justify-center transition-colors ${
+            activeInfo === item.key
+              ? 'bg-[#1A1A1A] text-white border-[#1A1A1A]'
+              : 'bg-transparent text-[#999] border-[#999]'
+          }`}
+        >
+          i
+        </button>
+      </div>
+      <p className="text-xl font-bold text-[#1A1A1A] mt-0.5">{value}</p>
+      {/* 툴팁 */}
+      <AnimatePresence>
+        {activeInfo === item.key && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.12 }}
+            className="absolute left-0 top-full mt-1 z-10 bg-[#1A1A1A] text-white text-[11px] leading-relaxed px-2.5 py-1.5 rounded-lg shadow-lg whitespace-nowrap"
+            onClick={() => setActiveInfo(null)}
+          >
+            {item.info}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
