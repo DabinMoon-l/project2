@@ -218,32 +218,32 @@ export default function QuestionCard({ question, courseId }: QuestionCardProps) 
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className="bg-[#F5F0E8] border-2 border-[#1A1A1A] p-5"
+      className="bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
     >
       {/* 문제 번호 및 유형 */}
-      <div className="flex items-center gap-2 mb-3">
-        <span className="text-lg font-bold text-[#1A1A1A]">
+      <div className="flex items-center gap-1.5 mb-2">
+        <span className="text-sm font-bold text-[#1A1A1A]">
           Q{question.number}.
         </span>
-        <span className="px-2 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold">
+        <span className="px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-[10px] font-bold">
           {typeLabels[question.type]}
         </span>
         {/* 복수정답 표시 */}
         {question.hasMultipleAnswers && (
-          <span className="px-2 py-0.5 bg-[#1A6B1A] text-[#F5F0E8] text-xs font-bold">
+          <span className="px-1.5 py-0.5 bg-[#1A6B1A] text-[#F5F0E8] text-[10px] font-bold">
             복수정답
           </span>
         )}
         {/* 챕터 표시 */}
         {courseId && question.chapterId && (
-          <span className="px-2 py-0.5 bg-[#E8F0FE] border border-[#4A6DA7] text-[#4A6DA7] text-xs font-medium">
+          <span className="px-1.5 py-0.5 bg-[#E8F0FE] border border-[#4A6DA7] text-[#4A6DA7] text-[10px] font-medium">
             {formatChapterLabel(courseId, question.chapterId, question.chapterDetailId)}
           </span>
         )}
       </div>
 
       {/* 문제 텍스트 */}
-      <p className="text-[#1A1A1A] text-base leading-relaxed whitespace-pre-wrap">
+      <p className="text-[#1A1A1A] text-xs leading-relaxed whitespace-pre-wrap">
         {question.text}
       </p>
 
@@ -256,22 +256,22 @@ export default function QuestionCard({ question, courseId }: QuestionCardProps) 
       {hasValidMixedExamples && question.mixedExamples!
         .filter(item => item.type === 'grouped' && isValidMixedItem(item))
         .map((item) => (
-          <div key={item.id} className="mt-4 p-4 bg-[#EDEAE4] border-2 border-[#1A1A1A] space-y-2">
+          <div key={item.id} className="mt-3 p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A] space-y-1.5">
             {item.children?.filter(child => isValidMixedItem(child)).map((child) => (
               <div key={child.id}>
                 {child.type === 'text' && child.content && (
-                  <p className="text-[#5C5C5C] text-sm whitespace-pre-wrap">{child.content}</p>
+                  <p className="text-[#5C5C5C] text-xs whitespace-pre-wrap">{child.content}</p>
                 )}
                 {child.type === 'labeled' && (
                   <>
                     {child.content && (
-                      <p className="text-[#1A1A1A] text-sm">
+                      <p className="text-[#1A1A1A] text-xs">
                         <span className="font-bold text-[#1A1A1A] mr-1">{child.label}.</span>
                         {child.content}
                       </p>
                     )}
                     {child.items && child.items.map((labeledItem, idx) => (
-                      <p key={idx} className="text-[#1A1A1A] text-sm">
+                      <p key={idx} className="text-[#1A1A1A] text-xs">
                         <span className="font-bold text-[#1A1A1A] mr-1">{labeledItem.label}.</span>
                         {labeledItem.content}
                       </p>
@@ -281,13 +281,13 @@ export default function QuestionCard({ question, courseId }: QuestionCardProps) 
                 {child.type === 'gana' && (
                   <>
                     {child.content && (
-                      <p className="text-[#1A1A1A] text-sm">
+                      <p className="text-[#1A1A1A] text-xs">
                         <span className="font-bold text-[#1A1A1A] mr-1">({child.label})</span>
                         {child.content}
                       </p>
                     )}
                     {child.items && child.items.map((labeledItem, idx) => (
-                      <p key={idx} className="text-[#1A1A1A] text-sm">
+                      <p key={idx} className="text-[#1A1A1A] text-xs">
                         <span className="font-bold text-[#1A1A1A] mr-1">({labeledItem.label})</span>
                         {labeledItem.content}
                       </p>
@@ -297,13 +297,13 @@ export default function QuestionCard({ question, courseId }: QuestionCardProps) 
                 {child.type === 'bullet' && (
                   <>
                     {child.content && (
-                      <p className="text-[#1A1A1A] text-sm">
+                      <p className="text-[#1A1A1A] text-xs">
                         <span className="font-bold text-[#1A1A1A] mr-1">◦</span>
                         {child.content}
                       </p>
                     )}
                     {child.items && child.items.map((labeledItem, idx) => (
-                      <p key={idx} className="text-[#1A1A1A] text-sm">
+                      <p key={idx} className="text-[#1A1A1A] text-xs">
                         <span className="font-bold text-[#1A1A1A] mr-1">◦</span>
                         {labeledItem.content}
                       </p>
@@ -330,22 +330,22 @@ export default function QuestionCard({ question, courseId }: QuestionCardProps) 
         .map((item) => {
           if (item.type === 'text') {
             return (
-              <div key={item.id} className="mt-4 p-4 bg-[#EDEAE4] border border-[#1A1A1A]">
-                <p className="text-[#1A1A1A] text-sm whitespace-pre-wrap">{item.content}</p>
+              <div key={item.id} className="mt-3 p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
+                <p className="text-[#1A1A1A] text-xs whitespace-pre-wrap">{item.content}</p>
               </div>
             );
           }
           if (item.type === 'labeled') {
             return (
-              <div key={item.id} className="mt-4 p-4 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
+              <div key={item.id} className="mt-3 p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
                 {item.content && (
-                  <p className="text-[#1A1A1A] text-sm">
+                  <p className="text-[#1A1A1A] text-xs">
                     <span className="font-bold text-[#1A1A1A] mr-1">{item.label}.</span>
                     {item.content}
                   </p>
                 )}
                 {item.items && item.items.map((labeledItem, idx) => (
-                  <p key={idx} className="text-[#1A1A1A] text-sm">
+                  <p key={idx} className="text-[#1A1A1A] text-xs">
                     <span className="font-bold text-[#1A1A1A] mr-1">{labeledItem.label}.</span>
                     {labeledItem.content}
                   </p>
@@ -355,15 +355,15 @@ export default function QuestionCard({ question, courseId }: QuestionCardProps) 
           }
           if (item.type === 'gana') {
             return (
-              <div key={item.id} className="mt-4 p-4 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
+              <div key={item.id} className="mt-3 p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
                 {item.content && (
-                  <p className="text-[#1A1A1A] text-sm">
+                  <p className="text-[#1A1A1A] text-xs">
                     <span className="font-bold text-[#1A1A1A] mr-1">({item.label})</span>
                     {item.content}
                   </p>
                 )}
                 {item.items && item.items.map((labeledItem, idx) => (
-                  <p key={idx} className="text-[#1A1A1A] text-sm">
+                  <p key={idx} className="text-[#1A1A1A] text-xs">
                     <span className="font-bold text-[#1A1A1A] mr-1">({labeledItem.label})</span>
                     {labeledItem.content}
                   </p>
@@ -373,15 +373,15 @@ export default function QuestionCard({ question, courseId }: QuestionCardProps) 
           }
           if (item.type === 'bullet') {
             return (
-              <div key={item.id} className="mt-4 p-4 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
+              <div key={item.id} className="mt-3 p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
                 {item.content && (
-                  <p className="text-[#1A1A1A] text-sm">
+                  <p className="text-[#1A1A1A] text-xs">
                     <span className="font-bold text-[#1A1A1A] mr-1">◦</span>
                     {item.content}
                   </p>
                 )}
                 {item.items && item.items.map((labeledItem, idx) => (
-                  <p key={idx} className="text-[#1A1A1A] text-sm">
+                  <p key={idx} className="text-[#1A1A1A] text-xs">
                     <span className="font-bold text-[#1A1A1A] mr-1">◦</span>
                     {labeledItem.content}
                   </p>
@@ -394,8 +394,8 @@ export default function QuestionCard({ question, courseId }: QuestionCardProps) 
 
       {/* 레거시 보기 (Examples) - 텍스트 형식 */}
       {hasValidExamples && !hasValidMixedExamples && question.examples!.type === 'text' && (
-        <div className="mt-4 p-4 bg-[#EDEAE4] border border-[#1A1A1A]">
-          <p className="text-[#1A1A1A] text-sm leading-relaxed">
+        <div className="mt-3 p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
+          <p className="text-[#1A1A1A] text-xs leading-relaxed">
             {question.examples!.items.filter(i => i.trim()).join(', ')}
           </p>
         </div>
@@ -403,9 +403,9 @@ export default function QuestionCard({ question, courseId }: QuestionCardProps) 
 
       {/* 레거시 보기 (Examples) - ㄱ.ㄴ.ㄷ. 형식 */}
       {hasValidExamples && !hasValidMixedExamples && question.examples!.type === 'labeled' && (
-        <div className="mt-4 p-4 bg-[#EDEAE4] border border-[#1A1A1A] space-y-2">
+        <div className="mt-3 p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1.5">
           {question.examples!.items.filter(i => i.trim()).map((item, idx) => (
-            <p key={idx} className="text-[#1A1A1A] text-sm">
+            <p key={idx} className="text-[#1A1A1A] text-xs">
               <span className="font-bold text-[#1A1A1A] mr-1">
                 {['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ'][idx]}.
               </span>
@@ -438,13 +438,13 @@ export default function QuestionCard({ question, courseId }: QuestionCardProps) 
 
       {/* 5. 보기 (<보기> 박스) - 이미지 다음, 발문 전에 표시 */}
       {question.bogi && question.bogi.items && question.bogi.items.some(i => i.content?.trim()) && (
-        <div className="mt-4">
+        <div className="mt-3">
           {/* <보기> 박스 (발문은 아래에서 별도 표시) */}
-          <div className="p-4 bg-[#EDEAE4] border-2 border-[#1A1A1A]">
-            <p className="text-xs text-center text-[#5C5C5C] mb-2 font-bold">&lt;보 기&gt;</p>
+          <div className="p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A]">
+            <p className="text-[10px] text-center text-[#5C5C5C] mb-1.5 font-bold">&lt;보 기&gt;</p>
             <div className="space-y-1">
               {question.bogi.items.filter(i => i.content?.trim()).map((item) => (
-                <p key={item.label} className="text-[#1A1A1A] text-sm">
+                <p key={item.label} className="text-[#1A1A1A] text-xs">
                   <span className="font-bold mr-1">{item.label}.</span>
                   {item.content}
                 </p>
@@ -456,7 +456,7 @@ export default function QuestionCard({ question, courseId }: QuestionCardProps) 
 
       {/* 6. 발문 (제시문 발문 + 보기 발문 합침, 선지 전에 표시) */}
       {(question.passagePrompt || question.bogi?.questionText) && (
-        <p className="mt-4 text-[#1A1A1A] text-sm leading-relaxed">
+        <p className="mt-3 text-[#1A1A1A] text-xs leading-relaxed">
           {question.passagePrompt && question.bogi?.questionText
             ? `${question.passagePrompt} ${question.bogi.questionText}`
             : question.passagePrompt || question.bogi?.questionText}
@@ -475,9 +475,9 @@ export default function QuestionCard({ question, courseId }: QuestionCardProps) 
         <div className="mt-4 space-y-3">
           {/* 공통 제시문 - 텍스트 형식 (passageType이 없거나 'text'일 때) */}
           {question.passage && (!question.passageType || question.passageType === 'text') && (
-            <div className="p-4 bg-[#EDEAE4] border border-[#1A1A1A]">
-              <p className="text-xs text-[#5C5C5C] mb-2 font-bold">공통 제시문</p>
-              <p className="text-[#1A1A1A] text-sm leading-relaxed whitespace-pre-wrap">
+            <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
+              <p className="text-[10px] text-[#5C5C5C] mb-1.5 font-bold">공통 제시문</p>
+              <p className="text-[#1A1A1A] text-xs leading-relaxed whitespace-pre-wrap">
                 {question.passage}
               </p>
             </div>
@@ -485,10 +485,10 @@ export default function QuestionCard({ question, courseId }: QuestionCardProps) 
 
           {/* 공통 제시문 - ㄱㄴㄷ 형식 */}
           {question.passageType === 'korean_abc' && question.koreanAbcItems && question.koreanAbcItems.length > 0 && (
-            <div className="p-4 bg-[#EDEAE4] border border-[#1A1A1A] space-y-2">
-              <p className="text-xs text-[#5C5C5C] mb-2 font-bold">제시문</p>
+            <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1.5">
+              <p className="text-[10px] text-[#5C5C5C] mb-1.5 font-bold">제시문</p>
               {question.koreanAbcItems.filter(i => i.trim()).map((item, idx) => (
-                <p key={idx} className="text-[#1A1A1A] text-sm">
+                <p key={idx} className="text-[#1A1A1A] text-xs">
                   <span className="font-bold text-[#1A1A1A] mr-1">
                     {['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ'][idx]}.
                   </span>

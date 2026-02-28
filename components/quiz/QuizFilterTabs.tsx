@@ -82,7 +82,7 @@ export default function QuizFilterTabs({
             onClick={() => onFilterChange(tab.value)}
             whileTap={{ scale: 0.95 }}
             className={`
-              relative px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap
+              relative px-2.5 py-1.5 rounded-full text-[11px] font-medium whitespace-nowrap
               transition-colors duration-200
               ${
                 isActive

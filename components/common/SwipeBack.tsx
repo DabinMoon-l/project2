@@ -109,12 +109,19 @@ export default function SwipeBack({ children, enabled = true }: SwipeBackProps) 
       // 화면 밖으로 슬라이드 후 뒤로가기
       motionX.set(screenWidth);
       setTimeout(() => {
-        // 뒤로가기 전에 transform 즉시 리셋 (페이지 전환 시 깜빡임 방지)
+        // 콘텐츠를 숨긴 후 위치 리셋 → 깜빡임 방지
+        if (contentRef.current) {
+          contentRef.current.style.visibility = 'hidden';
+        }
         motionX.jump(0);
         router.back();
+        // 새 페이지 렌더링 후 다시 표시
         setTimeout(() => {
+          if (contentRef.current) {
+            contentRef.current.style.visibility = '';
+          }
           navigating.current = false;
-        }, 300);
+        }, 80);
       }, 180);
     } else {
       // spring으로 원위치 복귀

@@ -160,7 +160,7 @@ function ExpToastItem({ toast }: { toast: ExpToastData }) {
 
       {/* 일반 EXP 토스트 - 빈티지 신문 스타일 */}
         <div
-          className="relative px-5 py-3 shadow-lg min-w-[220px]"
+          className="relative px-4 py-2 shadow-lg min-w-[180px]"
           style={{
             backgroundColor: theme.colors.background,
             border: '2px solid #1A1A1A',
@@ -186,7 +186,7 @@ function ExpToastItem({ toast }: { toast: ExpToastData }) {
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.1 }}
-              className="font-serif-display text-xl font-bold"
+              className="font-serif-display text-base font-bold"
               style={{ color: theme.colors.accent }}
             >
               +{toast.amount} XP
@@ -225,7 +225,7 @@ function ExpToastItem({ toast }: { toast: ExpToastData }) {
               </span>
             </div>
             <div
-              className="h-2 overflow-hidden"
+              className="h-1.5 overflow-hidden"
               style={{
                 backgroundColor: theme.colors.backgroundSecondary,
                 border: '1px solid #1A1A1A',

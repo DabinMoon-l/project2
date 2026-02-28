@@ -172,12 +172,11 @@ export default function PostDetailPage() {
   if (loading) {
     return (
       <div className="min-h-screen pb-6" style={{ backgroundColor: '#F5F0E8' }}>
-        <header className="mx-4 mt-4 pb-4 border-b-2 border-[#1A1A1A]">
-          <button onClick={() => goBack()} className="flex items-center gap-2 text-sm py-2">
+        <header className="mx-4 mt-3 pb-2 border-b-2 border-[#1A1A1A]">
+          <button onClick={() => goBack()} className="flex items-center py-1 text-[#3A3A3A]">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            뒤로가기
           </button>
         </header>
         <div className="px-4 pt-6 space-y-4">
@@ -193,12 +192,11 @@ export default function PostDetailPage() {
   if (error || !post) {
     return (
       <div className="min-h-screen pb-6" style={{ backgroundColor: '#F5F0E8' }}>
-        <header className="mx-4 mt-4 pb-4 border-b-2 border-[#1A1A1A]">
-          <button onClick={() => goBack()} className="flex items-center gap-2 text-sm py-2">
+        <header className="mx-4 mt-3 pb-2 border-b-2 border-[#1A1A1A]">
+          <button onClick={() => goBack()} className="flex items-center py-1 text-[#3A3A3A]">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            뒤로가기
           </button>
         </header>
         <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
@@ -229,15 +227,14 @@ export default function PostDetailPage() {
       transition={{ type: 'spring', stiffness: 400, damping: 35 }}
     >
       {/* 헤더 */}
-      <header className="mx-4 mt-4 pb-4">
+      <header className="mx-4 mt-3 pb-2">
         <button
           onClick={() => goBack()}
-          className="flex items-center gap-2 text-sm py-2 text-[#3A3A3A]"
+          className="flex items-center py-1 text-[#3A3A3A]"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
-          뒤로가기
         </button>
       </header>
 
@@ -249,7 +246,7 @@ export default function PostDetailPage() {
           {/* 공지 */}
           {post.isNotice && (
             <span
-              className="inline-block px-3 py-1 text-sm font-bold mb-3"
+              className="inline-block px-2.5 py-0.5 text-xs font-bold mb-3"
               style={{ backgroundColor: '#1A1A1A', color: '#F5F0E8' }}
             >
               NOTICE
@@ -257,12 +254,12 @@ export default function PostDetailPage() {
           )}
 
           {/* 제목 */}
-          <h2 className="font-serif-display text-3xl md:text-4xl font-black leading-tight mb-3 text-[#1A1A1A]">
+          <h2 className="font-serif-display text-2xl md:text-3xl font-black leading-tight mb-3 text-[#1A1A1A]">
             {post.title}
           </h2>
 
           {/* 메타 정보: 좌=글쓴이, 우=월일시 */}
-          <div className="flex items-center justify-between text-[15px] text-[#3A3A3A] mb-4 pb-4 border-b border-dashed border-[#1A1A1A]">
+          <div className="flex items-center justify-between text-xs text-[#3A3A3A] mb-4 pb-4 border-b border-dashed border-[#1A1A1A]">
             <span>
               {isProfessor && authorName ? `${authorName} ` : ''}{post.authorNickname}·{post.authorClassType || '?'}반
             </span>
@@ -270,7 +267,7 @@ export default function PostDetailPage() {
           </div>
 
           {/* 본문 */}
-          <p className="text-[18px] leading-relaxed whitespace-pre-wrap text-[#1A1A1A] mb-4">
+          <p className="text-base leading-relaxed whitespace-pre-wrap text-[#1A1A1A] mb-4">
             {post.content}
           </p>
 
@@ -280,14 +277,14 @@ export default function PostDetailPage() {
           {/* 첨부파일 */}
           {post.fileUrls && post.fileUrls.length > 0 && (
             <div className="mt-4 p-3 bg-[#EDEAE4]">
-              <p className="text-[15px] font-bold text-[#1A1A1A] mb-2">첨부파일</p>
+              <p className="text-xs font-bold text-[#1A1A1A] mb-2">첨부파일</p>
               {post.fileUrls.map((file, index) => (
                 <a
                   key={index}
                   href={file.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-[15px] text-[#1A1A1A] hover:underline py-1"
+                  className="flex items-center gap-2 text-xs text-[#1A1A1A] hover:underline py-1"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
@@ -301,7 +298,7 @@ export default function PostDetailPage() {
           {/* 찜 줄: 좌=찜, 우=조회·댓글 */}
           <div className="flex items-center justify-between py-2 mt-4 border-t border-dashed border-[#1A1A1A]">
             <LikeButton count={post.likes} isLiked={isLiked(postId)} onToggle={handleLike} />
-            <div className="flex items-center gap-3 text-[15px] text-[#5C5C5C]">
+            <div className="flex items-center gap-3 text-xs text-[#5C5C5C]">
               <span>조회 {post.viewCount}</span>
               <span>댓글 {post.commentCount}</span>
             </div>
@@ -330,7 +327,7 @@ export default function PostDetailPage() {
 
         {/* 댓글 */}
         <section className="pt-4 border-t-2 border-[#1A1A1A]">
-          <h3 className="font-bold text-xl mb-2 text-[#1A1A1A]">댓글</h3>
+          <h3 className="font-bold text-base mb-2 text-[#1A1A1A]">댓글</h3>
           <CommentSection postId={postId} postAuthorId={post.authorId} />
         </section>
       </main>

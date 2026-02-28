@@ -77,7 +77,7 @@ export default function OXChoice({
         disabled={disabled}
         style={getButtonStyle('O')}
         className={`
-          w-28 h-28 text-5xl font-bold
+          w-[72px] h-[72px] text-2xl font-bold
           border-2 transition-colors duration-200
           flex items-center justify-center
           ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}
@@ -104,7 +104,7 @@ export default function OXChoice({
         disabled={disabled}
         style={getButtonStyle('X')}
         className={`
-          w-28 h-28 text-5xl font-bold
+          w-[72px] h-[72px] text-2xl font-bold
           border-2 transition-colors duration-200
           flex items-center justify-center
           ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}

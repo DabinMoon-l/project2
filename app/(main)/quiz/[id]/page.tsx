@@ -925,36 +925,36 @@ export default function QuizPage() {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] p-5"
+              className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
             >
               {/* 아이콘 */}
-              <div className="flex justify-center mb-4">
-                <div className="w-14 h-14 bg-[#FFF8E1] border-2 border-[#8B6914] flex items-center justify-center">
-                  <svg className="w-7 h-7 text-[#8B6914]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="flex justify-center mb-3">
+                <div className="w-10 h-10 bg-[#FFF8E1] border-2 border-[#8B6914] flex items-center justify-center">
+                  <svg className="w-5 h-5 text-[#8B6914]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
               </div>
 
               {/* 제목 */}
-              <h2 className="text-lg font-bold text-[#1A1A1A] text-center mb-2">
+              <h2 className="text-base font-bold text-[#1A1A1A] text-center mb-1.5">
                 이전 진행상황이 있습니다
               </h2>
 
               {/* 설명 */}
-              <p className="text-sm text-[#5C5C5C] text-center mb-4">
+              <p className="text-xs text-[#5C5C5C] text-center mb-3">
                 이전에 풀던 문제가 저장되어 있습니다.
               </p>
 
               {/* 진행 상황 정보 */}
-              <div className="bg-[#EDEAE4] border border-[#1A1A1A] p-3 mb-4">
-                <div className="flex justify-between text-sm">
+              <div className="bg-[#EDEAE4] border border-[#1A1A1A] p-2.5 mb-3">
+                <div className="flex justify-between text-xs">
                   <span className="text-[#5C5C5C]">답변한 문제</span>
                   <span className="font-bold text-[#1A1A1A]">
                     {savedProgress.answeredCount} / {quiz.questions.length}문제
                   </span>
                 </div>
-                <div className="flex justify-between text-sm mt-1">
+                <div className="flex justify-between text-xs mt-1">
                   <span className="text-[#5C5C5C]">마지막 위치</span>
                   <span className="font-bold text-[#1A1A1A]">
                     {savedProgress.currentQuestionIndex + 1}번 문제
@@ -963,16 +963,16 @@ export default function QuizPage() {
               </div>
 
               {/* 버튼들 */}
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <button
                   onClick={handleResume}
-                  className="w-full py-3 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
+                  className="w-full py-2.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
                 >
                   이어서 풀기
                 </button>
                 <button
                   onClick={handleStartFresh}
-                  className="w-full py-3 text-sm font-bold bg-[#F5F0E8] text-[#1A1A1A] border-2 border-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+                  className="w-full py-2.5 text-xs font-bold bg-[#F5F0E8] text-[#1A1A1A] border-2 border-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
                 >
                   처음부터 다시 풀기
                 </button>

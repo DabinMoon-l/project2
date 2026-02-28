@@ -473,10 +473,23 @@ function groupByQuiz(items: ReviewItem[]): GroupedReviewItems[] {
  */
 function groupByChapterAndQuiz(items: ReviewItem[], courseId?: string): ChapterGroupedWrongItems[] {
   // 1차: chapterId로 그룹핑
+  // 챕터 인덱스에서 찾을 수 없는 chapterId는 null(미분류)로 통합
   const chapterMap = new Map<string | null, ReviewItem[]>();
 
   items.forEach(item => {
-    const chapterId = item.chapterId || null;
+    let chapterId = item.chapterId || null;
+
+    // chapterId가 존재하지만 과목 인덱스에서 찾을 수 없으면 미분류(null)로 통합
+    if (chapterId && courseId) {
+      const chapter = getChapterById(courseId, chapterId);
+      if (!chapter) {
+        chapterId = null;
+      }
+    } else if (chapterId && !courseId) {
+      // courseId가 없으면 챕터를 해석할 수 없으므로 미분류로 통합
+      chapterId = null;
+    }
+
     const existing = chapterMap.get(chapterId);
     if (existing) {
       existing.push(item);

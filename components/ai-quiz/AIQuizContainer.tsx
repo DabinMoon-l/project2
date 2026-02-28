@@ -18,6 +18,7 @@ import { useCourse } from '@/lib/contexts/CourseContext';
 import { getChapterIdFromTag } from '@/lib/courseIndex';
 import ReviewPractice, { type PracticeResult } from '@/components/review/ReviewPractice';
 import type { ReviewItem } from '@/lib/hooks/useReview';
+import type { SourceRect } from '@/lib/hooks/useExpandSource';
 
 import FloatingAIButton from './FloatingAIButton';
 import AIQuizModal, { AIQuizData } from './AIQuizModal';
@@ -82,6 +83,9 @@ export default function AIQuizContainer() {
   const [isProgressOpen, setIsProgressOpen] = useState(false);
   const [isPracticeOpen, setIsPracticeOpen] = useState(false);
 
+  // 요술지니 애니메이션용 소스 rect
+  const [sourceRect, setSourceRect] = useState<SourceRect | null>(null);
+
   // 진행 상태
   const [progressStep, setProgressStep] = useState<'uploading' | 'analyzing' | 'generating'>('uploading');
   const [currentFolderName, setCurrentFolderName] = useState('');
@@ -100,14 +104,23 @@ export default function AIQuizContainer() {
   // Job polling 중단용 ref
   const pollingRef = useRef(false);
 
-  // 플로팅 버튼 클릭
-  const handleFloatingButtonClick = useCallback(() => {
+  // 플로팅 버튼 클릭 (요술지니 애니메이션용 rect 캡처)
+  const handleFloatingButtonClick = useCallback((e: React.MouseEvent) => {
+    const el = e.currentTarget as HTMLElement;
+    const rect = el.getBoundingClientRect();
+    setSourceRect({
+      x: rect.left,
+      y: rect.top,
+      width: rect.width,
+      height: rect.height,
+    });
     setIsModalOpen(true);
   }, []);
 
   // 모달 닫기
   const handleModalClose = useCallback(() => {
     setIsModalOpen(false);
+    setSourceRect(null);
   }, []);
 
   // 태그에서 첫 번째 챕터 ID 추출
@@ -530,6 +543,7 @@ export default function AIQuizContainer() {
         isOpen={isModalOpen}
         onClose={handleModalClose}
         onStartQuiz={handleStartQuiz}
+        sourceRect={sourceRect}
       />
 
       {/* 진행 상태 모달 */}

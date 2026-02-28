@@ -213,26 +213,26 @@ export default function ExpPage() {
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 */}
-      <header className="sticky top-0 z-50 px-4 py-4 border-b-2 border-[#1A1A1A] bg-[#F5F0E8]">
+      <header className="sticky top-0 z-50 px-4 py-3 border-b-2 border-[#1A1A1A] bg-[#F5F0E8]">
         <div className="flex items-center justify-center">
-          <h1 className="text-lg font-bold text-[#1A1A1A]">
+          <h1 className="text-sm font-bold text-[#1A1A1A]">
             획득 경험치
           </h1>
         </div>
       </header>
 
       {/* 메인 콘텐츠 */}
-      <main className="flex-1 px-4 py-6">
+      <main className="flex-1 px-4 py-4">
         {/* 점수 표시 */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-8"
+          className="text-center mb-4"
         >
-          <div className="inline-block px-6 py-4 bg-[#F5F0E8] border-2 border-[#1A1A1A]">
-            <p className="text-sm text-[#5C5C5C] mb-1">퀴즈 점수</p>
-            <p className="text-4xl font-bold text-[#1A1A1A]">{expInfo.score}점</p>
-            <p className="text-xs text-[#5C5C5C] mt-1">
+          <div className="inline-block px-4 py-2.5 bg-[#F5F0E8] border-2 border-[#1A1A1A]">
+            <p className="text-xs text-[#5C5C5C] mb-0.5">퀴즈 점수</p>
+            <p className="text-2xl font-bold text-[#1A1A1A]">{expInfo.score}점</p>
+            <p className="text-[10px] text-[#5C5C5C] mt-0.5">
               {expInfo.correctCount} / {expInfo.totalCount} 문제 정답
             </p>
           </div>
@@ -246,66 +246,66 @@ export default function ExpPage() {
           className="space-y-3"
         >
           {/* 기본 EXP */}
-          <div className="flex justify-between items-center p-4 bg-[#EDEAE4] border border-[#1A1A1A]">
+          <div className="flex justify-between items-center p-2.5 bg-[#EDEAE4] border border-[#1A1A1A]">
             <div>
-              <p className="font-bold text-[#1A1A1A]">퀴즈 풀이 기본</p>
-              <p className="text-xs text-[#5C5C5C]">퀴즈 완료 보상</p>
+              <p className="text-xs font-bold text-[#1A1A1A]">퀴즈 풀이 기본</p>
+              <p className="text-[10px] text-[#5C5C5C]">퀴즈 완료 보상</p>
             </div>
-            <span className="text-lg font-bold text-[#1A1A1A]">+{expInfo.baseExp} XP</span>
+            <span className="text-sm font-bold text-[#1A1A1A]">+{expInfo.baseExp} XP</span>
           </div>
 
           {/* 성적 보너스 EXP */}
-          <div className="flex justify-between items-center p-4 bg-[#EDEAE4] border border-[#1A1A1A]">
+          <div className="flex justify-between items-center p-2.5 bg-[#EDEAE4] border border-[#1A1A1A]">
             <div>
-              <p className="font-bold text-[#1A1A1A]">성적 보너스</p>
-              <p className="text-xs text-[#5C5C5C]">
+              <p className="text-xs font-bold text-[#1A1A1A]">성적 보너스</p>
+              <p className="text-[10px] text-[#5C5C5C]">
                 {expInfo.score === 100 ? '만점!' :
                  expInfo.score >= 90 ? '90점 이상' :
                  expInfo.score >= 70 ? '70점 이상' :
                  expInfo.score >= 50 ? '50점 이상' : '50점 미만'}
               </p>
             </div>
-            <span className={`text-lg font-bold ${expInfo.bonusExp > 0 ? 'text-[#1A6B1A]' : 'text-[#5C5C5C]'}`}>
+            <span className={`text-sm font-bold ${expInfo.bonusExp > 0 ? 'text-[#1A6B1A]' : 'text-[#5C5C5C]'}`}>
               +{expInfo.bonusExp} XP
             </span>
           </div>
 
           {/* 피드백 EXP */}
-          <div className="flex justify-between items-center p-4 bg-[#EDEAE4] border border-[#1A1A1A]">
+          <div className="flex justify-between items-center p-2.5 bg-[#EDEAE4] border border-[#1A1A1A]">
             <div>
-              <p className="font-bold text-[#1A1A1A]">피드백 보너스</p>
-              <p className="text-xs text-[#5C5C5C]">
+              <p className="text-xs font-bold text-[#1A1A1A]">피드백 보너스</p>
+              <p className="text-[10px] text-[#5C5C5C]">
                 {expInfo.isOwnQuiz ? '자신의 퀴즈' :
                  expInfo.hasFeedback ? '피드백 제출 완료' : '피드백 미제출'}
               </p>
             </div>
-            <span className={`text-lg font-bold ${expInfo.feedbackExp > 0 ? 'text-[#1A6B1A]' : 'text-[#5C5C5C]'}`}>
+            <span className={`text-sm font-bold ${expInfo.feedbackExp > 0 ? 'text-[#1A6B1A]' : 'text-[#5C5C5C]'}`}>
               +{expInfo.feedbackExp} XP
             </span>
           </div>
 
           {/* 구분선 */}
-          <div className="border-t-2 border-[#1A1A1A] my-4" />
+          <div className="border-t-2 border-[#1A1A1A] my-3" />
 
           {/* 총 EXP */}
           <motion.div
             initial={{ scale: 0.95 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.3, type: 'spring', stiffness: 200 }}
-            className="flex justify-between items-center p-5 bg-[#1A1A1A] text-[#F5F0E8]"
+            className="flex justify-between items-center p-3 bg-[#1A1A1A] text-[#F5F0E8]"
           >
-            <p className="text-lg font-bold">총 획득 경험치</p>
-            <span className="text-2xl font-bold">+{expInfo.totalExp} XP</span>
+            <p className="text-sm font-bold">총 획득 경험치</p>
+            <span className="text-base font-bold">+{expInfo.totalExp} XP</span>
           </motion.div>
         </motion.div>
       </main>
 
       {/* 하단 버튼 */}
-      <div className="px-4 py-4 border-t-2 border-[#1A1A1A] bg-[#EDEAE4]">
+      <div className="px-4 py-3 border-t-2 border-[#1A1A1A] bg-[#EDEAE4]">
         <button
           onClick={handleComplete}
           disabled={isCompleting}
-          className="w-full py-4 text-base font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#3A3A3A] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          className="w-full py-2.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#3A3A3A] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
         >
           {isCompleting ? (
             <>

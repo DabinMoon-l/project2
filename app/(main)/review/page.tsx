@@ -96,7 +96,7 @@ function SlideFilter({
   const activeIndex = FILTER_OPTIONS.findIndex((opt) => opt.value === activeFilter);
 
   return (
-    <div className="relative flex items-stretch bg-[#EDEAE4] border border-[#1A1A1A] overflow-hidden min-w-[280px]">
+    <div className="relative flex items-stretch bg-[#EDEAE4] border border-[#1A1A1A] overflow-hidden min-w-0 w-[220px]">
       {/* 슬라이드 배경 */}
       <motion.div
         className="absolute h-full bg-[#1A1A1A]"
@@ -116,7 +116,7 @@ function SlideFilter({
           key={option.value}
           type="button"
           onClick={() => onFilterChange(option.value)}
-          className={`relative z-10 w-1/4 px-2 py-2 text-[11px] font-bold transition-colors text-center flex flex-col items-center justify-center ${
+          className={`relative z-10 w-1/4 px-1.5 py-1.5 text-[11px] font-bold transition-colors text-center whitespace-nowrap flex flex-col items-center justify-center ${
             activeFilter === option.value ? 'text-[#F5F0E8]' : 'text-[#1A1A1A]'
           }`}
         >
@@ -172,7 +172,7 @@ function FolderCard({
       transition={SPRING_TAP}
       onClick={onClick}
       className={`
-        relative flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all duration-150
+        relative flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-all duration-150
         ${isSelectMode
           ? isSelected
             ? ''
@@ -209,7 +209,7 @@ function FolderCard({
       <div className="relative">
         {variant === 'quiz' ? (
           // 퀴즈 카드 스타일 아이콘 — 검정 글래스 fill
-          <svg className="w-28 h-28 drop-shadow-lg" viewBox="0 0 24 24" fill="none">
+          <svg className="w-16 h-16 drop-shadow-lg" viewBox="0 0 24 24" fill="none">
             <defs>
               <linearGradient id={`${gradId}-q`} x1="0" y1="0" x2="1" y2="1">
                 <stop offset="0%" stopColor="rgba(50,50,50,0.85)" />
@@ -221,7 +221,7 @@ function FolderCard({
           </svg>
         ) : (
           // 폴더 아이콘 — 검정 글래스 fill
-          <svg className="w-28 h-28 drop-shadow-lg" viewBox="0 0 24 24" fill="none">
+          <svg className="w-16 h-16 drop-shadow-lg" viewBox="0 0 24 24" fill="none">
             <defs>
               <linearGradient id={gradId} x1="0" y1="0" x2="1" y2="1">
                 <stop offset="0%" stopColor="rgba(50,50,50,0.85)" />
@@ -247,12 +247,12 @@ function FolderCard({
       </div>
 
       {/* 제목 */}
-      <span className={`text-base font-bold text-center px-1 truncate w-full ${isSelectMode && !isSelected ? 'text-[#5C5C5C]' : 'text-[#1A1A1A]'}`}>
+      <span className={`text-sm font-bold text-center px-1 truncate w-full ${isSelectMode && !isSelected ? 'text-[#5C5C5C]' : 'text-[#1A1A1A]'}`}>
         {title}
       </span>
 
       {/* 문제 수 */}
-      <span className="text-sm text-center text-[#5C5C5C]">
+      <span className="text-xs text-center text-[#5C5C5C]">
         {count}문제
       </span>
     </motion.div>
@@ -2682,6 +2682,14 @@ function CreateFolderModal({
 }) {
   const [folderName, setFolderName] = useState('');
 
+  // 키보드 올라올 때 body 스크롤 방지
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+      return () => { document.body.style.overflow = ''; };
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const handleCreate = () => {
@@ -2693,28 +2701,37 @@ function CreateFolderModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      style={{ position: 'fixed', touchAction: 'none' }}
+    >
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 mx-4 max-w-sm w-full"
+        className="bg-[#F5F0E8] border-2 border-[#1A1A1A] p-3 mx-4 max-w-sm w-full"
       >
-        <h3 className="font-bold text-lg text-[#1A1A1A] mb-4">새 폴더 만들기</h3>
+        <h3 className="font-bold text-base text-[#1A1A1A] mb-3">새 폴더 만들기</h3>
 
         <input
           type="text"
           value={folderName}
           onChange={(e) => setFolderName(e.target.value)}
           placeholder="폴더 이름"
-          className="w-full px-3 py-2 border border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] mb-4 outline-none focus:border-2"
+          className="w-full px-2.5 py-1.5 text-sm border border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] mb-3 outline-none focus:border-2"
           autoFocus
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          inputMode="text"
+          data-form-type="other"
+          data-lpignore="true"
         />
 
         <div className="flex gap-2">
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 py-2 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+            className="flex-1 py-1.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
           >
             취소
           </button>
@@ -2722,7 +2739,7 @@ function CreateFolderModal({
             type="button"
             onClick={handleCreate}
             disabled={!folderName.trim()}
-            className="flex-1 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors disabled:opacity-50"
+            className="flex-1 py-1.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors disabled:opacity-50"
           >
             만들기
           </button>
@@ -2805,15 +2822,23 @@ function ReviewPageContent() {
   const [isAssignMode, setIsAssignMode] = useState(false);
   const [selectedFolderForAssign, setSelectedFolderForAssign] = useState<string | null>(null);
 
-  // 네비게이션 숨김 (폴더생성/정렬모드/서재상세)
+  // 네비게이션 숨김 (폴더생성/정렬모드/서재상세/공개전환모달)
   useEffect(() => {
-    if (showCreateFolder || isSortMode || selectedLibraryQuiz) {
+    if (showCreateFolder || isSortMode || selectedLibraryQuiz || publishConfirmQuizId) {
       document.body.setAttribute('data-hide-nav', '');
     } else {
       document.body.removeAttribute('data-hide-nav');
     }
     return () => document.body.removeAttribute('data-hide-nav');
-  }, [showCreateFolder, isSortMode, selectedLibraryQuiz]);
+  }, [showCreateFolder, isSortMode, selectedLibraryQuiz, publishConfirmQuizId]);
+
+  // 카테고리 설정 모달 열릴 때 body 스크롤 방지 (키보드 올라올 때 자유 스크롤 방지)
+  useEffect(() => {
+    if (isSortMode) {
+      document.body.style.overflow = 'hidden';
+      return () => { document.body.style.overflow = ''; };
+    }
+  }, [isSortMode]);
 
   // 로컬 스토리지에서 카테고리 정보 로드
   useEffect(() => {
@@ -3602,7 +3627,7 @@ function ReviewPageContent() {
                       setIsPdfSelectMode(false);
                       setSelectedPdfFolders(new Set());
                     }}
-                    className="px-4 py-3 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] whitespace-nowrap hover:bg-[#EDEAE4] transition-colors"
+                    className="px-3 py-2 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] whitespace-nowrap hover:bg-[#EDEAE4] transition-colors"
                   >
                     취소
                   </motion.button>
@@ -3718,7 +3743,7 @@ function ReviewPageContent() {
                         setSelectedPdfFolders(new Set());
                       }
                     }}
-                    className={`px-4 py-3 text-sm font-bold whitespace-nowrap transition-colors ${
+                    className={`px-3 py-2 text-xs font-bold whitespace-nowrap transition-colors ${
                       selectedPdfFolders.size > 0
                         ? 'bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A]'
                         : 'bg-[#D4CFC4] text-[#EDEAE4] cursor-not-allowed'
@@ -3739,7 +3764,7 @@ function ReviewPageContent() {
                       setIsReviewSelectMode(false);
                       setReviewSelectedIds(new Set());
                     }}
-                    className="px-4 py-3 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] whitespace-nowrap hover:bg-[#EDEAE4] transition-colors"
+                    className="px-2.5 py-1.5 text-[11px] font-bold border border-[#1A1A1A] text-[#1A1A1A] whitespace-nowrap hover:bg-[#EDEAE4] transition-colors"
                   >
                     취소
                   </motion.button>
@@ -3755,7 +3780,7 @@ function ReviewPageContent() {
                       }
                     }}
                     disabled={reviewSelectedIds.size === 0}
-                    className={`px-4 py-3 text-sm font-bold whitespace-nowrap transition-colors ${
+                    className={`px-2.5 py-1.5 text-[11px] font-bold whitespace-nowrap transition-colors ${
                       reviewSelectedIds.size > 0
                         ? 'bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A]'
                         : 'bg-[#D4CFC4] text-[#EDEAE4] cursor-not-allowed'
@@ -3776,7 +3801,7 @@ function ReviewPageContent() {
                     onClick={() => {
                       setIsReviewSelectMode(true);
                     }}
-                    className="px-4 py-3 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] whitespace-nowrap hover:bg-[#3A3A3A] transition-colors"
+                    className="px-2.5 py-1.5 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8] whitespace-nowrap hover:bg-[#3A3A3A] transition-colors flex items-center gap-1 overflow-visible"
                   >
                     선택 복습
                   </motion.button>
@@ -3848,13 +3873,13 @@ function ReviewPageContent() {
           <div className="w-full px-4 mt-3 flex gap-2">
             <button
               onClick={() => setShowCreateFolder(true)}
-              className="flex-1 py-2 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+              className="flex-1 py-1.5 text-xs font-bold border border-dashed border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
             >
               + 새 폴더
             </button>
             <button
               onClick={() => setIsSortMode(true)}
-              className="flex-1 py-2 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors flex items-center justify-center gap-1"
+              className="flex-1 py-1.5 text-xs font-bold border border-dashed border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors flex items-center justify-center gap-1"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -3868,9 +3893,9 @@ function ReviewPageContent() {
                 setIsPdfSelectMode(true);
                 setSelectedPdfFolders(new Set());
               }}
-              className="flex-1 py-2 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors flex items-center justify-center gap-1"
+              className="flex-1 py-1.5 text-xs font-bold border border-dashed border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors flex items-center justify-center gap-1"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
               PDF 다운
@@ -4487,6 +4512,68 @@ function ReviewPageContent() {
                             <div className="h-full flex items-center justify-center">
                               <p className="text-sm text-[#5C5C5C]">폴더가 없습니다</p>
                             </div>
+                          ) : firstCategoryFolders.length >= 4 ? (
+                            <FolderSlider>
+                              {firstCategoryFolders.map((folder) => {
+                                const canDelete = true;
+                                const updateKey = `${folder.filterType}-${folder.id}`;
+                                const hasUpdate = updatedQuizzes.has(updateKey);
+                                const isPdfMode = isPdfSelectMode && activeFilter === 'custom';
+                                return (
+                                  <FolderCard
+                                    key={updateKey}
+                                    title={folder.title}
+                                    count={folder.count}
+                                    onClick={() => {
+                                      if (isPdfMode) {
+                                        const newSelected = new Set(selectedPdfFolders);
+                                        if (newSelected.has(folder.id)) newSelected.delete(folder.id);
+                                        else newSelected.add(folder.id);
+                                        setSelectedPdfFolders(newSelected);
+                                      } else if (isFolderDeleteMode) {
+                                        const newSelected = new Set(deleteFolderIds);
+                                        if (newSelected.has(updateKey)) {
+                                          newSelected.delete(updateKey);
+                                        } else {
+                                          newSelected.add(updateKey);
+                                        }
+                                        setDeleteFolderIds(newSelected);
+                                      } else if (isReviewSelectMode) {
+                                        const newSelected = new Set(reviewSelectedIds);
+                                        if (newSelected.has(updateKey)) {
+                                          newSelected.delete(updateKey);
+                                        } else {
+                                          newSelected.add(updateKey);
+                                        }
+                                        setReviewSelectedIds(newSelected);
+                                      } else if (isAssignMode) {
+                                        handleFolderClickInAssignMode(folder.id);
+                                      } else {
+                                        handleFolderClick(folder);
+                                      }
+                                    }}
+                                    isSelectMode={(isFolderDeleteMode && canDelete) || isReviewSelectMode || isAssignMode || isPdfMode}
+                                    isSelected={
+                                      isPdfMode
+                                        ? selectedPdfFolders.has(folder.id)
+                                        : isAssignMode
+                                          ? selectedFolderForAssign === folder.id
+                                          : (isFolderDeleteMode ? deleteFolderIds : reviewSelectedIds).has(updateKey)
+                                    }
+                                    showDelete={false}
+                                    hasUpdate={hasUpdate}
+                                    onUpdateClick={() => {
+                                      setUpdateModalInfo({
+                                        quizId: folder.id,
+                                        quizTitle: folder.title,
+                                        filterType: folder.filterType,
+                                      });
+                                    }}
+                                    variant="folder"
+                                  />
+                                );
+                              })}
+                            </FolderSlider>
                           ) : (
                             <div className="grid grid-cols-3 gap-3 pb-2">
                               {firstCategoryFolders.map((folder) => {
@@ -4621,6 +4708,69 @@ function ReviewPageContent() {
                             </span>
                           </div>
                           <div className="flex-1 overflow-y-auto min-h-0">
+                            {sortedUncategorized.length >= 4 ? (
+                            <FolderSlider>
+                              {sortedUncategorized.map((folder) => {
+                                const canDelete = true;
+                                const updateKey = `${folder.filterType}-${folder.id}`;
+                                const hasUpdate = updatedQuizzes.has(updateKey);
+                                const isPdfMode = isPdfSelectMode && activeFilter === 'custom';
+                                return (
+                                  <FolderCard
+                                    key={updateKey}
+                                    title={folder.title}
+                                    count={folder.count}
+                                    onClick={() => {
+                                      if (isPdfMode) {
+                                        const newSelected = new Set(selectedPdfFolders);
+                                        if (newSelected.has(folder.id)) newSelected.delete(folder.id);
+                                        else newSelected.add(folder.id);
+                                        setSelectedPdfFolders(newSelected);
+                                      } else if (isFolderDeleteMode) {
+                                        const newSelected = new Set(deleteFolderIds);
+                                        if (newSelected.has(updateKey)) {
+                                          newSelected.delete(updateKey);
+                                        } else {
+                                          newSelected.add(updateKey);
+                                        }
+                                        setDeleteFolderIds(newSelected);
+                                      } else if (isReviewSelectMode) {
+                                        const newSelected = new Set(reviewSelectedIds);
+                                        if (newSelected.has(updateKey)) {
+                                          newSelected.delete(updateKey);
+                                        } else {
+                                          newSelected.add(updateKey);
+                                        }
+                                        setReviewSelectedIds(newSelected);
+                                      } else if (isAssignMode) {
+                                        handleFolderClickInAssignMode(folder.id);
+                                      } else {
+                                        handleFolderClick(folder);
+                                      }
+                                    }}
+                                    isSelectMode={(isFolderDeleteMode && canDelete) || isReviewSelectMode || isAssignMode || isPdfMode}
+                                    isSelected={
+                                      isPdfMode
+                                        ? selectedPdfFolders.has(folder.id)
+                                        : isAssignMode
+                                          ? selectedFolderForAssign === folder.id
+                                          : (isFolderDeleteMode ? deleteFolderIds : reviewSelectedIds).has(updateKey)
+                                    }
+                                    showDelete={false}
+                                    hasUpdate={hasUpdate}
+                                    onUpdateClick={() => {
+                                      setUpdateModalInfo({
+                                        quizId: folder.id,
+                                        quizTitle: folder.title,
+                                        filterType: folder.filterType,
+                                      });
+                                    }}
+                                    variant="folder"
+                                  />
+                                );
+                              })}
+                            </FolderSlider>
+                            ) : (
                             <div className="grid grid-cols-3 gap-3 pb-2">
                               {sortedUncategorized.map((folder) => {
                                 const canDelete = true;
@@ -4682,6 +4832,7 @@ function ReviewPageContent() {
                                 );
                               })}
                             </div>
+                            )}
                           </div>
                         </section>
                       )}
@@ -5113,12 +5264,73 @@ function ReviewPageContent() {
               })()
             ) : (
               // 기본 그리드 (카테고리 없을 때)
+              currentFolders.length >= 4 ? (
+                <FolderSlider>
+                  {currentFolders.map((folder) => {
+                    const canDelete = true;
+                    const updateKey = `${folder.filterType}-${folder.id}`;
+                    const hasUpdate = updatedQuizzes.has(updateKey);
+                    const isPdfMode = isPdfSelectMode && activeFilter === 'custom';
+                    return (
+                      <FolderCard
+                        key={updateKey}
+                        title={folder.title}
+                        count={folder.count}
+                        onClick={() => {
+                          if (isPdfMode) {
+                            const newSelected = new Set(selectedPdfFolders);
+                            if (newSelected.has(folder.id)) {
+                              newSelected.delete(folder.id);
+                            } else {
+                              newSelected.add(folder.id);
+                            }
+                            setSelectedPdfFolders(newSelected);
+                          } else if (isFolderDeleteMode) {
+                            const newSelected = new Set(deleteFolderIds);
+                            if (newSelected.has(updateKey)) {
+                              newSelected.delete(updateKey);
+                            } else {
+                              newSelected.add(updateKey);
+                            }
+                            setDeleteFolderIds(newSelected);
+                          } else if (isReviewSelectMode) {
+                            const newSelected = new Set(reviewSelectedIds);
+                            if (newSelected.has(updateKey)) {
+                              newSelected.delete(updateKey);
+                            } else {
+                              newSelected.add(updateKey);
+                            }
+                            setReviewSelectedIds(newSelected);
+                          } else {
+                            handleFolderClick(folder);
+                          }
+                        }}
+                        isSelectMode={(isFolderDeleteMode && canDelete) || isReviewSelectMode || isPdfMode}
+                        isSelected={
+                          isPdfMode
+                            ? selectedPdfFolders.has(folder.id)
+                            : (isFolderDeleteMode ? deleteFolderIds : reviewSelectedIds).has(updateKey)
+                        }
+                        showDelete={false}
+                        hasUpdate={hasUpdate}
+                        onUpdateClick={() => {
+                          setUpdateModalInfo({
+                            quizId: folder.id,
+                            quizTitle: folder.title,
+                            filterType: folder.filterType,
+                          });
+                        }}
+                        variant="folder"
+                      />
+                    );
+                  })}
+                </FolderSlider>
+              ) : (
               <div className="grid grid-cols-3 gap-3">
                 {currentFolders.map((folder) => {
                   const canDelete = true;
                   const updateKey = `${folder.filterType}-${folder.id}`;
                   const hasUpdate = updatedQuizzes.has(updateKey);
-                  const variant = 'folder';
                   const isPdfMode = isPdfSelectMode && activeFilter === 'custom';
                   return (
                     <FolderCard
@@ -5169,11 +5381,12 @@ function ReviewPageContent() {
                           filterType: folder.filterType,
                         });
                       }}
-                      variant={variant}
+                      variant="folder"
                     />
                   );
                 })}
               </div>
+              )
             )}
           </>
         )}
@@ -5198,40 +5411,40 @@ function ReviewPageContent() {
             exit={{ opacity: 0, scale: 0.88 }}
             transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-[300px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
+            className="w-full max-w-[280px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-3"
           >
-            <h2 className="text-sm font-bold text-[#1A1A1A] mb-3">
+            <h2 className="text-xs font-bold text-[#1A1A1A] mb-2">
               {selectedBookmarkedQuiz.title}
             </h2>
 
             {/* 미완료 퀴즈: 평균 점수 대형 표시 (Start 버전) */}
             {!selectedBookmarkedQuiz.hasCompleted && (
-              <div className="text-center py-2 mb-2 border-2 border-dashed border-[#1A1A1A] bg-[#EDEAE4]">
-                <p className="text-[10px] text-[#5C5C5C] mb-0.5">평균 점수</p>
-                <p className="text-2xl font-black text-[#1A1A1A]">
+              <div className="text-center py-1.5 mb-1.5 border-2 border-dashed border-[#1A1A1A] bg-[#EDEAE4]">
+                <p className="text-[9px] text-[#5C5C5C] mb-0.5">평균 점수</p>
+                <p className="text-xl font-black text-[#1A1A1A]">
                   {selectedBookmarkedQuiz.participantCount > 0
-                    ? <>{(selectedBookmarkedQuiz.averageScore ?? 0).toFixed(0)}<span className="text-xs font-bold">점</span></>
+                    ? <>{(selectedBookmarkedQuiz.averageScore ?? 0).toFixed(0)}<span className="text-[10px] font-bold">점</span></>
                     : '-'}
                 </p>
               </div>
             )}
 
-            <div className="space-y-1.5 mb-4">
-              <div className="flex justify-between text-xs">
+            <div className="space-y-1 mb-3">
+              <div className="flex justify-between text-[11px]">
                 <span className="text-[#5C5C5C]">문제 수</span>
                 <span className="font-bold text-[#1A1A1A]">{selectedBookmarkedQuiz.questionCount}문제</span>
               </div>
-              <div className="flex justify-between text-xs">
+              <div className="flex justify-between text-[11px]">
                 <span className="text-[#5C5C5C]">참여자</span>
                 <span className="font-bold text-[#1A1A1A]">{selectedBookmarkedQuiz.participantCount}명</span>
               </div>
-              <div className="flex justify-between text-xs">
+              <div className="flex justify-between text-[11px]">
                 <span className="text-[#5C5C5C]">난이도</span>
                 <span className="font-bold text-[#1A1A1A]">
                   {selectedBookmarkedQuiz.difficulty === 'easy' ? '쉬움' : selectedBookmarkedQuiz.difficulty === 'hard' ? '어려움' : '보통'}
                 </span>
               </div>
-              <div className="flex justify-between text-xs">
+              <div className="flex justify-between text-[11px]">
                 <span className="text-[#5C5C5C]">문제 유형</span>
                 <span className="font-bold text-[#1A1A1A]">
                   {formatQuestionTypes(
@@ -5241,7 +5454,7 @@ function ReviewPageContent() {
                   )}
                 </span>
               </div>
-              <div className="flex justify-between text-xs">
+              <div className="flex justify-between text-[11px]">
                 <span className="text-[#5C5C5C]">제작자</span>
                 <span className="font-bold text-[#1A1A1A]">
                   {selectedBookmarkedQuiz.creatorNickname || '익명'}
@@ -5251,7 +5464,7 @@ function ReviewPageContent() {
               {/* 완료된 퀴즈: 평균 점수 행 + 점수 표시 (Review 버전) */}
               {selectedBookmarkedQuiz.hasCompleted && (
                 <>
-                  <div className="flex justify-between text-xs">
+                  <div className="flex justify-between text-[11px]">
                     <span className="text-[#5C5C5C]">평균 점수</span>
                     <span className="font-bold text-[#1A1A1A]">
                       {selectedBookmarkedQuiz.participantCount > 0
@@ -5259,31 +5472,31 @@ function ReviewPageContent() {
                         : '-'}
                     </span>
                   </div>
-                  <div className="py-2 border-t border-[#A0A0A0]">
+                  <div className="py-1.5 border-t border-[#A0A0A0]">
                     <div className="flex items-center justify-center gap-2">
-                      <span className="text-2xl font-black text-[#1A1A1A]">
+                      <span className="text-xl font-black text-[#1A1A1A]">
                         {selectedBookmarkedQuiz.myScore !== undefined ? selectedBookmarkedQuiz.myScore : '-'}
                       </span>
-                      <span className="text-sm text-[#5C5C5C]">/</span>
-                      <span className="text-3xl font-black text-[#1A1A1A]">
+                      <span className="text-xs text-[#5C5C5C]">/</span>
+                      <span className="text-2xl font-black text-[#1A1A1A]">
                         {selectedBookmarkedQuiz.myFirstReviewScore !== undefined ? selectedBookmarkedQuiz.myFirstReviewScore : '-'}
                       </span>
                     </div>
                     <div className="flex items-center justify-center gap-6 mt-0.5">
-                      <span className="text-[10px] text-[#5C5C5C]">퀴즈</span>
-                      <span className="text-[10px] text-[#5C5C5C]">복습</span>
+                      <span className="text-[9px] text-[#5C5C5C]">퀴즈</span>
+                      <span className="text-[9px] text-[#5C5C5C]">복습</span>
                     </div>
                   </div>
                 </>
               )}
 
               {selectedBookmarkedQuiz.tags && selectedBookmarkedQuiz.tags.length > 0 && (
-                <div className="pt-2 border-t border-[#A0A0A0]">
-                  <div className="flex flex-wrap gap-1.5">
+                <div className="pt-1.5 border-t border-[#A0A0A0]">
+                  <div className="flex flex-wrap gap-1">
                     {selectedBookmarkedQuiz.tags.map((tag) => (
                       <span
                         key={tag}
-                        className="px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-medium"
+                        className="px-1 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-[10px] font-medium"
                       >
                         #{tag}
                       </span>
@@ -5296,7 +5509,7 @@ function ReviewPageContent() {
             <div className="flex gap-2">
               <button
                 onClick={() => setSelectedBookmarkedQuiz(null)}
-                className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+                className="flex-1 py-1.5 text-[11px] font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
               >
                 닫기
               </button>
@@ -5305,7 +5518,7 @@ function ReviewPageContent() {
                   router.push(`/quiz/${selectedBookmarkedQuiz.quizId}`);
                   setSelectedBookmarkedQuiz(null);
                 }}
-                className="flex-1 py-2 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
+                className="flex-1 py-1.5 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
               >
                 {selectedBookmarkedQuiz.hasCompleted ? '복습하기' : '시작하기'}
               </button>
@@ -5473,7 +5686,8 @@ function ReviewPageContent() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center p-3"
+            style={{ position: 'fixed', touchAction: 'none' }}
             onClick={() => {
               setIsSortMode(false);
               setNewCategoryName('');
@@ -5491,39 +5705,43 @@ function ReviewPageContent() {
               className="relative bg-[#F5F0E8] border-2 border-[#1A1A1A] w-full max-w-sm max-h-[80vh] overflow-y-auto"
             >
               {/* 헤더 */}
-              <div className="flex items-center justify-between p-4 border-b-2 border-[#1A1A1A]">
-                <h3 className="font-bold text-lg text-[#1A1A1A]">카테고리 설정</h3>
+              <div className="flex items-center justify-between p-3 border-b-2 border-[#1A1A1A]">
+                <h3 className="font-bold text-base text-[#1A1A1A]">카테고리 설정</h3>
                 <button
                   onClick={() => {
                     setIsSortMode(false);
                     setNewCategoryName('');
                   }}
-                  className="w-8 h-8 flex items-center justify-center text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+                  className="w-7 h-7 flex items-center justify-center text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
               </div>
 
               {/* 본문 */}
-              <div className="p-4 space-y-4">
+              <div className="p-3 space-y-3">
                 {/* 카테고리 추가 */}
                 <div>
-                  <label className="block text-sm font-bold text-[#1A1A1A] mb-2">새 카테고리 추가</label>
+                  <label className="block text-xs font-bold text-[#1A1A1A] mb-1.5">새 카테고리 추가</label>
                   {folderCategories.length >= 8 ? (
-                    <div className="p-3 border-2 border-dashed border-[#5C5C5C] bg-[#EDEAE4] text-center">
-                      <p className="text-sm text-[#5C5C5C]">카테고리는 최대 8개까지 추가할 수 있습니다.</p>
+                    <div className="p-2.5 border-2 border-dashed border-[#5C5C5C] bg-[#EDEAE4] text-center">
+                      <p className="text-xs text-[#5C5C5C]">카테고리는 최대 8개까지 추가할 수 있습니다.</p>
                     </div>
                   ) : (
-                    <div className="flex gap-2">
+                    <div className="flex gap-1.5">
                       <input
                         type="text"
                         value={newCategoryName}
                         onChange={(e) => setNewCategoryName(e.target.value)}
                         placeholder="카테고리 이름 입력"
-                        className="flex-1 px-3 py-2 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-sm focus:outline-none"
+                        className="flex-1 px-2.5 py-1.5 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-xs focus:outline-none"
                         maxLength={20}
+                        autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        inputMode="text"
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' && newCategoryName.trim()) {
                             handleAddFolderCategory();
@@ -5533,7 +5751,7 @@ function ReviewPageContent() {
                       <button
                         onClick={handleAddFolderCategory}
                         disabled={!newCategoryName.trim()}
-                        className="px-4 py-2 bg-[#1A1A1A] text-[#F5F0E8] font-bold text-sm disabled:opacity-30"
+                        className="px-3 py-1.5 bg-[#1A1A1A] text-[#F5F0E8] font-bold text-xs disabled:opacity-30"
                       >
                         추가
                       </button>
@@ -5543,15 +5761,15 @@ function ReviewPageContent() {
 
                 {/* 현재 카테고리 목록 */}
                 <div>
-                  <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
+                  <label className="block text-xs font-bold text-[#1A1A1A] mb-1.5">
                     현재 카테고리 ({folderCategories.length}/8개)
                   </label>
                   {folderCategories.length === 0 ? (
-                    <p className="text-xs text-[#5C5C5C] py-4 text-center border border-dashed border-[#5C5C5C]">
+                    <p className="text-[11px] text-[#5C5C5C] py-3 text-center border border-dashed border-[#5C5C5C]">
                       아직 카테고리가 없습니다. 위에서 추가해주세요.
                     </p>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       {folderCategories.map((cat) => {
                         const folderCount = Object.values(folderCategoryMap).filter(
                           (catId) => catId === cat.id
@@ -5560,15 +5778,15 @@ function ReviewPageContent() {
                         return (
                           <div
                             key={cat.id}
-                            className="flex items-center justify-between p-3 border-2 border-[#1A1A1A] bg-[#EDEAE4]"
+                            className="flex items-center justify-between p-2.5 border-2 border-[#1A1A1A] bg-[#EDEAE4]"
                           >
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-sm text-[#1A1A1A]">{cat.name}</span>
-                              <span className="text-xs text-[#5C5C5C]">({folderCount}개)</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-xs text-[#1A1A1A]">{cat.name}</span>
+                              <span className="text-[11px] text-[#5C5C5C]">({folderCount}개)</span>
                             </div>
                             <button
                               onClick={() => handleRemoveFolderCategory(cat.id)}
-                              className="px-2 py-1 text-xs font-bold text-[#8B1A1A] border border-[#8B1A1A] hover:bg-[#FDEAEA] transition-colors"
+                              className="px-1.5 py-0.5 text-[11px] font-bold text-[#8B1A1A] border border-[#8B1A1A] hover:bg-[#FDEAEA] transition-colors"
                             >
                               삭제
                             </button>
@@ -5581,17 +5799,17 @@ function ReviewPageContent() {
 
                 {/* 폴더 배정 모드 진입 버튼 */}
                 {folderCategories.length > 0 && customFolders.length > 0 && (
-                  <div className="pt-3 border-t-2 border-[#EDEAE4]">
+                  <div className="pt-2.5 border-t-2 border-[#EDEAE4]">
                     <button
                       onClick={() => {
                         setIsSortMode(false);
                         setIsAssignMode(true);
                       }}
-                      className="w-full py-3 font-bold text-sm bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#3A3A3A] transition-colors"
+                      className="w-full py-2.5 font-bold text-xs bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#3A3A3A] transition-colors"
                     >
                       폴더 배정하기
                     </button>
-                    <p className="text-xs text-[#5C5C5C] text-center mt-2">
+                    <p className="text-[11px] text-[#5C5C5C] text-center mt-1.5">
                       폴더를 선택 → 원하는 카테고리 헤더를 탭하세요
                     </p>
                   </div>
@@ -5766,12 +5984,12 @@ function ReviewPageContent() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-xs bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
+              className="w-full max-w-xs bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
             >
               {/* 아이콘 */}
-              <div className="flex justify-center mb-4">
-                <div className="w-12 h-12 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
-                  <svg className="w-6 h-6 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="flex justify-center mb-3">
+                <div className="w-10 h-10 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
+                  <svg className="w-5 h-5 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.6 9h16.8M3.6 15h16.8" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3a15.3 15.3 0 0 1 4 9 15.3 15.3 0 0 1-4 9 15.3 15.3 0 0 1-4-9 15.3 15.3 0 0 1 4-9z" />
@@ -5780,13 +5998,13 @@ function ReviewPageContent() {
               </div>
 
               {/* 텍스트 */}
-              <h3 className="text-center font-bold text-lg text-[#1A1A1A] mb-2">
+              <h3 className="text-center font-bold text-base text-[#1A1A1A] mb-1.5">
                 퀴즈를 공개할까요?
               </h3>
-              <p className="text-center text-sm text-[#5C5C5C] mb-1">
+              <p className="text-center text-xs text-[#5C5C5C] mb-0.5">
                 공개하면 다른 학생들도 풀 수 있어요.
               </p>
-              <p className="text-center text-sm text-[#5C5C5C] mb-6">
+              <p className="text-center text-xs text-[#5C5C5C] mb-4">
                 참여 통계도 확인할 수 있어요.
               </p>
 
@@ -5794,7 +6012,7 @@ function ReviewPageContent() {
               <div className="flex gap-3">
                 <button
                   onClick={() => setPublishConfirmQuizId(null)}
-                  className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+                  className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
                 >
                   취소
                 </button>
@@ -5803,7 +6021,7 @@ function ReviewPageContent() {
                     uploadToPublic(publishConfirmQuizId);
                     setPublishConfirmQuizId(null);
                   }}
-                  className="flex-1 py-3 font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
+                  className="flex-1 py-2 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
                 >
                   공개
                 </button>

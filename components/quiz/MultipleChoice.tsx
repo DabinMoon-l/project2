@@ -155,14 +155,14 @@ export default function MultipleChoice({
     visible: {
       opacity: 1,
       transition: {
-        staggerChildren: 0.1,
+        staggerChildren: 0.06,
       },
     },
   };
 
   const itemVariants = {
-    hidden: { opacity: 0, x: -20 },
-    visible: { opacity: 1, x: 0 },
+    hidden: { opacity: 0, x: -12 },
+    visible: { opacity: 1, x: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } },
   };
 
   return (
@@ -170,7 +170,7 @@ export default function MultipleChoice({
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="space-y-3 py-4"
+      className="space-y-2 py-3"
     >
       {choices.map((choice, index) => {
         const selected = isSelected(index);
@@ -179,15 +179,14 @@ export default function MultipleChoice({
           <motion.button
             key={index}
             variants={itemVariants}
-            whileHover={!disabled ? { scale: 1.02, x: 4 } : undefined}
             whileTap={!disabled ? { scale: 0.98 } : undefined}
             onClick={() => handleSelect(index)}
             disabled={disabled}
             style={getChoiceStyle(index)}
             className={`
-              w-full p-4
+              w-full p-3
               border-2 transition-all duration-200
-              flex items-start gap-3 text-left
+              flex items-start gap-2 text-left
               ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}
             `}
             aria-label={`선지 ${index + 1}: ${choice}`}
@@ -196,8 +195,8 @@ export default function MultipleChoice({
             {/* 선지 번호 */}
             <span
               className={`
-                flex-shrink-0 w-7 h-7
-                flex items-center justify-center text-sm font-bold
+                flex-shrink-0 w-6 h-6
+                flex items-center justify-center text-xs font-bold
                 transition-colors duration-200
                 ${selected
                   ? 'bg-[#F5F0E8]/20 text-[#F5F0E8]'
@@ -209,7 +208,7 @@ export default function MultipleChoice({
             </span>
 
             {/* 선지 텍스트 */}
-            <span className="flex-1 text-base leading-relaxed break-words">
+            <span className="flex-1 text-xs leading-relaxed break-words">
               {choice}
             </span>
 

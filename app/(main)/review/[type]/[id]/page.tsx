@@ -185,7 +185,7 @@ function SlideFilter({
   const activeIndex = FILTER_OPTIONS.findIndex((opt) => opt.value === activeFilter);
 
   return (
-    <div className="relative flex items-stretch bg-[#EDEAE4] border border-[#1A1A1A] overflow-hidden min-w-[320px]">
+    <div className="relative flex items-stretch bg-[#EDEAE4] border border-[#1A1A1A] overflow-hidden min-w-0 w-[220px]">
       {/* 슬라이드 배경 */}
       <motion.div
         className="absolute h-full bg-[#1A1A1A]"
@@ -205,7 +205,7 @@ function SlideFilter({
           key={option.value}
           type="button"
           onClick={() => onFilterChange(option.value)}
-          className={`relative z-10 w-1/4 px-3 py-3 text-xs font-bold transition-colors text-center flex flex-col items-center justify-center ${
+          className={`relative z-10 w-1/4 px-1.5 py-1.5 text-[11px] font-bold transition-colors text-center whitespace-nowrap flex flex-col items-center justify-center ${
             activeFilter === option.value ? 'text-[#F5F0E8]' : 'text-[#1A1A1A]'
           }`}
         >
@@ -406,7 +406,7 @@ function QuestionCard({
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden"
           >
-            <div className="border-t border-[#1A1A1A] p-4 space-y-4 bg-[#EDEAE4]">
+            <div className="border-t border-[#1A1A1A] p-3 space-y-3 bg-[#EDEAE4]">
               {/* 수정 모드: 문제 텍스트 수정 */}
               {isEditMode && onEditChange && (
                 <div>
@@ -689,11 +689,11 @@ function QuestionCard({
                 const userSelectedX = normalizedUser === 'X';
 
                 return (
-                  <div className="space-y-3">
-                    <div className="flex gap-4 justify-center py-2">
+                  <div className="space-y-2">
+                    <div className="flex gap-3 justify-center py-1">
                       {/* O 버튼 */}
                       <div
-                        className={`w-20 h-20 text-4xl font-bold border-2 flex items-center justify-center transition-colors ${
+                        className={`w-12 h-12 text-2xl font-bold border-2 flex items-center justify-center transition-colors ${
                           isOCorrect
                             ? 'bg-[#1A6B1A] border-[#1A6B1A] text-[#F5F0E8]'
                             : userSelectedO
@@ -705,7 +705,7 @@ function QuestionCard({
                       </div>
                       {/* X 버튼 */}
                       <div
-                        className={`w-20 h-20 text-4xl font-bold border-2 flex items-center justify-center transition-colors ${
+                        className={`w-12 h-12 text-2xl font-bold border-2 flex items-center justify-center transition-colors ${
                           isXCorrect
                             ? 'bg-[#1A6B1A] border-[#1A6B1A] text-[#F5F0E8]'
                             : userSelectedX
@@ -722,7 +722,7 @@ function QuestionCard({
 
               {/* 객관식 문제 - 시각적 선지 버튼 */}
               {item.type === 'multiple' && item.options && item.options.length > 0 && (
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {/* 복수 정답 표시 */}
                   {(() => {
                     const correctAnswerStr = item.correctAnswer?.toString() || '';
@@ -731,7 +731,7 @@ function QuestionCard({
                       : [correctAnswerStr];
                     const isMultipleAnswer = correctAnswers.length > 1;
                     return isMultipleAnswer && (
-                      <p className="text-xs text-[#8B6914] font-bold flex items-center gap-1">
+                      <p className="text-[10px] text-[#8B6914] font-bold flex items-center gap-1">
                         <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                         </svg>
@@ -739,7 +739,7 @@ function QuestionCard({
                       </p>
                     );
                   })()}
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     {(editData?.options ?? item.options).map((opt, idx) => {
                       const optionNum = (idx + 1).toString();
                       // 복수 정답 지원 - 1-indexed 번호만 사용 (optionIdx 제거)
@@ -785,7 +785,7 @@ function QuestionCard({
                         <div key={idx}>
                           <div
                             style={isEditMode ? {} : { backgroundColor: bgColor, borderColor, color: textColor }}
-                            className={`w-full p-3 border-2 flex items-start gap-3 text-left ${
+                            className={`w-full p-2 border-2 flex items-start gap-2 text-left ${
                               isEditMode
                                 ? 'border-[#1A1A1A] bg-[#F5F0E8]'
                                 : choiceExp ? 'cursor-pointer' : ''
@@ -801,7 +801,7 @@ function QuestionCard({
                           >
                             {/* 선지 번호 */}
                             <span
-                              className={`flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm font-bold ${
+                              className={`flex-shrink-0 w-5 h-5 flex items-center justify-center text-xs font-bold ${
                                 isEditMode
                                   ? 'bg-[#EDEAE4] text-[#1A1A1A]'
                                   : isCorrectOption || isWrongAnswer
@@ -821,10 +821,10 @@ function QuestionCard({
                                   newOptions[idx] = e.target.value;
                                   onEditChange('options', newOptions);
                                 }}
-                                className="flex-1 text-sm bg-transparent border-b border-[#5C5C5C] focus:outline-none focus:border-[#1A1A1A] text-[#1A1A1A]"
+                                className="flex-1 text-xs bg-transparent border-b border-[#5C5C5C] focus:outline-none focus:border-[#1A1A1A] text-[#1A1A1A]"
                               />
                             ) : (
-                              <span className="flex-1 text-sm leading-relaxed break-words">
+                              <span className="flex-1 text-xs leading-relaxed break-words">
                                 {opt}
                                 {isMultipleAnswerQuestion && isCorrectOption && <span className="ml-1 font-bold">(정답)</span>}
                                 {isMultipleAnswerQuestion && isUserAnswer && <span className="ml-1 font-bold">(내 답)</span>}
@@ -834,7 +834,7 @@ function QuestionCard({
                             {!isEditMode && (
                               (isCorrectOption || isUserAnswer) ? (
                                 <div className="flex items-center gap-1 flex-shrink-0">
-                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                                       d={isCorrectOption ? "M5 13l4 4L19 7" : "M6 18L18 6M6 6l12 12"} />
                                   </svg>
@@ -855,8 +855,8 @@ function QuestionCard({
                           </div>
                           {/* 선지별 해설 - 수정 모드면 전부 펼침 + textarea */}
                           {isEditMode && onEditChange ? (
-                            <div className="px-4 py-3 border-x-2 border-b-2 border-[#1A1A1A] bg-[#EDEAE4]">
-                              <label className="block text-xs text-[#5C5C5C] mb-1">선지 {idx + 1} 해설</label>
+                            <div className="px-3 py-2 border-x-2 border-b-2 border-[#1A1A1A] bg-[#EDEAE4]">
+                              <label className="block text-[10px] text-[#5C5C5C] mb-1">선지 {idx + 1} 해설</label>
                               <textarea
                                 value={(editData?.choiceExplanations ?? item.choiceExplanations ?? [])[idx] || ''}
                                 onChange={(e) => {
@@ -873,9 +873,9 @@ function QuestionCard({
                           ) : choiceExp && isChoiceExpanded ? (
                             <div
                               style={{ borderColor }}
-                              className="px-4 py-3 border-x-2 border-b-2 bg-[#EDEAE4]"
+                              className="px-3 py-2 border-x-2 border-b-2 bg-[#EDEAE4]"
                             >
-                              <p className={`text-sm whitespace-pre-wrap ${
+                              <p className={`text-xs whitespace-pre-wrap ${
                                 isCorrectOption ? 'text-[#1A6B1A]' : 'text-[#5C5C5C]'
                               }`}>
                                 {choiceExp.replace(/^선지\d+\s*해설\s*[:：]\s*/i, '')}
@@ -891,19 +891,19 @@ function QuestionCard({
 
               {/* 단답형/서술형 답 */}
               {(item.type === 'short' || item.type === 'short_answer' || item.type === 'subjective' || item.type === 'essay') && (
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {/* 내 답 */}
-                  <div className="p-3 border-2 border-[#1A1A1A] bg-[#F5F0E8]">
-                    <p className="text-xs text-[#5C5C5C] mb-1">내 답</p>
-                    <p className={`text-sm font-medium whitespace-pre-wrap ${item.isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>
+                  <div className="p-2 border-2 border-[#1A1A1A] bg-[#F5F0E8]">
+                    <p className="text-[10px] text-[#5C5C5C] mb-0.5">내 답</p>
+                    <p className={`text-xs font-medium whitespace-pre-wrap ${item.isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>
                       {item.userAnswer || '(미응답)'}
                     </p>
                   </div>
                   {/* 정답 */}
                   {item.correctAnswer && (
-                    <div className="p-3 border-2 border-[#1A6B1A] bg-[#E8F5E9]">
-                      <p className="text-xs text-[#1A6B1A] mb-1">정답</p>
-                      <p className="text-sm font-medium text-[#1A6B1A] whitespace-pre-wrap">
+                    <div className="p-2 border-2 border-[#1A6B1A] bg-[#E8F5E9]">
+                      <p className="text-[10px] text-[#1A6B1A] mb-0.5">정답</p>
+                      <p className="text-xs font-medium text-[#1A6B1A] whitespace-pre-wrap">
                         {/* 복수 정답 표시 (||| -> , 로 변환) */}
                         {item.correctAnswer?.includes('|||')
                           ? item.correctAnswer.split('|||').map((a: string) => a.trim()).join(', ')
@@ -923,19 +923,19 @@ function QuestionCard({
                item.type !== 'subjective' &&
                item.type !== 'essay' &&
                (item.userAnswer || item.correctAnswer) && (
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {item.userAnswer && (
-                    <div className="p-3 border-2 border-[#1A1A1A] bg-[#F5F0E8]">
-                      <p className="text-xs text-[#5C5C5C] mb-1">내 답</p>
-                      <p className={`text-sm font-medium whitespace-pre-wrap ${item.isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>
+                    <div className="p-2 border-2 border-[#1A1A1A] bg-[#F5F0E8]">
+                      <p className="text-[10px] text-[#5C5C5C] mb-0.5">내 답</p>
+                      <p className={`text-xs font-medium whitespace-pre-wrap ${item.isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>
                         {item.userAnswer}
                       </p>
                     </div>
                   )}
                   {item.correctAnswer && (
-                    <div className="p-3 border-2 border-[#1A6B1A] bg-[#E8F5E9]">
-                      <p className="text-xs text-[#1A6B1A] mb-1">정답</p>
-                      <p className="text-sm font-medium text-[#1A6B1A] whitespace-pre-wrap">
+                    <div className="p-2 border-2 border-[#1A6B1A] bg-[#E8F5E9]">
+                      <p className="text-[10px] text-[#1A6B1A] mb-0.5">정답</p>
+                      <p className="text-xs font-medium text-[#1A6B1A] whitespace-pre-wrap">
                         {item.correctAnswer}
                       </p>
                     </div>
@@ -1022,13 +1022,13 @@ function QuestionCard({
         <div className="space-y-4">
           {/* 피드백 유형 선택 */}
           <div>
-            <p className="text-sm text-[#5C5C5C] mb-3">이 문제에 대한 의견을 선택해주세요</p>
+            <p className="text-xs text-[#5C5C5C] mb-3">이 문제에 대한 의견을 선택해주세요</p>
             <div className="grid grid-cols-2 gap-2">
               {FEEDBACK_TYPES.map(({ type, label, positive }) => (
                 <button
                   key={type}
                   onClick={() => setSelectedFeedbackType(type)}
-                  className={`p-3 border-2 text-sm font-bold transition-all ${
+                  className={`p-2.5 border-2 text-sm font-bold transition-all ${
                     selectedFeedbackType === type
                       ? positive
                         ? 'border-[#1A6B1A] bg-[#1A6B1A] text-[#F5F0E8]'
@@ -1070,7 +1070,7 @@ function QuestionCard({
           <button
             onClick={handleFeedbackSubmit}
             disabled={!selectedFeedbackType || isFeedbackSubmitting}
-            className={`w-full py-3 font-bold border-2 transition-colors ${
+            className={`w-full py-2.5 font-bold border-2 transition-colors ${
               selectedFeedbackType
                 ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
                 : 'bg-[#EDEAE4] text-[#5C5C5C] border-[#5C5C5C] cursor-not-allowed'
@@ -2869,7 +2869,7 @@ export default function FolderDetailPage() {
       {/* 헤더 - 배너 이미지 */}
       <header className="pt-2 pb-1 flex flex-col items-center">
         {/* 리본 이미지 */}
-        <div className="w-full h-[160px] mt-2 flex justify-center">
+        <div className="w-full h-[140px] mt-2 flex justify-center">
           <img
             src={ribbonImage}
             alt="Review"
@@ -2883,42 +2883,42 @@ export default function FolderDetailPage() {
           {folderType === 'solved' ? (
             <>
               {/* solved 타입: 뒤로 버튼 (우측 정렬) */}
-              <div className="flex justify-end mb-3">
+              <div className="flex justify-end mb-2">
                 <button
                   onClick={() => router.back()}
-                  className="px-4 py-3 text-xs font-bold bg-[#EDEAE4] text-[#1A1A1A] border border-[#1A1A1A] whitespace-nowrap hover:bg-[#F5F0E8] transition-colors flex items-center gap-1.5"
+                  className="px-2.5 py-1.5 text-[11px] font-bold bg-[#EDEAE4] text-[#1A1A1A] border border-[#1A1A1A] whitespace-nowrap hover:bg-[#F5F0E8] transition-colors flex items-center gap-1"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                   뒤로가기
                 </button>
               </div>
-              <h2 className="text-3xl font-black text-[#1A1A1A] mb-3 truncate">
+              <h2 className="text-2xl font-black text-[#1A1A1A] mb-2 truncate">
                 {folderTitle}
               </h2>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="flex flex-col items-center">
-                    <span className="text-5xl font-serif font-bold text-[#1A1A1A]" style={{ fontFamily: 'Georgia, Times New Roman, serif' }}>
+                    <span className="text-4xl font-serif font-bold text-[#1A1A1A]" style={{ fontFamily: 'Georgia, Times New Roman, serif' }}>
                       {quizScores?.myScore !== undefined ? quizScores.myScore : '-'}
                     </span>
-                    <span className="text-base text-[#5C5C5C] mt-3">퀴즈</span>
+                    <span className="text-sm text-[#5C5C5C] mt-2">퀴즈</span>
                   </div>
-                  <span className="text-3xl text-[#5C5C5C] font-serif" style={{ fontFamily: 'Georgia, Times New Roman, serif' }}>/</span>
+                  <span className="text-2xl text-[#5C5C5C] font-serif" style={{ fontFamily: 'Georgia, Times New Roman, serif' }}>/</span>
                   <div className="flex flex-col items-center">
-                    <span className="text-5xl font-serif font-bold text-[#1A1A1A]" style={{ fontFamily: 'Georgia, Times New Roman, serif' }}>
+                    <span className="text-4xl font-serif font-bold text-[#1A1A1A]" style={{ fontFamily: 'Georgia, Times New Roman, serif' }}>
                       {quizScores?.myFirstReviewScore !== undefined ? quizScores.myFirstReviewScore : '-'}
                     </span>
-                    <span className="text-base text-[#5C5C5C] mt-3">복습</span>
+                    <span className="text-sm text-[#5C5C5C] mt-2">복습</span>
                   </div>
                 </div>
                 {quizScores?.isPublic && (
                   <div className="flex flex-col items-center">
-                    <span className="text-5xl font-serif font-bold text-[#1A1A1A]" style={{ fontFamily: 'Georgia, Times New Roman, serif' }}>
+                    <span className="text-4xl font-serif font-bold text-[#1A1A1A]" style={{ fontFamily: 'Georgia, Times New Roman, serif' }}>
                       {quizScores?.averageScore !== undefined ? Math.round(quizScores.averageScore) : '-'}
                     </span>
-                    <span className="text-base text-[#5C5C5C] mt-3">평균</span>
+                    <span className="text-sm text-[#5C5C5C] mt-2">평균</span>
                   </div>
                 )}
               </div>
@@ -2928,9 +2928,9 @@ export default function FolderDetailPage() {
             <div className="flex justify-end">
               <button
                 onClick={() => router.back()}
-                className="px-4 py-3 text-xs font-bold bg-[#EDEAE4] text-[#1A1A1A] border border-[#1A1A1A] whitespace-nowrap hover:bg-[#F5F0E8] transition-colors flex items-center gap-1.5"
+                className="px-2.5 py-1.5 text-[11px] font-bold bg-[#EDEAE4] text-[#1A1A1A] border border-[#1A1A1A] whitespace-nowrap hover:bg-[#F5F0E8] transition-colors flex items-center gap-1"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
                 뒤로가기
@@ -2945,9 +2945,9 @@ export default function FolderDetailPage() {
               />
               <button
                 onClick={() => router.push(`/review?filter=${folderType}`)}
-                className="px-4 py-3 text-xs font-bold bg-[#EDEAE4] text-[#1A1A1A] border border-[#1A1A1A] whitespace-nowrap hover:bg-[#F5F0E8] transition-colors flex items-center gap-1.5 flex-shrink-0 ml-3"
+                className="px-2.5 py-1.5 text-[11px] font-bold bg-[#EDEAE4] text-[#1A1A1A] border border-[#1A1A1A] whitespace-nowrap hover:bg-[#F5F0E8] transition-colors flex items-center gap-1 flex-shrink-0 ml-2"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
                 뒤로가기
@@ -2959,22 +2959,22 @@ export default function FolderDetailPage() {
 
       {/* 폴더 제목 + 점수 (solved 타입 제외) */}
       {folderType !== 'solved' && (
-        <div className="px-4 py-4 border-b border-[#EDEAE4]">
+        <div className="px-4 py-3 border-b border-[#EDEAE4]">
           {/* bookmark/library 타입일 때 제목 + 점수 표시 */}
           {(folderType === 'bookmark' || folderType === 'library') ? (
             <>
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center gap-2 mb-2">
                 {folderType === 'library' && isEditMode ? (
                   <input
                     type="text"
                     value={editedTitle}
                     onChange={(e) => setEditedTitle(e.target.value)}
-                    className="flex-1 text-2xl font-black text-[#1A1A1A] bg-[#EDEAE4] border-2 border-[#1A1A1A] px-2 py-1 focus:outline-none"
+                    className="flex-1 min-w-0 max-w-[160px] text-lg font-black text-[#1A1A1A] bg-[#EDEAE4] border-2 border-[#1A1A1A] px-2 py-1 focus:outline-none"
                     autoFocus
                   />
                 ) : (
                   <>
-                    <h2 className="text-2xl font-black text-[#1A1A1A] flex-1">
+                    <h2 className="text-lg font-black text-[#1A1A1A] flex-1">
                       {folderTitle}
                     </h2>
                     {folderType === 'library' && !isSelectMode && !fromQuizPage && (
@@ -3005,11 +3005,11 @@ export default function FolderDetailPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-3">
-                    <span className="text-4xl font-black text-[#1A1A1A]">
+                    <span className="text-2xl font-black text-[#1A1A1A]">
                       {quizScores?.myScore !== undefined ? quizScores.myScore : '-'}
                     </span>
-                    <span className="text-xl text-[#5C5C5C]">/</span>
-                    <span className="text-4xl font-black text-[#1A1A1A]">
+                    <span className="text-base text-[#5C5C5C]">/</span>
+                    <span className="text-2xl font-black text-[#1A1A1A]">
                       {quizScores?.myFirstReviewScore !== undefined ? quizScores.myFirstReviewScore : '-'}
                     </span>
                   </div>
@@ -3021,7 +3021,7 @@ export default function FolderDetailPage() {
                 {/* 평균 점수 (공개 퀴즈만) */}
                 {quizScores?.isPublic && (
                   <div className="flex flex-col items-center">
-                    <span className="text-4xl font-black text-[#1A1A1A]">
+                    <span className="text-2xl font-black text-[#1A1A1A]">
                       {quizScores?.averageScore !== undefined ? Math.round(quizScores.averageScore) : '-'}
                     </span>
                     <span className="text-xs text-[#5C5C5C] mt-1">평균</span>
@@ -3031,7 +3031,7 @@ export default function FolderDetailPage() {
             </>
           ) : (
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold text-[#1A1A1A] truncate flex-1">
+              <h2 className="text-base font-bold text-[#1A1A1A] truncate flex-1">
                 {folderTitle}
               </h2>
               {folderType === 'custom' && !isSelectMode && (
@@ -3072,44 +3072,47 @@ export default function FolderDetailPage() {
             </span>
           )}
         </p>
-        <div className="flex gap-2">
-          {/* 선택 모드일 때 전체 선택 버튼 */}
-          {isSelectMode && (
+        {/* 수정 모드일 때 선택 버튼 숨김 */}
+        {!isEditMode && (
+          <div className="flex gap-2">
+            {/* 선택 모드일 때 전체 선택 버튼 */}
+            {isSelectMode && (
+              <button
+                onClick={() => {
+                  if (selectedIds.size === questions.length) {
+                    setSelectedIds(new Set());
+                  } else {
+                    setSelectedIds(new Set(questions.map(q => q.id)));
+                  }
+                }}
+                className="px-3 py-1.5 text-xs font-bold border transition-colors bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#EDEAE4]"
+              >
+                {selectedIds.size === questions.length ? '전체 해제' : '전체'}
+              </button>
+            )}
             <button
               onClick={() => {
-                if (selectedIds.size === questions.length) {
+                if (isSelectMode) {
+                  setIsSelectMode(false);
+                  setIsDeleteMode(false);
+                  setIsAssignMode(false);
                   setSelectedIds(new Set());
                 } else {
-                  setSelectedIds(new Set(questions.map(q => q.id)));
+                  setIsSelectMode(true);
+                  // 선택 모드에서는 삭제 모드 비활성화 (복습용으로만 사용)
+                  setIsDeleteMode(false);
                 }
               }}
-              className="px-3 py-1.5 text-xs font-bold border transition-colors bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#EDEAE4]"
+              className={`px-3 py-1.5 text-xs font-bold border transition-colors ${
+                isSelectMode
+                  ? 'bg-[#EDEAE4] text-[#1A1A1A] border-[#1A1A1A]'
+                  : 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+              }`}
             >
-              {selectedIds.size === questions.length ? '전체 해제' : '전체'}
+              {isSelectMode ? '취소' : '선택'}
             </button>
-          )}
-          <button
-            onClick={() => {
-              if (isSelectMode) {
-                setIsSelectMode(false);
-                setIsDeleteMode(false);
-                setIsAssignMode(false);
-                setSelectedIds(new Set());
-              } else {
-                setIsSelectMode(true);
-                // 선택 모드에서는 삭제 모드 비활성화 (복습용으로만 사용)
-                setIsDeleteMode(false);
-              }
-            }}
-            className={`px-3 py-1.5 text-xs font-bold border transition-colors ${
-              isSelectMode
-                ? 'bg-[#EDEAE4] text-[#1A1A1A] border-[#1A1A1A]'
-                : 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-            }`}
-          >
-            {isSelectMode ? '취소' : '선택'}
-          </button>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* 로딩 */}
@@ -3464,21 +3467,21 @@ export default function FolderDetailPage() {
 
       {/* 하단 버튼 영역 */}
       {!loading && questions.length > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#F5F0E8] border-t-2 border-[#1A1A1A]">
+        <div className="fixed bottom-0 left-0 right-0 p-3 bg-[#F5F0E8] border-t-2 border-[#1A1A1A]">
           {isEditMode ? (
             /* 수정 모드일 때 - 취소/저장 */
             <div className="flex gap-2">
               <button
                 onClick={handleCancelEdit}
                 disabled={isSavingEdit}
-                className="flex-1 py-3 text-sm font-bold bg-[#F5F0E8] text-[#1A1A1A] border-2 border-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+                className="flex-1 py-2 text-xs font-bold bg-[#F5F0E8] text-[#1A1A1A] border-2 border-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
               >
                 취소
               </button>
               <button
                 onClick={handleSaveEdits}
                 disabled={isSavingEdit || (Object.keys(editedQuestions).length === 0 && !(editedTitle.trim() && editedTitle.trim() !== libraryQuizTitle))}
-                className={`flex-1 py-3 text-sm font-bold border-2 transition-colors ${
+                className={`flex-1 py-2 text-xs font-bold border-2 transition-colors ${
                   (Object.keys(editedQuestions).length > 0 || (editedTitle.trim() && editedTitle.trim() !== libraryQuizTitle))
                     ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A] hover:bg-[#3A3A3A]'
                     : 'bg-[#EDEAE4] text-[#5C5C5C] border-[#5C5C5C] cursor-not-allowed'
@@ -3491,7 +3494,7 @@ export default function FolderDetailPage() {
             /* 선택 모드일 때 - 선택한 문제 복습 */
             <button
               onClick={handleStartPractice}
-              className="w-full py-3 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#3A3A3A] transition-colors"
+              className="w-full py-2 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#3A3A3A] transition-colors"
             >
               선택 복습하기 ({selectedIds.size})
             </button>
@@ -3500,14 +3503,14 @@ export default function FolderDetailPage() {
             <div className="flex gap-2">
               <button
                 onClick={handleStartPractice}
-                className="flex-1 py-3 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#3A3A3A] transition-colors"
+                className="flex-1 py-2 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#3A3A3A] transition-colors"
               >
                 전체 복습
               </button>
               <button
                 onClick={handleStartWrongOnlyPractice}
                 disabled={wrongCount === 0}
-                className={`flex-1 py-3 text-sm font-bold border-2 transition-colors ${
+                className={`flex-1 py-2 text-xs font-bold border-2 transition-colors ${
                   wrongCount > 0
                     ? 'bg-[#8B1A1A] text-[#F5F0E8] border-[#8B1A1A] hover:bg-[#6B1414]'
                     : 'bg-[#EDEAE4] text-[#5C5C5C] border-[#5C5C5C] cursor-not-allowed'
@@ -3523,8 +3526,8 @@ export default function FolderDetailPage() {
 
       {/* 배정 모드일 때 하단 안내 */}
       {!loading && isAssignMode && isSelectMode && selectedIds.size === 0 && (
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#EDEAE4] border-t-2 border-[#1A1A1A]">
-          <p className="text-sm text-center text-[#5C5C5C]">
+        <div className="fixed bottom-0 left-0 right-0 p-3 bg-[#EDEAE4] border-t-2 border-[#1A1A1A]">
+          <p className="text-xs text-center text-[#5C5C5C]">
             분류할 문제를 선택하세요
           </p>
         </div>
@@ -3748,7 +3751,7 @@ export default function FolderDetailPage() {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-xs bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6"
+            className="w-full max-w-xs bg-[#F5F0E8] border-2 border-[#1A1A1A] p-5"
           >
             <div className="flex justify-center mb-4">
               <div className="w-12 h-12 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
@@ -3757,7 +3760,7 @@ export default function FolderDetailPage() {
                 </svg>
               </div>
             </div>
-            <h3 className="text-center font-bold text-lg text-[#1A1A1A] mb-2">
+            <h3 className="text-center font-bold text-base text-[#1A1A1A] mb-2">
               {folderType === 'custom' ? '폴더를 삭제할까요?' : '퀴즈를 삭제할까요?'}
             </h3>
             <p className="text-sm text-[#5C5C5C] mb-1">
@@ -3775,7 +3778,7 @@ export default function FolderDetailPage() {
             <div className="flex gap-3">
               <button
                 onClick={() => setShowDeleteModal(false)}
-                className="flex-1 py-3 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
+                className="flex-1 py-2.5 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
               >
                 취소
               </button>
@@ -3793,7 +3796,7 @@ export default function FolderDetailPage() {
                     console.error('삭제 실패:', err);
                   }
                 }}
-                className="flex-1 py-3 font-bold border-2 border-[#8B1A1A] text-[#8B1A1A] bg-[#F5F0E8] hover:bg-[#FDEAEA] transition-colors"
+                className="flex-1 py-2.5 font-bold border-2 border-[#8B1A1A] text-[#8B1A1A] bg-[#F5F0E8] hover:bg-[#FDEAEA] transition-colors"
               >
                 삭제
               </button>

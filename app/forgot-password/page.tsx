@@ -143,8 +143,9 @@ export default function ForgotPasswordPage() {
         <Image
           src="/images/corner-image.png"
           alt="장식 이미지"
-          width={360}
-          height={360}
+          width={150}
+          height={75}
+          style={{ width: 'auto', height: 'auto', maxWidth: '38vw' }}
           className="drop-shadow-lg"
         />
       </div>
@@ -156,19 +157,20 @@ export default function ForgotPasswordPage() {
         animate="visible"
       >
         {/* 로고 */}
-        <motion.div className="flex justify-center mb-6" variants={itemVariants}>
+        <motion.div className="flex justify-center mb-3" variants={itemVariants}>
           <Image
             src="/images/logo.png"
             alt="RabbiTory"
             width={200}
-            height={70}
+            height={67}
+            style={{ width: 'auto', height: 'auto', maxWidth: '50vw' }}
             className="drop-shadow-lg"
             priority
           />
         </motion.div>
 
         <motion.h1
-          className="text-2xl font-bold text-white text-center mb-4"
+          className="text-xl font-bold text-white text-center mb-3"
           variants={itemVariants}
         >
           비밀번호 찾기
@@ -184,8 +186,8 @@ export default function ForgotPasswordPage() {
             {result.hasRecoveryEmail ? (
               // 복구 이메일로 발송 성공
               <div className="p-4 bg-green-500/20 border border-green-400/30 rounded-xl backdrop-blur-sm">
-                <div className="w-12 h-12 mx-auto mb-3 bg-green-500 rounded-full flex items-center justify-center">
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-10 h-10 mx-auto mb-2 bg-green-500 rounded-full flex items-center justify-center">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                 </div>
@@ -194,8 +196,8 @@ export default function ForgotPasswordPage() {
             ) : (
               // 복구 이메일 미등록
               <div className="p-4 bg-yellow-500/20 border border-yellow-400/30 rounded-xl backdrop-blur-sm">
-                <div className="w-12 h-12 mx-auto mb-3 bg-yellow-500 rounded-full flex items-center justify-center">
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-10 h-10 mx-auto mb-2 bg-yellow-500 rounded-full flex items-center justify-center">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
                   </svg>
                 </div>
@@ -205,7 +207,7 @@ export default function ForgotPasswordPage() {
 
             <Link
               href="/login"
-              className="block w-full mt-4 py-3 bg-white/20 text-white font-medium rounded-xl text-center hover:bg-white/30 transition-colors"
+              className="block w-full mt-3 py-2.5 text-sm bg-white/20 text-white font-medium rounded-xl text-center hover:bg-white/30 transition-colors"
             >
               로그인 페이지로 돌아가기
             </Link>
@@ -235,7 +237,7 @@ export default function ForgotPasswordPage() {
                   value={studentId}
                   onChange={(e) => setStudentId(e.target.value.replace(/\D/g, ''))}
                   maxLength={10}
-                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-white/50 transition-colors"
+                  className="w-full px-3 py-2 text-sm bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-white/50 transition-colors"
                   disabled={isSubmitting}
                 />
               </div>
@@ -243,7 +245,7 @@ export default function ForgotPasswordPage() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full mt-4 py-3 bg-white text-gray-900 font-medium rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-50"
+                className="w-full mt-3 py-2.5 text-sm bg-white text-gray-900 font-medium rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-50"
               >
                 {isSubmitting ? '확인 중...' : '비밀번호 찾기'}
               </button>
@@ -284,9 +286,9 @@ export default function ForgotPasswordPage() {
                         value={inquiryMessage}
                         onChange={(e) => setInquiryMessage(e.target.value)}
                         placeholder="문의 내용을 입력하세요 (최대 500자)"
-                        rows={3}
+                        rows={2}
                         maxLength={500}
-                        className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white text-sm placeholder-white/40 focus:outline-none focus:border-white/50 transition-colors resize-none"
+                        className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-xl text-white text-sm placeholder-white/40 focus:outline-none focus:border-white/50 transition-colors resize-none"
                       />
                       <div className="flex gap-2">
                         <button

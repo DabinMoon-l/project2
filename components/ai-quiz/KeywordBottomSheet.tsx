@@ -159,54 +159,54 @@ export default function KeywordBottomSheet({
             className="fixed bottom-0 left-0 right-0 z-[71] bg-[#F5F0E8] border-t-2 border-[#1A1A1A] max-h-[70vh] flex flex-col"
           >
             {/* 핸들 */}
-            <div className="flex justify-center py-3">
-              <div className="w-10 h-1 bg-[#D4CFC4] rounded-full" />
+            <div className="flex justify-center py-2">
+              <div className="w-8 h-1 bg-[#D4CFC4] rounded-full" />
             </div>
 
             {/* 헤더 */}
-            <div className="px-5 pb-3 border-b border-[#D4CFC4]">
-              <h3 className="text-lg font-bold text-[#1A1A1A]">키워드 확인</h3>
-              <p className="text-sm text-[#5C5C5C] mt-1">
+            <div className="px-4 pb-2 border-b border-[#D4CFC4]">
+              <h3 className="text-sm font-bold text-[#1A1A1A]">키워드 확인</h3>
+              <p className="text-xs text-[#5C5C5C] mt-0.5">
                 퀴즈 생성에 사용할 키워드입니다. 불필요한 키워드는 삭제하세요.
               </p>
             </div>
 
             {/* 키워드 목록 */}
-            <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-5">
+            <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-3 space-y-3">
               {isLoading ? (
-                <div className="flex flex-col items-center justify-center py-8">
-                  <div className="w-8 h-8 border-2 border-[#1A1A1A] border-t-transparent rounded-full animate-spin mb-3" />
-                  <p className="text-sm text-[#5C5C5C]">{loadingMessage || '키워드 추출 중...'}</p>
+                <div className="flex flex-col items-center justify-center py-6">
+                  <div className="w-6 h-6 border-2 border-[#1A1A1A] border-t-transparent rounded-full animate-spin mb-2" />
+                  <p className="text-xs text-[#5C5C5C]">{loadingMessage || '키워드 추출 중...'}</p>
                 </div>
               ) : totalCurrentCount === 0 && totalVisibleCount >= totalInitialCount ? (
-                <div className="flex flex-col items-center justify-center py-8">
-                  <p className="text-sm text-[#5C5C5C]">추출된 키워드가 없습니다.</p>
+                <div className="flex flex-col items-center justify-center py-6">
+                  <p className="text-xs text-[#5C5C5C]">추출된 키워드가 없습니다.</p>
                 </div>
               ) : (
                 <>
                   {/* 핵심 개념 섹션 */}
                   {(mainConcepts.length > 0 || visibleMainCount < initialKeywords.mainConcepts.length) && (
                     <div>
-                      <h4 className="text-sm font-bold text-[#1A1A1A] mb-2 flex items-center gap-2">
+                      <h4 className="text-xs font-bold text-[#1A1A1A] mb-1.5 flex items-center gap-1.5">
                         핵심 개념
-                        <span className="text-xs text-[#5C5C5C] font-normal">문제 제목이 됩니다</span>
+                        <span className="text-[10px] text-[#5C5C5C] font-normal">문제 제목이 됩니다</span>
                       </h4>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-1.5">
                         {mainConcepts.slice(0, visibleMainCount).map((keyword) => (
                           <motion.div
                             key={`main-${keyword}`}
                             initial={{ opacity: 0, x: -20, scale: 0.8 }}
                             animate={{ opacity: 1, x: 0, scale: 1 }}
                             transition={{ duration: 0.2 }}
-                            className="flex items-center gap-1.5 px-3 py-1.5 border-2 border-[#1A6B1A] bg-[#1A6B1A]/10 rounded-full"
+                            className="flex items-center gap-1 px-2 py-1 border-2 border-[#1A6B1A] bg-[#1A6B1A]/10 rounded-full"
                           >
-                            <span className="text-sm font-medium text-[#1A6B1A]">{keyword}</span>
+                            <span className="text-xs font-medium text-[#1A6B1A]">{keyword}</span>
                             <button
                               type="button"
                               onClick={() => removeMainConcept(keyword)}
-                              className="w-4 h-4 flex items-center justify-center text-[#1A6B1A] hover:text-[#8B1A1A] transition-colors"
+                              className="w-3.5 h-3.5 flex items-center justify-center text-[#1A6B1A] hover:text-[#8B1A1A] transition-colors"
                             >
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
                               </svg>
                             </button>
@@ -219,26 +219,26 @@ export default function KeywordBottomSheet({
                   {/* 시나리오 단서 섹션 */}
                   {(caseTriggers.length > 0 || visibleTriggerCount < initialKeywords.caseTriggers.length) && (
                     <div>
-                      <h4 className="text-sm font-bold text-[#1A1A1A] mb-2 flex items-center gap-2">
+                      <h4 className="text-xs font-bold text-[#1A1A1A] mb-1.5 flex items-center gap-1.5">
                         시나리오 단서
-                        <span className="text-xs text-[#5C5C5C] font-normal">문제 상황에 활용됩니다</span>
+                        <span className="text-[10px] text-[#5C5C5C] font-normal">문제 상황에 활용됩니다</span>
                       </h4>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-1.5">
                         {caseTriggers.slice(0, visibleTriggerCount).map((keyword) => (
                           <motion.div
                             key={`trigger-${keyword}`}
                             initial={{ opacity: 0, x: -20, scale: 0.8 }}
                             animate={{ opacity: 1, x: 0, scale: 1 }}
                             transition={{ duration: 0.2 }}
-                            className="flex items-center gap-1.5 px-3 py-1.5 border-2 border-[#4A0E0E] bg-[#4A0E0E]/10 rounded-full"
+                            className="flex items-center gap-1 px-2 py-1 border-2 border-[#4A0E0E] bg-[#4A0E0E]/10 rounded-full"
                           >
-                            <span className="text-sm font-medium text-[#4A0E0E]">{keyword}</span>
+                            <span className="text-xs font-medium text-[#4A0E0E]">{keyword}</span>
                             <button
                               type="button"
                               onClick={() => removeCaseTrigger(keyword)}
-                              className="w-4 h-4 flex items-center justify-center text-[#4A0E0E] hover:text-[#8B1A1A] transition-colors"
+                              className="w-3.5 h-3.5 flex items-center justify-center text-[#4A0E0E] hover:text-[#8B1A1A] transition-colors"
                             >
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
                               </svg>
                             </button>
@@ -252,9 +252,9 @@ export default function KeywordBottomSheet({
             </div>
 
             {/* 푸터 */}
-            <div className="px-5 py-4 border-t-2 border-[#1A1A1A] bg-[#EDEAE4]">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm text-[#5C5C5C]">
+            <div className="px-4 py-3 border-t-2 border-[#1A1A1A] bg-[#EDEAE4]">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-[#5C5C5C]">
                   <span className="font-bold text-[#1A6B1A]">{mainConcepts.length}개</span> 개념 +
                   <span className="font-bold text-[#4A0E0E] ml-1">{caseTriggers.length}개</span> 단서
                 </span>
@@ -262,7 +262,7 @@ export default function KeywordBottomSheet({
                   <button
                     type="button"
                     onClick={handleRestoreAll}
-                    className="text-sm text-[#5C5C5C] underline"
+                    className="text-xs text-[#5C5C5C] underline"
                   >
                     전체 복원
                   </button>
@@ -271,7 +271,7 @@ export default function KeywordBottomSheet({
               <button
                 onClick={handleConfirm}
                 disabled={totalCurrentCount === 0 || totalVisibleCount < totalInitialCount}
-                className={`w-full py-3 font-bold text-lg border-2 border-[#1A1A1A] transition-all ${
+                className={`w-full py-2 font-bold text-xs border-2 border-[#1A1A1A] transition-all ${
                   totalCurrentCount > 0 && totalVisibleCount >= totalInitialCount
                     ? 'bg-[#1A1A1A] text-white hover:bg-[#3A3A3A] shadow-[2px_2px_0px_#1A1A1A] active:shadow-none active:translate-x-[2px] active:translate-y-[2px]'
                     : 'bg-[#E5E5E5] text-[#9A9A9A] cursor-not-allowed'

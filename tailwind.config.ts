@@ -60,6 +60,10 @@ const config: Config = {
         "theme-accent": "var(--theme-accent)",
         "theme-border": "var(--theme-border)",
       },
+      fontFamily: {
+        'serif-display': ['var(--font-playfair)', '"Playfair Display"', 'Georgia', 'serif'],
+        'serif-elegant': ['var(--font-cormorant)', '"Cormorant Garamond"', 'Georgia', 'serif'],
+      },
       // 기존 그라디언트 이미지
       backgroundImage: {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",

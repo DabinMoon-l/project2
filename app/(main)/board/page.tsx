@@ -136,14 +136,14 @@ const HeadlineArticle = memo(function HeadlineArticle({
         <div className="flex-1 flex flex-col">
           {/* 제목 - 검정 박스 */}
           <div className="bg-[#1A1A1A] px-3 py-3">
-            <h1 className="font-serif-display text-3xl md:text-4xl font-black text-[#F5F0E8] leading-tight">
+            <h1 className="font-serif-display text-2xl md:text-3xl font-black text-[#F5F0E8] leading-tight">
               {post.title}
             </h1>
           </div>
 
           {/* 본문 및 댓글 */}
           <div className="p-3 flex-1">
-            <p className="text-sm text-[#1A1A1A] leading-relaxed line-clamp-3">
+            <p className="text-xs text-[#1A1A1A] leading-relaxed line-clamp-3">
               {post.content}
             </p>
 
@@ -152,12 +152,12 @@ const HeadlineArticle = memo(function HeadlineArticle({
               <div className="mt-2 pt-2 border-t border-dashed border-[#1A1A1A] overflow-hidden">
                 {displayItems.map(({ comment, replies }) => (
                   <div key={comment.id} className="overflow-hidden">
-                    <p className="text-sm text-[#1A1A1A] leading-snug py-0.5 overflow-hidden text-ellipsis" style={{ wordBreak: 'break-all', maxWidth: '100%' }}>
+                    <p className="text-xs text-[#1A1A1A] leading-snug py-0.5 overflow-hidden text-ellipsis" style={{ wordBreak: 'break-all', maxWidth: '100%' }}>
                       <span className="whitespace-nowrap">ㄴ </span>{truncateComment(comment.content)}
                     </p>
                     {/* 대댓글 표시 */}
                     {replies.map((reply) => (
-                      <p key={reply.id} className="text-sm text-[#5C5C5C] leading-snug py-0.5 pl-4 overflow-hidden text-ellipsis" style={{ wordBreak: 'break-all', maxWidth: '100%' }}>
+                      <p key={reply.id} className="text-xs text-[#5C5C5C] leading-snug py-0.5 pl-4 overflow-hidden text-ellipsis" style={{ wordBreak: 'break-all', maxWidth: '100%' }}>
                         <span className="whitespace-nowrap">ㄴ </span>{truncateComment(reply.content)}
                       </p>
                     ))}
@@ -349,7 +349,7 @@ const MasonryItem = memo(function MasonryItem({
   );
 
   const TitleSection = (
-    <h2 className="font-serif-display text-3xl md:text-4xl font-black leading-tight text-[#1A1A1A]">
+    <h2 className="font-serif-display text-2xl md:text-3xl font-black leading-tight text-[#1A1A1A]">
       {post.title}
     </h2>
   );
@@ -407,7 +407,7 @@ const MasonryItem = memo(function MasonryItem({
       )}
 
       {/* 본문 */}
-      <p className="text-sm text-[#1A1A1A] leading-relaxed line-clamp-4 mt-2">
+      <p className="text-xs text-[#1A1A1A] leading-relaxed line-clamp-4 mt-2">
         {post.content}
       </p>
 
@@ -416,12 +416,12 @@ const MasonryItem = memo(function MasonryItem({
         <div className="mt-2 pt-2 border-t border-dashed border-[#1A1A1A] overflow-hidden">
           {displayItems.map(({ comment, replies }) => (
             <div key={comment.id} className="overflow-hidden">
-              <p className="text-sm text-[#1A1A1A] leading-snug py-0.5 overflow-hidden text-ellipsis" style={{ wordBreak: 'break-all', maxWidth: '100%' }}>
+              <p className="text-xs text-[#1A1A1A] leading-snug py-0.5 overflow-hidden text-ellipsis" style={{ wordBreak: 'break-all', maxWidth: '100%' }}>
                 <span className="whitespace-nowrap">ㄴ </span>{truncateComment(comment.content)}
               </p>
               {/* 대댓글 표시 */}
               {replies.map((reply) => (
-                <p key={reply.id} className="text-sm text-[#5C5C5C] leading-snug py-0.5 pl-4 overflow-hidden text-ellipsis" style={{ wordBreak: 'break-all', maxWidth: '100%' }}>
+                <p key={reply.id} className="text-xs text-[#5C5C5C] leading-snug py-0.5 pl-4 overflow-hidden text-ellipsis" style={{ wordBreak: 'break-all', maxWidth: '100%' }}>
                   <span className="whitespace-nowrap">ㄴ </span>{truncateComment(reply.content)}
                 </p>
               ))}
@@ -738,7 +738,7 @@ export default function BoardPage() {
       {/* 헤더 */}
       <header ref={headerRef} className="mx-4 mt-2 pb-4 border-b-4 border-double border-[#1A1A1A]">
         {/* 상단 날짜 및 에디션 */}
-        <div className="flex justify-between items-center text-xs text-[#3A3A3A] mb-3">
+        <div className="flex justify-between items-center text-[10px] text-[#3A3A3A] mb-3 whitespace-nowrap">
           <span>{dateString}</span>
           <span className="font-bold">Vol. {volNumber} No. {currentSemester}</span>
           <span>✦ Prof. Jin-Ah Kim EDITION ✦</span>
@@ -750,7 +750,7 @@ export default function BoardPage() {
         {/* 타이틀 — 교수님은 과목 체인지, 학생은 JIBDAN JISUNG */}
         {isProfessor ? (
           <div
-            className="border-y-4 border-[#1A1A1A] pt-5 pb-7 flex items-center justify-center gap-2 select-none overflow-hidden"
+            className="border-y-4 border-[#1A1A1A] pt-3 pb-4 flex items-center justify-center gap-2 select-none overflow-hidden"
             style={{ touchAction: 'pan-y' }}
             onTouchStart={(e) => { courseTouchStartX.current = scaleCoord(e.touches[0].clientX); }}
             onTouchMove={(e) => { courseTouchEndX.current = scaleCoord(e.touches[0].clientX); }}
@@ -794,7 +794,7 @@ export default function BoardPage() {
                 {(() => {
                   const name = courseList.find(c => c.id === selectedCourseId)?.nameEn.toUpperCase() || 'BIOLOGY';
                   const isLong = name.length > 10;
-                  return <span className={isLong ? 'text-[2.6rem] md:text-6xl' : 'text-5xl md:text-7xl'}>{name}</span>;
+                  return <span className={isLong ? 'text-[2.2rem] md:text-5xl' : 'text-4xl md:text-6xl'}>{name}</span>;
                 })()}
               </motion.h1>
             </AnimatePresence>
@@ -815,17 +815,17 @@ export default function BoardPage() {
             </button>
           </div>
         ) : (
-          <h1 className="font-serif-display text-5xl md:text-7xl font-black tracking-tight text-[#1A1A1A] text-center pt-5 pb-7 border-y-4 border-[#1A1A1A]">
+          <h1 className="font-serif-display text-4xl md:text-6xl font-black tracking-tight text-[#1A1A1A] text-center pt-3 pb-4 border-y-4 border-[#1A1A1A]">
             JIBDAN JISUNG
           </h1>
         )}
 
         {/* 서브타이틀 및 슬로건 */}
         <div className="flex justify-between items-center mt-3 mb-4">
-          <p className="text-xs text-[#3A3A3A] italic">
+          <p className="text-[10px] text-[#3A3A3A] italic">
             "{randomQuote}"
           </p>
-          <p className="text-xs text-[#3A3A3A]">
+          <p className="text-[10px] text-[#3A3A3A]">
             {currentYear} {semesterOrdinal} Semester{courseName ? ` · ${courseName}` : ''}
           </p>
         </div>
@@ -841,7 +841,7 @@ export default function BoardPage() {
               <div className="flex-1 min-w-0">
                 <button
                   onClick={handleManageClick}
-                  className="w-full px-4 py-2.5 text-sm font-bold"
+                  className="w-full px-3 py-2 text-xs font-bold"
                   style={{
                     border: '1px solid #1A1A1A',
                     backgroundColor: 'transparent',
@@ -857,7 +857,7 @@ export default function BoardPage() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="제목 검색..."
-                  className="w-full px-3 py-2.5 text-sm outline-none"
+                  className="w-full px-2.5 py-2 text-xs outline-none"
                   style={{
                     border: '1px solid #1A1A1A',
                     backgroundColor: '#F5F0E8',
@@ -871,7 +871,7 @@ export default function BoardPage() {
               <div className="flex gap-2 flex-1">
                 <button
                   onClick={handleWriteClick}
-                  className="flex-1 px-4 py-2.5 text-sm font-bold"
+                  className="flex-1 px-3 py-2 text-xs font-bold"
                   style={{
                     backgroundColor: '#1A1A1A',
                     color: '#F5F0E8',
@@ -881,7 +881,7 @@ export default function BoardPage() {
                 </button>
                 <button
                   onClick={handleManageClick}
-                  className="flex-1 px-4 py-2.5 text-sm font-bold"
+                  className="flex-1 px-3 py-2 text-xs font-bold"
                   style={{
                     backgroundColor: 'transparent',
                     color: '#1A1A1A',
@@ -897,7 +897,7 @@ export default function BoardPage() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="제목 검색..."
-                  className="w-full px-3 py-2.5 text-sm outline-none"
+                  className="w-full px-2.5 py-2 text-xs outline-none"
                   style={{
                     border: '1px solid #1A1A1A',
                     backgroundColor: '#F5F0E8',

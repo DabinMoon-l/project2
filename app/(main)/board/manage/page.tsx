@@ -179,16 +179,7 @@ function MyPostCard({
         </p>
       </button>
 
-      <div className="flex items-center justify-between">
-        <div
-          className="flex items-center gap-3 text-xs"
-          style={{ color: theme.colors.textSecondary }}
-        >
-          <span>{formatDate(post.createdAt)}</span>
-          <span>♥ {post.likes}</span>
-          <span>댓글 {post.commentCount}</span>
-        </div>
-
+      <div className="flex items-center justify-end">
         <button
           type="button"
           onClick={(e) => {
@@ -244,14 +235,7 @@ function MyCommentCard({
         </p>
       </button>
 
-      <div className="flex items-center justify-between">
-        <span
-          className="text-xs"
-          style={{ color: theme.colors.textSecondary }}
-        >
-          {formatDate(comment.createdAt)}
-        </span>
-
+      <div className="flex items-center justify-end">
         <button
           type="button"
           onClick={() => onDelete(comment.id, comment.postId)}
@@ -279,7 +263,7 @@ function LikedPostCard({
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       onClick={onClick}
-      className="flex-shrink-0 w-48 p-3 cursor-pointer"
+      className="flex-shrink-0 w-40 p-2.5 cursor-pointer"
       style={{
         border: '1px solid #1A1A1A',
         backgroundColor: theme.colors.backgroundCard,
@@ -1137,15 +1121,14 @@ export default function ManagePostsPage() {
       style={{ backgroundColor: theme.colors.background }}
     >
       {/* 헤더 */}
-      <header className="mx-4 mt-4 pb-4">
+      <header className="mx-4 mt-3 pb-2">
         <button
           onClick={handleBack}
-          className="flex items-center gap-2 text-sm py-2 text-[#3A3A3A]"
+          className="flex items-center py-1 text-[#3A3A3A]"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
-          뒤로가기
         </button>
       </header>
 
@@ -1272,15 +1255,15 @@ export default function ManagePostsPage() {
         <>
           <div className="mx-4 border-b-2 border-[#1A1A1A] mb-4" />
 
-          <div className="px-4 pb-4">
+          <div className="px-4 pb-3">
             <div className="flex items-center justify-center gap-4">
               <div className="flex-1 h-px bg-[#1A1A1A]" />
-              <h2 className="font-serif-display text-2xl font-bold text-[#1A1A1A]">
+              <h2 className="font-serif-display text-xl font-bold text-[#1A1A1A]">
                 MANAGE
               </h2>
               <div className="flex-1 h-px bg-[#1A1A1A]" />
             </div>
-            <p className="text-center text-sm mt-2" style={{ color: theme.colors.textSecondary }}>
+            <p className="text-center text-xs mt-1" style={{ color: theme.colors.textSecondary }}>
               내가 작성한 기사와 댓글, 좋아요한 글 관리
             </p>
           </div>
@@ -1290,11 +1273,11 @@ export default function ManagePostsPage() {
             <div className="grid grid-cols-2 gap-4">
               {/* 내 기사 */}
               <div
-                className="p-4 h-[45vh] flex flex-col"
+                className="p-3 h-[38vh] flex flex-col"
                 style={{ border: '1px solid #1A1A1A', backgroundColor: theme.colors.backgroundCard }}
               >
-                <div className="flex items-center gap-2 mb-4 pb-2 border-b-2 border-[#1A1A1A] flex-shrink-0">
-                  <h3 className="text-sm font-bold text-[#1A1A1A]">MY ARTICLES</h3>
+                <div className="flex items-center gap-2 mb-3 pb-1.5 border-b-2 border-[#1A1A1A] flex-shrink-0">
+                  <h3 className="text-xs font-bold text-[#1A1A1A]">MY ARTICLES</h3>
                   <span className="text-xs" style={{ color: theme.colors.textSecondary }}>({posts.length})</span>
                 </div>
 
@@ -1338,11 +1321,11 @@ export default function ManagePostsPage() {
 
               {/* 내 댓글 */}
               <div
-                className="p-4 h-[45vh] flex flex-col"
+                className="p-3 h-[38vh] flex flex-col"
                 style={{ border: '1px solid #1A1A1A', backgroundColor: theme.colors.backgroundCard }}
               >
-                <div className="flex items-center gap-2 mb-4 pb-2 border-b-2 border-[#1A1A1A] flex-shrink-0">
-                  <h3 className="text-sm font-bold text-[#1A1A1A]">MY COMMENTS</h3>
+                <div className="flex items-center gap-2 mb-3 pb-1.5 border-b-2 border-[#1A1A1A] flex-shrink-0">
+                  <h3 className="text-xs font-bold text-[#1A1A1A]">MY COMMENTS</h3>
                   <span className="text-xs" style={{ color: theme.colors.textSecondary }}>({comments.length})</span>
                 </div>
 
@@ -1379,9 +1362,9 @@ export default function ManagePostsPage() {
             </div>
 
             {/* 좋아요한 글 */}
-            <div className="p-4" style={{ border: '1px solid #1A1A1A', backgroundColor: theme.colors.backgroundCard }}>
-              <div className="flex items-center gap-2 mb-4 pb-2 border-b-2 border-[#1A1A1A]">
-                <h3 className="text-sm font-bold text-[#1A1A1A]">MY LIKES</h3>
+            <div className="p-3" style={{ border: '1px solid #1A1A1A', backgroundColor: theme.colors.backgroundCard }}>
+              <div className="flex items-center gap-2 mb-3 pb-1.5 border-b-2 border-[#1A1A1A]">
+                <h3 className="text-xs font-bold text-[#1A1A1A]">MY LIKES</h3>
                 <span className="text-xs" style={{ color: theme.colors.textSecondary }}>({likedPosts.length})</span>
               </div>
 
@@ -1394,7 +1377,7 @@ export default function ManagePostsPage() {
               {likedLoading && likedPosts.length === 0 && (
                 <div className="flex gap-3 overflow-hidden">
                   {[1, 2, 3].map(i => (
-                    <div key={i} className="flex-shrink-0 w-48 p-3 border border-[#D4CFC4]">
+                    <div key={i} className="flex-shrink-0 w-40 p-2.5 border border-[#D4CFC4]">
                       <Skeleton className="w-full h-10 mb-2 rounded-none" />
                       <Skeleton className="w-3/4 h-8 mb-2 rounded-none" />
                     </div>

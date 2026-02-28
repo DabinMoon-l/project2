@@ -1375,7 +1375,7 @@ export default function ProfessorQuizListPage() {
       </header>
 
       {/* 뉴스 캐러셀 (중간/기말/기출) */}
-      <section className="mt-6" style={{ transform: 'scale(0.85)', transformOrigin: 'top center', width: '117.65%', marginLeft: '-8.825%', marginBottom: '-16px' }}>
+      <section className="mt-6" style={{ transform: 'scale(0.85)', transformOrigin: 'top center', width: '117.65%', marginLeft: '-8.825%', marginBottom: '16px' }}>
         <ProfessorNewsCarousel
           midtermQuizzes={filteredMidterm}
           finalQuizzes={filteredFinal}

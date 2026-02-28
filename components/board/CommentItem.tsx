@@ -127,7 +127,7 @@ export default function CommentItem({
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-1.5">
           <span
-            className="text-[16px] font-semibold"
+            className="text-[13px] font-semibold"
             style={{ color: isPostAuthor ? theme.colors.accent : theme.colors.text }}
           >
             {isReply && <span className="text-[13px] font-bold text-[#999] mr-1">ㄴ</span>}
@@ -142,7 +142,7 @@ export default function CommentItem({
             </span>
           )}
           <span className="text-[#AAAAAA] text-[13px]">·</span>
-          <span className="text-[14px] text-[#999999]">
+          <span className="text-[11px] text-[#999999]">
             {formatDate(comment.createdAt)}
           </span>
         </div>
@@ -153,7 +153,7 @@ export default function CommentItem({
               <button
                 type="button"
                 onClick={onReply}
-                className="text-[14px] text-[#999999] hover:text-[#1A1A1A] transition-colors"
+                className="text-[11px] text-[#999999] hover:text-[#1A1A1A] transition-colors"
               >
                 답글
               </button>
@@ -162,7 +162,7 @@ export default function CommentItem({
               <button
                 type="button"
                 onClick={() => onLike(comment.id)}
-                className="flex items-center gap-1 text-[14px] transition-colors"
+                className="flex items-center gap-1 text-[11px] transition-colors"
                 style={{ color: isLiked ? '#8B1A1A' : '#999999' }}
               >
                 <span>{isLiked ? '♥' : '♡'}</span>
@@ -218,7 +218,7 @@ export default function CommentItem({
       ) : (
         <div className="overflow-hidden max-w-full">
           <p
-            className={`text-[18px] whitespace-pre-wrap leading-relaxed ${
+            className={`text-[15px] whitespace-pre-wrap leading-relaxed ${
               !isExpanded && isLongContent ? 'line-clamp-3' : ''
             }`}
             style={{

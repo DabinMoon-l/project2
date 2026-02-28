@@ -168,7 +168,7 @@ export default function SignupPage() {
       >
         {/* 타이틀 */}
         <motion.h1
-          className="text-2xl font-bold text-white text-center mb-4"
+          className="text-xl font-bold text-white text-center mb-3"
           variants={itemVariants}
         >
           회원가입
@@ -187,23 +187,23 @@ export default function SignupPage() {
 
         {/* 회원가입 폼 */}
         <motion.form onSubmit={handleSubmit} variants={itemVariants}>
-          <div className="space-y-3">
+          <div className="space-y-2">
             {/* 학년 선택 */}
             <div>
-              <label className="block text-sm font-medium text-white/80 mb-2">학년</label>
+              <label className="block text-xs font-medium text-white/80 mb-1">학년</label>
               <div className="grid grid-cols-2 gap-2">
                 {availableGrades.map((g) => (
                   <button
                     key={g}
                     type="button"
                     onClick={() => setGrade(g)}
-                    className={`px-3 py-2.5 rounded-xl text-center transition-all ${
+                    className={`px-3 py-2 rounded-xl text-center transition-all ${
                       grade === g
                         ? 'bg-white text-black'
                         : 'bg-white/10 border border-white/20 text-white hover:bg-white/20'
                     }`}
                   >
-                    <p className="text-sm font-bold">{g}학년</p>
+                    <p className="text-xs font-bold">{g}학년</p>
                   </button>
                 ))}
               </div>
@@ -217,20 +217,20 @@ export default function SignupPage() {
 
             {/* 반 선택 */}
             <div>
-              <label className="block text-sm font-medium text-white/80 mb-2">반</label>
+              <label className="block text-xs font-medium text-white/80 mb-1">반</label>
               <div className="grid grid-cols-4 gap-2">
                 {CLASS_OPTIONS.map((c) => (
                   <button
                     key={c}
                     type="button"
                     onClick={() => setClassId(c)}
-                    className={`px-3 py-2.5 rounded-xl text-center transition-all ${
+                    className={`px-3 py-2 rounded-xl text-center transition-all ${
                       classId === c
                         ? 'bg-white text-black'
                         : 'bg-white/10 border border-white/20 text-white hover:bg-white/20'
                     }`}
                   >
-                    <p className="text-sm font-bold">{c}</p>
+                    <p className="text-xs font-bold">{c}</p>
                   </button>
                 ))}
               </div>
@@ -247,7 +247,7 @@ export default function SignupPage() {
               autoComplete="off"
               autoCorrect="off"
               autoCapitalize="off"
-              className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-white/50 transition-colors"
+              className="w-full px-3 py-2 text-sm bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-white/50 transition-colors"
               disabled={isSubmitting}
             />
 
@@ -261,7 +261,7 @@ export default function SignupPage() {
               autoComplete="off"
               autoCorrect="off"
               autoCapitalize="off"
-              className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-white/50 transition-colors"
+              className="w-full px-3 py-2 text-sm bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-white/50 transition-colors"
               disabled={isSubmitting}
             />
 
@@ -272,7 +272,7 @@ export default function SignupPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="new-password"
-              className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-white/50 transition-colors"
+              className="w-full px-3 py-2 text-sm bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-white/50 transition-colors"
               disabled={isSubmitting}
             />
 
@@ -283,7 +283,7 @@ export default function SignupPage() {
               value={passwordConfirm}
               onChange={(e) => setPasswordConfirm(e.target.value)}
               autoComplete="new-password"
-              className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-white/50 transition-colors"
+              className="w-full px-3 py-2 text-sm bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-white/50 transition-colors"
               disabled={isSubmitting}
             />
           </div>
@@ -291,7 +291,7 @@ export default function SignupPage() {
           <button
             type="submit"
             disabled={isSubmitting || loading}
-            className="w-full mt-5 py-3 bg-white text-gray-900 font-medium rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full mt-3 py-2.5 text-sm bg-white text-gray-900 font-medium rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSubmitting ? '가입 처리 중...' : '회원가입'}
           </button>
@@ -299,7 +299,7 @@ export default function SignupPage() {
 
         {/* 익명 안내 */}
         <motion.p
-          className="mt-3 text-xs text-white/60 text-center leading-relaxed"
+          className="mt-2 text-xs text-white/60 text-center leading-relaxed"
           variants={itemVariants}
         >
           앱 내 활동은 닉네임으로만 표시되며,<br />
@@ -308,7 +308,7 @@ export default function SignupPage() {
 
         {/* 로그인 링크 */}
         <motion.p
-          className="mt-4 text-center text-white/70 text-sm"
+          className="mt-3 text-center text-white/70 text-sm"
           variants={itemVariants}
         >
           이미 계정이 있으신가요?{' '}

@@ -2,13 +2,14 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { createPortal } from 'react-dom';
 import * as pdfjsLib from 'pdfjs-dist';
 import { httpsCallable } from 'firebase/functions';
 import { auth, functions } from '@/lib/firebase';
 import { useCourse } from '@/lib/contexts/CourseContext';
 import { useVisionOcr } from '@/lib/hooks/useVisionOcr';
 import { generateCourseTags, COMMON_TAGS, type TagOption } from '@/lib/courseIndex';
+import ExpandModal from '@/components/common/ExpandModal';
+import type { SourceRect } from '@/lib/hooks/useExpandSource';
 import PageSelectionModal from './PageSelectionModal';
 // PDF.js worker - CDN 사용 (버전 일치 필수)
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
@@ -17,6 +18,7 @@ interface AIQuizModalProps {
   isOpen: boolean;
   onClose: () => void;
   onStartQuiz: (data: AIQuizData) => void;
+  sourceRect?: SourceRect | null;
 }
 
 export interface AIQuizData {
@@ -71,7 +73,7 @@ function useIsMobileDevice() {
 /**
  * AI 퀴즈 생성 모달
  */
-export default function AIQuizModal({ isOpen, onClose, onStartQuiz }: AIQuizModalProps) {
+export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }: AIQuizModalProps) {
   const isMobile = useIsMobileDevice();
   const { userCourseId } = useCourse();
   const visionOcr = useVisionOcr();
@@ -534,24 +536,15 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz }: AIQuizModa
     });
   }, [folderName, images, difficulty, questionCount, documentPages, convertSelectedPdfPagesToImages, onStartQuiz, selectedTags, ocrExtractedText, hasChapterTag, courseCustomized]);
 
-  // ESC 키로 닫기
+  // body overflow 제어 (ExpandModal이 ESC 키 처리)
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-
     if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown);
       document.body.style.overflow = 'hidden';
     }
-
     return () => {
-      document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = '';
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   // 업로드 버튼 수 계산 (모바일: 4개, PC: 3개)
   const buttonCount = isMobile ? 4 : 3;
@@ -561,412 +554,387 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz }: AIQuizModa
   // 어떤 유형이든 콘텐츠가 있으면 true
   const hasContent = images.length > 0 || selectedPageCount > 0;
 
-  if (typeof window === 'undefined') return null;
-
   return (
     <>
-      {createPortal(
-        <AnimatePresence>
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          {/* 백드롭 */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-          />
+      <ExpandModal isOpen={isOpen} onClose={onClose} sourceRect={sourceRect} className="w-full max-w-md" zIndex={50}>
+        <div className="bg-[#F5F0E8] border-2 border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A] overflow-hidden">
+          {/* 헤더 */}
+          <div className="flex items-center justify-between px-4 py-3 border-b-2 border-[#1A1A1A]">
+            <h2 className="text-sm font-bold text-[#1A1A1A]">퀴즈로 학습하기</h2>
+            <button
+              onClick={onClose}
+              className="p-0.5 text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
 
-          {/* 모달 */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            className="relative w-full max-w-md bg-[#F5F0E8] border-2 border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A] overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* 헤더 */}
-            <div className="flex items-center justify-between px-5 py-4 border-b-2 border-[#1A1A1A]">
-              <h2 className="text-lg font-bold text-[#1A1A1A]">퀴즈로 학습하기</h2>
-              <button
-                onClick={onClose}
-                className="p-1 text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+          {/* 본문 */}
+          <div className="px-4 py-3 max-h-[70vh] overflow-y-auto overscroll-contain space-y-3">
+            {/* 퀴즈 이름 */}
+            <div>
+              <label className="block text-xs font-semibold text-[#1A1A1A] mb-1.5">
+                퀴즈 이름
+              </label>
+              <input
+                type="text"
+                value={folderName}
+                onChange={(e) => setFolderName(e.target.value)}
+                placeholder="퀴즈 이름을 입력하세요"
+                className="w-full px-3 py-2 text-sm border-2 border-[#1A1A1A] bg-white text-[#1A1A1A] placeholder-[#9A9A9A] focus:outline-none focus:ring-2 focus:ring-[#1A1A1A] focus:ring-offset-2"
+              />
             </div>
 
-            {/* 본문 */}
-            <div className="px-5 py-4 max-h-[70vh] overflow-y-auto overscroll-contain space-y-5">
-              {/* 퀴즈 이름 */}
-              <div>
-                <label className="block text-sm font-semibold text-[#1A1A1A] mb-2">
-                  퀴즈 이름
+            {/* 태그 선택 (챕터 태그 필수) */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-[#1A1A1A]">
+                  태그 {courseCustomized && <span className="text-[#8B1A1A] font-normal text-[10px]">(챕터 필수)</span>}
                 </label>
-                <input
-                  type="text"
-                  value={folderName}
-                  onChange={(e) => setFolderName(e.target.value)}
-                  placeholder="퀴즈 이름을 입력하세요"
-                  className="w-full px-4 py-3 border-2 border-[#1A1A1A] bg-white text-[#1A1A1A] placeholder-[#9A9A9A] focus:outline-none focus:ring-2 focus:ring-[#1A1A1A] focus:ring-offset-2"
-                />
+                <button
+                  type="button"
+                  onClick={() => setShowTagFilter(!showTagFilter)}
+                  className={`flex items-center justify-center w-7 h-7 border transition-colors ${
+                    showTagFilter
+                      ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                      : 'bg-white text-[#1A1A1A] border-[#1A1A1A]'
+                  }`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                  </svg>
+                </button>
               </div>
 
-              {/* 태그 선택 (챕터 태그 필수) */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-semibold text-[#1A1A1A]">
-                    태그 {courseCustomized && <span className="text-[#8B1A1A] font-normal text-xs">(챕터 필수)</span>}
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setShowTagFilter(!showTagFilter)}
-                    className={`flex items-center justify-center w-8 h-8 border transition-colors ${
-                      showTagFilter
-                        ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                        : 'bg-white text-[#1A1A1A] border-[#1A1A1A]'
-                    }`}
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                    </svg>
-                  </button>
-                </div>
-
-                {/* 선택된 태그들 */}
-                {selectedTags.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {selectedTags.map((tag) => {
-                      return (
-                        <div
-                          key={tag}
-                          className="flex items-center gap-1 px-2 py-1 text-sm font-bold bg-[#1A1A1A] text-white"
-                        >
-                          #{tag}
-                          <button
-                            type="button"
-                            onClick={() => setSelectedTags(prev => prev.filter(t => t !== tag))}
-                            className="ml-0.5 hover:text-[#CCCCCC]"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* 챕터 태그 미선택 경고 (과목 맞춤형일 때만) */}
-                {courseCustomized && selectedTags.length > 0 && !hasChapterTag && (
-                  <p className="text-xs text-[#8B1A1A] mb-2">
-                    챕터 태그를 1개 이상 선택해주세요
-                  </p>
-                )}
-
-                {/* 태그 선택 목록 */}
-                <AnimatePresence>
-                  {showTagFilter && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="overflow-hidden"
-                    >
-                      <div className="flex flex-wrap gap-2 p-3 bg-white border-2 border-[#1A1A1A] max-h-40 overflow-y-auto overscroll-contain">
-                        {tagOptions
-                          .filter(tag => !selectedTags.includes(tag.value))
-                          .map((tag) => (
-                            <button
-                              key={tag.value}
-                              type="button"
-                              onClick={() => {
-                                setSelectedTags(prev => [...prev, tag.value]);
-                              }}
-                              className="px-3 py-1.5 text-sm font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
-                            >
-                              {tag.label}
-                            </button>
-                          ))}
-                        {tagOptions.filter(tag => !selectedTags.includes(tag.value)).length === 0 && (
-                          <p className="text-sm text-[#5C5C5C]">모든 태그가 선택되었습니다</p>
-                        )}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {/* 파일 업로드 */}
-              <div>
-                <label className="block text-sm font-semibold text-[#1A1A1A] mb-2">
-                  학습 자료 업로드
-                </label>
-
-                {/* 업로드 버튼들 */}
-                <div className={`grid ${gridCols} gap-2 mb-3`}>
-                  {/* 카메라 - 모바일에서만 표시 */}
-                  {isMobile && (
-                    <>
-                      <button
-                        onClick={() => cameraInputRef.current?.click()}
-                        className="flex flex-col items-center gap-1 p-3 border-2 border-[#1A1A1A] bg-white hover:bg-[#EDEAE4] transition-colors"
+              {/* 선택된 태그들 */}
+              {selectedTags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-1.5">
+                  {selectedTags.map((tag) => {
+                    return (
+                      <div
+                        key={tag}
+                        className="flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-bold bg-[#1A1A1A] text-white"
                       >
-                        <svg className="w-6 h-6 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        <span className="text-xs text-[#1A1A1A]">카메라</span>
-                      </button>
-                      <input
-                        ref={cameraInputRef}
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        onChange={handleImageSelect}
-                        className="hidden"
-                      />
-                    </>
-                  )}
-
-                  {/* 갤러리/이미지 */}
-                  <button
-                    onClick={() => galleryInputRef.current?.click()}
-                    className="flex flex-col items-center gap-1 p-3 border-2 border-[#1A1A1A] bg-white hover:bg-[#EDEAE4] transition-colors"
-                  >
-                    <svg className="w-6 h-6 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    <span className="text-xs text-[#1A1A1A]">{isMobile ? '갤러리' : '이미지'}</span>
-                  </button>
-                  <input
-                    ref={galleryInputRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={handleImageSelect}
-                    className="hidden"
-                  />
-
-                  {/* PDF */}
-                  <button
-                    onClick={() => pdfInputRef.current?.click()}
-                    className="flex flex-col items-center gap-1 p-3 border-2 border-[#1A1A1A] bg-white hover:bg-[#EDEAE4] transition-colors"
-                  >
-                    <svg className="w-6 h-6 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 13h1.5M9 16h1.5M12.5 13h2M12.5 16h2" />
-                    </svg>
-                    <span className="text-xs text-[#1A1A1A]">PDF</span>
-                  </button>
-                  <input
-                    ref={pdfInputRef}
-                    type="file"
-                    accept=".pdf,application/pdf"
-                    onChange={handlePdfSelect}
-                    className="hidden"
-                  />
-
-                  {/* PPT */}
-                  <button
-                    onClick={() => pptInputRef.current?.click()}
-                    className="flex flex-col items-center gap-1 p-3 border-2 border-[#1A1A1A] bg-white hover:bg-[#EDEAE4] transition-colors"
-                  >
-                    <svg className="w-6 h-6 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 9h6M9 12h4M9 15h5" />
-                    </svg>
-                    <span className="text-xs text-[#1A1A1A]">PPT</span>
-                  </button>
-                  <input
-                    ref={pptInputRef}
-                    type="file"
-                    accept=".ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-                    onChange={handlePptSelect}
-                    className="hidden"
-                  />
-                </div>
-
-                {/* 문서 로딩 */}
-                {isLoadingDocument && (
-                  <div className="flex items-center justify-center py-8 border-2 border-dashed border-[#9A9A9A]">
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="w-8 h-8 border-2 border-[#1A1A1A] border-t-transparent rounded-full animate-spin" />
-                      <span className="text-sm text-[#5C5C5C]">{loadingMessage}</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* 문서 페이지 선택 완료 요약 (PDF/PPT 공통) */}
-                {documentPages.length > 0 && (
-                  <div className="border-2 border-[#1A1A1A] p-4 bg-white">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        {/* 문서 아이콘 */}
-                        <div className="w-12 h-12 border-2 border-[#1A1A1A] bg-[#EDEAE4] flex items-center justify-center">
-                          <svg className="w-6 h-6 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                          </svg>
-                        </div>
-                        <div>
-                          <p className="font-bold text-[#1A1A1A]">{uploadType === 'ppt' ? 'PPT 파일' : 'PDF 파일'}</p>
-                          <p className="text-sm text-[#5C5C5C]">
-                            {selectedPageCount > 0 ? (
-                              <span className="text-[#1A6B1A] font-semibold">{selectedPageCount}개 페이지 선택됨</span>
-                            ) : (
-                              <span className="text-[#8B1A1A]">페이지를 선택해주세요</span>
-                            )}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
+                        #{tag}
                         <button
                           type="button"
-                          onClick={handleReopenPageSelection}
-                          className="px-3 py-2 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+                          onClick={() => setSelectedTags(prev => prev.filter(t => t !== tag))}
+                          className="ml-0.5 hover:text-[#CCCCCC]"
                         >
-                          {selectedPageCount > 0 ? '다시 선택' : '선택하기'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleClearDocumentSelection}
-                          className="px-3 py-2 text-sm font-bold border border-[#8B1A1A] text-[#8B1A1A] hover:bg-[#FEE2E2] transition-colors"
-                        >
-                          삭제
+                          ✕
                         </button>
                       </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* 챕터 태그 미선택 경고 (과목 맞춤형일 때만) */}
+              {courseCustomized && selectedTags.length > 0 && !hasChapterTag && (
+                <p className="text-[10px] text-[#8B1A1A] mb-1.5">
+                  챕터 태그를 1개 이상 선택해주세요
+                </p>
+              )}
+
+              {/* 태그 선택 목록 */}
+              <AnimatePresence>
+                {showTagFilter && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="flex flex-wrap gap-1.5 p-2 bg-white border-2 border-[#1A1A1A] max-h-36 overflow-y-auto overscroll-contain">
+                      {tagOptions
+                        .filter(tag => !selectedTags.includes(tag.value))
+                        .map((tag) => (
+                          <button
+                            key={tag.value}
+                            type="button"
+                            onClick={() => {
+                              setSelectedTags(prev => [...prev, tag.value]);
+                            }}
+                            className="px-2 py-1 text-xs font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+                          >
+                            {tag.label}
+                          </button>
+                        ))}
+                      {tagOptions.filter(tag => !selectedTags.includes(tag.value)).length === 0 && (
+                        <p className="text-xs text-[#5C5C5C]">모든 태그가 선택되었습니다</p>
+                      )}
                     </div>
-                  </div>
+                  </motion.div>
                 )}
+              </AnimatePresence>
+            </div>
 
-                {/* 업로드된 이미지 미리보기 */}
-                {images.length > 0 && (
-                  <div className="grid grid-cols-4 gap-2">
-                    {images.map((img, idx) => (
-                      <div key={idx} className="relative aspect-square border-2 border-[#1A1A1A]">
-                        <img
-                          src={img}
-                          alt={`Upload ${idx + 1}`}
-                          className="w-full h-full object-cover"
-                        />
-                        <button
-                          onClick={() => removeImage(idx)}
-                          className="absolute -top-2 -right-2 w-5 h-5 bg-[#8B1A1A] text-white rounded-full flex items-center justify-center"
-                        >
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* 난이도 */}
-              <div>
-                <label className="block text-sm font-semibold text-[#1A1A1A] mb-2">
-                  난이도
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {DIFFICULTY_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      onClick={() => setDifficulty(opt.value)}
-                      className={`p-3 border-2 transition-all ${
-                        difficulty === opt.value
-                          ? 'border-[#1A1A1A] bg-[#1A1A1A] text-white'
-                          : 'border-[#1A1A1A] bg-white text-[#1A1A1A] hover:bg-[#EDEAE4]'
-                      }`}
-                    >
-                      <div className="text-sm font-semibold">{opt.label}</div>
-                      <div className={`text-[10px] ${difficulty === opt.value ? 'text-white/70' : 'text-[#5C5C5C]'}`}>
-                        {opt.description}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* 문제 수 */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-semibold text-[#1A1A1A]">
-                    문제 수
-                  </label>
-                  <span className="text-lg font-bold text-[#1A1A1A]">{questionCount}문제</span>
-                </div>
-                <input
-                  type="range"
-                  min={5}
-                  max={20}
-                  value={questionCount}
-                  onChange={(e) => setQuestionCount(parseInt(e.target.value))}
-                  className="w-full h-2 bg-[#E5E5E5] rounded-lg appearance-none cursor-pointer accent-[#1A1A1A]"
-                />
-                <div className="flex justify-between text-xs text-[#5C5C5C] mt-1">
-                  <span>5문제</span>
-                  <span>20문제</span>
-                </div>
-              </div>
-
-              {/* 과목 맞춤형 */}
-              <label className="flex items-center gap-3 p-3 border-2 border-[#1A1A1A] bg-white cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={courseCustomized}
-                  onChange={(e) => setCourseCustomized(e.target.checked)}
-                  className="w-5 h-5 accent-[#1A1A1A] flex-shrink-0"
-                />
-                <div>
-                  <p className="text-sm font-semibold text-[#1A1A1A]">과목 맞춤형</p>
-                  <p className="text-xs text-[#5C5C5C]">
-                    {courseCustomized
-                      ? '교수님 출제 스타일과 과목 범위를 반영합니다'
-                      : '업로드한 자료에서만 문제를 생성합니다'}
-                  </p>
-                </div>
+            {/* 파일 업로드 */}
+            <div>
+              <label className="block text-xs font-semibold text-[#1A1A1A] mb-1.5">
+                학습 자료 업로드
               </label>
 
-              {/* AI 할루시네이션 경고 */}
-              <div className="p-3 border-2 border-[#8B1A1A]">
-                <div className="flex gap-2">
-                  <svg className="w-5 h-5 text-[#8B1A1A] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              {/* 업로드 버튼들 */}
+              <div className={`grid ${gridCols} gap-1.5 mb-2`}>
+                {/* 카메라 - 모바일에서만 표시 */}
+                {isMobile && (
+                  <>
+                    <button
+                      onClick={() => cameraInputRef.current?.click()}
+                      className="flex flex-col items-center gap-0.5 p-2 border-2 border-[#1A1A1A] bg-white hover:bg-[#EDEAE4] transition-colors"
+                    >
+                      <svg className="w-5 h-5 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      <span className="text-[10px] text-[#1A1A1A]">카메라</span>
+                    </button>
+                    <input
+                      ref={cameraInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleImageSelect}
+                      className="hidden"
+                    />
+                  </>
+                )}
+
+                {/* 갤러리/이미지 */}
+                <button
+                  onClick={() => galleryInputRef.current?.click()}
+                  className="flex flex-col items-center gap-0.5 p-2 border-2 border-[#1A1A1A] bg-white hover:bg-[#EDEAE4] transition-colors"
+                >
+                  <svg className="w-5 h-5 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
-                  <div>
-                    <p className="text-sm font-semibold text-[#8B1A1A]">AI 생성 문제 주의사항</p>
-                    <p className="text-xs text-[#5C5C5C] mt-1">
-                      AI가 생성한 문제는 오류가 있을 수 있습니다. 학습 보조 용도로만 활용하세요.
-                    </p>
+                  <span className="text-[10px] text-[#1A1A1A]">{isMobile ? '갤러리' : '이미지'}</span>
+                </button>
+                <input
+                  ref={galleryInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleImageSelect}
+                  className="hidden"
+                />
+
+                {/* PDF */}
+                <button
+                  onClick={() => pdfInputRef.current?.click()}
+                  className="flex flex-col items-center gap-0.5 p-2 border-2 border-[#1A1A1A] bg-white hover:bg-[#EDEAE4] transition-colors"
+                >
+                  <svg className="w-5 h-5 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 13h1.5M9 16h1.5M12.5 13h2M12.5 16h2" />
+                  </svg>
+                  <span className="text-[10px] text-[#1A1A1A]">PDF</span>
+                </button>
+                <input
+                  ref={pdfInputRef}
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  onChange={handlePdfSelect}
+                  className="hidden"
+                />
+
+                {/* PPT */}
+                <button
+                  onClick={() => pptInputRef.current?.click()}
+                  className="flex flex-col items-center gap-0.5 p-2 border-2 border-[#1A1A1A] bg-white hover:bg-[#EDEAE4] transition-colors"
+                >
+                  <svg className="w-5 h-5 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 9h6M9 12h4M9 15h5" />
+                  </svg>
+                  <span className="text-[10px] text-[#1A1A1A]">PPT</span>
+                </button>
+                <input
+                  ref={pptInputRef}
+                  type="file"
+                  accept=".ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                  onChange={handlePptSelect}
+                  className="hidden"
+                />
+              </div>
+
+              {/* 문서 로딩 */}
+              {isLoadingDocument && (
+                <div className="flex items-center justify-center py-6 border-2 border-dashed border-[#9A9A9A]">
+                  <div className="flex flex-col items-center gap-1.5">
+                    <div className="w-6 h-6 border-2 border-[#1A1A1A] border-t-transparent rounded-full animate-spin" />
+                    <span className="text-xs text-[#5C5C5C]">{loadingMessage}</span>
                   </div>
                 </div>
+              )}
+
+              {/* 문서 페이지 선택 완료 요약 (PDF/PPT 공통) */}
+              {documentPages.length > 0 && (
+                <div className="border-2 border-[#1A1A1A] p-3 bg-white">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {/* 문서 아이콘 */}
+                      <div className="w-10 h-10 border-2 border-[#1A1A1A] bg-[#EDEAE4] flex items-center justify-center">
+                        <svg className="w-5 h-5 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-[#1A1A1A]">{uploadType === 'ppt' ? 'PPT 파일' : 'PDF 파일'}</p>
+                        <p className="text-xs text-[#5C5C5C]">
+                          {selectedPageCount > 0 ? (
+                            <span className="text-[#1A6B1A] font-semibold">{selectedPageCount}개 페이지 선택됨</span>
+                          ) : (
+                            <span className="text-[#8B1A1A]">페이지를 선택해주세요</span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <button
+                        type="button"
+                        onClick={handleReopenPageSelection}
+                        className="px-2 py-1.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+                      >
+                        {selectedPageCount > 0 ? '다시 선택' : '선택하기'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleClearDocumentSelection}
+                        className="px-2 py-1.5 text-xs font-bold border border-[#8B1A1A] text-[#8B1A1A] hover:bg-[#FEE2E2] transition-colors"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 업로드된 이미지 미리보기 */}
+              {images.length > 0 && (
+                <div className="grid grid-cols-4 gap-1.5">
+                  {images.map((img, idx) => (
+                    <div key={idx} className="relative aspect-square border-2 border-[#1A1A1A]">
+                      <img
+                        src={img}
+                        alt={`Upload ${idx + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        onClick={() => removeImage(idx)}
+                        className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-[#8B1A1A] text-white rounded-full flex items-center justify-center"
+                      >
+                        <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 난이도 */}
+            <div>
+              <label className="block text-xs font-semibold text-[#1A1A1A] mb-1.5">
+                난이도
+              </label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {DIFFICULTY_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setDifficulty(opt.value)}
+                    className={`p-2 border-2 transition-all ${
+                      difficulty === opt.value
+                        ? 'border-[#1A1A1A] bg-[#1A1A1A] text-white'
+                        : 'border-[#1A1A1A] bg-white text-[#1A1A1A] hover:bg-[#EDEAE4]'
+                    }`}
+                  >
+                    <div className="text-xs font-semibold">{opt.label}</div>
+                    <div className={`text-[9px] ${difficulty === opt.value ? 'text-white/70' : 'text-[#5C5C5C]'}`}>
+                      {opt.description}
+                    </div>
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* 푸터 */}
-            <div className="px-5 py-4 border-t-2 border-[#1A1A1A] bg-[#EDEAE4]">
-              <button
-                onClick={handleStart}
-                disabled={!folderName.trim() || !hasContent || (courseCustomized && !hasChapterTag)}
-                className={`w-full py-3 font-bold text-lg border-2 border-[#1A1A1A] transition-all ${
-                  folderName.trim() && hasContent && (!courseCustomized || hasChapterTag)
-                    ? 'bg-[#1A1A1A] text-white hover:bg-[#3A3A3A] shadow-[2px_2px_0px_#1A1A1A] active:shadow-none active:translate-x-[2px] active:translate-y-[2px]'
-                    : 'bg-[#E5E5E5] text-[#9A9A9A] cursor-not-allowed'
-                }`}
-              >
-                학습 시작하기
-              </button>
+            {/* 문제 수 */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-[#1A1A1A]">
+                  문제 수
+                </label>
+                <span className="text-sm font-bold text-[#1A1A1A]">{questionCount}문제</span>
+              </div>
+              <input
+                type="range"
+                min={5}
+                max={20}
+                value={questionCount}
+                onChange={(e) => setQuestionCount(parseInt(e.target.value))}
+                className="w-full h-1.5 bg-[#E5E5E5] rounded-lg appearance-none cursor-pointer accent-[#1A1A1A]"
+              />
+              <div className="flex justify-between text-[10px] text-[#5C5C5C] mt-0.5">
+                <span>5문제</span>
+                <span>20문제</span>
+              </div>
             </div>
-          </motion.div>
+
+            {/* 과목 맞춤형 */}
+            <label className="flex items-center gap-2.5 p-2 border-2 border-[#1A1A1A] bg-white cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={courseCustomized}
+                onChange={(e) => setCourseCustomized(e.target.checked)}
+                className="w-4 h-4 accent-[#1A1A1A] flex-shrink-0"
+              />
+              <div>
+                <p className="text-xs font-semibold text-[#1A1A1A]">과목 맞춤형</p>
+                <p className="text-[10px] text-[#5C5C5C]">
+                  {courseCustomized
+                    ? '교수님 출제 스타일과 과목 범위를 반영합니다'
+                    : '업로드한 자료에서만 문제를 생성합니다'}
+                </p>
+              </div>
+            </label>
+
+            {/* AI 할루시네이션 경고 */}
+            <div className="p-2 border-2 border-[#8B1A1A]">
+              <div className="flex gap-1.5">
+                <svg className="w-4 h-4 text-[#8B1A1A] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <div>
+                  <p className="text-xs font-semibold text-[#8B1A1A]">AI 생성 문제 주의사항</p>
+                  <p className="text-[10px] text-[#5C5C5C] mt-0.5">
+                    AI가 생성한 문제는 오류가 있을 수 있습니다. 학습 보조 용도로만 활용하세요.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 푸터 */}
+          <div className="px-4 py-3 border-t-2 border-[#1A1A1A] bg-[#EDEAE4]">
+            <button
+              onClick={handleStart}
+              disabled={!folderName.trim() || !hasContent || (courseCustomized && !hasChapterTag)}
+              className={`w-full py-2 font-bold text-xs border-2 border-[#1A1A1A] transition-all ${
+                folderName.trim() && hasContent && (!courseCustomized || hasChapterTag)
+                  ? 'bg-[#1A1A1A] text-white hover:bg-[#3A3A3A] shadow-[2px_2px_0px_#1A1A1A] active:shadow-none active:translate-x-[2px] active:translate-y-[2px]'
+                  : 'bg-[#E5E5E5] text-[#9A9A9A] cursor-not-allowed'
+              }`}
+            >
+              학습 시작하기
+            </button>
+          </div>
         </div>
-      )}
-        </AnimatePresence>,
-        document.body
-      )}
+      </ExpandModal>
 
       {/* 페이지 선택 모달 */}
       <PageSelectionModal
@@ -978,7 +946,6 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz }: AIQuizModa
         isLoading={isLoadingDocument}
         loadingMessage={loadingMessage}
       />
-
     </>
   );
 }

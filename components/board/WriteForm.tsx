@@ -199,16 +199,16 @@ export default function WriteForm({
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="p-4"
+      className="p-3"
       style={{
         border: '1px solid #1A1A1A',
         backgroundColor: theme.colors.backgroundCard,
       }}
     >
       {/* 제목 입력 */}
-      <div className="mb-4">
+      <div className="mb-3">
         <label
-          className="block text-sm font-bold mb-2"
+          className="block text-xs font-bold mb-1.5"
           style={{ color: theme.colors.text }}
         >
           제목 <span style={{ color: '#8B1A1A' }}>*</span>
@@ -219,7 +219,7 @@ export default function WriteForm({
           onChange={(e) => handleTitleChange(e.target.value)}
           placeholder="기사 제목을 입력하세요 (2자 이상)"
           maxLength={100}
-          className="w-full px-4 py-3 outline-none transition-colors text-lg"
+          className="w-full px-3 py-2 outline-none transition-colors text-sm"
           style={{
             border: '1px solid #1A1A1A',
             backgroundColor: theme.colors.background,
@@ -235,9 +235,9 @@ export default function WriteForm({
       </div>
 
       {/* 내용 입력 */}
-      <div className="mb-4">
+      <div className="mb-3">
         <label
-          className="block text-sm font-bold mb-2"
+          className="block text-xs font-bold mb-1.5"
           style={{ color: theme.colors.text }}
         >
           본문 <span style={{ color: '#8B1A1A' }}>*</span>
@@ -246,9 +246,9 @@ export default function WriteForm({
           value={content}
           onChange={(e) => handleContentChange(e.target.value)}
           placeholder="기사 내용을 입력하세요 (10자 이상)"
-          rows={8}
+          rows={5}
           maxLength={2000}
-          className="w-full px-4 py-3 resize-none outline-none transition-colors leading-relaxed"
+          className="w-full px-3 py-2 resize-none outline-none transition-colors leading-relaxed"
           style={{
             border: '1px solid #1A1A1A',
             backgroundColor: theme.colors.background,
@@ -265,9 +265,9 @@ export default function WriteForm({
 
 
       {/* 이미지 첨부 */}
-      <div className="mb-4">
+      <div className="mb-3">
         <label
-          className="block text-sm font-bold mb-2"
+          className="block text-xs font-bold mb-1.5"
           style={{ color: theme.colors.text }}
         >
           사진
@@ -286,7 +286,7 @@ export default function WriteForm({
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.8 }}
-                  className="relative w-20 h-20"
+                  className="relative w-16 h-16"
                 >
                   <Image
                     src={img.preview}
@@ -318,14 +318,14 @@ export default function WriteForm({
           <button
             type="button"
             onClick={() => imageInputRef.current?.click()}
-            className="flex items-center gap-2 px-4 py-2 text-sm transition-colors"
+            className="flex items-center gap-2 px-3 py-1.5 text-xs transition-colors"
             style={{
               border: '1px dashed #1A1A1A',
               backgroundColor: 'transparent',
               color: theme.colors.text,
             }}
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
             사진 첨부
@@ -345,9 +345,9 @@ export default function WriteForm({
       </div>
 
       {/* 파일 첨부 */}
-      <div className="mb-4">
+      <div className="mb-3">
         <label
-          className="block text-sm font-bold mb-2"
+          className="block text-xs font-bold mb-1.5"
           style={{ color: theme.colors.text }}
         >
           파일
@@ -402,14 +402,14 @@ export default function WriteForm({
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-2 px-4 py-2 text-sm transition-colors"
+            className="flex items-center gap-2 px-3 py-1.5 text-xs transition-colors"
             style={{
               border: '1px dashed #1A1A1A',
               backgroundColor: 'transparent',
               color: theme.colors.text,
             }}
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
             </svg>
             파일 첨부
@@ -429,7 +429,7 @@ export default function WriteForm({
 
       {/* 구분선 */}
       <div
-        className="py-3 border-t border-b mb-4"
+        className="py-2 border-t border-b mb-3"
         style={{ borderColor: '#D4CFC4' }}
       />
 
@@ -463,7 +463,7 @@ export default function WriteForm({
         whileTap={{ scale: 0.99 }}
         onClick={handleSubmit}
         disabled={!isValid || isSubmitting || uploading}
-        className="w-full py-3 font-serif-display font-bold text-center transition-colors disabled:opacity-50"
+        className="w-full py-2.5 text-sm font-serif-display font-bold text-center transition-colors disabled:opacity-50"
         style={{
           backgroundColor: '#1A1A1A',
           color: '#F5F0E8',

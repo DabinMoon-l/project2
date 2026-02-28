@@ -4,6 +4,9 @@
  * recordAttempt에서 reviews 배치 생성을 분리하여:
  * - recordAttempt 응답 시간 단축 (채점 + 결과 저장만 동기)
  * - reviews 생성은 백그라운드에서 처리
+ *
+ * 재시도(retake) 시 기존 reviews를 삭제하고 새로 생성
+ * (중복 review 문서 방지)
  */
 
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
@@ -49,6 +52,46 @@ export const generateReviewsOnResult = onDocumentCreated(
 
     if (questions.length === 0) return;
 
+    // ── 기존 reviews 삭제 (재시도 시 중복 방지) ──
+    // 같은 userId + quizId의 기존 reviews를 삭제한 뒤 새로 생성
+    const existingReviews = await db.collection("reviews")
+      .where("userId", "==", userId)
+      .where("quizId", "==", quizId)
+      .get();
+
+    if (!existingReviews.empty) {
+      // 기존 reviews의 isBookmarked 상태 보존 (찜 상태 유지)
+      const bookmarkedQuestionIds = new Set<string>();
+      existingReviews.docs.forEach(d => {
+        const data = d.data();
+        if (data.isBookmarked) {
+          bookmarkedQuestionIds.add(data.questionId);
+        }
+      });
+
+      // 기존 reviews 삭제
+      const deleteBatch = db.batch();
+      let deleteCount = 0;
+      for (const d of existingReviews.docs) {
+        deleteBatch.delete(d.ref);
+        deleteCount++;
+        if (deleteCount >= 490) {
+          await deleteBatch.commit();
+          deleteCount = 0;
+        }
+      }
+      if (deleteCount > 0) {
+        await deleteBatch.commit();
+      }
+
+      // bookmarkedQuestionIds를 아래에서 사용
+      // (변수를 클로저로 캡처)
+      (result as any)._bookmarkedQuestionIds = bookmarkedQuestionIds;
+    }
+
+    const bookmarkedQuestionIds: Set<string> =
+      (result as any)._bookmarkedQuestionIds || new Set<string>();
+
     // reviews 배치 생성
     const batch = db.batch();
     let batchCount = 0;
@@ -62,7 +105,7 @@ export const generateReviewsOnResult = onDocumentCreated(
       let normalizedType = q.type || "multiple";
       if (normalizedType === "short") normalizedType = "short_answer";
 
-      const reviewBase = {
+      const reviewBase: Record<string, any> = {
         userId,
         quizId,
         quizTitle: quizData.title || "",
@@ -74,7 +117,7 @@ export const generateReviewsOnResult = onDocumentCreated(
         userAnswer: qs.userAnswer,
         explanation: q.explanation || "",
         isCorrect: qs.isCorrect,
-        isBookmarked: false,
+        isBookmarked: bookmarkedQuestionIds.has(qId),
         reviewCount: 0,
         lastReviewedAt: null,
         courseId: quizData.courseId || null,
@@ -87,6 +130,44 @@ export const generateReviewsOnResult = onDocumentCreated(
         imageUrl: q.imageUrl || null,
         createdAt: FieldValue.serverTimestamp(),
       };
+
+      // 결합형 문제 필드 추가
+      if (q.combinedGroupId) {
+        reviewBase.combinedGroupId = q.combinedGroupId;
+      }
+      if (q.combinedIndex !== undefined) {
+        reviewBase.combinedIndex = q.combinedIndex;
+      }
+      if (q.combinedTotal !== undefined) {
+        reviewBase.combinedTotal = q.combinedTotal;
+      }
+      if (q.passage) {
+        reviewBase.passage = q.passage;
+      }
+      if (q.passageType) {
+        reviewBase.passageType = q.passageType;
+      }
+      if (q.passageImage) {
+        reviewBase.passageImage = q.passageImage;
+      }
+      if (q.koreanAbcItems) {
+        reviewBase.koreanAbcItems = q.koreanAbcItems;
+      }
+      if (q.passageMixedExamples) {
+        reviewBase.passageMixedExamples = q.passageMixedExamples;
+      }
+      if (q.commonQuestion) {
+        reviewBase.commonQuestion = q.commonQuestion;
+      }
+      if (q.combinedMainText) {
+        reviewBase.combinedMainText = q.combinedMainText;
+      }
+      if (q.bogi) {
+        reviewBase.bogi = q.bogi;
+      }
+      if (q.mixedExamples) {
+        reviewBase.mixedExamples = q.mixedExamples;
+      }
 
       // solved 타입 저장
       batch.create(db.collection("reviews").doc(), {

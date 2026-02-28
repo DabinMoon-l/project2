@@ -151,10 +151,10 @@ export default function ExitConfirmModal({
             className="relative w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] shadow-xl overflow-hidden focus:outline-none"
           >
             {/* 경고 아이콘 */}
-            <div className="flex justify-center pt-6">
-              <div className="w-16 h-16 border-2 border-[#8B6914] bg-[#FFF8E1] flex items-center justify-center">
+            <div className="flex justify-center pt-4">
+              <div className="w-10 h-10 border-2 border-[#8B6914] bg-[#FFF8E1] flex items-center justify-center">
                 <svg
-                  className="w-8 h-8 text-[#8B6914]"
+                  className="w-5 h-5 text-[#8B6914]"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -170,16 +170,16 @@ export default function ExitConfirmModal({
             </div>
 
             {/* 본문 */}
-            <div className="px-6 py-4 text-center">
+            <div className="px-4 py-2.5 text-center">
               <h2
                 id="exit-modal-title"
-                className="text-lg font-bold text-[#1A1A1A] mb-2"
+                className="text-sm font-bold text-[#1A1A1A] mb-2"
               >
                 퀴즈를 나가시겠습니까?
               </h2>
               <p
                 id="exit-modal-description"
-                className="text-sm text-[#5C5C5C] leading-relaxed"
+                className="text-xs text-[#5C5C5C] leading-relaxed"
               >
                 진행 상황을 저장하면 나중에
                 <br />
@@ -187,14 +187,14 @@ export default function ExitConfirmModal({
               </p>
 
               {/* 진행 상황 표시 */}
-              <div className="mt-4 p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
-                <div className="flex items-center justify-between text-sm">
+              <div className="mt-4 p-2 bg-[#EDEAE4] border border-[#1A1A1A]">
+                <div className="flex items-center justify-between text-xs">
                   <span className="text-[#5C5C5C]">현재 진행도</span>
                   <span className="font-bold text-[#1A1A1A]">
                     {answeredCount}/{totalQuestions} 문제 답변 완료
                   </span>
                 </div>
-                <div className="mt-2 h-2 bg-[#DDD8D0] overflow-hidden">
+                <div className="mt-1.5 h-1.5 bg-[#DDD8D0] overflow-hidden">
                   <motion.div
                     initial={{ width: 0 }}
                     animate={{
@@ -208,14 +208,14 @@ export default function ExitConfirmModal({
             </div>
 
             {/* 버튼 영역 */}
-            <div className="flex flex-col gap-2 px-6 py-4 border-t-2 border-[#1A1A1A] bg-[#EDEAE4]">
+            <div className="flex flex-col gap-1.5 px-4 py-2.5 border-t-2 border-[#1A1A1A] bg-[#EDEAE4]">
               {/* 계속 풀기 버튼 */}
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={onClose}
                 disabled={isSaving}
-                className="w-full py-3 font-bold text-[#F5F0E8] bg-[#1A1A1A] border-2 border-[#1A1A1A] transition-all duration-200 hover:bg-[#2A2A2A] disabled:opacity-50"
+                className="w-full py-2 text-xs font-bold text-[#F5F0E8] bg-[#1A1A1A] border-2 border-[#1A1A1A] transition-all duration-200 hover:bg-[#2A2A2A] disabled:opacity-50"
               >
                 계속 풀기
               </motion.button>
@@ -226,12 +226,12 @@ export default function ExitConfirmModal({
                 whileTap={{ scale: 0.98 }}
                 onClick={onSaveAndExit}
                 disabled={isSaving}
-                className="w-full py-3 font-bold bg-[#F5F0E8] text-[#1A1A1A] border-2 border-[#1A1A1A] hover:bg-[#E5E0D8] transition-all duration-200 disabled:opacity-50 flex items-center justify-center"
+                className="w-full py-2 text-xs font-bold bg-[#F5F0E8] text-[#1A1A1A] border-2 border-[#1A1A1A] hover:bg-[#E5E0D8] transition-all duration-200 disabled:opacity-50 flex items-center justify-center"
               >
                 {isSaving ? (
                   <>
                     <svg
-                      className="animate-spin w-5 h-5 mr-2"
+                      className="animate-spin w-4 h-4 mr-2"
                       xmlns="http://www.w3.org/2000/svg"
                       fill="none"
                       viewBox="0 0 24 24"
@@ -263,7 +263,7 @@ export default function ExitConfirmModal({
                 whileTap={{ scale: 0.98 }}
                 onClick={onExitWithoutSave}
                 disabled={isSaving}
-                className="w-full py-3 font-bold bg-[#F5F0E8] text-[#8B1A1A] border-2 border-[#8B1A1A] hover:bg-[#FDEAEA] transition-all duration-200 disabled:opacity-50"
+                className="w-full py-2 text-xs font-bold bg-[#F5F0E8] text-[#8B1A1A] border-2 border-[#8B1A1A] hover:bg-[#FDEAEA] transition-all duration-200 disabled:opacity-50"
               >
                 저장하지 않고 나가기
               </motion.button>

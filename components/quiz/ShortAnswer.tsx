@@ -81,9 +81,9 @@ export default function ShortAnswer({
           disabled={disabled}
           rows={4}
           className={`
-            w-full p-4
+            w-full p-3
             border-2 transition-all duration-200
-            text-[#1A1A1A] text-base leading-relaxed
+            text-[#1A1A1A] text-sm leading-relaxed
             placeholder:text-[#5C5C5C]
             resize-none
             focus:outline-none

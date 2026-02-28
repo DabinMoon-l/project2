@@ -13,6 +13,7 @@ import OXChoice, { OXAnswer } from '@/components/quiz/OXChoice';
 import MultipleChoice from '@/components/quiz/MultipleChoice';
 import ShortAnswer from '@/components/quiz/ShortAnswer';
 import { BottomSheet, useExpToast } from '@/components/common';
+import ExitConfirmModal from '@/components/quiz/ExitConfirmModal';
 
 /** 피드백 타입 */
 type FeedbackType = 'unclear' | 'wrong' | 'typo' | 'other' | 'praise' | 'wantmore';
@@ -95,6 +96,8 @@ export default function ReviewPractice({
   const [answers, setAnswers] = useState<Record<number, AnswerType>>({});
   // 제출된 문제 인덱스 Set
   const [submittedIndices, setSubmittedIndices] = useState<Set<number>>(new Set());
+  // 나가기 확인 모달
+  const [showExitModal, setShowExitModal] = useState(false);
   // 결과 저장 (인덱스별) - 단일 문제용
   const [resultsMap, setResultsMap] = useState<Record<number, PracticeResult>>({});
   // 결합형 문제 결과 저장 (그룹 인덱스 -> 하위 인덱스 -> 결과)
@@ -125,6 +128,8 @@ export default function ReviewPractice({
   const [feedbackContent, setFeedbackContent] = useState('');
   const [isFeedbackSubmitting, setIsFeedbackSubmitting] = useState(false);
   const [submittedFeedbackIds, setSubmittedFeedbackIds] = useState<Set<string>>(new Set());
+  // 피드백 제출 횟수 (완료 시 합산 EXP 토스트용)
+  const [feedbackSubmitCount, setFeedbackSubmitCount] = useState(0);
 
   // 결합형 문제 그룹화
   const groupedItems = useMemo(() => {
@@ -248,7 +253,18 @@ export default function ReviewPractice({
     const chapterMap = new Map<string | null, ReviewItem[]>();
 
     wrongItems.forEach(item => {
-      const chapterId = item.chapterId || null;
+      let chapterId = item.chapterId || null;
+
+      // 챕터 인덱스에서 찾을 수 없는 chapterId는 미분류(null)로 통합
+      if (chapterId && userCourseId) {
+        const chapter = getChapterById(userCourseId, chapterId);
+        if (!chapter) {
+          chapterId = null;
+        }
+      } else if (chapterId && !userCourseId) {
+        chapterId = null;
+      }
+
       const existing = chapterMap.get(chapterId);
       if (existing) {
         existing.push(item);
@@ -426,9 +442,17 @@ export default function ReviewPractice({
     setPhase('feedback');
   };
 
-  // 피드백 화면에서 완료
+  // 피드백 화면에서 완료 — 복습 EXP + 피드백 EXP 합산 토스트
   const handleFinish = () => {
-    // 복습은 서버에서 XP를 지급하지 않음 (토스트 제거)
+    const revExp = correctCount * 2;
+    const fbExp = feedbackSubmitCount * 15;
+    const totalExp = revExp + fbExp;
+    if (totalExp > 0) {
+      const parts: string[] = [];
+      if (revExp > 0) parts.push(`복습 ${revExp}`);
+      if (fbExp > 0) parts.push(`피드백 ${fbExp}`);
+      showExpToast(totalExp, parts.join(' + '));
+    }
     onComplete(resultsArray);
   };
 
@@ -543,9 +567,8 @@ export default function ReviewPractice({
         createdAt: serverTimestamp(),
       });
       setSubmittedFeedbackIds(prev => new Set(prev).add(feedbackTargetItem.questionId));
+      setFeedbackSubmitCount(prev => prev + 1);
       closeFeedbackSheet();
-      // 피드백 EXP 토스트 (CF onFeedbackSubmit 트리거로 15 EXP 지급)
-      showExpToast(15, '피드백 작성');
     } catch (err) {
       console.error('피드백 제출 실패:', err);
       alert('피드백 제출에 실패했습니다.');
@@ -571,20 +594,20 @@ export default function ReviewPractice({
       >
         {/* 헤더 */}
         <header className="sticky top-0 z-50 border-b-2 border-[#1A1A1A] bg-[#F5F0E8]">
-          <div className="flex items-center justify-between h-14 px-4">
+          <div className="flex items-center justify-between h-12 px-4">
             <div className="w-10" />
-            <h1 className="text-base font-bold text-[#1A1A1A]">{headerTitle} 결과</h1>
+            <h1 className="text-sm font-bold text-[#1A1A1A]">{headerTitle} 결과</h1>
             <div className="w-10" />
           </div>
         </header>
 
-        <main className="px-4 py-6 pb-28">
+        <main className="px-4 py-5 pb-24">
           {/* 점수 */}
-          <div className="text-center mb-8">
-            <p className="text-6xl font-bold text-[#1A1A1A]">
+          <div className="text-center mb-5">
+            <p className="text-3xl font-bold text-[#1A1A1A]">
               {correctCount}/{totalQuestionCount}
             </p>
-            <p className="text-sm text-[#5C5C5C] mt-2">
+            <p className="text-xs text-[#5C5C5C] mt-1.5">
               정답률 {Math.round((correctCount / totalQuestionCount) * 100)}%
             </p>
           </div>
@@ -604,19 +627,19 @@ export default function ReviewPractice({
                     {/* 결합형 그룹 헤더 */}
                     <div
                       onClick={() => toggleExpand(group.groupId || `group-${groupIdx}`)}
-                      className="p-3 cursor-pointer"
+                      className="p-2.5 cursor-pointer"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           {/* 문항 번호 + 결합형 표시 + 정답 수 */}
-                          <div className="flex items-center gap-2 flex-wrap mb-1">
-                            <span className="inline-block px-2 py-0.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8]">
+                          <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                            <span className="inline-block px-1.5 py-0.5 text-[10px] font-bold bg-[#1A1A1A] text-[#F5F0E8]">
                               Q{groupIdx + 1}
                             </span>
-                            <span className="inline-block px-2 py-0.5 text-xs font-bold border border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A]">
+                            <span className="inline-block px-1.5 py-0.5 text-[10px] font-bold border border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A]">
                               결합형 문제
                             </span>
-                            <span className={`inline-block px-2 py-0.5 text-xs font-bold ${
+                            <span className={`inline-block px-1.5 py-0.5 text-[10px] font-bold ${
                               groupCorrectCount === group.items.length
                                 ? 'bg-[#E8F5E9] text-[#1A6B1A] border border-[#1A6B1A]'
                                 : groupCorrectCount > 0
@@ -628,7 +651,7 @@ export default function ReviewPractice({
                           </div>
                           {/* 공통 문제 내용 표시 */}
                           {firstItem.commonQuestion && (
-                            <p className="text-sm font-medium text-[#1A1A1A] line-clamp-2 pl-1">
+                            <p className="text-xs font-medium text-[#1A1A1A] line-clamp-2 pl-1">
                               {firstItem.commonQuestion}
                             </p>
                           )}
@@ -637,7 +660,7 @@ export default function ReviewPractice({
                         {/* 화살표 */}
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
                           <svg
-                            className={`w-5 h-5 text-[#5C5C5C] transition-transform mt-1 ${isGroupExpanded ? 'rotate-180' : ''}`}
+                            className={`w-4 h-4 text-[#5C5C5C] transition-transform mt-1 ${isGroupExpanded ? 'rotate-180' : ''}`}
                             fill="none"
                             stroke="currentColor"
                             viewBox="0 0 24 24"
@@ -664,12 +687,12 @@ export default function ReviewPractice({
                             {(firstItem.passage || firstItem.passageImage || (firstItem.koreanAbcItems && firstItem.koreanAbcItems.length > 0) || (firstItem.passageMixedExamples && firstItem.passageMixedExamples.length > 0)) && (
                               <div className="p-2 border border-[#8B6914] bg-[#FFF8E1]">
                                 {firstItem.passage && firstItem.passageType !== 'korean_abc' && firstItem.passageType !== 'mixed' && (
-                                  <p className="text-sm text-[#1A1A1A]">{firstItem.passage}</p>
+                                  <p className="text-xs text-[#1A1A1A]">{firstItem.passage}</p>
                                 )}
                                 {firstItem.passageType === 'korean_abc' && firstItem.koreanAbcItems && firstItem.koreanAbcItems.length > 0 && (
                                   <div className="space-y-1">
                                     {firstItem.koreanAbcItems.map((itm, i) => (
-                                      <p key={i} className="text-sm text-[#1A1A1A]">
+                                      <p key={i} className="text-xs text-[#1A1A1A]">
                                         <span className="font-bold">{KOREAN_LABELS[i]}.</span> {itm}
                                       </p>
                                     ))}
@@ -684,16 +707,16 @@ export default function ReviewPractice({
                                             {(block.children || []).map((child: any) => (
                                               <div key={child.id}>
                                                 {child.type === 'text' && child.content?.trim() && (
-                                                  <p className="text-sm text-[#5C5C5C]">{child.content}</p>
+                                                  <p className="text-xs text-[#5C5C5C]">{child.content}</p>
                                                 )}
                                                 {child.type === 'labeled' && (child.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
-                                                  <p key={item.id} className="text-sm text-[#1A1A1A]">
+                                                  <p key={item.id} className="text-xs text-[#1A1A1A]">
                                                     <span className="font-bold mr-1">{item.label}.</span>
                                                     {item.content}
                                                   </p>
                                                 ))}
                                                 {child.type === 'gana' && (child.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
-                                                  <p key={item.id} className="text-sm text-[#1A1A1A]">
+                                                  <p key={item.id} className="text-xs text-[#1A1A1A]">
                                                     <span className="font-bold mr-1">({item.label})</span>
                                                     {item.content}
                                                   </p>
@@ -706,12 +729,12 @@ export default function ReviewPractice({
                                           </div>
                                         )}
                                         {block.type === 'text' && block.content?.trim() && (
-                                          <p className="text-sm text-[#1A1A1A]">{block.content}</p>
+                                          <p className="text-xs text-[#1A1A1A]">{block.content}</p>
                                         )}
                                         {block.type === 'labeled' && (block.items || []).length > 0 && (
                                           <div className="space-y-1">
                                             {(block.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
-                                              <p key={item.id} className="text-sm text-[#1A1A1A]">
+                                              <p key={item.id} className="text-xs text-[#1A1A1A]">
                                                 <span className="font-bold mr-1">{item.label}.</span>
                                                 {item.content}
                                               </p>
@@ -721,7 +744,7 @@ export default function ReviewPractice({
                                         {block.type === 'gana' && (block.items || []).length > 0 && (
                                           <div className="space-y-1">
                                             {(block.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
-                                              <p key={item.id} className="text-sm text-[#1A1A1A]">
+                                              <p key={item.id} className="text-xs text-[#1A1A1A]">
                                                 <span className="font-bold mr-1">({item.label})</span>
                                                 {item.content}
                                               </p>
@@ -867,13 +890,13 @@ export default function ReviewPractice({
                                               <div className="p-3 border border-[#8B6914] bg-[#FFF8E1]">
                                                 <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
                                                 {subItem.subQuestionOptionsType === 'text' ? (
-                                                  <p className="text-sm text-[#1A1A1A]">
+                                                  <p className="text-xs text-[#1A1A1A]">
                                                     {subItem.subQuestionOptions.join(', ')}
                                                   </p>
                                                 ) : (
                                                   <div className="space-y-1">
                                                     {subItem.subQuestionOptions.map((opt, i) => (
-                                                      <p key={i} className="text-sm text-[#1A1A1A]">
+                                                      <p key={i} className="text-xs text-[#1A1A1A]">
                                                         <span className="font-bold">{KOREAN_LABELS[i]}.</span> {opt}
                                                       </p>
                                                     ))}
@@ -907,7 +930,7 @@ export default function ReviewPractice({
                                                   }
 
                                                   return (
-                                                    <div key={optIdx} className={`px-2 py-1 text-sm border ${className}`}>
+                                                    <div key={optIdx} className={`px-2 py-1 text-xs border ${className}`}>
                                                       {optIdx + 1}. {opt}
                                                       {isMultipleAnswer && isCorrectOption && ' (정답)'}
                                                       {isMultipleAnswer && isUserAnswer && ' (내 선택)'}
@@ -919,7 +942,7 @@ export default function ReviewPractice({
 
                                             {/* OX/주관식 답 (하위 문제용) */}
                                             {(!subItem.options || subItem.options.length === 0) && (
-                                              <div className="text-sm space-y-1">
+                                              <div className="text-xs space-y-1">
                                                 <p>
                                                   <span className="text-[#5C5C5C]">내 답: </span>
                                                   <span className={`font-bold ${isSubCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>
@@ -943,7 +966,7 @@ export default function ReviewPractice({
                                             {subItem.type === 'essay' && (subItem as any).rubric?.length > 0 && (subItem as any).rubric.some((r: any) => r.criteria?.trim()) && (
                                               <div className="p-2 bg-[#F5F0E8] border border-[#1A1A1A]">
                                                 <p className="text-xs font-bold text-[#5C5C5C]">평가 기준</p>
-                                                <ul className="space-y-1 text-sm">
+                                                <ul className="space-y-1 text-xs">
                                                   {(subItem as any).rubric.filter((r: any) => r.criteria?.trim()).map((r: any, idx: number) => (
                                                     <li key={idx} className="flex items-start gap-2">
                                                       <span className="text-[#1A1A1A] font-bold shrink-0">·</span>
@@ -961,7 +984,7 @@ export default function ReviewPractice({
                                             {/* 해설 */}
                                             <div className="p-2 bg-[#F5F0E8] border border-[#1A1A1A]">
                                               <p className="text-xs font-bold text-[#5C5C5C]">해설</p>
-                                              <p className="text-sm text-[#1A1A1A]">
+                                              <p className="text-xs text-[#1A1A1A]">
                                                 {subItem.explanation || '해설이 없습니다.'}
                                               </p>
                                             </div>
@@ -1007,31 +1030,31 @@ export default function ReviewPractice({
                     {/* 문제 헤더 */}
                     <div
                       onClick={() => toggleExpand(item.id)}
-                      className="p-3 cursor-pointer"
+                      className="p-2.5 cursor-pointer"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           {/* 첫 줄: 정답/오답 + 문항번호 + 챕터 + 문제유형 */}
-                          <div className="flex items-center gap-2 flex-wrap mb-1">
-                            <span className={`w-6 h-6 flex items-center justify-center text-xs font-bold ${
+                          <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                            <span className={`w-5 h-5 flex items-center justify-center text-[10px] font-bold ${
                               isItemCorrect ? 'bg-[#1A6B1A] text-white' : 'bg-[#8B1A1A] text-white'
                             }`}>
                               {isItemCorrect ? 'O' : 'X'}
                             </span>
-                            <span className="text-sm font-bold text-[#1A1A1A]">
+                            <span className="text-xs font-bold text-[#1A1A1A]">
                               Q{groupIdx + 1}
                             </span>
                             {userCourseId && item.chapterId && (
-                              <span className="px-1.5 py-0.5 bg-[#E8F0FE] border border-[#4A6DA7] text-[#4A6DA7] text-xs font-medium">
+                              <span className="px-1 py-0.5 bg-[#E8F0FE] border border-[#4A6DA7] text-[#4A6DA7] text-[10px] font-medium">
                                 {formatChapterLabel(userCourseId, item.chapterId, item.chapterDetailId)}
                               </span>
                             )}
-                            <span className="px-1.5 py-0.5 text-xs border border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A]">
+                            <span className="px-1 py-0.5 text-[10px] border border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A]">
                               {item.type === 'ox' ? 'OX문제' : item.type === 'multiple' ? '객관식문제' : '주관식문제'}
                             </span>
                           </div>
                           {/* 둘째 줄: 문제 내용 + 발문 */}
-                          <p className="text-sm font-medium text-[#1A1A1A] line-clamp-2 pl-8">
+                          <p className="text-xs font-medium text-[#1A1A1A] line-clamp-2 pl-7">
                             {item.question}
                             {/* 제시문 발문 또는 보기 발문 표시 */}
                             {(item.passagePrompt || item.bogiQuestionText) && (
@@ -1042,7 +1065,7 @@ export default function ReviewPractice({
                           </p>
                         </div>
                         <svg
-                          className={`w-5 h-5 text-[#5C5C5C] transition-transform flex-shrink-0 mt-1 ${isExpanded ? 'rotate-180' : ''}`}
+                          className={`w-4 h-4 text-[#5C5C5C] transition-transform flex-shrink-0 mt-1 ${isExpanded ? 'rotate-180' : ''}`}
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
@@ -1068,12 +1091,12 @@ export default function ReviewPractice({
                               {(item.passage || item.passageImage || item.koreanAbcItems || item.passageMixedExamples) && (
                                 <div className="p-2 border border-[#8B6914] bg-[#FFF8E1]">
                                   {item.passage && item.passageType !== 'korean_abc' && item.passageType !== 'mixed' && (
-                                    <p className="text-sm text-[#1A1A1A]">{item.passage}</p>
+                                    <p className="text-xs text-[#1A1A1A]">{item.passage}</p>
                                   )}
                                   {item.passageType === 'korean_abc' && item.koreanAbcItems && item.koreanAbcItems.length > 0 && (
                                     <div className="space-y-1">
                                       {item.koreanAbcItems.map((itm, i) => (
-                                        <p key={i} className="text-sm text-[#1A1A1A]">
+                                        <p key={i} className="text-xs text-[#1A1A1A]">
                                           <span className="font-bold">{KOREAN_LABELS[i]}.</span> {itm}
                                         </p>
                                       ))}
@@ -1088,16 +1111,16 @@ export default function ReviewPractice({
                                               {(block.children || []).map((child: any) => (
                                                 <div key={child.id}>
                                                   {child.type === 'text' && child.content?.trim() && (
-                                                    <p className="text-sm text-[#5C5C5C]">{child.content}</p>
+                                                    <p className="text-xs text-[#5C5C5C]">{child.content}</p>
                                                   )}
                                                   {child.type === 'labeled' && (child.items || []).filter((i: any) => i.content?.trim()).map((it: any) => (
-                                                    <p key={it.id} className="text-sm text-[#1A1A1A]">
+                                                    <p key={it.id} className="text-xs text-[#1A1A1A]">
                                                       <span className="font-bold mr-1">{it.label}.</span>
                                                       {it.content}
                                                     </p>
                                                   ))}
                                                   {child.type === 'gana' && (child.items || []).filter((i: any) => i.content?.trim()).map((it: any) => (
-                                                    <p key={it.id} className="text-sm text-[#1A1A1A]">
+                                                    <p key={it.id} className="text-xs text-[#1A1A1A]">
                                                       <span className="font-bold mr-1">({it.label})</span>
                                                       {it.content}
                                                     </p>
@@ -1110,12 +1133,12 @@ export default function ReviewPractice({
                                             </div>
                                           )}
                                           {block.type === 'text' && block.content?.trim() && (
-                                            <p className="text-sm text-[#1A1A1A]">{block.content}</p>
+                                            <p className="text-xs text-[#1A1A1A]">{block.content}</p>
                                           )}
                                           {block.type === 'labeled' && (block.items || []).length > 0 && (
                                             <div className="space-y-1">
                                               {(block.items || []).filter((i: any) => i.content?.trim()).map((it: any) => (
-                                                <p key={it.id} className="text-sm text-[#1A1A1A]">
+                                                <p key={it.id} className="text-xs text-[#1A1A1A]">
                                                   <span className="font-bold mr-1">{it.label}.</span>
                                                   {it.content}
                                                 </p>
@@ -1125,7 +1148,7 @@ export default function ReviewPractice({
                                           {block.type === 'gana' && (block.items || []).length > 0 && (
                                             <div className="space-y-1">
                                               {(block.items || []).filter((i: any) => i.content?.trim()).map((it: any) => (
-                                                <p key={it.id} className="text-sm text-[#1A1A1A]">
+                                                <p key={it.id} className="text-xs text-[#1A1A1A]">
                                                   <span className="font-bold mr-1">({it.label})</span>
                                                   {it.content}
                                                 </p>
@@ -1161,16 +1184,16 @@ export default function ReviewPractice({
                                       {(block.children || []).map((child: any) => (
                                         <div key={child.id}>
                                           {child.type === 'text' && child.content?.trim() && (
-                                            <p className="text-[#5C5C5C] text-sm whitespace-pre-wrap">{child.content}</p>
+                                            <p className="text-[#5C5C5C] text-xs whitespace-pre-wrap">{child.content}</p>
                                           )}
                                           {child.type === 'labeled' && (child.items || []).filter((i: any) => i.content?.trim()).map((itm: any) => (
-                                            <p key={itm.id} className="text-[#1A1A1A] text-sm">
+                                            <p key={itm.id} className="text-[#1A1A1A] text-xs">
                                               <span className="font-bold mr-1">{itm.label}.</span>
                                               {itm.content}
                                             </p>
                                           ))}
                                           {child.type === 'gana' && (child.items || []).filter((i: any) => i.content?.trim()).map((itm: any) => (
-                                            <p key={itm.id} className="text-[#1A1A1A] text-sm">
+                                            <p key={itm.id} className="text-[#1A1A1A] text-xs">
                                               <span className="font-bold mr-1">({itm.label})</span>
                                               {itm.content}
                                             </p>
@@ -1185,14 +1208,14 @@ export default function ReviewPractice({
                                   {/* 텍스트 블록 */}
                                   {block.type === 'text' && block.content?.trim() && (
                                     <div className="p-3 bg-[#FFF8E1] border border-[#8B6914]">
-                                      <p className="text-[#1A1A1A] text-sm whitespace-pre-wrap">{block.content}</p>
+                                      <p className="text-[#1A1A1A] text-xs whitespace-pre-wrap">{block.content}</p>
                                     </div>
                                   )}
                                   {/* ㄱㄴㄷ 블록 */}
                                   {block.type === 'labeled' && (block.items || []).length > 0 && (
                                     <div className="p-3 bg-[#FFF8E1] border border-[#8B6914] space-y-1">
                                       {(block.items || []).filter((i: any) => i.content?.trim()).map((itm: any) => (
-                                        <p key={itm.id} className="text-[#1A1A1A] text-sm">
+                                        <p key={itm.id} className="text-[#1A1A1A] text-xs">
                                           <span className="font-bold mr-1">{itm.label}.</span>
                                           {itm.content}
                                         </p>
@@ -1203,7 +1226,7 @@ export default function ReviewPractice({
                                   {block.type === 'gana' && (block.items || []).length > 0 && (
                                     <div className="p-3 bg-[#FFF8E1] border border-[#8B6914] space-y-1">
                                       {(block.items || []).filter((i: any) => i.content?.trim()).map((itm: any) => (
-                                        <p key={itm.id} className="text-[#1A1A1A] text-sm">
+                                        <p key={itm.id} className="text-[#1A1A1A] text-xs">
                                           <span className="font-bold mr-1">({itm.label})</span>
                                           {itm.content}
                                         </p>
@@ -1226,13 +1249,13 @@ export default function ReviewPractice({
                             <div className="p-3 border border-[#8B6914] bg-[#FFF8E1]">
                               <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
                               {item.subQuestionOptionsType === 'text' ? (
-                                <p className="text-sm text-[#1A1A1A]">
+                                <p className="text-xs text-[#1A1A1A]">
                                   {item.subQuestionOptions.join(', ')}
                                 </p>
                               ) : (
                                 <div className="space-y-1">
                                   {item.subQuestionOptions.map((opt, i) => (
-                                    <p key={i} className="text-sm text-[#1A1A1A]">
+                                    <p key={i} className="text-xs text-[#1A1A1A]">
                                       <span className="font-bold">{KOREAN_LABELS[i]}.</span> {opt}
                                     </p>
                                   ))}
@@ -1258,10 +1281,10 @@ export default function ReviewPractice({
                           {/* 4. 보기 (<보기> 박스) - 이미지 다음, 발문 전에 표시 */}
                           {item.bogi && item.bogi.items && item.bogi.items.some(i => i.content?.trim()) && (
                             <div className="p-2 bg-[#EDEAE4] border-2 border-[#1A1A1A]">
-                              <p className="text-xs text-center text-[#5C5C5C] mb-2 font-bold">&lt;보 기&gt;</p>
+                              <p className="text-[10px] text-center text-[#5C5C5C] mb-1.5 font-bold">&lt;보 기&gt;</p>
                               <div className="space-y-1">
                                 {item.bogi.items.filter(i => i.content?.trim()).map((bogiItem, idx) => (
-                                  <p key={idx} className="text-sm text-[#1A1A1A]">
+                                  <p key={idx} className="text-xs text-[#1A1A1A]">
                                     <span className="font-bold mr-1">{bogiItem.label}.</span>
                                     {bogiItem.content}
                                   </p>
@@ -1273,7 +1296,7 @@ export default function ReviewPractice({
                           {/* 5. 발문 (제시문 발문 + 보기 발문 합침, 선지 전에 표시) */}
                           {(item.passagePrompt || item.bogiQuestionText) && (
                             <div className="p-2 border border-[#1A1A1A] bg-[#F5F0E8]">
-                              <p className="text-sm text-[#1A1A1A]">
+                              <p className="text-xs text-[#1A1A1A]">
                                 {item.passagePrompt && item.bogiQuestionText
                                   ? `${item.passagePrompt} ${item.bogiQuestionText}`
                                   : item.passagePrompt || item.bogiQuestionText}
@@ -1306,7 +1329,7 @@ export default function ReviewPractice({
                                 }
 
                                 return (
-                                  <p key={optIdx} className={`text-sm p-2 border ${className}`}>
+                                  <p key={optIdx} className={`text-xs p-2 border ${className}`}>
                                     {optIdx + 1}. {opt}
                                     {isMultipleAnswer && isCorrectOption && ' (정답)'}
                                     {isMultipleAnswer && isUserAnswer && ' (내 선택)'}
@@ -1318,7 +1341,7 @@ export default function ReviewPractice({
 
                           {/* OX/주관식 답 */}
                           {(!item.options || item.options.length === 0) && (
-                            <div className="text-sm space-y-1">
+                            <div className="text-xs space-y-1">
                               <p>
                                 <span className="text-[#5C5C5C]">내 답: </span>
                                 <span className={`font-bold ${isItemCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>
@@ -1342,7 +1365,7 @@ export default function ReviewPractice({
                           {item.type === 'essay' && (item as any).rubric?.length > 0 && (item as any).rubric.some((r: any) => r.criteria?.trim()) && (
                             <div className="p-2 bg-[#F5F0E8] border border-[#1A1A1A]">
                               <p className="text-xs font-bold text-[#5C5C5C] mb-1">평가 기준</p>
-                              <ul className="space-y-1 text-sm">
+                              <ul className="space-y-1 text-xs">
                                 {(item as any).rubric.filter((r: any) => r.criteria?.trim()).map((r: any, idx: number) => (
                                   <li key={idx} className="flex items-start gap-2">
                                     <span className="text-[#1A1A1A] font-bold shrink-0">·</span>
@@ -1361,7 +1384,7 @@ export default function ReviewPractice({
                           {item.explanation && (
                             <div className="p-2 bg-[#F5F0E8] border border-[#1A1A1A]">
                               <p className="text-xs font-bold text-[#5C5C5C] mb-1">해설</p>
-                              <p className="text-sm text-[#1A1A1A]">{item.explanation}</p>
+                              <p className="text-xs text-[#1A1A1A]">{item.explanation}</p>
                             </div>
                           )}
 
@@ -1408,17 +1431,17 @@ export default function ReviewPractice({
         </main>
 
         {/* 하단 버튼 */}
-        <div className="fixed bottom-0 left-0 right-0 p-4 border-t-2 border-[#1A1A1A] bg-[#F5F0E8]">
-          <div className="flex gap-3">
+        <div className="fixed bottom-0 left-0 right-0 p-3 border-t-2 border-[#1A1A1A] bg-[#F5F0E8]">
+          <div className="flex gap-2.5">
             <button
               onClick={() => setPhase('practice')}
-              className="flex-1 py-4 bg-[#F5F0E8] text-[#1A1A1A] font-bold border-2 border-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+              className="flex-1 py-2.5 text-xs bg-[#F5F0E8] text-[#1A1A1A] font-bold border-2 border-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
             >
               이전
             </button>
             <button
               onClick={handleGoToFeedback}
-              className="flex-[2] py-4 bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
+              className="flex-[2] py-2.5 text-xs bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
             >
               다음
             </button>
@@ -1433,16 +1456,16 @@ export default function ReviewPractice({
           height="auto"
           zIndex="z-[70]"
         >
-          <div className="space-y-4">
+          <div className="space-y-3">
             {/* 피드백 유형 선택 */}
             <div>
-              <p className="text-sm text-[#5C5C5C] mb-3">이 문제에 대한 의견을 선택해주세요</p>
-              <div className="grid grid-cols-2 gap-2">
+              <p className="text-xs text-[#5C5C5C] mb-2">이 문제에 대한 의견을 선택해주세요</p>
+              <div className="grid grid-cols-2 gap-1.5">
                 {FEEDBACK_TYPES.map(({ type, label }) => (
                   <button
                     key={type}
                     onClick={() => setSelectedFeedbackType(type)}
-                    className={`p-3 border-2 text-sm font-bold transition-all ${
+                    className={`p-1.5 border-2 text-[10px] font-bold transition-all ${
                       selectedFeedbackType === type
                         ? 'border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8]'
                         : 'border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A]'
@@ -1462,16 +1485,16 @@ export default function ReviewPractice({
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
                 >
-                  <label className="block text-sm text-[#5C5C5C] mb-2">추가 의견 (선택)</label>
+                  <label className="block text-xs text-[#5C5C5C] mb-1.5">추가 의견 (선택)</label>
                   <textarea
                     value={feedbackContent}
                     onChange={(e) => setFeedbackContent(e.target.value)}
                     placeholder="자세한 내용을 적어주세요"
                     rows={3}
                     maxLength={200}
-                    className="w-full p-3 border-2 border-[#1A1A1A] bg-[#F5F0E8] focus:outline-none resize-none text-sm"
+                    className="w-full p-2 border-2 border-[#1A1A1A] bg-[#F5F0E8] focus:outline-none resize-none text-xs"
                   />
-                  <p className="text-xs text-[#5C5C5C] text-right mt-1">{feedbackContent.length}/200</p>
+                  <p className="text-[10px] text-[#5C5C5C] text-right mt-0.5">{feedbackContent.length}/200</p>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -1480,7 +1503,7 @@ export default function ReviewPractice({
             <button
               onClick={handleFeedbackSubmit}
               disabled={!selectedFeedbackType || isFeedbackSubmitting}
-              className={`w-full py-3 font-bold border-2 transition-colors ${
+              className={`w-full py-2 text-xs font-bold border-2 transition-colors ${
                 selectedFeedbackType
                   ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
                   : 'bg-[#EDEAE4] text-[#5C5C5C] border-[#5C5C5C] cursor-not-allowed'
@@ -1488,7 +1511,7 @@ export default function ReviewPractice({
             >
               {isFeedbackSubmitting ? '제출 중...' : '피드백 보내기'}
             </button>
-            <p className="text-xs text-[#5C5C5C] text-center">피드백은 익명으로 전달됩니다.</p>
+            <p className="text-[10px] text-[#5C5C5C] text-center">피드백은 익명으로 전달됩니다.</p>
           </div>
         </BottomSheet>
       </motion.div>
@@ -1498,76 +1521,84 @@ export default function ReviewPractice({
   // 복습 EXP 계산 (정답당 2 EXP)
   const reviewExp = correctCount * 2;
 
+  // 피드백 EXP 계산
+  const feedbackExp = feedbackSubmitCount * 15;
+  // 총 획득 EXP (복습 + 피드백)
+  const totalDisplayExp = reviewExp + feedbackExp;
+
   // ========== 피드백 화면 ==========
   if (phase === 'feedback') {
     return (
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="fixed inset-0 z-[60] overflow-y-auto overscroll-contain"
+        className="fixed inset-0 z-[60] flex flex-col overscroll-contain"
         style={{ backgroundColor: '#F5F0E8' }}
       >
-        {/* 헤더 */}
-        <header className="sticky top-0 z-50 border-b-2 border-[#1A1A1A] bg-[#F5F0E8]">
-          <div className="flex items-center justify-between h-14 px-4">
+        {/* 헤더 — 축소 h-10 */}
+        <header className="shrink-0 border-b-2 border-[#1A1A1A] bg-[#F5F0E8]">
+          <div className="flex items-center justify-between h-10 px-4">
             <button
               onClick={() => setPhase('result')}
-              className="p-2 -ml-2"
+              className="p-1 -ml-2"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
-            <h1 className="text-base font-bold text-[#1A1A1A]">{headerTitle} 완료</h1>
-            <div className="w-10" />
+            <h1 className="text-xs font-bold text-[#1A1A1A]">{headerTitle} 완료</h1>
+            <div className="w-8" />
           </div>
         </header>
 
-        <main className="px-4 py-6 pb-28">
-          {/* 결과 요약 */}
-          <div className="text-center mb-8">
-            <div className="w-20 h-20 mx-auto mb-4 bg-[#1A1A1A] rounded-full flex items-center justify-center">
-              <svg className="w-10 h-10 text-[#F5F0E8]" fill="currentColor" viewBox="0 0 20 20">
+        {/* 스크롤 가능한 본문 — 하단 버튼 영역 확보 */}
+        <main className="flex-1 overflow-y-auto overscroll-contain px-4 py-3 pb-20">
+          {/* 결과 요약 — 축소 */}
+          <div className="text-center mb-3">
+            <div className="w-11 h-11 mx-auto mb-2 bg-[#1A1A1A] rounded-full flex items-center justify-center">
+              <svg className="w-6 h-6 text-[#F5F0E8]" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
               </svg>
             </div>
-            <h2 className="text-xl font-bold text-[#1A1A1A]">{headerTitle}을 완료했습니다!</h2>
-            <p className="text-sm text-[#5C5C5C] mt-2">
+            <h2 className="text-sm font-bold text-[#1A1A1A]">{headerTitle}을 완료했습니다!</h2>
+            <p className="text-[10px] text-[#5C5C5C] mt-1">
               {totalQuestionCount}문제 중 {correctCount}문제 정답
             </p>
           </div>
 
-          {/* 획득 EXP */}
-          <div className="border-2 border-[#D4AF37] bg-[#FFF8E1] p-4 mb-6">
+          {/* 총 획득 EXP — 축소, 복습+피드백 합산 표시 */}
+          <div className="border-2 border-[#D4AF37] bg-[#FFF8E1] p-2 mb-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-[#D4AF37] flex items-center justify-center">
-                  <svg className="w-6 h-6 text-[#1A1A1A]" fill="currentColor" viewBox="0 0 20 20">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 bg-[#D4AF37] flex items-center justify-center">
+                  <svg className="w-4 h-4 text-[#1A1A1A]" fill="currentColor" viewBox="0 0 20 20">
                     <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                   </svg>
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-[#1A1A1A]">획득 EXP</p>
-                  <p className="text-xs text-[#5C5C5C]">정답 {correctCount}문제 × 2 EXP</p>
+                  <p className="text-[11px] font-bold text-[#1A1A1A]">총 획득 경험치</p>
+                  <p className="text-[10px] text-[#5C5C5C]">
+                    복습 {reviewExp}{feedbackExp > 0 ? ` + 피드백 ${feedbackExp}` : ''} EXP
+                  </p>
                 </div>
               </div>
-              <p className="text-2xl font-bold text-[#D4AF37]">+{reviewExp}</p>
+              <p className="text-base font-bold text-[#D4AF37]">+{totalDisplayExp}</p>
             </div>
           </div>
 
-          {/* 틀린 문제 폴더 저장 */}
+          {/* 틀린 문제 폴더 저장 — 축소 */}
           {wrongItems.length > 0 && !saveSuccess && (
-            <div className="border-2 border-[#1A1A1A] bg-[#F5F0E8] p-4">
-              <h3 className="font-bold text-[#1A1A1A] mb-2">
-                틀린 문제 {wrongItems.length}개를 커스텀 폴더에 저장하시겠습니까?
+            <div className="border-2 border-[#1A1A1A] bg-[#F5F0E8] p-1.5">
+              <h3 className="text-[11px] font-bold text-[#1A1A1A] mb-1">
+                틀린 문제 {wrongItems.length}개를 폴더에 저장
               </h3>
 
               {/* 챕터별 틀린 문제 수 */}
               {chapterGroupedWrongItems.length > 0 && (
-                <div className="mb-3 p-2 bg-[#EDEAE4] border border-[#D4CFC4]">
-                  <div className="space-y-1">
+                <div className="mb-1.5 p-1 bg-[#EDEAE4] border border-[#D4CFC4]">
+                  <div className="space-y-0.5">
                     {chapterGroupedWrongItems.map((group) => (
-                      <div key={group.chapterId || 'uncategorized'} className="flex items-center justify-between text-xs">
+                      <div key={group.chapterId || 'uncategorized'} className="flex items-center justify-between text-[10px]">
                         <span className="text-[#5C5C5C]">{group.chapterName}</span>
                         <span className="font-bold text-[#8B1A1A]">{group.items.length}문제</span>
                       </div>
@@ -1578,14 +1609,14 @@ export default function ReviewPractice({
 
               {/* 기존 폴더 선택 */}
               {customFolders.length > 0 && (
-                <div className="mb-4">
-                  <p className="text-xs text-[#5C5C5C] mb-2">기존 폴더 선택</p>
-                  <div className="space-y-1 max-h-32 overflow-y-auto overscroll-contain">
+                <div className="mb-1.5">
+                  <p className="text-[10px] text-[#5C5C5C] mb-0.5">기존 폴더 선택</p>
+                  <div className="space-y-0.5 max-h-24 overflow-y-auto overscroll-contain">
                     {customFolders.map(folder => (
                       <button
                         key={folder.id}
                         onClick={() => setSelectedFolderId(folder.id)}
-                        className={`w-full text-left px-3 py-2 text-sm border transition-colors ${
+                        className={`w-full text-left px-2 py-0.5 text-[11px] border transition-colors ${
                           selectedFolderId === folder.id
                             ? 'border-[#1A1A1A] bg-[#EDEAE4] font-bold'
                             : 'border-[#EDEAE4] hover:border-[#1A1A1A]'
@@ -1599,20 +1630,20 @@ export default function ReviewPractice({
               )}
 
               {/* 새 폴더 생성 */}
-              <div className="mb-4">
-                <p className="text-xs text-[#5C5C5C] mb-2">새 폴더 만들기</p>
-                <div className="flex gap-2">
+              <div className="mb-1.5">
+                <p className="text-[10px] text-[#5C5C5C] mb-0.5">새 폴더 만들기</p>
+                <div className="flex gap-1">
                   <input
                     type="text"
                     value={newFolderName}
                     onChange={(e) => setNewFolderName(e.target.value)}
                     placeholder="폴더 이름 입력"
-                    className="flex-1 px-3 py-2 text-sm border border-[#1A1A1A] bg-[#F5F0E8] outline-none focus:border-2"
+                    className="flex-1 px-2 py-0.5 text-[11px] border border-[#1A1A1A] bg-[#F5F0E8] outline-none focus:border-2"
                   />
                   <button
                     onClick={handleCreateFolder}
                     disabled={!newFolderName.trim() || isCreatingFolder}
-                    className="px-4 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] disabled:opacity-50"
+                    className="shrink-0 whitespace-nowrap px-2.5 py-1 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8] disabled:opacity-50"
                   >
                     {isCreatingFolder ? '...' : '생성'}
                   </button>
@@ -1624,7 +1655,7 @@ export default function ReviewPractice({
                 <button
                   onClick={handleSaveToFolder}
                   disabled={isSaving}
-                  className="w-full py-3 text-sm font-bold bg-[#1A6B1A] text-[#F5F0E8] hover:bg-[#155415] transition-colors disabled:opacity-50"
+                  className="w-full py-1 text-[11px] font-bold bg-[#1A6B1A] text-[#F5F0E8] hover:bg-[#155415] transition-colors disabled:opacity-50"
                 >
                   {isSaving ? '저장 중...' : `선택한 폴더에 ${wrongItems.length}문제 저장`}
                 </button>
@@ -1632,42 +1663,42 @@ export default function ReviewPractice({
             </div>
           )}
 
-          {/* 저장 완료 메시지 */}
+          {/* 저장 완료 메시지 — 축소 */}
           {saveSuccess && (
-            <div className="border-2 border-[#1A6B1A] bg-[#E8F5E9] p-4 text-center">
-              <svg className="w-12 h-12 mx-auto mb-2 text-[#1A6B1A]" fill="currentColor" viewBox="0 0 20 20">
+            <div className="border-2 border-[#1A6B1A] bg-[#E8F5E9] p-2 text-center">
+              <svg className="w-8 h-8 mx-auto mb-1 text-[#1A6B1A]" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
               </svg>
-              <p className="font-bold text-[#1A6B1A]">저장되었습니다!</p>
-              <p className="text-sm text-[#5C5C5C] mt-1">
+              <p className="text-[11px] font-bold text-[#1A6B1A]">저장되었습니다!</p>
+              <p className="text-[10px] text-[#5C5C5C] mt-0.5">
                 커스텀 폴더에서 확인할 수 있습니다.
               </p>
             </div>
           )}
 
-          {/* 틀린 문제가 없는 경우 */}
+          {/* 틀린 문제가 없는 경우 — 축소 */}
           {wrongItems.length === 0 && (
-            <div className="border-2 border-[#1A6B1A] bg-[#E8F5E9] p-4 text-center">
-              <svg className="w-12 h-12 mx-auto mb-2 text-[#1A6B1A]" fill="currentColor" viewBox="0 0 20 20">
+            <div className="border-2 border-[#1A6B1A] bg-[#E8F5E9] p-2 text-center">
+              <svg className="w-8 h-8 mx-auto mb-1 text-[#1A6B1A]" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
               </svg>
-              <p className="font-bold text-[#1A6B1A]">모든 문제를 맞혔습니다!</p>
+              <p className="text-[11px] font-bold text-[#1A6B1A]">모든 문제를 맞혔습니다!</p>
             </div>
           )}
         </main>
 
-        {/* 하단 버튼 */}
-        <div className="fixed bottom-0 left-0 right-0 p-4 border-t-2 border-[#1A1A1A] bg-[#F5F0E8]">
-          <div className="flex gap-3">
+        {/* 하단 버튼 — 항상 보이도록 fixed */}
+        <div className="shrink-0 p-2.5 border-t-2 border-[#1A1A1A] bg-[#F5F0E8]">
+          <div className="flex gap-2">
             <button
               onClick={() => setPhase('result')}
-              className="flex-1 py-4 bg-[#F5F0E8] text-[#1A1A1A] font-bold border-2 border-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+              className="flex-1 py-2 text-xs bg-[#F5F0E8] text-[#1A1A1A] font-bold border-2 border-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
             >
               이전
             </button>
             <button
               onClick={handleFinish}
-              className="flex-[2] py-4 bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
+              className="flex-[2] py-2 text-xs bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
             >
               완료
             </button>
@@ -1695,7 +1726,7 @@ export default function ReviewPractice({
           <motion.button
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.95 }}
-            onClick={onClose}
+            onClick={() => setShowExitModal(true)}
             className="p-2 -ml-2 transition-colors duration-200 text-[#1A1A1A] hover:bg-[#EDEAE4]"
             aria-label="나가기"
           >
@@ -1753,9 +1784,9 @@ export default function ReviewPractice({
             {currentGroup?.isCombined ? (
               <div className="space-y-4">
                 {/* 결합형 헤더 카드 */}
-                <div className="bg-[#F5F0E8] border-2 border-[#1A1A1A] p-5">
+                <div className="bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4">
                   <div className="flex items-center gap-2 mb-3">
-                    <span className="text-lg font-bold text-[#1A1A1A]">Q{currentIndex + 1}.</span>
+                    <span className="text-base font-bold text-[#1A1A1A]">Q{currentIndex + 1}.</span>
                     <span className="px-2 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold">
                       결합형
                     </span>
@@ -1766,7 +1797,7 @@ export default function ReviewPractice({
 
                   {/* 공통 문제 */}
                   {currentGroup.items[0]?.commonQuestion && (
-                    <p className="text-[#1A1A1A] text-base leading-relaxed whitespace-pre-wrap">
+                    <p className="text-[#1A1A1A] text-xs leading-relaxed whitespace-pre-wrap">
                       {currentGroup.items[0].commonQuestion}
                     </p>
                   )}
@@ -1775,12 +1806,12 @@ export default function ReviewPractice({
                   {(currentGroup.items[0]?.passage || currentGroup.items[0]?.koreanAbcItems || currentGroup.items[0]?.passageMixedExamples) && (
                     <div className={`p-3 border border-[#8B6914] bg-[#FFF8E1] ${currentGroup.items[0]?.commonQuestion ? 'mt-3' : ''}`}>
                       {currentGroup.items[0].passage && currentGroup.items[0].passageType !== 'korean_abc' && currentGroup.items[0].passageType !== 'mixed' && (
-                        <p className="text-sm text-[#1A1A1A]">{currentGroup.items[0].passage}</p>
+                        <p className="text-xs text-[#1A1A1A]">{currentGroup.items[0].passage}</p>
                       )}
                       {currentGroup.items[0].passageType === 'korean_abc' && currentGroup.items[0].koreanAbcItems && (
                         <div className="space-y-1">
                           {currentGroup.items[0].koreanAbcItems.map((itm, i) => (
-                            <p key={i} className="text-sm text-[#1A1A1A]">
+                            <p key={i} className="text-xs text-[#1A1A1A]">
                               <span className="font-bold">{KOREAN_LABELS[i]}.</span> {itm}
                             </p>
                           ))}
@@ -1795,16 +1826,16 @@ export default function ReviewPractice({
                                   {(block.children || []).map((child: any) => (
                                     <div key={child.id}>
                                       {child.type === 'text' && child.content?.trim() && (
-                                        <p className="text-sm text-[#5C5C5C]">{child.content}</p>
+                                        <p className="text-xs text-[#5C5C5C]">{child.content}</p>
                                       )}
                                       {child.type === 'labeled' && (child.items || []).filter((i: any) => i.content?.trim()).map((it: any) => (
-                                        <p key={it.id} className="text-sm text-[#1A1A1A]">
+                                        <p key={it.id} className="text-xs text-[#1A1A1A]">
                                           <span className="font-bold mr-1">{it.label}.</span>
                                           {it.content}
                                         </p>
                                       ))}
                                       {child.type === 'gana' && (child.items || []).filter((i: any) => i.content?.trim()).map((it: any) => (
-                                        <p key={it.id} className="text-sm text-[#1A1A1A]">
+                                        <p key={it.id} className="text-xs text-[#1A1A1A]">
                                           <span className="font-bold mr-1">({it.label})</span>
                                           {it.content}
                                         </p>
@@ -1817,12 +1848,12 @@ export default function ReviewPractice({
                                 </div>
                               )}
                               {block.type === 'text' && block.content?.trim() && (
-                                <p className="text-sm text-[#1A1A1A]">{block.content}</p>
+                                <p className="text-xs text-[#1A1A1A]">{block.content}</p>
                               )}
                               {block.type === 'labeled' && (block.items || []).length > 0 && (
                                 <div className="space-y-1">
                                   {(block.items || []).filter((i: any) => i.content?.trim()).map((it: any) => (
-                                    <p key={it.id} className="text-sm text-[#1A1A1A]">
+                                    <p key={it.id} className="text-xs text-[#1A1A1A]">
                                       <span className="font-bold mr-1">{it.label}.</span>
                                       {it.content}
                                     </p>
@@ -1832,7 +1863,7 @@ export default function ReviewPractice({
                               {block.type === 'gana' && (block.items || []).length > 0 && (
                                 <div className="space-y-1">
                                   {(block.items || []).filter((i: any) => i.content?.trim()).map((it: any) => (
-                                    <p key={it.id} className="text-sm text-[#1A1A1A]">
+                                    <p key={it.id} className="text-xs text-[#1A1A1A]">
                                       <span className="font-bold mr-1">({it.label})</span>
                                       {it.content}
                                     </p>
@@ -1869,10 +1900,10 @@ export default function ReviewPractice({
                   const isSubMultipleAnswer = subItem.correctAnswer?.toString().includes(',');
 
                   return (
-                    <div key={subItem.id} className="bg-[#EDEAE4] border border-[#D4CFC4] p-4">
+                    <div key={subItem.id} className="bg-[#EDEAE4] border border-[#D4CFC4] p-3">
                       {/* 하위 문제 헤더 */}
                       <div className="flex items-center gap-2 mb-3 flex-wrap">
-                        <span className="text-base font-bold text-[#1A1A1A]">Q{currentIndex + 1}-{subIdx + 1}.</span>
+                        <span className="text-sm font-bold text-[#1A1A1A]">Q{currentIndex + 1}-{subIdx + 1}.</span>
                         <span className="px-2 py-0.5 bg-[#5C5C5C] text-[#F5F0E8] text-xs font-bold">
                           {typeLabels[subItem.type] || '문제'}
                         </span>
@@ -1894,7 +1925,7 @@ export default function ReviewPractice({
                       </div>
 
                       {/* 하위 문제 텍스트 */}
-                      <p className="text-[#1A1A1A] text-base leading-relaxed whitespace-pre-wrap mb-3">
+                      <p className="text-[#1A1A1A] text-xs leading-relaxed whitespace-pre-wrap mb-3">
                         {subItem.question}
                       </p>
 
@@ -1920,15 +1951,15 @@ export default function ReviewPractice({
                                   {(block.children || []).map((child: any) => (
                                     <div key={child.id}>
                                       {child.type === 'text' && child.content?.trim() && (
-                                        <p className="text-[#5C5C5C] text-sm whitespace-pre-wrap">{child.content}</p>
+                                        <p className="text-[#5C5C5C] text-xs whitespace-pre-wrap">{child.content}</p>
                                       )}
                                       {child.type === 'labeled' && (child.items || []).filter((i: any) => i.content?.trim()).map((itm: any) => (
-                                        <p key={itm.id} className="text-[#1A1A1A] text-sm">
+                                        <p key={itm.id} className="text-[#1A1A1A] text-xs">
                                           <span className="font-bold mr-1">{itm.label}.</span>{itm.content}
                                         </p>
                                       ))}
                                       {child.type === 'gana' && (child.items || []).filter((i: any) => i.content?.trim()).map((itm: any) => (
-                                        <p key={itm.id} className="text-[#1A1A1A] text-sm">
+                                        <p key={itm.id} className="text-[#1A1A1A] text-xs">
                                           <span className="font-bold mr-1">({itm.label})</span>{itm.content}
                                         </p>
                                       ))}
@@ -1941,13 +1972,13 @@ export default function ReviewPractice({
                               )}
                               {block.type === 'text' && block.content?.trim() && (
                                 <div className="p-3 bg-[#FFF8E1] border border-[#8B6914]">
-                                  <p className="text-[#1A1A1A] text-sm whitespace-pre-wrap">{block.content}</p>
+                                  <p className="text-[#1A1A1A] text-xs whitespace-pre-wrap">{block.content}</p>
                                 </div>
                               )}
                               {block.type === 'labeled' && (block.items || []).length > 0 && (
                                 <div className="p-3 bg-[#FFF8E1] border border-[#8B6914] space-y-1">
                                   {(block.items || []).filter((i: any) => i.content?.trim()).map((itm: any) => (
-                                    <p key={itm.id} className="text-[#1A1A1A] text-sm">
+                                    <p key={itm.id} className="text-[#1A1A1A] text-xs">
                                       <span className="font-bold mr-1">{itm.label}.</span>{itm.content}
                                     </p>
                                   ))}
@@ -1956,7 +1987,7 @@ export default function ReviewPractice({
                               {block.type === 'gana' && (block.items || []).length > 0 && (
                                 <div className="p-3 bg-[#FFF8E1] border border-[#8B6914] space-y-1">
                                   {(block.items || []).filter((i: any) => i.content?.trim()).map((itm: any) => (
-                                    <p key={itm.id} className="text-[#1A1A1A] text-sm">
+                                    <p key={itm.id} className="text-[#1A1A1A] text-xs">
                                       <span className="font-bold mr-1">({itm.label})</span>{itm.content}
                                     </p>
                                   ))}
@@ -1977,13 +2008,13 @@ export default function ReviewPractice({
                         <div className="p-3 border border-[#8B6914] bg-[#FFF8E1] mb-3">
                           <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
                           {subItem.subQuestionOptionsType === 'text' ? (
-                            <p className="text-sm text-[#1A1A1A]">
+                            <p className="text-xs text-[#1A1A1A]">
                               {subItem.subQuestionOptions.join(', ')}
                             </p>
                           ) : (
                             <div className="space-y-1">
                               {subItem.subQuestionOptions.map((opt, i) => (
-                                <p key={i} className="text-sm text-[#1A1A1A]">
+                                <p key={i} className="text-xs text-[#1A1A1A]">
                                   <span className="font-bold">{KOREAN_LABELS[i]}.</span> {opt}
                                 </p>
                               ))}
@@ -2049,7 +2080,7 @@ export default function ReviewPractice({
                               ? 'border-[#1A6B1A] bg-[#E8F5E9]'
                               : 'border-[#8B1A1A] bg-[#FDEAEA]'
                           }`}>
-                            <p className={`text-lg font-bold text-center ${
+                            <p className={`text-base font-bold text-center ${
                               isSubCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'
                             }`}>
                               {isSubCorrect ? '정답입니다!' : '오답입니다'}
@@ -2071,7 +2102,7 @@ export default function ReviewPractice({
                           {subItem.type === 'essay' && (subItem as any).rubric?.length > 0 && (subItem as any).rubric.some((r: any) => r.criteria?.trim()) && (
                             <div className="p-2 bg-[#F5F0E8] border border-[#1A1A1A]">
                               <p className="text-xs font-bold text-[#5C5C5C]">평가 기준</p>
-                              <ul className="space-y-1 text-sm">
+                              <ul className="space-y-1 text-xs">
                                 {(subItem as any).rubric.filter((r: any) => r.criteria?.trim()).map((r: any, idx: number) => (
                                   <li key={idx} className="flex items-start gap-2">
                                     <span className="text-[#1A1A1A] font-bold shrink-0">·</span>
@@ -2089,7 +2120,7 @@ export default function ReviewPractice({
                           {/* 해설 */}
                           <div className="p-2 bg-[#F5F0E8] border border-[#1A1A1A]">
                             <p className="text-xs font-bold text-[#5C5C5C]">해설</p>
-                            <p className="text-sm text-[#1A1A1A]">
+                            <p className="text-xs text-[#1A1A1A]">
                               {subItem.explanation || '해설이 없습니다.'}
                             </p>
                           </div>
@@ -2103,9 +2134,9 @@ export default function ReviewPractice({
               /* 단일 문제 */
               <>
                 {/* 문제 카드 */}
-                <div className="bg-[#F5F0E8] border-2 border-[#1A1A1A] p-5">
+                <div className="bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4">
                   <div className="flex items-center gap-2 mb-3 flex-wrap">
-                    <span className="text-lg font-bold text-[#1A1A1A]">Q{currentIndex + 1}.</span>
+                    <span className="text-base font-bold text-[#1A1A1A]">Q{currentIndex + 1}.</span>
                     <span className="px-2 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold">
                       {typeLabels[currentItem.type] || '문제'}
                     </span>
@@ -2120,7 +2151,7 @@ export default function ReviewPractice({
                       </span>
                     )}
                   </div>
-                  <p className="text-[#1A1A1A] text-base leading-relaxed whitespace-pre-wrap">
+                  <p className="text-[#1A1A1A] text-xs leading-relaxed whitespace-pre-wrap">
                     {currentItem.question}
                   </p>
                   {/* 문제 이미지 */}
@@ -2155,15 +2186,15 @@ export default function ReviewPractice({
                               {(block.children || []).map((child: any) => (
                                 <div key={child.id}>
                                   {child.type === 'text' && child.content?.trim() && (
-                                    <p className="text-[#5C5C5C] text-sm whitespace-pre-wrap">{child.content}</p>
+                                    <p className="text-[#5C5C5C] text-xs whitespace-pre-wrap">{child.content}</p>
                                   )}
                                   {child.type === 'labeled' && (child.items || []).filter((i: any) => i.content?.trim()).map((itm: any) => (
-                                    <p key={itm.id} className="text-[#1A1A1A] text-sm">
+                                    <p key={itm.id} className="text-[#1A1A1A] text-xs">
                                       <span className="font-bold mr-1">{itm.label}.</span>{itm.content}
                                     </p>
                                   ))}
                                   {child.type === 'gana' && (child.items || []).filter((i: any) => i.content?.trim()).map((itm: any) => (
-                                    <p key={itm.id} className="text-[#1A1A1A] text-sm">
+                                    <p key={itm.id} className="text-[#1A1A1A] text-xs">
                                       <span className="font-bold mr-1">({itm.label})</span>{itm.content}
                                     </p>
                                   ))}
@@ -2176,13 +2207,13 @@ export default function ReviewPractice({
                           )}
                           {block.type === 'text' && block.content?.trim() && (
                             <div className="p-3 bg-[#FFF8E1] border border-[#8B6914]">
-                              <p className="text-[#1A1A1A] text-sm whitespace-pre-wrap">{block.content}</p>
+                              <p className="text-[#1A1A1A] text-xs whitespace-pre-wrap">{block.content}</p>
                             </div>
                           )}
                           {block.type === 'labeled' && (block.items || []).length > 0 && (
                             <div className="p-3 bg-[#FFF8E1] border border-[#8B6914] space-y-1">
                               {(block.items || []).filter((i: any) => i.content?.trim()).map((itm: any) => (
-                                <p key={itm.id} className="text-[#1A1A1A] text-sm">
+                                <p key={itm.id} className="text-[#1A1A1A] text-xs">
                                   <span className="font-bold mr-1">{itm.label}.</span>{itm.content}
                                 </p>
                               ))}
@@ -2191,7 +2222,7 @@ export default function ReviewPractice({
                           {block.type === 'gana' && (block.items || []).length > 0 && (
                             <div className="p-3 bg-[#FFF8E1] border border-[#8B6914] space-y-1">
                               {(block.items || []).filter((i: any) => i.content?.trim()).map((itm: any) => (
-                                <p key={itm.id} className="text-[#1A1A1A] text-sm">
+                                <p key={itm.id} className="text-[#1A1A1A] text-xs">
                                   <span className="font-bold mr-1">({itm.label})</span>{itm.content}
                                 </p>
                               ))}
@@ -2212,13 +2243,13 @@ export default function ReviewPractice({
                     <div className="mt-4 p-3 border border-[#8B6914] bg-[#FFF8E1]">
                       <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
                       {currentItem.subQuestionOptionsType === 'text' ? (
-                        <p className="text-sm text-[#1A1A1A]">
+                        <p className="text-xs text-[#1A1A1A]">
                           {currentItem.subQuestionOptions.join(', ')}
                         </p>
                       ) : (
                         <div className="space-y-1">
                           {currentItem.subQuestionOptions.map((opt, i) => (
-                            <p key={i} className="text-sm text-[#1A1A1A]">
+                            <p key={i} className="text-xs text-[#1A1A1A]">
                               <span className="font-bold">{KOREAN_LABELS[i]}.</span> {opt}
                             </p>
                           ))}
@@ -2286,18 +2317,18 @@ export default function ReviewPractice({
                   className="mt-6"
                 >
                   <div
-                    className={`p-4 text-center border-2 ${
+                    className={`p-3 text-center border-2 ${
                       isCorrect
                         ? 'bg-[#E8F5E9] border-[#1A6B1A]'
                         : 'bg-[#FDEAEA] border-[#8B1A1A]'
                     }`}
                   >
-                    <p className={`text-xl font-bold ${isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>
+                    <p className={`text-lg font-bold ${isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>
                       {isCorrect ? '정답입니다!' : '오답입니다'}
                     </p>
 
                     {!isCorrect && (
-                      <div className="mt-2 text-sm text-[#5C5C5C]">
+                      <div className="mt-2 text-xs text-[#5C5C5C]">
                         {currentItem.type === 'multiple' && currentItem.options && currentItem.correctAnswer.toString().includes(',') ? (
                           <>
                             <div className="mb-1">
@@ -2378,9 +2409,9 @@ export default function ReviewPractice({
 
                   {/* 루브릭 (서술형) */}
                   {currentItem.type === 'essay' && (currentItem as any).rubric?.length > 0 && (currentItem as any).rubric.some((r: any) => r.criteria?.trim()) && (
-                    <div className="mt-4 p-4 bg-[#EDEAE4] border-2 border-[#1A1A1A]">
+                    <div className="mt-4 p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A]">
                       <p className="text-xs font-bold text-[#5C5C5C] mb-1">평가 기준</p>
-                      <ul className="space-y-1 text-sm">
+                      <ul className="space-y-1 text-xs">
                         {(currentItem as any).rubric.filter((r: any) => r.criteria?.trim()).map((r: any, idx: number) => (
                           <li key={idx} className="flex items-start gap-2">
                             <span className="text-[#1A1A1A] font-bold shrink-0">·</span>
@@ -2396,9 +2427,9 @@ export default function ReviewPractice({
                   )}
 
                   {currentItem.explanation && (
-                    <div className="mt-4 p-4 bg-[#EDEAE4] border-2 border-[#1A1A1A]">
+                    <div className="mt-4 p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A]">
                       <p className="text-xs font-bold text-[#5C5C5C] mb-1">해설</p>
-                      <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{currentItem.explanation}</p>
+                      <p className="text-xs text-[#1A1A1A] whitespace-pre-wrap">{currentItem.explanation}</p>
                     </div>
                   )}
 
@@ -2494,7 +2525,7 @@ export default function ReviewPractice({
           {currentIndex > 0 && (
             <button
               onClick={handlePrev}
-              className="flex-1 py-4 bg-[#F5F0E8] text-[#1A1A1A] font-bold border-2 border-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+              className="flex-1 py-3 bg-[#F5F0E8] text-[#1A1A1A] font-bold border-2 border-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
             >
               이전
             </button>
@@ -2516,20 +2547,36 @@ export default function ReviewPractice({
                   return answer === null || (Array.isArray(answer) && answer.length === 0);
                 }
               })()}
-              className={`${currentIndex > 0 ? 'flex-[2]' : 'w-full'} py-4 bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
+              className={`${currentIndex > 0 ? 'flex-[2]' : 'w-full'} py-3 bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
             >
               제출하기
             </button>
           ) : (
             <button
               onClick={handleNext}
-              className={`${currentIndex > 0 ? 'flex-[2]' : 'w-full'} py-4 bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors`}
+              className={`${currentIndex > 0 ? 'flex-[2]' : 'w-full'} py-3 bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors`}
             >
               {isLastQuestion ? '결과 보기' : '다음 문제'}
             </button>
           )}
         </div>
       </div>
+
+      {/* 나가기 확인 모달 */}
+      <ExitConfirmModal
+        isOpen={showExitModal}
+        onClose={() => setShowExitModal(false)}
+        onSaveAndExit={() => {
+          setShowExitModal(false);
+          onClose();
+        }}
+        onExitWithoutSave={() => {
+          setShowExitModal(false);
+          onClose();
+        }}
+        answeredCount={submittedIndices.size}
+        totalQuestions={items.length}
+      />
     </motion.div>
   );
 }

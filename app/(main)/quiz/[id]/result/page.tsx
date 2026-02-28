@@ -1200,10 +1200,10 @@ export default function QuizResultPage() {
 
             return (
               <div className="flex gap-3 justify-center py-2">
-                <div className={`w-20 h-20 flex items-center justify-center font-bold text-2xl ${oClassName}`}>
+                <div className={`w-12 h-12 flex items-center justify-center font-bold text-base ${oClassName}`}>
                   O
                 </div>
-                <div className={`w-20 h-20 flex items-center justify-center font-bold text-2xl ${xClassName}`}>
+                <div className={`w-12 h-12 flex items-center justify-center font-bold text-base ${xClassName}`}>
                   X
                 </div>
               </div>
@@ -1318,7 +1318,7 @@ export default function QuizResultPage() {
         <p className="text-[#5C5C5C] text-center mb-6">{error || '알 수 없는 오류가 발생했습니다.'}</p>
         <button
           onClick={handleGoHome}
-          className="px-6 py-3 bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
+          className="px-6 py-2.5 bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
         >
           퀴즈 목록으로
         </button>
@@ -1341,17 +1341,17 @@ export default function QuizResultPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className="px-4 pt-6 space-y-6"
+        className="px-4 pt-4 space-y-4"
       >
         {/* 점수 표시 */}
-        <div className="bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6 text-center">
-          <p className="text-sm text-[#5C5C5C] mb-2">{resultData.quizTitle}</p>
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <span className="text-5xl font-bold text-[#1A1A1A]">{resultData.correctCount}</span>
-            <span className="text-2xl text-[#5C5C5C]">/</span>
-            <span className="text-2xl text-[#5C5C5C]">{resultData.totalCount}</span>
+        <div className="bg-[#F5F0E8] border-2 border-[#1A1A1A] p-3 text-center">
+          <p className="text-xs text-[#5C5C5C] mb-1">{resultData.quizTitle}</p>
+          <div className="flex items-center justify-center gap-1.5 mb-2">
+            <span className="text-3xl font-bold text-[#1A1A1A]">{resultData.correctCount}</span>
+            <span className="text-lg text-[#5C5C5C]">/</span>
+            <span className="text-lg text-[#5C5C5C]">{resultData.totalCount}</span>
           </div>
-          <p className="text-sm text-[#5C5C5C]">
+          <p className="text-xs text-[#5C5C5C]">
             {isPerfectScore
               ? '만점!'
               : `정답률 ${Math.round((resultData.correctCount / resultData.totalCount) * 100)}%`}
@@ -1360,8 +1360,8 @@ export default function QuizResultPage() {
 
 
         {/* 문제별 결과 */}
-        <div className="space-y-3">
-          <h3 className="font-bold text-[#1A1A1A]">문제별 결과</h3>
+        <div className="space-y-2">
+          <h3 className="font-bold text-sm text-[#1A1A1A]">문제별 결과</h3>
           {displayItems.map((item) => {
             // 단일 문제
             if (item.type === 'single' && item.result) {
@@ -1370,7 +1370,7 @@ export default function QuizResultPage() {
                 <div key={result.id}>
                   <button
                     onClick={() => toggleExpand(result.id)}
-                    className={`w-full border-2 p-4 text-left ${
+                    className={`w-full border-2 p-3 text-left ${
                       result.isCorrect
                         ? 'border-[#1A6B1A] bg-[#E8F5E9]'
                         : 'border-[#8B1A1A] bg-[#FDEAEA]'
@@ -1419,7 +1419,7 @@ export default function QuizResultPage() {
                         exit={{ height: 0, opacity: 0 }}
                         className="overflow-hidden"
                       >
-                        <div className="border-2 border-t-0 border-[#1A1A1A] bg-[#F5F0E8] p-4 space-y-3">
+                        <div className="border-2 border-t-0 border-[#1A1A1A] bg-[#F5F0E8] p-3 space-y-3">
                           {renderQuestionDetail(result)}
                         </div>
                       </motion.div>
@@ -1443,7 +1443,7 @@ export default function QuizResultPage() {
                   {/* 그룹 헤더 */}
                   <button
                     onClick={() => toggleGroupExpand(groupId)}
-                    className="w-full border border-[#1A1A1A] bg-[#F5F0E8] p-4 text-left"
+                    className="w-full border border-[#1A1A1A] bg-[#F5F0E8] p-3 text-left"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -1488,7 +1488,7 @@ export default function QuizResultPage() {
                         exit={{ height: 0, opacity: 0 }}
                         className="overflow-hidden"
                       >
-                        <div className="border border-t-0 border-[#1A1A1A] bg-[#F5F0E8] p-4 space-y-4">
+                        <div className="border border-t-0 border-[#1A1A1A] bg-[#F5F0E8] p-3 space-y-3">
                           {/* 공통 지문/보기 */}
                           {(firstResult.passage || firstResult.passageImage || firstResult.koreanAbcItems || (firstResult.passageMixedExamples && firstResult.passageMixedExamples.length > 0)) && (
                             <div className="p-3 border border-[#8B6914] bg-[#FFF8E1]">
@@ -1635,10 +1635,10 @@ export default function QuizResultPage() {
       </motion.main>
 
       {/* 하단 버튼 */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#F5F0E8] border-t-2 border-[#1A1A1A]">
+      <div className="fixed bottom-0 left-0 right-0 p-3 bg-[#F5F0E8] border-t-2 border-[#1A1A1A]">
         <button
           onClick={handleNext}
-          className="w-full py-4 bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
+          className="w-full py-2.5 text-sm bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
         >
           다음
         </button>

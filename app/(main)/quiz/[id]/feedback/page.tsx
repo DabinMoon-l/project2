@@ -149,9 +149,9 @@ function SingleQuestionCard({
   onFeedbackChange,
 }: SingleQuestionCardProps) {
   return (
-    <div className="bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4">
+    <div className="bg-[#F5F0E8] border-2 border-[#1A1A1A] p-2.5">
       {/* 정답/오답 표시 */}
-      <div className={`inline-block px-3 py-1 text-xs font-bold mb-3 ${
+      <div className={`inline-block px-2 py-0.5 text-[10px] font-bold mb-2 ${
         question.isCorrect
           ? 'bg-[#E8F5E9] text-[#1A6B1A] border border-[#1A6B1A]'
           : 'bg-[#FFEBEE] text-[#8B1A1A] border border-[#8B1A1A]'
@@ -160,9 +160,9 @@ function SingleQuestionCard({
       </div>
 
       {/* 문제 */}
-      <div className="mb-4">
-        <p className="text-xs text-[#5C5C5C] mb-1">Q{question.number}</p>
-        <p className="text-sm font-bold text-[#1A1A1A] leading-relaxed">
+      <div className="mb-3">
+        <p className="text-[10px] text-[#5C5C5C] mb-0.5">Q{question.number}</p>
+        <p className="text-xs font-bold text-[#1A1A1A] leading-relaxed">
           {question.question}
           {/* 제시문 발문 또는 보기 발문 표시 */}
           {(question.passagePrompt || question.bogiQuestionText) && (
@@ -377,7 +377,7 @@ function SingleQuestionCard({
                 return (
                   <div
                     key={option}
-                    className="w-24 h-24 text-4xl font-bold border-2 flex flex-col items-center justify-center"
+                    className="w-20 h-20 text-3xl font-bold border-2 flex flex-col items-center justify-center"
                     style={{ backgroundColor: bgColor, color: textColor, borderColor }}
                   >
                     <span>{option}</span>
@@ -532,25 +532,25 @@ function CombinedQuestionCard({
   const totalCount = group.subQuestions.length;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* 결합형 문제 헤더 */}
-      <div className="bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4">
+      <div className="bg-[#F5F0E8] border-2 border-[#1A1A1A] p-2.5">
         {/* 문제 번호 및 유형 */}
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-lg font-bold text-[#1A1A1A]">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-sm font-bold text-[#1A1A1A]">
             Q{group.groupNumber}.
           </span>
-          <span className="px-2 py-0.5 bg-[#8B6914] text-[#F5F0E8] text-xs font-bold">
+          <span className="px-1.5 py-0.5 bg-[#8B6914] text-[#F5F0E8] text-[10px] font-bold">
             결합형
           </span>
-          <span className="text-xs text-[#5C5C5C]">
+          <span className="text-[10px] text-[#5C5C5C]">
             ({totalCount}문제 중 {correctCount}개 정답)
           </span>
         </div>
 
         {/* 공통 문제 */}
         {group.commonQuestion && (
-          <p className="text-[#1A1A1A] text-sm leading-relaxed whitespace-pre-wrap mb-4">
+          <p className="text-[#1A1A1A] text-xs leading-relaxed whitespace-pre-wrap mb-3">
             {group.commonQuestion}
           </p>
         )}
@@ -672,7 +672,7 @@ function CombinedQuestionCard({
         return (
           <div
             key={question.id}
-            className="bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
+            className="bg-[#F5F0E8] border-2 border-[#1A1A1A] p-3"
           >
             {/* 정답/오답 및 문제 번호 */}
             <div className="flex items-center gap-2 mb-3">
@@ -883,7 +883,7 @@ function CombinedQuestionCard({
                       return (
                         <div
                           key={option}
-                          className="w-24 h-24 text-4xl font-bold border-2 flex flex-col items-center justify-center"
+                          className="w-20 h-20 text-3xl font-bold border-2 flex flex-col items-center justify-center"
                           style={{ backgroundColor: bgColor, color: textColor, borderColor }}
                         >
                           <span>{option}</span>
@@ -1529,7 +1529,7 @@ export default function FeedbackPage() {
         </p>
         <button
           onClick={() => router.push('/review')}
-          className="px-6 py-3 bg-[#1A1A1A] text-[#F5F0E8] font-bold"
+          className="px-6 py-2.5 bg-[#1A1A1A] text-[#F5F0E8] font-bold"
         >
           리뷰창으로 이동
         </button>
@@ -1549,7 +1549,7 @@ export default function FeedbackPage() {
         </p>
         <button
           onClick={() => router.push('/quiz')}
-          className="px-6 py-3 bg-[#1A1A1A] text-[#F5F0E8] font-bold"
+          className="px-6 py-2.5 bg-[#1A1A1A] text-[#F5F0E8] font-bold"
         >
           퀴즈 목록으로
         </button>
@@ -1569,7 +1569,7 @@ export default function FeedbackPage() {
         </p>
         <button
           onClick={() => router.push('/quiz')}
-          className="px-6 py-3 bg-[#1A1A1A] text-[#F5F0E8] font-bold"
+          className="px-6 py-2.5 bg-[#1A1A1A] text-[#F5F0E8] font-bold"
         >
           퀴즈 목록으로
         </button>
@@ -1599,30 +1599,16 @@ export default function FeedbackPage() {
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 */}
-      <header className="sticky top-0 z-50 px-4 py-4 border-b-2 border-[#1A1A1A] bg-[#F5F0E8]">
-        <div className="flex items-center justify-between">
-          {/* 뒤로가기 버튼 - 결과 페이지로 이동 */}
-          <button
-            onClick={() => {
-              router.push(`/quiz/${quizId}/result`);
-            }}
-            className="flex items-center gap-2 text-sm text-[#1A1A1A]"
-            aria-label="결과 페이지로"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            뒤로가기
-          </button>
+      <header className="sticky top-0 z-50 px-4 py-3 border-b-2 border-[#1A1A1A] bg-[#F5F0E8]">
+        <div className="flex items-center justify-center">
           <div className="text-center">
-            <h1 className="text-lg font-bold text-[#1A1A1A]">
+            <h1 className="text-sm font-bold text-[#1A1A1A]">
               피드백
             </h1>
-            <p className="text-xs text-[#5C5C5C] mt-0.5">
+            <p className="text-[10px] text-[#5C5C5C] mt-0.5">
               문제에 대한 의견을 남겨주세요
             </p>
           </div>
-          <div className="w-20" /> {/* 버튼 균형용 */}
         </div>
       </header>
 
@@ -1738,7 +1724,7 @@ export default function FeedbackPage() {
           <button
             onClick={handleSkip}
             disabled={isSubmitting}
-            className="flex-1 py-3 text-sm font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors disabled:opacity-50"
+            className="flex-1 py-2.5 text-sm font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors disabled:opacity-50"
           >
             Skip
           </button>
@@ -1747,7 +1733,7 @@ export default function FeedbackPage() {
           <button
             onClick={handleSubmit}
             disabled={isSubmitting}
-            className="flex-[2] py-3 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#3A3A3A] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            className="flex-[2] py-2.5 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#3A3A3A] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isSubmitting ? (
               <>

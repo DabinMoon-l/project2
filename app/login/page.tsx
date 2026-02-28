@@ -50,13 +50,13 @@ const itemVariants = {
 
 function VideoBackground() {
   return (
-    <div className="fixed inset-0 -z-10">
+    <div className="absolute inset-0 overflow-hidden">
       <video
         autoPlay
         loop
         muted
         playsInline
-        className="w-full h-full object-cover"
+        className="absolute inset-0 w-full h-full object-cover"
       >
         <source src="/videos/login-bg.mp4" type="video/mp4" />
       </video>
@@ -146,7 +146,7 @@ export default function LoginPage() {
   // 로딩 중이거나 이미 로그인된 경우
   if (loading || user) {
     return (
-      <div className="flex flex-col items-center justify-center px-4 py-6" style={{ minHeight: '100dvh' }}>
+      <div className="relative flex flex-col items-center justify-center px-4 py-6 overflow-hidden" style={{ minHeight: '100dvh' }}>
         <VideoBackground />
         <motion.div
           initial={{ opacity: 0 }}
@@ -162,40 +162,40 @@ export default function LoginPage() {
 
   return (
     <main
-      className="flex flex-col items-center px-4 py-6 overflow-y-auto"
+      className="relative flex flex-col items-center justify-center overflow-hidden"
       style={{ minHeight: '100dvh' }}
     >
       <VideoBackground />
 
-      {/* 상단: 장식 이미지 */}
-      <div className="w-full max-w-md mt-2 mb-4">
+      {/* 좌측 상단: 장식 이미지 */}
+      <div className="absolute top-0 left-0 z-10">
         <Image
           src="/images/corner-image.png"
           alt="장식 이미지"
-          width={200}
-          height={100}
-          style={{ width: 'auto', height: 'auto', maxWidth: '55vw' }}
+          width={150}
+          height={75}
+          style={{ width: 'auto', height: 'auto', maxWidth: '38vw' }}
           className="drop-shadow-lg"
         />
       </div>
 
       {/* 중간: 로고 */}
       <motion.div
-        className="w-full max-w-md"
+        className="relative z-10 w-full max-w-sm px-6"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
       >
         <motion.div
-          className="flex justify-center mb-6"
+          className="flex justify-center mb-3"
           variants={itemVariants}
         >
           <Image
             src="/images/logo.png"
             alt="RabbiTory"
-            width={260}
-            height={87}
-            style={{ width: 'auto', height: 'auto', maxWidth: '70vw' }}
+            width={200}
+            height={67}
+            style={{ width: 'auto', height: 'auto', maxWidth: '50vw' }}
             className="drop-shadow-lg"
             priority
           />
@@ -203,7 +203,7 @@ export default function LoginPage() {
 
         {/* 하단: 로그인 폼 */}
         <motion.div
-          className="w-full space-y-3"
+          className="w-full space-y-2"
           variants={itemVariants}
         >
           <input
@@ -215,7 +215,7 @@ export default function LoginPage() {
             autoComplete="off"
             autoCorrect="off"
             autoCapitalize="off"
-            className="w-full px-4 py-3 bg-white/10 border border-white/30 text-white placeholder-white/50 rounded-xl focus:outline-none focus:border-white/60"
+            className="w-full px-3 py-2 text-sm bg-white/10 border border-white/30 text-white placeholder-white/50 rounded-xl focus:outline-none focus:border-white/60"
           />
           <input
             type="password"
@@ -224,20 +224,20 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
             autoComplete="off"
-            className="w-full px-4 py-3 bg-white/10 border border-white/30 text-white placeholder-white/50 rounded-xl focus:outline-none focus:border-white/60"
+            className="w-full px-3 py-2 text-sm bg-white/10 border border-white/30 text-white placeholder-white/50 rounded-xl focus:outline-none focus:border-white/60"
           />
 
           {/* 회원가입 / 비밀번호 찾기 링크 */}
           <div className="flex items-center justify-between">
             <Link
               href="/signup"
-              className="text-white/70 text-sm hover:text-white transition-colors"
+              className="text-white/70 text-xs hover:text-white transition-colors"
             >
               회원가입
             </Link>
             <Link
               href="/forgot-password"
-              className="text-white/70 text-sm hover:text-white transition-colors"
+              className="text-white/70 text-xs hover:text-white transition-colors"
             >
               비밀번호 찾기
             </Link>
@@ -246,7 +246,7 @@ export default function LoginPage() {
           <button
             onClick={handleLogin}
             disabled={loading || !idInput || !password}
-            className="w-full py-3 bg-white text-black font-medium rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-50"
+            className="w-full py-2 text-sm bg-white text-black font-medium rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-50"
           >
             {loading ? '로그인 중...' : '로그인'}
           </button>

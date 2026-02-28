@@ -109,20 +109,20 @@ function WriteExitModal({
             className="relative w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] shadow-xl overflow-hidden focus:outline-none"
           >
             {/* 경고 아이콘 */}
-            <div className="flex justify-center pt-6">
-              <div className="w-16 h-16 border-2 border-[#8B6914] bg-[#FFF8E1] flex items-center justify-center">
-                <svg className="w-8 h-8 text-[#8B6914]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="flex justify-center pt-4">
+              <div className="w-12 h-12 border-2 border-[#8B6914] bg-[#FFF8E1] flex items-center justify-center">
+                <svg className="w-6 h-6 text-[#8B6914]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
               </div>
             </div>
 
             {/* 본문 */}
-            <div className="px-6 py-4 text-center">
-              <h2 id="write-exit-title" className="text-lg font-bold text-[#1A1A1A] mb-2">
+            <div className="px-5 py-3 text-center">
+              <h2 id="write-exit-title" className="text-sm font-bold text-[#1A1A1A] mb-2">
                 작성을 중단하시겠습니까?
               </h2>
-              <p id="write-exit-desc" className="text-sm text-[#5C5C5C] leading-relaxed">
+              <p id="write-exit-desc" className="text-xs text-[#5C5C5C] leading-relaxed">
                 {hasContent
                   ? <>임시 저장하면 나중에<br />이어서 작성할 수 있습니다.</>
                   : '작성된 내용이 없습니다.'
@@ -131,12 +131,12 @@ function WriteExitModal({
             </div>
 
             {/* 버튼 영역 */}
-            <div className="flex flex-col gap-2 px-6 py-4 border-t-2 border-[#1A1A1A] bg-[#EDEAE4]">
+            <div className="flex flex-col gap-2 px-5 py-3 border-t-2 border-[#1A1A1A] bg-[#EDEAE4]">
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={onClose}
-                className="w-full py-3 font-bold text-[#F5F0E8] bg-[#1A1A1A] border-2 border-[#1A1A1A] transition-all duration-200 hover:bg-[#2A2A2A]"
+                className="w-full py-2 font-bold text-[#F5F0E8] bg-[#1A1A1A] border-2 border-[#1A1A1A] transition-all duration-200 hover:bg-[#2A2A2A]"
               >
                 계속 작성하기
               </motion.button>
@@ -146,7 +146,7 @@ function WriteExitModal({
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={onSaveAndExit}
-                  className="w-full py-3 font-bold bg-[#F5F0E8] text-[#1A1A1A] border-2 border-[#1A1A1A] hover:bg-[#E5E0D8] transition-all duration-200"
+                  className="w-full py-2 font-bold bg-[#F5F0E8] text-[#1A1A1A] border-2 border-[#1A1A1A] hover:bg-[#E5E0D8] transition-all duration-200"
                 >
                   임시저장하고 나가기
                 </motion.button>
@@ -156,7 +156,7 @@ function WriteExitModal({
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={onExitWithoutSave}
-                className="w-full py-3 font-bold bg-[#F5F0E8] text-[#8B1A1A] border-2 border-[#8B1A1A] hover:bg-[#FDEAEA] transition-all duration-200"
+                className="w-full py-2 font-bold bg-[#F5F0E8] text-[#8B1A1A] border-2 border-[#8B1A1A] hover:bg-[#FDEAEA] transition-all duration-200"
               >
                 저장하지 않고 나가기
               </motion.button>
@@ -283,30 +283,29 @@ export default function WritePage() {
       style={{ backgroundColor: theme.colors.background }}
     >
       {/* 뒤로가기 */}
-      <header className="mx-4 mt-4 pb-4">
+      <header className="mx-4 mt-3 pb-2">
         <button
           onClick={handleBack}
-          className="flex items-center gap-2 text-sm py-2 text-[#3A3A3A]"
+          className="flex items-center py-1 text-[#3A3A3A]"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
-          뒤로가기
         </button>
       </header>
 
-      <div className="mx-4 border-b-2 border-[#1A1A1A] mb-4" />
+      <div className="mx-4 border-b-2 border-[#1A1A1A] mb-3" />
 
       {/* 페이지 제목 */}
-      <div className="px-4 pb-4">
+      <div className="px-4 pb-3">
         <div className="flex items-center justify-center gap-4">
           <div className="flex-1 h-px bg-[#1A1A1A]" />
-          <h2 className="font-serif-display text-2xl font-bold text-[#1A1A1A]">
+          <h2 className="font-serif-display text-xl font-bold text-[#1A1A1A]">
             WRITE ARTICLE
           </h2>
           <div className="flex-1 h-px bg-[#1A1A1A]" />
         </div>
-        <p className="text-center text-sm mt-2" style={{ color: theme.colors.textSecondary }}>
+        <p className="text-center text-xs mt-1" style={{ color: theme.colors.textSecondary }}>
           궁금한 점을 질문해보세요
         </p>
       </div>
