@@ -93,8 +93,8 @@ export const voteOnPoll = onCall(
       if (data.polls) {
         tx.update(docRef, { polls: newPolls });
       } else {
-        // 하위 호환: 단일 poll 필드
-        tx.update(docRef, { "poll.votes": votes });
+        // 하위 호환: 단일 poll 필드 (dot notation 금지)
+        tx.update(docRef, { poll: { ...polls[0], votes } });
       }
     });
 

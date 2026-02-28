@@ -143,32 +143,33 @@ export async function cleanupRateLimits(
   const cutoffTime = Timestamp.fromMillis(Date.now() - olderThanMs);
   let deletedCount = 0;
 
-  // 모든 사용자의 Rate limit 컬렉션 순회
   const usersSnapshot = await db.collection("rateLimits").listDocuments();
 
-  for (const userDoc of usersSnapshot) {
-    // POST 기록 정리
-    const postSnapshot = await userDoc
-      .collection("post")
-      .where("timestamp", "<", cutoffTime)
-      .get();
+  // 사용자별 병렬 처리
+  const results = await Promise.allSettled(
+    usersSnapshot.map(async (userDoc) => {
+      let count = 0;
+      for (const sub of ["post", "comment"]) {
+        const snap = await userDoc
+          .collection(sub)
+          .where("timestamp", "<", cutoffTime)
+          .get();
 
-    for (const doc of postSnapshot.docs) {
-      await doc.ref.delete();
-      deletedCount++;
-    }
+        // 배치 삭제 (500개 제한)
+        const batch = db.batch();
+        snap.docs.forEach(doc => {
+          batch.delete(doc.ref);
+          count++;
+        });
+        if (snap.docs.length > 0) await batch.commit();
+      }
+      return count;
+    })
+  );
 
-    // COMMENT 기록 정리
-    const commentSnapshot = await userDoc
-      .collection("comment")
-      .where("timestamp", "<", cutoffTime)
-      .get();
-
-    for (const doc of commentSnapshot.docs) {
-      await doc.ref.delete();
-      deletedCount++;
-    }
-  }
+  results.forEach(r => {
+    if (r.status === "fulfilled") deletedCount += r.value;
+  });
 
   return deletedCount;
 }

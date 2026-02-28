@@ -21,7 +21,7 @@ const LIMITS: Record<string, RateLimitConfig> = {
 };
 
 /**
- * Rate limit 검사
+ * Rate limit 검사 (트랜잭션으로 race condition 방지)
  * 초과 시 에러 메시지와 함께 throw
  *
  * @param userId - 사용자 ID
@@ -35,17 +35,19 @@ export async function checkRateLimitV2(
   if (!config) return;
 
   const db = getFirestore();
-  const now = Date.now();
-  const windowStart = now - config.windowMs;
   const counterRef = db.doc(`rateLimits_v2/${userId}_${action}`);
 
-  const doc = await counterRef.get();
-  const data = doc.data();
+  await db.runTransaction(async (tx) => {
+    const now = Date.now();
+    const windowStart = now - config.windowMs;
 
-  if (data) {
+    const doc = await tx.get(counterRef);
+    const data = doc.data();
+
     // 윈도우 내 타임스탬프만 필터
-    const timestamps: number[] = (data.timestamps || [])
-      .filter((ts: number) => ts > windowStart);
+    const timestamps: number[] = data
+      ? (data.timestamps || []).filter((ts: number) => ts > windowStart)
+      : [];
 
     if (timestamps.length >= config.maxRequests) {
       const retryAfterMs = timestamps[0] + config.windowMs - now;
@@ -56,17 +58,11 @@ export async function checkRateLimitV2(
       );
     }
 
-    // 현재 요청 추가 (오래된 것은 제거)
+    // 현재 요청 추가
     timestamps.push(now);
-    await counterRef.update({
+    tx.set(counterRef, {
       timestamps,
       updatedAt: FieldValue.serverTimestamp(),
     });
-  } else {
-    // 첫 요청
-    await counterRef.set({
-      timestamps: [now],
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-  }
+  });
 }

@@ -360,9 +360,17 @@ async function createBattle(
 
   await rtdb.ref(`tekken/battles/${battleId}`).set(battleData);
 
-  // 비동기 문제 생성 (fire-and-forget)
-  populateBattleQuestions(battleId, courseId, apiKey).catch((err) => {
+  // 비동기 문제 생성 (실패 시 에러 상태로 전환)
+  populateBattleQuestions(battleId, courseId, apiKey).catch(async (err) => {
     console.error("문제 생성 실패:", err);
+    try {
+      await rtdb.ref(`tekken/battles/${battleId}`).update({
+        status: "error",
+        errorMessage: "문제 생성에 실패했습니다.",
+      });
+    } catch (updateErr) {
+      console.error("에러 상태 업데이트 실패:", updateErr);
+    }
   });
 
   return battleId;
@@ -968,23 +976,19 @@ async function endBattle(
 
     const isWinner = uid === winnerId;
 
-    const streakSnap = await rtdb
-      .ref(`tekken/streaks/${uid}`)
-      .once("value");
-    const streak = streakSnap.val() || { currentStreak: 0, lastBattleAt: 0 };
-
-    // 무승부 시 연승 유지, 패배 시 초기화
-    const newStreak = isWinner
-      ? streak.currentStreak + 1
-      : isDraw
-        ? streak.currentStreak
-        : 0;
-    const xp = calcBattleXp(isWinner, newStreak);
-
-    await rtdb.ref(`tekken/streaks/${uid}`).set({
-      currentStreak: newStreak,
-      lastBattleAt: Date.now(),
+    // 연승 업데이트 (트랜잭션으로 race condition 방지)
+    const streakRef = rtdb.ref(`tekken/streaks/${uid}`);
+    const txResult = await streakRef.transaction((current: any) => {
+      const streak = current || { currentStreak: 0, lastBattleAt: 0 };
+      const newStreak = isWinner
+        ? streak.currentStreak + 1
+        : isDraw
+          ? streak.currentStreak
+          : 0;
+      return { currentStreak: newStreak, lastBattleAt: Date.now() };
     });
+    const newStreak = txResult.snapshot.val()?.currentStreak ?? 0;
+    const xp = calcBattleXp(isWinner, newStreak);
 
     // 결과에 XP 기록 (클라이언트 표시용)
     await battleRef.child(`result/xpByPlayer/${uid}`).set(xp);

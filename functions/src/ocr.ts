@@ -397,9 +397,6 @@ export const runClovaOcr = onCall(
     timeoutSeconds: 120,  // Gemini 전처리 시간 고려
   },
   async (request) => {
-    // ===== 함수 시작 로그 (V20260209) =====
-    console.log("XXXXX FUNCTION START V20260209 XXXXX");
-
     // 인증 확인
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");

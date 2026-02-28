@@ -227,16 +227,29 @@ STEP 3. 자체 검증 (필수)
   };
 
   // Gemini 2.0 Flash 사용 (최신 무료 모델)
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(requestBody),
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60_000);
+  let response: Awaited<ReturnType<typeof fetch>>;
+  try {
+    response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      }
+    );
+  } catch (err: any) {
+    clearTimeout(timeout);
+    if (err.name === "AbortError") {
+      throw new Error("Gemini API 요청 시간 초과 (60초)");
     }
-  );
+    throw err;
+  }
+  clearTimeout(timeout);
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -566,22 +579,35 @@ async function extractKeywordsWithGeminiApi(
     },
   };
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody),
+  const controller2 = new AbortController();
+  const timeout2 = setTimeout(() => controller2.abort(), 30_000);
+  let response2: Awaited<ReturnType<typeof fetch>>;
+  try {
+    response2 = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+        signal: controller2.signal,
+      }
+    );
+  } catch (err: any) {
+    clearTimeout(timeout2);
+    if (err.name === "AbortError") {
+      throw new Error("Gemini API 키워드 추출 시간 초과 (30초)");
     }
-  );
+    throw err;
+  }
+  clearTimeout(timeout2);
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("Gemini API 오류:", response.status, errorText);
-    throw new Error(`Gemini API 오류: ${response.status}`);
+  if (!response2.ok) {
+    const errorText = await response2.text();
+    console.error("Gemini API 오류:", response2.status, errorText);
+    throw new Error(`Gemini API 오류: ${response2.status}`);
   }
 
-  const result = (await response.json()) as any;
+  const result = (await response2.json()) as any;
 
   if (
     !result.candidates ||

@@ -269,6 +269,15 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
       }
     }
 
+    // 이전 과목의 radarNorm 구독 해제 (메모리 누수 방지)
+    _radarNormUnsubMap.forEach((unsub, prevCourseId) => {
+      if (prevCourseId !== courseId) {
+        unsub();
+        _radarNormUnsubMap.delete(prevCourseId);
+        _radarNormMap.delete(prevCourseId);
+      }
+    });
+
     // radarNorm/{courseId} onSnapshot 구독 (이미 구독 중이면 스킵)
     if (!_radarNormUnsubMap.has(courseId)) {
       const normDocRef = doc(db, 'radarNorm', courseId);
