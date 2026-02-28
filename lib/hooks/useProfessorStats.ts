@@ -100,9 +100,20 @@ interface ResultDoc {
 
 const PROF_TYPES = ['midterm', 'final', 'past', 'professor', 'professor-ai'];
 
+/** 학생 기본 데이터 (통계 페이지 부가 데이터 계산용) */
+export interface RawStudentData {
+  classId: string;
+  totalExp: number;
+  profCorrectCount: number;
+  profAttemptCount: number;
+  equippedRabbits: any[];
+  lastGachaExp: number;
+}
+
 interface RawCache {
   quizzes: QuizDoc[];
   userClassMap: Record<string, ClassType>;
+  rawStudents: RawStudentData[];
   results: ResultDoc[];
   ts: number;
 }
@@ -118,6 +129,13 @@ export function getRawUserClassMap(courseId: string): Record<string, ClassType> 
   const raw = _rawCacheMap.get(courseId);
   if (!raw || Date.now() - raw.ts > RAW_CACHE_TTL) return null;
   return raw.userClassMap;
+}
+
+/** raw 캐시에서 학생 데이터 조회 (통계 부가 데이터 중복 쿼리 방지) */
+export function getRawStudents(courseId: string): RawStudentData[] | null {
+  const raw = _rawCacheMap.get(courseId);
+  if (!raw || Date.now() - raw.ts > RAW_CACHE_TTL) return null;
+  return raw.rawStudents;
 }
 
 // === 훅 ===
@@ -168,12 +186,21 @@ export function useProfessorStats() {
         });
 
         const userClassMap: Record<string, ClassType> = {};
+        const rawStudents: RawStudentData[] = [];
         usersSnap.forEach(d => {
           const u = d.data();
           const cls = u.classId || u.classType;
           if (cls) {
             userClassMap[d.id] = cls as ClassType;
           }
+          rawStudents.push({
+            classId: (cls || 'A') as string,
+            totalExp: u.totalExp || 0,
+            profCorrectCount: u.profCorrectCount || 0,
+            profAttemptCount: u.profAttemptCount || 0,
+            equippedRabbits: Array.isArray(u.equippedRabbits) ? u.equippedRabbits : [],
+            lastGachaExp: u.lastGachaExp || 0,
+          });
         });
 
         // quizResults 배치 조회
@@ -202,7 +229,7 @@ export function useProfessorStats() {
           });
         }
 
-        raw = { quizzes, userClassMap, results, ts: Date.now() };
+        raw = { quizzes, userClassMap, rawStudents, results, ts: Date.now() };
         _rawCacheMap.set(courseId, raw);
       }
 

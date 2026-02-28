@@ -19,13 +19,15 @@ import {
   doc,
   getDoc,
   getDocs,
-  onSnapshot,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { formatChapterLabel } from '@/lib/courseIndex';
 import { useCustomFolders } from '@/lib/hooks/useCustomFolders';
 import FolderSelectModal from '@/components/common/FolderSelectModal';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
+
+// 모듈 레벨 classId 캐시 (모달 닫았다 열어도 유지, 페이지 이동 시에도 유지)
+const _statsUserClassCache = new Map<string, 'A' | 'B' | 'C' | 'D' | null>();
 
 // ============================================================
 // 애니메이션 컴포넌트
@@ -592,9 +594,8 @@ export default function QuizStatsModal({
   useEffect(() => {
     if (!isOpen) return;
 
-    let unsubResults: (() => void) | null = null;
-    // classId 캐시 (유저별 1회만 조회)
-    const userClassCache = new Map<string, 'A' | 'B' | 'C' | 'D' | null>();
+    // classId 캐시 (모듈 레벨 — 모달을 닫았다 다시 열어도 유지)
+    const userClassCache = _statsUserClassCache;
 
     const setup = async () => {
       try {
@@ -614,104 +615,99 @@ export default function QuizStatsModal({
         setQuestions(flatQuestions);
         setCourseId(quizData.courseId);
 
-        // 2. 퀴즈 결과 실시간 구독
+        // 2. 퀴즈 결과 1회성 조회 (onSnapshot → getDocs: 읽기 전용 통계이므로 실시간 불필요)
         const resultsQuery = query(
           collection(db, 'quizResults'),
           where('quizId', '==', quizId)
         );
 
-        unsubResults = onSnapshot(resultsQuery, async (resultsSnapshot) => {
-          try {
-            // 첫 번째 결과만 필터링 (isUpdate가 아닌 것)
-            const firstResults = resultsSnapshot.docs.filter(
-              (d) => !d.data().isUpdate
-            );
+        const resultsSnapshot = await getDocs(resultsQuery);
 
-            if (firstResults.length === 0) {
-              setResultsWithClass([]);
-              setLoading(false);
-              return;
-            }
+        // 첫 번째 결과만 필터링 (isUpdate가 아닌 것)
+        const firstResults = resultsSnapshot.docs.filter(
+          (d) => !d.data().isUpdate
+        );
 
-            // userId 중복 제거 — 동일 사용자의 가장 최근 결과만 사용
-            const latestByUser = new Map<string, any>();
-            firstResults.forEach((docSnapshot) => {
-              const data = docSnapshot.data();
-              const uid = data.userId;
-              const ts = data.createdAt?.toMillis?.() || data.createdAt?.seconds * 1000 || 0;
-              const existing = latestByUser.get(uid);
-              if (!existing || ts > (existing.data.createdAt?.toMillis?.() || existing.data.createdAt?.seconds * 1000 || 0)) {
-                latestByUser.set(uid, { docSnapshot, data });
-              }
-            });
-            const dedupedResults = Array.from(latestByUser.values());
+        if (firstResults.length === 0) {
+          setResultsWithClass([]);
+          setLoading(false);
+          return;
+        }
 
-            // 결과에서 classId 추출 (없으면 users 컬렉션에서 가져오기)
-            const resultsNeedingClass: { docSnapshot: any; data: any }[] = [];
-            const resultsWithClassDirect: ResultWithClass[] = [];
-
-            dedupedResults.forEach(({ data }) => {
-              if (data.classId) {
-                resultsWithClassDirect.push({
-                  userId: data.userId,
-                  classType: data.classId as 'A' | 'B' | 'C' | 'D',
-                  score: data.score || 0,
-                  questionScores: data.questionScores || {},
-                  createdAt: data.createdAt,
-                });
-              } else if (userClassCache.has(data.userId)) {
-                // 캐시된 classId 사용
-                resultsWithClassDirect.push({
-                  userId: data.userId,
-                  classType: userClassCache.get(data.userId) || null,
-                  score: data.score || 0,
-                  questionScores: data.questionScores || {},
-                  createdAt: data.createdAt,
-                });
-              } else {
-                resultsNeedingClass.push({ docSnapshot: null, data });
-              }
-            });
-
-            // classId가 없는 결과들에 대해 users 컬렉션에서 가져오기
-            const userIds = [...new Set(resultsNeedingClass.map((r) => r.data.userId))];
-
-            if (userIds.length > 0) {
-              await Promise.all(
-                userIds.map(async (userId) => {
-                  try {
-                    const userDoc = await getDoc(doc(db, 'users', userId));
-                    if (userDoc.exists()) {
-                      userClassCache.set(userId, userDoc.data().classId || null);
-                    } else {
-                      userClassCache.set(userId, null);
-                    }
-                  } catch {
-                    userClassCache.set(userId, null);
-                  }
-                })
-              );
-            }
-
-            // 결과에 classType 추가
-            const resultsFromUsers: ResultWithClass[] = resultsNeedingClass.map(({ data }) => {
-              return {
-                userId: data.userId,
-                classType: userClassCache.get(data.userId) || null,
-                score: data.score || 0,
-                questionScores: data.questionScores || {},
-                createdAt: data.createdAt,
-              };
-            });
-
-            const results: ResultWithClass[] = [...resultsWithClassDirect, ...resultsFromUsers];
-            setResultsWithClass(results);
-          } catch (err) {
-            console.error('통계 업데이트 실패:', err);
-          } finally {
-            setLoading(false);
+        // userId 중복 제거 — 동일 사용자의 가장 최근 결과만 사용
+        const latestByUser = new Map<string, any>();
+        firstResults.forEach((docSnapshot) => {
+          const data = docSnapshot.data();
+          const uid = data.userId;
+          const ts = data.createdAt?.toMillis?.() || data.createdAt?.seconds * 1000 || 0;
+          const existing = latestByUser.get(uid);
+          if (!existing || ts > (existing.data.createdAt?.toMillis?.() || existing.data.createdAt?.seconds * 1000 || 0)) {
+            latestByUser.set(uid, { docSnapshot, data });
           }
         });
+        const dedupedResults = Array.from(latestByUser.values());
+
+        // 결과에서 classId 추출 (없으면 배치로 users 컬렉션에서 가져오기)
+        const resultsNeedingClass: { data: any }[] = [];
+        const resultsWithClassDirect: ResultWithClass[] = [];
+
+        dedupedResults.forEach(({ data }) => {
+          if (data.classId) {
+            resultsWithClassDirect.push({
+              userId: data.userId,
+              classType: data.classId as 'A' | 'B' | 'C' | 'D',
+              score: data.score || 0,
+              questionScores: data.questionScores || {},
+              createdAt: data.createdAt,
+            });
+          } else if (userClassCache.has(data.userId)) {
+            resultsWithClassDirect.push({
+              userId: data.userId,
+              classType: userClassCache.get(data.userId) || null,
+              score: data.score || 0,
+              questionScores: data.questionScores || {},
+              createdAt: data.createdAt,
+            });
+          } else {
+            resultsNeedingClass.push({ data });
+          }
+        });
+
+        // classId가 없는 결과들에 대해 배치로 조회 (N+1 → 30개씩 배치 쿼리)
+        const userIds = [...new Set(resultsNeedingClass.map((r) => r.data.userId))];
+
+        if (userIds.length > 0) {
+          // 30개씩 배치로 쿼리 (Firestore 'in' 제한)
+          for (let i = 0; i < userIds.length; i += 30) {
+            const batch = userIds.slice(i, i + 30);
+            const batchResults = await Promise.all(
+              batch.map(async (userId) => {
+                try {
+                  const userDoc = await getDoc(doc(db, 'users', userId));
+                  return { userId, classId: userDoc.exists() ? userDoc.data().classId || null : null };
+                } catch {
+                  return { userId, classId: null };
+                }
+              })
+            );
+            batchResults.forEach(({ userId, classId }) => {
+              userClassCache.set(userId, classId);
+            });
+          }
+        }
+
+        // 결과에 classType 추가
+        const resultsFromUsers: ResultWithClass[] = resultsNeedingClass.map(({ data }) => ({
+          userId: data.userId,
+          classType: userClassCache.get(data.userId) || null,
+          score: data.score || 0,
+          questionScores: data.questionScores || {},
+          createdAt: data.createdAt,
+        }));
+
+        const results: ResultWithClass[] = [...resultsWithClassDirect, ...resultsFromUsers];
+        setResultsWithClass(results);
+        setLoading(false);
       } catch (err) {
         console.error('통계 로드 실패:', err);
         setError('통계를 불러오는데 실패했습니다.');
@@ -720,10 +716,6 @@ export default function QuizStatsModal({
     };
 
     setup();
-
-    return () => {
-      if (unsubResults) unsubResults();
-    };
   }, [isOpen, quizId]);
 
   // 필터링된 결과 기반으로 통계 계산

@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, useRef, type ReactNode, type MutableRefObject } from 'react';
+import { createContext, useContext, useState, useCallback, useRef, useMemo, type ReactNode, type MutableRefObject } from 'react';
 
 interface ButtonRect {
   x: number;
@@ -58,8 +58,13 @@ export function HomeOverlayProvider({ children }: { children: ReactNode }) {
     setIsCloseRequested(true);
   }, []);
 
+  // Context 값 메모이제이션 (불필요한 소비자 리렌더 방지)
+  const value = useMemo<HomeOverlayContextValue>(() => ({
+    isOpen, isCloseRequested, open, close, closeAnimated, homeButtonRef, buttonRect,
+  }), [isOpen, isCloseRequested, open, close, closeAnimated, buttonRect]);
+
   return (
-    <HomeOverlayContext.Provider value={{ isOpen, isCloseRequested, open, close, closeAnimated, homeButtonRef, buttonRect }}>
+    <HomeOverlayContext.Provider value={value}>
       {children}
     </HomeOverlayContext.Provider>
   );

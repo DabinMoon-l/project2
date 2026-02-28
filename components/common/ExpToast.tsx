@@ -1,11 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react';
+import { useState, useEffect, useCallback, createContext, useContext, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '@/styles/themes/useTheme';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { useAuth } from '@/lib/hooks/useAuth';
+import { useUser } from '@/lib/contexts/UserContext';
 import { getExpBarDisplay } from '@/lib/utils/milestone';
 
 /** 토스트 데이터 타입 */
@@ -31,30 +29,14 @@ const RealtimeExpContext = createContext<RealtimeExpData>({ totalExp: 0, lastGac
 
 /** ExpToast Provider */
 export function ExpToastProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { profile } = useUser();
   const [toasts, setToasts] = useState<ExpToastData[]>([]);
-  const [realtimeExp, setRealtimeExp] = useState<RealtimeExpData>({ totalExp: 0, lastGachaExp: 0 });
 
-  // Firestore 실시간 구독으로 최신 totalExp + lastGachaExp 추적
-  useEffect(() => {
-    if (!user?.uid) {
-      setRealtimeExp({ totalExp: 0, lastGachaExp: 0 });
-      return;
-    }
-
-    const userDocRef = doc(db, 'users', user.uid);
-    const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setRealtimeExp({
-          totalExp: data.totalExp || 0,
-          lastGachaExp: data.lastGachaExp || 0,
-        });
-      }
-    });
-
-    return () => unsubscribe();
-  }, [user?.uid]);
+  // UserContext에서 이미 구독 중인 프로필 데이터 재사용 (중복 onSnapshot 제거)
+  const realtimeExp = useMemo<RealtimeExpData>(() => ({
+    totalExp: profile?.totalExp || 0,
+    lastGachaExp: profile?.lastGachaExp || 0,
+  }), [profile?.totalExp, profile?.lastGachaExp]);
 
   const showExpToast = useCallback((
     amount: number,

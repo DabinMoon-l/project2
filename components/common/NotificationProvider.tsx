@@ -14,6 +14,7 @@ import React, {
   useState,
   useCallback,
   useEffect,
+  useMemo,
   ReactNode,
 } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -370,8 +371,8 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     clearLastNotification();
   }, [clearLastNotification]);
 
-  // Context 값
-  const contextValue: NotificationContextType = {
+  // Context 값 메모이제이션 (불필요한 소비자 리렌더 방지)
+  const contextValue = useMemo<NotificationContextType>(() => ({
     permissionStatus,
     isSubscribed,
     loading,
@@ -379,7 +380,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     subscribe,
     unsubscribe,
     showPermissionModal,
-  };
+  }), [permissionStatus, isSubscribed, loading, handleRequestPermission, subscribe, unsubscribe, showPermissionModal]);
 
   return (
     <NotificationContext.Provider value={contextValue}>

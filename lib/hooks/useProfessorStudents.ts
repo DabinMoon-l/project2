@@ -287,18 +287,62 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
       _radarNormUnsubMap.set(courseId, normUnsub);
     }
 
+    // orderBy 제거: 학생 정렬은 클라이언트에서 studentId 순으로 수행
+    // orderBy('lastActiveAt', 'desc')가 있으면 학생마다 하트비트 쓰기 시 Firestore가
+    // 정렬 순서 재평가 → onSnapshot 트리거 빈도 폭증
     const usersRef = collection(db, 'users');
     const q = query(
       usersRef,
       where('role', '==', 'student'),
       where('courseId', '==', courseId),
-      orderBy('lastActiveAt', 'desc'),
     );
+
+    // docChanges() 활용: 변경된 문서만 증분 업데이트
+    const studentsMap = new Map<string, ReturnType<typeof convertToStudentData>>();
 
     unsubRef.current = onSnapshot(
       q,
       (snapshot) => {
-        const studentsList = snapshot.docs.map(convertToStudentData);
+        const changes = snapshot.docChanges();
+
+        if (changes.length === 0 && studentsMap.size > 0) return;
+
+        // 첫 스냅샷이면 전체 로드 (docChanges가 전부 'added')
+        if (!hasLoadedRef.current) {
+          snapshot.docs.forEach(d => studentsMap.set(d.id, convertToStudentData(d)));
+        } else {
+          // 증분 업데이트: 변경된 문서만 처리
+          let hasNonActivityChange = false;
+          for (const change of changes) {
+            if (change.type === 'removed') {
+              studentsMap.delete(change.doc.id);
+              hasNonActivityChange = true;
+            } else {
+              const newData = convertToStudentData(change.doc);
+              const existing = studentsMap.get(change.doc.id);
+              studentsMap.set(change.doc.id, newData);
+
+              // lastActiveAt/currentActivity만 변경된 경우 리렌더 스킵
+              if (existing && change.type === 'modified') {
+                const isPresenceOnly =
+                  existing.nickname === newData.nickname &&
+                  existing.classId === newData.classId &&
+                  existing.experience === newData.experience &&
+                  existing.quizStats.totalAttempts === newData.quizStats.totalAttempts &&
+                  existing.quizStats.averageScore === newData.quizStats.averageScore &&
+                  existing.feedbackCount === newData.feedbackCount;
+                if (!isPresenceOnly) hasNonActivityChange = true;
+              } else {
+                hasNonActivityChange = true;
+              }
+            }
+          }
+
+          // 접속 상태만 변경된 경우 setStudents 호출 스킵 (리렌더 방지)
+          if (!hasNonActivityChange) return;
+        }
+
+        const studentsList = Array.from(studentsMap.values());
         setStudents(studentsList);
         hasLoadedRef.current = true;
         setLoading(false);

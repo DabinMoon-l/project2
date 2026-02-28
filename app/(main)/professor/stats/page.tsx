@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useCourse } from '@/lib/contexts';
-import { useProfessorStats, getRawUserClassMap, type QuestionSource, type DispersionMode } from '@/lib/hooks/useProfessorStats';
+import { useProfessorStats, getRawStudents, type QuestionSource, type DispersionMode, type RawStudentData } from '@/lib/hooks/useProfessorStats';
 import { calcFeedbackScore, FEEDBACK_SCORES } from '@/lib/utils/feedbackScore';
 import { exportToExcel, exportToWord, type WeeklyStatSummary } from '@/lib/utils/reportExport';
 import { httpsCallable } from 'firebase/functions';
@@ -127,11 +127,30 @@ export default function ProfessorStatsPage() {
 
       try {
         // questionFeedbacks + posts만 조회 (users는 useProfessorStats raw 캐시 재사용)
-        const [fbSnap, usersSnap, postSnap] = await Promise.all([
+        const [fbSnap, postSnap] = await Promise.all([
           getDocs(query(collection(db, 'questionFeedbacks'), where('courseId', '==', courseId))),
-          getDocs(query(collection(db, 'users'), where('courseId', '==', courseId), where('role', '==', 'student'))),
           getDocs(query(collection(db, 'posts'), where('courseId', '==', courseId))),
         ]);
+
+        if (cancelled) return;
+
+        // ── 학생 데이터: useProfessorStats raw 캐시에서 가져오기 (중복 쿼리 제거) ──
+        let rawStudents = getRawStudents(courseId);
+        if (!rawStudents) {
+          // raw 캐시가 아직 없으면 직접 조회 (fallback)
+          const usersSnap = await getDocs(query(collection(db, 'users'), where('courseId', '==', courseId), where('role', '==', 'student')));
+          rawStudents = usersSnap.docs.map(d => {
+            const data = d.data();
+            return {
+              classId: (data.classId || 'A') as string,
+              totalExp: data.totalExp || 0,
+              profCorrectCount: data.profCorrectCount || 0,
+              profAttemptCount: data.profAttemptCount || 0,
+              equippedRabbits: Array.isArray(data.equippedRabbits) ? data.equippedRabbits : [],
+              lastGachaExp: data.lastGachaExp || 0,
+            } as RawStudentData;
+          });
+        }
 
         if (cancelled) return;
 
@@ -164,7 +183,7 @@ export default function ProfessorStatsPage() {
         };
 
         // ── 학생 군집 + 게이미피케이션 ──
-        if (usersSnap.empty) {
+        if (rawStudents.length === 0) {
           const result: ExtraData = {
             feedbackData,
             clusterData: { passionate: 0, hardworking: 0, efficient: 0, atRisk: 0, total: 0 },
@@ -176,18 +195,15 @@ export default function ProfessorStatsPage() {
           return;
         }
 
-        const students = usersSnap.docs.map(d => {
-          const data = d.data();
-          return {
-            classId: (data.classId || 'A') as string,
-            totalExp: data.totalExp || 0,
-            correctRate: data.profCorrectCount
-              ? ((data.profCorrectCount / Math.max(data.profAttemptCount || 1, 1)) * 100)
-              : 0,
-            rabbitCount: Array.isArray(data.equippedRabbits) ? data.equippedRabbits.length : 0,
-            lastGachaExp: data.lastGachaExp || 0,
-          };
-        });
+        const students = rawStudents.map(s => ({
+          classId: s.classId,
+          totalExp: s.totalExp,
+          correctRate: s.profCorrectCount
+            ? ((s.profCorrectCount / Math.max(s.profAttemptCount || 1, 1)) * 100)
+            : 0,
+          rabbitCount: s.equippedRabbits.length,
+          lastGachaExp: s.lastGachaExp,
+        }));
 
         // 군집 분류
         const exps = students.map(s => s.totalExp).sort((a, b) => a - b);

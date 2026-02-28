@@ -120,33 +120,39 @@ export const useQuizBookmark = (): UseQuizBookmarkReturn => {
     const unsubscribe = onSnapshot(
       bookmarksQuery,
       async (snapshot) => {
-        const quizzes: BookmarkedQuiz[] = [];
         const ids = new Set<string>();
+        const bookmarkDataMap = new Map<string, any>();
 
         for (const docSnapshot of snapshot.docs) {
           const data = docSnapshot.data();
-          const quizId = data.quizId;
-          ids.add(quizId);
+          ids.add(data.quizId);
+          bookmarkDataMap.set(data.quizId, data);
+        }
 
-          // 퀴즈 정보 가져오기
-          try {
-            const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
-            if (quizDoc.exists()) {
+        // 퀴즈 정보 + 완료 여부를 병렬로 조회 (직렬 N+1 → 병렬 배치)
+        const quizIds = Array.from(ids);
+        const results = await Promise.all(
+          quizIds.map(async (quizId) => {
+            try {
+              // 퀴즈 문서와 완료 여부를 동시에 조회
+              const [quizDoc, completionDoc] = await Promise.all([
+                getDoc(doc(db, 'quizzes', quizId)),
+                user ? getDoc(doc(db, 'quiz_completions', `${quizId}_${user.uid}`)) : Promise.resolve(null),
+              ]);
+
+              if (!quizDoc.exists()) return null;
+
               const quizData = quizDoc.data();
-              // quiz_completions로 완료 여부 확인
-              let hasCompleted = false;
-              if (user) {
-                const completionDoc = await getDoc(doc(db, 'quiz_completions', `${quizId}_${user.uid}`));
-                hasCompleted = completionDoc.exists();
-              }
+              const bmData = bookmarkDataMap.get(quizId);
+              const hasCompleted = completionDoc?.exists() ?? false;
 
-              quizzes.push({
+              return {
                 id: quizId,
                 quizId,
                 title: quizData.title || '제목 없음',
                 questionCount: quizData.questionCount || 0,
                 participantCount: quizData.participantCount || 0,
-                bookmarkedAt: data.bookmarkedAt,
+                bookmarkedAt: bmData?.bookmarkedAt,
                 difficulty: quizData.difficulty || 'normal',
                 chapterId: quizData.chapterId || undefined,
                 creatorNickname: quizData.creatorNickname || '익명',
@@ -166,14 +172,15 @@ export const useQuizBookmark = (): UseQuizBookmarkReturn => {
                   }
                   return 0;
                 })(),
-              });
+              } as BookmarkedQuiz;
+            } catch {
+              return null;
             }
-          } catch (err) {
-            console.error('퀴즈 정보 로드 실패:', err);
-          }
-        }
+          })
+        );
 
-        // 북마크 시간 기준 정렬 (최신순)
+        // null 제거 + 북마크 시간 기준 정렬 (최신순)
+        const quizzes = results.filter((q): q is BookmarkedQuiz => q !== null);
         quizzes.sort((a, b) => {
           const aTime = a.bookmarkedAt?.toMillis?.() || 0;
           const bTime = b.bookmarkedAt?.toMillis?.() || 0;

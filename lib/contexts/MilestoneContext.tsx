@@ -7,6 +7,7 @@ import {
   useEffect,
   useCallback,
   useRef,
+  useMemo,
   type ReactNode,
   type MutableRefObject,
 } from 'react';
@@ -200,24 +201,32 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
     setRollResult(null);
   }, [userCourseId]);
 
-  const value: MilestoneContextValue = {
+  const openMilestoneModal = useCallback(() => {
+    if (milestoneButtonRef.current) {
+      const r = milestoneButtonRef.current.getBoundingClientRect();
+      setButtonRect({ x: r.x, y: r.y, width: r.width, height: r.height });
+    }
+    setShowMilestoneModal(true);
+  }, []);
+
+  const closeMilestoneModal = useCallback(() => setShowMilestoneModal(false), []);
+
+  // Context 값 메모이제이션 (불필요한 소비자 리렌더 방지)
+  const value = useMemo<MilestoneContextValue>(() => ({
     pendingCount,
     expBar,
     allRabbitsDiscovered,
     showMilestoneModal,
-    openMilestoneModal: () => {
-      if (milestoneButtonRef.current) {
-        const r = milestoneButtonRef.current.getBoundingClientRect();
-        setButtonRect({ x: r.x, y: r.y, width: r.width, height: r.height });
-      }
-      setShowMilestoneModal(true);
-    },
-    closeMilestoneModal: () => setShowMilestoneModal(false),
+    openMilestoneModal,
+    closeMilestoneModal,
     milestoneButtonRef,
     buttonRect,
     suppressAutoTrigger,
     setSuppressAutoTrigger,
-  };
+  }), [
+    pendingCount, expBar, allRabbitsDiscovered, showMilestoneModal,
+    openMilestoneModal, closeMilestoneModal, buttonRect, suppressAutoTrigger,
+  ]);
 
   return (
     <MilestoneContext.Provider value={value}>

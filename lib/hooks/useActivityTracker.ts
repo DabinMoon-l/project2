@@ -6,7 +6,7 @@ import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
 
-const UPDATE_INTERVAL = 30_000; // 30초
+const UPDATE_INTERVAL = 120_000; // 120초 (30초 → 120초로 줄여 Firestore 쓰기 빈도 75% 감소)
 
 // 경로 기반 현재 활동 판정
 function getCurrentActivity(pathname: string): string {
@@ -21,11 +21,14 @@ function getCurrentActivity(pathname: string): string {
   return '탐색 중';
 }
 
-// 학생 접속 상태 추적 훅 — 30초마다 lastActiveAt + currentActivity 업데이트
+// 학생 접속 상태 추적 훅 — 120초마다 lastActiveAt + currentActivity 업데이트
+// activity가 변경된 경우에만 즉시 쓰기, 동일하면 인터벌만 유지
 export function useActivityTracker() {
   const { user } = useAuth();
   const pathname = usePathname();
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastActivityRef = useRef<string>('');
+  const lastWriteRef = useRef<number>(0);
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -34,18 +37,22 @@ export function useActivityTracker() {
     const activity = getCurrentActivity(pathname);
 
     const update = () => {
+      lastActivityRef.current = activity;
+      lastWriteRef.current = Date.now();
       updateDoc(userRef, {
         lastActiveAt: serverTimestamp(),
         currentActivity: activity,
-      }).catch(() => {
-        // 권한 에러 등 무시 (교수 role이 이 필드 쓰기 불가일 수 있음)
-      });
+      }).catch(() => {});
     };
 
-    // 즉시 1회 업데이트
-    update();
+    // activity가 변경되었거나 마지막 쓰기로부터 충분한 시간이 지났을 때만 즉시 쓰기
+    const timeSinceLastWrite = Date.now() - lastWriteRef.current;
+    if (activity !== lastActivityRef.current || timeSinceLastWrite > UPDATE_INTERVAL) {
+      update();
+    }
 
-    // 30초 간격 반복
+    // 이전 인터벌 정리 후 새 인터벌 설정
+    if (intervalRef.current) clearInterval(intervalRef.current);
     intervalRef.current = setInterval(update, UPDATE_INTERVAL);
 
     return () => {

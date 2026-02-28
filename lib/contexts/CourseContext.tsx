@@ -11,6 +11,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   type ReactNode,
 } from 'react';
 import { doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
@@ -220,22 +221,27 @@ export function CourseProvider({ children }: { children: ReactNode }) {
     setRefreshKey((prev) => prev + 1);
   }, []);
 
+  // Context 값 메모이제이션 (불필요한 소비자 리렌더 방지)
+  const value = useMemo<CourseContextType>(() => ({
+    semesterSettings,
+    userCourseId,
+    userClassId,
+    userCourse,
+    loading,
+    error,
+    availableGrades,
+    getCourseForGrade,
+    updateSemesterSettings,
+    setProfessorCourse,
+    refresh,
+  }), [
+    semesterSettings, userCourseId, userClassId, userCourse,
+    loading, error, availableGrades,
+    getCourseForGrade, updateSemesterSettings, setProfessorCourse, refresh,
+  ]);
+
   return (
-    <CourseContext.Provider
-      value={{
-        semesterSettings,
-        userCourseId,
-        userClassId,
-        userCourse,
-        loading,
-        error,
-        availableGrades,
-        getCourseForGrade,
-        updateSemesterSettings,
-        setProfessorCourse,
-        refresh,
-      }}
-    >
+    <CourseContext.Provider value={value}>
       {children}
     </CourseContext.Provider>
   );
