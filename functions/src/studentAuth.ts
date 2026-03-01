@@ -10,6 +10,7 @@ import { defineSecret } from "firebase-functions/params";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import * as nodemailer from "nodemailer";
+import { getBaseStats } from "./utils/rabbitStats";
 
 // 이메일 발송용 시크릿
 const GMAIL_ADDRESS = defineSecret("GMAIL_ADDRESS");
@@ -269,35 +270,86 @@ export const registerStudent = onCall(
       throw new HttpsError("internal", "계정 생성에 실패했습니다.");
     }
 
-    // Firestore users/{uid} 문서 생성
-    const userDocRef = db.collection("users").doc(userRecord.uid);
-    await userDocRef.set({
-      email,
-      studentId,
-      name: name || enrolledData.name || nickname,
-      nickname,
-      classId,
-      courseId,
-      role: "student",
-      totalExp: 0,
-      rank: "견습생",
-      onboardingCompleted: true,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
+    // Firestore users/{uid} 문서 생성 + 기본 토끼 지급 (트랜잭션)
+    const uid = userRecord.uid;
+    const rabbitId = 0;
+    const holdingKey = `${courseId}_${rabbitId}`;
+    const userDocRef = db.collection("users").doc(uid);
+    const holdingRef = userDocRef.collection("rabbitHoldings").doc(holdingKey);
+    const rabbitRef = db.collection("rabbits").doc(holdingKey);
+    const displayNickname = nickname || "알 수 없음";
+
+    await db.runTransaction(async (transaction) => {
+      // READ: 기본 토끼 문서 확인
+      const rabbitDoc = await transaction.get(rabbitRef);
+
+      // WRITE 1: 유저 문서 생성
+      transaction.set(userDocRef, {
+        email,
+        studentId,
+        name: name || enrolledData.name || nickname,
+        nickname,
+        classId,
+        courseId,
+        role: "student",
+        totalExp: 0,
+        rank: "견습생",
+        onboardingCompleted: true,
+        equippedRabbits: [{ rabbitId, courseId }],
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      // WRITE 2: 기본 토끼 홀딩 생성
+      transaction.set(holdingRef, {
+        rabbitId,
+        courseId,
+        discoveryOrder: 1,
+        discoveredAt: FieldValue.serverTimestamp(),
+        level: 1,
+        stats: getBaseStats(rabbitId),
+      });
+
+      // WRITE 3: 토끼 문서 생성/업데이트
+      if (!rabbitDoc.exists) {
+        transaction.set(rabbitRef, {
+          rabbitId,
+          courseId,
+          name: null,
+          firstDiscovererUserId: uid,
+          firstDiscovererName: displayNickname,
+          discovererCount: 1,
+          discoverers: [{ userId: uid, nickname: displayNickname, discoveryOrder: 1 }],
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      } else {
+        const existingData = rabbitDoc.data()!;
+        const nextOrder = (existingData.discovererCount || 1) + 1;
+        transaction.update(rabbitRef, {
+          discovererCount: nextOrder,
+          discoverers: FieldValue.arrayUnion({
+            userId: uid,
+            nickname: displayNickname,
+            discoveryOrder: nextOrder,
+          }),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
     });
 
     // enrolledStudents 업데이트
     await enrolledRef.update({
       isRegistered: true,
-      registeredUid: userRecord.uid,
+      registeredUid: uid,
       registeredAt: FieldValue.serverTimestamp(),
     });
 
-    console.log(`학생 가입 완료: ${studentId} → ${userRecord.uid}`);
+    console.log(`학생 가입 완료: ${studentId} → ${uid} (기본 토끼 지급 포함)`);
 
     return {
       success: true,
-      uid: userRecord.uid,
+      uid,
     };
   }
 );

@@ -96,7 +96,12 @@ export default function CharacterBox() {
         (h) => h.rabbitId === frontSlot.rabbitId && h.courseId === frontSlot.courseId
       )
     : null;
-  const frontInfo = frontHolding ? getRabbitStats(frontHolding) : null;
+  // 홀딩이 있으면 실제 스탯, 없으면 기본 토끼(#0)는 베이스 스탯 폴백
+  const frontInfo = frontHolding
+    ? getRabbitStats(frontHolding)
+    : frontSlot
+      ? { level: 1, stats: { hp: 25, atk: 8, def: 5 } } // 베이스 스탯 폴백
+      : null;
 
   // 앞 토끼 이름 구독
   const { rabbit: frontRabbitDoc } = useRabbitDoc(frontSlot?.courseId, frontSlot?.rabbitId);
