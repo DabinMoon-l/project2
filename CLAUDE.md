@@ -850,3 +850,350 @@ firebase deploy --only functions
 - `SwipeBack.tsx` — 왼쪽 25px 가장자리 오른쪽 스와이프 → router.back()
 - 트리거: 화면 폭 35% 초과 또는 velocity > 500
 - 홈/교수홈/가로모드에서 비활성화
+
+## 서버 비용 예측
+
+### 대상 규모: 생물학 130명 + 미생물학 170명 ≈ 300명 활성 사용자
+
+| 서비스 | 무료 등급 | 예상 사용량 (월) | 월 비용 (USD) |
+|--------|----------|-----------------|--------------|
+| Firebase Auth | 10K MAU | 300 MAU | $0 |
+| Firestore 읽기 | 50K/일 (1.5M/월) | 2~4M | $1~3 |
+| Firestore 쓰기 | 20K/일 (600K/월) | 300~600K | $0~1 |
+| Cloud Functions | 2M 호출, 400K GB-s | 500K~1.2M 호출 | $0~5 |
+| Realtime Database | 10GB 전송 | <2GB (철권퀴즈) | $0 |
+| Cloud Storage | 5GB | 3~5GB (이미지/OCR) | $0~1 |
+| FCM 푸시 알림 | 무제한 | — | $0 |
+| Gemini API (Flash) | 15 RPM, 1M tok/일 | 1~3K 호출 | $0~5 |
+| Claude API (Sonnet) | 종량제 | 3~6 호출 (월별 리포트) | $1~3 |
+| Vercel Hobby | 100GB BW | PWA 정적 위주 | $0 |
+| Vercel Pro (필요시) | — | 트래픽 초과 시 | $20 |
+| Cloud Run (PPTX) | 2M req | <100 호출 | $0 |
+
+**월 합계 예상**:
+- 최소 (무료 등급 내): **$2~5**
+- 보통 (일부 초과): **$5~20**
+- 최대 (활발 사용 + Vercel Pro): **$25~40**
+
+### 비용 핵심 변수
+- **Firestore 읽기**: onSnapshot 리스너 88개 (코드베이스 전체). 사용자당 동시 5~10개 구독 → 300명 × 8개 = 2,400 동시 리스너. 불필요한 구독 정리로 절감 가능
+- **Cloud Functions**: 스케줄 CF 20+개 (1분~매일 주기). 배틀 시 burst 호출. 콜드 스타트 시 메모리 할당량이 비용 좌우
+- **Gemini API**: Flash 모델 무료 쿼터가 넉넉하여 대부분 무료. 문제 풀 사전 생성(야간 3시)으로 실시간 호출 최소화
+- **Vercel**: PWA 특성상 정적 자산 캐싱 효율 높음. 300명 수준에서 Hobby 무료 등급 충분, 500명+ 시 Pro 필요
+
+### 비용 최적화 전략
+1. onSnapshot 구독 최소화 (화면 이탈 시 unsubscribe, 폴링 전환)
+2. Cloud Functions 메모리 최적화 (기본 256MiB → 필요한 것만 512MiB)
+3. Firestore 복합 쿼리 → 단일 쿼리로 통합 (읽기 횟수 감소)
+4. 정적 데이터 클라이언트 캐싱 (rankings, radarNorm → sessionStorage SWR 유지)
+5. 이미지 최적화 (Next.js Image + WebP, lazy loading)
+
+## 개발 로드맵
+
+### Phase 1: 아키텍처 리뷰 + 리팩토링
+
+#### 1-1. 거대 파일 분할
+
+| 파일 | 현재 크기 | 분할 전략 |
+|------|----------|----------|
+| `app/(main)/review/page.tsx` | 6,146줄 | 탭별 컴포넌트 분리 (WrongTab, BookmarkTab, SolvedTab), 훅 추출 (useReviewData, useReviewFilters) |
+| `components/quiz/create/QuestionEditor.tsx` | 4,074줄 | 유형별 에디터 분리 (OXEditor, MultipleEditor, ShortEditor, EssayEditor, CombinedEditor), 공통 로직 훅 추출 |
+| `components/home/AnnouncementChannel.tsx` | 3,500줄+ | 메시지 렌더러, 입력 폼, 검색, 캘린더, 미디어 드로어를 별도 컴포넌트로 |
+| `app/(main)/board/page.tsx` | 2,800줄+ | PostList, WriteSection, CommentThread 분리 |
+| `functions/src/tekkenBattle.ts` | 1,800줄+ | matchmaking, round, scoring, endBattle 모듈 분리 |
+
+#### 1-2. Dynamic Import 도입
+
+현재 모든 컴포넌트가 정적 import → 번들 크기 과대. 아래 컴포넌트에 `next/dynamic` 적용:
+
+```typescript
+// 즉시 필요하지 않은 대형 컴포넌트
+const QuestionEditor = dynamic(() => import('@/components/quiz/create/QuestionEditor'));
+const TekkenBattleOverlay = dynamic(() => import('@/components/tekken/TekkenBattleOverlay'));
+const AnnouncementChannel = dynamic(() => import('@/components/home/AnnouncementChannel'));
+const RabbitDogam = dynamic(() => import('@/components/home/RabbitDogam'));
+const ProfessorLibraryTab = dynamic(() => import('@/components/professor/library/ProfessorLibraryTab'));
+const QuizStatsModal = dynamic(() => import('@/components/quiz/manage/QuizStatsModal'));
+
+// OCR/문서 처리 (사용 시에만 로드)
+const OCRProcessor = dynamic(() => import('@/components/quiz/create/OCRProcessor'));
+const ImageCropper = dynamic(() => import('@/components/quiz/create/ImageCropper'));
+```
+
+#### 1-3. onSnapshot 구독 최적화
+
+현재 88개 onSnapshot 호출 → 불필요한 실시간 구독 식별 후 정리:
+- **유지**: UserContext, 퀴즈 풀이 중 상태, 배틀 RTDB 리스너
+- **폴링 전환**: 랭킹 (이미 SWR 캐시), 교수 통계, 게시판 목록
+- **언마운트 시 해제 확인**: 모든 useEffect cleanup에서 unsubscribe 호출 검증
+- **쿼리 범위 축소**: `where` 절 추가하여 불필요한 문서 스캔 방지
+
+#### 1-4. 중복 코드 제거
+
+식별된 중복 패턴:
+- 퀴즈 렌더링 로직 (QuestionCard vs ReviewQuestionCard vs PreviewQuestionCard)
+- 이미지 업로드/표시 패턴 (게시판, 퀴즈, 공지 채널에 각각 구현)
+- Firestore 쿼리 패턴 (courseId 필터링이 여러 훅에 반복)
+- 바텀시트/모달 상태 관리 (open/close 패턴 반복)
+
+### Phase 2: 성능 최적화 (목표: 동시접속 500명)
+
+#### 2-1. 프론트엔드 최적화
+
+| 항목 | 현재 상태 | 최적화 |
+|------|----------|--------|
+| 번들 크기 | dynamic import 미사용, 전체 로드 | 라우트별 코드 스플리팅 + lazy 로드 |
+| 이미지 | 일부 `<img>` 사용 | 전체 `next/image` 전환 (WebP, srcset, lazy) |
+| 토끼 에셋 | 80개 PNG 즉시 로드 가능 | 보이는 것만 로드 (Intersection Observer) |
+| Framer Motion | 페이지 전체 래핑 | `LazyMotion` + `domAnimation` 서브셋 |
+| React re-render | Context 변경 시 전체 리렌더 | `useMemo`/`memo` 적용, Context 분할 |
+| 폰트 | 3개 폰트 동시 로드 | `font-display: swap` + 서브셋 |
+
+#### 2-2. Cloud Functions 최적화
+
+| 항목 | 현재 | 최적화 |
+|------|------|--------|
+| 콜드 스타트 | 기본 설정 (모든 CF 동일 인스턴스) | `minInstances: 1` (핵심 CF만: recordAttempt, joinMatchmaking) |
+| 메모리 | 대부분 기본 256MiB | CF별 프로파일링 후 적정 할당 (Gemini 호출: 512MiB, 경량: 128MiB) |
+| 타임아웃 | 기본 60초 | CF별 적정 설정 (배틀: 30초, AI 생성: 540초) |
+| 동시성 | 기본 80 | 부하 테스트 결과에 따라 조정 |
+| 리전 | asia-northeast3 (서울) | 유지 (한국 서비스) |
+
+#### 2-3. Firestore 쿼리 최적화
+
+- 복합 인덱스 추가 (`firestore.indexes.json`): 자주 사용되는 courseId + createdAt 조합
+- `select()` 사용: 필요한 필드만 조회 (특히 users 컬렉션 — 불필요한 characterPreview, badges 제외)
+- 페이지네이션: 무한 스크롤 컴포넌트에 `startAfter`/`limit` 적용
+- 캐시 레이어: 자주 바뀌지 않는 데이터 (courseScope, styleProfile) → 메모리/sessionStorage 캐싱
+
+#### 2-4. Realtime Database 최적화 (철권퀴즈)
+
+- 배틀 데이터 구조 평탄화 (깊은 중첩 방지)
+- `.indexOn` 규칙 최적화 (database.rules.json)
+- 리스너 범위 축소 (배틀 전체가 아닌 필요한 자식 노드만 구독)
+- 매칭 큐 트랜잭션 재시도 로직 강화
+
+### Phase 3: 테스트 프레임워크 구축
+
+#### 3-1. Vitest 단위 테스트
+
+```bash
+npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
+```
+
+**우선 테스트 대상** (비즈니스 로직 핵심):
+
+| 대상 | 파일 | 테스트 내용 |
+|------|------|------------|
+| 채점 로직 | `lib/scoring.ts` | 객관식/주관식/복수정답/서술형 채점 정확성 |
+| 데미지 계산 | `lib/utils/tekkenDamage.ts` | ATK/DEF 조합별 데미지, 크리티컬, 셀프데미지 |
+| 랭킹 계산 | `lib/utils/ranking.ts` | 개인/팀 점수 공식, 동점 처리 |
+| 피드백 점수 | `lib/utils/feedbackScore.ts` | 타입별 가중치, 평균 계산 |
+| 마일스톤 | `lib/utils/milestone.ts` | 50XP 간격, pending 계산, EXP 바 표시 |
+| 통계 유틸 | `lib/utils/statistics.ts` | 백분위, 표준편차, 정규화 |
+| 과목 시스템 | `lib/types/course.ts` | 학기 판별, 과목 결정 |
+| CF: recordAttempt | `functions/src/recordAttempt.ts` | 채점 + 분산 쓰기 + 동시 제출 처리 |
+| CF: tekkenDamage | `functions/src/utils/tekkenDamage.ts` | 서버 데미지 계산 (클라이언트와 일치 검증) |
+| CF: rabbitStats | `functions/src/utils/rabbitStats.ts` | 레벨업 스탯 증가 범위 검증 |
+
+**목표**: 핵심 비즈니스 로직 커버리지 90%+
+
+#### 3-2. Playwright E2E 테스트
+
+```bash
+npm install -D @playwright/test
+npx playwright install
+```
+
+**시나리오 목록**:
+
+| 시나리오 | 설명 | 우선순위 |
+|---------|------|---------|
+| 회원가입 → 로그인 | 학번 입력 → 이름/학년 → 로그인 → 홈 | P0 |
+| 퀴즈 풀이 전체 플로우 | 목록 → 풀이 → 제출 → 결과 → 피드백 | P0 |
+| 교수 퀴즈 생성 | 수동 생성 (OX, 객관식, 단답형, 결합형) | P0 |
+| 복습 플로우 | 오답 복습 → 정답 선택 → 완료 | P1 |
+| 게시판 CRUD | 글 작성 → 댓글 → 좋아요 → 삭제 | P1 |
+| AI 문제 생성 | 태그 선택 → 생성 → 완료 토스트 | P1 |
+| 철권퀴즈 매칭→배틀 | 매칭 큐 → 봇 매칭 → 라운드 → 결과 | P2 |
+| 토끼 뽑기/장착 | 마일스톤 → 뽑기 → 이름 → 장착 | P2 |
+| 공지 채널 | 교수 공지 작성 → 학생 읽기 → 투표 → 리액션 | P2 |
+| 교수 학생 모니터링 | 학생 목록 → 상세 → 레이더 차트 | P2 |
+| 반응형 세로/가로 | 각 페이지 세로↔가로 전환 레이아웃 검증 | P1 |
+| PWA 오프라인 | 오프라인 배너 표시, 캐시된 페이지 접근 | P2 |
+
+**설정**: `playwright.config.ts` — Chrome Mobile (iPhone 14 Pro 뷰포트 393×852), Desktop Chrome (1920×1080)
+
+#### 3-3. K6 부하 테스트 (목표: 동시접속 500명)
+
+```bash
+# K6 설치
+# https://k6.io/docs/get-started/installation/
+```
+
+**테스트 시나리오**:
+
+| 시나리오 | VU (가상 사용자) | 지속 시간 | SLO |
+|---------|----------------|----------|-----|
+| 일반 브라우징 | 500 VU | 10분 | p95 < 500ms |
+| 퀴즈 동시 제출 | 200 VU | 5분 | p95 < 2s, 에러율 < 1% |
+| 철권퀴즈 동시 매칭 | 100 VU (50쌍) | 5분 | p95 < 1s |
+| 게시판 동시 조회 | 300 VU | 10분 | p95 < 800ms |
+| 피크타임 시뮬레이션 | 500 VU (혼합) | 15분 | p95 < 1s, 에러율 < 0.5% |
+| 스파이크 테스트 | 0→500→0 VU (2분) | 6분 | 에러율 < 2% |
+| Soak 테스트 | 200 VU | 1시간 | 메모리 누수 없음, 에러율 < 0.1% |
+
+**K6 테스트 대상 엔드포인트**:
+- Callable CFs: `recordAttempt`, `joinMatchmaking`, `submitAnswer`, `checkJobStatus`
+- Firestore 직접 읽기: quizzes, users, rankings
+- RTDB 리스너: tekken/battles
+
+**모니터링 지표**:
+- Firebase Console: Firestore 읽기/쓰기 속도, CF 실행 시간/에러율
+- Vercel Analytics: TTFB, LCP, CLS
+- Cloud Functions 로그: 콜드 스타트 빈도, 메모리 사용량
+
+### Phase 4: 코드 품질 + 시니어 레벨 버그 헌팅
+
+#### 4-1. 정적 분석 강화
+
+```bash
+# ESLint 규칙 강화
+npm install -D eslint-plugin-react-hooks eslint-plugin-jsx-a11y
+npm install -D @typescript-eslint/strict-type-checked
+
+# 번들 분석
+ANALYZE=true npm run build
+```
+
+- TypeScript strict 모드 프론트엔드에도 활성화 (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`)
+- `eslint-plugin-react-hooks`: exhaustive-deps 경고 → 에러로 격상
+- unused imports/variables 자동 제거
+- `no-floating-promises` 규칙 (await 누락 방지)
+
+#### 4-2. 레이스 컨디션 점검
+
+시니어 개발자가 반드시 확인하는 동시성 버그 패턴:
+
+| 위험 영역 | 시나리오 | 점검 방법 |
+|----------|---------|----------|
+| 퀴즈 이중 제출 | 빠른 더블탭으로 recordAttempt 2회 호출 | CF에서 idempotency key 검증, 클라이언트 debounce |
+| EXP 동시 지급 | 퀴즈 완료 + 피드백이 동시 트리거 | Firestore 트랜잭션 사용 여부 확인 |
+| 철권 매칭 충돌 | 3명이 동시 매칭 → 2명만 매칭되어야 | RTDB 트랜잭션 원자성 검증 |
+| 토끼 뽑기 동시 Claim | 같은 pendingSpin 2회 Claim | spinLock 필드로 방지 여부 확인 |
+| onSnapshot race | 컴포넌트 마운트/언마운트 중 setState 호출 | cleanup에서 unsubscribe + mounted 플래그 |
+| 투표 동시 참여 | 같은 투표에 300명 동시 클릭 | CF에서 arrayUnion 사용 여부 (merge 안전성) |
+
+#### 4-3. 보안 감사
+
+| 점검 항목 | 설명 | 도구/방법 |
+|----------|------|----------|
+| Firestore Rules 테스트 | 모든 컬렉션 read/write 규칙 검증 | `@firebase/rules-unit-testing` |
+| XSS 방지 | 사용자 입력 (닉네임, 게시글, 댓글) HTML 이스케이프 | React 기본 + dangerouslySetInnerHTML 사용처 점검 |
+| IDOR 방지 | 다른 사용자 데이터 접근 불가 | Firestore Rules request.auth.uid 검증 |
+| Rate Limiting | CF callable 함수 abuse 방지 | 기존 rateLimit 로직 커버리지 확인 |
+| 환경 변수 노출 | NEXT_PUBLIC_ 접두사 아닌 시크릿 클라이언트 노출 | 빌드 결과물 grep |
+| 인증 우회 | 미인증 사용자의 (main) 라우트 접근 | useRequireAuth 래핑 누락 검사 |
+| Cloud Functions 권한 | 교수 전용 CF에 role 검증 누락 | 모든 onCall 함수 auth/role 체크 |
+| CORS | Cloud Functions CORS 설정 | Firebase hosting rewrites 검증 |
+
+#### 4-4. 메모리 누수 점검
+
+| 점검 대상 | 증상 | 해결 |
+|----------|------|------|
+| onSnapshot 미해제 | 페이지 이동 후에도 리스너 유지 → 메모리 증가 | Chrome DevTools Performance Monitor |
+| setInterval/setTimeout | clearInterval 없이 컴포넌트 언마운트 | useEffect cleanup 검증 |
+| 이벤트 리스너 | addEventListener 후 removeEventListener 누락 | 모든 useEffect 내 이벤트 등록 검사 |
+| 대용량 상태 | 전체 퀴즈 목록을 메모리에 보관 | 페이지네이션 + 가상 스크롤 적용 |
+| Canvas/WebGL | Lottie 애니메이션 destroy 미호출 | 언마운트 시 정리 확인 |
+
+#### 4-5. 에러 바운더리 커버리지
+
+현재 `ErrorBoundary.tsx` 존재하나 적용 범위 미확인:
+- 각 라우트 페이지에 ErrorBoundary 래핑
+- CF 호출 실패 시 사용자 친화적 에러 표시
+- 네트워크 에러 → 오프라인 배너 + 재시도 버튼
+- Firestore 권한 에러 → 로그인 페이지 리다이렉트
+
+#### 4-6. 접근성 (a11y) 점검
+
+- 키보드 네비게이션: Tab 순서, Enter/Space 활성화
+- 스크린 리더: aria-label, role 속성
+- 색 대비: WCAG AA 기준 (4.5:1 텍스트, 3:1 대형 텍스트)
+- 포커스 관리: 모달 열기 시 포커스 트랩, 닫기 시 원래 위치 복원
+
+### Phase 5: 반응형 디자인 검증
+
+#### 세로모드 (모바일 우선)
+
+| 화면 크기 | 기기 | 검증 포인트 |
+|----------|------|------------|
+| 320px | iPhone SE | 최소 너비 레이아웃 깨짐 없음 |
+| 375px | iPhone 13 mini | 기본 타겟 |
+| 393px | iPhone 14 Pro | 주력 타겟 |
+| 430px | iPhone 14 Pro Max | 넓은 모바일 |
+| 768px | iPad | 태블릿 세로 |
+
+#### 가로모드 (사이드바)
+
+| 화면 크기 | 기기 | 검증 포인트 |
+|----------|------|------------|
+| 1024×768 | iPad 가로 | 최소 가로모드 진입점 |
+| 1366×768 | 노트북 | 일반적 PC |
+| 1920×1080 | 모니터 | 풀HD |
+
+#### 검증 체크리스트
+- [ ] 모든 페이지 세로↔가로 전환 시 레이아웃 깨짐 없음
+- [ ] safe-area-inset 적용 (노치, 다이내믹 아일랜드, 홈바)
+- [ ] 바텀시트/모달 가로모드에서 정상 렌더링
+- [ ] 키보드 오픈 시 입력 필드 가림 없음
+- [ ] 캐러셀/스와이프 터치 + 마우스 모두 동작
+- [ ] 이미지/비디오 종횡비 유지
+
+### 구현 우선순위
+
+| 순서 | 작업 | 소요 예상 | 영향도 |
+|------|------|----------|--------|
+| 1 | Dynamic Import 도입 | 1~2일 | 번들 크기 40~60% 감소 |
+| 2 | onSnapshot 구독 최적화 | 2~3일 | Firestore 비용 30~50% 절감 |
+| 3 | 거대 파일 분할 (Top 3) | 3~5일 | 유지보수성, 빌드 속도 |
+| 4 | Vitest 단위 테스트 | 3~5일 | 핵심 로직 안정성 |
+| 5 | Cloud Functions 최적화 | 2~3일 | 콜드 스타트 감소, 비용 절감 |
+| 6 | 레이스 컨디션 수정 | 2~3일 | 데이터 무결성 |
+| 7 | 보안 감사 | 1~2일 | 보안 |
+| 8 | 반응형 검증 + 수정 | 3~5일 | UX |
+| 9 | Playwright E2E 테스트 | 5~7일 | 회귀 방지 |
+| 10 | K6 부하 테스트 | 3~5일 | 500명 동시접속 검증 |
+| 11 | 메모리 누수/에러 바운더리 | 2~3일 | 안정성 |
+| 12 | 접근성 + 코드 중복 제거 | 3~5일 | 품질 |
+
+### 시니어 개발자 버그 헌팅 체크리스트
+
+실제 현직 시니어 엔지니어가 프로덕션 코드 리뷰 시 확인하는 항목:
+
+#### Critical (즉시 수정)
+- [ ] **이중 제출 방지**: 모든 폼/CF 호출에 loading 상태 + disabled 처리
+- [ ] **인증 우회**: `(main)` 라우트 그룹의 모든 페이지에 `useRequireAuth` 적용 확인
+- [ ] **CF 권한 검증**: 교수 전용 CF에 `role === 'professor'` 체크 누락 없는지
+- [ ] **Firestore Rules 일관성**: rules와 실제 코드의 read/write 패턴 일치 여부
+- [ ] **환경 변수 보안**: `.env.local` 외 시크릿이 클라이언트 번들에 포함되지 않는지
+
+#### High (1주 내 수정)
+- [ ] **에러 핸들링**: CF 호출 실패 시 사용자에게 명확한 피드백 (무한 로딩 방지)
+- [ ] **옵티미스틱 업데이트 롤백**: Firestore 쓰기 실패 시 UI 상태 복구
+- [ ] **타이머 정리**: 모든 setTimeout/setInterval의 cleanup 확인
+- [ ] **의존성 배열**: useEffect/useCallback/useMemo 의존성 완전성 (ESLint exhaustive-deps)
+- [ ] **nullish 체크**: Firestore 문서 `.data()` 결과의 optional chaining 적용
+
+#### Medium (스프린트 내 수정)
+- [ ] **N+1 쿼리**: 루프 내 Firestore 개별 조회 → batch get 전환
+- [ ] **무한 리렌더**: Context 값 변경 시 불필요한 하위 트리 리렌더 방지
+- [ ] **이미지 최적화**: `<img>` 태그 → `next/image` 전환 누락
+- [ ] **접근성**: 인터랙티브 `<div>` → `<button>` 전환, aria 속성 누락
+- [ ] **TypeScript any**: `as any` 타입 캐스팅 제거, 올바른 타입 정의
+
+#### Low (백로그)
+- [ ] **console.log 잔존**: 프로덕션에서 자동 제거되지만, 개발 시 노이즈
+- [ ] **매직 넘버**: 하드코딩된 수치 → 상수 추출
+- [ ] **중복 스타일**: Tailwind 클래스 반복 → 커스텀 클래스 추출
+- [ ] **데드 코드**: 사용하지 않는 export, 폐기된 컴포넌트 정리
