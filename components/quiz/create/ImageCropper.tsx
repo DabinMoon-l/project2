@@ -277,7 +277,7 @@ export default function ImageCropper({
           <div className="flex-1 overflow-auto p-4">
             <div
               className="relative inline-block cursor-crosshair mx-auto"
-              style={{ width: imageSize.width, height: imageSize.height }}
+              style={{ width: imageSize.width, height: imageSize.height, touchAction: 'none' }}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}

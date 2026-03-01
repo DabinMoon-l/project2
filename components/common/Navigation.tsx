@@ -145,13 +145,17 @@ export default function Navigation({ role }: NavigationProps) {
     homeButtonRef,
   } = useHomeOverlay();
 
-  // 경로 기반 네비게이션 숨김
+  // 경로 기반 네비게이션 숨김 — layout.tsx hideNavigation과 동기화
   const shouldHideByPath = useMemo(() => {
     if (/^\/quiz\/[^/]+/.test(pathname) && pathname !== '/quiz/create') return true;
     if (pathname.includes('/edit')) return true;
+    if (/^\/board\/[^/]+/.test(pathname)) return true;
     if (pathname === '/ranking') return true;
     if (pathname === '/review/random') return true;
     if (/^\/review\/[^/]+\/[^/]+/.test(pathname)) return true;
+    if (/^\/professor\/quiz\/[^/]+\/preview/.test(pathname)) return true;
+    if (pathname === '/quiz/create') return true;
+    if (pathname === '/professor/quiz/create') return true;
     return false;
   }, [pathname]);
 

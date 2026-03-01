@@ -28,6 +28,7 @@ import { generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import AutoVideo, { getDifficultyVideo } from '@/components/quiz/AutoVideo';
 import { NEWSPAPER_BG_TEXT, parseAverageScore, sortByLatest, formatQuestionTypes } from '@/lib/utils/quizHelpers';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 import EditQuizSheet from '@/components/quiz/EditQuizSheet';
 
 // ============================================================
@@ -1525,8 +1526,10 @@ function QuizListPageContent() {
   // body 스크롤 방지 통합 (모달/관리모드 열림 시 PullToHome 스와이프 방지)
   useEffect(() => {
     const lock = !!quizToDelete || isManageMode;
-    document.body.style.overflow = lock ? 'hidden' : '';
-    return () => { document.body.style.overflow = ''; };
+    if (lock) {
+      lockScroll();
+      return () => unlockScroll();
+    }
   }, [quizToDelete, isManageMode]);
 
   // (삭제 모달은 위의 통합 useEffect에서 처리)

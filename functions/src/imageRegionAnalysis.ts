@@ -151,14 +151,28 @@ export async function analyzeImageRegions(
   };
 
   try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
+    // 60초 타임아웃
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60_000);
+    let response: Awaited<ReturnType<typeof fetch>>;
+    try {
+      response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal as any,
+        }
+      );
+    } catch (err: any) {
+      clearTimeout(timeout);
+      if (err.name === "AbortError") {
+        return { success: false, regions: [], error: "이미지 분석 시간 초과 (60초)" };
       }
-    );
+      throw err;
+    }
+    clearTimeout(timeout);
 
     if (!response.ok) {
       const errorText = await response.text();

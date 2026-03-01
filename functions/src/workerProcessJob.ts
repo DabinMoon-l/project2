@@ -460,6 +460,13 @@ export const retryQueuedJobs = onSchedule(
       // 문제 생성 실행
       try {
         const result = await processJobData(jobData, apiKey, db);
+        // 문제별 고유 ID 부여 (메인 워커와 동일)
+        if (result.questions) {
+          result.questions = JSON.parse(JSON.stringify(result.questions)).map((q: any) => {
+            if (q.id) return q;
+            return { ...q, id: `q_${crypto.randomUUID().slice(0, 8)}` };
+          });
+        }
         await jobRef.update({
           status: "COMPLETED",
           result,
@@ -475,6 +482,18 @@ export const retryQueuedJobs = onSchedule(
           completedAt: FieldValue.serverTimestamp(),
         });
         console.error(`[Retry] Job ${jobId} 실패:`, error);
+      } finally {
+        // Storage 임시 이미지 정리
+        const rawImgs = jobData.images || [];
+        if (rawImgs.length > 0 && typeof rawImgs[0] === "string" && rawImgs[0].startsWith("tmp/jobs/")) {
+          try {
+            const bucket = getStorage().bucket();
+            await Promise.all(rawImgs.map((p: string) => bucket.file(p).delete().catch(() => {})));
+            console.log(`[Retry] Job ${jobId}: 임시 이미지 ${rawImgs.length}개 삭제`);
+          } catch (e) {
+            console.warn(`[Retry] Job ${jobId}: 임시 이미지 삭제 실패`, e);
+          }
+        }
       }
     }
   }

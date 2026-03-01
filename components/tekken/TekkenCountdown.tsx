@@ -46,6 +46,8 @@ export default function TekkenCountdown({ onComplete, countdownStartedAt }: Tekk
   useEffect(() => {
     if (!countdownStartedAt) return; // 서버 타임스탬프 없으면 스킵
 
+    let completeTimer: ReturnType<typeof setTimeout> | null = null;
+
     const tick = () => {
       const elapsed = Date.now() - countdownStartedAt;
       const remaining = Math.max(0, 3000 - elapsed);
@@ -55,13 +57,16 @@ export default function TekkenCountdown({ onComplete, countdownStartedAt }: Tekk
 
       if (remaining <= 0 && !completedRef.current) {
         completedRef.current = true;
-        setTimeout(() => onCompleteRef.current(), 800);
+        completeTimer = setTimeout(() => onCompleteRef.current(), 800);
       }
     };
 
     tick();
     const timer = setInterval(tick, 50);
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      if (completeTimer) clearTimeout(completeTimer);
+    };
   }, [countdownStartedAt]);
 
   return (

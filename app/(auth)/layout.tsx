@@ -9,17 +9,17 @@
 
 import { useEffect } from 'react';
 import Image from 'next/image';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   // Auth 페이지: body 배경 검정 + 스크롤 방지
   useEffect(() => {
     const prevBg = document.body.style.backgroundColor;
-    const prevOverflow = document.body.style.overflow;
     document.body.style.backgroundColor = '#000';
-    document.body.style.overflow = 'hidden';
+    lockScroll();
     return () => {
       document.body.style.backgroundColor = prevBg;
-      document.body.style.overflow = prevOverflow;
+      unlockScroll();
     };
   }, []);
 

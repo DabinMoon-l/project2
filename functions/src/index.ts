@@ -355,6 +355,8 @@ export { submitInquiry } from "./inquiry";
 export { fillDogam } from "./fillDogam";
 export { cleanupExtraRabbits } from "./cleanupExtraRabbits";
 export { migrateRabbitStats } from "./migrateRabbitStats";
+export { migrateFeedbackCount } from "./migrateFeedbackCount";
+export { migrateQuizAnswersTo0Indexed } from "./migrateQuizAnswers";
 
 // ============================================
 // 주별 자동 수집 & 월별 리포트 Functions

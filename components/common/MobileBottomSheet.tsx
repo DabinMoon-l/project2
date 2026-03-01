@@ -55,7 +55,7 @@ export default function MobileBottomSheet({ open, onClose, children, maxHeight =
             onDragEnd={handleDragEnd}
             onClick={(e) => e.stopPropagation()}
             className="relative w-full bg-[#F5F0E8] rounded-t-2xl shadow-[0_-8px_32px_rgba(0,0,0,0.12)] border border-[#D4CFC4]/60 border-b-0 overflow-y-auto"
-            style={{ maxHeight }}
+            style={{ maxHeight, touchAction: 'pan-x' }}
           >
             {/* 드래그 핸들 */}
             <div className="flex justify-center pt-3 pb-1 sticky top-0 bg-[#F5F0E8] z-10 rounded-t-2xl cursor-grab active:cursor-grabbing">

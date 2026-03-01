@@ -11,6 +11,7 @@ import { generateCourseTags, COMMON_TAGS, type TagOption } from '@/lib/courseInd
 import ExpandModal from '@/components/common/ExpandModal';
 import type { SourceRect } from '@/lib/hooks/useExpandSource';
 import PageSelectionModal from './PageSelectionModal';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 // PDF.js worker - CDN 사용 (버전 일치 필수)
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
 
@@ -542,10 +543,10 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
   // body overflow 제어 (ExpandModal이 ESC 키 처리)
   useEffect(() => {
     if (isOpen) {
-      document.body.style.overflow = 'hidden';
+      lockScroll();
     }
     return () => {
-      document.body.style.overflow = '';
+      unlockScroll();
     };
   }, [isOpen]);
 

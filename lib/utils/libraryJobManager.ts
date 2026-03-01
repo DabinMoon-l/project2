@@ -41,8 +41,9 @@ export interface QuizSaveConfig {
 
 interface GeneratedQuestion {
   text: string;
-  choices: string[];
-  answer: number | number[];
+  type?: 'multiple' | 'ox';
+  choices?: string[];
+  answer: number | number[] | string;
   explanation: string;
   choiceExplanations?: string[];
   chapterId?: string;
@@ -232,12 +233,14 @@ async function pollAndSave(jobId: string, config: QuizSaveConfig) {
           // 태그가 1개면 해당 챕터로 배정, 여러 개면 첫 번째 챕터로 배정
           chapterId = defaultChapterId;
         }
+        // Gemini가 반환한 타입 사용 (ox/multiple)
+        const qType = (q as any).type === 'ox' ? 'ox' : 'multiple';
         return {
           id: `q${idx + 1}`,
           order: idx + 1,
-          type: 'multiple' as const,
+          type: qType as 'multiple' | 'ox',
           text: q.text,
-          choices: q.choices,
+          ...(qType === 'ox' ? {} : { choices: q.choices }),
           answer: q.answer,
           explanation: q.explanation || '',
           ...(q.choiceExplanations ? { choiceExplanations: q.choiceExplanations } : {}),
@@ -249,8 +252,8 @@ async function pollAndSave(jobId: string, config: QuizSaveConfig) {
         };
       }),
       questionCount: questions.length,
-      oxCount: 0,
-      multipleChoiceCount: questions.length,
+      oxCount: questions.filter(q => (q as any).type === 'ox').length,
+      multipleChoiceCount: questions.filter(q => (q as any).type !== 'ox').length,
       subjectiveCount: 0,
       participantCount: 0,
       userScores: {},

@@ -13,6 +13,7 @@ import {
   getProfessorRabbitName,
   getProfessorRabbitNote,
 } from '@/lib/utils/professorRabbit';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 interface ProfessorRabbitDogamProps {
   isOpen: boolean;
@@ -45,8 +46,8 @@ export default function ProfessorRabbitDogam({
   // body 스크롤 방지
   useEffect(() => {
     if (!isOpen) return;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
+    lockScroll();
+    return () => { unlockScroll(); };
   }, [isOpen]);
 
   // 도감 닫을 때 상세 초기화

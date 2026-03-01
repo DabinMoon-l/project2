@@ -11,6 +11,7 @@ import { formatChapterLabel, generateCourseTags, COMMON_TAGS } from '@/lib/cours
 import QuestionEditor, { type QuestionData, type SubQuestion } from '@/components/quiz/create/QuestionEditor';
 import QuestionList from '@/components/quiz/create/QuestionList';
 import { useProfessorQuiz, type QuizInput } from '@/lib/hooks/useProfessorQuiz';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 // ============================================================
 // 수정 나가기 확인 모달
@@ -48,10 +49,10 @@ function EditExitModal({
     if (isOpen) {
       previousActiveElement.current = document.activeElement as HTMLElement;
       modalRef.current?.focus();
-      document.body.style.overflow = 'hidden';
+      lockScroll();
     }
     return () => {
-      document.body.style.overflow = '';
+      unlockScroll();
       if (previousActiveElement.current) previousActiveElement.current.focus();
     };
   }, [isOpen]);

@@ -39,12 +39,14 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
   useActivityTracker();
 
   // 네비게이션 숨김 (홈 오버레이는 body attribute으로 처리)
+  // Navigation.tsx의 shouldHideByPath와 동기화 필수
   const hideNavigation =
-    pathname?.match(/^\/quiz\/[^/]+/) !== null ||
+    (pathname?.match(/^\/quiz\/[^/]+/) !== null && pathname !== '/quiz/create') ||
     pathname?.includes('/edit') ||
     pathname?.match(/^\/board\/[^/]+/) !== null ||
-    pathname === '/ranking' || // 직접 URL 접근 시 (바텀시트 전환 전 하위 호환)
+    pathname === '/ranking' ||
     pathname === '/review/random' ||
+    /^\/review\/[^/]+\/[^/]+/.test(pathname || '') ||
     pathname?.match(/^\/professor\/quiz\/[^/]+\/preview/) !== null ||
     pathname === '/quiz/create' ||
     pathname === '/professor/quiz/create';
@@ -60,7 +62,9 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
     pathname === '/professor/quiz' ||
     pathname === '/professor/students' ||
     pathname === '/profile' ||
-    pathname === '/settings';
+    pathname === '/settings' ||
+    pathname === '/ranking' ||
+    pathname === '/review/random';
 
   // 프로필이 없으면 로그인으로 리다이렉트
   useEffect(() => {

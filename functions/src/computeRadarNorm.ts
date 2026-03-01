@@ -181,33 +181,32 @@ async function computeRadarNormForCourse(courseId: string) {
 
   // 8. 성장세 (재시도 개선율)
   // 재시도가 있는 퀴즈에서 (최고 재시도 점수 - 첫 시도 점수)의 평균
-  // 0~100 스케일, 50이 기준선(변화 없음), 100이 만점 개선
+  // 0~100 스케일: 0 = 재시도 없음, 50 = 변화 없음, 100 = 만점 개선
   const growthByUid: Record<string, number> = {};
   studentUids.forEach(uid => {
     const userQuizMap = retryMap.get(uid);
-    if (!userQuizMap) { growthByUid[uid] = 50; return; }
+    if (!userQuizMap) { growthByUid[uid] = 0; return; }
 
     const improvements: number[] = [];
     userQuizMap.forEach(({ first, retries }) => {
       if (first < 0 || retries.length === 0) return;
       const bestRetry = Math.max(...retries);
-      // 개선폭: (bestRetry - first) — -100 ~ +100 범위
       improvements.push(bestRetry - first);
     });
 
     if (improvements.length === 0) {
-      growthByUid[uid] = 50; // 재시도 없음 → 기준선
+      growthByUid[uid] = 0; // 재시도 없음 → 0
     } else {
       const avgImprovement = improvements.reduce((s, v) => s + v, 0) / improvements.length;
-      // -100~+100 → 0~100 스케일 (50이 기준선)
+      // -100~+100 → 0~100 스케일 (50이 변화없음 기준선)
       growthByUid[uid] = Math.round(Math.max(0, Math.min(100, 50 + avgImprovement / 2)));
     }
   });
-  const growthValues = uids.map(u => growthByUid[u] ?? 50).sort((a, b) => a - b);
+  const growthValues = uids.map(u => growthByUid[u] ?? 0).sort((a, b) => a - b);
 
   // 진단 로그
   const nonZeroReview = Object.values(activeReviewByUid).filter(v => v > 0).length;
-  const nonZeroGrowth = Object.values(growthByUid).filter(v => v !== 50).length;
+  const nonZeroGrowth = Object.values(growthByUid).filter(v => v > 0).length;
   console.log(`[${courseId}] 복습력: ${nonZeroReview}/${studentUids.size}명 비영, 성장세: ${nonZeroGrowth}/${studentUids.size}명 변동, quizResults: ${quizResultsDocs.length}건`);
 
   return {

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 // 최대 페이지 선택 제한 (서버와 동일하게 유지)
 const MAX_PAGES = 20;
@@ -110,12 +111,12 @@ export default function PageSelectionModal({
 
     if (isOpen) {
       document.addEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = 'hidden';
+      lockScroll();
     }
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = '';
+      unlockScroll();
     };
   }, [isOpen, onClose]);
 

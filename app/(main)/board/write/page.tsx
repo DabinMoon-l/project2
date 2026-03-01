@@ -9,6 +9,7 @@ import WriteForm from '@/components/board/WriteForm';
 import { useCreatePost, type CreatePostData } from '@/lib/hooks/useBoard';
 import { useExpToast } from '@/components/common';
 import { useUser } from '@/lib/contexts';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 // localStorage 키
 const DRAFT_KEY = 'board-write-draft';
@@ -61,10 +62,10 @@ function WriteExitModal({
     if (isOpen) {
       previousActiveElement.current = document.activeElement as HTMLElement;
       modalRef.current?.focus();
-      document.body.style.overflow = 'hidden';
+      lockScroll();
     }
     return () => {
-      document.body.style.overflow = '';
+      unlockScroll();
       if (previousActiveElement.current) {
         previousActiveElement.current.focus();
       }

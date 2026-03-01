@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { useEffect, useRef } from 'react';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 /**
  * ExitConfirmModal Props 타입
@@ -81,11 +82,11 @@ export default function ExitConfirmModal({
     if (isOpen) {
       previousActiveElement.current = document.activeElement as HTMLElement;
       modalRef.current?.focus();
-      document.body.style.overflow = 'hidden';
+      lockScroll();
     }
 
     return () => {
-      document.body.style.overflow = '';
+      unlockScroll();
       if (previousActiveElement.current) {
         previousActiveElement.current.focus();
       }

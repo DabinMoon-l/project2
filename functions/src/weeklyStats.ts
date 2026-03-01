@@ -211,34 +211,6 @@ async function collectWeeklyStats(courseId: string, start: Date, end: Date, labe
     typeDistribution[t] = (typeDistribution[t] || 0) + 1;
   });
 
-  // 퀴즈 결과에서 정답률/완료율
-  const quizIds = quizzesSnap.docs.map(d => d.id);
-  let avgCorrectRate = 0;
-  let avgCompletionRate = 0;
-  const wrongQuestions: { quizId: string; questionIndex: number; wrongRate: number }[] = [];
-
-  if (quizIds.length > 0) {
-    // chunk 쿼리
-    for (let i = 0; i < quizIds.length; i += 30) {
-      const chunk = quizIds.slice(i, i + 30);
-      const resultsSnap = await db.collection("quizResults")
-        .where("quizId", "in", chunk)
-        .get();
-
-      let totalCorrect = 0;
-      let totalQuestions = 0;
-      resultsSnap.docs.forEach(d => {
-        const data = d.data();
-        totalCorrect += data.correctCount || 0;
-        totalQuestions += data.totalQuestions || 0;
-      });
-
-      if (totalQuestions > 0) {
-        avgCorrectRate = Math.round((totalCorrect / totalQuestions) * 100);
-      }
-    }
-  }
-
   // ── 피드백 데이터 ──
   const fbSnap = await db.collection("questionFeedbacks")
     .where("courseId", "==", courseId)
@@ -255,20 +227,108 @@ async function collectWeeklyStats(courseId: string, start: Date, end: Date, labe
   });
   const fbAvg = fbSnap.size > 0 ? Math.round((fbScoreSum / fbSnap.size) * 100) / 100 : 0;
 
-  // ── 학생 데이터 ──
+  // ── 학생 데이터 (퀴즈 완료율에 totalStudents 필요하므로 먼저 조회) ──
   const usersSnap = await db.collection("users")
     .where("courseId", "==", courseId)
     .where("role", "==", "student")
     .get();
 
   const totalStudents = usersSnap.size;
+
+  // ── 퀴즈 결과에서 정답률/완료율 ──
+  const quizIds = quizzesSnap.docs.map(d => d.id);
+  let avgCorrectRate = 0;
+  let avgCompletionRate = 0;
+  const wrongQuestions: { quizId: string; questionIndex: number; wrongRate: number }[] = [];
+
+  if (quizIds.length > 0) {
+    // Bug fix: 변수를 루프 밖으로 이동 (청크별 리셋 방지)
+    let totalCorrect = 0;
+    let totalQuestions = 0;
+    // 완료율 계산용: 퀴즈별 유니크 userId
+    const quizUserSets: Record<string, Set<string>> = {};
+
+    for (let i = 0; i < quizIds.length; i += 30) {
+      const chunk = quizIds.slice(i, i + 30);
+      const resultsSnap = await db.collection("quizResults")
+        .where("quizId", "in", chunk)
+        .get();
+
+      resultsSnap.docs.forEach(d => {
+        const rData = d.data();
+        totalCorrect += rData.correctCount || 0;
+        // Bug fix: totalQuestions → totalCount (quizResults 실제 필드명)
+        totalQuestions += rData.totalCount || 0;
+        // 완료율 집계
+        const qid = rData.quizId as string;
+        const uid = rData.userId as string;
+        if (qid && uid) {
+          if (!quizUserSets[qid]) quizUserSets[qid] = new Set();
+          quizUserSets[qid].add(uid);
+        }
+      });
+    }
+
+    if (totalQuestions > 0) {
+      avgCorrectRate = Math.round((totalCorrect / totalQuestions) * 100);
+    }
+
+    // Bug fix: 완료율 계산 (기존에는 항상 0)
+    if (totalStudents > 0) {
+      const compRates = Object.values(quizUserSets).map(s => (s.size / totalStudents) * 100);
+      if (compRates.length > 0) {
+        avgCompletionRate = Math.round(compRates.reduce((a, b) => a + b, 0) / compRates.length);
+      }
+    }
+  }
   const studentIdSet = new Set(usersSnap.docs.map(d => d.id));
-  // 활동 학생: 해당 주에 퀴즈 결과 또는 게시글을 작성한 학생 (updatedAt 대신 실제 활동 기반)
+  // 활동 학생: 해당 주에 퀴즈 결과 또는 게시글을 작성한 학생
   const activeStudentIds = new Set<string>();
-  let totalExpGain = 0;
-  let milestoneCount = 0;
-  let rabbitDiscoveries = 0;
+  // 누적 EXP 합계 (주간 획득량이 아닌 스냅샷 — expHistory 쿼리는 비용 과다)
+  let totalExpSum = 0;
+  // 전체 마일스톤 달성 스냅샷 (주간 아닌 누적값)
+  let totalMilestones = 0;
+  // 미구현: rabbitDiscoveries는 rabbitHoldings 서브컬렉션 주간 쿼리 필요 (비용 과다)
+  const rabbitDiscoveries = 0;
   let passionate = 0, hardworking = 0, efficient = 0, atRisk = 0;
+
+  // ── 교수 퀴즈 정답률 계산 (quizResults에서 직접 집계) ──
+  // users 문서에는 profCorrectCount 필드가 없으므로 quizResults에서 계산
+  const allQuizzesSnap = await db.collection("quizzes")
+    .where("courseId", "==", courseId)
+    .select("creatorId", "type")
+    .get();
+
+  const PROF_TYPES = new Set(["midterm", "final", "past", "professor", "professor-ai"]);
+  const profQuizIds = new Set<string>();
+  const professorUids = new Set<string>();
+  usersSnap.docs.forEach(d => {
+    if (d.data().role === "professor") professorUids.add(d.id);
+  });
+  allQuizzesSnap.docs.forEach(d => {
+    const data = d.data();
+    if (PROF_TYPES.has(data.type || "") || professorUids.has(data.creatorId)) {
+      profQuizIds.add(d.id);
+    }
+  });
+
+  // 교수 퀴즈에 대한 학생별 정답률 집계 (첫 시도만)
+  const allResultsSnap = await db.collection("quizResults")
+    .where("courseId", "==", courseId)
+    .select("userId", "quizId", "correctCount", "totalCount", "isUpdate")
+    .get();
+
+  const studentProfStats: Record<string, { correct: number; attempted: number }> = {};
+  allResultsSnap.docs.forEach(d => {
+    const r = d.data();
+    if (r.isUpdate) return;
+    if (!profQuizIds.has(r.quizId)) return;
+    const uid = r.userId as string;
+    if (!studentIdSet.has(uid)) return;
+    if (!studentProfStats[uid]) studentProfStats[uid] = { correct: 0, attempted: 0 };
+    studentProfStats[uid].correct += r.correctCount || 0;
+    studentProfStats[uid].attempted += r.totalCount || 0;
+  });
 
   // 중위값 계산을 위한 배열
   const exps: number[] = [];
@@ -276,14 +336,16 @@ async function collectWeeklyStats(courseId: string, start: Date, end: Date, labe
 
   usersSnap.docs.forEach(d => {
     const data = d.data();
+    if (data.role === "professor") return;
     const exp = data.totalExp || 0;
-    const correctRate = data.profCorrectCount
-      ? ((data.profCorrectCount / Math.max(data.profAttemptCount || 1, 1)) * 100)
+    const stat = studentProfStats[d.id];
+    const correctRate = stat && stat.attempted > 0
+      ? (stat.correct / stat.attempted) * 100
       : 0;
     exps.push(exp);
     rates.push(correctRate);
-    totalExpGain += exp;
-    milestoneCount += Math.floor((data.lastGachaExp || 0) / 50);
+    totalExpSum += exp;
+    totalMilestones += Math.floor((data.lastGachaExp || 0) / 50);
   });
 
   exps.sort((a, b) => a - b);
@@ -293,11 +355,12 @@ async function collectWeeklyStats(courseId: string, start: Date, end: Date, labe
 
   usersSnap.docs.forEach(d => {
     const data = d.data();
+    if (data.role === "professor") return;
     const exp = data.totalExp || 0;
-    const rate = data.profCorrectCount
-      ? ((data.profCorrectCount / Math.max(data.profAttemptCount || 1, 1)) * 100)
+    const stat = studentProfStats[d.id];
+    const rate = stat && stat.attempted > 0
+      ? (stat.correct / stat.attempted) * 100
       : 0;
-    // (활동 학생은 퀴즈 결과 + 게시글 기반으로 아래에서 집계)
 
     if (exp >= medianExp && rate >= medianRate) passionate++;
     else if (exp >= medianExp) hardworking++;
@@ -382,8 +445,10 @@ async function collectWeeklyStats(courseId: string, start: Date, end: Date, labe
     student: {
       activeCount: activeStudentIds.size,
       totalCount: totalStudents,
-      avgExpGain: totalStudents > 0 ? Math.round(totalExpGain / totalStudents) : 0,
-      milestoneCount,
+      // 학생 평균 누적 EXP 스냅샷 (주간 획득량이 아닌 현재 시점 평균)
+      avgExpGain: totalStudents > 0 ? Math.round(totalExpSum / totalStudents) : 0,
+      // 전체 마일스톤 달성 수 스냅샷 (누적값)
+      milestoneCount: totalMilestones,
       rabbitDiscoveries,
       clusterCounts: { passionate, hardworking, efficient, atRisk },
     },

@@ -21,6 +21,7 @@ import { useCourse, useUser } from '@/lib/contexts';
 import { COURSES, getPastExamOptions, type PastExamOption } from '@/lib/types/course';
 import { getChapterById, generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import type { QuestionExportData as PdfQuestionData } from '@/lib/utils/questionPdfExport';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 /** 완료된 퀴즈 데이터 타입 */
 interface CompletedQuizData {
@@ -2685,8 +2686,8 @@ function CreateFolderModal({
   // 키보드 올라올 때 body 스크롤 방지
   useEffect(() => {
     if (isOpen) {
-      document.body.style.overflow = 'hidden';
-      return () => { document.body.style.overflow = ''; };
+      lockScroll();
+      return () => unlockScroll();
     }
   }, [isOpen]);
 
@@ -2835,8 +2836,8 @@ function ReviewPageContent() {
   // 카테고리 설정 모달 열릴 때 body 스크롤 방지 (키보드 올라올 때 자유 스크롤 방지)
   useEffect(() => {
     if (isSortMode) {
-      document.body.style.overflow = 'hidden';
-      return () => { document.body.style.overflow = ''; };
+      lockScroll();
+      return () => unlockScroll();
     }
   }, [isSortMode]);
 

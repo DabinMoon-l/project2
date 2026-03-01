@@ -35,6 +35,7 @@ import {
 } from '@/lib/hooks/useSettings';
 import { calculateMilestoneInfo } from '@/components/home/StatsCard';
 import { auth, db, functions } from '@/lib/firebase';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 // ============================================================
 // 상수 (컴포넌트 외부 — 렌더마다 재생성 방지)
@@ -260,14 +261,13 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
   useEffect(() => {
     if (!isOpen) {
       document.body.removeAttribute('data-hide-nav');
-      document.body.style.overflow = '';
       return;
     }
     document.body.setAttribute('data-hide-nav', '');
-    document.body.style.overflow = 'hidden';
+    lockScroll();
     return () => {
       document.body.removeAttribute('data-hide-nav');
-      document.body.style.overflow = '';
+      unlockScroll();
     };
   }, [isOpen]);
 
@@ -1046,6 +1046,11 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                   </div>
                 </div>
 
+                {/* 교수 전용: 퀴즈 답안 마이그레이션 */}
+                {isProfessor && (
+                  <MigrateAnswerIndexButton />
+                )}
+
                 {/* 로그아웃 버튼 */}
                 <button
                   onClick={handleLogout}
@@ -1745,5 +1750,64 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
         </>
       )}
     </AnimatePresence>
+  );
+}
+
+// ============================================================
+// 퀴즈 답안 마이그레이션 버튼 (교수 전용, 1회성)
+// ============================================================
+
+function MigrateAnswerIndexButton() {
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{ message: string; ok: boolean } | null>(null);
+  const calledRef = useRef(false);
+
+  const handleMigrate = async () => {
+    if (calledRef.current || loading) return;
+    calledRef.current = true;
+    setLoading(true);
+    try {
+      const fn = httpsCallable<void, { migrated: number; skipped: number; errors: number }>(
+        functions,
+        'migrateQuizAnswersTo0Indexed'
+      );
+      const res = await fn();
+      const { migrated, skipped, errors } = res.data;
+      setResult({
+        message: `${migrated}개 변환, ${skipped}개 건너뜀${errors > 0 ? `, ${errors}개 오류` : ''}`,
+        ok: errors === 0,
+      });
+    } catch (err: any) {
+      setResult({ message: err.message || '실패', ok: false });
+      calledRef.current = false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="mb-6">
+      <h3 className="text-sm font-bold text-white/70 mb-3">
+        Data Migration
+      </h3>
+      <button
+        onClick={handleMigrate}
+        disabled={loading || calledRef.current}
+        className="w-full flex items-center justify-between py-2.5 disabled:opacity-50"
+      >
+        <div className="text-left">
+          <span className="text-sm text-white/80">퀴즈 답안 마이그레이션</span>
+          <p className="text-xs text-white/40">기존 퀴즈 답안 인덱싱 보정 (1회만)</p>
+        </div>
+        <span className="text-xs font-medium text-white/60 px-2.5 py-1 rounded-lg bg-white/10">
+          {loading ? '실행 중...' : calledRef.current ? '완료' : '실행'}
+        </span>
+      </button>
+      {result && (
+        <p className={`text-xs mt-1 ${result.ok ? 'text-green-400' : 'text-red-400'}`}>
+          {result.message}
+        </p>
+      )}
+    </div>
   );
 }

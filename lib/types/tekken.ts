@@ -162,7 +162,7 @@ export const BATTLE_CONFIG = {
   QUESTION_TIMEOUT: 20000,  // 문제 타임아웃 20초
   CRITICAL_TIME: 5000,      // 크리티컬 기준 5초
   MASH_STEP_PER_TAP: 1.5,  // 연타 게이지 이동량 (탭당 %)
-  MASH_TIMEOUT: 15000,      // 연타 줄다리기 시간제한 15초
+  MASH_TIMEOUT: 30000,      // 연타 안전 타임아웃 30초 (UI 표시 안 함)
   COUNTDOWN_SECONDS: 3,     // 카운트다운 3초
   LONG_PRESS_MS: 500,       // 롱프레스 500ms
 } as const;

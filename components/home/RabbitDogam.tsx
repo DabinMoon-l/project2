@@ -8,6 +8,7 @@ import { useUser } from '@/lib/contexts';
 import { useRabbitHoldings, useRabbitsForCourse, getRabbitStats, type RabbitDoc, type RabbitHolding } from '@/lib/hooks/useRabbit';
 import RabbitImage from '@/components/common/RabbitImage';
 import VirtualRabbitGrid from '@/components/common/VirtualRabbitGrid';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 const OPEN_MS = 380;
 const CLOSE_MS = 320;
@@ -51,8 +52,8 @@ export default function RabbitDogam({
   // 도감 열림 시 body 스크롤 방지
   useEffect(() => {
     if (!isOpen) return;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
+    lockScroll();
+    return () => { unlockScroll(); };
   }, [isOpen]);
 
   const { rabbits: allRabbits, loading: rabbitsLoading } = useRabbitsForCourse(courseId);

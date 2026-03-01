@@ -25,6 +25,11 @@ export const levelUpRabbit = onCall(
       throw new HttpsError("invalid-argument", "courseId와 rabbitId가 필요합니다.");
     }
 
+    // rabbitId 범위 검증
+    if (typeof rabbitId !== "number" || rabbitId < 0 || rabbitId > 79) {
+      throw new HttpsError("invalid-argument", "rabbitId는 0-79 범위여야 합니다.");
+    }
+
     const db = getFirestore();
 
     const result = await db.runTransaction(async (transaction) => {

@@ -4,6 +4,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 import {
   usePinnedPosts,
   useToProfessorPosts,
@@ -46,8 +47,8 @@ export default function BoardManagementModal({
   // 모달 열림 시 body 스크롤 방지
   useEffect(() => {
     if (!isOpen) return;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
+    lockScroll();
+    return () => { unlockScroll(); };
   }, [isOpen]);
 
   // 고정글 가로 스크롤 ref

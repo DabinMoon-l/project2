@@ -14,6 +14,7 @@ import MultipleChoice from '@/components/quiz/MultipleChoice';
 import ShortAnswer from '@/components/quiz/ShortAnswer';
 import { BottomSheet, useExpToast } from '@/components/common';
 import ExitConfirmModal from '@/components/quiz/ExitConfirmModal';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 /** 피드백 타입 */
 type FeedbackType = 'unclear' | 'wrong' | 'typo' | 'other' | 'praise' | 'wantmore';
@@ -84,8 +85,8 @@ export default function ReviewPractice({
 }: ReviewPracticeProps) {
   // 전체화면 오버레이 body 스크롤 방지
   useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
+    lockScroll();
+    return () => { unlockScroll(); };
   }, []);
 
   // 현재 화면 단계

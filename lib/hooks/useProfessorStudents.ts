@@ -36,7 +36,7 @@ export interface StudentData {
 
   // 통계
   level: number;
-  experience: number;
+  totalExp: number;
 
   // 퀴즈 통계
   quizStats: {
@@ -170,8 +170,8 @@ function computeRadarFromNorm(
   quizScore: number,
   totalExp: number,
 ): NonNullable<StudentDetail['radarMetrics']> {
-  // 성장세: norm에 growthByUid가 있으면 사용, 없으면 50(기준선)
-  const growth = norm.growthByUid?.[uid] ?? 50;
+  // 성장세: norm에 growthByUid가 있으면 사용, 없으면 0(재시도 없음)
+  const growth = norm.growthByUid?.[uid] ?? 0;
   return {
     quizScore,
     growth,
@@ -223,7 +223,7 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
       studentId: data.studentId || '',
       classId: data.classId || 'A',
       level: data.level || 1,
-      experience: data.experience || 0,
+      totalExp: data.totalExp || 0,
       quizStats: {
         totalAttempts: data.quizStats?.totalAttempts || 0,
         totalCorrect: data.quizStats?.totalCorrect || 0,
@@ -337,7 +337,7 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
                 const isPresenceOnly =
                   existing.nickname === newData.nickname &&
                   existing.classId === newData.classId &&
-                  existing.experience === newData.experience &&
+                  existing.totalExp === newData.totalExp &&
                   existing.quizStats.totalAttempts === newData.quizStats.totalAttempts &&
                   existing.quizStats.averageScore === newData.quizStats.averageScore &&
                   existing.feedbackCount === newData.feedbackCount;
@@ -393,7 +393,7 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
           ...cached.detail,
           radarMetrics: computeRadarFromNorm(
             uid, norm, cached.detail.quizStats.averageScore,
-            norm.expByUid[uid] ?? cached.detail.experience,
+            norm.expByUid[uid] ?? cached.detail.totalExp,
           ),
           weightedScore: norm.weightedScoreByUid[uid],
           classWeightedScores: buildClassWeightedScores(norm),
@@ -406,7 +406,7 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
     const students = _studentsListCacheMap.get(courseId);
     const student = students?.find(s => s.uid === uid);
     if (student && norm) {
-      const totalExp = norm.expByUid[uid] ?? student.experience;
+      const totalExp = norm.expByUid[uid] ?? student.totalExp;
       return {
         ...student,
         recentQuizzes: [],
@@ -476,7 +476,7 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
       // radarNorm에서 레이더 계산 (있으면)
       const norm = courseId ? _radarNormMap.get(courseId) : null;
       const radarMetrics = norm
-        ? computeRadarFromNorm(uid, norm, baseData.quizStats.averageScore, norm.expByUid[uid] ?? baseData.experience)
+        ? computeRadarFromNorm(uid, norm, baseData.quizStats.averageScore, norm.expByUid[uid] ?? baseData.totalExp)
         : undefined;
 
       const detail: StudentDetail = {

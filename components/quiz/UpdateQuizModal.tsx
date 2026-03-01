@@ -24,6 +24,7 @@ import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse } from '@/lib/contexts';
 import type { QuizUpdateInfo, UpdatedQuestion } from '@/lib/hooks/useQuizUpdate';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 // ============================================================
 // 타입 정의
@@ -108,8 +109,8 @@ export default function UpdateQuizModal({
     setUserAnswers({});
     setShowResult(false);
     setResultData(null);
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
+    lockScroll();
+    return () => { unlockScroll(); };
   }, [isOpen, updateInfo.quizId]);
 
   const questions = updateInfo.updatedQuestions;

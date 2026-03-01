@@ -24,6 +24,7 @@ import { useTheme } from '@/styles/themes/useTheme';
 import { useUpload } from '@/lib/hooks/useStorage';
 import { ImageViewer } from '@/components/common';
 import { useKeyboardAware } from '@/lib/hooks/useKeyboardAware';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 // ─── 타입 ───────────────────────────────────────────────
 
@@ -71,9 +72,9 @@ interface Announcement {
 // ─── 상수 ───────────────────────────────────────────────
 
 const REACTION_EMOJIS = ['❤️', '👍', '🔥', '😂', '😮', '😢'];
-const BUBBLE_C = 10;
-const BUBBLE_SIDE_MULTI = 20; // 다중 아이템 버블 좌우 패딩 (화살표 공간)
-const ARROW_ZONE = 24; // BUBBLE_SIDE_MULTI + content px-1(4px) = 화살표 영역 너비
+const BUBBLE_C = 14;
+const BUBBLE_SIDE_MULTI = 26; // 다중 아이템 버블 좌우 패딩 (화살표 공간)
+const ARROW_ZONE = 30; // BUBBLE_SIDE_MULTI + content px-1(4px) = 화살표 영역 너비
 
 // ─── 유틸 ───────────────────────────────────────────────
 
@@ -91,8 +92,11 @@ function getPolls(a: Announcement): Poll[] {
   } else if (a.poll) {
     polls = [a.poll];
   }
-  // options 없는 깨진 데이터 필터
-  return polls.filter((p) => p && Array.isArray(p.options) && p.options.length > 0);
+  // options 없는 깨진 데이터 필터 + votes 타입 검증
+  return polls.filter((p) => p && Array.isArray(p.options) && p.options.length > 0).map((p) => ({
+    ...p,
+    votes: (p.votes && typeof p.votes === 'object' && !Array.isArray(p.votes)) ? p.votes : {},
+  }));
 }
 
 /** 파일 배열 추출 (하위 호환) */
@@ -195,7 +199,7 @@ const ImageCarousel = memo(function ImageCarousel({
       <div className="flex items-center -mx-[30px]">
         {/* 좌측 화살표 — 버블 패딩 영역 중앙 */}
         <button
-          onClick={() => { if (idx > 0) containerRef.current?.scrollTo({ left: (idx - 1) * (containerRef.current?.clientWidth || 0), behavior: 'smooth' }); }}
+          onClick={() => { const el = containerRef.current?.children[idx - 1] as HTMLElement | undefined; el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' }); }}
           className={`w-[30px] shrink-0 flex items-center justify-center text-[#5C5C5C] ${idx > 0 ? '' : 'invisible'}`}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
@@ -206,9 +210,11 @@ const ImageCarousel = memo(function ImageCarousel({
           className="flex-1 overflow-x-auto snap-x snap-mandatory flex gap-0.5 scrollbar-hide"
           onScroll={() => {
             const el = containerRef.current;
-            if (!el) return;
-            const newIdx = Math.round(el.scrollLeft / el.clientWidth);
-            setIdx(newIdx);
+            if (!el || !el.children.length) return;
+            // 각 아이템 너비 + gap 기반 정확한 인덱스 계산
+            const itemW = (el.children[0] as HTMLElement).offsetWidth;
+            const newIdx = Math.round(el.scrollLeft / (itemW + 2)); // gap-0.5 = 2px
+            setIdx(Math.min(Math.max(0, newIdx), el.children.length - 1));
           }}
         >
           {urls.map((url, i) => (
@@ -219,7 +225,7 @@ const ImageCarousel = memo(function ImageCarousel({
         </div>
         {/* 우측 화살표 — 버블 패딩 영역 중앙 */}
         <button
-          onClick={() => { if (idx < urls.length - 1) containerRef.current?.scrollTo({ left: (idx + 1) * (containerRef.current?.clientWidth || 0), behavior: 'smooth' }); }}
+          onClick={() => { const el = containerRef.current?.children[idx + 1] as HTMLElement | undefined; el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' }); }}
           className={`w-[30px] shrink-0 flex items-center justify-center text-[#5C5C5C] ${idx < urls.length - 1 ? '' : 'invisible'}`}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
@@ -269,7 +275,7 @@ const FileCarousel = memo(function FileCarousel({ files }: { files: FileAttachme
       <div className="flex items-center -mx-[30px]">
         {/* 좌측 화살표 — 버블 패딩 영역 중앙 */}
         <button
-          onClick={() => { if (idx > 0) containerRef.current?.scrollTo({ left: (idx - 1) * (containerRef.current?.clientWidth || 0), behavior: 'smooth' }); }}
+          onClick={() => { const el = containerRef.current?.children[idx - 1] as HTMLElement | undefined; el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' }); }}
           className={`w-[30px] shrink-0 flex items-center justify-center text-[#5C5C5C] ${idx > 0 ? '' : 'invisible'}`}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
@@ -280,9 +286,10 @@ const FileCarousel = memo(function FileCarousel({ files }: { files: FileAttachme
           className="flex-1 overflow-x-auto snap-x snap-mandatory flex gap-0.5 scrollbar-hide"
           onScroll={() => {
             const el = containerRef.current;
-            if (!el) return;
-            const newIdx = Math.round(el.scrollLeft / el.clientWidth);
-            setIdx(newIdx);
+            if (!el || !el.children.length) return;
+            const itemW = (el.children[0] as HTMLElement).offsetWidth;
+            const newIdx = Math.round(el.scrollLeft / (itemW + 2));
+            setIdx(Math.min(Math.max(0, newIdx), el.children.length - 1));
           }}
         >
           {files.map((f, i) => (
@@ -293,7 +300,7 @@ const FileCarousel = memo(function FileCarousel({ files }: { files: FileAttachme
         </div>
         {/* 우측 화살표 — 버블 패딩 영역 중앙 */}
         <button
-          onClick={() => { if (idx < files.length - 1) containerRef.current?.scrollTo({ left: (idx + 1) * (containerRef.current?.clientWidth || 0), behavior: 'smooth' }); }}
+          onClick={() => { const el = containerRef.current?.children[idx + 1] as HTMLElement | undefined; el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' }); }}
           className={`w-[30px] shrink-0 flex items-center justify-center text-[#5C5C5C] ${idx < files.length - 1 ? '' : 'invisible'}`}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
@@ -335,8 +342,13 @@ const PollCard = memo(function PollCard({
   isProfessor?: boolean;
 }) {
   if (!poll || !poll.options) return null;
-  const votes = poll.votes || {};
-  const hasVoted = profileUid && Object.values(votes).some((arr) => Array.isArray(arr) && arr.includes(profileUid));
+  const rawVotes = poll.votes || {};
+  // votes 값이 배열이 아닌 경우 방어 (Firestore 데이터 변환 버그 대비)
+  const votes: Record<string, string[]> = {};
+  for (const [k, v] of Object.entries(rawVotes)) {
+    votes[k] = Array.isArray(v) ? v : [];
+  }
+  const hasVoted = profileUid && Object.values(votes).some((arr) => arr.includes(profileUid));
   const maxSel = poll.allowMultiple ? (poll.maxSelections || poll.options.length) : 1;
   // 교수님은 투표 안 해도 결과 항상 표시
   const showResults = hasVoted || isProfessor;
@@ -532,7 +544,7 @@ const PollCarousel = memo(function PollCarousel({
       <div className="flex items-center -mx-[30px]">
         {/* 좌측 화살표 — 버블 패딩 영역 중앙 */}
         <button
-          onClick={() => { if (idx > 0) containerRef.current?.scrollTo({ left: (idx - 1) * (containerRef.current?.clientWidth || 0), behavior: 'smooth' }); }}
+          onClick={() => { const el = containerRef.current; if (!el || idx <= 0) return; const target = el.children[idx - 1] as HTMLElement; target?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' }); }}
           className={`w-[30px] shrink-0 flex items-center justify-center text-[#5C5C5C] ${idx > 0 ? '' : 'invisible'}`}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
@@ -543,8 +555,9 @@ const PollCarousel = memo(function PollCarousel({
           className="flex-1 overflow-x-auto snap-x snap-mandatory flex items-center gap-0.5 scrollbar-hide"
           onScroll={() => {
             const el = containerRef.current;
-            if (!el) return;
-            const newIdx = Math.round(el.scrollLeft / el.clientWidth);
+            if (!el || !el.children.length) return;
+            const itemW = (el.children[0] as HTMLElement).offsetWidth;
+            const newIdx = Math.round(el.scrollLeft / (itemW + 2));
             setIdx(newIdx);
           }}
         >
@@ -556,7 +569,7 @@ const PollCarousel = memo(function PollCarousel({
         </div>
         {/* 우측 화살표 — 버블 패딩 영역 중앙 */}
         <button
-          onClick={() => { if (idx < polls.length - 1) containerRef.current?.scrollTo({ left: (idx + 1) * (containerRef.current?.clientWidth || 0), behavior: 'smooth' }); }}
+          onClick={() => { const el = containerRef.current; if (!el || idx >= polls.length - 1) return; const target = el.children[idx + 1] as HTMLElement; target?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' }); }}
           className={`w-[30px] shrink-0 flex items-center justify-center text-[#5C5C5C] ${idx < polls.length - 1 ? '' : 'invisible'}`}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
@@ -709,7 +722,7 @@ const MediaDrawer = memo(function MediaDrawer({
                   </div>
                   <div className="grid grid-cols-3 gap-1.5">
                     {datedImages.slice(0, PREVIEW_IMAGES).map((d, i) => (
-                      <button key={i} onClick={() => onImageClick(datedImages.slice(0, PREVIEW_IMAGES).map(x => x.url), i)} className="aspect-square overflow-hidden rounded-md border border-white/10">
+                      <button key={i} onClick={() => onImageClick(datedImages.map(x => x.url), i)} className="aspect-square overflow-hidden rounded-md border border-white/10">
                         <img src={d.url} alt="" className="w-full h-full object-cover" />
                       </button>
                     ))}
@@ -839,6 +852,7 @@ interface EditSubmitData {
   newFiles: File[];
   polls: Poll[];
   resetPollIndices: number[]; // 투표 결과 초기화할 인덱스
+  originalPolls?: Poll[]; // 옵션 변경 감지용 원본
 }
 
 const AnnouncementMessageItem = memo(function AnnouncementMessageItem({
@@ -897,6 +911,7 @@ const AnnouncementMessageItem = memo(function AnnouncementMessageItem({
   const editRef = useRef<HTMLTextAreaElement>(null);
   const editImgRef = useRef<HTMLInputElement>(null);
   const editFileRef = useRef<HTMLInputElement>(null);
+  const emojiBtnRef = useRef<HTMLButtonElement>(null);
 
   // 수정 상태
   const [editText, setEditText] = useState('');
@@ -967,6 +982,7 @@ const AnnouncementMessageItem = memo(function AnnouncementMessageItem({
         newFiles: editNewFiles,
         polls: editPolls,
         resetPollIndices: Array.from(editResetPolls),
+        originalPolls: pollList,
       });
       editNewImagePreviews.forEach(u => URL.revokeObjectURL(u));
       setEditing(false);
@@ -1183,6 +1199,7 @@ const AnnouncementMessageItem = memo(function AnnouncementMessageItem({
               </button>
             ))}
             <button
+              ref={emojiBtnRef}
               onClick={(e) => { e.stopPropagation(); onToggleEmojiPicker(showEmojiPickerForThis ? null : a.id); }}
               className="text-white/30 hover:text-white/60 transition-colors"
             >
@@ -1190,16 +1207,27 @@ const AnnouncementMessageItem = memo(function AnnouncementMessageItem({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </button>
-            {showEmojiPickerForThis && (
-              <div
-                className={`absolute ${isOwnProfessor ? 'right-0' : 'left-0'} bottom-full mb-1 bg-black/60 backdrop-blur-md border border-white/20 rounded-lg p-1.5 flex gap-1 z-20 shadow-lg`}
-                onClick={(e) => e.stopPropagation()}
-              >
-                {REACTION_EMOJIS.map((em) => (
-                  <button key={em} onClick={() => onReaction(a.id, em)} className="text-sm hover:scale-110 transition-transform">{em}</button>
-                ))}
-              </div>
-            )}
+            {showEmojiPickerForThis && emojiBtnRef.current && (() => {
+              const rect = emojiBtnRef.current!.getBoundingClientRect();
+              return createPortal(
+                <>
+                  <div className="fixed inset-0 z-[120]" onClick={(e) => { e.stopPropagation(); onToggleEmojiPicker(null); }} />
+                  <div
+                    className="fixed z-[121] bg-black/60 backdrop-blur-md border border-white/20 rounded-lg p-1.5 flex gap-1 shadow-lg"
+                    style={{
+                      bottom: window.innerHeight - rect.top + 4,
+                      ...(isOwnProfessor ? { right: window.innerWidth - rect.right } : { left: rect.left }),
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {REACTION_EMOJIS.map((em) => (
+                      <button key={em} onClick={() => onReaction(a.id, em)} className="text-sm hover:scale-110 transition-transform">{em}</button>
+                    ))}
+                  </div>
+                </>,
+                document.body,
+              );
+            })()}
           </div>
         </div>
       </div>
@@ -1285,6 +1313,12 @@ export default function AnnouncementChannel({
         setAnnouncements([]);
         setLoading(true);
       }
+      // 과목 전환 시 transient 상태 초기화
+      setShowEmojiPicker(null);
+      setSearchOpen(false);
+      setSearchQuery('');
+      setShowCalendar(false);
+      setShowMedia(false);
     }
   }, [userCourseId]);
 
@@ -1306,8 +1340,8 @@ export default function AnnouncementChannel({
   // ─── 모달 열림 시 body 스크롤 방지
   useEffect(() => {
     if (!showModal) return;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
+    lockScroll();
+    return () => { unlockScroll(); };
   }, [showModal]);
 
   // ─── 모달 콘텐츠 지연 렌더링 (입장 애니메이션 후 표시, 닫힐 때 초기화)
@@ -1485,7 +1519,7 @@ export default function AnnouncementChannel({
     const q = searchQuery.toLowerCase();
     const ids = chrono.filter((a) => a.content?.toLowerCase().includes(q)).map((a) => a.id);
     setSearchResults(ids);
-    setSearchIdx(ids.length > 0 ? ids.length - 1 : 0);
+    setSearchIdx(0);
   }, [searchQuery, chrono]);
 
   const scrollToMessage = useCallback((msgId: string) => {
@@ -1569,11 +1603,18 @@ export default function AnnouncementChannel({
       ...data.keepFiles,
       ...newFileInfos.map(fi => ({ url: fi.url, name: fi.name, type: fi.type, size: fi.size })),
     ];
-    // 투표: 빈 선지 제거, 빈 질문 투표 제거, 초기화 대상은 votes 리셋
+    // 투표: 빈 선지 제거, 빈 질문 투표 제거, 옵션 변경 시 자동 votes 리셋
     update.polls = data.polls
       .map((p, i) => {
         const cleaned = { ...p, options: p.options.filter(o => o.trim()) };
-        if (data.resetPollIndices.includes(i)) cleaned.votes = {};
+        // 명시적 초기화 대상이거나, 옵션이 변경된 경우 votes 리셋
+        // (옵션 순서/내용 변경 시 인덱스 기반 votes 키가 꼬이므로)
+        const origPoll = data.originalPolls?.[i];
+        const optionsChanged = origPoll && (
+          origPoll.options.length !== cleaned.options.length ||
+          origPoll.options.some((o: string, j: number) => o !== cleaned.options[j])
+        );
+        if (data.resetPollIndices.includes(i) || optionsChanged) cleaned.votes = {};
         return cleaned;
       })
       .filter(p => p.question.trim() && p.options.length >= 2);
@@ -2197,9 +2238,10 @@ export default function AnnouncementChannel({
                             if (isMultiLine !== prevOverflowRef.current) {
                               prevOverflowRef.current = isMultiLine;
                               setInputOverflows(isMultiLine);
+                              if (!isMultiLine) setInputExpanded(false);
                             }
                             if (inputExpanded) {
-                              t.style.height = t.scrollHeight + 'px';
+                              t.style.height = Math.max(t.scrollHeight, oneLineH) + 'px';
                             } else {
                               t.style.height = oneLineH + 'px';
                               t.scrollTop = t.scrollHeight;

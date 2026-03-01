@@ -8,7 +8,7 @@ export const BATTLE_CONFIG = {
   QUESTION_TIMEOUT: 20000,
   CRITICAL_TIME: 5000,
   MATCH_TIMEOUT: 20000,
-  MASH_TIMEOUT: 15000, // 연타 줄다리기 시간제한 15초
+  MASH_TIMEOUT: 30000, // 연타 안전 타임아웃 30초 (UI에 표시 안 함)
 };
 
 /** 양쪽 오답 시 상호 고정 데미지 */

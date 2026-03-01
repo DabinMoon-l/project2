@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 // ============================================================
 // 타입 정의
@@ -42,8 +43,8 @@ export default function QuizDeleteModal({
   // 모달 열림 시 body 스크롤 잠금 (PullToHome 스와이프 방지)
   useEffect(() => {
     if (!quiz) return;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
+    lockScroll();
+    return () => { unlockScroll(); };
   }, [quiz]);
 
   return (

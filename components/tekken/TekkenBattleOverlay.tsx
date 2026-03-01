@@ -4,7 +4,7 @@
  * 배틀 오버레이 — 포켓몬 스타일 전체 배틀 컨테이너 (v3)
  *
  * portal → body, z-[110]
- * 배경: home-bg.jpg + bg-black/80 (홈 완전히 가림)
+ * 배경: home-bg.jpg + bg-black/90 (홈 완전히 가림)
  * 2분할: 상단 퀴즈(flex-[5]) + 하단 캐릭터(flex-[5])
  *
  * 변경사항:
@@ -13,7 +13,7 @@
  * - 서버 카운트다운 동기화
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import TekkenCountdown from './TekkenCountdown';
@@ -83,13 +83,16 @@ export default function TekkenBattleOverlay({
   }, [tekken.battleStatus]);
 
   // 타임아웃 자동 제출 (항상 — 내가 답변해도 상대가 안 풀었을 수 있음)
+  // CF 실패 시 timeoutSubmitted 복구 (재시도 가능)
   useEffect(() => {
     if (tekken.battleStatus !== 'question') return;
     if (timeoutSubmittedRef.current) return;
 
     if (tekken.questionTimeLeft <= 0 && tekken.currentRound?.timeoutAt > 0) {
       timeoutSubmittedRef.current = true;
-      tekken.submitTimeout();
+      tekken.submitTimeout().catch(() => {
+        timeoutSubmittedRef.current = false;
+      });
     }
   }, [tekken.questionTimeLeft, tekken.battleStatus]);
 
@@ -98,10 +101,14 @@ export default function TekkenBattleOverlay({
     tekken.startRound(0);
   }, [tekken]);
 
-  // 답변 제출
+  // 답변 제출 — CF 실패 시 hasAnswered 복구 (재시도 가능)
   const handleAnswer = useCallback(async (answer: number) => {
     setHasAnswered(true);
-    await tekken.submitAnswer(answer);
+    try {
+      await tekken.submitAnswer(answer);
+    } catch {
+      setHasAnswered(false);
+    }
   }, [tekken]);
 
   // 연타 결과 제출
@@ -109,19 +116,18 @@ export default function TekkenBattleOverlay({
     await tekken.submitMashTaps(taps);
   }, [tekken]);
 
-  // 라운드 결과 — RTDB에서 직접 도출 (CF 반환값 대신)
-  const myResult: RoundResultData | null = (() => {
-    const round = tekken.currentRound;
-    if (!round?.result) return null;
-    return round.result[userId] ?? null;
-  })();
+  // 라운드 결과 — RTDB에서 직접 도출 (useMemo로 불필요 재생성 방지)
+  const roundResult = tekken.currentRound?.result;
+  const myResult: RoundResultData | null = useMemo(() => {
+    if (!roundResult) return null;
+    return roundResult[userId] ?? null;
+  }, [roundResult, userId]);
 
-  const opponentResult: RoundResultData | null = (() => {
-    const round = tekken.currentRound;
-    if (!round?.result) return null;
-    const opponentIds = Object.keys(round.result).filter((id) => id !== userId);
-    return opponentIds.length > 0 ? round.result[opponentIds[0]] : null;
-  })();
+  const opponentResult: RoundResultData | null = useMemo(() => {
+    if (!roundResult) return null;
+    const opponentIds = Object.keys(roundResult).filter((id) => id !== userId);
+    return opponentIds.length > 0 ? roundResult[opponentIds[0]] : null;
+  }, [roundResult, userId]);
 
   // 타이머 표시
   const minutes = Math.floor((tekken.battleTimeLeft ?? 0) / 60000);
@@ -136,12 +142,12 @@ export default function TekkenBattleOverlay({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
     >
-      {/* 배경: home-bg.jpg + 어두운 오버레이 (80%) */}
+      {/* 배경: home-bg.jpg + 어두운 오버레이 (90%) */}
       <div
         className="absolute inset-0 bg-cover bg-center"
-        style={{ backgroundImage: 'url(/home-bg.jpg)' }}
+        style={{ backgroundImage: 'url(/images/home-bg.jpg)' }}
       />
-      <div className="absolute inset-0 bg-black/80" />
+      <div className="absolute inset-0 bg-black/90" />
 
       {/* 콘텐츠 */}
       <div className="relative flex flex-col flex-1 z-10">

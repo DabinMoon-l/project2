@@ -230,11 +230,15 @@ export default function AIQuizContainer() {
       // 폴백용 챕터 ID (태그에서 추출)
       const fallbackChapterId = getFirstChapterIdFromTags(data.tags);
 
-      // 현재 학기 계산
+      // 현재 학기 계산 (02-22~08-21 → 1학기, 08-22~02-21 → 2학기)
       const now = new Date();
       const month = now.getMonth() + 1;
+      const day = now.getDate();
       const year = now.getFullYear();
-      const semester = month >= 3 && month <= 8 ? `${year}-1` : `${year}-2`;
+      const isSem1 = (month > 2 || (month === 2 && day >= 22)) && (month < 8 || (month === 8 && day <= 21));
+      // 2학기 중 1~2월은 전년도 학년
+      const semYear = (!isSem1 && month <= 2) ? year - 1 : year;
+      const semester = isSem1 ? `${semYear}-1` : `${semYear}-2`;
 
       // Firestore에 퀴즈 저장 (기존 퀴즈 구조와 동일)
       const db = getFirestore();
@@ -452,32 +456,43 @@ export default function AIQuizContainer() {
         const question = savedQuiz.questions.find(q => q.id === result.questionId);
         if (!question) continue;
 
-        // 복수정답 지원: 배열이면 쉼표로 구분
-        // question.answer는 0-indexed 숫자
-        const correctAnswer = Array.isArray(question.answer)
-          ? question.answer.map(a => String(Number(a) + 1)).join(',')
-          : String(Number(question.answer) + 1);
+        // 문제 타입 판별 (OX vs 객관식)
+        const isOx = question.type === 'ox' ||
+          (typeof question.answer === 'string' && (question.answer === 'O' || question.answer === 'X'));
+        const qType = isOx ? 'ox' : 'multiple';
 
-        // result.userAnswer는 0-indexed 문자열 또는 배열
-        // 숫자로 변환 후 +1 해서 1-indexed로 저장
-        const userAnswer = Array.isArray(result.userAnswer)
-          ? result.userAnswer.map(a => String(Number(a) + 1)).join(',')
-          : String(Number(result.userAnswer) + 1);
+        // OX: answer를 그대로 문자열로, 객관식: 0-indexed → 1-indexed 변환
+        let correctAnswer: string;
+        let userAnswer: string;
 
-        // solved 타입으로 저장 (모든 문제)
-        await addDoc(reviewsRef, {
+        if (isOx) {
+          // OX 문제: 'O'/'X' 문자열 또는 0/1 숫자
+          const ans = question.answer;
+          correctAnswer = ans === 0 ? 'O' : ans === 1 ? 'X' : String(ans);
+          const ua = result.userAnswer as string | number;
+          userAnswer = ua === '0' || ua === 0 ? 'O' : ua === '1' || ua === 1 ? 'X' : String(ua);
+        } else {
+          // 객관식: 0-indexed → 1-indexed
+          correctAnswer = Array.isArray(question.answer)
+            ? question.answer.map(a => String(Number(a) + 1)).join(',')
+            : String(Number(question.answer) + 1);
+          userAnswer = Array.isArray(result.userAnswer)
+            ? result.userAnswer.map(a => String(Number(a) + 1)).join(',')
+            : String(Number(result.userAnswer) + 1);
+        }
+
+        const reviewData = {
           userId: profile.uid,
           quizId: savedQuiz.id,
           quizTitle: savedQuiz.title,
           questionId: question.id,
           question: question.text,
-          type: 'multiple',
-          options: question.choices,
+          type: qType,
+          options: isOx ? null : question.choices,
           correctAnswer,
           userAnswer,
           explanation: question.explanation,
           choiceExplanations: question.choiceExplanations || null,
-          reviewType: 'solved',
           isBookmarked: false,
           isCorrect: result.isCorrect,
           reviewCount: 0,
@@ -486,40 +501,18 @@ export default function AIQuizContainer() {
           quizUpdatedAt: serverTimestamp(),
           chapterId: question.chapterId,
           chapterDetailId: question.chapterDetailId,
-          imageUrl: question.imageUrl || null, // 크롭된 이미지 URL
-          courseId: userCourseId || null, // 과목 ID (필터링용)
-          quizType: 'ai-generated', // 퀴즈 타입
-          quizCreatorId: profile.uid, // 퀴즈 생성자
-        });
+          imageUrl: question.imageUrl || null,
+          courseId: userCourseId || null,
+          quizType: 'ai-generated',
+          quizCreatorId: profile.uid,
+        };
+
+        // solved 타입으로 저장 (모든 문제)
+        await addDoc(reviewsRef, { ...reviewData, reviewType: 'solved' });
 
         // 오답인 경우 wrong 타입으로도 저장
         if (!result.isCorrect) {
-          await addDoc(reviewsRef, {
-            userId: profile.uid,
-            quizId: savedQuiz.id,
-            quizTitle: savedQuiz.title,
-            questionId: question.id,
-            question: question.text,
-            type: 'multiple',
-            options: question.choices,
-            correctAnswer,
-            userAnswer,
-            explanation: question.explanation,
-            choiceExplanations: question.choiceExplanations || null,
-            reviewType: 'wrong',
-            isBookmarked: false,
-            isCorrect: false,
-            reviewCount: 0,
-            lastReviewedAt: null,
-            createdAt: serverTimestamp(),
-            quizUpdatedAt: serverTimestamp(),
-            chapterId: question.chapterId,
-            chapterDetailId: question.chapterDetailId,
-            imageUrl: question.imageUrl || null, // 크롭된 이미지 URL
-            courseId: userCourseId || null, // 과목 ID (필터링용)
-            quizType: 'ai-generated', // 퀴즈 타입
-            quizCreatorId: profile.uid, // 퀴즈 생성자
-          });
+          await addDoc(reviewsRef, { ...reviewData, reviewType: 'wrong' });
         }
       }
 
@@ -531,7 +524,7 @@ export default function AIQuizContainer() {
 
     setSavedQuiz(null);
     setCurrentFolderName('');
-  }, [profile, savedQuiz]);
+  }, [profile, savedQuiz, userCourseId, userClassId]);
 
   return (
     <>

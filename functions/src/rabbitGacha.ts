@@ -4,6 +4,11 @@
  * Phase 1 (Roll): 랜덤 토끼 선택 + 상태 판별 → RollResult 반환
  * Phase 2 (Claim): 사용자 선택(discover/pass)에 따라 문서 생성/변경
  *
+ * 보안:
+ * - Phase 1에서 pendingSpin에 rabbitId 저장
+ * - Phase 2에서 pendingSpin.rabbitId와 요청 rabbitId 일치 검증
+ * - pendingSpin이 남아있으면 Phase 1에서 이전 결과 복구 (마일스톤 손실 방지)
+ *
  * 발견은 무제한, 장착은 최대 2마리
  */
 
@@ -32,11 +37,11 @@ interface ClaimResult {
 /**
  * spinRabbitGacha — Roll Only (Phase 1)
  *
- * 1. 마일스톤 검증 (floor(totalExp/50)*50 > lastGachaExp && totalExp >= 50)
- * 2. 랜덤 rabbitId (0-79) 선택
- * 3. rabbit 문서 존재 확인 → undiscovered / discovered 판별
- * 4. holding 존재 확인 → already_discovered 판별
- * 5. lastGachaExp 갱신 (스핀 소모)
+ * 1. pendingSpin 존재 확인 → 이전 결과 복구 (마일스톤 손실 방지)
+ * 2. 마일스톤 검증 (floor(totalExp/50)*50 > lastGachaExp && totalExp >= 50)
+ * 3. 랜덤 rabbitId (0-79) 선택
+ * 4. rabbit 문서 존재 확인 → undiscovered / discovered 판별
+ * 5. lastGachaExp 갱신 + pendingSpin 저장
  */
 export const spinRabbitGacha = onCall(
   { region: "asia-northeast3" },
@@ -66,10 +71,62 @@ export const spinRabbitGacha = onCall(
       const userData = userDoc.data()!;
       const totalExp = userData.totalExp || 0;
       const lastGachaExp = userData.lastGachaExp || 0;
+      const equippedRabbits: Array<{ rabbitId: number; courseId: string }> =
+        userData.equippedRabbits || [];
+
+      // === 이전 pendingSpin 복구 (같은 과목) ===
+      if (userData.pendingSpin && userData.pendingSpin.courseId === courseId) {
+        const psRabbitId = userData.pendingSpin.rabbitId as number;
+
+        // 이미 보유 중인지 확인 (edge case: 다른 경로로 획득됨)
+        const holdingRef = userRef
+          .collection("rabbitHoldings")
+          .doc(`${courseId}_${psRabbitId}`);
+        const holdingDoc = await transaction.get(holdingRef);
+
+        if (!holdingDoc.exists) {
+          // 이전 결과 복구 — 마일스톤 소비 안 함
+          const rabbitRef = db
+            .collection("rabbits")
+            .doc(`${courseId}_${psRabbitId}`);
+          const rabbitDoc = await transaction.get(rabbitRef);
+          const rabbitData = rabbitDoc.exists ? rabbitDoc.data()! : null;
+
+          if (!rabbitData) {
+            return {
+              type: "undiscovered",
+              rabbitId: psRabbitId,
+              rabbitName: null,
+              nextDiscoveryOrder: null,
+              myDiscoveryOrder: null,
+              equippedCount: equippedRabbits.length,
+            } as RollResult;
+          }
+
+          return {
+            type: "discovered",
+            rabbitId: psRabbitId,
+            rabbitName: rabbitData.name || null,
+            nextDiscoveryOrder: (rabbitData.discovererCount || 1) + 1,
+            myDiscoveryOrder: null,
+            equippedCount: equippedRabbits.length,
+          } as RollResult;
+        }
+
+        // 이미 보유 중 → pendingSpin 정리 후 새 스핀으로 진행
+        transaction.update(userRef, {
+          pendingSpin: FieldValue.delete(),
+        });
+      }
+
+      // === 새 스핀 ===
 
       // 스핀 잠금 체크 (10초 이내 중복 방지)
       if (userData.spinLock && Date.now() - userData.spinLock < 10000) {
-        throw new HttpsError("failed-precondition", "이미 뽑기가 진행 중입니다.");
+        throw new HttpsError(
+          "failed-precondition",
+          "이미 뽑기가 진행 중입니다."
+        );
       }
 
       // 마일스톤 검증 (pending = floor(totalExp/50) - floor(lastGachaExp/50))
@@ -110,16 +167,13 @@ export const spinRabbitGacha = onCall(
       const rabbitDoc = await transaction.get(rabbitRef);
       const rabbitData = rabbitDoc.exists ? rabbitDoc.data()! : null;
 
-      // lastGachaExp += 50 (마일스톤 1개만 소비) + 스핀 잠금 설정
+      // lastGachaExp += 50 + pendingSpin 저장 + 스핀 잠금 설정
       transaction.update(userRef, {
         lastGachaExp: lastGachaExp + 50,
         spinLock: Date.now(),
+        pendingSpin: { rabbitId, courseId },
         updatedAt: FieldValue.serverTimestamp(),
       });
-
-      // 장착 수 계산
-      const equippedRabbits: Array<{ rabbitId: number; courseId: string }> =
-        userData.equippedRabbits || [];
 
       if (!rabbitData) {
         // 미발견 — 아직 아무도 발견하지 않은 토끼
@@ -151,8 +205,9 @@ export const spinRabbitGacha = onCall(
 /**
  * claimGachaRabbit — Claim (Phase 2)
  *
- * action === "pass" → 즉시 반환 (아무 변경 없음)
+ * action === "pass" → pendingSpin 정리 (마일스톤 이미 소비됨)
  * action === "discover" → 트랜잭션:
+ *   0. pendingSpin.rabbitId === request.rabbitId 검증 (보안)
  *   1. 이미 보유 확인 → error
  *   2. rabbit 문서 재확인:
  *      - 미존재 → 최초 발견자 등록 (name 필수)
@@ -177,16 +232,32 @@ export const claimGachaRabbit = onCall(
     };
 
     if (!courseId || rabbitId === undefined || !action) {
-      throw new HttpsError("invalid-argument", "courseId, rabbitId, action이 필요합니다.");
+      throw new HttpsError(
+        "invalid-argument",
+        "courseId, rabbitId, action이 필요합니다."
+      );
     }
 
     // rabbitId 범위 검증
     if (typeof rabbitId !== "number" || rabbitId < 0 || rabbitId > 79) {
-      throw new HttpsError("invalid-argument", "rabbitId는 0-79 범위여야 합니다.");
+      throw new HttpsError(
+        "invalid-argument",
+        "rabbitId는 0-79 범위여야 합니다."
+      );
     }
 
-    // 놓아주기 → 아무 변경 없음
+    const db = getFirestore();
+
+    // 놓아주기 → pendingSpin 정리 (마일스톤은 이미 Phase 1에서 소비됨)
     if (action === "pass") {
+      await db
+        .collection("users")
+        .doc(userId)
+        .update({
+          pendingSpin: FieldValue.delete(),
+          spinLock: null,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
       return { success: true, passed: true };
     }
 
@@ -196,7 +267,6 @@ export const claimGachaRabbit = onCall(
       throw new HttpsError("invalid-argument", "이름은 1-10자여야 합니다.");
     }
 
-    const db = getFirestore();
     const rabbitDocId = `${courseId}_${rabbitId}`;
 
     const result = await db.runTransaction(async (transaction) => {
@@ -210,10 +280,29 @@ export const claimGachaRabbit = onCall(
       const userData = userDoc.data()!;
       const userName = userData.nickname || "용사";
 
+      // pendingSpin 검증 (보안: spin에서 할당된 rabbitId만 claim 가능)
+      const pendingSpin = userData.pendingSpin;
+      if (
+        !pendingSpin ||
+        pendingSpin.rabbitId !== rabbitId ||
+        pendingSpin.courseId !== courseId
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          "유효하지 않은 뽑기입니다. 다시 뽑기해주세요."
+        );
+      }
+
       // 이미 보유 확인
       const holdingRef = userRef.collection("rabbitHoldings").doc(rabbitDocId);
       const holdingDoc = await transaction.get(holdingRef);
       if (holdingDoc.exists) {
+        // 이미 보유 → pendingSpin 정리
+        transaction.update(userRef, {
+          pendingSpin: FieldValue.delete(),
+          spinLock: null,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
         throw new HttpsError("already-exists", "이미 발견한 토끼입니다.");
       }
 
@@ -229,7 +318,10 @@ export const claimGachaRabbit = onCall(
       if (!rabbitData) {
         // 미존재 → 최초 발견자 등록
         if (!trimmedName) {
-          throw new HttpsError("invalid-argument", "최초 발견 시 이름이 필요합니다.");
+          throw new HttpsError(
+            "invalid-argument",
+            "최초 발견 시 이름이 필요합니다."
+          );
         }
 
         // 이름 중복 체크 (트랜잭션 내 원자적 — rabbitNames 인덱스 문서)
@@ -237,7 +329,10 @@ export const claimGachaRabbit = onCall(
         const nameRef = db.collection("rabbitNames").doc(nameDocId);
         const nameDoc = await transaction.get(nameRef);
         if (nameDoc.exists) {
-          throw new HttpsError("already-exists", "이미 같은 이름의 토끼가 있어요!");
+          throw new HttpsError(
+            "already-exists",
+            "이미 같은 이름의 토끼가 있어요!"
+          );
         }
 
         discoveryOrder = 1;
@@ -281,7 +376,11 @@ export const claimGachaRabbit = onCall(
 
         transaction.update(rabbitRef, {
           discovererCount: FieldValue.increment(1),
-          discoverers: FieldValue.arrayUnion({ userId, nickname: userName, discoveryOrder }),
+          discoverers: FieldValue.arrayUnion({
+            userId,
+            nickname: userName,
+            discoveryOrder,
+          }),
           updatedAt: FieldValue.serverTimestamp(),
         });
 
@@ -301,25 +400,31 @@ export const claimGachaRabbit = onCall(
         userData.equippedRabbits || [];
 
       if (equippedRabbits.length < 2) {
-        // 빈 슬롯에 자동 장착 + 스핀 잠금 해제
+        // 빈 슬롯에 자동 장착 + pendingSpin 정리 + 스핀 잠금 해제
         const newEquipped = [...equippedRabbits, { rabbitId, courseId }];
         transaction.update(userRef, {
           equippedRabbits: newEquipped,
+          pendingSpin: FieldValue.delete(),
           spinLock: null,
           updatedAt: FieldValue.serverTimestamp(),
         });
-      } else if (equipSlot !== undefined && (equipSlot === 0 || equipSlot === 1)) {
-        // 슬롯 지정 교체 + 스핀 잠금 해제
+      } else if (
+        equipSlot !== undefined &&
+        (equipSlot === 0 || equipSlot === 1)
+      ) {
+        // 슬롯 지정 교체 + pendingSpin 정리 + 스핀 잠금 해제
         const newEquipped = [...equippedRabbits];
         newEquipped[equipSlot] = { rabbitId, courseId };
         transaction.update(userRef, {
           equippedRabbits: newEquipped,
+          pendingSpin: FieldValue.delete(),
           spinLock: null,
           updatedAt: FieldValue.serverTimestamp(),
         });
       } else {
-        // 슬롯 가득 & 미지정 → 장착하지 않음 + 스핀 잠금 해제
+        // 슬롯 가득 & 미지정 → 장착하지 않음 + pendingSpin 정리 + 스핀 잠금 해제
         transaction.update(userRef, {
+          pendingSpin: FieldValue.delete(),
           spinLock: null,
           updatedAt: FieldValue.serverTimestamp(),
         });

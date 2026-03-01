@@ -5,9 +5,8 @@ import type { QuestionSource } from '@/lib/hooks/useProfessorStats';
 
 const OPTIONS: { value: QuestionSource; label: string }[] = [
   { value: 'all', label: '전체' },
-  { value: 'professor', label: '교수' },
-  { value: 'custom', label: '학생' },
-  { value: 'ai-generated', label: 'AI' },
+  { value: 'professor', label: '교수님 퀴즈' },
+  { value: 'custom', label: '학생 퀴즈' },
 ];
 
 interface Props {
@@ -17,24 +16,24 @@ interface Props {
 
 export default function SourceFilter({ value, onChange }: Props) {
   return (
-    <div className="inline-flex bg-[#EBE5D9] border border-[#D4CFC4] p-0.5">
+    <div className="flex gap-4">
       {OPTIONS.map(o => {
         const active = value === o.value;
         return (
           <button
             key={o.value}
             onClick={() => onChange(o.value)}
-            className="relative px-3.5 py-1.5 text-xs font-bold transition-colors z-10"
-            style={{ color: active ? '#F5F0E8' : '#5C5C5C' }}
+            className="relative pb-1.5 text-base font-bold transition-colors"
+            style={{ color: active ? '#1A1A1A' : '#5C5C5C' }}
           >
+            {o.label}
             {active && (
               <motion.div
-                layoutId="source-bg"
-                className="absolute inset-0 bg-[#1A1A1A]"
+                layoutId="source-underline"
+                className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#1A1A1A]"
                 transition={{ type: 'spring', stiffness: 500, damping: 35 }}
               />
             )}
-            <span className="relative z-10">{o.label}</span>
           </button>
         );
       })}

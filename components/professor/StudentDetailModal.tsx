@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 import {
   type StudentData,
   type StudentDetail,
@@ -83,8 +84,8 @@ export default function StudentDetailModal({
   // 모달 열림 시 body 스크롤 방지
   useEffect(() => {
     if (!isOpen) return;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
+    lockScroll();
+    return () => { unlockScroll(); };
   }, [isOpen]);
   const classColor = student ? CLASS_COLORS[student.classId] : '#6366F1';
 

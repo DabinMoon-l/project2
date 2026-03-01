@@ -1231,14 +1231,28 @@ export async function generateWithGemini(
 
   const startTime = Date.now();
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody),
+  // 120초 타임아웃 (CF 300초 내에서 다른 처리 여유 확보)
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 120_000);
+  let response: Awaited<ReturnType<typeof fetch>>;
+  try {
+    response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal as any,
+      }
+    );
+  } catch (err: any) {
+    clearTimeout(timeout);
+    if (err.name === "AbortError") {
+      throw new Error("Gemini API 요청 시간 초과 (120초)");
     }
-  );
+    throw err;
+  }
+  clearTimeout(timeout);
 
   console.log(`[Gemini API] 응답 시간: ${Date.now() - startTime}ms`);
 
@@ -1258,10 +1272,14 @@ export async function generateWithGemini(
     throw new Error("AI 응답을 받지 못했습니다.");
   }
 
-  // 토큰 한도 도달 여부 확인
+  // finishReason 확인
   const finishReason = result.candidates[0].finishReason;
   if (finishReason === "MAX_TOKENS") {
     console.warn(`[Gemini] ⚠️ maxOutputTokens(${maxTokens}) 도달 — 응답이 잘렸을 수 있음`);
+  } else if (finishReason === "SAFETY") {
+    throw new Error("AI가 안전 정책에 의해 응답을 거부했습니다. 다른 학습 자료로 다시 시도해주세요.");
+  } else if (finishReason === "RECITATION") {
+    throw new Error("AI가 저작권 정책에 의해 응답을 거부했습니다. 다른 학습 자료로 다시 시도해주세요.");
   }
 
   const textContent = result.candidates[0].content.parts
@@ -1348,7 +1366,11 @@ export async function generateWithGemini(
           choices: isOxQuestion ? undefined : q.choices,
           answer: q.answer,
           explanation: q.explanation || "",
-          choiceExplanations: isOxQuestion ? undefined : (Array.isArray(q.choiceExplanations) ? q.choiceExplanations : undefined),
+          choiceExplanations: isOxQuestion ? undefined : (
+            Array.isArray(q.choiceExplanations) && Array.isArray(q.choices) && q.choiceExplanations.length === q.choices.length
+              ? q.choiceExplanations
+              : undefined
+          ),
           questionType: q.questionType,
           trapPattern: q.trapPattern,
           chapterId: q.chapterId,           // 챕터 ID (Gemini 할당)

@@ -53,9 +53,9 @@ export default function TekkenQuestionCard({
   const isInCritical = elapsed < CRITICAL_WINDOW;
 
   return (
-    <div className="w-full px-4 flex-1 flex flex-col justify-center">
+    <div className="w-full px-4 flex-1 flex flex-col min-h-0">
       {/* 문제 타이머 바 — 크리티컬 구간 시각화 */}
-      <div className="mb-3 flex items-center gap-2">
+      <div className="mb-2 flex items-center gap-2 flex-shrink-0">
         <div className="flex-1 h-2.5 bg-black/40 rounded-full overflow-hidden border border-white/10 relative">
           {/* 크리티컬 구간 배경 마킹 (좌측 20%) */}
           <div
@@ -92,7 +92,7 @@ export default function TekkenQuestionCard({
       {/* 크리티컬 구간 안내 텍스트 */}
       {isInCritical && (
         <motion.p
-          className="text-center text-xs font-bold text-yellow-400/80 mb-1"
+          className="text-center text-xs font-bold text-yellow-400/80 mb-1 flex-shrink-0"
           animate={{ opacity: [0.6, 1, 0.6] }}
           transition={{ duration: 0.8, repeat: Infinity }}
         >
@@ -100,48 +100,51 @@ export default function TekkenQuestionCard({
         </motion.p>
       )}
 
-      {/* 문제 텍스트 */}
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={roundIndex}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          className="bg-black/30 border border-white/10 rounded-2xl p-4 mb-3 backdrop-blur-sm"
-        >
-          <p className="text-sm font-bold text-white leading-relaxed">
-            {question.text}
-          </p>
-        </motion.div>
-      </AnimatePresence>
+      {/* 스크롤 가능 영역: 문제 + 선지 */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {/* 문제 텍스트 */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={roundIndex}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="bg-black/30 border border-white/10 rounded-2xl p-3 mb-2 backdrop-blur-sm"
+          >
+            <p className="text-sm font-bold text-white leading-relaxed">
+              {question.text}
+            </p>
+          </motion.div>
+        </AnimatePresence>
 
-      {/* 선택지 (5지선다) */}
-      <div className="grid gap-2 grid-cols-1">
-        {question.choices.map((choice, idx) => {
-          const isSelected = selectedAnswer === idx;
+        {/* 선택지 (5지선다) */}
+        <div className="grid gap-1.5 grid-cols-1 pb-1">
+          {question.choices.map((choice, idx) => {
+            const isSelected = selectedAnswer === idx;
 
-          return (
-            <motion.button
-              key={`${roundIndex}-${idx}`}
-              onClick={() => handleSelect(idx)}
-              disabled={disabled || selectedAnswer !== null}
-              className={`
-                relative px-4 py-2 rounded-xl border-2 font-bold text-left transition-all
-                ${isSelected
-                  ? 'border-yellow-400 bg-yellow-400/20 text-yellow-300'
-                  : 'border-white/20 bg-white/5 text-white hover:border-white/40 hover:bg-white/10'
-                }
-                ${disabled || selectedAnswer !== null ? 'opacity-60 cursor-default' : 'active:scale-[0.97]'}
-              `}
-              whileTap={disabled || selectedAnswer !== null ? {} : { scale: 0.97 }}
-            >
-              <span className="text-xs">
-                <span className="text-white/50 mr-2">{idx + 1}.</span>
-                {choice}
-              </span>
-            </motion.button>
-          );
-        })}
+            return (
+              <motion.button
+                key={`${roundIndex}-${idx}`}
+                onClick={() => handleSelect(idx)}
+                disabled={disabled || selectedAnswer !== null}
+                className={`
+                  relative px-3 py-2 rounded-xl border-2 font-bold text-left transition-all
+                  ${isSelected
+                    ? 'border-yellow-400 bg-yellow-400/20 text-yellow-300'
+                    : 'border-white/20 bg-white/5 text-white hover:border-white/40 hover:bg-white/10'
+                  }
+                  ${disabled || selectedAnswer !== null ? 'opacity-60 cursor-default' : 'active:scale-[0.97]'}
+                `}
+                whileTap={disabled || selectedAnswer !== null ? {} : { scale: 0.97 }}
+              >
+                <span className="text-xs leading-snug">
+                  <span className="text-white/50 mr-1.5">{idx + 1}.</span>
+                  {choice}
+                </span>
+              </motion.button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

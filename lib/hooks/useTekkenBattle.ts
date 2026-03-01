@@ -11,6 +11,9 @@
  * - 답변 후 "상대방 답변 대기 중..." 표시
  * - 셀프데미지 제거, 양쪽 오답 시 상호 고정 데미지
  * - 타임아웃: 항상 제출 (내가 답변해도 상대가 안 풀었을 수 있음)
+ * - CF 네트워크 에러 전파 (호출자가 상태 복구 가능)
+ * - 봇 매칭 레이스 방지 (matchResult 리스너 유지)
+ * - startBattleRound 실패 시 재시도 (최대 3회)
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -30,6 +33,17 @@ import type {
   BattleRabbit,
 } from '@/lib/types/tekken';
 import { BATTLE_CONFIG } from '@/lib/types/tekken';
+
+/** 예상된 CF 에러인지 (상태 불일치, 이미 처리됨 등) */
+function isExpectedError(err: any): boolean {
+  const code = err?.code || '';
+  return (
+    code === 'functions/failed-precondition' ||
+    code === 'functions/not-found' ||
+    code === 'functions/permission-denied' ||
+    code === 'functions/already-exists'
+  );
+}
 
 interface UseTekkenBattleReturn {
   // 매칭
@@ -128,13 +142,18 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     });
 
     // 연결 끊김 시 처리
+    let connectedRef: ReturnType<typeof ref> | null = null;
     if (userId) {
-      const connectedRef = ref(getRtdb(), `tekken/battles/${activeBattleId}/players/${userId}/connected`);
+      connectedRef = ref(getRtdb(), `tekken/battles/${activeBattleId}/players/${userId}/connected`);
       onDisconnect(connectedRef).set(false);
     }
 
     return () => {
       off(battleRef);
+      // onDisconnect 핸들러 해제 (배틀 종료 후 잔류 방지)
+      if (connectedRef) {
+        onDisconnect(connectedRef).cancel().catch(() => {});
+      }
     };
   }, [activeBattleId, userId]);
 
@@ -198,22 +217,31 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     };
   }, [battle?.status, battle?.currentRound, battle?.endsAt]);
 
-  // roundResult 감지 → 2초 후 다음 라운드 시작 (CF setTimeout 대체)
+  // roundResult 감지 → 2초 후 다음 라운드 시작 (재시도 최대 3회)
   useEffect(() => {
     if (battle?.status !== 'roundResult' || battle?.nextRound === undefined) return;
 
     const nextRound = battle.nextRound;
-    roundResultTimerRef.current = setTimeout(async () => {
+    let retryCount = 0;
+
+    const attemptStart = async () => {
       try {
         const fn = httpsCallable(functions, 'startBattleRound');
         await fn({ battleId: battleIdRef.current, roundIndex: nextRound });
       } catch (err: any) {
         // 이미 시작된 경우 무시
-        if (err?.code !== 'functions/failed-precondition') {
-          console.error('다음 라운드 시작 실패:', err);
+        if (isExpectedError(err)) return;
+        // 네트워크 에러 → 재시도 (최대 3회)
+        if (retryCount < 2) {
+          retryCount++;
+          roundResultTimerRef.current = setTimeout(attemptStart, 1000);
+        } else {
+          console.error('다음 라운드 시작 실패 (재시도 소진):', err);
         }
       }
-    }, 2000);
+    };
+
+    roundResultTimerRef.current = setTimeout(attemptStart, 2000);
 
     return () => {
       if (roundResultTimerRef.current) {
@@ -265,10 +293,10 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
       matchResultUnsubRef.current = unsubMatchResult;
 
       // 봇 매칭 타임아웃 (20초)
+      // matchResult 리스너를 유지한 상태로 봇 매칭 시도 (레이스 방지)
       matchTimeoutRef.current = setTimeout(async () => {
+        // 이미 실제 매칭 성사 시 무시
         if (battleIdRef.current) return;
-
-        clearTimers();
 
         try {
           const botFn = httpsCallable<{ courseId: string }, JoinMatchmakingResult>(
@@ -277,15 +305,23 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
           );
           const botResult = await botFn({ courseId });
 
+          // 봇 CF 실행 중 실제 매칭이 성사됐으면 무시 (실제 매칭 우선)
+          if (battleIdRef.current) return;
+
           if (botResult.data.battleId) {
             battleIdRef.current = botResult.data.battleId;
             setActiveBattleId(botResult.data.battleId);
             setMatchState('matched');
+            clearTimers();
           }
         } catch (err: any) {
+          // 실제 매칭이 성사됐으면 에러 무시
+          if (battleIdRef.current) return;
+
           console.error('봇 매칭 실패:', err);
           setMatchState('error');
           setError('매칭에 실패했습니다.');
+          clearTimers();
         }
       }, BATTLE_CONFIG.MATCH_TIMEOUT);
     } catch (err: any) {
@@ -307,9 +343,10 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     setWaitTime(0);
     clearTimers();
     battleIdRef.current = null;
+    setActiveBattleId(null);
   }, [clearTimers]);
 
-  // 답변 제출
+  // 답변 제출 — 네트워크 에러 시 throw (호출자가 hasAnswered 복구)
   const handleSubmitAnswer = useCallback(async (answer: number): Promise<SubmitAnswerResult | null> => {
     if (!battleIdRef.current || !battle) return null;
 
@@ -327,11 +364,10 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
       // status === 'scored' → 결과 반환
       return result.data;
     } catch (err: any) {
-      if (err?.code === 'functions/failed-precondition') {
-        return null;
-      }
-      console.error('답변 제출 실패:', err);
-      return null;
+      // 예상된 상태 에러 (이미 채점됨 등) → 무시
+      if (isExpectedError(err)) return null;
+      // 네트워크/기타 에러 → 호출자에게 전파 (hasAnswered 복구용)
+      throw err;
     }
   }, [battle?.currentRound]);
 
@@ -347,7 +383,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     }
   }, []);
 
-  // 연타 결과 제출 (CF 호출)
+  // 연타 결과 제출 — 네트워크 에러 시 throw (호출자가 submitted 복구)
   const handleSubmitMashTaps = useCallback(async (taps: number) => {
     if (!battleIdRef.current) return;
 
@@ -355,7 +391,10 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
       const fn = httpsCallable(functions, 'submitMashResult');
       await fn({ battleId: battleIdRef.current, taps });
     } catch (err: any) {
-      console.error('연타 제출 실패:', err);
+      // 예상된 에러 (이미 처리됨 등) → 무시
+      if (isExpectedError(err)) return;
+      // 네트워크/기타 에러 → 호출자에게 전파
+      throw err;
     }
   }, []);
 
@@ -366,7 +405,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     set(tapRef, count).catch(() => {});
   }, [userId]);
 
-  // 타임아웃 제출 (아무도 안 풀었을 때)
+  // 타임아웃 제출 — 네트워크 에러 시 throw (호출자가 timeoutSubmitted 복구)
   const handleSubmitTimeout = useCallback(async () => {
     if (!battleIdRef.current || !battle) return;
 
@@ -377,7 +416,10 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
         roundIndex: battle.currentRound,
       });
     } catch (err: any) {
-      console.error('타임아웃 제출 실패:', err);
+      // 예상된 에러 → 무시
+      if (isExpectedError(err)) return;
+      // 네트워크/기타 에러 → 호출자에게 전파
+      throw err;
     }
   }, [battle?.currentRound]);
 
@@ -389,7 +431,9 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
       const fn = httpsCallable(functions, 'startBattleRound');
       await fn({ battleId: battleIdRef.current, roundIndex });
     } catch (err: any) {
-      console.error('라운드 시작 실패:', err);
+      if (!isExpectedError(err)) {
+        console.error('라운드 시작 실패:', err);
+      }
     }
   }, []);
 

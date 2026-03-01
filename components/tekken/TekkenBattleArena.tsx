@@ -1,13 +1,15 @@
 'use client';
 
 /**
- * 포켓몬 스타일 캐릭터 영역 (v3)
+ * 포켓몬 스타일 캐릭터 영역 (v4)
  *
  * 상단: 상대 이름/Lv/HP(좌) + 상대 토끼(우) + 발판
  * 하단: 내 토끼(좌) + 발판 + 내 이름/Lv/HP(우)
  *
  * 변경사항:
- * - selfDamage → damageReceived
+ * - 상대 토끼 크기 증가 (80→110)
+ * - 히트 플래시: 데미지 받을 때 빨간 깜빡임
+ * - 데미지 팝업: 토끼 근처에서 확대 → 위로 사라짐
  * - 스왑 애니메이션: HP 0 → 다른 토끼로 전환 시에만 트리거
  */
 
@@ -20,6 +22,7 @@ interface DamagePopupData {
   id: number;
   value: number;
   target: 'opponent' | 'me';
+  isCritical?: boolean;
 }
 
 let popupIdCounter = 0;
@@ -29,17 +32,30 @@ function DamagePopup({ data }: { data: DamagePopupData }) {
 
   return (
     <motion.div
-      className={`absolute z-20 pointer-events-none ${
-        isOpponentHit ? 'top-4 right-8' : 'bottom-4 left-8'
+      className={`absolute z-30 pointer-events-none ${
+        isOpponentHit
+          ? 'top-[15%] right-[15%]'
+          : 'bottom-[15%] left-[15%]'
       }`}
-      initial={{ opacity: 0, scale: 0.5, y: 0 }}
-      animate={{ opacity: 1, scale: 1.2, y: isOpponentHit ? -20 : 20 }}
-      exit={{ opacity: 0, y: isOpponentHit ? -50 : 50, scale: 0.8 }}
-      transition={{ type: 'spring', damping: 10, stiffness: 200, duration: 1.2 }}
+      initial={{ opacity: 0, scale: 0.3, y: 0 }}
+      animate={{ opacity: 1, scale: data.isCritical ? 1.5 : 1.2, y: isOpponentHit ? -30 : 30 }}
+      exit={{ opacity: 0, y: isOpponentHit ? -60 : 60, scale: 0.6 }}
+      transition={{ type: 'spring', damping: 8, stiffness: 180, duration: 1.5 }}
     >
-      <span className="text-4xl font-black text-red-500 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]">
+      <span className={`font-black drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] ${
+        data.isCritical ? 'text-5xl text-yellow-400' : 'text-4xl text-red-500'
+      }`}>
         -{data.value}
       </span>
+      {data.isCritical && (
+        <motion.span
+          className="absolute -top-3 left-1/2 -translate-x-1/2 text-xs font-black text-yellow-300"
+          initial={{ opacity: 0, y: 5 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          CRITICAL!
+        </motion.span>
+      )}
     </motion.div>
   );
 }
@@ -119,14 +135,16 @@ function RabbitCharacter({
   isOpponent,
   isDead,
   isSwapping,
+  isHit,
 }: {
   rabbitId: number;
   isOpponent?: boolean;
   isDead?: boolean;
   isSwapping?: boolean;
+  isHit?: boolean;
 }) {
   const src = `/rabbit/rabbit-${String(rabbitId + 1).padStart(3, '0')}.png`;
-  const size = isOpponent ? 80 : 120;
+  const size = isOpponent ? 110 : 120;
 
   return (
     <div className="relative flex flex-col items-center">
@@ -135,7 +153,10 @@ function RabbitCharacter({
         <motion.div
           key={`${rabbitId}-${isSwapping ? 'swap' : 'normal'}`}
           initial={isSwapping ? { scale: 0, opacity: 0 } : { scale: 1, opacity: 1 }}
-          animate={{ scale: 1, opacity: isDead ? 0.3 : 1 }}
+          animate={{
+            scale: 1,
+            opacity: isDead ? 0.3 : 1,
+          }}
           exit={{ scale: 0, opacity: 0 }}
           transition={{
             type: 'spring',
@@ -152,6 +173,15 @@ function RabbitCharacter({
             alt=""
             className="w-full h-full object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.4)]"
           />
+          {/* 히트 플래시 오버레이 */}
+          {isHit && (
+            <motion.div
+              className="absolute inset-0 bg-red-500/50 rounded-lg mix-blend-multiply"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: [0, 0.8, 0, 0.6, 0] }}
+              transition={{ duration: 0.6, times: [0, 0.1, 0.3, 0.4, 0.6] }}
+            />
+          )}
         </motion.div>
       </AnimatePresence>
 
@@ -202,7 +232,6 @@ export default function TekkenBattleArena({
     const prevIndex = prevMyActiveIndex.current;
 
     if (currentIndex !== prevIndex && prevMyRabbitId.current !== undefined) {
-      // 이전 토끼의 HP가 0인 경우에만 스왑 애니메이션
       const prevRabbit = myPlayer?.rabbits?.[prevIndex];
       if (prevRabbit && prevRabbit.currentHp <= 0) {
         setSwappingTarget('me');
@@ -236,11 +265,21 @@ export default function TekkenBattleArena({
     prevOpponentRabbitId.current = opponentActiveRabbit?.rabbitId;
   }, [opponent?.activeRabbitIndex, opponentActiveRabbit?.rabbitId, opponent?.rabbits]);
 
-  // 라운드 결과 → 데미지 팝업
+  // 히트 플래시 상태
+  const [hitMe, setHitMe] = useState(false);
+  const [hitOp, setHitOp] = useState(false);
+
+  // 라운드 결과 → 데미지 팝업 + 히트 플래시 (단일 이펙트)
   useEffect(() => {
-    if (!showResult) return;
+    if (!showResult) {
+      setHitMe(false);
+      setHitOp(false);
+      return;
+    }
 
     const newPopups: DamagePopupData[] = [];
+    let shouldHitMe = false;
+    let shouldHitOp = false;
 
     // 내가 정답 → 상대에게 데미지
     if (myResult?.isCorrect && myResult.damage > 0) {
@@ -248,7 +287,9 @@ export default function TekkenBattleArena({
         id: ++popupIdCounter,
         value: myResult.damage,
         target: 'opponent',
+        isCritical: myResult.isCritical,
       });
+      shouldHitOp = true;
     }
 
     // 내가 받은 데미지 (상대 정답 or 상호 데미지)
@@ -258,22 +299,32 @@ export default function TekkenBattleArena({
         value: myResult.damageReceived,
         target: 'me',
       });
+      shouldHitMe = true;
     }
 
-    // 상대가 받은 데미지 (상호 데미지 시 — 상대 result에서 damageReceived)
+    // 상대가 받은 데미지 (상호 데미지 시)
     if (opponentResult && opponentResult.damageReceived > 0 && !(myResult?.isCorrect && myResult.damage > 0)) {
       newPopups.push({
         id: ++popupIdCounter,
         value: opponentResult.damageReceived,
         target: 'opponent',
       });
+      shouldHitOp = true;
     }
 
-    if (newPopups.length > 0) {
-      setPopups(newPopups);
-      const timer = setTimeout(() => setPopups([]), 1800);
-      return () => clearTimeout(timer);
-    }
+    if (newPopups.length > 0) setPopups(newPopups);
+    setHitMe(shouldHitMe);
+    setHitOp(shouldHitOp);
+
+    const hitTimer = setTimeout(() => {
+      setHitMe(false);
+      setHitOp(false);
+    }, 700);
+    const popupTimer = setTimeout(() => setPopups([]), 1800);
+    return () => {
+      clearTimeout(hitTimer);
+      clearTimeout(popupTimer);
+    };
   }, [showResult, myResult, opponentResult]);
 
   const myRabbitId = myActiveRabbit?.rabbitId ?? myPlayer?.profileRabbitId ?? 0;
@@ -298,6 +349,7 @@ export default function TekkenBattleArena({
             isOpponent
             isDead={opponentActiveRabbit ? opponentActiveRabbit.currentHp <= 0 : false}
             isSwapping={swappingTarget === 'opponent'}
+            isHit={hitOp}
           />
         </div>
       </div>
@@ -310,6 +362,7 @@ export default function TekkenBattleArena({
             rabbitId={myRabbitId}
             isDead={myActiveRabbit ? myActiveRabbit.currentHp <= 0 : false}
             isSwapping={swappingTarget === 'me'}
+            isHit={hitMe}
           />
         </div>
 
@@ -320,7 +373,7 @@ export default function TekkenBattleArena({
         />
       </div>
 
-      {/* ── 데미지 팝업 오버레이 (숫자만, 빨간색) ── */}
+      {/* ── 데미지 팝업 오버레이 ── */}
       <AnimatePresence>
         {popups.map((p) => (
           <DamagePopup key={p.id} data={p} />

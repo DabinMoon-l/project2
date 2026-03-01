@@ -4,6 +4,7 @@ import { useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence, useDragControls, PanInfo } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 // BottomSheet 높이 타입
 type SheetHeight = 'auto' | 'half' | 'full';
@@ -116,11 +117,11 @@ export default function BottomSheet({
     if (isOpen) {
       previousActiveElement.current = document.activeElement as HTMLElement;
       sheetRef.current?.focus();
-      document.body.style.overflow = 'hidden';
+      lockScroll();
     }
 
     return () => {
-      document.body.style.overflow = '';
+      unlockScroll();
       if (previousActiveElement.current) {
         previousActiveElement.current.focus();
       }

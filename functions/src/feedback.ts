@@ -84,6 +84,12 @@ export const onFeedbackSubmit = onDocumentCreated(
         });
 
         addExpInTransaction(transaction, userId, expReward, reason, userDoc);
+
+        // feedbackCount 증가 (소통 지표 계산용 — computeRadarNorm에서 사용)
+        const userRef = db.collection("users").doc(userId);
+        transaction.update(userRef, {
+          feedbackCount: FieldValue.increment(1),
+        });
       });
 
       console.log(`피드백 보상 지급 완료: ${userId}`, {

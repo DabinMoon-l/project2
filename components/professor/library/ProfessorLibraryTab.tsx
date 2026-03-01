@@ -1191,9 +1191,14 @@ export default function ProfessorLibraryTab({
                         onClick={async () => {
                           setShowPublishDropdown(false);
                           if (publishTarget) {
-                            await publishQuiz(publishTarget, opt.value);
-                            setPublishTarget(null);
-                            onPublish?.();
+                            try {
+                              await publishQuiz(publishTarget, opt.value);
+                              onPublish?.();
+                            } catch (err) {
+                              console.error('퀴즈 공개 실패:', err);
+                            } finally {
+                              setPublishTarget(null);
+                            }
                           }
                         }}
                         className="w-full py-2 text-xs font-bold text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"

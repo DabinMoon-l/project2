@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 /**
  * 추출된 키워드 타입 (두 카테고리)
@@ -126,12 +127,12 @@ export default function KeywordBottomSheet({
 
     if (isOpen) {
       document.addEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = 'hidden';
+      lockScroll();
     }
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = '';
+      unlockScroll();
     };
   }, [isOpen, onClose, isLoading]);
 

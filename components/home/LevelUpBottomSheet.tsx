@@ -57,6 +57,13 @@ export default function LevelUpBottomSheet({
     rows.push(courseHoldings.slice(i, i + RABBITS_PER_ROW));
   }
 
+  // 보유 토끼 없이 열리면 즉시 닫기 (빈 화면 + 네비 숨김 방지)
+  useEffect(() => {
+    if (isOpen && courseHoldings.length === 0) {
+      onClose();
+    }
+  }, [isOpen, courseHoldings.length, onClose]);
+
   // 열릴 때 상태 초기화
   useEffect(() => {
     if (isOpen) {

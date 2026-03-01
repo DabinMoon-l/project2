@@ -1,20 +1,40 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useCourse } from '@/lib/contexts';
-import { useProfessorStats, getRawStudents, type QuestionSource, type DispersionMode, type RawStudentData } from '@/lib/hooks/useProfessorStats';
+import { useProfessorStats, getRawStudents, type QuestionSource, type RawStudentData } from '@/lib/hooks/useProfessorStats';
 import { calcFeedbackScore, FEEDBACK_SCORES } from '@/lib/utils/feedbackScore';
 import { exportToExcel, exportToWord, type WeeklyStatSummary } from '@/lib/utils/reportExport';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
+import { mean as statMean, sd as statSd, zScore } from '@/lib/utils/statistics';
 import type { FeedbackType } from '@/components/quiz/InstantFeedbackButton';
 import type { CourseId } from '@/lib/types/course';
 import { getCourseList, COURSES } from '@/lib/types/course';
+import { scaleCoord } from '@/lib/hooks/useViewportScale';
 
-// ── 부가 데이터 모듈 레벨 캐시 (과목 전환 시 즉시 복원) ──
+import SourceFilter from '@/components/professor/stats/SourceFilter';
+import ClassComparison from '@/components/professor/stats/ClassComparison';
+import StabilityIndex from '@/components/professor/stats/StabilityIndex';
+import RadarChart from '@/components/professor/stats/RadarChart';
+import ClassProfileRadar from '@/components/professor/stats/ClassProfileRadar';
+import MobileBottomSheet from '@/components/common/MobileBottomSheet';
+import StudentListView from '@/components/professor/students/StudentListView';
+import StudentDetailModal from '@/components/professor/students/StudentDetailModal';
+import { useProfessorStudents, type StudentDetail, type StudentData } from '@/lib/hooks/useProfessorStudents';
+import type { WarningItem } from '@/app/(main)/professor/students/page';
+
+// ── 부가 데이터 모듈 레벨 캐시 ──
+interface ClusterStudentMap {
+  passionate: string[];
+  hardworking: string[];
+  efficient: string[];
+  atRisk: string[];
+}
+
 interface ExtraData {
   feedbackData: {
     byType: Record<string, number>;
@@ -31,135 +51,186 @@ interface ExtraData {
     efficient: number;
     atRisk: number;
     total: number;
+    byClass: Record<string, { passionate: number; hardworking: number; efficient: number; atRisk: number }>;
+    // uid 매핑 (반별)
+    studentsByCluster: Record<string, ClusterStudentMap>;
   } | null;
-  gamificationData: {
-    avgRabbits: number;
-    avgMilestones: number;
-    totalStudents: number;
-  } | null;
-  classProfileData: Record<string, {
-    score: number;
-    stability: number;
-    participation: number;
-    feedback: number;
-    board: number;
-    gamification: number;
-  }> | null;
 }
 
 const _extraCacheMap = new Map<string, { data: ExtraData; ts: number }>();
-const EXTRA_CACHE_TTL = 5 * 60 * 1000; // 5분
+const EXTRA_CACHE_TTL = 5 * 60 * 1000;
 
-import SourceFilter from '@/components/professor/stats/SourceFilter';
-import DispersionToggle from '@/components/professor/stats/DispersionToggle';
-import ClassComparison from '@/components/professor/stats/ClassComparison';
-import WeeklyBoxPlot from '@/components/professor/stats/WeeklyBoxPlot';
-import StabilityIndex from '@/components/professor/stats/StabilityIndex';
-import RadarChart from '@/components/professor/stats/RadarChart';
-import ChapterTable from '@/components/professor/stats/ChapterTable';
-import AIDifficultyAnalysis from '@/components/professor/stats/AIDifficultyAnalysis';
-import ClassSummaryTable from '@/components/professor/stats/ClassSummaryTable';
-import ClassProfileRadar from '@/components/professor/stats/ClassProfileRadar';
-import { scaleCoord } from '@/lib/hooks/useViewportScale';
-
-// ── 과목 ID 목록 ──
 const COURSE_IDS: CourseId[] = ['biology', 'microbiology', 'pathophysiology'];
 
-function SummaryCard({ value, label, accent }: { value: string; label: string; accent?: boolean }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      className="flex-1 bg-[#FDFBF7] border border-[#D4CFC4] p-3 shadow-[2px_2px_0px_#D4CFC4]"
-    >
-      <p className={`text-xl font-bold tabular-nums ${accent ? 'text-[#1D5D4A]' : 'text-[#1A1A1A]'}`}>
-        {value}
-      </p>
-      <p className="text-[10px] text-[#5C5C5C] mt-0.5">{label}</p>
-    </motion.div>
-  );
-}
+const CLUSTER_META = [
+  { key: 'passionate' as const, label: '열정적 학습자', color: '#16a34a', desc: '높은 참여 + 높은 성취' },
+  { key: 'hardworking' as const, label: '노력형 학습자', color: '#B8860B', desc: '높은 참여 + 낮은 성취' },
+  { key: 'efficient' as const, label: '효율형 학습자', color: '#1E3A5F', desc: '낮은 참여 + 높은 성취' },
+  { key: 'atRisk' as const, label: '이탈 위험군', color: '#8B1A1A', desc: '낮은 참여 + 낮은 성취' },
+];
 
 export default function ProfessorStatsPage() {
   const { userCourseId, setProfessorCourse } = useCourse();
   const { data, loading, error, fetchStats } = useProfessorStats();
+  const {
+    students,
+    subscribeStudents,
+    getInstantDetail,
+    fetchStudentDetail,
+  } = useProfessorStudents();
 
   const [courseId, setCourseId] = useState<CourseId>(userCourseId || 'biology');
   const [source, setSource] = useState<QuestionSource>('professor');
-  const [dispersion, setDispersion] = useState<DispersionMode>('sd');
 
-  // 과목 변경 핸들러 (sessionStorage 저장 포함)
   const handleCourseChange = useCallback((newCourseId: CourseId) => {
     setCourseId(newCourseId);
     setProfessorCourse(newCourseId);
   }, [setProfessorCourse]);
+
+  // 학생 목록 구독
+  useEffect(() => {
+    const unsub = subscribeStudents(courseId);
+    return unsub;
+  }, [courseId, subscribeStudents]);
 
   // 리포트 상태
   const [reportLoading, setReportLoading] = useState(false);
   const [reportInsight, setReportInsight] = useState<string | null>(null);
   const [reportWeeklyStats, setReportWeeklyStats] = useState<WeeklyStatSummary[]>([]);
   const [reportError, setReportError] = useState<string | null>(null);
+  const [reportSheetOpen, setReportSheetOpen] = useState(false);
+  const [reportMonth, setReportMonth] = useState(() => new Date().getMonth() + 1);
+  const [reportYear, setReportYear] = useState(() => new Date().getFullYear());
+  const [reportAvailable, setReportAvailable] = useState(false);
+  const [existingReportInsight, setExistingReportInsight] = useState<string | null>(null);
+  const [reportMonthDropdownOpen, setReportMonthDropdownOpen] = useState(false);
+  const [reportCheckLoading, setReportCheckLoading] = useState(false);
 
-  // 부가 데이터 (피드백 + 군집 + 게이미피케이션 + 반별 프로필) — 단일 state로 배칭
+  // 바텀시트 상태
+  const [atRiskSheetOpen, setAtRiskSheetOpen] = useState(false);
+  const [clusterSheetOpen, setClusterSheetOpen] = useState(false);
+  const [selectedClusterClass, setSelectedClusterClass] = useState<string | null>(null);
+  const [selectedClusterType, setSelectedClusterType] = useState<string | null>(null);
+
+  // 학생 상세 모달
+  const [selectedStudentDetail, setSelectedStudentDetail] = useState<StudentDetail | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const studentsRef = useRef(students);
+  studentsRef.current = students;
+
+  // 부가 데이터
   const [extraData, setExtraData] = useState<ExtraData>({
     feedbackData: null,
     clusterData: null,
-    gamificationData: null,
-    classProfileData: null,
   });
 
-  // 초기 + 필터 변경 시 데이터 조회
   useEffect(() => {
     fetchStats(courseId, source);
   }, [courseId, source, fetchStats]);
 
-  // 피드백 + 군집 + 게이미피케이션 + 반별 프로필 데이터 (캐시 + 단일 setState)
+  // 위험학생 계산
+  const { atRiskStudentList, atRiskWarningMap } = useMemo(() => {
+    if (students.length < 3) return { atRiskStudentList: [] as StudentData[], atRiskWarningMap: new Map<string, WarningItem>() };
+    const scores = students.map(s => s.quizStats.averageScore);
+    const m = statMean(scores);
+    const s = statSd(scores);
+    if (s === 0) return { atRiskStudentList: [] as StudentData[], atRiskWarningMap: new Map<string, WarningItem>() };
+
+    const warningMap = new Map<string, WarningItem>();
+    const atRisk: StudentData[] = [];
+    students.forEach(st => {
+      const z = zScore(st.quizStats.averageScore, m, s);
+      if (z < -1.5) {
+        atRisk.push(st);
+        warningMap.set(st.uid, { uid: st.uid, level: z < -2 ? 'danger' : 'caution' });
+      }
+    });
+    atRisk.sort((a, b) => a.quizStats.averageScore - b.quizStats.averageScore);
+    return { atRiskStudentList: atRisk, atRiskWarningMap: warningMap };
+  }, [students]);
+
+  // 학생 클릭 핸들러
+  const handleStudentClick = useCallback(async (uid: string) => {
+    const instant = getInstantDetail(uid);
+    if (instant) {
+      setSelectedStudentDetail(instant);
+    } else {
+      const basicStudent = studentsRef.current.find(s => s.uid === uid);
+      if (!basicStudent) return;
+      setSelectedStudentDetail({ ...basicStudent, recentQuizzes: [], recentFeedbacks: [] });
+    }
+    setDetailOpen(true);
+
+    const detail = await fetchStudentDetail(uid);
+    if (detail) {
+      setSelectedStudentDetail(prev => {
+        if (!prev) return detail;
+        return {
+          ...detail,
+          radarMetrics: detail.radarMetrics ?? prev.radarMetrics,
+          weightedScore: detail.weightedScore ?? prev.weightedScore,
+          classWeightedScores: detail.classWeightedScores ?? prev.classWeightedScores,
+        };
+      });
+    }
+  }, [getInstantDetail, fetchStudentDetail]);
+
+  const allStudentsForModal = useMemo(() =>
+    students.map(s => ({ uid: s.uid, classId: s.classId, averageScore: s.quizStats.averageScore })),
+  [students]);
+
+  // 클러스터 바텀시트용 학생 필터
+  const clusterStudentList = useMemo(() => {
+    if (!selectedClusterClass || !selectedClusterType || !extraData.clusterData) return [];
+    const uids = extraData.clusterData.studentsByCluster[selectedClusterClass]?.[selectedClusterType as keyof ClusterStudentMap] || [];
+    const uidSet = new Set(uids);
+    return students.filter(s => uidSet.has(s.uid));
+  }, [selectedClusterClass, selectedClusterType, extraData.clusterData, students]);
+
+  // 클러스터 warningMap (빈 맵 — 클러스터 바텀시트에서는 경고 불필요)
+  const emptyWarningMap = useMemo(() => new Map<string, WarningItem>(), []);
+
+  // 피드백 + 군집 데이터
   useEffect(() => {
     let cancelled = false;
 
     const loadAllExtraData = async () => {
-      // 캐시 확인
       const cached = _extraCacheMap.get(courseId);
-      if (cached && Date.now() - cached.ts < EXTRA_CACHE_TTL) {
+
+      // stale-while-revalidate: 만료되었어도 즉시 표시
+      if (cached) {
         setExtraData(cached.data);
-        return;
+        if (Date.now() - cached.ts < EXTRA_CACHE_TTL) return;
+        // 만료됨 → 백그라운드 갱신 계속
       }
 
       try {
-        // questionFeedbacks + posts만 조회 (users는 useProfessorStats raw 캐시 재사용)
-        const [fbSnap, postSnap] = await Promise.all([
-          getDocs(query(collection(db, 'questionFeedbacks'), where('courseId', '==', courseId))),
-          getDocs(query(collection(db, 'posts'), where('courseId', '==', courseId))),
-        ]);
-
+        const fbSnap = await getDocs(query(collection(db, 'questionFeedbacks'), where('courseId', '==', courseId)));
         if (cancelled) return;
 
-        // ── 학생 데이터: useProfessorStats raw 캐시에서 가져오기 (중복 쿼리 제거) ──
         let rawStudents = getRawStudents(courseId);
         if (!rawStudents) {
-          // raw 캐시가 아직 없으면 직접 조회 (fallback)
           const usersSnap = await getDocs(query(collection(db, 'users'), where('courseId', '==', courseId), where('role', '==', 'student')));
           rawStudents = usersSnap.docs.map(d => {
             const data = d.data();
             return {
+              uid: d.id,
               classId: (data.classId || 'A') as string,
               totalExp: data.totalExp || 0,
               profCorrectCount: data.profCorrectCount || 0,
               profAttemptCount: data.profAttemptCount || 0,
               equippedRabbits: Array.isArray(data.equippedRabbits) ? data.equippedRabbits : [],
               lastGachaExp: data.lastGachaExp || 0,
-            } as RawStudentData;
+            } as RawStudentData & { uid: string };
           });
         }
-
         if (cancelled) return;
 
-        // ── 피드백 분석 ──
+        // 피드백 분석
         const byType: Record<string, number> = {};
         const aiF: { type: FeedbackType }[] = [];
         const profF: { type: FeedbackType }[] = [];
         const allF: { type: FeedbackType }[] = [];
-        const fbByClass: Record<string, number> = {};
 
         fbSnap.docs.forEach(d => {
           const data = d.data();
@@ -168,8 +239,6 @@ export default function ProfessorStatsPage() {
           allF.push({ type: t as FeedbackType });
           if (data.isAiGenerated) aiF.push({ type: t as FeedbackType });
           else profF.push({ type: t as FeedbackType });
-          const cls = data.classId as string;
-          if (cls) fbByClass[cls] = (fbByClass[cls] || 0) + 1;
         });
 
         const feedbackData = {
@@ -182,101 +251,50 @@ export default function ProfessorStatsPage() {
           profCount: profF.length,
         };
 
-        // ── 학생 군집 + 게이미피케이션 ──
+        // 군집 분류
         if (rawStudents.length === 0) {
           const result: ExtraData = {
             feedbackData,
-            clusterData: { passionate: 0, hardworking: 0, efficient: 0, atRisk: 0, total: 0 },
-            gamificationData: { avgRabbits: 0, avgMilestones: 0, totalStudents: 0 },
-            classProfileData: null,
+            clusterData: { passionate: 0, hardworking: 0, efficient: 0, atRisk: 0, total: 0, byClass: {}, studentsByCluster: {} },
           };
           _extraCacheMap.set(courseId, { data: result, ts: Date.now() });
           if (!cancelled) setExtraData(result);
           return;
         }
 
-        const students = rawStudents.map(s => ({
+        const rawStudentData = rawStudents.map(s => ({
+          uid: (s as RawStudentData & { uid?: string }).uid || '',
           classId: s.classId,
           totalExp: s.totalExp,
           correctRate: s.profCorrectCount
             ? ((s.profCorrectCount / Math.max(s.profAttemptCount || 1, 1)) * 100)
             : 0,
-          rabbitCount: s.equippedRabbits.length,
-          lastGachaExp: s.lastGachaExp,
         }));
 
-        // 군집 분류
-        const exps = students.map(s => s.totalExp).sort((a, b) => a - b);
+        const exps = rawStudentData.map(s => s.totalExp).sort((a, b) => a - b);
         const medianExp = exps[Math.floor(exps.length / 2)] || 0;
         const RATE_THRESHOLD = 50;
 
-        let passionate = 0, hardworking = 0, efficient = 0, atRisk = 0;
-        students.forEach(s => {
+        let passionate = 0, hardworking = 0, efficient = 0, atRiskCluster = 0;
+        const byClass: Record<string, { passionate: number; hardworking: number; efficient: number; atRisk: number }> = {};
+        const studentsByCluster: Record<string, ClusterStudentMap> = {};
+
+        rawStudentData.forEach(s => {
           const highExp = s.totalExp >= medianExp && s.totalExp > 0;
           const highRate = s.correctRate >= RATE_THRESHOLD;
-          if (highExp && highRate) passionate++;
-          else if (highExp && !highRate) hardworking++;
-          else if (!highExp && highRate) efficient++;
-          else atRisk++;
+          const cls = s.classId;
+          if (!byClass[cls]) byClass[cls] = { passionate: 0, hardworking: 0, efficient: 0, atRisk: 0 };
+          if (!studentsByCluster[cls]) studentsByCluster[cls] = { passionate: [], hardworking: [], efficient: [], atRisk: [] };
+
+          if (highExp && highRate) { passionate++; byClass[cls].passionate++; studentsByCluster[cls].passionate.push(s.uid); }
+          else if (highExp && !highRate) { hardworking++; byClass[cls].hardworking++; studentsByCluster[cls].hardworking.push(s.uid); }
+          else if (!highExp && highRate) { efficient++; byClass[cls].efficient++; studentsByCluster[cls].efficient.push(s.uid); }
+          else { atRiskCluster++; byClass[cls].atRisk++; studentsByCluster[cls].atRisk.push(s.uid); }
         });
 
-        const clusterData = { passionate, hardworking, efficient, atRisk, total: students.length };
+        const clusterData = { passionate, hardworking, efficient, atRisk: atRiskCluster, total: rawStudentData.length, byClass, studentsByCluster };
 
-        const totalRabbits = students.reduce((s, st) => s + st.rabbitCount, 0);
-        const totalMilestones = students.reduce((s, st) => s + Math.floor(st.lastGachaExp / 50), 0);
-        const gamificationData = {
-          avgRabbits: students.length > 0 ? Math.round((totalRabbits / students.length) * 10) / 10 : 0,
-          avgMilestones: students.length > 0 ? Math.round((totalMilestones / students.length) * 10) / 10 : 0,
-          totalStudents: students.length,
-        };
-
-        // ── 반별 프로필 데이터 ──
-        const classIds = ['A', 'B', 'C', 'D'];
-        const profileData: Record<string, { score: number; stability: number; participation: number; feedback: number; board: number; gamification: number }> = {};
-
-        const boardByClass: Record<string, number> = {};
-        postSnap.docs.forEach(d => {
-          const cls = d.data().authorClassType as string;
-          if (cls) boardByClass[cls] = (boardByClass[cls] || 0) + 1;
-        });
-
-        const maxFb = Math.max(1, ...Object.values(fbByClass));
-        const maxBoard = Math.max(1, ...Object.values(boardByClass));
-        const maxMilestone = Math.max(1, ...students.map(s => Math.floor(s.lastGachaExp / 50)));
-
-        for (const cls of classIds) {
-          const classStudents = students.filter(s => s.classId === cls);
-          const count = classStudents.length;
-          if (count === 0) {
-            profileData[cls] = { score: 0, stability: 0, participation: 0, feedback: 0, board: 0, gamification: 0 };
-            continue;
-          }
-
-          const avgRate = classStudents.reduce((s, st) => s + st.correctRate, 0) / count;
-          const activeCount = classStudents.filter(s => s.totalExp > 0).length;
-          const participation = (activeCount / count) * 100;
-          const rateValues = classStudents.map(s => s.correctRate);
-          const rateM = rateValues.reduce((a, b) => a + b, 0) / rateValues.length;
-          const rateStd = Math.sqrt(rateValues.reduce((a, b) => a + (b - rateM) ** 2, 0) / Math.max(rateValues.length - 1, 1));
-          const rateCV = rateM > 0 ? rateStd / rateM : 1;
-          const stability = Math.min(100, Math.max(0, (1 - rateCV) * 100));
-
-          const classFb = fbByClass[cls] || 0;
-          const classBoard = boardByClass[cls] || 0;
-          const classMilestones = classStudents.reduce((s, st) => s + Math.floor(st.lastGachaExp / 50), 0) / count;
-
-          profileData[cls] = {
-            score: Math.min(100, avgRate),
-            stability,
-            participation: Math.min(100, participation),
-            feedback: Math.min(100, (classFb / maxFb) * 100),
-            board: Math.min(100, (classBoard / maxBoard) * 100),
-            gamification: Math.min(100, maxMilestone > 0 ? (classMilestones / maxMilestone) * 100 : 0),
-          };
-        }
-
-        // 단일 setState로 배칭 (리렌더링 1회)
-        const result: ExtraData = { feedbackData, clusterData, gamificationData, classProfileData: profileData };
+        const result: ExtraData = { feedbackData, clusterData };
         _extraCacheMap.set(courseId, { data: result, ts: Date.now() });
         if (!cancelled) setExtraData(result);
       } catch (err) {
@@ -288,6 +306,136 @@ export default function ProfessorStatsPage() {
     return () => { cancelled = true; };
   }, [courseId]);
 
+  // 리포트 월 드롭다운 옵션 생성 (최근 6개월)
+  const reportMonthOptions = useMemo(() => {
+    const opts: { year: number; month: number; label: string }[] = [];
+    const now = new Date();
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      opts.push({ year: d.getFullYear(), month: d.getMonth() + 1, label: `${d.getMonth() + 1}월` });
+    }
+    return opts;
+  }, []);
+
+  // 리포트 가용성 체크 (월 변경 시)
+  // 해당 월이 완전히 끝난 후에만 생성 가능
+  useEffect(() => {
+    let cancelled = false;
+    const checkAvailability = async () => {
+      setReportCheckLoading(true);
+      setReportAvailable(false);
+      setExistingReportInsight(null);
+      try {
+        // 해당 월이 끝났는지 확인 (다음 달 1일 이후여야 함)
+        const monthEndDate = new Date(reportYear, reportMonth, 1); // 다음 달 1일
+        const now = new Date();
+        const monthHasEnded = now >= monthEndDate;
+
+        if (!monthHasEnded) {
+          // 월이 아직 안 끝남 → 비활성
+          if (!cancelled) {
+            setReportAvailable(false);
+            setReportCheckLoading(false);
+          }
+          return;
+        }
+
+        const monthLabel = `${reportYear}-${String(reportMonth).padStart(2, '0')}`;
+
+        // 기존 리포트 확인
+        const reportDoc = await getDoc(doc(db, 'monthlyReports', courseId, 'months', monthLabel));
+        if (reportDoc.exists()) {
+          if (!cancelled) {
+            setExistingReportInsight(reportDoc.data().insight || '');
+            setReportAvailable(true);
+          }
+          return;
+        }
+
+        // weeklyStats 존재 여부 확인
+        const nextMonth = reportMonth === 12 ? `${reportYear + 1}-01-01` : `${reportYear}-${String(reportMonth + 1).padStart(2, '0')}-01`;
+        const weeksSnap = await getDocs(
+          query(
+            collection(db, 'weeklyStats', courseId, 'weeks'),
+            where('weekStart', '>=', `${reportYear}-${String(reportMonth).padStart(2, '0')}-01`),
+            where('weekStart', '<', nextMonth)
+          )
+        );
+        if (!cancelled) {
+          setReportAvailable(weeksSnap.docs.length > 0);
+        }
+      } catch {
+        if (!cancelled) setReportAvailable(false);
+      } finally {
+        if (!cancelled) setReportCheckLoading(false);
+      }
+    };
+    checkAvailability();
+    return () => { cancelled = true; };
+  }, [courseId, reportYear, reportMonth]);
+
+  // weeklyStats 조회 헬퍼
+  const fetchWeeklyStatsForMonth = useCallback(async (year: number, month: number) => {
+    const nextMonth = month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const weeksSnap = await getDocs(
+      query(
+        collection(db, 'weeklyStats', courseId, 'weeks'),
+        where('weekStart', '>=', `${year}-${String(month).padStart(2, '0')}-01`),
+        where('weekStart', '<', nextMonth)
+      )
+    );
+    return weeksSnap.docs.map(d => {
+      const wData = d.data();
+      return {
+        weekLabel: wData.weekLabel || d.id,
+        quiz: { newCount: wData.quiz?.newCount || 0, avgCorrectRate: wData.quiz?.avgCorrectRate || 0 },
+        feedback: { total: wData.feedback?.total || 0, avgScore: wData.feedback?.avgScore || 0 },
+        student: { activeCount: wData.student?.activeCount || 0, totalCount: wData.student?.totalCount || 0, avgExpGain: wData.student?.avgExpGain || 0 },
+        board: { postCount: wData.board?.postCount || 0, commentCount: wData.board?.commentCount || 0 },
+      };
+    });
+  }, [courseId]);
+
+  // 리포트 생성/열기
+  const handleGenerateReport = useCallback(async () => {
+    if (!reportAvailable || reportLoading) return;
+    setReportLoading(true);
+    setReportError(null);
+    try {
+      // 기존 리포트가 있으면 바로 열기
+      if (existingReportInsight !== null) {
+        setReportInsight(existingReportInsight);
+        const stats = await fetchWeeklyStatsForMonth(reportYear, reportMonth);
+        setReportWeeklyStats(stats);
+        setReportSheetOpen(true);
+        return;
+      }
+
+      // 새 리포트 생성
+      const generateReport = httpsCallable(functions, 'generateMonthlyReport');
+      const result = await generateReport({ courseId, year: reportYear, month: reportMonth });
+      const resultData = result.data as { insight: string; weeklyStatsUsed: string[] };
+      setReportInsight(resultData.insight);
+      setExistingReportInsight(resultData.insight);
+
+      const stats = await fetchWeeklyStatsForMonth(reportYear, reportMonth);
+      setReportWeeklyStats(stats);
+      setReportSheetOpen(true);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '리포트 생성 실패';
+      setReportError(msg);
+    } finally {
+      setReportLoading(false);
+    }
+  }, [courseId, reportYear, reportMonth, reportAvailable, reportLoading, existingReportInsight, fetchWeeklyStatsForMonth]);
+
+  // 반 클릭 → 클러스터 바텀시트
+  const handleClassClick = useCallback((classId: string) => {
+    setSelectedClusterClass(classId);
+    setSelectedClusterType(null);
+    setClusterSheetOpen(true);
+  }, []);
+
   return (
     <div className="min-h-screen pb-24 bg-[#F5F0E8]">
       {/* 리본 헤더 */}
@@ -298,51 +446,139 @@ export default function ProfessorStatsPage() {
         />
       </header>
 
-      <div className="px-4 space-y-4">
-        {/* 필터 영역 */}
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="space-y-3"
-        >
-          {/* 문제 출처 + 산포도 모드 */}
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <p className="text-[10px] text-[#5C5C5C] mb-1.5 font-bold uppercase tracking-wider">출처</p>
-              <SourceFilter value={source} onChange={setSource} />
-            </div>
-            <div>
-              <p className="text-[10px] text-[#5C5C5C] mb-1.5 font-bold uppercase tracking-wider">산포도</p>
-              <DispersionToggle value={dispersion} onChange={setDispersion} />
-            </div>
-          </div>
-        </motion.div>
+      <div className="px-4 space-y-6">
+        {/* 리본과 필터 사이 간격 */}
+        <div className="pt-2">
+          <SourceFilter value={source} onChange={setSource} />
+        </div>
 
-        {/* 요약 카드 */}
+        {/* 요약 카드 2개 (가운데 정렬 + 숫자 크게) */}
         {data && (
-          <div className="flex gap-2.5">
-            <SummaryCard value={String(data.totalStudents)} label="참여 학생" />
-            <SummaryCard value={String(data.totalAttempts)} label="총 시도" />
-            <SummaryCard
-              value={data.professorMean > 0 ? data.professorMean.toFixed(1) : '-'}
-              label="교수 문제 평균"
-              accent
-            />
+          <div className="grid grid-cols-3 gap-2.5">
+            {/* 참여학생 */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="p-3 border border-[#D4CFC4] flex flex-col items-center justify-center"
+            >
+              <p className="text-3xl font-black tabular-nums text-[#1A1A1A]">
+                {data.totalStudents}
+              </p>
+              <p className="text-[11px] text-[#5C5C5C] mt-1">참여 학생</p>
+            </motion.div>
+
+            {/* 위험학생 */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.05 }}
+              className="p-3 border border-[#D4CFC4] cursor-pointer hover:border-[#8B1A1A] transition-colors flex flex-col items-center justify-center"
+              onClick={() => setAtRiskSheetOpen(true)}
+            >
+              <div className="flex items-center gap-1">
+                <p className={`text-3xl font-black tabular-nums ${atRiskStudentList.length > 0 ? 'text-[#8B1A1A]' : 'text-[#1A1A1A]'}`}>
+                  {atRiskStudentList.length}
+                </p>
+                {atRiskStudentList.length > 0 && (
+                  <svg className="w-3.5 h-3.5 text-[#8B1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                )}
+              </div>
+              <p className="text-[11px] text-[#5C5C5C] mt-1">위험 학생</p>
+            </motion.div>
+
+            {/* 월간 리포트 */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.1 }}
+              className={`p-3 border transition-colors flex flex-col justify-center items-center relative ${
+                reportAvailable && !reportCheckLoading
+                  ? 'border-[#D4CFC4] cursor-pointer hover:border-[#1A1A1A]'
+                  : 'border-dashed border-[#D4CFC4] bg-[#EBE5D9]/30'
+              }`}
+              onClick={() => {
+                if (reportAvailable && !reportCheckLoading) handleGenerateReport();
+              }}
+            >
+              {reportLoading ? (
+                <motion.div
+                  className="w-8 h-8 border-2 border-[#1A1A1A] border-t-transparent rounded-full"
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                />
+              ) : (
+                <svg className={`w-8 h-8 ${reportAvailable && !reportCheckLoading ? 'text-[#1A1A1A]' : 'text-[#B0A89A]'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              )}
+              {/* 월 드롭다운 + 레포트 라벨 */}
+              <div className="flex items-center gap-0.5 mt-1 relative">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setReportMonthDropdownOpen(prev => !prev);
+                  }}
+                  className={`text-[11px] font-bold flex items-center gap-0.5 ${reportAvailable && !reportCheckLoading ? 'text-[#5C5C5C]' : 'text-[#B0A89A]'}`}
+                >
+                  {reportMonth}월 레포트
+                  <svg className={`w-2.5 h-2.5 transition-transform ${reportMonthDropdownOpen ? 'rotate-180' : ''}`} fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* 월 선택 드롭다운 */}
+              <AnimatePresence>
+                {reportMonthDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setReportMonthDropdownOpen(false); }} />
+                    <motion.div
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      className="absolute bottom-0 translate-y-full z-20 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg rounded-lg overflow-hidden"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {reportMonthOptions.map(opt => (
+                        <button
+                          key={`${opt.year}-${opt.month}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setReportYear(opt.year);
+                            setReportMonth(opt.month);
+                            setReportMonthDropdownOpen(false);
+                          }}
+                          className={`w-full px-4 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
+                            reportYear === opt.year && reportMonth === opt.month
+                              ? 'bg-[#1A1A1A] text-[#F5F0E8]'
+                              : 'text-[#1A1A1A] hover:bg-[#EBE5D9]'
+                          }`}
+                        >
+                          {opt.year !== new Date().getFullYear() ? `${opt.year}년 ` : ''}{opt.label}
+                        </button>
+                      ))}
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            </motion.div>
           </div>
         )}
 
-        {/* 에러 */}
+        {reportError && (
+          <p className="text-xs text-[#8B1A1A] border border-[#8B1A1A] p-2">{reportError}</p>
+        )}
+
         {error && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="bg-red-50 border border-[#8B1A1A] p-3 shadow-[2px_2px_0px_#D4A5A5]"
-          >
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-red-50 border border-[#8B1A1A] p-3">
             <p className="text-sm text-[#8B1A1A] font-bold">{error}</p>
           </motion.div>
         )}
 
-        {/* 로딩 */}
         {loading && (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
             <motion.div
@@ -354,65 +590,34 @@ export default function ProfessorStatsPage() {
           </div>
         )}
 
-        {/* 데이터 시각화 */}
         {data && !loading && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3 }}
-            className="space-y-4"
+            className="space-y-8"
           >
-            {/* A) 반별 비교 */}
-            <ClassComparison classStats={data.classStats} mode={dispersion} />
-
-            {/* B) 주차별 박스플롯 */}
-            <WeeklyBoxPlot weeklyTrend={data.weeklyTrend} />
-
-            {/* C) 반별 종합 역량 레이더 */}
-            {extraData.classProfileData && (
-              <ClassProfileRadar classProfileData={extraData.classProfileData} />
-            )}
-
-            {/* D) 안정성 지표 */}
+            <ClassComparison classStats={data.classStats} onClassClick={handleClassClick} />
+            <ClassProfileRadar courseId={courseId} />
             <StabilityIndex classStats={data.classStats} />
-
-            {/* E) 이해도 레이더 */}
             <RadarChart chapterStats={data.chapterStats} />
 
-            {/* F) 챕터/소주제 분석 */}
-            <ChapterTable chapterStats={data.chapterStats} />
-
-            {/* G) AI 난이도 분석 */}
-            <AIDifficultyAnalysis
-              aiDifficultyStats={data.aiDifficultyStats}
-              professorMean={data.professorMean}
-            />
-
-            {/* 반별 요약 */}
-            <ClassSummaryTable classStats={data.classStats} />
-
-            {/* ── 피드백 분석 ── */}
-            {extraData.feedbackData && extraData.feedbackData!.total > 0 && (
+            {/* 피드백 분석 */}
+            {extraData.feedbackData && extraData.feedbackData.total > 0 && (
               <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 h-px bg-[#1A1A1A]" />
-                  <h2 className="font-serif-display text-sm font-bold text-[#1A1A1A]">FEEDBACK ANALYSIS</h2>
-                  <div className="flex-1 h-px bg-[#1A1A1A]" />
-                </div>
+                <h3 className="text-lg font-bold text-[#1A1A1A]">피드백 분석</h3>
 
-                {/* 피드백 평균 점수 */}
-                <div className="bg-[#FDFBF7] border border-[#D4CFC4] p-3">
-                  <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between p-3 border border-[#D4CFC4]">
+                  <div>
                     <p className="text-xs font-bold text-[#1A1A1A]">평균 피드백 점수</p>
-                    <p className="text-xl font-black text-[#1A1A1A]">
-                      {extraData.feedbackData.avgScore > 0 ? '+' : ''}{extraData.feedbackData.avgScore.toFixed(1)}
-                    </p>
+                    <p className="text-[10px] text-[#5C5C5C]">총 {extraData.feedbackData.total}건</p>
                   </div>
-                  <p className="text-[10px] text-[#5C5C5C]">총 {extraData.feedbackData!.total}건</p>
+                  <p className="text-xl font-black text-[#1A1A1A]">
+                    {extraData.feedbackData.avgScore > 0 ? '+' : ''}{extraData.feedbackData.avgScore.toFixed(1)}
+                  </p>
                 </div>
 
-                {/* 타입별 분포 */}
-                <div className="bg-[#FDFBF7] border border-[#D4CFC4] p-3">
+                <div className="p-3 border border-[#D4CFC4]">
                   <p className="text-xs font-bold text-[#1A1A1A] mb-2">타입별 분포</p>
                   <div className="space-y-1.5">
                     {(['praise', 'wantmore', 'other', 'typo', 'unclear', 'wrong'] as const).map(type => {
@@ -425,7 +630,7 @@ export default function ProfessorStatsPage() {
                       return (
                         <div key={type} className="flex items-center gap-2">
                           <span className="text-[11px] w-20 text-[#1A1A1A] truncate">{label}</span>
-                          <div className="flex-1 h-4 bg-[#EDEAE4] relative">
+                          <div className="flex-1 h-4 bg-[#EBE5D9] relative">
                             <motion.div
                               initial={{ width: 0 }}
                               animate={{ width: `${pct}%` }}
@@ -441,202 +646,157 @@ export default function ProfessorStatsPage() {
                   </div>
                 </div>
 
-                {/* AI vs 교수 비교 */}
-                {(extraData.feedbackData!.aiCount > 0 || extraData.feedbackData!.profCount > 0) && (
-                  <div className="bg-[#FDFBF7] border border-[#D4CFC4] p-3">
+                {(extraData.feedbackData.aiCount > 0 || extraData.feedbackData.profCount > 0) && (
+                  <div className="p-3 border border-[#D4CFC4]">
                     <p className="text-xs font-bold text-[#1A1A1A] mb-2">AI 생성 vs 교수 출제</p>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="text-center p-2 border border-[#D4CFC4]">
                         <p className="text-lg font-black text-[#1A1A1A]">
-                          {extraData.feedbackData!.profCount > 0 ? (extraData.feedbackData!.profAvgScore > 0 ? '+' : '') + extraData.feedbackData!.profAvgScore.toFixed(1) : '-'}
+                          {extraData.feedbackData.profCount > 0 ? (extraData.feedbackData.profAvgScore > 0 ? '+' : '') + extraData.feedbackData.profAvgScore.toFixed(1) : '-'}
                         </p>
-                        <p className="text-[10px] text-[#5C5C5C]">교수 ({extraData.feedbackData!.profCount}건)</p>
+                        <p className="text-[10px] text-[#5C5C5C]">교수 ({extraData.feedbackData.profCount}건)</p>
                       </div>
                       <div className="text-center p-2 border border-[#D4CFC4]">
                         <p className="text-lg font-black text-[#1A1A1A]">
-                          {extraData.feedbackData!.aiCount > 0 ? (extraData.feedbackData!.aiAvgScore > 0 ? '+' : '') + extraData.feedbackData!.aiAvgScore.toFixed(1) : '-'}
+                          {extraData.feedbackData.aiCount > 0 ? (extraData.feedbackData.aiAvgScore > 0 ? '+' : '') + extraData.feedbackData.aiAvgScore.toFixed(1) : '-'}
                         </p>
-                        <p className="text-[10px] text-[#5C5C5C]">AI ({extraData.feedbackData!.aiCount}건)</p>
+                        <p className="text-[10px] text-[#5C5C5C]">AI ({extraData.feedbackData.aiCount}건)</p>
                       </div>
                     </div>
                   </div>
                 )}
               </div>
             )}
-
-            {/* ── 참여도 군집 요약 ── */}
-            {extraData.clusterData && extraData.clusterData!.total > 0 && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 h-px bg-[#1A1A1A]" />
-                  <h2 className="font-serif-display text-sm font-bold text-[#1A1A1A]">STUDENT CLUSTERS</h2>
-                  <div className="flex-1 h-px bg-[#1A1A1A]" />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { label: '열정적 학습자', count: extraData.clusterData!.passionate, color: '#16a34a', desc: '높은 참여 + 높은 성취' },
-                    { label: '노력형 학습자', count: extraData.clusterData!.hardworking, color: '#B8860B', desc: '높은 참여 + 낮은 성취' },
-                    { label: '효율형 학습자', count: extraData.clusterData!.efficient, color: '#1E3A5F', desc: '낮은 참여 + 높은 성취' },
-                    { label: '이탈 위험군', count: extraData.clusterData!.atRisk, color: '#8B1A1A', desc: '낮은 참여 + 낮은 성취' },
-                  ].map(cluster => {
-                    const pct = extraData.clusterData!.total > 0 ? Math.round((cluster.count / extraData.clusterData!.total) * 100) : 0;
-                    return (
-                      <div key={cluster.label} className="bg-[#FDFBF7] border border-[#D4CFC4] p-3">
-                        <div className="flex items-baseline gap-1 mb-1">
-                          <span className="text-xl font-black" style={{ color: cluster.color }}>{cluster.count}</span>
-                          <span className="text-[10px] text-[#5C5C5C]">명 ({pct}%)</span>
-                        </div>
-                        <p className="text-xs font-bold text-[#1A1A1A]">{cluster.label}</p>
-                        <p className="text-[9px] text-[#5C5C5C]">{cluster.desc}</p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* ── 게이미피케이션 효과 ── */}
-            {extraData.gamificationData && extraData.gamificationData.totalStudents > 0 && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 h-px bg-[#1A1A1A]" />
-                  <h2 className="font-serif-display text-sm font-bold text-[#1A1A1A]">GAMIFICATION</h2>
-                  <div className="flex-1 h-px bg-[#1A1A1A]" />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="bg-[#FDFBF7] border border-[#D4CFC4] p-3 text-center">
-                    <p className="text-2xl font-black text-[#1A1A1A]">{extraData.gamificationData!.avgRabbits}</p>
-                    <p className="text-[10px] text-[#5C5C5C] mt-1">평균 토끼 장착 수</p>
-                  </div>
-                  <div className="bg-[#FDFBF7] border border-[#D4CFC4] p-3 text-center">
-                    <p className="text-2xl font-black text-[#1A1A1A]">{extraData.gamificationData!.avgMilestones}</p>
-                    <p className="text-[10px] text-[#5C5C5C] mt-1">평균 마일스톤 달성</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ── 월별 리포트 다운로드 ── */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="flex-1 h-px bg-[#1A1A1A]" />
-                <h2 className="font-serif-display text-sm font-bold text-[#1A1A1A]">MONTHLY REPORT</h2>
-                <div className="flex-1 h-px bg-[#1A1A1A]" />
-              </div>
-
-              <div className="bg-[#FDFBF7] border border-[#D4CFC4] p-4 space-y-3">
-                <p className="text-xs text-[#5C5C5C]">
-                  월별 수집 데이터를 기반으로 Claude AI 분석 리포트를 생성합니다.
-                </p>
-
-                {reportError && (
-                  <p className="text-xs text-[#8B1A1A] border border-[#8B1A1A] p-2">{reportError}</p>
-                )}
-
-                <button
-                  type="button"
-                  disabled={reportLoading}
-                  onClick={async () => {
-                    setReportLoading(true);
-                    setReportError(null);
-                    try {
-                      const now = new Date();
-                      const year = now.getFullYear();
-                      const month = now.getMonth() + 1;
-
-                      const generateReport = httpsCallable(functions, 'generateMonthlyReport');
-                      const result = await generateReport({ courseId, year, month });
-                      const resultData = result.data as { insight: string; weeklyStatsUsed: string[] };
-                      setReportInsight(resultData.insight);
-
-                      const weeksSnap = await getDocs(
-                        query(
-                          collection(db, 'weeklyStats', courseId, 'weeks'),
-                          where('weekStart', '>=', `${year}-${String(month).padStart(2, '0')}-01`),
-                          where('weekStart', '<', month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, '0')}-01`)
-                        )
-                      );
-                      const stats: WeeklyStatSummary[] = weeksSnap.docs.map(d => {
-                        const data = d.data();
-                        return {
-                          weekLabel: data.weekLabel || d.id,
-                          quiz: { newCount: data.quiz?.newCount || 0, avgCorrectRate: data.quiz?.avgCorrectRate || 0 },
-                          feedback: { total: data.feedback?.total || 0, avgScore: data.feedback?.avgScore || 0 },
-                          student: { activeCount: data.student?.activeCount || 0, totalCount: data.student?.totalCount || 0, avgExpGain: data.student?.avgExpGain || 0 },
-                          board: { postCount: data.board?.postCount || 0, commentCount: data.board?.commentCount || 0 },
-                        };
-                      });
-                      setReportWeeklyStats(stats);
-                    } catch (err) {
-                      const msg = err instanceof Error ? err.message : '리포트 생성 실패';
-                      setReportError(msg);
-                    } finally {
-                      setReportLoading(false);
-                    }
-                  }}
-                  className="w-full py-3 border-2 border-[#1A1A1A] bg-[#1A1A1A] text-white text-sm font-bold disabled:opacity-50"
-                >
-                  {reportLoading ? '분석 중...' : '이번 달 리포트 생성'}
-                </button>
-
-                {reportInsight && (
-                  <div className="space-y-3">
-                    <div className="border border-[#D4CFC4] bg-white p-3 max-h-60 overflow-y-auto">
-                      <p className="text-[11px] text-[#1A1A1A] whitespace-pre-wrap leading-relaxed">
-                        {reportInsight.slice(0, 500)}
-                        {reportInsight.length > 500 && '...'}
-                      </p>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const courseName = getCourseList().find(c => c.id === courseId)?.name || courseId;
-                          const now = new Date();
-                          exportToExcel({
-                            courseId,
-                            courseName,
-                            monthLabel: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
-                            year: now.getFullYear(),
-                            month: now.getMonth() + 1,
-                            insight: reportInsight,
-                            weeklyStats: reportWeeklyStats,
-                          });
-                        }}
-                        className="py-2 border border-[#1A1A1A] text-[#1A1A1A] text-xs font-bold"
-                      >
-                        Excel 다운로드
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const courseName = getCourseList().find(c => c.id === courseId)?.name || courseId;
-                          const now = new Date();
-                          exportToWord({
-                            courseId,
-                            courseName,
-                            monthLabel: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
-                            year: now.getFullYear(),
-                            month: now.getMonth() + 1,
-                            insight: reportInsight,
-                            weeklyStats: reportWeeklyStats,
-                          });
-                        }}
-                        className="py-2 border border-[#1A1A1A] text-[#1A1A1A] text-xs font-bold"
-                      >
-                        Word 다운로드
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
           </motion.div>
         )}
       </div>
+
+      {/* 위험학생 바텀시트 */}
+      <MobileBottomSheet open={atRiskSheetOpen} onClose={() => setAtRiskSheetOpen(false)} maxHeight="80vh">
+        <div className="px-4 pb-6">
+          {atRiskStudentList.length === 0 ? (
+            <p className="text-sm text-[#5C5C5C] text-center py-8">위험 학생이 없습니다</p>
+          ) : (
+            <StudentListView
+              students={atRiskStudentList}
+              onStudentClick={handleStudentClick}
+              warningMap={atRiskWarningMap}
+            />
+          )}
+        </div>
+      </MobileBottomSheet>
+
+      {/* 반별 클러스터 바텀시트 */}
+      <MobileBottomSheet
+        open={clusterSheetOpen}
+        onClose={() => { setClusterSheetOpen(false); setSelectedClusterClass(null); setSelectedClusterType(null); }}
+        maxHeight="85vh"
+      >
+        <div className="px-4 pb-6">
+          {selectedClusterClass && (
+            <>
+              <h3 className="text-base font-bold text-[#1A1A1A] mb-4">{selectedClusterClass}반 학생 군집</h3>
+
+              {extraData.clusterData?.byClass[selectedClusterClass] ? (
+                <div className="space-y-4">
+                  {/* 군집 카드 4개 */}
+                  <div className="grid grid-cols-2 gap-2">
+                    {CLUSTER_META.map(cluster => {
+                      const classCluster = extraData.clusterData!.byClass[selectedClusterClass];
+                      const count = classCluster[cluster.key];
+                      const classTotal = Object.values(classCluster).reduce((a, b) => a + b, 0);
+                      const pct = classTotal > 0 ? Math.round((count / classTotal) * 100) : 0;
+                      const isSelected = selectedClusterType === cluster.key;
+
+                      return (
+                        <button
+                          key={cluster.key}
+                          onClick={() => setSelectedClusterType(isSelected ? null : cluster.key)}
+                          className={`p-3 border text-left transition-colors ${
+                            isSelected ? 'border-[#1A1A1A] bg-[#EBE5D9]' : 'border-[#D4CFC4]'
+                          }`}
+                        >
+                          <div className="flex items-baseline gap-1.5 mb-1">
+                            <span className="text-2xl font-black" style={{ color: cluster.color }}>{count}</span>
+                            <span className="text-xs text-[#5C5C5C]">명 ({pct}%)</span>
+                          </div>
+                          <p className="text-xs font-bold text-[#1A1A1A]">{cluster.label}</p>
+                          <p className="text-[9px] text-[#5C5C5C]">{cluster.desc}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* 선택된 군집의 학생 목록 */}
+                  {selectedClusterType && (
+                    <div className="mt-2">
+                      {clusterStudentList.length === 0 ? (
+                        <p className="text-sm text-[#5C5C5C] text-center py-6">해당 군집에 학생이 없습니다</p>
+                      ) : (
+                        <StudentListView
+                          students={clusterStudentList}
+                          onStudentClick={handleStudentClick}
+                          warningMap={emptyWarningMap}
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-[#5C5C5C] text-center py-8">데이터 없음</p>
+              )}
+            </>
+          )}
+        </div>
+      </MobileBottomSheet>
+
+      {/* 학생 상세 모달 */}
+      <StudentDetailModal
+        student={selectedStudentDetail}
+        allStudents={allStudentsForModal}
+        isOpen={detailOpen}
+        onClose={() => setDetailOpen(false)}
+      />
+
+      {/* 리포트 바텀시트 */}
+      <MobileBottomSheet open={reportSheetOpen} onClose={() => setReportSheetOpen(false)} maxHeight="80vh">
+        <div className="px-4 pb-6">
+          <h3 className="text-base font-bold text-[#1A1A1A] mb-4">{reportMonth}월 리포트</h3>
+          {reportInsight && (
+            <div className="space-y-3">
+              <div className="border border-[#D4CFC4] p-3 max-h-60 overflow-y-auto">
+                <p className="text-[11px] text-[#1A1A1A] whitespace-pre-wrap leading-relaxed">
+                  {reportInsight.slice(0, 800)}
+                  {reportInsight.length > 800 && '...'}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const courseName = getCourseList().find(c => c.id === courseId)?.name || courseId;
+                    exportToExcel({ courseId, courseName, monthLabel: `${reportYear}-${String(reportMonth).padStart(2, '0')}`, year: reportYear, month: reportMonth, insight: reportInsight!, weeklyStats: reportWeeklyStats });
+                  }}
+                  className="py-2.5 border-2 border-[#1A1A1A] text-[#1A1A1A] text-xs font-bold"
+                >
+                  Excel 다운로드
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const courseName = getCourseList().find(c => c.id === courseId)?.name || courseId;
+                    exportToWord({ courseId, courseName, monthLabel: `${reportYear}-${String(reportMonth).padStart(2, '0')}`, year: reportYear, month: reportMonth, insight: reportInsight!, weeklyStats: reportWeeklyStats });
+                  }}
+                  className="py-2.5 border-2 border-[#1A1A1A] text-[#1A1A1A] text-xs font-bold"
+                >
+                  Word 다운로드
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </MobileBottomSheet>
+
     </div>
   );
 }
@@ -658,13 +818,11 @@ function DashboardRibbonHeader({
     const prevIdx = (currentIndex - 1 + COURSE_IDS.length) % COURSE_IDS.length;
     onCourseChange(COURSE_IDS[prevIdx]);
   };
-
   const goToNext = () => {
     const nextIdx = (currentIndex + 1) % COURSE_IDS.length;
     onCourseChange(COURSE_IDS[nextIdx]);
   };
 
-  // 터치 스와이프
   const swipeStartX = useRef(0);
   const swipeStartY = useRef(0);
   const swipeDir = useRef<'none' | 'horizontal' | 'vertical'>('none');
@@ -674,35 +832,21 @@ function DashboardRibbonHeader({
     swipeStartY.current = scaleCoord(e.touches[0].clientY);
     swipeDir.current = 'none';
   };
-
   const handleTouchMove = (e: React.TouchEvent) => {
     if (swipeDir.current !== 'none') return;
     const dx = Math.abs(scaleCoord(e.touches[0].clientX) - swipeStartX.current);
     const dy = Math.abs(scaleCoord(e.touches[0].clientY) - swipeStartY.current);
-    if (dx > 10 || dy > 10) {
-      swipeDir.current = dx > dy ? 'horizontal' : 'vertical';
-    }
+    if (dx > 10 || dy > 10) swipeDir.current = dx > dy ? 'horizontal' : 'vertical';
   };
-
   const handleTouchEnd = (e: React.TouchEvent) => {
     if (swipeDir.current === 'vertical') return;
-    const touch = e.changedTouches[0];
-    const dx = scaleCoord(touch.clientX) - swipeStartX.current;
-    if (Math.abs(dx) > 40) {
-      if (dx > 0) goToPrev();
-      else goToNext();
-    }
+    const dx = scaleCoord(e.changedTouches[0].clientX) - swipeStartX.current;
+    if (Math.abs(dx) > 40) { dx > 0 ? goToPrev() : goToNext(); }
   };
 
-  // PC 마우스 드래그
   const mouseStartX = useRef(0);
   const isMouseDragging = useRef(false);
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    mouseStartX.current = scaleCoord(e.clientX);
-    isMouseDragging.current = true;
-  };
-
+  const handleMouseDown = (e: React.MouseEvent) => { mouseStartX.current = scaleCoord(e.clientX); isMouseDragging.current = true; };
   const handleMouseUp = (e: React.MouseEvent) => {
     if (!isMouseDragging.current) return;
     isMouseDragging.current = false;
@@ -742,7 +886,6 @@ function DashboardRibbonHeader({
         </AnimatePresence>
       </div>
 
-      {/* 페이지네이션 도트 */}
       <div className="flex justify-center gap-2 mt-3">
         {COURSE_IDS.map((id, idx) => (
           <button

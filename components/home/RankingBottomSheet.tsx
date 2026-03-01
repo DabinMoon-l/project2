@@ -49,6 +49,7 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
   const [showScrollTop, setShowScrollTop] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const top3Ref = useRef<HTMLDivElement>(null);
+  const rankedUsersRef = useRef<RankedUser[]>(rankedUsers);
 
   // 네비게이션 숨김
   useEffect(() => {
@@ -153,11 +154,17 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, userCourseId, profile?.uid]);
 
+  // rankedUsers가 변경될 때 ref 동기화
+  useEffect(() => {
+    rankedUsersRef.current = rankedUsers;
+  }, [rankedUsers]);
+
   // 프로필 변경 시 즉시 반영
   const equippedJSON = JSON.stringify(profile?.equippedRabbits || []);
   useEffect(() => {
-    if (!profile?.uid || rankedUsers.length === 0) return;
-    const me = rankedUsers.find(u => u.id === profile.uid);
+    const currentRanked = rankedUsersRef.current;
+    if (!profile?.uid || currentRanked.length === 0) return;
+    const me = currentRanked.find(u => u.id === profile.uid);
     if (!me) return;
 
     const equipped: Array<{ rabbitId: number; courseId?: string }> = profile.equippedRabbits || [];
@@ -181,7 +188,7 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
       me.equippedRabbitNames = names.length > 0 ? names.join(' & ') : '';
       me.firstEquippedRabbitId = firstSlot?.rabbitId;
       me.firstEquippedRabbitName = names[0] || undefined;
-      setRankedUsers([...rankedUsers]);
+      setRankedUsers([...rankedUsersRef.current]);
       setMyRank({ ...me });
     };
 
@@ -571,8 +578,8 @@ async function computeRankingsClientSide(courseId: string): Promise<RankedUser[]
     const allEquipped = u.equippedRabbits || [];
     const names = allEquipped.map((r: any) => {
       if (r.rabbitId === 0) return '토끼';
-      const key = `${r.courseId}_${r.rabbitId}`;
-      return rabbitNames[key] || `토끼 #${r.rabbitId}`;
+      const key = r.courseId ? `${r.courseId}_${r.rabbitId}` : null;
+      return (key && rabbitNames[key]) ? rabbitNames[key] : `토끼 #${r.rabbitId}`;
     });
     const firstSlot = allEquipped[0];
     return {
@@ -586,7 +593,7 @@ async function computeRankingsClientSide(courseId: string): Promise<RankedUser[]
       equippedRabbitNames: names.length > 0 ? names.join(' & ') : '',
       firstEquippedRabbitId: firstSlot?.rabbitId,
       firstEquippedRabbitName: firstSlot
-        ? firstSlot.rabbitId === 0 ? '토끼' : rabbitNames[`${firstSlot.courseId}_${firstSlot.rabbitId}`] || `토끼 #${firstSlot.rabbitId}`
+        ? firstSlot.rabbitId === 0 ? '토끼' : (firstSlot.courseId ? rabbitNames[`${firstSlot.courseId}_${firstSlot.rabbitId}`] : null) || `토끼 #${firstSlot.rabbitId}`
         : undefined,
       rank: 0,
     };

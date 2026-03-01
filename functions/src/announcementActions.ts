@@ -75,14 +75,16 @@ export const voteOnPoll = onCall(
       }
 
       // 현재 votes에서 호출자 UID만 제거 후 선택한 옵션에 추가
-      const votes: Record<string, string[]> = { ...(poll.votes || {}) };
-      for (const key of Object.keys(votes)) {
-        votes[key] = votes[key].filter((id: string) => id !== uid);
+      // votes 값이 배열이 아닌 경우 방어 (Firestore 데이터 변환 버그 대비)
+      const rawVotes = poll.votes || {};
+      const votes: Record<string, string[]> = {};
+      for (const key of Object.keys(rawVotes)) {
+        votes[key] = Array.isArray(rawVotes[key]) ? rawVotes[key].filter((id: string) => id !== uid) : [];
       }
       for (const optIdx of optIndices) {
         const key = optIdx.toString();
         if (!votes[key]) votes[key] = [];
-        votes[key].push(uid);
+        if (!votes[key].includes(uid)) votes[key].push(uid);
       }
 
       // polls 배열 전체 업데이트 (dot notation 금지 — Firestore 배열→객체 변환 버그 방지)

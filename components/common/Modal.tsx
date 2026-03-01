@@ -4,6 +4,7 @@ import { useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 // Modal 크기 타입
 type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | 'full';
@@ -145,7 +146,7 @@ export default function Modal({
       modalRef.current?.focus();
 
       // 스크롤 방지
-      document.body.style.overflow = 'hidden';
+      lockScroll();
 
       // 키보드 이벤트 등록
       document.addEventListener('keydown', handleKeyDown);
@@ -153,7 +154,7 @@ export default function Modal({
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = '';
+      unlockScroll();
 
       // 이전 포커스 복원
       if (previousActiveElement.current) {

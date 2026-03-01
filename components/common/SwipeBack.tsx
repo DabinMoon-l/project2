@@ -3,10 +3,13 @@
 import { useRef, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMotionValue, useSpring } from 'framer-motion';
+import { getScrollLockCount } from '@/lib/utils/scrollLock';
 
-const EDGE_WIDTH = 25; // 왼쪽 가장자리 감지 너비
+const EDGE_WIDTH = 30; // 왼쪽 가장자리 감지 너비 (25→30, 터치 정확성 개선)
 const THRESHOLD_RATIO = 0.35; // 화면 폭의 35% 초과 시 트리거
 const VELOCITY_THRESHOLD = 500; // 빠른 스와이프 트리거
+const DIRECTION_LOCK_DISTANCE = 12; // 방향 잠금 판별 거리 (px)
+const DIAGONAL_ANGLE_THRESHOLD = 55; // 대각선 판별 각도 (도) — 55도 이상이면 세로
 
 const SPRING_CONFIG = { stiffness: 400, damping: 35 };
 
@@ -62,35 +65,52 @@ export default function SwipeBack({ children, enabled = true }: SwipeBackProps) 
     };
   }, [springX]);
 
+  // 모달/오버레이 열림 여부 체크
+  const isBlocked = useCallback(() => {
+    if (document.body.hasAttribute('data-hide-nav')) return true;
+    if (document.body.hasAttribute('data-home-overlay-open')) return true;
+    // 스크롤 잠금 카운터 체크 (모달/바텀시트 열림)
+    if (getScrollLockCount() > 0) return true;
+    return false;
+  }, []);
+
   const onTouchStart = useCallback((e: TouchEvent) => {
     if (!enabled || navigating.current) return;
-    // 모달 열림 시 차단
-    if (document.body.hasAttribute('data-hide-nav') || document.body.style.overflow === 'hidden') return;
+    if (isBlocked()) return;
     const x = e.touches[0].clientX;
     if (x > EDGE_WIDTH) return; // 가장자리 밖이면 무시
     startX.current = x;
     startY.current = e.touches[0].clientY;
     active.current = true;
     locked.current = false;
-  }, [enabled]);
+  }, [enabled, isBlocked]);
 
   const onTouchMove = useCallback((e: TouchEvent) => {
     if (!active.current || navigating.current) return;
     const dx = e.touches[0].clientX - startX.current;
     const dy = e.touches[0].clientY - startY.current;
 
-    // 방향 잠금 (첫 15px 이동에서 판별)
-    if (!locked.current && (Math.abs(dx) > 15 || Math.abs(dy) > 15)) {
-      if (Math.abs(dy) > Math.abs(dx)) {
-        // 세로 스크롤 — SwipeBack 비활성화
-        active.current = false;
-        motionX.set(0);
-        return;
+    // 방향 잠금 (각도 기반 판별)
+    if (!locked.current) {
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > DIRECTION_LOCK_DISTANCE) {
+        // 각도 계산: 0° = 수평, 90° = 수직
+        const angle = Math.atan2(Math.abs(dy), Math.abs(dx)) * (180 / Math.PI);
+        if (angle > DIAGONAL_ANGLE_THRESHOLD) {
+          // 세로 스크롤 — SwipeBack 비활성화
+          active.current = false;
+          motionX.set(0);
+          return;
+        }
+        locked.current = true;
+      } else {
+        return; // 아직 판별 거리에 도달하지 않음
       }
-      locked.current = true;
     }
 
-    if (dx > 0) {
+    // 수평 잠금 확정 — 브라우저 기본 동작 방지 (Safari 뒤로가기, 스크롤)
+    if (locked.current && dx > 0) {
+      e.preventDefault();
       motionX.jump(dx);
     }
   }, [motionX]);
@@ -132,7 +152,8 @@ export default function SwipeBack({ children, enabled = true }: SwipeBackProps) 
   useEffect(() => {
     if (!enabled) return;
     document.addEventListener('touchstart', onTouchStart, { passive: true });
-    document.addEventListener('touchmove', onTouchMove, { passive: true });
+    // touchmove: passive:false → 수평 스와이프 시 preventDefault 가능 (Safari 뒤로가기 방지)
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
     document.addEventListener('touchend', onTouchEnd, { passive: true });
     return () => {
       document.removeEventListener('touchstart', onTouchStart);

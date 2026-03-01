@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 // ============================================================
 // 타입 정의
@@ -86,9 +87,9 @@ export default function ExtractedImagePicker({
 
   // body 스크롤 방지
   useEffect(() => {
-    document.body.style.overflow = 'hidden';
+    lockScroll();
     return () => {
-      document.body.style.overflow = '';
+      unlockScroll();
     };
   }, []);
 

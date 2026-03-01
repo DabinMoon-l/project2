@@ -960,21 +960,21 @@ export default function QuizCreatePage() {
 
               q.subQuestions.forEach((sq, sqIndex) => {
                 // 하위 문제 정답 처리
-                let subAnswer: string | number;
+                let subAnswer: string | number | number[];
                 if (sq.type === 'short_answer') {
                   const answerTexts = (sq.answerTexts || [sq.answerText || '']).filter(t => t.trim());
                   subAnswer = answerTexts.length > 1 ? answerTexts.join('|||') : answerTexts[0] || '';
                 } else if (sq.type === 'multiple') {
-                  // 객관식: 1-indexed로 변환
+                  // 객관식: 0-indexed로 저장 (AI 퀴즈와 통일)
                   if (sq.answerIndices && sq.answerIndices.length > 1) {
                     // 복수정답
-                    subAnswer = sq.answerIndices.map(i => i + 1).join(',');
+                    subAnswer = sq.answerIndices;
                   } else if (sq.answerIndices && sq.answerIndices.length === 1) {
                     // 단일정답 (answerIndices에서)
-                    subAnswer = sq.answerIndices[0] + 1;
+                    subAnswer = sq.answerIndices[0];
                   } else if (sq.answerIndex !== undefined && sq.answerIndex >= 0) {
                     // 단일정답 (answerIndex에서)
-                    subAnswer = sq.answerIndex + 1;
+                    subAnswer = sq.answerIndex;
                   } else {
                     subAnswer = -1;
                   }
@@ -1115,21 +1115,21 @@ export default function QuizCreatePage() {
               });
             } else {
               // 일반 문제 처리
-              let answer: string | number;
+              let answer: string | number | number[];
               if (q.type === 'subjective' || q.type === 'short_answer') {
                 const answerTexts = (q.answerTexts || [q.answerText]).filter(t => t.trim());
                 answer = answerTexts.length > 1 ? answerTexts.join('|||') : answerTexts[0] || '';
               } else if (q.type === 'multiple') {
-                // 객관식: 1-indexed로 변환
+                // 객관식: 0-indexed로 저장 (AI 퀴즈와 통일)
                 if (q.answerIndices && q.answerIndices.length > 1) {
                   // 복수정답
-                  answer = q.answerIndices.map(i => i + 1).join(',');
+                  answer = q.answerIndices;
                 } else if (q.answerIndices && q.answerIndices.length === 1) {
                   // 단일정답 (answerIndices에서)
-                  answer = q.answerIndices[0] + 1;
+                  answer = q.answerIndices[0];
                 } else if (q.answerIndex !== undefined && q.answerIndex >= 0) {
                   // 단일정답 (answerIndex에서)
-                  answer = q.answerIndex + 1;
+                  answer = q.answerIndex;
                 } else {
                   answer = -1;
                 }

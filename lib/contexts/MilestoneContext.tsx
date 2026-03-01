@@ -44,10 +44,23 @@ interface MilestoneContextValue {
 const defaultRef = { current: null };
 const MilestoneContext = createContext<MilestoneContextValue | null>(null);
 
+/** MilestoneProvider 밖에서 호출 시 안전한 기본값 (교수 등) */
+const NOOP_MILESTONE: MilestoneContextValue = {
+  pendingCount: 0,
+  expBar: { current: 0, max: 50, overflow: false, pendingCount: 0 },
+  allRabbitsDiscovered: false,
+  showMilestoneModal: false,
+  openMilestoneModal: () => {},
+  closeMilestoneModal: () => {},
+  milestoneButtonRef: defaultRef,
+  buttonRect: null,
+  suppressAutoTrigger: false,
+  setSuppressAutoTrigger: () => {},
+};
+
 export function useMilestone() {
   const ctx = useContext(MilestoneContext);
-  if (!ctx) throw new Error('useMilestone은 MilestoneProvider 안에서만 사용 가능');
-  return ctx;
+  return ctx ?? NOOP_MILESTONE;
 }
 
 export function MilestoneProvider({ children }: { children: ReactNode }) {
@@ -72,14 +85,17 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
   // 자동 트리거 억제
   const [suppressAutoTrigger, setSuppressAutoTrigger] = useState(false);
 
-  // 이전 pendingCount 추적
-  const prevPendingRef = useRef<number | null>(null);
+  // 자동 트리거 dismiss 상태 (사용자가 명시적으로 닫았을 때 재트리거 방지)
+  const [userDismissed, setUserDismissed] = useState(false);
 
   // EXP & 마일스톤
   const totalExp = profile?.totalExp || 0;
   const lastGachaExp = profile?.lastGachaExp || 0;
   const pendingCount = getPendingMilestones(totalExp, lastGachaExp);
-  const expBar = getExpBarDisplay(totalExp, lastGachaExp);
+  const expBar = useMemo(
+    () => getExpBarDisplay(totalExp, lastGachaExp),
+    [totalExp, lastGachaExp]
+  );
   const allRabbitsDiscovered = userCourseId
     ? holdings.filter((h) => h.courseId === userCourseId).length >= 80
     : false;
@@ -92,7 +108,6 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
       document.body.setAttribute('data-hide-nav', '');
       milestoneNavHiddenRef.current = true;
     } else if (milestoneNavHiddenRef.current) {
-      // 우리가 설정한 경우에만 제거
       document.body.removeAttribute('data-hide-nav');
       milestoneNavHiddenRef.current = false;
     }
@@ -106,53 +121,58 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
 
   // 프로필 초기 로드 완료 여부 (초기 로드 시 자동 트리거 방지)
   const profileStableRef = useRef(false);
+  const prevPendingRef = useRef<number>(0);
 
-  // 마일스톤 자동 트리거 (세션 중 pendingCount가 0→>0 되었을 때만)
+  // 프로필 초기 로드 — 현재 pendingCount 기록, 자동 트리거 안 함
   useEffect(() => {
-    // 프로필이 아직 로드 안 됨 — 무시
-    if (!profile) {
-      prevPendingRef.current = 0;
-      return;
-    }
-
-    // 프로필 최초 로드 완료 — 현재 값 기록만, 자동 트리거 안 함
+    if (!profile) return;
     if (!profileStableRef.current) {
       profileStableRef.current = true;
       prevPendingRef.current = pendingCount;
-      return;
+      // 초기 로드 시 pending이 있어도 자동 트리거 안 함
+      if (pendingCount > 0) setUserDismissed(true);
     }
+  }, [profile, pendingCount]);
 
-    if (
-      pendingCount > 0 &&
-      prevPendingRef.current === 0 &&
-      !showMilestoneModal &&
-      !showGachaModal &&
-      !showLevelUpSheet &&
-      !suppressAutoTrigger
-    ) {
-      const timer = setTimeout(() => {
-        // 별 버튼 위치 캡쳐 (자동 트리거)
-        if (milestoneButtonRef.current) {
-          const r = milestoneButtonRef.current.getBoundingClientRect();
-          setButtonRect({ x: r.x, y: r.y, width: r.width, height: r.height });
-        }
-        setShowMilestoneModal(true);
-      }, 600);
+  // pendingCount 변경 감지 → dismiss 리셋 (마일스톤 획득/소비 시)
+  useEffect(() => {
+    if (!profileStableRef.current) return;
+    if (pendingCount !== prevPendingRef.current) {
       prevPendingRef.current = pendingCount;
-      return () => clearTimeout(timer);
+      // 마일스톤 소비/획득으로 pendingCount 변경 → dismiss 리셋
+      setUserDismissed(false);
     }
-    prevPendingRef.current = pendingCount;
-  }, [profile, pendingCount, showMilestoneModal, showGachaModal, showLevelUpSheet, suppressAutoTrigger]);
+  }, [pendingCount]);
 
-  // 마일스톤 모달 → 선택
+  // 마일스톤 자동 트리거
+  // pending > 0, 모든 모달 닫힘, dismiss 안 됨, suppress 안 됨 → 600ms 후 자동 오픈
+  useEffect(() => {
+    if (!profileStableRef.current) return;
+    if (pendingCount <= 0) return;
+    if (userDismissed || suppressAutoTrigger) return;
+    if (showMilestoneModal || showGachaModal || showLevelUpSheet) return;
+
+    const timer = setTimeout(() => {
+      if (milestoneButtonRef.current) {
+        const r = milestoneButtonRef.current.getBoundingClientRect();
+        setButtonRect({ x: r.x, y: r.y, width: r.width, height: r.height });
+      }
+      setShowMilestoneModal(true);
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [pendingCount, userDismissed, suppressAutoTrigger, showMilestoneModal, showGachaModal, showLevelUpSheet]);
+
+  // 마일스톤 모달 → 선택 (dismiss 설정 → 액션 완료 시 pendingCount 변경으로 리셋됨)
   const handleChooseGacha = useCallback(() => {
     setShowMilestoneModal(false);
     setShowGachaModal(true);
+    setUserDismissed(true);
   }, []);
 
   const handleChooseLevelUp = useCallback(() => {
     setShowMilestoneModal(false);
     setShowLevelUpSheet(true);
+    setUserDismissed(true);
   }, []);
 
   // 뽑기 (스핀)
@@ -199,6 +219,7 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
     });
     setShowGachaModal(false);
     setRollResult(null);
+    // dismiss 설정하지 않음 → pendingCount 변경으로 자동 재트리거
   }, [userCourseId]);
 
   const openMilestoneModal = useCallback(() => {
@@ -210,6 +231,26 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const closeMilestoneModal = useCallback(() => setShowMilestoneModal(false), []);
+
+  // 마일스톤 선택 모달 닫기 (사용자가 선택하지 않고 닫음 → dismiss)
+  const handleMilestoneClose = useCallback(() => {
+    setShowMilestoneModal(false);
+    setUserDismissed(true);
+  }, []);
+
+  // 뽑기 모달 닫기 ("나중에 하기" → dismiss)
+  const handleGachaClose = useCallback(() => {
+    setShowGachaModal(false);
+    setRollResult(null);
+    setSpinError(null);
+    setUserDismissed(true);
+  }, []);
+
+  // 레벨업 닫기 (dismiss 설정 → 레벨업 완료 시 pendingCount 변경으로 리셋됨)
+  const handleLevelUpClose = useCallback(() => {
+    setShowLevelUpSheet(false);
+    setUserDismissed(true);
+  }, []);
 
   // Context 값 메모이제이션 (불필요한 소비자 리렌더 방지)
   const value = useMemo<MilestoneContextValue>(() => ({
@@ -235,7 +276,7 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
       {/* 마일스톤 선택 모달 */}
       <MilestoneChoiceModal
         isOpen={showMilestoneModal}
-        onClose={() => setShowMilestoneModal(false)}
+        onClose={handleMilestoneClose}
         pendingCount={pendingCount}
         onChooseLevelUp={handleChooseLevelUp}
         onChooseGacha={handleChooseGacha}
@@ -247,7 +288,7 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
       {userCourseId && (
         <LevelUpBottomSheet
           isOpen={showLevelUpSheet}
-          onClose={() => setShowLevelUpSheet(false)}
+          onClose={handleLevelUpClose}
           courseId={userCourseId}
           holdings={holdings}
         />
@@ -256,7 +297,7 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
       {/* 뽑기 모달 */}
       <GachaResultModal
         isOpen={showGachaModal}
-        onClose={() => { setShowGachaModal(false); setRollResult(null); setSpinError(null); }}
+        onClose={handleGachaClose}
         result={rollResult}
         isAnimating={isGachaAnimating}
         onSpin={handleSpin}

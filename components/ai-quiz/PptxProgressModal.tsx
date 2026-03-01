@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 interface PptxProgressModalProps {
   isOpen: boolean;
@@ -135,12 +136,12 @@ export default function PptxProgressModal({
 
     if (isOpen) {
       document.addEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = 'hidden';
+      lockScroll();
     }
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = '';
+      unlockScroll();
     };
   }, [isOpen, jobStatus.status, onClose]);
 

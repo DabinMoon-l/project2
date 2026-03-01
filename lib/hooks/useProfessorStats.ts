@@ -125,6 +125,9 @@ const RAW_CACHE_TTL = 5 * 60 * 1000; // 5분
 const _statsCacheMap = new Map<string, { data: StatsData; ts: number }>();
 const STATS_CACHE_TTL = 5 * 60 * 1000; // 5분 (raw 캐시와 통일)
 
+// courseIndex 프리로드 캐시
+const _courseIndexCache = new Map<string, any>();
+
 /** raw 캐시에서 학생 classMap 조회 (중복 쿼리 방지) */
 export function getRawUserClassMap(courseId: string): Record<string, ClassType> | null {
   const raw = _rawCacheMap.get(courseId);
@@ -139,6 +142,201 @@ export function getRawStudents(courseId: string): RawStudentData[] | null {
   return raw.rawStudents;
 }
 
+// === raw 데이터에서 통계 동기 계산 (source별) ===
+
+async function computeStats(raw: RawCache, source: QuestionSource, courseId: string): Promise<StatsData> {
+  // source 필터링 (메모리에서 즉시)
+  const filteredQuizIds = new Set<string>();
+  const quizMap = new Map<string, QuizDoc>();
+
+  for (const q of raw.quizzes) {
+    quizMap.set(q.id, q);
+    if (source === 'all') {
+      filteredQuizIds.add(q.id);
+    } else if (source === 'professor') {
+      if (PROF_TYPES.includes(q.type)) filteredQuizIds.add(q.id);
+    } else if (source === 'ai-generated') {
+      if (q.type === 'professor-ai') filteredQuizIds.add(q.id);
+    } else if (source === 'custom') {
+      if (q.type === 'custom') filteredQuizIds.add(q.id);
+    }
+  }
+
+  if (filteredQuizIds.size === 0) {
+    return { classStats: emptyClassStats(), weeklyTrend: [], chapterStats: [], aiDifficultyStats: [], professorMean: 0, totalStudents: 0, totalAttempts: 0 };
+  }
+
+  // 첫 시도만 필터링
+  const allResults = raw.results.filter(r => filteredQuizIds.has(r.quizId));
+  const results = allResults.filter(r => !r.isUpdate);
+  const userClassMap = raw.userClassMap;
+
+  // 반별 점수 집계
+  const classBucket: Record<ClassType, Record<string, number[]>> = {
+    A: {}, B: {}, C: {}, D: {},
+  };
+
+  for (const r of results) {
+    const cls = userClassMap[r.userId];
+    if (!cls) continue;
+    if (!classBucket[cls]) continue;
+    if (!classBucket[cls][r.userId]) classBucket[cls][r.userId] = [];
+    classBucket[cls][r.userId].push(r.score);
+  }
+
+  const classStats: ClassStats[] = (['A', 'B', 'C', 'D'] as ClassType[]).map(classId => {
+    const userScores = Object.values(classBucket[classId]).map(arr => mean(arr));
+    return {
+      classId,
+      scores: userScores,
+      mean: mean(userScores),
+      sd: sd(userScores),
+      cv: cv(userScores),
+      ci: ci95(userScores),
+      stability: stabilityIndex(userScores),
+      studentCount: userScores.length,
+      boxplot: quartiles(userScores),
+    };
+  });
+
+  // 주간 트렌드
+  const weekBucket: Record<string, Record<ClassType, Record<string, number[]>>> = {};
+
+  for (const r of results) {
+    const cls = userClassMap[r.userId];
+    if (!cls) continue;
+    const wNum = getISOWeek(r.createdAt);
+    const wKey = `W${wNum}`;
+    if (!weekBucket[wKey]) weekBucket[wKey] = { A: {}, B: {}, C: {}, D: {} };
+    if (!weekBucket[wKey][cls][r.userId]) weekBucket[wKey][cls][r.userId] = [];
+    weekBucket[wKey][cls][r.userId].push(r.score);
+  }
+
+  const weeklyTrend: WeeklyDataPoint[] = Object.entries(weekBucket)
+    .map(([week, byClass]) => {
+      const weekNum = parseInt(week.slice(1));
+      const classData = {} as WeeklyDataPoint['byClass'];
+      for (const cls of ['A', 'B', 'C', 'D'] as ClassType[]) {
+        const userScores = Object.values(byClass[cls]).map(arr => mean(arr));
+        classData[cls] = {
+          mean: mean(userScores),
+          sd: sd(userScores),
+          ci: ci95(userScores),
+          scores: userScores,
+        };
+      }
+      return { week, weekNum, byClass: classData };
+    })
+    .sort((a, b) => a.weekNum - b.weekNum);
+
+  // 챕터별 통계
+  const chapterBucket: Record<string, Record<string, number[]>> = {};
+
+  for (const r of results) {
+    const quiz = quizMap.get(r.quizId);
+    if (!quiz) continue;
+
+    for (const q of quiz.questions) {
+      const subQs = q.subQuestions && q.subQuestions.length > 0 ? q.subQuestions : [q];
+      for (const sq of subQs) {
+        const chId = sq.chapterId || q.chapterId || '';
+        const detId = sq.chapterDetailId || q.chapterDetailId || '';
+        const key = detId || chId;
+        if (!key) continue;
+
+        const scoreEntry = r.questionScores[sq.id];
+        if (scoreEntry === undefined) continue;
+
+        if (!chapterBucket[key]) chapterBucket[key] = {};
+        if (!chapterBucket[key][r.userId]) chapterBucket[key][r.userId] = [];
+        chapterBucket[key][r.userId].push(scoreEntry.isCorrect ? 100 : 0);
+      }
+    }
+  }
+
+  // courseIndex 캐시 활용
+  let courseIndex = _courseIndexCache.get(courseId);
+  if (!courseIndex) {
+    const { getCourseIndex } = await import('@/lib/courseIndex');
+    courseIndex = getCourseIndex(courseId);
+    if (courseIndex) _courseIndexCache.set(courseId, courseIndex);
+  }
+
+  const chapterStats: ChapterStats[] = [];
+
+  if (courseIndex) {
+    for (const chapter of courseIndex.chapters) {
+      const details: SubsectionStats[] = [];
+
+      if (chapter.details.length > 0) {
+        for (const detail of chapter.details) {
+          const bucket = chapterBucket[detail.id];
+          const scores = bucket ? Object.values(bucket).map((arr: number[]) => mean(arr)) : [];
+          details.push({
+            detailId: detail.id,
+            detailName: detail.name,
+            mean: mean(scores),
+            sd: sd(scores),
+            cv: cv(scores),
+            ci: ci95(scores),
+            scores,
+          });
+        }
+      }
+
+      const chapterScores = chapterBucket[chapter.id]
+        ? Object.values(chapterBucket[chapter.id]).map((arr: number[]) => mean(arr))
+        : [];
+      const allScores = details.length > 0
+        ? details.flatMap(d => d.scores)
+        : chapterScores;
+
+      chapterStats.push({
+        chapterId: chapter.id,
+        chapterName: chapter.shortName,
+        details,
+        mean: mean(allScores),
+        sd: sd(allScores),
+        cv: cv(allScores),
+        ci: ci95(allScores),
+      });
+    }
+  }
+
+  // AI 난이도 분석
+  const aiDiffBucket: Record<string, number[]> = { easy: [], normal: [], hard: [] };
+  const profScores: number[] = [];
+
+  for (const r of results) {
+    const quiz = quizMap.get(r.quizId);
+    if (!quiz) continue;
+    if (quiz.type === 'professor-ai' && quiz.difficulty) {
+      aiDiffBucket[quiz.difficulty]?.push(r.score);
+    }
+    if (PROF_TYPES.includes(quiz.type)) {
+      profScores.push(r.score);
+    }
+  }
+
+  const aiDifficultyStats: AIDifficultyStats[] = [
+    { difficulty: '쉬움', ...calcDiffStats(aiDiffBucket.easy) },
+    { difficulty: '보통', ...calcDiffStats(aiDiffBucket.normal) },
+    { difficulty: '어려움', ...calcDiffStats(aiDiffBucket.hard) },
+  ];
+
+  const uniqueStudents = new Set(results.map(r => r.userId)).size;
+
+  return {
+    classStats,
+    weeklyTrend,
+    chapterStats,
+    aiDifficultyStats,
+    professorMean: mean(profScores),
+    totalStudents: uniqueStudents,
+    totalAttempts: allResults.length,
+  };
+}
+
 // === 훅 ===
 
 export function useProfessorStats() {
@@ -150,285 +348,128 @@ export function useProfessorStats() {
     courseId: CourseId,
     source: QuestionSource = 'professor',
   ) => {
-    // 1. 완성 캐시 확인
     const cacheKey = `${courseId}_${source}`;
+
+    // 1. 완성 캐시 → 즉시 반환
     const cached = _statsCacheMap.get(cacheKey);
     if (cached && Date.now() - cached.ts < STATS_CACHE_TTL) {
       setData(cached.data);
       return;
     }
 
-    setLoading(true);
+    // 2. stale-while-revalidate: 만료된 캐시라도 즉시 표시
+    if (cached) {
+      setData(cached.data);
+      // loading 표시하지 않음 (즉시 데이터 보여줌)
+    }
+
+    // 3. raw 캐시가 있으면 source 필터만 재계산 (Firestore 쿼리 없이 즉시)
+    const rawCached = _rawCacheMap.get(courseId);
+    if (rawCached) {
+      // 만료되지 않았으면 source 계산만
+      if (Date.now() - rawCached.ts < RAW_CACHE_TTL) {
+        try {
+          const statsData = await computeStats(rawCached, source, courseId);
+          setData(statsData);
+          _statsCacheMap.set(cacheKey, { data: statsData, ts: Date.now() });
+          setLoading(false);
+          return;
+        } catch (err) {
+          console.error('통계 계산 실패:', err);
+        }
+      }
+
+      // 만료됐어도 stale data로 즉시 계산해서 보여주기
+      if (!cached) {
+        try {
+          const staleStats = await computeStats(rawCached, source, courseId);
+          setData(staleStats);
+        } catch { /* stale 계산 실패는 무시 */ }
+      }
+    }
+
+    // 4. 백그라운드에서 Firestore 갱신
+    if (!cached && !rawCached) setLoading(true);
     setError(null);
 
     try {
-      // 2. 원시 데이터 캐시 확인 → 없거나 만료 시 Firestore 조회
-      let raw = _rawCacheMap.get(courseId);
-      if (!raw || Date.now() - raw.ts > RAW_CACHE_TTL) {
-        // 전체 퀴즈 + 학생 병렬 조회 (source 무관하게 전부)
-        const [quizSnap, usersSnap] = await Promise.all([
-          getDocs(query(collection(db, 'quizzes'), where('courseId', '==', courseId))),
-          getDocs(query(collection(db, 'users'), where('role', '==', 'student'), where('courseId', '==', courseId))),
-        ]);
+      // 전체 퀴즈 + 학생 병렬 조회
+      const [quizSnap, usersSnap] = await Promise.all([
+        getDocs(query(collection(db, 'quizzes'), where('courseId', '==', courseId))),
+        getDocs(query(collection(db, 'users'), where('role', '==', 'student'), where('courseId', '==', courseId))),
+      ]);
 
-        const quizzes: QuizDoc[] = [];
-        const quizIds: string[] = [];
-        quizSnap.forEach(d => {
-          const data = d.data();
-          quizzes.push({
-            id: d.id,
-            type: data.type,
-            courseId: data.courseId,
-            difficulty: data.difficulty,
-            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt),
-            questions: data.questions || [],
-          });
-          quizIds.push(d.id);
+      const quizzes: QuizDoc[] = [];
+      const quizIds: string[] = [];
+      quizSnap.forEach(d => {
+        const data = d.data();
+        quizzes.push({
+          id: d.id,
+          type: data.type,
+          courseId: data.courseId,
+          difficulty: data.difficulty,
+          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt),
+          questions: data.questions || [],
         });
-
-        const userClassMap: Record<string, ClassType> = {};
-        const rawStudents: RawStudentData[] = [];
-        usersSnap.forEach(d => {
-          const u = d.data();
-          const cls = u.classId || u.classType;
-          if (cls) {
-            userClassMap[d.id] = cls as ClassType;
-          }
-          rawStudents.push({
-            classId: (cls || 'A') as string,
-            totalExp: u.totalExp || 0,
-            profCorrectCount: u.profCorrectCount || 0,
-            profAttemptCount: u.profAttemptCount || 0,
-            equippedRabbits: Array.isArray(u.equippedRabbits) ? u.equippedRabbits : [],
-            lastGachaExp: u.lastGachaExp || 0,
-          });
-        });
-
-        // quizResults 배치 조회
-        const results: ResultDoc[] = [];
-        if (quizIds.length > 0) {
-          const batchPromises = [];
-          for (let i = 0; i < quizIds.length; i += 30) {
-            const batch = quizIds.slice(i, i + 30);
-            batchPromises.push(getDocs(query(collection(db, 'quizResults'), where('quizId', 'in', batch))));
-          }
-          const batchResults = await Promise.all(batchPromises);
-          batchResults.forEach(resSnap => {
-            resSnap.forEach(d => {
-              const r = d.data();
-              if (!userClassMap[r.userId]) return;
-              results.push({
-                userId: r.userId,
-                quizId: r.quizId,
-                score: r.score ?? 0,
-                correctCount: r.correctCount ?? 0,
-                totalCount: r.totalCount ?? 0,
-                questionScores: r.questionScores || {},
-                createdAt: r.createdAt instanceof Timestamp ? r.createdAt.toDate() : new Date(r.createdAt),
-                isUpdate: r.isUpdate === true,
-              });
-            });
-          });
-        }
-
-        raw = { quizzes, userClassMap, rawStudents, results, ts: Date.now() };
-        _rawCacheMap.set(courseId, raw);
-      }
-
-      // 3. source 필터링 (메모리에서 즉시)
-      const filteredQuizIds = new Set<string>();
-      const quizMap = new Map<string, QuizDoc>();
-
-      for (const q of raw.quizzes) {
-        quizMap.set(q.id, q);
-        if (source === 'all') {
-          filteredQuizIds.add(q.id);
-        } else if (source === 'professor') {
-          if (PROF_TYPES.includes(q.type)) filteredQuizIds.add(q.id);
-        } else if (source === 'ai-generated') {
-          if (q.type === 'professor-ai') filteredQuizIds.add(q.id);
-        } else if (source === 'custom') {
-          if (q.type === 'custom') filteredQuizIds.add(q.id);
-        }
-      }
-
-      if (filteredQuizIds.size === 0) {
-        const emptyData: StatsData = { classStats: emptyClassStats(), weeklyTrend: [], chapterStats: [], aiDifficultyStats: [], professorMean: 0, totalStudents: 0, totalAttempts: 0 };
-        setData(emptyData);
-        _statsCacheMap.set(cacheKey, { data: emptyData, ts: Date.now() });
-        setLoading(false);
-        return;
-      }
-
-      // 첫 시도만 필터링 (재시도 점수는 통계에서 제외 — 성적 왜곡 방지)
-      const allResults = raw.results.filter(r => filteredQuizIds.has(r.quizId));
-      const results = allResults.filter(r => !r.isUpdate);
-      const userClassMap = raw.userClassMap;
-
-      // 4. 반별 점수 집계 (항상 A/B/C/D 포함)
-      const classBucket: Record<ClassType, Record<string, number[]>> = {
-        A: {}, B: {}, C: {}, D: {},
-      };
-
-      for (const r of results) {
-        const cls = userClassMap[r.userId];
-        if (!cls) continue;
-        if (!classBucket[cls]) continue;
-        if (!classBucket[cls][r.userId]) classBucket[cls][r.userId] = [];
-        classBucket[cls][r.userId].push(r.score);
-      }
-
-      const classStats: ClassStats[] = (['A', 'B', 'C', 'D'] as ClassType[]).map(classId => {
-        const userScores = Object.values(classBucket[classId]).map(arr => mean(arr));
-        return {
-          classId,
-          scores: userScores,
-          mean: mean(userScores),
-          sd: sd(userScores),
-          cv: cv(userScores),
-          ci: ci95(userScores),
-          stability: stabilityIndex(userScores),
-          studentCount: userScores.length,
-          boxplot: quartiles(userScores),
-        };
+        quizIds.push(d.id);
       });
 
-      // 5. 주간 트렌드
-      const weekBucket: Record<string, Record<ClassType, Record<string, number[]>>> = {};
-
-      for (const r of results) {
-        const cls = userClassMap[r.userId];
-        if (!cls) continue;
-        const wNum = getISOWeek(r.createdAt);
-        const wKey = `W${wNum}`;
-        if (!weekBucket[wKey]) weekBucket[wKey] = { A: {}, B: {}, C: {}, D: {} };
-        if (!weekBucket[wKey][cls][r.userId]) weekBucket[wKey][cls][r.userId] = [];
-        weekBucket[wKey][cls][r.userId].push(r.score);
-      }
-
-      const weeklyTrend: WeeklyDataPoint[] = Object.entries(weekBucket)
-        .map(([week, byClass]) => {
-          const weekNum = parseInt(week.slice(1));
-          const classData = {} as WeeklyDataPoint['byClass'];
-          for (const cls of ['A', 'B', 'C', 'D'] as ClassType[]) {
-            const userScores = Object.values(byClass[cls]).map(arr => mean(arr));
-            classData[cls] = {
-              mean: mean(userScores),
-              sd: sd(userScores),
-              ci: ci95(userScores),
-              scores: userScores,
-            };
-          }
-          return { week, weekNum, byClass: classData };
-        })
-        .sort((a, b) => a.weekNum - b.weekNum);
-
-      // 6. 챕터별 통계
-      const chapterBucket: Record<string, Record<string, number[]>> = {};
-
-      for (const r of results) {
-        const quiz = quizMap.get(r.quizId);
-        if (!quiz) continue;
-
-        for (const q of quiz.questions) {
-          const subQs = q.subQuestions && q.subQuestions.length > 0 ? q.subQuestions : [q];
-          for (const sq of subQs) {
-            const chId = sq.chapterId || q.chapterId || '';
-            const detId = sq.chapterDetailId || q.chapterDetailId || '';
-            const key = detId || chId;
-            if (!key) continue;
-
-            const scoreEntry = r.questionScores[sq.id];
-            if (scoreEntry === undefined) continue;
-
-            if (!chapterBucket[key]) chapterBucket[key] = {};
-            if (!chapterBucket[key][r.userId]) chapterBucket[key][r.userId] = [];
-            chapterBucket[key][r.userId].push(scoreEntry.isCorrect ? 100 : 0);
-          }
+      const userClassMap: Record<string, ClassType> = {};
+      const rawStudents: RawStudentData[] = [];
+      usersSnap.forEach(d => {
+        const u = d.data();
+        const cls = u.classId || u.classType;
+        if (cls) {
+          userClassMap[d.id] = cls as ClassType;
         }
-      }
+        rawStudents.push({
+          classId: (cls || 'A') as string,
+          totalExp: u.totalExp || 0,
+          profCorrectCount: u.profCorrectCount || 0,
+          profAttemptCount: u.profAttemptCount || 0,
+          equippedRabbits: Array.isArray(u.equippedRabbits) ? u.equippedRabbits : [],
+          lastGachaExp: u.lastGachaExp || 0,
+        });
+      });
 
-      const { getCourseIndex } = await import('@/lib/courseIndex');
-      const courseIndex = getCourseIndex(courseId);
-      const chapterStats: ChapterStats[] = [];
-
-      if (courseIndex) {
-        for (const chapter of courseIndex.chapters) {
-          const details: SubsectionStats[] = [];
-
-          if (chapter.details.length > 0) {
-            for (const detail of chapter.details) {
-              const bucket = chapterBucket[detail.id];
-              const scores = bucket ? Object.values(bucket).map(arr => mean(arr)) : [];
-              details.push({
-                detailId: detail.id,
-                detailName: detail.name,
-                mean: mean(scores),
-                sd: sd(scores),
-                cv: cv(scores),
-                ci: ci95(scores),
-                scores,
-              });
-            }
-          }
-
-          const chapterScores = chapterBucket[chapter.id]
-            ? Object.values(chapterBucket[chapter.id]).map(arr => mean(arr))
-            : [];
-          const allScores = details.length > 0
-            ? details.flatMap(d => d.scores)
-            : chapterScores;
-
-          chapterStats.push({
-            chapterId: chapter.id,
-            chapterName: chapter.shortName,
-            details,
-            mean: mean(allScores),
-            sd: sd(allScores),
-            cv: cv(allScores),
-            ci: ci95(allScores),
+      // quizResults 배치 조회
+      const results: ResultDoc[] = [];
+      if (quizIds.length > 0) {
+        const batchPromises = [];
+        for (let i = 0; i < quizIds.length; i += 30) {
+          const batch = quizIds.slice(i, i + 30);
+          batchPromises.push(getDocs(query(collection(db, 'quizResults'), where('quizId', 'in', batch))));
+        }
+        const batchResults = await Promise.all(batchPromises);
+        batchResults.forEach(resSnap => {
+          resSnap.forEach(d => {
+            const r = d.data();
+            if (!userClassMap[r.userId]) return;
+            results.push({
+              userId: r.userId,
+              quizId: r.quizId,
+              score: r.score ?? 0,
+              correctCount: r.correctCount ?? 0,
+              totalCount: r.totalCount ?? 0,
+              questionScores: r.questionScores || {},
+              createdAt: r.createdAt instanceof Timestamp ? r.createdAt.toDate() : new Date(r.createdAt),
+              isUpdate: r.isUpdate === true,
+            });
           });
-        }
+        });
       }
 
-      // 7. AI 난이도 분석
-      const aiDiffBucket: Record<string, number[]> = { easy: [], normal: [], hard: [] };
-      const profScores: number[] = [];
+      const raw: RawCache = { quizzes, userClassMap, rawStudents, results, ts: Date.now() };
+      _rawCacheMap.set(courseId, raw);
 
-      for (const r of results) {
-        const quiz = quizMap.get(r.quizId);
-        if (!quiz) continue;
-        if (quiz.type === 'professor-ai' && quiz.difficulty) {
-          aiDiffBucket[quiz.difficulty]?.push(r.score);
-        }
-        if (PROF_TYPES.includes(quiz.type)) {
-          profScores.push(r.score);
-        }
-      }
-
-      const aiDifficultyStats: AIDifficultyStats[] = [
-        { difficulty: '쉬움', ...calcDiffStats(aiDiffBucket.easy) },
-        { difficulty: '보통', ...calcDiffStats(aiDiffBucket.normal) },
-        { difficulty: '어려움', ...calcDiffStats(aiDiffBucket.hard) },
-      ];
-
-      const uniqueStudents = new Set(results.map(r => r.userId)).size;
-
-      const statsData: StatsData = {
-        classStats,
-        weeklyTrend,
-        chapterStats,
-        aiDifficultyStats,
-        professorMean: mean(profScores),
-        totalStudents: uniqueStudents,
-        totalAttempts: allResults.length, // 재시도 포함 전체 시도 횟수
-      };
-
+      // 최신 데이터로 통계 계산
+      const statsData = await computeStats(raw, source, courseId);
       setData(statsData);
       _statsCacheMap.set(cacheKey, { data: statsData, ts: Date.now() });
     } catch (err) {
       console.error('통계 데이터 조회 실패:', err);
-      setError('통계 데이터를 불러오는 중 오류가 발생했습니다.');
+      // stale 데이터가 없을 때만 에러 표시
+      if (!data) setError('통계 데이터를 불러오는 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }

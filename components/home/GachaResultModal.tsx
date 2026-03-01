@@ -102,9 +102,14 @@ export default function GachaResultModal({
   const [phase, setPhase] = useState<Phase>('hidden');
   const phaseRef = useRef<Phase>('hidden');
 
+  // 모달 재오픈 시 모든 상태 초기화
   useEffect(() => {
     if (isOpen) {
       setSkipped(false);
+      setNewName('');
+      setSelectedSlot(null);
+      setNameError(null);
+      setIsDiscovering(false);
     }
   }, [isOpen]);
 

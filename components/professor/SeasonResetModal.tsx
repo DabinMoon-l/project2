@@ -10,6 +10,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '@/styles/themes/useTheme';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 import {
   type SeasonType,
   getSeasonName,
@@ -71,8 +72,8 @@ export function SeasonResetModal({
   // 모달 열림 시 body 스크롤 방지
   useEffect(() => {
     if (!isOpen) return;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
+    lockScroll();
+    return () => { unlockScroll(); };
   }, [isOpen]);
 
   // 확인용 텍스트

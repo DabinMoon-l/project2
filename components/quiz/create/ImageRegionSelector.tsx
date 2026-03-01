@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as pdfjsLib from 'pdfjs-dist';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 // PDF.js 워커 설정
 if (typeof window !== 'undefined') {
@@ -111,9 +112,8 @@ export default function ImageRegionSelector({
 
   // 바디 스크롤 잠금
   useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
+    lockScroll();
+    return () => { unlockScroll(); };
   }, []);
 
   // 컨테이너 리사이즈 대응
