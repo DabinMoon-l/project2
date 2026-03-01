@@ -101,12 +101,16 @@ export default function UpdateQuizModal({
     }[];
   } | null>(null);
 
-  // 모달 열림 시 body 스크롤 방지
+  // 모달 열림 시 상태 초기화 + body 스크롤 방지
   useEffect(() => {
     if (!isOpen) return;
+    setCurrentIndex(0);
+    setUserAnswers({});
+    setShowResult(false);
+    setResultData(null);
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = ''; };
-  }, [isOpen]);
+  }, [isOpen, updateInfo.quizId]);
 
   const questions = updateInfo.updatedQuestions;
 
@@ -421,7 +425,7 @@ export default function UpdateQuizModal({
     } finally {
       setIsSubmitting(false);
     }
-  }, [user, userAnswers, questions, updateInfo, totalQuestionCount, userCourseId]);
+  }, [user, userAnswers, questions, updateInfo, totalQuestionCount, userCourseId, userClassId]);
 
   /**
    * 완료
@@ -443,10 +447,10 @@ export default function UpdateQuizModal({
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] max-h-[85vh] overflow-auto overscroll-contain"
+          className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] rounded-2xl max-h-[85vh] overflow-auto overscroll-contain"
         >
           {/* 헤더 */}
-          <div className="px-3 py-2 border-b border-[#1A1A1A]">
+          <div className="px-4 py-3 border-b border-[#1A1A1A]">
             <h2 className="text-sm font-bold text-[#1A1A1A]">업데이트 완료</h2>
           </div>
 
@@ -459,7 +463,7 @@ export default function UpdateQuizModal({
               <span className="text-base text-[#5C5C5C]">{questions.length}</span>
             </div>
 
-            <div className="p-3 border border-[#1A1A1A] bg-[#EDEAE4] mb-3">
+            <div className="p-3 border border-[#1A1A1A] bg-[#EDEAE4] rounded-xl mb-3">
               <p className="text-xs text-[#5C5C5C] mb-0.5">새 점수</p>
               <p className="text-xl font-bold text-[#1A1A1A]">{resultData.newScore}점</p>
               <p className="text-[10px] text-[#5C5C5C]">
@@ -495,17 +499,17 @@ export default function UpdateQuizModal({
                     const groupCorrect = item.results.filter((r) => r.isCorrect).length;
                     const first = item.results[0];
                     return (
-                      <div key={`group-${first.combinedGroupId}`} className="border-2 border-[#1A1A1A] bg-[#EDEAE4]">
+                      <div key={`group-${first.combinedGroupId}`} className="border-2 border-[#1A1A1A] bg-[#EDEAE4] rounded-xl overflow-hidden">
                         {/* 결합형 헤더 */}
                         <div className="p-3 border-b border-[#1A1A1A] flex items-center justify-between">
                           <span className="text-sm font-bold text-[#1A1A1A]">결합형 문제</span>
-                          <span className="text-xs px-2 py-0.5 bg-[#1A1A1A] text-[#F5F0E8]">
+                          <span className="text-xs px-2 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] rounded-md">
                             {groupCorrect}/{item.results.length} 정답
                           </span>
                         </div>
                         {/* 공통 제시문 */}
                         {(first.passage || first.passageImage || (first.koreanAbcItems && first.koreanAbcItems.length > 0) || (first.passageMixedExamples && first.passageMixedExamples.length > 0)) && (
-                          <div className="mx-3 mt-3 p-2 border border-[#8B6914] bg-[#FFF8E1] text-xs">
+                          <div className="mx-3 mt-3 p-2 border border-[#8B6914] bg-[#FFF8E1] rounded-lg text-xs">
                             {first.passage && first.passageType !== 'korean_abc' && (
                               <p className="text-[#1A1A1A] whitespace-pre-wrap">{first.passage}</p>
                             )}
@@ -565,10 +569,10 @@ export default function UpdateQuizModal({
           </div>
 
           {/* 완료 버튼 */}
-          <div className="px-3 py-2 border-t border-[#1A1A1A]">
+          <div className="px-4 py-3 border-t border-[#1A1A1A]">
             <button
               onClick={handleComplete}
-              className="w-full py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#333] transition-colors"
+              className="w-full py-2.5 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#333] transition-colors rounded-xl"
             >
               완료
             </button>
@@ -584,33 +588,33 @@ export default function UpdateQuizModal({
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] max-h-[85vh] overflow-auto overscroll-contain"
+        className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] rounded-2xl max-h-[85vh] overflow-auto overscroll-contain"
       >
         {/* 헤더 */}
-        <div className="px-3 py-2 border-b border-[#1A1A1A] flex items-center justify-between">
+        <div className="px-4 py-3 border-b border-[#1A1A1A] flex items-center justify-between">
           <div>
             <h2 className="text-sm font-bold text-[#1A1A1A]">수정된 문제 풀기</h2>
             <p className="text-[10px] text-[#5C5C5C]">{updateInfo.quizTitle}</p>
           </div>
           <button
             onClick={onClose}
-            className="w-6 h-6 flex items-center justify-center border border-[#1A1A1A] hover:bg-[#EDEAE4]"
+            className="w-7 h-7 flex items-center justify-center border border-[#1A1A1A] hover:bg-[#EDEAE4] rounded-lg"
           >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
         {/* 진행 표시 */}
-        <div className="px-3 py-1.5 border-b border-[#EDEAE4]">
+        <div className="px-4 py-1.5 border-b border-[#EDEAE4]">
           <div className="flex items-center justify-between text-[10px] text-[#5C5C5C]">
             <span>문제 {currentIndex + 1} / {displayItems.length}</span>
             <span>{Object.keys(userAnswers).length}개 답변</span>
           </div>
-          <div className="mt-0.5 h-0.5 bg-[#EDEAE4]">
+          <div className="mt-0.5 h-1 bg-[#EDEAE4] rounded-full">
             <div
-              className="h-full bg-[#1A1A1A] transition-all"
+              className="h-full bg-[#1A1A1A] transition-all rounded-full"
               style={{ width: `${((currentIndex + 1) / displayItems.length) * 100}%` }}
             />
           </div>
@@ -629,7 +633,7 @@ export default function UpdateQuizModal({
                 const hasPassage = first.passage || first.passageImage || (first.koreanAbcItems && first.koreanAbcItems.length > 0) || (first.passageMixedExamples && first.passageMixedExamples.length > 0);
                 if (!hasPassage) return null;
                 return (
-                  <div className="p-3 border-2 border-[#8B6914] bg-[#FFF8E1] mt-2 mb-3">
+                  <div className="p-3 border-2 border-[#8B6914] bg-[#FFF8E1] rounded-xl mt-2 mb-3">
                     {first.passage && first.passageType !== 'korean_abc' && (
                       <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{first.passage}</p>
                     )}
@@ -660,16 +664,16 @@ export default function UpdateQuizModal({
                                 {child.type === 'gana' && (child.items || []).map((ci: any) => (
                                   <p key={ci.id} className="text-sm"><span className="font-bold">({ci.label})</span> {ci.content}</p>
                                 ))}
-                                {child.type === 'image' && child.imageUrl && <img src={child.imageUrl} alt="" className="max-w-full h-auto" />}
+                                {child.type === 'image' && child.imageUrl && <img src={child.imageUrl} alt="" className="max-w-full h-auto rounded-lg" />}
                               </div>
                             ))}
-                            {block.type === 'image' && block.imageUrl && <img src={block.imageUrl} alt="" className="max-w-full h-auto" />}
+                            {block.type === 'image' && block.imageUrl && <img src={block.imageUrl} alt="" className="max-w-full h-auto rounded-lg" />}
                           </div>
                         ))}
                       </div>
                     )}
                     {first.passageImage && (
-                      <img src={first.passageImage} alt="공통 이미지" className={`max-w-full max-h-[300px] object-contain border border-[#1A1A1A] ${first.passage || (first.koreanAbcItems && first.koreanAbcItems.length > 0) ? 'mt-2' : ''}`} />
+                      <img src={first.passageImage} alt="공통 이미지" className={`max-w-full max-h-[300px] object-contain border border-[#1A1A1A] rounded-lg ${first.passage || (first.koreanAbcItems && first.koreanAbcItems.length > 0) ? 'mt-2' : ''}`} />
                     )}
                   </div>
                 );
@@ -699,11 +703,11 @@ export default function UpdateQuizModal({
         </div>
 
         {/* 네비게이션 버튼 */}
-        <div className="px-3 py-2 border-t border-[#1A1A1A] flex gap-2">
+        <div className="px-4 py-3 border-t border-[#1A1A1A] flex gap-2">
           {currentIndex > 0 && (
             <button
               onClick={handlePrev}
-              className="flex-1 py-2 text-sm font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+              className="flex-1 py-2.5 text-sm font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors rounded-xl"
             >
               이전
             </button>
@@ -712,7 +716,7 @@ export default function UpdateQuizModal({
             <button
               onClick={handleNext}
               disabled={!isCurrentItemAnswered}
-              className="flex-1 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#333] transition-colors disabled:opacity-50"
+              className="flex-1 py-2.5 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#333] transition-colors disabled:opacity-50 rounded-xl"
             >
               다음
             </button>
@@ -720,7 +724,7 @@ export default function UpdateQuizModal({
             <button
               onClick={handleSubmit}
               disabled={isSubmitting || Object.keys(userAnswers).length !== questions.length}
-              className="flex-1 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#333] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex-1 py-2.5 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#333] transition-colors disabled:opacity-50 flex items-center justify-center gap-2 rounded-xl"
             >
               {isSubmitting && (
                 <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
@@ -764,7 +768,7 @@ function SingleQuestionSolve({
           <PassageBlock question={q} />
         )}
 
-        <p className="text-[#1A1A1A] font-medium mt-1">{q.questionText}</p>
+        <p className="text-[#1A1A1A] text-sm leading-relaxed font-medium mt-1">{q.questionText}</p>
       </div>
 
       <QuestionExtras question={q} />
@@ -789,7 +793,7 @@ function SubQuestionSolve({
   onSelectAnswer: (answer: string) => void;
 }) {
   return (
-    <div className="p-3 border border-[#1A1A1A] bg-[#F5F0E8]">
+    <div className="p-3 border border-[#1A1A1A] bg-[#F5F0E8] rounded-xl">
       <div className="mb-3">
         <div className="flex items-center gap-2 mb-1">
           <span className="text-xs font-bold text-[#5C5C5C]">하위 문제 {subIndex}</span>
@@ -799,7 +803,7 @@ function SubQuestionSolve({
              '주관식'}
           </span>
         </div>
-        <p className="text-[#1A1A1A] font-medium text-sm">{q.questionText}</p>
+        <p className="text-[#1A1A1A] font-medium text-sm leading-relaxed">{q.questionText}</p>
       </div>
 
       <QuestionExtras question={q} />
@@ -814,7 +818,7 @@ function SubQuestionSolve({
 
 function PassageBlock({ question: q }: { question: UpdatedQuestion }) {
   return (
-    <div className="p-3 border-2 border-[#8B6914] bg-[#FFF8E1] mt-2 mb-2">
+    <div className="p-3 border-2 border-[#8B6914] bg-[#FFF8E1] rounded-xl mt-2 mb-2">
       {q.passage && q.passageType !== 'korean_abc' && (
         <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{q.passage}</p>
       )}
@@ -854,7 +858,7 @@ function PassageBlock({ question: q }: { question: UpdatedQuestion }) {
         </div>
       )}
       {q.passageImage && (
-        <img src={q.passageImage} alt="공통 이미지" className={`max-w-full max-h-[300px] object-contain border border-[#1A1A1A] ${q.passage || (q.koreanAbcItems && q.koreanAbcItems.length > 0) ? 'mt-2' : ''}`} />
+        <img src={q.passageImage} alt="공통 이미지" className={`max-w-full max-h-[300px] object-contain border border-[#1A1A1A] rounded-lg ${q.passage || (q.koreanAbcItems && q.koreanAbcItems.length > 0) ? 'mt-2' : ''}`} />
       )}
     </div>
   );
@@ -871,7 +875,7 @@ function QuestionExtras({ question: q }: { question: UpdatedQuestion }) {
       {q.mixedExamples && q.mixedExamples.length > 0 && (
         <div className="mb-3">
           {q.mixedExamples.filter((b: any) => b.type === 'grouped').map((block: any) => (
-            <div key={block.id} className="p-3 border-2 border-[#8B6914] bg-[#FFF8E1] mb-2">
+            <div key={block.id} className="p-3 border-2 border-[#8B6914] bg-[#FFF8E1] rounded-xl mb-2">
               <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
               <div className="space-y-1">
                 {block.children?.map((child: any) => (
@@ -891,13 +895,13 @@ function QuestionExtras({ question: q }: { question: UpdatedQuestion }) {
           ))}
           {q.mixedExamples.filter((b: any) => b.type !== 'grouped').map((block: any) => {
             if (block.type === 'text' && block.content?.trim()) return (
-              <div key={block.id} className="p-3 border border-[#8B6914] bg-[#FFF8E1] mb-2">
+              <div key={block.id} className="p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-xl mb-2">
                 <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
                 <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{block.content}</p>
               </div>
             );
             if (block.type === 'labeled') return (
-              <div key={block.id} className="p-3 border border-[#8B6914] bg-[#FFF8E1] mb-2">
+              <div key={block.id} className="p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-xl mb-2">
                 <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
                 <div className="space-y-1">
                   {(block.items || []).map((li: any) => (
@@ -907,7 +911,7 @@ function QuestionExtras({ question: q }: { question: UpdatedQuestion }) {
               </div>
             );
             if (block.type === 'gana') return (
-              <div key={block.id} className="p-3 border border-[#8B6914] bg-[#FFF8E1] mb-2">
+              <div key={block.id} className="p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-xl mb-2">
                 <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
                 <div className="space-y-1">
                   {(block.items || []).map((li: any) => (
@@ -923,7 +927,7 @@ function QuestionExtras({ question: q }: { question: UpdatedQuestion }) {
 
       {/* 레거시 하위 문제 보기 */}
       {!(q.mixedExamples && q.mixedExamples.length > 0) && q.subQuestionOptions && q.subQuestionOptions.length > 0 && (
-        <div className="p-3 border border-[#8B6914] bg-[#FFF8E1] mb-3">
+        <div className="p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-xl mb-3">
           <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
           {q.subQuestionOptionsType === 'text' ? (
             <p className="text-sm text-[#1A1A1A]">{q.subQuestionOptions.join(', ')}</p>
@@ -940,20 +944,20 @@ function QuestionExtras({ question: q }: { question: UpdatedQuestion }) {
       {/* 문제 이미지 */}
       {(q.image || q.imageUrl) && (
         <div className="mb-3">
-          <img src={q.image || q.imageUrl} alt="문제 이미지" className="max-w-full max-h-[300px] object-contain border border-[#1A1A1A]" />
+          <img src={q.image || q.imageUrl} alt="문제 이미지" className="max-w-full max-h-[300px] object-contain border border-[#1A1A1A] rounded-lg" />
         </div>
       )}
 
       {/* 하위 문제 이미지 */}
       {q.subQuestionImage && (
         <div className="mb-3">
-          <img src={q.subQuestionImage} alt="보기 이미지" className="max-w-full max-h-[300px] object-contain border border-[#1A1A1A]" />
+          <img src={q.subQuestionImage} alt="보기 이미지" className="max-w-full max-h-[300px] object-contain border border-[#1A1A1A] rounded-lg" />
         </div>
       )}
 
       {/* 보기 (<보기> 박스) */}
       {q.bogi && q.bogi.items && q.bogi.items.some(i => i.content?.trim()) && (
-        <div className="mb-3 p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A]">
+        <div className="mb-3 p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A] rounded-xl">
           <p className="text-xs text-center text-[#5C5C5C] mb-2 font-bold">&lt;보 기&gt;</p>
           <div className="space-y-1">
             {q.bogi.items.filter(i => i.content?.trim()).map((bi, i) => (
@@ -965,7 +969,7 @@ function QuestionExtras({ question: q }: { question: UpdatedQuestion }) {
 
       {/* 발문 */}
       {(q.passagePrompt || q.bogiQuestionText) && (
-        <div className="mb-3 p-3 border border-[#1A1A1A] bg-[#F5F0E8]">
+        <div className="mb-3 p-3 border border-[#1A1A1A] bg-[#F5F0E8] rounded-xl">
           <p className="text-sm text-[#1A1A1A]">
             {q.passagePrompt && q.bogiQuestionText
               ? `${q.passagePrompt} ${q.bogiQuestionText}`
@@ -992,12 +996,12 @@ function AnswerInput({
 }) {
   if (q.questionType === 'ox') {
     return (
-      <div className="space-y-2">
+      <div className="flex gap-3">
         {['O', 'X'].map((opt) => (
           <button
             key={opt}
             onClick={() => onSelectAnswer(opt)}
-            className={`w-full p-3 border-2 text-left font-bold transition-colors ${
+            className={`flex-1 py-3 border-2 text-center text-xl font-bold transition-colors rounded-xl ${
               userAnswer === opt
                 ? 'border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8]'
                 : 'border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] hover:bg-[#EDEAE4]'
@@ -1032,13 +1036,14 @@ function AnswerInput({
                   onSelectAnswer(optionValue);
                 }
               }}
-              className={`w-full p-3 border-2 text-left transition-colors ${
+              className={`w-full p-3 border-2 text-left transition-colors rounded-xl flex items-start gap-2 ${
                 isSelected
                   ? 'border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8]'
                   : 'border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] hover:bg-[#EDEAE4]'
               }`}
             >
-              <span className="font-bold">{idx + 1}.</span> {choice}
+              <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs font-bold border border-current rounded-full">{idx + 1}</span>
+              <span className="flex-1 text-xs leading-relaxed">{choice}</span>
             </button>
           );
         })}
@@ -1053,7 +1058,7 @@ function AnswerInput({
       value={userAnswer || ''}
       onChange={(e) => onSelectAnswer(e.target.value)}
       placeholder="답을 입력하세요"
-      className="w-full p-3 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] outline-none focus:border-[#5C5C5C]"
+      className="w-full p-3 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] text-sm leading-relaxed outline-none focus:border-[#5C5C5C] rounded-xl"
     />
   );
 }
@@ -1095,11 +1100,11 @@ function QuestionResultCard({
   const displayImage = r.image || r.imageUrl;
 
   return (
-    <div className={`p-3 border ${r.isCorrect ? 'border-[#1A6B1A] bg-[#E8F5E9]' : 'border-[#8B1A1A] bg-[#FDEAEA]'}`}>
+    <div className={`p-3 border rounded-xl ${r.isCorrect ? 'border-[#1A6B1A] bg-[#E8F5E9]' : 'border-[#8B1A1A] bg-[#FDEAEA]'}`}>
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-2">
         <span className={`text-sm font-bold ${r.isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>{label}</span>
-        <span className={`text-xs px-2 py-0.5 ${r.isCorrect ? 'bg-[#1A6B1A] text-white' : 'bg-[#8B1A1A] text-white'}`}>
+        <span className={`text-xs px-2 py-0.5 rounded-md ${r.isCorrect ? 'bg-[#1A6B1A] text-white' : 'bg-[#8B1A1A] text-white'}`}>
           {r.isCorrect ? '정답' : '오답'}
         </span>
       </div>
@@ -1111,7 +1116,7 @@ function QuestionResultCard({
       {r.mixedExamples && r.mixedExamples.length > 0 && (
         <div className="mb-2">
           {r.mixedExamples.filter((b: any) => b.type === 'grouped').map((block: any) => (
-            <div key={block.id} className="p-2 border border-[#8B6914] bg-[#FFF8E1] mb-1 text-xs">
+            <div key={block.id} className="p-2 border border-[#8B6914] bg-[#FFF8E1] rounded-lg mb-1 text-xs">
               {block.children?.map((child: any) => (
                 <div key={child.id}>
                   {child.type === 'text' && child.content?.trim() && <p className="text-[#5C5C5C] whitespace-pre-wrap">{child.content}</p>}
@@ -1127,19 +1132,19 @@ function QuestionResultCard({
           ))}
           {r.mixedExamples.filter((b: any) => b.type !== 'grouped').map((block: any) => {
             if (block.type === 'text' && block.content?.trim()) return (
-              <div key={block.id} className="p-2 border border-[#8B6914] bg-[#FFF8E1] mb-1 text-xs">
+              <div key={block.id} className="p-2 border border-[#8B6914] bg-[#FFF8E1] rounded-lg mb-1 text-xs">
                 <p className="text-[#1A1A1A] whitespace-pre-wrap">{block.content}</p>
               </div>
             );
             if (block.type === 'labeled') return (
-              <div key={block.id} className="p-2 border border-[#8B6914] bg-[#FFF8E1] mb-1 text-xs">
+              <div key={block.id} className="p-2 border border-[#8B6914] bg-[#FFF8E1] rounded-lg mb-1 text-xs">
                 {(block.items || []).map((li: any) => (
                   <p key={li.id}><span className="font-bold">{li.label}.</span> {li.content}</p>
                 ))}
               </div>
             );
             if (block.type === 'gana') return (
-              <div key={block.id} className="p-2 border border-[#8B6914] bg-[#FFF8E1] mb-1 text-xs">
+              <div key={block.id} className="p-2 border border-[#8B6914] bg-[#FFF8E1] rounded-lg mb-1 text-xs">
                 {(block.items || []).map((li: any) => (
                   <p key={li.id}><span className="font-bold">({li.label})</span> {li.content}</p>
                 ))}
@@ -1152,7 +1157,7 @@ function QuestionResultCard({
 
       {/* 레거시 보기 */}
       {!r.mixedExamples?.length && r.subQuestionOptions && r.subQuestionOptions.length > 0 && (
-        <div className="p-2 border border-[#8B6914] bg-[#FFF8E1] mb-2 text-xs">
+        <div className="p-2 border border-[#8B6914] bg-[#FFF8E1] rounded-lg mb-2 text-xs">
           {r.subQuestionOptionsType === 'text' ? (
             <p className="text-[#1A1A1A]">{r.subQuestionOptions.join(', ')}</p>
           ) : (
@@ -1168,20 +1173,20 @@ function QuestionResultCard({
       {/* 문제 이미지 */}
       {displayImage && (
         <div className="mb-2">
-          <img src={displayImage} alt="문제 이미지" className="max-w-full max-h-[200px] object-contain border border-[#1A1A1A]" />
+          <img src={displayImage} alt="문제 이미지" className="max-w-full max-h-[200px] object-contain border border-[#1A1A1A] rounded-lg" />
         </div>
       )}
 
       {/* 하위 문제 이미지 */}
       {r.subQuestionImage && (
         <div className="mb-2">
-          <img src={r.subQuestionImage} alt="보기 이미지" className="max-w-full max-h-[200px] object-contain border border-[#1A1A1A]" />
+          <img src={r.subQuestionImage} alt="보기 이미지" className="max-w-full max-h-[200px] object-contain border border-[#1A1A1A] rounded-lg" />
         </div>
       )}
 
       {/* 보기 박스 */}
       {r.bogi && r.bogi.items && r.bogi.items.some((i: any) => i.content?.trim()) && (
-        <div className="mb-2 p-2 bg-[#EDEAE4] border border-[#1A1A1A] text-xs">
+        <div className="mb-2 p-2 bg-[#EDEAE4] border border-[#1A1A1A] rounded-lg text-xs">
           <p className="text-center text-[#5C5C5C] mb-1 font-bold">&lt;보 기&gt;</p>
           <div className="space-y-0.5">
             {r.bogi.items.filter((i: any) => i.content?.trim()).map((bi: any, i: number) => (
@@ -1193,7 +1198,7 @@ function QuestionResultCard({
 
       {/* 발문 */}
       {(r.passagePrompt || r.bogiQuestionText) && (
-        <div className="mb-2 p-2 border border-[#1A1A1A] bg-[#F5F0E8] text-xs">
+        <div className="mb-2 p-2 border border-[#1A1A1A] bg-[#F5F0E8] rounded-lg text-xs">
           <p className="text-[#1A1A1A]">
             {r.passagePrompt && r.bogiQuestionText
               ? `${r.passagePrompt} ${r.bogiQuestionText}`
@@ -1211,7 +1216,7 @@ function QuestionResultCard({
             const isCorrectOpt = normalizedCorrect === opt;
             const isUserOpt = normalizedUser === opt;
             return (
-              <div key={opt} className={`flex-1 py-2 text-center text-sm font-bold border-2 ${
+              <div key={opt} className={`flex-1 py-2 text-center text-sm font-bold border-2 rounded-xl ${
                 isCorrectOpt && isUserOpt ? 'border-[#1A6B1A] bg-[#C8E6C9] text-[#1A6B1A]'
                 : isCorrectOpt ? 'border-[#1A6B1A] bg-white text-[#1A6B1A]'
                 : isUserOpt ? 'border-[#8B1A1A] bg-[#FFCDD2] text-[#8B1A1A]'
@@ -1232,7 +1237,7 @@ function QuestionResultCard({
             const isCorrectChoice = correctAnswerIndex.includes(choiceNum);
             const isUserChoice = userAnswerIndex.includes(choiceNum);
             return (
-              <div key={i} className={`p-2 text-xs border ${
+              <div key={i} className={`p-2 text-xs border rounded-lg ${
                 isCorrectChoice && isUserChoice ? 'border-[#1A6B1A] bg-[#C8E6C9] text-[#1A6B1A]'
                 : isCorrectChoice ? 'border-[#1A6B1A] bg-white text-[#1A6B1A]'
                 : isUserChoice ? 'border-[#8B1A1A] bg-[#FFCDD2] text-[#8B1A1A]'
@@ -1270,7 +1275,7 @@ function QuestionResultCard({
 
       {/* 해설 */}
       {r.explanation && (
-        <div className="p-2 bg-[#EDEAE4] border border-[#ccc] text-xs">
+        <div className="p-2 bg-[#EDEAE4] border border-[#ccc] rounded-lg text-xs">
           <p className="font-bold text-[#5C5C5C] mb-1">해설</p>
           <p className="text-[#1A1A1A] whitespace-pre-wrap">{r.explanation}</p>
         </div>

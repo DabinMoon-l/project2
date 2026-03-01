@@ -16,7 +16,7 @@ export function calcBaseDamage(atk: number, opponentDef: number): number {
 }
 
 /**
- * 크리티컬 데미지 계산 (4초 이내 정답)
+ * 크리티컬 데미지 계산 (5초 이내 정답)
  */
 export function calcCriticalDamage(baseDamage: number): number {
   return Math.ceil(baseDamage * 1.5);

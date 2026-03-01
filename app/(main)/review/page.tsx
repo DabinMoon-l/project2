@@ -172,7 +172,7 @@ function FolderCard({
       transition={SPRING_TAP}
       onClick={onClick}
       className={`
-        relative flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-all duration-150
+        relative pt-1 flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-all duration-150
         ${isSelectMode
           ? isSelected
             ? ''

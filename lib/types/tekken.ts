@@ -53,9 +53,9 @@ export interface RoundAnswer {
 /** 라운드 결과 */
 export interface RoundResultData {
   isCorrect: boolean;
-  damage: number;
+  damage: number;        // 내가 준 데미지
   isCritical: boolean;
-  selfDamage: number;
+  damageReceived: number; // 내가 받은 데미지
 }
 
 /** 라운드 상태 */
@@ -65,7 +65,7 @@ export interface RoundState {
   timeoutAt: number;
   answers?: Record<string, RoundAnswer>;
   result?: Record<string, RoundResultData>;
-  firstAnswerer?: string | null;
+  scored?: boolean;  // 채점 완료 플래그 (transaction lock)
 }
 
 /** 연타 미니게임 상태 (줄다리기) */
@@ -102,6 +102,8 @@ export interface BattleState {
   rounds?: Record<number, RoundState>;
   mash?: MashState;
   result?: BattleResult;
+  colorAssignment?: Record<string, 'red' | 'blue'>; // uid → 색상
+  countdownStartedAt?: number;  // 서버 타임스탬프
 }
 
 /** 매칭 큐 엔트리 */
@@ -130,11 +132,12 @@ export interface JoinMatchmakingResult {
 
 /** submitAnswer 응답 */
 export interface SubmitAnswerResult {
-  isCorrect: boolean;
-  damage: number;
-  isCritical: boolean;
-  selfDamage: number;
-  mashTriggered: boolean;
+  status: 'scored' | 'waiting';  // 채점됨 or 상대 대기
+  isCorrect?: boolean;           // scored일 때만
+  damage?: number;
+  isCritical?: boolean;
+  damageReceived?: number;
+  mashTriggered?: boolean;
   mashId?: string;
 }
 
@@ -157,7 +160,7 @@ export const BATTLE_CONFIG = {
   MATCH_TIMEOUT: 20000,     // 매칭 대기 20초 (봇 매칭)
   BATTLE_DURATION: 180000,  // 배틀 3분
   QUESTION_TIMEOUT: 20000,  // 문제 타임아웃 20초
-  CRITICAL_TIME: 4000,      // 크리티컬 기준 4초
+  CRITICAL_TIME: 5000,      // 크리티컬 기준 5초
   MASH_STEP_PER_TAP: 1.5,  // 연타 게이지 이동량 (탭당 %)
   MASH_TIMEOUT: 15000,      // 연타 줄다리기 시간제한 15초
   COUNTDOWN_SECONDS: 3,     // 카운트다운 3초

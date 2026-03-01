@@ -1,14 +1,14 @@
 'use client';
 
 /**
- * 포켓몬 스타일 캐릭터 영역 (v2)
+ * 포켓몬 스타일 캐릭터 영역 (v3)
  *
  * 상단: 상대 이름/Lv/HP(좌) + 상대 토끼(우) + 발판
  * 하단: 내 토끼(좌) + 발판 + 내 이름/Lv/HP(우)
  *
  * 변경사항:
- * - 데미지 텍스트: 숫자만, 빨간 굵은 글씨, 토끼 머리맡
- * - 발판: 포켓몬 스타일 회색 글래스 그라데이션 타원
+ * - selfDamage → damageReceived
+ * - 스왑 애니메이션: HP 0 → 다른 토끼로 전환 시에만 트리거
  */
 
 import { useState, useEffect, useRef } from 'react';
@@ -25,8 +25,6 @@ interface DamagePopupData {
 let popupIdCounter = 0;
 
 function DamagePopup({ data }: { data: DamagePopupData }) {
-  // 상대 토끼 맞음 → 상대 토끼 머리맡 (우상단)
-  // 내 토끼 맞음 → 내 토끼 머리맡 (좌하단)
   const isOpponentHit = data.target === 'opponent';
 
   return (
@@ -195,27 +193,50 @@ export default function TekkenBattleArena({
   const [swappingTarget, setSwappingTarget] = useState<'me' | 'opponent' | null>(null);
   const prevMyRabbitId = useRef(myActiveRabbit?.rabbitId);
   const prevOpponentRabbitId = useRef(opponentActiveRabbit?.rabbitId);
+  const prevMyActiveIndex = useRef(myPlayer?.activeRabbitIndex ?? 0);
+  const prevOpActiveIndex = useRef(opponent?.activeRabbitIndex ?? 0);
 
-  // 토끼 교체 감지
+  // 토끼 교체 감지 — 실제 교체(HP 0 → 다른 토끼)만 애니메이션
   useEffect(() => {
-    if (myActiveRabbit && prevMyRabbitId.current !== undefined && prevMyRabbitId.current !== myActiveRabbit.rabbitId) {
-      setSwappingTarget('me');
-      const timer = setTimeout(() => setSwappingTarget(null), 2000);
-      return () => clearTimeout(timer);
+    const currentIndex = myPlayer?.activeRabbitIndex ?? 0;
+    const prevIndex = prevMyActiveIndex.current;
+
+    if (currentIndex !== prevIndex && prevMyRabbitId.current !== undefined) {
+      // 이전 토끼의 HP가 0인 경우에만 스왑 애니메이션
+      const prevRabbit = myPlayer?.rabbits?.[prevIndex];
+      if (prevRabbit && prevRabbit.currentHp <= 0) {
+        setSwappingTarget('me');
+        const timer = setTimeout(() => setSwappingTarget(null), 2000);
+        prevMyActiveIndex.current = currentIndex;
+        prevMyRabbitId.current = myActiveRabbit?.rabbitId;
+        return () => clearTimeout(timer);
+      }
     }
+
+    prevMyActiveIndex.current = currentIndex;
     prevMyRabbitId.current = myActiveRabbit?.rabbitId;
-  }, [myActiveRabbit?.rabbitId, myActiveRabbit]);
+  }, [myPlayer?.activeRabbitIndex, myActiveRabbit?.rabbitId, myPlayer?.rabbits]);
 
   useEffect(() => {
-    if (opponentActiveRabbit && prevOpponentRabbitId.current !== undefined && prevOpponentRabbitId.current !== opponentActiveRabbit.rabbitId) {
-      setSwappingTarget('opponent');
-      const timer = setTimeout(() => setSwappingTarget(null), 2000);
-      return () => clearTimeout(timer);
-    }
-    prevOpponentRabbitId.current = opponentActiveRabbit?.rabbitId;
-  }, [opponentActiveRabbit?.rabbitId, opponentActiveRabbit]);
+    const currentIndex = opponent?.activeRabbitIndex ?? 0;
+    const prevIndex = prevOpActiveIndex.current;
 
-  // 라운드 결과 → 데미지 팝업 (숫자만)
+    if (currentIndex !== prevIndex && prevOpponentRabbitId.current !== undefined) {
+      const prevRabbit = opponent?.rabbits?.[prevIndex];
+      if (prevRabbit && prevRabbit.currentHp <= 0) {
+        setSwappingTarget('opponent');
+        const timer = setTimeout(() => setSwappingTarget(null), 2000);
+        prevOpActiveIndex.current = currentIndex;
+        prevOpponentRabbitId.current = opponentActiveRabbit?.rabbitId;
+        return () => clearTimeout(timer);
+      }
+    }
+
+    prevOpActiveIndex.current = currentIndex;
+    prevOpponentRabbitId.current = opponentActiveRabbit?.rabbitId;
+  }, [opponent?.activeRabbitIndex, opponentActiveRabbit?.rabbitId, opponent?.rabbits]);
+
+  // 라운드 결과 → 데미지 팝업
   useEffect(() => {
     if (!showResult) return;
 
@@ -230,29 +251,20 @@ export default function TekkenBattleArena({
       });
     }
 
-    // 내 오답 → 범실 셀프 데미지
-    if (myResult && !myResult.isCorrect && myResult.selfDamage > 0) {
+    // 내가 받은 데미지 (상대 정답 or 상호 데미지)
+    if (myResult && myResult.damageReceived > 0) {
       newPopups.push({
         id: ++popupIdCounter,
-        value: myResult.selfDamage,
+        value: myResult.damageReceived,
         target: 'me',
       });
     }
 
-    // 상대가 정답 → 나에게 데미지
-    if (opponentResult?.isCorrect && opponentResult.damage > 0) {
+    // 상대가 받은 데미지 (상호 데미지 시 — 상대 result에서 damageReceived)
+    if (opponentResult && opponentResult.damageReceived > 0 && !(myResult?.isCorrect && myResult.damage > 0)) {
       newPopups.push({
         id: ++popupIdCounter,
-        value: opponentResult.damage,
-        target: 'me',
-      });
-    }
-
-    // 상대 오답 → 상대 셀프 데미지
-    if (opponentResult && !opponentResult.isCorrect && opponentResult.selfDamage > 0) {
-      newPopups.push({
-        id: ++popupIdCounter,
-        value: opponentResult.selfDamage,
+        value: opponentResult.damageReceived,
         target: 'opponent',
       });
     }

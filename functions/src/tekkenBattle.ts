@@ -1,11 +1,12 @@
 /**
- * 철권퀴즈 Cloud Functions (v2 — 순발력 리워크)
+ * 철권퀴즈 Cloud Functions (v3 — 양쪽 독립 답변)
  *
  * 실시간 1v1 토끼 배틀 시스템
  * - joinMatchmaking: 매칭 큐 참가
  * - cancelMatchmaking: 큐에서 나가기
  * - matchWithBot: 봇 매칭
- * - submitAnswer: 답변 제출 (먼저 푼 사람이 라운드 결정)
+ * - submitAnswer: 답변 제출 (양쪽 독립 답변, 둘 다 제출 후 채점)
+ * - submitTimeout: 타임아웃 처리 (미답변 = 오답)
  * - swapRabbit: 토끼 교체
  * - submitMashResult: 연타 줄다리기 결과 제출
  */
@@ -18,12 +19,12 @@ import fetch from "node-fetch";
 import {
   calcDamage,
   calcBaseDamage,
-  calcSelfDamage,
   calcBattleXp,
   getTotalRemainingHp,
   BATTLE_CONFIG,
+  MUTUAL_DAMAGE,
 } from "./utils/tekkenDamage";
-import { createBotProfile } from "./utils/tekkenBot";
+import { createBotProfile, generateBotAnswer } from "./utils/tekkenBot";
 import { getBaseStats } from "./utils/rabbitStats";
 
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
@@ -338,6 +339,10 @@ async function createBattle(
     endsAt: 0, // 문제 생성 완료 후 설정
     currentRound: 0,
     totalRounds: 0,
+    colorAssignment: {
+      [player1.userId]: "red",
+      [player2.userId]: "blue",
+    },
     players: {
       [player1.userId]: {
         nickname: player1.nickname,
@@ -414,6 +419,7 @@ async function populateBattleQuestions(
     status: "countdown",
     rounds,
     totalRounds: questions.length,
+    countdownStartedAt: now,
     endsAt: now + BATTLE_CONFIG.BATTLE_DURATION + 5000,
   });
 
@@ -634,23 +640,8 @@ export const matchWithBot = onCall(
 );
 
 // ============================================
-// startRound — 라운드 시작 (내부 헬퍼)
-// ============================================
-async function startRound(battleId: string, roundIndex: number) {
-  const rtdb = getDatabase();
-  const now = Date.now();
-
-  await rtdb.ref(`tekken/battles/${battleId}`).update({
-    status: "question",
-    currentRound: roundIndex,
-    [`rounds/${roundIndex}/startedAt`]: now,
-    [`rounds/${roundIndex}/timeoutAt`]: now + BATTLE_CONFIG.QUESTION_TIMEOUT,
-  });
-}
-
-// ============================================
-// submitAnswer — 순발력 방식 (먼저 푼 사람이 라운드 결정)
-// Transaction으로 동시 답변 Race Condition 방지
+// submitAnswer — 양쪽 독립 답변 → 둘 다 제출 후 채점
+// scored transaction lock으로 이중 채점 방지
 // ============================================
 export const submitAnswer = onCall(
   { region: "asia-northeast3" },
@@ -669,18 +660,7 @@ export const submitAnswer = onCall(
     const rtdb = getDatabase();
     const battleRef = rtdb.ref(`tekken/battles/${battleId}`);
 
-    // 원자적 라운드 소유권 획득 (Race Condition 방지)
-    const lockRef = battleRef.child(`rounds/${roundIndex}/answeredBy`);
-    const txResult = await lockRef.transaction((current) => {
-      if (current !== null) return; // 이미 누가 답변 → abort
-      return userId;
-    });
-
-    if (!txResult.committed) {
-      throw new HttpsError("failed-precondition", "라운드가 이미 종료되었습니다.");
-    }
-
-    // 배틀 데이터 읽기 (lock 획득 후)
+    // 배틀 데이터 읽기
     const battleSnap = await battleRef.once("value");
     const battle = battleSnap.val();
 
@@ -693,6 +673,11 @@ export const submitAnswer = onCall(
       throw new HttpsError("not-found", "라운드를 찾을 수 없습니다.");
     }
 
+    // 이미 채점 완료된 라운드
+    if (round.scored) {
+      throw new HttpsError("failed-precondition", "라운드가 이미 종료되었습니다.");
+    }
+
     const now = Date.now();
 
     // 답변 기록
@@ -701,69 +686,146 @@ export const submitAnswer = onCall(
       answeredAt: now,
     });
 
-    // 정답 확인
-    const correctAnswerSnap = await rtdb
-      .ref(`tekken/battleAnswers/${battleId}/${roundIndex}`)
-      .once("value");
-    const correctAnswer = correctAnswerSnap.val();
-    const isCorrect = answer === correctAnswer;
-
     // 플레이어 정보
     const players = battle.players;
     const playerIds = Object.keys(players);
     const opponentId = playerIds.find((id) => id !== userId)!;
-    const myPlayer = players[userId];
     const opponent = players[opponentId];
 
-    const myActiveRabbit = myPlayer.rabbits[myPlayer.activeRabbitIndex];
-    const opActiveRabbit = opponent.rabbits[opponent.activeRabbitIndex];
-
-    let damage = 0;
-    let isCriticalHit = false;
-    let selfDamage = 0;
-
-    if (isCorrect) {
-      // 정답 → 상대에게 데미지
-      const dmgResult = calcDamage(
-        myActiveRabbit.atk,
-        opActiveRabbit.def,
-        now,
-        round.startedAt
-      );
-      damage = dmgResult.damage;
-      isCriticalHit = dmgResult.isCritical;
-    } else {
-      // 오답 → 범실 셀프데미지 (기본 데미지의 1.5배, 고의 오답 방지)
-      selfDamage = calcSelfDamage(myActiveRabbit.atk, opActiveRabbit.def);
+    // 봇이면 서버에서 봇 답변 즉시 생성
+    const existingOpAnswer = round.answers?.[opponentId];
+    if (opponent.isBot && !existingOpAnswer) {
+      const correctAnswerSnap = await rtdb
+        .ref(`tekken/battleAnswers/${battleId}/${roundIndex}`)
+        .once("value");
+      const correctAnswer = correctAnswerSnap.val();
+      const questionData = round.questionData;
+      const botResult = generateBotAnswer(correctAnswer, questionData.choices?.length || 5);
+      const botAnsweredAt = now + botResult.delay;
+      await battleRef.child(`rounds/${roundIndex}/answers/${opponentId}`).set({
+        answer: botResult.answer,
+        answeredAt: botAnsweredAt,
+      });
     }
 
-    // 결과 기록
-    await battleRef.child(`rounds/${roundIndex}/result/${userId}`).set({
-      isCorrect,
-      damage,
-      isCritical: isCriticalHit,
-      selfDamage,
+    // 다시 읽어서 양쪽 답변 확인
+    const updatedRoundSnap = await battleRef.child(`rounds/${roundIndex}/answers`).once("value");
+    const allAnswers = updatedRoundSnap.val() || {};
+
+    // 상대가 아직 답변 안 함 → 대기
+    if (!allAnswers[opponentId]) {
+      return { status: "waiting" as const };
+    }
+
+    // 양쪽 다 답변 → scored transaction lock 획득
+    const scoredRef = battleRef.child(`rounds/${roundIndex}/scored`);
+    const txResult = await scoredRef.transaction((current) => {
+      if (current) return; // 이미 채점됨 → abort
+      return true;
     });
 
-    // firstAnswerer 설정
-    await battleRef.child(`rounds/${roundIndex}/firstAnswerer`).set(userId);
-
-    // HP 업데이트
-    if (damage > 0) {
-      const newHp = Math.max(0, opActiveRabbit.currentHp - damage);
-      await battleRef
-        .child(`players/${opponentId}/rabbits/${opponent.activeRabbitIndex}/currentHp`)
-        .set(newHp);
-    }
-    if (selfDamage > 0) {
-      const newHp = Math.max(0, myActiveRabbit.currentHp - selfDamage);
-      await battleRef
-        .child(`players/${userId}/rabbits/${myPlayer.activeRabbitIndex}/currentHp`)
-        .set(newHp);
+    if (!txResult.committed) {
+      // 이미 상대가 채점함 → 결과 반환
+      const resultSnap = await battleRef.child(`rounds/${roundIndex}/result/${userId}`).once("value");
+      const myResult = resultSnap.val();
+      return {
+        status: "scored" as const,
+        isCorrect: myResult?.isCorrect,
+        damage: myResult?.damage,
+        isCritical: myResult?.isCritical,
+        damageReceived: myResult?.damageReceived,
+      };
     }
 
+    // 채점 수행
+    return await scoreRound(battleId, roundIndex, rtdb, battleRef, userId);
+  }
+);
+
+/**
+ * 라운드 채점 로직 (submitAnswer/submitTimeout 공용)
+ */
+async function scoreRound(
+  battleId: string,
+  roundIndex: number,
+  rtdb: ReturnType<typeof getDatabase>,
+  battleRef: ReturnType<ReturnType<typeof getDatabase>["ref"]>,
+  callerId?: string, // 호출자 ID (submitAnswer에서 전달)
+) {
+  // 최신 배틀 데이터 읽기
+  const battleSnap = await battleRef.once("value");
+  const battle = battleSnap.val();
+  const round = battle.rounds?.[roundIndex];
+
+  const correctAnswerSnap = await rtdb
+    .ref(`tekken/battleAnswers/${battleId}/${roundIndex}`)
+    .once("value");
+  const correctAnswer = correctAnswerSnap.val();
+
+  const players = battle.players;
+  const playerIds = Object.keys(players);
+  const [p1Id, p2Id] = playerIds;
+  const p1Answer = round.answers?.[p1Id];
+  const p2Answer = round.answers?.[p2Id];
+
+  const p1Correct = p1Answer ? p1Answer.answer === correctAnswer : false;
+  const p2Correct = p2Answer ? p2Answer.answer === correctAnswer : false;
+
+  const p1Player = players[p1Id];
+  const p2Player = players[p2Id];
+  const p1Rabbit = p1Player.rabbits[p1Player.activeRabbitIndex];
+  const p2Rabbit = p2Player.rabbits[p2Player.activeRabbitIndex];
+
+  // 결과 초기화
+  const p1Result = { isCorrect: p1Correct, damage: 0, isCritical: false, damageReceived: 0 };
+  const p2Result = { isCorrect: p2Correct, damage: 0, isCritical: false, damageReceived: 0 };
+
+  let mashTriggered = false;
+  let mashId = "";
+
+  if (p1Correct && p2Correct) {
+    // 양쪽 정답 → 연타 미니게임
+    mashTriggered = true;
+  } else if (!p1Correct && !p2Correct) {
+    // 양쪽 오답 → 상호 고정 데미지
+    p1Result.damageReceived = MUTUAL_DAMAGE;
+    p2Result.damageReceived = MUTUAL_DAMAGE;
+
+    const p1NewHp = Math.max(0, p1Rabbit.currentHp - MUTUAL_DAMAGE);
+    const p2NewHp = Math.max(0, p2Rabbit.currentHp - MUTUAL_DAMAGE);
+    await battleRef.child(`players/${p1Id}/rabbits/${p1Player.activeRabbitIndex}/currentHp`).set(p1NewHp);
+    await battleRef.child(`players/${p2Id}/rabbits/${p2Player.activeRabbitIndex}/currentHp`).set(p2NewHp);
+  } else {
+    // 한쪽만 정답
+    const loserId = p1Correct ? p2Id : p1Id;
+    const winnerAnswer = p1Correct ? p1Answer : p2Answer;
+    const winnerRabbit = p1Correct ? p1Rabbit : p2Rabbit;
+    const loserRabbit = p1Correct ? p2Rabbit : p1Rabbit;
+    const loserPlayer = p1Correct ? p2Player : p1Player;
+    const winnerResult = p1Correct ? p1Result : p2Result;
+    const loserResult = p1Correct ? p2Result : p1Result;
+
+    const dmgResult = calcDamage(
+      winnerRabbit.atk,
+      loserRabbit.def,
+      winnerAnswer?.answeredAt || round.startedAt,
+      round.startedAt
+    );
+    winnerResult.damage = dmgResult.damage;
+    winnerResult.isCritical = dmgResult.isCritical;
+    loserResult.damageReceived = dmgResult.damage;
+
+    const loserNewHp = Math.max(0, loserRabbit.currentHp - dmgResult.damage);
+    await battleRef.child(`players/${loserId}/rabbits/${loserPlayer.activeRabbitIndex}/currentHp`).set(loserNewHp);
+  }
+
+  // 결과 기록
+  await battleRef.child(`rounds/${roundIndex}/result/${p1Id}`).set(p1Result);
+  await battleRef.child(`rounds/${roundIndex}/result/${p2Id}`).set(p2Result);
+
+  if (mashTriggered) {
     // 연타 미니게임 트리거
-    const mashId = `mash_${roundIndex}_${Date.now()}`;
+    mashId = `mash_${roundIndex}_${Date.now()}`;
     const mashNow = Date.now();
     await battleRef.child("mash").set({
       mashId,
@@ -772,21 +834,28 @@ export const submitAnswer = onCall(
       taps: {},
     });
     await battleRef.child("status").set("mash");
-
-    return {
-      isCorrect,
-      damage,
-      isCritical: isCriticalHit,
-      selfDamage,
-      mashTriggered: true,
-      mashId,
-    };
+  } else {
+    // 라운드 종료 처리
+    const updatedBattle = (await battleRef.once("value")).val();
+    await processRoundEnd(battleId, roundIndex, updatedBattle);
   }
-);
+
+  // 호출자에게 결과 반환
+  const callerResult = callerId === p1Id ? p1Result : callerId === p2Id ? p2Result : null;
+  return {
+    status: "scored" as const,
+    isCorrect: callerResult?.isCorrect,
+    damage: callerResult?.damage,
+    isCritical: callerResult?.isCritical,
+    damageReceived: callerResult?.damageReceived,
+    mashTriggered,
+    mashId: mashTriggered ? mashId : undefined,
+  };
+}
 
 // ============================================
-// submitTimeout — 아무도 안 풀었을 때 타임아웃 처리
-// Transaction으로 이중 호출 방지
+// submitTimeout — 타임아웃 처리 (미답변 = 오답)
+// scored transaction lock으로 이중 채점 방지
 // ============================================
 export const submitTimeout = onCall(
   { region: "asia-northeast3" },
@@ -803,57 +872,19 @@ export const submitTimeout = onCall(
     const rtdb = getDatabase();
     const battleRef = rtdb.ref(`tekken/battles/${battleId}`);
 
-    // 원자적 타임아웃 소유권 획득 (이중 호출 방지)
-    const lockRef = battleRef.child(`rounds/${roundIndex}/answeredBy`);
-    const txResult = await lockRef.transaction((current) => {
-      if (current !== null) return; // 이미 누가 처리 → abort
-      return "timeout";
+    // scored transaction lock 획득
+    const scoredRef = battleRef.child(`rounds/${roundIndex}/scored`);
+    const txResult = await scoredRef.transaction((current) => {
+      if (current) return; // 이미 채점됨 → abort
+      return true;
     });
 
     if (!txResult.committed) {
       return { success: false };
     }
 
-    const battleSnap = await battleRef.once("value");
-    const battle = battleSnap.val();
-
-    if (!battle) {
-      return { success: false };
-    }
-
-    // 양쪽 범실 데미지 (스탯 기반)
-    const playerIds = Object.keys(battle.players);
-    for (let i = 0; i < playerIds.length; i++) {
-      const pid = playerIds[i];
-      const opPid = playerIds[i === 0 ? 1 : 0];
-      const player = battle.players[pid];
-      const opPlayer = battle.players[opPid];
-      const rabbit = player.rabbits[player.activeRabbitIndex];
-      const opRabbit = opPlayer.rabbits[opPlayer.activeRabbitIndex];
-      const sd = calcSelfDamage(rabbit.atk, opRabbit.def);
-      const newHp = Math.max(0, rabbit.currentHp - sd);
-      await battleRef
-        .child(`players/${pid}/rabbits/${player.activeRabbitIndex}/currentHp`)
-        .set(newHp);
-
-      await battleRef.child(`rounds/${roundIndex}/result/${pid}`).set({
-        isCorrect: false,
-        damage: 0,
-        isCritical: false,
-        selfDamage: sd,
-      });
-    }
-
-    // 연타 미니게임 진입
-    const mashId = `mash_${roundIndex}_${Date.now()}`;
-    const mashNow = Date.now();
-    await battleRef.child("mash").set({
-      mashId,
-      startedAt: mashNow,
-      endsAt: mashNow + BATTLE_CONFIG.MASH_TIMEOUT,
-      taps: {},
-    });
-    await battleRef.child("status").set("mash");
+    // 채점 수행
+    await scoreRound(battleId, roundIndex, rtdb, battleRef);
 
     return { success: true };
   }
@@ -1189,9 +1220,8 @@ export const startBattleRound = onCall(
     };
 
     const rtdb = getDatabase();
-    const battleSnap = await rtdb
-      .ref(`tekken/battles/${battleId}`)
-      .once("value");
+    const battleRef = rtdb.ref(`tekken/battles/${battleId}`);
+    const battleSnap = await battleRef.once("value");
     const battle = battleSnap.val();
 
     if (!battle) {
@@ -1212,7 +1242,26 @@ export const startBattleRound = onCall(
       return { success: true };
     }
 
-    await startRound(battleId, roundIndex);
+    // 트랜잭션으로 이중 시작 방지 (양쪽 클라이언트 동시 호출 대응)
+    const statusRef = battleRef.child("status");
+    const txResult = await statusRef.transaction((current) => {
+      if (current === "question") return; // 이미 시작됨 → abort
+      return "question";
+    });
+
+    if (!txResult.committed) {
+      // 다른 클라이언트가 이미 시작함
+      return { success: true };
+    }
+
+    // startedAt, timeoutAt 기록
+    const now = Date.now();
+    await battleRef.update({
+      currentRound: roundIndex,
+      [`rounds/${roundIndex}/startedAt`]: now,
+      [`rounds/${roundIndex}/timeoutAt`]: now + BATTLE_CONFIG.QUESTION_TIMEOUT,
+    });
+
     return { success: true };
   }
 );

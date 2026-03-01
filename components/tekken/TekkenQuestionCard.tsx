@@ -4,17 +4,17 @@
  * 배틀 문제 카드
  *
  * OX / 객관식 선택 UI
- * 타이머 게이지: 처음 4초(20%) 구간 = 금색 크리티컬, 나머지 = 파란색
+ * 타이머 게이지: 처음 5초(25%) 구간 = 금색 크리티컬, 나머지 = 파란색
  */
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { BattleQuestion } from '@/lib/types/tekken';
 
-// BATTLE_CONFIG.QUESTION_TIMEOUT = 20000ms, CRITICAL_TIME = 4000ms
+// BATTLE_CONFIG.QUESTION_TIMEOUT = 20000ms, CRITICAL_TIME = 5000ms
 const QUESTION_TIMEOUT = 20000;
-const CRITICAL_WINDOW = 4000;
-const CRITICAL_PERCENT = (CRITICAL_WINDOW / QUESTION_TIMEOUT) * 100; // 20%
+const CRITICAL_WINDOW = 5000;
+const CRITICAL_PERCENT = (CRITICAL_WINDOW / QUESTION_TIMEOUT) * 100; // 25%
 
 interface TekkenQuestionCardProps {
   question: BattleQuestion | null;
@@ -109,7 +109,7 @@ export default function TekkenQuestionCard({
           exit={{ opacity: 0, y: -10 }}
           className="bg-black/30 border border-white/10 rounded-2xl p-4 mb-3 backdrop-blur-sm"
         >
-          <p className="text-base font-bold text-white leading-relaxed">
+          <p className="text-sm font-bold text-white leading-relaxed">
             {question.text}
           </p>
         </motion.div>
@@ -126,7 +126,7 @@ export default function TekkenQuestionCard({
               onClick={() => handleSelect(idx)}
               disabled={disabled || selectedAnswer !== null}
               className={`
-                relative px-4 py-2.5 rounded-xl border-2 font-bold text-left transition-all
+                relative px-4 py-2 rounded-xl border-2 font-bold text-left transition-all
                 ${isSelected
                   ? 'border-yellow-400 bg-yellow-400/20 text-yellow-300'
                   : 'border-white/20 bg-white/5 text-white hover:border-white/40 hover:bg-white/10'
@@ -135,7 +135,7 @@ export default function TekkenQuestionCard({
               `}
               whileTap={disabled || selectedAnswer !== null ? {} : { scale: 0.97 }}
             >
-              <span className="text-sm">
+              <span className="text-xs">
                 <span className="text-white/50 mr-2">{idx + 1}.</span>
                 {choice}
               </span>

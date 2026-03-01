@@ -1,18 +1,16 @@
 'use client';
 
 /**
- * 배틀 오버레이 — 포켓몬 스타일 전체 배틀 컨테이너 (v2)
+ * 배틀 오버레이 — 포켓몬 스타일 전체 배틀 컨테이너 (v3)
  *
  * portal → body, z-[110]
  * 배경: home-bg.jpg + bg-black/80 (홈 완전히 가림)
  * 2분할: 상단 퀴즈(flex-[5]) + 하단 캐릭터(flex-[5])
  *
  * 변경사항:
- * - loading 상태: 문제 생성 중 스피너
- * - 배경 불투명도: 50% → 80%
- * - 레이아웃: 5:5 (겹침 해소)
- * - 순발력 시스템: 대기 상태 제거
- * - 연타: RTDB 줄다리기
+ * - 양쪽 독립 답변: 답변 후 "상대방 답변 대기 중..." 표시
+ * - 타임아웃: 항상 제출 (hasAnswered 가드 제거)
+ * - 서버 카운트다운 동기화
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -38,7 +36,6 @@ export default function TekkenBattleOverlay({
 }: TekkenBattleOverlayProps) {
   const [phase, setPhase] = useState<'loading' | 'countdown' | 'battle' | 'result'>('loading');
   const [hasAnswered, setHasAnswered] = useState(false);
-  const [lastAnswerResult, setLastAnswerResult] = useState<RoundResultData | null>(null);
   const [showRoundResult, setShowRoundResult] = useState(false);
   const prevRoundRef = useRef(0);
   const timeoutSubmittedRef = useRef(false);
@@ -70,7 +67,6 @@ export default function TekkenBattleOverlay({
   useEffect(() => {
     if (tekken.currentRoundIndex !== prevRoundRef.current) {
       setHasAnswered(false);
-      setLastAnswerResult(null);
       setShowRoundResult(false);
       timeoutSubmittedRef.current = false;
       prevRoundRef.current = tekken.currentRoundIndex;
@@ -86,30 +82,26 @@ export default function TekkenBattleOverlay({
     }
   }, [tekken.battleStatus]);
 
-  // 타임아웃 자동 제출 (아무도 안 풀었을 때)
+  // 타임아웃 자동 제출 (항상 — 내가 답변해도 상대가 안 풀었을 수 있음)
   useEffect(() => {
     if (tekken.battleStatus !== 'question') return;
-    if (hasAnswered || timeoutSubmittedRef.current) return;
+    if (timeoutSubmittedRef.current) return;
 
     if (tekken.questionTimeLeft <= 0 && tekken.currentRound?.timeoutAt > 0) {
       timeoutSubmittedRef.current = true;
       tekken.submitTimeout();
     }
-  }, [tekken.questionTimeLeft, tekken.battleStatus, hasAnswered]);
+  }, [tekken.questionTimeLeft, tekken.battleStatus]);
 
-  // 카운트다운 완료 → 첫 라운드 시작
+  // 카운트다운 완료 → 첫 라운드 시작 (RTDB status 변경이 phase 전환을 트리거)
   const handleCountdownComplete = useCallback(() => {
-    setPhase('battle');
     tekken.startRound(0);
   }, [tekken]);
 
   // 답변 제출
   const handleAnswer = useCallback(async (answer: number) => {
     setHasAnswered(true);
-    const result = await tekken.submitAnswer(answer);
-    if (result) {
-      setLastAnswerResult(result);
-    }
+    await tekken.submitAnswer(answer);
   }, [tekken]);
 
   // 연타 결과 제출
@@ -117,7 +109,13 @@ export default function TekkenBattleOverlay({
     await tekken.submitMashTaps(taps);
   }, [tekken]);
 
-  // 상대의 라운드 결과
+  // 라운드 결과 — RTDB에서 직접 도출 (CF 반환값 대신)
+  const myResult: RoundResultData | null = (() => {
+    const round = tekken.currentRound;
+    if (!round?.result) return null;
+    return round.result[userId] ?? null;
+  })();
+
   const opponentResult: RoundResultData | null = (() => {
     const round = tekken.currentRound;
     if (!round?.result) return null;
@@ -162,7 +160,10 @@ export default function TekkenBattleOverlay({
 
         {/* 카운트다운 */}
         {phase === 'countdown' && (
-          <TekkenCountdown onComplete={handleCountdownComplete} />
+          <TekkenCountdown
+            onComplete={handleCountdownComplete}
+            countdownStartedAt={tekken.battle?.countdownStartedAt}
+          />
         )}
 
         {/* 배틀 */}
@@ -204,14 +205,15 @@ export default function TekkenBattleOverlay({
                   opponentMashTaps={tekken.opponentMashTaps}
                   writeMashTap={tekken.writeMashTap}
                   onSubmit={handleMashSubmit}
+                  myColor={tekken.battle?.colorAssignment?.[userId] || 'red'}
                 />
               )}
 
-              {/* 순발력 시스템: 답변 후 연타 대기 */}
+              {/* 답변 후 상대 대기 */}
               {hasAnswered && tekken.battleStatus === 'question' && (
                 <div className="flex items-center justify-center py-2">
                   <span className="text-sm text-white/40 font-bold">
-                    연타 준비 중...
+                    상대방 답변 대기 중...
                   </span>
                 </div>
               )}
@@ -224,7 +226,7 @@ export default function TekkenBattleOverlay({
                 opponent={tekken.opponent}
                 myActiveRabbit={tekken.myActiveRabbit}
                 opponentActiveRabbit={tekken.opponentActiveRabbit}
-                myResult={lastAnswerResult}
+                myResult={myResult}
                 opponentResult={opponentResult}
                 showResult={showRoundResult}
               />

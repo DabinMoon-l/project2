@@ -9,6 +9,9 @@
  * - 승리 조건: 100% (내 승) 또는 0% (상대 승) 도달
  * - 타임아웃: 15초 내 미결정 시 현재 탭 차로 승패 결정
  *
+ * 색상: 서버 colorAssignment 기반 perspective 렌더링
+ * - myColor에 따라 좌/우 색상이 결정됨
+ *
  * RTDB 실시간 동기화:
  * - writeMashTap(count): 내 탭 수 RTDB 쓰기 (100ms 스로틀)
  * - opponentMashTaps: 상대 탭 수 리스너로 수신
@@ -25,9 +28,15 @@ interface TekkenMashMinigameProps {
   opponentMashTaps: number;
   writeMashTap: (count: number) => void;
   onSubmit: (taps: number) => void;
+  myColor: 'red' | 'blue';
 }
 
 const STEP = BATTLE_CONFIG.MASH_STEP_PER_TAP;
+
+const COLORS = {
+  red: { fill: 'bg-[#C06060]', label: 'text-[#C06060]' },
+  blue: { fill: 'bg-[#6060A0]', label: 'text-[#6060A0]' },
+};
 
 export default function TekkenMashMinigame({
   userId,
@@ -36,12 +45,15 @@ export default function TekkenMashMinigame({
   opponentMashTaps,
   writeMashTap,
   onSubmit,
+  myColor,
 }: TekkenMashMinigameProps) {
   const [myTaps, setMyTaps] = useState(0);
   const [submitted, setSubmitted] = useState(false);
   const [timeLeft, setTimeLeft] = useState<number>(BATTLE_CONFIG.MASH_TIMEOUT);
   const myTapsRef = useRef(0);
   const lastWriteRef = useRef(0);
+
+  const opColor = myColor === 'red' ? 'blue' : 'red';
 
   // 게이지: 50 + (내 탭 - 상대 탭) × STEP
   const myPercent = Math.min(100, Math.max(0, 50 + (myTaps - opponentMashTaps) * STEP));
@@ -57,7 +69,6 @@ export default function TekkenMashMinigame({
       // 타임아웃 → 현재 탭으로 제출
       if (remaining <= 0) {
         setSubmitted(true);
-        // 마지막 탭 수 RTDB 동기화
         writeMashTap(myTapsRef.current);
         onSubmit(myTapsRef.current);
       }
@@ -95,9 +106,9 @@ export default function TekkenMashMinigame({
     if (navigator.vibrate) navigator.vibrate(10);
   }, [submitted, writeMashTap]);
 
-  // 게이지 색상
-  const gaugeColor = myPercent > 50 ? 'bg-[#C06060]' : 'bg-[#6060A0]';
-  const bgColor = 'bg-[#6060A0]';
+  // 게이지 색상: 내가 밀고 있으면 내 색, 상대가 밀고 있으면 상대 색
+  const gaugeColor = myPercent > 50 ? COLORS[myColor].fill : COLORS[opColor].fill;
+  const bgColor = COLORS[opColor].fill;
   const timeSeconds = Math.ceil(timeLeft / 1000);
 
   return (
@@ -119,10 +130,10 @@ export default function TekkenMashMinigame({
 
       {/* 줄다리기 게이지 */}
       <div className="w-full max-w-xs mb-3">
-        {/* 라벨 */}
+        {/* 라벨: 왼쪽에 내 색상, 오른쪽에 상대 색상 */}
         <div className="flex justify-between mb-1">
-          <span className="text-xs font-bold text-[#C06060]">나</span>
-          <span className="text-xs font-bold text-[#6060A0]">상대</span>
+          <span className={`text-xs font-bold ${COLORS[myColor].label}`}>나</span>
+          <span className={`text-xs font-bold ${COLORS[opColor].label}`}>상대</span>
         </div>
 
         {/* 게이지 바 */}

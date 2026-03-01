@@ -1,16 +1,16 @@
 'use client';
 
 /**
- * 철권퀴즈 메인 훅 (v2 — 순발력 리워크)
+ * 철권퀴즈 메인 훅 (v3 — 양쪽 독립 답변)
  *
  * RTDB 리스너 + CF 호출 통합
  * 매칭 → 배틀 → 결과까지 전체 흐름 관리
  *
  * 변경사항:
- * - 순발력 시스템: 먼저 푼 사람이 라운드 결정
- * - loading 상태: 문제 생성 중 스피너
- * - 연타 줄다리기: RTDB 실시간 탭 동기화
- * - 대기 로직 제거 (bothAnswered 없음)
+ * - 양쪽 독립 답변: 둘 다 제출 후 채점
+ * - 답변 후 "상대방 답변 대기 중..." 표시
+ * - 셀프데미지 제거, 양쪽 오답 시 상호 고정 데미지
+ * - 타임아웃: 항상 제출 (내가 답변해도 상대가 안 풀었을 수 있음)
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -320,9 +320,13 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
         roundIndex: battle.currentRound,
         answer,
       });
+      // status === 'waiting' → 상대 대기 (UI에서 "상대방 답변 대기 중..." 표시)
+      if (result.data.status === 'waiting') {
+        return null;
+      }
+      // status === 'scored' → 결과 반환
       return result.data;
     } catch (err: any) {
-      // 라운드 이미 종료된 경우 (상대가 먼저 풀었음)
       if (err?.code === 'functions/failed-precondition') {
         return null;
       }
