@@ -245,13 +245,13 @@ service cloud.firestore {
 
     match /fcmTokens/{tokenId} {
       allow read: if isAuthenticated() &&
-        resource.data.userId == request.auth.uid;
+        resource.data.uid == request.auth.uid;
 
       allow create, update: if isAuthenticated() &&
-        request.resource.data.userId == request.auth.uid;
+        request.resource.data.uid == request.auth.uid;
 
       allow delete: if isAuthenticated() &&
-        resource.data.userId == request.auth.uid;
+        resource.data.uid == request.auth.uid;
     }
 
     // ============================================================
@@ -474,6 +474,12 @@ service cloud.firestore {
 
       // 쓰기: 교수님만
       allow write: if isProfessor();
+
+      // 하위 컬렉션 (예: settings/tekken/courses/{courseId})
+      match /{subcol}/{docId} {
+        allow read: if isAuthenticated();
+        allow write: if isProfessor();
+      }
     }
 
     // ============================================================
@@ -724,6 +730,21 @@ service cloud.firestore {
     // 스타일 기반 AI 문제 생성 사용량
     match /styledQuizUsage/{path=**} {
       allow read, write: if false;
+    }
+
+    // ============================================================
+    // 철권퀴즈 문제 풀 (CF 전용 쓰기)
+    // ============================================================
+    match /tekkenQuestionPool/{courseId} {
+      allow read, write: if false;
+
+      match /questions/{questionId} {
+        allow read, write: if false;
+      }
+
+      match /seenQuestions/{seenId} {
+        allow read, write: if false;
+      }
     }
 
     // 주별 통계 (CF에서 쓰기, 교수님만 읽기)

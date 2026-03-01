@@ -4,18 +4,50 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 프로젝트 개요
 
-대학 수업 보조 앱 "RabbiTory". 퀴즈 + 게시판 기능에 토끼 컨셉 게이미피케이션을 적용한 PWA.
+대학 수업 보조 앱 **"RabbiTory"**. 퀴즈 + 게시판 기능에 토끼 컨셉 게이미피케이션을 적용한 PWA.
 학생은 퀴즈를 풀고 피드백을 남기며, 교수님은 문제에 대한 피드백을 수집하고 학생 참여도를 모니터링.
+
+**프로젝트 규모**: TypeScript/TSX 135,000줄+, 컴포넌트 160개+, Cloud Functions 43개, 페이지 34개, 커밋 161개
 
 ## 기술 스택
 
-- **Frontend**: Next.js 16 (App Router) + React 19 + TypeScript + Tailwind CSS 3
-- **애니메이션**: Framer Motion (페이지 전환, UI), Lottie (퀴즈 결과 연출)
-- **Backend**: Firebase (Auth, Firestore, Realtime Database, Cloud Functions, Cloud Messaging, Storage)
-- **OCR**: Tesseract.js, pdfjs-dist
-- **AI**: Gemini API (문제 생성, 이미지 분석), Claude API (월별 리포트 인사이트)
-- **리포트 출력**: exceljs (Excel), docx (Word), file-saver
-- **배포**: Vercel (PWA, next-pwa)
+### 프론트엔드
+- **Next.js** 16.1.6 (App Router, Turbopack)
+- **React** 19 + **TypeScript** 5
+- **Tailwind CSS** 3
+- **Framer Motion** 11 (페이지 전환, UI 애니메이션)
+- **Lottie React** 2.4 (퀴즈 결과 연출)
+- **next-pwa** 5.6 (PWA 서비스 워커)
+- **next-view-transitions** 0.3.5 (View Transitions API)
+- **react-window** 2.2.7 (가상 스크롤)
+- **react-d3-cloud** 1.0.6 (단어 클라우드)
+
+### 문서/파일 처리
+- **Tesseract.js** 5.0.4 (클라이언트 OCR)
+- **pdfjs-dist** 4.0.379 (PDF 렌더링)
+- **exceljs** 4.4 (Excel 리포트 내보내기)
+- **docx** 9.5.3 (Word 리포트 내보내기)
+- **file-saver** 2.0.5 (파일 다운로드)
+- **jszip** 3.10.1 (압축)
+- **date-fns** 3.0 (날짜 처리)
+
+### Backend (Firebase)
+- **Firebase** 10.7 — Auth, Firestore, Realtime Database, Cloud Functions, Cloud Messaging, Storage
+- **firebase-functions** 5.0 + **firebase-admin** 12.0 (Node 20)
+- **@google-cloud/vision** 4.3.2 (Gemini Vision OCR)
+- **jimp** 0.22.12 (서버사이드 이미지 크롭)
+- **nodemailer** 6.9.8 (이메일 발송)
+- **node-fetch** 2.7 (API 호출)
+- **google-auth-library** 9.6 (Cloud Run 인증)
+
+### AI
+- **Gemini API** (gemini-2.0-flash) — AI 문제 생성, 이미지 분석, 철권퀴즈 문제
+- **Claude API** (claude-sonnet-4-20250514) — 월별 리포트 인사이트
+
+### 배포
+- **Vercel** — 프론트엔드 (PWA 자동 등록)
+- **Firebase** — Cloud Functions, Firestore, RTDB, Storage
+- **Cloud Run** — PPTX→PDF 변환 서비스
 
 ## 개발 명령어
 
@@ -23,7 +55,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm install          # 의존성 설치
 npm run dev          # 개발 서버 (Turbopack)
 npm run build        # 프로덕션 빌드
-npm run lint         # ESLint
+npm run lint         # ESLint 9
 npm run analyze      # 번들 분석 (ANALYZE=true)
 ```
 
@@ -38,23 +70,23 @@ npm run logs         # 로그 확인
 ```
 
 - **Node 20 필수** (`engines.node: "20"`)
-- tsconfig가 프론트보다 엄격: `noUnusedLocals`, `noImplicitReturns`, `strict` 활성화
-- `firebase.json` predeploy 훅: `npm run build` 자동 실행 (배포 시 수동 빌드 불필요)
-- **테스트 프레임워크 없음**: Jest/Vitest/Playwright 등 미설정. 수동 테스트 기반
+- tsconfig가 프론트보다 엄격: `noUnusedLocals`, `noImplicitReturns`, `strict`
+- `firebase.json` predeploy 훅: `npm run build` 자동 실행
+- **테스트 프레임워크 없음**: Jest/Vitest/Playwright 미설정, 수동 테스트 기반
 
 ### 환경 변수
 
-프론트엔드: `.env.local` 파일 (`.env.local.example` 참고)
-- `NEXT_PUBLIC_FIREBASE_*` — Firebase 프로젝트 설정 (API_KEY, AUTH_DOMAIN, PROJECT_ID, STORAGE_BUCKET, MESSAGING_SENDER_ID, APP_ID, MEASUREMENT_ID)
-- `NEXT_PUBLIC_FIREBASE_DATABASE_URL` — Firebase Realtime Database URL (철권퀴즈)
+**프론트엔드** (`.env.local`):
+- `NEXT_PUBLIC_FIREBASE_*` — API_KEY, AUTH_DOMAIN, PROJECT_ID, STORAGE_BUCKET, MESSAGING_SENDER_ID, APP_ID, MEASUREMENT_ID
+- `NEXT_PUBLIC_FIREBASE_DATABASE_URL` — Realtime Database URL (철권퀴즈)
 - `NEXT_PUBLIC_FIREBASE_VAPID_KEY` — FCM 웹 푸시 인증서 키
 - `NEXT_PUBLIC_NAVER_CLIENT_ID` / `NEXT_PUBLIC_NAVER_CALLBACK_URL` — 네이버 OAuth (선택)
-- `NEXT_PUBLIC_PPTX_CLOUD_RUN_URL` — PPT→PDF 변환 Cloud Run 서비스 URL
+- `NEXT_PUBLIC_PPTX_CLOUD_RUN_URL` — PPT→PDF Cloud Run URL
 
-Cloud Functions 시크릿:
+**Cloud Functions 시크릿**:
 ```bash
-firebase functions:secrets:set ANTHROPIC_API_KEY   # 서술형 AI 채점
-firebase functions:secrets:set GEMINI_API_KEY       # AI 문제 생성
+firebase functions:secrets:set GEMINI_API_KEY     # AI 문제 생성
+firebase functions:secrets:set ANTHROPIC_API_KEY   # 월별 리포트
 ```
 
 ## 아키텍처
@@ -63,23 +95,52 @@ firebase functions:secrets:set GEMINI_API_KEY       # AI 문제 생성
 
 ```
 app/
-├── login/              # 소셜 로그인 (Google, Apple, Naver, 이메일)
-├── signup/             # 이메일 회원가입
-├── verify-email/       # 이메일 인증
-├── onboarding/         # 온보딩 (폐기됨 — 회원가입에 통합, 홈으로 리다이렉트)
-└── (main)/             # 인증 필요 라우트 그룹
-    ├── page.tsx        #   홈
-    ├── quiz/           #   퀴즈 목록/풀이/결과/피드백
-    ├── review/         #   복습 (오답/찜/푼 문제)
-    ├── board/          #   게시판 (통합 피드)
-    ├── profile/        #   프로필
-    ├── settings/       #   설정
-    └── professor/      #   교수님 전용 (대시보드, 학생 모니터링, 통계)
+├── layout.tsx                  # 루트 레이아웃 (글꼴, PWA 메타)
+├── (auth)/                     # 비인증 라우트 그룹
+│   ├── layout.tsx              #   인증 페이지 공통 레이아웃
+│   ├── login/                  #   학번+비밀번호 로그인
+│   ├── signup/                 #   회원가입 (학번, 이름, 학년→과목 자동 결정)
+│   └── forgot-password/        #   비밀번호 찾기 (학번→복구 이메일 or 문의)
+├── (main)/                     # 인증 필요 라우트 그룹
+│   ├── layout.tsx              #   메인 레이아웃 (5계층 Provider + Navigation)
+│   ├── page.tsx                #   홈 (캐릭터, EXP 바, 공지, 랭킹)
+│   ├── quiz/                   #   퀴즈
+│   │   ├── page.tsx            #     목록 (필터: 중간/기말/기출/커스텀)
+│   │   ├── create/             #     학생 퀴즈 생성
+│   │   └── [id]/
+│   │       ├── page.tsx        #     풀이
+│   │       ├── result/         #     결과
+│   │       ├── feedback/       #     피드백 제출
+│   │       ├── exp/            #     마일스톤 보상
+│   │       └── edit/           #     수정 (본인 퀴즈)
+│   ├── review/                 #   복습
+│   │   ├── page.tsx            #     목록 (오답/찜/푼 문제 탭)
+│   │   ├── random/             #     랜덤 복습
+│   │   └── [type]/[id]/        #     복습 상세 (wrong|bookmark|solved)
+│   ├── board/                  #   게시판
+│   │   ├── page.tsx            #     통합 피드 (신문 Masonry 레이아웃)
+│   │   ├── write/              #     글 작성
+│   │   ├── manage/             #     게시판 관리 (교수 전용)
+│   │   └── [id]/               #     글 상세 + 댓글 + 수정
+│   ├── ranking/                #   랭킹
+│   ├── profile/                #   프로필 / 캐릭터 커스터마이징
+│   ├── settings/               #   설정 (알림, 닉네임, 계정 삭제)
+│   └── professor/              #   교수 전용
+│       ├── page.tsx            #     홈 (대시보드)
+│       ├── quiz/               #     퀴즈 관리 (3D 캐러셀 + 자작/AI 그리드)
+│       │   ├── create/         #     퀴즈 생성 (수동/파일 업로드)
+│       │   └── [id]/           #     상세 / 미리보기 / 수정
+│       ├── stats/              #     통계 (레이더, 주별 추세, 월별 리포트)
+│       ├── students/           #     학생 모니터링 (6축 레이더)
+│       └── analysis/           #     분석 (폐기됨 → stats로 통합)
+├── onboarding/                 # 온보딩 (폐기됨 → 회원가입에 통합, 홈으로 리다이렉트)
+├── verify-email/               # 이메일 인증 (폐기됨)
+└── firebase-messaging-sw.js/   # FCM 서비스 워커 (API Route)
 ```
 
-### Provider 계층 구조 (핵심)
+### Provider 계층 구조
 
-`app/(main)/layout.tsx`에서 인증 + 온보딩 완료 여부를 체크한 뒤, 다음 Provider들이 중첩:
+`app/(main)/layout.tsx`에서 인증 + 온보딩 완료 체크 후 Provider 중첩:
 
 ```
 MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
@@ -93,334 +154,401 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
                       └── children
 ```
 
-- **UserProvider** (`lib/contexts/UserContext.tsx`): 프로필, 캐릭터, 장비, 통계를 `onSnapshot`으로 실시간 구독. `useUser()` 훅으로 접근
-- **CourseProvider** (`lib/contexts/CourseContext.tsx`): 학기 설정, 과목/반 정보. `useCourse()` 훅으로 접근
-- **ThemeProvider** (`components/common/ThemeProvider.tsx`): 반별 테마 CSS 변수(`--theme-*`)를 `<html>`에 적용. `useTheme()` 훅으로 접근
-
 ### 상태 관리 패턴
 
-- **전역 상태**: React Context (User, Course, Theme) — Redux/Zustand 미사용
-- **서버 데이터**: Firestore `onSnapshot`으로 실시간 동기화 (커스텀 훅에서 구독)
-- **로컬 상태**: 컴포넌트 내 `useState`/`useReducer`
+- **전역 상태**: React Context (User, Course, Theme, HomeOverlay, Milestone) — Redux/Zustand 미사용
+- **서버 데이터**: Firestore `onSnapshot`으로 실시간 동기화 (커스텀 훅)
+- **로컬 상태**: 컴포넌트 `useState`/`useReducer`
 - **인증 상태**: Firebase `onAuthStateChanged` → `useAuth()` 훅
+- **캐시**: sessionStorage SWR (랭킹 2분/10분 TTL, 레이더 정규화 5분 TTL)
 
-### 주요 데이터 흐름
+## 컴포넌트 구조
 
-**퀴즈 풀이 흐름:**
-1. `/quiz` 목록 → `/quiz/[id]` 풀이 (로컬 state에 답안 저장)
-2. 제출 → Cloud Function `recordAttempt` 호출 (서버사이드 채점)
-3. 채점 완료 → `/quiz/[id]/result` 결과 화면
-4. → `/quiz/[id]/feedback` 피드백 제출 → EXP 지급 (Cloud Function)
+### `components/common/` — 공통 UI (21개)
+| 컴포넌트 | 역할 |
+|----------|------|
+| `Navigation.tsx` | 바텀탭(세로)/사이드바(가로) (학생 4탭, 교수 5탭) |
+| `MobileBottomSheet.tsx` | Framer Motion 드래그 바텀시트 (스와이프 닫기) |
+| `Modal.tsx` / `BottomSheet.tsx` | 기본 모달/시트 |
+| `ExpToast.tsx` | EXP 획득 토스트 (RealtimeExpContext onSnapshot 구독) |
+| `ThemeProvider.tsx` | 반별 CSS 변수(`--theme-*`) 적용 |
+| `NotificationProvider.tsx` | FCM 푸시 알림 초기화 + 포그라운드 핸들링 |
+| `SwipeBack.tsx` | 좌측 25px 가장자리 스와이프 → router.back() |
+| `ProfileDrawer.tsx` | 프로필 좌측 슬라이드 드로어 |
+| `ImageViewer.tsx` | 이미지 전체화면 뷰어 |
+| `CourseSwitcher.tsx` | 교수 과목 전환 캐러셀 |
+| `RabbitImage.tsx` | 토끼 이미지 렌더링 (rabbitId → 파일 매핑) |
+| `VirtualRabbitGrid.tsx` | 가상 스크롤 토끼 그리드 (react-window) |
+| `Header.tsx` / `Button.tsx` / `Input.tsx` / `Card.tsx` | 기본 UI |
+| `ErrorBoundary.tsx` / `Skeleton.tsx` / `SplashScreen.tsx` | 보조 |
+| `OfflineBanner.tsx` | 오프라인 상태 배너 |
+| `FolderSelectModal.tsx` / `FolderSlider.tsx` / `ExpandModal.tsx` | 폴더/확장 |
+| `TabSwipeNav.tsx` / `ScrollToTopButton.tsx` | 탭 스와이프, 맨 위 FAB |
+| `RibbonBanner.tsx` | 과목별 리본 이미지 |
+| `WebVitalsReporter.tsx` | Core Web Vitals 수집 |
 
-**경험치 흐름:**
-- 클라이언트에서 `totalExp`, `rank`, `role`, `badges` 직접 수정 불가
-- Cloud Functions에서만 검증 후 지급 (Firestore Security Rules로 강제)
-- EXP 토스트 (`ExpToast.tsx`): Firestore `onSnapshot`으로 실시간 `totalExp` 구독 → `RealtimeExpContext`로 공유. 토스트 아이템이 항상 최신 값 사용 (race condition 방지)
+### `components/home/` — 홈 화면 (19개)
+| 컴포넌트 | 역할 |
+|----------|------|
+| `CharacterBox.tsx` | 캐릭터 히어로 + 2마리 궤도 캐러셀(타원 공전) + EXP 바 + 도감 버튼 |
+| `HomeCharacter.tsx` | 캐릭터 렌더링 (머리 0-16, 피부 0-14, 수염 0-3) |
+| `HomeOverlay.tsx` | 학생 홈 바텀시트 (프로필, 공지, 랭킹) |
+| `ProfessorHomeOverlay.tsx` | 교수 홈 바텀시트 |
+| `ProfessorCharacterBox.tsx` | 교수용 캐릭터 박스 |
+| `AnnouncementChannel.tsx` | 공지 채널 (9-slice 말풍선, 다중 이미지/파일/투표 캐러셀, 이모지 리액션, 검색, 캘린더) |
+| `RabbitDogam.tsx` / `ProfessorRabbitDogam.tsx` | 토끼 도감 (발견자 목록, 데려오기) |
+| `GachaResultModal.tsx` | 뽑기 결과 모달 |
+| `LevelUpBottomSheet.tsx` | 토끼 레벨업 바텀시트 (글래스모피즘 UI) |
+| `MilestoneChoiceModal.tsx` | 마일스톤 보상 선택 (뽑기 or 레벨업) |
+| `RankingBottomSheet.tsx` / `RankingSection.tsx` | 개인/팀 랭킹 |
+| `ProfessorRankingSection.tsx` | 교수 랭킹 |
+| `TodayQuiz.tsx` / `QuickMenu.tsx` / `RandomReviewBanner.tsx` / `StatsCard.tsx` | 보조 섹션 |
 
-**복습 네비게이션:**
-- 퀴즈탭 복습 버튼 → `/review/library/[id]?from=quiz` (퀴즈 풀이 `/quiz/[id]`가 아님)
-- 오답만 복습 → `/review/wrong/[id]?from=quiz`
+### `components/quiz/` — 퀴즈 (28개)
+| 컴포넌트 | 역할 |
+|----------|------|
+| `QuizGrid.tsx` / `QuizCard.tsx` / `QuizHeader.tsx` | 퀴즈 목록 |
+| `QuizFilterTabs.tsx` | 필터 탭 (중간/기말/기출/커스텀) |
+| `QuestionCard.tsx` | 문제 카드 렌더링 (유형별 분기) |
+| `OXChoice.tsx` / `MultipleChoice.tsx` / `ShortAnswer.tsx` | 유형별 답안 UI |
+| `CombinedQuestionGroup.tsx` | 결합형 (공통 지문 + 하위 문제) |
+| `QuizNavigation.tsx` | 이전/다음/제출 |
+| `ResultHeader.tsx` / `ScoreCard.tsx` / `QuestionResultList.tsx` | 결과 |
+| `FeedbackForm.tsx` / `FeedbackButton.tsx` / `InstantFeedbackButton.tsx` | 피드백 |
+| `ExitConfirmModal.tsx` | 나가기 확인 |
+| `EditQuizSheet.tsx` / `UpdateQuizModal.tsx` | 퀴즈 수정 |
+| `Top3Race.tsx` | 상위 3명 경쟁 미니게임 |
+| `ClassRankingBar.tsx` | 반별 랭킹 바 |
+| `AutoVideo.tsx` | 난이도 비디오 자동 재생 |
+| **create/** (16개) | 퀴즈 생성 폼 |
+| `QuestionEditor.tsx` (4,074줄) | 문제 편집기 (OX/객관식/단답/서술/결합형) |
+| `FileUpload.tsx` / `OCRProcessor.tsx` / `OcrProgress.tsx` | OCR 파이프라인 |
+| `ImageUploader.tsx` / `ImageCropper.tsx` / `ImageRegionSelector.tsx` | 이미지 관리 |
+| `ChapterSelector.tsx` | 챕터 태그 선택 |
+| **manage/** | `QuizStatsModal.tsx` — 반별 필터, 문제별 분석, 변별도, 피드백 |
 
-### Cloud Functions 모듈 (`functions/src/`)
+### `components/review/` — 복습 (3개)
+| 컴포넌트 | 역할 |
+|----------|------|
+| `ReviewPractice.tsx` | 복습 풀이 (오답 반복, 해설 토글) |
+| `ReviewQuestionCard.tsx` | 복습 문제 카드 |
+| `ReviewTabs.tsx` | 복습 탭 (오답/찜/푼 문제) |
 
-| 모듈 | 역할 |
-|------|------|
-| `recordAttempt.ts` | 퀴즈 제출 + 서버사이드 채점 + 분산 쓰기 |
-| `quiz.ts` | 퀴즈 완료 시 EXP 지급, 통계 업데이트 |
-| `feedback.ts` | 피드백 저장 + EXP 지급 |
-| `board.ts` | 게시판 글/댓글/좋아요 + EXP 지급 |
-| `notification.ts` | FCM 푸시 알림 |
-| `essay.ts` | AI 보조 채점 (deprecated — Claude는 monthlyReport로 이전) |
-| `weeklyStats.ts` | 매주 월요일 퀴즈/피드백/학생/게시판 데이터 자동 수집 (Scheduled) |
-| `monthlyReport.ts` | Claude Sonnet 월별 리포트 생성 (Callable, 교수 전용) |
-| `styledQuizGenerator.ts` | 교수 출제 스타일 학습 → AI 문제 생성 (Gemini, sliderWeights/professorPrompt 지원) |
-| `enqueueGenerationJob.ts` | AI 문제 생성 Job 큐 등록 (Callable) |
-| `workerProcessJob.ts` | AI 문제 생성 백그라운드 워커 (Firestore trigger) |
-| `imageRegionAnalysis.ts` | Gemini Vision 이미지 영역 감지 |
-| `imageCropping.ts` | 이미지 크롭 → Firebase Storage 업로드 |
-| `pptx.ts` | PPTX 업로드 → Cloud Run 트리거 |
-| `rabbitGacha.ts` | 토끼 뽑기 2단계 (spinRabbitGacha → claimGachaRabbit) |
-| `rabbitLevelUp.ts` | 토끼 레벨업 (levelUpRabbit) — 스탯 랜덤 증가 |
-| `rabbitEquip.ts` | 토끼 장착/해제 (equipRabbit, unequipRabbit) |
-| `onboardingRabbit.ts` | 온보딩 완료 시 기본 토끼(#0) 자동 지급 (Firestore trigger) |
-| `gemini.ts` / `geminiQueue.ts` | Gemini API 래퍼 + 큐 관리 |
-| `questionParser*.ts` (v1~v4) | OCR 결과 → 문제 파싱 (다중 버전) |
-| `semesterTransition.ts` | 시즌(중간→기말) 전환 로직 |
-| `professorQuizAnalysis.ts` | 교수 대시보드 분석 데이터 |
-| `courseScope.ts` | 과목/반 범위 쿼리 유틸 |
-| `utils/shardedCounter.ts` | 분산 카운터 (동시쓰기 대응) |
-| `utils/rabbitStats.ts` | 토끼 기본 스탯·레벨업 스탯 증가 계산 |
-| `computeRankings.ts` | 랭킹 사전 계산 (5분 스케줄 + Callable) |
-| `reviewsGenerator.ts` | 퀴즈 완료 시 복습 데이터 자동 생성 |
-| `rateLimit.ts` | 도배 방지 레이트 리밋 |
-| `ocr.ts` / `visionOcr.ts` | OCR 처리 (Clova, Gemini Vision) |
-| `inquiry.ts` | 비로그인 문의 저장 (비밀번호 찾기 페이지) |
-| `tekkenBattle.ts` | 철권퀴즈 실시간 1v1 배틀 (매칭, 라운드, 결과) |
-| `tekkenCleanup.ts` | 철권퀴즈 매치 정리 (타임아웃, 비활성) |
-| `utils/tekkenBot.ts` | 철권퀴즈 봇 AI 로직 |
-| `utils/tekkenDamage.ts` | 철권퀴즈 데미지 계산 |
+### `components/board/` — 게시판 (8개)
+| 컴포넌트 | 역할 |
+|----------|------|
+| `PostList.tsx` / `PostCard.tsx` | 신문 Masonry 2열 레이아웃 |
+| `CommentSection.tsx` / `CommentItem.tsx` | 댓글/대댓글 |
+| `WriteForm.tsx` | 글/댓글 작성 (이미지/파일 첨부) |
+| `LikeButton.tsx` | 좋아요 |
+| `BoardTabs.tsx` / `NoticeTag.tsx` | 필터/태그 |
 
-## UI 테마 시스템
+### `components/professor/` — 교수 전용 (28개 + 하위)
+| 컴포넌트 | 역할 |
+|----------|------|
+| `QuizEditorForm.tsx` / `QuizList.tsx` / `QuizListItem.tsx` | 퀴즈 CRUD |
+| `PreviewQuestionCard.tsx` | 문제 미리보기 |
+| `PublishToggle.tsx` / `QuizDeleteModal.tsx` | 공개/삭제 |
+| `DashboardStats.tsx` / `ClassParticipation.tsx` | 대시보드 |
+| `AnalysisSummary.tsx` / `QuestionAnalysisCard.tsx` | 분석 |
+| `DifficultyChart.tsx` / `RecentFeedback.tsx` | 난이도/피드백 |
+| `EssayGrading.tsx` | 서술형 채점 |
+| `StudentList.tsx` / `StudentListItem.tsx` / `StudentStats.tsx` | 학생 목록 |
+| `StudentDetailModal.tsx` / `StudentEnrollment.tsx` | 학생 상세/등록 |
+| `SemesterSettingsCard.tsx` / `SeasonResetCard.tsx` / `SeasonResetModal.tsx` | 학기/시즌 |
+| `SeasonHistoryList.tsx` | 시즌 히스토리 |
+| `TekkenChapterSettings.tsx` | 배틀 퀴즈 챕터 범위 설정 |
+| `CourseSelector.tsx` / `TargetClassSelector.tsx` | 과목/반 선택 |
+| `StyleProfileModal.tsx` / `QuickActions.tsx` | 스타일 프로필/빠른 동작 |
+| `BoardManagementModal.tsx` | 게시판 관리 |
+| **stats/** (12개) | 교수 통계 대시보드 |
+| `RadarChart.tsx` / `StudentRadar.tsx` | 6축 레이더 차트 |
+| `ClassProfileRadar.tsx` / `ClassComparison.tsx` | 반별 비교 |
+| `ClassSummaryTable.tsx` / `ChapterTable.tsx` | 표 분석 |
+| `WeeklyTrend.tsx` / `WeeklyBoxPlot.tsx` | 주별 추세 |
+| `AIDifficultyAnalysis.tsx` | AI 문제 난이도 분석 |
+| `StabilityIndex.tsx` / `DispersionToggle.tsx` / `SourceFilter.tsx` / `SubjectFilter.tsx` | 필터 |
+| **students/** (4개) | 학생 모니터링 |
+| `StudentListView.tsx` / `StudentManagementSheet.tsx` | 학생 목록/관리 시트 |
+| `StudentDetailModal.tsx` / `StudentRadar.tsx` | 상세/레이더 |
+| **library/** (2개) | AI 서재 |
+| `ProfessorLibraryTab.tsx` | AI 문제 생성 (프롬프트, 파일, 슬라이더, 태그 피커) |
+| `LibraryJobToast.tsx` | 생성 중 토스트 (layout.tsx에 마운트) |
 
-### 빈티지 신문 스타일 (기본)
+### `components/ai-quiz/` — AI 퀴즈 (9개)
+| 컴포넌트 | 역할 |
+|----------|------|
+| `AIQuizContainer.tsx` | AI 퀴즈 플로팅 UI (학생 전용, 퀴즈 페이지에 표시) |
+| `AIQuizModal.tsx` / `AIQuizPlayer.tsx` | AI 퀴즈 모달/풀이 |
+| `AIQuizProgress.tsx` | 진행도 |
+| `FloatingAIButton.tsx` | 플로팅 버튼 |
+| `KeywordBottomSheet.tsx` | 키워드/챕터 태그 선택 |
+| `PageSelectionModal.tsx` / `PptxProgressModal.tsx` | PPTX 관련 |
 
-- **배경**: #F5F0E8 (크림), **보조 배경**: #EBE5D9, **카드**: #FDFBF7
-- **텍스트**: #1A1A1A (검정), **음소거**: #5C5C5C
-- **테두리**: #D4CFC4 (밝은), #1A1A1A (진한)
-- **둥근 모서리 없음** (`rounded-none`)
+### `components/tekken/` — 철권퀴즈 (9개)
+| 컴포넌트 | 역할 |
+|----------|------|
+| `TekkenBattleOverlay.tsx` | 배틀 전체 오버레이 (상태 기반 렌더링) |
+| `TekkenMatchmakingModal.tsx` | 매칭 중 모달 (30초 대기 → 봇) |
+| `TekkenBattleArena.tsx` | 배틀 아레나 (2명 레이아웃 + HP 바) |
+| `TekkenQuestionCard.tsx` | 배틀 문제 카드 (20초 타이머) |
+| `TekkenCountdown.tsx` | 3-2-1 카운트다운 |
+| `TekkenMashMinigame.tsx` | 연타 줄다리기 미니게임 (3초 게이지) |
+| `TekkenBattleResult.tsx` | 라운드/배틀 결과 |
+| `TekkenBattleConfirmModal.tsx` | 배틀 진입 확인 |
+| `TekkenEntryHint.tsx` | 철권퀴즈 소개 팁 |
 
-### CSS 변수 기반 테마
+### `components/profile/` — 프로필 (5개)
+`ProfileCard.tsx`, `CharacterEditor.tsx`, `SettingsList.tsx`, `SettingsItem.tsx`, `StatsSummary.tsx`
 
-ThemeProvider가 반(A/B/C/D)에 따라 `<html>`에 CSS 변수 설정:
-```css
---theme-background, --theme-background-secondary
---theme-accent, --theme-accent-light
---theme-text, --theme-text-secondary, --theme-border
-```
+## lib/ 구조
 
-Tailwind에서 `bg-theme-background`, `text-theme-accent` 등으로 사용 (`tailwind.config.ts`에 정의)
+### `lib/contexts/` — React Context (4개 + index)
+| Context | 역할 |
+|---------|------|
+| `UserContext.tsx` | 사용자 프로필 전역 (onSnapshot 실시간 구독, totalExp/rank/badges 등) |
+| `CourseContext.tsx` | 학기/과목 정보 (학년→과목 자동 결정, 현재 학기 설정) |
+| `HomeOverlayContext.tsx` | 홈 오버레이 열기/닫기 상태 |
+| `MilestoneContext.tsx` | 마일스톤 모달 관리 |
 
-### 반별 테마 색상 (`styles/themes/index.ts`)
+### `lib/hooks/` — 커스텀 훅 (31개)
 
-모든 반은 동일한 빈티지 크림 배경(#F5F0E8)을 공유하며, 강조색만 다름:
+**인증/사용자**:
+- `useAuth.ts` — Firebase Auth (학번+비밀번호 로그인, onAuthStateChanged)
+- `useProfile.ts` — 프로필 조회/수정 (닉네임, 캐릭터)
+- `useSettings.ts` — 사용자 설정
 
-| 반 | 강조색 (accent) | 강조색 밝은 (accentLight) | 분위기 |
-|---|----------------|--------------------------|--------|
-| A | #8B1A1A (버건디/레드) | #D4A5A5 | 열정적이고 용맹함 |
-| B | #B8860B (다크 골드) | #E8D5A3 | 따뜻하고 밝음 |
-| C | #1D5D4A (에메랄드 그린) | #A8D4C5 | 차분하고 안정적 |
-| D | #1E3A5F (네이비 블루) | #A8C4E0 | 지적이고 신뢰감 |
+**퀴즈 관련**:
+- `useLearningQuizzes.ts` — 학생 퀴즈 목록 구독 (필터 탭별)
+- `useQuizUpdate.ts` — 퀴즈 재시도 상태 추적
+- `useQuizBookmark.ts` — 찜 기능
+- `useReview.ts` — 복습 데이터 구독 (오답/찜/푼 문제)
+- `useCustomFolders.ts` — 커스텀 폴더 관리
 
-**생물학 단일 테마**: `courseId === 'biology'`이면 반별 테마 대신 `accent: #2E7D32` (자연 녹색) 단일 테마 적용
+**교수 관련**:
+- `useProfessorQuiz.ts` — 교수 퀴즈 CRUD + 통계
+- `useProfessorAiQuizzes.ts` — AI 생성 퀴즈 실시간 구독
+- `useProfessorStudents.ts` — 학생 모니터링 (Progressive Loading Phase 0→1→2 + 6축 레이더 정규화)
+- `useProfessorStats.ts` — 교수 통계 (주별 수집, 월별 리포트)
+- `useProfessorAnalysis.ts` — 교수 분석 데이터
+- `useEnrolledStudents.ts` — 학생 등록 목록 관리
+- `useSeasonReset.ts` — 시즌 리셋 상태
 
-### 글꼴
+**게시판/알림**:
+- `useBoard.ts` — 게시판 글/댓글 CRUD (Masonry 레이아웃 데이터)
+- `useNotification.ts` — FCM 알림 구독
+- `useActivityTracker.ts` — 사용자 활동 추적
 
-- **Noto Sans KR** — 본문 (한글)
-- **Playfair Display** — 빈티지 헤더 (`.font-serif-display`, `.btn-vintage`)
-- **Cormorant Garamond** — 우아한 세리프 (`.font-serif-elegant`)
+**토끼/배틀**:
+- `useRabbit.ts` — 토끼 보유, 도감, 스탯 조회 (useRabbitHoldings, useRabbitDoc, getRabbitStats)
+- `useTekkenBattle.ts` — 배틀 상태 (매칭, 라운드, 결과, Realtime DB 구독)
 
-### 유틸리티 클래스 (`globals.css`)
+**OCR**:
+- `useOcr.ts` — Tesseract OCR
+- `useClovaOcr.ts` — Naver CLOVA OCR (CF 호출)
+- `useVisionOcr.ts` — Google Vision OCR (CF 호출)
 
-- `.card-vintage` — 테두리 + 그림자 + hover 효과
-- `.btn-vintage` / `.btn-vintage-outline` — 빈티지 스타일 버튼
-- `.decorative-corner` — 신문 스타일 코너 장식
-- `.pb-navigation` — 네비게이션 바 + safe area 패딩
-- 전역 스크롤바 숨김 (`* { scrollbar-width: none }`, `*::-webkit-scrollbar { display: none }`)
-- `html, body { overflow-x: hidden; overscroll-behavior: none; background: #F5F0E8 }` — 모바일 PWA 가로 스크롤/오버스크롤 바운스 방지
+**UI/레이아웃**:
+- `useViewportScale.ts` — 뷰포트/가로모드 감지 (useWideMode, getZoom→항상1, scaleCoord→identity)
+- `useHideNav.ts` — 네비게이션 숨김 규칙
+- `useScrollLock.ts` — 스크롤 잠금
+- `useKeyboardAware.ts` — 모바일 키보드 높이 감지
+- `useReducedMotion.ts` — 동작 축소 설정
+- `useOnlineStatus.ts` — 온라인/오프라인 상태
+- `useStorage.ts` — localStorage 래퍼
+- `useExpandSource.ts` — 소스 확대
 
-### 과목 시스템 (`lib/types/course.ts`)
+### `lib/types/` — 타입 정의 (2개)
+- `course.ts` — CourseId, ClassId, 학기, 과목 정보, QuizFilterTab
+- `tekken.ts` — 배틀 상태, 매칭, 토끼 스탯, 플레이어, 라운드, 미니게임
 
-학년/학기 기반 자동 과목 결정:
+### `lib/utils/` — 유틸리티 (27개)
 
-| 과목 ID | 이름 | 학년/학기 |
-|---------|------|----------|
-| `biology` | 생물학 | 1학년 1학기 |
-| `pathophysiology` | 병태생리학 | 1학년 2학기 |
-| `microbiology` | 미생물학 | 2학년 1학기 |
+**점수/랭킹**:
+- `expRewards.ts` — EXP 보상 테이블
+- `feedbackScore.ts` — 피드백 점수 계산 (praise+2, wrong-2 등)
+- `ranking.ts` — 랭킹 점수 공식 (개인/팀)
+- `rankingCache.ts` — 랭킹 SWR 캐시 (2분/10분 TTL)
+- `radarNormCache.ts` — 6축 레이더 정규화 캐시 (5분 TTL)
+- `statistics.ts` — 통계 유틸 (백분위, 표준편차)
+- `milestone.ts` — 마일스톤 계산 (50XP 간격)
 
-- `CourseId = 'biology' | 'pathophysiology' | 'microbiology'`
-- 학기 자동 판별: 02-22~08-21 → 1학기, 08-22~02-21 → 2학기
-- 퀴즈 필터 탭 (`QuizFilterTab`): `midterm | final | past | custom`, 날짜 기반 기본 탭 자동 선택
+**토끼**:
+- `rabbitImage.ts` — 토끼 이미지 경로 (0~79 → /rabbit/rabbit-{id+1}.png)
+- `rabbitProfile.ts` — 토끼 프로필 이미지 경로
+- `rabbitDisplayName.ts` — 토끼 이름 표시 (기본 토끼 특별 처리)
+- `professorRabbit.ts` — 교수 토끼 관련
 
-### 네비게이션 탭
+**데이터 처리**:
+- `quizHelpers.ts` — 퀴즈 필터, 정렬, 대역폭 제한
+- `questionId.ts` — 문제 ID 생성/파싱
+- `firestore.ts` — Firestore 유틸 (쿼리, 배치)
+- `asyncHandler.ts` — 비동기 에러 핸들링
+- `tekkenDamage.ts` — 클라이언트 데미지 계산 (서버와 동일)
 
-**학생 탭** (4개):
-- `/` — 홈
-- `/quiz` — 퀴즈
-- `/review` — 복습
-- `/board` — 게시판
+**문서 내보내기**:
+- `questionPdfExport.tsx` — 문제 PDF 내보내기
+- `questionDocExport.ts` — 문제 Word 내보내기
+- `questionHtmlTemplate.ts` — 문제 HTML 템플릿
+- `reportExport.ts` — 월별 리포트 내보내기 (Excel/Word)
 
-**교수 탭** (5개, maxWidth 420px):
-- `/professor` — 홈
-- `/professor/stats` — 통계
-- `/professor/quiz` — 퀴즈
-- `/professor/students` — 학생
-- `/board` — 게시판
+**기타**:
+- `libraryJobManager.ts` — AI 문제 생성 Job 폴링 매니저
+- `offlineReviewCache.ts` — 오프라인 복습 캐시
+- `koreanStopwords.ts` — 한글 불용어 (검색 제외)
+- `cornerImageBase64.ts` — 신문 코너 장식 Base64
+- `scrollLock.ts` — 스크롤 잠금 유틸
+- `webVitals.ts` — Core Web Vitals 수집
 
-홈 버튼 클릭 시 `sessionStorage.setItem('home_return_path', pathname)` 설정 → 홈 페이지의 스와이프 업 복귀가 올바른 경로를 알 수 있도록
+### 기타 lib 파일
+- `firebase.ts` — Firebase 초기화 (app, auth, db, functions, storage, RTDB 지연 초기화)
+- `auth.ts` — Firebase Auth 래퍼 (signInWithEmail, formatStudentEmail, signOut)
+- `fcm.ts` — FCM 초기화, 토큰 요청, 포그라운드 메시지 핸들러
+- `scoring.ts` — 채점 로직 (객관식, 주관식, 서술형 루브릭)
+- `ocr.ts` — Tesseract 초기화 유틸
+- `imageUtils.ts` — 이미지 처리 유틸
+- `courseIndex.ts` — 과목 인덱스 데이터 (챕터 목록)
 
-### 공지 채널 (`components/home/AnnouncementChannel.tsx`)
+## Cloud Functions 전체 목록 (`functions/src/`)
 
-홈 바텀시트에 표시되는 교수님 공지 시스템:
-- Firestore `announcements` 컬렉션 실시간 구독
-- 텍스트/이미지/파일 첨부, **다중 투표(polls)**, 이모지 리액션
-- **다중 이미지/파일 업로드**: `imageUrls: string[]`, `files: Array<{url,name,type,size}>` (하위 호환: 기존 `imageUrl`/`fileUrl` 단일 필드도 읽기 지원)
-- **다중 투표**: `polls: Poll[]` 배열 (하위 호환: 기존 `poll` 단일 필드도 `getPolls()` 유틸로 배열 변환). 복수 선택 투표 지원 (`allowMultiple`, `maxSelections`)
-- **투표 생성 캐러셀**: `editingPolls: EditingPoll[]` + `editingPollIdx`로 여러 투표를 캐러셀 UI에서 생성/편집
-- **이미지/파일/투표 캐러셀**: 2개 이상일 때 좌우 화살표 + 스냅 스크롤(`snap-start`) + 점 인디케이터 + `gap-0.5` (인접 아이템 테두리 겹침 방지)
-
-**9-slice 말풍선 (Bubble 컴포넌트):**
-- CSS Grid가 아닌 **absolute positioning + padding** 방식으로 구현 (Grid 방식은 오른쪽 잘림 버그 발생)
-- `BUBBLE_C = 14` (기본 패딩), `BUBBLE_SIDE_MULTI = 26` (다중 아이템 캐러셀 좌우 패딩)
-- 9개 배경 이미지(`/notice/bubble_professor_*.png`)를 absolute로 배치, 콘텐츠는 `relative`로 위에 올림
-- `sidePadding` prop으로 단일/다중 아이템 패딩 분기
-- 텍스트 전용: `w-fit` (내용 크기 맞춤), 미디어 포함: `w-full` (래퍼 채움)
-
-**캐러셀 화살표 배치:**
-- `-mx-[30px]`로 flex를 버블 패딩 영역까지 확장, 화살표 `w-[30px]`으로 패딩 중앙 배치
-- `ARROW_ZONE = 30` (BUBBLE_SIDE_MULTI + content px-1 = 26 + 4)
-- 단일 아이템은 캐러셀 없이 렌더링, 버블 기본 패딩(14px) 유지
-
-**투표 Firestore 주의사항:**
-- `polls.0.votes` 같은 dot notation으로 업데이트하면 Firestore가 배열을 객체로 변환 → 반드시 전체 `polls` 배열로 업데이트: `{ polls: newPolls }`
-- `getPolls()` 유틸: `polls` 우선, 없으면 `poll` 단일값 래핑, 객체→배열 복구, 유효성 필터
-- 투표 참여자 수: `new Set(Object.values(votes).flat()).size` (중복 제거)
-
-**교수/학생 정렬:**
-- 교수님 본인 메시지: 우측 정렬 (`flex-row-reverse`), 미디어 위 본문 `text-right`
-- 학생 화면: 좌측 정렬, 본문 `text-left`
-- 읽음/시각: `{readCount}명 읽음 · {시각}` 순서
-- 이모지 피커: 교수님은 `right-0`, 학생은 `left-0`
-
-- **검색 기능**: 상단 검색 아이콘 → 키워드 입력 → 매칭 메시지 하이라이트 + 좌측 하단 상/하 화살표 FAB로 탐색
-- **캘린더**: 년도(교수님만)/월 선택, 메시지 있는 날 표시, 클릭 시 해당 날짜로 스크롤
-- **입력창 인라인 확장**: 2줄 이상 입력 시 확장 버튼 표시 → 클릭 시 max-height 해제하여 전체 내용 표시
-- **스크롤 FAB**: 최신 메시지가 안 보이면 좌측 하단에 스크롤 초기화 버튼 (검색 중에는 숨김)
-- `createPortal(... , document.body)`로 렌더링 (z-index 우회)
-- 미디어 드로어: 좌측 슬라이드, 이미지 전체화면 뷰어, 과목 체인지 헤더
-- 학생 홈 미리보기: 첫 글자/나머지 2줄 분리, 이미지→"사진을/보냈습니다", 파일→"파일을/보냈습니다"
-
-### 게시판 (`app/(main)/board/page.tsx`)
-
-신문 스타일 레이아웃의 게시판:
-- 교수님: 타이틀 영역에 과목 체인지 캐러셀 (BIOLOGY/PATHOPHYSIOLOGY/MICROBIOLOGY, 좌우 화살표 + 스와이프)
-- 학생: "JIBDAN JISUNG" 타이틀 고정
-- 게시글 고정/해제: 교수님 전용 (Firestore rules에 `isPinned/pinnedAt/pinnedBy` 허용)
-- 고정글 캐러셀 + Masonry 2열 레이아웃
-
-### 교수 퀴즈 시스템
-
-**시험 유형** (`QuizType`): 교수 퀴즈 생성 시 필수 선택
-- `midterm` (중간), `final` (기말), `past` (기출)
-- Firestore `quizzes` 문서의 `type` 필드에 저장 (기존 `'professor'` → 시험 유형으로 변경)
-- `useProfessorQuiz.fetchQuizzes()`: `type in ['midterm', 'final', 'past', 'professor']`로 쿼리
-
-**교수 퀴즈탭** (`app/(main)/professor/quiz/page.tsx`):
-- 3D perspective 순환 캐러셀 (MIDTERM / PAST EXAM / FINAL 3장, 클론 카드 방식 무한 루프)
-- 캐러셀 peek 효과: 82% 너비 카드 + 양쪽 9% 사이드 피크, PC 드래그 지원
-- 3D 전환: rotateY ±8°, scale 0.92, opacity 0.9 (비활성 카드)
-- 난이도별 MP4 비디오 카드 (`/videos/difficulty-easy|normal|hard.mp4`)
-- 기출 카드: PAST EXAM 헤더에 장식선 + 년도/시험 드롭다운
-- 퀴즈 미리보기 페이지 (`/professor/quiz/[id]/preview`)
-- 자작 퀴즈: 신문 스타일 카드 그리드 + 태그 검색
-- 자작 Details 모달: 미리보기 버튼 없음 (캐러셀 Details에만 표시)
-- 과목별 리본 이미지 스와이프 전환 (CourseRibbonHeader)
-
-**교수 서재 (AI 문제 생성)** (`components/professor/library/ProfessorLibraryTab.tsx`):
-- 프롬프트 입력 + 파일 업로드(이미지/PDF/PPT) + 슬라이더(스타일/범위/포커스가이드/난이도/문제수)
-- **챕터 태그 필수 선택**: 생성 시 챕터 태그를 강제 선택 → `extractChapterNumbersFromTags()`로 챕터 번호 추출 → `loadScopeForQuiz(forcedChapters)`로 정확한 범위 로드 (텍스트 추론 우회)
-- 태그+난이도 통합 피커: 하단바 태그 아이콘 클릭 → 챕터/난이도 태그 패널 (슬라이더 패널과 상호 배타)
-- `enqueueGenerationJob` CF 호출 → 백그라운드 폴링 (`lib/utils/libraryJobManager.ts`)
-- 생성 중 다른 페이지 이동 가능, 완료 시 상단 토스트 (`LibraryJobToast.tsx`, layout.tsx에 마운트)
-- 생성 중 모달: 사용자가 닫으면 같은 Job 동안 재표시 안 함 (`modalDismissedRef`)
-- 생성된 퀴즈는 `type: 'professor-ai'`로 저장, `useProfessorAiQuizzes` 훅으로 실시간 구독
-- 슬라이더 가중치: 0-9% OFF, 10-49% 낮음, 50-74% 보통, 75-94% 높음, 95-100% 강력
-
-**퀴즈 통계 모달** (`components/quiz/manage/QuizStatsModal.tsx`):
-- 반별 필터링, 문제별 스와이프 분석, 변별도 (4명 이상 응답 시 표시)
-- 선지별 해설 표시 (수정된 문제는 choiceExplanations 제외), 해설 섹션 (없으면 "해설 없음")
-- 우측 하단 피드백 아이콘 → questionFeedbacks 조회 모달
-
-### 교수 학생 모니터링 (`app/(main)/professor/students/page.tsx`)
-
-**핵심 훅**: `lib/hooks/useProfessorStudents.ts` — 학생 목록 구독 + 상세 조회 + 정규화 캐시
-
-**모듈 레벨 과목별 Map 캐시** (페이지 이동·과목 전환에도 유지):
-- `_normCacheMap<courseId, CourseNormCache>` — 6축 레이더 정규화 데이터 (5분 TTL, stale-while-revalidate)
-- `_weightedCacheMap<courseId, WeightedScoreCache>` — 가중 석차 점수
-- `_studentsListCacheMap<courseId, StudentData[]>` — 학생 목록 즉시 복원용
-- `_studentsSnapshotMap<courseId, snapshot[]>` — onSnapshot 데이터 (users 쿼리 대체)
-- `_normBuildPromiseMap<courseId, Promise>` — 중복 빌드 방지
-
-**Progressive Loading (Phase 0→1→2)**:
-- Phase 0: 캐시에서 레이더 즉시 계산 (쿼리 0개, 0초). growth=50 임시값
-- Phase 1: user doc + 6개 per-student 쿼리 병렬 → 실제 growth 계산 + 상세 데이터
-- Phase 2: norm 캐시 없을 때만 빌드 완료 후 레이더 재계산
-
-**가중 석차 점수 시스템**:
-- 각 퀴즈별: `rankScore = ((N - rank + 1) / N) × 100` (석차 기반)
-- 가중 평균: 교수 퀴즈(`midterm|final|past|professor|professor-ai`) 가중치 6, 학생 퀴즈 가중치 4
-- `quizResults` 컬렉션에서 계산, norm 캐시에 포함
-
-**6축 레이더 차트** (`StudentRadar.tsx`):
-- 정답률(절대값), 성장세(Tier1 재시도 + Tier2 오답극복), 출제력/소통/복습력/활동량(백분위)
-- 값 라벨: 축 방향 바깥 배치 (겹침 방지), ⓘ 버튼: HTML 오버레이 (SVG 좌표→CSS % 변환)
-
-### 교수 설정 (`app/(main)/professor/settings/page.tsx`)
-
-- 학기 설정 (SemesterSettingsCard)
-- 시즌 리셋 (SeasonResetCard + SeasonResetModal)
-- 배틀 퀴즈 키워드 범위 (TekkenKeywordsCard)
-- 시즌 히스토리 (SeasonHistoryList)
-- 기타 설정 (프로필, 알림, 앱 버전)
-
-### 피드백 점수 시스템 (`lib/utils/feedbackScore.ts`)
-
-피드백 타입별 점수: praise(+2), wantmore(+1), other(0), typo(-1), unclear(-1), wrong(-2)
-- `calcFeedbackScore(feedbacks)`: 평균 점수 (-2 ~ +2)
-- `getFeedbackLabel(score)`: 좋음(초록) / 보통(회색) / 나쁨(빨강)
-
-### 주별 수집 + 월별 리포트
-
-**주별 자동 수집** (`functions/src/weeklyStats.ts`):
-- Scheduled CF: 매주 월요일 00:00 KST
-- 저장: `weeklyStats/{courseId}/weeks/{year-Wxx}`
-- 수집: 퀴즈, 피드백, 학생(군집 포함), 게시판 데이터
-
-**월별 리포트** (`functions/src/monthlyReport.ts`):
-- Callable CF: 교수님 수동 트리거
-- Claude Sonnet (`claude-sonnet-4-20250514`) 호출 → 인사이트 생성
-- 저장: `monthlyReports/{courseId}/months/{year-MM}`
-- `ANTHROPIC_API_KEY` 시크릿 사용
-
-**리포트 다운로드** (`lib/utils/reportExport.ts`):
-- Excel (exceljs): 요약/퀴즈/학생/게시판/인사이트 시트
-- Word (docx): 마크다운 → Word 변환, 연구용 보고서 형식
-- 교수 통계 탭 하단 "MONTHLY REPORT" 섹션에서 생성/다운로드
-
-### 랭킹 시스템 (`lib/utils/ranking.ts`)
-
-- **개인**: `profCorrectCount × 4 + totalExp × 0.6`
-- **팀**: `normalizedAvgExp × 0.4 + avgCorrectRate × 0.4 + avgCompletionRate × 0.2`
-- 사전 계산: CF `computeRankingsScheduled` (5분마다) → `rankings/{courseId}` 문서 1개로 캐싱
-- 클라이언트: sessionStorage SWR 캐시 (TTL 2분/10분)
-
-## 반응형 레이아웃 시스템
-
-### 2버전 레이아웃
-
-| 모드 | 조건 | 전략 |
+### 퀴즈 관련
+| 함수 | 타입 | 역할 |
 |------|------|------|
-| **세로모드** | 폰/패드 세로/좁은 창 (< 1024px 또는 portrait) | 네이티브 반응형 (CSS zoom 제거됨) |
-| **가로모드** | PC/패드 가로 (landscape + 1024px 이상) | 좌측 사이드바(72px) + 중앙 컨텐츠(max-w 640px) |
+| `recordAttempt` | onCall | 퀴즈 제출 + 서버사이드 채점 + 분산 쓰기 (quiz_agg 샤드, quiz_completions, reviews) |
+| `onQuizComplete` | onDocument(quizResults) | 퀴즈 완료 시 EXP 지급 (만점50, 90%→35, 70%→25, 50%→15, 미만→5) |
+| `onQuizCreate` | onDocument(quizzes) | 퀴즈 생성 시 통계 초기화 |
+| `onQuizMakePublic` | onDocument(quizzes) | 공개 상태 변경 처리 |
+| `updateQuizStatistics` | internal | 퀴즈 통계 업데이트 |
+| `generateReviewsOnResult` | onDocument(quizResults) | 퀴즈 완료 시 복습 데이터(reviews) 자동 생성 |
 
-### 핵심 훅/유틸 (`lib/hooks/useViewportScale.ts`)
+### 피드백
+| 함수 | 타입 | 역할 |
+|------|------|------|
+| `onFeedbackSubmit` | onDocument(questionFeedbacks) | 피드백 제출 시 EXP 지급 (20 XP) |
+| `onFeedbackStatusChange` | onDocument(questionFeedbacks) | 피드백 상태 변경 처리 |
 
-- **`useViewportScale()`**: no-op (하위 호환용으로 유지, CSS zoom 제거됨)
-- **`useWideMode()`**: 가로모드 감지 상태 반환 (`orientation: landscape` + `min-width: 1024px`)
-- **`getZoom()`**: 항상 1 반환 (하위 호환용)
-- **`scaleCoord(value)`**: identity 함수 (하위 호환용, `value`를 그대로 반환)
+### 게시판
+| 함수 | 타입 | 역할 |
+|------|------|------|
+| `onPostCreate` | onDocument(posts) | 글 작성 EXP 지급 (30 XP) |
+| `onCommentCreate` | onDocument(comments) | 댓글 작성 EXP 지급 (10 XP) |
+| `onCommentDeleted` | onDocument(comments) | 댓글 삭제 시 카운트 감소 |
+| `onLikeReceived` | onDocument(likes) | 좋아요 EXP 지급 (5 XP, 첫 좋아요만) |
+| `onLikeRemoved` | onDocument(likes) | 좋아요 취소 처리 |
 
-### 가로모드 레이아웃
+### 알림 (FCM)
+| 함수 | 타입 | 역할 |
+|------|------|------|
+| `sendNotificationToUser` | onCall | 특정 유저에게 FCM 푸시 |
+| `sendNotificationToClass` | onCall | 반 전체 FCM 푸시 |
+| `onNewQuizCreated` | onDocument(quizzes) | 새 퀴즈 알림 |
+| `onBoardCommentCreated` | onDocument(comments) | 댓글 알림 |
+| `onBoardReplyCreated` | onDocument(replies) | 대댓글 알림 |
+| `onAnnouncementCreated` | onDocument(announcements) | 공지 알림 |
 
-- **사이드바** (`Navigation.tsx`): 좌측 72px, 홈 아이콘 + 탭 아이콘 세로 배치
-- **컨텐츠**: `ml-[72px] max-w-[640px] mx-auto`
-- **Tailwind 커스텀 스크린**: `wide: { raw: '(orientation: landscape) and (min-width: 1024px)' }`
+### 인증/학생 관리
+| 함수 | 타입 | 역할 |
+|------|------|------|
+| `registerStudent` | onCall | 학번 회원가입 (enrolledStudents 검증 + Firebase Auth 생성) |
+| `bulkEnrollStudents` | onCall | 학생 일괄 등록 (교수, 최대 200명) |
+| `resetStudentPassword` | onCall | 비밀번호 초기화 |
+| `requestPasswordReset` | onCall | 비밀번호 찾기 (복구 이메일 발송 or 문의 안내) |
+| `updateRecoveryEmail` | onCall | 복구 이메일 업데이트 |
+| `deleteStudentAccount` | onCall | 계정 삭제 (Auth + Firestore + enrolledStudents 초기화) |
+| `removeEnrolledStudent` | onCall | 학생 등록 제거 |
+| `grantDefaultRabbit` | onCall | 기본 토끼 수동 지급 |
+| `migrateExistingAccounts` | onCall | 기존 계정 마이그레이션 |
+| `initProfessorAccount` | onCall | 교수 계정 초기화 |
 
-### PWA 뷰포트 설정
+### AI 문제 생성
+| 함수 | 타입 | 역할 |
+|------|------|------|
+| `enqueueGenerationJob` | onCall | AI 문제 생성 Job 등록 (Rate limit: 분3/일15, dedupeKey) |
+| `checkJobStatus` | onCall | Job 상태 조회 |
+| `workerProcessJob` | onDocument(jobs) | 백그라운드 워커 (동시 최대 20, Gemini API 호출, 이미지 크롭) |
+| `retryQueuedJobs` | onCall | 실패 Job 재시도 |
+| `cleanupExpiredJobs` | onSchedule(매일) | 만료 Job 정리 |
+| `generateStyledQuiz` | onCall | 스타일 기반 문제 생성 (deprecated) |
+| `getStyleProfile` | onCall | 교수 출제 스타일 프로필 조회 |
+| `onProfessorQuizCreated` | onDocument(quizzes) | 교수 퀴즈 스타일 학습 |
 
-- `viewport-fit: cover` — iPhone 안전 영역까지 확장
-- `apple-mobile-web-app-capable: yes` + `status-bar-style: black-translucent`
-- manifest `orientation: any` — 세로/가로 모두 지원
-- `overscroll-behavior: none` — iOS 오버스크롤 바운스 방지
+### 과목 범위 / OCR
+| 함수 | 타입 | 역할 |
+|------|------|------|
+| `uploadCourseScope` | onCall | 과목 범위 업로드 (scope.md 파싱 → 챕터별 저장) |
+| `getCourseScope` | onCall | 과목 범위 조회 |
+| `runClovaOcr` / `getOcrUsage` | onCall | Naver CLOVA OCR |
+| `runVisionOcr` / `getVisionOcrUsage` | onCall | Google Vision OCR |
+| `analyzeImageRegionsCall` | onCall | Gemini Vision 이미지 영역 분석 |
+| `generateQuizWithGemini` / `getGeminiUsage` / `extractKeywords` | onCall | Gemini 직접 호출 |
+| `addToGeminiQueue` / `checkGeminiQueueStatus` / `claimGeminiQueueResult` | onCall | Gemini 큐 |
+| `processGeminiQueue` | onSchedule(1분) | Gemini 큐 처리 |
+| `cleanupGeminiQueue` | onSchedule(매시간) | Gemini 큐 정리 |
 
-## 코딩 컨벤션
+### 토끼 시스템
+| 함수 | 타입 | 역할 |
+|------|------|------|
+| `spinRabbitGacha` | onCall | 뽑기 Roll (50XP 마일스톤, 랜덤 토끼 선택, pendingSpin 저장) |
+| `claimGachaRabbit` | onCall | 뽑기 Claim (발견/놓아주기, 이름 짓기, 자동 장착) |
+| `equipRabbit` | onCall | 토끼 장착 (slotIndex 0\|1) |
+| `unequipRabbit` | onCall | 토끼 해제 |
+| `levelUpRabbit` | onCall | 레벨업 (HP/ATK/DEF 각 1~3 랜덤 증가) |
+| `onOnboardingComplete` | onDocument(users) | 기본 토끼(#0) 자동 지급 |
 
-- 응답 및 코드 주석: 한국어
-- 변수명/함수명: 영어
-- 들여쓰기: 2칸
-- 컴포넌트: React 함수형 컴포넌트 + TypeScript
-- 경로 별칭: `@/*` → 프로젝트 루트 (`tsconfig.json`)
+### 철권퀴즈 (배틀)
+| 함수 | 타입 | 역할 |
+|------|------|------|
+| `joinMatchmaking` | onCall(RTDB) | 매칭 큐 참가 (트랜잭션 원자 매칭) |
+| `cancelMatchmaking` | onCall(RTDB) | 매칭 취소 |
+| `matchWithBot` | onCall(RTDB) | 봇 매칭 (30초 초과 시) |
+| `submitAnswer` | onCall(RTDB) | 답변 제출 (양쪽 독립, 둘 다 제출 후 채점) |
+| `submitTimeout` | onCall(RTDB) | 타임아웃 (미답변 = 오답) |
+| `swapRabbit` | onCall(RTDB) | 토끼 교체 |
+| `submitMashResult` | onCall(RTDB) | 연타 미니게임 결과 |
+| `startBattleRound` | onCall(RTDB) | 라운드 시작 |
+| `tekkenCleanup` | onSchedule(5분) | 매칭/배틀/캐시/seenQuestions 정리 |
+| `tekkenPoolRefillScheduled` | onSchedule(매일 03:00) | 문제 풀 보충 (과목별 60문제 목표) |
+| `tekkenPoolRefill` | onCall | 교수 수동 풀 초기화/재생성 |
+
+### 랭킹/통계
+| 함수 | 타입 | 역할 |
+|------|------|------|
+| `computeRankingsScheduled` | onSchedule(5분) | 랭킹 사전 계산 → rankings/{courseId} |
+| `refreshRankings` | onCall | 수동 랭킹 갱신 |
+| `computeRadarNormScheduled` | onSchedule(5분) | 6축 레이더 정규화 사전 계산 |
+| `refreshRadarNorm` | onCall | 수동 레이더 갱신 |
+| `collectWeeklyStatsScheduled` | onSchedule(매주 월요일) | 주별 자동 수집 (퀴즈/피드백/학생/게시판) |
+| `generateMonthlyReport` | onCall | 월별 Claude 리포트 (claude-sonnet-4-20250514) |
+
+### 공지 채널
+| 함수 | 타입 | 역할 |
+|------|------|------|
+| `voteOnPoll` | onCall | 투표 (복수 선택 지원) |
+| `reactToAnnouncement` | onCall | 이모지 리액션 |
+| `markAnnouncementsRead` | onCall | 읽음 표시 |
+
+### 기타
+| 함수 | 타입 | 역할 |
+|------|------|------|
+| `checkRateLimitCall` | onCall | 도배 방지 (글 1분3개, 댓글 30초1개) |
+| `cleanupRateLimitsScheduled` | onSchedule(매시간) | Rate limit 기록 정리 |
+| `getUserStats` / `getLeaderboard` | onCall | 통계/랭킹 조회 |
+| `resetSeason` | onCall | 시즌 리셋 (교수, 중간→기말) |
+| `februaryTransition` / `augustTransition` | onSchedule | 학기 자동 전환 |
+| `submitInquiry` | onCall | 비로그인 문의 저장 |
+| `onPptxJobCreated` / `convertPptxToPdf` / `cleanupOldQuizJobs` | — | PPTX 처리 |
+| `fillDogam` / `cleanupExtraRabbits` / `migrateRabbitStats` / `migrateFeedbackCount` / `migrateQuizAnswersTo0Indexed` | onCall | 디버그/마이그레이션 |
+
+### Cloud Functions 유틸 (`functions/src/utils/`)
+| 파일 | 역할 |
+|------|------|
+| `gold.ts` | EXP 계산/트랜잭션 (calculateQuizExp, addExpInTransaction) |
+| `shardedCounter.ts` | 분산 카운터 (동시쓰기 대응, quiz_agg 샤드) |
+| `rabbitStats.ts` | 토끼 베이스 스탯 (80마리) + 레벨업 랜덤 증가 (HP/ATK/DEF 각 1~3) |
+| `tekkenDamage.ts` | 데미지 계산: max(ceil(ATK²/(ATK+DEF)×1.5), 2), 크리티컬 5초 이내 ×1.5, 셀프데미지 3 |
+| `tekkenBot.ts` | 봇 AI (30초 초과 자동 생성, 정답률 65%, 응답 3~18초) |
+| `rateLimitV2.ts` | 도배 방지 (recordAttempt용) |
+| `materialCache.ts` | 교과 범위 캐시 |
 
 ## 주요 기능 상세
 
@@ -428,296 +556,297 @@ Tailwind에서 `bg-theme-background`, `text-theme-accent` 등으로 사용 (`tai
 
 **문제 유형** (`QuestionType`): `'ox' | 'multiple' | 'short_answer' | 'essay' | 'combined'`
 
-| 유형 | 설명 | 비고 |
-|------|------|------|
-| OX | 참/거짓 | |
-| 객관식 | 2~8개 선지, 복수정답 지원 | |
-| 단답형 | 짧은 텍스트, 복수정답(`\|\|\|` 구분) | 학생 UI에서는 "주관식" |
-| 서술형 | 루브릭 채점 (AI/수동) | 교수 전용 |
-| 결합형 | 공통 지문/이미지 + 하위 문제들 | 하위 문제 N개 = N문제로 계산 |
+| 유형 | 학생 UI 명칭 | 답안 형식 | 비고 |
+|------|------------|----------|------|
+| OX | OX | 0\|1 | |
+| 객관식 | 객관식 | number (0-indexed), 복수정답: number[] | 2~8개 선지 |
+| 단답형 | 주관식 | string, 복수정답: `\|\|\|` 구분 | |
+| 서술형 | — (교수 전용) | 루브릭 채점 (AI/수동) | |
+| 결합형 | 결합형 | 공통 지문/이미지 + 하위 N문제 (OX/객관식/단답) | N문제 = N점 |
 
-**역할별 차이:**
-- 학생: OX, 객관식, 주관식(=단답형), 결합형
-- 교수: OX, 객관식, 단답형, 서술형, 결합형
+**answer 인덱싱 주의**:
+- 수동 퀴즈: **1-indexed** (answer=1 → 첫 번째 선지)
+- AI 퀴즈: **0-indexed** (answer=0 → 첫 번째 선지)
+- publishQuiz 시 `originalType: 'professor-ai'` 필드로 AI 출처 추적
 
-### 결합형 문제 구조
+**퀴즈 풀이 → 결과 플로우**:
+1. `/quiz/[id]` 풀이 (로컬 state에 답안 저장)
+2. 제출 → CF `recordAttempt` (서버사이드 채점 + 분산 쓰기)
+3. `/quiz/[id]/result` 결과 → `/quiz/[id]/feedback` 피드백 → EXP 지급
 
-- **공통 지문**: 텍스트 박스 / ㄱ.ㄴ.ㄷ. 형식 중 선택
-- **공통 이미지**: 별도 업로드 (공통 지문 OR 이미지 중 하나 필수)
-- **하위 문제**: OX, 객관식, 단답형만 가능 (서술형 제외)
-- **한글 라벨**: `KOREAN_LABELS = ['ㄱ', 'ㄴ', 'ㄷ', ...]` (`components/quiz/create/QuestionEditor.tsx`)
+**피드백 점수**: praise(+2), wantmore(+1), other(0), typo(-1), unclear(-1), wrong(-2)
 
-### 서술형 채점 (`lib/scoring.ts`)
+### AI 문제 생성 시스템
 
-```typescript
-calculateEssayScore(rubricScores)           // 루브릭 점수 합산
-createEmptyEssayScore(questionId, rubric)   // 빈 채점 결과 생성
-updateRubricScore(result, index, score, feedback)  // 점수 업데이트
-generateScoreSummary(result)                // 텍스트 요약
-```
+**교수 서재 플로우** (ProfessorLibraryTab → workerProcessJob):
+1. 프롬프트 입력 + 파일 업로드(이미지/PDF/PPT) + 슬라이더 조정
+2. **챕터 태그 필수 선택** → `extractChapterNumbersFromTags()` → `loadScopeForQuiz(forcedChapters)`
+3. `enqueueGenerationJob` CF → `jobs/{jobId}` (status: QUEUED)
+4. `workerProcessJob` 자동 트리거 (동시 최대 20)
+5. styleProfile + scope + focusGuide 병렬 로드 → Gemini API 호출
+6. HARD 난이도: Gemini Vision 영역 분석 + 이미지 자동 크롭 + ㄱㄴㄷ 보기
+7. 완료 → LibraryJobToast 표시 (다른 페이지에서도)
+
+**슬라이더 가중치**: 0-9% OFF, 10-49% 낮음, 50-74% 보통, 75-94% 높음, 95-100% 강력
+
+**학생 AI 퀴즈**: AIQuizContainer 플로팅 버튼 → 태그 선택 → 같은 CF 호출
 
 ### 복습 시스템
 
 - 유형: `wrong`(오답), `bookmark`(찜), `solved`(푼 문제)
-- 퀴즈 완료 → 모든 문제 `solved`로, 틀린 문제 추가로 `wrong`으로 `reviews` 컬렉션에 저장
+- 퀴즈 완료 → 모든 문제 `solved`, 틀린 문제 추가 `wrong` → `reviews` 컬렉션
 - `completedUsers` 배열로 퀴즈 완료 여부 추적
 - 폴더 삭제 시 `completedUsers`에서 제거 → 퀴즈 목록에 다시 표시
+- 퀴즈탭 복습 → `/review/library/[id]?from=quiz` (퀴즈 풀이 아님)
+- 수정된 퀴즈: 복습탭에서만 "!" 뱃지 표시, 퀴즈탭에서는 완료 유지
 
 ### 토끼 발견/장착 시스템
 
-**2단계 뽑기 (Roll → Claim):**
-1. `spinRabbitGacha` (Roll): 50XP 마일스톤마다 랜덤 토끼(0~79) 선택, `lastGachaExp` 갱신만 수행
-2. `claimGachaRabbit` (Claim): 사용자 선택에 따라 발견/놓아주기
-   - 미발견 토끼 → 최초 발견 (이름 짓기, 영구)
-   - 발견된 토끼 → 후속 발견 (N세)
-   - 이미 발견한 토끼 → 안내만 표시
-   - 발견은 무제한, 장착만 최대 2마리
+**2단계 뽑기**:
+1. `spinRabbitGacha` (Roll): 50XP 마일스톤 → 랜덤 토끼(0~79) 선택, pendingSpin 저장
+2. `claimGachaRabbit` (Claim): 발견(이름 짓기, 영구) or 놓아주기
 
-**장착 시스템:**
-- `equipRabbit`: 도감에서 "데려오기" (slotIndex 0|1 지정)
-- `unequipRabbit`: 슬롯에서 해제
-- 뽑기 시 빈 슬롯 자동 장착 (2개 미만), 슬롯 가득 → 인라인 선택 UI
+**장착**: 최대 2마리 (`equipRabbit` slotIndex 0|1), 뽑기 시 빈 슬롯 자동 장착
 
-**기본 토끼 (#0):**
-- 온보딩 완료 시 `onOnboardingComplete` 트리거로 자동 지급 (rabbitHoldings + rabbits + equippedRabbits)
-- 기본 토끼는 이름 없음, 도감에서 "토끼는 언제나 {닉네임} 편!" 메시지 표시
-- 보유 집사 섹션 미표시
+**기본 토끼 (#0)**: 온보딩 완료 시 `onOnboardingComplete` 트리거 자동 지급, 이름 없음
 
-**토끼 도감 상세:**
-- `discoverers` 배열: `{userId, nickname, discoveryOrder}` — 보유 집사 목록 실시간 표시
-- 부모(최초 발견자, 금색) → N대 집사(후속 발견자) 2열 레이아웃
-- 20명 단위 구분선, 스크롤 가능 (max-h-[200px])
+**마일스톤** (50XP마다): `MilestoneChoiceModal` 자동 표시 → 뽑기 or 레벨업 선택
 
-**핵심 데이터 모델:**
-- `users/{uid}` 필드: `equippedRabbits: Array<{rabbitId, courseId}>` (max 2), `lastGachaExp`
-- `rabbits/{courseId_rabbitId}`: 토끼 문서 (`name` 영구, `firstDiscovererUserId`, `discovererCount`, `discoverers[]`)
-- `users/{uid}/rabbitHoldings/{courseId_rabbitId}`: 발견 정보 (`discoveryOrder`, `discoveredAt`, `level`, `stats: {hp, atk, def}`)
+**레벨업**: `levelUpRabbit` CF → level+1, HP/ATK/DEF 각 1~3 랜덤 증가
 
-**관련 파일:**
-- CF: `functions/src/rabbitGacha.ts`, `functions/src/rabbitLevelUp.ts`, `functions/src/rabbitEquip.ts`, `functions/src/onboardingRabbit.ts`
-- 훅: `lib/hooks/useRabbit.ts` (useRabbitHoldings, useRabbitDoc, useRabbitsForCourse, getRabbitStats)
-- UI: `components/home/CharacterBox.tsx` (홈 히어로, 2마리 궤도 캐러셀), `GachaResultModal.tsx`, `RabbitDogam.tsx` (도감 + 데려오기), `LevelUpBottomSheet.tsx`, `MilestoneChoiceModal.tsx`
-- 유틸: `lib/utils/rabbitDisplayName.ts`, `lib/utils/milestone.ts`, `lib/utils/rabbitProfile.ts`
+**도감**: 부모(최초 발견자, 금색) → N대 집사(후속) 2열 레이아웃, 20명 구분선
 
-### 마일스톤 시스템 (50XP 보상 선택)
+### 철권퀴즈 (배틀 퀴즈)
 
-50XP 달성마다 `MilestoneChoiceModal`이 자동으로 표시되어 보상을 선택:
-- **토끼 뽑기**: `spinRabbitGacha` → `claimGachaRabbit` (2단계)
-- **토끼 레벨업**: `LevelUpBottomSheet` → `levelUpRabbit` CF 호출
+실시간 1v1 토끼 배틀. **Firebase Realtime Database** 사용 (프로젝트에서 유일한 RTDB 기능).
 
-**마일스톤 계산** (`lib/utils/milestone.ts`):
-- `getPendingMilestones(totalExp, lastGachaExp)`: 미수령 마일스톤 횟수
-- `getExpBarDisplay(totalExp, lastGachaExp)`: EXP 바 표시용 (current/max, 오버플로우 여부)
-- 마일스톤 자동 표시: `CharacterBox`에서 `pendingCount`가 0→>0이 되면 600ms 후 자동 오픈
+**플로우**: 매칭(30초, 봇 폴백) → countdown(3-2-1) → question(20초) → mash(연타 게이지) → roundResult → ... → finished(KO or 3분)
 
-**레벨업 바텀시트** (`components/home/LevelUpBottomSheet.tsx`):
-- 글래스모피즘 UI (home-bg.jpg + backdrop-blur-2xl)
-- 토끼 선택: 그리드 레이아웃 (최대 4줄 × 20마리), 각 줄마다 좌우 화살표 스크롤
-- 레벨업 전: Lv.N 스탯 → Lv.N+1 ? 비교 표시
-- 레벨업 후: 확정 스탯 + 증가량 표시 (흰색 텍스트 유지, 골드 변경 없음)
+**데미지**: `baseDamage = max(ceil(ATK²/(ATK+DEF)×1.5), 2)`, 크리티컬(5초 이내) ×1.5, 오답 셀프데미지 3
 
-**토끼 레벨/스탯** (`lib/hooks/useRabbit.ts`):
-- `getRabbitStats(holding)`: holding의 `level`, `stats` 읽기 (기본 Lv.1, HP/ATK/DEF 10)
-- CF `levelUpRabbit`: level +1, HP/ATK/DEF 각각 1~3 랜덤 증가 (`utils/rabbitStats.ts`)
-- 홀딩 데이터: `rabbitHoldings/{id}` 문서에 `level`, `stats: {hp, atk, def}` 필드
+**XP**: 승리 30, 패배 10, 연승 +5 (최대 50)
 
-### 캐릭터/게이미피케이션
+**문제 소스 우선순위**: Firestore 문제 풀(사전 생성, 중복 방지) → RTDB per-user 캐시 → Gemini 실시간 → 비상 문제
 
-- 사람 캐릭터 커스터마이징 (`HomeCharacter.tsx`, `CharacterEditor.tsx`): 머리스타일(0-16), 피부색(0-14), 수염(0-3)
-- 참여도에 따른 표정 변화 (웃음/무표정/찡그림)
-- 시즌 전환(중간→기말): 토끼 장착(equippedRabbits) 초기화, 발견 기록/외형/뱃지는 유지
+**문제 풀 사전 생성** (`tekkenQuestionPool.ts`):
+- 매일 새벽 3시 스케줄: 7일 지난 문제 삭제 + 과목당 60문제 보충
+- seenQuestions로 24시간 내 중복 방지 (6배틀까지 완전 비중복)
+- 교수 챕터 변경 시 풀 전체 초기화 + 재생성
 
-### AI 문제 생성 (`generateStyledQuiz`)
+### 공지 채널
 
-교수 출제 스타일을 학습하여 난이도별 문제 생성:
-- **쉬움**: OX/객관식
-- **보통**: 객관식 + 제시문
-- **어려움**: 객관식 + 제시문 + ㄱㄴㄷ 보기 + 이미지 자동 크롭 (Gemini Vision)
+홈 바텀시트 교수님 공지 시스템:
+- 텍스트/다중 이미지/다중 파일/다중 투표(복수 선택) + 이모지 리액션
+- **9-slice 말풍선**: absolute positioning + padding 방식 (BUBBLE_C=14, BUBBLE_SIDE_MULTI=26)
+- **캐러셀**: 2개 이상일 때 화살표 + 스냅 스크롤 + 점 인디케이터
+- **검색**: 키워드 매칭 하이라이트 + 상/하 화살표 FAB 탐색
+- **캘린더**: 년/월 선택, 메시지 있는 날 표시, 클릭 시 스크롤
+- Firestore `polls` 업데이트 시 반드시 전체 배열로 (dot notation 금지 → 객체 변환 버그)
 
-**챕터 태그 기반 범위 결정** (텍스트 추론 대체):
-- 교수/학생 모두 생성 시 챕터 태그 필수 선택
-- `extractChapterNumbersFromTags(tags)`: 태그("12_신경계") → 챕터 번호("12") 추출
-- `loadScopeForQuiz(forcedChapters)`: 강제 챕터로 정확한 범위 로드 (기존 `inferChaptersFromText` 우회)
-- `buildFullPrompt(tags)`: 태그 기반 출제 범위 확정 프롬프트 생성
+### 랭킹 시스템
 
-**학생용**: `components/ai-quiz/AIQuizContainer.tsx` (플로팅 버튼, 태그 전달)
-**교수용 서재**: `components/professor/library/ProfessorLibraryTab.tsx` (슬라이더 가중치 + 교수 프롬프트 + 태그/난이도 통합 피커)
+**개인**: `profCorrectCount × 4 + totalExp × 0.6`
+**팀**: `normalizedAvgExp × 0.4 + avgCorrectRate × 0.4 + avgCompletionRate × 0.2`
 
-관련 CF: `styledQuizGenerator.ts`, `enqueueGenerationJob.ts`, `workerProcessJob.ts`, `imageRegionAnalysis.ts`, `courseScope.ts`
+사전 계산: CF `computeRankingsScheduled` (5분마다) → `rankings/{courseId}` 1개 문서
+클라이언트: sessionStorage SWR (TTL 2분/10분)
 
-### UI 스타일 규칙
+### 교수 학생 모니터링
 
-- **퀴즈 제목**: `font-serif-display` 사용 금지 (산세리프 기본 폰트 사용)
-- **패널/박스/태그**: `bg-[#F5F0E8]` + `border-2 border-[#1A1A1A]` 통일 (흰색/누리끼리 배경 금지)
-- **플로팅 글래스 카드 (입력 영역 공통 패턴)**:
-  - 밝은 배경: `fixed left-3 right-3 rounded-2xl bg-[#F5F0E8]/80 backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.12)] border border-[#D4CFC4]/60`
-  - 어두운 배경 (공지채널): `mx-3 mb-3 rounded-2xl bg-white/8 backdrop-blur-xl border border-white/15 shadow-[0_4px_24px_rgba(0,0,0,0.25)]`
-  - 적용 대상: 교수 서재 프롬프트, 게시판 댓글 입력, 공지채널 입력
-  - 내부 textarea/버튼: `rounded-xl`, 태그: `rounded-full`
+**6축 레이더**: 정답률(절대값), 성장세(재시도+오답극복), 출제력/소통/복습력/활동량(백분위)
 
-### MobileBottomSheet (`components/common/MobileBottomSheet.tsx`)
+**Progressive Loading** (Phase 0→1→2):
+- Phase 0: 캐시에서 즉시 (0초, growth=50 임시)
+- Phase 1: user doc + 6개 쿼리 병렬 → 실제 데이터
+- Phase 2: norm 캐시 빌드 후 재계산
 
-- 바텀시트: `bg-[#F5F0E8] rounded-t-2xl shadow-[0_-8px_32px_rgba(0,0,0,0.12)] border border-[#D4CFC4]/60`
-- Framer Motion `drag="y"` + `onDragEnd` 스와이프 닫기 (80px 또는 velocity 300 임계치)
-- `createPortal(... , document.body)`로 렌더링
+**모듈 레벨 캐시** (페이지 이동/과목 전환에도 유지): `_normCacheMap`, `_weightedCacheMap`, `_studentsListCacheMap` (5분 TTL, stale-while-revalidate)
 
-### AI 퀴즈 answer 인덱싱 주의
+### 주별 수집 + 월별 리포트
 
-- **수동 퀴즈**: answer가 **1-indexed** (answer=1 → 첫 번째 선지). `quiz/create/page.tsx`에서 `answerIndex + 1`로 저장
-- **AI 퀴즈**: answer가 **0-indexed** (answer=0 → 첫 번째 선지). Gemini 프롬프트에서 0-based 강제
-- **publishQuiz 시**: `originalType: 'professor-ai'` 필드 추가하여 AI 출처 추적 (type이 midterm/final로 변경되어도)
-- **PDF 내보내기**: `QuestionExportData.answerZeroIndexed` 플래그로 구분하여 `formatAnswer`에서 올바른 보정 적용
+**주별**: 매주 월요일 00:00 KST → `weeklyStats/{courseId}/weeks/{year-Wxx}` (퀴즈/피드백/학생 군집/게시판)
 
-## 알려진 제약 및 주의사항
+**월별**: 교수 수동 트리거 → Claude Sonnet (`claude-sonnet-4-20250514`) → 인사이트 마크다운
 
-### Firestore Security Rules
+**다운로드**: Excel (exceljs, 5시트) + Word (docx, 연구용 형식)
 
-클라이언트에서 사용자 문서 업데이트 시 보호 필드 포함 금지:
-```javascript
-// ❌ Security Rules에서 거부됨
-await setDoc(doc(db, 'users', uid), { totalExp: 0, rank: '견습생' }, { merge: true });
+### 인증 시스템
 
-// ✅ 허용된 필드만 사용
-await setDoc(doc(db, 'users', uid), { onboardingCompleted: true, updatedAt: serverTimestamp() }, { merge: true });
-```
+**학번+비밀번호**: 학번 `20230001` → `20230001@rabbitory.internal` (Firebase Auth)
+- 교수 사전 등록(`enrolledStudents`)된 학번만 가입 가능
+- 학번당 1개 계정만 (isRegistered 플래그 + Auth 이메일 유니크)
+- Rate limit: IP당 10분 5회
 
-보호 필드: `totalExp`, `rank`, `role`, `badges`, `equippedRabbits` — Cloud Functions에서만 수정 가능
+**교수**: 허용 이메일 목록 기반 자동 권한 설정
 
-### Firestore 주요 컬렉션/서브컬렉션
+### 게시판
 
-- `users/{uid}` — 프로필, 캐릭터, 통계
-- `users/{uid}/quizHistory/{quizId}` — 퀴즈 풀이 기록
-- `users/{uid}/expHistory/{historyId}` — EXP 트랜잭션 로그
-- `users/{uid}/rabbitHoldings/{holdingId}` — 토끼 발견 정보 (discoveryOrder, discoveredAt)
-- `quizzes/{quizId}` — 퀴즈 문서
-- `quizzes/{quizId}/submissions/{submissionId}` — 제출 답안 (CF 전용 쓰기)
-- `quizzes/{quizId}/feedback/{feedbackId}` — 피드백 (CF 전용 쓰기)
-- `rabbits/{courseId_rabbitId}` — 토끼 문서 (name, firstDiscovererUserId, discovererCount)
-- `announcements/{id}` — 공지 (content, imageUrls[], files[], polls[], reactions, readBy) (하위 호환: imageUrl, fileUrl, poll 단일 필드도 지원)
-- `rankings/{courseId}` — 사전 계산된 랭킹 (rankedUsers[], teamRanks[])
-- `quizResults/{id}` — 퀴즈 결과 집계 (CF에서 쓰기)
-- `weeklyStats/{courseId}/weeks/{year-Wxx}` — 주별 자동 수집 통계 (CF에서 쓰기)
-- `monthlyReports/{courseId}/months/{year-MM}` — 월별 Claude 리포트 (CF에서 쓰기)
-- `inquiries/{id}` — 비로그인 문의 (studentId, message, type, isRead)
+- 신문 스타일: 고정글 캐러셀 + Masonry 2열
+- 글 EXP 30, 댓글 10, 좋아요 5 (첫 번째만)
+- 도배 방지: 글 1분 3개, 댓글 30초 1개
 
-### Firestore Rules — users 읽기 규칙
+## UI 테마 시스템
 
-- `get`: 본인 또는 교수님만 (개별 문서 읽기)
-- `list`: 로그인 사용자 모두 (랭킹 등 컬렉션 쿼리)
+### 빈티지 신문 스타일 (공통)
+- 배경 #F5F0E8(크림), 보조 #EBE5D9, 카드 #FDFBF7
+- 텍스트 #1A1A1A, 음소거 #5C5C5C
+- 테두리 #D4CFC4(밝은) / #1A1A1A(진한)
 
-### 도배 방지
+### 반별 강조색 (CSS 변수 `--theme-accent`)
+| 반 | accent | accentLight | 분위기 |
+|---|--------|-------------|--------|
+| A | #8B1A1A (버건디) | #D4A5A5 | 열정적 |
+| B | #B8860B (다크 골드) | #E8D5A3 | 따뜻함 |
+| C | #1D5D4A (에메랄드) | #A8D4C5 | 안정적 |
+| D | #1E3A5F (네이비) | #A8C4E0 | 신뢰감 |
 
-글 1분 3개, 댓글 30초 1개 제한 (Cloud Functions `checkRateLimitCall`에서 검증)
+**생물학**: `courseId === 'biology'`이면 반별 대신 `accent: #2E7D32` (자연 녹색) 단일 테마
 
-### 온보딩 (폐기됨)
+### 글꼴
+- **Noto Sans KR** — 본문 (한글)
+- **Playfair Display** — 빈티지 헤더 (`.font-serif-display`, `.btn-vintage`)
+- **Cormorant Garamond** — 우아한 세리프 (`.font-serif-elegant`)
 
-온보딩 플로우는 회원가입에 통합됨. `/onboarding/*` 경로는 모두 홈(`/`)으로 리다이렉트.
-`onboarding_just_completed` localStorage 플래그로 온보딩 직후 홈 → 온보딩 재리다이렉트 방지
+### 유틸리티 클래스 (`globals.css`)
+- `.card-vintage` — 테두리 + 그림자 + hover
+- `.btn-vintage` / `.btn-vintage-outline` — 빈티지 버튼
+- `.decorative-corner` — 신문 코너 장식
+- `.pb-navigation` — 네비게이션 + safe area 패딩
+- 전역 스크롤바 숨김, `overflow-x: hidden`, `overscroll-behavior: none`
 
-### 비밀번호 찾기 (`app/forgot-password/page.tsx`)
+### 플로팅 글래스 카드 (입력 영역 공통 패턴)
+- 밝은 배경: `fixed left-3 right-3 rounded-2xl bg-[#F5F0E8]/80 backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.12)] border border-[#D4CFC4]/60`
+- 어두운 배경 (공지채널): `mx-3 mb-3 rounded-2xl bg-white/8 backdrop-blur-xl border border-white/15`
 
-- 학번 입력 → `requestPasswordReset` CF 호출
-- 복구 이메일 등록된 경우: 재설정 링크 발송 안내
-- 미등록: "문의하기" 인라인 폼 펼침 → `submitInquiry` CF로 Firestore `inquiries`에 저장
-- 교수님 설정(`/professor/settings`)에서 문의 확인 가능
+## 반응형 레이아웃
+
+### 2버전 레이아웃
+| 모드 | 조건 | 전략 |
+|------|------|------|
+| 세로모드 | < 1024px 또는 portrait | 네이티브 반응형 (CSS zoom 제거됨) |
+| 가로모드 | landscape + 1024px 이상 | 좌측 사이드바(72px) + 중앙(max-w 640px) |
+
+- `useWideMode()` — 가로모드 감지
+- `getZoom()` → 항상 1 (하위 호환)
+- `scaleCoord()` → identity 함수 (하위 호환)
+- Tailwind: `wide: { raw: '(orientation: landscape) and (min-width: 1024px)' }`
+
+### 네비게이션 탭
+
+**학생** (4탭): `/`(홈), `/quiz`, `/review`, `/board`
+**교수** (5탭, maxWidth 420px): `/professor`, `/professor/stats`, `/professor/quiz`, `/professor/students`, `/board`
 
 ### 네비게이션 숨김 규칙
 
-경로 기반 (`app/(main)/layout.tsx`의 `hideNavigation`):
-- 홈 (`/`) — 세로모드에서만 숨김 (가로모드에서는 사이드바 항상 표시)
-- `/quiz/[id]/*` 경로: 퀴즈 풀이, 결과, 피드백 페이지
-- `/edit` 포함 경로: 퀴즈 수정 페이지
-- `/ranking` 경로: 랭킹 페이지
-- `/review/random` 경로: 랜덤 복습 페이지
-- `/review/[type]/[id]` 경로: 복습 상세 페이지
+**경로 기반** (`layout.tsx`의 `hideNavigation`):
+- 홈 `/` — 세로모드에서만 (가로모드 사이드바 항상 표시)
+- `/quiz/[id]/*`, `/edit`, `/ranking`, `/review/random`, `/review/[type]/[id]`
 
-모달 기반 (`data-hide-nav` body 속성):
-- 토끼 도감, 뽑기 모달, 공지 채널 모달 열림 시 `document.body.setAttribute('data-hide-nav', '')` → 닫힘 시 제거
-- Navigation에서 MutationObserver로 감지하여 숨김 처리
+**모달 기반** (`data-hide-nav` body 속성):
+- 도감, 뽑기, 공지 채널 모달 → `document.body.setAttribute('data-hide-nav', '')` → Navigation MutationObserver 감지
 
-### 홈 화면 구조
+### PWA 설정
+- `viewport-fit: cover` + `apple-mobile-web-app-capable: yes` + `status-bar-style: black-translucent`
+- manifest `orientation: any`, `display: standalone`
+- 개발 모드 PWA 비활성화 (`disable: NODE_ENV === "development"`)
+- 프로덕션 `console.log` 자동 제거 (`compiler.removeConsole`)
+- 비디오 캐싱 제외 (`/videos/` → `NetworkOnly`)
+- Next.js Image 원격 패턴: `firebasestorage.googleapis.com`
 
-- `CharacterBox`: 캐릭터 히어로, 배경 이미지, XP 배지, 도감 버튼, EXP 바 (게임 HUD 스타일 `bg-black/40 rounded-full backdrop-blur-xl`)
+## 과목 시스템
+
+| 과목 ID | 이름 | 학년/학기 |
+|---------|------|----------|
+| `biology` | 생물학 | 1학년 1학기 |
+| `pathophysiology` | 병태생리학 | 1학년 2학기 |
+| `microbiology` | 미생물학 | 2학년 1학기 |
+
+- 학기 자동 판별: 02-22~08-21 → 1학기, 08-22~02-21 → 2학기
+- 퀴즈 필터 탭: `midterm | final | past | custom`, 날짜 기반 기본 탭 자동 선택
+
+## Firestore 주요 컬렉션
+
+| 컬렉션 | 읽기 | 쓰기 | 비고 |
+|--------|------|------|------|
+| `users/{uid}` | 본인/교수(get), 로그인 전체(list) | 본인(제한 필드) | 보호: totalExp, rank, role, badges, equippedRabbits 등 |
+| `users/{uid}/quizHistory/{id}` | 본인/교수 | CF 전용 | |
+| `users/{uid}/expHistory/{id}` | 본인/교수 | CF 전용 | |
+| `users/{uid}/rabbitHoldings/{id}` | 본인/교수 | CF 전용 | |
+| `quizzes/{id}` | 로그인 전체 | 교수/본인 자작 | type: midterm\|final\|past\|professor\|professor-ai\|custom\|ai-generated |
+| `quizResults/{id}` | 로그인 전체 | 본인 | |
+| `reviews/{id}` | 본인/교수 | 본인 | |
+| `posts/{id}` | 로그인 전체 | 본인/교수(삭제) | |
+| `comments/{id}` | 로그인 전체 | 본인/교수(삭제) | |
+| `likes/{id}` | 로그인 전체 | 본인 | |
+| `announcements/{id}` | 로그인 전체 | 교수만 | 리액션/투표/읽음은 CF |
+| `rabbits/{courseId_rabbitId}` | 로그인 전체 | CF 전용 | |
+| `enrolledStudents/{courseId}/students/{id}` | 교수만 | 교수만 | 학번 사전 등록 |
+| `rankings/{courseId}` | 로그인 전체 | CF 전용 | 5분 사전 계산 |
+| `radarNorm/{courseId}` | 로그인 전체 | CF 전용 | |
+| `settings/{id}` + 하위 | 로그인 전체 | 교수만 | tekken/courses/{courseId} 등 |
+| `tekkenQuestionPool/{courseId}` + 하위 | CF 전용 | CF 전용 | 문제 풀 + seenQuestions |
+| `weeklyStats/{courseId}/weeks/{label}` | 교수만 | CF 전용 | |
+| `monthlyReports/{courseId}/months/{label}` | 교수만 | CF 전용 | |
+| `jobs/{id}` | 본인 | CF 전용 | AI 생성 Job |
+| `questionFeedbacks/{id}` | 본인/교수/퀴즈 제작자 | 본인(생성) | |
+| `fcmTokens/{id}` | 본인 | 본인 | |
+| `inquiries/{id}` | 교수 | CF(생성) | |
+
+## 토끼 에셋
+
+- `/public/rabbit/rabbit-001.png` ~ `rabbit-080.png` — 전신 (520:969 종횡비)
+- `/public/rabbit_profile/rabbit-001-pf.png` ~ `rabbit-080-pf.png` — 프로필
+
+**rabbitId ↔ 파일명**: rabbitId 0~79 (0-indexed), 파일명 001~080 (1-indexed)
+- `getRabbitImageSrc(rabbitId)` → `/rabbit/rabbit-{id+1}.png`
+- `getRabbitProfileUrl(rabbitId)` → `/rabbit_profile/rabbit-{id+1}-pf.png`
+
+## 홈 화면 구조
+
+- `CharacterBox`: 캐릭터 히어로, 배경, XP 배지, 도감 버튼, EXP 바 (`bg-black/40 rounded-full backdrop-blur-xl`)
   - 2마리 궤도 캐러셀 (타원 공전, Framer Motion `useSpring`/`useTransform`)
-  - 빈 슬롯은 "?" 플레이스홀더 표시, 스탯은 "-" 표시
-  - 마일스톤 버튼 (EXP 바 좌측, pendingCount > 0일 때 표시)
-- 바텀시트: 프로필 닉네임, 공지 채널, 랭킹 섹션
-- 홈은 `h-screen overflow-hidden` 컨테이너로 스크롤 방지 (body style 직접 조작 금지)
-- **z-index 주의**: 바텀시트 콘텐츠 영역이 `relative z-10` stacking context를 생성. 그 안의 모달(공지 채널 등)은 `createPortal(... , document.body)`로 body에 렌더링해야 CharacterBox의 z-20 EXP 바 위에 표시됨
+  - 빈 슬롯 "?" 플레이스홀더, 스탯 "-"
+  - 마일스톤 버튼 (EXP 바 좌측, pendingCount > 0)
+- 바텀시트: 프로필, 공지 채널, 랭킹
+- `h-screen overflow-hidden` 컨테이너 (body style 직접 조작 금지)
+- **z-index**: 바텀시트 `relative z-10` → 모달은 `createPortal(body)` 필수
 
-### 퀴즈 목록 정렬 규칙
+## 코딩 컨벤션
 
-- **퀴즈탭**: 미완료 > 완료 > 최신순. 수정된 퀴즈도 "완료" 상태 유지, "!" 뱃지 미표시
-- **복습탭**: 수정된 퀴즈 우선 > 최신순. "!" 뱃지 표시 (복습탭에서만)
+- 응답/주석/커밋/문서: 한국어
+- 변수명/함수명: 영어
+- 들여쓰기: 2칸
+- 컴포넌트: React 함수형 + TypeScript
+- 경로 별칭: `@/*` → 프로젝트 루트
+- `font-serif-display` 퀴즈 제목에 사용 금지
+- 패널/박스/태그: `bg-[#F5F0E8]` + `border-2 border-[#1A1A1A]` 통일
 
-### Firebase 설정 파일
+## 알려진 제약
 
-- `firebase.json` — Firestore rules/indexes, Functions, Storage 배포 설정
-- `firestore.rules` — Firestore 보안 규칙
-- `firestore.indexes.json` — 복합 인덱스 정의
-- `storage.rules` — Cloud Storage 보안 규칙
+### Firestore Security Rules 보호 필드
+`totalExp`, `rank`, `role`, `badges`, `equippedRabbits`, `totalCorrect`, `totalAttemptedQuestions`, `professorQuizzesCompleted`, `lastGachaExp`, `spinLock` — Cloud Functions에서만 수정 가능
+
+### 온보딩 (폐기됨)
+온보딩은 회원가입에 통합됨. `/onboarding/*` → 홈 리다이렉트. `onboarding_just_completed` localStorage 플래그로 재리다이렉트 방지
+
+### 퀴즈 목록 정렬
+- 퀴즈탭: 미완료 > 완료 > 최신순 (수정된 퀴즈도 완료 유지, "!" 미표시)
+- 복습탭: 수정된 퀴즈 우선 > 최신순 ("!" 뱃지 표시)
 
 ### Firebase 배포 (규칙 변경 시)
-
-Firestore 규칙/인덱스는 git push만으로 배포되지 않음. 별도 배포 필요:
 ```bash
 firebase deploy --only firestore:rules
 firebase deploy --only firestore:indexes
 firebase deploy --only functions
 ```
 
-## 철권퀴즈 (배틀 퀴즈)
+## Safe Area 처리
+- `html { background-color: #000 }` — 아이폰 둥근 모서리 뒤 검정
+- `body { padding-top: env(safe-area-inset-top) }` — 노치/다이내믹 아일랜드
+- Navigation: `bottom: max(1rem, calc(env(safe-area-inset-bottom) + 0.5rem))`
+- 홈 배경: `marginTop: -env(safe-area-inset-top)` + `paddingTop`으로 확장
 
-실시간 1v1 토끼 배틀. **Firebase Realtime Database** 사용 (프로젝트에서 Realtime DB를 사용하는 유일한 기능).
-- Realtime DB 경로: `tekken/matchmaking/{courseId}/{userId}`, `tekken/battles/{battleId}`, `tekken/streaks/{userId}`
-- 매치 시간 3분, 문제 타임아웃 20초, 크리티컬 4초 이내 x1.5
-- 데미지 = max(ceil(ATK²/(ATK+상대DEF)), 1), 오답 셀프데미지 3
-- 연타 미니게임 (눈빛보내기 스타일 게이지 땅따먹기, 3초)
-- XP: 승리 30, 패배 10, 연승 +5 (최대 50)
-- 봇 매칭: 30초 대기 초과 시
-- 교수 설정에서 배틀 키워드 범위 지정 (TekkenKeywordsCard)
-
-**관련 파일:**
-- CF: `functions/src/tekkenBattle.ts`, `functions/src/tekkenCleanup.ts`, `functions/src/utils/tekkenBot.ts`, `functions/src/utils/tekkenDamage.ts`
-- 훅: `lib/hooks/useTekkenBattle.ts`
-- UI: `components/tekken/` (TekkenBattleOverlay, TekkenBattleHUD, TekkenMatchmakingModal, TekkenQuestionCard, TekkenMashMinigame 등)
-- 타입: `lib/types/tekken.ts`
-- 데미지 유틸: `lib/utils/tekkenDamage.ts`
-- DB 규칙: `database.rules.json` (Realtime Database)
-
-## 배포
-
-### 프론트엔드 (Vercel)
-
-`npm run build` → Vercel 자동 배포. PWA 서비스 워커 자동 등록.
-- **PWA는 개발 모드에서 비활성화** (`next.config.mjs`에서 `disable: NODE_ENV === "development"`)
-- **프로덕션 빌드 시 `console.log` 자동 제거** — `console.error`/`console.warn`만 유지 (`compiler.removeConsole`)
-- **PWA 비디오 캐싱 제외**: `/videos/` 경로는 `NetworkOnly` 핸들러 사용 (캐시 시 `ERR_CACHE_OPERATION_NOT_SUPPORTED` 발생 방지)
-- **Next.js Image 원격 패턴**: `firebasestorage.googleapis.com` 허용 (Firebase Storage 이미지 최적화)
-
-### 토끼 에셋
-
-두 디렉토리에 80개 PNG 파일씩:
-- `/public/rabbit/rabbit-001.png` ~ `rabbit-080.png` — 전신 이미지 (종횡비 520:969)
-- `/public/rabbit_profile/rabbit-001-pf.png` ~ `rabbit-080-pf.png` — 프로필 이미지
-
-**rabbitId ↔ 파일명 매핑**: rabbitId는 0~79 (0-indexed), 파일명은 001~080 (1-indexed).
-- `getRabbitImageSrc(rabbitId)` → `/rabbit/rabbit-{id+1}.png` (`lib/utils/rabbitImage.ts`)
-- `getRabbitProfileUrl(rabbitId)` → `/rabbit_profile/rabbit-{id+1}-pf.png` (`lib/utils/rabbitProfile.ts`)
-
-### Cloud Run PPTX 서비스
-
-```bash
-cd cloud-run-pptx
-gcloud run deploy pptx-quiz-generator --source . --region asia-northeast3 \
-  --no-allow-unauthenticated --set-env-vars GEMINI_API_KEY=your-api-key
-
-# Cloud Functions 서비스 계정에 호출 권한 부여
-gcloud run services add-iam-policy-binding pptx-quiz-generator \
-  --region asia-northeast3 \
-  --member="serviceAccount:YOUR_PROJECT_ID@appspot.gserviceaccount.com" \
-  --role="roles/run.invoker"
-
-# functions/.env에 PPTX_CLOUD_RUN_URL 설정 후 배포
-cd functions && npm run deploy
-```
+## SwipeBack (뒤로가기 스와이프)
+- `SwipeBack.tsx` — 왼쪽 25px 가장자리 오른쪽 스와이프 → router.back()
+- 트리거: 화면 폭 35% 초과 또는 velocity > 500
+- 홈/교수홈/가로모드에서 비활성화

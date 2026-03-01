@@ -344,6 +344,7 @@ export {
   startBattleRound,
 } from "./tekkenBattle";
 export { tekkenCleanup } from "./tekkenCleanup";
+export { tekkenPoolRefillScheduled, tekkenPoolRefill } from "./tekkenQuestionPool";
 
 // ============================================
 // 비로그인 문의 Functions

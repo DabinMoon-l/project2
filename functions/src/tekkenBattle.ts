@@ -26,6 +26,9 @@ import {
 } from "./utils/tekkenDamage";
 import { createBotProfile, generateBotAnswer } from "./utils/tekkenBot";
 import { getBaseStats } from "./utils/rabbitStats";
+import { loadScopeForAI } from "./courseScope";
+import { getFocusGuide } from "./styledQuizGenerator";
+import { drawQuestionsFromPool } from "./tekkenQuestionPool";
 
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 
@@ -33,23 +36,23 @@ const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 // 문제 생성 (기존 퀴즈 참고 → Gemini 변형)
 // ============================================
 
-interface GeneratedQuestion {
+export interface GeneratedQuestion {
   text: string;
   type: "multiple";
   choices: string[];
   correctAnswer: number;
 }
 
-const COURSE_NAMES: Record<string, string> = {
+export const COURSE_NAMES: Record<string, string> = {
   biology: "생물학",
   pathophysiology: "병태생리학",
   microbiology: "미생물학",
 };
 
 /**
- * 교수님이 설정한 배틀 범위 키워드 조회
+ * 교수님이 설정한 배틀 출제 챕터 조회
  */
-async function getTekkenKeywords(courseId: string): Promise<string[]> {
+export async function getTekkenChapters(courseId: string): Promise<string[]> {
   try {
     const db = getFirestore();
     const doc = await db
@@ -59,54 +62,140 @@ async function getTekkenKeywords(courseId: string): Promise<string[]> {
       .doc(courseId)
       .get();
     if (doc.exists) {
-      return doc.data()?.keywords || [];
+      return doc.data()?.chapters || ["1", "2", "3"];
     }
   } catch {
-    // 설정 없으면 빈 배열
+    // 설정 없으면 기본값
   }
-  return [];
+  return ["1", "2", "3"];
 }
 
 /**
- * Gemini로 기존 문제를 참고하여 변형 문제 생성
- * count: 10 (7라운드 내 종료 + 여유분)
+ * 철권퀴즈 프롬프트 생성
+ *
+ * - biology: scope + focusGuide 5:5 비율
+ * - pathophysiology: scope 기반 (focusGuide 없으면 scope 전체)
+ * - microbiology: scope/focusGuide 없음 → 간호사 국시 기반 별도 프롬프트
  */
-async function generateBattleQuestions(
+function buildTekkenPrompt(
+  courseName: string,
   courseId: string,
-  apiKey: string,
-  count: number = 10
-): Promise<GeneratedQuestion[]> {
-  const courseName = COURSE_NAMES[courseId] || "생물학";
+  focusGuide: string | null,
+  scopeContent: string | null,
+  focusCount: number,
+  scopeCount: number,
+  chapters: string[]
+): string {
+  const totalCount = focusCount + scopeCount;
 
-  const keywords = await getTekkenKeywords(courseId);
+  // 미생물학: scope/focusGuide 없음 → 간호사 국시 기반 전용 프롬프트
+  if (courseId === "microbiology" && !focusGuide && !scopeContent) {
+    return `간호학과 2학년 대상 미생물학 배틀 퀴즈 문제 ${totalCount}개를 만들어주세요.
 
-  const keywordBlock =
-    keywords.length > 0
-      ? `\n출제 범위 키워드: ${keywords.join(", ")}\n반드시 이 키워드와 관련된 주제에서만 출제하세요. 키워드 범위를 벗어난 문제는 절대 금지입니다.`
-      : "";
+범위: 미생물학 ${chapters.join(", ")}장
+참고: 간호사 국가고시 미생물학 출제 범위를 참고하되, 간호학과 2학년 수준에 적합한 난이도로 출제하세요.
 
-  const prompt = `
-대학교 ${courseName} 과목의 배틀 퀴즈 문제 ${count}개를 새롭게 만들어주세요.
-${keywordBlock}
+대상: 간호학과 2학년 대학생
+난이도: 수업을 들은 학생이 20초 안에 풀 수 있는 중간 난이도
 
-중요 규칙:
+## 공통 규칙
 - 4지선다 순수 객관식만 (OX 문제 금지)
-- 문제 하나로 완결되어야 함 (별도 지문/제시문/보기표/그림/표 참조 금지)
+- 문제 하나로 완결 (별도 지문/제시문/보기표/그림/표 참조 금지)
 - "다음 중", "위의 내용에서" 같은 외부 참조 표현 금지
-- 문제 텍스트만 읽고 바로 답할 수 있어야 함
-- 각 문제는 서로 다른 주제/개념에서 출제
-- 같은 키워드나 개념을 2번 이상 반복 금지
-- 다양한 인지 수준(기억, 이해, 적용)을 섞어 출제
-- 적절한 중간 난이도: 수업을 들은 학생이라면 20초 안에 풀 수 있는 수준
-- 오답 선지는 그럴듯하게 (명백히 틀린 보기 금지)
+- 각 문제는 서로 다른 주제/개념 (같은 개념 2번 이상 금지)
 - 간결한 문제 (1~2문장)
+- 오답 선지는 그럴듯하게 (명백히 틀린 보기 금지)
 - choices 4개, correctAnswer는 0~3
-- 매번 다른 문제를 생성 (이전에 생성한 문제와 중복 금지)
+- 매번 다른 문제를 생성
 
 반드시 아래 JSON 형식만 출력 (다른 텍스트 없이):
 [
   {"text": "문제 내용", "type": "multiple", "choices": ["선지1", "선지2", "선지3", "선지4"], "correctAnswer": 2}
 ]`;
+  }
+
+  let prompt = `대학교 ${courseName} 과목 (${chapters.join(", ")}장) 배틀 퀴즈 문제 ${totalCount}개를 만들어주세요.\n\n`;
+
+  prompt += `대상: 간호학과 대학생\n`;
+  prompt += `난이도: 수업을 들은 학생이 20초 안에 풀 수 있는 중간 난이도\n\n`;
+
+  // focusGuide 기반 문제
+  if (focusGuide && focusCount > 0) {
+    prompt += `[파트 A — ${focusCount}문제]\n`;
+    prompt += `아래 "출제 포커스" 내용에서만 ${focusCount}문제를 출제하세요.\n`;
+    prompt += `출제 포커스에 명시된 개념, 비교, 매칭 유형을 그대로 활용하세요.\n\n`;
+    prompt += `<출제 포커스>\n${focusGuide}\n</출제 포커스>\n\n`;
+  }
+
+  // scope 기반 문제
+  if (scopeContent && scopeCount > 0) {
+    prompt += `[파트 B — ${scopeCount}문제]\n`;
+    prompt += `아래 "학습 범위" 내용에서만 ${scopeCount}문제를 출제하세요.\n`;
+    prompt += `학습 범위에 나온 내용만 사용하고, 범위 밖 내용은 절대 금지입니다.\n\n`;
+    prompt += `<학습 범위>\n${scopeContent}\n</학습 범위>\n\n`;
+  }
+
+  // 둘 다 없으면 generic (비상)
+  if (!focusGuide && !scopeContent) {
+    prompt += `${chapters.join(", ")}장 범위에서 ${totalCount}문제를 출제하세요.\n\n`;
+  }
+
+  prompt += `## 공통 규칙
+- 4지선다 순수 객관식만 (OX 문제 금지)
+- 문제 하나로 완결 (별도 지문/제시문/보기표/그림/표 참조 금지)
+- "다음 중", "위의 내용에서" 같은 외부 참조 표현 금지
+- 각 문제는 서로 다른 주제/개념 (같은 개념 2번 이상 금지)
+- 간결한 문제 (1~2문장)
+- 오답 선지는 그럴듯하게 (명백히 틀린 보기 금지)
+- choices 4개, correctAnswer는 0~3
+- 매번 다른 문제를 생성
+
+반드시 아래 JSON 형식만 출력 (다른 텍스트 없이):
+[
+  {"text": "문제 내용", "type": "multiple", "choices": ["선지1", "선지2", "선지3", "선지4"], "correctAnswer": 2}
+]`;
+
+  return prompt;
+}
+
+/**
+ * Gemini로 scope + focusGuide 기반 배틀 문제 생성
+ * count: 10 (7라운드 내 종료 + 여유분)
+ */
+export async function generateBattleQuestions(
+  courseId: string,
+  apiKey: string,
+  count: number = 10,
+  chapters?: string[]
+): Promise<GeneratedQuestion[]> {
+  const targetChapters = chapters || await getTekkenChapters(courseId);
+  const courseName = COURSE_NAMES[courseId] || "생물학";
+
+  // scope + focusGuide 병렬 로드
+  const [scopeData, focusGuide] = await Promise.all([
+    loadScopeForAI(courseId, targetChapters, 8000),
+    Promise.resolve(getFocusGuide(courseId, targetChapters)),
+  ]);
+
+  const hasFocusGuide = !!focusGuide;
+  const hasScope = !!scopeData?.content;
+
+  // 5:5 비율 결정
+  // focusGuide 없으면 → scope count문제
+  // scope 없으면 → focusGuide count문제 (또는 generic)
+  // 둘 다 있으면 → 5:5
+  const focusCount = hasFocusGuide ? (hasScope ? 5 : count) : 0;
+  const scopeCount = count - focusCount;
+
+  const prompt = buildTekkenPrompt(
+    courseName,
+    courseId,
+    focusGuide,
+    scopeData?.content || null,
+    focusCount,
+    scopeCount,
+    targetChapters
+  );
 
   try {
     const response = await fetch(
@@ -150,10 +239,48 @@ ${keywordBlock}
 
     console.log(`Gemini 유효 문제 ${valid.length}개 — 비상 문제 폴백`);
   } catch (error) {
-    console.error("Gemini 변형 문제 생성 실패:", error);
+    console.error("Gemini 배틀 문제 생성 실패:", error);
   }
 
   return [];
+}
+
+// ============================================
+// 사전 캐싱 시스템
+// ============================================
+
+interface PregenCache {
+  questions: GeneratedQuestion[];
+  createdAt: number;
+  chapters: string[];
+}
+
+/**
+ * 매칭 대기 중 문제 사전 생성 (fire-and-forget)
+ */
+async function pregenBattleQuestions(
+  courseId: string,
+  userId: string,
+  apiKey: string
+): Promise<void> {
+  const rtdb = getDatabase();
+  const cacheRef = rtdb.ref(`tekken/pregenQuestions/${courseId}_${userId}`);
+
+  // 이미 유효한 캐시가 있으면 스킵 (5분 이내)
+  const existing = await cacheRef.once("value");
+  const existingData = existing.val() as PregenCache | null;
+  if (existingData?.createdAt && existingData.createdAt > Date.now() - 5 * 60 * 1000) return;
+
+  const chapters = await getTekkenChapters(courseId);
+  const questions = await generateBattleQuestions(courseId, apiKey, 10, chapters);
+
+  if (questions.length >= 5) {
+    await cacheRef.set({
+      questions,
+      createdAt: Date.now(),
+      chapters,
+    });
+  }
 }
 
 // ============================================
@@ -283,8 +410,11 @@ async function createBattle(
 /**
  * 비동기 문제 생성 → 완료 시 countdown 전환
  *
- * 매번 Gemini로 새 문제 생성 (풀 캐시 미사용 — 중복 방지)
- * 실패 시 비상 문제로 폴백
+ * 우선순위:
+ * 1. Firestore 문제 풀 (사전 생성된 문제, 중복 방지)
+ * 2. RTDB per-user 사전 캐시
+ * 3. Gemini 실시간 호출
+ * 4. 비상 문제
  */
 async function populateBattleQuestions(
   battleId: string,
@@ -295,16 +425,56 @@ async function populateBattleQuestions(
   const battleRef = rtdb.ref(`tekken/battles/${battleId}`);
   const QUESTION_COUNT = 10;
 
-  // Gemini로 매번 새 문제 생성 (캐시 없이)
+  // 배틀 참가자 확인
+  const battleSnap = await battleRef.once("value");
+  const battle = battleSnap.val();
+  const playerIds = battle?.players ? Object.keys(battle.players) : [];
+  const humanPlayerIds = playerIds.filter(pid => !battle?.players?.[pid]?.isBot);
+
   let questions: GeneratedQuestion[] | null = null;
-  const generated = await generateBattleQuestions(courseId, apiKey, QUESTION_COUNT);
-  if (generated.length >= 5) {
-    questions = generated.slice(0, QUESTION_COUNT);
+
+  // 1. Firestore 문제 풀에서 추출 (중복 방지 포함)
+  if (humanPlayerIds.length > 0) {
+    try {
+      const poolQuestions = await drawQuestionsFromPool(courseId, humanPlayerIds, QUESTION_COUNT);
+      if (poolQuestions && poolQuestions.length >= 5) {
+        questions = poolQuestions.slice(0, QUESTION_COUNT);
+        console.log(`문제 풀 사용 (${courseId}): ${questions.length}문제`);
+      }
+    } catch (err) {
+      console.error("문제 풀 조회 실패, 폴백 진행:", err);
+    }
   }
 
-  // 실패 시 비상 문제
+  // 2. RTDB 사전 캐시 확인 (양쪽 플레이어)
+  if (!questions) {
+    for (const pid of playerIds) {
+      if (battle?.players?.[pid]?.isBot) continue;
+      const cacheRef = rtdb.ref(`tekken/pregenQuestions/${courseId}_${pid}`);
+      const cacheSnap = await cacheRef.once("value");
+      const cache = cacheSnap.val() as PregenCache | null;
+
+      if (cache?.questions && cache.questions.length >= 5 &&
+          cache.createdAt > Date.now() - 5 * 60 * 1000) {
+        questions = cache.questions.slice(0, QUESTION_COUNT);
+        await cacheRef.remove();
+        console.log(`사전 캐시 사용 (${pid})`);
+        break;
+      }
+    }
+  }
+
+  // 3. Gemini 실시간 호출
+  if (!questions) {
+    const generated = await generateBattleQuestions(courseId, apiKey, QUESTION_COUNT);
+    if (generated.length >= 5) {
+      questions = generated.slice(0, QUESTION_COUNT);
+    }
+  }
+
+  // 4. 비상 문제
   if (!questions || questions.length < 5) {
-    questions = getEmergencyQuestions();
+    questions = getEmergencyQuestions(courseId);
   }
 
   // 라운드 데이터 구성
@@ -326,7 +496,7 @@ async function populateBattleQuestions(
 
   const now = Date.now();
 
-  // RTDB 병렬 쓰기 (순차 → 동시)
+  // RTDB 병렬 쓰기
   await Promise.all([
     battleRef.update({
       status: "countdown",
@@ -338,25 +508,58 @@ async function populateBattleQuestions(
     rtdb.ref(`tekken/battleAnswers/${battleId}`).set(battleAnswersData),
   ]);
 
-  // 풀 캐시 미사용 — 매번 새 문제 생성으로 중복 방지
+  // 남은 캐시 정리 (사용하지 않은 상대방 캐시)
+  for (const pid of playerIds) {
+    if (battle?.players?.[pid]?.isBot) continue;
+    rtdb.ref(`tekken/pregenQuestions/${courseId}_${pid}`).remove().catch(() => {});
+  }
 }
 
 /**
- * 비상용 기본 문제 (폴백의 폴백)
+ * 비상용 기본 문제 (폴백의 폴백) — 과목별
  */
-function getEmergencyQuestions(): GeneratedQuestion[] {
-  return [
-    { text: "세포막의 주요 구성 성분으로 유동 모자이크 모델의 기반이 되는 것은?", type: "multiple", choices: ["인지질 이중층", "콜레스테롤", "당단백질", "셀룰로스"], correctAnswer: 0 },
-    { text: "미토콘드리아에서 ATP가 가장 많이 생성되는 단계는?", type: "multiple", choices: ["해당과정", "시트르산 회로", "산화적 인산화", "발효"], correctAnswer: 2 },
-    { text: "DNA 복제 시 선도 가닥(leading strand)의 합성 방향은?", type: "multiple", choices: ["5'→3' 연속 합성", "3'→5' 연속 합성", "5'→3' 불연속 합성", "3'→5' 불연속 합성"], correctAnswer: 0 },
-    { text: "광합성의 명반응이 일어나는 장소는?", type: "multiple", choices: ["스트로마", "틸라코이드 막", "세포질", "크리스타"], correctAnswer: 1 },
-    { text: "성숙한 적혈구에 없는 세포 소기관은?", type: "multiple", choices: ["세포막", "헤모글로빈", "핵", "탄산탈수효소"], correctAnswer: 2 },
-    { text: "인체에서 가장 넓은 면적을 차지하는 장기는?", type: "multiple", choices: ["간", "폐", "피부", "소장"], correctAnswer: 2 },
-    { text: "효소의 활성 부위에 기질이 결합하는 모델 중, 결합 시 효소 구조가 변하는 모델은?", type: "multiple", choices: ["자물쇠-열쇠 모델", "유도적합 모델", "경쟁적 억제 모델", "알로스테릭 모델"], correctAnswer: 1 },
-    { text: "ABO 혈액형에서 만능 수혈자(모든 혈액형에 수혈 가능)는?", type: "multiple", choices: ["A형", "B형", "AB형", "O형"], correctAnswer: 3 },
-    { text: "리보솜에서 mRNA의 코돈을 읽어 아미노산을 운반하는 RNA는?", type: "multiple", choices: ["mRNA", "tRNA", "rRNA", "snRNA"], correctAnswer: 1 },
-    { text: "인슐린이 분비되는 곳은?", type: "multiple", choices: ["부신 피질", "갑상선", "이자의 베타 세포", "뇌하수체 전엽"], correctAnswer: 2 },
-  ];
+function getEmergencyQuestions(courseId: string = "biology"): GeneratedQuestion[] {
+  switch (courseId) {
+    case "pathophysiology":
+      return [
+        { text: "세포가 자극에 적응하여 크기가 커지는 현상은?", type: "multiple", choices: ["비대", "증식", "화생", "이형성"], correctAnswer: 0 },
+        { text: "괴사(necrosis)와 세포자멸사(apoptosis)의 차이로 옳은 것은?", type: "multiple", choices: ["괴사는 염증을 동반한다", "세포자멸사는 염증을 동반한다", "괴사는 ATP가 필요하다", "세포자멸사는 세포막이 먼저 파괴된다"], correctAnswer: 0 },
+        { text: "급성 염증의 5대 징후에 해당하지 않는 것은?", type: "multiple", choices: ["발적", "종창", "섬유화", "동통"], correctAnswer: 2 },
+        { text: "혈전 형성의 3대 요인(Virchow's triad)에 해당하지 않는 것은?", type: "multiple", choices: ["혈류 정체", "혈관 내피 손상", "혈소판 감소", "과응고 상태"], correctAnswer: 2 },
+        { text: "제1형 과민반응을 매개하는 면역글로불린은?", type: "multiple", choices: ["IgA", "IgG", "IgE", "IgM"], correctAnswer: 2 },
+        { text: "양성 종양과 악성 종양의 차이로 옳은 것은?", type: "multiple", choices: ["양성은 전이된다", "악성은 피막이 있다", "악성은 침윤성 성장을 한다", "양성은 분화가 나쁘다"], correctAnswer: 2 },
+        { text: "색전증(embolism)의 가장 흔한 원인은?", type: "multiple", choices: ["공기", "지방", "혈전", "양수"], correctAnswer: 2 },
+        { text: "쇼크의 초기 보상기에 나타나는 반응은?", type: "multiple", choices: ["혈압 상승", "서맥", "심박출량 증가", "빈맥"], correctAnswer: 3 },
+        { text: "만성 염증에서 주로 관찰되는 세포는?", type: "multiple", choices: ["호중구", "대식세포", "호산구", "비만세포"], correctAnswer: 1 },
+        { text: "상처 치유 시 육아조직(granulation tissue)의 주요 구성 요소는?", type: "multiple", choices: ["신경 섬유", "모세혈관과 섬유아세포", "성숙한 콜라겐", "탄성 섬유"], correctAnswer: 1 },
+      ];
+    case "microbiology":
+      return [
+        { text: "그람 염색에서 그람양성균이 보라색을 유지하는 이유는?", type: "multiple", choices: ["외막이 있어서", "펩티도글리칸 층이 두꺼워서", "리포다당류가 있어서", "편모가 있어서"], correctAnswer: 1 },
+        { text: "세균의 내독소(endotoxin)의 주요 성분은?", type: "multiple", choices: ["단백질", "펩티도글리칸", "리포다당류(LPS)", "핵산"], correctAnswer: 2 },
+        { text: "아포(endospore)를 형성하는 세균은?", type: "multiple", choices: ["대장균", "포도상구균", "클로스트리듐", "연쇄상구균"], correctAnswer: 2 },
+        { text: "후천면역 중 항체가 관여하는 면역은?", type: "multiple", choices: ["세포매개 면역", "체액성 면역", "선천면역", "보체 활성화"], correctAnswer: 1 },
+        { text: "결핵을 일으키는 원인균은?", type: "multiple", choices: ["Staphylococcus aureus", "Mycobacterium tuberculosis", "Streptococcus pyogenes", "Escherichia coli"], correctAnswer: 1 },
+        { text: "바이러스가 숙주세포 안에서만 증식하는 이유는?", type: "multiple", choices: ["크기가 작아서", "자체 대사 기구가 없어서", "DNA가 없어서", "세포벽이 없어서"], correctAnswer: 1 },
+        { text: "감염병의 전파 경로 중 비말감염에 해당하는 것은?", type: "multiple", choices: ["인플루엔자", "말라리아", "B형 간염", "파상풍"], correctAnswer: 0 },
+        { text: "페니실린의 작용 기전은?", type: "multiple", choices: ["단백질 합성 억제", "세포벽 합성 억제", "핵산 합성 억제", "세포막 파괴"], correctAnswer: 1 },
+        { text: "칸디다증을 일으키는 미생물의 종류는?", type: "multiple", choices: ["세균", "바이러스", "진균", "원충"], correctAnswer: 2 },
+        { text: "말라리아를 매개하는 곤충은?", type: "multiple", choices: ["파리", "모기", "벼룩", "이"], correctAnswer: 1 },
+      ];
+    default: // biology
+      return [
+        { text: "세포막의 주요 구성 성분으로 유동 모자이크 모델의 기반이 되는 것은?", type: "multiple", choices: ["인지질 이중층", "콜레스테롤", "당단백질", "셀룰로스"], correctAnswer: 0 },
+        { text: "미토콘드리아에서 ATP가 가장 많이 생성되는 단계는?", type: "multiple", choices: ["해당과정", "시트르산 회로", "산화적 인산화", "발효"], correctAnswer: 2 },
+        { text: "DNA 복제 시 선도 가닥(leading strand)의 합성 방향은?", type: "multiple", choices: ["5'→3' 연속 합성", "3'→5' 연속 합성", "5'→3' 불연속 합성", "3'→5' 불연속 합성"], correctAnswer: 0 },
+        { text: "광합성의 명반응이 일어나는 장소는?", type: "multiple", choices: ["스트로마", "틸라코이드 막", "세포질", "크리스타"], correctAnswer: 1 },
+        { text: "성숙한 적혈구에 없는 세포 소기관은?", type: "multiple", choices: ["세포막", "헤모글로빈", "핵", "탄산탈수효소"], correctAnswer: 2 },
+        { text: "인체에서 가장 넓은 면적을 차지하는 장기는?", type: "multiple", choices: ["간", "폐", "피부", "소장"], correctAnswer: 2 },
+        { text: "효소의 활성 부위에 기질이 결합하는 모델 중, 결합 시 효소 구조가 변하는 모델은?", type: "multiple", choices: ["자물쇠-열쇠 모델", "유도적합 모델", "경쟁적 억제 모델", "알로스테릭 모델"], correctAnswer: 1 },
+        { text: "ABO 혈액형에서 만능 수혈자(모든 혈액형에 수혈 가능)는?", type: "multiple", choices: ["A형", "B형", "AB형", "O형"], correctAnswer: 3 },
+        { text: "리보솜에서 mRNA의 코돈을 읽어 아미노산을 운반하는 RNA는?", type: "multiple", choices: ["mRNA", "tRNA", "rRNA", "snRNA"], correctAnswer: 1 },
+        { text: "인슐린이 분비되는 곳은?", type: "multiple", choices: ["부신 피질", "갑상선", "이자의 베타 세포", "뇌하수체 전엽"], correctAnswer: 2 },
+      ];
+  }
 }
 
 // ============================================
@@ -467,6 +670,11 @@ export const joinMatchmaking = onCall(
       return { status: "matched", battleId };
     }
 
+    // 매칭 대기 중 → 문제 사전 생성 (fire-and-forget)
+    pregenBattleQuestions(courseId, userId, GEMINI_API_KEY.value()).catch((err) => {
+      console.error("사전 캐싱 실패 (무시):", err);
+    });
+
     return { status: "waiting" };
   }
 );
@@ -486,6 +694,9 @@ export const cancelMatchmaking = onCall(
 
     const rtdb = getDatabase();
     await rtdb.ref(`tekken/matchmaking/${courseId}/${userId}`).remove();
+
+    // 사전 캐시도 정리
+    rtdb.ref(`tekken/pregenQuestions/${courseId}_${userId}`).remove().catch(() => {});
 
     return { success: true };
   }
@@ -930,10 +1141,15 @@ async function processRoundEnd(
   }
 
   // 토끼 교체 + roundResult 전환을 단일 update로 원자적 기록
+  // mash 데이터 정리 (taps/processed 등 제거, result만 보존)
   const roundEndUpdates: Record<string, any> = {
     status: "roundResult",
     nextRound,
-    mash: null,
+    "mash/taps": null,
+    "mash/processed": null,
+    "mash/startedAt": null,
+    "mash/endsAt": null,
+    "mash/mashId": null,
   };
 
   for (const pid of playerIds) {
@@ -1172,21 +1388,24 @@ export const submitMashResult = onCall(
     const loserRabbit = loser.rabbits[loser.activeRabbitIndex];
     const bonusDamage = calcBaseDamage(winnerRabbit.atk, loserRabbit.def);
 
-    // 패자에게 보너스 데미지 — result + HP를 원자적으로 기록
+    // 패자에게 보너스 데미지 — result + HP + 라운드 결과를 원자적으로 기록
     const loserHpSnap = await battleRef
       .child(`players/${mashLoserId}/rabbits/${loser.activeRabbitIndex}/currentHp`)
       .once("value");
     const currentLoserHp = loserHpSnap.val() ?? loserRabbit.currentHp;
     const newHp = Math.max(0, currentLoserHp - bonusDamage);
+    const roundIdx = battle.currentRound || 0;
     await battleRef.update({
       "mash/result": { winnerId: mashWinnerId, bonusDamage },
       [`players/${mashLoserId}/rabbits/${loser.activeRabbitIndex}/currentHp`]: newHp,
+      // 라운드 결과에 연타 데미지 반영 (클라이언트 데미지 팝업용)
+      [`rounds/${roundIdx}/result/${mashWinnerId}/damage`]: bonusDamage,
+      [`rounds/${roundIdx}/result/${mashLoserId}/damageReceived`]: bonusDamage,
     });
 
     // 라운드 종료 처리
     const updatedBattle = (await battleRef.once("value")).val();
-    const currentRound = updatedBattle.currentRound || 0;
-    await processRoundEnd(battleId, currentRound, updatedBattle);
+    await processRoundEnd(battleId, roundIdx, updatedBattle);
 
     return { winnerId: mashWinnerId, bonusDamage };
   }
@@ -1246,10 +1465,12 @@ export const startBattleRound = onCall(
 
     // status + 라운드 데이터를 단일 update로 원자적 기록
     // (클라이언트 onValue에서 한 번에 수신 → race condition 방지)
+    // mash 잔류 데이터 완전 정리 (이전 라운드 연타 결과)
     const now = Date.now();
     await battleRef.update({
       status: "question",
       currentRound: roundIndex,
+      mash: null,
       [`rounds/${roundIndex}/startedAt`]: now,
       [`rounds/${roundIndex}/timeoutAt`]: now + BATTLE_CONFIG.QUESTION_TIMEOUT,
     });

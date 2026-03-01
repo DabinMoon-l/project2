@@ -10,6 +10,7 @@
 
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { getDatabase } from "firebase-admin/database";
+import { getFirestore, Timestamp } from "firebase-admin/firestore";
 
 export const tekkenCleanup = onSchedule(
   {
@@ -102,9 +103,52 @@ export const tekkenCleanup = onSchedule(
       }
     }
 
-    if (removedQueue > 0 || removedBattles > 0 || forcedEnd > 0 || removedMatchResults > 0) {
+    // 5. 오래된 사전 캐시 정리 (5분 이상)
+    const pregenRef = rtdb.ref("tekken/pregenQuestions");
+    const pregenSnap = await pregenRef.once("value");
+    const pregenData = pregenSnap.val() || {};
+
+    let removedPregen = 0;
+    for (const [key, cache] of Object.entries(pregenData)) {
+      const c = cache as { createdAt?: number };
+      if (c.createdAt && now - c.createdAt > 300000) {
+        await pregenRef.child(key).remove();
+        removedPregen++;
+      }
+    }
+
+    // 6. Firestore seenQuestions 정리 (24시간 지난 문서)
+    const fsDb = getFirestore();
+    const oneDayAgo = Timestamp.fromMillis(now - 24 * 60 * 60 * 1000);
+    const courseIds = ["biology", "pathophysiology", "microbiology"];
+    let removedSeen = 0;
+
+    for (const courseId of courseIds) {
+      try {
+        const seenRef = fsDb
+          .collection("tekkenQuestionPool")
+          .doc(courseId)
+          .collection("seenQuestions");
+
+        const expiredSnap = await seenRef
+          .where("seenAt", "<", oneDayAgo)
+          .limit(100)
+          .get();
+
+        if (!expiredSnap.empty) {
+          const batch = fsDb.batch();
+          expiredSnap.docs.forEach(doc => batch.delete(doc.ref));
+          await batch.commit();
+          removedSeen += expiredSnap.size;
+        }
+      } catch {
+        // seenQuestions 컬렉션이 아직 없을 수 있음
+      }
+    }
+
+    if (removedQueue > 0 || removedBattles > 0 || forcedEnd > 0 || removedMatchResults > 0 || removedPregen > 0 || removedSeen > 0) {
       console.log(
-        `철권퀴즈 정리: 큐 ${removedQueue}건, 배틀 ${removedBattles}건 제거, 강제종료 ${forcedEnd}건, matchResults ${removedMatchResults}건`
+        `철권퀴즈 정리: 큐 ${removedQueue}건, 배틀 ${removedBattles}건 제거, 강제종료 ${forcedEnd}건, matchResults ${removedMatchResults}건, 사전캐시 ${removedPregen}건, seenQuestions ${removedSeen}건`
       );
     }
   }
