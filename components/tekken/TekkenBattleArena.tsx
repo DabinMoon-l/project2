@@ -1,20 +1,26 @@
 'use client';
 
 /**
- * 포켓몬 스타일 캐릭터 영역 (v4)
+ * 포켓몬 스타일 캐릭터 영역 (v5)
  *
  * 상단: 상대 이름/Lv/HP(좌) + 상대 토끼(우) + 발판
  * 하단: 내 토끼(좌) + 발판 + 내 이름/Lv/HP(우)
  *
- * 변경사항:
- * - 상대 토끼 크기 증가 (80→110)
- * - 히트 플래시: 데미지 받을 때 빨간 깜빡임
- * - 데미지 팝업: 토끼 근처에서 확대 → 위로 사라짐
- * - 스왑 애니메이션: HP 0 → 다른 토끼로 전환 시에만 트리거
+ * v5 변경사항:
+ * - 데미지 팝업 확실히 소멸 (#1)
+ * - 양쪽 오답 데미지 팝업 (#2)
+ * - 토끼 하단 잘림 방지 (#3)
+ * - 토끼 피격 CSS filter 빨개지기 (#7)
+ * - 토끼 교체 1회 깜빡임 (#10)
+ * - 데미지 숫자 잘림 방지 (#12)
+ * - 데미지 모션 부드럽게 (#13)
+ * - HP 바에 토끼 이름 표시 (#14)
+ * - 라운드 결과 시 정답 표시 (#15)
  */
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { computeRabbitDisplayName } from '@/lib/utils/rabbitDisplayName';
 import type { BattlePlayer, BattleRabbit, RoundResultData } from '@/lib/types/tekken';
 
 // ── 데미지 팝업 ──
@@ -37,10 +43,10 @@ function DamagePopup({ data }: { data: DamagePopupData }) {
           ? 'top-[15%] right-[15%]'
           : 'bottom-[15%] left-[15%]'
       }`}
-      initial={{ opacity: 0, scale: 0.3, y: 0 }}
-      animate={{ opacity: 1, scale: data.isCritical ? 1.5 : 1.2, y: isOpponentHit ? -30 : 30 }}
-      exit={{ opacity: 0, y: isOpponentHit ? -60 : 60, scale: 0.6 }}
-      transition={{ type: 'spring', damping: 8, stiffness: 180, duration: 1.5 }}
+      initial={{ opacity: 0, scale: 0.5, y: 0 }}
+      animate={{ opacity: 1, scale: data.isCritical ? 1.4 : 1.1, y: isOpponentHit ? -20 : 20 }}
+      exit={{ opacity: 0, y: isOpponentHit ? -40 : 40, scale: 0.8 }}
+      transition={{ type: 'spring', damping: 15, stiffness: 150 }}
     >
       <span className={`font-black drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] ${
         data.isCritical ? 'text-5xl text-yellow-400' : 'text-4xl text-red-500'
@@ -64,13 +70,13 @@ function DamagePopup({ data }: { data: DamagePopupData }) {
 function PokemonHpBar({
   rabbit,
   nickname,
+  rabbitName,
   isBot,
-  isOpponent,
 }: {
   rabbit: BattleRabbit | null;
   nickname: string;
+  rabbitName?: string;
   isBot?: boolean;
-  isOpponent?: boolean;
 }) {
   const hp = rabbit?.currentHp ?? 0;
   const maxHp = rabbit?.maxHp ?? 1;
@@ -80,24 +86,25 @@ function PokemonHpBar({
 
   return (
     <div
-      className={`
-        relative px-3 py-2 rounded-xl border-2
-        ${isOpponent
-          ? 'bg-black/30 border-white/15 backdrop-blur-sm'
-          : 'bg-black/30 border-white/15 backdrop-blur-sm'
-        }
-      `}
+      className="relative px-3 py-2 rounded-xl border-2 bg-black/30 border-white/15 backdrop-blur-sm"
       style={{ minWidth: 160, maxWidth: 200 }}
     >
       {/* 이름 + 레벨 */}
       <div className="flex items-center justify-between mb-1">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <span className="text-sm font-black text-white truncate">
-            {nickname}
-          </span>
-          {isBot && (
-            <span className="text-[9px] px-1 py-px bg-white/20 rounded text-white/60 flex-shrink-0">
-              BOT
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm font-black text-white truncate block">
+              {nickname}
+            </span>
+            {isBot && (
+              <span className="text-[9px] px-1 py-px bg-white/20 rounded text-white/60 flex-shrink-0">
+                BOT
+              </span>
+            )}
+          </div>
+          {rabbitName && (
+            <span className="text-[10px] text-white/50 truncate block">
+              {rabbitName}
             </span>
           )}
         </div>
@@ -148,21 +155,21 @@ function RabbitCharacter({
 
   return (
     <div className="relative flex flex-col items-center">
-      {/* 토끼 이미지 */}
+      {/* 토끼 이미지 — key에서 isSwapping 제거하여 2번 깜빡임 방지 */}
       <AnimatePresence mode="wait">
         <motion.div
-          key={`${rabbitId}-${isSwapping ? 'swap' : 'normal'}`}
-          initial={isSwapping ? { scale: 0, opacity: 0 } : { scale: 1, opacity: 1 }}
+          key={rabbitId}
+          initial={isSwapping ? { scale: 0, opacity: 0, y: 20 } : false}
           animate={{
             scale: 1,
             opacity: isDead ? 0.3 : 1,
+            y: 0,
           }}
           exit={{ scale: 0, opacity: 0 }}
           transition={{
             type: 'spring',
-            damping: 12,
+            damping: 15,
             stiffness: 200,
-            duration: isSwapping ? 1.2 : 0.3,
           }}
           style={{ width: size, height: size * 1.2 }}
           className={isOpponent ? 'scale-x-[-1]' : ''}
@@ -171,17 +178,11 @@ function RabbitCharacter({
           <img
             src={src}
             alt=""
-            className="w-full h-full object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.4)]"
+            className="w-full h-full object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.4)] transition-[filter] duration-300"
+            style={isHit ? {
+              filter: 'sepia(1) saturate(60) hue-rotate(335deg) brightness(0.6)',
+            } : undefined}
           />
-          {/* 히트 플래시 오버레이 */}
-          {isHit && (
-            <motion.div
-              className="absolute inset-0 bg-red-500/50 rounded-lg mix-blend-multiply"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: [0, 0.8, 0, 0.6, 0] }}
-              transition={{ duration: 0.6, times: [0, 0.1, 0.3, 0.4, 0.6] }}
-            />
-          )}
         </motion.div>
       </AnimatePresence>
 
@@ -208,6 +209,7 @@ interface TekkenBattleArenaProps {
   myResult: RoundResultData | null;
   opponentResult: RoundResultData | null;
   showResult: boolean;
+  correctChoiceText?: string;
 }
 
 export default function TekkenBattleArena({
@@ -218,6 +220,7 @@ export default function TekkenBattleArena({
   myResult,
   opponentResult,
   showResult,
+  correctChoiceText,
 }: TekkenBattleArenaProps) {
   const [popups, setPopups] = useState<DamagePopupData[]>([]);
   const [swappingTarget, setSwappingTarget] = useState<'me' | 'opponent' | null>(null);
@@ -269,11 +272,12 @@ export default function TekkenBattleArena({
   const [hitMe, setHitMe] = useState(false);
   const [hitOp, setHitOp] = useState(false);
 
-  // 라운드 결과 → 데미지 팝업 + 히트 플래시 (단일 이펙트)
+  // 라운드 결과 → 데미지 팝업 + 히트 플래시
   useEffect(() => {
     if (!showResult) {
       setHitMe(false);
       setHitOp(false);
+      setPopups([]); // #1: showResult=false 시 팝업 즉시 클리어
       return;
     }
 
@@ -281,18 +285,7 @@ export default function TekkenBattleArena({
     let shouldHitMe = false;
     let shouldHitOp = false;
 
-    // 내가 정답 → 상대에게 데미지
-    if (myResult?.isCorrect && myResult.damage > 0) {
-      newPopups.push({
-        id: ++popupIdCounter,
-        value: myResult.damage,
-        target: 'opponent',
-        isCritical: myResult.isCritical,
-      });
-      shouldHitOp = true;
-    }
-
-    // 내가 받은 데미지 (상대 정답 or 상호 데미지)
+    // 내가 받은 데미지 → 내 토끼에 표시
     if (myResult && myResult.damageReceived > 0) {
       newPopups.push({
         id: ++popupIdCounter,
@@ -302,8 +295,18 @@ export default function TekkenBattleArena({
       shouldHitMe = true;
     }
 
-    // 상대가 받은 데미지 (상호 데미지 시)
-    if (opponentResult && opponentResult.damageReceived > 0 && !(myResult?.isCorrect && myResult.damage > 0)) {
+    // 상대가 받은 데미지 → 상대 토끼에 표시
+    if (myResult?.damage && myResult.damage > 0) {
+      // 내가 준 데미지 (내가 정답)
+      newPopups.push({
+        id: ++popupIdCounter,
+        value: myResult.damage,
+        target: 'opponent',
+        isCritical: myResult.isCritical,
+      });
+      shouldHitOp = true;
+    } else if (opponentResult && opponentResult.damageReceived > 0) {
+      // 상호 데미지 (양쪽 오답) — 내가 준 데미지가 없을 때만
       newPopups.push({
         id: ++popupIdCounter,
         value: opponentResult.damageReceived,
@@ -327,19 +330,32 @@ export default function TekkenBattleArena({
     };
   }, [showResult, myResult, opponentResult]);
 
-  const myRabbitId = myActiveRabbit?.rabbitId ?? myPlayer?.profileRabbitId ?? 0;
-  const opponentRabbitId = opponentActiveRabbit?.rabbitId ?? opponent?.profileRabbitId ?? 0;
+  // 안정적인 rabbitId 캐시 (undefined 깜빡임 방지)
+  const stableMyRabbitIdRef = useRef(myActiveRabbit?.rabbitId ?? myPlayer?.profileRabbitId ?? 0);
+  const stableOpRabbitIdRef = useRef(opponentActiveRabbit?.rabbitId ?? opponent?.profileRabbitId ?? 0);
+  if (myActiveRabbit?.rabbitId !== undefined) stableMyRabbitIdRef.current = myActiveRabbit.rabbitId;
+  if (opponentActiveRabbit?.rabbitId !== undefined) stableOpRabbitIdRef.current = opponentActiveRabbit.rabbitId;
+  const myRabbitId = stableMyRabbitIdRef.current;
+  const opponentRabbitId = stableOpRabbitIdRef.current;
+
+  // 토끼 이름 계산
+  const myRabbitName = myActiveRabbit
+    ? computeRabbitDisplayName(myActiveRabbit.name, myActiveRabbit.discoveryOrder ?? 1, myActiveRabbit.rabbitId)
+    : undefined;
+  const opponentRabbitName = opponentActiveRabbit
+    ? computeRabbitDisplayName(opponentActiveRabbit.name, opponentActiveRabbit.discoveryOrder ?? 1, opponentActiveRabbit.rabbitId)
+    : undefined;
 
   return (
-    <div className="relative flex-1 flex flex-col justify-between px-3 py-2 overflow-hidden">
+    <div className="relative flex-1 flex flex-col justify-between px-3 pt-2 pb-0">
       {/* ── 상대 영역 (상단) ── */}
       <div className="flex items-start justify-between">
         {/* 상대 HP 바 (좌) */}
         <PokemonHpBar
           rabbit={opponentActiveRabbit}
           nickname={opponent?.nickname ?? '상대방'}
+          rabbitName={opponentRabbitName}
           isBot={opponent?.isBot}
-          isOpponent
         />
 
         {/* 상대 토끼 (우) */}
@@ -370,6 +386,7 @@ export default function TekkenBattleArena({
         <PokemonHpBar
           rabbit={myActiveRabbit}
           nickname={myPlayer?.nickname ?? '나'}
+          rabbitName={myRabbitName}
         />
       </div>
 
@@ -380,11 +397,11 @@ export default function TekkenBattleArena({
         ))}
       </AnimatePresence>
 
-      {/* ── 정답/오답 텍스트 (중앙) ── */}
+      {/* ── 정답/오답 + 정답 텍스트 (중앙) ── */}
       <AnimatePresence>
         {showResult && myResult && (
           <motion.div
-            className="absolute inset-0 flex items-center justify-center pointer-events-none z-10"
+            className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10"
             initial={{ opacity: 0, scale: 0.5 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0 }}
@@ -393,6 +410,11 @@ export default function TekkenBattleArena({
             <span className={`text-2xl font-black drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)] ${myResult.isCorrect ? 'text-green-400' : 'text-red-400'}`}>
               {myResult.isCorrect ? '정답!' : '오답...'}
             </span>
+            {correctChoiceText && (
+              <span className="text-sm text-white/70 mt-1 px-4 text-center drop-shadow-[0_1px_4px_rgba(0,0,0,0.5)]">
+                정답: {correctChoiceText}
+              </span>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

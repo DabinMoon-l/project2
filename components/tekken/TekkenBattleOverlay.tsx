@@ -129,11 +129,6 @@ export default function TekkenBattleOverlay({
     return opponentIds.length > 0 ? roundResult[opponentIds[0]] : null;
   }, [roundResult, userId]);
 
-  // 타이머 표시
-  const minutes = Math.floor((tekken.battleTimeLeft ?? 0) / 60000);
-  const seconds = Math.floor(((tekken.battleTimeLeft ?? 0) % 60000) / 1000);
-  const timeStr = `${minutes}:${String(seconds).padStart(2, '0')}`;
-
   if (typeof window === 'undefined') return null;
 
   return createPortal(
@@ -147,7 +142,7 @@ export default function TekkenBattleOverlay({
         className="absolute inset-0 bg-cover bg-center"
         style={{ backgroundImage: 'url(/images/home-bg.jpg)' }}
       />
-      <div className="absolute inset-0 bg-black/90" />
+      <div className="absolute inset-0 bg-black/75" />
 
       {/* 콘텐츠 */}
       <div className="relative flex flex-col flex-1 z-10">
@@ -175,15 +170,10 @@ export default function TekkenBattleOverlay({
         {/* 배틀 */}
         {phase === 'battle' && (
           <>
-            {/* ── 상단 바: 타이머 + 라운드 ── */}
+            {/* ── 상단 바: 라운드 표시 ── */}
             <div className="pt-[env(safe-area-inset-top)]">
-              <div className="flex items-center justify-center gap-3 px-4 py-2">
-                <div className="px-4 py-1 bg-black/40 border border-white/15 rounded-full backdrop-blur-sm">
-                  <span className={`text-lg font-black ${(tekken.battleTimeLeft ?? 0) < 30000 ? 'text-red-400' : 'text-white'}`}>
-                    {timeStr}
-                  </span>
-                </div>
-                <span className="text-sm text-white/60 font-bold">
+              <div className="flex items-center justify-center px-4 py-2">
+                <span className="text-2xl font-black text-white">
                   R{tekken.currentRoundIndex + 1}/{tekken.totalRounds}
                 </span>
               </div>
@@ -226,7 +216,7 @@ export default function TekkenBattleOverlay({
             </div>
 
             {/* ── 캐릭터 영역 (50%) ── */}
-            <div className="flex-[5] min-h-0 overflow-hidden">
+            <div className="flex-[5] min-h-0">
               <TekkenBattleArena
                 myPlayer={tekken.myPlayer}
                 opponent={tekken.opponent}
@@ -235,6 +225,7 @@ export default function TekkenBattleOverlay({
                 myResult={myResult}
                 opponentResult={opponentResult}
                 showResult={showRoundResult}
+                correctChoiceText={showRoundResult ? (myResult?.correctChoiceText || opponentResult?.correctChoiceText) : undefined}
               />
             </div>
 

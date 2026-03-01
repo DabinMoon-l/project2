@@ -137,8 +137,7 @@ export default function TekkenQuestionCard({
                 `}
                 whileTap={disabled || selectedAnswer !== null ? {} : { scale: 0.97 }}
               >
-                <span className="text-xs leading-snug">
-                  <span className="text-white/50 mr-1.5">{idx + 1}.</span>
+                <span className="text-xs leading-snug text-center w-full block">
                   {choice}
                 </span>
               </motion.button>

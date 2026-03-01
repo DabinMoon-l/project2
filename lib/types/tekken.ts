@@ -25,6 +25,8 @@ export interface BattleRabbit {
   currentHp: number;
   atk: number;
   def: number;
+  name?: string;
+  discoveryOrder?: number;
 }
 
 /** 플레이어 정보 */
@@ -56,6 +58,7 @@ export interface RoundResultData {
   damage: number;        // 내가 준 데미지
   isCritical: boolean;
   damageReceived: number; // 내가 받은 데미지
+  correctChoiceText?: string; // 정답 선지 텍스트
 }
 
 /** 라운드 상태 */
@@ -161,7 +164,7 @@ export const BATTLE_CONFIG = {
   BATTLE_DURATION: 180000,  // 배틀 3분
   QUESTION_TIMEOUT: 20000,  // 문제 타임아웃 20초
   CRITICAL_TIME: 5000,      // 크리티컬 기준 5초
-  MASH_STEP_PER_TAP: 1.5,  // 연타 게이지 이동량 (탭당 %)
+  MASH_STEP_PER_TAP: 5,    // 연타 게이지 이동량 (탭당 %)
   MASH_TIMEOUT: 30000,      // 연타 안전 타임아웃 30초 (UI 표시 안 함)
   COUNTDOWN_SECONDS: 3,     // 카운트다운 3초
   LONG_PRESS_MS: 500,       // 롱프레스 500ms

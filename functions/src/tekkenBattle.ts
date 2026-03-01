@@ -47,58 +47,6 @@ const COURSE_NAMES: Record<string, string> = {
 };
 
 /**
- * 기존 퀴즈에서 객관식 랜덤 추출 (참고 자료용)
- */
-async function fetchExistingQuestions(
-  courseId: string,
-  count: number = 25
-): Promise<GeneratedQuestion[]> {
-  const db = getFirestore();
-  const snapshot = await db
-    .collection("quizzes")
-    .where("courseId", "==", courseId)
-    .where("type", "in", ["midterm", "final", "past", "professor"])
-    .select("questions")
-    .limit(20)
-    .get();
-
-  const allQuestions: GeneratedQuestion[] = [];
-
-  for (const doc of snapshot.docs) {
-    const quiz = doc.data();
-    const questions = quiz.questions || [];
-    for (const q of questions) {
-      // answer 필드 사용 (correctAnswer는 채점 결과에만 존재)
-      const answer = q.answer ?? q.correctAnswer;
-      if (
-        q.type === "multiple" &&
-        Array.isArray(q.choices) &&
-        answer !== undefined &&
-        typeof answer === "number"
-      ) {
-        // 모든 퀴즈 answer가 0-indexed로 통일됨 (마이그레이션 완료 후)
-        allQuestions.push({
-          text: q.text || q.question || "",
-          type: "multiple",
-          choices: q.choices.map((c: { text?: string } | string) =>
-            typeof c === "string" ? c : c.text || ""
-          ),
-          correctAnswer: answer,
-        });
-      }
-    }
-  }
-
-  // 셔플 후 반환
-  for (let i = allQuestions.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [allQuestions[i], allQuestions[j]] = [allQuestions[j], allQuestions[i]];
-  }
-
-  return allQuestions.slice(0, count);
-}
-
-/**
  * 교수님이 설정한 배틀 범위 키워드 조회
  */
 async function getTekkenKeywords(courseId: string): Promise<string[]> {
@@ -130,80 +78,34 @@ async function generateBattleQuestions(
 ): Promise<GeneratedQuestion[]> {
   const courseName = COURSE_NAMES[courseId] || "생물학";
 
-  const [existingQuestions, keywords] = await Promise.all([
-    fetchExistingQuestions(courseId, 15),
-    getTekkenKeywords(courseId),
-  ]);
-
-  const hasReference = existingQuestions.length >= 3;
-  const referenceBlock = hasReference
-    ? existingQuestions
-        .slice(0, 10)
-        .map(
-          (q, i) =>
-            `${i + 1}. [객관식] ${q.text}` +
-            ` (선지: ${q.choices.join(", ")} / 정답: ${q.choices[q.correctAnswer]})`
-        )
-        .join("\n")
-    : "";
+  const keywords = await getTekkenKeywords(courseId);
 
   const keywordBlock =
     keywords.length > 0
-      ? `\n출제 범위 키워드: ${keywords.join(", ")}\n이 키워드와 관련된 주제를 우선적으로 출제하세요.`
+      ? `\n출제 범위 키워드: ${keywords.join(", ")}\n반드시 이 키워드와 관련된 주제에서만 출제하세요. 키워드 범위를 벗어난 문제는 절대 금지입니다.`
       : "";
 
-  // 챕터 1~4 범위 + 다양성 지시
-  const chapterScope = "\n출제 범위: 챕터 1, 2, 3, 4 내용으로만 출제하세요.";
-  const diversityInstruction = `
-추가 지시:
-- 각 문제는 서로 다른 주제/개념에서 출제하세요
-- 같은 키워드나 개념을 2번 이상 반복하지 마세요
-- 다양한 인지 수준(기억, 이해, 적용)을 섞어 출제하세요`;
-
-  const prompt = hasReference
-    ? `
-아래는 대학교 ${courseName} 과목의 기존 퀴즈 문제입니다:
-
-${referenceBlock}
+  const prompt = `
+대학교 ${courseName} 과목의 배틀 퀴즈 문제 ${count}개를 새롭게 만들어주세요.
 ${keywordBlock}
-${chapterScope}
 
-위 문제들을 **참고**하여 비슷하지만 새로운 문제 ${count}개를 만들어주세요.
-
-변형 방법 (다양하게 섞어서):
-- 같은 주제의 다른 측면을 묻기 (예: "A는 B이다" → "B의 기능은 무엇인가?")
-- 객관식 선지를 바꾸거나 오답 선지를 비슷한 용어로 교체
-- 같은 개념을 다른 표현으로 물어보기
-- 원본과 완전히 똑같은 문제는 절대 금지
-${diversityInstruction}
-
-요구사항:
-- 5지선다 객관식 ${count}개 (OX 문제 금지)
-- 적절한 중간 난이도: 수업을 들은 학생이라면 20초 안에 풀 수 있지만, 단순 암기가 아닌 이해를 요구하는 수준
+중요 규칙:
+- 4지선다 순수 객관식만 (OX 문제 금지)
+- 문제 하나로 완결되어야 함 (별도 지문/제시문/보기표/그림/표 참조 금지)
+- "다음 중", "위의 내용에서" 같은 외부 참조 표현 금지
+- 문제 텍스트만 읽고 바로 답할 수 있어야 함
+- 각 문제는 서로 다른 주제/개념에서 출제
+- 같은 키워드나 개념을 2번 이상 반복 금지
+- 다양한 인지 수준(기억, 이해, 적용)을 섞어 출제
+- 적절한 중간 난이도: 수업을 들은 학생이라면 20초 안에 풀 수 있는 수준
 - 오답 선지는 그럴듯하게 (명백히 틀린 보기 금지)
 - 간결한 문제 (1~2문장)
-- choices 5개, correctAnswer는 0~4
+- choices 4개, correctAnswer는 0~3
+- 매번 다른 문제를 생성 (이전에 생성한 문제와 중복 금지)
 
 반드시 아래 JSON 형식만 출력 (다른 텍스트 없이):
 [
-  {"text": "문제 내용", "type": "multiple", "choices": ["선지1", "선지2", "선지3", "선지4", "선지5"], "correctAnswer": 2}
-]`
-    : `
-대학교 ${courseName} 과목의 배틀 퀴즈 문제 ${count}개를 만들어주세요.
-${keywordBlock}
-${chapterScope}
-${diversityInstruction}
-
-요구사항:
-- 5지선다 객관식 ${count}개 (OX 문제 금지)
-- 적절한 중간 난이도: 수업을 들은 학생이라면 20초 안에 풀 수 있지만, 단순 암기가 아닌 이해를 요구하는 수준
-- 오답 선지는 그럴듯하게 (명백히 틀린 보기 금지)
-- 간결한 문제 (1~2문장)
-- choices 5개, correctAnswer는 0~4
-
-반드시 아래 JSON 형식만 출력 (다른 텍스트 없이):
-[
-  {"text": "문제 내용", "type": "multiple", "choices": ["선지1", "선지2", "선지3", "선지4", "선지5"], "correctAnswer": 2}
+  {"text": "문제 내용", "type": "multiple", "choices": ["선지1", "선지2", "선지3", "선지4"], "correctAnswer": 2}
 ]`;
 
   try {
@@ -246,14 +148,9 @@ ${diversityInstruction}
       return valid.slice(0, count);
     }
 
-    console.log(`Gemini 유효 문제 ${valid.length}개 — 기존 퀴즈 원본 폴백`);
+    console.log(`Gemini 유효 문제 ${valid.length}개 — 비상 문제 폴백`);
   } catch (error) {
     console.error("Gemini 변형 문제 생성 실패:", error);
-  }
-
-  if (existingQuestions.length >= 5) {
-    console.log("기존 퀴즈 원본으로 폴백");
-    return existingQuestions.slice(0, count);
   }
 
   return [];
@@ -280,23 +177,25 @@ async function getPlayerBattleRabbits(
 ) {
   const db = getFirestore();
 
-  // 병렬 조회 (순차 for...await → Promise.all)
+  // 병렬 조회 (홀딩 + 토끼 이름)
   const rabbits = await Promise.all(
     equippedRabbits.map(async (eq) => {
       const holdingId = `${eq.courseId}_${eq.rabbitId}`;
-      const holdingDoc = await db
-        .collection("users")
-        .doc(userId)
-        .collection("rabbitHoldings")
-        .doc(holdingId)
-        .get();
+      const [holdingDoc, rabbitDoc] = await Promise.all([
+        db.collection("users").doc(userId)
+          .collection("rabbitHoldings").doc(holdingId).get(),
+        db.collection("rabbits").doc(holdingId).get(),
+      ]);
 
-      const stats = holdingDoc.exists
-        ? (holdingDoc.data()!.stats || getBaseStats(eq.rabbitId))
-        : getBaseStats(eq.rabbitId);
+      const holdingData = holdingDoc.exists ? holdingDoc.data()! : null;
+      const stats = holdingData?.stats || getBaseStats(eq.rabbitId);
+      const rabbitName = rabbitDoc.exists ? (rabbitDoc.data()?.name || null) : null;
+      const discoveryOrder = holdingData?.discoveryOrder || 1;
 
       return {
         rabbitId: eq.rabbitId,
+        name: rabbitName || "토끼",
+        discoveryOrder,
         maxHp: stats.hp,
         currentHp: stats.hp,
         atk: stats.atk,
@@ -381,94 +280,11 @@ async function createBattle(
   return battleId;
 }
 
-// ============================================
-// 문제 풀 캐시 (Gemini 호출을 백그라운드로 분리)
-// ============================================
-
-const POOL_MIN = 10; // 이 이하면 백그라운드 보충 트리거
-
-/**
- * RTDB 풀에서 문제 추출 (트랜잭션으로 원자적, ~100ms)
- */
-async function drawFromPool(
-  courseId: string,
-  count: number
-): Promise<GeneratedQuestion[] | null> {
-  const rtdb = getDatabase();
-  const poolRef = rtdb.ref(`tekken/questionPool/${courseId}/questions`);
-
-  let drawn: GeneratedQuestion[] = [];
-
-  const txResult = await poolRef.transaction((current) => {
-    if (!current || !Array.isArray(current) || current.length < count) {
-      return; // abort — 문제 부족
-    }
-
-    // 셔플
-    const arr = [...current];
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-
-    drawn = arr.slice(0, count);
-    return arr.slice(count); // 나머지만 유지
-  });
-
-  if (!txResult.committed || drawn.length < count) return null;
-
-  // 유효성 검증
-  const valid = drawn.filter(
-    (q) =>
-      q.text &&
-      Array.isArray(q.choices) &&
-      q.choices.length >= 2 &&
-      typeof q.correctAnswer === "number" &&
-      q.correctAnswer >= 0 &&
-      q.correctAnswer < q.choices.length
-  );
-
-  return valid.length >= count ? valid : null;
-}
-
-/**
- * 백그라운드 풀 보충 (fire-and-forget, 배틀 차단 없음)
- */
-function refillPoolAsync(courseId: string, apiKey: string): void {
-  (async () => {
-    try {
-      const rtdb = getDatabase();
-      const poolRef = rtdb.ref(`tekken/questionPool/${courseId}`);
-
-      // 현재 풀 크기 확인
-      const snap = await poolRef.get();
-      const existing: GeneratedQuestion[] = snap.exists()
-        ? (snap.val().questions || [])
-        : [];
-
-      if (existing.length >= POOL_MIN) return; // 이미 충분
-
-      // Gemini로 새 문제 생성
-      const newQuestions = await generateBattleQuestions(courseId, apiKey);
-
-      // 기존과 병합 (텍스트 중복 제거)
-      const existingTexts = new Set(existing.map((q) => q.text));
-      const unique = newQuestions.filter((q) => !existingTexts.has(q.text));
-      const merged = [...existing, ...unique].slice(0, 50);
-
-      await poolRef.set({ questions: merged, updatedAt: Date.now() });
-      console.log(`풀 보충 완료 (${courseId}): ${merged.length}개`);
-    } catch (err) {
-      console.error("풀 보충 실패:", err);
-    }
-  })();
-}
-
 /**
  * 비동기 문제 생성 → 완료 시 countdown 전환
  *
- * 3단계 폴백: 풀(~100ms) → 기존 퀴즈(~500ms) → 비상 문제(즉시)
- * Gemini 호출은 백그라운드 풀 보충으로만 수행 (배틀 차단 없음)
+ * 매번 Gemini로 새 문제 생성 (풀 캐시 미사용 — 중복 방지)
+ * 실패 시 비상 문제로 폴백
  */
 async function populateBattleQuestions(
   battleId: string,
@@ -479,18 +295,14 @@ async function populateBattleQuestions(
   const battleRef = rtdb.ref(`tekken/battles/${battleId}`);
   const QUESTION_COUNT = 10;
 
-  // 1단계: 풀에서 즉시 추출 (~100ms)
-  let questions = await drawFromPool(courseId, QUESTION_COUNT);
-
-  // 2단계: 풀 부족 → 기존 퀴즈에서 추출 (~500ms)
-  if (!questions) {
-    const existing = await fetchExistingQuestions(courseId, QUESTION_COUNT);
-    if (existing.length >= 5) {
-      questions = existing.slice(0, QUESTION_COUNT);
-    }
+  // Gemini로 매번 새 문제 생성 (캐시 없이)
+  let questions: GeneratedQuestion[] | null = null;
+  const generated = await generateBattleQuestions(courseId, apiKey, QUESTION_COUNT);
+  if (generated.length >= 5) {
+    questions = generated.slice(0, QUESTION_COUNT);
   }
 
-  // 3단계: 비상 문제 (즉시)
+  // 실패 시 비상 문제
   if (!questions || questions.length < 5) {
     questions = getEmergencyQuestions();
   }
@@ -526,8 +338,7 @@ async function populateBattleQuestions(
     rtdb.ref(`tekken/battleAnswers/${battleId}`).set(battleAnswersData),
   ]);
 
-  // 백그라운드: 풀 보충 (fire-and-forget, 배틀 차단 없음)
-  refillPoolAsync(courseId, apiKey);
+  // 풀 캐시 미사용 — 매번 새 문제 생성으로 중복 방지
 }
 
 /**
@@ -535,16 +346,16 @@ async function populateBattleQuestions(
  */
 function getEmergencyQuestions(): GeneratedQuestion[] {
   return [
-    { text: "세포막의 주요 구성 성분으로 유동 모자이크 모델의 기반이 되는 것은?", type: "multiple", choices: ["인지질 이중층", "콜레스테롤", "당단백질", "셀룰로스", "케라틴"], correctAnswer: 0 },
-    { text: "미토콘드리아에서 ATP가 가장 많이 생성되는 단계는?", type: "multiple", choices: ["해당과정", "시트르산 회로", "산화적 인산화", "발효", "베타 산화"], correctAnswer: 2 },
-    { text: "DNA 복제 시 선도 가닥(leading strand)의 합성 방향은?", type: "multiple", choices: ["5'→3' 연속 합성", "3'→5' 연속 합성", "5'→3' 불연속 합성", "3'→5' 불연속 합성", "양방향 동시 합성"], correctAnswer: 0 },
-    { text: "광합성의 명반응이 일어나는 장소는?", type: "multiple", choices: ["스트로마", "틸라코이드 막", "세포질", "내막", "크리스타"], correctAnswer: 1 },
-    { text: "성숙한 적혈구에 없는 세포 소기관은?", type: "multiple", choices: ["세포막", "헤모글로빈", "핵", "세포질", "탄산탈수효소"], correctAnswer: 2 },
-    { text: "인체에서 가장 넓은 면적을 차지하는 장기는?", type: "multiple", choices: ["간", "폐", "피부", "소장", "뇌"], correctAnswer: 2 },
-    { text: "효소의 활성 부위에 기질이 결합하는 모델 중, 결합 시 효소 구조가 변하는 모델은?", type: "multiple", choices: ["자물쇠-열쇠 모델", "유도적합 모델", "경쟁적 억제 모델", "알로스테릭 모델", "피드백 모델"], correctAnswer: 1 },
-    { text: "ABO 혈액형에서 만능 수혈자(모든 혈액형에 수혈 가능)는?", type: "multiple", choices: ["A형", "B형", "AB형", "O형", "Rh+ 형"], correctAnswer: 3 },
-    { text: "리보솜에서 mRNA의 코돈을 읽어 아미노산을 운반하는 RNA는?", type: "multiple", choices: ["mRNA", "tRNA", "rRNA", "snRNA", "miRNA"], correctAnswer: 1 },
-    { text: "인슐린이 분비되는 곳은?", type: "multiple", choices: ["부신 피질", "갑상선", "이자의 베타 세포", "뇌하수체 전엽", "간세포"], correctAnswer: 2 },
+    { text: "세포막의 주요 구성 성분으로 유동 모자이크 모델의 기반이 되는 것은?", type: "multiple", choices: ["인지질 이중층", "콜레스테롤", "당단백질", "셀룰로스"], correctAnswer: 0 },
+    { text: "미토콘드리아에서 ATP가 가장 많이 생성되는 단계는?", type: "multiple", choices: ["해당과정", "시트르산 회로", "산화적 인산화", "발효"], correctAnswer: 2 },
+    { text: "DNA 복제 시 선도 가닥(leading strand)의 합성 방향은?", type: "multiple", choices: ["5'→3' 연속 합성", "3'→5' 연속 합성", "5'→3' 불연속 합성", "3'→5' 불연속 합성"], correctAnswer: 0 },
+    { text: "광합성의 명반응이 일어나는 장소는?", type: "multiple", choices: ["스트로마", "틸라코이드 막", "세포질", "크리스타"], correctAnswer: 1 },
+    { text: "성숙한 적혈구에 없는 세포 소기관은?", type: "multiple", choices: ["세포막", "헤모글로빈", "핵", "탄산탈수효소"], correctAnswer: 2 },
+    { text: "인체에서 가장 넓은 면적을 차지하는 장기는?", type: "multiple", choices: ["간", "폐", "피부", "소장"], correctAnswer: 2 },
+    { text: "효소의 활성 부위에 기질이 결합하는 모델 중, 결합 시 효소 구조가 변하는 모델은?", type: "multiple", choices: ["자물쇠-열쇠 모델", "유도적합 모델", "경쟁적 억제 모델", "알로스테릭 모델"], correctAnswer: 1 },
+    { text: "ABO 혈액형에서 만능 수혈자(모든 혈액형에 수혈 가능)는?", type: "multiple", choices: ["A형", "B형", "AB형", "O형"], correctAnswer: 3 },
+    { text: "리보솜에서 mRNA의 코돈을 읽어 아미노산을 운반하는 RNA는?", type: "multiple", choices: ["mRNA", "tRNA", "rRNA", "snRNA"], correctAnswer: 1 },
+    { text: "인슐린이 분비되는 곳은?", type: "multiple", choices: ["부신 피질", "갑상선", "이자의 베타 세포", "뇌하수체 전엽"], correctAnswer: 2 },
   ];
 }
 
@@ -822,7 +633,7 @@ export const submitAnswer = onCall(
         .once("value");
       const correctAnswer = correctAnswerSnap.val();
       const questionData = round.questionData;
-      const botResult = generateBotAnswer(correctAnswer, questionData.choices?.length || 5);
+      const botResult = generateBotAnswer(correctAnswer, questionData.choices?.length || 4);
       const botAnsweredAt = now + botResult.delay;
       await battleRef.child(`rounds/${roundIndex}/answers/${opponentId}`).set({
         answer: botResult.answer,
@@ -907,9 +718,12 @@ async function scoreRound(
   const p1Rabbit = p1Player.rabbits[p1Player.activeRabbitIndex];
   const p2Rabbit = p2Player.rabbits[p2Player.activeRabbitIndex];
 
+  // 정답 선지 텍스트
+  const correctChoiceText = round.questionData?.choices?.[correctAnswer] || "";
+
   // 결과 초기화
-  const p1Result = { isCorrect: p1Correct, damage: 0, isCritical: false, damageReceived: 0 };
-  const p2Result = { isCorrect: p2Correct, damage: 0, isCritical: false, damageReceived: 0 };
+  const p1Result = { isCorrect: p1Correct, damage: 0, isCritical: false, damageReceived: 0, correctChoiceText };
+  const p2Result = { isCorrect: p2Correct, damage: 0, isCritical: false, damageReceived: 0, correctChoiceText };
 
   let mashTriggered = false;
   let mashId = "";
@@ -1098,8 +912,8 @@ async function processRoundEnd(
   const nextRound = (battle.currentRound || 0) + 1;
   const totalRounds = battle.totalRounds || 10;
 
-  // 문제 소진 or 시간 초과 → HP 비교
-  if (nextRound >= totalRounds || Date.now() >= battle.endsAt) {
+  // 문제 소진 → HP 비교 (시간제한 없음)
+  if (nextRound >= totalRounds) {
     const p1 = playerIds[0];
     const p2 = playerIds[1];
     const p1Hp = getTotalRemainingHp(battle.players[p1].rabbits);

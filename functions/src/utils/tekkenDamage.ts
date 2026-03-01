@@ -4,7 +4,7 @@
 
 /** 배틀 설정 상수 */
 export const BATTLE_CONFIG = {
-  BATTLE_DURATION: 180000,
+  BATTLE_DURATION: 600000, // 안전장치 (실질 종료는 HP=0 또는 라운드 완료)
   QUESTION_TIMEOUT: 20000,
   CRITICAL_TIME: 5000,
   MATCH_TIMEOUT: 20000,
@@ -12,7 +12,7 @@ export const BATTLE_CONFIG = {
 };
 
 /** 양쪽 오답 시 상호 고정 데미지 */
-export const MUTUAL_DAMAGE = 3;
+export const MUTUAL_DAMAGE = 10;
 
 /** XP 보상 상수 */
 export const BATTLE_XP = {

@@ -49,7 +49,8 @@ export default function TekkenCountdown({ onComplete, countdownStartedAt }: Tekk
     let completeTimer: ReturnType<typeof setTimeout> | null = null;
 
     const tick = () => {
-      const elapsed = Date.now() - countdownStartedAt;
+      // 500ms 네트워크 버퍼 — 카운트다운이 항상 3부터 시작하도록
+      const elapsed = Math.max(0, Date.now() - countdownStartedAt - 500);
       const remaining = Math.max(0, 3000 - elapsed);
       const newCount = Math.ceil(remaining / 1000);
 

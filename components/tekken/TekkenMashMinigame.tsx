@@ -112,9 +112,9 @@ export default function TekkenMashMinigame({
     myTapsRef.current += 1;
     setMyTaps(myTapsRef.current);
 
-    // 100ms 스로틀로 RTDB 쓰기
+    // 50ms 스로틀로 RTDB 쓰기 (동기화 향상)
     const now = Date.now();
-    if (now - lastWriteRef.current >= 100) {
+    if (now - lastWriteRef.current >= 50) {
       writeMashTap(myTapsRef.current);
       lastWriteRef.current = now;
     }
@@ -163,7 +163,7 @@ export default function TekkenMashMinigame({
           <motion.div
             className={`h-full ${COLORS[myColor].fill}`}
             animate={{ width: `${myPercent}%` }}
-            transition={{ duration: 0.08, ease: 'linear' }}
+            transition={{ duration: 0.15, ease: 'easeOut' }}
           />
           {/* 중앙 기준선 */}
           <div className="absolute top-0 left-1/2 -translate-x-px h-full w-0.5 bg-white/40" />
