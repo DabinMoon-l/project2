@@ -81,8 +81,18 @@ export default function ProfessorStatsPage() {
 
   const [courseId, setCourseId] = useState<CourseId>(userCourseId || 'biology');
   const [source, setSource] = useState<QuestionSource>('professor');
+  const courseIdInitRef = useRef(false);
+
+  // userCourseId가 비동기로 로드된 후 courseId 동기화
+  useEffect(() => {
+    if (userCourseId && !courseIdInitRef.current) {
+      courseIdInitRef.current = true;
+      setCourseId(userCourseId);
+    }
+  }, [userCourseId]);
 
   const handleCourseChange = useCallback((newCourseId: CourseId) => {
+    courseIdInitRef.current = true; // 수동 전환 시 자동 동기화 방지
     setCourseId(newCourseId);
     setProfessorCourse(newCourseId);
   }, [setProfessorCourse]);

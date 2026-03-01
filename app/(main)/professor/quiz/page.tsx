@@ -93,7 +93,7 @@ function ProfSectionTabs({
           key={opt.key}
           ref={el => { btnRefs.current[i] = el; }}
           onClick={() => onChangeFilter(opt.key)}
-          className={`pb-1.5 text-base font-bold transition-colors ${
+          className={`pb-1.5 text-lg font-bold transition-colors ${
             sectionFilter === opt.key ? 'text-[#1A1A1A]' : 'text-[#5C5C5C]'
           }`}
         >

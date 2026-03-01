@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   doc,
@@ -102,15 +102,35 @@ export default function UpdateQuizModal({
     }[];
   } | null>(null);
 
-  // 모달 열림 시 상태 초기화 + body 스크롤 방지
+  // 닫기 확인 (풀이 중 실수 닫기 방지)
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const hasStartedRef = useRef(false);
+
+  const handleRequestClose = useCallback(() => {
+    // 풀이 시작 전이거나 결과 화면이면 바로 닫기
+    if (!hasStartedRef.current || showResult) {
+      onClose();
+      return;
+    }
+    // 풀이 중이면 확인 다이얼로그
+    setShowCloseConfirm(true);
+  }, [showResult, onClose]);
+
+  // 모달 열림 시 상태 초기화 + body 스크롤 방지 + 네비게이션 숨김
   useEffect(() => {
     if (!isOpen) return;
     setCurrentIndex(0);
     setUserAnswers({});
     setShowResult(false);
     setResultData(null);
+    setShowCloseConfirm(false);
+    hasStartedRef.current = false;
     lockScroll();
-    return () => { unlockScroll(); };
+    document.body.setAttribute('data-hide-nav', '');
+    return () => {
+      unlockScroll();
+      document.body.removeAttribute('data-hide-nav');
+    };
   }, [isOpen, updateInfo.quizId]);
 
   const questions = updateInfo.updatedQuestions;
@@ -146,6 +166,7 @@ export default function UpdateQuizModal({
    * 답변 선택 (questionId 지정)
    */
   const handleSelectAnswer = useCallback((questionId: string, answer: string) => {
+    hasStartedRef.current = true;
     setUserAnswers((prev) => ({
       ...prev,
       [questionId]: answer,
@@ -444,11 +465,11 @@ export default function UpdateQuizModal({
   if (showResult && resultData) {
     const correctCount = resultData.questionResults.filter((r) => r.isCorrect).length;
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] rounded-2xl max-h-[85vh] overflow-auto overscroll-contain"
+          className="w-full max-w-md bg-[#F5F0E8] border-2 border-[#1A1A1A] rounded-2xl max-h-[90vh] overflow-auto overscroll-contain"
         >
           {/* 헤더 */}
           <div className="px-4 py-3 border-b border-[#1A1A1A]">
@@ -585,11 +606,12 @@ export default function UpdateQuizModal({
 
   // 문제 풀이 화면
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3">
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] rounded-2xl max-h-[85vh] overflow-auto overscroll-contain"
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md bg-[#F5F0E8] border-2 border-[#1A1A1A] rounded-2xl max-h-[90vh] overflow-auto overscroll-contain"
       >
         {/* 헤더 */}
         <div className="px-4 py-3 border-b border-[#1A1A1A] flex items-center justify-between">
@@ -598,7 +620,7 @@ export default function UpdateQuizModal({
             <p className="text-[10px] text-[#5C5C5C]">{updateInfo.quizTitle}</p>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleRequestClose}
             className="w-7 h-7 flex items-center justify-center border border-[#1A1A1A] hover:bg-[#EDEAE4] rounded-lg"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -606,6 +628,42 @@ export default function UpdateQuizModal({
             </svg>
           </button>
         </div>
+
+        {/* 닫기 확인 다이얼로그 */}
+        <AnimatePresence>
+          {showCloseConfirm && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+            >
+              <motion.div
+                initial={{ scale: 0.9 }}
+                animate={{ scale: 1 }}
+                exit={{ scale: 0.9 }}
+                className="bg-[#F5F0E8] border-2 border-[#1A1A1A] rounded-xl p-4 max-w-[260px] w-full"
+              >
+                <p className="text-sm font-bold text-[#1A1A1A] text-center mb-1">풀이를 중단할까요?</p>
+                <p className="text-[10px] text-[#5C5C5C] text-center mb-3">지금까지 푼 답변이 저장되지 않습니다.</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowCloseConfirm(false)}
+                    className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] rounded-xl"
+                  >
+                    계속 풀기
+                  </button>
+                  <button
+                    onClick={() => { setShowCloseConfirm(false); onClose(); }}
+                    className="flex-1 py-2 text-xs font-bold bg-[#8B1A1A] text-white border-2 border-[#8B1A1A] rounded-xl"
+                  >
+                    중단
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* 진행 표시 */}
         <div className="px-4 py-1.5 border-b border-[#EDEAE4]">

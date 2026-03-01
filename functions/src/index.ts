@@ -385,6 +385,7 @@ export {
   updateRecoveryEmail,
   migrateExistingAccounts,
   deleteStudentAccount,
+  removeEnrolledStudent,
 } from "./studentAuth";
 
 // ============================================

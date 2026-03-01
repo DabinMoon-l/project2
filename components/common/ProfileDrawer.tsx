@@ -1046,11 +1046,6 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                   </div>
                 </div>
 
-                {/* 교수 전용: 퀴즈 답안 마이그레이션 */}
-                {isProfessor && (
-                  <MigrateAnswerIndexButton />
-                )}
-
                 {/* 로그아웃 버튼 */}
                 <button
                   onClick={handleLogout}
@@ -1511,6 +1506,9 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                     >
                       비밀번호를 잊으셨나요?
                     </button>
+                    <p className="text-xs text-white/30 mt-1.5">
+                      문의를 통해 비밀번호를 초기화한 경우 123456으로 설정됩니다.
+                    </p>
                   </div>
                 )}
                 <div className="flex gap-3 mt-4">

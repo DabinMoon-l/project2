@@ -287,17 +287,28 @@ export default function EditQuizPage() {
     if (!original) return true; // 새 문제
 
     // 텍스트 비교
-    if (original.text !== current.text) return true;
+    if ((original.text || '') !== (current.text || '')) return true;
 
     // 타입 비교
     if (original.type !== current.type) return true;
 
     // 정답 비교
     if (current.type === 'subjective' || current.type === 'short_answer') {
-      if (original.answer !== current.answerText) return true;
+      if ((original.answer?.toString() || '') !== (current.answerText || '')) return true;
     } else if (current.type === 'multiple') {
-      const origAnswer = typeof original.answer === 'number' ? original.answer - 1 : -1;
+      // answer가 문자열("1")이든 숫자(1)이든 모두 처리 (1-indexed → 0-indexed)
+      const origNum = parseInt(String(original.answer), 10);
+      const origAnswer = !isNaN(origNum) ? origNum - 1 : -1;
       if (origAnswer !== current.answerIndex) return true;
+    } else if (current.type === 'ox') {
+      // OX: 0/"0"/"O" = O, 1/"1"/"X" = X
+      const normalizeOx = (v: any) => {
+        const s = String(v).toUpperCase();
+        if (s === '0' || s === 'O' || s === 'TRUE') return 0;
+        if (s === '1' || s === 'X' || s === 'FALSE') return 1;
+        return v;
+      };
+      if (normalizeOx(original.answer) !== normalizeOx(current.answerIndex)) return true;
     } else {
       if (original.answer !== current.answerIndex) return true;
     }
@@ -344,10 +355,19 @@ export default function EditQuizPage() {
     if (current.type === 'subjective' || current.type === 'short_answer') {
       if (original.answer !== (current.answerText || '')) return true;
     } else if (current.type === 'multiple') {
-      const origAnswer = typeof original.answer === 'number' ? original.answer - 1 : -1;
+      // answer가 문자열("1")이든 숫자(1)이든 모두 처리 (1-indexed → 0-indexed)
+      const origNum = parseInt(String(original.answer), 10);
+      const origAnswer = !isNaN(origNum) ? origNum - 1 : -1;
       if (origAnswer !== (current.answerIndex ?? -1)) return true;
-    } else {
-      if (original.answer !== (current.answerIndex ?? 0)) return true;
+    } else if (current.type === 'ox') {
+      // OX: 0/"0"/"O" = O, 1/"1"/"X" = X
+      const normalizeOx = (v: any) => {
+        const s = String(v).toUpperCase();
+        if (s === '0' || s === 'O' || s === 'TRUE') return 0;
+        if (s === '1' || s === 'X' || s === 'FALSE') return 1;
+        return v;
+      };
+      if (normalizeOx(original.answer) !== normalizeOx(current.answerIndex ?? 0)) return true;
     }
 
     // 선지 비교 (객관식)

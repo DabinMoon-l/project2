@@ -15,7 +15,7 @@ import { mean, sd, zScore } from '@/lib/utils/statistics';
 
 import StudentListView from '@/components/professor/students/StudentListView';
 import StudentDetailModal from '@/components/professor/students/StudentDetailModal';
-import StudentEnrollment from '@/components/professor/StudentEnrollment';
+import StudentManagementSheet from '@/components/professor/students/StudentManagementSheet';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
 
 // ============================================================
@@ -69,8 +69,8 @@ export default function StudentMonitoringPage() {
   const [selectedStudentDetail, setSelectedStudentDetail] = useState<StudentDetail | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
-  // 학생 등록 모달
-  const [showEnrollment, setShowEnrollment] = useState(false);
+  // 학생 관리 시트
+  const [showManagement, setShowManagement] = useState(false);
 
   // students ref (handleStudentClick에서 참조 — 콜백 재생성 방지)
   const studentsRef = useRef(students);
@@ -262,18 +262,8 @@ export default function StudentMonitoringPage() {
               students={filteredStudents}
               onStudentClick={handleStudentClick}
               warningMap={warningMap}
+              onManageClick={() => setShowManagement(true)}
             />
-
-            <div className="h-8" />
-
-            {/* 학생 등록 버튼 (목록 하단) */}
-            <button
-              onClick={() => setShowEnrollment(true)}
-              className="w-full py-2 border border-dashed border-[#D4CFC4] text-xs font-bold text-[#5C5C5C]
-                hover:border-[#1A1A1A] hover:text-[#1A1A1A] transition-colors"
-            >
-              + 학생 등록
-            </button>
           </>
         )}
       </div>
@@ -289,18 +279,14 @@ export default function StudentMonitoringPage() {
       {/* 스크롤 맨 위로 */}
       <ScrollToTopButton targetRef={donutRef} />
 
-      {/* 학생 등록 모달 */}
-      <AnimatePresence>
-        {showEnrollment && userCourseId && (
-          <StudentEnrollment
-            courseId={userCourseId}
-            onClose={() => setShowEnrollment(false)}
-            onComplete={() => {
-              // onSnapshot이 자동으로 갱신하므로 별도 호출 불필요
-            }}
-          />
-        )}
-      </AnimatePresence>
+      {/* 학생 관리 바텀시트 */}
+      {userCourseId && (
+        <StudentManagementSheet
+          open={showManagement}
+          onClose={() => setShowManagement(false)}
+          courseId={userCourseId}
+        />
+      )}
 
     </div>
   );

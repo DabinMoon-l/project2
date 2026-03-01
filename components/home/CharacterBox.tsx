@@ -247,9 +247,9 @@ export default function CharacterBox() {
       <div className="flex flex-col items-center w-full">
         {/* XP / 도감 */}
         <div className="w-full flex items-center justify-between px-8 mb-1 mt-3 relative z-20">
-          <div className="h-[30px] flex items-center gap-2.5 px-4 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl">
-            <span className="text-[15px] font-bold text-white">XP</span>
-            <span className="font-bold text-[15px] text-white leading-none text-right">{totalExp}</span>
+          <div className="h-[36px] flex items-center gap-2.5 px-5 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl">
+            <span className="text-[17px] font-bold text-white">XP</span>
+            <span className="font-bold text-[17px] text-white leading-none text-right">{totalExp}</span>
           </div>
           <button
             ref={dogamBtnRef}
@@ -260,9 +260,9 @@ export default function CharacterBox() {
               }
               setShowDogam(true);
             }}
-            className="h-[30px] flex items-center justify-center px-4 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl transition-transform duration-200 hover:scale-110 active:scale-95"
+            className="h-[36px] flex items-center justify-center px-5 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl transition-transform duration-200 hover:scale-110 active:scale-95"
           >
-            <span className="text-[15px] font-bold text-white">도감</span>
+            <span className="text-[17px] font-bold text-white">도감</span>
           </button>
         </div>
 

@@ -238,15 +238,24 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
 
   const isQuestionChanged = (original: any, current: QuestionData): boolean => {
     if (!original) return true;
-    if (original.text !== current.text) return true;
+    if ((original.text || '') !== (current.text || '')) return true;
     if (original.type !== current.type) return true;
     if (current.type === 'subjective' || current.type === 'short_answer') {
-      if (original.answer !== current.answerText) return true;
+      if ((original.answer?.toString() || '') !== (current.answerText || '')) return true;
     } else if (current.type === 'multiple') {
-      const origAnswer = typeof original.answer === 'number' ? original.answer - 1 : -1;
+      // answer가 문자열("1")이든 숫자(1)이든 모두 처리 (1-indexed → 0-indexed)
+      const origNum = parseInt(String(original.answer), 10);
+      const origAnswer = !isNaN(origNum) ? origNum - 1 : -1;
       if (origAnswer !== current.answerIndex) return true;
     } else if (current.type === 'ox') {
-      if (original.answer !== current.answerIndex) return true;
+      // OX: 0/"0"/"O" = O, 1/"1"/"X" = X
+      const normalizeOx = (v: any) => {
+        const s = String(v).toUpperCase();
+        if (s === '0' || s === 'O' || s === 'TRUE') return 0;
+        if (s === '1' || s === 'X' || s === 'FALSE') return 1;
+        return v;
+      };
+      if (normalizeOx(original.answer) !== normalizeOx(current.answerIndex)) return true;
     }
     if (current.type === 'multiple') {
       const origChoices = original.choices || [];
@@ -270,10 +279,19 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
     if (current.type === 'subjective' || current.type === 'short_answer') {
       if (original.answer !== (current.answerText || '')) return true;
     } else if (current.type === 'multiple') {
-      const origAnswer = typeof original.answer === 'number' ? original.answer - 1 : -1;
+      // answer가 문자열("1")이든 숫자(1)이든 모두 처리 (1-indexed → 0-indexed)
+      const origNum = parseInt(String(original.answer), 10);
+      const origAnswer = !isNaN(origNum) ? origNum - 1 : -1;
       if (origAnswer !== (current.answerIndex ?? -1)) return true;
     } else if (current.type === 'ox') {
-      if (original.answer !== (current.answerIndex ?? 0)) return true;
+      // OX: 0/"0"/"O" = O, 1/"1"/"X" = X
+      const normalizeOx = (v: any) => {
+        const s = String(v).toUpperCase();
+        if (s === '0' || s === 'O' || s === 'TRUE') return 0;
+        if (s === '1' || s === 'X' || s === 'FALSE') return 1;
+        return v;
+      };
+      if (normalizeOx(original.answer) !== normalizeOx(current.answerIndex ?? 0)) return true;
     }
     if (current.type === 'multiple') {
       const origChoices = original.choices || [];

@@ -137,6 +137,15 @@ export default function ProfessorQuizCreatePage() {
   const [tags, setTags] = useState<string[]>([]);
   const [showTagPicker, setShowTagPicker] = useState(false);
 
+  // userCourseId가 비동기로 로드된 후 selectedCourseId 동기화
+  const courseInitRef = useRef(false);
+  useEffect(() => {
+    if (userCourseId && !courseInitRef.current && !selectedCourseId) {
+      courseInitRef.current = true;
+      setSelectedCourseId(userCourseId as CourseId);
+    }
+  }, [userCourseId, selectedCourseId]);
+
   // 태그 옵션 (과목별)
   const tagOptions = useMemo(() => {
     const courseId = selectedCourseId || userCourseId || 'biology';

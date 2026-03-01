@@ -205,6 +205,8 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
   const unsubRef = useRef<Unsubscribe | null>(null);
   // 첫 로드 완료 여부 (과목 전환 시 스피너 방지)
   const hasLoadedRef = useRef(false);
+  // presence-only 변경 시 30초 간격 flush (온라인 정렬 갱신용)
+  const lastPresenceFlushRef = useRef(0);
 
   // 현재 fetchStudentDetail이 처리 중인 uid (stale 콜백 방지)
   const currentFetchUidRef = useRef<string | null>(null);
@@ -348,8 +350,12 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
             }
           }
 
-          // 접속 상태만 변경된 경우 setStudents 호출 스킵 (리렌더 방지)
-          if (!hasNonActivityChange) return;
+          // 접속 상태만 변경된 경우: 30초 간격으로만 setStudents 호출 (온라인 정렬 갱신 + 리렌더 절약)
+          if (!hasNonActivityChange) {
+            const now = Date.now();
+            if (now - lastPresenceFlushRef.current < 30_000) return;
+            lastPresenceFlushRef.current = now;
+          }
         }
 
         const studentsList = Array.from(studentsMap.values());

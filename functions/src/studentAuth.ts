@@ -101,10 +101,10 @@ export const bulkEnrollStudents = onCall(
       const batch = db.batch();
 
       for (const student of chunk) {
-        // 유효성 검사
-        if (!student.name || !student.studentId) {
+        // 유효성 검사 (학번 필수, 이름은 선택)
+        if (!student.studentId) {
           errorCount++;
-          errors.push(`누락된 필드: ${student.studentId || "학번 없음"}`);
+          errors.push(`누락된 필드: 학번 없음`);
           continue;
         }
 
@@ -134,7 +134,7 @@ export const bulkEnrollStudents = onCall(
         }
 
         const docData: Record<string, unknown> = {
-          name: student.name,
+          name: student.name || "",
           studentId: student.studentId,
           isRegistered: false,
           enrolledAt: FieldValue.serverTimestamp(),
@@ -170,12 +170,13 @@ export const bulkEnrollStudents = onCall(
 export const registerStudent = onCall(
   { region: "asia-northeast3" },
   async (request) => {
-    const { studentId, password, courseId, classId, nickname } = request.data as {
+    const { studentId, password, courseId, classId, nickname, name } = request.data as {
       studentId: string;
       password: string;
       courseId: string;
       classId: string;
       nickname: string;
+      name?: string;
     };
 
     if (!studentId || !password || !courseId || !classId || !nickname) {
@@ -273,7 +274,7 @@ export const registerStudent = onCall(
     await userDocRef.set({
       email,
       studentId,
-      name: enrolledData.name || nickname,
+      name: name || enrolledData.name || nickname,
       nickname,
       classId,
       courseId,
@@ -818,6 +819,91 @@ export const migrateExistingAccounts = onCall(
 );
 
 // ============================================================
+// 공용 헬퍼: 학생 데이터 정리 (서브컬렉션 + 최상위 컬렉션)
+// ============================================================
+
+async function cleanupStudentData(
+  db: FirebaseFirestore.Firestore,
+  uid: string,
+): Promise<void> {
+  // 1. 서브컬렉션 삭제: rabbitHoldings, quizHistory, expHistory
+  const subcollections = ["rabbitHoldings", "quizHistory", "expHistory"];
+  for (const subcol of subcollections) {
+    const snapshot = await db
+      .collection("users")
+      .doc(uid)
+      .collection(subcol)
+      .get();
+
+    const batch = db.batch();
+    let count = 0;
+    for (const doc of snapshot.docs) {
+      batch.delete(doc.ref);
+      count++;
+      if (count >= 450) {
+        await batch.commit();
+        count = 0;
+      }
+    }
+    if (count > 0) {
+      await batch.commit();
+    }
+  }
+
+  // 2. 최상위 컬렉션에서 사용자 관련 데이터 삭제
+  const userIdCollections = [
+    "quizResults",
+    "reviews",
+    "quiz_completions",
+    "quizProgress",
+    "questionFeedbacks",
+    "quizBookmarks",
+    "customFolders",
+    "deletedReviewItems",
+    "submissions",
+    "likes",
+  ];
+
+  for (const col of userIdCollections) {
+    const snapshot = await db.collection(col)
+      .where("userId", "==", uid)
+      .limit(500)
+      .get();
+
+    if (!snapshot.empty) {
+      const b = db.batch();
+      snapshot.docs.forEach((d) => b.delete(d.ref));
+      await b.commit();
+    }
+  }
+
+  // posts (authorId 필드)
+  const postsSnap = await db.collection("posts")
+    .where("authorId", "==", uid)
+    .limit(500)
+    .get();
+  if (!postsSnap.empty) {
+    const b = db.batch();
+    postsSnap.docs.forEach((d) => b.delete(d.ref));
+    await b.commit();
+  }
+
+  // comments (authorId 필드)
+  const commentsSnap = await db.collection("comments")
+    .where("authorId", "==", uid)
+    .limit(500)
+    .get();
+  if (!commentsSnap.empty) {
+    const b = db.batch();
+    commentsSnap.docs.forEach((d) => b.delete(d.ref));
+    await b.commit();
+  }
+
+  // 3. users/{uid} 문서 삭제
+  await db.collection("users").doc(uid).delete();
+}
+
+// ============================================================
 // 7) deleteStudentAccount — 학생 본인: 계정 삭제 (재가입 가능)
 // ============================================================
 
@@ -849,7 +935,7 @@ export const deleteStudentAccount = onCall(
     const courseId = userData.courseId;
 
     try {
-      // 1. enrolledStudents 초기화 → 재가입 가능
+      // enrolledStudents 초기화 → 재가입 가능
       if (courseId && studentId) {
         const enrolledRef = db
           .collection("enrolledStudents")
@@ -869,84 +955,10 @@ export const deleteStudentAccount = onCall(
         }
       }
 
-      // 2. 서브컬렉션 삭제: rabbitHoldings, quizHistory, expHistory
-      const subcollections = ["rabbitHoldings", "quizHistory", "expHistory"];
-      for (const subcol of subcollections) {
-        const snapshot = await db
-          .collection("users")
-          .doc(uid)
-          .collection(subcol)
-          .get();
+      // 학생 데이터 정리 + users 문서 삭제
+      await cleanupStudentData(db, uid);
 
-        const batch = db.batch();
-        let count = 0;
-        for (const doc of snapshot.docs) {
-          batch.delete(doc.ref);
-          count++;
-          // Firestore 배치 제한 (500개)
-          if (count >= 450) {
-            await batch.commit();
-            count = 0;
-          }
-        }
-        if (count > 0) {
-          await batch.commit();
-        }
-      }
-
-      // 3. 최상위 컬렉션에서 사용자 관련 데이터 삭제
-      const userIdCollections = [
-        "quizResults",
-        "reviews",
-        "quiz_completions",
-        "quizProgress",
-        "questionFeedbacks",
-        "quizBookmarks",
-        "customFolders",
-        "deletedReviewItems",
-        "submissions",
-        "likes",
-      ];
-
-      for (const col of userIdCollections) {
-        const snapshot = await db.collection(col)
-          .where("userId", "==", uid)
-          .limit(500)
-          .get();
-
-        if (!snapshot.empty) {
-          const b = db.batch();
-          snapshot.docs.forEach((d) => b.delete(d.ref));
-          await b.commit();
-        }
-      }
-
-      // posts (authorId 필드)
-      const postsSnap = await db.collection("posts")
-        .where("authorId", "==", uid)
-        .limit(500)
-        .get();
-      if (!postsSnap.empty) {
-        const b = db.batch();
-        postsSnap.docs.forEach((d) => b.delete(d.ref));
-        await b.commit();
-      }
-
-      // comments (authorId 필드)
-      const commentsSnap = await db.collection("comments")
-        .where("authorId", "==", uid)
-        .limit(500)
-        .get();
-      if (!commentsSnap.empty) {
-        const b = db.batch();
-        commentsSnap.docs.forEach((d) => b.delete(d.ref));
-        await b.commit();
-      }
-
-      // 4. users/{uid} 문서 삭제
-      await db.collection("users").doc(uid).delete();
-
-      // 5. Firebase Auth 계정 삭제
+      // Firebase Auth 계정 삭제
       await adminAuth.deleteUser(uid);
 
       console.log(`계정 삭제 완료: ${studentId} (${uid})`);
@@ -955,6 +967,78 @@ export const deleteStudentAccount = onCall(
     } catch (error) {
       console.error("계정 삭제 실패:", error);
       throw new HttpsError("internal", "계정 삭제에 실패했습니다.");
+    }
+  }
+);
+
+// ============================================================
+// 8) removeEnrolledStudent — 교수님 전용: 등록 학생 삭제
+// ============================================================
+
+export const removeEnrolledStudent = onCall(
+  { region: "asia-northeast3" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+    }
+
+    const db = getFirestore();
+
+    // 교수님 권한 확인
+    const userDoc = await db.collection("users").doc(request.auth.uid).get();
+    if (!userDoc.exists || userDoc.data()?.role !== "professor") {
+      throw new HttpsError("permission-denied", "교수님만 학생을 삭제할 수 있습니다.");
+    }
+
+    const { courseId, studentId } = request.data as {
+      courseId: string;
+      studentId: string;
+    };
+
+    if (!courseId || !studentId) {
+      throw new HttpsError("invalid-argument", "courseId와 studentId가 필요합니다.");
+    }
+
+    const enrolledRef = db
+      .collection("enrolledStudents")
+      .doc(courseId)
+      .collection("students")
+      .doc(studentId);
+
+    const enrolledDoc = await enrolledRef.get();
+    if (!enrolledDoc.exists) {
+      throw new HttpsError("not-found", "등록되지 않은 학번입니다.");
+    }
+
+    const enrolledData = enrolledDoc.data()!;
+    const wasRegistered = !!enrolledData.isRegistered;
+
+    try {
+      // 가입된 학생인 경우 Auth + 데이터 정리
+      if (wasRegistered && enrolledData.registeredUid) {
+        const uid = enrolledData.registeredUid;
+        const adminAuth = getAuth();
+
+        // 학생 데이터 정리 + users 문서 삭제
+        await cleanupStudentData(db, uid);
+
+        // Firebase Auth 계정 삭제
+        try {
+          await adminAuth.deleteUser(uid);
+        } catch (authErr) {
+          console.warn(`Auth 계정 삭제 실패 (이미 삭제됨?): ${uid}`, authErr);
+        }
+      }
+
+      // enrolledStudents 문서 삭제
+      await enrolledRef.delete();
+
+      console.log(`등록 학생 삭제: ${studentId} (courseId: ${courseId}, wasRegistered: ${wasRegistered})`);
+
+      return { success: true, wasRegistered };
+    } catch (error) {
+      console.error("등록 학생 삭제 실패:", error);
+      throw new HttpsError("internal", "학생 삭제에 실패했습니다.");
     }
   }
 );

@@ -138,7 +138,7 @@ function StudentSectionTabs({
           key={opt.key}
           ref={el => { btnRefs.current[i] = el; }}
           onClick={() => onChangeTab(opt.key)}
-          className={`pb-1.5 text-base font-bold transition-colors ${
+          className={`pb-1.5 text-lg font-bold transition-colors ${
             activeTab === opt.key ? 'text-[#1A1A1A]' : 'text-[#5C5C5C]'
           }`}
         >
@@ -972,7 +972,7 @@ function ReviewQuizCard({
       </div>
 
       {/* 업데이트 뱃지 + 북마크 버튼 */}
-      <div className="absolute top-2 right-2 z-30 flex items-center gap-1.5">
+      <div className="absolute top-2 right-2 z-30 flex items-start gap-1.5">
         {/* 업데이트 뱃지 */}
         {hasUpdate && (
           <button
@@ -2463,7 +2463,7 @@ function QuizListPageContent() {
             exit={{ opacity: 0, scale: 0.88 }}
             transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-[240px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-3 rounded-xl"
+            className="w-full max-w-[280px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-3 rounded-2xl"
           >
             {/* 아이콘 */}
             <div className="flex justify-center mb-2">
@@ -2501,14 +2501,14 @@ function QuizListPageContent() {
               <button
                 onClick={() => setUpdateConfirmQuiz(null)}
                 disabled={updateConfirmLoading}
-                className="flex-1 py-1.5 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors disabled:opacity-50 rounded-lg"
+                className="flex-1 py-1.5 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors disabled:opacity-50 rounded-xl"
               >
                 취소
               </button>
               <button
                 onClick={handleConfirmUpdate}
                 disabled={updateConfirmLoading}
-                className="flex-1 py-1.5 text-xs font-bold border-2 border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#333] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 py-1.5 text-xs font-bold border-2 border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#333] transition-colors disabled:opacity-50 flex items-center justify-center gap-2 rounded-xl"
               >
                 {updateConfirmLoading ? (
                   <>

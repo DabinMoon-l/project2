@@ -117,7 +117,7 @@ function SlideFilter({
           key={opt.value}
           ref={el => { btnRefs.current[i] = el; }}
           onClick={() => onFilterChange(opt.value)}
-          className={`pb-1.5 text-base font-bold transition-colors ${
+          className={`pb-1.5 text-lg font-bold transition-colors ${
             activeFilter === opt.value ? 'text-[#1A1A1A]' : 'text-[#5C5C5C]'
           }`}
         >
@@ -289,7 +289,7 @@ function BookmarkedQuizCard({
       onClick={onClick}
       className="relative border border-[#1A1A1A] bg-[#F5F0E8] p-3 cursor-pointer hover:bg-[#EDEAE4] transition-all rounded-xl"
     >
-      {/* 우측 상단 아이콘 그룹: [업데이트] [지구] [찜] */}
+      {/* 우측 상단 아이콘 그룹: [업데이트] [지구] [찜] — items-start로 찜버튼 카운트에 의한 밀림 방지 */}
       <div className="absolute top-2 right-2 flex items-start gap-1 z-10">
         {/* 업데이트 뱃지 */}
         {hasUpdate && (

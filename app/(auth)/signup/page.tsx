@@ -50,6 +50,7 @@ export default function SignupPage() {
   const [grade, setGrade] = useState<number>(0);
   const [studentId, setStudentId] = useState('');
   const [classId, setClassId] = useState('');
+  const [name, setName] = useState('');
   const [nickname, setNickname] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
@@ -86,7 +87,7 @@ export default function SignupPage() {
     e.preventDefault();
     setLocalError(null);
 
-    if (!grade || !studentId || !classId || !nickname || !password || !passwordConfirm) {
+    if (!grade || !studentId || !classId || !name || !nickname || !password || !passwordConfirm) {
       setLocalError('모든 필드를 입력해주세요.');
       return;
     }
@@ -98,6 +99,11 @@ export default function SignupPage() {
 
     if (!/^\d{7,10}$/.test(studentId)) {
       setLocalError('학번은 7-10자리 숫자입니다.');
+      return;
+    }
+
+    if (name.length < 2 || name.length > 10) {
+      setLocalError('이름은 2-10자 사이여야 합니다.');
       return;
     }
 
@@ -127,7 +133,8 @@ export default function SignupPage() {
       password,
       courseAssignment.courseId,
       classId,
-      nickname
+      nickname,
+      name
     );
     setIsSubmitting(false);
 
@@ -223,6 +230,20 @@ export default function SignupPage() {
             onChange={(e) => setStudentId(e.target.value.replace(/\D/g, ''))}
             maxLength={10}
             autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            className="w-full px-3 py-2 text-sm bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-white/50 transition-colors"
+            disabled={isSubmitting}
+          />
+
+          {/* 이름 (실명) */}
+          <input
+            type="text"
+            placeholder="이름 (실명)"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={10}
+            autoComplete="name"
             autoCorrect="off"
             autoCapitalize="off"
             className="w-full px-3 py-2 text-sm bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/50 focus:outline-none focus:border-white/50 transition-colors"

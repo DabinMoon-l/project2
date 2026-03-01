@@ -14,6 +14,7 @@ import type { ClassType } from '@/styles/themes';
 import LibraryJobToast from '@/components/professor/library/LibraryJobToast';
 import { useViewportScale, useWideMode } from '@/lib/hooks/useViewportScale';
 import { useScrollDismissKeyboard } from '@/lib/hooks/useKeyboardAware';
+import OfflineBanner from '@/components/common/OfflineBanner';
 
 /**
  * 내부 레이아웃 컴포넌트
@@ -112,6 +113,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
           <MilestoneWrapper isProfessor={isProfessor}>
             <HomeOverlayProvider>
               <LibraryJobToast />
+              <OfflineBanner />
               <SwipeBack enabled={!isWide && !isTabRoot}>
                   <div
                     data-main-content

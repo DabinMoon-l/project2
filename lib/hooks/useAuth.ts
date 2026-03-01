@@ -35,7 +35,7 @@ interface UseAuthReturn {
   /** 이메일+비밀번호 로그인 (교수님용) */
   loginWithEmail: (email: string, password: string) => Promise<void>;
   /** 학번+비밀번호 회원가입 (CF 호출) */
-  signUpWithStudentId: (studentId: string, password: string, courseId: string, classId: string, nickname: string) => Promise<{
+  signUpWithStudentId: (studentId: string, password: string, courseId: string, classId: string, nickname: string, name?: string) => Promise<{
     success: boolean;
     uid?: string;
   }>;
@@ -109,18 +109,19 @@ export const useAuth = (): UseAuthReturn => {
     password: string,
     courseId: string,
     classId: string,
-    nickname: string
+    nickname: string,
+    name?: string
   ): Promise<{ success: boolean; uid?: string }> => {
     try {
       setLoading(true);
       setError(null);
 
       const registerStudentFn = httpsCallable<
-        { studentId: string; password: string; courseId: string; classId: string; nickname: string },
+        { studentId: string; password: string; courseId: string; classId: string; nickname: string; name?: string },
         { success: boolean; uid: string }
       >(functions, 'registerStudent');
 
-      const result = await registerStudentFn({ studentId, password, courseId, classId, nickname });
+      const result = await registerStudentFn({ studentId, password, courseId, classId, nickname, name });
 
       // 가입 성공 후 바로 로그인
       const email = formatStudentEmail(studentId);

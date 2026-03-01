@@ -232,11 +232,156 @@ export const PATHOPHYSIOLOGY_INDEX: CourseIndex = {
   ],
 };
 
+// 미생물학 인덱스
+export const MICROBIOLOGY_INDEX: CourseIndex = {
+  courseId: 'microbiology',
+  courseName: '미생물학',
+  chapters: [
+    {
+      id: 'micro_1',
+      name: '1. 미생물과 미생물학',
+      shortName: '미생물과 미생물학',
+      details: [
+        { id: 'micro_1_1', name: '미생물의 개요' },
+        { id: 'micro_1_2', name: '미생물학의 역사' },
+      ],
+    },
+    {
+      id: 'micro_2',
+      name: '2. 숙주면역반응',
+      shortName: '숙주면역반응',
+      details: [
+        { id: 'micro_2_1', name: '면역계통의 개요' },
+        { id: 'micro_2_2', name: '선천면역' },
+        { id: 'micro_2_3', name: '후천면역' },
+        { id: 'micro_2_4', name: '면역계통의 병리와 응용' },
+      ],
+    },
+    {
+      id: 'micro_3',
+      name: '3. 감염과 발병',
+      shortName: '감염과 발병',
+      details: [
+        { id: 'micro_3_1', name: '감염의 성립' },
+        { id: 'micro_3_2', name: '감염과 발병' },
+        { id: 'micro_3_3', name: '감염의 경과' },
+      ],
+    },
+    {
+      id: 'micro_4',
+      name: '4. 세균의 일반적인 성질',
+      shortName: '세균의 일반적인 성질',
+      details: [
+        { id: 'micro_4_1', name: '세균의 분류' },
+        { id: 'micro_4_2', name: '세균의 형태와 구조' },
+        { id: 'micro_4_3', name: '세균의 증식' },
+        { id: 'micro_4_4', name: '세균의 대사' },
+        { id: 'micro_4_5', name: '세균의 유전' },
+        { id: 'micro_4_6', name: '세균의 병원성' },
+        { id: 'micro_4_7', name: '세균 감염병의 진단' },
+        { id: 'micro_4_8', name: '항균제' },
+      ],
+    },
+    {
+      id: 'micro_5',
+      name: '5. 병원성 세균',
+      shortName: '병원성 세균',
+      details: [
+        { id: 'micro_5_1', name: '그람양성 조건무산소성 및 산소성 알균' },
+        { id: 'micro_5_2', name: '그람음성 조건무산소성 막대균' },
+        { id: 'micro_5_3', name: '나선균군' },
+        { id: 'micro_5_4', name: '그람음성 산소성 막대균 및 알균' },
+        { id: 'micro_5_5', name: '그람양성 조건무산소성 및 산소성 막대균' },
+        { id: 'micro_5_6', name: '절대무산소성균' },
+        { id: 'micro_5_7', name: '미코박테륨속' },
+        { id: 'micro_5_8', name: '바퀴살균' },
+        { id: 'micro_5_9', name: '스피로헤타' },
+        { id: 'micro_5_10', name: '미코플라스마, 리케차, 클라미디아' },
+      ],
+    },
+    {
+      id: 'micro_6',
+      name: '6. 바이러스의 일반적 성질',
+      shortName: '바이러스의 일반적 성질',
+      details: [
+        { id: 'micro_6_1', name: '바이러스의 특징' },
+        { id: 'micro_6_2', name: '바이러스의 분류' },
+        { id: 'micro_6_3', name: '바이러스의 형태와 구조' },
+        { id: 'micro_6_4', name: '바이러스의 증식' },
+        { id: 'micro_6_5', name: '바이러스의 유전' },
+        { id: 'micro_6_6', name: '바이러스의 병원성' },
+        { id: 'micro_6_7', name: '바이러스 감염병의 진단' },
+        { id: 'micro_6_8', name: '항바이러스제' },
+      ],
+    },
+    {
+      id: 'micro_7',
+      name: '7. 병원성 바이러스',
+      shortName: '병원성 바이러스',
+      details: [
+        { id: 'micro_7_1', name: 'DNA 바이러스' },
+        { id: 'micro_7_2', name: 'RNA 바이러스' },
+        { id: 'micro_7_3', name: '간염바이러스' },
+        { id: 'micro_7_4', name: '종양바이러스' },
+        { id: 'micro_7_5', name: '프리온' },
+      ],
+    },
+    {
+      id: 'micro_8',
+      name: '8. 진균의 일반적 성질',
+      shortName: '진균의 일반적 성질',
+      details: [
+        { id: 'micro_8_1', name: '진균의 형태와 구조' },
+        { id: 'micro_8_2', name: '진균의 증식' },
+        { id: 'micro_8_3', name: '진균의 분류' },
+        { id: 'micro_8_4', name: '진균의 영양과 배양' },
+        { id: 'micro_8_5', name: '진균의 병원성' },
+        { id: 'micro_8_6', name: '진균 감염병의 진단' },
+        { id: 'micro_8_7', name: '항진균제' },
+      ],
+    },
+    {
+      id: 'micro_9',
+      name: '9. 병원성 진균',
+      shortName: '병원성 진균',
+      details: [
+        { id: 'micro_9_1', name: '심재성 진균증을 일으키는 진균' },
+        { id: 'micro_9_2', name: '표재성 피부진균증을 일으키는 진균' },
+        { id: 'micro_9_3', name: '심재성 피부진균증을 일으키는 진균' },
+      ],
+    },
+    {
+      id: 'micro_10',
+      name: '10. 원충의 일반적 성질과 병원성 원충',
+      shortName: '원충',
+      details: [
+        { id: 'micro_10_1', name: '원충의 특징' },
+        { id: 'micro_10_2', name: '원충의 형태와 구조' },
+        { id: 'micro_10_3', name: '원충의 분류' },
+        { id: 'micro_10_4', name: '원충의 발육과 증식' },
+        { id: 'micro_10_5', name: '원충 감염병의 진단' },
+        { id: 'micro_10_6', name: '항원충제' },
+        { id: 'micro_10_7', name: '병원성 원충' },
+      ],
+    },
+    {
+      id: 'micro_11',
+      name: '11. 감염병의 예방과 대책',
+      shortName: '감염병의 예방과 대책',
+      details: [
+        { id: 'micro_11_1', name: '감염병 현황' },
+        { id: 'micro_11_2', name: '감염병 예방' },
+        { id: 'micro_11_3', name: '감염병 대책' },
+      ],
+    },
+  ],
+};
+
 // 과목 ID로 인덱스 가져오기
 export const COURSE_INDEXES: Record<string, CourseIndex> = {
   biology: BIOLOGY_INDEX,
   pathophysiology: PATHOPHYSIOLOGY_INDEX,
-  // 추후 미생물학 추가
+  microbiology: MICROBIOLOGY_INDEX,
 };
 
 // 과목 ID로 인덱스 가져오기 함수

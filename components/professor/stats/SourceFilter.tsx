@@ -23,7 +23,7 @@ export default function SourceFilter({ value, onChange }: Props) {
           <button
             key={o.value}
             onClick={() => onChange(o.value)}
-            className="relative pb-1.5 text-base font-bold transition-colors"
+            className="relative pb-1.5 text-lg font-bold transition-colors"
             style={{ color: active ? '#1A1A1A' : '#5C5C5C' }}
           >
             {o.label}

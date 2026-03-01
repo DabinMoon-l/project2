@@ -42,7 +42,6 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
   const [error, setError] = useState<string | null>(null);
 
   // 직접 입력 상태
-  const [manualName, setManualName] = useState('');
   const [manualStudentId, setManualStudentId] = useState('');
 
   // 네비게이션 숨김
@@ -80,16 +79,31 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
       worksheet.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return; // 헤더 스킵
 
-        const name = String(row.getCell(1).value || '').trim();
-        const studentId = String(row.getCell(2).value || '').trim();
+        // 셀 값 추출 (학번이 어느 열에 있든 자동 감지)
+        const cell1 = String(row.getCell(1).value || '').trim();
+        const cell2 = String(row.getCell(2).value || '').trim();
 
-        if (name && studentId) {
+        // 숫자로만 이루어진 7-10자리를 학번으로 판단
+        let studentId = '';
+        let name = '';
+        if (/^\d{7,10}$/.test(cell1)) {
+          studentId = cell1;
+          name = cell2;
+        } else if (/^\d{7,10}$/.test(cell2)) {
+          studentId = cell2;
+          name = cell1;
+        } else {
+          // 둘 다 학번 형식이 아니면 스킵
+          return;
+        }
+
+        if (studentId) {
           rows.push({ name, studentId });
         }
       });
 
       if (rows.length === 0) {
-        setError('유효한 데이터가 없습니다. 컬럼: 이름, 학번');
+        setError('유효한 데이터가 없습니다. 학번(7-10자리 숫자)이 포함된 열이 필요합니다.');
         return;
       }
 
@@ -105,20 +119,19 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
   // ============================================
 
   const handleManualAdd = useCallback(() => {
-    if (!manualName || !manualStudentId) {
-      setError('이름과 학번을 입력해주세요.');
+    if (!manualStudentId) {
+      setError('학번을 입력해주세요.');
       return;
     }
 
     setPreviewRows(prev => [
       ...prev,
-      { name: manualName, studentId: manualStudentId },
+      { name: '', studentId: manualStudentId },
     ]);
 
-    setManualName('');
     setManualStudentId('');
     setError(null);
-  }, [manualName, manualStudentId]);
+  }, [manualStudentId]);
 
   // ============================================
   // 등록 실행 (CF 호출)
@@ -273,12 +286,12 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
               <div className="space-y-3">
                 <p className="text-sm text-[#5C5C5C]">
                   엑셀 파일 (.xlsx)을 업로드하세요.
-                  <br />컬럼: 이름, 학번
+                  <br />학번(7-10자리 숫자) 컬럼이 포함되어야 합니다.
                 </p>
                 <label className="block">
                   <input
                     type="file"
-                    accept=".xlsx,.xls"
+                    accept=".xlsx,.xls,.cell"
                     onChange={handleExcelUpload}
                     className="block w-full text-sm text-[#5C5C5C]
                       file:mr-3 file:py-2.5 file:px-4
@@ -294,24 +307,15 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
             {/* 직접 입력 탭 */}
             {activeTab === 'manual' && (
               <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    placeholder="이름"
-                    value={manualName}
-                    onChange={(e) => setManualName(e.target.value)}
-                    className="px-3 py-2.5 border-2 border-[#1A1A1A] rounded-lg text-sm bg-[#F5F0E8] placeholder-[#5C5C5C] focus:outline-none"
-                  />
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="학번"
-                    value={manualStudentId}
-                    onChange={(e) => setManualStudentId(e.target.value.replace(/\D/g, ''))}
-                    maxLength={10}
-                    className="px-3 py-2.5 border-2 border-[#1A1A1A] rounded-lg text-sm bg-[#F5F0E8] placeholder-[#5C5C5C] focus:outline-none"
-                  />
-                </div>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="학번 (7-10자리)"
+                  value={manualStudentId}
+                  onChange={(e) => setManualStudentId(e.target.value.replace(/\D/g, ''))}
+                  maxLength={10}
+                  className="w-full px-3 py-2.5 border-2 border-[#1A1A1A] rounded-lg text-sm bg-[#F5F0E8] placeholder-[#5C5C5C] focus:outline-none"
+                />
                 <button
                   onClick={handleManualAdd}
                   className="w-full py-2.5 border-2 border-[#1A1A1A] rounded-lg text-sm font-bold hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
@@ -331,7 +335,6 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b-2 border-[#1A1A1A] bg-[#EBE5D9]">
-                        <th className="px-3 py-2 text-left font-bold">이름</th>
                         <th className="px-3 py-2 text-left font-bold">학번</th>
                         <th className="w-10" />
                       </tr>
@@ -339,7 +342,6 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
                     <tbody>
                       {previewRows.map((row, i) => (
                         <tr key={i} className="border-b border-[#D4CFC4] last:border-b-0">
-                          <td className="px-3 py-2">{row.name}</td>
                           <td className="px-3 py-2">{row.studentId}</td>
                           <td className="px-2 py-2">
                             <button

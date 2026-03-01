@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
-import { useUser } from '@/lib/contexts';
 import { useRabbitHoldings, useRabbitsForCourse, getRabbitStats, type RabbitDoc, type RabbitHolding } from '@/lib/hooks/useRabbit';
 import RabbitImage from '@/components/common/RabbitImage';
 import VirtualRabbitGrid from '@/components/common/VirtualRabbitGrid';
@@ -417,88 +416,27 @@ function RabbitDetail({
         </div>
       </div>
 
-      {isDefaultRabbit ? (
-        <DefaultRabbitMessage />
-      ) : (
-        <ButlerList discoverers={discoverers} baseName={baseName} />
+      {!isDefaultRabbit && discoverers.length > 0 && (
+        <ParentLabel discoverers={discoverers} />
       )}
     </div>
   );
 }
 
 /**
- * 보유 집사 2열 레이아웃
+ * 부모(최초 발견자)만 표시 — 박스 없이 흰색 글씨
  */
-function ButlerList({
+function ParentLabel({
   discoverers,
-  baseName,
 }: {
   discoverers: Array<{ userId: string; nickname: string; discoveryOrder: number }>;
-  baseName: string;
 }) {
-  const sorted = [...discoverers].sort((a, b) => a.discoveryOrder - b.discoveryOrder);
-
-  const groups: Array<typeof sorted>[] = [];
-  for (let i = 0; i < sorted.length; i += 20) {
-    groups.push([
-      sorted.slice(i, i + 10),
-      sorted.slice(i + 10, i + 20),
-    ]);
-  }
-
-  const renderEntry = (d: { userId: string; nickname: string; discoveryOrder: number }) => (
-    <div key={d.userId} className="flex items-baseline gap-1">
-      {d.discoveryOrder === 1 ? (
-        <span className="text-xs font-bold text-[#D4AF37] shrink-0">부모</span>
-      ) : (
-        <span className="text-xs font-bold text-white/50 shrink-0">
-          {d.discoveryOrder - 1}대
-        </span>
-      )}
-      <span className="text-xs font-bold text-white/90 truncate">
-        {d.nickname}
-        {d.discoveryOrder > 1 && (
-          <span className="text-[10px] text-white/50 ml-0.5">
-            ({baseName} {d.discoveryOrder}세)
-          </span>
-        )}
-      </span>
-    </div>
-  );
+  const parent = discoverers.find(d => d.discoveryOrder === 1);
+  if (!parent) return null;
 
   return (
-    <div className="mb-3 p-3 bg-white/10 border border-white/15 rounded-xl">
-      <p className="text-sm font-bold mb-2 text-white">보유 집사</p>
-      <div className="max-h-[200px] overflow-y-auto overscroll-contain space-y-3">
-        {groups.map(([left, right], gi) => (
-          <div key={gi}>
-            {gi > 0 && <hr className="border-white/15 mb-3" />}
-            <div className="flex gap-4">
-              <div className="flex-1 space-y-1">
-                {left.map(renderEntry)}
-              </div>
-              {right.length > 0 && (
-                <div className="flex-1 space-y-1">
-                  {right.map(renderEntry)}
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/**
- * 기본 토끼 특별 메시지
- */
-function DefaultRabbitMessage() {
-  const { profile } = useUser();
-  const nickname = profile?.nickname || '여러분';
-  return (
-    <p className="mb-3 text-center text-sm font-bold text-white">
-      토끼는 언제나 {nickname} 편!
+    <p className="mb-3 text-center text-sm text-white">
+      부모 <span className="font-bold">{parent.nickname}</span>
     </p>
   );
 }

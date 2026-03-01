@@ -19,6 +19,7 @@ interface Props {
   onSortChange?: (key: SortKey) => void;
   onStudentClick: (uid: string) => void;
   warningMap: Map<string, WarningItem>;
+  onManageClick?: () => void;
 }
 
 function getOnlineStatus(lastActiveAt: Date): 'online' | 'offline' {
@@ -83,7 +84,7 @@ function getTimeAgo(date: Date): string {
   return `${diffDay}일전`;
 }
 
-export default function StudentListView({ students, onStudentClick, warningMap }: Props) {
+export default function StudentListView({ students, onStudentClick, warningMap, onManageClick }: Props) {
   // 30초마다 tick → 온라인 상태 재계산 (isPresenceOnly 최적화로 students가 안 바뀌어도 상태 갱신)
   const [tick, setTick] = useState(0);
   useEffect(() => {
@@ -121,10 +122,19 @@ export default function StudentListView({ students, onStudentClick, warningMap }
   return (
     <div>
       {/* 헤더 */}
-      <div className="flex items-center mb-5">
+      <div className="flex items-center justify-between mb-5">
         <span className="text-[22px] font-bold text-[#1A1A1A] pb-1.5">
           학생 목록 ({students.length}명)
         </span>
+        {onManageClick && (
+          <button
+            onClick={onManageClick}
+            className="px-3 py-1.5 text-sm font-bold border-2 border-[#1A1A1A] rounded-lg
+              text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+          >
+            관리
+          </button>
+        )}
       </div>
 
       {/* 학생 카드 그리드 — 3열 */}
