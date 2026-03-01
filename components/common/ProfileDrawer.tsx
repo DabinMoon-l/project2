@@ -36,6 +36,7 @@ import {
 import { calculateMilestoneInfo } from '@/components/home/StatsCard';
 import { auth, db, functions } from '@/lib/firebase';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
+import { useHideNav } from '@/lib/hooks/useHideNav';
 
 // ============================================================
 // 상수 (컴포넌트 외부 — 렌더마다 재생성 방지)
@@ -257,18 +258,14 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
     }
   }, [user?.uid, isOpen, fetchSettings]);
 
-  // 모달 열림 시 네비게이션 숨김 + body 스크롤 방지 (통합)
+  // 네비게이션 숨김
+  useHideNav(isOpen);
+
+  // body 스크롤 방지
   useEffect(() => {
-    if (!isOpen) {
-      document.body.removeAttribute('data-hide-nav');
-      return;
-    }
-    document.body.setAttribute('data-hide-nav', '');
+    if (!isOpen) return;
     lockScroll();
-    return () => {
-      document.body.removeAttribute('data-hide-nav');
-      unlockScroll();
-    };
+    return () => unlockScroll();
   }, [isOpen]);
 
   // 프로필 피커 점진적 렌더링 — 애니메이션 완료 후 12개씩
@@ -577,13 +574,15 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
     try {
       const deleteFn = httpsCallable<void, { success: boolean }>(functions, 'deleteStudentAccount');
       await deleteFn();
+      // CF에서 서버측 Auth 삭제 완료 → 클라이언트 로그아웃으로 즉시 인증 상태 초기화
+      // onAuthStateChanged가 null 감지 → useRequireAuth가 /login으로 리다이렉트
       onClose();
-      router.replace('/login');
+      await logout();
     } catch (err) {
       console.error('계정 삭제 실패:', err);
       setDeletingAccount(false);
     }
-  }, [deleteInput, onClose, router]);
+  }, [deleteInput, onClose, logout]);
 
   // 문의하기
   const handleSendInquiry = useCallback(async () => {

@@ -8,6 +8,7 @@ import { useRabbitHoldings, useRabbitsForCourse, getRabbitStats, type RabbitDoc,
 import RabbitImage from '@/components/common/RabbitImage';
 import VirtualRabbitGrid from '@/components/common/VirtualRabbitGrid';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
+import { useHideNav } from '@/lib/hooks/useHideNav';
 
 const OPEN_MS = 380;
 const CLOSE_MS = 320;
@@ -39,14 +40,7 @@ export default function RabbitDogam({
   buttonRect,
 }: RabbitDogamProps) {
   // 도감 열림 시 네비게이션 숨김
-  useEffect(() => {
-    if (isOpen) {
-      document.body.setAttribute('data-hide-nav', '');
-    } else {
-      document.body.removeAttribute('data-hide-nav');
-    }
-    return () => document.body.removeAttribute('data-hide-nav');
-  }, [isOpen]);
+  useHideNav(isOpen);
 
   // 도감 열림 시 body 스크롤 방지
   useEffect(() => {

@@ -13,6 +13,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
+import { useHideNav } from '@/lib/hooks/useHideNav';
 
 interface StudentRow {
   name: string;
@@ -45,12 +46,7 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
   const [manualStudentId, setManualStudentId] = useState('');
 
   // 네비게이션 숨김
-  useEffect(() => {
-    document.body.setAttribute('data-hide-nav', '');
-    return () => {
-      document.body.removeAttribute('data-hide-nav');
-    };
-  }, []);
+  useHideNav(true);
 
   // ============================================
   // 엑셀 업로드 처리

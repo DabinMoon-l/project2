@@ -23,6 +23,7 @@ import AutoVideo, { getDifficultyVideo } from '@/components/quiz/AutoVideo';
 import { NEWSPAPER_BG_TEXT } from '@/lib/utils/quizHelpers';
 import type { QuestionExportData as PdfQuestionData } from '@/lib/utils/questionPdfExport';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
+import { useHideNav, useHideNavOnly } from '@/lib/hooks/useHideNav';
 
 // ============================================================
 // 타입
@@ -997,15 +998,7 @@ export default function ProfessorQuizListPage() {
   }, [sectionFilter]);
 
   // 서재 탭 시 네비게이션만 숨김 (PullToHome은 유지)
-  // data-hide-nav는 PullToHome 제스처도 차단하므로 data-hide-nav-only 사용
-  useEffect(() => {
-    if (sectionFilter === 'library') {
-      document.body.setAttribute('data-hide-nav-only', '');
-    } else {
-      document.body.removeAttribute('data-hide-nav-only');
-    }
-    return () => document.body.removeAttribute('data-hide-nav-only');
-  }, [sectionFilter]);
+  useHideNavOnly(sectionFilter === 'library');
 
   // 서재 탭 인라인 프리뷰 모드
   const [isLibraryPreview, setIsLibraryPreview] = useState(false);
@@ -1357,17 +1350,18 @@ export default function ProfessorQuizListPage() {
     }).catch(() => setDetailsCreatorInfo(null));
   }, [detailsQuiz?.creatorUid]);
 
-  // Details 모달 열릴 때 네비게이션 숨김 + 스크롤 완전 잠금
+  // Details 모달 열릴 때 네비게이션 숨김
+  useHideNav(!!detailsQuiz);
+
+  // Details 모달 열릴 때 스크롤 완전 잠금
   useEffect(() => {
     if (detailsQuiz) {
-      document.body.setAttribute('data-hide-nav', 'true');
       const scrollY = window.scrollY;
       document.body.style.position = 'fixed';
       document.body.style.top = `-${scrollY}px`;
       document.body.style.left = '0';
       document.body.style.right = '0';
       return () => {
-        document.body.removeAttribute('data-hide-nav');
         document.body.style.position = '';
         document.body.style.top = '';
         document.body.style.left = '';

@@ -11,6 +11,7 @@ import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { MatchState } from '@/lib/types/tekken';
+import { useHideNav } from '@/lib/hooks/useHideNav';
 
 interface TekkenMatchmakingModalProps {
   isOpen: boolean;
@@ -29,17 +30,8 @@ export default function TekkenMatchmakingModal({
   error,
   onCancel,
 }: TekkenMatchmakingModalProps) {
-  // data-hide-nav 설정
-  useEffect(() => {
-    if (isOpen) {
-      document.body.setAttribute('data-hide-nav', '');
-    } else {
-      document.body.removeAttribute('data-hide-nav');
-    }
-    return () => {
-      document.body.removeAttribute('data-hide-nav');
-    };
-  }, [isOpen]);
+  // 네비게이션 숨김
+  useHideNav(isOpen);
 
   if (typeof window === 'undefined') return null;
 

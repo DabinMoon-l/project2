@@ -22,6 +22,7 @@ import { COURSES, getPastExamOptions, type PastExamOption } from '@/lib/types/co
 import { getChapterById, generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import type { QuestionExportData as PdfQuestionData } from '@/lib/utils/questionPdfExport';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
+import { useHideNav } from '@/lib/hooks/useHideNav';
 
 /** 완료된 퀴즈 데이터 타입 */
 interface CompletedQuizData {
@@ -2824,14 +2825,7 @@ function ReviewPageContent() {
   const [selectedFolderForAssign, setSelectedFolderForAssign] = useState<string | null>(null);
 
   // 네비게이션 숨김 (폴더생성/정렬모드/서재상세/공개전환모달)
-  useEffect(() => {
-    if (showCreateFolder || isSortMode || selectedLibraryQuiz || publishConfirmQuizId) {
-      document.body.setAttribute('data-hide-nav', '');
-    } else {
-      document.body.removeAttribute('data-hide-nav');
-    }
-    return () => document.body.removeAttribute('data-hide-nav');
-  }, [showCreateFolder, isSortMode, selectedLibraryQuiz, publishConfirmQuizId]);
+  useHideNav(!!(showCreateFolder || isSortMode || selectedLibraryQuiz || publishConfirmQuizId));
 
   // 카테고리 설정 모달 열릴 때 body 스크롤 방지 (키보드 올라올 때 자유 스크롤 방지)
   useEffect(() => {
@@ -3079,16 +3073,7 @@ function ReviewPageContent() {
   const [totalQuestionCount, setTotalQuestionCount] = useState(0);
 
   // 업데이트 모달이 열릴 때 네비게이션 숨김
-  useEffect(() => {
-    if (updateModalInfo || detailedUpdateInfo) {
-      document.body.setAttribute('data-hide-nav', 'true');
-    } else {
-      document.body.removeAttribute('data-hide-nav');
-    }
-    return () => {
-      document.body.removeAttribute('data-hide-nav');
-    };
-  }, [updateModalInfo, detailedUpdateInfo]);
+  useHideNav(!!(updateModalInfo || detailedUpdateInfo));
 
   // 커스텀 폴더 (결합형 문제는 1개로 계산)
   const customFolders = customFoldersData.map(f => ({

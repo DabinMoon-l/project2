@@ -23,6 +23,7 @@ import type { SourceRect } from '@/lib/hooks/useExpandSource';
 import FloatingAIButton from './FloatingAIButton';
 import AIQuizModal, { AIQuizData } from './AIQuizModal';
 import AIQuizProgress from './AIQuizProgress';
+import { useHideNav } from '@/lib/hooks/useHideNav';
 
 interface GeneratedQuestion {
   text: string;
@@ -93,13 +94,8 @@ export default function AIQuizContainer() {
   // 저장된 퀴즈 정보 (연습 모드용)
   const [savedQuiz, setSavedQuiz] = useState<QuizDocument | null>(null);
 
-  // 연습 모드 시 네비게이션 숨김 (언마운트 시 다른 컴포넌트의 data-hide-nav 보존)
-  useEffect(() => {
-    if (isPracticeOpen) {
-      document.body.setAttribute('data-hide-nav', '');
-      return () => document.body.removeAttribute('data-hide-nav');
-    }
-  }, [isPracticeOpen]);
+  // 연습 모드 시 네비게이션 숨김
+  useHideNav(isPracticeOpen);
 
   // Job polling 중단용 ref
   const pollingRef = useRef(false);

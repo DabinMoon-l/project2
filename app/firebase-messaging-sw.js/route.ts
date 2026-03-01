@@ -76,6 +76,11 @@ function getNotificationActions(type) {
         { action: 'open', title: '댓글 보기' },
         { action: 'dismiss', title: '닫기' },
       ];
+    case 'announcement':
+      return [
+        { action: 'open', title: '공지 보기' },
+        { action: 'dismiss', title: '닫기' },
+      ];
     case 'ranking_change':
       return [
         { action: 'open', title: '랭킹 확인' },
@@ -136,6 +141,8 @@ function getUrlFromNotification(data) {
     case 'board_comment':
     case 'board_reply':
       return data.postId ? '/board/post/' + data.postId : '/board';
+    case 'announcement':
+      return '/';
     case 'ranking_change':
       return '/';
     case 'season_start':

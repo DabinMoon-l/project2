@@ -62,6 +62,7 @@ export {
   onNewQuizCreated,
   onBoardCommentCreated,
   onBoardReplyCreated,
+  onAnnouncementCreated,
 } from "./notification";
 
 // ============================================

@@ -10,6 +10,7 @@ import {
 import { db } from '@/lib/firebase';
 import { useUser } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
+import { useHideNav } from '@/lib/hooks/useHideNav';
 
 /**
  * 복습 문제 타입
@@ -43,12 +44,7 @@ export default function RandomReviewPage() {
   const [loading, setLoading] = useState(true);
 
   // 네비게이션 숨김
-  useEffect(() => {
-    document.body.setAttribute('data-hide-nav', 'true');
-    return () => {
-      document.body.removeAttribute('data-hide-nav');
-    };
-  }, []);
+  useHideNav(true);
 
   // 문제 로드
   useEffect(() => {

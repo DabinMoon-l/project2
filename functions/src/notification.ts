@@ -448,3 +448,77 @@ export const onBoardReplyCreated = onDocumentCreated(
   }
 );
 
+/**
+ * 공지 작성 시 알림 전송
+ * 같은 과목(courseId) 학생들에게 알림
+ */
+export const onAnnouncementCreated = onDocumentCreated(
+  {
+    document: "announcements/{announcementId}",
+    region: "asia-northeast3",
+  },
+  async (event) => {
+    const data = event.data?.data();
+    if (!data) return;
+
+    const { courseId, content, createdBy } = data;
+    if (!courseId) return;
+
+    // 같은 과목 학생의 FCM 토큰 조회 (announcement 설정 체크)
+    const db = getFirestore();
+    const tokensSnapshot = await db
+      .collection("fcmTokens")
+      .where("topics", "array-contains", TOPICS.ALL)
+      .get();
+
+    // uid별 토큰 그룹핑
+    const tokensByUid = new Map<string, string[]>();
+    for (const tokenDoc of tokensSnapshot.docs) {
+      const { token, uid } = tokenDoc.data();
+      if (!uid || uid === createdBy) continue; // 작성자 제외
+      if (!tokensByUid.has(uid)) tokensByUid.set(uid, []);
+      tokensByUid.get(uid)!.push(token);
+    }
+
+    const uids = Array.from(tokensByUid.keys());
+    if (uids.length === 0) return;
+
+    // 같은 과목 + 알림 설정 활성화 필터링
+    const userRefs = uids.map(uid => db.collection("users").doc(uid));
+    const userDocs = await db.getAll(...userRefs);
+
+    const eligibleTokens: string[] = [];
+    for (const userDoc of userDocs) {
+      const userData = userDoc.data();
+      if (!userData) continue;
+      // 교수님 제외
+      if (userData.role === "professor") continue;
+      // 같은 과목 학생만
+      if (userData.courseId !== courseId) continue;
+      // announcement 설정 확인
+      const settings = userData.appSettings?.notifications;
+      if (settings && settings.announcement === false) continue;
+      const tokens = tokensByUid.get(userDoc.id);
+      if (tokens) eligibleTokens.push(...tokens);
+    }
+
+    if (eligibleTokens.length === 0) return;
+
+    const preview = (content as string)?.slice(0, 40) || "새 공지";
+    const payload: NotificationPayload = {
+      title: "새 공지가 올라왔어요!",
+      body: preview,
+      data: {
+        type: "announcement",
+      },
+    };
+
+    await sendPushNotification(eligibleTokens, payload);
+
+    console.log(`공지 알림 전송: ${event.params.announcementId}`, {
+      courseId,
+      tokenCount: eligibleTokens.length,
+    });
+  }
+);
+

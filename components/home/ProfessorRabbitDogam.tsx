@@ -14,6 +14,7 @@ import {
   getProfessorRabbitNote,
 } from '@/lib/utils/professorRabbit';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
+import { useHideNav } from '@/lib/hooks/useHideNav';
 
 interface ProfessorRabbitDogamProps {
   isOpen: boolean;
@@ -34,14 +35,7 @@ export default function ProfessorRabbitDogam({
   const [selectedRabbitId, setSelectedRabbitId] = useState<number | null>(null);
 
   // 네비게이션 숨김
-  useEffect(() => {
-    if (isOpen) {
-      document.body.setAttribute('data-hide-nav', '');
-    } else {
-      document.body.removeAttribute('data-hide-nav');
-    }
-    return () => document.body.removeAttribute('data-hide-nav');
-  }, [isOpen]);
+  useHideNav(isOpen);
 
   // body 스크롤 방지
   useEffect(() => {

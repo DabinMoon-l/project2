@@ -274,6 +274,15 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
   // 토스트 표시 상태
   const [showToast, setShowToast] = useState(false);
 
+  // 자동 구독: 이미 알림 권한이 granted인 상태에서 앱 시작 시 자동 FCM 토큰 발급 + Firestore 저장
+  useEffect(() => {
+    if (permissionStatus === 'granted' && user?.uid && !isSubscribed && !loading) {
+      subscribeToNotifications(user.uid).catch(() => {
+        // 자동 구독 실패 시 무시 (필수 아님)
+      });
+    }
+  }, [permissionStatus, user?.uid, isSubscribed, loading, subscribeToNotifications]);
+
   /**
    * 알림 권한 요청 및 구독
    */
@@ -353,6 +362,9 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
           } else {
             router.push('/board');
           }
+          break;
+        case 'announcement':
+          router.push('/');
           break;
         default:
           break;

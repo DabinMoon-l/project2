@@ -30,6 +30,7 @@ import { NEWSPAPER_BG_TEXT, parseAverageScore, sortByLatest, formatQuestionTypes
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 import EditQuizSheet from '@/components/quiz/EditQuizSheet';
+import { useHideNav } from '@/lib/hooks/useHideNav';
 
 // ============================================================
 // 타입 정의
@@ -1512,16 +1513,7 @@ function QuizListPageContent() {
   const [quizToDelete, setQuizToDelete] = useState<QuizCardData | null>(null);
 
   // Details/관리 모달 열릴 때 네비게이션 숨김
-  useEffect(() => {
-    if (selectedQuiz || reviewDetailsQuiz || quizToDelete || isManageMode || statsQuiz) {
-      document.body.setAttribute('data-hide-nav', 'true');
-    } else {
-      document.body.removeAttribute('data-hide-nav');
-    }
-    return () => {
-      document.body.removeAttribute('data-hide-nav');
-    };
-  }, [selectedQuiz, reviewDetailsQuiz, quizToDelete, isManageMode, statsQuiz]);
+  useHideNav(!!(selectedQuiz || reviewDetailsQuiz || quizToDelete || isManageMode || statsQuiz));
 
   // body 스크롤 방지 통합 (모달/관리모드 열림 시 PullToHome 스와이프 방지)
   useEffect(() => {

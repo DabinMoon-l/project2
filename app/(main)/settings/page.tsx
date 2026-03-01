@@ -12,6 +12,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { useUser, useCourse } from '@/lib/contexts';
 import { useRabbitHoldings } from '@/lib/hooks/useRabbit';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
+import { useHideNav } from '@/lib/hooks/useHideNav';
 
 const TekkenKeywordsCard = dynamic(() => import('@/components/professor/TekkenKeywordsCard'), {
   ssr: false,
@@ -55,12 +56,7 @@ export default function SettingsPage() {
   const [actionLoading, setActionLoading] = useState(false);
 
   // 네비게이션 숨김
-  useEffect(() => {
-    document.body.setAttribute('data-hide-nav', 'true');
-    return () => {
-      document.body.removeAttribute('data-hide-nav');
-    };
-  }, []);
+  useHideNav(true);
 
   // 설정 로드
   useEffect(() => {

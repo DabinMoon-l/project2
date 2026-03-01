@@ -43,12 +43,9 @@ export default function SettingsList({
   loading = false,
 }: SettingsListProps) {
   const notificationItems = [
-    { key: 'quizReminder' as const, icon: '⏰', label: '퀴즈 알림', description: '마감 전 퀴즈 알림을 받습니다' },
-    { key: 'newQuiz' as const, icon: '📝', label: '새 퀴즈 알림', description: '새로운 퀴즈가 등록되면 알림을 받습니다' },
-    { key: 'feedbackReply' as const, icon: '💬', label: '피드백 답변 알림', description: '피드백에 답변이 달리면 알림을 받습니다' },
-    { key: 'boardComment' as const, icon: '📢', label: '게시판 알림', description: '내 글에 댓글이 달리면 알림을 받습니다' },
-    { key: 'rankingChange' as const, icon: '📈', label: '랭킹 변동 알림', description: '순위가 변동되면 알림을 받습니다' },
-    { key: 'seasonNotice' as const, icon: '🗓️', label: '시즌 알림', description: '시즌 종료 및 초기화 알림을 받습니다' },
+    { key: 'announcement' as const, icon: '📢', label: '공지 알림', description: '교수님이 공지를 올리면 알림을 받습니다' },
+    { key: 'newQuiz' as const, icon: '📝', label: '퀴즈 알림', description: '새로운 퀴즈가 등록되면 알림을 받습니다' },
+    { key: 'boardComment' as const, icon: '💬', label: '댓글 알림', description: '내 글에 댓글/답글이 달리면 알림을 받습니다' },
   ];
 
   const displayItems = [

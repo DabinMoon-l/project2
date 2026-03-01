@@ -20,6 +20,7 @@ import type { RollResultData } from '@/components/home/GachaResultModal';
 import MilestoneChoiceModal from '@/components/home/MilestoneChoiceModal';
 import GachaResultModal from '@/components/home/GachaResultModal';
 import LevelUpBottomSheet from '@/components/home/LevelUpBottomSheet';
+import { useHideNav } from '@/lib/hooks/useHideNav';
 
 interface MilestoneContextValue {
   // 상태
@@ -101,23 +102,7 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
     : false;
 
   // 네비게이션 숨김 (마일스톤 관련 모달 중 하나라도 열려있을 때)
-  const milestoneNavHiddenRef = useRef(false);
-  useEffect(() => {
-    const anyOpen = showMilestoneModal || showGachaModal || showLevelUpSheet;
-    if (anyOpen) {
-      document.body.setAttribute('data-hide-nav', '');
-      milestoneNavHiddenRef.current = true;
-    } else if (milestoneNavHiddenRef.current) {
-      document.body.removeAttribute('data-hide-nav');
-      milestoneNavHiddenRef.current = false;
-    }
-    return () => {
-      if (milestoneNavHiddenRef.current) {
-        document.body.removeAttribute('data-hide-nav');
-        milestoneNavHiddenRef.current = false;
-      }
-    };
-  }, [showMilestoneModal, showGachaModal, showLevelUpSheet]);
+  useHideNav(showMilestoneModal || showGachaModal || showLevelUpSheet);
 
   // 프로필 초기 로드 완료 여부 (초기 로드 시 자동 트리거 방지)
   const profileStableRef = useRef(false);

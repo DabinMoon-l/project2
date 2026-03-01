@@ -13,6 +13,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { getRabbitStats, useRabbitDoc, type RabbitHolding } from '@/lib/hooks/useRabbit';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 import { computeRabbitDisplayName } from '@/lib/utils/rabbitDisplayName';
+import { useHideNav } from '@/lib/hooks/useHideNav';
 
 interface TekkenBattleConfirmModalProps {
   isOpen: boolean;
@@ -113,17 +114,8 @@ export default function TekkenBattleConfirmModal({
   equippedRabbits,
   holdings,
 }: TekkenBattleConfirmModalProps) {
-  // data-hide-nav 설정
-  useEffect(() => {
-    if (isOpen) {
-      document.body.setAttribute('data-hide-nav', '');
-    } else {
-      document.body.removeAttribute('data-hide-nav');
-    }
-    return () => {
-      document.body.removeAttribute('data-hide-nav');
-    };
-  }, [isOpen]);
+  // 네비게이션 숨김
+  useHideNav(isOpen);
 
   if (typeof window === 'undefined') return null;
 

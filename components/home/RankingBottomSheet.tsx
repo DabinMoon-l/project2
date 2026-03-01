@@ -10,6 +10,7 @@ import { useUser, useCourse } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
 import { type ClassType } from '@/styles/themes';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
+import { useHideNav } from '@/lib/hooks/useHideNav';
 import { getRabbitImageSrc } from '@/lib/utils/rabbitImage';
 import { readFullCache, writeFullCache } from '@/lib/utils/rankingCache';
 import { computeRankScore } from '@/lib/utils/ranking';
@@ -52,14 +53,7 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
   const rankedUsersRef = useRef<RankedUser[]>(rankedUsers);
 
   // 네비게이션 숨김
-  useEffect(() => {
-    if (isOpen) {
-      document.body.setAttribute('data-hide-nav', '');
-    } else {
-      document.body.removeAttribute('data-hide-nav');
-    }
-    return () => document.body.removeAttribute('data-hide-nav');
-  }, [isOpen]);
+  useHideNav(isOpen);
 
   // 열릴 때 초기화
   useEffect(() => {

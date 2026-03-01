@@ -25,6 +25,7 @@ import { useUpload } from '@/lib/hooks/useStorage';
 import { ImageViewer } from '@/components/common';
 import { useKeyboardAware } from '@/lib/hooks/useKeyboardAware';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
+import { useHideNav } from '@/lib/hooks/useHideNav';
 
 // ─── 타입 ───────────────────────────────────────────────
 
@@ -1331,11 +1332,7 @@ export default function AnnouncementChannel({
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // ─── 네비게이션 숨김
-  useEffect(() => {
-    if (showModal) document.body.setAttribute('data-hide-nav', '');
-    else document.body.removeAttribute('data-hide-nav');
-    return () => document.body.removeAttribute('data-hide-nav');
-  }, [showModal]);
+  useHideNav(showModal);
 
   // ─── 모달 열림 시 body 스크롤 방지
   useEffect(() => {

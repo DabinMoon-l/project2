@@ -22,6 +22,7 @@ import TekkenMashMinigame from './TekkenMashMinigame';
 import TekkenBattleResult from './TekkenBattleResult';
 import TekkenBattleArena from './TekkenBattleArena';
 import type { RoundResultData } from '@/lib/types/tekken';
+import { useHideNav } from '@/lib/hooks/useHideNav';
 
 interface TekkenBattleOverlayProps {
   tekken: any; // UseTekkenBattleReturn
@@ -40,13 +41,8 @@ export default function TekkenBattleOverlay({
   const prevRoundRef = useRef(0);
   const timeoutSubmittedRef = useRef(false);
 
-  // data-hide-nav 설정
-  useEffect(() => {
-    document.body.setAttribute('data-hide-nav', '');
-    return () => {
-      document.body.removeAttribute('data-hide-nav');
-    };
-  }, []);
+  // 네비게이션 숨김
+  useHideNav(true);
 
   // 배틀 상태에 따라 phase 전환
   useEffect(() => {

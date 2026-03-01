@@ -24,6 +24,7 @@ import { useCourse } from '@/lib/contexts/CourseContext';
 import { Skeleton, BottomSheet, useExpToast } from '@/components/common';
 import ReviewPractice, { type PracticeResult } from '@/components/review/ReviewPractice';
 import { formatChapterLabel, getChapterById } from '@/lib/courseIndex';
+import { useHideNav } from '@/lib/hooks/useHideNav';
 
 // 선지 번호 라벨 (최대 8개 지원)
 const choiceLabels = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧'];
@@ -1202,15 +1203,7 @@ export default function FolderDetailPage() {
   const supplementedExpsRef = useRef<string | null>(null);
 
   // 네비게이션 숨김
-  useEffect(() => {
-    // body에 data-hide-nav 속성 설정하여 네비게이션 숨김
-    document.body.setAttribute('data-hide-nav', 'true');
-
-    return () => {
-      // 페이지 떠날 때 속성 제거
-      document.body.removeAttribute('data-hide-nav');
-    };
-  }, []);
+  useHideNav(true);
 
   // 커스텀 폴더 찾기
   const customFolder = useMemo(() => {

@@ -25,6 +25,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse } from '@/lib/contexts';
 import type { QuizUpdateInfo, UpdatedQuestion } from '@/lib/hooks/useQuizUpdate';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
+import { useHideNav } from '@/lib/hooks/useHideNav';
 
 // ============================================================
 // 타입 정의
@@ -116,7 +117,10 @@ export default function UpdateQuizModal({
     setShowCloseConfirm(true);
   }, [showResult, onClose]);
 
-  // 모달 열림 시 상태 초기화 + body 스크롤 방지 + 네비게이션 숨김
+  // 네비게이션 숨김
+  useHideNav(isOpen);
+
+  // 모달 열림 시 상태 초기화 + body 스크롤 방지
   useEffect(() => {
     if (!isOpen) return;
     setCurrentIndex(0);
@@ -126,10 +130,8 @@ export default function UpdateQuizModal({
     setShowCloseConfirm(false);
     hasStartedRef.current = false;
     lockScroll();
-    document.body.setAttribute('data-hide-nav', '');
     return () => {
       unlockScroll();
-      document.body.removeAttribute('data-hide-nav');
     };
   }, [isOpen, updateInfo.quizId]);
 
