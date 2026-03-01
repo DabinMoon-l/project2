@@ -37,6 +37,8 @@ const pwaConfig = withPWA({
   register: true, // 서비스 워커 자동 등록
   skipWaiting: true, // 새 서비스 워커 즉시 활성화
   disable: process.env.NODE_ENV === "development", // 개발 모드에서는 PWA 비활성화
+  // FCM 서비스 워커를 next-pwa SW에 통합 (별도 등록 충돌 방지)
+  customWorkerDir: "worker",
   runtimeCaching: [
     // 비디오 파일은 캐시하지 않음 (ERR_CACHE_OPERATION_NOT_SUPPORTED 방지)
     {

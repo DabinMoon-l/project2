@@ -57,7 +57,7 @@ export default function HomeOverlay() {
     }
     const cx = buttonRect.x + buttonRect.width / 2;
     const cy = buttonRect.y + buttonRect.height / 2;
-    const offsetX = isWide ? 72 : 0;
+    const offsetX = isWide ? 240 : 0;
     return `${cx - offsetX}px ${cy}px`;
   }, [buttonRect, isWide]);
 
@@ -234,7 +234,7 @@ export default function HomeOverlay() {
         top: 0,
         bottom: 0,
         right: 0,
-        left: isWide ? '72px' : 0,
+        left: isWide ? '240px' : 0,
         zIndex: 100,
         backgroundImage: `url(${HOME_BG_IMAGE})`,
         backgroundSize: 'cover',

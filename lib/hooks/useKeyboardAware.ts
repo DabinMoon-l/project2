@@ -22,16 +22,53 @@ interface KeyboardAwareState {
   dismissKeyboard: () => void;
 }
 
+/**
+ * 숨겨진 readonly input으로 포커스를 이동시켜 키보드를 확실히 닫는 함수
+ * iOS PWA에서 단순 blur()가 무시되는 경우 대응
+ */
+function forceCloseKeyboard() {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement)) return;
+
+  // 숨겨진 input이 없으면 생성
+  let dummy = document.getElementById('__kb-dismiss') as HTMLInputElement | null;
+  if (!dummy) {
+    dummy = document.createElement('input');
+    dummy.id = '__kb-dismiss';
+    dummy.setAttribute('readonly', 'true');
+    dummy.setAttribute('tabindex', '-1');
+    dummy.setAttribute('aria-hidden', 'true');
+    Object.assign(dummy.style, {
+      position: 'fixed',
+      opacity: '0',
+      top: '-100px',
+      left: '0',
+      width: '1px',
+      height: '1px',
+      pointerEvents: 'none',
+    });
+    document.body.appendChild(dummy);
+  }
+
+  // readonly input에 포커스 → 키보드 닫힘 → 즉시 blur
+  dummy.focus();
+  dummy.blur();
+}
+
 export function useKeyboardAware(): KeyboardAwareState {
   const [bottomOffset, setBottomOffset] = useState(0);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
   const rafRef = useRef<number>(0);
+  const initialHeightRef = useRef<number>(0);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     const vv = window.visualViewport;
     if (!vv) return;
+
+    // 초기 높이 저장 (Android에서 키보드 감지에 사용)
+    initialHeightRef.current = vv.height;
 
     const handleResize = () => {
       // rAF로 배치하여 레이아웃 thrashing 방지
@@ -40,8 +77,13 @@ export function useKeyboardAware(): KeyboardAwareState {
         // iOS: innerHeight 고정, vv.height 축소 → offset = keyboard height
         // Android: 둘 다 축소 → offset ≈ 0
         const offset = Math.max(0, window.innerHeight - (vv.offsetTop + vv.height));
+
+        // Android 감지 보조: 초기 높이 대비 줄어든 양도 체크
+        const heightDiff = initialHeightRef.current - vv.height;
+        const isOpen = offset > 100 || heightDiff > 100;
+
         setBottomOffset(offset);
-        setIsKeyboardOpen(offset > 150);
+        setIsKeyboardOpen(isOpen);
       });
     };
 
@@ -56,9 +98,7 @@ export function useKeyboardAware(): KeyboardAwareState {
   }, []);
 
   const dismissKeyboard = useCallback(() => {
-    if (document.activeElement instanceof HTMLElement) {
-      document.activeElement.blur();
-    }
+    forceCloseKeyboard();
   }, []);
 
   return { isKeyboardOpen, bottomOffset, dismissKeyboard };
@@ -101,7 +141,8 @@ export function useScrollDismissKeyboard() {
 
       const dy = Math.abs(e.touches[0].clientY - startY);
       if (dy > 20) {
-        active.blur();
+        // iOS PWA에서 blur()가 무시되는 경우 대비하여 forceCloseKeyboard 사용
+        forceCloseKeyboard();
         dismissed = true;
       }
     };
@@ -153,7 +194,7 @@ export function useKeyboardScrollAdjust(
     const container = containerRef.current;
     if (!container) return;
 
-    if (bottomOffset > 150) {
+    if (bottomOffset > 100) {
       // 키보드 열림 → paddingBottom 증가
       if (origPaddingRef.current === null) {
         origPaddingRef.current = container.style.paddingBottom || '';

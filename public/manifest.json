@@ -4,7 +4,7 @@
   "description": "퀴즈를 풀고 토끼를 성장시키는 학습 앱",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#000000",
+  "background_color": "#F5F0E8",
   "theme_color": "#F5F0E8",
   "orientation": "any",
   "gcm_sender_id": "622810743656",

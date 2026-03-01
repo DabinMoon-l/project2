@@ -36,18 +36,21 @@ var messaging = firebase.messaging();
 
 /**
  * 백그라운드 메시지 핸들러
+ * data-only 메시지에서 알림 정보를 추출하여 표시
  */
 messaging.onBackgroundMessage(function(payload) {
-  console.log('[firebase-messaging-sw.js] 백그라운드 메시지 수신:', payload);
+  var data = payload.data || {};
+  var notificationTitle = data.notificationTitle || (payload.notification && payload.notification.title) || 'RabbiTory';
+  var notificationBody = data.notificationBody || (payload.notification && payload.notification.body) || '';
+  var notificationIcon = data.notificationIcon || (payload.notification && payload.notification.icon) || '/icons/icon-192x192.png';
 
-  var notificationTitle = (payload.notification && payload.notification.title) || 'RabbiTory';
   var notificationOptions = {
-    body: (payload.notification && payload.notification.body) || '새로운 알림이 있습니다.',
-    icon: (payload.notification && payload.notification.icon) || '/icons/icon-192x192.png',
+    body: notificationBody,
+    icon: notificationIcon,
     badge: '/icons/icon-72x72.png',
-    tag: (payload.data && payload.data.type) || 'default',
-    data: payload.data || {},
-    actions: getNotificationActions(payload.data && payload.data.type),
+    tag: data.type || 'default',
+    data: data,
+    actions: getNotificationActions(data.type),
     vibrate: [200, 100, 200],
     requireInteraction: true,
   };

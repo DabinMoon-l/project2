@@ -120,7 +120,6 @@ const convertToQuestionDataList = (
         // 추가 필드 보존 (수정 시 유실 방지)
         passagePrompt: q.passagePrompt || undefined,
         bogi: q.bogi || null,
-        rubric: q.rubric || undefined,
         scoringMethod: q.scoringMethod || undefined,
         passageBlocks: q.passageBlocks || undefined,
       });
@@ -332,9 +331,8 @@ export default function EditQuizPage() {
     // 발문 비교
     if (((original as any).passagePrompt || '') !== (current.passagePrompt || '')) return true;
 
-    // 보기/루브릭 비교
+    // 보기 비교
     if (JSON.stringify((original as any).bogi || null) !== JSON.stringify(current.bogi || null)) return true;
-    if (JSON.stringify((original as any).rubric || null) !== JSON.stringify(current.rubric || null)) return true;
 
     return false;
   };
@@ -509,7 +507,6 @@ export default function EditQuizPage() {
           mixedExamples: q.mixedExamples || undefined,
           passagePrompt: q.passagePrompt || undefined,
           bogi: q.bogi || undefined,
-          rubric: q.rubric || undefined,
           scoringMethod: q.scoringMethod || undefined,
           passageBlocks: q.passageBlocks || undefined,
           chapterId: q.chapterId || undefined,

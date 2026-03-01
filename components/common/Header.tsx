@@ -94,13 +94,12 @@ export default function Header({
       initial="initial"
       animate="animate"
       transition={{ duration: 0.3, ease: 'easeOut' }}
-      className="sticky z-50 w-full"
+      className="sticky top-0 z-50 w-full"
       style={{
-        top: 'env(safe-area-inset-top, 0px)',
         backgroundColor: `${colors.background}e6`, // 90% 불투명도
       }}
     >
-      {/* 블러 오버레이 */}
+      {/* 블러 오버레이 — safe-area 패딩 영역까지 커버 */}
       <div
         className="absolute inset-0 backdrop-blur-md"
         style={{
@@ -116,8 +115,8 @@ export default function Header({
         }}
       />
 
-      {/* 헤더 컨텐츠 */}
-      <div className="relative flex items-center justify-between h-14 px-4">
+      {/* 헤더 컨텐츠 — 노치/다이내믹 아일랜드 아래에 위치 */}
+      <div className="relative flex items-center justify-between h-14 px-4" style={{ marginTop: 'env(safe-area-inset-top, 0px)' }}>
         {/* 좌측 영역: 뒤로가기 버튼 */}
         <div className="flex justify-start">
           {showBack && (

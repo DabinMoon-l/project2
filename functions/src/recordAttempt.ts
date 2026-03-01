@@ -181,7 +181,8 @@ export const recordAttempt = onCall(
 
       const { isCorrect, userAnswerStr, correctAnswerStr } = gradeQuestion(q, userAns, i);
 
-      if (isCorrect) correctCount++;
+      // 서술형은 채점 제외
+      if (q.type !== "essay" && isCorrect) correctCount++;
 
       questionScores[qId] = {
         isCorrect,
@@ -193,7 +194,8 @@ export const recordAttempt = onCall(
       answersArr.push(userAnswerStr);
     }
 
-    const totalCount = questions.length;
+    // 서술형 제외 총 문제 수
+    const totalCount = questions.filter((q: any) => q.type !== "essay").length;
     const score = totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0;
 
     // ── ⑤ quizResults 생성 (append-only log) ──
@@ -244,15 +246,36 @@ export const recordAttempt = onCall(
       });
     }
 
-    // ── ⑧ quizzes 문서 hotspot 제거 ──
-    // completedUsers 배열 업데이트 제거 (quiz_completions 컬렉션으로 대체 완료)
-    // userScores만 비동기로 업데이트 (통계용, 실패해도 무방)
-    db.doc(`quizzes/${quizId}`).update({
-      [`userScores.${userId}`]: score,
-      updatedAt: FieldValue.serverTimestamp(),
-    }).catch((e) => {
-      console.warn(`quizzes/${quizId} userScores 업데이트 실패 (무시 가능):`, e);
-    });
+    // ── ⑧ quizzes 문서 참여자/평균점수 업데이트 ──
+    // quiz_completions 기반으로 participantCount, averageScore 계산
+    try {
+      const quizCompletionsSnap = await db.collection("quiz_completions")
+        .where("quizId", "==", quizId)
+        .get();
+
+      const participantCount = quizCompletionsSnap.size;
+      let scoreSum = 0;
+      quizCompletionsSnap.forEach((d) => {
+        scoreSum += d.data().score || 0;
+      });
+      const averageScore = participantCount > 0
+        ? Math.round((scoreSum / participantCount) * 10) / 10
+        : 0;
+
+      await db.doc(`quizzes/${quizId}`).update({
+        [`userScores.${userId}`]: score,
+        participantCount,
+        averageScore,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      // 실패해도 무방 — 다음 제출 시 재계산
+      db.doc(`quizzes/${quizId}`).update({
+        [`userScores.${userId}`]: score,
+        updatedAt: FieldValue.serverTimestamp(),
+      }).catch(() => {});
+      console.warn(`quizzes/${quizId} 통계 업데이트 실패 (무시 가능):`, e);
+    }
 
     // ── ⑨ reviews 생성은 generateReviewsOnResult 트리거에서 비동기 처리 ──
 

@@ -308,217 +308,6 @@ export function calculateTotalQuestionCount(questions: QuestionData[]): number {
 // 하위 컴포넌트
 // ============================================================
 
-/**
- * 루브릭 편집기 (서술형용)
- */
-function RubricEditor({
-  rubric,
-  onChange,
-  error,
-  hideLabel = false,
-}: {
-  rubric: RubricItem[];
-  onChange: (rubric: RubricItem[]) => void;
-  error?: string;
-  hideLabel?: boolean;
-}) {
-  // 배점 입력 모드: 하나라도 percentage > 0이면 기본 켜짐
-  const [showPercentage, setShowPercentage] = useState(() =>
-    rubric.some(r => r.percentage > 0)
-  );
-  const totalPercentage = showPercentage ? rubric.reduce((sum, item) => sum + item.percentage, 0) : 0;
-
-  // 균등 배분 유틸: 100을 n개로 나누되 나머지는 마지막에 몰아줌
-  const distributeEvenly = (items: RubricItem[]): RubricItem[] => {
-    const n = items.length;
-    if (n === 0) return items;
-    const base = Math.floor(100 / n);
-    const remainder = 100 - base * n;
-    return items.map((r, i) => ({
-      ...r,
-      percentage: base + (i >= n - remainder ? 1 : 0),
-    }));
-  };
-
-  const handleAdd = () => {
-    const newRubric = [
-      ...rubric,
-      { criteria: '', percentage: 0, description: '' },
-    ];
-    onChange(showPercentage ? distributeEvenly(newRubric) : newRubric);
-  };
-
-  const handleRemove = (index: number) => {
-    if (rubric.length <= 1) return;
-    const filtered = rubric.filter((_, i) => i !== index);
-    onChange(showPercentage ? distributeEvenly(filtered) : filtered);
-  };
-
-  const handleChange = (index: number, field: keyof RubricItem, value: string | number) => {
-    const newRubric = [...rubric];
-    newRubric[index] = { ...newRubric[index], [field]: value };
-
-    // 배점 변경 시 나머지 항목 자동 조정
-    if (showPercentage && field === 'percentage') {
-      const changed = Math.min(100, Math.max(0, value as number));
-      newRubric[index] = { ...newRubric[index], percentage: changed };
-      const others = newRubric.filter((_, i) => i !== index);
-      const remaining = Math.max(0, 100 - changed);
-      if (others.length > 0) {
-        const base = Math.floor(remaining / others.length);
-        const rem = remaining - base * others.length;
-        let otherIdx = 0;
-        for (let i = 0; i < newRubric.length; i++) {
-          if (i !== index) {
-            newRubric[i] = {
-              ...newRubric[i],
-              percentage: base + (otherIdx >= others.length - rem ? 1 : 0),
-            };
-            otherIdx++;
-          }
-        }
-      }
-    }
-
-    onChange(newRubric);
-  };
-
-  // 배점 토글
-  const handleTogglePercentage = () => {
-    if (showPercentage) {
-      // OFF: 모든 percentage 0으로
-      onChange(rubric.map(r => ({ ...r, percentage: 0 })));
-    } else {
-      // ON: 균등 배분
-      onChange(distributeEvenly(rubric));
-    }
-    setShowPercentage(!showPercentage);
-  };
-
-  return (
-    <div className="space-y-3">
-      {!hideLabel && (
-        <label className="text-xs font-bold text-[#1A1A1A]">
-          루브릭 (평가 기준)
-        </label>
-      )}
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-[#5C5C5C]">
-          학생 답안을 평가할 기준을 설정하세요
-        </p>
-        <button
-          type="button"
-          onClick={handleTogglePercentage}
-          className={`
-            px-2 py-0.5 text-xs font-bold border border-[#1A1A1A] transition-colors
-            ${showPercentage
-              ? 'bg-[#1A1A1A] text-[#F5F0E8]'
-              : 'bg-[#EDEAE4] text-[#5C5C5C] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
-            }
-          `}
-        >
-          배점 {showPercentage ? 'ON' : 'OFF'}
-        </button>
-      </div>
-
-      <div className="space-y-2">
-        {rubric.map((item, index) => (
-          <div key={index} className="p-3 border-2 border-[#1A1A1A] bg-[#EDEAE4]">
-            <div className="flex items-start gap-2">
-              <div className="flex-1 space-y-2">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={item.criteria}
-                    onChange={(e) => handleChange(index, 'criteria', e.target.value)}
-                    placeholder="평가요소 이름"
-                    className="flex-1 px-3 py-2 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-sm focus:outline-none"
-                  />
-                  {showPercentage && (
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        value={item.percentage}
-                        onChange={(e) => handleChange(index, 'percentage', Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
-                        min="0"
-                        max="100"
-                        className="w-16 px-2 py-2 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-sm text-center focus:outline-none"
-                      />
-                      <span className="text-sm font-bold">%</span>
-                    </div>
-                  )}
-                </div>
-                <textarea
-                  value={item.description || ''}
-                  onChange={(e) => handleChange(index, 'description', e.target.value)}
-                  placeholder="평가 기준 상세 설명 (선택)"
-                  rows={2}
-                  className="w-full px-3 py-2 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-sm resize-none focus:outline-none"
-                />
-              </div>
-              {rubric.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => handleRemove(index)}
-                  className="w-8 h-8 flex items-center justify-center text-[#8B1A1A] hover:bg-[#F5F0E8] transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <button
-        type="button"
-        onClick={handleAdd}
-        className="w-full py-1.5 text-xs font-bold border border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
-      >
-        + 평가요소 추가
-      </button>
-
-      {error && <p className="text-sm text-[#8B1A1A]">{error}</p>}
-
-      {/* 배점 안내 + 합계 (배점 모드일 때만) */}
-      {showPercentage && (
-        <div className="flex items-center justify-between">
-          <p className="text-xs text-[#5C5C5C]">
-            배점 비율의 합계가 100%가 되어야 합니다
-          </p>
-          {rubric.some(r => r.criteria.trim()) && (
-            <span className={`text-xs font-bold ${totalPercentage === 100 ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>
-              합계: {totalPercentage}%
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* 루브릭 미리보기 */}
-      {rubric.some(r => r.criteria.trim()) && (
-        <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
-          <p className="text-xs text-[#5C5C5C] mb-2">미리보기</p>
-          <ul className="space-y-1 text-sm">
-            {rubric.filter(r => r.criteria.trim()).map((item, idx) => (
-              <li key={idx} className="flex items-start gap-2">
-                <span className="text-[#1A1A1A] font-bold shrink-0">·</span>
-                <span className="flex-1">
-                  {item.criteria}
-                  {showPercentage && item.percentage > 0 && (
-                    <span className="text-[#5C5C5C] font-bold"> ({item.percentage}%)</span>
-                  )}
-                  {item.description && <span className="text-[#5C5C5C]"> — {item.description}</span>}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
 
 /**
  * 하위 문제용 혼합 보기 편집기 (일반 문제와 동일한 UI)
@@ -1833,7 +1622,6 @@ export default function QuestionEditor({
         imageUrl: null,
         examples: null,
         mixedExamples: [],
-        rubric: [],
         scoringMethod: 'manual',
         subQuestions: [],
         passageType: 'text',
@@ -1925,7 +1713,6 @@ export default function QuestionEditor({
       imageUrl: existing.imageUrl || null,
       examples: existing.examples || null,
       mixedExamples,
-      rubric: existing.rubric || [],
       scoringMethod: existing.scoringMethod || 'manual',
       subQuestions: existing.subQuestions || [],
       passageType: existing.passageType || 'text',
@@ -1983,8 +1770,6 @@ export default function QuestionEditor({
       answerTexts: [''],
       // 객관식일 때만 선지 유지
       choices: type === 'multiple' ? (prev.choices.length >= 2 ? prev.choices : ['', '']) : ['', ''],
-      // 서술형일 때 루브릭 및 채점방식 초기화
-      rubric: type === 'essay' ? [{ criteria: '', percentage: 0, description: '' }] : [],
       scoringMethod: type === 'essay' ? 'manual' : prev.scoringMethod,
       // 결합형일 때 하위 문제 초기화
       subQuestions: type === 'combined' ? [{
@@ -2702,14 +2487,6 @@ export default function QuestionEditor({
   }, []);
 
   /**
-   * 루브릭 변경 (서술형)
-   */
-  const handleRubricChange = useCallback((rubric: RubricItem[]) => {
-    setQuestion((prev) => ({ ...prev, rubric }));
-    setErrors((prev) => ({ ...prev, rubric: '' }));
-  }, []);
-
-  /**
    * 하위 문제 변경 (결합형)
    */
   const handleSubQuestionChange = useCallback((index: number, subQuestion: SubQuestion) => {
@@ -2814,18 +2591,6 @@ export default function QuestionEditor({
       const hasValidAnswer = answerTexts.some(t => t.trim());
       if (!hasValidAnswer) {
         newErrors.answer = '정답을 입력해주세요.';
-      }
-    } else if (question.type === 'essay') {
-      // 루브릭이 있고 배점이 설정된 경우 합계 100% 검증
-      const rubric = question.rubric || [];
-      if (rubric.length > 0) {
-        const hasPercentage = rubric.some(r => r.percentage > 0);
-        if (hasPercentage) {
-          const totalPercentage = rubric.reduce((sum, item) => sum + item.percentage, 0);
-          if (totalPercentage !== 100) {
-            newErrors.rubric = `배점 비율의 합계가 100%가 되어야 합니다. (현재: ${totalPercentage}%)`;
-          }
-        }
       }
     } else if (question.type === 'combined') {
       // 공통 문제 검사 (필수)

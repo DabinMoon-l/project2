@@ -28,6 +28,8 @@ import { scaleCoord } from '@/lib/hooks/useViewportScale';
 
 // 모듈 레벨 classId 캐시 (모달 닫았다 열어도 유지, 페이지 이동 시에도 유지)
 const _statsUserClassCache = new Map<string, 'A' | 'B' | 'C' | 'D' | null>();
+// 모듈 레벨 이름 캐시
+const _statsUserNameCache = new Map<string, string>();
 
 // ============================================================
 // 애니메이션 컴포넌트
@@ -334,6 +336,8 @@ interface QuestionStats {
   optionDistribution?: { option: string; count: number; isCorrect: boolean; percentage: number }[];
   // 주관식 오답 목록
   wrongAnswers?: { answer: string; count: number }[];
+  // 서술형 답변 목록
+  essayAnswers?: { answer: string; userId: string }[];
 }
 
 interface QuizStats {
@@ -551,6 +555,10 @@ export default function QuizStatsModal({
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [feedbackSourceRect, setFeedbackSourceRect] = useState<SourceRect | null>(null);
 
+  // 서술형 답안 모달
+  const [showEssayModal, setShowEssayModal] = useState(false);
+  const [essayClassFilter, setEssayClassFilter] = useState<'A' | 'B' | 'C' | 'D'>('A');
+
   // 문제 스와이프 (가로 슬라이드)
   const questionContentRef = useRef<HTMLDivElement>(null);
   const slideEnterFromRef = useRef<'left' | 'right' | null>(null);
@@ -684,7 +692,10 @@ export default function QuizStatsModal({
               batch.map(async (userId) => {
                 try {
                   const userDoc = await getDoc(doc(db, 'users', userId));
-                  return { userId, classId: userDoc.exists() ? userDoc.data().classId || null : null };
+                  const userData = userDoc.exists() ? userDoc.data() : null;
+                  // 이름도 캐시
+                  if (userData?.name) _statsUserNameCache.set(userId, userData.name);
+                  return { userId, classId: userData?.classId || null };
                 } catch {
                   return { userId, classId: null };
                 }
@@ -786,6 +797,7 @@ export default function QuizStatsModal({
     const oxSelections: Record<string, { o: number; x: number }> = {};
     const optionSelections: Record<string, Record<string, number>> = {};
     const shortAnswerResponses: Record<string, Record<string, number>> = {};
+    const essayResponses: Record<string, { answer: string; userId: string }[]> = {};
 
     // 변별도 계산용: 문제별로 { userId, isCorrect }[] 기록
     const questionUserScores: Record<string, { userId: string; isCorrect: boolean }[]> = {};
@@ -852,6 +864,17 @@ export default function QuizStatsModal({
             }
             const userAnswer = scoreData.userAnswer.toString().trim().toLowerCase() || '(미입력)';
             shortAnswerResponses[questionId][userAnswer] = (shortAnswerResponses[questionId][userAnswer] || 0) + 1;
+          }
+
+          // 서술형 답변 수집 (미응답도 포함)
+          if (question.type === 'essay') {
+            if (!essayResponses[questionId]) {
+              essayResponses[questionId] = [];
+            }
+            essayResponses[questionId].push({
+              answer: scoreData.userAnswer ? scoreData.userAnswer.toString() : '',
+              userId: result.userId,
+            });
           }
         }
       );
@@ -939,6 +962,11 @@ export default function QuizStatsModal({
         stat.wrongAnswers = Object.entries(shortAnswerResponses[q.id])
           .map(([answer, count]) => ({ answer, count }))
           .sort((a, b) => b.count - a.count);
+      }
+
+      // 서술형 답변 목록
+      if (q.type === 'essay' && essayResponses[q.id]) {
+        stat.essayAnswers = essayResponses[q.id];
       }
 
       return stat;
@@ -1379,6 +1407,18 @@ export default function QuizStatsModal({
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
                         </svg>
                       </button>
+                      {/* 서술형 답안 확인 아이콘 (피드백 아이콘 우측) */}
+                      {currentQuestion.questionType === 'essay' && (
+                        <button
+                          onClick={() => setShowEssayModal(true)}
+                          className="absolute top-1 left-9 z-10 w-8 h-8 flex items-center justify-center text-[#8B6914] hover:text-[#6B4F0E] transition-colors"
+                          title="서술형 답안 보기"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        </button>
+                      )}
                       {/* 폴더 저장 아이콘 (우측 상단) — 교수님 전용 */}
                       {isProfessor && (
                         <button
@@ -1841,6 +1881,91 @@ export default function QuizStatsModal({
               <div className="p-1.5 border-t border-[#1A1A1A]">
                 <button
                   onClick={() => { setShowFeedbackModal(false); setFeedbackList([]); }}
+                  className="w-full py-1.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] rounded-lg"
+                >
+                  닫기
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+          );
+        })()}
+      </AnimatePresence>
+
+      {/* 서술형 답안 모달 */}
+      <AnimatePresence>
+        {showEssayModal && currentQuestion?.essayAnswers && (() => {
+          const ESSAY_CLASS_FILTERS: ('A' | 'B' | 'C' | 'D')[] = ['A', 'B', 'C', 'D'];
+          const classColors: Record<string, string> = { A: '#EF4444', B: '#EAB308', C: '#22C55E', D: '#3B82F6' };
+          // essayClassFilter로 필터링
+          const filtered = currentQuestion.essayAnswers!.filter(ea => {
+            const cls = _statsUserClassCache.get(ea.userId);
+            return cls === essayClassFilter;
+          });
+          return (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/50"
+            onClick={(e) => { e.stopPropagation(); setShowEssayModal(false); }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] max-h-[70vh] overflow-visible flex flex-col rounded-xl"
+            >
+              {/* 헤더 */}
+              <div className="px-3 py-2 border-b border-[#1A1A1A]">
+                <h2 className="text-sm font-bold text-[#1A1A1A] text-center">서술형 답안</h2>
+              </div>
+
+              {/* ABCD 필터 */}
+              <div className="flex border-b border-[#D4CFC4]">
+                {ESSAY_CLASS_FILTERS.map((cls) => (
+                  <button
+                    key={cls}
+                    onClick={() => setEssayClassFilter(cls)}
+                    className={`flex-1 py-2 text-xs font-bold transition-colors ${
+                      essayClassFilter === cls
+                        ? 'text-[#F5F0E8]'
+                        : 'text-[#5C5C5C] hover:bg-[#EDEAE4]'
+                    }`}
+                    style={essayClassFilter === cls ? { backgroundColor: classColors[cls] } : undefined}
+                  >
+                    {cls}반
+                  </button>
+                ))}
+              </div>
+
+              {/* 답안 목록 */}
+              <div className="flex-1 overflow-y-auto overscroll-contain p-2 space-y-2">
+                {filtered.length === 0 ? (
+                  <div className="py-8 text-center">
+                    <p className="text-xs text-[#5C5C5C]">{essayClassFilter}반 응답이 없습니다.</p>
+                  </div>
+                ) : (
+                  filtered.map((ea, idx) => {
+                    const name = _statsUserNameCache.get(ea.userId) || '(알 수 없음)';
+                    return (
+                      <div key={idx} className="p-2 border border-[#1A1A1A] bg-[#EDEAE4] rounded-lg">
+                        <p className="text-xs font-bold text-[#1A1A1A] mb-1">{name}</p>
+                        <p className="text-xs text-[#1A1A1A] whitespace-pre-wrap leading-relaxed">
+                          {ea.answer || '(미응답)'}
+                        </p>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* 닫기 */}
+              <div className="p-1.5 border-t border-[#1A1A1A]">
+                <button
+                  onClick={() => setShowEssayModal(false)}
                   className="w-full py-1.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] rounded-lg"
                 >
                   닫기

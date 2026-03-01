@@ -356,7 +356,8 @@ export default function QuizResultPage() {
             }
           }
 
-          if (isCorrect) correctCount++;
+          // 서술형은 채점 제외
+          if (q.type !== 'essay' && isCorrect) correctCount++;
 
           const result: QuestionResult = {
             id: q.id || `q${index}`,
@@ -455,6 +456,8 @@ export default function QuizResultPage() {
         }
       );
 
+      // 서술형 제외 총 문제 수
+      const scoredCount = questions.filter((q: any) => q.type !== 'essay').length;
       const earnedExp = correctCount * 10;
       const quizUpdatedAt = quizData.updatedAt || quizData.createdAt || null;
       const quizCreatorId = quizData.creatorId || null;
@@ -465,7 +468,7 @@ export default function QuizResultPage() {
         quizCreatorId,
         quizType: quizData.type || 'custom',
         correctCount,
-        totalCount: questions.length,
+        totalCount: scoredCount,
         earnedExp,
         questionResults,
         quizUpdatedAt,
@@ -1257,28 +1260,9 @@ export default function QuizResultPage() {
         </div>
       )}
 
-      {/* 서술형: 루브릭 → 해설 (있는 것만) */}
+      {/* 서술형: 해설 (있는 것만) */}
       {result.type === 'essay' ? (
         <>
-          {result.rubric && result.rubric.length > 0 && result.rubric.some(r => r.criteria.trim()) && (
-            <div>
-              <p className="text-xs font-bold text-[#5C5C5C] mb-1">평가 기준</p>
-              <div className="bg-[#EDEAE4] p-3 border border-[#1A1A1A]">
-                <ul className="space-y-1 text-sm">
-                  {result.rubric.filter(r => r.criteria.trim()).map((item, idx) => (
-                    <li key={idx} className="flex items-start gap-2">
-                      <span className="text-[#1A1A1A] font-bold shrink-0">·</span>
-                      <span>
-                        {item.criteria}
-                        {item.percentage > 0 && <span className="text-[#5C5C5C] font-bold"> ({item.percentage}%)</span>}
-                        {item.description && <span className="text-[#5C5C5C]"> — {item.description}</span>}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          )}
           {result.explanation && result.explanation !== '해설이 없습니다.' && (
             <div>
               <p className="text-xs font-bold text-[#5C5C5C] mb-1">해설</p>
@@ -1338,8 +1322,8 @@ export default function QuizResultPage() {
   return (
     <div className="min-h-screen pb-24" style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 */}
-      <header className="sticky z-50 w-full border-b-2 border-[#1A1A1A]" style={{ top: 'env(safe-area-inset-top, 0px)', backgroundColor: '#F5F0E8' }}>
-        <div className="flex items-center justify-center h-14 px-4">
+      <header className="sticky top-0 z-50 w-full border-b-2 border-[#1A1A1A]" style={{ backgroundColor: '#F5F0E8' }}>
+        <div className="flex items-center justify-center h-14 px-4" style={{ marginTop: 'env(safe-area-inset-top, 0px)' }}>
           <h1 className="text-xl font-black text-[#1A1A1A]">퀴즈 결과</h1>
         </div>
       </header>
@@ -1372,20 +1356,27 @@ export default function QuizResultPage() {
             // 단일 문제
             if (item.type === 'single' && item.result) {
               const result = item.result;
+              const isEssay = result.type === 'essay';
               return (
                 <div key={result.id}>
                   <button
                     onClick={() => toggleExpand(result.id)}
                     className={`w-full border-2 p-3 text-left rounded-lg ${
-                      result.isCorrect
-                        ? 'border-[#1A6B1A] bg-[#E8F5E9]'
-                        : 'border-[#8B1A1A] bg-[#FDEAEA]'
+                      isEssay
+                        ? 'border-[#8B6914] bg-[#FFF8E1]'
+                        : result.isCorrect
+                          ? 'border-[#1A6B1A] bg-[#E8F5E9]'
+                          : 'border-[#8B1A1A] bg-[#FDEAEA]'
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`text-sm font-bold ${result.isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>
-                          Q{item.displayNumber}. {result.isCorrect ? '정답' : '오답'}
+                        <span className={`text-sm font-bold ${
+                          isEssay
+                            ? 'text-[#8B6914]'
+                            : result.isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'
+                        }`}>
+                          Q{item.displayNumber}. {isEssay ? '서술형' : result.isCorrect ? '정답' : '오답'}
                         </span>
                         {/* 챕터 표시 */}
                         {userCourseId && result.chapterId && (
@@ -1577,7 +1568,9 @@ export default function QuizResultPage() {
                                 >
                                   <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2 flex-wrap">
-                                      <span className={`text-xs font-bold ${subResult.isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'}`}>
+                                      <span className={`text-xs font-bold ${
+                                        subResult.isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'
+                                      }`}>
                                         Q{item.displayNumber}-{subIdx + 1}. {subResult.isCorrect ? '정답' : '오답'}
                                       </span>
                                       {/* 챕터 표시 */}

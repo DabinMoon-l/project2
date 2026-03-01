@@ -119,13 +119,12 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                     data-main-content
                     className="min-h-screen"
                     style={{
-                      paddingTop: 'env(safe-area-inset-top, 0px)',
-                      // 네비 바가 표시될 때: 네비 높이(~68px) + 네비 bottom offset(safe-area + 0.5rem) + 여유
-                      // pb-20(80px)은 safe-area 미포함이라 iPhone 15 Pro 등에서 콘텐츠가 가려짐
+                      // safe-area-inset-top은 각 페이지의 Header/헤더에서 처리
+                      // → 배경이 노치/다이내믹 아일랜드 뒤까지 확장됨 (네이티브 앱처럼)
                       ...(!hideNavigation && !isWide
-                        ? { paddingBottom: 'calc(5rem + env(safe-area-inset-bottom, 0px))' }
+                        ? { paddingBottom: 'calc(4.25rem + env(safe-area-inset-bottom, 0px))' }
                         : {}),
-                      ...(isWide ? { marginLeft: '72px' } : {}),
+                      ...(isWide ? { marginLeft: '240px' } : {}),
                     }}
                   >
                     {/* 메인 콘텐츠 */}

@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
@@ -13,10 +12,10 @@ import { useUser, useCourse } from '@/lib/contexts';
 import { useRabbitHoldings } from '@/lib/hooks/useRabbit';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 import { useHideNav } from '@/lib/hooks/useHideNav';
+import dynamic from 'next/dynamic';
 
-const TekkenKeywordsCard = dynamic(() => import('@/components/professor/TekkenKeywordsCard'), {
-  ssr: false,
-});
+const TekkenChapterSettings = dynamic(() => import('@/components/professor/TekkenChapterSettings'), { ssr: false });
+
 import {
   useSettings,
   type NotificationSettings,
@@ -54,6 +53,8 @@ export default function SettingsPage() {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [showTekkenSettings, setShowTekkenSettings] = useState(false);
+  const isProfessor = profile?.role === 'professor';
 
   // 네비게이션 숨김
   useHideNav(true);
@@ -220,12 +221,31 @@ export default function SettingsPage() {
         />
 
         {/* 교수 전용: 배틀 퀴즈 범위 설정 */}
-        {profile?.role === 'professor' && (
-          <div className="mt-4">
-            <TekkenKeywordsCard />
-          </div>
+        {isProfessor && (
+          <button
+            onClick={() => setShowTekkenSettings(true)}
+            className="w-full mt-4 p-4 rounded-2xl bg-white/8 backdrop-blur-xl border border-white/15 flex items-center justify-between"
+          >
+            <div className="flex items-center gap-3">
+              <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="text-white/70">
+                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+              </svg>
+              <span className="text-sm font-bold text-white">배틀 퀴즈 범위 설정</span>
+            </div>
+            <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="text-white/40">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
         )}
       </main>
+
+      {/* 교수 배틀 범위 설정 바텀시트 */}
+      {isProfessor && (
+        <TekkenChapterSettings
+          open={showTekkenSettings}
+          onClose={() => setShowTekkenSettings(false)}
+        />
+      )}
 
       {/* 로그아웃 확인 모달 */}
       <AnimatePresence>

@@ -39,8 +39,9 @@ const VAPID_KEY = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
 
 /**
  * 서비스 워커 경로
+ * next-pwa가 생성하는 sw.js를 사용 (FCM 핸들러가 worker/index.js에서 병합됨)
  */
-const SERVICE_WORKER_PATH = '/firebase-messaging-sw.js';
+const SERVICE_WORKER_PATH = '/sw.js';
 
 // ============================================================
 // 변수
@@ -82,7 +83,8 @@ export function getMessagingInstance(): Messaging | null {
 /**
  * 서비스 워커 등록
  *
- * FCM 백그라운드 알림을 처리하기 위한 서비스 워커를 등록합니다.
+ * next-pwa가 이미 등록한 sw.js를 재사용합니다.
+ * FCM 핸들러는 worker/index.js를 통해 sw.js에 병합되어 있습니다.
  */
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
@@ -91,6 +93,15 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
   }
 
   try {
+    // next-pwa가 이미 등록한 SW가 있으면 그것을 재사용
+    const existingRegistration = await navigator.serviceWorker.getRegistration('/');
+    if (existingRegistration) {
+      // SW가 아직 활성화 대기 중일 수 있으므로 ready 대기
+      await navigator.serviceWorker.ready;
+      return existingRegistration;
+    }
+
+    // next-pwa가 아직 등록하지 않은 경우 (개발모드 등) 직접 등록
     const registration = await navigator.serviceWorker.register(SERVICE_WORKER_PATH);
     return registration;
   } catch (error) {
@@ -206,12 +217,14 @@ export function onForegroundMessage(handler: NotificationHandler): () => void {
   foregroundHandler = handler;
 
   const unsubscribe = onMessage(messagingInstance, (payload: MessagePayload) => {
+    const data = payload.data as Record<string, string> | undefined;
+    // data-only 메시지에서 알림 정보 추출 (notification 키 fallback)
     const message: NotificationMessage = {
-      title: payload.notification?.title || '알림',
-      body: payload.notification?.body || '',
-      icon: payload.notification?.icon,
-      image: payload.notification?.image,
-      data: payload.data as Record<string, string>,
+      title: data?.notificationTitle || payload.notification?.title || '알림',
+      body: data?.notificationBody || payload.notification?.body || '',
+      icon: data?.notificationIcon || payload.notification?.icon,
+      image: data?.notificationImage || payload.notification?.image,
+      data: data,
     };
 
     if (foregroundHandler) {

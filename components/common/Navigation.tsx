@@ -3,9 +3,11 @@
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Fragment, useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useWideMode } from '@/lib/hooks/useViewportScale';
 import { useHomeOverlay } from '@/lib/contexts/HomeOverlayContext';
+import { useUser } from '@/lib/contexts/UserContext';
+import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 
 export type UserRole = 'student' | 'professor';
 
@@ -22,9 +24,6 @@ interface NavigationProps {
 // 통일된 색상
 const ACTIVE_COLOR = '#FFFFFF';
 const INACTIVE_COLOR = '#1A1A1A';
-
-// 사이드바 색상
-const SIDEBAR_ACTIVE_BG = 'rgba(26, 26, 26, 0.85)';
 
 // 홈 아이콘 (탭바 + 사이드바 공용)
 const homeIcon = (isActive: boolean) => (
@@ -144,6 +143,7 @@ export default function Navigation({ role }: NavigationProps) {
     isOpen: isOverlayOpen,
     homeButtonRef,
   } = useHomeOverlay();
+  const { profile } = useUser();
 
   // 경로 기반 네비게이션 숨김 — layout.tsx hideNavigation과 동기화
   const shouldHideByPath = useMemo(() => {
@@ -160,18 +160,25 @@ export default function Navigation({ role }: NavigationProps) {
   }, [pathname]);
 
   // body attribute 감지 (모달, 홈 오버레이 등)
+  // + 5초마다 자가 복구 (attribute ↔ 상태 불일치 시 보정)
+  const [isOverlayAttr, setIsOverlayAttr] = useState(false);
   useEffect(() => {
-    const checkHideNav = () => {
-      const shouldHide =
-        document.body.hasAttribute('data-hide-nav') ||
-        document.body.hasAttribute('data-hide-nav-only') ||
-        document.body.hasAttribute('data-home-overlay-open');
-      setIsHidden(shouldHide);
+    const syncState = () => {
+      const hideNav = document.body.hasAttribute('data-hide-nav');
+      const hideNavOnly = document.body.hasAttribute('data-hide-nav-only');
+      const overlayOpen = document.body.hasAttribute('data-home-overlay-open');
+      setIsHidden(hideNav || hideNavOnly || overlayOpen);
+      setIsOverlayAttr(overlayOpen);
     };
-    checkHideNav();
-    const observer = new MutationObserver(checkHideNav);
+    syncState();
+    const observer = new MutationObserver(syncState);
     observer.observe(document.body, { attributes: true, attributeFilter: ['data-hide-nav', 'data-hide-nav-only', 'data-home-overlay-open'] });
-    return () => observer.disconnect();
+    // 5초마다 자가 복구 (MutationObserver가 놓친 경우 대비)
+    const healthCheck = setInterval(syncState, 5000);
+    return () => {
+      observer.disconnect();
+      clearInterval(healthCheck);
+    };
   }, []);
 
   const tabs = role === 'professor' ? professorTabs : studentTabs;
@@ -195,56 +202,77 @@ export default function Navigation({ role }: NavigationProps) {
     }
   }, [isOverlayOpen, closeOverlay]);
 
-  // 가로모드 사이드바는 오버레이 열려도 유지 (오버레이가 left:72px로 사이드바 오른쪽에만)
-  const overlayOpen = document.body.hasAttribute('data-home-overlay-open');
+  // 가로모드 사이드바는 오버레이 열려도 유지 (오버레이가 left:240px로 사이드바 오른쪽에만)
   if (shouldHideByPath) return null;
   if (isHidden && !isWide) return null;
-  if (isHidden && isWide && !overlayOpen) return null;
+  if (isHidden && isWide && !isOverlayAttr) return null;
 
-  // 가로모드: 좌측 사이드바
+  // 가로모드: 블랙 글래스 사이드바 (프로필 + 네비게이션)
   if (isWide) {
     return (
       <nav
-        className="fixed left-0 top-0 bottom-0 z-50 flex flex-col items-center py-6 gap-2"
+        className="fixed left-0 top-0 bottom-0 z-50 flex flex-col"
         style={{
-          width: '72px',
-          backgroundColor: '#F5F0E8',
-          borderRight: '2px solid #1A1A1A',
+          width: '240px',
+          backgroundColor: 'rgba(0, 0, 0, 0.82)',
+          backdropFilter: 'blur(40px)',
+          WebkitBackdropFilter: 'blur(40px)',
+          borderRight: '1px solid rgba(255, 255, 255, 0.08)',
         }}
       >
-        {tabs.map((tab, index) => {
-          const isActive = isActiveTab(pathname, tab.path);
-          const isHome = tab.path === homePath;
+        {/* 프로필 섹션 */}
+        <div
+          className="px-5 pb-4 flex items-center gap-3"
+          style={{ paddingTop: 'calc(1.5rem + env(safe-area-inset-top, 0px))' }}
+        >
+          <div
+            className="w-11 h-11 flex items-center justify-center flex-shrink-0 rounded-xl overflow-hidden"
+            style={{ background: 'rgba(255, 255, 255, 0.1)', border: '1px solid rgba(255, 255, 255, 0.15)' }}
+          >
+            {profile?.profileRabbitId != null ? (
+              <img src={getRabbitProfileUrl(profile.profileRabbitId)} alt="프로필" className="w-full h-full object-cover" />
+            ) : (
+              <svg width={28} height={28} viewBox="0 0 24 24" fill="white">
+                <circle cx="12" cy="8" r="4" />
+                <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
+              </svg>
+            )}
+          </div>
+          <p className="font-bold text-lg text-white truncate flex-1">
+            {profile?.nickname || ''}
+          </p>
+        </div>
 
-          return (
-            <Fragment key={tab.path}>
-              {index === 1 && <div className="w-10 border-t border-[#1A1A1A]/20 my-1" />}
+        {/* 구분선 */}
+        <div className="mx-5 border-t border-white/10 mb-2" />
+
+        {/* 네비게이션 아이템 */}
+        <div className="flex-1 px-3 flex flex-col gap-1">
+          {tabs.map((tab) => {
+            const isActive = isActiveTab(pathname, tab.path);
+            const isHome = tab.path === homePath;
+
+            return (
               <Link
+                key={tab.path}
                 href={tab.path}
                 ref={isHome ? (el: HTMLAnchorElement | null) => { homeButtonRef.current = el; } : undefined}
                 onClick={isHome ? handleHomeClick : handleTabClick}
-                className="flex flex-col items-center justify-center gap-0.5 w-14 h-14 rounded-xl transition-all duration-200"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200"
                 style={{
-                  backgroundColor: isActive ? SIDEBAR_ACTIVE_BG : 'transparent',
+                  backgroundColor: isActive ? 'rgba(255, 255, 255, 0.15)' : 'transparent',
+                  opacity: isActive ? 1 : 0.6,
                 }}
                 aria-label={tab.label}
               >
-                <motion.div
-                  animate={{ scale: isActive ? 1.1 : 1 }}
-                  transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-                >
-                  {tab.icon(isActive)}
-                </motion.div>
-                <span
-                  className="text-[10px] font-bold"
-                  style={{ color: isActive ? ACTIVE_COLOR : INACTIVE_COLOR }}
-                >
+                {tab.icon(true)}
+                <span className="text-sm font-semibold text-white">
                   {tab.label}
                 </span>
               </Link>
-            </Fragment>
-          );
-        })}
+            );
+          })}
+        </div>
       </nav>
     );
   }

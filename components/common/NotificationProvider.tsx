@@ -21,6 +21,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { useNotification, PermissionStatus } from '@/lib/hooks/useNotification';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { useUser } from '@/lib/contexts';
 import { NotificationMessage } from '@/lib/fcm';
 import { useTheme } from '@/styles/themes/useTheme';
 
@@ -37,7 +38,6 @@ interface NotificationContextType {
   requestPermission: () => Promise<boolean>;
   subscribe: () => Promise<boolean>;
   unsubscribe: () => Promise<void>;
-  showPermissionModal: () => void;
 }
 
 // ============================================================
@@ -147,93 +147,6 @@ function NotificationToast({ notification, onClose, onClick }: NotificationToast
 }
 
 // ============================================================
-// 권한 요청 모달 컴포넌트
-// ============================================================
-
-interface PermissionModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onAllow: () => void;
-  loading: boolean;
-}
-
-function PermissionModal({ isOpen, onClose, onAllow, loading }: PermissionModalProps) {
-  const { theme } = useTheme();
-
-  if (!isOpen) return null;
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
-    >
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="w-full max-w-sm rounded-2xl p-6"
-        style={{ backgroundColor: theme.colors.background }}
-      >
-        {/* 아이콘 */}
-        <div className="flex justify-center mb-4">
-          <div
-            className="w-20 h-20 rounded-full flex items-center justify-center"
-            style={{ backgroundColor: `${theme.colors.accent}20` }}
-          >
-            <span className="text-4xl">🔔</span>
-          </div>
-        </div>
-
-        {/* 제목 */}
-        <h3
-          className="text-xl font-bold text-center mb-2"
-          style={{ color: theme.colors.text }}
-        >
-          알림을 받으시겠어요?
-        </h3>
-
-        {/* 설명 */}
-        <p
-          className="text-sm text-center mb-6"
-          style={{ color: theme.colors.textSecondary }}
-        >
-          새로운 퀴즈, 피드백 답변, 댓글 알림을 받을 수 있어요.
-          언제든지 설정에서 변경할 수 있습니다.
-        </p>
-
-        {/* 버튼 */}
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={loading}
-            className="flex-1 py-3 rounded-xl font-medium"
-            style={{
-              backgroundColor: theme.colors.backgroundSecondary,
-              color: theme.colors.text,
-            }}
-          >
-            나중에
-          </button>
-          <button
-            type="button"
-            onClick={onAllow}
-            disabled={loading}
-            className="flex-1 py-3 rounded-xl font-medium"
-            style={{
-              backgroundColor: theme.colors.accent,
-              color: theme.colors.background,
-            }}
-          >
-            {loading ? '처리 중...' : '알림 받기'}
-          </button>
-        </div>
-      </motion.div>
-    </div>
-  );
-}
-
-// ============================================================
 // Provider 컴포넌트
 // ============================================================
 
@@ -258,6 +171,7 @@ interface NotificationProviderProps {
 export function NotificationProvider({ children }: NotificationProviderProps) {
   const router = useRouter();
   const { user } = useAuth();
+  const { profile } = useUser();
   const {
     permissionStatus,
     isSubscribed,
@@ -269,10 +183,24 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     clearLastNotification,
   } = useNotification();
 
-  // 권한 요청 모달 상태
-  const [showModal, setShowModal] = useState(false);
   // 토스트 표시 상태
   const [showToast, setShowToast] = useState(false);
+
+  // 학생 자동 알림 활성화: 권한이 default(미요청)이면 브라우저 권한 자동 요청
+  useEffect(() => {
+    if (
+      permissionStatus === 'default' &&
+      user?.uid &&
+      profile?.role !== 'professor' &&
+      !loading
+    ) {
+      requestPermission().then(granted => {
+        if (granted) {
+          subscribeToNotifications(user.uid).catch(() => {});
+        }
+      });
+    }
+  }, [permissionStatus, user?.uid, profile?.role, loading, requestPermission, subscribeToNotifications]);
 
   // 자동 구독: 이미 알림 권한이 granted인 상태에서 앱 시작 시 자동 FCM 토큰 발급 + Firestore 저장
   useEffect(() => {
@@ -291,7 +219,6 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     if (granted && user?.uid) {
       await subscribeToNotifications(user.uid);
     }
-    setShowModal(false);
     return granted;
   }, [requestPermission, subscribeToNotifications, user?.uid]);
 
@@ -314,15 +241,6 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     }
     await unsubscribeFromNotifications(user.uid);
   }, [unsubscribeFromNotifications, user?.uid]);
-
-  /**
-   * 권한 요청 모달 표시
-   */
-  const showPermissionModal = useCallback(() => {
-    if (permissionStatus === 'default') {
-      setShowModal(true);
-    }
-  }, [permissionStatus]);
 
   /**
    * 새 알림 수신 시 토스트 표시
@@ -391,8 +309,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     requestPermission: handleRequestPermission,
     subscribe,
     unsubscribe,
-    showPermissionModal,
-  }), [permissionStatus, isSubscribed, loading, handleRequestPermission, subscribe, unsubscribe, showPermissionModal]);
+  }), [permissionStatus, isSubscribed, loading, handleRequestPermission, subscribe, unsubscribe]);
 
   return (
     <NotificationContext.Provider value={contextValue}>
@@ -405,18 +322,6 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
             notification={lastNotification}
             onClose={handleToastClose}
             onClick={handleToastClick}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* 권한 요청 모달 */}
-      <AnimatePresence>
-        {showModal && (
-          <PermissionModal
-            isOpen={showModal}
-            onClose={() => setShowModal(false)}
-            onAllow={handleRequestPermission}
-            loading={loading}
           />
         )}
       </AnimatePresence>

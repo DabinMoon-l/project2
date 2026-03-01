@@ -15,6 +15,7 @@ import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useExpToast } from '@/components/common';
 import { useUser } from '@/lib/contexts';
+import { useMilestone } from '@/lib/contexts/MilestoneContext';
 
 /**
  * 문제 결과 타입
@@ -50,8 +51,15 @@ export default function ExpPage() {
   const { user } = useAuth();
   const { profile } = useUser();
   const { showExpToast } = useExpToast();
+  const { setSuppressAutoTrigger } = useMilestone();
 
   const quizId = params.id as string;
+
+  // EXP 페이지에서도 마일스톤 자동 트리거 억제
+  useEffect(() => {
+    setSuppressAutoTrigger(true);
+    return () => setSuppressAutoTrigger(false);
+  }, [setSuppressAutoTrigger]);
 
   const [expInfo, setExpInfo] = useState<ExpInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -213,8 +221,8 @@ export default function ExpPage() {
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 */}
-      <header className="sticky z-50 px-4 py-3 border-b-2 border-[#1A1A1A] bg-[#F5F0E8]" style={{ top: 'env(safe-area-inset-top, 0px)' }}>
-        <div className="flex items-center justify-center">
+      <header className="sticky top-0 z-50 border-b-2 border-[#1A1A1A] bg-[#F5F0E8]">
+        <div className="flex items-center justify-center px-4 py-3" style={{ marginTop: 'env(safe-area-inset-top, 0px)' }}>
           <h1 className="text-sm font-bold text-[#1A1A1A]">
             획득 경험치
           </h1>

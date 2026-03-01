@@ -1,7 +1,9 @@
 'use client';
 
+import { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import SettingsItem from './SettingsItem';
+import { useNotificationContext } from '@/components/common/NotificationProvider';
 import {
   type NotificationSettings,
   type DisplaySettings,
@@ -42,6 +44,39 @@ export default function SettingsList({
   onResetSettings,
   loading = false,
 }: SettingsListProps) {
+  const {
+    permissionStatus,
+    isSubscribed,
+    subscribe,
+    unsubscribe,
+    requestPermission,
+    loading: fcmLoading,
+  } = useNotificationContext();
+
+  // 푸시 알림 마스터 토글 상태
+  const pushEnabled = permissionStatus === 'granted' && isSubscribed;
+  const [pushToggling, setPushToggling] = useState(false);
+
+  const handlePushToggle = useCallback(async (value: boolean) => {
+    setPushToggling(true);
+    try {
+      if (value) {
+        // 권한이 없으면 요청, 있으면 구독
+        if (permissionStatus !== 'granted') {
+          await requestPermission();
+        } else {
+          await subscribe();
+        }
+      } else {
+        await unsubscribe();
+      }
+    } catch {
+      // 에러는 NotificationProvider에서 처리
+    } finally {
+      setPushToggling(false);
+    }
+  }, [permissionStatus, requestPermission, subscribe, unsubscribe]);
+
   const notificationItems = [
     { key: 'announcement' as const, icon: '📢', label: '공지 알림', description: '교수님이 공지를 올리면 알림을 받습니다' },
     { key: 'newQuiz' as const, icon: '📝', label: '퀴즈 알림', description: '새로운 퀴즈가 등록되면 알림을 받습니다' },
@@ -64,6 +99,23 @@ export default function SettingsList({
     <div className="space-y-4">
       {/* 알림 설정 */}
       <GlassSection title="알림 설정" delay={0}>
+        {/* 푸시 알림 마스터 토글 */}
+        <SettingsItem
+          icon="🔔"
+          label="푸시 알림"
+          description={
+            permissionStatus === 'denied'
+              ? '브라우저 설정에서 알림을 허용해주세요'
+              : pushEnabled
+                ? '푸시 알림이 활성화되어 있습니다'
+                : '푸시 알림을 켜면 새 소식을 바로 받을 수 있어요'
+          }
+          type="toggle"
+          value={pushEnabled}
+          onChange={handlePushToggle}
+          disabled={loading || pushToggling || fcmLoading || permissionStatus === 'denied'}
+        />
+        {/* 개별 알림 유형 토글 (푸시 활성화 시에만 의미 있음) */}
         {notificationItems.map((item) => (
           <SettingsItem
             key={item.key}
@@ -73,7 +125,7 @@ export default function SettingsList({
             type="toggle"
             value={notifications[item.key]}
             onChange={(value) => onNotificationChange(item.key, value)}
-            disabled={loading}
+            disabled={loading || !pushEnabled}
           />
         ))}
       </GlassSection>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useCallback, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useMotionValue, useSpring } from 'framer-motion';
 import { getScrollLockCount } from '@/lib/utils/scrollLock';
 
@@ -19,7 +19,21 @@ interface SwipeBackProps {
 }
 
 /**
- * 왼쪽 가장자리에서 오른쪽 스와이프 → router.back()
+ * 부모 경로 계산 (router.back() 대신 사용)
+ * /quiz/123/result → /quiz/123
+ * /quiz/123 → /quiz
+ * /board/456 → /board
+ * /professor/quiz/create → /professor/quiz
+ */
+function getParentPath(pathname: string): string {
+  const segments = pathname.split('/').filter(Boolean);
+  if (segments.length <= 1) return '/';
+  segments.pop();
+  return '/' + segments.join('/');
+}
+
+/**
+ * 왼쪽 가장자리에서 오른쪽 스와이프 → 부모 경로로 이동
  *
  * 일반 div 래퍼 + ref로 직접 transform 적용.
  * motion.div를 사용하면 transform이 항상 적용되어
@@ -28,6 +42,7 @@ interface SwipeBackProps {
  */
 export default function SwipeBack({ children, enabled = true }: SwipeBackProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const motionX = useMotionValue(0);
   const springX = useSpring(motionX, SPRING_CONFIG);
 
@@ -126,28 +141,32 @@ export default function SwipeBack({ children, enabled = true }: SwipeBackProps) 
     const velocity = motionX.getVelocity();
     if (currentX > screenWidth * THRESHOLD_RATIO || velocity > VELOCITY_THRESHOLD) {
       navigating.current = true;
-      // 화면 밖으로 슬라이드 후 뒤로가기
+      // 화면 밖으로 슬라이드 후 부모 경로로 이동
       motionX.set(screenWidth);
       setTimeout(() => {
-        // 콘텐츠를 숨긴 후 위치 리셋 → 깜빡임 방지
+        // 콘텐츠를 투명하게 숨긴 후 위치 리셋 → 깜빡임 방지
         if (contentRef.current) {
-          contentRef.current.style.visibility = 'hidden';
+          contentRef.current.style.opacity = '0';
+          contentRef.current.style.pointerEvents = 'none';
         }
         motionX.jump(0);
-        router.back();
+        // 부모 경로로 이동 (router.back() 대신 → 엉뚱한 탭 방지)
+        const parentPath = getParentPath(pathname || '/');
+        router.replace(parentPath);
         // 새 페이지 렌더링 후 다시 표시
         setTimeout(() => {
           if (contentRef.current) {
-            contentRef.current.style.visibility = '';
+            contentRef.current.style.opacity = '';
+            contentRef.current.style.pointerEvents = '';
           }
           navigating.current = false;
-        }, 80);
+        }, 250);
       }, 180);
     } else {
       // spring으로 원위치 복귀
       motionX.set(0);
     }
-  }, [motionX, router]);
+  }, [motionX, router, pathname]);
 
   useEffect(() => {
     if (!enabled) return;

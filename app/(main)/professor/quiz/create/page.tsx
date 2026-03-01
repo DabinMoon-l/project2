@@ -927,7 +927,6 @@ export default function ProfessorQuizCreatePage() {
           choices: q.type === 'multiple' ? q.choices.filter((c) => c.trim()) : undefined,
           answer,
           explanation: q.explanation || undefined,
-          rubric: q.type === 'essay' && q.rubric && q.rubric.length > 0 && q.rubric.some(r => r.criteria.trim()) ? q.rubric.filter(r => r.criteria.trim()) : undefined,
           imageUrl: q.imageUrl || undefined,
           mixedExamples: questionMixedExamples,
           chapterId: q.chapterId || undefined,
@@ -1037,8 +1036,8 @@ export default function ProfessorQuizCreatePage() {
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 */}
-      <header className="sticky z-20 border-b-2 border-[#1A1A1A]" style={{ top: 'env(safe-area-inset-top, 0px)', backgroundColor: '#F5F0E8' }}>
-        <div className="flex items-center justify-between px-3 py-2">
+      <header className="sticky top-0 z-20 border-b-2 border-[#1A1A1A]" style={{ backgroundColor: '#F5F0E8' }}>
+        <div className="flex items-center justify-between px-3 py-2" style={{ marginTop: 'env(safe-area-inset-top, 0px)' }}>
           <button type="button" onClick={handleBackButton} className="flex items-center text-[#1A1A1A] p-1">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />

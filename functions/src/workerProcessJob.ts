@@ -132,7 +132,12 @@ export const workerProcessJob = onDocumentCreated(
       images = await Promise.all(
         rawImages.map(async (path: string) => {
           const [content] = await bucket.file(path).download();
-          return content.toString("utf-8");
+          const raw = content.toString("utf-8");
+          // data: 헤더가 없는 순수 base64에 헤더 추가 (Gemini inlineData 전송용)
+          if (!raw.startsWith("data:")) {
+            return `data:image/jpeg;base64,${raw}`;
+          }
+          return raw;
         })
       );
       console.log(`[Worker] Job ${jobId}: Storage에서 이미지 ${images.length}개 다운로드`);
@@ -528,7 +533,12 @@ async function processJobData(
     images = await Promise.all(
       rawImgs.map(async (path: string) => {
         const [content] = await bucket.file(path).download();
-        return content.toString("utf-8");
+        const raw = content.toString("utf-8");
+        // data: 헤더가 없는 순수 base64에 헤더 추가 (Gemini inlineData 전송용)
+        if (!raw.startsWith("data:")) {
+          return `data:image/jpeg;base64,${raw}`;
+        }
+        return raw;
       })
     );
   } else {

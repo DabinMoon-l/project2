@@ -191,7 +191,6 @@ interface PreviewQuestion {
     items: Array<{ label: string; content: string }>;
   } | null;
   choiceExplanations?: string[];
-  rubric?: Array<{ criteria: string; percentage: number; description?: string }>;
 }
 
 interface DisplayItem {
@@ -287,7 +286,6 @@ const convertToQuestionDataList = (rawQuestions: any[]): QuestionData[] => {
         // 추가 필드 보존 (수정 시 유실 방지)
         passagePrompt: q.passagePrompt || undefined,
         bogi: q.bogi || null,
-        rubric: q.rubric || undefined,
         scoringMethod: q.scoringMethod || undefined,
         passageBlocks: q.passageBlocks || undefined,
       });
@@ -396,7 +394,6 @@ export default function QuizPreviewPage() {
             options: (q.choices || q.options || []).filter((opt: any) => opt != null),
             correctAnswer,
             explanation: q.explanation || '',
-            rubric: q.rubric || undefined,
             image: q.image || q.imageUrl || null,
             subQuestionOptions: (() => {
               if (q.mixedExamples && Array.isArray(q.mixedExamples) && q.mixedExamples.length > 0) return null;
@@ -637,9 +634,8 @@ export default function QuizPreviewPage() {
     if ((original.imageUrl || null) !== (current.imageUrl || null)) return true;
     // 발문 비교
     if ((original.passagePrompt || '') !== (current.passagePrompt || '')) return true;
-    // 보기/루브릭 비교
+    // 보기 비교
     if (JSON.stringify(original.bogi || null) !== JSON.stringify(current.bogi || null)) return true;
-    if (JSON.stringify(original.rubric || null) !== JSON.stringify(current.rubric || null)) return true;
     return false;
   };
 
@@ -786,7 +782,6 @@ export default function QuizPreviewPage() {
           mixedExamples: q.mixedExamples || undefined,
           passagePrompt: q.passagePrompt || undefined,
           bogi: q.bogi || undefined,
-          rubric: q.rubric || undefined,
           scoringMethod: q.scoringMethod || undefined,
           passageBlocks: q.passageBlocks || undefined,
           chapterId: q.chapterId || undefined,
@@ -1105,48 +1100,15 @@ export default function QuizPreviewPage() {
           </div>
         )}
 
-        {/* 서술형: 루브릭 → 해설 (있는 것만) */}
-        {q.type === 'essay' ? (
-          <>
-            {q.rubric && q.rubric.length > 0 && q.rubric.some(r => r.criteria.trim()) && (
-              <div>
-                <p className="text-xs font-bold text-[#5C5C5C] mb-1">평가 기준</p>
-                <div className="bg-[#EDEAE4] p-3 border border-[#1A1A1A] rounded-lg">
-                  <ul className="space-y-1 text-sm">
-                    {q.rubric.filter(r => r.criteria.trim()).map((item, idx) => (
-                      <li key={idx} className="flex items-start gap-2">
-                        <span className="text-[#1A1A1A] font-bold shrink-0">·</span>
-                        <span>
-                          {item.criteria}
-                          {item.percentage > 0 && <span className="text-[#5C5C5C] font-bold"> ({item.percentage}%)</span>}
-                          {item.description && <span className="text-[#5C5C5C]"> — {item.description}</span>}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            )}
-            {q.explanation && (
-              <div>
-                <p className="text-xs font-bold text-[#5C5C5C] mb-1">해설</p>
-                <p className="text-sm text-[#1A1A1A] bg-[#EDEAE4] p-3 border border-[#1A1A1A] rounded-lg">
-                  {q.explanation}
-                </p>
-              </div>
-            )}
-          </>
-        ) : (
-          /* 비서술형: 해설 항상 표시 */
-          q.explanation ? (
-            <div>
-              <p className="text-xs font-bold text-[#5C5C5C] mb-1">해설</p>
-              <p className="text-sm text-[#1A1A1A] bg-[#EDEAE4] p-3 border border-[#1A1A1A] rounded-lg">
-                {q.explanation}
-              </p>
-            </div>
-          ) : null
-        )}
+        {/* 해설 */}
+        {q.explanation ? (
+          <div>
+            <p className="text-xs font-bold text-[#5C5C5C] mb-1">해설</p>
+            <p className="text-sm text-[#1A1A1A] bg-[#EDEAE4] p-3 border border-[#1A1A1A] rounded-lg">
+              {q.explanation}
+            </p>
+          </div>
+        ) : null}
       </>
     );
   };
@@ -1186,8 +1148,8 @@ export default function QuizPreviewPage() {
   return (
     <div className={`min-h-screen ${isEditMode ? 'pb-24' : 'pb-8'}`} style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 */}
-      <header className="sticky z-50 w-full border-b-2 border-[#1A1A1A]" style={{ top: 'env(safe-area-inset-top, 0px)', backgroundColor: '#F5F0E8' }}>
-        <div className="flex items-center h-14 px-4">
+      <header className="sticky top-0 z-50 w-full border-b-2 border-[#1A1A1A]" style={{ backgroundColor: '#F5F0E8' }}>
+        <div className="flex items-center h-14 px-4" style={{ marginTop: 'env(safe-area-inset-top, 0px)' }}>
           {isEditMode ? (
             <div className="w-10 h-10" />
           ) : (

@@ -857,6 +857,18 @@ export default function QuizPage() {
                       />
                     )}
 
+                    {/* 서술형 입력 */}
+                    {currentQuestion.type === 'essay' && (
+                      <ShortAnswer
+                        value={(currentAnswer as string) || ''}
+                        onChange={(value) =>
+                          handleAnswerChange(currentQuestion.id, value)
+                        }
+                        maxLength={200}
+                        placeholder="아는 것을 200자 내로 적어주세요."
+                      />
+                    )}
+
                     {/* 결합형 문제인데 선지가 없는 경우 (데이터 오류) - 주관식으로 대체 */}
                     {currentQuestion.type === 'combined' && !currentQuestion.choices && (
                       <div className="space-y-4">

@@ -399,7 +399,7 @@ const MICROBIOLOGY_FOCUS_GUIDE: string | null = null;
  * 과목 ID로 Focus Guide 가져오기
  * @param chapterNumbers - 추론된 챕터 번호 목록 (있으면 해당 챕터만 필터링)
  */
-function getFocusGuide(courseId: string, chapterNumbers?: string[]): string | null {
+export function getFocusGuide(courseId: string, chapterNumbers?: string[]): string | null {
   let fullGuide: string | null = null;
   switch (courseId) {
     case "biology":
@@ -905,12 +905,23 @@ export function buildFullPrompt(
   }
   // 2. 매우 짧은 텍스트 + FocusGuide 없음: 텍스트 기반 일반 지식 문제
   else if (isVeryShortText && !hasFocusGuide) {
-    uploadedTextLabel = "키워드/주제";
-    contentRule = `**일반 주제 출제 규칙**:
+    const hasText = (professorPrompt || ocrText).trim().length > 0;
+    if (hasText) {
+      uploadedTextLabel = "키워드/주제";
+      contentRule = `**일반 주제 출제 규칙**:
    - 제공된 '키워드/주제'("${(professorPrompt || ocrText).trim().slice(0, 30)}")와 관련된 내용으로만 문제를 출제하세요
    - **금지**: 이 키워드와 무관한 주제의 문제를 만들면 탈락입니다
    - **중요**: 확실하지 않거나 추측성 내용은 절대 포함하지 마세요
    - 널리 알려진 기본 개념, 정의, 특징만 문제로 만드세요`;
+    } else {
+      // 텍스트 없이 이미지만 제공된 경우
+      uploadedTextLabel = "이미지 학습 자료";
+      contentRule = `**이미지 기반 출제 규칙**:
+   - 첨부된 이미지를 면밀히 분석하여 핵심 개념, 구조, 프로세스를 파악하세요
+   - 이미지에 포함된 해부도, 다이어그램, 표, 그래프, 순서도 등의 시각 정보를 바탕으로 문제를 출제하세요
+   - 이미지에서 파악한 용어, 구조명, 관계, 수치를 정확하게 활용하세요
+   - **금지**: 이미지에 없는 내용을 추측하여 문제를 만들지 마세요`;
+    }
   }
   // 3. 짧은 텍스트 (50-200자) + FocusGuide 있음: 학습 자료로 챕터 파악 → 포커스 가이드 활용
   else if (isShortText && hasFocusGuide) {

@@ -295,9 +295,10 @@ export default function ReviewPractice({
     });
   }, [wrongItems, userCourseId]);
 
-  // 전체 문제 수 (결합형의 하위 문제 포함)
+  // 전체 문제 수 (결합형의 하위 문제 포함, 서술형 제외)
   const totalQuestionCount = useMemo(() => {
-    return groupedItems.reduce((sum, group) => sum + group.items.length, 0);
+    return groupedItems.reduce((sum, group) =>
+      sum + group.items.filter(item => item.type !== 'essay').length, 0);
   }, [groupedItems]);
 
   // 정답 개수
@@ -404,16 +405,17 @@ export default function ReviewPractice({
       }));
       setSubmittedIndices(prev => new Set(prev).add(currentIndex));
     } else {
-      // 단일 문제
-      if (answer === null || (Array.isArray(answer) && answer.length === 0)) return;
+      // 단일 문제 (서술형은 미응답도 제출 가능)
+      if (currentItem?.type !== 'essay' && (answer === null || (Array.isArray(answer) && answer.length === 0))) return;
       if (!currentItem) return;
 
-      const isCorrectAnswer = checkAnswer();
+      // 서술형은 채점 제외 (항상 isCorrect = false, 결과 표시에서 분기)
+      const isCorrectAnswer = currentItem.type === 'essay' ? false : checkAnswer();
       const newResult: PracticeResult = {
         reviewId: currentItem.id,
         quizId: currentItem.quizId,
         questionId: currentItem.questionId,
-        userAnswer: Array.isArray(answer) ? answer.join(',') : answer.toString(),
+        userAnswer: answer !== null ? (Array.isArray(answer) ? answer.join(',') : answer.toString()) : '',
         isCorrect: isCorrectAnswer,
       };
       setResultsMap(prev => ({ ...prev, [currentIndex]: newResult }));
@@ -594,8 +596,8 @@ export default function ReviewPractice({
         style={{ backgroundColor: '#F5F0E8' }}
       >
         {/* 헤더 */}
-        <header className="sticky z-50 border-b-2 border-[#1A1A1A] bg-[#F5F0E8]" style={{ top: 'env(safe-area-inset-top, 0px)' }}>
-          <div className="flex items-center justify-between h-12 px-4">
+        <header className="sticky top-0 z-50 border-b-2 border-[#1A1A1A] bg-[#F5F0E8]">
+          <div className="flex items-center justify-between h-12 px-4" style={{ marginTop: 'env(safe-area-inset-top, 0px)' }}>
             <div className="w-10" />
             <h1 className="text-sm font-bold text-[#1A1A1A]">{headerTitle} 결과</h1>
             <div className="w-10" />
@@ -965,25 +967,6 @@ export default function ReviewPractice({
                                               </div>
                                             )}
 
-                                            {/* 루브릭 (서술형) */}
-                                            {subItem.type === 'essay' && (subItem as any).rubric?.length > 0 && (subItem as any).rubric.some((r: any) => r.criteria?.trim()) && (
-                                              <div className="p-2 bg-[#F5F0E8] border border-[#1A1A1A]">
-                                                <p className="text-xs font-bold text-[#5C5C5C]">평가 기준</p>
-                                                <ul className="space-y-1 text-xs">
-                                                  {(subItem as any).rubric.filter((r: any) => r.criteria?.trim()).map((r: any, idx: number) => (
-                                                    <li key={idx} className="flex items-start gap-2">
-                                                      <span className="text-[#1A1A1A] font-bold shrink-0">·</span>
-                                                      <span className="text-[#1A1A1A]">
-                                                        {r.criteria}
-                                                        {r.percentage > 0 && <span className="text-[#5C5C5C] font-bold"> ({r.percentage}%)</span>}
-                                                        {r.description && <span className="text-[#5C5C5C]"> — {r.description}</span>}
-                                                      </span>
-                                                    </li>
-                                                  ))}
-                                                </ul>
-                                              </div>
-                                            )}
-
                                             {/* 해설 */}
                                             <div className="p-2 bg-[#F5F0E8] border border-[#1A1A1A]">
                                               <p className="text-xs font-bold text-[#5C5C5C]">해설</p>
@@ -1040,9 +1023,11 @@ export default function ReviewPractice({
                           {/* 첫 줄: 정답/오답 + 문항번호 + 챕터 + 문제유형 */}
                           <div className="flex items-center gap-1.5 flex-wrap mb-1">
                             <span className={`w-5 h-5 flex items-center justify-center text-[10px] font-bold ${
-                              isItemCorrect ? 'bg-[#1A6B1A] text-white' : 'bg-[#8B1A1A] text-white'
+                              item.type === 'essay'
+                                ? 'bg-[#8B6914] text-white'
+                                : isItemCorrect ? 'bg-[#1A6B1A] text-white' : 'bg-[#8B1A1A] text-white'
                             }`}>
-                              {isItemCorrect ? 'O' : 'X'}
+                              {item.type === 'essay' ? '✎' : isItemCorrect ? 'O' : 'X'}
                             </span>
                             <span className="text-xs font-bold text-[#1A1A1A]">
                               Q{groupIdx + 1}
@@ -1053,7 +1038,7 @@ export default function ReviewPractice({
                               </span>
                             )}
                             <span className="px-1 py-0.5 text-[10px] border border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A]">
-                              {item.type === 'ox' ? 'OX문제' : item.type === 'multiple' ? '객관식문제' : '주관식문제'}
+                              {item.type === 'ox' ? 'OX문제' : item.type === 'multiple' ? '객관식문제' : item.type === 'essay' ? '서술형문제' : '주관식문제'}
                             </span>
                           </div>
                           {/* 둘째 줄: 문제 내용 + 발문 */}
@@ -1342,8 +1327,18 @@ export default function ReviewPractice({
                             </div>
                           )}
 
-                          {/* OX/주관식 답 */}
+                          {/* OX/주관식/서술형 답 */}
                           {(!item.options || item.options.length === 0) && (
+                            item.type === 'essay' ? (
+                              <div className="text-xs space-y-1">
+                                <p>
+                                  <span className="text-[#5C5C5C]">내 답: </span>
+                                  <span className="font-bold text-[#1A1A1A]">
+                                    {result?.userAnswer || '(미응답)'}
+                                  </span>
+                                </p>
+                              </div>
+                            ) : (
                             <div className="text-xs space-y-1">
                               <p>
                                 <span className="text-[#5C5C5C]">내 답: </span>
@@ -1362,25 +1357,7 @@ export default function ReviewPractice({
                                 </p>
                               )}
                             </div>
-                          )}
-
-                          {/* 루브릭 (서술형) */}
-                          {item.type === 'essay' && (item as any).rubric?.length > 0 && (item as any).rubric.some((r: any) => r.criteria?.trim()) && (
-                            <div className="p-2 bg-[#F5F0E8] border border-[#1A1A1A]">
-                              <p className="text-xs font-bold text-[#5C5C5C] mb-1">평가 기준</p>
-                              <ul className="space-y-1 text-xs">
-                                {(item as any).rubric.filter((r: any) => r.criteria?.trim()).map((r: any, idx: number) => (
-                                  <li key={idx} className="flex items-start gap-2">
-                                    <span className="text-[#1A1A1A] font-bold shrink-0">·</span>
-                                    <span className="text-[#1A1A1A]">
-                                      {r.criteria}
-                                      {r.percentage > 0 && <span className="text-[#5C5C5C] font-bold"> ({r.percentage}%)</span>}
-                                      {r.description && <span className="text-[#5C5C5C]"> — {r.description}</span>}
-                                    </span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
+                            )
                           )}
 
                           {/* 해설 */}
@@ -1701,14 +1678,14 @@ export default function ReviewPractice({
     >
       {/* 헤더 */}
       <header
-        className="sticky z-[60] w-full border-b-2 border-[#1A1A1A]"
-        style={{ top: 'env(safe-area-inset-top, 0px)', backgroundColor: '#F5F0E8' }}
+        className="sticky top-0 z-[60] w-full border-b-2 border-[#1A1A1A]"
+        style={{ backgroundColor: '#F5F0E8' }}
       >
-        <div className="flex items-center justify-between h-14 px-4">
+        <div className="flex items-center justify-between h-14 px-4" style={{ marginTop: 'env(safe-area-inset-top, 0px)' }}>
           <motion.button
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.95 }}
-            onClick={() => setShowExitModal(true)}
+            onClick={() => onClose()}
             className="p-2 -ml-2 transition-colors duration-200 text-[#1A1A1A] hover:bg-[#EDEAE4]"
             aria-label="나가기"
           >
@@ -1895,7 +1872,9 @@ export default function ReviewPractice({
                           </span>
                         )}
                         {isSubmitted && (
-                          <span className={`px-2 py-0.5 text-xs font-bold ${isSubCorrect ? 'bg-[#1A6B1A] text-white' : 'bg-[#8B1A1A] text-white'}`}>
+                          <span className={`px-2 py-0.5 text-xs font-bold ${
+                            isSubCorrect ? 'bg-[#1A6B1A] text-white' : 'bg-[#8B1A1A] text-white'
+                          }`}>
                             {isSubCorrect ? '정답' : '오답'}
                           </span>
                         )}
@@ -2080,24 +2059,6 @@ export default function ReviewPractice({
                               </p>
                             )}
                           </div>
-                          {/* 루브릭 (서술형) */}
-                          {subItem.type === 'essay' && (subItem as any).rubric?.length > 0 && (subItem as any).rubric.some((r: any) => r.criteria?.trim()) && (
-                            <div className="p-2 bg-[#F5F0E8] border border-[#1A1A1A]">
-                              <p className="text-xs font-bold text-[#5C5C5C]">평가 기준</p>
-                              <ul className="space-y-1 text-xs">
-                                {(subItem as any).rubric.filter((r: any) => r.criteria?.trim()).map((r: any, idx: number) => (
-                                  <li key={idx} className="flex items-start gap-2">
-                                    <span className="text-[#1A1A1A] font-bold shrink-0">·</span>
-                                    <span className="text-[#1A1A1A]">
-                                      {r.criteria}
-                                      {r.percentage > 0 && <span className="text-[#5C5C5C] font-bold"> ({r.percentage}%)</span>}
-                                      {r.description && <span className="text-[#5C5C5C]"> — {r.description}</span>}
-                                    </span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
 
                           {/* 해설 */}
                           <div className="p-2 bg-[#F5F0E8] border border-[#1A1A1A]">
@@ -2286,6 +2247,17 @@ export default function ReviewPractice({
                       onChange={(value) => !isSubmitted && setAnswer(value)}
                       disabled={isSubmitted}
                     />
+                  )}
+
+                  {/* 서술형 입력 */}
+                  {currentItem.type === 'essay' && (
+                    <ShortAnswer
+                      value={(answer as string) || ''}
+                      onChange={(value) => !isSubmitted && setAnswer(value)}
+                      disabled={isSubmitted}
+                      maxLength={200}
+                      placeholder="아는 것을 200자 내로 적어주세요."
+                    />
               )}
             </div>
 
@@ -2298,6 +2270,14 @@ export default function ReviewPractice({
                   exit={{ opacity: 0, y: -20 }}
                   className="mt-6"
                 >
+                  {currentItem?.type === 'essay' ? (
+                    // 서술형: 채점 없이 수고하셨습니다 표시
+                    <div className="p-3 text-center border-2 border-[#1A1A1A] bg-[#F5F0E8]">
+                      <p className="text-lg font-bold text-[#1A1A1A]">
+                        수고하셨습니다.
+                      </p>
+                    </div>
+                  ) : (
                   <div
                     className={`p-3 text-center border-2 ${
                       isCorrect
@@ -2388,27 +2368,9 @@ export default function ReviewPractice({
                       </div>
                     )}
                   </div>
-
-                  {/* 루브릭 (서술형) */}
-                  {currentItem.type === 'essay' && (currentItem as any).rubric?.length > 0 && (currentItem as any).rubric.some((r: any) => r.criteria?.trim()) && (
-                    <div className="mt-4 p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A]">
-                      <p className="text-xs font-bold text-[#5C5C5C] mb-1">평가 기준</p>
-                      <ul className="space-y-1 text-xs">
-                        {(currentItem as any).rubric.filter((r: any) => r.criteria?.trim()).map((r: any, idx: number) => (
-                          <li key={idx} className="flex items-start gap-2">
-                            <span className="text-[#1A1A1A] font-bold shrink-0">·</span>
-                            <span className="text-[#1A1A1A]">
-                              {r.criteria}
-                              {r.percentage > 0 && <span className="text-[#5C5C5C] font-bold"> ({r.percentage}%)</span>}
-                              {r.description && <span className="text-[#5C5C5C]"> — {r.description}</span>}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
                   )}
 
-                  {currentItem.explanation && (
+                  {currentItem.type !== 'essay' && currentItem.explanation && (
                     <div className="mt-4 p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A]">
                       <p className="text-xs font-bold text-[#5C5C5C] mb-1">해설</p>
                       <p className="text-xs text-[#1A1A1A] whitespace-pre-wrap">{currentItem.explanation}</p>
@@ -2516,20 +2478,7 @@ export default function ReviewPractice({
           {!isSubmitted ? (
             <button
               onClick={handleSubmit}
-              disabled={(() => {
-                if (currentGroup?.isCombined) {
-                  // 결합형: 모든 하위 문제에 답변이 있어야 함
-                  const groupAnswers = combinedAnswers[currentIndex] || {};
-                  return currentGroup.items.some((_, subIdx) => {
-                    const subAnswer = groupAnswers[subIdx];
-                    return subAnswer === null || subAnswer === undefined || (Array.isArray(subAnswer) && subAnswer.length === 0);
-                  });
-                } else {
-                  // 단일 문제
-                  return answer === null || (Array.isArray(answer) && answer.length === 0);
-                }
-              })()}
-              className={`${currentIndex > 0 ? 'flex-[2]' : 'w-full'} py-3 bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors disabled:opacity-50 disabled:cursor-not-allowed rounded-lg`}
+              className={`${currentIndex > 0 ? 'flex-[2]' : 'w-full'} py-3 bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors rounded-lg`}
             >
               제출하기
             </button>

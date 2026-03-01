@@ -241,7 +241,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
       }
     };
 
-    roundResultTimerRef.current = setTimeout(attemptStart, 2000);
+    roundResultTimerRef.current = setTimeout(attemptStart, 1200);
 
     return () => {
       if (roundResultTimerRef.current) {

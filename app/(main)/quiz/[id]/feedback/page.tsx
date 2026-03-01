@@ -19,6 +19,7 @@ import { db, functions } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useExpToast } from '@/components/common';
 import { useUser } from '@/lib/contexts';
+import { useMilestone } from '@/lib/contexts/MilestoneContext';
 
 /**
  * 피드백 타입
@@ -433,25 +434,6 @@ function SingleQuestionCard({
               </div>
             </div>
           )}
-        </div>
-      )}
-
-      {/* 루브릭 (서술형) */}
-      {question.type === 'essay' && question.rubric && question.rubric.length > 0 && question.rubric.some(r => r.criteria.trim()) && (
-        <div className="mb-4 p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
-          <p className="text-xs font-bold text-[#1A1A1A] mb-1">평가 기준</p>
-          <ul className="space-y-1">
-            {question.rubric.filter(r => r.criteria.trim()).map((item, idx) => (
-              <li key={idx} className="flex items-start gap-2 text-xs text-[#5C5C5C]">
-                <span className="text-[#1A1A1A] font-bold shrink-0">·</span>
-                <span>
-                  {item.criteria}
-                  {item.percentage > 0 && <span className="font-bold"> ({item.percentage}%)</span>}
-                  {item.description && <span> — {item.description}</span>}
-                </span>
-              </li>
-            ))}
-          </ul>
         </div>
       )}
 
@@ -942,25 +924,6 @@ function CombinedQuestionCard({
               </div>
             )}
 
-            {/* 루브릭 (서술형) */}
-            {question.type === 'essay' && question.rubric && question.rubric.length > 0 && question.rubric.some(r => r.criteria.trim()) && (
-              <div className="mb-4 p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
-                <p className="text-xs font-bold text-[#1A1A1A] mb-1">평가 기준</p>
-                <ul className="space-y-1">
-                  {question.rubric.filter(r => r.criteria.trim()).map((item, idx) => (
-                    <li key={idx} className="flex items-start gap-2 text-xs text-[#5C5C5C]">
-                      <span className="text-[#1A1A1A] font-bold shrink-0">·</span>
-                      <span>
-                        {item.criteria}
-                        {item.percentage > 0 && <span className="font-bold"> ({item.percentage}%)</span>}
-                        {item.description && <span> — {item.description}</span>}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
             {/* 해설 */}
             {question.explanation && (
               <div className="mb-4 p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
@@ -1030,8 +993,15 @@ export default function FeedbackPage() {
   const { user } = useAuth();
   const { profile } = useUser();
   const { showExpToast } = useExpToast();
+  const { setSuppressAutoTrigger } = useMilestone();
 
   const quizId = params.id as string;
+
+  // 피드백 페이지에서도 마일스톤 자동 트리거 억제
+  useEffect(() => {
+    setSuppressAutoTrigger(true);
+    return () => setSuppressAutoTrigger(false);
+  }, [setSuppressAutoTrigger]);
 
   // 상태
   const [pageData, setPageData] = useState<FeedbackPageData | null>(null);
@@ -1599,8 +1569,8 @@ export default function FeedbackPage() {
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 */}
-      <header className="sticky z-50 px-4 py-3 border-b-2 border-[#1A1A1A] bg-[#F5F0E8]" style={{ top: 'env(safe-area-inset-top, 0px)' }}>
-        <div className="flex items-center justify-center">
+      <header className="sticky top-0 z-50 border-b-2 border-[#1A1A1A] bg-[#F5F0E8]">
+        <div className="flex items-center justify-center px-4 py-3" style={{ marginTop: 'env(safe-area-inset-top, 0px)' }}>
           <div className="text-center">
             <h1 className="text-sm font-bold text-[#1A1A1A]">
               피드백

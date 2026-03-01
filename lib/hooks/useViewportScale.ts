@@ -1,8 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-
-// useEffect, useState는 useWideMode에서 사용
+import { useEffect, useState, useRef, useCallback } from 'react';
 
 /**
  * CSS zoom 제거됨 — 항상 1 반환 (하위 호환용)
@@ -29,21 +27,36 @@ export function useViewportScale() {
 /**
  * 가로모드(wide) 감지 훅
  * orientation: landscape + min-width: 1024px
+ * 100ms 디바운스로 화면 회전 시 깜빡임 방지
  */
 export function useWideMode(): boolean {
   const [isWide, setIsWide] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleChange = useCallback((mql: MediaQueryList | MediaQueryListEvent) => {
+    const matches = 'matches' in mql ? mql.matches : (mql as MediaQueryList).matches;
+    // 100ms 디바운스 — 회전 애니메이션 중 중간 상태 무시
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      setIsWide(matches);
+    }, 100);
+  }, []);
 
   useEffect(() => {
     const mql = window.matchMedia(
       '(orientation: landscape) and (min-width: 1024px)'
     );
 
-    const handleChange = () => setIsWide(mql.matches);
-    handleChange();
+    // 초기값은 디바운스 없이 즉시 설정
+    setIsWide(mql.matches);
 
-    mql.addEventListener('change', handleChange);
-    return () => mql.removeEventListener('change', handleChange);
-  }, []);
+    const listener = (e: MediaQueryListEvent) => handleChange(e);
+    mql.addEventListener('change', listener);
+    return () => {
+      mql.removeEventListener('change', listener);
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [handleChange]);
 
   return isWide;
 }

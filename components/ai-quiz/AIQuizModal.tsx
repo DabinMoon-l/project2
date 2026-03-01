@@ -172,9 +172,8 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
         if (result.text.trim()) {
           // OCR 추출 텍스트 저장 (퀴즈 생성 시 사용)
           setOcrExtractedText(prev => prev ? `${prev}\n\n${result.text}` : result.text);
-        } else {
-          alert('이미지에서 텍스트를 인식할 수 없습니다.');
         }
+        // OCR 텍스트 없어도 이미지는 그대로 유지 → Gemini가 직접 이미지 분석
       } catch (error: any) {
         console.error('OCR 오류:', error);
         const errorMessage = error.message || 'OCR 처리 중 오류가 발생했습니다.';
@@ -432,9 +431,8 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
       if (result.text.trim()) {
         // OCR 추출 텍스트 저장 (퀴즈 생성 시 사용)
         setOcrExtractedText(result.text);
-      } else {
-        alert('문서에서 텍스트를 인식할 수 없습니다.');
       }
+      // OCR 텍스트 없어도 이미지는 그대로 유지 → Gemini가 직접 이미지 분석
     } catch (error: any) {
       console.error('OCR 오류:', error);
       const errorMessage = error.message || 'OCR 처리 중 오류가 발생했습니다.';

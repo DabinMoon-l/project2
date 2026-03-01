@@ -53,22 +53,40 @@ async function computeRadarNormForCourse(courseId: string) {
   });
 
   // 2. 4개 병렬 쿼리 (select로 필요한 필드만 — 메모리 절약)
-  const [quizzesResult, postsResult, reviewsResult, quizResultsResult] = await Promise.allSettled([
+  // reviews는 userId 배치로 조회 (courseId가 null인 기존 문서도 포함하기 위해)
+  const studentUidsArr = Array.from(studentUids);
+  const reviewBatches: Promise<FirebaseFirestore.QuerySnapshot>[] = [];
+  for (let i = 0; i < studentUidsArr.length; i += 30) {
+    const batch = studentUidsArr.slice(i, i + 30);
+    reviewBatches.push(
+      db.collection("reviews").where("userId", "in", batch).select("userId", "reviewCount").get()
+    );
+  }
+
+  const [quizzesResult, postsResult, quizResultsResult, ...reviewBatchResults] = await Promise.allSettled([
     db.collection("quizzes").where("courseId", "==", courseId).select("creatorId", "type").get(),
     db.collection("posts").where("courseId", "==", courseId).select("authorId").get(),
-    db.collection("reviews").where("courseId", "==", courseId).select("userId", "reviewCount").get(),
     db.collection("quizResults").where("courseId", "==", courseId).select("userId", "quizId", "score", "isUpdate").get(),
+    ...reviewBatches,
   ]);
 
   if (quizzesResult.status === "rejected") console.error(`quizzes 쿼리 실패 (${courseId}):`, quizzesResult.reason);
   if (postsResult.status === "rejected") console.error(`posts 쿼리 실패 (${courseId}):`, postsResult.reason);
-  if (reviewsResult.status === "rejected") console.error(`reviews 쿼리 실패 (${courseId}):`, reviewsResult.reason);
   if (quizResultsResult.status === "rejected") console.error(`quizResults 쿼리 실패 (${courseId}):`, quizResultsResult.reason);
 
   const quizzesDocs = quizzesResult.status === "fulfilled" ? quizzesResult.value.docs : [];
   const postsDocs = postsResult.status === "fulfilled" ? postsResult.value.docs : [];
-  const reviewsDocs = reviewsResult.status === "fulfilled" ? reviewsResult.value.docs : [];
   const quizResultsDocs = quizResultsResult.status === "fulfilled" ? quizResultsResult.value.docs : [];
+
+  // reviews 배치 결과 합치기
+  const reviewsDocs: any[] = [];
+  reviewBatchResults.forEach((r, idx) => {
+    if (r.status === "fulfilled") {
+      reviewsDocs.push(...(r as PromiseFulfilledResult<any>).value.docs);
+    } else {
+      console.error(`reviews 배치 ${idx} 쿼리 실패 (${courseId}):`, (r as PromiseRejectedResult).reason);
+    }
+  });
 
   // 3. 출제력 (학생이 만든 퀴즈 수)
   const quizCreationByUid: Record<string, number> = {};

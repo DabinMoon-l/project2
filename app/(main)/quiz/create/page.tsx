@@ -1497,8 +1497,8 @@ export default function QuizCreatePage() {
       style={{ backgroundColor: '#F5F0E8' }}
     >
       {/* 헤더 */}
-      <header className="sticky z-20 border-b-2 border-[#1A1A1A]" style={{ top: 'env(safe-area-inset-top, 0px)', backgroundColor: '#F5F0E8' }}>
-        <div className="flex items-center justify-between px-3 py-2">
+      <header className="sticky top-0 z-20 border-b-2 border-[#1A1A1A]" style={{ backgroundColor: '#F5F0E8' }}>
+        <div className="flex items-center justify-between px-3 py-2" style={{ marginTop: 'env(safe-area-inset-top, 0px)' }}>
           <button
             type="button"
             onClick={handleBackButton}

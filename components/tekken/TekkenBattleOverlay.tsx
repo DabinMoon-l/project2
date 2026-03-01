@@ -73,7 +73,7 @@ export default function TekkenBattleOverlay({
   useEffect(() => {
     if (tekken.battleStatus === 'roundResult') {
       setShowRoundResult(true);
-      const timer = setTimeout(() => setShowRoundResult(false), 1800);
+      const timer = setTimeout(() => setShowRoundResult(false), 1000);
       return () => clearTimeout(timer);
     }
   }, [tekken.battleStatus]);

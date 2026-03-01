@@ -146,35 +146,63 @@ async function sendPushNotification(
   const messaging = getMessaging();
 
   try {
+    // data-only 메시지로 전송 (notification 키 제거)
+    // notification 키가 있으면 브라우저가 자동으로 알림을 표시하고
+    // onBackgroundMessage에서 또 showNotification을 호출하여 중복 알림 발생
+    // data-only로 보내면 onBackgroundMessage에서만 알림을 제어 가능
     const message = {
-      notification: {
-        title: payload.title,
-        body: payload.body,
-        ...(payload.icon && { icon: payload.icon }),
-        ...(payload.image && { image: payload.image }),
+      data: {
+        ...(payload.data || {}),
+        // 알림 표시 정보를 data에 포함
+        notificationTitle: payload.title,
+        notificationBody: payload.body,
+        ...(payload.icon && { notificationIcon: payload.icon }),
+        ...(payload.image && { notificationImage: payload.image }),
       },
-      data: payload.data || {},
+      // 웹 푸시에서 data-only 메시지가 SW에 전달되려면 webpush 헤더 필요
+      webpush: {
+        headers: {
+          Urgency: "high",
+        },
+        fcmOptions: {
+          link: "/",
+        },
+      },
       tokens,
     };
 
     const response = await messaging.sendEachForMulticast(message);
 
-    // 실패한 토큰 정리
+    // 영구적으로 무효한 토큰만 삭제 (일시적 오류는 유지)
     if (response.failureCount > 0) {
+      const INVALID_TOKEN_ERRORS = [
+        "messaging/registration-token-not-registered",
+        "messaging/invalid-registration-token",
+        "messaging/invalid-argument",
+      ];
+
       const db = getFirestore();
-      const failedTokens = response.responses
-        .map((resp, idx) => (resp.success ? null : tokens[idx]))
+      const invalidTokens = response.responses
+        .map((resp, idx) => {
+          if (resp.success) return null;
+          const errorCode = resp.error?.code;
+          if (errorCode && INVALID_TOKEN_ERRORS.includes(errorCode)) {
+            return tokens[idx];
+          }
+          return null;
+        })
         .filter((token): token is string => token !== null);
 
-      // 실패한 토큰 삭제
-      const batch = db.batch();
-      for (const token of failedTokens) {
-        const tokenRef = db.collection("fcmTokens").doc(token);
-        batch.delete(tokenRef);
-      }
-      await batch.commit();
+      if (invalidTokens.length > 0) {
+        const batch = db.batch();
+        for (const token of invalidTokens) {
+          const tokenRef = db.collection("fcmTokens").doc(token);
+          batch.delete(tokenRef);
+        }
+        await batch.commit();
 
-      console.log(`실패한 토큰 ${failedTokens.length}개 삭제`);
+        console.log(`무효 토큰 ${invalidTokens.length}개 삭제 (전체 실패: ${response.failureCount})`);
+      }
     }
 
     console.log(
