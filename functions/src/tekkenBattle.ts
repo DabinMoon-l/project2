@@ -58,7 +58,8 @@ async function fetchExistingQuestions(
     .collection("quizzes")
     .where("courseId", "==", courseId)
     .where("type", "in", ["midterm", "final", "past", "professor"])
-    .limit(30)
+    .select("questions")
+    .limit(20)
     .get();
 
   const allQuestions: GeneratedQuestion[] = [];
@@ -278,38 +279,31 @@ async function getPlayerBattleRabbits(
   equippedRabbits: Array<{ rabbitId: number; courseId: string }>
 ) {
   const db = getFirestore();
-  const rabbits = [];
 
-  for (const eq of equippedRabbits) {
-    const holdingId = `${eq.courseId}_${eq.rabbitId}`;
-    const holdingDoc = await db
-      .collection("users")
-      .doc(userId)
-      .collection("rabbitHoldings")
-      .doc(holdingId)
-      .get();
+  // 병렬 조회 (순차 for...await → Promise.all)
+  const rabbits = await Promise.all(
+    equippedRabbits.map(async (eq) => {
+      const holdingId = `${eq.courseId}_${eq.rabbitId}`;
+      const holdingDoc = await db
+        .collection("users")
+        .doc(userId)
+        .collection("rabbitHoldings")
+        .doc(holdingId)
+        .get();
 
-    if (holdingDoc.exists) {
-      const data = holdingDoc.data()!;
-      const stats = data.stats || getBaseStats(eq.rabbitId);
-      rabbits.push({
+      const stats = holdingDoc.exists
+        ? (holdingDoc.data()!.stats || getBaseStats(eq.rabbitId))
+        : getBaseStats(eq.rabbitId);
+
+      return {
         rabbitId: eq.rabbitId,
         maxHp: stats.hp,
         currentHp: stats.hp,
         atk: stats.atk,
         def: stats.def,
-      });
-    } else {
-      const base = getBaseStats(eq.rabbitId);
-      rabbits.push({
-        rabbitId: eq.rabbitId,
-        maxHp: base.hp,
-        currentHp: base.hp,
-        atk: base.atk,
-        def: base.def,
-      });
-    }
-  }
+      };
+    })
+  );
 
   return rabbits;
 }
@@ -327,13 +321,15 @@ async function createBattle(
   const battleId = rtdb.ref("tekken/battles").push().key!;
   const now = Date.now();
 
-  // 플레이어 스탯 조회
-  const p1Rabbits = player1.isBot
-    ? (player1 as any).rabbits || []
-    : await getPlayerBattleRabbits(player1.userId, player1.equippedRabbits);
-  const p2Rabbits = player2.isBot
-    ? (player2 as any).rabbits || []
-    : await getPlayerBattleRabbits(player2.userId, player2.equippedRabbits);
+  // 플레이어 스탯 병렬 조회
+  const [p1Rabbits, p2Rabbits] = await Promise.all([
+    player1.isBot
+      ? Promise.resolve((player1 as any).rabbits || [])
+      : getPlayerBattleRabbits(player1.userId, player1.equippedRabbits),
+    player2.isBot
+      ? Promise.resolve((player2 as any).rabbits || [])
+      : getPlayerBattleRabbits(player2.userId, player2.equippedRabbits),
+  ]);
 
   // 즉시 loading 상태로 배틀 생성 (문제 없이)
   const battleData = {
@@ -385,8 +381,94 @@ async function createBattle(
   return battleId;
 }
 
+// ============================================
+// 문제 풀 캐시 (Gemini 호출을 백그라운드로 분리)
+// ============================================
+
+const POOL_MIN = 10; // 이 이하면 백그라운드 보충 트리거
+
+/**
+ * RTDB 풀에서 문제 추출 (트랜잭션으로 원자적, ~100ms)
+ */
+async function drawFromPool(
+  courseId: string,
+  count: number
+): Promise<GeneratedQuestion[] | null> {
+  const rtdb = getDatabase();
+  const poolRef = rtdb.ref(`tekken/questionPool/${courseId}/questions`);
+
+  let drawn: GeneratedQuestion[] = [];
+
+  const txResult = await poolRef.transaction((current) => {
+    if (!current || !Array.isArray(current) || current.length < count) {
+      return; // abort — 문제 부족
+    }
+
+    // 셔플
+    const arr = [...current];
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+
+    drawn = arr.slice(0, count);
+    return arr.slice(count); // 나머지만 유지
+  });
+
+  if (!txResult.committed || drawn.length < count) return null;
+
+  // 유효성 검증
+  const valid = drawn.filter(
+    (q) =>
+      q.text &&
+      Array.isArray(q.choices) &&
+      q.choices.length >= 2 &&
+      typeof q.correctAnswer === "number" &&
+      q.correctAnswer >= 0 &&
+      q.correctAnswer < q.choices.length
+  );
+
+  return valid.length >= count ? valid : null;
+}
+
+/**
+ * 백그라운드 풀 보충 (fire-and-forget, 배틀 차단 없음)
+ */
+function refillPoolAsync(courseId: string, apiKey: string): void {
+  (async () => {
+    try {
+      const rtdb = getDatabase();
+      const poolRef = rtdb.ref(`tekken/questionPool/${courseId}`);
+
+      // 현재 풀 크기 확인
+      const snap = await poolRef.get();
+      const existing: GeneratedQuestion[] = snap.exists()
+        ? (snap.val().questions || [])
+        : [];
+
+      if (existing.length >= POOL_MIN) return; // 이미 충분
+
+      // Gemini로 새 문제 생성
+      const newQuestions = await generateBattleQuestions(courseId, apiKey);
+
+      // 기존과 병합 (텍스트 중복 제거)
+      const existingTexts = new Set(existing.map((q) => q.text));
+      const unique = newQuestions.filter((q) => !existingTexts.has(q.text));
+      const merged = [...existing, ...unique].slice(0, 50);
+
+      await poolRef.set({ questions: merged, updatedAt: Date.now() });
+      console.log(`풀 보충 완료 (${courseId}): ${merged.length}개`);
+    } catch (err) {
+      console.error("풀 보충 실패:", err);
+    }
+  })();
+}
+
 /**
  * 비동기 문제 생성 → 완료 시 countdown 전환
+ *
+ * 3단계 폴백: 풀(~100ms) → 기존 퀴즈(~500ms) → 비상 문제(즉시)
+ * Gemini 호출은 백그라운드 풀 보충으로만 수행 (배틀 차단 없음)
  */
 async function populateBattleQuestions(
   battleId: string,
@@ -395,9 +477,21 @@ async function populateBattleQuestions(
 ): Promise<void> {
   const rtdb = getDatabase();
   const battleRef = rtdb.ref(`tekken/battles/${battleId}`);
+  const QUESTION_COUNT = 10;
 
-  let questions = await generateBattleQuestions(courseId, apiKey);
-  if (questions.length < 5) {
+  // 1단계: 풀에서 즉시 추출 (~100ms)
+  let questions = await drawFromPool(courseId, QUESTION_COUNT);
+
+  // 2단계: 풀 부족 → 기존 퀴즈에서 추출 (~500ms)
+  if (!questions) {
+    const existing = await fetchExistingQuestions(courseId, QUESTION_COUNT);
+    if (existing.length >= 5) {
+      questions = existing.slice(0, QUESTION_COUNT);
+    }
+  }
+
+  // 3단계: 비상 문제 (즉시)
+  if (!questions || questions.length < 5) {
     questions = getEmergencyQuestions();
   }
 
@@ -419,16 +513,21 @@ async function populateBattleQuestions(
   }
 
   const now = Date.now();
-  await battleRef.update({
-    status: "countdown",
-    rounds,
-    totalRounds: questions.length,
-    countdownStartedAt: now,
-    endsAt: now + BATTLE_CONFIG.BATTLE_DURATION + 5000,
-  });
 
-  // 정답을 별도 경로에 저장
-  await rtdb.ref(`tekken/battleAnswers/${battleId}`).set(battleAnswersData);
+  // RTDB 병렬 쓰기 (순차 → 동시)
+  await Promise.all([
+    battleRef.update({
+      status: "countdown",
+      rounds,
+      totalRounds: questions.length,
+      countdownStartedAt: now,
+      endsAt: now + BATTLE_CONFIG.BATTLE_DURATION + 5000,
+    }),
+    rtdb.ref(`tekken/battleAnswers/${battleId}`).set(battleAnswersData),
+  ]);
+
+  // 백그라운드: 풀 보충 (fire-and-forget, 배틀 차단 없음)
+  refillPoolAsync(courseId, apiKey);
 }
 
 /**
