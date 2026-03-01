@@ -866,20 +866,49 @@ firebase deploy --only functions
 | FCM 푸시 알림 | 무제한 | — | $0 |
 | Gemini API (Flash) | 15 RPM, 1M tok/일 | 1~3K 호출 | $0~5 |
 | Claude API (Sonnet) | 종량제 | 3~6 호출 (월별 리포트) | $1~3 |
-| Vercel Hobby | 100GB BW | PWA 정적 위주 | $0 |
-| Vercel Pro (필요시) | — | 트래픽 초과 시 | $20 |
+| Vercel Hobby | 100GB BW | ~5~15GB (PWA 캐싱) | $0 |
 | Cloud Run (PPTX) | 2M req | <100 호출 | $0 |
 
 **월 합계 예상**:
 - 최소 (무료 등급 내): **$2~5**
-- 보통 (일부 초과): **$5~20**
-- 최대 (활발 사용 + Vercel Pro): **$25~40**
+- 보통 (일부 초과): **$5~15**
+- 최대 (시험기간 피크): **$15~25**
+
+> Vercel Pro ($20/월)는 300~500명 규모에서 불필요. PWA 서비스 워커 캐싱으로 대역폭 ~5~15GB/월 (100GB 한도 대비 5~15%). 팀원 추가 또는 5,000+ MAU 시 검토
+
+### Firestore 읽기 상세 추정 (학습 플로우 기반)
+
+**학생 1명 행동별 읽기**:
+| 행동 | 읽기 수 | 비고 |
+|------|---------|------|
+| 앱 접속 (홈) | 15~30 | UserContext + Course + 랭킹 + 토끼 + 공지 |
+| 퀴즈 목록 조회 | 30~60 | 퀴즈 리스트 + 완료여부 체크 |
+| 퀴즈 풀이 1회 | 7~15 | 문서 로드 + CF 내부 읽기 |
+| 결과 + 피드백 | 2~10 | 결과 + 문제별 피드백 |
+| 복습 1회 | 15~30 | 복습 목록 + 퀴즈 참조 |
+| 게시판 | 25~35 | 글 목록 + 댓글 |
+| 철권퀴즈 1판 | 5~10 | seenQuestions + XP (RTDB는 별도) |
+
+**일일 사용 수준별 읽기**:
+| 수준 | 설명 | 읽기/일 |
+|------|------|---------|
+| 가벼움 | 홈 + 퀴즈 1개 + 게시판 | ~80~120 |
+| 보통 | 퀴즈 2~3개 + 복습 + 게시판 + 철권 | ~200~350 |
+| 활발 | 퀴즈 5개+ + 복습 + 게시판 + 철권 3판 | ~400~600 |
+
+**300명 월간 총 읽기 (서버 CF 포함)**:
+| 시나리오 | 클라이언트 | 서버 (스케줄 CF) | 합계 | 무료 초과분 | 비용 |
+|---------|-----------|-----------------|------|-----------|------|
+| 보수적 (60% 활성) | 400K | 200K | 600K | 0 | $0 |
+| 보통 (80% 활성) | 1.5M | 200K | 1.7M | 200K | $0.12 |
+| 활발 (90% 활성) | 3M | 250K | 3.25M | 1.75M | $1.05 |
+| 시험기간 피크 | 4~5M | 250K | ~5M | 3.5M | $2.10 |
 
 ### 비용 핵심 변수
 - **Firestore 읽기**: onSnapshot 리스너 88개 (코드베이스 전체). 사용자당 동시 5~10개 구독 → 300명 × 8개 = 2,400 동시 리스너. 불필요한 구독 정리로 절감 가능
 - **Cloud Functions**: 스케줄 CF 20+개 (1분~매일 주기). 배틀 시 burst 호출. 콜드 스타트 시 메모리 할당량이 비용 좌우
 - **Gemini API**: Flash 모델 무료 쿼터가 넉넉하여 대부분 무료. 문제 풀 사전 생성(야간 3시)으로 실시간 호출 최소화
-- **Vercel**: PWA 특성상 정적 자산 캐싱 효율 높음. 300명 수준에서 Hobby 무료 등급 충분, 500명+ 시 Pro 필요
+- **Vercel**: PWA 서비스 워커 캐싱으로 대역폭 극소. 500명까지 Hobby(무료) 충분
 
 ### 비용 최적화 전략
 1. onSnapshot 구독 최소화 (화면 이탈 시 unsubscribe, 폴링 전환)
@@ -1197,3 +1226,93 @@ ANALYZE=true npm run build
 - [ ] **매직 넘버**: 하드코딩된 수치 → 상수 추출
 - [ ] **중복 스타일**: Tailwind 클래스 반복 → 커스텀 클래스 추출
 - [ ] **데드 코드**: 사용하지 않는 export, 폐기된 컴포넌트 정리
+
+## 코드 품질 기준 (비개발자 유지보수 대응)
+
+### 핵심 원칙
+
+이 프로젝트는 **비개발자(또는 주니어)가 유지보수할 수 있어야** 합니다. 모든 코드는 다음 기준을 충족해야 합니다:
+
+1. **자기 설명적 코드**: 변수명/함수명만으로 의도를 파악 가능해야 함
+2. **한국어 주석**: 복잡한 비즈니스 로직, 의도가 불분명한 코드에 반드시 한국어 주석
+3. **파일당 300줄 이하**: 300줄 초과 시 컴포넌트/훅 분리 필수 (현재 거대 파일 리팩토링 필요)
+4. **단일 책임**: 한 파일/함수는 하나의 역할만. 이름이 역할을 설명
+
+### 파일/폴더 네이밍 규칙
+
+```
+components/
+  quiz/                     # 기능별 폴더
+    create/                 # 하위 기능
+      QuestionEditor.tsx    # 컴포넌트: PascalCase
+      useQuestionForm.ts    # 훅: use 접두사 + camelCase
+      questionHelpers.ts    # 유틸: camelCase
+      types.ts              # 타입: 파일명 소문자
+```
+
+### 디버깅 용이성 가이드
+
+#### 프론트엔드 디버깅
+
+| 상황 | 방법 |
+|------|------|
+| 컴포넌트 상태 확인 | React DevTools → Components 탭 → 상태/props 확인 |
+| Firestore 데이터 확인 | Firebase Console → Firestore → 컬렉션 직접 조회 |
+| API 호출 실패 | 브라우저 DevTools → Network 탭 → CF 호출 응답 확인 |
+| 렌더링 성능 | React DevTools → Profiler → 리렌더 원인 추적 |
+| 퀴즈 채점 이상 | CF 로그 확인: `firebase functions:log --only recordAttempt` |
+| 배틀 상태 이상 | Firebase Console → Realtime Database → tekken/battles 노드 직접 확인 |
+
+#### Cloud Functions 디버깅
+
+```bash
+# 실시간 로그 확인
+firebase functions:log --only recordAttempt
+firebase functions:log --only joinMatchmaking
+
+# 특정 시간대 로그
+firebase functions:log --only workerProcessJob --since 2024-01-01T00:00:00
+
+# 에뮬레이터에서 로컬 테스트
+cd functions && npm run serve
+```
+
+#### 자주 발생하는 문제 + 해결법
+
+| 증상 | 원인 | 해결 |
+|------|------|------|
+| 퀴즈 제출 후 결과 안 뜸 | `recordAttempt` CF 실패 | CF 로그 확인 → Firestore rules 읽기 권한 |
+| EXP가 안 올라감 | `onQuizComplete` 트리거 미발동 | `quizResults` 문서 생성 여부 확인 |
+| 토끼 뽑기 안 됨 | `lastGachaExp` 값 불일치 | users 문서의 totalExp vs lastGachaExp 비교 |
+| 배틀 매칭 안 됨 | RTDB 매칭 큐 잔류 | RTDB Console → tekken/matchmaking 확인 → 수동 삭제 |
+| AI 문제 생성 멈춤 | Job status: PROCESSING에서 멈춤 | jobs 문서 status 확인, 필요 시 FAILED로 수동 변경 |
+| 알림 안 옴 | FCM 토큰 만료/미등록 | fcmTokens/{uid} 문서 확인, 알림 권한 재요청 |
+| 로그인 실패 | enrolledStudents 미등록 | Firestore → enrolledStudents/{courseId}/students 확인 |
+| 페이지 빈 화면 | JS 에러 → ErrorBoundary 미적용 | 브라우저 Console 에러 확인 |
+
+### 로깅 전략
+
+- **프로덕션**: `console.log` 자동 제거 (next.config.mjs `removeConsole`). `console.error`/`console.warn`만 유지
+- **Cloud Functions**: `console.log`로 중요 이벤트 로깅 (Firebase Functions 로그에 기록)
+- **에러 보고**: 현재 미설정 → Sentry 또는 Firebase Crashlytics 도입 권장
+
+### 환경별 확인 포인트
+
+| 환경 | URL | 확인 방법 |
+|------|-----|----------|
+| 개발 | `localhost:3000` | `npm run dev` → 브라우저 |
+| Firebase Console | console.firebase.google.com | Firestore/Auth/Functions/RTDB 직접 확인 |
+| Vercel 프리뷰 | PR별 자동 생성 | git push → Vercel 대시보드 |
+| 프로덕션 | Vercel 도메인 | 자동 배포 (main 브랜치 push) |
+| CF 로그 | Firebase Console → Functions → 로그 | 에러 추적 |
+
+### 코드 리뷰 체크리스트 (비개발자용)
+
+PR 리뷰 시 확인할 항목:
+1. **빌드 성공**: `npm run build` 에러 없음
+2. **타입 안전**: `npx tsc --noEmit` 에러 없음
+3. **린트**: `npm run lint` 경고/에러 없음
+4. **한국어 주석**: 새로 추가된 복잡한 로직에 주석 있는지
+5. **파일 크기**: 새 파일이 300줄 이하인지
+6. **보안**: `.env` 파일이나 시크릿이 커밋에 포함되지 않았는지
+7. **Firestore Rules**: 새 컬렉션 추가 시 rules도 함께 수정되었는지
