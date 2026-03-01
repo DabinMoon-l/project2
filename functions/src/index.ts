@@ -381,6 +381,7 @@ export {
   bulkEnrollStudents,
   registerStudent,
   resetStudentPassword,
+  grantDefaultRabbit,
   requestPasswordReset,
   updateRecoveryEmail,
   migrateExistingAccounts,

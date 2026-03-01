@@ -367,10 +367,11 @@ export const resetStudentPassword = onCall(
 
     const db = getFirestore();
 
-    // 교수님 권한 확인
+    // 교수님 또는 관리자 권한 확인
     const userDoc = await db.collection("users").doc(request.auth.uid).get();
-    if (!userDoc.exists || userDoc.data()?.role !== "professor") {
-      throw new HttpsError("permission-denied", "교수님만 비밀번호를 초기화할 수 있습니다.");
+    const callerData = userDoc.data();
+    if (!userDoc.exists || (callerData?.role !== "professor" && !callerData?.isAdmin)) {
+      throw new HttpsError("permission-denied", "권한이 없습니다.");
     }
 
     const { studentId, courseId, newPassword } = request.data as {
@@ -421,6 +422,109 @@ export const resetStudentPassword = onCall(
       success: true,
       message: `${enrolledData.name}(${studentId})의 비밀번호가 초기화되었습니다.`,
     };
+  }
+);
+
+// ============================================================
+// 3.5) grantDefaultRabbit — 교수님 전용: 기본 토끼 미지급 학생에게 수동 지급
+// ============================================================
+
+export const grantDefaultRabbit = onCall(
+  { region: "asia-northeast3" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+    }
+
+    const db = getFirestore();
+
+    // 교수님 또는 관리자 권한 확인
+    const callerDoc = await db.collection("users").doc(request.auth.uid).get();
+    const callerData = callerDoc.data();
+    if (!callerDoc.exists || (callerData?.role !== "professor" && !callerData?.isAdmin)) {
+      throw new HttpsError("permission-denied", "권한이 없습니다.");
+    }
+
+    const { studentId, setAdmin } = request.data as { studentId: string; setAdmin?: boolean };
+    if (!studentId) {
+      throw new HttpsError("invalid-argument", "학번이 필요합니다.");
+    }
+
+    // 학번으로 유저 조회
+    const usersSnapshot = await db.collection("users")
+      .where("studentId", "==", studentId)
+      .limit(1)
+      .get();
+
+    if (usersSnapshot.empty) {
+      throw new HttpsError("not-found", "해당 학번의 사용자를 찾을 수 없습니다.");
+    }
+
+    const userDoc = usersSnapshot.docs[0];
+    const uid = userDoc.id;
+    const userData = userDoc.data();
+    const courseId = userData.courseId;
+    const nickname = userData.nickname || "알 수 없음";
+
+    if (!courseId) {
+      throw new HttpsError("failed-precondition", "과목 정보가 없습니다.");
+    }
+
+    const rabbitId = 0;
+    const holdingKey = `${courseId}_${rabbitId}`;
+    const userRef = db.collection("users").doc(uid);
+    const holdingRef = userRef.collection("rabbitHoldings").doc(holdingKey);
+    const rabbitRef = db.collection("rabbits").doc(holdingKey);
+
+    await db.runTransaction(async (transaction) => {
+      const holdingDoc = await transaction.get(holdingRef);
+      const rabbitDoc = await transaction.get(rabbitRef);
+
+      // 홀딩이 이미 있으면 스킵
+      if (!holdingDoc.exists) {
+        transaction.set(holdingRef, {
+          rabbitId,
+          courseId,
+          discoveryOrder: 1,
+          discoveredAt: FieldValue.serverTimestamp(),
+          level: 1,
+          stats: getBaseStats(rabbitId),
+        });
+      }
+
+      // 토끼 문서 생성/업데이트
+      if (!rabbitDoc.exists) {
+        transaction.set(rabbitRef, {
+          rabbitId,
+          courseId,
+          name: null,
+          firstDiscovererUserId: uid,
+          firstDiscovererName: nickname,
+          discovererCount: 1,
+          discoverers: [{ userId: uid, nickname, discoveryOrder: 1 }],
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+
+      // equippedRabbits + isAdmin 업데이트
+      const currentEquipped = userData.equippedRabbits || [];
+      const updateFields: Record<string, unknown> = {
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+      if (currentEquipped.length === 0) {
+        updateFields.equippedRabbits = [{ rabbitId, courseId }];
+      }
+      if (setAdmin) {
+        updateFields.isAdmin = true;
+      }
+      if (Object.keys(updateFields).length > 1) {
+        transaction.update(userRef, updateFields);
+      }
+    });
+
+    console.log(`기본 토끼 수동 지급: ${studentId} (${uid})`);
+    return { success: true, message: `${userData.name || nickname}(${studentId})에게 기본 토끼를 지급했습니다.` };
   }
 );
 
