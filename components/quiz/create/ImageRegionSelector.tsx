@@ -775,7 +775,7 @@ export default function ImageRegionSelector({
           className={`px-3 pb-3 pt-1 border-t border-[#D4CFC4] transition-colors duration-300 ${
             extractFeedback ? 'bg-[#E8F5E9]' : 'bg-[#F5F0E8]'
           }`}
-          style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}
+          style={{ paddingBottom: '0.75rem' }}
         >
           <p className="text-xs font-bold text-[#5C5C5C] mb-2">
             추출된 이미지 ({extractedImages.length}개)

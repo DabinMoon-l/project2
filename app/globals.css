@@ -138,7 +138,7 @@ body::-webkit-scrollbar-button {
 }
 
 .pb-navigation {
-  padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+  padding-bottom: 4rem;
 }
 
 /* 첫 글자 크게 (신문 스타일) */
@@ -180,6 +180,13 @@ img {
 }
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
+}
+
+/* 가로모드: 모든 fixed 오버레이를 사이드바 뒤로 안 가게 조정 */
+@media (orientation: landscape) and (min-width: 1024px) {
+  .fixed.inset-0 {
+    left: var(--modal-left, 0px) !important;
+  }
 }
 
 /* Auth 콘텐츠 — fixed로 전체 화면 + 키보드 스크롤 방지 */

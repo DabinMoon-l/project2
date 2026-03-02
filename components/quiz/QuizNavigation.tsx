@@ -61,7 +61,7 @@ export default function QuizNavigation({
       transition={{ duration: 0.3, delay: 0.2 }}
       className="fixed bottom-0 right-0 bg-[#F5F0E8] border-t-2 border-[#1A1A1A] px-4 py-3 pb-safe"
       style={{
-        paddingBottom: 'calc(12px + env(safe-area-inset-bottom, 0px))',
+        paddingBottom: '12px',
         left: 'var(--detail-panel-left, 0)',
       }}
     >

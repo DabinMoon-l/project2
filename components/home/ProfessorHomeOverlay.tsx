@@ -280,7 +280,7 @@ export default function ProfessorHomeOverlay() {
         </div>
 
         <div className="mt-32">
-          <div className="mb-2 flex items-center justify-between px-8">
+          <div className="mb-2 flex items-center justify-center px-8">
             <CourseSwitcher
               value={selectedCourse}
               onChange={setProfessorCourse}
