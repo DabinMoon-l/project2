@@ -277,13 +277,18 @@ export default function Navigation({ role }: NavigationProps) {
     );
   }
 
-  // 세로모드: 하단 바 (화면 하단 edge에 dock)
-  // paddingBottom으로 safe area만큼 올려서 필이 홈 인디케이터 위에 위치
-  // → safe area 영역에는 페이지 콘텐츠가 비쳐 보임
+  // 세로모드: 하단 바 — iOS 네이티브 탭바 패턴
+  // nav가 safe area까지 확장 + 반투명 블러 배경으로 영역 활용
+  // paddingBottom으로 필(pill)만 safe area 위에 위치
   return (
     <nav
       className="fixed left-0 right-0 bottom-0 z-50"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      style={{
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        backgroundColor: 'rgba(245, 240, 232, 0.75)',
+        backdropFilter: 'saturate(180%) blur(20px)',
+        WebkitBackdropFilter: 'saturate(180%) blur(20px)',
+      }}
     >
       <div className="flex justify-center px-4 py-1.5">
         <div
