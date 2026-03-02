@@ -8,7 +8,10 @@ import { doc, getDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useCourse } from '@/lib/contexts';
 import { formatChapterLabel, generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
-import QuestionEditor, { type QuestionData, type SubQuestion } from '@/components/quiz/create/QuestionEditor';
+import dynamic from 'next/dynamic';
+import { type QuestionData, type SubQuestion } from '@/components/quiz/create/QuestionEditor';
+
+const QuestionEditor = dynamic(() => import('@/components/quiz/create/QuestionEditor'));
 import QuestionList from '@/components/quiz/create/QuestionList';
 import { useProfessorQuiz, type QuizInput } from '@/lib/hooks/useProfessorQuiz';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';

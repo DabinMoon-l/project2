@@ -6,7 +6,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Timestamp } from 'firebase/firestore';
 import { Header, Button, Skeleton } from '@/components/common';
 import { QuizEditorForm, PublishToggle } from '@/components/professor';
-import QuestionEditor, { type QuestionData, type SubQuestion } from '@/components/quiz/create/QuestionEditor';
+import dynamic from 'next/dynamic';
+import { type QuestionData, type SubQuestion } from '@/components/quiz/create/QuestionEditor';
+
+const QuestionEditor = dynamic(() => import('@/components/quiz/create/QuestionEditor'));
 import QuestionList from '@/components/quiz/create/QuestionList';
 import { useProfessorQuiz, type ProfessorQuiz, type QuizInput, type QuizQuestion } from '@/lib/hooks/useProfessorQuiz';
 import type { QuizMetaData } from '@/components/professor/QuizEditorForm';
