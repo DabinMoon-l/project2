@@ -62,12 +62,12 @@ export async function getTekkenChapters(courseId: string): Promise<string[]> {
       .doc(courseId)
       .get();
     if (doc.exists) {
-      return doc.data()?.chapters || ["1", "2", "3"];
+      return doc.data()?.chapters || ["2", "3", "4"];
     }
   } catch {
     // 설정 없으면 기본값
   }
-  return ["1", "2", "3"];
+  return ["2", "3", "4"];
 }
 
 /**

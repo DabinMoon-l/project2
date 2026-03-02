@@ -226,7 +226,7 @@ export default function TekkenBattleOverlay({
               />
             </div>
 
-            <div className="pb-[env(safe-area-inset-bottom)]" />
+            <div className="pb-2" />
           </>
         )}
 

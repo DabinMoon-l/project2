@@ -1789,7 +1789,8 @@ function QuizListPageContent() {
 
   const handleUpdateComplete = () => {
     setUpdateModalInfo(null);
-    refreshUpdates();
+    // refreshUpdates() 제거 — 리렌더링으로 스크롤 초기화 방지
+    // Firestore 업데이트는 다음 접속 시 자동 반영
   };
 
   const handleEditQuiz = (quizId: string) => {

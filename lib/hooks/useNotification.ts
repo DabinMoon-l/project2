@@ -108,6 +108,8 @@ export function useNotification(): UseNotificationReturn {
   const swRegistrationRef = useRef<ServiceWorkerRegistration | null>(null);
   // 메시지 구독 해제 함수
   const unsubscribeMessageRef = useRef<(() => void) | null>(null);
+  // 구독 시도 실패 방지 (무한 루프 차단)
+  const subscribeFailedRef = useRef(false);
 
   /**
    * 초기 권한 상태 확인
@@ -189,17 +191,25 @@ export function useNotification(): UseNotificationReturn {
    */
   const subscribeToNotifications = useCallback(
     async (uid: string): Promise<boolean> => {
-      if (!fcmToken) {
-        // 토큰이 없으면 권한 요청부터
-        const granted = await requestPermission();
-        if (!granted) {
-          return false;
+      let token = fcmToken;
+
+      if (!token) {
+        // 토큰이 없으면 서비스 워커에서 직접 토큰 가져오기 시도
+        // (requestPermission 재호출 금지 — 브라우저 다이얼로그 반복 방지)
+        try {
+          const sw = swRegistrationRef.current || await registerServiceWorker();
+          swRegistrationRef.current = sw;
+          token = await getFCMToken(sw || undefined);
+        } catch {
+          // 토큰 가져오기 실패
         }
       }
 
-      const token = fcmToken || (await getFCMToken(swRegistrationRef.current || undefined));
       if (!token) {
-        setError('FCM 토큰을 가져올 수 없습니다.');
+        token = await getFCMToken(swRegistrationRef.current || undefined);
+      }
+      if (!token) {
+        subscribeFailedRef.current = true;
         return false;
       }
 
@@ -246,7 +256,7 @@ export function useNotification(): UseNotificationReturn {
         setLoading(false);
       }
     },
-    [fcmToken, requestPermission]
+    [fcmToken]
   );
 
   /**

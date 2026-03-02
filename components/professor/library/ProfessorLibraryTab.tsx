@@ -798,7 +798,7 @@ export default function ProfessorLibraryTab({
       {/* ============================================================ */}
       <div
         className="fixed left-3 right-3 z-40 rounded-2xl bg-[#F5F0E8]/80 backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.12)] border border-[#D4CFC4]/60"
-        style={{ bottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+        style={{ bottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}
       >
         {/* 선택된 태그 + 난이도 표시 */}
         {(selectedGenTags.length > 0 || difficulty) && (

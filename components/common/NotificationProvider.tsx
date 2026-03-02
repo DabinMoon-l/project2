@@ -185,6 +185,8 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 
   // 토스트 표시 상태
   const [showToast, setShowToast] = useState(false);
+  // 자동 구독 시도 여부 (무한 루프 방지)
+  const autoSubscribeAttemptedRef = React.useRef(false);
 
   // 학생 자동 알림 활성화: 권한이 default(미요청)이면 브라우저 권한 자동 요청
   useEffect(() => {
@@ -203,8 +205,10 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
   }, [permissionStatus, user?.uid, profile?.role, loading, requestPermission, subscribeToNotifications]);
 
   // 자동 구독: 이미 알림 권한이 granted인 상태에서 앱 시작 시 자동 FCM 토큰 발급 + Firestore 저장
+  // 한 번만 시도 (실패 시 무한 루프 방지)
   useEffect(() => {
-    if (permissionStatus === 'granted' && user?.uid && !isSubscribed && !loading) {
+    if (permissionStatus === 'granted' && user?.uid && !isSubscribed && !loading && !autoSubscribeAttemptedRef.current) {
+      autoSubscribeAttemptedRef.current = true;
       subscribeToNotifications(user.uid).catch(() => {
         // 자동 구독 실패 시 무시 (필수 아님)
       });

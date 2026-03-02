@@ -77,8 +77,7 @@ export default function ScrollToTopButton({
           onClick={scrollToTop}
           className={`fixed ${sideClass} z-40 w-10 h-10 ${variantClass} rounded-full shadow-lg flex items-center justify-center transition-colors`}
           style={{
-            // safe-area-inset-bottom 반영: 네비 바 위치 + 지정 offset
-            bottom: `calc(${bottomPx}px + env(safe-area-inset-bottom, 0px))`,
+            bottom: `${bottomPx}px`,
             // 가로모드: 사이드바 너비만큼 오프셋
             marginLeft: 'var(--modal-left, 0px)',
             WebkitTapHighlightColor: 'transparent',

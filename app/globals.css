@@ -20,8 +20,8 @@ html {
   min-height: -webkit-fill-available;
   overflow-x: hidden;
   overscroll-behavior: none;
-  /* 아이폰 safe area 배경 — 앱 테마와 통일 */
-  background-color: #F5F0E8;
+  /* 아이폰 둥근 모서리 뒤 — 검정 (네이티브 앱과 동일) */
+  background-color: #000;
   color: var(--text-dark);
 }
 
@@ -132,9 +132,9 @@ body::-webkit-scrollbar-button {
   border-top: none;
 }
 
-/* 네비게이션 하단 안전 영역 */
+/* 네비게이션 하단 영역 */
 .safe-area-bottom {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-bottom: 0;
 }
 
 .pb-navigation {
@@ -196,7 +196,7 @@ img {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px);
+  padding: env(safe-area-inset-top, 0px) 0 0;
   overflow: hidden;
   overscroll-behavior: none;
   -webkit-overflow-scrolling: auto;

@@ -327,7 +327,7 @@ export default function CommentSection({ postId, postAuthorId }: CommentSectionP
       {user && (
         <div
           className="fixed left-3 right-3 z-40 rounded-2xl bg-[#F5F0E8]/80 backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.12)] border border-[#D4CFC4]/60 overflow-hidden transition-[bottom] duration-100"
-          style={{ bottom: bottomOffset ? bottomOffset : 'max(0.75rem, env(safe-area-inset-bottom))' }}
+          style={{ bottom: bottomOffset ? bottomOffset : 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}
         >
           {/* 답글 대상 표시 */}
           <AnimatePresence>
@@ -375,7 +375,7 @@ export default function CommentSection({ postId, postAuthorId }: CommentSectionP
           )}
 
           {/* 입력 영역 */}
-          <div className="flex items-center gap-2 px-4 py-2.5" style={{ paddingBottom: 'max(0.625rem, env(safe-area-inset-bottom))' }}>
+          <div className="flex items-center gap-2 px-4 py-2.5">
             {/* 이미지 첨부 버튼 */}
             <button
               type="button"

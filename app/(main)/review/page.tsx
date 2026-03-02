@@ -4062,11 +4062,11 @@ function ReviewPageContent() {
                         }}
                         onReview={() => {
                           // 전체 복습 시작
-                          router.push(`/review/library/${quiz.id}?mode=review`);
+                          handleStartReviewByQuizId(quiz.id);
                         }}
                         onReviewWrongOnly={() => {
                           // 오답만 복습 시작
-                          router.push(`/review/library/${quiz.id}?mode=review&wrongOnly=true`);
+                          handleStartReviewWrongOnlyByQuizId(quiz.id);
                         }}
                         onPublish={() => {
                           setPublishConfirmQuizId(quiz.id);
