@@ -15,7 +15,7 @@ import { useWideMode, scaleCoord } from '@/lib/hooks/useViewportScale';
 
 // 대형 컴포넌트 lazy load (오버레이 열릴 때만 필요)
 const ProfileDrawer = dynamic(() => import('@/components/common/ProfileDrawer'), { ssr: false });
-const AnnouncementChannel = dynamic(() => import('@/components/home/AnnouncementChannel'), { ssr: false });
+const AnnouncementChannel = dynamic(() => import('@/components/home/announcement'), { ssr: false });
 
 const SWIPE_THRESHOLD = 120;
 const WHEEL_THRESHOLD = 80;

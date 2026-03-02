@@ -12,7 +12,7 @@ import ProfessorRankingSection from '@/components/home/ProfessorRankingSection';
 
 // 대형 컴포넌트 lazy load
 const ProfileDrawer = dynamic(() => import('@/components/common/ProfileDrawer'), { ssr: false });
-const AnnouncementChannel = dynamic(() => import('@/components/home/AnnouncementChannel'), { ssr: false });
+const AnnouncementChannel = dynamic(() => import('@/components/home/announcement'), { ssr: false });
 import ProfessorCharacterBox from '@/components/home/ProfessorCharacterBox';
 import { useWideMode, scaleCoord } from '@/lib/hooks/useViewportScale';
 
