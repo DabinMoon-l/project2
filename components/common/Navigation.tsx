@@ -281,7 +281,6 @@ export default function Navigation({ role }: NavigationProps) {
   return (
     <nav
       className="fixed left-0 right-0 bottom-0 z-50"
-      style={{ backgroundColor: '#F5F0E8' }}
     >
       <div className="flex justify-center px-4 py-1.5">
         <div
