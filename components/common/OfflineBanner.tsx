@@ -49,7 +49,7 @@ export default function OfflineBanner() {
               ? 'bg-green-600'
               : 'bg-[#5C5C5C]'
           }`}
-          style={{ paddingTop: 'max(6px, env(safe-area-inset-top))' }}
+          style={{ paddingTop: 'max(6px, env(safe-area-inset-top))', left: 'var(--modal-left, 0px)' }}
         >
           {reconnected ? (
             <span className="flex items-center gap-1.5">

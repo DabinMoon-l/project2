@@ -154,6 +154,7 @@ export default function LevelUpBottomSheet({
       <div
         className="fixed inset-0 z-[110] bg-black/60"
         style={{
+          left: 'var(--modal-left, 0px)',
           opacity: isTransition ? 0 : 1,
           transition: `opacity ${dur}ms ease`,
         }}
@@ -163,6 +164,7 @@ export default function LevelUpBottomSheet({
       <div
         className="fixed inset-0 z-[111] flex items-end justify-center pointer-events-none"
         style={{
+          left: 'var(--modal-left, 0px)',
           transform: isTransition ? 'scale(0)' : 'scale(1)',
           opacity: isTransition ? 0 : 1,
           transformOrigin: 'center center',

@@ -2579,6 +2579,7 @@ function QuestionListModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+      style={{ left: 'var(--modal-left, 0px)' }}
       onClick={onClose}
     >
       <motion.div
@@ -2705,7 +2706,7 @@ function CreateFolderModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      style={{ position: 'fixed', touchAction: 'none' }}
+      style={{ position: 'fixed', touchAction: 'none', left: 'var(--modal-left, 0px)' }}
     >
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
@@ -5401,6 +5402,7 @@ function ReviewPageContent() {
       {selectedBookmarkedQuiz && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
+          style={{ left: 'var(--modal-left, 0px)' }}
           onClick={() => setSelectedBookmarkedQuiz(null)}
         >
           <motion.div
@@ -5546,6 +5548,7 @@ function ReviewPageContent() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+            style={{ left: 'var(--modal-left, 0px)' }}
           >
             <motion.div
               initial={{ scale: 0.9 }}
@@ -5565,6 +5568,7 @@ function ReviewPageContent() {
       {updateModalInfo && !detailedUpdateInfo && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          style={{ left: 'var(--modal-left, 0px)' }}
           onClick={() => !updateModalLoading && setUpdateModalInfo(null)}
         >
           <motion.div
@@ -5685,7 +5689,7 @@ function ReviewPageContent() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-3"
-            style={{ position: 'fixed', touchAction: 'none' }}
+            style={{ position: 'fixed', touchAction: 'none', left: 'var(--modal-left, 0px)' }}
             onClick={() => {
               setIsSortMode(false);
               setNewCategoryName('');
@@ -5826,6 +5830,7 @@ function ReviewPageContent() {
             animate={{ opacity: 1, pointerEvents: 'auto' as const }}
             exit={{ opacity: 0, pointerEvents: 'none' as const }}
             className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50"
+            style={{ left: 'var(--modal-left, 0px)' }}
             onClick={() => setShowDeleteConfirmSheet(false)}
           >
             <motion.div
@@ -5975,6 +5980,7 @@ function ReviewPageContent() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+            style={{ left: 'var(--modal-left, 0px)' }}
             onClick={() => setPublishConfirmQuizId(null)}
           >
             <motion.div

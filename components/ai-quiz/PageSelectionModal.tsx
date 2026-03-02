@@ -125,7 +125,10 @@ export default function PageSelectionModal({
   return createPortal(
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[60] flex flex-col bg-[#F5F0E8]">
+        <div
+          className="fixed inset-0 z-[60] flex flex-col bg-[#F5F0E8]"
+          style={{ left: 'var(--modal-left, 0px)' }}
+        >
           {/* 헤더 */}
           <motion.div
             initial={{ opacity: 0, y: -20 }}

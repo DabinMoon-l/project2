@@ -45,6 +45,7 @@ const ImageViewer = memo(function ImageViewer({
   const viewer = (
     <div
       className="fixed inset-0 z-[120] bg-black/90 flex items-center justify-center"
+      style={{ left: 'var(--modal-left, 0px)' }}
       onClick={onClose}
       onTouchStart={(e) => { touchStartX.current = scaleCoord(e.touches[0].clientX); touchDeltaX.current = 0; swiping.current = true; }}
       onTouchMove={(e) => { if (swiping.current) touchDeltaX.current = scaleCoord(e.touches[0].clientX) - touchStartX.current; }}

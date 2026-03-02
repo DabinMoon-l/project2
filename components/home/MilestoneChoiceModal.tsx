@@ -102,6 +102,7 @@ export default function MilestoneChoiceModal({
       <div
         className="fixed inset-0 z-[110] bg-black/40"
         style={{
+          left: 'var(--modal-left, 0px)',
           opacity: isTransition ? 0 : 1,
           transition: `opacity ${dur}ms ease`,
         }}
@@ -111,6 +112,7 @@ export default function MilestoneChoiceModal({
       <div
         className="fixed inset-0 z-[111] flex items-center justify-center p-6 pointer-events-none"
         style={{
+          left: 'var(--modal-left, 0px)',
           transform: isTransition ? 'scale(0)' : 'scale(1)',
           opacity: isTransition ? 0 : 1,
           transformOrigin: origin,

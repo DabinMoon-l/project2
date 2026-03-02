@@ -167,7 +167,10 @@ export default function BottomSheet({
   return createPortal(
     <AnimatePresence>
       {isOpen && (
-        <div className={`fixed inset-0 ${zIndex}`}>
+        <div
+          className={`fixed inset-0 ${zIndex}`}
+          style={{ left: 'var(--modal-left, 0px)' }}
+        >
           {/* 백드롭 */}
           <motion.div
             variants={activeBackdropVariants}

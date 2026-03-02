@@ -149,7 +149,7 @@ export default function AIQuizPlayer({
     const grade = percentage >= 80 ? 'A' : percentage >= 60 ? 'B' : percentage >= 40 ? 'C' : 'D';
 
     return createPortal(
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#F5F0E8]">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#F5F0E8]" style={{ left: 'var(--modal-left, 0px)' }}>
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -200,7 +200,7 @@ export default function AIQuizPlayer({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex flex-col bg-[#F5F0E8]">
+    <div className="fixed inset-0 z-50 flex flex-col bg-[#F5F0E8]" style={{ left: 'var(--modal-left, 0px)' }}>
       {/* 헤더 */}
       <div className="flex items-center justify-between px-4 py-3 border-b-2 border-[#1A1A1A] bg-white">
         <button

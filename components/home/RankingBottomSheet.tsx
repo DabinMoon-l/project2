@@ -202,6 +202,7 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-[110] flex items-end justify-center bg-black/60"
+          style={{ left: 'var(--modal-left, 0px)' }}
           onClick={onClose}
         >
           <motion.div
@@ -435,6 +436,7 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className="fixed inset-0 z-[120] flex items-center justify-center p-6 bg-black/50"
+                style={{ left: 'var(--modal-left, 0px)' }}
                 onClick={() => setShowInfo(false)}
               >
                 <motion.div

@@ -90,7 +90,7 @@ export default function ExpandModal({
           <motion.div
             key="expand-backdrop"
             className="fixed inset-0"
-            style={{ zIndex }}
+            style={{ zIndex, left: 'var(--modal-left, 0px)' }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -103,7 +103,7 @@ export default function ExpandModal({
           {/* 모달 콘텐츠 */}
           <div
             className="fixed inset-0 flex items-center justify-center p-4 pointer-events-none"
-            style={{ zIndex: zIndex + 1 }}
+            style={{ zIndex: zIndex + 1, left: 'var(--modal-left, 0px)' }}
           >
             <motion.div
               key="expand-content"

@@ -1212,7 +1212,7 @@ const AnnouncementMessageItem = memo(function AnnouncementMessageItem({
               const rect = emojiBtnRef.current!.getBoundingClientRect();
               return createPortal(
                 <>
-                  <div className="fixed inset-0 z-[120]" onClick={(e) => { e.stopPropagation(); onToggleEmojiPicker(null); }} />
+                  <div className="fixed inset-0 z-[120]" style={{ left: 'var(--modal-left, 0px)' }} onClick={(e) => { e.stopPropagation(); onToggleEmojiPicker(null); }} />
                   <div
                     className="fixed z-[121] bg-black/60 backdrop-blur-md border border-white/20 rounded-lg p-1.5 flex gap-1 shadow-lg"
                     style={{
@@ -1721,6 +1721,7 @@ export default function AnnouncementChannel({
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="fixed inset-0 z-[110] flex items-end bg-black/40"
+              style={{ left: 'var(--modal-left, 0px)' }}
               onClick={closeModal}
             >
               <motion.div

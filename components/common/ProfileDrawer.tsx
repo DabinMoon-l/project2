@@ -103,6 +103,7 @@ function GlassModal({ children, onClose }: { children: React.ReactNode; onClose:
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
+      style={{ left: 'var(--modal-left, 0px)' }}
       onClick={onClose}
     >
       <motion.div
@@ -666,6 +667,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             className="fixed inset-0 bg-black/50 z-40"
+            style={{ left: 'var(--modal-left, 0px)' }}
             onClick={onClose}
           />
 
@@ -1086,6 +1088,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   className="fixed inset-0 z-[60] bg-black/50"
+                  style={{ left: 'var(--modal-left, 0px)' }}
                   onClick={() => setShowProfilePicker(false)}
                 />
                 <motion.div
@@ -1274,6 +1277,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/50"
+                style={{ left: 'var(--modal-left, 0px)' }}
                 onClick={() => setShowClassModal(false)}
               >
                 <motion.div

@@ -128,6 +128,7 @@ export default function TekkenBattleConfirmModal({
       {isOpen && (
         <motion.div
           className="fixed inset-0 z-[110] flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm"
+          style={{ left: 'var(--modal-left, 0px)' }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}

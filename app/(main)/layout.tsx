@@ -190,6 +190,27 @@ function MainLayoutGrid({
   // 분할 레이아웃 활성 여부 (컨텍스트 디테일 > 라우트 사이드바 우선)
   const showSplit = isDetailOpen || routeSidebarType !== null;
 
+  // CSS 변수를 body에 설정 (createPortal로 body에 렌더되는 모달/바텀시트가 상속받도록)
+  useEffect(() => {
+    const body = document.body;
+    if (isWide) {
+      // --modal-left: 모달/바텀시트 백드롭 시작점 (항상 사이드바 너비)
+      body.style.setProperty('--modal-left', '240px');
+      // --detail-panel-left: 활성 패널의 좌측 (분할 시 우측 패널 시작점)
+      body.style.setProperty(
+        '--detail-panel-left',
+        routeSidebarType && !isDetailOpen ? 'calc(50% + 120px)' : '240px'
+      );
+    } else {
+      body.style.setProperty('--modal-left', '0px');
+      body.style.setProperty('--detail-panel-left', '0px');
+    }
+    return () => {
+      body.style.removeProperty('--modal-left');
+      body.style.removeProperty('--detail-panel-left');
+    };
+  }, [isWide, routeSidebarType, isDetailOpen]);
+
   // 라우트 사이드바 컴포넌트 렌더
   const renderRouteSidebar = () => {
     switch (routeSidebarType) {

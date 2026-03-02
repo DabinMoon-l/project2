@@ -1220,6 +1220,7 @@ export default function QuizStatsModal({
       exit={{ opacity: 0 }}
       transition={{ duration: 0.15 }}
       className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 overflow-hidden overscroll-none"
+      style={{ left: 'var(--modal-left, 0px)' }}
       onClick={onClose}
     >
       <motion.div
@@ -1804,6 +1805,7 @@ export default function QuizStatsModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/50"
+            style={{ left: 'var(--modal-left, 0px)' }}
             onClick={(e) => { e.stopPropagation(); setShowFeedbackModal(false); setFeedbackList([]); }}
           >
             <motion.div
@@ -1908,6 +1910,7 @@ export default function QuizStatsModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/50"
+            style={{ left: 'var(--modal-left, 0px)' }}
             onClick={(e) => { e.stopPropagation(); setShowEssayModal(false); }}
           >
             <motion.div
