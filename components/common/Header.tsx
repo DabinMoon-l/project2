@@ -96,6 +96,8 @@ export default function Header({
       transition={{ duration: 0.3, ease: 'easeOut' }}
       className="sticky top-0 z-50 w-full"
       style={{
+        marginTop: 'calc(-1 * env(safe-area-inset-top, 0px))',
+        paddingTop: 'env(safe-area-inset-top, 0px)',
         backgroundColor: `${colors.background}e6`, // 90% 불투명도
       }}
     >
@@ -116,7 +118,7 @@ export default function Header({
       />
 
       {/* 헤더 컨텐츠 — 노치/다이내믹 아일랜드 아래에 위치 */}
-      <div className="relative flex items-center justify-between h-14 px-4" style={{ marginTop: 'env(safe-area-inset-top, 0px)' }}>
+      <div className="relative flex items-center justify-between h-14 px-4">
         {/* 좌측 영역: 뒤로가기 버튼 */}
         <div className="flex justify-start">
           {showBack && (

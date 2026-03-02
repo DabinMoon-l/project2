@@ -277,70 +277,75 @@ export default function Navigation({ role }: NavigationProps) {
     );
   }
 
-  // 세로모드: 하단 바
+  // 세로모드: 하단 바 (화면 하단 edge에 dock)
   return (
     <nav
-      className="fixed left-4 right-4 z-50 flex justify-center"
-      style={{ bottom: 'max(1rem, calc(env(safe-area-inset-bottom, 0px) + 0.5rem))' }}
+      className="fixed left-0 right-0 bottom-0 z-50"
+      style={{
+        backgroundColor: '#F5F0E8',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+      }}
     >
-      <div
-        className="relative flex items-stretch rounded-2xl overflow-hidden"
-        style={{
-          backgroundColor: '#F5F0E8',
-          border: '2px solid #1A1A1A',
-          boxShadow: '4px 4px 0px #1A1A1A',
-          maxWidth: role === 'professor' ? '420px' : '340px',
-          width: '100%',
-        }}
-      >
-        {/* 슬라이드 배경 */}
-        <motion.div
-          className="absolute rounded-xl"
+      <div className="flex justify-center px-4 py-1.5">
+        <div
+          className="relative flex items-stretch rounded-2xl overflow-hidden"
           style={{
-            width: `calc(${100 / tabs.length}% - 8px)`,
-            top: 4,
-            bottom: 4,
-            backgroundColor: 'rgba(26, 26, 26, 0.85)',
+            backgroundColor: '#F5F0E8',
+            border: '2px solid #1A1A1A',
+            boxShadow: '4px 4px 0px #1A1A1A',
+            maxWidth: role === 'professor' ? '420px' : '340px',
+            width: '100%',
           }}
-          initial={false}
-          animate={{
-            left: `calc(${(tabs.findIndex((tab) => isActiveTab(pathname, tab.path)) / tabs.length) * 100}% + 4px)`,
-          }}
-          transition={{
-            type: 'spring',
-            stiffness: 500,
-            damping: 35,
-          }}
-        />
+        >
+          {/* 슬라이드 배경 */}
+          <motion.div
+            className="absolute rounded-xl"
+            style={{
+              width: `calc(${100 / tabs.length}% - 8px)`,
+              top: 4,
+              bottom: 4,
+              backgroundColor: 'rgba(26, 26, 26, 0.85)',
+            }}
+            initial={false}
+            animate={{
+              left: `calc(${(tabs.findIndex((tab) => isActiveTab(pathname, tab.path)) / tabs.length) * 100}% + 4px)`,
+            }}
+            transition={{
+              type: 'spring',
+              stiffness: 500,
+              damping: 35,
+            }}
+          />
 
-        {tabs.map((tab) => {
-          const isActive = isActiveTab(pathname, tab.path);
-          const isHome = tab.path === homePath;
+          {tabs.map((tab) => {
+            const isActive = isActiveTab(pathname, tab.path);
+            const isHome = tab.path === homePath;
 
-          return (
-            <Link
-              key={tab.path}
-              href={tab.path}
-              ref={isHome ? (el: HTMLAnchorElement | null) => { homeButtonRef.current = el; } : undefined}
-              onClick={isHome ? handleHomeClick : handleTabClick}
-              className="relative z-10 flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-all duration-200"
-              aria-label={tab.label}
-            >
-              <motion.div
-                animate={{ scale: isActive ? 1.1 : 1 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+            return (
+              <Link
+                key={tab.path}
+                href={tab.path}
+                ref={isHome ? (el: HTMLAnchorElement | null) => { homeButtonRef.current = el; } : undefined}
+                onClick={isHome ? handleHomeClick : handleTabClick}
+                className="relative z-10 flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-all duration-200"
+                aria-label={tab.label}
               >
-                {tab.icon(isActive)}
-              </motion.div>
-              <span
-                className="text-xs font-bold"
-                style={{ color: isActive ? ACTIVE_COLOR : INACTIVE_COLOR }}
-              >
-                {tab.label}
-              </span>
-            </Link>
-          );
-        })}
+                <motion.div
+                  animate={{ scale: isActive ? 1.1 : 1 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+                >
+                  {tab.icon(isActive)}
+                </motion.div>
+                <span
+                  className="text-xs font-bold"
+                  style={{ color: isActive ? ACTIVE_COLOR : INACTIVE_COLOR }}
+                >
+                  {tab.label}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
       </div>
     </nav>
   );
