@@ -298,7 +298,7 @@ export default function MainLayout({
   }
 
   return (
-    <LazyMotion features={domAnimation} strict>
+    <LazyMotion features={domAnimation}>
       <UserProvider>
         <CourseProvider>
           <MainLayoutContent>{children}</MainLayoutContent>

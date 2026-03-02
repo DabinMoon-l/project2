@@ -495,24 +495,30 @@ const ProfessorLibraryTab = dynamic(() => import('@/components/professor/library
 - **폴링 전환**: 랭킹 (이미 SWR 캐시), 교수 통계, 게시판 목록
 - **언마운트 시 해제 확인**: 모든 useEffect cleanup에서 unsubscribe 호출 검증
 
-### Phase 3: 성능 최적화 (목표: 동시접속 500명)
+### Phase 3: 성능 최적화 (목표: 동시접속 500명) ✅ 완료
 
 #### 프론트엔드
 
-| 항목 | 현재 상태 | 최적화 |
-|------|----------|--------|
-| 번들 크기 | dynamic import 미사용 | 라우트별 코드 스플리팅 + lazy 로드 |
-| 이미지 | 일부 `<img>` 사용 | 전체 `next/image` 전환 |
-| Framer Motion | 전체 래핑 | `LazyMotion` + `domAnimation` 서브셋 |
-| React re-render | Context 변경 시 전체 리렌더 | `useMemo`/`memo`, Context 분할 |
+| 항목 | 이전 | 적용 완료 |
+|------|------|----------|
+| 번들 크기 | dynamic import 미사용 | Phase 2에서 라우트별 코드 스플리팅 + lazy 로드 적용 |
+| 이미지 | 168개 `<img>` (48개 파일) | 고트래픽 15개 파일 46개 태그 `next/image` 전환 (`unoptimized` — Firebase Storage CDN 직접) |
+| Framer Motion | 전체 번들 import (~60KB) | `LazyMotion` + `domAnimation` 서브셋 (`strict` 미사용 — `motion` 호환 유지) |
+| React re-render | Context 변경 시 전체 리렌더 | `DetailPanelContext`, `ExpToastProvider`에 `useMemo` 적용 |
 
 #### Cloud Functions
 
-| 항목 | 현재 | 최적화 |
-|------|------|--------|
-| 콜드 스타트 | 기본 설정 | `minInstances: 1` (핵심 CF만) |
-| 메모리 | 대부분 기본 256MiB | CF별 적정 할당 |
+| 항목 | 이전 | 적용 완료 |
+|------|------|----------|
+| 콜드 스타트 | 기본 설정 | `recordAttempt`, `joinMatchmaking`에 `minInstances: 1` (추가 ~$3-5/월) |
+| 메모리 | `recordAttempt` 512MiB, 나머지 기본 | 유지 |
 | 리전 | asia-northeast3 (서울) | 유지 |
+
+#### next/image 전환 제외 대상
+- `RabbitImage.tsx` — 의도적 `<img>` (Next.js 캐시 회피)
+- `questionHtmlTemplate.ts` — HTML 문자열 내 `<img>` (PDF 내보내기용)
+- `AnnouncementChannel` 내 이미지 — 사용자 업로드, 동적 URL
+- base64/data URL 이미지
 
 ### Phase 4: 테스트 프레임워크 구축
 
