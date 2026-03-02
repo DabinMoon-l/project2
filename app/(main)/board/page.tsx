@@ -680,7 +680,7 @@ export default function BoardPage() {
         <div className="flex justify-between items-center text-[10px] text-[#3A3A3A] mb-3 whitespace-nowrap">
           <span>{dateString}</span>
           <span className="font-bold">Vol. {volNumber} No. {currentSemester}</span>
-          <span>✦ Prof. Jin-Ah Kim EDITION ✦</span>
+          <span>✦ Prof. Jin-A Kim EDITION ✦</span>
         </div>
 
         {/* 상단 장식선 */}
