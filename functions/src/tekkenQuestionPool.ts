@@ -24,8 +24,8 @@ import {
 
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 
-// 과목 목록
-const ALL_COURSES = Object.keys(COURSE_NAMES);
+// 과목 목록 (순환 의존성으로 모듈 초기화 시 COURSE_NAMES가 undefined → 지연 평가)
+const getAllCourses = () => Object.keys(COURSE_NAMES);
 
 // 풀 목표 크기
 const TARGET_POOL_SIZE = 60;
@@ -236,7 +236,7 @@ export const tekkenPoolRefillScheduled = onSchedule(
       return;
     }
 
-    for (const courseId of ALL_COURSES) {
+    for (const courseId of getAllCourses()) {
       try {
         const result = await replenishQuestionPool(courseId, apiKey);
         console.log(`[스케줄] ${courseId}: 추가 ${result.added}개, 삭제 ${result.deleted}개`);
@@ -273,7 +273,7 @@ export const tekkenPoolRefill = onCall(
     }
 
     const { courseId } = request.data as { courseId: string };
-    if (!courseId || !ALL_COURSES.includes(courseId)) {
+    if (!courseId || !getAllCourses().includes(courseId)) {
       throw new HttpsError("invalid-argument", "유효한 courseId가 필요합니다.");
     }
 
