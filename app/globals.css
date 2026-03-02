@@ -20,8 +20,8 @@ html {
   min-height: -webkit-fill-available;
   overflow-x: hidden;
   overscroll-behavior: none;
-  /* 아이폰 둥근 모서리 뒤 — 검정 (네이티브 앱과 동일) */
-  background-color: #000;
+  /* 아이폰 둥근 모서리 뒤 — 크림 (앱 배경과 동일하게 매끄럽게) */
+  background-color: #F5F0E8;
   color: var(--text-dark);
 }
 
