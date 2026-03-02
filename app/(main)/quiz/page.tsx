@@ -17,10 +17,13 @@ import {
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useQuizBookmark } from '@/lib/hooks/useQuizBookmark';
+import dynamic from 'next/dynamic';
 import { useQuizUpdate, type QuizUpdateInfo } from '@/lib/hooks/useQuizUpdate';
-import UpdateQuizModal from '@/components/quiz/UpdateQuizModal';
-import QuizStatsModal from '@/components/quiz/manage/QuizStatsModal';
 import { Skeleton, ScrollToTopButton, ExpandModal } from '@/components/common';
+
+// 대형 모달 lazy load (버튼 클릭 시에만 로드)
+const UpdateQuizModal = dynamic(() => import('@/components/quiz/UpdateQuizModal'), { ssr: false });
+const QuizStatsModal = dynamic(() => import('@/components/quiz/manage/QuizStatsModal'), { ssr: false });
 import { useExpandSource } from '@/lib/hooks/useExpandSource';
 import { useCourse } from '@/lib/contexts';
 import { COURSES, getCurrentSemesterByDate, getDefaultQuizTab, getPastExamOptions, type PastExamOption } from '@/lib/types/course';

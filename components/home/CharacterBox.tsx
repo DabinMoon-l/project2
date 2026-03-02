@@ -13,14 +13,17 @@ import { useUser, useCourse, useMilestone } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
 import { useRabbitHoldings, useRabbitDoc, getRabbitStats } from '@/lib/hooks/useRabbit';
 import { computeRabbitDisplayName } from '@/lib/utils/rabbitDisplayName';
+import dynamic from 'next/dynamic';
 import { useExpToast } from '@/components/common/ExpToast';
 import { calcBattleXp } from '@/lib/utils/tekkenDamage';
 
-import RabbitDogam from './RabbitDogam';
 import TekkenMatchmakingModal from '@/components/tekken/TekkenMatchmakingModal';
 import TekkenBattleConfirmModal from '@/components/tekken/TekkenBattleConfirmModal';
-import TekkenBattleOverlay from '@/components/tekken/TekkenBattleOverlay';
 import { useTekkenBattle } from '@/lib/hooks/useTekkenBattle';
+
+// 대형 컴포넌트 lazy load (조건부 렌더링 — 버튼 클릭/배틀 시작 시에만 로드)
+const RabbitDogam = dynamic(() => import('./RabbitDogam'), { ssr: false });
+const TekkenBattleOverlay = dynamic(() => import('@/components/tekken/TekkenBattleOverlay'), { ssr: false });
 import { BATTLE_CONFIG } from '@/lib/types/tekken';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
 

@@ -6,9 +6,13 @@ import { doc, getDoc, updateDoc, serverTimestamp, Timestamp } from 'firebase/fir
 import { db, auth } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse } from '@/lib/contexts';
+import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/common';
-import QuestionEditor, { type QuestionData, type SubQuestion } from '@/components/quiz/create/QuestionEditor';
+import type { QuestionData, SubQuestion } from '@/components/quiz/create/QuestionEditor';
 import QuestionList from '@/components/quiz/create/QuestionList';
+
+// 대형 컴포넌트 lazy load (4,074줄 — 수정 시에만 로드)
+const QuestionEditor = dynamic(() => import('@/components/quiz/create/QuestionEditor'));
 import QuizMetaForm, { type QuizMeta, validateRequiredTags, getChapterTags } from '@/components/quiz/create/QuizMetaForm';
 import ImageRegionSelector, { type UploadedFileItem } from '@/components/quiz/create/ImageRegionSelector';
 import { AnimatePresence } from 'framer-motion';

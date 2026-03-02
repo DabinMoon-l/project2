@@ -16,11 +16,14 @@ import { functions } from '@/lib/firebase';
 import { useUser, useCourse } from '@/lib/contexts';
 import { useRabbitHoldings } from '@/lib/hooks/useRabbit';
 import { getPendingMilestones, getExpBarDisplay } from '@/lib/utils/milestone';
+import dynamic from 'next/dynamic';
 import type { RollResultData } from '@/components/home/GachaResultModal';
 import MilestoneChoiceModal from '@/components/home/MilestoneChoiceModal';
-import GachaResultModal from '@/components/home/GachaResultModal';
-import LevelUpBottomSheet from '@/components/home/LevelUpBottomSheet';
 import { useHideNav } from '@/lib/hooks/useHideNav';
+
+// 대형 모달 lazy load (마일스톤 이벤트 시에만 로드)
+const GachaResultModal = dynamic(() => import('@/components/home/GachaResultModal'), { ssr: false });
+const LevelUpBottomSheet = dynamic(() => import('@/components/home/LevelUpBottomSheet'), { ssr: false });
 
 interface MilestoneContextValue {
   // 상태

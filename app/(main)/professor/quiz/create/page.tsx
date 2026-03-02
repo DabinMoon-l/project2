@@ -13,10 +13,9 @@ import type { QuizType } from '@/components/professor/QuizEditorForm';
 import type { CourseId } from '@/lib/types/course';
 import { COURSES } from '@/lib/types/course';
 import { generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
+import dynamic from 'next/dynamic';
 import {
   ImageUploader,
-  OCRProcessor,
-  QuestionEditor,
   QuestionList,
   calculateTotalQuestionCount,
   ExtractedImagesProvider,
@@ -24,9 +23,13 @@ import {
   ExtractedImagePicker,
   type QuestionData,
 } from '@/components/quiz/create';
-import ImageCropper from '@/components/quiz/create/ImageCropper';
 import ImageRegionSelector, { type UploadedFileItem } from '@/components/quiz/create/ImageRegionSelector';
-import PageSelectionModal from '@/components/ai-quiz/PageSelectionModal';
+
+// 대형 컴포넌트 lazy load (단계별 조건부 렌더링)
+const OCRProcessor = dynamic(() => import('@/components/quiz/create/OCRProcessor'));
+const QuestionEditor = dynamic(() => import('@/components/quiz/create/QuestionEditor'));
+const ImageCropper = dynamic(() => import('@/components/quiz/create/ImageCropper'), { ssr: false });
+const PageSelectionModal = dynamic(() => import('@/components/ai-quiz/PageSelectionModal'), { ssr: false });
 import type { ParseResult, ParsedQuestion } from '@/lib/ocr';
 import * as pdfjsLib from 'pdfjs-dist';
 

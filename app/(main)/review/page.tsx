@@ -10,10 +10,14 @@ import { Skeleton, ExpandModal } from '@/components/common';
 import { useExpandSource } from '@/lib/hooks/useExpandSource';
 import { SPRING_TAP, TAP_SCALE } from '@/lib/constants/springs';
 import FolderSlider from '@/components/common/FolderSlider';
-import ReviewPractice, { type PracticeResult } from '@/components/review/ReviewPractice';
+import dynamic from 'next/dynamic';
+import type { PracticeResult } from '@/components/review/ReviewPractice';
 import { useReview, calculateCustomFolderQuestionCount, type ReviewItem, type GroupedReviewItems, type QuizUpdateInfo, type PrivateQuiz, type CustomFolder, type QuizAttempt } from '@/lib/hooks/useReview';
 import { useQuizUpdate, type QuizUpdateInfo as DetailedQuizUpdateInfo } from '@/lib/hooks/useQuizUpdate';
-import UpdateQuizModal from '@/components/quiz/UpdateQuizModal';
+
+// 대형 컴포넌트 lazy load
+const ReviewPractice = dynamic(() => import('@/components/review/ReviewPractice'), { ssr: false });
+const UpdateQuizModal = dynamic(() => import('@/components/quiz/UpdateQuizModal'), { ssr: false });
 import { useQuizBookmark, type BookmarkedQuiz } from '@/lib/hooks/useQuizBookmark';
 import { useLearningQuizzes, type LearningQuiz } from '@/lib/hooks/useLearningQuizzes';
 import { useAuth } from '@/lib/hooks/useAuth';

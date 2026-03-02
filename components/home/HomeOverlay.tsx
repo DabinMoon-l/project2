@@ -3,16 +3,19 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
+import dynamic from 'next/dynamic';
 import { useUser } from '@/lib/contexts';
 import { useHomeOverlay } from '@/lib/contexts/HomeOverlayContext';
-import { ProfileDrawer } from '@/components/common';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 import {
-  AnnouncementChannel,
   CharacterBox,
   RankingSection,
 } from '@/components/home';
 import { useWideMode, scaleCoord } from '@/lib/hooks/useViewportScale';
+
+// 대형 컴포넌트 lazy load (오버레이 열릴 때만 필요)
+const ProfileDrawer = dynamic(() => import('@/components/common/ProfileDrawer'), { ssr: false });
+const AnnouncementChannel = dynamic(() => import('@/components/home/AnnouncementChannel'), { ssr: false });
 
 const SWIPE_THRESHOLD = 120;
 const WHEEL_THRESHOLD = 80;

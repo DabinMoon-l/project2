@@ -16,13 +16,18 @@ import {
 import { useUser } from '@/lib/contexts';
 import { useCourse } from '@/lib/contexts/CourseContext';
 import { getChapterIdFromTag } from '@/lib/courseIndex';
-import ReviewPractice, { type PracticeResult } from '@/components/review/ReviewPractice';
+import dynamic from 'next/dynamic';
+import type { PracticeResult } from '@/components/review/ReviewPractice';
 import type { ReviewItem } from '@/lib/hooks/useReview';
 import type { SourceRect } from '@/lib/hooks/useExpandSource';
 
 import FloatingAIButton from './FloatingAIButton';
-import AIQuizModal, { AIQuizData } from './AIQuizModal';
+import type { AIQuizData } from './AIQuizModal';
 import AIQuizProgress from './AIQuizProgress';
+
+// 대형 컴포넌트 lazy load (AI 퀴즈 시작 시에만 로드)
+const ReviewPractice = dynamic(() => import('@/components/review/ReviewPractice'), { ssr: false });
+const AIQuizModal = dynamic(() => import('./AIQuizModal'), { ssr: false });
 import { useHideNav } from '@/lib/hooks/useHideNav';
 
 interface GeneratedQuestion {

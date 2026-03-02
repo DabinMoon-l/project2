@@ -14,9 +14,12 @@ import { COURSES, type CourseId, getDefaultQuizTab, getPastExamOptions, type Pas
 import { type ProfessorQuiz, type QuizTypeFilter } from '@/lib/hooks/useProfessorQuiz';
 import { calcFeedbackScore, getFeedbackLabel } from '@/lib/utils/feedbackScore';
 import { generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
-import QuizStatsModal from '@/components/quiz/manage/QuizStatsModal';
+import dynamic from 'next/dynamic';
 import PreviewQuestionCard from '@/components/professor/PreviewQuestionCard';
-import ProfessorLibraryTab from '@/components/professor/library/ProfessorLibraryTab';
+
+// 대형 컴포넌트 lazy load (탭/모달 전환 시에만 로드)
+const QuizStatsModal = dynamic(() => import('@/components/quiz/manage/QuizStatsModal'), { ssr: false });
+const ProfessorLibraryTab = dynamic(() => import('@/components/professor/library/ProfessorLibraryTab'));
 import { useCustomFolders } from '@/lib/hooks/useCustomFolders';
 import type { FeedbackType } from '@/components/quiz/InstantFeedbackButton';
 import AutoVideo, { getDifficultyVideo } from '@/components/quiz/AutoVideo';

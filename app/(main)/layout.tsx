@@ -7,12 +7,15 @@ import { ThemeProvider } from '@/styles/themes/ThemeProvider';
 import { useRequireAuth } from '@/lib/hooks/useAuth';
 import Navigation from '@/components/common/Navigation';
 import { NotificationProvider, ExpToastProvider, SwipeBack } from '@/components/common';
-import { AIQuizContainer } from '@/components/ai-quiz';
 import { UserProvider, useUser, CourseProvider, useCourse, MilestoneProvider, HomeOverlayProvider, DetailPanelProvider, useDetailPanel } from '@/lib/contexts';
-import { HomeOverlay, ProfessorHomeOverlay } from '@/components/home';
 import { useActivityTracker } from '@/lib/hooks/useActivityTracker';
 import type { ClassType } from '@/styles/themes';
-import LibraryJobToast from '@/components/professor/library/LibraryJobToast';
+
+// 대형 오버레이/컨테이너 lazy load (역할별 조건부 렌더링)
+const HomeOverlay = dynamic(() => import('@/components/home/HomeOverlay'), { ssr: false });
+const ProfessorHomeOverlay = dynamic(() => import('@/components/home/ProfessorHomeOverlay'), { ssr: false });
+const AIQuizContainer = dynamic(() => import('@/components/ai-quiz/AIQuizContainer'), { ssr: false });
+const LibraryJobToast = dynamic(() => import('@/components/professor/library/LibraryJobToast'), { ssr: false });
 import { useViewportScale, useWideMode } from '@/lib/hooks/useViewportScale';
 import { useScrollDismissKeyboard } from '@/lib/hooks/useKeyboardAware';
 import OfflineBanner from '@/components/common/OfflineBanner';

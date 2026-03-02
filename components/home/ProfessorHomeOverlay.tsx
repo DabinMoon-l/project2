@@ -3,13 +3,16 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
+import dynamic from 'next/dynamic';
 import { useUser, useCourse } from '@/lib/contexts';
 import { useHomeOverlay } from '@/lib/contexts/HomeOverlayContext';
-import { ProfileDrawer } from '@/components/common';
 import CourseSwitcher from '@/components/common/CourseSwitcher';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
-import { AnnouncementChannel } from '@/components/home';
 import ProfessorRankingSection from '@/components/home/ProfessorRankingSection';
+
+// 대형 컴포넌트 lazy load
+const ProfileDrawer = dynamic(() => import('@/components/common/ProfileDrawer'), { ssr: false });
+const AnnouncementChannel = dynamic(() => import('@/components/home/AnnouncementChannel'), { ssr: false });
 import ProfessorCharacterBox from '@/components/home/ProfessorCharacterBox';
 import { useWideMode, scaleCoord } from '@/lib/hooks/useViewportScale';
 

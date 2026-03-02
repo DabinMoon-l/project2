@@ -21,8 +21,12 @@ import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useReview, calculateCustomFolderQuestionCount, type ReviewItem, type FolderCategory, type CustomFolderQuestion } from '@/lib/hooks/useReview';
 import { useCourse } from '@/lib/contexts/CourseContext';
+import dynamic from 'next/dynamic';
 import { Skeleton, BottomSheet, useExpToast } from '@/components/common';
-import ReviewPractice, { type PracticeResult } from '@/components/review/ReviewPractice';
+import type { PracticeResult } from '@/components/review/ReviewPractice';
+
+// 대형 컴포넌트 lazy load (2,513줄 — 복습 풀이 시에만 로드)
+const ReviewPractice = dynamic(() => import('@/components/review/ReviewPractice'), { ssr: false });
 import { formatChapterLabel, getChapterById } from '@/lib/courseIndex';
 import { useHideNav } from '@/lib/hooks/useHideNav';
 
