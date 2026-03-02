@@ -277,26 +277,22 @@ export default function Navigation({ role }: NavigationProps) {
     );
   }
 
-  // 세로모드: 하단 바 — iOS 네이티브 탭바 패턴
-  // nav가 safe area까지 확장 + 반투명 블러 배경으로 영역 활용
-  // paddingBottom으로 필(pill)만 safe area 위에 위치
+  // 세로모드: 하단 바 — 필이 화면 맨 아래까지 확장
+  // 필 자체가 safe area를 채워서 하단 빈 공간 없음
   return (
     <nav
       className="fixed left-0 right-0 bottom-0 z-50"
-      style={{
-        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-        backgroundColor: 'rgba(245, 240, 232, 0.75)',
-        backdropFilter: 'saturate(180%) blur(20px)',
-        WebkitBackdropFilter: 'saturate(180%) blur(20px)',
-      }}
     >
-      <div className="flex justify-center px-4 py-1.5">
+      <div className="flex justify-center px-4 pt-1.5">
         <div
-          className="relative flex items-stretch rounded-2xl overflow-hidden"
+          className="relative flex items-stretch rounded-t-2xl overflow-hidden"
           style={{
             backgroundColor: '#F5F0E8',
-            border: '2px solid #1A1A1A',
-            boxShadow: '4px 4px 0px #1A1A1A',
+            borderTop: '2px solid #1A1A1A',
+            borderLeft: '2px solid #1A1A1A',
+            borderRight: '2px solid #1A1A1A',
+            boxShadow: '4px 0px 0px #1A1A1A',
+            paddingBottom: 'env(safe-area-inset-bottom, 0px)',
             maxWidth: role === 'professor' ? '420px' : '340px',
             width: '100%',
           }}
@@ -307,7 +303,7 @@ export default function Navigation({ role }: NavigationProps) {
             style={{
               width: `calc(${100 / tabs.length}% - 8px)`,
               top: 4,
-              bottom: 4,
+              bottom: 'calc(4px + env(safe-area-inset-bottom, 0px))',
               backgroundColor: 'rgba(26, 26, 26, 0.85)',
             }}
             initial={false}
