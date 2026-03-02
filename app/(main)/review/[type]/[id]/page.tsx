@@ -2650,7 +2650,8 @@ export default function FolderDetailPage() {
                 animate={{ y: 0 }}
                 exit={{ y: '100%' }}
                 transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                className="fixed bottom-0 left-0 right-0 z-50 bg-[#F5F0E8] border-t-2 border-[#1A1A1A] max-h-[70vh] flex flex-col"
+                className="fixed bottom-0 right-0 z-50 bg-[#F5F0E8] border-t-2 border-[#1A1A1A] max-h-[70vh] flex flex-col"
+                style={{ left: 'var(--detail-panel-left, 0)' }}
               >
                 {/* 바텀시트 헤더 */}
                 <div className="flex items-center justify-between px-4 py-3 border-b border-[#EDEAE4] flex-shrink-0">
@@ -3459,7 +3460,7 @@ export default function FolderDetailPage() {
 
       {/* 하단 버튼 영역 */}
       {!loading && questions.length > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 p-3 bg-[#F5F0E8] border-t-2 border-[#1A1A1A]">
+        <div className="fixed bottom-0 right-0 p-3 bg-[#F5F0E8] border-t-2 border-[#1A1A1A]" style={{ left: 'var(--detail-panel-left, 0)' }}>
           {isEditMode ? (
             /* 수정 모드일 때 - 취소/저장 */
             <div className="flex gap-2">
@@ -3518,7 +3519,7 @@ export default function FolderDetailPage() {
 
       {/* 배정 모드일 때 하단 안내 */}
       {!loading && isAssignMode && isSelectMode && selectedIds.size === 0 && (
-        <div className="fixed bottom-0 left-0 right-0 p-3 bg-[#EDEAE4] border-t-2 border-[#1A1A1A]">
+        <div className="fixed bottom-0 right-0 p-3 bg-[#EDEAE4] border-t-2 border-[#1A1A1A]" style={{ left: 'var(--detail-panel-left, 0)' }}>
           <p className="text-xs text-center text-[#5C5C5C]">
             분류할 문제를 선택하세요
           </p>
@@ -3555,7 +3556,8 @@ export default function FolderDetailPage() {
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 50 }}
-            className="fixed bottom-28 left-4 right-4 z-50"
+            className="fixed bottom-28 right-4 z-50"
+            style={{ left: 'max(1rem, var(--detail-panel-left, 1rem))' }}
           >
             <div className="bg-[#1A1A1A] text-[#F5F0E8] px-4 py-3 text-center border-2 border-[#1A1A1A]">
               <p className="text-sm font-bold">{toastMessage}</p>

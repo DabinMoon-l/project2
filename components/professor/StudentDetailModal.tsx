@@ -108,7 +108,8 @@ export default function StudentDetailModal({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: '100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl max-h-[85vh] overflow-hidden flex flex-col"
+            className="fixed bottom-0 right-0 z-50 bg-white rounded-t-3xl max-h-[85vh] overflow-hidden flex flex-col"
+            style={{ left: 'var(--detail-panel-left, 0)' }}
           >
             {/* 핸들 바 */}
             <div className="flex justify-center py-3">

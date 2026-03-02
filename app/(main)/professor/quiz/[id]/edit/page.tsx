@@ -790,7 +790,7 @@ export default function EditQuizPage() {
 
       {/* 하단 저장 버튼 */}
       {step === 'questions' && editingIndex === null && (
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100 safe-area-bottom">
+        <div className="fixed bottom-0 right-0 p-4 bg-white border-t border-gray-100 safe-area-bottom" style={{ left: 'var(--detail-panel-left, 0)' }}>
           <Button
             fullWidth
             onClick={handleSave}

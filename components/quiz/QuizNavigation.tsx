@@ -59,9 +59,10 @@ export default function QuizNavigation({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: 0.2 }}
-      className="fixed bottom-0 left-0 right-0 bg-[#F5F0E8] border-t-2 border-[#1A1A1A] px-4 py-3 pb-safe"
+      className="fixed bottom-0 right-0 bg-[#F5F0E8] border-t-2 border-[#1A1A1A] px-4 py-3 pb-safe"
       style={{
         paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
+        left: 'var(--detail-panel-left, 0)',
       }}
     >
       <div className="max-w-lg mx-auto flex gap-3">

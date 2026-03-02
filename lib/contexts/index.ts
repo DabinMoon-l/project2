@@ -11,3 +11,5 @@ export type { default as CourseContext } from './CourseContext';
 export { MilestoneProvider, useMilestone } from './MilestoneContext';
 
 export { HomeOverlayProvider, useHomeOverlay } from './HomeOverlayContext';
+
+export { DetailPanelProvider, useDetailPanel } from './DetailPanelContext';

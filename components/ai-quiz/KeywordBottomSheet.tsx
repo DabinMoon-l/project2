@@ -157,7 +157,8 @@ export default function KeywordBottomSheet({
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="fixed bottom-0 left-0 right-0 z-[71] bg-[#F5F0E8] border-t-2 border-[#1A1A1A] max-h-[70vh] flex flex-col"
+            className="fixed bottom-0 right-0 z-[71] bg-[#F5F0E8] border-t-2 border-[#1A1A1A] max-h-[70vh] flex flex-col"
+            style={{ left: 'var(--detail-panel-left, 0)' }}
           >
             {/* 핸들 */}
             <div className="flex justify-center py-2">

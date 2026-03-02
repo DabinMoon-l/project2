@@ -1638,7 +1638,7 @@ export default function QuizPreviewPage() {
 
       {/* 수정 모드 하단 저장 버튼 */}
       {isEditMode && editingIndex === null && (
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#F5F0E8] border-t-2 border-[#1A1A1A] z-50">
+        <div className="fixed bottom-0 right-0 p-4 bg-[#F5F0E8] border-t-2 border-[#1A1A1A] z-50" style={{ left: 'var(--detail-panel-left, 0)' }}>
           <button
             onClick={handleSave}
             disabled={saving || editableQuestions.length === 0}

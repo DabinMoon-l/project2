@@ -1634,7 +1634,7 @@ export default function QuizResultPage() {
       </motion.main>
 
       {/* 하단 버튼 */}
-      <div className="fixed bottom-0 left-0 right-0 p-3 bg-[#F5F0E8] border-t-2 border-[#1A1A1A]">
+      <div className="fixed bottom-0 right-0 p-3 bg-[#F5F0E8] border-t-2 border-[#1A1A1A]" style={{ left: 'var(--detail-panel-left, 0)' }}>
         <button
           onClick={handleNext}
           className="w-full py-3 text-sm bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors rounded-lg"

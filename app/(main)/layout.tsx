@@ -1,13 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { ThemeProvider } from '@/styles/themes/ThemeProvider';
 import { useRequireAuth } from '@/lib/hooks/useAuth';
 import Navigation from '@/components/common/Navigation';
 import { NotificationProvider, ExpToastProvider, SwipeBack } from '@/components/common';
 import { AIQuizContainer } from '@/components/ai-quiz';
-import { UserProvider, useUser, CourseProvider, useCourse, MilestoneProvider, HomeOverlayProvider } from '@/lib/contexts';
+import { UserProvider, useUser, CourseProvider, useCourse, MilestoneProvider, HomeOverlayProvider, DetailPanelProvider, useDetailPanel } from '@/lib/contexts';
 import { HomeOverlay, ProfessorHomeOverlay } from '@/components/home';
 import { useActivityTracker } from '@/lib/hooks/useActivityTracker';
 import type { ClassType } from '@/styles/themes';
@@ -15,6 +16,17 @@ import LibraryJobToast from '@/components/professor/library/LibraryJobToast';
 import { useViewportScale, useWideMode } from '@/lib/hooks/useViewportScale';
 import { useScrollDismissKeyboard } from '@/lib/hooks/useKeyboardAware';
 import OfflineBanner from '@/components/common/OfflineBanner';
+
+// 가로모드 라우트 사이드바 (lazy load)
+const QuizListSidebar = dynamic(() => import('@/components/quiz/QuizListSidebar'), {
+  loading: () => <div style={{ backgroundColor: '#F5F0E8', minHeight: '100vh' }} />,
+});
+const BoardListSidebar = dynamic(() => import('@/components/board/BoardListSidebar'), {
+  loading: () => <div style={{ backgroundColor: '#F5F0E8', minHeight: '100vh' }} />,
+});
+const ReviewListSidebar = dynamic(() => import('@/components/review/ReviewListSidebar'), {
+  loading: () => <div style={{ backgroundColor: '#F5F0E8', minHeight: '100vh' }} />,
+});
 
 /**
  * 내부 레이아웃 컴포넌트
@@ -112,39 +124,165 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
         <ExpToastProvider>
           <MilestoneWrapper isProfessor={isProfessor}>
             <HomeOverlayProvider>
-              <LibraryJobToast />
-              <OfflineBanner />
-              <SwipeBack enabled={!isWide && !isTabRoot}>
-                  <div
-                    data-main-content
-                    className="min-h-screen"
-                    style={{
-                      // safe-area-inset-top은 각 페이지의 Header/헤더에서 처리
-                      // → 배경이 노치/다이내믹 아일랜드 뒤까지 확장됨 (네이티브 앱처럼)
-                      ...(!hideNavigation && !isWide
-                        ? { paddingBottom: 'calc(4.25rem + env(safe-area-inset-bottom, 0px))' }
-                        : {}),
-                      ...(isWide ? { marginLeft: '240px' } : {}),
-                    }}
-                  >
-                    {/* 메인 콘텐츠 */}
-                    <main className={isWide ? 'max-w-[640px] mx-auto' : ''}>
-                      {children}
-                      {!isProfessor && pathname === '/quiz' && searchParams.get('manage') !== 'true' && <AIQuizContainer />}
-                    </main>
-
-                    {/* 하단 네비게이션 바 */}
-                    {!hideNavigation && (
-                      <Navigation role={isProfessor ? 'professor' : 'student'} />
-                    )}
-                  </div>
-              </SwipeBack>
-              {!isProfessor ? <HomeOverlay /> : <ProfessorHomeOverlay />}
+              <DetailPanelProvider>
+                <MainLayoutGrid
+                  isWide={isWide}
+                  hideNavigation={!!hideNavigation}
+                  isProfessor={isProfessor}
+                  isTabRoot={!!isTabRoot}
+                  pathname={pathname || ''}
+                  searchParams={searchParams}
+                >
+                  {children}
+                </MainLayoutGrid>
+              </DetailPanelProvider>
             </HomeOverlayProvider>
           </MilestoneWrapper>
         </ExpToastProvider>
       </NotificationProvider>
     </ThemeProvider>
+  );
+}
+
+/**
+ * 가로모드 3패널 그리드 레이아웃
+ * DetailPanelProvider 내부에서 useDetailPanel 사용
+ *
+ * 세로모드: 단일 열 (기존과 동일)
+ * 가로모드 (디테일 닫힘): 센터 max-w-640px
+ * 가로모드 (라우트 사이드바): 50/50 2열 (사이드바 + 페이지)
+ * 가로모드 (컨텍스트 디테일): 50/50 2열 (페이지 + 디테일 패널)
+ */
+function MainLayoutGrid({
+  children,
+  isWide,
+  hideNavigation,
+  isProfessor,
+  isTabRoot,
+  pathname,
+  searchParams,
+}: {
+  children: React.ReactNode;
+  isWide: boolean;
+  hideNavigation: boolean;
+  isProfessor: boolean;
+  isTabRoot: boolean;
+  pathname: string;
+  searchParams: ReturnType<typeof useSearchParams>;
+}) {
+  const { content: detailContent, isDetailOpen, closeDetail } = useDetailPanel();
+
+  // 가로모드 라우트 기반 사이드바 감지
+  // 상세 페이지 진입 시 좌측에 목록 사이드바 표시
+  const routeSidebarType = useMemo(() => {
+    if (!isWide) return null;
+    // 퀴즈 상세 (/quiz/[id], /quiz/[id]/result, /quiz/[id]/feedback, ...)
+    if (pathname.match(/^\/quiz\/[^/]+/) && pathname !== '/quiz/create') return 'quiz';
+    // 게시판 상세 (/board/[id], /board/[id]/edit)
+    if (pathname.match(/^\/board\/[^/]+/) && pathname !== '/board/write' && pathname !== '/board/manage') return 'board';
+    // 복습 상세 (/review/[type]/[id], /review/random)
+    if (/^\/review\/[^/]+\/[^/]+/.test(pathname) || pathname === '/review/random') return 'review';
+    // 교수 퀴즈 미리보기 (/professor/quiz/[id]/preview)
+    if (pathname.match(/^\/professor\/quiz\/[^/]+\/preview/)) return 'quiz';
+    return null;
+  }, [isWide, pathname]);
+
+  // 분할 레이아웃 활성 여부 (컨텍스트 디테일 > 라우트 사이드바 우선)
+  const showSplit = isDetailOpen || routeSidebarType !== null;
+
+  // 라우트 사이드바 컴포넌트 렌더
+  const renderRouteSidebar = () => {
+    switch (routeSidebarType) {
+      case 'quiz': return <QuizListSidebar />;
+      case 'board': return <BoardListSidebar />;
+      case 'review': return <ReviewListSidebar />;
+      default: return null;
+    }
+  };
+
+  return (
+    <>
+      <LibraryJobToast />
+      <OfflineBanner />
+      <SwipeBack enabled={!isWide && !isTabRoot}>
+        <div
+          data-main-content
+          className="min-h-screen"
+          style={{
+            ...(!hideNavigation && !isWide
+              ? { paddingBottom: 'calc(4.25rem + env(safe-area-inset-bottom, 0px))' }
+              : {}),
+            ...(isWide ? { marginLeft: '240px' } : {}),
+            // fixed 요소 좌측 위치 조정용 CSS 변수
+            // 모바일: 0, 가로모드: 240px (사이드바), 라우트 사이드바: calc(50% + 120px) (우측 패널)
+            '--detail-panel-left': isWide
+              ? (routeSidebarType && !isDetailOpen ? 'calc(50% + 120px)' : '240px')
+              : '0',
+          } as React.CSSProperties & Record<string, string>}
+        >
+          <div className={isWide && showSplit ? 'flex min-h-screen' : ''}>
+            {/* 좌측: 라우트 사이드바 또는 메인 콘텐츠 */}
+            <main
+              className={
+                isWide
+                  ? showSplit
+                    ? 'w-1/2 flex-shrink-0 overflow-y-auto min-h-screen'
+                    : 'max-w-[640px] mx-auto w-full'
+                  : ''
+              }
+            >
+              {isWide && routeSidebarType && !isDetailOpen
+                ? renderRouteSidebar()
+                : <>
+                    {children}
+                    {!isProfessor && pathname === '/quiz' && searchParams?.get('manage') !== 'true' && <AIQuizContainer />}
+                  </>
+              }
+            </main>
+
+            {/* 우측: 라우트 페이지 또는 컨텍스트 디테일 패널 */}
+            {isWide && showSplit && (
+              <aside
+                className="w-1/2 flex-shrink-0 overflow-y-auto min-h-screen relative"
+                style={{
+                  borderLeft: '1px solid #D4CFC4',
+                  backgroundColor: '#F5F0E8',
+                  paddingRight: 'env(safe-area-inset-right, 0px)',
+                }}
+              >
+                {isDetailOpen ? (
+                  <>
+                    {/* 컨텍스트 디테일: 닫기 버튼 + 콘텐츠 */}
+                    <button
+                      onClick={closeDetail}
+                      className="sticky top-3 float-right mr-3 z-10 w-8 h-8 rounded-full flex items-center justify-center"
+                      style={{ backgroundColor: 'rgba(26, 26, 26, 0.08)' }}
+                      aria-label="패널 닫기"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="#1A1A1A" strokeWidth={2} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                    <div className="max-w-[640px]">
+                      {detailContent}
+                    </div>
+                  </>
+                ) : routeSidebarType ? (
+                  // 라우트 사이드바: 페이지 children을 우측에 렌더
+                  children
+                ) : null}
+              </aside>
+            )}
+          </div>
+
+          {/* 하단 네비게이션 (가로모드에서는 사이드바이므로 항상 표시) */}
+          {(!hideNavigation || isWide) && (
+            <Navigation role={isProfessor ? 'professor' : 'student'} />
+          )}
+        </div>
+      </SwipeBack>
+      {!isProfessor ? <HomeOverlay /> : <ProfessorHomeOverlay />}
+    </>
   );
 }
 

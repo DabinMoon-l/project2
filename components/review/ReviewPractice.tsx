@@ -1411,7 +1411,7 @@ export default function ReviewPractice({
         </main>
 
         {/* 하단 버튼 */}
-        <div className="fixed bottom-0 left-0 right-0 p-3 border-t-2 border-[#1A1A1A] bg-[#F5F0E8]">
+        <div className="fixed bottom-0 right-0 p-3 border-t-2 border-[#1A1A1A] bg-[#F5F0E8]" style={{ left: 'var(--detail-panel-left, 0)' }}>
           <div className="flex gap-2.5">
             <button
               onClick={() => setPhase('practice')}
@@ -2462,8 +2462,8 @@ export default function ReviewPractice({
 
       {/* 하단 버튼 */}
       <div
-        className="fixed bottom-0 left-0 right-0 p-4 border-t-2 border-[#1A1A1A]"
-        style={{ backgroundColor: '#F5F0E8' }}
+        className="fixed bottom-0 right-0 p-4 border-t-2 border-[#1A1A1A]"
+        style={{ backgroundColor: '#F5F0E8', left: 'var(--detail-panel-left, 0)' }}
       >
         <div className="flex gap-3">
           {currentIndex > 0 && (
