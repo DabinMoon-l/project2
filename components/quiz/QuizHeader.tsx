@@ -45,10 +45,10 @@ export default function QuizHeader({
   return (
     <header
       className="sticky top-0 z-50 w-full border-b-2 border-[#1A1A1A]"
-      style={{ backgroundColor: '#F5F0E8' }}
+      style={{ backgroundColor: '#F5F0E8', marginTop: 'calc(-1 * env(safe-area-inset-top, 0px))', paddingTop: 'env(safe-area-inset-top, 0px)' }}
     >
       {/* 헤더 컨텐츠 — 노치 아래에 위치 */}
-      <div className="flex items-center justify-between h-14 px-4" style={{ marginTop: 'env(safe-area-inset-top, 0px)' }}>
+      <div className="flex items-center justify-between h-14 px-4">
         {/* 뒤로가기 버튼 */}
         <motion.button
           whileHover={{ scale: 1.1 }}

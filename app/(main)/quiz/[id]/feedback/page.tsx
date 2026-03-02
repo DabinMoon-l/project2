@@ -1569,8 +1569,8 @@ export default function FeedbackPage() {
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 */}
-      <header className="sticky top-0 z-50 border-b-2 border-[#1A1A1A] bg-[#F5F0E8]">
-        <div className="flex items-center justify-center px-4 py-3" style={{ marginTop: 'env(safe-area-inset-top, 0px)' }}>
+      <header className="sticky top-0 z-50 border-b-2 border-[#1A1A1A] bg-[#F5F0E8]" style={{ marginTop: 'calc(-1 * env(safe-area-inset-top, 0px))', paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+        <div className="flex items-center justify-center px-4 py-3">
           <div className="text-center">
             <h1 className="text-sm font-bold text-[#1A1A1A]">
               피드백

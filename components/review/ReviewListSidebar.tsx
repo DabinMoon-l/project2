@@ -114,7 +114,7 @@ export default function ReviewListSidebar() {
         style={{
           backgroundColor: '#F5F0E8',
           borderBottom: '1px solid #D4CFC4',
-          paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))',
+          paddingTop: '0.75rem',
         }}
       >
         <button
