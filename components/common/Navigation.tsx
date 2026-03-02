@@ -278,9 +278,12 @@ export default function Navigation({ role }: NavigationProps) {
   }
 
   // 세로모드: 하단 바 (화면 하단 edge에 dock)
+  // paddingBottom으로 safe area만큼 올려서 필이 홈 인디케이터 위에 위치
+  // → safe area 영역에는 페이지 콘텐츠가 비쳐 보임
   return (
     <nav
       className="fixed left-0 right-0 bottom-0 z-50"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
       <div className="flex justify-center px-4 py-1.5">
         <div

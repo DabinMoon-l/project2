@@ -195,7 +195,7 @@ function MainLayoutGrid({
           style={{
             paddingTop: 'env(safe-area-inset-top, 0px)',
             ...(!hideNavigation && !isWide
-              ? { paddingBottom: '4.25rem' }
+              ? { paddingBottom: 'calc(4.25rem + env(safe-area-inset-bottom, 0px))' }
               : {}),
             ...(isWide ? { marginLeft: '240px' } : {}),
             // fixed 요소 좌측 위치 조정용 CSS 변수

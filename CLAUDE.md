@@ -330,10 +330,13 @@ Z-score 기반: Z < -1.5 → 주의(caution), Z < -2 → 위험(danger)
 
 ## Safe Area 처리
 
-- `html { background-color: #F5F0E8 }` — 아이폰 둥근 모서리 뒤
-- 각 페이지 **Header/헤더**에서 `top: 0` + `marginTop: env(safe-area-inset-top)` 패턴
-  → 배경은 노치/다이내믹 아일랜드 뒤까지 확장, 콘텐츠만 노치 아래
-- Navigation 하단: `bottom: max(1rem, calc(env(safe-area-inset-bottom) + 0.5rem))`
+- `html { background-color: #F5F0E8 }` — 아이폰 둥근 모서리 뒤 배경
+- **상단 (노치/다이내믹 아일랜드)**: `data-main-content`에 `paddingTop: env(safe-area-inset-top)` 적용
+- 각 페이지 **Header/헤더**에서 `marginTop: -env(safe-area-inset-top)` + `paddingTop: env(safe-area-inset-top)` 패턴
+  → 배경은 노치 뒤까지 확장, 콘텐츠만 노치 아래
+- **하단 (홈 인디케이터)**: Navigation `<nav>`에 `paddingBottom: env(safe-area-inset-bottom)` 적용
+  → 필(pill)이 safe area 위에 위치, safe area 영역에는 페이지 콘텐츠가 비쳐 보임
+- 콘텐츠 영역 paddingBottom: `calc(4.25rem + env(safe-area-inset-bottom))` (네비 + safe area)
 
 ## SwipeBack (뒤로가기 스와이프)
 
