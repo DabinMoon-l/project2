@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 import { type RabbitHolding, getRabbitStats } from '@/lib/hooks/useRabbit';
+import Image from 'next/image';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 
 const OPEN_MS = 380;
@@ -179,7 +180,7 @@ export default function LevelUpBottomSheet({
         >
           {/* 배경 */}
           <div className="absolute inset-0">
-            <img src="/images/home-bg.jpg" alt="" className="w-full h-full object-cover" />
+            <Image src="/images/home-bg.jpg" alt="" fill className="object-cover" />
           </div>
           <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
 

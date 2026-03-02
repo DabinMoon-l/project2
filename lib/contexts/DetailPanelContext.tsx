@@ -9,7 +9,7 @@
  * 모바일 세로모드에서는 사용되지 않음.
  */
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 
@@ -58,14 +58,16 @@ export function DetailPanelProvider({ children }: { children: ReactNode }) {
     }
   }, [pathname]);
 
+  const value = useMemo(() => ({
+    content,
+    openDetail,
+    replaceDetail,
+    closeDetail,
+    isDetailOpen: content !== null,
+  }), [content, openDetail, replaceDetail, closeDetail]);
+
   return (
-    <DetailPanelContext.Provider value={{
-      content,
-      openDetail,
-      replaceDetail,
-      closeDetail,
-      isDetailOpen: content !== null,
-    }}>
+    <DetailPanelContext.Provider value={value}>
       {children}
     </DetailPanelContext.Provider>
   );

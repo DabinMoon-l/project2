@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
+import Image from 'next/image';
 import RabbitImage from '@/components/common/RabbitImage';
 
 const OPEN_MS = 380;
@@ -213,8 +214,7 @@ export default function GachaResultModal({
         <div className="pointer-events-auto w-full max-w-[280px] mx-4 relative overflow-hidden rounded-2xl">
           {/* 배경 */}
           <div className="absolute inset-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/images/home-bg.jpg" alt="" className="w-full h-full object-cover" />
+            <Image src="/images/home-bg.jpg" alt="" fill className="object-cover" />
           </div>
           <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
 

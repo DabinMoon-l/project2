@@ -9,6 +9,7 @@ import { db } from '@/lib/firebase';
 import { useCourse } from '@/lib/contexts';
 import { formatChapterLabel, generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import dynamic from 'next/dynamic';
+import Image from 'next/image';
 import { type QuestionData, type SubQuestion } from '@/components/quiz/create/QuestionEditor';
 
 const QuestionEditor = dynamic(() => import('@/components/quiz/create/QuestionEditor'));
@@ -861,7 +862,7 @@ export default function QuizPreviewPage() {
                     </p>
                   ))}
                   {child.type === 'image' && child.imageUrl && (
-                    <img src={child.imageUrl} alt="보기 이미지" className="max-w-full h-auto border border-[#1A1A1A] rounded-lg" />
+                    <Image src={child.imageUrl} alt="보기 이미지" width={800} height={400} className="max-w-full h-auto border border-[#1A1A1A] rounded-lg" unoptimized />
                   )}
                 </div>
               ))}
@@ -936,7 +937,7 @@ export default function QuizPreviewPage() {
         {q.image && (
           <div className="mb-3">
             <p className="text-xs font-bold text-[#5C5C5C] mb-2">문제 이미지</p>
-            <img src={q.image} alt="문제 이미지" className="max-w-full h-auto border border-[#1A1A1A] rounded-lg" />
+            <Image src={q.image} alt="문제 이미지" width={800} height={400} className="max-w-full h-auto border border-[#1A1A1A] rounded-lg" unoptimized />
           </div>
         )}
 
@@ -944,7 +945,7 @@ export default function QuizPreviewPage() {
         {q.subQuestionImage && (
           <div className="mb-3">
             <p className="text-xs font-bold text-[#5C5C5C] mb-2">이미지</p>
-            <img src={q.subQuestionImage} alt="하위 문제 이미지" className="max-w-full h-auto border border-[#1A1A1A] rounded-lg" />
+            <Image src={q.subQuestionImage} alt="하위 문제 이미지" width={800} height={400} className="max-w-full h-auto border border-[#1A1A1A] rounded-lg" unoptimized />
           </div>
         )}
 
@@ -1539,7 +1540,7 @@ export default function QuizPreviewPage() {
                                               {child.type === 'gana' && (child.items || []).map((i: any) => (
                                                 <p key={i.id} className="text-sm"><span className="font-bold">({i.label})</span> {i.content}</p>
                                               ))}
-                                              {child.type === 'image' && child.imageUrl && <img src={child.imageUrl} alt="" className="max-w-full h-auto" />}
+                                              {child.type === 'image' && child.imageUrl && <Image src={child.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto" unoptimized />}
                                             </div>
                                           ))}
                                         </div>
@@ -1559,13 +1560,13 @@ export default function QuizPreviewPage() {
                                           ))}
                                         </div>
                                       )}
-                                      {block.type === 'image' && block.imageUrl && <img src={block.imageUrl} alt="" className="max-w-full h-auto" />}
+                                      {block.type === 'image' && block.imageUrl && <Image src={block.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto" unoptimized />}
                                     </div>
                                   ))}
                                 </div>
                               )}
                               {firstResult.passageImage && (
-                                <img src={firstResult.passageImage} alt="공통 이미지" className="mt-2 max-w-full h-auto border border-[#1A1A1A] rounded-lg" />
+                                <Image src={firstResult.passageImage} alt="공통 이미지" width={800} height={400} className="mt-2 max-w-full h-auto border border-[#1A1A1A] rounded-lg" unoptimized />
                               )}
                             </div>
                           )}

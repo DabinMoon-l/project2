@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 import { useRabbitHoldings, useRabbitsForCourse, getRabbitStats, type RabbitDoc, type RabbitHolding } from '@/lib/hooks/useRabbit';
+import Image from 'next/image';
 import RabbitImage from '@/components/common/RabbitImage';
 import VirtualRabbitGrid from '@/components/common/VirtualRabbitGrid';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
@@ -209,7 +210,7 @@ export default function RabbitDogam({
         >
           {/* 배경 */}
           <div className="absolute inset-0 rounded-2xl overflow-hidden">
-            <img src="/images/home-bg.jpg" alt="" className="w-full h-full object-cover" />
+            <Image src="/images/home-bg.jpg" alt="" fill className="object-cover" />
           </div>
           <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
 
@@ -261,7 +262,7 @@ export default function RabbitDogam({
             >
               {/* 배경 */}
               <div className="absolute inset-0 rounded-2xl overflow-hidden">
-                <img src="/images/home-bg.jpg" alt="" className="w-full h-full object-cover" />
+                <Image src="/images/home-bg.jpg" alt="" fill className="object-cover" />
               </div>
               <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
 

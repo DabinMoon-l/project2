@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import Image from 'next/image';
 import RabbitImage from '@/components/common/RabbitImage';
 import VirtualRabbitGrid from '@/components/common/VirtualRabbitGrid';
 import {
@@ -71,7 +72,7 @@ export default function ProfessorRabbitDogam({
           >
             {/* 배경 */}
             <div className="absolute inset-0 rounded-2xl overflow-hidden">
-              <img src="/images/home-bg.jpg" alt="" className="w-full h-full object-cover" />
+              <Image src="/images/home-bg.jpg" alt="" fill className="object-cover" />
             </div>
             <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
 

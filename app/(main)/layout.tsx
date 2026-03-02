@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
+import { LazyMotion, domAnimation } from 'framer-motion';
 import { ThemeProvider } from '@/styles/themes/ThemeProvider';
 import { useRequireAuth } from '@/lib/hooks/useAuth';
 import Navigation from '@/components/common/Navigation';
@@ -297,10 +298,12 @@ export default function MainLayout({
   }
 
   return (
-    <UserProvider>
-      <CourseProvider>
-        <MainLayoutContent>{children}</MainLayoutContent>
-      </CourseProvider>
-    </UserProvider>
+    <LazyMotion features={domAnimation} strict>
+      <UserProvider>
+        <CourseProvider>
+          <MainLayoutContent>{children}</MainLayoutContent>
+        </CourseProvider>
+      </UserProvider>
+    </LazyMotion>
   );
 }

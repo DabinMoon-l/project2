@@ -51,8 +51,10 @@ export function ExpToastProvider({ children }: { children: React.ReactNode }) {
     }, 3000);
   }, []);
 
+  const expToastValue = useMemo(() => ({ showExpToast }), [showExpToast]);
+
   return (
-    <ExpToastContext.Provider value={{ showExpToast }}>
+    <ExpToastContext.Provider value={expToastValue}>
       <RealtimeExpContext.Provider value={realtimeExp}>
         {children}
         <ExpToastContainer toasts={toasts} />

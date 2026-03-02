@@ -491,7 +491,7 @@ function QuestionCard({
                                         {child.type === 'gana' && (child.items || []).map((i: any) => (
                                           <p key={i.id} className="text-sm"><span className="font-bold">({i.label})</span> {i.content}</p>
                                         ))}
-                                        {child.type === 'image' && child.imageUrl && <img src={child.imageUrl} alt="" className="max-w-full h-auto" />}
+                                        {child.type === 'image' && child.imageUrl && <Image src={child.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto" unoptimized />}
                                       </div>
                                     ))}
                                   </div>
@@ -511,14 +511,14 @@ function QuestionCard({
                                     ))}
                                   </div>
                                 )}
-                                {block.type === 'image' && block.imageUrl && <img src={block.imageUrl} alt="" className="max-w-full h-auto" />}
+                                {block.type === 'image' && block.imageUrl && <Image src={block.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto" unoptimized />}
                               </div>
                             ))}
                           </div>
                         )}
                         {/* 이미지 */}
                         {item.passageImage && (
-                          <img src={item.passageImage} alt="공통 이미지" className={`max-w-full max-h-[300px] object-contain border border-[#1A1A1A] ${hasText ? 'mt-3' : ''}`} />
+                          <Image src={item.passageImage} alt="공통 이미지" width={800} height={400} className={`max-w-full max-h-[300px] object-contain border border-[#1A1A1A] ${hasText ? 'mt-3' : ''}`} unoptimized />
                         )}
                       </div>
                     );
@@ -551,7 +551,7 @@ function QuestionCard({
                               </p>
                             ))}
                             {child.type === 'image' && child.imageUrl && (
-                              <img src={child.imageUrl} alt="보기 이미지" className="max-w-full h-auto border border-[#1A1A1A]" />
+                              <Image src={child.imageUrl} alt="보기 이미지" width={800} height={400} className="max-w-full h-auto border border-[#1A1A1A]" unoptimized />
                             )}
                           </div>
                         ))}
@@ -624,10 +624,13 @@ function QuestionCard({
               {/* 문제 이미지 - 보기 다음에 표시 */}
               {item.image && (
                 <div className="mb-3">
-                  <img
+                  <Image
                     src={item.image}
                     alt="문제 이미지"
+                    width={800}
+                    height={400}
                     className="max-w-full max-h-[300px] object-contain border border-[#1A1A1A]"
+                    unoptimized
                   />
                 </div>
               )}
@@ -635,10 +638,13 @@ function QuestionCard({
               {/* 하위 문제 이미지 */}
               {item.subQuestionImage && (
                 <div className="mb-3">
-                  <img
+                  <Image
                     src={item.subQuestionImage}
                     alt="보기 이미지"
+                    width={800}
+                    height={400}
                     className="max-w-full max-h-[300px] object-contain border border-[#1A1A1A]"
+                    unoptimized
                   />
                 </div>
               )}
@@ -2873,12 +2879,14 @@ export default function FolderDetailPage() {
       {/* 헤더 - 배너 이미지 */}
       <header className="pt-2 pb-1 flex flex-col items-center">
         {/* 리본 이미지 — 퀴즈 페이지와 동일 크기 */}
-        <div className="w-full h-[160px] mt-2">
-          <img
+        <div className="relative w-full h-[160px] mt-2">
+          <Image
             src={ribbonImage}
             alt="Review"
-            className="w-full h-full object-contain"
+            fill
+            className="object-contain"
             style={{ transform: `scale(${ribbonScale}) scaleX(1.15)` }}
+            unoptimized
           />
         </div>
 
@@ -3386,7 +3394,7 @@ export default function FolderDetailPage() {
                                                   {child.type === 'gana' && (child.items || []).map((i: any) => (
                                                     <p key={i.id} className="text-sm"><span className="font-bold">({i.label})</span> {i.content}</p>
                                                   ))}
-                                                  {child.type === 'image' && child.imageUrl && <img src={child.imageUrl} alt="" className="max-w-full h-auto" />}
+                                                  {child.type === 'image' && child.imageUrl && <Image src={child.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto" unoptimized />}
                                                 </div>
                                               ))}
                                             </div>
@@ -3406,14 +3414,14 @@ export default function FolderDetailPage() {
                                               ))}
                                             </div>
                                           )}
-                                          {block.type === 'image' && block.imageUrl && <img src={block.imageUrl} alt="" className="max-w-full h-auto" />}
+                                          {block.type === 'image' && block.imageUrl && <Image src={block.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto" unoptimized />}
                                         </div>
                                       ))}
                                     </div>
                                   )}
                                   {/* 이미지 */}
                                   {firstItem.passageImage && (
-                                    <img src={firstItem.passageImage} alt="공통 이미지" className={`max-w-full max-h-[300px] object-contain border border-[#1A1A1A] ${hasText ? 'mt-3' : ''}`} />
+                                    <Image src={firstItem.passageImage} alt="공통 이미지" width={800} height={400} className={`max-w-full max-h-[300px] object-contain border border-[#1A1A1A] ${hasText ? 'mt-3' : ''}`} unoptimized />
                                   )}
                                 </div>
                               );

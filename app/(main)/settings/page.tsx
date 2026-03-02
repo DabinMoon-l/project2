@@ -12,6 +12,7 @@ import { useUser, useCourse } from '@/lib/contexts';
 import { useRabbitHoldings } from '@/lib/hooks/useRabbit';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 import { useHideNav } from '@/lib/hooks/useHideNav';
+import Image from 'next/image';
 import dynamic from 'next/dynamic';
 
 const TekkenChapterSettings = dynamic(() => import('@/components/professor/TekkenChapterSettings'), { ssr: false });
@@ -122,7 +123,7 @@ export default function SettingsPage() {
     <div className="relative min-h-screen pb-8">
       {/* 배경 이미지 + 글래스 오버레이 */}
       <div className="fixed inset-0" style={{ left: 'var(--modal-left, 0px)' }}>
-        <img src="/images/home-bg.jpg" alt="" className="w-full h-full object-cover" />
+        <Image src="/images/home-bg.jpg" alt="" fill className="object-cover" />
       </div>
       <div className="fixed inset-0 bg-white/10 backdrop-blur-2xl" style={{ left: 'var(--modal-left, 0px)' }} />
 
@@ -173,10 +174,9 @@ export default function SettingsPage() {
             onClick={() => setShowProfilePicker(true)}
             className="w-full flex items-center gap-4 px-4 py-4 transition-colors hover:bg-white/5"
           >
-            <div className="w-16 h-16 flex-shrink-0 border-2 border-white/30 rounded-xl overflow-hidden flex items-center justify-center bg-white/10">
+            <div className="relative w-16 h-16 flex-shrink-0 border-2 border-white/30 rounded-xl overflow-hidden flex items-center justify-center bg-white/10">
               {profile?.profileRabbitId != null ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <Image
                   src={getRabbitProfileUrl(profile.profileRabbitId)}
                   alt="프로필"
                   width={64}
@@ -265,7 +265,7 @@ export default function SettingsPage() {
               className="relative w-full max-w-sm rounded-2xl overflow-hidden p-6"
             >
               <div className="absolute inset-0 rounded-2xl overflow-hidden">
-                <img src="/images/home-bg.jpg" alt="" className="w-full h-full object-cover" />
+                <Image src="/images/home-bg.jpg" alt="" fill className="object-cover" />
               </div>
               <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
               <div className="relative z-10 text-center">
@@ -312,7 +312,7 @@ export default function SettingsPage() {
               className="relative w-full max-w-sm rounded-2xl overflow-hidden"
             >
               <div className="absolute inset-0 rounded-2xl overflow-hidden">
-                <img src="/images/home-bg.jpg" alt="" className="w-full h-full object-cover" />
+                <Image src="/images/home-bg.jpg" alt="" fill className="object-cover" />
               </div>
               <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
               <div className="relative z-10">
@@ -369,14 +369,13 @@ export default function SettingsPage() {
                               await updateProfile({ profileRabbitId: h.rabbitId });
                               setShowProfilePicker(false);
                             }}
-                            className={`aspect-square rounded-xl border overflow-hidden transition-all ${
+                            className={`relative aspect-square rounded-xl border overflow-hidden transition-all ${
                               profile?.profileRabbitId === h.rabbitId
                                 ? 'border-white/50 scale-95 bg-white/20'
                                 : 'border-white/15 hover:border-white/30'
                             }`}
                           >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
+                            <Image
                               src={getRabbitProfileUrl(h.rabbitId)}
                               alt={`토끼 #${h.rabbitId}`}
                               width={80}
@@ -417,7 +416,7 @@ export default function SettingsPage() {
               className="relative w-full max-w-sm rounded-2xl overflow-hidden p-6"
             >
               <div className="absolute inset-0 rounded-2xl overflow-hidden">
-                <img src="/images/home-bg.jpg" alt="" className="w-full h-full object-cover" />
+                <Image src="/images/home-bg.jpg" alt="" fill className="object-cover" />
               </div>
               <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
               <div className="relative z-10 text-center">

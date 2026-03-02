@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import Image from 'next/image';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import {
   doc,
@@ -958,7 +959,7 @@ export default function QuizResultPage() {
                   </p>
                 ))}
                 {child.type === 'image' && child.imageUrl && (
-                  <img src={child.imageUrl} alt="보기 이미지" className="max-w-full h-auto border border-[#1A1A1A]" />
+                  <Image src={child.imageUrl} alt="보기 이미지" width={800} height={400} className="max-w-full h-auto border border-[#1A1A1A]" unoptimized />
                 )}
               </div>
             ))}
@@ -1035,7 +1036,7 @@ export default function QuizResultPage() {
       {result.image && (
         <div className="mb-3">
           <p className="text-xs font-bold text-[#5C5C5C] mb-2">문제 이미지</p>
-          <img src={result.image} alt="문제 이미지" className="max-w-full h-auto border border-[#1A1A1A]" />
+          <Image src={result.image} alt="문제 이미지" width={800} height={400} className="max-w-full h-auto border border-[#1A1A1A]" unoptimized />
         </div>
       )}
 
@@ -1043,7 +1044,7 @@ export default function QuizResultPage() {
       {result.subQuestionImage && (
         <div className="mb-3">
           <p className="text-xs font-bold text-[#5C5C5C] mb-2">이미지</p>
-          <img src={result.subQuestionImage} alt="하위 문제 이미지" className="max-w-full h-auto border border-[#1A1A1A]" />
+          <Image src={result.subQuestionImage} alt="하위 문제 이미지" width={800} height={400} className="max-w-full h-auto border border-[#1A1A1A]" unoptimized />
         </div>
       )}
 
@@ -1522,7 +1523,7 @@ export default function QuizResultPage() {
                                               {child.type === 'gana' && (child.items || []).map((i: any) => (
                                                 <p key={i.id} className="text-sm"><span className="font-bold">({i.label})</span> {i.content}</p>
                                               ))}
-                                              {child.type === 'image' && child.imageUrl && <img src={child.imageUrl} alt="" className="max-w-full h-auto" />}
+                                              {child.type === 'image' && child.imageUrl && <Image src={child.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto" unoptimized />}
                                             </div>
                                           ))}
                                         </div>
@@ -1542,14 +1543,14 @@ export default function QuizResultPage() {
                                           ))}
                                         </div>
                                       )}
-                                      {block.type === 'image' && block.imageUrl && <img src={block.imageUrl} alt="" className="max-w-full h-auto" />}
+                                      {block.type === 'image' && block.imageUrl && <Image src={block.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto" unoptimized />}
                                     </div>
                                   ))}
                                 </div>
                               )}
                               {/* 이미지 */}
                               {firstResult.passageImage && (
-                                <img src={firstResult.passageImage} alt="공통 이미지" className="mt-2 max-w-full h-auto border border-[#1A1A1A]" />
+                                <Image src={firstResult.passageImage} alt="공통 이미지" width={800} height={400} className="mt-2 max-w-full h-auto border border-[#1A1A1A]" unoptimized />
                               )}
                             </div>
                           )}

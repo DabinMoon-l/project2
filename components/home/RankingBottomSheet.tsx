@@ -9,6 +9,7 @@ import { db, functions } from '@/lib/firebase';
 import { useUser, useCourse } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
 import { type ClassType } from '@/styles/themes';
+import Image from 'next/image';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 import { useHideNav } from '@/lib/hooks/useHideNav';
 import { getRabbitImageSrc } from '@/lib/utils/rabbitImage';
@@ -216,8 +217,7 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
           >
             {/* 배경 이미지 + 글래스 오버레이 */}
             <div className="absolute inset-0 pointer-events-none">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/images/home-bg.jpg" alt="" className="w-full h-full object-cover" />
+              <Image src="/images/home-bg.jpg" alt="" fill className="object-cover" />
             </div>
             <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl pointer-events-none" />
 
@@ -447,8 +447,7 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
                   className="relative w-full max-w-[240px] rounded-2xl overflow-hidden p-3"
                 >
                   <div className="absolute inset-0 rounded-2xl overflow-hidden">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src="/images/home-bg.jpg" alt="" className="w-full h-full object-cover" />
+                    <Image src="/images/home-bg.jpg" alt="" fill className="object-cover" />
                   </div>
                   <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
                   <div className="relative z-10">

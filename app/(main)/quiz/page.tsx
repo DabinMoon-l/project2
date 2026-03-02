@@ -178,10 +178,12 @@ function CompletedBadge({ size = 'normal' }: { size?: 'normal' | 'small' }) {
   }
 
   return (
-    <img
+    <Image
       src="/images/completed-badge.png"
       alt="완료"
-      className={size === 'small' ? 'w-20 h-20 object-contain' : 'w-28 h-28 object-contain'}
+      width={size === 'small' ? 80 : 112}
+      height={size === 'small' ? 80 : 112}
+      className="object-contain"
       onError={() => setImgError(true)}
     />
   );

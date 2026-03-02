@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import Image from 'next/image';
 
 const OPEN_MS = 380;
 const CLOSE_MS = 320;
@@ -126,8 +127,7 @@ export default function MilestoneChoiceModal({
         >
           {/* 배경 이미지 + 글래스 오버레이 */}
           <div className="absolute inset-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/images/home-bg.jpg" alt="" className="w-full h-full object-cover" />
+            <Image src="/images/home-bg.jpg" alt="" fill className="object-cover" />
           </div>
           <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
 

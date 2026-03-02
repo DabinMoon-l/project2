@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence, PanInfo } from 'framer-motion';
 import { useRouter, useParams } from 'next/navigation';
+import Image from 'next/image';
 import {
   doc,
   getDoc,
@@ -199,7 +200,7 @@ function SingleQuestionCard({
                     </p>
                   ))}
                   {child.type === 'image' && child.imageUrl && (
-                    <img src={child.imageUrl} alt="지문 이미지" className="max-w-full h-auto border border-[#1A1A1A]" />
+                    <Image src={child.imageUrl} alt="지문 이미지" width={800} height={400} className="max-w-full h-auto border border-[#1A1A1A]" unoptimized />
                   )}
                 </div>
               ))}
@@ -239,7 +240,7 @@ function SingleQuestionCard({
               {/* 이미지 블록 */}
               {block.type === 'image' && block.imageUrl && (
                 <div className="border border-[#1A1A1A] overflow-hidden">
-                  <img src={block.imageUrl} alt="지문 이미지" className="max-w-full h-auto" />
+                  <Image src={block.imageUrl} alt="지문 이미지" width={800} height={400} className="max-w-full h-auto" unoptimized />
                 </div>
               )}
             </div>
@@ -273,7 +274,7 @@ function SingleQuestionCard({
       {/* 4. 문제 이미지 - 지문 다음에 표시 */}
       {question.image && (
         <div className="mb-4 border border-[#1A1A1A] overflow-hidden">
-          <img src={question.image} alt="문제 이미지" className="max-w-full h-auto" />
+          <Image src={question.image} alt="문제 이미지" width={800} height={400} className="max-w-full h-auto" unoptimized />
         </div>
       )}
 
@@ -587,7 +588,7 @@ function CombinedQuestionCard({
                           </p>
                         ))}
                         {child.type === 'image' && child.imageUrl && (
-                          <img src={child.imageUrl} alt="지문 이미지" className="max-w-full h-auto border border-[#1A1A1A]" />
+                          <Image src={child.imageUrl} alt="지문 이미지" width={800} height={400} className="max-w-full h-auto border border-[#1A1A1A]" unoptimized />
                         )}
                       </div>
                     ))}
@@ -624,7 +625,7 @@ function CombinedQuestionCard({
                 {/* 이미지 블록 */}
                 {block.type === 'image' && block.imageUrl && (
                   <div className="border border-[#1A1A1A] overflow-hidden">
-                    <img src={block.imageUrl} alt="지문 이미지" className="max-w-full h-auto" />
+                    <Image src={block.imageUrl} alt="지문 이미지" width={800} height={400} className="max-w-full h-auto" unoptimized />
                   </div>
                 )}
               </div>
@@ -638,10 +639,12 @@ function CombinedQuestionCard({
             <p className="absolute top-2 left-2 text-xs text-[#5C5C5C] font-bold bg-[#EDEAE4]/80 px-2 py-0.5 z-10">
               공통 이미지
             </p>
-            <img
+            <Image
               src={group.passageImage}
               alt="공통 이미지"
-              className="w-full h-full object-contain"
+              fill
+              className="object-contain"
+              unoptimized
             />
           </div>
         )}
@@ -690,7 +693,7 @@ function CombinedQuestionCard({
             {/* 하위 문제 이미지 */}
             {question.image && (
               <div className="mb-4 border border-[#1A1A1A] overflow-hidden">
-                <img src={question.image} alt="문제 이미지" className="max-w-full h-auto" />
+                <Image src={question.image} alt="문제 이미지" width={800} height={400} className="max-w-full h-auto" unoptimized />
               </div>
             )}
 
@@ -719,7 +722,7 @@ function CombinedQuestionCard({
                           </p>
                         ))}
                         {child.type === 'image' && child.imageUrl && (
-                          <img src={child.imageUrl} alt="지문 이미지" className="max-w-full h-auto border border-[#1A1A1A]" />
+                          <Image src={child.imageUrl} alt="지문 이미지" width={800} height={400} className="max-w-full h-auto border border-[#1A1A1A]" unoptimized />
                         )}
                       </div>
                     ))}
@@ -759,7 +762,7 @@ function CombinedQuestionCard({
                     {/* 이미지 블록 */}
                     {block.type === 'image' && block.imageUrl && (
                       <div className="border border-[#1A1A1A] overflow-hidden">
-                        <img src={block.imageUrl} alt="지문 이미지" className="max-w-full h-auto" />
+                        <Image src={block.imageUrl} alt="지문 이미지" width={800} height={400} className="max-w-full h-auto" unoptimized />
                       </div>
                     )}
                   </div>

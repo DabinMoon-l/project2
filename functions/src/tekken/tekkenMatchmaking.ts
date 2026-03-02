@@ -20,6 +20,7 @@ export const joinMatchmaking = onCall(
   {
     region: "asia-northeast3",
     secrets: [GEMINI_API_KEY],
+    minInstances: 1,
   },
   async (request) => {
     if (!request.auth) {

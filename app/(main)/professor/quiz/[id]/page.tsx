@@ -14,6 +14,7 @@ import {
   type QuestionStats,
   type QuizQuestion,
 } from '@/lib/hooks/useProfessorQuiz';
+import Image from 'next/image';
 import { useCourse } from '@/lib/contexts';
 import { formatChapterLabel } from '@/lib/courseIndex';
 
@@ -186,7 +187,7 @@ function QuestionAnalysis({
           {/* 공통 이미지 */}
           {commonImage && (
             <div className="rounded-lg overflow-hidden">
-              <img src={commonImage} alt="공통 이미지" className="w-full object-contain max-h-48" />
+              <Image src={commonImage} alt="공통 이미지" width={800} height={400} className="w-full object-contain max-h-48" unoptimized />
             </div>
           )}
 
@@ -210,7 +211,7 @@ function QuestionAnalysis({
                             </p>
                           ))}
                           {child.type === 'image' && child.imageUrl && (
-                            <img src={child.imageUrl} alt="보기 이미지" className="max-w-full h-auto rounded" />
+                            <Image src={child.imageUrl} alt="보기 이미지" width={800} height={400} className="max-w-full h-auto rounded" unoptimized />
                           )}
                         </div>
                       ))}
@@ -236,7 +237,7 @@ function QuestionAnalysis({
                   {/* 이미지 블록 */}
                   {block.type === 'image' && block.imageUrl && (
                     <div className="rounded-lg overflow-hidden">
-                      <img src={block.imageUrl} alt="보기 이미지" className="max-w-full h-auto" />
+                      <Image src={block.imageUrl} alt="보기 이미지" width={800} height={400} className="max-w-full h-auto" unoptimized />
                     </div>
                   )}
                 </div>
@@ -317,7 +318,7 @@ function QuestionAnalysis({
           {/* 삽입된 이미지 */}
           {(question as any).image && (
             <div className="mb-4 rounded-lg overflow-hidden">
-              <img src={(question as any).image} alt="문제 이미지" className="w-full object-contain max-h-48" />
+              <Image src={(question as any).image} alt="문제 이미지" width={800} height={400} className="w-full object-contain max-h-48" unoptimized />
             </div>
           )}
 

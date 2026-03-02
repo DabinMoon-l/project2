@@ -108,6 +108,7 @@ export const recordAttempt = onCall(
     memory: "512MiB",
     timeoutSeconds: 60,
     maxInstances: 100,
+    minInstances: 1,
     concurrency: 80,
   },
   async (request) => {
