@@ -1676,6 +1676,8 @@ function QuizListPageContent() {
       const past: QuizCardData[] = [];
 
       snapshot.forEach((doc) => {
+        // 비공개(isPublished: false) 퀴즈 필터링
+        if (doc.data().isPublished === false) return;
         const quiz = parseQuizData(doc, user.uid);
         if (quiz.type === 'midterm') midterm.push(quiz);
         else if (quiz.type === 'final') final_.push(quiz);

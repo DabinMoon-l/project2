@@ -774,77 +774,45 @@ export default function BoardPage() {
 
         {/* 버튼 + 검색 */}
         <div className="flex items-center gap-2">
-          {isProfessor ? (
-            /* 교수님: 관리 버튼 1개 + 검색 (1:1 비율) */
-            <>
-              <div className="flex-1 min-w-0">
-                <button
-                  onClick={handleManageClick}
-                  className="w-full px-3 py-2 text-xs font-bold"
-                  style={{
-                    border: '1px solid #1A1A1A',
-                    backgroundColor: 'transparent',
-                    color: '#1A1A1A',
-                  }}
-                >
-                  관리
-                </button>
-              </div>
-              <div className="flex-1 min-w-0">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="제목 검색..."
-                  className="w-full px-2.5 py-2 text-xs outline-none"
-                  style={{
-                    border: '1px solid #1A1A1A',
-                    backgroundColor: '#F5F0E8',
-                  }}
-                />
-              </div>
-            </>
-          ) : (
-            /* 학생: 글 작성 + 관리 + 검색 */
-            <>
-              <div className="flex gap-2 flex-1">
-                <button
-                  onClick={handleWriteClick}
-                  className="flex-1 px-3 py-2 text-xs font-bold"
-                  style={{
-                    backgroundColor: '#1A1A1A',
-                    color: '#F5F0E8',
-                  }}
-                >
-                  글 작성
-                </button>
-                <button
-                  onClick={handleManageClick}
-                  className="flex-1 px-3 py-2 text-xs font-bold"
-                  style={{
-                    backgroundColor: 'transparent',
-                    color: '#1A1A1A',
-                    border: '1px solid #1A1A1A',
-                  }}
-                >
-                  관리
-                </button>
-              </div>
-              <div className="flex-1">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="제목 검색..."
-                  className="w-full px-2.5 py-2 text-xs outline-none"
-                  style={{
-                    border: '1px solid #1A1A1A',
-                    backgroundColor: '#F5F0E8',
-                  }}
-                />
-              </div>
-            </>
-          )}
+          {/* 글 작성 + 관리 + 검색 (교수/학생 동일) */}
+          <>
+            <div className="flex gap-2 flex-1">
+              <button
+                onClick={handleWriteClick}
+                className="flex-1 px-3 py-2 text-xs font-bold"
+                style={{
+                  backgroundColor: '#1A1A1A',
+                  color: '#F5F0E8',
+                }}
+              >
+                글 작성
+              </button>
+              <button
+                onClick={handleManageClick}
+                className="flex-1 px-3 py-2 text-xs font-bold"
+                style={{
+                  backgroundColor: 'transparent',
+                  color: '#1A1A1A',
+                  border: '1px solid #1A1A1A',
+                }}
+              >
+                관리
+              </button>
+            </div>
+            <div className="flex-1">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="제목 검색..."
+                className="w-full px-2.5 py-2 text-xs outline-none"
+                style={{
+                  border: '1px solid #1A1A1A',
+                  backgroundColor: '#F5F0E8',
+                }}
+              />
+            </div>
+          </>
         </div>
       </header>
 

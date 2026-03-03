@@ -85,7 +85,8 @@ export default function QuizListSidebar() {
           });
         };
 
-        snap1.forEach(parseDoc);
+        // 비공개(isPublished: false) 교수 퀴즈 필터링
+        snap1.forEach((d) => { if (d.data().isPublished !== false) parseDoc(d); });
         snap2.forEach(parseDoc);
 
         // 타입별 정렬 → 같은 타입 내 최신순
