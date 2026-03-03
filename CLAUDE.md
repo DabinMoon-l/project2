@@ -135,6 +135,19 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 
 **마일스톤**: 50XP마다 1 마일스톤 → `MilestoneChoiceModal` 자동 표시 → 뽑기 or 레벨업 선택
 
+### 게시판 AI 자동답변
+
+학술 태그(`tag === '학술'`) 게시글 작성 시 Gemini 2.5 Flash가 자동으로 댓글을 생성.
+
+**플로우**: `onPostCreate` CF → 학술 태그 확인 → 이미지 있으면 base64 변환 → Gemini API 호출 → `comments` 컬렉션에 저장 + `commentCount` 증가
+
+**AI 댓글 데이터**:
+- `authorId: 'gemini-ai'`, `authorNickname: 'Gemini'`, `isAIReply: true`
+- 기존 comment 스키마 준수
+- `onCommentCreate`에서 `authorId === 'gemini-ai'`이면 EXP 지급 + 알림 스킵
+
+**이미지 처리**: `post.imageUrls` 존재 시 각 URL → fetch → base64 → Gemini `inlineData`로 통합 전송
+
 ### AI 문제 생성 시스템
 
 **교수 서재 플로우** (ProfessorLibraryTab → workerProcessJob):
