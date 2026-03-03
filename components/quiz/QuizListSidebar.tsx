@@ -66,7 +66,8 @@ export default function QuizListSidebar() {
         const q2 = query(
           collection(db, 'quizzes'),
           where('type', '==', 'custom'),
-          where('courseId', '==', userCourseId)
+          where('courseId', '==', userCourseId),
+          where('isPublic', '==', true)
         );
 
         const [snap1, snap2] = await Promise.all([getDocs(q1), getDocs(q2)]);

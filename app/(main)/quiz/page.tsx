@@ -1700,7 +1700,8 @@ function QuizListPageContent() {
     const q = query(
       collection(db, 'quizzes'),
       where('type', '==', 'custom'),
-      where('courseId', '==', userCourseId)
+      where('courseId', '==', userCourseId),
+      where('isPublic', '==', true)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
