@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { useTheme } from '@/styles/themes/useTheme';
 import WriteForm from '@/components/board/WriteForm';
-import { useCreatePost, type CreatePostData } from '@/lib/hooks/useBoard';
+import { useCreatePost, type CreatePostData, type BoardTag } from '@/lib/hooks/useBoard';
 import { useExpToast } from '@/components/common';
 import { useUser } from '@/lib/contexts';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
@@ -17,6 +17,7 @@ const DRAFT_KEY = 'board-write-draft';
 interface Draft {
   title: string;
   content: string;
+  tag?: BoardTag;
   savedAt: number;
 }
 
@@ -185,12 +186,13 @@ export default function WritePage() {
   const [showExitModal, setShowExitModal] = useState(false);
 
   // 현재 드래프트 상태 (ref + state)
-  const draftRef = useRef<{ title: string; content: string }>({ title: '', content: '' });
+  const draftRef = useRef<{ title: string; content: string; tag?: BoardTag }>({ title: '', content: '' });
   const [hasContent, setHasContent] = useState(false);
 
   // 드래프트 복원
   const [initialTitle, setInitialTitle] = useState('');
   const [initialContent, setInitialContent] = useState('');
+  const [initialTag, setInitialTag] = useState<BoardTag | undefined>();
   const [draftRestored, setDraftRestored] = useState(false);
 
   // 마운트 시 임시저장 복원
@@ -203,7 +205,8 @@ export default function WritePage() {
         if (Date.now() - draft.savedAt < 24 * 60 * 60 * 1000) {
           setInitialTitle(draft.title);
           setInitialContent(draft.content);
-          draftRef.current = { title: draft.title, content: draft.content };
+          setInitialTag(draft.tag);
+          draftRef.current = { title: draft.title, content: draft.content, tag: draft.tag };
           setHasContent(draft.title.trim().length > 0 || draft.content.trim().length > 0);
           setDraftRestored(true);
         } else {
@@ -224,8 +227,8 @@ export default function WritePage() {
   }, [draftRestored]);
 
   // WriteForm에서 변경 콜백
-  const handleDraftChange = useCallback((title: string, content: string) => {
-    draftRef.current = { title, content };
+  const handleDraftChange = useCallback((title: string, content: string, tag?: BoardTag) => {
+    draftRef.current = { title, content, tag };
     setHasContent(title.trim().length > 0 || content.trim().length > 0);
   }, []);
 
@@ -243,6 +246,7 @@ export default function WritePage() {
     const draft: Draft = {
       title: draftRef.current.title,
       content: draftRef.current.content,
+      tag: draftRef.current.tag,
       savedAt: Date.now(),
     };
     localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
@@ -319,6 +323,7 @@ export default function WritePage() {
           error={error}
           initialTitle={initialTitle}
           initialContent={initialContent}
+          initialTag={initialTag}
           onDraftChange={handleDraftChange}
         />
       </main>

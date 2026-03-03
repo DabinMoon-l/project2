@@ -253,6 +253,16 @@ export default function PostDetailPage() {
             </span>
           )}
 
+          {/* 태그 */}
+          {post.tag && (
+            <span
+              className="inline-block px-2 py-0.5 text-xs font-bold mb-2"
+              style={{ border: '1px solid #1A1A1A', color: '#1A1A1A' }}
+            >
+              #{post.tag}
+            </span>
+          )}
+
           {/* 제목 */}
           <h2 className="font-serif-display text-2xl md:text-3xl font-black leading-tight mb-3 text-[#1A1A1A]">
             {post.title}

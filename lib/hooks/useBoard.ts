@@ -43,6 +43,12 @@ import { useAuth } from './useAuth';
 /** 게시판 카테고리 */
 export type BoardCategory = 'toProfessor' | 'community' | 'all';
 
+/** 게시판 태그 */
+export type BoardTag = '학사' | '학술' | '기타';
+
+/** 태그 목록 상수 */
+export const BOARD_TAGS: BoardTag[] = ['학사', '학술', '기타'];
+
 /** 첨부파일 정보 타입 */
 export interface AttachedFile {
   name: string;
@@ -80,6 +86,8 @@ export interface Post {
   toProfessor?: boolean;
   // 조회수
   viewCount: number;
+  // 태그 (학사/학술/기타)
+  tag?: BoardTag;
 }
 
 /** 댓글 데이터 타입 */
@@ -110,6 +118,7 @@ export interface CreatePostData {
   category: BoardCategory;
   courseId?: string; // 과목 ID (과목별 분리)
   toProfessor?: boolean; // 교수님께 전달 여부
+  tag?: BoardTag; // 태그 (학사/학술/기타)
 }
 
 /** 댓글 작성 데이터 */
@@ -358,6 +367,8 @@ const docToPost = (doc: QueryDocumentSnapshot | DocumentSnapshot): Post => {
     toProfessor: data?.toProfessor || false,
     // 조회수
     viewCount: data?.viewCount || 0,
+    // 태그
+    tag: data?.tag || undefined,
   };
 };
 
@@ -758,6 +769,7 @@ export const useCreatePost = (): UseCreatePostReturn => {
           commentCount: 0,
           isNotice: false,
           toProfessor: data.toProfessor || false, // 교수님께 전달 여부
+          tag: data.tag || null, // 태그 (학사/학술/기타)
           viewCount: 0,
           createdAt: serverTimestamp(),
         };

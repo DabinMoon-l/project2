@@ -277,7 +277,7 @@ export async function preprocessOcrText(
 
   try {
     console.log("[Preprocess] Gemini API 호출 시작...");
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
     console.log("[Preprocess] URL:", geminiUrl.substring(0, 80) + "...");
 
     const response = await fetch(

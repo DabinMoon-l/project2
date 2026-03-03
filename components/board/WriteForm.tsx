@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { useTheme } from '@/styles/themes/useTheme';
 import { useUpload, type FileInfo } from '@/lib/hooks/useStorage';
-import type { CreatePostData, AttachedFile } from '@/lib/hooks/useBoard';
+import type { CreatePostData, AttachedFile, BoardTag } from '@/lib/hooks/useBoard';
+import { BOARD_TAGS } from '@/lib/hooks/useBoard';
 
 interface WriteFormProps {
   /** 제출 핸들러 */
@@ -18,8 +19,10 @@ interface WriteFormProps {
   initialTitle?: string;
   /** 초기 본문 (임시저장 복원용) */
   initialContent?: string;
+  /** 초기 태그 (임시저장 복원용) */
+  initialTag?: BoardTag;
   /** 제목/본문 변경 시 콜백 (임시저장용) */
-  onDraftChange?: (title: string, content: string) => void;
+  onDraftChange?: (title: string, content: string, tag?: BoardTag) => void;
 }
 
 /**
@@ -31,6 +34,7 @@ export default function WriteForm({
   error,
   initialTitle = '',
   initialContent = '',
+  initialTag,
   onDraftChange,
 }: WriteFormProps) {
   const { theme } = useTheme();
@@ -38,6 +42,7 @@ export default function WriteForm({
 
   const [title, setTitle] = useState(initialTitle);
   const [content, setContent] = useState(initialContent);
+  const [tag, setTag] = useState<BoardTag | undefined>(initialTag || '학술');
 
   // 부모에서 임시저장 복원 시 반영 (useState는 초기값만 사용하므로 동기화 필요)
   useEffect(() => {
@@ -48,16 +53,26 @@ export default function WriteForm({
     if (initialContent) setContent(initialContent);
   }, [initialContent]);
 
+  useEffect(() => {
+    if (initialTag) setTag(initialTag);
+  }, [initialTag]);
+
   // 제목/본문 변경 시 부모에 알림
   const handleTitleChange = useCallback((value: string) => {
     setTitle(value);
-    onDraftChange?.(value, content);
-  }, [content, onDraftChange]);
+    onDraftChange?.(value, content, tag);
+  }, [content, tag, onDraftChange]);
 
   const handleContentChange = useCallback((value: string) => {
     setContent(value);
-    onDraftChange?.(title, value);
-  }, [title, onDraftChange]);
+    onDraftChange?.(title, value, tag);
+  }, [title, tag, onDraftChange]);
+
+  const handleTagSelect = useCallback((selectedTag: BoardTag) => {
+    const newTag = tag === selectedTag ? undefined : selectedTag;
+    setTag(newTag);
+    onDraftChange?.(title, content, newTag);
+  }, [tag, title, content, onDraftChange]);
 
   // 첨부 파일 상태
   const [images, setImages] = useState<{ file: File; preview: string }[]>([]);
@@ -68,7 +83,7 @@ export default function WriteForm({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 유효성 검사
-  const isValid = title.trim().length >= 2 && content.trim().length >= 5;
+  const isValid = title.trim().length >= 2 && content.trim().length >= 5 && !!tag;
 
   /**
    * 이미지 선택 핸들러
@@ -189,6 +204,7 @@ export default function WriteForm({
         imageUrl: uploadedImageUrls[0] || undefined, // 대표 이미지
         imageUrls: uploadedImageUrls,
         fileUrls: uploadedFiles,
+        tag,
       });
     } catch (err) {
       console.error('글 작성 실패:', err);
@@ -231,6 +247,37 @@ export default function WriteForm({
           style={{ color: theme.colors.textSecondary }}
         >
           {title.length}/100
+        </div>
+      </div>
+
+      {/* 태그 선택 (필수) — 제목과 본문 사이 */}
+      <div className="mb-3">
+        <label
+          className="block text-xs font-bold mb-1.5"
+          style={{ color: theme.colors.text }}
+        >
+          태그 <span style={{ color: '#8B1A1A' }}>*</span>
+        </label>
+        <div className="flex gap-2">
+          {BOARD_TAGS.map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => handleTagSelect(t)}
+              className="px-3 py-1.5 text-xs font-bold transition-colors"
+              style={tag === t ? {
+                backgroundColor: '#1A1A1A',
+                color: '#F5F0E8',
+                border: '1px solid #1A1A1A',
+              } : {
+                backgroundColor: 'transparent',
+                color: '#1A1A1A',
+                border: '1px solid #1A1A1A',
+              }}
+            >
+              {t}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -452,7 +499,7 @@ export default function WriteForm({
       {/* 유효성 안내 */}
       {!isValid && (title.trim().length > 0 || content.trim().length > 0) && (
         <p className="text-xs text-[#8B1A1A] text-center">
-          {title.trim().length < 2 ? '제목을 2자 이상 입력해주세요' : '본문을 5자 이상 입력해주세요'}
+          {!tag ? '태그를 선택해주세요' : title.trim().length < 2 ? '제목을 2자 이상 입력해주세요' : '본문을 5자 이상 입력해주세요'}
         </p>
       )}
 

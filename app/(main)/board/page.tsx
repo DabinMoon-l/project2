@@ -8,7 +8,7 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Skeleton, ScrollToTopButton } from '@/components/common';
 import { SPRING_TAP, TAP_SCALE } from '@/lib/constants/springs';
-import { usePosts, usePinnedPosts, type Post, type Comment } from '@/lib/hooks/useBoard';
+import { usePosts, usePinnedPosts, type Post, type Comment, type BoardTag, BOARD_TAGS } from '@/lib/hooks/useBoard';
 import { useCourse } from '@/lib/contexts/CourseContext';
 import { useUser } from '@/lib/contexts/UserContext';
 import { COURSES, type CourseId, getCourseList } from '@/lib/types/course';
@@ -145,6 +145,15 @@ const HeadlineArticle = memo(function HeadlineArticle({
                     </span>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* 태그 (댓글 밑, 왼쪽 정렬) */}
+            {post.tag && (
+              <div className="mt-2">
+                <span className="inline-block px-2 py-0.5 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8]">
+                  #{post.tag}
+                </span>
               </div>
             )}
           </div>
@@ -378,6 +387,15 @@ const MasonryItem = memo(function MasonryItem({
           )}
         </div>
       )}
+
+      {/* 태그 (댓글 밑, 왼쪽 정렬) */}
+      {post.tag && (
+        <div className="mt-2">
+          <span className="inline-block px-2 py-0.5 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8]">
+            #{post.tag}
+          </span>
+        </div>
+      )}
     </motion.article>
   );
 });
@@ -445,6 +463,9 @@ export default function BoardPage() {
 
   // 검색
   const [searchQuery, setSearchQuery] = useState('');
+  // 태그 필터
+  const [selectedTags, setSelectedTags] = useState<BoardTag[]>([]);
+  const [showTagFilter, setShowTagFilter] = useState(false);
   // 댓글 맵 (postId -> comments)
   const [commentsMap, setCommentsMap] = useState<CommentsMap>(new Map());
 
@@ -580,7 +601,7 @@ export default function BoardPage() {
     };
   }, [postIdsKey]);
 
-  // 검색 필터링 및 정렬 (최신순)
+  // 검색 + 태그 필터링 및 정렬 (최신순)
   const filteredPosts = useMemo(() => {
     let result = searchQuery.trim()
       ? posts.filter(post =>
@@ -588,11 +609,16 @@ export default function BoardPage() {
         )
       : [...posts];
 
+    // 태그 필터 적용 (선택된 태그 중 하나와 일치)
+    if (selectedTags.length > 0) {
+      result = result.filter(post => post.tag && selectedTags.includes(post.tag));
+    }
+
     // 최신순 정렬
     result.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
     return result;
-  }, [posts, searchQuery]);
+  }, [posts, searchQuery, selectedTags]);
 
   const handlePostClick = useCallback((postId: string) => {
     sessionStorage.setItem('board_scroll_y', String(window.scrollY));
@@ -772,33 +798,25 @@ export default function BoardPage() {
         {/* 하단 장식선 */}
         <div className="border-t border-[#1A1A1A] mb-2" />
 
-        {/* 버튼 + 검색 */}
+        {/* 버튼 + 검색 + 태그 필터 */}
         <div className="flex items-center gap-2">
-          {/* 글 작성 + 관리 + 검색 (교수/학생 동일) */}
-          <>
-            <div className="flex gap-2 flex-1">
-              <button
-                onClick={handleWriteClick}
-                className="flex-1 px-3 py-2 text-xs font-bold"
-                style={{
-                  backgroundColor: '#1A1A1A',
-                  color: '#F5F0E8',
-                }}
-              >
-                글 작성
-              </button>
-              <button
-                onClick={handleManageClick}
-                className="flex-1 px-3 py-2 text-xs font-bold"
-                style={{
-                  backgroundColor: 'transparent',
-                  color: '#1A1A1A',
-                  border: '1px solid #1A1A1A',
-                }}
-              >
-                관리
-              </button>
-            </div>
+          <button
+            onClick={handleWriteClick}
+            className="px-3 py-2 text-xs font-bold flex-shrink-0"
+            style={{ backgroundColor: '#1A1A1A', color: '#F5F0E8' }}
+          >
+            글 작성
+          </button>
+          <button
+            onClick={handleManageClick}
+            className="px-3 py-2 text-xs font-bold flex-shrink-0"
+            style={{ backgroundColor: 'transparent', color: '#1A1A1A', border: '1px solid #1A1A1A' }}
+          >
+            관리
+          </button>
+
+          {/* 검색창 (태그 미선택 시만 표시) */}
+          {selectedTags.length === 0 && (
             <div className="flex-1">
               <input
                 type="text"
@@ -806,14 +824,80 @@ export default function BoardPage() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="제목 검색..."
                 className="w-full px-2.5 py-2 text-xs outline-none"
-                style={{
-                  border: '1px solid #1A1A1A',
-                  backgroundColor: '#F5F0E8',
-                }}
+                style={{ border: '1px solid #1A1A1A', backgroundColor: '#F5F0E8' }}
               />
             </div>
-          </>
+          )}
+
+          {/* 선택된 태그 칩 (태그 아이콘 왼쪽에 표시) */}
+          {selectedTags.length > 0 && (
+            <div className="flex-1 flex items-center justify-end gap-1.5">
+              {selectedTags.map((tag) => (
+                <div
+                  key={tag}
+                  className="flex items-center gap-0.5 px-1.5 h-9 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold border border-[#1A1A1A] shrink-0"
+                >
+                  #{tag}
+                  <button
+                    onClick={() => {
+                      setSelectedTags(prev => prev.filter(t => t !== tag));
+                    }}
+                    className="ml-0.5 hover:text-[#999]"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 태그 필터 토글 버튼 */}
+          <button
+            type="button"
+            onClick={() => setShowTagFilter(!showTagFilter)}
+            className={`flex items-center justify-center w-9 h-9 border transition-colors shrink-0 ${
+              showTagFilter
+                ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                : 'bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A]'
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+            </svg>
+          </button>
         </div>
+
+        {/* 태그 필터 확장 패널 */}
+        <AnimatePresence>
+          {showTagFilter && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden mt-2"
+            >
+              <div className="flex flex-wrap justify-end gap-1.5 p-2 bg-[#EDEAE4] border border-[#D4CFC4]">
+                {BOARD_TAGS
+                  .filter(tag => !selectedTags.includes(tag))
+                  .map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => {
+                        setSelectedTags(prev => [...prev, tag]);
+                        setShowTagFilter(false);
+                        setSearchQuery('');
+                      }}
+                      className="flex-1 py-1.5 text-xs font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#E5E0D8] transition-colors"
+                    >
+                      #{tag}
+                    </button>
+                  ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </header>
 
       <main className="px-4 pt-4">
@@ -832,10 +916,14 @@ export default function BoardPage() {
             style={{ minHeight: 'calc(100vh - 380px)' }}
           >
             <h3 className="font-serif-display text-2xl font-black mb-2 text-[#1A1A1A]">
-              {searchQuery ? '검색 결과 없음' : 'EXTRA! EXTRA!'}
+              {searchQuery || selectedTags.length > 0 ? '검색 결과 없음' : 'EXTRA! EXTRA!'}
             </h3>
             <p className="text-sm text-[#3A3A3A]">
-              {searchQuery ? '다른 검색어를 입력해보세요.' : '아직 소식이 없습니다. 첫 기사를 작성해보세요!'}
+              {selectedTags.length > 0
+                ? `${selectedTags.map(t => `#${t}`).join(' ')} 태그가 있는 글이 없습니다`
+                : searchQuery
+                  ? '다른 검색어를 입력해보세요.'
+                  : '아직 소식이 없습니다. 첫 기사를 작성해보세요!'}
             </p>
           </div>
         )}

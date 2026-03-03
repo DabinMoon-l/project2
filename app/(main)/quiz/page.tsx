@@ -2019,12 +2019,12 @@ function QuizListPageContent() {
           {selectedTags.map((tag) => (
             <div
               key={tag}
-              className="flex items-center gap-0.5 px-1.5 py-0.5 bg-[#F5F0E8] text-[#1A1A1A] text-xs font-bold border border-[#1A1A1A]"
+              className="flex items-center gap-0.5 px-1.5 h-9 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold border border-[#1A1A1A] rounded-lg"
             >
               #{tag}
               <button
                 onClick={() => setSelectedTags(prev => prev.filter(t => t !== tag))}
-                className="ml-0.5 hover:text-[#5C5C5C]"
+                className="ml-0.5 hover:text-[#999]"
               >
                 ✕
               </button>

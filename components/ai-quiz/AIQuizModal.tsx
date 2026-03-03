@@ -617,7 +617,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
                     return (
                       <div
                         key={tag}
-                        className="flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-bold bg-[#1A1A1A] text-white rounded-md"
+                        className="flex items-center gap-0.5 px-1.5 h-7 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] rounded-lg"
                       >
                         #{tag}
                         <button

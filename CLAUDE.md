@@ -34,7 +34,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **nodemailer** 6.9.8 / **node-fetch** 2.7 / **google-auth-library** 9.6
 
 ### AI
-- **Gemini API** (gemini-2.0-flash) — AI 문제 생성, 이미지 분석, 철권퀴즈 문제
+- **Gemini API** (gemini-2.5-flash) — AI 문제 생성, 이미지 분석, 철권퀴즈 문제
 - **Claude API** (claude-sonnet-4-20250514) — 월별 리포트 인사이트
 
 ### 배포
