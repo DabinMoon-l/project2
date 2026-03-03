@@ -202,8 +202,8 @@ export default function Navigation({ role }: NavigationProps) {
     }
   }, [isOverlayOpen, closeOverlay]);
 
-  // 가로모드 사이드바는 오버레이 열려도 유지 (오버레이가 left:240px로 사이드바 오른쪽에만)
-  if (shouldHideByPath) return null;
+  // 가로모드 사이드바는 항상 유지 (퀴즈 풀이 등 상세 페이지에서도 좌측 네비 표시)
+  if (shouldHideByPath && !isWide) return null;
   if (isHidden && !isWide) return null;
   if (isHidden && isWide && !isOverlayAttr) return null;
 

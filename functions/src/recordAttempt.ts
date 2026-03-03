@@ -15,7 +15,7 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
-import { incrementShard } from "./utils/shardedCounter";
+import { incrementShard, getShardedTotal } from "./utils/shardedCounter";
 import { checkRateLimitV2 } from "./utils/rateLimitV2";
 
 const db = getFirestore();
@@ -248,17 +248,9 @@ export const recordAttempt = onCall(
     }
 
     // ── ⑧ quizzes 문서 참여자/평균점수 업데이트 ──
-    // quiz_completions 기반으로 participantCount, averageScore 계산
+    // 분산 카운터(quiz_agg)에서 합산값 조회 (quiz_completions 전체 조회 대신)
     try {
-      const quizCompletionsSnap = await db.collection("quiz_completions")
-        .where("quizId", "==", quizId)
-        .get();
-
-      const participantCount = quizCompletionsSnap.size;
-      let scoreSum = 0;
-      quizCompletionsSnap.forEach((d) => {
-        scoreSum += d.data().score || 0;
-      });
+      const { count: participantCount, scoreSum } = await getShardedTotal(`quiz_agg/${quizId}`);
       const averageScore = participantCount > 0
         ? Math.round((scoreSum / participantCount) * 10) / 10
         : 0;
@@ -280,36 +272,15 @@ export const recordAttempt = onCall(
 
     // ── ⑨ reviews 생성은 generateReviewsOnResult 트리거에서 비동기 처리 ──
 
-    // ── ⑩ users/{uid}.quizStats.averageScore 갱신 ──
-    // quiz_completions에서 퀴즈별 최신 점수를 기반으로 평균 계산
+    // ── ⑩ users/{uid}.quizStats 증분 갱신 ──
+    // 전체 quiz_completions 조회 대신, 현재 제출 데이터로 증분 업데이트
     try {
-      const completionsSnap = await db.collection("quiz_completions")
-        .where("userId", "==", userId)
-        .get();
-
-      if (!completionsSnap.empty) {
-        let totalScore = 0;
-        let totalCorrectAll = 0;
-        let totalQuestionsAll = 0;
-        const quizCount = completionsSnap.size;
-
-        completionsSnap.forEach((doc) => {
-          const d = doc.data();
-          totalScore += d.score || 0;
-          totalCorrectAll += d.correctCount || 0;
-          totalQuestionsAll += d.totalCount || 0;
-        });
-
-        const avgScore = Math.round((totalScore / quizCount) * 100) / 100;
-
-        await db.doc(`users/${userId}`).update({
-          "quizStats.averageScore": avgScore,
-          "quizStats.totalAttempts": quizCount,
-          "quizStats.totalCorrect": totalCorrectAll,
-          "quizStats.totalQuestions": totalQuestionsAll,
-          updatedAt: FieldValue.serverTimestamp(),
-        });
-      }
+      await db.doc(`users/${userId}`).update({
+        "quizStats.totalCorrect": FieldValue.increment(correctCount),
+        "quizStats.totalQuestions": FieldValue.increment(totalCount),
+        ...(attemptNo <= 1 ? { "quizStats.totalAttempts": FieldValue.increment(1) } : {}),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
     } catch (e) {
       console.warn(`users/${userId} quizStats 갱신 실패 (무시 가능):`, e);
     }

@@ -465,7 +465,7 @@ export default function CharacterBox() {
         isOpen={showBattleConfirm}
         onConfirm={handleConfirmBattle}
         onCancel={() => setShowBattleConfirm(false)}
-        equippedRabbits={equippedRabbits}
+        equippedRabbits={[slot0, slot1].filter((s): s is { rabbitId: number; courseId: string } => s !== null)}
         holdings={holdings}
       />
 

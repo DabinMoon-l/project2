@@ -236,7 +236,7 @@ export default function HomeOverlay() {
         position: 'fixed',
         top: 0,
         bottom: 0,
-        right: 0,
+        right: isWide ? 'calc(50% - 120px)' : 0,
         left: isWide ? '240px' : 0,
         zIndex: 100,
         backgroundImage: `url(${HOME_BG_IMAGE})`,

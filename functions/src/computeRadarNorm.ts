@@ -279,11 +279,11 @@ export const refreshRadarNorm = onCall(
   }
 );
 
-// ── Scheduled: 5분마다 모든 courseId 갱신 ──
+// ── Scheduled: 10분마다 모든 courseId 갱신 ──
 
 export const computeRadarNormScheduled = onSchedule(
   {
-    schedule: "every 5 minutes",
+    schedule: "every 10 minutes",
     region: "asia-northeast3",
     timeZone: "Asia/Seoul",
     memory: "1GiB",

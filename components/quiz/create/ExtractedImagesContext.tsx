@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from 'react';
 
 // ============================================================
 // 타입 정의
@@ -142,18 +142,18 @@ export function ExtractedImagesProvider({ children }: ProviderProps) {
     setExtractedImages([]);
   }, []);
 
+  const value = useMemo(() => ({
+    uploadedFiles,
+    extractedImages,
+    addUploadedFile,
+    removeUploadedFile,
+    addExtractedImage,
+    removeExtractedImage,
+    clearAll,
+  }), [uploadedFiles, extractedImages, addUploadedFile, removeUploadedFile, addExtractedImage, removeExtractedImage, clearAll]);
+
   return (
-    <ExtractedImagesContext.Provider
-      value={{
-        uploadedFiles,
-        extractedImages,
-        addUploadedFile,
-        removeUploadedFile,
-        addExtractedImage,
-        removeExtractedImage,
-        clearAll,
-      }}
-    >
+    <ExtractedImagesContext.Provider value={value}>
       {children}
     </ExtractedImagesContext.Provider>
   );

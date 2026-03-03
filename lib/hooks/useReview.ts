@@ -766,39 +766,35 @@ export const useReview = (): UseReviewReturn => {
           orderBy('createdAt', 'desc')
         );
 
-    const unsubscribeWrong = onSnapshot(
-      wrongQuery,
-      async (snapshot) => {
-        try {
-          const docs = snapshot.docs;
-          const hasMore = docs.length > REVIEW_PAGE_SIZE;
-          const pageDocs = hasMore ? docs.slice(0, REVIEW_PAGE_SIZE) : docs;
+    // 오답 일회성 조회 (onSnapshot → getDocs)
+    getDocs(wrongQuery).then(async (snapshot) => {
+      try {
+        const docs = snapshot.docs;
+        const hasMore = docs.length > REVIEW_PAGE_SIZE;
+        const pageDocs = hasMore ? docs.slice(0, REVIEW_PAGE_SIZE) : docs;
 
-          const items: ReviewItem[] = pageDocs.map(mapDocToReviewItem);
-          await fillQuizTitles(items);
-          // Firestore orderBy로 이미 정렬되어 있으므로 클라이언트 sort 불필요
+        const items: ReviewItem[] = pageDocs.map(mapDocToReviewItem);
+        await fillQuizTitles(items);
 
-          if (isMounted) {
-            setWrongItems(items);
-            setHasMoreWrong(hasMore);
-            wrongLastDocRef.current = pageDocs.length > 0
-              ? pageDocs[pageDocs.length - 1]
-              : null;
-          }
-        } catch (e) {
-          console.error('오답 처리 실패:', e);
-        } finally {
-          if (isMounted) markLoaded();
-        }
-      },
-      (err) => {
-        console.error('오답 목록 로드 실패:', err);
         if (isMounted) {
-          setError('오답 목록을 불러오는데 실패했습니다.');
-          markLoaded();
+          setWrongItems(items);
+          setHasMoreWrong(hasMore);
+          wrongLastDocRef.current = pageDocs.length > 0
+            ? pageDocs[pageDocs.length - 1]
+            : null;
         }
+      } catch (e) {
+        console.error('오답 처리 실패:', e);
+      } finally {
+        if (isMounted) markLoaded();
       }
-    );
+    }).catch((err) => {
+      console.error('오답 목록 로드 실패:', err);
+      if (isMounted) {
+        setError('오답 목록을 불러오는데 실패했습니다.');
+        markLoaded();
+      }
+    });
 
     // 찜한 문제 구독 (orderBy + limit으로 무제한 스캔 방지)
     const bookmarkQuery = userCourseId
@@ -834,36 +830,32 @@ export const useReview = (): UseReviewReturn => {
           orderBy('createdAt', 'desc')
         );
 
-    const unsubscribeBookmark = onSnapshot(
-      bookmarkQuery,
-      async (snapshot) => {
-        try {
-          const docs = snapshot.docs;
-          const hasMore = docs.length > REVIEW_PAGE_SIZE;
-          const pageDocs = hasMore ? docs.slice(0, REVIEW_PAGE_SIZE) : docs;
+    // 찜한 문제 일회성 조회 (onSnapshot → getDocs)
+    getDocs(bookmarkQuery).then(async (snapshot) => {
+      try {
+        const docs = snapshot.docs;
+        const hasMore = docs.length > REVIEW_PAGE_SIZE;
+        const pageDocs = hasMore ? docs.slice(0, REVIEW_PAGE_SIZE) : docs;
 
-          const items: ReviewItem[] = pageDocs.map(mapDocToReviewItem);
-          await fillQuizTitles(items);
-          // Firestore orderBy로 이미 정렬되어 있으므로 클라이언트 sort 불필요
+        const items: ReviewItem[] = pageDocs.map(mapDocToReviewItem);
+        await fillQuizTitles(items);
 
-          if (isMounted) {
-            setBookmarkedItems(items);
-            setHasMoreBookmark(hasMore);
-            bookmarkLastDocRef.current = pageDocs.length > 0
-              ? pageDocs[pageDocs.length - 1]
-              : null;
-          }
-        } catch (e) {
-          console.error('찜한 문제 처리 실패:', e);
-        } finally {
-          if (isMounted) markLoaded();
+        if (isMounted) {
+          setBookmarkedItems(items);
+          setHasMoreBookmark(hasMore);
+          bookmarkLastDocRef.current = pageDocs.length > 0
+            ? pageDocs[pageDocs.length - 1]
+            : null;
         }
-      },
-      (err) => {
-        console.error('찜한 문제 목록 로드 실패:', err);
+      } catch (e) {
+        console.error('찜한 문제 처리 실패:', e);
+      } finally {
         if (isMounted) markLoaded();
       }
-    );
+    }).catch((err) => {
+      console.error('찜한 문제 목록 로드 실패:', err);
+      if (isMounted) markLoaded();
+    });
 
     // 푼 문제 구독 (페이지네이션: 첫 50건만 로드)
     const SOLVED_PAGE_SIZE = 50;
@@ -900,35 +892,32 @@ export const useReview = (): UseReviewReturn => {
           orderBy('createdAt', 'desc')
         );
 
-    const unsubscribeSolved = onSnapshot(
-      solvedBaseQuery,
-      async (snapshot) => {
-        try {
-          const docs = snapshot.docs;
-          const hasMore = docs.length > SOLVED_PAGE_SIZE;
-          const pageDocs = hasMore ? docs.slice(0, SOLVED_PAGE_SIZE) : docs;
+    // 푼 문제 일회성 조회 (onSnapshot → getDocs)
+    getDocs(solvedBaseQuery).then(async (snapshot) => {
+      try {
+        const docs = snapshot.docs;
+        const hasMore = docs.length > SOLVED_PAGE_SIZE;
+        const pageDocs = hasMore ? docs.slice(0, SOLVED_PAGE_SIZE) : docs;
 
-          const items: ReviewItem[] = pageDocs.map(mapDocToReviewItem);
-          await fillQuizTitles(items);
+        const items: ReviewItem[] = pageDocs.map(mapDocToReviewItem);
+        await fillQuizTitles(items);
 
-          if (isMounted) {
-            setSolvedItems(items);
-            setHasMoreSolved(hasMore);
-            solvedLastDocRef.current = pageDocs.length > 0
-              ? pageDocs[pageDocs.length - 1]
-              : null;
-          }
-        } catch (e) {
-          console.error('푼 문제 처리 실패:', e);
-        } finally {
-          if (isMounted) markLoaded();
+        if (isMounted) {
+          setSolvedItems(items);
+          setHasMoreSolved(hasMore);
+          solvedLastDocRef.current = pageDocs.length > 0
+            ? pageDocs[pageDocs.length - 1]
+            : null;
         }
-      },
-      (err) => {
-        console.error('푼 문제 목록 로드 실패:', err);
+      } catch (e) {
+        console.error('푼 문제 처리 실패:', e);
+      } finally {
         if (isMounted) markLoaded();
       }
-    );
+    }).catch((err) => {
+      console.error('푼 문제 목록 로드 실패:', err);
+      if (isMounted) markLoaded();
+    });
 
     // 퀴즈 풀이 기록 — 1회 조회 (실시간 구독 불필요, onSnapshot → getDocs)
     const attemptsQuery = userCourseId
@@ -1053,9 +1042,6 @@ export const useReview = (): UseReviewReturn => {
 
     return () => {
       isMounted = false;
-      unsubscribeWrong();
-      unsubscribeBookmark();
-      unsubscribeSolved();
       unsubscribePrivateQuizzes();
       unsubscribeDeleted();
     };

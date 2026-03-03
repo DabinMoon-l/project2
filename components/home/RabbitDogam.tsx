@@ -174,7 +174,7 @@ export default function RabbitDogam({
     : 'center center';
 
   const makeStyle = (p: Phase, origin: string) => ({
-    left: 'var(--modal-left, 0px)',
+    left: 'var(--home-sheet-left, 0px)',
     transform: p === 'entering' || p === 'exiting' ? 'scale(0)' : 'scale(1)',
     opacity: p === 'entering' || p === 'exiting' ? 0 : 1,
     transformOrigin: origin,
@@ -183,7 +183,7 @@ export default function RabbitDogam({
   });
 
   const backdropStyle = (p: Phase) => ({
-    left: 'var(--modal-left, 0px)',
+    left: 'var(--home-sheet-left, 0px)',
     opacity: p === 'entering' || p === 'exiting' ? 0 : 1,
     transition: `opacity ${p === 'exiting' ? CLOSE_MS : OPEN_MS}ms ease`,
   });

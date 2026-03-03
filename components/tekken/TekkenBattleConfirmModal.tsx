@@ -122,13 +122,14 @@ export default function TekkenBattleConfirmModal({
   // 항상 2슬롯 (빈 슬롯은 null)
   const slot0 = equippedRabbits[0] || null;
   const slot1 = equippedRabbits[1] || null;
+  const bothSlotsFilled = !!slot0 && !!slot1;
 
   return createPortal(
     <AnimatePresence>
       {isOpen && (
         <motion.div
           className="fixed inset-0 z-[110] flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm"
-          style={{ left: 'var(--modal-left, 0px)' }}
+          style={{ left: 'var(--home-sheet-left, 0px)' }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -160,10 +161,15 @@ export default function TekkenBattleConfirmModal({
             {/* 버튼 */}
             <div className="flex items-center gap-3 mt-2 w-full px-6">
               <motion.button
-                onClick={onConfirm}
-                className="flex-1 py-2.5 bg-red-500 rounded-full text-white font-black text-sm active:scale-95 transition-transform"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+                onClick={bothSlotsFilled ? onConfirm : undefined}
+                disabled={!bothSlotsFilled}
+                className={`flex-1 py-2.5 rounded-full font-black text-sm transition-transform ${
+                  bothSlotsFilled
+                    ? 'bg-red-500 text-white active:scale-95'
+                    : 'bg-white/20 text-white/30 cursor-not-allowed'
+                }`}
+                whileHover={bothSlotsFilled ? { scale: 1.05 } : undefined}
+                whileTap={bothSlotsFilled ? { scale: 0.95 } : undefined}
               >
                 배틀!
               </motion.button>
@@ -174,6 +180,13 @@ export default function TekkenBattleConfirmModal({
                 취소
               </button>
             </div>
+
+            {/* 2슬롯 미충족 안내 */}
+            {!bothSlotsFilled && (
+              <p className="text-xs text-white/50 text-center mt-1">
+                토끼 2마리를 장착해야 배틀할 수 있어요
+              </p>
+            )}
           </motion.div>
         </motion.div>
       )}

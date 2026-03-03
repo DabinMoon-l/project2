@@ -16,10 +16,10 @@ import {
   doc,
   setDoc,
   deleteDoc,
-  getDoc,
   updateDoc,
   increment,
   serverTimestamp,
+  documentId,
   Timestamp,
 } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -128,57 +128,74 @@ export const useQuizBookmark = (): UseQuizBookmarkReturn => {
         bookmarkDataMap.set(data.quizId, data);
       }
 
-      // 퀴즈 정보 + 완료 여부를 병렬로 조회
+      // 퀴즈 정보 + 완료 여부를 배치 조회 (N+1 → 2~4 쿼리)
       const quizIds = Array.from(ids);
-      const results = await Promise.all(
-        quizIds.map(async (quizId) => {
-          try {
-            const [quizDoc, completionDoc] = await Promise.all([
-              getDoc(doc(db, 'quizzes', quizId)),
-              user ? getDoc(doc(db, 'quiz_completions', `${quizId}_${user.uid}`)) : Promise.resolve(null),
-            ]);
+      const BATCH_SIZE = 30; // Firestore 'in' 쿼리 최대 30개
 
-            if (!quizDoc.exists()) return null;
+      // 퀴즈 문서 배치 조회
+      const quizDataMap2 = new Map<string, any>();
+      for (let i = 0; i < quizIds.length; i += BATCH_SIZE) {
+        const batch = quizIds.slice(i, i + BATCH_SIZE);
+        const quizSnap = await getDocs(
+          query(collection(db, 'quizzes'), where(documentId(), 'in', batch))
+        );
+        for (const d of quizSnap.docs) {
+          quizDataMap2.set(d.id, d.data());
+        }
+      }
 
-            const quizData = quizDoc.data();
-            const bmData = bookmarkDataMap.get(quizId);
-            const hasCompleted = completionDoc?.exists() ?? false;
-
-            return {
-              id: quizId,
-              quizId,
-              title: quizData.title || '제목 없음',
-              questionCount: quizData.questionCount || 0,
-              participantCount: quizData.participantCount || 0,
-              bookmarkedAt: bmData?.bookmarkedAt,
-              difficulty: quizData.difficulty || 'normal',
-              chapterId: quizData.chapterId || undefined,
-              creatorNickname: quizData.creatorNickname || '익명',
-              tags: quizData.tags || [],
-              oxCount: quizData.oxCount || 0,
-              multipleChoiceCount: quizData.multipleChoiceCount || 0,
-              subjectiveCount: quizData.subjectiveCount || 0,
-              myScore: user ? quizData.userScores?.[user.uid] : undefined,
-              myFirstReviewScore: user ? quizData.userFirstReviewScores?.[user.uid] : undefined,
-              hasCompleted,
-              bookmarkCount: quizData.bookmarkCount || 0,
-              isAiGenerated: quizData.isAiGenerated || quizData.type === 'ai-generated',
-              averageScore: quizData.averageScore || (() => {
-                if (quizData.userScores) {
-                  const scores = Object.values(quizData.userScores) as number[];
-                  return scores.length > 0 ? Math.round((scores.reduce((s, v) => s + v, 0) / scores.length) * 10) / 10 : 0;
-                }
-                return 0;
-              })(),
-            } as BookmarkedQuiz;
-          } catch {
-            return null;
+      // 완료 여부 배치 조회
+      const completionSet = new Set<string>();
+      if (user) {
+        const completionIds = quizIds.map(qid => `${qid}_${user.uid}`);
+        for (let i = 0; i < completionIds.length; i += BATCH_SIZE) {
+          const batch = completionIds.slice(i, i + BATCH_SIZE);
+          const compSnap = await getDocs(
+            query(collection(db, 'quiz_completions'), where(documentId(), 'in', batch))
+          );
+          for (const d of compSnap.docs) {
+            completionSet.add(d.id);
           }
-        })
-      );
+        }
+      }
 
-      // null 제거 + 북마크 시간 기준 정렬 (최신순)
-      const quizzes = results.filter((q): q is BookmarkedQuiz => q !== null);
+      // 결과 조합
+      const quizzes: BookmarkedQuiz[] = [];
+      for (const quizId of quizIds) {
+        const quizData = quizDataMap2.get(quizId);
+        if (!quizData) continue;
+
+        const bmData = bookmarkDataMap.get(quizId);
+        const hasCompleted = user ? completionSet.has(`${quizId}_${user.uid}`) : false;
+
+        quizzes.push({
+          id: quizId,
+          quizId,
+          title: quizData.title || '제목 없음',
+          questionCount: quizData.questionCount || 0,
+          participantCount: quizData.participantCount || 0,
+          bookmarkedAt: bmData?.bookmarkedAt,
+          difficulty: quizData.difficulty || 'normal',
+          chapterId: quizData.chapterId || undefined,
+          creatorNickname: quizData.creatorNickname || '익명',
+          tags: quizData.tags || [],
+          oxCount: quizData.oxCount || 0,
+          multipleChoiceCount: quizData.multipleChoiceCount || 0,
+          subjectiveCount: quizData.subjectiveCount || 0,
+          myScore: user ? quizData.userScores?.[user.uid] : undefined,
+          myFirstReviewScore: user ? quizData.userFirstReviewScores?.[user.uid] : undefined,
+          hasCompleted,
+          bookmarkCount: quizData.bookmarkCount || 0,
+          isAiGenerated: quizData.isAiGenerated || quizData.type === 'ai-generated',
+          averageScore: quizData.averageScore || (() => {
+            if (quizData.userScores) {
+              const scores = Object.values(quizData.userScores) as number[];
+              return scores.length > 0 ? Math.round((scores.reduce((s, v) => s + v, 0) / scores.length) * 10) / 10 : 0;
+            }
+            return 0;
+          })(),
+        });
+      }
       quizzes.sort((a, b) => {
         const aTime = a.bookmarkedAt?.toMillis?.() || 0;
         const bTime = b.bookmarkedAt?.toMillis?.() || 0;

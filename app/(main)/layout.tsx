@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { LazyMotion, domAnimation } from 'framer-motion';
@@ -17,6 +17,11 @@ const HomeOverlay = dynamic(() => import('@/components/home/HomeOverlay'), { ssr
 const ProfessorHomeOverlay = dynamic(() => import('@/components/home/ProfessorHomeOverlay'), { ssr: false });
 const AIQuizContainer = dynamic(() => import('@/components/ai-quiz/AIQuizContainer'), { ssr: false });
 const LibraryJobToast = dynamic(() => import('@/components/professor/library/LibraryJobToast'), { ssr: false });
+
+// 라우트 사이드바 lazy load (가로모드 전용)
+const QuizListSidebar = dynamic(() => import('@/components/quiz/QuizListSidebar'), { ssr: false });
+const BoardListSidebar = dynamic(() => import('@/components/board/BoardListSidebar'), { ssr: false });
+const ReviewListSidebar = dynamic(() => import('@/components/review/ReviewListSidebar'), { ssr: false });
 import { useViewportScale, useWideMode } from '@/lib/hooks/useViewportScale';
 import { useScrollDismissKeyboard } from '@/lib/hooks/useKeyboardAware';
 import OfflineBanner from '@/components/common/OfflineBanner';
@@ -167,6 +172,23 @@ function MainLayoutGrid({
 }) {
   const { content: detailContent, isDetailOpen, closeDetail } = useDetailPanel();
 
+  // 라우트 기반 사이드바 타입 감지 (가로모드 전용)
+  const routeSidebarType = useMemo(() => {
+    if (!isWide) return null;
+    // /quiz/[id]/* (NOT /quiz/create, /professor/quiz/create)
+    if (/^\/quiz\/[^/]+/.test(pathname) && pathname !== '/quiz/create') return 'quiz' as const;
+    // /board/[id]/*
+    if (/^\/board\/[^/]+/.test(pathname)) return 'board' as const;
+    // /review/[type]/[id] or /review/random
+    if (/^\/review\/[^/]+\/[^/]+/.test(pathname) || pathname === '/review/random') return 'review' as const;
+    // /professor/quiz/[id]/preview
+    if (/^\/professor\/quiz\/[^/]+\/preview/.test(pathname)) return 'quiz' as const;
+    return null;
+  }, [isWide, pathname]);
+
+  // 라우트 사이드바 표시 여부 (컨텍스트 디테일 > 라우트 사이드바 우선순위)
+  const hasRouteSidebar = !!routeSidebarType && !isDetailOpen;
+
   // CSS 변수를 body에 설정 (createPortal로 body에 렌더되는 모달/바텀시트가 상속받도록)
   useEffect(() => {
     const body = document.body;
@@ -175,13 +197,17 @@ function MainLayoutGrid({
       body.style.setProperty('--modal-left', '240px');
       // --detail-panel-left: 우측 패널 시작점
       body.style.setProperty('--detail-panel-left', 'calc(50% + 120px)');
+      // --home-sheet-left: 홈 오버레이 바텀시트 위치 (우측 패널)
+      body.style.setProperty('--home-sheet-left', 'calc(50% + 120px)');
     } else {
       body.style.setProperty('--modal-left', '0px');
       body.style.setProperty('--detail-panel-left', '0px');
+      body.style.setProperty('--home-sheet-left', '0px');
     }
     return () => {
       body.style.removeProperty('--modal-left');
       body.style.removeProperty('--detail-panel-left');
+      body.style.removeProperty('--home-sheet-left');
     };
   }, [isWide]);
 
@@ -200,14 +226,28 @@ function MainLayoutGrid({
               : {}),
             ...(isWide ? { marginLeft: '240px' } : {}),
             // fixed 요소 좌측 위치 조정용 CSS 변수
-            // 모바일: 0, 가로모드: 240px (사이드바), 라우트 사이드바: calc(50% + 120px) (우측 패널)
-            '--detail-panel-left': isWide
-              ? 'calc(50% + 120px)'
-              : '0',
+            // 모바일: 0, 가로모드(사이드바 없음): 240px, 라우트 사이드바: calc(50% + 120px)
+            '--detail-panel-left': !isWide
+              ? '0'
+              : routeSidebarType
+                ? 'calc(50% + 120px)'
+                : '240px',
           } as React.CSSProperties & Record<string, string>}
         >
           <div className={isWide ? 'flex min-h-screen' : ''}>
-            {/* 중앙: 현재 페이지 그대로 표시 (가로모드에서도 변경 없음) */}
+            {/* 라우트 사이드바 (가로모드 좌측 — 퀴즈/게시판/복습 목록) */}
+            {hasRouteSidebar && (
+              <div
+                className="w-1/2 flex-shrink-0 overflow-x-hidden overflow-y-auto min-h-screen"
+                style={{ borderRight: '1px solid #B0A898' }}
+              >
+                {routeSidebarType === 'quiz' && <QuizListSidebar />}
+                {routeSidebarType === 'board' && <BoardListSidebar />}
+                {routeSidebarType === 'review' && <ReviewListSidebar />}
+              </div>
+            )}
+
+            {/* 메인 콘텐츠 */}
             <main
               className={
                 isWide
@@ -219,8 +259,8 @@ function MainLayoutGrid({
               {!isProfessor && pathname === '/quiz' && searchParams?.get('manage') !== 'true' && <AIQuizContainer />}
             </main>
 
-            {/* 우측: 디테일 패널 (가로모드에서 항상 표시, 비어있을 수 있음) */}
-            {isWide && (
+            {/* 우측: 디테일 패널 (라우트 사이드바가 없을 때만 표시) */}
+            {isWide && !hasRouteSidebar && (
               <aside
                 className="w-1/2 flex-shrink-0 overflow-x-hidden overflow-y-auto min-h-screen relative"
                 style={{
