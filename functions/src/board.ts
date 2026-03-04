@@ -120,10 +120,17 @@ export const onPostCreate = onDocumentCreated(
 
       console.log(`게시글 보상 지급 완료: ${userId}`, { postId, expReward });
 
-      // 학술 태그 게시글이면 Gemini AI 자동답변 생성
+      // 학술 태그 게시글이면 Gemini AI 자동답변 생성 (교수님 글 제외)
       if (post.tag === "학술") {
         try {
-          await generateBoardAIReply(post, postId, GEMINI_API_KEY.value());
+          const authorDoc = await db.collection("users").doc(userId).get();
+          const authorRole = authorDoc.data()?.role;
+
+          if (authorRole !== "professor") {
+            await generateBoardAIReply(post, postId, GEMINI_API_KEY.value());
+          } else {
+            console.log(`교수님 게시글이므로 AI 자동답변 스킵: ${postId}`);
+          }
         } catch (aiError) {
           // AI 답변 실패해도 게시글 작성은 성공으로 처리
           console.error("AI 자동답변 생성 실패:", aiError);
@@ -527,7 +534,7 @@ async function generateBoardAIReply(
   await db.collection("comments").add({
     postId: postId,
     authorId: "gemini-ai",
-    authorNickname: "Gemini",
+    authorNickname: "콩콩이",
     authorClassType: null,
     content: aiText.trim(),
     imageUrls: [],

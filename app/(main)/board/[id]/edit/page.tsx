@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { useTheme } from '@/styles/themes/useTheme';
-import { usePost, useUpdatePost, type CreatePostData, type AttachedFile } from '@/lib/hooks/useBoard';
+import { usePost, useUpdatePost, BOARD_TAGS, type CreatePostData, type AttachedFile, type BoardTag } from '@/lib/hooks/useBoard';
 import { useUpload } from '@/lib/hooks/useStorage';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { Skeleton } from '@/components/common';
@@ -27,6 +27,7 @@ export default function EditPostPage() {
   // 폼 상태
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [tag, setTag] = useState<BoardTag | undefined>(undefined);
   const [initialized, setInitialized] = useState(false);
 
   // 기존 이미지/파일
@@ -46,6 +47,7 @@ export default function EditPostPage() {
     if (post && !initialized) {
       setTitle(post.title);
       setContent(post.content);
+      setTag(post.tag);
       setExistingImages(post.imageUrls || (post.imageUrl ? [post.imageUrl] : []));
       setExistingFiles(post.fileUrls || []);
       setInitialized(true);
@@ -56,7 +58,7 @@ export default function EditPostPage() {
   const isOwner = user?.uid === post?.authorId;
 
   // 유효성 검사
-  const isValid = title.trim().length >= 2 && content.trim().length >= 10;
+  const isValid = title.trim().length >= 2 && content.trim().length >= 10 && !!tag;
 
   // 총 이미지 수
   const totalImages = existingImages.length + newImages.length;
@@ -190,6 +192,7 @@ export default function EditPostPage() {
       const updateData: Record<string, unknown> = {
         title: title.trim(),
         content: content.trim(),
+        tag,
         isAnonymous: false,
         imageUrls: uploadedImageUrls.length > 0 ? uploadedImageUrls : [],
         fileUrls: uploadedFiles.length > 0 ? uploadedFiles : [],
@@ -210,7 +213,7 @@ export default function EditPostPage() {
     } catch (err) {
       console.error('글 수정 실패:', err);
     }
-  }, [isValid, updating, uploading, existingImages, existingFiles, newImages, newFiles, title, content, uploadImage, uploadFile, updatePost, postId, router]);
+  }, [isValid, updating, uploading, existingImages, existingFiles, newImages, newFiles, title, content, tag, uploadImage, uploadFile, updatePost, postId, router]);
 
   /**
    * 뒤로가기
@@ -318,6 +321,37 @@ export default function EditPostPage() {
             backgroundColor: theme.colors.backgroundCard,
           }}
         >
+          {/* 태그 선택 */}
+          <div className="mb-4">
+            <label
+              className="block text-sm font-serif-display font-bold mb-2"
+              style={{ color: theme.colors.text }}
+            >
+              TAG <span style={{ color: '#8B1A1A' }}>*</span>
+            </label>
+            <div className="flex gap-2">
+              {BOARD_TAGS.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTag(tag === t ? undefined : t)}
+                  className="px-3 py-1.5 text-sm font-serif-display font-bold transition-colors"
+                  style={tag === t ? {
+                    backgroundColor: '#1A1A1A',
+                    color: '#F5F0E8',
+                    border: '1px solid #1A1A1A',
+                  } : {
+                    backgroundColor: 'transparent',
+                    color: '#1A1A1A',
+                    border: '1px solid #1A1A1A',
+                  }}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* 제목 입력 */}
           <div className="mb-4">
             <label

@@ -105,6 +105,7 @@ export interface Comment {
   replies?: Comment[]; // 대댓글 목록 (클라이언트에서 구성)
   likes?: number; // 좋아요 수
   likedBy?: string[]; // 좋아요 누른 사용자 ID 목록
+  isAIReply?: boolean; // AI 자동답변 여부
 }
 
 /** 글 작성 데이터 */

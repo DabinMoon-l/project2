@@ -42,7 +42,7 @@ export default function WriteForm({
 
   const [title, setTitle] = useState(initialTitle);
   const [content, setContent] = useState(initialContent);
-  const [tag, setTag] = useState<BoardTag | undefined>(initialTag || '학술');
+  const [tag, setTag] = useState<BoardTag | undefined>(initialTag);
 
   // 부모에서 임시저장 복원 시 반영 (useState는 초기값만 사용하므로 동기화 필요)
   useEffect(() => {
@@ -209,7 +209,7 @@ export default function WriteForm({
     } catch (err) {
       console.error('글 작성 실패:', err);
     }
-  }, [isValid, isSubmitting, uploading, images, files, title, content, uploadImage, uploadFile, onSubmit]);
+  }, [isValid, isSubmitting, uploading, images, files, title, content, tag, uploadImage, uploadFile, onSubmit]);
 
   return (
     <motion.div
