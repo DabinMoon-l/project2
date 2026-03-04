@@ -127,6 +127,7 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 | 피드백 제출 | 15 | onFeedbackSubmit |
 | 게시글 작성 | 15 | onPostCreate |
 | 댓글 작성 | 15 | onCommentCreate |
+| 댓글 채택됨 | 30 | acceptComment |
 | 복습 연습 완료 | 25 | — (클라이언트) |
 | 배틀 승리 | 30 (+연승 ×5, 최대 50) | submitAnswer |
 | 배틀 패배 | 10 | submitAnswer |
@@ -135,18 +136,34 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 
 **마일스톤**: 50XP마다 1 마일스톤 → `MilestoneChoiceModal` 자동 표시 → 뽑기 or 레벨업 선택
 
-### 게시판 AI 자동답변
+### 게시판 AI 자동답변 (콩콩이)
 
-학술 태그(`tag === '학술'`) 게시글 작성 시 Gemini 2.5 Flash가 자동으로 댓글을 생성.
+학술 태그(`tag === '학술'`) 게시글 작성 시 콩콩이(Gemini 2.5 Flash)가 자동으로 댓글을 생성.
 
-**플로우**: `onPostCreate` CF → 학술 태그 확인 → 이미지 있으면 base64 변환 → Gemini API 호출 → `comments` 컬렉션에 저장 + `commentCount` 증가
+**플로우**: `onPostCreate` CF → 학술 태그 확인 → 이미지 있으면 base64 변환 → 과목 키워드(`courseScopes`) 로드 → Gemini API 호출 → `comments` 컬렉션에 저장 + `commentCount` 증가
+
+**대댓글 자동 응답**: 사용자가 콩콩이 댓글에 대댓글 → `onCommentCreate` CF가 감지 → 원본 글 + 이전 대화 맥락을 포함해 Gemini API 호출 → 대댓글로 자동 응답 (스팸 방지: 같은 부모에 2분 내 AI 대댓글 제한)
+
+**콩콩이 말투**: 20대 한국 여자 반말, 이모지/이모티콘 절대 금지, `maxOutputTokens: 2048`
 
 **AI 댓글 데이터**:
-- `authorId: 'gemini-ai'`, `authorNickname: 'Gemini'`, `isAIReply: true`
+- `authorId: 'gemini-ai'`, `authorNickname: '콩콩이'`, `isAIReply: true`
 - 기존 comment 스키마 준수
 - `onCommentCreate`에서 `authorId === 'gemini-ai'`이면 EXP 지급 + 알림 스킵
 
 **이미지 처리**: `post.imageUrls` 존재 시 각 URL → fetch → base64 → Gemini `inlineData`로 통합 전송
+
+### 게시판 댓글 채택
+
+글 작성자가 댓글 중 하나를 채택하는 기능.
+
+**조건**: 루트 댓글만 (대댓글 불가), 본인 댓글/AI 댓글 채택 불가, 글당 1회만
+**플로우**: `acceptComment` onCall CF → 트랜잭션으로 `post.acceptedCommentId` + `comment.isAccepted` 설정 → 채택자에게 30 EXP + 알림
+**UI**: 상세 페이지 댓글 상단에 두꺼운 검은색 박스(`border-[3px] #1A1A1A`)로 표시, 목록 미리보기에서도 채택 댓글 최상단
+
+### 게시글 삭제
+
+`deletePost` onCall CF로 처리 (Admin SDK). 클라이언트에서 타인 댓글 삭제 권한이 없으므로 서버에서 글 + 모든 댓글을 배치 삭제.
 
 ### AI 문제 생성 시스템
 
@@ -187,7 +204,8 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 
 **봇**: 60% 정답률, 1~8초 응답 시간, 10개 닉네임 풀, 레벨 3~7
 
-**문제 풀**: 매일 새벽 3시 → 과목당 60문제 보충, seenQuestions로 24시간 중복 방지
+**문제 풀**: 매일 새벽 3시 → 현재 학기 과목만 과목당 100문제 보충 (1학기: biology+microbiology, 2학기: biology+pathophysiology), seenQuestions로 24시간 중복 방지
+**교수 스타일 반영**: `professorQuizAnalysis/{courseId}/data/`의 styleProfile(출제 톤, 함정 패턴) + keywords(핵심 개념, 임상 키워드)를 프롬프트에 주입
 
 ## 교수 통계 시스템 (상세)
 
@@ -400,154 +418,71 @@ firebase deploy --only functions
 - manifest `orientation: any`, `display: standalone`, `background_color: #F5F0E8`
 - 프로덕션 `console.log` 자동 제거 (`compiler.removeConsole`)
 
-## 서버 비용 예측
+## 프로젝트 구조
 
-### 대상 규모: 생물학 130명 + 미생물학 170명 ≈ 300명 활성 사용자
-
-| 서비스 | 무료 등급 | 예상 사용량 (월) | 월 비용 (USD) |
-|--------|----------|-----------------|--------------|
-| Firebase Auth | 10K MAU | 300 MAU | $0 |
-| Firestore 읽기 | 50K/일 (1.5M/월) | 1.5~5M | $0~2 |
-| Firestore 쓰기 | 20K/일 (600K/월) | 300~600K | $0~0.50 |
-| Cloud Functions | 2M 호출, 400K GB-s | 500K~1.2M 호출 | $0~1 |
-| Realtime Database | 10GB 전송 | <2GB (철권퀴즈) | $0 |
-| Cloud Storage | 5GB | 3~5GB (이미지/OCR) | $0~0.50 |
-| FCM 푸시 알림 | 무제한 | — | $0 |
-| Gemini API (Flash) | 15 RPM, 1M tok/일 | 1~3K 호출 | $0~1 |
-| Claude API (Sonnet) | 종량제 | 3~6 호출 (월별 리포트) | $1~3 |
-| Vercel Hobby | 100GB BW | ~5~15GB (PWA 캐싱) | $0 |
-| Cloud Run (PPTX) | 2M req | <100 호출 | $0 |
-
-**월 합계 예상**:
-- 최소 (무료 등급 내): **$1~2**
-- 보통 (일부 초과): **$2~5**
-- 최대 (시험기간 피크): **$5~8**
-
-> 유일한 고정 비용은 Claude API (월별 리포트 3~6회, $1~3). 나머지는 대부분 무료 등급 내. Vercel Pro ($20/월) 불필요.
-
-### Firestore 읽기 상세 추정 (학습 플로우 기반)
-
-**학생 1명 행동별 읽기**:
-| 행동 | 읽기 수 | 비고 |
-|------|---------|------|
-| 앱 접속 (홈) | 15~30 | UserContext + Course + 랭킹 + 토끼 + 공지 |
-| 퀴즈 목록 조회 | 30~60 | 퀴즈 리스트 + 완료여부 체크 |
-| 퀴즈 풀이 1회 | 7~15 | 문서 로드 + CF 내부 읽기 |
-| 결과 + 피드백 | 2~10 | 결과 + 문제별 피드백 |
-| 복습 1회 | 15~30 | 복습 목록 + 퀴즈 참조 |
-| 게시판 | 25~35 | 글 목록 + 댓글 |
-| 철권퀴즈 1판 | 5~10 | seenQuestions + XP (RTDB는 별도) |
-
-**300명 월간 총 읽기**:
-| 시나리오 | 클라이언트 | 서버 (스케줄 CF) | 합계 | 비용 |
-|---------|-----------|-----------------|------|------|
-| 보수적 (60% 활성) | 400K | 200K | 600K | $0 |
-| 보통 (80% 활성) | 1.5M | 200K | 1.7M | $0.12 |
-| 활발 (90% 활성) | 3M | 250K | 3.25M | $1.05 |
-| 시험기간 피크 | 4~5M | 250K | ~5M | $2.10 |
-
-## 개발 로드맵
-
-### Phase 1: 반응형 디자인 완성
-
-사용자가 직접 체감하는 UI/UX 작업이므로 최우선.
-
-#### 세로모드 (모바일 우선)
-
-| 화면 크기 | 기기 | 검증 포인트 |
-|----------|------|------------|
-| 320px | iPhone SE | 최소 너비 레이아웃 깨짐 없음 |
-| 375px | iPhone 13 mini | 기본 타겟 |
-| 393px | iPhone 14 Pro | 주력 타겟 |
-| 430px | iPhone 14 Pro Max | 넓은 모바일 |
-| 768px | iPad | 태블릿 세로 |
-
-#### 가로모드 (3패널)
-
-| 화면 크기 | 기기 | 검증 포인트 |
-|----------|------|------------|
-| 1024×768 | iPad 가로 | 최소 가로모드 진입점 |
-| 1366×768 | 노트북 | 일반적 PC |
-| 1920×1080 | 모니터 | 풀HD |
-
-#### 검증 체크리스트
-- [ ] 모든 페이지 세로↔가로 전환 시 레이아웃 깨짐 없음
-- [ ] safe-area-inset 적용 (노치, 다이내믹 아일랜드, 홈바)
-- [ ] 바텀시트/모달 가로모드에서 정상 렌더링
-- [ ] 키보드 오픈 시 입력 필드 가림 없음
-- [ ] 캐러셀/스와이프 터치 + 마우스 모두 동작
-- [ ] 이미지/비디오 종횡비 유지
-- [ ] 교수 페이지 전체 가로모드 대응
-- [ ] 철권퀴즈 배틀 화면 가로모드 레이아웃
-
-### Phase 2: 아키텍처 리뷰 + 리팩토링
-
-#### 1-1. 거대 파일 분할
-
-| 파일 | 현재 크기 | 분할 전략 |
-|------|----------|----------|
-| `app/(main)/review/page.tsx` | 6,146줄 | 탭별 컴포넌트 분리, 훅 추출 |
-| `components/quiz/create/QuestionEditor.tsx` | 4,074줄 | 유형별 에디터 분리, 공통 로직 훅 추출 |
-| `components/home/AnnouncementChannel.tsx` | 3,500줄+ | 메시지 렌더러, 입력 폼, 검색, 캘린더 분리 |
-| `app/(main)/board/page.tsx` | 2,800줄+ | PostList, WriteSection, CommentThread 분리 |
-| `functions/src/tekkenBattle.ts` | 1,800줄+ | matchmaking, round, scoring 모듈 분리 |
-
-#### 1-2. Dynamic Import 도입
-
-```typescript
-const QuestionEditor = dynamic(() => import('@/components/quiz/create/QuestionEditor'));
-const TekkenBattleOverlay = dynamic(() => import('@/components/tekken/TekkenBattleOverlay'));
-const AnnouncementChannel = dynamic(() => import('@/components/home/AnnouncementChannel'));
-const RabbitDogam = dynamic(() => import('@/components/home/RabbitDogam'));
-const ProfessorLibraryTab = dynamic(() => import('@/components/professor/library/ProfessorLibraryTab'));
+```
+├── app/                        # Next.js App Router
+│   ├── (auth)/                 # 인증 라우트 (login, signup, forgot-password, verify-email)
+│   ├── (main)/                 # 보호된 메인 라우트 (Provider 계층 적용)
+│   │   ├── layout.tsx          # Provider 계층 + 3패널 가로모드 레이아웃
+│   │   ├── page.tsx            # 홈 (학생)
+│   │   ├── quiz/               # 퀴즈 목록/풀이/결과/피드백
+│   │   ├── review/             # 복습 모드
+│   │   ├── board/              # 게시판
+│   │   ├── ranking/            # 랭킹
+│   │   ├── professor/          # 교수 대시보드/통계/퀴즈관리/학생관리
+│   │   └── profile/, settings/ # 프로필, 설정
+│   └── api/                    # API 라우트 (convert-pptx)
+├── components/                 # React 컴포넌트 (~191개 파일)
+│   ├── ai-quiz/                # AI 퀴즈 생성 UI
+│   ├── board/                  # 게시판
+│   ├── common/                 # 공통 (SwipeBack, Navigation, BottomSheet 등)
+│   ├── home/                   # 홈 (AnnouncementChannel, RabbitDogam 등)
+│   ├── professor/              # 교수 대시보드
+│   ├── quiz/                   # 퀴즈 풀이/생성
+│   ├── review/                 # 복습
+│   └── tekken/                 # 철권퀴즈 배틀
+├── lib/                        # 유틸리티, 훅, 컨텍스트
+│   ├── firebase.ts             # Firebase 초기화
+│   ├── auth.ts                 # 인증 유틸
+│   ├── contexts/               # React Context (User, Course, Theme, Milestone, HomeOverlay, DetailPanel)
+│   ├── hooks/                  # 커스텀 훅 40+ (useAuth, useQuiz*, useProfessor*, useTekkenBattle 등)
+│   ├── utils/                  # 유틸 (ranking, scoring, expRewards, tekkenDamage 등)
+│   └── types/                  # 타입 정의 (course.ts, tekken.ts)
+├── functions/                  # Firebase Cloud Functions (Node 20, 별도 tsconfig)
+│   └── src/                    # CF 소스 (~61개 .ts 파일)
+│       ├── index.ts            # CF 엔트리 (모든 함수 export)
+│       ├── recordAttempt.ts    # 퀴즈 제출 + 채점
+│       ├── tekkenBattle.ts     # 실시간 배틀 로직
+│       ├── gemini.ts           # Gemini API 통합
+│       ├── rabbitGacha.ts      # 토끼 뽑기
+│       └── computeRankings.ts  # 랭킹 계산
+├── styles/themes/              # 테마 상수 + ThemeProvider
+├── public/                     # 정적 에셋 (rabbit/ 80개, icons/, animations/)
+├── firestore.rules             # Firestore 보안 규칙
+├── firestore.indexes.json      # Firestore 복합 인덱스
+├── database.rules.json         # Realtime Database 규칙
+└── storage.rules               # Cloud Storage 규칙
 ```
 
-#### 1-3. onSnapshot 구독 최적화
+### 주요 설정 파일
 
-- **유지**: UserContext, 퀴즈 풀이 중 상태, 배틀 RTDB 리스너
-- **폴링 전환**: 랭킹 (이미 SWR 캐시), 교수 통계, 게시판 목록
-- **언마운트 시 해제 확인**: 모든 useEffect cleanup에서 unsubscribe 호출 검증
+| 파일 | 역할 |
+|------|------|
+| `next.config.mjs` | Turbopack, PWA, 이미지 최적화, 번들 분석 |
+| `tailwind.config.ts` | `wide:` 커스텀 스크린, 빈티지 테마 색상, 폰트 |
+| `tsconfig.json` | `@/*` 경로 별칭 → 프로젝트 루트, strict 모드 |
+| `.eslintrc.json` | `next/core-web-vitals` 확장 |
+| `firebase.json` | Firestore/RTDB/Functions/Storage 배포 설정 |
+| `functions/tsconfig.json` | CF 전용 (noUnusedLocals, noImplicitReturns 추가) |
 
-### Phase 3: 성능 최적화 (목표: 동시접속 500명) ✅ 완료
+### 환경 변수 (.env.local)
 
-#### 프론트엔드
-
-| 항목 | 이전 | 적용 완료 |
-|------|------|----------|
-| 번들 크기 | dynamic import 미사용 | Phase 2에서 라우트별 코드 스플리팅 + lazy 로드 적용 |
-| 이미지 | 168개 `<img>` (48개 파일) | 고트래픽 15개 파일 46개 태그 `next/image` 전환 (`unoptimized` — Firebase Storage CDN 직접) |
-| Framer Motion | 전체 번들 import (~60KB) | `LazyMotion` + `domAnimation` 서브셋 (`strict` 미사용 — `motion` 호환 유지) |
-| React re-render | Context 변경 시 전체 리렌더 | `DetailPanelContext`, `ExpToastProvider`에 `useMemo` 적용 |
-
-#### Cloud Functions
-
-| 항목 | 이전 | 적용 완료 |
-|------|------|----------|
-| 콜드 스타트 | 기본 설정 | `recordAttempt`, `joinMatchmaking`에 `minInstances: 1` (추가 ~$3-5/월) |
-| 메모리 | `recordAttempt` 512MiB, 나머지 기본 | 유지 |
-| 리전 | asia-northeast3 (서울) | 유지 |
-
-#### next/image 전환 제외 대상
-- `RabbitImage.tsx` — 의도적 `<img>` (Next.js 캐시 회피)
-- `questionHtmlTemplate.ts` — HTML 문자열 내 `<img>` (PDF 내보내기용)
-- `AnnouncementChannel` 내 이미지 — 사용자 업로드, 동적 URL
-- base64/data URL 이미지
-
-### Phase 4: 테스트 프레임워크 구축
-
-**우선 테스트 대상**: 채점 로직, 데미지 계산, 랭킹 공식, 마일스톤, 통계 유틸
-**E2E**: 회원가입→로그인, 퀴즈 풀이, 교수 퀴즈 생성, 복습, 게시판
-
-### Phase 5: 코드 품질 + 버그 헌팅
-
-#### 레이스 컨디션 점검
-
-| 위험 영역 | 시나리오 | 점검 방법 |
-|----------|---------|----------|
-| 퀴즈 이중 제출 | 빠른 더블탭 | CF idempotency key, 클라이언트 debounce |
-| EXP 동시 지급 | 퀴즈 완료 + 피드백 동시 트리거 | Firestore 트랜잭션 |
-| 철권 매칭 충돌 | 3명 동시 매칭 | RTDB 트랜잭션 원자성 |
-| 토끼 뽑기 동시 Claim | 같은 pendingSpin 2회 | spinLock 필드 |
+```
+NEXT_PUBLIC_FIREBASE_API_KEY, AUTH_DOMAIN, PROJECT_ID, STORAGE_BUCKET,
+MESSAGING_SENDER_ID, APP_ID, MEASUREMENT_ID, VAPID_KEY, DATABASE_URL
+NEXT_PUBLIC_CLOUD_RUN_PPTX_URL  # Cloud Run PPTX 변환 서비스
+```
 
 ## 코드 품질 기준 (비개발자 유지보수 대응)
 
