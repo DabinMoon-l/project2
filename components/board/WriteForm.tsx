@@ -292,7 +292,7 @@ export default function WriteForm({
         <textarea
           value={content}
           onChange={(e) => handleContentChange(e.target.value)}
-          placeholder="기사 내용을 입력하세요 (10자 이상)"
+          placeholder="기사 내용을 입력하세요 (5자 이상)"
           rows={5}
           maxLength={2000}
           className="w-full px-3 py-2 resize-none outline-none transition-colors leading-relaxed"

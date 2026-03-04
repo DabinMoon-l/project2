@@ -58,7 +58,7 @@ export default function EditPostPage() {
   const isOwner = user?.uid === post?.authorId;
 
   // 유효성 검사
-  const isValid = title.trim().length >= 2 && content.trim().length >= 10 && !!tag;
+  const isValid = title.trim().length >= 2 && content.trim().length >= 5 && !!tag;
 
   // 총 이미지 수
   const totalImages = existingImages.length + newImages.length;
@@ -188,7 +188,7 @@ export default function EditPostPage() {
         }
       }
 
-      // 업데이트할 데이터 준비 (undefined 대신 null 사용)
+      // 업데이트할 데이터 준비
       const updateData: Record<string, unknown> = {
         title: title.trim(),
         content: content.trim(),
@@ -293,8 +293,8 @@ export default function EditPostPage() {
           <h1 className="font-serif-display text-3xl font-black tracking-tight text-[#1A1A1A]">
             JIBDAN JISUNG
           </h1>
-          <p className="text-sm text-[#3A3A3A] mt-1  italic">
-            "Edit Your Story"
+          <p className="text-sm text-[#3A3A3A] mt-1 italic">
+            &quot;Edit Your Story&quot;
           </p>
         </div>
       </header>
@@ -310,24 +310,53 @@ export default function EditPostPage() {
         </div>
       </div>
 
-      {/* 메인 폼 */}
+      {/* 메인 폼 — WriteForm과 동일한 스타일 */}
       <main className="px-4">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="p-4"
+          className="p-3"
           style={{
             border: '1px solid #1A1A1A',
             backgroundColor: theme.colors.backgroundCard,
           }}
         >
-          {/* 태그 선택 */}
-          <div className="mb-4">
+          {/* 제목 입력 */}
+          <div className="mb-3">
             <label
-              className="block text-sm font-serif-display font-bold mb-2"
+              className="block text-xs font-bold mb-1.5"
               style={{ color: theme.colors.text }}
             >
-              TAG <span style={{ color: '#8B1A1A' }}>*</span>
+              제목 <span style={{ color: '#8B1A1A' }}>*</span>
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="기사 제목을 입력하세요 (2자 이상)"
+              maxLength={100}
+              className="w-full px-3 py-2 outline-none transition-colors text-sm"
+              style={{
+                border: '1px solid #1A1A1A',
+                backgroundColor: theme.colors.background,
+                color: theme.colors.text,
+              }}
+            />
+            <div
+              className="mt-1 text-xs text-right"
+              style={{ color: theme.colors.textSecondary }}
+            >
+              {title.length}/100
+            </div>
+          </div>
+
+          {/* 태그 선택 (필수) — 제목과 본문 사이 */}
+          <div className="mb-3">
+            <label
+              className="block text-xs font-bold mb-1.5"
+              style={{ color: theme.colors.text }}
+            >
+              태그 <span style={{ color: '#8B1A1A' }}>*</span>
             </label>
             <div className="flex gap-2">
               {BOARD_TAGS.map((t) => (
@@ -335,7 +364,7 @@ export default function EditPostPage() {
                   key={t}
                   type="button"
                   onClick={() => setTag(tag === t ? undefined : t)}
-                  className="px-3 py-1.5 text-sm font-serif-display font-bold transition-colors"
+                  className="px-3 py-1.5 text-xs font-bold transition-colors"
                   style={tag === t ? {
                     backgroundColor: '#1A1A1A',
                     color: '#F5F0E8',
@@ -352,50 +381,21 @@ export default function EditPostPage() {
             </div>
           </div>
 
-          {/* 제목 입력 */}
-          <div className="mb-4">
-            <label
-              className="block text-sm font-serif-display font-bold mb-2"
-              style={{ color: theme.colors.text }}
-            >
-              HEADLINE <span style={{ color: '#8B1A1A' }}>*</span>
-            </label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="기사 제목을 입력하세요 (2자 이상)"
-              maxLength={100}
-              className="w-full px-4 py-3 outline-none transition-colors font-serif-display text-lg"
-              style={{
-                border: '1px solid #1A1A1A',
-                backgroundColor: theme.colors.background,
-                color: theme.colors.text,
-              }}
-            />
-            <div
-              className="mt-1 text-xs text-right "
-              style={{ color: theme.colors.textSecondary }}
-            >
-              {title.length}/100
-            </div>
-          </div>
-
           {/* 내용 입력 */}
-          <div className="mb-4">
+          <div className="mb-3">
             <label
-              className="block text-sm font-serif-display font-bold mb-2"
+              className="block text-xs font-bold mb-1.5"
               style={{ color: theme.colors.text }}
             >
-              ARTICLE BODY <span style={{ color: '#8B1A1A' }}>*</span>
+              본문 <span style={{ color: '#8B1A1A' }}>*</span>
             </label>
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder="기사 내용을 입력하세요 (10자 이상)"
-              rows={8}
+              placeholder="기사 내용을 입력하세요 (5자 이상)"
+              rows={5}
               maxLength={2000}
-              className="w-full px-4 py-3 resize-none outline-none transition-colors leading-relaxed"
+              className="w-full px-3 py-2 resize-none outline-none transition-colors leading-relaxed text-sm"
               style={{
                 border: '1px solid #1A1A1A',
                 backgroundColor: theme.colors.background,
@@ -403,7 +403,7 @@ export default function EditPostPage() {
               }}
             />
             <div
-              className="mt-1 text-xs text-right "
+              className="mt-1 text-xs text-right"
               style={{ color: theme.colors.textSecondary }}
             >
               {content.length}/2000
@@ -411,12 +411,12 @@ export default function EditPostPage() {
           </div>
 
           {/* 이미지 첨부 */}
-          <div className="mb-4">
+          <div className="mb-3">
             <label
-              className="block text-sm font-serif-display font-bold mb-2"
+              className="block text-xs font-bold mb-1.5"
               style={{ color: theme.colors.text }}
             >
-              PHOTOS
+              사진
               <span className="font-normal text-xs ml-2" style={{ color: theme.colors.textSecondary }}>
                 (최대 5장)
               </span>
@@ -433,7 +433,7 @@ export default function EditPostPage() {
                       initial={{ opacity: 0, scale: 0.8 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.8 }}
-                      className="relative w-20 h-20"
+                      className="relative w-16 h-16"
                     >
                       <Image
                         src={url}
@@ -463,7 +463,7 @@ export default function EditPostPage() {
                       initial={{ opacity: 0, scale: 0.8 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.8 }}
-                      className="relative w-20 h-20"
+                      className="relative w-16 h-16"
                     >
                       <Image
                         src={img.preview}
@@ -495,17 +495,17 @@ export default function EditPostPage() {
               <button
                 type="button"
                 onClick={() => imageInputRef.current?.click()}
-                className="flex items-center gap-2 px-4 py-2 text-sm transition-colors"
+                className="flex items-center gap-2 px-3 py-1.5 text-xs transition-colors"
                 style={{
                   border: '1px dashed #1A1A1A',
                   backgroundColor: 'transparent',
                   color: theme.colors.text,
                 }}
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-                사진 추가
+                사진 첨부
               </button>
             )}
 
@@ -521,12 +521,12 @@ export default function EditPostPage() {
           </div>
 
           {/* 파일 첨부 */}
-          <div className="mb-4">
+          <div className="mb-3">
             <label
-              className="block text-sm font-serif-display font-bold mb-2"
+              className="block text-xs font-bold mb-1.5"
               style={{ color: theme.colors.text }}
             >
-              FILES
+              파일
               <span className="font-normal text-xs ml-2" style={{ color: theme.colors.textSecondary }}>
                 (최대 3개, 10MB 이하)
               </span>
@@ -610,17 +610,17 @@ export default function EditPostPage() {
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-2 px-4 py-2 text-sm transition-colors"
+                className="flex items-center gap-2 px-3 py-1.5 text-xs transition-colors"
                 style={{
                   border: '1px dashed #1A1A1A',
                   backgroundColor: 'transparent',
                   color: theme.colors.text,
                 }}
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                 </svg>
-                파일 추가
+                파일 첨부
               </button>
             )}
 
@@ -634,20 +634,11 @@ export default function EditPostPage() {
             />
           </div>
 
-          {/* 상태 안내 */}
+          {/* 구분선 */}
           <div
-            className="flex items-center justify-end py-3 border-t border-b mb-4"
+            className="py-2 border-t border-b mb-3"
             style={{ borderColor: '#D4CFC4' }}
-          >
-            <span
-              className="text-xs italic"
-              style={{ color: theme.colors.textSecondary }}
-            >
-              {uploading && 'Uploading...'}
-              {updating && 'Saving...'}
-              {!uploading && !updating && isValid && 'Ready to save!'}
-            </span>
-          </div>
+          />
 
           {/* 에러 메시지 */}
           {(updateError || uploadError) && (
@@ -665,6 +656,13 @@ export default function EditPostPage() {
             </motion.div>
           )}
 
+          {/* 유효성 안내 */}
+          {!isValid && (title.trim().length > 0 || content.trim().length > 0) && (
+            <p className="text-xs text-[#8B1A1A] text-center mb-2">
+              {!tag ? '태그를 선택해주세요' : title.trim().length < 2 ? '제목을 2자 이상 입력해주세요' : '본문을 5자 이상 입력해주세요'}
+            </p>
+          )}
+
           {/* 저장 버튼 */}
           <motion.button
             type="button"
@@ -672,13 +670,13 @@ export default function EditPostPage() {
             whileTap={{ scale: 0.99 }}
             onClick={handleSubmit}
             disabled={!isValid || updating || uploading}
-            className="w-full py-3 font-serif-display font-bold text-center transition-colors disabled:opacity-50"
+            className="w-full py-2.5 text-sm font-serif-display font-bold text-center transition-colors disabled:opacity-50"
             style={{
               backgroundColor: '#1A1A1A',
               color: '#F5F0E8',
             }}
           >
-            {uploading ? 'Uploading...' : updating ? 'Saving...' : 'SAVE CHANGES'}
+            {uploading ? '업로드 중...' : updating ? '저장 중...' : '수정하기'}
           </motion.button>
         </motion.div>
       </main>
@@ -686,7 +684,7 @@ export default function EditPostPage() {
       {/* 하단 장식 */}
       <div className="mt-8 mx-4">
         <div className="border-t-4 border-double border-[#1A1A1A] pt-2">
-          <p className="text-center text-sm text-[#3A3A3A]  italic">
+          <p className="text-center text-sm text-[#3A3A3A] italic">
             © {new Date().getFullYear()} Jibdan Jisung. All rights reserved.
           </p>
         </div>
