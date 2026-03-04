@@ -67,6 +67,15 @@ const HeadlineArticle = memo(function HeadlineArticle({
   const totalCommentCount = comments.length;
   const rootComments = comments.filter(c => !c.parentId);
 
+  // 채택된 댓글을 최상단으로
+  if (post.acceptedCommentId) {
+    const idx = rootComments.findIndex(c => c.id === post.acceptedCommentId);
+    if (idx > 0) {
+      const [accepted] = rootComments.splice(idx, 1);
+      rootComments.unshift(accepted);
+    }
+  }
+
   // 표시할 댓글과 대댓글 합쳐서 최대 3개
   let displayCount = 0;
   const maxDisplay = 3;
@@ -301,6 +310,15 @@ const MasonryItem = memo(function MasonryItem({
   // 일반 글은 총 4개 댓글까지 (대댓글 포함)
   const totalCommentCount = comments.length;
   const rootComments = comments.filter(c => !c.parentId);
+
+  // 채택된 댓글을 최상단으로
+  if (post.acceptedCommentId) {
+    const idx = rootComments.findIndex(c => c.id === post.acceptedCommentId);
+    if (idx > 0) {
+      const [accepted] = rootComments.splice(idx, 1);
+      rootComments.unshift(accepted);
+    }
+  }
 
   // 표시할 댓글과 대댓글 합쳐서 최대 4개
   let displayCount = 0;

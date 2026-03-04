@@ -286,11 +286,11 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
         {/* 채택된 댓글 상단 표시 */}
         {acceptedComment && (
           <div
-            className="mb-4 p-3 border-2"
-            style={{ borderColor: '#2E7D32', backgroundColor: '#F0F7F0' }}
+            className="mb-4 p-3 border-[3px]"
+            style={{ borderColor: '#1A1A1A', backgroundColor: '#FDFBF7' }}
           >
             <div className="flex items-center gap-1.5 mb-1.5">
-              <span className="text-[10px] font-bold px-1.5 py-0.5 bg-[#2E7D32] text-white">
+              <span className="text-[10px] font-bold px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8]">
                 채택된 답변
               </span>
               <span className="text-[13px] font-semibold" style={{ color: '#1A1A1A' }}>
