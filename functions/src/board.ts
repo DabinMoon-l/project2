@@ -45,9 +45,12 @@ interface Comment {
   authorNickname?: string;
   userClass?: string;
   postId: string;
+  parentId?: string;
   content: string;
+  imageUrls?: string[];
   likeCount?: number;
   rewarded?: boolean;
+  isAIReply?: boolean;
   createdAt: FirebaseFirestore.Timestamp;
 }
 
@@ -196,6 +199,7 @@ export const onCommentCreate = onDocumentCreated(
   {
     document: "comments/{commentId}",
     region: "asia-northeast3",
+    secrets: [GEMINI_API_KEY],
   },
   async (event) => {
     const snapshot = event.data;
@@ -271,6 +275,49 @@ export const onCommentCreate = onDocumentCreated(
             read: false,
             createdAt: FieldValue.serverTimestamp(),
           });
+        }
+
+        // 콩콩이 대댓글 자동 응답 트리거
+        if (comment.parentId && postData.tag === "학술") {
+          try {
+            // 부모 댓글이 콩콩이 댓글인지 확인
+            const parentDoc = await db.collection("comments").doc(comment.parentId).get();
+            if (parentDoc.exists) {
+              const parentComment = parentDoc.data() as Comment;
+              if (parentComment.authorId === "gemini-ai") {
+                // 작성자가 교수인지 확인
+                const authorDoc = await db.collection("users").doc(userId).get();
+                const authorRole = authorDoc.data()?.role;
+
+                if (authorRole !== "professor") {
+                  // 스팸 방지: 같은 부모 댓글에 최근 2분 내 AI 대댓글이 있는지 확인
+                  const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
+                  const recentAI = await db.collection("comments")
+                    .where("parentId", "==", comment.parentId)
+                    .where("authorId", "==", "gemini-ai")
+                    .where("createdAt", ">=", twoMinAgo)
+                    .limit(1)
+                    .get();
+
+                  if (recentAI.empty) {
+                    await generateAIReplyToComment(
+                      postData,
+                      postId,
+                      parentComment,
+                      comment,
+                      comment.parentId,
+                      GEMINI_API_KEY.value(),
+                    );
+                  } else {
+                    console.log(`스팸 방지: 2분 내 AI 대댓글 이미 존재 (parentId=${comment.parentId})`);
+                  }
+                }
+              }
+            }
+          } catch (aiError) {
+            // AI 대댓글 실패해도 댓글 작성은 성공으로 처리
+            console.error("콩콩이 대댓글 자동 응답 실패:", aiError);
+          }
         }
       }
     } catch (error: unknown) {
@@ -438,20 +485,25 @@ async function generateBoardAIReply(
   const db = getFirestore();
 
   // 프롬프트 구성
-  const systemPrompt = `당신은 대학 수업 보조 AI입니다. 학생이 학술 게시판에 올린 글에 답변합니다.
+  const systemPrompt = `당신은 "콩콩이"라는 이름의 귀여운 토끼 AI 학습 도우미예요. 학생이 학술 게시판에 올린 글에 친근하게 답변해요.
+
+[콩콩이 말투 규칙]
+- 친근하고 다정한 ~요/~해요 체를 사용해요
+- 이모지를 적절히 사용해요 (🐰✨📚💡 등, 과하지 않게 1~3개)
+- 학생을 응원하는 따뜻한 톤을 유지해요
+- 자기소개는 하지 않아요 (이미 콩콩이라는 걸 알고 있어요)
 
 [검토 과정]
-1. 제목, 본문, 첨부 이미지를 하나의 맥락으로 통합 해석합니다
-2. 질문의 핵심 의도를 파악합니다
-3. 학술적으로 정확한 정보인지 검증합니다
-4. 불확실한 내용은 명확히 표시합니다
+1. 제목, 본문, 첨부 이미지를 하나의 맥락으로 통합 해석해요
+2. 질문의 핵심 의도를 파악해요
+3. 학술적으로 정확한 정보인지 검증해요
 
 [답변 규칙]
-- 최대 5문장 이내로 간결하게 답변
-- 한국어로 답변
-- 제목·본문·이미지를 따로 보지 말고 함께 해석하여 답변
-- 학술적 정확성을 우선시하되, 학생이 이해하기 쉽게 설명
-- 불확실한 경우 "교수님께 확인해보시길 권합니다"로 안내`;
+- 최대 5문장 이내로 간결하게 답변해요
+- 한국어로 답변해요
+- 제목·본문·이미지를 따로 보지 말고 함께 해석하여 답변해요
+- 학술적 정확성을 우선시하되, 학생이 이해하기 쉽게 설명해요
+- 불확실한 경우 "교수님께 한번 확인해보면 좋을 것 같아요!"로 안내해요`;
 
   const userText = `제목: ${post.title}\n본문: ${post.content}`;
 
@@ -549,4 +601,139 @@ async function generateBoardAIReply(
   });
 
   console.log(`AI 자동답변 생성 완료: postId=${postId}`);
+}
+
+/**
+ * 콩콩이 댓글에 대댓글이 달리면 대화 맥락을 이해하고 다시 대댓글로 응답
+ */
+async function generateAIReplyToComment(
+  post: Post,
+  postId: string,
+  aiComment: Comment,
+  userReply: Comment,
+  aiCommentId: string,
+  apiKey: string,
+): Promise<void> {
+  const db = getFirestore();
+
+  const systemPrompt = `당신은 "콩콩이"라는 이름의 귀여운 토끼 AI 학습 도우미예요. 학생이 당신의 이전 답변에 추가 질문을 했어요. 대화 맥락을 이해하고 이어서 답변해주세요.
+
+[콩콩이 말투 규칙]
+- 친근하고 다정한 ~요/~해요 체를 사용해요
+- 이모지를 적절히 사용해요 (🐰✨📚💡 등, 과하지 않게 1~3개)
+- 학생을 응원하는 따뜻한 톤을 유지해요
+- 자기소개는 하지 않아요 (이미 콩콩이라는 걸 알고 있어요)
+- 이전 답변과 자연스럽게 이어지는 대화를 해요
+
+[답변 규칙]
+- 최대 5문장 이내로 간결하게 답변해요
+- 한국어로 답변해요
+- 학술적 정확성을 우선시하되, 학생이 이해하기 쉽게 설명해요
+- 불확실한 경우 "교수님께 한번 확인해보면 좋을 것 같아요!"로 안내해요`;
+
+  const contextText = `[원본 게시글]
+제목: ${post.title}
+본문: ${post.content}
+
+[콩콩이의 이전 답변]
+${aiComment.content}
+
+[학생의 추가 질문/대댓글]
+${userReply.content}`;
+
+  // Gemini API 요청 parts 구성
+  const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
+    { text: systemPrompt + "\n\n" + contextText },
+  ];
+
+  // 대댓글에 이미지가 있으면 base64로 변환하여 추가
+  if (userReply.imageUrls && userReply.imageUrls.length > 0) {
+    for (const imageUrl of userReply.imageUrls) {
+      try {
+        const imgResponse = await fetch(imageUrl);
+        if (!imgResponse.ok) continue;
+        const buffer = await imgResponse.buffer();
+        const base64 = buffer.toString("base64");
+        const contentType = imgResponse.headers.get("content-type") || "image/jpeg";
+        parts.push({
+          inlineData: {
+            mimeType: contentType,
+            data: base64,
+          },
+        });
+      } catch (imgError) {
+        console.warn("대댓글 이미지 fetch 실패, 스킵:", imageUrl, imgError);
+      }
+    }
+  }
+
+  const requestBody = {
+    contents: [{ parts }],
+    generationConfig: {
+      temperature: 0.5,
+      topK: 40,
+      topP: 0.95,
+      maxOutputTokens: 1024,
+    },
+  };
+
+  // Gemini 2.5 Flash API 호출
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+  let response: Awaited<ReturnType<typeof fetch>>;
+  try {
+    response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      }
+    );
+  } catch (err: unknown) {
+    clearTimeout(timeout);
+    if (err && typeof err === "object" && "name" in err && (err as { name: string }).name === "AbortError") {
+      throw new Error("콩콩이 대댓글 요청 시간 초과 (30초)");
+    }
+    throw err;
+  }
+  clearTimeout(timeout);
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("콩콩이 대댓글 API 오류:", response.status, errorText);
+    throw new Error(`Gemini API 오류: ${response.status}`);
+  }
+
+  const data = await response.json() as {
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  };
+  const aiText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+  if (!aiText) {
+    console.warn("콩콩이 대댓글이 비어있습니다", data);
+    return;
+  }
+
+  // 콩콩이 원본 댓글 아래 대댓글로 저장
+  await db.collection("comments").add({
+    postId: postId,
+    parentId: aiCommentId,
+    authorId: "gemini-ai",
+    authorNickname: "콩콩이",
+    authorClassType: null,
+    content: aiText.trim(),
+    imageUrls: [],
+    isAnonymous: false,
+    isAIReply: true,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  // posts의 commentCount 증가
+  await db.collection("posts").doc(postId).update({
+    commentCount: FieldValue.increment(1),
+  });
+
+  console.log(`콩콩이 대댓글 생성 완료: postId=${postId}, parentId=${aiCommentId}`);
 }
