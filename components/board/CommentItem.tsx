@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useTheme } from '@/styles/themes/useTheme';
 import { ImageViewer } from '@/components/common';
@@ -13,10 +13,15 @@ interface CommentItemProps {
   onEdit?: (commentId: string, content: string) => void;
   onReply?: () => void;
   onLike?: (commentId: string) => void;
+  onAccept?: (commentId: string) => void;
   isLiked?: boolean;
   isDeleting?: boolean;
   isEditing?: boolean;
   isReply?: boolean;
+  /** 채택 버튼 표시 여부 */
+  canAccept?: boolean;
+  /** 채택 처리 중 */
+  isAccepting?: boolean;
   /** 교수님 여부 (이름 표시용) */
   isProfessor?: boolean;
   /** 작성자 실명 맵 (uid → name) */
@@ -57,10 +62,13 @@ export default function CommentItem({
   onEdit,
   onReply,
   onLike,
+  onAccept,
   isLiked = false,
   isDeleting = false,
   isEditing: isEditingProp = false,
   isReply = false,
+  canAccept = false,
+  isAccepting = false,
   isProfessor = false,
   authorNameMap,
   postAuthorId,
@@ -71,11 +79,18 @@ export default function CommentItem({
   const [isEditMode, setIsEditMode] = useState(false);
   const [editContent, setEditContent] = useState(comment.content);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isClamped, setIsClamped] = useState(false);
+  const contentRef = useRef<HTMLParagraphElement>(null);
   const [viewerInfo, setViewerInfo] = useState<{ index: number } | null>(null);
   const [imageCurrentPage, setImageCurrentPage] = useState(0);
 
-  // 댓글이 3줄 이상인지 확인 (약 57자 이상 또는 줄바꿈 3개 이상)
-  const isLongContent = comment.content.length > 57 || (comment.content.match(/\n/g) || []).length >= 3;
+  // 실제 DOM에서 line-clamp에 의해 잘리는지 감지
+  useEffect(() => {
+    const el = contentRef.current;
+    if (el && !isExpanded) {
+      setIsClamped(el.scrollHeight > el.clientHeight + 1);
+    }
+  }, [comment.content, isExpanded]);
   const images = comment.imageUrls || [];
 
   const isOwner = currentUserId === comment.authorId;
@@ -141,6 +156,11 @@ export default function CommentItem({
               글쓴이
             </span>
           )}
+          {comment.isAccepted && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 bg-[#2E7D32] text-white">
+              채택됨
+            </span>
+          )}
           <span className="text-[#AAAAAA] text-[13px]">·</span>
           <span className="text-[11px] text-[#999999]">
             {formatDate(comment.createdAt)}
@@ -149,6 +169,17 @@ export default function CommentItem({
 
         {!isEditMode && (
           <div className="flex items-center gap-2.5">
+            {canAccept && onAccept && (
+              <button
+                type="button"
+                onClick={() => onAccept(comment.id)}
+                disabled={isAccepting}
+                className="text-[11px] font-bold transition-colors disabled:opacity-50"
+                style={{ color: '#2E7D32' }}
+              >
+                {isAccepting ? '채택 중...' : '채택'}
+              </button>
+            )}
             {!isReply && onReply && (
               <button
                 type="button"
@@ -218,8 +249,9 @@ export default function CommentItem({
       ) : (
         <div className="overflow-hidden max-w-full">
           <p
+            ref={contentRef}
             className={`text-[15px] whitespace-pre-wrap leading-relaxed ${
-              !isExpanded && isLongContent ? 'line-clamp-3' : ''
+              !isExpanded ? 'line-clamp-3' : ''
             }`}
             style={{
               color: theme.colors.text,
@@ -229,8 +261,8 @@ export default function CommentItem({
           >
             {comment.content}
           </p>
-          {/* 더보기/접기 버튼 */}
-          {isLongContent && (
+          {/* 더보기/접기 버튼 — 실제 잘릴 때만 표시 */}
+          {(isClamped || isExpanded) && (
             <button
               type="button"
               onClick={() => setIsExpanded(!isExpanded)}

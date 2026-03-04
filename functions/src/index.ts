@@ -51,6 +51,8 @@ export {
   onCommentDeleted,
   onLikeReceived,
   onLikeRemoved,
+  acceptComment,
+  deletePost,
 } from "./board";
 
 // ============================================

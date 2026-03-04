@@ -1,9 +1,11 @@
 import { onDocumentCreated, onDocumentDeleted, onDocumentWritten } from "firebase-functions/v2/firestore";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import fetch from "node-fetch";
 import { readUserForExp, addExpInTransaction, EXP_REWARDS } from "./utils/gold";
 import { enforceRateLimit } from "./rateLimit";
+import { loadScopeForAI } from "./courseScope";
 
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 
@@ -291,15 +293,20 @@ export const onCommentCreate = onDocumentCreated(
 
                 if (authorRole !== "professor") {
                   // 스팸 방지: 같은 부모 댓글에 최근 2분 내 AI 대댓글이 있는지 확인
-                  const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
-                  const recentAI = await db.collection("comments")
+                  // 복합 인덱스 불필요하도록 단일 필드 쿼리 + 코드 필터링
+                  const recentReplies = await db.collection("comments")
                     .where("parentId", "==", comment.parentId)
-                    .where("authorId", "==", "gemini-ai")
-                    .where("createdAt", ">=", twoMinAgo)
-                    .limit(1)
                     .get();
 
-                  if (recentAI.empty) {
+                  const twoMinAgo = Date.now() - 2 * 60 * 1000;
+                  const hasRecentAI = recentReplies.docs.some((d) => {
+                    const data = d.data();
+                    if (data.authorId !== "gemini-ai") return false;
+                    const ts = data.createdAt?.toMillis?.() || data.createdAt?._seconds * 1000 || 0;
+                    return ts > twoMinAgo;
+                  });
+
+                  if (!hasRecentAI) {
                     await generateAIReplyToComment(
                       postData,
                       postId,
@@ -484,26 +491,38 @@ async function generateBoardAIReply(
 ): Promise<void> {
   const db = getFirestore();
 
+  // 과목 범위 키워드 로드
+  let scopeContext = "";
+  if (post.courseId) {
+    try {
+      const scope = await loadScopeForAI(post.courseId, undefined, 3000);
+      if (scope && scope.keywords.length > 0) {
+        scopeContext = `\n\n[이 과목의 주요 키워드]\n${scope.keywords.join(", ")}`;
+      }
+    } catch (e) {
+      console.warn("과목 범위 로드 실패, 스킵:", e);
+    }
+  }
+
   // 프롬프트 구성
-  const systemPrompt = `당신은 "콩콩이"라는 이름의 귀여운 토끼 AI 학습 도우미예요. 학생이 학술 게시판에 올린 글에 친근하게 답변해요.
+  const systemPrompt = `너는 "콩콩이"라는 이름의 토끼 AI 학습 도우미야. 학생이 학술 게시판에 올린 글에 답변해줘.
 
-[콩콩이 말투 규칙]
-- 친근하고 다정한 ~요/~해요 체를 사용해요
-- 이모지를 적절히 사용해요 (🐰✨📚💡 등, 과하지 않게 1~3개)
-- 학생을 응원하는 따뜻한 톤을 유지해요
-- 자기소개는 하지 않아요 (이미 콩콩이라는 걸 알고 있어요)
+[절대 금지]
+- 이모지, 이모티콘, 특수 기호 문자(🐰✨📚💡♥ 등) 절대 사용 금지. 순수 텍스트만 써.
+- ~요/~해요 존댓말 금지. 반말 써.
 
-[검토 과정]
-1. 제목, 본문, 첨부 이미지를 하나의 맥락으로 통합 해석해요
-2. 질문의 핵심 의도를 파악해요
-3. 학술적으로 정확한 정보인지 검증해요
+[콩콩이 말투]
+- 20대 한국 여자가 같은 과 친구한테 설명하듯 자연스러운 반말
+- ~야, ~거든, ~지, ~잖아, ~인 듯, ~해, ~같아, ~거야 같은 구어체
+- 딱딱하지 않게, 그렇다고 과하게 귀엽지도 않게
 
 [답변 규칙]
-- 최대 5문장 이내로 간결하게 답변해요
-- 한국어로 답변해요
-- 제목·본문·이미지를 따로 보지 말고 함께 해석하여 답변해요
-- 학술적 정확성을 우선시하되, 학생이 이해하기 쉽게 설명해요
-- 불확실한 경우 "교수님께 한번 확인해보면 좋을 것 같아요!"로 안내해요`;
+- 최대 5문장, 한국어
+- 제목/본문/이미지를 함께 해석해서 답변해
+- 학술적 정확성 우선, 학생이 이해하기 쉽게 설명해
+- 과목 범위 내 질문이면 키워드를 활용해서 정확하게 답변해
+- 범위 밖이어도 질문자가 궁금해하는 거니까 답변은 해주되, 범위 밖이라고 살짝 언급해
+- 불확실하면 "이건 교수님한테 한번 여쭤보는 게 좋을 것 같아!"로 안내해${scopeContext}`;
 
   const userText = `제목: ${post.title}\n본문: ${post.content}`;
 
@@ -539,7 +558,7 @@ async function generateBoardAIReply(
       temperature: 0.3,
       topK: 40,
       topP: 0.95,
-      maxOutputTokens: 1024,
+      maxOutputTokens: 2048,
     },
   };
 
@@ -616,20 +635,34 @@ async function generateAIReplyToComment(
 ): Promise<void> {
   const db = getFirestore();
 
-  const systemPrompt = `당신은 "콩콩이"라는 이름의 귀여운 토끼 AI 학습 도우미예요. 학생이 당신의 이전 답변에 추가 질문을 했어요. 대화 맥락을 이해하고 이어서 답변해주세요.
+  // 과목 범위 키워드 로드
+  let scopeContext = "";
+  if (post.courseId) {
+    try {
+      const scope = await loadScopeForAI(post.courseId, undefined, 3000);
+      if (scope && scope.keywords.length > 0) {
+        scopeContext = `\n\n[이 과목의 주요 키워드]\n${scope.keywords.join(", ")}`;
+      }
+    } catch (e) {
+      console.warn("과목 범위 로드 실패, 스킵:", e);
+    }
+  }
 
-[콩콩이 말투 규칙]
-- 친근하고 다정한 ~요/~해요 체를 사용해요
-- 이모지를 적절히 사용해요 (🐰✨📚💡 등, 과하지 않게 1~3개)
-- 학생을 응원하는 따뜻한 톤을 유지해요
-- 자기소개는 하지 않아요 (이미 콩콩이라는 걸 알고 있어요)
-- 이전 답변과 자연스럽게 이어지는 대화를 해요
+  const systemPrompt = `너는 "콩콩이"라는 이름의 토끼 AI 학습 도우미야. 학생이 너의 이전 답변에 추가 질문을 했어. 대화 맥락을 이해하고 이어서 답변해줘.
+
+[절대 금지]
+- 이모지, 이모티콘, 특수 기호 문자 절대 사용 금지. 순수 텍스트만 써.
+- ~요/~해요 존댓말 금지. 반말 써.
+
+[콩콩이 말투]
+- 20대 한국 여자가 같은 과 친구한테 설명하듯 자연스러운 반말
+- ~야, ~거든, ~지, ~잖아, ~인 듯, ~해, ~같아, ~거야 같은 구어체
+- 이전 답변과 자연스럽게 이어지는 대화를 해
 
 [답변 규칙]
-- 최대 5문장 이내로 간결하게 답변해요
-- 한국어로 답변해요
-- 학술적 정확성을 우선시하되, 학생이 이해하기 쉽게 설명해요
-- 불확실한 경우 "교수님께 한번 확인해보면 좋을 것 같아요!"로 안내해요`;
+- 최대 5문장, 한국어
+- 학술적 정확성 우선, 학생이 이해하기 쉽게 설명해
+- 불확실하면 "이건 교수님한테 한번 여쭤보는 게 좋을 것 같아!"로 안내해${scopeContext}`;
 
   const contextText = `[원본 게시글]
 제목: ${post.title}
@@ -673,7 +706,7 @@ ${userReply.content}`;
       temperature: 0.5,
       topK: 40,
       topP: 0.95,
-      maxOutputTokens: 1024,
+      maxOutputTokens: 2048,
     },
   };
 
@@ -737,3 +770,164 @@ ${userReply.content}`;
 
   console.log(`콩콩이 대댓글 생성 완료: postId=${postId}, parentId=${aiCommentId}`);
 }
+
+/**
+ * 댓글 채택 (글 작성자만 호출 가능)
+ * - 글당 1개 댓글만 채택 가능
+ * - 채택 시 댓글 작성자에게 추가 EXP 지급
+ */
+export const acceptComment = onCall(
+  { region: "asia-northeast3" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+    }
+
+    const { postId, commentId } = request.data as {
+      postId?: string;
+      commentId?: string;
+    };
+
+    if (!postId || !commentId) {
+      throw new HttpsError("invalid-argument", "postId와 commentId가 필요합니다.");
+    }
+
+    const uid = request.auth.uid;
+    const db = getFirestore();
+
+    // 게시글 조회 + 작성자 확인
+    const postDoc = await db.collection("posts").doc(postId).get();
+    if (!postDoc.exists) {
+      throw new HttpsError("not-found", "게시글을 찾을 수 없습니다.");
+    }
+    const postData = postDoc.data()!;
+    const postAuthorId = postData.authorId || postData.userId;
+
+    if (postAuthorId !== uid) {
+      throw new HttpsError("permission-denied", "글 작성자만 댓글을 채택할 수 있습니다.");
+    }
+
+    // 이미 채택된 댓글이 있는지 확인
+    if (postData.acceptedCommentId) {
+      throw new HttpsError("already-exists", "이미 채택된 댓글이 있습니다.");
+    }
+
+    // 댓글 조회
+    const commentDoc = await db.collection("comments").doc(commentId).get();
+    if (!commentDoc.exists) {
+      throw new HttpsError("not-found", "댓글을 찾을 수 없습니다.");
+    }
+    const commentData = commentDoc.data()!;
+
+    // 자기 댓글 채택 방지
+    if (commentData.authorId === uid) {
+      throw new HttpsError("invalid-argument", "본인의 댓글은 채택할 수 없습니다.");
+    }
+
+    // AI 댓글 채택 방지
+    if (commentData.authorId === "gemini-ai") {
+      throw new HttpsError("invalid-argument", "AI 댓글은 채택할 수 없습니다.");
+    }
+
+    // 대댓글 채택 방지 (루트 댓글만 채택 가능)
+    if (commentData.parentId) {
+      throw new HttpsError("invalid-argument", "대댓글은 채택할 수 없습니다.");
+    }
+
+    const commentAuthorId = commentData.authorId;
+    const expReward = EXP_REWARDS.COMMENT_ACCEPTED;
+
+    // 트랜잭션으로 채택 처리 + EXP 지급
+    await db.runTransaction(async (transaction) => {
+      const userDoc = await readUserForExp(transaction, commentAuthorId);
+
+      // 게시글에 채택 댓글 ID 저장
+      transaction.update(postDoc.ref, {
+        acceptedCommentId: commentId,
+      });
+
+      // 댓글에 채택 표시
+      transaction.update(commentDoc.ref, {
+        isAccepted: true,
+        acceptedAt: FieldValue.serverTimestamp(),
+      });
+
+      // 댓글 작성자에게 EXP 지급
+      addExpInTransaction(transaction, commentAuthorId, expReward, "댓글 채택", userDoc);
+    });
+
+    // 댓글 작성자에게 알림
+    await db.collection("notifications").add({
+      userId: commentAuthorId,
+      type: "COMMENT_ACCEPTED",
+      title: "댓글 채택",
+      message: "내 댓글이 채택되었습니다!",
+      data: { postId, commentId },
+      read: false,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    console.log(`댓글 채택 완료: postId=${postId}, commentId=${commentId}, author=${commentAuthorId}`);
+
+    return { success: true, expReward };
+  }
+);
+
+// ============================================================
+// 게시글 삭제 (Admin SDK로 댓글까지 원자적 삭제)
+// ============================================================
+
+/**
+ * 게시글 삭제 CF
+ * 클라이언트에서 댓글을 직접 삭제하면 타인 댓글에 대한 권한이 없어 실패하므로
+ * Admin SDK로 글 + 모든 댓글을 서버에서 삭제
+ */
+export const deletePost = onCall(
+  { region: "asia-northeast3" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+    }
+
+    const { postId } = request.data as { postId: string };
+    if (!postId) {
+      throw new HttpsError("invalid-argument", "postId가 필요합니다.");
+    }
+
+    const db = getFirestore();
+    const postRef = db.collection("posts").doc(postId);
+    const postSnap = await postRef.get();
+
+    if (!postSnap.exists) {
+      throw new HttpsError("not-found", "글을 찾을 수 없습니다.");
+    }
+
+    const postData = postSnap.data()!;
+    const authorId = postData.authorId || postData.userId;
+
+    // 권한 확인: 작성자 또는 교수님
+    const userDoc = await db.collection("users").doc(request.auth.uid).get();
+    const isProfessor = userDoc.exists && userDoc.data()?.role === "professor";
+
+    if (request.auth.uid !== authorId && !isProfessor) {
+      throw new HttpsError("permission-denied", "삭제 권한이 없습니다.");
+    }
+
+    // 해당 글의 모든 댓글 조회
+    const commentsSnap = await db
+      .collection("comments")
+      .where("postId", "==", postId)
+      .get();
+
+    // 글 + 댓글 배치 삭제 (500건 제한 분할)
+    const allRefs = [...commentsSnap.docs.map(d => d.ref), postRef];
+    for (let i = 0; i < allRefs.length; i += 500) {
+      const batch = db.batch();
+      allRefs.slice(i, i + 500).forEach(ref => batch.delete(ref));
+      await batch.commit();
+    }
+
+    console.log(`게시글 삭제 완료: postId=${postId}, 댓글 ${commentsSnap.size}개 포함`);
+    return { success: true, deletedComments: commentsSnap.size };
+  }
+);

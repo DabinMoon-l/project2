@@ -13,6 +13,7 @@ import {
   useUpdateComment,
   useDeleteComment,
   useCommentLike,
+  useAcceptComment,
   type Comment,
 } from '@/lib/hooks/useBoard';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -24,12 +25,14 @@ interface CommentSectionProps {
   postId: string;
   /** 게시글 작성자 uid (글쓴이 표시용) */
   postAuthorId?: string;
+  /** 이미 채택된 댓글 ID */
+  acceptedCommentId?: string;
 }
 
 /**
  * 댓글 섹션 컴포넌트 — 하단 고정 입력바 + 이미지 첨부
  */
-export default function CommentSection({ postId, postAuthorId }: CommentSectionProps) {
+export default function CommentSection({ postId, postAuthorId, acceptedCommentId }: CommentSectionProps) {
   const { theme } = useTheme();
   const { user } = useAuth();
   const { profile } = useUser();
@@ -39,6 +42,7 @@ export default function CommentSection({ postId, postAuthorId }: CommentSectionP
   const { updateComment } = useUpdateComment();
   const { deleteComment } = useDeleteComment();
   const { toggleCommentLike } = useCommentLike();
+  const { acceptComment, loading: accepting } = useAcceptComment();
   const { uploadMultipleImages, loading: uploading } = useUpload();
   const { bottomOffset } = useKeyboardAware();
   useKeyboardScrollAdjust(bottomOffset);
@@ -244,16 +248,66 @@ export default function CommentSection({ postId, postAuthorId }: CommentSectionP
     return comment?.likedBy?.includes(user?.uid || '') || false;
   }, [comments, user?.uid]);
 
+  const handleAccept = useCallback(async (commentId: string) => {
+    const success = await acceptComment(postId, commentId);
+    if (success && profile?.role !== 'professor') {
+      setTimeout(() => {
+        showExpToast(30, '댓글 채택');
+      }, 500);
+    }
+  }, [acceptComment, postId, showExpToast, profile?.role]);
+
   const handleReply = useCallback((commentId: string, nickname: string) => {
     setReplyingTo({ id: commentId, nickname });
   }, []);
 
   const isSending = creating || uploading;
 
+  // 채택 관련
+  const isPostOwner = !!(user?.uid && postAuthorId && user.uid === postAuthorId);
+  const hasAccepted = !!acceptedCommentId;
+
+  // 채택 가능 여부: 글 작성자 + 아직 채택 안 함 + 루트 댓글 + 본인 댓글 아님 + AI 아님
+  const canAcceptComment = useCallback((comment: Comment) => {
+    return isPostOwner && !hasAccepted && !comment.parentId
+      && comment.authorId !== user?.uid && comment.authorId !== 'gemini-ai';
+  }, [isPostOwner, hasAccepted, user?.uid]);
+
+  // 채택된 댓글 찾기
+  const acceptedComment = useMemo(() => {
+    if (!acceptedCommentId) return null;
+    return comments.find(c => c.id === acceptedCommentId) || null;
+  }, [acceptedCommentId, comments]);
+
   return (
     <>
       {/* 댓글 목록 */}
       <div className="py-4">
+        {/* 채택된 댓글 상단 표시 */}
+        {acceptedComment && (
+          <div
+            className="mb-4 p-3 border-2"
+            style={{ borderColor: '#2E7D32', backgroundColor: '#F0F7F0' }}
+          >
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <span className="text-[10px] font-bold px-1.5 py-0.5 bg-[#2E7D32] text-white">
+                채택된 답변
+              </span>
+              <span className="text-[13px] font-semibold" style={{ color: '#1A1A1A' }}>
+                {acceptedComment.authorClassType
+                  ? `${acceptedComment.authorNickname}·${acceptedComment.authorClassType}반`
+                  : acceptedComment.authorNickname}
+              </span>
+            </div>
+            <p
+              className="text-[15px] whitespace-pre-wrap leading-relaxed"
+              style={{ color: '#1A1A1A', wordBreak: 'break-word', overflowWrap: 'anywhere' }}
+            >
+              {acceptedComment.content}
+            </p>
+          </div>
+        )}
+
         {loading && (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
@@ -289,9 +343,12 @@ export default function CommentSection({ postId, postAuthorId }: CommentSectionP
                   onEdit={handleEdit}
                   onReply={() => handleReply(comment.id, comment.authorNickname)}
                   onLike={handleLike}
+                  onAccept={handleAccept}
                   isLiked={checkIsLiked(comment.id)}
                   isDeleting={deletingId === comment.id}
                   isEditing={editingId === comment.id}
+                  canAccept={canAcceptComment(comment)}
+                  isAccepting={accepting}
                   isProfessor={isProfessor}
                   authorNameMap={authorNameMap}
                   postAuthorId={postAuthorId}

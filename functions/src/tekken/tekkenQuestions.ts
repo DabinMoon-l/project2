@@ -7,6 +7,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import fetch from "node-fetch";
 import { loadScopeForAI } from "../courseScope";
 import { getFocusGuide } from "../styledQuizGenerator";
+import type { StyleProfile, KeywordStore } from "../professorQuizAnalysis";
 import type { GeneratedQuestion, PregenCache } from "./tekkenTypes";
 import { COURSE_NAMES } from "./tekkenTypes";
 
@@ -32,53 +33,84 @@ export async function getTekkenChapters(courseId: string): Promise<string[]> {
 }
 
 /**
+ * 교수 스타일/키워드 데이터를 Firestore에서 로드
+ */
+async function loadProfessorStyle(courseId: string): Promise<{
+  profile: StyleProfile | null;
+  keywords: KeywordStore | null;
+}> {
+  try {
+    const db = getFirestore();
+    const analysisRef = db.collection("professorQuizAnalysis").doc(courseId).collection("data");
+    const [profileDoc, keywordsDoc] = await Promise.all([
+      analysisRef.doc("styleProfile").get(),
+      analysisRef.doc("keywords").get(),
+    ]);
+    return {
+      profile: profileDoc.exists ? (profileDoc.data() as StyleProfile) : null,
+      keywords: keywordsDoc.exists ? (keywordsDoc.data() as KeywordStore) : null,
+    };
+  } catch {
+    return { profile: null, keywords: null };
+  }
+}
+
+/**
  * 철권퀴즈 프롬프트 생성
  *
- * - biology: scope + focusGuide 5:5 비율
- * - pathophysiology: scope 기반 (focusGuide 없으면 scope 전체)
- * - microbiology: scope/focusGuide 없음 → 간호사 국시 기반 별도 프롬프트
+ * 교수님의 출제 스타일(styleProfile)과 키워드(keywords)를 참고하여
+ * 과목 특성에 맞는 4지선다 문제를 생성
  */
 function buildTekkenPrompt(
   courseName: string,
-  courseId: string,
   focusGuide: string | null,
   scopeContent: string | null,
   focusCount: number,
   scopeCount: number,
-  chapters: string[]
+  chapters: string[],
+  profile: StyleProfile | null,
+  keywords: KeywordStore | null
 ): string {
   const totalCount = focusCount + scopeCount;
-
-  // 미생물학: scope/focusGuide 없음 → 간호사 국시 기반 전용 프롬프트
-  if (courseId === "microbiology" && !focusGuide && !scopeContent) {
-    return `간호학과 2학년 대상 미생물학 배틀 퀴즈 문제 ${totalCount}개를 만들어주세요.
-
-범위: 미생물학 ${chapters.join(", ")}장
-참고: 간호사 국가고시 미생물학 출제 범위를 참고하되, 간호학과 2학년 수준에 적합한 난이도로 출제하세요.
-
-대상: 간호학과 2학년 대학생
-난이도: 수업을 들은 학생이 20초 안에 풀 수 있는 중간 난이도
-
-## 공통 규칙
-- 4지선다 순수 객관식만 (OX 문제 금지)
-- 문제 하나로 완결 (별도 지문/제시문/보기표/그림/표 참조 금지)
-- "다음 중", "위의 내용에서" 같은 외부 참조 표현 금지
-- 각 문제는 서로 다른 주제/개념 (같은 개념 2번 이상 금지)
-- 간결한 문제 (1~2문장)
-- 오답 선지는 그럴듯하게 (명백히 틀린 보기 금지)
-- choices 4개, correctAnswer는 0~3
-- 매번 다른 문제를 생성
-
-반드시 아래 JSON 형식만 출력 (다른 텍스트 없이):
-[
-  {"text": "문제 내용", "type": "multiple", "choices": ["선지1", "선지2", "선지3", "선지4"], "correctAnswer": 2}
-]`;
-  }
 
   let prompt = `대학교 ${courseName} 과목 (${chapters.join(", ")}장) 배틀 퀴즈 문제 ${totalCount}개를 만들어주세요.\n\n`;
 
   prompt += `대상: 간호학과 대학생\n`;
   prompt += `난이도: 수업을 들은 학생이 20초 안에 풀 수 있는 중간 난이도\n\n`;
+
+  // 교수님 출제 스타일 참고
+  if (profile) {
+    prompt += `[교수님 출제 스타일 참고]\n`;
+    if (profile.toneCharacteristics) {
+      const tone = profile.toneCharacteristics;
+      if (tone.hasEnglishTerms) prompt += `- 영문 용어를 병기하세요\n`;
+      if (tone.hasClinicalCases) prompt += `- 임상 사례 기반 문제를 포함하세요\n`;
+      if (tone.usesNegative) prompt += `- "~이 아닌 것은?" 형식의 부정형 문제를 적절히 포함하세요\n`;
+    }
+    if (profile.trapPatterns && profile.trapPatterns.length > 0) {
+      const topTraps = profile.trapPatterns.slice(0, 3).map(t => t.pattern).join(", ");
+      prompt += `- 함정 패턴: ${topTraps}\n`;
+    }
+    prompt += `\n`;
+  }
+
+  // 교수님이 자주 출제하는 키워드 참고
+  if (keywords) {
+    if (keywords.mainConcepts && keywords.mainConcepts.length > 0) {
+      const topConcepts = keywords.mainConcepts
+        .slice(0, 15)
+        .map(k => k.term)
+        .join(", ");
+      prompt += `[교수님이 강조하는 핵심 개념]\n${topConcepts}\n\n`;
+    }
+    if (keywords.caseTriggers && keywords.caseTriggers.length > 0) {
+      const topCases = keywords.caseTriggers
+        .slice(0, 10)
+        .map(k => k.term)
+        .join(", ");
+      prompt += `[임상/사례 키워드]\n${topCases}\n\n`;
+    }
+  }
 
   // focusGuide 기반 문제
   if (focusGuide && focusCount > 0) {
@@ -132,10 +164,11 @@ export async function generateBattleQuestions(
   const targetChapters = chapters || await getTekkenChapters(courseId);
   const courseName = COURSE_NAMES[courseId] || "생물학";
 
-  // scope + focusGuide 병렬 로드
-  const [scopeData, focusGuide] = await Promise.all([
+  // scope + focusGuide + 교수 스타일/키워드 병렬 로드
+  const [scopeData, focusGuide, profStyle] = await Promise.all([
     loadScopeForAI(courseId, targetChapters, 8000),
     Promise.resolve(getFocusGuide(courseId, targetChapters)),
+    loadProfessorStyle(courseId),
   ]);
 
   const hasFocusGuide = !!focusGuide;
@@ -147,12 +180,13 @@ export async function generateBattleQuestions(
 
   const prompt = buildTekkenPrompt(
     courseName,
-    courseId,
     focusGuide,
     scopeData?.content || null,
     focusCount,
     scopeCount,
-    targetChapters
+    targetChapters,
+    profStyle.profile,
+    profStyle.keywords
   );
 
   try {

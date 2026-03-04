@@ -88,6 +88,8 @@ export interface Post {
   viewCount: number;
   // 태그 (학사/학술/기타)
   tag?: BoardTag;
+  // 채택된 댓글 ID
+  acceptedCommentId?: string;
 }
 
 /** 댓글 데이터 타입 */
@@ -106,6 +108,7 @@ export interface Comment {
   likes?: number; // 좋아요 수
   likedBy?: string[]; // 좋아요 누른 사용자 ID 목록
   isAIReply?: boolean; // AI 자동답변 여부
+  isAccepted?: boolean; // 채택 여부
 }
 
 /** 글 작성 데이터 */
@@ -370,6 +373,8 @@ const docToPost = (doc: QueryDocumentSnapshot | DocumentSnapshot): Post => {
     viewCount: data?.viewCount || 0,
     // 태그
     tag: data?.tag || undefined,
+    // 채택된 댓글 ID
+    acceptedCommentId: data?.acceptedCommentId || undefined,
   };
 };
 
@@ -391,6 +396,7 @@ const docToComment = (doc: QueryDocumentSnapshot | DocumentSnapshot): Comment =>
     createdAt: data?.createdAt?.toDate() || new Date(),
     likes: data?.likes || 0,
     likedBy: data?.likedBy || [],
+    isAccepted: data?.isAccepted || false,
   };
 };
 
@@ -879,34 +885,11 @@ export const useDeletePost = (): UseDeletePostReturn => {
         setLoading(true);
         setError(null);
 
-        // 글 작성자 확인
-        const postRef = doc(db, 'posts', postId);
-        const postSnap = await getDoc(postRef);
-
-        if (!postSnap.exists()) {
-          setError('게시글을 찾을 수 없습니다.');
-          return false;
-        }
-
-        if (postSnap.data().authorId !== user.uid) {
-          setError('삭제 권한이 없습니다.');
-          return false;
-        }
-
-        // 해당 글의 모든 댓글 + 글을 배치로 원자적 삭제
-        const commentsQuery = query(
-          collection(db, 'comments'),
-          where('postId', '==', postId)
-        );
-        const commentsSnapshot = await getDocs(commentsQuery);
-
-        // Firestore writeBatch는 500건 제한 — 댓글이 많을 경우 분할
-        const allDocs = [...commentsSnapshot.docs.map(d => d.ref), postRef];
-        for (let i = 0; i < allDocs.length; i += 500) {
-          const batch = writeBatch(db);
-          allDocs.slice(i, i + 500).forEach(ref => batch.delete(ref));
-          await batch.commit();
-        }
+        // CF로 글 + 댓글 원자적 삭제 (Admin SDK — 타인 댓글 권한 문제 해결)
+        const { getFunctions, httpsCallable } = await import('firebase/functions');
+        const functions = getFunctions(undefined, 'asia-northeast3');
+        const deletePostFn = httpsCallable(functions, 'deletePost');
+        await deletePostFn({ postId });
 
         return true;
       } catch (err) {
@@ -1758,6 +1741,41 @@ export const useAllPostsForCourse = (courseId?: string): UseAllPostsForCourseRet
   return { posts, loading, error };
 };
 
+// ============================================================
+// useAcceptComment 훅 - 댓글 채택
+// ============================================================
+
+/** useAcceptComment 훅 반환 타입 */
+interface UseAcceptCommentReturn {
+  acceptComment: (postId: string, commentId: string) => Promise<boolean>;
+  loading: boolean;
+}
+
+/**
+ * 댓글 채택 훅 (글 작성자만 사용 가능)
+ */
+export const useAcceptComment = (): UseAcceptCommentReturn => {
+  const [loading, setLoading] = useState(false);
+
+  const accept = useCallback(async (postId: string, commentId: string): Promise<boolean> => {
+    setLoading(true);
+    try {
+      const { httpsCallable } = await import('firebase/functions');
+      const { functions } = await import('../firebase');
+      const fn = httpsCallable(functions, 'acceptComment');
+      await fn({ postId, commentId });
+      return true;
+    } catch (err) {
+      console.error('댓글 채택 실패:', err);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  return { acceptComment: accept, loading };
+};
+
 // 기본 내보내기
 export default {
   usePosts,
@@ -1778,4 +1796,5 @@ export default {
   useToProfessorPosts,
   usePostsByClass,
   useAllPostsForCourse,
+  useAcceptComment,
 };

@@ -20,7 +20,7 @@ const DEFAULT_RABBIT_IMAGE = '/rabbit/default-news.png';
 type CommentsMap = Map<string, Comment[]>;
 
 /** 댓글 말줄임 상수 */
-const COMMENT_MAX_LENGTH = 57;
+const COMMENT_MAX_LENGTH = 30;
 
 /** 댓글 내용 말줄임 함수 */
 function truncateComment(content: string): string {

@@ -26,6 +26,7 @@ export const EXP_REWARDS = {
   // 게시판 관련
   POST_CREATE: 15,        // 글 작성
   COMMENT_CREATE: 15,     // 댓글 작성
+  COMMENT_ACCEPTED: 30,   // 댓글 채택
 };
 
 /**

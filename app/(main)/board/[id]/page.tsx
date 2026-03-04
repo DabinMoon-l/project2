@@ -338,7 +338,7 @@ export default function PostDetailPage() {
         {/* 댓글 */}
         <section className="pt-4 border-t-2 border-[#1A1A1A]">
           <h3 className="font-bold text-base mb-2 text-[#1A1A1A]">댓글</h3>
-          <CommentSection postId={postId} postAuthorId={post.authorId} />
+          <CommentSection postId={postId} postAuthorId={post.authorId} acceptedCommentId={post.acceptedCommentId} />
         </section>
       </main>
     </motion.div>

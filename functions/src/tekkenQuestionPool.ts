@@ -27,8 +27,30 @@ const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 // 과목 목록 (순환 의존성으로 모듈 초기화 시 COURSE_NAMES가 undefined → 지연 평가)
 const getAllCourses = () => Object.keys(COURSE_NAMES);
 
+/**
+ * 현재 학기 과목만 반환
+ * 1학기 (02-22 ~ 08-21): biology, microbiology
+ * 2학기 (08-22 ~ 02-21): biology, pathophysiology
+ */
+function getCurrentSemesterCourses(): string[] {
+  const now = new Date();
+  const month = now.getMonth() + 1; // 1~12
+  const day = now.getDate();
+
+  // 1학기: 2/22 ~ 8/21
+  const isSemester1 =
+    (month > 2 || (month === 2 && day >= 22)) &&
+    (month < 8 || (month === 8 && day <= 21));
+
+  if (isSemester1) {
+    return ["biology", "microbiology"];
+  }
+  // 2학기: 8/22 ~ 2/21
+  return ["biology", "pathophysiology"];
+}
+
 // 풀 목표 크기
-const TARGET_POOL_SIZE = 60;
+const TARGET_POOL_SIZE = 100;
 // 문제 유효 기간 (7일)
 const QUESTION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 // 배치당 문제 수
@@ -226,7 +248,7 @@ export const tekkenPoolRefillScheduled = onSchedule(
     region: "asia-northeast3",
     timeZone: "Asia/Seoul",
     secrets: [GEMINI_API_KEY],
-    timeoutSeconds: 540, // 9분 (3개 과목 순차 처리)
+    timeoutSeconds: 540, // 9분 (2개 과목 × 100문제 순차 처리)
     memory: "512MiB",
   },
   async () => {
@@ -236,7 +258,11 @@ export const tekkenPoolRefillScheduled = onSchedule(
       return;
     }
 
-    for (const courseId of getAllCourses()) {
+    // 현재 학기 과목만 생성 (1학기: biology+microbiology, 2학기: biology+pathophysiology)
+    const courses = getCurrentSemesterCourses();
+    console.log(`[스케줄] 현재 학기 과목: ${courses.join(", ")}`);
+
+    for (const courseId of courses) {
       try {
         const result = await replenishQuestionPool(courseId, apiKey);
         console.log(`[스케줄] ${courseId}: 추가 ${result.added}개, 삭제 ${result.deleted}개`);
