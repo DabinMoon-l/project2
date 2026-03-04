@@ -1615,6 +1615,8 @@ function QuizListPageContent() {
       });
       completionMapRef.current = map;
       setCompletionVer(v => v + 1);
+    }, (err) => {
+      console.error('quiz_completions 구독 에러:', err);
     });
     return unsub;
   }, [user]);
@@ -1666,7 +1668,7 @@ function QuizListPageContent() {
 
     const q = query(
       collection(db, 'quizzes'),
-      where('type', 'in', ['midterm', 'final', 'past']),
+      where('type', 'in', ['midterm', 'final', 'past', 'independent']),
       where('courseId', '==', userCourseId)
     );
 
@@ -1687,6 +1689,9 @@ function QuizListPageContent() {
       setMidtermQuizzes(midterm);
       setFinalQuizzes(final_);
       setPastQuizzes(past);
+      setIsLoading((prev) => ({ ...prev, midterm: false, final: false, past: false }));
+    }, (err) => {
+      console.error('퀴즈 목록 구독 에러:', err);
       setIsLoading((prev) => ({ ...prev, midterm: false, final: false, past: false }));
     });
 
@@ -1712,6 +1717,9 @@ function QuizListPageContent() {
         quizzes.push(parseQuizData(d, user.uid));
       });
       setCustomQuizzes(quizzes);
+      setIsLoading((prev) => ({ ...prev, custom: false }));
+    }, (err) => {
+      console.error('자작 퀴즈 구독 에러:', err);
       setIsLoading((prev) => ({ ...prev, custom: false }));
     });
 

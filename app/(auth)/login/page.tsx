@@ -117,7 +117,6 @@ export default function LoginPage() {
       <div className="w-full flex flex-col items-center space-y-2">
         <input
           type="text"
-          inputMode="numeric"
           placeholder="학번"
           value={idInput}
           onChange={(e) => setIdInput(e.target.value)}

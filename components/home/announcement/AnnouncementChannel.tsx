@@ -186,6 +186,9 @@ export default function AnnouncementChannel({
         announcementCache.set(cid, sorted);
         return sorted;
       });
+    }, (err) => {
+      console.error('공지 구독 에러:', err);
+      setLoading(false);
     });
     return () => unsub();
   }, [userCourseId]);

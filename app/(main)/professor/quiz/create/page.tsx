@@ -56,6 +56,7 @@ const QUIZ_TYPE_OPTIONS: { value: QuizType; label: string }[] = [
   { value: 'midterm', label: '중간' },
   { value: 'final', label: '기말' },
   { value: 'past', label: '기출' },
+  { value: 'independent', label: '단독' },
 ];
 
 /** 난이도 옵션 */
@@ -819,17 +820,18 @@ export default function ProfessorQuizCreatePage() {
         const subQuestionsCount = q.subQuestions.length;
 
         q.subQuestions.forEach((sq, sqIndex) => {
-          let subAnswer: string | number;
+          let subAnswer: string | number | number[];
           if (sq.type === 'short_answer') {
             const answerTexts = (sq.answerTexts || [sq.answerText || '']).filter(t => t.trim());
             subAnswer = answerTexts.length > 1 ? answerTexts.join('|||') : answerTexts[0] || '';
           } else if (sq.type === 'multiple') {
+            // 0-indexed로 저장 (recordAttempt CF와 일치)
             if (sq.answerIndices && sq.answerIndices.length > 1) {
-              subAnswer = sq.answerIndices.map(i => i + 1).join(',');
+              subAnswer = sq.answerIndices;
             } else if (sq.answerIndices && sq.answerIndices.length === 1) {
-              subAnswer = sq.answerIndices[0] + 1;
+              subAnswer = sq.answerIndices[0];
             } else if (sq.answerIndex !== undefined && sq.answerIndex >= 0) {
-              subAnswer = sq.answerIndex + 1;
+              subAnswer = sq.answerIndex;
             } else {
               subAnswer = -1;
             }
@@ -894,17 +896,18 @@ export default function ProfessorQuizCreatePage() {
           flattenedQuestions.push(subQuestionData);
         });
       } else {
-        let answer: string | number;
+        let answer: string | number | number[];
         if (q.type === 'subjective' || q.type === 'short_answer') {
           const answerTexts = (q.answerTexts || [q.answerText]).filter(t => t.trim());
           answer = answerTexts.length > 1 ? answerTexts.join('|||') : answerTexts[0] || '';
         } else if (q.type === 'multiple') {
+          // 0-indexed로 저장 (recordAttempt CF와 일치)
           if (q.answerIndices && q.answerIndices.length > 1) {
-            answer = q.answerIndices.map(i => i + 1).join(',');
+            answer = q.answerIndices;
           } else if (q.answerIndices && q.answerIndices.length === 1) {
-            answer = q.answerIndices[0] + 1;
+            answer = q.answerIndices[0];
           } else if (q.answerIndex !== undefined && q.answerIndex >= 0) {
-            answer = q.answerIndex + 1;
+            answer = q.answerIndex;
           } else {
             answer = -1;
           }
@@ -1034,7 +1037,7 @@ export default function ProfessorQuizCreatePage() {
 
   // 과목 정보
   const selectedCourse = selectedCourseId ? COURSES[selectedCourseId] : null;
-  const quizTypeLabel = quizType === 'midterm' ? '중간' : quizType === 'final' ? '기말' : quizType === 'past' ? `기출 (${pastYear} ${pastExamType === 'midterm' ? '중간' : '기말'})` : '';
+  const quizTypeLabel = quizType === 'midterm' ? '중간' : quizType === 'final' ? '기말' : quizType === 'past' ? `기출 (${pastYear} ${pastExamType === 'midterm' ? '중간' : '기말'})` : quizType === 'independent' ? '단독' : '';
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5F0E8' }}>
@@ -1197,7 +1200,7 @@ export default function ProfessorQuizCreatePage() {
                 <label className="block text-sm font-bold text-[#1A1A1A] mb-2">
                   시험 유형 <span className="text-[#8B1A1A]">*</span>
                 </label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-4 gap-2">
                   {QUIZ_TYPE_OPTIONS.map((option) => (
                     <motion.button
                       key={option.value}

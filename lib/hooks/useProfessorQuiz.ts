@@ -53,7 +53,7 @@ export interface QuizQuestion {
 }
 
 /** 시험 유형 */
-export type QuizTypeFilter = 'midterm' | 'final' | 'past';
+export type QuizTypeFilter = 'midterm' | 'final' | 'past' | 'independent';
 
 /** 퀴즈 데이터 */
 export interface ProfessorQuiz {
@@ -281,7 +281,7 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
         // type 필터: 특정 quizType이면 해당 타입만, 아니면 모든 교수 퀴즈 타입
         const typeFilter = options.quizType
           ? [options.quizType]
-          : ['midterm', 'final', 'past', 'professor'];
+          : ['midterm', 'final', 'past', 'professor', 'independent'];
 
         const basePageSize = options.pageSize || PAGE_SIZE;
         // targetClass 클라이언트 필터 시 넉넉히 가져옴 (필터 후에도 충분한 결과 확보)
@@ -344,7 +344,7 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
 
       const typeFilter = currentFilters.quizType
         ? [currentFilters.quizType]
-        : ['midterm', 'final', 'past', 'professor'];
+        : ['midterm', 'final', 'past', 'professor', 'independent'];
 
       const hasClassFilter = currentFilters.targetClass && currentFilters.targetClass !== 'all';
       const effectivePageSize = hasClassFilter ? PAGE_SIZE * 3 : PAGE_SIZE;

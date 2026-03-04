@@ -7,7 +7,7 @@ import { useTheme } from '@/styles/themes/useTheme';
 import WriteForm from '@/components/board/WriteForm';
 import { useCreatePost, type CreatePostData, type BoardTag } from '@/lib/hooks/useBoard';
 import { useExpToast, Modal } from '@/components/common';
-import { useUser } from '@/lib/contexts';
+import { useUser, useCourse } from '@/lib/contexts';
 
 // localStorage 키
 const DRAFT_KEY = 'board-write-draft';
@@ -28,6 +28,7 @@ export default function WritePage() {
   const { theme } = useTheme();
   const { createPost, loading, error } = useCreatePost();
   const { profile } = useUser();
+  const { userCourseId } = useCourse();
   const { showExpToast } = useExpToast();
 
   // 모달 상태
@@ -113,7 +114,7 @@ export default function WritePage() {
   const handleSubmit = useCallback(async (data: CreatePostData) => {
     const postData: CreatePostData = {
       ...data,
-      courseId: profile?.courseId || undefined,
+      courseId: userCourseId || profile?.courseId || undefined,
     };
 
     const postId = await createPost(postData);
@@ -128,7 +129,7 @@ export default function WritePage() {
         router.replace(`/board/${postId}`);
       }, 300);
     }
-  }, [createPost, router, profile, showExpToast]);
+  }, [createPost, router, profile, userCourseId, showExpToast]);
 
   return (
     <div

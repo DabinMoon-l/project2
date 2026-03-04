@@ -292,7 +292,9 @@ function PinnedPostCard({
         <p className="text-xs text-[#5C5C5C] line-clamp-2">{post.content}</p>
         <div className="flex items-center justify-between mt-2">
           <span className="text-xs text-[#5C5C5C]">
-            {post.authorNickname}·{post.authorClassType || '?'}반
+            {post.authorClassType
+              ? `${post.authorNickname}·${post.authorClassType}반`
+              : `교수님 ${post.authorNickname}`}
           </span>
           <span className="text-xs text-[#5C5C5C]">
             ❤️ {post.likes} 💬 {post.commentCount}
@@ -353,8 +355,9 @@ function PostListItem({
         <p className="text-xs text-[#5C5C5C] line-clamp-2 mt-0.5">{post.content}</p>
         <div className="flex items-center gap-2 mt-1 text-xs text-[#5C5C5C]">
           <span>
-            {post.authorNickname}
-            {showClass && `·${post.authorClassType || '?'}반`}
+            {post.authorClassType
+              ? <>{post.authorNickname}{showClass && `·${post.authorClassType}반`}</>
+              : `교수님 ${post.authorNickname}`}
           </span>
           <span>·</span>
           <span>❤️ {post.likes}</span>

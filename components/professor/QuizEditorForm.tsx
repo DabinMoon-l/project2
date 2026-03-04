@@ -11,7 +11,7 @@ import type { TargetClass, Difficulty } from '@/lib/hooks/useProfessorQuiz';
 // ============================================================
 
 /** 시험 유형 */
-export type QuizType = 'midterm' | 'final' | 'past';
+export type QuizType = 'midterm' | 'final' | 'past' | 'independent';
 
 /** 퀴즈 메타 데이터 */
 export interface QuizMetaData {
@@ -47,6 +47,7 @@ const QUIZ_TYPE_OPTIONS: { value: QuizType; label: string }[] = [
   { value: 'midterm', label: '중간' },
   { value: 'final', label: '기말' },
   { value: 'past', label: '기출' },
+  { value: 'independent', label: '단독' },
 ];
 
 /** 난이도 옵션 */
@@ -153,7 +154,7 @@ export default function QuizEditorForm({
         <label className="block text-sm font-medium text-gray-700 mb-2">
           시험 유형 <span className="text-red-500">*</span>
         </label>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-4 gap-3">
           {QUIZ_TYPE_OPTIONS.map((option) => {
             const isSelected = data.quizType === option.value;
             return (

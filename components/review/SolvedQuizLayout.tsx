@@ -163,6 +163,9 @@ export default function SolvedQuizLayout({
       setPastQuizzes(past);
       setCustomQuizzes(custom);
       setIsLoading({ midterm: false, final: false, past: false, custom: false });
+    }, (err) => {
+      console.error('풀었던 퀴즈 구독 에러:', err);
+      setIsLoading({ midterm: false, final: false, past: false, custom: false });
     });
 
     return () => unsubscribe();

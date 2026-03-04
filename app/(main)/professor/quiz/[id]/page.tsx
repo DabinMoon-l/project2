@@ -585,6 +585,8 @@ export default function QuizDetailPage() {
             }
             const updatedStats = await fetchQuizStatistics(quizId, data.questions);
             setStatistics(updatedStats);
+          }, (err) => {
+            console.error('퀴즈 결과 구독 에러:', err);
           });
         } else {
           setError('퀴즈를 찾을 수 없습니다.');

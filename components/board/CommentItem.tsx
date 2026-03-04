@@ -99,7 +99,7 @@ export default function CommentItem({
   const realName = isProfessor && authorNameMap ? authorNameMap.get(comment.authorId) : undefined;
   const authorDisplay = comment.authorClassType
     ? `${realName ? `${realName} ` : ''}${comment.authorNickname}·${comment.authorClassType}반`
-    : comment.authorNickname;
+    : `교수님 ${comment.authorNickname}`;
 
   const handleDeleteClick = () => {
     setShowDeleteConfirm(true);

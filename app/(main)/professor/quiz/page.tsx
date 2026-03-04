@@ -42,11 +42,20 @@ interface QuizFeedbackInfo {
 // 상수
 // ============================================================
 
-const NEWS_CARDS: { type: QuizTypeFilter; title: string; subtitle: string }[] = [
+/** 고정 캐러셀 카드 (중간/기출/기말) */
+const FIXED_CARDS: { type: QuizTypeFilter; title: string; subtitle: string }[] = [
   { type: 'midterm', title: 'MIDTERM PREP', subtitle: 'Vol.1 · Midterm Edition' },
   { type: 'past', title: 'PAST EXAM', subtitle: 'Official Archive' },
   { type: 'final', title: 'FINAL PREP', subtitle: 'Vol.2 · Final Edition' },
 ];
+
+/** 캐러셀 카드 타입 (고정 + 단독) */
+interface CarouselCard {
+  type: QuizTypeFilter;
+  title: string;
+  subtitle: string;
+  independentQuiz?: ProfessorQuiz;
+}
 
 // 캐러셀 위치 저장 키
 const PROF_QUIZ_CAROUSEL_KEY = 'prof-quiz-carousel-index';
@@ -451,25 +460,67 @@ const ProfessorPastExamNewsCard = memo(function ProfessorPastExamNewsCard({
 });
 
 // ============================================================
-// 뉴스 캐러셀 (학생과 동일한 3D perspective 효과)
+// 단독 퀴즈 전용 뉴스 카드
 // ============================================================
 
-function getProfCarouselDefault(): number {
-  if (typeof window !== 'undefined') {
-    const saved = sessionStorage.getItem(PROF_QUIZ_CAROUSEL_KEY);
-    if (saved !== null) return parseInt(saved, 10);
-  }
-  const tab = getDefaultQuizTab();
-  if (tab === 'midterm') return 0;
-  if (tab === 'past') return 1;
-  if (tab === 'final') return 2;
-  return 0;
-}
+const ProfessorIndependentNewsCard = memo(function ProfessorIndependentNewsCard({
+  quiz,
+  isLoading,
+  onDetails,
+  onStats,
+  onPublish,
+}: {
+  quiz: ProfessorQuiz | null;
+  isLoading: boolean;
+  onDetails: (quiz: ProfessorQuiz) => void;
+  onStats: (quiz: ProfessorQuiz) => void;
+  onPublish?: (quizId: string) => void;
+}) {
+  return (
+    <div className="w-full h-full border border-[#999] bg-[#1A1A1A] flex flex-col overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.3)] rounded-xl">
+      {/* 헤더 — 기출과 동일한 스타일 */}
+      <div className="bg-[#1A1A1A] text-[#F5F0E8] px-3 py-1.5 flex items-center justify-center flex-shrink-0">
+        <div className="text-center">
+          <p className="text-[6px] tracking-[0.2em] mb-0.5 opacity-60">━━━━━━━━━━━━━━━━</p>
+          <h1 className="font-serif text-xl font-black tracking-tight">SPECIAL EDITION</h1>
+        </div>
+      </div>
+
+      {/* 콘텐츠 */}
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain bg-[#1A1A1A]" data-scroll-inner>
+        {isLoading ? (
+          <div className="flex items-center justify-center h-full bg-[#F5F0E8]">
+            <div className="animate-pulse text-[#5C5C5C]">로딩 중...</div>
+          </div>
+        ) : !quiz ? (
+          <div className="flex flex-col items-center justify-center h-full text-center bg-[#F5F0E8]">
+            <h3 className="font-bold text-lg mb-2 text-[#1A1A1A]">퀴즈가 없습니다</h3>
+            <p className="text-sm text-[#5C5C5C]">단독 퀴즈가 아직 등록되지 않았습니다.</p>
+          </div>
+        ) : (
+          <div className="h-full">
+            <ProfessorNewsArticle
+              quiz={quiz}
+              onDetails={() => onDetails(quiz)}
+              onStats={() => onStats(quiz)}
+              onPublish={() => onPublish?.(quiz.id)}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
+
+// ============================================================
+// 뉴스 캐러셀 (학생과 동일한 3D perspective 효과)
+// ============================================================
 
 function ProfessorNewsCarousel({
   midtermQuizzes,
   finalQuizzes,
   pastQuizzes,
+  independentQuizzes,
   isLoading,
   onDetails,
   onStats,
@@ -481,7 +532,8 @@ function ProfessorNewsCarousel({
   midtermQuizzes: ProfessorQuiz[];
   finalQuizzes: ProfessorQuiz[];
   pastQuizzes: ProfessorQuiz[];
-  isLoading: { midterm: boolean; final: boolean; past: boolean };
+  independentQuizzes: ProfessorQuiz[];
+  isLoading: { midterm: boolean; final: boolean; past: boolean; independent: boolean };
   onDetails: (quiz: ProfessorQuiz) => void;
   onStats: (quiz: ProfessorQuiz) => void;
   onPublish?: (quizId: string) => void;
@@ -489,15 +541,65 @@ function ProfessorNewsCarousel({
   pastExamOptions: PastExamOption[];
   onSelectPastExam: (value: string) => void;
 }) {
-  const TOTAL = NEWS_CARDS.length; // 3
-  // visualIndex: 0=clone_last, 1~3=real cards, 4=clone_first
-  const [visualIndex, setVisualIndex] = useState(() => getProfCarouselDefault() + 1);
+  // 동적 캐러셀 카드 배열: [중간, 기출, 기말, 단독1, 단독2, ...]
+  const carouselCards: CarouselCard[] = useMemo(() => {
+    const fixed: CarouselCard[] = FIXED_CARDS.map(c => ({ ...c }));
+    // 단독 퀴즈는 각각 개별 카드 (최신순)
+    const indCards: CarouselCard[] = independentQuizzes.map(quiz => ({
+      type: 'independent' as QuizTypeFilter,
+      title: 'SPECIAL EDITION',
+      subtitle: quiz.title,
+      independentQuiz: quiz,
+    }));
+    return [...fixed, ...indCards];
+  }, [independentQuizzes]);
+
+  const TOTAL = carouselCards.length;
+
+  // 가장 최근 퀴즈가 있는 카드 인덱스 계산
+  const latestCardIndex = useMemo(() => {
+    const quizzesPerCard: (ProfessorQuiz | undefined)[] = carouselCards.map(card => {
+      if (card.type === 'independent') return card.independentQuiz;
+      if (card.type === 'midterm') return midtermQuizzes[0];
+      if (card.type === 'past') return pastQuizzes[0];
+      if (card.type === 'final') return finalQuizzes[0];
+      return undefined;
+    });
+
+    let bestIdx = -1;
+    let bestTime = 0;
+    quizzesPerCard.forEach((quiz, idx) => {
+      if (quiz && quiz.createdAt.getTime() > bestTime) {
+        bestTime = quiz.createdAt.getTime();
+        bestIdx = idx;
+      }
+    });
+    return bestIdx;
+  }, [carouselCards, midtermQuizzes, pastQuizzes, finalQuizzes]);
+
+  // visualIndex: 0=clone_last, 1~TOTAL=real cards, TOTAL+1=clone_first
+  // 초기값: 데이터가 있으면 최신 카드, 없으면 sessionStorage → 학기 기반 폴백
+  const [visualIndex, setVisualIndex] = useState(() => {
+    if (latestCardIndex >= 0) return latestCardIndex + 1;
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem(PROF_QUIZ_CAROUSEL_KEY);
+      if (saved !== null) {
+        const idx = parseInt(saved, 10);
+        if (idx >= 0 && idx < TOTAL) return idx + 1;
+      }
+    }
+    const tab = getDefaultQuizTab();
+    if (tab === 'midterm') return 1;
+    if (tab === 'past') return 2;
+    if (tab === 'final') return 3;
+    return 1;
+  });
   const [transitionOn, setTransitionOn] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   // 카드별 래퍼 ref (클론 스크롤 동기화용)
   const cardWrapperRefs = useRef<(HTMLDivElement | null)[]>([]);
 
-  // 실제 인덱스 (0~2)
+  // 실제 인덱스 (0~TOTAL-1)
   const realIndex = useMemo(() => {
     if (visualIndex <= 0) return TOTAL - 1;
     if (visualIndex > TOTAL) return 0;
@@ -607,9 +709,63 @@ function ProfessorNewsCarousel({
     [TOTAL]
   );
 
-  // 순서: midterm(0), past(1), final(2)
-  const quizzesByType = [midtermQuizzes, pastQuizzes, finalQuizzes];
-  const loadingByType = [isLoading.midterm, isLoading.past, isLoading.final];
+  // 카드별 퀴즈/로딩 헬퍼
+  const getQuizzesForCard = useCallback((card: CarouselCard): ProfessorQuiz[] => {
+    if (card.type === 'midterm') return midtermQuizzes;
+    if (card.type === 'past') return pastQuizzes;
+    if (card.type === 'final') return finalQuizzes;
+    if (card.type === 'independent' && card.independentQuiz) return [card.independentQuiz];
+    return [];
+  }, [midtermQuizzes, pastQuizzes, finalQuizzes]);
+
+  const getLoadingForCard = useCallback((card: CarouselCard): boolean => {
+    if (card.type === 'midterm') return isLoading.midterm;
+    if (card.type === 'past') return isLoading.past;
+    if (card.type === 'final') return isLoading.final;
+    if (card.type === 'independent') return isLoading.independent;
+    return false;
+  }, [isLoading]);
+
+  // 카드 렌더 헬퍼
+  const renderCard = useCallback((card: CarouselCard) => {
+    if (card.type === 'past') {
+      return (
+        <ProfessorPastExamNewsCard
+          quizzes={pastQuizzes}
+          isLoading={isLoading.past}
+          onDetails={onDetails}
+          onStats={onStats}
+          onPublish={onPublish}
+          selectedPastExam={selectedPastExam}
+          pastExamOptions={pastExamOptions}
+          onSelectPastExam={onSelectPastExam}
+        />
+      );
+    }
+    if (card.type === 'independent') {
+      return (
+        <ProfessorIndependentNewsCard
+          quiz={card.independentQuiz || null}
+          isLoading={isLoading.independent}
+          onDetails={onDetails}
+          onStats={onStats}
+          onPublish={onPublish}
+        />
+      );
+    }
+    return (
+      <ProfessorNewsCard
+        title={card.title}
+        subtitle={card.subtitle}
+        type={card.type}
+        quizzes={getQuizzesForCard(card)}
+        isLoading={getLoadingForCard(card)}
+        onDetails={onDetails}
+        onStats={onStats}
+        onPublish={onPublish}
+      />
+    );
+  }, [pastQuizzes, isLoading, onDetails, onStats, onPublish, selectedPastExam, pastExamOptions, onSelectPastExam, getQuizzesForCard, getLoadingForCard]);
 
   const CARD_WIDTH_PERCENT = 82;
   const SIDE_PEEK_PERCENT = (100 - CARD_WIDTH_PERCENT) / 2;
@@ -640,13 +796,17 @@ function ProfessorNewsCarousel({
           onAnimationComplete={handleAnimationComplete}
         >
           {extendedCardIndices.map((cardIdx, i) => {
-            const card = NEWS_CARDS[cardIdx];
+            const card = carouselCards[cardIdx];
             const isActive = i === visualIndex;
             const offset = i - visualIndex;
+            // 단독 카드는 퀴즈 ID로 고유키, 고정 카드는 type으로
+            const cardKey = card.independentQuiz
+              ? `ind-${card.independentQuiz.id}-${i}`
+              : `${card.type}-${i}`;
 
             return (
               <motion.div
-                key={`${card.type}-${i}`}
+                key={cardKey}
                 ref={(el: HTMLDivElement | null) => { cardWrapperRefs.current[i] = el; }}
                 className="flex-shrink-0 px-1.5"
                 style={{ width: `${CARD_WIDTH_PERCENT}%` }}
@@ -675,29 +835,7 @@ function ProfessorNewsCarousel({
                     className="absolute inset-0 origin-center rounded-xl"
                     style={{ transformStyle: 'preserve-3d' }}
                   >
-                  {card.type === 'past' ? (
-                    <ProfessorPastExamNewsCard
-                      quizzes={pastQuizzes}
-                      isLoading={loadingByType[cardIdx]}
-                      onDetails={onDetails}
-                      onStats={onStats}
-                      onPublish={onPublish}
-                      selectedPastExam={selectedPastExam}
-                      pastExamOptions={pastExamOptions}
-                      onSelectPastExam={onSelectPastExam}
-                    />
-                  ) : (
-                    <ProfessorNewsCard
-                      title={card.title}
-                      subtitle={card.subtitle}
-                      type={card.type}
-                      quizzes={quizzesByType[cardIdx]}
-                      isLoading={loadingByType[cardIdx]}
-                      onDetails={onDetails}
-                      onStats={onStats}
-                      onPublish={onPublish}
-                    />
-                  )}
+                    {renderCard(card)}
                   </motion.div>
                 </div>
               </motion.div>
@@ -984,6 +1122,7 @@ export default function ProfessorQuizListPage() {
   const [allMidterm, setAllMidterm] = useState<ProfessorQuiz[]>([]);
   const [allFinal, setAllFinal] = useState<ProfessorQuiz[]>([]);
   const [allPast, setAllPast] = useState<ProfessorQuiz[]>([]);
+  const [allIndependent, setAllIndependent] = useState<ProfessorQuiz[]>([]);
   const [examLoading, setExamLoading] = useState(true);
 
   // 섹션 필터 (자작/서재/커스텀) — sessionStorage로 유지
@@ -1153,12 +1292,12 @@ export default function ProfessorQuizListPage() {
         getDocs(query(
           collection(db, 'quizzes'),
           where('creatorUid', '==', user.uid),
-          where('type', 'in', ['midterm', 'final', 'past', 'professor']),
+          where('type', 'in', ['midterm', 'final', 'past', 'professor', 'independent']),
         )),
         getDocs(query(
           collection(db, 'quizzes'),
           where('creatorId', '==', user.uid),
-          where('type', 'in', ['midterm', 'final', 'past', 'professor']),
+          where('type', 'in', ['midterm', 'final', 'past', 'professor', 'independent']),
         )),
       ]);
 
@@ -1180,6 +1319,7 @@ export default function ProfessorQuizListPage() {
       setAllMidterm(allQuizzes.filter(q => q.type === 'midterm').sort(sortDesc));
       setAllFinal(allQuizzes.filter(q => q.type === 'final').sort(sortDesc));
       setAllPast(allQuizzes.filter(q => q.type === 'past').sort(sortDesc));
+      setAllIndependent(allQuizzes.filter(q => q.type === 'independent').sort(sortDesc));
     } catch (err) {
       console.error('[refreshExamQuizzes] 오류:', err);
     }
@@ -1205,6 +1345,11 @@ export default function ProfessorQuizListPage() {
     if (!userCourseId) return allPast;
     return allPast.filter(q => q.courseId === userCourseId);
   }, [allPast, userCourseId]);
+
+  const filteredIndependent = useMemo(() => {
+    if (!userCourseId) return allIndependent;
+    return allIndependent.filter(q => q.courseId === userCourseId);
+  }, [allIndependent, userCourseId]);
 
   // 자작 퀴즈 로드 (courseId 필터로 해당 과목만 구독)
   const [allCustomQuizzes, setAllCustomQuizzes] = useState<ProfessorQuiz[]>([]);
@@ -1246,11 +1391,11 @@ export default function ProfessorQuizListPage() {
 
   // 전체 퀴즈 목록 합산 (피드백 로드용 — 전체 데이터로 1회만 로드)
   const allQuizzes = useMemo(() => {
-    const carouselQuizzes = [...allMidterm, ...allFinal, ...allPast];
+    const carouselQuizzes = [...allMidterm, ...allFinal, ...allPast, ...allIndependent];
     const ids = new Set(carouselQuizzes.map(q => q.id));
     const uniqueCustomQuizzes = allCustomQuizzes.filter(q => !ids.has(q.id));
     return [...carouselQuizzes, ...uniqueCustomQuizzes];
-  }, [allMidterm, allFinal, allPast, allCustomQuizzes]);
+  }, [allMidterm, allFinal, allPast, allIndependent, allCustomQuizzes]);
 
   // 태그 필터링된 자작 퀴즈
   const filteredCustomQuizzes = useMemo(() => {
@@ -1314,6 +1459,8 @@ export default function ProfessorQuizListPage() {
           return { quizId: data.quizId as string, type: data.type as FeedbackType };
         });
         recalcFeedbackMap();
+      }, (err) => {
+        console.error('피드백 구독 에러:', err);
       });
       unsubscribes.push(unsub);
     }
@@ -1428,24 +1575,34 @@ export default function ProfessorQuizListPage() {
         />
       </header>
 
-      {/* 뉴스 캐러셀 (중간/기말/기출) */}
+      {/* 뉴스 캐러셀 (중간/기말/기출/단독) — 데이터 로드 후 마운트 (깜빡임 방지) */}
       <section className="mt-6" style={{ transform: 'scale(0.85)', transformOrigin: 'top center', width: '117.65%', marginLeft: '-8.825%', marginBottom: '-12px' }}>
-        <ProfessorNewsCarousel
-          midtermQuizzes={filteredMidterm}
-          finalQuizzes={filteredFinal}
-          pastQuizzes={filteredPast}
-          isLoading={{
-            midterm: examLoading,
-            final: examLoading,
-            past: examLoading,
-          }}
-          onDetails={handleCarouselDetails}
-          onStats={handleCarouselStats}
-          onPublish={(quizId) => setPublishConfirmQuizId(quizId)}
-          selectedPastExam={selectedPastExam}
-          pastExamOptions={pastExamOptions}
-          onSelectPastExam={setSelectedPastExam}
-        />
+        {examLoading ? (
+          <div className="flex justify-center" style={{ height: 440 }}>
+            <div className="w-[82%] h-[400px] border border-[#999] bg-[#1A1A1A] rounded-xl flex items-center justify-center">
+              <div className="animate-pulse text-[#F5F0E8]">로딩 중...</div>
+            </div>
+          </div>
+        ) : (
+          <ProfessorNewsCarousel
+            midtermQuizzes={filteredMidterm}
+            finalQuizzes={filteredFinal}
+            pastQuizzes={filteredPast}
+            independentQuizzes={filteredIndependent}
+            isLoading={{
+              midterm: false,
+              final: false,
+              past: false,
+              independent: false,
+            }}
+            onDetails={handleCarouselDetails}
+            onStats={handleCarouselStats}
+            onPublish={(quizId) => setPublishConfirmQuizId(quizId)}
+            selectedPastExam={selectedPastExam}
+            pastExamOptions={pastExamOptions}
+            onSelectPastExam={setSelectedPastExam}
+          />
+        )}
       </section>
 
       {/* 하단 섹션 */}

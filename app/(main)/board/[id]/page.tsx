@@ -271,7 +271,10 @@ export default function PostDetailPage() {
           {/* 메타 정보: 좌=글쓴이, 우=월일시 */}
           <div className="flex items-center justify-between text-xs text-[#3A3A3A] mb-4 pb-4 border-b border-dashed border-[#1A1A1A]">
             <span>
-              {isProfessor && authorName ? `${authorName} ` : ''}{post.authorNickname}·{post.authorClassType || '?'}반
+              {post.authorClassType
+                ? <>{isProfessor && authorName ? `${authorName} ` : ''}{post.authorNickname}·{post.authorClassType}반</>
+                : <>교수님 {post.authorNickname}</>
+              }
             </span>
             <span>{formatDate(post.createdAt)}</span>
           </div>

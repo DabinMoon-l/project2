@@ -133,7 +133,7 @@ async function computeRadarNormForCourse(courseId: string) {
   const expValues = uids.map(u => expByUid[u] ?? 0).sort((a, b) => a - b);
 
   // 7. 가중 석차 점수 (첫 시도만 사용)
-  const PROF_TYPES = new Set(["midterm", "final", "past", "professor", "professor-ai"]);
+  const PROF_TYPES = new Set(["midterm", "final", "past", "professor", "professor-ai", "independent"]);
   const quizTypeMap = new Map<string, boolean>();
   quizzesDocs.forEach(d => quizTypeMap.set(d.id, PROF_TYPES.has(d.data().type || "")));
 

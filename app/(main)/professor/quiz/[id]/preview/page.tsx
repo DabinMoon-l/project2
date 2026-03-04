@@ -15,6 +15,7 @@ import { type QuestionData, type SubQuestion } from '@/components/quiz/create/Qu
 const QuestionEditor = dynamic(() => import('@/components/quiz/create/QuestionEditor'));
 import QuestionList from '@/components/quiz/create/QuestionList';
 import { useProfessorQuiz, type QuizInput } from '@/lib/hooks/useProfessorQuiz';
+import { QuizDeleteModal } from '@/components/professor';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 // ============================================================
@@ -226,8 +227,15 @@ const convertToQuestionDataList = (rawQuestions: any[]): QuestionData[] => {
 
       const subQuestions: SubQuestion[] = groupQuestions.map((sq: any) => {
         let answerIndex = -1;
-        if (sq.type === 'multiple' && typeof sq.answer === 'number' && sq.answer > 0) {
-          answerIndex = sq.answer - 1;
+        if (sq.type === 'multiple' && typeof sq.answer === 'number') {
+          const sqChoiceCount = (sq.choices || []).length || 4;
+          if (sq.answer >= sqChoiceCount) {
+            // 1-indexed
+            answerIndex = sq.answer - 1;
+          } else if (sq.answer >= 0) {
+            // 0-indexed
+            answerIndex = sq.answer;
+          }
         } else if (sq.type === 'ox' && typeof sq.answer === 'number') {
           answerIndex = sq.answer;
         }
@@ -268,8 +276,15 @@ const convertToQuestionDataList = (rawQuestions: any[]): QuestionData[] => {
       });
     } else {
       let answerIndex = -1;
-      if (q.type === 'multiple' && typeof q.answer === 'number' && q.answer > 0) {
-        answerIndex = q.answer - 1;
+      if (q.type === 'multiple' && typeof q.answer === 'number') {
+        const qChoiceCount = (q.choices || []).length || 4;
+        if (q.answer >= qChoiceCount) {
+          // 1-indexed
+          answerIndex = q.answer - 1;
+        } else if (q.answer >= 0) {
+          // 0-indexed
+          answerIndex = q.answer;
+        }
       } else if (q.type === 'ox' && typeof q.answer === 'number') {
         answerIndex = q.answer;
       }
@@ -334,7 +349,11 @@ export default function QuizPreviewPage() {
   const [showTagPicker, setShowTagPicker] = useState(false);
   const [showExitModal, setShowExitModal] = useState(false);
 
-  const { updateQuiz, clearError } = useProfessorQuiz();
+  const { updateQuiz, deleteQuiz, clearError } = useProfessorQuiz();
+
+  // 삭제 모달 상태
+  const [deleteTarget, setDeleteTarget] = useState<{ title: string; questionCount: number; participantCount: number } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // 태그 옵션 (과목별)
   const tagOptions = useMemo(() => {
@@ -374,10 +393,19 @@ export default function QuizPreviewPage() {
             correctAnswer = String(q.correctAnswer);
           } else if (q.answer !== undefined && q.answer !== null) {
             if (q.type === 'multiple') {
+              const choiceCount = (q.choices || []).length || 4;
               if (Array.isArray(q.answer)) {
-                correctAnswer = q.answer.map((a: number) => String(a + 1)).join(',');
+                // 배열 중 choiceCount 이상인 값이 있으면 1-indexed
+                const isOneIndexed = q.answer.some((a: number) => typeof a === 'number' && a >= choiceCount);
+                correctAnswer = q.answer.map((a: number) => String(isOneIndexed ? a : a + 1)).join(',');
               } else if (typeof q.answer === 'number') {
-                correctAnswer = String(q.answer + 1);
+                if (q.answer >= choiceCount) {
+                  // 1-indexed (0-indexed 범위 초과)
+                  correctAnswer = String(q.answer);
+                } else if (q.answer >= 0) {
+                  // 0-indexed
+                  correctAnswer = String(q.answer + 1);
+                }
               } else {
                 correctAnswer = String(q.answer);
               }
@@ -583,6 +611,20 @@ export default function QuizPreviewPage() {
     }
   };
 
+  // 퀴즈 삭제 핸들러
+  const handleDeleteQuiz = async () => {
+    try {
+      setDeleting(true);
+      await deleteQuiz(quizId);
+      setDeleteTarget(null);
+      router.replace('/professor/quiz');
+    } catch (err) {
+      console.error('퀴즈 삭제 실패:', err);
+      alert('삭제에 실패했습니다. 다시 시도해주세요.');
+      setDeleting(false);
+    }
+  };
+
   // 문제 편집 핸들러
   const handleEditQuestion = (index: number) => setEditingIndex(index);
   const handleAddQuestion = () => setEditingIndex(-1);
@@ -611,10 +653,15 @@ export default function QuizPreviewPage() {
     if (current.type === 'subjective' || current.type === 'short_answer') {
       if ((original.answer?.toString() || '') !== (current.answerText || '')) return true;
     } else if (current.type === 'multiple') {
-      // answer가 문자열("1")이든 숫자(1)이든 모두 처리 (1-indexed → 0-indexed)
+      // 원본 answer 감지: choiceCount 이상이면 1-indexed, 아니면 0-indexed
       const origNum = parseInt(String(original.answer), 10);
-      const origAnswer = !isNaN(origNum) ? origNum - 1 : -1;
-      if (origAnswer !== current.answerIndex) return true;
+      if (!isNaN(origNum)) {
+        const choiceCount = (original.choices || []).length || 4;
+        const origAnswer = origNum >= choiceCount ? origNum - 1 : origNum;
+        if (origAnswer !== current.answerIndex) return true;
+      } else if (current.answerIndex !== -1) {
+        return true;
+      }
     } else if (current.type === 'ox') {
       // OX: 0/"0"/"O" = O, 1/"1"/"X" = X
       const normalizeOx = (v: any) => {
@@ -650,10 +697,14 @@ export default function QuizPreviewPage() {
     if (current.type === 'subjective' || current.type === 'short_answer') {
       if (original.answer !== (current.answerText || '')) return true;
     } else if (current.type === 'multiple') {
-      // answer가 문자열("1")이든 숫자(1)이든 모두 처리 (1-indexed → 0-indexed)
       const origNum = parseInt(String(original.answer), 10);
-      const origAnswer = !isNaN(origNum) ? origNum - 1 : -1;
-      if (origAnswer !== (current.answerIndex ?? -1)) return true;
+      if (!isNaN(origNum)) {
+        const choiceCount = (original.choices || []).length || 4;
+        const origAnswer = origNum >= choiceCount ? origNum - 1 : origNum;
+        if (origAnswer !== (current.answerIndex ?? -1)) return true;
+      } else if ((current.answerIndex ?? -1) !== -1) {
+        return true;
+      }
     } else if (current.type === 'ox') {
       // OX: 0/"0"/"O" = O, 1/"1"/"X" = X
       const normalizeOx = (v: any) => {
@@ -711,7 +762,8 @@ export default function QuizPreviewPage() {
           if (sq.type === 'subjective' || sq.type === 'short_answer') {
             answer = sq.answerText || '';
           } else if (sq.type === 'multiple') {
-            answer = (sq.answerIndex !== undefined && sq.answerIndex >= 0) ? sq.answerIndex + 1 : -1;
+            // 0-indexed로 저장 (recordAttempt CF와 일치)
+            answer = (sq.answerIndex !== undefined && sq.answerIndex >= 0) ? sq.answerIndex : -1;
           } else {
             answer = sq.answerIndex ?? 0;
           }
@@ -761,7 +813,8 @@ export default function QuizPreviewPage() {
         if (q.type === 'subjective' || q.type === 'short_answer') {
           answer = q.answerText;
         } else if (q.type === 'multiple') {
-          answer = q.answerIndex >= 0 ? q.answerIndex + 1 : -1;
+          // 0-indexed로 저장 (recordAttempt CF와 일치)
+          answer = q.answerIndex >= 0 ? q.answerIndex : -1;
         } else {
           answer = q.answerIndex;
         }
@@ -1169,17 +1222,36 @@ export default function QuizPreviewPage() {
           <h1 className="flex-1 text-center text-base font-bold text-[#1A1A1A] truncate px-4">
             {isEditMode ? '퀴즈 수정' : '문제 미리보기'}
           </h1>
-          <button
-            onClick={toggleEditMode}
-            className={`w-10 h-10 flex items-center justify-center transition-colors ${
-              isEditMode ? 'text-[#8B1A1A]' : 'text-[#5C5C5C] hover:text-[#1A1A1A]'
-            }`}
-            aria-label={isEditMode ? '수정 모드 해제' : '수정 모드'}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-          </button>
+          <div className="flex items-center">
+            {/* 삭제 버튼 — 수정 모드가 아닐 때만 표시 */}
+            {!isEditMode && (
+              <button
+                onClick={() => setDeleteTarget({
+                  title: quizTitle,
+                  questionCount: questions.length,
+                  participantCount,
+                })}
+                className="w-10 h-10 flex items-center justify-center text-[#5C5C5C] hover:text-[#8B1A1A] transition-colors"
+                aria-label="퀴즈 삭제"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            )}
+            {/* 수정 버튼 */}
+            <button
+              onClick={toggleEditMode}
+              className={`w-10 h-10 flex items-center justify-center transition-colors ${
+                isEditMode ? 'text-[#8B1A1A]' : 'text-[#5C5C5C] hover:text-[#1A1A1A]'
+              }`}
+              aria-label={isEditMode ? '수정 모드 해제' : '수정 모드'}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -1669,6 +1741,14 @@ export default function QuizPreviewPage() {
         onSaveAndExit={handleSaveAndExit}
         onExitWithoutSave={handleExitWithoutSave}
         isSaving={saving}
+      />
+
+      {/* 퀴즈 삭제 확인 모달 */}
+      <QuizDeleteModal
+        quiz={deleteTarget}
+        loading={deleting}
+        onConfirm={handleDeleteQuiz}
+        onCancel={() => setDeleteTarget(null)}
       />
     </div>
   );

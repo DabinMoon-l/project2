@@ -48,7 +48,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm install          # 의존성 설치
 npm run dev          # 개발 서버 (Turbopack)
 npm run build        # 프로덕션 빌드
-npm run lint         # ESLint 9
+npm run lint         # ESLint (next/core-web-vitals)
 npm run analyze      # 번들 분석 (ANALYZE=true)
 ```
 
@@ -433,7 +433,7 @@ firebase deploy --only functions
 │   │   ├── professor/          # 교수 대시보드/통계/퀴즈관리/학생관리
 │   │   └── profile/, settings/ # 프로필, 설정
 │   └── api/                    # API 라우트 (convert-pptx)
-├── components/                 # React 컴포넌트 (~191개 파일)
+├── components/                 # React 컴포넌트 (~209개 파일)
 │   ├── ai-quiz/                # AI 퀴즈 생성 UI
 │   ├── board/                  # 게시판
 │   ├── common/                 # 공통 (SwipeBack, Navigation, BottomSheet 등)
@@ -446,11 +446,11 @@ firebase deploy --only functions
 │   ├── firebase.ts             # Firebase 초기화
 │   ├── auth.ts                 # 인증 유틸
 │   ├── contexts/               # React Context (User, Course, Theme, Milestone, HomeOverlay, DetailPanel)
-│   ├── hooks/                  # 커스텀 훅 40+ (useAuth, useQuiz*, useProfessor*, useTekkenBattle 등)
+│   ├── hooks/                  # 커스텀 훅 31개 (useAuth, useQuiz*, useProfessor*, useTekkenBattle 등)
 │   ├── utils/                  # 유틸 (ranking, scoring, expRewards, tekkenDamage 등)
 │   └── types/                  # 타입 정의 (course.ts, tekken.ts)
 ├── functions/                  # Firebase Cloud Functions (Node 20, 별도 tsconfig)
-│   └── src/                    # CF 소스 (~61개 .ts 파일)
+│   └── src/                    # CF 소스 (~48개 .ts 파일)
 │       ├── index.ts            # CF 엔트리 (모든 함수 export)
 │       ├── recordAttempt.ts    # 퀴즈 제출 + 채점
 │       ├── tekkenBattle.ts     # 실시간 배틀 로직
@@ -472,7 +472,7 @@ firebase deploy --only functions
 | `next.config.mjs` | Turbopack, PWA, 이미지 최적화, 번들 분석 |
 | `tailwind.config.ts` | `wide:` 커스텀 스크린, 빈티지 테마 색상, 폰트 |
 | `tsconfig.json` | `@/*` 경로 별칭 → 프로젝트 루트, strict 모드 |
-| `.eslintrc.json` | `next/core-web-vitals` 확장 |
+| `.eslintrc.json` | `next/core-web-vitals` 단순 확장 |
 | `firebase.json` | Firestore/RTDB/Functions/Storage 배포 설정 |
 | `functions/tsconfig.json` | CF 전용 (noUnusedLocals, noImplicitReturns 추가) |
 

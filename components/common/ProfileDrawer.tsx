@@ -303,6 +303,8 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setUnreadCount(snapshot.size);
+    }, (err) => {
+      console.error('문의 카운트 구독 에러:', err);
     });
     return () => unsubscribe();
   }, [isAdmin, isOpen, showInquiryList]);
@@ -323,6 +325,8 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
       } as Inquiry));
       setInquiries(items);
       setUnreadCount(items.filter(i => !i.isRead).length);
+    }, (err) => {
+      console.error('문의 목록 구독 에러:', err);
     });
     return () => unsubscribe();
   }, [isAdmin, showInquiryList]);

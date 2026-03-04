@@ -299,7 +299,7 @@ async function collectWeeklyStats(courseId: string, start: Date, end: Date, labe
     .select("creatorId", "type")
     .get();
 
-  const PROF_TYPES = new Set(["midterm", "final", "past", "professor", "professor-ai"]);
+  const PROF_TYPES = new Set(["midterm", "final", "past", "professor", "professor-ai", "independent"]);
   const profQuizIds = new Set<string>();
   const professorUids = new Set<string>();
   usersSnap.docs.forEach(d => {

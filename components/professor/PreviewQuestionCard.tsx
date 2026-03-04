@@ -163,11 +163,14 @@ export default function PreviewQuestionCard({
                   )}
                   <div className="space-y-2">
                     {(editData?.choices ?? question.choices).map((choice: string, idx: number) => {
-                      // 정답 판별 (answer가 0-indexed 숫자 또는 배열)
+                      // 정답 판별 (0-indexed 또는 1-indexed 자동 감지)
+                      const choiceCount = (question.choices || []).length || 4;
+                      const normalizeAnswer = (a: number): number =>
+                        a >= choiceCount ? a - 1 : a; // choiceCount 이상이면 1-indexed → 0-indexed 변환
                       const correctAnswers: number[] = Array.isArray(question.answer)
-                        ? question.answer
-                        : typeof question.answer === 'number'
-                          ? [question.answer]
+                        ? question.answer.map((a: number) => normalizeAnswer(a))
+                        : typeof question.answer === 'number' && question.answer >= 0
+                          ? [normalizeAnswer(question.answer)]
                           : [];
                       const isCorrectOption = correctAnswers.includes(idx);
 

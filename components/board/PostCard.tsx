@@ -89,7 +89,10 @@ function PostCard({ post, onClick, isProfessor }: PostCardProps) {
       <div className="flex items-center justify-between">
         {/* 작성자: 교수님에겐 이름 닉넴·반, 학생에겐 닉넴·반 */}
         <span className="text-xs text-gray-500">
-          {isProfessor && post.authorName ? `${post.authorName} ` : ''}{post.authorNickname}·{post.authorClassType || '?'}반
+          {post.authorClassType
+            ? <>{isProfessor && post.authorName ? `${post.authorName} ` : ''}{post.authorNickname}·{post.authorClassType}반</>
+            : <>교수님 {post.authorNickname}</>
+          }
         </span>
 
         {/* 좋아요, 댓글 수 */}

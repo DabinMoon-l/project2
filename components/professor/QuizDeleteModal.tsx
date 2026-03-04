@@ -65,7 +65,7 @@ export default function QuizDeleteModal({
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
-            className="relative bg-[#F5F0E8] border-2 border-[#1A1A1A] p-6 max-w-sm w-full shadow-xl"
+            className="relative bg-[#F5F0E8] border-2 border-[#1A1A1A] p-5 max-w-[300px] w-full shadow-xl rounded-2xl"
           >
             <div className="text-center">
               {/* 경고 아이콘 - 빨간색 테두리 삼각형 */}

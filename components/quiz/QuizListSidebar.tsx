@@ -56,10 +56,10 @@ export default function QuizListSidebar() {
 
     const loadQuizzes = async () => {
       try {
-        // 교수 출제 퀴즈 (midterm, final, past)
+        // 교수 출제 퀴즈 (midterm, final, past, independent)
         const q1 = query(
           collection(db, 'quizzes'),
-          where('type', 'in', ['midterm', 'final', 'past']),
+          where('type', 'in', ['midterm', 'final', 'past', 'independent']),
           where('courseId', '==', userCourseId)
         );
         // 자작 퀴즈 (custom)
