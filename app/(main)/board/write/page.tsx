@@ -3,13 +3,11 @@
 import { useCallback, useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { createPortal } from 'react-dom';
 import { useTheme } from '@/styles/themes/useTheme';
 import WriteForm from '@/components/board/WriteForm';
 import { useCreatePost, type CreatePostData, type BoardTag } from '@/lib/hooks/useBoard';
-import { useExpToast } from '@/components/common';
+import { useExpToast, Modal } from '@/components/common';
 import { useUser } from '@/lib/contexts';
-import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 // localStorage 키
 const DRAFT_KEY = 'board-write-draft';
@@ -19,156 +17,6 @@ interface Draft {
   content: string;
   tag?: BoardTag;
   savedAt: number;
-}
-
-// ============================================================
-// 나가기 확인 모달 (ExitConfirmModal과 동일한 디자인)
-// ============================================================
-
-const backdropVariants = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1 },
-  exit: { opacity: 0 },
-};
-
-const modalVariants = {
-  hidden: { opacity: 0, scale: 0.95, y: 10 },
-  visible: {
-    opacity: 1, scale: 1, y: 0,
-    transition: { type: 'spring', stiffness: 300, damping: 25 },
-  },
-  exit: {
-    opacity: 0, scale: 0.95, y: 10,
-    transition: { duration: 0.15 },
-  },
-};
-
-function WriteExitModal({
-  isOpen,
-  onClose,
-  onSaveAndExit,
-  onExitWithoutSave,
-  hasContent,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  onSaveAndExit: () => void;
-  onExitWithoutSave: () => void;
-  hasContent: boolean;
-}) {
-  const modalRef = useRef<HTMLDivElement>(null);
-  const previousActiveElement = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    if (isOpen) {
-      previousActiveElement.current = document.activeElement as HTMLElement;
-      modalRef.current?.focus();
-      lockScroll();
-    }
-    return () => {
-      unlockScroll();
-      if (previousActiveElement.current) {
-        previousActiveElement.current.focus();
-      }
-    };
-  }, [isOpen]);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    if (isOpen) document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
-
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) onClose();
-  };
-
-  if (typeof window === 'undefined') return null;
-
-  return createPortal(
-    <AnimatePresence>
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <motion.div
-            variants={backdropVariants}
-            initial="hidden" animate="visible" exit="exit"
-            onClick={handleBackdropClick}
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            aria-hidden="true"
-          />
-
-          <motion.div
-            ref={modalRef}
-            variants={modalVariants}
-            initial="hidden" animate="visible" exit="exit"
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="write-exit-title"
-            aria-describedby="write-exit-desc"
-            tabIndex={-1}
-            className="relative w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] shadow-xl overflow-hidden focus:outline-none"
-          >
-            {/* 경고 아이콘 */}
-            <div className="flex justify-center pt-4">
-              <div className="w-12 h-12 border-2 border-[#8B6914] bg-[#FFF8E1] flex items-center justify-center">
-                <svg className="w-6 h-6 text-[#8B6914]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-            </div>
-
-            {/* 본문 */}
-            <div className="px-5 py-3 text-center">
-              <h2 id="write-exit-title" className="text-sm font-bold text-[#1A1A1A] mb-2">
-                작성을 중단하시겠습니까?
-              </h2>
-              <p id="write-exit-desc" className="text-xs text-[#5C5C5C] leading-relaxed">
-                {hasContent
-                  ? <>임시 저장하면 나중에<br />이어서 작성할 수 있습니다.</>
-                  : '작성된 내용이 없습니다.'
-                }
-              </p>
-            </div>
-
-            {/* 버튼 영역 */}
-            <div className="flex flex-col gap-2 px-5 py-3 border-t-2 border-[#1A1A1A] bg-[#EDEAE4]">
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={onClose}
-                className="w-full py-2 font-bold text-[#F5F0E8] bg-[#1A1A1A] border-2 border-[#1A1A1A] transition-all duration-200 hover:bg-[#2A2A2A]"
-              >
-                계속 작성하기
-              </motion.button>
-
-              {hasContent && (
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={onSaveAndExit}
-                  className="w-full py-2 font-bold bg-[#F5F0E8] text-[#1A1A1A] border-2 border-[#1A1A1A] hover:bg-[#E5E0D8] transition-all duration-200"
-                >
-                  임시저장하고 나가기
-                </motion.button>
-              )}
-
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={onExitWithoutSave}
-                className="w-full py-2 font-bold bg-[#F5F0E8] text-[#8B1A1A] border-2 border-[#8B1A1A] hover:bg-[#FDEAEA] transition-all duration-200"
-              >
-                저장하지 않고 나가기
-              </motion.button>
-            </div>
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>,
-    document.body
-  );
 }
 
 // ============================================================
@@ -343,13 +191,46 @@ export default function WritePage() {
       </AnimatePresence>
 
       {/* 나가기 확인 모달 */}
-      <WriteExitModal
+      <Modal
         isOpen={showExitModal}
         onClose={() => setShowExitModal(false)}
-        onSaveAndExit={handleSaveAndExit}
-        onExitWithoutSave={handleExitWithoutSave}
-        hasContent={hasContent}
-      />
+        size="sm"
+        showCloseButton={false}
+      >
+        <div className="text-center">
+          <p className="text-sm font-bold text-gray-900 mb-1">
+            작성을 중단하시겠습니까?
+          </p>
+          <p className="text-xs text-gray-500 leading-relaxed">
+            {hasContent
+              ? '임시 저장하면 나중에 이어서 작성할 수 있습니다.'
+              : '작성된 내용이 없습니다.'
+            }
+          </p>
+        </div>
+        <div className="flex flex-col gap-2 mt-4">
+          <button
+            onClick={() => setShowExitModal(false)}
+            className="w-full py-2.5 text-sm font-bold text-white bg-[#1A1A1A] rounded-xl hover:bg-[#2A2A2A] transition-colors"
+          >
+            계속 작성하기
+          </button>
+          {hasContent && (
+            <button
+              onClick={handleSaveAndExit}
+              className="w-full py-2.5 text-sm font-bold text-[#1A1A1A] bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
+            >
+              임시저장하고 나가기
+            </button>
+          )}
+          <button
+            onClick={handleExitWithoutSave}
+            className="w-full py-2.5 text-sm font-bold text-[#8B1A1A] bg-gray-100 rounded-xl hover:bg-red-50 transition-colors"
+          >
+            저장하지 않고 나가기
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }
