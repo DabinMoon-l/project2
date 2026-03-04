@@ -4,11 +4,145 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
+import { createPortal } from 'react-dom';
 import { useTheme } from '@/styles/themes/useTheme';
 import { usePost, useUpdatePost, BOARD_TAGS, type CreatePostData, type AttachedFile, type BoardTag } from '@/lib/hooks/useBoard';
 import { useUpload } from '@/lib/hooks/useStorage';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { Skeleton } from '@/components/common';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
+
+// ============================================================
+// 나가기 확인 모달 (글 작성 페이지와 동일한 디자인)
+// ============================================================
+
+const backdropVariants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1 },
+  exit: { opacity: 0 },
+};
+
+const modalVariants = {
+  hidden: { opacity: 0, scale: 0.95, y: 10 },
+  visible: {
+    opacity: 1, scale: 1, y: 0,
+    transition: { type: 'spring', stiffness: 300, damping: 25 },
+  },
+  exit: {
+    opacity: 0, scale: 0.95, y: 10,
+    transition: { duration: 0.15 },
+  },
+};
+
+function EditExitModal({
+  isOpen,
+  onClose,
+  onExit,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onExit: () => void;
+}) {
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previousActiveElement = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      previousActiveElement.current = document.activeElement as HTMLElement;
+      modalRef.current?.focus();
+      lockScroll();
+    }
+    return () => {
+      unlockScroll();
+      if (previousActiveElement.current) {
+        previousActiveElement.current.focus();
+      }
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    if (isOpen) document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  const handleBackdropClick = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) onClose();
+  };
+
+  if (typeof window === 'undefined') return null;
+
+  return createPortal(
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <motion.div
+            variants={backdropVariants}
+            initial="hidden" animate="visible" exit="exit"
+            onClick={handleBackdropClick}
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            aria-hidden="true"
+          />
+
+          <motion.div
+            ref={modalRef}
+            variants={modalVariants}
+            initial="hidden" animate="visible" exit="exit"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="edit-exit-title"
+            aria-describedby="edit-exit-desc"
+            tabIndex={-1}
+            className="relative w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] shadow-xl overflow-hidden focus:outline-none"
+          >
+            {/* 경고 아이콘 */}
+            <div className="flex justify-center pt-4">
+              <div className="w-12 h-12 border-2 border-[#8B6914] bg-[#FFF8E1] flex items-center justify-center">
+                <svg className="w-6 h-6 text-[#8B6914]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+            </div>
+
+            {/* 본문 */}
+            <div className="px-5 py-3 text-center">
+              <h2 id="edit-exit-title" className="text-sm font-bold text-[#1A1A1A] mb-2">
+                수정을 중단하시겠습니까?
+              </h2>
+              <p id="edit-exit-desc" className="text-xs text-[#5C5C5C] leading-relaxed">
+                수정 중인 내용이 사라집니다.
+              </p>
+            </div>
+
+            {/* 버튼 영역 */}
+            <div className="flex flex-col gap-2 px-5 py-3 border-t-2 border-[#1A1A1A] bg-[#EDEAE4]">
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={onClose}
+                className="w-full py-2 font-bold text-[#F5F0E8] bg-[#1A1A1A] border-2 border-[#1A1A1A] transition-all duration-200 hover:bg-[#2A2A2A]"
+              >
+                계속 수정하기
+              </motion.button>
+
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={onExit}
+                className="w-full py-2 font-bold bg-[#F5F0E8] text-[#8B1A1A] border-2 border-[#8B1A1A] hover:bg-[#FDEAEA] transition-all duration-200"
+              >
+                나가기
+              </motion.button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>,
+    document.body
+  );
+}
 
 /**
  * 글 수정 페이지
@@ -29,6 +163,7 @@ export default function EditPostPage() {
   const [content, setContent] = useState('');
   const [tag, setTag] = useState<BoardTag | undefined>(undefined);
   const [initialized, setInitialized] = useState(false);
+  const [showExitModal, setShowExitModal] = useState(false);
 
   // 기존 이미지/파일
   const [existingImages, setExistingImages] = useState<string[]>([]);
@@ -219,10 +354,8 @@ export default function EditPostPage() {
    * 뒤로가기
    */
   const handleBack = useCallback(() => {
-    if (window.confirm('수정 중인 내용이 사라집니다. 나가시겠습니까?')) {
-      router.back();
-    }
-  }, [router]);
+    setShowExitModal(true);
+  }, []);
 
   // 로딩 상태
   if (postLoading) {
@@ -689,6 +822,16 @@ export default function EditPostPage() {
           </p>
         </div>
       </div>
+
+      {/* 나가기 확인 모달 */}
+      <EditExitModal
+        isOpen={showExitModal}
+        onClose={() => setShowExitModal(false)}
+        onExit={() => {
+          setShowExitModal(false);
+          router.back();
+        }}
+      />
     </div>
   );
 }

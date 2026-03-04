@@ -151,7 +151,7 @@ service cloud.firestore {
         // 작성자가 제목, 내용, 이미지, 파일 수정
         (isOwner(resource.data.authorId) &&
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['title', 'content', 'imageUrl', 'imageUrls', 'fileUrls', 'isAnonymous', 'updatedAt'])) ||
+            .hasOnly(['title', 'content', 'imageUrl', 'imageUrls', 'fileUrls', 'isAnonymous', 'tag', 'updatedAt'])) ||
         // 로그인 사용자가 조회수 업데이트
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['viewCount']) ||
