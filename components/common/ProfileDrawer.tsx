@@ -303,8 +303,8 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setUnreadCount(snapshot.size);
-    }, (err) => {
-      console.error('문의 카운트 구독 에러:', err);
+    }, () => {
+      // Firestore 권한 에러 무시 (inquiries는 교수만 읽기 가능)
     });
     return () => unsubscribe();
   }, [isAdmin, isOpen, showInquiryList]);
@@ -325,8 +325,8 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
       } as Inquiry));
       setInquiries(items);
       setUnreadCount(items.filter(i => !i.isRead).length);
-    }, (err) => {
-      console.error('문의 목록 구독 에러:', err);
+    }, () => {
+      // Firestore 권한 에러 무시 (inquiries는 교수만 읽기 가능)
     });
     return () => unsubscribe();
   }, [isAdmin, showInquiryList]);

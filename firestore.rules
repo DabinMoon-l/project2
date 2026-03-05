@@ -582,10 +582,9 @@ service cloud.firestore {
     match /inquiries/{inquiryId} {
       // 생성: 로그인 사용자 (비로그인 문의는 CF에서 처리)
       allow create: if isAuthenticated();
-      // 읽기/수정: 교수님만
-      allow read, update: if isProfessor();
-      // 삭제: 교수님만
-      allow delete: if isProfessor();
+      // 읽기/수정/삭제: 교수님 또는 관리자(25010423)
+      allow read, update, delete: if isProfessor() ||
+        (isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.studentId == '25010423');
     }
 
     // ============================================================

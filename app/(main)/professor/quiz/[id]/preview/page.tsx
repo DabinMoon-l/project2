@@ -227,14 +227,23 @@ const convertToQuestionDataList = (rawQuestions: any[]): QuestionData[] => {
 
       const subQuestions: SubQuestion[] = groupQuestions.map((sq: any) => {
         let answerIndex = -1;
-        if (sq.type === 'multiple' && typeof sq.answer === 'number') {
-          const sqChoiceCount = (sq.choices || []).length || 4;
-          if (sq.answer >= sqChoiceCount) {
-            // 1-indexed
-            answerIndex = sq.answer - 1;
-          } else if (sq.answer >= 0) {
-            // 0-indexed
-            answerIndex = sq.answer;
+        let answerIndices: number[] | undefined;
+        let isMultipleAnswer = false;
+
+        if (sq.type === 'multiple') {
+          if (Array.isArray(sq.answer)) {
+            const sqChoiceCount = (sq.choices || []).length || 4;
+            const anyOver = sq.answer.some((a: number) => typeof a === 'number' && a >= sqChoiceCount);
+            answerIndices = anyOver ? sq.answer.map((a: number) => typeof a === 'number' ? a - 1 : a) : [...sq.answer];
+            isMultipleAnswer = true;
+            answerIndex = (answerIndices && answerIndices[0] !== undefined) ? answerIndices[0] : -1;
+          } else if (typeof sq.answer === 'number') {
+            const sqChoiceCount = (sq.choices || []).length || 4;
+            if (sq.answer >= sqChoiceCount) {
+              answerIndex = sq.answer - 1;
+            } else if (sq.answer >= 0) {
+              answerIndex = sq.answer;
+            }
           }
         } else if (sq.type === 'ox' && typeof sq.answer === 'number') {
           answerIndex = sq.answer;
@@ -245,6 +254,8 @@ const convertToQuestionDataList = (rawQuestions: any[]): QuestionData[] => {
           type: sq.type || 'multiple',
           choices: sq.choices || undefined,
           answerIndex: sq.type === 'multiple' || sq.type === 'ox' ? answerIndex : undefined,
+          answerIndices: isMultipleAnswer ? answerIndices : undefined,
+          isMultipleAnswer: isMultipleAnswer || undefined,
           answerText: typeof sq.answer === 'string' ? sq.answer : undefined,
           explanation: sq.explanation || undefined,
           mixedExamples: sq.examples || sq.mixedExamples || undefined,
@@ -276,14 +287,23 @@ const convertToQuestionDataList = (rawQuestions: any[]): QuestionData[] => {
       });
     } else {
       let answerIndex = -1;
-      if (q.type === 'multiple' && typeof q.answer === 'number') {
-        const qChoiceCount = (q.choices || []).length || 4;
-        if (q.answer >= qChoiceCount) {
-          // 1-indexed
-          answerIndex = q.answer - 1;
-        } else if (q.answer >= 0) {
-          // 0-indexed
-          answerIndex = q.answer;
+      let answerIndices: number[] | undefined;
+      let isMultipleAnswer = false;
+
+      if (q.type === 'multiple') {
+        if (Array.isArray(q.answer)) {
+          const qChoiceCount = (q.choices || []).length || 4;
+          const anyOver = q.answer.some((a: number) => typeof a === 'number' && a >= qChoiceCount);
+          answerIndices = anyOver ? q.answer.map((a: number) => typeof a === 'number' ? a - 1 : a) : [...q.answer];
+          isMultipleAnswer = true;
+          answerIndex = (answerIndices && answerIndices[0] !== undefined) ? answerIndices[0] : -1;
+        } else if (typeof q.answer === 'number') {
+          const qChoiceCount = (q.choices || []).length || 4;
+          if (q.answer >= qChoiceCount) {
+            answerIndex = q.answer - 1;
+          } else if (q.answer >= 0) {
+            answerIndex = q.answer;
+          }
         }
       } else if (q.type === 'ox' && typeof q.answer === 'number') {
         answerIndex = q.answer;
@@ -295,6 +315,8 @@ const convertToQuestionDataList = (rawQuestions: any[]): QuestionData[] => {
         type: q.type || 'multiple',
         choices: q.choices || ['', '', '', ''],
         answerIndex,
+        answerIndices: isMultipleAnswer ? answerIndices : undefined,
+        isMultipleAnswer: isMultipleAnswer || undefined,
         answerText: typeof q.answer === 'string' ? q.answer : '',
         explanation: q.explanation || '',
         imageUrl: q.imageUrl || null,
@@ -340,6 +362,7 @@ export default function QuizPreviewPage() {
   const [editableQuestions, setEditableQuestions] = useState<QuestionData[]>([]);
   const [originalQuestions, setOriginalQuestions] = useState<any[]>([]);
   const [editTitle, setEditTitle] = useState('');
+  const [editType, setEditType] = useState<'midterm' | 'final' | 'past' | 'independent'>('midterm');
   const [editDifficulty, setEditDifficulty] = useState<'easy' | 'normal' | 'hard'>('normal');
   const [editTags, setEditTags] = useState<string[]>([]);
   const [editDescription, setEditDescription] = useState('');
@@ -546,6 +569,9 @@ export default function QuizPreviewPage() {
     setEditableQuestions(converted);
     setOriginalQuestions(rawQuizData.questions || []);
     setEditTitle(rawQuizData.title || '');
+    // professor/professor-ai 등 비표준 타입은 midterm으로 기본 매핑
+    const validTypes = ['midterm', 'final', 'past', 'independent'];
+    setEditType(validTypes.includes(rawQuizData.type) ? rawQuizData.type : 'midterm');
     setEditDifficulty(rawQuizData.difficulty || 'normal');
     setEditTags(rawQuizData.tags || []);
     setEditDescription(rawQuizData.description || '');
@@ -568,6 +594,7 @@ export default function QuizPreviewPage() {
         title: editTitle,
         description: editDescription,
         difficulty: editDifficulty,
+        quizType: editType,
         tags: editTags,
         questions: flattenedQuestions,
       };
@@ -758,12 +785,15 @@ export default function QuizPreviewPage() {
         }
 
         q.subQuestions.forEach((sq, sqIndex) => {
-          let answer: string | number;
+          let answer: string | number | number[];
           if (sq.type === 'subjective' || sq.type === 'short_answer') {
             answer = sq.answerText || '';
           } else if (sq.type === 'multiple') {
-            // 0-indexed로 저장 (recordAttempt CF와 일치)
-            answer = (sq.answerIndex !== undefined && sq.answerIndex >= 0) ? sq.answerIndex : -1;
+            if (sq.answerIndices && sq.answerIndices.length > 0) {
+              answer = sq.answerIndices;
+            } else {
+              answer = (sq.answerIndex !== undefined && sq.answerIndex >= 0) ? sq.answerIndex : -1;
+            }
           } else {
             answer = sq.answerIndex ?? 0;
           }
@@ -809,12 +839,15 @@ export default function QuizPreviewPage() {
           flattenedQuestions.push(subQuestionData);
         });
       } else {
-        let answer: string | number;
+        let answer: string | number | number[];
         if (q.type === 'subjective' || q.type === 'short_answer') {
           answer = q.answerText;
         } else if (q.type === 'multiple') {
-          // 0-indexed로 저장 (recordAttempt CF와 일치)
-          answer = q.answerIndex >= 0 ? q.answerIndex : -1;
+          if (q.answerIndices && q.answerIndices.length > 0) {
+            answer = q.answerIndices;
+          } else {
+            answer = q.answerIndex >= 0 ? q.answerIndex : -1;
+          }
         } else {
           answer = q.answerIndex;
         }
@@ -868,6 +901,7 @@ export default function QuizPreviewPage() {
         title: editTitle,
         description: editDescription,
         difficulty: editDifficulty,
+        quizType: editType,
         tags: editTags,
         questions: flattenedQuestions,
       };
@@ -1281,6 +1315,32 @@ export default function QuizPreviewPage() {
                   placeholder="예: 중간고사 대비 퀴즈"
                   className="w-full px-3 py-2.5 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-sm text-[#1A1A1A] placeholder:text-[#9A9A9A] outline-none focus:bg-[#FDFBF7]"
                 />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-[#1A1A1A] mb-1.5">시험 유형</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {([
+                    { value: 'midterm' as const, label: '중간' },
+                    { value: 'past' as const, label: '기출' },
+                    { value: 'final' as const, label: '기말' },
+                    { value: 'independent' as const, label: '단독' },
+                  ]).map(({ value, label }) => (
+                    <motion.button
+                      key={value}
+                      type="button"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setEditType(value)}
+                      className={`py-2 px-3 font-bold text-xs border-2 transition-all duration-200 ${
+                        editType === value
+                          ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                          : 'bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
+                      }`}
+                    >
+                      {label}
+                    </motion.button>
+                  ))}
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-bold text-[#1A1A1A] mb-1.5">난이도</label>

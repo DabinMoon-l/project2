@@ -33,13 +33,11 @@ export interface ProfessorAiQuiz {
   tags: string[];
   type: string;
   isPublished?: boolean;
+  wasPublished?: boolean;
   publishedType?: string; // midterm | final | past
   createdAt: any;
   updatedAt: any;
 }
-
-// AI 생성 퀴즈 타입 (서재에서 표시할 퀴즈)
-const AI_QUIZ_TYPES = new Set(['professor-ai', 'ai-generated']);
 
 export function useProfessorAiQuizzes() {
   const { profile } = useUser();
@@ -53,11 +51,11 @@ export function useProfessorAiQuizzes() {
       return;
     }
 
-    // 기존 인덱스(creatorId + isPublic + createdAt desc)를 활용하는 단순 쿼리
-    // type 필터는 클라이언트에서 수행 (복합 인덱스 추가 불필요)
+    // creatorUid + courseId + createdAt desc 인덱스 활용
+    // (수동 생성 퀴즈는 creatorId 없이 creatorUid만 있으므로 creatorUid 사용)
     const q = query(
       collection(db, 'quizzes'),
-      where('creatorId', '==', profile.uid),
+      where('creatorUid', '==', profile.uid),
       where('courseId', '==', userCourseId),
       orderBy('createdAt', 'desc')
     );
@@ -77,11 +75,8 @@ export function useProfessorAiQuizzes() {
     return unsub;
   }, [profile?.uid, userCourseId]);
 
-  // 클라이언트 필터: AI 생성 퀴즈만
-  const quizzes = useMemo(
-    () => allQuizzes.filter(q => AI_QUIZ_TYPES.has(q.type)),
-    [allQuizzes]
-  );
+  // 전체 퀴즈 (AI + 커스텀 통합)
+  const quizzes = allQuizzes;
 
   // 퀴즈 삭제
   const deleteQuiz = useCallback(async (quizId: string) => {
@@ -102,11 +97,13 @@ export function useProfessorAiQuizzes() {
         originalType: 'professor-ai', // AI 출처 기록 (PDF 정답 인덱싱용)
         isPublished: true,
         isPublic: true,
+        wasPublished: true, // 한 번이라도 공개되면 영구 마킹 (Stats 활성 조건)
         updatedAt: serverTimestamp(),
       };
-      // creatorUid가 없는 기존 서재 퀴즈를 위해 공개 시 보정
+      // creatorUid/creatorId 양쪽 보정 (CF 호환)
       if (profile?.uid) {
         updateData.creatorUid = profile.uid;
+        updateData.creatorId = profile.uid;
       }
       await updateDoc(doc(db, 'quizzes', quizId), updateData);
     } catch (err: any) {
@@ -115,6 +112,22 @@ export function useProfessorAiQuizzes() {
       throw err;
     }
   }, [profile?.uid]);
+
+  // 퀴즈 비공개 전환
+  const unpublishQuiz = useCallback(async (quizId: string) => {
+    try {
+      await updateDoc(doc(db, 'quizzes', quizId), {
+        isPublished: false,
+        isPublic: false,
+        type: 'professor', // type 초기화 → 캐러셀에서 제거
+        updatedAt: serverTimestamp(),
+      });
+    } catch (err: any) {
+      console.error('[unpublishQuiz] 비공개 전환 실패:', err);
+      alert('비공개 전환에 실패했습니다: ' + (err?.message || ''));
+      throw err;
+    }
+  }, []);
 
   // 퀴즈 제목 수정
   const updateTitle = useCallback(async (quizId: string, newTitle: string) => {
@@ -146,5 +159,5 @@ export function useProfessorAiQuizzes() {
     await updateDoc(doc(db, 'quizzes', quizId), data);
   }, []);
 
-  return { quizzes, loading, deleteQuiz, publishQuiz, updateTitle, updateQuestions, updateMeta };
+  return { quizzes, loading, deleteQuiz, publishQuiz, unpublishQuiz, updateTitle, updateQuestions, updateMeta };
 }

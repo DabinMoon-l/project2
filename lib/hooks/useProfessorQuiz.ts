@@ -45,7 +45,7 @@ export interface QuizQuestion {
   text: string;
   type: QuestionType;
   choices?: string[];
-  answer: number | string;
+  answer: number | number[] | string;
   explanation?: string;
   chapterId?: string;
   chapterDetailId?: string;
@@ -438,15 +438,15 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
       else if (q.type === 'combined' && q.subQuestions && q.subQuestions.length > 0) {
         const parentId = q.id || `q${globalIdx}`;
         q.subQuestions.forEach((sq: any, idx: number) => {
-          // 정답 형식 변환
-          let answer: number | string;
+          // 정답 형식 변환 (0-indexed 유지 — recordAttempt CF와 일치)
+          let answer: number | string | number[];
           if (sq.type === 'ox') {
             answer = sq.answerIndex ?? 0;
           } else if (sq.type === 'multiple') {
             if (sq.answerIndices?.length > 0) {
-              answer = sq.answerIndices.map((i: number) => i + 1).join(',');
-            } else if (sq.answerIndex !== undefined) {
-              answer = sq.answerIndex + 1;
+              answer = sq.answerIndices.length === 1 ? sq.answerIndices[0] : sq.answerIndices;
+            } else if (sq.answerIndex !== undefined && sq.answerIndex >= 0) {
+              answer = sq.answerIndex;
             } else {
               answer = 0;
             }
@@ -832,6 +832,12 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
           ...input,
           updatedAt: Timestamp.now(),
         };
+
+        // quizType → type 매핑 (create와 동일)
+        if (input.quizType) {
+          raw.type = input.quizType;
+          delete raw.quizType;
+        }
 
         // 문제별 고유 ID 부여 (기존 퀴즈 수정 시에도 ID 없는 문제에 부여)
         if (input.questions) {

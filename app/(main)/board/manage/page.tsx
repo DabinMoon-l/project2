@@ -481,16 +481,19 @@ function ActivitySection({ posts, courseId }: { posts: Post[]; courseId: string 
       classMap[p.authorId] = p.authorClassType;
     });
 
-    // 글 수
+    // 글 수 (교수님·AI 제외 — authorClassType 없으면 학생 아님)
     posts.forEach(p => {
+      if (!p.authorClassType) return;
       if (!scores[p.authorId]) scores[p.authorId] = { nickname: p.authorNickname, classType: p.authorClassType, posts: 0, comments: 0, likes: 0 };
       scores[p.authorId].posts++;
       scores[p.authorId].likes += p.likes;
     });
 
-    // 댓글 수
+    // 댓글 수 (교수님·AI 제외 — authorClassType 없으면 학생 아님)
     comments.forEach(c => {
-      if (!scores[c.authorId]) scores[c.authorId] = { nickname: nicknameMap[c.authorId] || '알 수 없음', classType: c.authorClassType || classMap[c.authorId], posts: 0, comments: 0, likes: 0 };
+      const cls = c.authorClassType || classMap[c.authorId];
+      if (!cls) return;
+      if (!scores[c.authorId]) scores[c.authorId] = { nickname: nicknameMap[c.authorId] || '알 수 없음', classType: cls, posts: 0, comments: 0, likes: 0 };
       scores[c.authorId].comments++;
     });
 

@@ -132,8 +132,25 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
 
             const subQuestions: SubQuestion[] = groupQuestions.map((sq: any) => {
               let answerIndex = -1;
-              if (sq.type === 'multiple' && typeof sq.answer === 'number' && sq.answer > 0) {
-                answerIndex = sq.answer - 1;
+              let answerIndices: number[] | undefined;
+              let isMultipleAnswer = false;
+
+              if (sq.type === 'multiple') {
+                if (Array.isArray(sq.answer)) {
+                  // 복수 정답
+                  const sqChoiceCount = (sq.choices || []).length || 4;
+                  const anyOver = sq.answer.some((a: number) => typeof a === 'number' && a >= sqChoiceCount);
+                  answerIndices = anyOver ? sq.answer.map((a: number) => typeof a === 'number' ? a - 1 : a) : [...sq.answer];
+                  isMultipleAnswer = true;
+                  answerIndex = (answerIndices && answerIndices[0] !== undefined) ? answerIndices[0] : -1;
+                } else if (typeof sq.answer === 'number') {
+                  const sqChoiceCount = (sq.choices || []).length || 4;
+                  if (sq.answer >= sqChoiceCount) {
+                    answerIndex = sq.answer - 1;
+                  } else if (sq.answer >= 0) {
+                    answerIndex = sq.answer;
+                  }
+                }
               } else if (sq.type === 'ox' && typeof sq.answer === 'number') {
                 answerIndex = sq.answer;
               }
@@ -144,6 +161,8 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
                 type: sq.type || 'multiple',
                 choices: sq.choices || undefined,
                 answerIndex: sq.type === 'multiple' || sq.type === 'ox' ? answerIndex : undefined,
+                answerIndices: isMultipleAnswer ? answerIndices : undefined,
+                isMultipleAnswer: isMultipleAnswer || undefined,
                 answerText: typeof sq.answer === 'string' ? sq.answer : undefined,
                 explanation: sq.explanation || undefined,
                 mixedExamples: sq.examples || sq.mixedExamples || undefined,
@@ -173,8 +192,25 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
             loadedQuestions.push(combinedQuestion);
           } else {
             let answerIndex = -1;
-            if (q.type === 'multiple' && typeof q.answer === 'number' && q.answer > 0) {
-              answerIndex = q.answer - 1;
+            let answerIndices: number[] | undefined;
+            let isMultipleAnswer = false;
+
+            if (q.type === 'multiple') {
+              if (Array.isArray(q.answer)) {
+                // 복수 정답
+                const qChoiceCount = (q.choices || []).length || 4;
+                const anyOver = q.answer.some((a: number) => typeof a === 'number' && a >= qChoiceCount);
+                answerIndices = anyOver ? q.answer.map((a: number) => typeof a === 'number' ? a - 1 : a) : [...q.answer];
+                isMultipleAnswer = true;
+                answerIndex = (answerIndices && answerIndices[0] !== undefined) ? answerIndices[0] : -1;
+              } else if (typeof q.answer === 'number') {
+                const qChoiceCount = (q.choices || []).length || 4;
+                if (q.answer >= qChoiceCount) {
+                  answerIndex = q.answer - 1;
+                } else if (q.answer >= 0) {
+                  answerIndex = q.answer;
+                }
+              }
             } else if (q.type === 'ox' && typeof q.answer === 'number') {
               answerIndex = q.answer;
             }
@@ -185,6 +221,8 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
               type: q.type || 'multiple',
               choices: q.choices || ['', '', '', ''],
               answerIndex,
+              answerIndices: isMultipleAnswer ? answerIndices : undefined,
+              isMultipleAnswer: isMultipleAnswer || undefined,
               answerText: typeof q.answer === 'string' ? q.answer : '',
               explanation: q.explanation || '',
               imageUrl: q.imageUrl || null,
@@ -247,10 +285,22 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
     if (current.type === 'subjective' || current.type === 'short_answer') {
       if ((original.answer?.toString() || '') !== (current.answerText || '')) return true;
     } else if (current.type === 'multiple') {
-      // answer가 문자열("1")이든 숫자(1)이든 모두 처리 (1-indexed → 0-indexed)
-      const origNum = parseInt(String(original.answer), 10);
-      const origAnswer = !isNaN(origNum) ? origNum - 1 : -1;
-      if (origAnswer !== current.answerIndex) return true;
+      // 복수정답 비교
+      if (Array.isArray(original.answer) || (current.answerIndices && current.answerIndices.length > 0)) {
+        const origArr = Array.isArray(original.answer) ? [...original.answer].sort() : [original.answer];
+        const currArr = current.answerIndices && current.answerIndices.length > 0
+          ? [...current.answerIndices].sort()
+          : [current.answerIndex];
+        if (JSON.stringify(origArr) !== JSON.stringify(currArr)) return true;
+      } else {
+        // 단일 정답: 0-indexed 기준 비교 (answer가 1-indexed일 수 있으므로 choices 수로 판별)
+        const origNum = parseInt(String(original.answer), 10);
+        if (!isNaN(origNum)) {
+          const choiceCount = (original.choices || []).length || 4;
+          const origAnswer = origNum >= choiceCount ? origNum - 1 : origNum;
+          if (origAnswer !== current.answerIndex) return true;
+        }
+      }
     } else if (current.type === 'ox') {
       // OX: 0/"0"/"O" = O, 1/"1"/"X" = X
       const normalizeOx = (v: any) => {
@@ -283,10 +333,13 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
     if (current.type === 'subjective' || current.type === 'short_answer') {
       if (original.answer !== (current.answerText || '')) return true;
     } else if (current.type === 'multiple') {
-      // answer가 문자열("1")이든 숫자(1)이든 모두 처리 (1-indexed → 0-indexed)
+      // 0-indexed 기준 비교 (answer가 1-indexed일 수 있으므로 choices 수로 판별)
       const origNum = parseInt(String(original.answer), 10);
-      const origAnswer = !isNaN(origNum) ? origNum - 1 : -1;
-      if (origAnswer !== (current.answerIndex ?? -1)) return true;
+      if (!isNaN(origNum)) {
+        const choiceCount = (original.choices || []).length || 4;
+        const origAnswer = origNum >= choiceCount ? origNum - 1 : origNum;
+        if (origAnswer !== (current.answerIndex ?? -1)) return true;
+      }
     } else if (current.type === 'ox') {
       // OX: 0/"0"/"O" = O, 1/"1"/"X" = X
       const normalizeOx = (v: any) => {
@@ -390,11 +443,16 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
           ) : false;
 
           q.subQuestions.forEach((sq, sqIndex) => {
-            let answer: string | number;
+            let answer: string | number | number[];
             if (sq.type === 'subjective' || sq.type === 'short_answer') {
               answer = sq.answerText || '';
             } else if (sq.type === 'multiple') {
-              answer = (sq.answerIndex !== undefined && sq.answerIndex >= 0) ? sq.answerIndex + 1 : -1;
+              // 복수정답이면 배열, 아니면 단일 숫자 (0-indexed)
+              if (sq.answerIndices && sq.answerIndices.length > 0) {
+                answer = sq.answerIndices;
+              } else {
+                answer = (sq.answerIndex !== undefined && sq.answerIndex >= 0) ? sq.answerIndex : -1;
+              }
             } else {
               answer = sq.answerIndex ?? 0;
             }
@@ -435,11 +493,16 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
             flattenedQuestions.push(sanitizeForFirestore(subQuestionData));
           });
         } else {
-          let answer: string | number;
+          let answer: string | number | number[];
           if (q.type === 'subjective' || q.type === 'short_answer') {
             answer = q.answerText;
           } else if (q.type === 'multiple') {
-            answer = q.answerIndex >= 0 ? q.answerIndex + 1 : -1;
+            // 복수정답이면 배열, 아니면 단일 숫자 (0-indexed)
+            if (q.answerIndices && q.answerIndices.length > 0) {
+              answer = q.answerIndices;
+            } else {
+              answer = q.answerIndex >= 0 ? q.answerIndex : -1;
+            }
           } else {
             answer = q.answerIndex;
           }

@@ -294,7 +294,7 @@ function PinnedPostCard({
           <span className="text-xs text-[#5C5C5C]">
             {post.authorClassType
               ? `${post.authorNickname}·${post.authorClassType}반`
-              : `교수님 ${post.authorNickname}`}
+              : `${post.authorNickname} 교수님`}
           </span>
           <span className="text-xs text-[#5C5C5C]">
             ❤️ {post.likes} 💬 {post.commentCount}
@@ -357,7 +357,7 @@ function PostListItem({
           <span>
             {post.authorClassType
               ? <>{post.authorNickname}{showClass && `·${post.authorClassType}반`}</>
-              : `교수님 ${post.authorNickname}`}
+              : `${post.authorNickname} 교수님`}
           </span>
           <span>·</span>
           <span>❤️ {post.likes}</span>

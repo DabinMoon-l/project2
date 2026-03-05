@@ -99,7 +99,9 @@ export default function CommentItem({
   const realName = isProfessor && authorNameMap ? authorNameMap.get(comment.authorId) : undefined;
   const authorDisplay = comment.authorClassType
     ? `${realName ? `${realName} ` : ''}${comment.authorNickname}·${comment.authorClassType}반`
-    : `교수님 ${comment.authorNickname}`;
+    : comment.authorId === 'gemini-ai'
+      ? comment.authorNickname
+      : `${comment.authorNickname} 교수님`;
 
   const handleDeleteClick = () => {
     setShowDeleteConfirm(true);

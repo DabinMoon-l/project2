@@ -22,6 +22,9 @@ import {
   onLibraryJobEvent,
 } from '@/lib/utils/libraryJobManager';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
+
+const QuizStatsModal = dynamic(() => import('@/components/quiz/manage/QuizStatsModal'), { ssr: false });
 import { Skeleton } from '@/components/common';
 import MobileBottomSheet from '@/components/common/MobileBottomSheet';
 import { getDefaultQuizTab } from '@/lib/types/course';
@@ -89,7 +92,7 @@ export default function ProfessorLibraryTab({
   const router = useRouter();
   const { profile } = useUser();
   const { userCourseId, userCourse } = useCourse();
-  const { quizzes, loading: quizzesLoading, deleteQuiz, publishQuiz, updateTitle, updateQuestions, updateMeta } = useProfessorAiQuizzes();
+  const { quizzes, loading: quizzesLoading, deleteQuiz, publishQuiz, unpublishQuiz, updateTitle, updateQuestions, updateMeta } = useProfessorAiQuizzes();
 
   // 태그 옵션 (과목별)
   const editTagOptions = useMemo(() => {
@@ -158,6 +161,12 @@ export default function ProfessorLibraryTab({
     return tab === 'final' ? 'final' : 'midterm';
   });
   const [showPublishDropdown, setShowPublishDropdown] = useState(false);
+
+  // 비공개 전환 모달
+  const [unpublishTarget, setUnpublishTarget] = useState<string | null>(null);
+
+  // Stats 모달
+  const [statsQuizId, setStatsQuizId] = useState<{ id: string; title: string } | null>(null);
 
   // 삭제 확인
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -726,13 +735,20 @@ export default function ProfessorLibraryTab({
                   </svg>
                 </button>
               ) : (
-                <div className="absolute top-2 right-2 z-20 w-7 h-7 flex items-center justify-center text-[#8B6914]">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setUnpublishTarget(quiz.id);
+                  }}
+                  className="absolute top-2 right-2 z-20 w-7 h-7 flex items-center justify-center text-[#8B6914] hover:text-[#5C4A0A] hover:scale-110 transition-all"
+                  title="비공개로 전환"
+                >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.6 9h16.8M3.6 15h16.8" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3a15.3 15.3 0 0 1 4 9 15.3 15.3 0 0 1-4 9 15.3 15.3 0 0 1-4-9 15.3 15.3 0 0 1 4-9z" />
                   </svg>
-                </div>
+                </button>
               )}
 
               {/* 카드 내용 */}
@@ -1116,7 +1132,7 @@ export default function ProfessorLibraryTab({
               </div>
             </div>
 
-            {/* 닫기 / 삭제 */}
+            {/* 닫기 / Stats */}
             <div className="flex gap-2">
               <button
                 onClick={() => setSelectedDetailQuiz(null)}
@@ -1125,13 +1141,18 @@ export default function ProfessorLibraryTab({
                 닫기
               </button>
               <button
+                disabled={!(selectedDetailQuiz.isPublished || (selectedDetailQuiz as any).wasPublished)}
                 onClick={() => {
-                  setDeleteTarget(selectedDetailQuiz.id);
+                  setStatsQuizId({ id: selectedDetailQuiz.id, title: selectedDetailQuiz.title });
                   setSelectedDetailQuiz(null);
                 }}
-                className="flex-1 py-2 text-xs font-bold border-2 border-[#C44] text-[#C44] hover:bg-[#FEE] transition-colors rounded-lg"
+                className={`flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] rounded-lg transition-colors ${
+                  selectedDetailQuiz.isPublished || (selectedDetailQuiz as any).wasPublished
+                    ? 'bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#333]'
+                    : 'opacity-50 cursor-not-allowed bg-[#D4CFC4] text-[#5C5C5C] border-[#999]'
+                }`}
               >
-                삭제
+                Stats
               </button>
             </div>
           </motion.div>
@@ -1185,6 +1206,7 @@ export default function ProfessorLibraryTab({
                     {[
                       { value: 'midterm', label: '중간 대비' },
                       { value: 'final', label: '기말 대비' },
+                      { value: 'independent', label: '단독 대비' },
                     ].map((opt) => (
                       <button
                         key={opt.value}
@@ -1277,6 +1299,78 @@ export default function ProfessorLibraryTab({
             </div>
           </motion.div>
         </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* 비공개 전환 확인 모달 */}
+      {/* ============================================================ */}
+      {unpublishTarget && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50"
+          onClick={() => setUnpublishTarget(null)}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.88 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.88 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-[280px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 rounded-xl"
+          >
+            {/* 자물쇠 아이콘 */}
+            <div className="flex justify-center mb-3">
+              <div className="w-9 h-9 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4] rounded-lg">
+                <svg className="w-4 h-4 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+            </div>
+            <h3 className="text-center font-bold text-sm text-[#1A1A1A] mb-2">
+              비공개로 전환할까요?
+            </h3>
+            <p className="text-center text-xs text-[#5C5C5C] mb-4">
+              비공개 전환 시 학생들이 더 이상 풀 수 없어요.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setUnpublishTarget(null)}
+                className="flex-1 py-1.5 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors rounded-lg"
+              >
+                취소
+              </button>
+              <button
+                onClick={async () => {
+                  if (unpublishTarget) {
+                    try {
+                      await unpublishQuiz(unpublishTarget);
+                      onPublish?.();
+                    } catch (err) {
+                      console.error('비공개 전환 실패:', err);
+                    } finally {
+                      setUnpublishTarget(null);
+                    }
+                  }
+                }}
+                className="flex-1 py-1.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors rounded-lg"
+              >
+                비공개
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* Stats 모달 */}
+      {/* ============================================================ */}
+      {statsQuizId && (
+        <QuizStatsModal
+          quizId={statsQuizId.id}
+          quizTitle={statsQuizId.title}
+          isOpen={!!statsQuizId}
+          onClose={() => setStatsQuizId(null)}
+          isProfessor
+        />
       )}
     </div>
   );

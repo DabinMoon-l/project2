@@ -273,7 +273,7 @@ export default function PostDetailPage() {
             <span>
               {post.authorClassType
                 ? <>{isProfessor && authorName ? `${authorName} ` : ''}{post.authorNickname}·{post.authorClassType}반</>
-                : <>교수님 {post.authorNickname}</>
+                : <>{post.authorNickname} 교수님</>
               }
             </span>
             <span>{formatDate(post.createdAt)}</span>

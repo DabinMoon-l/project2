@@ -296,7 +296,9 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
               <span className="text-[13px] font-semibold" style={{ color: '#1A1A1A' }}>
                 {acceptedComment.authorClassType
                   ? `${acceptedComment.authorNickname}·${acceptedComment.authorClassType}반`
-                  : `교수님 ${acceptedComment.authorNickname}`}
+                  : acceptedComment.authorId === 'gemini-ai'
+                    ? acceptedComment.authorNickname
+                    : `${acceptedComment.authorNickname} 교수님`}
               </span>
             </div>
             <p

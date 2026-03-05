@@ -214,6 +214,8 @@ export interface QuestionData {
   passageImage?: string | null;
   /** 공통 문제 (결합형용) - 공통 제시문 위에 표시되는 문제 텍스트 */
   commonQuestion?: string;
+  /** 복수정답 모드 (객관식용) */
+  isMultipleAnswer?: boolean;
   /** 챕터 ID (결합형이 아닌 문제용) */
   chapterId?: string;
   /** 세부항목 ID (결합형이 아닌 문제용) */
