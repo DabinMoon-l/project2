@@ -177,6 +177,16 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 
 **학생 AI 퀴즈**: AIQuizContainer 플로팅 버튼 → 태그 선택 → 같은 CF 호출
 
+**서재 퀴즈 수정 모드** (ProfessorLibraryTab):
+- `QuestionList`(드래그 리오더) + `QuestionEditor`(풀 에디터) 방식 — preview 페이지와 동일
+- 메타 편집: 제목, 시험유형(4버튼), 난이도(3버튼), 총평, 태그 (외곽 박스 없음)
+- 취소/저장 버튼: 필터 행(`자작/서재/커스텀`) 우측에 배치 (`onEditStateChange` 콜백)
+- `convertToQuestionDataList` → `flattenQuestionsForSave` 라운드트립 (0-indexed 통일)
+- `...(originalQ || {})` spread로 `choiceExplanations` 등 미편집 필드 보존
+- Firestore `undefined` 값 strip 처리 (저장 직전)
+
+**교수 퀴즈 페이지 디폴트 탭**: `'library'`(서재) — sessionStorage로 탭 상태 유지
+
 ### 토끼 시스템
 
 **2단계 뽑기**:

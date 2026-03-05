@@ -53,12 +53,15 @@ function gradeQuestion(
   let correctAnswerStr = "";
 
   if (question.type === "ox") {
-    // OX 문제
-    correctAnswerStr = question.answer === 0 ? "O" : "X";
+    // OX 문제 — 숫자(0/1)와 문자열("O"/"X") 양쪽 지원
+    const answerVal = question.answer;
+    const isO = answerVal === 0 || answerVal === "O" || answerVal === "o";
+    correctAnswerStr = isO ? "O" : "X";
     if (userAnswer !== undefined) {
-      const ua = Number(userAnswer.answer);
-      userAnswerStr = ua === 0 ? "O" : "X";
-      isCorrect = ua === question.answer;
+      const ua = userAnswer.answer;
+      const uaIsO = ua === 0 || ua === "0" || ua === "O" || ua === "o";
+      userAnswerStr = uaIsO ? "O" : "X";
+      isCorrect = correctAnswerStr === userAnswerStr;
     }
   } else if (question.type === "multiple") {
     // 객관식
@@ -272,15 +275,28 @@ export const recordAttempt = onCall(
 
     // ── ⑨ reviews 생성은 generateReviewsOnResult 트리거에서 비동기 처리 ──
 
-    // ── ⑩ users/{uid}.quizStats 증분 갱신 ──
-    // 전체 quiz_completions 조회 대신, 현재 제출 데이터로 증분 업데이트
+    // ── ⑩ users/{uid}.quizStats 증분 갱신 + averageScore 계산 ──
     try {
+      // 증분 업데이트
       await db.doc(`users/${userId}`).update({
         "quizStats.totalCorrect": FieldValue.increment(correctCount),
         "quizStats.totalQuestions": FieldValue.increment(totalCount),
         ...(attemptNo <= 1 ? { "quizStats.totalAttempts": FieldValue.increment(1) } : {}),
         updatedAt: FieldValue.serverTimestamp(),
       });
+
+      // 증분 후 현재 값을 읽어서 averageScore 계산
+      const userDoc = await db.doc(`users/${userId}`).get();
+      const userData = userDoc.data();
+      if (userData?.quizStats) {
+        const totalQ = userData.quizStats.totalQuestions || 0;
+        const totalC = userData.quizStats.totalCorrect || 0;
+        const avgScore = totalQ > 0 ? Math.round((totalC / totalQ) * 100) : 0;
+        await db.doc(`users/${userId}`).update({
+          "quizStats.averageScore": avgScore,
+          "quizStats.lastAttemptAt": FieldValue.serverTimestamp(),
+        });
+      }
     } catch (e) {
       console.warn(`users/${userId} quizStats 갱신 실패 (무시 가능):`, e);
     }

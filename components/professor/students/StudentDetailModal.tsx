@@ -35,25 +35,31 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
   const studentAvg = student.weightedScore ?? 0;
   const allScoresInCourse = (student.classWeightedScores ?? []);
   const classMates = allScoresInCourse.filter(s => s.classId === student.classId);
-  const classScores = classMates.map(s => s.score);
-  const classMean = mean(classScores);
-  const classSd = sd(classScores);
-  const studentZ = zScore(studentAvg, classMean, classSd);
+  // B: 반 평균/SD도 참여자만 (score > 0)
+  const classScoresActive = classMates.map(s => s.score).filter(s => s > 0);
+  const classMean = mean(classScoresActive);
+  const classSd = sd(classScoresActive);
+  // D: SD=0이면 Z-score 무의미 → null
+  const studentZ = classSd > 0 ? zScore(studentAvg, classMean, classSd) : null;
 
   // 전체 과목 기준 백분위 + 전체 평균
-  const allCourseScores = allScoresInCourse.map(s => s.score);
+  // B: 미참여자(0점) 제외 — 참여만 해도 "상위 0%"되는 왜곡 방지
+  const activeScoresInCourse = allScoresInCourse.filter(s => s.score > 0);
+  const allCourseScores = activeScoresInCourse.map(s => s.score);
   const overallMean = mean(allCourseScores);
   // 순위 기반 백분위 (Z-score CDF 대신 — 비정규 분포에서도 정확)
   const sortedCourseScores = [...allCourseScores].sort((a, b) => a - b);
-  const overallPercentile = rankPercentile(studentAvg, sortedCourseScores);
+  const overallPercentile = studentAvg > 0
+    ? rankPercentile(studentAvg, sortedCourseScores)
+    : 0;
 
   // 표시 이름
   const displayName = student.name || student.nickname;
 
-  // 경고
+  // 경고 — D: Z-score가 null이면 경고 스킵
   const warnings: string[] = [];
-  if (studentZ < -2.0) warnings.push('Z-score < -2.0 — 위험');
-  else if (studentZ < -1.5) warnings.push('Z-score < -1.5 — 주의');
+  if (studentZ !== null && studentZ < -2.0) warnings.push('Z-score < -2.0 — 위험');
+  else if (studentZ !== null && studentZ < -1.5) warnings.push('Z-score < -1.5 — 주의');
 
   // 최근 퀴즈 5개 (recentQuizzes에서)
   const recentFive = student.recentQuizzes.slice(0, 5).reverse();
@@ -243,7 +249,7 @@ function AchievementGrid({
   studentAvg: number;
   classMean: number;
   overallMean: number;
-  studentZ: number;
+  studentZ: number | null;
   overallPercentile: number;
 }) {
   const [activeInfo, setActiveInfo] = useState<string | null>(null);
@@ -252,8 +258,10 @@ function AchievementGrid({
     avg: studentAvg.toFixed(1),
     classMean: classMean.toFixed(1),
     overallMean: overallMean.toFixed(1),
-    zscore: <span className={studentZ < -1.5 ? 'text-[#8B1A1A]' : ''}>{studentZ.toFixed(2)}</span>,
-    pct: `상위 ${100 - overallPercentile}%`,
+    zscore: studentZ !== null
+      ? <span className={studentZ < -1.5 ? 'text-[#8B1A1A]' : ''}>{studentZ.toFixed(2)}</span>
+      : <span className="text-[#5C5C5C]">N/A</span>,
+    pct: studentAvg > 0 ? `상위 ${100 - overallPercentile}%` : <span className="text-[#5C5C5C]">N/A</span>,
   };
 
   return (

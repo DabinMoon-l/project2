@@ -515,12 +515,15 @@ export default function QuizResultPage() {
           };
         });
 
+        let cfSuccess = false;
         try {
           const attemptResult = await recordAttemptFn({
             quizId,
             answers: serverAnswers,
             attemptNo: 1,
           });
+
+          cfSuccess = true;
 
           // 서버에서 이미 제출된 경우에도 정상 처리
           if (attemptResult.data.alreadySubmitted) {
@@ -547,7 +550,7 @@ export default function QuizResultPage() {
             quizCreatorId: quizData.creatorId || null,
             score,
             correctCount,
-            totalCount: questions.length,
+            totalCount: questions.filter((q: any) => q.type !== 'essay').length,
             earnedExp,
             answers: userAnswers,
             questionScores: questionScoreMap,
@@ -575,8 +578,9 @@ export default function QuizResultPage() {
           }
         }
 
-        {
-          // reviews 생성 (클라이언트에서 처리 - display 필드가 복잡하므로)
+        if (!cfSuccess) {
+          // CF 성공 시 서버 트리거(generateReviewsOnResult)가 reviews를 생성하므로 스킵
+          // CF 실패 시에만 클라이언트에서 reviews 생성
           // 퀴즈 업데이트 시간 저장 (문제 수정 알림용)
           const quizUpdatedAtForReview = quizData.updatedAt || quizData.createdAt || null;
 

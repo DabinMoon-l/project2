@@ -1131,7 +1131,7 @@ export default function ProfessorQuizListPage() {
       const saved = sessionStorage.getItem('prof_quiz_section_filter');
       if (saved === 'custom' || saved === 'library' || saved === 'folder') return saved;
     }
-    return 'custom';
+    return 'library';
   });
 
   // 필터 변경 시 sessionStorage에 저장
@@ -1144,6 +1144,13 @@ export default function ProfessorQuizListPage() {
 
   // 서재 탭 인라인 프리뷰 모드
   const [isLibraryPreview, setIsLibraryPreview] = useState(false);
+  // 서재 탭 수정 모드 상태 (필터 행 우측 취소/저장 버튼용)
+  const [libraryEditState, setLibraryEditState] = useState<{
+    isEditMode: boolean;
+    isSaving: boolean;
+    onCancel: () => void;
+    onSave: () => void;
+  } | null>(null);
 
   // 자작 섹션 (type: 'custom' 퀴즈, 학생과 동일한 데이터)
   const [customLoading, setCustomLoading] = useState(true);
@@ -1617,7 +1624,23 @@ export default function ProfessorQuizListPage() {
             }}
           />
 
-          {isLibraryPreview ? (
+          {isLibraryPreview && libraryEditState ? (
+            <div className="flex gap-1.5 flex-shrink-0">
+              <button
+                onClick={libraryEditState.onCancel}
+                className="px-3.5 py-2 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors rounded-lg"
+              >
+                취소
+              </button>
+              <button
+                onClick={libraryEditState.onSave}
+                disabled={libraryEditState.isSaving}
+                className="px-3.5 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors rounded-lg"
+              >
+                {libraryEditState.isSaving ? '저장 중...' : '저장'}
+              </button>
+            </div>
+          ) : isLibraryPreview ? (
             <div />
           ) : isProfPdfSelectMode ? (
             <div className="flex gap-2">
@@ -1894,6 +1917,7 @@ export default function ProfessorQuizListPage() {
             onPublish={() => {
               refreshExamQuizzes();
             }}
+            onEditStateChange={setLibraryEditState}
           />
         )}
 
@@ -2187,7 +2211,7 @@ export default function ProfessorQuizListPage() {
                 <span className="text-[#5C5C5C]">제작자</span>
                 <span className="font-bold text-[#1A1A1A]">
                   {detailsCreatorInfo?.role === 'professor'
-                    ? `${detailsCreatorInfo.name || '교수'} ${detailsCreatorInfo.nickname || detailsQuiz.creatorNickname || ''}`
+                    ? '교수님'
                     : `${detailsCreatorInfo?.nickname || detailsQuiz.creatorNickname || '익명'} ${detailsCreatorInfo?.classId ? detailsCreatorInfo.classId + '반' : ''}`
                   }
                 </span>

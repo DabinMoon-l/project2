@@ -41,6 +41,9 @@ import { useHideNav } from '@/lib/hooks/useHideNav';
 
 type NewsCardType = 'midterm' | 'final' | 'past';
 
+// 교수 퀴즈 타입 — 제작자를 "교수님"으로 표시
+const PROFESSOR_QUIZ_TYPES = new Set(['midterm', 'final', 'past', 'professor', 'professor-ai', 'independent']);
+
 interface QuizCardData {
   id: string;
   title: string;
@@ -2275,8 +2278,8 @@ function QuizListPageContent() {
               <div className="flex justify-between text-xs">
                 <span className="text-[#5C5C5C]">제작자</span>
                 <span className="font-bold text-[#1A1A1A]">
-                  {selectedQuiz.creatorNickname || '익명'}
-                  {selectedQuiz.creatorClassType && ` · ${selectedQuiz.creatorClassType}반`}
+                  {PROFESSOR_QUIZ_TYPES.has(selectedQuiz.type) ? '교수님' : (selectedQuiz.creatorNickname || '익명')}
+                  {!PROFESSOR_QUIZ_TYPES.has(selectedQuiz.type) && selectedQuiz.creatorClassType && ` · ${selectedQuiz.creatorClassType}반`}
                 </span>
               </div>
 
@@ -2394,7 +2397,7 @@ function QuizListPageContent() {
               <div className="flex justify-between text-xs">
                 <span className="text-[#5C5C5C]">제작자</span>
                 <span className="font-bold text-[#1A1A1A]">
-                  {reviewDetailsQuiz.creatorNickname || '익명'}
+                  {PROFESSOR_QUIZ_TYPES.has(reviewDetailsQuiz.type) ? '교수님' : (reviewDetailsQuiz.creatorNickname || '익명')}
                 </span>
               </div>
               <div className="flex justify-between text-xs">

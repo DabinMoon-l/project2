@@ -151,11 +151,18 @@ export function useProfessorAiQuizzes() {
     });
   }, []);
 
-  // 퀴즈 메타 수정 (description, tags 등)
-  const updateMeta = useCallback(async (quizId: string, meta: { description?: string; tags?: string[] }) => {
+  // 퀴즈 메타 수정 (description, tags, type, difficulty 등)
+  const updateMeta = useCallback(async (quizId: string, meta: {
+    description?: string;
+    tags?: string[];
+    type?: string;
+    difficulty?: string;
+  }) => {
     const data: Record<string, any> = { updatedAt: serverTimestamp() };
     if (meta.description !== undefined) data.description = meta.description;
     if (meta.tags !== undefined) data.tags = meta.tags;
+    if (meta.type !== undefined) data.type = meta.type;
+    if (meta.difficulty !== undefined) data.difficulty = meta.difficulty;
     await updateDoc(doc(db, 'quizzes', quizId), data);
   }, []);
 

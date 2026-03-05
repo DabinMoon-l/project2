@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, Suspense, useRef, useMemo } from 'rea
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { doc, getDoc, getDocs, collection, query, where, onSnapshot, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, getDocs, collection, query, where, onSnapshot, updateDoc, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Skeleton, ExpandModal } from '@/components/common';
 import { useExpandSource } from '@/lib/hooks/useExpandSource';
@@ -37,6 +37,9 @@ import LibraryQuizCard from '@/components/review/LibraryQuizCard';
 import BookmarkGridView from '@/components/review/BookmarkGridView';
 import QuestionListModal from '@/components/review/QuestionListModal';
 import CreateFolderModal from '@/components/review/CreateFolderModal';
+
+// 교수 퀴즈 타입 — 제작자를 "교수님"으로 표시
+const PROFESSOR_QUIZ_TYPES = new Set(['midterm', 'final', 'past', 'professor', 'professor-ai', 'independent']);
 
 /* ============================================================
  * 아래는 모든 서브 컴포넌트가 components/review/에 분리됨
@@ -546,7 +549,7 @@ function ReviewPageContent() {
     const items: ReviewItem[] = [];
     const libraryQuizIds: string[] = [];
 
-    reviewSelectedIds.forEach(folderId => {
+    for (const folderId of reviewSelectedIds) {
       if (folderId.startsWith('wrong-')) {
         // wrong-quizId-chapter-chapterId 형식 처리
         const parts = folderId.replace('wrong-', '').split('-chapter-');
@@ -576,19 +579,36 @@ function ReviewPageContent() {
         const folder = customFoldersData.find(f => f.id === id);
         if (folder) {
           // 커스텀 폴더의 문제들을 solvedItems에서 찾아서 추가
-          folder.questions.forEach(q => {
+          // solvedItems에 없으면 Firestore에서 직접 조회 (50건 제한 폴백)
+          for (const q of folder.questions) {
             const solvedItem = solvedItems.find(s => s.questionId === q.questionId && s.quizId === q.quizId);
             if (solvedItem) {
               items.push(solvedItem);
+            } else if (user?.uid) {
+              try {
+                const reviewSnap = await getDocs(query(
+                  collection(db, 'reviews'),
+                  where('userId', '==', user.uid),
+                  where('quizId', '==', q.quizId),
+                  where('questionId', '==', q.questionId),
+                  limit(1)
+                ));
+                if (!reviewSnap.empty) {
+                  const data = reviewSnap.docs[0].data();
+                  items.push({ id: reviewSnap.docs[0].id, ...data } as ReviewItem);
+                }
+              } catch (err) {
+                console.error('커스텀 폴더 폴백 조회 실패:', err);
+              }
             }
-          });
+          }
         }
       } else if (folderId.startsWith('library-')) {
         // 서재 퀴즈 ID 수집 (나중에 일괄 처리)
         const quizId = folderId.replace('library-', '');
         libraryQuizIds.push(quizId);
       }
-    });
+    }
 
     // 서재 퀴즈들의 문제 가져오기
     for (const quizId of libraryQuizIds) {
@@ -626,17 +646,40 @@ function ReviewPageContent() {
               correctAnswer,
               userAnswer: correctAnswer, // 서재 퀴즈는 정답으로 설정
               explanation: q.explanation || '',
+              choiceExplanations: q.choiceExplanations || undefined,
               isCorrect: true,
               reviewType: 'solved',
               isBookmarked: false,
               reviewCount: 0,
               lastReviewedAt: null,
-              createdAt: new Date() as any, // 클라이언트 사이드 임시 데이터
-              // 선택적 필드들
+              createdAt: quizData.createdAt || new Date() as any,
+              // 이미지
               courseId: userCourseId || null,
               image: q.image || null,
-              chapterId: q.chapterId || null,
               imageUrl: q.imageUrl || null,
+              chapterId: q.chapterId || null,
+              // 제시문
+              passage: q.passage || undefined,
+              passageType: q.passageType || undefined,
+              passageImage: q.passageImage || undefined,
+              koreanAbcItems: q.koreanAbcItems || undefined,
+              passageMixedExamples: q.passageMixedExamples || undefined,
+              commonQuestion: q.commonQuestion || undefined,
+              // 보기
+              mixedExamples: q.mixedExamples || undefined,
+              bogi: q.bogi || undefined,
+              subQuestionOptions: q.subQuestionOptions || undefined,
+              subQuestionOptionsType: q.subQuestionOptionsType || undefined,
+              subQuestionImage: q.subQuestionImage || undefined,
+              // 발문
+              passagePrompt: q.passagePrompt || undefined,
+              bogiQuestionText: q.bogiQuestionText || undefined,
+              // 결합형
+              combinedGroupId: q.combinedGroupId || undefined,
+              combinedIndex: q.combinedIndex,
+              combinedTotal: q.combinedTotal,
+              // 기타
+              quizCreatorId: quizData.creatorId || undefined,
             } as any);
           });
         }
@@ -2753,7 +2796,7 @@ function ReviewPageContent() {
               <div className="flex justify-between text-[11px]">
                 <span className="text-[#5C5C5C]">제작자</span>
                 <span className="font-bold text-[#1A1A1A]">
-                  {selectedBookmarkedQuiz.creatorNickname || '익명'}
+                  {selectedBookmarkedQuiz.type && PROFESSOR_QUIZ_TYPES.has(selectedBookmarkedQuiz.type) ? '교수님' : (selectedBookmarkedQuiz.creatorNickname || '익명')}
                 </span>
               </div>
 

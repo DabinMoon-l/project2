@@ -53,11 +53,20 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
   const authorNameCacheRef = useRef<Map<string, string>>(new Map());
   const [authorNameMap, setAuthorNameMap] = useState<Map<string, string>>(new Map());
 
-  // 댓글 작성자 uid 목록
+  // 교수가 아닌 작성자(교수 본인 포함)의 최신 닉네임 캐시
+  const authorNicknameCacheRef = useRef<Map<string, string>>(new Map());
+  const [authorNicknameMap, setAuthorNicknameMap] = useState<Map<string, string>>(new Map());
+
+  // 댓글 작성자 uid 목록 (교수 댓글 = authorClassType이 null)
   const commentAuthorIds = useMemo(() => {
     if (!isProfessor) return [];
     return [...new Set(comments.map(c => c.authorId))];
   }, [isProfessor, comments]);
+
+  // 교수 계정 댓글 작성자 uid (닉네임 변경 반영 대상)
+  const professorAuthorIds = useMemo(() => {
+    return [...new Set(comments.filter(c => !c.authorClassType && c.authorId !== 'gemini-ai').map(c => c.authorId))];
+  }, [comments]);
 
   // 교수님일 때 작성자 실명 일괄 조회
   useEffect(() => {
@@ -65,7 +74,6 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
     const cache = authorNameCacheRef.current;
     const missing = commentAuthorIds.filter(uid => !cache.has(uid));
     if (missing.length === 0) {
-      // 캐시에 모두 있으면 바로 설정
       setAuthorNameMap(new Map(cache));
       return;
     }
@@ -84,6 +92,31 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
       setAuthorNameMap(new Map(cache));
     });
   }, [isProfessor, commentAuthorIds]);
+
+  // 교수 계정 댓글의 최신 닉네임 조회 (닉네임 변경 반영)
+  useEffect(() => {
+    if (professorAuthorIds.length === 0) return;
+    const cache = authorNicknameCacheRef.current;
+    const missing = professorAuthorIds.filter(uid => !cache.has(uid));
+    if (missing.length === 0) {
+      setAuthorNicknameMap(new Map(cache));
+      return;
+    }
+    Promise.all(
+      missing.map(uid =>
+        getDoc(doc(db, 'users', uid))
+          .then(snap => {
+            if (snap.exists()) {
+              const nickname = snap.data().nickname;
+              if (nickname) cache.set(uid, nickname);
+            }
+          })
+          .catch(() => {})
+      )
+    ).then(() => {
+      setAuthorNicknameMap(new Map(cache));
+    });
+  }, [professorAuthorIds]);
 
   const [replyingTo, setReplyingTo] = useState<{ id: string; nickname: string } | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -298,7 +331,10 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
                   ? `${acceptedComment.authorNickname}·${acceptedComment.authorClassType}반`
                   : acceptedComment.authorId === 'gemini-ai'
                     ? acceptedComment.authorNickname
-                    : `${acceptedComment.authorNickname} 교수님`}
+                    : (() => {
+                        const nick = authorNicknameMap.get(acceptedComment.authorId) || acceptedComment.authorNickname;
+                        return nick.includes('교수') ? nick : `${nick} 교수님`;
+                      })()}
               </span>
             </div>
             <p
@@ -353,6 +389,7 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
                   isAccepting={accepting}
                   isProfessor={isProfessor}
                   authorNameMap={authorNameMap}
+                  authorNicknameMap={authorNicknameMap}
                   postAuthorId={postAuthorId}
                 />
 
@@ -372,6 +409,7 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
                       isReply
                       isProfessor={isProfessor}
                       authorNameMap={authorNameMap}
+                      authorNicknameMap={authorNicknameMap}
                       postAuthorId={postAuthorId}
                     />
                   ))

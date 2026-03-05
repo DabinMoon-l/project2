@@ -25,12 +25,16 @@ import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 
 const QuizStatsModal = dynamic(() => import('@/components/quiz/manage/QuizStatsModal'), { ssr: false });
+const QuestionEditor = dynamic(() => import('@/components/quiz/create/QuestionEditor'));
 import { Skeleton } from '@/components/common';
 import MobileBottomSheet from '@/components/common/MobileBottomSheet';
 import { getDefaultQuizTab } from '@/lib/types/course';
 import { generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import { useKeyboardAware } from '@/lib/hooks/useKeyboardAware';
 import PreviewQuestionCard from '@/components/professor/PreviewQuestionCard';
+import QuestionList from '@/components/quiz/create/QuestionList';
+import type { QuestionData, SubQuestion } from '@/components/quiz/create/questionTypes';
+import { Timestamp } from 'firebase/firestore';
 
 // ============================================================
 // 타입
@@ -77,6 +81,134 @@ function formatQuestionTypes(questions: any[]): string {
 }
 
 // ============================================================
+// 유틸리티: Firestore 문제 → QuestionData 변환
+// ============================================================
+
+const convertToQuestionDataList = (rawQuestions: any[]): QuestionData[] => {
+  const loadedQuestions: QuestionData[] = [];
+  const processedCombinedGroups = new Set<string>();
+
+  rawQuestions.forEach((q: any, index: number) => {
+    if (q.combinedGroupId) {
+      if (processedCombinedGroups.has(q.combinedGroupId)) return;
+      processedCombinedGroups.add(q.combinedGroupId);
+
+      const groupQuestions = rawQuestions
+        .filter((gq: any) => gq.combinedGroupId === q.combinedGroupId)
+        .sort((a: any, b: any) => (a.combinedIndex || 0) - (b.combinedIndex || 0));
+
+      const firstQ = groupQuestions[0] as any;
+
+      const subQuestions: SubQuestion[] = groupQuestions.map((sq: any) => {
+        let answerIndex = -1;
+        let answerIndices: number[] | undefined;
+        let isMultipleAnswer = false;
+
+        if (sq.type === 'multiple') {
+          if (Array.isArray(sq.answer)) {
+            const sqChoiceCount = (sq.choices || []).length || 4;
+            const anyOver = sq.answer.some((a: number) => typeof a === 'number' && a >= sqChoiceCount);
+            answerIndices = anyOver ? sq.answer.map((a: number) => typeof a === 'number' ? a - 1 : a) : [...sq.answer];
+            isMultipleAnswer = true;
+            answerIndex = (answerIndices && answerIndices[0] !== undefined) ? answerIndices[0] : -1;
+          } else if (typeof sq.answer === 'number') {
+            const sqChoiceCount = (sq.choices || []).length || 4;
+            if (sq.answer >= sqChoiceCount) {
+              answerIndex = sq.answer - 1;
+            } else if (sq.answer >= 0) {
+              answerIndex = sq.answer;
+            }
+          }
+        } else if (sq.type === 'ox' && typeof sq.answer === 'number') {
+          answerIndex = sq.answer;
+        }
+        return {
+          id: sq.id || `${q.combinedGroupId}_${sq.combinedIndex || 0}`,
+          text: sq.text || '',
+          type: sq.type || 'multiple',
+          choices: sq.choices || undefined,
+          answerIndex: sq.type === 'multiple' || sq.type === 'ox' ? answerIndex : undefined,
+          answerIndices: isMultipleAnswer ? answerIndices : undefined,
+          isMultipleAnswer: isMultipleAnswer || undefined,
+          answerText: typeof sq.answer === 'string' ? sq.answer : undefined,
+          explanation: sq.explanation || undefined,
+          mixedExamples: sq.examples || sq.mixedExamples || undefined,
+          image: sq.imageUrl || undefined,
+          chapterId: sq.chapterId || undefined,
+          chapterDetailId: sq.chapterDetailId || undefined,
+          passagePrompt: sq.passagePrompt || undefined,
+          bogi: sq.bogi || null,
+          passageBlocks: sq.passageBlocks || undefined,
+        };
+      });
+
+      loadedQuestions.push({
+        id: q.combinedGroupId,
+        text: firstQ.combinedMainText || '',
+        type: 'combined',
+        choices: [],
+        answerIndex: -1,
+        answerText: '',
+        explanation: '',
+        subQuestions,
+        passageType: firstQ.passageType || undefined,
+        passage: firstQ.passage || undefined,
+        koreanAbcItems: firstQ.koreanAbcItems || undefined,
+        passageMixedExamples: firstQ.passageMixedExamples || undefined,
+        passageImage: firstQ.passageImage || undefined,
+        commonQuestion: firstQ.commonQuestion || undefined,
+      });
+    } else {
+      let answerIndex = -1;
+      let answerIndices: number[] | undefined;
+      let isMultipleAnswer = false;
+
+      if (q.type === 'multiple') {
+        if (Array.isArray(q.answer)) {
+          const qChoiceCount = (q.choices || []).length || 4;
+          const anyOver = q.answer.some((a: number) => typeof a === 'number' && a >= qChoiceCount);
+          answerIndices = anyOver ? q.answer.map((a: number) => typeof a === 'number' ? a - 1 : a) : [...q.answer];
+          isMultipleAnswer = true;
+          answerIndex = (answerIndices && answerIndices[0] !== undefined) ? answerIndices[0] : -1;
+        } else if (typeof q.answer === 'number') {
+          const qChoiceCount = (q.choices || []).length || 4;
+          if (q.answer >= qChoiceCount) {
+            answerIndex = q.answer - 1;
+          } else if (q.answer >= 0) {
+            answerIndex = q.answer;
+          }
+        }
+      } else if (q.type === 'ox' && typeof q.answer === 'number') {
+        answerIndex = q.answer;
+      }
+
+      loadedQuestions.push({
+        id: q.id || `q_${index}`,
+        text: q.text || '',
+        type: q.type || 'multiple',
+        choices: q.choices || ['', '', '', ''],
+        answerIndex,
+        answerIndices: isMultipleAnswer ? answerIndices : undefined,
+        isMultipleAnswer: isMultipleAnswer || undefined,
+        answerText: typeof q.answer === 'string' ? q.answer : '',
+        explanation: q.explanation || '',
+        imageUrl: q.imageUrl || null,
+        examples: q.examples || null,
+        mixedExamples: q.mixedExamples || null,
+        chapterId: q.chapterId || undefined,
+        chapterDetailId: q.chapterDetailId || undefined,
+        passagePrompt: q.passagePrompt || undefined,
+        bogi: q.bogi || null,
+        scoringMethod: q.scoringMethod || undefined,
+        passageBlocks: q.passageBlocks || undefined,
+      });
+    }
+  });
+
+  return loadedQuestions;
+};
+
+// ============================================================
 // 컴포넌트
 // ============================================================
 
@@ -84,10 +216,12 @@ export default function ProfessorLibraryTab({
   onPreviewChange,
   isPreviewActive,
   onPublish,
+  onEditStateChange,
 }: {
   onPreviewChange?: (active: boolean) => void;
   isPreviewActive?: boolean;
   onPublish?: () => void;
+  onEditStateChange?: (state: { isEditMode: boolean; isSaving: boolean; onCancel: () => void; onSave: () => void } | null) => void;
 }) {
   const router = useRouter();
   const { profile } = useUser();
@@ -183,15 +317,20 @@ export default function ProfessorLibraryTab({
   const [editedDescription, setEditedDescription] = useState('');
   const [editedTags, setEditedTags] = useState<string[]>([]);
   const [showEditTagPicker, setShowEditTagPicker] = useState(false);
-  const [editedQuestions, setEditedQuestions] = useState<Record<number, { text?: string; choices?: string[]; explanation?: string; choiceExplanations?: string[] }>>({});
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  // QuestionList + QuestionEditor 기반 수정 모드
+  const [editableQuestions, setEditableQuestions] = useState<QuestionData[]>([]);
+  const [originalQuestions, setOriginalQuestions] = useState<any[]>([]);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editType, setEditType] = useState<'midterm' | 'final' | 'past' | 'independent'>('midterm');
+  const [editDifficulty, setEditDifficulty] = useState<'easy' | 'normal' | 'hard'>('normal');
 
   // 프리뷰 열기
   const openPreview = useCallback((quiz: ProfessorAiQuiz) => {
     setPreviewQuiz(quiz);
     setIsEditMode(false);
     setEditedTitle('');
-    setEditedQuestions({});
+    setEditingIndex(null);
     onPreviewChange?.(true);
   }, [onPreviewChange]);
 
@@ -202,7 +341,7 @@ export default function ProfessorLibraryTab({
     setEditedTitle('');
     setEditedDescription('');
     setEditedTags([]);
-    setEditedQuestions({});
+    setEditingIndex(null);
     onPreviewChange?.(false);
   }, [onPreviewChange]);
 
@@ -214,54 +353,266 @@ export default function ProfessorLibraryTab({
     setEditedDescription(previewQuiz.description || '');
     setEditedTags(previewQuiz.tags || []);
     setShowEditTagPicker(false);
-    setEditedQuestions({});
+    setEditingIndex(null);
+    // 퀴즈 메타
+    setEditType((previewQuiz as any).type || (previewQuiz as any).quizType || 'midterm');
+    setEditDifficulty((previewQuiz as any).difficulty || 'normal');
+    // 문제 변환
+    const questions = previewQuiz.questions || [];
+    setOriginalQuestions(questions);
+    setEditableQuestions(convertToQuestionDataList(questions));
   }, [previewQuiz]);
+
+  // 변경 감지: 단일 문제
+  const isQuestionChanged = (original: any | undefined, current: QuestionData): boolean => {
+    if (!original) return true;
+    if (original.text !== current.text) return true;
+    if (original.type !== current.type) return true;
+    if (current.type === 'subjective' || current.type === 'short_answer') {
+      if ((original.answer?.toString() || '') !== (current.answerText || '')) return true;
+    } else if (current.type === 'multiple') {
+      const origNum = parseInt(String(original.answer), 10);
+      if (!isNaN(origNum)) {
+        const choiceCount = (original.choices || []).length || 4;
+        const origAnswer = origNum >= choiceCount ? origNum - 1 : origNum;
+        if (origAnswer !== current.answerIndex) return true;
+      } else if (current.answerIndex !== -1) return true;
+    } else if (current.type === 'ox') {
+      const normalizeOx = (v: any) => {
+        const s = String(v).toUpperCase();
+        if (s === '0' || s === 'O' || s === 'TRUE') return 0;
+        if (s === '1' || s === 'X' || s === 'FALSE') return 1;
+        return v;
+      };
+      if (normalizeOx(original.answer) !== normalizeOx(current.answerIndex)) return true;
+    }
+    if (current.type === 'multiple') {
+      const origChoices = original.choices || [];
+      const currChoices = current.choices?.filter((c) => c.trim()) || [];
+      if (origChoices.length !== currChoices.length) return true;
+      for (let i = 0; i < currChoices.length; i++) {
+        if (origChoices[i] !== currChoices[i]) return true;
+      }
+    }
+    if ((original.explanation || '') !== (current.explanation || '')) return true;
+    if ((original.imageUrl || null) !== (current.imageUrl || null)) return true;
+    if ((original.passagePrompt || '') !== (current.passagePrompt || '')) return true;
+    if (JSON.stringify(original.bogi || null) !== JSON.stringify(current.bogi || null)) return true;
+    return false;
+  };
+
+  // 변경 감지: 하위 문제
+  const isQuestionChangedForSubQuestion = (original: any, current: SubQuestion): boolean => {
+    if (!original) return true;
+    if (original.text !== current.text) return true;
+    if (original.type !== current.type) return true;
+    if (current.type === 'subjective' || current.type === 'short_answer') {
+      if (original.answer !== (current.answerText || '')) return true;
+    } else if (current.type === 'multiple') {
+      const origNum = parseInt(String(original.answer), 10);
+      if (!isNaN(origNum)) {
+        const choiceCount = (original.choices || []).length || 4;
+        const origAnswer = origNum >= choiceCount ? origNum - 1 : origNum;
+        if (origAnswer !== (current.answerIndex ?? -1)) return true;
+      } else if ((current.answerIndex ?? -1) !== -1) return true;
+    } else if (current.type === 'ox') {
+      const normalizeOx = (v: any) => {
+        const s = String(v).toUpperCase();
+        if (s === '0' || s === 'O' || s === 'TRUE') return 0;
+        if (s === '1' || s === 'X' || s === 'FALSE') return 1;
+        return v;
+      };
+      if (normalizeOx(original.answer) !== normalizeOx(current.answerIndex ?? 0)) return true;
+    }
+    if (current.type === 'multiple') {
+      const origChoices = original.choices || [];
+      const currChoices = (current.choices || []).filter((c) => c.trim());
+      if (origChoices.length !== currChoices.length) return true;
+      for (let i = 0; i < currChoices.length; i++) {
+        if (origChoices[i] !== currChoices[i]) return true;
+      }
+    }
+    if ((original.explanation || '') !== (current.explanation || '')) return true;
+    if ((original.imageUrl || null) !== (current.image || null)) return true;
+    if ((original.passagePrompt || '') !== (current.passagePrompt || '')) return true;
+    if (JSON.stringify(original.bogi || null) !== JSON.stringify(current.bogi || null)) return true;
+    return false;
+  };
+
+  // QuestionData[] → Firestore 저장 형식 변환
+  const flattenQuestionsForSave = (): any[] => {
+    const flattenedQuestions: any[] = [];
+    let orderIndex = 0;
+
+    editableQuestions.forEach((q) => {
+      if (q.type === 'combined' && q.subQuestions && q.subQuestions.length > 0) {
+        const combinedGroupId = q.id || `combined_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const subQuestionsCount = q.subQuestions.length;
+
+        // 결합형 공통 지문 변경 감지
+        let parentChanged = false;
+        const origFirstQ = originalQuestions.find(
+          (oq) => oq.combinedGroupId === combinedGroupId && (oq.combinedIndex === 0 || oq.combinedIndex === undefined)
+        );
+        if (!origFirstQ) {
+          parentChanged = true;
+        } else {
+          if ((origFirstQ.passage || '') !== (q.passage || '')) parentChanged = true;
+          if ((origFirstQ.passageImage || null) !== (q.passageImage || null)) parentChanged = true;
+          if ((origFirstQ.commonQuestion || '') !== (q.commonQuestion || '')) parentChanged = true;
+          if ((origFirstQ.combinedMainText || '') !== (q.text || '')) parentChanged = true;
+          if (JSON.stringify(origFirstQ.koreanAbcItems || null) !== JSON.stringify(q.koreanAbcItems || null)) parentChanged = true;
+          if (JSON.stringify(origFirstQ.passageMixedExamples || null) !== JSON.stringify(q.passageMixedExamples || null)) parentChanged = true;
+        }
+
+        q.subQuestions.forEach((sq, sqIndex) => {
+          let answer: string | number | number[];
+          if (sq.type === 'subjective' || sq.type === 'short_answer') {
+            answer = sq.answerText || '';
+          } else if (sq.type === 'multiple') {
+            if (sq.answerIndices && sq.answerIndices.length > 0) {
+              answer = sq.answerIndices;
+            } else {
+              answer = (sq.answerIndex !== undefined && sq.answerIndex >= 0) ? sq.answerIndex : -1;
+            }
+          } else {
+            answer = sq.answerIndex ?? 0;
+          }
+
+          const originalQ = originalQuestions.find((oq) => oq.id === sq.id);
+          const hasChanged = parentChanged || !originalQ || isQuestionChangedForSubQuestion(originalQ, sq);
+
+          const subQuestionData: any = {
+            ...(originalQ || {}),
+            id: sq.id || `${combinedGroupId}_${sqIndex}`,
+            order: orderIndex++,
+            text: sq.text,
+            type: sq.type,
+            choices: sq.type === 'multiple' ? (sq.choices || []).filter((c) => c.trim()) : undefined,
+            answer,
+            explanation: sq.explanation || undefined,
+            imageUrl: sq.image || undefined,
+            examples: sq.mixedExamples || undefined,
+            mixedExamples: sq.mixedExamples || undefined,
+            passagePrompt: sq.passagePrompt || undefined,
+            bogi: sq.bogi || undefined,
+            passageBlocks: sq.passageBlocks || undefined,
+            combinedGroupId,
+            combinedIndex: sqIndex,
+            combinedTotal: subQuestionsCount,
+            chapterId: sq.chapterId || undefined,
+            chapterDetailId: sq.chapterDetailId || undefined,
+            questionUpdatedAt: hasChanged ? Timestamp.now() : (originalQ?.questionUpdatedAt || null),
+          };
+
+          if (sqIndex === 0) {
+            subQuestionData.passageType = q.passageType || undefined;
+            subQuestionData.passage = q.passage || undefined;
+            subQuestionData.koreanAbcItems = q.koreanAbcItems || undefined;
+            subQuestionData.passageMixedExamples = q.passageMixedExamples || undefined;
+            subQuestionData.passageImage = q.passageImage || undefined;
+            subQuestionData.commonQuestion = q.commonQuestion || undefined;
+            subQuestionData.combinedMainText = q.text || '';
+          }
+
+          flattenedQuestions.push(subQuestionData);
+        });
+      } else {
+        let answer: string | number | number[];
+        if (q.type === 'subjective' || q.type === 'short_answer') {
+          answer = q.answerText;
+        } else if (q.type === 'multiple') {
+          if (q.answerIndices && q.answerIndices.length > 0) {
+            answer = q.answerIndices;
+          } else {
+            answer = q.answerIndex >= 0 ? q.answerIndex : -1;
+          }
+        } else {
+          answer = q.answerIndex;
+        }
+
+        const originalQ = originalQuestions.find((oq) => oq.id === q.id);
+        const hasChanged = !originalQ || isQuestionChanged(originalQ, q);
+
+        flattenedQuestions.push({
+          ...(originalQ || {}),
+          id: q.id,
+          order: orderIndex++,
+          text: q.text,
+          type: q.type,
+          choices: q.type === 'multiple' ? q.choices?.filter((c) => c.trim()) : undefined,
+          answer,
+          explanation: q.explanation || undefined,
+          imageUrl: q.imageUrl || undefined,
+          examples: q.examples || undefined,
+          mixedExamples: q.mixedExamples || undefined,
+          passagePrompt: q.passagePrompt || undefined,
+          bogi: q.bogi || undefined,
+          scoringMethod: q.scoringMethod || undefined,
+          passageBlocks: q.passageBlocks || undefined,
+          chapterId: q.chapterId || undefined,
+          chapterDetailId: q.chapterDetailId || undefined,
+          questionUpdatedAt: hasChanged ? Timestamp.now() : (originalQ?.questionUpdatedAt || null),
+        });
+      }
+    });
+
+    // Firestore는 undefined 값을 허용하지 않으므로 제거
+    return flattenedQuestions.map((q) => {
+      const cleaned: Record<string, any> = {};
+      for (const [key, value] of Object.entries(q)) {
+        if (value !== undefined) cleaned[key] = value;
+      }
+      return cleaned;
+    });
+  };
+
+  // 문제 편집 핸들러
+  const handleEditQuestion = (index: number) => setEditingIndex(index);
+  const handleAddQuestion = () => setEditingIndex(-1);
+  const handleCancelEdit = () => setEditingIndex(null);
+  const handleSaveQuestion = (question: QuestionData) => {
+    if (editingIndex === -1) {
+      setEditableQuestions(prev => [...prev, question]);
+    } else if (editingIndex !== null) {
+      setEditableQuestions(prev => prev.map((q, i) => i === editingIndex ? question : q));
+    }
+    setEditingIndex(null);
+  };
 
   // 수정 저장
   const handleSaveEdit = useCallback(async () => {
-    if (!previewQuiz) return;
+    if (!previewQuiz || editableQuestions.length < 1) return;
     setIsSavingEdit(true);
     try {
+      const flattenedQuestions = flattenQuestionsForSave();
       // 제목 변경
       if (editedTitle && editedTitle !== previewQuiz.title) {
         await updateTitle(previewQuiz.id, editedTitle);
       }
-      // 총평/태그 변경
+      // 메타 변경
       const descChanged = editedDescription !== (previewQuiz.description || '');
       const tagsChanged = JSON.stringify(editedTags) !== JSON.stringify(previewQuiz.tags || []);
-      if (descChanged || tagsChanged) {
+      const typeChanged = editType !== ((previewQuiz as any).type || (previewQuiz as any).quizType || 'midterm');
+      const diffChanged = editDifficulty !== ((previewQuiz as any).difficulty || 'normal');
+      if (descChanged || tagsChanged || typeChanged || diffChanged) {
         await updateMeta(previewQuiz.id, {
           description: editedDescription,
           tags: editedTags,
+          type: editType,
+          difficulty: editDifficulty,
         });
       }
-      // 문제 변경
-      const hasQuestionEdits = Object.keys(editedQuestions).length > 0;
-      if (hasQuestionEdits) {
-        const newQuestions = previewQuiz.questions.map((q: any, idx: number) => {
-          const edit = editedQuestions[idx];
-          if (!edit) return q;
-          return {
-            ...q,
-            ...(edit.text !== undefined ? { text: edit.text } : {}),
-            ...(edit.choices !== undefined ? { choices: edit.choices } : {}),
-            ...(edit.explanation !== undefined ? { explanation: edit.explanation } : {}),
-            ...(edit.choiceExplanations !== undefined ? { choiceExplanations: edit.choiceExplanations } : {}),
-          };
-        });
-        await updateQuestions(previewQuiz.id, newQuestions);
-      }
+      // 문제 저장
+      await updateQuestions(previewQuiz.id, flattenedQuestions);
       setIsEditMode(false);
-      setEditedTitle('');
-      setEditedDescription('');
-      setEditedTags([]);
-      setEditedQuestions({});
+      setEditingIndex(null);
     } catch (err: any) {
       alert('저장 실패: ' + (err?.message || ''));
     } finally {
       setIsSavingEdit(false);
     }
-  }, [previewQuiz, editedTitle, editedDescription, editedTags, editedQuestions, updateTitle, updateQuestions, updateMeta]);
+  }, [previewQuiz, editedTitle, editedDescription, editedTags, editType, editDifficulty, editableQuestions, originalQuestions, updateTitle, updateQuestions, updateMeta]);
 
   // 부모에서 프리뷰 해제 시 내부 상태도 초기화
   useEffect(() => {
@@ -271,9 +622,29 @@ export default function ProfessorLibraryTab({
       setEditedTitle('');
       setEditedDescription('');
       setEditedTags([]);
-      setEditedQuestions({});
+      setEditingIndex(null);
     }
   }, [isPreviewActive]);
+
+  // 수정 모드 상태를 부모에 전달
+  useEffect(() => {
+    if (isEditMode) {
+      onEditStateChange?.({
+        isEditMode: true,
+        isSaving: isSavingEdit,
+        onCancel: () => {
+          setIsEditMode(false);
+          setEditingIndex(null);
+          setEditedTitle('');
+          setEditedDescription('');
+          setEditedTags([]);
+        },
+        onSave: handleSaveEdit,
+      });
+    } else {
+      onEditStateChange?.(null);
+    }
+  }, [isEditMode, isSavingEdit, handleSaveEdit, onEditStateChange]);
 
   // previewQuiz가 onSnapshot으로 업데이트되면 반영 (updatedAt 비교로 불필요한 갱신 방지)
   useEffect(() => {
@@ -426,21 +797,11 @@ export default function ProfessorLibraryTab({
                 </svg>
               </button>
             )}
-            {isEditMode ? (
-              <input
-                type="text"
-                autoFocus
-                value={editedTitle}
-                onChange={(e) => setEditedTitle(e.target.value)}
-                className="w-2/3 text-3xl font-black text-[#1A1A1A] bg-transparent border-b-2 border-[#1A1A1A] outline-none"
-              />
-            ) : (
-              <h2 className="text-3xl font-black text-[#1A1A1A] flex-1">
-                {previewQuiz.title}
-              </h2>
-            )}
-            {/* 연필 아이콘 + 휴지통 / 수정 모드 버튼 */}
-            {!isEditMode ? (
+            <h2 className="text-3xl font-black text-[#1A1A1A] flex-1">
+              {isEditMode ? editedTitle : previewQuiz.title}
+            </h2>
+            {/* 연필 아이콘 + 휴지통 (보기 모드만) */}
+            {!isEditMode && (
               <div className="flex gap-0.5 flex-shrink-0">
                 <button
                   onClick={handleEnterEditMode}
@@ -459,28 +820,6 @@ export default function ProfessorLibraryTab({
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
-                </button>
-              </div>
-            ) : (
-              <div className="flex gap-1.5 flex-shrink-0">
-                <button
-                  onClick={() => {
-                    setIsEditMode(false);
-                    setEditedTitle('');
-                    setEditedDescription('');
-                    setEditedTags([]);
-                    setEditedQuestions({});
-                  }}
-                  className="px-3.5 py-2 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors rounded-lg"
-                >
-                  취소
-                </button>
-                <button
-                  onClick={handleSaveEdit}
-                  disabled={isSavingEdit}
-                  className="px-3.5 py-2 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors rounded-lg"
-                >
-                  {isSavingEdit ? '저장 중...' : '저장'}
                 </button>
               </div>
             )}
@@ -509,43 +848,108 @@ export default function ProfessorLibraryTab({
             </div>
           )}
 
-          {/* 수정 모드: 총평/태그 편집 */}
+          {/* 수정 모드: 제목 + 시험유형 + 난이도 + 총평 + 태그 (외곽 박스 없음) */}
           {isEditMode && (
             <div className="space-y-4">
-              {/* 총평 */}
+              {/* 퀴즈 제목 */}
               <div>
-                <label className="block text-base font-bold text-[#1A1A1A] mb-2">총평</label>
+                <label className="block text-xs font-bold text-[#1A1A1A] mb-1.5">
+                  퀴즈 제목 <span className="text-[#8B1A1A]">*</span>
+                </label>
                 <input
                   type="text"
+                  value={editedTitle}
+                  onChange={(e) => setEditedTitle(e.target.value)}
+                  placeholder="예: 중간고사 대비 퀴즈"
+                  className="w-full px-3 py-2.5 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-sm text-[#1A1A1A] placeholder:text-[#9A9A9A] outline-none focus:bg-[#FDFBF7]"
+                />
+              </div>
+              {/* 시험 유형 */}
+              <div>
+                <label className="block text-xs font-bold text-[#1A1A1A] mb-1.5">시험 유형</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {([
+                    { value: 'midterm' as const, label: '중간' },
+                    { value: 'past' as const, label: '기출' },
+                    { value: 'final' as const, label: '기말' },
+                    { value: 'independent' as const, label: '단독' },
+                  ]).map(({ value, label }) => (
+                    <motion.button
+                      key={value}
+                      type="button"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setEditType(value)}
+                      className={`py-2 px-3 font-bold text-xs border-2 transition-all duration-200 ${
+                        editType === value
+                          ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                          : 'bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
+                      }`}
+                    >
+                      {label}
+                    </motion.button>
+                  ))}
+                </div>
+              </div>
+              {/* 난이도 */}
+              <div>
+                <label className="block text-xs font-bold text-[#1A1A1A] mb-1.5">난이도</label>
+                <div className="flex gap-2">
+                  {([
+                    { value: 'easy' as const, label: '쉬움' },
+                    { value: 'normal' as const, label: '보통' },
+                    { value: 'hard' as const, label: '어려움' },
+                  ]).map(({ value, label }) => (
+                    <motion.button
+                      key={value}
+                      type="button"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setEditDifficulty(value)}
+                      className={`flex-1 py-2 px-3 font-bold text-xs border-2 transition-all duration-200 ${
+                        editDifficulty === value
+                          ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                          : 'bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
+                      }`}
+                    >
+                      {label}
+                    </motion.button>
+                  ))}
+                </div>
+              </div>
+              {/* 총평 */}
+              <div>
+                <label className="block text-xs font-bold text-[#1A1A1A] mb-1.5">총평 (선택)</label>
+                <textarea
                   value={editedDescription}
                   onChange={(e) => setEditedDescription(e.target.value)}
                   placeholder="학생들에게 전할 한마디를 입력하세요"
-                  className="w-full bg-transparent border-b-2 border-[#D4CFC4] focus:border-[#1A1A1A] text-[#1A1A1A] placeholder:text-[#9A9A9A] outline-none text-base py-1.5 transition-colors"
+                  rows={2}
+                  className="w-full px-3 py-2.5 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] placeholder:text-[#9A9A9A] outline-none focus:bg-[#FDFBF7] resize-none text-xs"
                 />
               </div>
-
               {/* 태그 */}
               <div>
                 <div className="flex items-center gap-2 mb-1.5">
-                  <label className="text-sm font-bold text-[#1A1A1A]">태그</label>
+                  <label className="text-xs font-bold text-[#1A1A1A]">태그</label>
                   <button
                     type="button"
                     onClick={() => setShowEditTagPicker(!showEditTagPicker)}
-                    className={`px-2 py-0.5 text-xs font-bold border rounded transition-colors ${
+                    className={`px-2.5 py-0.5 text-xs font-bold border-2 transition-colors ${
                       showEditTagPicker
                         ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                        : 'bg-transparent text-[#5C5C5C] border-[#D4CFC4] hover:border-[#1A1A1A]'
+                        : 'bg-transparent text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
                     }`}
                   >
                     {showEditTagPicker ? '닫기' : '+ 추가'}
                   </button>
                 </div>
                 {editedTags.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mb-1.5">
+                  <div className="flex flex-wrap gap-1.5 mb-2">
                     {editedTags.map((tag) => (
                       <div
                         key={tag}
-                        className="flex items-center gap-0.5 px-2 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold rounded"
+                        className="flex items-center gap-1 px-2.5 py-1 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold"
                       >
                         #{tag}
                         <button
@@ -568,7 +972,7 @@ export default function ProfessorLibraryTab({
                       transition={{ duration: 0.2 }}
                       className="overflow-hidden"
                     >
-                      <div className="flex flex-wrap gap-1.5 p-2 bg-[#EDEAE4] border border-[#D4CFC4] rounded-lg">
+                      <div className="flex flex-wrap gap-1.5 p-2.5 border-2 border-[#1A1A1A] bg-[#F5F0E8]">
                         {editTagOptions
                           .filter(tag => !editedTags.includes(tag))
                           .map((tag) => (
@@ -576,7 +980,7 @@ export default function ProfessorLibraryTab({
                               key={tag}
                               type="button"
                               onClick={() => setEditedTags(prev => [...prev, tag])}
-                              className="px-2 py-1 text-xs font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors rounded"
+                              className="px-2.5 py-1 text-xs font-bold bg-transparent text-[#1A1A1A] border-2 border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
                             >
                               #{tag}
                             </button>
@@ -590,28 +994,56 @@ export default function ProfessorLibraryTab({
           )}
 
           <p className="text-sm text-[#5C5C5C]">
-            총 {questions.length}문제
+            총 {isEditMode ? editableQuestions.length : questions.length}문제
           </p>
         </div>
 
         {/* 문제 카드 목록 */}
-        <div className="space-y-2">
-          {questions.map((q: any, idx: number) => (
-            <PreviewQuestionCard
-              key={q.id || `q${idx}`}
-              question={q}
-              questionNumber={idx + 1}
-              isEditMode={isEditMode}
-              editData={editedQuestions[idx]}
-              onEditChange={isEditMode ? (field, value) => {
-                setEditedQuestions(prev => ({
-                  ...prev,
-                  [idx]: { ...prev[idx], [field]: value },
-                }));
-              } : undefined}
-            />
-          ))}
-        </div>
+        {isEditMode ? (
+          <div className="space-y-4">
+            <AnimatePresence>
+              {editingIndex !== null && (
+                <QuestionEditor
+                  initialQuestion={editingIndex >= 0 ? editableQuestions[editingIndex] : undefined}
+                  questionNumber={editingIndex >= 0 ? editingIndex + 1 : editableQuestions.length + 1}
+                  onSave={handleSaveQuestion}
+                  onCancel={handleCancelEdit}
+                  userRole="professor"
+                  courseId={userCourseId || undefined}
+                />
+              )}
+            </AnimatePresence>
+            {editingIndex === null && (
+              <QuestionList
+                questions={editableQuestions}
+                onQuestionsChange={setEditableQuestions}
+                onEditQuestion={handleEditQuestion}
+                userRole="professor"
+                courseId={userCourseId || undefined}
+              />
+            )}
+            {editingIndex === null && (
+              <motion.button
+                whileHover={{ scale: 1.01 }}
+                whileTap={{ scale: 0.99 }}
+                onClick={handleAddQuestion}
+                className="w-full py-3 border-2 border-dashed border-[#1A1A1A] text-[#1A1A1A] font-bold text-sm hover:bg-[#EDEAE4] transition-colors"
+              >
+                + 새 문제 추가
+              </motion.button>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {questions.map((q: any, idx: number) => (
+              <PreviewQuestionCard
+                key={q.id || `q${idx}`}
+                question={q}
+                questionNumber={idx + 1}
+              />
+            ))}
+          </div>
+        )}
 
         {/* 프리뷰 내 삭제 확인 모달 */}
         {deleteTarget && (

@@ -68,6 +68,8 @@ export interface BookmarkedQuiz {
   isAiGenerated?: boolean;
   /** 평균 점수 */
   averageScore?: number;
+  /** 퀴즈 타입 (midterm, professor 등) */
+  type?: string;
 }
 
 /**
@@ -187,6 +189,7 @@ export const useQuizBookmark = (): UseQuizBookmarkReturn => {
           hasCompleted,
           bookmarkCount: quizData.bookmarkCount || 0,
           isAiGenerated: quizData.isAiGenerated || quizData.type === 'ai-generated',
+          type: quizData.type || 'custom',
           averageScore: quizData.averageScore || (() => {
             if (quizData.userScores) {
               const scores = Object.values(quizData.userScores) as number[];

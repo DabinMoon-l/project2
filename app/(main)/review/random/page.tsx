@@ -1,11 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   doc,
   getDoc,
+  updateDoc,
+  increment,
+  serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useUser } from '@/lib/contexts';
@@ -13,23 +16,23 @@ import { useTheme } from '@/styles/themes/useTheme';
 import { useHideNav } from '@/lib/hooks/useHideNav';
 
 /**
- * 복습 문제 타입
+ * 복습 문제 타입 — Firestore reviews 컬렉션 필드명 기준
  */
 interface ReviewQuestion {
-  id: string;
+  id: string; // Firestore 문서 ID
   questionId: string;
-  questionText: string;
-  questionType: string;
-  choices?: string[];
+  question: string; // data.question
+  type: string; // data.type (ox, multiple, short_answer, short)
+  options?: string[]; // data.options
   correctAnswer: string;
-  userAnswer?: string;
   explanation?: string;
 }
 
 /**
  * 랜덤 복습 페이지
  * - 세션 스토리지에서 선택된 문제 ID 로드
- * - 기존 복습 UI/UX 활용
+ * - 복수정답 객관식/주관식 ||| 지원
+ * - 완료 시 markAsReviewed 호출
  */
 export default function RandomReviewPage() {
   const router = useRouter();
@@ -38,7 +41,9 @@ export default function RandomReviewPage() {
 
   const [questions, setQuestions] = useState<ReviewQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  // 객관식 복수정답용: 선택된 번호 Set
   const [userAnswers, setUserAnswers] = useState<Record<number, string>>({});
+  const [multiSelections, setMultiSelections] = useState<Record<number, Set<string>>>({});
   const [showResult, setShowResult] = useState(false);
   const [showAnswer, setShowAnswer] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -68,9 +73,9 @@ export default function RandomReviewPage() {
             loadedQuestions.push({
               id: docSnap.id,
               questionId: data.questionId,
-              questionText: data.questionText || data.question || '',
-              questionType: data.questionType || data.type || 'multiple',
-              choices: data.choices || data.options || [],
+              question: data.question || data.questionText || '',
+              type: data.type || data.questionType || 'multiple',
+              options: data.options || data.choices || [],
               correctAnswer: data.correctAnswer || '',
               explanation: data.explanation || '',
             });
@@ -94,9 +99,30 @@ export default function RandomReviewPage() {
   // 현재 문제
   const currentQuestion = questions[currentIndex];
 
-  // 답변 선택
+  // 복수정답 여부 확인
+  const isMultiAnswer = useCallback((q: ReviewQuestion) => {
+    return q.type === 'multiple' && q.correctAnswer.includes(',');
+  }, []);
+
+  // 단일 선택 답변
   const handleAnswer = (answer: string) => {
     setUserAnswers({ ...userAnswers, [currentIndex]: answer });
+  };
+
+  // 복수 선택 토글
+  const handleToggleMulti = (optionNum: string) => {
+    setMultiSelections(prev => {
+      const currentSet = new Set(prev[currentIndex] || []);
+      if (currentSet.has(optionNum)) {
+        currentSet.delete(optionNum);
+      } else {
+        currentSet.add(optionNum);
+      }
+      // userAnswers에도 정렬된 값 동기화
+      const sorted = Array.from(currentSet).sort((a, b) => Number(a) - Number(b));
+      setUserAnswers(ua => ({ ...ua, [currentIndex]: sorted.join(',') }));
+      return { ...prev, [currentIndex]: currentSet };
+    });
   };
 
   // 정답 확인
@@ -110,28 +136,66 @@ export default function RandomReviewPage() {
     if (currentIndex < questions.length - 1) {
       setCurrentIndex(currentIndex + 1);
     } else {
+      // 결과 화면 진입 전 markAsReviewed 호출
+      markAllAsReviewed();
       setShowResult(true);
     }
   };
 
-  // 정답 여부 확인
-  const isCorrect = (index: number) => {
+  // 모든 문제 복습 완료 처리
+  const markAllAsReviewed = async () => {
+    for (const q of questions) {
+      try {
+        await updateDoc(doc(db, 'reviews', q.id), {
+          reviewCount: increment(1),
+          lastReviewedAt: serverTimestamp(),
+        });
+      } catch (err) {
+        console.error('markAsReviewed 실패:', q.id, err);
+      }
+    }
+  };
+
+  // 정답 여부 확인 — 복수정답/||| 지원
+  const checkCorrect = (index: number) => {
     const question = questions[index];
     const userAnswer = userAnswers[index];
     if (!question || !userAnswer) return false;
 
-    if (question.questionType === 'ox') {
+    // OX
+    if (question.type === 'ox') {
       const normalizedUser = (userAnswer.toUpperCase() === 'O' || userAnswer === '0') ? 'O' : 'X';
       const normalizedCorrect = (question.correctAnswer.toString().toUpperCase() === 'O' ||
         question.correctAnswer.toString() === '0') ? 'O' : 'X';
       return normalizedUser === normalizedCorrect;
     }
 
+    // 객관식 복수정답
+    if (question.type === 'multiple' && question.correctAnswer.includes(',')) {
+      const correctSet = new Set(question.correctAnswer.split(',').map(s => s.trim()));
+      const userSet = new Set(userAnswer.split(',').map(s => s.trim()));
+      if (correctSet.size !== userSet.size) return false;
+      for (const v of correctSet) {
+        if (!userSet.has(v)) return false;
+      }
+      return true;
+    }
+
+    // 주관식 ||| 복수정답
+    if ((question.type === 'short_answer' || question.type === 'short') &&
+      question.correctAnswer.includes('|||')) {
+      const accepted = question.correctAnswer.split('|||').map(s => s.trim().toLowerCase());
+      return accepted.includes(userAnswer.trim().toLowerCase());
+    }
+
     return userAnswer.toString() === question.correctAnswer.toString();
   };
 
   // 결과 계산
-  const correctCount = Object.keys(userAnswers).filter((key) => isCorrect(Number(key))).length;
+  const correctCount = Object.keys(userAnswers).filter((key) => checkCorrect(Number(key))).length;
+
+  // 현재 답변 존재 여부
+  const hasCurrentAnswer = userAnswers[currentIndex] !== undefined && userAnswers[currentIndex] !== '';
 
   if (loading) {
     return (
@@ -248,11 +312,11 @@ export default function RandomReviewPage() {
               <span className="text-sm text-[#5C5C5C] mb-2 block">
                 Q{currentIndex + 1}.
               </span>
-              <p className="text-lg font-bold">{currentQuestion.questionText}</p>
+              <p className="text-lg font-bold">{currentQuestion.question}</p>
             </div>
 
-            {/* 선지 */}
-            {currentQuestion.questionType === 'ox' ? (
+            {/* OX */}
+            {currentQuestion.type === 'ox' ? (
               <div className="flex gap-4 justify-center">
                 {['O', 'X'].map((opt) => {
                   const isSelected = userAnswers[currentIndex] === opt;
@@ -282,18 +346,35 @@ export default function RandomReviewPage() {
                   );
                 })}
               </div>
-            ) : currentQuestion.questionType === 'multiple' && currentQuestion.choices ? (
+            ) : currentQuestion.type === 'multiple' && currentQuestion.options ? (
+              // 객관식 — 복수정답이면 토글, 단일이면 라디오
               <div className="space-y-3">
-                {currentQuestion.choices.map((choice, idx) => {
+                {isMultiAnswer(currentQuestion) && (
+                  <p className="text-xs text-[#5C5C5C] mb-1">복수 정답 — 해당하는 것을 모두 선택하세요</p>
+                )}
+                {currentQuestion.options.map((choice, idx) => {
                   const optionNum = (idx + 1).toString();
-                  const isSelected = userAnswers[currentIndex] === optionNum;
-                  const isCorrectAnswer = showAnswer && currentQuestion.correctAnswer.toString() === optionNum;
+                  const multi = isMultiAnswer(currentQuestion);
+                  const isSelected = multi
+                    ? (multiSelections[currentIndex] || new Set()).has(optionNum)
+                    : userAnswers[currentIndex] === optionNum;
+
+                  // 정답 하이라이트
+                  const correctNums = currentQuestion.correctAnswer.split(',').map(s => s.trim());
+                  const isCorrectAnswer = showAnswer && correctNums.includes(optionNum);
                   const isWrongSelected = showAnswer && isSelected && !isCorrectAnswer;
 
                   return (
                     <button
                       key={idx}
-                      onClick={() => !showAnswer && handleAnswer(optionNum)}
+                      onClick={() => {
+                        if (showAnswer) return;
+                        if (multi) {
+                          handleToggleMulti(optionNum);
+                        } else {
+                          handleAnswer(optionNum);
+                        }
+                      }}
                       disabled={showAnswer}
                       className={`w-full p-4 text-left border-2 transition-all ${
                         isCorrectAnswer
@@ -324,9 +405,11 @@ export default function RandomReviewPage() {
                 />
                 {showAnswer && (
                   <div className={`mt-2 p-3 ${
-                    isCorrect(currentIndex) ? 'bg-[#E8F5E9] text-[#1A6B1A]' : 'bg-[#FDEAEA] text-[#8B1A1A]'
+                    checkCorrect(currentIndex) ? 'bg-[#E8F5E9] text-[#1A6B1A]' : 'bg-[#FDEAEA] text-[#8B1A1A]'
                   }`}>
-                    정답: {currentQuestion.correctAnswer}
+                    정답: {currentQuestion.correctAnswer.includes('|||')
+                      ? currentQuestion.correctAnswer.split('|||').join(' 또는 ')
+                      : currentQuestion.correctAnswer}
                   </div>
                 )}
               </div>
@@ -352,7 +435,7 @@ export default function RandomReviewPage() {
         {!showAnswer ? (
           <button
             onClick={handleCheckAnswer}
-            disabled={!userAnswers[currentIndex]}
+            disabled={!hasCurrentAnswer}
             className="w-full py-4 bg-[#1A1A1A] text-white font-bold disabled:opacity-50"
           >
             정답 확인

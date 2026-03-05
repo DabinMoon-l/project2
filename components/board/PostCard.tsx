@@ -91,7 +91,7 @@ function PostCard({ post, onClick, isProfessor }: PostCardProps) {
         <span className="text-xs text-gray-500">
           {post.authorClassType
             ? <>{isProfessor && post.authorName ? `${post.authorName} ` : ''}{post.authorNickname}·{post.authorClassType}반</>
-            : <>{post.authorNickname} 교수님</>
+            : <>{post.authorNickname.includes('교수') ? post.authorNickname : `${post.authorNickname} 교수님`}</>
           }
         </span>
 

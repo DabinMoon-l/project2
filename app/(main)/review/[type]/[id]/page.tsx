@@ -1621,7 +1621,7 @@ export default function FolderDetailPage() {
             quizTitle: quizData.title || '퀴즈',
             questionId,
             question: q.question || q.text || '',
-            type: q.type || 'multiple',
+            type: q.type === 'short' ? 'short_answer' : (q.type || 'multiple'),
             options: q.choices || q.options || [],
             correctAnswer,
             userAnswer: '',
