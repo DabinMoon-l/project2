@@ -7,6 +7,77 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 대학 수업 보조 앱 **"RabbiTory"**. 퀴즈 + 게시판 기능에 토끼 컨셉 게이미피케이션을 적용한 PWA.
 학생은 퀴즈를 풀고 피드백을 남기며, 교수님은 문제에 대한 피드백을 수집하고 학생 참여도를 모니터링.
 
+## 코드베이스 규모
+
+**총 136,000+ 줄** / **390개 파일** (TypeScript + TSX)
+
+| 영역 | 파일 수 | 코드 줄 수 | 설명 |
+|------|---------|-----------|------|
+| `app/` | 43 | 33,300 | Next.js App Router 페이지 |
+| `components/` | 191 | 59,100 | React 컴포넌트 |
+| `lib/` | 75 | 21,400 | 훅, 유틸, 컨텍스트, 타입 |
+| `functions/src/` | 63 | 22,300 | Firebase Cloud Functions |
+
+### 주요 대형 파일
+
+| 파일 | 줄 수 | 역할 |
+|------|-------|------|
+| `app/(main)/review/[type]/[id]/page.tsx` | 3,815 | 복습 상세 페이지 |
+| `app/(main)/review/page.tsx` | 3,491 | 복습 목록 페이지 |
+| `app/(main)/quiz/page.tsx` | 2,758 | 학생 퀴즈 목록 |
+| `app/(main)/professor/quiz/page.tsx` | 2,354 | 교수 퀴즈 관리 |
+| `app/(main)/quiz/create/page.tsx` | 2,100 | 퀴즈 생성 페이지 |
+| `app/(main)/professor/quiz/[id]/preview/page.tsx` | 1,962 | 교수 퀴즈 미리보기 |
+| `components/quiz/create/QuestionEditor.tsx` | 2,521 | 문제 편집기 (풀 에디터) |
+| `components/review/ReviewPractice.tsx` | 2,513 | 복습 연습 모드 |
+| `components/quiz/manage/QuizStatsModal.tsx` | 2,223 | 퀴즈 통계 모달 |
+| `components/professor/library/ProfessorLibraryTab.tsx` | 2,045 | 교수 서재 탭 |
+| `components/common/ProfileDrawer.tsx` | 1,819 | 프로필 드로어 |
+| `lib/hooks/useReview.ts` | 2,005 | 복습 데이터 훅 |
+| `lib/hooks/useBoard.ts` | 1,800 | 게시판 데이터 훅 |
+| `functions/src/styledQuizGenerator.ts` | 1,781 | AI 스타일 문제 생성 |
+| `functions/src/studentAuth.ts` | 1,210 | 학생 인증/가입 |
+
+### 컴포넌트 디렉토리별 규모
+
+| 디렉토리 | 줄 수 | 주요 컴포넌트 |
+|---------|-------|-------------|
+| `components/quiz/` | 18,230 | QuestionEditor, QuizStatsModal, UpdateQuizModal, EditQuizSheet, OCRProcessor |
+| `components/professor/` | 11,825 | ProfessorLibraryTab, PreviewQuestionCard, StudentManagement, 통계 대시보드 |
+| `components/home/` | 8,151 | CharacterBox, HomeCharacter, RankingBottomSheet, AnnouncementChannel, RabbitDogam |
+| `components/common/` | 6,167 | ProfileDrawer, Navigation, SwipeBack, BottomSheet, MobileBottomSheet |
+| `components/review/` | 5,777 | ReviewPractice, 복습 카드 UI |
+| `components/ai-quiz/` | 2,892 | AIQuizModal, AI 퀴즈 생성 UI |
+| `components/board/` | 2,080 | 게시판 목록/상세/댓글 |
+| `components/tekken/` | 1,560 | 철권퀴즈 배틀 UI |
+
+### lib 디렉토리 상세
+
+| 디렉토리 | 줄 수 | 주요 파일 |
+|---------|-------|----------|
+| `lib/hooks/` (31개) | 12,020 | useReview, useBoard, useProfessorQuiz, useTekkenBattle, useProfessorStats |
+| `lib/utils/` | 3,735 | questionHtmlTemplate, questionDocExport, reportExport, libraryJobManager |
+| `lib/contexts/` (5개) | 997 | MilestoneContext, UserContext, CourseContext, DetailPanelContext, HomeOverlayContext |
+
+### Cloud Functions 주요 파일
+
+| 파일 | 줄 수 | 역할 |
+|------|-------|------|
+| `styledQuizGenerator.ts` | 1,781 | 교수 스타일 기반 AI 문제 생성 |
+| `studentAuth.ts` | 1,210 | 학번 인증, 회원가입, 교수 등록 |
+| `questionParser.ts` | 1,034 | Gemini 응답 파싱 (v1) |
+| `board.ts` | 992 | 게시판 CRUD + 콩콩이 자동답변 |
+| `questionParserV3.ts` | 857 | Gemini 응답 파싱 (v3) |
+| `gemini.ts` | 757 | Gemini API 통합 (문제 생성, 이미지 분석) |
+| `workerProcessJob.ts` | 742 | AI 생성 Job 워커 (동시 최대 20) |
+| `professorQuizAnalysis.ts` | 686 | 교수 출제 스타일 분석 |
+| `geminiQueue.ts` | 597 | Gemini API 큐 관리 |
+| `notification.ts` | 552 | FCM 푸시 알림 |
+| `recordAttempt.ts` | ~500 | 퀴즈 제출 + 서버 채점 |
+| `computeRankings.ts` | ~400 | 랭킹 계산 (5분 주기) |
+| `rabbitGacha.ts` | ~350 | 토끼 뽑기/장착/레벨업 |
+| `tekkenBattle.ts` | ~350 | 실시간 1v1 배틀 로직 |
+
 ## 기술 스택
 
 ### 프론트엔드

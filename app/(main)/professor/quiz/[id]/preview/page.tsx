@@ -4,8 +4,9 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { useRouter, useParams } from 'next/navigation';
-import { doc, getDoc, Timestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { doc, getDoc, collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '@/lib/firebase';
 import { useCourse } from '@/lib/contexts';
 import { formatChapterLabel, generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import dynamic from 'next/dynamic';
@@ -371,6 +372,13 @@ export default function QuizPreviewPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [showTagPicker, setShowTagPicker] = useState(false);
   const [showExitModal, setShowExitModal] = useState(false);
+  const [requireRetest, setRequireRetest] = useState(false);
+
+  // 피드백: questionNumber(1-indexed) → { type → count, otherTexts }
+  const [feedbackByQuestion, setFeedbackByQuestion] = useState<Map<number, {
+    counts: Record<string, number>;
+    otherTexts: string[];
+  }>>(new Map());
 
   const { updateQuiz, deleteQuiz, clearError } = useProfessorQuiz();
 
@@ -512,6 +520,40 @@ export default function QuizPreviewPage() {
     };
 
     loadQuiz();
+
+    // 피드백 로드
+    const loadFeedbacks = async () => {
+      try {
+        const fbSnap = await getDocs(query(
+          collection(db, 'questionFeedbacks'),
+          where('quizId', '==', quizId),
+        ));
+        const map = new Map<number, { counts: Record<string, number>; otherTexts: string[] }>();
+        fbSnap.forEach((d) => {
+          const data = d.data();
+          let qNum = 0;
+          if (data.questionNumber && data.questionNumber > 0) {
+            qNum = data.questionNumber;
+          } else if (data.questionId) {
+            const match = data.questionId.match(/^q(\d{1,3})$/);
+            if (match) qNum = parseInt(match[1], 10) + 1;
+          }
+          if (qNum === 0) return;
+
+          if (!map.has(qNum)) map.set(qNum, { counts: {}, otherTexts: [] });
+          const entry = map.get(qNum)!;
+          const type = data.type || data.feedbackType || 'other';
+          entry.counts[type] = (entry.counts[type] || 0) + 1;
+          if (type === 'other' && (data.content || data.feedback)) {
+            entry.otherTexts.push(data.content || data.feedback);
+          }
+        });
+        setFeedbackByQuestion(map);
+      } catch (err) {
+        console.error('[preview] 피드백 로드 실패:', err);
+      }
+    };
+    loadFeedbacks();
   }, [quizId, reloadKey]);
 
   // displayItems: 결합형 그룹 처리
@@ -577,6 +619,7 @@ export default function QuizPreviewPage() {
     setEditDescription(rawQuizData.description || '');
     setEditingIndex(null);
     setShowTagPicker(false);
+    setRequireRetest(false);
     setIsEditMode(true);
   };
 
@@ -589,7 +632,12 @@ export default function QuizPreviewPage() {
     try {
       setSaving(true);
       clearError();
-      const flattenedQuestions = flattenQuestionsForSave();
+
+      // 변경된 문제 ID 수집 (저장 전에)
+      const changedIds = getChangedQuestionIds();
+
+      // 재시험 모드면 questionUpdatedAt 설정, 아니면 설정 안 함
+      const flattenedQuestions = flattenQuestionsForSave(requireRetest);
       const quizInput: Partial<QuizInput> = {
         title: editTitle,
         description: editDescription,
@@ -599,6 +647,10 @@ export default function QuizPreviewPage() {
         questions: flattenedQuestions,
       };
       await updateQuiz(quizId, quizInput);
+
+      // 재채점 CF 호출
+      await callRegradeIfNeeded(changedIds);
+
       setShowExitModal(false);
       setIsEditMode(false);
       setEditingIndex(null);
@@ -759,7 +811,7 @@ export default function QuizPreviewPage() {
   };
 
   // QuestionData[] → Firestore 저장 형식 변환
-  const flattenQuestionsForSave = (): any[] => {
+  const flattenQuestionsForSave = (useQuestionUpdatedAt: boolean = true): any[] => {
     const flattenedQuestions: any[] = [];
     let orderIndex = 0;
 
@@ -823,7 +875,7 @@ export default function QuizPreviewPage() {
             combinedTotal: subQuestionsCount,
             chapterId: sq.chapterId || undefined,
             chapterDetailId: sq.chapterDetailId || undefined,
-            questionUpdatedAt: hasChanged ? Timestamp.now() : (originalQ?.questionUpdatedAt || null),
+            questionUpdatedAt: (hasChanged && useQuestionUpdatedAt) ? Timestamp.now() : (originalQ?.questionUpdatedAt || null),
           };
 
           if (sqIndex === 0) {
@@ -876,12 +928,45 @@ export default function QuizPreviewPage() {
           passageBlocks: q.passageBlocks || undefined,
           chapterId: q.chapterId || undefined,
           chapterDetailId: q.chapterDetailId || undefined,
-          questionUpdatedAt: hasChanged ? Timestamp.now() : (originalQ?.questionUpdatedAt || null),
+          questionUpdatedAt: (hasChanged && useQuestionUpdatedAt) ? Timestamp.now() : (originalQ?.questionUpdatedAt || null),
         });
       }
     });
 
     return flattenedQuestions;
+  };
+
+  // 변경된 문제 ID 수집
+  const getChangedQuestionIds = (): string[] => {
+    const changedIds: string[] = [];
+    editableQuestions.forEach((q) => {
+      if (q.type === 'combined' && q.subQuestions) {
+        q.subQuestions.forEach((sq) => {
+          const originalQ = originalQuestions.find(oq => oq.id === sq.id);
+          if (!originalQ || isQuestionChangedForSubQuestion(originalQ, sq)) {
+            changedIds.push(sq.id);
+          }
+        });
+      } else {
+        const originalQ = originalQuestions.find(oq => oq.id === q.id);
+        if (!originalQ || isQuestionChanged(originalQ, q)) {
+          changedIds.push(q.id);
+        }
+      }
+    });
+    return changedIds;
+  };
+
+  // 재채점 CF 호출 (재시험 모드가 아니고 변경된 문제가 있을 때)
+  const callRegradeIfNeeded = async (changedIds: string[]) => {
+    if (!requireRetest && changedIds.length > 0) {
+      try {
+        const regradeQuestionsFn = httpsCallable(functions, 'regradeQuestions');
+        await regradeQuestionsFn({ quizId, questionIds: changedIds });
+      } catch (err) {
+        console.warn('재채점 실패 (무시 가능):', err);
+      }
+    }
   };
 
   // 저장 핸들러
@@ -895,7 +980,11 @@ export default function QuizPreviewPage() {
       setSaving(true);
       clearError();
 
-      const flattenedQuestions = flattenQuestionsForSave();
+      // 변경된 문제 ID 수집 (저장 전에)
+      const changedIds = getChangedQuestionIds();
+
+      // 재시험 모드면 questionUpdatedAt 설정, 아니면 설정 안 함
+      const flattenedQuestions = flattenQuestionsForSave(requireRetest);
 
       const quizInput: Partial<QuizInput> = {
         title: editTitle,
@@ -907,6 +996,9 @@ export default function QuizPreviewPage() {
       };
 
       await updateQuiz(quizId, quizInput);
+
+      // 재채점 CF 호출
+      await callRegradeIfNeeded(changedIds);
 
       // 저장 성공 → 수정 모드 해제 + 데이터 리로드
       setIsEditMode(false);
@@ -1200,6 +1292,48 @@ export default function QuizPreviewPage() {
             </p>
           </div>
         ) : null}
+
+        {/* 피드백 */}
+        {(() => {
+          const fb = feedbackByQuestion.get(q.number);
+          if (!fb || Object.keys(fb.counts).length === 0) return null;
+          const types: { key: string; label: string }[] = [
+            { key: 'praise', label: '문제가 좋아요!' },
+            { key: 'wantmore', label: '더 풀고 싶어요' },
+            { key: 'unclear', label: '문제가 이해가 안 돼요' },
+            { key: 'wrong', label: '정답이 틀린 것 같아요' },
+            { key: 'typo', label: '오타가 있어요' },
+            { key: 'other', label: '기타 의견' },
+          ];
+          const activeTypes = types.filter(t => fb.counts[t.key]);
+          if (activeTypes.length === 0) return null;
+          return (
+            <div>
+              <p className="text-xs font-bold text-[#5C5C5C] mb-1">피드백</p>
+              <div className="bg-[#EDEAE4] p-3 border border-[#D4CFC4] rounded-lg space-y-2">
+                <div className="flex flex-wrap gap-1.5">
+                  {activeTypes.map(t => (
+                    <span
+                      key={t.key}
+                      className="px-2 py-1 text-[11px] font-bold border border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A] rounded"
+                    >
+                      {t.label} {fb.counts[t.key]}
+                    </span>
+                  ))}
+                </div>
+                {fb.otherTexts.length > 0 && (
+                  <div className="space-y-1">
+                    {fb.otherTexts.map((text, i) => (
+                      <p key={i} className="text-xs text-[#5C5C5C] bg-[#F5F0E8] p-2 border border-[#D4CFC4] rounded">
+                        {text}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </>
     );
   };
@@ -1445,6 +1579,19 @@ export default function QuizPreviewPage() {
                   )}
                 </AnimatePresence>
               </div>
+
+              {/* 재시험 체크박스 */}
+              <label className="flex items-center gap-2 mt-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={requireRetest}
+                  onChange={(e) => setRequireRetest(e.target.checked)}
+                  className="w-4 h-4 accent-[#1A1A1A]"
+                />
+                <span className="text-sm text-[#1A1A1A] font-medium">
+                  재시험 (수정 이전 응답 제외 + 수정 뱃지 표시)
+                </span>
+              </label>
             </div>
           </motion.div>
         ) : (

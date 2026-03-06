@@ -34,7 +34,8 @@ import { useKeyboardAware } from '@/lib/hooks/useKeyboardAware';
 import PreviewQuestionCard from '@/components/professor/PreviewQuestionCard';
 import QuestionList from '@/components/quiz/create/QuestionList';
 import type { QuestionData, SubQuestion } from '@/components/quiz/create/questionTypes';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp, collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 // ============================================================
 // 타입
@@ -324,6 +325,48 @@ export default function ProfessorLibraryTab({
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editType, setEditType] = useState<'midterm' | 'final' | 'past' | 'independent'>('midterm');
   const [editDifficulty, setEditDifficulty] = useState<'easy' | 'normal' | 'hard'>('normal');
+  const [requireRetest, setRequireRetest] = useState(false);
+
+  // 피드백 데이터: questionNumber(1-indexed) → { counts, otherTexts }
+  const [feedbackByQuestion, setFeedbackByQuestion] = useState<Map<number, {
+    counts: Record<string, number>;
+    otherTexts: string[];
+  }>>(new Map());
+
+  // 프리뷰 퀴즈 변경 시 피드백 로드
+  useEffect(() => {
+    if (!previewQuiz?.id) { setFeedbackByQuestion(new Map()); return; }
+    const load = async () => {
+      try {
+        const snap = await getDocs(query(
+          collection(db, 'questionFeedbacks'),
+          where('quizId', '==', previewQuiz.id),
+        ));
+        const map = new Map<number, { counts: Record<string, number>; otherTexts: string[] }>();
+        snap.forEach((d) => {
+          const data = d.data();
+          let qNum = 0;
+          if (data.questionNumber > 0) qNum = data.questionNumber;
+          else if (data.questionId) {
+            const m = data.questionId.match(/^q(\d{1,3})$/);
+            if (m) qNum = parseInt(m[1], 10) + 1;
+          }
+          if (qNum === 0) return;
+          if (!map.has(qNum)) map.set(qNum, { counts: {}, otherTexts: [] });
+          const entry = map.get(qNum)!;
+          const type = data.type || data.feedbackType || 'other';
+          entry.counts[type] = (entry.counts[type] || 0) + 1;
+          if (type === 'other' && (data.content || data.feedback)) {
+            entry.otherTexts.push(data.content || data.feedback);
+          }
+        });
+        setFeedbackByQuestion(map);
+      } catch (err) {
+        console.error('[서재] 피드백 로드 실패:', err);
+      }
+    };
+    load();
+  }, [previewQuiz?.id]);
 
   // 프리뷰 열기
   const openPreview = useCallback((quiz: ProfessorAiQuiz) => {
@@ -357,6 +400,7 @@ export default function ProfessorLibraryTab({
     // 퀴즈 메타
     setEditType((previewQuiz as any).type || (previewQuiz as any).quizType || 'midterm');
     setEditDifficulty((previewQuiz as any).difficulty || 'normal');
+    setRequireRetest(false);
     // 문제 변환
     const questions = previewQuiz.questions || [];
     setOriginalQuestions(questions);
@@ -440,7 +484,7 @@ export default function ProfessorLibraryTab({
   };
 
   // QuestionData[] → Firestore 저장 형식 변환
-  const flattenQuestionsForSave = (): any[] => {
+  const flattenQuestionsForSave = (useQuestionUpdatedAt: boolean = true): any[] => {
     const flattenedQuestions: any[] = [];
     let orderIndex = 0;
 
@@ -502,7 +546,7 @@ export default function ProfessorLibraryTab({
             combinedTotal: subQuestionsCount,
             chapterId: sq.chapterId || undefined,
             chapterDetailId: sq.chapterDetailId || undefined,
-            questionUpdatedAt: hasChanged ? Timestamp.now() : (originalQ?.questionUpdatedAt || null),
+            questionUpdatedAt: (hasChanged && useQuestionUpdatedAt) ? Timestamp.now() : (originalQ?.questionUpdatedAt || null),
           };
 
           if (sqIndex === 0) {
@@ -552,7 +596,7 @@ export default function ProfessorLibraryTab({
           passageBlocks: q.passageBlocks || undefined,
           chapterId: q.chapterId || undefined,
           chapterDetailId: q.chapterDetailId || undefined,
-          questionUpdatedAt: hasChanged ? Timestamp.now() : (originalQ?.questionUpdatedAt || null),
+          questionUpdatedAt: (hasChanged && useQuestionUpdatedAt) ? Timestamp.now() : (originalQ?.questionUpdatedAt || null),
         });
       }
     });
@@ -580,12 +624,37 @@ export default function ProfessorLibraryTab({
     setEditingIndex(null);
   };
 
+  // 변경된 문제 ID 수집
+  const getChangedQuestionIds = (): string[] => {
+    const changedIds: string[] = [];
+    editableQuestions.forEach((q) => {
+      if (q.type === 'combined' && q.subQuestions) {
+        q.subQuestions.forEach((sq) => {
+          const originalQ = originalQuestions.find(oq => oq.id === sq.id);
+          if (!originalQ || isQuestionChangedForSubQuestion(originalQ, sq)) {
+            changedIds.push(sq.id);
+          }
+        });
+      } else {
+        const originalQ = originalQuestions.find(oq => oq.id === q.id);
+        if (!originalQ || isQuestionChanged(originalQ, q)) {
+          changedIds.push(q.id);
+        }
+      }
+    });
+    return changedIds;
+  };
+
   // 수정 저장
   const handleSaveEdit = useCallback(async () => {
     if (!previewQuiz || editableQuestions.length < 1) return;
     setIsSavingEdit(true);
     try {
-      const flattenedQuestions = flattenQuestionsForSave();
+      // 변경된 문제 ID 수집 (저장 전에)
+      const changedIds = getChangedQuestionIds();
+
+      // 재시험 모드면 questionUpdatedAt 설정, 아니면 설정 안 함
+      const flattenedQuestions = flattenQuestionsForSave(requireRetest);
       // 제목 변경
       if (editedTitle && editedTitle !== previewQuiz.title) {
         await updateTitle(previewQuiz.id, editedTitle);
@@ -605,6 +674,17 @@ export default function ProfessorLibraryTab({
       }
       // 문제 저장
       await updateQuestions(previewQuiz.id, flattenedQuestions);
+
+      // 재시험 모드가 아니고 변경된 문제가 있으면 → 재채점 CF 호출
+      if (!requireRetest && changedIds.length > 0) {
+        try {
+          const regradeQuestionsFn = httpsCallable(functions, 'regradeQuestions');
+          await regradeQuestionsFn({ quizId: previewQuiz.id, questionIds: changedIds });
+        } catch (err) {
+          console.warn('재채점 실패 (무시 가능):', err);
+        }
+      }
+
       setIsEditMode(false);
       setEditingIndex(null);
     } catch (err: any) {
@@ -612,7 +692,7 @@ export default function ProfessorLibraryTab({
     } finally {
       setIsSavingEdit(false);
     }
-  }, [previewQuiz, editedTitle, editedDescription, editedTags, editType, editDifficulty, editableQuestions, originalQuestions, updateTitle, updateQuestions, updateMeta]);
+  }, [previewQuiz, editedTitle, editedDescription, editedTags, editType, editDifficulty, editableQuestions, originalQuestions, requireRetest, updateTitle, updateQuestions, updateMeta]);
 
   // 부모에서 프리뷰 해제 시 내부 상태도 초기화
   useEffect(() => {
@@ -990,6 +1070,19 @@ export default function ProfessorLibraryTab({
                   )}
                 </AnimatePresence>
               </div>
+
+              {/* 재시험 체크박스 */}
+              <label className="flex items-center gap-2 mt-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={requireRetest}
+                  onChange={(e) => setRequireRetest(e.target.checked)}
+                  className="w-4 h-4 accent-[#1A1A1A]"
+                />
+                <span className="text-sm text-[#1A1A1A] font-medium">
+                  재시험 (수정 이전 응답 제외 + 수정 뱃지 표시)
+                </span>
+              </label>
             </div>
           )}
 
@@ -1040,6 +1133,7 @@ export default function ProfessorLibraryTab({
                 key={q.id || `q${idx}`}
                 question={q}
                 questionNumber={idx + 1}
+                feedbackData={feedbackByQuestion.get(idx + 1)}
               />
             ))}
           </div>

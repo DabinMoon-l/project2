@@ -1775,9 +1775,23 @@ export default function ProfessorQuizListPage() {
           )}
         </div>
 
-        {/* 태그 검색 버튼 — 자작 탭에서만, 밑줄 우측 배치 (프리뷰 모드에서 숨김) */}
+        {/* 태그 검색 영역 — 자작 탭에서만 (프리뷰 모드에서 숨김) */}
         {sectionFilter === 'custom' && !isLibraryPreview && (
-          <div className="flex justify-end mb-2">
+          <div className="flex items-center justify-end gap-1.5 mb-1.5">
+            {selectedTags.map((tag) => (
+              <div
+                key={tag}
+                className="flex items-center gap-0.5 px-1.5 h-9 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold border border-[#1A1A1A] rounded-lg"
+              >
+                #{tag}
+                <button
+                  onClick={() => setSelectedTags(prev => prev.filter(t => t !== tag))}
+                  className="ml-0.5 hover:text-[#999]"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
             <button
               onClick={() => setShowTagFilter(!showTagFilter)}
               className={`flex items-center justify-center w-9 h-9 border transition-colors shrink-0 rounded-lg ${
@@ -1790,26 +1804,6 @@ export default function ProfessorQuizListPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
               </svg>
             </button>
-          </div>
-        )}
-
-        {/* 선택된 태그 + 태그 필터 목록 — 자작 탭에서만 */}
-        {sectionFilter === 'custom' && !isLibraryPreview && selectedTags.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-3">
-            {selectedTags.map((tag) => (
-              <div
-                key={tag}
-                className="flex items-center gap-1 px-2.5 h-9 bg-[#1A1A1A] text-[#F5F0E8] text-sm font-bold border border-[#1A1A1A] rounded-lg"
-              >
-                #{tag}
-                <button
-                  onClick={() => setSelectedTags(prev => prev.filter(t => t !== tag))}
-                  className="ml-0.5 hover:text-[#999]"
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
           </div>
         )}
         <AnimatePresence>

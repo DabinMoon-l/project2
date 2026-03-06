@@ -345,6 +345,7 @@ interface QuizStats {
   averageScore: number;
   highestScore: number;
   lowestScore: number;
+  stdDev: number;
   questionStats: QuestionStats[];
   courseId?: string;
 }
@@ -377,28 +378,13 @@ const CLASS_FILTERS: { value: ClassFilter; label: string }[] = [
  * 중요: ID 생성 시 result 페이지와 동일한 로직 사용 (q.id || `q${index}`)
  */
 /**
- * 객관식 answer를 0-indexed에서 1-indexed 문자열로 변환
- * 예: 2 → "3", [0, 2] → "1,3"
+ * 퀴즈 answer를 문자열로 변환 (인덱스 변환 없이 원본 보존)
+ * Firestore 저장값: OX→0/1, 객관식→0-indexed number/number[], 주관식→string
  */
-function convertAnswerTo1Indexed(type: string, answer: any): string | undefined {
+function answerToString(answer: any): string | undefined {
   if (answer === null || answer === undefined) return undefined;
-  if (type !== 'multiple') return answer?.toString();
-
-  // 이미 1-indexed 문자열인 경우 (예: "3" 또는 "1,3")
-  if (typeof answer === 'string') {
-    // 숫자 문자열이면 0-indexed일 수 있으므로 변환
-    // 하지만 문자열로 저장된 경우 이미 변환된 것일 수 있어 판단이 어려움
-    // → Firestore에서 answer는 항상 number/number[]로 저장되므로, 문자열이면 이미 변환된 것
-    return answer;
-  }
-
-  if (Array.isArray(answer)) {
-    return answer.map((a: number) => a + 1).join(',');
-  }
-  if (typeof answer === 'number') {
-    return (answer + 1).toString();
-  }
-  return answer?.toString();
+  if (Array.isArray(answer)) return answer.join(',');
+  return answer.toString();
 }
 
 /**
@@ -426,7 +412,7 @@ function flattenQuestions(questions: any[]): FlattenedQuestion[] {
         text: q.text || '',
         type: q.type,
         choices: q.choices,
-        answer: convertAnswerTo1Indexed(q.type, q.answer),
+        answer: answerToString(q.answer),
         chapterId: q.chapterId,
         chapterDetailId: q.chapterDetailId,
         imageUrl: q.imageUrl,
@@ -456,9 +442,9 @@ function flattenQuestions(questions: any[]): FlattenedQuestion[] {
           type: sq.type || 'short_answer',
           choices: sq.choices,
           answer: sq.answerIndices?.length > 0
-            ? sq.answerIndices.map((i: number) => i + 1).join(',')
+            ? sq.answerIndices.join(',')
             : sq.answerIndex !== undefined
-              ? (sq.answerIndex + 1).toString()
+              ? sq.answerIndex.toString()
               : sq.answerText,
           chapterId: q.chapterId,
           imageUrl: sq.imageUrl,
@@ -485,7 +471,7 @@ function flattenQuestions(questions: any[]): FlattenedQuestion[] {
         text: q.text || '',
         type: q.type,
         choices: q.choices,
-        answer: convertAnswerTo1Indexed(q.type, q.answer),
+        answer: answerToString(q.answer),
         chapterId: q.chapterId,
         chapterDetailId: q.chapterDetailId,
         imageUrl: q.imageUrl,
@@ -554,6 +540,8 @@ export default function QuizStatsModal({
   const [feedbackList, setFeedbackList] = useState<any[]>([]);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [feedbackSourceRect, setFeedbackSourceRect] = useState<SourceRect | null>(null);
+  const [allFeedbacks, setAllFeedbacks] = useState<any[] | null>(null); // 전체 피드백 캐시
+  const [feedbackQuestionNum, setFeedbackQuestionNum] = useState<number>(0); // 필터링할 문제 번호 (1-indexed, 0이면 전체)
 
   // 서술형 답안 모달
   const [showEssayModal, setShowEssayModal] = useState(false);
@@ -631,29 +619,52 @@ export default function QuizStatsModal({
 
         const resultsSnapshot = await getDocs(resultsQuery);
 
-        // 첫 번째 결과만 필터링 (isUpdate가 아닌 것)
-        const firstResults = resultsSnapshot.docs.filter(
-          (d) => !d.data().isUpdate
-        );
+        // 유저별 첫 풀이만 추출 (3단계 필터링)
+        // 1단계: userId별로 모든 결과를 시간순 그룹핑
+        const allByUser = new Map<string, { docSnapshot: any; data: any; ts: number }[]>();
+        resultsSnapshot.docs.forEach((docSnapshot) => {
+          const data = docSnapshot.data();
+          const uid = data.userId;
+          if (!uid) return;
+          const ts = data.createdAt?.toMillis?.() || data.createdAt?.seconds * 1000 || 0;
+          if (!allByUser.has(uid)) allByUser.set(uid, []);
+          allByUser.get(uid)!.push({ docSnapshot, data, ts });
+        });
 
-        if (firstResults.length === 0) {
+        // 2단계: 교수 계정 제외
+        const professorIds = new Set<string>();
+        const userIds = Array.from(allByUser.keys());
+        // 배치로 교수 여부 확인 (10명씩)
+        for (let i = 0; i < userIds.length; i += 10) {
+          const batch = userIds.slice(i, i + 10);
+          const userDocs = await Promise.all(
+            batch.map((uid) => getDoc(doc(db, 'users', uid)))
+          );
+          userDocs.forEach((userDoc) => {
+            if (userDoc.exists() && userDoc.data()?.role === 'professor') {
+              professorIds.add(userDoc.id);
+            }
+          });
+        }
+
+        // 3단계: 유저별 첫 풀이 선택 (순수 시간순 — isUpdate 플래그 역전 버그 대응)
+        const firstResultByUser = new Map<string, { docSnapshot: any; data: any }>();
+        allByUser.forEach((results, uid) => {
+          if (professorIds.has(uid)) return; // 교수 제외
+          results.sort((a, b) => a.ts - b.ts);
+          const earliest = results[0];
+          if (earliest) {
+            firstResultByUser.set(uid, { docSnapshot: earliest.docSnapshot, data: earliest.data });
+          }
+        });
+
+        const dedupedResults = Array.from(firstResultByUser.values());
+
+        if (dedupedResults.length === 0) {
           setResultsWithClass([]);
           setLoading(false);
           return;
         }
-
-        // userId 중복 제거 — 동일 사용자의 가장 최근 결과만 사용
-        const latestByUser = new Map<string, any>();
-        firstResults.forEach((docSnapshot) => {
-          const data = docSnapshot.data();
-          const uid = data.userId;
-          const ts = data.createdAt?.toMillis?.() || data.createdAt?.seconds * 1000 || 0;
-          const existing = latestByUser.get(uid);
-          if (!existing || ts > (existing.data.createdAt?.toMillis?.() || existing.data.createdAt?.seconds * 1000 || 0)) {
-            latestByUser.set(uid, { docSnapshot, data });
-          }
-        });
-        const dedupedResults = Array.from(latestByUser.values());
 
         // 결과에서 classId 추출 (없으면 배치로 users 컬렉션에서 가져오기)
         const resultsNeedingClass: { data: any }[] = [];
@@ -682,12 +693,12 @@ export default function QuizStatsModal({
         });
 
         // classId가 없는 결과들에 대해 배치로 조회 (N+1 → 30개씩 배치 쿼리)
-        const userIds = [...new Set(resultsNeedingClass.map((r) => r.data.userId))];
+        const classNeededUserIds = [...new Set(resultsNeedingClass.map((r) => r.data.userId))];
 
-        if (userIds.length > 0) {
+        if (classNeededUserIds.length > 0) {
           // 30개씩 배치로 쿼리 (Firestore 'in' 제한)
-          for (let i = 0; i < userIds.length; i += 30) {
-            const batch = userIds.slice(i, i + 30);
+          for (let i = 0; i < classNeededUserIds.length; i += 30) {
+            const batch = classNeededUserIds.slice(i, i + 30);
             const batchResults = await Promise.all(
               batch.map(async (userId) => {
                 try {
@@ -719,6 +730,51 @@ export default function QuizStatsModal({
         const results: ResultWithClass[] = [...resultsWithClassDirect, ...resultsFromUsers];
         setResultsWithClass(results);
         setLoading(false);
+
+        // 피드백도 미리 로드 (문제별 ! 표시용)
+        try {
+          const feedbacksRef = collection(db, 'questionFeedbacks');
+          const fbQuery = query(feedbacksRef, where('quizId', '==', quizId));
+          const fbSnapshot = await getDocs(fbQuery);
+          const fbItems: any[] = [];
+          fbSnapshot.forEach((d) => {
+            const data = d.data();
+            fbItems.push({
+              id: d.id,
+              ...data,
+              feedbackType: data.type || data.feedbackType,
+              feedback: data.content || data.feedback || '',
+              classType: _statsUserClassCache.get(data.userId) || null,
+            });
+          });
+          // 반 정보가 없는 피드백 유저는 배치 조회
+          const fbNeedClass = fbItems.filter((fb) => fb.userId && !fb.classType && !_statsUserClassCache.has(fb.userId));
+          const fbUniqueUids = [...new Set(fbNeedClass.map((fb) => fb.userId as string))];
+          for (let i = 0; i < fbUniqueUids.length; i += 30) {
+            const batch = fbUniqueUids.slice(i, i + 30);
+            await Promise.all(batch.map(async (uid) => {
+              try {
+                const userDoc = await getDoc(doc(db, 'users', uid));
+                const cls = userDoc.exists() ? userDoc.data()?.classId || null : null;
+                _statsUserClassCache.set(uid, cls);
+              } catch { /* ignore */ }
+            }));
+          }
+          // 반 정보 재적용
+          fbItems.forEach((fb) => {
+            if (!fb.classType && fb.userId) {
+              fb.classType = _statsUserClassCache.get(fb.userId) || null;
+            }
+          });
+          fbItems.sort((a, b) => {
+            const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
+            const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
+            return bTime - aTime;
+          });
+          setAllFeedbacks(fbItems);
+        } catch (fbErr) {
+          console.warn('피드백 미리 로드 실패:', fbErr);
+        }
       } catch (err) {
         console.error('통계 로드 실패:', err);
         setError('통계를 불러오는데 실패했습니다.');
@@ -745,6 +801,7 @@ export default function QuizStatsModal({
         averageScore: 0,
         highestScore: 0,
         lowestScore: 0,
+        stdDev: 0,
         courseId,
         questionStats: questions.map((q, idx) => ({
           questionId: `${q.id}_${idx}`,
@@ -784,6 +841,30 @@ export default function QuizStatsModal({
       }
     });
 
+    // 현재 정답 기준으로 isCorrect 재판정 (문제 수정 후 통계 모순 방지)
+    // question.answer: 0-indexed 문자열 (객관식 "0","1,2" / OX "0","1" / 주관식 원본)
+    // scoreData.userAnswer: 1-indexed 문자열 (객관식 "1","2,3" / OX "O","X" / 주관식 원본)
+    const checkCorrect = (question: FlattenedQuestion, userAnswer: string): boolean => {
+      if (!userAnswer && userAnswer !== '0') return false;
+      const answer = question.answer ?? '';
+      if (!answer && answer !== '0') return false;
+
+      if (question.type === 'ox') {
+        const correctIsO = answer === '0';
+        const userIsO = userAnswer.toUpperCase() === 'O' || userAnswer === '0';
+        return correctIsO === userIsO;
+      }
+      if (question.type === 'multiple') {
+        // answer: 0-indexed ("0","1,2"), userAnswer: 1-indexed ("1","2,3") → 1-indexed로 통일 비교
+        const correctParts = answer.split(',').map(s => parseInt(s.trim()) + 1).filter(n => !isNaN(n)).sort();
+        const userParts = userAnswer.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)).sort();
+        return JSON.stringify(correctParts) === JSON.stringify(userParts);
+      }
+      // 주관식: ||| 구분자 복수정답
+      const accepted = answer.split('|||').map(s => s.trim().toLowerCase());
+      return accepted.includes(userAnswer.trim().toLowerCase());
+    };
+
     // 통계 계산
     // 참여자 수/점수: 모든 유니크 사용자 포함 (수정 문제 풀었든 안 풀었든)
     // 문제별 정답률/선지: 수정된 문제는 수정 후 응답만, 비수정 문제는 전체
@@ -816,19 +897,22 @@ export default function QuizStatsModal({
           const updatedAt = questionUpdatedAtMap.get(questionId);
           if (updatedAt) {
             const answeredAt = toMillis(scoreData.answeredAt) || toMillis(result.createdAt);
-            if (answeredAt > 0 && answeredAt < updatedAt) return;
+            // 타임스탬프 없는 레거시 결과는 수정 이전으로 간주하여 제외
+            if (answeredAt === 0 || answeredAt < updatedAt) return;
           }
 
-          if (!questionCorrectCounts[questionId]) {
+          if (questionAttemptCounts[questionId] === undefined) {
             questionCorrectCounts[questionId] = 0;
             questionAttemptCounts[questionId] = 0;
             questionScoreArrays[questionId] = [];
             questionUserScores[questionId] = [];
           }
+          // 현재 정답 기준으로 재판정 (문제 수정 시 서버 isCorrect와 불일치 방지)
+          const isCorrect = checkCorrect(question, scoreData.userAnswer || '');
           questionAttemptCounts[questionId]++;
-          questionScoreArrays[questionId].push(scoreData.isCorrect ? 1 : 0);
-          questionUserScores[questionId].push({ userId: result.userId, isCorrect: scoreData.isCorrect });
-          if (scoreData.isCorrect) {
+          questionScoreArrays[questionId].push(isCorrect ? 1 : 0);
+          questionUserScores[questionId].push({ userId: result.userId, isCorrect });
+          if (isCorrect) {
             questionCorrectCounts[questionId]++;
           }
 
@@ -858,7 +942,7 @@ export default function QuizStatsModal({
           }
 
           // 주관식 응답 수집 (오답만)
-          if ((question.type === 'short_answer' || question.type === 'short') && !scoreData.isCorrect && scoreData.userAnswer) {
+          if ((question.type === 'short_answer' || question.type === 'short') && !isCorrect && scoreData.userAnswer) {
             if (!shortAnswerResponses[questionId]) {
               shortAnswerResponses[questionId] = {};
             }
@@ -880,10 +964,13 @@ export default function QuizStatsModal({
       );
     });
 
-    // 평균/최고/최저 점수
+    // 평균/최고/최저/표준편차
     const averageScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
     const highestScore = scores.length > 0 ? Math.max(...scores) : 0;
     const lowestScore = scores.length > 0 ? Math.min(...scores) : 0;
+    const stdDev = scores.length >= 2
+      ? Math.round(Math.sqrt(scores.reduce((sum, s) => sum + (s - averageScore) ** 2, 0) / scores.length) * 10) / 10
+      : 0;
 
     // 문제별 통계
     const questionStats: QuestionStats[] = questions.map((q, idx) => {
@@ -892,10 +979,10 @@ export default function QuizStatsModal({
       const correctRate = attempts > 0 ? Math.round((correct / attempts) * 100) : 0;
       const wrongRate = 100 - correctRate;
 
-      // 변별도 계산 (상위 27% 정답률 - 하위 27% 정답률)
+      // 변별도 계산 (상위 27% 정답률 - 하위 27% 정답률, 최소 10명 이상)
       let discrimination = 0;
       const userScores = questionUserScores[q.id];
-      if (userScores && userScores.length >= 4) {
+      if (userScores && userScores.length >= 10) {
         // 총점 기준 정렬
         const sorted = [...userScores].sort(
           (a, b) => (userTotalScores[b.userId] ?? 0) - (userTotalScores[a.userId] ?? 0)
@@ -942,19 +1029,22 @@ export default function QuizStatsModal({
       // 객관식 선지 분포
       if (q.type === 'multiple' && q.choices) {
         const selections = optionSelections[q.id] || {};
-        const correctAnswers = q.answer?.split(',').map((a) => a.trim()) || [];
+        // q.answer는 0-indexed (예: "0", "2", "0,2")
+        const correctIndices = q.answer?.split(',').map((a) => parseInt(a.trim())).filter(n => !isNaN(n)) || [];
 
         // 총 선택 수 계산 (모든 선지 선택의 합)
         const totalSelections = Object.values(selections).reduce((sum, count) => sum + count, 0);
 
         stat.optionDistribution = q.choices.map((choice, optIdx) => {
+          // selections 키는 1-indexed (서버 scoreData.userAnswer 기준)
           const optionNum = (optIdx + 1).toString();
           const count = selections[optionNum] || 0;
-          // 총 선택 수 기준으로 퍼센트 계산 (합이 100%가 되도록)
           const percentage = totalSelections > 0 ? Math.round((count / totalSelections) * 100) : 0;
-          const isCorrect = correctAnswers.includes(optionNum);
+          // 0-indexed 정답과 비교
+          const isCorrect = correctIndices.includes(optIdx);
           return { option: choice, count, isCorrect, percentage };
         });
+
       }
 
       // 주관식 오답 목록
@@ -977,6 +1067,7 @@ export default function QuizStatsModal({
       averageScore,
       highestScore,
       lowestScore,
+      stdDev,
       courseId,
       questionStats,
     };
@@ -999,6 +1090,27 @@ export default function QuizStatsModal({
     });
 
     return counts;
+  }, [resultsWithClass]);
+
+  // 반별 표준편차 계산 (전체 탭에서 비교 바 표시용)
+  const classStdDevs = useMemo(() => {
+    const result: Record<string, { stdDev: number; avg: number; count: number }> = {};
+    const classes = ['A', 'B', 'C', 'D'] as const;
+    for (const cls of classes) {
+      const scores = resultsWithClass.filter((r) => r.classType === cls).map((r) => r.score);
+      if (scores.length < 2) {
+        result[cls] = { stdDev: 0, avg: 0, count: scores.length };
+        continue;
+      }
+      const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+      const variance = scores.reduce((sum, s) => sum + (s - avg) ** 2, 0) / scores.length;
+      result[cls] = {
+        stdDev: Math.round(Math.sqrt(variance) * 10) / 10,
+        avg: Math.round(avg),
+        count: scores.length,
+      };
+    }
+    return result;
   }, [resultsWithClass]);
 
   // 오답률 Top 3 계산
@@ -1140,15 +1252,61 @@ export default function QuizStatsModal({
   // 현재 선택된 문제
   const currentQuestion = stats?.questionStats[selectedQuestionIndex];
 
+  // 피드백에서 문제 번호 추출 헬퍼
+  const getFeedbackQuestionNum = useCallback((fb: any): number => {
+    if (fb.questionNumber && fb.questionNumber > 0 && fb.questionNumber < 1000) {
+      return fb.questionNumber;
+    }
+    if (fb.questionId) {
+      const match = fb.questionId.match(/^q(\d{1,3})$/);
+      if (match) return parseInt(match[1], 10) + 1;
+    }
+    return 0;
+  }, []);
+
+  // 반별 필터 적용된 피드백 목록
+  const classFilteredFeedbacks = useMemo(() => {
+    if (!allFeedbacks) return [];
+    if (classFilter === 'all') return allFeedbacks;
+    return allFeedbacks.filter((fb) => fb.classType === classFilter);
+  }, [allFeedbacks, classFilter]);
+
+  // 문제별 피드백 존재 여부 Set (1-indexed 문제 번호) — 반별 필터 반영
+  // 문제별 피드백 개수 Map (1-indexed 문제 번호 → 개수)
+  const feedbackCountByQuestion = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const fb of classFilteredFeedbacks) {
+      const num = getFeedbackQuestionNum(fb);
+      if (num > 0) map.set(num, (map.get(num) || 0) + 1);
+    }
+    return map;
+  }, [classFilteredFeedbacks, getFeedbackQuestionNum]);
+
   // 혼합 보기 유효성 검사
   const hasValidMixedExamples = currentQuestion?.mixedExamples &&
     currentQuestion.mixedExamples.length > 0 &&
     currentQuestion.mixedExamples.some(item => isValidMixedItem(item));
 
-  // 피드백 로드
-  const handleOpenFeedback = useCallback(async (rect?: SourceRect) => {
+  // 피드백 로드 (questionNum: 1-indexed 문제 번호, 해당 문제 피드백만 필터)
+  const handleOpenFeedback = useCallback(async (questionNum: number, rect?: SourceRect) => {
     if (rect) setFeedbackSourceRect(rect);
+    setFeedbackQuestionNum(questionNum);
     setShowFeedbackModal(true);
+
+    // 반별 필터 적용 헬퍼
+    const applyClassAndQuestionFilter = (items: any[]) => {
+      let filtered = classFilter !== 'all' ? items.filter((fb) => fb.classType === classFilter) : items;
+      if (questionNum > 0) filtered = filtered.filter((fb) => getFeedbackQuestionNum(fb) === questionNum);
+      return filtered;
+    };
+
+    // 이미 캐시되어 있으면 필터링만
+    if (allFeedbacks) {
+      setFeedbackList(applyClassAndQuestionFilter(allFeedbacks));
+      return;
+    }
+
+    // 캐시 없으면 로드
     setFeedbackLoading(true);
     try {
       const feedbacksRef = collection(db, 'questionFeedbacks');
@@ -1163,23 +1321,25 @@ export default function QuizStatsModal({
           ...data,
           feedbackType: data.type || data.feedbackType,
           feedback: data.content || data.feedback || '',
+          classType: _statsUserClassCache.get(data.userId) || null,
         });
       });
 
-      // 최신순 정렬
       items.sort((a, b) => {
         const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
         const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
         return bTime - aTime;
       });
 
-      setFeedbackList(items);
+      setAllFeedbacks(items);
+      const filtered = applyClassAndQuestionFilter(items);
+      setFeedbackList(filtered);
     } catch (err) {
       console.error('피드백 로드 실패:', err);
     } finally {
       setFeedbackLoading(false);
     }
-  }, [quizId]);
+  }, [quizId, allFeedbacks, getFeedbackQuestionNum, classFilter]);
 
   // 현재 문제를 폴더에 저장
   const handleFolderSelect = async (folderId: string) => {
@@ -1279,10 +1439,10 @@ export default function QuizStatsModal({
         )}
 
         {!loading && !error && stats && (
-          <>
-            {/* 요약 카드 — 고정 */}
-            <div className="flex-shrink-0 px-3 pt-2 pb-1">
-              <div className="grid grid-cols-4 gap-1 p-2 border-2 border-[#1A1A1A] bg-[#EDEAE4]">
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            {/* 요약 카드 */}
+            <div className="px-3 pt-2 pb-1">
+              <div className="grid grid-cols-5 gap-1 p-2 border-2 border-[#1A1A1A] bg-[#EDEAE4]">
                 <div className="text-center">
                   <p className="text-[10px] text-[#5C5C5C]">참여자</p>
                   <p className="text-lg font-bold text-[#1A1A1A]">
@@ -1307,12 +1467,67 @@ export default function QuizStatsModal({
                     <CountUp key={`lowest-${classFilter}`} value={stats.lowestScore} duration={800} />
                   </p>
                 </div>
+                <div className="text-center">
+                  <p className="text-[10px] text-[#5C5C5C]">편차(σ)</p>
+                  <p className="text-lg font-bold text-[#1A1A1A]">
+                    {stats.stdDev > 0 ? stats.stdDev.toFixed(1) : '—'}
+                  </p>
+                </div>
               </div>
+
+              {/* 전체 탭일 때 반별 편차 비교 */}
+              {isProfessor && classFilter === 'all' && (() => {
+                const classes = ['A', 'B', 'C', 'D'] as const;
+                const classBarColors: Record<string, string> = {
+                  A: '#8B1A1A', B: '#8B6914', C: '#1D5D4A', D: '#1E3A5F',
+                };
+                const maxStdDev = Math.max(...classes.map((c) => classStdDevs[c].stdDev), 1);
+                const hasAnyData = classes.some((c) => classStdDevs[c].count >= 2);
+                if (!hasAnyData) return null;
+
+                return (
+                  <div className="mt-1 border-2 border-[#1A1A1A] bg-[#EDEAE4]">
+                    <div className="grid grid-cols-4 border-b border-[#D4CFC4]">
+                      {classes.map((cls) => (
+                        <div key={cls} className="text-center py-1.5 border-r last:border-r-0 border-[#D4CFC4]">
+                          <p className="text-[10px] text-[#5C5C5C]">{cls}반 편차</p>
+                          <p className="text-sm font-bold text-[#1A1A1A]">
+                            {classStdDevs[cls].count >= 2 ? classStdDevs[cls].stdDev.toFixed(1) : '—'}
+                          </p>
+                          {classStdDevs[cls].count >= 2 && (
+                            <p className="text-[10px] text-[#5C5C5C]">μ {classStdDevs[cls].avg}</p>
+                          )}
+                          {classStdDevs[cls].count < 2 && (
+                            <p className="text-[10px] text-[#5C5C5C]">부족</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="px-2 py-1.5 space-y-1">
+                      {classes.map((cls) => {
+                        const data = classStdDevs[cls];
+                        const barWidth = data.count >= 2 ? (data.stdDev / maxStdDev) * 100 : 0;
+                        return (
+                          <div key={cls} className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-[#1A1A1A] w-3">{cls}</span>
+                            <div className="flex-1 h-2.5 bg-[#D4CFC4] overflow-hidden">
+                              <div
+                                className="h-full transition-all duration-500"
+                                style={{ width: `${barWidth}%`, backgroundColor: classBarColors[cls] }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* 문제별 분석 */}
             {stats.questionStats.length > 0 && (
-              <div className="flex-1 flex flex-col min-h-0 mx-3 mb-2 border-2 border-[#1A1A1A] bg-[#EDEAE4]">
+              <div className="flex flex-col mx-3 mb-2 border-2 border-[#1A1A1A] bg-[#EDEAE4]" style={{ height: '420px' }}>
                 {/* 슬라이더 헤더 — 고정 */}
                 <div className="flex-shrink-0 px-3 py-2 border-b border-[#1A1A1A] bg-[#F5F0E8]">
                   <div className="flex items-center justify-between mb-1">
@@ -1329,11 +1544,6 @@ export default function QuizStatsModal({
                           correctRate: 100 - item.wrongRate,
                         }))
                         .sort((a, b) => a.position - b.position);
-
-                      // 겹침 감지: 인접 마커 간 거리가 20% 미만이면 위아래 교대 배치
-                      const needsStagger = markers.length > 1 && markers.some((m, i) =>
-                        i > 0 && (m.position - markers[i - 1].position) < 20
-                      );
 
                       const renderMarker = (item: typeof markers[0], placeAbove: boolean) => {
                         const rankLabel = item.rank === 1 ? '1st' : item.rank === 2 ? '2nd' : '3rd';
@@ -1361,7 +1571,7 @@ export default function QuizStatsModal({
                           <div
                             className="relative"
                             style={{
-                              marginTop: needsStagger ? '28px' : '0',
+                              marginTop: markers.length > 1 ? '24px' : '0',
                               marginBottom: markers.length > 0 ? '24px' : '0',
                             }}
                           >
@@ -1376,9 +1586,9 @@ export default function QuizStatsModal({
                                 background: `linear-gradient(to right, #1A1A1A 0%, #1A1A1A ${(selectedQuestionIndex / (totalQ - 1)) * 100}%, #D4CFC4 ${(selectedQuestionIndex / (totalQ - 1)) * 100}%, #D4CFC4 100%)`
                               }}
                             />
-                            {/* 킬러 마커 */}
+                            {/* 킬러 마커 — 위아래 교대 배치 */}
                             {markers.map((item, idx) =>
-                              renderMarker(item, needsStagger && idx % 2 === 0)
+                              renderMarker(item, idx % 2 === 0)
                             )}
                           </div>
                         </div>
@@ -1395,24 +1605,30 @@ export default function QuizStatsModal({
                       onTouchEnd={handleQSwipeEnd}
                       style={{ touchAction: 'pan-y' }}
                     >
-                      {/* 피드백 아이콘 (좌측 상단) */}
-                      <button
-                        onClick={(e) => {
-                          const r = e.currentTarget.getBoundingClientRect();
-                          handleOpenFeedback({ x: r.x, y: r.y, width: r.width, height: r.height });
-                        }}
-                        className="absolute top-1 left-1 z-10 w-8 h-8 flex items-center justify-center text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors"
-                        title="피드백 보기"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-                        </svg>
-                      </button>
-                      {/* 서술형 답안 확인 아이콘 (피드백 아이콘 우측) */}
+                      {/* 피드백 아이콘 (좌측 상단) + 피드백 개수 */}
+                      <div className="absolute top-1 left-1 z-10 flex items-center">
+                        <button
+                          onClick={(e) => {
+                            const r = e.currentTarget.getBoundingClientRect();
+                            handleOpenFeedback(selectedQuestionIndex + 1, { x: r.x, y: r.y, width: r.width, height: r.height });
+                          }}
+                          className="w-8 h-8 flex items-center justify-center text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors"
+                          title="피드백 보기"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                          </svg>
+                        </button>
+                        {(feedbackCountByQuestion.get(selectedQuestionIndex + 1) || 0) > 0 && (
+                          <span className="text-[10px] font-bold text-[#5C5C5C] -ml-1">{feedbackCountByQuestion.get(selectedQuestionIndex + 1)}</span>
+                        )}
+                      </div>
+                      {/* 서술형 답안 확인 아이콘 (피드백 아이콘 + ! 배지 우측) */}
                       {currentQuestion.questionType === 'essay' && (
                         <button
                           onClick={() => setShowEssayModal(true)}
-                          className="absolute top-1 left-9 z-10 w-8 h-8 flex items-center justify-center text-[#8B6914] hover:text-[#6B4F0E] transition-colors"
+                          className="absolute top-1 z-10 w-8 h-8 flex items-center justify-center text-[#8B6914] hover:text-[#6B4F0E] transition-colors"
+                          style={{ left: feedbackCountByQuestion.has(selectedQuestionIndex + 1) ? '2.75rem' : '2.25rem' }}
                           title="서술형 답안 보기"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1450,7 +1666,7 @@ export default function QuizStatsModal({
                           <span className="text-sm font-bold text-[#1A1A1A]">
                             정답률 {currentQuestion.correctRate}%
                           </span>
-                          {currentQuestion.totalAttempts >= 4 && (() => {
+                          {currentQuestion.totalAttempts >= 10 && (() => {
                             const d = currentQuestion.discrimination;
                             const label = d >= 0.4 ? '우수' : d >= 0.2 ? '양호' : d >= 0 ? '미흡' : '역변별';
                             const color = d >= 0.4 ? '#16A34A' : d >= 0.2 ? '#1A1A1A' : d >= 0 ? '#D97706' : '#DC2626';
@@ -1786,7 +2002,7 @@ export default function QuizStatsModal({
                   )}
                 </div>
               )}
-            </>
+            </div>
           )}
 
       </motion.div>
@@ -1806,7 +2022,7 @@ export default function QuizStatsModal({
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/50"
             style={{ left: 'var(--modal-left, 0px)' }}
-            onClick={(e) => { e.stopPropagation(); setShowFeedbackModal(false); setFeedbackList([]); }}
+            onClick={(e) => { e.stopPropagation(); setShowFeedbackModal(false); setFeedbackList([]); setFeedbackQuestionNum(0); }}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.05, x: fdx, y: fdy }}
@@ -1817,7 +2033,10 @@ export default function QuizStatsModal({
               className="w-full max-w-xs bg-[#F5F0E8] border-2 border-[#1A1A1A] max-h-[60vh] overflow-visible flex flex-col rounded-xl"
             >
               <div className="px-3 py-2 border-b border-[#1A1A1A]">
-                <h2 className="text-sm font-bold text-[#1A1A1A] text-center truncate">{quizTitle}</h2>
+                <h2 className="text-sm font-bold text-[#1A1A1A] text-center truncate">
+                  {feedbackQuestionNum > 0 ? `${feedbackQuestionNum}번 문제 피드백` : quizTitle}
+                  {classFilter !== 'all' && <span className="text-[#5C5C5C] font-normal"> ({classFilter}반)</span>}
+                </h2>
               </div>
 
               <div className="flex-1 overflow-y-auto overscroll-contain p-2">
@@ -1845,29 +2064,24 @@ export default function QuizStatsModal({
                         other: '기타 의견',
                       };
                       const typeLabel = typeLabels[feedback.feedbackType] || feedback.feedbackType || '피드백';
-                      let questionNum = 0;
-                      if (feedback.questionNumber && feedback.questionNumber > 0 && feedback.questionNumber < 1000) {
-                        questionNum = feedback.questionNumber;
-                      } else if (feedback.questionId) {
-                        const match = feedback.questionId.match(/^q(\d{1,3})$/);
-                        if (match) {
-                          questionNum = parseInt(match[1], 10) + 1;
-                        }
-                      }
+                      const questionNum = getFeedbackQuestionNum(feedback);
 
                       return (
                         <div
                           key={feedback.id}
                           className="p-1.5 border border-[#1A1A1A] bg-[#EDEAE4] rounded-lg"
                         >
-                          {questionNum > 0 && (
-                            <p className="text-[10px] text-[#5C5C5C] mb-0.5">
-                              문제 {questionNum}.
-                            </p>
-                          )}
-                          <p className="text-[11px] font-bold text-[#8B6914] mb-0.5">
-                            {typeLabel}
-                          </p>
+                          <div className="flex items-center gap-1 mb-0.5">
+                            {/* 전체 보기일 때만 문제 번호 표시 */}
+                            {feedbackQuestionNum === 0 && questionNum > 0 && (
+                              <span className="text-[10px] text-[#5C5C5C]">
+                                Q{questionNum}.
+                              </span>
+                            )}
+                            <span className="text-[11px] font-bold text-[#8B6914]">
+                              {typeLabel}
+                            </span>
+                          </div>
                           {feedback.feedback && (
                             <p className="text-[11px] text-[#1A1A1A]">
                               {feedback.feedback}
@@ -1882,7 +2096,7 @@ export default function QuizStatsModal({
 
               <div className="p-1.5 border-t border-[#1A1A1A]">
                 <button
-                  onClick={() => { setShowFeedbackModal(false); setFeedbackList([]); }}
+                  onClick={() => { setShowFeedbackModal(false); setFeedbackList([]); setFeedbackQuestionNum(0); }}
                   className="w-full py-1.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] rounded-lg"
                 >
                   닫기
