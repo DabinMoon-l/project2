@@ -17,7 +17,7 @@
 import { initializeApp } from "firebase-admin/app";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { getFirestore } from "firebase-admin/firestore";
 
 // Firebase Admin 초기화
 initializeApp();
@@ -412,84 +412,4 @@ export {
  * 중간→기말 전환 시 계급, 갑옷/무기, Shop 아이템 초기화
  * 캐릭터 외형, 뱃지는 유지
  */
-export const resetSeason = onCall(
-  { region: "asia-northeast3" },
-  async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
-    }
-
-    const userId = request.auth.uid;
-    const db = getFirestore();
-
-    // 교수님 권한 확인
-    const userDoc = await db.collection("users").doc(userId).get();
-    if (!userDoc.exists || userDoc.data()?.role !== "professor") {
-      throw new HttpsError("permission-denied", "교수님만 시즌 리셋이 가능합니다.");
-    }
-
-    const { classId, newSeason } = request.data as {
-      classId: string;
-      newSeason: "midterm" | "final";
-    };
-
-    if (!classId || !newSeason) {
-      throw new HttpsError("invalid-argument", "classId와 newSeason이 필요합니다.");
-    }
-
-    // 해당 반 학생들 조회
-    const studentsSnapshot = await db.collection("users")
-      .where("classId", "==", classId)
-      .where("role", "==", "student")
-      .get();
-
-    const batch = db.batch();
-    let resetCount = 0;
-
-    for (const studentDoc of studentsSnapshot.docs) {
-      batch.update(studentDoc.ref, {
-        // 초기화 항목
-        exp: 0,
-        totalExp: 0,
-        lastGachaExp: 0,
-        purchasedItems: [],
-
-        // 토끼 장착 초기화
-        equippedRabbits: [],
-
-        // 시즌 정보 업데이트
-        currentSeason: newSeason,
-        seasonResetAt: FieldValue.serverTimestamp(),
-
-        // 캐릭터 외형, 뱃지는 유지 (업데이트하지 않음)
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-      resetCount++;
-    }
-
-    // 시즌 로그 기록
-    const seasonLogRef = db.collection("seasonLogs").doc();
-    batch.set(seasonLogRef, {
-      classId,
-      previousSeason: newSeason === "final" ? "midterm" : "final",
-      newSeason,
-      resetBy: userId,
-      studentCount: resetCount,
-      createdAt: FieldValue.serverTimestamp(),
-    });
-
-    await batch.commit();
-
-    console.log(`시즌 리셋 완료: ${classId}`, {
-      newSeason,
-      resetCount,
-    });
-
-    return {
-      success: true,
-      message: `${resetCount}명의 학생 시즌이 리셋되었습니다.`,
-      resetCount,
-    };
-  }
-);
 

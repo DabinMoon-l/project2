@@ -659,38 +659,41 @@ export async function loadScopeForQuiz(
  */
 const DIFFICULTY_PARAMS = {
   easy: {
-    preferredTypes: ["OX", "DEFINITION_MATCH", "CLASSIFICATION"],
-    cognitiveLevel: "기억/이해",
-    trapStyle: "없음 (명확한 정오 구분)",
-    choiceStyle: "핵심 개념 중심의 명확한 선지 — 개념 정의, 특징, 분류를 직접적으로 물어보세요. 선지 간 차이가 분명해야 합니다.",
+    preferredTypes: ["DEFINITION_MATCH", "CLASSIFICATION", "COMPARISON"],
+    cognitiveLevel: "기억/이해 — 개념 정의, 특징, 분류를 직접적으로 확인",
+    trapStyle: "없음 (명확한 정오 구분, 선지 간 차이가 분명)",
+    choiceStyle: "핵심 개념 중심의 명확한 선지 — 선지 간 차이가 분명하고, 수업을 들은 학생이라면 쉽게 소거 가능. 명백히 다른 개념을 선지로 배치.",
     stemLength: "짧은 발문 (1-2문장)",
-    typeRatio: "OX 30%, 정의 매칭 40%, 분류 20%, 기타 10%",
-    allowedFormats: ["multiple", "ox"],  // OX 허용
+    typeRatio: "정의 매칭 40%, 분류 30%, 비교 20%, 기타 10%",
+    allowedFormats: ["multiple"],
     allowPassage: false,
     allowBogi: false,
   },
   medium: {
-    preferredTypes: ["MECHANISM", "CLASSIFICATION", "COMPARISON"],
-    cognitiveLevel: "적용/분석",
+    preferredTypes: ["MECHANISM", "CLASSIFICATION", "COMPARISON", "MULTI_SELECT"],
+    cognitiveLevel: "적용/분석 — 개념 간 비교, 기전 이해, 적용 능력 확인",
     trapStyle: "유사 용어 혼동, 시간 순서 교란",
-    choiceStyle: "유사 개념이 섞인 복잡한 선지 — 세부 특징 비교, 과정 순서, 기전 연결 등을 물어보세요.",
-    stemLength: "중간 길이 발문 (2-3문장)",
-    typeRatio: "기전 40%, 분류 30%, 비교 20%, 기타 10%",
+    choiceStyle: "유사 개념이 섞인 선지 — 비슷하지만 다른 용어, 과정 순서, 기전 연결을 섞어 출제. 소거에 약간의 사고가 필요한 수준.",
+    stemLength: "중간 길이 발문 (1-2문장)",
+    typeRatio: "기전 30%, 비교 30%, 분류 20%, 복수정답 20%",
     allowedFormats: ["multiple"],
     allowPassage: false,
     allowBogi: false,
   },
   hard: {
-    preferredTypes: ["NEGATIVE", "MULTI_SELECT", "CLINICAL_CASE", "MECHANISM", "BOGI_SELECT"],
-    cognitiveLevel: "분석/평가",
-    trapStyle: "정상비정상 뒤집기, 수치방향 뒤집기, 부분전체 혼동",
-    choiceStyle: "미묘한 차이가 있는 선지, 복수 정답 가능 — 단, 문제 주제는 반드시 학습 자료/지시사항 범위 내에서만. 다른 챕터 주제로 문제를 내면 안 됩니다.",
-    stemLength: "긴 발문 또는 케이스 시나리오",
-    typeRatio: "부정형 25%, 보기문제 20%, 임상케이스 20%, 다중선택 20%, 기전 15%",
+    preferredTypes: ["MECHANISM", "COMPARISON", "NEGATIVE", "MULTI_SELECT", "CLINICAL_CASE"],
+    cognitiveLevel: "분석/평가 — 심층 이해 확인. 문제 자체는 보통 난이도처럼 보이지만 선지 소거가 극도로 어려움",
+    trapStyle: "정상비정상 뒤집기, 유사 용어 혼동, 부분적으로 맞는 선지, 미묘한 차이",
+    choiceStyle: `**핵심 전략: 매력적인 오답 선지** — 문제(발문)는 보통 난이도와 비슷하게 간결하게 내되, 5개 선지 모두 그럴듯하게 구성.
+   - 오답이 "부분적으로 맞지만 핵심이 틀린" 선지여야 함 (명백히 틀린 선지 금지)
+   - 2~3개 선지가 정답처럼 보여서 소거법이 통하지 않아야 함
+   - 정확한 개념 이해 없이는 풀 수 없지만, 지엽적이거나 암기형은 아닌 수준
+   - 복수정답 문제에서도 "이것도 맞는 것 같은데?" 하는 선지를 배치`,
+    stemLength: "간결한 발문 (1-2문장) — 문제는 짧지만 선지에서 깊이를 요구",
+    typeRatio: "비교/기전 30%, 부정형 25%, 복수정답 25%, 임상케이스 20%",
     allowedFormats: ["multiple"],
     allowPassage: false,
-    allowBogi: true,      // 보기 허용
-    allowMultipleAnswers: true, // 복수정답 허용
+    allowBogi: false,
   },
 };
 
@@ -914,7 +917,8 @@ export function buildFullPrompt(
   const chapterIndexPrompt = courseCustomized ? buildChapterIndexPrompt(courseId, scopeChapters) : "";
   const focusGuide = courseCustomized && !skipFocusGuide ? getFocusGuide(courseId, scopeChapters) : null;
   // 과목 개요 (과목 특성 + 선택 챕터 상세 커리큘럼)
-  const courseOverviewPrompt = courseCustomized
+  // courseCustomized=false라도 챕터 태그가 선택되면 커리큘럼 개요는 포함
+  const courseOverviewPrompt = (courseCustomized || tagChapterNumbers.length > 0)
     ? buildCourseOverviewPrompt(courseId, tagChapterNumbers.length > 0 ? tagChapterNumbers : scopeChapters)
     : "";
 

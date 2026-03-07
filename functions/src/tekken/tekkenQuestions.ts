@@ -8,7 +8,7 @@ import fetch from "node-fetch";
 import { loadScopeForAI } from "../courseScope";
 import { getFocusGuide } from "../styledQuizGenerator";
 import type { StyleProfile, KeywordStore } from "../professorQuizAnalysis";
-import type { GeneratedQuestion, PregenCache } from "./tekkenTypes";
+import type { GeneratedQuestion, PregenCache, TekkenDifficulty } from "./tekkenTypes";
 import { COURSE_NAMES } from "./tekkenTypes";
 
 /**
@@ -64,10 +64,12 @@ async function loadProfessorStyle(courseId: string): Promise<{
 }
 
 /**
- * 철권퀴즈 프롬프트 생성
+ * 난이도별 철권퀴즈 프롬프트 생성
  *
- * 교수님의 출제 스타일(styleProfile)과 키워드(keywords)를 참고하여
- * 과목 특성에 맞는 4지선다 문제를 생성
+ * difficulty: "easy" | "medium" | "hard"
+ * easy: 개념 확인, 명확한 선지, 소거 쉬움
+ * medium: 중간 난이도, 유사 개념 섞임
+ * hard: 문제는 보통처럼 보이지만 선지 소거 극도로 어려움
  */
 function buildTekkenPrompt(
   courseName: string,
@@ -77,16 +79,50 @@ function buildTekkenPrompt(
   scopeCount: number,
   chapters: string[],
   profile: StyleProfile | null,
-  keywords: KeywordStore | null
+  keywords: KeywordStore | null,
+  difficulty: TekkenDifficulty = "medium"
 ): string {
   const totalCount = focusCount + scopeCount;
+
+  // 난이도별 설정
+  const difficultyConfig = {
+    easy: {
+      label: "쉬움 (개념 확인)",
+      description: "기본 개념 정의, 분류, 특징을 직접 확인하는 수준",
+      choiceRule: "선지 간 차이가 분명하고, 수업을 들은 학생이라면 쉽게 소거 가능. 명백히 다른 개념을 선지로 배치.",
+      timeHint: "20초 안에 풀 수 있는",
+      choiceCount: 4,
+    },
+    medium: {
+      label: "보통 (적용/비교)",
+      description: "개념 간 비교, 기전 이해, 유사 개념 구분이 필요한 수준",
+      choiceRule: "비슷하지만 다른 용어, 과정 순서, 기전 연결을 섞어 출제. 소거에 약간의 사고가 필요.",
+      timeHint: "20초 안에 풀 수 있는",
+      choiceCount: 5,
+    },
+    hard: {
+      label: "어려움 (매력적 오답)",
+      description: "문제 자체는 보통처럼 간결하지만, 5개 선지 모두 그럴듯하여 소거가 극도로 어려움",
+      choiceRule: `**핵심: 매력적인 오답 선지** — 5개 선지 모두 그럴듯하게 구성.
+   - 오답이 "부분적으로 맞지만 핵심이 틀린" 선지여야 함 (명백히 틀린 선지 금지)
+   - 2~3개 선지가 정답처럼 보여서 소거법이 통하지 않아야 함
+   - 정확한 개념 이해 없이는 풀 수 없지만, 지엽적이거나 암기형은 아닌 수준`,
+      timeHint: "20초 안에 읽을 수 있지만 깊은 사고가 필요한",
+      choiceCount: 5,
+    },
+  };
+
+  const config = difficultyConfig[difficulty];
 
   let prompt = `대학교 ${courseName} 과목 배틀 퀴즈 문제 ${totalCount}개를 만들어주세요.\n\n`;
 
   prompt += `대상: 간호학과 대학생\n`;
   prompt += `출제 범위: ${chapters.join(", ")}장 (전 챕터를 골고루 다루세요)\n`;
-  prompt += `난이도: 수업을 들은 학생이 20초 안에 풀 수 있는 중간 난이도\n`;
+  prompt += `난이도: ${config.label} — ${config.description}\n`;
   prompt += `⚠️ 문제 길이 제한: 문제는 반드시 1~2문장 이내 (최대 80자). 긴 지문/설명/사례 금지.\n\n`;
+
+  prompt += `## 선지 구성 규칙 (${difficulty.toUpperCase()})\n`;
+  prompt += `${config.choiceRule}\n\n`;
 
   // 교수님 출제 스타일 참고
   if (profile) {
@@ -94,10 +130,10 @@ function buildTekkenPrompt(
     if (profile.toneCharacteristics) {
       const tone = profile.toneCharacteristics;
       if (tone.hasEnglishTerms) prompt += `- 영문 용어를 병기하세요\n`;
-      if (tone.hasClinicalCases) prompt += `- 임상 사례 기반 문제를 포함하세요\n`;
-      if (tone.usesNegative) prompt += `- "~이 아닌 것은?" 형식의 부정형 문제를 적절히 포함하세요\n`;
+      if (tone.hasClinicalCases && difficulty !== "easy") prompt += `- 임상 사례 기반 문제를 포함하세요\n`;
+      if (tone.usesNegative && difficulty !== "easy") prompt += `- "~이 아닌 것은?" 형식의 부정형 문제를 적절히 포함하세요\n`;
     }
-    if (profile.trapPatterns && profile.trapPatterns.length > 0) {
+    if (profile.trapPatterns && profile.trapPatterns.length > 0 && difficulty !== "easy") {
       const topTraps = profile.trapPatterns.slice(0, 3).map(t => t.pattern).join(", ");
       prompt += `- 함정 패턴: ${topTraps}\n`;
     }
@@ -113,7 +149,7 @@ function buildTekkenPrompt(
         .join(", ");
       prompt += `[교수님이 강조하는 핵심 개념]\n${topConcepts}\n\n`;
     }
-    if (keywords.caseTriggers && keywords.caseTriggers.length > 0) {
+    if (keywords.caseTriggers && keywords.caseTriggers.length > 0 && difficulty !== "easy") {
       const topCases = keywords.caseTriggers
         .slice(0, 10)
         .map(k => k.term)
@@ -151,20 +187,20 @@ function buildTekkenPrompt(
   }
 
   prompt += `## 공통 규칙
-- 4지선다 순수 객관식만 (OX 문제 금지)
+- ${config.choiceCount}지선다 순수 객관식만 (OX 문제 금지)
 - 문제 하나로 완결 (별도 지문/제시문/보기표/그림/표 참조 금지)
 - "다음 중", "위의 내용에서" 같은 외부 참조 표현 금지
 - 각 문제는 서로 다른 주제/개념 (같은 개념 2번 이상 금지)
 - ⚠️ 문제는 반드시 1~2문장, 최대 80자 이내 (배틀 퀴즈이므로 빠르게 읽을 수 있어야 함)
 - 선지도 간결하게 (각 선지 최대 30자)
 - 오답 선지는 그럴듯하게 (명백히 틀린 보기 금지)
-- choices 4개, correctAnswer는 0~3
+- choices ${config.choiceCount}개, correctAnswer는 0~${config.choiceCount - 1}
 - 매번 다른 문제를 생성 — 이전에 생성한 문제와 겹치지 않도록 창의적으로 출제
 - ${chapters.length}개 챕터를 골고루 커버 (특정 챕터에 편중 금지)
 
 반드시 아래 JSON 형식만 출력 (다른 텍스트 없이):
 [
-  {"text": "문제 내용", "type": "multiple", "choices": ["선지1", "선지2", "선지3", "선지4"], "correctAnswer": 2}
+  {"text": "문제 내용", "type": "multiple", "choices": [${Array.from({length: config.choiceCount}, (_, i) => `"선지${i+1}"`).join(", ")}], "correctAnswer": 2, "difficulty": "${difficulty}"}
 ]`;
 
   return prompt;
@@ -172,13 +208,14 @@ function buildTekkenPrompt(
 
 /**
  * Gemini로 scope + focusGuide 기반 배틀 문제 생성
- * count: 10 (7라운드 내 종료 + 여유분)
+ * count: 문제 개수, difficulty: 난이도
  */
 export async function generateBattleQuestions(
   courseId: string,
   apiKey: string,
   count: number = 10,
-  chapters?: string[]
+  chapters?: string[],
+  difficulty: TekkenDifficulty = "medium"
 ): Promise<GeneratedQuestion[]> {
   const targetChapters = chapters || await getTekkenChapters(courseId);
   const courseName = COURSE_NAMES[courseId] || "생물학";
@@ -194,7 +231,7 @@ export async function generateBattleQuestions(
   const hasScope = !!scopeData?.content;
 
   // 5:5 비율 결정
-  const focusCount = hasFocusGuide ? (hasScope ? 5 : count) : 0;
+  const focusCount = hasFocusGuide ? (hasScope ? Math.ceil(count / 2) : count) : 0;
   const scopeCount = count - focusCount;
 
   const prompt = buildTekkenPrompt(
@@ -205,7 +242,8 @@ export async function generateBattleQuestions(
     scopeCount,
     targetChapters,
     profStyle.profile,
-    profStyle.keywords
+    profStyle.keywords,
+    difficulty
   );
 
   try {
@@ -217,7 +255,7 @@ export async function generateBattleQuestions(
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
-            temperature: 0.9,
+            temperature: difficulty === "hard" ? 0.8 : 0.9,
             maxOutputTokens: 8192,
           },
         }),
@@ -239,18 +277,22 @@ export async function generateBattleQuestions(
         q.text &&
         q.type &&
         Array.isArray(q.choices) &&
+        q.choices.length >= 4 &&
         typeof q.correctAnswer === "number" &&
         q.correctAnswer >= 0 &&
         q.correctAnswer < q.choices.length
-    );
+    ).map(q => ({
+      ...q,
+      difficulty, // 난이도 필드 추가
+    }));
 
-    if (valid.length >= 5) {
+    if (valid.length >= Math.min(3, count)) {
       return valid.slice(0, count);
     }
 
-    console.log(`Gemini 유효 문제 ${valid.length}개 — 비상 문제 폴백`);
+    console.log(`Gemini 유효 문제 ${valid.length}개 (${difficulty}) — 비상 문제 폴백`);
   } catch (error) {
-    console.error("Gemini 배틀 문제 생성 실패:", error);
+    console.error(`Gemini 배틀 문제 생성 실패 (${difficulty}):`, error);
   }
 
   return [];

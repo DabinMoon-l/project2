@@ -174,13 +174,22 @@ export const matchWithBot = onCall(
     const fsDb = getFirestore();
 
     // 원자적으로 큐에서 제거 — 이미 없으면(다른 유저가 매칭) 봇 생성 스킵
+    // 주의: RTDB transaction은 첫 호출 시 current=null(캐시 미스) 가능
+    //       → undefined 반환(abort) 대신 null 반환하여 재시도 허용
     const queueEntryRef = rtdb.ref(`tekken/matchmaking/${courseId}/${userId}`);
-    const txResult = await queueEntryRef.transaction((current) => {
-      if (!current) return; // 이미 큐에 없음 → abort (다른 유저가 매칭함)
-      return null; // 큐에서 제거
+    let removedFromQueue = false;
+    await queueEntryRef.transaction((current) => {
+      if (current) {
+        removedFromQueue = true;
+        return null; // 큐에서 제거
+      }
+      // null → 캐시 미스이거나 실제로 없음
+      // null 반환 = no-op (null→null) — 캐시 미스면 서버 값으로 재시도됨
+      removedFromQueue = false;
+      return current;
     });
 
-    if (!txResult.committed) {
+    if (!removedFromQueue) {
       // 이미 다른 유저와 매칭됨 — matchResults에서 battleId 확인
       const matchResultSnap = await rtdb
         .ref(`tekken/matchResults/${userId}`)
@@ -189,8 +198,8 @@ export const matchWithBot = onCall(
       if (matchResult?.battleId) {
         return { status: "matched", battleId: matchResult.battleId };
       }
-      // matchResult가 아직 없으면 약간 대기 후 재확인 (RTDB 전파 딜레이)
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // matchResult가 아직 없으면 대기 후 재확인 (RTDB 전파 딜레이)
+      await new Promise(resolve => setTimeout(resolve, 1000));
       const retrySnap = await rtdb
         .ref(`tekken/matchResults/${userId}`)
         .once("value");
@@ -198,8 +207,9 @@ export const matchWithBot = onCall(
       if (retryResult?.battleId) {
         return { status: "matched", battleId: retryResult.battleId };
       }
-      // 정말 없으면 큐에 다시 없는 상태 → 에러 (극히 드문 케이스)
-      throw new HttpsError("aborted", "매칭 상태를 확인할 수 없습니다. 다시 시도해주세요.");
+      // 클라이언트가 이미 매칭 결과를 처리하고 matchResults를 삭제했을 수 있음
+      // 클라이언트 쪽에서 battleIdRef로 판단하므로 에러 대신 빈 응답 반환
+      return { status: "already_matched" };
     }
 
     // 큐에서 정상 제거됨 → 봇 매칭 진행

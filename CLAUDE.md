@@ -285,7 +285,20 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 
 **봇**: 60% 정답률, 1~8초 응답 시간, 10개 닉네임 풀, 레벨 3~7
 
-**문제 풀**: 매일 새벽 3시 → 현재 학기 과목만 과목당 100문제 보충 (1학기: biology+microbiology, 2학기: biology+pathophysiology), seenQuestions로 24시간 중복 방지
+**난이도 배분**: 10문제 = easy 4 + medium 4 + hard 2 (순서대로 점점 어려워짐)
+- easy: 4지선다, 명확한 개념 문제
+- medium: 5지선다, 유사 개념 포함
+- hard: 5지선다, 모든 선지가 매력적인 함정
+
+**문제 풀**: 매일 새벽 3시 → 현재 학기 과목만 과목당 300문제 보충 (easy 120 + medium 120 + hard 60)
+- 1학기: biology + microbiology, 2학기: biology + pathophysiology
+- seenQuestions로 24시간 중복 방지
+
+**시험 시즌**: 미생물학은 시즌별 챕터 분리
+- 중간고사(3~4월, 9~10월): 1~5장 (코흐, 면역, 감염, 세균, 병원성 세균)
+- 기말고사(5~6월, 11~12월): 6~11장 (바이러스, 진균, 원충, 감염병 예방)
+- 교수 수동 설정: `settings/tekken` → `examSeason: "midterm" | "final"` (없으면 월 기반 자동 판별)
+
 **교수 스타일 반영**: `professorQuizAnalysis/{courseId}/data/`의 styleProfile(출제 톤, 함정 패턴) + keywords(핵심 개념, 임상 키워드)를 프롬프트에 주입
 
 ## 교수 통계 시스템 (상세)

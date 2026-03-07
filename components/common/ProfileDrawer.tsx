@@ -19,6 +19,7 @@ import {
   onSnapshot,
   doc,
   updateDoc,
+  setDoc,
   deleteDoc,
   serverTimestamp,
   where,
@@ -28,9 +29,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { useUser } from '@/lib/contexts/UserContext';
 import { useCourse } from '@/lib/contexts';
 import { useRabbitHoldings } from '@/lib/hooks/useRabbit';
-import dynamic from 'next/dynamic';
-
-const TekkenChapterSettings = dynamic(() => import('@/components/professor/TekkenChapterSettings'), { ssr: false });
+import TekkenChapterSettings from '@/components/professor/TekkenChapterSettings';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 import {
   useSettings,
@@ -232,6 +231,9 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
 
   const [showCacheConfirm, setShowCacheConfirm] = useState(false);
   const [showTekkenSettings, setShowTekkenSettings] = useState(false);
+  const [showSeasonReset, setShowSeasonReset] = useState(false);
+  const [seasonResetTarget, setSeasonResetTarget] = useState<'midterm' | 'final'>('midterm');
+  const [seasonResetting, setSeasonResetting] = useState(false);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteInput, setDeleteInput] = useState('');
@@ -727,11 +729,11 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             className="fixed left-0 right-0 bottom-0 z-50 max-h-[75vh] rounded-t-2xl overflow-hidden"
           >
-            {/* 글래스 배경 레이어 */}
-            <div className="absolute inset-0 rounded-t-2xl overflow-hidden">
+            {/* 글래스 배경 레이어 — pointer-events-none으로 클릭 관통 */}
+            <div className="absolute inset-0 rounded-t-2xl overflow-hidden pointer-events-none">
               <Image src="/images/home-bg.jpg" alt="" fill className="object-cover" />
             </div>
-            <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
+            <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl pointer-events-none" />
 
             {/* 스크롤 영역 */}
             <div ref={sheetRef} className="relative z-10 overflow-y-auto overscroll-contain max-h-[75vh]">
@@ -931,6 +933,22 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                         <div className="text-left">
                           <span className="text-sm text-white/80">배틀 퀴즈 범위</span>
                           <p className="text-xs text-white/40">과목별 출제 챕터 설정</p>
+                        </div>
+                        <svg className="w-4 h-4 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    )}
+
+                    {/* 시험 시즌 설정 (교수 전용) */}
+                    {isProfessor && (
+                      <button
+                        onClick={() => setShowSeasonReset(true)}
+                        className="w-full flex items-center justify-between py-2.5"
+                      >
+                        <div className="text-left">
+                          <span className="text-sm text-white/80">시험 시즌 설정</span>
+                          <p className="text-xs text-white/40">중간고사 / 기말고사 전환</p>
                         </div>
                         <svg className="w-4 h-4 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -1694,6 +1712,66 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                     )}
                   </div>
                 )}
+              </GlassModal>
+            )}
+          </AnimatePresence>
+
+          {/* 시험 시즌 설정 모달 (교수 전용) */}
+          <AnimatePresence>
+            {showSeasonReset && isProfessor && (
+              <GlassModal onClose={() => setShowSeasonReset(false)}>
+                <h3 className="text-base font-bold text-white mb-2">시험 시즌 설정</h3>
+                <p className="text-sm text-white/60 mb-4">
+                  배틀 퀴즈 출제 범위가 시즌에 맞게 변경됩니다.
+                </p>
+
+                {/* 시즌 선택 */}
+                <div className="mb-4">
+                  <div className="flex gap-2">
+                    {([['midterm', '중간고사'], ['final', '기말고사']] as const).map(([val, label]) => (
+                      <button
+                        key={val}
+                        onClick={() => setSeasonResetTarget(val)}
+                        className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-colors ${
+                          seasonResetTarget === val
+                            ? 'bg-white/30 text-white'
+                            : 'bg-white/10 text-white/50'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowSeasonReset(false)}
+                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/15 text-white hover:bg-white/20 transition-colors"
+                  >
+                    취소
+                  </button>
+                  <button
+                    disabled={seasonResetting}
+                    onClick={async () => {
+                      setSeasonResetting(true);
+                      try {
+                        const seasonRef = doc(db, 'settings', 'tekken');
+                        await setDoc(seasonRef, { examSeason: seasonResetTarget }, { merge: true });
+                        alert(`${seasonResetTarget === 'midterm' ? '중간고사' : '기말고사'} 시즌으로 설정 완료`);
+                        setShowSeasonReset(false);
+                      } catch (err: unknown) {
+                        const msg = err instanceof Error ? err.message : '알 수 없는 오류';
+                        alert('시즌 설정 실패: ' + msg);
+                      } finally {
+                        setSeasonResetting(false);
+                      }
+                    }}
+                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
+                  >
+                    {seasonResetting ? '저장 중...' : '저장'}
+                  </button>
+                </div>
               </GlassModal>
             )}
           </AnimatePresence>

@@ -2,12 +2,16 @@
  * 철권퀴즈 공유 타입 + 상수
  */
 
+/** 배틀 문제 난이도 */
+export type TekkenDifficulty = "easy" | "medium" | "hard";
+
 /** Gemini로 생성된 배틀 문제 */
 export interface GeneratedQuestion {
   text: string;
   type: "multiple";
   choices: string[];
   correctAnswer: number;
+  difficulty?: TekkenDifficulty;
 }
 
 /** 과목명 매핑 */

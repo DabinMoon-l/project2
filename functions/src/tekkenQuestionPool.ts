@@ -21,6 +21,7 @@ import {
   COURSE_NAMES,
   type GeneratedQuestion,
 } from "./tekkenBattle";
+import type { TekkenDifficulty } from "./tekken/tekkenTypes";
 
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 
@@ -48,6 +49,67 @@ function getCurrentSemesterCourses(): string[] {
   // 2학기: 8/22 ~ 2/21
   return ["biology", "pathophysiology"];
 }
+
+/**
+ * 현재 시험 시즌 판별
+ * 1학기 중간: 3~4월, 1학기 기말: 5~6월
+ * 2학기 중간: 9~10월, 2학기 기말: 11~12월
+ * 나머지(1~2월, 7~8월): 기말 범위 유지 (방학 중)
+ */
+type ExamSeason = "midterm" | "final";
+
+function getDefaultExamSeason(): ExamSeason {
+  const month = new Date().getMonth() + 1;
+  // 중간고사: 3~4월, 9~10월
+  if ([3, 4, 9, 10].includes(month)) return "midterm";
+  // 기말고사: 5~6월, 11~12월, 1~2월(방학), 7~8월(방학)
+  return "final";
+}
+
+/** Firestore settings/tekken.examSeason 수동 설정 우선, 없으면 월 기반 자동 판별 */
+async function getCurrentExamSeason(): Promise<ExamSeason> {
+  try {
+    const snap = await getFirestore().doc("settings/tekken").get();
+    const manual = snap.data()?.examSeason;
+    if (manual === "midterm" || manual === "final") return manual;
+  } catch {
+    // Firestore 오류 시 자동 판별로 fallback
+  }
+  return getDefaultExamSeason();
+}
+
+/**
+ * 미생물학 시험 시즌별 챕터 매핑
+ * - 중간고사: 1장(코흐), 2장(면역), 3장(감염), 4장(세균), 5장(병원성 세균)
+ * - 기말고사: 6장(바이러스 일반), 7장(병원성 바이러스), 8장(진균 일반), 9장(병원성 진균), 10장(원충), 11장(감염병 예방)
+ */
+const MICRO_EXAM_CHAPTERS: Record<ExamSeason, string[]> = {
+  midterm: ["1", "2", "3", "4", "5"],
+  final: ["6", "7", "8", "9", "10", "11"],
+};
+
+/**
+ * 과목별 시험 시즌 챕터 조회
+ * 미생물학만 시즌별 분리, 나머지는 교수 설정(getTekkenChapters) 사용
+ */
+async function getSeasonalChapters(courseId: string): Promise<string[]> {
+  if (courseId === "microbiology") {
+    const season = await getCurrentExamSeason();
+    console.log(`[시즌] 미생물학 시험 시즌: ${season} → 챕터: ${MICRO_EXAM_CHAPTERS[season].join(",")}`);
+    return MICRO_EXAM_CHAPTERS[season];
+  }
+  return getTekkenChapters(courseId);
+}
+
+/**
+ * 배틀 10문제 난이도 배분: easy 4 + medium 4 + hard 2
+ * 풀 생성 시에도 이 비율로 생성 (300문제 = easy 120 + medium 120 + hard 60)
+ */
+const DIFFICULTY_DISTRIBUTION: { difficulty: TekkenDifficulty; ratio: number }[] = [
+  { difficulty: "easy", ratio: 0.4 },
+  { difficulty: "medium", ratio: 0.4 },
+  { difficulty: "hard", ratio: 0.2 },
+];
 
 // 풀 목표 크기 (매일 초기화 후 새로 생성)
 const TARGET_POOL_SIZE = 300;
@@ -103,47 +165,56 @@ export async function replenishQuestionPool(
     return { added: 0, deleted };
   }
 
-  // 3. 챕터 조회
-  const chapters = await getTekkenChapters(courseId);
+  // 3. 챕터 조회 (시즌별)
+  const chapters = await getSeasonalChapters(courseId);
 
-  // 4. 부족분만큼 배치 생성
+  // 4. 난이도별 부족분 계산 후 배치 생성
   let added = 0;
-  const batchCount = Math.ceil(needed / BATCH_SIZE);
 
-  for (let i = 0; i < batchCount; i++) {
-    const remaining = needed - added;
-    const count = Math.min(remaining, BATCH_SIZE);
+  for (const { difficulty, ratio } of DIFFICULTY_DISTRIBUTION) {
+    const difficultyTarget = Math.round(needed * ratio);
+    if (difficultyTarget <= 0) continue;
 
-    try {
-      const questions = await generateBattleQuestions(courseId, apiKey, count, chapters);
+    let difficultyAdded = 0;
+    const batchCount = Math.ceil(difficultyTarget / BATCH_SIZE);
 
-      if (questions.length > 0) {
-        const writeBatch = db.batch();
-        const batchId = `${Date.now()}_${i}`;
+    for (let i = 0; i < batchCount; i++) {
+      const count = Math.min(difficultyTarget - difficultyAdded, BATCH_SIZE);
+      if (count <= 0) break;
 
-        for (const q of questions) {
-          const docRef = questionsRef.doc();
-          writeBatch.set(docRef, {
-            text: q.text,
-            type: q.type,
-            choices: q.choices,
-            correctAnswer: q.correctAnswer,
-            chapters,
-            generatedAt: FieldValue.serverTimestamp(),
-            batchId,
-          });
-          added++;
+      try {
+        const questions = await generateBattleQuestions(courseId, apiKey, count, chapters, difficulty);
+
+        if (questions.length > 0) {
+          const writeBatch = db.batch();
+          const batchId = `${Date.now()}_${difficulty}_${i}`;
+
+          for (const q of questions) {
+            const docRef = questionsRef.doc();
+            writeBatch.set(docRef, {
+              text: q.text,
+              type: q.type,
+              choices: q.choices,
+              correctAnswer: q.correctAnswer,
+              difficulty: q.difficulty || difficulty,
+              chapters,
+              generatedAt: FieldValue.serverTimestamp(),
+              batchId,
+            });
+            difficultyAdded++;
+            added++;
+          }
+          await writeBatch.commit();
         }
-        await writeBatch.commit();
+      } catch (err) {
+        console.error(`배치 ${difficulty}/${i + 1} 생성 실패 (${courseId}):`, err);
       }
-    } catch (err) {
-      console.error(`배치 ${i + 1}/${batchCount} 생성 실패 (${courseId}):`, err);
-    }
 
-    // 다음 배치 전 대기 (마지막 배치 제외)
-    if (i < batchCount - 1) {
+      // 다음 배치 전 대기
       await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
     }
+
+    console.log(`[풀 보충] ${courseId}/${difficulty}: ${difficultyAdded}/${difficultyTarget}개 생성`);
   }
 
   // 5. 메타 문서 업데이트
@@ -216,9 +287,55 @@ export async function drawQuestionsFromPool(
     }
   }
 
-  // 4. 셔플 후 count개 선택
-  const shuffled = available.sort(() => Math.random() - 0.5);
-  const selected = shuffled.slice(0, count);
+  // 4. 난이도별 분류 후 easy 4 + medium 4 + hard 2 순서대로 선택
+  const byDifficulty: Record<string, typeof available> = { easy: [], medium: [], hard: [] };
+  for (const doc of available) {
+    const diff = doc.data().difficulty || "medium";
+    if (byDifficulty[diff]) {
+      byDifficulty[diff].push(doc);
+    } else {
+      byDifficulty["medium"].push(doc); // 알 수 없는 난이도 → medium
+    }
+  }
+
+  // 각 난이도 셔플
+  for (const key of Object.keys(byDifficulty)) {
+    byDifficulty[key].sort(() => Math.random() - 0.5);
+  }
+
+  // easy 4 → medium 4 → hard 2 순서 (부족하면 다른 난이도에서 보충)
+  const targets = [
+    { difficulty: "easy", count: 4 },
+    { difficulty: "medium", count: 4 },
+    { difficulty: "hard", count: 2 },
+  ];
+
+  const selected: typeof available = [];
+  const usedIds = new Set<string>();
+
+  for (const target of targets) {
+    const pool = byDifficulty[target.difficulty];
+    let picked = 0;
+    for (const doc of pool) {
+      if (picked >= target.count) break;
+      if (usedIds.has(doc.id)) continue;
+      selected.push(doc);
+      usedIds.add(doc.id);
+      picked++;
+    }
+    // 부족하면 다른 난이도에서 보충
+    if (picked < target.count) {
+      for (const doc of available) {
+        if (picked >= target.count) break;
+        if (usedIds.has(doc.id)) continue;
+        selected.push(doc);
+        usedIds.add(doc.id);
+        picked++;
+      }
+    }
+  }
+
+  if (selected.length < 5) return null; // 최소 5문제 확보 불가
 
   // 5. seenQuestions 기록
   const selectedIds = selected.map(doc => doc.id);
@@ -236,7 +353,7 @@ export async function drawQuestionsFromPool(
   }
   await writeBatch.commit();
 
-  // 6. 문제 데이터 반환
+  // 6. 문제 데이터 반환 (순서 유지: easy → medium → hard)
   return selected.map(doc => {
     const data = doc.data();
     return {
@@ -244,6 +361,7 @@ export async function drawQuestionsFromPool(
       type: data.type,
       choices: data.choices,
       correctAnswer: data.correctAnswer,
+      difficulty: data.difficulty,
     };
   });
 }

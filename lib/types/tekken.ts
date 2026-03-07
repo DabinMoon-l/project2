@@ -129,7 +129,7 @@ export interface StreakData {
 
 /** joinMatchmaking 응답 */
 export interface JoinMatchmakingResult {
-  status: 'waiting' | 'matched';
+  status: 'waiting' | 'matched' | 'already_matched';
   battleId?: string;
 }
 

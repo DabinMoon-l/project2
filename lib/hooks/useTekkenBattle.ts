@@ -308,6 +308,20 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
           // 봇 CF 실행 중 실제 매칭이 성사됐으면 무시 (실제 매칭 우선)
           if (battleIdRef.current) return;
 
+          if (botResult.data.status === 'already_matched') {
+            // 서버에서 매칭 결과를 찾지 못했지만 클라이언트가 이미 처리했을 수 있음
+            // battleIdRef가 설정될 때까지 짧게 대기
+            if (!battleIdRef.current) {
+              await new Promise(r => setTimeout(r, 1000));
+            }
+            if (battleIdRef.current) return;
+            // 정말 매칭 안 됨 → 에러
+            setMatchState('error');
+            setError('매칭에 실패했습니다. 다시 시도해주세요.');
+            clearTimers();
+            return;
+          }
+
           if (botResult.data.battleId) {
             battleIdRef.current = botResult.data.battleId;
             setActiveBattleId(botResult.data.battleId);
