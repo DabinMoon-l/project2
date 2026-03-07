@@ -17,7 +17,8 @@ import {
   signOut,
   User,
 } from '../auth';
-import { functions } from '../firebase';
+import { db, functions } from '../firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 // ============================================================
 // 타입 정의
@@ -50,6 +51,41 @@ interface UseRequireAuthOptions {
 }
 
 // ============================================================
+// 로그인 로깅 (IP + 기기 정보)
+// ============================================================
+
+const loggedSessionKey = '__login_logged';
+
+async function recordLoginLog(uid: string) {
+  // 세션당 1회만 기록
+  if (typeof window === 'undefined') return;
+  if (sessionStorage.getItem(loggedSessionKey)) return;
+  sessionStorage.setItem(loggedSessionKey, '1');
+
+  try {
+    // IP 조회
+    let ip = 'unknown';
+    try {
+      const res = await fetch('https://api.ipify.org?format=json');
+      const data = await res.json();
+      ip = data.ip;
+    } catch { /* IP 조회 실패 무시 */ }
+
+    await addDoc(collection(db, 'loginLogs'), {
+      uid,
+      ip,
+      userAgent: navigator.userAgent,
+      platform: navigator.platform || 'unknown',
+      language: navigator.language,
+      screenSize: `${screen.width}x${screen.height}`,
+      timestamp: serverTimestamp(),
+    });
+  } catch {
+    // 로깅 실패는 무시
+  }
+}
+
+// ============================================================
 // useAuth 훅
 // ============================================================
 
@@ -63,6 +99,9 @@ export const useAuth = (): UseAuthReturn => {
     const unsubscribe = onAuthStateChanged((firebaseUser) => {
       setUser(firebaseUser);
       setLoading(false);
+      if (firebaseUser) {
+        recordLoginLog(firebaseUser.uid);
+      }
     });
 
     return () => unsubscribe();
