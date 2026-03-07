@@ -173,8 +173,36 @@ export const matchWithBot = onCall(
     const rtdb = getDatabase();
     const fsDb = getFirestore();
 
-    await rtdb.ref(`tekken/matchmaking/${courseId}/${userId}`).remove();
+    // 원자적으로 큐에서 제거 — 이미 없으면(다른 유저가 매칭) 봇 생성 스킵
+    const queueEntryRef = rtdb.ref(`tekken/matchmaking/${courseId}/${userId}`);
+    const txResult = await queueEntryRef.transaction((current) => {
+      if (!current) return; // 이미 큐에 없음 → abort (다른 유저가 매칭함)
+      return null; // 큐에서 제거
+    });
 
+    if (!txResult.committed) {
+      // 이미 다른 유저와 매칭됨 — matchResults에서 battleId 확인
+      const matchResultSnap = await rtdb
+        .ref(`tekken/matchResults/${userId}`)
+        .once("value");
+      const matchResult = matchResultSnap.val();
+      if (matchResult?.battleId) {
+        return { status: "matched", battleId: matchResult.battleId };
+      }
+      // matchResult가 아직 없으면 약간 대기 후 재확인 (RTDB 전파 딜레이)
+      await new Promise(resolve => setTimeout(resolve, 500));
+      const retrySnap = await rtdb
+        .ref(`tekken/matchResults/${userId}`)
+        .once("value");
+      const retryResult = retrySnap.val();
+      if (retryResult?.battleId) {
+        return { status: "matched", battleId: retryResult.battleId };
+      }
+      // 정말 없으면 큐에 다시 없는 상태 → 에러 (극히 드문 케이스)
+      throw new HttpsError("aborted", "매칭 상태를 확인할 수 없습니다. 다시 시도해주세요.");
+    }
+
+    // 큐에서 정상 제거됨 → 봇 매칭 진행
     const userDoc = await fsDb.collection("users").doc(userId).get();
     if (!userDoc.exists) {
       throw new HttpsError("not-found", "사용자를 찾을 수 없습니다.");
