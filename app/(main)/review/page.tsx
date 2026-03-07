@@ -325,6 +325,84 @@ function ReviewPageContent() {
     uploadToPublic,
   } = useLearningQuizzes();
 
+  // 완료된 퀴즈 구독 (커스텀 + 교수 퀴즈 — AI 생성 제외)
+  const [completedQuizzes, setCompletedQuizzes] = useState<LearningQuiz[]>([]);
+  const [completedLoading, setCompletedLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user || !userCourseId) {
+      setCompletedQuizzes([]);
+      setCompletedLoading(false);
+      return;
+    }
+
+    // quiz_completions에서 완료된 퀴즈 ID 가져오기
+    const completionsRef = collection(db, 'quiz_completions');
+    const q = query(completionsRef, where('userId', '==', user.uid));
+
+    const unsub = onSnapshot(q, async (snap) => {
+      const completionMap = new Map<string, { score: number; total: number }>();
+      snap.docs.forEach(d => {
+        const data = d.data();
+        completionMap.set(data.quizId, { score: data.score ?? 0, total: data.totalQuestions ?? 0 });
+      });
+
+      if (completionMap.size === 0) {
+        setCompletedQuizzes([]);
+        setCompletedLoading(false);
+        return;
+      }
+
+      // AI 생성 퀴즈는 이미 libraryQuizzesRaw에 있으므로 제외
+      const aiQuizIds = new Set(libraryQuizzesRaw.map(q => q.id));
+      const quizIds = Array.from(completionMap.keys()).filter(id => !aiQuizIds.has(id));
+
+      if (quizIds.length === 0) {
+        setCompletedQuizzes([]);
+        setCompletedLoading(false);
+        return;
+      }
+
+      // 퀴즈 메타데이터 로드 (10개씩 배치)
+      const quizzes: LearningQuiz[] = [];
+      for (let i = 0; i < quizIds.length; i += 10) {
+        const batch = quizIds.slice(i, i + 10);
+        const quizzesRef = collection(db, 'quizzes');
+        const batchQuery = query(quizzesRef, where('__name__', 'in', batch));
+        const batchSnap = await getDocs(batchQuery);
+        batchSnap.docs.forEach(d => {
+          const data = d.data();
+          // 현재 과목 퀴즈만
+          if (data.courseId !== userCourseId) return;
+          const comp = completionMap.get(d.id);
+          quizzes.push({
+            id: d.id,
+            title: data.title || '제목 없음',
+            questionCount: data.questionCount || 0,
+            score: comp?.score ?? 0,
+            totalQuestions: comp?.total ?? data.questionCount ?? 0,
+            createdAt: data.createdAt?.toDate?.() ?? new Date(),
+            completedAt: data.createdAt?.toDate?.() ?? new Date(),
+            isPublic: false,
+            tags: data.tags || [],
+            difficulty: data.difficulty || 'medium',
+            myScore: comp?.score,
+            oxCount: data.oxCount,
+            multipleChoiceCount: data.multipleChoiceCount,
+            subjectiveCount: data.subjectiveCount,
+          });
+        });
+      }
+
+      // 최신순 정렬
+      quizzes.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      setCompletedQuizzes(quizzes);
+      setCompletedLoading(false);
+    });
+
+    return () => unsub();
+  }, [user, userCourseId, libraryQuizzesRaw]);
+
   // 서재 고정 태그 목록
   // 과목별 동적 태그 목록 (공통 태그 + 챕터 태그)
   const libraryTagOptions = useMemo(() => {
@@ -332,14 +410,18 @@ function ReviewPageContent() {
     return [...COMMON_TAGS.map(t => t.value), ...courseTags.map(t => t.value)];
   }, [userCourseId]);
 
+  // 서재 통합 목록 (AI 생성 + 완료된 퀴즈)
+  const allLibraryQuizzes = useMemo(() => {
+    return [...libraryQuizzesRaw, ...completedQuizzes];
+  }, [libraryQuizzesRaw, completedQuizzes]);
+
   // 태그 필터링된 서재 퀴즈
   const libraryQuizzes = useMemo(() => {
-    if (librarySelectedTags.length === 0) return libraryQuizzesRaw;
-    // 선택된 모든 태그를 포함하는 퀴즈만 필터링 (AND 조건)
-    return libraryQuizzesRaw.filter(quiz =>
+    if (librarySelectedTags.length === 0) return allLibraryQuizzes;
+    return allLibraryQuizzes.filter(quiz =>
       librarySelectedTags.every(tag => quiz.tags?.includes(tag))
     );
-  }, [libraryQuizzesRaw, librarySelectedTags]);
+  }, [allLibraryQuizzes, librarySelectedTags]);
 
   // 찜 고정 태그 목록 (서재와 동일)
   // 찜 태그 목록 (서재와 동일)
@@ -1244,7 +1326,7 @@ function ReviewPageContent() {
 
       <main className="px-4 mt-3">
         {/* 로딩 스켈레톤 (2열 카드 그리드) */}
-        {(loading || (activeFilter === 'bookmark' && bookmarkLoading) || (activeFilter === 'library' && libraryLoading)) && (
+        {(loading || (activeFilter === 'bookmark' && bookmarkLoading) || (activeFilter === 'library' && (libraryLoading || completedLoading))) && (
           <div className="grid grid-cols-2 gap-3">
             {[1, 2, 3, 4, 5, 6].map((i) => (
               <SkeletonQuizCard key={i} />
@@ -1253,10 +1335,10 @@ function ReviewPageContent() {
         )}
 
         {/* 서재 탭 - AI 학습 퀴즈 */}
-        {!loading && !libraryLoading && activeFilter === 'library' && (
+        {!loading && !libraryLoading && !completedLoading && activeFilter === 'library' && (
           <div className="space-y-4">
             {/* 태그 검색 헤더 (3개 이상일 때만 표시) */}
-            {libraryQuizzesRaw.length >= 3 && (
+            {allLibraryQuizzes.length >= 3 && (
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-2">
                   <h2 className="font-serif-display text-lg font-black text-[#1A1A1A]">서재</h2>
@@ -1329,7 +1411,7 @@ function ReviewPageContent() {
             )}
 
             {/* 필터링 결과가 없을 때 (원본에는 퀴즈가 있지만 필터링 결과가 없을 때) */}
-            {libraryQuizzesRaw.length > 0 && libraryQuizzes.length === 0 && librarySelectedTags.length > 0 ? (
+            {allLibraryQuizzes.length > 0 && libraryQuizzes.length === 0 && librarySelectedTags.length > 0 ? (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}

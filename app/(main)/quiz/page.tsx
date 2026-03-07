@@ -107,25 +107,28 @@ function getDefaultCarouselIndex(): number {
 // (AutoVideo, getDifficultyVideo, NEWSPAPER_BG_TEXT, formatQuestionTypes → 공유 모듈에서 import)
 
 // ============================================================
-// 학생 퀴즈/복습 탭 (밑줄 스타일 — 교수 자작/서재/커스텀과 동일)
+// 학생 자작 섹션 반별 필터 (밑줄 스타일)
 // ============================================================
 
-const STUDENT_SECTION_OPTIONS: { key: 'quiz' | 'review'; label: string }[] = [
-  { key: 'quiz', label: '퀴즈' },
-  { key: 'review', label: '복습' },
+const CLASS_FILTER_OPTIONS: { key: 'all' | 'A' | 'B' | 'C' | 'D'; label: string }[] = [
+  { key: 'all', label: '전체' },
+  { key: 'A', label: 'A' },
+  { key: 'B', label: 'B' },
+  { key: 'C', label: 'C' },
+  { key: 'D', label: 'D' },
 ];
 
-function StudentSectionTabs({
+function ClassFilterTabs({
   activeTab,
   onChangeTab,
 }: {
-  activeTab: 'quiz' | 'review';
-  onChangeTab: (key: 'quiz' | 'review') => void;
+  activeTab: 'all' | 'A' | 'B' | 'C' | 'D';
+  onChangeTab: (key: 'all' | 'A' | 'B' | 'C' | 'D') => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const btnRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [underline, setUnderline] = useState({ left: 0, width: 0 });
-  const activeIdx = STUDENT_SECTION_OPTIONS.findIndex(o => o.key === activeTab);
+  const activeIdx = CLASS_FILTER_OPTIONS.findIndex(o => o.key === activeTab);
 
   const measureUnderline = useCallback(() => {
     if (activeIdx < 0 || !containerRef.current || !btnRefs.current[activeIdx]) return;
@@ -140,7 +143,7 @@ function StudentSectionTabs({
 
   return (
     <div ref={containerRef} className="relative flex gap-4">
-      {STUDENT_SECTION_OPTIONS.map((opt, i) => (
+      {CLASS_FILTER_OPTIONS.map((opt, i) => (
         <button
           key={opt.key}
           ref={el => { btnRefs.current[i] = el; }}
@@ -1508,8 +1511,8 @@ function QuizListPageContent() {
   const [statsSourceRect, setStatsSourceRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [deleteSourceRect, setDeleteSourceRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
 
-  // 자작 섹션 탭 (퀴즈 / 복습)
-  const [customSectionTab, setCustomSectionTab] = useState<'quiz' | 'review'>('quiz');
+  // 자작 섹션 반별 필터
+  const [classFilter, setClassFilter] = useState<'all' | 'A' | 'B' | 'C' | 'D'>('all');
 
   // 스크롤 맨 위로 버튼
   const customSectionRef = useRef<HTMLDivElement>(null);
@@ -1569,35 +1572,21 @@ function QuizListPageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [midtermQuizzes, finalQuizzes, pastQuizzes, customQuizzes, completionVer, applyCompletionAndSort]);
 
-  // 태그 필터링된 자작 퀴즈 (퀴즈 탭)
+  // 태그 + 반별 필터링된 자작 퀴즈
   const filteredCustomQuizzes = useMemo(() => {
-    if (selectedTags.length === 0) return customQuizzesWithUpdate;
-    return customQuizzesWithUpdate.filter(quiz =>
-      selectedTags.every(tag => quiz.tags?.includes(tag))
-    );
-  }, [customQuizzesWithUpdate, selectedTags]);
-
-  // 태그 필터링된 완료 퀴즈 (복습 탭) - 수정 > 최신순 정렬
-  const filteredCompletedQuizzes = useMemo(() => {
-    let completed = customQuizzesWithUpdate.filter(q => q.isCompleted);
+    let result = customQuizzesWithUpdate;
+    // 반별 필터
+    if (classFilter !== 'all') {
+      result = result.filter(quiz => quiz.creatorClassType === classFilter);
+    }
+    // 태그 필터
     if (selectedTags.length > 0) {
-      completed = completed.filter(quiz =>
+      result = result.filter(quiz =>
         selectedTags.every(tag => quiz.tags?.includes(tag))
       );
     }
-    // 수정 상태 적용 + 정렬: 수정 > 최신순
-    return completed.map(quiz => {
-      const updateInfo = updatedQuizzes.get(quiz.id);
-      if (updateInfo?.hasUpdate) {
-        return { ...quiz, hasUpdate: true, updatedQuestionCount: updateInfo.updatedQuestionCount };
-      }
-      return quiz;
-    }).sort((a, b) => {
-      if (a.hasUpdate && !b.hasUpdate) return -1;
-      if (!a.hasUpdate && b.hasUpdate) return 1;
-      return sortByLatest(a, b);
-    });
-  }, [customQuizzesWithUpdate, selectedTags, updatedQuizzes]);
+    return result;
+  }, [customQuizzesWithUpdate, classFilter, selectedTags]);
 
   // ============================================================
   // 데이터 로드 함수들
@@ -2018,29 +2007,34 @@ function QuizListPageContent() {
       {/* 자작 섹션 */}
       <section className="px-4">
         <div ref={customSectionRef} className="flex items-center justify-between mb-2">
-          <StudentSectionTabs
-            activeTab={customSectionTab}
-            onChangeTab={setCustomSectionTab}
+          <ClassFilterTabs
+            activeTab={classFilter}
+            onChangeTab={setClassFilter}
           />
         </div>
 
         {/* 태그 검색 영역 (우측 정렬) */}
         <div className="flex items-center justify-end gap-1.5 mb-1.5">
           {/* 선택된 태그들 */}
-          {selectedTags.map((tag) => (
-            <div
-              key={tag}
-              className="flex items-center gap-0.5 px-1.5 h-9 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold border border-[#1A1A1A] rounded-lg"
-            >
-              #{tag}
-              <button
-                onClick={() => setSelectedTags(prev => prev.filter(t => t !== tag))}
-                className="ml-0.5 hover:text-[#999]"
+          {selectedTags.map((tag) => {
+            const useShort = selectedTags.length >= 3 && tag.includes('_');
+            const label = useShort ? `#${tag.split('_')[0]}` : `#${tag}`;
+            return (
+              <div
+                key={tag}
+                title={`#${tag}`}
+                className="flex items-center gap-0.5 px-1.5 h-9 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold border border-[#1A1A1A] rounded-lg shrink-0"
               >
-                ✕
-              </button>
-            </div>
-          ))}
+                {label}
+                <button
+                  onClick={() => setSelectedTags(prev => prev.filter(t => t !== tag))}
+                  className="ml-0.5 hover:text-[#999]"
+                >
+                  ✕
+                </button>
+              </div>
+            );
+          })}
 
           {/* 태그 검색 버튼 */}
           <button
@@ -2087,9 +2081,8 @@ function QuizListPageContent() {
           )}
         </AnimatePresence>
 
-        {/* 퀴즈 탭 */}
-        {customSectionTab === 'quiz' && (
-          <>
+        {/* 자작 퀴즈 목록 */}
+        <>
             {actualLoading.custom && (
               <div className="grid grid-cols-2 gap-3">
                 {[1, 2, 3, 4].map((i) => (
@@ -2151,74 +2144,7 @@ function QuizListPageContent() {
               </div>
             )}
           </>
-        )}
 
-        {/* 복습 탭 - 완료된 자작 퀴즈 */}
-        {customSectionTab === 'review' && (
-          <>
-            {actualLoading.custom && (
-              <div className="grid grid-cols-2 gap-3">
-                {[1, 2, 3, 4].map((i) => (
-                  <SkeletonCard key={i} />
-                ))}
-              </div>
-            )}
-
-            {!actualLoading.custom && customQuizzes.filter(q => q.isCompleted).length === 0 && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex flex-col items-center justify-center text-center py-12"
-              >
-                <h3 className="text-lg font-black mb-2 text-[#1A1A1A]">
-                  복습할 퀴즈가 없습니다
-                </h3>
-                <p className="text-sm text-[#5C5C5C]">
-                  퀴즈를 풀면 여기에 표시됩니다
-                </p>
-              </motion.div>
-            )}
-
-            {/* 필터링 결과가 없을 때 */}
-            {!actualLoading.custom && customQuizzes.filter(q => q.isCompleted).length > 0 && filteredCompletedQuizzes.length === 0 && selectedTags.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex flex-col items-center justify-center text-center py-8"
-              >
-                <p className="text-sm text-[#5C5C5C]">
-                  {selectedTags.map(t => `#${t}`).join(' ')} 태그가 있는 퀴즈가 없습니다
-                </p>
-              </motion.div>
-            )}
-
-            {!actualLoading.custom && filteredCompletedQuizzes.length > 0 && (
-              <div className="grid grid-cols-2 gap-3">
-                {filteredCompletedQuizzes.map((quiz, index) => (
-                  <motion.div
-                    key={quiz.id}
-                    ref={(el) => registerReviewRef(quiz.id, el)}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.03 }}
-                  >
-                    <ReviewQuizCard
-                      quiz={quiz}
-                      onCardClick={() => router.push(`/review/library/${quiz.id}?from=quiz`)}
-                      onDetails={() => { captureReviewRect(quiz.id); setReviewDetailsQuiz(quiz); }}
-                      onReview={() => router.push(`/review/library/${quiz.id}?from=quiz&autoStart=all`)}
-                      onReviewWrongOnly={() => router.push(`/review/library/${quiz.id}?from=quiz&autoStart=wrongOnly`)}
-                      isBookmarked={isBookmarked(quiz.id)}
-                      onToggleBookmark={() => toggleBookmark(quiz.id)}
-                      hasUpdate={quiz.hasUpdate}
-                      onUpdate={() => handleOpenUpdateModal(quiz)}
-                    />
-                  </motion.div>
-                ))}
-              </div>
-            )}
-          </>
-        )}
       </section>
 
       {/* 퀴즈 상세 모달 */}

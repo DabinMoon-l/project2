@@ -8,6 +8,7 @@ import { db } from '@/lib/firebase';
 import { Skeleton, ImageViewer } from '@/components/common';
 import LikeButton from '@/components/board/LikeButton';
 import CommentSection from '@/components/board/CommentSection';
+import LinkifiedText from '@/components/board/LinkifiedText';
 import { usePost, useDeletePost, useLike } from '@/lib/hooks/useBoard';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useUser } from '@/lib/contexts';
@@ -26,60 +27,111 @@ function formatDate(date: Date) {
 /**
  * 이미지 갤러리 컴포넌트 (2장씩, 슬라이드, 클릭 시 전체화면 뷰어)
  */
+/**
+ * 스마트 페이지 분할: 세로 이미지 단독, 가로/정방 2장씩
+ */
+function buildImagePages(images: string[], tallFlags: Record<number, boolean>) {
+  const pages: { urls: string[]; indices: number[] }[] = [];
+  let i = 0;
+  while (i < images.length) {
+    if (tallFlags[i]) {
+      pages.push({ urls: [images[i]], indices: [i] });
+      i++;
+    } else if (i + 1 < images.length && !tallFlags[i + 1]) {
+      pages.push({ urls: [images[i], images[i + 1]], indices: [i, i + 1] });
+      i += 2;
+    } else {
+      pages.push({ urls: [images[i]], indices: [i] });
+      i++;
+    }
+  }
+  return pages;
+}
+
 function ImageGallery({ images }: { images: string[] }) {
   const [currentPage, setCurrentPage] = useState(0);
   const [viewerInfo, setViewerInfo] = useState<{ index: number } | null>(null);
+  const [tallFlags, setTallFlags] = useState<Record<number, boolean>>({});
 
-  // 2장씩 페이지 분할
-  const pages: string[][] = [];
-  for (let i = 0; i < images.length; i += 2) {
-    pages.push(images.slice(i, i + 2));
-  }
+  // img onLoad로 비율 감지 (별도 프리로드 없이 렌더와 동시에)
+  const handleImgLoad = (index: number, e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    const isTall = img.naturalHeight > img.naturalWidth * 1.3;
+    setTallFlags(prev => {
+      if (prev[index] === isTall) return prev;
+      return { ...prev, [index]: isTall };
+    });
+  };
+
+  const allDetected = Object.keys(tallFlags).length === images.length;
+  const pages = allDetected
+    ? buildImagePages(images, tallFlags)
+    : images.map((url, i) => ({ urls: [url], indices: [i] }));
 
   const totalPages = pages.length;
+  const safePage = Math.min(currentPage, totalPages - 1);
+
+  // 페이지 수 줄어들 때 보정
+  useEffect(() => {
+    if (currentPage >= totalPages && totalPages > 0) {
+      setCurrentPage(totalPages - 1);
+    }
+  }, [totalPages, currentPage]);
 
   if (images.length === 0) return null;
 
+  const currentPageData = pages[safePage] || pages[0];
+  const isSingle = currentPageData?.urls.length === 1;
+
   return (
     <div className="mt-4">
-      {/* 이미지 그리드 - 2장씩 동일 크기 */}
-      <div className="grid grid-cols-2 gap-2">
-        {pages[currentPage]?.map((url, index) => {
-          const globalIndex = currentPage * 2 + index;
+      <div className={isSingle ? '' : 'grid grid-cols-2 gap-2'}>
+        {currentPageData?.urls.map((url, index) => {
+          const globalIndex = currentPageData.indices[index];
           return (
             <div
-              key={`${currentPage}-${index}`}
-              className="relative aspect-square bg-gray-100 cursor-pointer"
+              key={`img-${globalIndex}`}
+              className="relative bg-[#EBE5D9] cursor-pointer overflow-hidden rounded-sm"
               onClick={() => setViewerInfo({ index: globalIndex })}
             >
               <img
                 src={url}
                 alt={`이미지 ${globalIndex + 1}`}
-                className="w-full h-full object-cover"
+                className={`w-full h-auto object-contain ${isSingle ? 'max-h-[420px]' : 'max-h-[280px]'}`}
                 draggable={false}
+                onLoad={(e) => handleImgLoad(globalIndex, e)}
               />
             </div>
           );
         })}
       </div>
 
-      {/* 슬라이드 컨트롤 (2장 초과 시) */}
+      {/* 아직 렌더되지 않은 이미지 프리로드 + 비율 감지 */}
+      <div className="hidden">
+        {images.map((url, i) =>
+          tallFlags[i] === undefined ? (
+            <img key={`preload-${i}`} src={url} alt="" onLoad={(e) => handleImgLoad(i, e)} />
+          ) : null
+        )}
+      </div>
+
+      {/* 슬라이드 컨트롤 */}
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-4 mt-3">
           <button
             onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
-            disabled={currentPage === 0}
+            disabled={safePage === 0}
             className="px-3 py-1 text-sm disabled:opacity-30"
             style={{ border: '1px solid #1A1A1A' }}
           >
             ←
           </button>
           <span className="text-sm text-[#3A3A3A]">
-            {currentPage + 1} / {totalPages}
+            {safePage + 1} / {totalPages}
           </span>
           <button
             onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
-            disabled={currentPage === totalPages - 1}
+            disabled={safePage === totalPages - 1}
             className="px-3 py-1 text-sm disabled:opacity-30"
             style={{ border: '1px solid #1A1A1A' }}
           >
@@ -280,9 +332,9 @@ export default function PostDetailPage() {
           </div>
 
           {/* 본문 */}
-          <p className="text-base leading-relaxed whitespace-pre-wrap text-[#1A1A1A] mb-4">
-            {post.content}
-          </p>
+          <div className="text-base leading-relaxed whitespace-pre-wrap text-[#1A1A1A] mb-4">
+            <LinkifiedText text={post.content} />
+          </div>
 
           {/* 이미지 갤러리 */}
           {allImages.length > 0 && <ImageGallery images={allImages} />}

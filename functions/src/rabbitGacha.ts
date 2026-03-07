@@ -9,7 +9,7 @@
  * - Phase 2에서 pendingSpin.rabbitId와 요청 rabbitId 일치 검증
  * - pendingSpin이 남아있으면 Phase 1에서 이전 결과 복구 (마일스톤 손실 방지)
  *
- * 발견은 무제한, 장착은 최대 2마리
+ * 발견/보유 무제한, 장착은 최대 2마리
  */
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
@@ -18,7 +18,7 @@ import { getBaseStats } from "./utils/rabbitStats";
 
 /** Roll 결과 타입 (Phase 1 반환값) */
 interface RollResult {
-  type: "undiscovered" | "discovered";
+  type: "undiscovered" | "discovered" | "owned";
   rabbitId: number;
   rabbitName: string | null;
   nextDiscoveryOrder: number | null;
@@ -84,39 +84,44 @@ export const spinRabbitGacha = onCall(
           .doc(`${courseId}_${psRabbitId}`);
         const holdingDoc = await transaction.get(holdingRef);
 
-        if (!holdingDoc.exists) {
-          // 이전 결과 복구 — 마일스톤 소비 안 함
-          const rabbitRef = db
-            .collection("rabbits")
-            .doc(`${courseId}_${psRabbitId}`);
-          const rabbitDoc = await transaction.get(rabbitRef);
-          const rabbitData = rabbitDoc.exists ? rabbitDoc.data()! : null;
+        // 이전 결과 복구 — 마일스톤 소비 안 함
+        const psRabbitRef = db
+          .collection("rabbits")
+          .doc(`${courseId}_${psRabbitId}`);
+        const psRabbitDoc = await transaction.get(psRabbitRef);
+        const psRabbitData = psRabbitDoc.exists ? psRabbitDoc.data()! : null;
 
-          if (!rabbitData) {
-            return {
-              type: "undiscovered",
-              rabbitId: psRabbitId,
-              rabbitName: null,
-              nextDiscoveryOrder: null,
-              myDiscoveryOrder: null,
-              equippedCount: equippedRabbits.length,
-            } as RollResult;
-          }
-
+        if (holdingDoc.exists) {
+          // 이미 보유 중 → owned 복구
           return {
-            type: "discovered",
+            type: "owned",
             rabbitId: psRabbitId,
-            rabbitName: rabbitData.name || null,
-            nextDiscoveryOrder: (rabbitData.discovererCount || 1) + 1,
+            rabbitName: psRabbitData?.name || null,
+            nextDiscoveryOrder: null,
+            myDiscoveryOrder: holdingDoc.data()?.discoveryOrder || null,
+            equippedCount: equippedRabbits.length,
+          } as RollResult;
+        }
+
+        if (!psRabbitData) {
+          return {
+            type: "undiscovered",
+            rabbitId: psRabbitId,
+            rabbitName: null,
+            nextDiscoveryOrder: null,
             myDiscoveryOrder: null,
             equippedCount: equippedRabbits.length,
           } as RollResult;
         }
 
-        // 이미 보유 중 → pendingSpin 정리 후 새 스핀으로 진행
-        transaction.update(userRef, {
-          pendingSpin: FieldValue.delete(),
-        });
+        return {
+          type: "discovered",
+          rabbitId: psRabbitId,
+          rabbitName: psRabbitData.name || null,
+          nextDiscoveryOrder: (psRabbitData.discovererCount || 1) + 1,
+          myDiscoveryOrder: null,
+          equippedCount: equippedRabbits.length,
+        } as RollResult;
       }
 
       // === 새 스핀 ===
@@ -139,7 +144,7 @@ export const spinRabbitGacha = onCall(
         );
       }
 
-      // 보유 토끼 목록 조회 → 풀에서 제외
+      // 보유 토끼 목록 조회
       const holdingsSnap = await transaction.get(
         userRef.collection("rabbitHoldings")
       );
@@ -148,24 +153,42 @@ export const spinRabbitGacha = onCall(
           .filter((d) => d.data().courseId === courseId)
           .map((d) => d.data().rabbitId as number)
       );
-      const pool = Array.from({ length: 80 }, (_, i) => i).filter(
-        (id) => !ownedIds.has(id)
-      );
-      if (pool.length === 0) {
-        throw new HttpsError(
-          "failed-precondition",
-          "모든 토끼를 발견했습니다!"
-        );
-      }
 
-      // 미보유 풀에서 랜덤 선택
-      const rabbitId = pool[Math.floor(Math.random() * pool.length)];
+      // 전체 풀에서 균등 확률 선택 (보유 토끼 포함)
+      const rabbitId = Math.floor(Math.random() * 80);
       const rabbitDocId = `${courseId}_${rabbitId}`;
 
       // 토끼 문서 확인
       const rabbitRef = db.collection("rabbits").doc(rabbitDocId);
       const rabbitDoc = await transaction.get(rabbitRef);
       const rabbitData = rabbitDoc.exists ? rabbitDoc.data()! : null;
+
+      // 이미 보유한 토끼 → 바로 레벨업 (발견 과정 스킵)
+      if (ownedIds.has(rabbitId)) {
+        // 보유 문서에서 이름 가져오기
+        const holdingRef = userRef
+          .collection("rabbitHoldings")
+          .doc(rabbitDocId);
+        const holdingDoc = await transaction.get(holdingRef);
+        const holdingData = holdingDoc.exists ? holdingDoc.data()! : null;
+
+        // lastGachaExp += 50 + pendingSpin 저장 + 스핀 잠금
+        transaction.update(userRef, {
+          lastGachaExp: lastGachaExp + 50,
+          spinLock: Date.now(),
+          pendingSpin: { rabbitId, courseId },
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        return {
+          type: "owned",
+          rabbitId,
+          rabbitName: rabbitData?.name || null,
+          nextDiscoveryOrder: null,
+          myDiscoveryOrder: holdingData?.discoveryOrder || null,
+          equippedCount: equippedRabbits.length,
+        } as RollResult;
+      }
 
       // lastGachaExp += 50 + pendingSpin 저장 + 스핀 잠금 설정
       transaction.update(userRef, {

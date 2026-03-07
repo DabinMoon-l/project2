@@ -4,13 +4,14 @@ import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useTheme } from '@/styles/themes/useTheme';
 import { ImageViewer } from '@/components/common';
+import LinkifiedText from '@/components/board/LinkifiedText';
 import type { Comment } from '@/lib/hooks/useBoard';
 
 interface CommentItemProps {
   comment: Comment;
   currentUserId?: string;
   onDelete?: (commentId: string) => void;
-  onEdit?: (commentId: string, content: string) => void;
+  onEdit?: (commentId: string, content: string, imageUrls?: string[]) => void;
   onReply?: () => void;
   onLike?: (commentId: string) => void;
   onAccept?: (commentId: string) => void;
@@ -30,6 +31,8 @@ interface CommentItemProps {
   authorNicknameMap?: Map<string, string>;
   /** 게시글 작성자 uid (글쓴이 표시용) */
   postAuthorId?: string;
+  /** 이미지 업로드 함수 (수정 시 새 이미지 업로드용) */
+  onUploadImages?: (files: File[]) => Promise<string[]>;
 }
 
 /**
@@ -55,6 +58,116 @@ function formatDate(date: Date) {
 }
 
 /**
+ * 스마트 페이지 분할: 세로 이미지 단독, 가로/정방 2장씩
+ */
+function buildCommentImagePages(images: string[], tallFlags: Record<number, boolean>) {
+  const pages: { urls: string[]; indices: number[] }[] = [];
+  let i = 0;
+  while (i < images.length) {
+    if (tallFlags[i]) {
+      pages.push({ urls: [images[i]], indices: [i] });
+      i++;
+    } else if (i + 1 < images.length && !tallFlags[i + 1]) {
+      pages.push({ urls: [images[i], images[i + 1]], indices: [i, i + 1] });
+      i += 2;
+    } else {
+      pages.push({ urls: [images[i]], indices: [i] });
+      i++;
+    }
+  }
+  return pages;
+}
+
+/**
+ * 댓글 이미지 갤러리 — 세로 이미지는 단독, 가로/정방은 2장씩
+ */
+function CommentImageGallery({
+  images,
+  isEditMode,
+  imageCurrentPage,
+  setImageCurrentPage,
+  onViewImage,
+}: {
+  images: string[];
+  isEditMode: boolean;
+  imageCurrentPage: number;
+  setImageCurrentPage: React.Dispatch<React.SetStateAction<number>>;
+  onViewImage: (index: number) => void;
+}) {
+  const [tallFlags, setTallFlags] = useState<Record<number, boolean>>({});
+
+  const handleImgLoad = (index: number, e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    const isTall = img.naturalHeight > img.naturalWidth * 1.3;
+    setTallFlags(prev => {
+      if (prev[index] === isTall) return prev;
+      return { ...prev, [index]: isTall };
+    });
+  };
+
+  const allDetected = Object.keys(tallFlags).length === images.length;
+  const pages = allDetected
+    ? buildCommentImagePages(images, tallFlags)
+    : images.map((url, i) => ({ urls: [url], indices: [i] }));
+
+  const totalPages = pages.length;
+  const safePage = Math.min(imageCurrentPage, totalPages - 1);
+
+  useEffect(() => {
+    if (imageCurrentPage >= totalPages && totalPages > 0) {
+      setImageCurrentPage(totalPages - 1);
+    }
+  }, [totalPages, imageCurrentPage, setImageCurrentPage]);
+
+  if (images.length === 0 || isEditMode) return null;
+
+  const currentPageData = pages[safePage] || pages[0];
+  const isSingle = currentPageData?.urls.length === 1;
+
+  return (
+    <div className="mt-2">
+      <div className={isSingle ? '' : 'grid grid-cols-2 gap-2'}>
+        {currentPageData?.urls.map((url, index) => {
+          const globalIndex = currentPageData.indices[index];
+          return (
+            <div
+              key={`img-${globalIndex}`}
+              className="relative bg-[#EBE5D9] cursor-pointer overflow-hidden rounded-sm"
+              onClick={() => onViewImage(globalIndex)}
+            >
+              <img
+                src={url}
+                alt={`이미지 ${globalIndex + 1}`}
+                className={`w-full h-auto object-contain ${isSingle ? 'max-h-[360px]' : 'max-h-[240px]'}`}
+                draggable={false}
+                onLoad={(e) => handleImgLoad(globalIndex, e)}
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 미렌더 이미지 프리로드 + 비율 감지 */}
+      <div className="hidden">
+        {images.map((url, i) =>
+          tallFlags[i] === undefined ? (
+            <img key={`preload-${i}`} src={url} alt="" onLoad={(e) => handleImgLoad(i, e)} />
+          ) : null
+        )}
+      </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-4 mt-2">
+          <button onClick={() => setImageCurrentPage(p => Math.max(0, p - 1))} disabled={safePage === 0} className="px-2 py-0.5 text-xs disabled:opacity-30" style={{ border: '1px solid #1A1A1A' }}>←</button>
+          <span className="text-xs text-[#3A3A3A]">{safePage + 1} / {totalPages}</span>
+          <button onClick={() => setImageCurrentPage(p => Math.min(totalPages - 1, p + 1))} disabled={safePage === totalPages - 1} className="px-2 py-0.5 text-xs disabled:opacity-30" style={{ border: '1px solid #1A1A1A' }}>→</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * 댓글 아이템 컴포넌트 (대댓글 지원, 수정 기능 포함)
  */
 export default function CommentItem({
@@ -75,6 +188,7 @@ export default function CommentItem({
   authorNameMap,
   authorNicknameMap,
   postAuthorId,
+  onUploadImages,
 }: CommentItemProps) {
   const { theme } = useTheme();
   const isPostAuthor = !!(postAuthorId && comment.authorId === postAuthorId);
@@ -86,6 +200,12 @@ export default function CommentItem({
   const contentRef = useRef<HTMLParagraphElement>(null);
   const [viewerInfo, setViewerInfo] = useState<{ index: number } | null>(null);
   const [imageCurrentPage, setImageCurrentPage] = useState(0);
+
+  // 수정 모드 이미지 상태
+  const [editExistingImages, setEditExistingImages] = useState<string[]>([]);
+  const [editNewFiles, setEditNewFiles] = useState<File[]>([]);
+  const [editNewPreviews, setEditNewPreviews] = useState<string[]>([]);
+  const editFileInputRef = useRef<HTMLInputElement>(null);
 
   // 실제 DOM에서 line-clamp에 의해 잘리는지 감지
   useEffect(() => {
@@ -127,19 +247,61 @@ export default function CommentItem({
 
   const handleEditClick = () => {
     setEditContent(comment.content);
+    setEditExistingImages(comment.imageUrls || []);
+    setEditNewFiles([]);
+    editNewPreviews.forEach(u => URL.revokeObjectURL(u));
+    setEditNewPreviews([]);
     setIsEditMode(true);
   };
 
-  const handleSaveEdit = () => {
-    if (editContent.trim() && onEdit) {
-      onEdit(comment.id, editContent.trim());
-      setIsEditMode(false);
+  const handleSaveEdit = async () => {
+    if ((!editContent.trim() && editExistingImages.length === 0 && editNewFiles.length === 0) || !onEdit) return;
+
+    // 새 이미지 업로드
+    let newUploadedUrls: string[] = [];
+    if (editNewFiles.length > 0 && onUploadImages) {
+      newUploadedUrls = await onUploadImages(editNewFiles);
     }
+
+    const finalImageUrls = [...editExistingImages, ...newUploadedUrls];
+    onEdit(comment.id, editContent.trim(), finalImageUrls);
+    editNewPreviews.forEach(u => URL.revokeObjectURL(u));
+    setEditNewFiles([]);
+    setEditNewPreviews([]);
+    setIsEditMode(false);
   };
 
   const handleCancelEdit = () => {
     setEditContent(comment.content);
+    setEditExistingImages([]);
+    editNewPreviews.forEach(u => URL.revokeObjectURL(u));
+    setEditNewFiles([]);
+    setEditNewPreviews([]);
     setIsEditMode(false);
+  };
+
+  // 수정 모드: 새 이미지 선택
+  const handleEditImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    const total = editExistingImages.length + editNewFiles.length + files.length;
+    const allowed = files.slice(0, Math.max(0, 5 - editExistingImages.length - editNewFiles.length));
+    if (allowed.length === 0) return;
+    setEditNewFiles(prev => [...prev, ...allowed]);
+    setEditNewPreviews(prev => [...prev, ...allowed.map(f => URL.createObjectURL(f))]);
+    if (editFileInputRef.current) editFileInputRef.current.value = '';
+  };
+
+  // 수정 모드: 기존 이미지 삭제
+  const removeExistingImage = (index: number) => {
+    setEditExistingImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // 수정 모드: 새 이미지 삭제
+  const removeNewImage = (index: number) => {
+    URL.revokeObjectURL(editNewPreviews[index]);
+    setEditNewFiles(prev => prev.filter((_, i) => i !== index));
+    setEditNewPreviews(prev => prev.filter((_, i) => i !== index));
   };
 
   return (
@@ -221,7 +383,7 @@ export default function CommentItem({
           <textarea
             value={editContent}
             onChange={(e) => setEditContent(e.target.value)}
-            className="w-full px-3 py-2 text-sm outline-none resize-none leading-relaxed"
+            className="w-full px-3 py-2 text-sm outline-none resize-none leading-relaxed rounded-lg"
             style={{
               border: '1px solid #1A1A1A',
               backgroundColor: theme.colors.background,
@@ -230,36 +392,93 @@ export default function CommentItem({
             rows={3}
             maxLength={500}
           />
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={handleSaveEdit}
-              disabled={!editContent.trim() || isEditingProp}
-              className="px-3 py-1 text-xs disabled:opacity-50"
-              style={{
-                backgroundColor: '#1A1A1A',
-                color: '#F5F0E8',
-              }}
-            >
-              {isEditingProp ? '저장 중...' : '저장'}
-            </button>
-            <button
-              type="button"
-              onClick={handleCancelEdit}
-              className="px-3 py-1 text-xs"
-              style={{
-                border: '1px solid #1A1A1A',
-                backgroundColor: 'transparent',
-                color: '#1A1A1A',
-              }}
-            >
-              취소
-            </button>
+
+          {/* 수정 모드 이미지 관리 */}
+          {(editExistingImages.length > 0 || editNewPreviews.length > 0) && (
+            <div className="flex gap-2 flex-wrap">
+              {editExistingImages.map((url, index) => (
+                <div key={`existing-${index}`} className="relative w-16 h-16 flex-shrink-0">
+                  <img src={url} alt="" className="w-full h-full object-cover border border-[#D4CFC4]" />
+                  <button
+                    type="button"
+                    onClick={() => removeExistingImage(index)}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#1A1A1A] text-[#F5F0E8] rounded-full flex items-center justify-center text-xs"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              {editNewPreviews.map((url, index) => (
+                <div key={`new-${index}`} className="relative w-16 h-16 flex-shrink-0">
+                  <img src={url} alt="" className="w-full h-full object-cover border border-dashed border-[#1A1A1A]" />
+                  <button
+                    type="button"
+                    onClick={() => removeNewImage(index)}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#1A1A1A] text-[#F5F0E8] rounded-full flex items-center justify-center text-xs"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2">
+            {/* 이미지 추가 버튼 */}
+            {editExistingImages.length + editNewFiles.length < 5 && (
+              <button
+                type="button"
+                onClick={() => editFileInputRef.current?.click()}
+                className="flex items-center gap-1 px-2 py-1 text-xs text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors rounded-md"
+                style={{ border: '1px solid #D4CFC4' }}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                사진 추가
+              </button>
+            )}
+            <input
+              ref={editFileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              tabIndex={-1}
+              className="hidden"
+              onChange={handleEditImageSelect}
+            />
+
+            <div className="flex gap-2 ml-auto">
+              <button
+                type="button"
+                onClick={handleSaveEdit}
+                disabled={(!editContent.trim() && editExistingImages.length === 0 && editNewFiles.length === 0) || isEditingProp}
+                className="px-3 py-1 text-xs disabled:opacity-50 rounded-md"
+                style={{
+                  backgroundColor: '#1A1A1A',
+                  color: '#F5F0E8',
+                }}
+              >
+                {isEditingProp ? '저장 중...' : '저장'}
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                className="px-3 py-1 text-xs rounded-md"
+                style={{
+                  border: '1px solid #1A1A1A',
+                  backgroundColor: 'transparent',
+                  color: '#1A1A1A',
+                }}
+              >
+                취소
+              </button>
+            </div>
           </div>
         </div>
       ) : (
         <div className="overflow-hidden max-w-full">
-          <p
+          <div
             ref={contentRef}
             className={`text-[15px] whitespace-pre-wrap leading-relaxed ${
               !isExpanded ? 'line-clamp-3' : ''
@@ -270,8 +489,8 @@ export default function CommentItem({
               overflowWrap: 'anywhere',
             }}
           >
-            {comment.content}
-          </p>
+            <LinkifiedText text={comment.content} />
+          </div>
           {/* 더보기/접기 버튼 — 실제 잘릴 때만 표시 */}
           {(isClamped || isExpanded) && (
             <button
@@ -287,40 +506,13 @@ export default function CommentItem({
       )}
 
       {/* 이미지 갤러리 */}
-      {images.length > 0 && !isEditMode && (() => {
-        // 2장씩 페이지 분할
-        const pages: string[][] = [];
-        for (let i = 0; i < images.length; i += 2) {
-          pages.push(images.slice(i, i + 2));
-        }
-        const totalPages = pages.length;
-
-        return (
-          <div className="mt-2">
-            <div className="grid grid-cols-2 gap-2">
-              {pages[imageCurrentPage]?.map((url, index) => {
-                const globalIndex = imageCurrentPage * 2 + index;
-                return (
-                  <div
-                    key={`${imageCurrentPage}-${index}`}
-                    className="relative aspect-square bg-gray-100 cursor-pointer"
-                    onClick={() => setViewerInfo({ index: globalIndex })}
-                  >
-                    <img src={url} alt={`이미지 ${globalIndex + 1}`} className="w-full h-full object-cover" draggable={false} />
-                  </div>
-                );
-              })}
-            </div>
-            {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-4 mt-2">
-                <button onClick={() => setImageCurrentPage(p => Math.max(0, p - 1))} disabled={imageCurrentPage === 0} className="px-2 py-0.5 text-xs disabled:opacity-30" style={{ border: '1px solid #1A1A1A' }}>←</button>
-                <span className="text-xs text-[#3A3A3A]">{imageCurrentPage + 1} / {totalPages}</span>
-                <button onClick={() => setImageCurrentPage(p => Math.min(totalPages - 1, p + 1))} disabled={imageCurrentPage === totalPages - 1} className="px-2 py-0.5 text-xs disabled:opacity-30" style={{ border: '1px solid #1A1A1A' }}>→</button>
-              </div>
-            )}
-          </div>
-        );
-      })()}
+      <CommentImageGallery
+        images={images}
+        isEditMode={isEditMode}
+        imageCurrentPage={imageCurrentPage}
+        setImageCurrentPage={setImageCurrentPage}
+        onViewImage={(index) => setViewerInfo({ index })}
+      />
 
       {/* 수정·삭제 (작성자만, 우측 하단) */}
       {!isEditMode && isOwner && (onEdit || onDelete) && (

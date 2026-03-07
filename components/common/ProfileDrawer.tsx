@@ -69,6 +69,45 @@ interface Inquiry {
   isRead: boolean;
 }
 
+// 문의 메시지 아이템 (line-clamp 감지 + 더보기/접기)
+function InquiryMessageItem({ message }: { message: string }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isClamped, setIsClamped] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (el && !isExpanded) {
+      setIsClamped(el.scrollHeight > el.clientHeight + 1);
+    }
+  }, [message, isExpanded]);
+
+  return (
+    <div className="flex-1 min-w-0">
+      <p
+        ref={ref}
+        className={`text-sm text-white/60 whitespace-pre-wrap break-words ${
+          !isExpanded ? 'line-clamp-2' : ''
+        }`}
+      >
+        {message}
+      </p>
+      {(isClamped || isExpanded) && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsExpanded(!isExpanded);
+          }}
+          className="text-[11px] text-white/40 hover:text-white/60 mt-0.5 transition-colors"
+        >
+          {isExpanded ? '접기' : '...더보기'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 // 글래스 토글 스위치 (컴포넌트 외부 정의 — 리렌더 시 재생성 방지)
 function ToggleSwitch({
   checked,
@@ -939,7 +978,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                           exit={{ height: 0, opacity: 0 }}
                           className="overflow-hidden"
                         >
-                          <div className="max-h-[180px] overflow-y-auto rounded-xl bg-black/20 border border-white/10">
+                          <div className="max-h-[320px] overflow-y-auto rounded-xl bg-black/20 border border-white/10">
                             {inquiries.length === 0 ? (
                               <p className="text-center text-sm text-white/40 py-6">문의가 없습니다</p>
                             ) : (
@@ -965,10 +1004,8 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                                       }
                                     </span>
                                   </div>
-                                  <div className="flex items-end justify-between gap-2">
-                                    <p className="text-sm text-white/60 line-clamp-2 flex-1">
-                                      {inq.message}
-                                    </p>
+                                  <div className="flex items-start justify-between gap-2">
+                                    <InquiryMessageItem message={inq.message} />
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();

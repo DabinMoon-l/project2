@@ -14,7 +14,7 @@ type Phase = 'hidden' | 'entering' | 'open' | 'exiting';
 
 /** Roll 결과 (spinRabbitGacha 반환값) */
 export interface RollResultData {
-  type: 'undiscovered' | 'discovered';
+  type: 'undiscovered' | 'discovered' | 'owned';
   rabbitId: number;
   rabbitName: string | null;
   nextDiscoveryOrder: number | null;

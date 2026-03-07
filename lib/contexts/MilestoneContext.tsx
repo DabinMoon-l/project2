@@ -86,6 +86,9 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
   const [isGachaAnimating, setIsGachaAnimating] = useState(false);
   const [spinError, setSpinError] = useState<string | null>(null);
 
+  // 보유 토끼 뽑기 시 자동 레벨업 대상
+  const [autoLevelUpRabbitId, setAutoLevelUpRabbitId] = useState<number | null>(null);
+
   // 자동 트리거 억제
   const [suppressAutoTrigger, setSuppressAutoTrigger] = useState(false);
 
@@ -100,9 +103,7 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
     () => getExpBarDisplay(totalExp, lastGachaExp),
     [totalExp, lastGachaExp]
   );
-  const allRabbitsDiscovered = userCourseId
-    ? holdings.filter((h) => h.courseId === userCourseId).length >= 80
-    : false;
+  const allRabbitsDiscovered = false;
 
   // 네비게이션 숨김 (마일스톤 관련 모달 중 하나라도 열려있을 때)
   useHideNav(showMilestoneModal || showGachaModal || showLevelUpSheet);
@@ -176,7 +177,26 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
         spinRabbitGacha({ courseId: userCourseId }),
         new Promise(resolve => setTimeout(resolve, 2000)),
       ]);
-      setRollResult(result.data);
+      const data = result.data;
+
+      // 이미 보유한 토끼 → 뽑기 모달 닫고 바로 레벨업
+      if (data.type === 'owned') {
+        // pendingSpin 정리 (pass)
+        const claimGachaRabbit = httpsCallable(functions, 'claimGachaRabbit');
+        await claimGachaRabbit({
+          courseId: userCourseId,
+          rabbitId: data.rabbitId,
+          action: 'pass',
+        });
+        // 뽑기 모달 닫고 레벨업 시트 열기
+        setRollResult(null);
+        setShowGachaModal(false);
+        setAutoLevelUpRabbitId(data.rabbitId);
+        setShowLevelUpSheet(true);
+        return;
+      }
+
+      setRollResult(data);
     } catch (error: any) {
       console.error('뽑기 실패:', error);
       const msg = error?.message || '';
@@ -237,6 +257,7 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
   // 레벨업 닫기 (dismiss 설정 → 레벨업 완료 시 pendingCount 변경으로 리셋됨)
   const handleLevelUpClose = useCallback(() => {
     setShowLevelUpSheet(false);
+    setAutoLevelUpRabbitId(null);
     setUserDismissed(true);
   }, []);
 
@@ -268,7 +289,6 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
         pendingCount={pendingCount}
         onChooseLevelUp={handleChooseLevelUp}
         onChooseGacha={handleChooseGacha}
-        allRabbitsDiscovered={allRabbitsDiscovered}
         buttonRect={buttonRect}
       />
 
@@ -279,6 +299,7 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
           onClose={handleLevelUpClose}
           courseId={userCourseId}
           holdings={holdings}
+          autoLevelUpRabbitId={autoLevelUpRabbitId}
         />
       )}
 

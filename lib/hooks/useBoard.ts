@@ -205,7 +205,7 @@ interface UseMyCommentsReturn {
 
 /** useUpdateComment 훅 반환 타입 */
 interface UseUpdateCommentReturn {
-  updateComment: (commentId: string, content: string) => Promise<boolean>;
+  updateComment: (commentId: string, content: string, imageUrls?: string[]) => Promise<boolean>;
   loading: boolean;
   error: string | null;
 }
@@ -1145,7 +1145,7 @@ export const useUpdateComment = (): UseUpdateCommentReturn => {
   const [error, setError] = useState<string | null>(null);
 
   const updateComment = useCallback(
-    async (commentId: string, content: string): Promise<boolean> => {
+    async (commentId: string, content: string, imageUrls?: string[]): Promise<boolean> => {
       if (!user) {
         setError('로그인이 필요합니다.');
         return false;
@@ -1169,10 +1169,15 @@ export const useUpdateComment = (): UseUpdateCommentReturn => {
           return false;
         }
 
-        await updateDoc(commentRef, {
+        const updateData: Record<string, unknown> = {
           content,
           updatedAt: serverTimestamp(),
-        });
+        };
+        if (imageUrls !== undefined) {
+          updateData.imageUrls = imageUrls;
+        }
+
+        await updateDoc(commentRef, updateData);
 
         return true;
       } catch (err) {

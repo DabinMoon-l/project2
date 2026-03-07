@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useWideMode } from '@/lib/hooks/useViewportScale';
+import { pruneAllStaleHiders } from '@/lib/hooks/useHideNav';
 import { useHomeOverlay } from '@/lib/contexts/HomeOverlayContext';
 import { useUser } from '@/lib/contexts/UserContext';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
@@ -173,8 +174,11 @@ export default function Navigation({ role }: NavigationProps) {
     syncState();
     const observer = new MutationObserver(syncState);
     observer.observe(document.body, { attributes: true, attributeFilter: ['data-hide-nav', 'data-hide-nav-only', 'data-home-overlay-open'] });
-    // 5초마다 자가 복구 (MutationObserver가 놓친 경우 대비)
-    const healthCheck = setInterval(syncState, 5000);
+    // 5초마다 자가 복구 (고아 ID 정리 + attribute ↔ 상태 보정)
+    const healthCheck = setInterval(() => {
+      pruneAllStaleHiders();
+      syncState();
+    }, 5000);
     return () => {
       observer.disconnect();
       clearInterval(healthCheck);

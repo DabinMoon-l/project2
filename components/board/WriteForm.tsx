@@ -77,6 +77,7 @@ export default function WriteForm({
   // 첨부 파일 상태
   const [images, setImages] = useState<{ file: File; preview: string }[]>([]);
   const [files, setFiles] = useState<{ file: File; name: string }[]>([]);
+  const [linkedImageUrls, setLinkedImageUrls] = useState<string[]>([]);
 
   // 파일 input refs
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -95,8 +96,8 @@ export default function WriteForm({
     const newImages: { file: File; preview: string }[] = [];
 
     Array.from(selectedFiles).forEach((file) => {
-      // 최대 5장까지
-      if (images.length + newImages.length >= 5) return;
+      // 최대 5장까지 (파일 + 링크 합산)
+      if (images.length + linkedImageUrls.length + newImages.length >= 5) return;
 
       // 이미지 타입 확인
       if (!file.type.startsWith('image/')) return;
@@ -112,7 +113,7 @@ export default function WriteForm({
     if (imageInputRef.current) {
       imageInputRef.current.value = '';
     }
-  }, [images.length]);
+  }, [images.length, linkedImageUrls.length]);
 
   /**
    * 파일 선택 핸들러
@@ -162,6 +163,29 @@ export default function WriteForm({
     });
   }, []);
 
+  // 링크 이미지 제거
+  const removeLinkedImage = useCallback((index: number) => {
+    setLinkedImageUrls(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  // 이미지 URL 감지 패턴
+  const IMAGE_URL_PATTERN = /^https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp|bmp|svg|tiff|ico|avif)(?:[?#]\S*)?$/i;
+  const KNOWN_IMAGE_HOST_PATTERN = /^https?:\/\/(?:i\.imgur\.com|pbs\.twimg\.com|images\.unsplash\.com|lh[0-9]*\.googleusercontent\.com|firebasestorage\.googleapis\.com|encrypted-tbn[0-9]*\.gstatic\.com|blogfiles\.naver\.net|postfiles\.naver\.net|[a-z0-9-]+\.googleusercontent\.com|cdn\.discordapp\.com|media\.discordapp\.net|i\.namu\.wiki|upload\.wikimedia\.org|img\.icons8\.com)\//i;
+
+  // 본문에 이미지 URL 붙여넣기 감지
+  const handleContentPaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const text = e.clipboardData.getData('text').trim();
+    if (!text) return;
+
+    if (IMAGE_URL_PATTERN.test(text) || KNOWN_IMAGE_HOST_PATTERN.test(text)) {
+      const totalImages = images.length + linkedImageUrls.length;
+      if (totalImages >= 5) return;
+      if (linkedImageUrls.includes(text)) return;
+      e.preventDefault();
+      setLinkedImageUrls(prev => [...prev, text]);
+    }
+  }, [images.length, linkedImageUrls]);
+
   /**
    * 파일 크기 포맷
    */
@@ -187,6 +211,9 @@ export default function WriteForm({
         }
       }
 
+      // 업로드 URL + 링크 URL 합치기
+      const allImageUrls = [...uploadedImageUrls, ...linkedImageUrls];
+
       // 파일 업로드
       const uploadedFiles: AttachedFile[] = [];
       for (const f of files) {
@@ -201,15 +228,15 @@ export default function WriteForm({
         content: content.trim(),
         isAnonymous: false,
         category: 'community',
-        imageUrl: uploadedImageUrls[0] || undefined, // 대표 이미지
-        imageUrls: uploadedImageUrls,
+        imageUrl: allImageUrls[0] || undefined,
+        imageUrls: allImageUrls,
         fileUrls: uploadedFiles,
         tag,
       });
     } catch (err) {
       console.error('글 작성 실패:', err);
     }
-  }, [isValid, isSubmitting, uploading, images, files, title, content, tag, uploadImage, uploadFile, onSubmit]);
+  }, [isValid, isSubmitting, uploading, images, files, linkedImageUrls, title, content, tag, uploadImage, uploadFile, onSubmit]);
 
   return (
     <motion.div
@@ -292,6 +319,7 @@ export default function WriteForm({
         <textarea
           value={content}
           onChange={(e) => handleContentChange(e.target.value)}
+          onPaste={handleContentPaste}
           placeholder="기사 내용을 입력하세요 (5자 이상)"
           rows={5}
           maxLength={2000}
@@ -360,8 +388,41 @@ export default function WriteForm({
           )}
         </AnimatePresence>
 
+        {/* 링크 이미지 미리보기 */}
+        {linkedImageUrls.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {linkedImageUrls.map((url, index) => (
+              <motion.div
+                key={url}
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                className="relative w-16 h-16"
+              >
+                <img
+                  src={url}
+                  alt={`링크 이미지 ${index + 1}`}
+                  className="w-full h-full object-cover"
+                  style={{ border: '1px dashed #1A1A1A' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => removeLinkedImage(index)}
+                  className="absolute -top-2 -right-2 w-5 h-5 flex items-center justify-center text-xs"
+                  style={{
+                    backgroundColor: '#8B1A1A',
+                    color: '#F5F0E8',
+                  }}
+                >
+                  ×
+                </button>
+              </motion.div>
+            ))}
+          </div>
+        )}
+
         {/* 이미지 추가 버튼 */}
-        {images.length < 5 && (
+        {images.length + linkedImageUrls.length < 5 && (
           <button
             type="button"
             onClick={() => imageInputRef.current?.click()}

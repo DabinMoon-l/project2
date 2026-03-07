@@ -75,6 +75,7 @@ export interface ProfessorQuiz {
   tags?: string[];
   pastYear?: number;
   pastExamType?: string;
+  creatorClassType?: 'A' | 'B' | 'C' | 'D';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -218,6 +219,7 @@ const docToQuiz = (doc: DocumentSnapshot | QueryDocumentSnapshot): ProfessorQuiz
     tags: data.tags || [],
     pastYear: data.pastYear,
     pastExamType: data.pastExamType,
+    creatorClassType: data.creatorClassType,
     createdAt: data.createdAt?.toDate() || new Date(),
     updatedAt: data.updatedAt?.toDate() || new Date(),
   };

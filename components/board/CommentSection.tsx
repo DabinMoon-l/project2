@@ -124,6 +124,7 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
   const [content, setContent] = useState('');
   const [pendingImages, setPendingImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [linkedImageUrls, setLinkedImageUrls] = useState<string[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -169,6 +170,30 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
     setPendingImages(prev => prev.filter((_, i) => i !== index));
     setImagePreviews(prev => prev.filter((_, i) => i !== index));
   }, [imagePreviews]);
+
+  // 링크 이미지 제거
+  const removeLinkedImage = useCallback((index: number) => {
+    setLinkedImageUrls(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  // 이미지 URL 감지 패턴
+  const IMAGE_URL_PATTERN = /^https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp|bmp|svg|tiff|ico|avif)(?:[?#]\S*)?$/i;
+  const KNOWN_IMAGE_HOST_PATTERN = /^https?:\/\/(?:i\.imgur\.com|pbs\.twimg\.com|images\.unsplash\.com|lh[0-9]*\.googleusercontent\.com|firebasestorage\.googleapis\.com|encrypted-tbn[0-9]*\.gstatic\.com|blogfiles\.naver\.net|postfiles\.naver\.net|[a-z0-9-]+\.googleusercontent\.com|cdn\.discordapp\.com|media\.discordapp\.net|i\.namu\.wiki|upload\.wikimedia\.org|img\.icons8\.com)\//i;
+
+  // 붙여넣기 시 이미지 URL 감지
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const text = e.clipboardData.getData('text').trim();
+    if (!text) return;
+
+    // 이미지 URL인지 확인
+    if (IMAGE_URL_PATTERN.test(text) || KNOWN_IMAGE_HOST_PATTERN.test(text)) {
+      const totalImages = pendingImages.length + linkedImageUrls.length;
+      if (totalImages >= 5) return;
+      if (linkedImageUrls.includes(text)) return;
+      e.preventDefault();
+      setLinkedImageUrls(prev => [...prev, text]);
+    }
+  }, [pendingImages.length, linkedImageUrls]);
 
   // 댓글을 계층 구조로 구성하고 좋아요순 > 최신순으로 정렬
   const organizeComments = (flatComments: Comment[]): Comment[] => {
@@ -226,20 +251,23 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
 
   // 댓글 제출
   const handleSubmit = useCallback(async () => {
-    if ((!content.trim() && pendingImages.length === 0) || !user) return;
+    if ((!content.trim() && pendingImages.length === 0 && linkedImageUrls.length === 0) || !user) return;
 
-    // 이미지 업로드
-    let imageUrls: string[] = [];
+    // 파일 이미지 업로드
+    let uploadedUrls: string[] = [];
     if (pendingImages.length > 0) {
-      imageUrls = await uploadMultipleImages(pendingImages);
+      uploadedUrls = await uploadMultipleImages(pendingImages);
     }
+
+    // 업로드 URL + 링크 URL 합치기
+    const allImageUrls = [...uploadedUrls, ...linkedImageUrls];
 
     const result = await createComment({
       postId,
       content: content.trim(),
       isAnonymous: false,
       parentId: replyingTo?.id,
-      imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
+      imageUrls: allImageUrls.length > 0 ? allImageUrls : undefined,
     });
 
     if (result) {
@@ -247,6 +275,7 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
       setPendingImages([]);
       imagePreviews.forEach(u => URL.revokeObjectURL(u));
       setImagePreviews([]);
+      setLinkedImageUrls([]);
       setReplyingTo(null);
       if (profile?.role !== 'professor') {
         setTimeout(() => {
@@ -255,7 +284,7 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
       }
       refresh();
     }
-  }, [content, pendingImages, user, postId, replyingTo, createComment, uploadMultipleImages, refresh, showExpToast, imagePreviews, profile?.role]);
+  }, [content, pendingImages, linkedImageUrls, user, postId, replyingTo, createComment, uploadMultipleImages, refresh, showExpToast, imagePreviews, profile?.role]);
 
   const handleDelete = useCallback(async (commentId: string) => {
     setDeletingId(commentId);
@@ -264,12 +293,17 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
     setDeletingId(null);
   }, [deleteComment, postId, refresh]);
 
-  const handleEdit = useCallback(async (commentId: string, newContent: string) => {
+  const handleEdit = useCallback(async (commentId: string, newContent: string, imageUrls?: string[]) => {
     setEditingId(commentId);
-    const success = await updateComment(commentId, newContent);
+    const success = await updateComment(commentId, newContent, imageUrls);
     if (success) refresh();
     setEditingId(null);
   }, [updateComment, refresh]);
+
+  // 댓글 수정 시 새 이미지 업로드
+  const handleUploadEditImages = useCallback(async (files: File[]) => {
+    return await uploadMultipleImages(files);
+  }, [uploadMultipleImages]);
 
   const handleLike = useCallback(async (commentId: string) => {
     const success = await toggleCommentLike(commentId);
@@ -391,6 +425,7 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
                   authorNameMap={authorNameMap}
                   authorNicknameMap={authorNicknameMap}
                   postAuthorId={postAuthorId}
+                  onUploadImages={handleUploadEditImages}
                 />
 
                 {/* 대댓글 목록 */}
@@ -411,6 +446,7 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
                       authorNameMap={authorNameMap}
                       authorNicknameMap={authorNicknameMap}
                       postAuthorId={postAuthorId}
+                      onUploadImages={handleUploadEditImages}
                     />
                   ))
                 }
@@ -453,15 +489,27 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
             )}
           </AnimatePresence>
 
-          {/* 이미지 프리뷰 */}
-          {imagePreviews.length > 0 && (
+          {/* 이미지 프리뷰 (파일 + 링크) */}
+          {(imagePreviews.length > 0 || linkedImageUrls.length > 0) && (
             <div className="flex gap-2 px-4 pt-2 overflow-x-auto">
               {imagePreviews.map((preview, index) => (
-                <div key={index} className="relative flex-shrink-0 w-16 h-16">
+                <div key={`file-${index}`} className="relative flex-shrink-0 w-16 h-16">
                   <img src={preview} alt="" className="w-full h-full object-cover border border-[#1A1A1A]" />
                   <button
                     type="button"
                     onClick={() => removeImage(index)}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#1A1A1A] text-[#F5F0E8] rounded-full flex items-center justify-center text-xs"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              {linkedImageUrls.map((url, index) => (
+                <div key={`link-${index}`} className="relative flex-shrink-0 w-16 h-16">
+                  <img src={url} alt="" className="w-full h-full object-cover border border-dashed border-[#1A1A1A]" />
+                  <button
+                    type="button"
+                    onClick={() => removeLinkedImage(index)}
                     className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#1A1A1A] text-[#F5F0E8] rounded-full flex items-center justify-center text-xs"
                   >
                     ×
@@ -498,6 +546,7 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
               ref={textareaRef}
               value={content}
               onChange={(e) => setContent(e.target.value)}
+              onPaste={handlePaste}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
@@ -521,7 +570,7 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={(!content.trim() && pendingImages.length === 0) || isSending}
+              disabled={(!content.trim() && pendingImages.length === 0 && linkedImageUrls.length === 0) || isSending}
               className="flex-shrink-0 text-[#5C5C5C] hover:text-[#1A1A1A] disabled:text-[#D4CFC4] transition-colors"
             >
               {isSending ? (

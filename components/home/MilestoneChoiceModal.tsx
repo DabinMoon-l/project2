@@ -16,7 +16,6 @@ interface MilestoneChoiceModalProps {
   pendingCount: number;
   onChooseLevelUp: () => void;
   onChooseGacha: () => void;
-  allRabbitsDiscovered?: boolean;
   buttonRect?: { x: number; y: number; width: number; height: number } | null;
 }
 
@@ -29,7 +28,6 @@ export default function MilestoneChoiceModal({
   pendingCount,
   onChooseLevelUp,
   onChooseGacha,
-  allRabbitsDiscovered = false,
   buttonRect,
 }: MilestoneChoiceModalProps) {
   const [visible, setVisible] = useState(false);
@@ -157,14 +155,10 @@ export default function MilestoneChoiceModal({
                 </button>
                 <button
                   onClick={() => handleChoose(onChooseGacha)}
-                  disabled={allRabbitsDiscovered}
-                  className="w-full py-2 text-sm bg-white/15 text-white font-bold border border-white/20 rounded-full active:scale-[0.98] transition-transform disabled:opacity-40 disabled:active:scale-100"
+                  className="w-full py-2 text-sm bg-white/15 text-white font-bold border border-white/20 rounded-full active:scale-[0.98] transition-transform"
                 >
-                  새 토끼 뽑기
+                  토끼 뽑기
                 </button>
-                {allRabbitsDiscovered && (
-                  <p className="text-xs text-white/50 -mt-1">모든 토끼를 발견했어요!</p>
-                )}
                 <button
                   onClick={runClose}
                   className="w-full py-1.5 text-white/50 text-xs hover:text-white/80 transition-colors"

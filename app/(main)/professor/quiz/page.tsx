@@ -1240,6 +1240,10 @@ export default function ProfessorQuizListPage() {
   const [isProfPdfSelectMode, setIsProfPdfSelectMode] = useState(false);
   const [selectedProfPdfFolders, setSelectedProfPdfFolders] = useState<Set<string>>(new Set());
 
+  // 반별 필터 (자작 탭)
+  const [classFilter, setClassFilter] = useState<'all' | 'A' | 'B' | 'C' | 'D'>('all');
+  const [isClassDropdownOpen, setIsClassDropdownOpen] = useState(false);
+
   const fixedTagOptions = useMemo(() => {
     const courseTags = generateCourseTags(userCourseId);
     return [...COMMON_TAGS.map(t => t.value), ...courseTags.map(t => t.value)];
@@ -1283,6 +1287,7 @@ export default function ProfessorQuizListPage() {
       tags: data.tags || [],
       pastYear: data.pastYear,
       pastExamType: data.pastExamType,
+      creatorClassType: data.creatorClassType,
       createdAt: data.createdAt?.toDate() || new Date(),
       updatedAt: data.updatedAt?.toDate() || new Date(),
     };
@@ -1404,13 +1409,19 @@ export default function ProfessorQuizListPage() {
     return [...carouselQuizzes, ...uniqueCustomQuizzes];
   }, [allMidterm, allFinal, allPast, allIndependent, allCustomQuizzes]);
 
-  // 태그 필터링된 자작 퀴즈
+  // 반별 + 태그 필터링된 자작 퀴즈
   const filteredCustomQuizzes = useMemo(() => {
-    if (selectedTags.length === 0) return customQuizzes;
-    return customQuizzes.filter(quiz =>
-      quiz.tags && selectedTags.some(tag => quiz.tags!.includes(tag))
-    );
-  }, [customQuizzes, selectedTags]);
+    let result = customQuizzes;
+    if (classFilter !== 'all') {
+      result = result.filter(quiz => quiz.creatorClassType === classFilter);
+    }
+    if (selectedTags.length > 0) {
+      result = result.filter(quiz =>
+        quiz.tags && selectedTags.some(tag => quiz.tags!.includes(tag))
+      );
+    }
+    return result;
+  }, [customQuizzes, classFilter, selectedTags]);
 
   // 피드백 구독용 quizId 목록 — ID가 실제로 변경될 때만 재구독 (churn 방지)
   const feedbackQuizIdsKey = useMemo(
@@ -1775,23 +1786,79 @@ export default function ProfessorQuizListPage() {
           )}
         </div>
 
-        {/* 태그 검색 영역 — 자작 탭에서만 (프리뷰 모드에서 숨김) */}
+        {/* 반별 필터 + 태그 검색 영역 — 자작 탭에서만 (프리뷰 모드에서 숨김) */}
         {sectionFilter === 'custom' && !isLibraryPreview && (
-          <div className="flex items-center justify-end gap-1.5 mb-1.5">
-            {selectedTags.map((tag) => (
-              <div
-                key={tag}
-                className="flex items-center gap-0.5 px-1.5 h-9 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold border border-[#1A1A1A] rounded-lg"
+          <div className="flex items-center gap-1.5 mb-1.5">
+            {/* 반별 드롭다운 */}
+            <div className="relative">
+              <button
+                onClick={() => setIsClassDropdownOpen(!isClassDropdownOpen)}
+                className="px-2 py-1.5 bg-[#F5F0E8] text-[#1A1A1A] text-sm font-bold flex items-center gap-1.5 border border-[#1A1A1A] rounded-lg"
               >
-                #{tag}
-                <button
-                  onClick={() => setSelectedTags(prev => prev.filter(t => t !== tag))}
-                  className="ml-0.5 hover:text-[#999]"
+                <span>{classFilter === 'all' ? '전체' : `${classFilter}반`}</span>
+                <svg
+                  className={`w-3 h-3 transition-transform ${isClassDropdownOpen ? 'rotate-180' : ''}`}
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
                 >
-                  ✕
-                </button>
-              </div>
-            ))}
+                  <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+
+              <AnimatePresence>
+                {isClassDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setIsClassDropdownOpen(false)} />
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="absolute left-0 top-full mt-1 z-20 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg min-w-[80px] rounded-lg overflow-hidden"
+                    >
+                      {(['all', 'A', 'B', 'C', 'D'] as const).map((opt) => (
+                        <button
+                          key={opt}
+                          onClick={() => {
+                            setClassFilter(opt);
+                            setIsClassDropdownOpen(false);
+                          }}
+                          className={`w-full px-3 py-2 text-left text-sm font-medium transition-colors ${
+                            classFilter === opt
+                              ? 'bg-[#1A1A1A] text-[#F5F0E8]'
+                              : 'text-[#1A1A1A] hover:bg-[#EDEAE4]'
+                          }`}
+                        >
+                          {opt === 'all' ? '전체' : `${opt}반`}
+                        </button>
+                      ))}
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* 태그 필터 (우측 정렬) */}
+            <div className="flex items-center justify-end gap-1.5 flex-1 min-w-0 overflow-hidden">
+            {selectedTags.map((tag, i) => {
+              // 3개 이상이면 챕터 번호만, 2개 이하면 풀네임
+              const useShort = selectedTags.length >= 3 && tag.includes('_');
+              const label = useShort ? `#${tag.split('_')[0]}` : `#${tag}`;
+              return (
+                <div
+                  key={tag}
+                  title={`#${tag}`}
+                  className="flex items-center gap-0.5 px-1.5 h-9 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold border border-[#1A1A1A] rounded-lg shrink-0"
+                >
+                  {label}
+                  <button
+                    onClick={() => setSelectedTags(prev => prev.filter(t => t !== tag))}
+                    className="ml-0.5 hover:text-[#999]"
+                  >
+                    ✕
+                  </button>
+                </div>
+              );
+            })}
             <button
               onClick={() => setShowTagFilter(!showTagFilter)}
               className={`flex items-center justify-center w-9 h-9 border transition-colors shrink-0 rounded-lg ${
@@ -1804,6 +1871,7 @@ export default function ProfessorQuizListPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
               </svg>
             </button>
+            </div>
           </div>
         )}
         <AnimatePresence>

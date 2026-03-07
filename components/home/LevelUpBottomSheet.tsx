@@ -28,6 +28,8 @@ interface LevelUpBottomSheetProps {
   onClose: () => void;
   courseId: string;
   holdings: RabbitHolding[];
+  /** 뽑기에서 보유 토끼가 나와 자동 레벨업할 rabbitId */
+  autoLevelUpRabbitId?: number | null;
 }
 
 const RABBITS_PER_ROW = 20;
@@ -40,6 +42,7 @@ export default function LevelUpBottomSheet({
   onClose,
   courseId,
   holdings,
+  autoLevelUpRabbitId,
 }: LevelUpBottomSheetProps) {
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -65,14 +68,19 @@ export default function LevelUpBottomSheet({
     }
   }, [isOpen, courseHoldings.length, onClose]);
 
-  // 열릴 때 상태 초기화
+  // 열릴 때 상태 초기화 + 자동 레벨업 대상 선택
   useEffect(() => {
     if (isOpen) {
-      setSelectedIdx(0);
+      if (autoLevelUpRabbitId !== undefined && autoLevelUpRabbitId !== null) {
+        const idx = courseHoldings.findIndex(h => h.rabbitId === autoLevelUpRabbitId);
+        setSelectedIdx(idx >= 0 ? idx : 0);
+      } else {
+        setSelectedIdx(0);
+      }
       setResult(null);
       setError(null);
     }
-  }, [isOpen]);
+  }, [isOpen, autoLevelUpRabbitId, courseHoldings]);
 
   // 열기
   useEffect(() => {

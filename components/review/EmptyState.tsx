@@ -8,7 +8,7 @@ import type { ReviewFilter } from './types';
  */
 export default function EmptyState({ filter, type, fullHeight = false }: { filter: ReviewFilter | 'solved'; type?: 'quiz' | 'question'; fullHeight?: boolean }) {
   const messages: Record<ReviewFilter | 'solved', { title: string; desc: string }> = {
-    library: { title: '서재가 비어있습니다', desc: 'AI 퀴즈로 학습하면 여기에 저장돼요.' },
+    library: { title: '서재가 비어있습니다', desc: '퀴즈를 풀면 여기에 저장돼요.' },
     wrong: { title: '오답이 없습니다', desc: '퀴즈를 풀면 틀린 문제가 자동으로 저장됩니다.' },
     bookmark: { title: '찜한 항목이 없습니다', desc: '퀴즈나 문제를 찜해보세요.' },
     custom: { title: '폴더가 없습니다', desc: '나만의 폴더를 만들어보세요.' },

@@ -17,6 +17,8 @@ import {
   useAllPostsForCourse,
   type Post,
   type Comment,
+  type BoardTag,
+  BOARD_TAGS,
 } from '@/lib/hooks/useBoard';
 import { type CourseId, getCourseList } from '@/lib/types/course';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
@@ -130,6 +132,349 @@ const CLASS_COLORS: Record<string, string> = {
 
 // 워드클라우드 색상 순환
 const CLOUD_COLORS = ['#1A1A1A', '#3A3A3A', '#5C5C5C', '#8B1A1A'];
+
+// ============================================================
+// 학술 Q&A 아카이브
+// ============================================================
+
+interface ArchiveComment {
+  id: string;
+  content: string;
+  authorNickname: string;
+  isAIReply?: boolean;
+  isAccepted?: boolean;
+  createdAt: Date;
+}
+
+interface ArchivePost {
+  id: string;
+  title: string;
+  content: string;
+  authorNickname: string;
+  imageUrls?: string[];
+  createdAt: Date;
+  commentCount: number;
+  acceptedCommentId?: string;
+  aiReply?: string;
+  comments: ArchiveComment[];
+  hasAccepted: boolean;
+}
+
+function AcademicArchiveSection({ posts, courseId }: { posts: Post[]; courseId: string }) {
+  const router = useRouter();
+  const [archivePosts, setArchivePosts] = useState<ArchivePost[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTags, setSelectedTags] = useState<BoardTag[]>([]);
+  const [showTagFilter, setShowTagFilter] = useState(false);
+
+  // 전체 게시글 (최근순)
+  const sortedPosts = useMemo(
+    () => [...posts].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
+    [posts]
+  );
+
+  // 태그 필터 적용
+  const academicPosts = useMemo(
+    () => selectedTags.length > 0
+      ? sortedPosts.filter(p => p.tag && selectedTags.includes(p.tag))
+      : sortedPosts,
+    [sortedPosts, selectedTags]
+  );
+
+  // 댓글 로드 (전체 게시글 기준 — 태그 변경 시 재로드 방지)
+  useEffect(() => {
+    if (sortedPosts.length === 0) {
+      setArchivePosts([]);
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const loadComments = async () => {
+      setLoading(true);
+      const postIds = sortedPosts.map(p => p.id);
+      const chunks: string[][] = [];
+      for (let i = 0; i < postIds.length; i += 30) {
+        chunks.push(postIds.slice(i, i + 30));
+      }
+
+      const allComments: Record<string, ArchiveComment[]> = {};
+      for (const chunk of chunks) {
+        try {
+          const q = query(
+            collection(db, 'comments'),
+            where('postId', 'in', chunk)
+          );
+          const snap = await getDocs(q);
+          snap.docs.forEach(d => {
+            const data = d.data();
+            const postId = data.postId as string;
+            if (!allComments[postId]) allComments[postId] = [];
+            allComments[postId].push({
+              id: d.id,
+              content: data.content || '',
+              authorNickname: data.authorNickname || '익명',
+              isAIReply: data.isAIReply || false,
+              isAccepted: data.isAccepted || false,
+              createdAt: data.createdAt?.toDate?.() || new Date(),
+            });
+          });
+        } catch (e) {
+          // 조회 실패 무시
+        }
+      }
+
+      if (cancelled) return;
+
+      const result: ArchivePost[] = sortedPosts.map(p => {
+        const comments = (allComments[p.id] || []).sort(
+          (a, b) => a.createdAt.getTime() - b.createdAt.getTime()
+        );
+        const aiComment = comments.find(c => c.isAIReply);
+        const hasAccepted = comments.some(c => c.isAccepted);
+
+        return {
+          id: p.id,
+          title: p.title,
+          content: p.content,
+          authorNickname: p.authorNickname,
+          imageUrls: p.imageUrls || (p.imageUrl ? [p.imageUrl] : undefined),
+          createdAt: p.createdAt,
+          commentCount: p.commentCount,
+          acceptedCommentId: p.acceptedCommentId,
+          aiReply: aiComment?.content,
+          comments,
+          hasAccepted,
+        };
+      });
+
+      setArchivePosts(result);
+      setLoading(false);
+    };
+
+    loadComments();
+    return () => { cancelled = true; };
+  }, [sortedPosts]);
+
+  // 태그 + 검색 필터 (클라이언트 사이드 — 깜빡임 없음)
+  const filtered = useMemo(() => {
+    let result = archivePosts;
+
+    // 태그 필터
+    if (selectedTags.length > 0) {
+      const tagSet = new Set(selectedTags);
+      result = result.filter(p => {
+        const postTag = posts.find(op => op.id === p.id)?.tag;
+        return postTag && tagSet.has(postTag);
+      });
+    }
+
+    // 검색 필터
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(p =>
+        p.title.toLowerCase().includes(q) ||
+        p.content.toLowerCase().includes(q) ||
+        (p.aiReply && p.aiReply.toLowerCase().includes(q))
+      );
+    }
+
+    return result;
+  }, [archivePosts, selectedTags, searchQuery, posts]);
+
+  const formatShortDate = (date: Date) => {
+    const m = date.getMonth() + 1;
+    const d = date.getDate();
+    return `${m}/${d}`;
+  };
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-2 gap-2.5">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-[180px] rounded-none" />
+        ))}
+      </div>
+    );
+  }
+
+  if (sortedPosts.length === 0) {
+    return (
+      <div className="border border-[#D4CFC4] bg-[#FDFBF7] p-6 text-center">
+        <p className="text-sm text-[#5C5C5C]">게시글이 없습니다</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* 검색 + 태그 필터 (게시판과 동일 UI) */}
+      <div className="mb-3">
+        <div className="flex items-center gap-2">
+          {/* 검색창 (태그 미선택 시만 표시) */}
+          {selectedTags.length === 0 && (
+            <div className="flex-1">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="제목 검색..."
+                className="w-full px-2.5 py-2 text-xs outline-none"
+                style={{ border: '1px solid #1A1A1A', backgroundColor: '#F5F0E8' }}
+              />
+            </div>
+          )}
+
+          {/* 선택된 태그 칩 */}
+          {selectedTags.length > 0 && (
+            <div className="flex-1 flex items-center justify-end gap-1.5">
+              {selectedTags.map((tag) => (
+                <div
+                  key={tag}
+                  className="flex items-center gap-0.5 px-1.5 h-9 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold border border-[#1A1A1A] shrink-0"
+                >
+                  #{tag}
+                  <button
+                    onClick={() => setSelectedTags(prev => prev.filter(t => t !== tag))}
+                    className="ml-0.5 hover:text-[#999]"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 태그 필터 토글 버튼 */}
+          <button
+            type="button"
+            onClick={() => setShowTagFilter(!showTagFilter)}
+            className={`flex items-center justify-center w-9 h-9 border transition-colors shrink-0 ${
+              showTagFilter
+                ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                : 'bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A]'
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+            </svg>
+          </button>
+        </div>
+
+        {/* 태그 필터 확장 패널 */}
+        <AnimatePresence>
+          {showTagFilter && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden mt-2"
+            >
+              <div className="flex flex-wrap justify-end gap-1.5 p-2 bg-[#EDEAE4] border border-[#D4CFC4]">
+                {BOARD_TAGS
+                  .filter(tag => !selectedTags.includes(tag))
+                  .map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => {
+                        setSelectedTags(prev => [...prev, tag]);
+                        setShowTagFilter(false);
+                        setSearchQuery('');
+                      }}
+                      className="flex-1 py-1.5 text-xs font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#E5E0D8] transition-colors"
+                    >
+                      #{tag}
+                    </button>
+                  ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* 건수 */}
+      <p className="text-[10px] text-[#5C5C5C] mb-2 tracking-wide">
+        {filtered.length}건{(searchQuery || selectedTags.length > 0) && ` (전체 ${sortedPosts.length}건)`}
+      </p>
+
+      {/* 2열 카드 그리드 */}
+      <div className="grid grid-cols-2 gap-2.5">
+        {filtered.map((post) => (
+          <button
+            key={post.id}
+            onClick={() => router.push(`/board/${post.id}`)}
+            className="text-left border border-[#1A1A1A] bg-[#FDFBF7] overflow-hidden hover:shadow-md transition-shadow"
+          >
+            {/* 이미지 썸네일 */}
+            {post.imageUrls && post.imageUrls.length > 0 && (
+              <div className="w-full bg-[#EBE5D9] overflow-hidden">
+                <img
+                  src={post.imageUrls[0]}
+                  alt=""
+                  className="w-full h-auto max-h-24 object-contain"
+                  loading="lazy"
+                />
+              </div>
+            )}
+
+            <div className="p-2.5">
+              {/* 제목 */}
+              <h4 className="text-[11px] font-bold text-[#1A1A1A] line-clamp-2 leading-tight mb-1">
+                {post.title}
+              </h4>
+
+              {/* 작성자 · 날짜 */}
+              <p className="text-[9px] text-[#999] mb-1.5">
+                {post.authorNickname} · {formatShortDate(post.createdAt)}
+              </p>
+
+              {/* 본문 미리보기 */}
+              <p className="text-[10px] text-[#5C5C5C] line-clamp-2 leading-relaxed mb-2">
+                {post.content}
+              </p>
+
+              {/* 콩콩이 답변 미리보기 */}
+              {post.aiReply && (
+                <div className="border-t border-[#D4CFC4] pt-1.5 mb-1.5">
+                  <p className="text-[9px] font-bold text-[#1A1A1A] mb-0.5">AI 답변</p>
+                  <p className="text-[10px] text-[#5C5C5C] line-clamp-2 leading-relaxed">
+                    {post.aiReply}
+                  </p>
+                </div>
+              )}
+
+              {/* 하단 정보 */}
+              <div className="flex items-center gap-1.5 text-[9px] text-[#999] border-t border-[#EBE5D9] pt-1.5">
+                <span>{post.comments.length}개 답변</span>
+                {post.imageUrls && post.imageUrls.length > 0 && (
+                  <>
+                    <span className="text-[#D4CFC4]">·</span>
+                    <span>{post.imageUrls.length}장</span>
+                  </>
+                )}
+                {post.hasAccepted && (
+                  <>
+                    <span className="text-[#D4CFC4]">·</span>
+                    <span className="font-bold text-[#1D5D4A]">채택</span>
+                  </>
+                )}
+              </div>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {filtered.length === 0 && searchQuery && (
+        <div className="py-6 text-center">
+          <p className="text-xs text-[#5C5C5C]">검색 결과가 없습니다</p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ============================================================
 // 학생용 컴포넌트
@@ -1217,6 +1562,17 @@ export default function ManagePostsPage() {
             </div>
           ) : (
             <>
+              {/* ── Q&A ARCHIVE ── */}
+              <section>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="flex-1 h-px bg-[#1A1A1A]" />
+                  <h2 className="font-serif-display text-lg font-bold text-[#1A1A1A]">Q&A ARCHIVE</h2>
+                  <div className="flex-1 h-px bg-[#1A1A1A]" />
+                </div>
+
+                <AcademicArchiveSection posts={allPosts} courseId={selectedCourseId} />
+              </section>
+
               {/* ── ACTIVITY ── */}
               <section>
                 <div className="flex items-center gap-3 mb-3">
