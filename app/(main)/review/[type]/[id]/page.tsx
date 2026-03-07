@@ -17,7 +17,8 @@ import {
   serverTimestamp,
   Timestamp,
 } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db, functions } from '@/lib/firebase';
+import { httpsCallable } from 'firebase/functions';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useReview, calculateCustomFolderQuestionCount, type ReviewItem, type FolderCategory, type CustomFolderQuestion } from '@/lib/hooks/useReview';
 import { useCourse } from '@/lib/contexts/CourseContext';
@@ -2489,23 +2490,18 @@ export default function FolderDetailPage() {
                   }
                 }
 
-                // 3. 복습 연습 EXP 지급용 quizResults 문서 생성 (CF 트리거)
+                // 3. 복습 연습 EXP 지급 — 서버사이드 CF 호출 (보안 강화)
                 if (results.length > 0) {
                   const correctCount = results.filter(r => r.isCorrect).length;
                   const totalCount = quizData.questions?.length || results.length;
                   const reviewScore = Math.round((correctCount / totalCount) * 100);
 
-                  await addDoc(collection(db, 'quizResults'), {
-                    userId: user.uid,
+                  const recordReviewPracticeFn = httpsCallable(functions, 'recordReviewPractice');
+                  await recordReviewPracticeFn({
                     quizId: folderId,
-                    quizTitle: quizData.title || '퀴즈',
-                    score: reviewScore,
                     correctCount,
                     totalCount,
-                    isReviewPractice: true,
-                    courseId: quizData.courseId || null,
-                    classId: userClassId || null,
-                    createdAt: serverTimestamp(),
+                    score: reviewScore,
                   });
 
                   // EXP 토스트는 ReviewPractice의 handleFinish에서 이미 표시됨

@@ -49,6 +49,7 @@ interface RankedUserDoc {
   rankScore: number;
   profileRabbitId: number | null;
   equippedRabbitNames: string;
+  equippedRabbits: Array<{ rabbitId: number; courseId?: string }>;
   firstEquippedRabbitId: number | null;
   firstEquippedRabbitName: string | null;
   rank: number;
@@ -177,6 +178,7 @@ async function computeRankingsForCourse(courseId: string) {
       rankScore,
       profileRabbitId: u.profileRabbitId ?? null,
       equippedRabbitNames,
+      equippedRabbits: allEquipped.map((r: any) => ({ rabbitId: r.rabbitId, courseId: r.courseId })),
       firstEquippedRabbitId,
       firstEquippedRabbitName,
       rank: 0,

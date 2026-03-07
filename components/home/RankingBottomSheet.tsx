@@ -25,6 +25,7 @@ interface RankedUser {
   rankScore: number;
   profileRabbitId?: number;
   equippedRabbitNames: string;
+  equippedRabbits?: Array<{ rabbitId: number; courseId?: string }>;
   firstEquippedRabbitId?: number;
   firstEquippedRabbitName?: string;
   rank: number;
@@ -33,6 +34,50 @@ interface RankedUser {
 interface RankingBottomSheetProps {
   isOpen: boolean;
   onClose: () => void;
+}
+
+/**
+ * 서버 캐시된 토끼 이름을 rabbits 컬렉션에서 실시간으로 갱신
+ */
+async function resolveRabbitNamesForAll(users: RankedUser[]) {
+  // 고유 rabbit 문서 ID 수집
+  const rabbitDocIds = new Set<string>();
+  for (const user of users) {
+    for (const r of (user.equippedRabbits || [])) {
+      if (r.rabbitId > 0 && r.courseId) {
+        rabbitDocIds.add(`${r.courseId}_${r.rabbitId}`);
+      }
+    }
+  }
+  if (rabbitDocIds.size === 0) return;
+
+  // 배치 조회 (10개씩)
+  const names: Record<string, string> = {};
+  const ids = Array.from(rabbitDocIds);
+  for (let i = 0; i < ids.length; i += 10) {
+    const batch = ids.slice(i, i + 10);
+    const snaps = await Promise.all(
+      batch.map(docId => getDoc(doc(db, 'rabbits', docId)))
+    );
+    snaps.forEach((snap, idx) => {
+      if (snap.exists()) {
+        names[batch[idx]] = snap.data()?.name || `토끼 #${batch[idx].split('_')[1]}`;
+      }
+    });
+  }
+
+  // 각 유저의 equippedRabbitNames 갱신
+  for (const user of users) {
+    const equipped = user.equippedRabbits || [];
+    if (equipped.length === 0) continue;
+    const resolved = equipped.map(r => {
+      if (r.rabbitId === 0) return '토끼';
+      const key = r.courseId ? `${r.courseId}_${r.rabbitId}` : null;
+      return (key && names[key]) ? names[key] : `토끼 #${r.rabbitId + 1}`;
+    });
+    user.equippedRabbitNames = resolved.join(' & ');
+    user.firstEquippedRabbitName = resolved[0] || undefined;
+  }
 }
 
 /**
@@ -118,8 +163,12 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
           const data = snapshot.data();
           const users = (data.rankedUsers || []) as RankedUser[];
           applyRankings(users);
-          writeFullCache(userCourseId, { rankedUsers: users });
           setLoading(false);
+          // 토끼 이름 실시간 갱신 (서버 캐시와 무관하게 최신 이름 반영)
+          resolveRabbitNamesForAll(users).then(() => {
+            applyRankings([...users]);
+            writeFullCache(userCourseId, { rankedUsers: users });
+          }).catch(() => {});
         } else if (!fallbackAttempted) {
           fallbackAttempted = true;
           if (!cached) setLoading(true);
@@ -586,6 +635,7 @@ async function computeRankingsClientSide(courseId: string): Promise<RankedUser[]
       rankScore,
       profileRabbitId: u.profileRabbitId,
       equippedRabbitNames: names.length > 0 ? names.join(' & ') : '',
+      equippedRabbits: allEquipped.map((r: any) => ({ rabbitId: r.rabbitId, courseId: r.courseId })),
       firstEquippedRabbitId: firstSlot?.rabbitId,
       firstEquippedRabbitName: firstSlot
         ? firstSlot.rabbitId === 0 ? '토끼' : (firstSlot.courseId ? rabbitNames[`${firstSlot.courseId}_${firstSlot.rabbitId}`] : null) || `토끼 #${firstSlot.rabbitId}`

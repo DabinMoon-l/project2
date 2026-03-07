@@ -99,7 +99,12 @@ export const onQuizComplete = onDocumentCreated(
             rewardedAt: FieldValue.serverTimestamp(),
             expRewarded: expReward,
           });
-          addExpInTransaction(transaction, userId, expReward, reason, userDoc);
+          addExpInTransaction(transaction, userId, expReward, reason, userDoc, {
+            type: "review_practice",
+            sourceId: quizId,
+            sourceCollection: "quizzes",
+            metadata: { resultId },
+          });
         });
         console.log(`복습 보상 지급 완료: ${userId}`, { resultId, expReward });
       } catch (error) {
@@ -180,7 +185,12 @@ export const onQuizComplete = onDocumentCreated(
         });
 
         // 경험치 지급
-        addExpInTransaction(transaction, userId, expReward, reason, userDoc);
+        addExpInTransaction(transaction, userId, expReward, reason, userDoc, {
+          type: "quiz_complete",
+          sourceId: quizId,
+          sourceCollection: "quizzes",
+          metadata: { score, resultId, isUpdate },
+        });
 
         // 첫 시도 + 서버 채점된 결과에만 누적 통계 업데이트 (랭킹용)
         if (!isUpdate && correctCount !== undefined && totalCount !== undefined && (result as any).gradedOnServer === true) {
@@ -356,7 +366,12 @@ export const onQuizCreate = onDocumentCreated(
           expRewarded: expReward,
         });
 
-        addExpInTransaction(transaction, creatorId, expReward, reason, userDoc);
+        addExpInTransaction(transaction, creatorId, expReward, reason, userDoc, {
+          type: "quiz_create",
+          sourceId: quizId,
+          sourceCollection: "quizzes",
+          metadata: { isAiSave },
+        });
       });
 
       console.log(`퀴즈 생성 보상 지급 완료: ${creatorId}`, {
@@ -415,7 +430,11 @@ export const onQuizMakePublic = onDocumentWritten(
           publicRewardedAt: FieldValue.serverTimestamp(),
         });
 
-        addExpInTransaction(transaction, creatorId, expReward, reason, userDoc);
+        addExpInTransaction(transaction, creatorId, expReward, reason, userDoc, {
+          type: "quiz_make_public",
+          sourceId: quizId,
+          sourceCollection: "quizzes",
+        });
       });
 
       console.log(`퀴즈 공개 전환 보상 지급: ${creatorId}`, { quizId, expReward });

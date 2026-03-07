@@ -387,6 +387,7 @@ export async function endBattle(
     });
 
     const histRef = userRef.collection("expHistory").doc();
+    const currentExp = (await userRef.get()).data()?.totalExp || 0;
     batch.set(histRef, {
       type: "tekken_battle",
       amount: xp,
@@ -395,7 +396,15 @@ export async function endBattle(
         : isDraw
           ? "배틀 무승부"
           : "배틀 패배",
-      battleId,
+      sourceId: battleId,
+      sourceCollection: "tekken/battles",
+      previousExp: currentExp,
+      newExp: currentExp + xp,
+      metadata: {
+        isWinner,
+        isDraw,
+        streak: newStreak,
+      },
       createdAt: FieldValue.serverTimestamp(),
     });
   }

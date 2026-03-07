@@ -17,16 +17,11 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { incrementShard, getShardedTotal } from "./utils/shardedCounter";
 import { checkRateLimitV2 } from "./utils/rateLimitV2";
+import { gradeQuestion, UserAnswer } from "./utils/gradeQuestion";
 
 const db = getFirestore();
 
 // ─── 타입 정의 ───
-
-interface UserAnswer {
-  questionId: string;
-  /** OX: 0|1, 객관식: 0-indexed number | number[], 주관식: string */
-  answer: number | number[] | string;
-}
 
 interface RecordAttemptInput {
   quizId: string;
@@ -39,68 +34,6 @@ interface QuestionScore {
   userAnswer: string;
   correctAnswer: string;
   answeredAt: FirebaseFirestore.FieldValue;
-}
-
-// ─── 서버 채점 로직 ───
-
-function gradeQuestion(
-  question: any,
-  userAnswer: UserAnswer | undefined,
-  questionIndex: number
-): { isCorrect: boolean; userAnswerStr: string; correctAnswerStr: string } {
-  let isCorrect = false;
-  let userAnswerStr = "";
-  let correctAnswerStr = "";
-
-  if (question.type === "ox") {
-    // OX 문제 — 숫자(0/1)와 문자열("O"/"X") 양쪽 지원
-    const answerVal = question.answer;
-    const isO = answerVal === 0 || answerVal === "O" || answerVal === "o";
-    correctAnswerStr = isO ? "O" : "X";
-    if (userAnswer !== undefined) {
-      const ua = userAnswer.answer;
-      const uaIsO = ua === 0 || ua === "0" || ua === "O" || ua === "o";
-      userAnswerStr = uaIsO ? "O" : "X";
-      isCorrect = correctAnswerStr === userAnswerStr;
-    }
-  } else if (question.type === "multiple") {
-    // 객관식
-    if (Array.isArray(question.answer)) {
-      // 복수정답
-      correctAnswerStr = question.answer.map((a: number) => String(a + 1)).join(",");
-      if (userAnswer && Array.isArray(userAnswer.answer)) {
-        const userSorted = [...(userAnswer.answer as number[])].sort();
-        const correctSorted = [...question.answer].sort();
-        isCorrect = JSON.stringify(userSorted) === JSON.stringify(correctSorted);
-        userAnswerStr = (userAnswer.answer as number[]).map((a) => String(a + 1)).join(",");
-      } else if (userAnswer !== undefined) {
-        const ua = Number(userAnswer.answer);
-        isCorrect = question.answer.length === 1 && question.answer[0] === ua;
-        userAnswerStr = String(ua + 1);
-      }
-    } else {
-      // 단일 정답
-      correctAnswerStr = String((question.answer ?? 0) + 1);
-      if (userAnswer !== undefined) {
-        const ua = Number(userAnswer.answer);
-        isCorrect = ua === question.answer;
-        userAnswerStr = String(ua + 1);
-      }
-    }
-  } else {
-    // short_answer, short, essay
-    correctAnswerStr = String(question.answer ?? "");
-    if (userAnswer !== undefined) {
-      userAnswerStr = String(userAnswer.answer);
-      // 정답이 ||| 구분자로 여러 개인 경우
-      const accepted = correctAnswerStr
-        .split("|||")
-        .map((s: string) => s.trim().toLowerCase());
-      isCorrect = accepted.includes(userAnswerStr.trim().toLowerCase());
-    }
-  }
-
-  return { isCorrect, userAnswerStr, correctAnswerStr };
 }
 
 // ─── 메인 함수 ───
@@ -227,6 +160,16 @@ export const recordAttempt = onCall(
 
     // ── ⑥ quiz_completions (completedUsers 배열 대체) ──
     const completionDocId = `${quizId}_${userId}`;
+
+    // 재시도 시 이전 점수 조회 (덮어쓰기 전)
+    let prevCompletionScore = 0;
+    if (attemptNo > 1) {
+      const prevCompletion = await db.doc(`quiz_completions/${completionDocId}`).get();
+      if (prevCompletion.exists) {
+        prevCompletionScore = prevCompletion.data()?.score || 0;
+      }
+    }
+
     await db.doc(`quiz_completions/${completionDocId}`).set(
       {
         quizId,
@@ -276,12 +219,18 @@ export const recordAttempt = onCall(
     // ── ⑨ reviews 생성은 generateReviewsOnResult 트리거에서 비동기 처리 ──
 
     // ── ⑩ users/{uid}.quizStats 증분 갱신 + averageScore 계산 ──
+    // totalScoreSum: 퀴즈별 점수(0~100) 합계 — averageScore = totalScoreSum / totalAttempts
+    // 재시도 시 점수 차이만큼 조정 (퀴즈당 최신 점수만 반영)
     try {
-      // 증분 업데이트
+      const scoreDiff = attemptNo <= 1 ? score : (score - prevCompletionScore);
+
       await db.doc(`users/${userId}`).update({
-        "quizStats.totalCorrect": FieldValue.increment(correctCount),
-        "quizStats.totalQuestions": FieldValue.increment(totalCount),
-        ...(attemptNo <= 1 ? { "quizStats.totalAttempts": FieldValue.increment(1) } : {}),
+        "quizStats.totalScoreSum": FieldValue.increment(scoreDiff),
+        ...(attemptNo <= 1 ? {
+          "quizStats.totalAttempts": FieldValue.increment(1),
+          "quizStats.totalCorrect": FieldValue.increment(correctCount),
+          "quizStats.totalQuestions": FieldValue.increment(totalCount),
+        } : {}),
         updatedAt: FieldValue.serverTimestamp(),
       });
 
@@ -289,9 +238,9 @@ export const recordAttempt = onCall(
       const userDoc = await db.doc(`users/${userId}`).get();
       const userData = userDoc.data();
       if (userData?.quizStats) {
-        const totalQ = userData.quizStats.totalQuestions || 0;
-        const totalC = userData.quizStats.totalCorrect || 0;
-        const avgScore = totalQ > 0 ? Math.round((totalC / totalQ) * 100) : 0;
+        const attempts = userData.quizStats.totalAttempts || 0;
+        const scoreSum = userData.quizStats.totalScoreSum || 0;
+        const avgScore = attempts > 0 ? Math.round(scoreSum / attempts) : 0;
         await db.doc(`users/${userId}`).update({
           "quizStats.averageScore": avgScore,
           "quizStats.lastAttemptAt": FieldValue.serverTimestamp(),

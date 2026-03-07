@@ -58,6 +58,34 @@ export async function readUserForExp(
 }
 
 /**
+ * EXP 히스토리 소스 타입
+ *
+ * 모든 EXP 지급 경로를 추적하기 위한 enum.
+ * users/{uid}/expHistory 문서의 `type` 필드에 저장됩니다.
+ */
+export type ExpSourceType =
+  | "quiz_complete"      // 퀴즈 완료
+  | "quiz_create"        // 퀴즈 생성 (커스텀/AI)
+  | "quiz_make_public"   // 퀴즈 공개 전환
+  | "review_practice"    // 복습 연습 완료
+  | "feedback_submit"    // 피드백 제출
+  | "post_create"        // 게시글 작성
+  | "comment_create"     // 댓글 작성
+  | "comment_accepted"   // 댓글 채택
+  | "tekken_battle"      // 배틀 (승리/패배/무승부)
+  | "other";             // 기타
+
+/**
+ * EXP 히스토리 추가 컨텍스트 (선택 사항)
+ */
+export interface ExpHistoryOptions {
+  type: ExpSourceType;
+  sourceId?: string;           // 관련 문서 ID (quizId, postId 등)
+  sourceCollection?: string;   // 관련 컬렉션명 (quizzes, posts 등)
+  metadata?: Record<string, unknown>; // 추가 컨텍스트 (점수, 제목 등)
+}
+
+/**
  * 사용자에게 경험치 지급 (트랜잭션 내에서 사용)
  *
  * XP만 증가시키고 히스토리 기록.
@@ -69,13 +97,15 @@ export async function readUserForExp(
  * @param amount 지급할 경험치량
  * @param reason 지급 사유
  * @param userDoc 미리 읽은 사용자 문서 스냅샷
+ * @param options 구조화된 EXP 소스 정보 (type, sourceId, metadata)
  */
 export function addExpInTransaction(
   transaction: Transaction,
   userId: string,
   amount: number,
   reason: string,
-  userDoc: FirebaseFirestore.DocumentSnapshot
+  userDoc: FirebaseFirestore.DocumentSnapshot,
+  options?: ExpHistoryOptions
 ): { rankUp: boolean } {
   if (!userDoc.exists) {
     throw new Error("사용자를 찾을 수 없습니다.");
@@ -94,17 +124,25 @@ export function addExpInTransaction(
     updatedAt: FieldValue.serverTimestamp(),
   });
 
-  // 경험치 히스토리 기록
+  // 경험치 히스토리 기록 (구조화된 필드 포함)
   const historyRef = db.collection("users").doc(userId)
     .collection("expHistory").doc();
 
-  transaction.set(historyRef, {
+  const historyData: Record<string, unknown> = {
+    type: options?.type || "other",
     amount,
     reason,
     previousExp: currentExp,
     newExp,
     createdAt: FieldValue.serverTimestamp(),
-  });
+  };
+
+  // 선택 필드: 값이 있을 때만 저장
+  if (options?.sourceId) historyData.sourceId = options.sourceId;
+  if (options?.sourceCollection) historyData.sourceCollection = options.sourceCollection;
+  if (options?.metadata) historyData.metadata = options.metadata;
+
+  transaction.set(historyRef, historyData);
 
   return { rankUp: false };
 }

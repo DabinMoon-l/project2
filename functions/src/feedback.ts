@@ -53,6 +53,19 @@ export const onFeedbackSubmit = onDocumentCreated(
 
     const db = getFirestore();
 
+    // 퀴즈 존재 검증 (가짜 피드백으로 EXP 파밍 방지)
+    const quizId = feedback.quizId;
+    if (!quizId) {
+      console.error("quizId 누락:", { feedbackId });
+      return;
+    }
+    const quizDoc = await db.doc(`quizzes/${quizId}`).get();
+    if (!quizDoc.exists) {
+      console.warn(`존재하지 않는 퀴즈에 대한 피드백 — EXP 차단: quizId=${quizId}`);
+      await snapshot.ref.update({ rewarded: true, expRewarded: 0 });
+      return;
+    }
+
     // 동일 유저+문제 중복 EXP 지급 방지
     const existingFeedbacks = await db
       .collection("questionFeedbacks")
@@ -83,7 +96,12 @@ export const onFeedbackSubmit = onDocumentCreated(
           expRewarded: expReward,
         });
 
-        addExpInTransaction(transaction, userId, expReward, reason, userDoc);
+        addExpInTransaction(transaction, userId, expReward, reason, userDoc, {
+          type: "feedback_submit",
+          sourceId: feedbackId,
+          sourceCollection: "questionFeedbacks",
+          metadata: { questionId, feedbackType: type },
+        });
 
         // feedbackCount 증가 (소통 지표 계산용 — computeRadarNorm에서 사용)
         const userRef = db.collection("users").doc(userId);
@@ -98,27 +116,24 @@ export const onFeedbackSubmit = onDocumentCreated(
       });
 
       // 교수님에게 알림 생성 (새 피드백 알림)
-      // 해당 퀴즈의 교수님 ID 조회
-      const quizDoc = await db.collection("quizzes").doc(feedback.quizId).get();
-      if (quizDoc.exists) {
-        const quizData = quizDoc.data();
-        const professorId = quizData?.creatorId;
+      // 위에서 검증한 quizDoc 재사용
+      const quizData = quizDoc.data();
+      const professorId = quizData?.creatorId;
 
-        if (professorId) {
-          await db.collection("notifications").add({
-            userId: professorId,
-            type: "NEW_FEEDBACK",
-            title: "새 피드백",
-            message: "문제에 대한 새로운 피드백이 등록되었습니다",
-            data: {
-              feedbackId,
-              quizId: feedback.quizId,
-              questionId,
-            },
-            read: false,
-            createdAt: FieldValue.serverTimestamp(),
-          });
-        }
+      if (professorId) {
+        await db.collection("notifications").add({
+          userId: professorId,
+          type: "NEW_FEEDBACK",
+          title: "새 피드백",
+          message: "문제에 대한 새로운 피드백이 등록되었습니다",
+          data: {
+            feedbackId,
+            quizId,
+            questionId,
+          },
+          read: false,
+          createdAt: FieldValue.serverTimestamp(),
+        });
       }
     } catch (error) {
       console.error("피드백 보상 지급 실패:", error);

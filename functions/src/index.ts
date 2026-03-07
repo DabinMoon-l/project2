@@ -33,6 +33,16 @@ export { onQuizComplete, updateQuizStatistics, onQuizCreate, onQuizMakePublic } 
 export { recordAttempt } from "./recordAttempt";
 
 // ============================================
+// 퀴즈 재채점 Functions
+// ============================================
+export { regradeQuestions } from "./regradeQuestions";
+
+// ============================================
+// 복습 연습 완료 (서버사이드 검증 + EXP 지급)
+// ============================================
+export { recordReviewPractice } from "./reviewPractice";
+
+// ============================================
 // Reviews 비동기 생성 (quizResults 생성 트리거)
 // ============================================
 export { generateReviewsOnResult } from "./reviewsGenerator";
