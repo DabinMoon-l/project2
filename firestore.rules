@@ -753,6 +753,13 @@ service cloud.firestore {
       }
     }
 
+    // 로그인 로그 (로그인 시 자동 기록, 읽기는 교수만)
+    match /loginLogs/{logId} {
+      allow create: if isAuthenticated();
+      allow read: if isProfessor();
+      allow update, delete: if false;
+    }
+
     // 월별 리포트 (CF에서 쓰기, 교수님만 읽기)
     match /monthlyReports/{courseId} {
       allow read: if isProfessor();
