@@ -69,11 +69,11 @@ export default function TekkenBattleOverlay({
     }
   }, [tekken.currentRoundIndex]);
 
-  // roundResult 상태 → 결과 표시
+  // roundResult 상태 → 결과 표시 (0.8초)
   useEffect(() => {
     if (tekken.battleStatus === 'roundResult') {
       setShowRoundResult(true);
-      const timer = setTimeout(() => setShowRoundResult(false), 1000);
+      const timer = setTimeout(() => setShowRoundResult(false), 800);
       return () => clearTimeout(timer);
     }
   }, [tekken.battleStatus]);

@@ -506,6 +506,63 @@ function buildChapterIndexPrompt(courseId: string, filterChapters?: string[]): s
   return text;
 }
 
+/**
+ * 과목 개요 + 선택된 챕터의 상세 커리큘럼 프롬프트 생성
+ * Gemini가 과목 특성과 출제 방향을 이해하도록 인덱스 기반 가이드 제공
+ */
+function buildCourseOverviewPrompt(courseId: string, filterChapters?: string[]): string {
+  const index = getCourseIndex(courseId);
+  if (!index) return "";
+
+  // 과목별 특성 설명
+  const courseCharacteristics: Record<string, string> = {
+    biology: `생물학은 생명현상의 기본 원리를 다루는 기초 과목입니다.
+세포 구조, 분자생물학, 유전학, 생리학 등 폭넓은 범위를 포함합니다.
+**출제 방향**: 개념 정의, 구조-기능 매칭, 비교 문제(vs), 과정/순서 문제, 조절 기전이 핵심입니다.
+특히 비교 문제(예: DNA vs RNA, 체세포분열 vs 감수분열, 교감 vs 부교감)가 자주 출제됩니다.`,
+
+    pathophysiology: `병태생리학은 질병의 발생 기전과 병리학적 변화를 다루는 과목입니다.
+정상 → 비정상 변화의 기전, 세포 수준의 병리, 면역/염증 반응, 종양학을 포함합니다.
+**출제 방향**: 기전(mechanism) 이해, 원인-결과 관계, 분류/비교 문제, 임상 적용이 핵심입니다.
+특히 분류 체계(예: 괴사 유형, 과민반응 I~IV형, 종양 분류)와 기전 연결이 중요합니다.`,
+
+    microbiology: `미생물학은 세균, 바이러스, 진균, 원충 등 병원성 미생물을 다루는 과목입니다.
+미생물의 구조/분류/증식, 숙주 면역반응, 감염 기전, 항미생물제를 포함합니다.
+**대상 학생**: 간호학과 학생 — 임상에서 실제로 접하는 미생물 위주로 출제하되, 기초 미생물학 범위도 폭넓게 다루세요.
+**출제 방향**: 임상에서 중요한 병원성 미생물(MRSA, VRE, 결핵균, HIV, HBV, 칸디다 등)의 특성, 감염 경로, 예방법을 우선 다루세요.
+미생물 분류/특성 비교, 그람양성 vs 그람음성, 독소/병원성 인자, 면역 기전, 항균제 작용기전도 핵심입니다.
+특히 세균/바이러스/진균 간 비교, 특정 균종의 특성(형태, 독소, 감염경로), 면역 반응 단계가 중요합니다.
+**⚠️ 미생물학 역사 출제 규칙**: 미생물학의 역사(1장)에서 문제를 출제할 경우, 코흐(Robert Koch)만 중심적으로 다루세요. 다른 과학자(파스퇴르 등)는 오답 선지로 활용할 수 있지만, 정답은 반드시 코흐와 관련된 내용이거나 코흐만 알면 풀 수 있는 문제여야 합니다.`,
+  };
+
+  const overview = courseCharacteristics[courseId];
+  if (!overview) return "";
+
+  // 선택된 챕터의 상세 내용 표시
+  const chapters = filterChapters && filterChapters.length > 0
+    ? index.chapters.filter(ch => {
+        const num = ch.id.split("_")[1];
+        return filterChapters.includes(num);
+      })
+    : [];
+
+  let text = `## 과목 개요 및 출제 가이드\n\n${overview}\n`;
+
+  if (chapters.length > 0) {
+    text += `\n### 선택된 챕터 상세 커리큘럼\n`;
+    text += `아래는 출제 범위로 지정된 챕터의 세부 주제입니다. 이 주제들을 기반으로 문제를 구성하세요.\n\n`;
+    for (const chapter of chapters) {
+      text += `**${chapter.name}**\n`;
+      for (const detail of chapter.details) {
+        text += `  - ${detail.name}\n`;
+      }
+      text += `\n`;
+    }
+  }
+
+  return text;
+}
+
 export interface StyleContext {
   profile: StyleProfile | null;
   keywords: KeywordStore | null;
@@ -846,11 +903,20 @@ export function buildFullPrompt(
         })
     : [];
 
+  // 태그에서 챕터 번호 추출 (과목 개요에 사용)
+  const tagChapterNumbers = tags && tags.length > 0
+    ? tags.filter(t => /^\d+_/.test(t)).map(t => t.split("_")[0])
+    : [];
+
   const styleContext = courseCustomized && !skipStyle ? buildStyleContextPrompt(context) : "";
   const difficultyPrompt = buildDifficultyPrompt(difficulty, context);
   const scopeContext = courseCustomized && !skipScope ? buildScopeContextPrompt(context, !!professorPrompt) : "";
   const chapterIndexPrompt = courseCustomized ? buildChapterIndexPrompt(courseId, scopeChapters) : "";
   const focusGuide = courseCustomized && !skipFocusGuide ? getFocusGuide(courseId, scopeChapters) : null;
+  // 과목 개요 (과목 특성 + 선택 챕터 상세 커리큘럼)
+  const courseOverviewPrompt = courseCustomized
+    ? buildCourseOverviewPrompt(courseId, tagChapterNumbers.length > 0 ? tagChapterNumbers : scopeChapters)
+    : "";
 
   // 슬라이더 가중치 → 문제 수 비율로 변환
   // scope와 focusGuide의 비율을 문제 수로 분배
@@ -897,15 +963,17 @@ export function buildFullPrompt(
    - **${questionCount}문제 전부** 키워드 주제에 관한 문제여야 합니다
    - '과목 전체 범위'는 정확한 개념과 용어 확인 참고용입니다`;
     } else {
-      // 키워드 없이 빈 텍스트: 포커스 가이드 전체에서 골고루 출제
-      contentRule = `**포커스 가이드 기반 출제 규칙**:
-   - 포커스 가이드 전체에서 골고루 출제하세요
+      // 키워드 없이 빈 텍스트: 포커스 가이드 + 챕터 커리큘럼에서 골고루 출제
+      contentRule = `**포커스 가이드 + 커리큘럼 기반 출제 규칙**:
+   - 포커스 가이드의 **(고빈도)**, **(필수 출제)** 항목을 우선 출제하세요
+   - '과목 개요 및 출제 가이드'의 챕터 상세 커리큘럼에서 세부 주제를 골고루 다루세요
    - '과목 전체 범위'에서 정확한 개념과 용어를 확인하세요`;
     }
   }
-  // 2. 매우 짧은 텍스트 + FocusGuide 없음: 텍스트 기반 일반 지식 문제
+  // 2. 매우 짧은 텍스트 + FocusGuide 없음: 챕터 커리큘럼/키워드 기반 출제
   else if (isVeryShortText && !hasFocusGuide) {
     const hasText = (professorPrompt || ocrText).trim().length > 0;
+    const hasTagsSelected = tagChapterLabels.length > 0;
     if (hasText) {
       uploadedTextLabel = "키워드/주제";
       contentRule = `**일반 주제 출제 규칙**:
@@ -913,6 +981,15 @@ export function buildFullPrompt(
    - **금지**: 이 키워드와 무관한 주제의 문제를 만들면 탈락입니다
    - **중요**: 확실하지 않거나 추측성 내용은 절대 포함하지 마세요
    - 널리 알려진 기본 개념, 정의, 특징만 문제로 만드세요`;
+    } else if (hasTagsSelected) {
+      // 학습 자료 없이 챕터 태그만 선택 → 과목 개요 + 커리큘럼 기반 출제
+      uploadedTextLabel = "출제 지시";
+      contentRule = `**챕터 커리큘럼 기반 출제 규칙**:
+   - 위 '과목 개요 및 출제 가이드'와 '챕터 상세 커리큘럼'을 참고하여 해당 챕터의 핵심 개념을 문제로 출제하세요
+   - '과목 전체 범위'가 있으면 정확한 개념과 용어를 반드시 확인하세요
+   - 각 세부 주제에서 골고루 출제하되, 핵심 개념/정의/비교/분류/기전 문제를 우선 출제하세요
+   - **금지**: 불확실하거나 추측에 기반한 내용을 문제로 만들지 마세요
+   - **${questionCount}문제**를 지정된 챕터 범위 내에서 다양하게 구성하세요`;
     } else {
       // 텍스트 없이 이미지만 제공된 경우
       uploadedTextLabel = "이미지 학습 자료";
@@ -1110,6 +1187,7 @@ ${trimmedProfessorPrompt}
   return `당신은 ${courseName} 과목의 대학 교수입니다.
 학생들의 시험을 준비시키기 위한 객관식 문제 ${questionCount}개를 만들어주세요.
 ${professorPromptSection}
+${courseOverviewPrompt}
 ## ${uploadedTextLabel}
 ${ocrText.slice(0, 6000)}
 ${styledFocusGuide}

@@ -49,14 +49,14 @@ function getCurrentSemesterCourses(): string[] {
   return ["biology", "pathophysiology"];
 }
 
-// 풀 목표 크기
-const TARGET_POOL_SIZE = 100;
-// 문제 유효 기간 (7일)
-const QUESTION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+// 풀 목표 크기 (매일 초기화 후 새로 생성)
+const TARGET_POOL_SIZE = 300;
+// 문제 유효 기간 (1일 — 매일 새벽 초기화)
+const QUESTION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 // 배치당 문제 수
-const BATCH_SIZE = 10;
-// 배치 간 대기 (3초)
-const BATCH_DELAY_MS = 3000;
+const BATCH_SIZE = 15;
+// 배치 간 대기 (2초)
+const BATCH_DELAY_MS = 2000;
 
 /**
  * 문제 풀 보충
@@ -197,13 +197,22 @@ export async function drawQuestionsFromPool(
   }
 
   // 3. 미시청 문제 필터링
-  const available = poolSnap.docs.filter(doc => !seenQuestionIds.has(doc.id));
+  let available = poolSnap.docs.filter(doc => !seenQuestionIds.has(doc.id));
 
   if (available.length < count) {
-    // 한쪽만 본 문제도 허용 (완전 미시청 부족 시)
-    // 이미 양쪽 union으로 제외했으므로, 부족하면 null 반환
     if (available.length < 5) {
-      return null;
+      // 5문제 미만 → seen 기록 초기화 후 전체 풀에서 재시도 (헤비 유저 대응)
+      console.log(`미시청 문제 부족 (${available.length}개) — seen 초기화 후 재사용`);
+      const resetBatch = db.batch();
+      for (const pid of playerIds) {
+        const oldSeenSnap = await seenRef
+          .where("userId", "==", pid)
+          .get();
+        oldSeenSnap.docs.forEach(doc => resetBatch.delete(doc.ref));
+      }
+      await resetBatch.commit();
+      // 초기화 후 전체 풀 사용
+      available = poolSnap.docs.sort(() => Math.random() - 0.5);
     }
   }
 
@@ -244,12 +253,12 @@ export async function drawQuestionsFromPool(
  */
 export const tekkenPoolRefillScheduled = onSchedule(
   {
-    schedule: "0 3 * * *", // 매일 03:00
+    schedule: "0 3 * * *", // 매일 03:00 KST
     region: "asia-northeast3",
     timeZone: "Asia/Seoul",
     secrets: [GEMINI_API_KEY],
-    timeoutSeconds: 540, // 9분 (2개 과목 × 100문제 순차 처리)
-    memory: "512MiB",
+    timeoutSeconds: 540, // 9분 (2개 과목 × 300문제 순차 처리)
+    memory: "1GiB",
   },
   async () => {
     const apiKey = GEMINI_API_KEY.value();
@@ -258,16 +267,47 @@ export const tekkenPoolRefillScheduled = onSchedule(
       return;
     }
 
+    const db = getFirestore();
+
     // 현재 학기 과목만 생성 (1학기: biology+microbiology, 2학기: biology+pathophysiology)
     const courses = getCurrentSemesterCourses();
-    console.log(`[스케줄] 현재 학기 과목: ${courses.join(", ")}`);
+    console.log(`[스케줄] 매일 초기화 시작 — 과목: ${courses.join(", ")}`);
 
     for (const courseId of courses) {
       try {
+        // 기존 문제 풀 전체 삭제 (매일 새 문제로 교체)
+        const poolRef = db.collection("tekkenQuestionPool").doc(courseId);
+        const questionsRef = poolRef.collection("questions");
+        const existingSnap = await questionsRef.get();
+
+        if (!existingSnap.empty) {
+          // 500개씩 batch 삭제
+          const refs = existingSnap.docs.map(doc => doc.ref);
+          for (let i = 0; i < refs.length; i += 500) {
+            const batch = db.batch();
+            refs.slice(i, i + 500).forEach(ref => batch.delete(ref));
+            await batch.commit();
+          }
+          console.log(`[스케줄] ${courseId}: 기존 ${existingSnap.size}개 삭제`);
+        }
+
+        // seenQuestions도 매일 초기화 (새 문제이므로)
+        const seenRef = poolRef.collection("seenQuestions");
+        const seenSnap = await seenRef.get();
+        if (!seenSnap.empty) {
+          const refs = seenSnap.docs.map(doc => doc.ref);
+          for (let i = 0; i < refs.length; i += 500) {
+            const batch = db.batch();
+            refs.slice(i, i + 500).forEach(ref => batch.delete(ref));
+            await batch.commit();
+          }
+        }
+
+        // 300문제 새로 생성
         const result = await replenishQuestionPool(courseId, apiKey);
-        console.log(`[스케줄] ${courseId}: 추가 ${result.added}개, 삭제 ${result.deleted}개`);
+        console.log(`[스케줄] ${courseId}: 새로 ${result.added}개 생성`);
       } catch (err) {
-        console.error(`[스케줄] ${courseId} 풀 보충 실패:`, err);
+        console.error(`[스케줄] ${courseId} 풀 생성 실패:`, err);
       }
 
       // 과목 간 딜레이

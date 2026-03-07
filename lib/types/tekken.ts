@@ -160,7 +160,7 @@ export const BATTLE_XP = {
 
 /** 배틀 설정 상수 */
 export const BATTLE_CONFIG = {
-  MATCH_TIMEOUT: 20000,     // 매칭 대기 20초 (봇 매칭)
+  MATCH_TIMEOUT: 10000,     // 매칭 대기 10초 (봇 매칭)
   BATTLE_DURATION: 180000,  // 배틀 3분
   QUESTION_TIMEOUT: 20000,  // 문제 타임아웃 20초
   CRITICAL_TIME: 5000,      // 크리티컬 기준 5초

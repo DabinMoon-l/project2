@@ -15,6 +15,14 @@ import { COURSE_NAMES } from "./tekkenTypes";
  * 교수님이 설정한 배틀 출제 챕터 조회
  */
 export async function getTekkenChapters(courseId: string): Promise<string[]> {
+  // 과목별 기본 전 챕터
+  const DEFAULT_CHAPTERS: Record<string, string[]> = {
+    biology: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"],
+    pathophysiology: ["3", "4", "5", "7", "8", "9", "10", "11"],
+    microbiology: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"],
+  };
+  const defaultChapters = DEFAULT_CHAPTERS[courseId] || ["2", "3", "4"];
+
   try {
     const db = getFirestore();
     const doc = await db
@@ -24,12 +32,12 @@ export async function getTekkenChapters(courseId: string): Promise<string[]> {
       .doc(courseId)
       .get();
     if (doc.exists) {
-      return doc.data()?.chapters || ["2", "3", "4"];
+      return doc.data()?.chapters || defaultChapters;
     }
   } catch {
     // 설정 없으면 기본값
   }
-  return ["2", "3", "4"];
+  return defaultChapters;
 }
 
 /**
@@ -73,10 +81,12 @@ function buildTekkenPrompt(
 ): string {
   const totalCount = focusCount + scopeCount;
 
-  let prompt = `대학교 ${courseName} 과목 (${chapters.join(", ")}장) 배틀 퀴즈 문제 ${totalCount}개를 만들어주세요.\n\n`;
+  let prompt = `대학교 ${courseName} 과목 배틀 퀴즈 문제 ${totalCount}개를 만들어주세요.\n\n`;
 
   prompt += `대상: 간호학과 대학생\n`;
-  prompt += `난이도: 수업을 들은 학생이 20초 안에 풀 수 있는 중간 난이도\n\n`;
+  prompt += `출제 범위: ${chapters.join(", ")}장 (전 챕터를 골고루 다루세요)\n`;
+  prompt += `난이도: 수업을 들은 학생이 20초 안에 풀 수 있는 중간 난이도\n`;
+  prompt += `⚠️ 문제 길이 제한: 문제는 반드시 1~2문장 이내 (최대 80자). 긴 지문/설명/사례 금지.\n\n`;
 
   // 교수님 출제 스타일 참고
   if (profile) {
@@ -133,15 +143,24 @@ function buildTekkenPrompt(
     prompt += `${chapters.join(", ")}장 범위에서 ${totalCount}문제를 출제하세요.\n\n`;
   }
 
+  // 미생물학 역사 관련 특별 규칙
+  if (courseName.includes("미생물")) {
+    prompt += `[미생물학 특별 규칙]\n`;
+    prompt += `- 간호학과 학생 대상이므로 임상에서 실제로 접하는 병원성 미생물(MRSA, VRE, 결핵균, HIV, HBV, 칸디다 등)을 우선 다루세요\n`;
+    prompt += `- 미생물학 역사(1장) 문제는 코흐(Koch)만 중심으로 다루세요 (다른 과학자는 오답 선지로만)\n\n`;
+  }
+
   prompt += `## 공통 규칙
 - 4지선다 순수 객관식만 (OX 문제 금지)
 - 문제 하나로 완결 (별도 지문/제시문/보기표/그림/표 참조 금지)
 - "다음 중", "위의 내용에서" 같은 외부 참조 표현 금지
 - 각 문제는 서로 다른 주제/개념 (같은 개념 2번 이상 금지)
-- 간결한 문제 (1~2문장)
+- ⚠️ 문제는 반드시 1~2문장, 최대 80자 이내 (배틀 퀴즈이므로 빠르게 읽을 수 있어야 함)
+- 선지도 간결하게 (각 선지 최대 30자)
 - 오답 선지는 그럴듯하게 (명백히 틀린 보기 금지)
 - choices 4개, correctAnswer는 0~3
-- 매번 다른 문제를 생성
+- 매번 다른 문제를 생성 — 이전에 생성한 문제와 겹치지 않도록 창의적으로 출제
+- ${chapters.length}개 챕터를 골고루 커버 (특정 챕터에 편중 금지)
 
 반드시 아래 JSON 형식만 출력 (다른 텍스트 없이):
 [
