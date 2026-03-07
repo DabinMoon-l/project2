@@ -18,6 +18,7 @@ import {
   limit,
   onSnapshot,
   doc,
+  getDoc,
   updateDoc,
   setDoc,
   deleteDoc,
@@ -29,7 +30,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { useUser } from '@/lib/contexts/UserContext';
 import { useCourse } from '@/lib/contexts';
 import { useRabbitHoldings } from '@/lib/hooks/useRabbit';
-import TekkenChapterSettings from '@/components/professor/TekkenChapterSettings';
+import { COURSE_INDEXES } from '@/lib/courseIndex';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 import {
   useSettings,
@@ -231,9 +232,16 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
 
   const [showCacheConfirm, setShowCacheConfirm] = useState(false);
   const [showTekkenSettings, setShowTekkenSettings] = useState(false);
-  const [showSeasonReset, setShowSeasonReset] = useState(false);
-  const [seasonResetTarget, setSeasonResetTarget] = useState<'midterm' | 'final'>('midterm');
-  const [seasonResetting, setSeasonResetting] = useState(false);
+  type TekkenCourseTab = 'biology' | 'pathophysiology' | 'microbiology';
+  const [tekkenCourse, setTekkenCourse] = useState<TekkenCourseTab>('microbiology');
+  const [tekkenChapters, setTekkenChapters] = useState<Record<TekkenCourseTab, string[]>>({
+    biology: ['1', '2', '3'],
+    pathophysiology: ['1', '2', '3'],
+    microbiology: ['1', '2', '3'],
+  });
+  const [tekkenLoading, setTekkenLoading] = useState(false);
+  const tekkenLoadedRef = useRef<Set<string>>(new Set());
+  const tekkenSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteInput, setDeleteInput] = useState('');
@@ -704,7 +712,46 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
     }
   }, [adminResetStudentId, adminResetPassword, userCourseId]);
 
+  // 배틀 퀴즈 챕터 설정 로드
+  const loadTekkenChapters = useCallback(async (courseId: string) => {
+    if (tekkenLoadedRef.current.has(courseId)) return;
+    try {
+      const snap = await getDoc(doc(db, 'settings', 'tekken', 'courses', courseId));
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data?.chapters && Array.isArray(data.chapters) && data.chapters.length > 0) {
+          setTekkenChapters(prev => ({ ...prev, [courseId]: data.chapters }));
+        }
+      }
+      tekkenLoadedRef.current.add(courseId);
+    } catch (err) {
+      console.error('챕터 로드 실패:', err);
+    }
+  }, []);
+
+  // 배틀 퀴즈 챕터 저장 (debounce)
+  const saveTekkenChapters = useCallback((courseId: string, chapters: string[]) => {
+    if (tekkenSaveRef.current) clearTimeout(tekkenSaveRef.current);
+    tekkenSaveRef.current = setTimeout(async () => {
+      try {
+        await setDoc(doc(db, 'settings', 'tekken', 'courses', courseId), { chapters }, { merge: true });
+      } catch (err) {
+        console.error('챕터 저장 실패:', err);
+      }
+    }, 300);
+  }, []);
+
+  // 배틀 퀴즈 설정 열릴 때 로드
+  useEffect(() => {
+    if (!showTekkenSettings) return;
+    setTekkenLoading(true);
+    loadTekkenChapters(tekkenCourse).finally(() => setTekkenLoading(false));
+  }, [showTekkenSettings, tekkenCourse, loadTekkenChapters]);
+
   if (!profile) return null;
+
+  const tekkenCourseIndex = COURSE_INDEXES[tekkenCourse];
+  const tekkenChapterList = tekkenCourseIndex?.chapters || [];
 
   return (
     <AnimatePresence>
@@ -933,22 +980,6 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                         <div className="text-left">
                           <span className="text-sm text-white/80">배틀 퀴즈 범위</span>
                           <p className="text-xs text-white/40">과목별 출제 챕터 설정</p>
-                        </div>
-                        <svg className="w-4 h-4 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                    )}
-
-                    {/* 시험 시즌 설정 (교수 전용) */}
-                    {isProfessor && (
-                      <button
-                        onClick={() => setShowSeasonReset(true)}
-                        className="w-full flex items-center justify-between py-2.5"
-                      >
-                        <div className="text-left">
-                          <span className="text-sm text-white/80">시험 시즌 설정</span>
-                          <p className="text-xs text-white/40">중간고사 / 기말고사 전환</p>
                         </div>
                         <svg className="w-4 h-4 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -1716,66 +1747,6 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
             )}
           </AnimatePresence>
 
-          {/* 시험 시즌 설정 모달 (교수 전용) */}
-          <AnimatePresence>
-            {showSeasonReset && isProfessor && (
-              <GlassModal onClose={() => setShowSeasonReset(false)}>
-                <h3 className="text-base font-bold text-white mb-2">시험 시즌 설정</h3>
-                <p className="text-sm text-white/60 mb-4">
-                  배틀 퀴즈 출제 범위가 시즌에 맞게 변경됩니다.
-                </p>
-
-                {/* 시즌 선택 */}
-                <div className="mb-4">
-                  <div className="flex gap-2">
-                    {([['midterm', '중간고사'], ['final', '기말고사']] as const).map(([val, label]) => (
-                      <button
-                        key={val}
-                        onClick={() => setSeasonResetTarget(val)}
-                        className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-colors ${
-                          seasonResetTarget === val
-                            ? 'bg-white/30 text-white'
-                            : 'bg-white/10 text-white/50'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setShowSeasonReset(false)}
-                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/15 text-white hover:bg-white/20 transition-colors"
-                  >
-                    취소
-                  </button>
-                  <button
-                    disabled={seasonResetting}
-                    onClick={async () => {
-                      setSeasonResetting(true);
-                      try {
-                        const seasonRef = doc(db, 'settings', 'tekken');
-                        await setDoc(seasonRef, { examSeason: seasonResetTarget }, { merge: true });
-                        alert(`${seasonResetTarget === 'midterm' ? '중간고사' : '기말고사'} 시즌으로 설정 완료`);
-                        setShowSeasonReset(false);
-                      } catch (err: unknown) {
-                        const msg = err instanceof Error ? err.message : '알 수 없는 오류';
-                        alert('시즌 설정 실패: ' + msg);
-                      } finally {
-                        setSeasonResetting(false);
-                      }
-                    }}
-                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
-                  >
-                    {seasonResetting ? '저장 중...' : '저장'}
-                  </button>
-                </div>
-              </GlassModal>
-            )}
-          </AnimatePresence>
-
           {/* 캐시 초기화 확인 모달 */}
           <AnimatePresence>
             {showCacheConfirm && (
@@ -1890,12 +1861,95 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
           </AnimatePresence>
 
           {/* 배틀 퀴즈 챕터 설정 (교수 전용) */}
-          {isProfessor && (
-            <TekkenChapterSettings
-              open={showTekkenSettings}
-              onClose={() => setShowTekkenSettings(false)}
-            />
-          )}
+          <AnimatePresence>
+            {showTekkenSettings && isProfessor && (
+              <GlassModal onClose={() => setShowTekkenSettings(false)}>
+                <h3 className="text-base font-bold text-white mb-1">배틀 퀴즈 범위</h3>
+                <p className="text-xs text-white/40 mb-3">선택한 챕터에서 배틀 문제가 출제됩니다</p>
+
+                {/* 과목 탭 */}
+                <div className="flex gap-1.5 mb-3 justify-center">
+                  {(['biology', 'pathophysiology', 'microbiology'] as const).map(cid => (
+                    <button
+                      key={cid}
+                      onClick={() => setTekkenCourse(cid)}
+                      className={`px-2.5 py-1 rounded-full text-xs font-bold transition-colors ${
+                        tekkenCourse === cid
+                          ? 'bg-white/30 text-white'
+                          : 'bg-white/10 text-white/50'
+                      }`}
+                    >
+                      {{ biology: '생물학', pathophysiology: '병태생리학', microbiology: '미생물학' }[cid]}
+                    </button>
+                  ))}
+                </div>
+
+                {/* 전체 선택 */}
+                <div className="flex justify-end mb-1.5">
+                  <button
+                    onClick={() => {
+                      const allNums = tekkenChapterList.map(c => c.name.split('.')[0].trim());
+                      const current = tekkenChapters[tekkenCourse];
+                      const isAll = allNums.every(n => current.includes(n));
+                      const next = isAll ? [allNums[0]] : allNums;
+                      setTekkenChapters(prev => ({ ...prev, [tekkenCourse]: next }));
+                      saveTekkenChapters(tekkenCourse, next);
+                    }}
+                    className="text-xs text-white/50 underline underline-offset-2"
+                  >
+                    {tekkenChapterList.length > 0 &&
+                     tekkenChapterList.every(c => tekkenChapters[tekkenCourse].includes(c.name.split('.')[0].trim()))
+                      ? '전체 해제'
+                      : '전체 선택'}
+                  </button>
+                </div>
+
+                {/* 챕터 목록 */}
+                {tekkenLoading ? (
+                  <div className="flex items-center justify-center py-6">
+                    <div className="w-4 h-4 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : (
+                  <div className="space-y-1 max-h-[35vh] overflow-y-auto">
+                    {tekkenChapterList.map(chapter => {
+                      const num = chapter.name.split('.')[0].trim();
+                      const checked = tekkenChapters[tekkenCourse].includes(num);
+                      return (
+                        <button
+                          key={chapter.id}
+                          onClick={() => {
+                            const current = tekkenChapters[tekkenCourse];
+                            if (checked && current.length <= 1) return;
+                            const next = checked
+                              ? current.filter(c => c !== num)
+                              : [...current, num];
+                            setTekkenChapters(prev => ({ ...prev, [tekkenCourse]: next }));
+                            saveTekkenChapters(tekkenCourse, next);
+                          }}
+                          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-xs font-medium transition-colors ${
+                            checked
+                              ? 'bg-white/25 text-white'
+                              : 'bg-white/8 text-white/50'
+                          }`}
+                        >
+                          <div className={`w-4 h-4 rounded flex-shrink-0 flex items-center justify-center border ${
+                            checked ? 'bg-white/80 border-white/80' : 'border-white/30'
+                          }`}>
+                            {checked && (
+                              <svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M20 6L9 17l-5-5" />
+                              </svg>
+                            )}
+                          </div>
+                          <span className="truncate">{chapter.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </GlassModal>
+            )}
+          </AnimatePresence>
         </>
       )}
     </AnimatePresence>

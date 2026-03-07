@@ -298,6 +298,8 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 - 중간고사(3~4월, 9~10월): 1~5장 (코흐, 면역, 감염, 세균, 병원성 세균)
 - 기말고사(5~6월, 11~12월): 6~11장 (바이러스, 진균, 원충, 감염병 예방)
 - 교수 수동 설정: `settings/tekken` → `examSeason: "midterm" | "final"` (없으면 월 기반 자동 판별)
+- 배틀 퀴즈 범위 설정: ProfileDrawer Settings → GlassModal 인라인 (과목별 챕터 체크박스)
+  - Firestore 경로: `settings/tekken/courses/{courseId}` → `{ chapters: string[] }`
 
 **교수 스타일 반영**: `professorQuizAnalysis/{courseId}/data/`의 styleProfile(출제 톤, 함정 패턴) + keywords(핵심 개념, 임상 키워드)를 프롬프트에 주입
 
