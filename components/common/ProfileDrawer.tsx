@@ -235,9 +235,9 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
   type TekkenCourseTab = 'biology' | 'pathophysiology' | 'microbiology';
   const [tekkenCourse, setTekkenCourse] = useState<TekkenCourseTab>('microbiology');
   const [tekkenChapters, setTekkenChapters] = useState<Record<TekkenCourseTab, string[]>>({
-    biology: ['1', '2', '3'],
-    pathophysiology: ['1', '2', '3'],
-    microbiology: ['1', '2', '3'],
+    biology: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
+    pathophysiology: ['3', '4', '5', '7', '8', '9', '10', '11'],
+    microbiology: ['1', '2', '3', '4', '5'],
   });
   const [tekkenLoading, setTekkenLoading] = useState(false);
   const tekkenLoadedRef = useRef<Set<string>>(new Set());
