@@ -292,7 +292,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
       });
       matchResultUnsubRef.current = unsubMatchResult;
 
-      // 봇 매칭 타임아웃 (20초)
+      // 봇 매칭 타임아웃 (10초)
       // matchResult 리스너를 유지한 상태로 봇 매칭 시도 (레이스 방지)
       matchTimeoutRef.current = setTimeout(async () => {
         // 이미 실제 매칭 성사 시 무시

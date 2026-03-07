@@ -135,7 +135,7 @@ export default function TekkenChapterSettings({ open, onClose }: TekkenChapterSe
   const chapters = courseIndex?.chapters || [];
 
   return (
-    <MobileBottomSheet open={open} onClose={onClose} maxHeight="75vh">
+    <MobileBottomSheet open={open} onClose={onClose} maxHeight="75vh" zClass="z-[70]">
       <div className="px-5 pb-6">
         {/* 헤더 */}
         <div className="text-center mb-4">

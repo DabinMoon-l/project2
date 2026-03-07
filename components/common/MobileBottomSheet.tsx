@@ -18,9 +18,11 @@ interface MobileBottomSheetProps {
   children: ReactNode;
   /** 최대 높이 (기본 60vh) */
   maxHeight?: string;
+  /** z-index 클래스 (기본 z-50) */
+  zClass?: string;
 }
 
-export default function MobileBottomSheet({ open, onClose, children, maxHeight = '60vh' }: MobileBottomSheetProps) {
+export default function MobileBottomSheet({ open, onClose, children, maxHeight = '60vh', zClass = 'z-50' }: MobileBottomSheetProps) {
   // 80px 이상 아래로 드래그하거나, 빠르게 스와이프하면 닫기
   const handleDragEnd = useCallback((_: any, info: PanInfo) => {
     if (info.offset.y > 80 || info.velocity.y > 300) {
@@ -37,7 +39,7 @@ export default function MobileBottomSheet({ open, onClose, children, maxHeight =
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-end"
+          className={`fixed inset-0 ${zClass} flex items-end`}
           style={{ left: 'var(--modal-left, 0px)' }}
           onClick={onClose}
         >
