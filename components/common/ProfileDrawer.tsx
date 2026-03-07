@@ -235,13 +235,13 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
   type TekkenCourseTab = 'biology' | 'pathophysiology' | 'microbiology';
   const [tekkenCourse, setTekkenCourse] = useState<TekkenCourseTab>('microbiology');
   const [tekkenChapters, setTekkenChapters] = useState<Record<TekkenCourseTab, string[]>>({
-    biology: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
+    biology: ['1', '2', '3', '4', '5', '6'],
     pathophysiology: ['3', '4', '5', '7', '8', '9', '10', '11'],
     microbiology: ['1', '2', '3', '4', '5'],
   });
   const [tekkenLoading, setTekkenLoading] = useState(false);
+  const [tekkenSaving, setTekkenSaving] = useState(false);
   const tekkenLoadedRef = useRef<Set<string>>(new Set());
-  const tekkenSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteInput, setDeleteInput] = useState('');
@@ -729,17 +729,23 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
     }
   }, []);
 
-  // 배틀 퀴즈 챕터 저장 (debounce)
-  const saveTekkenChapters = useCallback((courseId: string, chapters: string[]) => {
-    if (tekkenSaveRef.current) clearTimeout(tekkenSaveRef.current);
-    tekkenSaveRef.current = setTimeout(async () => {
-      try {
-        await setDoc(doc(db, 'settings', 'tekken', 'courses', courseId), { chapters }, { merge: true });
-      } catch (err) {
-        console.error('챕터 저장 실패:', err);
-      }
-    }, 300);
-  }, []);
+  // 배틀 퀴즈 챕터 전체 저장 (저장 버튼 클릭 시)
+  const saveTekkenChapters = useCallback(async () => {
+    setTekkenSaving(true);
+    try {
+      const courses: TekkenCourseTab[] = ['biology', 'pathophysiology', 'microbiology'];
+      await Promise.all(courses.map(cid =>
+        setDoc(doc(db, 'settings', 'tekken', 'courses', cid), { chapters: tekkenChapters[cid] }, { merge: true })
+      ));
+      alert('저장 완료! 다음 새벽부터 적용됩니다.');
+      setShowTekkenSettings(false);
+    } catch (err) {
+      console.error('챕터 저장 실패:', err);
+      alert('저장 실패');
+    } finally {
+      setTekkenSaving(false);
+    }
+  }, [tekkenChapters]);
 
   // 배틀 퀴즈 설정 열릴 때 로드
   useEffect(() => {
@@ -1893,7 +1899,6 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                       const isAll = allNums.every(n => current.includes(n));
                       const next = isAll ? [allNums[0]] : allNums;
                       setTekkenChapters(prev => ({ ...prev, [tekkenCourse]: next }));
-                      saveTekkenChapters(tekkenCourse, next);
                     }}
                     className="text-xs text-white/50 underline underline-offset-2"
                   >
@@ -1924,7 +1929,6 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                               ? current.filter(c => c !== num)
                               : [...current, num];
                             setTekkenChapters(prev => ({ ...prev, [tekkenCourse]: next }));
-                            saveTekkenChapters(tekkenCourse, next);
                           }}
                           className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-xs font-medium transition-colors ${
                             checked
@@ -1947,6 +1951,27 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                     })}
                   </div>
                 )}
+
+                {/* 저장 / 취소 */}
+                <div className="flex gap-3 mt-4">
+                  <button
+                    onClick={() => {
+                      // 취소 시 로드된 캐시 초기화 (다시 열면 Firestore에서 재로드)
+                      tekkenLoadedRef.current.clear();
+                      setShowTekkenSettings(false);
+                    }}
+                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/15 text-white hover:bg-white/20 transition-colors"
+                  >
+                    취소
+                  </button>
+                  <button
+                    disabled={tekkenSaving}
+                    onClick={saveTekkenChapters}
+                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
+                  >
+                    {tekkenSaving ? '저장 중...' : '저장'}
+                  </button>
+                </div>
               </GlassModal>
             )}
           </AnimatePresence>

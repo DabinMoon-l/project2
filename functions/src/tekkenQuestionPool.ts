@@ -51,54 +51,13 @@ function getCurrentSemesterCourses(): string[] {
 }
 
 /**
- * 현재 시험 시즌 판별
- * 1학기 중간: 3~4월, 1학기 기말: 5~6월
- * 2학기 중간: 9~10월, 2학기 기말: 11~12월
- * 나머지(1~2월, 7~8월): 기말 범위 유지 (방학 중)
- */
-type ExamSeason = "midterm" | "final";
-
-function getDefaultExamSeason(): ExamSeason {
-  const month = new Date().getMonth() + 1;
-  // 중간고사: 3~4월, 9~10월
-  if ([3, 4, 9, 10].includes(month)) return "midterm";
-  // 기말고사: 5~6월, 11~12월, 1~2월(방학), 7~8월(방학)
-  return "final";
-}
-
-/** Firestore settings/tekken.examSeason 수동 설정 우선, 없으면 월 기반 자동 판별 */
-async function getCurrentExamSeason(): Promise<ExamSeason> {
-  try {
-    const snap = await getFirestore().doc("settings/tekken").get();
-    const manual = snap.data()?.examSeason;
-    if (manual === "midterm" || manual === "final") return manual;
-  } catch {
-    // Firestore 오류 시 자동 판별로 fallback
-  }
-  return getDefaultExamSeason();
-}
-
-/**
- * 미생물학 시험 시즌별 챕터 매핑
- * - 중간고사: 1장(코흐), 2장(면역), 3장(감염), 4장(세균), 5장(병원성 세균)
- * - 기말고사: 6장(바이러스 일반), 7장(병원성 바이러스), 8장(진균 일반), 9장(병원성 진균), 10장(원충), 11장(감염병 예방)
- */
-const MICRO_EXAM_CHAPTERS: Record<ExamSeason, string[]> = {
-  midterm: ["1", "2", "3", "4", "5"],
-  final: ["6", "7", "8", "9", "10", "11"],
-};
-
-/**
- * 과목별 시험 시즌 챕터 조회
- * 미생물학만 시즌별 분리, 나머지는 교수 설정(getTekkenChapters) 사용
+ * 과목별 챕터 조회
+ * 교수 설정(settings/tekken/courses/{courseId}) 우선 사용
  */
 async function getSeasonalChapters(courseId: string): Promise<string[]> {
-  if (courseId === "microbiology") {
-    const season = await getCurrentExamSeason();
-    console.log(`[시즌] 미생물학 시험 시즌: ${season} → 챕터: ${MICRO_EXAM_CHAPTERS[season].join(",")}`);
-    return MICRO_EXAM_CHAPTERS[season];
-  }
-  return getTekkenChapters(courseId);
+  const chapters = await getTekkenChapters(courseId);
+  console.log(`[챕터] ${courseId}: ${chapters.join(",")}`);
+  return chapters;
 }
 
 /**

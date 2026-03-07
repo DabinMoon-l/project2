@@ -17,7 +17,7 @@ import { COURSE_NAMES } from "./tekkenTypes";
 export async function getTekkenChapters(courseId: string): Promise<string[]> {
   // 과목별 기본 전 챕터
   const DEFAULT_CHAPTERS: Record<string, string[]> = {
-    biology: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"],
+    biology: ["1", "2", "3", "4", "5", "6"],
     pathophysiology: ["3", "4", "5", "7", "8", "9", "10", "11"],
     microbiology: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"],
   };
