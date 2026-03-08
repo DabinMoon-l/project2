@@ -90,7 +90,7 @@ export function useProfessorAiQuizzes() {
   }, []);
 
   // 퀴즈 공개 (type을 midterm/final/past로 변경 + creatorUid 보정)
-  const publishQuiz = useCallback(async (quizId: string, publishType: string) => {
+  const publishQuiz = useCallback(async (quizId: string, publishType: string, pastExamInfo?: { pastYear: number; pastExamType: string }) => {
     try {
       const updateData: Record<string, any> = {
         type: publishType,
@@ -100,6 +100,11 @@ export function useProfessorAiQuizzes() {
         wasPublished: true, // 한 번이라도 공개되면 영구 마킹 (Stats 활성 조건)
         updatedAt: serverTimestamp(),
       };
+      // 기출 타입일 경우 년도/시험유형 추가
+      if (publishType === 'past' && pastExamInfo) {
+        updateData.pastYear = pastExamInfo.pastYear;
+        updateData.pastExamType = pastExamInfo.pastExamType;
+      }
       // creatorUid/creatorId 양쪽 보정 (CF 호환)
       if (profile?.uid) {
         updateData.creatorUid = profile.uid;
