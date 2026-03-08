@@ -324,11 +324,11 @@ export default function ReviewPractice({
 
     if (item.type === 'multiple') {
       if (isMultipleAnswer) {
+        // correctAnswer와 userAnswer 모두 0-indexed
         const correctIndices = correctAnswerStr.split(',').map(s => parseInt(s.trim(), 10));
         if (Array.isArray(userAnswer)) {
-          const userIndices = userAnswer.map(i => i + 1);
           const sortedCorrect = [...correctIndices].sort((a, b) => a - b);
-          const sortedUser = [...userIndices].sort((a, b) => a - b);
+          const sortedUser = [...userAnswer].sort((a, b) => a - b);
           return (
             sortedCorrect.length === sortedUser.length &&
             sortedCorrect.every((val, idx) => val === sortedUser[idx])
@@ -337,8 +337,8 @@ export default function ReviewPractice({
         return false;
       } else {
         if (typeof userAnswer === 'number') {
-          const oneIndexed = (userAnswer + 1).toString();
-          return correctAnswerStr === oneIndexed;
+          // 0-indexed 직접 비교
+          return correctAnswerStr === userAnswer.toString();
         }
         return false;
       }
@@ -924,7 +924,7 @@ export default function ReviewPractice({
                                             {subItem.options && subItem.options.length > 0 && (
                                               <div className="space-y-1">
                                                 {subItem.options.map((opt, optIdx) => {
-                                                  const optionNum = (optIdx + 1).toString();
+                                                  const optionNum = optIdx.toString();
                                                   const correctAnswerStr = subItem.correctAnswer?.toString() || '';
                                                   const correctAnswers = correctAnswerStr.includes(',')
                                                     ? correctAnswerStr.split(',').map(a => a.trim())
@@ -933,8 +933,8 @@ export default function ReviewPractice({
 
                                                   const userAnswerStr = subResult?.userAnswer || '';
                                                   const userAnswers = userAnswerStr.includes(',')
-                                                    ? userAnswerStr.split(',').map(a => (parseInt(a.trim(), 10) + 1).toString())
-                                                    : userAnswerStr ? [(parseInt(userAnswerStr, 10) + 1).toString()] : [];
+                                                    ? userAnswerStr.split(',').map(a => a.trim())
+                                                    : userAnswerStr ? [userAnswerStr] : [];
                                                   const isUserAnswer = userAnswers.includes(optionNum);
 
                                                   let className = 'border-[#D4CFC4] text-[#5C5C5C] bg-[#F5F0E8]';
@@ -944,11 +944,55 @@ export default function ReviewPractice({
                                                     className = 'border-[#8B1A1A] bg-[#FDEAEA] text-[#8B1A1A]';
                                                   }
 
+                                                  const choiceExp = subItem.choiceExplanations?.[optIdx];
+                                                  const choiceKey = `result-${subItem.id}-${optIdx}`;
+                                                  const isChoiceExpanded = expandedChoiceExplanations.has(choiceKey);
+
                                                   return (
-                                                    <div key={optIdx} className={`px-2 py-1 text-xs border ${className}`}>
-                                                      {optIdx + 1}. {opt}
-                                                      {isMultipleAnswer && isCorrectOption && ' (정답)'}
-                                                      {isMultipleAnswer && isUserAnswer && ' (내 선택)'}
+                                                    <div key={optIdx}>
+                                                      <div
+                                                        className={`px-2 py-1 text-xs border ${className} ${choiceExp ? 'cursor-pointer' : ''}`}
+                                                        onClick={choiceExp ? () => {
+                                                          setExpandedChoiceExplanations(prev => {
+                                                            const next = new Set(prev);
+                                                            if (next.has(choiceKey)) next.delete(choiceKey);
+                                                            else next.add(choiceKey);
+                                                            return next;
+                                                          });
+                                                        } : undefined}
+                                                      >
+                                                        <div className="flex items-center justify-between">
+                                                          <span className="flex-1">
+                                                            {optIdx + 1}. {opt}
+                                                            {isMultipleAnswer && isCorrectOption && ' (정답)'}
+                                                            {isMultipleAnswer && isUserAnswer && ' (내 선택)'}
+                                                          </span>
+                                                          {choiceExp && (
+                                                            <svg
+                                                              className={`w-3 h-3 text-[#5C5C5C] transition-transform flex-shrink-0 ml-1 ${isChoiceExpanded ? 'rotate-180' : ''}`}
+                                                              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                                            >
+                                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                            </svg>
+                                                          )}
+                                                        </div>
+                                                      </div>
+                                                      <AnimatePresence>
+                                                        {isChoiceExpanded && choiceExp && (
+                                                          <motion.div
+                                                            initial={{ height: 0, opacity: 0 }}
+                                                            animate={{ height: 'auto', opacity: 1 }}
+                                                            exit={{ height: 0, opacity: 0 }}
+                                                            className="overflow-hidden"
+                                                          >
+                                                            <div className="px-3 py-2 bg-[#EDEAE4] border-l-2 border-[#8B6914]">
+                                                              <p className="text-xs text-[#5C5C5C]">
+                                                                {choiceExp.replace(/^선지\s*\d+\s*해설\s*[:：]\s*/i, '')}
+                                                              </p>
+                                                            </div>
+                                                          </motion.div>
+                                                        )}
+                                                      </AnimatePresence>
                                                     </div>
                                                   );
                                                 })}
@@ -1306,7 +1350,7 @@ export default function ReviewPractice({
                           {item.options && item.options.length > 0 && (
                             <div className="space-y-1">
                               {item.options.map((opt, optIdx) => {
-                                const optionNum = (optIdx + 1).toString();
+                                const optionNum = optIdx.toString();
                                 const correctAnswerStr = item.correctAnswer?.toString() || '';
                                 const correctAnswers = correctAnswerStr.includes(',')
                                   ? correctAnswerStr.split(',').map(a => a.trim())
@@ -1315,8 +1359,8 @@ export default function ReviewPractice({
 
                                 const userAnswerStr = result?.userAnswer || '';
                                 const userAnswers = userAnswerStr.includes(',')
-                                  ? userAnswerStr.split(',').map(a => (parseInt(a.trim(), 10) + 1).toString())
-                                  : userAnswerStr ? [(parseInt(userAnswerStr, 10) + 1).toString()] : [];
+                                  ? userAnswerStr.split(',').map(a => a.trim())
+                                  : userAnswerStr ? [userAnswerStr] : [];
                                 const isUserAnswer = userAnswers.includes(optionNum);
 
                                 let className = 'border-[#D4CFC4] text-[#5C5C5C] bg-[#F5F0E8]';
@@ -1326,12 +1370,56 @@ export default function ReviewPractice({
                                   className = 'border-[#8B1A1A] bg-[#FDEAEA] text-[#8B1A1A]';
                                 }
 
+                                const choiceExp = item.choiceExplanations?.[optIdx];
+                                const choiceKey = `result-${item.id}-${optIdx}`;
+                                const isChoiceExpanded = expandedChoiceExplanations.has(choiceKey);
+
                                 return (
-                                  <p key={optIdx} className={`text-xs p-2 border ${className}`}>
-                                    {optIdx + 1}. {opt}
-                                    {isMultipleAnswer && isCorrectOption && ' (정답)'}
-                                    {isMultipleAnswer && isUserAnswer && ' (내 선택)'}
-                                  </p>
+                                  <div key={optIdx}>
+                                    <div
+                                      className={`text-xs p-2 border ${className} ${choiceExp ? 'cursor-pointer' : ''}`}
+                                      onClick={choiceExp ? () => {
+                                        setExpandedChoiceExplanations(prev => {
+                                          const next = new Set(prev);
+                                          if (next.has(choiceKey)) next.delete(choiceKey);
+                                          else next.add(choiceKey);
+                                          return next;
+                                        });
+                                      } : undefined}
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <span className="flex-1">
+                                          {optIdx + 1}. {opt}
+                                          {isMultipleAnswer && isCorrectOption && ' (정답)'}
+                                          {isMultipleAnswer && isUserAnswer && ' (내 선택)'}
+                                        </span>
+                                        {choiceExp && (
+                                          <svg
+                                            className={`w-3 h-3 text-[#5C5C5C] transition-transform flex-shrink-0 ml-1 ${isChoiceExpanded ? 'rotate-180' : ''}`}
+                                            fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                          >
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                          </svg>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <AnimatePresence>
+                                      {isChoiceExpanded && choiceExp && (
+                                        <motion.div
+                                          initial={{ height: 0, opacity: 0 }}
+                                          animate={{ height: 'auto', opacity: 1 }}
+                                          exit={{ height: 0, opacity: 0 }}
+                                          className="overflow-hidden"
+                                        >
+                                          <div className="px-3 py-2 bg-[#EDEAE4] border-l-2 border-[#8B6914]">
+                                            <p className="text-xs text-[#5C5C5C]">
+                                              {choiceExp.replace(/^선지\s*\d+\s*해설\s*[:：]\s*/i, '')}
+                                            </p>
+                                          </div>
+                                        </motion.div>
+                                      )}
+                                    </AnimatePresence>
+                                  </div>
                                 );
                               })}
                             </div>
@@ -2036,7 +2124,7 @@ export default function ReviewPractice({
                               disabled={isSubmitted}
                               correctIndex={
                                 isSubmitted
-                                  ? parseInt(subItem.correctAnswer.toString(), 10) - 1
+                                  ? parseInt(subItem.correctAnswer.toString(), 10)
                                   : undefined
                               }
                             />
@@ -2280,7 +2368,7 @@ export default function ReviewPractice({
                         disabled={isSubmitted}
                         correctIndex={
                           isSubmitted
-                            ? parseInt(currentItem.correctAnswer.toString(), 10) - 1
+                            ? parseInt(currentItem.correctAnswer.toString(), 10)
                             : undefined
                         }
                       />
@@ -2395,7 +2483,7 @@ export default function ReviewPractice({
                               <span>정답: </span>
                               <span className="font-bold text-[#1A6B1A]">
                                 {currentItem.correctAnswer && currentItem.correctAnswer.toString().trim() !== ''
-                                  ? `${currentItem.correctAnswer.toString()}번`
+                                  ? `${parseInt(currentItem.correctAnswer.toString(), 10) + 1}번`
                                   : '(정답 정보 없음)'}
                               </span>
                             </div>

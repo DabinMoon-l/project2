@@ -12,8 +12,9 @@ import {
   serverTimestamp,
   collection,
   Timestamp,
+  onSnapshot,
 } from 'firebase/firestore';
-import { useUser } from '@/lib/contexts';
+import { useUser, useMilestone } from '@/lib/contexts';
 import { useCourse } from '@/lib/contexts/CourseContext';
 import { getChapterIdFromTag } from '@/lib/courseIndex';
 import dynamic from 'next/dynamic';
@@ -102,6 +103,12 @@ export default function AIQuizContainer() {
   // 연습 모드 시 네비게이션 숨김
   useHideNav(isPracticeOpen);
 
+  // AI 퀴즈 생성/풀이 중 마일스톤 자동 트리거 억제
+  const milestone = useMilestone();
+  useEffect(() => {
+    milestone.setSuppressAutoTrigger(isPracticeOpen || isProgressOpen);
+  }, [isPracticeOpen, isProgressOpen]);
+
   // Job polling 중단용 ref
   const pollingRef = useRef(false);
 
@@ -187,45 +194,56 @@ export default function AIQuizContainer() {
         setProgressStep('analyzing');
       }
 
-      // 3단계: Job 상태 polling
-      const checkStatus = httpsCallable<
-        { jobId: string },
-        { jobId: string; status: string; result?: { questions: GeneratedQuestion[]; meta?: any }; error?: string }
-      >(functions, 'checkJobStatus');
+      // 3단계: Firestore onSnapshot으로 실시간 Job 상태 감지
+      // (polling 대비 지연 0초 + CF 호출 오버헤드 제거)
+      const questions = await new Promise<GeneratedQuestion[]>((resolve, reject) => {
+        const db = getFirestore();
+        const jobDocRef = doc(db, 'jobs', jobId);
+        const timeoutMs = 180000; // 3분 타임아웃
 
-      let questions: GeneratedQuestion[] = [];
-      const MAX_POLLS = 90; // 최대 90회 × 2초 = 3분
-      let pollCount = 0;
+        const timeout = setTimeout(() => {
+          unsub();
+          if (!pollingRef.current) return;
+          reject(new Error('문제 생성 시간이 초과되었습니다. 다시 시도해주세요.'));
+        }, timeoutMs);
 
-      while (pollingRef.current && pollCount < MAX_POLLS) {
-        const statusResult = await checkStatus({ jobId });
-        const { status, result, error } = statusResult.data;
+        const unsub = onSnapshot(jobDocRef, (snap) => {
+          if (!pollingRef.current) {
+            clearTimeout(timeout);
+            unsub();
+            resolve([]);
+            return;
+          }
 
-        if (status === 'RUNNING') {
-          setProgressStep('generating');
+          const jobDoc = snap.data();
+          if (!jobDoc) return;
+
+          if (jobDoc.status === 'RUNNING') {
+            setProgressStep('generating');
+          }
+
+          if (jobDoc.status === 'COMPLETED' && jobDoc.result?.questions) {
+            clearTimeout(timeout);
+            unsub();
+            resolve(jobDoc.result.questions.slice(0, data.questionCount));
+          }
+
+          if (jobDoc.status === 'FAILED') {
+            clearTimeout(timeout);
+            unsub();
+            reject(new Error(jobDoc.error || '문제 생성에 실패했습니다. 다시 시도해주세요.'));
+          }
+        }, (err) => {
+          clearTimeout(timeout);
+          reject(err);
+        });
+      });
+
+      if (!pollingRef.current || questions.length === 0) {
+        if (pollingRef.current) {
+          throw new Error('문제 생성에 실패했습니다. 다시 시도해주세요.');
         }
-
-        if (status === 'COMPLETED' && result) {
-          questions = result.questions.slice(0, data.questionCount);
-          break;
-        }
-
-        if (status === 'FAILED') {
-          throw new Error(error || '문제 생성에 실패했습니다. 다시 시도해주세요.');
-        }
-
-        // 2초 대기 후 재시도
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        pollCount++;
-      }
-
-      if (!pollingRef.current) {
-        // 사용자가 취소함
         return;
-      }
-
-      if (questions.length === 0) {
-        throw new Error('문제 생성 시간이 초과되었습니다. 다시 시도해주세요.');
       }
 
       // 폴백용 챕터 ID (태그에서 추출)
@@ -283,6 +301,8 @@ export default function AIQuizContainer() {
         participantCount: 0,
         userScores: {},
         creatorId: profile.uid,
+        // 교수는 creatorUid로도 저장 (교수 서재 훅 호환)
+        ...(profile.role === 'professor' ? { creatorUid: profile.uid } : {}),
         creatorNickname: profile.nickname || '익명',
         creatorClassType: profile.classType || null,
         courseId: userCourseId || 'biology',
@@ -293,7 +313,14 @@ export default function AIQuizContainer() {
 
       await setDoc(quizRef, quizData);
 
-      // 저장된 퀴즈 정보 설정
+      setIsProgressOpen(false);
+
+      // 교수는 서재에 저장만 (풀이 스킵)
+      if (profile.role === 'professor') {
+        return;
+      }
+
+      // 학생: 저장 후 바로 연습 모드
       setSavedQuiz({
         id: quizId,
         title: data.folderName,
@@ -301,8 +328,6 @@ export default function AIQuizContainer() {
         difficulty: data.difficulty,
         questions: quizData.questions,
       });
-
-      setIsProgressOpen(false);
       setIsPracticeOpen(true);
 
     } catch (err: any) {
@@ -326,12 +351,12 @@ export default function AIQuizContainer() {
 
     return savedQuiz.questions.map((q) => {
       const isOx = q.type === 'ox';
-      // OX 문제: 'O'/'X' 그대로, 객관식: 0-indexed → 1-indexed
+      // OX 문제: 'O'/'X' 그대로, 객관식: 0-indexed 그대로 문자열 변환
       const correctAnswer = isOx
         ? String(q.answer)
         : Array.isArray(q.answer)
-          ? q.answer.map(a => String(a + 1)).join(',')
-          : String(Number(q.answer) + 1);
+          ? q.answer.map(a => String(a)).join(',')
+          : String(Number(q.answer));
 
       return {
         id: `temp_${q.id}`, // 임시 ID (아직 reviews에 저장 안됨)
@@ -418,15 +443,8 @@ export default function AIQuizContainer() {
       const questionScores: Record<string, { isCorrect: boolean; userAnswer: string; answeredAt: ReturnType<typeof serverTimestamp> }> = {};
       results.forEach((r) => {
         const question = savedQuiz.questions.find(q => q.id === r.questionId);
-        let convertedAnswer = r.userAnswer;
-        if (question?.type === 'multiple' || !question?.type) {
-          // r.userAnswer는 0-indexed → 1-indexed로 변환
-          if (Array.isArray(r.userAnswer)) {
-            convertedAnswer = r.userAnswer.map((a: any) => String(Number(a) + 1)).join(',');
-          } else if (r.userAnswer !== '' && !isNaN(Number(r.userAnswer))) {
-            convertedAnswer = String(Number(r.userAnswer) + 1);
-          }
-        }
+        // 0-indexed 그대로 저장
+        const convertedAnswer = r.userAnswer;
         questionScores[r.questionId] = {
           isCorrect: r.isCorrect,
           userAnswer: convertedAnswer,
@@ -439,10 +457,12 @@ export default function AIQuizContainer() {
         quizId: savedQuiz.id,
         quizTitle: savedQuiz.title,
         quizCreatorId: profile.uid,
+        quizType: 'ai-generated',
+        quizIsPublic: false,
         score,
         correctCount,
         totalCount,
-        earnedExp: 0, // AI 퀴즈 풀이는 서버 XP 미지급 (생성 시 지급됨)
+        earnedExp: 0,
         questionScores,
         isUpdate: false,
         courseId: userCourseId || null,
@@ -462,24 +482,23 @@ export default function AIQuizContainer() {
           (typeof question.answer === 'string' && (question.answer === 'O' || question.answer === 'X'));
         const qType = isOx ? 'ox' : 'multiple';
 
-        // OX: answer를 그대로 문자열로, 객관식: 0-indexed → 1-indexed 변환
+        // OX: 'O'/'X'로 변환, 객관식: 0-indexed 그대로
         let correctAnswer: string;
         let userAnswer: string;
 
         if (isOx) {
-          // OX 문제: 'O'/'X' 문자열 또는 0/1 숫자
           const ans = question.answer;
           correctAnswer = ans === 0 ? 'O' : ans === 1 ? 'X' : String(ans);
           const ua = result.userAnswer as string | number;
           userAnswer = ua === '0' || ua === 0 ? 'O' : ua === '1' || ua === 1 ? 'X' : String(ua);
         } else {
-          // 객관식: 0-indexed → 1-indexed
+          // 객관식: 0-indexed 그대로
           correctAnswer = Array.isArray(question.answer)
-            ? question.answer.map(a => String(Number(a) + 1)).join(',')
-            : String(Number(question.answer) + 1);
+            ? question.answer.map(a => String(Number(a))).join(',')
+            : String(Number(question.answer));
           userAnswer = Array.isArray(result.userAnswer)
-            ? result.userAnswer.map(a => String(Number(a) + 1)).join(',')
-            : String(Number(result.userAnswer) + 1);
+            ? result.userAnswer.map(a => String(Number(a))).join(',')
+            : String(Number(result.userAnswer));
         }
 
         const reviewData = {

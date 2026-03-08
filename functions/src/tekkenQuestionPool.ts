@@ -31,7 +31,8 @@ const getAllCourses = () => Object.keys(COURSE_NAMES);
 /**
  * 현재 학기 과목만 반환
  * 1학기 (02-22 ~ 08-21): biology, microbiology
- * 2학기 (08-22 ~ 02-21): biology, pathophysiology
+ * 2학기 (08-22 ~ 02-21): pathophysiology만
+ * (생물학은 1학기 전용 과목)
  */
 function getCurrentSemesterCourses(): string[] {
   const now = new Date();
@@ -46,8 +47,8 @@ function getCurrentSemesterCourses(): string[] {
   if (isSemester1) {
     return ["biology", "microbiology"];
   }
-  // 2학기: 8/22 ~ 2/21
-  return ["biology", "pathophysiology"];
+  // 2학기: 8/22 ~ 2/21 (병태생리학만)
+  return ["pathophysiology"];
 }
 
 /**
@@ -61,28 +62,35 @@ async function getSeasonalChapters(courseId: string): Promise<string[]> {
 }
 
 /**
- * 배틀 10문제 난이도 배분: easy 4 + medium 4 + hard 2
- * 풀 생성 시에도 이 비율로 생성 (300문제 = easy 120 + medium 120 + hard 60)
+ * 배틀 10문제 난이도 배분: easy 5 + medium 5
+ * 풀 생성 시에도 이 비율로 생성 (300문제 = easy 150 + medium 150)
+ * hard 제거: Gemini 구조화 출력 실패율이 높아 풀 미달 → 배틀 로딩 지연 원인
  */
 const DIFFICULTY_DISTRIBUTION: { difficulty: TekkenDifficulty; ratio: number }[] = [
-  { difficulty: "easy", ratio: 0.4 },
-  { difficulty: "medium", ratio: 0.4 },
-  { difficulty: "hard", ratio: 0.2 },
+  { difficulty: "easy", ratio: 0.5 },
+  { difficulty: "medium", ratio: 0.5 },
 ];
 
 // 풀 목표 크기 (매일 초기화 후 새로 생성)
 const TARGET_POOL_SIZE = 300;
 // 문제 유효 기간 (1일 — 매일 새벽 초기화)
 const QUESTION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-// 배치당 문제 수
-const BATCH_SIZE = 15;
-// 배치 간 대기 (2초)
-const BATCH_DELAY_MS = 2000;
+// 배치당 문제 수 (구조화 출력으로 파싱 안정화 → 배치 크게)
+const BATCH_SIZE = 20;
+// 배치 간 대기 (1초 — 구조화 출력으로 파싱 실패율 감소)
+const BATCH_DELAY_MS = 1000;
+// 목표 미달 시 보충 라운드 최대 횟수 (easy/medium만이므로 실패율 매우 낮음)
+const MAX_SUPPLEMENT_ROUNDS = 5;
 
 /**
- * 문제 풀 보충
- * - 7일 지난 문제 삭제
- * - 현재 풀 크기 확인 → 부족분만큼 Gemini 호출
+ * 문제 풀 보충 — 챕터별 배치 분리 방식
+ *
+ * 핵심: "모든 챕터에서 20문제"가 아니라 "2장에서 15문제", "3장에서 15문제" 식으로
+ * 챕터 1개당 1배치로 생성 → 챕터 간 주제 중복 원천 차단
+ *
+ * - 챕터 1은 과목별 2~4문제만 (역사/개론 → 중요도 낮음)
+ * - 미생물학 1장은 코흐(Koch)만
+ * - 보충 라운드에서 부족분은 주요 챕터에서 추가 생성
  */
 export async function replenishQuestionPool(
   courseId: string,
@@ -93,7 +101,7 @@ export async function replenishQuestionPool(
   const poolRef = db.collection("tekkenQuestionPool").doc(courseId);
   const questionsRef = poolRef.collection("questions");
 
-  // 1. 7일 지난 문제 삭제
+  // 1. 만료 문제 삭제
   const expiredThreshold = Timestamp.fromMillis(Date.now() - QUESTION_MAX_AGE_MS);
   const expiredSnap = await questionsRef
     .where("generatedAt", "<", expiredThreshold)
@@ -110,81 +118,160 @@ export async function replenishQuestionPool(
   }
 
   // 2. 현재 풀 크기 확인
-  const currentSnap = await questionsRef.count().get();
-  const currentCount = currentSnap.data().count;
-  const needed = targetSize - currentCount;
+  const initialSnap = await questionsRef.count().get();
+  const initialCount = initialSnap.data().count;
 
-  if (needed <= 0) {
-    // 메타 문서 업데이트
+  if (initialCount >= targetSize) {
     await poolRef.set({
-      totalQuestions: currentCount,
+      totalQuestions: initialCount,
       lastRefreshedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
-
     return { added: 0, deleted };
   }
 
-  // 3. 챕터 조회 (시즌별)
+  // 3. 챕터 조회 + 분류
   const chapters = await getSeasonalChapters(courseId);
+  const mainChapters = chapters.filter(c => c !== "1");
+  const hasChapter1 = chapters.includes("1");
 
-  // 4. 난이도별 부족분 계산 후 배치 생성
-  let added = 0;
+  // 챕터 1 예산: easy 2 + medium 2 = 4문제 (0~1문제만 배틀에 나오도록 풀에 소량만)
+  const CH1_BUDGET = hasChapter1 ? 4 : 0;
+  const mainBudget = targetSize - initialCount - CH1_BUDGET;
 
+  let totalAdded = 0;
+
+  // Firestore 배치 저장 헬퍼
+  const saveQuestions = async (
+    questions: GeneratedQuestion[],
+    difficulty: TekkenDifficulty,
+    chapter: string,
+    batchLabel: string,
+  ) => {
+    if (questions.length === 0) return 0;
+    const writeBatch = db.batch();
+    const batchId = `${Date.now()}_${difficulty}_ch${chapter}_${batchLabel}`;
+    for (const q of questions) {
+      const docRef = questionsRef.doc();
+      writeBatch.set(docRef, {
+        text: q.text,
+        type: q.type,
+        choices: q.choices,
+        correctAnswer: q.correctAnswer,
+        difficulty: q.difficulty || difficulty,
+        chapter,
+        chapters,
+        generatedAt: FieldValue.serverTimestamp(),
+        batchId,
+      });
+    }
+    await writeBatch.commit();
+    return questions.length;
+  };
+
+  // 4. 챕터별 배치 생성 (챕터 1개 = 1 Gemini 호출)
   for (const { difficulty, ratio } of DIFFICULTY_DISTRIBUTION) {
-    const difficultyTarget = Math.round(needed * ratio);
-    if (difficultyTarget <= 0) continue;
+    const difficultyBudget = Math.round(mainBudget * ratio);
+    if (difficultyBudget <= 0) continue;
 
+    // 각 챕터에 균등 배분
+    const perChapter = Math.ceil(difficultyBudget / mainChapters.length);
     let difficultyAdded = 0;
-    const batchCount = Math.ceil(difficultyTarget / BATCH_SIZE);
 
-    for (let i = 0; i < batchCount; i++) {
-      const count = Math.min(difficultyTarget - difficultyAdded, BATCH_SIZE);
+    for (const chapter of mainChapters) {
+      const count = Math.min(perChapter, difficultyBudget - difficultyAdded);
       if (count <= 0) break;
 
-      try {
-        const questions = await generateBattleQuestions(courseId, apiKey, count, chapters, difficulty);
+      // 한 챕터에서 BATCH_SIZE 초과 시 분할
+      const batches = Math.ceil(count / BATCH_SIZE);
+      for (let b = 0; b < batches; b++) {
+        const batchCount = Math.min(BATCH_SIZE, count - b * BATCH_SIZE);
+        if (batchCount <= 0) break;
 
-        if (questions.length > 0) {
-          const writeBatch = db.batch();
-          const batchId = `${Date.now()}_${difficulty}_${i}`;
-
-          for (const q of questions) {
-            const docRef = questionsRef.doc();
-            writeBatch.set(docRef, {
-              text: q.text,
-              type: q.type,
-              choices: q.choices,
-              correctAnswer: q.correctAnswer,
-              difficulty: q.difficulty || difficulty,
-              chapters,
-              generatedAt: FieldValue.serverTimestamp(),
-              batchId,
-            });
-            difficultyAdded++;
-            added++;
-          }
-          await writeBatch.commit();
+        try {
+          const questions = await generateBattleQuestions(
+            courseId, apiKey, batchCount, [chapter], difficulty
+          );
+          const saved = await saveQuestions(questions, difficulty, chapter, `${b}`);
+          difficultyAdded += saved;
+          totalAdded += saved;
+        } catch (err) {
+          console.error(`[풀] ${courseId}/${difficulty}/ch${chapter} 실패:`, err);
         }
-      } catch (err) {
-        console.error(`배치 ${difficulty}/${i + 1} 생성 실패 (${courseId}):`, err);
-      }
 
-      // 다음 배치 전 대기
-      await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+        // 배치 간 대기
+        if (b < batches - 1) {
+          await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+        }
+      }
     }
 
-    console.log(`[풀 보충] ${courseId}/${difficulty}: ${difficultyAdded}/${difficultyTarget}개 생성`);
+    console.log(`[풀] ${courseId}/${difficulty}: ${difficultyAdded}문제 생성 (챕터별 분리)`);
+
+    // 챕터 1 소량 생성
+    if (hasChapter1) {
+      const ch1Count = Math.round(CH1_BUDGET * ratio); // easy 2, medium 2
+      if (ch1Count > 0) {
+        try {
+          const questions = await generateBattleQuestions(
+            courseId, apiKey, ch1Count, ["1"], difficulty
+          );
+          const saved = await saveQuestions(questions, difficulty, "1", "ch1");
+          totalAdded += saved;
+        } catch (err) {
+          console.error(`[풀] ${courseId}/${difficulty}/ch1 실패 (무시):`, err);
+        }
+      }
+    }
   }
 
-  // 5. 메타 문서 업데이트
+  // 5. 보충 라운드 — 목표 미달 시 부족분을 주요 챕터에서 추가
+  for (let round = 1; round <= MAX_SUPPLEMENT_ROUNDS; round++) {
+    const remaining = targetSize - initialCount - totalAdded;
+    if (remaining <= 0) break;
+
+    console.log(`[풀 보충] ${courseId}: 라운드 ${round} — 부족분 ${remaining}개`);
+
+    for (const { difficulty, ratio } of DIFFICULTY_DISTRIBUTION) {
+      const supplementTarget = Math.round(remaining * ratio);
+      if (supplementTarget <= 0) continue;
+
+      // 부족분을 주요 챕터에 라운드 로빈 배분
+      let supplementAdded = 0;
+      let chIdx = 0;
+      while (supplementAdded < supplementTarget && chIdx < mainChapters.length) {
+        const chapter = mainChapters[chIdx % mainChapters.length];
+        const count = Math.min(BATCH_SIZE, supplementTarget - supplementAdded);
+
+        try {
+          const questions = await generateBattleQuestions(
+            courseId, apiKey, count, [chapter], difficulty
+          );
+          const saved = await saveQuestions(questions, difficulty, chapter, `s${round}`);
+          supplementAdded += saved;
+          totalAdded += saved;
+        } catch (err) {
+          console.error(`[보충] ${courseId}/${difficulty}/ch${chapter}/r${round} 실패:`, err);
+        }
+        chIdx++;
+      }
+    }
+  }
+
+  // 6. 메타 문서 업데이트
+  const finalTotal = initialCount + totalAdded;
   await poolRef.set({
-    totalQuestions: currentCount + added,
+    totalQuestions: finalTotal,
     lastRefreshedAt: FieldValue.serverTimestamp(),
     chapters,
   }, { merge: true });
 
-  console.log(`문제 풀 보충 완료 (${courseId}): 추가 ${added}개, 삭제 ${deleted}개, 총 ${currentCount + added}개`);
-  return { added, deleted };
+  console.log(`문제 풀 보충 완료 (${courseId}): 추가 ${totalAdded}개, 삭제 ${deleted}개, 총 ${finalTotal}개`);
+
+  if (finalTotal < targetSize) {
+    console.warn(`[경고] ${courseId}: 목표 미달 (${finalTotal}/${targetSize}) — ${targetSize - finalTotal}개 부족`);
+  }
+
+  return { added: totalAdded, deleted };
 }
 
 /**
@@ -204,24 +291,28 @@ export async function drawQuestionsFromPool(
   const questionsRef = poolRef.collection("questions");
   const seenRef = poolRef.collection("seenQuestions");
 
-  // 1. 풀 전체 조회
-  const poolSnap = await questionsRef.get();
-  if (poolSnap.empty) return null;
-
-  // 2. 양쪽 플레이어의 최근 24시간 seenQuestions 조회
-  const oneDayAgo = Timestamp.fromMillis(Date.now() - 24 * 60 * 60 * 1000);
+  // 1. 풀 전체 + seenQuestions 병렬 조회
   const seenQuestionIds = new Set<string>();
 
-  for (const pid of playerIds) {
-    const seenSnap = await seenRef
-      .where("userId", "==", pid)
-      .where("seenAt", ">", oneDayAgo)
-      .get();
+  // userId 단일 필드 쿼리 — 복합 인덱스 불필요, seenAt은 코드에서 필터
+  const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+  const [poolSnap, ...seenSnaps] = await Promise.all([
+    questionsRef.get(),
+    ...playerIds.map(pid =>
+      seenRef.where("userId", "==", pid).get()
+    ),
+  ]);
+  if (poolSnap.empty) return null;
 
+  for (const seenSnap of seenSnaps) {
     for (const doc of seenSnap.docs) {
-      const ids = doc.data().questionIds as string[] | undefined;
+      const data = doc.data();
+      // seenAt 필터 (코드에서 24시간 체크 — 복합 인덱스 불필요)
+      const seenAt = data.seenAt?.toMillis?.() || 0;
+      if (seenAt < oneDayAgo) continue;
+      const ids = data.questionIds as string[] | undefined;
       if (ids) {
-        ids.forEach(id => seenQuestionIds.add(id));
+        ids.forEach((id: string) => seenQuestionIds.add(id));
       }
     }
   }
@@ -233,16 +324,20 @@ export async function drawQuestionsFromPool(
     if (available.length < 5) {
       // 5문제 미만 → seen 기록 초기화 후 전체 풀에서 재시도 (헤비 유저 대응)
       console.log(`미시청 문제 부족 (${available.length}개) — seen 초기화 후 재사용`);
+      const oldSeenSnaps = await Promise.all(
+        playerIds.map(pid => seenRef.where("userId", "==", pid).get())
+      );
       const resetBatch = db.batch();
-      for (const pid of playerIds) {
-        const oldSeenSnap = await seenRef
-          .where("userId", "==", pid)
-          .get();
-        oldSeenSnap.docs.forEach(doc => resetBatch.delete(doc.ref));
+      for (const snap of oldSeenSnaps) {
+        snap.docs.forEach(doc => resetBatch.delete(doc.ref));
       }
       await resetBatch.commit();
-      // 초기화 후 전체 풀 사용
-      available = poolSnap.docs.sort(() => Math.random() - 0.5);
+      // 초기화 후 전체 풀 사용 (Fisher-Yates 셔플)
+      available = [...poolSnap.docs];
+      for (let i = available.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [available[i], available[j]] = [available[j], available[i]];
+      }
     }
   }
 
@@ -257,16 +352,19 @@ export async function drawQuestionsFromPool(
     }
   }
 
-  // 각 난이도 셔플
+  // 각 난이도 Fisher-Yates 셔플 (Math.random() - 0.5 는 편향됨)
   for (const key of Object.keys(byDifficulty)) {
-    byDifficulty[key].sort(() => Math.random() - 0.5);
+    const arr = byDifficulty[key];
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
   }
 
-  // easy 4 → medium 4 → hard 2 순서 (부족하면 다른 난이도에서 보충)
+  // easy 5 → medium 5 순서 (부족하면 다른 난이도에서 보충)
   const targets = [
-    { difficulty: "easy", count: 4 },
-    { difficulty: "medium", count: 4 },
-    { difficulty: "hard", count: 2 },
+    { difficulty: "easy", count: 5 },
+    { difficulty: "medium", count: 5 },
   ];
 
   const selected: typeof available = [];
@@ -326,7 +424,49 @@ export async function drawQuestionsFromPool(
 }
 
 /**
- * 스케줄 CF: 매일 새벽 3시 KST 문제 풀 보충
+ * 단일 과목 문제 풀 초기화 + 재생성 (내부 헬퍼)
+ */
+async function refreshPoolForCourse(courseId: string, apiKey: string): Promise<void> {
+  const db = getFirestore();
+  const poolRef = db.collection("tekkenQuestionPool").doc(courseId);
+  const questionsRef = poolRef.collection("questions");
+
+  // 기존 문제 풀 + seenQuestions 병렬 조회 → 병렬 배치 삭제
+  const [existingSnap, seenSnap] = await Promise.all([
+    questionsRef.get(),
+    poolRef.collection("seenQuestions").get(),
+  ]);
+
+  // 배치 삭제 (500개씩 청크 → 병렬 커밋)
+  const deleteBatches = (docs: FirebaseFirestore.QueryDocumentSnapshot[]) => {
+    const batches: Promise<void>[] = [];
+    for (let i = 0; i < docs.length; i += 500) {
+      const batch = db.batch();
+      docs.slice(i, i + 500).forEach(doc => batch.delete(doc.ref));
+      batches.push(batch.commit().then(() => {}));
+    }
+    return Promise.all(batches);
+  };
+
+  await Promise.all([
+    existingSnap.empty ? Promise.resolve([]) : deleteBatches(existingSnap.docs),
+    seenSnap.empty ? Promise.resolve([]) : deleteBatches(seenSnap.docs),
+  ]);
+
+  if (!existingSnap.empty) {
+    console.log(`[스케줄] ${courseId}: 기존 ${existingSnap.size}개 삭제`);
+  }
+
+  // 300문제 새로 생성 (보충 루프 포함)
+  const result = await replenishQuestionPool(courseId, apiKey);
+  console.log(`[스케줄] ${courseId}: 새로 ${result.added}개 생성`);
+}
+
+/**
+ * 스케줄 CF: 매일 새벽 3시 KST 문제 풀 초기화
+ *
+ * 각 과목을 병렬로 실행 → 타임아웃 격리 + 속도 향상
+ * 과목당 독립 실행이므로 한 과목 실패가 다른 과목에 영향 안 줌
  */
 export const tekkenPoolRefillScheduled = onSchedule(
   {
@@ -334,7 +474,7 @@ export const tekkenPoolRefillScheduled = onSchedule(
     region: "asia-northeast3",
     timeZone: "Asia/Seoul",
     secrets: [GEMINI_API_KEY],
-    timeoutSeconds: 540, // 9분 (2개 과목 × 300문제 순차 처리)
+    timeoutSeconds: 540, // 9분 (과목별 병렬 처리)
     memory: "1GiB",
   },
   async () => {
@@ -344,52 +484,21 @@ export const tekkenPoolRefillScheduled = onSchedule(
       return;
     }
 
-    const db = getFirestore();
-
-    // 현재 학기 과목만 생성 (1학기: biology+microbiology, 2학기: biology+pathophysiology)
+    // 현재 학기 과목만 생성 (1학기: biology+microbiology, 2학기: pathophysiology만)
     const courses = getCurrentSemesterCourses();
     console.log(`[스케줄] 매일 초기화 시작 — 과목: ${courses.join(", ")}`);
 
-    for (const courseId of courses) {
-      try {
-        // 기존 문제 풀 전체 삭제 (매일 새 문제로 교체)
-        const poolRef = db.collection("tekkenQuestionPool").doc(courseId);
-        const questionsRef = poolRef.collection("questions");
-        const existingSnap = await questionsRef.get();
+    // 과목별 병렬 실행 (각 과목이 독립적으로 처리)
+    const results = await Promise.allSettled(
+      courses.map(courseId => refreshPoolForCourse(courseId, apiKey))
+    );
 
-        if (!existingSnap.empty) {
-          // 500개씩 batch 삭제
-          const refs = existingSnap.docs.map(doc => doc.ref);
-          for (let i = 0; i < refs.length; i += 500) {
-            const batch = db.batch();
-            refs.slice(i, i + 500).forEach(ref => batch.delete(ref));
-            await batch.commit();
-          }
-          console.log(`[스케줄] ${courseId}: 기존 ${existingSnap.size}개 삭제`);
-        }
-
-        // seenQuestions도 매일 초기화 (새 문제이므로)
-        const seenRef = poolRef.collection("seenQuestions");
-        const seenSnap = await seenRef.get();
-        if (!seenSnap.empty) {
-          const refs = seenSnap.docs.map(doc => doc.ref);
-          for (let i = 0; i < refs.length; i += 500) {
-            const batch = db.batch();
-            refs.slice(i, i + 500).forEach(ref => batch.delete(ref));
-            await batch.commit();
-          }
-        }
-
-        // 300문제 새로 생성
-        const result = await replenishQuestionPool(courseId, apiKey);
-        console.log(`[스케줄] ${courseId}: 새로 ${result.added}개 생성`);
-      } catch (err) {
-        console.error(`[스케줄] ${courseId} 풀 생성 실패:`, err);
+    // 결과 로깅
+    results.forEach((result, i) => {
+      if (result.status === "rejected") {
+        console.error(`[스케줄] ${courses[i]} 풀 생성 실패:`, result.reason);
       }
-
-      // 과목 간 딜레이
-      await new Promise(resolve => setTimeout(resolve, 2000));
-    }
+    });
   }
 );
 

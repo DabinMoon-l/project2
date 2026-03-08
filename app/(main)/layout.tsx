@@ -10,6 +10,7 @@ import Navigation from '@/components/common/Navigation';
 import { NotificationProvider, ExpToastProvider, SwipeBack } from '@/components/common';
 import { UserProvider, useUser, CourseProvider, useCourse, MilestoneProvider, HomeOverlayProvider, DetailPanelProvider, useDetailPanel } from '@/lib/contexts';
 import { useActivityTracker } from '@/lib/hooks/useActivityTracker';
+import { usePageViewLogger } from '@/lib/hooks/usePageViewLogger';
 import type { ClassType } from '@/styles/themes';
 
 // 대형 오버레이/컨테이너 lazy load (역할별 조건부 렌더링)
@@ -50,6 +51,9 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
 
   // 접속 추적 (lastActiveAt + currentActivity)
   useActivityTracker();
+
+  // 페이지뷰 로깅 (연구용)
+  usePageViewLogger();
 
   // 네비게이션 숨김 (홈 오버레이는 body attribute으로 처리)
   // Navigation.tsx의 shouldHideByPath와 동기화 필수
@@ -257,6 +261,7 @@ function MainLayoutGrid({
             >
               {children}
               {!isProfessor && pathname === '/quiz' && searchParams?.get('manage') !== 'true' && <AIQuizContainer />}
+              {isProfessor && pathname === '/professor/quiz' && <AIQuizContainer />}
             </main>
 
             {/* 우측: 디테일 패널 (라우트 사이드바가 없을 때만 표시) */}

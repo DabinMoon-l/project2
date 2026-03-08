@@ -39,7 +39,6 @@ export default function TekkenBattleOverlay({
   const [hasAnswered, setHasAnswered] = useState(false);
   const [showRoundResult, setShowRoundResult] = useState(false);
   const prevRoundRef = useRef(0);
-  const timeoutSubmittedRef = useRef(false);
 
   // 네비게이션 숨김
   useHideNav(true);
@@ -50,12 +49,14 @@ export default function TekkenBattleOverlay({
 
     if (tekken.battleStatus === 'finished') {
       setPhase('result');
-    } else if (tekken.battleStatus === 'loading') {
-      setPhase('loading');
-    } else if (tekken.battleStatus === 'countdown') {
+    } else if (tekken.battleStatus === 'countdown' || tekken.battleStatus === 'loading') {
+      // loading은 레거시 — 새 코드에서는 바로 countdown으로 생성됨
       setPhase('countdown');
     } else if (tekken.battleStatus === 'question' || tekken.battleStatus === 'mash' || tekken.battleStatus === 'roundResult') {
       setPhase('battle');
+    } else if (tekken.battleStatus === 'error') {
+      // 에러 시 배틀 종료
+      onClose();
     }
   }, [tekken.battleStatus, tekken.battle]);
 
@@ -64,7 +65,6 @@ export default function TekkenBattleOverlay({
     if (tekken.currentRoundIndex !== prevRoundRef.current) {
       setHasAnswered(false);
       setShowRoundResult(false);
-      timeoutSubmittedRef.current = false;
       prevRoundRef.current = tekken.currentRoundIndex;
     }
   }, [tekken.currentRoundIndex]);
@@ -78,18 +78,20 @@ export default function TekkenBattleOverlay({
     }
   }, [tekken.battleStatus]);
 
-  // 타임아웃 자동 제출 (항상 — 내가 답변해도 상대가 안 풀었을 수 있음)
-  // CF 실패 시 timeoutSubmitted 복구 (재시도 가능)
+  // 타임아웃 자동 제출 — 실패 시 2초마다 재시도 (상태 변경 시 자동 정리)
+  // scored transaction lock이 이중 채점을 방지하므로 안전
   useEffect(() => {
     if (tekken.battleStatus !== 'question') return;
-    if (timeoutSubmittedRef.current) return;
+    if (tekken.questionTimeLeft > 0) return;
+    if (!tekken.currentRound?.timeoutAt) return;
 
-    if (tekken.questionTimeLeft <= 0 && tekken.currentRound?.timeoutAt > 0) {
-      timeoutSubmittedRef.current = true;
-      tekken.submitTimeout().catch(() => {
-        timeoutSubmittedRef.current = false;
-      });
-    }
+    const attempt = () => {
+      tekken.submitTimeout().catch(() => {});
+    };
+
+    attempt();
+    const retryTimer = setInterval(attempt, 2000);
+    return () => clearInterval(retryTimer);
   }, [tekken.questionTimeLeft, tekken.battleStatus]);
 
   // 카운트다운 완료 → 첫 라운드 시작 (RTDB status 변경이 phase 전환을 트리거)
@@ -125,6 +127,14 @@ export default function TekkenBattleOverlay({
     return opponentIds.length > 0 ? roundResult[opponentIds[0]] : null;
   }, [roundResult, userId]);
 
+  // 상대가 봇인지 여부 (매 렌더마다 재계산 방지)
+  const isOpponentBot = useMemo(() => {
+    const players = tekken.battle?.players;
+    if (!players) return false;
+    const opId = Object.keys(players).find(id => id !== userId);
+    return opId ? !!players[opId]?.isBot : false;
+  }, [tekken.battle?.players, userId]);
+
   if (typeof window === 'undefined') return null;
 
   return createPortal(
@@ -143,19 +153,6 @@ export default function TekkenBattleOverlay({
 
       {/* 콘텐츠 */}
       <div className="relative flex flex-col flex-1 z-10">
-        {/* 로딩 (문제 생성 중) */}
-        {phase === 'loading' && (
-          <div className="flex-1 flex flex-col items-center justify-center">
-            <motion.div
-              className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full mb-4"
-              animate={{ rotate: 360 }}
-              transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-            />
-            <p className="text-lg font-bold text-white/80">문제 생성 중...</p>
-            <p className="text-sm text-white/40 mt-1">잠시만 기다려주세요</p>
-          </div>
-        )}
-
         {/* 카운트다운 */}
         {phase === 'countdown' && (
           <TekkenCountdown
@@ -167,17 +164,22 @@ export default function TekkenBattleOverlay({
         {/* 배틀 */}
         {phase === 'battle' && (
           <>
-            {/* ── 상단 바: 라운드 표시 ── */}
+            {/* ── 상단 바: 라운드 표시 (중앙) + CRITICAL (좌측) ── */}
             <div className="pt-[env(safe-area-inset-top)]">
-              <div className="flex items-center justify-center px-4 py-2">
+              <div className="relative flex items-center justify-center px-4 py-2">
+                {tekken.battleStatus === 'question' && tekken.questionTimeLeft > 0 && (20000 - tekken.questionTimeLeft) < 5000 && (
+                  <span className="absolute left-4 bottom-1.5 text-base font-black text-yellow-400 animate-pulse">
+                    CRITICAL!
+                  </span>
+                )}
                 <span className="text-2xl font-black text-white">
                   R{tekken.currentRoundIndex + 1}/{tekken.totalRounds}
                 </span>
               </div>
             </div>
 
-            {/* ── 퀴즈 영역 (50%) ── */}
-            <div className="flex-[5] flex flex-col min-h-0 overflow-hidden">
+            {/* ── 퀴즈 영역 ── */}
+            <div className="flex-[5] flex flex-col min-h-0 overflow-hidden relative">
               {/* 문제 카드 */}
               {tekken.battleStatus === 'question' && tekken.currentRound && (
                 <TekkenQuestionCard
@@ -199,12 +201,14 @@ export default function TekkenBattleOverlay({
                   writeMashTap={tekken.writeMashTap}
                   onSubmit={handleMashSubmit}
                   myColor={tekken.battle?.colorAssignment?.[userId] || 'red'}
+                  isOpponentBot={isOpponentBot}
+                  writeBotTap={tekken.writeBotTap}
                 />
               )}
 
-              {/* 답변 후 상대 대기 */}
+              {/* 답변 후 상대 대기 — 절대 위치 (캐릭터 영역 밀지 않도록) */}
               {hasAnswered && tekken.battleStatus === 'question' && (
-                <div className="flex items-center justify-center py-2">
+                <div className="absolute bottom-2 left-0 right-0 flex items-center justify-center pointer-events-none">
                   <span className="text-sm text-white/40 font-bold">
                     상대방 답변 대기 중...
                   </span>
@@ -212,7 +216,7 @@ export default function TekkenBattleOverlay({
               )}
             </div>
 
-            {/* ── 캐릭터 영역 (50%) ── */}
+            {/* ── 캐릭터 영역 ── */}
             <div className="flex-[5] min-h-0">
               <TekkenBattleArena
                 myPlayer={tekken.myPlayer}
@@ -226,7 +230,7 @@ export default function TekkenBattleOverlay({
               />
             </div>
 
-            <div className="pb-2" />
+            <div className="pb-1" />
           </>
         )}
 

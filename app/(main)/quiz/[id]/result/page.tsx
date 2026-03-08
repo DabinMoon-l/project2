@@ -288,12 +288,12 @@ export default function QuizResultPage() {
           if (q.correctAnswer !== undefined && q.correctAnswer !== null) {
             correctAnswer = q.correctAnswer;
           } else if (q.answer !== undefined && q.answer !== null) {
-            // AI 퀴즈: answer가 0-indexed 숫자인 경우 1-indexed로 변환
+            // answer 필드에서 변환 (0-indexed 그대로)
             if (q.type === 'multiple') {
               if (Array.isArray(q.answer)) {
-                correctAnswer = q.answer.map((a: number) => String(a + 1)).join(',');
+                correctAnswer = q.answer.map((a: number) => String(a)).join(',');
               } else if (typeof q.answer === 'number') {
-                correctAnswer = String(q.answer + 1);
+                correctAnswer = String(q.answer);
               } else {
                 correctAnswer = q.answer;
               }
@@ -316,7 +316,7 @@ export default function QuizResultPage() {
             // 복수정답 여부 확인
             if (correctAnswerStr.includes(',')) {
               // 복수정답: 모든 정답을 선택해야 정답
-              // correctAnswer와 userAnswer 모두 1-indexed (예: "1,3")
+              // correctAnswer와 userAnswer 모두 0-indexed (예: "0,2")
               const correctIndices = correctAnswerStr.split(',').map((s: string) => parseInt(s.trim(), 10));
               const userIndices = userAnswerStr
                 ? userAnswerStr.split(',').map((s: string) => parseInt(s.trim(), 10))
@@ -491,15 +491,13 @@ export default function QuizResultPage() {
           const rawAnswer = userAnswers[index] || '';
           let answer: any = rawAnswer;
 
-          // 서버에서 0-indexed로 채점하므로 원본 answer 필드 기준으로 전달
+          // 답안이 이미 0-indexed이므로 그대로 전달
           if (q.type === 'multiple') {
-            // 1-indexed string → 0-indexed number 변환
             if (typeof rawAnswer === 'string' && rawAnswer.includes(',')) {
-              // 복수정답: "1,3" → [0, 2]
-              answer = rawAnswer.split(',').map((s: string) => parseInt(s.trim(), 10) - 1);
+              answer = rawAnswer.split(',').map((s: string) => parseInt(s.trim(), 10));
             } else {
               const num = parseInt(rawAnswer, 10);
-              answer = isNaN(num) ? rawAnswer : num - 1;
+              answer = isNaN(num) ? rawAnswer : num;
             }
           } else if (q.type === 'ox') {
             // "O"/"X" → 0/1 변환
@@ -548,6 +546,8 @@ export default function QuizResultPage() {
             quizId,
             quizTitle: quizData.title || '퀴즈',
             quizCreatorId: quizData.creatorId || null,
+            quizType: quizData.type || null,
+            quizIsPublic: quizData.isPublic ?? false,
             score,
             correctCount,
             totalCount: questions.filter((q: any) => q.type !== 'essay').length,
@@ -1099,7 +1099,7 @@ export default function QuizResultPage() {
           })()}
           <div className="space-y-1">
             {result.options.map((opt, idx) => {
-              const optionNum = (idx + 1).toString();
+              const optionNum = idx.toString();
               const correctAnswerStr = result.correctAnswer?.toString() || '';
               const correctAnswers = correctAnswerStr.includes(',')
                 ? correctAnswerStr.split(',').map(a => a.trim())

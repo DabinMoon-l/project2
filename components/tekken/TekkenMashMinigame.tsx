@@ -31,6 +31,8 @@ interface TekkenMashMinigameProps {
   writeMashTap: (count: number) => void;
   onSubmit: (taps: number) => Promise<void>;
   myColor: 'red' | 'blue';
+  isOpponentBot?: boolean; // 봇이면 탭 시뮬레이션
+  writeBotTap?: (count: number) => void; // 봇 탭 RTDB 쓰기
 }
 
 const STEP = BATTLE_CONFIG.MASH_STEP_PER_TAP;
@@ -48,6 +50,8 @@ export default function TekkenMashMinigame({
   writeMashTap,
   onSubmit,
   myColor,
+  isOpponentBot = false,
+  writeBotTap,
 }: TekkenMashMinigameProps) {
   const [myTaps, setMyTaps] = useState(0);
   const [submitted, setSubmitted] = useState(false);
@@ -80,6 +84,22 @@ export default function TekkenMashMinigame({
       }
     }
   }, [writeMashTap, onSubmit]);
+
+  // 봇 탭 실시간 시뮬레이션 (3~5탭/초, 서버 로직과 동일)
+  useEffect(() => {
+    if (!isOpponentBot || !writeBotTap) return;
+    const botTapsPerSec = 3 + Math.random() * 2; // 서버와 동일한 범위
+    const intervalMs = Math.floor(1000 / botTapsPerSec);
+    let botCount = 0;
+
+    const timer = setInterval(() => {
+      if (submittedRef.current) return;
+      botCount++;
+      writeBotTap(botCount);
+    }, intervalMs);
+
+    return () => clearInterval(timer);
+  }, [isOpponentBot, writeBotTap]);
 
   // 안전 타임아웃 (UI에 표시 안 함, 30초 안전장치)
   useEffect(() => {
@@ -139,15 +159,13 @@ export default function TekkenMashMinigame({
         <p className="text-sm text-white/60">
           게이지를 끝까지 밀어라!
         </p>
-        <motion.span
+        <span
           className={`text-base font-black mt-1 inline-block ${
             myPercent > 60 ? 'text-green-400' : myPercent < 40 ? 'text-red-400' : 'text-yellow-400'
           }`}
-          animate={{ scale: [1, 1.05, 1] }}
-          transition={{ duration: 0.5, repeat: Infinity }}
         >
           {statusText}
-        </motion.span>
+        </span>
       </div>
 
       {/* 줄다리기 게이지 */}
@@ -182,7 +200,7 @@ export default function TekkenMashMinigame({
           e.preventDefault();
           handleTap();
         }}
-        className={`w-48 h-24 rounded-2xl border-3 flex items-center justify-center transition-transform backdrop-blur-sm select-none touch-none ${
+        className={`w-48 h-24 rounded-2xl border-3 flex items-center justify-center transition-transform select-none touch-none ${
           submitted
             ? 'bg-white/5 border-white/10'
             : `bg-white/10 border-white/25 active:scale-90`

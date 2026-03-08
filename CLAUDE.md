@@ -74,7 +74,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `geminiQueue.ts` | 597 | Gemini API 큐 관리 |
 | `notification.ts` | 552 | FCM 푸시 알림 |
 | `recordAttempt.ts` | ~500 | 퀴즈 제출 + 서버 채점 |
-| `computeRankings.ts` | ~400 | 랭킹 계산 (5분 주기) |
+| `computeRankings.ts` | ~400 | 랭킹 계산 (10분 주기) |
 | `rabbitGacha.ts` | ~350 | 토끼 뽑기/장착/레벨업 |
 | `tekkenBattle.ts` | ~350 | 실시간 1v1 배틀 로직 |
 
@@ -344,12 +344,16 @@ rankPercentile(value, sortedArray) = (value보다 작은 개수) / (배열.lengt
 - 모든 값 동일 + value = 0 → 0%
 ```
 
-### 랭킹 — `computeRankings.ts` (5분마다 사전 계산)
+### 랭킹 — `computeRankings.ts` (10분마다 사전 계산)
 
 **개인**: `profCorrectCount × 4 + totalExp × 0.6`
 **팀**: `normalizedAvgExp × 0.4 + avgCorrectRate × 0.4 + avgCompletionRate × 0.2`
 
 동점 처리: 동점자는 같은 순위 (A 100점, B 100점, C 90점 → 1위, 1위, 3위)
+
+**테스트 계정 배제**: 랭킹(개인+팀) 계산에서만 제외, 모든 기능은 정상 사용 가능
+- 생물학(biology): 닉네임 "빠샤"
+- 미생물학(microbiology): 닉네임 "test"
 
 ### 교수 통계 대시보드 — `professor/stats/page.tsx`
 

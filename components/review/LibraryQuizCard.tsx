@@ -5,12 +5,19 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { TAP_SCALE } from '@/lib/constants/springs';
 import { NEWSPAPER_BG_TEXT } from './types';
 
+// 교수 퀴즈 타입 판별
+const PROFESSOR_TYPES = ['professor', 'professor-ai', 'midterm', 'final', 'past'];
+
 /**
  * 서재 퀴즈 카드 (CustomReviewQuizCard와 동일한 스타일)
  * - 카드 클릭: 상세 페이지로 이동
  * - Details 버튼: 상세 페이지로 이동
  * - Review 버튼: 복습 시작
- * - 지구 아이콘: 공개 전환
+ *
+ * 아이콘 (학생 서재):
+ * - 사람: 교수 문제 (캐러셀)
+ * - 노란 지구: 공개 문제
+ * - 자물쇠: 비공개 (본인 AI/커스텀) → 클릭 시 공개 전환
  */
 export default function LibraryQuizCard({
   quiz,
@@ -21,8 +28,22 @@ export default function LibraryQuizCard({
   onPublish,
   isSelectMode = false,
   isSelected = false,
+  isProfessorView = false,
+  currentUserId,
 }: {
-  quiz: { id: string; title: string; questionCount: number; score: number; totalQuestions: number; tags?: string[]; myScore?: number; myFirstReviewScore?: number; isPublic?: boolean };
+  quiz: {
+    id: string;
+    title: string;
+    questionCount: number;
+    score: number;
+    totalQuestions: number;
+    tags?: string[];
+    myScore?: number;
+    myFirstReviewScore?: number;
+    isPublic?: boolean;
+    creatorId?: string;
+    quizType?: string;
+  };
   onCardClick: () => void;
   onDetails: () => void;
   onReview: () => void;
@@ -30,6 +51,10 @@ export default function LibraryQuizCard({
   onPublish?: () => void;
   isSelectMode?: boolean;
   isSelected?: boolean;
+  /** 교수 화면인지 (교수는 자물쇠/지구만 표시, 사람 아이콘 없음) */
+  isProfessorView?: boolean;
+  /** 현재 로그인한 사용자 ID (교수 문제 판별용) */
+  currentUserId?: string;
 }) {
   const [showReviewMenu, setShowReviewMenu] = useState(false);
   const reviewMenuRef = useRef<HTMLDivElement>(null);
@@ -48,6 +73,66 @@ export default function LibraryQuizCard({
   }, [showReviewMenu]);
 
   const tags = quiz.tags || [];
+
+  // 아이콘 타입 결정: 학생 서재에서 교수 문제인지 판별
+  const isProfessorQuiz = !isProfessorView && (
+    PROFESSOR_TYPES.includes(quiz.quizType || '') ||
+    // quizType이 없어도 creatorId가 본인이 아니면 교수 문제로 추정
+    (!quiz.quizType && quiz.creatorId && currentUserId && quiz.creatorId !== currentUserId)
+  );
+
+  // 아이콘 렌더링
+  const renderStatusIcon = () => {
+    if (isSelectMode) return null;
+
+    // 교수 문제 (학생에게만 사람 아이콘 표시)
+    if (isProfessorQuiz) {
+      return (
+        <div
+          className="absolute top-2 right-2 z-20 w-7 h-7 flex items-center justify-center text-[#5C5C5C]"
+          title="교수 출제 문제"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
+        </div>
+      );
+    }
+
+    // 공개 문제 (노란 지구)
+    if (quiz.isPublic) {
+      return (
+        <div
+          className="absolute top-2 right-2 z-20 w-7 h-7 flex items-center justify-center text-[#B8860B]"
+          title="공개 문제"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+      );
+    }
+
+    // 비공개 (자물쇠) — 본인 문제만 공개 전환 가능
+    if (!quiz.isPublic && onPublish) {
+      return (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onPublish();
+          }}
+          className="absolute top-2 right-2 z-20 w-7 h-7 flex items-center justify-center text-[#5C5C5C] hover:text-[#1A1A1A] hover:scale-110 transition-all"
+          title="공개로 전환"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+        </button>
+      );
+    }
+
+    return null;
+  };
 
   return (
     <motion.div
@@ -87,21 +172,8 @@ export default function LibraryQuizCard({
         </div>
       )}
 
-      {/* 공개 버튼 (자물쇠 아이콘 - 비공개 상태) - 선택 모드가 아니고 비공개일 때만 표시 */}
-      {!isSelectMode && !quiz.isPublic && onPublish && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onPublish();
-          }}
-          className="absolute top-2 right-2 z-20 w-7 h-7 flex items-center justify-center text-[#5C5C5C] hover:text-[#1A1A1A] hover:scale-110 transition-all"
-          title="공개로 전환"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-          </svg>
-        </button>
-      )}
+      {/* 상태 아이콘 */}
+      {renderStatusIcon()}
 
       {/* 카드 내용 */}
       <div className="relative z-10 p-3 bg-[#F5F0E8]/60">

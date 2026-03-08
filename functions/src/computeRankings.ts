@@ -68,7 +68,16 @@ async function computeRankingsForCourse(courseId: string) {
   const usersSnap = await db.collection("users").where("courseId", "==", courseId).get();
   const allUsers = usersSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
 
-  const students = allUsers.filter((u: any) => u.role !== "professor");
+  // 테스트 계정 닉네임 (랭킹에서만 제외, 기능은 정상 사용)
+  const testAccountNicknames: Record<string, string[]> = {
+    biology: ["빠샤"],
+    microbiology: ["test"],
+  };
+  const excludedNicknames = testAccountNicknames[courseId] || [];
+
+  const students = allUsers.filter((u: any) =>
+    u.role !== "professor" && !excludedNicknames.includes(u.nickname)
+  );
   const professorUids = allUsers.filter((u: any) => u.role === "professor").map((u: any) => u.id);
 
   if (students.length === 0) {

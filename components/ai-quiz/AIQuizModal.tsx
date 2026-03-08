@@ -522,8 +522,9 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
       finalImages = [...finalImages, ...pdfImages];
     }
 
-    if (finalImages.length === 0) {
-      alert('학습 자료를 업로드해주세요.');
+    // 과목 맞춤형 + 챕터 태그 선택 시 학습 자료 없이도 생성 가능
+    if (finalImages.length === 0 && !(courseCustomized && hasChapterTag)) {
+      alert('학습 자료를 업로드해주세요.\n(과목 맞춤형 + 챕터 태그 선택 시 자료 없이 생성 가능)');
       return;
     }
 
@@ -553,8 +554,8 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
   const gridCols = isMobile ? 'grid-cols-4' : 'grid-cols-3';
 
   const selectedPageCount = documentPages.filter(p => p.selected).length;
-  // 어떤 유형이든 콘텐츠가 있으면 true
-  const hasContent = images.length > 0 || selectedPageCount > 0;
+  // 콘텐츠 존재 여부 (과목 맞춤형 + 챕터 태그면 자료 없이도 OK)
+  const hasContent = images.length > 0 || selectedPageCount > 0 || (courseCustomized && hasChapterTag);
 
   return (
     <>

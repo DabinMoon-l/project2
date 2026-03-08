@@ -20,37 +20,19 @@ export default function TekkenCountdown({ onComplete, countdownStartedAt }: Tekk
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
   const completedRef = useRef(false);
+  // 컴포넌트 마운트 시점 기록 — 서버 시간이 이미 지났으면 마운트 시점 기준으로 카운트다운
+  const mountTimeRef = useRef(Date.now());
 
-  // 클라이언트 전용 카운트다운 (서버 타임스탬프 없을 때)
   useEffect(() => {
-    if (countdownStartedAt) return; // 서버 경로 사용 시 스킵
-
-    if (count === 0) {
-      const timer = setTimeout(() => {
-        if (!completedRef.current) {
-          completedRef.current = true;
-          onCompleteRef.current();
-        }
-      }, 800);
-      return () => clearTimeout(timer);
-    }
-
-    const timer = setTimeout(() => {
-      setCount((prev) => prev - 1);
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [count, countdownStartedAt]);
-
-  // 서버 타임스탬프 기반 카운트다운
-  useEffect(() => {
-    if (!countdownStartedAt) return; // 서버 타임스탬프 없으면 스킵
-
     let completeTimer: ReturnType<typeof setTimeout> | null = null;
 
+    // 서버 타임스탬프가 있으면 사용하되, 이미 지났으면 마운트 시점 기준
+    const effectiveStart = countdownStartedAt
+      ? Math.max(countdownStartedAt, mountTimeRef.current)
+      : mountTimeRef.current;
+
     const tick = () => {
-      // 500ms 네트워크 버퍼 — 카운트다운이 항상 3부터 시작하도록
-      const elapsed = Math.max(0, Date.now() - countdownStartedAt - 500);
+      const elapsed = Math.max(0, Date.now() - effectiveStart);
       const remaining = Math.max(0, 3000 - elapsed);
       const newCount = Math.ceil(remaining / 1000);
 
@@ -58,7 +40,7 @@ export default function TekkenCountdown({ onComplete, countdownStartedAt }: Tekk
 
       if (remaining <= 0 && !completedRef.current) {
         completedRef.current = true;
-        completeTimer = setTimeout(() => onCompleteRef.current(), 800);
+        completeTimer = setTimeout(() => onCompleteRef.current(), 500);
       }
     };
 

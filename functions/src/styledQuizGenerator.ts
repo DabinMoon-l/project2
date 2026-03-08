@@ -14,7 +14,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { defineSecret } from "firebase-functions/params";
 import fetch from "node-fetch";
-import type { StyleProfile, KeywordStore } from "./professorQuizAnalysis";
+import type { StyleProfile, KeywordStore, QuestionBank, SampleQuestion } from "./professorQuizAnalysis";
 import { loadScopeForAI, inferChaptersFromText } from "./courseScope";
 import { analyzeImageRegions } from "./imageRegionAnalysis";
 import { processImagesForQuiz, type CroppedImage } from "./imageCropping";
@@ -463,7 +463,7 @@ function filterFocusGuideByChapters(guide: string, chapterNumbers: string[]): st
 /**
  * 과목 ID로 챕터 인덱스 가져오기
  */
-function getCourseIndex(courseId: string): CourseIndex | null {
+export function getCourseIndex(courseId: string): CourseIndex | null {
   switch (courseId) {
     case "biology":
       return BIOLOGY_INDEX;
@@ -566,6 +566,7 @@ function buildCourseOverviewPrompt(courseId: string, filterChapters?: string[]):
 export interface StyleContext {
   profile: StyleProfile | null;
   keywords: KeywordStore | null;
+  questionBank: SampleQuestion[];
   scope: {
     content: string;
     keywords: string[];
@@ -709,66 +710,111 @@ function buildStyleContextPrompt(context: StyleContext): string {
 
   let styleSection = `
 ## 교수님 출제 스타일 (분석된 ${profile.analyzedQuestionCount}개 문제 기반)
-
-### 자주 출제하는 문제 유형
 `;
 
-  // 유형 분포 (상위 5개)
-  const sortedTypes = Object.entries(profile.typeDistribution)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 5);
-
-  for (const [type, count] of sortedTypes) {
-    const percentage = Math.round((count / profile.analyzedQuestionCount) * 100);
-    styleSection += `- ${type}: ${percentage}%\n`;
+  // 스타일 요약 (v2: 자연어 서술)
+  if (profile.styleDescription) {
+    styleSection += `
+### 출제 스타일 요약
+${profile.styleDescription}
+`;
   }
 
-  // 톤 특성
-  styleSection += `
-### 출제 특성
-- "옳지 않은 것" 유형: ${profile.toneCharacteristics.usesNegative ? "자주 사용" : "드물게 사용"}
-- "모두 고르기" 유형: ${profile.toneCharacteristics.usesMultiSelect ? "자주 사용" : "드물게 사용"}
-- 임상 케이스: ${profile.toneCharacteristics.hasClinicalCases ? "포함" : "거의 없음"}
-- 발문 길이: ${profile.toneCharacteristics.preferredStemLength === "short" ? "짧음" : profile.toneCharacteristics.preferredStemLength === "long" ? "긴 편" : "중간"}
-`;
-
-  // 함정 패턴 (상위 3개)
-  if (profile.trapPatterns.length > 0) {
+  // 발문 패턴 (v2: 구체적 문장 구조)
+  if (profile.questionPatterns && profile.questionPatterns.length > 0) {
     styleSection += `
-### 자주 사용하는 함정 패턴
+### 자주 사용하는 발문 패턴
 `;
-    const topTraps = profile.trapPatterns
+    const topPatterns = profile.questionPatterns
       .sort((a, b) => b.frequency - a.frequency)
-      .slice(0, 3);
+      .slice(0, 6);
 
-    for (const trap of topTraps) {
-      styleSection += `- ${trap.pattern} (${trap.frequency}회): 예) "${trap.examples[0]}..."\n`;
+    for (const p of topPatterns) {
+      styleSection += `- "${p.pattern}"`;
+      if (p.examples && p.examples.length > 0) {
+        styleSection += ` — 예: "${p.examples[0]}"`;
+      }
+      styleSection += `\n`;
+    }
+    styleSection += `위 패턴을 참고하여 비슷한 구조로 발문을 작성하세요.\n`;
+  }
+
+  // 오답 구성 전략 (v2: 구체적 방법)
+  if (profile.distractorStrategies && profile.distractorStrategies.length > 0) {
+    styleSection += `
+### 오답 선지 구성 방식
+`;
+    for (const s of profile.distractorStrategies.slice(0, 4)) {
+      styleSection += `- ${s}\n`;
     }
   }
 
-  // 교수 문제에서 추출된 키워드
-  if (keywords && keywords.mainConcepts.length > 0) {
-    const topConcepts = keywords.mainConcepts
+  // ★ 원본 문제 few-shot 예시 (QuestionBank에서 랜덤 추출)
+  if (context.questionBank && context.questionBank.length > 0) {
+    styleSection += `
+### 교수님이 실제로 낸 문제 (이 스타일을 따라하세요)
+`;
+    for (const q of context.questionBank.slice(0, 8)) {
+      styleSection += `Q. ${q.stem}\n`;
+      q.choices.forEach((c: string, i: number) => {
+        const marker = q.correctAnswer === i ? "✓" : " ";
+        styleSection += `  ${marker}${i + 1}. ${c}\n`;
+      });
+      styleSection += `\n`;
+    }
+    styleSection += `위 문제들의 발문 구조, 선지 길이, 용어 수준, 오답 구성 방식을 그대로 따라하세요.\n`;
+  }
+
+  // 주제별 비중 (v2)
+  if (profile.topicEmphasis && profile.topicEmphasis.length > 0) {
+    styleSection += `
+### 주요 출제 주제
+`;
+    const topTopics = profile.topicEmphasis
+      .sort((a, b) => b.weight - a.weight)
+      .slice(0, 5);
+    for (const t of topTopics) {
+      styleSection += `- ${t.topic} (비중: ${t.weight}/10)\n`;
+    }
+  }
+
+  // 핵심 학술 용어 (v2: coreTerms)
+  if (keywords && keywords.coreTerms && keywords.coreTerms.length > 0) {
+    const topTerms = keywords.coreTerms
       .sort((a, b) => b.frequency - a.frequency)
-      .slice(0, 10)
-      .map((k) => k.term);
+      .slice(0, 12);
+    const termsList = topTerms
+      .map((t) => t.english ? `${t.korean}(${t.english})` : t.korean)
+      .join(", ");
 
     styleSection += `
-### 시험에 자주 나오는 핵심 개념
-${topConcepts.join(", ")}
+### 시험에 자주 나오는 핵심 용어
+${termsList}
 `;
+  }
 
-    // 임상 단서도 추가
-    if (keywords.caseTriggers && keywords.caseTriggers.length > 0) {
-      const topCaseTriggers = keywords.caseTriggers
-        .sort((a, b) => b.frequency - a.frequency)
-        .slice(0, 8)
-        .map((k) => k.term);
-
-      styleSection += `
-### 케이스 문제에 자주 등장하는 임상 단서
-${topCaseTriggers.join(", ")}
+  // 출제 토픽 (v2: examTopics)
+  if (keywords && keywords.examTopics && keywords.examTopics.length > 0) {
+    styleSection += `
+### 주요 출제 토픽 (세부 개념)
 `;
+    for (const t of keywords.examTopics.slice(0, 6)) {
+      styleSection += `- ${t.topic}: ${t.subtopics.slice(0, 6).join(", ")}\n`;
+    }
+  }
+
+  // v1 하위 호환: 기존 데이터에 typeDistribution이 있으면 사용
+  if (!profile.questionPatterns && (profile as any).typeDistribution) {
+    const oldProfile = profile as any;
+    styleSection += `
+### 문제 유형 분포 (레거시)
+`;
+    const sortedTypes = Object.entries(oldProfile.typeDistribution as Record<string, number>)
+      .sort(([, a], [, b]) => (b as number) - (a as number))
+      .slice(0, 5);
+    for (const [type, count] of sortedTypes) {
+      const percentage = Math.round(((count as number) / oldProfile.analyzedQuestionCount) * 100);
+      styleSection += `- ${type}: ${percentage}%\n`;
     }
   }
 
@@ -787,8 +833,10 @@ function buildDifficultyPrompt(
 
   // 해당 난이도에서 교수가 선호하는 유형 (있으면)
   let preferredTypes = params.preferredTypes;
-  if (profile && profile.difficultyTypeMap[difficulty.toUpperCase() as "EASY" | "MEDIUM" | "HARD"]) {
-    const profTypes = profile.difficultyTypeMap[difficulty.toUpperCase() as "EASY" | "MEDIUM" | "HARD"];
+  // v1 하위 호환: difficultyTypeMap이 있으면 사용
+  const profileAny = profile as any;
+  if (profileAny?.difficultyTypeMap?.[difficulty.toUpperCase() as "EASY" | "MEDIUM" | "HARD"]) {
+    const profTypes = profileAny.difficultyTypeMap[difficulty.toUpperCase()];
     if (profTypes.length > 0) {
       preferredTypes = profTypes;
     }
@@ -886,7 +934,10 @@ export function buildFullPrompt(
   sliderWeights?: { style: number; scope: number; focusGuide: number },
   professorPrompt?: string,
   hasPageImages: boolean = false,
-  tags?: string[]  // 챕터 태그 (예: ["12_신경계"])
+  tags?: string[],  // 챕터 태그 (예: ["12_신경계"])
+  chapterRepetition: number = 0,  // 챕터별 평균 반복 횟수
+  chapterRepetitionMap?: Record<string, number>,  // 챕터별 개별 반복 횟수
+  isProfessor: boolean = false  // 교수 여부 (교수는 기존 임계값 유지)
 ): string {
   // 슬라이더 가중치에 따른 조건부 포함
   const skipStyle = sliderWeights && sliderWeights.style < 10;
@@ -914,7 +965,11 @@ export function buildFullPrompt(
   const styleContext = courseCustomized && !skipStyle ? buildStyleContextPrompt(context) : "";
   const difficultyPrompt = buildDifficultyPrompt(difficulty, context);
   const scopeContext = courseCustomized && !skipScope ? buildScopeContextPrompt(context, !!professorPrompt) : "";
-  const chapterIndexPrompt = courseCustomized ? buildChapterIndexPrompt(courseId, scopeChapters) : "";
+  // 챕터 인덱스: 태그 선택 챕터 우선, 없으면 scope 챕터
+  const chapterFilterForIndex = tagChapterNumbers.length > 0 ? tagChapterNumbers : scopeChapters;
+  const chapterIndexPrompt = (courseCustomized || tagChapterNumbers.length > 0)
+    ? buildChapterIndexPrompt(courseId, chapterFilterForIndex)
+    : "";
   const focusGuide = courseCustomized && !skipFocusGuide ? getFocusGuide(courseId, scopeChapters) : null;
   // 과목 개요 (과목 특성 + 선택 챕터 상세 커리큘럼)
   // courseCustomized=false라도 챕터 태그가 선택되면 커리큘럼 개요는 포함
@@ -1123,40 +1178,130 @@ ${availableImages.map((img, idx) => `### 이미지 ${idx + 1}
   // 핵심 집중 조건: 쉬움/보통 난이도 + 8문제 이하
   const isLowQuestionCount = !allowDetailedQuestions && questionCount <= 8;
 
-  // Focus Guide 섹션 (난이도와 문제 수에 따라 핵심 강조도 조절)
+  // Focus Guide 섹션 (난이도, 문제 수, 반복 횟수에 따라 핵심 강조도 조절)
+  // chapterRepetition이 높을수록 포커스 가이드 의존도 ↓, 다양성 ↑
   let focusGuideSection = "";
   if (hasFocusGuide) {
     let focusInstruction: string;
 
+    // 반복 횟수별 다양성 지시
+    // 학생: 0-1회 핵심집중, 2회 다른관점, 3회 보충확대, 4+ 다양성확장
+    // 교수: 0회 핵심집중, 1+ 다른관점, 3+ 다양성확장 (기존 유지)
+    let repNote: string;
+    if (isProfessor) {
+      // 교수: 기존 임계값 유지
+      repNote = chapterRepetition >= 3
+        ? `\n> - ⚠️ **${chapterRepetition + 1}회차 생성**: 이전에 같은 챕터로 여러 번 생성했습니다. (고빈도) 개념은 최소한만 포함하고, 포커스 가이드의 덜 출제된 항목, 세부 개념, 응용 문제 위주로 출제하세요. 기존 문제와 최대한 다른 각도에서 출제하세요.`
+        : chapterRepetition >= 1
+          ? `\n> - ⚠️ **${chapterRepetition + 1}회차 생성**: 같은 챕터로 이전에 생성한 적 있습니다. 이전과 다른 개념, 다른 관점에서 출제하세요. 포커스 가이드의 아직 다루지 않은 항목을 우선 선택하세요.`
+          : "";
+    } else {
+      // 학생: 핵심집중 2라운드 (0-1회) → 다른관점(2회) → 보충확대(3회) → 다양성확장(4+)
+      repNote = chapterRepetition >= 4
+        ? `\n> - ⚠️ **${chapterRepetition + 1}회차 생성 (다양성 확장)**: 이 챕터로 ${chapterRepetition}번 이상 생성했습니다. (고빈도) 개념은 최소한만 포함하고, 포커스 가이드의 덜 출제된 항목, 세부 개념, 응용 문제 위주로 출제하세요. 기존 문제와 최대한 다른 각도에서 출제하세요.`
+        : chapterRepetition === 3
+          ? `\n> - ⚠️ **${chapterRepetition + 1}회차 생성 (보충 확대)**: 핵심 개념은 이미 충분히 다뤘습니다. 포커스 가이드의 보조 항목, 학습 자료의 세부 내용, 응용·비교 문제 위주로 확대하세요.`
+          : chapterRepetition === 2
+            ? `\n> - ⚠️ **${chapterRepetition + 1}회차 생성 (다른 관점)**: 같은 챕터로 이전에 생성한 적 있습니다. 이전과 다른 개념, 다른 관점에서 출제하세요. 포커스 가이드의 아직 다루지 않은 항목을 우선 선택하세요.`
+            : "";
+    }
+
     if (allowDetailedQuestions) {
       // 어려움 난이도 또는 12문제 이상: 세부적인 내용도 출제 가능
       const modeLabel = isHard ? "어려움 난이도" : `${questionCount}문제`;
+      const minCore = Math.max(1, Math.round(questionCount * Math.max(0.1, 0.3 - chapterRepetition * 0.05)));
       focusInstruction = `> **세부 출제 허용 (${modeLabel})**:
 > - 포커스 가이드의 핵심 개념 + 학습 자료의 세부 내용 모두 출제 가능합니다
-> - **(고빈도)**, **(필수 출제)** 개념을 최소 ${Math.round(questionCount * 0.3)}개 포함하세요
+> - **(고빈도)**, **(필수 출제)** 개념을 최소 ${minCore}개 포함하세요
 > - 나머지는 학습 자료에 명시된 세부 사항, 예외 케이스, 부가 설명에서도 출제 가능
-> - 지엽적인 내용도 학습 자료에 근거가 있으면 출제하세요`;
+> - 지엽적인 내용도 학습 자료에 근거가 있으면 출제하세요${repNote}`;
     } else if (isLowQuestionCount) {
-      // 5-8문제 (쉬움/보통): 핵심만 출제
-      focusInstruction = `> **핵심 집중 모드 (${questionCount}문제)**:
+      // 5-8문제 (쉬움/보통)
+      const minCore = Math.max(1, Math.min(questionCount, 5) - chapterRepetition);
+      // 학생: 0-1 핵심집중, 2 다른관점, 3 보충확대, 4+ 다양성확장
+      // 교수: 0 핵심집중, 1+ 다른관점, 3+ 다양성확장
+      const isDiversity = isProfessor ? chapterRepetition >= 3 : chapterRepetition >= 4;
+      const isSupplement = !isProfessor && chapterRepetition === 3;
+      const isDifferent = isProfessor ? chapterRepetition >= 1 : chapterRepetition === 2;
+
+      if (isDiversity) {
+        focusInstruction = `> **다양성 확장 모드 (${questionCount}문제, ${chapterRepetition + 1}회차)**:
+> - **(고빈도)** 개념은 ${minCore}개만 포함하고, 나머지는 포커스 가이드의 보조 항목이나 학습 자료의 세부 내용에서 출제하세요
+> - 이전에 출제되었을 가능성이 높은 핵심 개념 대신 새로운 관점의 문제를 만드세요
+> - 응용, 비교, 사례 적용 등 다양한 문제 유형을 활용하세요`;
+      } else if (isSupplement) {
+        focusInstruction = `> **보충 확대 모드 (${questionCount}문제, ${chapterRepetition + 1}회차)**:
+> - 핵심 개념은 이미 충분히 다뤘습니다. **(고빈도)** 개념은 ${minCore}개만 포함하세요
+> - 포커스 가이드의 보조 항목, 학습 자료의 세부 내용에서 나머지를 출제하세요
+> - 응용, 비교, 사례 적용 등 다양한 문제 유형을 활용하세요${repNote}`;
+      } else if (isDifferent) {
+        focusInstruction = `> **핵심+보충 모드 (${questionCount}문제, ${chapterRepetition + 1}회차)**:
+> - **(고빈도)**, **(필수 출제)** 개념에서 ${minCore}개 이상 출제하세요
+> - 나머지는 포커스 가이드의 다른 항목이나 학습 자료의 세부 내용에서 출제하세요
+> - 이전과 다른 관점, 다른 문제 유형으로 출제하세요${repNote}`;
+      } else {
+        focusInstruction = `> **핵심 집중 모드 (${questionCount}문제)**:
 > - 반드시 **(고빈도)**, **(필수 출제)** 표시된 개념에서 ${Math.min(questionCount, 5)}개 이상 출제하세요
 > - **비교 문제** (vs), **기능 매칭** 등 핵심 유형을 우선 출제하세요
 > - 문제의 주제 자체가 해당 챕터의 핵심 내용이어야 합니다
 > - 지엽적인 세부사항, 예외 케이스, 부가 설명 등은 출제하지 마세요
 > - 선지 구성도 핵심 개념 간의 구분에 초점을 맞추세요`;
+      }
     } else {
-      // 9-11문제 (쉬움/보통): 핵심 위주 + 일부 보충
-      focusInstruction = `> **핵심 우선 모드 (${questionCount}문제)**:
+      // 9-11문제 (쉬움/보통)
+      const corePercent = Math.max(20, 60 - chapterRepetition * 15);
+      // 학생: 0-1 핵심집중, 2 다른관점, 3 보충확대, 4+ 다양성확장
+      // 교수: 0 핵심집중, 1+ 다른관점, 3+ 다양성확장
+      const isDiversity = isProfessor ? chapterRepetition >= 3 : chapterRepetition >= 4;
+      const isSupplement = !isProfessor && chapterRepetition === 3;
+      const isDifferent = isProfessor ? chapterRepetition >= 1 : chapterRepetition === 2;
+
+      if (isDiversity) {
+        focusInstruction = `> **다양성 확장 모드 (${questionCount}문제, ${chapterRepetition + 1}회차)**:
+> - **(고빈도)** 개념은 ${corePercent}% 이하로 제한하고, 나머지는 다양한 세부 개념에서 출제하세요
+> - 포커스 가이드의 보조 항목, 학습 자료의 세부 사항, 응용 문제를 적극 활용하세요
+> - 기존에 반복 출제되었을 핵심 주제는 피하고 새로운 각도에서 접근하세요`;
+      } else if (isSupplement) {
+        focusInstruction = `> **보충 확대 모드 (${questionCount}문제, ${chapterRepetition + 1}회차)**:
+> - 핵심 개념은 충분히 다뤘습니다. **(고빈도)** 개념은 ${corePercent}% 이하로 제한하세요
+> - 포커스 가이드의 보조 항목, 학습 자료의 세부 내용에서 나머지를 출제하세요
+> - 응용, 비교, 사례 적용 등 다양한 문제 유형을 활용하세요${repNote}`;
+      } else if (isDifferent) {
+        focusInstruction = `> **핵심 우선 모드 (${questionCount}문제, ${chapterRepetition + 1}회차)**:
+> - **(고빈도)**, **(필수 출제)** 개념에서 최소 ${corePercent}% 이상 출제하세요
+> - 나머지는 포커스 가이드의 다른 항목에서 출제하세요
+> - 이전과 다른 관점에서 출제하세요${repNote}`;
+      } else {
+        focusInstruction = `> **핵심 우선 모드 (${questionCount}문제)**:
 > - **(고빈도)**, **(필수 출제)** 표시된 개념에서 최소 60% 이상 출제하세요
 > - 나머지는 포커스 가이드의 다른 핵심 개념에서 출제하세요
 > - 학습 자료에만 있고 포커스 가이드에 없는 지엽적 내용은 가급적 피하세요`;
+      }
+    }
+
+    // 챕터별 반복 횟수 상세 정보 (Gemini에게 어떤 챕터를 다양화해야 하는지 알려줌)
+    let chapterRepDetail = "";
+    if (chapterRepetitionMap) {
+      const entries = Object.entries(chapterRepetitionMap).filter(([, v]) => v > 0);
+      if (entries.length > 0) {
+        chapterRepDetail = `\n\n> **챕터별 이전 생성 횟수** (높을수록 새로운 관점 필요):\n` +
+          entries.map(([tag, count]) => {
+            if (isProfessor) {
+              // 교수: 기존 임계값
+              return `> - ${tag}: ${count}회 생성됨${count >= 3 ? " → 세부/응용 위주로" : count >= 1 ? " → 다른 관점으로" : ""}`;
+            }
+            // 학생: 0-1 핵심, 2 다른관점, 3 보충확대, 4+ 다양성확장
+            const hint = count >= 4 ? " → 다양성 확장 (새로운 각도)" : count === 3 ? " → 보충 확대 (세부/응용)" : count === 2 ? " → 다른 관점으로" : "";
+            return `> - ${tag}: ${count}회 생성됨${hint}`;
+          }).join("\n");
+      }
     }
 
     focusGuideSection = `
 ## 출제 포커스 가이드
 ${focusGuide}
 
-${focusInstruction}
+${focusInstruction}${chapterRepDetail}
 `;
   }
 
@@ -1361,11 +1506,10 @@ export async function generateWithGemini(
   pageImages: string[] = []
 ): Promise<GeminiResult> {
   // 문제 수에 따라 토큰 수 조절
-  // 각 문제당 ~500토큰 필요 (선지별 해설 포함)
-  const estimatedTokensPerQuestion = 500;
-  const baseMaxTokens = Math.min(questionCount * estimatedTokensPerQuestion + 500, 8192);
+  // 각 문제당 ~600토큰 필요 (5지선다 + 선지별 해설 포함)
+  const estimatedTokensPerQuestion = 600;
   // 최소 8192 보장 (truncation 방지)
-  const maxTokens = Math.max(baseMaxTokens, 8192);
+  const maxTokens = Math.max(questionCount * estimatedTokensPerQuestion + 1000, 8192);
 
   // 페이지 이미지를 inlineData parts로 변환 (최대 10장)
   const imageParts: Array<{ inlineData: { mimeType: string; data: string } }> = [];
@@ -1387,7 +1531,7 @@ export async function generateWithGemini(
   const requestBody = {
     contents: [{ parts }],
     generationConfig: {
-      temperature: 0.5,  // 낮은 temperature = 더 빠른 생성
+      temperature: 0.7,  // 다양성 확보 (0.5→0.7)
       topK: 32,
       topP: 0.9,
       maxOutputTokens: maxTokens,
@@ -1655,7 +1799,7 @@ export const generateStyledQuiz = onCall(
       // 병렬 로드: 스타일 프로필, 키워드, Scope 동시 조회
       // ========================================
       const startTime = Date.now();
-      let styleContext: StyleContext = { profile: null, keywords: null, scope: null };
+      let styleContext: StyleContext = { profile: null, keywords: null, questionBank: [], scope: null };
 
       const analysisRef = db.collection("professorQuizAnalysis").doc(courseId);
 
@@ -1663,12 +1807,14 @@ export const generateStyledQuiz = onCall(
       // 짧은 텍스트일 경우 항상 scope 로드 (focusGuide + scope로 보충)
       const shouldLoadScope = isShortText || validDifficulty !== "easy";
 
-      const [profileDoc, keywordsDoc, scopeResult] = await Promise.all([
+      const [profileDoc, keywordsDoc, bankDoc, scopeResult] = await Promise.all([
         // 1. 스타일 프로필
         analysisRef.collection("data").doc("styleProfile").get(),
         // 2. 키워드
         analysisRef.collection("data").doc("keywords").get(),
-        // 3. Scope (짧은 텍스트이거나 MEDIUM/HARD 난이도일 때 로드)
+        // 3. 문제 뱅크 (원본 문제 few-shot용)
+        analysisRef.collection("data").doc("questionBank").get(),
+        // 4. Scope (짧은 텍스트이거나 MEDIUM/HARD 난이도일 때 로드)
         shouldLoadScope
           ? loadScopeForQuiz(courseId, trimmedText || "general", validDifficulty)
           : Promise.resolve(null),
@@ -1680,6 +1826,18 @@ export const generateStyledQuiz = onCall(
       }
       if (keywordsDoc.exists) {
         styleContext.keywords = keywordsDoc.data() as KeywordStore;
+      }
+      // 문제 뱅크에서 랜덤 10개 추출 (Fisher-Yates 셔플)
+      if (bankDoc.exists) {
+        const bank = bankDoc.data() as QuestionBank;
+        if (bank.questions && bank.questions.length > 0) {
+          const shuffled = [...bank.questions];
+          for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+          }
+          styleContext.questionBank = shuffled.slice(0, 10);
+        }
       }
       if (scopeResult) {
         styleContext.scope = scopeResult;
@@ -1835,28 +1993,49 @@ export const getStyleProfile = onCall(
     let keywordsSummary = null;
     if (keywordsDoc.exists) {
       const keywords = keywordsDoc.data() as KeywordStore;
-      keywordsSummary = {
-        mainConceptsCount: keywords.mainConcepts.length,
-        caseTriggersCount: keywords.caseTriggers.length,
-        topMainConcepts: keywords.mainConcepts.slice(0, 5).map((k) => k.term),
-        topCaseTriggers: keywords.caseTriggers.slice(0, 5).map((k) => k.term),
-      };
+      // v2: coreTerms + examTopics
+      if (keywords.coreTerms) {
+        keywordsSummary = {
+          coreTermsCount: keywords.coreTerms.length,
+          examTopicsCount: keywords.examTopics?.length || 0,
+          topTerms: keywords.coreTerms.slice(0, 5).map((t) => t.korean),
+          topTopics: keywords.examTopics?.slice(0, 5).map((t) => t.topic) || [],
+        };
+      } else {
+        // v1 하위 호환
+        const v1 = keywords as any;
+        keywordsSummary = {
+          coreTermsCount: v1.mainConcepts?.length || 0,
+          examTopicsCount: 0,
+          topTerms: v1.mainConcepts?.slice(0, 5).map((k: any) => k.term) || [],
+          topTopics: [],
+        };
+      }
+    }
+
+    // v2 형식 요약
+    const summary: any = {
+      analyzedQuizCount: profile.analyzedQuizCount,
+      analyzedQuestionCount: profile.analyzedQuestionCount,
+    };
+
+    // v2 필드
+    if (profile.questionPatterns) {
+      summary.topPatterns = profile.questionPatterns.slice(0, 3).map((p) => p.pattern);
+      summary.hasStyleDescription = !!profile.styleDescription;
+    }
+    // v1 하위 호환
+    if ((profile as any).typeDistribution) {
+      summary.topTypes = Object.entries((profile as any).typeDistribution as Record<string, number>)
+        .sort(([, a], [, b]) => (b as number) - (a as number))
+        .slice(0, 3)
+        .map(([type]) => type);
     }
 
     return {
       exists: true,
       courseId,
-      summary: {
-        analyzedQuizCount: profile.analyzedQuizCount,
-        analyzedQuestionCount: profile.analyzedQuestionCount,
-        topTypes: Object.entries(profile.typeDistribution)
-          .sort(([, a], [, b]) => b - a)
-          .slice(0, 3)
-          .map(([type]) => type),
-        usesNegative: profile.toneCharacteristics.usesNegative,
-        usesMultiSelect: profile.toneCharacteristics.usesMultiSelect,
-        hasClinicalCases: profile.toneCharacteristics.hasClinicalCases,
-      },
+      summary,
       keywordsSummary,
     };
   }

@@ -557,15 +557,15 @@ export default function QuestionCard({
                   })()}
                   <div className="space-y-1.5">
                     {(editData?.options ?? item.options).map((opt, idx) => {
-                      const optionNum = (idx + 1).toString();
-                      // 복수 정답 지원 - 1-indexed 번호만 사용 (optionIdx 제거)
+                      const optionNum = idx.toString();
+                      // 복수 정답 지원 - 0-indexed 번호 사용
                       const correctAnswerStr = item.correctAnswer?.toString() || '';
                       const correctAnswers = correctAnswerStr.includes(',')
                         ? correctAnswerStr.split(',').map(a => a.trim())
                         : [correctAnswerStr];
-                      // 정답 비교: 1-indexed 번호만 사용
+                      // 정답 비교: 0-indexed 번호 사용
                       const isCorrectOption = correctAnswers.some(ca => ca === optionNum);
-                      // 사용자 답 비교 - 1-indexed 번호만 사용
+                      // 사용자 답 비교 - 0-indexed 번호 사용
                       const userAnswerStr = item.userAnswer?.toString() || '';
                       const userAnswers = userAnswerStr.includes(',')
                         ? userAnswerStr.split(',').map(a => a.trim())

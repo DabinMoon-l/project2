@@ -12,7 +12,7 @@ import {
 } from "../utils/tekkenDamage";
 import { getBaseStats } from "../utils/rabbitStats";
 import { drawQuestionsFromPool } from "../tekkenQuestionPool";
-import { generateBattleQuestions, getEmergencyQuestions } from "./tekkenQuestions";
+import { getEmergencyQuestions } from "./tekkenQuestions";
 import type { GeneratedQuestion, PregenCache, PlayerSetup } from "./tekkenTypes";
 
 /**
@@ -38,11 +38,13 @@ async function getPlayerBattleRabbits(
       const stats = holdingData?.stats || getBaseStats(eq.rabbitId);
       const rabbitName = rabbitDoc.exists ? (rabbitDoc.data()?.name || null) : null;
       const discoveryOrder = holdingData?.discoveryOrder || 1;
+      const level = holdingData?.level || 1;
 
       return {
         rabbitId: eq.rabbitId,
         name: rabbitName || "토끼",
         discoveryOrder,
+        level,
         maxHp: stats.hp,
         currentHp: stats.hp,
         atk: stats.atk,
@@ -55,36 +57,95 @@ async function getPlayerBattleRabbits(
 }
 
 /**
- * 배틀 룸 생성 — 즉시 loading 상태로 생성, 문제 생성은 비동기
+ * 배틀 룸 생성 — 문제를 풀에서 동기적으로 뽑아 즉시 countdown 상태로 생성
+ * "loading" 단계 없이 매칭 직후 바로 카운트다운 시작
  */
 export async function createBattle(
   courseId: string,
   player1: PlayerSetup,
   player2: PlayerSetup,
-  apiKey: string
+  _apiKey: string
 ): Promise<string> {
   const rtdb = getDatabase();
   const battleId = rtdb.ref("tekken/battles").push().key!;
-  const now = Date.now();
 
-  // 플레이어 스탯 병렬 조회
-  const [p1Rabbits, p2Rabbits] = await Promise.all([
+  // 플레이어 스탯 + 문제 풀에서 동시에 로드
+  const playerIds = [player1.userId, player2.userId];
+  const humanPlayerIds = playerIds.filter((_, i) =>
+    i === 0 ? !player1.isBot : !player2.isBot
+  );
+
+  const [p1Rabbits, p2Rabbits, poolQuestions] = await Promise.all([
     player1.isBot
       ? Promise.resolve((player1 as any).rabbits || [])
       : getPlayerBattleRabbits(player1.userId, player1.equippedRabbits),
     player2.isBot
       ? Promise.resolve((player2 as any).rabbits || [])
       : getPlayerBattleRabbits(player2.userId, player2.equippedRabbits),
+    // 풀에서 문제 추출 (동기)
+    humanPlayerIds.length > 0
+      ? drawQuestionsFromPool(courseId, humanPlayerIds, 10).catch(() => null)
+      : Promise.resolve(null),
   ]);
 
-  // 즉시 loading 상태로 배틀 생성 (문제 없이)
+  // 풀 성공 → 풀 문제 사용, 실패 → 비상 문제 (Gemini 대기 없음)
+  let questions: GeneratedQuestion[];
+  if (poolQuestions && poolQuestions.length >= 5) {
+    questions = poolQuestions.slice(0, 10);
+    console.log(`배틀 문제 풀 사용 (${courseId}): ${questions.length}문제`);
+  } else {
+    // RTDB 사전 캐시 확인
+    let cacheUsed = false;
+    for (const pid of playerIds) {
+      if ((pid === player1.userId && player1.isBot) ||
+          (pid === player2.userId && player2.isBot)) continue;
+      const cacheRef = rtdb.ref(`tekken/pregenQuestions/${courseId}_${pid}`);
+      const cacheSnap = await cacheRef.once("value");
+      const cache = cacheSnap.val() as PregenCache | null;
+      if (cache?.questions && cache.questions.length >= 5 &&
+          cache.createdAt > Date.now() - 5 * 60 * 1000) {
+        questions = cache.questions.slice(0, 10);
+        await cacheRef.remove();
+        console.log(`배틀 사전 캐시 사용 (${pid})`);
+        cacheUsed = true;
+        break;
+      }
+    }
+    if (!cacheUsed) {
+      questions = getEmergencyQuestions(courseId);
+      console.warn(`배틀 비상 문제 사용 (${courseId}) — 풀/캐시 모두 실패`);
+    }
+  }
+
+  // 라운드 데이터 구성
+  const rounds: Record<string, any> = {};
+  const battleAnswersData: Record<string, number> = {};
+  for (let i = 0; i < questions!.length; i++) {
+    const q = questions![i];
+    rounds[i] = {
+      questionData: {
+        text: q.text,
+        type: q.type,
+        choices: q.choices,
+      },
+      startedAt: 0,
+      timeoutAt: 0,
+    };
+    battleAnswersData[i] = q.correctAnswer;
+  }
+
+  // 즉시 countdown 상태로 배틀 생성 (loading 단계 없음)
+  // ⚠️ 풀 로딩 후 fresh 타임스탬프 사용 (now는 함수 시작 시점이라 stale)
+  const writeNow = Date.now();
   const battleData = {
-    status: "loading",
+    status: "countdown",
     courseId,
-    createdAt: now,
-    endsAt: 0,
+    createdAt: writeNow,
+    countdownStartedAt: writeNow + 1500, // 1.5초 뒤 시작 — 양쪽 클라이언트가 데이터 수신할 시간 확보
+    endsAt: writeNow + BATTLE_CONFIG.BATTLE_DURATION + 5000,
     currentRound: 0,
-    totalRounds: 0,
+    totalRounds: questions!.length,
+    rounds,
     colorAssignment: {
       [player1.userId]: "red",
       [player2.userId]: "blue",
@@ -109,131 +170,22 @@ export async function createBattle(
     },
   };
 
-  await rtdb.ref(`tekken/battles/${battleId}`).set(battleData);
+  // 배틀 데이터 + 정답을 병렬로 기록
+  await Promise.all([
+    rtdb.ref(`tekken/battles/${battleId}`).set(battleData),
+    rtdb.ref(`tekken/battleAnswers/${battleId}`).set(battleAnswersData),
+  ]);
 
-  // 비동기 문제 생성 (실패 시 에러 상태로 전환)
-  populateBattleQuestions(battleId, courseId, apiKey).catch(async (err) => {
-    console.error("문제 생성 실패:", err);
-    try {
-      await rtdb.ref(`tekken/battles/${battleId}`).update({
-        status: "error",
-        errorMessage: "문제 생성에 실패했습니다.",
-      });
-    } catch (updateErr) {
-      console.error("에러 상태 업데이트 실패:", updateErr);
-    }
-  });
+  // 남은 캐시 정리 (fire-and-forget)
+  for (const pid of playerIds) {
+    if ((pid === player1.userId && player1.isBot) ||
+        (pid === player2.userId && player2.isBot)) continue;
+    rtdb.ref(`tekken/pregenQuestions/${courseId}_${pid}`).remove().catch(() => {});
+  }
 
   return battleId;
 }
 
-/**
- * 비동기 문제 생성 → 완료 시 countdown 전환
- *
- * 우선순위:
- * 1. Firestore 문제 풀 (사전 생성된 문제, 중복 방지)
- * 2. RTDB per-user 사전 캐시
- * 3. Gemini 실시간 호출
- * 4. 비상 문제
- */
-async function populateBattleQuestions(
-  battleId: string,
-  courseId: string,
-  apiKey: string
-): Promise<void> {
-  const rtdb = getDatabase();
-  const battleRef = rtdb.ref(`tekken/battles/${battleId}`);
-  const QUESTION_COUNT = 10;
-
-  // 배틀 참가자 확인
-  const battleSnap = await battleRef.once("value");
-  const battle = battleSnap.val();
-  const playerIds = battle?.players ? Object.keys(battle.players) : [];
-  const humanPlayerIds = playerIds.filter(pid => !battle?.players?.[pid]?.isBot);
-
-  let questions: GeneratedQuestion[] | null = null;
-
-  // 1. Firestore 문제 풀에서 추출 (중복 방지 포함)
-  if (humanPlayerIds.length > 0) {
-    try {
-      const poolQuestions = await drawQuestionsFromPool(courseId, humanPlayerIds, QUESTION_COUNT);
-      if (poolQuestions && poolQuestions.length >= 5) {
-        questions = poolQuestions.slice(0, QUESTION_COUNT);
-        console.log(`문제 풀 사용 (${courseId}): ${questions.length}문제`);
-      }
-    } catch (err) {
-      console.error("문제 풀 조회 실패, 폴백 진행:", err);
-    }
-  }
-
-  // 2. RTDB 사전 캐시 확인 (양쪽 플레이어)
-  if (!questions) {
-    for (const pid of playerIds) {
-      if (battle?.players?.[pid]?.isBot) continue;
-      const cacheRef = rtdb.ref(`tekken/pregenQuestions/${courseId}_${pid}`);
-      const cacheSnap = await cacheRef.once("value");
-      const cache = cacheSnap.val() as PregenCache | null;
-
-      if (cache?.questions && cache.questions.length >= 5 &&
-          cache.createdAt > Date.now() - 5 * 60 * 1000) {
-        questions = cache.questions.slice(0, QUESTION_COUNT);
-        await cacheRef.remove();
-        console.log(`사전 캐시 사용 (${pid})`);
-        break;
-      }
-    }
-  }
-
-  // 3. Gemini 실시간 호출
-  if (!questions) {
-    const generated = await generateBattleQuestions(courseId, apiKey, QUESTION_COUNT);
-    if (generated.length >= 5) {
-      questions = generated.slice(0, QUESTION_COUNT);
-    }
-  }
-
-  // 4. 비상 문제
-  if (!questions || questions.length < 5) {
-    questions = getEmergencyQuestions(courseId);
-  }
-
-  // 라운드 데이터 구성
-  const rounds: Record<string, any> = {};
-  const battleAnswersData: Record<string, number> = {};
-  for (let i = 0; i < questions.length; i++) {
-    const q = questions[i];
-    rounds[i] = {
-      questionData: {
-        text: q.text,
-        type: q.type,
-        choices: q.choices,
-      },
-      startedAt: 0,
-      timeoutAt: 0,
-    };
-    battleAnswersData[i] = q.correctAnswer;
-  }
-
-  const now = Date.now();
-
-  // RTDB 병렬 쓰기
-  await Promise.all([
-    battleRef.update({
-      status: "countdown",
-      rounds,
-      totalRounds: questions.length,
-      countdownStartedAt: now,
-      endsAt: now + BATTLE_CONFIG.BATTLE_DURATION + 5000,
-    }),
-    rtdb.ref(`tekken/battleAnswers/${battleId}`).set(battleAnswersData),
-  ]);
-
-  // 남은 캐시 정리 (사용하지 않은 상대방 캐시)
-  for (const pid of playerIds) {
-    if (battle?.players?.[pid]?.isBot) continue;
-    rtdb.ref(`tekken/pregenQuestions/${courseId}_${pid}`).remove().catch(() => {});
-  }
-}
 
 /**
  * 라운드 종료 처리 (HP 기반, 라운드 제한 없음)
@@ -283,11 +235,11 @@ export async function processRoundEnd(
     const p2Hp = getTotalRemainingHp(battle.players[p2].rabbits);
 
     if (p1Hp > p2Hp) {
-      await endBattle(battleId, p1, p2, false, "timeout");
+      await endBattle(battleId, p1, p2, false, "allRounds");
     } else if (p2Hp > p1Hp) {
-      await endBattle(battleId, p2, p1, false, "timeout");
+      await endBattle(battleId, p2, p1, false, "allRounds");
     } else {
-      await endBattle(battleId, null, null, true, "timeout");
+      await endBattle(battleId, null, null, true, "allRounds");
     }
     return;
   }
@@ -357,37 +309,43 @@ export async function endBattle(
   const players = battle?.players || {};
   const batch = fsDb.batch();
 
-  for (const [uid, player] of Object.entries(players)) {
-    const p = player as any;
-    if (p.isBot) continue;
+  // 인간 플레이어만 필터 + 연승 트랜잭션 병렬 실행
+  const humanEntries = Object.entries(players).filter(([, p]) => !(p as any).isBot);
+  const streakResults = await Promise.all(
+    humanEntries.map(async ([uid]) => {
+      const isWinner = uid === winnerId;
+      const streakRef = rtdb.ref(`tekken/streaks/${uid}`);
+      const txResult = await streakRef.transaction((current: any) => {
+        const streak = current || { currentStreak: 0, lastBattleAt: 0 };
+        const newStreak = isWinner
+          ? streak.currentStreak + 1
+          : isDraw
+            ? streak.currentStreak
+            : 0;
+        return { currentStreak: newStreak, lastBattleAt: Date.now() };
+      });
+      const newStreak = txResult.snapshot.val()?.currentStreak ?? 0;
+      return { uid, isWinner, newStreak, xp: calcBattleXp(isWinner, newStreak) };
+    })
+  );
 
-    const isWinner = uid === winnerId;
+  // XP 기록 (RTDB 병렬) + Firestore batch 누적
+  await Promise.all(
+    streakResults.map(({ uid, xp }) =>
+      battleRef.child(`result/xpByPlayer/${uid}`).set(xp)
+    )
+  );
 
-    // 연승 업데이트 (트랜잭션으로 race condition 방지)
-    const streakRef = rtdb.ref(`tekken/streaks/${uid}`);
-    const txResult = await streakRef.transaction((current: any) => {
-      const streak = current || { currentStreak: 0, lastBattleAt: 0 };
-      const newStreak = isWinner
-        ? streak.currentStreak + 1
-        : isDraw
-          ? streak.currentStreak
-          : 0;
-      return { currentStreak: newStreak, lastBattleAt: Date.now() };
-    });
-    const newStreak = txResult.snapshot.val()?.currentStreak ?? 0;
-    const xp = calcBattleXp(isWinner, newStreak);
-
-    // 결과에 XP 기록 (클라이언트 표시용)
-    await battleRef.child(`result/xpByPlayer/${uid}`).set(xp);
-
+  for (const { uid, isWinner, newStreak, xp } of streakResults) {
     const userRef = fsDb.collection("users").doc(uid);
     batch.update(userRef, {
       totalExp: FieldValue.increment(xp),
       updatedAt: FieldValue.serverTimestamp(),
     });
 
+    // previousExp/newExp는 FieldValue.increment 사용 시 정확한 값 알 수 없음
+    // → 트리거 기반으로 기록 (실시간 조회 제거)
     const histRef = userRef.collection("expHistory").doc();
-    const currentExp = (await userRef.get()).data()?.totalExp || 0;
     batch.set(histRef, {
       type: "tekken_battle",
       amount: xp,
@@ -398,8 +356,6 @@ export async function endBattle(
           : "배틀 패배",
       sourceId: battleId,
       sourceCollection: "tekken/battles",
-      previousExp: currentExp,
-      newExp: currentExp + xp,
       metadata: {
         isWinner,
         isDraw,

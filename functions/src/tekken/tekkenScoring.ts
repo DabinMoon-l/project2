@@ -22,14 +22,13 @@ async function scoreRound(
   battleRef: ReturnType<ReturnType<typeof getDatabase>["ref"]>,
   callerId?: string,
 ) {
-  // 최신 배틀 데이터 읽기
-  const battleSnap = await battleRef.once("value");
+  // 배틀 데이터 + 정답 병렬 읽기
+  const [battleSnap, correctAnswerSnap] = await Promise.all([
+    battleRef.once("value"),
+    rtdb.ref(`tekken/battleAnswers/${battleId}/${roundIndex}`).once("value"),
+  ]);
   const battle = battleSnap.val();
   const round = battle.rounds?.[roundIndex];
-
-  const correctAnswerSnap = await rtdb
-    .ref(`tekken/battleAnswers/${battleId}/${roundIndex}`)
-    .once("value");
   const correctAnswer = correctAnswerSnap.val();
 
   const players = battle.players;
@@ -237,15 +236,22 @@ export const submitAnswer = onCall(
     });
 
     if (!txResult.committed) {
-      // 이미 상대가 채점 중 → 결과 쓰기 완료까지 대기 (최대 3초)
-      let myResult = null;
-      for (let i = 0; i < 15; i++) {
-        const resultSnap = await battleRef.child(`rounds/${roundIndex}/result/${userId}`).once("value");
-        myResult = resultSnap.val();
-        if (myResult) break;
-        await new Promise((r) => setTimeout(r, 200));
-      }
-      // 폴링 타임아웃 시 결과가 없으면 waiting 반환 (RTDB 리스너에 맡김)
+      // 이미 상대가 채점 중 → RTDB 리스너로 결과 대기 (최대 3초)
+      const resultRef = battleRef.child(`rounds/${roundIndex}/result/${userId}`);
+      const myResult = await new Promise<any>((resolve) => {
+        const timeout = setTimeout(() => {
+          resultRef.off("value", listener);
+          resolve(null);
+        }, 3000);
+        const listener = resultRef.on("value", (snap) => {
+          const val = snap.val();
+          if (val) {
+            clearTimeout(timeout);
+            resultRef.off("value", listener);
+            resolve(val);
+          }
+        });
+      });
       if (!myResult) {
         return { status: "waiting" as const };
       }
@@ -303,18 +309,34 @@ export const submitTimeout = onCall(
       return { success: false };
     }
 
-    // 서버 시간 기준 타임아웃 검증 (2초 여유)
+    // 서버 시간 기준 타임아웃 검증 (5초 여유 — 클라이언트 시계 차이 허용)
     const round = battle.rounds?.[roundIndex];
-    if (round?.timeoutAt && Date.now() < round.timeoutAt - 2000) {
-      throw new HttpsError(
-        "failed-precondition",
-        "아직 타임아웃 시간이 아닙니다."
-      );
+    if (round?.timeoutAt && Date.now() < round.timeoutAt - 5000) {
+      return { success: false }; // 너무 이른 호출 → 클라이언트가 재시도
+    }
+
+    // 봇 상대일 때 봇 답변 생성 (타임아웃이어도 봇은 독립적으로 답변)
+    const playerIds = Object.keys(battle.players || {});
+    const opponentId = playerIds.find((id: string) => id !== userId)!;
+    const opponent = battle.players?.[opponentId];
+    const existingOpAnswer = round?.answers?.[opponentId];
+
+    if (opponent?.isBot && !existingOpAnswer) {
+      const correctAnswerSnap = await rtdb
+        .ref(`tekken/battleAnswers/${battleId}/${roundIndex}`)
+        .once("value");
+      const correctAnswer = correctAnswerSnap.val();
+      const questionData = round?.questionData;
+      const botResult = generateBotAnswer(correctAnswer, questionData?.choices?.length || 4);
+      await battleRef.child(`rounds/${roundIndex}/answers/${opponentId}`).set({
+        answer: botResult.answer,
+        answeredAt: (round?.startedAt || Date.now()) + botResult.delay,
+      });
     }
 
     // scored transaction lock 획득
     const scoredRef = battleRef.child(`rounds/${roundIndex}/scored`);
-    const txResult = await scoredRef.transaction((current) => {
+    const txResult = await scoredRef.transaction((current: any) => {
       if (current) return; // 이미 채점됨 → abort
       return true;
     });
