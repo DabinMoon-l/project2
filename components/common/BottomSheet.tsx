@@ -172,7 +172,12 @@ export default function BottomSheet({
   return createPortal(
     <AnimatePresence>
       {isOpen && (
-        <div
+        <motion.div
+          key="bottomsheet-wrapper"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
           className={`fixed inset-0 ${zIndex}`}
           style={{ left: 'var(--modal-left, 0px)' }}
         >
@@ -244,7 +249,7 @@ export default function BottomSheet({
               {children}
             </div>
           </motion.div>
-        </div>
+        </motion.div>
       )}
     </AnimatePresence>,
     document.body
