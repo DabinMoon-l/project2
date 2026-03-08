@@ -1266,6 +1266,11 @@ export default function FolderDetailPage() {
     });
   };
 
+  // 피드백 제출 완료 → EXP 토스트 (CF에서 피드백당 15XP 지급)
+  const handleFeedbackDone = useCallback((count: number) => {
+    showExpToast(15 * count, '피드백 작성');
+  }, [showExpToast]);
+
   // 복습 완료 핸들러
   const handlePracticeComplete = useCallback(async (results: PracticeResult[]) => {
     // 복습 완료된 문제 reviewCount 증가 (복습력 측정용)
@@ -1695,6 +1700,7 @@ export default function FolderDetailPage() {
                             isSelected={selectedIds.has(item.id)}
                             onSelect={() => handleSelectQuestion(item.id)}
                             onFeedbackSubmit={handleFeedbackSubmit}
+                            onFeedbackDone={handleFeedbackDone}
                             currentUserId={user?.uid}
                             quizCreatorId={quizCreatorsMap.get(item.quizId)}
                             isAiGenerated={quizAiMap.get(item.quizId)}
@@ -1732,6 +1738,7 @@ export default function FolderDetailPage() {
                     isSelected={selectedIds.has(item.id)}
                     onSelect={() => handleSelectQuestion(item.id)}
                     onFeedbackSubmit={handleFeedbackSubmit}
+                    onFeedbackDone={handleFeedbackDone}
                     currentUserId={user?.uid}
                     quizCreatorId={quizCreatorsMap.get(item.quizId)}
                     isAiGenerated={quizAiMap.get(item.quizId)}
@@ -1961,6 +1968,7 @@ export default function FolderDetailPage() {
                                   isSelected={false}
                                   onSelect={() => {}}
                                   onFeedbackSubmit={handleFeedbackSubmit}
+                                  onFeedbackDone={handleFeedbackDone}
                                   currentUserId={user?.uid}
                                   quizCreatorId={quizCreatorsMap.get(subItem.quizId)}
                                   isAiGenerated={quizAiMap.get(subItem.quizId)}

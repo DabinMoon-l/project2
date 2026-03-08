@@ -18,6 +18,8 @@ export interface QuestionCardProps {
   isSelected: boolean;
   onSelect: () => void;
   onFeedbackSubmit?: (questionId: string, type: FeedbackType, content: string) => void;
+  /** 피드백 제출 완료 후 콜백 (EXP 토스트 표시용, 제출한 피드백 수 전달) */
+  onFeedbackDone?: (count: number) => void;
   /** 현재 로그인한 사용자 ID (자기 문제 피드백 방지용) */
   currentUserId?: string;
   /** 해당 퀴즈의 생성자 ID (자기 문제 피드백 방지용) */
@@ -49,6 +51,7 @@ export default function QuestionCard({
   isSelected,
   onSelect,
   onFeedbackSubmit,
+  onFeedbackDone,
   currentUserId,
   quizCreatorId,
   isAiGenerated,
@@ -86,6 +89,8 @@ export default function QuestionCard({
       for (const type of types) {
         await onFeedbackSubmit(item.questionId, type, feedbackContent);
       }
+      // 피드백 제출 완료 콜백 (EXP 토스트 표시용)
+      onFeedbackDone?.(types.length);
       setIsFeedbackDone(true);
       setTimeout(() => {
         setIsFeedbackSubmitted(true);
