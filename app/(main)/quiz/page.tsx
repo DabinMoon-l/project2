@@ -216,6 +216,7 @@ const NewsArticle = memo(function NewsArticle({
 }) {
   const isCompleted = quiz.isCompleted && !quiz.hasUpdate;
   const hasUpdate = quiz.isCompleted && quiz.hasUpdate;
+  const isPerfectScore = quiz.myScore !== undefined && quiz.myScore >= quiz.questionCount;
   const [showReviewMenu, setShowReviewMenu] = useState(false);
   const reviewMenuRef = useRef<HTMLDivElement>(null);
 
@@ -273,6 +274,15 @@ const NewsArticle = memo(function NewsArticle({
             Details
           </button>
           {isCompleted ? (
+            isPerfectScore ? (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onReview?.(); }}
+                className="flex-1 py-3 text-base font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors rounded-lg"
+              >
+                Review
+              </button>
+            ) : (
             <div className="relative flex-1" ref={reviewMenuRef}>
               <button
                 type="button"
@@ -321,6 +331,7 @@ const NewsArticle = memo(function NewsArticle({
                 )}
               </AnimatePresence>
             </div>
+            )
           ) : (
             <button
               type="button"
@@ -484,6 +495,7 @@ const PastExamNewsCard = memo(function PastExamNewsCard({
   ) || null;
 
   const isCompleted = filteredQuiz?.isCompleted && !filteredQuiz?.hasUpdate;
+  const isPerfectScore = filteredQuiz && filteredQuiz.myScore !== undefined && filteredQuiz.myScore >= filteredQuiz.questionCount;
 
   return (
     <div className="w-full h-full border border-[#999] bg-[#1A1A1A] flex flex-col overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.3)] rounded-xl">
@@ -583,6 +595,15 @@ const PastExamNewsCard = memo(function PastExamNewsCard({
                   Details
                 </button>
                 {isCompleted ? (
+                  isPerfectScore ? (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onReview?.(filteredQuiz.id); }}
+                      className="flex-1 py-3 text-base font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors rounded-lg"
+                    >
+                      Review
+                    </button>
+                  ) : (
                   <div className="relative flex-1" ref={reviewMenuRef}>
                     <button
                       type="button"
@@ -631,6 +652,7 @@ const PastExamNewsCard = memo(function PastExamNewsCard({
                       )}
                     </AnimatePresence>
                   </div>
+                  )
                 ) : (
                   <button
                     type="button"
@@ -2137,7 +2159,7 @@ function QuizListPageContent() {
                       onToggleBookmark={() => toggleBookmark(quiz.id)}
                       onUpdate={() => handleOpenUpdateModal(quiz)}
                       onReview={() => router.push(`/review/library/${quiz.id}?from=quiz&autoStart=all`)}
-                      onReviewWrongOnly={() => router.push(`/review/library/${quiz.id}?from=quiz&autoStart=wrongOnly`)}
+                      onReviewWrongOnly={quiz.myScore !== undefined && quiz.myScore >= quiz.questionCount ? undefined : () => router.push(`/review/library/${quiz.id}?from=quiz&autoStart=wrongOnly`)}
                     />
                   </motion.div>
                 ))}

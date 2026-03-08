@@ -69,6 +69,8 @@ function ReviewPageContent() {
   const [practiceItems, setPracticeItems] = useState<ReviewItem[] | null>(null);
   // 복습 모드: 'all' (모두) vs 'wrongOnly' (오답만) - 첫 복습 점수 저장 여부 결정에 사용
   const [practiceMode, setPracticeMode] = useState<'all' | 'wrongOnly' | null>(null);
+  const practiceModeRef = useRef<'all' | 'wrongOnly' | null>(null);
+  useEffect(() => { practiceModeRef.current = practiceMode; }, [practiceMode]);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
 
   // 폴더 삭제 선택 모드 (모든 탭에서 통합 사용)
@@ -88,6 +90,27 @@ function ReviewPageContent() {
 
   // 서재 퀴즈 상세 모달
   const [selectedLibraryQuiz, setSelectedLibraryQuiz] = useState<typeof libraryQuizzesRaw[number] | null>(null);
+
+  // 모달 열기 시 최신 점수를 퀴즈 문서에서 직접 읽어 갱신
+  const openLibraryQuizModal = useCallback(async (quiz: typeof libraryQuizzesRaw[number]) => {
+    captureLibraryRect(quiz.id);
+    setSelectedLibraryQuiz(quiz);
+    try {
+      const quizDoc = await getDoc(doc(db, 'quizzes', quiz.id));
+      if (quizDoc.exists() && user) {
+        const data = quizDoc.data();
+        const freshScore = data.userScores?.[user.uid] ?? quiz.myScore;
+        const freshReviewScore = data.userFirstReviewScores?.[user.uid];
+        if (freshScore !== quiz.myScore || freshReviewScore !== quiz.myFirstReviewScore) {
+          setSelectedLibraryQuiz(prev => prev?.id === quiz.id ? {
+            ...prev!,
+            myScore: freshScore,
+            myFirstReviewScore: freshReviewScore,
+          } : prev);
+        }
+      }
+    } catch { /* 실패 시 캐시된 값 유지 */ }
+  }, [user]);
   const { sourceRect: librarySourceRect, registerRef: registerLibraryRef, captureRect: captureLibraryRect, clearRect: clearLibraryRect } = useExpandSource();
 
   // 서재 태그 필터 상태
@@ -383,10 +406,12 @@ function ReviewPageContent() {
             totalQuestions: comp?.total ?? data.questionCount ?? 0,
             createdAt: data.createdAt?.toDate?.() ?? new Date(),
             completedAt: data.createdAt?.toDate?.() ?? new Date(),
-            isPublic: false,
+            isPublic: data.isPublic ?? false,
             tags: data.tags || [],
             difficulty: data.difficulty || 'medium',
-            myScore: comp?.score,
+            myScore: data.userScores?.[user.uid] ?? comp?.score,
+            myFirstReviewScore: data.userFirstReviewScores?.[user.uid],
+            creatorId: data.creatorId || undefined,
             oxCount: data.oxCount,
             multipleChoiceCount: data.multipleChoiceCount,
             subjectiveCount: data.subjectiveCount,
@@ -629,6 +654,7 @@ function ReviewPageContent() {
     if (reviewSelectedIds.size === 0) return;
 
     const items: ReviewItem[] = [];
+    const seenQuestions = new Set<string>(); // quizId:questionId 중복 방지
     const libraryQuizIds: string[] = [];
 
     for (const folderId of reviewSelectedIds) {
@@ -646,7 +672,13 @@ function ReviewPageContent() {
           // 해당 퀴즈의 아이템만 추가
           const folder = chapterGroup.folders.find(f => f.quizId === quizId);
           if (folder) {
-            items.push(...folder.items);
+            for (const item of folder.items) {
+              const key = `${item.quizId}:${item.questionId}`;
+              if (!seenQuestions.has(key)) {
+                seenQuestions.add(key);
+                items.push(item);
+              }
+            }
           }
         }
       } else if (folderId.startsWith('bookmark-')) {
@@ -654,7 +686,13 @@ function ReviewPageContent() {
         // 찜한 퀴즈의 문제들은 bookmarkedItems에서 가져옴
         const bookmarkGroup = groupedBookmarkedItems.find(g => g.quizId === quizId);
         if (bookmarkGroup) {
-          items.push(...bookmarkGroup.items);
+          for (const item of bookmarkGroup.items) {
+            const key = `${item.quizId}:${item.questionId}`;
+            if (!seenQuestions.has(key)) {
+              seenQuestions.add(key);
+              items.push(item);
+            }
+          }
         }
       } else if (folderId.startsWith('custom-')) {
         const id = folderId.replace('custom-', '');
@@ -663,8 +701,11 @@ function ReviewPageContent() {
           // 커스텀 폴더의 문제들을 solvedItems에서 찾아서 추가
           // solvedItems에 없으면 Firestore에서 직접 조회 (50건 제한 폴백)
           for (const q of folder.questions) {
+            const dedupKey = `${q.quizId}:${q.questionId}`;
+            if (seenQuestions.has(dedupKey)) continue;
             const solvedItem = solvedItems.find(s => s.questionId === q.questionId && s.quizId === q.quizId);
             if (solvedItem) {
+              seenQuestions.add(dedupKey);
               items.push(solvedItem);
             } else if (user?.uid) {
               try {
@@ -677,6 +718,7 @@ function ReviewPageContent() {
                 ));
                 if (!reviewSnap.empty) {
                   const data = reviewSnap.docs[0].data();
+                  seenQuestions.add(dedupKey);
                   items.push({ id: reviewSnap.docs[0].id, ...data } as ReviewItem);
                 }
               } catch (err) {
@@ -702,6 +744,12 @@ function ReviewPageContent() {
           const quizTitle = quizData.title || '서재 퀴즈';
 
           questions.forEach((q: any, idx: number) => {
+            // 중복 체크
+            const qId = q.id || `q${idx}`;
+            const dedupKey = `${quizId}:${qId}`;
+            if (seenQuestions.has(dedupKey)) return;
+            seenQuestions.add(dedupKey);
+
             // ReviewItem 형식으로 변환
             let correctAnswer = '';
             if (q.type === 'multiple') {
@@ -862,7 +910,7 @@ function ReviewPageContent() {
 
     // 복습 결과가 있고, "모두" 복습 모드일 때만 첫번째 복습 점수 저장
     // "오답만" 복습은 첫 복습 점수에 포함되지 않음
-    if (results && results.length > 0 && user && practiceMode === 'all') {
+    if (results && results.length > 0 && user && practiceModeRef.current === 'all') {
       // 퀴즈별로 그룹화
       const scoresByQuiz = new Map<string, { correct: number; total: number }>();
       results.forEach(r => {
@@ -893,7 +941,7 @@ function ReviewPageContent() {
     }
     setPracticeItems(null);
     setPracticeMode(null);
-  }, [user, practiceMode, markAsReviewed]);
+  }, [user, markAsReviewed]);
 
   // 연습 모드
   if (practiceItems) {
@@ -946,7 +994,7 @@ function ReviewPageContent() {
                       setIsFolderDeleteMode(false);
                       setDeleteFolderIds(new Set());
                     }}
-                    className="px-4 py-3 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] whitespace-nowrap hover:bg-[#EDEAE4] transition-colors"
+                    className="px-3 py-2 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] whitespace-nowrap hover:bg-[#EDEAE4] transition-colors rounded-lg"
                   >
                     취소
                   </motion.button>
@@ -957,9 +1005,9 @@ function ReviewPageContent() {
                     animate={{ scale: 1, opacity: 1 }}
                     exit={{ scale: 0.8, opacity: 0 }}
                     onClick={() => setShowDeleteConfirmSheet(true)}
-                    className="px-4 py-3 text-sm font-bold border-2 border-[#8B1A1A] text-[#8B1A1A] hover:bg-[#FDEAEA] whitespace-nowrap transition-colors flex items-center justify-center"
+                    className="px-3 py-2 text-xs font-bold border-2 border-[#8B1A1A] text-[#8B1A1A] hover:bg-[#FDEAEA] whitespace-nowrap transition-colors flex items-center justify-center rounded-lg"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                   </motion.button>
@@ -978,7 +1026,7 @@ function ReviewPageContent() {
                       }
                     }}
                     disabled={deleteFolderIds.size === 0}
-                    className={`px-4 py-3 text-sm font-bold whitespace-nowrap transition-colors ${
+                    className={`px-3 py-2 text-xs font-bold whitespace-nowrap transition-colors rounded-lg ${
                       deleteFolderIds.size > 0
                         ? 'bg-[#8B1A1A] text-[#F5F0E8] hover:bg-[#7A1717]'
                         : 'bg-[#D4CFC4] text-[#EDEAE4] cursor-not-allowed'
@@ -999,7 +1047,7 @@ function ReviewPageContent() {
                       setIsLibrarySelectMode(false);
                       setLibrarySelectedIds(new Set());
                     }}
-                    className="px-4 py-3 text-sm font-bold border border-[#1A1A1A] text-[#1A1A1A] whitespace-nowrap hover:bg-[#EDEAE4] transition-colors"
+                    className="px-3 py-2 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] whitespace-nowrap hover:bg-[#EDEAE4] transition-colors rounded-lg"
                   >
                     취소
                   </motion.button>
@@ -1026,7 +1074,7 @@ function ReviewPageContent() {
                       }
                     }}
                     disabled={librarySelectedIds.size === 0}
-                    className={`px-4 py-3 text-sm font-bold whitespace-nowrap transition-colors ${
+                    className={`px-3 py-2 text-xs font-bold whitespace-nowrap transition-colors rounded-lg ${
                       librarySelectedIds.size > 0
                         ? 'bg-[#8B1A1A] text-[#F5F0E8] hover:bg-[#7A1717]'
                         : 'bg-[#D4CFC4] text-[#EDEAE4] cursor-not-allowed'
@@ -1473,21 +1521,19 @@ function ReviewPageContent() {
                           }
                         }}
                         onDetails={() => {
-                          // 모달 열기
-                          captureLibraryRect(quiz.id);
-                          setSelectedLibraryQuiz(quiz);
+                          openLibraryQuizModal(quiz);
                         }}
                         onReview={() => {
                           // 전체 복습 시작
                           handleStartReviewByQuizId(quiz.id);
                         }}
-                        onReviewWrongOnly={() => {
+                        onReviewWrongOnly={quiz.myScore !== undefined && quiz.myScore >= quiz.totalQuestions ? undefined : () => {
                           // 오답만 복습 시작
                           handleStartReviewWrongOnlyByQuizId(quiz.id);
                         }}
-                        onPublish={() => {
+                        onPublish={!quiz.isPublic && quiz.creatorId === user?.uid ? () => {
                           setPublishConfirmQuizId(quiz.id);
-                        }}
+                        } : undefined}
                         isSelectMode={isLibrarySelectMode || isReviewSelectMode}
                         isSelected={isSelected}
                       />
@@ -3536,7 +3582,7 @@ function ReviewPageContent() {
                   const quiz = selectedLibraryQuiz;
                   setSelectedLibraryQuiz(null);
                   clearLibraryRect();
-                  router.push(`/review/library/${quiz.id}?mode=review`);
+                  router.push(`/review/library/${quiz.id}?autoStart=all`);
                 }}
                 className="flex-1 py-2 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors rounded-lg"
               >

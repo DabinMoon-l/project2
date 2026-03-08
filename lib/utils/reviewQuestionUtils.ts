@@ -39,6 +39,7 @@ export function sortByQuestionId<T extends { questionId: string }>(items: T[]): 
 
 /**
  * 문제 목록을 displayItems로 변환 (결합형 그룹 처리)
+ * combinedGroupId가 있는 문제만 결합형으로 그룹핑 (questionId 대시 형식만으로는 그룹핑하지 않음)
  */
 export function createDisplayItems(questions: ReviewItem[]): DisplayItem[] {
   const sortedQuestions = sortByQuestionId(questions);
@@ -47,28 +48,16 @@ export function createDisplayItems(questions: ReviewItem[]): DisplayItem[] {
   let displayNumber = 0;
 
   for (const question of sortedQuestions) {
-    // 결합형 문제 - combinedGroupId가 있거나 questionId가 "q1-1" 형식인 경우
-    const [mainNum, subNum] = parseQuestionId(question.questionId);
-    const hasCombinedId = !!question.combinedGroupId;
-    const hasDashFormat = subNum > 0;
-
-    if (hasCombinedId || hasDashFormat) {
-      // 그룹 ID 결정 (combinedGroupId가 있으면 사용, 없으면 주문제 번호로 생성)
-      const groupId = question.combinedGroupId || `combined-${question.quizId}-q${mainNum}`;
+    // 결합형 문제 - combinedGroupId가 있는 경우만 그룹핑
+    if (question.combinedGroupId) {
+      const groupId = question.combinedGroupId;
 
       // 이미 처리된 그룹이면 스킵
       if (processedGroupIds.has(groupId)) continue;
       processedGroupIds.add(groupId);
 
-      // 같은 그룹의 모든 문제 찾기
-      const groupItems = sortedQuestions.filter((q) => {
-        if (q.combinedGroupId) {
-          return q.combinedGroupId === groupId;
-        }
-        // combinedGroupId가 없으면 questionId 패턴으로 그룹핑
-        const [qMainNum, qSubNum] = parseQuestionId(q.questionId);
-        return qMainNum === mainNum && qSubNum > 0 && q.quizId === question.quizId;
-      });
+      // 같은 combinedGroupId의 모든 문제 찾기
+      const groupItems = sortedQuestions.filter((q) => q.combinedGroupId === groupId);
 
       // combinedIndex 순서로 정렬 (공통 지문이 첫 번째 항목에 저장되어 있음)
       groupItems.sort((a, b) => {
@@ -77,8 +66,7 @@ export function createDisplayItems(questions: ReviewItem[]): DisplayItem[] {
         return aIndex - bIndex;
       });
 
-      // combinedGroupId가 있거나 그룹이 2개 이상이면 결합형 그룹으로 표시
-      if (hasCombinedId || groupItems.length > 1) {
+      if (groupItems.length > 1) {
         displayNumber++;
         displayItems.push({
           type: 'combined_group',
@@ -87,7 +75,7 @@ export function createDisplayItems(questions: ReviewItem[]): DisplayItem[] {
           displayNumber,
         });
       } else {
-        // 단일 문제로 처리
+        // combinedGroupId가 있지만 단독이면 단일 문제로 표시
         displayNumber++;
         displayItems.push({
           type: 'single',

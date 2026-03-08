@@ -102,6 +102,9 @@ export default function FolderDetailPage() {
   const [isDeleteMode, setIsDeleteMode] = useState(false);
   const [practiceItems, setPracticeItems] = useState<ReviewItem[] | null>(null);
   const [practiceMode, setPracticeMode] = useState<'all' | 'wrongOnly' | null>(null); // 복습 모드 (첫복습점수 저장용)
+  const practiceModeRef = useRef<'all' | 'wrongOnly' | null>(null);
+  // practiceMode 변경 시 ref 동기화 (useCallback 클로저 문제 방지)
+  useEffect(() => { practiceModeRef.current = practiceMode; }, [practiceMode]);
   const [isAddMode, setIsAddMode] = useState(false);
   const [showEmptyMessage, setShowEmptyMessage] = useState(false);
 
@@ -243,58 +246,41 @@ export default function FolderDetailPage() {
 
     const loadCustomQuestions = async () => {
       setCustomLoading(true);
-      const items: ReviewItem[] = [];
 
+      // quizId별로 questionId 그룹화 (in 쿼리 일괄 조회용)
+      const quizGroups = new Map<string, string[]>();
       for (const q of customFolder.questions) {
-        // questionId와 quizId 모두로 검색해야 정확한 문제를 찾을 수 있음
-        const reviewQuery = query(
-          collection(db, 'reviews'),
-          where('userId', '==', user.uid),
-          where('questionId', '==', q.questionId),
-          where('quizId', '==', q.quizId)
-        );
-        const reviewDocs = await getDocs(reviewQuery);
-        if (!reviewDocs.empty) {
-          const data = reviewDocs.docs[0].data();
-          items.push({
-            id: reviewDocs.docs[0].id,
-            userId: data.userId,
-            quizId: data.quizId,
-            quizTitle: data.quizTitle,
-            questionId: data.questionId,
-            question: data.question,
-            type: data.type,
-            options: data.options,
-            correctAnswer: data.correctAnswer,
-            userAnswer: data.userAnswer,
-            explanation: data.explanation,
-            reviewType: data.reviewType,
-            isBookmarked: data.isBookmarked,
-            isCorrect: data.isCorrect,
-            reviewCount: data.reviewCount || 0,
-            lastReviewedAt: data.lastReviewedAt,
-            createdAt: data.createdAt,
-            // 결합형 문제 필드
-            combinedGroupId: data.combinedGroupId,
-            combinedIndex: data.combinedIndex,
-            combinedTotal: data.combinedTotal,
-            passage: data.passage,
-            passageType: data.passageType,
-            passageImage: data.passageImage,
-            koreanAbcItems: data.koreanAbcItems,
-            passageMixedExamples: data.passageMixedExamples,
-            commonQuestion: data.commonQuestion,
-            // 문제 이미지/보기 필드
-            image: data.image,
-            mixedExamples: data.mixedExamples,
-            subQuestionOptions: data.subQuestionOptions,
-            subQuestionOptionsType: data.subQuestionOptionsType,
-            subQuestionImage: data.subQuestionImage,
-            quizCreatorId: data.quizCreatorId,
-            choiceExplanations: data.choiceExplanations,
-          });
+        const ids = quizGroups.get(q.quizId) || [];
+        ids.push(q.questionId);
+        quizGroups.set(q.quizId, ids);
+      }
+
+      // quizId별로 병렬 일괄 쿼리 (in 쿼리 최대 30개씩)
+      const batchPromises: Promise<ReviewItem[]>[] = [];
+      for (const [quizId, questionIds] of quizGroups) {
+        for (let i = 0; i < questionIds.length; i += 30) {
+          const batch = questionIds.slice(i, i + 30);
+          batchPromises.push((async () => {
+            const snap = await getDocs(query(
+              collection(db, 'reviews'),
+              where('userId', '==', user.uid),
+              where('quizId', '==', quizId),
+              where('questionId', 'in', batch)
+            ));
+            return snap.docs.map(d => {
+              const data = d.data();
+              return {
+                id: d.id,
+                ...data,
+                reviewCount: data.reviewCount || 0,
+              } as ReviewItem;
+            });
+          })());
         }
       }
+
+      const results = await Promise.all(batchPromises);
+      const items = results.flat();
 
       // questionId 기준으로 정렬 (결합형 문제 순서 유지)
       setCustomQuestions(sortByQuestionId(items));
@@ -1222,126 +1208,64 @@ export default function FolderDetailPage() {
   // 복습 완료 핸들러
   const handlePracticeComplete = useCallback(async (results: PracticeResult[]) => {
     // 복습 완료된 문제 reviewCount 증가 (복습력 측정용)
+    // 합성 ID(library-, fallback-)는 Firestore에 실제 문서가 없으므로 스킵
     for (const r of results) {
+      if (r.reviewId.startsWith('library-') || r.reviewId.startsWith('fallback-')) continue;
       try { await markAsReviewed(r.reviewId); } catch { /* 개별 실패 무시 */ }
     }
 
-    // 수정된 문제 재풀이 완료 시:
-    // 1. quizResults에 새 응답 저장 (통계 반영용)
-    // 2. reviews.quizUpdatedAt 업데이트 (뱃지 제거용)
-    if (folderId && user && folderType !== 'custom') {
+    if (folderId && user && folderType !== 'custom' && results.length > 0) {
+      const quizDocSnap = await getDoc(doc(db, 'quizzes', folderId)).catch(() => null);
+      const quizData = quizDocSnap?.data();
+      const correctCount = results.filter(r => r.isCorrect).length;
+      const totalCount = quizData?.questions?.length || results.length;
+      const reviewScore = Math.round((correctCount / totalCount) * 100);
+
+      // 1. 복습 연습 EXP 지급 — CF가 quizResults 생성 + EXP 처리
       try {
-        const quizDoc = await getDoc(doc(db, 'quizzes', folderId));
-        if (quizDoc.exists()) {
-          const quizData = quizDoc.data();
+        const recordReviewPracticeFn = httpsCallable(functions, 'recordReviewPractice');
+        await recordReviewPracticeFn({
+          quizId: folderId,
+          correctCount,
+          totalCount,
+          score: reviewScore,
+        });
+      } catch (err) {
+        console.error('복습 EXP 지급 실패:', err);
+      }
+
+      // 2. 첫 복습 점수 저장 (전체 복습 모드에서만, 최초 1회)
+      if (practiceModeRef.current === 'all' && quizData) {
+        try {
+          const existingReviewScore = quizData.userFirstReviewScores?.[user.uid];
+          if (existingReviewScore === undefined) {
+            await updateDoc(doc(db, 'quizzes', folderId), {
+              [`userFirstReviewScores.${user.uid}`]: reviewScore,
+            });
+            // 로컬 상태 즉시 갱신
+            setQuizScores(prev => prev ? { ...prev, myFirstReviewScore: reviewScore } : prev);
+          }
+        } catch (err) {
+          console.error('첫 복습 점수 저장 실패:', err);
+        }
+      }
+
+      // 3. 해당 퀴즈의 모든 reviews 문서 업데이트 (뱃지 제거)
+      if (quizData) {
+        try {
           const currentQuizUpdatedAt = quizData.updatedAt || quizData.createdAt || null;
-
-          // 1. quizResults에 새 응답 저장 (통계에 반영)
-          if (results.length > 0) {
-            const existingResultQuery = query(
-              collection(db, 'quizResults'),
-              where('userId', '==', user.uid),
-              where('quizId', '==', folderId)
-            );
-            const existingResults = await getDocs(existingResultQuery);
-
-            const newQuestionScores: Record<string, {
-              isCorrect: boolean;
-              userAnswer: string;
-              answeredAt: any;
-            }> = {};
-
-            results.forEach((result) => {
-              newQuestionScores[result.questionId] = {
-                isCorrect: result.isCorrect,
-                userAnswer: result.userAnswer,
-                answeredAt: serverTimestamp(),
-              };
-            });
-
-            if (!existingResults.empty) {
-              const existingDoc = existingResults.docs[0];
-              const existingData = existingDoc.data();
-              const existingScores = existingData.questionScores || {};
-              const mergedScores = { ...existingScores, ...newQuestionScores };
-              const newCorrectCount = Object.values(mergedScores).filter(
-                (s: any) => s.isCorrect
-              ).length;
-              const totalCount = quizData.questions?.length || Object.keys(mergedScores).length;
-              const newScore = Math.round((newCorrectCount / totalCount) * 100);
-
-              await updateDoc(existingDoc.ref, {
-                questionScores: mergedScores,
-                correctCount: newCorrectCount,
-                score: newScore,
-                isUpdate: true,
-                updatedAt: serverTimestamp(),
-              });
-            } else {
-              const correctCount = results.filter(r => r.isCorrect).length;
-              const totalCount = quizData.questions?.length || results.length;
-              const score = Math.round((correctCount / totalCount) * 100);
-
-              await addDoc(collection(db, 'quizResults'), {
-                userId: user.uid,
-                quizId: folderId,
-                quizTitle: quizData.title || '퀴즈',
-                quizCreatorId: quizData.creatorId || null,
-                score,
-                correctCount,
-                totalCount,
-                earnedExp: 0,
-                questionScores: newQuestionScores,
-                isUpdate: true,
-                courseId: quizData.courseId || null,
-                classId: userClassId || null,
-                createdAt: serverTimestamp(),
-              });
-            }
-          }
-
-          // 2. 첫 복습 점수 저장 (전체 복습 모드에서만, 최초 1회)
-          if (practiceMode === 'all' && results.length > 0) {
-            const existingReviewScore = quizData.userFirstReviewScores?.[user.uid];
-            if (existingReviewScore === undefined) {
-              const correctCount = results.filter(r => r.isCorrect).length;
-              const totalCount = quizData.questions?.length || results.length;
-              const reviewScore = Math.round((correctCount / totalCount) * 100);
-              await updateDoc(doc(db, 'quizzes', folderId), {
-                [`userFirstReviewScores.${user.uid}`]: reviewScore,
-              });
-            }
-          }
-
-          // 3. 복습 연습 EXP 지급 — 서버사이드 CF 호출
-          if (results.length > 0) {
-            const correctCount = results.filter(r => r.isCorrect).length;
-            const totalCount = quizData.questions?.length || results.length;
-            const reviewScore = Math.round((correctCount / totalCount) * 100);
-
-            const recordReviewPracticeFn = httpsCallable(functions, 'recordReviewPractice');
-            await recordReviewPracticeFn({
-              quizId: folderId,
-              correctCount,
-              totalCount,
-              score: reviewScore,
-            });
-          }
-
-          // 4. 해당 퀴즈의 모든 reviews 문서 업데이트 (뱃지 제거)
           const reviewsQuery = query(
             collection(db, 'reviews'),
             where('userId', '==', user.uid),
             where('quizId', '==', folderId)
           );
           const reviewsSnapshot = await getDocs(reviewsQuery);
-
           for (const reviewDoc of reviewsSnapshot.docs) {
             await updateDoc(reviewDoc.ref, { quizUpdatedAt: currentQuizUpdatedAt });
           }
+        } catch (err) {
+          console.error('리뷰 뱃지 업데이트 실패:', err);
         }
-      } catch (err) {
-        console.error('복습 결과 저장 실패:', err);
       }
     }
 
@@ -1351,7 +1275,7 @@ export default function FolderDetailPage() {
       setPracticeItems(null);
       setPracticeMode(null);
     }
-  }, [folderId, user, folderType, practiceMode, autoStart, userClassId, markAsReviewed, router]);
+  }, [folderId, user, folderType, autoStart, markAsReviewed, router]);
 
   // autoStart 모드: 데이터 로딩 중이면 로딩 스피너만 표시 (폴더 상세 안 보여줌)
   if (autoStart && !practiceItems && (loading || questions.length === 0)) {
@@ -1511,7 +1435,7 @@ export default function FolderDetailPage() {
                     <h2 className="text-2xl font-black text-[#1A1A1A] flex-1">
                       {folderTitle}
                     </h2>
-                    {folderType === 'library' && !isSelectMode && !fromQuizPage && (
+                    {folderType === 'library' && !isSelectMode && !fromQuizPage && quizCreatorsMap.get(folderId) === user?.uid && (
                       <>
                         <button
                           onClick={handleEnterEditMode}
@@ -1594,10 +1518,10 @@ export default function FolderDetailPage() {
 
       {/* 커스텀 폴더일 때 문제 추가 버튼 */}
       {folderType === 'custom' && !isSelectMode && (
-        <div className="px-4 pt-4">
+        <div className="px-4 pt-2">
           <button
             onClick={() => setIsAddMode(true)}
-            className="w-full py-2 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+            className="w-full py-1.5 text-sm font-bold border border-dashed border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
           >
             + 문제 추가하기
           </button>
@@ -1627,7 +1551,7 @@ export default function FolderDetailPage() {
                     setSelectedIds(new Set(questions.map(q => q.id)));
                   }
                 }}
-                className="px-4 py-2 text-sm font-bold border transition-colors bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#EDEAE4] rounded-lg"
+                className="px-2.5 py-1 text-xs font-bold border transition-colors bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#EDEAE4] rounded-md"
               >
                 {selectedIds.size === questions.length ? '전체 해제' : '전체'}
               </button>
@@ -1645,7 +1569,7 @@ export default function FolderDetailPage() {
                   setIsDeleteMode(false);
                 }
               }}
-              className={`px-4 py-2 text-sm font-bold border-2 transition-colors rounded-lg ${
+              className={`px-2.5 py-1 text-xs font-bold border-2 transition-colors rounded-md ${
                 isSelectMode
                   ? 'bg-[#EDEAE4] text-[#1A1A1A] border-[#1A1A1A]'
                   : 'bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#EDEAE4]'
@@ -2007,8 +1931,8 @@ export default function FolderDetailPage() {
         </main>
       )}
 
-      {/* 하단 버튼 영역 */}
-      {!loading && questions.length > 0 && (
+      {/* 하단 버튼 영역 — 선택 모드에서 선택 항목 없으면 숨김 */}
+      {!loading && questions.length > 0 && !(isSelectMode && !isAssignMode && selectedIds.size === 0) && (
         <div className="fixed bottom-0 right-0 p-3 bg-[#F5F0E8] border-t-2 border-[#1A1A1A]" style={{ left: 'var(--detail-panel-left, 0)' }}>
           {isEditMode ? (
             /* 수정 모드일 때 - 취소/저장 */

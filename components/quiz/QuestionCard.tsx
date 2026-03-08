@@ -152,6 +152,8 @@ interface QuestionCardProps {
   question: Question;
   /** 과목 ID (챕터 라벨 표시용) */
   courseId?: string;
+  /** 문항번호 줄 우측에 표시할 요소 (피드백 아이콘 등) */
+  headerRight?: React.ReactNode;
 }
 
 /**
@@ -172,7 +174,7 @@ interface QuestionCardProps {
  * />
  * ```
  */
-export default function QuestionCard({ question, courseId }: QuestionCardProps) {
+export default function QuestionCard({ question, courseId, headerRight }: QuestionCardProps) {
   // 문제 유형별 라벨
   const typeLabels: Record<QuestionType, string> = {
     ox: 'OX',
@@ -240,6 +242,7 @@ export default function QuestionCard({ question, courseId }: QuestionCardProps) 
             {formatChapterLabel(courseId, question.chapterId, question.chapterDetailId)}
           </span>
         )}
+        {headerRight}
       </div>
 
       {/* 문제 텍스트 */}

@@ -1092,7 +1092,7 @@ export default function QuizStatsModal({
     return counts;
   }, [resultsWithClass]);
 
-  // 반별 표준편차 계산 (전체 탭에서 비교 바 표시용)
+  // 반별 표준편차 계산 (전체 탭에서 비교 표시용)
   const classStdDevs = useMemo(() => {
     const result: Record<string, { stdDev: number; avg: number; count: number }> = {};
     const classes = ['A', 'B', 'C', 'D'] as const;
@@ -1475,19 +1475,15 @@ export default function QuizStatsModal({
                 </div>
               </div>
 
-              {/* 전체 탭일 때 반별 편차 비교 */}
+              {/* 전체 탭일 때 반별 편차 수치 */}
               {isProfessor && classFilter === 'all' && (() => {
                 const classes = ['A', 'B', 'C', 'D'] as const;
-                const classBarColors: Record<string, string> = {
-                  A: '#8B1A1A', B: '#8B6914', C: '#1D5D4A', D: '#1E3A5F',
-                };
-                const maxStdDev = Math.max(...classes.map((c) => classStdDevs[c].stdDev), 1);
                 const hasAnyData = classes.some((c) => classStdDevs[c].count >= 2);
                 if (!hasAnyData) return null;
 
                 return (
                   <div className="mt-1 border-2 border-[#1A1A1A] bg-[#EDEAE4]">
-                    <div className="grid grid-cols-4 border-b border-[#D4CFC4]">
+                    <div className="grid grid-cols-4">
                       {classes.map((cls) => (
                         <div key={cls} className="text-center py-1.5 border-r last:border-r-0 border-[#D4CFC4]">
                           <p className="text-[10px] text-[#5C5C5C]">{cls}반 편차</p>
@@ -1503,23 +1499,6 @@ export default function QuizStatsModal({
                         </div>
                       ))}
                     </div>
-                    <div className="px-2 py-1.5 space-y-1">
-                      {classes.map((cls) => {
-                        const data = classStdDevs[cls];
-                        const barWidth = data.count >= 2 ? (data.stdDev / maxStdDev) * 100 : 0;
-                        return (
-                          <div key={cls} className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-[#1A1A1A] w-3">{cls}</span>
-                            <div className="flex-1 h-2.5 bg-[#D4CFC4] overflow-hidden">
-                              <div
-                                className="h-full transition-all duration-500"
-                                style={{ width: `${barWidth}%`, backgroundColor: classBarColors[cls] }}
-                              />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
                   </div>
                 );
               })()}
@@ -1527,10 +1506,10 @@ export default function QuizStatsModal({
 
             {/* 문제별 분석 */}
             {stats.questionStats.length > 0 && (
-              <div className="flex flex-col mx-3 mb-2 border-2 border-[#1A1A1A] bg-[#EDEAE4]" style={{ height: '420px' }}>
+              <div className="flex flex-col mx-3 mb-2 border-2 border-[#1A1A1A] bg-[#EDEAE4]" style={{ height: '450px' }}>
                 {/* 슬라이더 헤더 — 고정 */}
-                <div className="flex-shrink-0 px-3 py-2 border-b border-[#1A1A1A] bg-[#F5F0E8]">
-                  <div className="flex items-center justify-between mb-1">
+                <div className="flex-shrink-0 px-3 py-1 border-b border-[#1A1A1A] bg-[#F5F0E8]">
+                  <div className="flex items-center justify-between">
                     <span className="text-sm font-bold text-[#1A1A1A]">Q{selectedQuestionIndex + 1}.</span>
                     <span className="text-xs text-[#5C5C5C]">{stats.questionStats.length}문제</span>
                   </div>
@@ -1571,8 +1550,8 @@ export default function QuizStatsModal({
                           <div
                             className="relative"
                             style={{
-                              marginTop: markers.length > 1 ? '24px' : '0',
-                              marginBottom: markers.length > 0 ? '24px' : '0',
+                              marginTop: markers.length > 1 ? '26px' : '0',
+                              marginBottom: markers.length > 0 ? '22px' : '0',
                             }}
                           >
                             <input

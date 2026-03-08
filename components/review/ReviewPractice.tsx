@@ -16,6 +16,7 @@ import { BottomSheet, useExpToast } from '@/components/common';
 import ExitConfirmModal from '@/components/quiz/ExitConfirmModal';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 import { type FeedbackType, FEEDBACK_TYPES } from '@/components/review/types';
+import { FeedbackIcon, InlineFeedbackPanel } from '@/components/common/InlineFeedback';
 
 interface ReviewPracticeProps {
   /** 복습할 문제 목록 */
@@ -119,6 +120,9 @@ export default function ReviewPractice({
   const [submittedFeedbackIds, setSubmittedFeedbackIds] = useState<Set<string>>(new Set());
   // 피드백 제출 횟수 (완료 시 합산 EXP 토스트용)
   const [feedbackSubmitCount, setFeedbackSubmitCount] = useState(0);
+
+  // 인라인 피드백 (풀이 중 피드백)
+  const [inlineFeedbackOpen, setInlineFeedbackOpen] = useState<string | null>(null);
 
   // 결합형 문제 그룹화
   const groupedItems = useMemo(() => {
@@ -1741,6 +1745,7 @@ export default function ReviewPractice({
                       {currentGroup.items.length}문제
                     </span>
                   </div>
+                  {/* 결합형은 하위 문제마다 개별 피드백 아이콘 표시 */}
 
                   {/* 공통 문제 */}
                   {currentGroup.items[0]?.commonQuestion && (
@@ -1871,6 +1876,13 @@ export default function ReviewPractice({
                             {formatChapterLabel(userCourseId, subItem.chapterId, subItem.chapterDetailId)}
                           </span>
                         )}
+                        <FeedbackIcon
+                          isOpen={inlineFeedbackOpen === subItem.questionId}
+                          isSubmitted={submittedFeedbackIds.has(subItem.questionId)}
+                          onClick={() => setInlineFeedbackOpen(
+                            inlineFeedbackOpen === subItem.questionId ? null : subItem.questionId
+                          )}
+                        />
                       </div>
 
                       {/* 하위 문제 텍스트 */}
@@ -2020,6 +2032,25 @@ export default function ReviewPractice({
                         )}
                       </div>
 
+                      {/* 인라인 피드백 패널 (하위 문제) */}
+                      <AnimatePresence>
+                        {inlineFeedbackOpen === subItem.questionId && user && (
+                          <InlineFeedbackPanel
+                            questionId={subItem.questionId}
+                            quizId={subItem.quizId}
+                            quizCreatorId={subItem.quizCreatorId}
+                            userId={user.uid}
+                            questionNumber={currentIndex + 1}
+                            isSubmitted={submittedFeedbackIds.has(subItem.questionId)}
+                            onSubmitted={(qId) => {
+                              setSubmittedFeedbackIds(prev => new Set(prev).add(qId));
+                              setFeedbackSubmitCount(prev => prev + 1);
+                            }}
+                            onClose={() => setInlineFeedbackOpen(null)}
+                          />
+                        )}
+                      </AnimatePresence>
+
                       {/* 제출 후 피드백 */}
                       {isSubmitted && (
                         <div className="mt-2 space-y-2">
@@ -2081,6 +2112,13 @@ export default function ReviewPractice({
                         {formatChapterLabel(userCourseId, currentItem.chapterId, currentItem.chapterDetailId)}
                       </span>
                     )}
+                    <FeedbackIcon
+                      isOpen={inlineFeedbackOpen === currentItem.questionId}
+                      isSubmitted={submittedFeedbackIds.has(currentItem.questionId)}
+                      onClick={() => setInlineFeedbackOpen(
+                        inlineFeedbackOpen === currentItem.questionId ? null : currentItem.questionId
+                      )}
+                    />
                   </div>
                   <p className="text-[#1A1A1A] text-sm leading-relaxed whitespace-pre-wrap">
                     {currentItem.question}
@@ -2248,6 +2286,25 @@ export default function ReviewPractice({
                     />
               )}
             </div>
+
+            {/* 인라인 피드백 패널 */}
+            <AnimatePresence>
+              {inlineFeedbackOpen === currentItem?.questionId && user && currentItem && (
+                <InlineFeedbackPanel
+                  questionId={currentItem.questionId}
+                  quizId={currentItem.quizId}
+                  quizCreatorId={currentItem.quizCreatorId}
+                  userId={user.uid}
+                  questionNumber={currentIndex + 1}
+                  isSubmitted={submittedFeedbackIds.has(currentItem.questionId)}
+                  onSubmitted={(qId) => {
+                    setSubmittedFeedbackIds(prev => new Set(prev).add(qId));
+                    setFeedbackSubmitCount(prev => prev + 1);
+                  }}
+                  onClose={() => setInlineFeedbackOpen(null)}
+                />
+              )}
+            </AnimatePresence>
 
             {/* 제출 후 결과 표시 */}
             <AnimatePresence>
