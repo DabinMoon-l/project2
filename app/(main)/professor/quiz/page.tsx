@@ -153,30 +153,11 @@ const ProfessorNewsArticle = memo(function ProfessorNewsArticle({
             {quiz.title}
           </h3>
         </div>
-        <div className="px-3 mt-0.5 flex items-center justify-between">
+        <div className="px-3 mt-0.5">
           <p className="text-sm text-[#1A1A1A]">
             {quiz.questionCount}문제 · {quiz.participantCount}명 참여
             {quiz.participantCount > 0 && ` · 평균 ${quiz.averageScore}점`}
           </p>
-          {!quiz.isPublished ? (
-            <button
-              onClick={(e) => { e.stopPropagation(); onPublish?.(); }}
-              className="w-5 h-5 flex items-center justify-center text-[#5C5C5C] hover:text-[#1A1A1A] hover:scale-110 transition-all flex-shrink-0"
-              title="비공개 — 클릭하여 공개"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-            </button>
-          ) : (
-            <span className="w-5 h-5 flex items-center justify-center text-[#5C5C5C] flex-shrink-0" title="공개됨">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.6 9h16.8M3.6 15h16.8" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3a15.3 15.3 0 0 1 4 9 15.3 15.3 0 0 1-4 9 15.3 15.3 0 0 1-4-9 15.3 15.3 0 0 1 4-9z" />
-              </svg>
-            </span>
-          )}
         </div>
         <div className="px-3 pb-3 pt-1.5 flex gap-2">
           <button
@@ -189,9 +170,7 @@ const ProfessorNewsArticle = memo(function ProfessorNewsArticle({
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onStats(); }}
-            className={`flex-1 py-3 text-base font-bold bg-[#1A1A1A] text-[#F5F0E8] transition-colors rounded-lg ${
-              !quiz.isPublished ? 'opacity-40 pointer-events-none' : 'hover:bg-[#3A3A3A]'
-            }`}
+            className="flex-1 py-3 text-base font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors rounded-lg"
           >
             Stats
           </button>
@@ -408,30 +387,11 @@ const ProfessorPastExamNewsCard = memo(function ProfessorPastExamNewsCard({
                   {filteredQuiz.title}
                 </h3>
               </div>
-              <div className="px-3 mt-0.5 flex items-center justify-between">
+              <div className="px-3 mt-0.5">
                 <p className="text-sm text-[#1A1A1A]">
                   {filteredQuiz.questionCount}문제 · {filteredQuiz.participantCount}명 참여
                   {filteredQuiz.participantCount > 0 && ` · 평균 ${filteredQuiz.averageScore}점`}
                 </p>
-                {!filteredQuiz.isPublished ? (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onPublish?.(filteredQuiz.id); }}
-                    className="w-5 h-5 flex items-center justify-center text-[#5C5C5C] hover:text-[#1A1A1A] hover:scale-110 transition-all flex-shrink-0"
-                    title="비공개 — 클릭하여 공개"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
-                  </button>
-                ) : (
-                  <span className="w-5 h-5 flex items-center justify-center text-[#5C5C5C] flex-shrink-0" title="공개됨">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.6 9h16.8M3.6 15h16.8" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3a15.3 15.3 0 0 1 4 9 15.3 15.3 0 0 1-4 9 15.3 15.3 0 0 1-4-9 15.3 15.3 0 0 1 4-9z" />
-                    </svg>
-                  </span>
-                )}
               </div>
               <div className="px-3 pb-3 pt-1.5 flex gap-2">
                 <button
@@ -444,9 +404,7 @@ const ProfessorPastExamNewsCard = memo(function ProfessorPastExamNewsCard({
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onStats(filteredQuiz); }}
-                  className={`flex-1 py-3 text-base font-bold bg-[#1A1A1A] text-[#F5F0E8] transition-colors rounded-lg ${
-                    !filteredQuiz.isPublished ? 'opacity-40 pointer-events-none' : 'hover:bg-[#3A3A3A]'
-                  }`}
+                  className="flex-1 py-3 text-base font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors rounded-lg"
                 >
                   Stats
                 </button>
@@ -1359,25 +1317,29 @@ export default function ProfessorQuizListPage() {
     refreshExamQuizzes();
   }, [refreshExamQuizzes]);
 
-  // 과목별 클라이언트 사이드 필터링 (과목 전환 시 즉시 반영)
+  // 과목별 클라이언트 사이드 필터링 (과목 전환 시 즉시 반영) + 공개 퀴즈만 캐러셀에 표시
   const filteredMidterm = useMemo(() => {
-    if (!userCourseId) return allMidterm;
-    return allMidterm.filter(q => q.courseId === userCourseId);
+    let result = allMidterm;
+    if (userCourseId) result = result.filter(q => q.courseId === userCourseId);
+    return result.filter(q => q.isPublished);
   }, [allMidterm, userCourseId]);
 
   const filteredFinal = useMemo(() => {
-    if (!userCourseId) return allFinal;
-    return allFinal.filter(q => q.courseId === userCourseId);
+    let result = allFinal;
+    if (userCourseId) result = result.filter(q => q.courseId === userCourseId);
+    return result.filter(q => q.isPublished);
   }, [allFinal, userCourseId]);
 
   const filteredPast = useMemo(() => {
-    if (!userCourseId) return allPast;
-    return allPast.filter(q => q.courseId === userCourseId);
+    let result = allPast;
+    if (userCourseId) result = result.filter(q => q.courseId === userCourseId);
+    return result.filter(q => q.isPublished);
   }, [allPast, userCourseId]);
 
   const filteredIndependent = useMemo(() => {
-    if (!userCourseId) return allIndependent;
-    return allIndependent.filter(q => q.courseId === userCourseId);
+    let result = allIndependent;
+    if (userCourseId) result = result.filter(q => q.courseId === userCourseId);
+    return result.filter(q => q.isPublished);
   }, [allIndependent, userCourseId]);
 
   // 자작 퀴즈 로드 (courseId 필터로 해당 과목만 구독)
