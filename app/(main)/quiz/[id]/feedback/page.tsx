@@ -119,7 +119,6 @@ interface FeedbackPageData {
   quizCreatorId: string;
   questionResults: QuestionResult[];
   pageItems: PageItem[]; // 페이지 단위 아이템 (일반 문제 또는 결합형 그룹)
-  hasSubmittedFeedback: boolean;
   isQuizDeleted?: boolean; // 퀴즈 삭제 여부
 }
 
@@ -1050,7 +1049,6 @@ export default function FeedbackPage() {
           quizCreatorId: '',
           questionResults: [],
           pageItems: [],
-          hasSubmittedFeedback: false,
           isQuizDeleted: true,
         });
         return;
@@ -1074,22 +1072,12 @@ export default function FeedbackPage() {
       );
       const resultsSnapshot = await getDocs(resultsQuery);
 
-      let hasSubmittedFeedback = false;
       let userAnswers: string[] = [];
 
       if (!resultsSnapshot.empty) {
         const resultData = resultsSnapshot.docs[0].data();
         userAnswers = resultData.answers || [];
       }
-
-      // 이미 피드백을 제출했는지 questionFeedbacks에서 확인
-      const existingFeedbackQuery = query(
-        collection(db, 'questionFeedbacks'),
-        where('userId', '==', user.uid),
-        where('quizId', '==', quizId)
-      );
-      const existingFeedbackSnapshot = await getDocs(existingFeedbackQuery);
-      hasSubmittedFeedback = !existingFeedbackSnapshot.empty;
 
       // 로컬 스토리지에서 결과 데이터 가져오기 (결과 페이지에서 저장한 것)
       const storedResult = localStorage.getItem(`quiz_result_${quizId}`);
@@ -1308,7 +1296,6 @@ export default function FeedbackPage() {
         quizCreatorId: quizData.creatorId || '',
         questionResults,
         pageItems,
-        hasSubmittedFeedback,
       });
     } catch (err) {
       console.error('피드백 페이지 로드 오류:', err);
@@ -1440,7 +1427,7 @@ export default function FeedbackPage() {
    */
   const handleSkip = () => {
     // EXP 페이지로 이동 (피드백 미제출)
-    router.push(`/quiz/${quizId}/exp`);
+    router.replace(`/quiz/${quizId}/exp`);
   };
 
   // 로딩 UI
@@ -1508,26 +1495,6 @@ export default function FeedbackPage() {
         </h2>
         <p className="text-[#5C5C5C] text-center mb-6">
           자신이 만든 퀴즈에는 피드백을 남길 수 없습니다.
-        </p>
-        <button
-          onClick={() => router.push('/quiz')}
-          className="px-6 py-2.5 bg-[#1A1A1A] text-[#F5F0E8] font-bold rounded-lg"
-        >
-          퀴즈 목록으로
-        </button>
-      </div>
-    );
-  }
-
-  // 이미 피드백을 제출한 경우
-  if (pageData.hasSubmittedFeedback) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-4" style={{ backgroundColor: '#F5F0E8' }}>
-        <h2 className="text-xl font-bold text-[#1A1A1A] mb-2">
-          이미 피드백을 제출했습니다
-        </h2>
-        <p className="text-[#5C5C5C] text-center mb-6">
-          소중한 의견 감사합니다!
         </p>
         <button
           onClick={() => router.push('/quiz')}
