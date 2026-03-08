@@ -9,33 +9,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 코드베이스 규모
 
-**총 136,000+ 줄** / **390개 파일** (TypeScript + TSX)
+**총 140,000+ 줄** / **397개 파일** (TypeScript + TSX)
 
 | 영역 | 파일 수 | 코드 줄 수 | 설명 |
 |------|---------|-----------|------|
-| `app/` | 43 | 33,300 | Next.js App Router 페이지 |
-| `components/` | 191 | 59,100 | React 컴포넌트 |
-| `lib/` | 75 | 21,400 | 훅, 유틸, 컨텍스트, 타입 |
-| `functions/src/` | 63 | 22,300 | Firebase Cloud Functions |
+| `app/` | 43 | 33,000 | Next.js App Router 페이지 |
+| `components/` | 213 | 62,000 | React 컴포넌트 |
+| `lib/` | 77 | 21,800 | 훅, 유틸, 컨텍스트, 타입 |
+| `functions/src/` | 64 | 23,600 | Firebase Cloud Functions |
 
 ### 주요 대형 파일
 
 | 파일 | 줄 수 | 역할 |
 |------|-------|------|
-| `app/(main)/review/[type]/[id]/page.tsx` | 3,815 | 복습 상세 페이지 |
-| `app/(main)/review/page.tsx` | 3,491 | 복습 목록 페이지 |
-| `app/(main)/quiz/page.tsx` | 2,758 | 학생 퀴즈 목록 |
-| `app/(main)/professor/quiz/page.tsx` | 2,354 | 교수 퀴즈 관리 |
+| `app/(main)/review/page.tsx` | 3,673 | 복습 목록 페이지 |
+| `app/(main)/quiz/page.tsx` | 2,833 | 학생 퀴즈 목록 |
+| `app/(main)/review/[type]/[id]/page.tsx` | 2,767 | 복습 상세 페이지 |
+| `components/review/ReviewPractice.tsx` | 2,666 | 복습 연습 모드 |
+| `components/quiz/create/QuestionEditor.tsx` | 2,648 | 문제 편집기 (풀 에디터) |
+| `app/(main)/professor/quiz/page.tsx` | 2,395 | 교수 퀴즈 관리 |
+| `components/quiz/manage/QuizStatsModal.tsx` | 2,202 | 퀴즈 통계 모달 |
 | `app/(main)/quiz/create/page.tsx` | 2,100 | 퀴즈 생성 페이지 |
-| `app/(main)/professor/quiz/[id]/preview/page.tsx` | 1,962 | 교수 퀴즈 미리보기 |
-| `components/quiz/create/QuestionEditor.tsx` | 2,521 | 문제 편집기 (풀 에디터) |
-| `components/review/ReviewPractice.tsx` | 2,513 | 복습 연습 모드 |
-| `components/quiz/manage/QuizStatsModal.tsx` | 2,223 | 퀴즈 통계 모달 |
-| `components/professor/library/ProfessorLibraryTab.tsx` | 2,045 | 교수 서재 탭 |
-| `components/common/ProfileDrawer.tsx` | 1,819 | 프로필 드로어 |
-| `lib/hooks/useReview.ts` | 2,005 | 복습 데이터 훅 |
-| `lib/hooks/useBoard.ts` | 1,800 | 게시판 데이터 훅 |
 | `functions/src/styledQuizGenerator.ts` | 2,042 | AI 스타일 문제 생성 |
+| `components/common/ProfileDrawer.tsx` | 2,041 | 프로필 드로어 |
+| `lib/hooks/useReview.ts` | 2,005 | 복습 데이터 훅 |
+| `app/(main)/professor/quiz/[id]/preview/page.tsx` | 1,962 | 교수 퀴즈 미리보기 |
+| `lib/hooks/useBoard.ts` | 1,776 | 게시판 데이터 훅 |
+| `components/professor/library/ProfessorLibraryTab.tsx` | 1,650 | 교수 서재 탭 |
 | `functions/src/studentAuth.ts` | 1,210 | 학생 인증/가입 |
 
 ### 컴포넌트 디렉토리별 규모
@@ -49,7 +49,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `components/review/` | 5,777 | ReviewPractice, 복습 카드 UI |
 | `components/ai-quiz/` | 2,892 | AIQuizModal, AI 퀴즈 생성 UI |
 | `components/board/` | 2,080 | 게시판 목록/상세/댓글 |
-| `components/tekken/` | 1,560 | 철권퀴즈 배틀 UI |
+| `components/tekken/` | 1,542 | 철권퀴즈 배틀 UI |
 
 ### lib 디렉토리 상세
 
@@ -66,17 +66,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `styledQuizGenerator.ts` | 2,042 | 교수 스타일 기반 AI 문제 생성 |
 | `studentAuth.ts` | 1,210 | 학번 인증, 회원가입, 교수 등록 |
 | `questionParser.ts` | 1,034 | Gemini 응답 파싱 (v1) |
-| `board.ts` | 992 | 게시판 CRUD + 콩콩이 자동답변 |
+| `board.ts` | 1,007 | 게시판 CRUD + 콩콩이 자동답변 |
 | `questionParserV3.ts` | 857 | Gemini 응답 파싱 (v3) |
 | `gemini.ts` | 757 | Gemini API 통합 (문제 생성, 이미지 분석) |
-| `workerProcessJob.ts` | 742 | AI 생성 Job 워커 (동시 최대 20) |
-| `professorQuizAnalysis.ts` | 686 | 교수 출제 스타일 분석 |
+| `professorQuizAnalysis.ts` | 770 | 교수 출제 스타일 분석 |
+| `workerProcessJob.ts` | 751 | AI 생성 Job 워커 (동시 최대 20) |
 | `geminiQueue.ts` | 597 | Gemini API 큐 관리 |
 | `notification.ts` | 552 | FCM 푸시 알림 |
-| `recordAttempt.ts` | ~500 | 퀴즈 제출 + 서버 채점 |
-| `computeRankings.ts` | ~400 | 랭킹 계산 (10분 주기) |
-| `rabbitGacha.ts` | ~350 | 토끼 뽑기/장착/레벨업 |
-| `tekkenBattle.ts` | ~350 | 실시간 1v1 배틀 로직 |
+| `rabbitGacha.ts` | 466 | 토끼 뽑기/장착/레벨업 |
+| `computeRankings.ts` | 359 | 랭킹 계산 (10분 주기) |
+| `recordAttempt.ts` | 275 | 퀴즈 제출 + 서버 채점 |
+| `tekken/` (디렉토리) | 800+ | 실시간 1v1 배틀 로직 (분리됨) |
 
 ## 기술 스택
 
@@ -200,7 +200,7 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 | 댓글 작성 | 15 | onCommentCreate |
 | 댓글 채택됨 | 30 | acceptComment |
 | 복습 연습 완료 | 25 | recordReviewPractice |
-| 배틀 승리 | 30 (+연승 ×5, 최대 50) | submitAnswer |
+| 배틀 승리 | 30 (+연승 ×5, 보너스 최대 20, 총합 최대 50) | submitAnswer |
 | 배틀 패배 | 10 | submitAnswer |
 
 **피드백 점수**: praise(+2), wantmore(+1), other(0), typo(-1), unclear(-1), wrong(-2)
@@ -283,21 +283,20 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 - 크리티컬(5초 이내 정답): baseDamage × 1.5
 - 양쪽 모두 오답: MUTUAL_DAMAGE = 10 (양쪽 동시 피해)
 
-**봇**: 60% 정답률, 1~8초 응답 시간, 10개 닉네임 풀, 레벨 3~7
+**봇**: 40% 정답률, 1~8초 응답 시간, 10개 닉네임 풀, 레벨 3~7
 
-**난이도 배분**: 10문제 = easy 4 + medium 4 + hard 2 (순서대로 점점 어려워짐)
+**난이도 배분**: 10문제 = easy 5 + medium 5 (hard 제거 — Gemini 구조화 출력 실패율 높아 풀 미달)
 - easy: 4지선다, 명확한 개념 문제
 - medium: 5지선다, 유사 개념 포함
-- hard: 5지선다, 모든 선지가 매력적인 함정
 
-**문제 풀**: 매일 새벽 3시 → 현재 학기 과목만 과목당 300문제 보충 (easy 120 + medium 120 + hard 60)
+**문제 풀**: 매일 새벽 3시 → 현재 학기 과목만 과목당 300문제 보충 (easy 150 + medium 150)
 - 1학기: biology + microbiology, 2학기: biology + pathophysiology
 - seenQuestions로 24시간 중복 방지
 
 **챕터 범위 설정**: 교수가 ProfileDrawer Settings → GlassModal에서 과목별 챕터 선택
 - Firestore 경로: `settings/tekken/courses/{courseId}` → `{ chapters: string[] }`
 - 저장 시 다음 새벽 문제 생성부터 적용
-- 기본값: biology `1~6`, microbiology `1~5`, pathophysiology `3~11`
+- 기본값: biology `1~6`, microbiology `1~11`, pathophysiology `3~11`(6 제외)
 
 **교수 스타일 반영**: `professorQuizAnalysis/{courseId}/data/`의 styleProfile(출제 톤, 함정 패턴) + keywords(핵심 개념, 임상 키워드)를 프롬프트에 주입
 
