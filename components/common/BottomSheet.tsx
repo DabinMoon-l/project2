@@ -44,19 +44,24 @@ const backdropVariants = {
 };
 
 const sheetVariants = {
-  hidden: { y: '100%' },
+  hidden: { y: '100%', opacity: 1 },
   visible: {
     y: 0,
+    opacity: 1,
     transition: {
       type: 'spring',
-      stiffness: 300,
-      damping: 30,
+      stiffness: 260,
+      damping: 28,
+      mass: 0.8,
     },
   },
   exit: {
     y: '100%',
+    opacity: 1,
     transition: {
-      duration: 0.2,
+      type: 'spring',
+      stiffness: 300,
+      damping: 30,
     },
   },
 };
@@ -201,7 +206,7 @@ export default function BottomSheet({
             tabIndex={-1}
             className={`
               absolute bottom-0 left-0 right-0
-              bg-white rounded-t-3xl shadow-xl
+              bg-[#F5F0E8] rounded-t-3xl shadow-xl
               overflow-hidden
               focus:outline-none
               ${heightStyles[height]}

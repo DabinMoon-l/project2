@@ -3586,7 +3586,7 @@ function ReviewPageContent() {
               {/* 점수 표시: 퀴즈 점수 / 첫번째 복습 점수 */}
               <div className="py-2 border-t border-[#A0A0A0]">
                 <div className="flex items-center justify-center gap-2">
-                  <span className="text-2xl font-black text-[#1A1A1A]">
+                  <span className="text-3xl font-black text-[#1A1A1A]">
                     {selectedLibraryQuiz.myScore !== undefined ? selectedLibraryQuiz.myScore : selectedLibraryQuiz.score}
                   </span>
                   <span className="text-sm text-[#5C5C5C]">/</span>

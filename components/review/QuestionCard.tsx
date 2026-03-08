@@ -791,7 +791,7 @@ export default function QuestionCard({
                       }
                     }}
                     disabled={isFeedbackSubmitted}
-                    className={`flex items-center gap-2 px-3 py-2 text-xs font-bold border-2 transition-colors ${
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold border transition-colors rounded-md ${
                       isFeedbackSubmitted
                         ? 'bg-[#E8F5E9] border-[#1A6B1A] text-[#1A6B1A] cursor-default'
                         : 'bg-[#FFF8E1] border-[#8B6914] text-[#8B6914] hover:bg-[#FFECB3]'
@@ -799,14 +799,14 @@ export default function QuestionCard({
                   >
                     {isFeedbackSubmitted ? (
                       <>
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
                         피드백 완료
                       </>
                     ) : (
                       <>
-                        <span className="w-5 h-5 flex items-center justify-center bg-[#8B6914] text-[#FFF8E1] font-bold">!</span>
+                        <span className="w-4 h-4 flex items-center justify-center bg-[#8B6914] text-[#FFF8E1] text-[10px] font-bold rounded-sm">!</span>
                         문제 피드백
                       </>
                     )}
@@ -839,14 +839,10 @@ export default function QuestionCard({
                 <button
                   key={type}
                   onClick={() => toggleFeedbackType(type)}
-                  className={`p-2.5 border-2 text-sm font-bold transition-all ${
+                  className={`p-2.5 border-2 text-sm font-bold transition-all rounded-lg ${
                     selectedFeedbackTypes.has(type)
-                      ? positive
-                        ? 'border-[#1A6B1A] bg-[#1A6B1A] text-[#F5F0E8]'
-                        : 'border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8]'
-                      : positive
-                        ? 'border-[#1A6B1A] bg-[#E8F5E9] text-[#1A6B1A]'
-                        : 'border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A]'
+                      ? 'border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8]'
+                      : 'border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A]'
                   }`}
                 >
                   {label}
@@ -870,7 +866,7 @@ export default function QuestionCard({
                   placeholder="자세한 내용을 적어주세요"
                   rows={3}
                   maxLength={200}
-                  className="w-full p-3 border-2 border-[#1A1A1A] bg-[#F5F0E8] focus:outline-none resize-none text-sm"
+                  className="w-full p-3 border-2 border-[#1A1A1A] bg-[#F5F0E8] focus:outline-none resize-none text-sm rounded-lg"
                 />
                 <p className="text-xs text-[#5C5C5C] text-right mt-1">{feedbackContent.length}/200</p>
               </motion.div>
@@ -881,7 +877,7 @@ export default function QuestionCard({
           <button
             onClick={handleFeedbackSubmit}
             disabled={selectedFeedbackTypes.size === 0 || isFeedbackSubmitting || isFeedbackDone}
-            className={`w-full py-2.5 font-bold border-2 transition-colors ${
+            className={`w-full py-2.5 font-bold border-2 transition-colors rounded-lg ${
               isFeedbackDone
                 ? 'bg-[#1A6B1A] text-[#F5F0E8] border-[#1A6B1A]'
                 : selectedFeedbackTypes.size > 0
