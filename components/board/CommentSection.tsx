@@ -569,8 +569,8 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
                 </div>
               ))}
               {linkedImageUrls.map((url, index) => (
-                <div key={`link-${index}`} className="relative flex-shrink-0 w-16 h-16">
-                  <img src={url} alt="" className="w-full h-full object-cover border border-dashed border-[#1A1A1A]" />
+                <div key={`link-${index}`} className="relative flex-shrink-0 h-16">
+                  <img src={url} alt="" className="h-full w-auto object-contain rounded-sm border border-dashed border-[#1A1A1A]" />
                   <button
                     type="button"
                     onClick={() => removeLinkedImage(index)}
