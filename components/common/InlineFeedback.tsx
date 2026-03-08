@@ -99,7 +99,6 @@ export function InlineFeedbackPanel({
       });
 
       onSubmitted(questionId);
-      onClose();
     } catch (err) {
       console.error('피드백 제출 실패:', err);
     } finally {

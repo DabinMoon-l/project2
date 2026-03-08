@@ -265,7 +265,8 @@ export default function FolderDetailPage() {
               collection(db, 'reviews'),
               where('userId', '==', user.uid),
               where('quizId', '==', quizId),
-              where('questionId', 'in', batch)
+              where('questionId', 'in', batch),
+              where('reviewType', '==', 'solved')
             ));
             return snap.docs.map(d => {
               const data = d.data();
