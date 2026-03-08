@@ -95,7 +95,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
   const [error, setError] = useState<string | null>(null);
   const [battleTimeLeft, setBattleTimeLeft] = useState(0);
   const [questionTimeLeft, setQuestionTimeLeft] = useState(0);
-  const [opponentMashTaps, setOpponentMashTaps] = useState(0);
+  // opponentMashTaps는 battle에서 직접 파생 (아래 참조)
   const [activeBattleId, setActiveBattleId] = useState<string | null>(null);
 
   const battleIdRef = useRef<string | null>(null);
@@ -105,7 +105,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
   const matchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const battleTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const matchResultUnsubRef = useRef<(() => void) | null>(null);
-  const mashTapUnsubRef = useRef<(() => void) | null>(null);
+  // mashTapUnsubRef 제거: opponentMashTaps는 battle에서 파생
   const roundResultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 타이머 + 리스너 정리
@@ -118,10 +118,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
       matchResultUnsubRef.current();
       matchResultUnsubRef.current = null;
     }
-    if (mashTapUnsubRef.current) {
-      mashTapUnsubRef.current();
-      mashTapUnsubRef.current = null;
-    }
+    // mashTap 별도 리스너 제거됨 (battle 파생값 사용)
     waitTimerRef.current = null;
     matchTimeoutRef.current = null;
     battleTimerRef.current = null;
@@ -159,17 +156,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     };
   }, [activeBattleId, userId]);
 
-  // 연타 상대 탭: battle 상태에서 직접 추출 (별도 RTDB 리스너 제거 → flickering 방지)
-  useEffect(() => {
-    if (!battle?.mash?.taps || !userId) {
-      setOpponentMashTaps(0);
-      return;
-    }
-    const playerIds = Object.keys(battle.players || {});
-    const opId = playerIds.find((id) => id !== userId);
-    if (!opId) return;
-    setOpponentMashTaps(battle.mash.taps[opId] || 0);
-  }, [battle?.mash?.taps, userId]);
+  // (opponentMashTaps는 파생 상태 섹션에서 battle.mash.taps로부터 직접 계산)
 
   // 배틀/문제 타이머 — 초 단위 변경 시만 setState (리렌더 75% 감소)
   const prevQSecRef = useRef(-1);
@@ -480,7 +467,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     setMatchState('idle');
     setWaitTime(0);
     setError(null);
-    setOpponentMashTaps(0);
+    // opponentMashTaps는 battle에서 파생되므로 battle=null이면 자동 0
     clearTimers();
   }, [clearTimers]);
 
@@ -491,6 +478,8 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
   // opponentId ref 업데이트 (writeBotTap 안정성)
   if (opponentId) opponentIdRef.current = opponentId;
   const opponent = opponentId && battle?.players?.[opponentId] ? battle.players[opponentId] : null;
+  // 연타 상대 탭: battle 상태에서 직접 파생 (useState/useEffect 없이 → 중간 0 리셋 불가능)
+  const opponentMashTaps = opponentId && battle?.mash?.taps?.[opponentId] || 0;
   const currentRound = battle?.rounds?.[battle.currentRound] ?? null;
   const myActiveRabbit = myPlayer ? myPlayer.rabbits?.[myPlayer.activeRabbitIndex] ?? null : null;
   const opponentActiveRabbit = opponent ? opponent.rabbits?.[opponent.activeRabbitIndex] ?? null : null;
