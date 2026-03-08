@@ -199,7 +199,7 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 | 게시글 작성 | 15 | onPostCreate |
 | 댓글 작성 | 15 | onCommentCreate |
 | 댓글 채택됨 | 30 | acceptComment |
-| 복습 연습 완료 | 25 | — (클라이언트) |
+| 복습 연습 완료 | 25 | recordReviewPractice |
 | 배틀 승리 | 30 (+연승 ×5, 최대 50) | submitAnswer |
 | 배틀 패배 | 10 | submitAnswer |
 
@@ -328,10 +328,12 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 
 ```
 1. 각 퀴즈: (최고 재시도 점수 - 첫 시도 점수) 수집
-2. 평균 개선율 계산
-3. 스케일 변환: growth = max(0, min(100, 50 + avgImprovement / 2))
+2. 첫 시도 90%+ & 재시도 없음 → 개선 불필요(0)로 카운트 (만점 학생 페널티 방지)
+3. 첫 시도 < 90% & 재시도 없음 → 스킵 (아직 성장 활동 없음)
+4. 평균 개선율 계산
+5. 스케일 변환: growth = max(0, min(100, 50 + avgImprovement / 2))
    - 50 = 변화 없음 기준선
-   - 재시도 없는 학생 = 0
+   - 퀴즈 데이터 없거나 전부 저점수+미재시도 = 0
 ```
 
 #### 백분위 계산
