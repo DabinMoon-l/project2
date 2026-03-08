@@ -1243,6 +1243,23 @@ export default function ProfessorQuizListPage() {
   // 반별 필터 (자작 탭)
   const [classFilter, setClassFilter] = useState<'all' | 'A' | 'B' | 'C' | 'D'>('all');
   const [isClassDropdownOpen, setIsClassDropdownOpen] = useState(false);
+  const classDropdownRef = useRef<HTMLDivElement>(null);
+
+  // 드롭다운 외부 클릭 시 닫기
+  useEffect(() => {
+    if (!isClassDropdownOpen) return;
+    const handler = (e: MouseEvent | TouchEvent) => {
+      if (classDropdownRef.current && !classDropdownRef.current.contains(e.target as Node)) {
+        setIsClassDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler);
+    };
+  }, [isClassDropdownOpen]);
 
   const fixedTagOptions = useMemo(() => {
     const courseTags = generateCourseTags(userCourseId);
@@ -1790,10 +1807,10 @@ export default function ProfessorQuizListPage() {
         {sectionFilter === 'custom' && !isLibraryPreview && (
           <div className="flex items-center gap-1.5 mb-1.5">
             {/* 반별 드롭다운 */}
-            <div className="relative">
+            <div className="relative" ref={classDropdownRef}>
               <button
                 onClick={() => setIsClassDropdownOpen(!isClassDropdownOpen)}
-                className="px-2 py-1.5 bg-[#F5F0E8] text-[#1A1A1A] text-sm font-bold flex items-center gap-1.5 border border-[#1A1A1A] rounded-lg"
+                className="w-[80px] px-3 py-1.5 bg-[#F5F0E8] text-[#1A1A1A] text-sm font-bold flex items-center justify-between border border-[#1A1A1A] rounded-lg"
               >
                 <span>{classFilter === 'all' ? '전체' : `${classFilter}반`}</span>
                 <svg
@@ -1807,32 +1824,29 @@ export default function ProfessorQuizListPage() {
 
               <AnimatePresence>
                 {isClassDropdownOpen && (
-                  <>
-                    <div className="fixed inset-0 z-10" onClick={() => setIsClassDropdownOpen(false)} />
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="absolute left-0 top-full mt-1 z-20 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg min-w-[80px] rounded-lg overflow-hidden"
-                    >
-                      {(['all', 'A', 'B', 'C', 'D'] as const).map((opt) => (
-                        <button
-                          key={opt}
-                          onClick={() => {
-                            setClassFilter(opt);
-                            setIsClassDropdownOpen(false);
-                          }}
-                          className={`w-full px-3 py-2 text-left text-sm font-medium transition-colors ${
-                            classFilter === opt
-                              ? 'bg-[#1A1A1A] text-[#F5F0E8]'
-                              : 'text-[#1A1A1A] hover:bg-[#EDEAE4]'
-                          }`}
-                        >
-                          {opt === 'all' ? '전체' : `${opt}반`}
-                        </button>
-                      ))}
-                    </motion.div>
-                  </>
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="absolute left-0 top-full mt-1 z-20 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg w-[80px] rounded-lg overflow-hidden"
+                  >
+                    {(['all', 'A', 'B', 'C', 'D'] as const).map((opt) => (
+                      <button
+                        key={opt}
+                        onClick={() => {
+                          setClassFilter(opt);
+                          setIsClassDropdownOpen(false);
+                        }}
+                        className={`w-full px-3 py-2 text-left text-sm font-medium transition-colors ${
+                          classFilter === opt
+                            ? 'bg-[#1A1A1A] text-[#F5F0E8]'
+                            : 'text-[#1A1A1A] hover:bg-[#EDEAE4]'
+                        }`}
+                      >
+                        {opt === 'all' ? '전체' : `${opt}반`}
+                      </button>
+                    ))}
+                  </motion.div>
                 )}
               </AnimatePresence>
             </div>

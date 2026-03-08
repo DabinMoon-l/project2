@@ -117,10 +117,9 @@ const ImageViewer = memo(function ImageViewer({
     }
   }, [scale, isZoomed, translate]);
 
-  // 터치 이동
+  // 터치 이동 (touchAction: 'none' + 네이티브 리스너가 브라우저 기본 동작 차단)
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (isPinching.current && e.touches.length === 2) {
-      e.preventDefault();
       const dist = getTouchDist(e.touches);
       const newScale = Math.max(1, Math.min(5, pinchStartScale.current * (dist / pinchStartDist.current)));
       setScale(newScale);
@@ -128,7 +127,6 @@ const ImageViewer = memo(function ImageViewer({
         setTranslate({ x: 0, y: 0 });
       }
     } else if (isPanning.current && e.touches.length === 1) {
-      e.preventDefault();
       const dx = e.touches[0].clientX - panStart.current.x;
       const dy = e.touches[0].clientY - panStart.current.y;
       const newT = clampTranslate(
@@ -161,18 +159,26 @@ const ImageViewer = memo(function ImageViewer({
     }
   }, [scale, goPrev, goNext]);
 
-  // PC 스크롤 줌
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const delta = e.deltaY > 0 ? -0.15 : 0.15;
-    setScale(prev => {
-      const newScale = Math.max(1, Math.min(5, prev + delta));
-      if (newScale <= 1) {
-        setTranslate({ x: 0, y: 0 });
-      }
-      return newScale;
-    });
+  // PC 스크롤 줌 (네이티브 리스너로 등록 — React onWheel은 passive라 preventDefault 불가)
+  const scaleRef = useRef(scale);
+  scaleRef.current = scale;
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const delta = e.deltaY > 0 ? -0.15 : 0.15;
+      setScale(prev => {
+        const newScale = Math.max(1, Math.min(5, prev + delta));
+        if (newScale <= 1) {
+          setTranslate({ x: 0, y: 0 });
+        }
+        return newScale;
+      });
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
   }, []);
 
   // 더블탭 줌 토글
@@ -228,7 +234,6 @@ const ImageViewer = memo(function ImageViewer({
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      onWheel={handleWheel}
     >
       {/* 컨트롤 (닫기, 다운로드, 화살표, 카운터) */}
       <div className={`transition-opacity duration-200 ${showControls && !isZoomed ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
