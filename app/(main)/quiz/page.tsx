@@ -705,15 +705,17 @@ function NewsCarousel({
   onReview: (quizId: string) => void;
   onReviewWrongOnly: (quizId: string) => void;
 }) {
-  const TOTAL = NEWS_CARDS.length; // 3
-  // visualIndex: 0=clone_last, 1~3=real cards, 4=clone_first
+  const TOTAL = NEWS_CARDS.length; // 4
+  // visualIndex: 0=clone_last, 1~4=real cards, 5=clone_first
   const [visualIndex, setVisualIndex] = useState(() => getDefaultCarouselIndex() + 1);
   const [transitionOn, setTransitionOn] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   // 카드별 래퍼 ref (클론 스크롤 동기화용)
   const cardWrapperRefs = useRef<(HTMLDivElement | null)[]>([]);
+  // 최신 퀴즈 탭 자동 이동 (최초 1회만)
+  const autoNavigatedRef = useRef(false);
 
-  // 실제 인덱스 (0~2)
+  // 실제 인덱스 (0~3)
   const realIndex = useMemo(() => {
     if (visualIndex <= 0) return TOTAL - 1;
     if (visualIndex > TOTAL) return 0;
@@ -726,6 +728,42 @@ function NewsCarousel({
       sessionStorage.setItem(QUIZ_CAROUSEL_KEY, String(realIndex));
     }
   }, [realIndex]);
+
+  // 데이터 로드 후 최신 퀴즈가 있는 탭으로 자동 이동 (sessionStorage 저장값 없을 때만)
+  useEffect(() => {
+    if (autoNavigatedRef.current) return;
+    // 아직 로딩 중이면 대기
+    if (isLoading.midterm || isLoading.final || isLoading.past || isLoading.independent) return;
+    // sessionStorage에 사용자가 직접 탭을 선택한 기록이 있으면 스킵
+    if (typeof window !== 'undefined' && sessionStorage.getItem(QUIZ_CAROUSEL_KEY) !== null) {
+      autoNavigatedRef.current = true;
+      return;
+    }
+    autoNavigatedRef.current = true;
+
+    // 각 탭의 최신 퀴즈 createdAt 비교
+    const allGroups = [
+      { index: 0, quizzes: midtermQuizzes },
+      { index: 1, quizzes: pastQuizzes },
+      { index: 2, quizzes: finalQuizzes },
+      { index: 3, quizzes: independentQuizzes },
+    ];
+    let latestTime = 0;
+    let latestIndex = getDefaultCarouselIndex(); // 날짜 기반 기본값
+    for (const group of allGroups) {
+      for (const q of group.quizzes) {
+        const t = q.createdAt instanceof Date ? q.createdAt.getTime() : 0;
+        if (t > latestTime) {
+          latestTime = t;
+          latestIndex = group.index;
+        }
+      }
+    }
+    setTransitionOn(false);
+    setVisualIndex(latestIndex + 1);
+    // 다음 프레임에서 트랜지션 복원
+    requestAnimationFrame(() => setTransitionOn(true));
+  }, [isLoading, midtermQuizzes, finalQuizzes, pastQuizzes, independentQuizzes]);
 
   // 클론 카드 스크롤을 실제 카드와 동기화
   const syncCloneScroll = useCallback(() => {

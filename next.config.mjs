@@ -18,6 +18,14 @@ const nextConfig = {
         hostname: "firebasestorage.googleapis.com",
         pathname: "/v0/b/**",
       },
+      {
+        protocol: "https",
+        hostname: "**",
+      },
+      {
+        protocol: "http",
+        hostname: "**",
+      },
     ],
   },
   // 실험적 기능
