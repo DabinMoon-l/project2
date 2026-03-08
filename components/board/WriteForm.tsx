@@ -413,12 +413,12 @@ export default function WriteForm({
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.8 }}
-                className="relative w-16 h-16"
+                className="relative h-16"
               >
                 <img
                   src={url}
                   alt={`링크 이미지 ${index + 1}`}
-                  className="w-full h-full object-cover"
+                  className="h-full w-auto object-contain rounded-sm"
                   style={{ border: '1px dashed #1A1A1A' }}
                 />
                 <button

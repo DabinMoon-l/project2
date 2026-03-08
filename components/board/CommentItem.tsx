@@ -451,8 +451,8 @@ export default function CommentItem({
                 </div>
               ))}
               {editLinkedUrls.map((url, index) => (
-                <div key={`linked-${index}`} className="relative w-16 h-16 flex-shrink-0">
-                  <img src={url} alt="" className="w-full h-full object-cover border border-dashed border-[#1A1A1A]" />
+                <div key={`linked-${index}`} className="relative h-16 flex-shrink-0">
+                  <img src={url} alt="" className="h-full w-auto object-contain rounded-sm border border-dashed border-[#1A1A1A]" />
                   <button
                     type="button"
                     onClick={() => removeEditLinkedImage(index)}
