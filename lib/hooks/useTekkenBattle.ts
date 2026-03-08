@@ -159,33 +159,17 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     };
   }, [activeBattleId, userId]);
 
-  // 연타 상대 탭 RTDB 리스너
+  // 연타 상대 탭: battle 상태에서 직접 추출 (별도 RTDB 리스너 제거 → flickering 방지)
   useEffect(() => {
-    if (!battle?.mash || !battleIdRef.current || !userId) {
+    if (!battle?.mash?.taps || !userId) {
       setOpponentMashTaps(0);
-      if (mashTapUnsubRef.current) {
-        mashTapUnsubRef.current();
-        mashTapUnsubRef.current = null;
-      }
       return;
     }
-
-    // 상대 ID 찾기
     const playerIds = Object.keys(battle.players || {});
-    const opponentId = playerIds.find((id) => id !== userId);
-    if (!opponentId) return;
-
-    const opTapsRef = ref(getRtdb(), `tekken/battles/${battleIdRef.current}/mash/taps/${opponentId}`);
-    const unsub = onValue(opTapsRef, (snapshot) => {
-      setOpponentMashTaps(snapshot.val() || 0);
-    });
-    mashTapUnsubRef.current = unsub;
-
-    return () => {
-      unsub();
-      mashTapUnsubRef.current = null;
-    };
-  }, [battle?.mash?.mashId, userId]);
+    const opId = playerIds.find((id) => id !== userId);
+    if (!opId) return;
+    setOpponentMashTaps(battle.mash.taps[opId] || 0);
+  }, [battle?.mash?.taps, userId]);
 
   // 배틀/문제 타이머 — 초 단위 변경 시만 setState (리렌더 75% 감소)
   const prevQSecRef = useRef(-1);

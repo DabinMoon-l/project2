@@ -89,7 +89,16 @@ export default function RankingSection({ overrideCourseId }: { overrideCourseId?
     loadRankings();
   }, [userCourseId, profile, classType]);
 
-  const teamRankLabel = loading ? '-' : teamRank > 0 ? `${teamRank}${ordinalSuffix(teamRank)}` : '-';
+  // 테스트 계정은 랭킹에서 제외 (기능은 정상 사용, 랭킹만 "-")
+  const testAccountNicknames: Record<string, string[]> = {
+    biology: ['빠샤'],
+    microbiology: ['test'],
+  };
+  const isTestAccount = userCourseId
+    ? (testAccountNicknames[userCourseId] || []).includes(profile?.nickname || '')
+    : false;
+
+  const teamRankLabel = loading ? '-' : isTestAccount ? '-' : teamRank > 0 ? `${teamRank}${ordinalSuffix(teamRank)}` : '-';
 
   return (
     <>
@@ -123,9 +132,9 @@ export default function RankingSection({ overrideCourseId }: { overrideCourseId?
             <span className="text-[10px] font-bold text-white/50 tracking-widest">MY RANK</span>
             <div className="flex items-baseline justify-center">
               <span className={`text-4xl font-black text-white leading-tight ${loading ? 'animate-pulse' : ''}`}>
-                {loading ? '-' : (personalRank || '-')}
+                {loading ? '-' : isTestAccount ? '-' : (personalRank || '-')}
               </span>
-              {!loading && (
+              {!loading && !isTestAccount && (
                 <span className="text-base font-bold text-white/50 ml-0.5">
                   /{totalStudents}
                 </span>
