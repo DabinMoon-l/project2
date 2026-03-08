@@ -1572,7 +1572,7 @@ function ReviewPageContent() {
                           // 전체 복습 시작
                           handleStartReviewByQuizId(quiz.id);
                         }}
-                        onReviewWrongOnly={quiz.myScore !== undefined && quiz.myScore >= quiz.totalQuestions ? undefined : () => {
+                        onReviewWrongOnly={quiz.myScore === 100 ? undefined : () => {
                           // 오답만 복습 시작
                           handleStartReviewWrongOnlyByQuizId(quiz.id);
                         }}
