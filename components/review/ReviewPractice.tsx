@@ -15,19 +15,7 @@ import ShortAnswer from '@/components/quiz/ShortAnswer';
 import { BottomSheet, useExpToast } from '@/components/common';
 import ExitConfirmModal from '@/components/quiz/ExitConfirmModal';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
-
-/** 피드백 타입 */
-type FeedbackType = 'unclear' | 'wrong' | 'typo' | 'other' | 'praise' | 'wantmore';
-
-/** 피드백 유형 옵션 */
-const FEEDBACK_TYPES: { type: FeedbackType; label: string; positive?: boolean }[] = [
-  { type: 'praise', label: '문제가 좋아요!', positive: true },
-  { type: 'wantmore', label: '더 풀고 싶어요', positive: true },
-  { type: 'unclear', label: '문제가 이해가 안 돼요' },
-  { type: 'wrong', label: '정답이 틀린 것 같아요' },
-  { type: 'typo', label: '오타가 있어요' },
-  { type: 'other', label: '기타 의견' },
-];
+import { type FeedbackType, FEEDBACK_TYPES } from '@/components/review/types';
 
 interface ReviewPracticeProps {
   /** 복습할 문제 목록 */
