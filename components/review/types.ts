@@ -29,7 +29,7 @@ export interface CompletedQuizData {
 }
 
 /** 필터 타입 */
-export type ReviewFilter = 'library' | 'wrong' | 'bookmark' | 'custom';
+export type ReviewFilter = 'library' | 'solved' | 'wrong' | 'bookmark' | 'custom';
 
 /** 필터 옵션 */
 export const FILTER_OPTIONS: { value: ReviewFilter; line1: string; line2?: string }[] = [
@@ -75,4 +75,30 @@ export interface QuizDetails {
   difficulty?: 'easy' | 'normal' | 'hard';
   chapterId?: string;
   creatorNickname?: string;
+}
+
+/** 피드백 타입 */
+export type FeedbackType = 'unclear' | 'wrong' | 'typo' | 'other' | 'praise' | 'wantmore';
+
+/** 피드백 유형 옵션 */
+export const FEEDBACK_TYPES: { type: FeedbackType; label: string; positive?: boolean }[] = [
+  { type: 'praise', label: '문제가 좋아요!', positive: true },
+  { type: 'wantmore', label: '더 풀고 싶어요', positive: true },
+  { type: 'unclear', label: '문제가 이해가 안 돼요' },
+  { type: 'wrong', label: '정답이 틀린 것 같아요' },
+  { type: 'typo', label: '오타가 있어요' },
+  { type: 'other', label: '기타 의견' },
+];
+
+/** 화면 표시용 아이템 (단일 문제 또는 결합형 그룹) */
+export interface DisplayItem {
+  type: 'single' | 'combined_group';
+  /** 단일 문제 */
+  item?: import('@/lib/hooks/useReview').ReviewItem;
+  /** 결합형 그룹 문제들 */
+  items?: import('@/lib/hooks/useReview').ReviewItem[];
+  /** 결합형 그룹 ID */
+  combinedGroupId?: string;
+  /** 화면 표시 번호 */
+  displayNumber: number;
 }
