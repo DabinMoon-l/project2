@@ -697,8 +697,8 @@ const SingleQuizNewsCard = memo(function SingleQuizNewsCard({
     <div className="w-full h-full border border-[#999] bg-[#1A1A1A] flex flex-col overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.3)] rounded-xl">
       {/* 헤더 */}
       <div className="bg-[#1A1A1A] text-[#F5F0E8] px-4 py-1.5 text-center flex-shrink-0">
+        <p className="text-[6px] tracking-[0.2em] mb-0.5 opacity-60">━━━━━━━━━━━━━━━━</p>
         <h1 className="font-serif text-lg font-black tracking-tight">SPECIAL QUIZ</h1>
-        <p className="text-[9px] tracking-widest">Professor&apos;s Pick</p>
       </div>
       <div className="flex-1 min-h-0 overflow-hidden" data-scroll-inner>
         <NewsArticle
@@ -1815,8 +1815,9 @@ function QuizListPageContent() {
       const independent: QuizCardData[] = [];
 
       snapshot.forEach((doc) => {
-        // 비공개(isPublished: false) 퀴즈 필터링
-        if (doc.data().isPublished === false) return;
+        // 비공개 퀴즈 필터링 (isPublished 또는 isPublic)
+        const data = doc.data();
+        if (data.isPublished === false || data.isPublic === false) return;
         const quiz = parseQuizData(doc, user.uid);
         if (quiz.type === 'midterm') midterm.push(quiz);
         else if (quiz.type === 'final') final_.push(quiz);
