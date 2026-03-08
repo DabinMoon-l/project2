@@ -202,7 +202,6 @@ export default function TekkenBattleOverlay({
                   onSubmit={handleMashSubmit}
                   myColor={tekken.battle?.colorAssignment?.[userId] || 'red'}
                   isOpponentBot={isOpponentBot}
-                  writeBotTap={tekken.writeBotTap}
                 />
               )}
 

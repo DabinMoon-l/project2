@@ -31,8 +31,7 @@ interface TekkenMashMinigameProps {
   writeMashTap: (count: number) => void;
   onSubmit: (taps: number) => Promise<void>;
   myColor: 'red' | 'blue';
-  isOpponentBot?: boolean; // 봇이면 탭 시뮬레이션
-  writeBotTap?: (count: number) => void; // 봇 탭 RTDB 쓰기
+  isOpponentBot?: boolean; // 봇이면 로컬 시뮬레이션
 }
 
 const STEP = BATTLE_CONFIG.MASH_STEP_PER_TAP;
@@ -51,9 +50,9 @@ export default function TekkenMashMinigame({
   onSubmit,
   myColor,
   isOpponentBot = false,
-  writeBotTap,
 }: TekkenMashMinigameProps) {
   const [myTaps, setMyTaps] = useState(0);
+  const [botLocalTaps, setBotLocalTaps] = useState(0); // 봇 로컬 시뮬레이션 (RTDB 미사용)
   const [submitted, setSubmitted] = useState(false);
   const myTapsRef = useRef(0);
   const lastWriteRef = useRef(0);
@@ -62,8 +61,11 @@ export default function TekkenMashMinigame({
 
   const opColor = myColor === 'red' ? 'blue' : 'red';
 
+  // 봇이면 로컬 탭, 실제 플레이어면 RTDB 값 사용
+  const effectiveOpponentTaps = isOpponentBot ? botLocalTaps : opponentMashTaps;
+
   // 게이지: 50 + (내 탭 - 상대 탭) × STEP
-  const myPercent = Math.min(100, Math.max(0, 50 + (myTaps - opponentMashTaps) * STEP));
+  const myPercent = Math.min(100, Math.max(0, 50 + (myTaps - effectiveOpponentTaps) * STEP));
 
   // 결과 제출 — CF 실패 시 자동 재시도 (최대 3회)
   const handleSubmitResult = useCallback(async () => {
@@ -85,21 +87,20 @@ export default function TekkenMashMinigame({
     }
   }, [writeMashTap, onSubmit]);
 
-  // 봇 탭 실시간 시뮬레이션 (3~5탭/초, 서버 로직과 동일)
+  // 봇 탭 로컬 시뮬레이션 (RTDB 미사용 → 리렌더 부하 제거)
+  // 서버 submitMashResult CF가 opTaps=0일 때 경과시간 기반으로 자동 계산
   useEffect(() => {
-    if (!isOpponentBot || !writeBotTap) return;
-    const botTapsPerSec = 3 + Math.random() * 2; // 서버와 동일한 범위
+    if (!isOpponentBot) return;
+    const botTapsPerSec = 3 + Math.random() * 2;
     const intervalMs = Math.floor(1000 / botTapsPerSec);
-    let botCount = 0;
 
     const timer = setInterval(() => {
       if (submittedRef.current) return;
-      botCount++;
-      writeBotTap(botCount);
+      setBotLocalTaps(prev => prev + 1);
     }, intervalMs);
 
     return () => clearInterval(timer);
-  }, [isOpponentBot, writeBotTap]);
+  }, [isOpponentBot]);
 
   // 안전 타임아웃 (UI에 표시 안 함, 30초 안전장치)
   useEffect(() => {
@@ -190,7 +191,7 @@ export default function TekkenMashMinigame({
         {/* 탭 수 표시 */}
         <div className="flex justify-between mt-1.5">
           <span className={`text-sm font-bold ${COLORS[myColor].text}`}>{myTaps}탭</span>
-          <span className={`text-sm font-bold ${COLORS[opColor].text}`}>{opponentMashTaps}탭</span>
+          <span className={`text-sm font-bold ${COLORS[opColor].text}`}>{effectiveOpponentTaps}탭</span>
         </div>
       </div>
 

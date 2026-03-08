@@ -35,7 +35,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `components/common/ProfileDrawer.tsx` | 1,819 | 프로필 드로어 |
 | `lib/hooks/useReview.ts` | 2,005 | 복습 데이터 훅 |
 | `lib/hooks/useBoard.ts` | 1,800 | 게시판 데이터 훅 |
-| `functions/src/styledQuizGenerator.ts` | 1,781 | AI 스타일 문제 생성 |
+| `functions/src/styledQuizGenerator.ts` | 2,042 | AI 스타일 문제 생성 |
 | `functions/src/studentAuth.ts` | 1,210 | 학생 인증/가입 |
 
 ### 컴포넌트 디렉토리별 규모
@@ -63,7 +63,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 | 파일 | 줄 수 | 역할 |
 |------|-------|------|
-| `styledQuizGenerator.ts` | 1,781 | 교수 스타일 기반 AI 문제 생성 |
+| `styledQuizGenerator.ts` | 2,042 | 교수 스타일 기반 AI 문제 생성 |
 | `studentAuth.ts` | 1,210 | 학번 인증, 회원가입, 교수 등록 |
 | `questionParser.ts` | 1,034 | Gemini 응답 파싱 (v1) |
 | `board.ts` | 992 | 게시판 CRUD + 콩콩이 자동답변 |
@@ -160,7 +160,7 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 - **서버 데이터**: Firestore `onSnapshot`으로 실시간 동기화 (커스텀 훅)
 - **로컬 상태**: 컴포넌트 `useState`/`useReducer`
 - **인증 상태**: Firebase `onAuthStateChanged` → `useAuth()` 훅
-- **캐시**: sessionStorage SWR (랭킹 2분/10분 TTL, 레이더 정규화 5분 TTL)
+- **캐시**: sessionStorage SWR (랭킹 2분/10분 TTL, 레이더 정규화 2분/10분 TTL)
 
 ## 주요 기능 상세
 
@@ -303,7 +303,7 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 
 ## 교수 통계 시스템 (상세)
 
-### 6축 레이더 차트 — `computeRadarNorm.ts` (5분마다 사전 계산)
+### 6축 레이더 차트 — `computeRadarNorm.ts` (10분마다 사전 계산)
 
 | 축 | 이름 | 계산 방식 | 스케일 |
 |----|------|----------|--------|
