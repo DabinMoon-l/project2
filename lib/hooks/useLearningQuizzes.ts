@@ -46,8 +46,6 @@ export interface LearningQuiz {
   subjectiveCount?: number;
   /** 퀴즈 생성자 ID */
   creatorId?: string;
-  /** 삭제된 퀴즈 여부 (quizzes 문서가 없지만 completion 기록 존재) */
-  isDeleted?: boolean;
 }
 
 /**

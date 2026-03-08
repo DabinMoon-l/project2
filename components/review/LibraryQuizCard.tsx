@@ -22,7 +22,7 @@ export default function LibraryQuizCard({
   isSelectMode = false,
   isSelected = false,
 }: {
-  quiz: { id: string; title: string; questionCount: number; score: number; totalQuestions: number; tags?: string[]; myScore?: number; myFirstReviewScore?: number; isPublic?: boolean; isDeleted?: boolean };
+  quiz: { id: string; title: string; questionCount: number; score: number; totalQuestions: number; tags?: string[]; myScore?: number; myFirstReviewScore?: number; isPublic?: boolean };
   onCardClick: () => void;
   onDetails: () => void;
   onReview: () => void;
@@ -107,7 +107,7 @@ export default function LibraryQuizCard({
       <div className="relative z-10 p-3 bg-[#F5F0E8]/60">
         {/* 제목 (2줄 고정 높이) */}
         <div className="h-[36px] mb-1.5">
-          <h3 className={`font-bold text-sm line-clamp-2 leading-snug pr-8 ${quiz.isDeleted ? 'text-[#5C5C5C]' : 'text-[#1A1A1A]'}`}>
+          <h3 className="font-bold text-sm line-clamp-2 text-[#1A1A1A] leading-snug pr-8">
             {quiz.title}
           </h3>
         </div>
