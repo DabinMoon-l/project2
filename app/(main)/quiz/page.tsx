@@ -221,7 +221,7 @@ const NewsArticle = memo(function NewsArticle({
 }) {
   const isCompleted = quiz.isCompleted && !quiz.hasUpdate;
   const hasUpdate = quiz.isCompleted && quiz.hasUpdate;
-  const isPerfectScore = quiz.myScore !== undefined && quiz.myScore >= quiz.questionCount;
+  const isPerfectScore = quiz.myScore === 100;
   const [showReviewMenu, setShowReviewMenu] = useState(false);
   const reviewMenuRef = useRef<HTMLDivElement>(null);
 
@@ -500,7 +500,7 @@ const PastExamNewsCard = memo(function PastExamNewsCard({
   ) || null;
 
   const isCompleted = filteredQuiz?.isCompleted && !filteredQuiz?.hasUpdate;
-  const isPerfectScore = filteredQuiz && filteredQuiz.myScore !== undefined && filteredQuiz.myScore >= filteredQuiz.questionCount;
+  const isPerfectScore = filteredQuiz?.myScore === 100;
 
   return (
     <div className="w-full h-full border border-[#999] bg-[#1A1A1A] flex flex-col overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.3)] rounded-xl">
@@ -2286,7 +2286,7 @@ function QuizListPageContent() {
                       onToggleBookmark={() => toggleBookmark(quiz.id)}
                       onUpdate={() => handleOpenUpdateModal(quiz)}
                       onReview={() => router.push(`/review/library/${quiz.id}?from=quiz&autoStart=all`)}
-                      onReviewWrongOnly={quiz.myScore !== undefined && quiz.myScore >= quiz.questionCount ? undefined : () => router.push(`/review/library/${quiz.id}?from=quiz&autoStart=wrongOnly`)}
+                      onReviewWrongOnly={quiz.myScore === 100 ? undefined : () => router.push(`/review/library/${quiz.id}?from=quiz&autoStart=wrongOnly`)}
                     />
                   </motion.div>
                 ))}
