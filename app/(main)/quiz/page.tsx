@@ -39,7 +39,7 @@ import { useHideNav } from '@/lib/hooks/useHideNav';
 // 타입 정의
 // ============================================================
 
-type NewsCardType = 'midterm' | 'final' | 'past';
+type NewsCardType = 'midterm' | 'final' | 'past' | 'independent';
 
 // 교수 퀴즈 타입 — 제작자를 "교수님"으로 표시
 const PROFESSOR_QUIZ_TYPES = new Set(['midterm', 'final', 'past', 'professor', 'professor-ai', 'independent']);
@@ -83,6 +83,7 @@ const NEWS_CARDS: { type: NewsCardType; title: string; subtitle: string }[] = [
   { type: 'midterm', title: 'MIDTERM PREP', subtitle: 'Vol.1 · Midterm Edition' },
   { type: 'past', title: 'PAST EXAM', subtitle: 'Official Archive' },
   { type: 'final', title: 'FINAL PREP', subtitle: 'Vol.2 · Final Edition' },
+  { type: 'independent', title: 'INDEPENDENT', subtitle: 'Special Quiz' },
 ];
 
 // 캐러셀 위치 저장 키
@@ -90,7 +91,7 @@ const QUIZ_CAROUSEL_KEY = 'quiz-carousel-index';
 // 캐러셀 내 스크롤 위치 저장 키 (타입별)
 const QUIZ_SCROLL_KEY = (type: string) => `quiz-scroll-${type}`;
 
-// getDefaultQuizTab → 캐러셀 인덱스 매핑 (midterm=0, past=1, final=2)
+// getDefaultQuizTab → 캐러셀 인덱스 매핑 (midterm=0, past=1, final=2, independent=3)
 function getDefaultCarouselIndex(): number {
   if (typeof window !== 'undefined') {
     const saved = sessionStorage.getItem(QUIZ_CAROUSEL_KEY);
@@ -679,6 +680,7 @@ function NewsCarousel({
   midtermQuizzes,
   finalQuizzes,
   pastQuizzes,
+  independentQuizzes,
   pastExamOptions,
   selectedPastExam,
   onSelectPastExam,
@@ -692,10 +694,11 @@ function NewsCarousel({
   midtermQuizzes: QuizCardData[];
   finalQuizzes: QuizCardData[];
   pastQuizzes: QuizCardData[];
+  independentQuizzes: QuizCardData[];
   pastExamOptions: PastExamOption[];
   selectedPastExam: string;
   onSelectPastExam: (value: string) => void;
-  isLoading: { midterm: boolean; final: boolean; past: boolean };
+  isLoading: { midterm: boolean; final: boolean; past: boolean; independent: boolean };
   onStart: (quizId: string) => void;
   onUpdate: (quiz: QuizCardData) => void;
   onShowDetails?: (quiz: QuizCardData) => void;
@@ -820,9 +823,9 @@ function NewsCarousel({
     [TOTAL]
   );
 
-  // 순서: midterm(0), past(1), final(2)
-  const quizzesByType = [midtermQuizzes, pastQuizzes, finalQuizzes];
-  const loadingByType = [isLoading.midterm, isLoading.past, isLoading.final];
+  // 순서: midterm(0), past(1), final(2), independent(3)
+  const quizzesByType = [midtermQuizzes, pastQuizzes, finalQuizzes, independentQuizzes];
+  const loadingByType = [isLoading.midterm, isLoading.past, isLoading.final, isLoading.independent];
 
   const CARD_WIDTH_PERCENT = 82;
   const SIDE_PEEK_PERCENT = (100 - CARD_WIDTH_PERCENT) / 2;
@@ -1483,6 +1486,7 @@ function QuizListPageContent() {
   const [midtermQuizzes, setMidtermQuizzes] = useState<QuizCardData[]>([]);
   const [finalQuizzes, setFinalQuizzes] = useState<QuizCardData[]>([]);
   const [pastQuizzes, setPastQuizzes] = useState<QuizCardData[]>([]);
+  const [independentQuizzes, setIndependentQuizzes] = useState<QuizCardData[]>([]);
   const [customQuizzes, setCustomQuizzes] = useState<QuizCardData[]>([]);
 
   // quiz_completions 기반 완료 데이터 (useRef로 구독 재시작 방지)
@@ -1493,6 +1497,7 @@ function QuizListPageContent() {
     midterm: true,
     final: true,
     past: true,
+    independent: true,
     custom: true,
   });
 
@@ -1501,6 +1506,7 @@ function QuizListPageContent() {
     midterm: isLoading.midterm || updatesLoading,
     final: isLoading.final || updatesLoading,
     past: isLoading.past || updatesLoading,
+    independent: isLoading.independent || updatesLoading,
     custom: isLoading.custom || updatesLoading,
   }), [isLoading, updatesLoading]);
 
@@ -1586,13 +1592,14 @@ function QuizListPageContent() {
   }, []);
 
   // 단일 useMemo — completionVer 변경 시 1회 정렬
-  const { midtermQuizzesWithUpdate, finalQuizzesWithUpdate, pastQuizzesWithUpdate, customQuizzesWithUpdate } = useMemo(() => ({
+  const { midtermQuizzesWithUpdate, finalQuizzesWithUpdate, pastQuizzesWithUpdate, independentQuizzesWithUpdate, customQuizzesWithUpdate } = useMemo(() => ({
     midtermQuizzesWithUpdate: applyCompletionAndSort(midtermQuizzes),
     finalQuizzesWithUpdate: applyCompletionAndSort(finalQuizzes),
     pastQuizzesWithUpdate: applyCompletionAndSort(pastQuizzes),
+    independentQuizzesWithUpdate: applyCompletionAndSort(independentQuizzes),
     customQuizzesWithUpdate: applyCompletionAndSort(customQuizzes),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [midtermQuizzes, finalQuizzes, pastQuizzes, customQuizzes, completionVer, applyCompletionAndSort]);
+  }), [midtermQuizzes, finalQuizzes, pastQuizzes, independentQuizzes, customQuizzes, completionVer, applyCompletionAndSort]);
 
   // 태그 + 반별 필터링된 자작 퀴즈
   const filteredCustomQuizzes = useMemo(() => {
@@ -1678,7 +1685,7 @@ function QuizListPageContent() {
   useEffect(() => {
     if (!user || !userCourseId) return;
 
-    setIsLoading((prev) => ({ ...prev, midterm: true, final: true, past: true }));
+    setIsLoading((prev) => ({ ...prev, midterm: true, final: true, past: true, independent: true }));
 
     const q = query(
       collection(db, 'quizzes'),
@@ -1690,23 +1697,26 @@ function QuizListPageContent() {
       const midterm: QuizCardData[] = [];
       const final_: QuizCardData[] = [];
       const past: QuizCardData[] = [];
+      const independent: QuizCardData[] = [];
 
       snapshot.forEach((doc) => {
         // 비공개(isPublished: false) 퀴즈 필터링
         if (doc.data().isPublished === false) return;
         const quiz = parseQuizData(doc, user.uid);
-        if (quiz.type === 'midterm' || quiz.type === 'professor' || quiz.type === 'professor-ai' || quiz.type === 'independent') midterm.push(quiz);
+        if (quiz.type === 'midterm') midterm.push(quiz);
         else if (quiz.type === 'final') final_.push(quiz);
         else if (quiz.type === 'past') past.push(quiz);
+        else if (quiz.type === 'independent' || quiz.type === 'professor' || quiz.type === 'professor-ai') independent.push(quiz);
       });
 
       setMidtermQuizzes(midterm);
       setFinalQuizzes(final_);
       setPastQuizzes(past);
-      setIsLoading((prev) => ({ ...prev, midterm: false, final: false, past: false }));
+      setIndependentQuizzes(independent);
+      setIsLoading((prev) => ({ ...prev, midterm: false, final: false, past: false, independent: false }));
     }, (err) => {
       console.error('퀴즈 목록 구독 에러:', err);
-      setIsLoading((prev) => ({ ...prev, midterm: false, final: false, past: false }));
+      setIsLoading((prev) => ({ ...prev, midterm: false, final: false, past: false, independent: false }));
     });
 
     return () => unsubscribe();
@@ -2014,6 +2024,7 @@ function QuizListPageContent() {
           midtermQuizzes={midtermQuizzesWithUpdate}
           finalQuizzes={finalQuizzesWithUpdate}
           pastQuizzes={pastQuizzesWithUpdate}
+          independentQuizzes={independentQuizzesWithUpdate}
           pastExamOptions={pastExamOptions}
           selectedPastExam={selectedPastExam}
           onSelectPastExam={setSelectedPastExam}
