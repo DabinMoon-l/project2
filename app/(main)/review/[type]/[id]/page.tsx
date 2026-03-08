@@ -33,6 +33,7 @@ import { useHideNav } from '@/lib/hooks/useHideNav';
 import { type FeedbackType, type DisplayItem, type ReviewFilter } from '@/components/review/types';
 import { KOREAN_LABELS, parseQuestionId, sortByQuestionId, createDisplayItems } from '@/lib/utils/reviewQuestionUtils';
 import QuestionCard from '@/components/review/QuestionCard';
+import AddQuestionsView from '@/components/review/AddQuestionsView';
 
 /**
  * 폴더 상세 페이지
@@ -103,11 +104,6 @@ export default function FolderDetailPage() {
   const [practiceMode, setPracticeMode] = useState<'all' | 'wrongOnly' | null>(null); // 복습 모드 (첫복습점수 저장용)
   const [isAddMode, setIsAddMode] = useState(false);
   const [showEmptyMessage, setShowEmptyMessage] = useState(false);
-  const [addSelectedIds, setAddSelectedIds] = useState<Set<string>>(new Set());
-  // 결합형 문제 아코디언 펼침 상태
-  const [expandedCombinedGroups, setExpandedCombinedGroups] = useState<Set<string>>(new Set());
-  // 바텀시트용 상태
-  const [selectedQuizForAdd, setSelectedQuizForAdd] = useState<{ quizId: string; quizTitle: string } | null>(null);
 
   // 폴더/서재 삭제 모달 상태
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -988,84 +984,6 @@ export default function FolderDetailPage() {
     }
   }, [autoStart, loading, questions, wrongItems, folderType, folderId]);
 
-  // 선택된 퀴즈의 문제 목록 가져오기
-  const getSelectedQuizItems = () => {
-    if (!selectedQuizForAdd) return [];
-    const items = solvedItems.filter(item => item.quizId === selectedQuizForAdd.quizId);
-    return sortByQuestionId(items);
-  };
-
-  // 이미 폴더에 추가된 문제 키 목록 (quizId:questionId 조합)
-  const alreadyAddedQuestionKeys = useMemo(() => {
-    if (folderType !== 'custom' || !customFolder) return new Set<string>();
-    return new Set(customFolder.questions.map((q: CustomFolderQuestion) => `${q.quizId}:${q.questionId}`));
-  }, [folderType, customFolder]);
-
-  // 문제 추가 선택/해제 (quizId:questionId 조합으로 중복 방지)
-  // 결합형 문제는 모든 하위 문제를 함께 선택/해제
-  const handleAddSelect = (item: ReviewItem) => {
-    const key = `${item.quizId}:${item.questionId}`;
-    // 이미 폴더에 있는 문제는 선택 불가
-    if (alreadyAddedQuestionKeys.has(key)) return;
-
-    const newSelected = new Set(addSelectedIds);
-
-    // 결합형 문제인 경우: 같은 그룹의 모든 하위 문제를 함께 선택/해제
-    if (item.combinedGroupId) {
-      // 같은 combinedGroupId를 가진 모든 문제 찾기
-      const groupItems = solvedItems.filter(
-        i => i.combinedGroupId === item.combinedGroupId && i.quizId === item.quizId
-      );
-      const groupKeys = groupItems.map(i => `${i.quizId}:${i.questionId}`);
-
-      // 하나라도 선택되어 있으면 전체 해제, 아니면 전체 선택
-      const anySelected = groupKeys.some(k => newSelected.has(k));
-      if (anySelected) {
-        groupKeys.forEach(k => newSelected.delete(k));
-      } else {
-        // 이미 폴더에 있지 않은 것만 선택
-        groupKeys.forEach(k => {
-          if (!alreadyAddedQuestionKeys.has(k)) {
-            newSelected.add(k);
-          }
-        });
-      }
-    } else {
-      // 일반 문제: 개별 선택/해제
-      if (newSelected.has(key)) {
-        newSelected.delete(key);
-      } else {
-        newSelected.add(key);
-      }
-    }
-    setAddSelectedIds(newSelected);
-  };
-
-  // 선택된 문제의 실제 수 계산 (결합형은 1문제로 계산)
-  const actualSelectedCount = useMemo(() => {
-    if (addSelectedIds.size === 0) return 0;
-    const seenCombinedGroups = new Set<string>();
-    let count = 0;
-    for (const key of addSelectedIds) {
-      const colonIndex = key.indexOf(':');
-      if (colonIndex === -1) continue;
-      const quizId = key.substring(0, colonIndex);
-      const questionId = key.substring(colonIndex + 1);
-      const item = solvedItems.find(i => i.questionId === questionId && i.quizId === quizId);
-      if (item) {
-        if (item.combinedGroupId) {
-          if (!seenCombinedGroups.has(item.combinedGroupId)) {
-            seenCombinedGroups.add(item.combinedGroupId);
-            count++;
-          }
-        } else {
-          count++;
-        }
-      }
-    }
-    return count;
-  }, [addSelectedIds, solvedItems]);
-
   // 선택된 문제들 삭제
   const handleDeleteSelectedQuestions = async () => {
     if (selectedIds.size === 0) return;
@@ -1101,12 +1019,10 @@ export default function FolderDetailPage() {
   };
 
   // 문제 추가 확정
-  const handleAddQuestions = async () => {
-    if (actualSelectedCount === 0) return;
+  const handleAddQuestions = async (selectedKeys: string[]) => {
+    if (selectedKeys.length === 0) return;
 
     try {
-      // 선택된 키(quizId:questionId) 기준으로 문제 찾기
-      const selectedKeys = Array.from(addSelectedIds);
       const uniqueItems: ReviewItem[] = [];
       const seenKeys = new Set<string>();
 
@@ -1136,10 +1052,6 @@ export default function FolderDetailPage() {
 
       // 추가된 문제 UI 업데이트
       setCustomQuestions(prev => [...prev, ...uniqueItems]);
-
-      // 바텀시트 닫고 선택 초기화
-      setSelectedQuizForAdd(null);
-      setAddSelectedIds(new Set());
 
       // 실제 문제 수 계산 (결합형은 1문제로 계산)
       const combinedGroups = new Set<string>();
@@ -1307,6 +1219,140 @@ export default function FolderDetailPage() {
     });
   };
 
+  // 복습 완료 핸들러
+  const handlePracticeComplete = useCallback(async (results: PracticeResult[]) => {
+    // 복습 완료된 문제 reviewCount 증가 (복습력 측정용)
+    for (const r of results) {
+      try { await markAsReviewed(r.reviewId); } catch { /* 개별 실패 무시 */ }
+    }
+
+    // 수정된 문제 재풀이 완료 시:
+    // 1. quizResults에 새 응답 저장 (통계 반영용)
+    // 2. reviews.quizUpdatedAt 업데이트 (뱃지 제거용)
+    if (folderId && user && folderType !== 'custom') {
+      try {
+        const quizDoc = await getDoc(doc(db, 'quizzes', folderId));
+        if (quizDoc.exists()) {
+          const quizData = quizDoc.data();
+          const currentQuizUpdatedAt = quizData.updatedAt || quizData.createdAt || null;
+
+          // 1. quizResults에 새 응답 저장 (통계에 반영)
+          if (results.length > 0) {
+            const existingResultQuery = query(
+              collection(db, 'quizResults'),
+              where('userId', '==', user.uid),
+              where('quizId', '==', folderId)
+            );
+            const existingResults = await getDocs(existingResultQuery);
+
+            const newQuestionScores: Record<string, {
+              isCorrect: boolean;
+              userAnswer: string;
+              answeredAt: any;
+            }> = {};
+
+            results.forEach((result) => {
+              newQuestionScores[result.questionId] = {
+                isCorrect: result.isCorrect,
+                userAnswer: result.userAnswer,
+                answeredAt: serverTimestamp(),
+              };
+            });
+
+            if (!existingResults.empty) {
+              const existingDoc = existingResults.docs[0];
+              const existingData = existingDoc.data();
+              const existingScores = existingData.questionScores || {};
+              const mergedScores = { ...existingScores, ...newQuestionScores };
+              const newCorrectCount = Object.values(mergedScores).filter(
+                (s: any) => s.isCorrect
+              ).length;
+              const totalCount = quizData.questions?.length || Object.keys(mergedScores).length;
+              const newScore = Math.round((newCorrectCount / totalCount) * 100);
+
+              await updateDoc(existingDoc.ref, {
+                questionScores: mergedScores,
+                correctCount: newCorrectCount,
+                score: newScore,
+                isUpdate: true,
+                updatedAt: serverTimestamp(),
+              });
+            } else {
+              const correctCount = results.filter(r => r.isCorrect).length;
+              const totalCount = quizData.questions?.length || results.length;
+              const score = Math.round((correctCount / totalCount) * 100);
+
+              await addDoc(collection(db, 'quizResults'), {
+                userId: user.uid,
+                quizId: folderId,
+                quizTitle: quizData.title || '퀴즈',
+                quizCreatorId: quizData.creatorId || null,
+                score,
+                correctCount,
+                totalCount,
+                earnedExp: 0,
+                questionScores: newQuestionScores,
+                isUpdate: true,
+                courseId: quizData.courseId || null,
+                classId: userClassId || null,
+                createdAt: serverTimestamp(),
+              });
+            }
+          }
+
+          // 2. 첫 복습 점수 저장 (전체 복습 모드에서만, 최초 1회)
+          if (practiceMode === 'all' && results.length > 0) {
+            const existingReviewScore = quizData.userFirstReviewScores?.[user.uid];
+            if (existingReviewScore === undefined) {
+              const correctCount = results.filter(r => r.isCorrect).length;
+              const totalCount = quizData.questions?.length || results.length;
+              const reviewScore = Math.round((correctCount / totalCount) * 100);
+              await updateDoc(doc(db, 'quizzes', folderId), {
+                [`userFirstReviewScores.${user.uid}`]: reviewScore,
+              });
+            }
+          }
+
+          // 3. 복습 연습 EXP 지급 — 서버사이드 CF 호출
+          if (results.length > 0) {
+            const correctCount = results.filter(r => r.isCorrect).length;
+            const totalCount = quizData.questions?.length || results.length;
+            const reviewScore = Math.round((correctCount / totalCount) * 100);
+
+            const recordReviewPracticeFn = httpsCallable(functions, 'recordReviewPractice');
+            await recordReviewPracticeFn({
+              quizId: folderId,
+              correctCount,
+              totalCount,
+              score: reviewScore,
+            });
+          }
+
+          // 4. 해당 퀴즈의 모든 reviews 문서 업데이트 (뱃지 제거)
+          const reviewsQuery = query(
+            collection(db, 'reviews'),
+            where('userId', '==', user.uid),
+            where('quizId', '==', folderId)
+          );
+          const reviewsSnapshot = await getDocs(reviewsQuery);
+
+          for (const reviewDoc of reviewsSnapshot.docs) {
+            await updateDoc(reviewDoc.ref, { quizUpdatedAt: currentQuizUpdatedAt });
+          }
+        }
+      } catch (err) {
+        console.error('복습 결과 저장 실패:', err);
+      }
+    }
+
+    if (autoStart) {
+      router.back();
+    } else {
+      setPracticeItems(null);
+      setPracticeMode(null);
+    }
+  }, [folderId, user, folderType, practiceMode, autoStart, userClassId, markAsReviewed, router]);
+
   // autoStart 모드: 데이터 로딩 중이면 로딩 스피너만 표시 (폴더 상세 안 보여줌)
   if (autoStart && !practiceItems && (loading || questions.length === 0)) {
     return (
@@ -1325,150 +1371,7 @@ export default function FolderDetailPage() {
       <ReviewPractice
         items={practiceItems}
         quizTitle={folderTitle}
-        onComplete={async (results: PracticeResult[]) => {
-          // 복습 완료된 문제 reviewCount 증가 (복습력 측정용)
-          for (const r of results) {
-            try { await markAsReviewed(r.reviewId); } catch { /* 개별 실패 무시 */ }
-          }
-
-          // 수정된 문제 재풀이 완료 시:
-          // 1. quizResults에 새 응답 저장 (통계 반영용)
-          // 2. reviews.quizUpdatedAt 업데이트 (뱃지 제거용)
-          if (folderId && user && folderType !== 'custom') {
-            try {
-              // 현재 퀴즈의 정보 가져오기
-              const quizDoc = await getDoc(doc(db, 'quizzes', folderId));
-              if (quizDoc.exists()) {
-                const quizData = quizDoc.data();
-                const currentQuizUpdatedAt = quizData.updatedAt || quizData.createdAt || null;
-
-                // 1. quizResults에 새 응답 저장 (통계에 반영)
-                if (results.length > 0) {
-                  // 기존 quizResults 문서 찾기
-                  const existingResultQuery = query(
-                    collection(db, 'quizResults'),
-                    where('userId', '==', user.uid),
-                    where('quizId', '==', folderId)
-                  );
-                  const existingResults = await getDocs(existingResultQuery);
-
-                  // 새로운 questionScores 데이터 생성
-                  const newQuestionScores: Record<string, {
-                    isCorrect: boolean;
-                    userAnswer: string;
-                    answeredAt: any;
-                  }> = {};
-
-                  results.forEach((result) => {
-                    newQuestionScores[result.questionId] = {
-                      isCorrect: result.isCorrect,
-                      userAnswer: result.userAnswer,
-                      answeredAt: serverTimestamp(),
-                    };
-                  });
-
-                  if (!existingResults.empty) {
-                    // 기존 문서가 있으면 questionScores만 업데이트
-                    const existingDoc = existingResults.docs[0];
-                    const existingData = existingDoc.data();
-                    const existingScores = existingData.questionScores || {};
-
-                    // 기존 점수와 새 점수 병합 (새 점수가 우선)
-                    const mergedScores = { ...existingScores, ...newQuestionScores };
-
-                    // 정답 수 재계산
-                    const newCorrectCount = Object.values(mergedScores).filter(
-                      (s: any) => s.isCorrect
-                    ).length;
-                    const totalCount = quizData.questions?.length || Object.keys(mergedScores).length;
-                    const newScore = Math.round((newCorrectCount / totalCount) * 100);
-
-                    await updateDoc(existingDoc.ref, {
-                      questionScores: mergedScores,
-                      correctCount: newCorrectCount,
-                      score: newScore,
-                      isUpdate: true, // 재풀이 표시
-                      updatedAt: serverTimestamp(),
-                    });
-                  } else {
-                    // 기존 문서가 없으면 새로 생성 (드문 경우)
-                    const correctCount = results.filter(r => r.isCorrect).length;
-                    const totalCount = quizData.questions?.length || results.length;
-                    const score = Math.round((correctCount / totalCount) * 100);
-
-                    await addDoc(collection(db, 'quizResults'), {
-                      userId: user.uid,
-                      quizId: folderId,
-                      quizTitle: quizData.title || '퀴즈',
-                      quizCreatorId: quizData.creatorId || null,
-                      score,
-                      correctCount,
-                      totalCount,
-                      earnedExp: 0, // 복습 연습은 EXP 없음
-                      questionScores: newQuestionScores,
-                      isUpdate: true,
-                      courseId: quizData.courseId || null,
-                      classId: userClassId || null, // 사용자의 반 정보 사용
-                      createdAt: serverTimestamp(),
-                    });
-                  }
-                }
-
-                // 2. 첫 복습 점수 저장 (전체 복습 모드에서만, 최초 1회)
-                if (practiceMode === 'all' && results.length > 0) {
-                  const existingReviewScore = quizData.userFirstReviewScores?.[user.uid];
-                  if (existingReviewScore === undefined) {
-                    const correctCount = results.filter(r => r.isCorrect).length;
-                    const totalCount = quizData.questions?.length || results.length;
-                    const reviewScore = Math.round((correctCount / totalCount) * 100);
-                    await updateDoc(doc(db, 'quizzes', folderId), {
-                      [`userFirstReviewScores.${user.uid}`]: reviewScore,
-                    });
-                  }
-                }
-
-                // 3. 복습 연습 EXP 지급 — 서버사이드 CF 호출 (보안 강화)
-                if (results.length > 0) {
-                  const correctCount = results.filter(r => r.isCorrect).length;
-                  const totalCount = quizData.questions?.length || results.length;
-                  const reviewScore = Math.round((correctCount / totalCount) * 100);
-
-                  const recordReviewPracticeFn = httpsCallable(functions, 'recordReviewPractice');
-                  await recordReviewPracticeFn({
-                    quizId: folderId,
-                    correctCount,
-                    totalCount,
-                    score: reviewScore,
-                  });
-
-                  // EXP 토스트는 ReviewPractice의 handleFinish에서 이미 표시됨
-                  // CF에서 25 EXP 지급하지만 토스트 중복 방지
-                }
-
-                // 4. 해당 퀴즈의 모든 reviews 문서 업데이트 (뱃지 제거)
-                const reviewsQuery = query(
-                  collection(db, 'reviews'),
-                  where('userId', '==', user.uid),
-                  where('quizId', '==', folderId)
-                );
-                const reviewsSnapshot = await getDocs(reviewsQuery);
-
-                for (const reviewDoc of reviewsSnapshot.docs) {
-                  await updateDoc(reviewDoc.ref, { quizUpdatedAt: currentQuizUpdatedAt });
-                }
-              }
-            } catch (err) {
-              console.error('복습 결과 저장 실패:', err);
-            }
-          }
-
-          if (autoStart) {
-            router.back();
-          } else {
-            setPracticeItems(null);
-            setPracticeMode(null);
-          }
-        }}
+        onComplete={handlePracticeComplete}
         onClose={() => {
           if (autoStart) {
             router.back();
@@ -1482,315 +1385,16 @@ export default function FolderDetailPage() {
     );
   }
 
-  // 문제 추가 모드 - 폴더 선택 화면
-  if (isAddMode && folderType === 'custom') {
-    const quizItems = getSelectedQuizItems();
-
+  // 문제 추가 모드 - AddQuestionsView 컴포넌트로 분리
+  if (isAddMode && folderType === 'custom' && customFolder) {
     return (
-      <div className="min-h-screen pb-28" style={{ backgroundColor: '#F5F0E8' }}>
-        {/* 헤더 */}
-        <header className="sticky top-0 z-50 border-b-2 border-[#1A1A1A] bg-[#F5F0E8]" style={{ marginTop: 'calc(-1 * env(safe-area-inset-top, 0px))', paddingTop: 'env(safe-area-inset-top, 0px)' }}>
-          <div className="flex items-center justify-between h-14 px-4">
-            <button
-              onClick={() => {
-                setIsAddMode(false);
-                setAddSelectedIds(new Set());
-                setSelectedQuizForAdd(null);
-              }}
-              className="text-[#1A1A1A] font-bold"
-            >
-              닫기
-            </button>
-            <h1 className="text-base font-bold text-[#1A1A1A]">문제 추가</h1>
-            <div className="w-10" /> {/* 균형 맞추기 */}
-          </div>
-        </header>
-
-        {/* 안내 문구 */}
-        <div className="px-4 py-3 border-b border-[#EDEAE4]">
-          <p className="text-sm text-[#5C5C5C]">추가할 문제가 있는 문제지를 선택하세요</p>
-        </div>
-
-        {/* 퀴즈 폴더 목록 */}
-        <main className="px-4 py-4">
-          {groupedSolvedItems.length === 0 ? (
-            <div className="py-16 text-center">
-              <p className="text-[#5C5C5C]">풀었던 문제지가 없습니다.</p>
-              <p className="text-xs text-[#5C5C5C] mt-2">퀴즈를 풀면 여기에 표시됩니다.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-3 gap-3">
-              {groupedSolvedItems.map((group) => {
-                // 해당 퀴즈에서 이미 추가된 문제 수 계산 (결합형은 1문제로 계산)
-                const totalCount = group.questionCount;
-                // 이미 추가된 문제 카운트 (결합형은 1개로)
-                const addedItems = group.items.filter(item =>
-                  alreadyAddedQuestionKeys.has(`${item.quizId}:${item.questionId}`)
-                );
-                const seenCombinedGroups = new Set<string>();
-                let addedCount = 0;
-                for (const item of addedItems) {
-                  if (item.combinedGroupId) {
-                    if (!seenCombinedGroups.has(item.combinedGroupId)) {
-                      seenCombinedGroups.add(item.combinedGroupId);
-                      addedCount++;
-                    }
-                  } else {
-                    addedCount++;
-                  }
-                }
-                const remainingCount = totalCount - addedCount;
-
-                return (
-                  <button
-                    key={group.quizId}
-                    onClick={() => setSelectedQuizForAdd({ quizId: group.quizId, quizTitle: group.quizTitle })}
-                    className="p-3 border border-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors text-left"
-                  >
-                    {/* 폴더 아이콘 */}
-                    <div className="flex justify-center mb-2">
-                      <svg className="w-10 h-10 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                      </svg>
-                    </div>
-                    {/* 제목 */}
-                    <h3 className="font-bold text-xs text-center line-clamp-2 mb-1 text-[#1A1A1A]">
-                      {group.quizTitle}
-                    </h3>
-                    {/* 문제 수 */}
-                    <p className="text-[10px] text-center text-[#5C5C5C]">
-                      {remainingCount > 0 ? (
-                        <>{remainingCount}문제 추가 가능</>
-                      ) : (
-                        <span className="text-[#8B1A1A]">모두 추가됨</span>
-                      )}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </main>
-
-        {/* 바텀시트 - 퀴즈 선택 시 문제 목록 표시 */}
-        <AnimatePresence>
-          {selectedQuizForAdd && (
-            <>
-              {/* 오버레이 */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => {
-                  setSelectedQuizForAdd(null);
-                  setAddSelectedIds(new Set());
-                }}
-                className="fixed inset-0 bg-black/50 z-50"
-              />
-              {/* 바텀시트 */}
-              <motion.div
-                initial={{ y: '100%' }}
-                animate={{ y: 0 }}
-                exit={{ y: '100%' }}
-                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                className="fixed bottom-0 right-0 z-50 bg-[#F5F0E8] border-t-2 border-[#1A1A1A] max-h-[70vh] flex flex-col"
-                style={{ left: 'var(--detail-panel-left, 0)' }}
-              >
-                {/* 바텀시트 헤더 */}
-                <div className="flex items-center justify-between px-4 py-3 border-b border-[#EDEAE4] flex-shrink-0">
-                  <button
-                    onClick={() => {
-                      setSelectedQuizForAdd(null);
-                      setAddSelectedIds(new Set());
-                    }}
-                    className="text-sm text-[#5C5C5C]"
-                  >
-                    취소
-                  </button>
-                  <h2 className="font-bold text-sm text-[#1A1A1A] line-clamp-1 max-w-[200px]">
-                    {selectedQuizForAdd.quizTitle}
-                  </h2>
-                  <button
-                    onClick={handleAddQuestions}
-                    disabled={actualSelectedCount === 0}
-                    className="text-sm font-bold text-[#1A1A1A] disabled:opacity-30"
-                  >
-                    추가 ({actualSelectedCount})
-                  </button>
-                </div>
-
-                {/* 문제 목록 - 결합형은 그룹으로 표시 */}
-                <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
-                  {quizItems.length === 0 ? (
-                    <p className="py-8 text-center text-[#5C5C5C]">문제가 없습니다.</p>
-                  ) : (
-                    (() => {
-                      // 결합형 그룹핑: combinedGroupId로 묶기
-                      const displayItems: Array<{ type: 'single'; item: ReviewItem } | { type: 'combined'; groupId: string; items: ReviewItem[] }> = [];
-                      const seenCombinedGroups = new Set<string>();
-
-                      for (const item of quizItems) {
-                        if (item.combinedGroupId) {
-                          if (!seenCombinedGroups.has(item.combinedGroupId)) {
-                            seenCombinedGroups.add(item.combinedGroupId);
-                            const groupItems = quizItems.filter(i => i.combinedGroupId === item.combinedGroupId);
-                            displayItems.push({ type: 'combined', groupId: item.combinedGroupId, items: groupItems });
-                          }
-                        } else {
-                          displayItems.push({ type: 'single', item });
-                        }
-                      }
-
-                      return displayItems.map((displayItem, idx) => {
-                        if (displayItem.type === 'single') {
-                          const item = displayItem.item;
-                          const itemKey = `${item.quizId}:${item.questionId}`;
-                          const isAlreadyAdded = alreadyAddedQuestionKeys.has(itemKey);
-                          const isSelected = addSelectedIds.has(itemKey);
-
-                          return (
-                            <div
-                              key={`single-${item.id}-${item.questionId}`}
-                              onClick={() => !isAlreadyAdded && handleAddSelect(item)}
-                              className={`p-3 border transition-all ${
-                                isAlreadyAdded
-                                  ? 'border-[#5C5C5C] bg-[#EDEAE4] cursor-not-allowed opacity-60'
-                                  : isSelected
-                                    ? 'border-2 border-[#1A1A1A] bg-[#EDEAE4] cursor-pointer'
-                                    : 'border-[#1A1A1A] bg-white cursor-pointer'
-                              }`}
-                            >
-                              <div className="flex items-start gap-3">
-                                <div className={`w-5 h-5 flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                                  isAlreadyAdded ? 'bg-[#5C5C5C]' : isSelected ? 'bg-[#1A1A1A]' : 'border border-[#5C5C5C]'
-                                }`}>
-                                  {(isSelected || isAlreadyAdded) && (
-                                    <svg className="w-3 h-3 text-[#F5F0E8]" fill="currentColor" viewBox="0 0 20 20">
-                                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                    </svg>
-                                  )}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  {isAlreadyAdded && (
-                                    <span className="inline-block px-1.5 py-0.5 text-[10px] font-bold bg-[#5C5C5C] text-[#F5F0E8] mb-1">
-                                      이미 추가됨
-                                    </span>
-                                  )}
-                                  <p className={`text-sm line-clamp-2 ${isAlreadyAdded ? 'text-[#5C5C5C]' : 'text-[#1A1A1A]'}`}>
-                                    {item.question}
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        } else {
-                          // 결합형 문제 그룹
-                          const { groupId, items: groupItems } = displayItem;
-                          const firstItem = groupItems[0];
-                          const isExpanded = expandedCombinedGroups.has(groupId);
-                          // 그룹 내 모든 하위 문제가 이미 추가되었는지
-                          const allAdded = groupItems.every(i => alreadyAddedQuestionKeys.has(`${i.quizId}:${i.questionId}`));
-                          // 그룹 내 하나라도 선택되었는지
-                          const isSelected = groupItems.some(i => addSelectedIds.has(`${i.quizId}:${i.questionId}`));
-                          // 공통 지문/이미지 가져오기
-                          const passage = firstItem.passage || firstItem.commonQuestion || '';
-                          const passageImage = firstItem.passageImage;
-
-                          return (
-                            <div
-                              key={`combined-${groupId}`}
-                              className={`border transition-all ${
-                                allAdded
-                                  ? 'border-[#5C5C5C] bg-[#EDEAE4] opacity-60'
-                                  : isSelected
-                                    ? 'border-2 border-[#1A1A1A] bg-[#EDEAE4]'
-                                    : 'border-[#1A1A1A] bg-white'
-                              }`}
-                            >
-                              {/* 결합형 헤더 - 클릭 시 선택 */}
-                              <div
-                                onClick={() => !allAdded && handleAddSelect(firstItem)}
-                                className={`p-3 ${allAdded ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-                              >
-                                <div className="flex items-start gap-3">
-                                  <div className={`w-5 h-5 flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                                    allAdded ? 'bg-[#5C5C5C]' : isSelected ? 'bg-[#1A1A1A]' : 'border border-[#5C5C5C]'
-                                  }`}>
-                                    {(isSelected || allAdded) && (
-                                      <svg className="w-3 h-3 text-[#F5F0E8]" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                      </svg>
-                                    )}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    {allAdded && (
-                                      <span className="inline-block px-1.5 py-0.5 text-[10px] font-bold bg-[#5C5C5C] text-[#F5F0E8] mb-1">
-                                        이미 추가됨
-                                      </span>
-                                    )}
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <span className="inline-block px-1.5 py-0.5 text-[10px] font-bold bg-[#1A1A1A] text-[#F5F0E8]">
-                                        결합형
-                                      </span>
-                                      <span className="text-[10px] text-[#5C5C5C]">
-                                        하위 {groupItems.length}문제
-                                      </span>
-                                    </div>
-                                    <p className={`text-sm line-clamp-2 ${allAdded ? 'text-[#5C5C5C]' : 'text-[#1A1A1A]'}`}>
-                                      {passage || '(공통 지문 없음)'}
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-                              {/* 아코디언 토글 버튼 */}
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setExpandedCombinedGroups(prev => {
-                                    const newSet = new Set(prev);
-                                    if (newSet.has(groupId)) {
-                                      newSet.delete(groupId);
-                                    } else {
-                                      newSet.add(groupId);
-                                    }
-                                    return newSet;
-                                  });
-                                }}
-                                className="w-full py-2 border-t border-[#E8D9A8] text-xs text-[#5C5C5C] hover:bg-[#EDEAE4] flex items-center justify-center gap-1"
-                              >
-                                {isExpanded ? '접기' : `하위 문제 보기 (${groupItems.length})`}
-                                <svg
-                                  className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                </svg>
-                              </button>
-                              {/* 하위 문제 목록 */}
-                              {isExpanded && (
-                                <div className="border-t border-[#E8D9A8] bg-[#FFFDF7] px-3 py-2 space-y-1">
-                                  {groupItems.map((subItem, subIdx) => (
-                                    <div key={subItem.questionId} className="text-xs text-[#5C5C5C] py-1">
-                                      <span className="font-bold mr-1">{subIdx + 1}.</span>
-                                      <span className="line-clamp-1">{subItem.question}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        }
-                      });
-                    })()
-                  )}
-                </div>
-              </motion.div>
-            </>
-          )}
-        </AnimatePresence>
-      </div>
+      <AddQuestionsView
+        groupedSolvedItems={groupedSolvedItems}
+        solvedItems={solvedItems}
+        customFolderQuestions={customFolder.questions}
+        onClose={() => setIsAddMode(false)}
+        onAddQuestions={handleAddQuestions}
+      />
     );
   }
 
