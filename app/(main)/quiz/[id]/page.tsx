@@ -116,7 +116,6 @@ export default function QuizPage() {
   // 인라인 피드백 상태
   const [inlineFeedbackOpen, setInlineFeedbackOpen] = useState<string | null>(null); // 열린 문제 ID
   const [inlineFeedbackSubmitted, setInlineFeedbackSubmitted] = useState<Set<string>>(new Set());
-  const [inlineFeedbackCount, setInlineFeedbackCount] = useState(0);
 
   // 이전 진행상황 복원 모달
   const [showResumeModal, setShowResumeModal] = useState(false);
@@ -918,13 +917,11 @@ export default function QuizPage() {
                         isSubmitted={inlineFeedbackSubmitted.has(currentQuestion.id)}
                         onSubmitted={(qId) => {
                           setInlineFeedbackSubmitted(prev => new Set(prev).add(qId));
-                          setInlineFeedbackCount(prev => prev + 1);
+
                           // localStorage에 인라인 피드백 카운트 저장 (exp 페이지에서 사용)
                           const key = `quiz_inline_feedback_count_${quizId}`;
                           const current = parseInt(localStorage.getItem(key) || '0', 10);
                           localStorage.setItem(key, String(current + 1));
-                          // 피드백 제출 플래그도 설정
-                          localStorage.setItem(`quiz_feedback_${quizId}`, 'true');
                         }}
                         onClose={() => setInlineFeedbackOpen(null)}
                       />
@@ -948,11 +945,9 @@ export default function QuizPage() {
                   )}
                   onFeedbackSubmitted={(qId) => {
                     setInlineFeedbackSubmitted(prev => new Set(prev).add(qId));
-                    setInlineFeedbackCount(prev => prev + 1);
                     const key = `quiz_inline_feedback_count_${quizId}`;
                     const current = parseInt(localStorage.getItem(key) || '0', 10);
                     localStorage.setItem(key, String(current + 1));
-                    localStorage.setItem(`quiz_feedback_${quizId}`, 'true');
                     setInlineFeedbackOpen(null);
                   }}
                   quizCreatorId={quiz?.creatorId}
