@@ -433,7 +433,7 @@ function ReviewPageContent() {
         // 현재 과목 퀴즈만
         if (comp?.courseId && comp.courseId !== userCourseId) continue;
         // quizResults에서 제목 조회
-        let title = '삭제된 퀴즈';
+        let title = '퀴즈';
         let totalCount = comp?.total ?? 0;
         try {
           const resultQuery = query(
@@ -445,7 +445,7 @@ function ReviewPageContent() {
           const resultSnap = await getDocs(resultQuery);
           if (!resultSnap.empty) {
             const resultData = resultSnap.docs[0].data();
-            title = resultData.quizTitle || '삭제된 퀴즈';
+            title = resultData.quizTitle || '퀴즈';
             totalCount = resultData.totalCount || totalCount;
           }
         } catch { /* 무시 */ }
@@ -461,7 +461,6 @@ function ReviewPageContent() {
           tags: [],
           difficulty: 'medium',
           myScore: comp?.score,
-          isDeleted: true,
         });
       }
 

@@ -330,13 +330,13 @@ export default function FolderDetailPage() {
           const reviewFallbackDocs = await getDocs(reviewFallbackQuery);
           if (reviewFallbackDocs.empty) {
             setLibraryQuestions([]);
-            setLibraryQuizTitle('삭제된 퀴즈');
+            setLibraryQuizTitle('퀴즈');
             setLibraryLoading(false);
             return;
           }
           // reviews에서 퀴즈 제목 추출
           const firstReview = reviewFallbackDocs.docs[0].data();
-          setLibraryQuizTitle(firstReview.quizTitle || '삭제된 퀴즈');
+          setLibraryQuizTitle(firstReview.quizTitle || '퀴즈');
           // reviews를 ReviewItem으로 변환
           const fallbackItems: ReviewItem[] = reviewFallbackDocs.docs.map(d => {
             const data = d.data();
@@ -345,7 +345,7 @@ export default function FolderDetailPage() {
               reviewId: d.id,
               userId: user.uid,
               quizId: folderId,
-              quizTitle: data.quizTitle || '삭제된 퀴즈',
+              quizTitle: data.quizTitle || '퀴즈',
               questionId: data.questionId || '',
               question: data.question || '',
               type: data.type || 'multiple',
