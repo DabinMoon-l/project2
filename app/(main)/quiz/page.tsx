@@ -1682,7 +1682,7 @@ function QuizListPageContent() {
 
     const q = query(
       collection(db, 'quizzes'),
-      where('type', 'in', ['midterm', 'final', 'past', 'independent']),
+      where('type', 'in', ['midterm', 'final', 'past', 'independent', 'professor', 'professor-ai']),
       where('courseId', '==', userCourseId)
     );
 
@@ -1695,7 +1695,7 @@ function QuizListPageContent() {
         // 비공개(isPublished: false) 퀴즈 필터링
         if (doc.data().isPublished === false) return;
         const quiz = parseQuizData(doc, user.uid);
-        if (quiz.type === 'midterm') midterm.push(quiz);
+        if (quiz.type === 'midterm' || quiz.type === 'professor' || quiz.type === 'professor-ai' || quiz.type === 'independent') midterm.push(quiz);
         else if (quiz.type === 'final') final_.push(quiz);
         else if (quiz.type === 'past') past.push(quiz);
       });
