@@ -125,6 +125,9 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
   const [pendingImages, setPendingImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [linkedImageUrls, setLinkedImageUrls] = useState<string[]>([]);
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const [urlInputValue, setUrlInputValue] = useState('');
+  const urlInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -194,6 +197,18 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
       setLinkedImageUrls(prev => [...prev, text]);
     }
   }, [pendingImages.length, linkedImageUrls]);
+
+  // URL 입력으로 이미지 추가
+  const handleAddImageUrl = useCallback(() => {
+    const url = urlInputValue.trim();
+    if (!url) return;
+    if (pendingImages.length + linkedImageUrls.length >= 5) return;
+    if (linkedImageUrls.includes(url)) return;
+    setLinkedImageUrls(prev => [...prev, url]);
+    setUrlInputValue('');
+    // 입력칸에 포커스 유지
+    setTimeout(() => urlInputRef.current?.focus(), 50);
+  }, [urlInputValue, pendingImages.length, linkedImageUrls]);
 
   // 댓글을 계층 구조로 구성하고 좋아요순 > 최신순으로 정렬
   const organizeComments = (flatComments: Comment[]): Comment[] => {
@@ -276,6 +291,8 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
       imagePreviews.forEach(u => URL.revokeObjectURL(u));
       setImagePreviews([]);
       setLinkedImageUrls([]);
+      setShowUrlInput(false);
+      setUrlInputValue('');
       setReplyingTo(null);
       if (profile?.role !== 'professor') {
         setTimeout(() => {
@@ -489,6 +506,53 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
             )}
           </AnimatePresence>
 
+          {/* URL 입력 패널 */}
+          <AnimatePresence>
+            {showUrlInput && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="flex items-center gap-2 px-4 py-2 border-b border-[#D4CFC4]/40">
+                  <input
+                    ref={urlInputRef}
+                    type="url"
+                    value={urlInputValue}
+                    onChange={(e) => setUrlInputValue(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddImageUrl(); } }}
+                    placeholder="이미지 URL 붙여넣기"
+                    className="flex-1 px-2.5 py-1.5 text-xs outline-none rounded-lg"
+                    style={{
+                      border: '1px solid rgba(180, 175, 165, 0.6)',
+                      backgroundColor: 'rgba(245, 240, 232, 0.5)',
+                      color: theme.colors.text,
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddImageUrl}
+                    disabled={!urlInputValue.trim() || pendingImages.length + linkedImageUrls.length >= 5}
+                    className="flex-shrink-0 px-2.5 py-1.5 text-xs font-bold disabled:opacity-30 rounded-lg"
+                    style={{ backgroundColor: '#1A1A1A', color: '#F5F0E8' }}
+                  >
+                    추가
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowUrlInput(false); setUrlInputValue(''); }}
+                    className="flex-shrink-0 text-[#999] p-0.5"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* 이미지 프리뷰 (파일 + 링크) */}
           {(imagePreviews.length > 0 || linkedImageUrls.length > 0) && (
             <div className="flex gap-2 px-4 pt-2 overflow-x-auto">
@@ -530,6 +594,17 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
             >
               <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </button>
+            {/* URL로 이미지 추가 버튼 */}
+            <button
+              type="button"
+              onClick={() => { setShowUrlInput(v => !v); setTimeout(() => urlInputRef.current?.focus(), 100); }}
+              disabled={isSending}
+              className={`flex-shrink-0 transition-colors disabled:opacity-30 ${showUrlInput ? 'text-[#1A1A1A]' : 'text-[#3A3A3A] hover:text-[#1A1A1A]'}`}
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
               </svg>
             </button>
             <input

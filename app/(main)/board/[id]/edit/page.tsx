@@ -38,10 +38,14 @@ export default function EditPostPage() {
   // 새로 추가할 이미지/파일
   const [newImages, setNewImages] = useState<{ file: File; preview: string }[]>([]);
   const [newFiles, setNewFiles] = useState<{ file: File; name: string }[]>([]);
+  const [linkedImageUrls, setLinkedImageUrls] = useState<string[]>([]);
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const [urlInputValue, setUrlInputValue] = useState('');
 
   // 파일 input refs
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const urlInputRef = useRef<HTMLInputElement>(null);
 
   // 글 데이터 로드 시 폼 초기화
   useEffect(() => {
@@ -62,8 +66,24 @@ export default function EditPostPage() {
   const isValid = title.trim().length >= 2 && content.trim().length >= 5 && !!tag;
 
   // 총 이미지 수
-  const totalImages = existingImages.length + newImages.length;
+  const totalImages = existingImages.length + newImages.length + linkedImageUrls.length;
   const totalFiles = existingFiles.length + newFiles.length;
+
+  // URL 입력으로 이미지 추가
+  const handleAddImageUrl = useCallback(() => {
+    const url = urlInputValue.trim();
+    if (!url) return;
+    if (totalImages >= 5) return;
+    if (linkedImageUrls.includes(url) || existingImages.includes(url)) return;
+    setLinkedImageUrls(prev => [...prev, url]);
+    setUrlInputValue('');
+    setTimeout(() => urlInputRef.current?.focus(), 50);
+  }, [urlInputValue, totalImages, linkedImageUrls, existingImages]);
+
+  // 링크 이미지 제거
+  const removeLinkedImage = useCallback((index: number) => {
+    setLinkedImageUrls(prev => prev.filter((_, i) => i !== index));
+  }, []);
 
   /**
    * 이미지 선택 핸들러
@@ -189,6 +209,9 @@ export default function EditPostPage() {
         }
       }
 
+      // 링크 이미지 URL 추가
+      uploadedImageUrls.push(...linkedImageUrls);
+
       // 업데이트할 데이터 준비
       const updateData: Record<string, unknown> = {
         title: title.trim(),
@@ -214,7 +237,7 @@ export default function EditPostPage() {
     } catch (err) {
       console.error('글 수정 실패:', err);
     }
-  }, [isValid, updating, uploading, existingImages, existingFiles, newImages, newFiles, title, content, tag, uploadImage, uploadFile, updatePost, postId, router]);
+  }, [isValid, updating, uploading, existingImages, existingFiles, newImages, newFiles, linkedImageUrls, title, content, tag, uploadImage, uploadFile, updatePost, postId, router]);
 
   /**
    * 뒤로가기
@@ -489,24 +512,109 @@ export default function EditPostPage() {
               )}
             </AnimatePresence>
 
-            {/* 이미지 추가 버튼 */}
-            {totalImages < 5 && (
-              <button
-                type="button"
-                onClick={() => imageInputRef.current?.click()}
-                className="flex items-center gap-2 px-3 py-1.5 text-xs transition-colors"
-                style={{
-                  border: '1px dashed #1A1A1A',
-                  backgroundColor: 'transparent',
-                  color: theme.colors.text,
-                }}
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                사진 첨부
-              </button>
+            {/* 링크 이미지 미리보기 */}
+            {linkedImageUrls.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-3">
+                {linkedImageUrls.map((url, index) => (
+                  <motion.div
+                    key={url}
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="relative w-16 h-16"
+                  >
+                    <img
+                      src={url}
+                      alt={`링크 이미지 ${index + 1}`}
+                      className="w-full h-full object-cover"
+                      style={{ border: '1px dashed #1A1A1A' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeLinkedImage(index)}
+                      className="absolute -top-2 -right-2 w-5 h-5 flex items-center justify-center text-xs"
+                      style={{ backgroundColor: '#8B1A1A', color: '#F5F0E8' }}
+                    >
+                      ×
+                    </button>
+                  </motion.div>
+                ))}
+              </div>
             )}
+
+            {/* URL 입력 패널 */}
+            <AnimatePresence>
+              {showUrlInput && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="overflow-hidden mb-2"
+                >
+                  <div
+                    className="flex items-center gap-2 p-2"
+                    style={{ border: '1px solid #D4CFC4', backgroundColor: theme.colors.background }}
+                  >
+                    <input
+                      ref={urlInputRef}
+                      type="url"
+                      value={urlInputValue}
+                      onChange={(e) => setUrlInputValue(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddImageUrl(); } }}
+                      placeholder="이미지 URL을 붙여넣으세요"
+                      className="flex-1 px-2.5 py-1.5 text-xs outline-none"
+                      style={{ border: '1px solid #D4CFC4', backgroundColor: theme.colors.backgroundCard, color: theme.colors.text }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddImageUrl}
+                      disabled={!urlInputValue.trim() || totalImages >= 5}
+                      className="flex-shrink-0 px-2.5 py-1.5 text-xs font-bold disabled:opacity-30"
+                      style={{ backgroundColor: '#1A1A1A', color: '#F5F0E8' }}
+                    >
+                      추가
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* 이미지 추가 버튼 */}
+            <div className="flex gap-2">
+              {totalImages < 5 && (
+                <button
+                  type="button"
+                  onClick={() => imageInputRef.current?.click()}
+                  className="flex items-center gap-2 px-3 py-1.5 text-xs transition-colors"
+                  style={{
+                    border: '1px dashed #1A1A1A',
+                    backgroundColor: 'transparent',
+                    color: theme.colors.text,
+                  }}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  사진 첨부
+                </button>
+              )}
+              {totalImages < 5 && (
+                <button
+                  type="button"
+                  onClick={() => { setShowUrlInput(v => !v); setTimeout(() => urlInputRef.current?.focus(), 100); }}
+                  className={`flex items-center gap-2 px-3 py-1.5 text-xs transition-colors ${showUrlInput ? 'font-bold' : ''}`}
+                  style={{
+                    border: showUrlInput ? '1px solid #1A1A1A' : '1px dashed #1A1A1A',
+                    backgroundColor: showUrlInput ? '#1A1A1A' : 'transparent',
+                    color: showUrlInput ? '#F5F0E8' : theme.colors.text,
+                  }}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                  URL 이미지
+                </button>
+              )}
+            </div>
 
             <input
               ref={imageInputRef}

@@ -205,7 +205,11 @@ export default function CommentItem({
   const [editExistingImages, setEditExistingImages] = useState<string[]>([]);
   const [editNewFiles, setEditNewFiles] = useState<File[]>([]);
   const [editNewPreviews, setEditNewPreviews] = useState<string[]>([]);
+  const [editLinkedUrls, setEditLinkedUrls] = useState<string[]>([]);
+  const [showEditUrlInput, setShowEditUrlInput] = useState(false);
+  const [editUrlInputValue, setEditUrlInputValue] = useState('');
   const editFileInputRef = useRef<HTMLInputElement>(null);
+  const editUrlInputRef = useRef<HTMLInputElement>(null);
 
   // 실제 DOM에서 line-clamp에 의해 잘리는지 감지
   useEffect(() => {
@@ -251,11 +255,14 @@ export default function CommentItem({
     setEditNewFiles([]);
     editNewPreviews.forEach(u => URL.revokeObjectURL(u));
     setEditNewPreviews([]);
+    setEditLinkedUrls([]);
+    setShowEditUrlInput(false);
+    setEditUrlInputValue('');
     setIsEditMode(true);
   };
 
   const handleSaveEdit = async () => {
-    if ((!editContent.trim() && editExistingImages.length === 0 && editNewFiles.length === 0) || !onEdit) return;
+    if ((!editContent.trim() && editExistingImages.length === 0 && editNewFiles.length === 0 && editLinkedUrls.length === 0) || !onEdit) return;
 
     // 새 이미지 업로드
     let newUploadedUrls: string[] = [];
@@ -263,11 +270,14 @@ export default function CommentItem({
       newUploadedUrls = await onUploadImages(editNewFiles);
     }
 
-    const finalImageUrls = [...editExistingImages, ...newUploadedUrls];
+    const finalImageUrls = [...editExistingImages, ...newUploadedUrls, ...editLinkedUrls];
     onEdit(comment.id, editContent.trim(), finalImageUrls);
     editNewPreviews.forEach(u => URL.revokeObjectURL(u));
     setEditNewFiles([]);
     setEditNewPreviews([]);
+    setEditLinkedUrls([]);
+    setShowEditUrlInput(false);
+    setEditUrlInputValue('');
     setIsEditMode(false);
   };
 
@@ -277,7 +287,27 @@ export default function CommentItem({
     editNewPreviews.forEach(u => URL.revokeObjectURL(u));
     setEditNewFiles([]);
     setEditNewPreviews([]);
+    setEditLinkedUrls([]);
+    setShowEditUrlInput(false);
+    setEditUrlInputValue('');
     setIsEditMode(false);
+  };
+
+  // 수정 모드: URL로 이미지 추가
+  const handleAddEditImageUrl = () => {
+    const url = editUrlInputValue.trim();
+    if (!url) return;
+    const total = editExistingImages.length + editNewFiles.length + editLinkedUrls.length;
+    if (total >= 5) return;
+    if (editLinkedUrls.includes(url) || editExistingImages.includes(url)) return;
+    setEditLinkedUrls(prev => [...prev, url]);
+    setEditUrlInputValue('');
+    setTimeout(() => editUrlInputRef.current?.focus(), 50);
+  };
+
+  // 수정 모드: 링크 이미지 삭제
+  const removeEditLinkedImage = (index: number) => {
+    setEditLinkedUrls(prev => prev.filter((_, i) => i !== index));
   };
 
   // 수정 모드: 새 이미지 선택
@@ -394,7 +424,7 @@ export default function CommentItem({
           />
 
           {/* 수정 모드 이미지 관리 */}
-          {(editExistingImages.length > 0 || editNewPreviews.length > 0) && (
+          {(editExistingImages.length > 0 || editNewPreviews.length > 0 || editLinkedUrls.length > 0) && (
             <div className="flex gap-2 flex-wrap">
               {editExistingImages.map((url, index) => (
                 <div key={`existing-${index}`} className="relative w-16 h-16 flex-shrink-0">
@@ -420,12 +450,58 @@ export default function CommentItem({
                   </button>
                 </div>
               ))}
+              {editLinkedUrls.map((url, index) => (
+                <div key={`linked-${index}`} className="relative w-16 h-16 flex-shrink-0">
+                  <img src={url} alt="" className="w-full h-full object-cover border border-dashed border-[#1A1A1A]" />
+                  <button
+                    type="button"
+                    onClick={() => removeEditLinkedImage(index)}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#1A1A1A] text-[#F5F0E8] rounded-full flex items-center justify-center text-xs"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* URL 입력 패널 */}
+          {showEditUrlInput && (
+            <div className="flex items-center gap-2">
+              <input
+                ref={editUrlInputRef}
+                type="url"
+                value={editUrlInputValue}
+                onChange={(e) => setEditUrlInputValue(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddEditImageUrl(); } }}
+                placeholder="이미지 URL 붙여넣기"
+                className="flex-1 px-2.5 py-1.5 text-xs outline-none rounded-md"
+                style={{ border: '1px solid #D4CFC4', backgroundColor: theme.colors.background, color: theme.colors.text }}
+              />
+              <button
+                type="button"
+                onClick={handleAddEditImageUrl}
+                disabled={!editUrlInputValue.trim()}
+                className="flex-shrink-0 px-2 py-1.5 text-xs font-bold disabled:opacity-30 rounded-md"
+                style={{ backgroundColor: '#1A1A1A', color: '#F5F0E8' }}
+              >
+                추가
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowEditUrlInput(false); setEditUrlInputValue(''); }}
+                className="text-[#999] p-0.5"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
           )}
 
           <div className="flex items-center gap-2">
             {/* 이미지 추가 버튼 */}
-            {editExistingImages.length + editNewFiles.length < 5 && (
+            {editExistingImages.length + editNewFiles.length + editLinkedUrls.length < 5 && (
               <button
                 type="button"
                 onClick={() => editFileInputRef.current?.click()}
@@ -436,6 +512,20 @@ export default function CommentItem({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
                 사진 추가
+              </button>
+            )}
+            {/* URL로 이미지 추가 버튼 */}
+            {editExistingImages.length + editNewFiles.length + editLinkedUrls.length < 5 && (
+              <button
+                type="button"
+                onClick={() => { setShowEditUrlInput(v => !v); setTimeout(() => editUrlInputRef.current?.focus(), 100); }}
+                className={`flex items-center gap-1 px-2 py-1 text-xs transition-colors rounded-md ${showEditUrlInput ? 'text-[#F5F0E8]' : 'text-[#5C5C5C] hover:text-[#1A1A1A]'}`}
+                style={{ border: '1px solid #D4CFC4', backgroundColor: showEditUrlInput ? '#1A1A1A' : 'transparent' }}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+                URL
               </button>
             )}
             <input
@@ -452,7 +542,7 @@ export default function CommentItem({
               <button
                 type="button"
                 onClick={handleSaveEdit}
-                disabled={(!editContent.trim() && editExistingImages.length === 0 && editNewFiles.length === 0) || isEditingProp}
+                disabled={(!editContent.trim() && editExistingImages.length === 0 && editNewFiles.length === 0 && editLinkedUrls.length === 0) || isEditingProp}
                 className="px-3 py-1 text-xs disabled:opacity-50 rounded-md"
                 style={{
                   backgroundColor: '#1A1A1A',
