@@ -39,7 +39,7 @@ import { useHideNav } from '@/lib/hooks/useHideNav';
 // 타입 정의
 // ============================================================
 
-type NewsCardType = 'midterm' | 'final' | 'past' | 'independent';
+type NewsCardType = 'midterm' | 'final' | 'past';
 
 // 교수 퀴즈 타입 — 제작자를 "교수님"으로 표시
 const PROFESSOR_QUIZ_TYPES = new Set(['midterm', 'final', 'past', 'professor', 'professor-ai', 'independent']);
@@ -79,23 +79,27 @@ interface QuizCardData {
 // 상수
 // ============================================================
 
-const NEWS_CARDS: { type: NewsCardType; title: string; subtitle: string }[] = [
-  { type: 'midterm', title: 'MIDTERM PREP', subtitle: 'Vol.1 · Midterm Edition' },
-  { type: 'past', title: 'PAST EXAM', subtitle: 'Official Archive' },
-  { type: 'final', title: 'FINAL PREP', subtitle: 'Vol.2 · Final Edition' },
-  { type: 'independent', title: 'INDEPENDENT', subtitle: 'Special Quiz' },
-];
+// 캐러셀 카드 유니온 타입 (기본 3개 + 단독 퀴즈 각각)
+type CarouselCard =
+  | { kind: 'list'; type: NewsCardType; title: string; subtitle: string }
+  | { kind: 'past' }
+  | { kind: 'single'; quiz: QuizCardData };
 
 // 캐러셀 위치 저장 키
 const QUIZ_CAROUSEL_KEY = 'quiz-carousel-index';
 // 캐러셀 내 스크롤 위치 저장 키 (타입별)
 const QUIZ_SCROLL_KEY = (type: string) => `quiz-scroll-${type}`;
 
-// getDefaultQuizTab → 캐러셀 인덱스 매핑 (midterm=0, past=1, final=2, independent=3)
-function getDefaultCarouselIndex(): number {
+// getDefaultQuizTab → 캐러셀 인덱스 매핑 (midterm=0, past=1, final=2, 이후 단독 퀴즈)
+function getDefaultCarouselIndex(totalCards?: number): number {
   if (typeof window !== 'undefined') {
     const saved = sessionStorage.getItem(QUIZ_CAROUSEL_KEY);
-    if (saved !== null) return parseInt(saved, 10);
+    if (saved !== null) {
+      const idx = parseInt(saved, 10);
+      // 카드 수가 바뀌었으면 범위 체크
+      if (totalCards !== undefined && idx >= totalCards) return 0;
+      return idx;
+    }
   }
   const tab = getDefaultQuizTab();
   if (tab === 'midterm') return 0;
@@ -673,6 +677,43 @@ const PastExamNewsCard = memo(function PastExamNewsCard({
 });
 
 // ============================================================
+// 단독 퀴즈 카드 (각 independent/professor/professor-ai 퀴즈 개별 표시)
+// ============================================================
+
+const SingleQuizNewsCard = memo(function SingleQuizNewsCard({
+  quiz,
+  onStart,
+  onShowDetails,
+  onReview,
+  onReviewWrongOnly,
+}: {
+  quiz: QuizCardData;
+  onStart: (quizId: string) => void;
+  onShowDetails?: (quiz: QuizCardData) => void;
+  onReview: (quizId: string) => void;
+  onReviewWrongOnly: (quizId: string) => void;
+}) {
+  return (
+    <div className="w-full h-full border border-[#999] bg-[#1A1A1A] flex flex-col overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.3)] rounded-xl">
+      {/* 헤더 */}
+      <div className="bg-[#1A1A1A] text-[#F5F0E8] px-4 py-1.5 text-center flex-shrink-0">
+        <h1 className="font-serif text-lg font-black tracking-tight">SPECIAL QUIZ</h1>
+        <p className="text-[9px] tracking-widest">Professor&apos;s Pick</p>
+      </div>
+      <div className="flex-1 min-h-0 overflow-hidden" data-scroll-inner>
+        <NewsArticle
+          quiz={quiz}
+          onStart={() => onStart(quiz.id)}
+          onDetails={onShowDetails ? () => onShowDetails(quiz) : undefined}
+          onReview={() => onReview(quiz.id)}
+          onReviewWrongOnly={() => onReviewWrongOnly(quiz.id)}
+        />
+      </div>
+    </div>
+  );
+});
+
+// ============================================================
 // 뉴스 캐러셀 (교수와 동일한 3D perspective + 무한 루프)
 // ============================================================
 
@@ -705,17 +746,46 @@ function NewsCarousel({
   onReview: (quizId: string) => void;
   onReviewWrongOnly: (quizId: string) => void;
 }) {
-  const TOTAL = NEWS_CARDS.length; // 4
-  // visualIndex: 0=clone_last, 1~4=real cards, 5=clone_first
-  const [visualIndex, setVisualIndex] = useState(() => getDefaultCarouselIndex() + 1);
+  // 동적 카드 배열: 기본 3개 + 단독 퀴즈 각각
+  const carouselCards: CarouselCard[] = useMemo(() => {
+    const cards: CarouselCard[] = [
+      { kind: 'list', type: 'midterm', title: 'MIDTERM PREP', subtitle: 'Vol.1 · Midterm Edition' },
+      { kind: 'past' },
+      { kind: 'list', type: 'final', title: 'FINAL PREP', subtitle: 'Vol.2 · Final Edition' },
+    ];
+    // 각 단독 퀴즈를 개별 캐러셀 카드로 추가
+    for (const quiz of independentQuizzes) {
+      cards.push({ kind: 'single', quiz });
+    }
+    return cards;
+  }, [independentQuizzes]);
+
+  const TOTAL = carouselCards.length;
+  // visualIndex: 0=clone_last, 1~TOTAL=real cards, TOTAL+1=clone_first
+  const [visualIndex, setVisualIndex] = useState(() => getDefaultCarouselIndex(TOTAL) + 1);
   const [transitionOn, setTransitionOn] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   // 카드별 래퍼 ref (클론 스크롤 동기화용)
   const cardWrapperRefs = useRef<(HTMLDivElement | null)[]>([]);
   // 최신 퀴즈 탭 자동 이동 (최초 1회만)
   const autoNavigatedRef = useRef(false);
+  // TOTAL 변경 추적
+  const prevTotalRef = useRef(TOTAL);
 
-  // 실제 인덱스 (0~3)
+  // TOTAL이 변경되면 visualIndex 보정
+  useEffect(() => {
+    if (prevTotalRef.current !== TOTAL && TOTAL > 0) {
+      setTransitionOn(false);
+      setVisualIndex(prev => {
+        const real = prev <= 0 ? TOTAL - 1 : prev > prevTotalRef.current ? 0 : prev - 1;
+        return Math.min(real, TOTAL - 1) + 1;
+      });
+      prevTotalRef.current = TOTAL;
+      requestAnimationFrame(() => setTransitionOn(true));
+    }
+  }, [TOTAL]);
+
+  // 실제 인덱스 (0 ~ TOTAL-1)
   const realIndex = useMemo(() => {
     if (visualIndex <= 0) return TOTAL - 1;
     if (visualIndex > TOTAL) return 0;
@@ -732,49 +802,39 @@ function NewsCarousel({
   // 데이터 로드 후 최신 퀴즈가 있는 탭으로 자동 이동 (sessionStorage 저장값 없을 때만)
   useEffect(() => {
     if (autoNavigatedRef.current) return;
-    // 아직 로딩 중이면 대기
     if (isLoading.midterm || isLoading.final || isLoading.past || isLoading.independent) return;
-    // sessionStorage에 사용자가 직접 탭을 선택한 기록이 있으면 스킵
     if (typeof window !== 'undefined' && sessionStorage.getItem(QUIZ_CAROUSEL_KEY) !== null) {
       autoNavigatedRef.current = true;
       return;
     }
     autoNavigatedRef.current = true;
 
-    // 각 탭의 최신 퀴즈 createdAt 비교
-    const allGroups = [
-      { index: 0, quizzes: midtermQuizzes },
-      { index: 1, quizzes: pastQuizzes },
-      { index: 2, quizzes: finalQuizzes },
-      { index: 3, quizzes: independentQuizzes },
-    ];
+    // 각 카드의 최신 퀴즈 createdAt 비교
+    const quizArrays: QuizCardData[][] = [midtermQuizzes, pastQuizzes, finalQuizzes, ...independentQuizzes.map(q => [q])];
     let latestTime = 0;
-    let latestIndex = getDefaultCarouselIndex(); // 날짜 기반 기본값
-    for (const group of allGroups) {
-      for (const q of group.quizzes) {
+    let latestIndex = getDefaultCarouselIndex(TOTAL);
+    quizArrays.forEach((quizzes, index) => {
+      for (const q of quizzes) {
         const t = q.createdAt instanceof Date ? q.createdAt.getTime() : 0;
         if (t > latestTime) {
           latestTime = t;
-          latestIndex = group.index;
+          latestIndex = index;
         }
       }
-    }
+    });
     setTransitionOn(false);
     setVisualIndex(latestIndex + 1);
-    // 다음 프레임에서 트랜지션 복원
     requestAnimationFrame(() => setTransitionOn(true));
-  }, [isLoading, midtermQuizzes, finalQuizzes, pastQuizzes, independentQuizzes]);
+  }, [isLoading, midtermQuizzes, finalQuizzes, pastQuizzes, independentQuizzes, TOTAL]);
 
   // 클론 카드 스크롤을 실제 카드와 동기화
   const syncCloneScroll = useCallback(() => {
     const refs = cardWrapperRefs.current;
     const getScroller = (el: HTMLDivElement | null) =>
       el?.querySelector<HTMLElement>('[data-scroll-inner]');
-    // clone_last(0) ← real_last(TOTAL)
     const clone0 = getScroller(refs[0]);
     const realLast = getScroller(refs[TOTAL]);
     if (clone0 && realLast) clone0.scrollTop = realLast.scrollTop;
-    // clone_first(TOTAL+1) ← real_first(1)
     const cloneEnd = getScroller(refs[TOTAL + 1]);
     const realFirst = getScroller(refs[1]);
     if (cloneEnd && realFirst) cloneEnd.scrollTop = realFirst.scrollTop;
@@ -855,15 +915,22 @@ function NewsCarousel({
     }
   }, [visualIndex, TOTAL]);
 
-  // 확장 카드: [clone_last, card_0, card_1, card_2, clone_first]
+  // 확장 카드: [clone_last, card_0, ..., card_N-1, clone_first]
   const extendedCardIndices = useMemo(
     () => [TOTAL - 1, ...Array.from({ length: TOTAL }, (_, i) => i), 0],
     [TOTAL]
   );
 
-  // 순서: midterm(0), past(1), final(2), independent(3)
-  const quizzesByType = [midtermQuizzes, pastQuizzes, finalQuizzes, independentQuizzes];
-  const loadingByType = [isLoading.midterm, isLoading.past, isLoading.final, isLoading.independent];
+  // 카드 인덱스 → 퀴즈 배열 매핑 (midterm=0, past=1, final=2, 이후 단독)
+  const quizzesByIndex: QuizCardData[][] = useMemo(() => [
+    midtermQuizzes, pastQuizzes, finalQuizzes,
+    ...independentQuizzes.map(q => [q]),
+  ], [midtermQuizzes, pastQuizzes, finalQuizzes, independentQuizzes]);
+
+  const loadingByIndex: boolean[] = useMemo(() => [
+    isLoading.midterm, isLoading.past, isLoading.final,
+    ...independentQuizzes.map(() => isLoading.independent),
+  ], [isLoading, independentQuizzes]);
 
   const CARD_WIDTH_PERCENT = 82;
   const SIDE_PEEK_PERCENT = (100 - CARD_WIDTH_PERCENT) / 2;
@@ -894,13 +961,15 @@ function NewsCarousel({
           onAnimationComplete={handleAnimationComplete}
         >
           {extendedCardIndices.map((cardIdx, i) => {
-            const card = NEWS_CARDS[cardIdx];
+            const card = carouselCards[cardIdx];
             const isActive = i === visualIndex;
             const offset = i - visualIndex;
+            // 고유 키 생성
+            const cardKey = card.kind === 'single' ? `single-${card.quiz.id}-${i}` : `${card.kind}-${i}`;
 
             return (
               <motion.div
-                key={`${card.type}-${i}`}
+                key={cardKey}
                 ref={(el: HTMLDivElement | null) => { cardWrapperRefs.current[i] = el; }}
                 className="flex-shrink-0 px-1.5"
                 style={{ width: `${CARD_WIDTH_PERCENT}%` }}
@@ -930,10 +999,10 @@ function NewsCarousel({
                     className="absolute inset-0 origin-center rounded-xl"
                     style={{ transformStyle: 'preserve-3d' }}
                   >
-                  {card.type === 'past' ? (
+                  {card.kind === 'past' ? (
                     <PastExamNewsCard
                       quizzes={pastQuizzes}
-                      isLoading={loadingByType[cardIdx]}
+                      isLoading={loadingByIndex[cardIdx]}
                       onStart={onStart}
                       onShowDetails={onShowDetails}
                       selectedPastExam={selectedPastExam}
@@ -942,13 +1011,21 @@ function NewsCarousel({
                       onReview={onReview}
                       onReviewWrongOnly={onReviewWrongOnly}
                     />
+                  ) : card.kind === 'single' ? (
+                    <SingleQuizNewsCard
+                      quiz={card.quiz}
+                      onStart={onStart}
+                      onShowDetails={onShowDetails}
+                      onReview={onReview}
+                      onReviewWrongOnly={onReviewWrongOnly}
+                    />
                   ) : (
                     <NewsCard
                       title={card.title}
                       subtitle={card.subtitle}
                       type={card.type}
-                      quizzes={quizzesByType[cardIdx]}
-                      isLoading={loadingByType[cardIdx]}
+                      quizzes={quizzesByIndex[cardIdx]}
+                      isLoading={loadingByIndex[cardIdx]}
                       onStart={onStart}
                       onUpdate={onUpdate}
                       onShowDetails={onShowDetails}
