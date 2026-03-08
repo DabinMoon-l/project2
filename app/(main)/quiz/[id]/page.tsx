@@ -222,6 +222,14 @@ export default function QuizPage() {
 
       const quizData = quizDoc.data();
 
+      // 비공개 퀴즈 접근 차단 (본인 퀴즈는 허용)
+      if (quizData.creatorId !== user.uid && quizData.creatorUid !== user.uid) {
+        if (quizData.isPublished === false || quizData.isPublic === false) {
+          setError('이 퀴즈는 현재 비공개 상태입니다.');
+          return;
+        }
+      }
+
       // 문제 목록 - 퀴즈 문서 내부의 questions 배열에서 가져옴
       const questionsData = quizData.questions || [];
       const questions: Question[] = [];

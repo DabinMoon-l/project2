@@ -100,6 +100,13 @@ export const recordAttempt = onCall(
       throw new HttpsError("not-found", "퀴즈를 찾을 수 없습니다.");
     }
     const quizData = quizDoc.data()!;
+
+    // 비공개 퀴즈 제출 차단 (본인 퀴즈는 허용)
+    const isCreator = quizData.creatorId === userId || quizData.creatorUid === userId;
+    if (!isCreator && (quizData.isPublished === false || quizData.isPublic === false)) {
+      throw new HttpsError("permission-denied", "이 퀴즈는 현재 비공개 상태입니다.");
+    }
+
     const questions: any[] = quizData.questions || [];
 
     if (questions.length === 0) {
