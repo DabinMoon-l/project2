@@ -199,7 +199,8 @@ async function computeRadarNormForCourse(courseId: string) {
 
   // 8. 성장세 (재시도 개선율)
   // 재시도가 있는 퀴즈에서 (최고 재시도 점수 - 첫 시도 점수)의 평균
-  // 0~100 스케일: 0 = 재시도 없음, 50 = 변화 없음, 100 = 만점 개선
+  // 첫 시도 90%+ & 재시도 없음 → 개선 불필요(0)로 카운트 (만점 학생 페널티 방지)
+  // 0~100 스케일: 0 = 퀴즈 데이터 없음, 50 = 변화 없음, 100 = 만점 개선
   const growthByUid: Record<string, number> = {};
   studentUids.forEach(uid => {
     const userQuizMap = retryMap.get(uid);
@@ -207,13 +208,20 @@ async function computeRadarNormForCourse(courseId: string) {
 
     const improvements: number[] = [];
     userQuizMap.forEach(({ first, retries }) => {
-      if (first < 0 || retries.length === 0) return;
-      const bestRetry = Math.max(...retries);
-      improvements.push(bestRetry - first);
+      if (first < 0) return;
+      if (retries.length > 0) {
+        // 재시도 있음 → 실제 개선율 측정
+        const bestRetry = Math.max(...retries);
+        improvements.push(bestRetry - first);
+      } else if (first >= 90) {
+        // 첫 시도 90%+ & 재시도 없음 → 이미 마스터, 개선 불필요(0)
+        improvements.push(0);
+      }
+      // 첫 시도 < 90 & 재시도 없음 → 아직 성장 활동 없음, 스킵
     });
 
     if (improvements.length === 0) {
-      growthByUid[uid] = 0; // 재시도 없음 → 0
+      growthByUid[uid] = 0; // 퀴즈 데이터 없거나 전부 저점수+미재시도
     } else {
       const avgImprovement = improvements.reduce((s, v) => s + v, 0) / improvements.length;
       // -100~+100 → 0~100 스케일 (50이 변화없음 기준선)
