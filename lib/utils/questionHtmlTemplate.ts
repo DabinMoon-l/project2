@@ -383,6 +383,68 @@ function splitIntoPages(questions: QuestionExportData[], questionsPerPage: numbe
 }
 
 // ============================================================
+// 정답/해설 페이지 분할 (텍스트 길이 기반 높이 추정)
+// ============================================================
+
+/** 해설 텍스트 길이 기반으로 페이지 분할 (dead space 최소화) */
+function splitAnswerIntoPages(
+  questions: QuestionExportData[],
+  includeExplanations: boolean
+): Array<[QuestionExportData[], QuestionExportData[]]> {
+  // 높이 추정 상수 (px 기준)
+  const COL_HEIGHT = 920;           // 칼럼 사용 가능 높이 (헤더 없는 페이지)
+  const COL_HEIGHT_HEADER = 840;    // 첫 페이지 (헤더 포함)
+  const ITEM_BASE = 48;             // 번호줄 + margin/padding
+  const LINE_H = 21;                // 해설 한 줄 높이 (~9.5pt × 1.7)
+  const CHARS_PER_LINE = 28;        // 칼럼 폭 기준 한 줄 한국어 글자 수
+
+  function estimateHeight(q: QuestionExportData): number {
+    if (!includeExplanations || !q.explanation) return ITEM_BASE;
+    // 줄바꿈 기준으로 실제 줄 수 추정 (white-space: pre-wrap)
+    const textLines = q.explanation.split('\n');
+    let totalLines = 0;
+    for (const line of textLines) {
+      totalLines += Math.max(1, Math.ceil(line.length / CHARS_PER_LINE));
+    }
+    return ITEM_BASE + totalLines * LINE_H;
+  }
+
+  const heights = questions.map(q => estimateHeight(q));
+  const pages: Array<[QuestionExportData[], QuestionExportData[]]> = [];
+  let i = 0;
+
+  while (i < questions.length) {
+    const maxH = pages.length === 0 ? COL_HEIGHT_HEADER : COL_HEIGHT;
+    const left: QuestionExportData[] = [];
+    const right: QuestionExportData[] = [];
+    let leftH = 0;
+    let rightH = 0;
+
+    // 좌측 칼럼 채우기
+    while (i < questions.length && (left.length === 0 || leftH + heights[i] <= maxH)) {
+      left.push(questions[i]);
+      leftH += heights[i];
+      i++;
+    }
+
+    // 우측 칼럼 채우기
+    while (i < questions.length && (right.length === 0 || rightH + heights[i] <= maxH)) {
+      right.push(questions[i]);
+      rightH += heights[i];
+      i++;
+    }
+
+    pages.push([left, right]);
+  }
+
+  if (pages.length === 0 && questions.length > 0) {
+    pages.push([questions, []]);
+  }
+
+  return pages;
+}
+
+// ============================================================
 // CSS (rabbitory_exam_template.html 기반)
 // ============================================================
 
@@ -421,7 +483,7 @@ const EXAM_CSS = `
   .h-img-cell {
     display: table-cell;
     width: 200px;
-    border-right: 2.5pt solid #000;
+    border-right: 1.2pt solid #000;
     padding: 6px 10px;
     vertical-align: middle;
     text-align: center;
@@ -624,22 +686,33 @@ const EXAM_CSS = `
     font-size: 9pt;
   }
 
-  /* 정답 페이지 2단 (table 유지, 중앙선 없음) */
-  .ans-col-layout {
-    width: 100%;
-    border-collapse: collapse;
-    table-layout: fixed;
+  /* 정답 페이지 2단 (flex 기반, 중앙선 높이 제한) */
+  .ans-col-wrap {
+    position: relative;
+    display: flex;
+    gap: 0;
+    height: calc(297mm - 9mm - 14mm - 7mm - 10mm);
+    overflow: hidden;
   }
-  .ans-col-layout > tbody > tr > td {
-    width: 50%;
-    vertical-align: top;
-    padding: 0;
+  .ans-col-wrap.has-header {
+    height: calc(297mm - 9mm - 14mm - 7mm - 80px - 10mm);
   }
-  .ans-col-layout > tbody > tr > td:first-child {
+  .ans-col-wrap::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    border-left: 0.4pt solid #ddd;
+  }
+  .ans-col-left, .ans-col-right {
+    flex: 1;
+    overflow: hidden;
+  }
+  .ans-col-left {
     padding-right: 10px;
-    border-right: 0.4pt solid #ddd;
   }
-  .ans-col-layout > tbody > tr > td:last-child {
+  .ans-col-right {
     padding-left: 10px;
   }
 
@@ -767,7 +840,8 @@ export function generateExamHtml(
 
   // 정답/해설 페이지
   if (options.includeAnswers) {
-    const answerPages = splitIntoPages(questions, 12); // 정답은 더 많이 넣을 수 있음
+    // 텍스트 길이 기반 페이지 분할 (dead space 최소화)
+    const answerPages = splitAnswerIntoPages(questions, !!options.includeExplanations);
     let ansGlobalNum = 1;
 
     answerPages.forEach(([ leftQ, rightQ ], pageIdx) => {
@@ -777,7 +851,7 @@ export function generateExamHtml(
       if (pageIdx === 0) {
         html.push('<div class="ans-header">');
         html.push('<div class="ans-main">');
-        html.push(`<div class="h-img-cell" style="border-right:2.5pt solid #000;"><img src="${CORNER_IMAGE_DATA_URI}" alt=""></div>`);
+        html.push(`<div class="h-img-cell"><img src="${CORNER_IMAGE_DATA_URI}" alt=""></div>`);
         html.push('<div class="ans-title-cell"><span class="ans-title">정답 및 해설</span></div>');
         html.push('</div>');
         html.push('<div class="ans-brand-row">');
@@ -787,11 +861,11 @@ export function generateExamHtml(
         html.push('<hr class="sep-thick">');
       }
 
-      // 2단 레이아웃 (정답은 중앙선 없이 table 유지)
-      html.push('<table class="ans-col-layout"><tr>');
+      // 2단 레이아웃 (flex 기반, 중앙선 높이 제한)
+      html.push(`<div class="ans-col-wrap${pageIdx === 0 ? ' has-header' : ''}">`);
 
       // 좌측
-      html.push('<td>');
+      html.push('<div class="ans-col-left">');
       const leftStart = ansGlobalNum;
       leftQ.forEach((q, idx) => {
         const num = leftStart + idx;
@@ -802,10 +876,10 @@ export function generateExamHtml(
         }
         html.push('</div>');
       });
-      html.push('</td>');
+      html.push('</div>');
 
       // 우측
-      html.push('<td>');
+      html.push('<div class="ans-col-right">');
       const rightStart = leftStart + leftQ.length;
       rightQ.forEach((q, idx) => {
         const num = rightStart + idx;
@@ -816,9 +890,9 @@ export function generateExamHtml(
         }
         html.push('</div>');
       });
-      html.push('</td>');
+      html.push('</div>');
 
-      html.push('</tr></table>');
+      html.push('</div>');
 
       ansGlobalNum += leftQ.length + rightQ.length;
 

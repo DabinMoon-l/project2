@@ -1387,7 +1387,7 @@ export default function ReviewPractice({
                                   openFeedbackSheet(item);
                                 }}
                                 disabled={submittedFeedbackIds.has(item.questionId)}
-                                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold border transition-colors rounded-lg ${
+                                className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold border transition-colors rounded-md ${
                                   submittedFeedbackIds.has(item.questionId)
                                     ? 'bg-[#E8F5E9] border-[#1A6B1A] text-[#1A6B1A] cursor-default'
                                     : 'bg-[#FFF8E1] border-[#8B6914] text-[#8B6914] hover:bg-[#FFECB3]'
@@ -1395,14 +1395,14 @@ export default function ReviewPractice({
                               >
                                 {submittedFeedbackIds.has(item.questionId) ? (
                                   <>
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                     </svg>
                                     피드백 완료
                                   </>
                                 ) : (
                                   <>
-                                    <span className="w-5 h-5 flex items-center justify-center bg-[#8B6914] text-[#FFF8E1] font-bold text-xs">!</span>
+                                    <span className="w-4 h-4 flex items-center justify-center bg-[#8B6914] text-[#FFF8E1] text-[10px] font-bold rounded-sm">!</span>
                                     문제 피드백
                                   </>
                                 )}

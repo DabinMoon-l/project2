@@ -1262,7 +1262,7 @@ function ReviewPageContent() {
                         : 'bg-[#D4CFC4] text-[#EDEAE4] cursor-not-allowed'
                     }`}
                   >
-                    PDF 다운 {selectedPdfFolders.size > 0 && `(${selectedPdfFolders.size})`}
+                    PDF 다운
                   </motion.button>
                 </>
               ) : isReviewSelectMode ? (
