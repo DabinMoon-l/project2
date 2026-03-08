@@ -17,7 +17,6 @@ import { useUser } from '@/lib/contexts';
 import { useCourse } from '@/lib/contexts/CourseContext';
 import { useProfessorAiQuizzes, ProfessorAiQuiz } from '@/lib/hooks/useProfessorAiQuizzes';
 import {
-  startLibraryJob,
   isLibraryJobActive,
   onLibraryJobEvent,
 } from '@/lib/utils/libraryJobManager';
@@ -27,10 +26,8 @@ import dynamic from 'next/dynamic';
 const QuizStatsModal = dynamic(() => import('@/components/quiz/manage/QuizStatsModal'), { ssr: false });
 const QuestionEditor = dynamic(() => import('@/components/quiz/create/QuestionEditor'));
 import { Skeleton } from '@/components/common';
-import MobileBottomSheet from '@/components/common/MobileBottomSheet';
 import { getDefaultQuizTab, getPastExamOptions } from '@/lib/types/course';
 import { generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
-import { useKeyboardAware } from '@/lib/hooks/useKeyboardAware';
 import PreviewQuestionCard from '@/components/professor/PreviewQuestionCard';
 import QuestionList from '@/components/quiz/create/QuestionList';
 import type { QuestionData, SubQuestion } from '@/components/quiz/create/questionTypes';
@@ -41,22 +38,9 @@ import { db } from '@/lib/firebase';
 // 타입
 // ============================================================
 
-interface SliderWeights {
-  style: number;           // 0-100 (출제 스타일)
-  scopeFocusGuide: number; // 0-100 (낮=scope중심, 높=focusGuide중심)
-  questionCount: number;   // 5-20
-}
-
 // ============================================================
 // 유틸
 // ============================================================
-
-/** 넓게↔핵심 슬라이더 라벨 */
-function getScopeFocusLabel(value: number): string {
-  if (value < 30) return '넓게 출제';
-  if (value < 70) return '균형';
-  return '핵심만 출제';
-}
 
 /** 신문 배경 텍스트 */
 const NEWSPAPER_BG_TEXT = `The cell membrane, also known as the plasma membrane, is a biological membrane that separates and protects the interior of all cells from the outside environment. The cell membrane consists of a lipid bilayer, including cholesterols that sit between phospholipids to maintain their fluidity at various temperatures. The membrane also contains membrane proteins, including integral proteins that span the membrane serving as membrane transporters, and peripheral proteins that loosely attach to the outer side of the cell membrane, acting as enzymes to facilitate interaction with the cell's environment.`;
@@ -235,27 +219,6 @@ export default function ProfessorLibraryTab({
     return [...COMMON_TAGS.map(t => t.value), ...courseTags.map(t => t.value)];
   }, [userCourseId]);
 
-  // 프롬프트
-  const [prompt, setPrompt] = useState('');
-
-  // 챕터 태그 (생성 시 필수)
-  const [selectedGenTags, setSelectedGenTags] = useState<string[]>([]);
-  const genTagOptions = useMemo(() => {
-    const courseTags = generateCourseTags(userCourseId);
-    // 챕터 태그만 (중간/기말/기타 제외)
-    return courseTags;
-  }, [userCourseId]);
-
-  // 슬라이더
-  const [sliders, setSliders] = useState<SliderWeights>({
-    style: 50,
-    scopeFocusGuide: 50,
-    questionCount: 10,
-  });
-
-  // 난이도 — 태그 버튼 (별도 state)
-  const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard' | null>(null);
-
   // 백그라운드 Job 진행 상태 (libraryJobManager 이벤트 구독)
   const [isGenerating, setIsGenerating] = useState(() => isLibraryJobActive());
   const [progressStep, setProgressStep] = useState<'uploading' | 'analyzing' | 'generating'>('uploading');
@@ -263,19 +226,12 @@ export default function ProfessorLibraryTab({
   // 사용자가 모달을 직접 닫았으면 같은 Job 동안 다시 띄우지 않음
   const modalDismissedRef = useRef(false);
 
-  // 모바일 키보드 인식
-  const { isKeyboardOpen, bottomOffset, dismissKeyboard } = useKeyboardAware();
-  const promptTextareaRef = useRef<HTMLTextAreaElement>(null);
-  const [isPromptFocused, setIsPromptFocused] = useState(false);
-  const [mobilePanel, setMobilePanel] = useState<'slider' | 'tags' | null>(null);
-
   // Job 이벤트 구독 — 완료/실패 시 isGenerating 해제
   useEffect(() => {
     const unsub = onLibraryJobEvent((event) => {
       if (event.type === 'started') {
         setIsGenerating(true);
         setProgressStep('analyzing');
-        // handleGenerate에서 이미 모달을 띄우므로 여기서는 생략
       }
       if (event.type === 'progress' && event.step === 'generating') {
         setProgressStep('generating');
@@ -739,122 +695,6 @@ export default function ProfessorLibraryTab({
   }, [quizzes, previewQuiz]);
 
   // ============================================================
-  // AI 문제 생성
-  // ============================================================
-
-  const handleGenerate = useCallback(async () => {
-    if (!profile?.uid) {
-      alert('로그인이 필요합니다.');
-      return;
-    }
-    if (!prompt.trim()) {
-      alert('프롬프트를 입력해주세요.');
-      return;
-    }
-    if (selectedGenTags.length === 0) {
-      alert('챕터 태그를 1개 이상 선택해주세요.\nAI가 정확한 범위에서 문제를 생성합니다.');
-      return;
-    }
-    if (!difficulty) {
-      alert('난이도를 선택해주세요.');
-      return;
-    }
-    if (isLibraryJobActive()) {
-      alert('이미 문제를 생성 중입니다.');
-      return;
-    }
-
-    // 즉시 프로그레스 모달 표시
-    modalDismissedRef.current = false;
-    setShowProgressModal(true);
-    setProgressStep('uploading');
-
-    // 통합 슬라이더 → scope/focusGuide로 분리 (백엔드 호환)
-    const scopeValue = Math.max(10, 100 - sliders.scopeFocusGuide);
-    const focusGuideValue = Math.max(10, sliders.scopeFocusGuide);
-
-    try {
-      const enqueueJob = httpsCallable<
-        {
-          text?: string;
-          images?: string[];
-          difficulty: string;
-          questionCount: number;
-          courseId: string;
-          courseName?: string;
-          courseCustomized?: boolean;
-          sliderWeights?: { style: number; scope: number; focusGuide: number; questionCount: number };
-          professorPrompt?: string;
-          tags?: string[];
-        },
-        { jobId: string; status: string; deduplicated: boolean }
-      >(functions, 'enqueueGenerationJob');
-
-      const enqueueResult = await enqueueJob({
-        text: prompt.trim(),
-        difficulty,
-        questionCount: sliders.questionCount,
-        courseId: userCourseId || 'biology',
-        courseName: userCourse?.name || '일반',
-        courseCustomized: true,
-        sliderWeights: {
-          style: sliders.style,
-          scope: scopeValue,
-          focusGuide: focusGuideValue,
-          questionCount: sliders.questionCount,
-        },
-        professorPrompt: prompt.trim() || undefined,
-        tags: selectedGenTags,
-      });
-
-      const { jobId } = enqueueResult.data;
-
-      // 학기 계산
-      const now = new Date();
-      const month = now.getMonth() + 1;
-      const year = now.getFullYear();
-      const semester = month >= 3 && month <= 8 ? `${year}-1` : `${year}-2`;
-
-      // 백그라운드 Job 매니저에 위임 (fire-and-forget)
-      startLibraryJob(jobId, {
-        uid: profile.uid,
-        nickname: profile.nickname || '교수',
-        courseId: userCourseId || 'biology',
-        semester,
-        questionCount: sliders.questionCount,
-        difficulty,
-        tags: selectedGenTags.length > 0 ? selectedGenTags : undefined,
-      });
-
-      // 입력 초기화
-      setPrompt('');
-      setSelectedGenTags([]);
-      setMobilePanel(null);
-
-    } catch (err: any) {
-      setShowProgressModal(false);
-      const msg = err?.message || 'Job 등록 중 오류가 발생했습니다.';
-      if (msg.includes('횟수') || msg.includes('초과') || msg.includes('exhausted')) {
-        alert(msg);
-      } else {
-        alert(`오류: ${msg}`);
-      }
-    }
-  }, [profile, prompt, sliders, difficulty, userCourseId, userCourse, selectedGenTags]);
-
-  // ============================================================
-  // 슬라이더 라벨
-  // ============================================================
-
-  const getWeightLabel = (value: number): string => {
-    if (value < 10) return 'OFF';
-    if (value < 50) return '낮음';
-    if (value < 75) return '보통';
-    if (value < 95) return '높음';
-    return '강력';
-  };
-
-  // ============================================================
   // JSX — 인라인 프리뷰 모드
   // ============================================================
 
@@ -1199,7 +1039,7 @@ export default function ProfessorLibraryTab({
   // JSX — 일반 모드 (카드 그리드)
   // ============================================================
 
-  const hasContent = !!prompt.trim();
+
 
   return (
     <div className="flex-1 flex flex-col pb-[140px]">
@@ -1334,251 +1174,6 @@ export default function ProfessorLibraryTab({
           ))}
         </div>
       )}
-      {/* ============================================================ */}
-      {/* 프롬프트 입력 — 플로팅 글래스 카드 */}
-      {/* ============================================================ */}
-      <div
-        className="fixed left-3 right-3 z-40 rounded-2xl bg-[#F5F0E8]/80 backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.12)] border border-[#D4CFC4]/60"
-        style={{ bottom: '0.75rem' }}
-      >
-        {/* 선택된 태그 + 난이도 표시 */}
-        {(selectedGenTags.length > 0 || difficulty) && (
-          <div className="flex flex-wrap gap-1.5 px-3.5 pt-2.5">
-            {selectedGenTags.map(tag => (
-              <button
-                key={tag}
-                onClick={() => setSelectedGenTags(prev => prev.filter(t => t !== tag))}
-                className="flex items-center gap-0.5 px-2.5 py-1 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8] rounded-full hover:bg-[#3A3A3A] transition-colors"
-              >
-                #{tag}
-                <span className="opacity-50 text-[9px] ml-0.5">✕</span>
-              </button>
-            ))}
-            {difficulty && (
-              <button
-                onClick={() => setDifficulty(null)}
-                className="flex items-center gap-0.5 px-2.5 py-1 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8] rounded-full hover:bg-[#3A3A3A] transition-colors"
-              >
-                #{difficulty === 'easy' ? '쉬움' : difficulty === 'medium' ? '보통' : '어려움'}
-                <span className="opacity-50 text-[9px] ml-0.5">✕</span>
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* textarea */}
-        <textarea
-          ref={promptTextareaRef}
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onFocus={() => setIsPromptFocused(true)}
-          onBlur={() => setIsPromptFocused(false)}
-          placeholder="AI에게 문제 생성 지시사항을 입력하세요..."
-          className="w-full px-4 pt-2.5 pb-1 text-sm text-[#1A1A1A] placeholder-[#999] bg-transparent outline-none resize-none"
-          rows={2}
-        />
-
-        {/* 하단 바: 슬라이더 > 태그 + 생성 */}
-        <div className="flex items-center justify-between px-3 pb-2.5">
-          <div className="flex items-center gap-1">
-            {/* 슬라이더 아이콘 → MobileBottomSheet */}
-            <button
-              onClick={() => setMobilePanel(mobilePanel === 'slider' ? null : 'slider')}
-              className={`w-9 h-9 flex items-center justify-center rounded-xl transition-colors ${
-                mobilePanel === 'slider' ? 'bg-[#1A1A1A] text-[#F5F0E8]' : 'text-[#5C5C5C] hover:bg-[#EDEAE4]/80'
-              }`}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-              </svg>
-            </button>
-            {/* 태그 아이콘 → MobileBottomSheet */}
-            <button
-              onClick={() => setMobilePanel(mobilePanel === 'tags' ? null : 'tags')}
-              className={`w-9 h-9 flex items-center justify-center rounded-xl transition-colors relative ${
-                mobilePanel === 'tags' ? 'bg-[#1A1A1A] text-[#F5F0E8]' : (selectedGenTags.length > 0 || difficulty) ? 'text-[#1A1A1A]' : 'text-[#5C5C5C] hover:bg-[#EDEAE4]/80'
-              }`}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-              </svg>
-              {selectedGenTags.length > 0 && mobilePanel !== 'tags' && (
-                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-[#1A1A1A] text-[#F5F0E8] text-[9px] font-bold flex items-center justify-center rounded-full">
-                  {selectedGenTags.length}
-                </span>
-              )}
-            </button>
-          </div>
-
-          {/* 생성 버튼 */}
-          <button
-            onClick={handleGenerate}
-            disabled={isGenerating || !hasContent || !difficulty || selectedGenTags.length === 0}
-            className={`px-5 py-2 text-sm font-bold rounded-xl transition-colors ${
-              isGenerating || !hasContent || !difficulty || selectedGenTags.length === 0
-                ? 'bg-[#D4CFC4]/80 text-[#999] cursor-not-allowed'
-                : 'bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A]'
-            }`}
-          >
-            {isGenerating ? '생성 중...' : '생성'}
-          </button>
-        </div>
-
-        {/* 태그/난이도 미선택 안내 */}
-        {hasContent && (selectedGenTags.length === 0 || !difficulty) && !isGenerating && (
-          <p className="text-xs text-[#999] px-4 pb-2 text-right">
-            {selectedGenTags.length === 0 && !difficulty
-              ? '태그 아이콘에서 챕터·난이도를 설정해주세요'
-              : selectedGenTags.length === 0
-                ? '태그 아이콘에서 챕터를 선택해주세요'
-                : '태그 아이콘에서 난이도를 선택해주세요'}
-          </p>
-        )}
-      </div>
-
-      {/* ============================================================ */}
-      {/* 모바일: 키보드 위 플로팅 툴바 */}
-      {/* ============================================================ */}
-      {typeof document !== 'undefined' && isPromptFocused && isKeyboardOpen && createPortal(
-        <div
-          className="fixed left-3 right-3 z-50 flex items-center justify-between px-3 py-2 rounded-2xl bg-[#F5F0E8]/80 backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.12)] border border-[#D4CFC4]/60"
-          style={{ bottom: bottomOffset }}
-        >
-          <div className="flex items-center gap-1">
-            {/* 슬라이더 */}
-            <button
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => { dismissKeyboard(); setMobilePanel('slider'); }}
-              className="w-9 h-9 flex items-center justify-center rounded-xl text-[#5C5C5C] hover:bg-[#EDEAE4]/80 transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-              </svg>
-            </button>
-            {/* 태그 */}
-            <button
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => { dismissKeyboard(); setMobilePanel('tags'); }}
-              className="w-9 h-9 flex items-center justify-center rounded-xl transition-colors relative text-[#5C5C5C] hover:bg-[#EDEAE4]/80"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-              </svg>
-              {selectedGenTags.length > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-[#1A1A1A] text-[#F5F0E8] text-[9px] font-bold flex items-center justify-center rounded-full">
-                  {selectedGenTags.length}
-                </span>
-              )}
-            </button>
-          </div>
-          {/* 생성 */}
-          <button
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => { dismissKeyboard(); handleGenerate(); }}
-            disabled={isGenerating || !hasContent || !difficulty || selectedGenTags.length === 0}
-            className={`px-5 py-2 text-sm font-bold rounded-xl transition-colors ${
-              isGenerating || !hasContent || !difficulty || selectedGenTags.length === 0
-                ? 'bg-[#D4CFC4]/80 text-[#999] cursor-not-allowed'
-                : 'bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A]'
-            }`}
-          >
-            {isGenerating ? '생성 중...' : '생성'}
-          </button>
-        </div>,
-        document.body,
-      )}
-
-      {/* ============================================================ */}
-      {/* 슬라이더 바텀시트 */}
-      {/* ============================================================ */}
-      <MobileBottomSheet open={mobilePanel === 'slider'} onClose={() => setMobilePanel(null)}>
-        <div className="p-4 space-y-4">
-          <SliderRow
-            label="출제 스타일"
-            value={sliders.style}
-            weightLabel={getWeightLabel(sliders.style)}
-            onChange={(v) => setSliders(prev => ({ ...prev, style: v }))}
-          />
-          <SliderRow
-            label="출제 범위"
-            value={sliders.scopeFocusGuide}
-            weightLabel={getScopeFocusLabel(sliders.scopeFocusGuide)}
-            onChange={(v) => setSliders(prev => ({ ...prev, scopeFocusGuide: v }))}
-          />
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-sm font-bold text-[#1A1A1A]">문제 수</span>
-              <span className="text-sm font-bold text-[#1A1A1A]">{sliders.questionCount}문제</span>
-            </div>
-            <input
-              type="range"
-              min={5}
-              max={20}
-              step={1}
-              value={sliders.questionCount}
-              onChange={(e) => setSliders(prev => ({ ...prev, questionCount: parseInt(e.target.value) }))}
-              className="w-full h-2 bg-[#D4CFC4] appearance-none cursor-pointer accent-[#1A1A1A]"
-              style={{
-                background: `linear-gradient(to right, #1A1A1A 0%, #1A1A1A ${((sliders.questionCount - 5) / 15) * 100}%, #D4CFC4 ${((sliders.questionCount - 5) / 15) * 100}%, #D4CFC4 100%)`
-              }}
-            />
-          </div>
-        </div>
-      </MobileBottomSheet>
-
-      {/* ============================================================ */}
-      {/* 태그/난이도 바텀시트 */}
-      {/* ============================================================ */}
-      <MobileBottomSheet open={mobilePanel === 'tags'} onClose={() => setMobilePanel(null)}>
-        <div className="p-3 space-y-2">
-          {/* 챕터 태그 */}
-          <div>
-            <span className="text-[11px] font-bold text-[#5C5C5C]">챕터</span>
-            <div className="flex flex-wrap gap-1.5 mt-1.5">
-              {genTagOptions.map(tag => {
-                const selected = selectedGenTags.includes(tag.value);
-                return (
-                  <button
-                    key={tag.value}
-                    onClick={() => setSelectedGenTags(prev =>
-                      selected ? prev.filter(t => t !== tag.value) : [...prev, tag.value]
-                    )}
-                    className={`px-2 py-1 text-xs font-bold border-2 rounded transition-colors ${
-                      selected
-                        ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                        : 'bg-transparent text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
-                    }`}
-                  >
-                    {tag.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          {/* 구분선 */}
-          <div className="border-t border-[#1A1A1A]" />
-          {/* 난이도 */}
-          <div>
-            <span className="text-[11px] font-bold text-[#5C5C5C]">난이도</span>
-            <div className="flex flex-wrap gap-1.5 mt-1.5">
-              {(['easy', 'medium', 'hard'] as const).map(d => (
-                <button
-                  key={d}
-                  onClick={() => setDifficulty(prev => prev === d ? null : d)}
-                  className={`px-2 py-1 text-xs font-bold border-2 rounded transition-colors ${
-                    difficulty === d
-                      ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                      : 'bg-transparent text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
-                  }`}
-                >
-                  #{d === 'easy' ? '쉬움' : d === 'medium' ? '보통' : '어려움'}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </MobileBottomSheet>
-
       {/* ============================================================ */}
       {/* 생성 진행 모달 (AIQuizProgress 재사용) */}
       {/* ============================================================ */}
@@ -1944,42 +1539,6 @@ export default function ProfessorLibraryTab({
           isProfessor
         />
       )}
-    </div>
-  );
-}
-
-// ============================================================
-// 슬라이더 행 컴포넌트
-// ============================================================
-
-function SliderRow({
-  label,
-  value,
-  weightLabel,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  weightLabel: string;
-  onChange: (v: number) => void;
-}) {
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-sm font-bold text-[#1A1A1A]">{label}</span>
-        <span className="text-xs font-bold text-[#5C5C5C]">{value}% ({weightLabel})</span>
-      </div>
-      <input
-        type="range"
-        min={0}
-        max={100}
-        value={value}
-        onChange={(e) => onChange(parseInt(e.target.value))}
-        className="w-full h-2 bg-[#D4CFC4] appearance-none cursor-pointer accent-[#1A1A1A]"
-        style={{
-          background: `linear-gradient(to right, #1A1A1A 0%, #1A1A1A ${value}%, #D4CFC4 ${value}%, #D4CFC4 100%)`
-        }}
-      />
     </div>
   );
 }

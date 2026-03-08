@@ -18,7 +18,7 @@
  * - 라운드 결과 시 정답 표시 (#15)
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { computeRabbitDisplayName } from '@/lib/utils/rabbitDisplayName';
 import type { BattlePlayer, BattleRabbit, RoundResultData } from '@/lib/types/tekken';
@@ -80,41 +80,48 @@ function PokemonHpBar({
 }) {
   const hp = rabbit?.currentHp ?? 0;
   const maxHp = rabbit?.maxHp ?? 1;
-  const level = rabbit ? Math.max(1, Math.floor((rabbit.atk + rabbit.def + maxHp) / 10)) : 1;
+  const level = rabbit?.level ?? 1;
   const hpPercent = Math.max(0, (hp / maxHp) * 100);
   const hpColor = hpPercent > 50 ? 'bg-green-500' : hpPercent > 25 ? 'bg-yellow-500' : 'bg-red-500';
 
   return (
     <div
-      className="relative px-3 py-2 rounded-xl border-2 bg-black/30 border-white/15 backdrop-blur-sm"
+      className="relative px-3 py-2 rounded-xl border-2 bg-black/40 border-white/15"
       style={{ minWidth: 160, maxWidth: 200 }}
     >
-      {/* 이름 + 레벨 */}
-      <div className="flex items-center justify-between mb-1">
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="text-sm font-black text-white truncate block">
-              {nickname}
-            </span>
-            {isBot && (
-              <span className="text-[9px] px-1 py-px bg-white/20 rounded text-white/60 flex-shrink-0">
-                BOT
-              </span>
-            )}
-          </div>
-          {rabbitName && (
-            <span className="text-[10px] text-white/50 truncate block">
-              {rabbitName}
-            </span>
-          )}
-        </div>
-        <span className="text-xs font-bold text-white/60 flex-shrink-0 ml-1">
-          Lv.{level}
+      {/* 닉네임 */}
+      <div className="flex items-center gap-1.5">
+        <span className="text-sm font-black text-white truncate block">
+          {nickname}
         </span>
+        {isBot && (
+          <span className="text-[9px] px-1 py-px bg-white/20 rounded text-white/60 flex-shrink-0">
+            BOT
+          </span>
+        )}
       </div>
 
-      {/* HP 바 */}
-      <div className="flex items-center gap-1.5">
+      {/* 토끼 이름 + 레벨 (같은 줄) */}
+      {rabbitName && (
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-white/50 truncate">
+            {rabbitName}
+          </span>
+          <span className="text-xs font-bold text-white/60 flex-shrink-0 ml-1">
+            Lv.{level}
+          </span>
+        </div>
+      )}
+      {!rabbitName && (
+        <div className="flex justify-end">
+          <span className="text-xs font-bold text-white/60">
+            Lv.{level}
+          </span>
+        </div>
+      )}
+
+      {/* HP 바 (약간 여백 추가) */}
+      <div className="flex items-center gap-1.5 mt-1.5">
         <span className="text-[10px] font-bold text-white/50">HP</span>
         <div className="flex-1 h-3 bg-black/50 rounded-full overflow-hidden border border-white/10">
           <motion.div
@@ -212,7 +219,7 @@ interface TekkenBattleArenaProps {
   correctChoiceText?: string;
 }
 
-export default function TekkenBattleArena({
+function TekkenBattleArena({
   myPlayer,
   opponent,
   myActiveRabbit,
@@ -347,7 +354,7 @@ export default function TekkenBattleArena({
     : undefined;
 
   return (
-    <div className="relative flex-1 flex flex-col justify-between px-3 pt-2 pb-0">
+    <div className="relative flex-1 flex flex-col justify-between px-3 pt-1 pb-1">
       {/* ── 상대 영역 (상단) ── */}
       <div className="flex items-start justify-between">
         {/* 상대 HP 바 (좌) */}
@@ -358,8 +365,8 @@ export default function TekkenBattleArena({
           isBot={opponent?.isBot}
         />
 
-        {/* 상대 토끼 (우) */}
-        <div className="relative">
+        {/* 상대 토끼 (우) — 왼쪽으로 */}
+        <div className="relative mr-6">
           <RabbitCharacter
             rabbitId={opponentRabbitId}
             isOpponent
@@ -371,9 +378,9 @@ export default function TekkenBattleArena({
       </div>
 
       {/* ── 내 영역 (하단) ── */}
-      <div className="flex items-end justify-between">
-        {/* 내 토끼 (좌) */}
-        <div className="relative">
+      <div className="flex items-end justify-between -mb-2">
+        {/* 내 토끼 (좌) — 위로 + 오른쪽으로 */}
+        <div className="relative -mt-6 ml-6">
           <RabbitCharacter
             rabbitId={myRabbitId}
             isDead={myActiveRabbit ? myActiveRabbit.currentHp <= 0 : false}
@@ -382,12 +389,14 @@ export default function TekkenBattleArena({
           />
         </div>
 
-        {/* 내 HP 바 (우) */}
-        <PokemonHpBar
-          rabbit={myActiveRabbit}
-          nickname={myPlayer?.nickname ?? '나'}
-          rabbitName={myRabbitName}
-        />
+        {/* 내 HP 바 (우) — 위로 올림 */}
+        <div className="mb-4">
+          <PokemonHpBar
+            rabbit={myActiveRabbit}
+            nickname={myPlayer?.nickname ?? '나'}
+            rabbitName={myRabbitName}
+          />
+        </div>
       </div>
 
       {/* ── 데미지 팝업 오버레이 ── */}
@@ -421,3 +430,5 @@ export default function TekkenBattleArena({
     </div>
   );
 }
+
+export default memo(TekkenBattleArena);

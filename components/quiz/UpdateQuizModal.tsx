@@ -341,11 +341,13 @@ export default function UpdateQuizModal({
         userId: user.uid,
         quizId: updateInfo.quizId,
         quizTitle: updateInfo.quizTitle,
-        quizCreatorId: updateInfo.quizCreatorId || null, // 퀴즈 제작자 ID (통계 조회용)
+        quizCreatorId: updateInfo.quizCreatorId || null,
+        quizType: null, // 재시도 시 퀴즈 문서 미로드 (첫 시도에서 저장됨)
+        quizIsPublic: null,
         score: newScore,
         correctCount: totalCorrect,
         totalCount: totalQuestionCount,
-        earnedExp: 0, // 업데이트는 추가 경험치 없음
+        earnedExp: 0,
         questionScores: mergedScores,
         isUpdate: true,
         originalResultId: updateInfo.originalResultId,

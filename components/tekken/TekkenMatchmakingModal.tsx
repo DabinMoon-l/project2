@@ -7,7 +7,6 @@
  * 매칭 중 애니메이션 + 대기 시간 표시
  */
 
-import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { MatchState } from '@/lib/types/tekken';
@@ -39,22 +38,18 @@ export default function TekkenMatchmakingModal({
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          className="fixed inset-0 z-[110] flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm"
+          className="fixed inset-0 z-[110] flex flex-col items-center justify-center bg-black/90"
           style={{ left: 'var(--home-sheet-left, 0px)' }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
-          {/* 배틀 아이콘 */}
-          <motion.div
-            className="mb-5"
-            animate={{ rotate: [0, 10, -10, 0], scale: [1, 1.1, 1] }}
-            transition={{ duration: 1.5, repeat: Infinity }}
-          >
+          {/* 배틀 아이콘 — CSS 애니메이션 (framer-motion 대비 GPU 가속) */}
+          <div className="mb-5 animate-pulse">
             <svg className="w-16 h-16 text-red-400" viewBox="0 0 24 24" fill="currentColor">
               <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" />
             </svg>
-          </motion.div>
+          </div>
 
           {/* 상태 텍스트 */}
           <div className="text-center mb-5">
@@ -64,12 +59,8 @@ export default function TekkenMatchmakingModal({
                   상대를 찾는 중...
                 </h2>
                 <div className="flex items-center justify-center gap-2">
-                  {/* 스피너 */}
-                  <motion.div
-                    className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full"
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                  />
+                  {/* 스피너 — CSS 애니메이션 */}
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   <span className="text-base text-white/70">
                     {waitTime}초
                   </span>

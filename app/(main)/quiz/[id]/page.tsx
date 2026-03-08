@@ -59,6 +59,8 @@ interface QuizData {
   courseId?: string;
   /** 퀴즈 생성자 ID */
   creatorId?: string;
+  /** 퀴즈 타입 (ai-generated 등) */
+  quizType?: string;
 }
 
 /**
@@ -486,6 +488,7 @@ export default function QuizPage() {
         displayItems,
         courseId: quizData.courseId || undefined,
         creatorId: quizData.creatorId || undefined,
+        quizType: quizData.type || undefined,
       });
 
       // 저장된 진행 상황 확인
@@ -644,14 +647,12 @@ export default function QuizPage() {
         // 답안 타입에 따라 적절한 형태로 변환
         if (answer === null || answer === undefined) return '';
 
-        // 객관식 답안 처리: 0-indexed를 1-indexed로 변환 (correctAnswer 형식과 맞춤)
+        // 객관식 답안 처리: 0-indexed 그대로 저장
         if (q.type === 'multiple') {
           if (Array.isArray(answer)) {
-            // 복수 선택: 0-indexed 배열을 1-indexed로 변환 후 쉼표로 연결
-            return answer.map(i => i + 1).join(',');
+            return answer.join(',');
           } else if (typeof answer === 'number') {
-            // 단일 선택: 0-indexed를 1-indexed로 변환
-            return (answer + 1).toString();
+            return answer.toString();
           }
         }
 
@@ -830,13 +831,15 @@ export default function QuizPage() {
                     question={currentQuestion}
                     courseId={quiz?.courseId}
                     headerRight={
-                      <FeedbackIcon
-                        isOpen={inlineFeedbackOpen === currentQuestion.id}
-                        isSubmitted={inlineFeedbackSubmitted.has(currentQuestion.id)}
-                        onClick={() => setInlineFeedbackOpen(
-                          inlineFeedbackOpen === currentQuestion.id ? null : currentQuestion.id
-                        )}
-                      />
+                      quiz?.creatorId !== user?.uid ? (
+                        <FeedbackIcon
+                          isOpen={inlineFeedbackOpen === currentQuestion.id}
+                          isSubmitted={inlineFeedbackSubmitted.has(currentQuestion.id)}
+                          onClick={() => setInlineFeedbackOpen(
+                            inlineFeedbackOpen === currentQuestion.id ? null : currentQuestion.id
+                          )}
+                        />
+                      ) : undefined
                     }
                   />
 
@@ -913,9 +916,9 @@ export default function QuizPage() {
                     )}
                   </div>
 
-                  {/* 인라인 피드백 패널 */}
+                  {/* 인라인 피드백 패널 — 자기 퀴즈가 아닐 때만 표시 */}
                   <AnimatePresence>
-                    {inlineFeedbackOpen === currentQuestion.id && user && (
+                    {inlineFeedbackOpen === currentQuestion.id && user && quiz?.creatorId !== user.uid && (
                       <InlineFeedbackPanel
                         questionId={currentQuestion.id}
                         quizId={quizId}
@@ -948,16 +951,16 @@ export default function QuizPage() {
                   courseId={quiz?.courseId}
                   inlineFeedbackOpen={inlineFeedbackOpen}
                   inlineFeedbackSubmitted={inlineFeedbackSubmitted}
-                  onFeedbackToggle={(qId) => setInlineFeedbackOpen(
+                  onFeedbackToggle={quiz?.creatorId !== user?.uid ? (qId) => setInlineFeedbackOpen(
                     inlineFeedbackOpen === qId ? null : qId
-                  )}
-                  onFeedbackSubmitted={(qId) => {
+                  ) : undefined}
+                  onFeedbackSubmitted={quiz?.creatorId !== user?.uid ? (qId) => {
                     setInlineFeedbackSubmitted(prev => new Set(prev).add(qId));
                     const key = `quiz_inline_feedback_count_${quizId}`;
                     const current = parseInt(localStorage.getItem(key) || '0', 10);
                     localStorage.setItem(key, String(current + 1));
                     setInlineFeedbackOpen(null);
-                  }}
+                  } : undefined}
                   quizCreatorId={quiz?.creatorId}
                   quizId={quizId}
                   userId={user?.uid}

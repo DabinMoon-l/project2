@@ -1,12 +1,15 @@
 /**
- * 교수 퀴즈 분석 Cloud Function
+ * 교수 퀴즈 분석 Cloud Function (v2)
  *
  * 교수가 퀴즈를 생성하면 자동으로:
- * 1. 문제 스타일 분석 (유형, 함정 패턴, 톤)
- * 2. 키워드 추출 (mainConcepts, caseTriggers)
- * 3. 과목별 스타일 프로필 업데이트
+ * 1. 출제 스타일 분석 (발문 패턴, 오답 구성 전략, 주제 비중)
+ * 2. 핵심 학술 용어 + 출제 토픽 추출
+ * 3. 원본 문제 샘플 저장 (few-shot 예시용, 최대 20개 회전)
+ * 4. 과목별 스타일 프로필 누적 업데이트
  *
- * AI 문제 생성 시 이 데이터를 활용하여 교수 스타일에 맞는 문제 생성
+ * 핵심 원칙: 원본 문제(발문+선지)를 직접 저장하여 few-shot으로 사용.
+ * Gemini 분석은 보조 역할(스타일 요약, 패턴 정리).
+ * 교수가 계속 문제를 올려도 sampleQuestions는 최근 20개만 유지 (FIFO 회전).
  */
 
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
@@ -17,34 +20,42 @@ import fetch from "node-fetch";
 // Gemini API 키
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 
+// 문제 뱅크 최대 보관 수 (300문제 × ~250바이트 = 75KB, Firestore 1MB 한도 내)
+const MAX_QUESTION_BANK_SIZE = 300;
+
 // ============================================================
-// 타입 정의
+// 타입 정의 (v2)
 // ============================================================
 
-/** 문제 유형 */
-type QuestionType =
-  | "NEGATIVE"          // 옳지 않은 것 찾기
-  | "DEFINITION_MATCH"  // 정의-개념 매칭
-  | "MECHANISM"         // 기전/원리
-  | "MULTI_SELECT"      // 모두 고르기
-  | "CLASSIFICATION"    // 분류
-  | "CLINICAL_CASE"     // 임상 케이스
-  | "FILL_IN_BLANK"     // 빈칸 채우기
-  | "COMPARISON"        // 비교
-  | "OTHER";            // 기타
-
-/** 분석된 문제 태그 */
-interface TaggedQuestion {
-  questionIndex: number;
-  stem: string;
-  types: QuestionType[];
-  difficulty: "EASY" | "MEDIUM" | "HARD";
-  trapPatterns: string[];      // 함정 유형
-  keyTerms: string[];          // 핵심 용어
-  cognitiveLevel: "기억" | "이해" | "적용" | "분석" | "평가";
+/** 교수 원본 문제 (few-shot 예시용) */
+export interface SampleQuestion {
+  stem: string;           // 발문 원문
+  choices: string[];      // 선지 원문 (순서대로)
+  correctAnswer?: number; // 정답 인덱스 (있으면)
+  quizId: string;         // 출처 퀴즈 ID
+  addedAt: number;        // 추가 타임스탬프
 }
 
-/** 스타일 프로필 */
+/**
+ * 문제 뱅크 — 교수 원본 문제 전체 보관 (최대 300개)
+ *
+ * Firestore: professorQuizAnalysis/{courseId}/data/questionBank
+ * 문제 생성 시 여기서 랜덤 10개 뽑아서 few-shot 예시로 사용.
+ * 모든 문제가 확률적으로 활용됨.
+ */
+export interface QuestionBank {
+  courseId: string;
+  lastUpdated: FirebaseFirestore.Timestamp;
+  totalCount: number;
+  questions: SampleQuestion[];
+}
+
+/**
+ * 스타일 프로필 (v2) — Gemini 분석 결과 (보조 역할)
+ *
+ * 핵심 few-shot은 QuestionBank에서 랜덤 추출.
+ * 이 프로필은 전체 경향 요약 + 패턴 정리 (보조 컨텍스트).
+ */
 export interface StyleProfile {
   courseId: string;
   courseName: string;
@@ -52,50 +63,61 @@ export interface StyleProfile {
   analyzedQuizCount: number;
   analyzedQuestionCount: number;
 
-  // 문제 유형 분포
-  typeDistribution: Record<QuestionType, number>;
+  // 교수 출제 스타일 자연어 요약 (Gemini 분석)
+  styleDescription: string;
 
-  // 난이도별 유형 분포
-  difficultyTypeMap: {
-    EASY: QuestionType[];
-    MEDIUM: QuestionType[];
-    HARD: QuestionType[];
-  };
-
-  // 함정 패턴
-  trapPatterns: {
+  // 실제 발문 패턴 (보조)
+  questionPatterns: {
     pattern: string;
     frequency: number;
     examples: string[];
   }[];
 
-  // 출제 톤/스타일
-  toneCharacteristics: {
-    usesNegative: boolean;      // "옳지 않은 것" 사용 빈도
-    usesMultiSelect: boolean;   // "모두 고르기" 사용 빈도
-    hasEnglishTerms: boolean;   // 영문 병기 여부
-    hasClinicalCases: boolean;  // 임상 케이스 포함 여부
-    preferredStemLength: "short" | "medium" | "long";
-  };
+  // 선지 구성 전략 (보조)
+  distractorStrategies: string[];
 
-  // 인지 수준 분포
-  cognitiveLevelDistribution: Record<string, number>;
+  // 주제별 출제 비중 (보조)
+  topicEmphasis: {
+    topic: string;
+    weight: number;
+  }[];
 }
 
-/** 키워드 저장소 */
+/**
+ * 키워드 저장소 (v2) — 교수가 실제 시험에서 다루는 학술 용어와 토픽
+ */
 export interface KeywordStore {
   courseId: string;
   lastUpdated: FirebaseFirestore.Timestamp;
-  mainConcepts: {
-    term: string;
+
+  // 핵심 학술 용어
+  coreTerms: {
+    korean: string;
+    english?: string;
     frequency: number;
-    relatedQuizIds: string[];
+    context: string;
   }[];
-  caseTriggers: {
-    term: string;
-    frequency: number;
-    relatedQuizIds: string[];
+
+  // 출제 토픽
+  examTopics: {
+    topic: string;
+    subtopics: string[];
+    questionCount: number;
   }[];
+}
+
+/** Gemini 분석 결과 (단일 퀴즈) */
+interface QuizAnalysisResult {
+  styleDescription: string;
+  questionPatterns: { pattern: string; examples: string[] }[];
+  distractorStrategies: string[];
+  topicEmphasis: { topic: string; weight: number }[];
+}
+
+/** 키워드 추출 결과 (단일 퀴즈) */
+interface KeywordExtractionResult {
+  coreTerms: { korean: string; english?: string; context: string }[];
+  examTopics: { topic: string; subtopics: string[] }[];
 }
 
 /** 퀴즈 분석 원본 저장 */
@@ -103,11 +125,10 @@ interface RawAnalysis {
   quizId: string;
   courseId: string;
   createdAt: FirebaseFirestore.Timestamp;
-  questions: TaggedQuestion[];
-  keywords: {
-    mainConcepts: string[];
-    caseTriggers: string[];
-  };
+  analysis: QuizAnalysisResult;
+  keywords: KeywordExtractionResult;
+  // 원본 문제도 raw에 보관 (영구 아카이브)
+  originalQuestions: Array<{ stem: string; choices: string[] }>;
 }
 
 // ============================================================
@@ -115,7 +136,9 @@ interface RawAnalysis {
 // ============================================================
 
 /**
- * Gemini로 문제 스타일 분석
+ * Gemini로 교수 출제 스타일 분석 (보조 역할)
+ * 핵심 few-shot은 원본 문제에서 직접 가져오고,
+ * 이 함수는 스타일 요약/패턴 정리만 담당
  */
 async function analyzeQuestionsWithGemini(
   questions: Array<{
@@ -124,83 +147,74 @@ async function analyzeQuestionsWithGemini(
     type: string;
   }>,
   apiKey: string
-): Promise<TaggedQuestion[]> {
+): Promise<QuizAnalysisResult> {
   const questionsText = questions
     .map((q, i) => {
       let text = `[문제 ${i + 1}]\n${q.stem}`;
       if (q.choices && q.choices.length > 0) {
-        text += "\n선지:\n" + q.choices.map((c) => `${c.label}. ${c.text}`).join("\n");
+        text += "\n" + q.choices.map((c) => `${c.label}. ${c.text}`).join("\n");
       }
       return text;
     })
     .join("\n\n---\n\n");
 
-  const prompt = `당신은 대학 시험 분석 전문가입니다. 다음 문제들을 분석하여 출제 스타일을 파악해주세요.
+  const prompt = `당신은 대학 교수의 시험 출제 스타일을 분석하는 전문가입니다.
+아래 교수가 실제로 출제한 문제들을 정밀하게 분석하여, AI가 이 교수처럼 문제를 생성할 수 있도록 구체적 패턴을 추출하세요.
 
 ## 분석할 문제들
 ${questionsText}
 
-## 분석 항목
+## 분석 과제
 
-각 문제에 대해 다음을 분석하세요:
+### 1. styleDescription (교수 출제 스타일 자연어 요약)
+이 교수가 문제를 어떻게 내는지 3-5문장으로 **구체적으로** 서술하세요.
+- 발문의 길이, 구조, 특징적인 표현 방식
+- 선지 구성 방식 (정답과 오답의 관계)
+- 자주 사용하는 질문 방식 (부정형, 비교형, 정의형 등)
+- 용어 사용 방식 (영문 병기 여부, 전문용어 수준)
+- **추상적 서술 금지** — "주로 '~에 대한 설명으로 옳지 않은 것은?' 형태를 사용한다" 처럼 구체적으로
 
-1. **types** (문제 유형, 복수 가능):
-   - NEGATIVE: "옳지 않은 것", "틀린 것" 찾기
-   - DEFINITION_MATCH: 정의-개념 매칭
-   - MECHANISM: 기전, 원리, 경로 설명
-   - MULTI_SELECT: "모두 고르면", 복수 선택
-   - CLASSIFICATION: 분류, 유형 구분
-   - CLINICAL_CASE: 환자/증상 시나리오
-   - FILL_IN_BLANK: 빈칸 채우기
-   - COMPARISON: 비교, 차이점
-   - OTHER: 위에 해당하지 않음
+### 2. questionPatterns (발문 패턴)
+이 교수가 실제로 사용하는 발문 구조를 추출하세요.
+- "~에 대한 설명으로 옳은 것은?" 같은 구체적 템플릿 형태
+- 각 패턴별 실제 발문 예시 1-2개 포함
+- 최소 3개, 최대 8개
 
-2. **difficulty**: EASY(기억/이해), MEDIUM(적용/분석), HARD(분석/평가+함정)
+### 3. distractorStrategies (오답 선지 구성 전략)
+이 교수가 오답을 어떻게 만드는지 **구체적으로** 분석하세요.
+- **추상적 코드 금지**: "유사용어_혼동" ← 이런 식 금지
+- 실제 문제 근거로 서술
+  좋은 예: "그람양성균의 특징을 묻는 문제에서, 그람음성균의 특징(외막, LPS)을 선지에 섞어 구분 요구"
+- 최소 2개, 최대 5개
 
-3. **trapPatterns** (함정 패턴):
-   - "정상비정상_뒤집기": 정상/비정상 판단 혼동
-   - "수치방향_뒤집기": 증가/감소, 상승/하강 뒤집기
-   - "유사용어_혼동": 비슷한 용어 섞기
-   - "시간순서_교란": 급성/만성, 선후관계
-   - "부분전체_혼동": 일부를 전체처럼 서술
-   - "예외_강조": 대표적 특징의 예외 출제
+### 4. topicEmphasis (주제별 출제 비중)
+- topic: 학술적 주제명
+- weight: 1(1문제) ~ 10(다수 문제)
 
-4. **keyTerms**: 문제의 핵심 용어 (2-5개)
-
-5. **cognitiveLevel**: 기억, 이해, 적용, 분석, 평가
-
-## 출력 형식
-반드시 아래 JSON 형식으로만 응답하세요:
+## 출력 형식 (JSON만 출력, 다른 텍스트 없이)
 {
-  "questions": [
-    {
-      "questionIndex": 0,
-      "stem": "문제 발문 요약",
-      "types": ["NEGATIVE", "MECHANISM"],
-      "difficulty": "MEDIUM",
-      "trapPatterns": ["유사용어_혼동"],
-      "keyTerms": ["세포자멸사", "괴사"],
-      "cognitiveLevel": "분석"
-    }
-  ]
+  "styleDescription": "이 교수는...",
+  "questionPatterns": [
+    {"pattern": "~에 대한 설명으로 옳지 않은 것은?", "examples": ["실제 발문 1"]}
+  ],
+  "distractorStrategies": ["구체적 전략 1"],
+  "topicEmphasis": [{"topic": "주제명", "weight": 8}]
 }`;
-
-  const requestBody = {
-    contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: {
-      temperature: 0.2,
-      topK: 40,
-      topP: 0.95,
-      maxOutputTokens: 4096,
-    },
-  };
 
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody),
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.3,
+          topK: 40,
+          topP: 0.95,
+          maxOutputTokens: 4096,
+        },
+      }),
     }
   );
 
@@ -211,7 +225,6 @@ ${questionsText}
   }
 
   const result = (await response.json()) as any;
-
   if (!result.candidates?.[0]?.content) {
     throw new Error("AI 응답을 받지 못했습니다.");
   }
@@ -221,45 +234,47 @@ ${questionsText}
     .map((p: any) => p.text)
     .join("");
 
-  // JSON 추출
-  let jsonText = textContent;
-  const jsonMatch = textContent.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (jsonMatch) {
-    jsonText = jsonMatch[1].trim();
-  }
-  const objectMatch = jsonText.match(/\{[\s\S]*\}/);
-  if (objectMatch) {
-    jsonText = objectMatch[0];
-  }
+  const parsed = robustParseJson(textContent);
 
-  try {
-    const parsed = JSON.parse(jsonText);
-    return parsed.questions || [];
-  } catch (parseError) {
-    console.error("JSON 파싱 오류:", parseError);
-    throw new Error("스타일 분석 결과를 파싱할 수 없습니다.");
-  }
+  return {
+    styleDescription: typeof parsed.styleDescription === "string" ? parsed.styleDescription : "",
+    questionPatterns: Array.isArray(parsed.questionPatterns)
+      ? parsed.questionPatterns
+          .filter((p: any) => typeof p.pattern === "string")
+          .map((p: any) => ({
+            pattern: p.pattern,
+            examples: Array.isArray(p.examples) ? p.examples.filter((e: any) => typeof e === "string").slice(0, 3) : [],
+          }))
+      : [],
+    distractorStrategies: Array.isArray(parsed.distractorStrategies)
+      ? parsed.distractorStrategies.filter((s: any) => typeof s === "string").slice(0, 5)
+      : [],
+    topicEmphasis: Array.isArray(parsed.topicEmphasis)
+      ? parsed.topicEmphasis
+          .filter((t: any) => typeof t.topic === "string" && typeof t.weight === "number")
+          .slice(0, 10)
+      : [],
+  };
 }
 
 /**
- * Gemini로 문제에서 키워드 추출
+ * Gemini로 핵심 학술 용어 + 출제 토픽 추출
  */
 async function extractKeywordsFromQuestions(
-  questions: Array<{ stem: string; choices?: Array<{ text: string }> }>,
+  questions: Array<{ stem: string; choices?: Array<{ label: string; text: string }> }>,
   courseId: string,
   apiKey: string
-): Promise<{ mainConcepts: string[]; caseTriggers: string[] }> {
-  const fullText = questions
-    .map((q) => {
-      let text = q.stem;
-      if (q.choices) {
-        text += " " + q.choices.map((c) => c.text).join(" ");
+): Promise<KeywordExtractionResult> {
+  const questionsText = questions
+    .map((q, i) => {
+      let text = `[문제 ${i + 1}] ${q.stem}`;
+      if (q.choices && q.choices.length > 0) {
+        text += "\n" + q.choices.map(c => `${c.label}. ${c.text}`).join(" / ");
       }
       return text;
     })
     .join("\n");
 
-  // 과목별 프롬프트 조정
   const subjectHint = courseId.includes("patho")
     ? "병태생리학"
     : courseId.includes("micro")
@@ -267,47 +282,49 @@ async function extractKeywordsFromQuestions(
     : "생물학";
 
   const prompt = `당신은 ${subjectHint} 시험 분석 전문가입니다.
+아래 교수가 실제로 출제한 시험 문제에서 핵심 학술 용어와 출제 토픽을 추출하세요.
 
-다음 시험 문제들에서 핵심 개념과 임상 단서를 추출하세요.
-
-## 시험 문제 텍스트
-${fullText.slice(0, 8000)}
+## 시험 문제
+${questionsText.slice(0, 8000)}
 
 ## 추출 규칙
 
-### mainConcepts (핵심 개념) - 최대 20개
-- 문제의 주제가 되는 핵심 개념/메커니즘/질병명
-- 예: "세포자멸사", "쇼크의 병태생리", "패혈증", "보체 활성화"
+### coreTerms (핵심 학술 용어) — 최대 25개
+교수가 문제와 선지에서 **실제로 사용한** 학술/의학 용어만 추출하세요.
 
-### caseTriggers (임상 단서) - 최대 15개
-- 문제 시나리오에 등장하는 증상/검사 소견
-- 예: "38도 이상 발열", "백혈구 증가", "의식 저하"
+**좋은 예시:**
+- {"korean": "그람양성균", "english": "Gram-positive bacteria", "context": "세균 분류 비교 문제"}
+- {"korean": "펩티도글리칸", "english": "peptidoglycan", "context": "세포벽 구조 문제"}
 
-## 주의사항
-- 조사 포함 금지: "세포는", "면역의" ❌
-- 단독 일반 명사 금지: "세포", "면역" ❌
-- 2단어 이상 조합 권장: "세포자멸사 기전" ✓
+**금지 예시:**
+- "백신 개발자", "미생물학 아버지" ← 인물/수식어
+- "세균 발견" ← 행위/사건
+- "감염" ← 너무 일반적
 
-## 출력 형식
+**기준:** 학술 전문 용어만, 영문 병기 있으면 함께, 맥락 한 문장
+
+### examTopics (출제 토픽) — 최대 10개
+**대주제 + 세부주제**로 정리하세요.
+
+**좋은 예시:**
+- {"topic": "세균의 구조와 분류", "subtopics": ["그람염색", "펩티도글리칸", "외막", "LPS"]}
+- {"topic": "항생제와 내성", "subtopics": ["페니실린", "MRSA", "VRE"]}
+
+## 출력 형식 (JSON만 출력)
 {
-  "mainConcepts": ["개념1", "개념2", ...],
-  "caseTriggers": ["단서1", "단서2", ...]
+  "coreTerms": [{"korean": "용어", "english": "term", "context": "맥락"}],
+  "examTopics": [{"topic": "대주제", "subtopics": ["세부1"]}]
 }`;
-
-  const requestBody = {
-    contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: {
-      temperature: 0.3,
-      maxOutputTokens: 1024,
-    },
-  };
 
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody),
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
+      }),
     }
   );
 
@@ -321,26 +338,62 @@ ${fullText.slice(0, 8000)}
     ?.map((p: any) => p.text)
     ?.join("") || "";
 
-  let jsonText = textContent;
-  const jsonMatch = textContent.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (jsonMatch) jsonText = jsonMatch[1].trim();
-  const objectMatch = jsonText.match(/\{[\s\S]*\}/);
-  if (objectMatch) jsonText = objectMatch[0];
-
   try {
-    const parsed = JSON.parse(jsonText);
+    const parsed = robustParseJson(textContent);
     return {
-      mainConcepts: Array.isArray(parsed.mainConcepts)
-        ? parsed.mainConcepts.filter((k: unknown) => typeof k === "string").slice(0, 20)
+      coreTerms: Array.isArray(parsed.coreTerms)
+        ? parsed.coreTerms
+            .filter((t: any) => typeof t.korean === "string" && t.korean.length > 0)
+            .map((t: any) => ({
+              korean: t.korean,
+              english: typeof t.english === "string" ? t.english : undefined,
+              context: typeof t.context === "string" ? t.context : "",
+            }))
+            .slice(0, 25)
         : [],
-      caseTriggers: Array.isArray(parsed.caseTriggers)
-        ? parsed.caseTriggers.filter((k: unknown) => typeof k === "string").slice(0, 15)
+      examTopics: Array.isArray(parsed.examTopics)
+        ? parsed.examTopics
+            .filter((t: any) => typeof t.topic === "string")
+            .map((t: any) => ({
+              topic: t.topic,
+              subtopics: Array.isArray(t.subtopics) ? t.subtopics.filter((s: any) => typeof s === "string") : [],
+            }))
+            .slice(0, 10)
         : [],
     };
   } catch {
     console.error("키워드 파싱 오류");
-    return { mainConcepts: [], caseTriggers: [] };
+    return { coreTerms: [], examTopics: [] };
   }
+}
+
+// ============================================================
+// JSON 파싱 유틸
+// ============================================================
+
+/**
+ * Gemini 응답에서 JSON을 안전하게 추출
+ */
+function robustParseJson(rawText: string): any {
+  let text = rawText;
+  const codeBlockMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (codeBlockMatch) {
+    text = codeBlockMatch[1].trim();
+  }
+
+  try { return JSON.parse(text); } catch {}
+
+  const objMatch = text.match(/\{[\s\S]*\}/);
+  if (objMatch) {
+    try { return JSON.parse(objMatch[0]); } catch {}
+    try {
+      const fixed = objMatch[0].replace(/,\s*}/g, "}").replace(/,\s*]/g, "]");
+      return JSON.parse(fixed);
+    } catch {}
+  }
+
+  console.error("JSON 파싱 최종 실패, 빈 객체 반환");
+  return {};
 }
 
 // ============================================================
@@ -348,194 +401,208 @@ ${fullText.slice(0, 8000)}
 // ============================================================
 
 /**
- * 새 분석 결과를 기존 스타일 프로필에 병합
+ * 새 분석 결과를 기존 프로필에 병합
  */
 function mergeStyleProfile(
   existing: StyleProfile | null,
-  newAnalysis: TaggedQuestion[],
+  newAnalysis: QuizAnalysisResult,
+  questionCount: number,
   courseId: string,
   courseName: string
 ): StyleProfile {
   const now = FieldValue.serverTimestamp() as unknown as FirebaseFirestore.Timestamp;
 
-  // 기존 프로필이 없으면 새로 생성
-  if (!existing) {
-    const profile: StyleProfile = {
+  // 기존 프로필이 없거나 v1 형식이면 새로 생성
+  const isV1 = existing && ("typeDistribution" in existing);
+  if (!existing || isV1) {
+    return {
       courseId,
       courseName,
       lastUpdated: now,
       analyzedQuizCount: 1,
-      analyzedQuestionCount: newAnalysis.length,
-      typeDistribution: {} as Record<QuestionType, number>,
-      difficultyTypeMap: { EASY: [], MEDIUM: [], HARD: [] },
-      trapPatterns: [],
-      toneCharacteristics: {
-        usesNegative: false,
-        usesMultiSelect: false,
-        hasEnglishTerms: false,
-        hasClinicalCases: false,
-        preferredStemLength: "medium",
-      },
-      cognitiveLevelDistribution: {},
+      analyzedQuestionCount: questionCount,
+      styleDescription: newAnalysis.styleDescription,
+      questionPatterns: newAnalysis.questionPatterns.map(p => ({
+        pattern: p.pattern,
+        frequency: 1,
+        examples: p.examples.slice(0, 3),
+      })),
+      distractorStrategies: newAnalysis.distractorStrategies,
+      topicEmphasis: newAnalysis.topicEmphasis,
     };
-
-    // 분석 결과 반영
-    updateProfileFromAnalysis(profile, newAnalysis);
-    return profile;
   }
 
-  // 기존 프로필 업데이트
-  const profile = { ...existing };
-  profile.lastUpdated = now;
-  profile.analyzedQuizCount += 1;
-  profile.analyzedQuestionCount += newAnalysis.length;
+  // 기존 v2 프로필 업데이트
+  const profile: StyleProfile = {
+    ...existing,
+    lastUpdated: now,
+    analyzedQuizCount: existing.analyzedQuizCount + 1,
+    analyzedQuestionCount: existing.analyzedQuestionCount + questionCount,
+    styleDescription: newAnalysis.styleDescription || existing.styleDescription,
+  };
 
-  updateProfileFromAnalysis(profile, newAnalysis);
+  // 발문 패턴 병합
+  const patternMap = new Map<string, { frequency: number; examples: string[] }>();
+  for (const p of (existing.questionPatterns || [])) {
+    patternMap.set(p.pattern, { frequency: p.frequency, examples: [...p.examples] });
+  }
+  for (const p of newAnalysis.questionPatterns) {
+    const ex = patternMap.get(p.pattern);
+    if (ex) {
+      ex.frequency += 1;
+      for (const e of p.examples) {
+        if (ex.examples.length < 3 && !ex.examples.includes(e)) {
+          ex.examples.push(e);
+        }
+      }
+    } else {
+      patternMap.set(p.pattern, { frequency: 1, examples: p.examples.slice(0, 3) });
+    }
+  }
+  profile.questionPatterns = Array.from(patternMap.entries())
+    .map(([pattern, data]) => ({ pattern, ...data }))
+    .sort((a, b) => b.frequency - a.frequency)
+    .slice(0, 15);
+
+  // 오답 전략 병합
+  const strategies = new Set(existing.distractorStrategies || []);
+  for (const s of newAnalysis.distractorStrategies) {
+    strategies.add(s);
+  }
+  profile.distractorStrategies = Array.from(strategies).slice(0, 10);
+
+  // 주제 비중 병합
+  const topicMap = new Map<string, number>();
+  for (const t of (existing.topicEmphasis || [])) {
+    topicMap.set(t.topic, t.weight);
+  }
+  for (const t of newAnalysis.topicEmphasis) {
+    const prev = topicMap.get(t.topic) || 0;
+    topicMap.set(t.topic, Math.max(prev, t.weight));
+  }
+  profile.topicEmphasis = Array.from(topicMap.entries())
+    .map(([topic, weight]) => ({ topic, weight }))
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, 15);
+
   return profile;
 }
 
 /**
- * 분석 결과를 프로필에 반영
- */
-function updateProfileFromAnalysis(
-  profile: StyleProfile,
-  analysis: TaggedQuestion[]
-): void {
-  // 유형 분포 업데이트
-  for (const q of analysis) {
-    for (const type of q.types) {
-      profile.typeDistribution[type] = (profile.typeDistribution[type] || 0) + 1;
-    }
-
-    // 난이도별 유형 매핑
-    const diffTypes = profile.difficultyTypeMap[q.difficulty] || [];
-    for (const type of q.types) {
-      if (!diffTypes.includes(type)) {
-        diffTypes.push(type);
-      }
-    }
-    profile.difficultyTypeMap[q.difficulty] = diffTypes;
-
-    // 인지 수준 분포
-    profile.cognitiveLevelDistribution[q.cognitiveLevel] =
-      (profile.cognitiveLevelDistribution[q.cognitiveLevel] || 0) + 1;
-
-    // 함정 패턴 업데이트
-    for (const trap of q.trapPatterns) {
-      const existing = profile.trapPatterns.find((t) => t.pattern === trap);
-      if (existing) {
-        existing.frequency += 1;
-        if (existing.examples.length < 3) {
-          existing.examples.push(q.stem.substring(0, 50));
-        }
-      } else {
-        profile.trapPatterns.push({
-          pattern: trap,
-          frequency: 1,
-          examples: [q.stem.substring(0, 50)],
-        });
-      }
-    }
-  }
-
-  // 톤 특성 업데이트
-  const hasNegative = analysis.some((q) => q.types.includes("NEGATIVE"));
-  const hasMultiSelect = analysis.some((q) => q.types.includes("MULTI_SELECT"));
-  const hasClinical = analysis.some((q) => q.types.includes("CLINICAL_CASE"));
-
-  if (hasNegative) profile.toneCharacteristics.usesNegative = true;
-  if (hasMultiSelect) profile.toneCharacteristics.usesMultiSelect = true;
-  if (hasClinical) profile.toneCharacteristics.hasClinicalCases = true;
-
-  // 평균 발문 길이 계산
-  const avgStemLength =
-    analysis.reduce((sum, q) => sum + q.stem.length, 0) / analysis.length;
-  if (avgStemLength < 50) {
-    profile.toneCharacteristics.preferredStemLength = "short";
-  } else if (avgStemLength > 150) {
-    profile.toneCharacteristics.preferredStemLength = "long";
-  } else {
-    profile.toneCharacteristics.preferredStemLength = "medium";
-  }
-}
-
-/**
- * 키워드 저장소 업데이트 (문제에서 추출한 키워드)
+ * 키워드 저장소 업데이트 (v2)
  */
 function mergeKeywordStore(
   existing: KeywordStore | null,
-  newKeywords: { mainConcepts: string[]; caseTriggers: string[] },
-  courseId: string,
-  quizId: string
+  newKeywords: KeywordExtractionResult,
+  courseId: string
 ): KeywordStore {
+  const now = FieldValue.serverTimestamp() as unknown as FirebaseFirestore.Timestamp;
+
+  const isV1 = existing && "mainConcepts" in existing;
+  if (!existing || isV1) {
+    return {
+      courseId,
+      lastUpdated: now,
+      coreTerms: newKeywords.coreTerms.map(t => ({
+        korean: t.korean,
+        english: t.english,
+        frequency: 1,
+        context: t.context,
+      })),
+      examTopics: newKeywords.examTopics.map(t => ({
+        topic: t.topic,
+        subtopics: t.subtopics,
+        questionCount: 1,
+      })),
+    };
+  }
+
+  const store: KeywordStore = { ...existing, lastUpdated: now };
+
+  // coreTerms 병합
+  const termMap = new Map<string, { english?: string; frequency: number; context: string }>();
+  for (const t of existing.coreTerms) {
+    termMap.set(t.korean, { english: t.english, frequency: t.frequency, context: t.context });
+  }
+  for (const t of newKeywords.coreTerms) {
+    const ex = termMap.get(t.korean);
+    if (ex) {
+      ex.frequency += 1;
+      if (t.english && !ex.english) ex.english = t.english;
+      if (t.context) ex.context = t.context;
+    } else {
+      termMap.set(t.korean, { english: t.english, frequency: 1, context: t.context });
+    }
+  }
+  store.coreTerms = Array.from(termMap.entries())
+    .map(([korean, data]) => ({ korean, ...data }))
+    .sort((a, b) => b.frequency - a.frequency)
+    .slice(0, 50);
+
+  // examTopics 병합
+  const topicMap = new Map<string, { subtopics: Set<string>; questionCount: number }>();
+  for (const t of existing.examTopics) {
+    topicMap.set(t.topic, { subtopics: new Set(t.subtopics), questionCount: t.questionCount });
+  }
+  for (const t of newKeywords.examTopics) {
+    const ex = topicMap.get(t.topic);
+    if (ex) {
+      ex.questionCount += 1;
+      for (const s of t.subtopics) ex.subtopics.add(s);
+    } else {
+      topicMap.set(t.topic, { subtopics: new Set(t.subtopics), questionCount: 1 });
+    }
+  }
+  store.examTopics = Array.from(topicMap.entries())
+    .map(([topic, data]) => ({ topic, subtopics: Array.from(data.subtopics), questionCount: data.questionCount }))
+    .sort((a, b) => b.questionCount - a.questionCount)
+    .slice(0, 20);
+
+  return store;
+}
+
+/**
+ * 문제 뱅크 업데이트: 새 문제 추가, 300개 초과 시 가장 오래된 것 제거
+ */
+function mergeQuestionBank(
+  existing: QuestionBank | null,
+  newQuestions: SampleQuestion[],
+  courseId: string
+): QuestionBank {
   const now = FieldValue.serverTimestamp() as unknown as FirebaseFirestore.Timestamp;
 
   if (!existing) {
     return {
       courseId,
       lastUpdated: now,
-      mainConcepts: newKeywords.mainConcepts.map((term) => ({
-        term,
-        frequency: 1,
-        relatedQuizIds: [quizId],
-      })),
-      caseTriggers: newKeywords.caseTriggers.map((term) => ({
-        term,
-        frequency: 1,
-        relatedQuizIds: [quizId],
-      })),
+      totalCount: newQuestions.length,
+      questions: newQuestions.slice(0, MAX_QUESTION_BANK_SIZE),
     };
   }
 
-  const store = { ...existing, lastUpdated: now };
+  // 새 문제를 앞에 추가 (최신순)
+  const allQuestions = [...newQuestions, ...existing.questions];
 
-  // mainConcepts 병합
-  for (const term of newKeywords.mainConcepts) {
-    const existingTerm = store.mainConcepts.find((t) => t.term === term);
-    if (existingTerm) {
-      existingTerm.frequency += 1;
-      if (!existingTerm.relatedQuizIds.includes(quizId)) {
-        existingTerm.relatedQuizIds.push(quizId);
-      }
-    } else {
-      store.mainConcepts.push({ term, frequency: 1, relatedQuizIds: [quizId] });
-    }
-  }
+  // 300개 초과 시 가장 오래된 것 제거 (FIFO)
+  const trimmed = allQuestions.slice(0, MAX_QUESTION_BANK_SIZE);
 
-  // caseTriggers 병합
-  for (const term of newKeywords.caseTriggers) {
-    const existingTerm = store.caseTriggers.find((t) => t.term === term);
-    if (existingTerm) {
-      existingTerm.frequency += 1;
-      if (!existingTerm.relatedQuizIds.includes(quizId)) {
-        existingTerm.relatedQuizIds.push(quizId);
-      }
-    } else {
-      store.caseTriggers.push({ term, frequency: 1, relatedQuizIds: [quizId] });
-    }
-  }
-
-  // 빈도순 정렬
-  store.mainConcepts.sort((a, b) => b.frequency - a.frequency);
-  store.caseTriggers.sort((a, b) => b.frequency - a.frequency);
-
-  return store;
+  return {
+    courseId,
+    lastUpdated: now,
+    totalCount: trimmed.length,
+    questions: trimmed,
+  };
 }
-
 
 // ============================================================
 // Cloud Function
 // ============================================================
 
 /**
- * 교수 퀴즈 생성 시 자동 분석
+ * 교수 퀴즈 생성 시 자동 분석 (v2)
  *
  * 트리거: quizzes/{quizId} 문서 생성
  * 조건: 생성자가 교수 (role: 'professor')
- *
- * 분석 내용:
- * 1. 문제 스타일 분석 (유형, 함정 패턴)
- * 2. 문제에서 키워드 추출 (누적 저장)
  */
 export const onProfessorQuizCreated = onDocumentCreated(
   {
@@ -556,9 +623,10 @@ export const onProfessorQuizCreated = onDocumentCreated(
       courseName?: string;
       type?: string;
       questions?: Array<{
-        text?: string;   // 실제 Firestore 필드명
-        stem?: string;   // 레거시 호환
+        text?: string;
+        stem?: string;
         type: string;
+        answer?: number;
         choices?: string[] | Array<{ label: string; text: string }>;
       }>;
     };
@@ -568,103 +636,120 @@ export const onProfessorQuizCreated = onDocumentCreated(
     // 1. 생성자가 교수인지 확인
     const userDoc = await db.collection("users").doc(quizData.creatorId).get();
     if (!userDoc.exists || userDoc.data()?.role !== "professor") {
-      console.log(`[분석 스킵] 교수가 아닌 사용자의 퀴즈: ${quizId}`);
       return;
     }
 
     // 2. 문제 목록 확인
     const questions = quizData.questions;
     if (!questions || questions.length === 0) {
-      console.log(`[분석 스킵] 문제가 없는 퀴즈: ${quizId}`);
       return;
     }
 
-    // 3. 과목 ID 확인
     const courseId = quizData.courseId || "general";
     const courseName = quizData.courseName || "일반";
 
-    console.log(`[교수 퀴즈 분석 시작] ${quizId}, 과목: ${courseName}, 문제 수: ${questions.length}`);
+    console.log(`[교수 퀴즈 분석] ${quizId}, ${courseName}, ${questions.length}문제`);
 
-    // API 키 확인
     const apiKey = GEMINI_API_KEY.value();
     if (!apiKey) {
-      console.error("[분석 실패] Gemini API 키가 없습니다.");
+      console.error("[분석 실패] Gemini API 키 없음");
       return;
     }
 
-    // 문제 데이터 정규화: text→stem, choices 형식 통일
+    // 문제 데이터 정규화
     const normalizedQuestions = questions.map((q) => {
-      // stem 필드: text 우선, stem 폴백
       const stem = q.text || q.stem || "";
-
-      // choices 정규화: string[] → [{label, text}] 변환
       let choices: Array<{ label: string; text: string }> | undefined;
+      let choiceStrings: string[] = [];
+
       if (Array.isArray(q.choices) && q.choices.length > 0) {
         if (typeof q.choices[0] === "string") {
-          // 신규 형식: string[]
-          choices = (q.choices as string[]).map((c, i) => ({
+          choiceStrings = q.choices as string[];
+          choices = choiceStrings.map((c, i) => ({
             label: String(i + 1),
             text: c,
           }));
         } else {
-          // 레거시 형식: [{label, text}]
           choices = q.choices as Array<{ label: string; text: string }>;
+          choiceStrings = choices.map(c => c.text);
         }
       }
 
-      return { stem, type: q.type, choices };
-    }).filter((q) => q.stem.length > 0); // 빈 문제 제외
+      return {
+        stem,
+        type: q.type,
+        choices,
+        choiceStrings,
+        correctAnswer: typeof q.answer === "number" ? q.answer : undefined,
+      };
+    }).filter((q) => q.stem.length > 0);
 
     if (normalizedQuestions.length === 0) {
-      console.log(`[분석 스킵] 유효한 문제가 없는 퀴즈: ${quizId}`);
       return;
     }
 
+    // ★ 원본 문제 → SampleQuestion 변환 (questionBank용)
+    const now = Date.now();
+    const newSamples: SampleQuestion[] = normalizedQuestions
+      .filter(q => q.choiceStrings.length >= 2)
+      .map(q => ({
+        stem: q.stem,
+        choices: q.choiceStrings,
+        correctAnswer: q.correctAnswer,
+        quizId,
+        addedAt: now,
+      }));
+
     try {
-      // 4. Gemini로 문제 스타일 분석
-      const taggedQuestions = await analyzeQuestionsWithGemini(normalizedQuestions, apiKey);
-      console.log(`[스타일 분석 완료] ${taggedQuestions.length}개 문제 분석됨`);
+      // Gemini 분석 + 키워드 추출 병렬 실행
+      const [analysis, keywords] = await Promise.all([
+        analyzeQuestionsWithGemini(normalizedQuestions, apiKey),
+        extractKeywordsFromQuestions(normalizedQuestions, courseId, apiKey),
+      ]);
 
-      // 5. Gemini로 문제에서 키워드 추출
-      const keywords = await extractKeywordsFromQuestions(normalizedQuestions, courseId, apiKey);
-      console.log(`[키워드 추출 완료] mainConcepts: ${keywords.mainConcepts.length}, caseTriggers: ${keywords.caseTriggers.length}`);
+      console.log(`[분석 완료] 패턴 ${analysis.questionPatterns.length}개, 용어 ${keywords.coreTerms.length}개, 원본 ${newSamples.length}개`);
 
-      // 6. Firestore에 저장
+      // Firestore 저장
       const analysisRef = db.collection("professorQuizAnalysis").doc(courseId);
 
-      // 6a. raw 분석 결과 저장
-      const rawRef = analysisRef.collection("raw").doc(quizId);
-      await rawRef.set({
+      // raw 저장 (영구 아카이브)
+      await analysisRef.collection("raw").doc(quizId).set({
         quizId,
         courseId,
         createdAt: FieldValue.serverTimestamp(),
-        questions: taggedQuestions,
+        analysis,
         keywords,
+        originalQuestions: normalizedQuestions.map(q => ({
+          stem: q.stem,
+          choices: q.choiceStrings,
+        })),
       } as RawAnalysis);
 
-      // 6b. 스타일 프로필 업데이트
+      // 스타일 프로필 업데이트
       const styleRef = analysisRef.collection("data").doc("styleProfile");
       const existingStyle = (await styleRef.get()).data() as StyleProfile | undefined;
       const updatedStyle = mergeStyleProfile(
         existingStyle || null,
-        taggedQuestions,
+        analysis,
+        normalizedQuestions.length,
         courseId,
         courseName
       );
       await styleRef.set(updatedStyle);
 
-      // 6c. 키워드 저장소 업데이트 (누적)
+      // ★ 문제 뱅크 업데이트 (원본 전체 누적, 최대 300개)
+      const bankRef = analysisRef.collection("data").doc("questionBank");
+      const existingBank = (await bankRef.get()).data() as QuestionBank | undefined;
+      const updatedBank = mergeQuestionBank(existingBank || null, newSamples, courseId);
+      await bankRef.set(updatedBank);
+
+      // 키워드 업데이트
       const keywordsRef = analysisRef.collection("data").doc("keywords");
       const existingKeywords = (await keywordsRef.get()).data() as KeywordStore | undefined;
-      const updatedKeywords = mergeKeywordStore(
-        existingKeywords || null,
-        keywords,
-        courseId,
-        quizId
-      );
+      const updatedKeywords = mergeKeywordStore(existingKeywords || null, keywords, courseId);
       await keywordsRef.set(updatedKeywords);
 
-      // 6d. 메타데이터 업데이트
+      // 메타데이터
       await analysisRef.set(
         {
           courseId,
@@ -677,10 +762,9 @@ export const onProfessorQuizCreated = onDocumentCreated(
         { merge: true }
       );
 
-      console.log(`[교수 퀴즈 분석 완료] ${quizId}`);
+      console.log(`[교수 퀴즈 분석 완료] ${quizId}, 문제 뱅크 ${updatedBank.totalCount}개 보유`);
     } catch (error) {
       console.error(`[교수 퀴즈 분석 실패] ${quizId}:`, error);
-      // 분석 실패해도 퀴즈 생성은 성공한 것이므로 에러를 throw하지 않음
     }
   }
 );

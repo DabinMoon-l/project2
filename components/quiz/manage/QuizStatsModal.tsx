@@ -843,7 +843,7 @@ export default function QuizStatsModal({
 
     // 현재 정답 기준으로 isCorrect 재판정 (문제 수정 후 통계 모순 방지)
     // question.answer: 0-indexed 문자열 (객관식 "0","1,2" / OX "0","1" / 주관식 원본)
-    // scoreData.userAnswer: 1-indexed 문자열 (객관식 "1","2,3" / OX "O","X" / 주관식 원본)
+    // scoreData.userAnswer: 0-indexed 문자열 (객관식 "0","1,2" / OX "O","X" / 주관식 원본)
     const checkCorrect = (question: FlattenedQuestion, userAnswer: string): boolean => {
       if (!userAnswer && userAnswer !== '0') return false;
       const answer = question.answer ?? '';
@@ -855,8 +855,8 @@ export default function QuizStatsModal({
         return correctIsO === userIsO;
       }
       if (question.type === 'multiple') {
-        // answer: 0-indexed ("0","1,2"), userAnswer: 1-indexed ("1","2,3") → 1-indexed로 통일 비교
-        const correctParts = answer.split(',').map(s => parseInt(s.trim()) + 1).filter(n => !isNaN(n)).sort();
+        // answer, userAnswer 모두 0-indexed ("0","1,2") → 직접 비교
+        const correctParts = answer.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)).sort();
         const userParts = userAnswer.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)).sort();
         return JSON.stringify(correctParts) === JSON.stringify(userParts);
       }
@@ -1036,8 +1036,8 @@ export default function QuizStatsModal({
         const totalSelections = Object.values(selections).reduce((sum, count) => sum + count, 0);
 
         stat.optionDistribution = q.choices.map((choice, optIdx) => {
-          // selections 키는 1-indexed (서버 scoreData.userAnswer 기준)
-          const optionNum = (optIdx + 1).toString();
+          // selections 키는 0-indexed (서버 scoreData.userAnswer 기준)
+          const optionNum = optIdx.toString();
           const count = selections[optionNum] || 0;
           const percentage = totalSelections > 0 ? Math.round((count / totalSelections) * 100) : 0;
           // 0-indexed 정답과 비교

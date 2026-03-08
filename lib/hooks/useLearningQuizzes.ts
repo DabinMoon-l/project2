@@ -46,6 +46,8 @@ export interface LearningQuiz {
   subjectiveCount?: number;
   /** 퀴즈 생성자 ID */
   creatorId?: string;
+  /** 퀴즈 타입 (professor, ai-generated, custom 등) */
+  quizType?: string;
 }
 
 /**
@@ -237,13 +239,13 @@ export function useLearningQuizzes() {
         const isCorrect = q.isCorrect !== undefined ? q.isCorrect : true;
         let convertedAnswer = userAnswers[idx];
 
-        // 객관식: 0-indexed → 1-indexed 변환 (통계 모달에서 1-indexed 기대)
+        // 객관식: 0-indexed 그대로 문자열 변환
         if (q.type === 'multiple') {
           const raw = q.userAnswer ?? q.answer;
           if (Array.isArray(raw)) {
-            convertedAnswer = raw.map((a: number) => String(a + 1)).join(',');
+            convertedAnswer = raw.map((a: number) => String(a)).join(',');
           } else if (raw !== undefined && raw !== null && !isNaN(Number(raw))) {
-            convertedAnswer = String(Number(raw) + 1);
+            convertedAnswer = String(Number(raw));
           }
         } else if (q.type === 'ox') {
           const raw = q.userAnswer ?? q.answer;
@@ -263,11 +265,13 @@ export function useLearningQuizzes() {
         userId: user.uid,
         quizId,
         quizTitle,
-        quizCreatorId: user.uid, // 업로더가 생성자이므로 본인 ID
+        quizCreatorId: user.uid,
+        quizType: 'custom',
+        quizIsPublic: true,
         score,
         correctCount: questions.filter((q: any) => q.isCorrect !== false).length,
         totalCount: totalQuestions,
-        earnedExp: 0, // 서재 업로드는 이미 EXP를 받았으므로 0
+        earnedExp: 0,
         answers: userAnswers,
         questionScores,
         isUpdate: false,
@@ -286,13 +290,13 @@ export function useLearningQuizzes() {
         let normalizedType = question.type || 'multiple';
         if (normalizedType === 'short') normalizedType = 'short_answer';
 
-        // 정답 처리 (1-indexed 번호로 변환)
+        // 정답 처리 (0-indexed 그대로 문자열 변환)
         let correctAnswer = '';
         if (question.type === 'multiple') {
           if (Array.isArray(question.answer)) {
-            correctAnswer = question.answer.map((a: number) => String(a + 1)).join(',');
+            correctAnswer = question.answer.map((a: number) => String(a)).join(',');
           } else {
-            correctAnswer = String((question.answer ?? 0) + 1);
+            correctAnswer = String(question.answer ?? 0);
           }
         } else if (question.type === 'ox') {
           correctAnswer = question.answer === 0 ? 'O' : 'X';
@@ -300,14 +304,14 @@ export function useLearningQuizzes() {
           correctAnswer = String(question.answer ?? '');
         }
 
-        // 사용자 답변 처리 (1-indexed 번호로 변환)
+        // 사용자 답변 처리 (0-indexed 그대로 문자열 변환)
         let userAnswer = '';
         if (question.userAnswer !== undefined && question.userAnswer !== null) {
           if (question.type === 'multiple') {
             if (Array.isArray(question.userAnswer)) {
-              userAnswer = question.userAnswer.map((a: number) => String(a + 1)).join(',');
+              userAnswer = question.userAnswer.map((a: number) => String(a)).join(',');
             } else if (typeof question.userAnswer === 'number') {
-              userAnswer = String(question.userAnswer + 1);
+              userAnswer = String(question.userAnswer);
             } else {
               userAnswer = String(question.userAnswer);
             }

@@ -93,23 +93,14 @@ export const submitMashResult = onCall(
     // 내 탭 수 기록
     await battleRef.child(`mash/taps/${userId}`).set(validTaps);
 
-    // 봇 처리
     const players = battle.players;
     const playerIds = Object.keys(players);
     const opponentId = playerIds.find((id) => id !== userId)!;
     const opponent = players[opponentId];
 
-    if (opponent.isBot) {
-      // 봇: 경과 시간 기반 탭 수 (3~5탭/초)
-      const elapsed = Math.max(1000, Date.now() - (battle.mash.startedAt || Date.now()));
-      const botTapsPerSec = 3 + Math.random() * 2;
-      const botTaps = Math.floor((elapsed / 1000) * botTapsPerSec);
-      await battleRef.child(`mash/taps/${opponentId}`).set(botTaps);
-    }
-
     // 원자적 연타 결과 처리 (이중 처리 방지)
     const processedRef = battleRef.child("mash/processed");
-    const mashTx = await processedRef.transaction((current) => {
+    const mashTx = await processedRef.transaction((current: any) => {
       if (current) return; // 이미 처리됨 → abort
       return true;
     });
@@ -121,11 +112,19 @@ export const submitMashResult = onCall(
       return { winnerId: latestResult?.winnerId, bonusDamage: latestResult?.bonusDamage };
     }
 
-    // 최신 탭 수 읽기 (실시간 writeMashTap으로 기록된 값)
+    // ⚠️ 최신 탭 수 읽기 (클라이언트 writeMashTap/writeBotTap이 기록한 실시간 값)
     const latestTapsSnap = await battleRef.child("mash/taps").once("value");
     const latestTaps = latestTapsSnap.val() || {};
     const myTaps = latestTaps[userId] || validTaps;
-    const opTaps = latestTaps[opponentId] || 0;
+    let opTaps = latestTaps[opponentId] || 0;
+
+    // 봇 처리 — 최신 RTDB 값이 없을 때만 서버에서 생성 (역전 방지)
+    if (opponent.isBot && opTaps <= 0) {
+      const elapsed = Math.max(1000, Date.now() - (battle.mash.startedAt || Date.now()));
+      const botTapsPerSec = 3 + Math.random() * 2;
+      opTaps = Math.floor((elapsed / 1000) * botTapsPerSec);
+      await battleRef.child(`mash/taps/${opponentId}`).set(opTaps);
+    }
 
     const mashWinnerId = myTaps > opTaps ? userId : myTaps < opTaps ? opponentId : userId;
     const mashLoserId = mashWinnerId === userId ? opponentId : userId;
@@ -138,11 +137,8 @@ export const submitMashResult = onCall(
     const bonusDamage = calcBaseDamage(winnerRabbit.atk, loserRabbit.def);
 
     // 패자에게 보너스 데미지 — result + HP + 라운드 결과를 원자적으로 기록
-    const loserHpSnap = await battleRef
-      .child(`players/${mashLoserId}/rabbits/${loser.activeRabbitIndex}/currentHp`)
-      .once("value");
-    const currentLoserHp = loserHpSnap.val() ?? loserRabbit.currentHp;
-    const newHp = Math.max(0, currentLoserHp - bonusDamage);
+    // 이미 로드된 loserRabbit.currentHp 사용 (별도 RTDB 읽기 불필요)
+    const newHp = Math.max(0, loserRabbit.currentHp - bonusDamage);
     const roundIdx = battle.currentRound || 0;
     await battleRef.update({
       "mash/result": { winnerId: mashWinnerId, bonusDamage },

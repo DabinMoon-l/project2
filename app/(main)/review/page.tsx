@@ -408,9 +408,9 @@ function ReviewPageContent() {
           quizzes.push({
             id: d.id,
             title: data.title || '제목 없음',
-            questionCount: data.questionCount || 0,
+            questionCount: data.questions?.length || data.questionCount || 0,
             score: comp?.score ?? 0,
-            totalQuestions: comp?.total ?? data.questionCount ?? 0,
+            totalQuestions: comp?.total ?? data.questions?.length ?? data.questionCount ?? 0,
             createdAt: data.createdAt?.toDate?.() ?? new Date(),
             completedAt: data.createdAt?.toDate?.() ?? new Date(),
             isPublic: data.isPublic ?? false,
@@ -419,6 +419,7 @@ function ReviewPageContent() {
             myScore: data.userScores?.[user.uid] ?? comp?.score,
             myFirstReviewScore: data.userFirstReviewScores?.[user.uid],
             creatorId: data.creatorId || undefined,
+            quizType: data.type || undefined,
             oxCount: data.oxCount,
             multipleChoiceCount: data.multipleChoiceCount,
             subjectiveCount: data.subjectiveCount,
@@ -435,6 +436,9 @@ function ReviewPageContent() {
         // quizResults에서 제목 조회
         let title = '퀴즈';
         let totalCount = comp?.total ?? 0;
+        let quizCreatorId: string | undefined;
+        let quizType: string | undefined;
+        let quizIsPublic = false;
         try {
           const resultQuery = query(
             collection(db, 'quizResults'),
@@ -447,8 +451,15 @@ function ReviewPageContent() {
             const resultData = resultSnap.docs[0].data();
             title = resultData.quizTitle || '퀴즈';
             totalCount = resultData.totalCount || totalCount;
+            quizCreatorId = resultData.quizCreatorId || undefined;
+            quizType = resultData.quizType || undefined;
+            quizIsPublic = resultData.quizIsPublic ?? false;
           }
         } catch { /* 무시 */ }
+        // quizType이 없으면 creatorId로 추정
+        if (!quizType && quizCreatorId && quizCreatorId !== user.uid) {
+          quizType = 'professor';
+        }
         quizzes.push({
           id: missingId,
           title,
@@ -457,10 +468,12 @@ function ReviewPageContent() {
           totalQuestions: totalCount,
           createdAt: comp?.completedAt?.toDate?.() ?? new Date(),
           completedAt: comp?.completedAt?.toDate?.() ?? new Date(),
-          isPublic: false,
+          isPublic: quizIsPublic,
           tags: [],
           difficulty: 'medium',
           myScore: comp?.score,
+          creatorId: quizCreatorId,
+          quizType,
         });
       }
 
@@ -799,9 +812,9 @@ function ReviewPageContent() {
             let correctAnswer = '';
             if (q.type === 'multiple') {
               if (Array.isArray(q.answer)) {
-                correctAnswer = q.answer.map((a: number) => String(a + 1)).join(',');
+                correctAnswer = q.answer.map((a: number) => String(a)).join(',');
               } else {
-                correctAnswer = String((q.answer ?? 0) + 1);
+                correctAnswer = String(q.answer ?? 0);
               }
             } else if (q.type === 'ox') {
               correctAnswer = q.answer === 0 ? 'O' : 'X';
@@ -1433,10 +1446,8 @@ function ReviewPageContent() {
             {/* 태그 검색 헤더 (3개 이상일 때만 표시) */}
             {allLibraryQuizzes.length >= 3 && (
               <div className="mb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <h2 className="font-serif-display text-lg font-black text-[#1A1A1A]">서재</h2>
-
-                  {/* 선택된 태그들 + 태그 아이콘 (우측) */}
+                <div className="flex items-center justify-end mb-2">
+                  {/* 선택된 태그들 + 태그 아이콘 */}
                   <div className="flex items-center gap-2">
                     {/* 선택된 태그들 (태그 아이콘 왼쪽에 배치) */}
                     {librarySelectedTags.map((tag) => (
@@ -1569,18 +1580,19 @@ function ReviewPageContent() {
                           openLibraryQuizModal(quiz);
                         }}
                         onReview={() => {
-                          // 전체 복습 시작
-                          handleStartReviewByQuizId(quiz.id);
+                          // 서재 퀴즈는 항상 ReviewPractice로 열기
+                          router.push(`/review/library/${quiz.id}?autoStart=all`);
                         }}
                         onReviewWrongOnly={quiz.myScore === 100 ? undefined : () => {
-                          // 오답만 복습 시작
-                          handleStartReviewWrongOnlyByQuizId(quiz.id);
+                          // 서재 퀴즈 오답만 복습
+                          router.push(`/review/library/${quiz.id}?autoStart=wrongOnly`);
                         }}
                         onPublish={!quiz.isPublic && quiz.creatorId === user?.uid ? () => {
                           setPublishConfirmQuizId(quiz.id);
                         } : undefined}
                         isSelectMode={isLibrarySelectMode || isReviewSelectMode}
                         isSelected={isSelected}
+                        currentUserId={user?.uid}
                       />
                     </motion.div>
                   );
@@ -2007,12 +2019,12 @@ function ReviewPageContent() {
                               </div>
                             );
                           })()}
-                          <h3 className={`font-serif-display font-bold text-sm ${
+                          <h3 className={`font-bold text-xl ${
                             isAssignMode && selectedFolderForAssign ? 'text-[#1A6B1A]' : 'text-[#1A1A1A]'
                           }`}>
                             {folderCategories[0]?.name || '미분류'}
                           </h3>
-                          <span className={`text-xs ${
+                          <span className={`text-xl ml-1.5 ${
                             isAssignMode && selectedFolderForAssign ? 'text-[#1A6B1A]' : 'text-[#5C5C5C]'
                           }`}>
                             ({firstCategoryFolders.length})
@@ -2207,12 +2219,12 @@ function ReviewPageContent() {
                                 </div>
                               );
                             })()}
-                            <h3 className={`font-serif-display font-bold text-sm ${
+                            <h3 className={`font-bold text-xl ${
                               isAssignMode && selectedFolderForAssign ? 'text-[#1A6B1A]' : 'text-[#1A1A1A]'
                             }`}>
                               미분류
                             </h3>
-                            <span className={`text-xs ${
+                            <span className={`text-xl ml-1.5 ${
                               isAssignMode && selectedFolderForAssign ? 'text-[#1A6B1A]' : 'text-[#5C5C5C]'
                             }`}>
                               ({sortedUncategorized.length})
@@ -2425,15 +2437,12 @@ function ReviewPageContent() {
                                 </div>
                               );
                             })()}
-                            <span className={`font-bold text-sm min-w-[60px] ${
+                            <span className={`font-bold text-xl ${
                               isAssignMode && selectedFolderForAssign ? 'text-[#1A6B1A]' : 'text-[#1A1A1A]'
                             }`}>{cat.name}</span>
-                            <div className={`flex-1 border-t border-dashed mx-2 ${
-                              isAssignMode && selectedFolderForAssign ? 'border-[#1A6B1A]' : 'border-[#5C5C5C]'
-                            }`} />
-                            <span className={`text-xs min-w-[30px] text-right ${
+                            <span className={`text-xl ml-1.5 ${
                               isAssignMode && selectedFolderForAssign ? 'text-[#1A6B1A]' : 'text-[#5C5C5C]'
-                            }`}>{categoryFolders.length}개</span>
+                            }`}>({categoryFolders.length})</span>
                           </div>
 
                           {/* 폴더들 - 4개 이상이면 좌우 슬라이드 */}

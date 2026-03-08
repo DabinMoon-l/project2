@@ -307,7 +307,7 @@ function SingleQuestionCard({
         <div className="mb-4 space-y-2">
           <p className="text-xs font-bold text-[#5C5C5C]">선지</p>
           {question.options.map((option, idx) => {
-            const optionNum = (idx + 1).toString();
+            const optionNum = idx.toString();
             const correctAnswerStr = question.correctAnswer?.toString() || '';
             const userAnswerStr = question.userAnswer?.toString() || '';
 
@@ -796,7 +796,7 @@ function CombinedQuestionCard({
               <div className="mb-4 space-y-2">
                 <p className="text-xs font-bold text-[#5C5C5C]">선지</p>
                 {question.options.map((option, optIdx) => {
-                  const optionNum = (optIdx + 1).toString();
+                  const optionNum = optIdx.toString();
                   const correctAnswerStr = question.correctAnswer?.toString() || '';
                   const userAnswerStr = question.userAnswer?.toString() || '';
 
@@ -1110,12 +1110,12 @@ export default function FeedbackPage() {
           if (q.correctAnswer !== undefined && q.correctAnswer !== null) {
             correctAnswer = q.correctAnswer;
           } else if (q.answer !== undefined && q.answer !== null) {
-            // AI 퀴즈: answer가 0-indexed 숫자인 경우 1-indexed로 변환
+            // AI 퀴즈: answer가 0-indexed 숫자 → 문자열 변환
             if (q.type === 'multiple') {
               if (Array.isArray(q.answer)) {
-                correctAnswer = q.answer.map((a: number) => String(a + 1)).join(',');
+                correctAnswer = q.answer.map((a: number) => String(a)).join(',');
               } else if (typeof q.answer === 'number') {
-                correctAnswer = String(q.answer + 1);
+                correctAnswer = String(q.answer);
               } else {
                 correctAnswer = q.answer;
               }

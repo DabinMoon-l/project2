@@ -74,6 +74,7 @@ interface UseTekkenBattleReturn {
 
   // 연타 RTDB
   writeMashTap: (count: number) => void;
+  writeBotTap: (count: number) => void;
   opponentMashTaps: number;
 
   // 연타
@@ -185,11 +186,18 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     };
   }, [battle?.mash?.mashId, userId]);
 
-  // 배틀/문제 타이머
+  // 배틀/문제 타이머 — 초 단위 변경 시만 setState (리렌더 75% 감소)
+  const prevQSecRef = useRef(-1);
+  const prevBSecRef = useRef(-1);
+  const rawQuestionTimeRef = useRef(0);
+
   useEffect(() => {
     if (!battle || battle.status === 'finished') {
       setBattleTimeLeft(0);
       setQuestionTimeLeft(0);
+      rawQuestionTimeRef.current = 0;
+      prevQSecRef.current = -1;
+      prevBSecRef.current = -1;
       if (battleTimerRef.current) clearInterval(battleTimerRef.current);
       return;
     }
@@ -197,20 +205,35 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     const tick = () => {
       const now = Date.now();
 
+      // 배틀 전체 타이머 (초 단위 변경 시만)
       if (battle.endsAt) {
-        setBattleTimeLeft(Math.max(0, battle.endsAt - now));
+        const bLeft = Math.max(0, battle.endsAt - now);
+        const bSec = Math.ceil(bLeft / 1000);
+        if (bSec !== prevBSecRef.current) {
+          prevBSecRef.current = bSec;
+          setBattleTimeLeft(bLeft);
+        }
       }
 
+      // 문제 타이머
       const round = battle.rounds?.[battle.currentRound];
       if (round?.timeoutAt && battle.status === 'question') {
-        setQuestionTimeLeft(Math.max(0, round.timeoutAt - now));
-      } else {
+        const qLeft = Math.max(0, round.timeoutAt - now);
+        rawQuestionTimeRef.current = qLeft;
+        const qSec = Math.ceil(qLeft / 1000);
+        if (qSec !== prevQSecRef.current) {
+          prevQSecRef.current = qSec;
+          setQuestionTimeLeft(qLeft);
+        }
+      } else if (prevQSecRef.current !== 0) {
+        prevQSecRef.current = 0;
+        rawQuestionTimeRef.current = 0;
         setQuestionTimeLeft(0);
       }
     };
 
     tick();
-    battleTimerRef.current = setInterval(tick, 100);
+    battleTimerRef.current = setInterval(tick, 250);
 
     return () => {
       if (battleTimerRef.current) clearInterval(battleTimerRef.current);
@@ -419,6 +442,16 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     set(tapRef, count).catch(() => {});
   }, [userId]);
 
+  // 봇 탭 수 RTDB 쓰기 (봇 연타 실시간 시뮬레이션용)
+  const writeBotTap = useCallback((count: number) => {
+    if (!battleIdRef.current || !battle) return;
+    const playerIds = Object.keys(battle.players || {});
+    const opponentId = playerIds.find(id => id !== userId);
+    if (!opponentId) return;
+    const tapRef = ref(getRtdb(), `tekken/battles/${battleIdRef.current}/mash/taps/${opponentId}`);
+    set(tapRef, count).catch(() => {});
+  }, [userId, battle]);
+
   // 타임아웃 제출 — 네트워크 에러 시 throw (호출자가 timeoutSubmitted 복구)
   const handleSubmitTimeout = useCallback(async () => {
     if (!battleIdRef.current || !battle) return;
@@ -509,6 +542,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     submitTimeout: handleSubmitTimeout,
 
     writeMashTap,
+    writeBotTap,
     opponentMashTaps,
 
     mash: battle?.mash ?? null,

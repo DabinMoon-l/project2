@@ -16,6 +16,7 @@ import {
   addDoc,
   serverTimestamp,
   Timestamp,
+  limit,
 } from 'firebase/firestore';
 import { db, functions } from '@/lib/firebase';
 import { httpsCallable } from 'firebase/functions';
@@ -28,12 +29,143 @@ import type { PracticeResult } from '@/components/review/ReviewPractice';
 
 // 대형 컴포넌트 lazy load (2,513줄 — 복습 풀이 시에만 로드)
 const ReviewPractice = dynamic(() => import('@/components/review/ReviewPractice'), { ssr: false });
-import { formatChapterLabel, getChapterById } from '@/lib/courseIndex';
+// 퀴즈 수정 모드용 에디터 (lazy load)
+const QuestionEditor = dynamic(() => import('@/components/quiz/create/QuestionEditor'));
+import { formatChapterLabel, getChapterById, generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import { useHideNav } from '@/lib/hooks/useHideNav';
 import { type FeedbackType, type DisplayItem, type ReviewFilter } from '@/components/review/types';
 import { KOREAN_LABELS, parseQuestionId, sortByQuestionId, createDisplayItems } from '@/lib/utils/reviewQuestionUtils';
 import QuestionCard from '@/components/review/QuestionCard';
+import QuestionList from '@/components/quiz/create/QuestionList';
+import type { QuestionData, SubQuestion } from '@/components/quiz/create/questionTypes';
 import AddQuestionsView from '@/components/review/AddQuestionsView';
+
+// ============================================================
+// Firestore questions → QuestionData[] 변환 (교수 서재탭과 동일)
+// ============================================================
+const convertToQuestionDataList = (rawQuestions: any[]): QuestionData[] => {
+  const loadedQuestions: QuestionData[] = [];
+  const processedCombinedGroups = new Set<string>();
+
+  rawQuestions.forEach((q: any, index: number) => {
+    if (q.combinedGroupId) {
+      if (processedCombinedGroups.has(q.combinedGroupId)) return;
+      processedCombinedGroups.add(q.combinedGroupId);
+
+      const groupQuestions = rawQuestions
+        .filter((gq: any) => gq.combinedGroupId === q.combinedGroupId)
+        .sort((a: any, b: any) => (a.combinedIndex || 0) - (b.combinedIndex || 0));
+
+      const firstQ = groupQuestions[0] as any;
+
+      const subQuestions: SubQuestion[] = groupQuestions.map((sq: any) => {
+        let answerIndex = -1;
+        let answerIndices: number[] | undefined;
+        let isMultipleAnswer = false;
+
+        if (sq.type === 'multiple') {
+          if (Array.isArray(sq.answer)) {
+            const sqChoiceCount = (sq.choices || []).length || 4;
+            const anyOver = sq.answer.some((a: number) => typeof a === 'number' && a >= sqChoiceCount);
+            answerIndices = anyOver ? sq.answer.map((a: number) => typeof a === 'number' ? a - 1 : a) : [...sq.answer];
+            isMultipleAnswer = true;
+            answerIndex = (answerIndices && answerIndices[0] !== undefined) ? answerIndices[0] : -1;
+          } else if (typeof sq.answer === 'number') {
+            const sqChoiceCount = (sq.choices || []).length || 4;
+            if (sq.answer >= sqChoiceCount) {
+              answerIndex = sq.answer - 1;
+            } else if (sq.answer >= 0) {
+              answerIndex = sq.answer;
+            }
+          }
+        } else if (sq.type === 'ox' && typeof sq.answer === 'number') {
+          answerIndex = sq.answer;
+        }
+        return {
+          id: sq.id || `${q.combinedGroupId}_${sq.combinedIndex || 0}`,
+          text: sq.text || '',
+          type: sq.type || 'multiple',
+          choices: sq.choices || undefined,
+          answerIndex: sq.type === 'multiple' || sq.type === 'ox' ? answerIndex : undefined,
+          answerIndices: isMultipleAnswer ? answerIndices : undefined,
+          isMultipleAnswer: isMultipleAnswer || undefined,
+          answerText: typeof sq.answer === 'string' ? sq.answer : undefined,
+          explanation: sq.explanation || undefined,
+          mixedExamples: sq.examples || sq.mixedExamples || undefined,
+          image: sq.imageUrl || undefined,
+          chapterId: sq.chapterId || undefined,
+          chapterDetailId: sq.chapterDetailId || undefined,
+          passagePrompt: sq.passagePrompt || undefined,
+          bogi: sq.bogi || null,
+          passageBlocks: sq.passageBlocks || undefined,
+        };
+      });
+
+      loadedQuestions.push({
+        id: q.combinedGroupId,
+        text: firstQ.combinedMainText || '',
+        type: 'combined',
+        choices: [],
+        answerIndex: -1,
+        answerText: '',
+        explanation: '',
+        subQuestions,
+        passageType: firstQ.passageType || undefined,
+        passage: firstQ.passage || undefined,
+        koreanAbcItems: firstQ.koreanAbcItems || undefined,
+        passageMixedExamples: firstQ.passageMixedExamples || undefined,
+        passageImage: firstQ.passageImage || undefined,
+        commonQuestion: firstQ.commonQuestion || undefined,
+      });
+    } else {
+      let answerIndex = -1;
+      let answerIndices: number[] | undefined;
+      let isMultipleAnswer = false;
+
+      if (q.type === 'multiple') {
+        if (Array.isArray(q.answer)) {
+          const qChoiceCount = (q.choices || []).length || 4;
+          const anyOver = q.answer.some((a: number) => typeof a === 'number' && a >= qChoiceCount);
+          answerIndices = anyOver ? q.answer.map((a: number) => typeof a === 'number' ? a - 1 : a) : [...q.answer];
+          isMultipleAnswer = true;
+          answerIndex = (answerIndices && answerIndices[0] !== undefined) ? answerIndices[0] : -1;
+        } else if (typeof q.answer === 'number') {
+          const qChoiceCount = (q.choices || []).length || 4;
+          if (q.answer >= qChoiceCount) {
+            answerIndex = q.answer - 1;
+          } else if (q.answer >= 0) {
+            answerIndex = q.answer;
+          }
+        }
+      } else if (q.type === 'ox' && typeof q.answer === 'number') {
+        answerIndex = q.answer;
+      }
+
+      loadedQuestions.push({
+        id: q.id || `q_${index}`,
+        text: q.text || '',
+        type: q.type || 'multiple',
+        choices: q.choices || ['', '', '', ''],
+        answerIndex,
+        answerIndices: isMultipleAnswer ? answerIndices : undefined,
+        isMultipleAnswer: isMultipleAnswer || undefined,
+        answerText: typeof q.answer === 'string' ? q.answer : '',
+        explanation: q.explanation || '',
+        imageUrl: q.imageUrl || null,
+        examples: q.examples || null,
+        mixedExamples: q.mixedExamples || null,
+        chapterId: q.chapterId || undefined,
+        chapterDetailId: q.chapterDetailId || undefined,
+        passagePrompt: q.passagePrompt || undefined,
+        bogi: q.bogi || null,
+        scoringMethod: q.scoringMethod || undefined,
+        passageBlocks: q.passageBlocks || undefined,
+      });
+    }
+  });
+
+  return loadedQuestions;
+};
 
 /**
  * 폴더 상세 페이지
@@ -140,11 +272,16 @@ export default function FolderDetailPage() {
   // 수정된 문제 ID 집합 (문제별 뱃지 표시용)
   const [updatedQuestionIds, setUpdatedQuestionIds] = useState<Set<string>>(new Set());
 
-  // 수정 모드 상태 (제목 + 문제 인라인 수정)
+  // 수정 모드 상태 (QuestionList + QuestionEditor 방식 — 교수 서재와 동일)
   const [isEditMode, setIsEditMode] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
-  const [editedQuestions, setEditedQuestions] = useState<Record<string, { question?: string; options?: string[]; explanation?: string; choiceExplanations?: string[] }>>({});
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editableQuestions, setEditableQuestions] = useState<QuestionData[]>([]);
+  const [originalQuestions, setOriginalQuestions] = useState<any[]>([]);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editDifficulty, setEditDifficulty] = useState<'easy' | 'normal' | 'hard'>('normal');
+  const [editedTags, setEditedTags] = useState<string[]>([]);
+  const [showEditTagPicker, setShowEditTagPicker] = useState(false);
 
   const loadedFolderRef = useRef<string | null>(null);
   const supplementedExpsRef = useRef<string | null>(null);
@@ -320,12 +457,13 @@ export default function FolderDetailPage() {
           questionScores = sorted[0].data().questionScores || {};
         }
 
-        // 삭제된 퀴즈: reviews 컬렉션에서 폴백 로드
+        // 삭제된 퀴즈: reviews 컬렉션에서 폴백 로드 (solved만 — wrong은 중복)
         if (!quizDoc.exists()) {
           const reviewFallbackQuery = query(
             collection(db, 'reviews'),
             where('userId', '==', user.uid),
-            where('quizId', '==', folderId)
+            where('quizId', '==', folderId),
+            where('reviewType', '==', 'solved')
           );
           const reviewFallbackDocs = await getDocs(reviewFallbackQuery);
           if (reviewFallbackDocs.empty) {
@@ -407,36 +545,15 @@ export default function FolderDetailPage() {
         // questions 배열을 ReviewItem 형식으로 변환
         const questions = quizData.questions || [];
 
-        // questionScores의 userAnswer가 0-indexed인지 1-indexed인지 자동 감지
-        // 정답인 문제에서 scoreData.userAnswer == q.answer(0-indexed)이면 0-indexed 데이터
-        let scoreAnswerIsZeroIndexed = false;
-        if (Object.keys(questionScores).length > 0) {
-          for (let i = 0; i < questions.length; i++) {
-            const q = questions[i];
-            const qId = q.id || `q${i}`;
-            const sd = questionScores[qId];
-            if (sd && sd.isCorrect === true && q.type === 'multiple' && q.answer !== undefined) {
-              const ua = Number(sd.userAnswer);
-              const ca = typeof q.answer === 'number' ? q.answer : Number(q.answer);
-              if (!isNaN(ua) && !isNaN(ca)) {
-                // userAnswer와 correctAnswer(0-indexed)가 같으면 0-indexed 데이터
-                scoreAnswerIsZeroIndexed = (ua === ca);
-                break;
-              }
-            }
-          }
-        }
 
         const items: ReviewItem[] = questions.map((q: any, idx: number) => {
-          // 정답 변환 (1-indexed 번호 또는 텍스트)
+          // 정답 변환 (0-indexed 그대로)
           let correctAnswer = '';
           if (q.type === 'multiple') {
-            // 복수정답 지원: answer가 배열인 경우
             if (Array.isArray(q.answer)) {
-              correctAnswer = q.answer.map((a: number) => String(a + 1)).join(',');
+              correctAnswer = q.answer.map((a: number) => String(a)).join(',');
             } else {
-              // 0-indexed를 1-indexed로 변환
-              correctAnswer = String((q.answer ?? 0) + 1);
+              correctAnswer = String(q.answer ?? 0);
             }
           } else if (q.type === 'ox') {
             correctAnswer = q.answer === 0 ? 'O' : 'X';
@@ -444,22 +561,14 @@ export default function FolderDetailPage() {
             correctAnswer = String(q.answer ?? '');
           }
 
-          // 사용자 답변 변환 (0-indexed → 1-indexed)
-          // 퀴즈 문서의 userAnswer는 0-indexed (AIQuizContainer가 저장)
+          // 사용자 답변 변환 (0-indexed 그대로)
           let userAnswer = '';
           if (q.userAnswer !== undefined && q.userAnswer !== null) {
             if (q.type === 'multiple') {
               if (Array.isArray(q.userAnswer)) {
-                userAnswer = q.userAnswer.map((a: any) => String(Number(a) + 1)).join(',');
+                userAnswer = q.userAnswer.map((a: any) => String(Number(a))).join(',');
               } else if (typeof q.userAnswer === 'number') {
-                userAnswer = String(q.userAnswer + 1);
-              } else if (typeof q.userAnswer === 'string' && q.userAnswer !== '' && !isNaN(Number(q.userAnswer))) {
-                // 0-indexed 문자열 (예: "2") → 1-indexed (예: "3")
-                if (q.userAnswer.includes(',')) {
-                  userAnswer = q.userAnswer.split(',').map((a: string) => String(Number(a.trim()) + 1)).join(',');
-                } else {
-                  userAnswer = String(Number(q.userAnswer) + 1);
-                }
+                userAnswer = String(q.userAnswer);
               } else {
                 userAnswer = String(q.userAnswer);
               }
@@ -474,26 +583,13 @@ export default function FolderDetailPage() {
           }
 
           // quizResults에서 해당 문제 결과 가져오기
-          // questionScores 키는 question ID (예: "q1", "q2" 또는 커스텀 ID)
           const questionId = q.id || `q${idx}`;
           const scoreData = questionScores[questionId];
 
-          // scoreData.userAnswer 변환 (0-indexed 데이터면 1-indexed로 변환)
-          let finalUserAnswer = userAnswer; // 기본값: 퀴즈 문서에서 변환한 값
+          // scoreData.userAnswer (0-indexed 그대로 사용)
+          let finalUserAnswer = userAnswer;
           if (scoreData?.userAnswer !== undefined) {
-            const rawUA = String(scoreData.userAnswer);
-            if (scoreAnswerIsZeroIndexed && q.type === 'multiple') {
-              // 0-indexed → 1-indexed 변환
-              if (rawUA.includes(',')) {
-                finalUserAnswer = rawUA.split(',').map((a: string) => String(Number(a.trim()) + 1)).join(',');
-              } else if (rawUA !== '' && !isNaN(Number(rawUA))) {
-                finalUserAnswer = String(Number(rawUA) + 1);
-              } else {
-                finalUserAnswer = rawUA;
-              }
-            } else {
-              finalUserAnswer = rawUA;
-            }
+            finalUserAnswer = String(scoreData.userAnswer);
           }
 
           return {
@@ -584,9 +680,9 @@ export default function FolderDetailPage() {
           let correctAnswer = '';
           if (q.type === 'multiple') {
             if (Array.isArray(q.answer)) {
-              correctAnswer = q.answer.map((a: number) => String(a + 1)).join(',');
+              correctAnswer = q.answer.map((a: number) => String(a)).join(',');
             } else {
-              correctAnswer = String((q.answer ?? 0) + 1);
+              correctAnswer = String(q.answer ?? 0);
             }
           } else if (q.type === 'ox') {
             correctAnswer = q.answer === 0 ? 'O' : 'X';
@@ -781,8 +877,28 @@ export default function FolderDetailPage() {
         const quizDoc = await getDoc(doc(db, 'quizzes', folderId));
         if (quizDoc.exists()) {
           const data = quizDoc.data();
+          let myScore = data.userScores?.[user.uid] ?? data.score;
+
+          // userScores에 점수가 없으면 quizResults에서 폴백 조회
+          if (myScore === undefined || myScore === null) {
+            try {
+              const resultsQuery = query(
+                collection(db, 'quizResults'),
+                where('userId', '==', user.uid),
+                where('quizId', '==', folderId)
+              );
+              const resultsSnap = await getDocs(resultsQuery);
+              if (!resultsSnap.empty) {
+                // 퀴즈 점수(isReviewPractice 아닌 것) 우선, 없으면 복습 점수 사용
+                const quizResult = resultsSnap.docs.find(d => !d.data().isReviewPractice);
+                const anyResult = quizResult || resultsSnap.docs[0];
+                myScore = anyResult.data().score;
+              }
+            } catch { /* 폴백 실패 무시 */ }
+          }
+
           setQuizScores({
-            myScore: data.userScores?.[user.uid] ?? data.score,
+            myScore,
             myFirstReviewScore: data.userFirstReviewScores?.[user.uid],
             averageScore: data.averageScore,
             isPublic: data.isPublic ?? false,
@@ -876,77 +992,153 @@ export default function FolderDetailPage() {
     setSelectedIds(new Set());
   };
 
-  // 수정 모드 진입 핸들러
-  const handleEnterEditMode = () => {
+  // 수정 모드 진입 핸들러 (퀴즈 문서에서 questions 로드 → QuestionData 변환)
+  const handleEnterEditMode = async () => {
     setEditedTitle(libraryQuizTitle);
-    setEditedQuestions({});
+    setEditingIndex(null);
+    setShowEditTagPicker(false);
+
+    try {
+      const quizDoc = await getDoc(doc(db, 'quizzes', folderId));
+      if (quizDoc.exists()) {
+        const data = quizDoc.data();
+        const questions = data.questions || [];
+        setOriginalQuestions(questions);
+        setEditableQuestions(convertToQuestionDataList(questions));
+        setEditDifficulty(data.difficulty || 'normal');
+        setEditedTags(data.tags || []);
+      }
+    } catch (err) {
+      console.error('퀴즈 로드 실패:', err);
+    }
+
     setIsEditMode(true);
   };
 
-  // 수정 모드 저장 핸들러 (제목 + 문제 일괄 저장)
-  const handleSaveEdits = async () => {
-    const editedKeys = Object.keys(editedQuestions);
-    const titleChanged = editedTitle.trim() && editedTitle.trim() !== libraryQuizTitle;
+  // QuestionData[] → Firestore 저장 형식 변환 (교수 서재와 동일)
+  const flattenQuestionsForSave = (): any[] => {
+    const flattenedQuestions: any[] = [];
+    let orderIndex = 0;
 
-    if (editedKeys.length === 0 && !titleChanged) {
-      setIsEditMode(false);
-      return;
-    }
+    editableQuestions.forEach((q) => {
+      if (q.type === 'combined' && q.subQuestions && q.subQuestions.length > 0) {
+        const combinedGroupId = q.id || `combined_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const subQuestionsCount = q.subQuestions.length;
+
+        q.subQuestions.forEach((sq, sqIndex) => {
+          let answer: string | number | number[];
+          if (sq.type === 'subjective' || sq.type === 'short_answer') {
+            answer = sq.answerText || '';
+          } else if (sq.type === 'multiple') {
+            if (sq.answerIndices && sq.answerIndices.length > 0) {
+              answer = sq.answerIndices;
+            } else {
+              answer = (sq.answerIndex !== undefined && sq.answerIndex >= 0) ? sq.answerIndex : -1;
+            }
+          } else {
+            answer = sq.answerIndex ?? 0;
+          }
+
+          const originalQ = originalQuestions.find((oq) => oq.id === sq.id);
+          const subQuestionData: any = {
+            ...(originalQ || {}),
+            id: sq.id || `${combinedGroupId}_${sqIndex}`,
+            order: orderIndex++,
+            text: sq.text,
+            type: sq.type,
+            choices: sq.type === 'multiple' ? (sq.choices || []).filter((c) => c.trim()) : undefined,
+            answer,
+            explanation: sq.explanation || undefined,
+            imageUrl: sq.image || undefined,
+            examples: sq.mixedExamples || undefined,
+            mixedExamples: sq.mixedExamples || undefined,
+            passagePrompt: sq.passagePrompt || undefined,
+            bogi: sq.bogi || undefined,
+            passageBlocks: sq.passageBlocks || undefined,
+            combinedGroupId,
+            combinedIndex: sqIndex,
+            combinedTotal: subQuestionsCount,
+            chapterId: sq.chapterId || undefined,
+            chapterDetailId: sq.chapterDetailId || undefined,
+          };
+
+          if (sqIndex === 0) {
+            subQuestionData.passageType = q.passageType || undefined;
+            subQuestionData.passage = q.passage || undefined;
+            subQuestionData.koreanAbcItems = q.koreanAbcItems || undefined;
+            subQuestionData.passageMixedExamples = q.passageMixedExamples || undefined;
+            subQuestionData.passageImage = q.passageImage || undefined;
+            subQuestionData.commonQuestion = q.commonQuestion || undefined;
+            subQuestionData.combinedMainText = q.text || '';
+          }
+
+          flattenedQuestions.push(subQuestionData);
+        });
+      } else {
+        let answer: string | number | number[];
+        if (q.type === 'subjective' || q.type === 'short_answer') {
+          answer = q.answerText;
+        } else if (q.type === 'multiple') {
+          if (q.answerIndices && q.answerIndices.length > 0) {
+            answer = q.answerIndices;
+          } else {
+            answer = q.answerIndex >= 0 ? q.answerIndex : -1;
+          }
+        } else {
+          answer = q.answerIndex;
+        }
+
+        const originalQ = originalQuestions.find((oq) => oq.id === q.id);
+        flattenedQuestions.push({
+          ...(originalQ || {}),
+          id: q.id,
+          order: orderIndex++,
+          text: q.text,
+          type: q.type,
+          choices: q.type === 'multiple' ? q.choices?.filter((c) => c.trim()) : undefined,
+          answer,
+          explanation: q.explanation || undefined,
+          imageUrl: q.imageUrl || undefined,
+          examples: q.examples || undefined,
+          mixedExamples: q.mixedExamples || undefined,
+          passagePrompt: q.passagePrompt || undefined,
+          bogi: q.bogi || undefined,
+          scoringMethod: q.scoringMethod || undefined,
+          passageBlocks: q.passageBlocks || undefined,
+          chapterId: q.chapterId || undefined,
+          chapterDetailId: q.chapterDetailId || undefined,
+        });
+      }
+    });
+
+    // Firestore는 undefined 값을 허용하지 않으므로 제거
+    return flattenedQuestions.map((q) => {
+      const cleaned: Record<string, any> = {};
+      for (const [key, value] of Object.entries(q)) {
+        if (value !== undefined) cleaned[key] = value;
+      }
+      return cleaned;
+    });
+  };
+
+  // 수정 모드 저장 핸들러 (QuestionData → Firestore 형식 변환 후 저장)
+  const handleSaveEdits = async () => {
+    if (editableQuestions.length < 1) return;
 
     setIsSavingEdit(true);
     try {
       const updateData: Record<string, any> = {};
+      const titleChanged = editedTitle.trim() && editedTitle.trim() !== libraryQuizTitle;
 
-      // 제목 변경
       if (titleChanged) {
         updateData.title = editedTitle.trim();
       }
 
-      // 문제 변경
-      if (editedKeys.length > 0) {
-        const quizDoc = await getDoc(doc(db, 'quizzes', folderId));
-        if (!quizDoc.exists()) {
-          showToast('퀴즈를 찾을 수 없습니다');
-          setIsSavingEdit(false);
-          return;
-        }
-
-        const quizData = quizDoc.data();
-        const updatedQs = [...(quizData.questions || [])];
-
-        // 로컬 libraryQuestions의 choiceExplanations를 questionId로 매핑
-        // (reviews 폴백으로 로드된 데이터가 퀴즈 문서에 없을 수 있음)
-        const localChoiceExpsMap = new Map<string, string[]>();
-        libraryQuestions.forEach(item => {
-          if (item.choiceExplanations && item.choiceExplanations.length > 0) {
-            localChoiceExpsMap.set(item.questionId, item.choiceExplanations);
-          }
-        });
-
-        // 모든 문제의 choiceExplanations를 퀴즈 문서에 동기화
-        updatedQs.forEach((q: any, idx: number) => {
-          const qId = q.id || `q${idx}`;
-          if (!q.choiceExplanations) {
-            const localExps = localChoiceExpsMap.get(qId);
-            if (localExps) {
-              q.choiceExplanations = localExps;
-            }
-          }
-        });
-
-        for (const questionId of editedKeys) {
-          const edits = editedQuestions[questionId];
-          const qIdx = updatedQs.findIndex((q: any, idx: number) => (q.id || `q${idx}`) === questionId);
-          if (qIdx === -1) continue;
-
-          if (edits.question !== undefined) updatedQs[qIdx].text = edits.question;
-          if (edits.options !== undefined) updatedQs[qIdx].choices = edits.options;
-          if (edits.explanation !== undefined) updatedQs[qIdx].explanation = edits.explanation;
-          if (edits.choiceExplanations !== undefined) updatedQs[qIdx].choiceExplanations = edits.choiceExplanations;
-        }
-
-        updateData.questions = updatedQs;
-      }
+      const flattenedQuestions = flattenQuestionsForSave();
+      updateData.questions = flattenedQuestions;
+      updateData.totalQuestions = flattenedQuestions.length;
+      updateData.difficulty = editDifficulty;
+      updateData.tags = editedTags;
 
       await updateDoc(doc(db, 'quizzes', folderId), updateData);
 
@@ -954,25 +1146,45 @@ export default function FolderDetailPage() {
       if (titleChanged) {
         setLibraryQuizTitle(editedTitle.trim());
       }
-      if (editedKeys.length > 0) {
-        setLibraryQuestions(prev =>
-          prev.map(item => {
-            const edits = editedQuestions[item.questionId];
-            if (!edits) return item;
-            return {
-              ...item,
-              question: edits.question ?? item.question,
-              options: edits.options ?? item.options,
-              explanation: edits.explanation ?? item.explanation,
-              choiceExplanations: edits.choiceExplanations ?? item.choiceExplanations,
-            };
-          })
-        );
-      }
+
+      // libraryQuestions 갱신 — 저장된 문제 데이터로 재구성
+      setLibraryQuestions(flattenedQuestions.map((q: any, idx: number) => {
+        const qId = q.id || `q${idx}`;
+        // 기존 libraryQuestions에서 매칭되는 항목 찾기
+        const existing = libraryQuestions.find(lq => lq.questionId === qId);
+
+        let correctAnswer = '';
+        if (q.type === 'multiple') {
+          correctAnswer = Array.isArray(q.answer) ? q.answer.map(String).join(',') : String(q.answer ?? 0);
+        } else if (q.type === 'ox') {
+          correctAnswer = q.answer === 0 ? 'O' : 'X';
+        } else {
+          correctAnswer = String(q.answer ?? '');
+        }
+
+        return {
+          ...(existing || {}),
+          id: existing?.id || `temp_${qId}`,
+          questionId: qId,
+          quizId: folderId,
+          question: q.text || '',
+          type: q.type || 'multiple',
+          options: q.choices || [],
+          correctAnswer,
+          explanation: q.explanation || '',
+          choiceExplanations: q.choiceExplanations || null,
+          image: q.imageUrl || null,
+          isCorrect: existing?.isCorrect ?? true,
+          userAnswer: existing?.userAnswer || correctAnswer,
+          reviewType: existing?.reviewType || 'solved',
+          isBookmarked: existing?.isBookmarked || false,
+          reviewCount: existing?.reviewCount || 0,
+          lastReviewedAt: existing?.lastReviewedAt || null,
+        } as ReviewItem;
+      }));
 
       setIsEditMode(false);
-      setEditedQuestions({});
-      showToast('수정 완료');
+      setEditingIndex(null);
     } catch (err) {
       console.error('수정 실패:', err);
       showToast('수정에 실패했습니다');
@@ -980,12 +1192,35 @@ export default function FolderDetailPage() {
     setIsSavingEdit(false);
   };
 
+  // 문제 편집 핸들러 (QuestionList → QuestionEditor 전환)
+  const handleEditQuestion = (index: number) => setEditingIndex(index);
+  const handleAddQuestion = () => setEditingIndex(-1);
+  const handleCancelQuestionEdit = () => setEditingIndex(null);
+  const handleSaveQuestion = (question: QuestionData) => {
+    if (editingIndex === -1) {
+      setEditableQuestions(prev => [...prev, question]);
+    } else if (editingIndex !== null) {
+      setEditableQuestions(prev => prev.map((q, i) => i === editingIndex ? question : q));
+    }
+    setEditingIndex(null);
+  };
+
   // 수정 모드 취소 핸들러
   const handleCancelEdit = () => {
     setIsEditMode(false);
-    setEditedQuestions({});
+    setEditingIndex(null);
+    setEditableQuestions([]);
+    setOriginalQuestions([]);
     setEditedTitle('');
+    setEditedTags([]);
+    setShowEditTagPicker(false);
   };
+
+  // 태그 옵션 생성
+  const editTagOptions = useMemo(() => {
+    const courseTags = userCourse?.id ? generateCourseTags(userCourse.id) : [];
+    return [...courseTags, ...COMMON_TAGS];
+  }, [userCourse?.id]);
 
   // 현재 문제지의 오답 개수 계산
   const wrongCount = useMemo(() => {
@@ -1333,6 +1568,89 @@ export default function FolderDetailPage() {
           console.error('리뷰 뱃지 업데이트 실패:', err);
         }
       }
+
+      // 4. 서재 AI 퀴즈: 퀴즈 점수 저장 + 오답 reviews 생성 (최초 1회)
+      // AI 생성 직후 풀기 = 퀴즈 점수, 서재에서 처음 풀기도 퀴즈 점수로 취급
+      if (folderType === 'library' && quizData) {
+        const existingQuizScore = quizData.userScores?.[user.uid];
+
+        // 4-1. 퀴즈 점수가 없으면 저장 (첫 풀이 = 퀴즈 점수)
+        if (existingQuizScore === undefined) {
+          try {
+            await updateDoc(doc(db, 'quizzes', folderId), {
+              [`userScores.${user.uid}`]: reviewScore,
+              score: reviewScore,
+              participantCount: 1,
+            });
+            // 로컬 상태 즉시 갱신
+            setQuizScores(prev => prev ? { ...prev, myScore: reviewScore } : prev);
+          } catch (err) {
+            console.error('퀴즈 점수 저장 실패:', err);
+          }
+        }
+
+        // 4-2. reviews가 없으면 생성 (오답 탭 분류용)
+        try {
+          const existingSolvedReviews = await getDocs(query(
+            collection(db, 'reviews'),
+            where('userId', '==', user.uid),
+            where('quizId', '==', folderId),
+            where('reviewType', '==', 'solved'),
+            limit(1)
+          ));
+
+          if (existingSolvedReviews.empty && questions.length > 0) {
+            const courseId = userCourse?.id || quizData.courseId || null;
+            const reviewsRef = collection(db, 'reviews');
+
+            for (const result of results) {
+              const item = questions.find(q => q.questionId === result.questionId);
+              if (!item) continue;
+
+              // result.userAnswer는 0-indexed 그대로 저장
+              const convertedUserAnswer = result.userAnswer;
+
+              const reviewData = {
+                userId: user.uid,
+                quizId: folderId,
+                quizTitle: quizData.title || folderTitle,
+                questionId: result.questionId,
+                question: item.question,
+                type: item.type,
+                options: item.options || null,
+                correctAnswer: item.correctAnswer,
+                userAnswer: convertedUserAnswer,
+                explanation: item.explanation || '',
+                choiceExplanations: item.choiceExplanations || null,
+                isBookmarked: false,
+                isCorrect: result.isCorrect,
+                reviewCount: 0,
+                lastReviewedAt: null,
+                createdAt: serverTimestamp(),
+                quizUpdatedAt: serverTimestamp(),
+                chapterId: item.chapterId || null,
+                chapterDetailId: item.chapterDetailId || null,
+                imageUrl: item.imageUrl || null,
+                image: item.image || null,
+                courseId,
+                quizType: quizData.type || 'ai-generated',
+                quizCreatorId: quizData.creatorId || user.uid,
+                reviewType: 'solved' as const,
+              };
+
+              // 모든 문제를 solved로 저장
+              await addDoc(reviewsRef, reviewData);
+
+              // 오답은 wrong으로도 저장 (오답 탭 분류)
+              if (!result.isCorrect) {
+                await addDoc(reviewsRef, { ...reviewData, reviewType: 'wrong' as const });
+              }
+            }
+          }
+        } catch (err) {
+          console.error('오답 reviews 생성 실패:', err);
+        }
+      }
     }
 
     if (autoStart) {
@@ -1341,7 +1659,7 @@ export default function FolderDetailPage() {
       setPracticeItems(null);
       setPracticeMode(null);
     }
-  }, [folderId, user, folderType, autoStart, markAsReviewed, router]);
+  }, [folderId, user, folderType, autoStart, markAsReviewed, router, questions, folderTitle, userCourse]);
 
   // autoStart 모드: 데이터 로딩 중이면 로딩 스피너만 표시 (폴더 상세 안 보여줌)
   if (autoStart && !practiceItems && (loading || questions.length === 0)) {
@@ -1371,6 +1689,7 @@ export default function FolderDetailPage() {
           }
         }}
         currentUserId={user?.uid}
+        showFeedback={folderType !== 'library'}
       />
     );
   }
@@ -1493,7 +1812,7 @@ export default function FolderDetailPage() {
                     type="text"
                     value={editedTitle}
                     onChange={(e) => setEditedTitle(e.target.value)}
-                    className="flex-1 min-w-0 max-w-[160px] text-2xl font-black text-[#1A1A1A] bg-[#EDEAE4] border-2 border-[#1A1A1A] px-2 py-1 focus:outline-none"
+                    className="flex-1 min-w-0 text-2xl font-black text-[#1A1A1A] bg-[#EDEAE4] border-2 border-[#1A1A1A] px-2 py-1 focus:outline-none focus:bg-[#FDFBF7]"
                     autoFocus
                   />
                 ) : (
@@ -1526,32 +1845,35 @@ export default function FolderDetailPage() {
                   </>
                 )}
               </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-2xl font-black text-[#1A1A1A]">
-                      {quizScores?.myScore !== undefined ? quizScores.myScore : '-'}
-                    </span>
-                    <span className="text-base text-[#5C5C5C]">/</span>
-                    <span className="text-2xl font-black text-[#1A1A1A]">
-                      {quizScores?.myFirstReviewScore !== undefined ? quizScores.myFirstReviewScore : '-'}
-                    </span>
+              {/* 수정 모드일 때 점수 영역 숨김 */}
+              {!isEditMode && (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl font-black text-[#1A1A1A]">
+                        {quizScores?.myScore !== undefined ? quizScores.myScore : '-'}
+                      </span>
+                      <span className="text-base text-[#5C5C5C]">/</span>
+                      <span className="text-2xl font-black text-[#1A1A1A]">
+                        {quizScores?.myFirstReviewScore !== undefined ? quizScores.myFirstReviewScore : '-'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-5 mt-1">
+                      <span className="text-xs text-[#5C5C5C]">퀴즈</span>
+                      <span className="text-xs text-[#5C5C5C]">복습</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-5 mt-1">
-                    <span className="text-xs text-[#5C5C5C]">퀴즈</span>
-                    <span className="text-xs text-[#5C5C5C]">복습</span>
-                  </div>
+                  {/* 평균 점수 (공개 퀴즈만) */}
+                  {quizScores?.isPublic && (
+                    <div className="flex flex-col items-center">
+                      <span className="text-2xl font-black text-[#1A1A1A]">
+                        {quizScores?.averageScore !== undefined ? Math.round(quizScores.averageScore) : '-'}
+                      </span>
+                      <span className="text-xs text-[#5C5C5C] mt-1">평균</span>
+                    </div>
+                  )}
                 </div>
-                {/* 평균 점수 (공개 퀴즈만) */}
-                {quizScores?.isPublic && (
-                  <div className="flex flex-col items-center">
-                    <span className="text-2xl font-black text-[#1A1A1A]">
-                      {quizScores?.averageScore !== undefined ? Math.round(quizScores.averageScore) : '-'}
-                    </span>
-                    <span className="text-xs text-[#5C5C5C] mt-1">평균</span>
-                  </div>
-                )}
-              </div>
+              )}
             </>
           ) : (
             <div className="flex items-center gap-2">
@@ -1597,7 +1919,7 @@ export default function FolderDetailPage() {
       {/* 상단 정보 */}
       <div className="px-4 py-3 flex items-center justify-between">
         <p className="text-lg font-bold text-[#5C5C5C]">
-          {loading ? '불러오는 중...' : `총 ${questions.length}문제`}
+          {loading ? '불러오는 중...' : `총 ${isEditMode ? editableQuestions.length : questions.length}문제`}
           {isSelectMode && selectedIds.size > 0 && (
             <span className="ml-2 text-[#1A1A1A] font-bold">
               ({selectedIds.size}개 선택)
@@ -1656,8 +1978,132 @@ export default function FolderDetailPage() {
         </div>
       )}
 
-      {/* 문제 목록 */}
-      {!loading && (
+      {/* 수정 모드: 메타 편집 + QuestionList + QuestionEditor (교수 서재와 동일) */}
+      {!loading && isEditMode && folderType === 'library' && (
+        <main className="px-4 space-y-2">
+          {editingIndex !== null ? (
+            <QuestionEditor
+              initialQuestion={editingIndex >= 0 ? editableQuestions[editingIndex] : undefined}
+              questionNumber={editingIndex >= 0 ? editingIndex + 1 : editableQuestions.length + 1}
+              onSave={handleSaveQuestion}
+              onCancel={handleCancelQuestionEdit}
+              userRole="student"
+              courseId={userCourse?.id}
+            />
+          ) : (
+            <>
+              {/* 메타 편집 영역 (교수 서재와 동일 스타일) */}
+              <div className="space-y-4 mb-4">
+                {/* 난이도 */}
+                <div>
+                  <label className="block text-xs font-bold text-[#1A1A1A] mb-1.5">난이도</label>
+                  <div className="flex gap-2">
+                    {([
+                      { value: 'easy' as const, label: '쉬움' },
+                      { value: 'normal' as const, label: '보통' },
+                      { value: 'hard' as const, label: '어려움' },
+                    ]).map(({ value, label }) => (
+                      <motion.button
+                        key={value}
+                        type="button"
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => setEditDifficulty(value)}
+                        className={`flex-1 py-2 px-3 font-bold text-xs border-2 transition-all duration-200 ${
+                          editDifficulty === value
+                            ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                            : 'bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
+                        }`}
+                      >
+                        {label}
+                      </motion.button>
+                    ))}
+                  </div>
+                </div>
+                {/* 태그 */}
+                <div>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <label className="text-xs font-bold text-[#1A1A1A]">태그</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowEditTagPicker(!showEditTagPicker)}
+                      className={`px-2.5 py-0.5 text-xs font-bold border-2 transition-colors ${
+                        showEditTagPicker
+                          ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                          : 'bg-transparent text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
+                      }`}
+                    >
+                      {showEditTagPicker ? '닫기' : '+ 추가'}
+                    </button>
+                  </div>
+                  {editedTags.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {editedTags.map((tag) => (
+                        <div
+                          key={tag}
+                          className="flex items-center gap-1 px-2.5 py-1 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold"
+                        >
+                          #{tag}
+                          <button
+                            type="button"
+                            onClick={() => setEditedTags(prev => prev.filter(t => t !== tag))}
+                            className="ml-0.5 hover:text-[#D4CFC4]"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <AnimatePresence>
+                    {showEditTagPicker && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="flex flex-wrap gap-1.5 p-2.5 border-2 border-[#1A1A1A] bg-[#F5F0E8]">
+                          {editTagOptions
+                            .filter(opt => !editedTags.includes(opt.value))
+                            .map((opt) => (
+                              <button
+                                key={opt.value}
+                                type="button"
+                                onClick={() => setEditedTags(prev => [...prev, opt.value])}
+                                className="px-2.5 py-1 text-xs font-bold bg-transparent text-[#1A1A1A] border-2 border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+                              >
+                                {opt.label}
+                              </button>
+                            ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+
+              <QuestionList
+                questions={editableQuestions}
+                onQuestionsChange={setEditableQuestions}
+                onEditQuestion={handleEditQuestion}
+                userRole="student"
+                courseId={userCourse?.id}
+              />
+              <motion.button
+                onClick={handleAddQuestion}
+                className="w-full py-3 border-2 border-dashed border-[#1A1A1A] text-[#1A1A1A] font-bold text-sm hover:bg-[#EDEAE4] transition-colors"
+              >
+                + 새 문제 추가
+              </motion.button>
+            </>
+          )}
+        </main>
+      )}
+
+      {/* 문제 목록 (일반 모드) */}
+      {!loading && !(isEditMode && folderType === 'library') && (
         <main className="px-4 space-y-2">
           {questions.length === 0 ? (
             <div className="py-16 text-center">
@@ -1707,14 +2153,6 @@ export default function FolderDetailPage() {
                             folderType={folderType}
                             courseId={userCourse?.id}
                             hasUpdate={updatedQuestionIds.has(item.questionId)}
-                            isEditMode={isEditMode}
-                            editData={editedQuestions[item.questionId]}
-                            onEditChange={isEditMode ? (field, value) => {
-                              setEditedQuestions(prev => ({
-                                ...prev,
-                                [item.questionId]: { ...prev[item.questionId], [field]: value }
-                              }));
-                            } : undefined}
                           />
                         );
                       })
@@ -1745,14 +2183,6 @@ export default function FolderDetailPage() {
                     courseId={userCourse?.id}
                     folderType={folderType}
                     hasUpdate={updatedQuestionIds.has(item.questionId)}
-                    isEditMode={isEditMode}
-                    editData={editedQuestions[item.questionId]}
-                    onEditChange={isEditMode ? (field, value) => {
-                      setEditedQuestions(prev => ({
-                        ...prev,
-                        [item.questionId]: { ...prev[item.questionId], [field]: value }
-                      }));
-                    } : undefined}
                   />
                 );
               }
@@ -1975,14 +2405,6 @@ export default function FolderDetailPage() {
                                   courseId={userCourse?.id}
                                   folderType={folderType}
                                   hasUpdate={updatedQuestionIds.has(subItem.questionId)}
-                                  isEditMode={isEditMode}
-                                  editData={editedQuestions[subItem.questionId]}
-                                  onEditChange={isEditMode ? (field, value) => {
-                                    setEditedQuestions(prev => ({
-                                      ...prev,
-                                      [subItem.questionId]: { ...prev[subItem.questionId], [field]: value }
-                                    }));
-                                  } : undefined}
                                 />
                               ))}
                             </div>
@@ -2000,8 +2422,8 @@ export default function FolderDetailPage() {
         </main>
       )}
 
-      {/* 하단 버튼 영역 — 선택 모드에서 선택 항목 없으면 숨김 */}
-      {!loading && questions.length > 0 && !(isSelectMode && !isAssignMode && selectedIds.size === 0) && (
+      {/* 하단 버튼 영역 — 선택 모드에서 선택 항목 없으면 숨김, 문제 에디터 열려있을 때 숨김 */}
+      {!loading && (questions.length > 0 || (isEditMode && editableQuestions.length > 0)) && !(isSelectMode && !isAssignMode && selectedIds.size === 0) && !(isEditMode && editingIndex !== null) && (
         <div className="fixed bottom-0 right-0 p-3 bg-[#F5F0E8] border-t-2 border-[#1A1A1A]" style={{ left: 'var(--detail-panel-left, 0)' }}>
           {isEditMode ? (
             /* 수정 모드일 때 - 취소/저장 */
@@ -2015,9 +2437,9 @@ export default function FolderDetailPage() {
               </button>
               <button
                 onClick={handleSaveEdits}
-                disabled={isSavingEdit || (Object.keys(editedQuestions).length === 0 && !(editedTitle.trim() && editedTitle.trim() !== libraryQuizTitle))}
+                disabled={isSavingEdit || editableQuestions.length < 1}
                 className={`flex-1 py-3 text-sm font-bold border-2 transition-colors rounded-lg ${
-                  (Object.keys(editedQuestions).length > 0 || (editedTitle.trim() && editedTitle.trim() !== libraryQuizTitle))
+                  editableQuestions.length > 0
                     ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A] hover:bg-[#3A3A3A]'
                     : 'bg-[#EDEAE4] text-[#5C5C5C] border-[#5C5C5C] cursor-not-allowed'
                 }`}

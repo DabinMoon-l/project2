@@ -32,7 +32,8 @@ export default function TekkenBattleResult({
 
   const endReasonText = {
     ko: 'K.O!',
-    timeout: '시간 종료',
+    allRounds: '',
+    timeout: '',
     disconnect: '연결 끊김',
   }[result.endReason] || '';
 
@@ -68,7 +69,7 @@ export default function TekkenBattleResult({
 
       {/* XP 획득 */}
       <motion.div
-        className="flex items-center gap-3 px-8 py-4 bg-black/40 border border-white/15 rounded-2xl backdrop-blur-xl mb-10"
+        className="flex items-center gap-3 px-8 py-4 bg-black/50 border border-white/15 rounded-2xl mb-10"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.9 }}

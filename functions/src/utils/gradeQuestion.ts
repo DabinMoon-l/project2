@@ -37,25 +37,25 @@ export function gradeQuestion(
   } else if (question.type === "multiple") {
     // 객관식
     if (Array.isArray(question.answer)) {
-      // 복수정답
-      correctAnswerStr = question.answer.map((a: number) => String(a + 1)).join(",");
+      // 복수정답 (0-indexed)
+      correctAnswerStr = question.answer.map((a: number) => String(a)).join(",");
       if (userAnswer && Array.isArray(userAnswer.answer)) {
         const userSorted = [...(userAnswer.answer as number[])].sort();
         const correctSorted = [...question.answer].sort();
         isCorrect = JSON.stringify(userSorted) === JSON.stringify(correctSorted);
-        userAnswerStr = (userAnswer.answer as number[]).map((a) => String(a + 1)).join(",");
+        userAnswerStr = (userAnswer.answer as number[]).map((a) => String(a)).join(",");
       } else if (userAnswer !== undefined) {
         const ua = Number(userAnswer.answer);
         isCorrect = question.answer.length === 1 && question.answer[0] === ua;
-        userAnswerStr = String(ua + 1);
+        userAnswerStr = String(ua);
       }
     } else {
-      // 단일 정답
-      correctAnswerStr = String((question.answer ?? 0) + 1);
+      // 단일 정답 (0-indexed)
+      correctAnswerStr = String(question.answer ?? 0);
       if (userAnswer !== undefined) {
         const ua = Number(userAnswer.answer);
         isCorrect = ua === question.answer;
-        userAnswerStr = String(ua + 1);
+        userAnswerStr = String(ua);
       }
     }
   } else {

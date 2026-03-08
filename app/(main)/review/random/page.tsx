@@ -353,7 +353,7 @@ export default function RandomReviewPage() {
                   <p className="text-xs text-[#5C5C5C] mb-1">복수 정답 — 해당하는 것을 모두 선택하세요</p>
                 )}
                 {currentQuestion.options.map((choice, idx) => {
-                  const optionNum = (idx + 1).toString();
+                  const optionNum = idx.toString();
                   const multi = isMultiAnswer(currentQuestion);
                   const isSelected = multi
                     ? (multiSelections[currentIndex] || new Set()).has(optionNum)

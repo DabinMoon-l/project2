@@ -174,7 +174,7 @@ export default function PostDetailPage() {
   const isProfessor = profile?.role === 'professor';
   const { post, loading, error, refresh } = usePost(postId);
   const { deletePost, loading: deleting } = useDeletePost();
-  const { toggleLike, isLiked } = useLike();
+  const { toggleLike } = useLike();
 
   const isOwner = user?.uid === post?.authorId;
 
@@ -362,7 +362,7 @@ export default function PostDetailPage() {
 
           {/* 찜 줄: 좌=찜, 우=조회·댓글 */}
           <div className="flex items-center justify-between py-2 mt-4 border-t border-dashed border-[#1A1A1A]">
-            <LikeButton count={post.likes} isLiked={isLiked(postId)} onToggle={handleLike} />
+            <LikeButton count={post.likes} isLiked={post.likedBy?.includes(user?.uid || '') || false} onToggle={handleLike} />
             <div className="flex items-center gap-3 text-xs text-[#5C5C5C]">
               <span>조회 {post.viewCount}</span>
               <span>댓글 {post.commentCount}</span>

@@ -1207,17 +1207,19 @@ export const useLike = (): UseLikeReturn => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
 
-  // 좋아요 상태 확인
+  // 좋아요 상태 확인 — post.likedBy 배열로 직접 판단 (호출 측에서 post 전달)
+  // 기존 인터페이스 유지: postId만 받되, 내부에서는 사용 안 함
+  // → 실제 판단은 board/[id]/page.tsx에서 post.likedBy로 직접 수행
   const isLiked = useCallback(
-    (postId: string): boolean => {
-      return likedPosts.has(postId);
+    (_postId: string): boolean => {
+      // 이 함수는 더 이상 사용하지 않음 — post.likedBy?.includes(uid) 직접 사용 권장
+      return false;
     },
-    [likedPosts]
+    []
   );
 
-  // 좋아요 토글
+  // 좋아요 토글 — like 문서 존재 여부를 getDoc으로 확인 (Set 의존 제거)
   const toggleLike = useCallback(
     async (postId: string): Promise<boolean> => {
       if (!user) {
@@ -1229,18 +1231,13 @@ export const useLike = (): UseLikeReturn => {
         setLoading(true);
         setError(null);
 
-        const isCurrentlyLiked = likedPosts.has(postId);
         const likeDocId = `${user.uid}_post_${postId}`;
         const likeRef = doc(db, 'likes', likeDocId);
+        const likeSnap = await getDoc(likeRef);
 
-        if (isCurrentlyLiked) {
+        if (likeSnap.exists()) {
           // 좋아요 취소 — likes 컬렉션에서 삭제 → CF가 posts.likes/likedBy 업데이트
           await deleteDoc(likeRef);
-          setLikedPosts((prev) => {
-            const newSet = new Set(prev);
-            newSet.delete(postId);
-            return newSet;
-          });
         } else {
           // 좋아요 — likes 컬렉션에 생성 → CF가 posts.likes/likedBy 업데이트
           const postSnap = await getDoc(doc(db, 'posts', postId));
@@ -1252,7 +1249,6 @@ export const useLike = (): UseLikeReturn => {
             targetUserId: postAuthorId,
             createdAt: serverTimestamp(),
           });
-          setLikedPosts((prev) => new Set(prev).add(postId));
         }
 
         return true;
@@ -1266,17 +1262,6 @@ export const useLike = (): UseLikeReturn => {
     },
     [user]
   );
-
-  // 사용자의 좋아요 목록 로드
-  useEffect(() => {
-    if (!user) {
-      setLikedPosts(new Set());
-      return;
-    }
-
-    // 사용자가 좋아요한 글 목록을 로드하는 것은 성능상 이슈가 있을 수 있음
-    // 여기서는 각 글을 조회할 때 likedBy를 확인하는 방식으로 처리
-  }, [user]);
 
   return { toggleLike, isLiked, loading, error };
 };
@@ -1302,17 +1287,16 @@ export const useCommentLike = (): UseCommentLikeReturn => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [likedComments, setLikedComments] = useState<Set<string>>(new Set());
 
-  // 좋아요 상태 확인
+  // 좋아요 상태 확인 — comment.likedBy 배열로 직접 판단 (호출 측에서 처리)
   const isCommentLiked = useCallback(
-    (commentId: string): boolean => {
-      return likedComments.has(commentId);
+    (_commentId: string): boolean => {
+      return false;
     },
-    [likedComments]
+    []
   );
 
-  // 좋아요 토글 — likes 컬렉션 기반 (CF가 comments.likes/likedBy 업데이트)
+  // 좋아요 토글 — like 문서 존재 여부를 getDoc으로 확인 (Set 의존 제거)
   const toggleCommentLike = useCallback(
     async (commentId: string): Promise<boolean> => {
       if (!user) {
@@ -1324,18 +1308,13 @@ export const useCommentLike = (): UseCommentLikeReturn => {
         setLoading(true);
         setError(null);
 
-        const isCurrentlyLiked = likedComments.has(commentId);
         const likeDocId = `${user.uid}_comment_${commentId}`;
         const likeRef = doc(db, 'likes', likeDocId);
+        const likeSnap = await getDoc(likeRef);
 
-        if (isCurrentlyLiked) {
+        if (likeSnap.exists()) {
           // 좋아요 취소 — likes 컬렉션에서 삭제 → CF가 comments.likes/likedBy 업데이트
           await deleteDoc(likeRef);
-          setLikedComments((prev) => {
-            const newSet = new Set(prev);
-            newSet.delete(commentId);
-            return newSet;
-          });
         } else {
           // 좋아요 — likes 컬렉션에 생성 → CF가 comments.likes/likedBy 업데이트
           const commentSnap = await getDoc(doc(db, 'comments', commentId));
@@ -1347,7 +1326,6 @@ export const useCommentLike = (): UseCommentLikeReturn => {
             targetUserId: commentAuthorId,
             createdAt: serverTimestamp(),
           });
-          setLikedComments((prev) => new Set(prev).add(commentId));
         }
 
         return true;
@@ -1361,13 +1339,6 @@ export const useCommentLike = (): UseCommentLikeReturn => {
     },
     [user]
   );
-
-  // 사용자의 좋아요 목록 초기화
-  useEffect(() => {
-    if (!user) {
-      setLikedComments(new Set());
-    }
-  }, [user]);
 
   return { toggleCommentLike, isCommentLiked, loading, error };
 };

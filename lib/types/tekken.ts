@@ -25,6 +25,7 @@ export interface BattleRabbit {
   currentHp: number;
   atk: number;
   def: number;
+  level?: number;
   name?: string;
   discoveryOrder?: number;
 }
@@ -88,7 +89,7 @@ export interface BattleResult {
   winnerId: string | null;
   loserId: string | null;
   isDraw: boolean;
-  endReason: 'ko' | 'timeout' | 'disconnect';
+  endReason: 'ko' | 'allRounds' | 'timeout' | 'disconnect';
   xpGranted: boolean;
 }
 
@@ -160,7 +161,7 @@ export const BATTLE_XP = {
 
 /** 배틀 설정 상수 */
 export const BATTLE_CONFIG = {
-  MATCH_TIMEOUT: 10000,     // 매칭 대기 10초 (봇 매칭)
+  MATCH_TIMEOUT: 10000,     // 매칭 대기 10초 (상대 없으면 봇 매칭)
   BATTLE_DURATION: 180000,  // 배틀 3분
   QUESTION_TIMEOUT: 20000,  // 문제 타임아웃 20초
   CRITICAL_TIME: 5000,      // 크리티컬 기준 5초

@@ -65,6 +65,15 @@ interface WeeklyStats {
     classParticipationScores: Record<string, number>;
     keywords: { text: string; value: number }[];
   };
+
+  // 페이지뷰
+  pageView: {
+    totalViews: number;
+    uniqueUsers: number;
+    byCategory: Record<string, number>;
+    avgSessionViews: number;
+    peakHours: number[]; // 상위 3개 시간대 (0~23, KST)
+  };
 }
 
 // ============================================================
@@ -413,6 +422,46 @@ async function collectWeeklyStats(courseId: string, start: Date, end: Date, labe
     commentCount += commSnap.size;
   }
 
+  // ── 페이지뷰 데이터 ──
+  const pvSnap = await db.collection("pageViews")
+    .where("courseId", "==", courseId)
+    .where("timestamp", ">=", startTs)
+    .where("timestamp", "<", endTs)
+    .get();
+
+  const pvByCategory: Record<string, number> = {};
+  const pvUniqueUsers = new Set<string>();
+  const pvSessionViews: Record<string, number> = {};
+  const pvHourCounts: Record<number, number> = {};
+  const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+  pvSnap.docs.forEach(d => {
+    const data = d.data();
+    const cat = data.category || "other";
+    pvByCategory[cat] = (pvByCategory[cat] || 0) + 1;
+    if (data.userId) pvUniqueUsers.add(data.userId as string);
+    if (data.sessionId) {
+      pvSessionViews[data.sessionId as string] = (pvSessionViews[data.sessionId as string] || 0) + 1;
+    }
+    // KST 시간대별 집계
+    if (data.timestamp?.toDate) {
+      const kstHour = new Date(data.timestamp.toDate().getTime() + KST_OFFSET_MS).getUTCHours();
+      pvHourCounts[kstHour] = (pvHourCounts[kstHour] || 0) + 1;
+    }
+  });
+
+  // 세션당 평균 페이지뷰
+  const sessionCounts = Object.values(pvSessionViews);
+  const avgSessionViews = sessionCounts.length > 0
+    ? Math.round((sessionCounts.reduce((a, b) => a + b, 0) / sessionCounts.length) * 10) / 10
+    : 0;
+
+  // 상위 3개 피크 시간대
+  const peakHours = Object.entries(pvHourCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([hour]) => Number(hour));
+
   // ── Haiku 키워드 추출 ──
   let keywords: { text: string; value: number }[] = [];
   if (postTexts.length > 0 && apiKey) {
@@ -458,6 +507,13 @@ async function collectWeeklyStats(courseId: string, start: Date, end: Date, labe
       totalViews,
       classParticipationScores: classPostCounts,
       keywords,
+    },
+    pageView: {
+      totalViews: pvSnap.size,
+      uniqueUsers: pvUniqueUsers.size,
+      byCategory: pvByCategory,
+      avgSessionViews,
+      peakHours,
     },
   };
 }

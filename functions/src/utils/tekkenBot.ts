@@ -36,6 +36,7 @@ export function createBotProfile() {
     rabbits: [
       {
         rabbitId: rabbitId,
+        level: level1,
         maxHp: boost(stats1.hp, level1),
         currentHp: boost(stats1.hp, level1),
         atk: boost(stats1.atk, level1),
@@ -43,6 +44,7 @@ export function createBotProfile() {
       },
       {
         rabbitId: rabbitId2,
+        level: level2,
         maxHp: boost(stats2.hp, level2),
         currentHp: boost(stats2.hp, level2),
         atk: boost(stats2.atk, level2),
@@ -62,7 +64,7 @@ export function generateBotAnswer(
   correctAnswer: number,
   choiceCount: number
 ): { answer: number; delay: number } {
-  const isCorrect = Math.random() < 0.6;
+  const isCorrect = Math.random() < 0.4;
   const delay = 1000 + Math.floor(Math.random() * 7000);
 
   if (isCorrect) {

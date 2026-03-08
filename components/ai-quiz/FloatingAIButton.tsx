@@ -19,13 +19,14 @@ export default function FloatingAIButton({ onClick }: FloatingAIButtonProps) {
   const pathname = usePathname();
   const [isPressed, setIsPressed] = useState(false);
 
-  // 퀴즈 페이지에서만 표시 (홈은 개편으로 제외)
-  const shouldShow = pathname === '/quiz';
+  // 퀴즈 페이지에서만 표시 (학생: /quiz, 교수: /professor/quiz)
+  const shouldShow = pathname === '/quiz' || pathname === '/professor/quiz';
 
-  // 퀴즈 풀이 중에는 숨김
-  const isQuizPage = pathname?.match(/^\/quiz\/[^/]+/) !== null;
+  // 퀴즈 풀이/상세 중에는 숨김
+  const isQuizSubPage = pathname?.match(/^\/quiz\/[^/]+/) !== null
+    || pathname?.match(/^\/professor\/quiz\/[^/]+/) !== null;
 
-  if (!shouldShow || isQuizPage) {
+  if (!shouldShow || isQuizSubPage) {
     return null;
   }
 

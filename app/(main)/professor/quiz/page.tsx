@@ -26,7 +26,7 @@ import AutoVideo, { getDifficultyVideo } from '@/components/quiz/AutoVideo';
 import { NEWSPAPER_BG_TEXT } from '@/lib/utils/quizHelpers';
 import type { QuestionExportData as PdfQuestionData } from '@/lib/utils/questionPdfExport';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
-import { useHideNav, useHideNavOnly } from '@/lib/hooks/useHideNav';
+import { useHideNav } from '@/lib/hooks/useHideNav';
 
 // ============================================================
 // 타입
@@ -1096,9 +1096,6 @@ export default function ProfessorQuizListPage() {
   useEffect(() => {
     sessionStorage.setItem('prof_quiz_section_filter', sectionFilter);
   }, [sectionFilter]);
-
-  // 서재 탭 시 네비게이션만 숨김 (PullToHome은 유지)
-  useHideNavOnly(sectionFilter === 'library');
 
   // 서재 탭 인라인 프리뷰 모드
   const [isLibraryPreview, setIsLibraryPreview] = useState(false);

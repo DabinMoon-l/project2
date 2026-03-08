@@ -151,6 +151,8 @@ export const recordAttempt = onCall(
       quizId,
       quizTitle: quizData.title || "",
       quizCreatorId: quizData.creatorId || null,
+      quizType: quizData.type || null,
+      quizIsPublic: quizData.isPublic ?? false,
       score,
       correctCount,
       totalCount,
