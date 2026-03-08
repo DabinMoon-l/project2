@@ -176,6 +176,12 @@ export default function QuestionEditor({
   // 이미지 업로드 관련
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const [showImageUrlInput, setShowImageUrlInput] = useState(false);
+  const [imageUrlInputValue, setImageUrlInputValue] = useState('');
+  const imageUrlInputRef = useRef<HTMLInputElement>(null);
+  const [showPassageImageUrlInput, setShowPassageImageUrlInput] = useState(false);
+  const [passageImageUrlInputValue, setPassageImageUrlInputValue] = useState('');
+  const passageImageUrlInputRef = useRef<HTMLInputElement>(null);
 
   // 보기 추가 모드
   const [showExamplesEditor, setShowExamplesEditor] = useState(
@@ -1328,6 +1334,7 @@ export default function QuestionEditor({
                     e.preventDefault();
                     e.stopPropagation();
                     handleRemoveImage();
+                    setShowImageUrlInput(false);
                   }}
                   className="absolute top-1 right-1 z-10 w-8 h-8 bg-[#8B1A1A] text-[#F5F0E8] flex items-center justify-center hover:bg-[#6B1414] transition-colors cursor-pointer"
                 >
@@ -1337,62 +1344,121 @@ export default function QuestionEditor({
                 </button>
               </div>
             ) : (
-              <div className="flex gap-2">
-                {/* 이미지 업로드 버튼 */}
-                <div className="relative flex-1">
-                  <input
-                    ref={imageInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    disabled={isUploadingImage}
-                    className="hidden"
-                    id="question-image"
-                  />
-                  <label
-                    htmlFor="question-image"
-                    className={`
-                      flex items-center justify-center gap-2
-                      w-full py-3 border-2 border-dashed border-[#1A1A1A]
-                      text-[#5C5C5C] cursor-pointer
-                      hover:bg-[#EDEAE4] hover:text-[#1A1A1A]
-                      transition-colors
-                      ${isUploadingImage ? 'opacity-50 cursor-not-allowed' : ''}
-                    `}
-                  >
-                    {isUploadingImage ? (
-                      <span className="flex items-center gap-2">
-                        <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                        </svg>
-                        업로드 중...
-                      </span>
-                    ) : (
-                      <>
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        이미지 업로드
-                      </>
-                    )}
-                  </label>
-                </div>
-                {/* 추출 이미지 삽입 버튼 */}
-                {extractedImages.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  {/* 이미지 업로드 버튼 */}
+                  <div className="relative flex-1">
+                    <input
+                      ref={imageInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      disabled={isUploadingImage}
+                      className="hidden"
+                      id="question-image"
+                    />
+                    <label
+                      htmlFor="question-image"
+                      className={`
+                        flex items-center justify-center gap-2
+                        w-full py-3 border-2 border-dashed border-[#1A1A1A]
+                        text-[#5C5C5C] cursor-pointer
+                        hover:bg-[#EDEAE4] hover:text-[#1A1A1A]
+                        transition-colors text-xs
+                        ${isUploadingImage ? 'opacity-50 cursor-not-allowed' : ''}
+                      `}
+                    >
+                      {isUploadingImage ? (
+                        <span className="flex items-center gap-2">
+                          <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                          업로드 중...
+                        </span>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          이미지 업로드
+                        </>
+                      )}
+                    </label>
+                  </div>
+                  {/* URL 이미지 버튼 */}
                   <button
                     type="button"
                     onClick={() => {
-                      setExtractedImageTarget('question');
-                      setShowExtractedImagePicker(true);
+                      setShowImageUrlInput(v => !v);
+                      setTimeout(() => imageUrlInputRef.current?.focus(), 100);
                     }}
-                    className="flex-1 flex items-center justify-center gap-2 py-3 border-2 border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
+                    className={`flex-1 flex items-center justify-center gap-2 py-3 border-2 border-dashed text-xs transition-colors ${
+                      showImageUrlInput
+                        ? 'border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8]'
+                        : 'border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A]'
+                    }`}
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                     </svg>
-                    추출 이미지 삽입
+                    URL 이미지
                   </button>
+                  {/* 추출 이미지 삽입 버튼 */}
+                  {extractedImages.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExtractedImageTarget('question');
+                        setShowExtractedImagePicker(true);
+                      }}
+                      className="flex-1 flex items-center justify-center gap-2 py-3 border-2 border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors text-xs"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      추출 이미지
+                    </button>
+                  )}
+                </div>
+                {/* URL 입력 패널 */}
+                {showImageUrlInput && (
+                  <div className="flex items-center gap-2 p-2 border border-[#D4CFC4] bg-[#FDFBF7]">
+                    <input
+                      ref={imageUrlInputRef}
+                      type="url"
+                      value={imageUrlInputValue}
+                      onChange={(e) => setImageUrlInputValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const url = imageUrlInputValue.trim();
+                          if (url) {
+                            setQuestion(prev => ({ ...prev, imageUrl: url }));
+                            setImageUrlInputValue('');
+                            setShowImageUrlInput(false);
+                          }
+                        }
+                      }}
+                      placeholder="이미지 URL을 붙여넣으세요"
+                      className="flex-1 px-2.5 py-1.5 text-xs outline-none bg-transparent"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const url = imageUrlInputValue.trim();
+                        if (url) {
+                          setQuestion(prev => ({ ...prev, imageUrl: url }));
+                          setImageUrlInputValue('');
+                          setShowImageUrlInput(false);
+                        }
+                      }}
+                      disabled={!imageUrlInputValue.trim()}
+                      className="flex-shrink-0 px-2.5 py-1.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] disabled:opacity-30 transition-opacity"
+                    >
+                      추가
+                    </button>
+                  </div>
                 )}
               </div>
             )}
@@ -1431,35 +1497,96 @@ export default function QuestionEditor({
                 </button>
               </div>
             ) : (
-              <div className="flex gap-2">
-                {/* 이미지 업로드 버튼 */}
-                <label className="flex-1 flex items-center justify-center gap-2 py-3 border-2 border-dashed border-[#1A1A1A] text-[#5C5C5C] cursor-pointer hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handlePassageImageUpload}
-                    className="hidden"
-                  />
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  이미지 업로드
-                </label>
-                {/* 추출 이미지 삽입 버튼 */}
-                {extractedImages.length > 0 && (
+              <div>
+                <div className="flex gap-2">
+                  {/* 이미지 업로드 버튼 */}
+                  <label className="flex-1 flex items-center justify-center gap-2 py-3 border-2 border-dashed border-[#1A1A1A] text-[#5C5C5C] cursor-pointer hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors text-xs">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handlePassageImageUpload}
+                      className="hidden"
+                    />
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    이미지 업로드
+                  </label>
+                  {/* URL 이미지 버튼 */}
                   <button
                     type="button"
                     onClick={() => {
-                      setExtractedImageTarget('passage');
-                      setShowExtractedImagePicker(true);
+                      setShowPassageImageUrlInput(!showPassageImageUrlInput);
+                      if (!showPassageImageUrlInput) {
+                        setTimeout(() => passageImageUrlInputRef.current?.focus(), 100);
+                      }
                     }}
-                    className="flex-1 flex items-center justify-center gap-2 py-3 border-2 border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors"
+                    className={`flex-1 flex items-center justify-center gap-2 py-3 border-2 border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors text-xs ${
+                      showPassageImageUrlInput
+                        ? 'bg-[#EDEAE4] text-[#1A1A1A]'
+                        : ''
+                    }`}
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                     </svg>
-                    추출 이미지 삽입
+                    URL 이미지
                   </button>
+                  {/* 추출 이미지 삽입 버튼 */}
+                  {extractedImages.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExtractedImageTarget('passage');
+                        setShowExtractedImagePicker(true);
+                      }}
+                      className="flex-1 flex items-center justify-center gap-2 py-3 border-2 border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors text-xs"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      추출 이미지
+                    </button>
+                  )}
+                </div>
+                {/* URL 입력 패널 */}
+                {showPassageImageUrlInput && (
+                  <div className="flex items-center gap-2 p-2 border border-[#D4CFC4] bg-[#FDFBF7] mt-1">
+                    <input
+                      ref={passageImageUrlInputRef}
+                      type="url"
+                      value={passageImageUrlInputValue}
+                      onChange={(e) => setPassageImageUrlInputValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const url = passageImageUrlInputValue.trim();
+                          if (url) {
+                            setQuestion(prev => ({ ...prev, passageImage: url }));
+                            setPassageImageUrlInputValue('');
+                            setShowPassageImageUrlInput(false);
+                          }
+                        }
+                      }}
+                      placeholder="이미지 URL을 붙여넣으세요"
+                      className="flex-1 px-2.5 py-1.5 text-xs outline-none bg-transparent"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const url = passageImageUrlInputValue.trim();
+                        if (url) {
+                          setQuestion(prev => ({ ...prev, passageImage: url }));
+                          setPassageImageUrlInputValue('');
+                          setShowPassageImageUrlInput(false);
+                        }
+                      }}
+                      disabled={!passageImageUrlInputValue.trim()}
+                      className="flex-shrink-0 px-2.5 py-1.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] disabled:opacity-30 transition-opacity"
+                    >
+                      추가
+                    </button>
+                  </div>
                 )}
               </div>
             )}

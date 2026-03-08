@@ -13,6 +13,7 @@ import {
   getDoc,
   getDocs,
   addDoc,
+  writeBatch,
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -43,6 +44,8 @@ export interface LearningQuiz {
   multipleChoiceCount?: number;
   /** 주관식 문제 수 */
   subjectiveCount?: number;
+  /** 퀴즈 생성자 ID */
+  creatorId?: string;
 }
 
 /**
@@ -106,6 +109,7 @@ export function useLearningQuizzes() {
             oxCount,
             multipleChoiceCount,
             subjectiveCount,
+            creatorId: data.creatorId || undefined,
           };
         });
         // 클라이언트에서 최신순 정렬
@@ -272,7 +276,8 @@ export function useLearningQuizzes() {
         createdAt: serverTimestamp(),
       });
 
-      // 3. reviews 컬렉션에 각 문제 저장 (복습 탭에 표시)
+      // 3. reviews 컬렉션에 각 문제 일괄 저장 (writeBatch)
+      const batch = writeBatch(db);
 
       for (let i = 0; i < questions.length; i++) {
         const question = questions[i];
@@ -284,7 +289,6 @@ export function useLearningQuizzes() {
         // 정답 처리 (1-indexed 번호로 변환)
         let correctAnswer = '';
         if (question.type === 'multiple') {
-          // 복수정답 지원: answer가 배열인 경우
           if (Array.isArray(question.answer)) {
             correctAnswer = question.answer.map((a: number) => String(a + 1)).join(',');
           } else {
@@ -317,8 +321,7 @@ export function useLearningQuizzes() {
         }
         const isCorrect = question.isCorrect !== undefined ? question.isCorrect : true;
 
-        // solved 타입으로 저장
-        await addDoc(collection(db, 'reviews'), {
+        const reviewData = {
           userId: user.uid,
           quizId,
           quizTitle,
@@ -330,7 +333,7 @@ export function useLearningQuizzes() {
           userAnswer,
           explanation: question.explanation || '',
           isCorrect,
-          reviewType: 'solved',
+          reviewType: 'solved' as const,
           isBookmarked: false,
           reviewCount: 0,
           lastReviewedAt: null,
@@ -343,38 +346,22 @@ export function useLearningQuizzes() {
           choiceExplanations: question.choiceExplanations || null,
           imageUrl: question.imageUrl || null,
           createdAt: serverTimestamp(),
-        });
+        };
+
+        // solved 타입으로 저장
+        batch.set(doc(collection(db, 'reviews')), reviewData);
 
         // 오답인 경우 wrong 타입으로도 저장
         if (!isCorrect) {
-          await addDoc(collection(db, 'reviews'), {
-            userId: user.uid,
-            quizId,
-            quizTitle,
-            questionId: question.id || `q${i}`,
-            question: question.text || '',
-            type: normalizedType,
-            options: question.choices || [],
-            correctAnswer,
-            userAnswer,
-            explanation: question.explanation || '',
+          batch.set(doc(collection(db, 'reviews')), {
+            ...reviewData,
             isCorrect: false,
-            reviewType: 'wrong',
-            isBookmarked: false,
-            reviewCount: 0,
-            lastReviewedAt: null,
-            courseId: userCourseId || null,
-            quizUpdatedAt: quizData.updatedAt || quizData.createdAt || null,
-            quizCreatorId: quizData.creatorId || null,
-            image: question.image || null,
-            chapterId: question.chapterId || null,
-            chapterDetailId: question.chapterDetailId || null,
-            choiceExplanations: question.choiceExplanations || null,
-            imageUrl: question.imageUrl || null,
-            createdAt: serverTimestamp(),
+            reviewType: 'wrong' as const,
           });
         }
       }
+
+      await batch.commit();
 
       console.log(`퀴즈 "${quizTitle}" 공개 업로드 완료 (${questions.length}문제)`);
     } catch (error) {

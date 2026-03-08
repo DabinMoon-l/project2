@@ -29,6 +29,7 @@ import ShortAnswer from '@/components/quiz/ShortAnswer';
 import QuizNavigation from '@/components/quiz/QuizNavigation';
 import ExitConfirmModal from '@/components/quiz/ExitConfirmModal';
 import CombinedQuestionGroup from '@/components/quiz/CombinedQuestionGroup';
+import { FeedbackIcon, InlineFeedbackPanel } from '@/components/common/InlineFeedback';
 
 /**
  * 화면에 표시될 아이템 타입 (단일 문제 또는 결합형 그룹)
@@ -56,6 +57,8 @@ interface QuizData {
   displayItems: DisplayItem[];
   /** 과목 ID */
   courseId?: string;
+  /** 퀴즈 생성자 ID */
+  creatorId?: string;
 }
 
 /**
@@ -109,6 +112,11 @@ export default function QuizPage() {
 
   // 모달 상태
   const [showExitModal, setShowExitModal] = useState(false);
+
+  // 인라인 피드백 상태
+  const [inlineFeedbackOpen, setInlineFeedbackOpen] = useState<string | null>(null); // 열린 문제 ID
+  const [inlineFeedbackSubmitted, setInlineFeedbackSubmitted] = useState<Set<string>>(new Set());
+  const [inlineFeedbackCount, setInlineFeedbackCount] = useState(0);
 
   // 이전 진행상황 복원 모달
   const [showResumeModal, setShowResumeModal] = useState(false);
@@ -470,6 +478,7 @@ export default function QuizPage() {
         questions,
         displayItems,
         courseId: quizData.courseId || undefined,
+        creatorId: quizData.creatorId || undefined,
       });
 
       // 저장된 진행 상황 확인
@@ -810,7 +819,19 @@ export default function QuizPage() {
               {currentDisplayItem.type === 'single' && currentQuestion && (
                 <>
                   {/* 문제 카드 */}
-                  <QuestionCard question={currentQuestion} courseId={quiz?.courseId} />
+                  <QuestionCard
+                    question={currentQuestion}
+                    courseId={quiz?.courseId}
+                    headerRight={
+                      <FeedbackIcon
+                        isOpen={inlineFeedbackOpen === currentQuestion.id}
+                        isSubmitted={inlineFeedbackSubmitted.has(currentQuestion.id)}
+                        onClick={() => setInlineFeedbackOpen(
+                          inlineFeedbackOpen === currentQuestion.id ? null : currentQuestion.id
+                        )}
+                      />
+                    }
+                  />
 
                   {/* 선지 영역 */}
                   <div className="mt-4">
@@ -884,6 +905,31 @@ export default function QuizPage() {
                       </div>
                     )}
                   </div>
+
+                  {/* 인라인 피드백 패널 */}
+                  <AnimatePresence>
+                    {inlineFeedbackOpen === currentQuestion.id && user && (
+                      <InlineFeedbackPanel
+                        questionId={currentQuestion.id}
+                        quizId={quizId}
+                        quizCreatorId={quiz?.creatorId}
+                        userId={user.uid}
+                        questionNumber={currentQuestion.number}
+                        isSubmitted={inlineFeedbackSubmitted.has(currentQuestion.id)}
+                        onSubmitted={(qId) => {
+                          setInlineFeedbackSubmitted(prev => new Set(prev).add(qId));
+                          setInlineFeedbackCount(prev => prev + 1);
+                          // localStorage에 인라인 피드백 카운트 저장 (exp 페이지에서 사용)
+                          const key = `quiz_inline_feedback_count_${quizId}`;
+                          const current = parseInt(localStorage.getItem(key) || '0', 10);
+                          localStorage.setItem(key, String(current + 1));
+                          // 피드백 제출 플래그도 설정
+                          localStorage.setItem(`quiz_feedback_${quizId}`, 'true');
+                        }}
+                        onClose={() => setInlineFeedbackOpen(null)}
+                      />
+                    )}
+                  </AnimatePresence>
                 </>
               )}
 
@@ -895,6 +941,23 @@ export default function QuizPage() {
                   onAnswerChange={handleAnswerChange}
                   groupNumber={currentDisplayItem.displayNumber}
                   courseId={quiz?.courseId}
+                  inlineFeedbackOpen={inlineFeedbackOpen}
+                  inlineFeedbackSubmitted={inlineFeedbackSubmitted}
+                  onFeedbackToggle={(qId) => setInlineFeedbackOpen(
+                    inlineFeedbackOpen === qId ? null : qId
+                  )}
+                  onFeedbackSubmitted={(qId) => {
+                    setInlineFeedbackSubmitted(prev => new Set(prev).add(qId));
+                    setInlineFeedbackCount(prev => prev + 1);
+                    const key = `quiz_inline_feedback_count_${quizId}`;
+                    const current = parseInt(localStorage.getItem(key) || '0', 10);
+                    localStorage.setItem(key, String(current + 1));
+                    localStorage.setItem(`quiz_feedback_${quizId}`, 'true');
+                    setInlineFeedbackOpen(null);
+                  }}
+                  quizCreatorId={quiz?.creatorId}
+                  quizId={quizId}
+                  userId={user?.uid}
                 />
               )}
             </motion.div>

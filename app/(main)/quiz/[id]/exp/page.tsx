@@ -130,9 +130,13 @@ export default function ExpPage() {
       else if (score >= 70) bonusExp = 10; // 총 35
       else if (score >= 50) bonusExp = 5; // 총 30
 
-      // 피드백 EXP (자기 퀴즈면 0, 피드백 1개당 10)
+      // 피드백 EXP (자기 퀴즈면 0)
+      // 인라인 피드백 (풀이 중) + 피드백 페이지 합산
       const hasFeedback = localStorage.getItem(`quiz_feedback_${quizId}`) === 'true';
-      const feedbackExp = isOwnQuiz ? 0 : (hasFeedback ? 10 : 0);
+      const inlineFbCount = parseInt(localStorage.getItem(`quiz_inline_feedback_count_${quizId}`) || '0', 10);
+      // 피드백 페이지 10 XP + 인라인 피드백은 CF에서 각각 15 XP 지급 (표시만 합산)
+      const feedbackPageExp = hasFeedback ? 10 : 0;
+      const feedbackExp = isOwnQuiz ? 0 : (feedbackPageExp + inlineFbCount * 15);
 
       const totalExp = baseExp + bonusExp + feedbackExp;
 
@@ -179,6 +183,7 @@ export default function ExpPage() {
       localStorage.removeItem(`quiz_answers_${quizId}`);
       localStorage.removeItem(`quiz_result_${quizId}`);
       localStorage.removeItem(`quiz_feedback_${quizId}`);
+      localStorage.removeItem(`quiz_inline_feedback_count_${quizId}`);
 
       // 퀴즈 목록으로 이동
       router.push('/quiz');

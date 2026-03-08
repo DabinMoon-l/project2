@@ -91,20 +91,22 @@ export function useSeasonReset() {
       setLogsLoading(true);
 
       const classIds = ['A', 'B', 'C', 'D'];
-      const classInfos: ClassSeasonInfo[] = [];
 
-      for (const classId of classIds) {
-        // 해당 반의 학생 수와 시즌 정보 조회
-        const studentsQuery = query(
-          collection(db, 'users'),
-          where('classId', '==', classId),
-          where('role', '==', 'student')
-        );
+      // 4개 반 병렬 조회
+      const classSnapshots = await Promise.all(
+        classIds.map(classId =>
+          getDocs(query(
+            collection(db, 'users'),
+            where('classId', '==', classId),
+            where('role', '==', 'student')
+          ))
+        )
+      );
 
-        const studentsSnapshot = await getDocs(studentsQuery);
+      const classInfos: ClassSeasonInfo[] = classIds.map((classId, idx) => {
+        const studentsSnapshot = classSnapshots[idx];
         const studentCount = studentsSnapshot.size;
 
-        // 첫 번째 학생의 시즌 정보로 대표값 사용
         let currentSeason: SeasonType = 'midterm';
         let lastResetAt: Date | null = null;
 
@@ -116,14 +118,14 @@ export function useSeasonReset() {
           }
         }
 
-        classInfos.push({
+        return {
           classId,
           currentSeason,
           lastResetAt,
           studentCount,
           canReset: studentCount > 0,
-        });
-      }
+        };
+      });
 
       setClassSeasons(classInfos);
     } catch (err) {
@@ -160,31 +162,34 @@ export function useSeasonReset() {
       }
 
       const snapshot = await getDocs(logsQuery);
-      const logs: SeasonLog[] = [];
 
-      for (const docSnap of snapshot.docs) {
-        const data = docSnap.data();
-
-        // 리셋한 교수님 이름 조회
-        let resetByName = '교수님';
-        if (data.resetBy) {
-          const professorDoc = await getDoc(doc(db, 'users', data.resetBy));
-          if (professorDoc.exists()) {
-            resetByName = professorDoc.data().nickname || '교수님';
-          }
+      // 고유 교수 ID 추출 후 병렬 조회
+      const professorIds = [...new Set(
+        snapshot.docs.map(d => d.data().resetBy).filter(Boolean) as string[]
+      )];
+      const professorDocs = await Promise.all(
+        professorIds.map(id => getDoc(doc(db, 'users', id)))
+      );
+      const professorNameMap = new Map<string, string>();
+      professorDocs.forEach(d => {
+        if (d.exists()) {
+          professorNameMap.set(d.id, d.data().nickname || '교수님');
         }
+      });
 
-        logs.push({
+      const logs: SeasonLog[] = snapshot.docs.map(docSnap => {
+        const data = docSnap.data();
+        return {
           id: docSnap.id,
           classId: data.classId,
           previousSeason: data.previousSeason,
           newSeason: data.newSeason,
           resetBy: data.resetBy,
-          resetByName,
+          resetByName: (data.resetBy && professorNameMap.get(data.resetBy)) || '교수님',
           studentCount: data.studentCount,
           createdAt: (data.createdAt as Timestamp).toDate(),
-        });
-      }
+        };
+      });
 
       setSeasonLogs(logs);
     } catch (err) {

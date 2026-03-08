@@ -7,7 +7,6 @@ import Image from 'next/image';
 import {
   doc,
   getDoc,
-  updateDoc,
   collection,
   addDoc,
   query,
@@ -1080,9 +1079,17 @@ export default function FeedbackPage() {
 
       if (!resultsSnapshot.empty) {
         const resultData = resultsSnapshot.docs[0].data();
-        hasSubmittedFeedback = resultData.hasFeedback || false;
         userAnswers = resultData.answers || [];
       }
+
+      // 이미 피드백을 제출했는지 questionFeedbacks에서 확인
+      const existingFeedbackQuery = query(
+        collection(db, 'questionFeedbacks'),
+        where('userId', '==', user.uid),
+        where('quizId', '==', quizId)
+      );
+      const existingFeedbackSnapshot = await getDocs(existingFeedbackQuery);
+      hasSubmittedFeedback = !existingFeedbackSnapshot.empty;
 
       // 로컬 스토리지에서 결과 데이터 가져오기 (결과 페이지에서 저장한 것)
       const storedResult = localStorage.getItem(`quiz_result_${quizId}`);
@@ -1409,24 +1416,6 @@ export default function FeedbackPage() {
       }
 
       if (!isMountedRef.current) return; // 마운트 상태 체크
-
-      // 사용자 결과 문서 업데이트 (피드백 완료 표시)
-      const resultsQuery = query(
-        collection(db, 'quizResults'),
-        where('userId', '==', user.uid),
-        where('quizId', '==', pageData.quizId)
-      );
-      const resultsSnapshot = await getDocs(resultsQuery);
-
-      if (!isMountedRef.current) return; // 마운트 상태 체크
-
-      if (!resultsSnapshot.empty) {
-        const resultDocRef = resultsSnapshot.docs[0].ref;
-        await updateDoc(resultDocRef, {
-          hasFeedback: true,
-          feedbackAt: serverTimestamp(),
-        });
-      }
 
       // 피드백 제출 여부를 localStorage에 저장 (EXP 페이지에서 확인)
       const feedbackCount = Object.values(feedbackTypes).filter((t) => t !== null).length;

@@ -67,6 +67,29 @@ export default function AddQuestionsView({
     });
   }, [solvedItems, alreadyAddedQuestionKeys]);
 
+  // 선택 가능한 모든 키 (이미 추가된 문제 제외)
+  const selectableKeys = useMemo(() => {
+    return quizItems
+      .map(item => `${item.quizId}:${item.questionId}`)
+      .filter(key => !alreadyAddedQuestionKeys.has(key));
+  }, [quizItems, alreadyAddedQuestionKeys]);
+
+  // 전체 선택 여부
+  const isAllSelected = selectableKeys.length > 0 && selectableKeys.every(key => addSelectedIds.has(key));
+
+  // 전체 선택/해제
+  const handleSelectAll = useCallback(() => {
+    setAddSelectedIds(prev => {
+      const newSelected = new Set(prev);
+      if (isAllSelected) {
+        selectableKeys.forEach(k => newSelected.delete(k));
+      } else {
+        selectableKeys.forEach(k => newSelected.add(k));
+      }
+      return newSelected;
+    });
+  }, [isAllSelected, selectableKeys]);
+
   // 선택된 문제 수 (결합형은 1문제)
   const actualSelectedCount = useMemo(() => {
     if (addSelectedIds.size === 0) return 0;
@@ -215,6 +238,21 @@ export default function AddQuestionsView({
                   추가 ({actualSelectedCount})
                 </button>
               </div>
+
+              {/* 전체 선택 바 */}
+              {selectableKeys.length > 0 && (
+                <div className="flex items-center justify-between px-4 py-2 border-b border-[#EDEAE4] flex-shrink-0">
+                  <button
+                    onClick={handleSelectAll}
+                    className="text-xs font-bold text-[#1A1A1A]"
+                  >
+                    {isAllSelected ? '전체 해제' : '전체 선택'}
+                  </button>
+                  <span className="text-[10px] text-[#5C5C5C]">
+                    {selectableKeys.length > 0 && `선택 가능 ${selectableKeys.length}문제`}
+                  </span>
+                </div>
+              )}
 
               {/* 문제 목록 */}
               <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">

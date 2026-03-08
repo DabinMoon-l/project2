@@ -361,7 +361,7 @@ export default function SolvedQuizLayout({
                   }}
                   onDetails={() => onShowDetails(quiz)}
                   onReview={() => onQuizClick(quiz.id)}
-                  onReviewWrongOnly={onQuizClickWrongOnly ? () => onQuizClickWrongOnly(quiz.id) : undefined}
+                  onReviewWrongOnly={onQuizClickWrongOnly && !(quiz.myScore !== undefined && quiz.myScore >= quiz.questionCount) ? () => onQuizClickWrongOnly(quiz.id) : undefined}
                   isBookmarked={isQuizBookmarked(quiz.id)}
                   onToggleBookmark={() => onToggleBookmark(quiz.id)}
                   isSelectMode={isSelectMode}

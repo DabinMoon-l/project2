@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useRef } from 'react';
 import type { QuestionType } from '@/lib/ocr';
 import type { SubQuestion } from './questionTypes';
 import { KOREAN_LABELS, BOGI_QUESTION_PRESETS } from './questionTypes';
@@ -396,55 +397,10 @@ export default function SubQuestionEditor({
       </div>
 
       {/* 하위 문제 이미지 */}
-      <div className="mt-3 space-y-2">
-        <label className="text-xs font-bold text-[#1A1A1A]">
-          이미지 <span className="text-[#5C5C5C] font-normal">(선택)</span>
-        </label>
-        {subQuestion.image ? (
-          <div className="relative border-2 border-[#1A1A1A] bg-[#EDEAE4] p-1">
-            <img
-              src={subQuestion.image}
-              alt="하위 문제 이미지"
-              className="w-full max-h-32 object-contain"
-            />
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onChange({ ...subQuestion, image: undefined });
-              }}
-              className="absolute top-0.5 right-0.5 z-10 w-6 h-6 bg-[#8B1A1A] text-[#F5F0E8] flex items-center justify-center hover:bg-[#6B1414] transition-colors cursor-pointer"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        ) : (
-          <label className="flex items-center justify-center gap-1 w-full py-2 border-2 border-dashed border-[#1A1A1A] text-[#5C5C5C] cursor-pointer hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors">
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  const reader = new FileReader();
-                  reader.onload = (event) => {
-                    onChange({ ...subQuestion, image: event.target?.result as string });
-                  };
-                  reader.readAsDataURL(file);
-                }
-              }}
-            />
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            <span className="text-xs">이미지 업로드</span>
-          </label>
-        )}
-      </div>
+      <SubQuestionImageUpload
+        image={subQuestion.image}
+        onChange={(image) => onChange({ ...subQuestion, image })}
+      />
 
       {/* 하위 문제 보기 (<보기> 박스) - 객관식/주관식에서만 사용, OX는 사용 안함 */}
       {(subQuestion.type === 'multiple' || subQuestion.type === 'short_answer') && (
@@ -608,6 +564,132 @@ export default function SubQuestionEditor({
         placeholder="해설 (선택)"
         className="w-full mt-3 px-3 py-1.5 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-sm focus:outline-none"
       />
+    </div>
+  );
+}
+
+/**
+ * 하위 문제 이미지 업로드 (파일 + URL)
+ */
+function SubQuestionImageUpload({
+  image,
+  onChange,
+}: {
+  image?: string;
+  onChange: (image: string | undefined) => void;
+}) {
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const [urlValue, setUrlValue] = useState('');
+  const urlInputRef = useRef<HTMLInputElement>(null);
+
+  const handleUrlSubmit = () => {
+    const url = urlValue.trim();
+    if (url) {
+      onChange(url);
+      setUrlValue('');
+      setShowUrlInput(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 space-y-2">
+      <label className="text-xs font-bold text-[#1A1A1A]">
+        이미지 <span className="text-[#5C5C5C] font-normal">(선택)</span>
+      </label>
+      {image ? (
+        <div className="relative border-2 border-[#1A1A1A] bg-[#EDEAE4] p-1">
+          <img
+            src={image}
+            alt="하위 문제 이미지"
+            className="w-full max-h-32 object-contain"
+          />
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onChange(undefined);
+            }}
+            className="absolute top-0.5 right-0.5 z-10 w-6 h-6 bg-[#8B1A1A] text-[#F5F0E8] flex items-center justify-center hover:bg-[#6B1414] transition-colors cursor-pointer"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      ) : (
+        <div>
+          <div className="flex gap-2">
+            {/* 파일 업로드 */}
+            <label className="flex-1 flex items-center justify-center gap-1 py-2 border-2 border-dashed border-[#1A1A1A] text-[#5C5C5C] cursor-pointer hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors text-xs">
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                      onChange(event.target?.result as string);
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+              />
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              이미지 업로드
+            </label>
+            {/* URL 입력 토글 */}
+            <button
+              type="button"
+              onClick={() => {
+                setShowUrlInput(!showUrlInput);
+                if (!showUrlInput) {
+                  setTimeout(() => urlInputRef.current?.focus(), 100);
+                }
+              }}
+              className={`flex-1 flex items-center justify-center gap-1 py-2 border-2 border-dashed border-[#1A1A1A] text-[#5C5C5C] hover:bg-[#EDEAE4] hover:text-[#1A1A1A] transition-colors text-xs ${
+                showUrlInput ? 'bg-[#EDEAE4] text-[#1A1A1A]' : ''
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+              </svg>
+              URL 이미지
+            </button>
+          </div>
+          {/* URL 입력 패널 */}
+          {showUrlInput && (
+            <div className="flex items-center gap-2 p-2 border border-[#D4CFC4] bg-[#FDFBF7] mt-1">
+              <input
+                ref={urlInputRef}
+                type="url"
+                value={urlValue}
+                onChange={(e) => setUrlValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleUrlSubmit();
+                  }
+                }}
+                placeholder="이미지 URL을 붙여넣으세요"
+                className="flex-1 px-2.5 py-1.5 text-xs outline-none bg-transparent"
+              />
+              <button
+                type="button"
+                onClick={handleUrlSubmit}
+                disabled={!urlValue.trim()}
+                className="flex-shrink-0 px-2.5 py-1.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] disabled:opacity-30 transition-opacity"
+              >
+                추가
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

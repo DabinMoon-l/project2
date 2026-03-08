@@ -22,12 +22,12 @@ export default function LibraryQuizCard({
   isSelectMode = false,
   isSelected = false,
 }: {
-  quiz: { id: string; title: string; questionCount: number; score: number; totalQuestions: number; tags?: string[]; myScore?: number; myFirstReviewScore?: number };
+  quiz: { id: string; title: string; questionCount: number; score: number; totalQuestions: number; tags?: string[]; myScore?: number; myFirstReviewScore?: number; isPublic?: boolean };
   onCardClick: () => void;
   onDetails: () => void;
   onReview: () => void;
   onReviewWrongOnly?: () => void;
-  onPublish: () => void;
+  onPublish?: () => void;
   isSelectMode?: boolean;
   isSelected?: boolean;
 }) {
@@ -87,8 +87,8 @@ export default function LibraryQuizCard({
         </div>
       )}
 
-      {/* 공개 버튼 (자물쇠 아이콘 - 비공개 상태) - 선택 모드가 아닐 때만 표시 */}
-      {!isSelectMode && (
+      {/* 공개 버튼 (자물쇠 아이콘 - 비공개 상태) - 선택 모드가 아니고 비공개일 때만 표시 */}
+      {!isSelectMode && !quiz.isPublic && onPublish && (
         <button
           onClick={(e) => {
             e.stopPropagation();

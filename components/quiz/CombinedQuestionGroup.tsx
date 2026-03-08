@@ -1,12 +1,13 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import OXChoice, { OXAnswer } from './OXChoice';
 import MultipleChoice from './MultipleChoice';
 import ShortAnswer from './ShortAnswer';
 import { Question } from './QuestionCard';
 import { formatChapterLabel } from '@/lib/courseIndex';
+import { FeedbackIcon, InlineFeedbackPanel } from '@/components/common/InlineFeedback';
 
 /**
  * 답안 타입
@@ -24,6 +25,20 @@ interface CombinedQuestionGroupProps {
   groupNumber: number;
   /** 과목 ID (챕터 라벨 표시용) */
   courseId?: string;
+  /** 인라인 피드백: 현재 열린 문제 ID */
+  inlineFeedbackOpen?: string | null;
+  /** 인라인 피드백: 이미 제출한 문제 ID Set */
+  inlineFeedbackSubmitted?: Set<string>;
+  /** 인라인 피드백: 토글 핸들러 */
+  onFeedbackToggle?: (questionId: string) => void;
+  /** 인라인 피드백: 제출 완료 핸들러 */
+  onFeedbackSubmitted?: (questionId: string) => void;
+  /** 인라인 피드백: 퀴즈 생성자 ID */
+  quizCreatorId?: string;
+  /** 인라인 피드백: 퀴즈 ID */
+  quizId?: string;
+  /** 인라인 피드백: 현재 사용자 ID */
+  userId?: string;
 }
 
 /**
@@ -37,6 +52,13 @@ export default function CombinedQuestionGroup({
   onAnswerChange,
   groupNumber,
   courseId,
+  inlineFeedbackOpen,
+  inlineFeedbackSubmitted,
+  onFeedbackToggle,
+  onFeedbackSubmitted,
+  quizCreatorId,
+  quizId,
+  userId,
 }: CombinedQuestionGroupProps) {
   // 첫 번째 문제에서 공통 정보 가져오기
   const firstQuestion = questions[0];
@@ -229,6 +251,13 @@ export default function CombinedQuestionGroup({
                   {formatChapterLabel(courseId, question.chapterId, question.chapterDetailId)}
                 </span>
               )}
+              {onFeedbackToggle && (
+                <FeedbackIcon
+                  isOpen={inlineFeedbackOpen === question.id}
+                  isSubmitted={inlineFeedbackSubmitted?.has(question.id) || false}
+                  onClick={() => onFeedbackToggle(question.id)}
+                />
+              )}
             </div>
 
             {/* 하위 문제 텍스트 */}
@@ -416,6 +445,22 @@ export default function CombinedQuestionGroup({
                 />
               )}
             </div>
+
+            {/* 인라인 피드백 패널 */}
+            <AnimatePresence>
+              {onFeedbackSubmitted && userId && quizId && inlineFeedbackOpen === question.id && (
+                <InlineFeedbackPanel
+                  questionId={question.id}
+                  quizId={quizId}
+                  quizCreatorId={quizCreatorId}
+                  userId={userId}
+                  questionNumber={parseInt(subNumber.split('-')[0], 10)}
+                  isSubmitted={inlineFeedbackSubmitted?.has(question.id) || false}
+                  onSubmitted={onFeedbackSubmitted}
+                  onClose={() => onFeedbackToggle?.(question.id)}
+                />
+              )}
+            </AnimatePresence>
           </div>
         );
       })}
