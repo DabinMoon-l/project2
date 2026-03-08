@@ -70,12 +70,22 @@ export function InlineFeedbackPanel({
   onSubmitted,
   onClose,
 }: InlineFeedbackProps & { onClose: () => void }) {
-  const [selectedType, setSelectedType] = useState<FeedbackType | null>(null);
+  const [selectedTypes, setSelectedTypes] = useState<Set<FeedbackType>>(new Set());
   const [content, setContent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDone, setIsDone] = useState(false);
+
+  const toggleType = (type: FeedbackType) => {
+    setSelectedTypes(prev => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
+      return next;
+    });
+  };
 
   const handleSubmit = async () => {
-    if (!selectedType) return;
+    if (selectedTypes.size === 0) return;
     setIsSubmitting(true);
     try {
       // quizCreatorId가 없으면 Firestore에서 조회
@@ -87,18 +97,24 @@ export function InlineFeedbackPanel({
         }
       }
 
-      await addDoc(collection(db, 'questionFeedbacks'), {
-        questionId,
-        quizId,
-        quizCreatorId: creatorId,
-        userId,
-        questionNumber,
-        type: selectedType,
-        content,
-        createdAt: serverTimestamp(),
-      });
+      // 선택된 타입마다 피드백 문서 생성
+      const types = Array.from(selectedTypes);
+      await Promise.all(types.map(type =>
+        addDoc(collection(db, 'questionFeedbacks'), {
+          questionId,
+          quizId,
+          quizCreatorId: creatorId,
+          userId,
+          questionNumber,
+          type,
+          content,
+          createdAt: serverTimestamp(),
+        })
+      ));
 
-      onSubmitted(questionId);
+      setIsDone(true);
+      // 잠시 체크 표시 후 닫기
+      setTimeout(() => onSubmitted(questionId), 800);
     } catch (err) {
       console.error('피드백 제출 실패:', err);
     } finally {
@@ -114,27 +130,29 @@ export function InlineFeedbackPanel({
       transition={{ duration: 0.2 }}
       className="overflow-hidden"
     >
-      <div className="mt-3 p-3 border-2 border-[#8B6914] bg-[#FFF8E1]">
-        {/* 피드백 타입 선택 (3×2 그리드) */}
-        <div className="grid grid-cols-3 gap-1.5 mb-2">
-          {FEEDBACK_TYPES.map(({ type, label }) => (
-            <button
-              key={type}
-              onClick={() => setSelectedType(type)}
-              className={`py-1.5 px-1 text-[10px] font-bold border transition-all rounded ${
-                selectedType === type
-                  ? 'border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8]'
-                  : 'border-[#8B6914] bg-[#FFF8E1] text-[#8B6914]'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+      <div className="mt-3 p-3 border-2 border-[#1A1A1A] bg-[#EDEAE4]">
+        {/* 피드백 타입 선택 (2×3 그리드, 중복 선택 가능) */}
+        <div className="flex flex-col items-center gap-1.5">
+          <div className="grid grid-cols-2 gap-2 w-fit">
+            {FEEDBACK_TYPES.map(({ type, label }) => (
+              <button
+                key={type}
+                onClick={() => toggleType(type)}
+                className={`py-2 px-5 text-xs font-bold border transition-all rounded whitespace-nowrap ${
+                  selectedTypes.has(type)
+                    ? 'border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8]'
+                    : 'border-[#8B6914] bg-[#FFF8E1] text-[#8B6914]'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* 추가 의견 + 보내기 */}
         <AnimatePresence>
-          {selectedType && (
+          {selectedTypes.size > 0 && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
@@ -147,21 +165,25 @@ export function InlineFeedbackPanel({
                 placeholder="추가 의견 (선택)"
                 rows={2}
                 maxLength={200}
-                className="w-full p-2 border border-[#8B6914] bg-white/60 focus:outline-none resize-none text-xs rounded mb-2"
+                className="w-full mt-2 p-2 border border-[#8B6914] bg-white/60 focus:outline-none resize-none text-xs rounded"
               />
-              <div className="flex gap-2">
+              <div className="flex gap-2 mt-2">
                 <button
                   onClick={onClose}
-                  className="flex-1 py-1.5 text-xs font-bold border border-[#8B6914] text-[#8B6914] rounded"
+                  className="flex-1 py-1.5 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] rounded"
                 >
                   취소
                 </button>
                 <button
                   onClick={handleSubmit}
-                  disabled={isSubmitting}
-                  className="flex-1 py-1.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border border-[#1A1A1A] rounded"
+                  disabled={isSubmitting || isDone}
+                  className={`flex-1 py-1.5 text-xs font-bold border border-[#1A1A1A] rounded transition-colors ${
+                    isDone
+                      ? 'bg-[#1A6B1A] text-[#F5F0E8] border-[#1A6B1A]'
+                      : 'bg-[#1A1A1A] text-[#F5F0E8]'
+                  }`}
                 >
-                  {isSubmitting ? '전송 중...' : '보내기'}
+                  {isDone ? '✓' : isSubmitting ? '전송 중...' : '보내기'}
                 </button>
               </div>
             </motion.div>

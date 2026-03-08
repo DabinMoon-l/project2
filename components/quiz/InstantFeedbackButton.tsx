@@ -62,10 +62,11 @@ export default function InstantFeedbackButton({
 }: InstantFeedbackButtonProps) {
   const colors = useThemeColors();
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedType, setSelectedType] = useState<FeedbackType | null>(null);
+  const [selectedTypes, setSelectedTypes] = useState<Set<FeedbackType>>(new Set());
   const [content, setContent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isDone, setIsDone] = useState(false);
 
   // 바텀시트 열기
   const handleOpen = () => {
@@ -73,31 +74,47 @@ export default function InstantFeedbackButton({
     setIsOpen(true);
   };
 
+  const toggleType = (type: FeedbackType) => {
+    setSelectedTypes(prev => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
+      return next;
+    });
+  };
+
   // 바텀시트 닫기
   const handleClose = () => {
     setIsOpen(false);
     // 상태 초기화
     setTimeout(() => {
-      setSelectedType(null);
+      setSelectedTypes(new Set());
       setContent('');
+      setIsDone(false);
     }, 300);
   };
 
   // 피드백 제출
   const handleSubmit = async () => {
-    if (!selectedType) return;
+    if (selectedTypes.size === 0) return;
 
     setIsSubmitting(true);
 
     try {
-      await onSubmit({
-        questionId,
-        type: selectedType,
-        content,
-      });
+      const types = Array.from(selectedTypes);
+      for (const type of types) {
+        await onSubmit({
+          questionId,
+          type,
+          content,
+        });
+      }
 
-      setIsSubmitted(true);
-      handleClose();
+      setIsDone(true);
+      setTimeout(() => {
+        setIsSubmitted(true);
+        handleClose();
+      }, 800);
     } catch (error) {
       console.error('피드백 제출 실패:', error);
     } finally {
@@ -166,12 +183,12 @@ export default function InstantFeedbackButton({
                   key={type}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => setSelectedType(type)}
+                  onClick={() => toggleType(type)}
                   className={`
                     p-4 border-2 transition-all duration-200
                     flex items-center justify-center text-center
                     min-h-[60px]
-                    ${selectedType === type
+                    ${selectedTypes.has(type)
                       ? positive
                         ? 'border-[#1A6B1A] bg-[#1A6B1A] text-[#F5F0E8]'
                         : 'border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8]'
@@ -189,7 +206,7 @@ export default function InstantFeedbackButton({
 
           {/* 추가 내용 입력 */}
           <AnimatePresence>
-            {selectedType && (
+            {selectedTypes.size > 0 && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
@@ -215,46 +232,22 @@ export default function InstantFeedbackButton({
 
           {/* 제출 버튼 */}
           <motion.button
-            whileHover={selectedType ? { scale: 1.02 } : undefined}
-            whileTap={selectedType ? { scale: 0.98 } : undefined}
+            whileHover={selectedTypes.size > 0 && !isDone ? { scale: 1.02 } : undefined}
+            whileTap={selectedTypes.size > 0 && !isDone ? { scale: 0.98 } : undefined}
             onClick={handleSubmit}
-            disabled={!selectedType || isSubmitting}
+            disabled={selectedTypes.size === 0 || isSubmitting || isDone}
             className={`
               w-full py-3.5 font-bold text-base border-2
               transition-all duration-200
-              ${selectedType
-                ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A] hover:bg-[#2A2A2A]'
-                : 'bg-[#EDEAE4] text-[#5C5C5C] border-[#5C5C5C] cursor-not-allowed'
+              ${isDone
+                ? 'bg-[#1A6B1A] text-[#F5F0E8] border-[#1A6B1A]'
+                : selectedTypes.size > 0
+                  ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A] hover:bg-[#2A2A2A]'
+                  : 'bg-[#EDEAE4] text-[#5C5C5C] border-[#5C5C5C] cursor-not-allowed'
               }
             `}
           >
-            {isSubmitting ? (
-              <span className="flex items-center justify-center gap-2">
-                <svg
-                  className="animate-spin w-5 h-5"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
-                제출 중...
-              </span>
-            ) : (
-              '피드백 보내기'
-            )}
+            {isDone ? '✓' : isSubmitting ? '전송 중...' : '피드백 보내기'}
           </motion.button>
 
           <p className="text-xs text-[#5C5C5C] text-center">

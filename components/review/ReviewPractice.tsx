@@ -114,9 +114,10 @@ export default function ReviewPractice({
 
   // 피드백 바텀시트 상태
   const [feedbackTargetItem, setFeedbackTargetItem] = useState<ReviewItem | null>(null);
-  const [selectedFeedbackType, setSelectedFeedbackType] = useState<FeedbackType | null>(null);
+  const [selectedFeedbackTypes, setSelectedFeedbackTypes] = useState<Set<FeedbackType>>(new Set());
   const [feedbackContent, setFeedbackContent] = useState('');
   const [isFeedbackSubmitting, setIsFeedbackSubmitting] = useState(false);
+  const [isFeedbackDone, setIsFeedbackDone] = useState(false);
   const [submittedFeedbackIds, setSubmittedFeedbackIds] = useState<Set<string>>(new Set());
   // 피드백 제출 횟수 (완료 시 합산 EXP 토스트용)
   const [feedbackSubmitCount, setFeedbackSubmitCount] = useState(0);
@@ -524,13 +525,24 @@ export default function ReviewPractice({
   // 피드백 바텀시트 닫기
   const closeFeedbackSheet = () => {
     setFeedbackTargetItem(null);
-    setSelectedFeedbackType(null);
+    setSelectedFeedbackTypes(new Set());
     setFeedbackContent('');
+    setIsFeedbackDone(false);
+  };
+
+  // 피드백 타입 토글
+  const toggleFeedbackType = (type: FeedbackType) => {
+    setSelectedFeedbackTypes(prev => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
+      return next;
+    });
   };
 
   // 피드백 제출
   const handleFeedbackSubmit = async () => {
-    if (!feedbackTargetItem || !selectedFeedbackType || !user) return;
+    if (!feedbackTargetItem || selectedFeedbackTypes.size === 0 || !user) return;
     setIsFeedbackSubmitting(true);
     try {
       // quizCreatorId 결정: 아이템에 없으면 퀴즈에서 가져옴
@@ -551,19 +563,25 @@ export default function ReviewPractice({
       const questionNumber = qMatch ? parseInt(qMatch[1], 10) + 1 : 1;
 
       const feedbackRef = collection(db, 'questionFeedbacks');
-      await addDoc(feedbackRef, {
-        questionId: feedbackTargetItem.questionId,
-        quizId: feedbackTargetItem.quizId,
-        quizCreatorId: creatorId, // 퀴즈 생성자 ID (조회 최적화용)
-        userId: user.uid,
-        questionNumber, // 문제 번호 (표시용)
-        type: selectedFeedbackType,
-        content: feedbackContent,
-        createdAt: serverTimestamp(),
-      });
+      const types = Array.from(selectedFeedbackTypes);
+      await Promise.all(types.map(type =>
+        addDoc(feedbackRef, {
+          questionId: feedbackTargetItem.questionId,
+          quizId: feedbackTargetItem.quizId,
+          quizCreatorId: creatorId,
+          userId: user.uid,
+          questionNumber,
+          type,
+          content: feedbackContent,
+          createdAt: serverTimestamp(),
+        })
+      ));
       setSubmittedFeedbackIds(prev => new Set(prev).add(feedbackTargetItem.questionId));
       setFeedbackSubmitCount(prev => prev + 1);
-      closeFeedbackSheet();
+      setIsFeedbackDone(true);
+      setTimeout(() => {
+        closeFeedbackSheet();
+      }, 800);
     } catch (err) {
       console.error('피드백 제출 실패:', err);
       alert('피드백 제출에 실패했습니다.');
@@ -1436,9 +1454,9 @@ export default function ReviewPractice({
                 {FEEDBACK_TYPES.map(({ type, label }) => (
                   <button
                     key={type}
-                    onClick={() => setSelectedFeedbackType(type)}
+                    onClick={() => toggleFeedbackType(type)}
                     className={`p-2 border-2 text-xs font-bold transition-all rounded-lg ${
-                      selectedFeedbackType === type
+                      selectedFeedbackTypes.has(type)
                         ? 'border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8]'
                         : 'border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A]'
                     }`}
@@ -1451,7 +1469,7 @@ export default function ReviewPractice({
 
             {/* 추가 내용 입력 */}
             <AnimatePresence>
-              {selectedFeedbackType && (
+              {selectedFeedbackTypes.size > 0 && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
@@ -1474,14 +1492,16 @@ export default function ReviewPractice({
             {/* 제출 버튼 */}
             <button
               onClick={handleFeedbackSubmit}
-              disabled={!selectedFeedbackType || isFeedbackSubmitting}
+              disabled={selectedFeedbackTypes.size === 0 || isFeedbackSubmitting || isFeedbackDone}
               className={`w-full py-2.5 text-sm font-bold border-2 transition-colors rounded-lg ${
-                selectedFeedbackType
-                  ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                  : 'bg-[#EDEAE4] text-[#5C5C5C] border-[#5C5C5C] cursor-not-allowed'
+                isFeedbackDone
+                  ? 'bg-[#1A6B1A] text-[#F5F0E8] border-[#1A6B1A]'
+                  : selectedFeedbackTypes.size > 0
+                    ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                    : 'bg-[#EDEAE4] text-[#5C5C5C] border-[#5C5C5C] cursor-not-allowed'
               }`}
             >
-              {isFeedbackSubmitting ? '제출 중...' : '피드백 보내기'}
+              {isFeedbackDone ? '✓' : isFeedbackSubmitting ? '제출 중...' : '피드백 보내기'}
             </button>
             <p className="text-[10px] text-[#5C5C5C] text-center">피드백은 익명으로 전달됩니다.</p>
           </div>

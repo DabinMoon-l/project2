@@ -61,22 +61,39 @@ export default function QuestionCard({
 }: QuestionCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
-  const [selectedFeedbackType, setSelectedFeedbackType] = useState<FeedbackType | null>(null);
+  const [selectedFeedbackTypes, setSelectedFeedbackTypes] = useState<Set<FeedbackType>>(new Set());
   const [feedbackContent, setFeedbackContent] = useState('');
   const [isFeedbackSubmitting, setIsFeedbackSubmitting] = useState(false);
   const [isFeedbackSubmitted, setIsFeedbackSubmitted] = useState(false);
+  const [isFeedbackDone, setIsFeedbackDone] = useState(false);
   const [expandedChoices, setExpandedChoices] = useState<Set<number>>(new Set());
+
+  const toggleFeedbackType = (type: FeedbackType) => {
+    setSelectedFeedbackTypes(prev => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
+      return next;
+    });
+  };
 
   // 피드백 제출
   const handleFeedbackSubmit = async () => {
-    if (!selectedFeedbackType || !onFeedbackSubmit) return;
+    if (selectedFeedbackTypes.size === 0 || !onFeedbackSubmit) return;
     setIsFeedbackSubmitting(true);
     try {
-      await onFeedbackSubmit(item.questionId, selectedFeedbackType, feedbackContent);
-      setIsFeedbackSubmitted(true);
-      setIsFeedbackOpen(false);
-      setSelectedFeedbackType(null);
-      setFeedbackContent('');
+      const types = Array.from(selectedFeedbackTypes);
+      for (const type of types) {
+        await onFeedbackSubmit(item.questionId, type, feedbackContent);
+      }
+      setIsFeedbackDone(true);
+      setTimeout(() => {
+        setIsFeedbackSubmitted(true);
+        setIsFeedbackOpen(false);
+        setSelectedFeedbackTypes(new Set());
+        setFeedbackContent('');
+        setIsFeedbackDone(false);
+      }, 800);
     } catch (err) {
       console.error('피드백 제출 실패:', err);
     } finally {
@@ -807,7 +824,7 @@ export default function QuestionCard({
         isOpen={isFeedbackOpen}
         onClose={() => {
           setIsFeedbackOpen(false);
-          setSelectedFeedbackType(null);
+          setSelectedFeedbackTypes(new Set());
           setFeedbackContent('');
         }}
         title="문제 피드백"
@@ -821,9 +838,9 @@ export default function QuestionCard({
               {FEEDBACK_TYPES.map(({ type, label, positive }) => (
                 <button
                   key={type}
-                  onClick={() => setSelectedFeedbackType(type)}
+                  onClick={() => toggleFeedbackType(type)}
                   className={`p-2.5 border-2 text-sm font-bold transition-all ${
-                    selectedFeedbackType === type
+                    selectedFeedbackTypes.has(type)
                       ? positive
                         ? 'border-[#1A6B1A] bg-[#1A6B1A] text-[#F5F0E8]'
                         : 'border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8]'
@@ -840,7 +857,7 @@ export default function QuestionCard({
 
           {/* 추가 내용 입력 */}
           <AnimatePresence>
-            {selectedFeedbackType && (
+            {selectedFeedbackTypes.size > 0 && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
@@ -863,14 +880,16 @@ export default function QuestionCard({
           {/* 제출 버튼 */}
           <button
             onClick={handleFeedbackSubmit}
-            disabled={!selectedFeedbackType || isFeedbackSubmitting}
+            disabled={selectedFeedbackTypes.size === 0 || isFeedbackSubmitting || isFeedbackDone}
             className={`w-full py-2.5 font-bold border-2 transition-colors ${
-              selectedFeedbackType
-                ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                : 'bg-[#EDEAE4] text-[#5C5C5C] border-[#5C5C5C] cursor-not-allowed'
+              isFeedbackDone
+                ? 'bg-[#1A6B1A] text-[#F5F0E8] border-[#1A6B1A]'
+                : selectedFeedbackTypes.size > 0
+                  ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                  : 'bg-[#EDEAE4] text-[#5C5C5C] border-[#5C5C5C] cursor-not-allowed'
             }`}
           >
-            {isFeedbackSubmitting ? '제출 중...' : '피드백 보내기'}
+            {isFeedbackDone ? '✓' : isFeedbackSubmitting ? '제출 중...' : '피드백 보내기'}
           </button>
           <p className="text-xs text-[#5C5C5C] text-center">피드백은 익명으로 전달됩니다.</p>
         </div>
