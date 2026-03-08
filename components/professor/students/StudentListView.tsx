@@ -104,15 +104,15 @@ export default function StudentListView({ students, onStudentClick, warningMap, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [students, tick]);
 
-  // 접속 중 우선 → 학번순 정렬
+  // 접속 중 우선 → 최근 접속순 정렬
   const sorted = useMemo(() => {
     return [...enrichedStudents].sort((a, b) => {
       // 접속 중인 학생이 상단으로
       const aOnline = a.status === 'online' ? 0 : 1;
       const bOnline = b.status === 'online' ? 0 : 1;
       if (aOnline !== bOnline) return aOnline - bOnline;
-      // 같은 그룹 내에서 학번순
-      return compareStudentId(a.studentId, b.studentId);
+      // 같은 그룹 내에서 최근 접속순 (lastActiveAt 내림차순)
+      return b.lastActiveAt.getTime() - a.lastActiveAt.getTime();
     });
   }, [enrichedStudents]);
 
