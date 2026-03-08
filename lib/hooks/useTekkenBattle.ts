@@ -99,6 +99,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
   const [activeBattleId, setActiveBattleId] = useState<string | null>(null);
 
   const battleIdRef = useRef<string | null>(null);
+  const opponentIdRef = useRef<string | null>(null);
   const courseIdRef = useRef<string | null>(null);
   const waitTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const matchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -443,14 +444,12 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
   }, [userId]);
 
   // 봇 탭 수 RTDB 쓰기 (봇 연타 실시간 시뮬레이션용)
+  // refs 사용으로 참조 안정화 (battle 변경 시 interval 재시작 방지)
   const writeBotTap = useCallback((count: number) => {
-    if (!battleIdRef.current || !battle) return;
-    const playerIds = Object.keys(battle.players || {});
-    const opponentId = playerIds.find(id => id !== userId);
-    if (!opponentId) return;
-    const tapRef = ref(getRtdb(), `tekken/battles/${battleIdRef.current}/mash/taps/${opponentId}`);
+    if (!battleIdRef.current || !opponentIdRef.current) return;
+    const tapRef = ref(getRtdb(), `tekken/battles/${battleIdRef.current}/mash/taps/${opponentIdRef.current}`);
     set(tapRef, count).catch(() => {});
-  }, [userId, battle]);
+  }, []);
 
   // 타임아웃 제출 — 네트워크 에러 시 throw (호출자가 timeoutSubmitted 복구)
   const handleSubmitTimeout = useCallback(async () => {
@@ -505,6 +504,8 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
   const playerIds = battle?.players ? Object.keys(battle.players) : [];
   const myPlayer = userId && battle?.players?.[userId] ? battle.players[userId] : null;
   const opponentId = playerIds.find((id) => id !== userId);
+  // opponentId ref 업데이트 (writeBotTap 안정성)
+  if (opponentId) opponentIdRef.current = opponentId;
   const opponent = opponentId && battle?.players?.[opponentId] ? battle.players[opponentId] : null;
   const currentRound = battle?.rounds?.[battle.currentRound] ?? null;
   const myActiveRabbit = myPlayer ? myPlayer.rabbits?.[myPlayer.activeRabbitIndex] ?? null : null;
