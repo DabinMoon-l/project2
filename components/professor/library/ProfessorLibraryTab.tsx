@@ -28,7 +28,7 @@ const QuizStatsModal = dynamic(() => import('@/components/quiz/manage/QuizStatsM
 const QuestionEditor = dynamic(() => import('@/components/quiz/create/QuestionEditor'));
 import { Skeleton } from '@/components/common';
 import MobileBottomSheet from '@/components/common/MobileBottomSheet';
-import { getDefaultQuizTab } from '@/lib/types/course';
+import { getDefaultQuizTab, getPastExamOptions } from '@/lib/types/course';
 import { generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import { useKeyboardAware } from '@/lib/hooks/useKeyboardAware';
 import PreviewQuestionCard from '@/components/professor/PreviewQuestionCard';
@@ -291,11 +291,10 @@ export default function ProfessorLibraryTab({
 
   // 공개 모달
   const [publishTarget, setPublishTarget] = useState<string | null>(null);
-  const [publishType, setPublishType] = useState<string>(() => {
-    const tab = getDefaultQuizTab();
-    return tab === 'final' ? 'final' : 'midterm';
-  });
   const [showPublishDropdown, setShowPublishDropdown] = useState(false);
+  // 기출 선택 시 서브 드롭다운
+  const [showPastSubDropdown, setShowPastSubDropdown] = useState(false);
+  const [selectedPastExam, setSelectedPastExam] = useState<string | null>(null);
 
   // 비공개 전환 모달
   const [unpublishTarget, setUnpublishTarget] = useState<string | null>(null);
@@ -1720,7 +1719,7 @@ export default function ProfessorLibraryTab({
             {/* 버튼: 취소 + 공개(드롭다운) */}
             <div className="flex gap-2">
               <button
-                onClick={() => { setPublishTarget(null); setShowPublishDropdown(false); }}
+                onClick={() => { setPublishTarget(null); setShowPublishDropdown(false); setShowPastSubDropdown(false); setSelectedPastExam(null); }}
                 className="flex-1 py-1.5 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors rounded-lg"
               >
                 취소
@@ -1732,11 +1731,18 @@ export default function ProfessorLibraryTab({
                     {[
                       { value: 'midterm', label: '중간 대비' },
                       { value: 'final', label: '기말 대비' },
-                      { value: 'independent', label: '단독 대비' },
+                      { value: 'past', label: '기출' },
+                      { value: 'independent', label: '단독' },
                     ].map((opt) => (
                       <button
                         key={opt.value}
                         onClick={async () => {
+                          // 기출 선택 시 서브 드롭다운 표시
+                          if (opt.value === 'past') {
+                            setShowPublishDropdown(false);
+                            setShowPastSubDropdown(true);
+                            return;
+                          }
                           setShowPublishDropdown(false);
                           if (publishTarget) {
                             try {
@@ -1756,13 +1762,53 @@ export default function ProfessorLibraryTab({
                     ))}
                   </div>
                 )}
+                {/* 기출 서브 드롭다운 (위로 열림) */}
+                {showPastSubDropdown && (
+                  <div className="absolute bottom-full left-0 w-full border-2 border-[#1A1A1A] border-b-0 bg-[#F5F0E8] rounded-t-lg overflow-hidden max-h-[200px] overflow-y-auto">
+                    {/* 뒤로가기 */}
+                    <button
+                      onClick={() => { setShowPastSubDropdown(false); setShowPublishDropdown(true); }}
+                      className="w-full py-2 text-xs font-bold text-[#5C5C5C] hover:bg-[#EDEAE4] transition-colors flex items-center justify-center gap-1"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                      기출 선택
+                    </button>
+                    <div className="border-t border-[#D4CFC4]" />
+                    {getPastExamOptions(userCourseId).map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={async () => {
+                          setShowPastSubDropdown(false);
+                          if (publishTarget) {
+                            try {
+                              await publishQuiz(publishTarget, 'past', { pastYear: opt.year, pastExamType: opt.examType });
+                              onPublish?.();
+                            } catch (err) {
+                              console.error('퀴즈 공개 실패:', err);
+                            } finally {
+                              setPublishTarget(null);
+                            }
+                          }
+                        }}
+                        className="w-full py-2 text-xs font-bold text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {/* 공개 버튼 — 클릭 시 드롭다운 토글 */}
                 <button
-                  onClick={() => setShowPublishDropdown(!showPublishDropdown)}
+                  onClick={() => {
+                    setShowPastSubDropdown(false);
+                    setShowPublishDropdown(!showPublishDropdown);
+                  }}
                   className="w-full flex items-center justify-center gap-2 py-1.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors rounded-lg"
                 >
                   공개
-                  <svg className={`w-3 h-3 transition-transform ${showPublishDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className={`w-3 h-3 transition-transform ${showPublishDropdown || showPastSubDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
                   </svg>
                 </button>
