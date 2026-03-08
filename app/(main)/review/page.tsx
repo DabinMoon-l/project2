@@ -364,10 +364,15 @@ function ReviewPageContent() {
     const q = query(completionsRef, where('userId', '==', user.uid));
 
     const unsub = onSnapshot(q, async (snap) => {
-      const completionMap = new Map<string, { score: number; total: number }>();
+      const completionMap = new Map<string, { score: number; total: number; courseId: string | null; completedAt: any }>();
       snap.docs.forEach(d => {
         const data = d.data();
-        completionMap.set(data.quizId, { score: data.score ?? 0, total: data.totalQuestions ?? 0 });
+        completionMap.set(data.quizId, {
+          score: data.score ?? 0,
+          total: data.totalCount ?? data.totalQuestions ?? 0,
+          courseId: data.courseId ?? null,
+          completedAt: data.completedAt,
+        });
       });
 
       if (completionMap.size === 0) {
@@ -388,6 +393,7 @@ function ReviewPageContent() {
 
       // 퀴즈 메타데이터 로드 (10개씩 배치)
       const quizzes: LearningQuiz[] = [];
+      const foundIds = new Set<string>();
       for (let i = 0; i < quizIds.length; i += 10) {
         const batch = quizIds.slice(i, i + 10);
         const quizzesRef = collection(db, 'quizzes');
@@ -397,6 +403,7 @@ function ReviewPageContent() {
           const data = d.data();
           // 현재 과목 퀴즈만
           if (data.courseId !== userCourseId) return;
+          foundIds.add(d.id);
           const comp = completionMap.get(d.id);
           quizzes.push({
             id: d.id,
@@ -416,6 +423,45 @@ function ReviewPageContent() {
             multipleChoiceCount: data.multipleChoiceCount,
             subjectiveCount: data.subjectiveCount,
           });
+        });
+      }
+
+      // 삭제된 퀴즈 폴백: quizResults에서 제목 가져오기
+      const missingIds = quizIds.filter(id => !foundIds.has(id));
+      for (const missingId of missingIds) {
+        const comp = completionMap.get(missingId);
+        // 현재 과목 퀴즈만
+        if (comp?.courseId && comp.courseId !== userCourseId) continue;
+        // quizResults에서 제목 조회
+        let title = '삭제된 퀴즈';
+        let totalCount = comp?.total ?? 0;
+        try {
+          const resultQuery = query(
+            collection(db, 'quizResults'),
+            where('userId', '==', user.uid),
+            where('quizId', '==', missingId),
+            limit(1)
+          );
+          const resultSnap = await getDocs(resultQuery);
+          if (!resultSnap.empty) {
+            const resultData = resultSnap.docs[0].data();
+            title = resultData.quizTitle || '삭제된 퀴즈';
+            totalCount = resultData.totalCount || totalCount;
+          }
+        } catch { /* 무시 */ }
+        quizzes.push({
+          id: missingId,
+          title,
+          questionCount: totalCount,
+          score: comp?.score ?? 0,
+          totalQuestions: totalCount,
+          createdAt: comp?.completedAt?.toDate?.() ?? new Date(),
+          completedAt: comp?.completedAt?.toDate?.() ?? new Date(),
+          isPublic: false,
+          tags: [],
+          difficulty: 'medium',
+          myScore: comp?.score,
+          isDeleted: true,
         });
       }
 

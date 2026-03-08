@@ -300,15 +300,6 @@ export default function FolderDetailPage() {
       setLibraryLoading(true);
       try {
         const quizDoc = await getDoc(doc(db, 'quizzes', folderId));
-        if (!quizDoc.exists()) {
-          setLibraryQuestions([]);
-          setLibraryQuizTitle('');
-          setLibraryLoading(false);
-          return;
-        }
-
-        const quizData = quizDoc.data();
-        setLibraryQuizTitle(quizData.title || '퀴즈');
 
         // quizResults에서 사용자 풀이 결과 가져오기
         const resultQuery = query(
@@ -328,6 +319,75 @@ export default function FolderDetailPage() {
           });
           questionScores = sorted[0].data().questionScores || {};
         }
+
+        // 삭제된 퀴즈: reviews 컬렉션에서 폴백 로드
+        if (!quizDoc.exists()) {
+          const reviewFallbackQuery = query(
+            collection(db, 'reviews'),
+            where('userId', '==', user.uid),
+            where('quizId', '==', folderId)
+          );
+          const reviewFallbackDocs = await getDocs(reviewFallbackQuery);
+          if (reviewFallbackDocs.empty) {
+            setLibraryQuestions([]);
+            setLibraryQuizTitle('삭제된 퀴즈');
+            setLibraryLoading(false);
+            return;
+          }
+          // reviews에서 퀴즈 제목 추출
+          const firstReview = reviewFallbackDocs.docs[0].data();
+          setLibraryQuizTitle(firstReview.quizTitle || '삭제된 퀴즈');
+          // reviews를 ReviewItem으로 변환
+          const fallbackItems: ReviewItem[] = reviewFallbackDocs.docs.map(d => {
+            const data = d.data();
+            return {
+              id: d.id,
+              reviewId: d.id,
+              userId: user.uid,
+              quizId: folderId,
+              quizTitle: data.quizTitle || '삭제된 퀴즈',
+              questionId: data.questionId || '',
+              question: data.question || '',
+              type: data.type || 'multiple',
+              options: data.options || [],
+              correctAnswer: data.correctAnswer || '',
+              userAnswer: data.userAnswer || '',
+              explanation: data.explanation || '',
+              choiceExplanations: data.choiceExplanations || undefined,
+              reviewType: data.reviewType || 'solved',
+              isBookmarked: data.isBookmarked || false,
+              isCorrect: data.isCorrect,
+              reviewCount: data.reviewCount || 0,
+              lastReviewedAt: data.lastReviewedAt || null,
+              createdAt: data.createdAt,
+              image: data.image || undefined,
+              imageUrl: data.imageUrl || undefined,
+              passage: data.passage || undefined,
+              passageType: data.passageType || undefined,
+              passageImage: data.passageImage || undefined,
+              koreanAbcItems: data.koreanAbcItems || undefined,
+              passageMixedExamples: data.passageMixedExamples || undefined,
+              commonQuestion: data.commonQuestion || undefined,
+              mixedExamples: data.mixedExamples || undefined,
+              bogi: data.bogi || undefined,
+              subQuestionOptions: data.subQuestionOptions || undefined,
+              subQuestionOptionsType: data.subQuestionOptionsType || undefined,
+              subQuestionImage: data.subQuestionImage || undefined,
+              passagePrompt: data.passagePrompt || undefined,
+              bogiQuestionText: data.bogiQuestionText || undefined,
+              combinedGroupId: data.combinedGroupId || undefined,
+              combinedIndex: data.combinedIndex,
+              combinedTotal: data.combinedTotal,
+              quizCreatorId: data.quizCreatorId || undefined,
+            };
+          });
+          setLibraryQuestions(sortByQuestionId(fallbackItems));
+          setLibraryLoading(false);
+          return;
+        }
+
+        const quizData = quizDoc.data();
+        setLibraryQuizTitle(quizData.title || '퀴즈');
 
         // reviews 컬렉션에서 choiceExplanations 가져오기 (퀴즈 문서에 없을 수 있음)
         const reviewQuery = query(
