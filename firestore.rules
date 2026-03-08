@@ -214,12 +214,10 @@ service cloud.firestore {
       // 읽기: 로그인 사용자 (퀴즈 제작자가 피드백 확인용, 민감하지 않은 데이터)
       allow read: if isAuthenticated();
 
-      // 생성: 본인 것만 + 실제 퀴즈 존재 검증
-      // 보안 강화: 존재하지 않는 quizId로 허위 피드백 생성 방지
+      // 생성: 본인 것만 (삭제된 퀴즈 복습 중 피드백도 허용)
       allow create: if isAuthenticated() &&
         request.resource.data.userId == request.auth.uid &&
-        request.resource.data.quizId is string &&
-        exists(/databases/$(database)/documents/quizzes/$(request.resource.data.quizId));
+        request.resource.data.quizId is string;
 
       // 수정: 교수님만 (답변 작성)
       allow update: if isProfessor();
@@ -357,12 +355,10 @@ service cloud.firestore {
          (resource.data.quizId != null &&
           get(/databases/$(database)/documents/quizzes/$(resource.data.quizId)).data.creatorId == request.auth.uid));
 
-      // 생성: 본인 것만 + 실제 퀴즈 존재 검증
-      // 보안 강화: 존재하지 않는 quizId로 허위 피드백 생성 방지
+      // 생성: 본인 것만 (삭제된 퀴즈 복습 중 피드백도 허용)
       allow create: if isAuthenticated() &&
         request.resource.data.userId == request.auth.uid &&
-        request.resource.data.quizId is string &&
-        exists(/databases/$(database)/documents/quizzes/$(request.resource.data.quizId));
+        request.resource.data.quizId is string;
 
       // 수정/삭제: 불가
       allow update, delete: if false;
