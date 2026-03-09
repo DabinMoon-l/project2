@@ -12,6 +12,12 @@ export interface GeneratedQuestion {
   choices: string[];
   correctAnswer: number;
   difficulty?: TekkenDifficulty;
+  /** 문제 해설 */
+  explanation?: string;
+  /** 선지별 해설 (choices와 같은 순서) */
+  choiceExplanations?: string[];
+  /** 챕터 ID (예: "ch_3") */
+  chapterId?: string;
 }
 
 /** 과목명 매핑 */
