@@ -75,10 +75,10 @@ const DIFFICULTY_DISTRIBUTION: { difficulty: TekkenDifficulty; ratio: number }[]
 const TARGET_POOL_SIZE = 300;
 // 문제 유효 기간 (1일 — 매일 새벽 초기화)
 const QUESTION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-// 배치당 문제 수 (구조화 출력으로 파싱 안정화 → 배치 크게)
-const BATCH_SIZE = 20;
-// 배치 간 대기 (1초 — 구조화 출력으로 파싱 실패율 감소)
-const BATCH_DELAY_MS = 1000;
+// 배치당 문제 수 (해설+선지별해설 추가로 토큰 증가 → 15개로 축소)
+const BATCH_SIZE = 15;
+// 배치 간 대기 (4초 — RPM 15 제한 준수)
+const BATCH_DELAY_MS = 4000;
 // 목표 미달 시 보충 라운드 최대 횟수 (easy/medium만이므로 실패율 매우 낮음)
 const MAX_SUPPLEMENT_ROUNDS = 5;
 
@@ -158,10 +158,13 @@ export async function replenishQuestionPool(
         choices: q.choices,
         correctAnswer: q.correctAnswer,
         difficulty: q.difficulty || difficulty,
-        chapter,
+        chapter: q.chapterId || chapter,
         chapters,
         generatedAt: FieldValue.serverTimestamp(),
         batchId,
+        // 해설 + 선지별 해설 (복습 오답탭 연동용)
+        ...(q.explanation ? { explanation: q.explanation } : {}),
+        ...(q.choiceExplanations?.length ? { choiceExplanations: q.choiceExplanations } : {}),
       });
     }
     await writeBatch.commit();
@@ -410,7 +413,7 @@ export async function drawQuestionsFromPool(
   }
   await writeBatch.commit();
 
-  // 6. 문제 데이터 반환 (순서 유지: easy → medium → hard)
+  // 6. 문제 데이터 반환 (해설+선지별해설+챕터 포함)
   return selected.map(doc => {
     const data = doc.data();
     return {
@@ -419,6 +422,9 @@ export async function drawQuestionsFromPool(
       choices: data.choices,
       correctAnswer: data.correctAnswer,
       difficulty: data.difficulty,
+      ...(data.explanation ? { explanation: data.explanation } : {}),
+      ...(data.choiceExplanations ? { choiceExplanations: data.choiceExplanations } : {}),
+      ...(data.chapter ? { chapterId: data.chapter } : {}),
     };
   });
 }

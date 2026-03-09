@@ -127,6 +127,9 @@ export async function createBattle(
         text: q.text,
         type: q.type,
         choices: q.choices,
+        ...(q.explanation ? { explanation: q.explanation } : {}),
+        ...(q.choiceExplanations ? { choiceExplanations: q.choiceExplanations } : {}),
+        ...(q.chapterId ? { chapterId: q.chapterId } : {}),
       },
       startedAt: 0,
       timeoutAt: 0,
@@ -371,6 +374,101 @@ export async function endBattle(
     // Firestore batch 실패 → xpGranted 리셋 (재시도 가능)
     console.error("XP 지급 Firestore batch 실패, xpGranted 리셋:", err);
     await xpGrantedRef.set(false).catch(() => {});
+  }
+
+  // 오답 → reviews 컬렉션 저장 (복습 오답탭 연동, fire-and-forget)
+  saveBattleWrongAnswers(battleId, battle, fsDb).catch((err) => {
+    console.error("배틀 오답 저장 실패 (무시):", err);
+  });
+}
+
+/**
+ * 배틀 오답을 reviews 컬렉션에 저장
+ * 각 인간 플레이어의 틀린 문제를 reviewType: "wrong"으로 저장
+ */
+async function saveBattleWrongAnswers(
+  battleId: string,
+  battle: any,
+  db: FirebaseFirestore.Firestore
+) {
+  if (!battle?.rounds || !battle?.players) return;
+
+  const rtdb = getDatabase();
+  const courseId = battle.courseId || "biology";
+
+  // 정답 데이터 로드
+  const answersSnap = await rtdb.ref(`tekken/battleAnswers/${battleId}`).once("value");
+  const correctAnswers = answersSnap.val() || {};
+
+  const rounds = battle.rounds;
+  const players = battle.players;
+  const humanPlayerIds = Object.keys(players).filter(
+    (pid) => !players[pid].isBot
+  );
+
+  if (humanPlayerIds.length === 0) return;
+
+  // 가상 퀴즈 ID (배틀 단위로 그룹화)
+  const quizId = `tekken_${battleId}`;
+  const quizTitle = "철권퀴즈 배틀";
+
+  const writeBatch = db.batch();
+  let count = 0;
+
+  for (const uid of humanPlayerIds) {
+    for (const [roundIdxStr, round] of Object.entries(rounds)) {
+      const roundData = round as any;
+      const roundIdx = parseInt(roundIdxStr, 10);
+      const correctAnswer = correctAnswers[roundIdx];
+      if (correctAnswer === undefined || correctAnswer === null) continue;
+
+      const userAnswer = roundData.answers?.[uid]?.answer;
+      const isCorrect = userAnswer === correctAnswer;
+
+      // 오답만 저장
+      if (isCorrect) continue;
+
+      const questionData = roundData.questionData;
+      if (!questionData?.text || !questionData?.choices) continue;
+
+      const reviewDoc: Record<string, any> = {
+        userId: uid,
+        quizId,
+        quizTitle,
+        questionId: `tekken_r${roundIdx}`,
+        question: questionData.text,
+        type: "multiple",
+        options: questionData.choices,
+        correctAnswer: String(correctAnswer),
+        userAnswer: userAnswer !== undefined && userAnswer !== null ? String(userAnswer) : "",
+        isCorrect: false,
+        reviewType: "wrong",
+        isBookmarked: false,
+        reviewCount: 0,
+        courseId,
+        createdAt: FieldValue.serverTimestamp(),
+      };
+
+      // 해설 필드 (풀에 있으면 포함)
+      if (questionData.explanation) {
+        reviewDoc.explanation = questionData.explanation;
+      }
+      if (questionData.choiceExplanations) {
+        reviewDoc.choiceExplanations = questionData.choiceExplanations;
+      }
+      // 챕터 태그
+      if (questionData.chapterId) {
+        reviewDoc.chapterId = questionData.chapterId;
+      }
+
+      writeBatch.set(db.collection("reviews").doc(), reviewDoc);
+      count++;
+    }
+  }
+
+  if (count > 0) {
+    await writeBatch.commit();
+    console.log(`[배틀 오답] ${battleId}: ${count}개 오답 → reviews 저장`);
   }
 }
 

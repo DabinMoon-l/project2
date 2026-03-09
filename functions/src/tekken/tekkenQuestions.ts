@@ -515,9 +515,20 @@ function buildTekkenPrompt(
 - ${chapters.length}개 챕터를 골고루 커버 (특정 챕터에 편중 금지)
 - ⚠️ 1장 문제는 절대 2문제 이상 금지 — 0~1문제만 허용
 
+## 해설 규칙
+- explanation: 정답이 왜 맞는지 1~2문장으로 설명 (최대 100자)
+- choiceExplanations: 각 선지마다 왜 맞/틀린지 1문장 설명 (각 최대 50자)
+- chapterId: 해당 문제의 챕터 번호 (예: "3", "5")
+
+## 검토 규칙 (반드시 준수)
+- correctAnswer가 실제 정답 선지의 인덱스(0부터)와 일치하는지 반드시 재확인
+- explanation이 정답 선지와 일치하는지 확인
+- 오답 선지가 정답과 혼동되지 않도록 명확히 구분 가능한지 확인
+- choiceExplanations[correctAnswer]에 "정답" 표현이 포함되어야 함
+
 반드시 아래 JSON 형식만 출력 (다른 텍스트 없이):
 [
-  {"text": "문제 내용", "type": "multiple", "choices": [${Array.from({length: config.choiceCount}, (_, i) => `"선지${i+1}"`).join(", ")}], "correctAnswer": 2, "difficulty": "${difficulty}"}
+  {"text": "문제 내용", "type": "multiple", "choices": [${Array.from({length: config.choiceCount}, (_, i) => `"선지${i+1}"`).join(", ")}], "correctAnswer": 2, "difficulty": "${difficulty}", "explanation": "정답 해설", "choiceExplanations": [${Array.from({length: config.choiceCount}, (_, i) => `"선지${i+1} 해설"`).join(", ")}], "chapterId": "3"}
 ]`;
 
   return prompt;
@@ -564,7 +575,7 @@ export async function generateBattleQuestions(
     difficulty
   );
 
-  // Gemini 구조화 출력 스키마 (JSON 형식 강제)
+  // Gemini 구조화 출력 스키마 (해설+선지별해설+챕터태그 포함)
   const responseSchema = {
     type: "ARRAY",
     items: {
@@ -575,8 +586,11 @@ export async function generateBattleQuestions(
         choices: { type: "ARRAY", items: { type: "STRING" } },
         correctAnswer: { type: "INTEGER" },
         difficulty: { type: "STRING" },
+        explanation: { type: "STRING" },
+        choiceExplanations: { type: "ARRAY", items: { type: "STRING" } },
+        chapterId: { type: "STRING" },
       },
-      required: ["text", "type", "choices", "correctAnswer"],
+      required: ["text", "type", "choices", "correctAnswer", "explanation", "choiceExplanations", "chapterId"],
     },
   };
 
