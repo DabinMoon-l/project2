@@ -90,11 +90,11 @@ export default function PreviewQuestionCard({
               {/* 수정 모드: 문제 텍스트 수정 */}
               {isEditMode && onEditChange && (
                 <div>
-                  <label className="block text-xs font-bold text-[#5C5C5C] mb-1">문제</label>
+                  <label className="block text-[10px] font-bold text-[#5C5C5C] mb-1">문제</label>
                   <textarea
                     value={editData?.text ?? question.text}
                     onChange={(e) => onEditChange('text', e.target.value)}
-                    className="w-full p-3 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-sm text-[#1A1A1A] focus:outline-none resize-none"
+                    className="w-full p-2 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-xs text-[#1A1A1A] focus:outline-none resize-none"
                     rows={3}
                     onInput={(e) => {
                       const target = e.target as HTMLTextAreaElement;
@@ -195,7 +195,7 @@ export default function PreviewQuestionCard({
                         <div key={idx}>
                           <div
                             style={isEditMode ? {} : { backgroundColor: bgColor, borderColor, color: textColor }}
-                            className={`w-full p-3 border-2 flex items-start gap-3 text-left ${
+                            className={`w-full p-2 border-2 flex items-start gap-2 text-left ${
                               isEditMode
                                 ? 'border-[#1A1A1A] bg-[#F5F0E8]'
                                 : choiceExp ? 'cursor-pointer' : ''
@@ -211,7 +211,7 @@ export default function PreviewQuestionCard({
                           >
                             {/* 선지 번호 */}
                             <span
-                              className={`flex-shrink-0 w-6 h-6 flex items-center justify-center text-sm font-bold ${
+                              className={`flex-shrink-0 w-5 h-5 flex items-center justify-center text-xs font-bold ${
                                 isEditMode
                                   ? 'bg-[#EDEAE4] text-[#1A1A1A]'
                                   : isCorrectOption
@@ -231,10 +231,10 @@ export default function PreviewQuestionCard({
                                   newChoices[idx] = e.target.value;
                                   onEditChange('choices', newChoices);
                                 }}
-                                className="flex-1 text-sm bg-transparent border-b border-[#5C5C5C] focus:outline-none focus:border-[#1A1A1A] text-[#1A1A1A]"
+                                className="flex-1 text-xs bg-transparent border-b border-[#5C5C5C] focus:outline-none focus:border-[#1A1A1A] text-[#1A1A1A]"
                               />
                             ) : (
-                              <span className="flex-1 text-sm leading-relaxed break-words">
+                              <span className="flex-1 text-xs leading-relaxed break-words">
                                 {choice}
                                 {Array.isArray(question.answer) && question.answer.length > 1 && isCorrectOption && (
                                   <span className="ml-1 font-bold">(정답)</span>
@@ -265,8 +265,8 @@ export default function PreviewQuestionCard({
                           </div>
                           {/* 선지별 해설 — 수정 모드면 전부 펼침 + textarea */}
                           {isEditMode && onEditChange ? (
-                            <div className="px-4 py-3 border-x-2 border-b-2 border-[#1A1A1A] bg-[#EDEAE4]">
-                              <label className="block text-xs text-[#5C5C5C] mb-1">선지 {idx + 1} 해설</label>
+                            <div className="px-3 py-2 border-x-2 border-b-2 border-[#1A1A1A] bg-[#EDEAE4]">
+                              <label className="block text-[10px] text-[#5C5C5C] mb-1">선지 {idx + 1} 해설</label>
                               <textarea
                                 value={(editData?.choiceExplanations ?? question.choiceExplanations ?? [])[idx] || ''}
                                 onChange={(e) => {
@@ -275,16 +275,16 @@ export default function PreviewQuestionCard({
                                   newExps[idx] = e.target.value;
                                   onEditChange('choiceExplanations', newExps);
                                 }}
-                                className="w-full p-2 border border-[#5C5C5C] bg-[#F5F0E8] text-sm text-[#5C5C5C] focus:outline-none resize-none"
+                                className="w-full p-1.5 border border-[#5C5C5C] bg-[#F5F0E8] text-xs text-[#5C5C5C] focus:outline-none resize-none"
                                 rows={2}
                               />
                             </div>
                           ) : choiceExp && isChoiceExpanded ? (
                             <div
                               style={{ borderColor }}
-                              className="px-4 py-3 border-x-2 border-b-2 bg-[#EDEAE4]"
+                              className="px-3 py-2 border-x-2 border-b-2 bg-[#EDEAE4]"
                             >
-                              <p className={`text-sm whitespace-pre-wrap ${
+                              <p className={`text-xs whitespace-pre-wrap ${
                                 isCorrectOption ? 'text-[#1A6B1A]' : 'text-[#5C5C5C]'
                               }`}>
                                 {choiceExp.replace(/^선지\d+\s*해설\s*[:：]\s*/i, '')}
@@ -301,9 +301,9 @@ export default function PreviewQuestionCard({
               {/* 단답형 답 */}
               {(question.type === 'short_answer' || question.type === 'short') && (
                 <div className="space-y-3">
-                  <div className="p-3 border-2 border-[#1A6B1A] bg-[#E8F5E9]">
-                    <p className="text-xs text-[#1A6B1A] mb-1">정답</p>
-                    <p className="text-sm font-medium text-[#1A6B1A] whitespace-pre-wrap">
+                  <div className="p-2 border-2 border-[#1A6B1A] bg-[#E8F5E9]">
+                    <p className="text-[10px] text-[#1A6B1A] mb-0.5">정답</p>
+                    <p className="text-xs font-medium text-[#1A6B1A] whitespace-pre-wrap">
                       {typeof question.answer === 'string'
                         ? question.answer.includes('|||')
                           ? question.answer.split('|||').map((a: string) => a.trim()).join(', ')
@@ -316,12 +316,12 @@ export default function PreviewQuestionCard({
 
               {/* 해설 */}
               {isEditMode && onEditChange ? (
-                <div className="p-3 border border-[#1A1A1A] bg-[#F5F0E8]">
-                  <label className="block text-xs font-bold text-[#5C5C5C] mb-1">해설</label>
+                <div className="p-2 border border-[#1A1A1A] bg-[#F5F0E8]">
+                  <label className="block text-[10px] font-bold text-[#5C5C5C] mb-1">해설</label>
                   <textarea
                     value={editData?.explanation ?? question.explanation ?? ''}
                     onChange={(e) => onEditChange('explanation', e.target.value)}
-                    className="w-full p-2 border border-[#5C5C5C] bg-[#EDEAE4] text-sm text-[#5C5C5C] focus:outline-none resize-none"
+                    className="w-full p-1.5 border border-[#5C5C5C] bg-[#EDEAE4] text-xs text-[#5C5C5C] focus:outline-none resize-none"
                     rows={3}
                     onInput={(e) => {
                       const target = e.target as HTMLTextAreaElement;
@@ -331,9 +331,9 @@ export default function PreviewQuestionCard({
                   />
                 </div>
               ) : question.explanation ? (
-                <div className="p-3 border border-[#1A1A1A] bg-[#F5F0E8]">
-                  <p className="text-xs font-bold text-[#5C5C5C] mb-1">해설</p>
-                  <p className="text-sm text-[#5C5C5C] whitespace-pre-wrap">
+                <div className="p-2 border border-[#1A1A1A] bg-[#F5F0E8]">
+                  <p className="text-[10px] font-bold text-[#5C5C5C] mb-0.5">해설</p>
+                  <p className="text-xs text-[#5C5C5C] whitespace-pre-wrap">
                     {question.explanation}
                   </p>
                 </div>

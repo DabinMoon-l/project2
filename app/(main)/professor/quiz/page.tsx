@@ -2386,9 +2386,9 @@ export default function ProfessorQuizListPage() {
       {/* 스크롤 맨 위로 버튼 (프리뷰 모드에서 숨김) */}
       <ScrollToTopButton
         targetRef={headerRef}
-        hidden={isLibraryPreview || sectionFilter === 'library'}
+        hidden={isLibraryPreview}
         bottomPx={90}
-        side="right"
+        side="left"
       />
     </div>
   );

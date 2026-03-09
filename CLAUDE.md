@@ -7,77 +7,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 대학 수업 보조 앱 **"RabbiTory"**. 퀴즈 + 게시판 기능에 토끼 컨셉 게이미피케이션을 적용한 PWA.
 학생은 퀴즈를 풀고 피드백을 남기며, 교수님은 문제에 대한 피드백을 수집하고 학생 참여도를 모니터링.
 
-## 코드베이스 규모
-
-**총 140,000+ 줄** / **397개 파일** (TypeScript + TSX)
-
-| 영역 | 파일 수 | 코드 줄 수 | 설명 |
-|------|---------|-----------|------|
-| `app/` | 43 | 33,000 | Next.js App Router 페이지 |
-| `components/` | 213 | 62,000 | React 컴포넌트 |
-| `lib/` | 77 | 21,800 | 훅, 유틸, 컨텍스트, 타입 |
-| `functions/src/` | 64 | 23,600 | Firebase Cloud Functions |
-
-### 주요 대형 파일
-
-| 파일 | 줄 수 | 역할 |
-|------|-------|------|
-| `app/(main)/review/page.tsx` | 3,673 | 복습 목록 페이지 |
-| `app/(main)/quiz/page.tsx` | 2,833 | 학생 퀴즈 목록 |
-| `app/(main)/review/[type]/[id]/page.tsx` | 2,767 | 복습 상세 페이지 |
-| `components/review/ReviewPractice.tsx` | 2,666 | 복습 연습 모드 |
-| `components/quiz/create/QuestionEditor.tsx` | 2,648 | 문제 편집기 (풀 에디터) |
-| `app/(main)/professor/quiz/page.tsx` | 2,395 | 교수 퀴즈 관리 |
-| `components/quiz/manage/QuizStatsModal.tsx` | 2,202 | 퀴즈 통계 모달 |
-| `app/(main)/quiz/create/page.tsx` | 2,100 | 퀴즈 생성 페이지 |
-| `functions/src/styledQuizGenerator.ts` | 2,042 | AI 스타일 문제 생성 |
-| `components/common/ProfileDrawer.tsx` | 2,041 | 프로필 드로어 |
-| `lib/hooks/useReview.ts` | 2,005 | 복습 데이터 훅 |
-| `app/(main)/professor/quiz/[id]/preview/page.tsx` | 1,962 | 교수 퀴즈 미리보기 |
-| `lib/hooks/useBoard.ts` | 1,776 | 게시판 데이터 훅 |
-| `components/professor/library/ProfessorLibraryTab.tsx` | 1,650 | 교수 서재 탭 |
-| `functions/src/studentAuth.ts` | 1,210 | 학생 인증/가입 |
-
-### 컴포넌트 디렉토리별 규모
-
-| 디렉토리 | 줄 수 | 주요 컴포넌트 |
-|---------|-------|-------------|
-| `components/quiz/` | 18,230 | QuestionEditor, QuizStatsModal, UpdateQuizModal, EditQuizSheet, OCRProcessor |
-| `components/professor/` | 11,825 | ProfessorLibraryTab, PreviewQuestionCard, StudentManagement, 통계 대시보드 |
-| `components/home/` | 8,151 | CharacterBox, HomeCharacter, RankingBottomSheet, AnnouncementChannel, RabbitDogam |
-| `components/common/` | 6,167 | ProfileDrawer, Navigation, SwipeBack, BottomSheet, MobileBottomSheet |
-| `components/review/` | 5,777 | ReviewPractice, 복습 카드 UI |
-| `components/ai-quiz/` | 2,892 | AIQuizModal, AI 퀴즈 생성 UI |
-| `components/board/` | 2,080 | 게시판 목록/상세/댓글 |
-| `components/tekken/` | 1,542 | 철권퀴즈 배틀 UI |
-
-### lib 디렉토리 상세
-
-| 디렉토리 | 줄 수 | 주요 파일 |
-|---------|-------|----------|
-| `lib/hooks/` (31개) | 12,020 | useReview, useBoard, useProfessorQuiz, useTekkenBattle, useProfessorStats |
-| `lib/utils/` | 3,735 | questionHtmlTemplate, questionDocExport, reportExport, libraryJobManager |
-| `lib/contexts/` (5개) | 997 | MilestoneContext, UserContext, CourseContext, DetailPanelContext, HomeOverlayContext |
-
-### Cloud Functions 주요 파일
-
-| 파일 | 줄 수 | 역할 |
-|------|-------|------|
-| `styledQuizGenerator.ts` | 2,042 | 교수 스타일 기반 AI 문제 생성 |
-| `studentAuth.ts` | 1,210 | 학번 인증, 회원가입, 교수 등록 |
-| `questionParser.ts` | 1,034 | Gemini 응답 파싱 (v1) |
-| `board.ts` | 1,007 | 게시판 CRUD + 콩콩이 자동답변 |
-| `questionParserV3.ts` | 857 | Gemini 응답 파싱 (v3) |
-| `gemini.ts` | 757 | Gemini API 통합 (문제 생성, 이미지 분석) |
-| `professorQuizAnalysis.ts` | 770 | 교수 출제 스타일 분석 |
-| `workerProcessJob.ts` | 751 | AI 생성 Job 워커 (동시 최대 20) |
-| `geminiQueue.ts` | 597 | Gemini API 큐 관리 |
-| `notification.ts` | 552 | FCM 푸시 알림 |
-| `rabbitGacha.ts` | 466 | 토끼 뽑기/장착/레벨업 |
-| `computeRankings.ts` | 359 | 랭킹 계산 (10분 주기) |
-| `recordAttempt.ts` | 275 | 퀴즈 제출 + 서버 채점 |
-| `tekken/` (디렉토리) | 800+ | 실시간 1v1 배틀 로직 (분리됨) |
-
 ## 기술 스택
 
 ### 프론트엔드
@@ -93,8 +22,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### 문서/파일 처리
 - **Tesseract.js** 5.0.4 (클라이언트 OCR)
 - **pdfjs-dist** 4.0.379 (PDF 렌더링)
-- **exceljs** 4.4 (Excel 리포트 내보내기)
-- **docx** 9.5.3 (Word 리포트 내보내기)
+- **exceljs** 4.4 (Excel 리포트) / **docx** 9.5.3 (Word 리포트)
 - **file-saver** 2.0.5 / **jszip** 3.10.1 / **date-fns** 3.0
 
 ### Backend (Firebase)
@@ -127,7 +55,9 @@ npm run analyze      # 번들 분석 (ANALYZE=true)
 
 ```bash
 cd functions
+npm install          # CF 의존성 설치
 npm run build        # TypeScript 컴파일
+npm run lint         # @typescript-eslint 린트
 npm run serve        # 에뮬레이터로 로컬 테스트
 npm run deploy       # Firebase 배포
 npm run logs         # 로그 확인
@@ -161,6 +91,20 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 - **로컬 상태**: 컴포넌트 `useState`/`useReducer`
 - **인증 상태**: Firebase `onAuthStateChanged` → `useAuth()` 훅
 - **캐시**: sessionStorage SWR (랭킹 2분/10분 TTL, 레이더 정규화 2분/10분 TTL)
+
+### 주요 대형 파일 (수정 시 주의)
+
+- `app/(main)/review/page.tsx` — 복습 목록 페이지
+- `app/(main)/quiz/page.tsx` — 학생 퀴즈 목록
+- `app/(main)/review/[type]/[id]/page.tsx` — 복습 상세 페이지
+- `components/review/ReviewPractice.tsx` — 복습 연습 모드
+- `components/quiz/create/QuestionEditor.tsx` — 문제 편집기 (풀 에디터)
+- `app/(main)/professor/quiz/page.tsx` — 교수 퀴즈 관리
+- `components/quiz/manage/QuizStatsModal.tsx` — 퀴즈 통계 모달
+- `functions/src/styledQuizGenerator.ts` — AI 스타일 문제 생성
+- `components/common/ProfileDrawer.tsx` — 프로필 드로어
+- `lib/hooks/useReview.ts` — 복습 데이터 훅
+- `lib/hooks/useBoard.ts` — 게시판 데이터 훅
 
 ## 주요 기능 상세
 
@@ -213,28 +157,23 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 
 **플로우**: `onPostCreate` CF → 학술 태그 확인 → 이미지 있으면 base64 변환 → 과목 키워드(`courseScopes`) 로드 → Gemini API 호출 → `comments` 컬렉션에 저장 + `commentCount` 증가
 
-**대댓글 자동 응답**: 사용자가 콩콩이 댓글에 대댓글 → `onCommentCreate` CF가 감지 → 원본 글 + 이전 대화 맥락을 포함해 Gemini API 호출 → 대댓글로 자동 응답 (스팸 방지: 같은 부모에 2분 내 AI 대댓글 제한)
+**대댓글 자동 응답**: 사용자가 콩콩이 댓글에 대댓글 → `onCommentCreate` CF가 감지 → 원본 글 + 이전 대화 맥락 포함 Gemini 호출 → 대댓글 자동 응답 (스팸 방지: 같은 부모에 2분 내 AI 대댓글 제한)
 
 **콩콩이 말투**: 20대 한국 여자 반말, 이모지/이모티콘 절대 금지, `maxOutputTokens: 2048`
 
 **AI 댓글 데이터**:
 - `authorId: 'gemini-ai'`, `authorNickname: '콩콩이'`, `isAIReply: true`
-- 기존 comment 스키마 준수
 - `onCommentCreate`에서 `authorId === 'gemini-ai'`이면 EXP 지급 + 알림 스킵
-
-**이미지 처리**: `post.imageUrls` 존재 시 각 URL → fetch → base64 → Gemini `inlineData`로 통합 전송
 
 ### 게시판 댓글 채택
 
-글 작성자가 댓글 중 하나를 채택하는 기능.
-
-**조건**: 루트 댓글만 (대댓글 불가), 본인 댓글/AI 댓글 채택 불가, 글당 1회만
-**플로우**: `acceptComment` onCall CF → 트랜잭션으로 `post.acceptedCommentId` + `comment.isAccepted` 설정 → 채택자에게 30 EXP + 알림
-**UI**: 상세 페이지 댓글 상단에 두꺼운 검은색 박스(`border-[3px] #1A1A1A`)로 표시, 목록 미리보기에서도 채택 댓글 최상단
+글 작성자가 댓글 중 하나를 채택. 루트 댓글만 가능, 본인/AI 댓글 불가, 글당 1회만.
+`acceptComment` onCall CF → 트랜잭션 → 채택자에게 30 EXP + 알림.
+UI: 상세 페이지 댓글 상단에 `border-[3px] #1A1A1A` 박스로 표시.
 
 ### 게시글 삭제
 
-`deletePost` onCall CF로 처리 (Admin SDK). 클라이언트에서 타인 댓글 삭제 권한이 없으므로 서버에서 글 + 모든 댓글을 배치 삭제.
+`deletePost` onCall CF로 처리 (Admin SDK). 서버에서 글 + 모든 댓글을 배치 삭제.
 
 ### AI 문제 생성 시스템
 
@@ -249,9 +188,6 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 **학생 AI 퀴즈**: AIQuizContainer 플로팅 버튼 → 태그 선택 → 같은 CF 호출
 
 **서재 퀴즈 수정 모드** (ProfessorLibraryTab):
-- `QuestionList`(드래그 리오더) + `QuestionEditor`(풀 에디터) 방식 — preview 페이지와 동일
-- 메타 편집: 제목, 시험유형(4버튼), 난이도(3버튼), 총평, 태그 (외곽 박스 없음)
-- 취소/저장 버튼: 필터 행(`자작/서재/커스텀`) 우측에 배치 (`onEditStateChange` 콜백)
 - `convertToQuestionDataList` → `flattenQuestionsForSave` 라운드트립 (0-indexed 통일)
 - `...(originalQ || {})` spread로 `choiceExplanations` 등 미편집 필드 보존
 - Firestore `undefined` 값 strip 처리 (저장 직전)
@@ -285,114 +221,59 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 
 **봇**: 40% 정답률, 1~8초 응답 시간, 10개 닉네임 풀, 레벨 3~7
 
-**난이도 배분**: 10문제 = easy 5 + medium 5 (hard 제거 — Gemini 구조화 출력 실패율 높아 풀 미달)
-- easy: 4지선다, 명확한 개념 문제
-- medium: 5지선다, 유사 개념 포함
+**난이도 배분**: 10문제 = easy 5 + medium 5 (hard 제거)
+- easy: 4지선다, medium: 5지선다
 
 **문제 풀**: 매일 새벽 3시 → 현재 학기 과목만 과목당 300문제 보충 (easy 150 + medium 150)
 - 1학기: biology + microbiology, 2학기: biology + pathophysiology
 - seenQuestions로 24시간 중복 방지
 
-**챕터 범위 설정**: 교수가 ProfileDrawer Settings → GlassModal에서 과목별 챕터 선택
-- Firestore 경로: `settings/tekken/courses/{courseId}` → `{ chapters: string[] }`
-- 저장 시 다음 새벽 문제 생성부터 적용
+**챕터 범위 설정**: Firestore `settings/tekken/courses/{courseId}` → `{ chapters: string[] }`
 - 기본값: biology `1~6`, microbiology `1~11`, pathophysiology `3~11`(6 제외)
 
-**교수 스타일 반영**: `professorQuizAnalysis/{courseId}/data/`의 styleProfile(출제 톤, 함정 패턴) + keywords(핵심 개념, 임상 키워드)를 프롬프트에 주입
+**교수 스타일 반영**: `professorQuizAnalysis/{courseId}/data/`의 styleProfile + keywords를 프롬프트에 주입
 
-## 교수 통계 시스템 (상세)
+## 교수 통계 시스템
 
 ### 6축 레이더 차트 — `computeRadarNorm.ts` (10분마다 사전 계산)
 
 | 축 | 이름 | 계산 방식 | 스케일 |
 |----|------|----------|--------|
-| 1 | 가중 석차 | 교수 퀴즈 석차 기반 가중 평균 (아래 상세) | 절대값 0~100 |
+| 1 | 가중 석차 | 교수 퀴즈 석차 기반 가중 평균 | 절대값 0~100 |
 | 2 | 성장세 | 재시도 개선율 평균 → 0~100 변환 | 절대값 0~100 |
 | 3 | 출제력 | 학생이 만든 커스텀 퀴즈 수 | 백분위 |
 | 4 | 소통 | (게시글 수 × 3) + 피드백 수 | 백분위 |
-| 5 | 복습력 | reviews의 reviewCount 합계 (markAsReviewed 횟수) | 백분위 |
+| 5 | 복습력 | reviews의 reviewCount 합계 | 백분위 |
 | 6 | 활동량 | users.totalExp (누적 EXP) | 백분위 |
 
-#### 가중 석차 상세
+**가중 석차**: 참여자 < 5명 → 실제 점수, ≥ 5명 → `((참여자수 - 석차 + 1) / 참여자수) × 100`. 가중치: 교수 퀴즈 = 6, 학생 커스텀 = 4.
 
-```
-1. 퀴즈별 석차 계산 (첫 시도만 사용, isUpdate !== true)
-2. 참여자 < 5명: 실제 점수 사용 (소수 참여 시 석차 부풀림 방지)
-   참여자 ≥ 5명: rankScore = ((참여자수 - 석차 + 1) / 참여자수) × 100
-3. 가중치: 교수 퀴즈(midterm/final/past/professor/professor-ai) = 6, 학생 커스텀 = 4
-4. 최종: sum(rankScore × weight) / sum(weight) → 소수점 2자리
-```
+**성장세**: (최고 재시도 점수 - 첫 시도 점수) 평균. 첫 시도 90%+ & 미재시도 → 0, 첫 시도 < 90% & 미재시도 → 스킵. `growth = max(0, min(100, 50 + avgImprovement / 2))`.
 
-#### 성장세 상세
-
-```
-1. 각 퀴즈: (최고 재시도 점수 - 첫 시도 점수) 수집
-2. 첫 시도 90%+ & 재시도 없음 → 개선 불필요(0)로 카운트 (만점 학생 페널티 방지)
-3. 첫 시도 < 90% & 재시도 없음 → 스킵 (아직 성장 활동 없음)
-4. 평균 개선율 계산
-5. 스케일 변환: growth = max(0, min(100, 50 + avgImprovement / 2))
-   - 50 = 변화 없음 기준선
-   - 퀴즈 데이터 없거나 전부 저점수+미재시도 = 0
-```
-
-#### 백분위 계산
-
-```
-rankPercentile(value, sortedArray) = (value보다 작은 개수) / (배열.length - 1) × 100
-- 모든 값 동일 + value > 0 → 50%
-- 모든 값 동일 + value = 0 → 0%
-```
+**백분위**: `(value보다 작은 개수) / (배열.length - 1) × 100`. 모든 값 동일 + value > 0 → 50%, value = 0 → 0%.
 
 ### 랭킹 — `computeRankings.ts` (10분마다 사전 계산)
 
 **개인**: `profCorrectCount × 4 + totalExp × 0.6`
 **팀**: `normalizedAvgExp × 0.4 + avgCorrectRate × 0.4 + avgCompletionRate × 0.2`
+동점 처리: 같은 순위 부여 (1위, 1위, 3위)
 
-동점 처리: 동점자는 같은 순위 (A 100점, B 100점, C 90점 → 1위, 1위, 3위)
-
-**테스트 계정 배제**: 랭킹(개인+팀) 계산에서만 제외, 모든 기능은 정상 사용 가능
-- 생물학(biology): 닉네임 "빠샤"
-- 미생물학(microbiology): 닉네임 "test"
+**테스트 계정 배제**: 랭킹 계산에서만 제외
+- biology: 닉네임 "빠샤" / microbiology: 닉네임 "test"
 
 ### 교수 통계 대시보드 — `professor/stats/page.tsx`
 
-#### 위험 학생 감지
+**위험 학생**: Z-score < -1.5 → 주의, < -2 → 위험
 
-```
-Z-score 기반: Z < -1.5 → 주의(caution), Z < -2 → 위험(danger)
-평균과 표준편차는 전체 학생 평균 점수에서 계산
-```
+**학생 군집** (medianExp 기준, 정답률 50% 기준):
+- passionate (EXP↑ 정답률↑), hardworking (EXP↑ 정답률↓), efficient (EXP↓ 정답률↑), atRisk (EXP↓ 정답률↓)
 
-#### 학생 군집 분류 (4 타입)
+**변별도**: 참여자 ≥ 4명, 상위 27% 정답률 - 하위 27% 정답률
 
-```
-중위값 기반 분류:
-- medianExp = 학생들의 EXP 중위값
-- RATE_THRESHOLD = 50% (정답률 기준)
+### 주별/월별 수집
 
-| EXP ≥ median | 정답률 ≥ 50% | 타입 |
-|---|---|---|
-| O | O | passionate (열정적) |
-| O | X | hardworking (노력형) |
-| X | O | efficient (효율형) |
-| X | X | atRisk (이탈위험) |
-```
-
-#### 변별도
-
-```
-표시 조건: 해당 퀴즈 참여자 ≥ 4명
-공식: 상위 27% 정답률 - 하위 27% 정답률
-```
-
-### 주별 수집 — `weeklyStats.ts` (매주 월요일 00:00 KST)
-
-수집 항목: 퀴즈(신규/유형/정답률/완료율), 피드백(유형별/평균점수), 학생(활성/군집), 게시판(글/댓글/키워드-Haiku AI 추출)
-
-### 월별 리포트
-
-교수 수동 트리거 → Claude Sonnet (`claude-sonnet-4-20250514`) → 인사이트 마크다운
-다운로드: Excel (exceljs, 5시트) + Word (docx, 연구용 형식)
+- **주별** (`weeklyStats.ts`): 매주 월요일 00:00 KST, 퀴즈/피드백/학생/게시판 통계
+- **월별 리포트**: 교수 수동 트리거 → Claude Sonnet → 인사이트 마크다운 → Excel/Word 다운로드
 
 ### 캐시 전략
 
@@ -400,8 +281,7 @@ Z-score 기반: Z < -1.5 → 주의(caution), Z < -2 → 위험(danger)
 |------|------|-----|------|
 | 랭킹 | sessionStorage | 2분 fresh / 10분 max | SWR |
 | 레이더 정규화 | sessionStorage | 2분 fresh / 10분 max | SWR |
-| 교수 통계 raw | 모듈 Map | 5분 | stale-while-revalidate |
-| 교수 통계 계산 | 모듈 Map | 5분 | stale-while-revalidate |
+| 교수 통계 | 모듈 Map | 5분 | stale-while-revalidate |
 
 ## UI 테마 시스템
 
@@ -434,7 +314,6 @@ Z-score 기반: Z < -1.5 → 주의(caution), Z < -2 → 위험(danger)
 │ 사이드바  │   메인 콘텐츠    │   디테일 패널     │
 │ (프로필   │  (iPhone SE     │  (모달/바텀시트   │
 │  + 네비)  │   동일 배치)     │   가 여기 표시)   │
-│          │                 │                  │
 │  블랙    │                 │                  │
 │  글래스   │                 │                  │
 └──────────┴─────────────────┴──────────────────┘
@@ -442,36 +321,25 @@ Z-score 기반: Z < -1.5 → 주의(caution), Z < -2 → 위험(danger)
 
 - `useWideMode()` — 가로모드 감지 (100ms 디바운스)
 - Tailwind: `wide: { raw: '(orientation: landscape) and (min-width: 1024px)' }`
-- 좌측 사이드바: 블랙 글래스 스타일 (프로필 + 네비게이션)
-- 중앙: iPhone SE 배치 그대로 (max-w-640px)
-- 우측: 퀴즈 풀이, 퀴즈 만들기, 모달 등 디테일 표시
-
-### 세로모드 (< 1024px 또는 portrait)
-
-네이티브 모바일 반응형. 모든 기종에서 iPhone SE 배치와 동일하게 표시.
 
 ### 네비게이션
 
 **학생** (4탭): `/`(홈), `/quiz`, `/review`, `/board`
 **교수** (5탭): `/professor`, `/professor/stats`, `/professor/quiz`, `/professor/students`, `/board`
 
-**숨김 규칙**: 퀴즈 풀이/생성/수정, 게시판 상세, 랭킹, 복습 상세 등에서 숨김
-**숨김 구현**: `useHideNav` (Set 기반 — 레이스컨디션 면역), MutationObserver + 5초 주기 health check
+**숨김 구현**: `useHideNav` (Set 기반), MutationObserver + 5초 주기 health check
 
 ## Safe Area 처리
 
 - `html { background-color: #F5F0E8 }` — 아이폰 둥근 모서리 뒤 배경
-- **상단 (노치/다이내믹 아일랜드)**: `data-main-content`에 `paddingTop: env(safe-area-inset-top)` 적용
-- 각 페이지 **Header/헤더**에서 `marginTop: -env(safe-area-inset-top)` + `paddingTop: env(safe-area-inset-top)` 패턴
-  → 배경은 노치 뒤까지 확장, 콘텐츠만 노치 아래
-- **하단 (홈 인디케이터)**: Navigation `<nav>`에 `paddingBottom: env(safe-area-inset-bottom)` 적용
-  → 필(pill)이 safe area 위에 위치, safe area 영역에는 페이지 콘텐츠가 비쳐 보임
-- 콘텐츠 영역 paddingBottom: `calc(4.25rem + env(safe-area-inset-bottom))` (네비 + safe area)
+- **상단**: `data-main-content`에 `paddingTop: env(safe-area-inset-top)`
+- 각 페이지 헤더: `marginTop: -env(safe-area-inset-top)` + `paddingTop: env(safe-area-inset-top)` 패턴
+- **하단**: Navigation `<nav>`에 `paddingBottom: env(safe-area-inset-bottom)`
+- 콘텐츠: `paddingBottom: calc(4.25rem + env(safe-area-inset-bottom))`
 
 ## SwipeBack (뒤로가기 스와이프)
 
-- `SwipeBack.tsx` — 왼쪽 25px 가장자리 오른쪽 스와이프
-- **부모 경로로 이동**: `router.replace(getParentPath())` (예: `/quiz/123/result` → `/quiz/123`)
+- `SwipeBack.tsx` — 왼쪽 25px 가장자리 오른쪽 스와이프 → `router.replace(getParentPath())`
 - 트리거: 화면 폭 35% 초과 또는 velocity > 500
 - 홈/교수홈/가로모드에서 비활성화
 
@@ -517,61 +385,13 @@ firebase deploy --only functions
 - manifest `orientation: any`, `display: standalone`, `background_color: #F5F0E8`
 - 프로덕션 `console.log` 자동 제거 (`compiler.removeConsole`)
 
-## 프로젝트 구조
-
-```
-├── app/                        # Next.js App Router
-│   ├── (auth)/                 # 인증 라우트 (login, signup, forgot-password, verify-email)
-│   ├── (main)/                 # 보호된 메인 라우트 (Provider 계층 적용)
-│   │   ├── layout.tsx          # Provider 계층 + 3패널 가로모드 레이아웃
-│   │   ├── page.tsx            # 홈 (학생)
-│   │   ├── quiz/               # 퀴즈 목록/풀이/결과/피드백
-│   │   ├── review/             # 복습 모드
-│   │   ├── board/              # 게시판
-│   │   ├── ranking/            # 랭킹
-│   │   ├── professor/          # 교수 대시보드/통계/퀴즈관리/학생관리
-│   │   └── profile/, settings/ # 프로필, 설정
-│   └── api/                    # API 라우트 (convert-pptx)
-├── components/                 # React 컴포넌트 (~209개 파일)
-│   ├── ai-quiz/                # AI 퀴즈 생성 UI
-│   ├── board/                  # 게시판
-│   ├── common/                 # 공통 (SwipeBack, Navigation, BottomSheet 등)
-│   ├── home/                   # 홈 (AnnouncementChannel, RabbitDogam 등)
-│   ├── professor/              # 교수 대시보드
-│   ├── quiz/                   # 퀴즈 풀이/생성
-│   ├── review/                 # 복습
-│   └── tekken/                 # 철권퀴즈 배틀
-├── lib/                        # 유틸리티, 훅, 컨텍스트
-│   ├── firebase.ts             # Firebase 초기화
-│   ├── auth.ts                 # 인증 유틸
-│   ├── contexts/               # React Context (User, Course, Theme, Milestone, HomeOverlay, DetailPanel)
-│   ├── hooks/                  # 커스텀 훅 31개 (useAuth, useQuiz*, useProfessor*, useTekkenBattle 등)
-│   ├── utils/                  # 유틸 (ranking, scoring, expRewards, tekkenDamage 등)
-│   └── types/                  # 타입 정의 (course.ts, tekken.ts)
-├── functions/                  # Firebase Cloud Functions (Node 20, 별도 tsconfig)
-│   └── src/                    # CF 소스 (~48개 .ts 파일)
-│       ├── index.ts            # CF 엔트리 (모든 함수 export)
-│       ├── recordAttempt.ts    # 퀴즈 제출 + 채점
-│       ├── tekkenBattle.ts     # 실시간 배틀 로직
-│       ├── gemini.ts           # Gemini API 통합
-│       ├── rabbitGacha.ts      # 토끼 뽑기
-│       └── computeRankings.ts  # 랭킹 계산
-├── styles/themes/              # 테마 상수 + ThemeProvider
-├── public/                     # 정적 에셋 (rabbit/ 80개, icons/, animations/)
-├── firestore.rules             # Firestore 보안 규칙
-├── firestore.indexes.json      # Firestore 복합 인덱스
-├── database.rules.json         # Realtime Database 규칙
-└── storage.rules               # Cloud Storage 규칙
-```
-
 ### 주요 설정 파일
 
 | 파일 | 역할 |
 |------|------|
 | `next.config.mjs` | Turbopack, PWA, 이미지 최적화, 번들 분석 |
 | `tailwind.config.ts` | `wide:` 커스텀 스크린, 빈티지 테마 색상, 폰트 |
-| `tsconfig.json` | `@/*` 경로 별칭 → 프로젝트 루트, strict 모드 |
-| `.eslintrc.json` | `next/core-web-vitals` 단순 확장 |
+| `tsconfig.json` | `@/*` 경로 별칭, strict 모드 |
 | `firebase.json` | Firestore/RTDB/Functions/Storage 배포 설정 |
 | `functions/tsconfig.json` | CF 전용 (noUnusedLocals, noImplicitReturns 추가) |
 
@@ -583,16 +403,7 @@ MESSAGING_SENDER_ID, APP_ID, MEASUREMENT_ID, VAPID_KEY, DATABASE_URL
 NEXT_PUBLIC_CLOUD_RUN_PPTX_URL  # Cloud Run PPTX 변환 서비스
 ```
 
-## 코드 품질 기준 (비개발자 유지보수 대응)
-
-### 핵심 원칙
-
-1. **자기 설명적 코드**: 변수명/함수명만으로 의도를 파악 가능
-2. **한국어 주석**: 복잡한 비즈니스 로직에 반드시 한국어 주석
-3. **파일당 300줄 이하**: 300줄 초과 시 분리 필수 (현재 거대 파일 리팩토링 필요)
-4. **단일 책임**: 한 파일/함수는 하나의 역할
-
-### 디버깅 가이드
+## 디버깅 가이드
 
 | 증상 | 원인 | 해결 |
 |------|------|------|
@@ -601,15 +412,6 @@ NEXT_PUBLIC_CLOUD_RUN_PPTX_URL  # Cloud Run PPTX 변환 서비스
 | 토끼 뽑기 안 됨 | `lastGachaExp` 값 불일치 | users 문서의 totalExp vs lastGachaExp |
 | 배틀 매칭 안 됨 | RTDB 매칭 큐 잔류 | RTDB Console → tekken/matchmaking |
 | AI 문제 생성 멈춤 | Job PROCESSING 멈춤 | jobs 문서 status → FAILED로 변경 |
-| 네비게이션 사라짐 | useHideNav Set 불일치 | 새로고침 (5초 주기 health check이 복구) |
+| 네비게이션 사라짐 | useHideNav Set 불일치 | 새로고침 (5초 health check 복구) |
 | 알림 안 옴 | FCM 토큰 만료 | fcmTokens/{uid} 확인 |
 | 로그인 실패 | enrolledStudents 미등록 | enrolledStudents/{courseId}/students 확인 |
-
-### 환경별 확인
-
-| 환경 | 확인 방법 |
-|------|----------|
-| 개발 | `npm run dev` → `localhost:3000` |
-| Firebase Console | Firestore/Auth/Functions/RTDB 직접 확인 |
-| 프로덕션 | Vercel 자동 배포 (main push) |
-| CF 로그 | `firebase functions:log --only [함수명]` |

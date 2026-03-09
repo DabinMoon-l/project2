@@ -387,6 +387,11 @@ function RabbitDetail({
         </div>
         <div className="flex flex-col items-center">
           <p className="text-sm font-bold text-white truncate">{myDisplayName}</p>
+          {!isDefaultRabbit && holding.discoveryOrder > 0 && (
+            <p className="text-[10px] text-[#D4AF37] font-bold mb-0.5">
+              {holding.discoveryOrder}대 집사
+            </p>
+          )}
           <p className="text-[10px] text-white/50 mb-1.5">
             {rabbit.discovererCount}명 발견 · Lv.{level}
           </p>

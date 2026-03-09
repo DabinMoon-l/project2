@@ -633,34 +633,22 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
               const choiceKey = userOX === 'O' || userAnswer === 0 || userAnswer === '0' ? '0' : '1';
               choiceCounts[choiceKey] = (choiceCounts[choiceKey] || 0) + 1;
             } else if (question.type === 'multiple') {
-              // 객관식
-              // answers 배열은 1-indexed 문자열 ("1","2","3"...)로 저장됨 (recordAttempt CF)
-              // 복수 선택: "1,3" 형태
+              // 객관식 — recordAttempt CF가 0-indexed로 저장
               const rawStr = String(userAnswer);
               const selections = rawStr.includes(',')
                 ? rawStr.split(',').map(s => parseInt(s.trim(), 10))
                 : [typeof userAnswer === 'string' ? parseInt(userAnswer, 10) : userAnswer];
 
-              // 1-indexed → 0-indexed 변환
-              const choiceCount = question.choices?.length || 0;
-              const zeroIndexed = selections.map(s => {
-                // 값이 1 이상이고 choices 범위를 벗어나면 1-indexed로 판단
-                if (s >= 1 && s > choiceCount - 1) return s - 1;
-                // 값이 1 이상이면 1-indexed로 판단 (recordAttempt 기본 동작)
-                if (s >= 1) return s - 1;
-                return s;
-              });
-
               if (Array.isArray(correctAnswer)) {
-                const userSorted = [...zeroIndexed].sort();
+                const userSorted = [...selections].sort();
                 const correctSorted = [...correctAnswer].sort();
                 isCorrect = JSON.stringify(userSorted) === JSON.stringify(correctSorted);
               } else {
-                isCorrect = zeroIndexed.length === 1 && zeroIndexed[0] === correctAnswer;
+                isCorrect = selections.length === 1 && selections[0] === correctAnswer;
               }
 
               // 선택 카운트 (0-indexed 기준)
-              zeroIndexed.forEach(idx => {
+              selections.forEach(idx => {
                 const choiceKey = String(idx);
                 choiceCounts[choiceKey] = (choiceCounts[choiceKey] || 0) + 1;
               });

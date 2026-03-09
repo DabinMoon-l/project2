@@ -1148,7 +1148,7 @@ function QuestionResultCard({
     if (!answer) return '-';
     if (type === 'ox') return answer.toUpperCase();
     if (type === 'multiple' && choices) {
-      const indices = answer.split(',').map(s => parseInt(s.trim(), 10) - 1);
+      const indices = answer.split(',').map(s => parseInt(s.trim(), 10));
       return indices.map(i => choices[i] || `${i + 1}번`).join(', ');
     }
     return answer;

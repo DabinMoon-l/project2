@@ -49,7 +49,7 @@ interface RankedUserDoc {
   rankScore: number;
   profileRabbitId: number | null;
   equippedRabbitNames: string;
-  equippedRabbits: Array<{ rabbitId: number; courseId?: string }>;
+  equippedRabbits: Array<{ rabbitId: number; courseId?: string; discoveryOrder?: number }>;
   firstEquippedRabbitId: number | null;
   firstEquippedRabbitName: string | null;
   rank: number;
@@ -95,14 +95,26 @@ async function computeRankingsForCourse(courseId: string) {
     });
   });
 
-  // ── 2단계: quizzes + quizResults + rabbits 병렬 조회 (토끼 실패해도 계속) ──
-  const [quizResult, resultsResult, rabbitResult] = await Promise.allSettled([
+  // 장착 토끼의 discoveryOrder 수집 (유저별 rabbitHoldings 조회)
+  // key: "userId_courseId_rabbitId" → discoveryOrder
+  const holdingPairs: Array<{ userId: string; docId: string }> = [];
+  students.forEach((u: any) => {
+    const equipped = u.equippedRabbits || [];
+    equipped.forEach((r: any) => {
+      if (r.courseId) {
+        holdingPairs.push({ userId: u.id, docId: `${r.courseId}_${r.rabbitId}` });
+      }
+    });
+  });
+
+  // ── 2단계: quizzes + quizResults + rabbits + holdings 병렬 조회 ──
+  const [quizResult, resultsResult, rabbitResult, holdingsResult] = await Promise.allSettled([
     professorUids.length > 0
       ? db.collection("quizzes").where("courseId", "==", courseId).get()
       : Promise.resolve(null),
     db.collection("quizResults").where("courseId", "==", courseId).get(),
     (async () => {
-      const names: Record<string, string> = {};
+      const names: Record<string, string | null> = {};
       const ids = Array.from(rabbitDocIds);
       for (let i = 0; i < ids.length; i += 10) {
         const batch = ids.slice(i, i + 10);
@@ -111,11 +123,29 @@ async function computeRankingsForCourse(courseId: string) {
         );
         snaps.forEach((snap, idx) => {
           if (snap.exists) {
-            names[batch[idx]] = snap.data()?.name || `토끼 #${batch[idx].split("_")[1]}`;
+            names[batch[idx]] = snap.data()?.name || null;
           }
         });
       }
       return names;
+    })(),
+    // 각 유저의 장착 토끼 discoveryOrder 로드
+    (async () => {
+      const orders: Record<string, number> = {};
+      for (let i = 0; i < holdingPairs.length; i += 10) {
+        const batch = holdingPairs.slice(i, i + 10);
+        const snaps = await Promise.all(
+          batch.map(p => db.collection("users").doc(p.userId)
+            .collection("rabbitHoldings").doc(p.docId).get())
+        );
+        snaps.forEach((snap, idx) => {
+          if (snap.exists) {
+            const key = `${batch[idx].userId}_${batch[idx].docId}`;
+            orders[key] = snap.data()?.discoveryOrder || 1;
+          }
+        });
+      }
+      return orders;
     })(),
   ]);
 
@@ -126,7 +156,8 @@ async function computeRankingsForCourse(courseId: string) {
 
   const quizSnap = quizResult.status === "fulfilled" ? quizResult.value : null;
   const resultsSnap = resultsResult.value;
-  const rabbitNames: Record<string, string> = rabbitResult.status === "fulfilled" ? rabbitResult.value : {};
+  const rabbitNames: Record<string, string | null> = rabbitResult.status === "fulfilled" ? rabbitResult.value : {};
+  const holdingOrders: Record<string, number> = holdingsResult.status === "fulfilled" ? holdingsResult.value : {};
 
   // 교수 퀴즈 ID 수집
   const profQuizIds = new Set<string>();
@@ -161,21 +192,31 @@ async function computeRankingsForCourse(courseId: string) {
     const profStat = studentProfStats[u.id] || { correct: 0, attempted: 0 };
     const rankScore = computeRankScore(profStat.correct, exp);
 
-    // 장착 토끼 이름
+    // 장착 토끼 이름 (discoveryOrder 반영 — "뭉치 2세" 등)
     const allEquipped = u.equippedRabbits || [];
     const names = allEquipped.map((r: any) => {
       if (r.rabbitId === 0) return "토끼";
       const key = `${r.courseId}_${r.rabbitId}`;
-      return rabbitNames[key] || `토끼 #${r.rabbitId}`;
+      const baseName = rabbitNames[key] || `토끼 #${r.rabbitId + 1}`;
+      const orderKey = `${u.id}_${key}`;
+      const order = holdingOrders[orderKey] || 1;
+      return order > 1 ? `${baseName} ${order}세` : baseName;
     });
     const equippedRabbitNames = names.length > 0 ? names.join(" & ") : "";
 
     const firstSlot = allEquipped[0];
     const firstEquippedRabbitId = firstSlot?.rabbitId ?? null;
-    const firstEquippedRabbitName = firstSlot
+    const firstKey = firstSlot ? `${firstSlot.courseId}_${firstSlot.rabbitId}` : null;
+    const firstBaseName = firstSlot
       ? firstSlot.rabbitId === 0
         ? "토끼"
-        : rabbitNames[`${firstSlot.courseId}_${firstSlot.rabbitId}`] || `토끼 #${firstSlot.rabbitId}`
+        : rabbitNames[firstKey!] || `토끼 #${firstSlot.rabbitId + 1}`
+      : null;
+    const firstOrder = firstSlot && firstKey
+      ? holdingOrders[`${u.id}_${firstKey}`] || 1
+      : 1;
+    const firstEquippedRabbitName = firstBaseName
+      ? (firstOrder > 1 ? `${firstBaseName} ${firstOrder}세` : firstBaseName)
       : null;
 
     return {
@@ -187,7 +228,11 @@ async function computeRankingsForCourse(courseId: string) {
       rankScore,
       profileRabbitId: u.profileRabbitId ?? null,
       equippedRabbitNames,
-      equippedRabbits: allEquipped.map((r: any) => ({ rabbitId: r.rabbitId, courseId: r.courseId })),
+      equippedRabbits: allEquipped.map((r: any) => ({
+        rabbitId: r.rabbitId,
+        courseId: r.courseId,
+        discoveryOrder: holdingOrders[`${u.id}_${r.courseId}_${r.rabbitId}`] || 1,
+      })),
       firstEquippedRabbitId,
       firstEquippedRabbitName,
       rank: 0,
