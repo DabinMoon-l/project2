@@ -519,7 +519,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs font-semibold text-[#1A1A1A]">
-                  태그 {courseCustomized && <span className="text-[#8B1A1A] font-normal text-[10px]">(챕터 필수)</span>}
+                  태그 {courseCustomized && <span className="text-[#8B1A1A] font-semibold text-xs">(챕터 필수)</span>}
                 </label>
                 <button
                   type="button"
@@ -560,10 +560,15 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
               )}
 
               {/* 챕터 태그 미선택 경고 (과목 맞춤형일 때만) */}
-              {courseCustomized && selectedTags.length > 0 && !hasChapterTag && (
-                <p className="text-[10px] text-[#8B1A1A] mb-1.5">
-                  챕터 태그를 1개 이상 선택해주세요
-                </p>
+              {courseCustomized && !hasChapterTag && (
+                <div className="flex items-center gap-1.5 px-2.5 py-2 mb-1.5 bg-[#FFF3F3] border border-[#E8A0A0] rounded-lg">
+                  <svg className="w-4 h-4 flex-shrink-0 text-[#8B1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3l9.66 16.59A1 1 0 0120.66 21H3.34a1 1 0 01-.86-1.41L12 3z" />
+                  </svg>
+                  <p className="text-xs text-[#8B1A1A] font-medium">
+                    태그 버튼을 눌러 챕터 태그를 선택해주세요
+                  </p>
+                </div>
               )}
 
               {/* 태그 선택 목록 */}
