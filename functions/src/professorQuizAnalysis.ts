@@ -20,8 +20,8 @@ import fetch from "node-fetch";
 // Gemini API 키
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 
-// 문제 뱅크 최대 보관 수 (300문제 × ~250바이트 = 75KB, Firestore 1MB 한도 내)
-const MAX_QUESTION_BANK_SIZE = 300;
+// 문제 뱅크 최대 보관 수 (1000문제 × ~500바이트 ≈ 500KB, Firestore 1MB 한도 내)
+const MAX_QUESTION_BANK_SIZE = 1000;
 
 // ============================================================
 // 타입 정의 (v2)

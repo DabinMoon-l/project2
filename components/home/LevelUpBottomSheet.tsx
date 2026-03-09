@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
-import { type RabbitHolding, getRabbitStats } from '@/lib/hooks/useRabbit';
+import { type RabbitHolding, getRabbitStats, useRabbitsForCourse } from '@/lib/hooks/useRabbit';
+import { computeRabbitDisplayName } from '@/lib/utils/rabbitDisplayName';
 import Image from 'next/image';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 
@@ -60,6 +61,16 @@ export default function LevelUpBottomSheet({
   for (let i = 0; i < courseHoldings.length; i += RABBITS_PER_ROW) {
     rows.push(courseHoldings.slice(i, i + RABBITS_PER_ROW));
   }
+
+  // rabbits 컬렉션에서 이름 로드 (holdings에는 name 없음)
+  const { rabbits: rabbitDocs } = useRabbitsForCourse(courseId);
+  const rabbitNameMap = useMemo(() => {
+    const map = new Map<number, string | null>();
+    for (const doc of rabbitDocs) {
+      map.set(doc.rabbitId, doc.name);
+    }
+    return map;
+  }, [rabbitDocs]);
 
   // 보유 토끼 없이 열리면 즉시 닫기 (빈 화면 + 네비 숨김 방지)
   useEffect(() => {
@@ -149,6 +160,9 @@ export default function LevelUpBottomSheet({
 
   const selected = courseHoldings[selectedIdx];
   const selectedInfo = selected ? getRabbitStats(selected) : null;
+  const selectedName = selected
+    ? computeRabbitDisplayName(rabbitNameMap.get(selected.rabbitId) ?? null, selected.discoveryOrder, selected.rabbitId)
+    : null;
 
   if (courseHoldings.length === 0) return null;
 
@@ -261,6 +275,10 @@ export default function LevelUpBottomSheet({
             {/* 선택된 토끼 정보 */}
             {selectedInfo && selected && (
               <div className="text-center">
+                {/* 토끼 이름 */}
+                {selectedName && (
+                  <p className="text-sm font-bold text-white/80 mb-2">{selectedName}</p>
+                )}
                 {result ? (
                   <motion.div
                     initial={{ opacity: 0, scale: 0.9 }}

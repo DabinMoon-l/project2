@@ -34,13 +34,6 @@ export interface GenerationJob {
   courseCustomized: boolean; // 과목 맞춤형 (false면 스타일/범위/포커스 제외)
 
   // 교수 서재 옵션
-  sliderWeights?: {
-    style: number;       // 0-100
-    scope: number;       // 0-100
-    focusGuide: number;  // 0-100
-    difficulty: number;  // 0-100
-    questionCount: number; // 5-20
-  };
   professorPrompt?: string;
 
   // 챕터 태그 (예: ["12_신경계", "11_내분비계"]) — 챕터 추론 대신 직접 범위 확정
@@ -82,7 +75,6 @@ function buildDedupeKey(
   questionCount: number,
   courseId: string,
   courseCustomized: boolean,
-  sliderWeights?: { style: number; scope: number; focusGuide: number; difficulty: number; questionCount: number },
   professorPrompt?: string,
   tags?: string[]
 ): string {
@@ -94,10 +86,6 @@ function buildDedupeKey(
   hash.update(courseId);
   hash.update(String(courseCustomized));
 
-  // 슬라이더 + 프롬프트 포함
-  if (sliderWeights) {
-    hash.update(JSON.stringify(sliderWeights));
-  }
   if (professorPrompt) {
     hash.update(professorPrompt.slice(0, 500));
   }
@@ -136,13 +124,6 @@ export const enqueueGenerationJob = onCall(
       courseId?: string;
       courseName?: string;
       courseCustomized?: boolean;
-      sliderWeights?: {
-        style: number;
-        scope: number;
-        focusGuide: number;
-        difficulty: number;
-        questionCount: number;
-      } | null;
       professorPrompt?: string | null;
       tags?: string[] | null;
     };
@@ -154,7 +135,6 @@ export const enqueueGenerationJob = onCall(
     const courseId = raw.courseId ?? "general";
     const courseName = raw.courseName ?? "일반";
     const courseCustomized = raw.courseCustomized ?? true;
-    const sliderWeights = raw.sliderWeights ?? undefined;
     const professorPrompt = raw.professorPrompt ?? undefined;
     const tags = raw.tags ?? undefined;
 
@@ -180,7 +160,6 @@ export const enqueueGenerationJob = onCall(
       questionCount,
       courseId,
       courseCustomized,
-      sliderWeights,
       professorPrompt,
       tags
     );
@@ -253,7 +232,6 @@ export const enqueueGenerationJob = onCall(
       courseId,
       courseName,
       courseCustomized,
-      ...(sliderWeights ? { sliderWeights } : {}),
       ...(professorPrompt ? { professorPrompt } : {}),
       ...(tags && tags.length > 0 ? { tags } : {}),
       dedupeKey,

@@ -831,7 +831,7 @@ export default function QuizPage() {
                     question={currentQuestion}
                     courseId={quiz?.courseId}
                     headerRight={
-                      quiz?.creatorId !== user?.uid ? (
+                      quiz?.creatorId !== user?.uid && quiz?.quizType !== 'ai-generated' ? (
                         <FeedbackIcon
                           isOpen={inlineFeedbackOpen === currentQuestion.id}
                           isSubmitted={inlineFeedbackSubmitted.has(currentQuestion.id)}
@@ -916,9 +916,9 @@ export default function QuizPage() {
                     )}
                   </div>
 
-                  {/* 인라인 피드백 패널 — 자기 퀴즈가 아닐 때만 표시 */}
+                  {/* 인라인 피드백 패널 — 자기 퀴즈/AI 퀴즈가 아닐 때만 표시 */}
                   <AnimatePresence>
-                    {inlineFeedbackOpen === currentQuestion.id && user && quiz?.creatorId !== user.uid && (
+                    {inlineFeedbackOpen === currentQuestion.id && user && quiz?.creatorId !== user.uid && quiz?.quizType !== 'ai-generated' && (
                       <InlineFeedbackPanel
                         questionId={currentQuestion.id}
                         quizId={quizId}

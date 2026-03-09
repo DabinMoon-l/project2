@@ -2112,7 +2112,7 @@ export default function ReviewPractice({
                               disabled={isSubmitted}
                               correctIndices={
                                 isSubmitted
-                                  ? subItem.correctAnswer.toString().split(',').map(s => parseInt(s.trim(), 10) - 1)
+                                  ? subItem.correctAnswer.toString().split(',').map(s => parseInt(s.trim(), 10))
                                   : undefined
                               }
                             />
@@ -2180,7 +2180,7 @@ export default function ReviewPractice({
                                   {subItem.type === 'ox'
                                     ? (subItem.correctAnswer?.toString() === '0' || subItem.correctAnswer?.toString().toUpperCase() === 'O' ? 'O' : 'X')
                                     : subItem.type === 'multiple'
-                                    ? subItem.correctAnswer?.toString().split(',').map(a => `${a.trim()}번`).join(', ')
+                                    ? subItem.correctAnswer?.toString().split(',').map(a => `${parseInt(a.trim(), 10) + 1}번`).join(', ')
                                     : subItem.correctAnswer?.toString()}
                                 </span>
                               </p>
@@ -2356,7 +2356,7 @@ export default function ReviewPractice({
                         disabled={isSubmitted}
                         correctIndices={
                           isSubmitted
-                            ? currentItem.correctAnswer.toString().split(',').map(s => parseInt(s.trim(), 10) - 1)
+                            ? currentItem.correctAnswer.toString().split(',').map(s => parseInt(s.trim(), 10))
                             : undefined
                         }
                       />
@@ -2461,7 +2461,7 @@ export default function ReviewPractice({
                               <span>정답: </span>
                               <span className="font-bold text-[#1A6B1A]">
                                 {currentItem.correctAnswer
-                                  ? currentItem.correctAnswer.toString().split(',').map((ans: string) => `${ans.trim()}번`).join(', ')
+                                  ? currentItem.correctAnswer.toString().split(',').map((ans: string) => `${parseInt(ans.trim(), 10) + 1}번`).join(', ')
                                   : '(정답 정보 없음)'}
                               </span>
                             </div>
@@ -2546,7 +2546,7 @@ export default function ReviewPractice({
                           const correctAnswers = correctAnswerStr.includes(',')
                             ? correctAnswerStr.split(',').map(a => a.trim())
                             : [correctAnswerStr];
-                          const isCorrectChoice = correctAnswers.includes((idx + 1).toString());
+                          const isCorrectChoice = correctAnswers.includes(idx.toString());
 
                           return (
                             <button

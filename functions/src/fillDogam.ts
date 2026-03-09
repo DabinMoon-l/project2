@@ -47,18 +47,30 @@ export const fillDogam = onCall(
 
     // 배치 제한(500)이 있으므로 50개씩 나눠서 처리
     for (let batchStart = 1; batchStart <= 79; batchStart += 25) {
-      const batch = db.batch();
       const batchEnd = Math.min(batchStart + 24, 79);
 
+      // 먼저 기존 문서 확인 (이름 보존용)
+      const existingDocs = new Map<number, { name: string | null }>();
+      for (let rabbitId = batchStart; rabbitId <= batchEnd; rabbitId++) {
+        const rabbitDocId = `${courseId}_${rabbitId}`;
+        const rabbitDoc = await db.collection("rabbits").doc(rabbitDocId).get();
+        if (rabbitDoc.exists) {
+          existingDocs.set(rabbitId, { name: rabbitDoc.data()?.name || null });
+        }
+      }
+
+      const batch = db.batch();
       for (let rabbitId = batchStart; rabbitId <= batchEnd; rabbitId++) {
         const rabbitDocId = `${courseId}_${rabbitId}`;
         const rabbitRef = db.collection("rabbits").doc(rabbitDocId);
         const holdingRef = db.collection("users").doc(userId)
           .collection("rabbitHoldings").doc(rabbitDocId);
 
-        const rabbitName = RABBIT_NAMES[rabbitId - 1] || `토끼 #${rabbitId}`;
+        const existing = existingDocs.get(rabbitId);
+        // 기존 이름이 있으면 보존, 없으면 새 이름 부여
+        const rabbitName = existing?.name || RABBIT_NAMES[rabbitId - 1] || `토끼 #${rabbitId}`;
 
-        // rabbit 문서 생성 (이미 있으면 discoverers에 추가)
+        // rabbit 문서 생성 (이미 있으면 discoverers에 추가, 이름은 보존)
         batch.set(rabbitRef, {
           rabbitId,
           courseId,

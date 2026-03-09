@@ -330,7 +330,7 @@ export default function QuizResultPage() {
                 sortedCorrect.length === sortedUser.length &&
                 sortedCorrect.every((val, idx) => val === sortedUser[idx]);
             } else {
-              // 단일정답: 둘 다 1-indexed로 직접 비교
+              // 단일정답: 둘 다 0-indexed 문자열로 직접 비교
               isCorrect = userAnswerStr === correctAnswerStr;
             }
           } else if (q.type === 'ox') {
@@ -895,10 +895,11 @@ export default function QuizResultPage() {
   };
 
   const handleNext = () => {
-    // 자기가 만든 퀴즈인 경우 바로 EXP 페이지로 이동 (피드백 건너뜀)
+    // 자기가 만든 퀴즈 또는 AI 생성 퀴즈인 경우 바로 EXP 페이지로 이동 (피드백 건너뜀)
     const isOwnQuiz = user && resultData?.quizCreatorId === user.uid;
+    const isAIQuiz = resultData?.quizType === 'ai-generated';
 
-    if (isOwnQuiz) {
+    if (isOwnQuiz || isAIQuiz) {
       router.push(`/quiz/${quizId}/exp`);
     } else {
       router.push(`/quiz/${quizId}/feedback`);

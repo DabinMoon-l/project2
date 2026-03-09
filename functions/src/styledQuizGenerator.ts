@@ -754,7 +754,7 @@ ${profile.styleDescription}
     styleSection += `
 ### 교수님이 실제로 낸 문제 (이 스타일을 따라하세요)
 `;
-    for (const q of context.questionBank.slice(0, 8)) {
+    for (const q of context.questionBank) {
       styleSection += `Q. ${q.stem}\n`;
       q.choices.forEach((c: string, i: number) => {
         const marker = q.correctAnswer === i ? "✓" : " ";
@@ -931,7 +931,6 @@ export function buildFullPrompt(
   isVeryShortText: boolean = false,
   availableImages: CroppedImage[] = [],
   courseCustomized: boolean = true,
-  sliderWeights?: { style: number; scope: number; focusGuide: number },
   professorPrompt?: string,
   hasPageImages: boolean = false,
   tags?: string[],  // 챕터 태그 (예: ["12_신경계"])
@@ -939,11 +938,6 @@ export function buildFullPrompt(
   chapterRepetitionMap?: Record<string, number>,  // 챕터별 개별 반복 횟수
   isProfessor: boolean = false  // 교수 여부 (교수는 기존 임계값 유지)
 ): string {
-  // 슬라이더 가중치에 따른 조건부 포함
-  const skipStyle = sliderWeights && sliderWeights.style < 10;
-  const skipScope = sliderWeights && sliderWeights.scope < 10;
-  const skipFocusGuide = sliderWeights && sliderWeights.focusGuide < 10;
-
   // Scope에서 로드된 챕터 번호 (여러 곳에서 사용)
   const scopeChapters = context.scope?.chaptersLoaded;
 
@@ -962,39 +956,24 @@ export function buildFullPrompt(
     ? tags.filter(t => /^\d+_/.test(t)).map(t => t.split("_")[0])
     : [];
 
-  const styleContext = courseCustomized && !skipStyle ? buildStyleContextPrompt(context) : "";
+  const styleContext = courseCustomized ? buildStyleContextPrompt(context) : "";
   const difficultyPrompt = buildDifficultyPrompt(difficulty, context);
-  const scopeContext = courseCustomized && !skipScope ? buildScopeContextPrompt(context, !!professorPrompt) : "";
+  const scopeContext = courseCustomized ? buildScopeContextPrompt(context, !!professorPrompt) : "";
   // 챕터 인덱스: 태그 선택 챕터 우선, 없으면 scope 챕터
   const chapterFilterForIndex = tagChapterNumbers.length > 0 ? tagChapterNumbers : scopeChapters;
   const chapterIndexPrompt = (courseCustomized || tagChapterNumbers.length > 0)
     ? buildChapterIndexPrompt(courseId, chapterFilterForIndex)
     : "";
-  const focusGuide = courseCustomized && !skipFocusGuide ? getFocusGuide(courseId, scopeChapters) : null;
+  const focusGuide = courseCustomized ? getFocusGuide(courseId, scopeChapters) : null;
   // 과목 개요 (과목 특성 + 선택 챕터 상세 커리큘럼)
   // courseCustomized=false라도 챕터 태그가 선택되면 커리큘럼 개요는 포함
   const courseOverviewPrompt = (courseCustomized || tagChapterNumbers.length > 0)
     ? buildCourseOverviewPrompt(courseId, tagChapterNumbers.length > 0 ? tagChapterNumbers : scopeChapters)
     : "";
 
-  // 슬라이더 가중치 → 문제 수 비율로 변환
-  // scope와 focusGuide의 비율을 문제 수로 분배
-  const scopeWeight = sliderWeights ? sliderWeights.scope : 50;
-  const focusWeight = sliderWeights ? sliderWeights.focusGuide : 50;
-
-  // focusGuide vs scope 문제 수 분배 (둘 다 10 이상일 때)
-  const totalWeight = (skipScope ? 0 : scopeWeight) + (skipFocusGuide ? 0 : focusWeight);
-  const focusQuestionCount = totalWeight > 0 && !skipFocusGuide
-    ? Math.round(questionCount * (focusWeight / totalWeight))
-    : 0;
+  // focusGuide vs scope 문제 수 균등 분배
+  const focusQuestionCount = Math.round(questionCount / 2);
   const scopeQuestionCount = questionCount - focusQuestionCount;
-
-  // 스타일 반영 강도 (문제 수 비율은 아니지만 명확한 지시로 변환)
-  const getStylePrefix = (value: number): string => {
-    if (value < 10) return "";
-    const ratio = Math.round((value / 100) * questionCount);
-    return `(${questionCount}문제 중 약 ${ratio}문제는 아래 출제 스타일을 따르세요. 나머지는 자유롭게 출제하세요.)`;
-  };
 
   // Scope가 있으면 "출제 범위"로, 없으면 "학습 자료"로 표현
   const hasScope = !!context.scope?.content;
@@ -1131,9 +1110,8 @@ export function buildFullPrompt(
 ## 어려움 난이도 추가 지침
 
 ### 형식 비율 (${questionCount}문제 기준 — 반드시 지켜주세요)
-- 부정형 ("옳지 않은 것"): **${Math.max(1, Math.round(questionCount * 0.25))}문제**
-- 보기 문제 (ㄱ,ㄴ,ㄷ + bogi 필드 포함): **${Math.max(1, Math.round(questionCount * 0.2))}문제**
-- 복수정답 (answer를 배열로): **${Math.max(1, Math.round(questionCount * 0.15))}문제**
+- 부정형 ("옳지 않은 것"): **${Math.max(1, Math.round(questionCount * 0.3))}문제**
+- 복수정답 (answer를 배열로): **${Math.max(1, Math.round(questionCount * 0.2))}문제**
 - 나머지: 기전/임상케이스/일반 객관식
 
 ### 오답 선지 구성 전략
@@ -1318,18 +1296,14 @@ ${focusInstruction}${chapterRepDetail}
 ${trimmedProfessorPrompt}
 ` : "";
 
-  // 슬라이더 가중치 → 문제 수 비율 접두사
-  const stylePrefix = sliderWeights ? getStylePrefix(sliderWeights.style) : "";
-
-  // professorPrompt가 있으면 scope는 순수 참고용 — 비율 할당 금지 (발문 출제 금지와 모순 방지)
-  const scopeRatioPrefix = !skipScope && !skipFocusGuide && totalWeight > 0 && !professorPrompt
+  // professorPrompt가 있으면 scope는 순수 참고용 — 비율 할당 금지
+  const scopeRatioPrefix = !professorPrompt
     ? `(${questionCount}문제 중 약 ${scopeQuestionCount}문제는 이 넓은 범위에서 출제하세요.)`
     : "";
-  const focusRatioPrefix = !skipFocusGuide && !skipScope && totalWeight > 0 && !professorPrompt
+  const focusRatioPrefix = !professorPrompt
     ? `(${questionCount}문제 중 약 ${focusQuestionCount}문제는 아래 핵심 포인트에서 출제하세요.)`
     : "";
 
-  const styledStyleContext = styleContext && stylePrefix ? `${stylePrefix}\n${styleContext}` : styleContext;
   const styledScopeContext = scopeContext && scopeRatioPrefix ? `${scopeRatioPrefix}\n${scopeContext}` : scopeContext;
   const styledFocusGuide = focusGuideSection && focusRatioPrefix ? `${focusRatioPrefix}\n${focusGuideSection}` : focusGuideSection;
 
@@ -1341,7 +1315,7 @@ ${courseOverviewPrompt}
 ${ocrText.slice(0, 6000)}
 ${styledFocusGuide}
 ${difficultyPrompt}
-${styledStyleContext}
+${styleContext}
 ${hardModeExtra}
 ${chapterIndexPrompt}
 ${imageSection}

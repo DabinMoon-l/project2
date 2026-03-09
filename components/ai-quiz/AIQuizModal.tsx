@@ -6,7 +6,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import { httpsCallable } from 'firebase/functions';
 import { auth, functions } from '@/lib/firebase';
 import { useCourse } from '@/lib/contexts/CourseContext';
-import { useVisionOcr } from '@/lib/hooks/useVisionOcr';
+// OCR 제거됨 — Gemini가 이미지를 직접 분석하므로 별도 OCR 불필요
 import { generateCourseTags, COMMON_TAGS, type TagOption } from '@/lib/courseIndex';
 import ExpandModal from '@/components/common/ExpandModal';
 import type { SourceRect } from '@/lib/hooks/useExpandSource';
@@ -28,7 +28,6 @@ export interface AIQuizData {
   difficulty: 'easy' | 'medium' | 'hard';
   questionCount: number;
   tags: string[]; // 태그 배열
-  textContent?: string; // OCR/PPT 텍스트 내용 (선택적)
   courseCustomized?: boolean; // 과목 맞춤형 (교수 스타일/범위/포커스 반영)
 }
 
@@ -77,8 +76,6 @@ function useIsMobileDevice() {
 export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }: AIQuizModalProps) {
   const isMobile = useIsMobileDevice();
   const { userCourseId } = useCourse();
-  const visionOcr = useVisionOcr();
-
   // 과목별 동적 태그 생성 (챕터 번호 포함)
   const tagOptions = useMemo(() => {
     const courseTags = generateCourseTags(userCourseId);
@@ -103,8 +100,8 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
   // 파일 데이터 저장 (고해상도 변환용)
   const [pdfArrayBuffer, setPdfArrayBuffer] = useState<ArrayBuffer | null>(null);
 
-  // OCR 관련 상태
-  const [pendingOcrImages, setPendingOcrImages] = useState<string[]>([]);
+  // 페이지 선택 후 렌더링된 이미지 캐시 (중복 렌더링 방지)
+  const [renderedPageImages, setRenderedPageImages] = useState<string[]>([]);
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -128,21 +125,16 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
       setPdfArrayBuffer(null);
       setShowPageSelectionModal(false);
       setPageSelectionTitle('');
-      setOcrExtractedText('');
-      setIsOcrProcessing(false);
-      setPendingOcrImages([]);
+      setRenderedPageImages([]);
     }
   }, [isOpen]);
 
-  // 이미지 파일 처리 및 OCR (Google Vision OCR 사용)
+  // 이미지 파일 처리 (OCR 제거 — Gemini가 이미지를 직접 분석)
   const handleImageSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    // 파일 배열을 먼저 복사 (input 초기화 전에)
     const fileArray = Array.from(files);
-
-    // input 초기화 (파일 복사 후 실행)
     if (e.target) e.target.value = '';
 
     const newImages: string[] = [];
@@ -155,35 +147,12 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
     }
 
     if (newImages.length > 0) {
-      // 이미지 추가
       setImages(prev => [...prev, ...newImages]);
       if (!uploadType) {
         setUploadType('image');
       }
-
-      // OCR 텍스트 추출 시작
-      setPendingOcrImages(newImages);
-      setIsOcrProcessing(true);
-
-      try {
-        // Google Vision OCR로 텍스트 추출
-        const result = await visionOcr.runOcr(newImages);
-
-        if (result.text.trim()) {
-          // OCR 추출 텍스트 저장 (퀴즈 생성 시 사용)
-          setOcrExtractedText(prev => prev ? `${prev}\n\n${result.text}` : result.text);
-        }
-        // OCR 텍스트 없어도 이미지는 그대로 유지 → Gemini가 직접 이미지 분석
-      } catch (error: any) {
-        console.error('OCR 오류:', error);
-        const errorMessage = error.message || 'OCR 처리 중 오류가 발생했습니다.';
-        alert(errorMessage);
-      } finally {
-        setIsOcrProcessing(false);
-        setPendingOcrImages([]);
-      }
     }
-  }, [uploadType, visionOcr]);
+  }, [uploadType]);
 
   // PDF 파일 처리
   const handlePdfSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -210,31 +179,36 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
 
       // 복사본으로 PDF 로드 (원본 유지)
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
+
+      // 4개씩 병렬 렌더링 (메모리 절약 + 속도 균형)
+      const BATCH_SIZE = 4;
       const pages: DocumentPage[] = [];
+      for (let batch = 0; batch < pdf.numPages; batch += BATCH_SIZE) {
+        const end = Math.min(batch + BATCH_SIZE, pdf.numPages);
+        setLoadingMessage(`PDF 로딩 중... (${batch + 1}~${end}/${pdf.numPages})`);
 
-      for (let i = 1; i <= pdf.numPages; i++) {
-        setLoadingMessage(`PDF 로딩 중... (${i}/${pdf.numPages})`);
-        const page = await pdf.getPage(i);
-        // 썸네일 화질 개선: scale 0.3 → 0.8, JPEG 품질 70% → 90%
-        const viewport = page.getViewport({ scale: 0.8 });
+        const batchPromises = [];
+        for (let i = batch + 1; i <= end; i++) {
+          batchPromises.push((async (pageNum: number) => {
+            const page = await pdf.getPage(pageNum);
+            const viewport = page.getViewport({ scale: 0.5 });
 
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d')!;
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d')!;
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
 
-        await page.render({
-          canvasContext: context,
-          viewport: viewport,
-        }).promise;
+            await page.render({ canvasContext: context, viewport }).promise;
+            return {
+              pageNum,
+              thumbnail: canvas.toDataURL('image/jpeg', 0.6),
+              selected: false,
+            };
+          })(i));
+        }
 
-        const thumbnail = canvas.toDataURL('image/jpeg', 0.9);
-
-        pages.push({
-          pageNum: i,
-          thumbnail,
-          selected: false,
-        });
+        const batchResults = await Promise.all(batchPromises);
+        pages.push(...batchResults);
       }
 
       setDocumentPages(pages);
@@ -253,10 +227,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
     if (e.target) e.target.value = '';
   }, []);
 
-  // OCR 추출 텍스트 (이미지/PDF용)
-  const [ocrExtractedText, setOcrExtractedText] = useState<string>('');
-  // OCR 진행 중
-  const [isOcrProcessing, setIsOcrProcessing] = useState(false);
+  // (OCR 제거됨 — Gemini가 이미지를 직접 분석하므로 별도 OCR 불필요)
 
   // PPTX 파일 선택 → Cloud Run에서 PDF 변환 후 페이지 미리보기
   const handlePptSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -315,33 +286,39 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
       // ArrayBuffer 복사본 저장 (PDF.js가 원본을 transfer하므로)
       setPdfArrayBuffer(arrayBuffer.slice(0));
 
-      // 3. pdfjs-dist로 페이지 썸네일 생성 (기존 PDF 플로우 재사용)
+      // 3. pdfjs-dist로 페이지 썸네일 병렬 생성
       setLoadingMessage('페이지 로딩 중...');
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
+
+      // 4개씩 병렬 렌더링 (메모리 절약 + 속도 균형)
+      const BATCH_SIZE = 4;
       const pages: DocumentPage[] = [];
+      for (let batch = 0; batch < pdf.numPages; batch += BATCH_SIZE) {
+        const end = Math.min(batch + BATCH_SIZE, pdf.numPages);
+        setLoadingMessage(`페이지 로딩 중... (${batch + 1}~${end}/${pdf.numPages})`);
 
-      for (let i = 1; i <= pdf.numPages; i++) {
-        setLoadingMessage(`페이지 로딩 중... (${i}/${pdf.numPages})`);
-        const page = await pdf.getPage(i);
-        const viewport = page.getViewport({ scale: 0.8 });
+        const batchPromises = [];
+        for (let i = batch + 1; i <= end; i++) {
+          batchPromises.push((async (pageNum: number) => {
+            const page = await pdf.getPage(pageNum);
+            const viewport = page.getViewport({ scale: 0.5 });
 
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d')!;
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d')!;
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
 
-        await page.render({
-          canvasContext: context,
-          viewport: viewport,
-        }).promise;
+            await page.render({ canvasContext: context, viewport }).promise;
+            return {
+              pageNum,
+              thumbnail: canvas.toDataURL('image/jpeg', 0.6),
+              selected: false,
+            };
+          })(i));
+        }
 
-        const thumbnail = canvas.toDataURL('image/jpeg', 0.9);
-
-        pages.push({
-          pageNum: i,
-          thumbnail,
-          selected: false,
-        });
+        const batchResults = await Promise.all(batchPromises);
+        pages.push(...batchResults);
       }
 
       setDocumentPages(pages);
@@ -377,24 +354,27 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
   }, []);
 
   // 페이지 선택 모달에서 확인 및 OCR
+  // 페이지 선택 확인 — 이미지 렌더링 후 캐시 (OCR 제거, 중복 렌더링 방지)
   const handlePageSelectionConfirm = useCallback(async (selectedPages: DocumentPage[]) => {
     setDocumentPages(selectedPages);
     setShowPageSelectionModal(false);
 
     const selectedPageNums = selectedPages.filter(p => p.selected);
-    if (selectedPageNums.length === 0) return;
+    if (selectedPageNums.length === 0) {
+      setRenderedPageImages([]);
+      return;
+    }
 
-    // 고해상도 이미지로 OCR 수행 (썸네일 대신 scale 2.0)
+    // PDF → 이미지 렌더링 (scale 1.2 + JPEG 0.7 — 전송 크기 축소)
     let selectedImages: string[] = [];
 
     if (pdfArrayBuffer) {
       try {
         const pdf = await pdfjsLib.getDocument({ data: pdfArrayBuffer.slice(0) }).promise;
 
-        for (const page of selectedPageNums) {
+        const renderPromises = selectedPageNums.map(async (page) => {
           const pdfPage = await pdf.getPage(page.pageNum);
-          // OCR용 고해상도 (scale 2.0)
-          const viewport = pdfPage.getViewport({ scale: 2.0 });
+          const viewport = pdfPage.getViewport({ scale: 1.2 });
 
           const canvas = document.createElement('canvas');
           const context = canvas.getContext('2d')!;
@@ -406,41 +386,22 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
             viewport: viewport,
           }).promise;
 
-          const imageData = canvas.toDataURL('image/jpeg', 0.9);
-          selectedImages.push(imageData);
-        }
+          return canvas.toDataURL('image/jpeg', 0.7);
+        });
+
+        selectedImages = await Promise.all(renderPromises);
       } catch (error) {
-        console.error('PDF 고해상도 변환 오류:', error);
-        // 실패 시 썸네일 사용
+        console.error('PDF 이미지 변환 오류:', error);
         selectedImages = selectedPageNums.map(p => p.thumbnail);
       }
     } else {
-      // PDF가 아닌 경우 (PPT 등) 썸네일 사용
+      // PPT 등: 썸네일 사용
       selectedImages = selectedPageNums.map(p => p.thumbnail);
     }
 
-    if (selectedImages.length === 0) return;
-
-    // OCR 시작
-    setIsOcrProcessing(true);
-
-    try {
-      // Google Vision OCR로 텍스트 추출
-      const result = await visionOcr.runOcr(selectedImages);
-
-      if (result.text.trim()) {
-        // OCR 추출 텍스트 저장 (퀴즈 생성 시 사용)
-        setOcrExtractedText(result.text);
-      }
-      // OCR 텍스트 없어도 이미지는 그대로 유지 → Gemini가 직접 이미지 분석
-    } catch (error: any) {
-      console.error('OCR 오류:', error);
-      const errorMessage = error.message || 'OCR 처리 중 오류가 발생했습니다.';
-      alert(errorMessage);
-    } finally {
-      setIsOcrProcessing(false);
-    }
-  }, [visionOcr, pdfArrayBuffer]);
+    // 렌더링된 이미지 캐시 → handleStart에서 재사용 (중복 렌더링 방지)
+    setRenderedPageImages(selectedImages);
+  }, [pdfArrayBuffer]);
 
   // 페이지 선택 모달 다시 열기
   const handleReopenPageSelection = useCallback(() => {
@@ -452,42 +413,14 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
   const handleClearDocumentSelection = useCallback(() => {
     setDocumentPages([]);
     setPdfArrayBuffer(null);
-    setOcrExtractedText(''); // OCR 텍스트도 초기화
+    setRenderedPageImages([]); // 캐시된 이미지도 초기화
     // 다른 콘텐츠가 있으면 uploadType 유지
     if (images.length === 0) {
       setUploadType(null);
     }
   }, [images.length]);
 
-  // 선택된 PDF 페이지를 고해상도 이미지로 변환
-  const convertSelectedPdfPagesToImages = useCallback(async (): Promise<string[]> => {
-    const selectedPages = documentPages.filter(p => p.selected);
-    if (selectedPages.length === 0 || !pdfArrayBuffer) return [];
-
-    // ArrayBuffer 복사본 사용 (PDF.js가 transfer하므로)
-    const pdf = await pdfjsLib.getDocument({ data: pdfArrayBuffer.slice(0) }).promise;
-    const images: string[] = [];
-
-    for (const page of selectedPages) {
-      const pdfPage = await pdf.getPage(page.pageNum);
-      const viewport = pdfPage.getViewport({ scale: 2 });
-
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d')!;
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-
-      await pdfPage.render({
-        canvasContext: context,
-        viewport: viewport,
-      }).promise;
-
-      const imageData = canvas.toDataURL('image/jpeg', 0.9);
-      images.push(imageData);
-    }
-
-    return images;
-  }, [documentPages, pdfArrayBuffer]);
+  // (convertSelectedPdfPagesToImages 제거 — handlePageSelectionConfirm에서 캐시된 이미지 사용)
 
   // 이미지 삭제
   const removeImage = useCallback((index: number) => {
@@ -512,15 +445,8 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
       return;
     }
 
-    // 이미지 + PDF/PPT 페이지 합치기
-    let finalImages = [...images];
-
-    // PDF 페이지가 있으면 이미지로 변환하여 추가
-    const selectedPdfPageCount = documentPages.filter(p => p.selected).length;
-    if (selectedPdfPageCount > 0) {
-      const pdfImages = await convertSelectedPdfPagesToImages();
-      finalImages = [...finalImages, ...pdfImages];
-    }
+    // 이미지 + 캐시된 PDF/PPT 페이지 이미지 합치기 (중복 렌더링 없음)
+    const finalImages = [...images, ...renderedPageImages];
 
     // 과목 맞춤형 + 챕터 태그 선택 시 학습 자료 없이도 생성 가능
     if (finalImages.length === 0 && !(courseCustomized && hasChapterTag)) {
@@ -534,10 +460,9 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
       difficulty,
       questionCount,
       tags: selectedTags,
-      textContent: ocrExtractedText || undefined,
       courseCustomized,
     });
-  }, [folderName, images, difficulty, questionCount, documentPages, convertSelectedPdfPagesToImages, onStartQuiz, selectedTags, ocrExtractedText, hasChapterTag, courseCustomized]);
+  }, [folderName, images, renderedPageImages, difficulty, questionCount, onStartQuiz, selectedTags, hasChapterTag, courseCustomized]);
 
   // body overflow 제어 (ExpandModal이 ESC 키 처리)
   useEffect(() => {
@@ -559,7 +484,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
 
   return (
     <>
-      <ExpandModal isOpen={isOpen} onClose={onClose} sourceRect={sourceRect} className="w-[85%] max-w-sm" zIndex={50}>
+      <ExpandModal isOpen={isOpen} onClose={showPageSelectionModal ? () => {} : onClose} sourceRect={sourceRect} className="w-[85%] max-w-sm" zIndex={50}>
         <div className="bg-[#F5F0E8] border-2 border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A] overflow-hidden rounded-2xl">
           {/* 헤더 */}
           <div className="flex items-center justify-between px-4 py-3 border-b-2 border-[#1A1A1A]">
@@ -777,18 +702,18 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
 
               {/* 문서 페이지 선택 완료 요약 (PDF/PPT 공통) */}
               {documentPages.length > 0 && (
-                <div className="border-2 border-[#1A1A1A] p-3 bg-white rounded-lg">
+                <div className="border-2 border-[#1A1A1A] p-2.5 bg-white rounded-lg">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
                       {/* 문서 아이콘 */}
-                      <div className="w-10 h-10 border-2 border-[#1A1A1A] bg-[#EDEAE4] flex items-center justify-center">
-                        <svg className="w-5 h-5 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="w-8 h-8 flex-shrink-0 border-2 border-[#1A1A1A] bg-[#EDEAE4] flex items-center justify-center">
+                        <svg className="w-4 h-4 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                         </svg>
                       </div>
-                      <div>
-                        <p className="text-sm font-bold text-[#1A1A1A]">{uploadType === 'ppt' ? 'PPT 파일' : 'PDF 파일'}</p>
-                        <p className="text-xs text-[#5C5C5C]">
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-[#1A1A1A]">{uploadType === 'ppt' ? 'PPT 파일' : 'PDF 파일'}</p>
+                        <p className="text-[11px] text-[#5C5C5C]">
                           {selectedPageCount > 0 ? (
                             <span className="text-[#1A6B1A] font-semibold">{selectedPageCount}개 페이지 선택됨</span>
                           ) : (
@@ -797,18 +722,18 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
                         </p>
                       </div>
                     </div>
-                    <div className="flex gap-1.5">
+                    <div className="flex gap-1 flex-shrink-0">
                       <button
                         type="button"
                         onClick={handleReopenPageSelection}
-                        className="px-2 py-1.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors rounded-lg"
+                        className="px-1.5 py-1 text-[11px] font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors rounded-lg whitespace-nowrap"
                       >
                         {selectedPageCount > 0 ? '다시 선택' : '선택하기'}
                       </button>
                       <button
                         type="button"
                         onClick={handleClearDocumentSelection}
-                        className="px-2 py-1.5 text-xs font-bold border border-[#8B1A1A] text-[#8B1A1A] hover:bg-[#FEE2E2] transition-colors rounded-lg"
+                        className="px-1.5 py-1 text-[11px] font-bold border border-[#8B1A1A] text-[#8B1A1A] hover:bg-[#FEE2E2] transition-colors rounded-lg whitespace-nowrap"
                       >
                         삭제
                       </button>

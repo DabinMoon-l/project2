@@ -174,7 +174,7 @@ export default function AIQuizContainer() {
       >(functions, 'enqueueGenerationJob');
 
       const enqueueResult = await enqueueJob({
-        text: data.textContent,
+        text: undefined, // OCR 제거 — Gemini가 이미지 직접 분석
         images: data.images,
         difficulty: data.difficulty,
         questionCount: data.questionCount,
@@ -416,7 +416,7 @@ export default function AIQuizContainer() {
         };
       });
 
-      // 퀴즈 문서에 점수, 문제 결과 저장
+      // 퀴즈 문서에 점수, 문제 결과 저장 (본인 퀴즈이므로 클라이언트 쓰기 가능)
       const quizRef = doc(db, 'quizzes', savedQuiz.id);
       await setDoc(quizRef, {
         participantCount: 1,
@@ -428,47 +428,8 @@ export default function AIQuizContainer() {
         updatedAt: serverTimestamp(),
       }, { merge: true });
 
-      // quiz_completions에 완료 기록 생성
-      const completionDocId = `${savedQuiz.id}_${profile.uid}`;
-      await setDoc(doc(db, 'quiz_completions', completionDocId), {
-        quizId: savedQuiz.id,
-        userId: profile.uid,
-        score,
-        attemptNo: 1,
-        completedAt: serverTimestamp(),
-      }, { merge: true });
-
-      // 퀴즈 결과를 quizResults 컬렉션에 저장 (통계용)
-      // userAnswer를 1-indexed로 변환 (통계 모달에서 1-indexed 기대)
-      const questionScores: Record<string, { isCorrect: boolean; userAnswer: string; answeredAt: ReturnType<typeof serverTimestamp> }> = {};
-      results.forEach((r) => {
-        const question = savedQuiz.questions.find(q => q.id === r.questionId);
-        // 0-indexed 그대로 저장
-        const convertedAnswer = r.userAnswer;
-        questionScores[r.questionId] = {
-          isCorrect: r.isCorrect,
-          userAnswer: convertedAnswer,
-          answeredAt: serverTimestamp(),
-        };
-      });
-
-      await addDoc(collection(db, 'quizResults'), {
-        userId: profile.uid,
-        quizId: savedQuiz.id,
-        quizTitle: savedQuiz.title,
-        quizCreatorId: profile.uid,
-        quizType: 'ai-generated',
-        quizIsPublic: false,
-        score,
-        correctCount,
-        totalCount,
-        earnedExp: 0,
-        questionScores,
-        isUpdate: false,
-        courseId: userCourseId || null,
-        classId: userClassId || null,
-        createdAt: serverTimestamp(),
-      });
+      // quiz_completions, quizResults는 CF 전용 (Security Rules에서 클라이언트 쓰기 차단)
+      // AI 퀴즈는 recordAttempt를 거치지 않으므로 reviews만 저장
 
       // 모든 문제를 reviews 컬렉션에 저장
       const reviewsRef = collection(db, 'reviews');
@@ -571,11 +532,10 @@ export default function AIQuizContainer() {
         <div className="fixed inset-0 z-50 bg-[#F5F0E8]" style={{ left: 'var(--modal-left, 0px)' }}>
           <ReviewPractice
             items={practiceItems}
-            quizTitle={savedQuiz?.title}
             onComplete={handlePracticeComplete}
             onClose={handlePracticeClose}
             currentUserId={profile?.uid}
-            headerTitle="퀴즈"
+            headerTitle={savedQuiz?.title || '퀴즈'}
             showFeedback={false}
           />
         </div>

@@ -55,13 +55,6 @@ interface JobInput {
   courseName: string;
   userId: string;
   courseCustomized: boolean;
-  sliderWeights?: {
-    style: number;
-    scope: number;
-    focusGuide: number;
-    difficulty: number;
-    questionCount: number;
-  };
   professorPrompt?: string;
   tags?: string[];
 }
@@ -152,7 +145,7 @@ async function executeJobProcessing(
   const {
     text, images, difficulty, questionCount,
     courseId, courseName, userId,
-    courseCustomized, sliderWeights, professorPrompt, tags,
+    courseCustomized, professorPrompt, tags,
   } = input;
 
   const trimmedText = (text || "").trim();
@@ -193,9 +186,7 @@ async function executeJobProcessing(
   // ========================================
   // 2단계: 스타일/키워드/스코프 로드 + 반복 횟수 카운트 (병렬)
   // ========================================
-  const skipStyle = sliderWeights && sliderWeights.style < 10;
-  const skipScope = sliderWeights && sliderWeights.scope < 10;
-  const shouldLoadScope = !cacheHit && courseCustomized && (isShortText || validDifficulty !== "easy") && !skipScope;
+  const shouldLoadScope = !cacheHit && courseCustomized && (isShortText || validDifficulty !== "easy");
 
   const forcedChapters = tags && tags.length > 0
     ? extractChapterNumbersFromTags(tags)
@@ -210,7 +201,7 @@ async function executeJobProcessing(
     ? db.collection("professorQuizAnalysis").doc(courseId)
     : null;
 
-  if (courseCustomized && analysisRef && !skipStyle) {
+  if (courseCustomized && analysisRef) {
     parallelTasks.push(
       analysisRef.collection("data").doc("styleProfile").get(),
       analysisRef.collection("data").doc("keywords").get(),
@@ -287,8 +278,8 @@ async function executeJobProcessing(
   if (bankDoc?.exists) {
     const bank = bankDoc.data() as QuestionBank;
     if (bank.questions && bank.questions.length > 0) {
-      // Fisher-Yates Top-K (10개만 셔플)
-      styleContext.questionBank = sampleFromArray(bank.questions, 10);
+      // Fisher-Yates Top-K (8개만 셔플 — 프롬프트에 8문제 삽입)
+      styleContext.questionBank = sampleFromArray(bank.questions, 8);
     }
   }
   if (scopeResult) {
@@ -357,7 +348,6 @@ async function executeJobProcessing(
     isVeryShortText,
     croppedImages,
     courseCustomized,
-    sliderWeights ? { style: sliderWeights.style, scope: sliderWeights.scope, focusGuide: sliderWeights.focusGuide } : undefined,
     professorPrompt,
     pageImages.length > 0,
     tags,
@@ -370,15 +360,18 @@ async function executeJobProcessing(
     `${logPrefix} 문제 생성 시작: ` +
     `과목=${courseName}, 난이도=${validDifficulty}, 개수=${validQuestionCount}, 맞춤형=${courseCustomized}` +
     `, 페이지이미지=${pageImages.length}장` +
-    (sliderWeights ? `, 슬라이더=${JSON.stringify(sliderWeights)}` : "")
+    ""
   );
+
+  // HARD + 크롭 이미지 있으면 크롭본만 전송 (원본 중복 제거 → 토큰/시간 절약)
+  const finalPageImages = croppedImages.length > 0 ? [] : pageImages;
 
   const { questions, title: generatedTitle } = await generateWithGemini(
     prompt,
     apiKey,
     validQuestionCount,
     croppedImages,
-    pageImages
+    finalPageImages
   );
 
   // 챕터 ID 유효성 검증
@@ -553,7 +546,6 @@ export const workerProcessJob = onDocumentCreated(
         courseName: jobData.courseName,
         userId: jobData.userId,
         courseCustomized: jobData.courseCustomized ?? true,
-        sliderWeights: jobData.sliderWeights,
         professorPrompt: jobData.professorPrompt,
         tags: jobData.tags,
       }, apiKey, db, `[Worker] Job ${jobId}`);
@@ -640,75 +632,77 @@ export const retryQueuedJobs = onSchedule(
 
     if (queuedJobs.empty) return;
 
-    console.log(`[Retry] ${queuedJobs.size}개 QUEUED Job 재처리 시작`);
+    console.log(`[Retry] ${queuedJobs.size}개 QUEUED Job 병렬 재처리 시작`);
 
     const apiKey = GEMINI_API_KEY.value();
 
-    for (const jobDoc of queuedJobs.docs) {
-      const jobId = jobDoc.id;
-      const jobData = jobDoc.data();
-      const jobRef = jobDoc.ref;
+    // 병렬 처리 — 순차 대비 N배 빠름 (동시성은 MAX_CONCURRENT_JOBS로 이미 제한)
+    await Promise.allSettled(
+      queuedJobs.docs.map(async (jobDoc) => {
+        const jobId = jobDoc.id;
+        const jobData = jobDoc.data();
+        const jobRef = jobDoc.ref;
 
-      // CAS: QUEUED → RUNNING
-      try {
-        await db.runTransaction(async (tx) => {
-          const current = await tx.get(jobRef);
-          if (current.data()?.status !== "QUEUED") {
-            throw new Error("이미 처리 중");
-          }
-          tx.update(jobRef, {
-            status: "RUNNING",
-            startedAt: FieldValue.serverTimestamp(),
+        // CAS: QUEUED → RUNNING
+        try {
+          await db.runTransaction(async (tx) => {
+            const current = await tx.get(jobRef);
+            if (current.data()?.status !== "QUEUED") {
+              throw new Error("이미 처리 중");
+            }
+            tx.update(jobRef, {
+              status: "RUNNING",
+              startedAt: FieldValue.serverTimestamp(),
+            });
           });
-        });
-      } catch {
-        continue;
-      }
+        } catch {
+          return;
+        }
 
-      const rawImages = jobData.images || [];
+        const rawImages = jobData.images || [];
 
-      try {
-        const images = await downloadJobImages(rawImages);
+        try {
+          const images = await downloadJobImages(rawImages);
 
-        const result = await executeJobProcessing({
-          text: jobData.text,
-          images,
-          difficulty: jobData.difficulty,
-          questionCount: jobData.questionCount,
-          courseId: jobData.courseId,
-          courseName: jobData.courseName,
-          userId: jobData.userId,
-          courseCustomized: jobData.courseCustomized ?? true,
-          sliderWeights: jobData.sliderWeights,
-          professorPrompt: jobData.professorPrompt,
-          tags: jobData.tags,
-        }, apiKey, db, `[Retry] Job ${jobId}`);
+          const result = await executeJobProcessing({
+            text: jobData.text,
+            images,
+            difficulty: jobData.difficulty,
+            questionCount: jobData.questionCount,
+            courseId: jobData.courseId,
+            courseName: jobData.courseName,
+            userId: jobData.userId,
+            courseCustomized: jobData.courseCustomized ?? true,
+            professorPrompt: jobData.professorPrompt,
+            tags: jobData.tags,
+          }, apiKey, db, `[Retry] Job ${jobId}`);
 
-        // 문제별 고유 ID 부여
-        const cleanQuestions = result.questions.map((q: any) => {
-          if (q.id) return q;
-          return { ...q, id: `q_${crypto.randomUUID().slice(0, 8)}` };
-        });
+          // 문제별 고유 ID 부여
+          const cleanQuestions = result.questions.map((q: any) => {
+            if (q.id) return q;
+            return { ...q, id: `q_${crypto.randomUUID().slice(0, 8)}` };
+          });
 
-        await jobRef.update({
-          status: "COMPLETED",
-          result: { questions: cleanQuestions, meta: result.meta },
-          completedAt: FieldValue.serverTimestamp(),
-        });
-        console.log(`[Retry] Job ${jobId} 완료`);
-      } catch (error) {
-        await jobRef.update({
-          status: "FAILED",
-          error: error instanceof Error
-            ? error.message
-            : "문제 생성 중 오류가 발생했습니다.",
-          completedAt: FieldValue.serverTimestamp(),
-        });
-        console.error(`[Retry] Job ${jobId} 실패:`, error);
-      } finally {
-        await cleanupJobImages(rawImages, "[Retry]", jobId);
-      }
-    }
+          await jobRef.update({
+            status: "COMPLETED",
+            result: { questions: cleanQuestions, meta: result.meta },
+            completedAt: FieldValue.serverTimestamp(),
+          });
+          console.log(`[Retry] Job ${jobId} 완료`);
+        } catch (error) {
+          await jobRef.update({
+            status: "FAILED",
+            error: error instanceof Error
+              ? error.message
+              : "문제 생성 중 오류가 발생했습니다.",
+            completedAt: FieldValue.serverTimestamp(),
+          });
+          console.error(`[Retry] Job ${jobId} 실패:`, error);
+        } finally {
+          await cleanupJobImages(rawImages, "[Retry]", jobId);
+        }
+      })
+    );
   }
 );
 
