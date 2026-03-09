@@ -1,0 +1,77 @@
+'use client';
+
+import { useEffect, useRef } from 'react';
+import { usePathname } from 'next/navigation';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useAuth } from '@/lib/hooks/useAuth';
+import { useCourse } from '@/lib/contexts/CourseContext';
+
+// 세션 ID 생성 (탭 단위 — 새 탭/새로고침마다 새 세션)
+function getSessionId(): string {
+  let sessionId = sessionStorage.getItem('pv_session_id');
+  if (!sessionId) {
+    sessionId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    sessionStorage.setItem('pv_session_id', sessionId);
+  }
+  return sessionId;
+}
+
+// 경로를 카테고리로 분류 (연구 분석용)
+function categorize(path: string): string {
+  if (path === '/' || path === '/professor') return 'home';
+  if (path === '/quiz' || path === '/professor/quiz') return 'quiz_list';
+  if (path.startsWith('/quiz/create') || path === '/professor/quiz/create') return 'quiz_create';
+  if (/^\/quiz\/[^/]+\/result/.test(path)) return 'quiz_result';
+  if (/^\/quiz\/[^/]+\/feedback/.test(path)) return 'quiz_feedback';
+  if (/^\/quiz\/[^/]+/.test(path)) return 'quiz_solve';
+  if (path === '/review') return 'review_list';
+  if (path === '/review/random') return 'review_practice';
+  if (/^\/review\/[^/]+\/[^/]+/.test(path)) return 'review_detail';
+  if (/^\/board\/[^/]+/.test(path)) return 'board_detail';
+  if (path === '/board') return 'board_list';
+  if (path === '/ranking') return 'ranking';
+  if (path === '/profile') return 'profile';
+  if (path === '/settings') return 'settings';
+  if (path.startsWith('/professor/stats')) return 'prof_stats';
+  if (path.startsWith('/professor/students')) return 'prof_students';
+  if (/^\/professor\/quiz\/[^/]+\/preview/.test(path)) return 'prof_quiz_preview';
+  return 'other';
+}
+
+/**
+ * 페이지뷰 로깅 훅
+ * 경로 변경 시 Firestore pageViews 컬렉션에 기록
+ * - 같은 경로 연속 중복 방지
+ * - 세션 ID로 방문 흐름 추적
+ * - 카테고리 분류로 연구 분석 용이
+ */
+export function usePageViewLogger() {
+  const { user } = useAuth();
+  const pathname = usePathname();
+  const { userCourseId, userClassId } = useCourse();
+  const lastPathRef = useRef<string>('');
+  const lastTimeRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (!user?.uid || !pathname) return;
+
+    // 같은 경로 2초 내 중복 방지
+    const now = Date.now();
+    if (pathname === lastPathRef.current && now - lastTimeRef.current < 2000) return;
+
+    lastPathRef.current = pathname;
+    lastTimeRef.current = now;
+
+    // 비동기 로깅 (실패해도 무시)
+    addDoc(collection(db, 'pageViews'), {
+      userId: user.uid,
+      path: pathname,
+      category: categorize(pathname),
+      sessionId: getSessionId(),
+      courseId: userCourseId || null,
+      classId: userClassId || null,
+      timestamp: serverTimestamp(),
+    }).catch(() => {});
+  }, [user?.uid, pathname, userCourseId, userClassId]);
+}
