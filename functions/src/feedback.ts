@@ -86,6 +86,13 @@ export const onFeedbackSubmit = onDocumentCreated(
 
     try {
       await db.runTransaction(async (transaction) => {
+        // 트랜잭션 내 중복 체크 (at-least-once 방어)
+        const freshDoc = await transaction.get(snapshot.ref);
+        if (freshDoc.data()?.rewarded) {
+          console.log(`트랜잭션 내 중복 감지 (피드백): ${feedbackId}`);
+          return;
+        }
+
         // READ 먼저
         const userDoc = await readUserForExp(transaction, userId);
 

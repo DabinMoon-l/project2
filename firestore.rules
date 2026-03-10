@@ -298,9 +298,11 @@ service cloud.firestore {
       allow create: if isAuthenticated() &&
         request.resource.data.userId == request.auth.uid;
 
-      // 수정: 본인만 (복습 횟수, 마지막 복습 일시)
+      // 수정: 본인만 (reviewCount는 +1씩만 허용, 임의 조작 방지)
       allow update: if isAuthenticated() &&
-        resource.data.userId == request.auth.uid;
+        resource.data.userId == request.auth.uid &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['reviewCount']) ||
+         request.resource.data.reviewCount == resource.data.reviewCount + 1);
 
       // 삭제: 본인만
       allow delete: if isAuthenticated() &&
