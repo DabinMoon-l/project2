@@ -13,7 +13,7 @@
 | 5 | onQuizMakePublic EXP 이중 지급 | 중간 | 트랜잭션 내 `publicRewarded` 재확인 | ✅ 완료 |
 | 6 | onPostCreate/onCommentCreate EXP 이중 지급 | 중간 | 트랜잭션 내 `rewarded` 재확인 | ✅ 완료 |
 | 7 | onFeedbackSubmit EXP 이중 지급 | 중간 | 트랜잭션 내 `rewarded` 재확인 | ✅ 완료 |
-| 8 | 챕터 인덱스 서버/클라이언트 이중 관리 | 낮음 | 공유 모듈 생성 (장기) / 주석 동기화 (단기) | 미착수 |
+| 8 | 챕터 인덱스 서버/클라이언트 이중 관리 | 낮음 | `shared/courseChapters.json` 단일 소스 + prebuild 복사 | ✅ 완료 |
 
 ### 수정 불가 또는 장기 과제
 
@@ -33,7 +33,7 @@
 
 ### Phase 2: 코드 품질 (1~2주)
 - [x] EXP 상수 단일 소스화 — `shared/expRewards.json` + 프론트 6개 파일 하드코딩 제거
-- [ ] 챕터 인덱스 공유 모듈 (functions + lib 공용)
+- [x] 챕터 인덱스 공유 모듈 — `shared/courseChapters.json` + 프론트/서버 인라인 데이터 제거
 - [ ] useReview.ts 분리 (wrong/bookmark/solved 각각의 훅)
 
 ### Phase 3: 테스트 (2~4주)
