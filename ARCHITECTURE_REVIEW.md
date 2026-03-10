@@ -8,7 +8,7 @@
 |---|--------|--------|----------|------|
 | 1 | onQuizComplete EXP 이중 지급 (퀴즈 완료 + 복습) | 높음 | 트랜잭션 내 `rewarded` 재확인 | ✅ 완료 |
 | 2 | reviews 클라이언트 직접 쓰기 (reviewCount 조작) | 중간 | Firestore Rules에서 +1씩만 허용 | ✅ 완료 |
-| 3 | EXP 상수 서버/클라이언트 이중 정의 | 중간 | 클라이언트 상수를 서버 값 참조로 통일 | 미착수 |
+| 3 | EXP 상수 서버/클라이언트 이중 정의 | 중간 | `shared/expRewards.json` 단일 소스 + 프론트 하드코딩 제거 | ✅ 완료 |
 | 4 | onQuizCreate EXP 이중 지급 | 중간 | 트랜잭션 내 `rewarded` 재확인 | ✅ 완료 |
 | 5 | onQuizMakePublic EXP 이중 지급 | 중간 | 트랜잭션 내 `publicRewarded` 재확인 | ✅ 완료 |
 | 6 | onPostCreate/onCommentCreate EXP 이중 지급 | 중간 | 트랜잭션 내 `rewarded` 재확인 | ✅ 완료 |
@@ -32,7 +32,7 @@
 - [x] reviews 컬렉션 reviewCount 보호 (Security Rules) — +1씩만 허용
 
 ### Phase 2: 코드 품질 (1~2주)
-- [ ] EXP 상수 단일 소스화
+- [x] EXP 상수 단일 소스화 — `shared/expRewards.json` + 프론트 6개 파일 하드코딩 제거
 - [ ] 챕터 인덱스 공유 모듈 (functions + lib 공용)
 - [ ] useReview.ts 분리 (wrong/bookmark/solved 각각의 훅)
 

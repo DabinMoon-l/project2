@@ -8,6 +8,7 @@ import WriteForm from '@/components/board/WriteForm';
 import { useCreatePost, type CreatePostData, type BoardTag } from '@/lib/hooks/useBoard';
 import { useExpToast, Modal } from '@/components/common';
 import { useUser, useCourse } from '@/lib/contexts';
+import { EXP_REWARDS } from '@/lib/utils/expRewards';
 
 // localStorage 키
 const DRAFT_KEY = 'board-write-draft';
@@ -123,7 +124,7 @@ export default function WritePage() {
       localStorage.removeItem(DRAFT_KEY);
 
       if (profile?.role !== 'professor') {
-        showExpToast(15, '게시글 작성');
+        showExpToast(EXP_REWARDS.POST_CREATE, '게시글 작성');
       }
       setTimeout(() => {
         router.replace(`/board/${postId}`);
