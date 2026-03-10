@@ -93,6 +93,12 @@ export const onQuizComplete = onDocumentCreated(
 
       try {
         await db.runTransaction(async (transaction) => {
+          // 트랜잭션 내 중복 체크 (at-least-once 방어)
+          const freshDoc = await transaction.get(snapshot.ref);
+          if (freshDoc.data()?.rewarded) {
+            console.log(`트랜잭션 내 중복 감지 (복습): ${resultId}`);
+            return;
+          }
           const userDoc = await readUserForExp(transaction, userId);
           transaction.update(snapshot.ref, {
             rewarded: true,
@@ -166,6 +172,13 @@ export const onQuizComplete = onDocumentCreated(
       // 트랜잭션으로 보상 지급
       // 주의: Firestore 트랜잭션은 모든 READ가 WRITE보다 먼저 실행되어야 함
       await db.runTransaction(async (transaction) => {
+        // 트랜잭션 내 중복 체크 (at-least-once 방어)
+        const freshDoc = await transaction.get(snapshot.ref);
+        if (freshDoc.data()?.rewarded) {
+          console.log(`트랜잭션 내 중복 감지: ${resultId}`);
+          return;
+        }
+
         // ── 모든 READ를 먼저 수행 ──
         const userDoc = await readUserForExp(transaction, userId);
 
@@ -356,6 +369,13 @@ export const onQuizCreate = onDocumentCreated(
 
     try {
       await db.runTransaction(async (transaction) => {
+        // 트랜잭션 내 중복 체크 (at-least-once 방어)
+        const freshDoc = await transaction.get(snapshot.ref);
+        if (freshDoc.data()?.rewarded) {
+          console.log(`트랜잭션 내 중복 감지 (퀴즈 생성): ${quizId}`);
+          return;
+        }
+
         // READ 먼저
         const userDoc = await readUserForExp(transaction, creatorId);
 
@@ -420,11 +440,18 @@ export const onQuizMakePublic = onDocumentWritten(
 
     try {
       await db.runTransaction(async (transaction) => {
+        // 트랜잭션 내 중복 체크 (at-least-once 방어)
+        const quizRef = db.collection("quizzes").doc(quizId);
+        const freshDoc = await transaction.get(quizRef);
+        if (freshDoc.data()?.publicRewarded) {
+          console.log(`트랜잭션 내 중복 감지 (공개 전환): ${quizId}`);
+          return;
+        }
+
         // READ 먼저
         const userDoc = await readUserForExp(transaction, creatorId);
 
         // WRITE
-        const quizRef = db.collection("quizzes").doc(quizId);
         transaction.update(quizRef, {
           publicRewarded: true,
           publicRewardedAt: FieldValue.serverTimestamp(),

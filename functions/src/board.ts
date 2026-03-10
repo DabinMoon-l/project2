@@ -109,6 +109,13 @@ export const onPostCreate = onDocumentCreated(
       const reason = "게시글 작성";
 
       await db.runTransaction(async (transaction) => {
+        // 트랜잭션 내 중복 체크 (at-least-once 방어)
+        const freshDoc = await transaction.get(snapshot.ref);
+        if (freshDoc.data()?.rewarded) {
+          console.log(`트랜잭션 내 중복 감지 (게시글): ${postId}`);
+          return;
+        }
+
         // READ 먼저
         const userDoc = await readUserForExp(transaction, userId);
 
@@ -246,6 +253,13 @@ export const onCommentCreate = onDocumentCreated(
       const reason = "댓글 작성";
 
       await db.runTransaction(async (transaction) => {
+        // 트랜잭션 내 중복 체크 (at-least-once 방어)
+        const freshDoc = await transaction.get(snapshot.ref);
+        if (freshDoc.data()?.rewarded) {
+          console.log(`트랜잭션 내 중복 감지 (댓글): ${commentId}`);
+          return;
+        }
+
         // READ 먼저
         const userDoc = await readUserForExp(transaction, userId);
 
