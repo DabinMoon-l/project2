@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
@@ -153,6 +153,7 @@ export default function QuizResultPage() {
   const [resultData, setResultData] = useState<QuizResultData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const submitCalledRef = useRef(false);
   const [expandedQuestionIds, setExpandedQuestionIds] = useState<Set<string>>(new Set());
   // 결합형 그룹 펼침 상태 (그룹 ID -> 펼침 여부)
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(new Set());
@@ -207,6 +208,9 @@ export default function QuizResultPage() {
 
   const calculateAndSaveResults = useCallback(async () => {
     if (!user || !quizId) return;
+    // 중복 호출 방지 (React StrictMode, 빠른 리렌더 등)
+    if (submitCalledRef.current) return;
+    submitCalledRef.current = true;
 
     try {
       setIsLoading(true);
@@ -254,6 +258,11 @@ export default function QuizResultPage() {
           console.error('캐시된 결과 파싱 오류:', e);
         }
       }
+
+      // 서버에 이미 제출 완료된 퀴즈인지 확인 (새로고침/재방문 시 중복 제출 방지)
+      const completionDocId = `${quizId}_${user.uid}`;
+      const completionDoc = await getDoc(doc(db, 'quiz_completions', completionDocId));
+      const alreadyCompleted = completionDoc.exists();
 
       const answersParam = searchParams.get('answers');
       let userAnswers: string[] = [];
@@ -477,7 +486,14 @@ export default function QuizResultPage() {
 
       setResultData(result);
 
-      // 결과 저장
+      // 결과 저장 (이미 완료된 퀴즈면 서버 제출 스킵)
+      if (alreadyCompleted) {
+        // localStorage에 결과 저장 (다음 방문 시 캐시 히트)
+        localStorage.setItem(`quiz_result_${quizId}`, JSON.stringify(result));
+        setIsLoading(false);
+        return;
+      }
+
       try {
         // ── recordAttempt Cloud Function 호출 (서버 채점 + 분산 쓰기) ──
         // quizResults, quiz_completions, quiz_agg, quizzes 호환 업데이트를 서버에서 처리

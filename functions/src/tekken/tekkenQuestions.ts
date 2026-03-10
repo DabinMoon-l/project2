@@ -603,7 +603,8 @@ export async function generateBattleQuestions(
       const currentPrompt = isSimplified
         ? `대학교 ${courseName} 과목 ${difficulty === "easy" ? "쉬운" : difficulty === "hard" ? "어려운" : "보통"} 4지선다 객관식 문제 ${count}개.
 범위: ${targetChapters.join(", ")}장
-JSON 배열로 출력: [{"text":"문제","type":"multiple","choices":["선지1","선지2","선지3","선지4"],"correctAnswer":0,"difficulty":"${difficulty}"}]`
+각 문제에 explanation(정답 해설 1~2문장), choiceExplanations(선지별 해설 배열), chapterId(챕터 번호) 필수 포함.
+JSON 배열로 출력: [{"text":"문제","type":"multiple","choices":["선지1","선지2","선지3","선지4"],"correctAnswer":0,"difficulty":"${difficulty}","explanation":"정답 해설","choiceExplanations":["선지1 해설","선지2 해설","선지3 해설","선지4 해설"],"chapterId":"3"}]`
         : prompt;
 
       const generationConfig: any = {

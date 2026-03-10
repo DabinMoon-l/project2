@@ -439,7 +439,7 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
       const baseData = cachedStudents?.find(s => s.uid === uid);
       if (!baseData) return null;
 
-      // 경량 쿼리: 최근 5개만 (limit)
+      // 경량 쿼리: 중복 제출 대비 넉넉히 가져온 후 quizId 기준 중복 제거
       const [quizResultsSnap, feedbacksSnap] = await Promise.all([
         courseId
           ? getDocs(query(
@@ -447,7 +447,7 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
               where('userId', '==', uid),
               where('courseId', '==', courseId),
               orderBy('createdAt', 'desc'),
-              limit(5),
+              limit(20),
             )).catch(() => null)
           : Promise.resolve(null),
         getDocs(query(
@@ -458,16 +458,22 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
         )).catch(() => null),
       ]);
 
-      const recentQuizzes = (quizResultsSnap?.docs ?? []).map(d => {
+      // quizId 기준 중복 제거 (최신 1건만 유지, createdAt desc이므로 첫 등장이 최신)
+      const seenQuizIds = new Set<string>();
+      const recentQuizzes: { quizId: string; quizTitle: string; score: number; totalQuestions: number; completedAt: Date }[] = [];
+      for (const d of (quizResultsSnap?.docs ?? [])) {
         const data = d.data();
-        return {
-          quizId: data.quizId || '',
+        const qid = data.quizId || '';
+        if (seenQuizIds.has(qid)) continue;
+        seenQuizIds.add(qid);
+        recentQuizzes.push({
+          quizId: qid,
           quizTitle: data.quizTitle || '퀴즈',
           score: data.score || 0,
           totalQuestions: data.totalQuestions || 0,
           completedAt: data.completedAt?.toDate?.() || data.createdAt?.toDate?.() || new Date(),
-        };
-      });
+        });
+      }
 
       const recentFeedbacks = (feedbacksSnap?.docs ?? []).map(d => {
         const data = d.data();

@@ -232,6 +232,15 @@ export default function QuizPage() {
         }
       }
 
+      // 이미 완료한 퀴즈인지 확인 (중복 제출 방지)
+      const completionDocId = `${quizId}_${user.uid}`;
+      const completionDoc = await getDoc(doc(db, 'quiz_completions', completionDocId));
+      if (completionDoc.exists()) {
+        // 이미 풀었으면 복습 페이지로 리다이렉트
+        router.replace(`/review/quiz/${quizId}`);
+        return;
+      }
+
       // 문제 목록 - 퀴즈 문서 내부의 questions 배열에서 가져옴
       const questionsData = quizData.questions || [];
       const questions: Question[] = [];
