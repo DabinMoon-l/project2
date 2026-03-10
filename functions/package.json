@@ -4,7 +4,7 @@
   "description": "용사 퀴즈 앱 Cloud Functions",
   "main": "lib/index.js",
   "scripts": {
-    "prebuild": "node -e \"const fs=require('fs'),p=require('path');const d=p.join(__dirname,'src/shared');fs.mkdirSync(d,{recursive:true});fs.copyFileSync(p.join(__dirname,'../shared/expRewards.json'),p.join(d,'expRewards.json'))\"",
+    "prebuild": "node -e \"const fs=require('fs'),p=require('path');const d=p.join(__dirname,'src/shared');fs.mkdirSync(d,{recursive:true});['expRewards.json','courseChapters.json'].forEach(f=>fs.copyFileSync(p.join(__dirname,'../shared',f),p.join(d,f)))\"",
     "build": "npm run prebuild && tsc",
     "build:watch": "tsc --watch",
     "serve": "npm run build && firebase emulators:start --only functions",
