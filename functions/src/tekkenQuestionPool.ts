@@ -140,7 +140,7 @@ export async function replenishQuestionPool(
 
   let totalAdded = 0;
 
-  // Firestore 배치 저장 헬퍼
+  // Firestore 배치 저장 헬퍼 (해설 없는 문제 필터링)
   const saveQuestions = async (
     questions: GeneratedQuestion[],
     difficulty: TekkenDifficulty,
@@ -148,9 +148,18 @@ export async function replenishQuestionPool(
     batchLabel: string,
   ) => {
     if (questions.length === 0) return 0;
+    // 해설 + 선지별해설 모두 있는 문제만 저장 (복습 오답 품질 보장)
+    const withExplanation = questions.filter(
+      q => q.explanation && q.choiceExplanations && q.choiceExplanations.length > 0
+    );
+    if (withExplanation.length < questions.length) {
+      console.log(`[풀] ${courseId}/ch${chapter}/${difficulty}: 해설 없는 문제 ${questions.length - withExplanation.length}개 제외`);
+    }
+    if (withExplanation.length === 0) return 0;
+
     const writeBatch = db.batch();
     const batchId = `${Date.now()}_${difficulty}_ch${chapter}_${batchLabel}`;
-    for (const q of questions) {
+    for (const q of withExplanation) {
       const docRef = questionsRef.doc();
       writeBatch.set(docRef, {
         text: q.text,
@@ -162,13 +171,12 @@ export async function replenishQuestionPool(
         chapters,
         generatedAt: FieldValue.serverTimestamp(),
         batchId,
-        // 해설 + 선지별 해설 (복습 오답탭 연동용)
-        ...(q.explanation ? { explanation: q.explanation } : {}),
-        ...(q.choiceExplanations?.length ? { choiceExplanations: q.choiceExplanations } : {}),
+        explanation: q.explanation,
+        choiceExplanations: q.choiceExplanations,
       });
     }
     await writeBatch.commit();
-    return questions.length;
+    return withExplanation.length;
   };
 
   // 4. 챕터별 배치 생성 (챕터 1개 = 1 Gemini 호출)
@@ -414,8 +422,21 @@ export async function drawQuestionsFromPool(
   await writeBatch.commit();
 
   // 6. 문제 데이터 반환 (해설+선지별해설+챕터 포함)
+  // 풀의 chapter는 순수 번호("3")지만 클라이언트 courseIndex는 접두사 형식("bio_3")
+  const chapterPrefix: Record<string, string> = {
+    biology: "bio_",
+    microbiology: "micro_",
+    pathophysiology: "patho_",
+  };
+  const prefix = chapterPrefix[courseId] || "";
+
   return selected.map(doc => {
     const data = doc.data();
+    // 이미 접두사가 있으면 그대로, 없으면 붙여줌
+    let chapterId = data.chapter || "";
+    if (chapterId && prefix && !chapterId.startsWith(prefix)) {
+      chapterId = `${prefix}${chapterId}`;
+    }
     return {
       text: data.text,
       type: data.type,
@@ -424,7 +445,7 @@ export async function drawQuestionsFromPool(
       difficulty: data.difficulty,
       ...(data.explanation ? { explanation: data.explanation } : {}),
       ...(data.choiceExplanations ? { choiceExplanations: data.choiceExplanations } : {}),
-      ...(data.chapter ? { chapterId: data.chapter } : {}),
+      ...(chapterId ? { chapterId } : {}),
     };
   });
 }

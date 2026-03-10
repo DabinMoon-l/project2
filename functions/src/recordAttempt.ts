@@ -66,7 +66,46 @@ export const recordAttempt = onCall(
       throw new HttpsError("resource-exhausted", e.message);
     }
 
-    // ── ② attemptNo를 서버에서 계산 (클라이언트 조작 방지) ──
+    // ── ②-a 제출 락 (동시 중복 제출 방지) ──
+    const lockRef = db.doc(`quiz_submit_locks/${userId}_${quizId}`);
+    try {
+      await db.runTransaction(async (tx) => {
+        const lockDoc = await tx.get(lockRef);
+        if (lockDoc.exists) {
+          const data = lockDoc.data()!;
+          // 60초 이내 중복 제출 차단
+          if (data.lockedAt && Date.now() - data.lockedAt < 60_000) {
+            throw new Error("SUBMIT_LOCKED");
+          }
+        }
+        tx.set(lockRef, { userId, quizId, lockedAt: Date.now() });
+      });
+    } catch (e: any) {
+      if (e.message === "SUBMIT_LOCKED") {
+        // 이미 처리된 결과가 있으면 반환
+        const existingResult = await db
+          .collection("quizResults")
+          .where("userId", "==", userId)
+          .where("quizId", "==", quizId)
+          .orderBy("createdAt", "desc")
+          .limit(1)
+          .get();
+        if (!existingResult.empty) {
+          const d = existingResult.docs[0].data();
+          return {
+            alreadySubmitted: true,
+            resultId: existingResult.docs[0].id,
+            score: d.score,
+            correctCount: d.correctCount,
+            totalCount: d.totalCount,
+          };
+        }
+        throw new HttpsError("already-exists", "이미 제출 처리 중입니다. 잠시 후 다시 시도해주세요.");
+      }
+      throw e;
+    }
+
+    // ── ②-b attemptNo를 서버에서 계산 (클라이언트 조작 방지) ──
     const prevAttempts = await db
       .collection("quizResults")
       .where("userId", "==", userId)
@@ -75,7 +114,7 @@ export const recordAttempt = onCall(
       .get();
     const attemptNo = prevAttempts.data().count + 1;
 
-    // ── ③ Idempotency 검사 ──
+    // ── ③ Idempotency 검사 (락 통과 후에도 2차 확인) ──
     const attemptKey = `${userId}_${quizId}_${attemptNo}`;
     const existingSnap = await db
       .collection("quizResults")
@@ -84,6 +123,8 @@ export const recordAttempt = onCall(
       .get();
 
     if (!existingSnap.empty) {
+      // 락 해제
+      await lockRef.delete().catch(() => {});
       const existingData = existingSnap.docs[0].data();
       return {
         alreadySubmitted: true,
@@ -258,6 +299,9 @@ export const recordAttempt = onCall(
     } catch (e) {
       console.warn(`users/${userId} quizStats 갱신 실패 (무시 가능):`, e);
     }
+
+    // ── 제출 락 해제 ──
+    await lockRef.delete().catch(() => {});
 
     console.log(
       `퀴즈 제출 처리 완료: userId=${userId}, quizId=${quizId}, ` +

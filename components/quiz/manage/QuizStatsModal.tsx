@@ -1439,9 +1439,9 @@ export default function QuizStatsModal({
         )}
 
         {!loading && !error && stats && (
-          <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="flex-1 min-h-0 flex flex-col">
             {/* 요약 카드 */}
-            <div className="px-3 pt-2 pb-1">
+            <div className="px-3 pt-2 pb-1 flex-shrink-0">
               <div className="grid grid-cols-5 gap-1 p-2 border-2 border-[#1A1A1A] bg-[#EDEAE4]">
                 <div className="text-center">
                   <p className="text-[10px] text-[#5C5C5C]">참여자</p>
@@ -1506,7 +1506,7 @@ export default function QuizStatsModal({
 
             {/* 문제별 분석 */}
             {stats.questionStats.length > 0 && (
-              <div className="flex flex-col mx-3 mb-2 border-2 border-[#1A1A1A] bg-[#EDEAE4]" style={{ height: '450px' }}>
+              <div className="flex flex-col mx-3 mb-2 border-2 border-[#1A1A1A] bg-[#EDEAE4] flex-1 min-h-0">
                 {/* 슬라이더 헤더 — 고정 */}
                 <div className="flex-shrink-0 px-3 py-1 border-b border-[#1A1A1A] bg-[#F5F0E8]">
                   <div className="flex items-center justify-between">
@@ -1630,6 +1630,7 @@ export default function QuizStatsModal({
                       <div
                         ref={questionContentRef}
                         className="h-full overflow-y-auto overflow-x-hidden scrollbar-hide overscroll-contain"
+                        style={{ WebkitOverflowScrolling: 'touch' }}
                       >
                       {/* 참여자가 없는 반일 경우 */}
                       {stats.participantCount === 0 ? (

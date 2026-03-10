@@ -66,6 +66,26 @@ export const recordReviewPractice = onCall(
     }
     const quizData = quizDoc.data()!;
 
+    // ── 제출 락 (동시 중복 요청 방지) ──
+    const lockRef = db.doc(`review_submit_locks/${userId}_${quizId}`);
+    try {
+      await db.runTransaction(async (tx) => {
+        const lockDoc = await tx.get(lockRef);
+        if (lockDoc.exists) {
+          const lockData = lockDoc.data()!;
+          if (lockData.lockedAt && Date.now() - lockData.lockedAt < 60_000) {
+            throw new Error("SUBMIT_LOCKED");
+          }
+        }
+        tx.set(lockRef, { userId, quizId, lockedAt: Date.now() });
+      });
+    } catch (e: any) {
+      if (e.message === "SUBMIT_LOCKED") {
+        return { success: true, expRewarded: 0, alreadyRewarded: true };
+      }
+      throw e;
+    }
+
     // ── 동일 userId+quizId 복습 중복 보상 방지 ──
     const existingReviewRewards = await db
       .collection("quizResults")
@@ -116,6 +136,9 @@ export const recordReviewPractice = onCall(
         });
       }
     });
+
+    // 락 해제
+    await lockRef.delete().catch(() => {});
 
     console.log(`복습 연습 기록 완료: userId=${userId}, quizId=${quizId}`, {
       score,
