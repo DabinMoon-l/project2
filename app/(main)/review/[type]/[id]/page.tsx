@@ -25,6 +25,7 @@ import { useReview, calculateCustomFolderQuestionCount, type ReviewItem, type Fo
 import { useCourse } from '@/lib/contexts/CourseContext';
 import dynamic from 'next/dynamic';
 import { Skeleton, BottomSheet, useExpToast } from '@/components/common';
+import { EXP_REWARDS } from '@/lib/utils/expRewards';
 import type { PracticeResult } from '@/components/review/ReviewPractice';
 
 // 대형 컴포넌트 lazy load (2,513줄 — 복습 풀이 시에만 로드)
@@ -1503,7 +1504,7 @@ export default function FolderDetailPage() {
 
   // 피드백 제출 완료 → EXP 토스트 (CF에서 피드백당 15XP 지급)
   const handleFeedbackDone = useCallback((count: number) => {
-    showExpToast(15 * count, '피드백 작성');
+    showExpToast(EXP_REWARDS.FEEDBACK_SUBMIT * count, '피드백 작성');
   }, [showExpToast]);
 
   // 복습 완료 핸들러

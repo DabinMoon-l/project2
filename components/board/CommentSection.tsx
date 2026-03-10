@@ -6,6 +6,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useTheme } from '@/styles/themes/useTheme';
 import { Skeleton, useExpToast } from '@/components/common';
+import { EXP_REWARDS } from '@/lib/utils/expRewards';
 import CommentItem from './CommentItem';
 import {
   useComments,
@@ -296,7 +297,7 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
       setReplyingTo(null);
       if (profile?.role !== 'professor') {
         setTimeout(() => {
-          showExpToast(15, '댓글 작성');
+          showExpToast(EXP_REWARDS.COMMENT_CREATE, '댓글 작성');
         }, 500);
       }
       refresh();
@@ -336,7 +337,7 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
     const success = await acceptComment(postId, commentId);
     if (success && profile?.role !== 'professor') {
       setTimeout(() => {
-        showExpToast(30, '댓글 채택');
+        showExpToast(EXP_REWARDS.COMMENT_ACCEPTED, '댓글 채택');
       }, 500);
     }
   }, [acceptComment, postId, showExpToast, profile?.role]);

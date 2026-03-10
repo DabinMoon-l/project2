@@ -13,6 +13,7 @@ import OXChoice, { OXAnswer } from '@/components/quiz/OXChoice';
 import MultipleChoice from '@/components/quiz/MultipleChoice';
 import ShortAnswer from '@/components/quiz/ShortAnswer';
 import { BottomSheet, useExpToast } from '@/components/common';
+import { EXP_REWARDS } from '@/lib/utils/expRewards';
 import ExitConfirmModal from '@/components/quiz/ExitConfirmModal';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 import { type FeedbackType, FEEDBACK_TYPES } from '@/components/review/types';
@@ -441,7 +442,7 @@ export default function ReviewPractice({
   // 피드백 화면에서 완료 — 복습 EXP + 피드백 EXP 합산 토스트
   const handleFinish = () => {
     const revExp = correctCount * 2;
-    const fbExp = feedbackSubmitCount * 15;
+    const fbExp = feedbackSubmitCount * EXP_REWARDS.FEEDBACK_SUBMIT;
     const totalExp = revExp + fbExp;
     if (totalExp > 0) {
       const parts: string[] = [];
@@ -1602,7 +1603,7 @@ export default function ReviewPractice({
   const reviewExp = correctCount * 2;
 
   // 피드백 EXP 계산
-  const feedbackExp = feedbackSubmitCount * 15;
+  const feedbackExp = feedbackSubmitCount * EXP_REWARDS.FEEDBACK_SUBMIT;
   // 총 획득 EXP (복습 + 피드백)
   const totalDisplayExp = reviewExp + feedbackExp;
 

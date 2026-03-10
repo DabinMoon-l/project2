@@ -11,6 +11,7 @@ import { compressImage, formatFileSize } from '@/lib/imageUtils';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse, useUser } from '@/lib/contexts';
 import { useExpToast } from '@/components/common';
+import { EXP_REWARDS } from '@/lib/utils/expRewards';
 import { getCurrentSemesterByDate } from '@/lib/types/course';
 import dynamic from 'next/dynamic';
 import {
@@ -1444,7 +1445,7 @@ export default function QuizCreatePage() {
       await addDoc(collection(db, 'quizzes'), cleanedQuizData);
 
       // EXP 토스트 표시 — 실제 지급은 CF onQuizCreate에서 수행
-      const earnedExp = cleanedQuizData.isPublic ? 50 : 25;
+      const earnedExp = cleanedQuizData.isPublic ? EXP_REWARDS.QUIZ_CREATE : EXP_REWARDS.QUIZ_AI_SAVE;
       showExpToast(earnedExp, '퀴즈 생성');
 
       // 저장된 초안 삭제

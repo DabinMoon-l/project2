@@ -1,6 +1,9 @@
 # 빌드 결과물
 lib/
 
+# 공유 상수 (prebuild에서 자동 복사)
+src/shared/
+
 # 의존성
 node_modules/
 

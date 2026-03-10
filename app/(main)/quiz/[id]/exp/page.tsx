@@ -16,6 +16,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { useExpToast } from '@/components/common';
 import { useUser } from '@/lib/contexts';
 import { useMilestone } from '@/lib/contexts/MilestoneContext';
+import { EXP_REWARDS, calculateQuizExp } from '@/lib/utils/expRewards';
 
 /**
  * 문제 결과 타입
@@ -120,23 +121,19 @@ export default function ExpPage() {
       // 점수 계산
       const score = totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0;
 
-      // 기본 EXP: 25 XP (참여 보상)
-      const baseExp = 25;
+      // 기본 EXP (참여 보상)
+      const baseExp = EXP_REWARDS.QUIZ_FAIL;
 
-      // 성적 보너스 EXP (Cloud Function과 동일한 로직)
-      let bonusExp = 0;
-      if (score === 100) bonusExp = 25; // 총 50
-      else if (score >= 90) bonusExp = 15; // 총 40
-      else if (score >= 70) bonusExp = 10; // 총 35
-      else if (score >= 50) bonusExp = 5; // 총 30
+      // 성적 보너스 EXP (서버 calculateQuizExp와 동일)
+      const bonusExp = calculateQuizExp(score) - baseExp;
 
       // 피드백 EXP (자기 퀴즈면 0)
       // 인라인 피드백 (풀이 중) + 피드백 페이지 합산
       const hasFeedback = localStorage.getItem(`quiz_feedback_${quizId}`) === 'true';
       const inlineFbCount = parseInt(localStorage.getItem(`quiz_inline_feedback_count_${quizId}`) || '0', 10);
-      // 피드백 페이지 10 XP + 인라인 피드백은 CF에서 각각 15 XP 지급 (표시만 합산)
-      const feedbackPageExp = hasFeedback ? 10 : 0;
-      const feedbackExp = isOwnQuiz ? 0 : (feedbackPageExp + inlineFbCount * 15);
+      // 피드백 페이지 + 인라인 피드백 모두 CF에서 각각 FEEDBACK_SUBMIT XP 지급 (표시만 합산)
+      const feedbackPageExp = hasFeedback ? EXP_REWARDS.FEEDBACK_SUBMIT : 0;
+      const feedbackExp = isOwnQuiz ? 0 : (feedbackPageExp + inlineFbCount * EXP_REWARDS.FEEDBACK_SUBMIT);
 
       const totalExp = baseExp + bonusExp + feedbackExp;
 
