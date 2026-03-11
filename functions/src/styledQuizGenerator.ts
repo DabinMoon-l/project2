@@ -1255,10 +1255,10 @@ export async function generateWithGemini(
   pageImages: string[] = []
 ): Promise<GeminiResult> {
   // 문제 수에 따라 토큰 수 조절
-  // 각 문제당 ~600토큰 필요 (5지선다 + 선지별 해설 포함)
-  const estimatedTokensPerQuestion = 600;
+  // hard 난이도: 복수정답/부정형/상세해설로 문제당 토큰 증가
+  const estimatedTokensPerQuestion = 1000;
   // 최소 8192 보장 (truncation 방지)
-  const maxTokens = Math.max(questionCount * estimatedTokensPerQuestion + 1000, 8192);
+  const maxTokens = Math.max(questionCount * estimatedTokensPerQuestion + 2000, 8192);
 
   // 페이지 이미지를 inlineData parts로 변환 (최대 10장)
   const imageParts: Array<{ inlineData: { mimeType: string; data: string } }> = [];
@@ -1637,12 +1637,33 @@ export const generateStyledQuiz = onCall(
       console.log(`[문제 생성 시작] 과목: ${courseName}, 난이도: ${validDifficulty}, 개수: ${validQuestionCount}, 이미지: ${croppedImages.length}개`);
 
       // Gemini 호출 (문제 수와 이미지 전달)
-      const { questions } = await generateWithGemini(
+      let { questions } = await generateWithGemini(
         prompt,
         apiKey,
         validQuestionCount,
         croppedImages  // 이미지 매핑용
       );
+
+      // 문제 수 부족 시 보충 생성 (최대 2회)
+      if (questions.length < validQuestionCount) {
+        console.log(`[보충] ${questions.length}/${validQuestionCount} — 부족분 보충 시작`);
+        for (let retry = 0; retry < 2 && questions.length < validQuestionCount; retry++) {
+          const remaining = validQuestionCount - questions.length;
+          try {
+            const suppPrompt = buildFullPrompt(
+              trimmedText, validDifficulty, remaining,
+              styleContext, courseName, courseId,
+              isShortText, isVeryShortText, croppedImages
+            );
+            const supp = await generateWithGemini(suppPrompt, apiKey, remaining, croppedImages);
+            questions = [...questions, ...supp.questions];
+            console.log(`[보충] ${retry + 1}차: +${supp.questions.length}개 → 총 ${questions.length}개`);
+          } catch (err) {
+            console.warn(`[보충] ${retry + 1}차 실패:`, err);
+            break;
+          }
+        }
+      }
 
       // 이미지가 포함된 문제 수 계산
       const questionsWithImages = questions.filter(q => q.imageUrl).length;
