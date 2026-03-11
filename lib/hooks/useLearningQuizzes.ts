@@ -198,7 +198,7 @@ export function useLearningQuizzes() {
       }
 
       // 2. 퀴즈 문서 업데이트 (기존 태그와 난이도 유지)
-      // 참여자 수는 이미 AI 퀴즈 완료 시 1로 설정되어 있으므로 증가하지 않음
+      // 참여자 수 0으로 초기화 (본인 풀이 미포함 — 다른 학생이 풀면 recordAttempt에서 증가)
       await updateDoc(quizRef, {
         type: 'custom',
         isAiGenerated: true,
@@ -206,6 +206,7 @@ export function useLearningQuizzes() {
         tags: tags || quizData.tags || [],
         difficulty: quizData.difficulty || 'medium',
         [`userScores.${user.uid}`]: score,
+        participantCount: 0,
         uploadedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
