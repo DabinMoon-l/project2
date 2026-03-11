@@ -1324,8 +1324,8 @@ function CustomQuizCard({
         </p>
       </div>
 
-      {/* 업데이트 뱃지 + 지구 아이콘 (AI 공개) + 북마크 버튼 */}
-      <div className="absolute top-2 right-2 z-30 flex items-center gap-2">
+      {/* 업데이트 뱃지 + 북마크 + 지구 아이콘 (세로 배치) */}
+      <div className="absolute top-2 right-2 z-30 flex flex-col items-center gap-1">
         {/* 업데이트 뱃지 */}
         {hasUpdate && (
           <button
@@ -1364,6 +1364,17 @@ function CustomQuizCard({
           )}
         </button>
         )}
+
+        {/* 지구 아이콘 (AI 생성 공개 퀴즈) — 찜 아이콘 아래 */}
+        {quiz.isAiGenerated && !isCompleted && (
+          <div className="w-5 h-5 flex items-center justify-center text-[#5C5C5C]">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.6 9h16.8M3.6 15h16.8" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3a15.3 15.3 0 0 1 4 9 15.3 15.3 0 0 1-4 9 15.3 15.3 0 0 1-4-9 15.3 15.3 0 0 1 4-9z" />
+            </svg>
+          </div>
+        )}
       </div>
 
       {/* 완료 오버레이 */}
@@ -1375,22 +1386,11 @@ function CustomQuizCard({
 
       {/* 카드 내용 */}
       <div className="relative z-10 p-3 bg-[#F5F0E8]/60">
-        {/* 제목 + 아이콘 (같은 줄) */}
-        <div className="h-[36px] mb-1.5 flex items-start gap-1">
-          <h3 className="font-bold text-sm line-clamp-2 text-[#1A1A1A] leading-snug flex-1 min-w-0">
+        {/* 제목 (2줄 고정 높이) */}
+        <div className="h-[36px] mb-1.5">
+          <h3 className="font-bold text-sm line-clamp-2 text-[#1A1A1A] pr-6 leading-snug">
             {quiz.title}
           </h3>
-          <div className="flex items-center gap-1 shrink-0 mt-0.5">
-            {quiz.isAiGenerated && !isCompleted && (
-              <div className="w-4 h-4 flex items-center justify-center text-[#5C5C5C]">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.6 9h16.8M3.6 15h16.8" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3a15.3 15.3 0 0 1 4 9 15.3 15.3 0 0 1-4 9 15.3 15.3 0 0 1-4-9 15.3 15.3 0 0 1 4-9z" />
-                </svg>
-              </div>
-            )}
-          </div>
         </div>
 
         {/* 메타 정보 */}
