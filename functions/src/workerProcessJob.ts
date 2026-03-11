@@ -366,13 +366,55 @@ async function executeJobProcessing(
   // HARD + 크롭 이미지 있으면 크롭본만 전송 (원본 중복 제거 → 토큰/시간 절약)
   const finalPageImages = croppedImages.length > 0 ? [] : pageImages;
 
-  const { questions, title: generatedTitle } = await generateWithGemini(
+  let { questions, title: generatedTitle } = await generateWithGemini(
     prompt,
     apiKey,
     validQuestionCount,
     croppedImages,
     finalPageImages
   );
+
+  // 문제 수 부족 시 보충 생성 (최대 2회 재시도)
+  if (questions.length < validQuestionCount) {
+    const shortage = validQuestionCount - questions.length;
+    console.log(`${logPrefix} 문제 부족: ${questions.length}/${validQuestionCount} — ${shortage}개 보충 생성`);
+
+    for (let retry = 0; retry < 2 && questions.length < validQuestionCount; retry++) {
+      const remaining = validQuestionCount - questions.length;
+      try {
+        const supplementPrompt = buildFullPrompt(
+          trimmedText,
+          validDifficulty,
+          remaining,
+          styleContext,
+          courseName,
+          courseId,
+          isShortText,
+          isVeryShortText,
+          croppedImages,
+          courseCustomized,
+          professorPrompt,
+          pageImages.length > 0,
+          tags,
+          chapterRepetition + 1, // 반복 횟수 증가 → 다른 문제 유도
+          chapterRepetitionMap as Record<string, number>,
+          isProfessor
+        );
+        const supplement = await generateWithGemini(
+          supplementPrompt,
+          apiKey,
+          remaining,
+          croppedImages,
+          finalPageImages
+        );
+        questions = [...questions, ...supplement.questions];
+        console.log(`${logPrefix} 보충 ${retry + 1}차: +${supplement.questions.length}개 → 총 ${questions.length}개`);
+      } catch (err) {
+        console.warn(`${logPrefix} 보충 생성 ${retry + 1}차 실패:`, err);
+        break;
+      }
+    }
+  }
 
   // 챕터 ID 유효성 검증
   validateChapterIds(questions, courseId, tags);
