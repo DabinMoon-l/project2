@@ -9,10 +9,8 @@ import {
   doc,
   deleteDoc,
   updateDoc,
-  setDoc,
   getDoc,
   getDocs,
-  addDoc,
   writeBatch,
   serverTimestamp,
 } from 'firebase/firestore';
@@ -162,7 +160,6 @@ export function useLearningQuizzes() {
       const quizData = quizDoc.data();
       const questions = quizData.questions || [];
       const score = quizData.score || 0;
-      const totalQuestions = quizData.totalQuestions || questions.length;
       const quizTitle = quizData.title || '퀴즈';
 
       // 1-1. 퀴즈 문서의 questions에 choiceExplanations가 빠진 경우 본인 reviews에서 동기화
@@ -213,72 +210,8 @@ export function useLearningQuizzes() {
         updatedAt: serverTimestamp(),
       });
 
-      // quiz_completions에 완료 기록 생성
-      const completionDocId = `${quizRef.id}_${user.uid}`;
-      await setDoc(doc(db, 'quiz_completions', completionDocId), {
-        quizId: quizRef.id,
-        userId: user.uid,
-        score,
-        attemptNo: 1,
-        completedAt: serverTimestamp(),
-      }, { merge: true });
-
-      // 2-1. quizResults 컬렉션에 결과 저장 (교수님 통계에 표시)
-      // 문제별 답변 배열 생성
-      const userAnswers: string[] = questions.map((q: any) => {
-        if (q.userAnswer !== undefined && q.userAnswer !== null) {
-          return String(q.userAnswer);
-        }
-        // 답변이 없으면 정답으로 폴백 (AI 퀴즈에서 userAnswer 저장되지 않은 경우)
-        return String(q.answer);
-      });
-
-      // 문제별 점수 객체 생성 (userAnswer를 1-indexed로 변환)
-      const questionScores: Record<string, { isCorrect: boolean; userAnswer: string; answeredAt: any }> = {};
-      questions.forEach((q: any, idx: number) => {
-        const isCorrect = q.isCorrect !== undefined ? q.isCorrect : true;
-        let convertedAnswer = userAnswers[idx];
-
-        // 객관식: 0-indexed 그대로 문자열 변환
-        if (q.type === 'multiple') {
-          const raw = q.userAnswer ?? q.answer;
-          if (Array.isArray(raw)) {
-            convertedAnswer = raw.map((a: number) => String(a)).join(',');
-          } else if (raw !== undefined && raw !== null && !isNaN(Number(raw))) {
-            convertedAnswer = String(Number(raw));
-          }
-        } else if (q.type === 'ox') {
-          const raw = q.userAnswer ?? q.answer;
-          if (typeof raw === 'number') {
-            convertedAnswer = raw === 0 ? 'O' : 'X';
-          }
-        }
-
-        questionScores[q.id || `q${idx}`] = {
-          isCorrect,
-          userAnswer: convertedAnswer,
-          answeredAt: serverTimestamp(),
-        };
-      });
-
-      await addDoc(collection(db, 'quizResults'), {
-        userId: user.uid,
-        quizId,
-        quizTitle,
-        quizCreatorId: user.uid,
-        quizType: 'custom',
-        quizIsPublic: true,
-        score,
-        correctCount: questions.filter((q: any) => q.isCorrect !== false).length,
-        totalCount: totalQuestions,
-        earnedExp: 0,
-        answers: userAnswers,
-        questionScores,
-        isUpdate: false,
-        courseId: userCourseId || null,
-        classId: userClassId || null,
-        createdAt: serverTimestamp(),
-      });
+      // quiz_completions / quizResults는 recordAttempt CF 전용
+      // 다른 학생이 이 퀴즈를 풀 때 자동 생성됨
 
       // 3. reviews 컬렉션에 각 문제 일괄 저장 (writeBatch)
       const batch = writeBatch(db);
