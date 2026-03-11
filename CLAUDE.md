@@ -305,6 +305,15 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 
 **학생 AI 퀴즈**: AIQuizContainer 플로팅 버튼 → 태그 선택 → 같은 CF 호출
 
+**문제 수 보충**: 요청한 문제 수보다 적게 생성된 경우 (토큰 제한 등) 부족분만큼 자동 재생성 (최대 2회)
+- `workerProcessJob` + `generateStyledQuiz` 양쪽 경로 모두 적용
+- hard 난이도: 문제당 토큰 1000 + 여유 2000 (복수정답/부정형/상세해설 고려)
+
+**서재 → 공개 전환** (`useLearningQuizzes.ts`의 `uploadToPublic`):
+- `quiz_completions`/`quizResults`는 **클라이언트에서 쓰기 불가** (Firestore rules `if false`) → CF 전용
+- `participantCount: 0`으로 초기화 (본인 풀이 미포함, 다른 학생이 풀면 `recordAttempt`에서 증가)
+- `reviews` batch 쓰기는 클라이언트 허용 (userId 본인 확인)
+
 **서재 퀴즈 수정 모드**:
 - `convertToQuestionDataList` → `flattenQuestionsForSave` 라운드트립 (0-indexed 통일)
 - `...(originalQ || {})` spread로 `choiceExplanations` 등 미편집 필드 보존
@@ -312,7 +321,7 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 ## 토끼 시스템
 
 **2단계 뽑기**:
-1. `spinRabbitGacha` (Roll): 50XP 마일스톤 → 랜덤 토끼(0~79) 선택, pendingSpin 저장
+1. `spinRabbitGacha` (Roll): 50XP 마일스톤 → 랜덤 토끼(0~79) 선택, pendingSpin 저장. **이미 보유한 토끼가 나오면 마일스톤 소비하지 않음** (levelUpRabbit에서 소비)
 2. `claimGachaRabbit` (Claim): 발견 (이름 짓기, 영구 소유)
 
 **장착**: 최대 2마리 (`equipRabbit` slotIndex 0|1), 뽑기 시 빈 슬롯 자동 장착
@@ -341,6 +350,7 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 
 **문제 풀**: 매일 새벽 3시 → 현재 학기 과목만 과목당 300문제 (easy 150 + medium 150)
 - 1학기: biology + microbiology, 2학기: pathophysiology만
+- **무중단 교체**: 새 풀 300문제 100% 생성 완료 후 기존 풀 삭제 (생성 중 배틀 정상 작동)
 - 해설 필수 (explanation + choiceExplanations 없는 문제 필터링)
 - seenQuestions 24시간 중복 방지, 5문제 미만 시 기록 초기화
 - 챕터1 예산: 4문제만 (과목별 역사/개론 비중 축소)
@@ -505,3 +515,6 @@ firebase deploy --only storage    # Storage rules
 | 알림 안 옴 | FCM 토큰 만료 | fcmTokens/{uid} 확인 |
 | 로그인 실패 | enrolledStudents 미등록 | enrolledStudents/{courseId}/students 확인 |
 | 해설 없는 배틀 문제 | 문제 풀 필터링 실패 | tekkenQuestionPool saveQuestions 로그 확인 |
+| 서재 공개 전환 권한 오류 | quiz_completions/quizResults 클라이언트 쓰기 | 이 컬렉션은 CF 전용 (if false) |
+| hard 문제 수 부족 | maxOutputTokens 도달로 JSON 잘림 | 자동 보충 생성 로직 적용됨 (최대 2회) |
+| 토끼 중복 뽑기 → 레벨업 실패 | spinRabbitGacha가 마일스톤 이중 소비 | 보유 토끼 시 마일스톤 미소비 (수정됨) |
