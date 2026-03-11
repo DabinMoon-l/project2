@@ -554,8 +554,12 @@ async function generateBoardAIReply(
 [답변 규칙]
 - 한국어로 답변해
 - 글의 제목, 본문, 첨부된 이미지를 모두 참고해서 답변해
-- 핵심 개념과 원리를 간결하게 설명해. 필요하면 예시나 비유를 활용하되 장황하지 않게.
-- 답변은 짧고 밀도 있게 써. 불필요한 서론이나 반복은 빼.
+- 핵심 개념과 원리를 충분히 자세하게 설명해. 예시나 비유도 적극 활용해.
+- 여러 개념이 나오면 번호를 매겨서 하나씩 정리해줘.
+- 불필요한 서론이나 반복은 빼되, 설명 자체는 충분히 해줘.
+
+[답변 마무리]
+- 답변의 마지막 줄에 반드시 "궁금한 게 더 있으면 대댓글로 물어봐~"라고 안내해.
 
 [정확성 검증]
 - 답변 작성 후 반드시 사실 관계, 수치, 용어를 한번 더 검토해.
@@ -596,13 +600,13 @@ async function generateBoardAIReply(
       temperature: 0.5,
       topK: 40,
       topP: 0.95,
-      maxOutputTokens: 2048,
+      maxOutputTokens: 8192,
     },
   };
 
   // Gemini 2.5 Flash API 호출
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 60_000);
+  const timeout = setTimeout(() => controller.abort(), 120_000);
   let response: Awaited<ReturnType<typeof fetch>>;
   try {
     response = await fetch(
@@ -617,7 +621,7 @@ async function generateBoardAIReply(
   } catch (err: unknown) {
     clearTimeout(timeout);
     if (err && typeof err === "object" && "name" in err && (err as { name: string }).name === "AbortError") {
-      throw new Error("Gemini AI 답변 요청 시간 초과 (60초)");
+      throw new Error("Gemini AI 답변 요청 시간 초과 (120초)");
     }
     throw err;
   }
@@ -722,8 +726,9 @@ async function generateAIReplyToComment(
 
 [답변 규칙]
 - 한국어로 답변해
-- 핵심 개념과 원리를 간결하게 설명해. 필요하면 예시나 비유를 활용하되 장황하지 않게.
-- 답변은 짧고 밀도 있게 써. 불필요한 서론이나 반복은 빼.
+- 핵심 개념과 원리를 충분히 자세하게 설명해. 예시나 비유도 적극 활용해.
+- 여러 개념이 나오면 번호를 매겨서 하나씩 정리해줘.
+- 불필요한 서론이나 반복은 빼되, 설명 자체는 충분히 해줘.
 - 이전 대화와 자연스럽게 이어가되, 이미 설명한 내용은 반복하지 마.
 
 [정확성 검증]
@@ -781,13 +786,13 @@ ${conversationHistory}`;
       temperature: 0.5,
       topK: 40,
       topP: 0.95,
-      maxOutputTokens: 2048,
+      maxOutputTokens: 8192,
     },
   };
 
   // Gemini 2.5 Flash API 호출
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 60_000);
+  const timeout = setTimeout(() => controller.abort(), 120_000);
   let response: Awaited<ReturnType<typeof fetch>>;
   try {
     response = await fetch(
@@ -802,7 +807,7 @@ ${conversationHistory}`;
   } catch (err: unknown) {
     clearTimeout(timeout);
     if (err && typeof err === "object" && "name" in err && (err as { name: string }).name === "AbortError") {
-      throw new Error("콩콩이 대댓글 요청 시간 초과 (60초)");
+      throw new Error("콩콩이 대댓글 요청 시간 초과 (120초)");
     }
     throw err;
   }

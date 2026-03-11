@@ -64,10 +64,29 @@ npm run logs         # 로그 확인
 ```
 
 - **Node 20 필수** (`engines.node: "20"`)
+- **리전**: 모든 CF `asia-northeast3` (서울)
 - tsconfig가 프론트보다 엄격: `noUnusedLocals`, `noImplicitReturns`, `strict`
 - **테스트 프레임워크 없음**: Jest/Vitest/Playwright 미설정, 수동 테스트 기반
 
+### 공유 상수 (`shared/`)
+
+프론트엔드와 Cloud Functions 간 공유하는 상수 파일의 **단일 소스**:
+- `shared/expRewards.json` — EXP 보상 값
+- `shared/courseChapters.json` — 과목별 챕터 인덱스
+
+**동기화 메커니즘**: `functions/package.json`의 `prebuild` 스크립트가 `npm run build` 시 자동으로 `shared/*.json` → `functions/src/shared/`로 복사.
+- 클라이언트: `lib/utils/expRewards.ts`, `lib/courseIndex.ts`에서 각각 import
+- 서버: `functions/src/shared/`에서 import
+
+**⚠️ 상수 수정 시 반드시 `shared/*.json`을 편집** (개별 파일 수정 금지)
+
 ## 아키텍처
+
+### 라우트 그룹
+
+- `app/(auth)/` — 로그인/회원가입 (인증 불필요 레이아웃)
+- `app/(main)/` — 메인 앱 (인증 필수, Provider 계층 포함)
+- `app/api/` — API 라우트 (`convert-pptx` 등)
 
 ### Provider 계층 구조
 
@@ -168,6 +187,16 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 | `joinMatchmaking` | 배틀 매칭 + 방 생성 | 봇 폴백 |
 | `submitAnswer` | 배틀 답변 제출 + 채점 | scored 트랜잭션 |
 | `registerStudent` | 회원가입 | enrolledStudents 확인 |
+| `bulkEnrollStudents` | 학번 일괄 등록 | 교수만 |
+| `resetStudentPassword` | 비밀번호 초기화 | 교수만 |
+| `deleteStudentAccount` | 학생 계정 삭제 | 교수만 |
+| `initProfessorAccount` | 교수 계정 초기화 | 서버사이드 권한 |
+| `regradeQuestions` | 퀴즈 재채점 | 교수만 |
+| `voteOnPoll` / `reactToAnnouncement` | 공지 투표/리액션 | 인증 필수 |
+| `submitInquiry` | 비로그인 문의 | 인증 불필요 |
+| `cancelMatchmaking` | 배틀 매칭 취소 | 인증 필수 |
+| `submitTimeout` / `swapRabbit` | 배틀 타임아웃/토끼교체 | 인증 필수 |
+| `submitMashResult` / `startBattleRound` | 배틀 연타/라운드 시작 | 인증 필수 |
 | `generateMonthlyReport` | 월별 리포트 (Claude API) | 교수만 |
 
 ### onDocumentCreated (Firestore 트리거)
@@ -228,8 +257,7 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 
 ## EXP 보상 체계
 
-**서버 상수**: `functions/src/utils/gold.ts` → `EXP_REWARDS`
-**클라이언트 상수**: `lib/utils/expRewards.ts` (UI 표시용, 서버와 동기화 필요)
+**단일 소스**: `shared/expRewards.json` → 클라이언트 `lib/utils/expRewards.ts`, 서버 `functions/src/shared/expRewards.json` (prebuild 자동 복사)
 
 | 활동 | EXP | CF |
 |------|-----|-----|
@@ -428,7 +456,7 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 | `microbiology` | 미생물학 | 2학년 1학기 | `micro_` |
 
 - 학기 자동 판별: 02-22~08-21 → 1학기, 08-22~02-21 → 2학기
-- 챕터 인덱스: `lib/courseIndex.ts` (클라이언트), `functions/src/styledQuizGenerator.ts` (서버, 별도 복사)
+- 챕터 인덱스: `shared/courseChapters.json` (단일 소스) → 클라이언트 `lib/courseIndex.ts`, 서버 prebuild 자동 복사
 - 태그 형식: `"12_신경계"` (value) → `"#12_신경계"` (표시)
 
 ## 인증 시스템
