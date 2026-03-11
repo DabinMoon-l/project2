@@ -1655,7 +1655,7 @@ export default function FolderDetailPage() {
     }
 
     if (autoStart) {
-      router.back();
+      router.push(`/review?filter=${folderType}`);
     } else {
       setPracticeItems(null);
       setPracticeMode(null);
@@ -1683,7 +1683,7 @@ export default function FolderDetailPage() {
         onComplete={handlePracticeComplete}
         onClose={() => {
           if (autoStart) {
-            router.back();
+            router.push(`/review?filter=${folderType}`);
           } else {
             setPracticeItems(null);
             setPracticeMode(null);
@@ -1743,7 +1743,7 @@ export default function FolderDetailPage() {
             <>
               <div className="flex items-center gap-2 mb-2">
                 <button
-                  onClick={() => router.back()}
+                  onClick={() => router.push(`/review?filter=${folderType}`)}
                   className="p-1 text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors flex-shrink-0"
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1800,7 +1800,7 @@ export default function FolderDetailPage() {
                 {/* 뒤로가기 < 화살표 */}
                 {!isEditMode && (
                   <button
-                    onClick={() => router.back()}
+                    onClick={() => router.push(`/review?filter=${folderType}`)}
                     className="p-1 text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors flex-shrink-0"
                   >
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1879,7 +1879,7 @@ export default function FolderDetailPage() {
           ) : (
             <div className="flex items-center gap-2">
               <button
-                onClick={() => router.back()}
+                onClick={() => router.push(`/review?filter=${folderType}`)}
                 className="p-1 text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors flex-shrink-0"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

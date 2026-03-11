@@ -230,19 +230,38 @@ export async function processRoundEnd(
   const nextRound = (battle.currentRound || 0) + 1;
   const totalRounds = battle.totalRounds || 10;
 
-  // 문제 소진 → HP 비교 (시간제한 없음)
+  // 문제 소진 → 정답 수 비교 우선, 동점 시 HP 비교
   if (nextRound >= totalRounds) {
     const p1 = playerIds[0];
     const p2 = playerIds[1];
-    const p1Hp = getTotalRemainingHp(battle.players[p1].rabbits);
-    const p2Hp = getTotalRemainingHp(battle.players[p2].rabbits);
 
-    if (p1Hp > p2Hp) {
+    // 각 플레이어의 정답 수 집계
+    let p1Correct = 0;
+    let p2Correct = 0;
+    const rounds = battle.rounds || {};
+    for (let i = 0; i < totalRounds; i++) {
+      const roundResult = rounds[i]?.result;
+      if (!roundResult) continue;
+      if (roundResult[p1]?.isCorrect) p1Correct++;
+      if (roundResult[p2]?.isCorrect) p2Correct++;
+    }
+
+    if (p1Correct > p2Correct) {
       await endBattle(battleId, p1, p2, false, "allRounds");
-    } else if (p2Hp > p1Hp) {
+    } else if (p2Correct > p1Correct) {
       await endBattle(battleId, p2, p1, false, "allRounds");
     } else {
-      await endBattle(battleId, null, null, true, "allRounds");
+      // 정답 수 동점 → HP로 판정
+      const p1Hp = getTotalRemainingHp(battle.players[p1].rabbits);
+      const p2Hp = getTotalRemainingHp(battle.players[p2].rabbits);
+
+      if (p1Hp > p2Hp) {
+        await endBattle(battleId, p1, p2, false, "allRounds");
+      } else if (p2Hp > p1Hp) {
+        await endBattle(battleId, p2, p1, false, "allRounds");
+      } else {
+        await endBattle(battleId, null, null, true, "allRounds");
+      }
     }
     return;
   }
