@@ -254,7 +254,7 @@ export function getCourseIndex(courseId: string): CourseIndex | null {
 /**
  * 챕터 인덱스를 프롬프트용 텍스트로 변환
  */
-function buildChapterIndexPrompt(courseId: string, filterChapters?: string[]): string {
+export function buildChapterIndexPrompt(courseId: string, filterChapters?: string[]): string {
   const index = getCourseIndex(courseId);
   if (!index) return "";
 
@@ -285,7 +285,7 @@ function buildChapterIndexPrompt(courseId: string, filterChapters?: string[]): s
  * 과목 개요 + 선택된 챕터의 상세 커리큘럼 프롬프트 생성
  * Gemini가 과목 특성과 출제 방향을 이해하도록 인덱스 기반 가이드 제공
  */
-function buildCourseOverviewPrompt(courseId: string, filterChapters?: string[]): string {
+export function buildCourseOverviewPrompt(courseId: string, filterChapters?: string[]): string {
   const index = getCourseIndex(courseId);
   if (!index) return "";
 
@@ -433,7 +433,7 @@ export async function loadScopeForQuiz(
 /**
  * 난이도별 문제 생성 파라미터
  */
-const DIFFICULTY_PARAMS = {
+export const DIFFICULTY_PARAMS = {
   easy: {
     preferredTypes: ["DEFINITION_MATCH", "CLASSIFICATION", "COMPARISON"],
     cognitiveLevel: "기억/이해 — 개념 정의, 특징, 분류를 직접적으로 확인",

@@ -172,9 +172,9 @@ export const spinRabbitGacha = onCall(
         const holdingDoc = await transaction.get(holdingRef);
         const holdingData = holdingDoc.exists ? holdingDoc.data()! : null;
 
-        // lastGachaExp += 50 + pendingSpin 저장 + 스핀 잠금
+        // 마일스톤 소비하지 않음 — levelUpRabbit에서 소비
+        // pendingSpin + 스핀 잠금만 저장
         transaction.update(userRef, {
-          lastGachaExp: lastGachaExp + 50,
           spinLock: Date.now(),
           pendingSpin: { rabbitId, courseId },
           updatedAt: FieldValue.serverTimestamp(),

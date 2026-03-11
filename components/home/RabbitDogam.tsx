@@ -388,7 +388,7 @@ function RabbitDetail({
         <div className="flex flex-col items-center">
           <p className="text-sm font-bold text-white truncate">{myDisplayName}</p>
           {!isDefaultRabbit && holding.discoveryOrder > 0 && (
-            <p className="text-[10px] text-[#D4AF37] font-bold mb-0.5">
+            <p className="text-[10px] text-white/70 font-bold mb-0.5">
               {holding.discoveryOrder}대 집사
             </p>
           )}

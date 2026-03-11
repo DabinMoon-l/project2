@@ -11,8 +11,8 @@ import { useState, useEffect, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { BattleQuestion } from '@/lib/types/tekken';
 
-// BATTLE_CONFIG.QUESTION_TIMEOUT = 20000ms, CRITICAL_TIME = 5000ms
-const QUESTION_TIMEOUT = 20000;
+// BATTLE_CONFIG.QUESTION_TIMEOUT = 30000ms, CRITICAL_TIME = 5000ms
+const QUESTION_TIMEOUT = 30000;
 const CRITICAL_WINDOW = 5000;
 
 interface TekkenQuestionCardProps {

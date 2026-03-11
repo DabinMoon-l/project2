@@ -439,7 +439,7 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
       const baseData = cachedStudents?.find(s => s.uid === uid);
       if (!baseData) return null;
 
-      // 경량 쿼리: 중복 제출 대비 넉넉히 가져온 후 quizId 기준 중복 제거
+      // 전체 퀴즈 결과 가져오기 (중복 제출 대비 quizId 기준 중복 제거)
       const [quizResultsSnap, feedbacksSnap] = await Promise.all([
         courseId
           ? getDocs(query(
@@ -447,7 +447,6 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
               where('userId', '==', uid),
               where('courseId', '==', courseId),
               orderBy('createdAt', 'desc'),
-              limit(20),
             )).catch(() => null)
           : Promise.resolve(null),
         getDocs(query(

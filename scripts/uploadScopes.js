@@ -29,6 +29,11 @@ const SCOPE_FILES = [
     courseName: "생물학",
     filePath: path.join(__dirname, "..", "biologyScope.md"),
   },
+  {
+    courseId: "microbiology",
+    courseName: "미생물학",
+    filePath: path.join(__dirname, "..", "microbiologyScope.md"),
+  },
 ];
 
 /**
@@ -37,8 +42,8 @@ const SCOPE_FILES = [
 function parseChapters(content) {
   const chapters = [];
 
-  // ## 숫자. 또는 ## 숫자장. 패턴으로 챕터 구분
-  const chapterRegex = /^##\s*(\d+)(?:장)?[.\s]+(.+?)$/gm;
+  // ## 숫자. 또는 ## 숫자장. 또는 ## Chapter 숫자. 패턴으로 챕터 구분
+  const chapterRegex = /^##\s*(?:Chapter\s+)?0*(\d+)(?:장)?[.\s]+(.+?)$/gm;
   const matches = [...content.matchAll(chapterRegex)];
 
   for (let i = 0; i < matches.length; i++) {
