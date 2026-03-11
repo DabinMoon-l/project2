@@ -95,39 +95,46 @@ const MAX_SUPPLEMENT_ROUNDS = 5;
 export async function replenishQuestionPool(
   courseId: string,
   apiKey: string,
-  targetSize: number = TARGET_POOL_SIZE
+  targetSize: number = TARGET_POOL_SIZE,
+  /** true면 기존 풀 크기 무시하고 targetSize만큼 강제 생성 (무중단 교체용) */
+  forceAdd: boolean = false
 ): Promise<{ added: number; deleted: number }> {
   const db = getFirestore();
   const poolRef = db.collection("tekkenQuestionPool").doc(courseId);
   const questionsRef = poolRef.collection("questions");
 
-  // 1. 만료 문제 삭제
-  const expiredThreshold = Timestamp.fromMillis(Date.now() - QUESTION_MAX_AGE_MS);
-  const expiredSnap = await questionsRef
-    .where("generatedAt", "<", expiredThreshold)
-    .get();
-
   let deleted = 0;
-  if (!expiredSnap.empty) {
-    const batch = db.batch();
-    for (const doc of expiredSnap.docs) {
-      batch.delete(doc.ref);
-      deleted++;
+  let initialCount = 0;
+
+  if (!forceAdd) {
+    // 1. 만료 문제 삭제 (일반 보충 모드)
+    const expiredThreshold = Timestamp.fromMillis(Date.now() - QUESTION_MAX_AGE_MS);
+    const expiredSnap = await questionsRef
+      .where("generatedAt", "<", expiredThreshold)
+      .get();
+
+    if (!expiredSnap.empty) {
+      const batch = db.batch();
+      for (const doc of expiredSnap.docs) {
+        batch.delete(doc.ref);
+        deleted++;
+      }
+      await batch.commit();
     }
-    await batch.commit();
-  }
 
-  // 2. 현재 풀 크기 확인
-  const initialSnap = await questionsRef.count().get();
-  const initialCount = initialSnap.data().count;
+    // 2. 현재 풀 크기 확인
+    const initialSnap = await questionsRef.count().get();
+    initialCount = initialSnap.data().count;
 
-  if (initialCount >= targetSize) {
-    await poolRef.set({
-      totalQuestions: initialCount,
-      lastRefreshedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-    return { added: 0, deleted };
+    if (initialCount >= targetSize) {
+      await poolRef.set({
+        totalQuestions: initialCount,
+        lastRefreshedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+      return { added: 0, deleted };
+    }
   }
+  // forceAdd: initialCount=0으로 취급 → targetSize만큼 전부 새로 생성
 
   // 3. 챕터 조회 + 분류
   const chapters = await getSeasonalChapters(courseId);
@@ -506,42 +513,58 @@ export async function drawQuestionsFromPool(
 }
 
 /**
- * 단일 과목 문제 풀 초기화 + 재생성 (내부 헬퍼)
+ * 단일 과목 문제 풀 초기화 + 재생성 (무중단 교체)
+ *
+ * 핵심: 새 문제 생성이 100% 완료될 때까지 기존 풀 유지
+ * 1. 기존 문제 ID 목록 스냅샷 저장
+ * 2. 새 문제 300개 생성 (기존 풀과 공존)
+ * 3. 새 문제 생성 완료 후 기존 문제 + seenQuestions 삭제
+ * → 생성 도중 배틀 요청 시 기존 풀에서 정상 추출
  */
 async function refreshPoolForCourse(courseId: string, apiKey: string): Promise<void> {
   const db = getFirestore();
   const poolRef = db.collection("tekkenQuestionPool").doc(courseId);
   const questionsRef = poolRef.collection("questions");
 
-  // 기존 문제 풀 + seenQuestions 병렬 조회 → 병렬 배치 삭제
+  // 1. 기존 문제 ID 스냅샷 (교체 시 삭제 대상)
   const [existingSnap, seenSnap] = await Promise.all([
     questionsRef.get(),
     poolRef.collection("seenQuestions").get(),
   ]);
+  const oldDocIds = existingSnap.docs.map(d => d.id);
 
-  // 배치 삭제 (500개씩 청크 → 병렬 커밋)
-  const deleteBatches = (docs: FirebaseFirestore.QueryDocumentSnapshot[]) => {
+  console.log(`[스케줄] ${courseId}: 기존 ${oldDocIds.length}개 유지하면서 새 풀 생성 시작`);
+
+  // 2. 새 문제 300개 생성 (기존 풀과 공존, forceAdd로 기존 크기 무시)
+  const result = await replenishQuestionPool(courseId, apiKey, TARGET_POOL_SIZE, true);
+  console.log(`[스케줄] ${courseId}: 새로 ${result.added}개 생성 완료 — 이제 기존 풀 삭제`);
+
+  // 3. 새 문제 생성 완료 후 기존 문제 + seenQuestions 삭제
+  const deleteBatches = (docs: { ref: FirebaseFirestore.DocumentReference }[]) => {
     const batches: Promise<void>[] = [];
     for (let i = 0; i < docs.length; i += 500) {
       const batch = db.batch();
-      docs.slice(i, i + 500).forEach(doc => batch.delete(doc.ref));
+      docs.slice(i, i + 500).forEach(d => batch.delete(d.ref));
       batches.push(batch.commit().then(() => {}));
     }
     return Promise.all(batches);
   };
 
+  // 기존 문제만 삭제 (새로 생성된 문제는 유지)
+  const oldDocs = oldDocIds.map(id => ({ ref: questionsRef.doc(id) }));
   await Promise.all([
-    existingSnap.empty ? Promise.resolve([]) : deleteBatches(existingSnap.docs),
+    oldDocs.length > 0 ? deleteBatches(oldDocs) : Promise.resolve([]),
     seenSnap.empty ? Promise.resolve([]) : deleteBatches(seenSnap.docs),
   ]);
 
-  if (!existingSnap.empty) {
-    console.log(`[스케줄] ${courseId}: 기존 ${existingSnap.size}개 삭제`);
-  }
+  console.log(`[스케줄] ${courseId}: 기존 ${oldDocIds.length}개 삭제, seenQuestions ${seenSnap.size}개 초기화`);
 
-  // 300문제 새로 생성 (보충 루프 포함)
-  const result = await replenishQuestionPool(courseId, apiKey);
-  console.log(`[스케줄] ${courseId}: 새로 ${result.added}개 생성`);
+  // 4. 메타 업데이트
+  const finalSnap = await questionsRef.count().get();
+  await poolRef.set({
+    totalQuestions: finalSnap.data().count,
+    lastRefreshedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
 }
 
 /**
