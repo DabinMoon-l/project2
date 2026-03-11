@@ -75,10 +75,10 @@ const DIFFICULTY_DISTRIBUTION: { difficulty: TekkenDifficulty; ratio: number }[]
 const TARGET_POOL_SIZE = 300;
 // 문제 유효 기간 (1일 — 매일 새벽 초기화)
 const QUESTION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-// 배치당 문제 수 (해설+선지별해설 추가로 토큰 증가 → 15개로 축소)
-const BATCH_SIZE = 15;
-// 배치 간 대기 (4초 — RPM 15 제한 준수)
-const BATCH_DELAY_MS = 4000;
+// 배치당 문제 수 (풍부한 프롬프트로 토큰 증가 → 10개로 축소)
+const BATCH_SIZE = 10;
+// 배치 간 대기 (6초 — RPM 10 무료 제한 준수)
+const BATCH_DELAY_MS = 6000;
 // 목표 미달 시 보충 라운드 최대 횟수 (easy/medium만이므로 실패율 매우 낮음)
 const MAX_SUPPLEMENT_ROUNDS = 5;
 
@@ -140,6 +140,9 @@ export async function replenishQuestionPool(
 
   let totalAdded = 0;
 
+  // 중복 방지: 이번 세션에서 생성된 문제 텍스트 추적
+  const generatedTexts: string[] = [];
+
   // Firestore 배치 저장 헬퍼 (해설 없는 문제 필터링)
   const saveQuestions = async (
     questions: GeneratedQuestion[],
@@ -174,6 +177,8 @@ export async function replenishQuestionPool(
         explanation: q.explanation,
         choiceExplanations: q.choiceExplanations,
       });
+      // 중복 방지용 텍스트 기록
+      generatedTexts.push(q.text);
     }
     await writeBatch.commit();
     return withExplanation.length;
@@ -200,7 +205,7 @@ export async function replenishQuestionPool(
 
         try {
           const questions = await generateBattleQuestions(
-            courseId, apiKey, batchCount, [chapter], difficulty
+            courseId, apiKey, batchCount, [chapter], difficulty, generatedTexts
           );
           const saved = await saveQuestions(questions, difficulty, chapter, `${b}`);
           difficultyAdded += saved;
@@ -214,6 +219,9 @@ export async function replenishQuestionPool(
           await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
         }
       }
+
+      // 챕터 간 대기 (RPM 준수)
+      await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
     }
 
     console.log(`[풀] ${courseId}/${difficulty}: ${difficultyAdded}문제 생성 (챕터별 분리)`);
@@ -224,7 +232,7 @@ export async function replenishQuestionPool(
       if (ch1Count > 0) {
         try {
           const questions = await generateBattleQuestions(
-            courseId, apiKey, ch1Count, ["1"], difficulty
+            courseId, apiKey, ch1Count, ["1"], difficulty, generatedTexts
           );
           const saved = await saveQuestions(questions, difficulty, "1", "ch1");
           totalAdded += saved;
@@ -255,7 +263,7 @@ export async function replenishQuestionPool(
 
         try {
           const questions = await generateBattleQuestions(
-            courseId, apiKey, count, [chapter], difficulty
+            courseId, apiKey, count, [chapter], difficulty, generatedTexts
           );
           const saved = await saveQuestions(questions, difficulty, chapter, `s${round}`);
           supplementAdded += saved;
@@ -264,6 +272,8 @@ export async function replenishQuestionPool(
           console.error(`[보충] ${courseId}/${difficulty}/ch${chapter}/r${round} 실패:`, err);
         }
         chIdx++;
+
+        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
       }
     }
   }
@@ -352,7 +362,7 @@ export async function drawQuestionsFromPool(
     }
   }
 
-  // 4. 난이도별 분류 후 easy 4 + medium 4 + hard 2 순서대로 선택
+  // 4. 난이도별 + 챕터별 분류
   const byDifficulty: Record<string, typeof available> = { easy: [], medium: [], hard: [] };
   for (const doc of available) {
     const diff = doc.data().difficulty || "medium";
@@ -363,7 +373,7 @@ export async function drawQuestionsFromPool(
     }
   }
 
-  // 각 난이도 Fisher-Yates 셔플 (Math.random() - 0.5 는 편향됨)
+  // 각 난이도 Fisher-Yates 셔플
   for (const key of Object.keys(byDifficulty)) {
     const arr = byDifficulty[key];
     for (let i = arr.length - 1; i > 0; i--) {
@@ -372,7 +382,56 @@ export async function drawQuestionsFromPool(
     }
   }
 
-  // easy 5 → medium 5 순서 (부족하면 다른 난이도에서 보충)
+  /**
+   * 챕터 균등 분배 선택 헬퍼
+   * 난이도 풀에서 챕터별 라운드 로빈으로 선택 → 모든 챕터 골고루 커버
+   */
+  const pickBalanced = (
+    pool: typeof available,
+    targetCount: number,
+    usedIds: Set<string>
+  ): typeof available => {
+    // 챕터별 그룹핑
+    const byChapter: Record<string, typeof available> = {};
+    for (const doc of pool) {
+      if (usedIds.has(doc.id)) continue;
+      const chapter = doc.data().chapter || "unknown";
+      if (!byChapter[chapter]) byChapter[chapter] = [];
+      byChapter[chapter].push(doc);
+    }
+
+    // 챕터 목록 셔플 (시작 챕터 랜덤화)
+    const chapterKeys = Object.keys(byChapter);
+    for (let i = chapterKeys.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [chapterKeys[i], chapterKeys[j]] = [chapterKeys[j], chapterKeys[i]];
+    }
+
+    // 라운드 로빈: 각 챕터에서 1개씩 순환
+    const result: typeof available = [];
+    const chapterIdx: Record<string, number> = {};
+    for (const ch of chapterKeys) chapterIdx[ch] = 0;
+
+    let round = 0;
+    while (result.length < targetCount) {
+      let pickedThisRound = false;
+      for (const ch of chapterKeys) {
+        if (result.length >= targetCount) break;
+        const docs = byChapter[ch];
+        if (chapterIdx[ch] < docs.length) {
+          result.push(docs[chapterIdx[ch]]);
+          usedIds.add(docs[chapterIdx[ch]].id);
+          chapterIdx[ch]++;
+          pickedThisRound = true;
+        }
+      }
+      if (!pickedThisRound) break; // 모든 챕터 소진
+      round++;
+    }
+    return result;
+  };
+
+  // easy 5 → medium 5 (챕터 균등 분배)
   const targets = [
     { difficulty: "easy", count: 5 },
     { difficulty: "medium", count: 5 },
@@ -383,22 +442,18 @@ export async function drawQuestionsFromPool(
 
   for (const target of targets) {
     const pool = byDifficulty[target.difficulty];
-    let picked = 0;
-    for (const doc of pool) {
-      if (picked >= target.count) break;
-      if (usedIds.has(doc.id)) continue;
-      selected.push(doc);
-      usedIds.add(doc.id);
-      picked++;
-    }
+    const picked = pickBalanced(pool, target.count, usedIds);
+    selected.push(...picked);
+
     // 부족하면 다른 난이도에서 보충
-    if (picked < target.count) {
+    if (picked.length < target.count) {
+      let need = target.count - picked.length;
       for (const doc of available) {
-        if (picked >= target.count) break;
+        if (need <= 0) break;
         if (usedIds.has(doc.id)) continue;
         selected.push(doc);
         usedIds.add(doc.id);
-        picked++;
+        need--;
       }
     }
   }

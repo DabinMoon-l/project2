@@ -6,7 +6,7 @@ import { getDatabase } from "firebase-admin/database";
 import { getFirestore } from "firebase-admin/firestore";
 import fetch from "node-fetch";
 import { loadScopeForAI } from "../courseScope";
-import { getFocusGuide } from "../styledQuizGenerator";
+import { getFocusGuide, buildCourseOverviewPrompt, buildChapterIndexPrompt, DIFFICULTY_PARAMS } from "../styledQuizGenerator";
 import type { StyleProfile, KeywordStore, QuestionBank, SampleQuestion } from "../professorQuizAnalysis";
 import type { GeneratedQuestion, PregenCache, TekkenDifficulty } from "./tekkenTypes";
 import { COURSE_NAMES } from "./tekkenTypes";
@@ -340,210 +340,213 @@ async function loadProfessorStyle(courseId: string): Promise<{
 }
 
 /**
- * 난이도별 철권퀴즈 프롬프트 생성
+ * 향상된 배틀 퀴즈 프롬프트 생성
  *
- * difficulty: "easy" | "medium" | "hard"
- * easy: 개념 확인, 명확한 선지, 소거 쉬움
- * medium: 중간 난이도, 유사 개념 섞임
- * hard: 문제는 보통처럼 보이지만 선지 소거 극도로 어려움
+ * AI 문제 생성(styledQuizGenerator)과 동일 수준의 풍부한 컨텍스트 활용:
+ * - 과목 개요 + 챕터 상세 커리큘럼
+ * - 챕터 분류 체계 (세부 주제 트리)
+ * - 출제 포커스 가이드
+ * - 과목 학습 범위 (Scope)
+ * - 교수 스타일 + few-shot 예시
+ * - 기존 문제 중복 방지 리스트
  */
-function buildTekkenPrompt(
+function buildEnhancedBattlePrompt(
   courseName: string,
+  courseId: string,
+  chapters: string[],
+  difficulty: TekkenDifficulty,
+  count: number,
   focusGuide: string | null,
   scopeContent: string | null,
-  focusCount: number,
-  scopeCount: number,
-  chapters: string[],
   profile: StyleProfile | null,
   keywords: KeywordStore | null,
   questionBank: SampleQuestion[],
-  difficulty: TekkenDifficulty = "medium"
+  existingTexts: string[]
 ): string {
-  const totalCount = focusCount + scopeCount;
+  const diffParams = (DIFFICULTY_PARAMS as any)[difficulty] || (DIFFICULTY_PARAMS as any)["medium"];
 
-  // 난이도별 설정 (easy + medium만 사용)
-  const difficultyConfig: Record<string, {
-    label: string;
-    description: string;
-    choiceRule: string;
-    timeHint: string;
-    choiceCount: number;
-  }> = {
-    easy: {
-      label: "쉬움 (개념 확인)",
-      description: "기본 개념 정의, 분류, 특징을 직접 확인하는 수준",
-      choiceRule: "선지 간 차이가 분명하고, 수업을 들은 학생이라면 쉽게 소거 가능. 명백히 다른 개념을 선지로 배치.",
-      timeHint: "20초 안에 풀 수 있는",
-      choiceCount: 4,
-    },
-    medium: {
-      label: "보통 (적용/비교)",
-      description: "개념 간 비교, 기전 이해, 유사 개념 구분이 필요한 수준",
-      choiceRule: "비슷하지만 다른 용어, 과정 순서, 기전 연결을 섞어 출제. 소거에 약간의 사고가 필요.",
-      timeHint: "20초 안에 풀 수 있는",
-      choiceCount: 4,
-    },
-  };
+  // 과목 개요 + 챕터 커리큘럼
+  const courseOverview = buildCourseOverviewPrompt(courseId, chapters);
+  // 챕터 분류 체계 (세부 주제 트리)
+  const chapterIndex = buildChapterIndexPrompt(courseId, chapters);
 
-  const config = difficultyConfig[difficulty] || difficultyConfig["medium"];
+  let prompt = `당신은 ${courseName} 과목의 대학 교수입니다.
+학생들의 실시간 배틀 퀴즈용 4지선다 객관식 문제 ${count}개를 만들어주세요.
 
-  let prompt = `대학교 ${courseName} 과목 배틀 퀴즈 문제 ${totalCount}개를 만들어주세요.\n\n`;
+⚠️ 배틀 퀴즈 특성: 30초 안에 풀어야 하므로 문제와 선지 모두 간결해야 합니다.
+- 문제: 1~2문장, 최대 80자
+- 선지: 각 최대 30자
+- 4지선다만 (OX 문제 금지)
+`;
 
-  prompt += `대상: 간호학과 대학생\n`;
-  // 1장은 비중 최소화 (역사/개론 챕터는 출제 가치 낮음)
+  // 과목 개요 + 선택 챕터 커리큘럼
+  if (courseOverview) {
+    prompt += `\n${courseOverview}\n`;
+  }
+
+  // 난이도 설정 (styledQuizGenerator의 DIFFICULTY_PARAMS 활용)
+  prompt += `\n## 난이도: ${difficulty.toUpperCase()}
+- 인지 수준: ${diffParams.cognitiveLevel}
+- 선지 스타일: ${diffParams.choiceStyle}
+`;
+  if (difficulty !== "easy" && diffParams.trapStyle && diffParams.trapStyle !== "없음 (명확한 정오 구분, 선지 간 차이가 분명)") {
+    prompt += `- 함정 패턴: ${diffParams.trapStyle}\n`;
+  }
+
+  // 챕터 범위 + 균등 분배 강조
   const mainChapters = chapters.filter(c => c !== "1");
   const hasChapter1 = chapters.includes("1");
+
+  prompt += `\n## 출제 범위
+`;
   if (mainChapters.length > 0) {
-    prompt += `출제 범위: ${mainChapters.join(", ")}장을 중심으로 골고루 다루세요\n`;
+    prompt += `${mainChapters.join(", ")}장 범위에서 **골고루** 출제하세요.
+⚠️ 각 챕터에서 최소 1문제 이상 출제하고, 특정 챕터에 편중하지 마세요.
+`;
     if (hasChapter1) {
       if (courseName.includes("미생물")) {
-        prompt += `⚠️ 1장(미생물학 역사)은 0~1문제만 출제하세요. 1장 문제를 낼 경우 반드시 코흐(Koch)의 가설/실험만 다루세요.\n`;
+        prompt += `⚠️ 1장(미생물학 역사)은 0~1문제만. 코흐(Koch)의 가설/실험만 다루세요.\n`;
       } else {
-        prompt += `⚠️ 1장은 0~1문제만 출제하세요 (개론/역사 챕터이므로 중요도 낮음).\n`;
+        prompt += `⚠️ 1장은 0~1문제만 (개론/역사 챕터).\n`;
       }
     }
   } else {
-    prompt += `출제 범위: ${chapters.join(", ")}장\n`;
+    prompt += `${chapters.join(", ")}장 범위에서 출제하세요.\n`;
   }
-  prompt += `난이도: ${config.label} — ${config.description}\n`;
-  prompt += `⚠️ 문제 길이 제한: 문제는 반드시 1~2문장 이내 (최대 80자). 긴 지문/설명/사례 금지.\n\n`;
 
-  prompt += `## 선지 구성 규칙 (${difficulty.toUpperCase()})\n`;
-  prompt += `${config.choiceRule}\n\n`;
+  // 출제 포커스 가이드 (biology만 현재 있음)
+  if (focusGuide) {
+    prompt += `\n## 출제 포커스 가이드
+아래 **(고빈도)**, **(필수 출제)** 항목을 우선 출제하세요.
 
-  // 교수님 출제 스타일 참고 (v2: 구체적 패턴 기반)
+${focusGuide}
+`;
+  }
+
+  // 교수 스타일 (v2: 구체적 패턴 기반)
   if (profile) {
-    // 스타일 요약
     if (profile.styleDescription) {
-      prompt += `[교수님 출제 스타일]\n${profile.styleDescription}\n\n`;
+      prompt += `\n[교수님 출제 스타일]\n${profile.styleDescription}\n`;
     }
-
-    // 발문 패턴 (실제 문장 구조 템플릿)
     if (profile.questionPatterns && profile.questionPatterns.length > 0) {
-      prompt += `[교수님이 자주 사용하는 발문 패턴]\n`;
-      const topPatterns = profile.questionPatterns.slice(0, 5);
-      for (const p of topPatterns) {
+      prompt += `\n[자주 사용하는 발문 패턴]\n`;
+      for (const p of profile.questionPatterns.slice(0, 5)) {
         prompt += `- "${p.pattern}"`;
-        if (p.examples && p.examples.length > 0) {
-          prompt += ` — 예: "${p.examples[0]}"`;
-        }
+        if (p.examples && p.examples.length > 0) prompt += ` — 예: "${p.examples[0]}"`;
         prompt += `\n`;
       }
-      prompt += `위 패턴을 참고하여 비슷한 구조로 발문을 작성하세요.\n\n`;
     }
-
-    // 오답 구성 전략 (구체적 방법)
-    if (profile.distractorStrategies && profile.distractorStrategies.length > 0 && difficulty !== "easy") {
-      prompt += `[교수님의 오답 선지 구성 방식]\n`;
+    if (difficulty !== "easy" && profile.distractorStrategies && profile.distractorStrategies.length > 0) {
+      prompt += `\n[오답 선지 구성 방식]\n`;
       for (const s of profile.distractorStrategies.slice(0, 3)) {
         prompt += `- ${s}\n`;
       }
-      prompt += `\n`;
     }
-
   }
 
   // ★ 원본 문제 few-shot (가장 중요한 스타일 컨텍스트)
-  // questionBank에서 랜덤 추출된 문제 — 매번 다른 조합
   if (questionBank.length > 0) {
-    prompt += `[교수님이 실제로 낸 문제 — 이 스타일을 따라하세요]\n`;
+    prompt += `\n[교수님 실제 문제 — 이 스타일 참고]\n`;
     for (const q of questionBank.slice(0, 5)) {
       prompt += `Q. ${q.stem}\n`;
-      q.choices.forEach((c, i) => {
-        prompt += `  ${i + 1}. ${c}\n`;
-      });
+      q.choices.forEach((c, i) => { prompt += `  ${i + 1}. ${c}\n`; });
       prompt += `\n`;
     }
   }
 
-  // 교수님의 핵심 학술 용어 + 출제 토픽 (v2)
-  if (keywords) {
-    // 핵심 학술 용어
-    if (keywords.coreTerms && keywords.coreTerms.length > 0) {
-      const topTerms = keywords.coreTerms.slice(0, 15);
-      const termsList = topTerms.map(t => t.english ? `${t.korean}(${t.english})` : t.korean).join(", ");
-      prompt += `[교수님이 강조하는 핵심 용어]\n${termsList}\n\n`;
-    }
+  // 핵심 학술 용어
+  if (keywords && keywords.coreTerms && keywords.coreTerms.length > 0) {
+    const terms = keywords.coreTerms.slice(0, 15)
+      .map(t => t.english ? `${t.korean}(${t.english})` : t.korean).join(", ");
+    prompt += `\n[핵심 학술 용어]\n${terms}\n`;
+  }
 
-    // 출제 토픽 (대주제 → 세부주제)
-    if (keywords.examTopics && keywords.examTopics.length > 0 && difficulty !== "easy") {
-      prompt += `[교수님의 주요 출제 토픽]\n`;
-      for (const t of keywords.examTopics.slice(0, 5)) {
-        prompt += `- ${t.topic}: ${t.subtopics.slice(0, 5).join(", ")}\n`;
-      }
-      prompt += `\n`;
+  // 출제 토픽 (medium만)
+  if (keywords && keywords.examTopics && keywords.examTopics.length > 0 && difficulty !== "easy") {
+    prompt += `\n[주요 출제 토픽]\n`;
+    for (const t of keywords.examTopics.slice(0, 5)) {
+      prompt += `- ${t.topic}: ${t.subtopics.slice(0, 5).join(", ")}\n`;
     }
   }
 
-  // focusGuide 기반 문제
-  if (focusGuide && focusCount > 0) {
-    prompt += `[파트 A — ${focusCount}문제]\n`;
-    prompt += `아래 "출제 포커스" 내용에서만 ${focusCount}문제를 출제하세요.\n`;
-    prompt += `출제 포커스에 명시된 개념, 비교, 매칭 유형을 그대로 활용하세요.\n\n`;
-    prompt += `<출제 포커스>\n${focusGuide}\n</출제 포커스>\n\n`;
+  // 과목 학습 범위 (Scope — 정확성 검증용)
+  if (scopeContent) {
+    prompt += `\n## 과목 학습 범위 (정확성 검증용)
+아래 내용에서 정확한 개념과 용어를 확인하세요.
+
+${scopeContent.slice(0, 8000)}
+`;
   }
 
-  // scope 기반 문제
-  if (scopeContent && scopeCount > 0) {
-    prompt += `[파트 B — ${scopeCount}문제]\n`;
-    prompt += `아래 "학습 범위" 내용에서만 ${scopeCount}문제를 출제하세요.\n`;
-    prompt += `학습 범위에 나온 내용만 사용하고, 범위 밖 내용은 절대 금지입니다.\n\n`;
-    prompt += `<학습 범위>\n${scopeContent}\n</학습 범위>\n\n`;
-  }
-
-  // 둘 다 없으면 generic (비상)
-  if (!focusGuide && !scopeContent) {
-    prompt += `${chapters.join(", ")}장 범위에서 ${totalCount}문제를 출제하세요.\n\n`;
+  // 챕터 분류 체계 (세부 주제 트리)
+  if (chapterIndex) {
+    prompt += `\n${chapterIndex}\n`;
   }
 
   // 미생물학 임상 중심 규칙
   if (courseName.includes("미생물")) {
-    prompt += `[미생물학 특별 규칙]\n`;
-    prompt += `- 간호학과 학생 대상이므로 임상에서 실제로 접하는 병원성 미생물(MRSA, VRE, 결핵균, HIV, HBV, 칸디다 등)을 우선 다루세요\n\n`;
+    prompt += `\n[미생물학 특별 규칙]
+- 간호학과 학생 대상이므로 임상에서 실제로 접하는 병원성 미생물(MRSA, VRE, 결핵균, HIV, HBV, 칸디다 등)을 우선 다루세요
+`;
   }
 
-  prompt += `## 공통 규칙
-- ${config.choiceCount}지선다 순수 객관식만 (OX 문제 금지)
+  // ⛔ 중복 방지 — 기존 생성 문제 리스트
+  if (existingTexts.length > 0) {
+    prompt += `\n## ⛔ 이미 생성된 문제 (절대 중복 금지)
+아래 문제와 동일하거나 유사한 문제를 만들지 마세요. 같은 개념이라도 다른 각도에서 출제하세요.
+
+`;
+    // 토큰 효율: 최근 30개만
+    for (const t of existingTexts.slice(-30)) {
+      prompt += `- ${t}\n`;
+    }
+  }
+
+  prompt += `
+## 공통 규칙
+- 4지선다 순수 객관식만 (OX 문제 금지)
 - 문제 하나로 완결 (별도 지문/제시문/보기표/그림/표 참조 금지)
 - "다음 중", "위의 내용에서" 같은 외부 참조 표현 금지
 - 각 문제는 서로 다른 주제/개념 (같은 개념 2번 이상 금지)
-- ⚠️ 문제는 반드시 1~2문장, 최대 80자 이내 (배틀 퀴즈이므로 빠르게 읽을 수 있어야 함)
+- ⚠️ 문제는 반드시 1~2문장, 최대 80자 이내
 - 선지도 간결하게 (각 선지 최대 30자)
 - 오답 선지는 그럴듯하게 (명백히 틀린 보기 금지)
-- choices ${config.choiceCount}개, correctAnswer는 0~${config.choiceCount - 1}
-- 매번 다른 문제를 생성 — 이전에 생성한 문제와 겹치지 않도록 창의적으로 출제
+- choices 4개, correctAnswer는 0~3
 - ${chapters.length}개 챕터를 골고루 커버 (특정 챕터에 편중 금지)
-- ⚠️ 1장 문제는 절대 2문제 이상 금지 — 0~1문제만 허용
+- ⚠️ 1장 문제는 절대 2문제 이상 금지
 
-## 해설 규칙
-- explanation: 정답이 왜 맞는지 1~2문장으로 설명 (최대 100자)
-- choiceExplanations: 각 선지마다 왜 맞/틀린지 1문장 설명 (각 최대 50자)
+## 해설 규칙 (필수)
+- explanation: 정답이 왜 맞는지 1~2문장 (최대 100자)
+- choiceExplanations: 각 선지마다 왜 맞/틀린지 1문장 (각 최대 50자). 반드시 4개 선지 모두 해설.
 - chapterId: 해당 문제의 챕터 번호 (예: "3", "5")
 
-## 검토 규칙 (반드시 준수)
-- correctAnswer가 실제 정답 선지의 인덱스(0부터)와 일치하는지 반드시 재확인
+## 검증 규칙 (반드시 준수)
+- correctAnswer가 실제 정답 선지의 인덱스(0부터)와 일치하는지 재확인
 - explanation이 정답 선지와 일치하는지 확인
-- 오답 선지가 정답과 혼동되지 않도록 명확히 구분 가능한지 확인
-- choiceExplanations[correctAnswer]에 "정답" 표현이 포함되어야 함
+- choiceExplanations[correctAnswer]에 "정답" 표현 포함
 
 반드시 아래 JSON 형식만 출력 (다른 텍스트 없이):
 [
-  {"text": "문제 내용", "type": "multiple", "choices": [${Array.from({length: config.choiceCount}, (_, i) => `"선지${i+1}"`).join(", ")}], "correctAnswer": 2, "difficulty": "${difficulty}", "explanation": "정답 해설", "choiceExplanations": [${Array.from({length: config.choiceCount}, (_, i) => `"선지${i+1} 해설"`).join(", ")}], "chapterId": "3"}
+  {"text": "문제 내용", "type": "multiple", "choices": ["선지1", "선지2", "선지3", "선지4"], "correctAnswer": 2, "difficulty": "${difficulty}", "explanation": "정답 해설", "choiceExplanations": ["선지1 해설", "선지2 해설", "선지3 해설", "선지4 해설"], "chapterId": "3"}
 ]`;
 
   return prompt;
 }
 
 /**
- * Gemini로 scope + focusGuide 기반 배틀 문제 생성
- * count: 문제 개수, difficulty: 난이도
+ * Gemini로 배틀 문제 생성 (향상된 프롬프트)
+ *
+ * styledQuizGenerator와 동일 수준 컨텍스트 활용:
+ * - 과목 개요 + 챕터 커리큘럼 + 포커스 가이드 + Scope + 교수 스타일
+ * - existingTexts로 배치 간 중복 방지
  */
 export async function generateBattleQuestions(
   courseId: string,
   apiKey: string,
   count: number = 10,
   chapters?: string[],
-  difficulty: TekkenDifficulty = "medium"
+  difficulty: TekkenDifficulty = "medium",
+  existingTexts: string[] = []
 ): Promise<GeneratedQuestion[]> {
   const targetChapters = chapters || await getTekkenChapters(courseId);
   const courseName = COURSE_NAMES[courseId] || "생물학";
@@ -555,27 +558,21 @@ export async function generateBattleQuestions(
     loadProfessorStyle(courseId),
   ]);
 
-  const hasFocusGuide = !!focusGuide;
-  const hasScope = !!scopeData?.content;
-
-  // 5:5 비율 결정
-  const focusCount = hasFocusGuide ? (hasScope ? Math.ceil(count / 2) : count) : 0;
-  const scopeCount = count - focusCount;
-
-  const prompt = buildTekkenPrompt(
+  const prompt = buildEnhancedBattlePrompt(
     courseName,
+    courseId,
+    targetChapters,
+    difficulty,
+    count,
     focusGuide,
     scopeData?.content || null,
-    focusCount,
-    scopeCount,
-    targetChapters,
     profStyle.profile,
     profStyle.keywords,
     profStyle.questionBank,
-    difficulty
+    existingTexts
   );
 
-  // Gemini 구조화 출력 스키마 (해설+선지별해설+챕터태그 포함)
+  // Gemini 구조화 출력 스키마
   const responseSchema = {
     type: "ARRAY",
     items: {
@@ -594,25 +591,25 @@ export async function generateBattleQuestions(
     },
   };
 
-  // 최대 3회 시도 (1차: 구조화 출력, 2차: 구조화 + 간단 프롬프트, 3차: 자유형 + robust 파싱)
+  // 최대 3회 시도 (1차: 풍부한 프롬프트, 2차: 간소화, 3차: 자유형 robust 파싱)
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const isSimplified = attempt >= 1;
       const isFreeform = attempt >= 2;
 
       const currentPrompt = isSimplified
-        ? `대학교 ${courseName} 과목 ${difficulty === "easy" ? "쉬운" : difficulty === "hard" ? "어려운" : "보통"} 4지선다 객관식 문제 ${count}개.
-범위: ${targetChapters.join(", ")}장
-각 문제에 explanation(정답 해설 1~2문장), choiceExplanations(선지별 해설 배열), chapterId(챕터 번호) 필수 포함.
+        ? `대학교 ${courseName} 과목 ${difficulty === "easy" ? "쉬운" : "보통"} 4지선다 객관식 문제 ${count}개.
+범위: ${targetChapters.join(", ")}장. 각 챕터에서 골고루 출제.
+각 문제에 explanation(정답 해설 1~2문장), choiceExplanations(선지별 해설 4개), chapterId(챕터 번호) 필수.
 JSON 배열로 출력: [{"text":"문제","type":"multiple","choices":["선지1","선지2","선지3","선지4"],"correctAnswer":0,"difficulty":"${difficulty}","explanation":"정답 해설","choiceExplanations":["선지1 해설","선지2 해설","선지3 해설","선지4 해설"],"chapterId":"3"}]`
         : prompt;
 
       const generationConfig: any = {
-        temperature: isSimplified ? 0.7 : (difficulty === "hard" ? 0.8 : 0.9),
+        temperature: isSimplified ? 0.7 : 0.9,
         maxOutputTokens: isSimplified ? 4096 : 8192,
       };
 
-      // 구조화 출력 강제 (3차 시도에서만 자유형)
+      // 구조화 출력 (3차 시도에서만 자유형)
       if (!isFreeform) {
         generationConfig.responseMimeType = "application/json";
         generationConfig.responseSchema = responseSchema;
@@ -627,7 +624,8 @@ JSON 배열로 출력: [{"text":"문제","type":"multiple","choices":["선지1",
             contents: [{ parts: [{ text: currentPrompt }] }],
             generationConfig,
           }),
-        }
+          timeout: 120000,
+        } as any
       );
 
       const data = (await response.json()) as {
@@ -644,7 +642,6 @@ JSON 배열로 출력: [{"text":"문제","type":"multiple","choices":["선지1",
         continue;
       }
 
-      // 구조화 출력이면 직접 파싱, 아니면 robust 파싱
       const questions = robustParseQuestionArray(responseText);
 
       const valid = questions.filter(isValidQuestion).map(q => ({

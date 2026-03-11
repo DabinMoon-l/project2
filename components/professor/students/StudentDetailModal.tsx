@@ -61,8 +61,8 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
   if (studentZ !== null && studentZ < -2.0) warnings.push('Z-score < -2.0 — 위험');
   else if (studentZ !== null && studentZ < -1.5) warnings.push('Z-score < -1.5 — 주의');
 
-  // 최근 퀴즈 5개 (recentQuizzes에서)
-  const recentFive = student.recentQuizzes.slice(0, 5).reverse();
+  // 모든 퀴즈 (시간순 정렬 — recentQuizzes는 최신순이므로 reverse)
+  const allQuizzes = [...student.recentQuizzes].reverse();
 
   return (
     <AnimatePresence>
@@ -149,53 +149,64 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
                 overallPercentile={overallPercentile}
               />
 
-              {/* 최근 퀴즈 5개 차트 */}
+              {/* 전체 퀴즈 성적 차트 (가로 스크롤) */}
               <div>
                 <p className="text-base font-bold text-[#1A1A1A] mb-3">최근 퀴즈 성적</p>
-                <svg viewBox="0 0 300 140" className="w-full">
-                  {/* Y축 가이드라인 */}
-                  <line x1={20} y1={30} x2={280} y2={30} stroke="#D4CFC4" strokeWidth={0.3} strokeDasharray="3,3" />
-                  <line x1={20} y1={62.5} x2={280} y2={62.5} stroke="#D4CFC4" strokeWidth={0.3} strokeDasharray="3,3" />
-                  <line x1={20} y1={95} x2={280} y2={95} stroke="#D4CFC4" strokeWidth={0.5} />
-                  {/* Y축 레이블 */}
-                  <text x={14} y={33} textAnchor="end" fontSize={7} fill="#5C5C5C">100</text>
-                  <text x={14} y={66} textAnchor="end" fontSize={7} fill="#5C5C5C">50</text>
-                  <text x={14} y={98} textAnchor="end" fontSize={7} fill="#5C5C5C">0</text>
-                  {recentFive.length === 0 && (
-                    <text x={150} y={65} textAnchor="middle" fontSize={11} fill="#999">
-                      퀴즈 기록 없음
-                    </text>
-                  )}
-                  {recentFive.map((q, i, arr) => {
-                    const x = arr.length === 1 ? 150 : 30 + (i / (arr.length - 1)) * 240;
-                    const y = 95 - (q.score / 100) * 65;
-                    const prevX = i > 0 ? (30 + ((i - 1) / (arr.length - 1)) * 240) : x;
-                    const prevY = i > 0 ? (95 - (arr[i - 1].score / 100) * 65) : y;
-                    return (
-                      <g key={i}>
-                        {i > 0 && (
-                          <line x1={prevX} y1={prevY} x2={x} y2={y}
-                            stroke="#1A1A1A" strokeWidth={1.5} />
-                        )}
-                        <circle cx={x} cy={y} r={4.5} fill="#F5F0E8" stroke="#1A1A1A" strokeWidth={2} />
-                        <text x={x} y={y - 10} textAnchor="middle" fontSize={10}
-                          fontWeight="bold" fill="#1A1A1A">
-                          {q.score}
-                        </text>
-                      </g>
-                    );
-                  })}
-                  {recentFive.map((q, i, arr) => {
-                    const x = arr.length === 1 ? 150 : 30 + (i / (arr.length - 1)) * 240;
-                    const name = q.quizTitle.length > 6 ? q.quizTitle.slice(0, 6) + '..' : q.quizTitle;
-                    return (
-                      <text key={`label-${i}`} x={x} y={114} textAnchor="middle" fontSize={11}
-                        fill="#1A1A1A" fontWeight="600">
-                        {name}
-                      </text>
-                    );
-                  })}
-                </svg>
+                {allQuizzes.length === 0 ? (
+                  <div className="flex items-center justify-center h-24 text-sm text-[#999]">
+                    퀴즈 기록 없음
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto scrollbar-hide -mx-5 px-5">
+                    {(() => {
+                      const spacing = 60;
+                      const paddingLeft = 30;
+                      const paddingRight = 30;
+                      const chartWidth = Math.max(300, paddingLeft + paddingRight + (allQuizzes.length - 1) * spacing);
+                      return (
+                        <svg viewBox={`0 0 ${chartWidth} 140`} width={chartWidth} height={140} className="min-w-full">
+                          {/* Y축 가이드라인 */}
+                          <line x1={20} y1={30} x2={chartWidth - 20} y2={30} stroke="#D4CFC4" strokeWidth={0.3} strokeDasharray="3,3" />
+                          <line x1={20} y1={62.5} x2={chartWidth - 20} y2={62.5} stroke="#D4CFC4" strokeWidth={0.3} strokeDasharray="3,3" />
+                          <line x1={20} y1={95} x2={chartWidth - 20} y2={95} stroke="#D4CFC4" strokeWidth={0.5} />
+                          {/* Y축 레이블 */}
+                          <text x={14} y={33} textAnchor="end" fontSize={7} fill="#5C5C5C">100</text>
+                          <text x={14} y={66} textAnchor="end" fontSize={7} fill="#5C5C5C">50</text>
+                          <text x={14} y={98} textAnchor="end" fontSize={7} fill="#5C5C5C">0</text>
+                          {allQuizzes.map((q, i, arr) => {
+                            const x = arr.length === 1 ? chartWidth / 2 : paddingLeft + i * spacing;
+                            const y = 95 - (q.score / 100) * 65;
+                            const prevX = i > 0 ? (paddingLeft + (i - 1) * spacing) : x;
+                            const prevY = i > 0 ? (95 - (arr[i - 1].score / 100) * 65) : y;
+                            return (
+                              <g key={i}>
+                                {i > 0 && (
+                                  <line x1={prevX} y1={prevY} x2={x} y2={y}
+                                    stroke="#1A1A1A" strokeWidth={1.5} />
+                                )}
+                                <circle cx={x} cy={y} r={4.5} fill="#F5F0E8" stroke="#1A1A1A" strokeWidth={2} />
+                                <text x={x} y={y - 10} textAnchor="middle" fontSize={10}
+                                  fontWeight="bold" fill="#1A1A1A">
+                                  {q.score}
+                                </text>
+                              </g>
+                            );
+                          })}
+                          {allQuizzes.map((q, i, arr) => {
+                            const x = arr.length === 1 ? chartWidth / 2 : paddingLeft + i * spacing;
+                            const name = q.quizTitle.length > 6 ? q.quizTitle.slice(0, 6) + '..' : q.quizTitle;
+                            return (
+                              <text key={`label-${i}`} x={x} y={114} textAnchor="middle" fontSize={11}
+                                fill="#1A1A1A" fontWeight="600">
+                                {name}
+                              </text>
+                            );
+                          })}
+                        </svg>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
             </div>
 

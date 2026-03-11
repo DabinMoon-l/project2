@@ -163,8 +163,8 @@ export const BATTLE_XP = {
 export const BATTLE_CONFIG = {
   MATCH_TIMEOUT: 10000,     // 매칭 대기 10초 (상대 없으면 봇 매칭)
   BATTLE_DURATION: 180000,  // 배틀 3분
-  QUESTION_TIMEOUT: 20000,  // 문제 타임아웃 20초
-  CRITICAL_TIME: 5000,      // 크리티컬 기준 5초
+  QUESTION_TIMEOUT: 30000,  // 문제 타임아웃 30초
+  CRITICAL_TIME: 10000,     // 크리티컬 기준 10초
   MASH_STEP_PER_TAP: 5,    // 연타 게이지 이동량 (탭당 %)
   MASH_TIMEOUT: 30000,      // 연타 안전 타임아웃 30초 (UI 표시 안 함)
   COUNTDOWN_SECONDS: 3,     // 카운트다운 3초

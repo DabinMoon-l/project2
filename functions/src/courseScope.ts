@@ -143,9 +143,9 @@ export const uploadCourseScope = onCall(
 function parseChapters(content: string): Omit<ChapterScope, "updatedAt">[] {
   const chapters: Omit<ChapterScope, "updatedAt">[] = [];
 
-  // ## 숫자. 또는 ## 숫자장. 패턴으로 챕터 구분
-  // 예: ## 3. 세포손상, ## 8장. 순환장애
-  const chapterRegex = /^##\s*(\d+)(?:장)?[.\s]+(.+?)$/gm;
+  // ## 숫자. 또는 ## 숫자장. 또는 ## Chapter 숫자. 패턴으로 챕터 구분
+  // 예: ## 3. 세포손상, ## 8장. 순환장애, ## Chapter 01. 미생물과 미생물학
+  const chapterRegex = /^##\s*(?:Chapter\s+)?0*(\d+)(?:장)?[.\s]+(.+?)$/gm;
   const matches = [...content.matchAll(chapterRegex)];
 
   for (let i = 0; i < matches.length; i++) {

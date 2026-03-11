@@ -79,9 +79,12 @@ export default function LevelUpBottomSheet({
     }
   }, [isOpen, courseHoldings.length, onClose]);
 
-  // 열릴 때 상태 초기화 + 자동 레벨업 대상 선택
+  // 열릴 때만 상태 초기화 + 자동 레벨업 대상 선택
+  // courseHoldings를 의존성에서 제거 — Firestore 실시간 업데이트로 selectedIdx 리셋 방지
+  const prevOpenRef = useRef(false);
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !prevOpenRef.current) {
+      // 열리는 순간에만 초기화
       if (autoLevelUpRabbitId !== undefined && autoLevelUpRabbitId !== null) {
         const idx = courseHoldings.findIndex(h => h.rabbitId === autoLevelUpRabbitId);
         setSelectedIdx(idx >= 0 ? idx : 0);
@@ -91,7 +94,8 @@ export default function LevelUpBottomSheet({
       setResult(null);
       setError(null);
     }
-  }, [isOpen, autoLevelUpRabbitId, courseHoldings]);
+    prevOpenRef.current = isOpen;
+  }, [isOpen, autoLevelUpRabbitId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 열기
   useEffect(() => {

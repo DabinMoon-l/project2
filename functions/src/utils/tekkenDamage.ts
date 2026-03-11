@@ -5,8 +5,8 @@
 /** 배틀 설정 상수 */
 export const BATTLE_CONFIG = {
   BATTLE_DURATION: 600000, // 안전장치 (실질 종료는 HP=0 또는 라운드 완료)
-  QUESTION_TIMEOUT: 20000,
-  CRITICAL_TIME: 5000,
+  QUESTION_TIMEOUT: 30000,
+  CRITICAL_TIME: 10000,
   MATCH_TIMEOUT: 20000,
   MASH_TIMEOUT: 30000, // 연타 안전 타임아웃 30초 (UI에 표시 안 함)
 };
