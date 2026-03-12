@@ -28,7 +28,7 @@ import {
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useUser } from '@/lib/contexts/UserContext';
 import { useCourse } from '@/lib/contexts';
-import { useRabbitHoldings } from '@/lib/hooks/useRabbit';
+import { useMilestone } from '@/lib/contexts';
 import { COURSE_INDEXES } from '@/lib/courseIndex';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 import {
@@ -59,7 +59,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
   const { user, logout } = useAuth();
   const { profile, updateNickname, updateProfile, isProfessor } = useUser();
   const { userCourseId } = useCourse();
-  const { holdings } = useRabbitHoldings(user?.uid);
+  const { holdings } = useMilestone();
   const {
     settings,
     loading: settingsLoading,

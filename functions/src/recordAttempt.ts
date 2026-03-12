@@ -41,11 +41,11 @@ interface QuestionScore {
 export const recordAttempt = onCall(
   {
     region: "asia-northeast3",
-    memory: "512MiB",
+    memory: "1GiB",
     timeoutSeconds: 60,
-    maxInstances: 100,
+    maxInstances: 200,
     minInstances: 1,
-    concurrency: 80,
+    concurrency: 250,
   },
   async (request) => {
     // 인증 확인
@@ -105,13 +105,15 @@ export const recordAttempt = onCall(
       throw e;
     }
 
-    // ── ②-b attemptNo를 서버에서 계산 (클라이언트 조작 방지) ──
-    const prevAttempts = await db
-      .collection("quizResults")
-      .where("userId", "==", userId)
-      .where("quizId", "==", quizId)
-      .count()
-      .get();
+    // ── ②-b attemptNo + 퀴즈 로드 + 이전 완료 정보 — 병렬 조회 ──
+    const [prevAttempts, quizDoc] = await Promise.all([
+      db.collection("quizResults")
+        .where("userId", "==", userId)
+        .where("quizId", "==", quizId)
+        .count()
+        .get(),
+      db.doc(`quizzes/${quizId}`).get(),
+    ]);
     const attemptNo = prevAttempts.data().count + 1;
 
     // ── ③ Idempotency 검사 (락 통과 후에도 2차 확인) ──
@@ -135,8 +137,7 @@ export const recordAttempt = onCall(
       };
     }
 
-    // ── ③ 퀴즈 로드 ──
-    const quizDoc = await db.doc(`quizzes/${quizId}`).get();
+    // ── ③ 퀴즈 검증 (이미 위에서 병렬 로드됨) ──
     if (!quizDoc.exists) {
       throw new HttpsError("not-found", "퀴즈를 찾을 수 없습니다.");
     }
@@ -208,19 +209,19 @@ export const recordAttempt = onCall(
       createdAt: FieldValue.serverTimestamp(),
     });
 
-    // ── ⑥ quiz_completions (completedUsers 배열 대체) ──
+    // ── ⑥ quiz_completions + 분산 카운터 + 이전 점수 조회 — 병렬 처리 ──
     const completionDocId = `${quizId}_${userId}`;
 
-    // 재시도 시 이전 점수 조회 (덮어쓰기 전)
-    let prevCompletionScore = 0;
-    if (attemptNo > 1) {
-      const prevCompletion = await db.doc(`quiz_completions/${completionDocId}`).get();
-      if (prevCompletion.exists) {
-        prevCompletionScore = prevCompletion.data()?.score || 0;
-      }
-    }
+    // 재시도 시 이전 점수 필요 → 완료 문서 & 분산카운터 동시에 처리
+    const prevCompletionPromise = attemptNo > 1
+      ? db.doc(`quiz_completions/${completionDocId}`).get()
+      : Promise.resolve(null);
 
-    await db.doc(`quiz_completions/${completionDocId}`).set(
+    const shardPromise = attemptNo <= 1
+      ? incrementShard(`quiz_agg/${quizId}`, { count: 1, scoreSum: score })
+      : Promise.resolve();
+
+    const completionWritePromise = db.doc(`quiz_completions/${completionDocId}`).set(
       {
         quizId,
         userId,
@@ -234,71 +235,78 @@ export const recordAttempt = onCall(
       { merge: true }
     );
 
-    // ── ⑦ 분산 카운터 (quiz_agg) ──
-    // 첫 번째 시도일 때만 count 증가 (재시도는 점수만 업데이트)
-    if (attemptNo <= 1) {
-      await incrementShard(`quiz_agg/${quizId}`, {
-        count: 1,
-        scoreSum: score,
-      });
-    }
+    // 3개 병렬 실행
+    const [prevCompletionDoc] = await Promise.all([
+      prevCompletionPromise,
+      shardPromise,
+      completionWritePromise,
+    ]);
 
-    // ── ⑧ quizzes 문서 참여자/평균점수 업데이트 ──
-    // 분산 카운터(quiz_agg)에서 합산값 조회 (quiz_completions 전체 조회 대신)
-    try {
-      const { count: participantCount, scoreSum } = await getShardedTotal(`quiz_agg/${quizId}`);
-      const averageScore = participantCount > 0
-        ? Math.round((scoreSum / participantCount) * 10) / 10
-        : 0;
+    const prevCompletionScore = prevCompletionDoc?.exists
+      ? (prevCompletionDoc.data()?.score || 0)
+      : 0;
 
-      await db.doc(`quizzes/${quizId}`).update({
-        [`userScores.${userId}`]: score,
-        participantCount,
-        averageScore,
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-    } catch (e) {
-      // 실패해도 무방 — 다음 제출 시 재계산
-      db.doc(`quizzes/${quizId}`).update({
-        [`userScores.${userId}`]: score,
-        updatedAt: FieldValue.serverTimestamp(),
-      }).catch(() => {});
-      console.warn(`quizzes/${quizId} 통계 업데이트 실패 (무시 가능):`, e);
-    }
+    // ── ⑧ quizzes 문서 참여자/평균점수 + users quizStats — 비동기 병렬 (응답 차단 안 함) ──
+    // 분산 카운터 합산 + quizzes 문서 + users 갱신을 병렬 fire-and-forget
+    const quizStatsPromise = (async () => {
+      try {
+        const { count: participantCount, scoreSum: aggScoreSum } = await getShardedTotal(`quiz_agg/${quizId}`);
+        const averageScore = participantCount > 0
+          ? Math.round((aggScoreSum / participantCount) * 10) / 10
+          : 0;
+
+        await db.doc(`quizzes/${quizId}`).update({
+          [`userScores.${userId}`]: score,
+          participantCount,
+          averageScore,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      } catch (e) {
+        db.doc(`quizzes/${quizId}`).update({
+          [`userScores.${userId}`]: score,
+          updatedAt: FieldValue.serverTimestamp(),
+        }).catch(() => {});
+        console.warn(`quizzes/${quizId} 통계 업데이트 실패 (무시 가능):`, e);
+      }
+    })();
+
+    // ── ⑩ users/{uid}.quizStats — 2회 write (증분 + averageScore 계산) ──
+    // 기존 3회(update+get+update)에서 2회로 축소, 병렬 실행으로 응답 차단 최소화
+    const userStatsPromise = (async () => {
+      try {
+        const scoreDiff = attemptNo <= 1 ? score : (score - prevCompletionScore);
+
+        await db.doc(`users/${userId}`).update({
+          "quizStats.totalScoreSum": FieldValue.increment(scoreDiff),
+          ...(attemptNo <= 1 ? {
+            "quizStats.totalAttempts": FieldValue.increment(1),
+            "quizStats.totalCorrect": FieldValue.increment(correctCount),
+            "quizStats.totalQuestions": FieldValue.increment(totalCount),
+          } : {}),
+          "quizStats.lastAttemptAt": FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        // averageScore 갱신 (증분 후 읽기 필요 — fire-and-forget)
+        const userDoc = await db.doc(`users/${userId}`).get();
+        const qs = userDoc.data()?.quizStats;
+        if (qs) {
+          const avg = qs.totalAttempts > 0
+            ? Math.round((qs.totalScoreSum || 0) / qs.totalAttempts)
+            : 0;
+          db.doc(`users/${userId}`).update({
+            "quizStats.averageScore": avg,
+          }).catch(() => {});
+        }
+      } catch (e) {
+        console.warn(`users/${userId} quizStats 갱신 실패 (무시 가능):`, e);
+      }
+    })();
 
     // ── ⑨ reviews 생성은 generateReviewsOnResult 트리거에서 비동기 처리 ──
 
-    // ── ⑩ users/{uid}.quizStats 증분 갱신 + averageScore 계산 ──
-    // totalScoreSum: 퀴즈별 점수(0~100) 합계 — averageScore = totalScoreSum / totalAttempts
-    // 재시도 시 점수 차이만큼 조정 (퀴즈당 최신 점수만 반영)
-    try {
-      const scoreDiff = attemptNo <= 1 ? score : (score - prevCompletionScore);
-
-      await db.doc(`users/${userId}`).update({
-        "quizStats.totalScoreSum": FieldValue.increment(scoreDiff),
-        ...(attemptNo <= 1 ? {
-          "quizStats.totalAttempts": FieldValue.increment(1),
-          "quizStats.totalCorrect": FieldValue.increment(correctCount),
-          "quizStats.totalQuestions": FieldValue.increment(totalCount),
-        } : {}),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-
-      // 증분 후 현재 값을 읽어서 averageScore 계산
-      const userDoc = await db.doc(`users/${userId}`).get();
-      const userData = userDoc.data();
-      if (userData?.quizStats) {
-        const attempts = userData.quizStats.totalAttempts || 0;
-        const scoreSum = userData.quizStats.totalScoreSum || 0;
-        const avgScore = attempts > 0 ? Math.round(scoreSum / attempts) : 0;
-        await db.doc(`users/${userId}`).update({
-          "quizStats.averageScore": avgScore,
-          "quizStats.lastAttemptAt": FieldValue.serverTimestamp(),
-        });
-      }
-    } catch (e) {
-      console.warn(`users/${userId} quizStats 갱신 실패 (무시 가능):`, e);
-    }
+    // 통계 업데이트 병렬 대기 (응답 전 완료 보장)
+    await Promise.all([quizStatsPromise, userStatsPromise]);
 
     // ── 제출 락 해제 ──
     await lockRef.delete().catch(() => {});

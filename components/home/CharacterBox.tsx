@@ -9,7 +9,7 @@ import {
 } from 'framer-motion';
 import { useUser, useCourse, useMilestone } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
-import { useRabbitHoldings, useRabbitDoc, getRabbitStats } from '@/lib/hooks/useRabbit';
+import { useRabbitDoc, getRabbitStats } from '@/lib/hooks/useRabbit';
 import { computeRabbitDisplayName } from '@/lib/utils/rabbitDisplayName';
 import dynamic from 'next/dynamic';
 import { useExpToast } from '@/components/common/ExpToast';
@@ -38,12 +38,10 @@ export default function CharacterBox() {
   const { userCourseId } = useCourse();
   const { theme } = useTheme();
 
-  // 마일스톤 Context
+  // 마일스톤 Context (holdings 포함 — 중복 onSnapshot 방지)
   const milestone = useMilestone();
+  const { holdings } = milestone;
   const { showExpToast } = useExpToast();
-
-  // 토끼 홀딩 구독 (실제 스탯)
-  const { holdings } = useRabbitHoldings(profile?.uid);
 
   // 캐러셀
   const [activeIndex, setActiveIndex] = useState(0);
@@ -451,6 +449,7 @@ export default function CharacterBox() {
           userId={profile.uid}
           equippedRabbits={equippedRabbits}
           buttonRect={dogamRect}
+          holdings={holdings}
         />
       )}
 

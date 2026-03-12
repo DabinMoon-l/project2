@@ -4,15 +4,16 @@
  * - 캐시 있으면 즉시 반환 → 백그라운드에서 갱신
  * - 캐시 없으면 fetch 후 저장
  *
- * TTL: 2분 (신선), 10분 (최대 허용)
+ * TTL: 5분 (신선), 15분 (최대 허용)
+ * CF가 10분마다 계산 → 5분 fresh로 불필요한 Firestore 읽기 50% 감소
  *
  * 키 분리:
  * - home: 홈 RankingSection용 (간소 데이터)
  * - full: 랭킹 페이지용 (전체 유저 데이터)
  */
 
-const FRESH_TTL = 2 * 60 * 1000; // 2분
-const MAX_TTL = 10 * 60 * 1000;  // 10분
+const FRESH_TTL = 5 * 60 * 1000; // 5분 (CF 10분 주기의 절반)
+const MAX_TTL = 15 * 60 * 1000;  // 15분
 
 interface CacheEnvelope<T> {
   data: T;

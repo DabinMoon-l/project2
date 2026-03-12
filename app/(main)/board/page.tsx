@@ -4,7 +4,7 @@ import { useCallback, useState, useMemo, memo, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Skeleton, ScrollToTopButton } from '@/components/common';
 import { SPRING_TAP, TAP_SCALE } from '@/lib/constants/springs';
@@ -575,48 +575,43 @@ export default function BoardPage() {
       setCommentsMap(newMap);
     };
 
-    chunks.forEach((chunk, chunkIndex) => {
-      const commentsQuery = query(
-        collection(db, 'comments'),
-        where('postId', 'in', chunk)
-      );
-
-      const unsub = onSnapshot(
-        commentsQuery,
-        (snapshot) => {
-          const chunkMap = new Map<string, Comment[]>();
-          snapshot.forEach((doc) => {
-            const data = doc.data();
-            const comment: Comment = {
-              id: doc.id,
-              postId: data.postId || '',
-              parentId: data.parentId || undefined,
-              authorId: data.authorId || '',
-              authorNickname: data.authorNickname || '알 수 없음',
-              content: data.content || '',
-              isAnonymous: data.isAnonymous || false,
-              createdAt: data.createdAt?.toDate() || new Date(),
-              likes: data.likes || 0,
-              likedBy: data.likedBy || [],
-            };
-            const existing = chunkMap.get(comment.postId) || [];
-            existing.push(comment);
-            chunkMap.set(comment.postId, existing);
-          });
-          chunkResults.set(chunkIndex, chunkMap);
-          mergeAllChunks();
-        },
-        (err) => {
-          console.error('댓글 실시간 구독 실패:', err);
-        }
-      );
-
-      unsubscribes.push(unsub);
+    // getDocs 1회 조회 (onSnapshot → getDocs: 목록 미리보기용 실시간 불필요)
+    let cancelled = false;
+    Promise.all(
+      chunks.map(async (chunk, chunkIndex) => {
+        const commentsQuery = query(
+          collection(db, 'comments'),
+          where('postId', 'in', chunk)
+        );
+        const snapshot = await getDocs(commentsQuery);
+        const chunkMap = new Map<string, Comment[]>();
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          const comment: Comment = {
+            id: doc.id,
+            postId: data.postId || '',
+            parentId: data.parentId || undefined,
+            authorId: data.authorId || '',
+            authorNickname: data.authorNickname || '알 수 없음',
+            content: data.content || '',
+            isAnonymous: data.isAnonymous || false,
+            createdAt: data.createdAt?.toDate() || new Date(),
+            likes: data.likes || 0,
+            likedBy: data.likedBy || [],
+          };
+          const existing = chunkMap.get(comment.postId) || [];
+          existing.push(comment);
+          chunkMap.set(comment.postId, existing);
+        });
+        chunkResults.set(chunkIndex, chunkMap);
+      })
+    ).then(() => {
+      if (!cancelled) mergeAllChunks();
+    }).catch((err) => {
+      console.error('댓글 조회 실패:', err);
     });
 
-    return () => {
-      unsubscribes.forEach(unsub => unsub());
-    };
+    return () => { cancelled = true; };
   }, [postIdsKey]);
 
   // 검색 + 태그 필터링 및 정렬 (최신순)

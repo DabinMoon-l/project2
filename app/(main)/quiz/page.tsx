@@ -1580,14 +1580,14 @@ function QuizListPageContent() {
   // 데이터 로드 함수들
   // ============================================================
 
-  // quiz_completions 구독 (useRef로 다른 구독에 영향 안 줌)
+  // quiz_completions 1회 조회 (onSnapshot → getDocs: 목록에서 실시간 불필요, 재마운트 시 갱신)
   useEffect(() => {
     if (!user) return;
     const q = query(
       collection(db, 'quiz_completions'),
       where('userId', '==', user.uid)
     );
-    const unsub = onSnapshot(q, (snap) => {
+    getDocs(q).then((snap) => {
       const map = new Map<string, number>();
       snap.forEach(d => {
         const data = d.data();
@@ -1595,10 +1595,9 @@ function QuizListPageContent() {
       });
       completionMapRef.current = map;
       setCompletionVer(v => v + 1);
-    }, (err) => {
-      console.error('quiz_completions 구독 에러:', err);
+    }).catch((err) => {
+      console.error('quiz_completions 조회 에러:', err);
     });
-    return unsub;
   }, [user]);
 
   // 퀴즈 데이터 파싱 (updatedQuizzes 의존성 제거 - 재로딩 방지)

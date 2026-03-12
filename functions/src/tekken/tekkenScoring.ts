@@ -136,7 +136,7 @@ async function scoreRound(
 // scored transaction lock으로 이중 채점 방지
 // ============================================
 export const submitAnswer = onCall(
-  { region: "asia-northeast3" },
+  { region: "asia-northeast3", memory: "512MiB", minInstances: 1 },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");

@@ -15,7 +15,7 @@ interface RateLimitConfig {
  * - ai-generate-daily: AI 문제 생성 (일간)
  */
 const LIMITS: Record<string, RateLimitConfig> = {
-  "quiz-submit": { maxRequests: 3, windowMs: 60_000 },          // 분당 3회
+  "quiz-submit": { maxRequests: 5, windowMs: 60_000 },          // 분당 5회 (시험 중 재시도 여유)
   "ai-generate": { maxRequests: 3, windowMs: 60_000 },          // 분당 3회
   "ai-generate-daily": { maxRequests: 15, windowMs: 86_400_000 }, // 일 15회
 };

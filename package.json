@@ -48,6 +48,7 @@
     "firebase-admin": "^13.6.0",
     "postcss": "^8",
     "tailwindcss": "^3",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.0"
   }
 }

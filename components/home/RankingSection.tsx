@@ -75,8 +75,28 @@ export default function RankingSection({ overrideCourseId }: { overrideCourseId?
             totalStudents: rankedUsers.length,
           });
         } else {
-          // rankings 문서 없음 → 클라이언트 폴백
-          await computeHomeFallback(userCourseId, profile.uid, classType, setTeamRank, setPersonalRank, setTotalStudents);
+          // rankings 문서 없음 → CF에 갱신 요청 (클라이언트 폴백 제거 — 300명 동시 쿼리 폭풍 방지)
+          // refreshRankings CF가 비동기로 계산, 다음 로드 시 캐시 히트
+          try {
+            const { httpsCallable } = await import('firebase/functions');
+            const { functions } = await import('@/lib/firebase');
+            const refresh = httpsCallable(functions, 'refreshRankings');
+            await refresh({ courseId: userCourseId });
+            // 재시도 — CF가 즉시 계산 완료하면 이번에 데이터 표시
+            const retrySnap = await getDoc(doc(db, 'rankings', userCourseId));
+            if (retrySnap.exists()) {
+              const retryData = retrySnap.data();
+              const rankedUsers = retryData.rankedUsers || [];
+              const teamRanksArr = retryData.teamRanks || [];
+              const myTeam = teamRanksArr.find((t: any) => t.classId === classType);
+              if (myTeam) setTeamRank(myTeam.rank);
+              const me = rankedUsers.find((u: any) => u.id === profile.uid);
+              if (me) setPersonalRank(me.rank);
+              setTotalStudents(rankedUsers.length);
+            }
+          } catch {
+            // CF 호출 실패해도 무방 — 다음 스케줄(10분)에서 자동 생성
+          }
         }
 
         setLoading(false);

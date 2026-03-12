@@ -224,3 +224,160 @@ describe("gradeQuestion — 반환값 포맷", () => {
     expect(gradeQuestion(q, makeAnswer([2, 0]), 0).userAnswerStr).toBe("2,0");
   });
 });
+
+// ============================================================
+// 결합형 (combined) — 서브 문제 개별 채점
+// ============================================================
+
+describe("gradeQuestion — 결합형 서브 문제", () => {
+  // 결합형은 공통 지문 + 하위 N문제 → recordAttempt가 flatten 후 개별 gradeQuestion 호출
+  // 서브 문제 타입이 mixed (OX + 객관식 + 단답) 일 때 각각 정상 채점되는지
+
+  it("서브 문제 #0: OX 정답", () => {
+    const sub = { type: "ox", answer: 1 };
+    expect(gradeQuestion(sub, makeAnswer(1), 0).isCorrect).toBe(true);
+  });
+
+  it("서브 문제 #1: 객관식 정답 (0-indexed)", () => {
+    const sub = { type: "multiple", answer: 3 };
+    expect(gradeQuestion(sub, makeAnswer(3), 1).isCorrect).toBe(true);
+  });
+
+  it("서브 문제 #2: 단답형 정답", () => {
+    const sub = { type: "short_answer", answer: "미토콘드리아" };
+    expect(gradeQuestion(sub, makeAnswer("미토콘드리아"), 2).isCorrect).toBe(true);
+  });
+
+  it("서브 문제 믹스: 3개 중 1개만 맞으면 개별 채점 독립", () => {
+    const subs = [
+      { type: "ox", answer: 0 },
+      { type: "multiple", answer: 2 },
+      { type: "short_answer", answer: "세포" },
+    ];
+    const answers = [makeAnswer(0), makeAnswer(1), makeAnswer("핵")];
+
+    const results = subs.map((s, i) => gradeQuestion(s, answers[i], i));
+    expect(results[0].isCorrect).toBe(true);  // OX 맞음
+    expect(results[1].isCorrect).toBe(false); // 객관식 틀림
+    expect(results[2].isCorrect).toBe(false); // 단답 틀림
+  });
+
+  it("서브 문제 복수정답 객관식 채점", () => {
+    const sub = { type: "multiple", answer: [0, 3] };
+    expect(gradeQuestion(sub, makeAnswer([3, 0]), 0).isCorrect).toBe(true);
+    expect(gradeQuestion(sub, makeAnswer([0]), 0).isCorrect).toBe(false);
+  });
+});
+
+// ============================================================
+// 0-indexed vs 1-indexed 함정
+// ============================================================
+
+describe("gradeQuestion — 0-indexed 안전성", () => {
+  it("정답이 0번 선지 (첫 번째) → 사용자 0 제출 → 정답", () => {
+    const q = { type: "multiple", answer: 0 };
+    expect(gradeQuestion(q, makeAnswer(0), 0).isCorrect).toBe(true);
+  });
+
+  it("정답이 0번 선지 → 사용자 1 제출 → 오답 (1-indexed 착각 방지)", () => {
+    const q = { type: "multiple", answer: 0 };
+    expect(gradeQuestion(q, makeAnswer(1), 0).isCorrect).toBe(false);
+  });
+
+  it("8개 선지 중 마지막(index 7) 정답", () => {
+    const q = { type: "multiple", answer: 7 };
+    expect(gradeQuestion(q, makeAnswer(7), 0).isCorrect).toBe(true);
+    expect(gradeQuestion(q, makeAnswer(8), 0).isCorrect).toBe(false);
+  });
+
+  it("복수정답 [0, 1] — 첫 두 선지 모두 정답", () => {
+    const q = { type: "multiple", answer: [0, 1] };
+    expect(gradeQuestion(q, makeAnswer([0, 1]), 0).isCorrect).toBe(true);
+    expect(gradeQuestion(q, makeAnswer([1, 2]), 0).isCorrect).toBe(false);
+  });
+});
+
+// ============================================================
+// 타입 강제변환 엣지케이스
+// ============================================================
+
+describe("gradeQuestion — 타입 강제변환", () => {
+  it("정답 숫자 2, 사용자 문자열 '2' 제출 → 정답 (Number 변환)", () => {
+    const q = { type: "multiple", answer: 2 };
+    expect(gradeQuestion(q, makeAnswer("2" as any), 0).isCorrect).toBe(true);
+  });
+
+  it("정답 숫자 0, 사용자 문자열 '0' 제출 → 정답", () => {
+    const q = { type: "multiple", answer: 0 };
+    expect(gradeQuestion(q, makeAnswer("0" as any), 0).isCorrect).toBe(true);
+  });
+
+  it("OX: 사용자 boolean true 제출 → X가 아닌 O로 처리되지 않아야 함", () => {
+    const q = { type: "ox", answer: 0 }; // 정답: O
+    // boolean true → 문자열도 아니고 0도 아님 → uaIsO = false → "X"
+    const result = gradeQuestion(q, makeAnswer(true as any), 0);
+    // true는 "O"가 아니므로 → X로 처리 → 오답
+    expect(result.userAnswerStr).toBe("X");
+    expect(result.isCorrect).toBe(false);
+  });
+
+  it("OX: 사용자 boolean false 제출 → O로 처리되지 않아야 함", () => {
+    const q = { type: "ox", answer: 1 }; // 정답: X
+    // boolean false → 0이 아님(falsy이지만 === 비교) → uaIsO depends
+    const result = gradeQuestion(q, makeAnswer(false as any), 0);
+    // false !== 0 (strict), false !== "0", false !== "O" → X로 처리
+    expect(result.userAnswerStr).toBe("X");
+    expect(result.isCorrect).toBe(true); // X == X
+  });
+
+  it("주관식: 숫자 제출도 문자열로 비교", () => {
+    const q = { type: "short_answer", answer: "42" };
+    expect(gradeQuestion(q, makeAnswer(42 as any), 0).isCorrect).toBe(true);
+  });
+
+  it("객관식: NaN 입력 → 0으로 변환되어 0번 선지 선택 취급", () => {
+    const q = { type: "multiple", answer: 1 };
+    const result = gradeQuestion(q, makeAnswer("abc" as any), 0);
+    // Number("abc") = NaN, NaN === 1 → false
+    expect(result.isCorrect).toBe(false);
+  });
+});
+
+// ============================================================
+// 빈 배열 / 경계값
+// ============================================================
+
+describe("gradeQuestion — 경계값", () => {
+  it("정답이 빈 배열 [] → 사용자 빈 배열 제출 → 정답", () => {
+    const q = { type: "multiple", answer: [] };
+    expect(gradeQuestion(q, makeAnswer([]), 0).isCorrect).toBe(true);
+  });
+
+  it("정답이 빈 배열 → 사용자 [0] 제출 → 오답", () => {
+    const q = { type: "multiple", answer: [] };
+    expect(gradeQuestion(q, makeAnswer([0]), 0).isCorrect).toBe(false);
+  });
+
+  it("주관식: 빈 문자열 정답 → 빈 문자열 제출 → 정답", () => {
+    const q = { type: "short_answer", answer: "" };
+    expect(gradeQuestion(q, makeAnswer(""), 0).isCorrect).toBe(true);
+  });
+
+  it("주관식: 공백만 있는 답 → trim 후 비교", () => {
+    const q = { type: "short_answer", answer: "  " };
+    // "  ".trim() = "", 사용자 "  ".trim() = "" → 같음
+    expect(gradeQuestion(q, makeAnswer("  "), 0).isCorrect).toBe(true);
+  });
+
+  it("주관식: ||| 구분자 사이에 빈 문자열", () => {
+    const q = { type: "short_answer", answer: "세포|||" };
+    // ["세포", ""] → "" 입력 시 정답
+    expect(gradeQuestion(q, makeAnswer(""), 0).isCorrect).toBe(true);
+    expect(gradeQuestion(q, makeAnswer("세포"), 0).isCorrect).toBe(true);
+  });
+
+  it("questionIndex가 큰 값이어도 정상 작동", () => {
+    const q = { type: "ox", answer: 0 };
+    expect(gradeQuestion(q, makeAnswer(0), 999).isCorrect).toBe(true);
+  });
+});
