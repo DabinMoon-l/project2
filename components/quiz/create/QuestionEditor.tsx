@@ -21,7 +21,7 @@ import {
   GANA_LABELS,
   BOGI_QUESTION_PRESETS,
 } from './questionTypes';
-import { generateId, typeLabels } from './questionUtils';
+import { generateId, typeLabels, getInitialQuestionData } from './questionUtils';
 import SubQuestionMixedExamplesEditor from './SubQuestionMixedExamplesEditor';
 import SubQuestionEditor from './SubQuestionEditor';
 
@@ -52,125 +52,8 @@ export default function QuestionEditor({
   onAddExtracted,
   onRemoveExtracted,
 }: QuestionEditorProps) {
-  // 초기 상태 설정
-  const getInitialData = (): QuestionData => {
-    if (!initialQuestion) {
-      // 새 문제
-      return {
-        id: generateId(),
-        text: '',
-        type: 'multiple',
-        choices: ['', ''],
-        answerIndex: -1,
-        answerIndices: [],
-        answerText: '',
-        answerTexts: [''],
-        explanation: '',
-        imageUrl: null,
-        examples: null,
-        mixedExamples: [],
-        scoringMethod: 'manual',
-        subQuestions: [],
-        passageType: 'text',
-        koreanAbcItems: [],
-        passageImage: null,
-        passage: '',
-      };
-    }
-
-    // 기존 QuestionData인 경우
-    const existing = initialQuestion;
-    // answerTexts 초기화: 기존 answerText가 있으면 파싱
-    let answerTexts = existing.answerTexts || [];
-    if (answerTexts.length === 0 && existing.answerText) {
-      // 쉼표로 구분된 복수 정답 파싱
-      answerTexts = existing.answerText.includes('|||')
-        ? existing.answerText.split('|||').map(s => s.trim())
-        : [existing.answerText];
-    }
-    if (answerTexts.length === 0) {
-      answerTexts = [''];
-    }
-    // 기존 examples를 mixedExamples 블록으로 마이그레이션
-    let mixedExamples: MixedExampleBlock[] = [];
-
-    // 기존 mixedExamples가 있으면 새 블록 구조로 변환
-    if (existing.mixedExamples && existing.mixedExamples.length > 0) {
-      // 이전 형식(MixedExampleItem[])인지 새 형식(MixedExampleBlock[])인지 확인
-      const firstItem = existing.mixedExamples[0] as MixedExampleBlock | MixedExampleItem;
-      if ('items' in firstItem || (firstItem.type === 'text' && 'content' in firstItem && !('label' in firstItem))) {
-        // 이미 새 형식
-        mixedExamples = existing.mixedExamples as MixedExampleBlock[];
-      } else {
-        // 이전 형식 → 새 형식으로 변환
-        // labeled 항목들을 하나의 블록으로 그룹화
-        const oldItems = existing.mixedExamples as unknown as MixedExampleItem[];
-        const labeledItems = oldItems.filter(item => item.type === 'labeled');
-        const textItems = oldItems.filter(item => item.type === 'text');
-
-        // 텍스트 항목들을 개별 블록으로
-        textItems.forEach(item => {
-          mixedExamples.push({
-            id: item.id,
-            type: 'text',
-            content: item.content,
-          });
-        });
-
-        // labeled 항목들을 하나의 블록으로
-        if (labeledItems.length > 0) {
-          mixedExamples.push({
-            id: `labeled_${Date.now()}`,
-            type: 'labeled',
-            items: labeledItems.map((item, idx) => ({
-              id: item.id,
-              label: item.label || KOREAN_LABELS[idx],
-              content: item.content,
-            })),
-          });
-        }
-      }
-    } else if (existing.examples?.items?.length) {
-      // 기존 examples를 mixedExamples 블록으로 변환
-      if (existing.examples.type === 'labeled') {
-        // ㄱㄴㄷ 형식 → labeled 블록 하나
-        mixedExamples = [{
-          id: `labeled_${Date.now()}`,
-          type: 'labeled',
-          items: existing.examples.items.map((content, idx) => ({
-            id: `item_${Date.now()}_${idx}`,
-            label: KOREAN_LABELS[idx],
-            content,
-          })),
-        }];
-      } else {
-        // 텍스트 형식 → text 블록들
-        mixedExamples = existing.examples.items.map((content, idx) => ({
-          id: `text_${Date.now()}_${idx}`,
-          type: 'text' as const,
-          content,
-        }));
-      }
-    }
-
-    return {
-      ...existing,
-      answerIndices: existing.answerIndices || [],
-      answerTexts,
-      imageUrl: existing.imageUrl || null,
-      examples: existing.examples || null,
-      mixedExamples,
-      scoringMethod: existing.scoringMethod || 'manual',
-      subQuestions: existing.subQuestions || [],
-      passageType: existing.passageType || 'text',
-      koreanAbcItems: existing.koreanAbcItems || [],
-      passageImage: existing.passageImage || null,
-      passage: existing.passage || '',
-    };
-  };
-
   // 상태
-  const [question, setQuestion] = useState<QuestionData>(getInitialData);
+  const [question, setQuestion] = useState<QuestionData>(() => getInitialQuestionData(initialQuestion));
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // 이미지 업로드 관련
@@ -185,12 +68,12 @@ export default function QuestionEditor({
 
   // 보기 추가 모드
   const [showExamplesEditor, setShowExamplesEditor] = useState(
-    () => !!(getInitialData().examples || (getInitialData().mixedExamples?.length ?? 0) > 0)
+    () => !!(getInitialQuestionData(initialQuestion).examples || (getInitialQuestionData(initialQuestion).mixedExamples?.length ?? 0) > 0)
   );
 
   // 복수정답 모드 (객관식에서만 사용)
   const [isMultipleAnswerMode, setIsMultipleAnswerMode] = useState(
-    () => (getInitialData().answerIndices?.length || 0) > 1
+    () => (getInitialQuestionData(initialQuestion).answerIndices?.length || 0) > 1
   );
 
   // 추출 이미지 선택 모달 표시 여부
@@ -205,7 +88,7 @@ export default function QuestionEditor({
 
   // 초기 문제가 변경되면 상태 업데이트
   useEffect(() => {
-    setQuestion(getInitialData());
+    setQuestion(getInitialQuestionData(initialQuestion));
     setErrors({});
   }, [initialQuestion]);
 
