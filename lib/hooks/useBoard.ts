@@ -26,379 +26,48 @@ import {
   updateDoc,
   deleteDoc,
   serverTimestamp,
-  DocumentSnapshot,
   QueryDocumentSnapshot,
-  Timestamp,
   onSnapshot,
   deleteField,
   writeBatch,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from './useAuth';
+import type {
+  BoardCategory,
+  Post,
+  Comment,
+  CreatePostData,
+  CreateCommentData,
+  UsePostsReturn,
+  UsePostReturn,
+  UseCommentsReturn,
+  UseCreatePostReturn,
+  UseUpdatePostReturn,
+  UseDeletePostReturn,
+  UseCreateCommentReturn,
+  UseDeleteCommentReturn,
+  UseMyCommentsReturn,
+  UseUpdateCommentReturn,
+  UseLikeReturn,
+  UseMyLikedPostsReturn,
+  UsePinnedPostsReturn,
+  UseToProfessorPostsReturn,
+  UsePostsByClassReturn,
+} from './useBoardTypes';
+import {
+  PAGE_SIZE,
+  canCreatePost,
+  recordPostTime,
+  canCreateComment,
+  recordCommentTime,
+  docToPost,
+  docToComment,
+} from './useBoardUtils';
 
-// ============================================================
-// 타입 정의
-// ============================================================
-
-/** 게시판 카테고리 */
-export type BoardCategory = 'toProfessor' | 'community' | 'all';
-
-/** 게시판 태그 */
-export type BoardTag = '학사' | '학술' | '기타';
-
-/** 태그 목록 상수 */
-export const BOARD_TAGS: BoardTag[] = ['학사', '학술', '기타'];
-
-/** 첨부파일 정보 타입 */
-export interface AttachedFile {
-  name: string;
-  url: string;
-  type: string;
-  size: number;
-}
-
-/** 게시글 데이터 타입 */
-export interface Post {
-  id: string;
-  title: string;
-  content: string;
-  authorName?: string; // 실명 (교수님 화면에서 사용)
-  imageUrl?: string; // 대표 이미지 (하위 호환)
-  imageUrls?: string[]; // 여러 이미지
-  fileUrls?: AttachedFile[]; // 첨부 파일 목록
-  authorId: string;
-  authorNickname: string;
-  authorClassType?: 'A' | 'B' | 'C' | 'D'; // 작성자 반
-  isAnonymous: boolean;
-  category: BoardCategory;
-  courseId?: string; // 과목 ID (과목별 분리)
-  likes: number;
-  likedBy: string[]; // 좋아요한 사용자 ID 배열
-  commentCount: number;
-  isNotice: boolean;
-  createdAt: Date;
-  updatedAt?: Date;
-  // 고정 게시글 관련 필드
-  isPinned?: boolean;
-  pinnedAt?: Date;
-  pinnedBy?: string;
-  // 교수님께 전달 여부
-  toProfessor?: boolean;
-  // 조회수
-  viewCount: number;
-  // 태그 (학사/학술/기타)
-  tag?: BoardTag;
-  // 채택된 댓글 ID
-  acceptedCommentId?: string;
-}
-
-/** 댓글 데이터 타입 */
-export interface Comment {
-  id: string;
-  postId: string;
-  parentId?: string; // 대댓글인 경우 부모 댓글 ID
-  authorId: string;
-  authorNickname: string;
-  authorClassType?: 'A' | 'B' | 'C' | 'D'; // 작성자 반
-  content: string;
-  imageUrls?: string[]; // 댓글 이미지
-  isAnonymous: boolean;
-  createdAt: Date;
-  replies?: Comment[]; // 대댓글 목록 (클라이언트에서 구성)
-  likes?: number; // 좋아요 수
-  likedBy?: string[]; // 좋아요 누른 사용자 ID 목록
-  isAIReply?: boolean; // AI 자동답변 여부
-  isAccepted?: boolean; // 채택 여부
-}
-
-/** 글 작성 데이터 */
-export interface CreatePostData {
-  title: string;
-  content: string;
-  imageUrl?: string; // 대표 이미지 (하위 호환)
-  imageUrls?: string[]; // 여러 이미지
-  fileUrls?: AttachedFile[]; // 첨부 파일 목록
-  isAnonymous: boolean;
-  category: BoardCategory;
-  courseId?: string; // 과목 ID (과목별 분리)
-  toProfessor?: boolean; // 교수님께 전달 여부
-  tag?: BoardTag; // 태그 (학사/학술/기타)
-}
-
-/** 댓글 작성 데이터 */
-export interface CreateCommentData {
-  postId: string;
-  content: string;
-  isAnonymous: boolean;
-  parentId?: string; // 대댓글인 경우 부모 댓글 ID
-  imageUrls?: string[]; // 댓글 이미지 URL
-}
-
-/** usePosts 훅 반환 타입 */
-interface UsePostsReturn {
-  posts: Post[];
-  loading: boolean;
-  error: string | null;
-  hasMore: boolean;
-  loadMore: () => Promise<void>;
-  refresh: () => Promise<void>;
-}
-
-/** usePost 훅 반환 타입 */
-interface UsePostReturn {
-  post: Post | null;
-  loading: boolean;
-  error: string | null;
-  refresh: () => Promise<void>;
-}
-
-/** useComments 훅 반환 타입 */
-interface UseCommentsReturn {
-  comments: Comment[];
-  loading: boolean;
-  error: string | null;
-  refresh: () => Promise<void>;
-}
-
-/** useCreatePost 훅 반환 타입 */
-interface UseCreatePostReturn {
-  createPost: (data: CreatePostData) => Promise<string | null>;
-  loading: boolean;
-  error: string | null;
-}
-
-/** useUpdatePost 훅 반환 타입 */
-interface UseUpdatePostReturn {
-  updatePost: (postId: string, data: Partial<CreatePostData>) => Promise<boolean>;
-  loading: boolean;
-  error: string | null;
-}
-
-/** useDeletePost 훅 반환 타입 */
-interface UseDeletePostReturn {
-  deletePost: (postId: string) => Promise<boolean>;
-  loading: boolean;
-  error: string | null;
-}
-
-/** useCreateComment 훅 반환 타입 */
-interface UseCreateCommentReturn {
-  createComment: (data: CreateCommentData) => Promise<string | null>;
-  loading: boolean;
-  error: string | null;
-}
-
-/** useDeleteComment 훅 반환 타입 */
-interface UseDeleteCommentReturn {
-  deleteComment: (commentId: string, postId: string) => Promise<boolean>;
-  loading: boolean;
-  error: string | null;
-}
-
-/** useMyComments 훅 반환 타입 */
-interface UseMyCommentsReturn {
-  comments: (Comment & { postTitle?: string })[];
-  loading: boolean;
-  error: string | null;
-  refresh: () => Promise<void>;
-}
-
-/** useUpdateComment 훅 반환 타입 */
-interface UseUpdateCommentReturn {
-  updateComment: (commentId: string, content: string, imageUrls?: string[]) => Promise<boolean>;
-  loading: boolean;
-  error: string | null;
-}
-
-/** useLike 훅 반환 타입 */
-interface UseLikeReturn {
-  toggleLike: (postId: string) => Promise<boolean>;
-  isLiked: (postId: string) => boolean;
-  loading: boolean;
-  error: string | null;
-}
-
-/** useMyLikedPosts 훅 반환 타입 */
-interface UseMyLikedPostsReturn {
-  posts: Post[];
-  loading: boolean;
-  error: string | null;
-  refresh: () => Promise<void>;
-}
-
-/** usePinnedPosts 훅 반환 타입 */
-interface UsePinnedPostsReturn {
-  pinnedPosts: Post[];
-  loading: boolean;
-  error: string | null;
-  pinPost: (postId: string) => Promise<boolean>;
-  unpinPost: (postId: string) => Promise<boolean>;
-  refresh: () => Promise<void>;
-}
-
-/** useToProfessorPosts 훅 반환 타입 */
-interface UseToProfessorPostsReturn {
-  posts: Post[];
-  loading: boolean;
-  error: string | null;
-  refresh: () => Promise<void>;
-}
-
-/** usePostsByClass 훅 반환 타입 */
-interface UsePostsByClassReturn {
-  posts: Post[];
-  loading: boolean;
-  error: string | null;
-  refresh: () => Promise<void>;
-}
-
-// ============================================================
-// 페이지 크기 상수
-// ============================================================
-const PAGE_SIZE = 10;
-
-// ============================================================
-// 도배 방지 유틸리티
-// ============================================================
-
-/** 마지막 글 작성 시간 저장 키 */
-const LAST_POST_TIME_KEY = 'hero-quiz-last-post-time';
-const LAST_COMMENT_TIME_KEY = 'hero-quiz-last-comment-time';
-const POST_COUNT_KEY = 'hero-quiz-post-count';
-
-/** 글 작성 제한: 1분에 3개 */
-const POST_LIMIT_DURATION = 60 * 1000; // 1분
-const POST_LIMIT_COUNT = 3;
-
-/** 댓글 작성 제한: 30초에 1개 */
-const COMMENT_LIMIT_DURATION = 30 * 1000; // 30초
-
-/**
- * 글 작성 가능 여부 확인
- */
-const canCreatePost = (): { canCreate: boolean; waitTime: number } => {
-  const now = Date.now();
-  const lastPostData = localStorage.getItem(POST_COUNT_KEY);
-
-  if (!lastPostData) {
-    return { canCreate: true, waitTime: 0 };
-  }
-
-  const { times } = JSON.parse(lastPostData) as { times: number[] };
-  const recentPosts = times.filter((t) => now - t < POST_LIMIT_DURATION);
-
-  if (recentPosts.length >= POST_LIMIT_COUNT) {
-    const oldestTime = Math.min(...recentPosts);
-    const waitTime = POST_LIMIT_DURATION - (now - oldestTime);
-    return { canCreate: false, waitTime };
-  }
-
-  return { canCreate: true, waitTime: 0 };
-};
-
-/**
- * 글 작성 시간 기록
- */
-const recordPostTime = (): void => {
-  const now = Date.now();
-  const lastPostData = localStorage.getItem(POST_COUNT_KEY);
-
-  let times: number[] = [];
-  if (lastPostData) {
-    const parsed = JSON.parse(lastPostData) as { times: number[] };
-    times = parsed.times.filter((t) => now - t < POST_LIMIT_DURATION);
-  }
-
-  times.push(now);
-  localStorage.setItem(POST_COUNT_KEY, JSON.stringify({ times }));
-};
-
-/**
- * 댓글 작성 가능 여부 확인
- */
-const canCreateComment = (): { canCreate: boolean; waitTime: number } => {
-  const now = Date.now();
-  const lastCommentTime = localStorage.getItem(LAST_COMMENT_TIME_KEY);
-
-  if (!lastCommentTime) {
-    return { canCreate: true, waitTime: 0 };
-  }
-
-  const timeDiff = now - parseInt(lastCommentTime, 10);
-  if (timeDiff < COMMENT_LIMIT_DURATION) {
-    return { canCreate: false, waitTime: COMMENT_LIMIT_DURATION - timeDiff };
-  }
-
-  return { canCreate: true, waitTime: 0 };
-};
-
-/**
- * 댓글 작성 시간 기록
- */
-const recordCommentTime = (): void => {
-  localStorage.setItem(LAST_COMMENT_TIME_KEY, Date.now().toString());
-};
-
-// ============================================================
-// Firestore 문서 -> Post 변환
-// ============================================================
-const docToPost = (doc: QueryDocumentSnapshot | DocumentSnapshot): Post => {
-  const data = doc.data();
-  return {
-    id: doc.id,
-    title: data?.title || '',
-    content: data?.content || '',
-    imageUrl: data?.imageUrl,
-    imageUrls: data?.imageUrls || [],
-    fileUrls: data?.fileUrls || [],
-    authorId: data?.authorId || '',
-    authorNickname: data?.authorNickname || '알 수 없음',
-    authorClassType: data?.authorClassType,
-    isAnonymous: data?.isAnonymous || false,
-    category: data?.category || 'community',
-    courseId: data?.courseId,
-    likes: data?.likes || 0,
-    likedBy: data?.likedBy || [],
-    commentCount: data?.commentCount || 0,
-    isNotice: data?.isNotice || false,
-    createdAt: data?.createdAt?.toDate() || new Date(),
-    updatedAt: data?.updatedAt?.toDate(),
-    // 고정 게시글 관련 필드
-    isPinned: data?.isPinned || false,
-    pinnedAt: data?.pinnedAt?.toDate(),
-    pinnedBy: data?.pinnedBy,
-    // 교수님께 전달 여부
-    toProfessor: data?.toProfessor || false,
-    // 조회수
-    viewCount: data?.viewCount || 0,
-    // 태그
-    tag: data?.tag || undefined,
-    // 채택된 댓글 ID
-    acceptedCommentId: data?.acceptedCommentId || undefined,
-  };
-};
-
-// ============================================================
-// Firestore 문서 -> Comment 변환
-// ============================================================
-const docToComment = (doc: QueryDocumentSnapshot | DocumentSnapshot): Comment => {
-  const data = doc.data();
-  return {
-    id: doc.id,
-    postId: data?.postId || '',
-    parentId: data?.parentId || undefined,
-    authorId: data?.authorId || '',
-    authorNickname: data?.authorNickname || '알 수 없음',
-    authorClassType: data?.authorClassType,
-    content: data?.content || '',
-    imageUrls: data?.imageUrls || [],
-    isAnonymous: data?.isAnonymous || false,
-    createdAt: data?.createdAt?.toDate() || new Date(),
-    likes: data?.likes || 0,
-    likedBy: data?.likedBy || [],
-    isAccepted: data?.isAccepted || false,
-  };
-};
+// 하위 호환을 위한 re-export
+export type { BoardCategory, BoardTag, AttachedFile, Post, Comment, CreatePostData, CreateCommentData } from './useBoardTypes';
+export { BOARD_TAGS } from './useBoardTypes';
 
 // ============================================================
 // usePosts 훅 - 글 목록 조회
