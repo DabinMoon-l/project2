@@ -25,6 +25,19 @@ import { formatChapterLabel } from '@/lib/courseIndex';
 import { useCustomFolders } from '@/lib/hooks/useCustomFolders';
 import FolderSelectModal from '@/components/common/FolderSelectModal';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
+import type {
+  SourceRect,
+  QuizStatsModalProps,
+  LabeledItem,
+  BogiData,
+  MixedExampleItem,
+  FlattenedQuestion,
+  QuestionStats,
+  QuizStats,
+  ResultWithClass,
+  ClassFilter,
+} from './quizStatsTypes';
+import { CLASS_FILTERS } from './quizStatsTypes';
 
 // 모듈 레벨 classId 캐시 (모달 닫았다 열어도 유지, 페이지 이동 시에도 유지)
 const _statsUserClassCache = new Map<string, 'A' | 'B' | 'C' | 'D' | null>();
@@ -229,144 +242,6 @@ function ClassPieChart({
     </div>
   );
 }
-
-// ============================================================
-// 타입 정의
-// ============================================================
-
-interface SourceRect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-interface QuizStatsModalProps {
-  quizId: string;
-  quizTitle: string;
-  isOpen: boolean;
-  onClose: () => void;
-  isProfessor?: boolean;
-  sourceRect?: SourceRect | null;
-}
-
-interface LabeledItem {
-  label: string;
-  content: string;
-}
-
-interface BogiData {
-  questionText: string;
-  items: LabeledItem[];
-}
-
-interface MixedExampleItem {
-  id: string;
-  type: 'text' | 'labeled' | 'gana' | 'bullet' | 'image' | 'grouped';
-  label?: string;
-  content?: string;
-  items?: LabeledItem[];
-  imageUrl?: string;
-  children?: MixedExampleItem[];
-}
-
-interface FlattenedQuestion {
-  id: string;
-  text: string;
-  type: 'ox' | 'multiple' | 'short_answer' | 'short' | 'essay';
-  choices?: string[];
-  answer?: string;
-  chapterId?: string;
-  chapterDetailId?: string;
-  // 이미지
-  imageUrl?: string;
-  // 제시문 관련
-  mixedExamples?: MixedExampleItem[];
-  passagePrompt?: string;
-  // 보기 관련
-  bogi?: BogiData | null;
-  // 결합형 그룹 정보
-  combinedGroupId?: string;
-  combinedIndex?: number;
-  combinedTotal?: number;
-  // 공통 지문 정보 (첫 번째 하위 문제에만)
-  passage?: string;
-  passageType?: string;
-  passageImage?: string;
-  koreanAbcItems?: string[];
-  // 해설
-  explanation?: string;
-  choiceExplanations?: string[];
-  // 문제 수정 시간 (수정된 문제만)
-  questionUpdatedAt?: number;
-}
-
-interface QuestionStats {
-  questionId: string;
-  questionIndex: number;
-  questionText: string;
-  questionType: string;
-  correctRate: number;
-  wrongRate: number;
-  discrimination: number;
-  totalAttempts: number;
-  correctCount: number;
-  correctAnswer?: string;
-  choices?: string[];
-  chapterId?: string;
-  chapterDetailId?: string;
-  // 이미지
-  imageUrl?: string;
-  // 제시문 관련
-  mixedExamples?: MixedExampleItem[];
-  passagePrompt?: string;
-  // 보기 정보
-  bogi?: BogiData | null;
-  // 결합형 공통 지문
-  passage?: string;
-  passageType?: string;
-  passageImage?: string;
-  koreanAbcItems?: string[];
-  // 해설
-  explanation?: string;
-  choiceExplanations?: string[];
-  // OX 선택 분포
-  oxDistribution?: { o: number; x: number };
-  // 객관식 선지별 선택 분포
-  optionDistribution?: { option: string; count: number; isCorrect: boolean; percentage: number }[];
-  // 주관식 오답 목록
-  wrongAnswers?: { answer: string; count: number }[];
-  // 서술형 답변 목록
-  essayAnswers?: { answer: string; userId: string }[];
-}
-
-interface QuizStats {
-  participantCount: number;
-  averageScore: number;
-  highestScore: number;
-  lowestScore: number;
-  stdDev: number;
-  questionStats: QuestionStats[];
-  courseId?: string;
-}
-
-interface ResultWithClass {
-  userId: string;
-  classType: 'A' | 'B' | 'C' | 'D' | null;
-  score: number;
-  questionScores: Record<string, { isCorrect: boolean; userAnswer: string; answeredAt?: any }>;
-  createdAt?: any;
-}
-
-type ClassFilter = 'all' | 'A' | 'B' | 'C' | 'D';
-
-const CLASS_FILTERS: { value: ClassFilter; label: string }[] = [
-  { value: 'all', label: '전체' },
-  { value: 'A', label: 'A반' },
-  { value: 'B', label: 'B반' },
-  { value: 'C', label: 'C반' },
-  { value: 'D', label: 'D반' },
-];
 
 // ============================================================
 // 헬퍼 함수
