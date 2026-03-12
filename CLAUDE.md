@@ -66,7 +66,9 @@ npm run logs         # 로그 확인
 - **Node 20 필수** (`engines.node: "20"`)
 - **리전**: 모든 CF `asia-northeast3` (서울)
 - tsconfig가 프론트보다 엄격: `noUnusedLocals`, `noImplicitReturns`, `strict`
-- **테스트 프레임워크 없음**: Jest/Vitest/Playwright 미설정, 수동 테스트 기반
+- **테스트 프레임워크 없음**: Jest/Vitest/Playwright 미설정
+- **빌드 검증**: `npx next build` 통과를 커밋 전 필수 검증으로 사용 (프로덕션 앱이므로 매 커밋 빌드 확인)
+- **관리 스크립트**: `scripts/` 디렉토리에 Firebase Admin SDK 기반 데이터 조회/수정 스크립트 (~50개)
 
 ### 공유 상수 (`shared/`)
 
@@ -115,18 +117,29 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 
 ### 주요 대형 파일 (수정 시 주의)
 
-| 파일 | 역할 | 비고 |
-|------|------|------|
-| `components/review/ReviewPractice.tsx` | 복습 연습 모드 | 40K+ 토큰, 3단계 플로우 |
-| `components/quiz/create/QuestionEditor.tsx` | 문제 편집기 | 34K+ 토큰, 6종 보기 타입 |
-| `lib/hooks/useReview.ts` | 복습 데이터 훅 | 1700줄+, 5종 리뷰 타입 |
-| `lib/hooks/useBoard.ts` | 게시판 데이터 훅 | CRUD + AI 댓글 |
-| `components/home/CharacterBox.tsx` | 토끼 캐러셀 + 배틀진입 | 664줄 |
-| `app/(main)/quiz/page.tsx` | 학생 퀴즈 목록 | 뉴스캐러셀 |
-| `app/(main)/review/page.tsx` | 복습 목록 | 필터 5종 |
-| `functions/src/styledQuizGenerator.ts` | AI 스타일 문제 생성 | 교수 스타일 반영 |
-| `functions/src/recordAttempt.ts` | 퀴즈 제출 서버 채점 | 분산 쓰기 |
-| `functions/src/board.ts` | 게시판 트리거 | AI 자동답변 |
+| 파일 | 줄 수 | 역할 | 비고 |
+|------|-------|------|------|
+| `app/(main)/review/page.tsx` | 3671 | 복습 목록 | 필터 5종 |
+| `app/(main)/quiz/page.tsx` | 2677 | 학생 퀴즈 목록 | +quizPageParts.tsx(129줄) |
+| `components/review/ReviewPractice.tsx` | 2572 | 복습 연습 모드 | 3단계 플로우 |
+| `app/(main)/review/[type]/[id]/page.tsx` | 2537 | 복습 상세/편집 | |
+| `components/quiz/create/QuestionEditor.tsx` | 2437 | 문제 편집기 | 6종 보기 타입 |
+| `functions/src/styledQuizGenerator.ts` | 1812 | AI 스타일 문제 생성 | 교수 스타일 반영 |
+| `app/(main)/professor/quiz/[id]/preview/page.tsx` | 1560 | 퀴즈 미리보기/편집 | |
+| `lib/hooks/useReview.ts` | 1517 | 복습 데이터 훅 | 5종 리뷰 타입 |
+| `lib/hooks/useBoard.ts` | 1445 | 게시판 데이터 훅 | CRUD + AI 댓글 |
+| `components/professor/library/ProfessorLibraryTab.tsx` | 1294 | 교수 서재 탭 | +Utils(161줄) |
+| `functions/src/board.ts` | 1018 | 게시판 트리거 | AI 자동답변 |
+
+### 공유 유틸리티 (중복 코드 통합)
+
+리팩토링으로 4~5개 파일에서 반복되던 코드를 공유 모듈로 추출:
+
+| 모듈 | 줄 수 | 역할 | 사용처 |
+|------|-------|------|--------|
+| `lib/utils/questionSerializer.ts` | 262 | flattenQuestionsForSave + 변경감지 | edit, preview, library, review 4곳 |
+| `components/common/AnimatedUnderlineTabs.tsx` | 71 | 밑줄 애니메이션 탭 (제네릭) | quiz, profQuiz, review, students 4곳 |
+| `lib/utils/quizHelpers.ts` | 42 | formatQuestionTypes, NEWSPAPER_BG_TEXT 등 | quiz, review, library 3곳 |
 
 ### Firestore 컬렉션 구조
 

@@ -1,6 +1,7 @@
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 
-const NUM_SHARDS = 10;
+// 300명 동시 제출 시 샤드당 6명으로 분산 (기존 10→50)
+const NUM_SHARDS = 50;
 
 /**
  * 분산 카운터 증가

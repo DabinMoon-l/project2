@@ -31,6 +31,9 @@ interface MilestoneContextValue {
   expBar: ReturnType<typeof getExpBarDisplay>;
   allRabbitsDiscovered: boolean;
 
+  // 토끼 보유 정보 (useRabbitHoldings 중복 구독 방지)
+  holdings: any[];
+
   // 모달 제어
   showMilestoneModal: boolean;
   openMilestoneModal: () => void;
@@ -53,6 +56,7 @@ const NOOP_MILESTONE: MilestoneContextValue = {
   pendingCount: 0,
   expBar: { current: 0, max: 50, overflow: false, pendingCount: 0 },
   allRabbitsDiscovered: false,
+  holdings: [],
   showMilestoneModal: false,
   openMilestoneModal: () => {},
   closeMilestoneModal: () => {},
@@ -266,6 +270,7 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
     pendingCount,
     expBar,
     allRabbitsDiscovered,
+    holdings,
     showMilestoneModal,
     openMilestoneModal,
     closeMilestoneModal,
@@ -274,7 +279,7 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
     suppressAutoTrigger,
     setSuppressAutoTrigger,
   }), [
-    pendingCount, expBar, allRabbitsDiscovered, showMilestoneModal,
+    pendingCount, expBar, allRabbitsDiscovered, holdings, showMilestoneModal,
     openMilestoneModal, closeMilestoneModal, buttonRect, suppressAutoTrigger,
   ]);
 

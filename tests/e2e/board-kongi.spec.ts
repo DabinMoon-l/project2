@@ -14,10 +14,8 @@ test.describe("게시판", () => {
 
   test("게시판 탭 → 글 목록 표시", async ({ page }) => {
     await navigateToTab(page, "게시판");
-    await page.waitForURL(/\/board/);
-
-    const body = page.locator("body");
-    await expect(body).not.toHaveText("Loading...", { timeout: 10_000 });
+    await expect(page).toHaveURL(/\/board/);
+    await waitForPageLoad(page);
   });
 
   test("글 작성 버튼 → 작성 페이지 이동", async ({ page }) => {
@@ -46,12 +44,6 @@ test.describe("게시판", () => {
       await firstPost.click();
       await expect(page).toHaveURL(/\/board\/.+/);
       await waitForPageLoad(page);
-
-      // 댓글 영역 or 댓글 입력창 확인
-      const commentArea = page.locator("textarea, input").filter({ hasText: /댓글/ });
-      const commentSection = page.locator("[data-comments], [data-comment-list]");
-      // 최소한 페이지가 로드되면 됨
-      await expect(page.locator("body")).not.toHaveText("Loading...", { timeout: 10_000 });
     }
   });
 
@@ -65,10 +57,7 @@ test.describe("게시판", () => {
       await waitForPageLoad(page);
 
       // 콩콩이 댓글 존재 확인
-      const kongiComment = page.locator("body").filter({ hasText: /콩콩이/ });
-      // 콩콩이 답변이 있을 수도 없을 수도 있음 (AI 호출 지연)
-      const hasKongi = await kongiComment.isVisible({ timeout: 10_000 }).catch(() => false);
-      // 결과 로그 (통과 여부와 무관)
+      const hasKongi = await page.getByText("콩콩이").isVisible({ timeout: 10_000 }).catch(() => false);
       console.log(`콩콩이 답변 존재: ${hasKongi}`);
     }
   });

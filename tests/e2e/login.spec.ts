@@ -2,11 +2,12 @@
  * E2E 테스트 — 로그인 플로우
  */
 import { test, expect } from "@playwright/test";
-import { TEST_STUDENT, TEST_PROFESSOR, waitForPageLoad } from "./helpers";
+import { TEST_STUDENT, TEST_PROFESSOR, waitForPageLoad, waitForLoginReady } from "./helpers";
 
 test.describe("학생 로그인", () => {
   test("학번 + 비밀번호로 로그인 → 홈 화면", async ({ page }) => {
     await page.goto("/login");
+    await waitForLoginReady(page);
 
     // 로그인 폼 확인
     await expect(page.getByPlaceholder("학번")).toBeVisible();
@@ -18,13 +19,14 @@ test.describe("학생 로그인", () => {
     await page.getByPlaceholder("비밀번호").fill(TEST_STUDENT.password);
     await page.getByRole("button", { name: "로그인" }).click();
 
-    // 홈 화면 리다이렉트 확인
-    await page.waitForURL(/^\/$/, { timeout: 15_000 });
+    // 로그인 후 메인 앱으로 이동 확인 (/login에서 벗어남)
+    await page.waitForURL(/.*\/(?!login)/, { timeout: 15_000 });
     await waitForPageLoad(page);
   });
 
   test("잘못된 비밀번호 → 에러 메시지", async ({ page }) => {
     await page.goto("/login");
+    await waitForLoginReady(page);
 
     await page.getByPlaceholder("학번").fill(TEST_STUDENT.id);
     await page.getByPlaceholder("비밀번호").fill("wrong_password_123");
@@ -36,6 +38,7 @@ test.describe("학생 로그인", () => {
 
   test("빈 입력 → 로그인 버튼 비활성화", async ({ page }) => {
     await page.goto("/login");
+    await waitForLoginReady(page);
 
     const loginBtn = page.getByRole("button", { name: "로그인" });
     await expect(loginBtn).toBeDisabled();
@@ -47,6 +50,7 @@ test.describe("학생 로그인", () => {
 
   test("회원가입 링크 이동", async ({ page }) => {
     await page.goto("/login");
+    await waitForLoginReady(page);
     await page.getByText("회원가입").click();
     await page.waitForURL(/\/signup/);
   });

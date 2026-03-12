@@ -87,78 +87,40 @@ export const usePosts = (category: BoardCategory, courseId?: string): UsePostsRe
   const [hasMore, setHasMore] = useState(true);
   const [pageCount, setPageCount] = useState(1);
 
-  // onSnapshot 실시간 구독 (notice + normal 2개 리스너)
+  // onSnapshot 단일 리스너 (공지+일반 통합 — 이중 구독 방지)
   useEffect(() => {
     setLoading(true);
     setError(null);
 
-    // 공지 쿼리
-    const noticeConstraints = [
+    // 공지+일반 통합 쿼리 (isNotice 필터 제거, 클라이언트에서 분리)
+    const constraints = [
       ...(courseId ? [where('courseId', '==', courseId)] : []),
       ...(category !== 'all' ? [where('category', '==', category)] : []),
-      where('isNotice', '==', true),
       orderBy('createdAt', 'desc'),
+      limit(pageCount * PAGE_SIZE + 20), // 공지 여유분 (+20)
     ];
 
-    // 일반 글 쿼리 (pageCount 기반 limit)
-    const normalConstraints = [
-      ...(courseId ? [where('courseId', '==', courseId)] : []),
-      ...(category !== 'all' ? [where('category', '==', category)] : []),
-      where('isNotice', '==', false),
-      orderBy('createdAt', 'desc'),
-      limit(pageCount * PAGE_SIZE),
-    ];
+    const postsQuery = query(collection(db, 'posts'), ...constraints);
 
-    const noticeQuery = query(collection(db, 'posts'), ...noticeConstraints);
-    const normalQuery = query(collection(db, 'posts'), ...normalConstraints);
-
-    let notices: Post[] = [];
-    let normalPosts: Post[] = [];
-    let noticeReady = false;
-    let normalReady = false;
-
-    const mergePosts = () => {
-      if (noticeReady && normalReady) {
+    const unsub = onSnapshot(
+      postsQuery,
+      (snapshot) => {
+        const allDocs = snapshot.docs.map(docToPost);
+        // 공지는 상단, 일반은 하단 (원래와 동일한 결과)
+        const notices = allDocs.filter(p => p.isNotice);
+        const normalPosts = allDocs.filter(p => !p.isNotice).slice(0, pageCount * PAGE_SIZE);
         setPosts([...notices, ...normalPosts]);
+        setHasMore(normalPosts.length === pageCount * PAGE_SIZE);
         setLoading(false);
-      }
-    };
-
-    const unsubNotice = onSnapshot(
-      noticeQuery,
-      (snapshot) => {
-        notices = snapshot.docs.map(docToPost);
-        noticeReady = true;
-        mergePosts();
-      },
-      (err) => {
-        console.error('공지 실시간 구독 실패:', err);
-        setError('게시글을 불러오는데 실패했습니다.');
-        noticeReady = true;
-        mergePosts();
-      }
-    );
-
-    const unsubNormal = onSnapshot(
-      normalQuery,
-      (snapshot) => {
-        normalPosts = snapshot.docs.map(docToPost);
-        setHasMore(snapshot.docs.length === pageCount * PAGE_SIZE);
-        normalReady = true;
-        mergePosts();
       },
       (err) => {
         console.error('게시글 실시간 구독 실패:', err);
         setError('게시글을 불러오는데 실패했습니다.');
-        normalReady = true;
-        mergePosts();
+        setLoading(false);
       }
     );
 
-    return () => {
-      unsubNotice();
-      unsubNormal();
-    };
+    return () => unsub();
   }, [category, courseId, pageCount]);
 
   // 추가 로드 (pageCount 증가 → useEffect 재실행)

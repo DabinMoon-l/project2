@@ -110,9 +110,11 @@ async function computeRankingsForCourse(courseId: string) {
   // ── 2단계: quizzes + quizResults + rabbits + holdings 병렬 조회 ──
   const [quizResult, resultsResult, rabbitResult, holdingsResult] = await Promise.allSettled([
     professorUids.length > 0
-      ? db.collection("quizzes").where("courseId", "==", courseId).get()
+      ? db.collection("quizzes").where("courseId", "==", courseId)
+          .select("creatorId", "creatorUid").get()
       : Promise.resolve(null),
-    db.collection("quizResults").where("courseId", "==", courseId).get(),
+    db.collection("quizResults").where("courseId", "==", courseId)
+        .select("userId", "quizCreatorId", "quizId", "correctCount", "totalCount", "isUpdate", "completedAt", "createdAt").get(),
     (async () => {
       const names: Record<string, string | null> = {};
       const ids = Array.from(rabbitDocIds);
@@ -374,15 +376,16 @@ export const computeRankingsScheduled = onSchedule(
       }
     }
 
-    // settings에 courseId가 없으면 users에서 수집
+    // settings에 courseId가 없으면 기본 과목 사용 (users 전체 스캔 방지)
     if (courseIds.length === 0) {
-      const usersSnap = await db.collection("users").limit(100).get();
-      const ids = new Set<string>();
-      usersSnap.docs.forEach(d => {
-        const cid = d.data().courseId;
-        if (cid) ids.add(cid);
-      });
-      courseIds.push(...ids);
+      // 학기별 기본 과목 (1학기: biology+microbiology, 2학기: pathophysiology)
+      const now = new Date();
+      const month = now.getMonth() + 1; // 1-12
+      if (month >= 2 && month <= 8) {
+        courseIds.push("biology", "microbiology");
+      } else {
+        courseIds.push("pathophysiology");
+      }
     }
 
     const uniqueIds = [...new Set(courseIds)];

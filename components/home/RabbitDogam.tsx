@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
-import { useRabbitHoldings, useRabbitsForCourse, getRabbitStats, type RabbitDoc, type RabbitHolding } from '@/lib/hooks/useRabbit';
+import { useRabbitsForCourse, getRabbitStats, type RabbitDoc, type RabbitHolding } from '@/lib/hooks/useRabbit';
 import Image from 'next/image';
 import RabbitImage from '@/components/common/RabbitImage';
 import VirtualRabbitGrid from '@/components/common/VirtualRabbitGrid';
@@ -25,6 +25,7 @@ interface RabbitDogamProps {
   userId: string;
   equippedRabbits: Array<{ rabbitId: number; courseId: string }>;
   buttonRect?: Rect | null;
+  holdings?: RabbitHolding[];
 }
 
 /**
@@ -39,6 +40,7 @@ export default function RabbitDogam({
   userId,
   equippedRabbits,
   buttonRect,
+  holdings: propHoldings,
 }: RabbitDogamProps) {
   // 도감 열림 시 네비게이션 숨김
   useHideNav(isOpen);
@@ -51,7 +53,9 @@ export default function RabbitDogam({
   }, [isOpen]);
 
   const { rabbits: allRabbits, loading: rabbitsLoading } = useRabbitsForCourse(courseId);
-  const { holdings, loading: holdingsLoading } = useRabbitHoldings(userId);
+  // MilestoneContext에서 이미 구독한 holdings를 prop으로 받음 (중복 onSnapshot 방지)
+  const holdings = propHoldings || [];
+  const holdingsLoading = !propHoldings;
 
   // === 도감 모달 요술지니 ===
   const [visible, setVisible] = useState(false);

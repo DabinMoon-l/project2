@@ -9,7 +9,7 @@ import { isStudentEmail, extractStudentId } from '@/lib/auth';
 import { SettingsList } from '@/components/profile';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useUser, useCourse } from '@/lib/contexts';
-import { useRabbitHoldings } from '@/lib/hooks/useRabbit';
+import { useMilestone } from '@/lib/contexts';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 import { useHideNav } from '@/lib/hooks/useHideNav';
 import Image from 'next/image';
@@ -37,7 +37,7 @@ export default function SettingsPage() {
   const { user, logout } = useAuth();
   const { profile, updateProfile } = useUser();
   const { userCourseId } = useCourse();
-  const { holdings } = useRabbitHoldings(user?.uid);
+  const { holdings } = useMilestone();
   const [showProfilePicker, setShowProfilePicker] = useState(false);
   const {
     settings,

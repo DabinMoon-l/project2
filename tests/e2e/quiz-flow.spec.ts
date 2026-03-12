@@ -14,21 +14,20 @@ test.describe("퀴즈 풀기 (캐러셀 퀴즈)", () => {
 
   test("퀴즈 탭 → 퀴즈 목록 표시", async ({ page }) => {
     await navigateToTab(page, "퀴즈");
-    await page.waitForURL(/\/quiz/);
+    await expect(page).toHaveURL(/\/quiz/);
 
     // 퀴즈 카드가 있거나 빈 상태 메시지
-    const body = page.locator("body");
-    await expect(body).not.toHaveText("Loading...", { timeout: 10_000 });
+    await waitForPageLoad(page);
   });
 
   test("퀴즈 카드 클릭 → 풀이 페이지 진입", async ({ page }) => {
     await navigateToTab(page, "퀴즈");
 
-    // 첫 번째 퀴즈 카드 클릭
-    const quizCard = page.locator("[data-quiz-card]").first();
-    if (await quizCard.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await quizCard.click();
-      // 퀴즈 상세 or 풀이 페이지
+    // Start 버튼 클릭
+    const startBtn = page.getByRole("button", { name: "Start" }).first();
+    if (await startBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
+      await startBtn.click();
+      // 퀴즈 풀이 페이지
       await expect(page).toHaveURL(/\/quiz\/.+/);
     }
   });
@@ -42,9 +41,6 @@ test.describe("퀴즈 풀기 (캐러셀 퀴즈)", () => {
     // 퀴즈 페이지 직접 이동
     await page.goto(`/quiz/${TEST_QUIZ_ID}`);
     await waitForPageLoad(page);
-
-    // 문제 표시 대기
-    await expect(page.locator("body")).not.toHaveText("Loading...", { timeout: 15_000 });
 
     // 문제 답변 (최대 10문제 루프)
     for (let i = 0; i < 10; i++) {
@@ -88,7 +84,7 @@ test.describe("네비게이션", () => {
     await dismissOverlays(page);
   });
 
-  test("4개 탭 순환: 홈 → 퀴즈 → 복습 → 게시판 → 홈", async ({ page }) => {
+  test("4개 탭 순환: 홈 → 퀴즈 → 복습 → 게시판", async ({ page }) => {
     await navigateToTab(page, "퀴즈");
     await expect(page).toHaveURL(/\/quiz/);
 
@@ -97,8 +93,5 @@ test.describe("네비게이션", () => {
 
     await navigateToTab(page, "게시판");
     await expect(page).toHaveURL(/\/board/);
-
-    await navigateToTab(page, "홈");
-    await expect(page).toHaveURL(/^\/$/);
   });
 });

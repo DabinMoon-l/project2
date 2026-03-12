@@ -495,7 +495,7 @@ async function saveBattleWrongAnswers(
 // startBattleRound — 카운트다운 후 / roundResult 후 라운드 시작
 // ============================================
 export const startBattleRound = onCall(
-  { region: "asia-northeast3" },
+  { region: "asia-northeast3", memory: "512MiB" },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");

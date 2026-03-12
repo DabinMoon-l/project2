@@ -13,7 +13,6 @@ import {
   query,
   where,
   orderBy,
-  onSnapshot,
   doc,
   deleteDoc,
   updateDoc,
@@ -486,34 +485,31 @@ export const useReview = (): UseReviewReturn => {
           where('isPublic', '==', false)
         );
 
-    const unsubscribePrivateQuizzes = onSnapshot(
-      privateQuizzesQuery,
-      (snapshot) => {
-        const quizzes: PrivateQuiz[] = [];
-        snapshot.forEach((docSnap) => {
-          const data = docSnap.data();
-          quizzes.push({
-            id: docSnap.id,
-            title: data.title || '퀴즈',
-            questionCount: data.questions?.length || 0,
-            createdAt: data.createdAt,
-          });
+    // 비공개 퀴즈 1회 조회 (onSnapshot → getDocs: 실시간 불필요)
+    getDocs(privateQuizzesQuery).then((snapshot) => {
+      const quizzes: PrivateQuiz[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        quizzes.push({
+          id: docSnap.id,
+          title: data.title || '퀴즈',
+          questionCount: data.questions?.length || 0,
+          createdAt: data.createdAt,
         });
+      });
 
-        quizzes.sort((a, b) => {
-          const aTime = a.createdAt?.toMillis?.() || 0;
-          const bTime = b.createdAt?.toMillis?.() || 0;
-          return bTime - aTime;
-        });
+      quizzes.sort((a, b) => {
+        const aTime = a.createdAt?.toMillis?.() || 0;
+        const bTime = b.createdAt?.toMillis?.() || 0;
+        return bTime - aTime;
+      });
 
-        if (isMounted) setPrivateQuizzes(quizzes);
-      },
-      (err) => {
-        console.error('비공개 퀴즈 로드 실패:', err);
-      }
-    );
+      if (isMounted) setPrivateQuizzes(quizzes);
+    }).catch((err) => {
+      console.error('비공개 퀴즈 로드 실패:', err);
+    });
 
-    // 삭제된 항목 구독 (휴지통)
+    // 삭제된 항목 1회 조회 (onSnapshot → getDocs: 실시간 불필요)
     const deletedQuery = userCourseId
       ? query(
           collection(db, 'deletedReviewItems'),
@@ -527,35 +523,29 @@ export const useReview = (): UseReviewReturn => {
           orderBy('deletedAt', 'desc')
         );
 
-    const unsubscribeDeleted = onSnapshot(
-      deletedQuery,
-      (snapshot) => {
-        const items: DeletedItem[] = [];
-        snapshot.forEach((docSnap) => {
-          const data = docSnap.data();
-          items.push({
-            id: docSnap.id,
-            userId: data.userId,
-            courseId: data.courseId,
-            type: data.type,
-            originalId: data.originalId,
-            title: data.title,
-            questionCount: data.questionCount || 0,
-            deletedAt: data.deletedAt,
-            restoreData: data.restoreData,
-          });
+    getDocs(deletedQuery).then((snapshot) => {
+      const items: DeletedItem[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        items.push({
+          id: docSnap.id,
+          userId: data.userId,
+          courseId: data.courseId,
+          type: data.type,
+          originalId: data.originalId,
+          title: data.title,
+          questionCount: data.questionCount || 0,
+          deletedAt: data.deletedAt,
+          restoreData: data.restoreData,
         });
-        if (isMounted) setDeletedItems(items);
-      },
-      (err) => {
-        console.error('삭제된 항목 로드 실패:', err);
-      }
-    );
+      });
+      if (isMounted) setDeletedItems(items);
+    }).catch((err) => {
+      console.error('삭제된 항목 로드 실패:', err);
+    });
 
     return () => {
       isMounted = false;
-      unsubscribePrivateQuizzes();
-      unsubscribeDeleted();
     };
     // fetchQuizTitle, fillQuizTitles, mapDocToReviewItem은 안정적인 ref이므로 의존성에서 제외
     // eslint-disable-next-line react-hooks/exhaustive-deps
