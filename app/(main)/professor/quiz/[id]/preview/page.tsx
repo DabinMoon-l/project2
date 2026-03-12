@@ -4,14 +4,14 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { useRouter, useParams } from 'next/navigation';
-import { doc, getDoc, collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/lib/firebase';
 import { useCourse } from '@/lib/contexts';
 import { formatChapterLabel, generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
-import { type QuestionData, type SubQuestion } from '@/components/quiz/create/QuestionEditor';
+import { type QuestionData } from '@/components/quiz/create/QuestionEditor';
 
 const QuestionEditor = dynamic(() => import('@/components/quiz/create/QuestionEditor'));
 import QuestionList from '@/components/quiz/create/QuestionList';
@@ -19,6 +19,7 @@ import { useProfessorQuiz, type QuizInput } from '@/lib/hooks/useProfessorQuiz';
 import { QuizDeleteModal } from '@/components/professor';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 import { convertToQuestionDataList } from '@/components/professor/library/professorLibraryUtils';
+import { isQuestionChanged, isQuestionChangedForSubQuestion, flattenQuestionsForSave } from '@/lib/utils/questionSerializer';
 import type { PreviewQuestion, DisplayItem } from './previewTypes';
 
 function EditExitModal({
@@ -446,7 +447,7 @@ export default function QuizPreviewPage() {
       const changedIds = getChangedQuestionIds();
 
       // 재시험 모드면 questionUpdatedAt 설정, 아니면 설정 안 함
-      const flattenedQuestions = flattenQuestionsForSave(requireRetest);
+      const flattenedQuestions = flattenQuestionsForSave(editableQuestions, originalQuestions, { trackChanges: true, useQuestionUpdatedAt: requireRetest });
       const quizInput: Partial<QuizInput> = {
         title: editTitle,
         description: editDescription,
@@ -533,218 +534,6 @@ export default function QuizPreviewPage() {
     setEditTags((prev) => prev.filter((t) => t !== tag));
   };
 
-  // 변경 감지
-  const isQuestionChanged = (original: any | undefined, current: QuestionData): boolean => {
-    if (!original) return true;
-    if (original.text !== current.text) return true;
-    if (original.type !== current.type) return true;
-    if (current.type === 'subjective' || current.type === 'short_answer') {
-      if ((original.answer?.toString() || '') !== (current.answerText || '')) return true;
-    } else if (current.type === 'multiple') {
-      // 원본 answer 감지: choiceCount 이상이면 1-indexed, 아니면 0-indexed
-      const origNum = parseInt(String(original.answer), 10);
-      if (!isNaN(origNum)) {
-        const choiceCount = (original.choices || []).length || 4;
-        const origAnswer = origNum >= choiceCount ? origNum - 1 : origNum;
-        if (origAnswer !== current.answerIndex) return true;
-      } else if (current.answerIndex !== -1) {
-        return true;
-      }
-    } else if (current.type === 'ox') {
-      // OX: 0/"0"/"O" = O, 1/"1"/"X" = X
-      const normalizeOx = (v: any) => {
-        const s = String(v).toUpperCase();
-        if (s === '0' || s === 'O' || s === 'TRUE') return 0;
-        if (s === '1' || s === 'X' || s === 'FALSE') return 1;
-        return v;
-      };
-      if (normalizeOx(original.answer) !== normalizeOx(current.answerIndex)) return true;
-    }
-    if (current.type === 'multiple') {
-      const origChoices = original.choices || [];
-      const currChoices = current.choices?.filter((c) => c.trim()) || [];
-      if (origChoices.length !== currChoices.length) return true;
-      for (let i = 0; i < currChoices.length; i++) {
-        if (origChoices[i] !== currChoices[i]) return true;
-      }
-    }
-    if ((original.explanation || '') !== (current.explanation || '')) return true;
-    // 이미지 비교
-    if ((original.imageUrl || null) !== (current.imageUrl || null)) return true;
-    // 발문 비교
-    if ((original.passagePrompt || '') !== (current.passagePrompt || '')) return true;
-    // 보기 비교
-    if (JSON.stringify(original.bogi || null) !== JSON.stringify(current.bogi || null)) return true;
-    return false;
-  };
-
-  const isQuestionChangedForSubQuestion = (original: any, current: SubQuestion): boolean => {
-    if (!original) return true;
-    if (original.text !== current.text) return true;
-    if (original.type !== current.type) return true;
-    if (current.type === 'subjective' || current.type === 'short_answer') {
-      if (original.answer !== (current.answerText || '')) return true;
-    } else if (current.type === 'multiple') {
-      const origNum = parseInt(String(original.answer), 10);
-      if (!isNaN(origNum)) {
-        const choiceCount = (original.choices || []).length || 4;
-        const origAnswer = origNum >= choiceCount ? origNum - 1 : origNum;
-        if (origAnswer !== (current.answerIndex ?? -1)) return true;
-      } else if ((current.answerIndex ?? -1) !== -1) {
-        return true;
-      }
-    } else if (current.type === 'ox') {
-      // OX: 0/"0"/"O" = O, 1/"1"/"X" = X
-      const normalizeOx = (v: any) => {
-        const s = String(v).toUpperCase();
-        if (s === '0' || s === 'O' || s === 'TRUE') return 0;
-        if (s === '1' || s === 'X' || s === 'FALSE') return 1;
-        return v;
-      };
-      if (normalizeOx(original.answer) !== normalizeOx(current.answerIndex ?? 0)) return true;
-    }
-    if (current.type === 'multiple') {
-      const origChoices = original.choices || [];
-      const currChoices = (current.choices || []).filter((c) => c.trim());
-      if (origChoices.length !== currChoices.length) return true;
-      for (let i = 0; i < currChoices.length; i++) {
-        if (origChoices[i] !== currChoices[i]) return true;
-      }
-    }
-    if ((original.explanation || '') !== (current.explanation || '')) return true;
-    if ((original.imageUrl || null) !== (current.image || null)) return true;
-    // 발문/보기 비교
-    if ((original.passagePrompt || '') !== (current.passagePrompt || '')) return true;
-    if (JSON.stringify(original.bogi || null) !== JSON.stringify(current.bogi || null)) return true;
-    return false;
-  };
-
-  // QuestionData[] → Firestore 저장 형식 변환
-  const flattenQuestionsForSave = (useQuestionUpdatedAt: boolean = true): any[] => {
-    const flattenedQuestions: any[] = [];
-    let orderIndex = 0;
-
-    editableQuestions.forEach((q) => {
-      if (q.type === 'combined' && q.subQuestions && q.subQuestions.length > 0) {
-        const combinedGroupId = q.id || `combined_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        const subQuestionsCount = q.subQuestions.length;
-
-        // 결합형 공통 지문 변경 감지 (지문/이미지만 수정 시에도 뱃지 표시)
-        let parentChanged = false;
-        const origFirstQ = originalQuestions.find(
-          (oq) => oq.combinedGroupId === combinedGroupId && (oq.combinedIndex === 0 || oq.combinedIndex === undefined)
-        );
-        if (!origFirstQ) {
-          parentChanged = true;
-        } else {
-          if ((origFirstQ.passage || '') !== (q.passage || '')) parentChanged = true;
-          if ((origFirstQ.passageImage || null) !== (q.passageImage || null)) parentChanged = true;
-          if ((origFirstQ.commonQuestion || '') !== (q.commonQuestion || '')) parentChanged = true;
-          if ((origFirstQ.combinedMainText || '') !== (q.text || '')) parentChanged = true;
-          if (JSON.stringify(origFirstQ.koreanAbcItems || null) !== JSON.stringify(q.koreanAbcItems || null)) parentChanged = true;
-          if (JSON.stringify(origFirstQ.passageMixedExamples || null) !== JSON.stringify(q.passageMixedExamples || null)) parentChanged = true;
-        }
-
-        q.subQuestions.forEach((sq, sqIndex) => {
-          let answer: string | number | number[];
-          if (sq.type === 'subjective' || sq.type === 'short_answer') {
-            answer = sq.answerText || '';
-          } else if (sq.type === 'multiple') {
-            if (sq.answerIndices && sq.answerIndices.length > 0) {
-              answer = sq.answerIndices;
-            } else {
-              answer = (sq.answerIndex !== undefined && sq.answerIndex >= 0) ? sq.answerIndex : -1;
-            }
-          } else {
-            answer = sq.answerIndex ?? 0;
-          }
-
-          const originalQ = originalQuestions.find((oq) => oq.id === sq.id);
-          const hasChanged = parentChanged || !originalQ || isQuestionChangedForSubQuestion(originalQ, sq);
-
-          const subQuestionData: any = {
-            // 원본 필드 보존 (choiceExplanations 등 QuestionData에 없는 필드)
-            ...(originalQ || {}),
-            // 수정 가능한 필드 덮어쓰기
-            id: sq.id || `${combinedGroupId}_${sqIndex}`,
-            order: orderIndex++,
-            text: sq.text,
-            type: sq.type,
-            choices: sq.type === 'multiple' ? (sq.choices || []).filter((c) => c.trim()) : undefined,
-            answer,
-            explanation: sq.explanation || undefined,
-            imageUrl: sq.image || undefined,
-            examples: sq.mixedExamples || undefined,
-            mixedExamples: sq.mixedExamples || undefined,
-            passagePrompt: sq.passagePrompt || undefined,
-            bogi: sq.bogi || undefined,
-            passageBlocks: sq.passageBlocks || undefined,
-            combinedGroupId,
-            combinedIndex: sqIndex,
-            combinedTotal: subQuestionsCount,
-            chapterId: sq.chapterId || undefined,
-            chapterDetailId: sq.chapterDetailId || undefined,
-            questionUpdatedAt: (hasChanged && useQuestionUpdatedAt) ? Timestamp.now() : (originalQ?.questionUpdatedAt || null),
-          };
-
-          if (sqIndex === 0) {
-            subQuestionData.passageType = q.passageType || undefined;
-            subQuestionData.passage = q.passage || undefined;
-            subQuestionData.koreanAbcItems = q.koreanAbcItems || undefined;
-            subQuestionData.passageMixedExamples = q.passageMixedExamples || undefined;
-            subQuestionData.passageImage = q.passageImage || undefined;
-            subQuestionData.commonQuestion = q.commonQuestion || undefined;
-            subQuestionData.combinedMainText = q.text || '';
-          }
-
-          flattenedQuestions.push(subQuestionData);
-        });
-      } else {
-        let answer: string | number | number[];
-        if (q.type === 'subjective' || q.type === 'short_answer') {
-          answer = q.answerText;
-        } else if (q.type === 'multiple') {
-          if (q.answerIndices && q.answerIndices.length > 0) {
-            answer = q.answerIndices;
-          } else {
-            answer = q.answerIndex >= 0 ? q.answerIndex : -1;
-          }
-        } else {
-          answer = q.answerIndex;
-        }
-
-        // ID 기반 매칭만 사용 (인덱스 폴백 제거 — 삭제/순서변경 시 오매칭 방지)
-        const originalQ = originalQuestions.find((oq) => oq.id === q.id);
-        const hasChanged = !originalQ || isQuestionChanged(originalQ, q);
-
-        flattenedQuestions.push({
-          // 원본 필드 보존 (choiceExplanations 등 QuestionData에 없는 필드)
-          ...(originalQ || {}),
-          // 수정 가능한 필드 덮어쓰기
-          id: q.id,
-          order: orderIndex++,
-          text: q.text,
-          type: q.type,
-          choices: q.type === 'multiple' ? q.choices?.filter((c) => c.trim()) : undefined,
-          answer,
-          explanation: q.explanation || undefined,
-          imageUrl: q.imageUrl || undefined,
-          examples: q.examples || undefined,
-          mixedExamples: q.mixedExamples || undefined,
-          passagePrompt: q.passagePrompt || undefined,
-          bogi: q.bogi || undefined,
-          scoringMethod: q.scoringMethod || undefined,
-          passageBlocks: q.passageBlocks || undefined,
-          chapterId: q.chapterId || undefined,
-          chapterDetailId: q.chapterDetailId || undefined,
-          questionUpdatedAt: (hasChanged && useQuestionUpdatedAt) ? Timestamp.now() : (originalQ?.questionUpdatedAt || null),
-        });
-      }
-    });
-
-    return flattenedQuestions;
-  };
-
   // 변경된 문제 ID 수집
   const getChangedQuestionIds = (): string[] => {
     const changedIds: string[] = [];
@@ -793,7 +582,7 @@ export default function QuizPreviewPage() {
       const changedIds = getChangedQuestionIds();
 
       // 재시험 모드면 questionUpdatedAt 설정, 아니면 설정 안 함
-      const flattenedQuestions = flattenQuestionsForSave(requireRetest);
+      const flattenedQuestions = flattenQuestionsForSave(editableQuestions, originalQuestions, { trackChanges: true, useQuestionUpdatedAt: requireRetest });
 
       const quizInput: Partial<QuizInput> = {
         title: editTitle,
