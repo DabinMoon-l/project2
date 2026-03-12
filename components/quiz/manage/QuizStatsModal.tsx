@@ -842,15 +842,17 @@ export default function QuizStatsModal({
     });
 
     // 현재 정답 기준으로 isCorrect 재판정 (문제 수정 후 통계 모순 방지)
-    // question.answer: 0-indexed 문자열 (객관식 "0","1,2" / OX "0","1" / 주관식 원본)
-    // scoreData.userAnswer: 0-indexed 문자열 (객관식 "0","1,2" / OX "O","X" / 주관식 원본)
-    const checkCorrect = (question: FlattenedQuestion, userAnswer: string): boolean => {
+    // question.answer: 0-indexed (객관식 "0","1,2" / OX 0,1,"0","1" / 주관식 원본)
+    // scoreData.userAnswer: (객관식 "0","1,2" / OX "O","X",0,1 / 주관식 원본)
+    // Firestore에서 숫자로 저장된 경우 대비 String() 변환
+    const checkCorrect = (question: FlattenedQuestion, rawUserAnswer: unknown): boolean => {
+      const userAnswer = rawUserAnswer != null ? String(rawUserAnswer) : '';
       if (!userAnswer && userAnswer !== '0') return false;
-      const answer = question.answer ?? '';
+      const answer = question.answer != null ? String(question.answer) : '';
       if (!answer && answer !== '0') return false;
 
       if (question.type === 'ox') {
-        const correctIsO = answer === '0';
+        const correctIsO = answer === '0' || answer.toUpperCase() === 'O';
         const userIsO = userAnswer.toUpperCase() === 'O' || userAnswer === '0';
         return correctIsO === userIsO;
       }
@@ -908,7 +910,7 @@ export default function QuizStatsModal({
             questionUserScores[questionId] = [];
           }
           // 현재 정답 기준으로 재판정 (문제 수정 시 서버 isCorrect와 불일치 방지)
-          const isCorrect = checkCorrect(question, scoreData.userAnswer || '');
+          const isCorrect = checkCorrect(question, scoreData.userAnswer ?? '');
           questionAttemptCounts[questionId]++;
           questionScoreArrays[questionId].push(isCorrect ? 1 : 0);
           questionUserScores[questionId].push({ userId: result.userId, isCorrect });
