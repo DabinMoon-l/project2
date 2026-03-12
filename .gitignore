@@ -6,6 +6,10 @@
 
 # testing
 /coverage
+/test-results/
+/tests/e2e/report/
+/tests/load/tokens.json
+/tests/load/results/
 
 # next.js
 /.next/
