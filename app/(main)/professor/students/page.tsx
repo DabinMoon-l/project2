@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import AnimatedUnderlineTabs from '@/components/common/AnimatedUnderlineTabs';
 /* eslint-disable @next/next/no-img-element */
 import { COURSES, type CourseId } from '@/lib/types/course';
 import {
@@ -419,12 +420,12 @@ function StudentsRibbonHeader({
 // 반 필터 언더라인 탭
 // ============================================================
 
-const CLASS_FILTER_OPTIONS: { key: ClassType | 'all'; label: string }[] = [
-  { key: 'all', label: 'ALL' },
-  { key: 'A', label: 'A' },
-  { key: 'B', label: 'B' },
-  { key: 'C', label: 'C' },
-  { key: 'D', label: 'D' },
+const CLASS_FILTER_OPTIONS: { value: ClassType | 'all'; label: string }[] = [
+  { value: 'all', label: 'ALL' },
+  { value: 'A', label: 'A' },
+  { value: 'B', label: 'B' },
+  { value: 'C', label: 'C' },
+  { value: 'D', label: 'D' },
 ];
 
 function ClassFilterTabs({
@@ -434,45 +435,7 @@ function ClassFilterTabs({
   selectedClass: ClassType | 'all';
   onClassChange: (cls: ClassType | 'all') => void;
 }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const btnRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const [underline, setUnderline] = useState({ left: 0, width: 0 });
-  const activeIdx = CLASS_FILTER_OPTIONS.findIndex(o => o.key === selectedClass);
-
-  const measureUnderline = useCallback(() => {
-    if (activeIdx < 0 || !containerRef.current || !btnRefs.current[activeIdx]) return;
-    const container = containerRef.current.getBoundingClientRect();
-    const btn = btnRefs.current[activeIdx]!.getBoundingClientRect();
-    setUnderline({ left: btn.left - container.left, width: btn.width });
-  }, [activeIdx]);
-
-  useEffect(() => {
-    measureUnderline();
-  }, [measureUnderline]);
-
-  return (
-    <div ref={containerRef} className="relative flex gap-4">
-      {CLASS_FILTER_OPTIONS.map((opt, i) => (
-        <button
-          key={opt.key}
-          ref={el => { btnRefs.current[i] = el; }}
-          onClick={() => onClassChange(opt.key)}
-          className={`pb-1.5 text-xl font-bold transition-colors ${
-            selectedClass === opt.key ? 'text-[#1A1A1A]' : 'text-[#5C5C5C]'
-          }`}
-        >
-          {opt.label}
-        </button>
-      ))}
-      {activeIdx >= 0 && underline.width > 0 && (
-        <motion.div
-          className="absolute bottom-0 h-[2px] bg-[#1A1A1A]"
-          animate={{ left: underline.left, width: underline.width }}
-          transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-        />
-      )}
-    </div>
-  );
+  return <AnimatedUnderlineTabs options={CLASS_FILTER_OPTIONS} activeValue={selectedClass} onChange={onClassChange} buttonClassName="text-xl" />;
 }
 
 // ============================================================

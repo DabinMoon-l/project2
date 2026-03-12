@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { useState } from 'react';
 import Image from 'next/image';
 import { getDefaultQuizTab } from '@/lib/types/course';
+import AnimatedUnderlineTabs from '@/components/common/AnimatedUnderlineTabs';
 
 // ============================================================
 // 타입 정의
@@ -79,12 +79,12 @@ export function getDefaultCarouselIndex(totalCards?: number): number {
 }
 
 /** 학생 자작 섹션 반별 필터 옵션 */
-export const CLASS_FILTER_OPTIONS: { key: 'all' | 'A' | 'B' | 'C' | 'D'; label: string }[] = [
-  { key: 'all', label: '전체' },
-  { key: 'A', label: 'A' },
-  { key: 'B', label: 'B' },
-  { key: 'C', label: 'C' },
-  { key: 'D', label: 'D' },
+export const CLASS_FILTER_OPTIONS: { value: 'all' | 'A' | 'B' | 'C' | 'D'; label: string }[] = [
+  { value: 'all', label: '전체' },
+  { value: 'A', label: 'A' },
+  { value: 'B', label: 'B' },
+  { value: 'C', label: 'C' },
+  { value: 'D', label: 'D' },
 ];
 
 // ============================================================
@@ -99,45 +99,7 @@ export function ClassFilterTabs({
   activeTab: 'all' | 'A' | 'B' | 'C' | 'D';
   onChangeTab: (key: 'all' | 'A' | 'B' | 'C' | 'D') => void;
 }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const btnRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const [underline, setUnderline] = useState({ left: 0, width: 0 });
-  const activeIdx = CLASS_FILTER_OPTIONS.findIndex(o => o.key === activeTab);
-
-  const measureUnderline = useCallback(() => {
-    if (activeIdx < 0 || !containerRef.current || !btnRefs.current[activeIdx]) return;
-    const container = containerRef.current.getBoundingClientRect();
-    const btn = btnRefs.current[activeIdx]!.getBoundingClientRect();
-    setUnderline({ left: btn.left - container.left, width: btn.width });
-  }, [activeIdx]);
-
-  useEffect(() => {
-    measureUnderline();
-  }, [measureUnderline]);
-
-  return (
-    <div ref={containerRef} className="relative flex gap-4">
-      {CLASS_FILTER_OPTIONS.map((opt, i) => (
-        <button
-          key={opt.key}
-          ref={el => { btnRefs.current[i] = el; }}
-          onClick={() => onChangeTab(opt.key)}
-          className={`pb-1.5 text-lg font-bold transition-colors ${
-            activeTab === opt.key ? 'text-[#1A1A1A]' : 'text-[#5C5C5C]'
-          }`}
-        >
-          {opt.label}
-        </button>
-      ))}
-      {activeIdx >= 0 && underline.width > 0 && (
-        <motion.div
-          className="absolute bottom-0 h-[2px] bg-[#1A1A1A]"
-          animate={{ left: underline.left, width: underline.width }}
-          transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-        />
-      )}
-    </div>
-  );
+  return <AnimatedUnderlineTabs options={CLASS_FILTER_OPTIONS} activeValue={activeTab} onChange={onChangeTab} />;
 }
 
 /** 완료 뱃지 컴포넌트 */
