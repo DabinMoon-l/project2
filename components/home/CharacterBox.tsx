@@ -28,6 +28,7 @@ import { BATTLE_CONFIG } from '@/lib/types/tekken';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
 import { SWIPE_THRESHOLD, ORBIT_RX, ORBIT_RY, CHAR_SIZE, CHAR_HALF, ORBIT_Y_SHIFT } from './characterBoxConstants';
 import { StatBadge } from './StatBadge';
+import { FloatingWrapper } from './FloatingWrapper';
 
 /**
  * 캐릭터 섹션 — 궤도 캐러셀 + XP/도감 + EXP 바 + 마일스톤
@@ -561,26 +562,7 @@ function OrbitalCharacter({
   );
 }
 
-/**
- * 둥실둥실 떠다니는 래퍼
- */
-function FloatingWrapper({ children, seed = 0 }: { children: React.ReactNode; seed?: number }) {
-  const duration = 2.6 + seed * 0.4;
-  return (
-    <motion.div
-      animate={{
-        y: [0, -18, 0],
-        rotate: [0, 2.5, 0, -2.5, 0],
-      }}
-      transition={{
-        y: { duration, repeat: Infinity, ease: 'easeInOut' },
-        rotate: { duration: duration * 1.6, repeat: Infinity, ease: 'easeInOut' },
-      }}
-    >
-      {children}
-    </motion.div>
-  );
-}
+// FloatingWrapper → ./FloatingWrapper.tsx로 분리됨
 
 // StatBadge → ./StatBadge.tsx로 분리됨
 
