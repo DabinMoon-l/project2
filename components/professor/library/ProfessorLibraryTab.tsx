@@ -30,8 +30,8 @@ import { getDefaultQuizTab, getPastExamOptions } from '@/lib/types/course';
 import { generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import PreviewQuestionCard from '@/components/professor/PreviewQuestionCard';
 import QuestionList from '@/components/quiz/create/QuestionList';
-import type { QuestionData, SubQuestion } from '@/components/quiz/create/questionTypes';
-import { Timestamp, collection, query, where, getDocs } from 'firebase/firestore';
+import type { QuestionData } from '@/components/quiz/create/questionTypes';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import {
   NEWSPAPER_BG_TEXT,
@@ -39,6 +39,7 @@ import {
   formatQuestionTypes,
   convertToQuestionDataList,
 } from './professorLibraryUtils';
+import { isQuestionChanged, isQuestionChangedForSubQuestion, flattenQuestionsForSave } from '@/lib/utils/questionSerializer';
 
 // ============================================================
 // 컴포넌트
@@ -209,210 +210,6 @@ export default function ProfessorLibraryTab({
     setEditableQuestions(convertToQuestionDataList(questions));
   }, [previewQuiz]);
 
-  // 변경 감지: 단일 문제
-  const isQuestionChanged = (original: any | undefined, current: QuestionData): boolean => {
-    if (!original) return true;
-    if (original.text !== current.text) return true;
-    if (original.type !== current.type) return true;
-    if (current.type === 'subjective' || current.type === 'short_answer') {
-      if ((original.answer?.toString() || '') !== (current.answerText || '')) return true;
-    } else if (current.type === 'multiple') {
-      const origNum = parseInt(String(original.answer), 10);
-      if (!isNaN(origNum)) {
-        const choiceCount = (original.choices || []).length || 4;
-        const origAnswer = origNum >= choiceCount ? origNum - 1 : origNum;
-        if (origAnswer !== current.answerIndex) return true;
-      } else if (current.answerIndex !== -1) return true;
-    } else if (current.type === 'ox') {
-      const normalizeOx = (v: any) => {
-        const s = String(v).toUpperCase();
-        if (s === '0' || s === 'O' || s === 'TRUE') return 0;
-        if (s === '1' || s === 'X' || s === 'FALSE') return 1;
-        return v;
-      };
-      if (normalizeOx(original.answer) !== normalizeOx(current.answerIndex)) return true;
-    }
-    if (current.type === 'multiple') {
-      const origChoices = original.choices || [];
-      const currChoices = current.choices?.filter((c) => c.trim()) || [];
-      if (origChoices.length !== currChoices.length) return true;
-      for (let i = 0; i < currChoices.length; i++) {
-        if (origChoices[i] !== currChoices[i]) return true;
-      }
-    }
-    if ((original.explanation || '') !== (current.explanation || '')) return true;
-    if ((original.imageUrl || null) !== (current.imageUrl || null)) return true;
-    if ((original.passagePrompt || '') !== (current.passagePrompt || '')) return true;
-    if (JSON.stringify(original.bogi || null) !== JSON.stringify(current.bogi || null)) return true;
-    return false;
-  };
-
-  // 변경 감지: 하위 문제
-  const isQuestionChangedForSubQuestion = (original: any, current: SubQuestion): boolean => {
-    if (!original) return true;
-    if (original.text !== current.text) return true;
-    if (original.type !== current.type) return true;
-    if (current.type === 'subjective' || current.type === 'short_answer') {
-      if (original.answer !== (current.answerText || '')) return true;
-    } else if (current.type === 'multiple') {
-      const origNum = parseInt(String(original.answer), 10);
-      if (!isNaN(origNum)) {
-        const choiceCount = (original.choices || []).length || 4;
-        const origAnswer = origNum >= choiceCount ? origNum - 1 : origNum;
-        if (origAnswer !== (current.answerIndex ?? -1)) return true;
-      } else if ((current.answerIndex ?? -1) !== -1) return true;
-    } else if (current.type === 'ox') {
-      const normalizeOx = (v: any) => {
-        const s = String(v).toUpperCase();
-        if (s === '0' || s === 'O' || s === 'TRUE') return 0;
-        if (s === '1' || s === 'X' || s === 'FALSE') return 1;
-        return v;
-      };
-      if (normalizeOx(original.answer) !== normalizeOx(current.answerIndex ?? 0)) return true;
-    }
-    if (current.type === 'multiple') {
-      const origChoices = original.choices || [];
-      const currChoices = (current.choices || []).filter((c) => c.trim());
-      if (origChoices.length !== currChoices.length) return true;
-      for (let i = 0; i < currChoices.length; i++) {
-        if (origChoices[i] !== currChoices[i]) return true;
-      }
-    }
-    if ((original.explanation || '') !== (current.explanation || '')) return true;
-    if ((original.imageUrl || null) !== (current.image || null)) return true;
-    if ((original.passagePrompt || '') !== (current.passagePrompt || '')) return true;
-    if (JSON.stringify(original.bogi || null) !== JSON.stringify(current.bogi || null)) return true;
-    return false;
-  };
-
-  // QuestionData[] → Firestore 저장 형식 변환
-  const flattenQuestionsForSave = (useQuestionUpdatedAt: boolean = true): any[] => {
-    const flattenedQuestions: any[] = [];
-    let orderIndex = 0;
-
-    editableQuestions.forEach((q) => {
-      if (q.type === 'combined' && q.subQuestions && q.subQuestions.length > 0) {
-        const combinedGroupId = q.id || `combined_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        const subQuestionsCount = q.subQuestions.length;
-
-        // 결합형 공통 지문 변경 감지
-        let parentChanged = false;
-        const origFirstQ = originalQuestions.find(
-          (oq) => oq.combinedGroupId === combinedGroupId && (oq.combinedIndex === 0 || oq.combinedIndex === undefined)
-        );
-        if (!origFirstQ) {
-          parentChanged = true;
-        } else {
-          if ((origFirstQ.passage || '') !== (q.passage || '')) parentChanged = true;
-          if ((origFirstQ.passageImage || null) !== (q.passageImage || null)) parentChanged = true;
-          if ((origFirstQ.commonQuestion || '') !== (q.commonQuestion || '')) parentChanged = true;
-          if ((origFirstQ.combinedMainText || '') !== (q.text || '')) parentChanged = true;
-          if (JSON.stringify(origFirstQ.koreanAbcItems || null) !== JSON.stringify(q.koreanAbcItems || null)) parentChanged = true;
-          if (JSON.stringify(origFirstQ.passageMixedExamples || null) !== JSON.stringify(q.passageMixedExamples || null)) parentChanged = true;
-        }
-
-        q.subQuestions.forEach((sq, sqIndex) => {
-          let answer: string | number | number[];
-          if (sq.type === 'subjective' || sq.type === 'short_answer') {
-            answer = sq.answerText || '';
-          } else if (sq.type === 'multiple') {
-            if (sq.answerIndices && sq.answerIndices.length > 0) {
-              answer = sq.answerIndices;
-            } else {
-              answer = (sq.answerIndex !== undefined && sq.answerIndex >= 0) ? sq.answerIndex : -1;
-            }
-          } else {
-            answer = sq.answerIndex ?? 0;
-          }
-
-          const originalQ = originalQuestions.find((oq) => oq.id === sq.id);
-          const hasChanged = parentChanged || !originalQ || isQuestionChangedForSubQuestion(originalQ, sq);
-
-          const subQuestionData: any = {
-            ...(originalQ || {}),
-            id: sq.id || `${combinedGroupId}_${sqIndex}`,
-            order: orderIndex++,
-            text: sq.text,
-            type: sq.type,
-            choices: sq.type === 'multiple' ? (sq.choices || []).filter((c) => c.trim()) : undefined,
-            answer,
-            explanation: sq.explanation || undefined,
-            imageUrl: sq.image || undefined,
-            examples: sq.mixedExamples || undefined,
-            mixedExamples: sq.mixedExamples || undefined,
-            passagePrompt: sq.passagePrompt || undefined,
-            bogi: sq.bogi || undefined,
-            passageBlocks: sq.passageBlocks || undefined,
-            combinedGroupId,
-            combinedIndex: sqIndex,
-            combinedTotal: subQuestionsCount,
-            chapterId: sq.chapterId || undefined,
-            chapterDetailId: sq.chapterDetailId || undefined,
-            questionUpdatedAt: (hasChanged && useQuestionUpdatedAt) ? Timestamp.now() : (originalQ?.questionUpdatedAt || null),
-          };
-
-          if (sqIndex === 0) {
-            subQuestionData.passageType = q.passageType || undefined;
-            subQuestionData.passage = q.passage || undefined;
-            subQuestionData.koreanAbcItems = q.koreanAbcItems || undefined;
-            subQuestionData.passageMixedExamples = q.passageMixedExamples || undefined;
-            subQuestionData.passageImage = q.passageImage || undefined;
-            subQuestionData.commonQuestion = q.commonQuestion || undefined;
-            subQuestionData.combinedMainText = q.text || '';
-          }
-
-          flattenedQuestions.push(subQuestionData);
-        });
-      } else {
-        let answer: string | number | number[];
-        if (q.type === 'subjective' || q.type === 'short_answer') {
-          answer = q.answerText;
-        } else if (q.type === 'multiple') {
-          if (q.answerIndices && q.answerIndices.length > 0) {
-            answer = q.answerIndices;
-          } else {
-            answer = q.answerIndex >= 0 ? q.answerIndex : -1;
-          }
-        } else {
-          answer = q.answerIndex;
-        }
-
-        const originalQ = originalQuestions.find((oq) => oq.id === q.id);
-        const hasChanged = !originalQ || isQuestionChanged(originalQ, q);
-
-        flattenedQuestions.push({
-          ...(originalQ || {}),
-          id: q.id,
-          order: orderIndex++,
-          text: q.text,
-          type: q.type,
-          choices: q.type === 'multiple' ? q.choices?.filter((c) => c.trim()) : undefined,
-          answer,
-          explanation: q.explanation || undefined,
-          imageUrl: q.imageUrl || undefined,
-          examples: q.examples || undefined,
-          mixedExamples: q.mixedExamples || undefined,
-          passagePrompt: q.passagePrompt || undefined,
-          bogi: q.bogi || undefined,
-          scoringMethod: q.scoringMethod || undefined,
-          passageBlocks: q.passageBlocks || undefined,
-          chapterId: q.chapterId || undefined,
-          chapterDetailId: q.chapterDetailId || undefined,
-          questionUpdatedAt: (hasChanged && useQuestionUpdatedAt) ? Timestamp.now() : (originalQ?.questionUpdatedAt || null),
-        });
-      }
-    });
-
-    // Firestore는 undefined 값을 허용하지 않으므로 제거
-    return flattenedQuestions.map((q) => {
-      const cleaned: Record<string, any> = {};
-      for (const [key, value] of Object.entries(q)) {
-        if (value !== undefined) cleaned[key] = value;
-      }
-      return cleaned;
-    });
-  };
-
   // 문제 편집 핸들러
   const handleEditQuestion = (index: number) => setEditingIndex(index);
   const handleAddQuestion = () => setEditingIndex(-1);
@@ -456,7 +253,7 @@ export default function ProfessorLibraryTab({
       const changedIds = getChangedQuestionIds();
 
       // 재시험 모드면 questionUpdatedAt 설정, 아니면 설정 안 함
-      const flattenedQuestions = flattenQuestionsForSave(requireRetest);
+      const flattenedQuestions = flattenQuestionsForSave(editableQuestions, originalQuestions, { trackChanges: true, useQuestionUpdatedAt: requireRetest, cleanupUndefined: true });
       // 제목 변경
       if (editedTitle && editedTitle !== previewQuiz.title) {
         await updateTitle(previewQuiz.id, editedTitle);
