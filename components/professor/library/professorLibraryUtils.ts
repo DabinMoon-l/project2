@@ -6,12 +6,10 @@
  */
 
 import type { QuestionData, SubQuestion } from '@/components/quiz/create/questionTypes';
+export { NEWSPAPER_BG_TEXT } from '@/lib/utils/quizHelpers';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyValue = any;
-
-/** 신문 배경 텍스트 */
-export const NEWSPAPER_BG_TEXT = `The cell membrane, also known as the plasma membrane, is a biological membrane that separates and protects the interior of all cells from the outside environment. The cell membrane consists of a lipid bilayer, including cholesterols that sit between phospholipids to maintain their fluidity at various temperatures. The membrane also contains membrane proteins, including integral proteins that span the membrane serving as membrane transporters, and peripheral proteins that loosely attach to the outer side of the cell membrane, acting as enzymes to facilitate interaction with the cell's environment.`;
 
 /** AI 기본 제목 판별 (날짜 형식이면 serif 비적용) */
 export function isDefaultAiTitle(title: string): boolean {
