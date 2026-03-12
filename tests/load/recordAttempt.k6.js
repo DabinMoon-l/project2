@@ -3,15 +3,14 @@
  *
  * 시나리오: 300명 학생이 동시에 퀴즈를 제출
  *
- * 사전 준비:
- *   1. node tests/load/generate-tokens.js   (토큰 생성)
- *   2. 테스트용 퀴즈 ID를 K6_QUIZ_ID 환경변수로 전달
- *
- * 실행:
- *   k6 run -e QUIZ_ID=<퀴즈ID> tests/load/recordAttempt.k6.js
+ * 에뮬레이터 대상 (기본):
+ *   firebase emulators:start
+ *   node tests/load/seed-emulator.js
+ *   node tests/load/generate-tokens-emulator.js
+ *   k6 run tests/load/recordAttempt.k6.js
  *
  * 옵션:
- *   k6 run -e QUIZ_ID=xxx -e VUS=100 -e DURATION=30s tests/load/recordAttempt.k6.js
+ *   k6 run -e QUIZ_ID=xxx -e VUS=100 tests/load/recordAttempt.k6.js
  */
 
 import http from "k6/http";
@@ -31,8 +30,10 @@ const tokens = new SharedArray("tokens", function () {
 
 const PROJECT_ID = "project2-7a317";
 const REGION = "asia-northeast3";
-const QUIZ_ID = __ENV.QUIZ_ID || "TEST_QUIZ_ID";
-const BASE_URL = `https://${REGION}-${PROJECT_ID}.cloudfunctions.net/recordAttempt`;
+const QUIZ_ID = __ENV.QUIZ_ID || "load-test-quiz-0";
+const BASE_URL = __ENV.FUNCTIONS_URL
+  ? `${__ENV.FUNCTIONS_URL}/recordAttempt`
+  : `http://127.0.0.1:5001/${PROJECT_ID}/${REGION}/recordAttempt`;
 
 // ── 커스텀 메트릭 ──
 

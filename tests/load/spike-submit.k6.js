@@ -3,8 +3,11 @@
  *
  * 시나리오: 시험 종료 시 300명이 거의 동시에 제출 버튼을 누르는 상황
  *
- * 실행:
- *   k6 run -e QUIZ_ID=<퀴즈ID> tests/load/spike-submit.k6.js
+ * 에뮬레이터 대상 (기본):
+ *   firebase emulators:start
+ *   node tests/load/seed-emulator.js
+ *   node tests/load/generate-tokens-emulator.js
+ *   k6 run tests/load/spike-submit.k6.js
  */
 
 import http from "k6/http";
@@ -22,9 +25,11 @@ const tokens = new SharedArray("tokens", function () {
 
 const PROJECT_ID = "project2-7a317";
 const REGION = "asia-northeast3";
-const QUIZ_ID = __ENV.QUIZ_ID || "TEST_QUIZ_ID";
+const QUIZ_ID = __ENV.QUIZ_ID || "load-test-quiz-0";
 const VUS = Number(__ENV.VUS) || 300;
-const BASE_URL = `https://${REGION}-${PROJECT_ID}.cloudfunctions.net/recordAttempt`;
+const BASE_URL = __ENV.FUNCTIONS_URL
+  ? `${__ENV.FUNCTIONS_URL}/recordAttempt`
+  : `http://127.0.0.1:5001/${PROJECT_ID}/${REGION}/recordAttempt`;
 
 // ── 메트릭 ──
 
