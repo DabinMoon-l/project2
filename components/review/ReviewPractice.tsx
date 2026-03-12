@@ -18,51 +18,9 @@ import ExitConfirmModal from '@/components/quiz/ExitConfirmModal';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 import { type FeedbackType, FEEDBACK_TYPES } from '@/components/review/types';
 import { FeedbackIcon, InlineFeedbackPanel } from '@/components/common/InlineFeedback';
-
-interface ReviewPracticeProps {
-  /** 복습할 문제 목록 */
-  items: ReviewItem[];
-  /** 퀴즈 제목 (선택) */
-  quizTitle?: string;
-  /** 완료 핸들러 */
-  onComplete: (results: PracticeResult[]) => void;
-  /** 닫기 핸들러 */
-  onClose: () => void;
-  /** 현재 사용자 ID (본인 문제 피드백 방지용) */
-  currentUserId?: string;
-  /** 헤더 타이틀 커스터마이징 (기본값: "복습") */
-  headerTitle?: string;
-  /** 피드백 기능 표시 여부 (기본값: true) */
-  showFeedback?: boolean;
-}
-
-/**
- * 연습 결과 타입
- */
-export interface PracticeResult {
-  /** 복습 문제 ID */
-  reviewId: string;
-  /** 퀴즈 ID */
-  quizId: string;
-  /** 문제 ID (통계 반영용) */
-  questionId: string;
-  /** 사용자 답변 */
-  userAnswer: string;
-  /** 정답 여부 */
-  isCorrect: boolean;
-}
-
-/** 답안 타입 */
-type AnswerType = string | number | number[] | null;
-
-/** 화면 단계 */
-type Phase = 'practice' | 'result' | 'feedback';
-
-/**
- * 복습 연습 모드 컴포넌트
- */
-// ㄱㄴㄷ 라벨
-const KOREAN_LABELS = ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ'];
+import type { ReviewPracticeProps, PracticeResult, AnswerType, Phase } from './reviewPracticeTypes';
+import { KOREAN_LABELS, TYPE_LABELS } from './reviewPracticeTypes';
+export type { PracticeResult } from './reviewPracticeTypes';
 
 export default function ReviewPractice({
   items,
@@ -300,14 +258,7 @@ export default function ReviewPractice({
     return resultsArray.filter(r => r.isCorrect).length;
   }, [resultsArray]);
 
-  // 문제 유형별 라벨
-  const typeLabels: Record<string, string> = {
-    ox: 'OX',
-    multiple: '객관식',
-    short: '주관식',
-    short_answer: '주관식',
-    subjective: '주관식',
-  };
+  const typeLabels = TYPE_LABELS;
 
   // 복수 정답 여부 확인
   const isMultipleAnswerQuestion = useCallback(() => {
