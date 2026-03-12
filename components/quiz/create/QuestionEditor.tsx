@@ -21,7 +21,7 @@ import {
   GANA_LABELS,
   BOGI_QUESTION_PRESETS,
 } from './questionTypes';
-import { generateId, typeLabels, getInitialQuestionData } from './questionUtils';
+import { generateId, typeLabels, getInitialQuestionData, validateQuestion } from './questionUtils';
 import SubQuestionMixedExamplesEditor from './SubQuestionMixedExamplesEditor';
 import SubQuestionEditor from './SubQuestionEditor';
 
@@ -874,104 +874,10 @@ export default function QuestionEditor({
   /**
    * 유효성 검사
    */
-  const validate = (): boolean => {
-    const newErrors: Record<string, string> = {};
-
-    // 문제 텍스트 검사 (결합형은 공통 지문 보기 OR 공통 이미지 중 하나 이상 선택사항)
-    if (question.type === 'combined') {
-      // 결합형: 공통 지문 보기와 공통 이미지 모두 선택사항 (둘 다 없어도 됨)
-      // passageMixedExamples (혼합 보기)가 있으면 유효
-      // 단, 공통 문제(commonQuestion)와 하위 문제(subQuestions)는 필수 (아래에서 별도 검사)
-      // 따라서 여기서는 추가 검사 불필요
-    } else {
-      if (!question.text.trim()) {
-        newErrors.text = '문제를 입력해주세요.';
-      }
-    }
-
-    // 정답 검사
-    if (question.type === 'ox') {
-      if (question.answerIndex < 0) {
-        newErrors.answer = '정답을 선택해주세요.';
-      }
-    } else if (question.type === 'multiple') {
-      // 복수정답 모드일 때
-      if (isMultipleAnswerMode) {
-        if (!question.answerIndices || question.answerIndices.length < 2) {
-          newErrors.answer = '복수정답 모드에서는 2개 이상의 정답을 선택해주세요.';
-        }
-        // 선택된 정답들에 내용이 있는지 확인
-        const emptyAnswers = (question.answerIndices || []).filter(
-          idx => !question.choices[idx]?.trim()
-        );
-        if (emptyAnswers.length > 0) {
-          newErrors.answer = '선택된 정답에 내용이 없습니다.';
-        }
-      } else {
-        if (question.answerIndex < 0) {
-          newErrors.answer = '정답을 선택해주세요.';
-        }
-        if (question.answerIndex >= 0 && !question.choices[question.answerIndex]?.trim()) {
-          newErrors.answer = '선택된 정답에 내용이 없습니다.';
-        }
-      }
-
-      // 선지 검사
-      const filledChoices = question.choices.filter((c) => c.trim()).length;
-      if (filledChoices < 2) {
-        newErrors.choices = '최소 2개 이상의 선지를 입력해주세요.';
-      }
-    } else if (question.type === 'short_answer') {
-      // 복수 정답 중 하나라도 입력되어 있어야 함
-      const answerTexts = question.answerTexts || [question.answerText];
-      const hasValidAnswer = answerTexts.some(t => t.trim());
-      if (!hasValidAnswer) {
-        newErrors.answer = '정답을 입력해주세요.';
-      }
-    } else if (question.type === 'combined') {
-      // 공통 문제 검사 (필수)
-      if (!question.commonQuestion?.trim()) {
-        newErrors.commonQuestion = '공통 문제를 입력해주세요.';
-      }
-
-      // 하위 문제 검사
-      const subQuestions = question.subQuestions || [];
-      if (subQuestions.length === 0) {
-        newErrors.subQuestions = '최소 1개 이상의 하위 문제를 추가해주세요.';
-      } else {
-        const hasEmptySubQuestion = subQuestions.some(sq => !sq.text.trim());
-        if (hasEmptySubQuestion) {
-          newErrors.subQuestions = '모든 하위 문제에 내용을 입력해주세요.';
-        }
-      }
-    }
-
-    // 챕터 검사 (courseId가 있을 때만 필수)
-    if (courseId) {
-      if (question.type === 'combined') {
-        // 결합형: 모든 하위 문제에 챕터 필수
-        const subQuestions = question.subQuestions || [];
-        const hasEmptyChapter = subQuestions.some(sq => !sq.chapterId);
-        if (hasEmptyChapter) {
-          newErrors.chapter = '모든 하위 문제의 챕터를 설정해주세요.';
-        }
-      } else {
-        // 일반 문제: 챕터 필수
-        if (!question.chapterId) {
-          newErrors.chapter = '챕터를 설정해주세요.';
-        }
-      }
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  /**
-   * 저장
-   */
   const handleSave = () => {
-    if (validate()) {
+    const newErrors = validateQuestion(question, { courseId, isMultipleAnswerMode });
+    setErrors(newErrors);
+    if (Object.keys(newErrors).length === 0) {
       onSave(question);
     }
   };
