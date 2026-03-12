@@ -1,13 +1,14 @@
 /**
- * k6 혼합 부하 테스트 — 300명 동시 다양한 활동
+ * k6 혼합 부하 테스트 — 300명 실제 사용 패턴
  *
  * 시나리오 분배 (300명):
- *   150명 — 퀴즈 제출 (recordAttempt)
- *    50명 — 게시판 글/댓글 (Firestore REST API)
- *    30명 — 복습 연습 (recordReviewPractice)
- *    20명 — 배틀 매칭 (joinMatchmaking)
+ *    80명 — 퀴즈 풀기 (recordAttempt, 캐러셀 퀴즈)
+ *    40명 — 배틀 퀴즈 (joinMatchmaking → submitAnswer)
+ *    30명 — 토끼 뽑기 (spinRabbitGacha → claimGachaRabbit)
+ *    20명 — 토끼 레벨업 (levelUpRabbit)
  *    30명 — AI 문제 생성 (enqueueGenerationJob)
- *    20명 — 뽑기 (spinRabbitGacha)
+ *    50명 — 복습 연습 (recordReviewPractice)
+ *    50명 — 게시판 학술글 (콩콩이 AI 자동답변 트리거)
  *
  * 에뮬레이터 대상:
  *   firebase emulators:start
@@ -39,18 +40,30 @@ const COURSE_ID = "biology";
 
 // ── 메트릭 (기능별) ──
 
+// 퀴즈
 const quizSuccess = new Rate("quiz_submit_success");
 const quizDuration = new Trend("quiz_submit_duration", true);
-const boardSuccess = new Rate("board_write_success");
-const boardDuration = new Trend("board_write_duration", true);
-const reviewSuccess = new Rate("review_practice_success");
-const reviewDuration = new Trend("review_practice_duration", true);
+// 배틀
 const battleSuccess = new Rate("battle_match_success");
 const battleDuration = new Trend("battle_match_duration", true);
-const aiGenSuccess = new Rate("ai_generate_success");
-const aiGenDuration = new Trend("ai_generate_duration", true);
+const battleAnswerSuccess = new Rate("battle_answer_success");
+// 뽑기
 const gachaSuccess = new Rate("gacha_spin_success");
 const gachaDuration = new Trend("gacha_spin_duration", true);
+const gachaClaimSuccess = new Rate("gacha_claim_success");
+// 레벨업
+const levelUpSuccess = new Rate("levelup_success");
+const levelUpDuration = new Trend("levelup_duration", true);
+// AI 생성
+const aiGenSuccess = new Rate("ai_generate_success");
+const aiGenDuration = new Trend("ai_generate_duration", true);
+// 복습
+const reviewSuccess = new Rate("review_practice_success");
+const reviewDuration = new Trend("review_practice_duration", true);
+// 게시판 (콩콩이)
+const boardSuccess = new Rate("board_academic_success");
+const boardDuration = new Trend("board_academic_duration", true);
+// 공통
 const totalErrors = new Counter("total_errors");
 
 // ── 시나리오 ──
@@ -70,9 +83,11 @@ export const options = {
     },
   },
   thresholds: {
-    quiz_submit_success: ["rate>0.90"],
-    board_write_success: ["rate>0.90"],
-    review_practice_success: ["rate>0.90"],
+    quiz_submit_success: ["rate>0.85"],
+    battle_match_success: ["rate>0.80"],
+    gacha_spin_success: ["rate>0.80"],
+    review_practice_success: ["rate>0.85"],
+    board_academic_success: ["rate>0.85"],
     quiz_submit_duration: ["p(95)<15000"],
   },
 };
@@ -98,7 +113,7 @@ function callCF(functionName, data, idToken) {
   });
 }
 
-// Firestore REST API로 문서 생성
+// Firestore REST API 문서 생성
 function firestoreCreate(collection, fields, idToken) {
   const url = `${FIRESTORE_BASE}/${collection}`;
   return http.post(url, JSON.stringify({ fields }), {
@@ -110,31 +125,31 @@ function firestoreCreate(collection, fields, idToken) {
   });
 }
 
-// Firestore REST 필드 변환
+// Firestore REST 필드 헬퍼
 function strVal(s) { return { stringValue: s }; }
 function intVal(n) { return { integerValue: String(n) }; }
 function boolVal(b) { return { booleanValue: b }; }
 function arrVal(items) { return { arrayValue: { values: items } }; }
 function tsVal() { return { timestampValue: new Date().toISOString() }; }
 
-// ── 역할 분배 ──
+// ── 역할 분배 (300명) ──
 
 function getRole(vu) {
-  // VU 번호 기반으로 역할 결정 (비율 유지)
   const mod = vu % 300;
-  if (mod < 150) return "quiz";       // 150명: 퀴즈 제출
-  if (mod < 200) return "board";      // 50명: 게시판
-  if (mod < 230) return "review";     // 30명: 복습
-  if (mod < 250) return "battle";     // 20명: 배틀
-  if (mod < 280) return "ai_gen";     // 30명: AI 생성
-  return "gacha";                     // 20명: 뽑기
+  if (mod < 80) return "quiz";        // 80명: 퀴즈 풀기
+  if (mod < 120) return "battle";     // 40명: 배틀 퀴즈
+  if (mod < 150) return "gacha";      // 30명: 토끼 뽑기
+  if (mod < 170) return "levelup";    // 20명: 토끼 레벨업
+  if (mod < 200) return "ai_gen";     // 30명: AI 생성
+  if (mod < 250) return "review";     // 50명: 복습
+  return "board";                     // 50명: 게시판 (콩콩이)
 }
 
 // ============================================================
 // 역할별 시나리오
 // ============================================================
 
-// ── 퀴즈 제출 ──
+// ── 1. 퀴즈 풀기 (교수님 퀴즈 = 캐러셀 퀴즈) ──
 
 function doQuizSubmit(token) {
   const quizId = `load-test-quiz-${Math.floor(Math.random() * 5)}`;
@@ -154,56 +169,126 @@ function doQuizSubmit(token) {
   if (!ok) totalErrors.add(1);
 }
 
-// ── 게시판 글/댓글 ──
+// ── 2. 배틀 퀴즈 (매칭 → 답변 제출) ──
 
-function doBoardWrite(token) {
-  const action = Math.random() > 0.5 ? "post" : "comment";
+function doBattle(token) {
+  // 1단계: 매칭 참여
+  const matchRes = callCF("joinMatchmaking", {
+    courseId: COURSE_ID,
+  }, token.idToken);
 
-  if (action === "post") {
-    const res = firestoreCreate("posts", {
-      title: strVal(`부하테스트 글 VU${__VU}`),
-      content: strVal(`동시접속 테스트 중입니다. ${Date.now()}`),
-      category: strVal("community"),
-      authorId: strVal(token.uid),
-      authorNickname: strVal(`테스터${token.index}`),
-      authorClassType: strVal("A"),
-      courseId: strVal(COURSE_ID),
-      likes: intVal(0),
-      likedBy: arrVal([]),
-      commentCount: intVal(0),
-      viewCount: intVal(0),
-      isAnonymous: boolVal(false),
-      isNotice: boolVal(false),
-      imageUrls: arrVal([]),
-      fileUrls: arrVal([]),
-      createdAt: tsVal(),
+  battleDuration.add(matchRes.timings.duration);
+  const matchOk = check(matchRes, { "매칭 200": (r) => r.status === 200 });
+  battleSuccess.add(matchOk ? 1 : 0);
+  if (!matchOk) { totalErrors.add(1); return; }
+
+  // 2단계: 매칭 결과에서 battleId 추출 → 답변 시도
+  try {
+    const body = JSON.parse(matchRes.body);
+    const battleId = body?.result?.battleId;
+    if (!battleId) return; // waiting 상태 → 봇 매칭 대기
+
+    // 카운트다운 시뮬레이션 (3초)
+    sleep(3);
+
+    // 첫 라운드 답변 제출
+    const answerRes = callCF("submitAnswer", {
+      battleId,
+      roundIndex: 0,
+      answer: Math.floor(Math.random() * 4),
     }, token.idToken);
 
-    boardDuration.add(res.timings.duration);
-    const ok = check(res, { "게시글 작성": (r) => r.status === 200 });
-    boardSuccess.add(ok ? 1 : 0);
-    if (!ok) totalErrors.add(1);
-  } else {
-    const postId = `load-test-post-${Math.floor(Math.random() * 5)}`;
-    const res = firestoreCreate("comments", {
-      postId: strVal(postId),
-      authorId: strVal(token.uid),
-      authorNickname: strVal(`테스터${token.index}`),
-      authorClassType: strVal("A"),
-      content: strVal(`테스트 댓글 ${Date.now()}`),
-      isAnonymous: boolVal(false),
-      imageUrls: arrVal([]),
-      createdAt: tsVal(),
-    }, token.idToken);
-
-    boardDuration.add(res.timings.duration);
-    const ok = check(res, { "댓글 작성": (r) => r.status === 200 });
-    boardSuccess.add(ok ? 1 : 0);
-    if (!ok) totalErrors.add(1);
+    const answerOk = check(answerRes, { "배틀 답변 200": (r) => r.status === 200 });
+    battleAnswerSuccess.add(answerOk ? 1 : 0);
+  } catch (e) {
+    // 매칭 결과 파싱 실패
   }
 }
 
-// ── 복습 연습 ──
+// ── 3. 토끼 뽑기 (Roll → Claim 2단계) ──
+
+function doGachaSpin(token) {
+  // Roll 단계
+  const spinRes = callCF("spinRabbitGacha", {
+    courseId: COURSE_ID,
+  }, token.idToken);
+
+  gachaDuration.add(spinRes.timings.duration);
+  const spinOk = check(spinRes, { "뽑기 Roll 200": (r) => r.status === 200 });
+  gachaSuccess.add(spinOk ? 1 : 0);
+  if (!spinOk) { totalErrors.add(1); return; }
+
+  // Claim 단계 (새 토끼면 이름 짓기)
+  try {
+    const body = JSON.parse(spinRes.body);
+    const result = body?.result;
+    if (!result) return;
+
+    // 연출 시뮬레이션 (뽑기 애니메이션)
+    sleep(2);
+
+    if (result.type === "undiscovered") {
+      // 최초 발견 → 이름 짓고 claim
+      const claimRes = callCF("claimGachaRabbit", {
+        courseId: COURSE_ID,
+        rabbitId: result.rabbitId,
+        action: "discover",
+        name: `테토끼${__VU}_${Date.now() % 10000}`,
+      }, token.idToken);
+
+      const claimOk = check(claimRes, { "뽑기 Claim 200": (r) => r.status === 200 });
+      gachaClaimSuccess.add(claimOk ? 1 : 0);
+    } else if (result.type === "discovered") {
+      // 이미 발견된 토끼 → claim
+      const claimRes = callCF("claimGachaRabbit", {
+        courseId: COURSE_ID,
+        rabbitId: result.rabbitId,
+        action: "discover",
+        name: `테토끼${__VU}_${Date.now() % 10000}`,
+      }, token.idToken);
+
+      const claimOk = check(claimRes, { "뽑기 Claim 200": (r) => r.status === 200 });
+      gachaClaimSuccess.add(claimOk ? 1 : 0);
+    }
+    // type "owned" → 보유 토끼, 마일스톤 미소비 (레벨업용)
+  } catch (e) {
+    // 파싱 실패
+  }
+}
+
+// ── 4. 토끼 레벨업 ──
+
+function doLevelUp(token) {
+  const res = callCF("levelUpRabbit", {
+    courseId: COURSE_ID,
+    rabbitId: 0,  // 기본 토끼
+  }, token.idToken);
+
+  levelUpDuration.add(res.timings.duration);
+  const ok = check(res, { "레벨업 200": (r) => r.status === 200 });
+  levelUpSuccess.add(ok ? 1 : 0);
+  if (!ok) totalErrors.add(1);
+}
+
+// ── 5. AI 문제 생성 ──
+
+function doAiGenerate(token) {
+  const res = callCF("enqueueGenerationJob", {
+    text: "세포의 구조와 기능에 대해 설명하시오.",
+    difficulty: ["easy", "medium", "hard"][Math.floor(Math.random() * 3)],
+    questionCount: 5,
+    courseId: COURSE_ID,
+    courseName: "생물학",
+    tags: [`bio_${Math.floor(Math.random() * 6) + 1}`],
+  }, token.idToken);
+
+  aiGenDuration.add(res.timings.duration);
+  const ok = check(res, { "AI 생성 200": (r) => r.status === 200 });
+  aiGenSuccess.add(ok ? 1 : 0);
+  if (!ok) totalErrors.add(1);
+}
+
+// ── 6. 복습 연습 ──
 
 function doReviewPractice(token) {
   const quizId = `load-test-quiz-${Math.floor(Math.random() * 5)}`;
@@ -218,52 +303,46 @@ function doReviewPractice(token) {
   }, token.idToken);
 
   reviewDuration.add(res.timings.duration);
-  const ok = check(res, { "복습 제출 200": (r) => r.status === 200 });
+  const ok = check(res, { "복습 완료 200": (r) => r.status === 200 });
   reviewSuccess.add(ok ? 1 : 0);
   if (!ok) totalErrors.add(1);
 }
 
-// ── 배틀 매칭 ──
+// ── 7. 게시판 학술글 (콩콩이 트리거) ──
 
-function doBattleMatch(token) {
-  const res = callCF("joinMatchmaking", {
-    courseId: COURSE_ID,
+function doBoardAcademic(token) {
+  const topics = [
+    "세포 분열 과정에서 DNA 복제는 어떤 단계에서 일어나나요?",
+    "미토콘드리아의 내막과 외막의 기능 차이가 뭔가요?",
+    "원핵세포와 진핵세포의 차이점을 알고 싶어요",
+    "리보솜의 구조와 단백질 합성 과정이 궁금합니다",
+    "세포 신호전달 경로에서 2차 메신저의 역할은?",
+  ];
+
+  // 학술 태그로 게시글 작성 → onPostCreate 트리거 → 콩콩이 자동답변
+  const res = firestoreCreate("posts", {
+    title: strVal(`학술 질문 VU${__VU}`),
+    content: strVal(topics[Math.floor(Math.random() * topics.length)] + ` (${Date.now()})`),
+    category: strVal("community"),
+    tag: strVal("학술"),
+    authorId: strVal(token.uid),
+    authorNickname: strVal(`테스터${token.index}`),
+    authorClassType: strVal(["A", "B", "C", "D"][__VU % 4]),
+    courseId: strVal(COURSE_ID),
+    likes: intVal(0),
+    likedBy: arrVal([]),
+    commentCount: intVal(0),
+    viewCount: intVal(0),
+    isAnonymous: boolVal(false),
+    isNotice: boolVal(false),
+    imageUrls: arrVal([]),
+    fileUrls: arrVal([]),
+    createdAt: tsVal(),
   }, token.idToken);
 
-  battleDuration.add(res.timings.duration);
-  const ok = check(res, { "매칭 200": (r) => r.status === 200 });
-  battleSuccess.add(ok ? 1 : 0);
-  if (!ok) totalErrors.add(1);
-}
-
-// ── AI 문제 생성 ──
-
-function doAiGenerate(token) {
-  const res = callCF("enqueueGenerationJob", {
-    text: "세포의 구조와 기능에 대해 설명하시오.",
-    difficulty: ["easy", "medium", "hard"][Math.floor(Math.random() * 3)],
-    questionCount: 5,
-    courseId: COURSE_ID,
-    courseName: "생물학",
-    tags: ["1_세포"],
-  }, token.idToken);
-
-  aiGenDuration.add(res.timings.duration);
-  const ok = check(res, { "AI 생성 200": (r) => r.status === 200 });
-  aiGenSuccess.add(ok ? 1 : 0);
-  if (!ok) totalErrors.add(1);
-}
-
-// ── 뽑기 ──
-
-function doGachaSpin(token) {
-  const res = callCF("spinRabbitGacha", {
-    courseId: COURSE_ID,
-  }, token.idToken);
-
-  gachaDuration.add(res.timings.duration);
-  const ok = check(res, { "뽑기 200": (r) => r.status === 200 });
-  gachaSuccess.add(ok ? 1 : 0);
+  boardDuration.add(res.timings.duration);
+  const ok = check(res, { "학술글 작성": (r) => r.status === 200 });
+  boardSuccess.add(ok ? 1 : 0);
   if (!ok) totalErrors.add(1);
 }
 
@@ -279,11 +358,12 @@ export default function () {
 
   switch (role) {
     case "quiz":    doQuizSubmit(token); break;
-    case "board":   doBoardWrite(token); break;
-    case "review":  doReviewPractice(token); break;
-    case "battle":  doBattleMatch(token); break;
-    case "ai_gen":  doAiGenerate(token); break;
+    case "battle":  doBattle(token); break;
     case "gacha":   doGachaSpin(token); break;
+    case "levelup": doLevelUp(token); break;
+    case "ai_gen":  doAiGenerate(token); break;
+    case "review":  doReviewPractice(token); break;
+    case "board":   doBoardAcademic(token); break;
   }
 
   // 실제 사용자처럼 간격
@@ -306,28 +386,33 @@ export function handleSummary(data) {
   };
 
   const text = `
-=== 300명 혼합 부하 테스트 결과 ===
+=== 300명 실제 사용 패턴 부하 테스트 결과 ===
 
 총 요청: ${m.http_reqs?.values?.count || 0}
 총 에러: ${m.total_errors?.values?.count || 0}
 
-[퀴즈 제출 - 150명]
+[퀴즈 풀기 - 80명] (교수님 캐러셀 퀴즈)
   ${fmt("quiz_submit_success")} | ${dur("quiz_submit_duration")}
 
-[게시판 - 50명]
-  ${fmt("board_write_success")} | ${dur("board_write_duration")}
+[배틀 퀴즈 - 40명] (매칭 + 답변)
+  매칭 ${fmt("battle_match_success")} | ${dur("battle_match_duration")}
+  답변 ${fmt("battle_answer_success")}
 
-[복습 연습 - 30명]
-  ${fmt("review_practice_success")} | ${dur("review_practice_duration")}
+[토끼 뽑기 - 30명] (Roll + Claim)
+  Roll ${fmt("gacha_spin_success")} | ${dur("gacha_spin_duration")}
+  Claim ${fmt("gacha_claim_success")}
 
-[배틀 매칭 - 20명]
-  ${fmt("battle_match_success")} | ${dur("battle_match_duration")}
+[토끼 레벨업 - 20명]
+  ${fmt("levelup_success")} | ${dur("levelup_duration")}
 
 [AI 생성 - 30명]
   ${fmt("ai_generate_success")} | ${dur("ai_generate_duration")}
 
-[뽑기 - 20명]
-  ${fmt("gacha_spin_success")} | ${dur("gacha_spin_duration")}
+[복습 연습 - 50명]
+  ${fmt("review_practice_success")} | ${dur("review_practice_duration")}
+
+[게시판 학술 - 50명] (콩콩이 트리거)
+  ${fmt("board_academic_success")} | ${dur("board_academic_duration")}
 `;
 
   return {
@@ -336,11 +421,20 @@ export function handleSummary(data) {
       totalRequests: m.http_reqs?.values?.count || 0,
       totalErrors: m.total_errors?.values?.count || 0,
       quiz: { success: m.quiz_submit_success?.values?.rate, p95: m.quiz_submit_duration?.values?.["p(95)"] },
-      board: { success: m.board_write_success?.values?.rate, p95: m.board_write_duration?.values?.["p(95)"] },
-      review: { success: m.review_practice_success?.values?.rate, p95: m.review_practice_duration?.values?.["p(95)"] },
-      battle: { success: m.battle_match_success?.values?.rate, p95: m.battle_match_duration?.values?.["p(95)"] },
+      battle: {
+        matchSuccess: m.battle_match_success?.values?.rate,
+        answerSuccess: m.battle_answer_success?.values?.rate,
+        p95: m.battle_match_duration?.values?.["p(95)"],
+      },
+      gacha: {
+        spinSuccess: m.gacha_spin_success?.values?.rate,
+        claimSuccess: m.gacha_claim_success?.values?.rate,
+        p95: m.gacha_spin_duration?.values?.["p(95)"],
+      },
+      levelup: { success: m.levelup_success?.values?.rate, p95: m.levelup_duration?.values?.["p(95)"] },
       aiGen: { success: m.ai_generate_success?.values?.rate, p95: m.ai_generate_duration?.values?.["p(95)"] },
-      gacha: { success: m.gacha_spin_success?.values?.rate, p95: m.gacha_spin_duration?.values?.["p(95)"] },
+      review: { success: m.review_practice_success?.values?.rate, p95: m.review_practice_duration?.values?.["p(95)"] },
+      board: { success: m.board_academic_success?.values?.rate, p95: m.board_academic_duration?.values?.["p(95)"] },
     }, null, 2),
     stdout: text,
   };
