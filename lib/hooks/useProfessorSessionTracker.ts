@@ -5,7 +5,7 @@
  * 120초 주기로 heartbeat를 업데이트하여 활성 세션을 추적합니다.
  *
  * 컬렉션: professorLoginLogs/{auto-id}
- * 필드: uid, email, browser, os, deviceType, screenWidth, screenHeight,
+ * 필드: uid, email, browser, os, deviceType, screenSize,
  *       userAgent, loginAt, lastActiveAt
  */
 
@@ -23,21 +23,22 @@ const HEARTBEAT_INTERVAL = 120_000; // 120초
 function getDeviceInfo() {
   const ua = navigator.userAgent;
 
-  // 브라우저 감지
+  // 브라우저 감지 (CriOS=Chrome on iOS, FxiOS=Firefox on iOS)
   let browser = '알 수 없음';
-  if (ua.includes('Firefox')) browser = 'Firefox';
-  else if (ua.includes('Edg/')) browser = 'Edge';
+  if (ua.includes('Firefox') || ua.includes('FxiOS')) browser = 'Firefox';
+  else if (ua.includes('Edg/') || ua.includes('EdgiOS')) browser = 'Edge';
   else if (ua.includes('OPR') || ua.includes('Opera')) browser = 'Opera';
+  else if (ua.includes('CriOS')) browser = 'Chrome (iOS)';
   else if (ua.includes('Chrome') && !ua.includes('Edg/')) browser = 'Chrome';
-  else if (ua.includes('Safari') && !ua.includes('Chrome')) browser = 'Safari';
+  else if (ua.includes('Safari') && !ua.includes('Chrome') && !ua.includes('CriOS')) browser = 'Safari';
 
-  // OS 감지
+  // OS 감지 (iPhone/iPad를 Mac보다 먼저 — iOS UA에 "Mac" 포함됨)
   let os = '알 수 없음';
-  if (ua.includes('Windows')) os = 'Windows';
-  else if (ua.includes('Mac')) os = 'macOS';
-  else if (ua.includes('iPhone')) os = 'iOS (iPhone)';
+  if (ua.includes('iPhone')) os = 'iOS (iPhone)';
   else if (ua.includes('iPad')) os = 'iOS (iPad)';
   else if (ua.includes('Android')) os = 'Android';
+  else if (ua.includes('Windows')) os = 'Windows';
+  else if (ua.includes('Mac')) os = 'macOS';
   else if (ua.includes('Linux')) os = 'Linux';
 
   // 디바이스 타입
@@ -50,8 +51,7 @@ function getDeviceInfo() {
     os,
     deviceType,
     userAgent: ua,
-    screenWidth: screen.width,
-    screenHeight: screen.height,
+    screenSize: `${window.innerWidth}x${window.innerHeight}`,
   };
 }
 
