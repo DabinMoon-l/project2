@@ -49,6 +49,95 @@ export function calculateTotalQuestionCount(questions: QuestionData[]): number {
 }
 
 /**
+ * 문제 데이터 검증
+ * @returns 에러 객체 (비어있으면 유효)
+ */
+export function validateQuestion(
+  question: QuestionData,
+  options: { courseId?: string; isMultipleAnswerMode: boolean }
+): Record<string, string> {
+  const { courseId, isMultipleAnswerMode } = options;
+  const newErrors: Record<string, string> = {};
+
+  // 문제 텍스트 검사 (결합형은 공통 지문 보기 OR 공통 이미지 중 하나 이상 선택사항)
+  if (question.type === 'combined') {
+    // 결합형: 공통 지문 보기와 공통 이미지 모두 선택사항
+  } else {
+    if (!question.text.trim()) {
+      newErrors.text = '문제를 입력해주세요.';
+    }
+  }
+
+  // 정답 검사
+  if (question.type === 'ox') {
+    if (question.answerIndex < 0) {
+      newErrors.answer = '정답을 선택해주세요.';
+    }
+  } else if (question.type === 'multiple') {
+    if (isMultipleAnswerMode) {
+      if (!question.answerIndices || question.answerIndices.length < 2) {
+        newErrors.answer = '복수정답 모드에서는 2개 이상의 정답을 선택해주세요.';
+      }
+      const emptyAnswers = (question.answerIndices || []).filter(
+        idx => !question.choices[idx]?.trim()
+      );
+      if (emptyAnswers.length > 0) {
+        newErrors.answer = '선택된 정답에 내용이 없습니다.';
+      }
+    } else {
+      if (question.answerIndex < 0) {
+        newErrors.answer = '정답을 선택해주세요.';
+      }
+      if (question.answerIndex >= 0 && !question.choices[question.answerIndex]?.trim()) {
+        newErrors.answer = '선택된 정답에 내용이 없습니다.';
+      }
+    }
+
+    const filledChoices = question.choices.filter((c) => c.trim()).length;
+    if (filledChoices < 2) {
+      newErrors.choices = '최소 2개 이상의 선지를 입력해주세요.';
+    }
+  } else if (question.type === 'short_answer') {
+    const answerTexts = question.answerTexts || [question.answerText];
+    const hasValidAnswer = answerTexts.some(t => t.trim());
+    if (!hasValidAnswer) {
+      newErrors.answer = '정답을 입력해주세요.';
+    }
+  } else if (question.type === 'combined') {
+    if (!question.commonQuestion?.trim()) {
+      newErrors.commonQuestion = '공통 문제를 입력해주세요.';
+    }
+
+    const subQuestions = question.subQuestions || [];
+    if (subQuestions.length === 0) {
+      newErrors.subQuestions = '최소 1개 이상의 하위 문제를 추가해주세요.';
+    } else {
+      const hasEmptySubQuestion = subQuestions.some(sq => !sq.text.trim());
+      if (hasEmptySubQuestion) {
+        newErrors.subQuestions = '모든 하위 문제에 내용을 입력해주세요.';
+      }
+    }
+  }
+
+  // 챕터 검사
+  if (courseId) {
+    if (question.type === 'combined') {
+      const subQuestions = question.subQuestions || [];
+      const hasEmptyChapter = subQuestions.some(sq => !sq.chapterId);
+      if (hasEmptyChapter) {
+        newErrors.chapter = '모든 하위 문제의 챕터를 설정해주세요.';
+      }
+    } else {
+      if (!question.chapterId) {
+        newErrors.chapter = '챕터를 설정해주세요.';
+      }
+    }
+  }
+
+  return newErrors;
+}
+
+/**
  * QuestionEditor 초기 데이터 생성
  * 새 문제 또는 기존 문제의 포맷 마이그레이션 처리
  */
