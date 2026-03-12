@@ -12,7 +12,9 @@
     "start": "npm run shell",
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log",
-    "lint": "eslint --ext .ts src/"
+    "lint": "eslint --ext .ts src/",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "engines": {
     "node": "20"
