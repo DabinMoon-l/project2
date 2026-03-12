@@ -32,11 +32,11 @@ export interface CompletedQuizData {
 export type ReviewFilter = 'library' | 'solved' | 'wrong' | 'bookmark' | 'custom';
 
 /** 필터 옵션 */
-export const FILTER_OPTIONS: { value: ReviewFilter; line1: string; line2?: string }[] = [
-  { value: 'library', line1: '서재' },
-  { value: 'wrong', line1: '오답' },
-  { value: 'bookmark', line1: '찜' },
-  { value: 'custom', line1: '커스텀' },
+export const FILTER_OPTIONS: { value: ReviewFilter; label: string }[] = [
+  { value: 'library', label: '서재' },
+  { value: 'wrong', label: '오답' },
+  { value: 'bookmark', label: '찜' },
+  { value: 'custom', label: '커스텀' },
 ];
 
 /** 난이도별 이미지 */
