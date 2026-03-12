@@ -26,15 +26,7 @@ const RabbitDogam = dynamic(() => import('./RabbitDogam'), { ssr: false });
 const TekkenBattleOverlay = dynamic(() => import('@/components/tekken/TekkenBattleOverlay'), { ssr: false });
 import { BATTLE_CONFIG } from '@/lib/types/tekken';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
-
-const SWIPE_THRESHOLD = 40;
-
-/* 궤도 파라미터 */
-const ORBIT_RX = 110;
-const ORBIT_RY = 32;
-const CHAR_SIZE = 115;
-const CHAR_HALF = CHAR_SIZE / 2;
-const ORBIT_Y_SHIFT = 135;
+import { SWIPE_THRESHOLD, ORBIT_RX, ORBIT_RY, CHAR_SIZE, CHAR_HALF, ORBIT_Y_SHIFT } from './characterBoxConstants';
 
 /**
  * 캐릭터 섹션 — 궤도 캐러셀 + XP/도감 + EXP 바 + 마일스톤
