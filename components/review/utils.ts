@@ -3,27 +3,7 @@
 import { MOTIVATIONAL_QUOTES } from './types';
 import type { CompletedQuizData } from './types';
 
-/**
- * 문제 유형을 포맷하여 표시
- * 예: "OX 2 / 객관식 5 / 주관식 2"
- */
-export function formatQuestionTypes(
-  oxCount: number = 0,
-  multipleChoiceCount: number = 0,
-  subjectiveCount: number = 0
-): string {
-  const parts: string[] = [];
-  if (oxCount > 0) parts.push(`OX ${oxCount}`);
-  if (multipleChoiceCount > 0) parts.push(`객관식 ${multipleChoiceCount}`);
-  if (subjectiveCount > 0) parts.push(`주관식 ${subjectiveCount}`);
-
-  if (parts.length === 0) {
-    const total = oxCount + multipleChoiceCount + subjectiveCount;
-    return total > 0 ? `${total}문제` : '-';
-  }
-
-  return parts.join(' / ');
-}
+export { formatQuestionTypes } from '@/lib/utils/quizHelpers';
 
 /** 랜덤 명언 가져오기 */
 export function getRandomQuote(): string {

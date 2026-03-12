@@ -38,9 +38,10 @@ import { type FeedbackType, type DisplayItem, type ReviewFilter } from '@/compon
 import { KOREAN_LABELS, parseQuestionId, sortByQuestionId, createDisplayItems } from '@/lib/utils/reviewQuestionUtils';
 import QuestionCard from '@/components/review/QuestionCard';
 import QuestionList from '@/components/quiz/create/QuestionList';
-import type { QuestionData, SubQuestion } from '@/components/quiz/create/questionTypes';
+import type { QuestionData } from '@/components/quiz/create/questionTypes';
 import AddQuestionsView from '@/components/review/AddQuestionsView';
 import { convertToQuestionDataList } from '@/components/professor/library/professorLibraryUtils';
+import { flattenQuestionsForSave } from '@/lib/utils/questionSerializer';
 
 /**
  * 폴더 상세 페이지
@@ -890,112 +891,6 @@ export default function FolderDetailPage() {
     setIsEditMode(true);
   };
 
-  // QuestionData[] → Firestore 저장 형식 변환 (교수 서재와 동일)
-  const flattenQuestionsForSave = (): any[] => {
-    const flattenedQuestions: any[] = [];
-    let orderIndex = 0;
-
-    editableQuestions.forEach((q) => {
-      if (q.type === 'combined' && q.subQuestions && q.subQuestions.length > 0) {
-        const combinedGroupId = q.id || `combined_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        const subQuestionsCount = q.subQuestions.length;
-
-        q.subQuestions.forEach((sq, sqIndex) => {
-          let answer: string | number | number[];
-          if (sq.type === 'subjective' || sq.type === 'short_answer') {
-            answer = sq.answerText || '';
-          } else if (sq.type === 'multiple') {
-            if (sq.answerIndices && sq.answerIndices.length > 0) {
-              answer = sq.answerIndices;
-            } else {
-              answer = (sq.answerIndex !== undefined && sq.answerIndex >= 0) ? sq.answerIndex : -1;
-            }
-          } else {
-            answer = sq.answerIndex ?? 0;
-          }
-
-          const originalQ = originalQuestions.find((oq) => oq.id === sq.id);
-          const subQuestionData: any = {
-            ...(originalQ || {}),
-            id: sq.id || `${combinedGroupId}_${sqIndex}`,
-            order: orderIndex++,
-            text: sq.text,
-            type: sq.type,
-            choices: sq.type === 'multiple' ? (sq.choices || []).filter((c) => c.trim()) : undefined,
-            answer,
-            explanation: sq.explanation || undefined,
-            imageUrl: sq.image || undefined,
-            examples: sq.mixedExamples || undefined,
-            mixedExamples: sq.mixedExamples || undefined,
-            passagePrompt: sq.passagePrompt || undefined,
-            bogi: sq.bogi || undefined,
-            passageBlocks: sq.passageBlocks || undefined,
-            combinedGroupId,
-            combinedIndex: sqIndex,
-            combinedTotal: subQuestionsCount,
-            chapterId: sq.chapterId || undefined,
-            chapterDetailId: sq.chapterDetailId || undefined,
-          };
-
-          if (sqIndex === 0) {
-            subQuestionData.passageType = q.passageType || undefined;
-            subQuestionData.passage = q.passage || undefined;
-            subQuestionData.koreanAbcItems = q.koreanAbcItems || undefined;
-            subQuestionData.passageMixedExamples = q.passageMixedExamples || undefined;
-            subQuestionData.passageImage = q.passageImage || undefined;
-            subQuestionData.commonQuestion = q.commonQuestion || undefined;
-            subQuestionData.combinedMainText = q.text || '';
-          }
-
-          flattenedQuestions.push(subQuestionData);
-        });
-      } else {
-        let answer: string | number | number[];
-        if (q.type === 'subjective' || q.type === 'short_answer') {
-          answer = q.answerText;
-        } else if (q.type === 'multiple') {
-          if (q.answerIndices && q.answerIndices.length > 0) {
-            answer = q.answerIndices;
-          } else {
-            answer = q.answerIndex >= 0 ? q.answerIndex : -1;
-          }
-        } else {
-          answer = q.answerIndex;
-        }
-
-        const originalQ = originalQuestions.find((oq) => oq.id === q.id);
-        flattenedQuestions.push({
-          ...(originalQ || {}),
-          id: q.id,
-          order: orderIndex++,
-          text: q.text,
-          type: q.type,
-          choices: q.type === 'multiple' ? q.choices?.filter((c) => c.trim()) : undefined,
-          answer,
-          explanation: q.explanation || undefined,
-          imageUrl: q.imageUrl || undefined,
-          examples: q.examples || undefined,
-          mixedExamples: q.mixedExamples || undefined,
-          passagePrompt: q.passagePrompt || undefined,
-          bogi: q.bogi || undefined,
-          scoringMethod: q.scoringMethod || undefined,
-          passageBlocks: q.passageBlocks || undefined,
-          chapterId: q.chapterId || undefined,
-          chapterDetailId: q.chapterDetailId || undefined,
-        });
-      }
-    });
-
-    // Firestore는 undefined 값을 허용하지 않으므로 제거
-    return flattenedQuestions.map((q) => {
-      const cleaned: Record<string, any> = {};
-      for (const [key, value] of Object.entries(q)) {
-        if (value !== undefined) cleaned[key] = value;
-      }
-      return cleaned;
-    });
-  };
-
   // 수정 모드 저장 핸들러 (QuestionData → Firestore 형식 변환 후 저장)
   const handleSaveEdits = async () => {
     if (editableQuestions.length < 1) return;
@@ -1009,7 +904,7 @@ export default function FolderDetailPage() {
         updateData.title = editedTitle.trim();
       }
 
-      const flattenedQuestions = flattenQuestionsForSave();
+      const flattenedQuestions = flattenQuestionsForSave(editableQuestions, originalQuestions, { cleanupUndefined: true });
       updateData.questions = flattenedQuestions;
       updateData.totalQuestions = flattenedQuestions.length;
       updateData.difficulty = editDifficulty;
