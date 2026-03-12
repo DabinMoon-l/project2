@@ -256,6 +256,27 @@ service cloud.firestore {
     }
 
     // ============================================================
+    // 교수 로그인 세션 추적
+    // ============================================================
+
+    match /professorLoginLogs/{logId} {
+      // 읽기: 교수님만
+      allow read: if isProfessor();
+
+      // 생성: 교수님 본인만
+      allow create: if isProfessor() &&
+        request.resource.data.uid == request.auth.uid;
+
+      // 수정: 교수님 본인만 (heartbeat 업데이트)
+      allow update: if isProfessor() &&
+        resource.data.uid == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastActiveAt']);
+
+      // 삭제: 불가
+      allow delete: if false;
+    }
+
+    // ============================================================
     // 시즌 로그 컬렉션
     // ============================================================
 
