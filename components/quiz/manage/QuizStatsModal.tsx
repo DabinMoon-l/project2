@@ -38,6 +38,7 @@ import type {
   ClassFilter,
 } from './quizStatsTypes';
 import { CLASS_FILTERS } from './quizStatsTypes';
+import { flattenQuestions, isValidMixedItem, checkCorrect, getTypeLabel, toMillis } from './quizStatsUtils';
 
 // 모듈 레벨 classId 캐시 (모달 닫았다 열어도 유지, 페이지 이동 시에도 유지)
 const _statsUserClassCache = new Map<string, 'A' | 'B' | 'C' | 'D' | null>();
@@ -241,147 +242,6 @@ function ClassPieChart({
       </div>
     </div>
   );
-}
-
-// ============================================================
-// 헬퍼 함수
-// ============================================================
-
-/**
- * questions 배열을 펼쳐서 결합형 하위 문제들을 개별 문제로 변환
- *
- * 중요: ID 생성 시 result 페이지와 동일한 로직 사용 (q.id || `q${index}`)
- */
-/**
- * 퀴즈 answer를 문자열로 변환 (인덱스 변환 없이 원본 보존)
- * Firestore 저장값: OX→0/1, 객관식→0-indexed number/number[], 주관식→string
- */
-function answerToString(answer: any): string | undefined {
-  if (answer === null || answer === undefined) return undefined;
-  if (Array.isArray(answer)) return answer.join(',');
-  return answer.toString();
-}
-
-/**
- * questionUpdatedAt 타임스탬프를 밀리초로 변환
- */
-function toMillis(ts: any): number {
-  if (!ts) return 0;
-  if (ts.toMillis) return ts.toMillis();
-  if (ts.seconds) return ts.seconds * 1000;
-  if (typeof ts === 'number') return ts;
-  return 0;
-}
-
-function flattenQuestions(questions: any[]): FlattenedQuestion[] {
-  const result: FlattenedQuestion[] = [];
-
-  questions.forEach((q, index) => {
-    // 결과 페이지와 동일한 ID fallback 로직 사용
-    const questionId = q.id || `q${index}`;
-
-    // 이미 펼쳐진 결합형 문제 (combinedGroupId가 있는 경우)
-    if (q.combinedGroupId) {
-      result.push({
-        id: questionId,
-        text: q.text || '',
-        type: q.type,
-        choices: q.choices,
-        answer: answerToString(q.answer),
-        chapterId: q.chapterId,
-        chapterDetailId: q.chapterDetailId,
-        imageUrl: q.imageUrl,
-        mixedExamples: q.mixedExamples,
-        passagePrompt: q.passagePrompt,
-        bogi: q.bogi,
-        combinedGroupId: q.combinedGroupId,
-        combinedIndex: q.combinedIndex,
-        combinedTotal: q.combinedTotal,
-        passage: q.combinedIndex === 0 ? q.passage : undefined,
-        passageType: q.combinedIndex === 0 ? q.passageType : undefined,
-        passageImage: q.combinedIndex === 0 ? q.passageImage : undefined,
-        koreanAbcItems: q.combinedIndex === 0 ? q.koreanAbcItems : undefined,
-        explanation: q.explanation,
-        choiceExplanations: q.choiceExplanations,
-        questionUpdatedAt: toMillis(q.questionUpdatedAt) || undefined,
-      });
-    }
-    // 레거시 결합형 문제 (type === 'combined' + subQuestions)
-    else if (q.type === 'combined' && q.subQuestions && q.subQuestions.length > 0) {
-      const groupId = `legacy_${questionId}`;
-      q.subQuestions.forEach((sq: any, idx: number) => {
-        const updatedAt = toMillis(sq.questionUpdatedAt || q.questionUpdatedAt);
-        result.push({
-          id: sq.id || `${questionId}_sub${idx}`,
-          text: sq.text || '',
-          type: sq.type || 'short_answer',
-          choices: sq.choices,
-          answer: sq.answerIndices?.length > 0
-            ? sq.answerIndices.join(',')
-            : sq.answerIndex !== undefined
-              ? sq.answerIndex.toString()
-              : sq.answerText,
-          chapterId: q.chapterId,
-          imageUrl: sq.imageUrl,
-          mixedExamples: sq.mixedExamples,
-          passagePrompt: sq.passagePrompt,
-          bogi: sq.bogi,
-          combinedGroupId: groupId,
-          combinedIndex: idx,
-          combinedTotal: q.subQuestions.length,
-          passage: idx === 0 ? q.passage : undefined,
-          passageType: idx === 0 ? q.passageType : undefined,
-          passageImage: idx === 0 ? q.passageImage : undefined,
-          koreanAbcItems: idx === 0 ? q.koreanAbcItems : undefined,
-          explanation: sq.explanation,
-          choiceExplanations: sq.choiceExplanations,
-          questionUpdatedAt: updatedAt || undefined,
-        });
-      });
-    }
-    // 일반 문제
-    else {
-      result.push({
-        id: questionId,
-        text: q.text || '',
-        type: q.type,
-        choices: q.choices,
-        answer: answerToString(q.answer),
-        chapterId: q.chapterId,
-        chapterDetailId: q.chapterDetailId,
-        imageUrl: q.imageUrl,
-        mixedExamples: q.mixedExamples,
-        passagePrompt: q.passagePrompt,
-        bogi: q.bogi,
-        explanation: q.explanation,
-        choiceExplanations: q.choiceExplanations,
-        questionUpdatedAt: toMillis(q.questionUpdatedAt) || undefined,
-      });
-    }
-  });
-
-  return result;
-}
-
-/**
- * 혼합 보기 항목이 유효한지 확인
- */
-function isValidMixedItem(item: MixedExampleItem): boolean {
-  switch (item.type) {
-    case 'text':
-      return Boolean(item.content?.trim());
-    case 'labeled':
-    case 'gana':
-    case 'bullet':
-      return Boolean(item.content?.trim()) ||
-             Boolean(item.items?.some(i => i.content.trim()));
-    case 'image':
-      return Boolean(item.imageUrl);
-    case 'grouped':
-      return Boolean(item.children?.length && item.children.some(child => isValidMixedItem(child)));
-    default:
-      return false;
-  }
 }
 
 // ============================================================
@@ -716,32 +576,6 @@ export default function QuizStatsModal({
       }
     });
 
-    // 현재 정답 기준으로 isCorrect 재판정 (문제 수정 후 통계 모순 방지)
-    // question.answer: 0-indexed (객관식 "0","1,2" / OX 0,1,"0","1" / 주관식 원본)
-    // scoreData.userAnswer: (객관식 "0","1,2" / OX "O","X",0,1 / 주관식 원본)
-    // Firestore에서 숫자로 저장된 경우 대비 String() 변환
-    const checkCorrect = (question: FlattenedQuestion, rawUserAnswer: unknown): boolean => {
-      const userAnswer = rawUserAnswer != null ? String(rawUserAnswer) : '';
-      if (!userAnswer && userAnswer !== '0') return false;
-      const answer = question.answer != null ? String(question.answer) : '';
-      if (!answer && answer !== '0') return false;
-
-      if (question.type === 'ox') {
-        const correctIsO = answer === '0' || answer.toUpperCase() === 'O';
-        const userIsO = userAnswer.toUpperCase() === 'O' || userAnswer === '0';
-        return correctIsO === userIsO;
-      }
-      if (question.type === 'multiple') {
-        // answer, userAnswer 모두 0-indexed ("0","1,2") → 직접 비교
-        const correctParts = answer.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)).sort();
-        const userParts = userAnswer.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)).sort();
-        return JSON.stringify(correctParts) === JSON.stringify(userParts);
-      }
-      // 주관식: ||| 구분자 복수정답
-      const accepted = answer.split('|||').map(s => s.trim().toLowerCase());
-      return accepted.includes(userAnswer.trim().toLowerCase());
-    };
-
     // 통계 계산
     // 참여자 수/점수: 모든 유니크 사용자 포함 (수정 문제 풀었든 안 풀었든)
     // 문제별 정답률/선지: 수정된 문제는 수정 후 응답만, 비수정 문제는 전체
@@ -1002,18 +836,6 @@ export default function QuizStatsModal({
         wrongRate: q.wrongRate,
       }));
   }, [stats]);
-
-  // 문제 유형 라벨
-  const getTypeLabel = (type: string) => {
-    switch (type) {
-      case 'ox': return 'OX';
-      case 'multiple': return '객관식';
-      case 'short_answer':
-      case 'short': return '주관식';
-      case 'essay': return '서술형';
-      default: return type;
-    }
-  };
 
   // 문제 전환 (비스와이프: 즉시)
   const goToQuestion = useCallback((newIdx: number) => {
