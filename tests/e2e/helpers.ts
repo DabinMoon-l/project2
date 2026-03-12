@@ -23,7 +23,7 @@ export async function loginAsStudent(page: Page) {
   await page.getByPlaceholder("비밀번호").fill(TEST_STUDENT.password);
   await page.getByRole("button", { name: "로그인" }).click();
 
-  // 홈 화면 로드 대기 (네비게이션 표시)
+  // 홈 화면 로드 대기
   await page.waitForURL(/^\/$/, { timeout: 15_000 });
 }
 
@@ -39,14 +39,12 @@ export async function loginAsProfessor(page: Page) {
   await page.getByPlaceholder("비밀번호").fill(TEST_PROFESSOR.password);
   await page.getByRole("button", { name: "로그인" }).click();
 
-  // 교수 대시보드 로드 대기
   await page.waitForURL(/\/professor/, { timeout: 15_000 });
 }
 
 // ── 로딩 완료 대기 ──
 
 export async function waitForPageLoad(page: Page) {
-  // Loading... 스피너가 사라질 때까지 대기
   await expect(page.getByText("Loading...")).toBeHidden({ timeout: 15_000 });
 }
 
@@ -55,4 +53,38 @@ export async function waitForPageLoad(page: Page) {
 export async function navigateToTab(page: Page, tabName: string) {
   await page.getByRole("navigation").getByText(tabName).click();
   await waitForPageLoad(page);
+}
+
+// ── 모달/오버레이 닫기 (뜨면 닫기) ──
+
+export async function dismissOverlays(page: Page) {
+  // 마일스톤 모달이 떠있으면 닫기
+  const closeBtn = page.locator("[data-modal-close], [aria-label='닫기']").first();
+  if (await closeBtn.isVisible({ timeout: 1_000 }).catch(() => false)) {
+    await closeBtn.click();
+  }
+}
+
+// ── 퀴즈 선택지 클릭 (문제 유형 자동 감지) ──
+
+export async function answerCurrentQuestion(page: Page) {
+  // 객관식 선택지
+  const choice = page.locator("[data-choice], [data-answer-option]").first();
+  if (await choice.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    await choice.click();
+    return;
+  }
+
+  // OX 버튼
+  const oxBtn = page.locator("button").filter({ hasText: /^O$|^X$/ }).first();
+  if (await oxBtn.isVisible({ timeout: 1_000 }).catch(() => false)) {
+    await oxBtn.click();
+    return;
+  }
+
+  // 단답형 입력
+  const input = page.locator("input[type='text'], textarea").first();
+  if (await input.isVisible({ timeout: 1_000 }).catch(() => false)) {
+    await input.fill("정답");
+  }
 }
