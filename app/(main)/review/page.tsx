@@ -37,9 +37,7 @@ import LibraryQuizCard from '@/components/review/LibraryQuizCard';
 import BookmarkGridView from '@/components/review/BookmarkGridView';
 import QuestionListModal from '@/components/review/QuestionListModal';
 import CreateFolderModal from '@/components/review/CreateFolderModal';
-
-// 교수 퀴즈 타입 — 제작자를 "교수님"으로 표시
-const PROFESSOR_QUIZ_TYPES = new Set(['midterm', 'final', 'past', 'professor', 'professor-ai', 'independent']);
+import { PROFESSOR_QUIZ_TYPES } from '@/app/(main)/quiz/quizPageParts';
 
 /* ============================================================
  * 아래는 모든 서브 컴포넌트가 components/review/에 분리됨
