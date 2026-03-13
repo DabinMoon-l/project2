@@ -362,6 +362,8 @@ export async function endBattle(
     const userRef = fsDb.collection("users").doc(uid);
     batch.update(userRef, {
       totalExp: FieldValue.increment(xp),
+      tekkenTotal: FieldValue.increment(1),
+      ...(isWinner ? { tekkenWins: FieldValue.increment(1) } : {}),
       updatedAt: FieldValue.serverTimestamp(),
     });
 
