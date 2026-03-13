@@ -9,6 +9,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { defineSecret } from "firebase-functions/params";
 import fetch from "node-fetch";
+import { verifyProfessorAccess } from "./utils/professorAccess";
 
 // 기존 ANTHROPIC_API_KEY 시크릿 재사용
 const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
@@ -101,13 +102,6 @@ export const generateMonthlyReport = onCall(
 
     const db = getFirestore();
 
-    // 교수님 권한 + 과목 소유권 확인
-    const userDoc = await db.collection("users").doc(request.auth.uid).get();
-    const userData = userDoc.data();
-    if (!userDoc.exists || userData?.role !== "professor") {
-      throw new HttpsError("permission-denied", "교수님만 리포트를 생성할 수 있습니다.");
-    }
-
     const { courseId, year, month, deleteWeeklyStats = false } = request.data as {
       courseId: string;
       year: number;
@@ -119,10 +113,8 @@ export const generateMonthlyReport = onCall(
       throw new HttpsError("invalid-argument", "courseId, year, month가 필요합니다.");
     }
 
-    // 교수가 담당하는 과목인지 확인
-    if (userData?.courseId && userData.courseId !== courseId) {
-      throw new HttpsError("permission-denied", "담당 과목의 리포트만 생성할 수 있습니다.");
-    }
+    // 교수 권한 + 과목 소유권 확인
+    await verifyProfessorAccess(request.auth.uid, courseId);
 
     const monthLabel = `${year}-${String(month).padStart(2, "0")}`;
     const courseName = COURSE_NAMES[courseId] || courseId;

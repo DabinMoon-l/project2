@@ -13,6 +13,7 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { verifyProfessorAccess } from "./utils/professorAccess";
 
 // ============================================================
 // 타입 정의
@@ -65,12 +66,6 @@ export const uploadCourseScope = onCall(
     const db = getFirestore();
     const userId = request.auth.uid;
 
-    // 교수 권한 확인
-    const userDoc = await db.collection("users").doc(userId).get();
-    if (!userDoc.exists || userDoc.data()?.role !== "professor") {
-      throw new HttpsError("permission-denied", "교수님만 범위를 업로드할 수 있습니다.");
-    }
-
     const { courseId, courseName, scopeContent } = request.data as {
       courseId: string;
       courseName: string;
@@ -80,6 +75,9 @@ export const uploadCourseScope = onCall(
     if (!courseId || !courseName || !scopeContent) {
       throw new HttpsError("invalid-argument", "courseId, courseName, scopeContent가 필요합니다.");
     }
+
+    // 교수 권한 + 과목 소유권 확인
+    await verifyProfessorAccess(userId, courseId);
 
     try {
       // 챕터별로 파싱
