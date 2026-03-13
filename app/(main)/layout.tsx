@@ -10,7 +10,7 @@ import Navigation from '@/components/common/Navigation';
 import { NotificationProvider, ExpToastProvider, SwipeBack } from '@/components/common';
 import { UserProvider, useUser, CourseProvider, useCourse, MilestoneProvider, HomeOverlayProvider, DetailPanelProvider, useDetailPanel } from '@/lib/contexts';
 import { useActivityTracker } from '@/lib/hooks/useActivityTracker';
-import { useProfessorSessionTracker } from '@/lib/hooks/useProfessorSessionTracker';
+
 import { usePageViewLogger } from '@/lib/hooks/usePageViewLogger';
 import type { ClassType } from '@/styles/themes';
 
@@ -53,8 +53,6 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
   // 접속 추적 (lastActiveAt + currentActivity)
   useActivityTracker();
 
-  // 교수 세션 추적 (디바이스 정보 + heartbeat)
-  useProfessorSessionTracker();
 
   // 페이지뷰 로깅 (연구용)
   usePageViewLogger();

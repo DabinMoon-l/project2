@@ -109,6 +109,12 @@ export default function QuizPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  // 바로 채점 상태
+  const [submittedQuestions, setSubmittedQuestions] = useState<Set<string>>(new Set());
+  const [gradeResults, setGradeResults] = useState<Record<string, { isCorrect: boolean; correctAnswer: string }>>({});
+  // 선지별 해설 아코디언 상태
+  const [expandedChoiceIdx, setExpandedChoiceIdx] = useState<number | null>(null);
+
   // 저장된 진행 상황 ID
   const [progressId, setProgressId] = useState<string | null>(null);
 
@@ -295,6 +301,10 @@ export default function QuizPage() {
             // 챕터 정보 추가
             chapterId: q.chapterId || undefined,
             chapterDetailId: q.chapterDetailId || undefined,
+            // 채점용 필드
+            answer: q.answer,
+            explanation: q.explanation || undefined,
+            choiceExplanations: q.choiceExplanations || undefined,
           };
 
           // 첫 번째 하위 문제 (combinedIndex === 0)에만 공통 지문 정보 표시
@@ -358,6 +368,10 @@ export default function QuizPage() {
                 // 챕터 정보 추가
                 chapterId: q.chapterId || undefined,
                 chapterDetailId: q.chapterDetailId || undefined,
+                // 채점용 필드
+                answer: sq.answer,
+                explanation: sq.explanation || undefined,
+                choiceExplanations: sq.choiceExplanations || undefined,
               };
 
               // 첫 번째 하위 문제에만 공통 지문 정보 표시
@@ -427,6 +441,10 @@ export default function QuizPage() {
             // 챕터 정보 추가
             chapterId: q.chapterId || undefined,
             chapterDetailId: q.chapterDetailId || undefined,
+            // 채점용 필드
+            answer: q.answer,
+            explanation: q.explanation || undefined,
+            choiceExplanations: q.choiceExplanations || undefined,
           });
         }
       });
@@ -572,11 +590,88 @@ export default function QuizPage() {
   }, []);
 
   /**
+   * 현재 화면의 문제들을 로컬 채점
+   */
+  const handleGradeCurrentItem = useCallback(() => {
+    if (!currentDisplayItem) return;
+
+    const questionsToGrade = currentDisplayItem.type === 'single' && currentDisplayItem.question
+      ? [currentDisplayItem.question]
+      : currentDisplayItem.questions || [];
+
+    const newResults: Record<string, { isCorrect: boolean; correctAnswer: string }> = {};
+    const newSubmitted = new Set(submittedQuestions);
+
+    for (const q of questionsToGrade) {
+      newSubmitted.add(q.id);
+
+      if (q.type === 'essay') {
+        // 서술형은 수동 채점이므로 오답 처리
+        newResults[q.id] = { isCorrect: false, correctAnswer: '' };
+        continue;
+      }
+
+      const userAns = answers[q.id];
+      const correctAns = q.answer;
+
+      if (q.type === 'ox') {
+        const isO = correctAns === 0 || correctAns === 'O' || correctAns === 'o';
+        const correctStr = isO ? 'O' : 'X';
+        const userStr = userAns === 'O' ? 'O' : userAns === 'X' ? 'X' : '';
+        newResults[q.id] = { isCorrect: correctStr === userStr, correctAnswer: correctStr };
+      } else if (q.type === 'multiple') {
+        if (Array.isArray(correctAns)) {
+          // 복수정답
+          const userSorted = Array.isArray(userAns) ? [...userAns].sort() : [];
+          const correctSorted = [...correctAns].sort();
+          newResults[q.id] = {
+            isCorrect: JSON.stringify(userSorted) === JSON.stringify(correctSorted),
+            correctAnswer: correctAns.map((a: number) => `${a + 1}번`).join(', '),
+          };
+        } else {
+          // 단일정답
+          const correctNum = typeof correctAns === 'string' ? parseInt(correctAns, 10) : (correctAns ?? 0);
+          newResults[q.id] = {
+            isCorrect: userAns === correctNum,
+            correctAnswer: `${correctNum + 1}번`,
+          };
+        }
+      } else {
+        // short_answer, short
+        const correctStr = String(correctAns ?? '');
+        const userStr = String(userAns ?? '');
+        const accepted = correctStr.split('|||').map(s => s.trim().toLowerCase());
+        newResults[q.id] = {
+          isCorrect: accepted.includes(userStr.trim().toLowerCase()),
+          correctAnswer: correctStr.replace(/\|\|\|/g, ' 또는 '),
+        };
+      }
+    }
+
+    setSubmittedQuestions(newSubmitted);
+    setGradeResults(prev => ({ ...prev, ...newResults }));
+    setExpandedChoiceIdx(null);
+  }, [currentDisplayItem, answers, submittedQuestions]);
+
+  // 현재 화면의 모든 문제가 제출(채점)되었는지
+  const isCurrentItemSubmitted = useMemo(() => {
+    if (!currentDisplayItem) return false;
+    if (currentDisplayItem.type === 'single' && currentDisplayItem.question) {
+      return submittedQuestions.has(currentDisplayItem.question.id);
+    }
+    if (currentDisplayItem.type === 'combined_group' && currentDisplayItem.questions) {
+      return currentDisplayItem.questions.every(q => submittedQuestions.has(q.id));
+    }
+    return false;
+  }, [currentDisplayItem, submittedQuestions]);
+
+  /**
    * 이전 문제로 이동
    */
   const handlePrev = useCallback(() => {
     if (currentQuestionIndex > 0) {
       setCurrentQuestionIndex((prev) => prev - 1);
+      setExpandedChoiceIdx(null);
     }
   }, [currentQuestionIndex]);
 
@@ -586,6 +681,7 @@ export default function QuizPage() {
   const handleNext = useCallback(() => {
     if (quiz && currentQuestionIndex < quiz.displayItems.length - 1) {
       setCurrentQuestionIndex((prev) => prev + 1);
+      setExpandedChoiceIdx(null);
     }
   }, [quiz, currentQuestionIndex]);
 
@@ -853,77 +949,176 @@ export default function QuizPage() {
                   />
 
                   {/* 선지 영역 */}
-                  <div className="mt-4">
-                    {/* OX 선지 */}
-                    {currentQuestion.type === 'ox' && (
-                      <OXChoice
-                        selected={currentAnswer as OXAnswer}
-                        onSelect={(answer) =>
-                          handleAnswerChange(currentQuestion.id, answer)
-                        }
-                      />
-                    )}
+                  {(() => {
+                    const isSubmitted = submittedQuestions.has(currentQuestion.id);
+                    const result = gradeResults[currentQuestion.id];
 
-                    {/* 객관식 선지 */}
-                    {currentQuestion.type === 'multiple' &&
-                      currentQuestion.choices && (
-                        currentQuestion.hasMultipleAnswers ? (
-                          <MultipleChoice
-                            choices={currentQuestion.choices}
-                            multiSelect
-                            selectedIndices={Array.isArray(currentAnswer) ? currentAnswer : []}
-                            onMultiSelect={(indices) =>
-                              handleAnswerChange(currentQuestion.id, indices)
+                    return (
+                      <div className="mt-4">
+                        {/* OX 선지 */}
+                        {currentQuestion.type === 'ox' && (
+                          <OXChoice
+                            selected={currentAnswer as OXAnswer}
+                            onSelect={(answer) =>
+                              handleAnswerChange(currentQuestion.id, answer)
                             }
+                            disabled={isSubmitted}
                           />
-                        ) : (
-                          <MultipleChoice
-                            choices={currentQuestion.choices}
-                            selected={currentAnswer as number | null}
-                            onSelect={(index) =>
-                              handleAnswerChange(currentQuestion.id, index)
+                        )}
+
+                        {/* 객관식 선지 */}
+                        {currentQuestion.type === 'multiple' &&
+                          currentQuestion.choices && (
+                            currentQuestion.hasMultipleAnswers ? (
+                              <MultipleChoice
+                                choices={currentQuestion.choices}
+                                multiSelect
+                                selectedIndices={Array.isArray(currentAnswer) ? currentAnswer : []}
+                                onMultiSelect={(indices) =>
+                                  handleAnswerChange(currentQuestion.id, indices)
+                                }
+                                disabled={isSubmitted}
+                                correctIndices={isSubmitted && Array.isArray(currentQuestion.answer) ? currentQuestion.answer : undefined}
+                              />
+                            ) : (
+                              <MultipleChoice
+                                choices={currentQuestion.choices}
+                                selected={currentAnswer as number | null}
+                                onSelect={(index) =>
+                                  handleAnswerChange(currentQuestion.id, index)
+                                }
+                                disabled={isSubmitted}
+                                correctIndex={isSubmitted ? Number(currentQuestion.answer) : undefined}
+                              />
+                            )
+                          )}
+
+                        {/* 주관식/단답형 입력 */}
+                        {(currentQuestion.type === 'short' || currentQuestion.type === 'short_answer') && (
+                          <ShortAnswer
+                            value={(currentAnswer as string) || ''}
+                            onChange={(value) =>
+                              handleAnswerChange(currentQuestion.id, value)
                             }
+                            disabled={isSubmitted}
                           />
-                        )
-                      )}
+                        )}
 
-                    {/* 주관식/단답형 입력 */}
-                    {(currentQuestion.type === 'short' || currentQuestion.type === 'short_answer') && (
-                      <ShortAnswer
-                        value={(currentAnswer as string) || ''}
-                        onChange={(value) =>
-                          handleAnswerChange(currentQuestion.id, value)
-                        }
-                      />
-                    )}
+                        {/* 서술형 입력 */}
+                        {currentQuestion.type === 'essay' && (
+                          <ShortAnswer
+                            value={(currentAnswer as string) || ''}
+                            onChange={(value) =>
+                              handleAnswerChange(currentQuestion.id, value)
+                            }
+                            maxLength={200}
+                            placeholder="아는 것을 200자 내로 적어주세요."
+                            disabled={isSubmitted}
+                          />
+                        )}
 
-                    {/* 서술형 입력 */}
-                    {currentQuestion.type === 'essay' && (
-                      <ShortAnswer
-                        value={(currentAnswer as string) || ''}
-                        onChange={(value) =>
-                          handleAnswerChange(currentQuestion.id, value)
-                        }
-                        maxLength={200}
-                        placeholder="아는 것을 200자 내로 적어주세요."
-                      />
-                    )}
+                        {/* 결합형 문제인데 선지가 없는 경우 (데이터 오류) - 주관식으로 대체 */}
+                        {currentQuestion.type === 'combined' && !currentQuestion.choices && (
+                          <div className="space-y-4">
+                            <div className="p-3 bg-[#FFF8E1] border border-[#8B6914] text-sm text-[#8B6914]">
+                              이 문제는 하위 문제가 설정되지 않았습니다. 텍스트로 답변해주세요.
+                            </div>
+                            <ShortAnswer
+                              value={(currentAnswer as string) || ''}
+                              onChange={(value) =>
+                                handleAnswerChange(currentQuestion.id, value)
+                              }
+                              disabled={isSubmitted}
+                            />
+                          </div>
+                        )}
 
-                    {/* 결합형 문제인데 선지가 없는 경우 (데이터 오류) - 주관식으로 대체 */}
-                    {currentQuestion.type === 'combined' && !currentQuestion.choices && (
-                      <div className="space-y-4">
-                        <div className="p-3 bg-[#FFF8E1] border border-[#8B6914] text-sm text-[#8B6914]">
-                          ⚠️ 이 문제는 하위 문제가 설정되지 않았습니다. 텍스트로 답변해주세요.
-                        </div>
-                        <ShortAnswer
-                          value={(currentAnswer as string) || ''}
-                          onChange={(value) =>
-                            handleAnswerChange(currentQuestion.id, value)
-                          }
-                        />
+                        {/* 채점 결과 + 해설 */}
+                        <AnimatePresence>
+                          {isSubmitted && result && (
+                            <motion.div
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -10 }}
+                              transition={{ duration: 0.3 }}
+                              className="mt-4 space-y-3"
+                            >
+                              {/* 정답/오답 표시 */}
+                              <div className={`p-3 border-2 ${
+                                result.isCorrect
+                                  ? 'bg-[#E8F5E9] border-[#1A6B1A]'
+                                  : 'bg-[#FDEAEA] border-[#8B1A1A]'
+                              }`}>
+                                <p className={`text-sm font-bold ${
+                                  result.isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'
+                                }`}>
+                                  {result.isCorrect ? '정답입니다!' : '오답입니다'}
+                                </p>
+                                {!result.isCorrect && result.correctAnswer && (
+                                  <p className="text-xs text-[#5C5C5C] mt-1">
+                                    정답: <span className="font-bold text-[#1A6B1A]">{result.correctAnswer}</span>
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* 해설 */}
+                              {currentQuestion.explanation && (
+                                <div className="p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A]">
+                                  <p className="text-xs font-bold text-[#1A1A1A] mb-1">해설</p>
+                                  <p className="text-xs text-[#1A1A1A] leading-relaxed whitespace-pre-wrap">
+                                    {currentQuestion.explanation}
+                                  </p>
+                                </div>
+                              )}
+
+                              {/* 선지별 해설 아코디언 */}
+                              {currentQuestion.choiceExplanations && currentQuestion.type === 'multiple' && currentQuestion.choices && (
+                                <div className="border-2 border-[#D4CFC4] overflow-hidden">
+                                  <p className="px-3 py-2 text-xs font-bold text-[#5C5C5C] bg-[#EDEAE4] border-b border-[#D4CFC4]">
+                                    선지별 해설
+                                  </p>
+                                  {currentQuestion.choices.map((choice, idx) => {
+                                    const expText = currentQuestion.choiceExplanations?.[idx];
+                                    if (!expText) return null;
+                                    const isExpanded = expandedChoiceIdx === idx;
+                                    return (
+                                      <div key={idx} className="border-b border-[#D4CFC4] last:border-b-0">
+                                        <button
+                                          onClick={() => setExpandedChoiceIdx(isExpanded ? null : idx)}
+                                          className="w-full px-3 py-2 flex items-center gap-2 text-left hover:bg-[#F5F0E8] transition-colors"
+                                        >
+                                          <span className="text-xs font-bold text-[#5C5C5C] flex-shrink-0">{idx + 1}번</span>
+                                          <span className="text-xs text-[#1A1A1A] flex-1 truncate">{choice}</span>
+                                          <svg className={`w-3 h-3 text-[#5C5C5C] transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                          </svg>
+                                        </button>
+                                        <AnimatePresence>
+                                          {isExpanded && (
+                                            <motion.div
+                                              initial={{ height: 0, opacity: 0 }}
+                                              animate={{ height: 'auto', opacity: 1 }}
+                                              exit={{ height: 0, opacity: 0 }}
+                                              transition={{ duration: 0.2 }}
+                                              className="overflow-hidden"
+                                            >
+                                              <p className="px-3 pb-2 text-xs text-[#5C5C5C] leading-relaxed whitespace-pre-wrap">
+                                                {expText}
+                                              </p>
+                                            </motion.div>
+                                          )}
+                                        </AnimatePresence>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
-                    )}
-                  </div>
+                    );
+                  })()}
 
                   {/* 인라인 피드백 패널 — 자기 퀴즈/AI 퀴즈가 아닐 때만 표시 */}
                   <AnimatePresence>
@@ -958,6 +1153,8 @@ export default function QuizPage() {
                   onAnswerChange={handleAnswerChange}
                   groupNumber={currentDisplayItem.displayNumber}
                   courseId={quiz?.courseId}
+                  submittedQuestions={submittedQuestions}
+                  gradeResults={gradeResults}
                   inlineFeedbackOpen={inlineFeedbackOpen}
                   inlineFeedbackSubmitted={inlineFeedbackSubmitted}
                   onFeedbackToggle={quiz?.creatorId !== user?.uid ? (qId) => setInlineFeedbackOpen(
@@ -989,6 +1186,8 @@ export default function QuizPage() {
         onSubmit={handleSubmit}
         hasAnswered={isCurrentItemAnswered}
         isSubmitting={isSubmitting}
+        onGrade={handleGradeCurrentItem}
+        isGraded={isCurrentItemSubmitted}
       />
 
       {/* 나가기 확인 모달 */}

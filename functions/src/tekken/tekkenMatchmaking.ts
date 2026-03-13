@@ -223,7 +223,18 @@ export const matchWithBot = onCall(
       throw new HttpsError("failed-precondition", "장착된 토끼가 없습니다.");
     }
 
-    const botProfile = createBotProfile();
+    // 유저 토끼 레벨 조회 (봇 레벨 산정용)
+    const holdingDocs = await Promise.all(
+      equippedRabbits.slice(0, 2).map((eq: any) =>
+        fsDb.collection("users").doc(userId)
+          .collection("rabbitHoldings").doc(`${eq.courseId}_${eq.rabbitId}`).get()
+      )
+    );
+    const userMaxLevel = Math.max(
+      ...holdingDocs.map(d => d.exists ? (d.data()?.level || 1) : 1)
+    );
+
+    const botProfile = createBotProfile(userMaxLevel);
     const botUserId = `bot_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
     const player1: PlayerSetup = {

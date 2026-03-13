@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import OXChoice, { OXAnswer } from './OXChoice';
@@ -39,6 +40,10 @@ interface CombinedQuestionGroupProps {
   quizId?: string;
   /** 인라인 피드백: 현재 사용자 ID */
   userId?: string;
+  /** 채점된 문제 ID Set */
+  submittedQuestions?: Set<string>;
+  /** 채점 결과 */
+  gradeResults?: Record<string, { isCorrect: boolean; correctAnswer: string }>;
 }
 
 /**
@@ -59,7 +64,10 @@ export default function CombinedQuestionGroup({
   quizCreatorId,
   quizId,
   userId,
+  submittedQuestions,
+  gradeResults,
 }: CombinedQuestionGroupProps) {
+  const [expandedChoiceIdx, setExpandedChoiceIdx] = useState<Record<string, number | null>>({});
   // 첫 번째 문제에서 공통 정보 가져오기
   const firstQuestion = questions[0];
   const {
@@ -410,41 +418,140 @@ export default function CombinedQuestionGroup({
             })()}
 
             {/* 선지 영역 */}
-            <div className="mt-2">
-              {/* OX 선지 */}
-              {question.type === 'ox' && (
-                <OXChoice
-                  selected={currentAnswer as OXAnswer}
-                  onSelect={(answer) => onAnswerChange(question.id, answer)}
-                />
-              )}
+            {(() => {
+              const isQSubmitted = submittedQuestions?.has(question.id) || false;
+              const result = gradeResults?.[question.id];
 
-              {/* 객관식 선지 */}
-              {question.type === 'multiple' && question.choices && (
-                question.hasMultipleAnswers ? (
-                  <MultipleChoice
-                    choices={question.choices}
-                    multiSelect
-                    selectedIndices={Array.isArray(currentAnswer) ? currentAnswer : []}
-                    onMultiSelect={(indices) => onAnswerChange(question.id, indices)}
-                  />
-                ) : (
-                  <MultipleChoice
-                    choices={question.choices}
-                    selected={currentAnswer as number | null}
-                    onSelect={(index) => onAnswerChange(question.id, index)}
-                  />
-                )
-              )}
+              return (
+                <>
+                  <div className="mt-2">
+                    {/* OX 선지 */}
+                    {question.type === 'ox' && (
+                      <OXChoice
+                        selected={currentAnswer as OXAnswer}
+                        onSelect={(answer) => onAnswerChange(question.id, answer)}
+                        disabled={isQSubmitted}
+                      />
+                    )}
 
-              {/* 주관식/단답형 입력 */}
-              {(question.type === 'short' || question.type === 'short_answer') && (
-                <ShortAnswer
-                  value={(currentAnswer as string) || ''}
-                  onChange={(value) => onAnswerChange(question.id, value)}
-                />
-              )}
-            </div>
+                    {/* 객관식 선지 */}
+                    {question.type === 'multiple' && question.choices && (
+                      question.hasMultipleAnswers ? (
+                        <MultipleChoice
+                          choices={question.choices}
+                          multiSelect
+                          selectedIndices={Array.isArray(currentAnswer) ? currentAnswer : []}
+                          onMultiSelect={(indices) => onAnswerChange(question.id, indices)}
+                          disabled={isQSubmitted}
+                          correctIndices={isQSubmitted && Array.isArray(question.answer) ? question.answer : undefined}
+                        />
+                      ) : (
+                        <MultipleChoice
+                          choices={question.choices}
+                          selected={currentAnswer as number | null}
+                          onSelect={(index) => onAnswerChange(question.id, index)}
+                          disabled={isQSubmitted}
+                          correctIndex={isQSubmitted ? Number(question.answer) : undefined}
+                        />
+                      )
+                    )}
+
+                    {/* 주관식/단답형 입력 */}
+                    {(question.type === 'short' || question.type === 'short_answer') && (
+                      <ShortAnswer
+                        value={(currentAnswer as string) || ''}
+                        onChange={(value) => onAnswerChange(question.id, value)}
+                        disabled={isQSubmitted}
+                      />
+                    )}
+                  </div>
+
+                  {/* 채점 결과 + 해설 */}
+                  <AnimatePresence>
+                    {isQSubmitted && result && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.3 }}
+                        className="mt-3 space-y-3"
+                      >
+                        <div className={`p-3 border-2 ${
+                          result.isCorrect
+                            ? 'bg-[#E8F5E9] border-[#1A6B1A]'
+                            : 'bg-[#FDEAEA] border-[#8B1A1A]'
+                        }`}>
+                          <p className={`text-sm font-bold ${
+                            result.isCorrect ? 'text-[#1A6B1A]' : 'text-[#8B1A1A]'
+                          }`}>
+                            {result.isCorrect ? '정답입니다!' : '오답입니다'}
+                          </p>
+                          {!result.isCorrect && result.correctAnswer && (
+                            <p className="text-xs text-[#5C5C5C] mt-1">
+                              정답: <span className="font-bold text-[#1A6B1A]">{result.correctAnswer}</span>
+                            </p>
+                          )}
+                        </div>
+
+                        {question.explanation && (
+                          <div className="p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A]">
+                            <p className="text-xs font-bold text-[#1A1A1A] mb-1">해설</p>
+                            <p className="text-xs text-[#1A1A1A] leading-relaxed whitespace-pre-wrap">
+                              {question.explanation}
+                            </p>
+                          </div>
+                        )}
+
+                        {question.choiceExplanations && question.type === 'multiple' && question.choices && (
+                          <div className="border-2 border-[#D4CFC4] overflow-hidden">
+                            <p className="px-3 py-2 text-xs font-bold text-[#5C5C5C] bg-[#EDEAE4] border-b border-[#D4CFC4]">
+                              선지별 해설
+                            </p>
+                            {question.choices.map((choice, cIdx) => {
+                              const expText = question.choiceExplanations?.[cIdx];
+                              if (!expText) return null;
+                              const isExpanded = expandedChoiceIdx[question.id] === cIdx;
+                              return (
+                                <div key={cIdx} className="border-b border-[#D4CFC4] last:border-b-0">
+                                  <button
+                                    onClick={() => setExpandedChoiceIdx(prev => ({
+                                      ...prev,
+                                      [question.id]: isExpanded ? null : cIdx,
+                                    }))}
+                                    className="w-full px-3 py-2 flex items-center gap-2 text-left hover:bg-[#F5F0E8] transition-colors"
+                                  >
+                                    <span className="text-xs font-bold text-[#5C5C5C] flex-shrink-0">{cIdx + 1}번</span>
+                                    <span className="text-xs text-[#1A1A1A] flex-1 truncate">{choice}</span>
+                                    <svg className={`w-3 h-3 text-[#5C5C5C] transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                  </button>
+                                  <AnimatePresence>
+                                    {isExpanded && (
+                                      <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.2 }}
+                                        className="overflow-hidden"
+                                      >
+                                        <p className="px-3 pb-2 text-xs text-[#5C5C5C] leading-relaxed whitespace-pre-wrap">
+                                          {expText}
+                                        </p>
+                                      </motion.div>
+                                    )}
+                                  </AnimatePresence>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </>
+              );
+            })()}
 
             {/* 인라인 피드백 패널 */}
             <AnimatePresence>

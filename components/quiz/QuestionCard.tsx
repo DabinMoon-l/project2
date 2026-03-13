@@ -142,6 +142,12 @@ export interface Question {
   chapterId?: string;
   /** 챕터 세부항목 ID */
   chapterDetailId?: string;
+  /** 정답 (로컬 채점용) */
+  answer?: number | number[] | string;
+  /** 해설 */
+  explanation?: string;
+  /** 선지별 해설 */
+  choiceExplanations?: string[];
 }
 
 /**
