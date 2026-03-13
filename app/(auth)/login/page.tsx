@@ -39,11 +39,11 @@ export default function LoginPage() {
         isRedirecting.current = true;
 
         try {
-          // 교수님 도메인 체크 → 서버에서 정확한 이메일 검증
+          // 학생 계정(@rabbitory.internal)이 아닌 이메일 → 교수 여부 서버 검증
           const email = user.email || '';
-          const isProfessorDomain = email.endsWith('@ccn.ac.kr');
+          const isStudentEmail = email.endsWith('@rabbitory.internal');
 
-          if (isProfessorDomain) {
+          if (!isStudentEmail && email.includes('@')) {
             try {
               await httpsCallable(functions, 'initProfessorAccount')();
               router.replace('/professor');
