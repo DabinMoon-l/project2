@@ -29,7 +29,7 @@ type Phase = 'hidden' | 'entering' | 'open' | 'exiting';
  */
 export default function ProfessorHomeOverlay() {
   const { profile } = useUser();
-  const { userCourseId, setProfessorCourse } = useCourse();
+  const { userCourseId, setProfessorCourse, assignedCourses } = useCourse();
   const { isOpen, isCloseRequested, close, buttonRect } = useHomeOverlay();
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
   const isWide = useWideMode();
@@ -269,6 +269,7 @@ export default function ProfessorHomeOverlay() {
                 value={selectedCourse}
                 onChange={setProfessorCourse}
                 textClassName="text-2xl font-black text-white/90 tracking-wide inline-block"
+                courseIds={assignedCourses}
               />
             }
           />
@@ -285,6 +286,7 @@ export default function ProfessorHomeOverlay() {
               value={selectedCourse}
               onChange={setProfessorCourse}
               textClassName="text-2xl font-bold text-white tracking-widest inline-block"
+              courseIds={assignedCourses}
             />
           </div>
           <ProfessorRankingSection overrideCourseId={selectedCourse} />

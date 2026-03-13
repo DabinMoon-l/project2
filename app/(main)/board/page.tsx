@@ -451,7 +451,7 @@ function NewspaperSkeleton() {
  */
 export default function BoardPage() {
   const router = useRouter();
-  const { semesterSettings, userCourseId, setProfessorCourse } = useCourse();
+  const { semesterSettings, userCourseId, setProfessorCourse, assignedCourses } = useCourse();
   const { profile } = useUser();
 
   // 교수님 여부 확인
@@ -476,8 +476,14 @@ export default function BoardPage() {
   const { posts, loading, error, hasMore, loadMore, refresh } = usePosts('all', activeCourseId);
   const { pinnedPosts, pinPost, unpinPost } = usePinnedPosts(activeCourseId);
 
-  // 과목 목록 (교수님용)
-  const courseList = useMemo(() => getCourseList(), []);
+  // 과목 목록 (교수님용 — assignedCourses 기반 필터링)
+  const courseList = useMemo(() => {
+    const all = getCourseList();
+    if (assignedCourses.length > 0) {
+      return all.filter(c => assignedCourses.includes(c.id));
+    }
+    return all;
+  }, [assignedCourses]);
 
   // 검색
   const [searchQuery, setSearchQuery] = useState('');

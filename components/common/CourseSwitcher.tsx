@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { CourseId } from '@/lib/types/course';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
 
-const COURSES: { id: CourseId; name: string }[] = [
+const ALL_COURSES: { id: CourseId; name: string }[] = [
   { id: 'biology', name: 'Biology' },
   { id: 'microbiology', name: 'Microbiology' },
   { id: 'pathophysiology', name: 'Pathophysiology' },
@@ -15,24 +15,30 @@ interface Props {
   value: CourseId;
   onChange: (id: CourseId) => void;
   textClassName?: string;
+  /** 표시할 과목 목록 (assignedCourses 기반 필터링용) */
+  courseIds?: string[];
 }
 
-export default function CourseSwitcher({ value, onChange, textClassName }: Props) {
-  const currentIndex = COURSES.findIndex(c => c.id === value);
+export default function CourseSwitcher({ value, onChange, textClassName, courseIds }: Props) {
+  // courseIds가 있으면 해당 과목만 표시, 없으면 전체
+  const courses = courseIds && courseIds.length > 0
+    ? ALL_COURSES.filter(c => courseIds.includes(c.id))
+    : ALL_COURSES;
+  const currentIndex = courses.findIndex(c => c.id === value);
   const touchStartX = useRef(0);
   const dirRef = useRef(0);
 
   const goPrev = useCallback(() => {
     dirRef.current = -1;
-    const prevIdx = (currentIndex - 1 + COURSES.length) % COURSES.length;
-    onChange(COURSES[prevIdx].id);
-  }, [currentIndex, onChange]);
+    const prevIdx = (currentIndex - 1 + courses.length) % courses.length;
+    onChange(courses[prevIdx].id);
+  }, [currentIndex, onChange, courses]);
 
   const goNext = useCallback(() => {
     dirRef.current = 1;
-    const nextIdx = (currentIndex + 1) % COURSES.length;
-    onChange(COURSES[nextIdx].id);
-  }, [currentIndex, onChange]);
+    const nextIdx = (currentIndex + 1) % courses.length;
+    onChange(courses[nextIdx].id);
+  }, [currentIndex, onChange, courses]);
 
   const onTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = scaleCoord(e.touches[0].clientX);
@@ -70,7 +76,7 @@ export default function CourseSwitcher({ value, onChange, textClassName }: Props
             exit={{ opacity: 0, x: dir >= 0 ? -30 : 30 }}
             transition={{ duration: 0.15 }}
           >
-            {COURSES[currentIndex]?.name || 'Biology'}
+            {courses[currentIndex]?.name || 'Biology'}
           </motion.span>
         </AnimatePresence>
       </div>
