@@ -77,6 +77,9 @@ export interface UserProfile {
   // 역할
   role: 'student' | 'professor';
 
+  // 교수 전용: 담당 과목 목록 (allowedProfessors에서 동기화)
+  assignedCourses?: string[];
+
   // 캐릭터/뽑기 시스템 (레거시)
   currentCharacterIndex?: number;
   currentCharacterName?: string;
