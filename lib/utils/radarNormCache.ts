@@ -14,20 +14,19 @@ interface CacheEnvelope<T> {
   timestamp: number;
 }
 
-/** Firestore radarNorm/{courseId} 문서 구조 */
+/** Firestore radarNorm/{courseId} 문서 구조 — 5축 (퀴즈성적/배틀/출제력/소통/활동량) */
 export interface RadarNormData {
   quizCreationByUid: Record<string, number>;
   communityByUid: Record<string, number>;
-  activeReviewByUid: Record<string, number>;
+  battleByUid: Record<string, number>;       // 배틀 승수
   expByUid: Record<string, number>;
   weightedScoreByUid: Record<string, number>;
-  growthByUid: Record<string, number>;  // 성장세 (0-100, 50=기준선)
   studentClassMap: Record<string, string>;
   quizCreationCounts: number[];
   communityScores: number[];
-  activeReviewCounts: number[];
+  battleValues: number[];                    // 배틀 백분위 배열
   expValues: number[];
-  growthValues: number[];               // 성장세 백분위 배열
+  weightedScoreValues: number[];             // 가중 석차 백분위 배열
   totalStudents: number;
 }
 

@@ -27,14 +27,15 @@ async function computeRadarNormForCourse(courseId: string) {
     return {
       quizCreationByUid: {},
       communityByUid: {},
-      activeReviewByUid: {},
+      battleByUid: {},
       expByUid: {},
       weightedScoreByUid: {},
       studentClassMap: {},
       quizCreationCounts: [],
       communityScores: [],
-      activeReviewCounts: [],
+      battleValues: [],
       expValues: [],
+      weightedScoreValues: [],
       totalStudents: 0,
     };
   }
@@ -42,6 +43,7 @@ async function computeRadarNormForCourse(courseId: string) {
   const studentUids = new Set<string>();
   const expByUid: Record<string, number> = {};
   const fbCountByUid: Record<string, number> = {};
+  const battleByUid: Record<string, number> = {};
   const studentClassMap: Record<string, string> = {};
 
   usersSnap.docs.forEach(d => {
@@ -49,25 +51,15 @@ async function computeRadarNormForCourse(courseId: string) {
     studentUids.add(d.id);
     expByUid[d.id] = data.totalExp || 0;
     fbCountByUid[d.id] = data.feedbackCount || 0;
+    battleByUid[d.id] = data.tekkenWins || 0;
     studentClassMap[d.id] = data.classId || "A";
   });
 
-  // 2. 4개 병렬 쿼리 (select로 필요한 필드만 — 메모리 절약)
-  // reviews는 userId 배치로 조회 (courseId가 null인 기존 문서도 포함하기 위해)
-  const studentUidsArr = Array.from(studentUids);
-  const reviewBatches: Promise<FirebaseFirestore.QuerySnapshot>[] = [];
-  for (let i = 0; i < studentUidsArr.length; i += 30) {
-    const batch = studentUidsArr.slice(i, i + 30);
-    reviewBatches.push(
-      db.collection("reviews").where("userId", "in", batch).select("userId", "reviewCount").get()
-    );
-  }
-
-  const [quizzesResult, postsResult, quizResultsResult, ...reviewBatchResults] = await Promise.allSettled([
+  // 2. 3개 병렬 쿼리 (select로 필요한 필드만 — 메모리 절약)
+  const [quizzesResult, postsResult, quizResultsResult] = await Promise.allSettled([
     db.collection("quizzes").where("courseId", "==", courseId).select("creatorId", "type").get(),
     db.collection("posts").where("courseId", "==", courseId).select("authorId").get(),
     db.collection("quizResults").where("courseId", "==", courseId).select("userId", "quizId", "score", "isUpdate").get(),
-    ...reviewBatches,
   ]);
 
   if (quizzesResult.status === "rejected") console.error(`quizzes 쿼리 실패 (${courseId}):`, quizzesResult.reason);
@@ -77,16 +69,6 @@ async function computeRadarNormForCourse(courseId: string) {
   const quizzesDocs = quizzesResult.status === "fulfilled" ? quizzesResult.value.docs : [];
   const postsDocs = postsResult.status === "fulfilled" ? postsResult.value.docs : [];
   const quizResultsDocs = quizResultsResult.status === "fulfilled" ? quizResultsResult.value.docs : [];
-
-  // reviews 배치 결과 합치기
-  const reviewsDocs: any[] = [];
-  reviewBatchResults.forEach((r, idx) => {
-    if (r.status === "fulfilled") {
-      reviewsDocs.push(...(r as PromiseFulfilledResult<any>).value.docs);
-    } else {
-      console.error(`reviews 배치 ${idx} 쿼리 실패 (${courseId}):`, (r as PromiseRejectedResult).reason);
-    }
-  });
 
   // 3. 출제력 (학생이 만든 퀴즈 수)
   const quizCreationByUid: Record<string, number> = {};
@@ -111,61 +93,22 @@ async function computeRadarNormForCourse(courseId: string) {
     communityByUid[uid] = (postCountByUid[uid] ?? 0) * 3 + (fbCountByUid[uid] ?? 0);
   });
 
-  // 5. 복습력 (능동적 복습 활동 — reviewCount 합계)
-  // reviewCount = markAsReviewed 호출 횟수 (학생이 실제로 복습한 횟수)
-  // 퀴즈 재시도 시 reviewCount 보존됨 (reviewsGenerator에서 처리)
-  const activeReviewByUid: Record<string, number> = {};
-  reviewsDocs.forEach(d => {
-    const data = d.data();
-    const userId = data.userId as string;
-    const reviewCount = data.reviewCount ?? 0;
-    if (userId && studentUids.has(userId) && reviewCount > 0) {
-      activeReviewByUid[userId] = (activeReviewByUid[userId] ?? 0) + reviewCount;
-    }
-  });
-  console.log(`[${courseId}] reviews 쿼리: ${reviewsDocs.length}건, 복습 활동 학생: ${Object.keys(activeReviewByUid).length}명`);
-
-  // 6. 백분위 배열 (오름차순 정렬)
-  const uids = Array.from(studentUids);
-  const quizCreationCounts = uids.map(u => quizCreationByUid[u] ?? 0).sort((a, b) => a - b);
-  const communityScores = uids.map(u => communityByUid[u] ?? 0).sort((a, b) => a - b);
-  const activeReviewCounts = uids.map(u => activeReviewByUid[u] ?? 0).sort((a, b) => a - b);
-  const expValues = uids.map(u => expByUid[u] ?? 0).sort((a, b) => a - b);
-
-  // 7. 가중 석차 점수 (첫 시도만 사용)
+  // 5. 가중 석차 점수 (첫 시도만 사용)
   const PROF_TYPES = new Set(["midterm", "final", "past", "professor", "professor-ai", "independent"]);
   const quizTypeMap = new Map<string, boolean>();
   quizzesDocs.forEach(d => quizTypeMap.set(d.id, PROF_TYPES.has(d.data().type || "")));
 
-  // 첫 시도 / 재시도 분리 수집 (가중 석차 + 성장세 계산)
   const completionsByQuiz = new Map<string, { userId: string; score: number }[]>();
-  // 성장세용: 학생별 퀴즈별 { firstScore, bestRetryScore }
-  const retryMap = new Map<string, Map<string, { first: number; retries: number[] }>>();
-
   quizResultsDocs.forEach(d => {
     const qr = d.data();
     if (!studentUids.has(qr.userId)) return;
     const qid = qr.quizId as string;
     if (!qid) return;
-    const isRetry = qr.isUpdate === true;
+    if (qr.isUpdate === true) return; // 재시도 제외
 
-    if (!isRetry) {
-      // 첫 시도 → 가중 석차에 사용
-      const arr = completionsByQuiz.get(qid) ?? [];
-      arr.push({ userId: qr.userId, score: qr.score ?? 0 });
-      completionsByQuiz.set(qid, arr);
-    }
-
-    // 성장세 데이터 수집 (첫 시도 + 재시도 모두)
-    if (!retryMap.has(qr.userId)) retryMap.set(qr.userId, new Map());
-    const userQuizMap = retryMap.get(qr.userId)!;
-    if (!userQuizMap.has(qid)) userQuizMap.set(qid, { first: -1, retries: [] });
-    const entry = userQuizMap.get(qid)!;
-    if (!isRetry) {
-      entry.first = qr.score ?? 0;
-    } else {
-      entry.retries.push(qr.score ?? 0);
-    }
+    const arr = completionsByQuiz.get(qid) ?? [];
+    arr.push({ userId: qr.userId, score: qr.score ?? 0 });
+    completionsByQuiz.set(qid, arr);
   });
 
   const studentScorePairs = new Map<string, { rankScore: number; weight: number }[]>();
@@ -177,8 +120,6 @@ async function computeRadarNormForCourse(courseId: string) {
     let rank = 1;
     sorted.forEach((p, idx) => {
       if (idx > 0 && sorted[idx].score < sorted[idx - 1].score) rank = idx + 1;
-      // 참여자 5명 미만: 실제 점수 사용 (소수 참여 시 석차 부풀림 방지)
-      // 참여자 5명 이상: 석차 기반 점수 사용
       const rankScore = N < 5
         ? (p.score ?? 0)
         : ((N - rank + 1) / N) * 100;
@@ -197,57 +138,30 @@ async function computeRadarNormForCourse(courseId: string) {
     weightedScoreByUid[uid] = Math.round((tws / tw) * 100) / 100;
   });
 
-  // 8. 성장세 (재시도 개선율)
-  // 재시도가 있는 퀴즈에서 (최고 재시도 점수 - 첫 시도 점수)의 평균
-  // 첫 시도 90%+ & 재시도 없음 → 개선 불필요(0)로 카운트 (만점 학생 페널티 방지)
-  // 0~100 스케일: 0 = 퀴즈 데이터 없음, 50 = 변화 없음, 100 = 만점 개선
-  const growthByUid: Record<string, number> = {};
-  studentUids.forEach(uid => {
-    const userQuizMap = retryMap.get(uid);
-    if (!userQuizMap) { growthByUid[uid] = 0; return; }
-
-    const improvements: number[] = [];
-    userQuizMap.forEach(({ first, retries }) => {
-      if (first < 0) return;
-      if (retries.length > 0) {
-        // 재시도 있음 → 실제 개선율 측정
-        const bestRetry = Math.max(...retries);
-        improvements.push(bestRetry - first);
-      } else if (first >= 90) {
-        // 첫 시도 90%+ & 재시도 없음 → 이미 마스터, 개선 불필요(0)
-        improvements.push(0);
-      }
-      // 첫 시도 < 90 & 재시도 없음 → 아직 성장 활동 없음, 스킵
-    });
-
-    if (improvements.length === 0) {
-      growthByUid[uid] = 0; // 퀴즈 데이터 없거나 전부 저점수+미재시도
-    } else {
-      const avgImprovement = improvements.reduce((s, v) => s + v, 0) / improvements.length;
-      // -100~+100 → 0~100 스케일 (50이 변화없음 기준선)
-      growthByUid[uid] = Math.round(Math.max(0, Math.min(100, 50 + avgImprovement / 2)));
-    }
-  });
-  const growthValues = uids.map(u => growthByUid[u] ?? 0).sort((a, b) => a - b);
+  // 6. 백분위 배열 (오름차순 정렬) — 5축 전부 백분위
+  const uids = Array.from(studentUids);
+  const quizCreationCounts = uids.map(u => quizCreationByUid[u] ?? 0).sort((a, b) => a - b);
+  const communityScores = uids.map(u => communityByUid[u] ?? 0).sort((a, b) => a - b);
+  const battleValues = uids.map(u => battleByUid[u] ?? 0).sort((a, b) => a - b);
+  const expValues = uids.map(u => expByUid[u] ?? 0).sort((a, b) => a - b);
+  const weightedScoreValues = uids.map(u => weightedScoreByUid[u] ?? 0).sort((a, b) => a - b);
 
   // 진단 로그
-  const nonZeroReview = Object.values(activeReviewByUid).filter(v => v > 0).length;
-  const nonZeroGrowth = Object.values(growthByUid).filter(v => v > 0).length;
-  console.log(`[${courseId}] 복습력: ${nonZeroReview}/${studentUids.size}명 비영, 성장세: ${nonZeroGrowth}/${studentUids.size}명 변동, quizResults: ${quizResultsDocs.length}건`);
+  const nonZeroBattle = Object.values(battleByUid).filter(v => v > 0).length;
+  console.log(`[${courseId}] 배틀 참여: ${nonZeroBattle}/${studentUids.size}명, quizResults: ${quizResultsDocs.length}건`);
 
   return {
     quizCreationByUid,
     communityByUid,
-    activeReviewByUid,
+    battleByUid,
     expByUid,
     weightedScoreByUid,
-    growthByUid,
     studentClassMap,
     quizCreationCounts,
     communityScores,
-    activeReviewCounts,
+    battleValues,
     expValues,
-    growthValues,
+    weightedScoreValues,
     totalStudents: studentUids.size,
   };
 }

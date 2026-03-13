@@ -13,24 +13,22 @@ const CLASS_COLORS: Record<string, { main: string; light: string }> = {
   D: { main: '#1E3A5F', light: '#A8C4E0' },
 };
 
-// StudentRadar 동일 6축
+// 5축 (StudentRadar 동일)
 const AXES = [
-  { key: 'accuracy', label: '정답률' },
-  { key: 'growth', label: '성장세' },
+  { key: 'quizScore', label: '퀴즈' },
+  { key: 'battle', label: '배틀' },
   { key: 'creation', label: '출제력' },
   { key: 'community', label: '소통' },
-  { key: 'review', label: '복습력' },
   { key: 'activity', label: '활동량' },
 ] as const;
 
 type AxisKey = (typeof AXES)[number]['key'];
 
 interface ClassProfile {
-  accuracy: number;
-  growth: number;
+  quizScore: number;
+  battle: number;
   creation: number;
   community: number;
-  review: number;
   activity: number;
 }
 
@@ -38,11 +36,10 @@ interface Props {
   courseId: string;
 }
 
-// radarNormData에서 반별 6축 평균 계산
+// radarNormData에서 반별 5축 평균 계산
 function computeClassProfiles(norm: RadarNormData): Record<string, ClassProfile> {
   const classStudents: Record<string, string[]> = { A: [], B: [], C: [], D: [] };
 
-  // uid → classId 매핑
   for (const [uid, cls] of Object.entries(norm.studentClassMap)) {
     if (classStudents[cls]) classStudents[cls].push(uid);
   }
@@ -52,35 +49,27 @@ function computeClassProfiles(norm: RadarNormData): Record<string, ClassProfile>
   for (const cls of ['A', 'B', 'C', 'D']) {
     const uids = classStudents[cls];
     if (uids.length === 0) {
-      profiles[cls] = { accuracy: 0, growth: 0, creation: 0, community: 0, review: 0, activity: 0 };
+      profiles[cls] = { quizScore: 0, battle: 0, creation: 0, community: 0, activity: 0 };
       continue;
     }
 
-    let sumAccuracy = 0, sumGrowth = 0, sumCreation = 0;
-    let sumCommunity = 0, sumReview = 0, sumActivity = 0;
+    let sumQuizScore = 0, sumBattle = 0, sumCreation = 0;
+    let sumCommunity = 0, sumActivity = 0;
 
     for (const uid of uids) {
-      // 정답률: weightedScore (0-100 절대값)
-      sumAccuracy += norm.weightedScoreByUid[uid] ?? 0;
-      // 성장세: growth (0-100)
-      sumGrowth += norm.growthByUid[uid] ?? 0;
-      // 출제력: 백분위
+      sumQuizScore += rankPercentile(norm.weightedScoreByUid[uid] ?? 0, norm.weightedScoreValues ?? []);
+      sumBattle += rankPercentile(norm.battleByUid?.[uid] ?? 0, norm.battleValues ?? []);
       sumCreation += rankPercentile(norm.quizCreationByUid[uid] ?? 0, norm.quizCreationCounts);
-      // 소통: 백분위
       sumCommunity += rankPercentile(norm.communityByUid[uid] ?? 0, norm.communityScores);
-      // 복습력: 백분위
-      sumReview += rankPercentile(norm.activeReviewByUid[uid] ?? 0, norm.activeReviewCounts);
-      // 활동량: 백분위
       sumActivity += rankPercentile(norm.expByUid[uid] ?? 0, norm.expValues);
     }
 
     const n = uids.length;
     profiles[cls] = {
-      accuracy: sumAccuracy / n,
-      growth: sumGrowth / n,
+      quizScore: sumQuizScore / n,
+      battle: sumBattle / n,
       creation: sumCreation / n,
       community: sumCommunity / n,
-      review: sumReview / n,
       activity: sumActivity / n,
     };
   }
@@ -115,7 +104,7 @@ export default function ClassProfileRadar({ courseId }: Props) {
   };
 
   const gridLevels = [25, 50, 75, 100];
-  const emptyProfile: ClassProfile = { accuracy: 0, growth: 0, creation: 0, community: 0, review: 0, activity: 0 };
+  const emptyProfile: ClassProfile = { quizScore: 0, battle: 0, creation: 0, community: 0, activity: 0 };
 
   const getClassPath = (cls: string) => {
     const profile = classProfiles?.[cls] || emptyProfile;
@@ -135,11 +124,10 @@ export default function ClassProfileRadar({ courseId }: Props) {
   return (
     <div>
       <h3 className="text-lg font-bold text-[#1A1A1A] mb-1">반별 종합 역량</h3>
-      <p className="text-[10px] text-[#5C5C5C] mb-2">정답률 · 성장세 · 출제력 · 소통 · 복습력 · 활동량</p>
+      <p className="text-[10px] text-[#5C5C5C] mb-2">퀴즈 · 배틀 · 출제력 · 소통 · 활동량</p>
 
       <svg viewBox="0 0 400 360" className="w-full" style={{ overflow: 'visible' }}>
         <defs>
-          {/* 반별 radialGradient (StudentRadar 스타일) */}
           {activeClasses.map(cls => {
             const c = CLASS_COLORS[cls];
             return (

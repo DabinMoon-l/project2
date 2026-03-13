@@ -129,8 +129,8 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
             <div>
               <StudentRadar
                 data={student.radarMetrics ?? {
-                  quizScore: 0, growth: 50, quizCreation: 0,
-                  community: 0, review: 0, activity: 0,
+                  quizScore: 0, battle: 0, quizCreation: 0,
+                  community: 0, activity: 0,
                 }}
                 classColor={CLASS_COLORS[student.classId]}
               />

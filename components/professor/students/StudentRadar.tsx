@@ -3,22 +3,20 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// 6축 라벨 + 설명
+// 5축 라벨 + 설명 (전부 백분위)
 const AXES = [
-  { key: 'quizScore', label: '정답률', info: '퀴즈 평균 정답률 (절대값)' },
-  { key: 'growth', label: '성장세', info: '오답 복습 후 극복률. 50 기준선' },
+  { key: 'quizScore', label: '퀴즈', info: '가중 석차 점수 백분위 (교수 퀴즈 ×6, 학생 퀴즈 ×4)' },
+  { key: 'battle', label: '배틀', info: '철권퀴즈 배틀 승수 백분위' },
   { key: 'quizCreation', label: '출제력', info: '직접 만든 퀴즈 수 백분위' },
   { key: 'community', label: '소통', info: '글×3 + 피드백 가중합 백분위' },
-  { key: 'review', label: '복습력', info: '재풀이한 복습 수 백분위' },
   { key: 'activity', label: '활동량', info: '총 EXP 백분위' },
 ] as const;
 
 interface RadarData {
   quizScore: number;
-  growth: number;
+  battle: number;
   quizCreation: number;
   community: number;
-  review: number;
   activity: number;
 }
 
@@ -30,7 +28,6 @@ interface Props {
 export default function StudentRadar({ data, classColor }: Props) {
   const [activeTooltip, setActiveTooltip] = useState<number | null>(null);
 
-  // viewBox를 넉넉하게 — 라벨 + ⓘ가 잘리지 않도록
   const CX = 185;
   const CY = 180;
   const R = 100;
@@ -38,7 +35,6 @@ export default function StudentRadar({ data, classColor }: Props) {
   const VIEWBOX_H = 370;
   const n = AXES.length;
 
-  // 각 축의 각도
   const angles = AXES.map((_, i) => (Math.PI * 2 * i) / n - Math.PI / 2);
 
   const getPoint = (i: number, value: number) => {
@@ -48,23 +44,19 @@ export default function StudentRadar({ data, classColor }: Props) {
 
   const gridLevels = [25, 50, 75, 100];
 
-  // 학생 다각형
   const dataPoints = AXES.map((axis, i) => getPoint(i, data[axis.key]));
   const dataPath = dataPoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ') + 'Z';
 
-  // 축 라벨 위치 (차트 바깥 충분히 먼 곳 — 값 라벨과 겹치지 않게)
   const LABEL_R = R + 48;
-  // 라벨 + ⓘ를 하나의 그룹으로 보고, ⓘ 폭(~10px)의 절반만큼 라벨을 왼쪽으로 이동하여 전체 중앙 정렬
-  const INFO_ICON_OFFSET = 6; // ⓘ 아이콘 반폭 보정
+  const INFO_ICON_OFFSET = 6;
   const labelPositions = angles.map(angle => ({
     x: CX + LABEL_R * Math.cos(angle) - INFO_ICON_OFFSET,
     y: CY + LABEL_R * Math.sin(angle),
   }));
 
-  // ⓘ 버튼: 라벨 텍스트 바로 오른쪽에 배치
   const infoPositions = AXES.map((axis, i) => {
     const lp = labelPositions[i];
-    const halfW = axis.label.length * 7.5; // 한글 문자 폭 추정
+    const halfW = axis.label.length * 7.5;
     const ix = lp.x + halfW + 10;
     const iy = lp.y;
     return { pctX: (ix / VIEWBOX_W) * 100, pctY: (iy / VIEWBOX_H) * 100 };
@@ -127,11 +119,10 @@ export default function StudentRadar({ data, classColor }: Props) {
           style={{ transformOrigin: `${CX}px ${CY}px` }}
         />
 
-        {/* 데이터 포인트 + 값 라벨 (축 방향 바깥으로 배치) */}
+        {/* 데이터 포인트 + 값 라벨 */}
         {dataPoints.map((p, i) => {
           const val = data[AXES[i].key];
           const angle = angles[i];
-          // 값 라벨: 데이터 포인트에서 축 방향 바깥으로 16px
           const nx = p.x + 16 * Math.cos(angle);
           const ny = p.y + 16 * Math.sin(angle);
 
@@ -153,7 +144,7 @@ export default function StudentRadar({ data, classColor }: Props) {
         })}
       </svg>
 
-      {/* ⓘ 버튼 — HTML 오버레이 (라벨 오른쪽에 나란히 배치) */}
+      {/* ⓘ 버튼 — HTML 오버레이 */}
       {infoPositions.map((pos, i) => (
         <button
           key={`info-${i}`}
@@ -173,7 +164,7 @@ export default function StudentRadar({ data, classColor }: Props) {
         </button>
       ))}
 
-      {/* 툴팁 — 차트 중앙에 겹쳐서 표시 (ⓘ 다시 터치로 닫기) */}
+      {/* 툴팁 */}
       <AnimatePresence>
         {activeTooltip !== null && (
           <motion.div
