@@ -77,14 +77,13 @@ export interface StudentDetail extends StudentData {
     createdAt: Date;
   }[];
 
-  // 종합 역량 레이더 메트릭 (정규화 0~100)
+  // 종합 역량 레이더 메트릭 (5축, 전부 백분위 0~100)
   radarMetrics?: {
-    quizScore: number;      // 정답률 (0-100 절대값)
-    growth: number;         // 성장세 (0-100, 50=기준선)
-    quizCreation: number;   // 출제력 (0-100 백분위)
-    community: number;      // 소통 (0-100 백분위)
-    review: number;         // 복습력 (0-100 백분위)
-    activity: number;       // 활동량 (0-100 백분위)
+    quizScore: number;      // 퀴즈 성적 (가중 석차 백분위)
+    battle: number;         // 배틀 (승수 백분위)
+    quizCreation: number;   // 출제력 (백분위)
+    community: number;      // 소통 (백분위)
+    activity: number;       // 활동량 (백분위)
   };
 
   // 가중 석차 점수 (교수 퀴즈 ×6, 학생 퀴즈 ×4)
@@ -167,17 +166,13 @@ const DETAIL_CACHE_TTL = 5 * 60 * 1000; // 5분
 function computeRadarFromNorm(
   uid: string,
   norm: RadarNormData,
-  quizScore: number,
   totalExp: number,
 ): NonNullable<StudentDetail['radarMetrics']> {
-  // 성장세: norm에 growthByUid가 있으면 사용, 없으면 0(재시도 없음)
-  const growth = norm.growthByUid?.[uid] ?? 0;
   return {
-    quizScore,
-    growth,
+    quizScore: rankPercentile(norm.weightedScoreByUid[uid] ?? 0, norm.weightedScoreValues ?? []),
+    battle: rankPercentile(norm.battleByUid?.[uid] ?? 0, norm.battleValues ?? []),
     quizCreation: rankPercentile(norm.quizCreationByUid[uid] ?? 0, norm.quizCreationCounts),
     community: rankPercentile(norm.communityByUid[uid] ?? 0, norm.communityScores),
-    review: rankPercentile(norm.activeReviewByUid[uid] ?? 0, norm.activeReviewCounts),
     activity: rankPercentile(totalExp, norm.expValues),
   };
 }
@@ -398,8 +393,7 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
         return {
           ...cached.detail,
           radarMetrics: computeRadarFromNorm(
-            uid, norm, cached.detail.quizStats.averageScore,
-            norm.expByUid[uid] ?? cached.detail.totalExp,
+            uid, norm, norm.expByUid[uid] ?? cached.detail.totalExp,
           ),
           weightedScore: norm.weightedScoreByUid[uid],
           classWeightedScores: buildClassWeightedScores(norm),
@@ -417,7 +411,7 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
         ...student,
         recentQuizzes: [],
         recentFeedbacks: [],
-        radarMetrics: computeRadarFromNorm(uid, norm, student.quizStats.averageScore, totalExp),
+        radarMetrics: computeRadarFromNorm(uid, norm, totalExp),
         weightedScore: norm.weightedScoreByUid[uid],
         classWeightedScores: buildClassWeightedScores(norm),
       };
@@ -487,7 +481,7 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
       // radarNorm에서 레이더 계산 (있으면)
       const norm = courseId ? _radarNormMap.get(courseId) : null;
       const radarMetrics = norm
-        ? computeRadarFromNorm(uid, norm, baseData.quizStats.averageScore, norm.expByUid[uid] ?? baseData.totalExp)
+        ? computeRadarFromNorm(uid, norm, norm.expByUid[uid] ?? baseData.totalExp)
         : undefined;
 
       const detail: StudentDetail = {
