@@ -798,5 +798,13 @@ service cloud.firestore {
         allow write: if false;
       }
     }
+
+    // ============================================================
+    // 교수 허용 목록 (Admin SDK 전용 — 클라이언트 접근 불가)
+    // ============================================================
+
+    match /allowedProfessors/{email} {
+      allow read, write: if false;
+    }
   }
 }
