@@ -15,6 +15,7 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
 import { defineSecret } from "firebase-functions/params";
+import { verifyProfessorAccess } from "./utils/professorAccess";
 import {
   generateBattleQuestions,
   getTekkenChapters,
@@ -622,14 +623,12 @@ export const tekkenPoolRefill = onCall(
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
     }
 
-    // 교수 권한 확인
     const db = getFirestore();
-    const userDoc = await db.collection("users").doc(request.auth.uid).get();
-    if (!userDoc.exists || userDoc.data()?.role !== "professor") {
-      throw new HttpsError("permission-denied", "교수님만 실행 가능합니다.");
-    }
 
     const { courseId } = request.data as { courseId: string };
+
+    // 교수 권한 + 과목 소유권 확인
+    await verifyProfessorAccess(request.auth.uid, courseId);
     if (!courseId || !getAllCourses().includes(courseId)) {
       throw new HttpsError("invalid-argument", "유효한 courseId가 필요합니다.");
     }

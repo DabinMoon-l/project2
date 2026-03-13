@@ -11,6 +11,7 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import * as nodemailer from "nodemailer";
 import { getBaseStats } from "./utils/rabbitStats";
+import { verifyProfessorAccess } from "./utils/professorAccess";
 
 // 이메일 발송용 시크릿
 const GMAIL_ADDRESS = defineSecret("GMAIL_ADDRESS");
@@ -71,16 +72,13 @@ export const bulkEnrollStudents = onCall(
 
     const db = getFirestore();
 
-    // 교수님 권한 확인
-    const userDoc = await db.collection("users").doc(request.auth.uid).get();
-    if (!userDoc.exists || userDoc.data()?.role !== "professor") {
-      throw new HttpsError("permission-denied", "교수님만 학생을 등록할 수 있습니다.");
-    }
-
     const { courseId, students } = request.data as {
       courseId: string;
       students: EnrollStudent[];
     };
+
+    // 교수님 권한 + 과목 소유권 확인
+    await verifyProfessorAccess(request.auth.uid, courseId);
 
     if (!courseId || !students || !Array.isArray(students) || students.length === 0) {
       throw new HttpsError("invalid-argument", "courseId와 students 배열이 필요합니다.");
@@ -367,18 +365,14 @@ export const resetStudentPassword = onCall(
 
     const db = getFirestore();
 
-    // 교수님 또는 관리자 권한 확인
-    const userDoc = await db.collection("users").doc(request.auth.uid).get();
-    const callerData = userDoc.data();
-    if (!userDoc.exists || (callerData?.role !== "professor" && !callerData?.isAdmin)) {
-      throw new HttpsError("permission-denied", "권한이 없습니다.");
-    }
-
     const { studentId, courseId, newPassword } = request.data as {
       studentId: string;
       courseId: string;
       newPassword: string;
     };
+
+    // 교수님 권한 + 과목 소유권 확인
+    await verifyProfessorAccess(request.auth.uid, courseId);
 
     if (!studentId || !courseId || !newPassword) {
       throw new HttpsError("invalid-argument", "학번, 과목, 새 비밀번호가 필요합니다.");
@@ -1140,16 +1134,13 @@ export const removeEnrolledStudent = onCall(
 
     const db = getFirestore();
 
-    // 교수님 권한 확인
-    const userDoc = await db.collection("users").doc(request.auth.uid).get();
-    if (!userDoc.exists || userDoc.data()?.role !== "professor") {
-      throw new HttpsError("permission-denied", "교수님만 학생을 삭제할 수 있습니다.");
-    }
-
     const { courseId, studentId } = request.data as {
       courseId: string;
       studentId: string;
     };
+
+    // 교수님 권한 + 과목 소유권 확인
+    await verifyProfessorAccess(request.auth.uid, courseId);
 
     if (!courseId || !studentId) {
       throw new HttpsError("invalid-argument", "courseId와 studentId가 필요합니다.");
