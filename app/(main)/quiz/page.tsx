@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Image from 'next/image';
 import {
   collection,
   query,
@@ -11,7 +10,6 @@ import {
   getDocs,
   deleteDoc,
   doc,
-  getDoc,
   onSnapshot,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -26,7 +24,7 @@ const UpdateQuizModal = dynamic(() => import('@/components/quiz/UpdateQuizModal'
 const QuizStatsModal = dynamic(() => import('@/components/quiz/manage/QuizStatsModal'), { ssr: false });
 import { useExpandSource } from '@/lib/hooks/useExpandSource';
 import { useCourse } from '@/lib/contexts';
-import { COURSES, getCurrentSemesterByDate, getDefaultQuizTab, getPastExamOptions, type PastExamOption } from '@/lib/types/course';
+import { COURSES, getPastExamOptions, type PastExamOption } from '@/lib/types/course';
 import { generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import { parseAverageScore, sortByLatest, formatQuestionTypes } from '@/lib/utils/quizHelpers';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
@@ -37,7 +35,7 @@ import {
   ClassFilterTabs,
 } from './quizPageParts';
 import type { QuizCardData } from './quizPageParts';
-import { NewsCarousel, ReviewQuizCard, CustomQuizCard, SkeletonCard, ManageQuizCard } from './quizPageCards';
+import { NewsCarousel, CustomQuizCard, SkeletonCard, ManageQuizCard } from './quizPageCards';
 
 
 function QuizListPageContent() {
@@ -45,7 +43,7 @@ function QuizListPageContent() {
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const { isBookmarked, toggleBookmark } = useQuizBookmark();
-  const { userCourseId, semesterSettings } = useCourse();
+  const { userCourseId } = useCourse();
   const { updatedQuizzes, checkQuizUpdate, refresh: refreshUpdates, loading: updatesLoading } = useQuizUpdate();
 
   // 과목별 리본 이미지
@@ -84,7 +82,6 @@ function QuizListPageContent() {
 
   const [selectedQuiz, setSelectedQuiz] = useState<QuizCardData | null>(null);
   const { sourceRect, registerRef, captureRect, clearRect } = useExpandSource();
-  const { sourceRect: reviewSourceRect, registerRef: registerReviewRef, captureRect: captureReviewRect, clearRect: clearReviewRect } = useExpandSource();
 
   // 기출 드롭다운
   const pastExamOptions = useMemo(() => getPastExamOptions(userCourseId), [userCourseId]);
@@ -117,14 +114,11 @@ function QuizListPageContent() {
   // 스크롤 맨 위로 버튼
   const customSectionRef = useRef<HTMLDivElement>(null);
 
-  // 복습 탭 Details 모달
-  const [reviewDetailsQuiz, setReviewDetailsQuiz] = useState<QuizCardData | null>(null);
-
   // 삭제 확인 모달
   const [quizToDelete, setQuizToDelete] = useState<QuizCardData | null>(null);
 
   // Details/관리 모달 열릴 때 네비게이션 숨김
-  useHideNav(!!(selectedQuiz || reviewDetailsQuiz || quizToDelete || isManageMode || statsQuiz));
+  useHideNav(!!(selectedQuiz || quizToDelete || isManageMode || statsQuiz));
 
   // body 스크롤 방지 통합 (모달/관리모드 열림 시 PullToHome 스와이프 방지)
   useEffect(() => {
@@ -880,114 +874,6 @@ function QuizListPageContent() {
                 className="flex-1 py-2 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors rounded-lg"
               >
                 {selectedQuiz.isCompleted ? '복습하기' : '시작하기'}
-              </button>
-            </div>
-          </>
-        )}
-      </ExpandModal>
-
-      {/* 복습 탭 Details 모달 */}
-      <ExpandModal
-        isOpen={!!reviewDetailsQuiz}
-        onClose={() => { setReviewDetailsQuiz(null); clearReviewRect(); }}
-        sourceRect={reviewSourceRect}
-        className="w-full max-w-[260px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 rounded-xl"
-        zIndex={60}
-      >
-        {reviewDetailsQuiz && (
-          <>
-            <h2 className="text-sm font-bold text-[#1A1A1A] mb-3">
-              {reviewDetailsQuiz.title}
-            </h2>
-
-            <div className="space-y-1.5 mb-4">
-              <div className="flex justify-between text-xs">
-                <span className="text-[#5C5C5C]">문제 수</span>
-                <span className="font-bold text-[#1A1A1A]">{reviewDetailsQuiz.questionCount}문제</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-[#5C5C5C]">참여자</span>
-                <span className="font-bold text-[#1A1A1A]">{reviewDetailsQuiz.participantCount}명</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-[#5C5C5C]">난이도</span>
-                <span className="font-bold text-[#1A1A1A]">
-                  {reviewDetailsQuiz.difficulty === 'easy' ? '쉬움' : reviewDetailsQuiz.difficulty === 'hard' ? '어려움' : '보통'}
-                </span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-[#5C5C5C]">문제 유형</span>
-                <span className="font-bold text-[#1A1A1A]">
-                  {formatQuestionTypes(
-                    reviewDetailsQuiz.oxCount || 0,
-                    reviewDetailsQuiz.multipleChoiceCount || 0,
-                    reviewDetailsQuiz.subjectiveCount || 0
-                  )}
-                </span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-[#5C5C5C]">제작자</span>
-                <span className="font-bold text-[#1A1A1A]">
-                  {PROFESSOR_QUIZ_TYPES.has(reviewDetailsQuiz.type) ? '교수님' : (reviewDetailsQuiz.creatorNickname || '익명')}
-                </span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-[#5C5C5C]">평균 점수</span>
-                <span className="font-bold text-[#1A1A1A]">
-                  {reviewDetailsQuiz.participantCount > 0
-                    ? `${(reviewDetailsQuiz.averageScore ?? 0).toFixed(0)}점`
-                    : '-'}
-                </span>
-              </div>
-              {/* 점수 표시: 퀴즈 점수 / 첫번째 복습 점수 */}
-              <div className="py-2 border-t border-[#A0A0A0]">
-                <div className="flex items-center justify-center gap-2">
-                  <span className="text-3xl font-black text-[#1A1A1A]">
-                    {reviewDetailsQuiz.myScore !== undefined ? reviewDetailsQuiz.myScore : '-'}
-                  </span>
-                  <span className="text-sm text-[#5C5C5C]">/</span>
-                  <span className="text-3xl font-black text-[#1A1A1A]">
-                    {reviewDetailsQuiz.myFirstReviewScore !== undefined ? reviewDetailsQuiz.myFirstReviewScore : '-'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-center gap-6 mt-0.5">
-                  <span className="text-[10px] text-[#5C5C5C]">퀴즈</span>
-                  <span className="text-[10px] text-[#5C5C5C]">복습</span>
-                </div>
-              </div>
-              {reviewDetailsQuiz.tags && reviewDetailsQuiz.tags.length > 0 && (
-                <div className="pt-2 border-t border-[#A0A0A0]">
-                  <div className="flex flex-wrap gap-1.5">
-                    {reviewDetailsQuiz.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-medium"
-                      >
-                        #{tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                onClick={() => { setReviewDetailsQuiz(null); clearReviewRect(); }}
-                className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors rounded-lg"
-              >
-                닫기
-              </button>
-              <button
-                onClick={() => {
-                  const quiz = reviewDetailsQuiz;
-                  setReviewDetailsQuiz(null);
-                  clearReviewRect();
-                  router.push(`/review/library/${quiz.id}?from=quiz`);
-                }}
-                className="flex-1 py-2 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors rounded-lg"
-              >
-                복습하기
               </button>
             </div>
           </>
