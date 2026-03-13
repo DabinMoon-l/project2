@@ -31,7 +31,7 @@ import {
   FIXED_CARDS,
   PROF_QUIZ_CAROUSEL_KEY,
   PROF_QUIZ_SCROLL_KEY,
-  COURSE_IDS,
+  ALL_COURSE_IDS,
   ProfSectionTabs,
 } from './profQuizPageParts';
 import type { QuizFeedbackInfo, CarouselCard } from './profQuizPageParts';
@@ -740,23 +740,25 @@ function ProfessorNewsCarousel({
 function CourseRibbonHeader({
   currentCourseId,
   onCourseChange,
+  courseIds = ALL_COURSE_IDS,
 }: {
   currentCourseId: CourseId;
   onCourseChange: (courseId: CourseId) => void;
+  courseIds?: CourseId[];
 }) {
-  const currentIndex = COURSE_IDS.indexOf(currentCourseId);
+  const currentIndex = courseIds.indexOf(currentCourseId);
   const course = COURSES[currentCourseId];
   const ribbonImage = course?.quizRibbonImage || '/images/biology-quiz-ribbon.png';
   const ribbonScale = course?.quizRibbonScale || 1;
 
   const goToPrev = () => {
-    const prevIdx = (currentIndex - 1 + COURSE_IDS.length) % COURSE_IDS.length;
-    onCourseChange(COURSE_IDS[prevIdx]);
+    const prevIdx = (currentIndex - 1 + courseIds.length) % courseIds.length;
+    onCourseChange(courseIds[prevIdx]);
   };
 
   const goToNext = () => {
-    const nextIdx = (currentIndex + 1) % COURSE_IDS.length;
-    onCourseChange(COURSE_IDS[nextIdx]);
+    const nextIdx = (currentIndex + 1) % courseIds.length;
+    onCourseChange(courseIds[nextIdx]);
   };
 
   // 터치 + 마우스 드래그 스와이프 (세로 스크롤 허용)
@@ -840,7 +842,7 @@ function CourseRibbonHeader({
 
       {/* 페이지네이션 도트 */}
       <div className="flex justify-center gap-2 mt-3">
-        {COURSE_IDS.map((id, idx) => (
+        {courseIds.map((id, idx) => (
           <button
             key={id}
             onClick={() => onCourseChange(id)}
@@ -985,7 +987,13 @@ function SkeletonCard() {
 export default function ProfessorQuizListPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const { userCourseId, setProfessorCourse } = useCourse();
+  const { userCourseId, setProfessorCourse, assignedCourses } = useCourse();
+  const courseIds = useMemo(() => {
+    if (assignedCourses.length > 0) {
+      return ALL_COURSE_IDS.filter(id => assignedCourses.includes(id));
+    }
+    return ALL_COURSE_IDS;
+  }, [assignedCourses]);
   const { profile } = useUser();
 
   // 과목별 퀴즈 통합 로드 (useProfessorQuiz ×3 → 단일 fetch + state)
@@ -1478,6 +1486,7 @@ export default function ProfessorQuizListPage() {
         <CourseRibbonHeader
           currentCourseId={userCourseId || 'biology'}
           onCourseChange={handleCourseChange}
+          courseIds={courseIds}
         />
       </header>
 

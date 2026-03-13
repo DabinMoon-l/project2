@@ -39,7 +39,7 @@ export const PROF_QUIZ_CAROUSEL_KEY = 'prof-quiz-carousel-index';
 /** 캐러셀 내 스크롤 위치 저장 키 (타입별) */
 export const PROF_QUIZ_SCROLL_KEY = (type: string) => `prof-quiz-scroll-${type}`;
 
-export const COURSE_IDS: CourseId[] = ['biology', 'microbiology', 'pathophysiology'];
+export const ALL_COURSE_IDS: CourseId[] = ['biology', 'microbiology', 'pathophysiology'];
 
 /** 자작/서재/커스텀 탭 옵션 */
 export const SECTION_OPTIONS: { value: 'custom' | 'library' | 'folder'; label: string }[] = [
