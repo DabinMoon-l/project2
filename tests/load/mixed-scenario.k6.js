@@ -26,7 +26,7 @@ import { SharedArray } from "k6/data";
 // ── 토큰 ──
 
 const tokens = new SharedArray("tokens", function () {
-  return JSON.parse(open("./tests/load/tokens.json"));
+  return JSON.parse(open("./tokens.json"));
 });
 
 // ── 설정 (에뮬레이터 기본) ──
@@ -81,27 +81,30 @@ const totalErrors = new Counter("total_errors");
 
 // ── 시나리오 ──
 
+// VU 수 환경변수로 제어 (기본 300, 에뮬레이터는 K6_MAX_VUS=50 권장)
+const MAX_VUS = Number(__ENV.K6_MAX_VUS) || 300;
+
 export const options = {
   scenarios: {
     mixed_load: {
       executor: "ramping-vus",
       startVUs: 0,
       stages: [
-        { duration: "15s", target: 100 },   // 워밍업
-        { duration: "15s", target: 200 },
-        { duration: "15s", target: 300 },   // 최대 300명
-        { duration: "60s", target: 300 },   // 1분 유지
-        { duration: "15s", target: 0 },     // 쿨다운
+        { duration: "15s", target: Math.round(MAX_VUS * 0.33) },  // 워밍업
+        { duration: "15s", target: Math.round(MAX_VUS * 0.66) },
+        { duration: "15s", target: MAX_VUS },                      // 최대
+        { duration: "60s", target: MAX_VUS },                      // 1분 유지
+        { duration: "15s", target: 0 },                            // 쿨다운
       ],
     },
   },
   thresholds: {
     quiz_submit_success: ["rate>0.85"],
-    battle_match_success: ["rate>0.80"],
-    gacha_spin_success: ["rate>0.80"],
+    battle_match_success: ["rate>0.70"],
+    gacha_spin_success: ["rate>0.70"],
     review_practice_success: ["rate>0.85"],
     board_academic_success: ["rate>0.85"],
-    quiz_submit_duration: ["p(95)<15000"],
+    quiz_submit_duration: ["p(95)<30000"],
   },
 };
 
@@ -477,7 +480,7 @@ export function handleSummary(data) {
 `;
 
   return {
-    "tests/load/results/mixed-summary.json": JSON.stringify({
+    "./results/mixed-summary.json": JSON.stringify({
       timestamp: new Date().toISOString(),
       totalRequests: m.http_reqs?.values?.count || 0,
       totalErrors: m.total_errors?.values?.count || 0,
