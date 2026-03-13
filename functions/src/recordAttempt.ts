@@ -270,34 +270,28 @@ export const recordAttempt = onCall(
       }
     })();
 
-    // ── ⑩ users/{uid}.quizStats — 2회 write (증분 + averageScore 계산) ──
-    // 기존 3회(update+get+update)에서 2회로 축소, 병렬 실행으로 응답 차단 최소화
+    // ── ⑩ users/{uid}.quizStats — 트랜잭션으로 원자적 갱신 ──
     const userStatsPromise = (async () => {
       try {
         const scoreDiff = attemptNo <= 1 ? score : (score - prevCompletionScore);
+        const isFirstAttempt = attemptNo <= 1;
 
-        await db.doc(`users/${userId}`).update({
-          "quizStats.totalScoreSum": FieldValue.increment(scoreDiff),
-          ...(attemptNo <= 1 ? {
-            "quizStats.totalAttempts": FieldValue.increment(1),
-            "quizStats.totalCorrect": FieldValue.increment(correctCount),
-            "quizStats.totalQuestions": FieldValue.increment(totalCount),
-          } : {}),
-          "quizStats.lastAttemptAt": FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
+        await db.runTransaction(async (tx) => {
+          const userDoc = await tx.get(db.doc(`users/${userId}`));
+          const qs = userDoc.data()?.quizStats || {};
+
+          const newScoreSum = (qs.totalScoreSum || 0) + scoreDiff;
+          const newAttempts = (qs.totalAttempts || 0) + (isFirstAttempt ? 1 : 0);
+          const newAvg = newAttempts > 0 ? Math.round(newScoreSum / newAttempts) : 0;
+
+          tx.update(db.doc(`users/${userId}`), {
+            "quizStats.totalScoreSum": newScoreSum,
+            "quizStats.totalAttempts": newAttempts,
+            "quizStats.averageScore": newAvg,
+            "quizStats.lastAttemptAt": FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          });
         });
-
-        // averageScore 갱신 (증분 후 읽기 필요 — fire-and-forget)
-        const userDoc = await db.doc(`users/${userId}`).get();
-        const qs = userDoc.data()?.quizStats;
-        if (qs) {
-          const avg = qs.totalAttempts > 0
-            ? Math.round((qs.totalScoreSum || 0) / qs.totalAttempts)
-            : 0;
-          db.doc(`users/${userId}`).update({
-            "quizStats.averageScore": avg,
-          }).catch(() => {});
-        }
       } catch (e) {
         console.warn(`users/${userId} quizStats 갱신 실패 (무시 가능):`, e);
       }
