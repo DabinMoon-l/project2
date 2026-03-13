@@ -17,7 +17,7 @@ const CLASS_COLORS: Record<string, { main: string; light: string }> = {
 const AXES = [
   { key: 'quizScore', label: '퀴즈' },
   { key: 'battle', label: '배틀' },
-  { key: 'creation', label: '출제력' },
+  { key: 'quizCreation', label: '출제력' },
   { key: 'community', label: '소통' },
   { key: 'activity', label: '활동량' },
 ] as const;
@@ -27,7 +27,7 @@ type AxisKey = (typeof AXES)[number]['key'];
 interface ClassProfile {
   quizScore: number;
   battle: number;
-  creation: number;
+  quizCreation: number;
   community: number;
   activity: number;
 }
@@ -49,17 +49,17 @@ function computeClassProfiles(norm: RadarNormData): Record<string, ClassProfile>
   for (const cls of ['A', 'B', 'C', 'D']) {
     const uids = classStudents[cls];
     if (uids.length === 0) {
-      profiles[cls] = { quizScore: 0, battle: 0, creation: 0, community: 0, activity: 0 };
+      profiles[cls] = { quizScore: 0, battle: 0, quizCreation: 0, community: 0, activity: 0 };
       continue;
     }
 
-    let sumQuizScore = 0, sumBattle = 0, sumCreation = 0;
+    let sumQuizScore = 0, sumBattle = 0, sumQuizCreation = 0;
     let sumCommunity = 0, sumActivity = 0;
 
     for (const uid of uids) {
       sumQuizScore += rankPercentile(norm.weightedScoreByUid[uid] ?? 0, norm.weightedScoreValues ?? []);
       sumBattle += rankPercentile(norm.battleByUid?.[uid] ?? 0, norm.battleValues ?? []);
-      sumCreation += rankPercentile(norm.quizCreationByUid[uid] ?? 0, norm.quizCreationCounts);
+      sumQuizCreation += rankPercentile(norm.quizCreationByUid[uid] ?? 0, norm.quizCreationCounts);
       sumCommunity += rankPercentile(norm.communityByUid[uid] ?? 0, norm.communityScores);
       sumActivity += rankPercentile(norm.expByUid[uid] ?? 0, norm.expValues);
     }
@@ -68,7 +68,7 @@ function computeClassProfiles(norm: RadarNormData): Record<string, ClassProfile>
     profiles[cls] = {
       quizScore: sumQuizScore / n,
       battle: sumBattle / n,
-      creation: sumCreation / n,
+      quizCreation: sumQuizCreation / n,
       community: sumCommunity / n,
       activity: sumActivity / n,
     };
@@ -104,7 +104,7 @@ export default function ClassProfileRadar({ courseId }: Props) {
   };
 
   const gridLevels = [25, 50, 75, 100];
-  const emptyProfile: ClassProfile = { quizScore: 0, battle: 0, creation: 0, community: 0, activity: 0 };
+  const emptyProfile: ClassProfile = { quizScore: 0, battle: 0, quizCreation: 0, community: 0, activity: 0 };
 
   const getClassPath = (cls: string) => {
     const profile = classProfiles?.[cls] || emptyProfile;

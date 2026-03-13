@@ -1,14 +1,16 @@
 'use client';
 
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface Props {
   quizId: string | null;
   onClose: () => void;
-  onConfirm: (quizId: string) => void;
+  onConfirm: (quizId: string) => Promise<void> | void;
 }
 
 export default function ReviewPublishModal({ quizId, onClose, onConfirm }: Props) {
+  const [isLoading, setIsLoading] = useState(false);
   return (
     <AnimatePresence>
       {quizId && (
@@ -58,13 +60,19 @@ export default function ReviewPublishModal({ quizId, onClose, onConfirm }: Props
                 취소
               </button>
               <button
-                onClick={() => {
-                  onConfirm(quizId);
-                  onClose();
+                disabled={isLoading}
+                onClick={async () => {
+                  setIsLoading(true);
+                  try {
+                    await onConfirm(quizId);
+                    onClose();
+                  } catch {
+                    setIsLoading(false);
+                  }
                 }}
-                className="flex-1 py-2.5 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors rounded-lg"
+                className="flex-1 py-2.5 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors rounded-lg disabled:opacity-50"
               >
-                공개
+                {isLoading ? '공개 중...' : '공개'}
               </button>
             </div>
           </motion.div>

@@ -88,7 +88,7 @@ export default function ReviewDeleteSheet({
                 )}
               </div>
               {deletedItems.length > 0 ? (
-                <div className="space-y-2">
+                <AnimatePresence mode="popLayout">
                   {deletedItems.map((item) => (
                     <motion.div
                       key={item.id}
@@ -139,7 +139,7 @@ export default function ReviewDeleteSheet({
                       </div>
                     </motion.div>
                   ))}
-                </div>
+                </AnimatePresence>
               ) : (
                 <div className="text-center py-8">
                   <svg className="w-12 h-12 text-[#D4CFC4] mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
