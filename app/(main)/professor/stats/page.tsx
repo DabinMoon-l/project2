@@ -60,7 +60,7 @@ interface ExtraData {
 const _extraCacheMap = new Map<string, { data: ExtraData; ts: number }>();
 const EXTRA_CACHE_TTL = 5 * 60 * 1000;
 
-const COURSE_IDS: CourseId[] = ['biology', 'microbiology', 'pathophysiology'];
+const ALL_COURSE_IDS: CourseId[] = ['biology', 'microbiology', 'pathophysiology'];
 
 const CLUSTER_META = [
   { key: 'passionate' as const, label: '열정적 학습자', color: '#16a34a', desc: '높은 참여 + 높은 성취' },
@@ -70,7 +70,13 @@ const CLUSTER_META = [
 ];
 
 export default function ProfessorStatsPage() {
-  const { userCourseId, setProfessorCourse } = useCourse();
+  const { userCourseId, setProfessorCourse, assignedCourses } = useCourse();
+  const courseIds = useMemo(() => {
+    if (assignedCourses.length > 0) {
+      return ALL_COURSE_IDS.filter(id => assignedCourses.includes(id));
+    }
+    return ALL_COURSE_IDS;
+  }, [assignedCourses]);
   const { data, loading, error, fetchStats } = useProfessorStats();
   const {
     students,
@@ -453,6 +459,7 @@ export default function ProfessorStatsPage() {
         <DashboardRibbonHeader
           currentCourseId={courseId}
           onCourseChange={handleCourseChange}
+          courseIds={courseIds}
         />
       </header>
 
@@ -815,22 +822,24 @@ export default function ProfessorStatsPage() {
 function DashboardRibbonHeader({
   currentCourseId,
   onCourseChange,
+  courseIds = ALL_COURSE_IDS,
 }: {
   currentCourseId: CourseId;
   onCourseChange: (courseId: CourseId) => void;
+  courseIds?: CourseId[];
 }) {
-  const currentIndex = COURSE_IDS.indexOf(currentCourseId);
+  const currentIndex = courseIds.indexOf(currentCourseId);
   const course = COURSES[currentCourseId];
   const ribbonImage = course?.dashboardRibbonImage || '/images/biology-dashboard-ribbon.png';
   const ribbonScale = course?.dashboardRibbonScale || 1;
 
   const goToPrev = () => {
-    const prevIdx = (currentIndex - 1 + COURSE_IDS.length) % COURSE_IDS.length;
-    onCourseChange(COURSE_IDS[prevIdx]);
+    const prevIdx = (currentIndex - 1 + courseIds.length) % courseIds.length;
+    onCourseChange(courseIds[prevIdx]);
   };
   const goToNext = () => {
-    const nextIdx = (currentIndex + 1) % COURSE_IDS.length;
-    onCourseChange(COURSE_IDS[nextIdx]);
+    const nextIdx = (currentIndex + 1) % courseIds.length;
+    onCourseChange(courseIds[nextIdx]);
   };
 
   const swipeStartX = useRef(0);
@@ -897,7 +906,7 @@ function DashboardRibbonHeader({
       </div>
 
       <div className="flex justify-center gap-2 mt-3">
-        {COURSE_IDS.map((id, idx) => (
+        {courseIds.map((id, idx) => (
           <button
             key={id}
             onClick={() => onCourseChange(id)}
