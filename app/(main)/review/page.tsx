@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { doc, getDoc, getDocs, collection, query, where, onSnapshot, updateDoc, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Skeleton, ExpandModal } from '@/components/common';
+import { Skeleton } from '@/components/common';
 import { useExpandSource } from '@/lib/hooks/useExpandSource';
 import { SPRING_TAP, TAP_SCALE } from '@/lib/constants/springs';
 import FolderSlider from '@/components/common/FolderSlider';
@@ -37,6 +37,9 @@ import LibraryQuizCard from '@/components/review/LibraryQuizCard';
 import BookmarkGridView from '@/components/review/BookmarkGridView';
 import QuestionListModal from '@/components/review/QuestionListModal';
 import CreateFolderModal from '@/components/review/CreateFolderModal';
+import ReviewDeleteSheet from '@/components/review/ReviewDeleteSheet';
+import ReviewPublishModal from '@/components/review/ReviewPublishModal';
+import ReviewLibraryDetailModal from '@/components/review/ReviewLibraryDetailModal';
 import { PROFESSOR_QUIZ_TYPES } from '@/app/(main)/quiz/quizPageParts';
 
 /* ============================================================
@@ -3341,309 +3344,34 @@ function ReviewPageContent() {
         )}
       </AnimatePresence>
 
-      {/* 삭제 확인 바텀시트 */}
-      <AnimatePresence>
-        {showDeleteConfirmSheet && (
-          <motion.div
-            initial={{ opacity: 0, pointerEvents: 'auto' as const }}
-            animate={{ opacity: 1, pointerEvents: 'auto' as const }}
-            exit={{ opacity: 0, pointerEvents: 'none' as const }}
-            className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50"
-            style={{ left: 'var(--modal-left, 0px)' }}
-            onClick={() => setShowDeleteConfirmSheet(false)}
-          >
-            <motion.div
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              onClick={(e) => e.stopPropagation()}
-              className="w-full max-h-[70vh] bg-[#F5F0E8] border-t-2 border-[#1A1A1A] overflow-hidden flex flex-col"
-            >
-              {/* 헤더 */}
-              <div className="flex items-center justify-between p-4 border-b border-[#EDEAE4]">
-                <h3 className="font-bold text-lg text-[#1A1A1A]">휴지통</h3>
-                <button
-                  onClick={() => setShowDeleteConfirmSheet(false)}
-                  className="w-8 h-8 flex items-center justify-center text-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              {/* 삭제된 항목 목록 (휴지통) */}
-              <div className="flex-1 overflow-y-auto p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-sm text-[#5C5C5C]">
-                    삭제된 항목입니다.
-                  </p>
-                  {deletedItems.length > 0 && (
-                    <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        if (confirm(`휴지통의 모든 항목(${deletedItems.length}개)을 영구 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) {
-                          try {
-                            for (const item of deletedItems) {
-                              await permanentlyDeleteItem(item.id);
-                            }
-                            setShowDeleteConfirmSheet(false);
-                          } catch (err) {
-                            alert('휴지통 비우기에 실패했습니다.');
-                          }
-                        }
-                      }}
-                      className="px-3 py-1.5 text-sm font-bold text-[#8B1A1A] border border-[#8B1A1A] hover:bg-[#8B1A1A] hover:text-white transition-colors"
-                    >
-                      휴지통 비우기
-                    </button>
-                  )}
-                </div>
-                {deletedItems.length > 0 ? (
-                  <div className="space-y-2">
-                    {deletedItems.map((item) => {
-                      const typeLabels: Record<string, string> = {
-                        solved: '문제',
-                        wrong: '오답',
-                        bookmark: '찜',
-                        custom: '커스텀',
-                      };
-                      return (
-                        <motion.div
-                          key={item.id}
-                          layout
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: 20 }}
-                          className="flex items-center justify-between p-3 border border-[#5C5C5C] bg-[#EDEAE4]"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-[#1A1A1A] truncate">{item.title}</p>
-                            <p className="text-xs text-[#5C5C5C]">
-                              {typeLabels[item.type] || item.type} · {item.questionCount}문제
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2 ml-2">
-                            {/* 되살리기 버튼 */}
-                            <button
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                try {
-                                  await restoreDeletedItem(item.id);
-                                  // 복원 성공 시 모든 모드 해제 및 상태 초기화
-                                  setShowDeleteConfirmSheet(false);
-                                  setIsFolderDeleteMode(false);
-                                  setDeleteFolderIds(new Set());
-                                  setIsReviewSelectMode(false);
-                                  setReviewSelectedIds(new Set());
-                                } catch (err) {
-                                  alert('복원에 실패했습니다.');
-                                }
-                              }}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-[#1A6B1A] font-bold border border-[#1A6B1A] hover:bg-[#1A6B1A] hover:text-white transition-colors"
-                            >
-                              되살리기
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                              </svg>
-                            </button>
-                            {/* 삭제 버튼 */}
-                            <button
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                try {
-                                  await permanentlyDeleteItem(item.id);
-                                } catch (err) {
-                                  alert('삭제에 실패했습니다.');
-                                }
-                              }}
-                              className="px-3 py-1.5 text-sm text-[#8B1A1A] font-bold border border-[#8B1A1A] hover:bg-[#8B1A1A] hover:text-white transition-colors"
-                            >
-                              삭제
-                            </button>
-                          </div>
-                        </motion.div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <svg className="w-12 h-12 text-[#D4CFC4] mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                    <p className="text-sm text-[#5C5C5C]">휴지통이 비어있습니다.</p>
-                  </div>
-                )}
-              </div>
-
-              {/* 하단 버튼 */}
-              <div className="p-4 border-t border-[#EDEAE4]">
-                <button
-                  onClick={() => setShowDeleteConfirmSheet(false)}
-                  className="w-full py-3 font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors"
-                >
-                  닫기
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* 삭제 확인 바텀시트 (휴지통) */}
+      <ReviewDeleteSheet
+        isOpen={showDeleteConfirmSheet}
+        onClose={() => setShowDeleteConfirmSheet(false)}
+        deletedItems={deletedItems}
+        permanentlyDeleteItem={permanentlyDeleteItem}
+        restoreDeletedItem={restoreDeletedItem}
+        onRestoreSuccess={() => {
+          setIsFolderDeleteMode(false);
+          setDeleteFolderIds(new Set());
+          setIsReviewSelectMode(false);
+          setReviewSelectedIds(new Set());
+        }}
+      />
 
       {/* 서재 퀴즈 공개 확인 모달 */}
-      <AnimatePresence>
-        {publishConfirmQuizId && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
-            style={{ left: 'var(--modal-left, 0px)' }}
-            onClick={() => setPublishConfirmQuizId(null)}
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-              className="w-[85%] max-w-[280px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 rounded-2xl"
-            >
-              {/* 아이콘 */}
-              <div className="flex justify-center mb-3">
-                <div className="w-10 h-10 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4] rounded-lg">
-                  <svg className="w-5 h-5 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.6 9h16.8M3.6 15h16.8" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3a15.3 15.3 0 0 1 4 9 15.3 15.3 0 0 1-4 9 15.3 15.3 0 0 1-4-9 15.3 15.3 0 0 1 4-9z" />
-                  </svg>
-                </div>
-              </div>
-
-              {/* 텍스트 */}
-              <h3 className="text-center font-bold text-base text-[#1A1A1A] mb-1.5">
-                퀴즈를 공개할까요?
-              </h3>
-              <p className="text-center text-xs text-[#5C5C5C] mb-0.5">
-                공개하면 다른 학생들도 풀 수 있어요.
-              </p>
-              <p className="text-center text-xs text-[#5C5C5C] mb-4">
-                참여 통계도 확인할 수 있어요.
-              </p>
-
-              {/* 버튼 */}
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setPublishConfirmQuizId(null)}
-                  className="flex-1 py-2.5 text-sm font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors rounded-lg"
-                >
-                  취소
-                </button>
-                <button
-                  onClick={() => {
-                    uploadToPublic(publishConfirmQuizId);
-                    setPublishConfirmQuizId(null);
-                  }}
-                  className="flex-1 py-2.5 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors rounded-lg"
-                >
-                  공개
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <ReviewPublishModal
+        quizId={publishConfirmQuizId}
+        onClose={() => setPublishConfirmQuizId(null)}
+        onConfirm={uploadToPublic}
+      />
 
       {/* 서재 퀴즈 상세 모달 */}
-      <ExpandModal
-        isOpen={!!selectedLibraryQuiz}
-        onClose={() => { setSelectedLibraryQuiz(null); clearLibraryRect(); }}
+      <ReviewLibraryDetailModal
+        quiz={selectedLibraryQuiz}
         sourceRect={librarySourceRect}
-        className="w-full max-w-[300px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 rounded-2xl"
-        zIndex={60}
-      >
-        {selectedLibraryQuiz && (
-          <>
-            <h2 className="text-sm font-bold text-[#1A1A1A] mb-3">
-              {selectedLibraryQuiz.title}
-            </h2>
-
-            <div className="space-y-1.5 mb-4">
-              <div className="flex justify-between text-xs">
-                <span className="text-[#5C5C5C]">문제 수</span>
-                <span className="font-bold text-[#1A1A1A]">{selectedLibraryQuiz.questionCount}문제</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-[#5C5C5C]">난이도</span>
-                <span className="font-bold text-[#1A1A1A]">
-                  {selectedLibraryQuiz.difficulty === 'easy' ? '쉬움' :
-                   selectedLibraryQuiz.difficulty === 'hard' ? '어려움' : '보통'}
-                </span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-[#5C5C5C]">문제 유형</span>
-                <span className="font-bold text-[#1A1A1A]">
-                  {formatQuestionTypes(
-                    selectedLibraryQuiz.oxCount || 0,
-                    selectedLibraryQuiz.multipleChoiceCount || 0,
-                    selectedLibraryQuiz.subjectiveCount || 0
-                  )}
-                </span>
-              </div>
-              {/* 점수 표시: 퀴즈 점수 / 첫번째 복습 점수 */}
-              <div className="py-2 border-t border-[#A0A0A0]">
-                <div className="flex items-center justify-center gap-2">
-                  <span className="text-3xl font-black text-[#1A1A1A]">
-                    {selectedLibraryQuiz.myScore !== undefined ? selectedLibraryQuiz.myScore : selectedLibraryQuiz.score}
-                  </span>
-                  <span className="text-sm text-[#5C5C5C]">/</span>
-                  <span className="text-3xl font-black text-[#1A1A1A]">
-                    {selectedLibraryQuiz.myFirstReviewScore !== undefined ? selectedLibraryQuiz.myFirstReviewScore : '-'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-center gap-6 mt-0.5">
-                  <span className="text-[10px] text-[#5C5C5C]">퀴즈</span>
-                  <span className="text-[10px] text-[#5C5C5C]">복습</span>
-                </div>
-              </div>
-              {selectedLibraryQuiz.tags && selectedLibraryQuiz.tags.length > 0 && (
-                <div className="pt-2 border-t border-[#A0A0A0]">
-                  <div className="flex flex-wrap gap-1.5">
-                    {selectedLibraryQuiz.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-medium"
-                      >
-                        #{tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                onClick={() => { setSelectedLibraryQuiz(null); clearLibraryRect(); }}
-                className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors rounded-lg"
-              >
-                닫기
-              </button>
-              <button
-                onClick={() => {
-                  const quiz = selectedLibraryQuiz;
-                  setSelectedLibraryQuiz(null);
-                  clearLibraryRect();
-                  router.push(`/review/library/${quiz.id}?autoStart=all`);
-                }}
-                className="flex-1 py-2 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors rounded-lg"
-              >
-                복습하기
-              </button>
-            </div>
-          </>
-        )}
-      </ExpandModal>
+        onClose={() => { setSelectedLibraryQuiz(null); clearLibraryRect(); }}
+      />
 
     </div>
   );
