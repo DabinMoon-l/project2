@@ -30,7 +30,7 @@ import {
   getCurrentSemesterByDate,
 } from '../types/course';
 
-const PROFESSOR_COURSE_KEY = 'professor-selected-course';
+const PROFESSOR_COURSE_KEY = 'professor-selected-course'; // localStorage key
 const VALID_COURSE_IDS: CourseId[] = ['biology', 'microbiology', 'pathophysiology'];
 
 /**
@@ -55,8 +55,10 @@ interface CourseContextType {
   getCourseForGrade: (grade: number) => ReturnType<typeof determineCourse>;
   /** 학기 설정 업데이트 (교수님 전용) */
   updateSemesterSettings: (settings: Partial<SemesterSettings>) => Promise<void>;
-  /** 교수님 과목 선택 (sessionStorage 저장) */
+  /** 교수님 과목 선택 (localStorage 저장) */
   setProfessorCourse: (courseId: CourseId) => void;
+  /** 교수님 담당 과목 목록 (assignedCourses) */
+  assignedCourses: string[];
   /** 설정 새로고침 */
   refresh: () => void;
 }
@@ -129,27 +131,40 @@ export function CourseProvider({ children }: { children: ReactNode }) {
   // 교수님 courseId 미설정 여부 (학기 기반 기본값 적용용)
   const [isProfessorNoCourse, setIsProfessorNoCourse] = useState(false);
 
-  // 교수님 sessionStorage에서 저장된 과목 읽기
+  // 교수 담당 과목 목록 (profile에서 읽기)
+  const assignedCourses = useMemo<string[]>(() => {
+    if (profile?.role !== 'professor') return [];
+    return profile.assignedCourses || [];
+  }, [profile]);
+
+  // 교수님 localStorage에서 저장된 과목 읽기
   const getSavedProfessorCourse = useCallback((): CourseId | null => {
     if (typeof window === 'undefined') return null;
-    const saved = sessionStorage.getItem(PROFESSOR_COURSE_KEY);
-    if (saved && VALID_COURSE_IDS.includes(saved as CourseId)) return saved as CourseId;
+    const saved = localStorage.getItem(PROFESSOR_COURSE_KEY);
+    if (saved && VALID_COURSE_IDS.includes(saved as CourseId)) {
+      // 담당 과목에 포함된 경우만 허용 (assignedCourses가 비어있으면 모두 허용 — 하위호환)
+      if (assignedCourses.length === 0 || assignedCourses.includes(saved)) {
+        return saved as CourseId;
+      }
+    }
     return null;
-  }, []);
+  }, [assignedCourses]);
 
   // 교수님 학기 기반 기본 과목
   const getProfessorDefaultCourse = useCallback((semester?: number): CourseId => {
     const saved = getSavedProfessorCourse();
     if (saved) return saved;
+    // 담당 과목이 있으면 첫 번째 과목을 기본값으로
+    if (assignedCourses.length > 0) return assignedCourses[0] as CourseId;
     const sem = semester ?? getCurrentSemesterByDate();
     return sem === 1 ? 'microbiology' : 'pathophysiology';
-  }, [getSavedProfessorCourse]);
+  }, [getSavedProfessorCourse, assignedCourses]);
 
-  // 교수님 과목 선택 (sessionStorage 저장 + state 업데이트)
+  // 교수님 과목 선택 (localStorage 저장 + state 업데이트)
   const setProfessorCourse = useCallback((courseId: CourseId) => {
     setUserCourseId(courseId);
     if (typeof window !== 'undefined') {
-      sessionStorage.setItem(PROFESSOR_COURSE_KEY, courseId);
+      localStorage.setItem(PROFESSOR_COURSE_KEY, courseId);
     }
   }, []);
 
@@ -233,11 +248,12 @@ export function CourseProvider({ children }: { children: ReactNode }) {
     getCourseForGrade,
     updateSemesterSettings,
     setProfessorCourse,
+    assignedCourses,
     refresh,
   }), [
     semesterSettings, userCourseId, userClassId, userCourse,
     loading, error, availableGrades,
-    getCourseForGrade, updateSemesterSettings, setProfessorCourse, refresh,
+    getCourseForGrade, updateSemesterSettings, setProfessorCourse, assignedCourses, refresh,
   ]);
 
   return (
