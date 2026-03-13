@@ -12,8 +12,8 @@ const BOT_NAMES = [
   "솜사탕", "콩콩이", "달토끼", "바니바니", "뭉치",
 ];
 
-/** 봇 프로필 생성 */
-export function createBotProfile() {
+/** 봇 프로필 생성 — 유저 토끼 레벨 기반으로 +3 레벨 */
+export function createBotProfile(userMaxLevel = 1) {
   const nickname = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)];
   const rabbitId = Math.floor(Math.random() * 80);
   const rabbitId2 = (rabbitId + 1 + Math.floor(Math.random() * 79)) % 80;
@@ -21,9 +21,12 @@ export function createBotProfile() {
   const stats1 = getBaseStats(rabbitId);
   const stats2 = getBaseStats(rabbitId2);
 
-  // 봇 레벨 3~7 랜덤 → 스탯 약간 부스트
-  const level1 = 3 + Math.floor(Math.random() * 5);
-  const level2 = 3 + Math.floor(Math.random() * 5);
+  // 유저 최고 레벨 +3 (±1 랜덤), 최소 3
+  const BOT_LEVEL_OFFSET = 3;
+  const jitter = Math.floor(Math.random() * 3) - 1; // -1, 0, 1
+  const baseLevel = Math.max(3, userMaxLevel + BOT_LEVEL_OFFSET + jitter);
+  const level1 = baseLevel;
+  const level2 = Math.max(3, baseLevel + Math.floor(Math.random() * 2) - 1);
 
   // 플레이어 레벨업(3-5 총합/레벨)과 유사한 비율
   const boost = (base: number, lv: number) =>

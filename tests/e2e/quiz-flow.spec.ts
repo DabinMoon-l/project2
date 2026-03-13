@@ -43,11 +43,19 @@ test.describe("퀴즈 풀기 (캐러셀 퀴즈)", () => {
     await waitForPageLoad(page);
 
     // 문제 답변 (최대 10문제 루프)
+    // 바로 채점 모드: 답 선택 → "제출하기"(채점) → "다음"/"결과 보기"
     for (let i = 0; i < 10; i++) {
       await answerCurrentQuestion(page);
 
-      // 다음/제출 버튼
-      const nextBtn = page.getByRole("button", { name: /다음|제출/ });
+      // "제출하기" 버튼 클릭 (로컬 채점)
+      const gradeBtn = page.getByRole("button", { name: "제출하기" });
+      if (await gradeBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
+        await gradeBtn.click();
+        await page.waitForTimeout(500);
+      }
+
+      // "다음" 또는 "결과 보기" 버튼 클릭
+      const nextBtn = page.getByRole("button", { name: /다음|결과 보기/ });
       if (await nextBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
         await nextBtn.click();
       }

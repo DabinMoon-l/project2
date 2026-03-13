@@ -15,30 +15,25 @@ interface QuizNavigationProps {
   onPrev: () => void;
   /** 다음 버튼 클릭 핸들러 */
   onNext: () => void;
-  /** 제출 버튼 클릭 핸들러 */
+  /** 퀴즈 최종 제출 핸들러 */
   onSubmit: () => void;
   /** 현재 문제에 답변했는지 여부 */
   hasAnswered: boolean;
   /** 제출 로딩 상태 */
   isSubmitting?: boolean;
+  /** 문제별 채점 핸들러 */
+  onGrade?: () => void;
+  /** 현재 문제가 채점되었는지 */
+  isGraded?: boolean;
 }
 
 /**
  * 퀴즈 네비게이션 컴포넌트
  *
- * [이전] [다음] 버튼을 표시하고, 마지막 문제에서는 [제출] 버튼을 표시합니다.
- *
- * @example
- * ```tsx
- * <QuizNavigation
- *   currentQuestion={3}
- *   totalQuestions={10}
- *   onPrev={() => goToPrev()}
- *   onNext={() => goToNext()}
- *   onSubmit={() => submitQuiz()}
- *   hasAnswered={!!answers[currentQuestion]}
- * />
- * ```
+ * 3단계 버튼 로직:
+ * 1. 답 선택 전/후: [이전] [제출하기] (채점)
+ * 2. 채점 후 + 마지막 아님: [이전] [다음]
+ * 3. 채점 후 + 마지막: [이전] [제출하기] (최종 제출)
  */
 export default function QuizNavigation({
   currentQuestion,
@@ -48,11 +43,18 @@ export default function QuizNavigation({
   onSubmit,
   hasAnswered,
   isSubmitting = false,
+  onGrade,
+  isGraded = false,
 }: QuizNavigationProps) {
   const colors = useThemeColors();
 
   const isFirstQuestion = currentQuestion === 1;
   const isLastQuestion = currentQuestion === totalQuestions;
+
+  // 버튼 상태 결정
+  const showGradeButton = onGrade && !isGraded; // 아직 채점 안 된 상태 → "제출하기" (채점)
+  const showNextButton = isGraded && !isLastQuestion; // 채점 완료 + 다음 문제 있음
+  const showFinalSubmit = isGraded && isLastQuestion; // 채점 완료 + 마지막 문제
 
   return (
     <motion.div
@@ -100,9 +102,72 @@ export default function QuizNavigation({
           </span>
         </motion.button>
 
-        {/* 다음/제출 버튼 */}
-        {isLastQuestion ? (
-          // 제출 버튼
+        {/* 채점 버튼 (아직 채점 안 된 상태) */}
+        {showGradeButton && (
+          <motion.button
+            whileHover={hasAnswered ? { scale: 1.02 } : undefined}
+            whileTap={hasAnswered ? { scale: 0.98 } : undefined}
+            onClick={onGrade}
+            disabled={!hasAnswered}
+            className={`
+              flex-1 py-3 font-bold text-sm rounded-lg
+              border-2 border-[#1A1A1A] transition-all duration-200
+              ${!hasAnswered
+                ? 'bg-[#EDEAE4] text-[#5C5C5C] border-[#5C5C5C] cursor-not-allowed'
+                : 'bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#2A2A2A]'
+              }
+            `}
+            aria-label="제출하기"
+          >
+            <span className="flex items-center justify-center gap-2">
+              제출하기
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            </span>
+          </motion.button>
+        )}
+
+        {/* 다음 버튼 (채점 완료 + 마지막 아님) */}
+        {showNextButton && (
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={onNext}
+            className="flex-1 py-3 font-bold text-sm rounded-lg border-2 border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8] transition-all duration-200 hover:bg-[#2A2A2A]"
+            aria-label="다음 문제"
+          >
+            <span className="flex items-center justify-center gap-2">
+              다음
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </span>
+          </motion.button>
+        )}
+
+        {/* 최종 제출 버튼 (채점 완료 + 마지막 문제) */}
+        {showFinalSubmit && (
           <motion.button
             whileHover={!isSubmitting ? { scale: 1.02 } : undefined}
             whileTap={!isSubmitting ? { scale: 0.98 } : undefined}
@@ -143,7 +208,7 @@ export default function QuizNavigation({
                 </>
               ) : (
                 <>
-                  제출하기
+                  결과 보기
                   <svg
                     className="w-4 h-4"
                     fill="none"
@@ -154,37 +219,11 @@ export default function QuizNavigation({
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={2}
-                      d="M5 13l4 4L19 7"
+                      d="M9 5l7 7-7 7"
                     />
                   </svg>
                 </>
               )}
-            </span>
-          </motion.button>
-        ) : (
-          // 다음 버튼
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={onNext}
-            className="flex-1 py-3 font-bold text-sm rounded-lg border-2 border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8] transition-all duration-200 hover:bg-[#2A2A2A]"
-            aria-label="다음 문제"
-          >
-            <span className="flex items-center justify-center gap-2">
-              다음
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
             </span>
           </motion.button>
         )}
