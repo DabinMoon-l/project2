@@ -23,7 +23,10 @@ const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getAuth } = require("firebase-admin/auth");
 const { getDatabase } = require("firebase-admin/database");
 
-const app = initializeApp({ projectId: "project2-7a317" });
+const app = initializeApp({
+  projectId: "project2-7a317",
+  databaseURL: "http://127.0.0.1:9000/?ns=project2-7a317-default-rtdb",
+});
 const db = getFirestore(app);
 const auth = getAuth(app);
 const rtdb = getDatabase(app);
@@ -118,12 +121,10 @@ async function seedQuizzes() {
           id: `q${i}`,
           type: i < 7 ? "multiple" : i < 9 ? "ox" : "short_answer",
           text: `${courseId} 문제 ${i + 1} — ${cfg.topics[i % cfg.topics.length]}에 대한 문제`,
-          choices: i < 7 ? ["선택1", "선택2", "선택3", "선택4"] : undefined,
+          ...(i < 7 ? { choices: ["선택1", "선택2", "선택3", "선택4"] } : {}),
           answer: i < 7 ? Math.floor(Math.random() * 4) : i < 9 ? (Math.random() > 0.5 ? 0 : 1) : "정답",
           explanation: `해설 ${i + 1}`,
-          choiceExplanations: i < 7 ? [
-            "선택1 해설", "선택2 해설", "선택3 해설", "선택4 해설"
-          ] : undefined,
+          ...(i < 7 ? { choiceExplanations: ["선택1 해설", "선택2 해설", "선택3 해설", "선택4 해설"] } : {}),
         });
       }
 
