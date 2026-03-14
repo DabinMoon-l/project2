@@ -4,8 +4,8 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { collection, addDoc, serverTimestamp, db } from '@/lib/repositories';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { auth, storage } from '@/lib/firebase';
+import { upload as storageUpload } from '@/lib/repositories/firebase/storageRepo';
+import { auth } from '@/lib/firebase';
 import { compressImage, formatFileSize } from '@/lib/imageUtils';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse, useUser } from '@/lib/contexts';
@@ -1322,12 +1322,11 @@ export default function QuizCreatePage() {
           // Storage에 업로드
           const timestamp = Date.now();
           const randomStr = Math.random().toString(36).substring(2, 8);
-          const storageRef = ref(storage, `quiz-images/${user.uid}/${timestamp}_${randomStr}.${finalExtension}`);
+          const storagePath = `quiz-images/${user.uid}/${timestamp}_${randomStr}.${finalExtension}`;
 
           console.log(`[업로드 중] ${path}: ${formatFileSize(finalBlob.size)}`);
 
-          await uploadBytes(storageRef, finalBlob);
-          const downloadUrl = await getDownloadURL(storageRef);
+          const downloadUrl = await storageUpload(storagePath, finalBlob);
 
           console.log(`[성공] ${path}: 이미지 업로드 완료 - ${downloadUrl.substring(0, 80)}...`);
           return downloadUrl;
