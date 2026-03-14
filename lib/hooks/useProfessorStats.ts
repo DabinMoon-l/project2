@@ -98,7 +98,7 @@ interface ResultDoc {
 
 // === 모듈 레벨 캐시 (과목 전환·페이지 이동 시에도 유지) ===
 
-const PROF_TYPES = ['midterm', 'final', 'past', 'professor', 'professor-ai'];
+const PROF_TYPES = ['midterm', 'final', 'past', 'professor', 'professor-ai', 'independent'];
 
 /** 학생 기본 데이터 (통계 페이지 부가 데이터 계산용) */
 export interface RawStudentData {
