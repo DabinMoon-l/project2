@@ -56,19 +56,33 @@ async function computeRadarNormForCourse(courseId: string) {
   });
 
   // 2. 3개 병렬 쿼리 (select로 필요한 필드만 — 메모리 절약)
-  const [quizzesResult, postsResult, quizResultsResult] = await Promise.allSettled([
+  // quizResults는 courseId 필터 대신, 해당 과목 학생 uid로 필터 (이전 데이터 courseId 누락 대응)
+  const studentUidArray = Array.from(studentUids);
+  const quizResultBatches: Promise<FirebaseFirestore.QuerySnapshot>[] = [];
+  for (let i = 0; i < studentUidArray.length; i += 30) {
+    const batch = studentUidArray.slice(i, i + 30);
+    quizResultBatches.push(
+      db.collection("quizResults").where("userId", "in", batch).select("userId", "quizId", "score", "isUpdate").get()
+    );
+  }
+
+  const [quizzesResult, postsResult, ...quizResultBatchResults] = await Promise.allSettled([
     db.collection("quizzes").where("courseId", "==", courseId).select("creatorId", "type").get(),
     db.collection("posts").where("courseId", "==", courseId).select("authorId").get(),
-    db.collection("quizResults").where("courseId", "==", courseId).select("userId", "quizId", "score", "isUpdate").get(),
+    ...quizResultBatches,
   ]);
 
   if (quizzesResult.status === "rejected") console.error(`quizzes 쿼리 실패 (${courseId}):`, quizzesResult.reason);
   if (postsResult.status === "rejected") console.error(`posts 쿼리 실패 (${courseId}):`, postsResult.reason);
-  if (quizResultsResult.status === "rejected") console.error(`quizResults 쿼리 실패 (${courseId}):`, quizResultsResult.reason);
 
   const quizzesDocs = quizzesResult.status === "fulfilled" ? quizzesResult.value.docs : [];
   const postsDocs = postsResult.status === "fulfilled" ? postsResult.value.docs : [];
-  const quizResultsDocs = quizResultsResult.status === "fulfilled" ? quizResultsResult.value.docs : [];
+  // quizResults 배치 결과 합치기
+  const quizResultsDocs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+  quizResultBatchResults.forEach(r => {
+    if (r.status === "fulfilled") quizResultsDocs.push(...r.value.docs);
+    else console.error(`quizResults 배치 쿼리 실패 (${courseId}):`, r.reason);
+  });
 
   // 3. 출제력 (학생이 만든 퀴즈 수)
   const quizCreationByUid: Record<string, number> = {};
@@ -96,7 +110,11 @@ async function computeRadarNormForCourse(courseId: string) {
   // 5. 가중 석차 점수 (첫 시도만 사용)
   const PROF_TYPES = new Set(["midterm", "final", "past", "professor", "professor-ai", "independent"]);
   const quizTypeMap = new Map<string, boolean>();
-  quizzesDocs.forEach(d => quizTypeMap.set(d.id, PROF_TYPES.has(d.data().type || "")));
+  const courseQuizIds = new Set<string>(); // 해당 과목 퀴즈 ID
+  quizzesDocs.forEach(d => {
+    courseQuizIds.add(d.id);
+    quizTypeMap.set(d.id, PROF_TYPES.has(d.data().type || ""));
+  });
 
   const completionsByQuiz = new Map<string, { userId: string; score: number }[]>();
   quizResultsDocs.forEach(d => {
@@ -104,6 +122,7 @@ async function computeRadarNormForCourse(courseId: string) {
     if (!studentUids.has(qr.userId)) return;
     const qid = qr.quizId as string;
     if (!qid) return;
+    if (!courseQuizIds.has(qid)) return; // 해당 과목 퀴즈만
     if (qr.isUpdate === true) return; // 재시도 제외
 
     const arr = completionsByQuiz.get(qid) ?? [];
@@ -148,7 +167,8 @@ async function computeRadarNormForCourse(courseId: string) {
 
   // 진단 로그
   const nonZeroBattle = Object.values(battleByUid).filter(v => v > 0).length;
-  console.log(`[${courseId}] 배틀 참여: ${nonZeroBattle}/${studentUids.size}명, quizResults: ${quizResultsDocs.length}건`);
+  const nonZeroQuiz = Object.values(weightedScoreByUid).filter(v => v > 0).length;
+  console.log(`[${courseId}] 학생: ${studentUids.size}명, 퀴즈결과: ${quizResultsDocs.length}건(과목퀴즈: ${courseQuizIds.size}개), 퀴즈축>0: ${nonZeroQuiz}명, 배틀축>0: ${nonZeroBattle}명`);
 
   return {
     quizCreationByUid,
