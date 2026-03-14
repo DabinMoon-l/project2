@@ -3,9 +3,8 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { upload as storageUpload } from '@/lib/repositories/firebase/storageRepo';
 import { auth } from '@/lib/firebase';
-import { compressImage, formatFileSize } from '@/lib/imageUtils';
+import { uploadBase64ToStorage } from '@/lib/utils/quizImageUpload';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse } from '@/lib/contexts';
 import { useProfessorQuiz, type QuizInput, type Difficulty } from '@/lib/hooks/useProfessorQuiz';
@@ -759,53 +758,6 @@ export default function ProfessorQuizCreatePage() {
   }, [step]);
 
   /**
-   * base64 이미지를 Firebase Storage에 업로드
-   */
-  const uploadBase64ToStorage = useCallback(async (base64: string, path: string): Promise<string | null> => {
-    if (!user) return null;
-    try {
-      const matches = base64.match(/^data:image\/(\w+);base64,(.+)$/);
-      if (!matches) return null;
-
-      const extension = matches[1];
-      const data = matches[2];
-      const byteCharacters = atob(data);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const originalBlob = new Blob([byteArray], { type: `image/${extension}` });
-
-      let finalBlob: Blob = originalBlob;
-      let finalExtension = extension;
-
-      try {
-        const compressionResult = await compressImage(originalBlob, {
-          maxWidth: 1920, maxHeight: 1080, quality: 0.85,
-          maxSizeBytes: 800 * 1024, outputType: 'image/jpeg',
-        });
-        finalBlob = compressionResult.blob;
-        finalExtension = 'jpg';
-      } catch {
-        // 압축 실패 시 원본 사용
-      }
-
-      if (finalBlob.size > 5 * 1024 * 1024) {
-        throw new Error(`이미지 크기가 너무 큽니다: ${formatFileSize(finalBlob.size)}`);
-      }
-
-      const timestamp = Date.now();
-      const randomStr = Math.random().toString(36).substring(2, 8);
-      const storagePath = `quiz-images/${user.uid}/${timestamp}_${randomStr}.${finalExtension}`;
-      return await storageUpload(storagePath, finalBlob);
-    } catch (err) {
-      console.error(`[실패] ${path}: 이미지 업로드 실패`, err);
-      return null;
-    }
-  }, [user]);
-
-  /**
    * QuestionData를 QuizQuestion 형식으로 변환 (결합형 펼침)
    */
   const convertToQuizQuestions = useCallback((questionList: QuestionData[]) => {
@@ -962,11 +914,11 @@ export default function ProfessorQuizCreatePage() {
       for (let i = 0; i < flattenedQuestions.length; i++) {
         const q = flattenedQuestions[i];
         if (q.imageUrl && typeof q.imageUrl === 'string' && q.imageUrl.startsWith('data:image/')) {
-          const url = await uploadBase64ToStorage(q.imageUrl, `questions[${i}].imageUrl`);
+          const url = await uploadBase64ToStorage(q.imageUrl, user.uid, `questions[${i}].imageUrl`);
           flattenedQuestions[i].imageUrl = url;
         }
         if (q.passageImage && typeof q.passageImage === 'string' && q.passageImage.startsWith('data:image/')) {
-          const url = await uploadBase64ToStorage(q.passageImage, `questions[${i}].passageImage`);
+          const url = await uploadBase64ToStorage(q.passageImage, user.uid, `questions[${i}].passageImage`);
           flattenedQuestions[i].passageImage = url;
         }
       }
@@ -1012,7 +964,7 @@ export default function ProfessorQuizCreatePage() {
     } finally {
       setIsSaving(false);
     }
-  }, [user, title, description, difficulty, questions, selectedCourseId, quizType, tags, pastYear, pastExamType, createQuiz, convertToQuizQuestions, uploadBase64ToStorage, deleteDraft, router]);
+  }, [user, title, description, difficulty, questions, selectedCourseId, quizType, tags, pastYear, pastExamType, createQuiz, convertToQuizQuestions, deleteDraft, router]);
 
   /**
    * 단계별 진행률
