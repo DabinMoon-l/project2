@@ -31,7 +31,7 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
 
   if (!student || !isOpen) return null;
 
-  // 학업 성취도 — 가중 석차 점수 기반 (교수 퀴즈 ×6, 학생 퀴즈 ×4)
+  // 학업 성취도 — 교수 퀴즈 평균 점수 기반 (원점수 0~100)
   const studentAvg = student.weightedScore ?? 0;
   const allScoresInCourse = (student.classWeightedScores ?? []);
   const classMates = allScoresInCourse.filter(s => s.classId === student.classId);
