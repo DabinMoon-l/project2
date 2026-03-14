@@ -96,75 +96,77 @@ export default function ClassComparison({ classStats, students, onClassClick }: 
   const gap = plotW / colCount;
   const boxW = Math.min(44, gap * 0.5);
 
-  // ── 성적 비교 (기존 막대 차트) ──
+  // ── 참여도 Y축 (hooks는 early return 전에 호출 — React 규칙) ──
+  const engMaxVal = useMemo(() => {
+    const whiskerMax = Math.max(...boxPlots.map(b => b.whiskerHigh), 0);
+    return Math.max(50, whiskerMax * 1.25);
+  }, [boxPlots]);
+
+  const engYTicks = useMemo(() => {
+    const mv = engMaxVal;
+    if (mv <= 0) return [0];
+    const step = Math.pow(10, Math.floor(Math.log10(mv / 4)));
+    const niceStep = [1, 2, 5, 10, 20, 50, 100, 200, 500].find(s => s * step >= mv / 5) || 1;
+    const realStep = niceStep * step;
+    const ticks: number[] = [];
+    for (let v = 0; v <= mv * 1.05; v += (realStep > 0 ? realStep : 50)) ticks.push(Math.round(v));
+    return ticks.length > 0 ? ticks : [0];
+  }, [engMaxVal]);
+
+  // ── 성적 비교 (막대 차트) ──
   if (mode === 'score') {
-    const maxVal = 100;
-    const toY = (v: number) => padT + plotH * (1 - v / maxVal);
-    const baseY = toY(0);
+    const scoreMax = 100;
+    const sToY = (v: number) => padT + plotH * (1 - v / scoreMax);
+    const sBaseY = sToY(0);
     const barW = Math.min(56, gap * 0.6);
 
     return (
       <div>
         <ModeToggle mode={mode} setMode={setMode} />
         <p className="text-[10px] text-[#5C5C5C] mb-3">평균 점수 (± SD) · 막대 클릭 시 클러스터 분석</p>
-
         <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full">
-          <defs>
-            <clipPath id="plot-clip">
-              <rect x={padL} y={0} width={plotW} height={baseY + 1} />
-            </clipPath>
-          </defs>
-
+          <defs><clipPath id="plot-clip"><rect x={padL} y={0} width={plotW} height={sBaseY + 1} /></clipPath></defs>
           {[0, 25, 50, 75, 100].map(v => (
             <g key={v}>
-              <line x1={padL} y1={toY(v)} x2={chartW - padR} y2={toY(v)}
-                stroke={v === 0 ? '#D4CFC4' : '#EBE5D9'} strokeWidth={v === 0 ? 1 : 0.5} />
-              <text x={padL - 6} y={toY(v) + 4} textAnchor="end" fontSize={12} fill="#5C5C5C" fontWeight="500">{v}</text>
+              <line x1={padL} y1={sToY(v)} x2={chartW - padR} y2={sToY(v)} stroke={v === 0 ? '#D4CFC4' : '#EBE5D9'} strokeWidth={v === 0 ? 1 : 0.5} />
+              <text x={padL - 6} y={sToY(v) + 4} textAnchor="end" fontSize={12} fill="#5C5C5C" fontWeight="500">{v}</text>
             </g>
           ))}
-
           <g clipPath="url(#plot-clip)">
             {classStats.map((cls, i) => {
-              const c = CLASS_COLORS[cls.classId];
-              const cx = padL + gap * i + gap / 2;
-              const hasDat = cls.scores.length > 0;
-              const meanY = hasDat ? toY(cls.mean) : baseY;
-              const barH = baseY - meanY;
-
+              const c = CLASS_COLORS[cls.classId]; const cx = padL + gap * i + gap / 2;
+              const hasDat = cls.scores.length > 0; const meanY = hasDat ? sToY(cls.mean) : sBaseY; const barH = sBaseY - meanY;
               return (
                 <g key={cls.classId}>
                   {hasDat && barH > 0 && (
                     <motion.rect x={cx - barW / 2} width={barW} fill={c.fill} stroke={c.main} strokeWidth={2} rx={2}
-                      initial={{ y: baseY, height: 0 }} animate={{ y: meanY, height: barH }}
+                      initial={{ y: sBaseY, height: 0 }} animate={{ y: meanY, height: barH }}
                       transition={{ duration: 0.6, delay: i * 0.1, ease: 'easeOut' }} />
                   )}
                   {hasDat && cls.sd > 0 && (
                     <motion.g initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 + i * 0.1 }}>
-                      <line x1={cx} y1={toY(Math.min(100, cls.mean + cls.sd))} x2={cx} y2={toY(Math.max(0, cls.mean - cls.sd))} stroke={c.main} strokeWidth={1.5} />
-                      <line x1={cx - 6} y1={toY(Math.min(100, cls.mean + cls.sd))} x2={cx + 6} y2={toY(Math.min(100, cls.mean + cls.sd))} stroke={c.main} strokeWidth={1.5} />
-                      <line x1={cx - 6} y1={toY(Math.max(0, cls.mean - cls.sd))} x2={cx + 6} y2={toY(Math.max(0, cls.mean - cls.sd))} stroke={c.main} strokeWidth={1.5} />
+                      <line x1={cx} y1={sToY(Math.min(100, cls.mean + cls.sd))} x2={cx} y2={sToY(Math.max(0, cls.mean - cls.sd))} stroke={c.main} strokeWidth={1.5} />
+                      <line x1={cx - 6} y1={sToY(Math.min(100, cls.mean + cls.sd))} x2={cx + 6} y2={sToY(Math.min(100, cls.mean + cls.sd))} stroke={c.main} strokeWidth={1.5} />
+                      <line x1={cx - 6} y1={sToY(Math.max(0, cls.mean - cls.sd))} x2={cx + 6} y2={sToY(Math.max(0, cls.mean - cls.sd))} stroke={c.main} strokeWidth={1.5} />
                     </motion.g>
                   )}
                 </g>
               );
             })}
           </g>
-
           {classStats.map((cls, i) => {
-            const c = CLASS_COLORS[cls.classId];
-            const cx = padL + gap * i + gap / 2;
-            const hasDat = cls.scores.length > 0;
-            const meanY = hasDat ? toY(cls.mean) : baseY;
+            const c = CLASS_COLORS[cls.classId]; const cx = padL + gap * i + gap / 2;
+            const hasDat = cls.scores.length > 0; const meanY = hasDat ? sToY(cls.mean) : sBaseY;
             return (
               <g key={`label-${cls.classId}`} className="cursor-pointer" onClick={() => onClassClick?.(cls.classId)}>
                 <rect x={cx - gap / 2} y={padT} width={gap} height={chartH - padT} fill="transparent" />
                 {hasDat && (
-                  <text x={cx} y={Math.min(meanY - 8, toY(Math.min(100, cls.mean + cls.sd)) - 10)} textAnchor="middle" fontSize={13} fill="#1A1A1A" fontWeight="bold">
+                  <text x={cx} y={Math.min(meanY - 8, sToY(Math.min(100, cls.mean + cls.sd)) - 10)} textAnchor="middle" fontSize={13} fill="#1A1A1A" fontWeight="bold">
                     {cls.mean.toFixed(1)}
                   </text>
                 )}
-                <text x={cx} y={baseY + 16} textAnchor="middle" fontSize={13} fill="#1A1A1A" fontWeight="bold">{c.label}</text>
-                <text x={cx} y={baseY + 30} textAnchor="middle" fontSize={11} fill="#5C5C5C">{cls.studentCount}명</text>
+                <text x={cx} y={sBaseY + 16} textAnchor="middle" fontSize={13} fill="#1A1A1A" fontWeight="bold">{c.label}</text>
+                <text x={cx} y={sBaseY + 30} textAnchor="middle" fontSize={11} fill="#5C5C5C">{cls.studentCount}명</text>
               </g>
             );
           })}
@@ -174,34 +176,16 @@ export default function ClassComparison({ classStats, students, onClassClick }: 
   }
 
   // ── 참여도 비교 (박스플롯) ──
-  // Y축: whisker 범위 기반, 이상치는 위에 점으로
-  const maxVal = useMemo(() => {
-    const whiskerMax = Math.max(...boxPlots.map(b => b.whiskerHigh), 0);
-    return Math.max(50, whiskerMax * 1.25);
-  }, [boxPlots]);
-
-  const toY = (v: number) => padT + plotH * (1 - Math.min(v, maxVal) / maxVal);
+  const toY = (v: number) => padT + plotH * (1 - Math.min(v, engMaxVal) / engMaxVal);
   const baseY = toY(0);
-
-  // Y축 틱 (깔끔한 간격)
-  const yTicks = useMemo(() => {
-    const step = Math.pow(10, Math.floor(Math.log10(maxVal / 4)));
-    const niceStep = [1, 2, 5, 10, 20, 50, 100, 200, 500].find(s => s * step >= maxVal / 5) || 1;
-    const tickStep = niceStep * (step < 1 ? 1 : step / (step > 1 ? 1 : 1));
-    const realStep = tickStep > 0 ? tickStep : 50;
-    const ticks: number[] = [];
-    for (let v = 0; v <= maxVal * 1.05; v += realStep) ticks.push(Math.round(v));
-    return ticks.length > 0 ? ticks : [0];
-  }, [maxVal]);
 
   return (
     <div>
       <ModeToggle mode={mode} setMode={setMode} />
-      <p className="text-[10px] text-[#5C5C5C] mb-3">EXP 분포 (박스플롯) · 점 = 이상치</p>
+      <p className="text-[10px] text-[#5C5C5C] mb-3">EXP 분포 (박스플롯) · ○ = 이상치</p>
 
       <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full">
-        {/* Y축 그리드 */}
-        {yTicks.map(v => (
+        {engYTicks.map(v => (
           <g key={v}>
             <line x1={padL} y1={toY(v)} x2={chartW - padR} y2={toY(v)}
               stroke={v === 0 ? '#D4CFC4' : '#EBE5D9'} strokeWidth={v === 0 ? 1 : 0.5} />
@@ -252,7 +236,7 @@ export default function ClassComparison({ classStats, students, onClassClick }: 
               {/* 이상치 점 */}
               {bp.outliers.map((val, oi) => {
                 // 이상치는 Y축 상한 밖이면 상한 위치에 표시
-                const oy = val > maxVal ? padT - 2 : toY(val);
+                const oy = val > engMaxVal ? padT - 2 : toY(val);
                 return (
                   <motion.circle key={oi} cx={cx} cy={oy} r={3}
                     fill="none" stroke={c.main} strokeWidth={1.5}
