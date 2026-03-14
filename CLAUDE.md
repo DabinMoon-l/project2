@@ -755,37 +755,50 @@ firebase deploy --only database       # RTDB rules
 firebase deploy --only storage        # Storage rules
 ```
 
-## 리팩토링 기록 (2026-03-15)
+## 테스트 커버리지 확장 계획
 
-### 사문 코드 삭제
-서술형 AI 채점 (`EssayGrading`, `essay.ts`, `scoring.ts`), 시즌/학기 관리 UI (`SeasonResetCard/Modal/HistoryList`, `SemesterSettingsCard`), 미사용 훅 (`useOcr`, `useClovaOcr`, `useVisionOcr`, `useScrollLock`, `useSeasonReset`), 미사용 유틸 (`offlineReviewCache`, `questionDocExport`, `koreanStopwords`), Tesseract OCR 엔진 (340줄) 삭제.
-OCR 기능은 `OCRProcessor.tsx`에서 `callFunction()` 직접 호출로 동작.
+현재: E2E 8개 스펙 + CF 유닛 3개 스펙 + k6 부하 1개. 코드 규모(85,000줄) 대비 부족.
 
-### 대형 파일 분리
+### 1단계: CF 유닛 테스트 확충 (Vitest)
 
-| 원본 파일 | 추출 대상 | 줄 감소 |
-|-----------|-----------|---------|
-| `professor/quiz/page.tsx` | `profQuizSubComponents.tsx` (7개 서브 컴포넌트) | 2316→1397 |
-| `board/manage/page.tsx` | `boardManageSections.tsx` (AcademicArchive+Activity) | 1635→458 |
-| `quiz/feedback/page.tsx` | `feedbackQuestionCards.tsx` (문제 카드 2개) | 1574→728 |
-| `review/page.tsx` | `useFolderCategories`, `useCompletedQuizzes` 훅 | 3271→3008 |
-| `useReview.ts` | `useReviewUpdateCheck` 훅 | 1507→1341 |
-| `useBoard.ts` | `useBoardLike` (좋아요 3개 훅) | 1403→1195 |
-| `lib/ocr.ts` | Tesseract 사문코드 삭제 | 2027→1692 |
-| `quiz/create/page.tsx` | `quizImageUpload.ts` 유틸 (교수 생성도 공유) | 2099→1946 |
+| 대상 | 테스트 내용 | 우선순위 |
+|------|-----------|---------|
+| `recordAttempt` | 5중 방어 (중복 제출, rate limit, idempotency) | 높음 |
+| `computeRadarNorm` | 5축 계산 정확성 (교수 퀴즈 평균, 배틀 참여수, 소통) | 높음 |
+| `computeRankings` | 개인/팀 점수 공식, 동점 처리 | 높음 |
+| `enqueueGenerationJob` | Rate limit, dedup, 이미지 Storage 저장 | 중간 |
+| `styledQuizGenerator` | 난이도별 프롬프트, 챕터 반복 가이드, JSON 복구 | 중간 |
+| `tekkenMatchmaking` | Per-User Write, 봇 폴백, FIFO 페어링 | 중간 |
+| `weeklyStats` | 4군집 분류 (medianExp/medianRate 동적 계산) | 중간 |
 
-### Firebase SDK 누출 수정
-`ProfileDrawer.tsx` (firebase/auth → `lib/auth.ts` 래퍼), `quiz/create` 2개 (firebase/storage → `storageRepo.upload`). 잔여 2파일(`useTekkenBattle` RTDB, `useStorage` Storage)은 정당한 추상화 레이어.
+### 2단계: 프론트엔드 컴포넌트 테스트 (Vitest + Testing Library)
 
-### 성능 최적화
+| 대상 | 테스트 내용 | 우선순위 |
+|------|-----------|---------|
+| `ReviewPractice` | 풀이→결과→피드백 3단계 전환, 채점 정확성 | 높음 |
+| `QuestionEditor` | 6종 문제타입 입력/저장, 결합형 하위문제 | 높음 |
+| `ClassComparison` | 성적/참여도 토글, 박스플롯 데이터 계산 | 중간 |
+| Context Providers | useMemo 메모이제이션, 불필요한 리렌더 방지 | 중간 |
 
-| 병목 | 해결 | 파일 |
-|------|------|------|
-| 순차 deleteDoc 루프 (50-100회 왕복) | `writeBatch` 일괄 삭제 (1회) | `useReview.ts` |
-| 순차 addDoc 루프 (복원) | `writeBatch` 일괄 추가 | `useReview.ts` |
-| 배치 간 순차 대기 (댓글 제목 로드) | 전체 `Promise.all` 병렬 | `useBoard.ts` |
-| `deleteSolvedQuiz` 쿼리 순차 | `Promise.all` 병렬 조회 | `useReview.ts` |
-| `layout.tsx` 불필요한 useState | `profile.classType` 직접 파생 | `layout.tsx` |
+### 3단계: E2E 확장 (Playwright)
+
+| 시나리오 | 현재 | 목표 |
+|---------|------|------|
+| 학생 퀴즈 풀이 → 결과 → 피드백 → EXP | 있음 | 유지 |
+| AI 문제 생성 → 서재 → 편집 → 공개 전환 | 없음 | 추가 |
+| 교수 통계 대시보드 → 군집 분석 → 리포트 | 없음 | 추가 |
+| 배틀 매칭 → 문제 풀이 → 결과 | 없음 | 추가 |
+| 복습 폴더 관리 → 카테고리 → PDF 내보내기 | 없음 | 추가 |
+
+## 대형 파일 리팩토링 계획
+
+현재 2000줄+ 파일 3개는 단순 추출이 불가능 (상태 의존 깊음). SaaS 마이그레이션 Phase 2에서 함께 처리.
+
+| 파일 | 줄 수 | 리팩토링 전략 |
+|------|-------|-------------|
+| `review/page.tsx` | 3,008 | `ReviewPageContext` 도입 → 5탭 상태 공유, 탭별 컴포넌트 분리 |
+| `ReviewPractice.tsx` | 2,571 | 3단계(풀이/결과/피드백)를 `ReviewPracticeContext`로 묶고 각각 분리 |
+| `QuestionEditor.tsx` | 2,437 | 문제 타입별 서브 에디터 분리 (OXEditor, MultipleEditor 등) |
 
 ## 디버깅 가이드
 

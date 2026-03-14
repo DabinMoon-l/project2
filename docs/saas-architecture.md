@@ -892,3 +892,24 @@ posts: orgId + courseId + createdAt
 | Edge Functions Cold Start | LOW | MEDIUM | 핫 함수 warm-up, Cloud Run fallback |
 | RLS 정책 누락으로 데이터 유출 | LOW | CRITICAL | 테스트 스위트 + 정기 감사 |
 | 마이그레이션 기간 중 서비스 중단 | MEDIUM | HIGH | Blue-green 배포, feature flag로 점진적 전환 |
+
+---
+
+## 10. 대형 파일 리팩토링 (Phase 2 병행)
+
+SaaS Phase 2 (Firestore → PostgreSQL) 시 hooks의 raw Firestore 쿼리를 Repository로 전환하면서 자연스럽게 분리.
+
+### 대상 파일
+
+| 파일 | 줄 수 | 전략 |
+|------|-------|------|
+| `review/page.tsx` | 3,008 | `ReviewPageContext` 도입 → 5탭 상태(필터/선택모드/삭제모드) 공유, 탭별 `ReviewLibraryTab`/`ReviewBookmarkTab`/`ReviewFolderTab` 컴포넌트 분리 |
+| `ReviewPractice.tsx` | 2,571 | `ReviewPracticeContext` 도입 → 풀이/결과/피드백 3단계를 독립 컴포넌트로 분리. expand 상태 Context로 공유 |
+| `QuestionEditor.tsx` | 2,437 | 문제 타입별 서브 에디터 (`OXEditor`, `MultipleEditor`, `ShortAnswerEditor`, `CombinedEditor`) 분리. question state는 부모 유지 |
+
+### 왜 Phase 2에서?
+
+- 현재 이 파일들은 **기능적으로 정상 동작** — 분리하면 버그 리스크만 증가
+- Phase 2에서 hooks → Repository 전환 작업이 이 파일들을 건드리게 됨
+- 그때 함께 Context 기반 분리를 하면 **한 번만 건드려서** 리스크 최소화
+- 테스트 커버리지를 먼저 확보한 후 리팩토링하면 회귀 버그 방지
