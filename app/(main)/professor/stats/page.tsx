@@ -271,18 +271,22 @@ export default function ProfessorStatsPage() {
           return;
         }
 
-        const rawStudentData = rawStudents.map(s => ({
-          uid: (s as RawStudentData & { uid?: string }).uid || '',
-          classId: s.classId,
-          totalExp: s.totalExp,
-          correctRate: s.profCorrectCount
-            ? ((s.profCorrectCount / Math.max(s.profAttemptCount || 1, 1)) * 100)
-            : 0,
-        }));
+        // 군집 분류 — students(useProfessorStudents)의 quizStats.averageScore 활용
+        // profCorrectCount가 users에 미저장될 수 있으므로 quizStats 기반이 정확
+        const studentMap = new Map(students.map(s => [s.uid, s]));
+        const rawStudentData = rawStudents.map(s => {
+          const uid = (s as RawStudentData & { uid?: string }).uid || '';
+          const studentDetail = studentMap.get(uid);
+          // quizStats.averageScore (0~100) 사용, 없으면 profCorrectCount 폴백
+          const correctRate = studentDetail?.quizStats.averageScore
+            ?? (s.profCorrectCount
+              ? ((s.profCorrectCount / Math.max(s.profAttemptCount || 1, 1)) * 100)
+              : 0);
+          return { uid, classId: s.classId, totalExp: s.totalExp, correctRate };
+        });
 
         const exps = rawStudentData.map(s => s.totalExp).sort((a, b) => a - b);
         const medianExp = exps[Math.floor(exps.length / 2)] || 0;
-        // 정답률도 동적 중앙값 (weeklyStats CF와 동일 기준)
         const rates = rawStudentData.map(s => s.correctRate).sort((a, b) => a - b);
         const medianRate = rates[Math.floor(rates.length / 2)] || 0;
 
@@ -292,7 +296,7 @@ export default function ProfessorStatsPage() {
 
         rawStudentData.forEach(s => {
           const highExp = s.totalExp >= medianExp && s.totalExp > 0;
-          const highRate = s.correctRate >= medianRate;
+          const highRate = s.correctRate >= medianRate && s.correctRate > 0;
           const cls = s.classId;
           if (!byClass[cls]) byClass[cls] = { passionate: 0, hardworking: 0, efficient: 0, atRisk: 0 };
           if (!studentsByCluster[cls]) studentsByCluster[cls] = { passionate: [], hardworking: [], efficient: [], atRisk: [] };
@@ -315,7 +319,9 @@ export default function ProfessorStatsPage() {
 
     loadAllExtraData();
     return () => { cancelled = true; };
-  }, [courseId]);
+    // students 변경 시 군집 재계산 (students가 비동기 로드되므로)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courseId, students.length]);
 
   // 리포트 월 드롭다운 옵션 생성 (최근 6개월)
   const reportMonthOptions = useMemo(() => {
