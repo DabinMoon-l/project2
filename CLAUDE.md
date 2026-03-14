@@ -757,38 +757,51 @@ firebase deploy --only storage        # Storage rules
 
 ## 테스트 커버리지 확장 계획
 
-현재: E2E 8개 스펙 + CF 유닛 3개 스펙 + k6 부하 1개. 코드 규모(85,000줄) 대비 부족.
+현재: E2E 8개 (페이지 로드 확인) + **CF 유닛 4개 파일 (164 tests 통과)** + k6 부하 1개.
 
-### 1단계: CF 유닛 테스트 확충 (Vitest)
+### 현재 CF 테스트 현황 (Vitest, `cd functions && npm test`)
 
-| 대상 | 테스트 내용 | 우선순위 |
-|------|-----------|---------|
-| `recordAttempt` | 5중 방어 (중복 제출, rate limit, idempotency) | 높음 |
-| `computeRadarNorm` | 5축 계산 정확성 (교수 퀴즈 평균, 배틀 참여수, 소통) | 높음 |
-| `computeRankings` | 개인/팀 점수 공식, 동점 처리 | 높음 |
-| `enqueueGenerationJob` | Rate limit, dedup, 이미지 Storage 저장 | 중간 |
-| `styledQuizGenerator` | 난이도별 프롬프트, 챕터 반복 가이드, JSON 복구 | 중간 |
-| `tekkenMatchmaking` | Per-User Write, 봇 폴백, FIFO 페어링 | 중간 |
-| `weeklyStats` | 4군집 분류 (medianExp/medianRate 동적 계산) | 중간 |
+| 파일 | 테스트 수 | 검증 내용 |
+|------|----------|----------|
+| `gradeQuestion.test.ts` | 52 | OX/객관식/단답/복수정답 채점 정확성 |
+| `rankingFormulas.test.ts` | 54 | 개인/팀 랭킹 공식, 동점 처리, EXP 보상 계산 |
+| `tekkenDamage.test.ts` | 31 | 데미지 공식, 크리티컬, 배틀 EXP |
+| `radarAndCluster.test.ts` | 27 | 5축 레이더(rankPercentile), 4군집 분류(경계값), 박스플롯 |
+**목표**: 기능 버그 감지 + 회귀 방지 중심의 실질적 테스트.
 
-### 2단계: 프론트엔드 컴포넌트 테스트 (Vitest + Testing Library)
+### 1단계: CF 기능 테스트 (Vitest, 에뮬레이터 연동)
 
-| 대상 | 테스트 내용 | 우선순위 |
-|------|-----------|---------|
-| `ReviewPractice` | 풀이→결과→피드백 3단계 전환, 채점 정확성 | 높음 |
-| `QuestionEditor` | 6종 문제타입 입력/저장, 결합형 하위문제 | 높음 |
-| `ClassComparison` | 성적/참여도 토글, 박스플롯 데이터 계산 | 중간 |
-| Context Providers | useMemo 메모이제이션, 불필요한 리렌더 방지 | 중간 |
+| 대상 | 검증 항목 | 우선순위 |
+|------|----------|---------|
+| `recordAttempt` | 중복 제출 차단, 동시 제출 락, 재시도 idempotency, 점수 계산 정확성 | 높음 |
+| `computeRadarNorm` | 교수 퀴즈 평균(원점수) 정확성, 배틀 참여수(tekkenTotal) 반영, 소통(글+댓글+피드백) 합산 | 높음 |
+| `computeRankings` | 개인/팀 점수 공식, 동점 시 같은 순위, 분산 카운터 정합성 | 높음 |
+| `weeklyStats` | 4군집 분류 — medianExp/medianRate=0일 때 이탈 위험군 분류, 경계값 테스트 | 높음 |
+| `tekkenMatchmaking` | 봇 폴백 10초, FIFO 페어링 순서, 매칭 락 TTL | 중간 |
+| `enqueueGenerationJob` | Rate limit (분당 3회/일 15회), sha256 dedup 10분, 동시 요청 처리 | 중간 |
+| `styledQuizGenerator` | Truncated JSON 복구, 문제 수 부족 시 자동 보충, 챕터 ID 유효성 | 중간 |
 
-### 3단계: E2E 확장 (Playwright)
+### 2단계: 프론트엔드 기능 테스트 (Vitest + Testing Library)
 
-| 시나리오 | 현재 | 목표 |
-|---------|------|------|
-| 학생 퀴즈 풀이 → 결과 → 피드백 → EXP | 있음 | 유지 |
-| AI 문제 생성 → 서재 → 편집 → 공개 전환 | 없음 | 추가 |
-| 교수 통계 대시보드 → 군집 분석 → 리포트 | 없음 | 추가 |
-| 배틀 매칭 → 문제 풀이 → 결과 | 없음 | 추가 |
-| 복습 폴더 관리 → 카테고리 → PDF 내보내기 | 없음 | 추가 |
+| 대상 | 검증 항목 | 우선순위 |
+|------|----------|---------|
+| `ReviewPractice` | OX/객관식/단답 채점 정확성, 복수정답 처리, 결합형 하위문제 점수 합산 | 높음 |
+| `QuestionEditor` | 6종 문제타입 저장/로드 왕복, answer 0-indexed 통일, 이미지 base64→URL 변환 | 높음 |
+| `ClassComparison` | 박스플롯 Q1/Q3/whisker 계산, 이상치 감지, 성적/참여도 모드 전환 시 hooks 규칙 | 중간 |
+| `useFolderCategories` | localStorage 저장/복원, 카테고리 최대 8개, 폴더 순서 교환 | 중간 |
+| `useReview writeBatch` | 100개 문서 삭제 시 배치 분할(500건), 복원 시 데이터 정합성 | 중간 |
+
+### 3단계: 통합 기능 테스트 (Playwright, 에뮬레이터)
+
+현재 E2E(페이지 로드 확인)를 **실제 기능 플로우 테스트**로 교체.
+
+| 플로우 | 검증 항목 |
+|--------|----------|
+| 퀴즈 풀이 → 결과 → EXP | 점수 계산 맞는지, EXP 정확히 지급되는지, 마일스톤 트리거 |
+| AI 문제 생성 → 서재 저장 | Job 상태 전환(QUEUED→RUNNING→COMPLETED), 문제 수 정확성 |
+| 복습 삭제 → 휴지통 → 복원 | writeBatch 정합성, 복원 후 데이터 동일한지 |
+| 배틀 매칭 → 봇 대전 → 결과 | 10초 봇 폴백, 데미지 계산, EXP 지급 |
+| 교수 통계 → 4군집 | 비활동 학생이 이탈 위험군인지, 활동 학생 분류 정확성 |
 
 ## 대형 파일 리팩토링 계획
 
