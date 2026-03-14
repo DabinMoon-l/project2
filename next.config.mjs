@@ -7,6 +7,50 @@ const nextConfig = {
   turbopack: {
     root: '.',
   },
+  // CDN 캐시 헤더 — 정적 에셋 + 이미지
+  async headers() {
+    return [
+      {
+        // 토끼 이미지, 리본 이미지 등 정적 에셋 (1년 캐시, immutable)
+        source: '/images/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
+      {
+        source: '/rabbit/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
+      {
+        source: '/rabbit_profile/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
+      {
+        source: '/lottie/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
+      {
+        // 폰트 (1년 캐시)
+        source: '/fonts/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
+      {
+        // API 라우트 — 랭킹/레이더 CDN 캐시 (5분 edge, 10분 stale)
+        source: '/api/cache/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, s-maxage=300, stale-while-revalidate=600' },
+        ],
+      },
+    ];
+  },
   // 이미지 최적화 설정
   images: {
     formats: ["image/avif", "image/webp"],
