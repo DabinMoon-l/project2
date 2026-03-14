@@ -4,12 +4,8 @@ import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import {
-  reauthenticateWithCredential,
-  EmailAuthProvider,
-  updatePassword,
-} from 'firebase/auth';
 import { callFunction } from '@/lib/api';
+import { reauthenticate, changePassword } from '@/lib/auth';
 import {
   collection,
   addDoc,
@@ -324,8 +320,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
     setSavingRecovery(true);
     setRecoveryMessage('');
     try {
-      const credential = EmailAuthProvider.credential(auth.currentUser.email, recoveryPassword);
-      await reauthenticateWithCredential(auth.currentUser, credential);
+      await reauthenticate(recoveryPassword);
       setPasswordVerified(true);
       setRecoveryMessage('');
     } catch {
@@ -392,9 +387,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
     setSavingPassword(true);
     setPasswordError('');
     try {
-      const credential = EmailAuthProvider.credential(auth.currentUser.email, currentPassword);
-      await reauthenticateWithCredential(auth.currentUser, credential);
-      await updatePassword(auth.currentUser, newPassword);
+      await changePassword(currentPassword, newPassword);
       setPasswordError('');
       setShowPasswordModal(false);
       setCurrentPassword('');

@@ -3,8 +3,8 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { auth, storage } from '@/lib/firebase';
+import { upload as storageUpload } from '@/lib/repositories/firebase/storageRepo';
+import { auth } from '@/lib/firebase';
 import { compressImage, formatFileSize } from '@/lib/imageUtils';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse } from '@/lib/contexts';
@@ -797,9 +797,8 @@ export default function ProfessorQuizCreatePage() {
 
       const timestamp = Date.now();
       const randomStr = Math.random().toString(36).substring(2, 8);
-      const storageRef = ref(storage, `quiz-images/${user.uid}/${timestamp}_${randomStr}.${finalExtension}`);
-      await uploadBytes(storageRef, finalBlob);
-      return await getDownloadURL(storageRef);
+      const storagePath = `quiz-images/${user.uid}/${timestamp}_${randomStr}.${finalExtension}`;
+      return await storageUpload(storagePath, finalBlob);
     } catch (err) {
       console.error(`[실패] ${path}: 이미지 업로드 실패`, err);
       return null;

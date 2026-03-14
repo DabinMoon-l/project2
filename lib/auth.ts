@@ -9,6 +9,9 @@ import {
   signOut as firebaseSignOut,
   onAuthStateChanged as firebaseOnAuthStateChanged,
   signInWithEmailAndPassword,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
+  updatePassword as firebaseUpdatePassword,
   User,
   UserCredential,
   NextOrObserver,
@@ -100,6 +103,34 @@ export const signInWithEmail = async (
     }
     throw new Error('알 수 없는 오류가 발생했습니다.');
   }
+};
+
+// ============================================================
+// 비밀번호 변경
+// ============================================================
+
+/**
+ * 현재 비밀번호로 재인증
+ */
+export const reauthenticate = async (currentPassword: string): Promise<void> => {
+  const user = auth.currentUser;
+  if (!user || !user.email) throw new Error('로그인 정보를 찾을 수 없습니다.');
+  const credential = EmailAuthProvider.credential(user.email, currentPassword);
+  await reauthenticateWithCredential(user, credential);
+};
+
+/**
+ * 현재 비밀번호로 재인증 후 새 비밀번호로 변경
+ */
+export const changePassword = async (
+  currentPassword: string,
+  newPassword: string
+): Promise<void> => {
+  const user = auth.currentUser;
+  if (!user || !user.email) throw new Error('로그인 정보를 찾을 수 없습니다.');
+  const credential = EmailAuthProvider.credential(user.email, currentPassword);
+  await reauthenticateWithCredential(user, credential);
+  await firebaseUpdatePassword(user, newPassword);
 };
 
 // ============================================================
