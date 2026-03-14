@@ -37,9 +37,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Claude API** (claude-sonnet-4-20250514) — 월별 리포트 인사이트
 
 ### 배포
-- **Vercel** — 프론트엔드 (PWA, git push시 자동 배포)
+- **Vercel** — 프론트엔드 (PWA, git push시 자동 배포, CDN 캐시)
 - **Firebase** — Cloud Functions, Firestore, RTDB, Storage
-- **Cloud Run** — PPTX→PDF 변환 서비스
+- **Cloud Run** — PPTX→PDF 변환 + 철권퀴즈 문제 풀 워커
 
 ## 개발 명령어
 
@@ -170,6 +170,8 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 | `announcements/{id}` | 공지사항 | CF 전용 |
 | `courseScopes/{courseId}` | 과목 키워드/범위 | CF 전용 |
 | `professorQuizAnalysis/{courseId}` | 교수 스타일 분석 | CF 전용 |
+| `allowedProfessors/{email}` | 교수 허용 목록 + 담당 과목 | Admin SDK 전용 |
+| `courses/{courseId}` | 과목 레지스트리 (동적 과목) | Admin SDK 전용 |
 
 ### RTDB 경로 (철권퀴즈 전용)
 
@@ -407,8 +409,11 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 
 | 캐시 | 위치 | TTL | 패턴 |
 |------|------|-----|------|
-| 랭킹 | sessionStorage | 2분 fresh / 10분 max | SWR |
-| 레이더 정규화 | sessionStorage | 2분 fresh / 10분 max | SWR |
+| 정적 에셋 | Vercel CDN | 1년 immutable | Cache-Control |
+| 랭킹 CDN | Vercel Edge | 5분 s-maxage | /api/cache/rankings |
+| 레이더 CDN | Vercel Edge | 5분 s-maxage | /api/cache/radar |
+| 랭킹 | sessionStorage | 5분 fresh / 15분 max | SWR |
+| 레이더 정규화 | sessionStorage | 5분 fresh / 15분 max | SWR |
 | 교수 통계 | 모듈 Map | 5분 | stale-while-revalidate |
 | Firestore 오프라인 | IndexedDB | persistentLocalCache | 멀티탭 |
 
@@ -487,8 +492,63 @@ MainLayout (useRequireAuth → 미인증 시 /login 리다이렉트)
 **학번+비밀번호**: 학번 `20230001` → `20230001@rabbitory.internal` (Firebase Auth)
 - `registerStudent` CF가 enrolledStudents 확인 후 계정 생성
 - 학번당 1개 계정만 (isRegistered 플래그)
-- 교수: `@ccn.ac.kr` 도메인 → 자동 교수 경로
+- 교수: `@` 포함 이메일 → `initProfessorAccount` CF → `allowedProfessors/{email}` DB 확인
 - Middleware 없음 — `useRequireAuth()` 훅으로 클라이언트 리다이렉트
+
+### 교수 권한 시스템
+
+- **교수 허용**: `allowedProfessors/{email}` Firestore 컬렉션 (Admin SDK 전용)
+- **과목 소유권**: `users/{uid}.assignedCourses` 배열 (로그인 시 `allowedProfessors`에서 동기화)
+- **CF 검증**: `verifyProfessorAccess(uid, courseId)` — role 확인 + 과목 소유권 검증
+- **하위호환**: `assignedCourses` 비어있으면 모든 과목 허용
+- **seed**: `node scripts/seed-allowed-professors.js`
+
+## 동적 과목 시스템
+
+- **CourseId 타입**: `'biology' | 'pathophysiology' | 'microbiology' | (string & {})` — 자동완성 유지 + 확장
+- **과목 레지스트리**: Firestore `courses/{courseId}` 컬렉션 → `CourseContext.courseRegistry`로 실시간 구독
+- **COURSES 상수**: `lib/types/course.ts` — Firestore 미설정 시 폴백 (3과목 기본값)
+- **소비자 API**: `useCourse()` → `getCourseById(id)`, `courseList`, `courseRegistry`
+- **seed**: `node scripts/seed-courses.js`
+- **UI 연동**: CourseSwitcher, CourseSelector, SemesterSettingsCard 모두 레지스트리 기반
+
+## CDN 캐시 레이어
+
+### 정적 에셋 (next.config.mjs)
+- `/images/*`, `/rabbit/*`, `/rabbit_profile/*`, `/lottie/*`, `/fonts/*`: 1년 immutable
+
+### 서버 CDN (Vercel Edge)
+- `GET /api/cache/rankings?courseId=` — 랭킹 데이터 (s-maxage=300, SWR=600)
+- `GET /api/cache/radar?courseId=` — 레이더 데이터 (s-maxage=300, SWR=600)
+- `lib/firebaseAdmin.ts` — API Route용 Firebase Admin SDK (FIREBASE_SERVICE_ACCOUNT_KEY 환경변수)
+
+### 클라이언트 캐시 (기존)
+- 랭킹/레이더: sessionStorage SWR (5분 fresh / 15분 max)
+- 교수 통계: 모듈 Map (5분)
+- Firestore: persistentLocalCache + multiTab
+
+## Cloud Run 서비스
+
+### tekken-pool-worker
+- **위치**: `services/tekken-pool-worker/`
+- **역할**: 철권퀴즈 문제 풀 Gemini API 병렬 생성 (CF 대비 5배 빠름)
+- **트리거**: Cloud Scheduler → POST /refill (매일 03:00 KST)
+- **스펙**: 2GB 메모리, 15분 타임아웃, 동시 Gemini 5개
+- **배포**: `./services/tekken-pool-worker/deploy.sh`
+
+## 부하 테스트
+
+- **위치**: `tests/load/`
+- **시나리오**: 학생 300명 + 교수 5명 동시접속 (k6)
+- **실행**:
+  ```bash
+  firebase emulators:start
+  node tests/load/seed-emulator.js
+  node tests/load/generate-tokens-emulator.js
+  k6 run tests/load/mixed-scenario.k6.js
+  ```
+- **교수 시나리오**: 대시보드 통계, 학생목록, 퀴즈목록 순회
+- **학생 시나리오**: 퀴즈(80), 배틀(40), 뽑기(30), 레벨업(20), AI생성(30), 복습(50), 게시판(30), 랭킹(20)
 
 ## 코딩 컨벤션
 
