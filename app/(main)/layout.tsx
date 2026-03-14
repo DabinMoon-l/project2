@@ -40,7 +40,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
   const searchParams = useSearchParams();
   const { profile, loading: profileLoading, isProfessor } = useUser();
   const { userCourseId } = useCourse();
-  const [userClassType, setUserClassType] = useState<ClassType>('A');
+  // userClassType은 profile.classType에서 직접 파생 (불필요한 state 제거)
   const [waitCount, setWaitCount] = useState(0);
 
   // 뷰포트 스케일링 (세로모드: zoom, 가로모드: 1)
@@ -101,14 +101,13 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
     }
   }, [profile, profileLoading, router, waitCount]);
 
-  // 프로필에서 반 타입 가져오기
+  // 프로필에서 반 타입 → 로컬 스토리지 동기화 (테마 유지용)
   useEffect(() => {
     if (profile?.classType) {
-      setUserClassType(profile.classType);
-      // 로컬 스토리지에도 저장 (테마 유지용)
       localStorage.setItem('hero-quiz-class-type', profile.classType);
     }
   }, [profile?.classType]);
+  const userClassType = (profile?.classType as ClassType) || 'A';
 
   // 프로필 로딩 중이거나 프로필이 없으면 로딩 표시
   if (profileLoading || !profile) {
