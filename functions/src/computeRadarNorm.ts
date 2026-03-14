@@ -66,9 +66,10 @@ async function computeRadarNormForCourse(courseId: string) {
     );
   }
 
-  const [quizzesResult, postsResult, ...quizResultBatchResults] = await Promise.allSettled([
+  const [quizzesResult, postsResult, commentsResult, ...quizResultBatchResults] = await Promise.allSettled([
     db.collection("quizzes").where("courseId", "==", courseId).select("creatorId", "type").get(),
     db.collection("posts").where("courseId", "==", courseId).select("authorId").get(),
+    db.collection("comments").where("courseId", "==", courseId).select("authorId").get(),
     ...quizResultBatches,
   ]);
 
@@ -77,6 +78,7 @@ async function computeRadarNormForCourse(courseId: string) {
 
   const quizzesDocs = quizzesResult.status === "fulfilled" ? quizzesResult.value.docs : [];
   const postsDocs = postsResult.status === "fulfilled" ? postsResult.value.docs : [];
+  const commentsDocs = commentsResult.status === "fulfilled" ? commentsResult.value.docs : [];
   // quizResults 배치 결과 합치기
   const quizResultsDocs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
   quizResultBatchResults.forEach(r => {
@@ -102,59 +104,49 @@ async function computeRadarNormForCourse(courseId: string) {
     }
   });
 
+  // 댓글 수 집계
+  const commentCountByUid: Record<string, number> = {};
+  commentsDocs.forEach(d => {
+    const authorId = d.data().authorId as string;
+    if (authorId && studentUids.has(authorId)) {
+      commentCountByUid[authorId] = (commentCountByUid[authorId] ?? 0) + 1;
+    }
+  });
+
   const communityByUid: Record<string, number> = {};
   studentUids.forEach(uid => {
-    communityByUid[uid] = (postCountByUid[uid] ?? 0) * 3 + (fbCountByUid[uid] ?? 0);
+    communityByUid[uid] = (postCountByUid[uid] ?? 0) * 3 + (commentCountByUid[uid] ?? 0) * 2 + (fbCountByUid[uid] ?? 0);
   });
 
-  // 5. 가중 석차 점수 (첫 시도만 사용)
+  // 5. 퀴즈 축 — 교수 퀴즈 평균 점수 (원점수, 0~100)
   const PROF_TYPES = new Set(["midterm", "final", "past", "professor", "professor-ai", "independent"]);
-  const quizTypeMap = new Map<string, boolean>();
-  const courseQuizIds = new Set<string>(); // 해당 과목 퀴즈 ID
+  const courseQuizIds = new Set<string>();
+  const profQuizIds = new Set<string>();
   quizzesDocs.forEach(d => {
     courseQuizIds.add(d.id);
-    quizTypeMap.set(d.id, PROF_TYPES.has(d.data().type || ""));
+    if (PROF_TYPES.has(d.data().type || "")) profQuizIds.add(d.id);
   });
 
-  const completionsByQuiz = new Map<string, { userId: string; score: number }[]>();
+  // 교수 퀴즈 결과만 수집 (첫 시도만)
+  const profScoresByUid = new Map<string, number[]>();
   quizResultsDocs.forEach(d => {
     const qr = d.data();
     if (!studentUids.has(qr.userId)) return;
     const qid = qr.quizId as string;
-    if (!qid) return;
-    if (!courseQuizIds.has(qid)) return; // 해당 과목 퀴즈만
-    if (qr.isUpdate === true) return; // 재시도 제외
-
-    const arr = completionsByQuiz.get(qid) ?? [];
-    arr.push({ userId: qr.userId, score: qr.score ?? 0 });
-    completionsByQuiz.set(qid, arr);
+    if (!qid || !profQuizIds.has(qid)) return; // 교수 퀴즈만
+    if (qr.isUpdate === true) return;
+    const arr = profScoresByUid.get(qr.userId) ?? [];
+    arr.push(qr.score ?? 0);
+    profScoresByUid.set(qr.userId, arr);
   });
 
-  const studentScorePairs = new Map<string, { rankScore: number; weight: number }[]>();
-  completionsByQuiz.forEach((participants, quizId) => {
-    const N = participants.length;
-    if (N === 0) return;
-    const weight = (quizTypeMap.get(quizId) ?? false) ? 6 : 4;
-    const sorted = [...participants].sort((a, b) => b.score - a.score);
-    let rank = 1;
-    sorted.forEach((p, idx) => {
-      if (idx > 0 && sorted[idx].score < sorted[idx - 1].score) rank = idx + 1;
-      const rankScore = N < 5
-        ? (p.score ?? 0)
-        : ((N - rank + 1) / N) * 100;
-      const pairs = studentScorePairs.get(p.userId) ?? [];
-      pairs.push({ rankScore, weight });
-      studentScorePairs.set(p.userId, pairs);
-    });
-  });
-
+  // 학생별 교수 퀴즈 평균 점수
   const weightedScoreByUid: Record<string, number> = {};
   studentUids.forEach(uid => {
-    const pairs = studentScorePairs.get(uid);
-    if (!pairs || pairs.length === 0) { weightedScoreByUid[uid] = 0; return; }
-    const tw = pairs.reduce((s, p) => s + p.weight, 0);
-    const tws = pairs.reduce((s, p) => s + p.rankScore * p.weight, 0);
-    weightedScoreByUid[uid] = Math.round((tws / tw) * 100) / 100;
+    const scores = profScoresByUid.get(uid);
+    if (!scores || scores.length === 0) { weightedScoreByUid[uid] = 0; return; }
+    const avg = scores.reduce((s, v) => s + v, 0) / scores.length;
+    weightedScoreByUid[uid] = Math.round(avg * 100) / 100;
   });
 
   // 6. 백분위 배열 (오름차순 정렬) — 5축 전부 백분위
