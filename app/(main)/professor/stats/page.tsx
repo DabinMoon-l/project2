@@ -15,7 +15,6 @@ import { scaleCoord } from '@/lib/hooks/useViewportScale';
 
 import ClassComparison from '@/components/professor/stats/ClassComparison';
 import RadarChart from '@/components/professor/stats/RadarChart';
-import ClassProfileRadar from '@/components/professor/stats/ClassProfileRadar';
 import MobileBottomSheet from '@/components/common/MobileBottomSheet';
 import StudentListView from '@/components/professor/students/StudentListView';
 import StudentDetailModal from '@/components/professor/students/StudentDetailModal';
@@ -607,7 +606,6 @@ export default function ProfessorStatsPage() {
             className="space-y-8"
           >
             <ClassComparison classStats={data.classStats} students={students} onClassClick={handleClassClick} />
-            <ClassProfileRadar courseId={courseId} />
             <RadarChart chapterStats={data.chapterStats} />
 
             {/* 피드백 분석 */}
