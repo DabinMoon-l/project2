@@ -24,7 +24,7 @@ const UpdateQuizModal = dynamic(() => import('@/components/quiz/UpdateQuizModal'
 const QuizStatsModal = dynamic(() => import('@/components/quiz/manage/QuizStatsModal'), { ssr: false });
 import { useExpandSource } from '@/lib/hooks/useExpandSource';
 import { useCourse } from '@/lib/contexts';
-import { COURSES, getPastExamOptions, type PastExamOption } from '@/lib/types/course';
+import { getPastExamOptions, type PastExamOption } from '@/lib/types/course';
 import { generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import { parseAverageScore, sortByLatest, formatQuestionTypes } from '@/lib/utils/quizHelpers';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
@@ -43,11 +43,11 @@ function QuizListPageContent() {
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const { isBookmarked, toggleBookmark } = useQuizBookmark();
-  const { userCourseId } = useCourse();
+  const { userCourseId, getCourseById } = useCourse();
   const { updatedQuizzes, checkQuizUpdate, refresh: refreshUpdates, loading: updatesLoading } = useQuizUpdate();
 
   // 과목별 리본 이미지
-  const currentCourse = userCourseId && COURSES[userCourseId] ? COURSES[userCourseId] : null;
+  const currentCourse = userCourseId ? getCourseById(userCourseId) : null;
   const ribbonImage = currentCourse?.quizRibbonImage || '/images/biology-quiz-ribbon.png';
   const ribbonScale = currentCourse?.quizRibbonScale || 1;
   const ribbonOffsetY = currentCourse?.quizRibbonOffsetY || 0;

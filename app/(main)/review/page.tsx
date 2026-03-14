@@ -22,7 +22,7 @@ import { useQuizBookmark, type BookmarkedQuiz } from '@/lib/hooks/useQuizBookmar
 import { useLearningQuizzes, type LearningQuiz } from '@/lib/hooks/useLearningQuizzes';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse, useUser } from '@/lib/contexts';
-import { COURSES, getPastExamOptions } from '@/lib/types/course';
+import { getPastExamOptions } from '@/lib/types/course';
 import { getChapterById, generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import type { QuestionExportData as PdfQuestionData } from '@/lib/utils/questionPdfExport';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
@@ -57,11 +57,11 @@ function ReviewPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
-  const { userCourseId, semesterSettings } = useCourse();
+  const { userCourseId, semesterSettings, getCourseById } = useCourse();
   const { profile } = useUser();
 
   // 과목별 리본 이미지
-  const currentCourse = userCourseId && COURSES[userCourseId] ? COURSES[userCourseId] : null;
+  const currentCourse = userCourseId ? getCourseById(userCourseId) : null;
   const ribbonImage = currentCourse?.reviewRibbonImage || '/images/biology-review-ribbon.png';
   const ribbonScale = currentCourse?.reviewRibbonScale || 1;
 
@@ -1260,7 +1260,7 @@ function ReviewPageContent() {
                           folderName,
                           userName: profile?.nickname || '',
                           studentId: profile?.studentId || '',
-                          courseName: userCourseId ? COURSES[userCourseId]?.name : undefined,
+                          courseName: userCourseId ? getCourseById(userCourseId)?.name : undefined,
                         });
                       } catch (err) {
                         console.error('PDF 다운로드 실패:', err);

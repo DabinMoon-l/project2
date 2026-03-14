@@ -13,7 +13,6 @@ import { functions } from '@/lib/firebase';
 import { mean as statMean, sd as statSd, zScore } from '@/lib/utils/statistics';
 import type { FeedbackType } from '@/components/quiz/InstantFeedbackButton';
 import type { CourseId } from '@/lib/types/course';
-import { getCourseList, COURSES } from '@/lib/types/course';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
 
 import SourceFilter from '@/components/professor/stats/SourceFilter';
@@ -60,8 +59,6 @@ interface ExtraData {
 const _extraCacheMap = new Map<string, { data: ExtraData; ts: number }>();
 const EXTRA_CACHE_TTL = 5 * 60 * 1000;
 
-const ALL_COURSE_IDS: CourseId[] = ['biology', 'microbiology', 'pathophysiology'];
-
 const CLUSTER_META = [
   { key: 'passionate' as const, label: '열정적 학습자', color: '#16a34a', desc: '높은 참여 + 높은 성취' },
   { key: 'hardworking' as const, label: '노력형 학습자', color: '#B8860B', desc: '높은 참여 + 낮은 성취' },
@@ -70,13 +67,14 @@ const CLUSTER_META = [
 ];
 
 export default function ProfessorStatsPage() {
-  const { userCourseId, setProfessorCourse, assignedCourses } = useCourse();
+  const { userCourseId, setProfessorCourse, assignedCourses, courseList } = useCourse();
   const courseIds = useMemo(() => {
+    const allIds = courseList.map(c => c.id) as CourseId[];
     if (assignedCourses.length > 0) {
-      return ALL_COURSE_IDS.filter(id => assignedCourses.includes(id));
+      return allIds.filter(id => assignedCourses.includes(id));
     }
-    return ALL_COURSE_IDS;
-  }, [assignedCourses]);
+    return allIds;
+  }, [assignedCourses, courseList]);
   const { data, loading, error, fetchStats } = useProfessorStats();
   const {
     students,
@@ -791,7 +789,7 @@ export default function ProfessorStatsPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    const courseName = getCourseList().find(c => c.id === courseId)?.name || courseId;
+                    const courseName = courseList.find(c => c.id === courseId)?.name || courseId;
                     exportToExcel({ courseId, courseName, monthLabel: `${reportYear}-${String(reportMonth).padStart(2, '0')}`, year: reportYear, month: reportMonth, insight: reportInsight!, weeklyStats: reportWeeklyStats });
                   }}
                   className="py-2.5 border-2 border-[#1A1A1A] text-[#1A1A1A] text-xs font-bold"
@@ -801,7 +799,7 @@ export default function ProfessorStatsPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    const courseName = getCourseList().find(c => c.id === courseId)?.name || courseId;
+                    const courseName = courseList.find(c => c.id === courseId)?.name || courseId;
                     exportToWord({ courseId, courseName, monthLabel: `${reportYear}-${String(reportMonth).padStart(2, '0')}`, year: reportYear, month: reportMonth, insight: reportInsight!, weeklyStats: reportWeeklyStats });
                   }}
                   className="py-2.5 border-2 border-[#1A1A1A] text-[#1A1A1A] text-xs font-bold"
@@ -822,14 +820,15 @@ export default function ProfessorStatsPage() {
 function DashboardRibbonHeader({
   currentCourseId,
   onCourseChange,
-  courseIds = ALL_COURSE_IDS,
+  courseIds,
 }: {
   currentCourseId: CourseId;
   onCourseChange: (courseId: CourseId) => void;
-  courseIds?: CourseId[];
+  courseIds: CourseId[];
 }) {
+  const { getCourseById } = useCourse();
   const currentIndex = courseIds.indexOf(currentCourseId);
-  const course = COURSES[currentCourseId];
+  const course = getCourseById(currentCourseId);
   const ribbonImage = course?.dashboardRibbonImage || '/images/biology-dashboard-ribbon.png';
   const ribbonScale = course?.dashboardRibbonScale || 1;
 

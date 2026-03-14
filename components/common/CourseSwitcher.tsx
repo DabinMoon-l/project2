@@ -1,15 +1,10 @@
 'use client';
 
-import { useCallback, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { CourseId } from '@/lib/types/course';
+import { useCourse } from '@/lib/contexts/CourseContext';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
-
-const ALL_COURSES: { id: CourseId; name: string }[] = [
-  { id: 'biology', name: 'Biology' },
-  { id: 'microbiology', name: 'Microbiology' },
-  { id: 'pathophysiology', name: 'Pathophysiology' },
-];
 
 interface Props {
   value: CourseId;
@@ -20,10 +15,15 @@ interface Props {
 }
 
 export default function CourseSwitcher({ value, onChange, textClassName, courseIds }: Props) {
+  const { courseList } = useCourse();
   // courseIds가 있으면 해당 과목만 표시, 없으면 전체
-  const courses = courseIds && courseIds.length > 0
-    ? ALL_COURSES.filter(c => courseIds.includes(c.id))
-    : ALL_COURSES;
+  const courses = useMemo(() => {
+    const all = courseList.map(c => ({ id: c.id as CourseId, name: c.nameEn }));
+    if (courseIds && courseIds.length > 0) {
+      return all.filter(c => courseIds.includes(c.id));
+    }
+    return all;
+  }, [courseList, courseIds]);
   const currentIndex = courses.findIndex(c => c.id === value);
   const touchStartX = useRef(0);
   const dirRef = useRef(0);

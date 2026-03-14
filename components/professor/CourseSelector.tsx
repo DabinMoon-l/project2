@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCourse } from '@/lib/contexts';
-import { COURSES, type CourseId } from '@/lib/types/course';
+import type { CourseId } from '@/lib/types/course';
 
 /**
  * 과목 정보 타입
@@ -41,11 +41,11 @@ export function CourseSelector({
   compact = false,
 }: CourseSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const { semesterSettings } = useCourse();
+  const { semesterSettings, courseList, getCourseById } = useCourse();
 
   // 과목 목록 생성
-  const courseOptions: CourseOption[] = Object.values(COURSES).map((course) => ({
-    id: course.id,
+  const courseOptions: CourseOption[] = courseList.map((course) => ({
+    id: course.id as CourseId,
     name: course.name,
     nameEn: course.nameEn,
     grade: course.grade,
@@ -53,7 +53,7 @@ export function CourseSelector({
   }));
 
   // 선택된 과목 정보
-  const selectedCourse = selectedCourseId ? COURSES[selectedCourseId] : null;
+  const selectedCourse = selectedCourseId ? getCourseById(selectedCourseId) : null;
 
   // 학기 라벨
   const semesterLabel = semesterSettings

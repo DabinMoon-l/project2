@@ -20,7 +20,7 @@ import {
   type BoardTag,
   BOARD_TAGS,
 } from '@/lib/hooks/useBoard';
-import { type CourseId, getCourseList } from '@/lib/types/course';
+import type { CourseId } from '@/lib/types/course';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
 import {
   SpiralWordCloud,
@@ -1227,10 +1227,9 @@ export default function ManagePostsPage() {
   const { profile } = useUser();
   const isProfessor = profile?.role === 'professor';
   const searchParams = useSearchParams();
-  const { userCourseId } = useCourse();
+  const { userCourseId, courseList } = useCourse();
 
   // 교수님 — 과목 선택 (URL 파라미터 > 학기별 기본값)
-  const courseList = useMemo(() => getCourseList(), []);
   const courseFromUrl = searchParams.get('course') as CourseId | null;
   const [selectedCourseId, setSelectedCourseId] = useState<CourseId>(
     courseFromUrl || (userCourseId as CourseId) || 'microbiology'
