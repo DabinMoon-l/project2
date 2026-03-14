@@ -4,9 +4,8 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { collection, addDoc, serverTimestamp, db } from '@/lib/repositories';
-import { upload as storageUpload } from '@/lib/repositories/firebase/storageRepo';
 import { auth } from '@/lib/firebase';
-import { compressImage, formatFileSize } from '@/lib/imageUtils';
+import { processQuizImages, sanitizeForFirestore } from '@/lib/utils/quizImageUpload';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse, useUser } from '@/lib/contexts';
 import { useExpToast } from '@/components/common';
@@ -1265,161 +1264,9 @@ export default function QuizCreatePage() {
 
       };
 
-      // base64 이미지를 Firebase Storage에 업로드하는 함수
-      const uploadBase64ToStorage = async (base64: string, path: string): Promise<string | null> => {
-        try {
-          console.log(`[이미지 업로드 시작] ${path}`);
-
-          // base64에서 데이터 추출
-          const matches = base64.match(/^data:image\/(\w+);base64,(.+)$/);
-          if (!matches) {
-            console.error(`[실패] ${path}: 잘못된 base64 형식`);
-            return null;
-          }
-
-          const extension = matches[1];
-          const data = matches[2];
-
-          // base64를 Blob으로 변환
-          const byteCharacters = atob(data);
-          const byteNumbers = new Array(byteCharacters.length);
-          for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
-          }
-          const byteArray = new Uint8Array(byteNumbers);
-          const originalBlob = new Blob([byteArray], { type: `image/${extension}` });
-
-          console.log(`[원본 크기] ${path}: ${formatFileSize(originalBlob.size)}`);
-
-          // 이미지 압축 (1MB 초과 시 또는 항상 최적화)
-          let finalBlob: Blob = originalBlob;
-          let finalExtension = extension;
-
-          try {
-            const compressionResult = await compressImage(originalBlob, {
-              maxWidth: 1920,
-              maxHeight: 1080,
-              quality: 0.85,
-              maxSizeBytes: 800 * 1024, // 800KB 목표
-              outputType: 'image/jpeg',
-            });
-
-            finalBlob = compressionResult.blob;
-            finalExtension = 'jpg';
-
-            console.log(`[압축 완료] ${path}: ${formatFileSize(compressionResult.originalSize)} → ${formatFileSize(compressionResult.compressedSize)} (${compressionResult.compressionRatio}% 절감)`);
-          } catch (compressErr) {
-            console.warn(`[압축 실패] ${path}: 원본 사용`, compressErr);
-            // 압축 실패 시 원본 사용
-          }
-
-          // 최종 크기 확인
-          if (finalBlob.size > 5 * 1024 * 1024) {
-            console.error(`[실패] ${path}: 파일 크기 초과 (${formatFileSize(finalBlob.size)} > 5MB)`);
-            throw new Error(`이미지 크기가 너무 큽니다: ${formatFileSize(finalBlob.size)}. 5MB 이하로 줄여주세요.`);
-          }
-
-          // Storage에 업로드
-          const timestamp = Date.now();
-          const randomStr = Math.random().toString(36).substring(2, 8);
-          const storagePath = `quiz-images/${user.uid}/${timestamp}_${randomStr}.${finalExtension}`;
-
-          console.log(`[업로드 중] ${path}: ${formatFileSize(finalBlob.size)}`);
-
-          const downloadUrl = await storageUpload(storagePath, finalBlob);
-
-          console.log(`[성공] ${path}: 이미지 업로드 완료 - ${downloadUrl.substring(0, 80)}...`);
-          return downloadUrl;
-        } catch (err: any) {
-          // 상세 에러 로깅
-          console.error(`[실패] ${path}: 이미지 업로드 실패`);
-          console.error(`  - 에러 타입: ${err?.name || 'Unknown'}`);
-          console.error(`  - 에러 코드: ${err?.code || 'N/A'}`);
-          console.error(`  - 에러 메시지: ${err?.message || String(err)}`);
-
-          if (err?.code === 'storage/unauthorized') {
-            console.error(`  - 원인: Storage 권한 부족. storage.rules 확인 필요.`);
-            console.error(`  - 경로: quiz-images/${user.uid}/...`);
-          } else if (err?.code === 'storage/quota-exceeded') {
-            console.error(`  - 원인: Storage 용량 초과`);
-          } else if (err?.code === 'storage/invalid-format') {
-            console.error(`  - 원인: 잘못된 파일 형식`);
-          }
-
-          return null;
-        }
-      };
-
-      // 퀴즈 데이터에서 base64 이미지를 Storage URL로 변환
-      const processImagesInQuizData = async (data: any): Promise<any> => {
-        // questions 배열의 이미지 처리
-        if (data.questions && Array.isArray(data.questions)) {
-          for (let i = 0; i < data.questions.length; i++) {
-            const q = data.questions[i];
-
-            // imageUrl 처리
-            if (q.imageUrl && typeof q.imageUrl === 'string' && q.imageUrl.startsWith('data:image/')) {
-              console.log(`[처리중] questions[${i}].imageUrl 업로드...`);
-              const url = await uploadBase64ToStorage(q.imageUrl, `questions[${i}].imageUrl`);
-              data.questions[i].imageUrl = url;
-            }
-
-            // passageImage 처리 (결합형 문제)
-            if (q.passageImage && typeof q.passageImage === 'string' && q.passageImage.startsWith('data:image/')) {
-              console.log(`[처리중] questions[${i}].passageImage 업로드...`);
-              const url = await uploadBase64ToStorage(q.passageImage, `questions[${i}].passageImage`);
-              data.questions[i].passageImage = url;
-            }
-          }
-        }
-
-        return data;
-      };
-
-      // Firestore 호환성을 위한 데이터 정리 함수 (이미지 처리 후 사용)
-      const sanitizeForFirestore = (data: any, path: string = ''): any => {
-        if (data === null || data === undefined) {
-          return null;
-        }
-
-        if (typeof data === 'string') {
-          // 이미지 업로드 후에도 남은 base64가 있으면 제거
-          if (data.startsWith('data:image/')) {
-            console.warn(`[경고] ${path}: 업로드되지 않은 base64 이미지 발견 - null로 대체`);
-            return null;
-          }
-          return data;
-        }
-
-        if (Array.isArray(data)) {
-          return data
-            .filter((item) => item !== undefined && item !== null)
-            .map((item, idx) => {
-              if (Array.isArray(item)) {
-                // 중첩 배열은 문자열로 변환
-                return item.filter(i => i != null).join(', ');
-              }
-              return sanitizeForFirestore(item, `${path}[${idx}]`);
-            });
-        }
-
-        if (typeof data === 'object') {
-          const sanitized: any = {};
-          for (const key of Object.keys(data)) {
-            const value = data[key];
-            if (value !== undefined) {
-              sanitized[key] = sanitizeForFirestore(value, path ? `${path}.${key}` : key);
-            }
-          }
-          return sanitized;
-        }
-
-        return data;
-      };
-
       // 1. 먼저 이미지를 Storage에 업로드
       console.log('=== 이미지 업로드 시작 ===');
-      const quizDataWithUrls = await processImagesInQuizData(JSON.parse(JSON.stringify(quizData)));
+      const quizDataWithUrls = await processQuizImages(JSON.parse(JSON.stringify(quizData)), user.uid);
       console.log('=== 이미지 업로드 완료 ===');
 
       // 2. 문제별 고유 ID 부여
