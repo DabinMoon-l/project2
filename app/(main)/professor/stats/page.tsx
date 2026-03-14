@@ -13,9 +13,7 @@ import type { FeedbackType } from '@/components/quiz/InstantFeedbackButton';
 import type { CourseId } from '@/lib/types/course';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
 
-import SourceFilter from '@/components/professor/stats/SourceFilter';
 import ClassComparison from '@/components/professor/stats/ClassComparison';
-import StabilityIndex from '@/components/professor/stats/StabilityIndex';
 import RadarChart from '@/components/professor/stats/RadarChart';
 import ClassProfileRadar from '@/components/professor/stats/ClassProfileRadar';
 import MobileBottomSheet from '@/components/common/MobileBottomSheet';
@@ -82,7 +80,7 @@ export default function ProfessorStatsPage() {
   } = useProfessorStudents();
 
   const [courseId, setCourseId] = useState<CourseId>(userCourseId || 'biology');
-  const [source, setSource] = useState<QuestionSource>('professor');
+  const source: QuestionSource = 'professor'; // 교수님 퀴즈 고정
   const courseIdInitRef = useRef(false);
 
   // userCourseId가 비동기로 로드된 후 courseId 동기화
@@ -460,10 +458,8 @@ export default function ProfessorStatsPage() {
       </header>
 
       <div className="px-4 space-y-6">
-        {/* 리본과 필터 사이 간격 */}
-        <div className="pt-2">
-          <SourceFilter value={source} onChange={setSource} />
-        </div>
+        {/* 리본과 콘텐츠 사이 간격 */}
+        <div className="pt-2" />
 
         {/* 요약 카드 2개 (가운데 정렬 + 숫자 크게) */}
         {data && (
@@ -610,9 +606,8 @@ export default function ProfessorStatsPage() {
             transition={{ duration: 0.3 }}
             className="space-y-8"
           >
-            <ClassComparison classStats={data.classStats} onClassClick={handleClassClick} />
+            <ClassComparison classStats={data.classStats} students={students} onClassClick={handleClassClick} />
             <ClassProfileRadar courseId={courseId} />
-            <StabilityIndex classStats={data.classStats} />
             <RadarChart chapterStats={data.chapterStats} />
 
             {/* 피드백 분석 */}
