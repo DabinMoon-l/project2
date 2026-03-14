@@ -39,6 +39,7 @@ export type { ReviewType, ReviewItem, GroupedReviewItems, ChapterGroupedWrongIte
 export type { CustomFolder, CustomFolderQuestion, FolderCategory } from './useReviewTypes';
 import type { ReviewType, ReviewItem, GroupedReviewItems, ChapterGroupedWrongItems, QuizAttempt, QuizUpdateInfo, PrivateQuiz, DeletedItem, UseReviewReturn } from './useReviewTypes';
 import { calculateCustomFolderQuestionCount, groupByQuiz, groupByChapterAndQuiz } from './useReviewUtils';
+import { useReviewUpdateCheck } from './useReviewUpdateCheck';
 
 // 유틸리티 함수 재내보내기 (기존 import 경로 호환)
 export { calculateCustomFolderQuestionCount } from './useReviewUtils';
@@ -114,9 +115,6 @@ export const useReview = (): UseReviewReturn => {
 
   // 퀴즈 제목 캐시 (ref로 관리하여 useEffect 재실행 방지)
   const quizTitlesCacheRef = useRef<Record<string, string>>({});
-
-  // 퀴즈 업데이트 정보
-  const [updatedQuizzes, setUpdatedQuizzes] = useState<Map<string, QuizUpdateInfo>>(new Map());
 
   /**
    * 퀴즈 제목 가져오기 (ref 캐시 사용, 상태 변경 없음)
@@ -894,7 +892,6 @@ export const useReview = (): UseReviewReturn => {
    */
   const refresh = useCallback(() => {
     setRefreshKey((prev) => prev + 1);
-    setUpdatedQuizzes(new Map());
   }, []);
 
   /**
@@ -1102,14 +1099,8 @@ export const useReview = (): UseReviewReturn => {
       // 남은 기존 리뷰들 (새 퀴즈에 없는 문제들)은 삭제하지 않고 유지
       // 사용자가 직접 삭제할 때까지 보존
 
-      // 업데이트 정보 제거
-      setUpdatedQuizzes((prev) => {
-        const newMap = new Map(prev);
-        newMap.delete(`wrong-${quizId}`);
-        newMap.delete(`bookmark-${quizId}`);
-        newMap.delete(`solved-${quizId}`);
-        return newMap;
-      });
+      // 업데이트 정보 리셋 (refreshKey 변경으로 useReviewUpdateCheck 재실행)
+      setRefreshKey((prev) => prev + 1);
 
     } catch (err) {
       console.error('문제 업데이트 실패:', err);
@@ -1214,174 +1205,17 @@ export const useReview = (): UseReviewReturn => {
   const groupedBookmarkedItems = useMemo(() => groupByQuiz(bookmarkedItems), [bookmarkedItems]);
   const groupedSolvedItems = useMemo(() => groupByQuiz(solvedItems), [solvedItems]);
 
-  /**
-   * 퀴즈의 문제 수정 여부 확인 (기본정보 수정은 제외)
-   * 각 문제의 questionUpdatedAt과 저장된 quizUpdatedAt을 비교하여
-   * 문제 내용이 수정되었는지 확인합니다.
-   */
-  const checkQuizQuestionUpdates = useCallback(async (
-    quizId: string,
-    savedQuizUpdatedAt: Timestamp | null
-  ): Promise<boolean> => {
-    if (!savedQuizUpdatedAt) return false;
-
-    try {
-      const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
-      if (!quizDoc.exists()) return false;
-
-      const quizData = quizDoc.data();
-      const questions = quizData?.questions || [];
-      const savedTime = savedQuizUpdatedAt.toMillis ? savedQuizUpdatedAt.toMillis() : 0;
-
-      // 각 문제의 questionUpdatedAt을 확인하여 수정된 문제가 있는지 체크
-      for (const q of questions) {
-        const questionUpdatedAt = q.questionUpdatedAt;
-        if (questionUpdatedAt) {
-          const updatedTime = questionUpdatedAt.toMillis ? questionUpdatedAt.toMillis() : 0;
-          // 문제가 저장 이후에 수정되었으면 업데이트 있음
-          if (updatedTime > savedTime) {
-            return true;
-          }
-        }
-      }
-
-      return false;
-    } catch (err) {
-      console.error('문제 수정 확인 실패:', err);
-      return false;
-    }
-  }, []);
-
-  // 퀴즈 업데이트 확인 (최초 로드 후 한 번만 실행)
-  const updateCheckDoneRef = useRef(false);
-
-  // loading/user/courseId가 바뀌면 체크 플래그 리셋
-  useEffect(() => {
-    updateCheckDoneRef.current = false;
-  }, [user, userCourseId, refreshKey]);
-
-  useEffect(() => {
-    // 로딩 중이거나 이미 체크했으면 스킵
-    if (loading) return;
-    if (updateCheckDoneRef.current) return;
-    if (wrongItems.length === 0 && bookmarkedItems.length === 0 && solvedItems.length === 0) return;
-
-    updateCheckDoneRef.current = true;
-
-    const checkAllUpdates = async () => {
-      const newUpdatedQuizzes = new Map<string, QuizUpdateInfo>();
-
-      // 오답 문제 업데이트 확인
-      for (const group of groupedWrongItems) {
-        if (group.items.length > 0 && group.items[0].quizUpdatedAt) {
-          const hasQuestionUpdate = await checkQuizQuestionUpdates(
-            group.quizId,
-            group.items[0].quizUpdatedAt
-          );
-          if (hasQuestionUpdate) {
-            newUpdatedQuizzes.set(`wrong-${group.quizId}`, {
-              quizId: group.quizId,
-              quizTitle: group.quizTitle,
-              hasUpdate: true,
-            });
-          }
-        }
-      }
-
-      // 찜한 문제 업데이트 확인
-      for (const group of groupedBookmarkedItems) {
-        if (group.items.length > 0 && group.items[0].quizUpdatedAt) {
-          const hasQuestionUpdate = await checkQuizQuestionUpdates(
-            group.quizId,
-            group.items[0].quizUpdatedAt
-          );
-          if (hasQuestionUpdate) {
-            newUpdatedQuizzes.set(`bookmark-${group.quizId}`, {
-              quizId: group.quizId,
-              quizTitle: group.quizTitle,
-              hasUpdate: true,
-            });
-          }
-        }
-      }
-
-      // 푼 문제 업데이트 확인
-      for (const group of groupedSolvedItems) {
-        if (group.items.length > 0 && group.items[0].quizUpdatedAt) {
-          const hasQuestionUpdate = await checkQuizQuestionUpdates(
-            group.quizId,
-            group.items[0].quizUpdatedAt
-          );
-          if (hasQuestionUpdate) {
-            newUpdatedQuizzes.set(`solved-${group.quizId}`, {
-              quizId: group.quizId,
-              quizTitle: group.quizTitle,
-              hasUpdate: true,
-            });
-          }
-        }
-      }
-
-      // 커스텀 폴더(내맘대로) 업데이트 확인
-      // 폴더에 포함된 문제 중 수정된 문제가 있는지 확인
-      for (const folder of customFolders) {
-        const folderQuestions = folder.questions || [];
-        if (folderQuestions.length === 0) continue;
-
-        // 폴더 내 퀴즈별로 그룹핑
-        const quizGroups = new Map<string, string[]>();
-        for (const q of folderQuestions) {
-          const existing = quizGroups.get(q.quizId) || [];
-          existing.push(q.questionId);
-          quizGroups.set(q.quizId, existing);
-        }
-
-        // 각 퀴즈에서 수정된 문제가 있는지 확인
-        let hasAnyUpdate = false;
-        for (const [quizId, questionIds] of quizGroups) {
-          try {
-            const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
-            if (!quizDoc.exists()) continue;
-
-            const quizData = quizDoc.data();
-            const questions = quizData?.questions || [];
-
-            // 폴더에 포함된 문제들 중 수정된 것이 있는지 확인
-            for (const q of questions) {
-              if (!questionIds.includes(q.id)) continue;
-
-              const questionUpdatedAt = q.questionUpdatedAt;
-              if (questionUpdatedAt) {
-                const updatedTime = questionUpdatedAt.toMillis ? questionUpdatedAt.toMillis() : 0;
-                // 폴더 생성 시간 이후에 수정되었으면 업데이트 있음
-                const folderCreatedAt = folder.createdAt?.toMillis ? folder.createdAt.toMillis() : 0;
-                if (updatedTime > folderCreatedAt) {
-                  hasAnyUpdate = true;
-                  break;
-                }
-              }
-            }
-            if (hasAnyUpdate) break;
-          } catch (err) {
-            console.error('커스텀 폴더 업데이트 확인 실패:', err);
-          }
-        }
-
-        if (hasAnyUpdate) {
-          newUpdatedQuizzes.set(`custom-${folder.id}`, {
-            quizId: folder.id,
-            quizTitle: folder.name,
-            hasUpdate: true,
-          });
-        }
-      }
-
-      setUpdatedQuizzes(newUpdatedQuizzes);
-    };
-
-    checkAllUpdates();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, groupedWrongItems, groupedBookmarkedItems, groupedSolvedItems, customFolders, checkQuizQuestionUpdates]);
+  // 퀴즈 업데이트 확인 (별도 훅으로 분리)
+  const updatedQuizzes = useReviewUpdateCheck(
+    loading,
+    groupedWrongItems,
+    groupedBookmarkedItems,
+    groupedSolvedItems,
+    customFolders,
+    refreshKey,
+    user?.uid,
+    userCourseId,
+  );
 
   // 푼 문제 추가 로드 (페이지네이션)
   const loadMoreSolved = useCallback(async () => {
