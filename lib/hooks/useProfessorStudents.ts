@@ -169,7 +169,7 @@ function computeRadarFromNorm(
   totalExp: number,
 ): NonNullable<StudentDetail['radarMetrics']> {
   return {
-    quizScore: rankPercentile(norm.weightedScoreByUid[uid] ?? 0, norm.weightedScoreValues ?? []),
+    quizScore: norm.weightedScoreByUid[uid] ?? 0, // 교수 퀴즈 평균 점수 (원점수 0~100)
     battle: rankPercentile(norm.battleByUid?.[uid] ?? 0, norm.battleValues ?? []),
     quizCreation: rankPercentile(norm.quizCreationByUid[uid] ?? 0, norm.quizCreationCounts),
     community: rankPercentile(norm.communityByUid[uid] ?? 0, norm.communityScores),
