@@ -14,7 +14,7 @@ import {
   useMemo,
   type ReactNode,
 } from 'react';
-import { doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
+import { doc, collection, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../hooks/useAuth';
 import { useUser } from './UserContext';
@@ -31,7 +31,6 @@ import {
 } from '../types/course';
 
 const PROFESSOR_COURSE_KEY = 'professor-selected-course'; // localStorage key
-const VALID_COURSE_IDS: CourseId[] = ['biology', 'microbiology', 'pathophysiology'];
 
 /**
  * Context 타입
@@ -59,6 +58,12 @@ interface CourseContextType {
   setProfessorCourse: (courseId: CourseId) => void;
   /** 교수님 담당 과목 목록 (assignedCourses) */
   assignedCourses: string[];
+  /** 과목 레지스트리 (Firestore courses 컬렉션 → COURSES 폴백) */
+  courseRegistry: Record<string, Course>;
+  /** 과목 ID로 과목 정보 조회 */
+  getCourseById: (courseId: string) => Course | null;
+  /** 정렬된 과목 목록 */
+  courseList: Course[];
   /** 설정 새로고침 */
   refresh: () => void;
 }
@@ -97,6 +102,44 @@ export function CourseProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [courseRegistry, setCourseRegistry] = useState<Record<string, Course>>({ ...COURSES });
+
+  // Firestore courses 컬렉션 구독 → 동적 과목 레지스트리
+  useEffect(() => {
+    const coursesRef = collection(db, 'courses');
+    const unsubscribe = onSnapshot(
+      coursesRef,
+      (snapshot) => {
+        if (snapshot.empty) {
+          // courses 컬렉션 없으면 기본 COURSES 상수 사용
+          setCourseRegistry({ ...COURSES });
+          return;
+        }
+        const registry: Record<string, Course> = {};
+        snapshot.docs.forEach((docSnap) => {
+          const data = docSnap.data() as Course;
+          registry[docSnap.id] = { ...data, id: docSnap.id };
+        });
+        setCourseRegistry(registry);
+      },
+      (err) => {
+        // 권한 오류 시 COURSES 폴백
+        console.warn('과목 레지스트리 로드 실패, 기본값 사용:', err.code);
+        setCourseRegistry({ ...COURSES });
+      }
+    );
+    return () => unsubscribe();
+  }, []);
+
+  // 과목 ID로 조회 헬퍼
+  const getCourseById = useCallback((courseId: string): Course | null => {
+    return courseRegistry[courseId] || null;
+  }, [courseRegistry]);
+
+  // 정렬된 과목 목록
+  const courseList = useMemo(() => {
+    return Object.values(courseRegistry).sort((a, b) => (a.order || 0) - (b.order || 0));
+  }, [courseRegistry]);
 
   // 학기 설정 구독
   useEffect(() => {
@@ -141,14 +184,14 @@ export function CourseProvider({ children }: { children: ReactNode }) {
   const getSavedProfessorCourse = useCallback((): CourseId | null => {
     if (typeof window === 'undefined') return null;
     const saved = localStorage.getItem(PROFESSOR_COURSE_KEY);
-    if (saved && VALID_COURSE_IDS.includes(saved as CourseId)) {
+    if (saved && courseRegistry[saved]) {
       // 담당 과목에 포함된 경우만 허용 (assignedCourses가 비어있으면 모두 허용 — 하위호환)
       if (assignedCourses.length === 0 || assignedCourses.includes(saved)) {
         return saved as CourseId;
       }
     }
     return null;
-  }, [assignedCourses]);
+  }, [assignedCourses, courseRegistry]);
 
   // 교수님 학기 기반 기본 과목
   const getProfessorDefaultCourse = useCallback((semester?: number): CourseId => {
@@ -200,8 +243,8 @@ export function CourseProvider({ children }: { children: ReactNode }) {
     }
   }, [isProfessorNoCourse, semesterSettings, getProfessorDefaultCourse]);
 
-  // 현재 사용자의 과목 정보
-  const userCourse = userCourseId ? COURSES[userCourseId] : null;
+  // 현재 사용자의 과목 정보 (레지스트리 기반)
+  const userCourse = userCourseId ? (courseRegistry[userCourseId] || null) : null;
 
   // 선택 가능한 학년 목록
   const availableGrades = semesterSettings
@@ -249,11 +292,15 @@ export function CourseProvider({ children }: { children: ReactNode }) {
     updateSemesterSettings,
     setProfessorCourse,
     assignedCourses,
+    courseRegistry,
+    getCourseById,
+    courseList,
     refresh,
   }), [
     semesterSettings, userCourseId, userClassId, userCourse,
     loading, error, availableGrades,
-    getCourseForGrade, updateSemesterSettings, setProfessorCourse, assignedCourses, refresh,
+    getCourseForGrade, updateSemesterSettings, setProfessorCourse, assignedCourses,
+    courseRegistry, getCourseById, courseList, refresh,
   ]);
 
   return (
