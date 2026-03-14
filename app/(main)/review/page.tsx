@@ -26,6 +26,7 @@ import { getChapterById, generateCourseTags, COMMON_TAGS } from '@/lib/courseInd
 import type { QuestionExportData as PdfQuestionData } from '@/lib/utils/questionPdfExport';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 import { useHideNav } from '@/lib/hooks/useHideNav';
+import { useFolderCategories } from '@/lib/hooks/useFolderCategories';
 import { type CompletedQuizData, type ReviewFilter, FILTER_OPTIONS } from '@/components/review/types';
 import { formatQuestionTypes } from '@/components/review/utils';
 import SlideFilter from '@/components/review/SlideFilter';
@@ -140,12 +141,22 @@ function ReviewPageContent() {
   const [selectedPdfFolders, setSelectedPdfFolders] = useState<Set<string>>(new Set());
 
   // 폴더 정렬(카테고리) 관련 상태
-  const [isSortMode, setIsSortMode] = useState(false);
-  const [folderCategories, setFolderCategories] = useState<{ id: string; name: string }[]>([]);
-  const [folderCategoryMap, setFolderCategoryMap] = useState<Record<string, string>>({});
-  const [folderOrderMap, setFolderOrderMap] = useState<Record<string, number>>({}); // 폴더 순서
-  const [isAssignMode, setIsAssignMode] = useState(false);
-  const [selectedFolderForAssign, setSelectedFolderForAssign] = useState<string | null>(null);
+  const {
+    folderCategories,
+    folderCategoryMap,
+    folderOrderMap,
+    isSortMode,
+    setIsSortMode,
+    isAssignMode,
+    setIsAssignMode,
+    selectedFolderForAssign,
+    setSelectedFolderForAssign,
+    addCategory: handleAddFolderCategory,
+    removeCategory: handleRemoveFolderCategory,
+    assignFolderToCategory: handleAssignFolderToCategory,
+    swapFolderCategories: handleSwapFolderCategoriesRaw,
+    handleFolderClickInAssignMode: handleFolderClickInAssignModeRaw,
+  } = useFolderCategories();
 
   // 네비게이션 숨김 (폴더생성/정렬모드/서재상세/공개전환모달)
   useHideNav(!!(showCreateFolder || isSortMode || selectedLibraryQuiz || publishConfirmQuizId));
@@ -158,151 +169,11 @@ function ReviewPageContent() {
     }
   }, [isSortMode]);
 
-  // 로컬 스토리지에서 카테고리 정보 로드
-  useEffect(() => {
-    const savedCategories = localStorage.getItem('review_folder_categories');
-    const savedMap = localStorage.getItem('review_folder_category_map');
-    const savedOrder = localStorage.getItem('review_folder_order_map');
-    if (savedCategories) {
-      try {
-        setFolderCategories(JSON.parse(savedCategories));
-      } catch (e) {
-        console.error('카테고리 로드 실패:', e);
-      }
-    }
-    if (savedMap) {
-      try {
-        setFolderCategoryMap(JSON.parse(savedMap));
-      } catch (e) {
-        console.error('카테고리 맵 로드 실패:', e);
-      }
-    }
-    if (savedOrder) {
-      try {
-        setFolderOrderMap(JSON.parse(savedOrder));
-      } catch (e) {
-        console.error('폴더 순서 로드 실패:', e);
-      }
-    }
-  }, []);
-
-  // 카테고리 정보를 로컬 스토리지에 저장
-  const saveFolderCategories = (
-    categories: { id: string; name: string }[],
-    map: Record<string, string>,
-    order?: Record<string, number>
-  ) => {
-    localStorage.setItem('review_folder_categories', JSON.stringify(categories));
-    localStorage.setItem('review_folder_category_map', JSON.stringify(map));
-    if (order) {
-      localStorage.setItem('review_folder_order_map', JSON.stringify(order));
-    }
-  };
-
-  // 카테고리 추가 (최대 8개)
-  const handleAddFolderCategory = (name: string) => {
-    if (!name.trim()) return;
-    if (folderCategories.length >= 8) {
-      alert('카테고리는 최대 8개까지 추가할 수 있습니다.');
-      return;
-    }
-    const newCategory = {
-      id: `fcat_${Date.now()}`,
-      name: name.trim(),
-    };
-    const newCategories = [...folderCategories, newCategory];
-    setFolderCategories(newCategories);
-    saveFolderCategories(newCategories, folderCategoryMap, folderOrderMap);
-  };
-
-  // 카테고리 삭제
-  const handleRemoveFolderCategory = (categoryId: string) => {
-    const newCategories = folderCategories.filter(c => c.id !== categoryId);
-    // 해당 카테고리의 폴더들은 미분류로 변경
-    const newMap = { ...folderCategoryMap };
-    Object.keys(newMap).forEach(folderId => {
-      if (newMap[folderId] === categoryId) {
-        delete newMap[folderId];
-      }
-    });
-    setFolderCategories(newCategories);
-    setFolderCategoryMap(newMap);
-    saveFolderCategories(newCategories, newMap, folderOrderMap);
-  };
-
-  // 폴더를 카테고리에 배정 (분류 모드 유지)
-  const handleAssignFolderToCategory = (folderId: string, categoryId: string | null) => {
-    const newMap = { ...folderCategoryMap };
-    if (categoryId) {
-      newMap[folderId] = categoryId;
-    } else {
-      delete newMap[folderId];
-    }
-    setFolderCategoryMap(newMap);
-    saveFolderCategories(folderCategories, newMap, folderOrderMap);
-    setSelectedFolderForAssign(null);
-    // 분류 모드는 유지 (사용자가 종료 버튼 클릭 시에만 종료)
-  };
-
-  // 두 폴더의 카테고리 또는 위치 교환
-  const handleSwapFolderCategories = (folderId1: string, folderId2: string) => {
-    const cat1 = folderCategoryMap[folderId1];
-    const cat2 = folderCategoryMap[folderId2];
-
-    // 같은 카테고리 내에 있으면 순서만 교환
-    if (cat1 === cat2 || (!cat1 && !cat2)) {
-      const newOrderMap = { ...folderOrderMap };
-      // 순서가 없으면 현재 인덱스 기반으로 초기화
-      const sameCategoryFolders = customFolders
-        .filter(f => (cat1 ? folderCategoryMap[f.id] === cat1 : !folderCategoryMap[f.id]))
-        .sort((a, b) => (folderOrderMap[a.id] ?? 999) - (folderOrderMap[b.id] ?? 999));
-
-      // 현재 인덱스 찾기
-      const idx1 = sameCategoryFolders.findIndex(f => f.id === folderId1);
-      const idx2 = sameCategoryFolders.findIndex(f => f.id === folderId2);
-
-      if (idx1 !== -1 && idx2 !== -1) {
-        // 실제 인덱스로 순서 교환
-        newOrderMap[folderId1] = idx2;
-        newOrderMap[folderId2] = idx1;
-        setFolderOrderMap(newOrderMap);
-        saveFolderCategories(folderCategories, folderCategoryMap, newOrderMap);
-      }
-      setSelectedFolderForAssign(null);
-      return;
-    }
-
-    // 다른 카테고리면 카테고리 교환
-    const newMap = { ...folderCategoryMap };
-    if (cat2) {
-      newMap[folderId1] = cat2;
-    } else {
-      delete newMap[folderId1];
-    }
-    if (cat1) {
-      newMap[folderId2] = cat1;
-    } else {
-      delete newMap[folderId2];
-    }
-
-    setFolderCategoryMap(newMap);
-    saveFolderCategories(folderCategories, newMap, folderOrderMap);
-    setSelectedFolderForAssign(null);
-  };
-
-  // 분류 모드에서 폴더 클릭 핸들러
-  const handleFolderClickInAssignMode = (folderId: string) => {
-    if (!selectedFolderForAssign) {
-      // 선택된 폴더가 없으면 이 폴더를 선택
-      setSelectedFolderForAssign(folderId);
-    } else if (selectedFolderForAssign === folderId) {
-      // 같은 폴더를 다시 클릭하면 선택 해제
-      setSelectedFolderForAssign(null);
-    } else {
-      // 다른 폴더를 클릭하면 카테고리 교환
-      handleSwapFolderCategories(selectedFolderForAssign, folderId);
-    }
-  };
+  // 폴더 교환/클릭 래퍼 (customFolders 의존)
+  const handleSwapFolderCategories = (folderId1: string, folderId2: string) =>
+    handleSwapFolderCategoriesRaw(folderId1, folderId2, customFolders);
+  const handleFolderClickInAssignMode = (folderId: string) =>
+    handleFolderClickInAssignModeRaw(folderId, customFolders);
 
 
   const {
