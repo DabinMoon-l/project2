@@ -457,8 +457,6 @@ export default function ProfessorStatsPage() {
       </header>
 
       <div className="px-4 space-y-6">
-        {/* 리본과 콘텐츠 사이 간격 */}
-        <div className="pt-2" />
 
         {/* 요약 카드 2개 (가운데 정렬 + 숫자 크게) */}
         {data && (
