@@ -25,6 +25,7 @@ import {
   Timestamp,
   getDoc,
   getDocs,
+  writeBatch,
   db,
   type QueryDocumentSnapshot,
   type DocumentData,
@@ -606,32 +607,27 @@ export const useReview = (): UseReviewReturn => {
         restoreData,
       });
 
-      // 해당 퀴즈의 모든 solved 리뷰 삭제
-      for (const docSnap of solvedDocs.docs) {
-        await deleteDoc(docSnap.ref);
-      }
+      // 해당 퀴즈의 모든 wrong 리뷰 + quizResults도 병렬 조회
+      const [wrongDocs, resultsDocs] = await Promise.all([
+        getDocs(query(
+          collection(db, 'reviews'),
+          where('userId', '==', user.uid),
+          where('quizId', '==', quizId),
+          where('reviewType', '==', 'wrong')
+        )),
+        getDocs(query(
+          collection(db, 'quizResults'),
+          where('userId', '==', user.uid),
+          where('quizId', '==', quizId)
+        )),
+      ]);
 
-      // 해당 퀴즈의 모든 wrong 리뷰도 삭제
-      const wrongQuery = query(
-        collection(db, 'reviews'),
-        where('userId', '==', user.uid),
-        where('quizId', '==', quizId),
-        where('reviewType', '==', 'wrong')
-      );
-      const wrongDocs = await getDocs(wrongQuery);
-      for (const docSnap of wrongDocs.docs) {
-        await deleteDoc(docSnap.ref);
-      }
-
-      // quizResults에서 해당 기록 삭제
-      const resultsQuery = query(
-        collection(db, 'quizResults'),
-        where('userId', '==', user.uid),
-        where('quizId', '==', quizId)
-      );
-      const resultsDocs = await getDocs(resultsQuery);
-      for (const docSnap of resultsDocs.docs) {
-        await deleteDoc(docSnap.ref);
+      // writeBatch로 일괄 삭제 (순차 deleteDoc → 단일 배치)
+      const allDocs = [...solvedDocs.docs, ...wrongDocs.docs, ...resultsDocs.docs];
+      for (let i = 0; i < allDocs.length; i += 500) {
+        const batch = writeBatch(db);
+        allDocs.slice(i, i + 500).forEach(d => batch.delete(d.ref));
+        await batch.commit();
       }
 
       // quiz_completions에서 완료 기록 삭제
@@ -731,9 +727,11 @@ export const useReview = (): UseReviewReturn => {
         restoreData,
       });
 
-      // 삭제
-      for (const docSnap of filteredDocs) {
-        await deleteDoc(docSnap.ref);
+      // writeBatch로 일괄 삭제
+      for (let i = 0; i < filteredDocs.length; i += 500) {
+        const batch = writeBatch(db);
+        filteredDocs.slice(i, i + 500).forEach(d => batch.delete(d.ref));
+        await batch.commit();
       }
     } catch (err) {
       console.error('오답 폴더 삭제 실패:', err);
@@ -791,9 +789,11 @@ export const useReview = (): UseReviewReturn => {
         restoreData,
       });
 
-      // 삭제
-      for (const docSnap of wrongDocs.docs) {
-        await deleteDoc(docSnap.ref);
+      // writeBatch로 일괄 삭제
+      for (let i = 0; i < wrongDocs.docs.length; i += 500) {
+        const batch = writeBatch(db);
+        wrongDocs.docs.slice(i, i + 500).forEach(d => batch.delete(d.ref));
+        await batch.commit();
       }
     } catch (err) {
       console.error('오답 폴더 삭제 실패:', err);
@@ -856,13 +856,18 @@ export const useReview = (): UseReviewReturn => {
         restoreData,
       });
 
-      // bookmark 전용 리뷰는 삭제
-      for (const docSnap of bookmarkDocs.docs) {
-        await deleteDoc(docSnap.ref);
-      }
-      // 다른 타입 리뷰의 isBookmarked 플래그만 해제
-      for (const docSnap of nonBookmarkFlagged) {
-        await updateDoc(docSnap.ref, { isBookmarked: false });
+      // writeBatch로 일괄 처리 (삭제 + 플래그 해제)
+      const allBatchDocs = [...bookmarkDocs.docs, ...nonBookmarkFlagged];
+      for (let i = 0; i < allBatchDocs.length; i += 500) {
+        const batch = writeBatch(db);
+        allBatchDocs.slice(i, i + 500).forEach(d => {
+          if (bookmarkDocs.docs.includes(d)) {
+            batch.delete(d.ref);
+          } else {
+            batch.update(d.ref, { isBookmarked: false });
+          }
+        });
+        await batch.commit();
       }
     } catch (err) {
       console.error('찜한 문제 폴더 삭제 실패:', err);
@@ -912,15 +917,17 @@ export const useReview = (): UseReviewReturn => {
       const data = deletedDoc.data();
       const restoreData = data.restoreData;
 
-      // 타입에 따라 복원
+      // 타입에 따라 복원 (writeBatch로 일괄 처리)
       if (data.type === 'solved' && restoreData?.solvedReviews) {
-        // 푼 문제 복원 - reviews 컬렉션에 다시 추가
-        for (const review of restoreData.solvedReviews) {
-          const { id, ...reviewData } = review;
-          await addDoc(collection(db, 'reviews'), {
-            ...reviewData,
-            createdAt: serverTimestamp(),
+        // 푼 문제 복원 - writeBatch로 일괄 추가
+        for (let i = 0; i < restoreData.solvedReviews.length; i += 500) {
+          const batch = writeBatch(db);
+          restoreData.solvedReviews.slice(i, i + 500).forEach((review: any) => {
+            const { id, ...reviewData } = review;
+            const newRef = doc(collection(db, 'reviews'));
+            batch.set(newRef, { ...reviewData, createdAt: serverTimestamp() });
           });
+          await batch.commit();
         }
         // quiz_completions 복원
         try {
@@ -934,22 +941,25 @@ export const useReview = (): UseReviewReturn => {
           console.error('quiz_completions 복원 실패:', e);
         }
       } else if (data.type === 'wrong' && restoreData?.wrongReviews) {
-        // 오답 복원
-        for (const review of restoreData.wrongReviews) {
-          const { id, ...reviewData } = review;
-          await addDoc(collection(db, 'reviews'), {
-            ...reviewData,
-            createdAt: serverTimestamp(),
+        // 오답 복원 - writeBatch로 일괄 추가
+        for (let i = 0; i < restoreData.wrongReviews.length; i += 500) {
+          const batch = writeBatch(db);
+          restoreData.wrongReviews.slice(i, i + 500).forEach((review: any) => {
+            const { id, ...reviewData } = review;
+            const newRef = doc(collection(db, 'reviews'));
+            batch.set(newRef, { ...reviewData, createdAt: serverTimestamp() });
           });
+          await batch.commit();
         }
       } else if (data.type === 'bookmark' && restoreData?.bookmarkedReviewIds) {
-        // 찜 복원 - isBookmarked를 true로 변경
-        for (const reviewId of restoreData.bookmarkedReviewIds) {
-          try {
-            await updateDoc(doc(db, 'reviews', reviewId), { isBookmarked: true });
-          } catch (e) {
-            console.error('리뷰 복원 실패:', reviewId, e);
-          }
+        // 찜 복원 - writeBatch로 isBookmarked 일괄 복원
+        const reviewIds = restoreData.bookmarkedReviewIds as string[];
+        for (let i = 0; i < reviewIds.length; i += 500) {
+          const batch = writeBatch(db);
+          reviewIds.slice(i, i + 500).forEach((reviewId: string) => {
+            batch.update(doc(db, 'reviews', reviewId), { isBookmarked: true });
+          });
+          await batch.commit();
         }
       } else if (data.type === 'custom' && restoreData?.folderData) {
         // 커스텀 폴더 복원
