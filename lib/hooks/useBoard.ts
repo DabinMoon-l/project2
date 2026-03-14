@@ -714,27 +714,18 @@ export const useMyComments = (skip = false): UseMyCommentsReturn => {
         // 클라이언트 측에서 최신순 정렬
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
-      // 게시글 제목 가져오기
+      // 게시글 제목 가져오기 (전체 병렬)
       const postIds = [...new Set(myComments.map(c => c.postId))];
       const postTitles = new Map<string, string>();
 
-      // 30개씩 나눠서 조회 (Firestore 제한)
-      for (let i = 0; i < postIds.length; i += 30) {
-        const chunk = postIds.slice(i, i + 30);
-        const postsPromises = chunk.map(async (postId) => {
-          try {
-            const postDoc = await getDoc(doc(db, 'posts', postId));
-            if (postDoc.exists()) {
-              postTitles.set(postId, postDoc.data().title || '삭제된 게시글');
-            } else {
-              postTitles.set(postId, '삭제된 게시글');
-            }
-          } catch {
-            postTitles.set(postId, '삭제된 게시글');
-          }
-        });
-        await Promise.all(postsPromises);
-      }
+      await Promise.all(postIds.map(async (postId) => {
+        try {
+          const postDoc = await getDoc(doc(db, 'posts', postId));
+          postTitles.set(postId, postDoc.exists() ? (postDoc.data().title || '삭제된 게시글') : '삭제된 게시글');
+        } catch {
+          postTitles.set(postId, '삭제된 게시글');
+        }
+      }));
 
       // 댓글에 게시글 제목 추가
       const commentsWithTitle = myComments.map(comment => ({
