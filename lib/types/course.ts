@@ -3,9 +3,10 @@
  */
 
 /**
- * 과목 ID
+ * 과목 ID — 기본 3과목 + 동적 확장 가능
+ * (string & {}) 패턴으로 자동완성 유지하면서 임의 문자열 허용
  */
-export type CourseId = 'biology' | 'pathophysiology' | 'microbiology';
+export type CourseId = 'biology' | 'pathophysiology' | 'microbiology' | (string & {});
 
 /**
  * 반 ID
@@ -22,7 +23,7 @@ export type Semester = 1 | 2;
  */
 export interface Course {
   /** 과목 ID */
-  id: CourseId;
+  id: string;
   /** 과목명 (한글) */
   name: string;
   /** 과목명 (영문) */
@@ -99,7 +100,10 @@ export interface CourseAssignment {
 /**
  * 과목 상수 데이터
  */
-export const COURSES: Record<CourseId, Course> = {
+/**
+ * 기본 과목 상수 (Firestore courses 컬렉션의 폴백)
+ */
+export const COURSES: Record<string, Course> = {
   biology: {
     id: 'biology',
     name: '생물학',
@@ -209,10 +213,10 @@ export function getAvailableGrades(currentSemester: Semester): number[] {
 }
 
 /**
- * 과목 정보 가져오기
+ * 과목 정보 가져오기 (COURSES 상수 기반, 동적 과목은 CourseContext 사용)
  */
-export function getCourse(courseId: CourseId): Course {
-  return COURSES[courseId];
+export function getCourse(courseId: string): Course | null {
+  return COURSES[courseId] || null;
 }
 
 /**
