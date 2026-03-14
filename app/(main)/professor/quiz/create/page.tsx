@@ -11,7 +11,6 @@ import { useCourse } from '@/lib/contexts';
 import { useProfessorQuiz, type QuizInput, type Difficulty } from '@/lib/hooks/useProfessorQuiz';
 import type { QuizType } from '@/components/professor/QuizEditorForm';
 import type { CourseId } from '@/lib/types/course';
-import { COURSES } from '@/lib/types/course';
 import { generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import dynamic from 'next/dynamic';
 import {
@@ -83,7 +82,7 @@ const DIFFICULTY_OPTIONS: { value: Difficulty; label: string }[] = [
 export default function ProfessorQuizCreatePage() {
   const router = useRouter();
   const { user } = useAuth();
-  const { semesterSettings, userCourseId } = useCourse();
+  const { semesterSettings, userCourseId, getCourseById, courseList } = useCourse();
   const { createQuiz, error, clearError } = useProfessorQuiz();
 
   // 단계 관리
@@ -1036,7 +1035,7 @@ export default function ProfessorQuizCreatePage() {
   };
 
   // 과목 정보
-  const selectedCourse = selectedCourseId ? COURSES[selectedCourseId] : null;
+  const selectedCourse = selectedCourseId ? getCourseById(selectedCourseId) : null;
   const quizTypeLabel = quizType === 'midterm' ? '중간' : quizType === 'final' ? '기말' : quizType === 'past' ? `기출 (${pastYear} ${pastExamType === 'midterm' ? '중간' : '기말'})` : quizType === 'independent' ? '단독' : '';
 
   return (
@@ -1285,7 +1284,7 @@ export default function ProfessorQuizCreatePage() {
                   과목 <span className="text-[#8B1A1A]">*</span>
                 </label>
                 <div className="grid grid-cols-3 gap-2">
-                  {(Object.values(COURSES) as Array<{ id: CourseId; name: string }>).map((course) => (
+                  {courseList.map((course) => (
                     <motion.button
                       key={course.id}
                       type="button"

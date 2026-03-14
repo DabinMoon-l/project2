@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useCourse } from '@/lib/contexts';
-import { COURSES } from '@/lib/types/course';
 import type { Semester } from '@/lib/types/course';
 
 /**
@@ -11,7 +10,7 @@ import type { Semester } from '@/lib/types/course';
  * 교수님이 현재 연도와 학기를 설정할 수 있는 컴포넌트
  */
 export function SemesterSettingsCard() {
-  const { semesterSettings, updateSemesterSettings, loading } = useCourse();
+  const { semesterSettings, updateSemesterSettings, loading, courseList } = useCourse();
   const [isSaving, setIsSaving] = useState(false);
   const [editMode, setEditMode] = useState(false);
 
@@ -20,7 +19,7 @@ export function SemesterSettingsCard() {
   const [tempSemester, setTempSemester] = useState<Semester>(semesterSettings?.currentSemester || 1);
 
   // 현재 학기에 맞는 과목 목록
-  const currentCourses = Object.values(COURSES).filter(
+  const currentCourses = courseList.filter(
     (course) => course.semester === (semesterSettings?.currentSemester || 1)
   );
 
@@ -170,7 +169,7 @@ export function SemesterSettingsCard() {
           <div className="p-3 bg-[#EBE5D9] rounded-lg">
             <span className="text-[#5C5C5C] text-sm block mb-2">변경 시 수강 가능 과목</span>
             <div className="flex flex-wrap gap-2">
-              {Object.values(COURSES)
+              {courseList
                 .filter((course) => course.semester === tempSemester)
                 .map((course) => (
                   <span

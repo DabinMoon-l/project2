@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AnimatedUnderlineTabs from '@/components/common/AnimatedUnderlineTabs';
 /* eslint-disable @next/next/no-img-element */
-import { COURSES, type CourseId } from '@/lib/types/course';
+import type { CourseId } from '@/lib/types/course';
 import {
   useProfessorStudents,
   type StudentDetail,
@@ -54,13 +54,14 @@ export default function StudentMonitoringPage() {
     clearError,
   } = useProfessorStudents();
 
-  const { userCourseId, setProfessorCourse, assignedCourses } = useCourse();
+  const { userCourseId, setProfessorCourse, assignedCourses, courseList } = useCourse();
   const courseIds = useMemo(() => {
+    const allIds = courseList.map(c => c.id) as CourseId[];
     if (assignedCourses.length > 0) {
-      return ALL_COURSE_IDS.filter(id => assignedCourses.includes(id));
+      return allIds.filter(id => assignedCourses.includes(id));
     }
-    return ALL_COURSE_IDS;
-  }, [assignedCourses]);
+    return allIds;
+  }, [assignedCourses, courseList]);
 
   const [selectedClass, setSelectedClass] = useState<ClassType | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -304,19 +305,18 @@ export default function StudentMonitoringPage() {
 // 과목 리본 스와이프 헤더
 // ============================================================
 
-const ALL_COURSE_IDS: CourseId[] = ['biology', 'microbiology', 'pathophysiology'];
-
 function StudentsRibbonHeader({
   currentCourseId,
   onCourseChange,
-  courseIds = ALL_COURSE_IDS,
+  courseIds,
 }: {
   currentCourseId: CourseId;
   onCourseChange: (courseId: CourseId) => void;
-  courseIds?: CourseId[];
+  courseIds: CourseId[];
 }) {
+  const { getCourseById } = useCourse();
   const currentIndex = courseIds.indexOf(currentCourseId);
-  const course = COURSES[currentCourseId];
+  const course = getCourseById(currentCourseId);
   const ribbonImage = course?.studentsRibbonImage || '/images/biology-students-ribbon.png';
   const ribbonScale = course?.studentsRibbonScale || 1;
 

@@ -11,7 +11,7 @@ import { SPRING_TAP, TAP_SCALE } from '@/lib/constants/springs';
 import { usePosts, usePinnedPosts, type Post, type Comment, type BoardTag, BOARD_TAGS } from '@/lib/hooks/useBoard';
 import { useCourse } from '@/lib/contexts/CourseContext';
 import { useUser } from '@/lib/contexts/UserContext';
-import { COURSES, type CourseId, getCourseList } from '@/lib/types/course';
+import { type CourseId } from '@/lib/types/course';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
 /** 기본 토끼 이미지 경로 */
 const DEFAULT_RABBIT_IMAGE = '/rabbit/default-news.png';
@@ -451,7 +451,7 @@ function NewspaperSkeleton() {
  */
 export default function BoardPage() {
   const router = useRouter();
-  const { semesterSettings, userCourseId, setProfessorCourse, assignedCourses } = useCourse();
+  const { semesterSettings, userCourseId, setProfessorCourse, assignedCourses, getCourseById, courseList: allCourses } = useCourse();
   const { profile } = useUser();
 
   // 교수님 여부 확인
@@ -478,12 +478,11 @@ export default function BoardPage() {
 
   // 과목 목록 (교수님용 — assignedCourses 기반 필터링)
   const courseList = useMemo(() => {
-    const all = getCourseList();
     if (assignedCourses.length > 0) {
-      return all.filter(c => assignedCourses.includes(c.id));
+      return allCourses.filter(c => assignedCourses.includes(c.id));
     }
-    return all;
-  }, [assignedCourses]);
+    return allCourses;
+  }, [assignedCourses, allCourses]);
 
   // 검색
   const [searchQuery, setSearchQuery] = useState('');
@@ -711,7 +710,7 @@ export default function BoardPage() {
   const volNumber = currentYear - 2025; // 2026년 = 1, 2027년 = 2, ...
   const semesterOrdinal = currentSemester === 1 ? '1st' : '2nd';
   // profile에서 courseId를 가져와서 과목명 조회
-  const userCourse = profile?.courseId ? COURSES[profile.courseId as CourseId] : null;
+  const userCourse = profile?.courseId ? getCourseById(profile.courseId) : null;
   const courseName = userCourse?.nameEn || '';
 
 

@@ -10,7 +10,7 @@ import { useExpandSource } from '@/lib/hooks/useExpandSource';
 import { TAP_SCALE } from '@/lib/constants/springs';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse, useUser } from '@/lib/contexts';
-import { COURSES, type CourseId, getDefaultQuizTab, getPastExamOptions, type PastExamOption } from '@/lib/types/course';
+import { type CourseId, getDefaultQuizTab, getPastExamOptions, type PastExamOption } from '@/lib/types/course';
 import { type ProfessorQuiz, type QuizTypeFilter } from '@/lib/hooks/useProfessorQuiz';
 import { calcFeedbackScore, getFeedbackLabel } from '@/lib/utils/feedbackScore';
 import { generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
@@ -31,7 +31,6 @@ import {
   FIXED_CARDS,
   PROF_QUIZ_CAROUSEL_KEY,
   PROF_QUIZ_SCROLL_KEY,
-  ALL_COURSE_IDS,
   ProfSectionTabs,
 } from './profQuizPageParts';
 import type { QuizFeedbackInfo, CarouselCard } from './profQuizPageParts';
@@ -740,14 +739,15 @@ function ProfessorNewsCarousel({
 function CourseRibbonHeader({
   currentCourseId,
   onCourseChange,
-  courseIds = ALL_COURSE_IDS,
+  courseIds,
 }: {
   currentCourseId: CourseId;
   onCourseChange: (courseId: CourseId) => void;
-  courseIds?: CourseId[];
+  courseIds: CourseId[];
 }) {
+  const { getCourseById } = useCourse();
   const currentIndex = courseIds.indexOf(currentCourseId);
-  const course = COURSES[currentCourseId];
+  const course = getCourseById(currentCourseId);
   const ribbonImage = course?.quizRibbonImage || '/images/biology-quiz-ribbon.png';
   const ribbonScale = course?.quizRibbonScale || 1;
 
@@ -987,13 +987,14 @@ function SkeletonCard() {
 export default function ProfessorQuizListPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const { userCourseId, setProfessorCourse, assignedCourses } = useCourse();
+  const { userCourseId, setProfessorCourse, assignedCourses, courseList, getCourseById } = useCourse();
   const courseIds = useMemo(() => {
+    const allIds = courseList.map(c => c.id) as CourseId[];
     if (assignedCourses.length > 0) {
-      return ALL_COURSE_IDS.filter(id => assignedCourses.includes(id));
+      return allIds.filter(id => assignedCourses.includes(id));
     }
-    return ALL_COURSE_IDS;
-  }, [assignedCourses]);
+    return allIds;
+  }, [assignedCourses, courseList]);
   const { profile } = useUser();
 
   // 과목별 퀴즈 통합 로드 (useProfessorQuiz ×3 → 단일 fetch + state)
@@ -1655,7 +1656,7 @@ export default function ProfessorQuizListPage() {
                       folderName,
                       userName: profile?.nickname || '',
                       studentId: '',
-                      courseName: userCourseId ? COURSES[userCourseId]?.name : undefined,
+                      courseName: userCourseId ? getCourseById(userCourseId)?.name : undefined,
                     });
                   } catch (err) {
                     console.error('PDF 다운로드 실패:', err);
