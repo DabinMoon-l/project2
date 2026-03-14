@@ -152,8 +152,8 @@ export default function ClassComparison({ classStats, students, onClassClick }: 
           {bars.map((bar, i) => {
             const c = CLASS_COLORS[bar.classId] || CLASS_COLORS.A;
             const cx = padL + gap * i + gap / 2;
-            const hasDat = bar.count > 0 && bar.mean > 0;
-            const meanY = hasDat ? toY(bar.mean) : baseY;
+            const hasDat = bar.count > 0;
+            const meanY = hasDat && bar.mean > 0 ? toY(bar.mean) : baseY;
             const barH = baseY - meanY;
 
             return (
@@ -195,8 +195,8 @@ export default function ClassComparison({ classStats, students, onClassClick }: 
         {bars.map((bar, i) => {
           const c = CLASS_COLORS[bar.classId] || CLASS_COLORS.A;
           const cx = padL + gap * i + gap / 2;
-          const hasDat = bar.count > 0 && bar.mean > 0;
-          const meanY = hasDat ? toY(bar.mean) : baseY;
+          const hasDat = bar.count > 0;
+          const meanY = hasDat && bar.mean > 0 ? toY(bar.mean) : baseY;
 
           return (
             <g key={`label-${bar.classId}`}
