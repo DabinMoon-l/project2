@@ -285,7 +285,9 @@ export default function ProfessorStatsPage() {
 
         const exps = rawStudentData.map(s => s.totalExp).sort((a, b) => a - b);
         const medianExp = exps[Math.floor(exps.length / 2)] || 0;
-        const RATE_THRESHOLD = 50;
+        // 정답률도 동적 중앙값 (weeklyStats CF와 동일 기준)
+        const rates = rawStudentData.map(s => s.correctRate).sort((a, b) => a - b);
+        const medianRate = rates[Math.floor(rates.length / 2)] || 0;
 
         let passionate = 0, hardworking = 0, efficient = 0, atRiskCluster = 0;
         const byClass: Record<string, { passionate: number; hardworking: number; efficient: number; atRisk: number }> = {};
@@ -293,7 +295,7 @@ export default function ProfessorStatsPage() {
 
         rawStudentData.forEach(s => {
           const highExp = s.totalExp >= medianExp && s.totalExp > 0;
-          const highRate = s.correctRate >= RATE_THRESHOLD;
+          const highRate = s.correctRate >= medianRate;
           const cls = s.classId;
           if (!byClass[cls]) byClass[cls] = { passionate: 0, hardworking: 0, efficient: 0, atRisk: 0 };
           if (!studentsByCluster[cls]) studentsByCluster[cls] = { passionate: [], hardworking: [], efficient: [], atRisk: [] };
