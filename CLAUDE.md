@@ -475,20 +475,31 @@ AIQuizContainer 플로팅 버튼 → AIQuizModal (PDF/PPTX/이미지 업로드)
 
 ## 교수 통계 대시보드
 
-### 5축 레이더 차트 (10분마다 사전 계산)
+### 5축 레이더 차트 (10분마다 사전 계산, `computeRadarNormScheduled`)
 
 | 축 | 이름 | 계산 | 스케일 |
 |----|------|------|--------|
-| 1 | 퀴즈 | 가중 석차 점수 (첫 시도만) | 0~100 |
+| 1 | 퀴즈 | 교수 퀴즈 평균 점수 (첫 시도만, PROF_TYPES 필터) | 원점수 0~100 |
 | 2 | 활동량 | totalExp | 백분위 |
-| 3 | 배틀 | 배틀 전적 기반 (미구현 — 현재 0 고정) | 백분위 |
-| 4 | 소통 | 게시글×3 + 피드백 | 백분위 |
-| 5 | 출제력 | 커스텀 퀴즈 수 | 백분위 |
+| 3 | 배틀 | 배틀 참여수 `tekkenTotal` (봇 포함) | 백분위 |
+| 4 | 소통 | 게시글×3 + 댓글×2 + 피드백 | 백분위 |
+| 5 | 출제력 | 학생이 만든 퀴즈 수 (AI 생성 + 커스텀) | 백분위 |
+
+### 교수 통계 페이지 UI
+
+- **필터**: 교수님 퀴즈 고정 (SourceFilter 삭제됨)
+- **반별 비교**: "성적 비교" (평균 ± SD 막대) / "참여도 비교" (EXP 박스플롯) 토글
+- **반별 종합 역량**: 삭제됨 (ClassProfileRadar)
+- **안정성 지표**: 삭제됨 (StabilityIndex)
+- **챕터 분석**: 레이더 차트 + 드롭다운 (전체/챕터별)
 
 ### 학생 분석
 
-- **위험 학생**: Z-score < -1.5 → 주의, < -2 → 위험
-- **4군집**: passionate (EXP↑정답↑), hardworking (EXP↑정답↓), efficient (EXP↓정답↑), atRisk (EXP↓정답↓)
+- **위험 학생**: Z-score < -1.5 → 주의, < -2 → 위험 (교수 퀴즈 평균 점수 기반)
+- **4군집**: `quizStats.averageScore` + `totalExp` 기반, 동적 medianRate/medianExp
+  - passionate (EXP↑성적↑), hardworking (EXP↑성적↓), efficient (EXP↓성적↑), atRisk (EXP↓성적↓)
+  - `highExp`: totalExp >= medianExp **&& > 0**, `highRate`: correctRate >= medianRate **&& > 0**
+  - EXP=0 또는 성적=0인 학생은 자동으로 이탈 위험군
 - **변별도**: 상위 27% - 하위 27% 정답률 (참여 ≥4명)
 
 ### 월별 리포트 (generateMonthlyReport)
@@ -637,7 +648,7 @@ onQuizComplete, onQuizCreate, onPostCreate, onCommentCreate, onFeedbackSubmit, g
 |----|------|------|
 | tekkenPoolRefillScheduled | 매일 03:00 | 과목당 300문제 |
 | computeRankingsScheduled | 10분 | 개인/팀 랭킹 |
-| computeRadarNormScheduled | 10분 | 5축 레이더 |
+| computeRadarNormScheduled | 10분 | 5축 레이더 (퀴즈 원점수/배틀 참여수/소통/출제력/활동량) |
 | collectWeeklyStatsScheduled | 매주 월 00:00 | 주별 통계 |
 | retryQueuedJobs | 매 1분 | AI Job 큐 드레인 + 타임아웃 처리 |
 | cleanupExpiredJobs | 매시간 | 만료 Job + Material 캐시 정리 |
