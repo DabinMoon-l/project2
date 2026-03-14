@@ -1,7 +1,16 @@
 'use client';
 
+import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import type { ClassStats } from '@/lib/hooks/useProfessorStats';
+import type { StudentData } from '@/lib/hooks/useProfessorStudents';
+
+type CompareMode = 'score' | 'engagement';
+
+const MODE_OPTIONS: { value: CompareMode; label: string }[] = [
+  { value: 'score', label: '성적 비교' },
+  { value: 'engagement', label: '참여도 비교' },
+];
 
 const CLASS_COLORS: Record<string, { main: string; fill: string; label: string }> = {
   A: { main: '#8B1A1A', fill: 'rgba(139,26,26,0.15)', label: 'A반' },
@@ -12,12 +21,55 @@ const CLASS_COLORS: Record<string, { main: string; fill: string; label: string }
 
 interface Props {
   classStats: ClassStats[];
+  students: StudentData[];
   onClassClick?: (classId: string) => void;
 }
 
-export default function ClassComparison({ classStats, onClassClick }: Props) {
-  // Y축 최댓값 항상 100 고정
-  const maxVal = 100;
+// 간단한 통계 함수
+function calcMean(arr: number[]): number {
+  if (arr.length === 0) return 0;
+  return arr.reduce((s, v) => s + v, 0) / arr.length;
+}
+function calcSd(arr: number[]): number {
+  if (arr.length < 2) return 0;
+  const m = calcMean(arr);
+  return Math.sqrt(arr.reduce((s, v) => s + (v - m) ** 2, 0) / (arr.length - 1));
+}
+
+interface BarData {
+  classId: string;
+  mean: number;
+  sd: number;
+  count: number;
+}
+
+export default function ClassComparison({ classStats, students, onClassClick }: Props) {
+  const [mode, setMode] = useState<CompareMode>('score');
+
+  // 참여도(EXP) 데이터 계산
+  const engagementData = useMemo<BarData[]>(() => {
+    const classIds = classStats.map(c => c.classId);
+    return classIds.map(classId => {
+      const classStudents = students.filter(s => s.classId === classId);
+      const exps = classStudents.map(s => s.totalExp || 0);
+      return {
+        classId,
+        mean: calcMean(exps),
+        sd: calcSd(exps),
+        count: classStudents.length,
+      };
+    });
+  }, [classStats, students]);
+
+  // 현재 모드에 따른 데이터
+  const bars = mode === 'score'
+    ? classStats.map(cls => ({ classId: cls.classId, mean: cls.mean, sd: cls.sd, count: cls.studentCount }))
+    : engagementData;
+
+  // Y축 최댓값: 성적은 100 고정, 참여도는 동적
+  const maxVal = mode === 'score'
+    ? 100
+    : Math.max(100, ...bars.map(b => b.mean + b.sd)) * 1.15;
 
   const chartW = 360;
   const chartH = 220;
@@ -28,17 +80,52 @@ export default function ClassComparison({ classStats, onClassClick }: Props) {
   const plotW = chartW - padL - padR;
   const plotH = chartH - padT - padB;
 
-  const barCount = classStats.length || 4;
+  const barCount = bars.length || 4;
   const gap = plotW / barCount;
   const barW = Math.min(56, gap * 0.6);
 
   const toY = (v: number) => padT + plotH * (1 - v / maxVal);
   const baseY = toY(0);
 
+  // Y축 그리드 값
+  const yTicks = mode === 'score'
+    ? [0, 25, 50, 75, 100]
+    : (() => {
+      const step = Math.ceil(maxVal / 4 / 50) * 50; // 50 단위
+      return [0, step, step * 2, step * 3, step * 4].filter(v => v <= maxVal * 1.05);
+    })();
+
   return (
     <div>
-      <h3 className="text-lg font-bold text-[#1A1A1A] mb-1">반별 성적 비교</h3>
-      <p className="text-[10px] text-[#5C5C5C] mb-3">평균 점수 (± SD) · 막대 클릭 시 클러스터 분석</p>
+      {/* 모드 토글 (SourceFilter 스타일) */}
+      <div className="flex gap-4 mb-4">
+        {MODE_OPTIONS.map(o => {
+          const active = mode === o.value;
+          return (
+            <button
+              key={o.value}
+              onClick={() => setMode(o.value)}
+              className="relative pb-1.5 text-lg font-bold transition-colors"
+              style={{ color: active ? '#1A1A1A' : '#5C5C5C' }}
+            >
+              {o.label}
+              {active && (
+                <motion.div
+                  layoutId="compare-underline"
+                  className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#1A1A1A]"
+                  transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <p className="text-[10px] text-[#5C5C5C] mb-3">
+        {mode === 'score'
+          ? '평균 점수 (± SD) · 막대 클릭 시 클러스터 분석'
+          : '평균 EXP (± SD)'}
+      </p>
 
       <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full">
         <defs>
@@ -48,7 +135,7 @@ export default function ClassComparison({ classStats, onClassClick }: Props) {
         </defs>
 
         {/* Y축 그리드 + 라벨 */}
-        {[0, 25, 50, 75, 100].map(v => {
+        {yTicks.map(v => {
           const y = toY(v);
           return (
             <g key={v}>
@@ -60,18 +147,17 @@ export default function ClassComparison({ classStats, onClassClick }: Props) {
           );
         })}
 
-        {/* 막대 + 에러바 (클립 영역 내) */}
+        {/* 막대 + 에러바 */}
         <g clipPath="url(#plot-clip)">
-          {classStats.map((cls, i) => {
-            const c = CLASS_COLORS[cls.classId];
+          {bars.map((bar, i) => {
+            const c = CLASS_COLORS[bar.classId] || CLASS_COLORS.A;
             const cx = padL + gap * i + gap / 2;
-            const hasDat = cls.scores.length > 0;
-            const meanY = hasDat ? toY(cls.mean) : baseY;
+            const hasDat = bar.count > 0 && bar.mean > 0;
+            const meanY = hasDat ? toY(bar.mean) : baseY;
             const barH = baseY - meanY;
 
             return (
-              <g key={cls.classId}>
-                {/* 막대 */}
+              <g key={bar.classId}>
                 {hasDat && barH > 0 && (
                   <motion.rect
                     x={cx - barW / 2}
@@ -86,18 +172,17 @@ export default function ClassComparison({ classStats, onClassClick }: Props) {
                   />
                 )}
 
-                {/* SD Error bar */}
-                {hasDat && cls.sd > 0 && (
+                {hasDat && bar.sd > 0 && (
                   <motion.g
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.5 + i * 0.1 }}
                   >
-                    <line x1={cx} y1={toY(Math.min(100, cls.mean + cls.sd))} x2={cx} y2={toY(Math.max(0, cls.mean - cls.sd))}
+                    <line x1={cx} y1={toY(Math.min(maxVal, bar.mean + bar.sd))} x2={cx} y2={toY(Math.max(0, bar.mean - bar.sd))}
                       stroke={c.main} strokeWidth={1.5} />
-                    <line x1={cx - 6} y1={toY(Math.min(100, cls.mean + cls.sd))} x2={cx + 6} y2={toY(Math.min(100, cls.mean + cls.sd))}
+                    <line x1={cx - 6} y1={toY(Math.min(maxVal, bar.mean + bar.sd))} x2={cx + 6} y2={toY(Math.min(maxVal, bar.mean + bar.sd))}
                       stroke={c.main} strokeWidth={1.5} />
-                    <line x1={cx - 6} y1={toY(Math.max(0, cls.mean - cls.sd))} x2={cx + 6} y2={toY(Math.max(0, cls.mean - cls.sd))}
+                    <line x1={cx - 6} y1={toY(Math.max(0, bar.mean - bar.sd))} x2={cx + 6} y2={toY(Math.max(0, bar.mean - bar.sd))}
                       stroke={c.main} strokeWidth={1.5} />
                   </motion.g>
                 )}
@@ -106,38 +191,35 @@ export default function ClassComparison({ classStats, onClassClick }: Props) {
           })}
         </g>
 
-        {/* 클릭 영역 + 라벨 (클립 밖) */}
-        {classStats.map((cls, i) => {
-          const c = CLASS_COLORS[cls.classId];
+        {/* 클릭 영역 + 라벨 */}
+        {bars.map((bar, i) => {
+          const c = CLASS_COLORS[bar.classId] || CLASS_COLORS.A;
           const cx = padL + gap * i + gap / 2;
-          const hasDat = cls.scores.length > 0;
-          const meanY = hasDat ? toY(cls.mean) : baseY;
+          const hasDat = bar.count > 0 && bar.mean > 0;
+          const meanY = hasDat ? toY(bar.mean) : baseY;
 
           return (
-            <g key={`label-${cls.classId}`}
+            <g key={`label-${bar.classId}`}
               className="cursor-pointer"
-              onClick={() => onClassClick?.(cls.classId)}
+              onClick={() => onClassClick?.(bar.classId)}
             >
-              {/* 투명 클릭 영역 */}
               <rect x={cx - gap / 2} y={padT} width={gap} height={chartH - padT}
                 fill="transparent" />
 
-              {/* 평균값 레이블 (SD 에러바 위에 배치) */}
               {hasDat && (
-                <text x={cx} y={Math.min(meanY - 8, toY(Math.min(100, cls.mean + cls.sd)) - 10)} textAnchor="middle"
+                <text x={cx} y={Math.min(meanY - 8, toY(Math.min(maxVal, bar.mean + bar.sd)) - 10)} textAnchor="middle"
                   fontSize={13} fill="#1A1A1A" fontWeight="bold">
-                  {cls.mean.toFixed(1)}
+                  {mode === 'score' ? bar.mean.toFixed(1) : Math.round(bar.mean)}
                 </text>
               )}
 
-              {/* X축 라벨 */}
               <text x={cx} y={baseY + 16} textAnchor="middle"
                 fontSize={13} fill="#1A1A1A" fontWeight="bold">
                 {c.label}
               </text>
               <text x={cx} y={baseY + 30} textAnchor="middle"
                 fontSize={11} fill="#5C5C5C">
-                {cls.studentCount}명
+                {bar.count}명
               </text>
             </g>
           );
