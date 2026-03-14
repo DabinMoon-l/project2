@@ -31,18 +31,20 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const rtdb = getDatabase(app);
 
-const NUM_USERS = 300;
+const NUM_STUDENTS = 300;
+const NUM_PROFESSORS = 5;
+const NUM_USERS = NUM_STUDENTS + NUM_PROFESSORS;
 const COURSES = ["biology", "microbiology"];
 const COURSE_ID = "biology"; // 하위 호환
 
 // ── 테스트 유저 생성 ──
 
 async function seedUsers() {
-  console.log(`유저 ${NUM_USERS}명 생성 중...`);
+  console.log(`학생 ${NUM_STUDENTS}명 생성 중...`);
   let batch = db.batch();
   let batchCount = 0;
 
-  for (let i = 0; i < NUM_USERS; i++) {
+  for (let i = 0; i < NUM_STUDENTS; i++) {
     const uid = `load-test-${String(i).padStart(4, "0")}`;
     const studentId = `99${String(i).padStart(6, "0")}`;
 
@@ -92,14 +94,67 @@ async function seedUsers() {
       await batch.commit();
       batch = db.batch();
       batchCount = 0;
-      console.log(`  ${i + 1}/${NUM_USERS} 유저 생성 완료`);
+      console.log(`  ${i + 1}/${NUM_STUDENTS} 학생 생성 완료`);
     }
   }
 
   if (batchCount > 0) {
     await batch.commit();
   }
-  console.log(`  ${NUM_USERS}명 유저 생성 완료`);
+  console.log(`  ${NUM_STUDENTS}명 학생 생성 완료`);
+}
+
+// ── 교수 유저 생성 ──
+
+async function seedProfessors() {
+  console.log(`교수 ${NUM_PROFESSORS}명 생성 중...`);
+  const batch = db.batch();
+
+  const professorConfigs = [
+    { email: "prof0@ccn.ac.kr", nickname: "교수0", courses: ["biology", "microbiology"] },
+    { email: "prof1@ccn.ac.kr", nickname: "교수1", courses: ["biology"] },
+    { email: "prof2@ccn.ac.kr", nickname: "교수2", courses: ["microbiology"] },
+    { email: "prof3@ccn.ac.kr", nickname: "교수3", courses: ["biology", "microbiology"] },
+    { email: "prof4@ccn.ac.kr", nickname: "교수4", courses: ["biology"] },
+  ];
+
+  for (let i = 0; i < NUM_PROFESSORS; i++) {
+    const uid = `load-test-prof-${i}`;
+    const cfg = professorConfigs[i];
+
+    try {
+      await auth.createUser({
+        uid,
+        email: cfg.email,
+        password: "loadtest1234",
+      });
+    } catch (e) {
+      // 이미 존재하면 무시
+    }
+
+    batch.set(db.doc(`users/${uid}`), {
+      uid,
+      email: cfg.email,
+      nickname: cfg.nickname,
+      role: "professor",
+      assignedCourses: cfg.courses,
+      totalExp: 0,
+      level: 1,
+      onboardingCompleted: true,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    // allowedProfessors 등록
+    batch.set(db.doc(`allowedProfessors/${cfg.email}`), {
+      courses: cfg.courses,
+      name: cfg.nickname,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  }
+
+  await batch.commit();
+  console.log(`  ${NUM_PROFESSORS}명 교수 생성 완료`);
 }
 
 // ── 교수님 퀴즈 생성 (캐러셀 퀴즈) ──
@@ -327,18 +382,97 @@ async function seedRtdb() {
 
 // ── 메인 ──
 
+// ── enrolledStudents (교수 학생 등록) ──
+
+async function seedEnrolledStudents() {
+  console.log("enrolledStudents 시드 중...");
+  for (const courseId of COURSES) {
+    let batch = db.batch();
+    let batchCount = 0;
+    const start = courseId === "biology" ? 0 : 150;
+    const end = courseId === "biology" ? 150 : 300;
+
+    for (let i = start; i < end; i++) {
+      const studentId = `99${String(i).padStart(6, "0")}`;
+      batch.set(db.doc(`enrolledStudents/${courseId}/students/${studentId}`), {
+        studentId,
+        isRegistered: true,
+        enrolledAt: FieldValue.serverTimestamp(),
+      });
+      batchCount++;
+      if (batchCount >= 499) {
+        await batch.commit();
+        batch = db.batch();
+        batchCount = 0;
+      }
+    }
+    if (batchCount > 0) await batch.commit();
+  }
+  console.log("  enrolledStudents 완료");
+}
+
+// ── 랭킹/레이더 사전 계산 문서 ──
+
+async function seedRankingsAndRadar() {
+  console.log("랭킹/레이더 사전계산 문서 생성 중...");
+  for (const courseId of COURSES) {
+    // 간단한 랭킹 문서 (교수 대시보드 읽기용)
+    const rankings = [];
+    const start = courseId === "biology" ? 0 : 150;
+    for (let i = 0; i < 150; i++) {
+      const idx = start + i;
+      rankings.push({
+        rank: i + 1,
+        uid: `load-test-${String(idx).padStart(4, "0")}`,
+        nickname: courseId === "biology" ? `테스터${idx}` : `미생물${idx - 150}`,
+        score: 1000 - i * 5,
+        totalExp: 500 - i,
+      });
+    }
+    await db.doc(`rankings/${courseId}`).set({
+      individual: rankings,
+      team: {},
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    // 레이더 정규화
+    const radarData = {};
+    for (let i = 0; i < 150; i++) {
+      const idx = start + i;
+      const uid = `load-test-${String(idx).padStart(4, "0")}`;
+      radarData[uid] = {
+        rank: Math.random() * 100,
+        growth: Math.random() * 100,
+        quizCreation: Math.random() * 100,
+        communication: Math.random() * 100,
+        review: Math.random() * 100,
+        activity: Math.random() * 100,
+      };
+    }
+    await db.doc(`radarNorm/${courseId}`).set({
+      data: radarData,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  }
+  console.log("  랭킹/레이더 생성 완료");
+}
+
 async function main() {
   console.log("=== Firebase 에뮬레이터 시드 데이터 생성 ===\n");
 
   await seedSettings();
   await seedUsers();
+  await seedProfessors();
   await seedQuizzes();
   await seedPosts();
   await seedRabbits();
   await seedTekkenPool();
+  await seedEnrolledStudents();
+  await seedRankingsAndRadar();
   await seedRtdb();
 
   console.log("\n=== 시드 완료! ===");
+  console.log(`학생 ${NUM_STUDENTS}명 + 교수 ${NUM_PROFESSORS}명`);
   console.log("에뮬레이터 UI: http://127.0.0.1:4000");
   console.log("\n다음 단계:");
   console.log("  node tests/load/generate-tokens-emulator.js");

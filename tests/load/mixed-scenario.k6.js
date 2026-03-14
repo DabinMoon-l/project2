@@ -1,7 +1,7 @@
 /**
- * k6 혼합 부하 테스트 — 300명 실제 사용 패턴
+ * k6 혼합 부하 테스트 — 300명 학생 + 5명 교수 동시접속
  *
- * 시나리오 분배 (300명, biology 150 + microbiology 150):
+ * 학생 시나리오 분배 (300명, biology 150 + microbiology 150):
  *    80명 — 퀴즈 풀기 (recordAttempt, 교수 캐러셀 퀴즈)
  *    40명 — 배틀 퀴즈 (joinMatchmaking → submitAnswer)
  *    30명 — 토끼 뽑기 (spinRabbitGacha → claimGachaRabbit)
@@ -10,6 +10,12 @@
  *    50명 — 복습 연습 (recordReviewPractice)
  *    30명 — 게시판 학술글 (콩콩이 AI 자동답변 트리거)
  *    20명 — 랭킹/레이더 조회 (Firestore read)
+ *
+ * 교수 시나리오 (5명, mixed_professor):
+ *    대시보드 통계 조회 (rankings + radarNorm)
+ *    학생 목록 쿼리 (enrolledStudents)
+ *    퀴즈 관리 (quizzes 목록 읽기)
+ *    피드백 조회 (feedbacks 쿼리)
  *
  * 에뮬레이터 대상:
  *   firebase emulators:start
@@ -27,6 +33,11 @@ import { SharedArray } from "k6/data";
 
 const tokens = new SharedArray("tokens", function () {
   return JSON.parse(open("./tokens.json"));
+});
+
+const profTokens = new SharedArray("profTokens", function () {
+  try { return JSON.parse(open("./prof-tokens.json")); }
+  catch { return []; }
 });
 
 // ── 설정 (에뮬레이터 기본) ──
@@ -76,6 +87,13 @@ const boardDuration = new Trend("board_academic_duration", true);
 // 랭킹/레이더 조회
 const rankingSuccess = new Rate("ranking_read_success");
 const rankingDuration = new Trend("ranking_read_duration", true);
+// 교수 시나리오
+const profStatsSuccess = new Rate("prof_stats_success");
+const profStatsDuration = new Trend("prof_stats_duration", true);
+const profStudentsSuccess = new Rate("prof_students_success");
+const profStudentsDuration = new Trend("prof_students_duration", true);
+const profQuizListSuccess = new Rate("prof_quiz_list_success");
+const profQuizListDuration = new Trend("prof_quiz_list_duration", true);
 // 공통
 const totalErrors = new Counter("total_errors");
 
@@ -84,10 +102,13 @@ const totalErrors = new Counter("total_errors");
 // VU 수 환경변수로 제어 (기본 300, 에뮬레이터는 K6_MAX_VUS=50 권장)
 const MAX_VUS = Number(__ENV.K6_MAX_VUS) || 300;
 
+const PROF_VUS = Number(__ENV.K6_PROF_VUS) || 5;
+
 export const options = {
   scenarios: {
     mixed_load: {
       executor: "ramping-vus",
+      exec: "studentScenario",
       startVUs: 0,
       stages: [
         { duration: "15s", target: Math.round(MAX_VUS * 0.33) },  // 워밍업
@@ -97,6 +118,13 @@ export const options = {
         { duration: "15s", target: 0 },                            // 쿨다운
       ],
     },
+    professor_load: {
+      executor: "constant-vus",
+      exec: "professorScenario",
+      vus: PROF_VUS,
+      duration: "120s",                                            // 학생과 동일 기간
+      startTime: "5s",                                             // 학생 워밍업 후 시작
+    },
   },
   thresholds: {
     quiz_submit_success: ["rate>0.85"],
@@ -105,6 +133,8 @@ export const options = {
     review_practice_success: ["rate>0.85"],
     board_academic_success: ["rate>0.85"],
     quiz_submit_duration: ["p(95)<30000"],
+    prof_stats_success: ["rate>0.90"],
+    prof_stats_duration: ["p(95)<10000"],
   },
 };
 
@@ -407,10 +437,92 @@ function doRankingRead(token) {
 }
 
 // ============================================================
+// 교수 시나리오
+// ============================================================
+
+// ── 교수 1: 대시보드 통계 (랭킹 + 레이더 동시 조회) ──
+
+function doProfStats(token) {
+  const courseId = __VU % 2 === 0 ? "biology" : "microbiology";
+
+  // 랭킹 문서 조회
+  const rankRes = http.get(`${FIRESTORE_BASE}/rankings/${courseId}`, {
+    headers: cfHeaders(token.idToken),
+    timeout: "15s",
+  });
+
+  // 레이더 정규화 조회
+  const radarRes = http.get(`${FIRESTORE_BASE}/radarNorm/${courseId}`, {
+    headers: cfHeaders(token.idToken),
+    timeout: "15s",
+  });
+
+  const total = rankRes.timings.duration + radarRes.timings.duration;
+  profStatsDuration.add(total);
+
+  const ok = check(rankRes, { "교수 랭킹 200": (r) => r.status === 200 }) &&
+    check(radarRes, { "교수 레이더 200": (r) => r.status === 200 });
+  profStatsSuccess.add(ok ? 1 : 0);
+  if (!ok) totalErrors.add(1);
+}
+
+// ── 교수 2: 학생 목록 쿼리 ──
+
+function doProfStudents(token) {
+  const courseId = __VU % 2 === 0 ? "biology" : "microbiology";
+
+  // enrolledStudents 서브컬렉션 목록 조회
+  const url = `${FIRESTORE_BASE}/enrolledStudents/${courseId}/students?pageSize=50`;
+  const res = http.get(url, {
+    headers: cfHeaders(token.idToken),
+    timeout: "15s",
+  });
+
+  profStudentsDuration.add(res.timings.duration);
+  const ok = check(res, { "교수 학생목록 200": (r) => r.status === 200 });
+  profStudentsSuccess.add(ok ? 1 : 0);
+  if (!ok) totalErrors.add(1);
+}
+
+// ── 교수 3: 퀴즈 목록 조회 ──
+
+function doProfQuizList(token) {
+  const courseId = __VU % 2 === 0 ? "biology" : "microbiology";
+
+  // 퀴즈 컬렉션 쿼리 (courseId 필터)
+  const query = {
+    structuredQuery: {
+      from: [{ collectionId: "quizzes" }],
+      where: {
+        fieldFilter: {
+          field: { fieldPath: "courseId" },
+          op: "EQUAL",
+          value: { stringValue: courseId },
+        },
+      },
+      orderBy: [{ field: { fieldPath: "createdAt" }, direction: "DESCENDING" }],
+      limit: 20,
+    },
+  };
+
+  const url = `${FIRESTORE_BASE}:runQuery`;
+  const res = http.post(url, JSON.stringify(query), {
+    headers: cfHeaders(token.idToken),
+    timeout: "15s",
+  });
+
+  profQuizListDuration.add(res.timings.duration);
+  const ok = check(res, { "교수 퀴즈목록 200": (r) => r.status === 200 });
+  profQuizListSuccess.add(ok ? 1 : 0);
+  if (!ok) totalErrors.add(1);
+}
+
+// ============================================================
 // 메인 실행
 // ============================================================
 
-export default function () {
+// 학생 시나리오 (mixed_load에서 호출)
+export function studentScenario() {
   const token = getToken();
   if (!token?.idToken) return;
 
@@ -427,8 +539,27 @@ export default function () {
     case "ranking": doRankingRead(token); break;
   }
 
-  // 실제 사용자처럼 간격
   sleep(Math.random() * 3 + 1);
+}
+
+// 교수 시나리오 (professor_load에서 호출)
+export function professorScenario() {
+  if (profTokens.length === 0) return;
+  const token = profTokens[__VU % profTokens.length];
+  if (!token?.idToken) return;
+
+  // 교수는 대시보드 → 학생목록 → 퀴즈목록 순회
+  const actions = [doProfStats, doProfStudents, doProfQuizList];
+  const action = actions[__ITER % actions.length];
+  action(token);
+
+  // 교수는 학생보다 느리게 조회 (5~10초 간격)
+  sleep(Math.random() * 5 + 5);
+}
+
+// default export (k6 호환)
+export default function () {
+  studentScenario();
 }
 
 // ── 요약 출력 ──
@@ -447,10 +578,12 @@ export function handleSummary(data) {
   };
 
   const text = `
-=== 300명 (biology 150 + micro 150) 부하 테스트 결과 ===
+=== 300명 학생 + 5명 교수 동시접속 부하 테스트 결과 ===
 
 총 요청: ${m.http_reqs?.values?.count || 0}
 총 에러: ${m.total_errors?.values?.count || 0}
+
+── 학생 시나리오 (300명, biology 150 + micro 150) ──
 
 [퀴즈 풀기 - 80명] (교수님 캐러셀 퀴즈, 2과목)
   ${fmt("quiz_submit_success")} | ${dur("quiz_submit_duration")}
@@ -477,6 +610,17 @@ export function handleSummary(data) {
 
 [랭킹/레이더 - 20명] (Firestore 읽기, 2과목)
   ${fmt("ranking_read_success")} | ${dur("ranking_read_duration")}
+
+── 교수 시나리오 (5명, 학생과 동시 실행) ──
+
+[대시보드 통계] (랭킹 + 레이더 동시)
+  ${fmt("prof_stats_success")} | ${dur("prof_stats_duration")}
+
+[학생 목록 조회] (enrolledStudents)
+  ${fmt("prof_students_success")} | ${dur("prof_students_duration")}
+
+[퀴즈 목록 조회] (courseId 필터)
+  ${fmt("prof_quiz_list_success")} | ${dur("prof_quiz_list_duration")}
 `;
 
   return {
@@ -500,6 +644,9 @@ export function handleSummary(data) {
       review: { success: m.review_practice_success?.values?.rate, p95: m.review_practice_duration?.values?.["p(95)"] },
       board: { success: m.board_academic_success?.values?.rate, p95: m.board_academic_duration?.values?.["p(95)"] },
       ranking: { success: m.ranking_read_success?.values?.rate, p95: m.ranking_read_duration?.values?.["p(95)"] },
+      profStats: { success: m.prof_stats_success?.values?.rate, p95: m.prof_stats_duration?.values?.["p(95)"] },
+      profStudents: { success: m.prof_students_success?.values?.rate, p95: m.prof_students_duration?.values?.["p(95)"] },
+      profQuizList: { success: m.prof_quiz_list_success?.values?.rate, p95: m.prof_quiz_list_duration?.values?.["p(95)"] },
     }, null, 2),
     stdout: text,
   };
