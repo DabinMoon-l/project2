@@ -9,11 +9,11 @@
 
 | 항목 | 수치 |
 |------|------|
-| TypeScript/TSX 파일 | ~930개 |
+| TypeScript/TSX 파일 | ~940개 |
 | 총 코드 라인 | 85,000+ 줄 |
 | 페이지/라우트 | 42개 |
-| React 컴포넌트 | ~200개 |
-| 커스텀 훅 | 31개 |
+| React 컴포넌트 | ~210개 |
+| 커스텀 훅 | 36개 |
 | Cloud Functions | 150+ (47개 모듈) |
 | Firestore 컬렉션 | 25+ |
 | 관리 스크립트 | 9개 (`scripts/`) |
@@ -710,10 +710,37 @@ firebase deploy --only database       # RTDB rules
 firebase deploy --only storage        # Storage rules
 ```
 
-## 삭제된 코드 (2026-03-15 정리)
+## 리팩토링 기록 (2026-03-15)
 
-서술형 AI 채점 (`EssayGrading`, `essay.ts`, `scoring.ts`), 시즌/학기 관리 UI (`SeasonResetCard/Modal/HistoryList`, `SemesterSettingsCard`), 미사용 훅 (`useOcr`, `useClovaOcr`, `useVisionOcr`, `useScrollLock`, `useSeasonReset`), 미사용 유틸 (`offlineReviewCache`, `questionDocExport`, `koreanStopwords`) 삭제.
-OCR 기능은 `OCRProcessor.tsx`에서 `callFunction()` 직접 호출로 동작 (훅 래퍼만 제거).
+### 사문 코드 삭제
+서술형 AI 채점 (`EssayGrading`, `essay.ts`, `scoring.ts`), 시즌/학기 관리 UI (`SeasonResetCard/Modal/HistoryList`, `SemesterSettingsCard`), 미사용 훅 (`useOcr`, `useClovaOcr`, `useVisionOcr`, `useScrollLock`, `useSeasonReset`), 미사용 유틸 (`offlineReviewCache`, `questionDocExport`, `koreanStopwords`), Tesseract OCR 엔진 (340줄) 삭제.
+OCR 기능은 `OCRProcessor.tsx`에서 `callFunction()` 직접 호출로 동작.
+
+### 대형 파일 분리
+
+| 원본 파일 | 추출 대상 | 줄 감소 |
+|-----------|-----------|---------|
+| `professor/quiz/page.tsx` | `profQuizSubComponents.tsx` (7개 서브 컴포넌트) | 2316→1397 |
+| `board/manage/page.tsx` | `boardManageSections.tsx` (AcademicArchive+Activity) | 1635→458 |
+| `quiz/feedback/page.tsx` | `feedbackQuestionCards.tsx` (문제 카드 2개) | 1574→728 |
+| `review/page.tsx` | `useFolderCategories`, `useCompletedQuizzes` 훅 | 3271→3008 |
+| `useReview.ts` | `useReviewUpdateCheck` 훅 | 1507→1341 |
+| `useBoard.ts` | `useBoardLike` (좋아요 3개 훅) | 1403→1195 |
+| `lib/ocr.ts` | Tesseract 사문코드 삭제 | 2027→1692 |
+| `quiz/create/page.tsx` | `quizImageUpload.ts` 유틸 (교수 생성도 공유) | 2099→1946 |
+
+### Firebase SDK 누출 수정
+`ProfileDrawer.tsx` (firebase/auth → `lib/auth.ts` 래퍼), `quiz/create` 2개 (firebase/storage → `storageRepo.upload`). 잔여 2파일(`useTekkenBattle` RTDB, `useStorage` Storage)은 정당한 추상화 레이어.
+
+### 성능 최적화
+
+| 병목 | 해결 | 파일 |
+|------|------|------|
+| 순차 deleteDoc 루프 (50-100회 왕복) | `writeBatch` 일괄 삭제 (1회) | `useReview.ts` |
+| 순차 addDoc 루프 (복원) | `writeBatch` 일괄 추가 | `useReview.ts` |
+| 배치 간 순차 대기 (댓글 제목 로드) | 전체 `Promise.all` 병렬 | `useBoard.ts` |
+| `deleteSolvedQuiz` 쿼리 순차 | `Promise.all` 병렬 조회 | `useReview.ts` |
+| `layout.tsx` 불필요한 useState | `profile.classType` 직접 파생 | `layout.tsx` |
 
 ## 디버깅 가이드
 
