@@ -51,7 +51,7 @@ async function computeRadarNormForCourse(courseId: string) {
     studentUids.add(d.id);
     expByUid[d.id] = data.totalExp || 0;
     fbCountByUid[d.id] = data.feedbackCount || 0;
-    battleByUid[d.id] = data.tekkenWins || 0;
+    battleByUid[d.id] = data.tekkenTotal || 0; // 배틀 참여수 (봇 포함)
     studentClassMap[d.id] = data.classId || "A";
   });
 
