@@ -806,5 +806,16 @@ service cloud.firestore {
     match /allowedProfessors/{email} {
       allow read, write: if false;
     }
+
+    // ============================================================
+    // 과목 레지스트리 (courses 컬렉션)
+    // ============================================================
+
+    match /courses/{courseId} {
+      // 읽기: 로그인 사용자 (CourseContext에서 구독)
+      allow read: if isAuthenticated();
+      // 쓰기: Admin SDK 전용 (seed 스크립트 + 교수 관리 기능)
+      allow write: if false;
+    }
   }
 }
