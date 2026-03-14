@@ -54,3 +54,53 @@ export const TYPE_LABELS: Record<string, string> = {
   short_answer: '주관식',
   subjective: '주관식',
 };
+
+/** 그룹화된 아이템 (결합형 문제 처리) */
+export interface GroupedItem {
+  isCombined: boolean;
+  items: ReviewItem[];
+  groupId?: string;
+}
+
+/** 챕터별 그룹 */
+export interface ChapterGroup {
+  chapterId: string | null;
+  chapterName: string;
+  items: ReviewItem[];
+}
+
+/** 결과+피드백 화면 props */
+export interface ReviewResultPhaseProps {
+  // 데이터
+  groupedItems: GroupedItem[];
+  resultsMap: Record<number, PracticeResult>;
+  combinedResultsMap: Record<number, Record<number, PracticeResult>>;
+  correctCount: number;
+  totalQuestionCount: number;
+  chapterGroupedWrongItems: ChapterGroup[];
+  headerTitle: string;
+  showFeedback: boolean;
+  userCourseId: string | null;
+  currentUserId?: string;
+
+  // expand 상태 (풀이 화면과 공유)
+  expandedIds: Set<string>;
+  setExpandedIds: React.Dispatch<React.SetStateAction<Set<string>>>;
+  expandedSubIds: Set<string>;
+  setExpandedSubIds: React.Dispatch<React.SetStateAction<Set<string>>>;
+  expandedChoiceExplanations: Set<string>;
+  setExpandedChoiceExplanations: React.Dispatch<React.SetStateAction<Set<string>>>;
+
+  // 피드백 상태
+  submittedFeedbackIds: Set<string>;
+  feedbackSubmitCount: number;
+
+  // 인라인 피드백
+  inlineFeedbackOpen: string | null;
+  setInlineFeedbackOpen: React.Dispatch<React.SetStateAction<string | null>>;
+
+  // 액션
+  onClose: () => void;
+  onComplete: (results: PracticeResult[]) => void;
+  setPhase: React.Dispatch<React.SetStateAction<Phase>>;
+}
