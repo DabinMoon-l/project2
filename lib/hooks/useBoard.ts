@@ -69,6 +69,9 @@ import {
 export type { BoardCategory, BoardTag, AttachedFile, Post, Comment, CreatePostData, CreateCommentData } from './useBoardTypes';
 export { BOARD_TAGS } from './useBoardTypes';
 
+// 좋아요 훅 → useBoardLike.ts로 분리, 기존 import 경로 호환
+export { useLike, useCommentLike, useMyLikedPosts } from './useBoardLike';
+
 // ============================================================
 // usePosts 훅 - 글 목록 조회
 // ============================================================
@@ -824,214 +827,6 @@ export const useUpdateComment = (): UseUpdateCommentReturn => {
 };
 
 // ============================================================
-// useLike 훅 - 좋아요 토글
-// ============================================================
-
-/**
- * 좋아요 기능 훅
- *
- * @returns 좋아요 토글 함수, 좋아요 상태 확인 함수, 로딩 상태, 에러
- */
-export const useLike = (): UseLikeReturn => {
-  const { user } = useAuth();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // 좋아요 상태 확인 — post.likedBy 배열로 직접 판단 (호출 측에서 post 전달)
-  // 기존 인터페이스 유지: postId만 받되, 내부에서는 사용 안 함
-  // → 실제 판단은 board/[id]/page.tsx에서 post.likedBy로 직접 수행
-  const isLiked = useCallback(
-    (_postId: string): boolean => {
-      // 이 함수는 더 이상 사용하지 않음 — post.likedBy?.includes(uid) 직접 사용 권장
-      return false;
-    },
-    []
-  );
-
-  // 좋아요 토글 — like 문서 존재 여부를 getDoc으로 확인 (Set 의존 제거)
-  const toggleLike = useCallback(
-    async (postId: string): Promise<boolean> => {
-      if (!user) {
-        setError('로그인이 필요합니다.');
-        return false;
-      }
-
-      try {
-        setLoading(true);
-        setError(null);
-
-        const likeDocId = `${user.uid}_post_${postId}`;
-        const likeRef = doc(db, 'likes', likeDocId);
-        const likeSnap = await getDoc(likeRef);
-
-        if (likeSnap.exists()) {
-          // 좋아요 취소 — likes 컬렉션에서 삭제 → CF가 posts.likes/likedBy 업데이트
-          await deleteDoc(likeRef);
-        } else {
-          // 좋아요 — likes 컬렉션에 생성 → CF가 posts.likes/likedBy 업데이트
-          const postSnap = await getDoc(doc(db, 'posts', postId));
-          const postAuthorId = postSnap.data()?.authorId || postSnap.data()?.userId || '';
-          await setDoc(likeRef, {
-            userId: user.uid,
-            targetType: 'post',
-            targetId: postId,
-            targetUserId: postAuthorId,
-            createdAt: serverTimestamp(),
-          });
-        }
-
-        return true;
-      } catch (err) {
-        console.error('좋아요 토글 실패:', err);
-        setError('좋아요 처리에 실패했습니다.');
-        return false;
-      } finally {
-        setLoading(false);
-      }
-    },
-    [user]
-  );
-
-  return { toggleLike, isLiked, loading, error };
-};
-
-// ============================================================
-// useCommentLike 훅 - 댓글 좋아요 토글
-// ============================================================
-
-/** useCommentLike 훅 반환 타입 */
-interface UseCommentLikeReturn {
-  toggleCommentLike: (commentId: string) => Promise<boolean>;
-  isCommentLiked: (commentId: string) => boolean;
-  loading: boolean;
-  error: string | null;
-}
-
-/**
- * 댓글 좋아요 기능 훅
- *
- * @returns 댓글 좋아요 토글 함수, 좋아요 상태 확인 함수, 로딩 상태, 에러
- */
-export const useCommentLike = (): UseCommentLikeReturn => {
-  const { user } = useAuth();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // 좋아요 상태 확인 — comment.likedBy 배열로 직접 판단 (호출 측에서 처리)
-  const isCommentLiked = useCallback(
-    (_commentId: string): boolean => {
-      return false;
-    },
-    []
-  );
-
-  // 좋아요 토글 — like 문서 존재 여부를 getDoc으로 확인 (Set 의존 제거)
-  const toggleCommentLike = useCallback(
-    async (commentId: string): Promise<boolean> => {
-      if (!user) {
-        setError('로그인이 필요합니다.');
-        return false;
-      }
-
-      try {
-        setLoading(true);
-        setError(null);
-
-        const likeDocId = `${user.uid}_comment_${commentId}`;
-        const likeRef = doc(db, 'likes', likeDocId);
-        const likeSnap = await getDoc(likeRef);
-
-        if (likeSnap.exists()) {
-          // 좋아요 취소 — likes 컬렉션에서 삭제 → CF가 comments.likes/likedBy 업데이트
-          await deleteDoc(likeRef);
-        } else {
-          // 좋아요 — likes 컬렉션에 생성 → CF가 comments.likes/likedBy 업데이트
-          const commentSnap = await getDoc(doc(db, 'comments', commentId));
-          const commentAuthorId = commentSnap.data()?.authorId || commentSnap.data()?.userId || '';
-          await setDoc(likeRef, {
-            userId: user.uid,
-            targetType: 'comment',
-            targetId: commentId,
-            targetUserId: commentAuthorId,
-            createdAt: serverTimestamp(),
-          });
-        }
-
-        return true;
-      } catch (err) {
-        console.error('댓글 좋아요 토글 실패:', err);
-        setError('좋아요 처리에 실패했습니다.');
-        return false;
-      } finally {
-        setLoading(false);
-      }
-    },
-    [user]
-  );
-
-  return { toggleCommentLike, isCommentLiked, loading, error };
-};
-
-// ============================================================
-// useMyLikedPosts 훅 - 내가 좋아요한 글 목록 조회
-// ============================================================
-
-/**
- * 현재 사용자가 좋아요한 게시글 목록을 조회하는 훅
- *
- * @returns 좋아요한 글 목록, 로딩 상태, 에러
- */
-export const useMyLikedPosts = (skip = false): UseMyLikedPostsReturn => {
-  const { user } = useAuth();
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(!skip);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadLikedPosts = useCallback(async () => {
-    if (!user || skip) {
-      setLoading(false);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
-
-      // 내가 좋아요한 글 조회 (likedBy 배열에 내 uid가 포함된 글)
-      const likedQuery = query(
-        collection(db, 'posts'),
-        where('likedBy', 'array-contains', user.uid),
-        limit(30)
-      );
-
-      const snapshot = await getDocs(likedQuery);
-      const likedPosts = snapshot.docs.map(docToPost)
-        // 최신순 정렬
-        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-
-      setPosts(likedPosts);
-    } catch (err) {
-      console.error('좋아요한 글 로드 실패:', err);
-      setError('좋아요한 글을 불러오는데 실패했습니다.');
-    } finally {
-      setLoading(false);
-    }
-  }, [user, skip]);
-
-  const refresh = useCallback(async () => {
-    await loadLikedPosts();
-  }, [loadLikedPosts]);
-
-  useEffect(() => {
-    loadLikedPosts();
-  }, [loadLikedPosts]);
-
-  return { posts, loading, error, refresh };
-};
-
-// ============================================================
-// usePinnedPosts 훅 - 고정된 게시글 관리
-// ============================================================
 
 /**
  * 고정된 게시글을 관리하는 훅
@@ -1392,9 +1187,6 @@ export default {
   useCreateComment,
   useUpdateComment,
   useDeleteComment,
-  useLike,
-  useCommentLike,
-  useMyLikedPosts,
   usePinnedPosts,
   useToProfessorPosts,
   usePostsByClass,
