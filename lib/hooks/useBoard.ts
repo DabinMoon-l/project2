@@ -26,12 +26,12 @@ import {
   updateDoc,
   deleteDoc,
   serverTimestamp,
-  QueryDocumentSnapshot,
   onSnapshot,
   deleteField,
   writeBatch,
-} from 'firebase/firestore';
-import { db } from '../firebase';
+  db,
+  type QueryDocumentSnapshot,
+} from '@/lib/repositories';
 import { useAuth } from './useAuth';
 import type {
   BoardCategory,
@@ -517,10 +517,8 @@ export const useDeletePost = (): UseDeletePostReturn => {
         setError(null);
 
         // CF로 글 + 댓글 원자적 삭제 (Admin SDK — 타인 댓글 권한 문제 해결)
-        const { getFunctions, httpsCallable } = await import('firebase/functions');
-        const functions = getFunctions(undefined, 'asia-northeast3');
-        const deletePostFn = httpsCallable(functions, 'deletePost');
-        await deletePostFn({ postId });
+        const { callFunction } = await import('@/lib/api');
+        await callFunction('deletePost', { postId });
 
         return true;
       } catch (err) {
@@ -1367,10 +1365,8 @@ export const useAcceptComment = (): UseAcceptCommentReturn => {
   const accept = useCallback(async (postId: string, commentId: string): Promise<boolean> => {
     setLoading(true);
     try {
-      const { httpsCallable } = await import('firebase/functions');
-      const { functions } = await import('../firebase');
-      const fn = httpsCallable(functions, 'acceptComment');
-      await fn({ postId, commentId });
+      const { callFunction } = await import('@/lib/api');
+      await callFunction('acceptComment', { postId, commentId });
       return true;
     } catch (err) {
       console.error('댓글 채택 실패:', err);

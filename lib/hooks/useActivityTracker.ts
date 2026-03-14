@@ -2,8 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { doc, updateDoc, serverTimestamp, db } from '@/lib/repositories';
 import { useAuth } from '@/lib/hooks/useAuth';
 
 const UPDATE_INTERVAL = 120_000; // 120초 (30초 → 120초로 줄여 Firestore 쓰기 빈도 75% 감소)

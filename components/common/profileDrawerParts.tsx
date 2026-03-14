@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp } from '@/lib/repositories';
 import type { NotificationSettings } from '@/lib/hooks/useSettings';
 
 // ============================================================

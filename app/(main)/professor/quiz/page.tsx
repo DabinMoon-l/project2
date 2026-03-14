@@ -3,8 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, query, where, onSnapshot, getDocs, getDoc, updateDoc, doc, Timestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { collection, query, where, onSnapshot, getDocs, getDoc, updateDoc, doc, Timestamp, db } from '@/lib/repositories';
 import { Skeleton, ScrollToTopButton, ExpandModal } from '@/components/common';
 import { useExpandSource } from '@/lib/hooks/useExpandSource';
 import { TAP_SCALE } from '@/lib/constants/springs';

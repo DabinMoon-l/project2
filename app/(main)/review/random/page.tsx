@@ -9,8 +9,8 @@ import {
   updateDoc,
   increment,
   serverTimestamp,
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+  db,
+} from '@/lib/repositories';
 import { useUser } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
 import { useHideNav } from '@/lib/hooks/useHideNav';

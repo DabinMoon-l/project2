@@ -16,8 +16,8 @@ import {
   serverTimestamp,
   arrayUnion,
   arrayRemove,
-} from 'firebase/firestore';
-import { db } from '../firebase';
+  db,
+} from '@/lib/repositories';
 import {
   getNotificationPermission,
   requestNotificationPermission,

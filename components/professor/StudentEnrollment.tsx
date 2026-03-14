@@ -11,21 +11,8 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/lib/firebase';
+import { callFunction, type StudentRow, type EnrollResult } from '@/lib/api';
 import { useHideNav } from '@/lib/hooks/useHideNav';
-
-interface StudentRow {
-  name: string;
-  studentId: string;
-}
-
-interface EnrollResult {
-  successCount: number;
-  duplicateCount: number;
-  errorCount: number;
-  errors: string[];
-}
 
 type TabType = 'excel' | 'manual';
 
@@ -143,17 +130,12 @@ export default function StudentEnrollment({ courseId, onClose, onComplete }: Pro
     setError(null);
 
     try {
-      const bulkEnrollFn = httpsCallable<
-        { courseId: string; students: StudentRow[] },
-        EnrollResult
-      >(functions, 'bulkEnrollStudents');
-
-      const response = await bulkEnrollFn({
+      const response = await callFunction('bulkEnrollStudents', {
         courseId,
         students: previewRows,
       });
 
-      setResult(response.data);
+      setResult(response);
     } catch (err: unknown) {
       const firebaseError = err as { message?: string };
       setError(firebaseError.message || '등록에 실패했습니다.');

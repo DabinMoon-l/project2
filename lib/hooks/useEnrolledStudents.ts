@@ -8,8 +8,7 @@
  */
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { collection, getDocs, query } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { collection, getDocs, query, db } from '@/lib/repositories';
 
 export interface EnrolledStudent {
   studentId: string;

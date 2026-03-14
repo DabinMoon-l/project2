@@ -3,9 +3,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/lib/firebase';
 import { type RabbitHolding, getRabbitStats, useRabbitsForCourse } from '@/lib/hooks/useRabbit';
+import { callFunction, type LevelUpResult } from '@/lib/api';
 import { computeRabbitDisplayName } from '@/lib/utils/rabbitDisplayName';
 import Image from 'next/image';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
@@ -15,14 +14,6 @@ const CLOSE_MS = 320;
 const EASE = 'cubic-bezier(0.4, 0, 0.2, 1)';
 
 type Phase = 'hidden' | 'entering' | 'open' | 'exiting';
-
-interface LevelUpResult {
-  newLevel: number;
-  oldStats: { hp: number; atk: number; def: number };
-  newStats: { hp: number; atk: number; def: number };
-  statIncreases: { hp: number; atk: number; def: number };
-  totalPoints: number;
-}
 
 interface LevelUpBottomSheetProps {
   isOpen: boolean;
@@ -143,12 +134,8 @@ export default function LevelUpBottomSheet({
     setIsLoading(true);
     setError(null);
     try {
-      const levelUpRabbit = httpsCallable<
-        { courseId: string; rabbitId: number },
-        LevelUpResult
-      >(functions, 'levelUpRabbit');
-      const res = await levelUpRabbit({ courseId, rabbitId: holding.rabbitId });
-      setResult(res.data);
+      const res = await callFunction('levelUpRabbit', { courseId, rabbitId: holding.rabbitId });
+      setResult(res);
     } catch (err: any) {
       const msg = err?.message || '레벨업에 실패했습니다.';
       setError(msg);

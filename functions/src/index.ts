@@ -227,11 +227,6 @@ export const getLeaderboard = onCall(
 export { februaryTransition, augustTransition } from "./semesterTransition";
 
 // ============================================
-// 서술형 AI 채점 Functions (deprecated — Claude는 monthlyReport에서 사용)
-// ============================================
-// export { gradeEssay, gradeEssayBatch } from "./essay";
-
-// ============================================
 // OCR Functions (Naver CLOVA OCR)
 // ============================================
 export { runClovaOcr, getOcrUsage } from "./ocr";

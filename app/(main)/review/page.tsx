@@ -4,8 +4,7 @@ import { useState, useCallback, useEffect, Suspense, useRef, useMemo } from 'rea
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { doc, getDoc, getDocs, collection, query, where, onSnapshot, updateDoc, limit } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { doc, getDoc, getDocs, collection, query, where, onSnapshot, updateDoc, limit, db } from '@/lib/repositories';
 import { Skeleton } from '@/components/common';
 import { useExpandSource } from '@/lib/hooks/useExpandSource';
 import { SPRING_TAP, TAP_SCALE } from '@/lib/constants/springs';

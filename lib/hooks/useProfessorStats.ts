@@ -2,9 +2,8 @@
 
 import { useState, useCallback } from 'react';
 import {
-  collection, query, where, getDocs, Timestamp,
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+  collection, query, where, getDocs, Timestamp, db,
+} from '@/lib/repositories';
 import type { CourseId } from '@/lib/types/course';
 import {
   mean, sd, cv, ci95, stabilityIndex, quartiles, getISOWeek,

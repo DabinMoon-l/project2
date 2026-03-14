@@ -2,8 +2,7 @@
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { collection, addDoc, serverTimestamp, doc, getDoc, db } from '@/lib/repositories';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse } from '@/lib/contexts';
 import type { ReviewItem } from '@/lib/hooks/useReview';

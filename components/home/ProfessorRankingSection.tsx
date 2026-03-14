@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { doc, getDoc, collection, query, where, getDocs, db } from '@/lib/repositories';
 import { useUser, useCourse } from '@/lib/contexts';
 import { readHomeCache, writeHomeCache } from '@/lib/utils/rankingCache';
 import { computeRankScore, computeTeamScore } from '@/lib/utils/ranking';

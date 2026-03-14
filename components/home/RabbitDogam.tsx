@@ -2,9 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/lib/firebase';
 import { useRabbitsForCourse, getRabbitStats, type RabbitDoc, type RabbitHolding } from '@/lib/hooks/useRabbit';
+import { callFunction } from '@/lib/api';
 import Image from 'next/image';
 import RabbitImage from '@/components/common/RabbitImage';
 import VirtualRabbitGrid from '@/components/common/VirtualRabbitGrid';
@@ -474,7 +473,6 @@ function FooterWithEquip({
   const handleEquip = async () => {
     setIsProcessing(true);
     try {
-      const equipRabbit = httpsCallable(functions, 'equipRabbit');
       let slotIndex: number;
       if (slotsAreFull) {
         if (selectedSlot === null) return;
@@ -482,7 +480,7 @@ function FooterWithEquip({
       } else {
         slotIndex = equippedRabbits.length;
       }
-      await equipRabbit({ courseId, rabbitId: rabbit.rabbitId, slotIndex });
+      await callFunction('equipRabbit', { courseId, rabbitId: rabbit.rabbitId, slotIndex });
     } catch (error) {
       console.error('장착 실패:', error);
     } finally {

@@ -13,9 +13,8 @@ import {
   where,
   getDocs,
   serverTimestamp,
-} from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
-import { db, functions } from '@/lib/firebase';
+  db,
+} from '@/lib/repositories';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useExpToast } from '@/components/common';
 import { useUser } from '@/lib/contexts';

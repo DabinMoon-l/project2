@@ -3,8 +3,7 @@
 import { useCallback, useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { doc, updateDoc, increment, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { doc, updateDoc, increment, getDoc, db } from '@/lib/repositories';
 import { Skeleton, ImageViewer } from '@/components/common';
 import LikeButton from '@/components/board/LikeButton';
 import CommentSection from '@/components/board/CommentSection';

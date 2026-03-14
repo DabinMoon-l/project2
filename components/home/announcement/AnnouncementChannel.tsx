@@ -14,9 +14,9 @@ import {
   updateDoc,
   doc,
   serverTimestamp,
-} from 'firebase/firestore';
-import { db, functions } from '@/lib/firebase';
-import { httpsCallable } from 'firebase/functions';
+  db,
+} from '@/lib/repositories';
+import { callFunction } from '@/lib/api';
 import { useUser, useCourse } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
 import { useUpload } from '@/lib/hooks/useStorage';
@@ -211,7 +211,7 @@ export default function AnnouncementChannel({
     // 아직 읽지 않은 공지만 CF로 읽음 처리
     const unreadIds = announcements.filter((a) => !a.readBy?.includes(profile.uid)).map((a) => a.id);
     if (unreadIds.length > 0) {
-      httpsCallable(functions, 'markAnnouncementsRead')({ announcementIds: unreadIds }).catch(() => {});
+      callFunction('markAnnouncementsRead', { announcementIds: unreadIds }).catch(() => {});
     }
   }, [showModal, userCourseId, profile, announcements]);
 
@@ -418,7 +418,7 @@ export default function AnnouncementChannel({
   const handleReaction = useCallback(async (aid: string, emoji: string) => {
     if (!profile) return;
     try {
-      await httpsCallable(functions, 'reactToAnnouncement')({ announcementId: aid, emoji });
+      await callFunction('reactToAnnouncement', { announcementId: aid, emoji });
     } catch {}
     setShowEmojiPicker(null);
   }, [profile]);
@@ -427,7 +427,7 @@ export default function AnnouncementChannel({
   const handleVote = useCallback(async (aid: string, pollIdx: number, optIndices: number[]) => {
     if (!profile || optIndices.length === 0) return;
     try {
-      await httpsCallable(functions, 'voteOnPoll')({ announcementId: aid, pollIdx, optIndices });
+      await callFunction('voteOnPoll', { announcementId: aid, pollIdx, optIndices });
     } catch (err) { console.error('투표 실패:', err); }
   }, [profile]);
 

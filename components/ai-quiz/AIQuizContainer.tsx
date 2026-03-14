@@ -2,10 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/lib/firebase';
+import { callFunction } from '@/lib/api';
 import {
-  getFirestore,
   doc,
   setDoc,
   addDoc,
@@ -13,7 +11,8 @@ import {
   collection,
   Timestamp,
   onSnapshot,
-} from 'firebase/firestore';
+  db,
+} from '@/lib/repositories';
 import { useUser, useMilestone } from '@/lib/contexts';
 import { useCourse } from '@/lib/contexts/CourseContext';
 import { getChapterIdFromTag } from '@/lib/courseIndex';
@@ -159,21 +158,7 @@ export default function AIQuizContainer() {
       // 1단계: Job 등록
       setProgressStep('uploading');
 
-      const enqueueJob = httpsCallable<
-        {
-          text?: string;
-          images?: string[];
-          difficulty: string;
-          questionCount: number;
-          courseId: string;
-          courseName?: string;
-          courseCustomized?: boolean;
-          tags?: string[];
-        },
-        { jobId: string; status: string; deduplicated: boolean }
-      >(functions, 'enqueueGenerationJob');
-
-      const enqueueResult = await enqueueJob({
+      const enqueueResult = await callFunction('enqueueGenerationJob', {
         text: undefined, // OCR 제거 — Gemini가 이미지 직접 분석
         images: data.images,
         difficulty: data.difficulty,
@@ -184,7 +169,7 @@ export default function AIQuizContainer() {
         tags: data.tags.length > 0 ? data.tags : undefined,
       });
 
-      const { jobId, status: initialStatus, deduplicated } = enqueueResult.data;
+      const { jobId, status: initialStatus, deduplicated } = enqueueResult as { jobId: string; status: string; deduplicated: boolean };
 
       // 이미 완료된 중복 Job이면 바로 결과 가져오기
       if (deduplicated && initialStatus === 'COMPLETED') {
@@ -197,7 +182,6 @@ export default function AIQuizContainer() {
       // 3단계: Firestore onSnapshot으로 실시간 Job 상태 감지
       // (polling 대비 지연 0초 + CF 호출 오버헤드 제거)
       const questions = await new Promise<GeneratedQuestion[]>((resolve, reject) => {
-        const db = getFirestore();
         const jobDocRef = doc(db, 'jobs', jobId);
         const timeoutMs = 180000; // 3분 타임아웃
 
@@ -260,7 +244,6 @@ export default function AIQuizContainer() {
       const semester = isSem1 ? `${semYear}-1` : `${semYear}-2`;
 
       // Firestore에 퀴즈 저장 (기존 퀴즈 구조와 동일)
-      const db = getFirestore();
       const quizRef = doc(collection(db, 'quizzes'));
       const quizId = quizRef.id;
 
@@ -399,7 +382,6 @@ export default function AIQuizContainer() {
     setIsPracticeOpen(false);
 
     try {
-      const db = getFirestore();
 
       // 정답/오답 집계
       const correctCount = results.filter(r => r.isCorrect).length;

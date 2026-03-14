@@ -11,8 +11,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/lib/firebase';
+import { callFunction } from '@/lib/api';
 import { useUser } from '@/lib/contexts';
 import { useCourse } from '@/lib/contexts/CourseContext';
 import { useProfessorAiQuizzes, ProfessorAiQuiz } from '@/lib/hooks/useProfessorAiQuizzes';
@@ -31,8 +30,7 @@ import { generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import PreviewQuestionCard from '@/components/professor/PreviewQuestionCard';
 import QuestionList from '@/components/quiz/create/QuestionList';
 import type { QuestionData } from '@/components/quiz/create/questionTypes';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs, db } from '@/lib/repositories';
 import {
   NEWSPAPER_BG_TEXT,
   isDefaultAiTitle,
@@ -277,8 +275,7 @@ export default function ProfessorLibraryTab({
       // 재시험 모드가 아니고 변경된 문제가 있으면 → 재채점 CF 호출
       if (!requireRetest && changedIds.length > 0) {
         try {
-          const regradeQuestionsFn = httpsCallable(functions, 'regradeQuestions');
-          await regradeQuestionsFn({ quizId: previewQuiz.id, questionIds: changedIds });
+          await callFunction('regradeQuestions', { quizId: previewQuiz.id, questionIds: changedIds });
         } catch (err) {
           console.warn('재채점 실패 (무시 가능):', err);
         }

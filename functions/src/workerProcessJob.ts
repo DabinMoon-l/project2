@@ -40,7 +40,7 @@ import { extractChapterNumbersFromTags } from "./courseScope";
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 
 // 동시 실행 제한
-const MAX_CONCURRENT_JOBS = 20;
+const MAX_CONCURRENT_JOBS = 40;
 
 // ========================================
 // 공유 문제 생성 로직 (workerProcessJob + retryQueuedJobs 공용)

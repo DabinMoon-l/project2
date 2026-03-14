@@ -8,8 +8,7 @@
 
 import { useState, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/lib/firebase';
+import { callFunction, type StudentRow, type EnrollResult } from '@/lib/api';
 import MobileBottomSheet from '@/components/common/MobileBottomSheet';
 import { useEnrolledStudents, type EnrolledStudent } from '@/lib/hooks/useEnrolledStudents';
 
@@ -21,18 +20,6 @@ interface Props {
   open: boolean;
   onClose: () => void;
   courseId: string;
-}
-
-interface StudentRow {
-  name: string;
-  studentId: string;
-}
-
-interface EnrollResult {
-  successCount: number;
-  duplicateCount: number;
-  errorCount: number;
-  errors: string[];
 }
 
 type TabType = 'excel' | 'manual';
@@ -72,12 +59,7 @@ export default function StudentManagementSheet({ open, onClose, courseId }: Prop
   const handleDelete = useCallback(async (studentId: string) => {
     setDeleting(true);
     try {
-      const removeFn = httpsCallable<
-        { courseId: string; studentId: string },
-        { success: boolean; wasRegistered: boolean }
-      >(functions, 'removeEnrolledStudent');
-
-      await removeFn({ courseId, studentId });
+      await callFunction('removeEnrolledStudent', { courseId, studentId });
       setConfirmDeleteId(null);
     } catch (err: unknown) {
       const firebaseError = err as { message?: string };
@@ -179,13 +161,8 @@ export default function StudentManagementSheet({ open, onClose, courseId }: Prop
     setError(null);
 
     try {
-      const bulkEnrollFn = httpsCallable<
-        { courseId: string; students: StudentRow[] },
-        EnrollResult
-      >(functions, 'bulkEnrollStudents');
-
-      const response = await bulkEnrollFn({ courseId, students: previewRows });
-      setEnrollResult(response.data);
+      const response = await callFunction('bulkEnrollStudents', { courseId, students: previewRows });
+      setEnrollResult(response);
       setPreviewRows([]);
     } catch (err: unknown) {
       const firebaseError = err as { message?: string };

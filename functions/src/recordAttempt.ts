@@ -299,11 +299,14 @@ export const recordAttempt = onCall(
 
     // ── ⑨ reviews 생성은 generateReviewsOnResult 트리거에서 비동기 처리 ──
 
-    // 통계 업데이트 병렬 대기 (응답 전 완료 보장)
-    await Promise.all([quizStatsPromise, userStatsPromise]);
+    // 통계 업데이트: fire-and-forget (응답 차단하지 않음)
+    // quizResults + quiz_completions + quiz_agg 는 이미 기록됨 → 파생 통계는 비동기 OK
+    Promise.all([quizStatsPromise, userStatsPromise]).catch((e) =>
+      console.warn("통계 업데이트 실패 (무시 가능):", e)
+    );
 
-    // ── 제출 락 해제 ──
-    await lockRef.delete().catch(() => {});
+    // 제출 락 해제: fire-and-forget
+    lockRef.delete().catch(() => {});
 
     console.log(
       `퀴즈 제출 처리 완료: userId=${userId}, quizId=${quizId}, ` +

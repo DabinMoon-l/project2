@@ -3,8 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { doc, getDoc, db } from '@/lib/repositories';
 import { Skeleton } from '@/components/common';
 import { SPRING_TAP, TAP_SCALE } from '@/lib/constants/springs';
 import { DIFFICULTY_IMAGES, DIFFICULTY_LABELS, type QuizDetails } from './types';

@@ -11,11 +11,11 @@ import {
   doc,
   getDoc,
   onSnapshot,
-  QueryDocumentSnapshot,
-  DocumentData,
-  Unsubscribe,
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+  db,
+  type QueryDocumentSnapshot,
+  type DocumentData,
+} from '@/lib/repositories';
+import type { Unsubscribe } from '@/lib/repositories';
 import { rankPercentile } from '@/lib/utils/statistics';
 import { RadarNormData, readRadarNormCache, writeRadarNormCache } from '@/lib/utils/radarNormCache';
 

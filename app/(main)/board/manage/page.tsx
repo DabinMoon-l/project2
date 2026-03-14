@@ -3,8 +3,7 @@
 import { useCallback, useState, useMemo, useRef, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs, onSnapshot, db } from '@/lib/repositories';
 import { useTheme } from '@/styles/themes/useTheme';
 import { Skeleton } from '@/components/common';
 import { useUser, useCourse } from '@/lib/contexts';

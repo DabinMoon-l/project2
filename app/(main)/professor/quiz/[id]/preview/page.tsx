@@ -4,9 +4,8 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { useRouter, useParams } from 'next/navigation';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
-import { db, functions } from '@/lib/firebase';
+import { doc, getDoc, collection, query, where, getDocs, db } from '@/lib/repositories';
+import { callFunction } from '@/lib/api';
 import { useCourse } from '@/lib/contexts';
 import { formatChapterLabel, generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import dynamic from 'next/dynamic';
@@ -559,8 +558,7 @@ export default function QuizPreviewPage() {
   const callRegradeIfNeeded = async (changedIds: string[]) => {
     if (!requireRetest && changedIds.length > 0) {
       try {
-        const regradeQuestionsFn = httpsCallable(functions, 'regradeQuestions');
-        await regradeQuestionsFn({ quizId, questionIds: changedIds });
+        await callFunction('regradeQuestions', { quizId, questionIds: changedIds });
       } catch (err) {
         console.warn('재채점 실패 (무시 가능):', err);
       }

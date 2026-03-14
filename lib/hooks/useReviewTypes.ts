@@ -2,7 +2,7 @@
  * useReview 관련 타입 정의
  */
 
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp } from '@/lib/repositories';
 import type { CustomFolder, CustomFolderQuestion, FolderCategory } from './useCustomFolders';
 
 // 커스텀 폴더 타입 재내보내기 (기존 사용처 호환)

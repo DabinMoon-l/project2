@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { callFunction } from '@/lib/api';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 interface StyleProfileSummary {
@@ -70,14 +70,8 @@ export default function StyleProfileModal({
       setError(null);
 
       try {
-        const functions = getFunctions(undefined, 'asia-northeast3');
-        const getStyleProfile = httpsCallable<{ courseId: string }, StyleProfileData>(
-          functions,
-          'getStyleProfile'
-        );
-
-        const result = await getStyleProfile({ courseId });
-        setData(result.data);
+        const data = await callFunction('getStyleProfile', { courseId });
+        setData(data);
       } catch (err) {
         console.error('스타일 프로필 조회 오류:', err);
         setError('스타일 프로필을 불러오는 중 오류가 발생했습니다.');

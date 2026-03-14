@@ -2,8 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/lib/firebase';
+import { callFunction } from '@/lib/api';
 
 // ============================================================
 // 타입 정의
@@ -121,12 +120,8 @@ export default function AIQuizGenerator({
   const loadUsage = useCallback(async () => {
     setIsLoadingUsage(true);
     try {
-      const getGeminiUsage = httpsCallable<void, GeminiUsage>(
-        functions,
-        'getGeminiUsage'
-      );
-      const result = await getGeminiUsage();
-      setUsage(result.data);
+      const data = await callFunction('getGeminiUsage');
+      setUsage(data as GeminiUsage);
     } catch (error) {
       console.error('사용량 조회 오류:', error);
     } finally {
@@ -139,15 +134,11 @@ export default function AIQuizGenerator({
    */
   const checkQueueStatus = useCallback(async (id: string) => {
     try {
-      const checkStatus = httpsCallable<{ queueId: string }, QueueResult>(
-        functions,
-        'checkGeminiQueueStatus'
-      );
-      const result = await checkStatus({ queueId: id });
-      setQueueStatus(result.data);
+      const statusData = await callFunction('checkGeminiQueueStatus', { queueId: id }) as QueueResult;
+      setQueueStatus(statusData);
 
       // 완료된 경우
-      if (result.data.status === 'completed' && result.data.result) {
+      if (statusData.status === 'completed' && statusData.result) {
         // 폴링 중지
         if (pollingIntervalRef.current) {
           clearInterval(pollingIntervalRef.current);
@@ -155,11 +146,7 @@ export default function AIQuizGenerator({
         }
 
         // 결과 수령
-        const claimResult = httpsCallable<{ queueId: string }, { success: boolean; questions: GeneratedQuestion[] }>(
-          functions,
-          'claimGeminiQueueResult'
-        );
-        const claimed = await claimResult({ queueId: id });
+        const claimed = await callFunction('claimGeminiQueueResult', { queueId: id }) as { success: boolean; questions: GeneratedQuestion[] };
 
         // localStorage 정리
         localStorage.removeItem(QUEUE_ID_KEY);
@@ -171,11 +158,11 @@ export default function AIQuizGenerator({
         loadUsage();
 
         // 결과 전달
-        onComplete(claimed.data.questions);
+        onComplete(claimed.questions);
       }
 
       // 실패한 경우
-      if (result.data.status === 'failed') {
+      if (statusData.status === 'failed') {
         if (pollingIntervalRef.current) {
           clearInterval(pollingIntervalRef.current);
           pollingIntervalRef.current = null;
@@ -186,10 +173,10 @@ export default function AIQuizGenerator({
         setQueueStatus(null);
         setIsGenerating(false);
 
-        onError?.(result.data.error || 'AI 문제 생성에 실패했습니다.');
+        onError?.(statusData.error || 'AI 문제 생성에 실패했습니다.');
       }
 
-      return result.data;
+      return statusData;
     } catch (error) {
       console.error('큐 상태 확인 오류:', error);
       return null;
@@ -308,21 +295,16 @@ export default function AIQuizGenerator({
       setProgress({ status: '요청을 큐에 추가하는 중...', percent: 30 });
 
       // 큐에 추가
-      const addToQueue = httpsCallable<
-        { image: string; difficulty: string },
-        QueueResult
-      >(functions, 'addToGeminiQueue');
-
-      const result = await addToQueue({
+      const queueData = await callFunction('addToGeminiQueue', {
         image: base64Image,
         difficulty,
-      });
+      }) as QueueResult;
 
       if (isCancelledRef.current) return;
 
-      const newQueueId = result.data.queueId;
+      const newQueueId = queueData.queueId;
       setQueueId(newQueueId);
-      setQueueStatus(result.data);
+      setQueueStatus(queueData);
 
       // localStorage에 저장 (페이지 이동 후에도 확인 가능)
       localStorage.setItem(QUEUE_ID_KEY, newQueueId);
@@ -331,8 +313,8 @@ export default function AIQuizGenerator({
       onQueueStarted?.(newQueueId);
 
       setProgress({
-        status: result.data.position && result.data.position > 1
-          ? `대기 순서: ${result.data.position}번째`
+        status: queueData.position && queueData.position > 1
+          ? `대기 순서: ${queueData.position}번째`
           : '처리 중...',
         percent: 50,
       });

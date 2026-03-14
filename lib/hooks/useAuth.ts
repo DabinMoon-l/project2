@@ -9,7 +9,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { httpsCallable } from 'firebase/functions';
+import { callFunction } from '@/lib/api';
 import {
   onAuthStateChanged,
   signInWithEmail,
@@ -17,7 +17,6 @@ import {
   signOut,
   User,
 } from '../auth';
-import { functions } from '../firebase';
 
 // ============================================================
 // 타입 정의
@@ -116,18 +115,13 @@ export const useAuth = (): UseAuthReturn => {
       setLoading(true);
       setError(null);
 
-      const registerStudentFn = httpsCallable<
-        { studentId: string; password: string; courseId: string; classId: string; nickname: string; name?: string },
-        { success: boolean; uid: string }
-      >(functions, 'registerStudent');
-
-      const result = await registerStudentFn({ studentId, password, courseId, classId, nickname, name });
+      const result = await callFunction('registerStudent', { studentId, password, courseId, classId, nickname, name });
 
       // 가입 성공 후 바로 로그인
       const email = formatStudentEmail(studentId);
       await signInWithEmail(email, password);
 
-      return result.data;
+      return result as { success: boolean; uid: string };
     } catch (err: unknown) {
       // Firebase Functions 에러 처리
       const firebaseError = err as { code?: string; message?: string };

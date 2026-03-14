@@ -11,13 +11,11 @@ import {
   type ReactNode,
   type MutableRefObject,
 } from 'react';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/lib/firebase';
 import { useUser, useCourse } from '@/lib/contexts';
 import { useRabbitHoldings } from '@/lib/hooks/useRabbit';
 import { getPendingMilestones, getExpBarDisplay } from '@/lib/utils/milestone';
 import dynamic from 'next/dynamic';
-import type { RollResultData } from '@/components/home/GachaResultModal';
+import { callFunction, type RollResultData } from '@/lib/api';
 import MilestoneChoiceModal from '@/components/home/MilestoneChoiceModal';
 import { useHideNav } from '@/lib/hooks/useHideNav';
 
@@ -174,20 +172,15 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
     setIsGachaAnimating(true);
     setSpinError(null);
     try {
-      const spinRabbitGacha = httpsCallable<{ courseId: string }, RollResultData>(
-        functions, 'spinRabbitGacha'
-      );
-      const [result] = await Promise.all([
-        spinRabbitGacha({ courseId: userCourseId }),
+      const [data] = await Promise.all([
+        callFunction('spinRabbitGacha', { courseId: userCourseId }),
         new Promise(resolve => setTimeout(resolve, 2000)),
       ]);
-      const data = result.data;
 
       // 이미 보유한 토끼 → 뽑기 모달 닫고 바로 레벨업
       if (data.type === 'owned') {
         // pendingSpin 정리 (pass)
-        const claimGachaRabbit = httpsCallable(functions, 'claimGachaRabbit');
-        await claimGachaRabbit({
+        await callFunction('claimGachaRabbit', {
           courseId: userCourseId,
           rabbitId: data.rabbitId,
           action: 'pass',
@@ -221,8 +214,7 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
     equipSlot?: number
   ) => {
     if (!userCourseId) return;
-    const claimGachaRabbit = httpsCallable(functions, 'claimGachaRabbit');
-    await claimGachaRabbit({
+    await callFunction('claimGachaRabbit', {
       courseId: userCourseId,
       rabbitId: result.rabbitId,
       action: 'discover',

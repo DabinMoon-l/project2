@@ -16,8 +16,7 @@ import {
   useMemo,
   type ReactNode,
 } from 'react';
-import { doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { userRepo } from '@/lib/repositories';
 import { useAuth } from '@/lib/hooks/useAuth';
 import type {
   UserProfile,
@@ -84,14 +83,12 @@ export function UserProvider({ children }: UserProviderProps) {
     setLoading(true);
     setError(null);
 
-    const userDocRef = doc(db, 'users', user.uid);
-
-    // onSnapshot으로 실시간 구독
-    const unsubscribe = onSnapshot(
-      userDocRef,
-      (docSnap) => {
-        if (docSnap.exists()) {
-          const data = docSnap.data();
+    // userRepo로 실시간 구독
+    const unsubscribe = userRepo.subscribeProfile(
+      user.uid,
+      (raw, _id) => {
+        if (raw) {
+          const data = raw as Record<string, any>;
 
           // 교수님이 아니고 온보딩이 완료되지 않았으면 profile을 null로 설정
           if (data.role !== 'professor' && !data.onboardingCompleted) {
@@ -145,11 +142,11 @@ export function UserProvider({ children }: UserProviderProps) {
         }
         setLoading(false);
       },
-      (err) => {
+      (err: Error) => {
         console.error('프로필 구독 에러:', err);
         setError('프로필을 불러오는데 실패했습니다.');
         setLoading(false);
-      }
+      },
     );
 
     return () => unsubscribe();
@@ -163,11 +160,7 @@ export function UserProvider({ children }: UserProviderProps) {
       }
 
       try {
-        const userDocRef = doc(db, 'users', user.uid);
-        await updateDoc(userDocRef, {
-          ...data,
-          updatedAt: serverTimestamp(),
-        });
+        await userRepo.updateProfile(user.uid, data as Record<string, unknown>);
         // onSnapshot이 자동으로 상태 업데이트
       } catch (err) {
         console.error('프로필 수정 에러:', err);
@@ -204,12 +197,7 @@ export function UserProvider({ children }: UserProviderProps) {
       }
 
       try {
-        const userDocRef = doc(db, 'users', user.uid);
-        await updateDoc(userDocRef, {
-          nickname,
-          lastNicknameChangeAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
+        await userRepo.updateNickname(user.uid, nickname);
       } catch (err) {
         console.error('닉네임 수정 에러:', err);
         throw new Error('닉네임 수정에 실패했습니다.');

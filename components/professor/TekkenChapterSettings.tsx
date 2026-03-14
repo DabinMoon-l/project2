@@ -8,9 +8,8 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
-import { db, functions } from '@/lib/firebase';
+import { doc, getDoc, setDoc, db } from '@/lib/repositories';
+import { callFunction } from '@/lib/api';
 import { COURSE_INDEXES } from '@/lib/courseIndex';
 import { useCourse } from '@/lib/contexts';
 import MobileBottomSheet from '@/components/common/MobileBottomSheet';
@@ -76,8 +75,7 @@ export default function TekkenChapterSettings({ open, onClose }: TekkenChapterSe
     if (refillPoolRef.current) clearTimeout(refillPoolRef.current);
     refillPoolRef.current = setTimeout(async () => {
       try {
-        const refillFn = httpsCallable(functions, 'tekkenPoolRefill');
-        refillFn({ courseId }).catch(() => {});
+        callFunction('tekkenPoolRefill', { courseId }).catch(() => {});
       } catch {
         // 백그라운드 처리 — 에러 무시
       }

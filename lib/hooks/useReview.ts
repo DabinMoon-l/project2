@@ -25,10 +25,10 @@ import {
   Timestamp,
   getDoc,
   getDocs,
-  QueryDocumentSnapshot,
-  DocumentData,
-} from 'firebase/firestore';
-import { db } from '../firebase';
+  db,
+  type QueryDocumentSnapshot,
+  type DocumentData,
+} from '@/lib/repositories';
 import { useAuth } from './useAuth';
 import { useCourse } from '../contexts/CourseContext';
 import { useCustomFolders } from './useCustomFolders';
