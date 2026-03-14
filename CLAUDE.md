@@ -101,6 +101,50 @@ cd functions && npm test      # CF 유닛 (Vitest, 3개 스펙)
 k6 run tests/load/mixed-scenario.k6.js  # 부하 (학생 300 + 교수 5)
 ```
 
+### 부하 테스트 상세 (`tests/load/mixed-scenario.k6.js`)
+
+**동시접속**: 학생 300명 (biology 150 + microbiology 150) + 교수 5명
+
+**학생 시나리오 분배**:
+
+| VU 수 | 시나리오 | CF |
+|--------|---------|-----|
+| 100명 | 퀴즈 풀기 | `recordAttempt` |
+| 70명 | 배틀 퀴즈 | `joinMatchmaking` → `submitAnswer` |
+| 50명 | AI 문제 생성 | `enqueueGenerationJob` |
+| 50명 | 복습 연습 | `recordReviewPractice` |
+| 10명 | 토끼 뽑기 | `spinRabbitGacha` → `claimGachaRabbit` |
+| 5명 | 토끼 레벨업 | `levelUpRabbit` |
+| 10명 | 게시판 학술글 | `onPostCreate` (콩콩이 AI 트리거) |
+| 5명 | 랭킹/레이더 | Firestore read |
+
+**교수 시나리오** (5명, 120초): 대시보드 통계 + 학생 목록 + 퀴즈 관리 + 피드백 조회
+
+**램프업**: 0→100→200→300 VU (15초씩) → 300 VU 1분 유지 → 쿨다운 15초
+
+**합격 기준 (thresholds)**:
+
+| 메트릭 | 기준 |
+|--------|------|
+| 퀴즈 제출 성공률 | > 85% |
+| 배틀 매칭 성공률 | > 70% |
+| 토끼 뽑기 성공률 | > 70% |
+| 복습 연습 성공률 | > 85% |
+| 게시판 학술글 성공률 | > 85% |
+| 퀴즈 제출 p95 지연 | < 30초 |
+| 교수 통계 성공률 | > 90% |
+| 교수 통계 p95 지연 | < 10초 |
+
+**실행 방법** (에뮬레이터):
+```bash
+firebase emulators:start
+node tests/load/seed-production.js    # 테스트 데이터 시드
+node tests/load/generate-tokens.js    # 인증 토큰 생성
+k6 run tests/load/mixed-scenario.k6.js
+```
+
+**프로덕션**: `PROD=1 k6 run tests/load/mixed-scenario.k6.js`
+
 ### 공유 상수 (`shared/`)
 
 프론트엔드와 Cloud Functions 간 **단일 소스**:
