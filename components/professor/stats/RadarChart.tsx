@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ChapterStats } from '@/lib/hooks/useProfessorStats';
 
@@ -26,6 +26,19 @@ function extractChapterNumber(chapterId: string): string {
 export default function RadarChart({ chapterStats }: Props) {
   const [selectedChapter, setSelectedChapter] = useState<string | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // 드롭다운 외부 클릭 감지 (fixed 오버레이 없이 스크롤 유지)
+  useEffect(() => {
+    if (!isDropdownOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [isDropdownOpen]);
 
   // 레이더에 표시할 데이터
   const radarData = selectedChapter
@@ -80,7 +93,7 @@ export default function RadarChart({ chapterStats }: Props) {
           )}
         </div>
         {/* 챕터 커스텀 드롭다운 */}
-        <div className="relative">
+        <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
             className="px-2 py-1 bg-[#F5F0E8] border border-[#1A1A1A] text-[#1A1A1A] text-xs font-bold flex items-center justify-between gap-1.5 min-w-[80px] rounded-lg"
@@ -100,7 +113,6 @@ export default function RadarChart({ chapterStats }: Props) {
           <AnimatePresence>
             {isDropdownOpen && (
               <>
-                <div className="fixed inset-0 z-10" onClick={() => setIsDropdownOpen(false)} />
                 <motion.div
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
