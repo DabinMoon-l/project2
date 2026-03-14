@@ -5,15 +5,14 @@
  * 페이지를 벗어나도 폴링이 유지되고, 완료 시 Firestore 저장 + 이벤트 발행.
  */
 
-import { httpsCallable } from 'firebase/functions';
 import {
-  getFirestore,
   doc,
   setDoc,
   collection,
   serverTimestamp,
-} from 'firebase/firestore';
-import { functions } from '@/lib/firebase';
+  db,
+} from '@/lib/repositories';
+import { callFunction } from '@/lib/api';
 import { getCourseIndex } from '@/lib/courseIndex';
 
 // ============================================================
@@ -160,16 +159,6 @@ function extractChapterIdsFromTags(courseId: string, tags: string[]): string[] {
 // ============================================================
 
 async function pollAndSave(jobId: string, config: QuizSaveConfig) {
-  const checkStatus = httpsCallable<
-    { jobId: string },
-    {
-      jobId: string;
-      status: string;
-      result?: { questions: GeneratedQuestion[]; meta?: any };
-      error?: string;
-    }
-  >(functions, 'checkJobStatus');
-
   const MAX_POLLS = 90; // 최대 3분
   let pollCount = 0;
 
@@ -178,8 +167,8 @@ async function pollAndSave(jobId: string, config: QuizSaveConfig) {
     let generatedTitle: string | undefined;
 
     while (pollingActive && pollCount < MAX_POLLS) {
-      const statusResult = await checkStatus({ jobId });
-      const { status, result, error } = statusResult.data;
+      const statusResult = await callFunction('checkJobStatus', { jobId });
+      const { status, result, error } = statusResult;
 
       if (status === 'RUNNING') {
         emit({ type: 'progress', step: 'generating' });
@@ -206,8 +195,7 @@ async function pollAndSave(jobId: string, config: QuizSaveConfig) {
     }
 
     // Firestore 저장
-    const firestoreDb = getFirestore();
-    const quizRef = doc(collection(firestoreDb, 'quizzes'));
+    const quizRef = doc(collection(db, 'quizzes'));
 
     // 태그에서 chapterId 폴백 후보 추출 (Gemini가 chapterId 누락 시 사용)
     const fallbackChapterIds = extractChapterIdsFromTags(

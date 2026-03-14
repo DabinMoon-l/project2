@@ -2,8 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { doc, getDoc, db } from '@/lib/repositories';
 import { useTheme } from '@/styles/themes/useTheme';
 import { Skeleton, useExpToast } from '@/components/common';
 import { EXP_REWARDS } from '@/lib/utils/expRewards';

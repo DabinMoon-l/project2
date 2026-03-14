@@ -2,14 +2,12 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs, doc, getDoc, db } from '@/lib/repositories';
 import { useCourse } from '@/lib/contexts';
 import { useProfessorStats, getRawStudents, type QuestionSource, type RawStudentData } from '@/lib/hooks/useProfessorStats';
 import { calcFeedbackScore, FEEDBACK_SCORES } from '@/lib/utils/feedbackScore';
 import { exportToExcel, exportToWord, type WeeklyStatSummary } from '@/lib/utils/reportExport';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/lib/firebase';
+import { callFunction } from '@/lib/api';
 import { mean as statMean, sd as statSd, zScore } from '@/lib/utils/statistics';
 import type { FeedbackType } from '@/components/quiz/InstantFeedbackButton';
 import type { CourseId } from '@/lib/types/course';
@@ -426,9 +424,7 @@ export default function ProfessorStatsPage() {
       }
 
       // 새 리포트 생성
-      const generateReport = httpsCallable(functions, 'generateMonthlyReport');
-      const result = await generateReport({ courseId, year: reportYear, month: reportMonth });
-      const resultData = result.data as { insight: string; weeklyStatsUsed: string[] };
+      const resultData = await callFunction('generateMonthlyReport', { courseId, year: reportYear, month: reportMonth }) as { insight: string; weeklyStatsUsed: string[] };
       setReportInsight(resultData.insight);
       setExistingReportInsight(resultData.insight);
 

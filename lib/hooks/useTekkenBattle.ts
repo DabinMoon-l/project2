@@ -18,8 +18,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ref, onValue, off, onDisconnect, remove, set } from 'firebase/database';
-import { httpsCallable } from 'firebase/functions';
-import { getRtdb, functions } from '@/lib/firebase';
+import { getRtdb } from '@/lib/firebase';
+import { callFunction } from '@/lib/api';
 import type {
   MatchState,
   BattleState,
@@ -221,8 +221,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
 
     const attemptStart = async () => {
       try {
-        const fn = httpsCallable(functions, 'startBattleRound');
-        await fn({ battleId: battleIdRef.current, roundIndex: nextRound });
+        await callFunction('startBattleRound', { battleId: battleIdRef.current!, roundIndex: nextRound });
       } catch (err: any) {
         // 이미 시작된 경우 무시
         if (isExpectedError(err)) return;
@@ -259,15 +258,11 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     }, 1000);
 
     try {
-      const joinFn = httpsCallable<{ courseId: string }, JoinMatchmakingResult>(
-        functions,
-        'joinMatchmaking'
-      );
-      const result = await joinFn({ courseId });
+      const result = await callFunction('joinMatchmaking', { courseId });
 
-      if (result.data.status === 'matched' && result.data.battleId) {
-        battleIdRef.current = result.data.battleId;
-        setActiveBattleId(result.data.battleId);
+      if (result.status === 'matched' && result.battleId) {
+        battleIdRef.current = result.battleId;
+        setActiveBattleId(result.battleId);
         setMatchState('matched');
         clearTimers();
         return;
@@ -294,16 +289,12 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
         if (battleIdRef.current) return;
 
         try {
-          const botFn = httpsCallable<{ courseId: string }, JoinMatchmakingResult>(
-            functions,
-            'matchWithBot'
-          );
-          const botResult = await botFn({ courseId });
+          const botResult = await callFunction('matchWithBot', { courseId });
 
           // 봇 CF 실행 중 실제 매칭이 성사됐으면 무시 (실제 매칭 우선)
           if (battleIdRef.current) return;
 
-          if (botResult.data.status === 'already_matched') {
+          if (botResult.status === 'already_matched') {
             // 서버에서 매칭 결과를 찾지 못했지만 클라이언트가 이미 처리했을 수 있음
             // battleIdRef가 설정될 때까지 짧게 대기
             if (!battleIdRef.current) {
@@ -317,9 +308,9 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
             return;
           }
 
-          if (botResult.data.battleId) {
-            battleIdRef.current = botResult.data.battleId;
-            setActiveBattleId(botResult.data.battleId);
+          if (botResult.battleId) {
+            battleIdRef.current = botResult.battleId;
+            setActiveBattleId(botResult.battleId);
             setMatchState('matched');
             clearTimers();
           }
@@ -345,8 +336,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
   const cancelMatch = useCallback(() => {
     if (!courseIdRef.current) return;
 
-    const cancelFn = httpsCallable(functions, 'cancelMatchmaking');
-    cancelFn({ courseId: courseIdRef.current }).catch(console.error);
+    callFunction('cancelMatchmaking', { courseId: courseIdRef.current }).catch(console.error);
 
     setMatchState('idle');
     setWaitTime(0);
@@ -360,18 +350,17 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     if (!battleIdRef.current || !battle) return null;
 
     try {
-      const fn = httpsCallable<any, SubmitAnswerResult>(functions, 'submitAnswer');
-      const result = await fn({
+      const result = await callFunction('submitAnswer', {
         battleId: battleIdRef.current,
         roundIndex: battle.currentRound,
         answer,
       });
       // status === 'waiting' → 상대 대기 (UI에서 "상대방 답변 대기 중..." 표시)
-      if (result.data.status === 'waiting') {
+      if (result.status === 'waiting') {
         return null;
       }
       // status === 'scored' → 결과 반환
-      return result.data;
+      return result;
     } catch (err: any) {
       // 예상된 상태 에러 (이미 채점됨 등) → 무시
       if (isExpectedError(err)) return null;
@@ -385,8 +374,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     if (!battleIdRef.current) return;
 
     try {
-      const fn = httpsCallable(functions, 'swapRabbit');
-      await fn({ battleId: battleIdRef.current });
+      await callFunction('swapRabbit', { battleId: battleIdRef.current });
     } catch (err: any) {
       console.error('토끼 교체 실패:', err);
     }
@@ -397,8 +385,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     if (!battleIdRef.current) return;
 
     try {
-      const fn = httpsCallable(functions, 'submitMashResult');
-      await fn({ battleId: battleIdRef.current, taps });
+      await callFunction('submitMashResult', { battleId: battleIdRef.current, taps });
     } catch (err: any) {
       // 예상된 에러 (이미 처리됨 등) → 무시
       if (isExpectedError(err)) return;
@@ -427,8 +414,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     if (!battleIdRef.current || !battle) return;
 
     try {
-      const fn = httpsCallable(functions, 'submitTimeout');
-      await fn({
+      await callFunction('submitTimeout', {
         battleId: battleIdRef.current,
         roundIndex: battle.currentRound,
       });
@@ -445,8 +431,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     if (!battleIdRef.current) return;
 
     try {
-      const fn = httpsCallable(functions, 'startBattleRound');
-      await fn({ battleId: battleIdRef.current, roundIndex });
+      await callFunction('startBattleRound', { battleId: battleIdRef.current, roundIndex });
     } catch (err: any) {
       if (!isExpectedError(err)) {
         console.error('라운드 시작 실패:', err);

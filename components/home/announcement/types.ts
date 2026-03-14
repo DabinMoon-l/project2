@@ -1,4 +1,4 @@
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp } from '@/lib/repositories';
 import React from 'react';
 
 // ─── 타입 ───────────────────────────────────────────────

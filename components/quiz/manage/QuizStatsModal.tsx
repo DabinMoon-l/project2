@@ -19,8 +19,8 @@ import {
   doc,
   getDoc,
   getDocs,
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+  db,
+} from '@/lib/repositories';
 import { formatChapterLabel } from '@/lib/courseIndex';
 import { useCustomFolders } from '@/lib/hooks/useCustomFolders';
 import FolderSelectModal from '@/components/common/FolderSelectModal';

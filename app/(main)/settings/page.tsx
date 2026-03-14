@@ -3,8 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/lib/firebase';
+import { callFunction } from '@/lib/api';
 import { isStudentEmail, extractStudentId } from '@/lib/auth';
 import { SettingsList } from '@/components/profile';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -475,12 +474,7 @@ function RecoveryEmailSection() {
     setMessage(null);
 
     try {
-      const updateFn = httpsCallable<
-        { recoveryEmail: string },
-        { success: boolean; maskedEmail: string }
-      >(functions, 'updateRecoveryEmail');
-
-      const result = await updateFn({ recoveryEmail: email });
+      await callFunction('updateRecoveryEmail', { recoveryEmail: email });
       setMessage('복구 이메일이 등록되었습니다.');
       setIsEditing(false);
       setEmail('');

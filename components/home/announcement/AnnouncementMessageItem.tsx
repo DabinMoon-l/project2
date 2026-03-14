@@ -3,8 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { deleteDoc, doc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { deleteDoc, doc, db } from '@/lib/repositories';
 import type { Announcement, FileAttachment, Poll, EditSubmitData } from './types';
 import { REACTION_EMOJIS, BUBBLE_SIDE_MULTI, getImageUrls, getFiles, getPolls, fmtDate, fmtTime, URL_RE } from './types';
 import { Bubble, ImageCarousel, FileCarousel, PollCarousel, MessageContent } from './BubbleComponents';

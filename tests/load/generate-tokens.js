@@ -1,15 +1,16 @@
 /**
- * k6 부하 테스트용 Firebase Auth 토큰 일괄 생성
+ * 프로덕션 k6 부하 테스트용 Firebase Auth 토큰 일괄 생성
  *
  * 사용법:
  *   node tests/load/generate-tokens.js
  *
  * 필요:
  *   - serviceAccountKey.json (프로젝트 루트)
- *   - enrolledStudents에 테스트 학번이 등록되어 있어야 함
+ *   - seed-production.js 먼저 실행 (Auth 계정 생성)
  *
  * 출력:
- *   tests/load/tokens.json — k6에서 사용할 토큰 배열
+ *   tests/load/tokens.json     — 학생 토큰 배열
+ *   tests/load/prof-tokens.json — 교수 토큰 배열
  */
 
 const { initializeApp, cert } = require("firebase-admin/app");
@@ -22,10 +23,11 @@ const path = require("path");
 const PROJECT_ROOT = path.resolve(__dirname, "../..");
 const SA_PATH = path.join(PROJECT_ROOT, "serviceAccountKey.json");
 const OUTPUT_PATH = path.join(__dirname, "tokens.json");
+const PROF_OUTPUT_PATH = path.join(__dirname, "prof-tokens.json");
 
-// 테스트 학번 범위 (실제 등록된 학번 사용 또는 테스트용 계정)
-const TEST_STUDENT_IDS = [];
-const NUM_VIRTUAL_USERS = Number(process.env.K6_VUS) || 300;
+const NUM_STUDENTS = Number(process.env.K6_VUS) || 300;
+const NUM_PROFESSORS = 1;
+const UID_PREFIX = "load-test-";
 
 // Firebase API Key (.env.local에서 읽기)
 let FIREBASE_API_KEY = process.env.FIREBASE_API_KEY || "";
@@ -57,10 +59,7 @@ async function exchangeCustomTokenForIdToken(customToken) {
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      token: customToken,
-      returnSecureToken: true,
-    }),
+    body: JSON.stringify({ token: customToken, returnSecureToken: true }),
   });
 
   if (!res.ok) {
@@ -80,42 +79,61 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`${NUM_VIRTUAL_USERS}개 토큰 생성 시작...`);
-
-  // 기존 학생 계정의 UID 조회 또는 커스텀 토큰 생성
+  // ── 학생 토큰 ──
+  console.log(`학생 ${NUM_STUDENTS}개 토큰 생성 중...`);
   const tokens = [];
   const batchSize = 50;
 
-  for (let i = 0; i < NUM_VIRTUAL_USERS; i += batchSize) {
+  for (let i = 0; i < NUM_STUDENTS; i += batchSize) {
     const batch = [];
-    const end = Math.min(i + batchSize, NUM_VIRTUAL_USERS);
+    const end = Math.min(i + batchSize, NUM_STUDENTS);
 
     for (let j = i; j < end; j++) {
-      // 테스트 UID 생성 (실제 유저가 아닌 가상 UID)
-      const uid = `load-test-user-${String(j).padStart(4, "0")}`;
+      const uid = `${UID_PREFIX}${String(j).padStart(4, "0")}`;
 
       batch.push(
         auth
           .createCustomToken(uid)
           .then((customToken) => exchangeCustomTokenForIdToken(customToken))
           .then((idToken) => {
-            tokens.push({ uid, idToken, index: j });
+            tokens.push({ uid, idToken, index: j, role: "student" });
           })
           .catch((err) => {
-            console.warn(`토큰 생성 실패 (${uid}):`, err.message);
+            console.warn(`  학생 토큰 실패 (${uid}): ${err.message}`);
           })
       );
     }
 
     await Promise.all(batch);
-    console.log(`  ${Math.min(end, NUM_VIRTUAL_USERS)}/${NUM_VIRTUAL_USERS} 완료`);
+    console.log(`  ${Math.min(end, NUM_STUDENTS)}/${NUM_STUDENTS} 완료`);
   }
 
-  // 저장
+  // index 순서 보장
+  tokens.sort((a, b) => a.index - b.index);
   fs.writeFileSync(OUTPUT_PATH, JSON.stringify(tokens, null, 2));
-  console.log(`\n${tokens.length}개 토큰 저장: ${OUTPUT_PATH}`);
-  console.log("\nk6 실행:");
-  console.log("  k6 run tests/load/recordAttempt.k6.js");
+  console.log(`${tokens.length}개 학생 토큰 저장: ${OUTPUT_PATH}`);
+
+  // ── 교수 토큰 ──
+  console.log(`\n교수 ${NUM_PROFESSORS}개 토큰 생성 중...`);
+  const profTokens = [];
+
+  for (let i = 0; i < NUM_PROFESSORS; i++) {
+    const uid = `${UID_PREFIX}prof-${i}`;
+
+    try {
+      const customToken = await auth.createCustomToken(uid);
+      const idToken = await exchangeCustomTokenForIdToken(customToken);
+      profTokens.push({ uid, idToken, index: i, role: "professor" });
+    } catch (err) {
+      console.warn(`  교수 토큰 실패 (${uid}): ${err.message}`);
+    }
+  }
+
+  fs.writeFileSync(PROF_OUTPUT_PATH, JSON.stringify(profTokens, null, 2));
+  console.log(`${profTokens.length}개 교수 토큰 저장: ${PROF_OUTPUT_PATH}`);
+
+  console.log("\n프로덕션 k6 실행:");
+  console.log("  k6 run -e PROD=1 tests/load/mixed-scenario.k6.js");
 }
 
 main().catch((err) => {

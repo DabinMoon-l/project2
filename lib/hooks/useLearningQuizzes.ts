@@ -13,8 +13,8 @@ import {
   getDocs,
   writeBatch,
   serverTimestamp,
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+  db,
+} from '@/lib/repositories';
 import { useAuth } from './useAuth';
 import { useCourse } from '@/lib/contexts/CourseContext';
 

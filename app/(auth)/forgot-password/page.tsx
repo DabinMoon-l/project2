@@ -12,8 +12,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import Link from 'next/link';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/lib/firebase';
+import { callFunction } from '@/lib/api';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -83,13 +82,7 @@ export default function ForgotPasswordPage() {
 
     setIsSubmitting(true);
     try {
-      const fn = httpsCallable<
-        { studentId: string; email: string },
-        { success: boolean; hasRecoveryEmail: boolean; codeSent?: boolean; maskedEmail?: string; message: string }
-      >(functions, 'requestPasswordReset');
-
-      const res = await fn({ studentId, email });
-      const data = res.data;
+      const data = await callFunction('requestPasswordReset', { studentId, email });
 
       if (data.hasRecoveryEmail && data.codeSent) {
         setMaskedEmail(data.maskedEmail || '');
@@ -125,13 +118,8 @@ export default function ForgotPasswordPage() {
 
     setIsSubmitting(true);
     try {
-      const fn = httpsCallable<
-        { studentId: string; verificationCode: string; newPassword: string },
-        { success: boolean; message: string }
-      >(functions, 'requestPasswordReset');
-
-      const res = await fn({ studentId, verificationCode, newPassword });
-      if (res.data.success) {
+      const data = await callFunction('requestPasswordReset', { studentId, verificationCode, newPassword });
+      if (data.success) {
         setPhase('complete');
       }
     } catch (err: unknown) {
@@ -149,11 +137,7 @@ export default function ForgotPasswordPage() {
 
     setInquirySubmitting(true);
     try {
-      const submitInquiryFn = httpsCallable<
-        { studentId: string; message: string },
-        { success: boolean }
-      >(functions, 'submitInquiry');
-      await submitInquiryFn({ studentId, message: trimmed });
+      await callFunction('submitInquiry', { studentId, message: trimmed });
       setInquirySent(true);
       setInquiryMessage('');
       setTimeout(() => {

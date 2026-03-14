@@ -1,5 +1,11 @@
 /**
  * 철권퀴즈 매칭 — joinMatchmaking, cancelMatchmaking, matchWithBot
+ *
+ * 매칭 락 패턴:
+ * ① 각 유저가 자기 경로에 쓰기 (경합 0)
+ * ② 락 획득한 1명이 큐 전체를 읽어서 FIFO 페어링
+ * ③ matchResults/{userId}로 양쪽 모두에 알림
+ * → 기존 전체 큐 트랜잭션 대비 동시접속 경합 제거
  */
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
@@ -12,6 +18,9 @@ import { pregenBattleQuestions } from "./tekkenQuestions";
 import type { PlayerSetup } from "./tekkenTypes";
 
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
+
+// 매칭 락 유효 시간 (ms) — 이 시간 내에 매처가 처리 완료해야 함
+const MATCH_LOCK_TTL = 10_000;
 
 // ============================================
 // joinMatchmaking
@@ -50,86 +59,143 @@ export const joinMatchmaking = onCall(
       );
     }
 
-    const queueEntry = {
-      userId,
+    // ① 프로필 + 큐 등록 (per-user 경로, 경합 없음)
+    const profileData = {
       nickname: userData.nickname || "플레이어",
       profileRabbitId: equippedRabbits[0]?.rabbitId || 0,
       equippedRabbits,
-      joinedAt: Date.now(),
     };
+    await Promise.all([
+      rtdb.ref(`tekken/matchmaking_data/${courseId}/${userId}`).set(profileData),
+      rtdb.ref(`tekken/matchmaking/${courseId}/${userId}`).set({ joinedAt: Date.now() }),
+    ]);
 
-    // 트랜잭션으로 원자적 매칭
-    const queueRef = rtdb.ref(`tekken/matchmaking/${courseId}`);
-    let matchedOpponentId: string | null = null;
-    let matchedOpponentData: any = null;
-
-    const txResult = await queueRef.transaction((currentData) => {
-      matchedOpponentId = null;
-      matchedOpponentData = null;
-
-      if (!currentData) {
-        return { [userId]: queueEntry };
+    // ② 매칭 락 획득 시도
+    const lockRef = rtdb.ref(`tekken/matchmaking_lock/${courseId}`);
+    let acquired = false;
+    await lockRef.transaction((current) => {
+      if (current && Date.now() - current.lockedAt < MATCH_LOCK_TTL) {
+        acquired = false;
+        return current; // 다른 매처가 처리 중
       }
-
-      delete currentData[userId];
-
-      const opponentIds = Object.keys(currentData);
-      if (opponentIds.length > 0) {
-        matchedOpponentId = opponentIds[0];
-        matchedOpponentData = JSON.parse(JSON.stringify(currentData[matchedOpponentId]));
-        delete currentData[matchedOpponentId];
-        return Object.keys(currentData).length === 0 ? null : currentData;
-      }
-
-      currentData[userId] = queueEntry;
-      return currentData;
+      acquired = true;
+      return { lockedAt: Date.now(), matcherId: userId };
     });
 
-    if (!txResult.committed) {
-      throw new HttpsError("aborted", "매칭 처리 실패, 다시 시도해주세요.");
+    if (acquired) {
+      // ③ 매처: 큐 페어링 실행
+      try {
+        const myBattleId = await runMatchmaker(
+          courseId, userId, rtdb, GEMINI_API_KEY.value()
+        );
+        if (myBattleId) {
+          return { status: "matched", battleId: myBattleId };
+        }
+      } finally {
+        lockRef.remove().catch(() => {});
+      }
+
+      // 매처였지만 홀수번째라 매칭 안 됨 → 대기
+      pregenBattleQuestions(courseId, userId, GEMINI_API_KEY.value()).catch(() => {});
+      return { status: "waiting" };
     }
 
-    if (matchedOpponentId && matchedOpponentData) {
-      const player1: PlayerSetup = {
-        userId,
-        nickname: userData.nickname || "플레이어",
-        profileRabbitId: equippedRabbits[0]?.rabbitId || 0,
-        isBot: false,
-        equippedRabbits,
-      };
-
-      const player2: PlayerSetup = {
-        userId: matchedOpponentId,
-        nickname: matchedOpponentData.nickname || "상대방",
-        profileRabbitId: matchedOpponentData.profileRabbitId || 0,
-        isBot: false,
-        equippedRabbits: matchedOpponentData.equippedRabbits || [],
-      };
-
-      // createBattle은 즉시 반환 (문제 생성은 비동기)
-      const battleId = await createBattle(
-        courseId,
-        player1,
-        player2,
-        GEMINI_API_KEY.value()
-      );
-
-      await rtdb.ref(`tekken/matchResults/${matchedOpponentId}`).set({
-        battleId,
-        matchedAt: Date.now(),
-      });
-
-      return { status: "matched", battleId };
+    // ④ 비매처: 매처가 처리할 때까지 대기 후 결과 확인
+    await new Promise(r => setTimeout(r, 800));
+    const myMatch = await rtdb.ref(`tekken/matchResults/${userId}`).once("value");
+    if (myMatch.val()?.battleId) {
+      return { status: "matched", battleId: myMatch.val().battleId };
     }
 
-    // 매칭 대기 중 → 문제 사전 생성 (fire-and-forget)
-    pregenBattleQuestions(courseId, userId, GEMINI_API_KEY.value()).catch((err) => {
-      console.error("사전 캐싱 실패 (무시):", err);
-    });
-
+    // 아직 매칭 안 됨 → 클라이언트에서 matchResults 리스너 or 봇 폴백
+    pregenBattleQuestions(courseId, userId, GEMINI_API_KEY.value()).catch(() => {});
     return { status: "waiting" };
   }
 );
+
+/**
+ * 매처: 큐 전체를 읽어서 FIFO 순서로 페어링
+ * 경합 없음 — 락 획득한 1명만 실행
+ */
+async function runMatchmaker(
+  courseId: string,
+  matcherId: string,
+  rtdb: ReturnType<typeof getDatabase>,
+  apiKey: string
+): Promise<string | null> {
+  const snap = await rtdb.ref(`tekken/matchmaking/${courseId}`).once("value");
+  const queue = snap.val() || {};
+  const userIds = Object.keys(queue).sort(
+    (a, b) => (queue[a].joinedAt || 0) - (queue[b].joinedAt || 0)
+  );
+
+  if (userIds.length < 2) return null;
+
+  // 프로필 일괄 로드
+  const profileSnaps = await Promise.all(
+    userIds.map(id =>
+      rtdb.ref(`tekken/matchmaking_data/${courseId}/${id}`).once("value")
+    )
+  );
+  const profiles: Record<string, any> = {};
+  userIds.forEach((id, i) => { profiles[id] = profileSnaps[i].val() || {}; });
+
+  // FIFO 페어링
+  const pairs: [string, string][] = [];
+  for (let i = 0; i + 1 < userIds.length; i += 2) {
+    pairs.push([userIds[i], userIds[i + 1]]);
+  }
+
+  // 전체 페어 병렬 처리
+  let matcherBattleId: string | null = null;
+
+  await Promise.all(pairs.map(async ([id1, id2]) => {
+    // 큐에서 양쪽 제거
+    await Promise.all([
+      rtdb.ref(`tekken/matchmaking/${courseId}/${id1}`).remove(),
+      rtdb.ref(`tekken/matchmaking/${courseId}/${id2}`).remove(),
+    ]);
+
+    const p1 = profiles[id1];
+    const p2 = profiles[id2];
+
+    const player1: PlayerSetup = {
+      userId: id1,
+      nickname: p1.nickname || "플레이어",
+      profileRabbitId: p1.profileRabbitId || 0,
+      isBot: false,
+      equippedRabbits: p1.equippedRabbits || [],
+    };
+    const player2: PlayerSetup = {
+      userId: id2,
+      nickname: p2.nickname || "상대방",
+      profileRabbitId: p2.profileRabbitId || 0,
+      isBot: false,
+      equippedRabbits: p2.equippedRabbits || [],
+    };
+
+    const battleId = await createBattle(courseId, player1, player2, apiKey);
+
+    // 양쪽 모두에 matchResults 알림
+    await Promise.all([
+      rtdb.ref(`tekken/matchResults/${id1}`).set({ battleId, matchedAt: Date.now() }),
+      rtdb.ref(`tekken/matchResults/${id2}`).set({ battleId, matchedAt: Date.now() }),
+    ]);
+
+    // 프로필 정리 (fire-and-forget)
+    Promise.all([
+      rtdb.ref(`tekken/matchmaking_data/${courseId}/${id1}`).remove(),
+      rtdb.ref(`tekken/matchmaking_data/${courseId}/${id2}`).remove(),
+    ]).catch(() => {});
+
+    // 매처 본인이 페어에 포함됐는지 확인
+    if (id1 === matcherId || id2 === matcherId) {
+      matcherBattleId = battleId;
+    }
+  }));
+
+  return matcherBattleId;
+}
 
 // ============================================
 // cancelMatchmaking
@@ -147,7 +213,8 @@ export const cancelMatchmaking = onCall(
     const rtdb = getDatabase();
     await rtdb.ref(`tekken/matchmaking/${courseId}/${userId}`).remove();
 
-    // 사전 캐시도 정리
+    // 프로필 데이터 + 사전 캐시 정리
+    rtdb.ref(`tekken/matchmaking_data/${courseId}/${userId}`).remove().catch(() => {});
     rtdb.ref(`tekken/pregenQuestions/${courseId}_${userId}`).remove().catch(() => {});
 
     return { success: true };
@@ -173,21 +240,20 @@ export const matchWithBot = onCall(
     const rtdb = getDatabase();
     const fsDb = getFirestore();
 
-    // 원자적으로 큐에서 제거 — 이미 없으면(다른 유저가 매칭) 봇 생성 스킵
-    // 주의: RTDB transaction은 첫 호출 시 current=null(캐시 미스) 가능
-    //       → undefined 반환(abort) 대신 null 반환하여 재시도 허용
+    // 큐에서 원자적 제거 — 이미 없으면(다른 유저가 매칭) 봇 생성 스킵
     const queueEntryRef = rtdb.ref(`tekken/matchmaking/${courseId}/${userId}`);
     let removedFromQueue = false;
     await queueEntryRef.transaction((current) => {
       if (current) {
         removedFromQueue = true;
-        return null; // 큐에서 제거
+        return null;
       }
-      // null → 캐시 미스이거나 실제로 없음
-      // null 반환 = no-op (null→null) — 캐시 미스면 서버 값으로 재시도됨
       removedFromQueue = false;
       return current;
     });
+
+    // 프로필 데이터 정리
+    rtdb.ref(`tekken/matchmaking_data/${courseId}/${userId}`).remove().catch(() => {});
 
     if (!removedFromQueue) {
       // 이미 다른 유저와 매칭됨 — matchResults에서 battleId 확인
@@ -198,7 +264,7 @@ export const matchWithBot = onCall(
       if (matchResult?.battleId) {
         return { status: "matched", battleId: matchResult.battleId };
       }
-      // matchResult가 아직 없으면 대기 후 재확인 (RTDB 전파 딜레이)
+      // RTDB 전파 딜레이 대비 재확인
       await new Promise(resolve => setTimeout(resolve, 1000));
       const retrySnap = await rtdb
         .ref(`tekken/matchResults/${userId}`)
@@ -207,8 +273,6 @@ export const matchWithBot = onCall(
       if (retryResult?.battleId) {
         return { status: "matched", battleId: retryResult.battleId };
       }
-      // 클라이언트가 이미 매칭 결과를 처리하고 matchResults를 삭제했을 수 있음
-      // 클라이언트 쪽에서 battleIdRef로 판단하므로 에러 대신 빈 응답 반환
       return { status: "already_matched" };
     }
 

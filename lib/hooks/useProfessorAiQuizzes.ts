@@ -18,8 +18,8 @@ import {
   deleteDoc,
   updateDoc,
   serverTimestamp,
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+  db,
+} from '@/lib/repositories';
 import { useUser } from '@/lib/contexts';
 import { useCourse } from '@/lib/contexts/CourseContext';
 

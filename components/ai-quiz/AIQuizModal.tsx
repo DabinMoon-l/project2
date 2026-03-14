@@ -3,8 +3,8 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as pdfjsLib from 'pdfjs-dist';
-import { httpsCallable } from 'firebase/functions';
-import { auth, functions } from '@/lib/firebase';
+import { callFunction } from '@/lib/api';
+import { auth } from '@/lib/firebase';
 import { useCourse } from '@/lib/contexts/CourseContext';
 // OCR 제거됨 — Gemini가 이미지를 직접 분석하므로 별도 OCR 불필요
 import { generateCourseTags, COMMON_TAGS, type TagOption } from '@/lib/courseIndex';
@@ -272,11 +272,10 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
 
       // 2. Cloud Function으로 PDF 변환 요청 (CORS 자동 처리)
       setLoadingMessage('PPT를 PDF로 변환 중... (최대 1~2분 소요)');
-      const convertFn = httpsCallable<{ pptxBase64: string }, { pdfBase64: string }>(functions, 'convertPptxToPdf', { timeout: 180000 });
-      const result = await convertFn({ pptxBase64 });
+      const result = await callFunction('convertPptxToPdf', { pptxBase64 }, { timeout: 180000 }) as { pdfBase64: string };
 
       // 3. base64 PDF → ArrayBuffer 변환
-      const pdfBinaryString = atob(result.data.pdfBase64);
+      const pdfBinaryString = atob(result.pdfBase64);
       const pdfBytes = new Uint8Array(pdfBinaryString.length);
       for (let i = 0; i < pdfBinaryString.length; i++) {
         pdfBytes[i] = pdfBinaryString.charCodeAt(i);

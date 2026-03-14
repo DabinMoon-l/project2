@@ -138,20 +138,9 @@ export const enqueueGenerationJob = onCall(
     const professorPrompt = raw.professorPrompt ?? undefined;
     const tags = raw.tags ?? undefined;
 
-    // Rate limit 검사
-    try {
-      await checkRateLimitV2(userId, "ai-generate");
-      await checkRateLimitV2(userId, "ai-generate-daily");
-    } catch (err) {
-      throw new HttpsError(
-        "resource-exhausted",
-        err instanceof Error ? err.message : "요청 한도 초과"
-      );
-    }
-
     const db = getFirestore();
 
-    // dedupeKey 생성
+    // dedupeKey 생성 (CPU만, 빠름)
     const dedupeKey = buildDedupeKey(
       userId,
       text,
@@ -164,14 +153,26 @@ export const enqueueGenerationJob = onCall(
       tags
     );
 
-    // 중복 Job 확인 (최근 10분 이내 같은 dedupeKey)
-    const existingJobs = await db
-      .collection("jobs")
-      .where("dedupeKey", "==", dedupeKey)
-      .where("status", "in", ["QUEUED", "RUNNING", "COMPLETED"])
-      .orderBy("createdAt", "desc")
-      .limit(1)
-      .get();
+    // Rate limit 2종 + 중복 확인 병렬 처리 (순차 대비 ~200ms 절약)
+    let existingJobs: FirebaseFirestore.QuerySnapshot;
+    try {
+      const [, , dedupeResult] = await Promise.all([
+        checkRateLimitV2(userId, "ai-generate"),
+        checkRateLimitV2(userId, "ai-generate-daily"),
+        db.collection("jobs")
+          .where("dedupeKey", "==", dedupeKey)
+          .where("status", "in", ["QUEUED", "RUNNING", "COMPLETED"])
+          .orderBy("createdAt", "desc")
+          .limit(1)
+          .get(),
+      ]);
+      existingJobs = dedupeResult;
+    } catch (err) {
+      throw new HttpsError(
+        "resource-exhausted",
+        err instanceof Error ? err.message : "요청 한도 초과"
+      );
+    }
 
     if (!existingJobs.empty) {
       const existingJob = existingJobs.docs[0];

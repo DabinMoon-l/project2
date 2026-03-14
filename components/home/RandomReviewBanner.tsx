@@ -9,8 +9,8 @@ import {
   where,
   getDocs,
   limit,
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+  db,
+} from '@/lib/repositories';
 import { useUser, useCourse } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
 

@@ -3,8 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { doc, onSnapshot, db } from '@/lib/repositories';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 interface PptxProgressModalProps {

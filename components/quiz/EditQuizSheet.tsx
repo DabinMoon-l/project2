@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { doc, getDoc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
-import { db, auth } from '@/lib/firebase';
+import { doc, getDoc, updateDoc, serverTimestamp, Timestamp, db } from '@/lib/repositories';
+import { auth } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse } from '@/lib/contexts';
 import dynamic from 'next/dynamic';

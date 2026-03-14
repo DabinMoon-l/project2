@@ -4,10 +4,10 @@
  * 도배 방지, Firestore 문서 변환 등 순수 함수
  */
 
-import {
+import type {
   DocumentSnapshot,
   QueryDocumentSnapshot,
-} from 'firebase/firestore';
+} from '@/lib/repositories';
 import type { Post, Comment } from './useBoardTypes';
 
 // ============================================================

@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { doc, getDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { doc, getDoc, collection, query, where, onSnapshot, db } from '@/lib/repositories';
 import { getPastExamOptions, type PastExamOption } from '@/lib/types/course';
 import { generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import type { CompletedQuizData } from './types';

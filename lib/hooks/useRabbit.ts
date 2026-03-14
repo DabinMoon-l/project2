@@ -16,8 +16,8 @@ import {
   where,
   onSnapshot,
   orderBy,
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+  db,
+} from '@/lib/repositories';
 
 // ============================================================
 // 타입 정의

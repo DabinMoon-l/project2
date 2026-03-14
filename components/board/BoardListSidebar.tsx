@@ -9,8 +9,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { collection, query, where, orderBy, getDocs, limit } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { collection, query, where, orderBy, getDocs, limit, db } from '@/lib/repositories';
 import { useCourse } from '@/lib/contexts';
 
 interface SidebarPost {

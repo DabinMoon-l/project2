@@ -3,9 +3,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { doc, getDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
-import { db, functions } from '@/lib/firebase';
+import { doc, getDoc, collection, query, where, getDocs, onSnapshot, db } from '@/lib/repositories';
+import { callFunction } from '@/lib/api';
 import { useUser, useCourse } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
 import { type ClassType } from '@/styles/themes';
@@ -177,8 +176,7 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
 
           let generated = false;
           try {
-            const refresh = httpsCallable(functions, 'refreshRankings');
-            await refresh({ courseId: userCourseId });
+            await callFunction('refreshRankings', { courseId: userCourseId });
             generated = true;
           } catch { /* CF 미배포 */ }
 

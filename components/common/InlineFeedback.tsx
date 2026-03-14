@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, addDoc, doc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { collection, addDoc, doc, getDoc, serverTimestamp, db } from '@/lib/repositories';
 import { FEEDBACK_TYPES, type FeedbackType } from '@/components/review/types';
 
 interface InlineFeedbackProps {

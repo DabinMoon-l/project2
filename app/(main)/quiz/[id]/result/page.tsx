@@ -18,9 +18,9 @@ import {
   query,
   where,
   getDocs,
-} from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
-import { db, functions } from '@/lib/firebase';
+  db,
+} from '@/lib/repositories';
+import { callFunction } from '@/lib/api';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse, useMilestone } from '@/lib/contexts';
 import { formatChapterLabel } from '@/lib/courseIndex';
@@ -392,10 +392,8 @@ export default function QuizResultPage() {
       try {
         // ── recordAttempt Cloud Function 호출 (서버 채점 + 분산 쓰기) ──
         // quizResults, quiz_completions, quiz_agg, quizzes 호환 업데이트를 서버에서 처리
-        const recordAttemptFn = httpsCallable<
-          { quizId: string; answers: { questionId: string; answer: any }[]; attemptNo?: number },
-          { alreadySubmitted?: boolean; resultId: string; score: number; correctCount: number; totalCount: number }
-        >(functions, 'recordAttempt');
+        const recordAttemptFn = (data: { quizId: string; answers: { questionId: string; answer: any }[]; attemptNo?: number }) =>
+          callFunction('recordAttempt', data);
 
         // 사용자 답변을 서버 형식으로 변환
         const serverAnswers = questions.map((q: any, index: number) => {
@@ -435,8 +433,8 @@ export default function QuizResultPage() {
           cfSuccess = true;
 
           // 서버에서 이미 제출된 경우에도 정상 처리
-          if (attemptResult.data.alreadySubmitted) {
-            console.log('이미 제출된 퀴즈 (idempotency):', attemptResult.data.resultId);
+          if (attemptResult.alreadySubmitted) {
+            console.log('이미 제출된 퀴즈 (idempotency):', attemptResult.resultId);
           }
         } catch (cfError: any) {
           // Cloud Function 실패 시 폴백: 클라이언트에서 직접 저장

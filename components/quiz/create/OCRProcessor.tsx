@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/lib/firebase';
+import { callFunction } from '@/lib/api';
 import {
   parseQuestionsAuto,
   isImageFile,
@@ -363,16 +362,11 @@ export default function OCRProcessor({
         setProgress({ progress: 30, status: 'CLOVA OCR 처리 중...' });
 
         // Cloud Function 호출
-        const runClovaOcr = httpsCallable<{ image: string }, OcrResult>(
-          functions,
-          'runClovaOcr'
-        );
-
-        const result = await runClovaOcr({ image: base64Image });
+        const ocrResult = await callFunction('runClovaOcr', { image: base64Image }) as OcrResult;
 
         if (isCancelledRef.current) return;
 
-        const { text, usage, parsedV4 } = result.data;
+        const { text, usage, parsedV4 } = ocrResult;
 
         // 🔍 디버그: 서버 응답 확인
         console.log('=== OCR 서버 응답 디버그 ===');
@@ -408,19 +402,14 @@ export default function OCRProcessor({
 
             try {
               // 이미지 영역 분석 Cloud Function 호출
-              const analyzeImageRegionsCall = httpsCallable<
-                { imageBase64: string },
-                { success: boolean; regions: QuestionImageRegion[] }
-              >(functions, 'analyzeImageRegionsCall');
+              const regionResult = await callFunction('analyzeImageRegionsCall', { imageBase64: base64Image }) as { success: boolean; regions: QuestionImageRegion[] };
 
-              const regionResult = await analyzeImageRegionsCall({ imageBase64: base64Image });
-
-              if (regionResult.data.success && regionResult.data.regions.length > 0) {
-                console.log('[OCRProcessor] 이미지 영역 분석 완료:', regionResult.data.regions.length, '개');
+              if (regionResult.success && regionResult.regions.length > 0) {
+                console.log('[OCRProcessor] 이미지 영역 분석 완료:', regionResult.regions.length, '개');
                 setProgress({ progress: 85, status: '이미지 자동 추출 중...' });
 
                 // 각 영역을 크롭하여 해당 문제에 매핑
-                for (const region of regionResult.data.regions) {
+                for (const region of regionResult.regions) {
                   try {
                     const croppedDataUrl = await cropImageRegion(base64Image, region.boundingBox);
                     onAutoExtractImage(

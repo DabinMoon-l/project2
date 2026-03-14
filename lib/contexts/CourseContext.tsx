@@ -14,8 +14,7 @@ import {
   useMemo,
   type ReactNode,
 } from 'react';
-import { doc, collection, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { settingsRepo } from '@/lib/repositories';
 import { useAuth } from '../hooks/useAuth';
 import { useUser } from './UserContext';
 import {
@@ -106,27 +105,18 @@ export function CourseProvider({ children }: { children: ReactNode }) {
 
   // Firestore courses 컬렉션 구독 → 동적 과목 레지스트리
   useEffect(() => {
-    const coursesRef = collection(db, 'courses');
-    const unsubscribe = onSnapshot(
-      coursesRef,
-      (snapshot) => {
-        if (snapshot.empty) {
-          // courses 컬렉션 없으면 기본 COURSES 상수 사용
+    const unsubscribe = settingsRepo.subscribeCourses(
+      (registry) => {
+        if (Object.keys(registry).length === 0) {
           setCourseRegistry({ ...COURSES });
           return;
         }
-        const registry: Record<string, Course> = {};
-        snapshot.docs.forEach((docSnap) => {
-          const data = docSnap.data() as Course;
-          registry[docSnap.id] = { ...data, id: docSnap.id };
-        });
         setCourseRegistry(registry);
       },
       (err) => {
-        // 권한 오류 시 COURSES 폴백
-        console.warn('과목 레지스트리 로드 실패, 기본값 사용:', err.code);
+        console.warn('과목 레지스트리 로드 실패, 기본값 사용:', (err as any).code);
         setCourseRegistry({ ...COURSES });
-      }
+      },
     );
     return () => unsubscribe();
   }, []);
@@ -145,27 +135,21 @@ export function CourseProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setLoading(true);
 
-    const settingsRef = doc(db, 'settings', 'semester');
-
-    const unsubscribe = onSnapshot(
-      settingsRef,
-      (snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.data() as SemesterSettings;
+    const unsubscribe = settingsRepo.subscribeSemester(
+      (data) => {
+        if (data) {
           setSemesterSettings(data);
         } else {
-          // 설정이 없으면 기본값 사용 (문서 생성은 교수님이 설정 페이지에서 함)
           console.log('학기 설정 문서가 없습니다. 기본값을 사용합니다.');
           setSemesterSettings(DEFAULT_SEMESTER_SETTINGS);
         }
         setLoading(false);
       },
       (err) => {
-        // 권한 오류 등 발생 시 기본값 사용
-        console.warn('학기 설정 로드 실패, 기본값 사용:', err.code);
+        console.warn('학기 설정 로드 실패, 기본값 사용:', (err as any).code);
         setSemesterSettings(DEFAULT_SEMESTER_SETTINGS);
         setLoading(false);
-      }
+      },
     );
 
     return () => unsubscribe();
@@ -264,8 +248,7 @@ export function CourseProvider({ children }: { children: ReactNode }) {
   const updateSemesterSettings = useCallback(
     async (settings: Partial<SemesterSettings>) => {
       try {
-        const settingsRef = doc(db, 'settings', 'semester');
-        await setDoc(settingsRef, settings, { merge: true });
+        await settingsRepo.updateSemester(settings);
       } catch (err) {
         console.error('학기 설정 업데이트 실패:', err);
         throw new Error('학기 설정 업데이트에 실패했습니다.');

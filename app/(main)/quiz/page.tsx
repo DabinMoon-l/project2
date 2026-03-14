@@ -11,8 +11,8 @@ import {
   deleteDoc,
   doc,
   onSnapshot,
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+  db,
+} from '@/lib/repositories';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useQuizBookmark } from '@/lib/hooks/useQuizBookmark';
 import dynamic from 'next/dynamic';

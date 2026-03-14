@@ -10,8 +10,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/lib/firebase';
+import { callFunction } from '@/lib/api';
 import { useAuth } from '@/lib/hooks/useAuth';
 
 export default function LoginPage() {
@@ -45,7 +44,7 @@ export default function LoginPage() {
 
           if (!isStudentEmail && email.includes('@')) {
             try {
-              await httpsCallable(functions, 'initProfessorAccount')();
+              await callFunction('initProfessorAccount');
               router.replace('/professor');
             } catch {
               // CF에서 권한 거부 → 일반 사용자로 처리

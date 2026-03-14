@@ -3,10 +3,9 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, db } from '@/lib/repositories';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { httpsCallable } from 'firebase/functions';
-import { auth, db, storage, functions } from '@/lib/firebase';
+import { auth, storage } from '@/lib/firebase';
 import { compressImage, formatFileSize } from '@/lib/imageUtils';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse, useUser } from '@/lib/contexts';

@@ -27,12 +27,3 @@ export { default as StudentStats } from './StudentStats';
 export { default as QuestionAnalysisCard } from './QuestionAnalysisCard';
 export { default as DifficultyChart } from './DifficultyChart';
 export { default as AnalysisSummary } from './AnalysisSummary';
-
-// 시즌 관리 컴포넌트
-export { default as SeasonResetCard } from './SeasonResetCard';
-export { default as SeasonResetModal } from './SeasonResetModal';
-export { default as SeasonHistoryList } from './SeasonHistoryList';
-export { default as SemesterSettingsCard } from './SemesterSettingsCard';
-
-// 채점 컴포넌트 (deprecated — 서술형 채점 제거)
-// export { default as EssayGrading } from './EssayGrading';

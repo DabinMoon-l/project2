@@ -21,10 +21,10 @@ import {
   updateDoc,
   deleteDoc,
   Timestamp,
-  DocumentSnapshot,
-  QueryDocumentSnapshot,
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+  db,
+  type DocumentSnapshot,
+  type QueryDocumentSnapshot,
+} from '@/lib/repositories';
 
 // ============================================================
 // 타입 정의

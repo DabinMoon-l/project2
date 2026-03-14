@@ -8,7 +8,7 @@
  */
 
 import type { QuestionData, SubQuestion } from '@/components/quiz/create/questionTypes';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp } from '@/lib/repositories';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyValue = any;

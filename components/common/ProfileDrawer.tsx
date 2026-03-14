@@ -9,7 +9,7 @@ import {
   EmailAuthProvider,
   updatePassword,
 } from 'firebase/auth';
-import { httpsCallable } from 'firebase/functions';
+import { callFunction } from '@/lib/api';
 import {
   collection,
   addDoc,
@@ -24,7 +24,8 @@ import {
   deleteDoc,
   serverTimestamp,
   where,
-} from 'firebase/firestore';
+  db,
+} from '@/lib/repositories';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useUser } from '@/lib/contexts/UserContext';
 import { useCourse } from '@/lib/contexts';
@@ -37,7 +38,7 @@ import {
   DEFAULT_SETTINGS,
 } from '@/lib/hooks/useSettings';
 import { calculateMilestoneInfo } from '@/components/home/StatsCard';
-import { auth, db, functions } from '@/lib/firebase';
+import { auth } from '@/lib/firebase';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 import { useHideNav } from '@/lib/hooks/useHideNav';
 import {
@@ -344,12 +345,8 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
     setSavingRecovery(true);
     setRecoveryMessage('');
     try {
-      const updateFn = httpsCallable<
-        { recoveryEmail: string },
-        { needsVerification?: boolean; success?: boolean; maskedEmail: string }
-      >(functions, 'updateRecoveryEmail');
-      const result = await updateFn({ recoveryEmail });
-      if (result.data.needsVerification) {
+      const result = await callFunction('updateRecoveryEmail', { recoveryEmail });
+      if (result.needsVerification) {
         setVerificationSent(true);
         setRecoveryMessage('');
       }
@@ -365,11 +362,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
     setVerifyingCode(true);
     setRecoveryMessage('');
     try {
-      const updateFn = httpsCallable<
-        { recoveryEmail: string; verificationCode: string },
-        { success: boolean; maskedEmail: string }
-      >(functions, 'updateRecoveryEmail');
-      await updateFn({ recoveryEmail, verificationCode });
+      await callFunction('updateRecoveryEmail', { recoveryEmail, verificationCode });
       setRecoveryMessage('복구 이메일이 등록되었습니다.');
       setTimeout(() => {
         setShowRecoveryModal(false);
@@ -432,16 +425,12 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
     setResetMaskedEmail('');
     setResetLoading(true);
     try {
-      const resetFn = httpsCallable<
-        Record<string, never>,
-        { success: boolean; codeSent?: boolean; hasRecoveryEmail: boolean; maskedEmail?: string; message: string }
-      >(functions, 'requestPasswordReset');
-      const result = await resetFn({});
-      if (result.data.codeSent) {
+      const result = await callFunction('requestPasswordReset', {});
+      if (result.codeSent) {
         setResetCodeSent(true);
-        setResetMaskedEmail(result.data.maskedEmail || '');
+        setResetMaskedEmail(result.maskedEmail || '');
       } else {
-        setResetMessage(result.data.message);
+        setResetMessage(result.message || '');
       }
     } catch {
       setResetMessage('인증 코드 전송에 실패했습니다.');
@@ -470,12 +459,8 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
     setResetLoading(true);
     setResetMessage('');
     try {
-      const resetFn = httpsCallable<
-        { verificationCode: string; newPassword: string },
-        { success: boolean; message: string }
-      >(functions, 'requestPasswordReset');
-      const result = await resetFn({ verificationCode: resetCode, newPassword: resetNewPassword });
-      setResetMessage(result.data.message);
+      const result = await callFunction('requestPasswordReset', { verificationCode: resetCode, newPassword: resetNewPassword });
+      setResetMessage(result.message || '');
       setTimeout(() => {
         setShowResetModal(false);
       }, 1200);
@@ -511,8 +496,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
     if (deleteInput !== '삭제') return;
     setDeletingAccount(true);
     try {
-      const deleteFn = httpsCallable<void, { success: boolean }>(functions, 'deleteStudentAccount');
-      await deleteFn();
+      await callFunction('deleteStudentAccount');
       // CF에서 서버측 Auth 삭제 완료 → 클라이언트 로그아웃으로 즉시 인증 상태 초기화
       // onAuthStateChanged가 null 감지 → useRequireAuth가 /login으로 리다이렉트
       onClose();
@@ -569,16 +553,12 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
     setAdminResetting(true);
     setAdminResetResult(null);
     try {
-      const resetStudentPasswordFn = httpsCallable<
-        { studentId: string; courseId: string; newPassword: string },
-        { success: boolean; message: string }
-      >(functions, 'resetStudentPassword');
-      const res = await resetStudentPasswordFn({
+      const res = await callFunction('resetStudentPassword', {
         studentId: adminResetStudentId,
         courseId: userCourseId,
         newPassword: adminResetPassword,
       });
-      setAdminResetResult({ message: res.data.message, type: 'success' });
+      setAdminResetResult({ message: res.message, type: 'success' });
       setAdminResetStudentId('');
       setAdminResetPassword('');
     } catch (err: unknown) {
@@ -1875,12 +1855,8 @@ function MigrateAnswerIndexButton() {
     calledRef.current = true;
     setLoading(true);
     try {
-      const fn = httpsCallable<void, { migrated: number; skipped: number; errors: number }>(
-        functions,
-        'migrateQuizAnswersTo0Indexed'
-      );
-      const res = await fn();
-      const { migrated, skipped, errors } = res.data;
+      const res = await callFunction('migrateQuizAnswersTo0Indexed');
+      const { migrated, skipped, errors } = res;
       setResult({
         message: `${migrated}개 변환, ${skipped}개 건너뜀${errors > 0 ? `, ${errors}개 오류` : ''}`,
         ok: errors === 0,

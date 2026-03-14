@@ -5,13 +5,13 @@
  */
 
 import {
-  DocumentSnapshot,
-  QueryDocumentSnapshot,
-  Timestamp,
   doc,
   getDoc,
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+  Timestamp,
+  db,
+  type DocumentSnapshot,
+  type QueryDocumentSnapshot,
+} from '@/lib/repositories';
 
 // ============================================================
 // 타입 정의

@@ -21,8 +21,8 @@ import {
   getDocs,
   serverTimestamp,
   Timestamp,
-} from 'firebase/firestore';
-import { db } from '../firebase';
+  db,
+} from '@/lib/repositories';
 import { useAuth } from './useAuth';
 import { useCourse } from '../contexts/CourseContext';
 

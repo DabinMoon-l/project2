@@ -13,8 +13,8 @@ import {
   updateDoc,
   serverTimestamp,
   Timestamp,
-} from 'firebase/firestore';
-import { db } from '../firebase';
+  db,
+} from '@/lib/repositories';
 
 // ============================================================
 // 타입 정의

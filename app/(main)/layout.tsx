@@ -7,7 +7,7 @@ import { LazyMotion, domAnimation } from 'framer-motion';
 import { ThemeProvider } from '@/styles/themes/ThemeProvider';
 import { useRequireAuth } from '@/lib/hooks/useAuth';
 import Navigation from '@/components/common/Navigation';
-import { NotificationProvider, ExpToastProvider, SwipeBack } from '@/components/common';
+import { NotificationProvider, ExpToastProvider, SwipeBack, ComposeProviders } from '@/components/common';
 import { UserProvider, useUser, CourseProvider, useCourse, MilestoneProvider, HomeOverlayProvider, DetailPanelProvider, useDetailPanel } from '@/lib/contexts';
 import { useActivityTracker } from '@/lib/hooks/useActivityTracker';
 
@@ -125,28 +125,25 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <ThemeProvider initialClassType={userClassType} courseId={userCourseId}>
-      <NotificationProvider>
-        <ExpToastProvider>
-          <MilestoneWrapper isProfessor={isProfessor}>
-            <HomeOverlayProvider>
-              <DetailPanelProvider>
-                <MainLayoutGrid
-                  isWide={isWide}
-                  hideNavigation={!!hideNavigation}
-                  isProfessor={isProfessor}
-                  isTabRoot={!!isTabRoot}
-                  pathname={pathname || ''}
-                  searchParams={searchParams}
-                >
-                  {children}
-                </MainLayoutGrid>
-              </DetailPanelProvider>
-            </HomeOverlayProvider>
-          </MilestoneWrapper>
-        </ExpToastProvider>
-      </NotificationProvider>
-    </ThemeProvider>
+    <ComposeProviders providers={[
+      [ThemeProvider, { initialClassType: userClassType, courseId: userCourseId }],
+      [NotificationProvider],
+      [ExpToastProvider],
+      [MilestoneWrapper, { isProfessor }],
+      [HomeOverlayProvider],
+      [DetailPanelProvider],
+    ]}>
+      <MainLayoutGrid
+        isWide={isWide}
+        hideNavigation={!!hideNavigation}
+        isProfessor={isProfessor}
+        isTabRoot={!!isTabRoot}
+        pathname={pathname || ''}
+        searchParams={searchParams}
+      >
+        {children}
+      </MainLayoutGrid>
+    </ComposeProviders>
   );
 }
 

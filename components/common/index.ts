@@ -69,3 +69,6 @@ export { default as ScrollToTopButton } from './ScrollToTopButton';
 
 // ExpandModal 컴포넌트 (Apple Music 스타일 확장/축소 모달)
 export { default as ExpandModal } from './ExpandModal';
+
+// ComposeProviders (Provider 중첩 플랫화 유틸리티)
+export { default as ComposeProviders } from './ComposeProviders';

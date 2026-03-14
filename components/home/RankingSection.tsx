@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { doc, getDoc, collection, query, where, getDocs, db } from '@/lib/repositories';
 import { useUser, useCourse } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
 import { readHomeCache, writeHomeCache } from '@/lib/utils/rankingCache';
@@ -78,10 +77,8 @@ export default function RankingSection({ overrideCourseId }: { overrideCourseId?
           // rankings 문서 없음 → CF에 갱신 요청 (클라이언트 폴백 제거 — 300명 동시 쿼리 폭풍 방지)
           // refreshRankings CF가 비동기로 계산, 다음 로드 시 캐시 히트
           try {
-            const { httpsCallable } = await import('firebase/functions');
-            const { functions } = await import('@/lib/firebase');
-            const refresh = httpsCallable(functions, 'refreshRankings');
-            await refresh({ courseId: userCourseId });
+            const { callFunction: callFn } = await import('@/lib/api');
+            await callFn('refreshRankings', { courseId: userCourseId });
             // 재시도 — CF가 즉시 계산 완료하면 이번에 데이터 표시
             const retrySnap = await getDoc(doc(db, 'rankings', userCourseId));
             if (retrySnap.exists()) {

@@ -3,8 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { collection, query, where, onSnapshot, db } from '@/lib/repositories';
 import { Header, Button, Skeleton } from '@/components/common';
 import { PublishToggle, QuizDeleteModal } from '@/components/professor';
 import {

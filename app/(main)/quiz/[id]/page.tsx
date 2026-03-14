@@ -14,8 +14,8 @@ import {
   where,
   getDocs,
   serverTimestamp,
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+  db,
+} from '@/lib/repositories';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useThemeColors } from '@/styles/themes/useTheme';
 import { Skeleton } from '@/components/common';

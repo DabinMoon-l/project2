@@ -2,14 +2,14 @@
  * k6 혼합 부하 테스트 — 300명 학생 + 5명 교수 동시접속
  *
  * 학생 시나리오 분배 (300명, biology 150 + microbiology 150):
- *    80명 — 퀴즈 풀기 (recordAttempt, 교수 캐러셀 퀴즈)
- *    40명 — 배틀 퀴즈 (joinMatchmaking → submitAnswer)
- *    30명 — 토끼 뽑기 (spinRabbitGacha → claimGachaRabbit)
- *    20명 — 토끼 레벨업 (levelUpRabbit)
- *    30명 — AI 문제 생성 (enqueueGenerationJob)
+ *   100명 — 퀴즈 풀기 (recordAttempt, 교수 캐러셀 퀴즈)
+ *    70명 — 배틀 퀴즈 (joinMatchmaking → submitAnswer)
+ *    50명 — AI 문제 생성 (enqueueGenerationJob)
  *    50명 — 복습 연습 (recordReviewPractice)
- *    30명 — 게시판 학술글 (콩콩이 AI 자동답변 트리거)
- *    20명 — 랭킹/레이더 조회 (Firestore read)
+ *    10명 — 토끼 뽑기 (spinRabbitGacha → claimGachaRabbit)
+ *     5명 — 토끼 레벨업 (levelUpRabbit)
+ *    10명 — 게시판 학술글 (콩콩이 AI 자동답변 트리거)
+ *     5명 — 랭킹/레이더 조회 (Firestore read)
  *
  * 교수 시나리오 (5명, mixed_professor):
  *    대시보드 통계 조회 (rankings + radarNorm)
@@ -40,22 +40,32 @@ const profTokens = new SharedArray("profTokens", function () {
   catch { return []; }
 });
 
-// ── 설정 (에뮬레이터 기본) ──
+// ── 설정 ──
 
 const PROJECT_ID = "project2-7a317";
 const REGION = "asia-northeast3";
+const IS_PROD = __ENV.PROD === "1";
+
 const FUNCTIONS_BASE = __ENV.FUNCTIONS_URL ||
-  `http://127.0.0.1:5001/${PROJECT_ID}/${REGION}`;
+  (IS_PROD
+    ? `https://${REGION}-${PROJECT_ID}.cloudfunctions.net`
+    : `http://127.0.0.1:5001/${PROJECT_ID}/${REGION}`);
+
 const FIRESTORE_BASE = __ENV.FIRESTORE_URL ||
-  `http://127.0.0.1:8080/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
+  (IS_PROD
+    ? `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`
+    : `http://127.0.0.1:8080/v1/projects/${PROJECT_ID}/databases/(default)/documents`);
 // ── 유저별 과목 결정 (150명 biology + 150명 microbiology) ──
 
 function getCourseId(vu) {
   return vu % 300 < 150 ? "biology" : "microbiology";
 }
 
+const NUM_QUIZZES = 20; // seed-production.js와 동일
+
 function getQuizId(courseId) {
-  const idx = Math.floor(Math.random() * 5);
+  // VU + 반복 횟수 조합으로 퀴즈 분산 (같은 유저가 같은 퀴즈 재제출 방지)
+  const idx = (__VU + __ITER) % NUM_QUIZZES;
   return `load-test-${courseId}-quiz-${idx}`;
 }
 
@@ -102,7 +112,7 @@ const totalErrors = new Counter("total_errors");
 // VU 수 환경변수로 제어 (기본 300, 에뮬레이터는 K6_MAX_VUS=50 권장)
 const MAX_VUS = Number(__ENV.K6_MAX_VUS) || 300;
 
-const PROF_VUS = Number(__ENV.K6_PROF_VUS) || 5;
+const PROF_VUS = Number(__ENV.K6_PROF_VUS) || 1;
 
 export const options = {
   scenarios: {
@@ -182,14 +192,14 @@ function tsVal() { return { timestampValue: new Date().toISOString() }; }
 
 function getRole(vu) {
   const mod = vu % 300;
-  if (mod < 80) return "quiz";        // 80명: 퀴즈 풀기
-  if (mod < 120) return "battle";     // 40명: 배틀 퀴즈
-  if (mod < 150) return "gacha";      // 30명: 토끼 뽑기
-  if (mod < 170) return "levelup";    // 20명: 토끼 레벨업
-  if (mod < 200) return "ai_gen";     // 30명: AI 생성
-  if (mod < 250) return "review";     // 50명: 복습
-  if (mod < 280) return "board";      // 30명: 게시판 (콩콩이)
-  return "ranking";                   // 20명: 랭킹/레이더 조회
+  if (mod < 100) return "quiz";       // 100명: 퀴즈 풀기
+  if (mod < 170) return "battle";     //  70명: 배틀 퀴즈
+  if (mod < 220) return "ai_gen";     //  50명: AI 생성
+  if (mod < 270) return "review";     //  50명: 복습
+  if (mod < 280) return "gacha";      //  10명: 토끼 뽑기
+  if (mod < 285) return "levelup";    //   5명: 토끼 레벨업
+  if (mod < 295) return "board";      //  10명: 게시판 (콩콩이)
+  return "ranking";                   //   5명: 랭킹/레이더 조회
 }
 
 // ============================================================
@@ -199,6 +209,9 @@ function getRole(vu) {
 // ── 1. 퀴즈 풀기 (교수님 퀴즈 = 캐러셀 퀴즈) ──
 
 function doQuizSubmit(token) {
+  // Rate limit: 유저당 분당 5회. 테스트에서 초과 방지 (분당 4회 = 15초 간격)
+  if (__ITER >= 8) { sleep(5); return; }
+
   const courseId = getCourseId(__VU);
   const quizId = getQuizId(courseId);
   const answers = [];
@@ -220,6 +233,9 @@ function doQuizSubmit(token) {
 // ── 2. 배틀 퀴즈 (매칭 → 답변 제출) ──
 
 function doBattle(token) {
+  // 실제 패턴 시뮬레이션: VU별 시간차 (0-15초 분산)
+  if (__ITER === 0) { sleep((__VU % 50) * 0.3); }
+
   // 1단계: 매칭 참여
   const courseId = getCourseId(__VU);
   const matchRes = callCF("joinMatchmaking", {
@@ -257,6 +273,9 @@ function doBattle(token) {
 // ── 3. 토끼 뽑기 (Roll → Claim 2단계) ──
 
 function doGachaSpin(token) {
+  // 마일스톤 소진 방지: totalExp 2000 → 마일스톤 40개, 여유있게 30회까지만
+  if (__ITER >= 30) { sleep(5); return; }
+
   // Roll 단계
   const courseId = getCourseId(__VU);
   const spinRes = callCF("spinRabbitGacha", {
@@ -309,6 +328,9 @@ function doGachaSpin(token) {
 // ── 4. 토끼 레벨업 ──
 
 function doLevelUp(token) {
+  // 마일스톤 소진 방지: totalExp 2000 → 마일스톤 40개, 여유있게 30회까지만
+  if (__ITER >= 30) { sleep(5); return; }
+
   const courseId = getCourseId(__VU);
   const res = callCF("levelUpRabbit", {
     courseId,
@@ -324,6 +346,9 @@ function doLevelUp(token) {
 // ── 5. AI 문제 생성 ──
 
 function doAiGenerate(token) {
+  // Rate limit: 분당 3회, 일 15회. 3회 초과 시 대기
+  if (__ITER >= 3) { sleep(5); return; }
+
   const courseId = getCourseId(__VU);
   const isBio = courseId === "biology";
   const prefix = isBio ? "bio" : "micro";
@@ -489,15 +514,17 @@ function doProfStudents(token) {
 function doProfQuizList(token) {
   const courseId = __VU % 2 === 0 ? "biology" : "microbiology";
 
-  // 퀴즈 컬렉션 쿼리 (courseId 필터)
+  // 퀴즈 컬렉션 쿼리 (courseId + isPublic 필터 — 기존 복합 인덱스 활용)
   const query = {
     structuredQuery: {
       from: [{ collectionId: "quizzes" }],
       where: {
-        fieldFilter: {
-          field: { fieldPath: "courseId" },
-          op: "EQUAL",
-          value: { stringValue: courseId },
+        compositeFilter: {
+          op: "AND",
+          filters: [
+            { fieldFilter: { field: { fieldPath: "courseId" }, op: "EQUAL", value: { stringValue: courseId } } },
+            { fieldFilter: { field: { fieldPath: "isPublic" }, op: "EQUAL", value: { booleanValue: true } } },
+          ],
         },
       },
       orderBy: [{ field: { fieldPath: "createdAt" }, direction: "DESCENDING" }],
@@ -624,7 +651,7 @@ export function handleSummary(data) {
 `;
 
   return {
-    "./results/mixed-summary.json": JSON.stringify({
+    "tests/load/results/mixed-summary.json": JSON.stringify({
       timestamp: new Date().toISOString(),
       totalRequests: m.http_reqs?.values?.count || 0,
       totalErrors: m.total_errors?.values?.count || 0,

@@ -17,9 +17,9 @@ import {
   serverTimestamp,
   Timestamp,
   limit,
-} from 'firebase/firestore';
-import { db, functions } from '@/lib/firebase';
-import { httpsCallable } from 'firebase/functions';
+  db,
+} from '@/lib/repositories';
+import { callFunction } from '@/lib/api';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useReview, calculateCustomFolderQuestionCount, type ReviewItem, type FolderCategory, type CustomFolderQuestion } from '@/lib/hooks/useReview';
 import { useCourse } from '@/lib/contexts/CourseContext';
@@ -1294,8 +1294,7 @@ export default function FolderDetailPage() {
 
       // 1. 복습 연습 EXP 지급 — CF가 quizResults 생성 + EXP 처리
       try {
-        const recordReviewPracticeFn = httpsCallable(functions, 'recordReviewPractice');
-        await recordReviewPracticeFn({
+        await callFunction('recordReviewPractice', {
           quizId: folderId,
           correctCount,
           totalCount,
