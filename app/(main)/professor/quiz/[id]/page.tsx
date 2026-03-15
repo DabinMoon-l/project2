@@ -21,6 +21,49 @@ import { formatChapterLabel } from '@/lib/courseIndex';
 // 타입 정의
 // ============================================================
 
+/** 결합형 문제의 혼합 형식 블록 내 항목 */
+interface PassageMixedItem {
+  id: string;
+  label?: string;
+  content?: string;
+}
+
+/** 결합형 문제의 혼합 형식 블록 내 자식 요소 */
+interface PassageMixedChild {
+  id: string;
+  type: 'text' | 'labeled' | 'image';
+  content?: string;
+  imageUrl?: string;
+  items?: PassageMixedItem[];
+}
+
+/** 결합형 문제의 혼합 형식 블록 */
+interface PassageMixedBlock {
+  id: string;
+  type: 'grouped' | 'text' | 'labeled' | 'image';
+  content?: string;
+  imageUrl?: string;
+  items?: PassageMixedItem[];
+  children?: PassageMixedChild[];
+}
+
+/** 결합형 문제 확장 필드 (QuizQuestion에 추가) */
+interface CombinedQuestionFields {
+  subQuestions?: QuizQuestion[];
+  commonPassage?: string;
+  commonImage?: string;
+  passageFormat?: string;
+  passageMixedExamples?: PassageMixedBlock[];
+  image?: string;
+}
+
+/** 서술형 문제의 루브릭 항목 */
+interface RubricEntry {
+  criteria: string;
+  percentage: number;
+  description?: string;
+}
+
 /** 반별 색상 */
 const CLASS_COLORS: Record<string, string> = {
   A: 'bg-red-100 text-red-700',
@@ -68,11 +111,12 @@ function QuestionAnalysis({
   const [showAllWrongAnswers, setShowAllWrongAnswers] = useState(false);
 
   // 결합형 문제의 하위 문제들 가져오기
-  const subQuestions = (question as any).subQuestions as QuizQuestion[] | undefined;
-  const commonPassage = (question as any).commonPassage as string | undefined;
-  const commonImage = (question as any).commonImage as string | undefined;
-  const passageFormat = (question as any).passageFormat as string | undefined;
-  const passageMixedExamples = (question as any).passageMixedExamples as any[] | undefined;
+  const combined = question as QuizQuestion & CombinedQuestionFields;
+  const subQuestions = combined.subQuestions;
+  const commonPassage = combined.commonPassage;
+  const commonImage = combined.commonImage;
+  const passageFormat = combined.passageFormat;
+  const passageMixedExamples = combined.passageMixedExamples;
 
   return (
     <div className="bg-white rounded-2xl p-5 shadow-sm">
@@ -193,17 +237,17 @@ function QuestionAnalysis({
           {/* 공통 지문 - 혼합 형식 */}
           {passageFormat === 'mixed' && passageMixedExamples && passageMixedExamples.length > 0 && (
             <div className="space-y-2">
-              {passageMixedExamples.map((block: any) => (
+              {passageMixedExamples.map((block) => (
                 <div key={block.id}>
                   {/* 묶음 블록 */}
                   {block.type === 'grouped' && (
                     <div className="p-3 bg-amber-50 rounded-lg border-2 border-amber-200 space-y-1">
-                      {(block.children || []).map((child: any) => (
+                      {(block.children || []).map((child) => (
                         <div key={child.id}>
                           {child.type === 'text' && child.content?.trim() && (
                             <p className="text-gray-600 text-sm whitespace-pre-wrap">{child.content}</p>
                           )}
-                          {child.type === 'labeled' && (child.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                          {child.type === 'labeled' && (child.items || []).filter((i) => i.content?.trim()).map((item) => (
                             <p key={item.id} className="text-gray-700 text-sm">
                               <span className="font-bold mr-1">{item.label}.</span>
                               {item.content}
@@ -225,7 +269,7 @@ function QuestionAnalysis({
                   {/* ㄱㄴㄷ 블록 */}
                   {block.type === 'labeled' && (block.items || []).length > 0 && (
                     <div className="p-3 bg-amber-50 rounded-lg space-y-1">
-                      {(block.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                      {(block.items || []).filter((i) => i.content?.trim()).map((item) => (
                         <p key={item.id} className="text-gray-700 text-sm">
                           <span className="font-bold mr-1">{item.label}.</span>
                           {item.content}
@@ -315,9 +359,9 @@ function QuestionAnalysis({
           <p className="text-gray-800 font-medium mb-4">{question.text}</p>
 
           {/* 삽입된 이미지 */}
-          {(question as any).image && (
+          {combined.image && (
             <div className="mb-4 rounded-lg overflow-hidden">
-              <Image src={(question as any).image} alt="문제 이미지" width={800} height={400} className="w-full object-contain max-h-48" unoptimized />
+              <Image src={combined.image} alt="문제 이미지" width={800} height={400} className="w-full object-contain max-h-48" unoptimized />
             </div>
           )}
 
@@ -455,11 +499,11 @@ function QuestionAnalysis({
           {question.type === 'essay' && (
             <div className="space-y-3">
               {/* 루브릭 */}
-              {question.rubric && question.rubric.length > 0 && question.rubric.some((r: any) => r.criteria?.trim()) && (
+              {question.rubric && question.rubric.length > 0 && question.rubric.some((r) => r.criteria?.trim()) && (
                 <div className="p-3 bg-blue-50 rounded-lg">
                   <p className="text-xs text-blue-600 font-medium mb-1">평가 기준</p>
                   <ul className="space-y-1 text-sm text-blue-800">
-                    {question.rubric.filter((r: any) => r.criteria?.trim()).map((r: any, idx: number) => (
+                    {question.rubric.filter((r) => r.criteria?.trim()).map((r: RubricEntry, idx: number) => (
                       <li key={idx} className="flex items-start gap-2">
                         <span className="font-bold shrink-0">·</span>
                         <span>
@@ -986,9 +1030,9 @@ export default function QuizDetailPage() {
                 )}
 
                 {/* 결합형 하위 문제 수 */}
-                {question.type === 'combined' && (question as any).subQuestions && (
+                {question.type === 'combined' && (question as QuizQuestion & CombinedQuestionFields).subQuestions && (
                   <p className="mt-2 text-xs text-orange-600 font-medium">
-                    하위 문제 {(question as any).subQuestions.length}개
+                    하위 문제 {(question as QuizQuestion & CombinedQuestionFields).subQuestions!.length}개
                   </p>
                 )}
 
