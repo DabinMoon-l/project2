@@ -26,6 +26,24 @@ interface TeamRankEntry {
   rank: number;
 }
 
+/** rankings/{courseId} 문서의 rankedUsers 배열 항목 */
+interface RankedUserEntry {
+  id: string;
+  rank: number;
+  totalExp?: number;
+  [key: string]: unknown;
+}
+
+/** users 컬렉션 문서 (폴백 계산용) */
+interface UserDoc {
+  id: string;
+  role?: string;
+  classId?: string;
+  totalExp?: number;
+  professorQuizzesCompleted?: number;
+  [key: string]: unknown;
+}
+
 /**
  * 교수님 전용 랭킹 섹션 — 4개 팀 자동/수동 롤링
  */
@@ -82,18 +100,18 @@ export default function ProfessorRankingSection({ overrideCourseId }: { override
         if (rankDoc.exists()) {
           const data = rankDoc.data();
           const teamRanksArr = data.teamRanks || [];
-          const rankedUsers: any[] = data.rankedUsers || [];
+          const rankedUsers: RankedUserEntry[] = (data.rankedUsers || []) as RankedUserEntry[];
 
           // 팀 엔트리 구성 (랭크순)
-          const entries: TeamRankEntry[] = teamRanksArr
-            .map((t: any) => ({ classId: t.classId, rank: t.rank }))
+          const entries: TeamRankEntry[] = (teamRanksArr as TeamRankEntry[])
+            .map((t) => ({ classId: t.classId, rank: t.rank }))
             .sort((a: TeamRankEntry, b: TeamRankEntry) => a.rank - b.rank);
 
           // 주간 참여율 (CF에서 계산, 없으면 누적 폴백)
           const rate = data.weeklyParticipationRate != null
             ? data.weeklyParticipationRate
             : rankedUsers.length > 0
-              ? Math.round((rankedUsers.filter((u: any) => (u.totalExp || 0) > 0).length / rankedUsers.length) * 100)
+              ? Math.round((rankedUsers.filter((u) => (u.totalExp || 0) > 0).length / rankedUsers.length) * 100)
               : 0;
 
           setTeamEntries(entries);
@@ -102,7 +120,7 @@ export default function ProfessorRankingSection({ overrideCourseId }: { override
 
           // 캐시 갱신
           const teamRanksMap: Record<string, number> = {};
-          teamRanksArr.forEach((t: any) => { teamRanksMap[t.classId] = t.rank; });
+          (teamRanksArr as TeamRankEntry[]).forEach((t) => { teamRanksMap[t.classId] = t.rank; });
 
           writeHomeCache(userCourseId, {
             teamRanks: teamRanksMap,
@@ -332,14 +350,14 @@ async function computeProfessorFallback(
   setParticipationRate: (v: number) => void,
 ) {
   const usersSnap = await getDocs(query(collection(db, 'users'), where('courseId', '==', courseId)));
-  const allUsers = usersSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
-  const students = allUsers.filter((u: any) => u.role !== 'professor');
-  const professorUids = allUsers.filter((u: any) => u.role === 'professor').map((u: any) => u.id);
+  const allUsers: UserDoc[] = usersSnap.docs.map(d => ({ id: d.id, ...d.data() } as UserDoc));
+  const students = allUsers.filter((u) => u.role !== 'professor');
+  const professorUids = allUsers.filter((u) => u.role === 'professor').map((u) => u.id);
 
   if (students.length === 0) return;
 
   // 참여율: EXP > 0인 학생 비율
-  const active = students.filter((u: any) => (u.totalExp || 0) > 0).length;
+  const active = students.filter((u) => (u.totalExp || 0) > 0).length;
   const rate = Math.round((active / students.length) * 100);
   setParticipationRate(rate);
 
@@ -375,15 +393,15 @@ async function computeProfessorFallback(
 
   // 팀 랭킹
   const classes = ['A', 'B', 'C', 'D'];
-  const allExps = students.map((u: any) => u.totalExp || 0);
+  const allExps = students.map((u) => u.totalExp || 0);
   const maxExp = Math.max(...allExps, 1);
   const teamCalc = classes.map(cls => {
-    const members = students.filter((u: any) => u.classId === cls);
+    const members = students.filter((u) => u.classId === cls);
     if (members.length === 0) return { classId: cls, score: 0, rank: 0 };
 
-    const avgExp = members.reduce((s: number, u: any) => s + (u.totalExp || 0), 0) / members.length;
+    const avgExp = members.reduce((s: number, u: UserDoc) => s + (u.totalExp || 0), 0) / members.length;
     const normalizedAvgExp = (avgExp / maxExp) * 100;
-    const correctRates = members.map((u: any) => {
+    const correctRates = members.map((u) => {
       const stat = studentProfStats[u.id];
       if (!stat || stat.attempted === 0) return 0;
       return (stat.correct / stat.attempted) * 100;
@@ -391,7 +409,7 @@ async function computeProfessorFallback(
     const avgCorrectRate = correctRates.reduce((s, r) => s + r, 0) / correctRates.length;
     let avgCompletionRate = 0;
     if (totalProfQuizzes > 0) {
-      const rates = members.map((u: any) => Math.min(((u.professorQuizzesCompleted || 0) / totalProfQuizzes) * 100, 100));
+      const rates = members.map((u) => Math.min(((u.professorQuizzesCompleted || 0) / totalProfQuizzes) * 100, 100));
       avgCompletionRate = rates.reduce((s, r) => s + r, 0) / rates.length;
     }
     return { classId: cls, score: computeTeamScore(normalizedAvgExp, avgCorrectRate, avgCompletionRate), rank: 0 };

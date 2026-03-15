@@ -8,6 +8,30 @@ import { readHomeCache, writeHomeCache } from '@/lib/utils/rankingCache';
 import { computeRankScore, computeTeamScore } from '@/lib/utils/ranking';
 import RankingBottomSheet from './RankingBottomSheet';
 
+/** rankings/{courseId} 문서의 rankedUsers 배열 항목 */
+interface RankedUserEntry {
+  id: string;
+  rank: number;
+  totalExp?: number;
+  [key: string]: unknown;
+}
+
+/** rankings/{courseId} 문서의 teamRanks 배열 항목 */
+interface TeamRankEntry {
+  classId: string;
+  rank: number;
+}
+
+/** users 컬렉션 문서 (폴백 계산용) */
+interface UserDoc {
+  id: string;
+  role?: string;
+  classId?: string;
+  totalExp?: number;
+  professorQuizzesCompleted?: number;
+  [key: string]: unknown;
+}
+
 // 순위 접미사
 const ordinalSuffix = (n: number) => {
   if (n === 1) return 'st';
@@ -56,17 +80,17 @@ export default function RankingSection({ overrideCourseId }: { overrideCourseId?
           const teamRanksArr = data.teamRanks || [];
 
           // 팀 랭킹
-          const myTeam = teamRanksArr.find((t: any) => t.classId === classType);
+          const myTeam = teamRanksArr.find((t: TeamRankEntry) => t.classId === classType);
           if (myTeam) setTeamRank(myTeam.rank);
 
           // 개인 랭킹
-          const me = rankedUsers.find((u: any) => u.id === profile.uid);
+          const me = rankedUsers.find((u: RankedUserEntry) => u.id === profile.uid);
           if (me) setPersonalRank(me.rank);
           setTotalStudents(rankedUsers.length);
 
           // sessionStorage 캐시 갱신
           const teamRanksMap: Record<string, number> = {};
-          teamRanksArr.forEach((t: any) => { teamRanksMap[t.classId] = t.rank; });
+          teamRanksArr.forEach((t: TeamRankEntry) => { teamRanksMap[t.classId] = t.rank; });
 
           writeHomeCache(userCourseId, {
             teamRanks: teamRanksMap,
@@ -85,9 +109,9 @@ export default function RankingSection({ overrideCourseId }: { overrideCourseId?
               const retryData = retrySnap.data();
               const rankedUsers = retryData.rankedUsers || [];
               const teamRanksArr = retryData.teamRanks || [];
-              const myTeam = teamRanksArr.find((t: any) => t.classId === classType);
+              const myTeam = teamRanksArr.find((t: TeamRankEntry) => t.classId === classType);
               if (myTeam) setTeamRank(myTeam.rank);
-              const me = rankedUsers.find((u: any) => u.id === profile.uid);
+              const me = rankedUsers.find((u: RankedUserEntry) => u.id === profile.uid);
               if (me) setPersonalRank(me.rank);
               setTotalStudents(rankedUsers.length);
             }
@@ -187,9 +211,9 @@ async function computeHomeFallback(
   setTotalStudents: (v: number) => void,
 ) {
   const usersSnap = await getDocs(query(collection(db, 'users'), where('courseId', '==', courseId)));
-  const allUsers = usersSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
-  const students = allUsers.filter((u: any) => u.role !== 'professor');
-  const professorUids = allUsers.filter((u: any) => u.role === 'professor').map((u: any) => u.id);
+  const allUsers: UserDoc[] = usersSnap.docs.map(d => ({ id: d.id, ...d.data() } as UserDoc));
+  const students = allUsers.filter((u) => u.role !== 'professor');
+  const professorUids = allUsers.filter((u) => u.role === 'professor').map((u) => u.id);
 
   if (students.length === 0) return;
 
@@ -224,7 +248,7 @@ async function computeHomeFallback(
   });
 
   // 개인 랭킹
-  const ranked = students.map((u: any) => {
+  const ranked = students.map((u) => {
     const exp = u.totalExp || 0;
     const profStat = studentProfStats[u.id] || { correct: 0, attempted: 0 };
     return { id: u.id, classId: u.classId || 'A', rankScore: computeRankScore(profStat.correct, exp), rank: 0 };
@@ -238,15 +262,15 @@ async function computeHomeFallback(
 
   // 팀 랭킹
   const classes = ['A', 'B', 'C', 'D'];
-  const allExps = students.map((u: any) => u.totalExp || 0);
+  const allExps = students.map((u) => u.totalExp || 0);
   const maxExp = Math.max(...allExps, 1);
   const teamEntries = classes.map(cls => {
-    const members = students.filter((u: any) => u.classId === cls);
+    const members = students.filter((u) => u.classId === cls);
     if (members.length === 0) return { classId: cls, score: 0, rank: 0 };
 
-    const avgExp = members.reduce((s: number, u: any) => s + (u.totalExp || 0), 0) / members.length;
+    const avgExp = members.reduce((s: number, u: UserDoc) => s + (u.totalExp || 0), 0) / members.length;
     const normalizedAvgExp = (avgExp / maxExp) * 100;
-    const correctRates = members.map((u: any) => {
+    const correctRates = members.map((u) => {
       const stat = studentProfStats[u.id];
       if (!stat || stat.attempted === 0) return 0;
       return (stat.correct / stat.attempted) * 100;
@@ -254,7 +278,7 @@ async function computeHomeFallback(
     const avgCorrectRate = correctRates.reduce((s, r) => s + r, 0) / correctRates.length;
     let avgCompletionRate = 0;
     if (totalProfQuizzes > 0) {
-      const rates = members.map((u: any) => Math.min(((u.professorQuizzesCompleted || 0) / totalProfQuizzes) * 100, 100));
+      const rates = members.map((u) => Math.min(((u.professorQuizzesCompleted || 0) / totalProfQuizzes) * 100, 100));
       avgCompletionRate = rates.reduce((s, r) => s + r, 0) / rates.length;
     }
     return { classId: cls, score: computeTeamScore(normalizedAvgExp, avgCorrectRate, avgCompletionRate), rank: 0 };
