@@ -284,7 +284,8 @@ export default function Navigation({ role }: NavigationProps) {
   // 세로모드: 하단 플로팅 네비게이션 바
   return (
     <nav
-      className="fixed left-0 right-0 bottom-0 z-50"
+      className="fixed left-0 right-0 z-50"
+      style={{ bottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
       <div className="flex justify-center px-4 py-1.5">
         <div
