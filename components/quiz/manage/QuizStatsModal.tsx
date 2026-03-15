@@ -41,6 +41,8 @@ import { CLASS_FILTERS } from './quizStatsTypes';
 import { flattenQuestions, isValidMixedItem, checkCorrect, getTypeLabel, toMillis } from './quizStatsUtils';
 import CountUp from './CountUp';
 import ClassPieChart from './ClassPieChart';
+import StatsQuizFeedbackModal from './StatsQuizFeedbackModal';
+import StatsEssayAnswersModal from './StatsEssayAnswersModal';
 
 // 모듈 레벨 classId 캐시 (모달 닫았다 열어도 유지, 페이지 이동 시에도 유지)
 const _statsUserClassCache = new Map<string, 'A' | 'B' | 'C' | 'D' | null>();
@@ -75,7 +77,6 @@ export default function QuizStatsModal({
 
   // 피드백 모달
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
-  const [feedbackList, setFeedbackList] = useState<any[]>([]);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [feedbackSourceRect, setFeedbackSourceRect] = useState<SourceRect | null>(null);
   const [allFeedbacks, setAllFeedbacks] = useState<any[] | null>(null); // 전체 피드백 캐시
@@ -83,7 +84,6 @@ export default function QuizStatsModal({
 
   // 서술형 답안 모달
   const [showEssayModal, setShowEssayModal] = useState(false);
-  const [essayClassFilter, setEssayClassFilter] = useState<'A' | 'B' | 'C' | 'D'>('A');
 
   // 문제 스와이프 (가로 슬라이드)
   const questionContentRef = useRef<HTMLDivElement>(null);
@@ -789,24 +789,14 @@ export default function QuizStatsModal({
     currentQuestion.mixedExamples.length > 0 &&
     currentQuestion.mixedExamples.some(item => isValidMixedItem(item));
 
-  // 피드백 로드 (questionNum: 1-indexed 문제 번호, 해당 문제 피드백만 필터)
+  // 피드백 모달 열기 (questionNum: 1-indexed 문제 번호, 0이면 전체)
   const handleOpenFeedback = useCallback(async (questionNum: number, rect?: SourceRect) => {
     if (rect) setFeedbackSourceRect(rect);
     setFeedbackQuestionNum(questionNum);
     setShowFeedbackModal(true);
 
-    // 반별 필터 적용 헬퍼
-    const applyClassAndQuestionFilter = (items: any[]) => {
-      let filtered = classFilter !== 'all' ? items.filter((fb) => fb.classType === classFilter) : items;
-      if (questionNum > 0) filtered = filtered.filter((fb) => getFeedbackQuestionNum(fb) === questionNum);
-      return filtered;
-    };
-
-    // 이미 캐시되어 있으면 필터링만
-    if (allFeedbacks) {
-      setFeedbackList(applyClassAndQuestionFilter(allFeedbacks));
-      return;
-    }
+    // 이미 캐시되어 있으면 로드 불필요
+    if (allFeedbacks) return;
 
     // 캐시 없으면 로드
     setFeedbackLoading(true);
@@ -834,14 +824,12 @@ export default function QuizStatsModal({
       });
 
       setAllFeedbacks(items);
-      const filtered = applyClassAndQuestionFilter(items);
-      setFeedbackList(filtered);
     } catch (err) {
       console.error('피드백 로드 실패:', err);
     } finally {
       setFeedbackLoading(false);
     }
-  }, [quizId, allFeedbacks, getFeedbackQuestionNum, classFilter]);
+  }, [quizId, allFeedbacks]);
 
   // 현재 문제를 폴더에 저장
   const handleFolderSelect = async (folderId: string) => {
@@ -1490,191 +1478,26 @@ export default function QuizStatsModal({
       </motion.div>
 
       {/* 피드백 모달 */}
-      <AnimatePresence>
-        {showFeedbackModal && (() => {
-          const sr = feedbackSourceRect;
-          const cx = typeof window !== 'undefined' ? window.innerWidth / 2 : 0;
-          const cy = typeof window !== 'undefined' ? window.innerHeight / 2 : 0;
-          const fdx = sr ? (sr.x + sr.width / 2 - cx) : 0;
-          const fdy = sr ? (sr.y + sr.height / 2 - cy) : 0;
-          return (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/50"
-            style={{ left: 'var(--modal-left, 0px)' }}
-            onClick={(e) => { e.stopPropagation(); setShowFeedbackModal(false); setFeedbackList([]); setFeedbackQuestionNum(0); }}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.05, x: fdx, y: fdy }}
-              animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
-              exit={{ opacity: 0, scale: 0.05, x: fdx, y: fdy }}
-              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-              onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-xs bg-[#F5F0E8] border-2 border-[#1A1A1A] max-h-[60vh] overflow-visible flex flex-col rounded-xl"
-            >
-              <div className="px-3 py-2 border-b border-[#1A1A1A]">
-                <h2 className="text-sm font-bold text-[#1A1A1A] text-center truncate">
-                  {feedbackQuestionNum > 0 ? `${feedbackQuestionNum}번 문제 피드백` : quizTitle}
-                  {classFilter !== 'all' && <span className="text-[#5C5C5C] font-normal"> ({classFilter}반)</span>}
-                </h2>
-              </div>
-
-              <div className="flex-1 overflow-y-auto overscroll-contain p-2">
-                {feedbackLoading && (
-                  <div className="py-6 text-center">
-                    <p className="text-xs text-[#5C5C5C]">로딩 중...</p>
-                  </div>
-                )}
-
-                {!feedbackLoading && feedbackList.length === 0 && (
-                  <div className="py-6 text-center">
-                    <p className="text-xs text-[#5C5C5C]">아직 피드백이 없습니다.</p>
-                  </div>
-                )}
-
-                {!feedbackLoading && feedbackList.length > 0 && (
-                  <div className="space-y-1.5">
-                    {feedbackList.map((feedback) => {
-                      const typeLabels: Record<string, string> = {
-                        praise: '문제가 좋아요!',
-                        wantmore: '더 풀고 싶어요',
-                        unclear: '문제가 이해가 안 돼요',
-                        wrong: '정답이 틀린 것 같아요',
-                        typo: '오타가 있어요',
-                        other: '기타 의견',
-                      };
-                      const typeLabel = typeLabels[feedback.feedbackType] || feedback.feedbackType || '피드백';
-                      const questionNum = getFeedbackQuestionNum(feedback);
-
-                      return (
-                        <div
-                          key={feedback.id}
-                          className="p-1.5 border border-[#1A1A1A] bg-[#EDEAE4] rounded-lg"
-                        >
-                          <div className="flex items-center gap-1 mb-0.5">
-                            {/* 전체 보기일 때만 문제 번호 표시 */}
-                            {feedbackQuestionNum === 0 && questionNum > 0 && (
-                              <span className="text-[10px] text-[#5C5C5C]">
-                                Q{questionNum}.
-                              </span>
-                            )}
-                            <span className="text-[11px] font-bold text-[#8B6914]">
-                              {typeLabel}
-                            </span>
-                          </div>
-                          {feedback.feedback && (
-                            <p className="text-[11px] text-[#1A1A1A]">
-                              {feedback.feedback}
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              <div className="p-1.5 border-t border-[#1A1A1A]">
-                <button
-                  onClick={() => { setShowFeedbackModal(false); setFeedbackList([]); setFeedbackQuestionNum(0); }}
-                  className="w-full py-1.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] rounded-lg"
-                >
-                  닫기
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-          );
-        })()}
-      </AnimatePresence>
+      <StatsQuizFeedbackModal
+        isOpen={showFeedbackModal}
+        onClose={() => { setShowFeedbackModal(false); setFeedbackQuestionNum(0); }}
+        feedbackList={classFilteredFeedbacks}
+        loading={feedbackLoading}
+        questionNum={feedbackQuestionNum}
+        classFilter={classFilter}
+        quizTitle={quizTitle}
+        sourceRect={feedbackSourceRect}
+        getFeedbackQuestionNum={getFeedbackQuestionNum}
+      />
 
       {/* 서술형 답안 모달 */}
-      <AnimatePresence>
-        {showEssayModal && currentQuestion?.essayAnswers && (() => {
-          const ESSAY_CLASS_FILTERS: ('A' | 'B' | 'C' | 'D')[] = ['A', 'B', 'C', 'D'];
-          const classColors: Record<string, string> = { A: '#EF4444', B: '#EAB308', C: '#22C55E', D: '#3B82F6' };
-          // essayClassFilter로 필터링
-          const filtered = currentQuestion.essayAnswers!.filter(ea => {
-            const cls = _statsUserClassCache.get(ea.userId);
-            return cls === essayClassFilter;
-          });
-          return (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/50"
-            style={{ left: 'var(--modal-left, 0px)' }}
-            onClick={(e) => { e.stopPropagation(); setShowEssayModal(false); }}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-              onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] max-h-[70vh] overflow-visible flex flex-col rounded-xl"
-            >
-              {/* 헤더 */}
-              <div className="px-3 py-2 border-b border-[#1A1A1A]">
-                <h2 className="text-sm font-bold text-[#1A1A1A] text-center">서술형 답안</h2>
-              </div>
-
-              {/* ABCD 필터 */}
-              <div className="flex border-b border-[#D4CFC4]">
-                {ESSAY_CLASS_FILTERS.map((cls) => (
-                  <button
-                    key={cls}
-                    onClick={() => setEssayClassFilter(cls)}
-                    className={`flex-1 py-2 text-xs font-bold transition-colors ${
-                      essayClassFilter === cls
-                        ? 'text-[#F5F0E8]'
-                        : 'text-[#5C5C5C] hover:bg-[#EDEAE4]'
-                    }`}
-                    style={essayClassFilter === cls ? { backgroundColor: classColors[cls] } : undefined}
-                  >
-                    {cls}반
-                  </button>
-                ))}
-              </div>
-
-              {/* 답안 목록 */}
-              <div className="flex-1 overflow-y-auto overscroll-contain p-2 space-y-2">
-                {filtered.length === 0 ? (
-                  <div className="py-8 text-center">
-                    <p className="text-xs text-[#5C5C5C]">{essayClassFilter}반 응답이 없습니다.</p>
-                  </div>
-                ) : (
-                  filtered.map((ea, idx) => {
-                    const name = _statsUserNameCache.get(ea.userId) || '(알 수 없음)';
-                    return (
-                      <div key={idx} className="p-2 border border-[#1A1A1A] bg-[#EDEAE4] rounded-lg">
-                        <p className="text-xs font-bold text-[#1A1A1A] mb-1">{name}</p>
-                        <p className="text-xs text-[#1A1A1A] whitespace-pre-wrap leading-relaxed">
-                          {ea.answer || '(미응답)'}
-                        </p>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-
-              {/* 닫기 */}
-              <div className="p-1.5 border-t border-[#1A1A1A]">
-                <button
-                  onClick={() => setShowEssayModal(false)}
-                  className="w-full py-1.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] rounded-lg"
-                >
-                  닫기
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-          );
-        })()}
-      </AnimatePresence>
+      <StatsEssayAnswersModal
+        isOpen={showEssayModal}
+        onClose={() => setShowEssayModal(false)}
+        essayAnswers={currentQuestion?.essayAnswers || []}
+        userClassCache={_statsUserClassCache}
+        userNameCache={_statsUserNameCache}
+      />
 
       {/* 폴더 선택 모달 */}
       <FolderSelectModal
