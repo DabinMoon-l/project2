@@ -30,7 +30,8 @@ import { groupByQuiz, groupByChapterAndQuiz } from './useReviewUtils';
 
 /** Firestore 스냅샷 문서를 ReviewItem으로 변환 */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapDocToReviewItem(docSnapshot: any): ReviewItem {
+function // eslint-disable-next-line @typescript-eslint/no-explicit-any
+mapDocToReviewItem(docSnapshot: any): ReviewItem {
   const data = docSnapshot.data();
   return {
     id: docSnapshot.id,

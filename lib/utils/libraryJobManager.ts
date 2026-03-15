@@ -222,7 +222,7 @@ async function pollAndSave(jobId: string, config: QuizSaveConfig) {
           chapterId = defaultChapterId;
         }
         // Gemini가 반환한 타입 사용 (ox/multiple)
-        const qType = (q as any).type === 'ox' ? 'ox' : 'multiple';
+        const qType = q.type === 'ox' ? 'ox' : 'multiple';
         return {
           id: `q${idx + 1}`,
           order: idx + 1,
@@ -240,8 +240,8 @@ async function pollAndSave(jobId: string, config: QuizSaveConfig) {
         };
       }),
       questionCount: questions.length,
-      oxCount: questions.filter(q => (q as any).type === 'ox').length,
-      multipleChoiceCount: questions.filter(q => (q as any).type !== 'ox').length,
+      oxCount: questions.filter(q => q.type === 'ox').length,
+      multipleChoiceCount: questions.filter(q => q.type !== 'ox').length,
       subjectiveCount: 0,
       participantCount: 0,
       userScores: {},
@@ -258,8 +258,8 @@ async function pollAndSave(jobId: string, config: QuizSaveConfig) {
 
     emit({ type: 'completed', questionCount: questions.length });
 
-  } catch (err: any) {
-    emit({ type: 'failed', error: err?.message || '문제 생성 중 오류가 발생했습니다.' });
+  } catch (err: unknown) {
+    emit({ type: 'failed', error: (err as Error)?.message || '문제 생성 중 오류가 발생했습니다.' });
   } finally {
     pollingActive = false;
     activeJobId = null;

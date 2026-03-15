@@ -50,7 +50,7 @@ function toMillis(ts: TimestampLike | undefined | null): number {
  * - 레거시 결합형 (type==='combined' + subQuestions): 하위 문제별로 분리
  * - 일반 문제: 그대로 push
  */
-export function flattenQuestionsForStats(questions: any[]): QuizQuestion[] {
+export function flattenQuestionsForStats(questions: Record<string, any>[]): QuizQuestion[] {
   const result: QuizQuestion[] = [];
   let globalIdx = 0;
 
@@ -70,7 +70,7 @@ export function flattenQuestionsForStats(questions: any[]): QuizQuestion[] {
     // 레거시 결합형 문제 (type === 'combined' + subQuestions)
     else if (q.type === 'combined' && q.subQuestions && q.subQuestions.length > 0) {
       const parentId = q.id || `q${globalIdx}`;
-      q.subQuestions.forEach((sq: any, idx: number) => {
+      q.subQuestions.forEach((sq: Record<string, any>, idx: number) => {
         // 정답 형식 변환 (0-indexed 유지 — recordAttempt CF와 일치)
         let answer: number | string | number[];
         if (sq.type === 'ox') {
@@ -120,7 +120,7 @@ export function flattenQuestionsForStats(questions: any[]): QuizQuestion[] {
  *
  * @returns questionUpdatedAtMap (인덱스→밀리초), questionModifiedMap (인덱스→수정여부)
  */
-export function buildQuestionUpdatedAtMaps(questions: any[]): {
+export function buildQuestionUpdatedAtMaps(questions: Record<string, any>[]): {
   questionUpdatedAtMap: Map<number, number>;
   questionModifiedMap: Map<number, boolean>;
 } {
@@ -128,10 +128,10 @@ export function buildQuestionUpdatedAtMaps(questions: any[]): {
   const questionModifiedMap = new Map<number, boolean>();
 
   let flatIdx = 0;
-  questions.forEach((q: any) => {
+  questions.forEach((q: Record<string, any>) => {
     if (q.type === 'combined' && q.subQuestions && q.subQuestions.length > 0) {
       // 결합형: 각 하위 문제별로 처리
-      q.subQuestions.forEach((sq: any) => {
+      q.subQuestions.forEach((sq: Record<string, any>) => {
         const updatedAt = sq.questionUpdatedAt || q.questionUpdatedAt;
         const ts = toMillis(updatedAt);
         if (ts > 0) {
@@ -177,7 +177,7 @@ export function buildQuestionUpdatedAtMaps(questions: any[]): {
  * @returns QuizStatistics (문제별 통계 + 오답률 순위)
  */
 export function computeQuizStatistics(
-  questions: any[],
+  questions: Record<string, any>[],
   resultDocs: QuizResultData[],
 ): QuizStatistics {
   // 결합형 문제 펼치기 (레거시 호환성)

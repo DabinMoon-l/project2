@@ -79,7 +79,7 @@ export default function QuizStatsModal({
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [feedbackSourceRect, setFeedbackSourceRect] = useState<SourceRect | null>(null);
-  const [allFeedbacks, setAllFeedbacks] = useState<any[] | null>(null); // 전체 피드백 캐시
+  const [allFeedbacks, setAllFeedbacks] = useState<Record<string, any>[] | null>(null); // 전체 피드백 캐시
   const [feedbackQuestionNum, setFeedbackQuestionNum] = useState<number>(0); // 필터링할 문제 번호 (1-indexed, 0이면 전체)
 
   // 서술형 답안 모달
@@ -159,7 +159,7 @@ export default function QuizStatsModal({
 
         // 유저별 첫 풀이만 추출 (3단계 필터링)
         // 1단계: userId별로 모든 결과를 시간순 그룹핑
-        const allByUser = new Map<string, { docSnapshot: any; data: any; ts: number }[]>();
+        const allByUser = new Map<string, { docSnapshot: { id: string }; data: Record<string, any>; ts: number }[]>();
         resultsSnapshot.docs.forEach((docSnapshot) => {
           const data = docSnapshot.data();
           const uid = data.userId;
@@ -186,7 +186,7 @@ export default function QuizStatsModal({
         }
 
         // 3단계: 유저별 첫 풀이 선택 (순수 시간순 — isUpdate 플래그 역전 버그 대응)
-        const firstResultByUser = new Map<string, { docSnapshot: any; data: any }>();
+        const firstResultByUser = new Map<string, { docSnapshot: { id: string }; data: Record<string, any> }>();
         allByUser.forEach((results, uid) => {
           if (professorIds.has(uid)) return; // 교수 제외
           results.sort((a, b) => a.ts - b.ts);
@@ -205,7 +205,7 @@ export default function QuizStatsModal({
         }
 
         // 결과에서 classId 추출 (없으면 배치로 users 컬렉션에서 가져오기)
-        const resultsNeedingClass: { data: any }[] = [];
+        const resultsNeedingClass: { data: Record<string, any> }[] = [];
         const resultsWithClassDirect: ResultWithClass[] = [];
 
         dedupedResults.forEach(({ data }) => {
@@ -274,7 +274,7 @@ export default function QuizStatsModal({
           const feedbacksRef = collection(db, 'questionFeedbacks');
           const fbQuery = query(feedbacksRef, where('quizId', '==', quizId));
           const fbSnapshot = await getDocs(fbQuery);
-          const fbItems: any[] = [];
+          const fbItems: Record<string, any>[] = [];
           fbSnapshot.forEach((d) => {
             const data = d.data();
             fbItems.push({
@@ -755,7 +755,7 @@ export default function QuizStatsModal({
   const currentQuestion = stats?.questionStats[selectedQuestionIndex];
 
   // 피드백에서 문제 번호 추출 헬퍼
-  const getFeedbackQuestionNum = useCallback((fb: any): number => {
+  const getFeedbackQuestionNum = useCallback((fb: Record<string, any>): number => {
     if (fb.questionNumber && fb.questionNumber > 0 && fb.questionNumber < 1000) {
       return fb.questionNumber;
     }
@@ -805,7 +805,7 @@ export default function QuizStatsModal({
       const q = query(feedbacksRef, where('quizId', '==', quizId));
       const snapshot = await getDocs(q);
 
-      const items: any[] = [];
+      const items: Record<string, any>[] = [];
       snapshot.forEach((d) => {
         const data = d.data();
         items.push({
