@@ -20,6 +20,40 @@ export const FEEDBACK_TYPE_OPTIONS: { type: FeedbackType; label: string; positiv
 ];
 
 /**
+ * 혼합 지문 블록 내 라벨 항목
+ */
+export interface FeedbackLabeledItem {
+  id: string;
+  label: string;
+  content: string;
+}
+
+/**
+ * 혼합 지문 블록 내 자식 블록 (grouped 안의 블록)
+ */
+export interface FeedbackMixedChild {
+  id: string;
+  type: 'text' | 'labeled' | 'gana' | 'image';
+  label?: string;
+  content?: string;
+  items?: FeedbackLabeledItem[];
+  imageUrl?: string;
+}
+
+/**
+ * 혼합 지문 블록 (text/labeled/gana/image/grouped)
+ */
+export interface FeedbackMixedBlock {
+  id: string;
+  type: 'text' | 'labeled' | 'gana' | 'image' | 'grouped';
+  label?: string;
+  content?: string;
+  items?: FeedbackLabeledItem[];
+  imageUrl?: string;
+  children?: FeedbackMixedChild[];
+}
+
+/**
  * 문제 결과 타입
  */
 export interface QuestionResult {
@@ -43,22 +77,7 @@ export interface QuestionResult {
   subQuestionOptions?: string[];
   subQuestionOptionsType?: 'text' | 'labeled' | 'mixed';
   // 혼합 지문 원본 데이터
-  mixedExamples?: Array<{
-    id: string;
-    type: 'text' | 'labeled' | 'image' | 'grouped';
-    label?: string;
-    content?: string;
-    items?: Array<{ id: string; label: string; content: string }>;
-    imageUrl?: string;
-    children?: Array<{
-      id: string;
-      type: 'text' | 'labeled' | 'image';
-      label?: string;
-      content?: string;
-      items?: Array<{ id: string; label: string; content: string }>;
-      imageUrl?: string;
-    }>;
-  }>;
+  mixedExamples?: FeedbackMixedBlock[];
   // 발문 정보
   passagePrompt?: string;
   bogiQuestionText?: string;
@@ -80,8 +99,7 @@ export interface CombinedGroup {
   passageType?: string;
   passageImage?: string;
   koreanAbcItems?: string[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  passageMixedExamples?: any[];
+  passageMixedExamples?: FeedbackMixedBlock[];
   subQuestions: QuestionResult[];
 }
 

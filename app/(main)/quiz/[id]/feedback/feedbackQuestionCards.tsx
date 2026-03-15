@@ -12,6 +12,9 @@ import type {
   QuestionResult,
   CombinedGroup,
   SingleQuestionCardProps,
+  FeedbackMixedBlock,
+  FeedbackMixedChild,
+  FeedbackLabeledItem,
 } from './feedbackTypes';
 
 /**
@@ -54,20 +57,20 @@ export function SingleQuestionCard({
         <div className="mb-4 space-y-2">
           <p className="text-xs font-bold text-[#5C5C5C]">지문</p>
           {/* 1-1. 묶음 블록 (grouped) 먼저 */}
-          {question.mixedExamples.filter((b: any) => b.type === 'grouped').map((block: any) => (
+          {question.mixedExamples.filter((b: FeedbackMixedBlock) => b.type === 'grouped').map((block: FeedbackMixedBlock) => (
             <div key={block.id} className="p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A] space-y-1">
-              {(block.children || []).map((child: any) => (
+              {(block.children || []).map((child: FeedbackMixedChild) => (
                 <div key={child.id}>
                   {child.type === 'text' && child.content?.trim() && (
                     <p className="text-[#5C5C5C] text-xs whitespace-pre-wrap">{child.content}</p>
                   )}
-                  {child.type === 'labeled' && (child.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                  {child.type === 'labeled' && (child.items || []).filter((i: FeedbackLabeledItem) => i.content?.trim()).map((item: FeedbackLabeledItem) => (
                     <p key={item.id} className="text-[#1A1A1A] text-xs">
                       <span className="font-bold mr-1">{item.label}.</span>
                       {item.content}
                     </p>
                   ))}
-                  {child.type === 'gana' && (child.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                  {child.type === 'gana' && (child.items || []).filter((i: FeedbackLabeledItem) => i.content?.trim()).map((item: FeedbackLabeledItem) => (
                     <p key={item.id} className="text-[#1A1A1A] text-xs">
                       <span className="font-bold mr-1">({item.label})</span>
                       {item.content}
@@ -81,7 +84,7 @@ export function SingleQuestionCard({
             </div>
           ))}
           {/* 1-2. 나머지 블록 (생성 순서대로) */}
-          {question.mixedExamples.filter((b: any) => b.type !== 'grouped').map((block: any) => (
+          {question.mixedExamples.filter((b: FeedbackMixedBlock) => b.type !== 'grouped').map((block: FeedbackMixedBlock) => (
             <div key={block.id}>
               {/* 텍스트 블록 */}
               {block.type === 'text' && block.content?.trim() && (
@@ -92,7 +95,7 @@ export function SingleQuestionCard({
               {/* ㄱㄴㄷ 블록 */}
               {block.type === 'labeled' && (block.items || []).length > 0 && (
                 <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
-                  {(block.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                  {(block.items || []).filter((i: FeedbackLabeledItem) => i.content?.trim()).map((item: FeedbackLabeledItem) => (
                     <p key={item.id} className="text-[#1A1A1A] text-xs">
                       <span className="font-bold mr-1">{item.label}.</span>
                       {item.content}
@@ -103,7 +106,7 @@ export function SingleQuestionCard({
               {/* (가)(나)(다) 블록 */}
               {block.type === 'gana' && (block.items || []).length > 0 && (
                 <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
-                  {(block.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                  {(block.items || []).filter((i: FeedbackLabeledItem) => i.content?.trim()).map((item: FeedbackLabeledItem) => (
                     <p key={item.id} className="text-[#1A1A1A] text-xs">
                       <span className="font-bold mr-1">({item.label})</span>
                       {item.content}
@@ -439,23 +442,23 @@ export function CombinedQuestionCard({
         {/* 공통 지문 - 혼합 형식 */}
         {group.passageMixedExamples && group.passageMixedExamples.length > 0 && (
           <div className="mb-4 space-y-2">
-            {group.passageMixedExamples.map((block: any) => (
+            {group.passageMixedExamples.map((block: FeedbackMixedBlock) => (
               <div key={block.id}>
                 {/* 묶음 블록 */}
                 {block.type === 'grouped' && (
                   <div className="p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A] space-y-1">
-                    {(block.children || []).map((child: any) => (
+                    {(block.children || []).map((child: FeedbackMixedChild) => (
                       <div key={child.id}>
                         {child.type === 'text' && child.content?.trim() && (
                           <p className="text-[#5C5C5C] text-xs whitespace-pre-wrap">{child.content}</p>
                         )}
-                        {child.type === 'labeled' && (child.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                        {child.type === 'labeled' && (child.items || []).filter((i: FeedbackLabeledItem) => i.content?.trim()).map((item: FeedbackLabeledItem) => (
                           <p key={item.id} className="text-[#1A1A1A] text-xs">
                             <span className="font-bold mr-1">{item.label}.</span>
                             {item.content}
                           </p>
                         ))}
-                        {child.type === 'gana' && (child.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                        {child.type === 'gana' && (child.items || []).filter((i: FeedbackLabeledItem) => i.content?.trim()).map((item: FeedbackLabeledItem) => (
                           <p key={item.id} className="text-[#1A1A1A] text-xs">
                             <span className="font-bold mr-1">({item.label})</span>
                             {item.content}
@@ -477,7 +480,7 @@ export function CombinedQuestionCard({
                 {/* ㄱㄴㄷ 블록 */}
                 {block.type === 'labeled' && (block.items || []).length > 0 && (
                   <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
-                    {(block.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                    {(block.items || []).filter((i: FeedbackLabeledItem) => i.content?.trim()).map((item: FeedbackLabeledItem) => (
                       <p key={item.id} className="text-[#1A1A1A] text-xs">
                         <span className="font-bold mr-1">{item.label}.</span>
                         {item.content}
@@ -488,7 +491,7 @@ export function CombinedQuestionCard({
                 {/* (가)(나)(다) 블록 */}
                 {block.type === 'gana' && (block.items || []).length > 0 && (
                   <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
-                    {(block.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                    {(block.items || []).filter((i: FeedbackLabeledItem) => i.content?.trim()).map((item: FeedbackLabeledItem) => (
                       <p key={item.id} className="text-[#1A1A1A] text-xs">
                         <span className="font-bold mr-1">({item.label})</span>
                         {item.content}
@@ -576,20 +579,20 @@ export function CombinedQuestionCard({
               <div className="mb-4 space-y-2">
                 <p className="text-xs font-bold text-[#5C5C5C]">지문</p>
                 {/* 묶음 블록 먼저 */}
-                {question.mixedExamples.filter((b: any) => b.type === 'grouped').map((block: any) => (
+                {question.mixedExamples.filter((b: FeedbackMixedBlock) => b.type === 'grouped').map((block: FeedbackMixedBlock) => (
                   <div key={block.id} className="p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A] space-y-1">
-                    {(block.children || []).map((child: any) => (
+                    {(block.children || []).map((child: FeedbackMixedChild) => (
                       <div key={child.id}>
                         {child.type === 'text' && child.content?.trim() && (
                           <p className="text-[#5C5C5C] text-xs whitespace-pre-wrap">{child.content}</p>
                         )}
-                        {child.type === 'labeled' && (child.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                        {child.type === 'labeled' && (child.items || []).filter((i: FeedbackLabeledItem) => i.content?.trim()).map((item: FeedbackLabeledItem) => (
                           <p key={item.id} className="text-[#1A1A1A] text-xs">
                             <span className="font-bold mr-1">{item.label}.</span>
                             {item.content}
                           </p>
                         ))}
-                        {child.type === 'gana' && (child.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                        {child.type === 'gana' && (child.items || []).filter((i: FeedbackLabeledItem) => i.content?.trim()).map((item: FeedbackLabeledItem) => (
                           <p key={item.id} className="text-[#1A1A1A] text-xs">
                             <span className="font-bold mr-1">({item.label})</span>
                             {item.content}
@@ -603,7 +606,7 @@ export function CombinedQuestionCard({
                   </div>
                 ))}
                 {/* 나머지 블록 (생성 순서대로) */}
-                {question.mixedExamples.filter((b: any) => b.type !== 'grouped').map((block: any) => (
+                {question.mixedExamples.filter((b: FeedbackMixedBlock) => b.type !== 'grouped').map((block: FeedbackMixedBlock) => (
                   <div key={block.id}>
                     {/* 텍스트 블록 */}
                     {block.type === 'text' && block.content?.trim() && (
@@ -614,7 +617,7 @@ export function CombinedQuestionCard({
                     {/* ㄱㄴㄷ 블록 */}
                     {block.type === 'labeled' && (block.items || []).length > 0 && (
                       <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
-                        {(block.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                        {(block.items || []).filter((i: FeedbackLabeledItem) => i.content?.trim()).map((item: FeedbackLabeledItem) => (
                           <p key={item.id} className="text-[#1A1A1A] text-xs">
                             <span className="font-bold mr-1">{item.label}.</span>
                             {item.content}
@@ -625,7 +628,7 @@ export function CombinedQuestionCard({
                     {/* (가)(나)(다) 블록 */}
                     {block.type === 'gana' && (block.items || []).length > 0 && (
                       <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
-                        {(block.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                        {(block.items || []).filter((i: FeedbackLabeledItem) => i.content?.trim()).map((item: FeedbackLabeledItem) => (
                           <p key={item.id} className="text-[#1A1A1A] text-xs">
                             <span className="font-bold mr-1">({item.label})</span>
                             {item.content}
