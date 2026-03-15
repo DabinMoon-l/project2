@@ -96,7 +96,8 @@ const HeadlineArticle = memo(function HeadlineArticle({
       onClick={onClick}
       whileTap={onClick ? TAP_SCALE : undefined}
       transition={SPRING_TAP}
-      className={`group border border-[#1A1A1A] bg-[#F5F0E8] relative transition-all ${onClick ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-md' : ''}`}
+      className={`group border border-[#1A1A1A] bg-[#F5F0E8] relative transition-[transform,box-shadow] ${onClick ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-md' : ''}`}
+      style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
     >
       {/* 콘텐츠 래퍼 */}
       <div className="flex">
@@ -359,7 +360,8 @@ const MasonryItem = memo(function MasonryItem({
       onClick={onClick}
       whileTap={TAP_SCALE}
       transition={SPRING_TAP}
-      className="cursor-pointer group break-inside-avoid mb-4 p-3 border border-[#1A1A1A] bg-[#F5F0E8] relative hover:-translate-y-0.5 hover:shadow-md transition-all"
+      className="cursor-pointer group break-inside-avoid mb-4 p-3 border border-[#1A1A1A] bg-[#F5F0E8] relative hover:-translate-y-0.5 hover:shadow-md transition-[transform,box-shadow]"
+      style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
     >
       {imagePosition === 'top' ? (
         <>
@@ -958,7 +960,7 @@ export default function BoardPage() {
 
         {/* Masonry 2열 */}
         {masonryPosts.length > 0 && (
-          <div className="columns-2 gap-4">
+          <div className="columns-2 gap-4" style={{ transform: 'translateZ(0)' }}>
             {masonryPosts.map((post, index) => (
               <MasonryItem
                 key={post.id}
