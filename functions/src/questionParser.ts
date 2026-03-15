@@ -306,13 +306,9 @@ function detectAndSortTwoColumn(
     // 좌측 먼저, 그 다음 우측
     lines = [...leftLines, ...rightLines];
 
-    console.log(
-      `[Parser] 2단 감지: 좌측 ${leftLines.length}줄, 우측 ${rightLines.length}줄`
-    );
   } else {
     // 1단: y좌표 순서로 정렬
     lines = clusterIntoLines(fields);
-    console.log(`[Parser] 1단 문서: ${lines.length}줄`);
   }
 
   return {
@@ -908,7 +904,6 @@ export function parseQuestions(
     cropPadding = 20,
   } = options;
 
-  console.log(`[Parser] 파싱 시작: ${ocrFields.length}개 필드`);
 
   // 1. 좌표 정보 추가
   const fieldsWithCoords = ocrFields.map(addCoordinates);
@@ -917,37 +912,21 @@ export function parseQuestions(
   const { lines, isTwoColumn, leftCount, rightCount } =
     detectAndSortTwoColumn(fieldsWithCoords);
 
-  console.log(`[Parser] 라인 클러스터링 완료: ${lines.length}줄`);
 
   // 3. 문제 세그먼테이션
   const questions = segmentQuestions(lines);
 
-  console.log(`[Parser] 문제 파싱 완료: ${questions.length}개 문제`);
-
-  // 디버그: 각 문제 요약
-  questions.forEach((q, idx) => {
-    console.log(
-      `  [문제 ${q.number}] type=${q.type}, choices=${q.choices?.length || 0}, box=${q.box ? "있음" : "없음"}`
-    );
-    console.log(`    stem: ${q.stem.slice(0, 50)}...`);
-  });
 
   // 4. 자동 크롭 정보 생성
   let autoCrop: AutoCropInfo | undefined;
   if (includeAutoCrop && fieldsWithCoords.length > 0) {
     autoCrop = generateAutoCropInfo(fieldsWithCoords, cropPadding);
-    console.log(`[Parser] 자동 크롭 정보:`);
-    console.log(`  컨텐츠 영역: (${autoCrop.contentBounds.x}, ${autoCrop.contentBounds.y}) ` +
-      `${autoCrop.contentBounds.width}x${autoCrop.contentBounds.height}`);
-    console.log(`  제안 크롭: (${autoCrop.suggestedCrop.x}, ${autoCrop.suggestedCrop.y}) ` +
-      `${autoCrop.suggestedCrop.width}x${autoCrop.suggestedCrop.height}`);
   }
 
   // 5. 디버그 오버레이 생성
   let debugOverlays: DebugOverlayItem[] | undefined;
   if (includeDebugOverlays) {
     debugOverlays = generateAccurateOverlays(lines, questions);
-    console.log(`[Parser] 디버그 오버레이: ${debugOverlays.length}개 항목`);
   }
 
   return {
