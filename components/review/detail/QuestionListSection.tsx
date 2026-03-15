@@ -7,6 +7,17 @@ import type { DisplayItem, FeedbackType } from '@/components/review/types';
 import { KOREAN_LABELS } from '@/lib/utils/reviewQuestionUtils';
 import QuestionCard from '@/components/review/QuestionCard';
 
+
+/** 혼합 지문 블록 (passageMixedExamples용) */
+interface ReviewMixedBlock {
+  id: string;
+  type: string;
+  content?: string;
+  items?: Array<{ id: string; label: string; content: string }>;
+  imageUrl?: string;
+  children?: ReviewMixedBlock[];
+}
+
 /** 카테고리별 그룹 */
 export interface CategoryGroup {
   category: FolderCategory | null;
@@ -374,19 +385,19 @@ function CombinedGroupCard({
                       )
                     )}
                     {/* 혼합 형식 */}
-                    {(firstItem as any).passageMixedExamples && (firstItem as any).passageMixedExamples.length > 0 && (
+                    {firstItem.passageMixedExamples && firstItem.passageMixedExamples.length > 0 && (
                       <div className="space-y-2">
-                        {(firstItem as any).passageMixedExamples.map((block: any) => (
+                        {firstItem.passageMixedExamples.map((block: ReviewMixedBlock) => (
                           <div key={block.id}>
                             {block.type === 'grouped' && (
                               <div className="space-y-1">
-                                {(block.children || []).map((child: any) => (
+                                {(block.children || []).map((child: ReviewMixedBlock) => (
                                   <div key={child.id}>
                                     {child.type === 'text' && <p className="text-sm text-[#5C5C5C] whitespace-pre-wrap">{child.content}</p>}
-                                    {child.type === 'labeled' && (child.items || []).map((i: any) => (
+                                    {child.type === 'labeled' && (child.items || []).map((i: { id: string; label: string; content: string }) => (
                                       <p key={i.id} className="text-sm"><span className="font-bold">{i.label}.</span> {i.content}</p>
                                     ))}
-                                    {child.type === 'gana' && (child.items || []).map((i: any) => (
+                                    {child.type === 'gana' && (child.items || []).map((i: { id: string; label: string; content: string }) => (
                                       <p key={i.id} className="text-sm"><span className="font-bold">({i.label})</span> {i.content}</p>
                                     ))}
                                     {child.type === 'image' && child.imageUrl && <Image src={child.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto" unoptimized />}
@@ -397,14 +408,14 @@ function CombinedGroupCard({
                             {block.type === 'text' && <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{block.content}</p>}
                             {block.type === 'labeled' && (
                               <div className="space-y-1">
-                                {(block.items || []).map((i: any) => (
+                                {(block.items || []).map((i: { id: string; label: string; content: string }) => (
                                   <p key={i.id} className="text-sm"><span className="font-bold">{i.label}.</span> {i.content}</p>
                                 ))}
                               </div>
                             )}
                             {block.type === 'gana' && (
                               <div className="space-y-1">
-                                {(block.items || []).map((i: any) => (
+                                {(block.items || []).map((i: { id: string; label: string; content: string }) => (
                                   <p key={i.id} className="text-sm"><span className="font-bold">({i.label})</span> {i.content}</p>
                                 ))}
                               </div>
