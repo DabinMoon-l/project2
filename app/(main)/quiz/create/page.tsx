@@ -26,6 +26,7 @@ import {
   type QuizMeta,
 } from '@/components/quiz/create';
 import ImageRegionSelector, { type UploadedFileItem } from '@/components/quiz/create/ImageRegionSelector';
+import type { MixedExampleBlock, LabeledItem } from '@/components/quiz/create/questionTypes';
 
 // 대형 컴포넌트 lazy load (단계별 조건부 렌더링)
 const OCRProcessor = dynamic(() => import('@/components/quiz/create/OCRProcessor'));
@@ -56,6 +57,35 @@ interface DocumentPage {
  * 페이지 단계
  */
 type Step = 'upload' | 'questions' | 'meta' | 'confirm';
+
+/**
+ * Firestore에 저장할 평탄화된 문제 데이터
+ * 결합형 하위 문제와 일반 문제 모두 이 형태로 저장됨
+ */
+interface FlattenedQuestion {
+  id: string;
+  order: number;
+  text: string;
+  type: string;
+  choices?: string[] | null;
+  answer: string | number | number[];
+  explanation?: string | null;
+  imageUrl?: string | null;
+  examples?: { type: string; items: string[] } | null;
+  mixedExamples?: MixedExampleBlock[] | null;
+  combinedGroupId?: string;
+  combinedIndex?: number;
+  combinedTotal?: number;
+  chapterId?: string | null;
+  chapterDetailId?: string | null;
+  passageType?: string;
+  passage?: string;
+  passageImage?: string | null;
+  commonQuestion?: string | null;
+  koreanAbcItems?: string[] | null;
+  passageMixedExamples?: MixedExampleBlock[] | null;
+  combinedMainText?: string;
+}
 
 // ============================================================
 // 컴포넌트
@@ -166,15 +196,15 @@ export default function QuizCreatePage() {
    * 데이터 정리 (undefined, null, 빈 배열 제거)
    * localStorage와 Firestore 모두 직렬화 가능한 데이터만 허용
    */
-  const cleanDataForStorage = useCallback((data: any): any => {
+  const cleanDataForStorage = useCallback((data: unknown): unknown => {
     if (data === null || data === undefined) return null;
     if (Array.isArray(data)) {
       return data.map(item => cleanDataForStorage(item)).filter(item => item !== null && item !== undefined);
     }
     if (typeof data === 'object') {
-      const cleaned: any = {};
-      for (const key in data) {
-        const value = data[key];
+      const cleaned: Record<string, unknown> = {};
+      for (const key in data as Record<string, unknown>) {
+        const value = (data as Record<string, unknown>)[key];
         // undefined, 함수, File 객체 제외
         if (value !== undefined && typeof value !== 'function' && !(value instanceof File)) {
           const cleanedValue = cleanDataForStorage(value);
@@ -941,7 +971,7 @@ export default function QuizCreatePage() {
 
         // 문제 정보 - 결합형은 하위 문제를 개별 문제로 펼침
         questions: (() => {
-          const flattenedQuestions: any[] = [];
+          const flattenedQuestions: FlattenedQuestion[] = [];
           let orderIndex = 0;
 
           questions.forEach((q) => {
@@ -1001,12 +1031,12 @@ export default function QuizCreatePage() {
                 let subMixedExamples = null;
                 if (sq.mixedExamples && Array.isArray(sq.mixedExamples) && sq.mixedExamples.length > 0) {
                   const filteredMixed = sq.mixedExamples
-                    .filter((block: any) => {
+                    .filter((block: MixedExampleBlock) => {
                       switch (block.type) {
                         case 'text':
                           return block.content?.trim();
                         case 'labeled':
-                          return (block.items || []).some((i: any) => i.content?.trim());
+                          return (block.items || []).some((i: LabeledItem) => i.content?.trim());
                         case 'image':
                           return block.imageUrl?.trim();
                         case 'grouped':
@@ -1015,19 +1045,19 @@ export default function QuizCreatePage() {
                           return false;
                       }
                     })
-                    .map((block: any) => {
+                    .map((block: MixedExampleBlock) => {
                       if (block.type === 'labeled') {
                         return {
                           ...block,
-                          items: (block.items || []).filter((i: any) => i.content?.trim()),
+                          items: (block.items || []).filter((i: LabeledItem) => i.content?.trim()),
                         };
                       }
                       if (block.type === 'grouped') {
                         return {
                           ...block,
-                          children: (block.children || []).filter((child: any) => {
+                          children: (block.children || []).filter((child: MixedExampleBlock) => {
                             if (child.type === 'text') return child.content?.trim();
-                            if (child.type === 'labeled') return (child.items || []).some((i: any) => i.content?.trim());
+                            if (child.type === 'labeled') return (child.items || []).some((i: LabeledItem) => i.content?.trim());
                             if (child.type === 'image') return child.imageUrl?.trim();
                             return false;
                           }),
@@ -1040,7 +1070,7 @@ export default function QuizCreatePage() {
                   }
                 }
 
-                const subQuestionData: any = {
+                const subQuestionData: FlattenedQuestion = {
                   id: sq.id || `${combinedGroupId}_${sqIndex}`, // ID 명시적 포함
                   order: orderIndex++,
                   text: sq.text,
@@ -1072,25 +1102,25 @@ export default function QuizCreatePage() {
                   // 공통 지문 혼합 보기 (passageType이 mixed일 때)
                   if (q.passageType === 'mixed' && q.passageMixedExamples && q.passageMixedExamples.length > 0) {
                     const filteredPassageMixed = q.passageMixedExamples
-                      .filter((block: any) => {
+                      .filter((block: MixedExampleBlock) => {
                         switch (block.type) {
                           case 'text': return block.content?.trim();
-                          case 'labeled': return (block.items || []).some((i: any) => i.content?.trim());
+                          case 'labeled': return (block.items || []).some((i: LabeledItem) => i.content?.trim());
                           case 'image': return block.imageUrl?.trim();
                           case 'grouped': return (block.children?.length ?? 0) > 0;
                           default: return false;
                         }
                       })
-                      .map((block: any) => {
+                      .map((block: MixedExampleBlock) => {
                         if (block.type === 'labeled') {
-                          return { ...block, items: (block.items || []).filter((i: any) => i.content?.trim()) };
+                          return { ...block, items: (block.items || []).filter((i: LabeledItem) => i.content?.trim()) };
                         }
                         if (block.type === 'grouped') {
                           return {
                             ...block,
-                            children: (block.children || []).filter((child: any) => {
+                            children: (block.children || []).filter((child: MixedExampleBlock) => {
                               if (child.type === 'text') return child.content?.trim();
-                              if (child.type === 'labeled') return (child.items || []).some((i: any) => i.content?.trim());
+                              if (child.type === 'labeled') return (child.items || []).some((i: LabeledItem) => i.content?.trim());
                               if (child.type === 'image') return child.imageUrl?.trim();
                               return false;
                             }),

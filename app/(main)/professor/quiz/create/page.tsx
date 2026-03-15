@@ -22,6 +22,7 @@ import {
   type QuestionData,
 } from '@/components/quiz/create';
 import ImageRegionSelector, { type UploadedFileItem } from '@/components/quiz/create/ImageRegionSelector';
+import type { MixedExampleBlock, LabeledItem } from '@/components/quiz/create/questionTypes';
 
 // 대형 컴포넌트 lazy load (단계별 조건부 렌더링)
 const OCRProcessor = dynamic(() => import('@/components/quiz/create/OCRProcessor'));
@@ -48,6 +49,33 @@ interface DocumentPage {
 // ============================================================
 
 type Step = 'upload' | 'questions' | 'meta' | 'confirm';
+
+/**
+ * Firestore에 저장할 평탄화된 문제 데이터
+ */
+interface FlattenedQuestion {
+  id: string;
+  order: number;
+  text: string;
+  type: string;
+  choices?: string[] | null;
+  answer: string | number | number[];
+  explanation?: string | null;
+  imageUrl?: string | null;
+  mixedExamples?: MixedExampleBlock[] | null;
+  combinedGroupId?: string;
+  combinedIndex?: number;
+  combinedTotal?: number;
+  chapterId?: string | null;
+  chapterDetailId?: string | null;
+  passageType?: string;
+  passage?: string;
+  passageImage?: string | null;
+  commonQuestion?: string | null;
+  koreanAbcItems?: string[] | null;
+  passageMixedExamples?: MixedExampleBlock[] | null;
+  combinedMainText?: string;
+}
 
 /** 시험 유형 옵션 */
 const QUIZ_TYPE_OPTIONS: { value: QuizType; label: string }[] = [
@@ -195,15 +223,15 @@ export default function ProfessorQuizCreatePage() {
   /**
    * 데이터 정리
    */
-  const cleanDataForStorage = useCallback((data: any): any => {
+  const cleanDataForStorage = useCallback((data: unknown): unknown => {
     if (data === null || data === undefined) return null;
     if (Array.isArray(data)) {
       return data.map(item => cleanDataForStorage(item)).filter(item => item !== null && item !== undefined);
     }
     if (typeof data === 'object') {
-      const cleaned: any = {};
-      for (const key in data) {
-        const value = data[key];
+      const cleaned: Record<string, unknown> = {};
+      for (const key in data as Record<string, unknown>) {
+        const value = (data as Record<string, unknown>)[key];
         if (value !== undefined && typeof value !== 'function' && !(value instanceof File)) {
           const cleanedValue = cleanDataForStorage(value);
           if (cleanedValue !== null && cleanedValue !== undefined) {
@@ -761,7 +789,7 @@ export default function ProfessorQuizCreatePage() {
    * QuestionData를 QuizQuestion 형식으로 변환 (결합형 펼침)
    */
   const convertToQuizQuestions = useCallback((questionList: QuestionData[]) => {
-    const flattenedQuestions: any[] = [];
+    const flattenedQuestions: FlattenedQuestion[] = [];
     let orderIndex = 0;
 
     questionList.forEach((q) => {
@@ -792,24 +820,24 @@ export default function ProfessorQuizCreatePage() {
           let subMixedExamples = null;
           if (sq.mixedExamples && Array.isArray(sq.mixedExamples) && sq.mixedExamples.length > 0) {
             const filteredMixed = sq.mixedExamples
-              .filter((block: any) => {
+              .filter((block: MixedExampleBlock) => {
                 switch (block.type) {
                   case 'text': return block.content?.trim();
-                  case 'labeled': return (block.items || []).some((i: any) => i.content?.trim());
+                  case 'labeled': return (block.items || []).some((i: LabeledItem) => i.content?.trim());
                   case 'image': return block.imageUrl?.trim();
                   case 'grouped': return (block.children?.length ?? 0) > 0;
                   default: return false;
                 }
               })
-              .map((block: any) => {
-                if (block.type === 'labeled') return { ...block, items: (block.items || []).filter((i: any) => i.content?.trim()) };
-                if (block.type === 'grouped') return { ...block, children: (block.children || []).filter((child: any) => { if (child.type === 'text') return child.content?.trim(); if (child.type === 'labeled') return (child.items || []).some((i: any) => i.content?.trim()); if (child.type === 'image') return child.imageUrl?.trim(); return false; }) };
+              .map((block: MixedExampleBlock) => {
+                if (block.type === 'labeled') return { ...block, items: (block.items || []).filter((i: LabeledItem) => i.content?.trim()) };
+                if (block.type === 'grouped') return { ...block, children: (block.children || []).filter((child: MixedExampleBlock) => { if (child.type === 'text') return child.content?.trim(); if (child.type === 'labeled') return (child.items || []).some((i: LabeledItem) => i.content?.trim()); if (child.type === 'image') return child.imageUrl?.trim(); return false; }) };
                 return block;
               });
             if (filteredMixed.length > 0) subMixedExamples = filteredMixed;
           }
 
-          const subQuestionData: any = {
+          const subQuestionData: FlattenedQuestion = {
             id: sq.id || `${combinedGroupId}_${sqIndex}`,
             order: orderIndex++,
             text: sq.text,
@@ -836,8 +864,8 @@ export default function ProfessorQuizCreatePage() {
               : undefined;
             if (q.passageType === 'mixed' && q.passageMixedExamples && q.passageMixedExamples.length > 0) {
               const filteredPassageMixed = q.passageMixedExamples
-                .filter((block: any) => { switch (block.type) { case 'text': return block.content?.trim(); case 'labeled': return (block.items || []).some((i: any) => i.content?.trim()); case 'image': return block.imageUrl?.trim(); case 'grouped': return (block.children?.length ?? 0) > 0; default: return false; } })
-                .map((block: any) => { if (block.type === 'labeled') return { ...block, items: (block.items || []).filter((i: any) => i.content?.trim()) }; if (block.type === 'grouped') return { ...block, children: (block.children || []).filter((child: any) => { if (child.type === 'text') return child.content?.trim(); if (child.type === 'labeled') return (child.items || []).some((i: any) => i.content?.trim()); if (child.type === 'image') return child.imageUrl?.trim(); return false; }) }; return block; });
+                .filter((block: MixedExampleBlock) => { switch (block.type) { case 'text': return block.content?.trim(); case 'labeled': return (block.items || []).some((i: LabeledItem) => i.content?.trim()); case 'image': return block.imageUrl?.trim(); case 'grouped': return (block.children?.length ?? 0) > 0; default: return false; } })
+                .map((block: MixedExampleBlock) => { if (block.type === 'labeled') return { ...block, items: (block.items || []).filter((i: LabeledItem) => i.content?.trim()) }; if (block.type === 'grouped') return { ...block, children: (block.children || []).filter((child: MixedExampleBlock) => { if (child.type === 'text') return child.content?.trim(); if (child.type === 'labeled') return (child.items || []).some((i: LabeledItem) => i.content?.trim()); if (child.type === 'image') return child.imageUrl?.trim(); return false; }) }; return block; });
               subQuestionData.passageMixedExamples = filteredPassageMixed.length > 0 ? filteredPassageMixed : undefined;
             }
             subQuestionData.combinedMainText = q.text || '';
