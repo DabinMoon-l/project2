@@ -162,12 +162,12 @@ export async function analyzeImageRegions(
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(requestBody),
-          signal: controller.signal as any,
+          signal: controller.signal as import("node-fetch").RequestInit["signal"],
         }
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       clearTimeout(timeout);
-      if (err.name === "AbortError") {
+      if (err instanceof Error && err.name === "AbortError") {
         return { success: false, regions: [], error: "이미지 분석 시간 초과 (60초)" };
       }
       throw err;
@@ -184,7 +184,14 @@ export async function analyzeImageRegions(
       };
     }
 
-    const result = (await response.json()) as any;
+    interface GeminiResponse {
+      candidates?: Array<{
+        content?: {
+          parts?: Array<{ text?: string }>;
+        };
+      }>;
+    }
+    const result = (await response.json()) as GeminiResponse;
 
     if (
       !result.candidates ||
@@ -198,9 +205,9 @@ export async function analyzeImageRegions(
       };
     }
 
-    const textContent = result.candidates[0].content.parts
-      .filter((p: any) => p.text)
-      .map((p: any) => p.text)
+    const textContent = (result.candidates[0].content.parts || [])
+      .filter((p) => p.text)
+      .map((p) => p.text)
       .join("");
 
     console.log("[ImageRegion] Gemini 응답:", textContent.substring(0, 500));

@@ -61,12 +61,23 @@ interface TeamRankEntry {
   rank: number;
 }
 
+interface UserDoc {
+  id: string;
+  role?: string;
+  nickname?: string;
+  classId?: string;
+  totalExp?: number;
+  profileRabbitId?: number | null;
+  equippedRabbits?: Array<{ rabbitId: number; courseId?: string }>;
+  professorQuizzesCompleted?: number;
+}
+
 async function computeRankingsForCourse(courseId: string) {
   const db = getFirestore();
 
   // ── 1단계: users 쿼리 ──
   const usersSnap = await db.collection("users").where("courseId", "==", courseId).get();
-  const allUsers = usersSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+  const allUsers: UserDoc[] = usersSnap.docs.map(d => ({ id: d.id, ...d.data() } as UserDoc));
 
   // 테스트 계정 닉네임 (랭킹에서만 제외, 기능은 정상 사용)
   const testAccountNicknames: Record<string, string[]> = {
@@ -75,10 +86,10 @@ async function computeRankingsForCourse(courseId: string) {
   };
   const excludedNicknames = testAccountNicknames[courseId] || [];
 
-  const students = allUsers.filter((u: any) =>
-    u.role !== "professor" && !excludedNicknames.includes(u.nickname)
+  const students = allUsers.filter((u) =>
+    u.role !== "professor" && !excludedNicknames.includes(u.nickname || "")
   );
-  const professorUids = allUsers.filter((u: any) => u.role === "professor").map((u: any) => u.id);
+  const professorUids = allUsers.filter((u) => u.role === "professor").map((u) => u.id);
 
   if (students.length === 0) {
     return { rankedUsers: [], teamRanks: [], totalStudents: 0, weeklyParticipationRate: 0 };
@@ -86,9 +97,9 @@ async function computeRankingsForCourse(courseId: string) {
 
   // 장착 토끼 ID 수집
   const rabbitDocIds = new Set<string>();
-  students.forEach((u: any) => {
+  students.forEach((u) => {
     const equipped = u.equippedRabbits || [];
-    equipped.forEach((r: any) => {
+    equipped.forEach((r) => {
       if (r.rabbitId > 0 && r.courseId) {
         rabbitDocIds.add(`${r.courseId}_${r.rabbitId}`);
       }
@@ -98,9 +109,9 @@ async function computeRankingsForCourse(courseId: string) {
   // 장착 토끼의 discoveryOrder 수집 (유저별 rabbitHoldings 조회)
   // key: "userId_courseId_rabbitId" → discoveryOrder
   const holdingPairs: Array<{ userId: string; docId: string }> = [];
-  students.forEach((u: any) => {
+  students.forEach((u) => {
     const equipped = u.equippedRabbits || [];
-    equipped.forEach((r: any) => {
+    equipped.forEach((r) => {
       if (r.courseId) {
         holdingPairs.push({ userId: u.id, docId: `${r.courseId}_${r.rabbitId}` });
       }
@@ -189,14 +200,14 @@ async function computeRankingsForCourse(courseId: string) {
 
   // ── 개인 랭킹 ──
 
-  const rankedUsers: RankedUserDoc[] = students.map((u: any) => {
+  const rankedUsers: RankedUserDoc[] = students.map((u) => {
     const exp = u.totalExp || 0;
     const profStat = studentProfStats[u.id] || { correct: 0, attempted: 0 };
     const rankScore = computeRankScore(profStat.correct, exp);
 
     // 장착 토끼 이름 (discoveryOrder 반영 — "뭉치 2세" 등)
     const allEquipped = u.equippedRabbits || [];
-    const names = allEquipped.map((r: any) => {
+    const names = allEquipped.map((r) => {
       if (r.rabbitId === 0) return "토끼";
       const key = `${r.courseId}_${r.rabbitId}`;
       const baseName = rabbitNames[key] || `토끼 #${r.rabbitId + 1}`;
@@ -230,7 +241,7 @@ async function computeRankingsForCourse(courseId: string) {
       rankScore,
       profileRabbitId: u.profileRabbitId ?? null,
       equippedRabbitNames,
-      equippedRabbits: allEquipped.map((r: any) => ({
+      equippedRabbits: allEquipped.map((r) => ({
         rabbitId: r.rabbitId,
         courseId: r.courseId,
         discoveryOrder: holdingOrders[`${u.id}_${r.courseId}_${r.rabbitId}`] || 1,
@@ -252,7 +263,7 @@ async function computeRankingsForCourse(courseId: string) {
   });
 
   // ── 주간 참여율 (월~일, KST 기준) ──
-  const studentIdSet = new Set(students.map((u: any) => u.id));
+  const studentIdSet = new Set(students.map((u) => u.id));
   const weekStartUTC = getWeekStartUTC();
   const weeklyActiveIds = new Set<string>();
   resultsSnap.docs.forEach(d => {
@@ -269,17 +280,17 @@ async function computeRankingsForCourse(courseId: string) {
 
   // ── 팀 랭킹 ──
   const classes = ["A", "B", "C", "D"];
-  const maxExp = Math.max(...students.map((u: any) => u.totalExp || 0), 1);
+  const maxExp = Math.max(...students.map((u) => u.totalExp || 0), 1);
 
   const teamRanks: TeamRankEntry[] = classes.map(cls => {
-    const members = students.filter((u: any) => u.classId === cls);
+    const members = students.filter((u) => u.classId === cls);
     if (members.length === 0) return { classId: cls, score: 0, rank: 0 };
 
-    const avgExp = members.reduce((s: number, u: any) => s + (u.totalExp || 0), 0) / members.length;
+    const avgExp = members.reduce((s: number, u) => s + (u.totalExp || 0), 0) / members.length;
     const normalizedAvgExp = (avgExp / maxExp) * 100;
 
     // 미참여자는 0%로 포함 (전체 멤버 기준 평균)
-    const correctRates = members.map((u: any) => {
+    const correctRates = members.map((u) => {
       const stat = studentProfStats[u.id];
       if (!stat || stat.attempted === 0) return 0;
       return (stat.correct / stat.attempted) * 100;
@@ -288,7 +299,7 @@ async function computeRankingsForCourse(courseId: string) {
 
     let avgCompletionRate = 0;
     if (totalProfQuizzes > 0) {
-      const completionRates = members.map((u: any) =>
+      const completionRates = members.map((u) =>
         Math.min(((u.professorQuizzesCompleted || 0) / totalProfQuizzes) * 100, 100)
       );
       avgCompletionRate = completionRates.reduce((s, r) => s + r, 0) / completionRates.length;

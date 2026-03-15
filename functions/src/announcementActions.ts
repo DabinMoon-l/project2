@@ -46,11 +46,17 @@ export const voteOnPoll = onCall(
       const data = snap.data()!;
 
       // polls 배열 추출 (하위 호환: poll 단일 → 배열 래핑)
-      let polls: any[] = data.polls || (data.poll ? [data.poll] : []);
+      interface PollData {
+        options?: unknown[];
+        allowMultiple?: boolean;
+        maxSelections?: number;
+        votes?: Record<string, string[]>;
+      }
+      let polls: PollData[] = data.polls || (data.poll ? [data.poll] : []);
 
       // 객체→배열 복구 (Firestore가 간혹 배열을 객체로 변환)
       if (polls && !Array.isArray(polls)) {
-        polls = Object.values(polls);
+        polls = Object.values(polls as Record<string, PollData>);
       }
 
       const poll = polls[pollIdx];
@@ -88,7 +94,7 @@ export const voteOnPoll = onCall(
       }
 
       // polls 배열 전체 업데이트 (dot notation 금지 — Firestore 배열→객체 변환 버그 방지)
-      const newPolls = polls.map((p: any, i: number) =>
+      const newPolls = polls.map((p: PollData, i: number) =>
         i === pollIdx ? { ...p, votes } : p
       );
 

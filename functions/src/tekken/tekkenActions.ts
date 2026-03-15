@@ -100,7 +100,7 @@ export const submitMashResult = onCall(
 
     // 원자적 연타 결과 처리 (이중 처리 방지)
     const processedRef = battleRef.child("mash/processed");
-    const mashTx = await processedRef.transaction((current: any) => {
+    const mashTx = await processedRef.transaction((current: boolean | null) => {
       if (current) return; // 이미 처리됨 → abort
       return true;
     });

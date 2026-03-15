@@ -47,8 +47,8 @@ export interface GenerationJob {
 
   // 결과 (COMPLETED 시)
   result?: {
-    questions: any[];
-    meta?: any;
+    questions: Array<{ [key: string]: unknown }>;
+    meta?: { [key: string]: unknown };
   };
 
   // 에러 (FAILED 시)
@@ -290,7 +290,12 @@ export const checkJobStatus = onCall(
       throw new HttpsError("permission-denied", "권한이 없습니다.");
     }
 
-    const response: any = {
+    const response: {
+      jobId: string;
+      status: string;
+      result?: unknown;
+      error?: string;
+    } = {
       jobId,
       status: jobData.status,
     };

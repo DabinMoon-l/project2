@@ -65,7 +65,7 @@ export const tekkenCleanup = onSchedule(
 
     let forcedEnd = 0;
     for (const [battleId, battle] of Object.entries(activeBattles)) {
-      const b = battle as { status?: string; endsAt?: number; createdAt?: number; result?: any };
+      const b = battle as { status?: string; endsAt?: number; createdAt?: number; result?: { xpGranted?: boolean } };
       if (b.status && b.status !== "finished") {
         // endsAt 기반 타임아웃 (endsAt이 설정된 배틀)
         const endsAtTimeout = b.endsAt && now > b.endsAt + 30000;

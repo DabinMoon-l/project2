@@ -224,14 +224,22 @@ ${questionsText}
     throw new Error(`Gemini API 오류: ${response.status}`);
   }
 
-  const result = (await response.json()) as any;
+  interface GeminiResponse {
+    candidates?: Array<{
+      content?: {
+        parts: Array<{ text?: string }>;
+      };
+    }>;
+  }
+
+  const result = (await response.json()) as GeminiResponse;
   if (!result.candidates?.[0]?.content) {
     throw new Error("AI 응답을 받지 못했습니다.");
   }
 
   const textContent = result.candidates[0].content.parts
-    .filter((p: any) => p.text)
-    .map((p: any) => p.text)
+    .filter((p) => p.text)
+    .map((p) => p.text)
     .join("");
 
   const parsed = robustParseJson(textContent);
@@ -239,19 +247,20 @@ ${questionsText}
   return {
     styleDescription: typeof parsed.styleDescription === "string" ? parsed.styleDescription : "",
     questionPatterns: Array.isArray(parsed.questionPatterns)
-      ? parsed.questionPatterns
-          .filter((p: any) => typeof p.pattern === "string")
-          .map((p: any) => ({
-            pattern: p.pattern,
-            examples: Array.isArray(p.examples) ? p.examples.filter((e: any) => typeof e === "string").slice(0, 3) : [],
+      ? (parsed.questionPatterns as Record<string, unknown>[])
+          .filter((p) => typeof p.pattern === "string")
+          .map((p) => ({
+            pattern: p.pattern as string,
+            examples: Array.isArray(p.examples) ? (p.examples as unknown[]).filter((e): e is string => typeof e === "string").slice(0, 3) : [],
           }))
       : [],
     distractorStrategies: Array.isArray(parsed.distractorStrategies)
-      ? parsed.distractorStrategies.filter((s: any) => typeof s === "string").slice(0, 5)
+      ? (parsed.distractorStrategies as unknown[]).filter((s): s is string => typeof s === "string").slice(0, 5)
       : [],
     topicEmphasis: Array.isArray(parsed.topicEmphasis)
-      ? parsed.topicEmphasis
-          .filter((t: any) => typeof t.topic === "string" && typeof t.weight === "number")
+      ? (parsed.topicEmphasis as Record<string, unknown>[])
+          .filter((t) => typeof t.topic === "string" && typeof t.weight === "number")
+          .map((t) => ({ topic: t.topic as string, weight: t.weight as number }))
           .slice(0, 10)
       : [],
   };
@@ -332,31 +341,39 @@ ${questionsText.slice(0, 8000)}
     throw new Error(`Gemini API 오류: ${response.status}`);
   }
 
-  const result = (await response.json()) as any;
+  interface GeminiResponse {
+    candidates?: Array<{
+      content?: {
+        parts: Array<{ text?: string }>;
+      };
+    }>;
+  }
+
+  const result = (await response.json()) as GeminiResponse;
   const textContent = result.candidates?.[0]?.content?.parts
-    ?.filter((p: any) => p.text)
-    ?.map((p: any) => p.text)
+    ?.filter((p) => p.text)
+    ?.map((p) => p.text)
     ?.join("") || "";
 
   try {
     const parsed = robustParseJson(textContent);
     return {
       coreTerms: Array.isArray(parsed.coreTerms)
-        ? parsed.coreTerms
-            .filter((t: any) => typeof t.korean === "string" && t.korean.length > 0)
-            .map((t: any) => ({
-              korean: t.korean,
+        ? (parsed.coreTerms as Record<string, unknown>[])
+            .filter((t) => typeof t.korean === "string" && (t.korean as string).length > 0)
+            .map((t) => ({
+              korean: t.korean as string,
               english: typeof t.english === "string" ? t.english : undefined,
               context: typeof t.context === "string" ? t.context : "",
             }))
             .slice(0, 25)
         : [],
       examTopics: Array.isArray(parsed.examTopics)
-        ? parsed.examTopics
-            .filter((t: any) => typeof t.topic === "string")
-            .map((t: any) => ({
-              topic: t.topic,
-              subtopics: Array.isArray(t.subtopics) ? t.subtopics.filter((s: any) => typeof s === "string") : [],
+        ? (parsed.examTopics as Record<string, unknown>[])
+            .filter((t) => typeof t.topic === "string")
+            .map((t) => ({
+              topic: t.topic as string,
+              subtopics: Array.isArray(t.subtopics) ? (t.subtopics as unknown[]).filter((s): s is string => typeof s === "string") : [],
             }))
             .slice(0, 10)
         : [],
@@ -374,7 +391,7 @@ ${questionsText.slice(0, 8000)}
 /**
  * Gemini 응답에서 JSON을 안전하게 추출
  */
-function robustParseJson(rawText: string): any {
+function robustParseJson(rawText: string): Record<string, unknown> {
   let text = rawText;
   const codeBlockMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (codeBlockMatch) {

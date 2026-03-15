@@ -15,7 +15,7 @@ import { defineSecret } from "firebase-functions/params";
 import { createBotProfile } from "../utils/tekkenBot";
 import { createBattle } from "./tekkenRound";
 import { pregenBattleQuestions } from "./tekkenQuestions";
-import type { PlayerSetup } from "./tekkenTypes";
+import type { PlayerSetup, BotPlayerSetup } from "./tekkenTypes";
 
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 
@@ -137,7 +137,12 @@ async function runMatchmaker(
       rtdb.ref(`tekken/matchmaking_data/${courseId}/${id}`).once("value")
     )
   );
-  const profiles: Record<string, any> = {};
+  interface MatchProfile {
+    nickname?: string;
+    profileRabbitId?: number;
+    equippedRabbits?: Array<{ rabbitId: number; courseId: string }>;
+  }
+  const profiles: Record<string, MatchProfile> = {};
   userIds.forEach((id, i) => { profiles[id] = profileSnaps[i].val() || {}; });
 
   // FIFO 페어링
@@ -289,7 +294,7 @@ export const matchWithBot = onCall(
 
     // 유저 토끼 레벨 조회 (봇 레벨 산정용)
     const holdingDocs = await Promise.all(
-      equippedRabbits.slice(0, 2).map((eq: any) =>
+      equippedRabbits.slice(0, 2).map((eq: { rabbitId: number; courseId: string }) =>
         fsDb.collection("users").doc(userId)
           .collection("rabbitHoldings").doc(`${eq.courseId}_${eq.rabbitId}`).get()
       )
@@ -309,19 +314,19 @@ export const matchWithBot = onCall(
       equippedRabbits,
     };
 
-    const player2 = {
+    const player2: BotPlayerSetup = {
       userId: botUserId,
       nickname: botProfile.nickname,
       profileRabbitId: botProfile.profileRabbitId,
       isBot: true,
-      equippedRabbits: [] as Array<{ rabbitId: number; courseId: string }>,
+      equippedRabbits: [],
       rabbits: botProfile.rabbits,
     };
 
     const battleId = await createBattle(
       courseId,
       player1,
-      player2 as any,
+      player2,
       GEMINI_API_KEY.value()
     );
 

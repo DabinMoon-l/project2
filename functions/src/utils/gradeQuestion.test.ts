@@ -1,10 +1,18 @@
 import { describe, it, expect } from "vitest";
-import { gradeQuestion, UserAnswer } from "./gradeQuestion";
+import { gradeQuestion, UserAnswer, GradeableQuestion } from "./gradeQuestion";
 
 // ─── 헬퍼 ───
 
 function makeAnswer(answer: number | number[] | string): UserAnswer {
   return { questionId: "q1", answer };
+}
+
+/**
+ * 엣지케이스 테스트용: 의도적으로 잘못된 타입을 전달하는 헬퍼
+ * 실제 런타임에서 직렬화 과정 중 발생할 수 있는 타입 불일치를 시뮬레이션
+ */
+function makeUnsafeAnswer(answer: unknown): UserAnswer {
+  return { questionId: "q1", answer: answer as UserAnswer["answer"] };
 }
 
 // ============================================================
@@ -303,41 +311,41 @@ describe("gradeQuestion — 0-indexed 안전성", () => {
 
 describe("gradeQuestion — 타입 강제변환", () => {
   it("정답 숫자 2, 사용자 문자열 '2' 제출 → 정답 (Number 변환)", () => {
-    const q = { type: "multiple", answer: 2 };
-    expect(gradeQuestion(q, makeAnswer("2" as any), 0).isCorrect).toBe(true);
+    const q: GradeableQuestion = { type: "multiple", answer: 2 };
+    expect(gradeQuestion(q, makeAnswer("2"), 0).isCorrect).toBe(true);
   });
 
   it("정답 숫자 0, 사용자 문자열 '0' 제출 → 정답", () => {
-    const q = { type: "multiple", answer: 0 };
-    expect(gradeQuestion(q, makeAnswer("0" as any), 0).isCorrect).toBe(true);
+    const q: GradeableQuestion = { type: "multiple", answer: 0 };
+    expect(gradeQuestion(q, makeAnswer("0"), 0).isCorrect).toBe(true);
   });
 
   it("OX: 사용자 boolean true 제출 → X가 아닌 O로 처리되지 않아야 함", () => {
-    const q = { type: "ox", answer: 0 }; // 정답: O
+    const q: GradeableQuestion = { type: "ox", answer: 0 }; // 정답: O
     // boolean true → 문자열도 아니고 0도 아님 → uaIsO = false → "X"
-    const result = gradeQuestion(q, makeAnswer(true as any), 0);
+    const result = gradeQuestion(q, makeUnsafeAnswer(true), 0);
     // true는 "O"가 아니므로 → X로 처리 → 오답
     expect(result.userAnswerStr).toBe("X");
     expect(result.isCorrect).toBe(false);
   });
 
   it("OX: 사용자 boolean false 제출 → O로 처리되지 않아야 함", () => {
-    const q = { type: "ox", answer: 1 }; // 정답: X
+    const q: GradeableQuestion = { type: "ox", answer: 1 }; // 정답: X
     // boolean false → 0이 아님(falsy이지만 === 비교) → uaIsO depends
-    const result = gradeQuestion(q, makeAnswer(false as any), 0);
+    const result = gradeQuestion(q, makeUnsafeAnswer(false), 0);
     // false !== 0 (strict), false !== "0", false !== "O" → X로 처리
     expect(result.userAnswerStr).toBe("X");
     expect(result.isCorrect).toBe(true); // X == X
   });
 
   it("주관식: 숫자 제출도 문자열로 비교", () => {
-    const q = { type: "short_answer", answer: "42" };
-    expect(gradeQuestion(q, makeAnswer(42 as any), 0).isCorrect).toBe(true);
+    const q: GradeableQuestion = { type: "short_answer", answer: "42" };
+    expect(gradeQuestion(q, makeAnswer(42), 0).isCorrect).toBe(true);
   });
 
   it("객관식: NaN 입력 → 0으로 변환되어 0번 선지 선택 취급", () => {
-    const q = { type: "multiple", answer: 1 };
-    const result = gradeQuestion(q, makeAnswer("abc" as any), 0);
+    const q: GradeableQuestion = { type: "multiple", answer: 1 };
+    const result = gradeQuestion(q, makeAnswer("abc"), 0);
     // Number("abc") = NaN, NaN === 1 → false
     expect(result.isCorrect).toBe(false);
   });

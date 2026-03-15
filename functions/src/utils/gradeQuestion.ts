@@ -14,8 +14,15 @@ export interface UserAnswer {
 
 // ─── 서버 채점 로직 ───
 
+/** 채점 대상 문제 구조 (Firestore Record와 호환 가능하도록 인덱스 시그니처 포함) */
+export interface GradeableQuestion {
+  type: string;
+  answer: number | number[] | string | undefined;
+  [key: string]: unknown;
+}
+
 export function gradeQuestion(
-  question: any,
+  question: GradeableQuestion,
   userAnswer: UserAnswer | undefined,
   questionIndex: number
 ): { isCorrect: boolean; userAnswerStr: string; correctAnswerStr: string } {

@@ -16,9 +16,9 @@ import { getFirestore } from "firebase-admin/firestore";
  * choiceCount 이상이면 1-indexed → -1로 변환
  */
 function fixAnswerIfNeeded(
-  answer: any,
+  answer: unknown,
   choiceCount: number
-): { value: any; changed: boolean } {
+): { value: unknown; changed: boolean } {
   if (typeof answer === "number") {
     if (answer >= choiceCount) {
       return { value: answer - 1, changed: true };
@@ -26,12 +26,12 @@ function fixAnswerIfNeeded(
     return { value: answer, changed: false };
   }
   if (Array.isArray(answer)) {
-    const anyOver = answer.some(
-      (a: any) => typeof a === "number" && a >= choiceCount
+    const anyOver = (answer as unknown[]).some(
+      (a) => typeof a === "number" && a >= choiceCount
     );
     if (anyOver) {
       return {
-        value: answer.map((a: any) => (typeof a === "number" && a >= choiceCount ? a - 1 : a)),
+        value: (answer as unknown[]).map((a) => (typeof a === "number" && a >= choiceCount ? a - 1 : a)),
         changed: true,
       };
     }
@@ -76,9 +76,9 @@ export const migrateQuizAnswersTo0Indexed = onCall(
       }
 
       let changed = false;
-      const updatedQuestions = questions.map((q: any) => {
+      const updatedQuestions = questions.map((q: Record<string, unknown>) => {
         const updated = { ...q };
-        const choiceCount = (q.choices || []).length || 4;
+        const choiceCount = (Array.isArray(q.choices) ? q.choices.length : 0) || 4;
 
         // 객관식 answer 수정
         if (q.type === "multiple") {

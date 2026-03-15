@@ -579,16 +579,16 @@ ${termsList}
   }
 
   // v1 하위 호환: 기존 데이터에 typeDistribution이 있으면 사용
-  if (!profile.questionPatterns && (profile as any).typeDistribution) {
-    const oldProfile = profile as any;
+  const profileRecord = profile as unknown as Record<string, unknown>;
+  if (!profile.questionPatterns && profileRecord.typeDistribution) {
     styleSection += `
 ### 문제 유형 분포 (레거시)
 `;
-    const sortedTypes = Object.entries(oldProfile.typeDistribution as Record<string, number>)
-      .sort(([, a], [, b]) => (b as number) - (a as number))
+    const sortedTypes = Object.entries(profileRecord.typeDistribution as Record<string, number>)
+      .sort(([, a], [, b]) => b - a)
       .slice(0, 5);
     for (const [type, count] of sortedTypes) {
-      const percentage = Math.round(((count as number) / oldProfile.analyzedQuestionCount) * 100);
+      const percentage = Math.round((count / profile.analyzedQuestionCount) * 100);
       styleSection += `- ${type}: ${percentage}%\n`;
     }
   }
@@ -609,9 +609,10 @@ function buildDifficultyPrompt(
   // 해당 난이도에서 교수가 선호하는 유형 (있으면)
   let preferredTypes = params.preferredTypes;
   // v1 하위 호환: difficultyTypeMap이 있으면 사용
-  const profileAny = profile as any;
-  if (profileAny?.difficultyTypeMap?.[difficulty.toUpperCase() as "EASY" | "MEDIUM" | "HARD"]) {
-    const profTypes = profileAny.difficultyTypeMap[difficulty.toUpperCase()];
+  const profileV1 = profile as unknown as Record<string, unknown> | null;
+  const difficultyTypeMap = profileV1?.difficultyTypeMap as Record<string, string[]> | undefined;
+  if (difficultyTypeMap?.[difficulty.toUpperCase()]) {
+    const profTypes = difficultyTypeMap[difficulty.toUpperCase()];
     if (profTypes.length > 0) {
       preferredTypes = profTypes;
     }
@@ -1305,12 +1306,12 @@ export async function generateWithGemini(
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
-        signal: controller.signal as any,
+        signal: controller.signal as unknown as import("node-fetch").RequestInit["signal"],
       }
     );
-  } catch (err: any) {
+  } catch (err: unknown) {
     clearTimeout(timeout);
-    if (err.name === "AbortError") {
+    if (err instanceof Error && err.name === "AbortError") {
       throw new Error("Gemini API 요청 시간 초과 (120초)");
     }
     throw err;
@@ -1329,7 +1330,16 @@ export async function generateWithGemini(
     throw new Error(`Gemini API 오류: ${response.status}`);
   }
 
-  const result = (await response.json()) as any;
+  interface GeminiResponse {
+    candidates?: Array<{
+      content?: {
+        parts: Array<{ text?: string }>;
+      };
+      finishReason?: string;
+    }>;
+  }
+
+  const result = (await response.json()) as GeminiResponse;
 
   if (!result.candidates?.[0]?.content) {
     throw new Error("AI 응답을 받지 못했습니다.");
@@ -1346,8 +1356,8 @@ export async function generateWithGemini(
   }
 
   const textContent = result.candidates[0].content.parts
-    .filter((p: any) => p.text)
-    .map((p: any) => p.text)
+    .filter((p) => p.text)
+    .map((p) => p.text)
     .join("");
 
   // JSON 추출 (여러 전략 시도)
@@ -1773,18 +1783,19 @@ export const getStyleProfile = onCall(
         };
       } else {
         // v1 하위 호환
-        const v1 = keywords as any;
+        const v1 = keywords as unknown as Record<string, unknown>;
+        const v1Concepts = Array.isArray(v1.mainConcepts) ? v1.mainConcepts as Array<Record<string, unknown>> : [];
         keywordsSummary = {
-          coreTermsCount: v1.mainConcepts?.length || 0,
+          coreTermsCount: v1Concepts.length,
           examTopicsCount: 0,
-          topTerms: v1.mainConcepts?.slice(0, 5).map((k: any) => k.term) || [],
-          topTopics: [],
+          topTerms: v1Concepts.slice(0, 5).map((k) => (k.term as string) || ""),
+          topTopics: [] as string[],
         };
       }
     }
 
     // v2 형식 요약
-    const summary: any = {
+    const summary: Record<string, unknown> = {
       analyzedQuizCount: profile.analyzedQuizCount,
       analyzedQuestionCount: profile.analyzedQuestionCount,
     };
@@ -1795,9 +1806,10 @@ export const getStyleProfile = onCall(
       summary.hasStyleDescription = !!profile.styleDescription;
     }
     // v1 하위 호환
-    if ((profile as any).typeDistribution) {
-      summary.topTypes = Object.entries((profile as any).typeDistribution as Record<string, number>)
-        .sort(([, a], [, b]) => (b as number) - (a as number))
+    const profileAsRecord = profile as unknown as Record<string, unknown>;
+    if (profileAsRecord.typeDistribution) {
+      summary.topTypes = Object.entries(profileAsRecord.typeDistribution as Record<string, number>)
+        .sort(([, a], [, b]) => b - a)
         .slice(0, 3)
         .map(([type]) => type);
     }

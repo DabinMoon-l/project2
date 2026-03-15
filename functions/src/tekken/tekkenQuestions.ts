@@ -120,15 +120,16 @@ function tryRepairObject(objStr: string): string | null {
 /**
  * 개별 객체가 유효한 문제인지 검증
  */
-function isValidQuestion(q: any): q is GeneratedQuestion {
+function isValidQuestion(q: unknown): q is GeneratedQuestion {
+  if (!q || typeof q !== "object") return false;
+  const obj = q as Record<string, unknown>;
   return (
-    q &&
-    typeof q.text === "string" && q.text.length > 0 &&
-    Array.isArray(q.choices) && q.choices.length >= 4 &&
-    q.choices.every((c: any) => typeof c === "string") &&
-    typeof q.correctAnswer === "number" &&
-    q.correctAnswer >= 0 &&
-    q.correctAnswer < q.choices.length
+    typeof obj.text === "string" && obj.text.length > 0 &&
+    Array.isArray(obj.choices) && obj.choices.length >= 4 &&
+    (obj.choices as unknown[]).every((c) => typeof c === "string") &&
+    typeof obj.correctAnswer === "number" &&
+    obj.correctAnswer >= 0 &&
+    obj.correctAnswer < (obj.choices as unknown[]).length
   );
 }
 
@@ -363,7 +364,7 @@ function buildEnhancedBattlePrompt(
   questionBank: SampleQuestion[],
   existingTexts: string[]
 ): string {
-  const diffParams = (DIFFICULTY_PARAMS as any)[difficulty] || (DIFFICULTY_PARAMS as any)["medium"];
+  const diffParams = DIFFICULTY_PARAMS[difficulty as keyof typeof DIFFICULTY_PARAMS] || DIFFICULTY_PARAMS["medium"];
 
   // 과목 개요 + 챕터 커리큘럼
   const courseOverview = buildCourseOverviewPrompt(courseId, chapters);
@@ -604,7 +605,7 @@ export async function generateBattleQuestions(
 JSON 배열로 출력: [{"text":"문제","type":"multiple","choices":["선지1","선지2","선지3","선지4"],"correctAnswer":0,"difficulty":"${difficulty}","explanation":"정답 해설","choiceExplanations":["선지1 해설","선지2 해설","선지3 해설","선지4 해설"],"chapterId":"3"}]`
         : prompt;
 
-      const generationConfig: any = {
+      const generationConfig: Record<string, unknown> = {
         temperature: isSimplified ? 0.7 : 0.9,
         maxOutputTokens: isSimplified ? 4096 : 8192,
       };
@@ -625,7 +626,7 @@ JSON 배열로 출력: [{"text":"문제","type":"multiple","choices":["선지1",
             generationConfig,
           }),
           timeout: 120000,
-        } as any
+        } as import("node-fetch").RequestInit
       );
 
       const data = (await response.json()) as {

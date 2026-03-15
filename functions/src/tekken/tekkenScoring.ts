@@ -56,7 +56,7 @@ async function scoreRound(
   let mashId = "";
 
   // 원자적 업데이트를 위한 updates 객체
-  const updates: Record<string, any> = {};
+  const updates: Record<string, unknown> = {};
 
   if (p1Correct && p2Correct) {
     // 양쪽 정답 → 연타 미니게임
@@ -238,7 +238,7 @@ export const submitAnswer = onCall(
     if (!txResult.committed) {
       // 이미 상대가 채점 중 → RTDB 리스너로 결과 대기 (최대 3초)
       const resultRef = battleRef.child(`rounds/${roundIndex}/result/${userId}`);
-      const myResult = await new Promise<any>((resolve) => {
+      const myResult = await new Promise<Record<string, unknown> | null>((resolve) => {
         const timeout = setTimeout(() => {
           resultRef.off("value", listener);
           resolve(null);
@@ -336,7 +336,7 @@ export const submitTimeout = onCall(
 
     // scored transaction lock 획득
     const scoredRef = battleRef.child(`rounds/${roundIndex}/scored`);
-    const txResult = await scoredRef.transaction((current: any) => {
+    const txResult = await scoredRef.transaction((current: boolean | null) => {
       if (current) return; // 이미 채점됨 → abort
       return true;
     });

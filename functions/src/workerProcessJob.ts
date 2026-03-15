@@ -26,6 +26,7 @@ import {
   getCourseIndex,
   type StyleContext,
   type Difficulty,
+  type GeneratedQuestion,
 } from "./styledQuizGenerator";
 import type { QuestionBank } from "./professorQuizAnalysis";
 import {
@@ -60,8 +61,8 @@ interface JobInput {
 }
 
 interface JobResult {
-  questions: any[];
-  meta: Record<string, any>;
+  questions: GeneratedQuestion[];
+  meta: Record<string, unknown>;
 }
 
 /**
@@ -82,7 +83,7 @@ function sampleFromArray<T>(arr: T[], k: number): T[] {
  * 챕터 ID 유효성 검증 및 보정
  */
 function validateChapterIds(
-  questions: any[],
+  questions: GeneratedQuestion[],
   courseId: string,
   tags?: string[]
 ) {
@@ -194,7 +195,7 @@ async function executeJobProcessing(
   const combinedText = [trimmedText, professorPrompt].filter(Boolean).join("\n");
 
   // 병렬 실행할 작업 모음
-  const parallelTasks: Promise<any>[] = [];
+  const parallelTasks: Promise<unknown>[] = [];
 
   // Task 0~2: 스타일 프로필/키워드/문제뱅크
   const analysisRef = courseCustomized
@@ -265,8 +266,12 @@ async function executeJobProcessing(
       : Promise.resolve({} as Record<string, number>)
   );
 
-  const [profileDoc, keywordsDoc, bankDoc, scopeResult, chapterRepetitionMap] =
-    await Promise.all(parallelTasks);
+  const parallelResults = await Promise.all(parallelTasks);
+  const profileDoc = parallelResults[0] as FirebaseFirestore.DocumentSnapshot | null;
+  const keywordsDoc = parallelResults[1] as FirebaseFirestore.DocumentSnapshot | null;
+  const bankDoc = parallelResults[2] as FirebaseFirestore.DocumentSnapshot | null;
+  const scopeResult = parallelResults[3] as StyleContext["scope"] | null;
+  const chapterRepetitionMap = parallelResults[4] as Record<string, number>;
 
   // 결과 적용
   if (profileDoc?.exists) {
@@ -287,12 +292,12 @@ async function executeJobProcessing(
   }
 
   // 반복 횟수 평균 계산
-  const repValues = Object.values(chapterRepetitionMap as Record<string, number>);
+  const repValues = Object.values(chapterRepetitionMap);
   const chapterRepetition = repValues.length > 0
     ? Math.round(repValues.reduce((a: number, b: number) => a + b, 0) / repValues.length)
     : 0;
 
-  const nonZero = Object.entries(chapterRepetitionMap as Record<string, number>).filter(([, v]) => v > 0);
+  const nonZero = Object.entries(chapterRepetitionMap).filter(([, v]) => v > 0);
   if (nonZero.length > 0) {
     console.log(`${logPrefix} 챕터별 반복: ${nonZero.map(([k, v]) => `${k}=${v}`).join(", ")}`);
   }
@@ -352,7 +357,7 @@ async function executeJobProcessing(
     pageImages.length > 0,
     tags,
     chapterRepetition,
-    chapterRepetitionMap as Record<string, number>,
+    chapterRepetitionMap,
     isProfessor
   );
 
@@ -397,7 +402,7 @@ async function executeJobProcessing(
           pageImages.length > 0,
           tags,
           chapterRepetition + 1, // 반복 횟수 증가 → 다른 문제 유도
-          chapterRepetitionMap as Record<string, number>,
+          chapterRepetitionMap,
           isProfessor
         );
         const supplement = await generateWithGemini(
@@ -593,8 +598,9 @@ export const workerProcessJob = onDocumentCreated(
       }, apiKey, db, `[Worker] Job ${jobId}`);
 
       // 문제별 고유 ID 부여
-      const cleanQuestions = result.questions.map((q: any) => {
-        if (q.id) return q;
+      const cleanQuestions = result.questions.map((q) => {
+        const qWithId = q as GeneratedQuestion & { id?: string };
+        if (qWithId.id) return qWithId;
         return { ...q, id: `q_${crypto.randomUUID().slice(0, 8)}` };
       });
 
@@ -720,8 +726,9 @@ export const retryQueuedJobs = onSchedule(
           }, apiKey, db, `[Retry] Job ${jobId}`);
 
           // 문제별 고유 ID 부여
-          const cleanQuestions = result.questions.map((q: any) => {
-            if (q.id) return q;
+          const cleanQuestions = result.questions.map((q) => {
+            const qWithId = q as GeneratedQuestion & { id?: string };
+            if (qWithId.id) return qWithId;
             return { ...q, id: `q_${crypto.randomUUID().slice(0, 8)}` };
           });
 
