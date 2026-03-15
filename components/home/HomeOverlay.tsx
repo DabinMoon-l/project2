@@ -50,6 +50,7 @@ export default function HomeOverlay() {
   const wheelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const noTransitionRef = useRef(false);
   const cleanupRef = useRef<(() => void) | null>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -129,7 +130,7 @@ export default function HomeOverlay() {
     pulling.current = false;
   }, []);
 
-  const onTouchMove = useCallback((e: React.TouchEvent) => {
+  const onTouchMove = useCallback((e: TouchEvent) => {
     if (phaseRef.current !== 'open') return;
     const cy = scaleCoord(e.touches[0].clientY);
     const delta = startY.current - cy;
@@ -144,7 +145,9 @@ export default function HomeOverlay() {
       return;
     }
 
-    // pulling 중 — 위로 스와이프
+    // pulling 중 — 위로 스와이프: 아래 페이지로 이벤트 전파 차단
+    e.preventDefault();
+
     if (delta > 0) {
       setPullY(delta * 0.6);
     } else {
@@ -196,6 +199,14 @@ export default function HomeOverlay() {
     return () => window.removeEventListener('wheel', handleWheel);
   }, [visible, runExitAnimation]);
 
+  // native touchmove — passive: false로 스와이프 중 아래 페이지 스크롤 차단
+  useEffect(() => {
+    const el = overlayRef.current;
+    if (!el || !visible) return;
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    return () => el.removeEventListener('touchmove', onTouchMove);
+  }, [visible, onTouchMove]);
+
   if (!mounted || !visible || !profile) return null;
 
   const pullProgress = Math.min(pullY / (SWIPE_THRESHOLD * 1.5), 1);
@@ -228,9 +239,9 @@ export default function HomeOverlay() {
 
   return createPortal(
     <div
+      ref={overlayRef}
       className="overflow-hidden flex flex-col scrollbar-hide"
       onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
       style={{
         position: 'fixed',
