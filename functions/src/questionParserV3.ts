@@ -272,11 +272,6 @@ function analyzeColumns(tokens: Token[]): ColumnInfo {
   const leftMinX = leftTokens.length > 0 ? Math.min(...leftTokens.map(t => t.x)) : pageMinX;
   const rightMinX = rightTokens.length > 0 ? Math.min(...rightTokens.map(t => t.x)) : valleyX;
 
-  console.log(`[V3] ===== 컬럼 분석 =====`);
-  console.log(`[V3] 페이지: ${pageWidth.toFixed(0)}x${pageMaxY.toFixed(0)}`);
-  console.log(`[V3] 토큰: 좌=${leftTokens.length}, 우=${rightTokens.length}`);
-  console.log(`[V3] 2단: ${isTwoColumn}, 분리선: x=${valleyX.toFixed(0)}`);
-  console.log(`[V3] 컬럼 시작: 좌=${leftMinX.toFixed(0)}, 우=${rightMinX.toFixed(0)}`);
 
   return {
     isTwoColumn,
@@ -348,7 +343,6 @@ function buildLines(tokens: Token[], columnInfo: ColumnInfo): LogicalLine[] {
   const leftLines = buildForColumn(leftTokens, 'left');
   const rightLines = buildForColumn(rightTokens, 'right');
 
-  console.log(`[V3] 라인: 좌=${leftLines.length}, 우=${rightLines.length}`);
 
   // 좌측 먼저 → 우측
   return [...leftLines, ...rightLines];
@@ -384,7 +378,6 @@ interface QuestionBoundary {
 function detectQuestionBoundaries(lines: LogicalLine[], columnInfo: ColumnInfo): QuestionBoundary[] {
   const boundaries: QuestionBoundary[] = [];
 
-  console.log(`[V3] ===== 문제 탐지 (번호가 왕!) =====`);
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -401,35 +394,29 @@ function detectQuestionBoundaries(lines: LogicalLine[], columnInfo: ColumnInfo):
 
     // 필터 1: 헤더/수험정보 제외
     if (isHeader(text)) {
-      console.log(`[V3] ${num}번 스킵: 헤더`);
       continue;
     }
 
     // 필터 2: 번호 뒤가 선지 패턴이면 제외 (1. (a) 같은 건 선지)
     if (startsWithChoice(afterNum)) {
-      console.log(`[V3] ${num}번 스킵: 선지 패턴`);
       continue;
     }
 
     // 필터 3: 번호 뒤가 한글/괄호로 시작하지 않으면 제외
     if (afterNum.length > 0 && !QUESTION_START_PATTERN.test(afterNum)) {
-      console.log(`[V3] ${num}번 스킵: 한글 시작 아님 "${afterNum.substring(0, 10)}..."`);
       continue;
     }
 
     // 중복 체크 - 같은 번호가 이미 있으면 스킵
     if (boundaries.some(b => b.number === num)) {
-      console.log(`[V3] ${num}번 스킵: 중복`);
       continue;
     }
 
     boundaries.push({ number: num, lineIndex: i, line });
-    console.log(`[V3] ${num}번 발견: line ${i}, col=${line.column}, text="${text.substring(0, 30)}..."`);
   }
 
   // 라인 인덱스 순서대로 정렬 (문제 번호가 아닌 등장 순서!)
   boundaries.sort((a, b) => a.lineIndex - b.lineIndex);
-  console.log(`[V3] 문제 순서: [${boundaries.map(b => b.number).join(', ')}]`);
 
   return boundaries;
 }
@@ -605,7 +592,6 @@ function extractQuestionContent(
     }
   }
 
-  console.log(`[V3] 문제 ${qNum}: 보기 키워드 ${hasBoxKeywordFound ? '있음' : '없음'}`);
 
   for (let i = startIdx; i < endIdx; i++) {
     const line = lines[i];
@@ -717,7 +703,6 @@ function extractQuestionContent(
     choice.text = choice.text.trim();
   }
 
-  console.log(`[V3] 문제 ${qNum}: stem=${stemParts.length}줄, choices=${choices.length}, boxItems=${boxItems.length}`);
 
   return {
     stem: stemParts.join(' ').trim(),
@@ -750,25 +735,18 @@ function determineType(content: { choices: Choice[] }, fullText: string): 'multi
 // ============================================================
 
 export function parseQuestionsV3(fields: ClovaField[]): ParseResultV3 {
-  console.log(`[V3] ========================================`);
-  console.log(`[V3] 파싱 시작: ${fields.length}개 필드`);
-  console.log(`[V3] ========================================`);
 
   // Stage 1: 토큰 정규화
   const tokens = normalizeTokens(fields);
-  console.log(`[V3] 토큰: ${tokens.length}개`);
 
   // Stage 2: 컬럼 분석
   const columnInfo = analyzeColumns(tokens);
 
   // Stage 3: 라인 구성
   const lines = buildLines(tokens, columnInfo);
-  console.log(`[V3] 라인: ${lines.length}줄`);
 
   // 디버그: 처음 10줄
-  console.log(`[V3] ----- 처음 10줄 -----`);
   lines.slice(0, 10).forEach((l, i) => {
-    console.log(`[V3] [${i}] col=${l.column} x=${l.minX.toFixed(0)}: "${l.text.substring(0, 40)}..."`);
   });
 
   // Stage 5: 문제 경계 탐지
@@ -823,17 +801,6 @@ export function parseQuestionsV3(fields: ClovaField[]): ParseResultV3 {
       needsReview: type === 'unknown',
       bbox: { x: minX, y: minY, w: maxX - minX, h: maxY - minY },
     });
-  }
-
-  // 결과 요약
-  console.log(`[V3] ========================================`);
-  console.log(`[V3] 파싱 완료: ${questions.length}개 문제`);
-  console.log(`[V3] ========================================`);
-
-  for (const q of questions) {
-    const passageCount = Object.keys(q.passages).length;
-    console.log(`[V3] ${q.questionNumber}번: type=${q.type}, choices=${q.choices.length}, boxItems=${q.boxItems.length}, passages=${passageCount}`);
-    console.log(`[V3]   stem: "${q.stem.substring(0, 50)}${q.stem.length > 50 ? '...' : ''}"`);
   }
 
   const leftLines = lines.filter(l => l.column === 'left').length;

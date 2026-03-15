@@ -126,10 +126,6 @@ export async function parseQuestionsV4(
   ocrText: string,
   apiKey: string
 ): Promise<ParseResultV4> {
-  console.log("[V4] ========================================");
-  console.log(`[V4] 파싱 시작: ${ocrText.length}자`);
-  console.log("[V4] ========================================");
-
   // 1. Gemini 전처리
   const preprocessResult = await preprocessOcrText(ocrText, apiKey);
 
@@ -146,20 +142,8 @@ export async function parseQuestionsV4(
     };
   }
 
-  console.log(`[V4] 전처리 완료: ${preprocessResult.questions.length}개 문제`);
-
   // 2. 앱 구조로 변환
   const questions = convertToAppStructure(preprocessResult.questions);
-
-  // 결과 로그
-  console.log("[V4] ========================================");
-  console.log(`[V4] 파싱 완료: ${questions.length}개 문제`);
-  console.log("[V4] ========================================");
-
-  for (const q of questions) {
-    console.log(`[V4] ${q.questionNumber}번: type=${q.type}, choices=${q.choices.length}`);
-    console.log(`[V4]   stem: "${q.stem.substring(0, 50)}..."`);
-  }
 
   return {
     success: questions.length > 0,

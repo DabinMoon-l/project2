@@ -182,7 +182,6 @@ function analyzeColumns(tokens: Token[]): ColumnInfo {
   // 2단 조건: 좌/우 각 15개 이상, 중앙 30% 미만 (기준 완화)
   const isTwoColumn = leftCount >= 15 && rightCount >= 15 && middleCount < tokens.length * 0.3;
 
-  console.log(`[V2] 컬럼: 좌=${leftCount}, 우=${rightCount}, 중앙=${middleCount}(${(middleCount/tokens.length*100).toFixed(1)}%), 2단=${isTwoColumn}`);
 
   return {
     isTwoColumn,
@@ -204,7 +203,6 @@ function buildLinesForColumn(tokens: Token[]): LogicalLine[] {
   const medianHeight = heights.length > 0 ? heights[Math.floor(heights.length / 2)] : 20;
   const Y_TOLERANCE = Math.max(medianHeight * 0.6, 8); // 높이의 60% 또는 최소 8px
 
-  console.log(`[V2] 라인 빌드: 토큰수=${tokens.length}, 중앙높이=${medianHeight}, Y허용=${Y_TOLERANCE.toFixed(1)}`);
 
   // y좌표로 클러스터링 (토큰 순회 전 전체 분석)
   const yClusters: { y: number; tokens: Token[] }[] = [];
@@ -287,7 +285,6 @@ function buildAllLines(tokens: Token[], columnInfo: ColumnInfo): LogicalLine[] {
     const leftLines = buildLinesForColumn(leftTokens);
     const rightLines = buildLinesForColumn(rightTokens);
 
-    console.log(`[V2] 2단 라인: 좌측=${leftLines.length}, 우측=${rightLines.length}`);
     rawLines = [...leftLines, ...rightLines];
   }
 
@@ -320,7 +317,6 @@ function splitLineByQuestionNumbers(line: LogicalLine): LogicalLine[] {
 
   // 문제 번호가 2개 이상이면 분리
   if (matches.length >= 2) {
-    console.log(`[V2] 라인 분리: "${text.substring(0, 50)}..." → ${matches.length}개 문제`);
 
     const result: LogicalLine[] = [];
     for (let i = 0; i < matches.length; i++) {
@@ -412,7 +408,6 @@ function detectQuestionBoundaries(lines: LogicalLine[]): QuestionBoundary[] {
       if (startsWithKorean || hasKeyword) {
         // 중복 체크: 이미 같은 번호가 있으면 스킵
         if (boundaries.some(b => b.number === normalMatch[1])) {
-          console.log(`[V2] 문제 ${normalMatch[1]} 중복 발견, 스킵: "${text.substring(0, 40)}..."`);
           continue;
         }
 
@@ -421,13 +416,10 @@ function detectQuestionBoundaries(lines: LogicalLine[]): QuestionBoundary[] {
           isCombined: false,
           startLineIndex: i,
         });
-        console.log(`[V2] 문제 ${normalMatch[1]} 발견 at line ${i}: "${text.substring(0, 40)}..."`);
       }
     }
   }
 
-  console.log(`[V2] 문제 경계: 총 ${boundaries.length}개 발견`);
-  boundaries.forEach(b => console.log(`  - 문제 ${b.number} at line ${b.startLineIndex}`));
 
   return boundaries;
 }
@@ -472,7 +464,6 @@ function determineQuestionType(block: QuestionBlock): 'multipleChoice' | 'shortA
   // OX 체크 (최우선)
   for (const pattern of OX_PATTERNS) {
     if (pattern.test(fullText)) {
-      console.log(`[V2] 문제 ${block.number}: OX 패턴 발견`);
       return 'ox';
     }
   }
@@ -483,14 +474,12 @@ function determineQuestionType(block: QuestionBlock): 'multipleChoice' | 'shortA
 
     // 원문자 선지 체크 (①②③④⑤)
     if (CIRCLE_NUMBER_IN_LINE.test(text)) {
-      console.log(`[V2] 문제 ${block.number}: 원문자 선지 발견 - "${text.substring(0, 50)}"`);
       return 'multipleChoice';
     }
 
     // 다중 선지 라인 패턴 체크
     for (const pattern of MULTI_CHOICE_LINE_PATTERNS) {
       if (pattern.test(text)) {
-        console.log(`[V2] 문제 ${block.number}: 다중 선지 패턴 발견 - "${text.substring(0, 50)}"`);
         return 'multipleChoice';
       }
     }
@@ -498,7 +487,6 @@ function determineQuestionType(block: QuestionBlock): 'multipleChoice' | 'shortA
     // 단일 선지 패턴 체크
     for (const pattern of SINGLE_CHOICE_PATTERNS) {
       if (pattern.test(text)) {
-        console.log(`[V2] 문제 ${block.number}: 단일 선지 패턴 발견 - "${text.substring(0, 50)}"`);
         return 'multipleChoice';
       }
     }
@@ -507,7 +495,6 @@ function determineQuestionType(block: QuestionBlock): 'multipleChoice' | 'shortA
   // 토큰 레벨 체크 (백업)
   const hasCircleChoice = block.allTokens.some(t => CIRCLE_NUMBER_PATTERN.test(t.text));
   if (hasCircleChoice) {
-    console.log(`[V2] 문제 ${block.number}: 토큰에서 원문자 발견`);
     return 'multipleChoice';
   }
 
@@ -515,18 +502,15 @@ function determineQuestionType(block: QuestionBlock): 'multipleChoice' | 'shortA
   if (/고르[시는]|것은\?|옳[은지]/.test(fullText)) {
     const hasBox = BOX_START_PATTERN.test(fullText) || /<\s*보\s*기\s*>/.test(fullText);
     if (hasBox) {
-      console.log(`[V2] 문제 ${block.number}: "고르시오" + <보기> 존재 → 객관식 추정`);
       return 'multipleChoice';
     }
 
     // "ㄱ, ㄴ, ㄷ" 형태의 보기 조합 존재
     if (/[ㄱㄴㄷ]\s*,\s*[ㄱㄴㄷ]/.test(fullText)) {
-      console.log(`[V2] 문제 ${block.number}: "고르시오" + ㄱㄴㄷ 조합 → 객관식 추정`);
       return 'multipleChoice';
     }
   }
 
-  console.log(`[V2] 문제 ${block.number}: 선지 미발견 → 주관식`);
   return 'shortAnswer';
 }
 
@@ -772,8 +756,6 @@ function parseAltChoicesFromLine(text: string): string[] {
 // ============================================================
 
 export function parseQuestionsV2(fields: ClovaField[]): ParseResultV2 {
-  console.log(`[V2] ========== 파싱 시작 ==========`);
-  console.log(`[V2] 입력 필드 수: ${fields.length}`);
 
   // Stage 1: 토큰 정규화
   const tokens = normalizeTokens(fields);
@@ -781,10 +763,8 @@ export function parseQuestionsV2(fields: ClovaField[]): ParseResultV2 {
   // 선지 토큰 카운트 (여러 패턴)
   const choiceTokens = tokens.filter(t => CIRCLE_NUMBER_PATTERN.test(t.text));
 
-  console.log(`[V2] 선지(①②③) 토큰 수: ${choiceTokens.length}`);
 
   if (choiceTokens.length > 0) {
-    console.log(`[V2] 원문자 선지 샘플: ${choiceTokens.slice(0, 5).map(t => t.text).join(', ')}`);
   }
 
   // Stage 2: 컬럼 분석
@@ -792,14 +772,10 @@ export function parseQuestionsV2(fields: ClovaField[]): ParseResultV2 {
 
   // Stage 3: 라인 구성
   const lines = buildAllLines(tokens, columnInfo);
-  console.log(`[V2] 총 라인 수: ${lines.length}`);
 
   // 디버그: 처음 20줄 (라인 텍스트 전체 확인)
-  console.log(`[V2] ===== 처음 20줄 =====`);
   lines.slice(0, 20).forEach((l, i) => {
-    console.log(`  [${i}] "${l.text}"`);
   });
-  console.log(`[V2] ===== 라인 끝 =====`);
 
   // Stage 4: 문제 경계 탐지
   const boundaries = detectQuestionBoundaries(lines);
@@ -823,18 +799,11 @@ export function parseQuestionsV2(fields: ClovaField[]): ParseResultV2 {
     };
   });
 
-  console.log(`[V2] ========== 파싱 완료 ==========`);
-  console.log(`[V2] 총 문제 수: ${questions.length}`);
   questions.forEach(q => {
-    console.log(`[V2] 문제 ${q.questionNumber}: type=${q.type}, choices=${q.choices.length}, boxes=${q.boxes.length}`);
-    console.log(`[V2]   passage: ${(q.passage || '').substring(0, 60)}...`);
-    console.log(`[V2]   questionText: ${(q.questionText || '').substring(0, 60)}...`);
     if (q.choices.length > 0) {
-      console.log(`[V2]   choices: ${q.choices.join(' | ')}`);
     }
     if (q.boxes.length > 0) {
       q.boxes.forEach((box, bi) => {
-        console.log(`[V2]   box[${bi}]: kind=${box.kind}, items=${box.items?.length || 0}`);
       });
     }
   });
