@@ -13,6 +13,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 // 선지 번호 라벨 (최대 8개 지원)
 const choiceLabels = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧'];
 
+/** 미리보기용 문제 데이터 (Firestore 문서 기반, 필드가 동적) */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type PreviewQuestion = Record<string, any>;
+
 export default function PreviewQuestionCard({
   question,
   questionNumber,
@@ -21,11 +25,11 @@ export default function PreviewQuestionCard({
   onEditChange,
   feedbackData,
 }: {
-  question: any;
+  question: PreviewQuestion;
   questionNumber: number;
   isEditMode?: boolean;
   editData?: { text?: string; choices?: string[]; explanation?: string; choiceExplanations?: string[] };
-  onEditChange?: (field: string, value: any) => void;
+  onEditChange?: (field: string, value: string | string[] | number) => void;
   feedbackData?: { counts: Record<string, number>; otherTexts: string[] };
 }) {
   const [isExpanded, setIsExpanded] = useState(false);

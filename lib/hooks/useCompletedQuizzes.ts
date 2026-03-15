@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, db, query, where, onSnapshot, getDocs, limit } from '@/lib/repositories';
+import { collection, db, query, where, onSnapshot, getDocs, limit, Timestamp } from '@/lib/repositories';
 import type { User } from 'firebase/auth';
 import type { LearningQuiz } from '@/lib/hooks/useLearningQuizzes';
 
@@ -29,7 +29,7 @@ export function useCompletedQuizzes(
     const q = query(completionsRef, where('userId', '==', user.uid));
 
     const unsub = onSnapshot(q, async (snap) => {
-      const completionMap = new Map<string, { score: number; total: number; courseId: string | null; completedAt: any }>();
+      const completionMap = new Map<string, { score: number; total: number; courseId: string | null; completedAt: Timestamp | null }>();
       snap.docs.forEach(d => {
         const data = d.data();
         completionMap.set(data.quizId, {

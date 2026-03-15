@@ -114,7 +114,7 @@ export function CourseProvider({ children }: { children: ReactNode }) {
         setCourseRegistry(registry);
       },
       (err) => {
-        console.warn('과목 레지스트리 로드 실패, 기본값 사용:', (err as any).code);
+        console.warn('과목 레지스트리 로드 실패, 기본값 사용:', (err as { code?: string })?.code);
         setCourseRegistry({ ...COURSES });
       },
     );
@@ -146,7 +146,7 @@ export function CourseProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       },
       (err) => {
-        console.warn('학기 설정 로드 실패, 기본값 사용:', (err as any).code);
+        console.warn('학기 설정 로드 실패, 기본값 사용:', (err as { code?: string })?.code);
         setSemesterSettings(DEFAULT_SEMESTER_SETTINGS);
         setLoading(false);
       },

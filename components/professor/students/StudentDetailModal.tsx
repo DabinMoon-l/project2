@@ -23,7 +23,7 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
   useHideNav(isOpen);
 
   // 드래그로 닫기
-  const handleDragEnd = useCallback((_: any, info: PanInfo) => {
+  const handleDragEnd = useCallback((_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     if (info.offset.y > 80 || info.velocity.y > 300) {
       onClose();
     }

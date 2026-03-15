@@ -32,7 +32,7 @@ export interface QuizCardData {
   updatedQuestionCount?: number;
   tags?: string[];
   bookmarkCount?: number;
-  createdAt?: any;
+  createdAt?: { toMillis?: () => number; seconds?: number };
   attachmentUrl?: string;
   oneLineSummary?: string;
   description?: string;

@@ -136,8 +136,8 @@ export default function LevelUpBottomSheet({
     try {
       const res = await callFunction('levelUpRabbit', { courseId, rabbitId: holding.rabbitId });
       setResult(res);
-    } catch (err: any) {
-      const msg = err?.message || '레벨업에 실패했습니다.';
+    } catch (err: unknown) {
+      const msg = (err as Error)?.message || '레벨업에 실패했습니다.';
       setError(msg);
     } finally {
       setIsLoading(false);

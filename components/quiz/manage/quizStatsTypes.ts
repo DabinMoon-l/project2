@@ -2,6 +2,8 @@
  * QuizStatsModal 관련 타입 정의
  */
 
+import type { Timestamp } from '@/lib/repositories';
+
 export interface SourceRect {
   x: number;
   y: number;
@@ -122,8 +124,8 @@ export interface ResultWithClass {
   userId: string;
   classType: 'A' | 'B' | 'C' | 'D' | null;
   score: number;
-  questionScores: Record<string, { isCorrect: boolean; userAnswer: string; answeredAt?: any }>;
-  createdAt?: any;
+  questionScores: Record<string, { isCorrect: boolean; userAnswer: string; answeredAt?: Timestamp }>;
+  createdAt?: Timestamp;
 }
 
 export type ClassFilter = 'all' | 'A' | 'B' | 'C' | 'D';

@@ -24,6 +24,7 @@ import {
   db,
   type DocumentSnapshot,
   type QueryDocumentSnapshot,
+  type DocumentData,
 } from '@/lib/repositories';
 import { computeQuizStatistics, type QuizResultData } from '@/lib/utils/quizStatsComputation';
 
@@ -475,7 +476,7 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
 
         // 문제별 고유 ID 부여
         if (Array.isArray(cleanedInput.questions)) {
-          cleanedInput.questions = cleanedInput.questions.map((q: any) => {
+          cleanedInput.questions = cleanedInput.questions.map((q: DocumentData) => {
             if (q.id) return q;
             return { ...q, id: `q_${crypto.randomUUID().slice(0, 8)}` };
           });
@@ -556,7 +557,7 @@ export const useProfessorQuiz = (): UseProfessorQuizReturn => {
 
         // 문제별 고유 ID 부여 (기존 퀴즈 수정 시에도 ID 없는 문제에 부여)
         if (input.questions) {
-          raw.questions = (input.questions as any[]).map((q: any) => {
+          raw.questions = (input.questions as DocumentData[]).map((q: DocumentData) => {
             if (q.id) return q;
             return { ...q, id: `q_${crypto.randomUUID().slice(0, 8)}` };
           });

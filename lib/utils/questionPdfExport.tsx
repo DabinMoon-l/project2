@@ -8,6 +8,7 @@
 import { saveAs } from 'file-saver';
 import { getAuth } from 'firebase/auth';
 import { generateExamHtml } from './questionHtmlTemplate';
+import type { MixedExampleBlock } from '@/components/quiz/create/questionTypes';
 
 // ============================================================
 // 타입
@@ -34,8 +35,8 @@ export interface QuestionExportData {
   combinedIndex?: number;
   combinedTotal?: number;
   // 복합 제시문
-  passageMixedExamples?: any[];
-  mixedExamples?: any[];
+  passageMixedExamples?: MixedExampleBlock[];
+  mixedExamples?: MixedExampleBlock[];
 }
 
 export interface PdfExportOptions {

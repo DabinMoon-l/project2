@@ -14,6 +14,7 @@ import {
   writeBatch,
   serverTimestamp,
   db,
+  type DocumentData,
 } from '@/lib/repositories';
 import { useAuth } from './useAuth';
 import { useCourse } from '@/lib/contexts/CourseContext';
@@ -87,7 +88,7 @@ export function useLearningQuizzes() {
           let oxCount = 0;
           let multipleChoiceCount = 0;
           let subjectiveCount = 0;
-          questions.forEach((q: any) => {
+          questions.forEach((q: DocumentData) => {
             if (q.type === 'ox') oxCount++;
             else if (q.type === 'multiple') multipleChoiceCount++;
             else if (q.type === 'short' || q.type === 'short_answer') subjectiveCount++;
@@ -163,7 +164,7 @@ export function useLearningQuizzes() {
       const quizTitle = quizData.title || '퀴즈';
 
       // 1-1. 퀴즈 문서의 questions에 choiceExplanations가 빠진 경우 본인 reviews에서 동기화
-      const missingExps = questions.some((q: any) => !q.choiceExplanations && q.type === 'multiple');
+      const missingExps = questions.some((q: DocumentData) => !q.choiceExplanations && q.type === 'multiple');
       if (missingExps) {
         try {
           const reviewDocs = await getDocs(query(
@@ -179,7 +180,7 @@ export function useLearningQuizzes() {
             }
           });
           let questionsChanged = false;
-          questions.forEach((q: any, idx: number) => {
+          questions.forEach((q: DocumentData, idx: number) => {
             if (!q.choiceExplanations && q.type === 'multiple') {
               const exps = reviewExpsMap[q.id || `q${idx}`]
                 || reviewExpsMap[(idx + 1).toString()];

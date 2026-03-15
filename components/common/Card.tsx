@@ -85,7 +85,7 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
           // Enter 또는 Space 키로 클릭 가능
           if ((clickable || onClick) && (e.key === 'Enter' || e.key === ' ')) {
             e.preventDefault();
-            onClick?.(e as any);
+            onClick?.(e as unknown as React.MouseEvent<HTMLDivElement>);
           }
         }}
         className={`

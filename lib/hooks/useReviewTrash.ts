@@ -124,8 +124,7 @@ export function useReviewTrash(
         // 푼 문제 복원
         for (let i = 0; i < restoreData.solvedReviews.length; i += 500) {
           const batch = writeBatch(db);
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          restoreData.solvedReviews.slice(i, i + 500).forEach((review: any) => {
+          restoreData.solvedReviews.slice(i, i + 500).forEach((review: Record<string, unknown>) => {
             const { id, ...reviewData } = review;
             const newRef = doc(collection(db, 'reviews'));
             batch.set(newRef, { ...reviewData, createdAt: serverTimestamp() });
@@ -147,8 +146,7 @@ export function useReviewTrash(
         // 오답 복원
         for (let i = 0; i < restoreData.wrongReviews.length; i += 500) {
           const batch = writeBatch(db);
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          restoreData.wrongReviews.slice(i, i + 500).forEach((review: any) => {
+          restoreData.wrongReviews.slice(i, i + 500).forEach((review: Record<string, unknown>) => {
             const { id, ...reviewData } = review;
             const newRef = doc(collection(db, 'reviews'));
             batch.set(newRef, { ...reviewData, createdAt: serverTimestamp() });

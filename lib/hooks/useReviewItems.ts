@@ -20,6 +20,7 @@ import {
   getDoc,
   getDocs,
   db,
+  type DocumentData,
 } from '@/lib/repositories';
 import type { ReviewItem, QuizAttempt, PrivateQuiz, GroupedReviewItems, ChapterGroupedWrongItems } from './useReviewTypes';
 import { groupByQuiz, groupByChapterAndQuiz } from './useReviewUtils';
@@ -29,10 +30,8 @@ import { groupByQuiz, groupByChapterAndQuiz } from './useReviewUtils';
 // ============================================================
 
 /** Firestore 스냅샷 문서를 ReviewItem으로 변환 */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function // eslint-disable-next-line @typescript-eslint/no-explicit-any
-mapDocToReviewItem(docSnapshot: any): ReviewItem {
-  const data = docSnapshot.data();
+function mapDocToReviewItem(docSnapshot: { id: string; data: () => unknown }): ReviewItem {
+  const data = docSnapshot.data() as DocumentData;
   return {
     id: docSnapshot.id,
     userId: data.userId,
@@ -191,11 +190,11 @@ export function useReviewItems(
   const [hasMoreSolved, setHasMoreSolved] = useState(false);
   const [hasMoreWrong, setHasMoreWrong] = useState(false);
   const [hasMoreBookmark, setHasMoreBookmark] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Firestore 페이지네이션 커서
   const solvedLastDocRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Firestore 페이지네이션 커서
   const wrongLastDocRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Firestore 페이지네이션 커서
   const bookmarkLastDocRef = useRef<any>(null);
   const solvedQueryBaseRef = useRef<ReturnType<typeof query> | null>(null);
   const wrongQueryBaseRef = useRef<ReturnType<typeof query> | null>(null);

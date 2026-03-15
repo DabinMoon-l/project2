@@ -21,10 +21,14 @@ const FEEDBACK_TYPE_LABELS: Record<string, string> = {
   other: '기타 의견',
 };
 
+/** 피드백 아이템 타입 (Firestore 문서 기반) */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type FeedbackItem = Record<string, any>;
+
 export interface StatsQuizFeedbackModalProps {
   isOpen: boolean;
   onClose: () => void;
-  feedbackList: any[];
+  feedbackList: FeedbackItem[];
   loading: boolean;
   /** 필터링할 문제 번호 (1-indexed, 0이면 전체) */
   questionNum: number;
@@ -35,7 +39,7 @@ export interface StatsQuizFeedbackModalProps {
   /** 요술지니 애니메이션 시작 좌표 */
   sourceRect?: { x: number; y: number; width: number; height: number } | null;
   /** 피드백에서 문제 번호를 추출하는 헬퍼 */
-  getFeedbackQuestionNum: (fb: any) => number;
+  getFeedbackQuestionNum: (fb: FeedbackItem) => number;
 }
 
 export default function StatsQuizFeedbackModal({

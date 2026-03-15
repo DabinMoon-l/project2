@@ -12,6 +12,7 @@ import {
   doc,
   onSnapshot,
   db,
+  type QueryDocumentSnapshot,
 } from '@/lib/repositories';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useQuizBookmark } from '@/lib/hooks/useQuizBookmark';
@@ -208,7 +209,7 @@ function QuizListPageContent() {
   }, [user]);
 
   // 퀴즈 데이터 파싱 (updatedQuizzes 의존성 제거 - 재로딩 방지)
-  const parseQuizData = useCallback((docSnapshot: any, userId: string): QuizCardData => {
+  const parseQuizData = useCallback((docSnapshot: QueryDocumentSnapshot, userId: string): QuizCardData => {
     const data = docSnapshot.data();
     const isCompleted = data.completedUsers?.includes(userId) || false;
     const participantCount = data.participantCount || 0;

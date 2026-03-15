@@ -17,6 +17,7 @@ import {
   Timestamp,
   limit,
   db,
+  type DocumentData,
 } from '@/lib/repositories';
 import { callFunction } from '@/lib/api';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -224,7 +225,7 @@ export default function FolderDetailPage() {
         if (!quizDoc.exists()) return;
         const questions = quizDoc.data().questions || [];
         const expsMap: Record<string, string[]> = {};
-        questions.forEach((q: any, idx: number) => {
+        questions.forEach((q: DocumentData, idx: number) => {
           if (q.choiceExplanations?.length > 0) {
             expsMap[q.id || `q${idx}`] = q.choiceExplanations;
             expsMap[(idx + 1).toString()] = q.choiceExplanations;
@@ -424,7 +425,7 @@ export default function FolderDetailPage() {
         const questions = quizData.questions || [];
 
 
-        const items: ReviewItem[] = questions.map((q: any, idx: number) => {
+        const items: ReviewItem[] = questions.map((q: DocumentData, idx: number) => {
           // 정답 변환 (0-indexed 그대로)
           let correctAnswer = '';
           if (q.type === 'multiple') {
@@ -711,8 +712,8 @@ export default function FolderDetailPage() {
           const quizQuestions = quizData?.questions || [];
 
           // quizQuestions를 questionId로 매핑
-          const questionMap = new Map<string, Record<string, any>>();
-          quizQuestions.forEach((q: any, idx: number) => {
+          const questionMap = new Map<string, DocumentData>();
+          quizQuestions.forEach((q: DocumentData, idx: number) => {
             const qId = q.id || `q${idx}`;
             questionMap.set(qId, q);
           });

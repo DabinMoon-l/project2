@@ -321,19 +321,20 @@ export default function AIQuizGenerator({
 
       // 폴링 시작
       startPolling(newQueueId);
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (isCancelledRef.current) return;
 
       let errorMessage = 'AI 문제 생성 중 오류가 발생했습니다.';
+      const err = error as { code?: string; message?: string };
 
-      if (error.code === 'functions/resource-exhausted') {
-        errorMessage = error.message || '사용량 한도를 초과했습니다.';
-      } else if (error.code === 'functions/failed-precondition') {
+      if (err.code === 'functions/resource-exhausted') {
+        errorMessage = err.message || '사용량 한도를 초과했습니다.';
+      } else if (err.code === 'functions/failed-precondition') {
         errorMessage = 'AI 서비스가 설정되지 않았습니다. 관리자에게 문의하세요.';
-      } else if (error.code === 'functions/unauthenticated') {
+      } else if (err.code === 'functions/unauthenticated') {
         errorMessage = '로그인이 필요합니다.';
-      } else if (error.message) {
-        errorMessage = error.message;
+      } else if (err.message) {
+        errorMessage = err.message;
       }
 
       console.error('AI 생성 오류:', error);

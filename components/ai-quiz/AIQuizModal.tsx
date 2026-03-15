@@ -325,9 +325,9 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
       setPageSelectionTitle('PPT 페이지 선택');
       setShowPageSelectionModal(true);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('PPTX 변환 오류:', error);
-      alert(error.message || 'PPT 파일을 변환할 수 없습니다.\nPDF로 변환 후 업로드해주세요.');
+      alert((error as Error)?.message || 'PPT 파일을 변환할 수 없습니다.\nPDF로 변환 후 업로드해주세요.');
       setUploadType(null);
     } finally {
       setIsLoadingDocument(false);

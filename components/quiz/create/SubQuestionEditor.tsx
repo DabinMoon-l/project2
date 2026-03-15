@@ -73,7 +73,7 @@ export default function SubQuestionEditor({
 
   // 복수정답 모드 여부
   const isMultipleAnswerMode = (subQuestion.answerIndices?.length || 0) > 1 ||
-    (subQuestion as any).isMultipleAnswer === true;
+    (subQuestion as unknown as { isMultipleAnswer?: boolean }).isMultipleAnswer === true;
 
   const handleToggleMultipleAnswer = () => {
     const newIsMultiple = !isMultipleAnswerMode;

@@ -3,6 +3,7 @@
  */
 
 import { Timestamp } from '@/lib/repositories';
+import type { MixedExampleBlock } from '@/components/quiz/create/questionTypes';
 import type { CustomFolder, CustomFolderQuestion, FolderCategory } from './useCustomFolders';
 
 // 커스텀 폴더 타입 재내보내기 (기존 사용처 호환)
@@ -73,7 +74,7 @@ export interface ReviewItem {
   /** 결합형 ㄱㄴㄷ 보기 항목 */
   koreanAbcItems?: string[];
   /** 결합형 공통 지문 혼합 보기 */
-  passageMixedExamples?: any[];
+  passageMixedExamples?: MixedExampleBlock[];
   /** 결합형 공통 문제 */
   commonQuestion?: string;
   /** 문제 이미지 */
@@ -219,7 +220,7 @@ export interface DeletedItem {
   /** 삭제 일시 */
   deletedAt: Timestamp;
   /** 복원에 필요한 데이터 */
-  restoreData?: any;
+  restoreData?: Record<string, unknown>;
 }
 
 /**

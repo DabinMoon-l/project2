@@ -24,6 +24,7 @@ import {
   getDocs,
   writeBatch,
   db,
+  type DocumentData,
 } from '@/lib/repositories';
 import { useAuth } from './useAuth';
 import { useCourse } from '../contexts/CourseContext';
@@ -500,8 +501,7 @@ export const useReview = (): UseReviewReturn => {
       const existingReviews = await getDocs(existingReviewsQuery);
 
       // 기존 리뷰를 questionId+reviewType 키로 매핑
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const existingReviewMap = new Map<string, { docId: string; data: any }>();
+      const existingReviewMap = new Map<string, { docId: string; data: DocumentData }>();
       existingReviews.forEach((docSnapshot) => {
         const data = docSnapshot.data();
         const key = `${data.questionId}-${data.reviewType}`;
@@ -510,8 +510,7 @@ export const useReview = (): UseReviewReturn => {
 
       // 새 퀴즈의 questionId 집합
       const newQuestionIds = new Set<string>();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      questions.forEach((q: any, i: number) => {
+      questions.forEach((q: DocumentData, i: number) => {
         newQuestionIds.add(q.id || `q${i}`);
       });
 

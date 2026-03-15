@@ -12,7 +12,7 @@ import {
   type MutableRefObject,
 } from 'react';
 import { useUser, useCourse } from '@/lib/contexts';
-import { useRabbitHoldings } from '@/lib/hooks/useRabbit';
+import { useRabbitHoldings, type RabbitHolding } from '@/lib/hooks/useRabbit';
 import { getPendingMilestones, getExpBarDisplay } from '@/lib/utils/milestone';
 import dynamic from 'next/dynamic';
 import { callFunction, type RollResultData } from '@/lib/api';
@@ -30,7 +30,7 @@ interface MilestoneContextValue {
   allRabbitsDiscovered: boolean;
 
   // 토끼 보유 정보 (useRabbitHoldings 중복 구독 방지)
-  holdings: any[];
+  holdings: RabbitHolding[];
 
   // 모달 제어
   showMilestoneModal: boolean;
@@ -194,9 +194,9 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
       }
 
       setRollResult(data);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('뽑기 실패:', error);
-      const msg = error?.message || '';
+      const msg = (error as Error)?.message || '';
       if (msg.includes('모든 토끼를 발견')) {
         setSpinError('모든 토끼를 발견했습니다!');
       } else {
