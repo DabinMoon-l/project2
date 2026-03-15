@@ -248,7 +248,7 @@ export const useQuizUpdate = (): UseQuizUpdateReturn => {
       for (const q of updatedQuestions) {
         if (q.combinedGroupId && !passageByGroup.has(q.combinedGroupId)) {
           const firstInGroup = questions.find(
-            (orig: any) => orig.combinedGroupId === q.combinedGroupId && orig.combinedIndex === 0
+            (orig: Record<string, any>) => orig.combinedGroupId === q.combinedGroupId && orig.combinedIndex === 0
           );
           if (firstInGroup) {
             passageByGroup.set(q.combinedGroupId, {
@@ -321,7 +321,7 @@ export const useQuizUpdate = (): UseQuizUpdateReturn => {
       const resultsSnapshot = await getDocs(resultsQuery);
 
       // quizId별로 그룹핑 (isUpdate가 아닌 첫 번째 결과만)
-      const resultsByQuiz = new Map<string, { docId: string; data: any }>();
+      const resultsByQuiz = new Map<string, { docId: string; data: Record<string, any> }>();
       resultsSnapshot.forEach((docSnapshot) => {
         const data = docSnapshot.data();
         if (!data.isUpdate && !resultsByQuiz.has(data.quizId)) {

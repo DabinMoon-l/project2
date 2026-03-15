@@ -504,8 +504,8 @@ export const usePinnedPosts = (courseId?: string): UsePinnedPostsReturn => {
       (snapshot) => {
         const pinned = snapshot.docs.map(docToPost)
           .sort((a, b) => {
-            const aPinnedAt = (a as any).pinnedAt?.getTime() || 0;
-            const bPinnedAt = (b as any).pinnedAt?.getTime() || 0;
+            const aPinnedAt = a.pinnedAt?.getTime() || 0;
+            const bPinnedAt = b.pinnedAt?.getTime() || 0;
             return bPinnedAt - aPinnedAt;
           });
         setPinnedPosts(pinned);
@@ -539,7 +539,7 @@ export const usePinnedPosts = (courseId?: string): UsePinnedPostsReturn => {
     } catch (err: any) {
       console.error('게시글 고정 실패:', err);
       // Firestore 권한 거부 시 명확한 메시지
-      if (err?.code === 'permission-denied') {
+      if ((err as { code?: string })?.code === 'permission-denied') {
         setError('교수님만 게시글을 고정할 수 있습니다.');
       } else {
         setError('게시글 고정에 실패했습니다.');

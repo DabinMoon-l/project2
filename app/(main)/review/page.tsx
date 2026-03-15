@@ -533,7 +533,7 @@ function ReviewPageContent() {
           const questions = quizData.questions || [];
           const quizTitle = quizData.title || '서재 퀴즈';
 
-          questions.forEach((q: any, idx: number) => {
+          questions.forEach((q: Record<string, any>, idx: number) => {
             // 중복 체크
             const qId = q.id || `q${idx}`;
             const dedupKey = `${quizId}:${qId}`;
@@ -572,7 +572,7 @@ function ReviewPageContent() {
               isBookmarked: false,
               reviewCount: 0,
               lastReviewedAt: null,
-              createdAt: quizData.createdAt || new Date() as any,
+              createdAt: quizData.createdAt || null,
               // 이미지
               courseId: userCourseId || null,
               image: q.image || null,
@@ -600,7 +600,7 @@ function ReviewPageContent() {
               combinedTotal: q.combinedTotal,
               // 기타
               quizCreatorId: quizData.creatorId || undefined,
-            } as any);
+            } as ReviewItem);
           });
         }
       } catch (error) {
@@ -912,7 +912,7 @@ function ReviewPageContent() {
                         }
 
                         // 배치 fetch → Map 캐시
-                        const quizCache = new Map<string, any>();
+                        const quizCache = new Map<string, Record<string, any>>();
                         let fetchFailed = 0;
                         for (const quizId of quizIdSet) {
                           try {
@@ -929,7 +929,7 @@ function ReviewPageContent() {
                           for (const q of folder.questions) {
                             const quizData = quizCache.get(q.quizId);
                             if (!quizData) { skippedCount++; continue; }
-                            const quizQuestions = (quizData.questions as any[]) || [];
+                            const quizQuestions = (quizData.questions as Record<string, any>[]) || [];
                             // questionId로 매칭 시도
                             let question: any = q.questionId
                               ? quizQuestions.find((qq: any, idx: number) => (qq.id || `q${idx}`) === q.questionId)
@@ -944,7 +944,7 @@ function ReviewPageContent() {
                             // answer 안전 변환 (배열/숫자/문자열 모두 대응)
                             const rawAnswer = question.answer;
                             const answerStr = Array.isArray(rawAnswer)
-                              ? rawAnswer.map((a: any) => String(a)).join(',')
+                              ? rawAnswer.map((a: unknown) => String(a)).join(',')
                               : String(rawAnswer ?? '');
 
                             // AI 퀴즈(0-indexed) vs 수동 퀴즈(1-indexed) 구분

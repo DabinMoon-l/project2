@@ -8,6 +8,7 @@ import {
   isImageFile,
   isPDFFile,
   type ParseResult,
+  type ParsedQuestion,
 } from '@/lib/ocr';
 import * as pdfjsLib from 'pdfjs-dist';
 
@@ -433,8 +434,8 @@ export default function OCRProcessor({
 
           // V4 결과를 앱의 ParseResult 형식으로 변환
           const parsed: ParseResult = {
-            questions: parsedV4.questions.map((q) => {
-              const question: any = {
+            questions: (parsedV4.questions.map((q) => {
+              const question: Record<string, any> = {
                 // 필수 필드
                 text: q.stem,
                 type: q.type === 'multipleChoice' ? 'multiple' : q.type === 'ox' ? 'ox' : 'short_answer',
@@ -511,7 +512,7 @@ export default function OCRProcessor({
               }
 
               return question;
-            }),
+            }) as unknown as ParsedQuestion[]),
             rawText: text,
             success: true,
             message: `${parsedV4.questions.length}개의 문제를 인식했습니다. (AI 전처리)`,
@@ -525,10 +526,10 @@ export default function OCRProcessor({
           // V4 실패 - 에러 표시 (디버깅용)
           console.error('[OCRProcessor] V4 실패!');
           console.error('[OCRProcessor] parsedV4:', parsedV4);
-          console.error('[OCRProcessor] parsedV4?.debug:', (parsedV4 as any)?.debug);
+          console.error('[OCRProcessor] parsedV4?.debug:', (parsedV4 as unknown as { debug?: { error?: string } })?.debug);
 
           // 서버에서 전달된 에러 메시지 추출
-          const serverError = (parsedV4 as any)?.debug?.error || '알 수 없는 오류';
+          const serverError = (parsedV4 as unknown as { debug?: { error?: string } })?.debug?.error || '알 수 없는 오류';
 
           const errorMsg = parsedV4
             ? `V4 파싱 실패: ${serverError}`
@@ -547,23 +548,24 @@ export default function OCRProcessor({
           setStep('review');
           onComplete(emptyResult);
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         if (isCancelledRef.current) return;
 
         let errorMessage = 'OCR 처리 중 오류가 발생했습니다.';
 
         // Firebase Functions 에러 처리
-        if (error.code === 'functions/resource-exhausted') {
-          errorMessage = error.message || '이번 달 OCR 사용량(500건)을 초과했습니다.';
-        } else if (error.code === 'functions/failed-precondition') {
+        const err = error as { code?: string; message?: string };
+        if (err.code === 'functions/resource-exhausted') {
+          errorMessage = err.message || '이번 달 OCR 사용량(500건)을 초과했습니다.';
+        } else if (err.code === 'functions/failed-precondition') {
           errorMessage = 'OCR 서비스가 설정되지 않았습니다. 관리자에게 문의하세요.';
-        } else if (error.code === 'functions/unauthenticated') {
+        } else if (err.code === 'functions/unauthenticated') {
           errorMessage = '로그인이 필요합니다.';
-        } else if (error.message) {
-          errorMessage = error.message;
+        } else if (err.message) {
+          errorMessage = err.message;
         }
 
-        console.error('OCR 처리 오류:', error);
+        console.error('OCR 처리 오류:', err);
         onError?.(errorMessage);
         setStep('idle');
       } finally {

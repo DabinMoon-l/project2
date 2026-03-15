@@ -155,7 +155,7 @@ export default function FolderDetailPage() {
   const [editedTitle, setEditedTitle] = useState('');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editableQuestions, setEditableQuestions] = useState<QuestionData[]>([]);
-  const [originalQuestions, setOriginalQuestions] = useState<any[]>([]);
+  const [originalQuestions, setOriginalQuestions] = useState<Record<string, any>[]>([]);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editDifficulty, setEditDifficulty] = useState<'easy' | 'normal' | 'hard'>('normal');
   const [editedTags, setEditedTags] = useState<string[]>([]);
@@ -444,7 +444,7 @@ export default function FolderDetailPage() {
           if (q.userAnswer !== undefined && q.userAnswer !== null) {
             if (q.type === 'multiple') {
               if (Array.isArray(q.userAnswer)) {
-                userAnswer = q.userAnswer.map((a: any) => String(Number(a))).join(',');
+                userAnswer = q.userAnswer.map((a: number) => String(Number(a))).join(',');
               } else if (typeof q.userAnswer === 'number') {
                 userAnswer = String(q.userAnswer);
               } else {
@@ -554,7 +554,7 @@ export default function FolderDetailPage() {
         setBookmarkFallbackTitle(quizData.title || '퀴즈');
 
         const rawQuestions = quizData.questions || [];
-        const items: ReviewItem[] = rawQuestions.map((q: any, idx: number) => {
+        const items: ReviewItem[] = rawQuestions.map((q: Record<string, any>, idx: number) => {
           let correctAnswer = '';
           if (q.type === 'multiple') {
             if (Array.isArray(q.answer)) {
@@ -711,7 +711,7 @@ export default function FolderDetailPage() {
           const quizQuestions = quizData?.questions || [];
 
           // quizQuestions를 questionId로 매핑
-          const questionMap = new Map<string, any>();
+          const questionMap = new Map<string, Record<string, any>>();
           quizQuestions.forEach((q: any, idx: number) => {
             const qId = q.id || `q${idx}`;
             questionMap.set(qId, q);
@@ -920,7 +920,7 @@ export default function FolderDetailPage() {
       }
 
       // libraryQuestions 갱신 — 저장된 문제 데이터로 재구성
-      setLibraryQuestions(flattenedQuestions.map((q: any, idx: number) => {
+      setLibraryQuestions(flattenedQuestions.map((q: Record<string, any>, idx: number) => {
         const qId = q.id || `q${idx}`;
         // 기존 libraryQuestions에서 매칭되는 항목 찾기
         const existing = libraryQuestions.find(lq => lq.questionId === qId);

@@ -73,9 +73,9 @@ export async function uploadBase64ToStorage(
 
     console.log(`[성공] ${debugPath}: 이미지 업로드 완료 - ${downloadUrl.substring(0, 80)}...`);
     return downloadUrl;
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error(`[실패] ${debugPath}: 이미지 업로드 실패`);
-    console.error(`  - 에러: ${err?.message || String(err)}`);
+    console.error(`  - 에러: ${(err as Error)?.message || String(err)}`);
     return null;
   }
 }
@@ -84,9 +84,9 @@ export async function uploadBase64ToStorage(
  * 퀴즈 데이터 내 base64 이미지를 Storage URL로 변환
  */
 export async function processQuizImages(
-  quizData: any,
+  quizData: Record<string, any>,
   userId: string
-): Promise<any> {
+): Promise<Record<string, any>> {
   if (quizData.questions && Array.isArray(quizData.questions)) {
     for (let i = 0; i < quizData.questions.length; i++) {
       const q = quizData.questions[i];
