@@ -69,38 +69,122 @@ export interface ChapterGroup {
   items: ReviewItem[];
 }
 
-/** 결과+피드백 화면 props */
-export interface ReviewResultPhaseProps {
+import type { CustomFolder } from '@/lib/hooks/useReview';
+import type { FeedbackType } from '@/components/review/types';
+
+/** 결과 화면 props */
+export interface ResultStageProps {
   // 데이터
   groupedItems: GroupedItem[];
   resultsMap: Record<number, PracticeResult>;
   combinedResultsMap: Record<number, Record<number, PracticeResult>>;
   correctCount: number;
   totalQuestionCount: number;
-  chapterGroupedWrongItems: ChapterGroup[];
   headerTitle: string;
   showFeedback: boolean;
   userCourseId: string | null;
   currentUserId?: string;
 
-  // expand 상태 (풀이 화면과 공유)
+  // expand 상태
   expandedIds: Set<string>;
-  setExpandedIds: React.Dispatch<React.SetStateAction<Set<string>>>;
+  toggleExpand: (id: string) => void;
   expandedSubIds: Set<string>;
-  setExpandedSubIds: React.Dispatch<React.SetStateAction<Set<string>>>;
+  toggleSubExpand: (id: string) => void;
   expandedChoiceExplanations: Set<string>;
   setExpandedChoiceExplanations: React.Dispatch<React.SetStateAction<Set<string>>>;
 
-  // 피드백 상태
+  // 피드백 바텀시트
   submittedFeedbackIds: Set<string>;
-  feedbackSubmitCount: number;
+  openFeedbackSheet: (item: ReviewItem) => void;
+  feedbackTargetItem: ReviewItem | null;
+  closeFeedbackSheet: () => void;
+  selectedFeedbackTypes: Set<FeedbackType>;
+  toggleFeedbackType: (type: FeedbackType) => void;
+  feedbackContent: string;
+  setFeedbackContent: (value: string) => void;
+  isFeedbackSubmitting: boolean;
+  isFeedbackDone: boolean;
+  handleFeedbackSubmit: () => void;
+
+  // 액션
+  onGoToFeedback: () => void;
+  onBackToPractice: () => void;
+}
+
+/** 피드백(완료) 화면 props */
+export interface FeedbackStageProps {
+  // 데이터
+  wrongItems: ReviewItem[];
+  correctCount: number;
+  totalQuestionCount: number;
+  headerTitle: string;
+  chapterGroupedWrongItems: ChapterGroup[];
+  totalDisplayExp: number;
+
+  // 폴더 저장 관련
+  customFolders: CustomFolder[];
+  selectedFolderId: string | null;
+  setSelectedFolderId: (id: string | null) => void;
+  newFolderName: string;
+  setNewFolderName: (name: string) => void;
+  isCreatingFolder: boolean;
+  handleCreateFolder: () => void;
+  isSaving: boolean;
+  handleSaveToFolder: () => void;
+  saveSuccess: boolean;
+
+  // 액션
+  onBackToResult: () => void;
+  onFinish: () => void;
+}
+
+/** 문제 풀이 화면 props */
+export interface PracticeStageProps {
+  // 데이터
+  groupedItems: GroupedItem[];
+  currentIndex: number;
+  totalCount: number;
+  currentGroup: GroupedItem | undefined;
+  currentItem: ReviewItem | null;
+  progress: number;
+  headerTitle: string;
+  quizTitle?: string;
+  userCourseId: string | null;
+  typeLabels: Record<string, string>;
+
+  // 답안 상태
+  answers: Record<number, AnswerType>;
+  combinedAnswers: Record<number, Record<number, AnswerType>>;
+  answer: AnswerType;
+  isSubmitted: boolean;
+  isCorrect: boolean;
+  isLastQuestion: boolean;
+  resultsMap: Record<number, PracticeResult>;
+  combinedResultsMap: Record<number, Record<number, PracticeResult>>;
+
+  // 답안 설정
+  setAnswer: (value: AnswerType) => void;
+  setCombinedAnswer: (subIndex: number, value: AnswerType) => void;
+
+  // 복수정답 여부
+  isMultipleAnswerQuestion: () => boolean;
+
+  // 액션
+  handleSubmit: () => void;
+  handleNext: () => void;
+  handlePrev: () => void;
+  onClose: () => void;
+
+  // 선지별 해설 펼침
+  expandedChoiceExplanations: Set<string>;
+  setExpandedChoiceExplanations: React.Dispatch<React.SetStateAction<Set<string>>>;
 
   // 인라인 피드백
   inlineFeedbackOpen: string | null;
   setInlineFeedbackOpen: React.Dispatch<React.SetStateAction<string | null>>;
-
-  // 액션
-  onClose: () => void;
-  onComplete: (results: PracticeResult[]) => void;
-  setPhase: React.Dispatch<React.SetStateAction<Phase>>;
+  submittedFeedbackIds: Set<string>;
+  setSubmittedFeedbackIds: React.Dispatch<React.SetStateAction<Set<string>>>;
+  feedbackSubmitCount: number;
+  setFeedbackSubmitCount: React.Dispatch<React.SetStateAction<number>>;
+  user: { uid: string } | null;
 }
