@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
 import { formatChapterLabel } from '@/lib/courseIndex';
@@ -180,7 +181,7 @@ interface QuestionCardProps {
  * />
  * ```
  */
-export default function QuestionCard({ question, courseId, headerRight }: QuestionCardProps) {
+function QuestionCard({ question, courseId, headerRight }: QuestionCardProps) {
   // 문제 유형별 라벨
   const typeLabels: Record<QuestionType, string> = {
     ox: 'OX',
@@ -535,3 +536,5 @@ export default function QuestionCard({ question, courseId, headerRight }: Questi
     </motion.div>
   );
 }
+
+export default memo(QuestionCard);

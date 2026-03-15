@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { motion } from 'framer-motion';
 import type { BookmarkedQuiz } from '@/lib/hooks/useQuizBookmark';
 import BookmarkQuizCard from './BookmarkQuizCard';
@@ -7,7 +8,7 @@ import BookmarkQuizCard from './BookmarkQuizCard';
 /**
  * 찜 탭 그리드 뷰 (자작 탭과 동일한 2열 그리드 배치)
  */
-export default function BookmarkGridView({
+function BookmarkGridView({
   bookmarkedQuizzes,
   onQuizCardClick,
   onQuizDetails,
@@ -92,3 +93,5 @@ export default function BookmarkGridView({
     </div>
   );
 }
+
+export default memo(BookmarkGridView);

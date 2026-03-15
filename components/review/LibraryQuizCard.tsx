@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { memo, useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TAP_SCALE } from '@/lib/constants/springs';
 import { NEWSPAPER_BG_TEXT } from './types';
@@ -19,7 +19,7 @@ const PROFESSOR_TYPES = ['professor', 'professor-ai', 'midterm', 'final', 'past'
  * - 노란 지구: 공개 문제
  * - 자물쇠: 비공개 (본인 AI/커스텀) → 클릭 시 공개 전환
  */
-export default function LibraryQuizCard({
+function LibraryQuizCard({
   quiz,
   onCardClick,
   onDetails,
@@ -280,3 +280,5 @@ export default function LibraryQuizCard({
     </motion.div>
   );
 }
+
+export default memo(LibraryQuizCard);
