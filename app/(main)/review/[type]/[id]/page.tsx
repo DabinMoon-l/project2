@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
-import Image from 'next/image';
 import {
   doc,
   getDoc,
@@ -21,10 +20,10 @@ import {
 } from '@/lib/repositories';
 import { callFunction } from '@/lib/api';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { useReview, calculateCustomFolderQuestionCount, type ReviewItem, type FolderCategory, type CustomFolderQuestion } from '@/lib/hooks/useReview';
+import { useReview, type ReviewItem, type FolderCategory, type CustomFolderQuestion } from '@/lib/hooks/useReview';
 import { useCourse } from '@/lib/contexts/CourseContext';
 import dynamic from 'next/dynamic';
-import { Skeleton, BottomSheet, useExpToast } from '@/components/common';
+import { Skeleton, useExpToast } from '@/components/common';
 import { EXP_REWARDS } from '@/lib/utils/expRewards';
 import type { PracticeResult } from '@/components/review/ReviewPractice';
 
@@ -34,14 +33,17 @@ const ReviewPractice = dynamic(() => import('@/components/review/ReviewPractice'
 const QuestionEditor = dynamic(() => import('@/components/quiz/create/QuestionEditor'));
 import { formatChapterLabel, getChapterById, generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import { useHideNav } from '@/lib/hooks/useHideNav';
-import { type FeedbackType, type DisplayItem, type ReviewFilter } from '@/components/review/types';
-import { KOREAN_LABELS, parseQuestionId, sortByQuestionId, createDisplayItems } from '@/lib/utils/reviewQuestionUtils';
-import QuestionCard from '@/components/review/QuestionCard';
+import { type FeedbackType, type ReviewFilter } from '@/components/review/types';
+import { parseQuestionId, sortByQuestionId, createDisplayItems } from '@/lib/utils/reviewQuestionUtils';
 import QuestionList from '@/components/quiz/create/QuestionList';
 import type { QuestionData } from '@/components/quiz/create/questionTypes';
 import AddQuestionsView from '@/components/review/AddQuestionsView';
 import { convertToQuestionDataList } from '@/components/professor/library/professorLibraryUtils';
 import { flattenQuestionsForSave } from '@/lib/utils/questionSerializer';
+import FolderDetailHeader from '@/components/review/detail/FolderDetailHeader';
+import QuestionListSection from '@/components/review/detail/QuestionListSection';
+import FolderDetailBottomSheets from '@/components/review/detail/FolderDetailBottomSheets';
+import EditMetadataSection from '@/components/review/detail/EditMetadataSection';
 
 /**
  * 폴더 상세 페이지
@@ -1492,71 +1494,15 @@ export default function FolderDetailPage() {
       transition={{ type: 'spring', stiffness: 400, damping: 35 }}
     >
       {/* 헤더 - 배너 이미지 */}
-      <header className="pt-2 pb-1 flex flex-col items-center">
-        {/* 리본 이미지 — 퀴즈 페이지와 동일 크기 */}
-        <div className="relative w-full h-[160px] mt-2">
-          <Image
-            src={ribbonImage}
-            alt="Review"
-            fill
-            className="object-contain"
-            style={{ transform: `scale(${ribbonScale}) scaleX(1.15)` }}
-            unoptimized
-          />
-        </div>
-
-        {/* 필터 + 이전 버튼 영역 */}
-        <div className="w-full px-4 py-1">
-          {folderType === 'solved' ? (
-            <>
-              <div className="flex items-center gap-2 mb-2">
-                <button
-                  onClick={() => router.push(`/review?filter=${folderType}`)}
-                  className="p-1 text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors flex-shrink-0"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-                <h2 className="text-2xl font-black text-[#1A1A1A] truncate flex-1">
-                  {folderTitle}
-                </h2>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="flex flex-col items-center">
-                    <span className="text-4xl font-serif font-bold text-[#1A1A1A]" style={{ fontFamily: 'Georgia, Times New Roman, serif' }}>
-                      {quizScores?.myScore !== undefined ? quizScores.myScore : '-'}
-                    </span>
-                    <span className="text-sm text-[#5C5C5C] mt-2">퀴즈</span>
-                  </div>
-                  <span className="text-2xl text-[#5C5C5C] font-serif" style={{ fontFamily: 'Georgia, Times New Roman, serif' }}>/</span>
-                  <div className="flex flex-col items-center">
-                    <span className="text-4xl font-serif font-bold text-[#1A1A1A]" style={{ fontFamily: 'Georgia, Times New Roman, serif' }}>
-                      {quizScores?.myFirstReviewScore !== undefined ? quizScores.myFirstReviewScore : '-'}
-                    </span>
-                    <span className="text-sm text-[#5C5C5C] mt-2">복습</span>
-                  </div>
-                </div>
-                {quizScores?.isPublic && (
-                  <div className="flex flex-col items-center">
-                    <span className="text-4xl font-serif font-bold text-[#1A1A1A]" style={{ fontFamily: 'Georgia, Times New Roman, serif' }}>
-                      {quizScores?.averageScore !== undefined ? Math.round(quizScores.averageScore) : '-'}
-                    </span>
-                    <span className="text-sm text-[#5C5C5C] mt-2">평균</span>
-                  </div>
-                )}
-              </div>
-            </>
-          ) : fromQuizPage ? (
-            /* 퀴즈 페이지 복습탭에서 온 경우: 빈 — 제목은 아래 섹션에서 표시 */
-            <div />
-          ) : (
-            /* 서재/오답/찜/커스텀: 필터 숨김 (상세 페이지에서는 불필요) */
-            <div />
-          )}
-        </div>
-      </header>
+      <FolderDetailHeader
+        ribbonImage={ribbonImage}
+        ribbonScale={ribbonScale}
+        folderType={folderType}
+        folderTitle={folderTitle}
+        fromQuizPage={fromQuizPage}
+        quizScores={quizScores}
+        onBack={() => router.push(`/review?filter=${folderType}`)}
+      />
 
       {/* 폴더 제목 + 점수 (solved 타입 제외) */}
       {folderType !== 'solved' && (
@@ -1761,97 +1707,17 @@ export default function FolderDetailPage() {
             />
           ) : (
             <>
-              {/* 메타 편집 영역 (교수 서재와 동일 스타일) */}
-              <div className="space-y-4 mb-4">
-                {/* 난이도 */}
-                <div>
-                  <label className="block text-xs font-bold text-[#1A1A1A] mb-1.5">난이도</label>
-                  <div className="flex gap-2">
-                    {([
-                      { value: 'easy' as const, label: '쉬움' },
-                      { value: 'normal' as const, label: '보통' },
-                      { value: 'hard' as const, label: '어려움' },
-                    ]).map(({ value, label }) => (
-                      <motion.button
-                        key={value}
-                        type="button"
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => setEditDifficulty(value)}
-                        className={`flex-1 py-2 px-3 font-bold text-xs border-2 transition-all duration-200 ${
-                          editDifficulty === value
-                            ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                            : 'bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
-                        }`}
-                      >
-                        {label}
-                      </motion.button>
-                    ))}
-                  </div>
-                </div>
-                {/* 태그 */}
-                <div>
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <label className="text-xs font-bold text-[#1A1A1A]">태그</label>
-                    <button
-                      type="button"
-                      onClick={() => setShowEditTagPicker(!showEditTagPicker)}
-                      className={`px-2.5 py-0.5 text-xs font-bold border-2 transition-colors ${
-                        showEditTagPicker
-                          ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                          : 'bg-transparent text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8]'
-                      }`}
-                    >
-                      {showEditTagPicker ? '닫기' : '+ 추가'}
-                    </button>
-                  </div>
-                  {editedTags.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mb-2">
-                      {editedTags.map((tag) => (
-                        <div
-                          key={tag}
-                          className="flex items-center gap-1 px-2.5 py-1 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold"
-                        >
-                          #{tag}
-                          <button
-                            type="button"
-                            onClick={() => setEditedTags(prev => prev.filter(t => t !== tag))}
-                            className="ml-0.5 hover:text-[#D4CFC4]"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <AnimatePresence>
-                    {showEditTagPicker && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="flex flex-wrap gap-1.5 p-2.5 border-2 border-[#1A1A1A] bg-[#F5F0E8]">
-                          {editTagOptions
-                            .filter(opt => !editedTags.includes(opt.value))
-                            .map((opt) => (
-                              <button
-                                key={opt.value}
-                                type="button"
-                                onClick={() => setEditedTags(prev => [...prev, opt.value])}
-                                className="px-2.5 py-1 text-xs font-bold bg-transparent text-[#1A1A1A] border-2 border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
-                              >
-                                {opt.label}
-                              </button>
-                            ))}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </div>
+              {/* 메타 편집 영역 (난이도 + 태그) */}
+              <EditMetadataSection
+                editDifficulty={editDifficulty}
+                onDifficultyChange={setEditDifficulty}
+                editedTags={editedTags}
+                onRemoveTag={(tag) => setEditedTags(prev => prev.filter(t => t !== tag))}
+                onAddTag={(tag) => setEditedTags(prev => [...prev, tag])}
+                showEditTagPicker={showEditTagPicker}
+                onToggleTagPicker={() => setShowEditTagPicker(!showEditTagPicker)}
+                editTagOptions={editTagOptions}
+              />
 
               <QuestionList
                 questions={editableQuestions}
@@ -1874,320 +1740,25 @@ export default function FolderDetailPage() {
       {/* 문제 목록 (일반 모드) */}
       {!loading && !(isEditMode && folderType === 'library') && (
         <main className="px-4 space-y-2">
-          {questions.length === 0 ? (
-            <div className="py-16 text-center">
-              <p className="text-[#5C5C5C]">문제가 없습니다.</p>
-            </div>
-          ) : groupedByCategory ? (
-            // 카테고리별로 그룹화된 표시
-            <div className="space-y-4">
-              {groupedByCategory.map((group, groupIndex) => (
-                <div key={group.category?.id || 'uncategorized'}>
-                  {/* 카테고리 헤더 */}
-                  <div className="flex items-center gap-2 mb-2 mt-4">
-                    <span className="font-bold text-[#1A1A1A] text-sm">
-                      {group.category?.name || '미분류'}
-                    </span>
-                    <div className="flex-1 border-t border-dashed border-[#5C5C5C]" />
-                    <span className="text-xs text-[#5C5C5C]">
-                      {group.items.length}문제
-                    </span>
-                  </div>
-                  {/* 해당 카테고리의 문제들 */}
-                  <div className="space-y-2">
-                    {group.items.length === 0 ? (
-                      <p className="text-xs text-[#5C5C5C] py-2 text-center">문제가 없습니다</p>
-                    ) : (
-                      group.items.map((item, index) => {
-                        // 전체 문제 목록에서의 인덱스 계산
-                        let globalIndex = 0;
-                        for (let i = 0; i < groupIndex; i++) {
-                          globalIndex += groupedByCategory[i].items.length;
-                        }
-                        globalIndex += index;
-
-                        return (
-                          <QuestionCard
-                            key={item.id}
-                            item={item}
-                            questionNumber={globalIndex + 1}
-                            isSelectMode={isSelectMode}
-                            isSelected={selectedIds.has(item.id)}
-                            onSelect={() => handleSelectQuestion(item.id)}
-                            onFeedbackSubmit={handleFeedbackSubmit}
-                            onFeedbackDone={handleFeedbackDone}
-                            currentUserId={user?.uid}
-                            quizCreatorId={quizCreatorsMap.get(item.quizId)}
-                            isAiGenerated={quizAiMap.get(item.quizId)}
-                            folderType={folderType}
-                            courseId={userCourse?.id}
-                            hasUpdate={updatedQuestionIds.has(item.questionId)}
-                          />
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            // 일반 목록 표시 (결합형 그룹 포함)
-            displayItems.map((displayItem) => {
-              // 단일 문제
-              if (displayItem.type === 'single' && displayItem.item) {
-                const item = displayItem.item;
-                return (
-                  <QuestionCard
-                    key={item.id}
-                    item={item}
-                    questionNumber={displayItem.displayNumber}
-                    isSelectMode={isSelectMode}
-                    isSelected={selectedIds.has(item.id)}
-                    onSelect={() => handleSelectQuestion(item.id)}
-                    onFeedbackSubmit={handleFeedbackSubmit}
-                    onFeedbackDone={handleFeedbackDone}
-                    currentUserId={user?.uid}
-                    quizCreatorId={quizCreatorsMap.get(item.quizId)}
-                    isAiGenerated={quizAiMap.get(item.quizId)}
-                    courseId={userCourse?.id}
-                    folderType={folderType}
-                    hasUpdate={updatedQuestionIds.has(item.questionId)}
-                  />
-                );
-              }
-
-              // 결합형 그룹
-              if (displayItem.type === 'combined_group' && displayItem.items && displayItem.combinedGroupId) {
-                const groupId = displayItem.combinedGroupId;
-                const groupItems = displayItem.items;
-                const correctInGroup = groupItems.filter(r => r.isCorrect).length;
-                const totalInGroup = groupItems.length;
-                const firstItem = groupItems[0];
-                const isGroupExpanded = expandedGroupIds.has(groupId);
-
-                // 그룹 내 선택된 문제 수
-                const selectedInGroup = groupItems.filter(r => selectedIds.has(r.id)).length;
-                const isGroupSelected = selectedInGroup > 0;
-
-                return (
-                  <div key={groupId}>
-                    {/* 그룹 헤더 */}
-                    <div
-                      onClick={() => {
-                        if (isSelectMode) {
-                          // 선택 모드: 그룹 전체 선택/해제
-                          const newSelected = new Set(selectedIds);
-                          if (selectedInGroup === totalInGroup) {
-                            groupItems.forEach(r => newSelected.delete(r.id));
-                          } else {
-                            groupItems.forEach(r => newSelected.add(r.id));
-                          }
-                          setSelectedIds(newSelected);
-                        } else {
-                          toggleGroupExpand(groupId);
-                        }
-                      }}
-                      className={`border p-3 cursor-pointer transition-all ${
-                        isSelectMode
-                          ? isGroupSelected
-                            ? 'border-2 border-dashed border-[#1A1A1A] bg-[#EDEAE4]'
-                            : 'border border-dashed border-[#5C5C5C] bg-[#F5F0E8]'
-                          : 'border-[#1A1A1A] bg-[#F5F0E8]'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          {/* 문항 번호 + 결합형 표시 + 정답 수 */}
-                          <div className="flex items-center gap-2 mb-1 flex-wrap">
-                            <span className="inline-block px-2 py-0.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8]">
-                              Q{displayItem.displayNumber}
-                            </span>
-                            <span className="inline-block px-2 py-0.5 text-xs font-bold border border-[#1A1A1A] bg-[#F5F0E8] text-[#1A1A1A]">
-                              결합형 문제
-                            </span>
-                            <span className={`inline-block px-2 py-0.5 text-xs font-bold ${
-                              correctInGroup === totalInGroup
-                                ? 'bg-[#E8F5E9] text-[#1A6B1A] border border-[#1A6B1A]'
-                                : correctInGroup > 0
-                                ? 'bg-[#FFF8E1] text-[#8B6914] border border-[#8B6914]'
-                                : 'bg-[#FFEBEE] text-[#8B1A1A] border border-[#8B1A1A]'
-                            }`}>
-                              {correctInGroup}/{totalInGroup} 정답
-                            </span>
-                          </div>
-                          {/* 공통 지문/문제 미리보기 */}
-                          <p className="text-sm text-[#1A1A1A]">
-                            {firstItem.commonQuestion || firstItem.passage || '결합형 문제'}
-                            {/* 제시문 발문 표시 */}
-                            {firstItem.passagePrompt && (
-                              <span className="ml-1 text-[#5C5C5C]">
-                                {firstItem.passagePrompt}
-                              </span>
-                            )}
-                          </p>
-                        </div>
-
-                        {/* 오른쪽 영역: 체크박스/화살표 */}
-                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                          {isSelectMode ? (
-                            <div className={`w-5 h-5 flex items-center justify-center ${
-                              selectedInGroup === totalInGroup ? 'bg-[#1A1A1A]' : selectedInGroup > 0 ? 'bg-[#5C5C5C]' : 'border border-[#5C5C5C]'
-                            }`}>
-                              {selectedInGroup > 0 && (
-                                <svg className="w-3 h-3 text-[#F5F0E8]" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                </svg>
-                              )}
-                            </div>
-                          ) : (
-                            <svg
-                              className={`w-5 h-5 text-[#5C5C5C] transition-transform ${isGroupExpanded ? 'rotate-180' : ''}`}
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                            </svg>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 그룹 펼침 (공통 지문 + 하위 문제들) */}
-                    <AnimatePresence>
-                      {isGroupExpanded && !isSelectMode && (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: 'auto', opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          className="overflow-hidden"
-                        >
-                          <div className="border border-t-0 border-[#1A1A1A] bg-[#F5F0E8] p-4 space-y-4">
-                            {/* 공통 문제는 아코디언 헤더에 표시되므로 생략 */}
-
-                            {/* 공통 지문 */}
-                            {(firstItem.passage || firstItem.passageImage || firstItem.koreanAbcItems || (firstItem.passageMixedExamples && firstItem.passageMixedExamples.length > 0)) && (() => {
-                              // 지문과 이미지가 둘 다 있는지 확인
-                              const hasText = firstItem.passage || (firstItem.koreanAbcItems && firstItem.koreanAbcItems.length > 0) || (firstItem.passageMixedExamples && firstItem.passageMixedExamples.length > 0);
-                              const hasImage = !!firstItem.passageImage;
-                              const needsInnerBox = hasText && hasImage;
-
-                              return (
-                                <div className="p-3 border border-[#8B6914] bg-[#FFF8E1]">
-                                  {/* 텍스트 */}
-                                  {firstItem.passage && firstItem.passageType !== 'korean_abc' && (
-                                    needsInnerBox ? (
-                                      <div className="p-3 bg-[#FFFDF7] border border-[#E8D9A8]">
-                                        <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{firstItem.passage}</p>
-                                      </div>
-                                    ) : (
-                                      <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{firstItem.passage}</p>
-                                    )
-                                  )}
-                                  {/* ㄱㄴㄷ 형식 */}
-                                  {firstItem.passageType === 'korean_abc' && firstItem.koreanAbcItems && firstItem.koreanAbcItems.length > 0 && (
-                                    needsInnerBox ? (
-                                      <div className="p-3 bg-[#FFFDF7] border border-[#E8D9A8]">
-                                        <div className="space-y-1">
-                                          {firstItem.koreanAbcItems.map((itm, idx) => (
-                                            <p key={idx} className="text-sm text-[#1A1A1A]">
-                                              <span className="font-bold">{KOREAN_LABELS[idx]}.</span> {itm}
-                                            </p>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    ) : (
-                                      <div className="space-y-1">
-                                        {firstItem.koreanAbcItems.map((itm, idx) => (
-                                          <p key={idx} className="text-sm text-[#1A1A1A]">
-                                            <span className="font-bold">{KOREAN_LABELS[idx]}.</span> {itm}
-                                          </p>
-                                        ))}
-                                      </div>
-                                    )
-                                  )}
-                                  {/* 혼합 형식 */}
-                                  {(firstItem as any).passageMixedExamples && (firstItem as any).passageMixedExamples.length > 0 && (
-                                    <div className="space-y-2">
-                                      {(firstItem as any).passageMixedExamples.map((block: any) => (
-                                        <div key={block.id}>
-                                          {block.type === 'grouped' && (
-                                            <div className="space-y-1">
-                                              {(block.children || []).map((child: any) => (
-                                                <div key={child.id}>
-                                                  {child.type === 'text' && <p className="text-sm text-[#5C5C5C] whitespace-pre-wrap">{child.content}</p>}
-                                                  {child.type === 'labeled' && (child.items || []).map((i: any) => (
-                                                    <p key={i.id} className="text-sm"><span className="font-bold">{i.label}.</span> {i.content}</p>
-                                                  ))}
-                                                  {child.type === 'gana' && (child.items || []).map((i: any) => (
-                                                    <p key={i.id} className="text-sm"><span className="font-bold">({i.label})</span> {i.content}</p>
-                                                  ))}
-                                                  {child.type === 'image' && child.imageUrl && <Image src={child.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto" unoptimized />}
-                                                </div>
-                                              ))}
-                                            </div>
-                                          )}
-                                          {block.type === 'text' && <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{block.content}</p>}
-                                          {block.type === 'labeled' && (
-                                            <div className="space-y-1">
-                                              {(block.items || []).map((i: any) => (
-                                                <p key={i.id} className="text-sm"><span className="font-bold">{i.label}.</span> {i.content}</p>
-                                              ))}
-                                            </div>
-                                          )}
-                                          {block.type === 'gana' && (
-                                            <div className="space-y-1">
-                                              {(block.items || []).map((i: any) => (
-                                                <p key={i.id} className="text-sm"><span className="font-bold">({i.label})</span> {i.content}</p>
-                                              ))}
-                                            </div>
-                                          )}
-                                          {block.type === 'image' && block.imageUrl && <Image src={block.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto" unoptimized />}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
-                                  {/* 이미지 */}
-                                  {firstItem.passageImage && (
-                                    <Image src={firstItem.passageImage} alt="공통 이미지" width={800} height={400} className={`max-w-full max-h-[300px] object-contain border border-[#1A1A1A] ${hasText ? 'mt-3' : ''}`} unoptimized />
-                                  )}
-                                </div>
-                              );
-                            })()}
-
-                            {/* 하위 문제들 */}
-                            <div className="space-y-2 p-3 bg-[#EDEAE4] border border-[#D4CFC4]">
-                              {groupItems.map((subItem, subIdx) => (
-                                <QuestionCard
-                                  key={subItem.id}
-                                  item={subItem}
-                                  questionNumber={displayItem.displayNumber}
-                                  subQuestionNumber={subIdx + 1}
-                                  isSelectMode={false}
-                                  isSelected={false}
-                                  onSelect={() => {}}
-                                  onFeedbackSubmit={handleFeedbackSubmit}
-                                  onFeedbackDone={handleFeedbackDone}
-                                  currentUserId={user?.uid}
-                                  quizCreatorId={quizCreatorsMap.get(subItem.quizId)}
-                                  isAiGenerated={quizAiMap.get(subItem.quizId)}
-                                  courseId={userCourse?.id}
-                                  folderType={folderType}
-                                  hasUpdate={updatedQuestionIds.has(subItem.questionId)}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                );
-              }
-
-              return null;
-            })
-          )}
+          <QuestionListSection
+            questions={questions}
+            displayItems={displayItems}
+            groupedByCategory={groupedByCategory}
+            isSelectMode={isSelectMode}
+            selectedIds={selectedIds}
+            onSelectQuestion={handleSelectQuestion}
+            onSetSelectedIds={setSelectedIds}
+            expandedGroupIds={expandedGroupIds}
+            onToggleGroupExpand={toggleGroupExpand}
+            onFeedbackSubmit={handleFeedbackSubmit}
+            onFeedbackDone={handleFeedbackDone}
+            currentUserId={user?.uid}
+            quizCreatorsMap={quizCreatorsMap}
+            quizAiMap={quizAiMap}
+            folderType={folderType}
+            courseId={userCourse?.id}
+            updatedQuestionIds={updatedQuestionIds}
+          />
         </main>
       )}
 
@@ -2299,238 +1870,62 @@ export default function FolderDetailPage() {
         )}
       </AnimatePresence>
 
-      {/* 카테고리 관리 바텀시트 */}
-      <BottomSheet
-        isOpen={isCategoryMode}
-        onClose={() => {
+      {/* 카테고리 관리 + 배정 + 삭제 모달 모음 */}
+      <FolderDetailBottomSheets
+        isCategoryMode={isCategoryMode}
+        onCloseCategoryMode={() => { setIsCategoryMode(false); setNewCategoryName(''); }}
+        newCategoryName={newCategoryName}
+        onNewCategoryNameChange={setNewCategoryName}
+        onAddCategory={handleAddCategory}
+        onRemoveCategory={handleRemoveCategory}
+        customFolder={customFolder}
+        onEnterAssignMode={() => {
           setIsCategoryMode(false);
-          setNewCategoryName('');
+          setIsSelectMode(true);
+          setIsDeleteMode(false);
+          setIsAssignMode(true);
         }}
-        title="정렬 기준 관리"
-        height="auto"
-      >
-        <div className="space-y-4">
-          {/* 카테고리 추가 */}
-          <div>
-            <label className="block text-sm text-[#5C5C5C] mb-2">새 분류 추가</label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newCategoryName}
-                onChange={(e) => setNewCategoryName(e.target.value)}
-                placeholder="분류 이름 입력"
-                className="flex-1 px-3 py-2 border-2 border-[#1A1A1A] bg-[#F5F0E8] text-sm focus:outline-none"
-                maxLength={20}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && newCategoryName.trim()) {
-                    handleAddCategory();
-                  }
-                }}
-              />
-              <button
-                onClick={handleAddCategory}
-                disabled={!newCategoryName.trim()}
-                className="px-4 py-2 bg-[#1A1A1A] text-[#F5F0E8] font-bold text-sm disabled:opacity-30"
-              >
-                추가
-              </button>
-            </div>
-          </div>
-
-          {/* 현재 카테고리 목록 */}
-          <div>
-            <label className="block text-sm text-[#5C5C5C] mb-2">
-              현재 분류 ({customFolder?.categories?.length || 0}개)
-            </label>
-            {!customFolder?.categories?.length ? (
-              <p className="text-xs text-[#5C5C5C] py-4 text-center border border-dashed border-[#5C5C5C]">
-                아직 분류가 없습니다. 위에서 추가해주세요.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {customFolder.categories.map((cat) => {
-                  const questionCount = customFolder.questions.filter(
-                    (q: CustomFolderQuestion) => q.categoryId === cat.id
-                  ).length;
-
-                  return (
-                    <div
-                      key={cat.id}
-                      className="flex items-center justify-between p-3 border border-[#1A1A1A] bg-[#EDEAE4]"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-[#1A1A1A]">{cat.name}</span>
-                        <span className="text-xs text-[#5C5C5C]">({questionCount}문제)</span>
-                      </div>
-                      <button
-                        onClick={() => handleRemoveCategory(cat.id)}
-                        className="px-2 py-1 text-xs text-[#8B1A1A] hover:bg-[#FDEAEA] transition-colors"
-                      >
-                        삭제
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* 문제 배정 모드 진입 버튼 */}
-          {customFolder?.categories?.length ? (
-            <div className="pt-2 border-t border-[#EDEAE4]">
-              <button
-                onClick={() => {
-                  setIsCategoryMode(false);
-                  setIsSelectMode(true);
-                  setIsDeleteMode(false);
-                  setIsAssignMode(true);
-                }}
-                className="w-full py-3 font-bold text-sm bg-[#F5F0E8] text-[#1A1A1A] border-2 border-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
-              >
-                문제 분류하기
-              </button>
-              <p className="text-xs text-[#5C5C5C] text-center mt-2">
-                문제를 선택한 후 원하는 분류에 배정할 수 있습니다.
-              </p>
-            </div>
-          ) : null}
-        </div>
-      </BottomSheet>
-
-      {/* 문제 배정 바텀시트 (문제 선택 후 카테고리 선택) */}
-      <BottomSheet
-        isOpen={isAssignMode && isSelectMode && selectedIds.size > 0}
-        onClose={() => {
-          setSelectedCategoryForAssign(null);
+        isAssignSheetOpen={isAssignMode && isSelectMode && selectedIds.size > 0}
+        onCloseAssignSheet={() => setSelectedCategoryForAssign(null)}
+        selectedCount={selectedIds.size}
+        selectedCategoryForAssign={selectedCategoryForAssign}
+        onSelectCategoryForAssign={setSelectedCategoryForAssign}
+        onAssign={async () => {
+          if (!selectedCategoryForAssign) return;
+          const categoryId = selectedCategoryForAssign === 'uncategorized' ? null : selectedCategoryForAssign;
+          try {
+            for (const itemId of selectedIds) {
+              const item = questions.find(q => q.id === itemId);
+              if (item) {
+                await assignQuestionToCategory(folderId, item.questionId, categoryId);
+              }
+            }
+            setSelectedIds(new Set());
+            setIsSelectMode(false);
+            setIsAssignMode(false);
+            setSelectedCategoryForAssign(null);
+          } catch (err) {
+            console.error('배정 실패:', err);
+            alert('배정에 실패했습니다.');
+          }
         }}
-        title={`${selectedIds.size}개 문제 분류`}
-        height="auto"
-      >
-        <div className="space-y-3">
-          <p className="text-sm text-[#5C5C5C]">분류를 선택하세요</p>
-
-          {/* 카테고리 선택 버튼들 */}
-          <div className="space-y-2">
-            {customFolder?.categories?.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategoryForAssign(cat.id)}
-                className={`w-full p-3 text-left font-bold text-sm border-2 transition-colors ${
-                  selectedCategoryForAssign === cat.id
-                    ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                    : 'bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A] hover:bg-[#EDEAE4]'
-                }`}
-              >
-                {cat.name}
-              </button>
-            ))}
-            {/* 미분류 옵션 */}
-            <button
-              onClick={() => setSelectedCategoryForAssign('uncategorized')}
-              className={`w-full p-3 text-left font-bold text-sm border-2 transition-colors ${
-                selectedCategoryForAssign === 'uncategorized'
-                  ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                  : 'bg-[#F5F0E8] text-[#5C5C5C] border-[#5C5C5C] border-dashed hover:bg-[#EDEAE4]'
-              }`}
-            >
-              미분류
-            </button>
-          </div>
-
-          {/* 배정 버튼 */}
-          <button
-            onClick={async () => {
-              if (!selectedCategoryForAssign) return;
-              const categoryId = selectedCategoryForAssign === 'uncategorized' ? null : selectedCategoryForAssign;
-
-              try {
-                for (const itemId of selectedIds) {
-                  const item = questions.find(q => q.id === itemId);
-                  if (item) {
-                    await assignQuestionToCategory(folderId, item.questionId, categoryId);
-                  }
-                }
-                setSelectedIds(new Set());
-                setIsSelectMode(false);
-                setIsAssignMode(false);
-                setSelectedCategoryForAssign(null);
-              } catch (err) {
-                console.error('배정 실패:', err);
-                alert('배정에 실패했습니다.');
-              }
-            }}
-            disabled={!selectedCategoryForAssign}
-            className="w-full py-3 font-bold text-sm bg-[#1A1A1A] text-[#F5F0E8] disabled:opacity-30 transition-colors"
-          >
-            배정하기
-          </button>
-        </div>
-      </BottomSheet>
-
-      {/* 폴더/서재 삭제 확인 모달 */}
-      {showDeleteModal && (
-        <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50"
-          onClick={() => setShowDeleteModal(false)}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            onClick={(e) => e.stopPropagation()}
-            className="w-[85%] max-w-[280px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 rounded-2xl"
-          >
-            <div className="flex justify-center mb-3">
-              <div className="w-10 h-10 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4] rounded-lg">
-                <svg className="w-5 h-5 text-[#8B1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </div>
-            </div>
-            <h3 className="text-center font-bold text-base text-[#1A1A1A] mb-2">
-              {folderType === 'custom' ? '폴더를 삭제할까요?' : '퀴즈를 삭제할까요?'}
-            </h3>
-            <p className="text-xs text-[#5C5C5C] mb-1">
-              {folderType === 'custom'
-                ? '- 삭제된 폴더는 복구할 수 없습니다.'
-                : '- 삭제된 퀴즈는 복구할 수 없습니다.'
-              }
-            </p>
-            <p className="text-xs text-[#5C5C5C] mb-5">
-              {folderType === 'custom'
-                ? '- 폴더 안의 문제는 원본에 남아있습니다.'
-                : '- 이미 푼 사람은 복습 가능합니다.'
-              }
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowDeleteModal(false)}
-                className="flex-1 py-2.5 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors rounded-lg"
-              >
-                취소
-              </button>
-              <button
-                onClick={async () => {
-                  try {
-                    if (folderType === 'custom') {
-                      await deleteCustomFolder(folderId);
-                    } else if (folderType === 'library') {
-                      await deleteDoc(doc(db, 'quizzes', folderId));
-                    }
-                    setShowDeleteModal(false);
-                    router.push(`/review?filter=${folderType}`);
-                  } catch (err) {
-                    console.error('삭제 실패:', err);
-                  }
-                }}
-                className="flex-1 py-2.5 font-bold border-2 border-[#8B1A1A] text-[#8B1A1A] bg-[#F5F0E8] hover:bg-[#FDEAEA] transition-colors rounded-lg"
-              >
-                삭제
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
+        showDeleteModal={showDeleteModal}
+        onCloseDeleteModal={() => setShowDeleteModal(false)}
+        folderType={folderType}
+        onDelete={async () => {
+          try {
+            if (folderType === 'custom') {
+              await deleteCustomFolder(folderId);
+            } else if (folderType === 'library') {
+              await deleteDoc(doc(db, 'quizzes', folderId));
+            }
+            setShowDeleteModal(false);
+            router.push(`/review?filter=${folderType}`);
+          } catch (err) {
+            console.error('삭제 실패:', err);
+          }
+        }}
+      />
     </motion.div>
   );
 }
