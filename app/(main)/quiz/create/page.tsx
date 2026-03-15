@@ -505,8 +505,6 @@ export default function QuizCreatePage() {
         cMapPacked: true,
       }).promise;
 
-      console.log(`[PDF] ${selected.length}개 페이지 선택됨. 모든 페이지 OCR 처리 시작`);
-
       // 모든 선택된 페이지를 렌더링
       const pageCanvases: HTMLCanvasElement[] = [];
       let totalHeight = 0;
@@ -570,8 +568,6 @@ export default function QuizCreatePage() {
         { type: 'image/png' }
       );
 
-      console.log(`[PDF] ${selected.length}개 페이지 병합 완료. 총 크기: ${maxWidth}x${totalHeight}`);
-
       setOcrTargetFile(pdfImageFile);
       setSelectedFile(pdfImageFile);
     } catch (err) {
@@ -608,8 +604,6 @@ export default function QuizCreatePage() {
    * 자동 추출 이미지 핸들러 (OCR 이미지 영역 분석 후 호출)
    */
   const handleAutoExtractImage = useCallback((dataUrl: string, questionNumber: number, sourceFileName?: string) => {
-    console.log(`[QuizCreate] 자동 추출 이미지: 문제 ${questionNumber}`);
-
     // 자동 추출 이미지 매핑에 저장
     setAutoExtractedImages((prev) => {
       const newMap = new Map(prev);
@@ -714,10 +708,6 @@ export default function QuizCreatePage() {
             examples: null, // 레거시 필드
             mixedExamples, // 새로운 혼합 보기 형식
           };
-
-          if (autoImage) {
-            console.log(`[QuizCreate] 문제 ${questionNumber}에 자동 추출 이미지 매핑됨`);
-          }
 
           // 선택적 필드 추가
           if (answerIndices && answerIndices.length > 0) {
@@ -1265,9 +1255,7 @@ export default function QuizCreatePage() {
       };
 
       // 1. 먼저 이미지를 Storage에 업로드
-      console.log('=== 이미지 업로드 시작 ===');
       const quizDataWithUrls = await processQuizImages(JSON.parse(JSON.stringify(quizData)), user.uid);
-      console.log('=== 이미지 업로드 완료 ===');
 
       // 2. 문제별 고유 ID 부여
       if (Array.isArray(quizDataWithUrls.questions)) {
@@ -1278,11 +1266,7 @@ export default function QuizCreatePage() {
       // 3. 데이터 정리 (중첩 배열 제거 등)
       const cleanedQuizData = sanitizeForFirestore(quizDataWithUrls);
 
-      // 3. 데이터 크기 확인
-      const dataSize = JSON.stringify(cleanedQuizData).length;
-      console.log(`최종 데이터 크기: ${(dataSize / 1024).toFixed(1)}KB`);
-
-      // 4. 타임스탬프 추가
+      // 3. 타임스탬프 추가
       cleanedQuizData.createdAt = serverTimestamp();
       cleanedQuizData.updatedAt = serverTimestamp();
 
