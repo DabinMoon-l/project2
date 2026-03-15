@@ -122,7 +122,7 @@ export default function ProfessorLibraryTab({
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   // QuestionList + QuestionEditor 기반 수정 모드
   const [editableQuestions, setEditableQuestions] = useState<QuestionData[]>([]);
-  const [originalQuestions, setOriginalQuestions] = useState<any[]>([]);
+  const [originalQuestions, setOriginalQuestions] = useState<Record<string, unknown>[]>([]);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editType, setEditType] = useState<'midterm' | 'final' | 'past' | 'independent'>('midterm');
   const [editDifficulty, setEditDifficulty] = useState<'easy' | 'normal' | 'hard'>('normal');
@@ -199,8 +199,10 @@ export default function ProfessorLibraryTab({
     setShowEditTagPicker(false);
     setEditingIndex(null);
     // 퀴즈 메타
-    setEditType((previewQuiz as any).type || (previewQuiz as any).quizType || 'midterm');
-    setEditDifficulty((previewQuiz as any).difficulty || 'normal');
+    const resolvedType = (previewQuiz.type || (previewQuiz as ProfessorAiQuiz & { quizType?: string }).quizType || 'midterm') as 'midterm' | 'final' | 'past' | 'independent';
+    setEditType(resolvedType);
+    const resolvedDiff = (previewQuiz.difficulty || 'normal') as 'easy' | 'normal' | 'hard';
+    setEditDifficulty(resolvedDiff);
     setRequireRetest(false);
     // 문제 변환
     const questions = previewQuiz.questions || [];
@@ -259,8 +261,8 @@ export default function ProfessorLibraryTab({
       // 메타 변경
       const descChanged = editedDescription !== (previewQuiz.description || '');
       const tagsChanged = JSON.stringify(editedTags) !== JSON.stringify(previewQuiz.tags || []);
-      const typeChanged = editType !== ((previewQuiz as any).type || (previewQuiz as any).quizType || 'midterm');
-      const diffChanged = editDifficulty !== ((previewQuiz as any).difficulty || 'normal');
+      const typeChanged = editType !== ((previewQuiz.type || (previewQuiz as ProfessorAiQuiz & { quizType?: string }).quizType || 'midterm') as 'midterm' | 'final' | 'past' | 'independent');
+      const diffChanged = editDifficulty !== ((previewQuiz.difficulty || 'normal') as 'easy' | 'normal' | 'hard');
       if (descChanged || tagsChanged || typeChanged || diffChanged) {
         await updateMeta(previewQuiz.id, {
           description: editedDescription,
@@ -283,8 +285,8 @@ export default function ProfessorLibraryTab({
 
       setIsEditMode(false);
       setEditingIndex(null);
-    } catch (err: any) {
-      alert('저장 실패: ' + (err?.message || ''));
+    } catch (err: unknown) {
+      alert('저장 실패: ' + (((err as Error)?.message) || ''));
     } finally {
       setIsSavingEdit(false);
     }
@@ -608,9 +610,9 @@ export default function ProfessorLibraryTab({
           </div>
         ) : (
           <div className="space-y-2">
-            {questions.map((q: any, idx: number) => (
+            {questions.map((q: Record<string, unknown>, idx: number) => (
               <PreviewQuestionCard
-                key={q.id || `q${idx}`}
+                key={(q.id as string) || `q${idx}`}
                 question={q}
                 questionNumber={idx + 1}
                 feedbackData={feedbackByQuestion.get(idx + 1)}
@@ -902,13 +904,13 @@ export default function ProfessorLibraryTab({
                 닫기
               </button>
               <button
-                disabled={!(selectedDetailQuiz.isPublished || (selectedDetailQuiz as any).wasPublished)}
+                disabled={!(selectedDetailQuiz.isPublished || selectedDetailQuiz.wasPublished)}
                 onClick={() => {
                   setStatsQuizId({ id: selectedDetailQuiz.id, title: selectedDetailQuiz.title });
                   setSelectedDetailQuiz(null);
                 }}
                 className={`flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] rounded-lg transition-colors ${
-                  selectedDetailQuiz.isPublished || (selectedDetailQuiz as any).wasPublished
+                  selectedDetailQuiz.isPublished || selectedDetailQuiz.wasPublished
                     ? 'bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#333]'
                     : 'opacity-50 cursor-not-allowed bg-[#D4CFC4] text-[#5C5C5C] border-[#999]'
                 }`}

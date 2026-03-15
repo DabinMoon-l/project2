@@ -3,14 +3,14 @@
 import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, query, where, onSnapshot, getDocs, getDoc, updateDoc, doc, Timestamp, db } from '@/lib/repositories';
+import { collection, query, where, onSnapshot, getDocs, getDoc, updateDoc, doc, Timestamp, db, type QueryDocumentSnapshot, type DocumentData } from '@/lib/repositories';
 import { Skeleton, ScrollToTopButton, ExpandModal } from '@/components/common';
 import { useExpandSource } from '@/lib/hooks/useExpandSource';
 import { TAP_SCALE } from '@/lib/constants/springs';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse, useUser } from '@/lib/contexts';
 import { type CourseId, getDefaultQuizTab, getPastExamOptions, type PastExamOption } from '@/lib/types/course';
-import { type ProfessorQuiz, type QuizTypeFilter } from '@/lib/hooks/useProfessorQuiz';
+import { type ProfessorQuiz, type QuizTypeFilter, type QuizQuestion } from '@/lib/hooks/useProfessorQuiz';
 import { calcFeedbackScore, getFeedbackLabel } from '@/lib/utils/feedbackScore';
 import { generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import dynamic from 'next/dynamic';
@@ -19,7 +19,7 @@ import PreviewQuestionCard from '@/components/professor/PreviewQuestionCard';
 // 대형 컴포넌트 lazy load (탭/모달 전환 시에만 로드)
 const QuizStatsModal = dynamic(() => import('@/components/quiz/manage/QuizStatsModal'), { ssr: false });
 const ProfessorLibraryTab = dynamic(() => import('@/components/professor/library/ProfessorLibraryTab'));
-import { useCustomFolders } from '@/lib/hooks/useCustomFolders';
+import { useCustomFolders, type CustomFolderQuestion } from '@/lib/hooks/useCustomFolders';
 import type { FeedbackType } from '@/components/quiz/InstantFeedbackButton';
 import AutoVideo, { getDifficultyVideo } from '@/components/quiz/AutoVideo';
 import { NEWSPAPER_BG_TEXT } from '@/lib/utils/quizHelpers';
@@ -42,6 +42,23 @@ import {
   ProfessorCustomQuizCard,
 } from './profQuizSubComponents';
 
+
+/** Firestore에서 로드된 퀴즈 문제 (QuizQuestion + PDF 내보내기용 확장 필드) */
+interface FirestoreQuizQuestion extends QuizQuestion {
+  imageUrl?: string;
+  passage?: string;
+  passageType?: 'text' | 'korean_abc' | 'mixed';
+  koreanAbcItems?: string[];
+  bogi?: { questionText?: string; items: Array<{ label: string; content: string }> } | null;
+  commonQuestion?: string;
+  passagePrompt?: string;
+  passageImage?: string;
+  combinedGroupId?: string;
+  combinedIndex?: number;
+  combinedTotal?: number;
+  passageMixedExamples?: unknown[];
+  mixedExamples?: unknown[];
+}
 
 // ============================================================
 // 스켈레톤 카드
@@ -124,11 +141,11 @@ export default function ProfessorQuizListPage() {
 
   // 폴더 상세 뷰
   const [openFolderId, setOpenFolderId] = useState<string | null>(null);
-  const [folderQuestions, setFolderQuestions] = useState<any[]>([]);
+  const [folderQuestions, setFolderQuestions] = useState<(FirestoreQuizQuestion & { _quizTitle?: string })[]>([]);
   const [folderLoading, setFolderLoading] = useState(false);
 
   // 폴더 클릭 시 문제 로드 (useEffect 대신 직접 호출 — onSnapshot이 customFolders를 갱신하면 useEffect가 cancelled되는 문제 방지)
-  const handleOpenFolder = useCallback(async (folder: { id: string; questions: any[] }) => {
+  const handleOpenFolder = useCallback(async (folder: { id: string; questions: CustomFolderQuestion[] }) => {
     setOpenFolderId(folder.id);
     setFolderQuestions([]);
 
@@ -143,7 +160,7 @@ export default function ProfessorQuizListPage() {
       const quizIdSet = new Set<string>();
       for (const q of folder.questions) quizIdSet.add(q.quizId);
 
-      const quizCache = new Map<string, any>();
+      const quizCache = new Map<string, DocumentData>();
       for (const quizId of quizIdSet) {
         try {
           const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
@@ -153,19 +170,19 @@ export default function ProfessorQuizListPage() {
         }
       }
 
-      const questions: any[] = [];
+      const questions: (FirestoreQuizQuestion & { _quizTitle?: string })[] = [];
       // questionId가 없는 기존 데이터 대응: 같은 퀴즈에서 몇 번째인지 추적
       const quizIndexCounters: Record<string, number> = {};
       for (const q of folder.questions) {
         const quizData = quizCache.get(q.quizId);
         if (!quizData) continue;
-        const quizQuestions = (quizData.questions as any[]) || [];
+        const quizQuestions = ((quizData.questions ?? []) as FirestoreQuizQuestion[]);
 
-        let question: any = null;
+        let question: FirestoreQuizQuestion | undefined = undefined;
 
         if (q.questionId) {
           // 정상 매칭: questionId로 찾기
-          question = quizQuestions.find((qq: any, idx: number) => {
+          question = quizQuestions.find((qq, idx) => {
             const qId = qq.id || `q${idx}`;
             return qId === q.questionId;
           });
@@ -239,7 +256,7 @@ export default function ProfessorQuizListPage() {
   const [feedbackMap, setFeedbackMap] = useState<Record<string, QuizFeedbackInfo>>({});
 
   // 퀴즈 문서 → ProfessorQuiz 파싱 헬퍼
-  const docToQuiz = useCallback((docSnap: any): ProfessorQuiz => {
+  const docToQuiz = useCallback((docSnap: QueryDocumentSnapshot<DocumentData>): ProfessorQuiz => {
     const data = docSnap.data();
     return {
       id: docSnap.id,
@@ -658,7 +675,7 @@ export default function ProfessorQuizListPage() {
                     }
 
                     // 배치 fetch → Map 캐시
-                    const quizCache = new Map<string, any>();
+                    const quizCache = new Map<string, DocumentData>();
                     let fetchFailed = 0;
                     for (const quizId of quizIdSet) {
                       try {
@@ -675,10 +692,10 @@ export default function ProfessorQuizListPage() {
                       for (const q of folder.questions) {
                         const quizData = quizCache.get(q.quizId);
                         if (!quizData) { skippedCount++; continue; }
-                        const quizQuestions = (quizData.questions as any[]) || [];
-                        let question: any = q.questionId
-                          ? quizQuestions.find((qq: any, idx: number) => (qq.id || `q${idx}`) === q.questionId)
-                          : null;
+                        const quizQuestions = ((quizData.questions ?? []) as FirestoreQuizQuestion[]);
+                        let question: FirestoreQuizQuestion | undefined = q.questionId
+                          ? quizQuestions.find((qq, idx) => (qq.id || `q${idx}`) === q.questionId)
+                          : undefined;
                         if (!question) {
                           const counter = quizIndexCounters[q.quizId] || 0;
                           if (counter < quizQuestions.length) question = quizQuestions[counter];
@@ -688,7 +705,7 @@ export default function ProfessorQuizListPage() {
                         // answer 안전 변환 (배열/숫자/문자열 모두 대응)
                         const rawAnswer = question.answer;
                         const answerStr = Array.isArray(rawAnswer)
-                          ? rawAnswer.map((a: any) => String(a)).join(',')
+                          ? rawAnswer.map((a: string | number) => String(a)).join(',')
                           : String(rawAnswer ?? '');
 
                         // AI 퀴즈(0-indexed) vs 수동 퀴즈(1-indexed) 구분
