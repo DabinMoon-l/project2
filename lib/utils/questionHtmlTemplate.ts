@@ -6,6 +6,7 @@
  */
 
 import type { QuestionExportData, PdfExportOptions } from './questionPdfExport';
+import type { MixedExampleBlock } from '@/components/quiz/create/questionTypes';
 import { CORNER_IMAGE_DATA_URI } from './cornerImageBase64';
 
 // ============================================================
@@ -78,7 +79,7 @@ function formatDate(): string {
 // ============================================================
 
 /** mixed 타입 블록 배열 → HTML 내용 (passage div 안에 삽입) */
-function renderMixedContent(blocks: any[]): string {
+function renderMixedContent(blocks: MixedExampleBlock[]): string {
   const parts: string[] = [];
   for (const block of blocks) {
     if (!block) continue;

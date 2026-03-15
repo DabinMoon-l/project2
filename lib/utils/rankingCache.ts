@@ -42,7 +42,7 @@ export function writeHomeCache(courseId: string, data: HomeCacheData) {
 // ── 랭킹 페이지 캐시 ──
 
 export interface FullCacheData {
-  rankedUsers: any[];
+  rankedUsers: unknown[];
 }
 
 const FULL_KEY = (courseId: string) => `ranking_full_${courseId}`;

@@ -106,7 +106,7 @@ export interface RawStudentData {
   totalExp: number;
   profCorrectCount: number;
   profAttemptCount: number;
-  equippedRabbits: any[];
+  equippedRabbits: { rabbitId: number; courseId?: string; slotIndex?: number }[];
   lastGachaExp: number;
 }
 

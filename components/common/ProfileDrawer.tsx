@@ -1174,8 +1174,8 @@ function MigrateAnswerIndexButton() {
         message: `${migrated}개 변환, ${skipped}개 건너뜀${errors > 0 ? `, ${errors}개 오류` : ''}`,
         ok: errors === 0,
       });
-    } catch (err: any) {
-      setResult({ message: err.message || '실패', ok: false });
+    } catch (err: unknown) {
+      setResult({ message: (err as Error)?.message || '실패', ok: false });
       calledRef.current = false;
     } finally {
       setLoading(false);

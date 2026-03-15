@@ -108,7 +108,7 @@ export default function BottomSheet({
 
   // 드래그 종료 핸들러
   const handleDragEnd = useCallback(
-    (_: any, info: PanInfo) => {
+    (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
       // 아래로 100px 이상 드래그하거나 빠르게 스와이프하면 닫기
       if (info.offset.y > 100 || info.velocity.y > 500) {
         onClose();

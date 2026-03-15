@@ -1294,7 +1294,7 @@ export default function QuizCreatePage() {
       }
 
       // 3. 데이터 정리 (중첩 배열 제거 등)
-      const cleanedQuizData = sanitizeForFirestore(quizDataWithUrls);
+      const cleanedQuizData = sanitizeForFirestore(quizDataWithUrls) as Record<string, unknown>;
 
       // 3. 타임스탬프 추가
       cleanedQuizData.createdAt = serverTimestamp();

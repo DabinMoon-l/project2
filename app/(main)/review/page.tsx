@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, Suspense, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { doc, getDoc, getDocs, collection, query, where, updateDoc, limit, db } from '@/lib/repositories';
+import { doc, getDoc, getDocs, collection, query, where, updateDoc, limit, db, type DocumentData } from '@/lib/repositories';
 import { useExpandSource } from '@/lib/hooks/useExpandSource';
 import dynamic from 'next/dynamic';
 import type { PracticeResult } from '@/components/review/ReviewPractice';
@@ -929,10 +929,10 @@ function ReviewPageContent() {
                           for (const q of folder.questions) {
                             const quizData = quizCache.get(q.quizId);
                             if (!quizData) { skippedCount++; continue; }
-                            const quizQuestions = (quizData.questions as Record<string, any>[]) || [];
+                            const quizQuestions = (quizData.questions as DocumentData[]) || [];
                             // questionId로 매칭 시도
-                            let question: any = q.questionId
-                              ? quizQuestions.find((qq: any, idx: number) => (qq.id || `q${idx}`) === q.questionId)
+                            let question: DocumentData | null | undefined = q.questionId
+                              ? quizQuestions.find((qq: DocumentData, idx: number) => (qq.id || `q${idx}`) === q.questionId)
                               : null;
                             // 폴백: questionId 누락/매칭 실패 시 같은 퀴즈 내 순서대로 매칭
                             if (!question) {

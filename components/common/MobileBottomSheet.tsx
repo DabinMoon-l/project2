@@ -24,7 +24,7 @@ interface MobileBottomSheetProps {
 
 export default function MobileBottomSheet({ open, onClose, children, maxHeight = '60vh', zClass = 'z-50' }: MobileBottomSheetProps) {
   // 80px 이상 아래로 드래그하거나, 빠르게 스와이프하면 닫기
-  const handleDragEnd = useCallback((_: any, info: PanInfo) => {
+  const handleDragEnd = useCallback((_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     if (info.offset.y > 80 || info.velocity.y > 300) {
       onClose();
     }

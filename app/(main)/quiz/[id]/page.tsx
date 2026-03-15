@@ -15,10 +15,14 @@ import {
   getDocs,
   serverTimestamp,
   db,
+  type DocumentData,
 } from '@/lib/repositories';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useThemeColors } from '@/styles/themes/useTheme';
 import { Skeleton } from '@/components/common';
+
+/** Firestore 퀴즈 문제 문서 타입 */
+type FirestoreQuestionDoc = DocumentData;
 
 // 퀴즈 풀이 관련 컴포넌트
 import QuizHeader from '@/components/quiz/QuizHeader';
@@ -254,7 +258,7 @@ export default function QuizPage() {
 
       console.log('[QuizPage] 원본 문제 데이터:', questionsData);
 
-      questionsData.forEach((q: any, index: number) => {
+      questionsData.forEach((q: FirestoreQuestionDoc, index: number) => {
         console.log(`[QuizPage] 문제 ${index + 1}:`, {
           type: q.type,
           combinedGroupId: q.combinedGroupId,
@@ -276,7 +280,7 @@ export default function QuizPage() {
           const hasMultipleAnswers = q.type === 'multiple' && answerStr.includes(',');
 
           // 문제 유형 매핑
-          let mappedType: QuestionType = q.type;
+          let mappedType: QuestionType = (q.type || 'multiple') as QuestionType;
           if (q.type === 'subjective' || q.type === 'short_answer') {
             mappedType = 'short';
           }
@@ -336,14 +340,14 @@ export default function QuizPage() {
           if (subQuestions.length > 0) {
             const legacyCombinedGroupId = `legacy_combined_${index}`;
 
-            subQuestions.forEach((sq: any, sqIndex: number) => {
+            subQuestions.forEach((sq: FirestoreQuestionDoc, sqIndex: number) => {
               questionNumber++;
               // 복수정답 여부 확인
               const hasMultipleAnswers = sq.type === 'multiple' &&
                 (sq.answerIndices?.length > 1 || false);
 
               // 문제 유형 매핑
-              let mappedType: QuestionType = sq.type;
+              let mappedType: QuestionType = (sq.type || 'multiple') as QuestionType;
               if (sq.type === 'subjective' || sq.type === 'short_answer') {
                 mappedType = 'short';
               }
@@ -420,7 +424,7 @@ export default function QuizPage() {
           const hasMultipleAnswers = q.type === 'multiple' && answerStr.includes(',');
 
           // 문제 유형 매핑 (subjective, short_answer -> short)
-          let mappedType: QuestionType = q.type;
+          let mappedType: QuestionType = (q.type || 'multiple') as QuestionType;
           if (q.type === 'subjective' || q.type === 'short_answer') {
             mappedType = 'short';
           }
@@ -548,10 +552,10 @@ export default function QuizPage() {
         });
         setAnswers(initialAnswers);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('퀴즈 로드 실패:', err);
-      console.error('에러 코드:', err.code);
-      console.error('에러 메시지:', err.message);
+      console.error('에러 코드:', (err as { code?: string })?.code);
+      console.error('에러 메시지:', (err as Error)?.message);
       setError('퀴즈를 불러오는데 실패했습니다.');
     } finally {
       setIsLoading(false);

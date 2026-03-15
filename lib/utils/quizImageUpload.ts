@@ -109,7 +109,7 @@ export async function processQuizImages(
 /**
  * Firestore 호환성을 위한 데이터 정리 (중첩 배열, base64 잔여물 제거)
  */
-export function sanitizeForFirestore(data: any, path: string = ''): any {
+export function sanitizeForFirestore(data: unknown, path: string = ''): unknown {
   if (data === null || data === undefined) return null;
 
   if (typeof data === 'string') {
@@ -132,9 +132,9 @@ export function sanitizeForFirestore(data: any, path: string = ''): any {
   }
 
   if (typeof data === 'object') {
-    const sanitized: any = {};
-    for (const key of Object.keys(data)) {
-      const value = data[key];
+    const sanitized: Record<string, unknown> = {};
+    for (const key of Object.keys(data as Record<string, unknown>)) {
+      const value = (data as Record<string, unknown>)[key];
       if (value !== undefined) {
         sanitized[key] = sanitizeForFirestore(value, path ? `${path}.${key}` : key);
       }

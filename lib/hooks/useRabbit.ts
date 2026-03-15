@@ -17,6 +17,7 @@ import {
   onSnapshot,
   orderBy,
   db,
+  Timestamp,
 } from '@/lib/repositories';
 
 // ============================================================
@@ -36,7 +37,7 @@ export interface RabbitHolding {
   rabbitId: number;
   courseId: string;
   discoveryOrder: number; // 1=최초발견, 2+=후속
-  discoveredAt: any;
+  discoveredAt: Timestamp;
   level?: number;
   stats?: RabbitStats;
 }
@@ -58,8 +59,8 @@ export interface RabbitDoc {
   firstDiscovererName: string;
   discovererCount: number; // 총 발견자 수
   discoverers: RabbitDiscoverer[]; // 전체 발견자 목록
-  createdAt: any;
-  updatedAt: any;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 // ============================================================

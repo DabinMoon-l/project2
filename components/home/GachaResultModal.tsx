@@ -169,9 +169,9 @@ export default function GachaResultModal({
       await onDiscover(result, name, slot);
       setNewName('');
       setSelectedSlot(null);
-    } catch (err: any) {
-      const code = err?.code || '';
-      const msg = err?.message || '';
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code || '';
+      const msg = (err as Error)?.message || '';
       if (code.includes('already-exists') || msg.includes('같은 이름')) {
         setNameError('이미 같은 이름의 토끼가 있어요!');
       } else {

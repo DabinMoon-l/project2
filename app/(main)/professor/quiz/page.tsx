@@ -24,6 +24,7 @@ import type { FeedbackType } from '@/components/quiz/InstantFeedbackButton';
 import AutoVideo, { getDifficultyVideo } from '@/components/quiz/AutoVideo';
 import { NEWSPAPER_BG_TEXT } from '@/lib/utils/quizHelpers';
 import type { QuestionExportData as PdfQuestionData } from '@/lib/utils/questionPdfExport';
+import type { MixedExampleBlock } from '@/components/quiz/create/questionTypes';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
 import { useHideNav } from '@/lib/hooks/useHideNav';
 import {
@@ -56,8 +57,8 @@ interface FirestoreQuizQuestion extends QuizQuestion {
   combinedGroupId?: string;
   combinedIndex?: number;
   combinedTotal?: number;
-  passageMixedExamples?: unknown[];
-  mixedExamples?: unknown[];
+  passageMixedExamples?: MixedExampleBlock[];
+  mixedExamples?: MixedExampleBlock[];
 }
 
 // ============================================================

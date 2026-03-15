@@ -238,7 +238,7 @@ export function useProfessorAnalysis(): UseProfessorAnalysisReturn {
           });
 
           // 결과 집계 (메모리에서)
-          quizResults.forEach((resultData: any) => {
+          quizResults.forEach((resultData: { answers?: { questionId: string; isCorrect: boolean; selectedAnswer?: number }[] }) => {
             const answers = resultData.answers || [];
             answers.forEach((answer: {
               questionId: string;
@@ -258,7 +258,7 @@ export function useProfessorAnalysis(): UseProfessorAnalysisReturn {
           });
 
           // 피드백 집계 (메모리에서)
-          quizFeedbacks.forEach((feedbackData: any) => {
+          quizFeedbacks.forEach((feedbackData: { questionId?: string }) => {
             const questionId = feedbackData.questionId;
             if (questionId) {
               const stats = questionStats.get(questionId);

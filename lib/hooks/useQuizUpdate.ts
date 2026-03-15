@@ -18,9 +18,11 @@ import {
   getDoc,
   Timestamp,
   db,
+  type DocumentData,
 } from '@/lib/repositories';
 import { useAuth } from './useAuth';
 import { useCourse } from '../contexts/CourseContext';
+import type { MixedExampleBlock } from '@/components/quiz/create/questionTypes';
 
 // ============================================================
 // 타입 정의
@@ -45,10 +47,10 @@ export interface UpdatedQuestion {
   passageType?: 'text' | 'korean_abc' | 'mixed';
   passageImage?: string;
   koreanAbcItems?: string[];
-  passageMixedExamples?: any[];
+  passageMixedExamples?: MixedExampleBlock[];
   commonQuestion?: string;
   // 보기
-  mixedExamples?: any[];
+  mixedExamples?: MixedExampleBlock[];
   bogi?: { questionText?: string; items: Array<{ label: string; content: string }> } | null;
   subQuestionOptions?: string[];
   subQuestionOptionsType?: 'text' | 'labeled' | 'mixed';
@@ -233,7 +235,7 @@ export const useQuizUpdate = (): UseQuizUpdateReturn => {
       const passageByGroup = new Map<string, {
         passage?: string; passageType?: 'text' | 'korean_abc' | 'mixed';
         passageImage?: string; koreanAbcItems?: string[];
-        passageMixedExamples?: any[]; commonQuestion?: string;
+        passageMixedExamples?: MixedExampleBlock[]; commonQuestion?: string;
       }>();
       for (const q of updatedQuestions) {
         if (q.combinedGroupId && q.combinedIndex === 0) {
@@ -248,7 +250,7 @@ export const useQuizUpdate = (): UseQuizUpdateReturn => {
       for (const q of updatedQuestions) {
         if (q.combinedGroupId && !passageByGroup.has(q.combinedGroupId)) {
           const firstInGroup = questions.find(
-            (orig: Record<string, any>) => orig.combinedGroupId === q.combinedGroupId && orig.combinedIndex === 0
+            (orig: DocumentData) => orig.combinedGroupId === q.combinedGroupId && orig.combinedIndex === 0
           );
           if (firstInGroup) {
             passageByGroup.set(q.combinedGroupId, {
@@ -321,7 +323,7 @@ export const useQuizUpdate = (): UseQuizUpdateReturn => {
       const resultsSnapshot = await getDocs(resultsQuery);
 
       // quizId별로 그룹핑 (isUpdate가 아닌 첫 번째 결과만)
-      const resultsByQuiz = new Map<string, { docId: string; data: Record<string, any> }>();
+      const resultsByQuiz = new Map<string, { docId: string; data: DocumentData }>();
       resultsSnapshot.forEach((docSnapshot) => {
         const data = docSnapshot.data();
         if (!data.isUpdate && !resultsByQuiz.has(data.quizId)) {

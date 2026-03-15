@@ -313,11 +313,11 @@ export default function AIQuizContainer() {
       });
       setIsPracticeOpen(true);
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('AI 퀴즈 생성 오류:', err);
       setIsProgressOpen(false);
 
-      const errorMessage = err?.message || err?.code || 'AI 문제 생성 중 오류가 발생했습니다.';
+      const errorMessage = (err as Error)?.message || (err as { code?: string })?.code || 'AI 문제 생성 중 오류가 발생했습니다.';
 
       if (errorMessage.includes('횟수') || errorMessage.includes('초과') || errorMessage.includes('exhausted')) {
         alert(errorMessage);

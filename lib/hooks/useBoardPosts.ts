@@ -536,7 +536,7 @@ export const usePinnedPosts = (courseId?: string): UsePinnedPostsReturn => {
         pinnedBy: user.uid,
       });
       return true;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('게시글 고정 실패:', err);
       // Firestore 권한 거부 시 명확한 메시지
       if ((err as { code?: string })?.code === 'permission-denied') {
@@ -564,9 +564,9 @@ export const usePinnedPosts = (courseId?: string): UsePinnedPostsReturn => {
       });
       // onSnapshot이 자동으로 상태 업데이트
       return true;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('게시글 고정 해제 실패:', err);
-      if (err?.code === 'permission-denied') {
+      if ((err as { code?: string })?.code === 'permission-denied') {
         setError('교수님만 게시글 고정을 해제할 수 있습니다.');
       } else {
         setError('게시글 고정 해제에 실패했습니다.');

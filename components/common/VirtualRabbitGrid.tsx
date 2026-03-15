@@ -34,8 +34,7 @@ export default function VirtualRabbitGrid({ renderCell }: VirtualRabbitGridProps
   const cellW = containerWidth > 0 ? (containerWidth - GAP * (COLS - 1)) / COLS : 0;
   const rowH = cellW + GAP;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const RowComponent = useCallback((props: RowComponentProps<any>): ReactElement => {
+  const RowComponent = useCallback((props: RowComponentProps<Record<string, never>>): ReactElement => {
     const { index: rowIndex, style } = props;
     return (
       <div style={style}>

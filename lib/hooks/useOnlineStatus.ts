@@ -47,7 +47,7 @@ const OFFLINE_QUEUE_KEY = 'rabbitory_offline_queue';
 export interface OfflineAction {
   id: string;
   type: string;
-  payload: any;
+  payload: Record<string, unknown>;
   createdAt: number;
 }
 

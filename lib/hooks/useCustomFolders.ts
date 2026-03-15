@@ -145,7 +145,7 @@ export const useCustomFolders = (): UseCustomFoldersReturn => {
         createdAt: serverTimestamp(),
       });
       return docRef.id;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('커스텀 폴더 생성 실패:', err);
       return null;
     }

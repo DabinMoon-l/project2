@@ -21,11 +21,35 @@ import TekkenQuestionCard from './TekkenQuestionCard';
 import TekkenMashMinigame from './TekkenMashMinigame';
 import TekkenBattleResult from './TekkenBattleResult';
 import TekkenBattleArena from './TekkenBattleArena';
-import type { RoundResultData } from '@/lib/types/tekken';
+import type { RoundResultData, BattleState, BattlePlayer, BattleRabbit, BattleResult, BattleStatus, RoundState, SubmitAnswerResult, MashState } from '@/lib/types/tekken';
 import { useHideNav } from '@/lib/hooks/useHideNav';
 
 interface TekkenBattleOverlayProps {
-  tekken: any; // UseTekkenBattleReturn
+  tekken: {
+    battle: BattleState | null;
+    battleStatus: BattleStatus | 'error' | null;
+    myPlayer: BattlePlayer | null;
+    opponent: BattlePlayer | null;
+    myActiveRabbit: BattleRabbit | null;
+    opponentActiveRabbit: BattleRabbit | null;
+    currentRound: RoundState | null;
+    currentRoundIndex: number;
+    totalRounds: number;
+    battleTimeLeft: number;
+    questionTimeLeft: number;
+    submitAnswer: (answer: number) => Promise<SubmitAnswerResult | null>;
+    swapRabbit: () => Promise<void>;
+    submitMashTaps: (taps: number) => Promise<void>;
+    startRound: (roundIndex: number) => Promise<void>;
+    submitTimeout: () => Promise<void>;
+    writeMashTap: (count: number) => void;
+    writeBotTap: (count: number) => void;
+    opponentMashTaps: number;
+    mash: MashState | null;
+    result: BattleResult | null;
+    leaveBattle: () => void;
+    error: string | null;
+  };
   userId: string;
   onClose: () => void;
 }

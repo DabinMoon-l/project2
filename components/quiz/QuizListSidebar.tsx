@@ -11,7 +11,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { collection, query, where, getDocs, db } from '@/lib/repositories';
+import { collection, query, where, getDocs, db, type QueryDocumentSnapshot } from '@/lib/repositories';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse } from '@/lib/contexts';
 
@@ -72,7 +72,7 @@ export default function QuizListSidebar() {
         const [snap1, snap2] = await Promise.all([getDocs(q1), getDocs(q2)]);
         const items: SidebarQuiz[] = [];
 
-        const parseDoc = (d: any) => {
+        const parseDoc = (d: QueryDocumentSnapshot) => {
           const data = d.data();
           items.push({
             id: d.id,
