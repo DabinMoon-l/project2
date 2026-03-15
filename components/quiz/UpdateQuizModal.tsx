@@ -19,6 +19,7 @@ import {
   where,
   getDocs,
   serverTimestamp,
+  Timestamp,
   db,
 } from '@/lib/repositories';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -26,6 +27,8 @@ import { useCourse } from '@/lib/contexts';
 import type { QuizUpdateInfo, UpdatedQuestion } from '@/lib/hooks/useQuizUpdate';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 import { useHideNav } from '@/lib/hooks/useHideNav';
+import type { MixedExampleBlock, LabeledItem } from '@/components/quiz/create/questionTypes';
+import type { FieldValue } from '@/lib/repositories/firebase/firestoreBase';
 
 // ============================================================
 // 타입 정의
@@ -90,8 +93,8 @@ export default function UpdateQuizModal({
       passageType?: string;
       passageImage?: string;
       koreanAbcItems?: string[];
-      passageMixedExamples?: any[];
-      mixedExamples?: any[];
+      passageMixedExamples?: MixedExampleBlock[];
+      mixedExamples?: MixedExampleBlock[];
       bogi?: { questionText?: string; items: Array<{ label: string; content: string }> } | null;
       subQuestionOptions?: string[];
       subQuestionOptionsType?: string;
@@ -232,8 +235,8 @@ export default function UpdateQuizModal({
         passageType?: string;
         passageImage?: string;
         koreanAbcItems?: string[];
-        passageMixedExamples?: any[];
-        mixedExamples?: any[];
+        passageMixedExamples?: MixedExampleBlock[];
+        mixedExamples?: MixedExampleBlock[];
         bogi?: { questionText?: string; items: Array<{ label: string; content: string }> } | null;
         subQuestionOptions?: string[];
         subQuestionOptionsType?: string;
@@ -316,7 +319,7 @@ export default function UpdateQuizModal({
       }
 
       // 2. 기존 점수와 병합
-      const mergedScores: Record<string, { isCorrect: boolean; userAnswer: string; correctAnswer?: string; answeredAt: any }> = { ...originalScores };
+      const mergedScores: Record<string, { isCorrect: boolean; userAnswer: string; correctAnswer?: string; answeredAt: FieldValue | Timestamp }> = { ...originalScores };
 
       // 새로 푼 문제로 교체
       for (const result of questionResults) {
@@ -548,22 +551,22 @@ export default function UpdateQuizModal({
                             )}
                             {first.passageMixedExamples && first.passageMixedExamples.length > 0 && (
                               <div className="space-y-1">
-                                {first.passageMixedExamples.map((block: any) => (
+                                {first.passageMixedExamples.map((block: MixedExampleBlock) => (
                                   <div key={block.id}>
                                     {block.type === 'text' && <p className="text-[#1A1A1A] whitespace-pre-wrap">{block.content}</p>}
-                                    {block.type === 'labeled' && (block.items || []).map((i: any) => (
+                                    {block.type === 'labeled' && (block.items || []).map((i: LabeledItem) => (
                                       <p key={i.id}><span className="font-bold">{i.label}.</span> {i.content}</p>
                                     ))}
-                                    {block.type === 'gana' && (block.items || []).map((i: any) => (
+                                    {block.type === 'gana' && (block.items || []).map((i: LabeledItem) => (
                                       <p key={i.id}><span className="font-bold">({i.label})</span> {i.content}</p>
                                     ))}
-                                    {block.type === 'grouped' && (block.children || []).map((child: any) => (
+                                    {block.type === 'grouped' && (block.children || []).map((child: MixedExampleBlock) => (
                                       <div key={child.id}>
                                         {child.type === 'text' && <p className="text-[#5C5C5C] whitespace-pre-wrap">{child.content}</p>}
-                                        {child.type === 'labeled' && (child.items || []).map((ci: any) => (
+                                        {child.type === 'labeled' && (child.items || []).map((ci: LabeledItem) => (
                                           <p key={ci.id}><span className="font-bold">{ci.label}.</span> {ci.content}</p>
                                         ))}
-                                        {child.type === 'gana' && (child.items || []).map((ci: any) => (
+                                        {child.type === 'gana' && (child.items || []).map((ci: LabeledItem) => (
                                           <p key={ci.id}><span className="font-bold">({ci.label})</span> {ci.content}</p>
                                         ))}
                                       </div>
@@ -709,22 +712,22 @@ export default function UpdateQuizModal({
                     )}
                     {first.passageMixedExamples && first.passageMixedExamples.length > 0 && (
                       <div className="space-y-1">
-                        {first.passageMixedExamples.map((block: any) => (
+                        {first.passageMixedExamples.map((block: MixedExampleBlock) => (
                           <div key={block.id}>
                             {block.type === 'text' && <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{block.content}</p>}
-                            {block.type === 'labeled' && (block.items || []).map((i: any) => (
+                            {block.type === 'labeled' && (block.items || []).map((i: LabeledItem) => (
                               <p key={i.id} className="text-sm"><span className="font-bold">{i.label}.</span> {i.content}</p>
                             ))}
-                            {block.type === 'gana' && (block.items || []).map((i: any) => (
+                            {block.type === 'gana' && (block.items || []).map((i: LabeledItem) => (
                               <p key={i.id} className="text-sm"><span className="font-bold">({i.label})</span> {i.content}</p>
                             ))}
-                            {block.type === 'grouped' && (block.children || []).map((child: any) => (
+                            {block.type === 'grouped' && (block.children || []).map((child: MixedExampleBlock) => (
                               <div key={child.id}>
                                 {child.type === 'text' && <p className="text-sm text-[#5C5C5C] whitespace-pre-wrap">{child.content}</p>}
-                                {child.type === 'labeled' && (child.items || []).map((ci: any) => (
+                                {child.type === 'labeled' && (child.items || []).map((ci: LabeledItem) => (
                                   <p key={ci.id} className="text-sm"><span className="font-bold">{ci.label}.</span> {ci.content}</p>
                                 ))}
-                                {child.type === 'gana' && (child.items || []).map((ci: any) => (
+                                {child.type === 'gana' && (child.items || []).map((ci: LabeledItem) => (
                                   <p key={ci.id} className="text-sm"><span className="font-bold">({ci.label})</span> {ci.content}</p>
                                 ))}
                                 {child.type === 'image' && child.imageUrl && <img src={child.imageUrl} alt="" className="max-w-full h-auto rounded-lg" />}
@@ -894,22 +897,22 @@ function PassageBlock({ question: q }: { question: UpdatedQuestion }) {
       )}
       {q.passageMixedExamples && q.passageMixedExamples.length > 0 && (
         <div className="space-y-1">
-          {q.passageMixedExamples.map((block: any) => (
+          {q.passageMixedExamples.map((block: MixedExampleBlock) => (
             <div key={block.id}>
               {block.type === 'text' && <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{block.content}</p>}
-              {block.type === 'labeled' && (block.items || []).map((i: any) => (
+              {block.type === 'labeled' && (block.items || []).map((i: LabeledItem) => (
                 <p key={i.id} className="text-sm"><span className="font-bold">{i.label}.</span> {i.content}</p>
               ))}
-              {block.type === 'gana' && (block.items || []).map((i: any) => (
+              {block.type === 'gana' && (block.items || []).map((i: LabeledItem) => (
                 <p key={i.id} className="text-sm"><span className="font-bold">({i.label})</span> {i.content}</p>
               ))}
-              {block.type === 'grouped' && (block.children || []).map((child: any) => (
+              {block.type === 'grouped' && (block.children || []).map((child: MixedExampleBlock) => (
                 <div key={child.id}>
                   {child.type === 'text' && <p className="text-sm text-[#5C5C5C] whitespace-pre-wrap">{child.content}</p>}
-                  {child.type === 'labeled' && (child.items || []).map((ci: any) => (
+                  {child.type === 'labeled' && (child.items || []).map((ci: LabeledItem) => (
                     <p key={ci.id} className="text-sm"><span className="font-bold">{ci.label}.</span> {ci.content}</p>
                   ))}
-                  {child.type === 'gana' && (child.items || []).map((ci: any) => (
+                  {child.type === 'gana' && (child.items || []).map((ci: LabeledItem) => (
                     <p key={ci.id} className="text-sm"><span className="font-bold">({ci.label})</span> {ci.content}</p>
                   ))}
                   {child.type === 'image' && child.imageUrl && <img src={child.imageUrl} alt="" className="max-w-full h-auto" />}
@@ -937,17 +940,17 @@ function QuestionExtras({ question: q }: { question: UpdatedQuestion }) {
       {/* 혼합 보기 */}
       {q.mixedExamples && q.mixedExamples.length > 0 && (
         <div className="mb-3">
-          {q.mixedExamples.filter((b: any) => b.type === 'grouped').map((block: any) => (
+          {q.mixedExamples.filter((b: MixedExampleBlock) => b.type === 'grouped').map((block: MixedExampleBlock) => (
             <div key={block.id} className="p-3 border-2 border-[#8B6914] bg-[#FFF8E1] rounded-xl mb-2">
               <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
               <div className="space-y-1">
-                {block.children?.map((child: any) => (
+                {block.children?.map((child: MixedExampleBlock) => (
                   <div key={child.id}>
                     {child.type === 'text' && child.content?.trim() && <p className="text-sm text-[#5C5C5C] whitespace-pre-wrap">{child.content}</p>}
-                    {child.type === 'labeled' && (child.items || []).map((li: any) => (
+                    {child.type === 'labeled' && (child.items || []).map((li: LabeledItem) => (
                       <p key={li.id} className="text-sm text-[#1A1A1A]"><span className="font-bold">{li.label}.</span> {li.content}</p>
                     ))}
-                    {child.type === 'gana' && (child.items || []).map((li: any) => (
+                    {child.type === 'gana' && (child.items || []).map((li: LabeledItem) => (
                       <p key={li.id} className="text-sm text-[#1A1A1A]"><span className="font-bold">({li.label})</span> {li.content}</p>
                     ))}
                     {child.type === 'image' && child.imageUrl && <img src={child.imageUrl} alt="" className="max-w-full h-auto border border-[#1A1A1A]" />}
@@ -956,7 +959,7 @@ function QuestionExtras({ question: q }: { question: UpdatedQuestion }) {
               </div>
             </div>
           ))}
-          {q.mixedExamples.filter((b: any) => b.type !== 'grouped').map((block: any) => {
+          {q.mixedExamples.filter((b: MixedExampleBlock) => b.type !== 'grouped').map((block: MixedExampleBlock) => {
             if (block.type === 'text' && block.content?.trim()) return (
               <div key={block.id} className="p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-xl mb-2">
                 <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
@@ -967,7 +970,7 @@ function QuestionExtras({ question: q }: { question: UpdatedQuestion }) {
               <div key={block.id} className="p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-xl mb-2">
                 <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
                 <div className="space-y-1">
-                  {(block.items || []).map((li: any) => (
+                  {(block.items || []).map((li: LabeledItem) => (
                     <p key={li.id} className="text-sm text-[#1A1A1A]"><span className="font-bold">{li.label}.</span> {li.content}</p>
                   ))}
                 </div>
@@ -977,7 +980,7 @@ function QuestionExtras({ question: q }: { question: UpdatedQuestion }) {
               <div key={block.id} className="p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-xl mb-2">
                 <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
                 <div className="space-y-1">
-                  {(block.items || []).map((li: any) => (
+                  {(block.items || []).map((li: LabeledItem) => (
                     <p key={li.id} className="text-sm text-[#1A1A1A]"><span className="font-bold">({li.label})</span> {li.content}</p>
                   ))}
                 </div>
@@ -1138,7 +1141,7 @@ function QuestionResultCard({
     questionId: string; isCorrect: boolean; userAnswer: string; correctAnswer: string;
     previousAnswer: string; questionText: string; questionType: string; choices?: string[];
     explanation?: string; choiceExplanations?: string[]; image?: string; imageUrl?: string;
-    mixedExamples?: any[]; bogi?: any; subQuestionOptions?: string[];
+    mixedExamples?: MixedExampleBlock[]; bogi?: { questionText?: string; items: Array<{ label: string; content: string }> } | null; subQuestionOptions?: string[];
     subQuestionOptionsType?: string; subQuestionImage?: string;
     passagePrompt?: string; bogiQuestionText?: string;
   };
@@ -1178,22 +1181,22 @@ function QuestionResultCard({
       {/* 혼합 보기 */}
       {r.mixedExamples && r.mixedExamples.length > 0 && (
         <div className="mb-2">
-          {r.mixedExamples.filter((b: any) => b.type === 'grouped').map((block: any) => (
+          {r.mixedExamples.filter((b: MixedExampleBlock) => b.type === 'grouped').map((block: MixedExampleBlock) => (
             <div key={block.id} className="p-2 border border-[#8B6914] bg-[#FFF8E1] rounded-lg mb-1 text-xs">
-              {block.children?.map((child: any) => (
+              {block.children?.map((child: MixedExampleBlock) => (
                 <div key={child.id}>
                   {child.type === 'text' && child.content?.trim() && <p className="text-[#5C5C5C] whitespace-pre-wrap">{child.content}</p>}
-                  {child.type === 'labeled' && (child.items || []).map((li: any) => (
+                  {child.type === 'labeled' && (child.items || []).map((li: LabeledItem) => (
                     <p key={li.id}><span className="font-bold">{li.label}.</span> {li.content}</p>
                   ))}
-                  {child.type === 'gana' && (child.items || []).map((li: any) => (
+                  {child.type === 'gana' && (child.items || []).map((li: LabeledItem) => (
                     <p key={li.id}><span className="font-bold">({li.label})</span> {li.content}</p>
                   ))}
                 </div>
               ))}
             </div>
           ))}
-          {r.mixedExamples.filter((b: any) => b.type !== 'grouped').map((block: any) => {
+          {r.mixedExamples.filter((b: MixedExampleBlock) => b.type !== 'grouped').map((block: MixedExampleBlock) => {
             if (block.type === 'text' && block.content?.trim()) return (
               <div key={block.id} className="p-2 border border-[#8B6914] bg-[#FFF8E1] rounded-lg mb-1 text-xs">
                 <p className="text-[#1A1A1A] whitespace-pre-wrap">{block.content}</p>
@@ -1201,14 +1204,14 @@ function QuestionResultCard({
             );
             if (block.type === 'labeled') return (
               <div key={block.id} className="p-2 border border-[#8B6914] bg-[#FFF8E1] rounded-lg mb-1 text-xs">
-                {(block.items || []).map((li: any) => (
+                {(block.items || []).map((li: LabeledItem) => (
                   <p key={li.id}><span className="font-bold">{li.label}.</span> {li.content}</p>
                 ))}
               </div>
             );
             if (block.type === 'gana') return (
               <div key={block.id} className="p-2 border border-[#8B6914] bg-[#FFF8E1] rounded-lg mb-1 text-xs">
-                {(block.items || []).map((li: any) => (
+                {(block.items || []).map((li: LabeledItem) => (
                   <p key={li.id}><span className="font-bold">({li.label})</span> {li.content}</p>
                 ))}
               </div>
@@ -1248,11 +1251,11 @@ function QuestionResultCard({
       )}
 
       {/* 보기 박스 */}
-      {r.bogi && r.bogi.items && r.bogi.items.some((i: any) => i.content?.trim()) && (
+      {r.bogi && r.bogi.items && r.bogi.items.some((i: { label: string; content: string }) => i.content?.trim()) && (
         <div className="mb-2 p-2 bg-[#EDEAE4] border border-[#1A1A1A] rounded-lg text-xs">
           <p className="text-center text-[#5C5C5C] mb-1 font-bold">&lt;보 기&gt;</p>
           <div className="space-y-0.5">
-            {r.bogi.items.filter((i: any) => i.content?.trim()).map((bi: any, i: number) => (
+            {r.bogi.items.filter((i: { label: string; content: string }) => i.content?.trim()).map((bi: { label: string; content: string }, i: number) => (
               <p key={i} className="text-[#1A1A1A]"><span className="font-bold mr-1">{bi.label}.</span>{bi.content}</p>
             ))}
           </div>
