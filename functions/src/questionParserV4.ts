@@ -171,11 +171,3 @@ export async function parseQuestionsV4(
   };
 }
 
-/**
- * ClovaField에서 텍스트만 추출 (기존 OCR 결과 호환용)
- */
-export function extractTextFromClovaFields(
-  fields: Array<{ inferText: string }>
-): string {
-  return fields.map((f) => f.inferText).join(" ");
-}
