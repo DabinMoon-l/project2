@@ -24,7 +24,9 @@ import { callFunction } from '@/lib/api';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse, useMilestone } from '@/lib/contexts';
 import { formatChapterLabel } from '@/lib/courseIndex';
-import type { QuestionResult, ResultDisplayItem, QuizResultData } from './resultTypes';
+import type { QuestionResult, ResultDisplayItem, QuizResultData, FirestoreQuizQuestion } from './resultTypes';
+import type { MixedExampleBlock, LabeledItem } from '@/components/quiz/create/questionTypes';
+import type { FieldValue } from '@/lib/repositories/firebase/firestoreBase';
 
 /**
  * 퀴즈 결과 페이지
@@ -118,17 +120,17 @@ export default function QuizResultPage() {
           if (cachedResult.questionResults && cachedResult.questionResults.length > 0) {
             // 캐시 데이터에 choiceExplanations가 빠진 객관식 문제가 있으면 퀴즈 문서에서 보충
             const hasMissingExps = cachedResult.questionResults.some(
-              (qr: any) => !qr.choiceExplanations && qr.type === 'multiple'
+              (qr: QuestionResult) => !qr.choiceExplanations && qr.type === 'multiple'
             );
             if (hasMissingExps) {
               try {
                 const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
                 if (quizDoc.exists()) {
-                  const questions = quizDoc.data().questions || [];
-                  cachedResult.questionResults.forEach((qr: any, qrIdx: number) => {
+                  const questions: FirestoreQuizQuestion[] = quizDoc.data().questions || [];
+                  cachedResult.questionResults.forEach((qr: QuestionResult, qrIdx: number) => {
                     if (!qr.choiceExplanations && qr.type === 'multiple') {
                       // questionId 여러 형식으로 매칭 시도
-                      const qData = questions.find((q: any, idx: number) =>
+                      const qData = questions.find((q: FirestoreQuizQuestion, idx: number) =>
                         (q.id || `q${idx}`) === qr.id
                         || (q.id || `q${idx}`) === `q${qrIdx + 1}`
                         || (q.id || `q${idx}`) === qr.number?.toString()
@@ -185,12 +187,12 @@ export default function QuizResultPage() {
 
       let correctCount = 0;
       const questionResults: QuestionResult[] = questions.map(
-        (q: any, index: number) => {
+        (q: FirestoreQuizQuestion, index: number) => {
           const userAnswer = userAnswers[index] || '';
           // correctAnswer가 있으면 그대로 사용, 없으면 answer 필드에서 변환
-          let correctAnswer: any = '';
+          let correctAnswer: string = '';
           if (q.correctAnswer !== undefined && q.correctAnswer !== null) {
-            correctAnswer = q.correctAnswer;
+            correctAnswer = String(q.correctAnswer);
           } else if (q.answer !== undefined && q.answer !== null) {
             // answer 필드에서 변환 (0-indexed 그대로)
             if (q.type === 'multiple') {
@@ -199,16 +201,16 @@ export default function QuizResultPage() {
               } else if (typeof q.answer === 'number') {
                 correctAnswer = String(q.answer);
               } else {
-                correctAnswer = q.answer;
+                correctAnswer = String(q.answer);
               }
             } else if (q.type === 'ox') {
               if (q.answer === 0) correctAnswer = 'O';
               else if (q.answer === 1) correctAnswer = 'X';
-              else correctAnswer = q.answer;
+              else correctAnswer = String(q.answer);
             } else if (q.type === 'essay') {
               correctAnswer = '';
             } else {
-              correctAnswer = q.answer;
+              correctAnswer = String(q.answer);
             }
           }
 
@@ -269,7 +271,7 @@ export default function QuizResultPage() {
             number: index + 1,
             question: q.text || q.question || '',
             type: q.type,
-            options: (q.choices || q.options || []).filter((opt: any) => opt != null),
+            options: (q.choices || q.options || []).filter((opt: string) => opt != null),
             correctAnswer: correctAnswer,
             userAnswer,
             isCorrect,
@@ -277,67 +279,67 @@ export default function QuizResultPage() {
             rubric: q.rubric || undefined,
             isBookmarked: false,
             // 문제 이미지/보기 필드
-            image: q.image || q.imageUrl || null,
+            image: q.image || q.imageUrl || undefined,
             // 보기: examples 객체에서 items 추출
             // mixedExamples가 있으면 그것을 직접 사용하므로 subQuestionOptions는 null
             subQuestionOptions: (() => {
-              // mixedExamples가 있는 경우 - mixedExamples를 직접 사용하므로 null 반환
+              // mixedExamples가 있는 경우 - mixedExamples를 직접 사용하므로 undefined 반환
               if (q.mixedExamples && Array.isArray(q.mixedExamples) && q.mixedExamples.length > 0) {
-                return null;
+                return undefined;
               }
               // examples가 직접 배열인 경우 (이전 형식)
               if (Array.isArray(q.examples)) {
-                return q.examples.filter((item: any) => item != null);
+                return q.examples.filter((item: string) => item != null);
               }
               // examples가 객체이고 items 배열이 있는 경우 (새 형식)
-              if (q.examples && typeof q.examples === 'object' && Array.isArray(q.examples.items)) {
-                return q.examples.items.filter((item: any) => item != null);
+              if (q.examples && typeof q.examples === 'object' && !Array.isArray(q.examples) && Array.isArray(q.examples.items)) {
+                return q.examples.items.filter((item: string) => item != null);
               }
               // koreanAbcExamples가 있는 경우 (ㄱㄴㄷ 형식)
               if (q.koreanAbcExamples && Array.isArray(q.koreanAbcExamples)) {
                 return q.koreanAbcExamples
                   .map((e: {text: string}) => e.text)
-                  .filter((text: any) => text != null);
+                  .filter((text: string) => text != null);
               }
               // 기존 subQuestionOptions 필드
-              return q.subQuestionOptions || null;
+              return q.subQuestionOptions || undefined;
             })(),
             // 보기 타입 추출
             subQuestionOptionsType: (() => {
               // mixedExamples가 있는 경우 (최신 형식 - 텍스트+ㄱㄴㄷ 혼합)
               if (q.mixedExamples && Array.isArray(q.mixedExamples) && q.mixedExamples.length > 0) {
-                return 'mixed'; // 혼합 형식 표시
+                return 'mixed' as const; // 혼합 형식 표시
               }
               if (Array.isArray(q.examples)) {
-                return 'text'; // 이전 형식은 기본 텍스트로
+                return 'text' as const; // 이전 형식은 기본 텍스트로
               }
-              if (q.examples && typeof q.examples === 'object' && q.examples.type) {
-                return q.examples.type;
+              if (q.examples && typeof q.examples === 'object' && !Array.isArray(q.examples) && q.examples.type) {
+                return q.examples.type as 'text' | 'labeled' | 'mixed';
               }
               if (q.koreanAbcExamples && Array.isArray(q.koreanAbcExamples)) {
-                return 'labeled';
+                return 'labeled' as const;
               }
-              return null;
+              return undefined;
             })(),
             // 혼합 보기 원본 데이터 (렌더링용)
-            mixedExamples: q.mixedExamples || null,
-            subQuestionImage: q.subQuestionImage || null,
+            mixedExamples: q.mixedExamples || undefined,
+            subQuestionImage: q.subQuestionImage || undefined,
             // 챕터 정보
-            chapterId: q.chapterId || null,
-            chapterDetailId: q.chapterDetailId || null,
+            chapterId: q.chapterId || undefined,
+            chapterDetailId: q.chapterDetailId || undefined,
             // 발문 정보
-            passagePrompt: q.passagePrompt || null,
-            bogiQuestionText: q.bogi?.questionText || null,
+            passagePrompt: q.passagePrompt || undefined,
+            bogiQuestionText: q.bogi?.questionText || undefined,
             // 보기 (<보기> 박스)
             bogi: q.bogi ? {
               questionText: q.bogi.questionText,
-              items: (q.bogi.items || []).map((item: any) => ({
+              items: (q.bogi.items || []).map((item: { label: string; content: string }) => ({
                 label: item.label,
                 content: item.content,
               })),
             } : null,
             // 선지별 해설 (AI 생성 문제용)
-            choiceExplanations: q.choiceExplanations || null,
+            choiceExplanations: q.choiceExplanations || undefined,
           };
 
           // 결합형 그룹 정보 추가
@@ -362,7 +364,7 @@ export default function QuizResultPage() {
       );
 
       // 서술형 제외 총 문제 수
-      const scoredCount = questions.filter((q: any) => q.type !== 'essay').length;
+      const scoredCount = questions.filter((q: FirestoreQuizQuestion) => q.type !== 'essay').length;
       const earnedExp = correctCount * 10;
       const quizUpdatedAt = quizData.updatedAt || quizData.createdAt || null;
       const quizCreatorId = quizData.creatorId || null;
@@ -392,13 +394,13 @@ export default function QuizResultPage() {
       try {
         // ── recordAttempt Cloud Function 호출 (서버 채점 + 분산 쓰기) ──
         // quizResults, quiz_completions, quiz_agg, quizzes 호환 업데이트를 서버에서 처리
-        const recordAttemptFn = (data: { quizId: string; answers: { questionId: string; answer: any }[]; attemptNo?: number }) =>
+        const recordAttemptFn = (data: { quizId: string; answers: { questionId: string; answer: string | number | number[] }[]; attemptNo?: number }) =>
           callFunction('recordAttempt', data);
 
         // 사용자 답변을 서버 형식으로 변환
-        const serverAnswers = questions.map((q: any, index: number) => {
+        const serverAnswers = questions.map((q: FirestoreQuizQuestion, index: number) => {
           const rawAnswer = userAnswers[index] || '';
-          let answer: any = rawAnswer;
+          let answer: string | number | number[] = rawAnswer;
 
           // 답안이 이미 0-indexed이므로 그대로 전달
           if (q.type === 'multiple') {
@@ -433,12 +435,12 @@ export default function QuizResultPage() {
           cfSuccess = true;
 
           // 서버에서 이미 제출된 경우에도 정상 처리 (idempotency)
-        } catch (cfError: any) {
+        } catch (cfError: unknown) {
           // Cloud Function 실패 시 폴백: 클라이언트에서 직접 저장
-          console.warn('recordAttempt CF 실패, 폴백 처리:', cfError.message);
+          console.warn('recordAttempt CF 실패, 폴백 처리:', cfError instanceof Error ? cfError.message : cfError);
 
           const score = Math.round((correctCount / questions.length) * 100);
-          const questionScoreMap: Record<string, { isCorrect: boolean; userAnswer: string; answeredAt: any }> = {};
+          const questionScoreMap: Record<string, { isCorrect: boolean; userAnswer: string; answeredAt: FieldValue }> = {};
           questionResults.forEach((qr) => {
             questionScoreMap[qr.id] = {
               isCorrect: qr.isCorrect,
@@ -456,7 +458,7 @@ export default function QuizResultPage() {
             quizIsPublic: quizData.isPublic ?? false,
             score,
             correctCount,
-            totalCount: questions.filter((q: any) => q.type !== 'essay').length,
+            totalCount: questions.filter((q: FirestoreQuizQuestion) => q.type !== 'essay').length,
             earnedExp,
             answers: userAnswers,
             questionScores: questionScoreMap,
@@ -1421,17 +1423,17 @@ export default function QuizResultPage() {
                               {/* 혼합 형식 (mixed) */}
                               {firstResult.passageMixedExamples && firstResult.passageMixedExamples.length > 0 && (
                                 <div className="space-y-2">
-                                  {firstResult.passageMixedExamples.map((block: any) => (
+                                  {firstResult.passageMixedExamples.map((block: MixedExampleBlock) => (
                                     <div key={block.id}>
                                       {block.type === 'grouped' && (
                                         <div className="space-y-1">
-                                          {(block.children || []).map((child: any) => (
+                                          {(block.children || []).map((child: MixedExampleBlock) => (
                                             <div key={child.id}>
                                               {child.type === 'text' && <p className="text-sm text-[#5C5C5C] whitespace-pre-wrap">{child.content}</p>}
-                                              {child.type === 'labeled' && (child.items || []).map((i: any) => (
+                                              {child.type === 'labeled' && (child.items || []).map((i: LabeledItem) => (
                                                 <p key={i.id} className="text-sm"><span className="font-bold">{i.label}.</span> {i.content}</p>
                                               ))}
-                                              {child.type === 'gana' && (child.items || []).map((i: any) => (
+                                              {child.type === 'gana' && (child.items || []).map((i: LabeledItem) => (
                                                 <p key={i.id} className="text-sm"><span className="font-bold">({i.label})</span> {i.content}</p>
                                               ))}
                                               {child.type === 'image' && child.imageUrl && <Image src={child.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto" unoptimized />}
@@ -1442,14 +1444,14 @@ export default function QuizResultPage() {
                                       {block.type === 'text' && <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{block.content}</p>}
                                       {block.type === 'labeled' && (
                                         <div className="space-y-1">
-                                          {(block.items || []).map((i: any) => (
+                                          {(block.items || []).map((i: LabeledItem) => (
                                             <p key={i.id} className="text-sm"><span className="font-bold">{i.label}.</span> {i.content}</p>
                                           ))}
                                         </div>
                                       )}
                                       {block.type === 'gana' && (
                                         <div className="space-y-1">
-                                          {(block.items || []).map((i: any) => (
+                                          {(block.items || []).map((i: LabeledItem) => (
                                             <p key={i.id} className="text-sm"><span className="font-bold">({i.label})</span> {i.content}</p>
                                           ))}
                                         </div>

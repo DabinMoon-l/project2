@@ -2,6 +2,46 @@
  * 퀴즈 결과 페이지 타입 정의
  */
 
+import type { MixedExampleBlock } from '@/components/quiz/create/questionTypes';
+
+/** Firestore에서 가져온 퀴즈 문제 데이터 (이전/현재 형식 호환) */
+export interface FirestoreQuizQuestion {
+  id?: string;
+  type: string;
+  text?: string;
+  question?: string;
+  choices?: string[];
+  options?: string[];
+  correctAnswer?: string | number | number[];
+  answer?: string | number | number[];
+  explanation?: string;
+  choiceExplanations?: string[];
+  rubric?: Array<{ criteria: string; percentage: number; description?: string }>;
+  image?: string;
+  imageUrl?: string;
+  /** @deprecated 제시문(passageBlocks)으로 대체됨 */
+  examples?: string[] | { type?: string; items?: string[] };
+  /** @deprecated 제시문(passageBlocks)으로 대체됨 */
+  koreanAbcExamples?: Array<{ text: string }>;
+  mixedExamples?: MixedExampleBlock[];
+  subQuestionOptions?: string[];
+  subQuestionOptionsType?: 'text' | 'labeled' | 'mixed';
+  subQuestionImage?: string;
+  passagePrompt?: string;
+  bogi?: { questionText?: string; items: Array<{ label: string; content: string }> } | null;
+  combinedGroupId?: string;
+  combinedIndex?: number;
+  combinedTotal?: number;
+  passageType?: string;
+  passage?: string;
+  passageImage?: string;
+  koreanAbcItems?: string[];
+  commonQuestion?: string;
+  passageMixedExamples?: MixedExampleBlock[];
+  chapterId?: string;
+  chapterDetailId?: string;
+}
+
 /**
  * 문제 결과 타입
  */
@@ -33,8 +73,7 @@ export interface QuestionResult {
   /** 결합형 ㄱㄴㄷ 보기 항목 */
   koreanAbcItems?: string[];
   /** 결합형 공통 지문 혼합 보기 */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  passageMixedExamples?: any[];
+  passageMixedExamples?: MixedExampleBlock[];
   /** 결합형 공통 문제 */
   commonQuestion?: string;
   /** 문제 이미지 */
@@ -44,22 +83,7 @@ export interface QuestionResult {
   /** 보기 타입 */
   subQuestionOptionsType?: 'text' | 'labeled' | 'mixed';
   /** 혼합 보기 원본 데이터 (렌더링용) */
-  mixedExamples?: Array<{
-    id: string;
-    type: 'text' | 'labeled' | 'gana' | 'image' | 'grouped';
-    label?: string;
-    content?: string;
-    items?: Array<{ id: string; label: string; content: string }>;
-    imageUrl?: string;
-    children?: Array<{
-      id: string;
-      type: 'text' | 'labeled' | 'gana' | 'image';
-      label?: string;
-      content?: string;
-      items?: Array<{ id: string; label: string; content: string }>;
-      imageUrl?: string;
-    }>;
-  }>;
+  mixedExamples?: MixedExampleBlock[];
   /** 하위 문제 이미지 */
   subQuestionImage?: string;
   /** 챕터 ID */
@@ -106,5 +130,5 @@ export interface QuizResultData {
   totalCount: number;
   earnedExp: number;
   questionResults: QuestionResult[];
-  quizUpdatedAt?: any; // 퀴즈 수정 시간 (알림용)
+  quizUpdatedAt?: unknown; // 퀴즈 수정 시간 (Firestore Timestamp 또는 알림용)
 }
