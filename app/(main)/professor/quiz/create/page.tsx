@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/lib/firebase';
-import { uploadBase64ToStorage } from '@/lib/utils/quizImageUpload';
+import { uploadBase64ToStorage, sanitizeForFirestore } from '@/lib/utils/quizImageUpload';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse } from '@/lib/contexts';
 import { useProfessorQuiz, type QuizInput, type Difficulty } from '@/lib/hooks/useProfessorQuiz';
@@ -221,35 +221,12 @@ export default function ProfessorQuizCreatePage() {
   }, [extractedImages]);
 
   /**
-   * 데이터 정리
-   */
-  const cleanDataForStorage = useCallback((data: unknown): unknown => {
-    if (data === null || data === undefined) return null;
-    if (Array.isArray(data)) {
-      return data.map(item => cleanDataForStorage(item)).filter(item => item !== null && item !== undefined);
-    }
-    if (typeof data === 'object') {
-      const cleaned: Record<string, unknown> = {};
-      for (const key in data as Record<string, unknown>) {
-        const value = (data as Record<string, unknown>)[key];
-        if (value !== undefined && typeof value !== 'function' && !(value instanceof File)) {
-          const cleanedValue = cleanDataForStorage(value);
-          if (cleanedValue !== null && cleanedValue !== undefined) {
-            cleaned[key] = cleanedValue;
-          }
-        }
-      }
-      return Object.keys(cleaned).length > 0 ? cleaned : null;
-    }
-    return data;
-  }, []);
-
-  /**
    * 초안 저장
    */
   const saveDraft = useCallback(() => {
     try {
-      const cleanedQuestions = cleanDataForStorage(questions) || [];
+      // 공용 sanitizeForFirestore로 데이터 정리 후 저장
+      const cleanedQuestions = sanitizeForFirestore(questions) || [];
       const draftData = {
         step,
         questions: cleanedQuestions,
@@ -269,7 +246,7 @@ export default function ProfessorQuizCreatePage() {
       console.error('초안 저장 실패:', err);
       return false;
     }
-  }, [step, questions, quizType, pastYear, pastExamType, selectedCourseId, title, description, difficulty, tags, cleanDataForStorage]);
+  }, [step, questions, quizType, pastYear, pastExamType, selectedCourseId, title, description, difficulty, tags]);
 
   /**
    * 초안 불러오기

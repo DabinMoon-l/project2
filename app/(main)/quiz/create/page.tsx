@@ -193,39 +193,13 @@ export default function QuizCreatePage() {
   }, [extractedImages]);
 
   /**
-   * 데이터 정리 (undefined, null, 빈 배열 제거)
-   * localStorage와 Firestore 모두 직렬화 가능한 데이터만 허용
-   */
-  const cleanDataForStorage = useCallback((data: unknown): unknown => {
-    if (data === null || data === undefined) return null;
-    if (Array.isArray(data)) {
-      return data.map(item => cleanDataForStorage(item)).filter(item => item !== null && item !== undefined);
-    }
-    if (typeof data === 'object') {
-      const cleaned: Record<string, unknown> = {};
-      for (const key in data as Record<string, unknown>) {
-        const value = (data as Record<string, unknown>)[key];
-        // undefined, 함수, File 객체 제외
-        if (value !== undefined && typeof value !== 'function' && !(value instanceof File)) {
-          const cleanedValue = cleanDataForStorage(value);
-          if (cleanedValue !== null && cleanedValue !== undefined) {
-            cleaned[key] = cleanedValue;
-          }
-        }
-      }
-      return Object.keys(cleaned).length > 0 ? cleaned : null;
-    }
-    return data;
-  }, []);
-
-  /**
    * 초안 저장
    */
   const saveDraft = useCallback(() => {
     try {
-      // 데이터 정리 후 저장
-      const cleanedQuestions = cleanDataForStorage(questions) || [];
-      const cleanedMeta = cleanDataForStorage(quizMeta) || {};
+      // 공용 sanitizeForFirestore로 데이터 정리 후 저장
+      const cleanedQuestions = sanitizeForFirestore(questions) || [];
+      const cleanedMeta = sanitizeForFirestore(quizMeta) || {};
 
       const draftData = {
         step,
@@ -239,7 +213,7 @@ export default function QuizCreatePage() {
       console.error('초안 저장 실패:', err);
       return false;
     }
-  }, [step, questions, quizMeta, cleanDataForStorage]);
+  }, [step, questions, quizMeta]);
 
   /**
    * 초안 불러오기

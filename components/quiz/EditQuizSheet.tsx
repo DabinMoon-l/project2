@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { doc, getDoc, updateDoc, serverTimestamp, Timestamp, db } from '@/lib/repositories';
 import { auth } from '@/lib/firebase';
+import { sanitizeForFirestore } from '@/lib/utils/quizImageUpload';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse } from '@/lib/contexts';
 import dynamic from 'next/dynamic';
@@ -388,41 +389,6 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
     if ((original.explanation || '') !== (current.explanation || '')) return true;
     if ((original.imageUrl || null) !== (current.image || null)) return true;
     return false;
-  };
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Firestore 직렬화는 임의 구조를 다루므로 unknown 사용
-  const sanitizeForFirestore = (obj: unknown, depth = 0): unknown => {
-    if (depth > 20) return null;
-    if (obj === null || obj === undefined) return null;
-    if (typeof obj === 'string' || typeof obj === 'number' || typeof obj === 'boolean') return obj;
-    if (obj instanceof Timestamp) return obj;
-    if (obj instanceof Date) return Timestamp.fromDate(obj);
-    if (typeof obj === 'object' && obj !== null && 'seconds' in obj && 'nanoseconds' in obj && Object.keys(obj).length === 2) {
-      try { return new Timestamp((obj as { seconds: number }).seconds, (obj as { nanoseconds: number }).nanoseconds); } catch { return null; }
-    }
-    if (typeof File !== 'undefined' && obj instanceof File) return null;
-    if (typeof Blob !== 'undefined' && obj instanceof Blob) return null;
-    if (typeof obj === 'function') return null;
-    if (Array.isArray(obj)) {
-      return obj.map(item => sanitizeForFirestore(item, depth + 1)).filter(item => item !== undefined);
-    }
-    if (typeof obj === 'object') {
-      const o = obj as Record<string, unknown>;
-      if (o.constructor && o.constructor !== Object && o.constructor.name !== 'Object') {
-        if (obj instanceof Map) return sanitizeForFirestore(Object.fromEntries(obj), depth + 1);
-        if (obj instanceof Set) return sanitizeForFirestore(Array.from(obj), depth + 1);
-        return null;
-      }
-      const result: Record<string, unknown> = {};
-      for (const [key, value] of Object.entries(o)) {
-        if (value !== undefined) {
-          const sanitizedValue = sanitizeForFirestore(value, depth + 1);
-          if (sanitizedValue !== undefined) result[key] = sanitizedValue;
-        }
-      }
-      return Object.keys(result).length > 0 ? result : null;
-    }
-    return obj;
   };
 
   // 퀴즈 저장

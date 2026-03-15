@@ -107,11 +107,27 @@ export async function processQuizImages(
 }
 
 /**
- * Firestore 호환성을 위한 데이터 정리 (중첩 배열, base64 잔여물 제거)
+ * Firestore/localStorage 호환성을 위한 범용 데이터 정리 유틸리티
+ *
+ * 처리 항목:
+ * - undefined, null → null 변환
+ * - base64 이미지 문자열 → null (업로드 누락 감지)
+ * - File, Blob, 함수 → null (직렬화 불가)
+ * - Firestore Timestamp / Date → Timestamp 변환
+ * - Timestamp-like 객체 ({seconds, nanoseconds}) → Timestamp 변환
+ * - Map → Object, Set → Array 변환
+ * - 중첩 배열 → 쉼표 구분 문자열로 평탄화 (Firestore 제한)
+ * - 비순수 객체 (커스텀 클래스 등) → null
+ * - 빈 객체 → null
+ * - 무한 재귀 방지 (깊이 20 제한)
  */
-export function sanitizeForFirestore(data: unknown, path: string = ''): unknown {
+export function sanitizeForFirestore(data: unknown, path: string = '', depth: number = 0): unknown {
+  // 무한 재귀 방지
+  if (depth > 20) return null;
+
   if (data === null || data === undefined) return null;
 
+  // 원시 타입 (string은 base64 검사 필요)
   if (typeof data === 'string') {
     if (data.startsWith('data:image/')) {
       console.warn(`[경고] ${path}: 업로드되지 않은 base64 이미지 발견 - null로 대체`);
@@ -119,28 +135,106 @@ export function sanitizeForFirestore(data: unknown, path: string = ''): unknown 
     }
     return data;
   }
+  if (typeof data === 'number' || typeof data === 'boolean') return data;
 
+  // 직렬화 불가능한 타입 제거
+  if (typeof data === 'function') return null;
+  if (typeof File !== 'undefined' && data instanceof File) return null;
+  if (typeof Blob !== 'undefined' && data instanceof Blob) return null;
+
+  // Firestore Timestamp 유지
+  if (isTimestamp(data)) return data;
+
+  // Date → Timestamp 변환
+  if (data instanceof Date) {
+    return dateToTimestamp(data);
+  }
+
+  // Timestamp-like 객체 ({seconds, nanoseconds}) 변환
+  if (isTimestampLike(data)) {
+    return timestampLikeToTimestamp(data);
+  }
+
+  // 배열 처리 (null/undefined 필터 + 중첩 배열 평탄화)
   if (Array.isArray(data)) {
     return data
       .filter((item) => item !== undefined && item !== null)
       .map((item, idx) => {
+        // 중첩 배열 → 쉼표 구분 문자열 (Firestore는 중첩 배열 비허용)
         if (Array.isArray(item)) {
           return item.filter(i => i != null).join(', ');
         }
-        return sanitizeForFirestore(item, `${path}[${idx}]`);
-      });
+        return sanitizeForFirestore(item, `${path}[${idx}]`, depth + 1);
+      })
+      .filter(item => item !== undefined);
   }
 
+  // 객체 처리
   if (typeof data === 'object') {
-    const sanitized: Record<string, unknown> = {};
-    for (const key of Object.keys(data as Record<string, unknown>)) {
-      const value = (data as Record<string, unknown>)[key];
+    const o = data as Record<string, unknown>;
+
+    // Map/Set 변환
+    if (data instanceof Map) return sanitizeForFirestore(Object.fromEntries(data), path, depth + 1);
+    if (data instanceof Set) return sanitizeForFirestore(Array.from(data), path, depth + 1);
+
+    // 비순수 객체 (커스텀 클래스 인스턴스 등) 제거
+    if (o.constructor && o.constructor !== Object && o.constructor.name !== 'Object') {
+      return null;
+    }
+
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(o)) {
       if (value !== undefined) {
-        sanitized[key] = sanitizeForFirestore(value, path ? `${path}.${key}` : key);
+        const sanitizedValue = sanitizeForFirestore(value, path ? `${path}.${key}` : key, depth + 1);
+        if (sanitizedValue !== undefined) {
+          result[key] = sanitizedValue;
+        }
       }
     }
-    return sanitized;
+    return Object.keys(result).length > 0 ? result : null;
   }
 
   return data;
+}
+
+// --- Timestamp 헬퍼 (동적 import 없이 런타임 감지) ---
+
+/** Firestore Timestamp 인스턴스인지 확인 */
+function isTimestamp(obj: unknown): boolean {
+  return (
+    obj !== null &&
+    typeof obj === 'object' &&
+    'toDate' in (obj as Record<string, unknown>) &&
+    'seconds' in (obj as Record<string, unknown>) &&
+    'nanoseconds' in (obj as Record<string, unknown>)
+  );
+}
+
+/** Timestamp-like 평문 객체인지 확인 ({seconds, nanoseconds} 2개 키만) */
+function isTimestampLike(obj: unknown): obj is { seconds: number; nanoseconds: number } {
+  if (obj === null || typeof obj !== 'object') return false;
+  const keys = Object.keys(obj as Record<string, unknown>);
+  return keys.length === 2 && 'seconds' in (obj as Record<string, unknown>) && 'nanoseconds' in (obj as Record<string, unknown>);
+}
+
+/** Date → Firestore Timestamp 변환 (런타임에 Timestamp 클래스 사용 가능할 때만) */
+function dateToTimestamp(date: Date): unknown {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Timestamp } = require('firebase/firestore');
+    return Timestamp.fromDate(date);
+  } catch {
+    return date;
+  }
+}
+
+/** Timestamp-like 객체 → Firestore Timestamp 변환 */
+function timestampLikeToTimestamp(obj: { seconds: number; nanoseconds: number }): unknown {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Timestamp } = require('firebase/firestore');
+    return new Timestamp(obj.seconds, obj.nanoseconds);
+  } catch {
+    return null;
+  }
 }
