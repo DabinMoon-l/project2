@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { memo, useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useTheme } from '@/styles/themes/useTheme';
 import { ImageViewer } from '@/components/common';
@@ -170,7 +170,7 @@ function CommentImageGallery({
 /**
  * 댓글 아이템 컴포넌트 (대댓글 지원, 수정 기능 포함)
  */
-export default function CommentItem({
+function CommentItem({
   comment,
   currentUserId,
   onDelete,
@@ -683,3 +683,5 @@ export default function CommentItem({
     </motion.div>
   );
 }
+
+export default memo(CommentItem);

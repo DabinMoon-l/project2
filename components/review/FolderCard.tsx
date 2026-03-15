@@ -1,12 +1,13 @@
 'use client';
 
+import { memo } from 'react';
 import { motion } from 'framer-motion';
 import { SPRING_TAP, TAP_SCALE } from '@/lib/constants/springs';
 
 /**
  * 폴더 카드 컴포넌트
  */
-export default function FolderCard({
+function FolderCard({
   title,
   count,
   onClick,
@@ -127,3 +128,5 @@ export default function FolderCard({
     </motion.div>
   );
 }
+
+export default memo(FolderCard);
