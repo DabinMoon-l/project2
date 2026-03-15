@@ -31,7 +31,6 @@
     "react-d3-cloud": "^1.0.6",
     "react-dom": "^19",
     "react-window": "^2.2.7",
-    "tesseract.js": "^5.0.4",
     "web-vitals": "^4.0.0"
   },
   "devDependencies": {
