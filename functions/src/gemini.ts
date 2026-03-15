@@ -279,8 +279,6 @@ STEP 3. 자체 검증 (필수)
     .map((p: any) => p.text)
     .join("");
 
-  console.log("Gemini 응답 텍스트:", textContent);
-
   // JSON 추출 (```json ... ``` 또는 순수 JSON)
   let jsonText = textContent;
 
@@ -621,8 +619,6 @@ async function extractKeywordsWithGeminiApi(
     .filter((p: any) => p.text)
     .map((p: any) => p.text)
     .join("");
-
-  console.log("Gemini 키워드 응답:", textContent);
 
   // JSON 추출
   let jsonText = textContent;
