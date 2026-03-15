@@ -6,9 +6,10 @@ import Image from 'next/image';
 import OXChoice, { OXAnswer } from './OXChoice';
 import MultipleChoice from './MultipleChoice';
 import ShortAnswer from './ShortAnswer';
-import { Question, MixedExampleItem, LabeledItem } from './QuestionCard';
+import { Question, LabeledItem } from './QuestionCard';
 import { formatChapterLabel } from '@/lib/courseIndex';
 import { FeedbackIcon, InlineFeedbackPanel } from '@/components/common/InlineFeedback';
+import MixedExamplesRenderer from '@/components/common/MixedExamplesRenderer';
 
 /**
  * 답안 타입
@@ -133,72 +134,8 @@ export default function CombinedQuestionGroup({
 
         {/* 공통 지문 - 혼합 형식 */}
         {passageMixedExamples && passageMixedExamples.length > 0 && (
-          <div className="mb-4 space-y-2">
-            {passageMixedExamples.map((block: MixedExampleItem) => (
-              <div key={block.id}>
-                {/* 묶음 블록 */}
-                {block.type === 'grouped' && (
-                  <div className="p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A] space-y-1">
-                    {(block.children || []).map((child: MixedExampleItem) => (
-                      <div key={child.id}>
-                        {child.type === 'text' && child.content?.trim() && (
-                          <p className="text-[#5C5C5C] text-sm whitespace-pre-wrap">{child.content}</p>
-                        )}
-                        {child.type === 'labeled' && (child.items || []).filter((i: LabeledItem) => i.content?.trim()).map((item: LabeledItem) => (
-                          <p key={item.label} className="text-[#1A1A1A] text-sm">
-                            <span className="font-bold mr-1">{item.label}.</span>
-                            {item.content}
-                          </p>
-                        ))}
-                        {child.type === 'gana' && (child.items || []).filter((i: LabeledItem) => i.content?.trim()).map((item: LabeledItem) => (
-                          <p key={item.label} className="text-[#1A1A1A] text-sm">
-                            <span className="font-bold mr-1">({item.label})</span>
-                            {item.content}
-                          </p>
-                        ))}
-                        {child.type === 'image' && child.imageUrl && (
-                          <img src={child.imageUrl} alt="보기 이미지" className="max-w-full h-auto border border-[#1A1A1A]" />
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {/* 텍스트 블록 */}
-                {block.type === 'text' && block.content?.trim() && (
-                  <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
-                    <p className="text-[#1A1A1A] text-sm whitespace-pre-wrap">{block.content}</p>
-                  </div>
-                )}
-                {/* ㄱㄴㄷ 블록 */}
-                {block.type === 'labeled' && (block.items || []).length > 0 && (
-                  <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
-                    {(block.items || []).filter((i: LabeledItem) => i.content?.trim()).map((item: LabeledItem) => (
-                      <p key={item.label} className="text-[#1A1A1A] text-sm">
-                        <span className="font-bold mr-1">{item.label}.</span>
-                        {item.content}
-                      </p>
-                    ))}
-                  </div>
-                )}
-                {/* (가)(나)(다) 블록 */}
-                {block.type === 'gana' && (block.items || []).length > 0 && (
-                  <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
-                    {(block.items || []).filter((i: LabeledItem) => i.content?.trim()).map((item: LabeledItem) => (
-                      <p key={item.label} className="text-[#1A1A1A] text-sm">
-                        <span className="font-bold mr-1">({item.label})</span>
-                        {item.content}
-                      </p>
-                    ))}
-                  </div>
-                )}
-                {/* 이미지 블록 */}
-                {block.type === 'image' && block.imageUrl && (
-                  <div className="border border-[#1A1A1A] overflow-hidden">
-                    <img src={block.imageUrl} alt="보기 이미지" className="max-w-full h-auto" />
-                  </div>
-                )}
-              </div>
-            ))}
+          <div className="mb-4">
+            <MixedExamplesRenderer blocks={passageMixedExamples} spacing="loose" textSize="sm" blockWrapper="passage" groupedBorderThick />
           </div>
         )}
 

@@ -25,7 +25,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse, useMilestone } from '@/lib/contexts';
 import { formatChapterLabel } from '@/lib/courseIndex';
 import type { QuestionResult, ResultDisplayItem, QuizResultData, FirestoreQuizQuestion } from './resultTypes';
-import type { MixedExampleBlock, LabeledItem } from '@/components/quiz/create/questionTypes';
+import MixedExamplesRenderer from '@/components/common/MixedExamplesRenderer';
 import type { FieldValue } from '@/lib/repositories/firebase/firestoreBase';
 
 /**
@@ -1422,44 +1422,7 @@ export default function QuizResultPage() {
                               )}
                               {/* 혼합 형식 (mixed) */}
                               {firstResult.passageMixedExamples && firstResult.passageMixedExamples.length > 0 && (
-                                <div className="space-y-2">
-                                  {firstResult.passageMixedExamples.map((block: MixedExampleBlock) => (
-                                    <div key={block.id}>
-                                      {block.type === 'grouped' && (
-                                        <div className="space-y-1">
-                                          {(block.children || []).map((child: MixedExampleBlock) => (
-                                            <div key={child.id}>
-                                              {child.type === 'text' && <p className="text-sm text-[#5C5C5C] whitespace-pre-wrap">{child.content}</p>}
-                                              {child.type === 'labeled' && (child.items || []).map((i: LabeledItem) => (
-                                                <p key={i.id} className="text-sm"><span className="font-bold">{i.label}.</span> {i.content}</p>
-                                              ))}
-                                              {child.type === 'gana' && (child.items || []).map((i: LabeledItem) => (
-                                                <p key={i.id} className="text-sm"><span className="font-bold">({i.label})</span> {i.content}</p>
-                                              ))}
-                                              {child.type === 'image' && child.imageUrl && <Image src={child.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto" unoptimized />}
-                                            </div>
-                                          ))}
-                                        </div>
-                                      )}
-                                      {block.type === 'text' && <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{block.content}</p>}
-                                      {block.type === 'labeled' && (
-                                        <div className="space-y-1">
-                                          {(block.items || []).map((i: LabeledItem) => (
-                                            <p key={i.id} className="text-sm"><span className="font-bold">{i.label}.</span> {i.content}</p>
-                                          ))}
-                                        </div>
-                                      )}
-                                      {block.type === 'gana' && (
-                                        <div className="space-y-1">
-                                          {(block.items || []).map((i: LabeledItem) => (
-                                            <p key={i.id} className="text-sm"><span className="font-bold">({i.label})</span> {i.content}</p>
-                                          ))}
-                                        </div>
-                                      )}
-                                      {block.type === 'image' && block.imageUrl && <Image src={block.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto" unoptimized />}
-                                    </div>
-                                  ))}
-                                </div>
+                                <MixedExamplesRenderer blocks={firstResult.passageMixedExamples} spacing="loose" textSize="sm" filterEmpty={false} imageRenderer="next-image" />
                               )}
                               {/* 이미지 */}
                               {firstResult.passageImage && (

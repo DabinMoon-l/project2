@@ -8,17 +8,7 @@ import { BottomSheet } from '@/components/common';
 import { type FeedbackType, FEEDBACK_TYPES } from '@/components/review/types';
 import { choiceLabels, KOREAN_LABELS } from '@/lib/utils/reviewQuestionUtils';
 import { formatChapterLabel } from '@/lib/courseIndex';
-
-
-/** 혼합 지문 블록 (passageMixedExamples용) */
-interface ReviewMixedBlock {
-  id: string;
-  type: string;
-  content?: string;
-  items?: Array<{ id: string; label: string; content: string }>;
-  imageUrl?: string;
-  children?: ReviewMixedBlock[];
-}
+import MixedExamplesRenderer from '@/components/common/MixedExamplesRenderer';
 
 export interface QuestionCardProps {
   item: ReviewItem;
@@ -293,44 +283,7 @@ export default function QuestionCard({
                         )}
                         {/* 혼합 형식 */}
                         {item.passageMixedExamples && item.passageMixedExamples.length > 0 && (
-                          <div className="space-y-2">
-                            {item.passageMixedExamples.map((block: ReviewMixedBlock) => (
-                              <div key={block.id}>
-                                {block.type === 'grouped' && (
-                                  <div className="space-y-1">
-                                    {(block.children || []).map((child: ReviewMixedBlock) => (
-                                      <div key={child.id}>
-                                        {child.type === 'text' && <p className="text-sm text-[#5C5C5C] whitespace-pre-wrap">{child.content}</p>}
-                                        {child.type === 'labeled' && (child.items || []).map((i: { id: string; label: string; content: string }) => (
-                                          <p key={i.id} className="text-sm"><span className="font-bold">{i.label}.</span> {i.content}</p>
-                                        ))}
-                                        {child.type === 'gana' && (child.items || []).map((i: { id: string; label: string; content: string }) => (
-                                          <p key={i.id} className="text-sm"><span className="font-bold">({i.label})</span> {i.content}</p>
-                                        ))}
-                                        {child.type === 'image' && child.imageUrl && <Image src={child.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto" unoptimized />}
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                                {block.type === 'text' && <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{block.content}</p>}
-                                {block.type === 'labeled' && (
-                                  <div className="space-y-1">
-                                    {(block.items || []).map((i: { id: string; label: string; content: string }) => (
-                                      <p key={i.id} className="text-sm"><span className="font-bold">{i.label}.</span> {i.content}</p>
-                                    ))}
-                                  </div>
-                                )}
-                                {block.type === 'gana' && (
-                                  <div className="space-y-1">
-                                    {(block.items || []).map((i: { id: string; label: string; content: string }) => (
-                                      <p key={i.id} className="text-sm"><span className="font-bold">({i.label})</span> {i.content}</p>
-                                    ))}
-                                  </div>
-                                )}
-                                {block.type === 'image' && block.imageUrl && <Image src={block.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto" unoptimized />}
-                              </div>
-                            ))}
-                          </div>
+                          <MixedExamplesRenderer blocks={item.passageMixedExamples} spacing="loose" textSize="sm" filterEmpty={false} imageRenderer="next-image" />
                         )}
                         {/* 이미지 */}
                         {item.passageImage && (
