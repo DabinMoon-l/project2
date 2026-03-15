@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { callFunction } from '@/lib/api';
-import { reauthenticate, changePassword } from '@/lib/auth';
 import {
   collection,
   addDoc,
@@ -14,9 +13,7 @@ import {
   limit,
   onSnapshot,
   doc,
-  getDoc,
   updateDoc,
-  setDoc,
   deleteDoc,
   serverTimestamp,
   where,
@@ -26,7 +23,6 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { useUser } from '@/lib/contexts/UserContext';
 import { useCourse } from '@/lib/contexts';
 import { useMilestone } from '@/lib/contexts';
-import { COURSE_INDEXES } from '@/lib/courseIndex';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 import {
   useSettings,
@@ -34,7 +30,6 @@ import {
   DEFAULT_SETTINGS,
 } from '@/lib/hooks/useSettings';
 import { calculateMilestoneInfo } from '@/components/home/StatsCard';
-import { auth } from '@/lib/firebase';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 import { useHideNav } from '@/lib/hooks/useHideNav';
 import {
@@ -47,6 +42,11 @@ import {
   GlassModal,
 } from './profileDrawerParts';
 import type { Inquiry, ProfileDrawerProps } from './profileDrawerParts';
+import RecoveryEmailModal from './profileDrawerModals/RecoveryEmailModal';
+import PasswordChangeModal from './profileDrawerModals/PasswordChangeModal';
+import PasswordResetModal from './profileDrawerModals/PasswordResetModal';
+import TekkenSettingsModal from './profileDrawerModals/TekkenSettingsModal';
+import AccountDeletionDialog from './profileDrawerModals/AccountDeletionDialog';
 
 /**
  * 글래스모피즘 프로필/설정 바텀시트
@@ -78,51 +78,13 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
 
   const [selectedClass, setSelectedClass] = useState<'A' | 'B' | 'C' | 'D'>('A');
 
-  // Account 섹션 상태
+  // Account 섹션 — 모달 열림/닫힘 토글 (내부 상태는 각 모달 컴포넌트에서 관리)
   const [showRecoveryModal, setShowRecoveryModal] = useState(false);
-  const [recoveryEmail, setRecoveryEmail] = useState('');
-  const [recoveryPassword, setRecoveryPassword] = useState('');
-  const [recoveryMessage, setRecoveryMessage] = useState('');
-  const [savingRecovery, setSavingRecovery] = useState(false);
-  const [passwordVerified, setPasswordVerified] = useState(false);
-
-  const [verificationSent, setVerificationSent] = useState(false);
-  const [verificationCode, setVerificationCode] = useState('');
-  const [verifyingCode, setVerifyingCode] = useState(false);
-
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [passwordError, setPasswordError] = useState('');
-  const [savingPassword, setSavingPassword] = useState(false);
-
   const [showResetModal, setShowResetModal] = useState(false);
-  const [resetCode, setResetCode] = useState('');
-  const [resetCodeSent, setResetCodeSent] = useState(false);
-  const [resetCodeVerified, setResetCodeVerified] = useState(false);
-  const [resetNewPassword, setResetNewPassword] = useState('');
-  const [resetConfirmPassword, setResetConfirmPassword] = useState('');
-  const [resetLoading, setResetLoading] = useState(false);
-  const [resetMessage, setResetMessage] = useState('');
-  const [resetMaskedEmail, setResetMaskedEmail] = useState('');
-
   const [showCacheConfirm, setShowCacheConfirm] = useState(false);
   const [showTekkenSettings, setShowTekkenSettings] = useState(false);
-  type TekkenCourseTab = 'biology' | 'pathophysiology' | 'microbiology';
-  const [tekkenCourse, setTekkenCourse] = useState<TekkenCourseTab>('microbiology');
-  const [tekkenChapters, setTekkenChapters] = useState<Record<TekkenCourseTab, string[]>>({
-    biology: ['1', '2', '3', '4', '5', '6'],
-    pathophysiology: ['3', '4', '5', '7', '8', '9', '10', '11'],
-    microbiology: ['1', '2', '3', '4', '5'],
-  });
-  const [tekkenLoading, setTekkenLoading] = useState(false);
-  const [tekkenSaving, setTekkenSaving] = useState(false);
-  const tekkenLoadedRef = useRef<Set<string>>(new Set());
-
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleteInput, setDeleteInput] = useState('');
-  const [deletingAccount, setDeletingAccount] = useState(false);
 
   const [showInquiryModal, setShowInquiryModal] = useState(false);
   const [inquiryMessage, setInquiryMessage] = useState('');
@@ -314,156 +276,6 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
     }
   }, [logout, onClose]);
 
-  // 비밀번호 확인 후 이메일 인증 진행
-  const handleRecoveryPasswordCheck = useCallback(async () => {
-    if (!auth.currentUser?.email || !recoveryPassword) return;
-    setSavingRecovery(true);
-    setRecoveryMessage('');
-    try {
-      await reauthenticate(recoveryPassword);
-      setPasswordVerified(true);
-      setRecoveryMessage('');
-    } catch {
-      setRecoveryMessage('비밀번호가 올바르지 않습니다.');
-    } finally {
-      setSavingRecovery(false);
-    }
-  }, [recoveryPassword]);
-
-  // 복구 이메일 인증 코드 전송
-  const handleSendVerification = useCallback(async () => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(recoveryEmail)) {
-      setRecoveryMessage('유효하지 않은 이메일 형식입니다.');
-      return;
-    }
-    setSavingRecovery(true);
-    setRecoveryMessage('');
-    try {
-      const result = await callFunction('updateRecoveryEmail', { recoveryEmail });
-      if (result.needsVerification) {
-        setVerificationSent(true);
-        setRecoveryMessage('');
-      }
-    } catch {
-      setRecoveryMessage('인증 코드 전송에 실패했습니다.');
-    } finally {
-      setSavingRecovery(false);
-    }
-  }, [recoveryEmail]);
-
-  // 복구 이메일 인증 코드 확인
-  const handleVerifyCode = useCallback(async () => {
-    setVerifyingCode(true);
-    setRecoveryMessage('');
-    try {
-      await callFunction('updateRecoveryEmail', { recoveryEmail, verificationCode });
-      setRecoveryMessage('복구 이메일이 등록되었습니다.');
-      setTimeout(() => {
-        setShowRecoveryModal(false);
-        setRecoveryEmail('');
-        setRecoveryMessage('');
-        setVerificationSent(false);
-        setVerificationCode('');
-      }, 1200);
-    } catch {
-      setRecoveryMessage('인증 코드가 올바르지 않습니다.');
-    } finally {
-      setVerifyingCode(false);
-    }
-  }, [recoveryEmail, verificationCode]);
-
-  // 비밀번호 변경
-  const handlePasswordChange = useCallback(async () => {
-    if (newPassword.length < 6) {
-      setPasswordError('비밀번호는 6자 이상이어야 합니다.');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setPasswordError('새 비밀번호가 일치하지 않습니다.');
-      return;
-    }
-    if (!auth.currentUser?.email) return;
-    setSavingPassword(true);
-    setPasswordError('');
-    try {
-      await changePassword(currentPassword, newPassword);
-      setPasswordError('');
-      setShowPasswordModal(false);
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-    } catch (err: unknown) {
-      const fbErr = err as { code?: string };
-      if (fbErr.code === 'auth/wrong-password' || fbErr.code === 'auth/invalid-credential') {
-        setPasswordError('현재 비밀번호가 올바르지 않습니다.');
-      } else {
-        setPasswordError('비밀번호 변경에 실패했습니다.');
-      }
-    } finally {
-      setSavingPassword(false);
-    }
-  }, [currentPassword, newPassword, confirmPassword]);
-
-  // 비밀번호 찾기 모달 열기 + 인증 코드 전송
-  const handleOpenResetModal = useCallback(async () => {
-    setShowPasswordModal(false);
-    setShowResetModal(true);
-    setResetCode('');
-    setResetCodeSent(false);
-    setResetCodeVerified(false);
-    setResetNewPassword('');
-    setResetConfirmPassword('');
-    setResetMessage('');
-    setResetMaskedEmail('');
-    setResetLoading(true);
-    try {
-      const result = await callFunction('requestPasswordReset', {});
-      if (result.codeSent) {
-        setResetCodeSent(true);
-        setResetMaskedEmail(result.maskedEmail || '');
-      } else {
-        setResetMessage(result.message || '');
-      }
-    } catch {
-      setResetMessage('인증 코드 전송에 실패했습니다.');
-    } finally {
-      setResetLoading(false);
-    }
-  }, []);
-
-  // 비밀번호 찾기 — 인증 코드 확인
-  const handleVerifyResetCode = useCallback(async () => {
-    if (resetCode.length !== 6) return;
-    setResetCodeVerified(true);
-    setResetMessage('');
-  }, [resetCode]);
-
-  // 비밀번호 찾기 — 새 비밀번호 저장
-  const handleResetNewPassword = useCallback(async () => {
-    if (resetNewPassword.length < 6) {
-      setResetMessage('비밀번호는 6자 이상이어야 합니다.');
-      return;
-    }
-    if (resetNewPassword !== resetConfirmPassword) {
-      setResetMessage('새 비밀번호가 일치하지 않습니다.');
-      return;
-    }
-    setResetLoading(true);
-    setResetMessage('');
-    try {
-      const result = await callFunction('requestPasswordReset', { verificationCode: resetCode, newPassword: resetNewPassword });
-      setResetMessage(result.message || '');
-      setTimeout(() => {
-        setShowResetModal(false);
-      }, 1200);
-    } catch {
-      setResetMessage('비밀번호 변경에 실패했습니다. 인증 코드를 확인해주세요.');
-      setResetCodeVerified(false);
-    } finally {
-      setResetLoading(false);
-    }
-  }, [resetCode, resetNewPassword, resetConfirmPassword]);
 
   // 캐시 초기화
   const handleClearCache = useCallback(async () => {
@@ -483,22 +295,6 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
     }
     window.location.reload();
   }, []);
-
-  // 계정 삭제
-  const handleDeleteAccount = useCallback(async () => {
-    if (deleteInput !== '삭제') return;
-    setDeletingAccount(true);
-    try {
-      await callFunction('deleteStudentAccount');
-      // CF에서 서버측 Auth 삭제 완료 → 클라이언트 로그아웃으로 즉시 인증 상태 초기화
-      // onAuthStateChanged가 null 감지 → useRequireAuth가 /login으로 리다이렉트
-      onClose();
-      await logout();
-    } catch (err) {
-      console.error('계정 삭제 실패:', err);
-      setDeletingAccount(false);
-    }
-  }, [deleteInput, onClose, logout]);
 
   // 문의하기
   const handleSendInquiry = useCallback(async () => {
@@ -565,52 +361,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
     }
   }, [adminResetStudentId, adminResetPassword, userCourseId]);
 
-  // 배틀 퀴즈 챕터 설정 로드
-  const loadTekkenChapters = useCallback(async (courseId: string) => {
-    if (tekkenLoadedRef.current.has(courseId)) return;
-    try {
-      const snap = await getDoc(doc(db, 'settings', 'tekken', 'courses', courseId));
-      if (snap.exists()) {
-        const data = snap.data();
-        if (data?.chapters && Array.isArray(data.chapters) && data.chapters.length > 0) {
-          setTekkenChapters(prev => ({ ...prev, [courseId]: data.chapters }));
-        }
-      }
-      tekkenLoadedRef.current.add(courseId);
-    } catch (err) {
-      console.error('챕터 로드 실패:', err);
-    }
-  }, []);
-
-  // 배틀 퀴즈 챕터 전체 저장 (저장 버튼 클릭 시)
-  const saveTekkenChapters = useCallback(async () => {
-    setTekkenSaving(true);
-    try {
-      const courses: TekkenCourseTab[] = ['biology', 'pathophysiology', 'microbiology'];
-      await Promise.all(courses.map(cid =>
-        setDoc(doc(db, 'settings', 'tekken', 'courses', cid), { chapters: tekkenChapters[cid] }, { merge: true })
-      ));
-      alert('저장 완료! 다음 새벽부터 적용됩니다.');
-      setShowTekkenSettings(false);
-    } catch (err) {
-      console.error('챕터 저장 실패:', err);
-      alert('저장 실패');
-    } finally {
-      setTekkenSaving(false);
-    }
-  }, [tekkenChapters]);
-
-  // 배틀 퀴즈 설정 열릴 때 로드
-  useEffect(() => {
-    if (!showTekkenSettings) return;
-    setTekkenLoading(true);
-    loadTekkenChapters(tekkenCourse).finally(() => setTekkenLoading(false));
-  }, [showTekkenSettings, tekkenCourse, loadTekkenChapters]);
-
   if (!profile) return null;
-
-  const tekkenCourseIndex = COURSE_INDEXES[tekkenCourse];
-  const tekkenChapterList = tekkenCourseIndex?.chapters || [];
 
   return (
     <AnimatePresence>
@@ -781,15 +532,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                     {/* 복구 이메일 (학생만) */}
                     {!isProfessor && (
                       <button
-                        onClick={() => {
-                          setRecoveryEmail('');
-                          setRecoveryPassword('');
-                          setRecoveryMessage('');
-                          setPasswordVerified(!profile.recoveryEmail);
-                          setVerificationSent(false);
-                          setVerificationCode('');
-                          setShowRecoveryModal(true);
-                        }}
+                        onClick={() => setShowRecoveryModal(true)}
                         className="w-full flex items-center justify-between py-2.5"
                       >
                         <div className="text-left">
@@ -806,14 +549,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
 
                     {/* 비밀번호 변경 */}
                     <button
-                      onClick={() => {
-                        setCurrentPassword('');
-                        setNewPassword('');
-                        setConfirmPassword('');
-                        setPasswordError('');
-                        setResetMessage('');
-                        setShowPasswordModal(true);
-                      }}
+                      onClick={() => setShowPasswordModal(true)}
                       className="w-full flex items-center justify-between py-2.5"
                     >
                       <span className="text-sm text-white/80">비밀번호 변경</span>
@@ -1029,10 +765,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                 {/* 계정 삭제 (학생만) */}
                 {!isProfessor && (
                   <button
-                    onClick={() => {
-                      setDeleteInput('');
-                      setShowDeleteConfirm(true);
-                    }}
+                    onClick={() => setShowDeleteConfirm(true)}
                     className="w-full mt-3 text-center text-xs text-red-400/60 hover:text-red-400/80 transition-colors py-2"
                   >
                     계정 삭제
@@ -1308,303 +1041,30 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
           </AnimatePresence>
 
           {/* 복구 이메일 모달 */}
-          <AnimatePresence>
-            {showRecoveryModal && (
-              <GlassModal onClose={() => {
-                setShowRecoveryModal(false);
-                setPasswordVerified(false);
-                setVerificationSent(false);
-                setVerificationCode('');
-                setRecoveryPassword('');
-                setRecoveryMessage('');
-              }}>
-                <h3 className="text-base font-bold text-white mb-1">복구 이메일</h3>
-                <p className="text-xs text-white/40 mb-4">비밀번호 찾기에 사용됩니다</p>
-
-                {!passwordVerified ? (
-                  <>
-                    <p className="text-xs text-white/50 mb-2">
-                      본인 확인을 위해 비밀번호를 입력해주세요
-                    </p>
-                    <input
-                      type="password"
-                      value={recoveryPassword}
-                      onChange={(e) => {
-                        setRecoveryPassword(e.target.value);
-                        setRecoveryMessage('');
-                      }}
-                      placeholder="현재 비밀번호"
-                      className="w-full px-3 py-2 rounded-xl outline-none text-sm bg-white/10 text-white placeholder:text-white/40 border border-white/15"
-                    />
-                  </>
-                ) : (
-                  <>
-                    {maskedRecovery && !verificationSent && (
-                      <p className="text-xs text-white/50 mb-2">
-                        현재: {maskedRecovery}
-                      </p>
-                    )}
-
-                    <input
-                      type="email"
-                      value={recoveryEmail}
-                      onChange={(e) => {
-                        setRecoveryEmail(e.target.value);
-                        setRecoveryMessage('');
-                      }}
-                      placeholder="이메일 주소"
-                      disabled={verificationSent}
-                      className="w-full px-3 py-2 rounded-xl outline-none text-sm bg-white/10 text-white placeholder:text-white/40 border border-white/15 disabled:opacity-50"
-                    />
-
-                    {verificationSent && (
-                      <div className="mt-3">
-                        <p className="text-xs text-white/50 mb-2">
-                          인증 코드가 전송되었습니다
-                        </p>
-                        <input
-                          type="text"
-                          value={verificationCode}
-                          onChange={(e) => {
-                            setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6));
-                            setRecoveryMessage('');
-                          }}
-                          placeholder="인증 코드 6자리"
-                          maxLength={6}
-                          inputMode="numeric"
-                          className="w-full px-3 py-2 rounded-xl outline-none text-sm bg-white/10 text-white placeholder:text-white/40 border border-white/15 text-center tracking-[0.3em]"
-                        />
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {recoveryMessage && (
-                  <p className={`text-xs mt-2 ${recoveryMessage.includes('등록') ? 'text-green-300' : 'text-red-300'}`}>
-                    {recoveryMessage}
-                  </p>
-                )}
-
-                <div className="flex gap-3 mt-4">
-                  <button
-                    onClick={() => {
-                      setShowRecoveryModal(false);
-                      setPasswordVerified(false);
-                      setVerificationSent(false);
-                      setVerificationCode('');
-                      setRecoveryPassword('');
-                      setRecoveryMessage('');
-                    }}
-                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/15 text-white hover:bg-white/20 transition-colors"
-                  >
-                    취소
-                  </button>
-                  {!passwordVerified ? (
-                    <button
-                      onClick={handleRecoveryPasswordCheck}
-                      disabled={savingRecovery || !recoveryPassword}
-                      className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
-                    >
-                      {savingRecovery ? '확인 중...' : '확인'}
-                    </button>
-                  ) : verificationSent ? (
-                    <button
-                      onClick={handleVerifyCode}
-                      disabled={verifyingCode || verificationCode.length !== 6}
-                      className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
-                    >
-                      {verifyingCode ? '확인 중...' : '인증 완료'}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handleSendVerification}
-                      disabled={savingRecovery || !recoveryEmail}
-                      className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
-                    >
-                      {savingRecovery ? '전송 중...' : '인증 코드 전송'}
-                    </button>
-                  )}
-                </div>
-              </GlassModal>
-            )}
-          </AnimatePresence>
+          <RecoveryEmailModal
+            isOpen={showRecoveryModal}
+            onClose={() => setShowRecoveryModal(false)}
+            maskedRecovery={maskedRecovery}
+            profile={profile}
+          />
 
           {/* 비밀번호 변경 모달 */}
-          <AnimatePresence>
-            {showPasswordModal && (
-              <GlassModal onClose={() => setShowPasswordModal(false)}>
-                <h3 className="text-base font-bold text-white mb-3">비밀번호 변경</h3>
-
-                <div className="space-y-3">
-                  <input
-                    type="password"
-                    value={currentPassword}
-                    onChange={(e) => {
-                      setCurrentPassword(e.target.value);
-                      setPasswordError('');
-                    }}
-                    placeholder="현재 비밀번호"
-                    className="w-full px-3 py-2 rounded-xl outline-none text-sm bg-white/10 text-white placeholder:text-white/40 border border-white/15"
-                  />
-                  <input
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => {
-                      setNewPassword(e.target.value);
-                      setPasswordError('');
-                    }}
-                    placeholder="새 비밀번호 (6자 이상)"
-                    className="w-full px-3 py-2 rounded-xl outline-none text-sm bg-white/10 text-white placeholder:text-white/40 border border-white/15"
-                  />
-                  <input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => {
-                      setConfirmPassword(e.target.value);
-                      setPasswordError('');
-                    }}
-                    placeholder="새 비밀번호 확인"
-                    className="w-full px-3 py-2 rounded-xl outline-none text-sm bg-white/10 text-white placeholder:text-white/40 border border-white/15"
-                  />
-                </div>
-                {passwordError && (
-                  <p className="text-xs mt-2 text-red-300">{passwordError}</p>
-                )}
-                {!isProfessor && (
-                  <div className="mt-3">
-                    <button
-                      type="button"
-                      onClick={handleOpenResetModal}
-                      className="text-xs text-white/40 hover:text-white/60 transition-colors"
-                    >
-                      비밀번호를 잊으셨나요?
-                    </button>
-                    <p className="text-xs text-white/30 mt-1.5">
-                      문의를 통해 비밀번호를 초기화한 경우 123456으로 설정됩니다.
-                    </p>
-                  </div>
-                )}
-                <div className="flex gap-3 mt-4">
-                  <button
-                    onClick={() => setShowPasswordModal(false)}
-                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/15 text-white hover:bg-white/20 transition-colors"
-                  >
-                    취소
-                  </button>
-                  <button
-                    onClick={handlePasswordChange}
-                    disabled={savingPassword || !currentPassword || newPassword.length < 6}
-                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
-                  >
-                    {savingPassword ? '변경 중...' : '변경'}
-                  </button>
-                </div>
-              </GlassModal>
-            )}
-          </AnimatePresence>
+          <PasswordChangeModal
+            isOpen={showPasswordModal}
+            onClose={() => setShowPasswordModal(false)}
+            onForgotPassword={() => {
+              setShowPasswordModal(false);
+              setShowResetModal(true);
+            }}
+            isProfessor={isProfessor}
+          />
 
           {/* 비밀번호 재설정 모달 (인증코드 → 새 비밀번호) */}
-          <AnimatePresence>
-            {showResetModal && (
-              <GlassModal onClose={() => setShowResetModal(false)}>
-                <h3 className="text-base font-bold text-white mb-1">비밀번호 재설정</h3>
-
-                {resetLoading && !resetCodeSent && (
-                  <div className="flex items-center gap-2 py-6 justify-center">
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white/80 rounded-full animate-spin" />
-                    <span className="text-sm text-white/50">인증 코드 전송 중...</span>
-                  </div>
-                )}
-
-                {!resetCodeSent && !resetLoading && (
-                  <p className="text-sm text-white/50 py-4">{resetMessage || '복구 이메일이 필요합니다.'}</p>
-                )}
-
-                {resetCodeSent && !resetCodeVerified && (
-                  <>
-                    <p className="text-xs text-white/40 mb-4">
-                      {resetMaskedEmail}로 인증 코드를 보냈습니다
-                    </p>
-                    <input
-                      type="text"
-                      value={resetCode}
-                      onChange={(e) => {
-                        setResetCode(e.target.value.replace(/\D/g, '').slice(0, 6));
-                        setResetMessage('');
-                      }}
-                      placeholder="인증 코드 6자리"
-                      maxLength={6}
-                      inputMode="numeric"
-                      className="w-full px-3 py-2 rounded-xl outline-none text-sm bg-white/10 text-white placeholder:text-white/40 border border-white/15 text-center tracking-[0.3em]"
-                    />
-                  </>
-                )}
-
-                {resetCodeVerified && (
-                  <>
-                    <p className="text-xs text-white/40 mb-4">새 비밀번호를 입력하세요</p>
-                    <div className="space-y-3">
-                      <input
-                        type="password"
-                        value={resetNewPassword}
-                        onChange={(e) => {
-                          setResetNewPassword(e.target.value);
-                          setResetMessage('');
-                        }}
-                        placeholder="새 비밀번호 (6자 이상)"
-                        className="w-full px-3 py-2 rounded-xl outline-none text-sm bg-white/10 text-white placeholder:text-white/40 border border-white/15"
-                      />
-                      <input
-                        type="password"
-                        value={resetConfirmPassword}
-                        onChange={(e) => {
-                          setResetConfirmPassword(e.target.value);
-                          setResetMessage('');
-                        }}
-                        placeholder="새 비밀번호 확인"
-                        className="w-full px-3 py-2 rounded-xl outline-none text-sm bg-white/10 text-white placeholder:text-white/40 border border-white/15"
-                      />
-                    </div>
-                  </>
-                )}
-
-                {resetMessage && (
-                  <p className={`text-xs mt-2 ${resetMessage.includes('변경되었') ? 'text-green-300' : 'text-red-300'}`}>
-                    {resetMessage}
-                  </p>
-                )}
-
-                {(resetCodeSent || (!resetLoading && !resetCodeSent)) && (
-                  <div className="flex gap-3 mt-4">
-                    <button
-                      onClick={() => setShowResetModal(false)}
-                      className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/15 text-white hover:bg-white/20 transition-colors"
-                    >
-                      취소
-                    </button>
-                    {resetCodeSent && !resetCodeVerified && (
-                      <button
-                        onClick={handleVerifyResetCode}
-                        disabled={resetCode.length !== 6}
-                        className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
-                      >
-                        확인
-                      </button>
-                    )}
-                    {resetCodeVerified && (
-                      <button
-                        onClick={handleResetNewPassword}
-                        disabled={resetLoading || resetNewPassword.length < 6}
-                        className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
-                      >
-                        {resetLoading ? '변경 중...' : '변경'}
-                      </button>
-                    )}
-                  </div>
-                )}
-              </GlassModal>
-            )}
-          </AnimatePresence>
+          <PasswordResetModal
+            isOpen={showResetModal}
+            onClose={() => setShowResetModal(false)}
+            profile={profile}
+          />
 
           {/* 캐시 초기화 확인 모달 */}
           <AnimatePresence>
@@ -1678,156 +1138,16 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
           </AnimatePresence>
 
           {/* 계정 삭제 확인 모달 */}
-          <AnimatePresence>
-            {showDeleteConfirm && (
-              <GlassModal onClose={() => setShowDeleteConfirm(false)}>
-                <h3 className="text-lg font-bold text-red-300 mb-2">계정 삭제</h3>
-                <p className="text-sm text-white/60 mb-1">
-                  계정을 삭제하면 모든 데이터가 영구 삭제됩니다.
-                </p>
-                <p className="text-sm text-white/60 mb-4">
-                  같은 학번으로 다시 가입할 수 있습니다.
-                </p>
-                <div className="mb-4">
-                  <p className="text-xs text-white/40 mb-2">
-                    확인을 위해 &quot;삭제&quot;를 입력하세요
-                  </p>
-                  <input
-                    type="text"
-                    value={deleteInput}
-                    onChange={(e) => setDeleteInput(e.target.value)}
-                    placeholder="삭제"
-                    className="w-full px-3 py-2 rounded-xl outline-none text-sm bg-white/10 text-white placeholder:text-white/40 border border-red-400/30"
-                  />
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setShowDeleteConfirm(false)}
-                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/15 text-white hover:bg-white/20 transition-colors"
-                  >
-                    취소
-                  </button>
-                  <button
-                    onClick={handleDeleteAccount}
-                    disabled={deletingAccount || deleteInput !== '삭제'}
-                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-red-500/30 border border-red-400/30 text-red-200 hover:bg-red-500/40 transition-colors disabled:opacity-50"
-                  >
-                    {deletingAccount ? '삭제 중...' : '계정 삭제'}
-                  </button>
-                </div>
-              </GlassModal>
-            )}
-          </AnimatePresence>
+          <AccountDeletionDialog
+            isOpen={showDeleteConfirm}
+            onClose={() => setShowDeleteConfirm(false)}
+          />
 
           {/* 배틀 퀴즈 챕터 설정 (교수 전용) */}
-          <AnimatePresence>
-            {showTekkenSettings && isProfessor && (
-              <GlassModal onClose={() => setShowTekkenSettings(false)}>
-                <h3 className="text-base font-bold text-white mb-1">배틀 퀴즈 범위</h3>
-                <p className="text-xs text-white/40 mb-3">선택한 챕터에서 배틀 문제가 출제됩니다</p>
-
-                {/* 과목 탭 */}
-                <div className="flex gap-1.5 mb-3 justify-center">
-                  {(['biology', 'pathophysiology', 'microbiology'] as const).map(cid => (
-                    <button
-                      key={cid}
-                      onClick={() => setTekkenCourse(cid)}
-                      className={`px-2.5 py-1 rounded-full text-xs font-bold transition-colors ${
-                        tekkenCourse === cid
-                          ? 'bg-white/30 text-white'
-                          : 'bg-white/10 text-white/50'
-                      }`}
-                    >
-                      {{ biology: '생물학', pathophysiology: '병태생리학', microbiology: '미생물학' }[cid]}
-                    </button>
-                  ))}
-                </div>
-
-                {/* 전체 선택 */}
-                <div className="flex justify-end mb-1.5">
-                  <button
-                    onClick={() => {
-                      const allNums = tekkenChapterList.map(c => c.name.split('.')[0].trim());
-                      const current = tekkenChapters[tekkenCourse];
-                      const isAll = allNums.every(n => current.includes(n));
-                      const next = isAll ? [allNums[0]] : allNums;
-                      setTekkenChapters(prev => ({ ...prev, [tekkenCourse]: next }));
-                    }}
-                    className="text-xs text-white/50 underline underline-offset-2"
-                  >
-                    {tekkenChapterList.length > 0 &&
-                     tekkenChapterList.every(c => tekkenChapters[tekkenCourse].includes(c.name.split('.')[0].trim()))
-                      ? '전체 해제'
-                      : '전체 선택'}
-                  </button>
-                </div>
-
-                {/* 챕터 목록 */}
-                {tekkenLoading ? (
-                  <div className="flex items-center justify-center py-6">
-                    <div className="w-4 h-4 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
-                  </div>
-                ) : (
-                  <div className="space-y-1 max-h-[35vh] overflow-y-auto">
-                    {tekkenChapterList.map(chapter => {
-                      const num = chapter.name.split('.')[0].trim();
-                      const checked = tekkenChapters[tekkenCourse].includes(num);
-                      return (
-                        <button
-                          key={chapter.id}
-                          onClick={() => {
-                            const current = tekkenChapters[tekkenCourse];
-                            if (checked && current.length <= 1) return;
-                            const next = checked
-                              ? current.filter(c => c !== num)
-                              : [...current, num];
-                            setTekkenChapters(prev => ({ ...prev, [tekkenCourse]: next }));
-                          }}
-                          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-xs font-medium transition-colors ${
-                            checked
-                              ? 'bg-white/25 text-white'
-                              : 'bg-white/8 text-white/50'
-                          }`}
-                        >
-                          <div className={`w-4 h-4 rounded flex-shrink-0 flex items-center justify-center border ${
-                            checked ? 'bg-white/80 border-white/80' : 'border-white/30'
-                          }`}>
-                            {checked && (
-                              <svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M20 6L9 17l-5-5" />
-                              </svg>
-                            )}
-                          </div>
-                          <span className="truncate">{chapter.name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* 저장 / 취소 */}
-                <div className="flex gap-3 mt-4">
-                  <button
-                    onClick={() => {
-                      // 취소 시 로드된 캐시 초기화 (다시 열면 Firestore에서 재로드)
-                      tekkenLoadedRef.current.clear();
-                      setShowTekkenSettings(false);
-                    }}
-                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/15 text-white hover:bg-white/20 transition-colors"
-                  >
-                    취소
-                  </button>
-                  <button
-                    disabled={tekkenSaving}
-                    onClick={saveTekkenChapters}
-                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
-                  >
-                    {tekkenSaving ? '저장 중...' : '저장'}
-                  </button>
-                </div>
-              </GlassModal>
-            )}
-          </AnimatePresence>
+          <TekkenSettingsModal
+            isOpen={showTekkenSettings}
+            onClose={() => setShowTekkenSettings(false)}
+          />
         </>
       )}
     </AnimatePresence>
