@@ -222,7 +222,6 @@ export default function ProfessorHomeOverlay() {
         backgroundRepeat: 'no-repeat',
         backgroundColor: '#C8A090',
         paddingTop: 'env(safe-area-inset-top, 0px)',
-        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         transform: getTransform(),
         opacity: getOpacity(),
         borderRadius: `${getRadius()}px`,
