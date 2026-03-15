@@ -12,6 +12,32 @@
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 
+/** Firestore 퀴즈 문제 필드 (reviews 생성에 필요한 부분) */
+interface QuizQuestionData {
+  id?: string;
+  type?: string;
+  text?: string;
+  choices?: string[];
+  explanation?: string;
+  image?: string;
+  chapterId?: string;
+  chapterDetailId?: string;
+  choiceExplanations?: string[];
+  imageUrl?: string;
+  combinedGroupId?: string;
+  combinedIndex?: number;
+  combinedTotal?: number;
+  passage?: string;
+  passageType?: string;
+  passageImage?: string;
+  koreanAbcItems?: unknown;
+  passageMixedExamples?: unknown;
+  commonQuestion?: string;
+  combinedMainText?: string;
+  bogi?: unknown;
+  mixedExamples?: unknown;
+}
+
 const db = getFirestore();
 
 export const generateReviewsOnResult = onDocumentCreated(
@@ -48,12 +74,14 @@ export const generateReviewsOnResult = onDocumentCreated(
     }
 
     const quizData = quizDoc.data()!;
-    const questions: any[] = quizData.questions || [];
+    const questions: QuizQuestionData[] = quizData.questions || [];
 
     if (questions.length === 0) return;
 
     // ── 기존 reviews 삭제 (재시도 시 중복 방지) ──
     // 같은 userId + quizId의 기존 reviews를 삭제한 뒤 새로 생성
+    let restoredBookmarkedQuestionIds: Set<string> | null = null;
+    let restoredPreservedReviewCounts: Map<string, { count: number; lastAt: FirebaseFirestore.Timestamp | null }> | null = null;
     const existingReviews = await db.collection("reviews")
       .where("userId", "==", userId)
       .where("quizId", "==", quizId)
@@ -62,7 +90,7 @@ export const generateReviewsOnResult = onDocumentCreated(
     if (!existingReviews.empty) {
       // 기존 reviews의 isBookmarked + reviewCount 보존 (복습 기록 유지)
       const bookmarkedQuestionIds = new Set<string>();
-      const preservedReviewCounts = new Map<string, { count: number; lastAt: any }>();
+      const preservedReviewCounts = new Map<string, { count: number; lastAt: FirebaseFirestore.Timestamp | null }>();
       existingReviews.docs.forEach(d => {
         const data = d.data();
         if (data.isBookmarked) {
@@ -95,14 +123,14 @@ export const generateReviewsOnResult = onDocumentCreated(
       }
 
       // 보존된 데이터를 아래에서 사용 (클로저 캡처)
-      (result as any)._bookmarkedQuestionIds = bookmarkedQuestionIds;
-      (result as any)._preservedReviewCounts = preservedReviewCounts;
+      restoredBookmarkedQuestionIds = bookmarkedQuestionIds;
+      restoredPreservedReviewCounts = preservedReviewCounts;
     }
 
     const bookmarkedQuestionIds: Set<string> =
-      (result as any)._bookmarkedQuestionIds || new Set<string>();
-    const preservedReviewCounts: Map<string, { count: number; lastAt: any }> =
-      (result as any)._preservedReviewCounts || new Map();
+      restoredBookmarkedQuestionIds || new Set<string>();
+    const preservedReviewCounts: Map<string, { count: number; lastAt: FirebaseFirestore.Timestamp | null }> =
+      restoredPreservedReviewCounts || new Map();
 
     // reviews 배치 생성
     const batch = db.batch();
@@ -120,7 +148,7 @@ export const generateReviewsOnResult = onDocumentCreated(
       // 기존 복습 기록 복원 (퀴즈 재시도 시 리셋 방지)
       const preserved = preservedReviewCounts.get(qId);
 
-      const reviewBase: Record<string, any> = {
+      const reviewBase: Record<string, unknown> = {
         userId,
         quizId,
         quizTitle: quizData.title || "",

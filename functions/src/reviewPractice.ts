@@ -79,8 +79,8 @@ export const recordReviewPractice = onCall(
         }
         tx.set(lockRef, { userId, quizId, lockedAt: Date.now() });
       });
-    } catch (e: any) {
-      if (e.message === "SUBMIT_LOCKED") {
+    } catch (e: unknown) {
+      if (e instanceof Error && e.message === "SUBMIT_LOCKED") {
         return { success: true, expRewarded: 0, alreadyRewarded: true };
       }
       throw e;

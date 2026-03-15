@@ -144,10 +144,17 @@ export const generateMonthlyReport = onCall(
       throw new HttpsError("not-found", `${monthLabel}에 해당하는 주별 통계가 없습니다.`);
     }
 
-    const weeklyData: any[] = weeksSnap.docs.map(d => ({
+    interface WeeklyStatEntry {
+      label: string;
+      quiz?: { newCount?: number };
+      feedback?: { total?: number };
+      student?: { activeCount?: number };
+      [key: string]: unknown;
+    }
+    const weeklyData: WeeklyStatEntry[] = weeksSnap.docs.map(d => ({
       label: d.id,
       ...d.data(),
-    }));
+    } as WeeklyStatEntry));
     const weekLabels = weeksSnap.docs.map(d => d.id);
 
     // Claude Sonnet 프롬프트 생성

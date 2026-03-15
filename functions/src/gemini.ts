@@ -242,9 +242,9 @@ STEP 3. 자체 검증 (필수)
         signal: controller.signal,
       }
     );
-  } catch (err: any) {
+  } catch (err: unknown) {
     clearTimeout(timeout);
-    if (err.name === "AbortError") {
+    if (err instanceof Error && err.name === "AbortError") {
       throw new Error("Gemini API 요청 시간 초과 (60초)");
     }
     throw err;
@@ -262,7 +262,15 @@ STEP 3. 자체 검증 (필수)
     throw new Error(`Gemini API 오류: ${response.status}`);
   }
 
-  const result = await response.json() as any;
+  interface GeminiResponse {
+    candidates?: Array<{
+      content?: {
+        parts: Array<{ text?: string }>;
+      };
+    }>;
+  }
+
+  const result = await response.json() as GeminiResponse;
 
   // 응답 파싱
   if (
@@ -275,8 +283,8 @@ STEP 3. 자체 검증 (필수)
   }
 
   const textContent = result.candidates[0].content.parts
-    .filter((p: any) => p.text)
-    .map((p: any) => p.text)
+    .filter((p) => p.text)
+    .map((p) => p.text)
     .join("");
 
   // JSON 추출 (```json ... ``` 또는 순수 JSON)
@@ -590,9 +598,9 @@ async function extractKeywordsWithGeminiApi(
         signal: controller2.signal,
       }
     );
-  } catch (err: any) {
+  } catch (err: unknown) {
     clearTimeout(timeout2);
-    if (err.name === "AbortError") {
+    if (err instanceof Error && err.name === "AbortError") {
       throw new Error("Gemini API 키워드 추출 시간 초과 (30초)");
     }
     throw err;
@@ -605,7 +613,15 @@ async function extractKeywordsWithGeminiApi(
     throw new Error(`Gemini API 오류: ${response2.status}`);
   }
 
-  const result = (await response2.json()) as any;
+  interface GeminiKeywordResponse {
+    candidates?: Array<{
+      content?: {
+        parts: Array<{ text?: string }>;
+      };
+    }>;
+  }
+
+  const result = (await response2.json()) as GeminiKeywordResponse;
 
   if (
     !result.candidates ||
@@ -616,8 +632,8 @@ async function extractKeywordsWithGeminiApi(
   }
 
   const textContent = result.candidates[0].content.parts
-    .filter((p: any) => p.text)
-    .map((p: any) => p.text)
+    .filter((p) => p.text)
+    .map((p) => p.text)
     .join("");
 
   // JSON 추출

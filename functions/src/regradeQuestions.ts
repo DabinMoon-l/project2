@@ -78,7 +78,13 @@ export const regradeQuestions = onCall(
     }
 
     // ── ② 수정된 문제 필터 ──
-    const questions: any[] = quizData.questions || [];
+    interface QuizQuestion {
+      id?: string;
+      type: string;
+      answer: number | number[] | string;
+      [key: string]: unknown;
+    }
+    const questions: QuizQuestion[] = quizData.questions || [];
     const changedQuestionIds = new Set(questionIds);
 
     // ── ③ 해당 퀴즈의 모든 quizResult 조회 ──
@@ -157,7 +163,7 @@ export const regradeQuestions = onCall(
       }
 
       // ── ⑤ 새 점수 계산 ──
-      const totalCount = questions.filter((q: any) => q.type !== "essay").length;
+      const totalCount = questions.filter((q: QuizQuestion) => q.type !== "essay").length;
       const newScore = totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0;
 
       // quizResults 업데이트

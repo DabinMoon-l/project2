@@ -17,7 +17,13 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { incrementShard, getShardedTotal } from "./utils/shardedCounter";
 import { checkRateLimitV2 } from "./utils/rateLimitV2";
-import { gradeQuestion, UserAnswer } from "./utils/gradeQuestion";
+import { gradeQuestion, UserAnswer, GradeableQuestion } from "./utils/gradeQuestion";
+
+/** Firestore 퀴즈 문제 (채점 가능 필드 + 메타데이터) */
+interface QuizQuestion extends GradeableQuestion {
+  id?: string;
+  [key: string]: unknown;
+}
 
 const db = getFirestore();
 
@@ -62,8 +68,8 @@ export const recordAttempt = onCall(
     // ── ① Rate limit ──
     try {
       await checkRateLimitV2(userId, "quiz-submit");
-    } catch (e: any) {
-      throw new HttpsError("resource-exhausted", e.message);
+    } catch (e: unknown) {
+      throw new HttpsError("resource-exhausted", e instanceof Error ? e.message : "요청 제한 초과");
     }
 
     // ── ②-a 제출 락 (동시 중복 제출 방지) ──
@@ -80,8 +86,8 @@ export const recordAttempt = onCall(
         }
         tx.set(lockRef, { userId, quizId, lockedAt: Date.now() });
       });
-    } catch (e: any) {
-      if (e.message === "SUBMIT_LOCKED") {
+    } catch (e: unknown) {
+      if (e instanceof Error && e.message === "SUBMIT_LOCKED") {
         // 이미 처리된 결과가 있으면 반환
         const existingResult = await db
           .collection("quizResults")
@@ -149,7 +155,7 @@ export const recordAttempt = onCall(
       throw new HttpsError("permission-denied", "이 퀴즈는 현재 비공개 상태입니다.");
     }
 
-    const questions: any[] = quizData.questions || [];
+    const questions: QuizQuestion[] = quizData.questions || [];
 
     if (questions.length === 0) {
       throw new HttpsError("failed-precondition", "문제가 없는 퀴즈입니다.");
@@ -181,7 +187,7 @@ export const recordAttempt = onCall(
     }
 
     // 서술형 제외 총 문제 수
-    const totalCount = questions.filter((q: any) => q.type !== "essay").length;
+    const totalCount = questions.filter((q) => q.type !== "essay").length;
     const score = totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0;
 
     // ── ⑤ quizResults 생성 (append-only log) ──

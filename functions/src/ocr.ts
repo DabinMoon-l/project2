@@ -139,7 +139,23 @@ async function callClovaOcr(
     throw new Error(`CLOVA OCR API 오류: ${response.status}`);
   }
 
-  const result = await response.json();
+  interface ClovaOcrImage {
+    inferResult: string;
+    message?: string;
+    fields?: Array<{
+      inferText?: string;
+      lineBreak?: boolean;
+      boundingPoly?: {
+        vertices: Array<{ x: number; y: number }>;
+      };
+    }>;
+  }
+
+  interface ClovaApiResponse {
+    images?: ClovaOcrImage[];
+  }
+
+  const result = (await response.json()) as ClovaApiResponse;
 
   // 텍스트 추출
   if (!result.images || result.images.length === 0) {
@@ -155,7 +171,7 @@ async function callClovaOcr(
   const fields = image.fields || [];
 
   // 2단 감지: x좌표 분포 분석
-  const xCoordinates = fields.map((f: any) => {
+  const xCoordinates = fields.map((f) => {
     const vertices = f.boundingPoly?.vertices;
     if (vertices && vertices.length > 0) {
       return vertices[0].x;
@@ -185,7 +201,7 @@ async function callClovaOcr(
     middleCount < fields.length * 0.2;
 
   // 필드에 좌표 정보 추가 (너비 포함)
-  const fieldsWithCoords = fields.map((f: any) => {
+  const fieldsWithCoords = fields.map((f) => {
     const vertices = f.boundingPoly?.vertices || [];
     const x = vertices[0]?.x || 0;
     const y = vertices[0]?.y || 0;
@@ -202,18 +218,18 @@ async function callClovaOcr(
     const columnDivider = minX + pageWidth * 0.5;
 
     const leftFields = fieldsWithCoords
-      .filter((f: any) => f._x < columnDivider)
-      .sort((a: any, b: any) => a._y - b._y);
+      .filter((f) => f._x < columnDivider)
+      .sort((a, b) => a._y - b._y);
 
     const rightFields = fieldsWithCoords
-      .filter((f: any) => f._x >= columnDivider)
-      .sort((a: any, b: any) => a._y - b._y);
+      .filter((f) => f._x >= columnDivider)
+      .sort((a, b) => a._y - b._y);
 
     // 좌측 먼저, 그 다음 우측
     sortedFields = [...leftFields, ...rightFields];
   } else {
     // 1단: y좌표 순서로 정렬
-    sortedFields = fieldsWithCoords.sort((a: any, b: any) => {
+    sortedFields = fieldsWithCoords.sort((a, b) => {
       // y가 비슷하면 (20px 이내) x로 정렬
       if (Math.abs(a._y - b._y) < 20) {
         return a._x - b._x;
@@ -373,8 +389,8 @@ export const runClovaOcr = onCall(
       if (ocrResult.text && geminiKey) {
         try {
           parsedV4 = await parseQuestionsV4(ocrResult.text, geminiKey);
-        } catch (parseError: any) {
-          console.error("[V4] 파싱 오류:", parseError?.message || parseError);
+        } catch (parseError: unknown) {
+          console.error("[V4] 파싱 오류:", (parseError as Error)?.message || parseError);
         }
       }
 

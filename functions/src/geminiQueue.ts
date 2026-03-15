@@ -192,7 +192,18 @@ answer는 0부터 시작하는 인덱스입니다 (0=첫 번째 선지).`;
     throw new Error(`Gemini API 오류: ${response.status}`);
   }
 
-  const result = (await response.json()) as any;
+  interface GeminiPart {
+    text?: string;
+  }
+  interface GeminiResponse {
+    candidates?: Array<{
+      content?: {
+        parts: GeminiPart[];
+      };
+    }>;
+  }
+
+  const result = (await response.json()) as GeminiResponse;
 
   if (
     !result.candidates ||
@@ -203,8 +214,8 @@ answer는 0부터 시작하는 인덱스입니다 (0=첫 번째 선지).`;
   }
 
   const textContent = result.candidates[0].content.parts
-    .filter((p: any) => p.text)
-    .map((p: any) => p.text)
+    .filter((p: GeminiPart) => p.text)
+    .map((p: GeminiPart) => p.text)
     .join("");
 
   let jsonText = textContent;

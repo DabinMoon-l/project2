@@ -184,8 +184,9 @@ export const registerStudent = onCall(
 
     // IP 기반 rate limit (학번 열거 공격 방지)
     const db0 = getFirestore();
-    const ip = (request.rawRequest as any)?.ip ||
-      (request.rawRequest as any)?.headers?.["x-forwarded-for"] || "unknown";
+    const rawReq = request.rawRequest as { ip?: string; headers?: Record<string, string | string[] | undefined> };
+    const ip = rawReq?.ip ||
+      rawReq?.headers?.["x-forwarded-for"] || "unknown";
     const ipKey = String(ip).replace(/[./:\\]/g, "_").slice(0, 60);
     const rateLimitRef = db0.collection("rateLimits_v2").doc(`register_${ipKey}`);
     const rateLimitDoc = await rateLimitRef.get();
@@ -544,8 +545,9 @@ export const requestPasswordReset = onCall(
     const adminAuth = getAuth();
 
     // IP 기반 rate limit (무차별 시도 방지)
-    const ip = (request.rawRequest as any)?.ip ||
-      (request.rawRequest as any)?.headers?.["x-forwarded-for"] || "unknown";
+    const rawReq2 = request.rawRequest as { ip?: string; headers?: Record<string, string | string[] | undefined> };
+    const ip = rawReq2?.ip ||
+      rawReq2?.headers?.["x-forwarded-for"] || "unknown";
     const ipKey = String(ip).replace(/[./:\\]/g, "_").slice(0, 60);
     const rateLimitRef = db.collection("rateLimits_v2").doc(`pwreset_${ipKey}`);
     const rateLimitDoc = await rateLimitRef.get();

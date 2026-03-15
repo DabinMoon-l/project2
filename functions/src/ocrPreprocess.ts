@@ -302,7 +302,15 @@ export async function preprocessOcrText(
       };
     }
 
-    const result = (await response.json()) as any;
+    interface GeminiResponse {
+      candidates?: Array<{
+        content?: {
+          parts: Array<{ text?: string }>;
+        };
+      }>;
+    }
+
+    const result = (await response.json()) as GeminiResponse;
 
     if (
       !result.candidates ||
@@ -317,8 +325,8 @@ export async function preprocessOcrText(
     }
 
     const textContent = result.candidates[0].content.parts
-      .filter((p: any) => p.text)
-      .map((p: any) => p.text)
+      .filter((p) => p.text)
+      .map((p) => p.text)
       .join("");
 
     console.log("[Preprocess] Gemini 응답 길이:", textContent.length);
@@ -343,17 +351,18 @@ export async function preprocessOcrText(
     }
 
     // 3. JSON 파싱 시도
-    let parsed: any;
+    let parsed: Record<string, unknown> | Record<string, unknown>[];
     try {
       parsed = JSON.parse(jsonText);
-    } catch (parseError: any) {
+    } catch (parseError: unknown) {
       // 더 자세한 에러 정보 포함
-      const errorPos = parseInt(parseError.message.match(/position (\d+)/)?.[1] || "0");
+      const parseMsg = parseError instanceof Error ? parseError.message : "";
+      const errorPos = parseInt(parseMsg.match(/position (\d+)/)?.[1] || "0");
       const contextStart = Math.max(0, errorPos - 50);
       const contextEnd = Math.min(jsonText.length, errorPos + 50);
       const errorContext = jsonText.substring(contextStart, contextEnd);
 
-      console.error("[Preprocess] JSON 파싱 실패:", parseError.message);
+      console.error("[Preprocess] JSON 파싱 실패:", parseMsg);
       console.error("[Preprocess] 전체 길이:", jsonText.length);
       console.error("[Preprocess] 에러 위치 주변:", errorContext);
 
@@ -365,19 +374,19 @@ export async function preprocessOcrText(
     }
 
     // 여러 형식 처리
-    let questionsArray: any[] = [];
+    let questionsArray: Record<string, unknown>[] = [];
 
-    if (parsed.questions && Array.isArray(parsed.questions)) {
-      // {"questions": [...]} 형식
-      questionsArray = parsed.questions;
-      console.log("[Preprocess] questions 배열 형식");
-    } else if (Array.isArray(parsed)) {
+    if (Array.isArray(parsed)) {
       // [...] 배열만 반환된 경우
       questionsArray = parsed;
       console.log("[Preprocess] 직접 배열 형식");
+    } else if (parsed.questions && Array.isArray(parsed.questions)) {
+      // {"questions": [...]} 형식
+      questionsArray = parsed.questions as Record<string, unknown>[];
+      console.log("[Preprocess] questions 배열 형식");
     } else if (parsed.data && Array.isArray(parsed.data)) {
       // {"data": [...]} 형식
-      questionsArray = parsed.data;
+      questionsArray = parsed.data as Record<string, unknown>[];
       console.log("[Preprocess] data 배열 형식");
     } else if (parsed.questionNumber !== undefined && parsed.stem) {
       // 단일 문제 객체가 반환된 경우 - 배열로 감싸기
@@ -408,17 +417,17 @@ export async function preprocessOcrText(
 
       const structured: StructuredQuestion = {
         questionNumber: q.questionNumber,
-        stem: q.stem.trim(),
+        stem: String(q.stem).trim(),
         choices: [],
       };
 
       // 선지 정규화
       if (Array.isArray(q.choices)) {
-        for (const c of q.choices) {
-          if (c.label && c.text !== undefined) {
+        for (const raw of q.choices as Record<string, unknown>[]) {
+          if (raw.label && raw.text !== undefined) {
             structured.choices.push({
-              label: normalizeChoiceLabel(c.label),
-              text: String(c.text).trim(),
+              label: normalizeChoiceLabel(String(raw.label)),
+              text: String(raw.text).trim(),
             });
           }
         }
@@ -426,10 +435,10 @@ export async function preprocessOcrText(
 
       // 보기 항목 (ㄱㄴㄷ)
       if (Array.isArray(q.boxItems)) {
-        structured.boxItems = q.boxItems
-          .filter((b: any) => b.label && b.text)
-          .map((b: any) => ({
-            label: b.label,
+        structured.boxItems = (q.boxItems as Record<string, unknown>[])
+          .filter((b) => b.label && b.text)
+          .map((b) => ({
+            label: String(b.label),
             text: String(b.text).trim(),
           }));
       }
@@ -441,14 +450,14 @@ export async function preprocessOcrText(
       }
 
       // (가)(나)(다) 형식 제시문
-      if (q.labeledPassages && typeof q.labeledPassages === "object") {
-        structured.labeledPassages = q.labeledPassages;
+      if (q.labeledPassages && typeof q.labeledPassages === "object" && !Array.isArray(q.labeledPassages)) {
+        structured.labeledPassages = q.labeledPassages as Record<string, string>;
         structured.passageType = "labeled";
       }
 
       // ◦ 항목 형식 제시문
       if (Array.isArray(q.bulletItems) && q.bulletItems.length > 0) {
-        structured.bulletItems = q.bulletItems.map((item: string) => String(item).trim());
+        structured.bulletItems = (q.bulletItems as unknown[]).map((item) => String(item).trim());
         structured.passageType = "bullet";
       }
 

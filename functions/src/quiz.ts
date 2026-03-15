@@ -59,7 +59,7 @@ export const onQuizComplete = onDocumentCreated(
 
     const { userId, quizId, correctCount, totalCount } = result;
     const isUpdate = result.isUpdate === true;
-    const isReviewPractice = (result as any).isReviewPractice === true;
+    const isReviewPractice = (result as QuizResult & { isReviewPractice?: boolean }).isReviewPractice === true;
     const quizCreatorId = result.quizCreatorId || null;
 
     // 필수 데이터 검증
@@ -125,7 +125,7 @@ export const onQuizComplete = onDocumentCreated(
     // 서버 채점 점수 검증: gradedOnServer가 true이면 score 신뢰,
     // 그렇지 않으면 (클라이언트 폴백) submissions에서 실제 점수 확인
     let verifiedScore = result.score;
-    if ((result as any).gradedOnServer !== true) {
+    if ((result as QuizResult & { gradedOnServer?: boolean }).gradedOnServer !== true) {
       // 클라이언트 생성 문서 — submissions에서 서버 채점 결과 확인
       const db2 = getFirestore();
       const subsSnap = await db2
@@ -206,7 +206,7 @@ export const onQuizComplete = onDocumentCreated(
         });
 
         // 첫 시도 + 서버 채점된 결과에만 누적 통계 업데이트 (랭킹용)
-        if (!isUpdate && correctCount !== undefined && totalCount !== undefined && (result as any).gradedOnServer === true) {
+        if (!isUpdate && correctCount !== undefined && totalCount !== undefined && (result as QuizResult & { gradedOnServer?: boolean }).gradedOnServer === true) {
           const userRef = db.collection("users").doc(userId);
           const statsUpdate: Record<string, FirebaseFirestore.FieldValue> = {
             totalCorrect: FieldValue.increment(correctCount),

@@ -13,7 +13,7 @@ import {
 import { getBaseStats } from "../utils/rabbitStats";
 import { drawQuestionsFromPool } from "../tekkenQuestionPool";
 import { getEmergencyQuestions } from "./tekkenQuestions";
-import type { GeneratedQuestion, PregenCache, PlayerSetup } from "./tekkenTypes";
+import type { GeneratedQuestion, PregenCache, PlayerSetup, BotPlayerSetup, BattleData, BattleRoundData, BattlePlayer } from "./tekkenTypes";
 
 /**
  * 플레이어 스탯 조회
@@ -77,10 +77,10 @@ export async function createBattle(
 
   const [p1Rabbits, p2Rabbits, poolQuestions] = await Promise.all([
     player1.isBot
-      ? Promise.resolve((player1 as any).rabbits || [])
+      ? Promise.resolve((player1 as BotPlayerSetup).rabbits || [])
       : getPlayerBattleRabbits(player1.userId, player1.equippedRabbits),
     player2.isBot
-      ? Promise.resolve((player2 as any).rabbits || [])
+      ? Promise.resolve((player2 as BotPlayerSetup).rabbits || [])
       : getPlayerBattleRabbits(player2.userId, player2.equippedRabbits),
     // 풀에서 문제 추출 (동기)
     humanPlayerIds.length > 0
@@ -118,7 +118,7 @@ export async function createBattle(
   }
 
   // 라운드 데이터 구성
-  const rounds: Record<string, any> = {};
+  const rounds: Record<string, Omit<BattleRoundData, 'started' | 'result' | 'answers'>> = {};
   const battleAnswersData: Record<string, number> = {};
   for (let i = 0; i < questions!.length; i++) {
     const q = questions![i];
@@ -197,7 +197,7 @@ export async function createBattle(
 export async function processRoundEnd(
   battleId: string,
   _roundIndex: number,
-  battle: any
+  battle: BattleData
 ) {
   const rtdb = getDatabase();
   const battleRef = rtdb.ref(`tekken/battles/${battleId}`);
@@ -268,7 +268,7 @@ export async function processRoundEnd(
 
   // 토끼 교체 + roundResult 전환을 단일 update로 원자적 기록
   // mash 데이터 정리 (taps/processed 등 제거, result만 보존)
-  const roundEndUpdates: Record<string, any> = {
+  const roundEndUpdates: Record<string, unknown> = {
     status: "roundResult",
     nextRound,
     "mash/taps": null,
@@ -317,7 +317,7 @@ export async function endBattle(
   if (!xpTx.committed) return; // 다른 호출이 이미 처리함
 
   const battleSnap = await battleRef.once("value");
-  const battle = battleSnap.val();
+  const battle = battleSnap.val() as BattleData | null;
 
   await battleRef.update({
     status: "finished",
@@ -332,12 +332,12 @@ export async function endBattle(
   const batch = fsDb.batch();
 
   // 인간 플레이어만 필터 + 연승 트랜잭션 병렬 실행
-  const humanEntries = Object.entries(players).filter(([, p]) => !(p as any).isBot);
+  const humanEntries = Object.entries(players as Record<string, BattlePlayer>).filter(([, p]) => !p.isBot);
   const streakResults = await Promise.all(
     humanEntries.map(async ([uid]) => {
       const isWinner = uid === winnerId;
       const streakRef = rtdb.ref(`tekken/streaks/${uid}`);
-      const txResult = await streakRef.transaction((current: any) => {
+      const txResult = await streakRef.transaction((current: { currentStreak: number; lastBattleAt: number } | null) => {
         const streak = current || { currentStreak: 0, lastBattleAt: 0 };
         const newStreak = isWinner
           ? streak.currentStreak + 1
@@ -409,7 +409,7 @@ export async function endBattle(
  */
 async function saveBattleWrongAnswers(
   battleId: string,
-  battle: any,
+  battle: BattleData | null,
   db: FirebaseFirestore.Firestore
 ) {
   if (!battle?.rounds || !battle?.players) return;
@@ -438,7 +438,7 @@ async function saveBattleWrongAnswers(
 
   for (const uid of humanPlayerIds) {
     for (const [roundIdxStr, round] of Object.entries(rounds)) {
-      const roundData = round as any;
+      const roundData = round as BattleRoundData;
       const roundIdx = parseInt(roundIdxStr, 10);
       const correctAnswer = correctAnswers[roundIdx];
       if (correctAnswer === undefined || correctAnswer === null) continue;
@@ -452,7 +452,7 @@ async function saveBattleWrongAnswers(
       const questionData = roundData.questionData;
       if (!questionData?.text || !questionData?.choices) continue;
 
-      const reviewDoc: Record<string, any> = {
+      const reviewDoc: Record<string, unknown> = {
         userId: uid,
         quizId,
         quizTitle,

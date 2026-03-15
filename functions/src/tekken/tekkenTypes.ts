@@ -34,6 +34,74 @@ export interface PregenCache {
   chapters: string[];
 }
 
+/** 배틀 토끼 스탯 */
+export interface BattleRabbit {
+  rabbitId: number;
+  name?: string;
+  discoveryOrder?: number;
+  level: number;
+  maxHp: number;
+  currentHp: number;
+  atk: number;
+  def: number;
+}
+
+/** 배틀 플레이어 정보 (RTDB 저장 형태) */
+export interface BattlePlayer {
+  nickname: string;
+  profileRabbitId: number;
+  isBot: boolean;
+  rabbits: BattleRabbit[];
+  activeRabbitIndex: number;
+  connected: boolean;
+}
+
+/** 라운드별 결과 (플레이어별) */
+export interface RoundPlayerResult {
+  isCorrect: boolean;
+  answer?: number;
+}
+
+/** 라운드 데이터 */
+export interface BattleRoundData {
+  questionData: {
+    text: string;
+    type: string;
+    choices: string[];
+    explanation?: string;
+    choiceExplanations?: string[];
+    chapterId?: string;
+  };
+  startedAt: number;
+  timeoutAt: number;
+  started?: boolean;
+  result?: Record<string, RoundPlayerResult>;
+  answers?: Record<string, { answer: number }>;
+}
+
+/** RTDB 배틀 데이터 */
+export interface BattleData {
+  status: string;
+  courseId: string;
+  createdAt: number;
+  countdownStartedAt?: number;
+  endsAt: number;
+  currentRound: number;
+  totalRounds: number;
+  rounds: Record<string, BattleRoundData>;
+  colorAssignment: Record<string, string>;
+  players: Record<string, BattlePlayer>;
+  mash?: Record<string, unknown> | null;
+  result?: {
+    xpGranted?: boolean;
+    winnerId?: string | null;
+    loserId?: string | null;
+    isDraw?: boolean;
+    endReason?: string;
+    xpByPlayer?: Record<string, number>;
+  };
+}
+
 /** 배틀 생성 시 플레이어 설정 */
 export interface PlayerSetup {
   userId: string;
@@ -41,4 +109,10 @@ export interface PlayerSetup {
   profileRabbitId: number;
   isBot: boolean;
   equippedRabbits: Array<{ rabbitId: number; courseId: string }>;
+}
+
+/** 봇 플레이어 설정 (미리 계산된 토끼 스탯 포함) */
+export interface BotPlayerSetup extends PlayerSetup {
+  isBot: true;
+  rabbits: BattleRabbit[];
 }
