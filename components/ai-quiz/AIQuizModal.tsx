@@ -2,7 +2,6 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import * as pdfjsLib from 'pdfjs-dist';
 import { callFunction } from '@/lib/api';
 import { auth } from '@/lib/firebase';
 import { useCourse } from '@/lib/contexts/CourseContext';
@@ -12,8 +11,16 @@ import ExpandModal from '@/components/common/ExpandModal';
 import type { SourceRect } from '@/lib/hooks/useExpandSource';
 import PageSelectionModal from './PageSelectionModal';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
-// PDF.js worker - CDN 사용 (버전 일치 필수)
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
+
+// pdfjs-dist 동적 import (번들 크기 최적화)
+let _pdfjsLib: typeof import('pdfjs-dist') | null = null;
+async function getPdfjs() {
+  if (!_pdfjsLib) {
+    _pdfjsLib = await import('pdfjs-dist');
+    _pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
+  }
+  return _pdfjsLib;
+}
 
 interface AIQuizModalProps {
   isOpen: boolean;
@@ -178,6 +185,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
       setPdfArrayBuffer(arrayBuffer.slice(0));
 
       // 복사본으로 PDF 로드 (원본 유지)
+      const pdfjsLib = await getPdfjs();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
 
       // 4개씩 병렬 렌더링 (메모리 절약 + 속도 균형)
@@ -287,6 +295,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
 
       // 3. pdfjs-dist로 페이지 썸네일 병렬 생성
       setLoadingMessage('페이지 로딩 중...');
+      const pdfjsLib = await getPdfjs();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
 
       // 4개씩 병렬 렌더링 (메모리 절약 + 속도 균형)
@@ -369,6 +378,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
 
     if (pdfArrayBuffer) {
       try {
+        const pdfjsLib = await getPdfjs();
         const pdf = await pdfjsLib.getDocument({ data: pdfArrayBuffer.slice(0) }).promise;
 
         const renderPromises = selectedPageNums.map(async (page) => {

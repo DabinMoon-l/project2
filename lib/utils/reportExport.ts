@@ -4,8 +4,6 @@
  * monthlyReports 데이터 + Claude insight → Excel/Word 변환 → Blob 다운로드
  */
 
-import ExcelJS from 'exceljs';
-import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
 import { saveAs } from 'file-saver';
 
 // ============================================================
@@ -48,6 +46,8 @@ export interface WeeklyStatSummary {
 // ============================================================
 
 export async function exportToExcel(data: ReportData) {
+  // exceljs 동적 import (번들 크기 최적화)
+  const ExcelJS = (await import('exceljs')).default;
   const wb = new ExcelJS.Workbook();
   wb.creator = 'RabbiTory';
   wb.created = new Date();
@@ -144,7 +144,12 @@ export async function exportToExcel(data: ReportData) {
 // ============================================================
 
 /** 마크다운 줄을 Word Paragraph로 변환 (간이 파서) */
-function mdLineToParagraph(line: string): Paragraph {
+function mdLineToParagraph(
+  line: string,
+  docx: typeof import('docx'),
+): InstanceType<typeof import('docx').Paragraph> {
+  const { Paragraph, TextRun, HeadingLevel } = docx;
+
   // 헤딩
   if (line.startsWith('### ')) {
     return new Paragraph({
@@ -169,7 +174,7 @@ function mdLineToParagraph(line: string): Paragraph {
   }
 
   // 볼드 처리 (**text**)
-  const parts: TextRun[] = [];
+  const parts: InstanceType<typeof TextRun>[] = [];
   const regex = /\*\*(.*?)\*\*/g;
   let lastIdx = 0;
   let match: RegExpExecArray | null;
@@ -204,7 +209,11 @@ function mdLineToParagraph(line: string): Paragraph {
 }
 
 export async function exportToWord(data: ReportData) {
-  const paragraphs: Paragraph[] = [];
+  // docx 동적 import (번들 크기 최적화)
+  const docx = await import('docx');
+  const { Document, Packer, Paragraph, TextRun, HeadingLevel } = docx;
+
+  const paragraphs: InstanceType<typeof Paragraph>[] = [];
 
   // 타이틀
   paragraphs.push(
@@ -267,7 +276,7 @@ export async function exportToWord(data: ReportData) {
 
   data.insight.split('\n').forEach(line => {
     if (line.trim()) {
-      paragraphs.push(mdLineToParagraph(line));
+      paragraphs.push(mdLineToParagraph(line, docx));
     } else {
       paragraphs.push(new Paragraph({ spacing: { after: 100 } }));
     }

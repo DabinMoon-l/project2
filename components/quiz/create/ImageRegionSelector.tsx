@@ -2,13 +2,17 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import * as pdfjsLib from 'pdfjs-dist';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
-// PDF.js 워커 설정
-if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
+// pdfjs-dist 동적 import (번들 크기 최적화)
+let _pdfjsLib: typeof import('pdfjs-dist') | null = null;
+async function getPdfjs() {
+  if (!_pdfjsLib) {
+    _pdfjsLib = await import('pdfjs-dist');
+    _pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
+  }
+  return _pdfjsLib;
 }
 
 // ============================================================
@@ -147,6 +151,7 @@ export default function ImageRegionSelector({
     setIsLoadingPdf(true);
     try {
       const arrayBuffer = await file.arrayBuffer();
+      const pdfjsLib = await getPdfjs();
       const pdf = await pdfjsLib.getDocument({
         data: arrayBuffer,
         cMapUrl: 'https://unpkg.com/pdfjs-dist@4.10.38/cmaps/',

@@ -30,11 +30,14 @@ const QuestionEditor = dynamic(() => import('@/components/quiz/create/QuestionEd
 const ImageCropper = dynamic(() => import('@/components/quiz/create/ImageCropper'), { ssr: false });
 const PageSelectionModal = dynamic(() => import('@/components/ai-quiz/PageSelectionModal'), { ssr: false });
 import type { ParseResult, ParsedQuestion } from '@/lib/ocr';
-import * as pdfjsLib from 'pdfjs-dist';
-
-// PDF.js worker 설정
-if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
+// pdfjs-dist 동적 import (번들 크기 최적화)
+let _pdfjsLib: typeof import('pdfjs-dist') | null = null;
+async function getPdfjs() {
+  if (!_pdfjsLib) {
+    _pdfjsLib = await import('pdfjs-dist');
+    _pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
+  }
+  return _pdfjsLib;
 }
 
 // PDF 페이지 타입
@@ -427,6 +430,7 @@ export default function ProfessorQuizCreatePage() {
         setPendingPdfFile(file);
 
         const arrayBuffer = await file.arrayBuffer();
+        const pdfjsLib = await getPdfjs();
         const pdf = await pdfjsLib.getDocument({
           data: arrayBuffer,
           cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/cmaps/',
@@ -478,6 +482,7 @@ export default function ProfessorQuizCreatePage() {
       setOcrError(null);
 
       const arrayBuffer = await pendingPdfFile.arrayBuffer();
+      const pdfjsLib = await getPdfjs();
       const pdf = await pdfjsLib.getDocument({
         data: arrayBuffer,
         cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/cmaps/',
