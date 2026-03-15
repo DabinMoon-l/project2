@@ -94,8 +94,6 @@ async function callClovaOcr(
   imageBase64: string,
   apiKey: string
 ): Promise<ClovaOcrResult> {
-  console.log(">>> callClovaOcr 함수 시작");
-
   // 이미지 포맷 감지
   let format = "jpg";
   if (imageBase64.startsWith("data:image/png")) {
@@ -143,11 +141,6 @@ async function callClovaOcr(
 
   const result = await response.json();
 
-  // ⚠️ 디버깅: API 응답 직후 즉시 로그
-  console.log(">>> CLOVA API 응답 수신됨");
-  console.log(">>> images 존재:", !!result.images);
-  console.log(">>> images 길이:", result.images?.length || 0);
-
   // 텍스트 추출
   if (!result.images || result.images.length === 0) {
     return { text: "", fields: [] };
@@ -159,35 +152,7 @@ async function callClovaOcr(
     throw new Error(`OCR 처리 실패: ${image.message || image.inferResult}`);
   }
 
-  // 🔍 디버깅: 필드 구조 상세 로그 (처음 10개)
   const fields = image.fields || [];
-  console.log("========================================");
-  console.log("CLOVA_RAW_FIELDS_START");
-  console.log("========================================");
-  console.log(`총 필드 수: ${fields.length}`);
-  console.log("처음 10개 필드 JSON:");
-  console.log(JSON.stringify(fields.slice(0, 10), null, 2));
-  console.log("========================================");
-  console.log("CLOVA_RAW_FIELDS_END");
-  console.log("========================================");
-
-  // 추가: 선지 패턴 필드 찾기
-  const choiceFields = fields.filter((f: any) =>
-    /^[①②③④⑤⑥⑦⑧]/.test(f.inferText) ||
-    /^\d+\)/.test(f.inferText)
-  );
-  console.log(`선지 패턴 필드 수: ${choiceFields.length}`);
-  if (choiceFields.length > 0) {
-    console.log("선지 필드 샘플:", JSON.stringify(choiceFields.slice(0, 5), null, 2));
-  }
-
-  fields.slice(0, 5).forEach((field: any, idx: number) => {
-    console.log(`[${idx}] text: "${field.inferText}"`);
-    console.log(`    lineBreak: ${field.lineBreak}`);
-    console.log(`    boundingPoly:`, JSON.stringify(field.boundingPoly));
-    console.log(`    기타 속성:`, Object.keys(field));
-  });
-  console.log(`총 필드 수: ${fields.length}`);
 
   // 2단 감지: x좌표 분포 분석
   const xCoordinates = fields.map((f: any) => {
@@ -198,9 +163,7 @@ async function callClovaOcr(
     return 0;
   });
 
-  // x좌표 중간값 계산
   const sortedX = [...xCoordinates].sort((a, b) => a - b);
-  const midX = sortedX[Math.floor(sortedX.length / 2)];
   const minX = sortedX[0];
   const maxX = sortedX[sortedX.length - 1];
 
@@ -220,11 +183,6 @@ async function callClovaOcr(
     leftCount >= 10 &&
     rightCount >= 10 &&
     middleCount < fields.length * 0.2;
-
-  console.log(`=== 2단 분석 ===`);
-  console.log(`페이지 너비: ${pageWidth}, 중간값: ${midX}`);
-  console.log(`좌측: ${leftCount}, 우측: ${rightCount}, 중간: ${middleCount}`);
-  console.log(`2단 문서 판정: ${isTwoColumn}`);
 
   // 필드에 좌표 정보 추가 (너비 포함)
   const fieldsWithCoords = fields.map((f: any) => {
@@ -253,7 +211,6 @@ async function callClovaOcr(
 
     // 좌측 먼저, 그 다음 우측
     sortedFields = [...leftFields, ...rightFields];
-    console.log(`좌측 필드: ${leftFields.length}, 우측 필드: ${rightFields.length}`);
   } else {
     // 1단: y좌표 순서로 정렬
     sortedFields = fieldsWithCoords.sort((a: any, b: any) => {
@@ -329,32 +286,6 @@ async function callClovaOcr(
   if (currentLine.trim()) {
     lines.push(currentLine.trim());
   }
-
-  console.log(`=== 추출된 텍스트 (처음 10줄) ===`);
-  lines.slice(0, 10).forEach((line, idx) => {
-    console.log(`[${idx}] ${line}`);
-  });
-
-  // 🔍 보기(선지) 패턴 분석
-  console.log(`=== 보기 패턴 분석 ===`);
-  const choicePatterns = [
-    /^[①②③④⑤⑥⑦⑧]/,      // 원문자
-    /^[ㄱㄴㄷㄹㅁㅂㅅㅇ]\./,  // 한글 자음
-    /^[1-9]\)/,              // 1) 2) 형식
-    /^[a-e]\)/i,             // a) b) 형식
-  ];
-
-  const choiceLines = lines.filter(line =>
-    choicePatterns.some(p => p.test(line.trim()))
-  );
-  console.log(`보기로 인식된 줄 수: ${choiceLines.length}`);
-  choiceLines.slice(0, 10).forEach((line, idx) => {
-    console.log(`  [보기${idx}] ${line}`);
-  });
-
-  // 전체 텍스트 로그 (디버깅용)
-  console.log(`=== 전체 텍스트 (${lines.length}줄) ===`);
-  console.log(lines.join("\n"));
 
   return {
     text: lines.join("\n"),
@@ -435,47 +366,16 @@ export const runClovaOcr = onCall(
       // CLOVA OCR 호출
       const ocrResult = await callClovaOcr(image, apiKey);
 
-      // ★★★ 중요: CLOVA OCR 직후 디버그 ★★★
-      console.log("★★★★★★★★★★★★★★★★★★★★★★★★★★★★");
-      console.log("★ CLOVA OCR 완료, V4 파싱 시작 직전 ★");
-      console.log("★★★★★★★★★★★★★★★★★★★★★★★★★★★★");
-
       // 문제지 파싱 V4 (Gemini 전처리 + 단순 파서) - 메인!
       let parsedV4: ParseResultV4 | null = null;
       const geminiKey = GEMINI_API_KEY.value();
 
-      // 🔍 디버그: V4 파싱 조건 확인
-      console.log(`=== V4 파싱 조건 확인 ===`);
-      console.log(`ocrResult.text 존재: ${!!ocrResult.text}`);
-      console.log(`ocrResult.text 길이: ${ocrResult.text?.length || 0}`);
-      console.log(`geminiKey 존재: ${!!geminiKey}`);
-      console.log(`geminiKey 길이: ${geminiKey?.length || 0}`);
-
       if (ocrResult.text && geminiKey) {
         try {
-          console.log(`=== 파싱 V4 시작 (Gemini 전처리) ===`);
-          console.log(`[V4] 텍스트 길이: ${ocrResult.text.length}`);
-          console.log(`[V4] API 키 앞 10자: ${geminiKey.substring(0, 10)}...`);
           parsedV4 = await parseQuestionsV4(ocrResult.text, geminiKey);
-          console.log(`[V4] 파싱 완료, success=${parsedV4?.success}, questions=${parsedV4?.questions?.length}`);
-          console.log(`=== 파싱 V4 결과 ===`);
-          console.log(`인식된 문제 수: ${parsedV4.questions.length}`);
-          parsedV4.questions.forEach((q) => {
-            console.log(`[문제 ${q.questionNumber}] type=${q.type}, choices=${q.choices.length}`);
-            console.log(`  stem: ${(q.stem || '').substring(0, 60)}...`);
-            if (q.choices.length > 0) {
-              console.log(`  choices: ${q.choices.map(c => `${c.label}:${c.text.substring(0, 15)}`).join(' | ')}`);
-            }
-          });
         } catch (parseError: any) {
-          console.error("=== V4 파싱 오류 발생 ===");
-          console.error("[V4 ERROR] 메시지:", parseError?.message || parseError);
-          console.error("[V4 ERROR] 스택:", parseError?.stack?.substring(0, 500));
+          console.error("[V4] 파싱 오류:", parseError?.message || parseError);
         }
-      } else {
-        console.log("=== V4 건너뜀 ===");
-        console.log(`[V4 SKIP] ocrResult.text 존재: ${!!ocrResult.text}, 길이: ${ocrResult.text?.length || 0}`);
-        console.log(`[V4 SKIP] geminiKey 존재: ${!!geminiKey}`);
       }
 
       // 문제지 파싱 V3 (폴백용 - 좌표 기반)
@@ -483,8 +383,6 @@ export const runClovaOcr = onCall(
       if (ocrResult.fields.length > 0) {
         try {
           parsedV3 = parseQuestionsV3(ocrResult.fields as ClovaFieldV3[]);
-          console.log(`=== 파싱 V3 결과 (폴백) ===`);
-          console.log(`인식된 문제 수: ${parsedV3.questions.length}`);
         } catch (parseError) {
           console.error("문제 파싱 V3 오류:", parseError);
         }
