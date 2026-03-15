@@ -2,9 +2,11 @@
  * QuizStatsModal 유틸리티 함수
  *
  * 문제 펼치기, 답변 변환, 정답 체크, 타임스탬프 변환 등 순수 함수
+ * 핵심 채점 로직은 lib/utils/gradeAnswer.ts에 위임.
  */
 
 import type { FlattenedQuestion, MixedExampleItem } from './quizStatsTypes';
+import { gradeAnswer } from '@/lib/utils/gradeAnswer';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyValue = any;
@@ -150,27 +152,19 @@ export function isValidMixedItem(item: MixedExampleItem): boolean {
  * 현재 정답 기준으로 isCorrect 재판정 (문제 수정 후 통계 모순 방지)
  * question.answer: 0-indexed (객관식 "0","1,2" / OX 0,1,"0","1" / 주관식 원본)
  * userAnswer: (객관식 "0","1,2" / OX "O","X",0,1 / 주관식 원본)
+ *
+ * 핵심 채점 로직은 gradeAnswer()에 위임.
  */
 export function checkCorrect(question: FlattenedQuestion, rawUserAnswer: unknown): boolean {
+  // 기존 호환: rawUserAnswer가 null/undefined이면 빈 문자열로 변환 후 falsy 처리
   const userAnswer = rawUserAnswer != null ? String(rawUserAnswer) : '';
   if (!userAnswer && userAnswer !== '0') return false;
+
+  // 정답이 없거나 빈 문자열이면 오답 처리 ('0'은 유효한 OX 정답)
   const answer = question.answer != null ? String(question.answer) : '';
   if (!answer && answer !== '0') return false;
 
-  if (question.type === 'ox') {
-    const correctIsO = answer === '0' || answer.toUpperCase() === 'O';
-    const userIsO = userAnswer.toUpperCase() === 'O' || userAnswer === '0';
-    return correctIsO === userIsO;
-  }
-  if (question.type === 'multiple') {
-    // answer, userAnswer 모두 0-indexed ("0","1,2") → 직접 비교
-    const correctParts = answer.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)).sort();
-    const userParts = userAnswer.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)).sort();
-    return JSON.stringify(correctParts) === JSON.stringify(userParts);
-  }
-  // 주관식: ||| 구분자 복수정답
-  const accepted = answer.split('|||').map(s => s.trim().toLowerCase());
-  return accepted.includes(userAnswer.trim().toLowerCase());
+  return gradeAnswer(question.type, question.answer, userAnswer);
 }
 
 /**
