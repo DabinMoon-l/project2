@@ -115,7 +115,7 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
             {warnings.length > 0 && (
               <div className="mt-2 space-y-1">
                 {warnings.map((w, i) => (
-                  <div key={i} className="text-xs px-2 py-1 bg-red-50 border border-[#8B1A1A] text-[#8B1A1A] font-bold">
+                  <div key={`warning-${i}`} className="text-xs px-2 py-1 bg-red-50 border border-[#8B1A1A] text-[#8B1A1A] font-bold">
                     {w}
                   </div>
                 ))}
@@ -179,7 +179,7 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
                             const prevX = i > 0 ? (paddingLeft + (i - 1) * spacing) : x;
                             const prevY = i > 0 ? (95 - (arr[i - 1].score / 100) * 65) : y;
                             return (
-                              <g key={i}>
+                              <g key={`point-${q.quizId}`}>
                                 {i > 0 && (
                                   <line x1={prevX} y1={prevY} x2={x} y2={y}
                                     stroke="#1A1A1A" strokeWidth={1.5} />
@@ -196,7 +196,7 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
                             const x = arr.length === 1 ? chartWidth / 2 : paddingLeft + i * spacing;
                             const name = q.quizTitle.length > 6 ? q.quizTitle.slice(0, 6) + '..' : q.quizTitle;
                             return (
-                              <text key={`label-${i}`} x={x} y={114} textAnchor="middle" fontSize={11}
+                              <text key={`label-${q.quizId}`} x={x} y={114} textAnchor="middle" fontSize={11}
                                 fill="#1A1A1A" fontWeight="600">
                                 {name}
                               </text>
@@ -278,7 +278,7 @@ function AchievementGrid({
   return (
     <div onClick={() => setActiveInfo(null)} className="space-y-4">
       {ACHIEVEMENT_ROWS.map((row, ri) => (
-        <div key={ri} className="grid grid-cols-2 gap-x-4">
+        <div key={`row-${ri}`} className="grid grid-cols-2 gap-x-4">
           {row.map((item, ci) => (
             <AchievementItem key={item.key} item={item} value={values[item.key]} activeInfo={activeInfo} setActiveInfo={setActiveInfo} alignRight={ci === 1} />
           ))}

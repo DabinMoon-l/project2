@@ -279,8 +279,8 @@ export default function QuestionCard({ question, courseId, headerRight }: Questi
                         {child.content}
                       </p>
                     )}
-                    {child.items && child.items.map((labeledItem, idx) => (
-                      <p key={idx} className="text-[#1A1A1A] text-xs">
+                    {child.items && child.items.map((labeledItem) => (
+                      <p key={`${child.id}-${labeledItem.label}`} className="text-[#1A1A1A] text-xs">
                         <span className="font-bold text-[#1A1A1A] mr-1">{labeledItem.label}.</span>
                         {labeledItem.content}
                       </p>
@@ -295,8 +295,8 @@ export default function QuestionCard({ question, courseId, headerRight }: Questi
                         {child.content}
                       </p>
                     )}
-                    {child.items && child.items.map((labeledItem, idx) => (
-                      <p key={idx} className="text-[#1A1A1A] text-xs">
+                    {child.items && child.items.map((labeledItem) => (
+                      <p key={`${child.id}-${labeledItem.label}`} className="text-[#1A1A1A] text-xs">
                         <span className="font-bold text-[#1A1A1A] mr-1">({labeledItem.label})</span>
                         {labeledItem.content}
                       </p>
@@ -312,7 +312,7 @@ export default function QuestionCard({ question, courseId, headerRight }: Questi
                       </p>
                     )}
                     {child.items && child.items.map((labeledItem, idx) => (
-                      <p key={idx} className="text-[#1A1A1A] text-xs">
+                      <p key={`${child.id}-bullet-${idx}`} className="text-[#1A1A1A] text-xs">
                         <span className="font-bold text-[#1A1A1A] mr-1">◦</span>
                         {labeledItem.content}
                       </p>
@@ -353,8 +353,8 @@ export default function QuestionCard({ question, courseId, headerRight }: Questi
                     {item.content}
                   </p>
                 )}
-                {item.items && item.items.map((labeledItem, idx) => (
-                  <p key={idx} className="text-[#1A1A1A] text-xs">
+                {item.items && item.items.map((labeledItem) => (
+                  <p key={`${item.id}-${labeledItem.label}`} className="text-[#1A1A1A] text-xs">
                     <span className="font-bold text-[#1A1A1A] mr-1">{labeledItem.label}.</span>
                     {labeledItem.content}
                   </p>
@@ -371,8 +371,8 @@ export default function QuestionCard({ question, courseId, headerRight }: Questi
                     {item.content}
                   </p>
                 )}
-                {item.items && item.items.map((labeledItem, idx) => (
-                  <p key={idx} className="text-[#1A1A1A] text-xs">
+                {item.items && item.items.map((labeledItem) => (
+                  <p key={`${item.id}-${labeledItem.label}`} className="text-[#1A1A1A] text-xs">
                     <span className="font-bold text-[#1A1A1A] mr-1">({labeledItem.label})</span>
                     {labeledItem.content}
                   </p>
@@ -390,7 +390,7 @@ export default function QuestionCard({ question, courseId, headerRight }: Questi
                   </p>
                 )}
                 {item.items && item.items.map((labeledItem, idx) => (
-                  <p key={idx} className="text-[#1A1A1A] text-xs">
+                  <p key={`${item.id}-bullet-${idx}`} className="text-[#1A1A1A] text-xs">
                     <span className="font-bold text-[#1A1A1A] mr-1">◦</span>
                     {labeledItem.content}
                   </p>
@@ -413,8 +413,9 @@ export default function QuestionCard({ question, courseId, headerRight }: Questi
       {/* 레거시 보기 (Examples) - ㄱ.ㄴ.ㄷ. 형식 */}
       {hasValidExamples && !hasValidMixedExamples && question.examples!.type === 'labeled' && (
         <div className="mt-3 p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1.5">
+          {/* 정적 ㄱㄴㄷ 보기 — 순서 고정이므로 접두사 + index 사용 */}
           {question.examples!.items.filter(i => i.trim()).map((item, idx) => (
-            <p key={idx} className="text-[#1A1A1A] text-xs">
+            <p key={`legacy-abc-${idx}`} className="text-[#1A1A1A] text-xs">
               <span className="font-bold text-[#1A1A1A] mr-1">
                 {['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ'][idx]}.
               </span>
@@ -496,8 +497,9 @@ export default function QuestionCard({ question, courseId, headerRight }: Questi
           {question.passageType === 'korean_abc' && question.koreanAbcItems && question.koreanAbcItems.length > 0 && (
             <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1.5">
               <p className="text-[10px] text-[#5C5C5C] mb-1.5 font-bold">제시문</p>
+              {/* 정적 ㄱㄴㄷ 제시문 — 순서 고정이므로 접두사 + index 사용 */}
               {question.koreanAbcItems.filter(i => i.trim()).map((item, idx) => (
-                <p key={idx} className="text-[#1A1A1A] text-xs">
+                <p key={`kabc-${idx}`} className="text-[#1A1A1A] text-xs">
                   <span className="font-bold text-[#1A1A1A] mr-1">
                     {['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ'][idx]}.
                   </span>

@@ -236,7 +236,7 @@ export default function SubQuestionEditor({
               ? (subQuestion.answerIndices || []).includes(idx)
               : subQuestion.answerIndex === idx;
             return (
-            <div key={idx} className="flex items-center gap-2">
+            <div key={`choice-${idx}`} className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => handleAnswerSelect(idx)}
@@ -289,7 +289,7 @@ export default function SubQuestionEditor({
       {subQuestion.type === 'short_answer' && (
         <div className="space-y-2">
           {(subQuestion.answerTexts || ['']).map((text, idx) => (
-            <div key={idx} className="flex items-center gap-2">
+            <div key={`answer-${idx}`} className="flex items-center gap-2">
               <input
                 type="text"
                 value={text}
@@ -446,7 +446,7 @@ export default function SubQuestionEditor({
               <div className="flex flex-wrap gap-1">
                 {BOGI_QUESTION_PRESETS.slice(0, 2).map((preset, idx) => (
                   <button
-                    key={idx}
+                    key={`preset-${idx}`}
                     type="button"
                     onClick={() => onChange({
                       ...subQuestion,

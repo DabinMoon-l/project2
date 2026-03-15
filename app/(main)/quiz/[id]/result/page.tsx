@@ -937,7 +937,7 @@ export default function QuizResultPage() {
           <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
           <div className="space-y-1">
             {result.subQuestionOptions.map((itm, idx) => (
-              <p key={idx} className="text-sm text-[#1A1A1A]">
+              <p key={`label-${['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ'][idx]}`} className="text-sm text-[#1A1A1A]">
                 <span className="font-bold">{['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ'][idx]}.</span> {itm}
               </p>
             ))}
@@ -966,8 +966,8 @@ export default function QuizResultPage() {
         <div className="mb-3 p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A] rounded-lg">
           <p className="text-xs text-center text-[#5C5C5C] mb-2 font-bold">&lt;보 기&gt;</p>
           <div className="space-y-1">
-            {result.bogi.items.filter(i => i.content?.trim()).map((item, idx) => (
-              <p key={idx} className="text-sm text-[#1A1A1A]">
+            {result.bogi.items.filter(i => i.content?.trim()).map((item) => (
+              <p key={item.label} className="text-sm text-[#1A1A1A]">
                 <span className="font-bold mr-1">{item.label}.</span>
                 {item.content}
               </p>
@@ -1038,7 +1038,7 @@ export default function QuizResultPage() {
               }
 
               return (
-                <div key={idx}>
+                <div key={`choice-${idx}`}>
                   <div
                     className={`text-sm p-2 border ${borderColor} ${bgColor} ${textColor} flex items-center justify-between ${choiceExp ? 'cursor-pointer' : ''}`}
                     onClick={choiceExp ? () => {
@@ -1414,7 +1414,7 @@ export default function QuizResultPage() {
                               {firstResult.passageType === 'korean_abc' && firstResult.koreanAbcItems && firstResult.koreanAbcItems.length > 0 && (
                                 <div className="space-y-1">
                                   {firstResult.koreanAbcItems.map((itm, idx) => (
-                                    <p key={idx} className="text-sm text-[#1A1A1A]">
+                                    <p key={`label-${['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ'][idx]}`} className="text-sm text-[#1A1A1A]">
                                       <span className="font-bold">{['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ'][idx]}.</span> {itm}
                                     </p>
                                   ))}

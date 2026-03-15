@@ -264,8 +264,9 @@ export default function QuestionCard({
                           needsInnerBox ? (
                             <div className="p-3 bg-[#FFFDF7] border border-[#E8D9A8]">
                               <div className="space-y-1">
+                                {/* 정적 ㄱㄴㄷ 보기 — 순서 고정 */}
                                 {item.koreanAbcItems.map((itm, idx) => (
-                                  <p key={idx} className="text-sm text-[#1A1A1A]">
+                                  <p key={`kabc-${idx}`} className="text-sm text-[#1A1A1A]">
                                     <span className="font-bold">{KOREAN_LABELS[idx]}.</span> {itm}
                                   </p>
                                 ))}
@@ -273,8 +274,9 @@ export default function QuestionCard({
                             </div>
                           ) : (
                             <div className="space-y-1">
+                              {/* 정적 ㄱㄴㄷ 보기 — 순서 고정 */}
                               {item.koreanAbcItems.map((itm, idx) => (
-                                <p key={idx} className="text-sm text-[#1A1A1A]">
+                                <p key={`kabc-${idx}`} className="text-sm text-[#1A1A1A]">
                                   <span className="font-bold">{KOREAN_LABELS[idx]}.</span> {itm}
                                 </p>
                               ))}
@@ -379,8 +381,9 @@ export default function QuestionCard({
                       </p>
                     ) : (
                       <div className="space-y-1">
+                        {/* 정적 보기 항목 — 순서 고정 */}
                         {item.subQuestionOptions.map((opt, idx) => (
-                          <p key={idx} className="text-sm text-[#1A1A1A]">
+                          <p key={`opt-${idx}`} className="text-sm text-[#1A1A1A]">
                             <span className="font-bold">{KOREAN_LABELS[idx]}.</span> {opt}
                           </p>
                         ))}
@@ -423,8 +426,8 @@ export default function QuestionCard({
                 <div className="mb-3 p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A]">
                   <p className="text-xs text-center text-[#5C5C5C] mb-2 font-bold">&lt;보 기&gt;</p>
                   <div className="space-y-1">
-                    {item.bogi.items.filter(i => i.content?.trim()).map((bogiItem, idx) => (
-                      <p key={idx} className="text-sm text-[#1A1A1A]">
+                    {item.bogi.items.filter(i => i.content?.trim()).map((bogiItem) => (
+                      <p key={`bogi-${bogiItem.label}`} className="text-sm text-[#1A1A1A]">
                         <span className="font-bold mr-1">{bogiItem.label}.</span>
                         {bogiItem.content}
                       </p>
@@ -562,7 +565,7 @@ export default function QuestionCard({
                       const isChoiceExpanded = expandedChoices.has(idx);
 
                       return (
-                        <div key={idx}>
+                        <div key={`choice-${idx}`}>
                           <div
                             style={isEditMode ? {} : { backgroundColor: bgColor, borderColor, color: textColor }}
                             className={`w-full p-2 border-2 flex items-start gap-2 text-left ${

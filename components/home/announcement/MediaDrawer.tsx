@@ -101,7 +101,7 @@ const MediaDrawer = memo(function MediaDrawer({
                   </div>
                   <div className="grid grid-cols-3 gap-1.5">
                     {datedImages.slice(0, PREVIEW_IMAGES).map((d, i) => (
-                      <button key={i} onClick={() => onImageClick(datedImages.map(x => x.url), i)} className="aspect-square overflow-hidden rounded-md border border-white/10">
+                      <button key={`img-${d.url}`} onClick={() => onImageClick(datedImages.map(x => x.url), i)} className="aspect-square overflow-hidden rounded-md border border-white/10">
                         <img src={d.url} alt="" className="w-full h-full object-cover" />
                       </button>
                     ))}
@@ -123,8 +123,8 @@ const MediaDrawer = memo(function MediaDrawer({
                     <span className="text-sm text-white/40">{datedFiles.length}개</span>
                   </div>
                   <div className="space-y-2">
-                    {datedFiles.slice(0, PREVIEW_FILES).map((d, i) => (
-                      <a key={i} href={d.file.url} target="_blank" rel="noopener noreferrer" download={d.file.name}
+                    {datedFiles.slice(0, PREVIEW_FILES).map((d) => (
+                      <a key={d.file.url} href={d.file.url} target="_blank" rel="noopener noreferrer" download={d.file.name}
                         className="flex items-center gap-3 p-3 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
                       >
                         <svg className="w-5 h-5 text-white/50 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -161,14 +161,14 @@ const MediaDrawer = memo(function MediaDrawer({
           {/* ── 필터 뷰: 날짜별 그룹핑 ── */}
           {filter === 'images' && (
             <>
-              {imageGroups.length > 0 ? imageGroups.map((group, gi) => {
+              {imageGroups.length > 0 ? imageGroups.map((group) => {
                 const groupUrls = group.items.map(x => x.url);
                 return (
-                <div key={gi}>
+                <div key={group.label}>
                   <p className="text-xs font-bold text-white/40 tracking-wider mb-2">{group.label}</p>
                   <div className="grid grid-cols-3 gap-1.5">
                     {group.items.map((d, i) => (
-                      <button key={i} onClick={() => onImageClick(groupUrls, i)} className="aspect-square overflow-hidden rounded-md border border-white/10">
+                      <button key={d.url} onClick={() => onImageClick(groupUrls, i)} className="aspect-square overflow-hidden rounded-md border border-white/10">
                         <img src={d.url} alt="" className="w-full h-full object-cover" />
                       </button>
                     ))}
@@ -184,12 +184,12 @@ const MediaDrawer = memo(function MediaDrawer({
           )}
           {filter === 'files' && (
             <>
-              {fileGroups.length > 0 ? fileGroups.map((group, gi) => (
-                <div key={gi}>
+              {fileGroups.length > 0 ? fileGroups.map((group) => (
+                <div key={group.label}>
                   <p className="text-xs font-bold text-white/40 tracking-wider mb-2">{group.label}</p>
                   <div className="space-y-2">
-                    {group.items.map((d, i) => (
-                      <a key={i} href={d.file.url} target="_blank" rel="noopener noreferrer" download={d.file.name}
+                    {group.items.map((d) => (
+                      <a key={d.file.url} href={d.file.url} target="_blank" rel="noopener noreferrer" download={d.file.name}
                         className="flex items-center gap-3 p-3 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
                       >
                         <svg className="w-5 h-5 text-white/50 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">

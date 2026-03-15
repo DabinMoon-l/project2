@@ -196,7 +196,7 @@ export default function PreviewQuestionCard({
                       const isChoiceExpanded = expandedChoices.has(idx);
 
                       return (
-                        <div key={idx}>
+                        <div key={`choice-${idx}`}>
                           <div
                             style={isEditMode ? {} : { backgroundColor: bgColor, borderColor, color: textColor }}
                             className={`w-full p-2 border-2 flex items-start gap-2 text-left ${
@@ -376,7 +376,7 @@ export default function PreviewQuestionCard({
                       {feedbackData.otherTexts.length > 0 && (
                         <div className="space-y-1">
                           {feedbackData.otherTexts.map((text, i) => (
-                            <p key={i} className="text-xs text-[#5C5C5C] bg-[#EDEAE4] p-2 border border-[#D4CFC4] rounded">
+                            <p key={`feedback-text-${i}`} className="text-xs text-[#5C5C5C] bg-[#EDEAE4] p-2 border border-[#D4CFC4] rounded">
                               {text}
                             </p>
                           ))}

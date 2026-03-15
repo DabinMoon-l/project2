@@ -340,7 +340,7 @@ export default function ManagePostsPage() {
                 {postsLoading && posts.length === 0 && (
                   <div className="space-y-3 flex-shrink-0">
                     {[1, 2, 3].map(i => (
-                      <div key={i} className="border-b border-[#D4CFC4] pb-3">
+                      <div key={`skel-post-${i}`} className="border-b border-[#D4CFC4] pb-3">
                         <Skeleton className="w-3/4 h-5 mb-2 rounded-none" />
                         <Skeleton className="w-full h-8 mb-2 rounded-none" />
                       </div>
@@ -388,7 +388,7 @@ export default function ManagePostsPage() {
                 {commentsLoading && comments.length === 0 && (
                   <div className="space-y-3 flex-shrink-0">
                     {[1, 2, 3].map(i => (
-                      <div key={i} className="border-b border-[#D4CFC4] pb-3">
+                      <div key={`skel-comment-${i}`} className="border-b border-[#D4CFC4] pb-3">
                         <Skeleton className="w-1/2 h-3 mb-2 rounded-none" />
                         <Skeleton className="w-full h-8 mb-2 rounded-none" />
                       </div>
@@ -426,7 +426,7 @@ export default function ManagePostsPage() {
               {likedLoading && likedPosts.length === 0 && (
                 <div className="flex gap-3 overflow-hidden">
                   {[1, 2, 3].map(i => (
-                    <div key={i} className="flex-shrink-0 w-40 p-2.5 border border-[#D4CFC4]">
+                    <div key={`skel-like-${i}`} className="flex-shrink-0 w-40 p-2.5 border border-[#D4CFC4]">
                       <Skeleton className="w-full h-10 mb-2 rounded-none" />
                       <Skeleton className="w-3/4 h-8 mb-2 rounded-none" />
                     </div>

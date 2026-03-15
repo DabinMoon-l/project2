@@ -254,7 +254,7 @@ const PinnedPostsCarousel = memo(function PinnedPostsCarousel({
           </button>
           {posts.map((_, index) => (
             <button
-              key={index}
+              key={`dot-${index}`}
               type="button"
               onClick={() => setCurrentIndex(index)}
               className={`w-2 h-2 transition-all ${
@@ -434,7 +434,7 @@ function NewspaperSkeleton() {
       </div>
       <div className="columns-2 gap-4">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="break-inside-avoid mb-4 p-3 border border-[#1A1A1A]">
+          <div key={`skel-${i}`} className="break-inside-avoid mb-4 p-3 border border-[#1A1A1A]">
             <Skeleton className="w-full h-24 rounded-none mb-2" />
             <Skeleton className="w-full h-6 rounded-none mb-2" />
             <Skeleton className="w-full h-12 rounded-none" />

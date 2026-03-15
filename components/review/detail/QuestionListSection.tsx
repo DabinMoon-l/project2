@@ -358,7 +358,7 @@ function CombinedGroupCard({
                         <div className="p-3 bg-[#FFFDF7] border border-[#E8D9A8]">
                           <div className="space-y-1">
                             {firstItem.koreanAbcItems.map((itm, idx) => (
-                              <p key={idx} className="text-sm text-[#1A1A1A]">
+                              <p key={`label-${KOREAN_LABELS[idx]}`} className="text-sm text-[#1A1A1A]">
                                 <span className="font-bold">{KOREAN_LABELS[idx]}.</span> {itm}
                               </p>
                             ))}

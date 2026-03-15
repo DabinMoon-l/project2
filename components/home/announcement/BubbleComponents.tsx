@@ -70,8 +70,9 @@ export const ImageCarousel = memo(function ImageCarousel({
             setIdx(Math.min(Math.max(0, newIdx), el.children.length - 1));
           }}
         >
+          {/* 이미지 URL은 고유하므로 key로 사용 */}
           {urls.map((url, i) => (
-            <button key={i} onClick={() => onImageClick(urls, i)} className="w-full shrink-0 snap-start">
+            <button key={url} onClick={() => onImageClick(urls, i)} className="w-full shrink-0 snap-start">
               <img src={url} alt={`이미지 ${i + 1}`} className="w-full aspect-[4/3] object-cover border border-[#D4CFC4]" />
             </button>
           ))}
@@ -86,8 +87,8 @@ export const ImageCarousel = memo(function ImageCarousel({
       </div>
       {/* 점 인디케이터 */}
       <div className="flex justify-center gap-1 mt-1">
-        {urls.map((_, i) => (
-          <div key={i} className={`w-1.5 h-1.5 rounded-full transition-colors ${i === idx ? 'bg-[#1A1A1A]' : 'bg-[#D4CFC4]'}`} />
+        {urls.map((url, i) => (
+          <div key={`dot-${url}`} className={`w-1.5 h-1.5 rounded-full transition-colors ${i === idx ? 'bg-[#1A1A1A]' : 'bg-[#D4CFC4]'}`} />
         ))}
       </div>
     </div>
@@ -145,8 +146,8 @@ export const FileCarousel = memo(function FileCarousel({ files }: { files: FileA
             setIdx(Math.min(Math.max(0, newIdx), el.children.length - 1));
           }}
         >
-          {files.map((f, i) => (
-            <div key={i} className="w-full shrink-0 snap-start">
+          {files.map((f) => (
+            <div key={f.url} className="w-full shrink-0 snap-start">
               <FileCard f={f} />
             </div>
           ))}
@@ -161,8 +162,8 @@ export const FileCarousel = memo(function FileCarousel({ files }: { files: FileA
       </div>
       {/* 점 인디케이터 */}
       <div className="flex justify-center gap-1 mt-1">
-        {files.map((_, i) => (
-          <div key={i} className={`w-1.5 h-1.5 rounded-full transition-colors ${i === idx ? 'bg-[#1A1A1A]' : 'bg-[#D4CFC4]'}`} />
+        {files.map((f, i) => (
+          <div key={`dot-${f.url}`} className={`w-1.5 h-1.5 rounded-full transition-colors ${i === idx ? 'bg-[#1A1A1A]' : 'bg-[#D4CFC4]'}`} />
         ))}
       </div>
     </div>
@@ -222,7 +223,7 @@ export const PollCard = memo(function PollCard({
           // 교수님: 결과 + 투표 가능 (클릭 시 투표)
           if (isProfessor) {
             return (
-              <button key={oi} onClick={(e) => { e.stopPropagation(); if (!hasVoted) { if (poll.allowMultiple) onToggle(oi); else onSingleVote(oi); } }}
+              <button key={`pollopt-${oi}`} onClick={(e) => { e.stopPropagation(); if (!hasVoted) { if (poll.allowMultiple) onToggle(oi); else onSingleVote(oi); } }}
                 className="w-full text-left py-0.5"
               >
                 <div className="flex items-start gap-1.5">
@@ -253,7 +254,7 @@ export const PollCard = memo(function PollCard({
             if (poll.allowMultiple) {
               return (
                 <button
-                  key={oi}
+                  key={`pollopt-${oi}`}
                   onClick={(e) => { e.stopPropagation(); onToggle(oi); }}
                   className="w-full text-left py-1"
                 >
@@ -267,7 +268,7 @@ export const PollCard = memo(function PollCard({
               );
             }
             return (
-              <button key={oi} onClick={(e) => { e.stopPropagation(); onSingleVote(oi); }} className="w-full text-left py-0.5">
+              <button key={`pollopt-${oi}`} onClick={(e) => { e.stopPropagation(); onSingleVote(oi); }} className="w-full text-left py-0.5">
                 <div className="flex items-start gap-1.5">
                   <span className="w-3.5 h-3.5 border-[1.5px] border-[#1A1A1A] shrink-0 mt-px" />
                   <span className="flex-1 text-xs min-w-0 break-words">{opt}</span>
@@ -278,7 +279,7 @@ export const PollCard = memo(function PollCard({
 
           // 학생: 투표 후 결과 표시
           return (
-            <div key={oi} className="py-0.5">
+            <div key={`pollopt-${oi}`} className="py-0.5">
               <div className="flex items-start gap-1.5">
                 <span className={`w-3.5 h-3.5 border-[1.5px] border-[#1A1A1A] shrink-0 mt-px flex items-center justify-center ${isMyVote ? 'bg-[#1A1A1A]' : ''}`}>
                   {isMyVote && <span className="text-white text-[8px]">✓</span>}
@@ -373,7 +374,7 @@ export const PollCarousel = memo(function PollCarousel({
 
   const renderCard = (poll: Poll, pi: number) => (
     <PollCard
-      key={pi}
+      key={`pollcard-${pi}`}
       poll={poll}
       pollIdx={pi}
       profileUid={profileUid}
@@ -413,7 +414,7 @@ export const PollCarousel = memo(function PollCarousel({
           }}
         >
           {polls.map((poll, i) => (
-            <div key={i} className="w-full shrink-0 snap-start flex items-center">
+            <div key={`poll-slide-${i}`} className="w-full shrink-0 snap-start flex items-center">
               <div className="w-full">{renderCard(poll, i)}</div>
             </div>
           ))}
@@ -429,7 +430,7 @@ export const PollCarousel = memo(function PollCarousel({
       {/* 점 인디케이터 */}
       <div className="flex justify-center gap-1 mt-1">
         {polls.map((_, i) => (
-          <div key={i} className={`w-1.5 h-1.5 rounded-full transition-colors ${i === idx ? 'bg-[#1A1A1A]' : 'bg-[#D4CFC4]'}`} />
+          <div key={`poll-dot-${i}`} className={`w-1.5 h-1.5 rounded-full transition-colors ${i === idx ? 'bg-[#1A1A1A]' : 'bg-[#D4CFC4]'}`} />
         ))}
       </div>
     </div>

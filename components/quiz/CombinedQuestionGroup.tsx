@@ -122,7 +122,7 @@ export default function CombinedQuestionGroup({
           <div className="p-4 bg-[#EDEAE4] border border-[#1A1A1A] mb-4 space-y-2">
             <p className="text-xs text-[#5C5C5C] mb-2 font-bold">지문</p>
             {koreanAbcItems.filter((i: string) => i.trim()).map((item: string, idx: number) => (
-              <p key={idx} className="text-[#1A1A1A] text-sm">
+              <p key={`label-${['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ'][idx]}`} className="text-[#1A1A1A] text-sm">
                 <span className="font-bold text-[#1A1A1A] mr-1">
                   {['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ'][idx]}.
                 </span>
@@ -296,7 +296,7 @@ export default function CombinedQuestionGroup({
                   {!hasMixed && question.examples && question.examples.items && question.examples.type === 'labeled' && question.examples.items.some(item => item.trim()) && (
                     <div className="mb-4 p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
                       {question.examples.items.filter(i => i.trim()).map((item, i) => (
-                        <p key={i} className="text-[#1A1A1A] text-xs">
+                        <p key={`legacy-${['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ'][i]}`} className="text-[#1A1A1A] text-xs">
                           <span className="font-bold mr-1">
                             {['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ'][i]}.
                           </span>
@@ -449,7 +449,7 @@ export default function CombinedQuestionGroup({
                               if (!expText) return null;
                               const isExpanded = expandedChoiceIdx[question.id] === cIdx;
                               return (
-                                <div key={cIdx} className="border-b border-[#D4CFC4] last:border-b-0">
+                                <div key={`choice-exp-${cIdx}`} className="border-b border-[#D4CFC4] last:border-b-0">
                                   <button
                                     onClick={() => setExpandedChoiceIdx(prev => ({
                                       ...prev,

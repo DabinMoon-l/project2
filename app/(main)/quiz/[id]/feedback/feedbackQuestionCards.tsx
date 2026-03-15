@@ -72,8 +72,9 @@ export function SingleQuestionCard({
       {!question.mixedExamples && question.subQuestionOptions && question.subQuestionOptions.length > 0 && question.subQuestionOptionsType === 'labeled' && (
         <div className="mb-4 p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
           <p className="text-xs font-bold text-[#5C5C5C] mb-2">지문</p>
+          {/* 정적 ㄱㄴㄷ 보기 — 순서 고정 */}
           {question.subQuestionOptions.map((itm, idx) => (
-            <p key={idx} className="text-[#1A1A1A] text-xs">
+            <p key={`kabc-${idx}`} className="text-[#1A1A1A] text-xs">
               <span className="font-bold mr-1">{['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ'][idx]}.</span>
               {itm}
             </p>
@@ -93,8 +94,8 @@ export function SingleQuestionCard({
         <div className="mb-4 p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A]">
           <p className="text-xs text-center text-[#5C5C5C] mb-2 font-bold">&lt;보 기&gt;</p>
           <div className="space-y-1">
-            {question.bogi.items.filter(i => i.content?.trim()).map((item, idx) => (
-              <p key={idx} className="text-xs text-[#1A1A1A]">
+            {question.bogi.items.filter(i => i.content?.trim()).map((item) => (
+              <p key={`bogi-${item.label}`} className="text-xs text-[#1A1A1A]">
                 <span className="font-bold mr-1">{item.label}.</span>
                 {item.content}
               </p>
@@ -135,7 +136,7 @@ export function SingleQuestionCard({
 
             return (
               <div
-                key={idx}
+                key={`choice-${idx}`}
                 className={`p-2 text-xs border ${
                   isCorrect
                     ? 'bg-[#E8F5E9] border-[#1A6B1A] text-[#1A6B1A]'
@@ -361,8 +362,9 @@ export function CombinedQuestionCard({
         {group.passageType === 'korean_abc' && group.koreanAbcItems && group.koreanAbcItems.length > 0 && (
           <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A] mb-4 space-y-1">
             <p className="text-xs text-[#5C5C5C] mb-2 font-bold">지문</p>
+            {/* 정적 ㄱㄴㄷ 제시문 — 순서 고정 */}
             {group.koreanAbcItems.filter((i: string) => i.trim()).map((item: string, idx: number) => (
-              <p key={idx} className="text-[#1A1A1A] text-xs">
+              <p key={`kabc-${idx}`} className="text-[#1A1A1A] text-xs">
                 <span className="font-bold text-[#1A1A1A] mr-1">
                   {['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ'][idx]}.
                 </span>
@@ -465,8 +467,9 @@ export function CombinedQuestionCard({
             {!question.mixedExamples && question.subQuestionOptions && question.subQuestionOptions.length > 0 && question.subQuestionOptionsType === 'labeled' && (
               <div className="mb-4 p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
                 <p className="text-xs font-bold text-[#5C5C5C] mb-2">지문</p>
+                {/* 정적 ㄱㄴㄷ 보기 — 순서 고정 */}
                 {question.subQuestionOptions.map((itm, idx) => (
-                  <p key={idx} className="text-[#1A1A1A] text-xs">
+                  <p key={`kabc-${idx}`} className="text-[#1A1A1A] text-xs">
                     <span className="font-bold mr-1">{['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ'][idx]}.</span>
                     {itm}
                   </p>
@@ -495,7 +498,7 @@ export function CombinedQuestionCard({
 
                   return (
                     <div
-                      key={optIdx}
+                      key={`choice-${optIdx}`}
                       className={`p-2 text-xs border ${
                         isCorrect
                           ? 'bg-[#E8F5E9] border-[#1A6B1A] text-[#1A6B1A]'

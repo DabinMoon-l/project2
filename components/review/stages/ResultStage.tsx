@@ -153,8 +153,9 @@ export default function ResultStage({
                               )}
                               {firstItem.passageType === 'korean_abc' && firstItem.koreanAbcItems && firstItem.koreanAbcItems.length > 0 && (
                                 <div className="space-y-1">
+                                  {/* 정적 ㄱㄴㄷ 보기 — 순서 고정 */}
                                   {firstItem.koreanAbcItems.map((itm, i) => (
-                                    <p key={i} className="text-xs text-[#1A1A1A]">
+                                    <p key={`kabc-${i}`} className="text-xs text-[#1A1A1A]">
                                       <span className="font-bold">{KOREAN_LABELS[i]}.</span> {itm}
                                     </p>
                                   ))}
@@ -243,8 +244,9 @@ export default function ResultStage({
                                                 </p>
                                               ) : (
                                                 <div className="space-y-1">
+                                                  {/* 정적 보기 항목 — 순서 고정 */}
                                                   {subItem.subQuestionOptions.map((opt, i) => (
-                                                    <p key={i} className="text-xs text-[#1A1A1A]">
+                                                    <p key={`opt-${i}`} className="text-xs text-[#1A1A1A]">
                                                       <span className="font-bold">{KOREAN_LABELS[i]}.</span> {opt}
                                                     </p>
                                                   ))}
@@ -282,7 +284,7 @@ export default function ResultStage({
                                                 const isChoiceExpanded = expandedChoiceExplanations.has(choiceKey);
 
                                                 return (
-                                                  <div key={optIdx}>
+                                                  <div key={`choice-${optIdx}`}>
                                                     <div
                                                       className={`px-2 py-1 text-xs border ${className} ${choiceExp ? 'cursor-pointer' : ''}`}
                                                       onClick={choiceExp ? () => {
@@ -470,8 +472,9 @@ export default function ResultStage({
                                 )}
                                 {item.passageType === 'korean_abc' && item.koreanAbcItems && item.koreanAbcItems.length > 0 && (
                                   <div className="space-y-1">
+                                    {/* 정적 ㄱㄴㄷ 보기 — 순서 고정 */}
                                     {item.koreanAbcItems.map((itm, i) => (
-                                      <p key={i} className="text-xs text-[#1A1A1A]">
+                                      <p key={`kabc-${i}`} className="text-xs text-[#1A1A1A]">
                                         <span className="font-bold">{KOREAN_LABELS[i]}.</span> {itm}
                                       </p>
                                     ))}
@@ -506,8 +509,9 @@ export default function ResultStage({
                               </p>
                             ) : (
                               <div className="space-y-1">
+                                {/* 정적 보기 항목 — 순서 고정 */}
                                 {item.subQuestionOptions.map((opt, i) => (
-                                  <p key={i} className="text-xs text-[#1A1A1A]">
+                                  <p key={`opt-${i}`} className="text-xs text-[#1A1A1A]">
                                     <span className="font-bold">{KOREAN_LABELS[i]}.</span> {opt}
                                   </p>
                                 ))}
@@ -535,8 +539,8 @@ export default function ResultStage({
                           <div className="p-2 bg-[#EDEAE4] border-2 border-[#1A1A1A]">
                             <p className="text-[10px] text-center text-[#5C5C5C] mb-1.5 font-bold">&lt;보 기&gt;</p>
                             <div className="space-y-1">
-                              {item.bogi.items.filter(i => i.content?.trim()).map((bogiItem, idx) => (
-                                <p key={idx} className="text-xs text-[#1A1A1A]">
+                              {item.bogi.items.filter(i => i.content?.trim()).map((bogiItem) => (
+                                <p key={`bogi-${bogiItem.label}`} className="text-xs text-[#1A1A1A]">
                                   <span className="font-bold mr-1">{bogiItem.label}.</span>
                                   {bogiItem.content}
                                 </p>
@@ -585,7 +589,7 @@ export default function ResultStage({
                               const isChoiceExpanded = expandedChoiceExplanations.has(choiceKey);
 
                               return (
-                                <div key={optIdx}>
+                                <div key={`choice-${optIdx}`}>
                                   <div
                                     className={`text-xs p-2 border ${className} ${choiceExp ? 'cursor-pointer' : ''}`}
                                     onClick={choiceExp ? () => {
