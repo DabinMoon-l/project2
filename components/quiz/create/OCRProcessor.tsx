@@ -10,11 +10,14 @@ import {
   type ParseResult,
   type ParsedQuestion,
 } from '@/lib/ocr';
-import * as pdfjsLib from 'pdfjs-dist';
-
-// PDF.js 워커 설정
-if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+// pdfjs-dist 동적 import (번들 크기 최적화)
+let _pdfjsLib: typeof import('pdfjs-dist') | null = null;
+async function getPdfjs() {
+  if (!_pdfjsLib) {
+    _pdfjsLib = await import('pdfjs-dist');
+    _pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+  }
+  return _pdfjsLib;
 }
 
 // ============================================================
@@ -190,6 +193,7 @@ async function cropImageRegion(
  */
 async function pdfToImages(file: File): Promise<{ images: string[]; combinedImage: string }> {
   const arrayBuffer = await file.arrayBuffer();
+  const pdfjsLib = await getPdfjs();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   const numPages = pdf.numPages;
 
