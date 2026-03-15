@@ -254,67 +254,72 @@ export default function HomeOverlay() {
         overscrollBehavior: 'none',
       }}
     >
-      <div className="relative z-[2] flex-1 flex flex-col pt-1 pb-2">
-        {/* 프로필 + 닉네임 */}
-        <div className="px-8 flex items-center gap-3 mb-2 mt-10">
-          <button
-            className="w-14 h-14 flex items-center justify-center flex-shrink-0 rounded-xl overflow-hidden"
-            style={{
-              background: 'rgba(0, 0, 0, 0.3)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-            }}
-            onClick={() => setShowProfileDrawer(true)}
-          >
-            {profile.profileRabbitId != null ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={getRabbitProfileUrl(profile.profileRabbitId)}
-                alt="프로필"
-                width={80}
-                height={80}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <svg width={40} height={40} viewBox="0 0 24 24" fill="white">
-                <circle cx="12" cy="8" r="4" />
-                <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
-              </svg>
-            )}
-          </button>
-          <p className="font-bold text-4xl text-white truncate leading-normal flex-1">
-            {profile.nickname}
-          </p>
+      <div className="relative z-[2] flex-1 flex flex-col justify-between pt-1 pb-2">
+        {/* 상단 그룹: 프로필 + 공지 */}
+        <div>
+          {/* 프로필 + 닉네임 */}
+          <div className="px-8 flex items-center gap-3 mb-2 mt-10">
+            <button
+              className="w-14 h-14 flex items-center justify-center flex-shrink-0 rounded-xl overflow-hidden"
+              style={{
+                background: 'rgba(0, 0, 0, 0.3)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+              }}
+              onClick={() => setShowProfileDrawer(true)}
+            >
+              {profile.profileRabbitId != null ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={getRabbitProfileUrl(profile.profileRabbitId)}
+                  alt="프로필"
+                  width={80}
+                  height={80}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <svg width={40} height={40} viewBox="0 0 24 24" fill="white">
+                  <circle cx="12" cy="8" r="4" />
+                  <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
+                </svg>
+              )}
+            </button>
+            <p className="font-bold text-4xl text-white truncate leading-normal flex-1">
+              {profile.nickname}
+            </p>
+          </div>
+
+          {/* 공지 */}
+          <div className="px-8 mb-2 mt-1 relative z-30">
+            <AnnouncementChannel />
+          </div>
         </div>
 
-        {/* 공지 */}
-        <div className="px-8 mb-2 mt-1 relative z-30">
-          <AnnouncementChannel />
-        </div>
-
-        {/* 캐릭터 영역 */}
+        {/* 중앙 그룹: 캐릭터 */}
         <CharacterBox />
 
-        {/* 랭킹 */}
-        <RankingSection />
+        {/* 하단 그룹: 랭킹 + 스와이프 힌트 */}
+        <div>
+          <RankingSection />
 
-        {/* 스와이프 힌트 — 하단 (가로모드에서는 숨김) */}
-        {!isWide && (
-          <div className="absolute bottom-5 left-0 right-0 flex flex-col items-center gap-0.5 pointer-events-none">
-            <motion.svg
-              className="w-4 h-4 text-white/50"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              animate={{ y: [0, -6, 0] }}
-              transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
-            </motion.svg>
-            <span className="text-[10px] font-bold text-white/50 backdrop-blur-sm">
-              위로 스와이프하여 학습 시작
-            </span>
-          </div>
-        )}
+          {/* 스와이프 힌트 — 하단 (가로모드에서는 숨김) */}
+          {!isWide && (
+            <div className="mt-4 flex flex-col items-center gap-0.5 pointer-events-none">
+              <motion.svg
+                className="w-4 h-4 text-white/50"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                animate={{ y: [0, -6, 0] }}
+                transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
+              </motion.svg>
+              <span className="text-[10px] font-bold text-white/50 backdrop-blur-sm">
+                위로 스와이프하여 학습 시작
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* 프로필 드로어 */}
