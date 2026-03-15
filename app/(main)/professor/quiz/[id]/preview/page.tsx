@@ -19,7 +19,60 @@ import { QuizDeleteModal } from '@/components/professor';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 import { convertToQuestionDataList } from '@/components/professor/library/professorLibraryUtils';
 import { isQuestionChanged, isQuestionChangedForSubQuestion, flattenQuestionsForSave } from '@/lib/utils/questionSerializer';
-import type { PreviewQuestion, DisplayItem } from './previewTypes';
+import type { PreviewQuestion, DisplayItem, PreviewMixedBlock, PreviewMixedChild, PreviewLabeledItem } from './previewTypes';
+
+/** Firestore에서 읽어온 원본 퀴즈 문서 타입 */
+interface RawQuizData {
+  title?: string;
+  type?: string;
+  difficulty?: string;
+  tags?: string[];
+  description?: string;
+  questions?: RawQuestion[];
+  averageScore?: number;
+  participantCount?: number;
+  [key: string]: unknown;
+}
+
+/** Firestore에서 읽어온 원본 문제 타입 */
+interface RawQuestion {
+  id?: string;
+  text?: string;
+  question?: string;
+  type?: string;
+  choices?: string[];
+  options?: string[];
+  correctAnswer?: string | number | number[];
+  answer?: string | number | number[];
+  explanation?: string;
+  image?: string;
+  imageUrl?: string;
+  examples?: string[] | { type?: string; items?: string[] };
+  koreanAbcExamples?: Array<{ text: string }>;
+  mixedExamples?: PreviewMixedBlock[];
+  subQuestionOptions?: string[];
+  subQuestionOptionsType?: 'text' | 'labeled' | 'mixed';
+  subQuestionImage?: string;
+  chapterId?: string;
+  chapterDetailId?: string;
+  passagePrompt?: string;
+  bogi?: {
+    questionText?: string;
+    items?: Array<{ label: string; content: string }>;
+  };
+  choiceExplanations?: string[];
+  // 결합형 필드
+  combinedGroupId?: string;
+  combinedIndex?: number;
+  combinedTotal?: number;
+  passageType?: string;
+  passage?: string;
+  passageImage?: string;
+  koreanAbcItems?: string[];
+  passageMixedExamples?: PreviewMixedBlock[];
+  commonQuestion?: string;
+  [key: string]: unknown;
+}
 
 function EditExitModal({
   isOpen,
@@ -168,9 +221,9 @@ export default function QuizPreviewPage() {
 
   // 수정 모드 상태
   const [isEditMode, setIsEditMode] = useState(false);
-  const [rawQuizData, setRawQuizData] = useState<any>(null);
+  const [rawQuizData, setRawQuizData] = useState<RawQuizData | null>(null);
   const [editableQuestions, setEditableQuestions] = useState<QuestionData[]>([]);
-  const [originalQuestions, setOriginalQuestions] = useState<any[]>([]);
+  const [originalQuestions, setOriginalQuestions] = useState<RawQuestion[]>([]);
   const [editTitle, setEditTitle] = useState('');
   const [editType, setEditType] = useState<'midterm' | 'final' | 'past' | 'independent'>('midterm');
   const [editDifficulty, setEditDifficulty] = useState<'easy' | 'normal' | 'hard'>('normal');
@@ -219,14 +272,14 @@ export default function QuizPreviewPage() {
           return;
         }
 
-        const data = quizDoc.data();
+        const data = quizDoc.data() as RawQuizData;
         setRawQuizData(data);
         setQuizTitle(data.title || '퀴즈');
         setAverageScore(data.averageScore || 0);
         setParticipantCount(data.participantCount || 0);
 
-        const rawQuestions = data.questions || [];
-        const parsed: PreviewQuestion[] = rawQuestions.map((q: any, index: number) => {
+        const rawQuestions: RawQuestion[] = (data.questions || []) as RawQuestion[];
+        const parsed: PreviewQuestion[] = rawQuestions.map((q: RawQuestion, index: number) => {
           // 정답 변환
           let correctAnswer: string = '';
           if (q.correctAnswer !== undefined && q.correctAnswer !== null) {
@@ -262,43 +315,43 @@ export default function QuizPreviewPage() {
             id: q.id || `q${index}`,
             number: index + 1,
             question: q.text || q.question || '',
-            type: q.type,
-            options: (q.choices || q.options || []).filter((opt: any) => opt != null),
+            type: q.type || '',
+            options: (q.choices || q.options || []).filter((opt: string) => opt != null),
             correctAnswer,
             explanation: q.explanation || '',
-            image: q.image || q.imageUrl || null,
+            image: q.image || q.imageUrl || undefined,
             subQuestionOptions: (() => {
-              if (q.mixedExamples && Array.isArray(q.mixedExamples) && q.mixedExamples.length > 0) return null;
-              if (Array.isArray(q.examples)) return q.examples.filter((item: any) => item != null);
-              if (q.examples && typeof q.examples === 'object' && Array.isArray(q.examples.items)) {
-                return q.examples.items.filter((item: any) => item != null);
+              if (q.mixedExamples && Array.isArray(q.mixedExamples) && q.mixedExamples.length > 0) return undefined;
+              if (Array.isArray(q.examples)) return q.examples.filter((item: string) => item != null);
+              if (q.examples && typeof q.examples === 'object' && !Array.isArray(q.examples) && Array.isArray(q.examples.items)) {
+                return q.examples.items.filter((item: string) => item != null);
               }
               if (q.koreanAbcExamples && Array.isArray(q.koreanAbcExamples)) {
-                return q.koreanAbcExamples.map((e: { text: string }) => e.text).filter((text: any) => text != null);
+                return q.koreanAbcExamples.map((e: { text: string }) => e.text).filter((text: string) => text != null);
               }
-              return q.subQuestionOptions || null;
+              return q.subQuestionOptions || undefined;
             })(),
             subQuestionOptionsType: (() => {
-              if (q.mixedExamples && Array.isArray(q.mixedExamples) && q.mixedExamples.length > 0) return 'mixed';
-              if (Array.isArray(q.examples)) return 'text';
-              if (q.examples && typeof q.examples === 'object' && q.examples.type) return q.examples.type;
-              if (q.koreanAbcExamples && Array.isArray(q.koreanAbcExamples)) return 'labeled';
-              return null;
+              if (q.mixedExamples && Array.isArray(q.mixedExamples) && q.mixedExamples.length > 0) return 'mixed' as const;
+              if (Array.isArray(q.examples)) return 'text' as const;
+              if (q.examples && typeof q.examples === 'object' && !Array.isArray(q.examples) && q.examples.type) return q.examples.type as 'text' | 'labeled' | 'mixed';
+              if (q.koreanAbcExamples && Array.isArray(q.koreanAbcExamples)) return 'labeled' as const;
+              return undefined;
             })(),
-            mixedExamples: q.mixedExamples || null,
-            subQuestionImage: q.subQuestionImage || null,
-            chapterId: q.chapterId || null,
-            chapterDetailId: q.chapterDetailId || null,
-            passagePrompt: q.passagePrompt || null,
-            bogiQuestionText: q.bogi?.questionText || null,
+            mixedExamples: q.mixedExamples || undefined,
+            subQuestionImage: q.subQuestionImage || undefined,
+            chapterId: q.chapterId || undefined,
+            chapterDetailId: q.chapterDetailId || undefined,
+            passagePrompt: q.passagePrompt || undefined,
+            bogiQuestionText: q.bogi?.questionText || undefined,
             bogi: q.bogi ? {
               questionText: q.bogi.questionText,
-              items: (q.bogi.items || []).map((item: any) => ({
+              items: (q.bogi.items || []).map((item: { label: string; content: string }) => ({
                 label: item.label,
                 content: item.content,
               })),
             } : null,
-            choiceExplanations: q.choiceExplanations || null,
+            choiceExplanations: q.choiceExplanations || undefined,
           };
 
           // 결합형 필드
@@ -422,8 +475,8 @@ export default function QuizPreviewPage() {
     setEditTitle(rawQuizData.title || '');
     // professor/professor-ai 등 비표준 타입은 midterm으로 기본 매핑
     const validTypes = ['midterm', 'final', 'past', 'independent'];
-    setEditType(validTypes.includes(rawQuizData.type) ? rawQuizData.type : 'midterm');
-    setEditDifficulty(rawQuizData.difficulty || 'normal');
+    setEditType(rawQuizData.type && validTypes.includes(rawQuizData.type) ? rawQuizData.type as 'midterm' | 'final' | 'past' | 'independent' : 'midterm');
+    setEditDifficulty((rawQuizData.difficulty as 'easy' | 'normal' | 'hard') || 'normal');
     setEditTags(rawQuizData.tags || []);
     setEditDescription(rawQuizData.description || '');
     setEditingIndex(null);
@@ -617,21 +670,21 @@ export default function QuizPreviewPage() {
     return (
       <>
         {/* 묶은 보기 (grouped) */}
-        {groupedBlocks.map((block: any) => (
+        {groupedBlocks.map((block: PreviewMixedBlock) => (
           <div key={block.id} className="mb-3 p-3 border-2 border-[#1A1A1A] bg-[#FFF8E1] rounded-lg">
             <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
             <div className="space-y-1">
-              {block.children?.map((child: any) => (
+              {block.children?.map((child: PreviewMixedChild) => (
                 <div key={child.id}>
                   {child.type === 'text' && child.content?.trim() && (
                     <p className="text-sm text-[#5C5C5C] whitespace-pre-wrap">{child.content}</p>
                   )}
-                  {child.type === 'labeled' && (child.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                  {child.type === 'labeled' && (child.items || []).filter((i: PreviewLabeledItem) => i.content?.trim()).map((item: PreviewLabeledItem) => (
                     <p key={item.id} className="text-sm text-[#1A1A1A]">
                       <span className="font-bold">{item.label}.</span> {item.content}
                     </p>
                   ))}
-                  {child.type === 'gana' && (child.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                  {child.type === 'gana' && (child.items || []).filter((i: PreviewLabeledItem) => i.content?.trim()).map((item: PreviewLabeledItem) => (
                     <p key={item.id} className="text-sm text-[#1A1A1A]">
                       <span className="font-bold">({item.label})</span> {item.content}
                     </p>
@@ -646,7 +699,7 @@ export default function QuizPreviewPage() {
         ))}
 
         {/* 나머지 제시문 */}
-        {nonGroupedBlocks.map((block: any) => {
+        {nonGroupedBlocks.map((block: PreviewMixedBlock) => {
           if (block.type === 'text' && block.content?.trim()) {
             return (
               <div key={block.id} className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-lg">
@@ -660,7 +713,7 @@ export default function QuizPreviewPage() {
               <div key={block.id} className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-lg">
                 <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
                 <div className="space-y-1">
-                  {(block.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                  {(block.items || []).filter((i: PreviewLabeledItem) => i.content?.trim()).map((item: PreviewLabeledItem) => (
                     <p key={item.id} className="text-sm text-[#1A1A1A]">
                       <span className="font-bold">{item.label}.</span> {item.content}
                     </p>
@@ -674,7 +727,7 @@ export default function QuizPreviewPage() {
               <div key={block.id} className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-lg">
                 <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
                 <div className="space-y-1">
-                  {(block.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
+                  {(block.items || []).filter((i: PreviewLabeledItem) => i.content?.trim()).map((item: PreviewLabeledItem) => (
                     <p key={item.id} className="text-sm text-[#1A1A1A]">
                       <span className="font-bold">({item.label})</span> {item.content}
                     </p>
@@ -1402,17 +1455,17 @@ export default function QuizPreviewPage() {
                               )}
                               {firstResult.passageMixedExamples && firstResult.passageMixedExamples.length > 0 && (
                                 <div className="space-y-2">
-                                  {firstResult.passageMixedExamples.map((block: any) => (
+                                  {firstResult.passageMixedExamples.map((block: PreviewMixedBlock) => (
                                     <div key={block.id}>
                                       {block.type === 'grouped' && (
                                         <div className="space-y-1">
-                                          {(block.children || []).map((child: any) => (
+                                          {(block.children || []).map((child: PreviewMixedChild) => (
                                             <div key={child.id}>
                                               {child.type === 'text' && <p className="text-sm text-[#5C5C5C] whitespace-pre-wrap">{child.content}</p>}
-                                              {child.type === 'labeled' && (child.items || []).map((i: any) => (
+                                              {child.type === 'labeled' && (child.items || []).map((i: PreviewLabeledItem) => (
                                                 <p key={i.id} className="text-sm"><span className="font-bold">{i.label}.</span> {i.content}</p>
                                               ))}
-                                              {child.type === 'gana' && (child.items || []).map((i: any) => (
+                                              {child.type === 'gana' && (child.items || []).map((i: PreviewLabeledItem) => (
                                                 <p key={i.id} className="text-sm"><span className="font-bold">({i.label})</span> {i.content}</p>
                                               ))}
                                               {child.type === 'image' && child.imageUrl && <Image src={child.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto" unoptimized />}
@@ -1423,14 +1476,14 @@ export default function QuizPreviewPage() {
                                       {block.type === 'text' && <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{block.content}</p>}
                                       {block.type === 'labeled' && (
                                         <div className="space-y-1">
-                                          {(block.items || []).map((i: any) => (
+                                          {(block.items || []).map((i: PreviewLabeledItem) => (
                                             <p key={i.id} className="text-sm"><span className="font-bold">{i.label}.</span> {i.content}</p>
                                           ))}
                                         </div>
                                       )}
                                       {block.type === 'gana' && (
                                         <div className="space-y-1">
-                                          {(block.items || []).map((i: any) => (
+                                          {(block.items || []).map((i: PreviewLabeledItem) => (
                                             <p key={i.id} className="text-sm"><span className="font-bold">({i.label})</span> {i.content}</p>
                                           ))}
                                         </div>
