@@ -9,6 +9,17 @@ import { type FeedbackType, FEEDBACK_TYPES } from '@/components/review/types';
 import { choiceLabels, KOREAN_LABELS } from '@/lib/utils/reviewQuestionUtils';
 import { formatChapterLabel } from '@/lib/courseIndex';
 
+
+/** 혼합 지문 블록 (passageMixedExamples용) */
+interface ReviewMixedBlock {
+  id: string;
+  type: string;
+  content?: string;
+  items?: Array<{ id: string; label: string; content: string }>;
+  imageUrl?: string;
+  children?: ReviewMixedBlock[];
+}
+
 export interface QuestionCardProps {
   item: ReviewItem;
   questionNumber: number;
@@ -35,7 +46,7 @@ export interface QuestionCardProps {
   /** 수정 모드 여부 */
   isEditMode?: boolean;
   /** 수정 내용 변경 콜백 */
-  onEditChange?: (field: string, value: any) => void;
+  onEditChange?: (field: string, value: string | string[]) => void;
   /** 현재 수정 중인 데이터 */
   editData?: { question?: string; options?: string[]; explanation?: string; choiceExplanations?: string[] };
 }
@@ -240,9 +251,9 @@ export default function QuestionCard({
               {item.combinedGroupId && !subQuestionNumber && (
                 <div className="space-y-3 mb-4">
                   {/* 공통 지문 */}
-                  {(item.passage || item.passageImage || (item.koreanAbcItems && item.koreanAbcItems.length > 0) || ((item as any).passageMixedExamples && (item as any).passageMixedExamples.length > 0)) && (() => {
+                  {(item.passage || item.passageImage || (item.koreanAbcItems && item.koreanAbcItems.length > 0) || (item.passageMixedExamples && item.passageMixedExamples.length > 0)) && (() => {
                     // 지문과 이미지가 둘 다 있는지 확인
-                    const hasText = item.passage || (item.koreanAbcItems && item.koreanAbcItems.length > 0) || ((item as any).passageMixedExamples && (item as any).passageMixedExamples.length > 0);
+                    const hasText = item.passage || (item.koreanAbcItems && item.koreanAbcItems.length > 0) || (item.passageMixedExamples && item.passageMixedExamples.length > 0);
                     const hasImage = !!item.passageImage;
                     const needsInnerBox = hasText && hasImage;
 
@@ -281,19 +292,19 @@ export default function QuestionCard({
                           )
                         )}
                         {/* 혼합 형식 */}
-                        {(item as any).passageMixedExamples && (item as any).passageMixedExamples.length > 0 && (
+                        {item.passageMixedExamples && item.passageMixedExamples.length > 0 && (
                           <div className="space-y-2">
-                            {(item as any).passageMixedExamples.map((block: any) => (
+                            {item.passageMixedExamples.map((block: ReviewMixedBlock) => (
                               <div key={block.id}>
                                 {block.type === 'grouped' && (
                                   <div className="space-y-1">
-                                    {(block.children || []).map((child: any) => (
+                                    {(block.children || []).map((child: ReviewMixedBlock) => (
                                       <div key={child.id}>
                                         {child.type === 'text' && <p className="text-sm text-[#5C5C5C] whitespace-pre-wrap">{child.content}</p>}
-                                        {child.type === 'labeled' && (child.items || []).map((i: any) => (
+                                        {child.type === 'labeled' && (child.items || []).map((i: { id: string; label: string; content: string }) => (
                                           <p key={i.id} className="text-sm"><span className="font-bold">{i.label}.</span> {i.content}</p>
                                         ))}
-                                        {child.type === 'gana' && (child.items || []).map((i: any) => (
+                                        {child.type === 'gana' && (child.items || []).map((i: { id: string; label: string; content: string }) => (
                                           <p key={i.id} className="text-sm"><span className="font-bold">({i.label})</span> {i.content}</p>
                                         ))}
                                         {child.type === 'image' && child.imageUrl && <Image src={child.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto" unoptimized />}
@@ -304,14 +315,14 @@ export default function QuestionCard({
                                 {block.type === 'text' && <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{block.content}</p>}
                                 {block.type === 'labeled' && (
                                   <div className="space-y-1">
-                                    {(block.items || []).map((i: any) => (
+                                    {(block.items || []).map((i: { id: string; label: string; content: string }) => (
                                       <p key={i.id} className="text-sm"><span className="font-bold">{i.label}.</span> {i.content}</p>
                                     ))}
                                   </div>
                                 )}
                                 {block.type === 'gana' && (
                                   <div className="space-y-1">
-                                    {(block.items || []).map((i: any) => (
+                                    {(block.items || []).map((i: { id: string; label: string; content: string }) => (
                                       <p key={i.id} className="text-sm"><span className="font-bold">({i.label})</span> {i.content}</p>
                                     ))}
                                   </div>

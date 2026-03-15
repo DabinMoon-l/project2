@@ -13,6 +13,7 @@ import ShortAnswer from '@/components/quiz/ShortAnswer';
 import { FeedbackIcon, InlineFeedbackPanel } from '@/components/common/InlineFeedback';
 import { KOREAN_LABELS } from '../reviewPracticeTypes';
 import type { PracticeStageProps } from '../reviewPracticeTypes';
+import type { MixedExampleBlock, LabeledItem } from '@/components/quiz/create/questionTypes';
 
 export default function PracticeStage({
   // 데이터
@@ -167,22 +168,22 @@ export default function PracticeStage({
                       )}
                       {currentGroup.items[0].passageType === 'mixed' && currentGroup.items[0].passageMixedExamples && currentGroup.items[0].passageMixedExamples.length > 0 && (
                         <div className="space-y-2">
-                          {currentGroup.items[0].passageMixedExamples.map((block: any) => (
+                          {currentGroup.items[0].passageMixedExamples.map((block: MixedExampleBlock) => (
                             <div key={block.id}>
                               {block.type === 'grouped' && (
                                 <div className="space-y-1">
-                                  {(block.children || []).map((child: any) => (
+                                  {(block.children || []).map((child: MixedExampleBlock) => (
                                     <div key={child.id}>
                                       {child.type === 'text' && child.content?.trim() && (
                                         <p className="text-xs text-[#5C5C5C]">{child.content}</p>
                                       )}
-                                      {child.type === 'labeled' && (child.items || []).filter((i: any) => i.content?.trim()).map((it: any) => (
+                                      {child.type === 'labeled' && (child.items || []).filter((i: LabeledItem) => i.content?.trim()).map((it: LabeledItem) => (
                                         <p key={it.id} className="text-xs text-[#1A1A1A]">
                                           <span className="font-bold mr-1">{it.label}.</span>
                                           {it.content}
                                         </p>
                                       ))}
-                                      {child.type === 'gana' && (child.items || []).filter((i: any) => i.content?.trim()).map((it: any) => (
+                                      {child.type === 'gana' && (child.items || []).filter((i: LabeledItem) => i.content?.trim()).map((it: LabeledItem) => (
                                         <p key={it.id} className="text-xs text-[#1A1A1A]">
                                           <span className="font-bold mr-1">({it.label})</span>
                                           {it.content}
@@ -200,7 +201,7 @@ export default function PracticeStage({
                               )}
                               {block.type === 'labeled' && (block.items || []).length > 0 && (
                                 <div className="space-y-1">
-                                  {(block.items || []).filter((i: any) => i.content?.trim()).map((it: any) => (
+                                  {(block.items || []).filter((i: LabeledItem) => i.content?.trim()).map((it: LabeledItem) => (
                                     <p key={it.id} className="text-xs text-[#1A1A1A]">
                                       <span className="font-bold mr-1">{it.label}.</span>
                                       {it.content}
@@ -210,7 +211,7 @@ export default function PracticeStage({
                               )}
                               {block.type === 'gana' && (block.items || []).length > 0 && (
                                 <div className="space-y-1">
-                                  {(block.items || []).filter((i: any) => i.content?.trim()).map((it: any) => (
+                                  {(block.items || []).filter((i: LabeledItem) => i.content?.trim()).map((it: LabeledItem) => (
                                     <p key={it.id} className="text-xs text-[#1A1A1A]">
                                       <span className="font-bold mr-1">({it.label})</span>
                                       {it.content}
@@ -301,21 +302,21 @@ export default function PracticeStage({
                       {subItem.mixedExamples && subItem.mixedExamples.length > 0 && (
                         <div className="space-y-2 mb-3">
                           <p className="text-xs font-bold text-[#8B6914]">지문</p>
-                          {subItem.mixedExamples.map((block: any) => (
+                          {subItem.mixedExamples.map((block: MixedExampleBlock) => (
                             <div key={block.id}>
                               {block.type === 'grouped' && (block.children?.length ?? 0) > 0 && (
                                 <div className="p-3 bg-[#FFF8E1] border-2 border-[#8B6914] space-y-1">
-                                  {(block.children || []).map((child: any) => (
+                                  {(block.children || []).map((child: MixedExampleBlock) => (
                                     <div key={child.id}>
                                       {child.type === 'text' && child.content?.trim() && (
                                         <p className="text-[#5C5C5C] text-xs whitespace-pre-wrap">{child.content}</p>
                                       )}
-                                      {child.type === 'labeled' && (child.items || []).filter((i: any) => i.content?.trim()).map((itm: any) => (
+                                      {child.type === 'labeled' && (child.items || []).filter((i: LabeledItem) => i.content?.trim()).map((itm: LabeledItem) => (
                                         <p key={itm.id} className="text-[#1A1A1A] text-xs">
                                           <span className="font-bold mr-1">{itm.label}.</span>{itm.content}
                                         </p>
                                       ))}
-                                      {child.type === 'gana' && (child.items || []).filter((i: any) => i.content?.trim()).map((itm: any) => (
+                                      {child.type === 'gana' && (child.items || []).filter((i: LabeledItem) => i.content?.trim()).map((itm: LabeledItem) => (
                                         <p key={itm.id} className="text-[#1A1A1A] text-xs">
                                           <span className="font-bold mr-1">({itm.label})</span>{itm.content}
                                         </p>
@@ -334,7 +335,7 @@ export default function PracticeStage({
                               )}
                               {block.type === 'labeled' && (block.items || []).length > 0 && (
                                 <div className="p-3 bg-[#FFF8E1] border border-[#8B6914] space-y-1">
-                                  {(block.items || []).filter((i: any) => i.content?.trim()).map((itm: any) => (
+                                  {(block.items || []).filter((i: LabeledItem) => i.content?.trim()).map((itm: LabeledItem) => (
                                     <p key={itm.id} className="text-[#1A1A1A] text-xs">
                                       <span className="font-bold mr-1">{itm.label}.</span>{itm.content}
                                     </p>
@@ -343,7 +344,7 @@ export default function PracticeStage({
                               )}
                               {block.type === 'gana' && (block.items || []).length > 0 && (
                                 <div className="p-3 bg-[#FFF8E1] border border-[#8B6914] space-y-1">
-                                  {(block.items || []).filter((i: any) => i.content?.trim()).map((itm: any) => (
+                                  {(block.items || []).filter((i: LabeledItem) => i.content?.trim()).map((itm: LabeledItem) => (
                                     <p key={itm.id} className="text-[#1A1A1A] text-xs">
                                       <span className="font-bold mr-1">({itm.label})</span>{itm.content}
                                     </p>
@@ -544,21 +545,21 @@ export default function PracticeStage({
                   {currentItem.mixedExamples && currentItem.mixedExamples.length > 0 && (
                     <div className="mt-4 space-y-2">
                       <p className="text-xs font-bold text-[#8B6914]">지문</p>
-                      {currentItem.mixedExamples.map((block: any) => (
+                      {currentItem.mixedExamples.map((block: MixedExampleBlock) => (
                         <div key={block.id}>
                           {block.type === 'grouped' && (block.children?.length ?? 0) > 0 && (
                             <div className="p-3 bg-[#FFF8E1] border-2 border-[#8B6914] space-y-1">
-                              {(block.children || []).map((child: any) => (
+                              {(block.children || []).map((child: MixedExampleBlock) => (
                                 <div key={child.id}>
                                   {child.type === 'text' && child.content?.trim() && (
                                     <p className="text-[#5C5C5C] text-xs whitespace-pre-wrap">{child.content}</p>
                                   )}
-                                  {child.type === 'labeled' && (child.items || []).filter((i: any) => i.content?.trim()).map((itm: any) => (
+                                  {child.type === 'labeled' && (child.items || []).filter((i: LabeledItem) => i.content?.trim()).map((itm: LabeledItem) => (
                                     <p key={itm.id} className="text-[#1A1A1A] text-xs">
                                       <span className="font-bold mr-1">{itm.label}.</span>{itm.content}
                                     </p>
                                   ))}
-                                  {child.type === 'gana' && (child.items || []).filter((i: any) => i.content?.trim()).map((itm: any) => (
+                                  {child.type === 'gana' && (child.items || []).filter((i: LabeledItem) => i.content?.trim()).map((itm: LabeledItem) => (
                                     <p key={itm.id} className="text-[#1A1A1A] text-xs">
                                       <span className="font-bold mr-1">({itm.label})</span>{itm.content}
                                     </p>
@@ -577,7 +578,7 @@ export default function PracticeStage({
                           )}
                           {block.type === 'labeled' && (block.items || []).length > 0 && (
                             <div className="p-3 bg-[#FFF8E1] border border-[#8B6914] space-y-1">
-                              {(block.items || []).filter((i: any) => i.content?.trim()).map((itm: any) => (
+                              {(block.items || []).filter((i: LabeledItem) => i.content?.trim()).map((itm: LabeledItem) => (
                                 <p key={itm.id} className="text-[#1A1A1A] text-xs">
                                   <span className="font-bold mr-1">{itm.label}.</span>{itm.content}
                                 </p>
@@ -586,7 +587,7 @@ export default function PracticeStage({
                           )}
                           {block.type === 'gana' && (block.items || []).length > 0 && (
                             <div className="p-3 bg-[#FFF8E1] border border-[#8B6914] space-y-1">
-                              {(block.items || []).filter((i: any) => i.content?.trim()).map((itm: any) => (
+                              {(block.items || []).filter((i: LabeledItem) => i.content?.trim()).map((itm: LabeledItem) => (
                                 <p key={itm.id} className="text-[#1A1A1A] text-xs">
                                   <span className="font-bold mr-1">({itm.label})</span>{itm.content}
                                 </p>
