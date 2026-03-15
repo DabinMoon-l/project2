@@ -8,7 +8,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse } from '@/lib/contexts';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/common';
-import type { QuestionData, SubQuestion } from '@/components/quiz/create/QuestionEditor';
+import type { QuestionData, SubQuestion, MixedExampleBlock } from '@/components/quiz/create/QuestionEditor';
 import QuestionList from '@/components/quiz/create/QuestionList';
 
 // 대형 컴포넌트 lazy load (4,074줄 — 수정 시에만 로드)
@@ -16,6 +16,32 @@ const QuestionEditor = dynamic(() => import('@/components/quiz/create/QuestionEd
 import QuizMetaForm, { type QuizMeta, validateRequiredTags, getChapterTags } from '@/components/quiz/create/QuizMetaForm';
 import ImageRegionSelector, { type UploadedFileItem } from '@/components/quiz/create/ImageRegionSelector';
 import { AnimatePresence } from 'framer-motion';
+
+/** Firestore 원본 문제 데이터 (퀴즈 문서 내 questions 배열) */
+interface RawQuestion {
+  id?: string;
+  text?: string;
+  type?: string;
+  choices?: string[];
+  answer?: number | number[] | string;
+  explanation?: string;
+  imageUrl?: string;
+  examples?: unknown;
+  mixedExamples?: unknown;
+  combinedGroupId?: string;
+  combinedIndex?: number;
+  combinedTotal?: number;
+  combinedMainText?: string;
+  passageType?: string;
+  passage?: string;
+  koreanAbcItems?: string[];
+  passageMixedExamples?: unknown[];
+  passageImage?: string;
+  commonQuestion?: string;
+  chapterId?: string;
+  chapterDetailId?: string;
+  questionUpdatedAt?: unknown;
+}
 
 interface EditQuizSheetProps {
   quizId: string;
@@ -48,7 +74,7 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
 
   // 문제 관리
   const [questions, setQuestions] = useState<QuestionData[]>([]);
-  const [originalQuestions, setOriginalQuestions] = useState<any[]>([]);
+  const [originalQuestions, setOriginalQuestions] = useState<RawQuestion[]>([]);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [isAddingNew, setIsAddingNew] = useState(false);
 
@@ -113,24 +139,24 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
           difficulty: data.difficulty || 'normal',
         });
 
-        setOriginalQuestions(data.questions || []);
+        setOriginalQuestions((data.questions || []) as RawQuestion[]);
 
-        const rawQuestions = data.questions || [];
+        const rawQuestions = (data.questions || []) as RawQuestion[];
         const loadedQuestions: QuestionData[] = [];
         const processedCombinedGroups = new Set<string>();
 
-        rawQuestions.forEach((q: any, index: number) => {
+        rawQuestions.forEach((q, index) => {
           if (q.combinedGroupId) {
             if (processedCombinedGroups.has(q.combinedGroupId)) return;
             processedCombinedGroups.add(q.combinedGroupId);
 
             const groupQuestions = rawQuestions.filter(
-              (gq: any) => gq.combinedGroupId === q.combinedGroupId
-            ).sort((a: any, b: any) => (a.combinedIndex || 0) - (b.combinedIndex || 0));
+              (gq) => gq.combinedGroupId === q.combinedGroupId
+            ).sort((a, b) => (a.combinedIndex || 0) - (b.combinedIndex || 0));
 
             const firstQ = groupQuestions[0];
 
-            const subQuestions: SubQuestion[] = groupQuestions.map((sq: any) => {
+            const subQuestions: SubQuestion[] = groupQuestions.map((sq) => {
               let answerIndex = -1;
               let answerIndices: number[] | undefined;
               let isMultipleAnswer = false;
@@ -139,8 +165,8 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
                 if (Array.isArray(sq.answer)) {
                   // 복수 정답
                   const sqChoiceCount = (sq.choices || []).length || 4;
-                  const anyOver = sq.answer.some((a: number) => typeof a === 'number' && a >= sqChoiceCount);
-                  answerIndices = anyOver ? sq.answer.map((a: number) => typeof a === 'number' ? a - 1 : a) : [...sq.answer];
+                  const anyOver = (sq.answer as number[]).some((a) => typeof a === 'number' && a >= sqChoiceCount);
+                  answerIndices = anyOver ? (sq.answer as number[]).map((a) => typeof a === 'number' ? a - 1 : a) : [...(sq.answer as number[])];
                   isMultipleAnswer = true;
                   answerIndex = (answerIndices && answerIndices[0] !== undefined) ? answerIndices[0] : -1;
                 } else if (typeof sq.answer === 'number') {
@@ -158,14 +184,14 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
               return {
                 id: sq.id || `${q.combinedGroupId}_${sq.combinedIndex || 0}`,
                 text: sq.text || '',
-                type: sq.type || 'multiple',
+                type: (sq.type || 'multiple') as SubQuestion['type'],
                 choices: sq.choices || undefined,
                 answerIndex: sq.type === 'multiple' || sq.type === 'ox' ? answerIndex : undefined,
                 answerIndices: isMultipleAnswer ? answerIndices : undefined,
                 isMultipleAnswer: isMultipleAnswer || undefined,
                 answerText: typeof sq.answer === 'string' ? sq.answer : undefined,
                 explanation: sq.explanation || undefined,
-                mixedExamples: sq.examples || sq.mixedExamples || undefined,
+                mixedExamples: (sq.mixedExamples || sq.examples || undefined) as MixedExampleBlock[] | undefined,
                 image: sq.imageUrl || undefined,
                 chapterId: sq.chapterId || undefined,
                 chapterDetailId: sq.chapterDetailId || undefined,
@@ -181,10 +207,10 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
               answerText: '',
               explanation: '',
               subQuestions,
-              passageType: firstQ.passageType || undefined,
+              passageType: (firstQ.passageType || undefined) as QuestionData['passageType'],
               passage: firstQ.passage || undefined,
-              koreanAbcItems: firstQ.koreanAbcItems || undefined,
-              passageMixedExamples: firstQ.passageMixedExamples || undefined,
+              koreanAbcItems: (firstQ.koreanAbcItems || undefined) as QuestionData['koreanAbcItems'],
+              passageMixedExamples: (firstQ.passageMixedExamples || undefined) as QuestionData['passageMixedExamples'],
               passageImage: firstQ.passageImage || undefined,
               commonQuestion: firstQ.commonQuestion || undefined,
             };
@@ -215,10 +241,11 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
               answerIndex = q.answer;
             }
 
+            const questionType = (q.type || 'multiple') as QuestionData['type'];
             loadedQuestions.push({
               id: q.id || `q_${index}`,
               text: q.text || '',
-              type: q.type || 'multiple',
+              type: questionType,
               choices: q.choices || ['', '', '', ''],
               answerIndex,
               answerIndices: isMultipleAnswer ? answerIndices : undefined,
@@ -226,8 +253,8 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
               answerText: typeof q.answer === 'string' ? q.answer : '',
               explanation: q.explanation || '',
               imageUrl: q.imageUrl || null,
-              examples: q.examples || null,
-              mixedExamples: q.mixedExamples || null,
+              examples: (q.examples || null) as QuestionData['examples'],
+              mixedExamples: (q.mixedExamples || null) as QuestionData['mixedExamples'],
               chapterId: q.chapterId || undefined,
               chapterDetailId: q.chapterDetailId || undefined,
             });
@@ -278,7 +305,7 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
     setIsAddingNew(false);
   }, []);
 
-  const isQuestionChanged = (original: any, current: QuestionData): boolean => {
+  const isQuestionChanged = (original: RawQuestion | undefined, current: QuestionData): boolean => {
     if (!original) return true;
     if ((original.text || '') !== (current.text || '')) return true;
     if (original.type !== current.type) return true;
@@ -303,7 +330,7 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
       }
     } else if (current.type === 'ox') {
       // OX: 0/"0"/"O" = O, 1/"1"/"X" = X
-      const normalizeOx = (v: any) => {
+      const normalizeOx = (v: unknown): number | unknown => {
         const s = String(v).toUpperCase();
         if (s === '0' || s === 'O' || s === 'TRUE') return 0;
         if (s === '1' || s === 'X' || s === 'FALSE') return 1;
@@ -326,7 +353,7 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
     return false;
   };
 
-  const isQuestionChangedForSubQuestion = (original: any, current: SubQuestion): boolean => {
+  const isQuestionChangedForSubQuestion = (original: RawQuestion | undefined, current: SubQuestion): boolean => {
     if (!original) return true;
     if (original.text !== current.text) return true;
     if (original.type !== current.type) return true;
@@ -342,7 +369,7 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
       }
     } else if (current.type === 'ox') {
       // OX: 0/"0"/"O" = O, 1/"1"/"X" = X
-      const normalizeOx = (v: any) => {
+      const normalizeOx = (v: unknown): number | unknown => {
         const s = String(v).toUpperCase();
         if (s === '0' || s === 'O' || s === 'TRUE') return 0;
         if (s === '1' || s === 'X' || s === 'FALSE') return 1;
@@ -363,14 +390,15 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
     return false;
   };
 
-  const sanitizeForFirestore = (obj: any, depth = 0): any => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Firestore 직렬화는 임의 구조를 다루므로 unknown 사용
+  const sanitizeForFirestore = (obj: unknown, depth = 0): unknown => {
     if (depth > 20) return null;
     if (obj === null || obj === undefined) return null;
     if (typeof obj === 'string' || typeof obj === 'number' || typeof obj === 'boolean') return obj;
     if (obj instanceof Timestamp) return obj;
     if (obj instanceof Date) return Timestamp.fromDate(obj);
     if (typeof obj === 'object' && obj !== null && 'seconds' in obj && 'nanoseconds' in obj && Object.keys(obj).length === 2) {
-      try { return new Timestamp(obj.seconds, obj.nanoseconds); } catch { return null; }
+      try { return new Timestamp((obj as { seconds: number }).seconds, (obj as { nanoseconds: number }).nanoseconds); } catch { return null; }
     }
     if (typeof File !== 'undefined' && obj instanceof File) return null;
     if (typeof Blob !== 'undefined' && obj instanceof Blob) return null;
@@ -379,13 +407,14 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
       return obj.map(item => sanitizeForFirestore(item, depth + 1)).filter(item => item !== undefined);
     }
     if (typeof obj === 'object') {
-      if (obj.constructor && obj.constructor !== Object && obj.constructor.name !== 'Object') {
+      const o = obj as Record<string, unknown>;
+      if (o.constructor && o.constructor !== Object && o.constructor.name !== 'Object') {
         if (obj instanceof Map) return sanitizeForFirestore(Object.fromEntries(obj), depth + 1);
         if (obj instanceof Set) return sanitizeForFirestore(Array.from(obj), depth + 1);
         return null;
       }
-      const result: Record<string, any> = {};
-      for (const [key, value] of Object.entries(obj)) {
+      const result: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(o)) {
         if (value !== undefined) {
           const sanitizedValue = sanitizeForFirestore(value, depth + 1);
           if (sanitizedValue !== undefined) result[key] = sanitizedValue;
@@ -421,7 +450,7 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
     try {
       setIsSaving(true);
 
-      const flattenedQuestions: any[] = [];
+      const flattenedQuestions: Record<string, unknown>[] = [];
       let orderIndex = 0;
 
       questions.forEach((q) => {
@@ -460,7 +489,7 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
             const originalQ = originalQuestions.find((oq) => oq.id === sq.id);
             const hasChanged = !originalQ || passageChanged || isQuestionChangedForSubQuestion(originalQ, sq);
 
-            const subQuestionData: any = {
+            const subQuestionData: Record<string, unknown> = {
               ...(originalQ || {}),
               id: sq.id || `${combinedGroupId}_${sqIndex}`,
               order: orderIndex++,
@@ -490,7 +519,7 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
               subQuestionData.combinedMainText = q.text || '';
             }
 
-            flattenedQuestions.push(sanitizeForFirestore(subQuestionData));
+            flattenedQuestions.push(sanitizeForFirestore(subQuestionData) as Record<string, unknown>);
           });
         } else {
           let answer: string | number | number[];
@@ -525,7 +554,7 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
             chapterId: q.chapterId || null,
             chapterDetailId: q.chapterDetailId || null,
             questionUpdatedAt: hasChanged ? Timestamp.now() : (originalQ?.questionUpdatedAt || null),
-          }));
+          }) as Record<string, unknown>);
         }
       });
 

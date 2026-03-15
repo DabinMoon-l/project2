@@ -6,7 +6,7 @@ import Image from 'next/image';
 import OXChoice, { OXAnswer } from './OXChoice';
 import MultipleChoice from './MultipleChoice';
 import ShortAnswer from './ShortAnswer';
-import { Question } from './QuestionCard';
+import { Question, MixedExampleItem, LabeledItem } from './QuestionCard';
 import { formatChapterLabel } from '@/lib/courseIndex';
 import { FeedbackIcon, InlineFeedbackPanel } from '@/components/common/InlineFeedback';
 
@@ -77,7 +77,7 @@ export default function CombinedQuestionGroup({
     koreanAbcItems,
     commonQuestion,
     passageMixedExamples,
-  } = firstQuestion as Question & { commonQuestion?: string; passageMixedExamples?: any[] };
+  } = firstQuestion;
 
   return (
     <motion.div
@@ -134,24 +134,24 @@ export default function CombinedQuestionGroup({
         {/* 공통 지문 - 혼합 형식 */}
         {passageMixedExamples && passageMixedExamples.length > 0 && (
           <div className="mb-4 space-y-2">
-            {passageMixedExamples.map((block: any) => (
+            {passageMixedExamples.map((block: MixedExampleItem) => (
               <div key={block.id}>
                 {/* 묶음 블록 */}
                 {block.type === 'grouped' && (
                   <div className="p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A] space-y-1">
-                    {(block.children || []).map((child: any) => (
+                    {(block.children || []).map((child: MixedExampleItem) => (
                       <div key={child.id}>
                         {child.type === 'text' && child.content?.trim() && (
                           <p className="text-[#5C5C5C] text-sm whitespace-pre-wrap">{child.content}</p>
                         )}
-                        {child.type === 'labeled' && (child.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
-                          <p key={item.id} className="text-[#1A1A1A] text-sm">
+                        {child.type === 'labeled' && (child.items || []).filter((i: LabeledItem) => i.content?.trim()).map((item: LabeledItem) => (
+                          <p key={item.label} className="text-[#1A1A1A] text-sm">
                             <span className="font-bold mr-1">{item.label}.</span>
                             {item.content}
                           </p>
                         ))}
-                        {child.type === 'gana' && (child.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
-                          <p key={item.id} className="text-[#1A1A1A] text-sm">
+                        {child.type === 'gana' && (child.items || []).filter((i: LabeledItem) => i.content?.trim()).map((item: LabeledItem) => (
+                          <p key={item.label} className="text-[#1A1A1A] text-sm">
                             <span className="font-bold mr-1">({item.label})</span>
                             {item.content}
                           </p>
@@ -172,8 +172,8 @@ export default function CombinedQuestionGroup({
                 {/* ㄱㄴㄷ 블록 */}
                 {block.type === 'labeled' && (block.items || []).length > 0 && (
                   <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
-                    {(block.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
-                      <p key={item.id} className="text-[#1A1A1A] text-sm">
+                    {(block.items || []).filter((i: LabeledItem) => i.content?.trim()).map((item: LabeledItem) => (
+                      <p key={item.label} className="text-[#1A1A1A] text-sm">
                         <span className="font-bold mr-1">{item.label}.</span>
                         {item.content}
                       </p>
@@ -183,8 +183,8 @@ export default function CombinedQuestionGroup({
                 {/* (가)(나)(다) 블록 */}
                 {block.type === 'gana' && (block.items || []).length > 0 && (
                   <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
-                    {(block.items || []).filter((i: any) => i.content?.trim()).map((item: any) => (
-                      <p key={item.id} className="text-[#1A1A1A] text-sm">
+                    {(block.items || []).filter((i: LabeledItem) => i.content?.trim()).map((item: LabeledItem) => (
+                      <p key={item.label} className="text-[#1A1A1A] text-sm">
                         <span className="font-bold mr-1">({item.label})</span>
                         {item.content}
                       </p>
@@ -291,13 +291,13 @@ export default function CombinedQuestionGroup({
                             <p className="text-[#5C5C5C] text-sm whitespace-pre-wrap">{child.content}</p>
                           )}
                           {child.type === 'labeled' && (child.items || []).filter(i => i.content.trim()).map((item) => (
-                            <p key={item.id} className="text-[#1A1A1A] text-sm">
+                            <p key={item.label} className="text-[#1A1A1A] text-sm">
                               <span className="font-bold mr-1">{item.label}.</span>
                               {item.content}
                             </p>
                           ))}
                           {child.type === 'gana' && (child.items || []).filter(i => i.content.trim()).map((item) => (
-                            <p key={item.id} className="text-[#1A1A1A] text-sm">
+                            <p key={item.label} className="text-[#1A1A1A] text-sm">
                               <span className="font-bold mr-1">({item.label})</span>
                               {item.content}
                             </p>
@@ -323,7 +323,7 @@ export default function CombinedQuestionGroup({
                       return (
                         <div key={block.id} className="mb-4 p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
                           {(block.items || []).filter(i => i.content.trim()).map((item) => (
-                            <p key={item.id} className="text-[#1A1A1A] text-sm">
+                            <p key={item.label} className="text-[#1A1A1A] text-sm">
                               <span className="font-bold mr-1">{item.label}.</span>
                               {item.content}
                             </p>
@@ -335,7 +335,7 @@ export default function CombinedQuestionGroup({
                       return (
                         <div key={block.id} className="mb-4 p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
                           {(block.items || []).filter(i => i.content.trim()).map((item) => (
-                            <p key={item.id} className="text-[#1A1A1A] text-sm">
+                            <p key={item.label} className="text-[#1A1A1A] text-sm">
                               <span className="font-bold mr-1">({item.label})</span>
                               {item.content}
                             </p>
@@ -391,11 +391,11 @@ export default function CombinedQuestionGroup({
                   )}
 
                   {/* 5. 보기 (<보기> 박스) - 이미지 다음, 발문 전에 표시 */}
-                  {question.bogi && question.bogi.items && question.bogi.items.some((i: any) => i.content?.trim()) && (
+                  {question.bogi && question.bogi.items && question.bogi.items.some((i: LabeledItem) => i.content?.trim()) && (
                     <div className="mb-4 p-4 bg-[#EDEAE4] border-2 border-[#1A1A1A]">
                       <p className="text-xs text-center text-[#5C5C5C] mb-2 font-bold">&lt;보 기&gt;</p>
                       <div className="space-y-1">
-                        {question.bogi.items.filter((i: any) => i.content?.trim()).map((item: any) => (
+                        {question.bogi.items.filter((i: LabeledItem) => i.content?.trim()).map((item: LabeledItem) => (
                           <p key={item.label} className="text-[#1A1A1A] text-sm">
                             <span className="font-bold mr-1">{item.label}.</span>
                             {item.content}

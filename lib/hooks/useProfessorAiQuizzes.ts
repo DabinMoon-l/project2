@@ -29,14 +29,14 @@ export interface ProfessorAiQuiz {
   description?: string;
   difficulty: string;
   questionCount: number;
-  questions: any[];
+  questions: Record<string, unknown>[];
   tags: string[];
   type: string;
   isPublished?: boolean;
   wasPublished?: boolean;
   publishedType?: string; // midterm | final | past
-  createdAt: any;
-  updatedAt: any;
+  createdAt: { seconds: number; nanoseconds: number; getTime?: () => number } | null;
+  updatedAt: { seconds: number; nanoseconds: number; getTime?: () => number } | null;
 }
 
 export function useProfessorAiQuizzes() {
@@ -82,9 +82,9 @@ export function useProfessorAiQuizzes() {
   const deleteQuiz = useCallback(async (quizId: string) => {
     try {
       await deleteDoc(doc(db, 'quizzes', quizId));
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[deleteQuiz] 삭제 실패:', err);
-      alert('퀴즈 삭제에 실패했습니다: ' + (err?.message || ''));
+      alert('퀴즈 삭제에 실패했습니다: ' + (((err as Error)?.message) || ''));
       throw err;
     }
   }, []);
@@ -92,7 +92,7 @@ export function useProfessorAiQuizzes() {
   // 퀴즈 공개 (type을 midterm/final/past로 변경 + creatorUid 보정)
   const publishQuiz = useCallback(async (quizId: string, publishType: string, pastExamInfo?: { pastYear: number; pastExamType: string }) => {
     try {
-      const updateData: Record<string, any> = {
+      const updateData: Record<string, unknown> = {
         type: publishType,
         originalType: 'professor-ai', // AI 출처 기록 (PDF 정답 인덱싱용)
         isPublished: true,
@@ -111,9 +111,9 @@ export function useProfessorAiQuizzes() {
         updateData.creatorId = profile.uid;
       }
       await updateDoc(doc(db, 'quizzes', quizId), updateData);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[publishQuiz] 공개 실패:', err);
-      alert('퀴즈 공개에 실패했습니다: ' + (err?.message || ''));
+      alert('퀴즈 공개에 실패했습니다: ' + (((err as Error)?.message) || ''));
       throw err;
     }
   }, [profile?.uid]);
@@ -127,9 +127,9 @@ export function useProfessorAiQuizzes() {
         type: 'professor', // type 초기화 → 캐러셀에서 제거
         updatedAt: serverTimestamp(),
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[unpublishQuiz] 비공개 전환 실패:', err);
-      alert('비공개 전환에 실패했습니다: ' + (err?.message || ''));
+      alert('비공개 전환에 실패했습니다: ' + (((err as Error)?.message) || ''));
       throw err;
     }
   }, []);
@@ -143,9 +143,9 @@ export function useProfessorAiQuizzes() {
   }, []);
 
   // 퀴즈 문제 수정 (questions 배열 전체 교체 + questionCount 동기화)
-  const updateQuestions = useCallback(async (quizId: string, questions: any[]) => {
+  const updateQuestions = useCallback(async (quizId: string, questions: Record<string, unknown>[]) => {
     // 문제별 고유 ID 부여
-    const questionsWithIds = questions.map((q: any) => {
+    const questionsWithIds = questions.map((q) => {
       if (q.id) return q;
       return { ...q, id: `q_${crypto.randomUUID().slice(0, 8)}` };
     });
@@ -163,7 +163,7 @@ export function useProfessorAiQuizzes() {
     type?: string;
     difficulty?: string;
   }) => {
-    const data: Record<string, any> = { updatedAt: serverTimestamp() };
+    const data: Record<string, unknown> = { updatedAt: serverTimestamp() };
     if (meta.description !== undefined) data.description = meta.description;
     if (meta.tags !== undefined) data.tags = meta.tags;
     if (meta.type !== undefined) data.type = meta.type;

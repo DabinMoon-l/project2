@@ -35,8 +35,8 @@ import type {
 import { BATTLE_CONFIG } from '@/lib/types/tekken';
 
 /** 예상된 CF 에러인지 (상태 불일치, 이미 처리됨 등) */
-function isExpectedError(err: any): boolean {
-  const code = err?.code || '';
+function isExpectedError(err: unknown): boolean {
+  const code = (err as { code?: string })?.code || '';
   return (
     code === 'functions/failed-precondition' ||
     code === 'functions/not-found' ||
@@ -222,7 +222,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     const attemptStart = async () => {
       try {
         await callFunction('startBattleRound', { battleId: battleIdRef.current!, roundIndex: nextRound });
-      } catch (err: any) {
+      } catch (err: unknown) {
         // 이미 시작된 경우 무시
         if (isExpectedError(err)) return;
         // 네트워크 에러 → 재시도 (최대 3회)
@@ -314,7 +314,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
             setMatchState('matched');
             clearTimers();
           }
-        } catch (err: any) {
+        } catch (err: unknown) {
           // 실제 매칭이 성사됐으면 에러 무시
           if (battleIdRef.current) return;
 
@@ -324,10 +324,10 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
           clearTimers();
         }
       }, BATTLE_CONFIG.MATCH_TIMEOUT);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('매칭 실패:', err);
       setMatchState('error');
-      setError(err?.message || '매칭에 실패했습니다.');
+      setError((err as { message?: string })?.message || '매칭에 실패했습니다.');
       clearTimers();
     }
   }, [userId, clearTimers]);
@@ -361,7 +361,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
       }
       // status === 'scored' → 결과 반환
       return result;
-    } catch (err: any) {
+    } catch (err: unknown) {
       // 예상된 상태 에러 (이미 채점됨 등) → 무시
       if (isExpectedError(err)) return null;
       // 네트워크/기타 에러 → 호출자에게 전파 (hasAnswered 복구용)
@@ -375,7 +375,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
 
     try {
       await callFunction('swapRabbit', { battleId: battleIdRef.current });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('토끼 교체 실패:', err);
     }
   }, []);
@@ -386,7 +386,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
 
     try {
       await callFunction('submitMashResult', { battleId: battleIdRef.current, taps });
-    } catch (err: any) {
+    } catch (err: unknown) {
       // 예상된 에러 (이미 처리됨 등) → 무시
       if (isExpectedError(err)) return;
       // 네트워크/기타 에러 → 호출자에게 전파
@@ -418,7 +418,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
         battleId: battleIdRef.current,
         roundIndex: battle.currentRound,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       // 예상된 에러 → 무시
       if (isExpectedError(err)) return;
       // 네트워크/기타 에러 → 호출자에게 전파
@@ -432,7 +432,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
 
     try {
       await callFunction('startBattleRound', { battleId: battleIdRef.current, roundIndex });
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (!isExpectedError(err)) {
         console.error('라운드 시작 실패:', err);
       }
@@ -490,7 +490,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     opponentActiveRabbit,
     currentRound,
     currentRoundIndex: battle?.currentRound ?? 0,
-    totalRounds: (battle as any)?.totalRounds ?? 10,
+    totalRounds: (battle as BattleState & { totalRounds?: number })?.totalRounds ?? 10,
     battleTimeLeft,
     questionTimeLeft,
 
