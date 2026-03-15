@@ -432,10 +432,7 @@ export default function QuizResultPage() {
 
           cfSuccess = true;
 
-          // 서버에서 이미 제출된 경우에도 정상 처리
-          if (attemptResult.alreadySubmitted) {
-            console.log('이미 제출된 퀴즈 (idempotency):', attemptResult.resultId);
-          }
+          // 서버에서 이미 제출된 경우에도 정상 처리 (idempotency)
         } catch (cfError: any) {
           // Cloud Function 실패 시 폴백: 클라이언트에서 직접 저장
           console.warn('recordAttempt CF 실패, 폴백 처리:', cfError.message);
