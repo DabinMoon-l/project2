@@ -71,7 +71,7 @@ export default function BogiEditor({ bogi, onBogiChange }: BogiEditorProps) {
                 <div className="flex flex-wrap gap-1">
                   {BOGI_QUESTION_PRESETS.map((preset, idx) => (
                     <button
-                      key={idx}
+                      key={`preset-${idx}`}
                       type="button"
                       onClick={() => onBogiChange({ ...bogi, questionText: preset })}
                       className={`

@@ -545,8 +545,9 @@ export default function UpdateQuizModal({
                             )}
                             {first.passageType === 'korean_abc' && first.koreanAbcItems && first.koreanAbcItems.length > 0 && (
                               <div className="space-y-0.5">
+                                {/* 정적 ㄱㄴㄷ 보기 — 순서 고정 */}
                                 {first.koreanAbcItems.map((itm, i) => (
-                                  <p key={i} className="text-[#1A1A1A]"><span className="font-bold">{KOREAN_LABELS[i]}.</span> {itm}</p>
+                                  <p key={`kabc-${i}`} className="text-[#1A1A1A]"><span className="font-bold">{KOREAN_LABELS[i]}.</span> {itm}</p>
                                 ))}
                               </div>
                             )}
@@ -683,8 +684,9 @@ export default function UpdateQuizModal({
                     )}
                     {first.passageType === 'korean_abc' && first.koreanAbcItems && first.koreanAbcItems.length > 0 && (
                       <div className="space-y-1">
+                        {/* 정적 ㄱㄴㄷ 보기 — 순서 고정 */}
                         {first.koreanAbcItems.map((itm, i) => (
-                          <p key={i} className="text-sm text-[#1A1A1A]"><span className="font-bold">{KOREAN_LABELS[i]}.</span> {itm}</p>
+                          <p key={`kabc-${i}`} className="text-sm text-[#1A1A1A]"><span className="font-bold">{KOREAN_LABELS[i]}.</span> {itm}</p>
                         ))}
                       </div>
                     )}
@@ -843,8 +845,9 @@ function PassageBlock({ question: q }: { question: UpdatedQuestion }) {
       )}
       {q.passageType === 'korean_abc' && q.koreanAbcItems && q.koreanAbcItems.length > 0 && (
         <div className="space-y-1">
+          {/* 정적 ㄱㄴㄷ 보기 — 순서 고정 */}
           {q.koreanAbcItems.map((itm, i) => (
-            <p key={i} className="text-sm text-[#1A1A1A]"><span className="font-bold">{KOREAN_LABELS[i]}.</span> {itm}</p>
+            <p key={`kabc-${i}`} className="text-sm text-[#1A1A1A]"><span className="font-bold">{KOREAN_LABELS[i]}.</span> {itm}</p>
           ))}
         </div>
       )}
@@ -880,8 +883,9 @@ function QuestionExtras({ question: q }: { question: UpdatedQuestion }) {
             <p className="text-sm text-[#1A1A1A]">{q.subQuestionOptions.join(', ')}</p>
           ) : (
             <div className="space-y-1">
+              {/* 정적 보기 항목 — 순서 고정 */}
               {q.subQuestionOptions.map((opt, i) => (
-                <p key={i} className="text-sm text-[#1A1A1A]"><span className="font-bold">{KOREAN_LABELS[i]}.</span> {opt}</p>
+                <p key={`opt-${i}`} className="text-sm text-[#1A1A1A]"><span className="font-bold">{KOREAN_LABELS[i]}.</span> {opt}</p>
               ))}
             </div>
           )}
@@ -907,8 +911,8 @@ function QuestionExtras({ question: q }: { question: UpdatedQuestion }) {
         <div className="mb-3 p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A] rounded-xl">
           <p className="text-xs text-center text-[#5C5C5C] mb-2 font-bold">&lt;보 기&gt;</p>
           <div className="space-y-1">
-            {q.bogi.items.filter(i => i.content?.trim()).map((bi, i) => (
-              <p key={i} className="text-sm text-[#1A1A1A]"><span className="font-bold mr-1">{bi.label}.</span>{bi.content}</p>
+            {q.bogi.items.filter(i => i.content?.trim()).map((bi) => (
+              <p key={`bogi-${bi.label}`} className="text-sm text-[#1A1A1A]"><span className="font-bold mr-1">{bi.label}.</span>{bi.content}</p>
             ))}
           </div>
         </div>
@@ -970,7 +974,7 @@ function AnswerInput({
           const isSelected = userAnswer?.split(',').includes(optionValue);
           return (
             <button
-              key={idx}
+              key={`choice-${idx}`}
               onClick={() => {
                 const currentAnswers = userAnswer?.split(',').filter(Boolean) || [];
                 if (isMultipleAnswer) {
@@ -1073,8 +1077,9 @@ function QuestionResultCard({
             <p className="text-[#1A1A1A]">{r.subQuestionOptions.join(', ')}</p>
           ) : (
             <div className="space-y-0.5">
+              {/* 정적 보기 항목 — 순서 고정 */}
               {r.subQuestionOptions.map((opt, i) => (
-                <p key={i} className="text-[#1A1A1A]"><span className="font-bold">{KOREAN_LABELS[i]}.</span> {opt}</p>
+                <p key={`opt-${i}`} className="text-[#1A1A1A]"><span className="font-bold">{KOREAN_LABELS[i]}.</span> {opt}</p>
               ))}
             </div>
           )}
@@ -1100,8 +1105,8 @@ function QuestionResultCard({
         <div className="mb-2 p-2 bg-[#EDEAE4] border border-[#1A1A1A] rounded-lg text-xs">
           <p className="text-center text-[#5C5C5C] mb-1 font-bold">&lt;보 기&gt;</p>
           <div className="space-y-0.5">
-            {r.bogi.items.filter((i: { label: string; content: string }) => i.content?.trim()).map((bi: { label: string; content: string }, i: number) => (
-              <p key={i} className="text-[#1A1A1A]"><span className="font-bold mr-1">{bi.label}.</span>{bi.content}</p>
+            {r.bogi.items.filter((i: { label: string; content: string }) => i.content?.trim()).map((bi: { label: string; content: string }) => (
+              <p key={`bogi-${bi.label}`} className="text-[#1A1A1A]"><span className="font-bold mr-1">{bi.label}.</span>{bi.content}</p>
             ))}
           </div>
         </div>
@@ -1148,7 +1153,7 @@ function QuestionResultCard({
             const isCorrectChoice = correctAnswerIndex.includes(choiceNum);
             const isUserChoice = userAnswerIndex.includes(choiceNum);
             return (
-              <div key={i} className={`p-2 text-xs border rounded-lg ${
+              <div key={`choice-${i}`} className={`p-2 text-xs border rounded-lg ${
                 isCorrectChoice && isUserChoice ? 'border-[#1A6B1A] bg-[#C8E6C9] text-[#1A6B1A]'
                 : isCorrectChoice ? 'border-[#1A6B1A] bg-white text-[#1A6B1A]'
                 : isUserChoice ? 'border-[#8B1A1A] bg-[#FFCDD2] text-[#8B1A1A]'

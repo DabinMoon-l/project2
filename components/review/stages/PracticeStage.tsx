@@ -159,8 +159,9 @@ export default function PracticeStage({
                       )}
                       {currentGroup.items[0].passageType === 'korean_abc' && currentGroup.items[0].koreanAbcItems && (
                         <div className="space-y-1">
+                          {/* 정적 ㄱㄴㄷ 보기 — 순서 고정 */}
                           {currentGroup.items[0].koreanAbcItems.map((itm, i) => (
-                            <p key={i} className="text-xs text-[#1A1A1A]">
+                            <p key={`kabc-${i}`} className="text-xs text-[#1A1A1A]">
                               <span className="font-bold">{KOREAN_LABELS[i]}.</span> {itm}
                             </p>
                           ))}
@@ -259,8 +260,9 @@ export default function PracticeStage({
                             </p>
                           ) : (
                             <div className="space-y-1">
+                              {/* 정적 보기 항목 — 순서 고정 */}
                               {subItem.subQuestionOptions.map((opt, i) => (
-                                <p key={i} className="text-xs text-[#1A1A1A]">
+                                <p key={`opt-${i}`} className="text-xs text-[#1A1A1A]">
                                   <span className="font-bold">{KOREAN_LABELS[i]}.</span> {opt}
                                 </p>
                               ))}
@@ -447,8 +449,9 @@ export default function PracticeStage({
                         </p>
                       ) : (
                         <div className="space-y-1">
+                          {/* 정적 보기 항목 — 순서 고정 */}
                           {currentItem.subQuestionOptions.map((opt, i) => (
-                            <p key={i} className="text-xs text-[#1A1A1A]">
+                            <p key={`opt-${i}`} className="text-xs text-[#1A1A1A]">
                               <span className="font-bold">{KOREAN_LABELS[i]}.</span> {opt}
                             </p>
                           ))}
@@ -614,8 +617,8 @@ export default function PracticeStage({
                           <>
                             <span>정답 (다음 중 하나): </span>
                             <div className="mt-1 flex flex-wrap gap-1">
-                              {currentItem.correctAnswer.toString().split('|||').map((ans: string, idx: number) => (
-                                <span key={idx} className="px-2 py-0.5 bg-[#E8F5E9] border border-[#1A6B1A] text-[#1A6B1A] font-bold">
+                              {currentItem.correctAnswer.toString().split('|||').map((ans: string) => (
+                                <span key={`ans-${ans.trim()}`} className="px-2 py-0.5 bg-[#E8F5E9] border border-[#1A6B1A] text-[#1A6B1A] font-bold">
                                   {ans.trim()}
                                 </span>
                               ))}
@@ -672,7 +675,7 @@ export default function PracticeStage({
 
                           return (
                             <button
-                              key={idx}
+                              key={`choiceExp-${idx}`}
                               onClick={() => {
                                 setExpandedChoiceExplanations(prev => {
                                   const next = new Set(prev);

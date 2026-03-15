@@ -752,8 +752,9 @@ export default function QuizPreviewPage() {
           <div className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-lg">
             <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
             <div className="space-y-1">
+              {/* 정적 ㄱㄴㄷ 보기 — 순서 고정 */}
               {q.subQuestionOptions.map((itm, idx) => (
-                <p key={idx} className="text-sm text-[#1A1A1A]">
+                <p key={`kabc-${idx}`} className="text-sm text-[#1A1A1A]">
                   <span className="font-bold">{['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ'][idx]}.</span> {itm}
                 </p>
               ))}
@@ -782,8 +783,8 @@ export default function QuizPreviewPage() {
           <div className="mb-3 p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A] rounded-lg">
             <p className="text-xs text-center text-[#5C5C5C] mb-2 font-bold">&lt;보 기&gt;</p>
             <div className="space-y-1">
-              {q.bogi.items.filter(i => i.content?.trim()).map((item, idx) => (
-                <p key={idx} className="text-sm text-[#1A1A1A]">
+              {q.bogi.items.filter(i => i.content?.trim()).map((item) => (
+                <p key={`bogi-${item.label}`} className="text-sm text-[#1A1A1A]">
                   <span className="font-bold mr-1">{item.label}.</span>
                   {item.content}
                 </p>
@@ -835,7 +836,7 @@ export default function QuizPreviewPage() {
                 const isChoiceExpanded = expandedChoices.has(choiceKey);
 
                 return (
-                  <div key={idx}>
+                  <div key={`choice-${idx}`}>
                     <div
                       className={`text-sm p-2 border rounded-lg ${
                         isCorrectOption
@@ -972,8 +973,9 @@ export default function QuizPreviewPage() {
                 </div>
                 {fb.otherTexts.length > 0 && (
                   <div className="space-y-1">
+                    {/* 피드백 텍스트는 고유 ID 없음 — 접두사 + index 사용 */}
                     {fb.otherTexts.map((text, i) => (
-                      <p key={i} className="text-xs text-[#5C5C5C] bg-[#F5F0E8] p-2 border border-[#D4CFC4] rounded">
+                      <p key={`fb-text-${i}`} className="text-xs text-[#5C5C5C] bg-[#F5F0E8] p-2 border border-[#D4CFC4] rounded">
                         {text}
                       </p>
                     ))}
@@ -1446,8 +1448,9 @@ export default function QuizPreviewPage() {
                               )}
                               {firstResult.passageType === 'korean_abc' && firstResult.koreanAbcItems && firstResult.koreanAbcItems.length > 0 && (
                                 <div className="space-y-1">
+                                  {/* 정적 ㄱㄴㄷ 제시문 — 순서 고정 */}
                                   {firstResult.koreanAbcItems.map((itm, idx) => (
-                                    <p key={idx} className="text-sm text-[#1A1A1A]">
+                                    <p key={`kabc-${idx}`} className="text-sm text-[#1A1A1A]">
                                       <span className="font-bold">{['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ'][idx]}.</span> {itm}
                                     </p>
                                   ))}

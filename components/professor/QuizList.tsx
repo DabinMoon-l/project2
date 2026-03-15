@@ -150,7 +150,7 @@ export default function QuizList({
         <div className="flex items-center justify-between">
           <div className="flex gap-2">
             {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="w-16 h-9 rounded-xl" />
+              <Skeleton key={`skel-tab-${i}`} className="w-16 h-9 rounded-xl" />
             ))}
           </div>
           <Skeleton className="w-24 h-9 rounded-xl" />
@@ -159,7 +159,7 @@ export default function QuizList({
         {/* 퀴즈 카드 스켈레톤 */}
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-32 rounded-2xl" />
+            <Skeleton key={`skel-card-${i}`} className="h-32 rounded-2xl" />
           ))}
         </div>
       </div>

@@ -40,7 +40,7 @@ export default function ShortAnswerEditor({
       {/* 정답 입력 목록 */}
       <div className="space-y-2">
         {answerTexts.map((text, index) => (
-          <div key={index} className="flex items-center gap-2">
+          <div key={`answer-${index}`} className="flex items-center gap-2">
             <input
               type="text"
               value={text}

@@ -192,7 +192,7 @@ export default function CharacterEditor({
             <div className="grid grid-cols-5 gap-3">
               {SKIN_COLORS.map((skin, index) => (
                 <motion.button
-                  key={index}
+                  key={skin.name}
                   type="button"
                   onClick={() => {
                     handleOptionChange('skinColor', index);
@@ -221,7 +221,7 @@ export default function CharacterEditor({
             <div className="space-y-2 max-h-60 overflow-y-auto">
               {currentCategory.options.map((opt, index) => (
                 <motion.button
-                  key={index}
+                  key={opt}
                   type="button"
                   onClick={() => {
                     handleOptionChange(currentCategory.key, index);

@@ -313,7 +313,7 @@ export default function StudentManagementSheet({ open, onClose, courseId }: Prop
                         {enrollResult.errors.length > 0 && (
                           <ul className="mt-2 text-xs text-[#8B1A1A] space-y-1">
                             {enrollResult.errors.map((e, i) => (
-                              <li key={i}>• {e}</li>
+                              <li key={`error-${i}`}>• {e}</li>
                             ))}
                           </ul>
                         )}
@@ -411,7 +411,7 @@ export default function StudentManagementSheet({ open, onClose, courseId }: Prop
                         </div>
                         <div className="max-h-32 overflow-y-auto">
                           {previewRows.map((row, i) => (
-                            <div key={i} className="flex items-center justify-between px-3 py-1.5 border-b border-[#D4CFC4] last:border-b-0 text-xs">
+                            <div key={`preview-${row.studentId}-${i}`} className="flex items-center justify-between px-3 py-1.5 border-b border-[#D4CFC4] last:border-b-0 text-xs">
                               <span>{row.studentId}</span>
                               <button
                                 onClick={() => removePreviewRow(i)}

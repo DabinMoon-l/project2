@@ -1169,8 +1169,9 @@ export default function QuizStatsModal({
                             {currentQuestion.passageType === 'korean_abc' && currentQuestion.koreanAbcItems && currentQuestion.koreanAbcItems.length > 0 && (
                               <div className="p-2 bg-[#F5F0E8] border border-[#1A1A1A] space-y-0.5 rounded-lg">
                                 <p className="text-[10px] text-[#5C5C5C] mb-1 font-bold">제시문</p>
+                                {/* 정적 ㄱㄴㄷ 제시문 — 순서 고정 */}
                                 {currentQuestion.koreanAbcItems.filter(i => i.trim()).map((item, idx) => (
-                                  <p key={idx} className="text-xs text-[#1A1A1A]">
+                                  <p key={`kabc-${idx}`} className="text-xs text-[#1A1A1A]">
                                     <span className="font-bold mr-1">{['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ'][idx]}.</span>
                                     {item}
                                   </p>
@@ -1209,8 +1210,8 @@ export default function QuizStatsModal({
                                           <span className="font-bold mr-1">{child.label}.</span>{child.content}
                                         </p>
                                       )}
-                                      {child.items?.map((labeledItem, idx) => (
-                                        <p key={idx} className="text-[#1A1A1A] text-xs">
+                                      {child.items?.map((labeledItem) => (
+                                        <p key={`${child.id}-${labeledItem.label}`} className="text-[#1A1A1A] text-xs">
                                           <span className="font-bold mr-1">{labeledItem.label}.</span>{labeledItem.content}
                                         </p>
                                       ))}
@@ -1223,8 +1224,8 @@ export default function QuizStatsModal({
                                           <span className="font-bold mr-1">({child.label})</span>{child.content}
                                         </p>
                                       )}
-                                      {child.items?.map((labeledItem, idx) => (
-                                        <p key={idx} className="text-[#1A1A1A] text-xs">
+                                      {child.items?.map((labeledItem) => (
+                                        <p key={`${child.id}-${labeledItem.label}`} className="text-[#1A1A1A] text-xs">
                                           <span className="font-bold mr-1">({labeledItem.label})</span>{labeledItem.content}
                                         </p>
                                       ))}
@@ -1238,7 +1239,7 @@ export default function QuizStatsModal({
                                         </p>
                                       )}
                                       {child.items?.map((labeledItem, idx) => (
-                                        <p key={idx} className="text-[#1A1A1A] text-xs">
+                                        <p key={`${child.id}-bullet-${idx}`} className="text-[#1A1A1A] text-xs">
                                           <span className="font-bold mr-1">◦</span>{labeledItem.content}
                                         </p>
                                       ))}
@@ -1271,8 +1272,8 @@ export default function QuizStatsModal({
                                       <span className="font-bold mr-1">{item.label}.</span>{item.content}
                                     </p>
                                   )}
-                                  {item.items?.map((labeledItem, idx) => (
-                                    <p key={idx} className="text-xs text-[#1A1A1A]">
+                                  {item.items?.map((labeledItem) => (
+                                    <p key={`${item.id}-${labeledItem.label}`} className="text-xs text-[#1A1A1A]">
                                       <span className="font-bold mr-1">{labeledItem.label}.</span>{labeledItem.content}
                                     </p>
                                   ))}
@@ -1287,8 +1288,8 @@ export default function QuizStatsModal({
                                       <span className="font-bold mr-1">({item.label})</span>{item.content}
                                     </p>
                                   )}
-                                  {item.items?.map((labeledItem, idx) => (
-                                    <p key={idx} className="text-xs text-[#1A1A1A]">
+                                  {item.items?.map((labeledItem) => (
+                                    <p key={`${item.id}-${labeledItem.label}`} className="text-xs text-[#1A1A1A]">
                                       <span className="font-bold mr-1">({labeledItem.label})</span>{labeledItem.content}
                                     </p>
                                   ))}
@@ -1393,7 +1394,7 @@ export default function QuizStatsModal({
                                 const choiceExpl = choiceExpls?.[optIdx];
 
                                 return (
-                                  <div key={optIdx}>
+                                  <div key={`dist-${optIdx}`}>
                                     <div
                                       className={`relative flex items-center gap-2 px-2 py-1.5 border overflow-hidden ${
                                         opt.isCorrect ? 'border-[#1A6B1A]' : isHighestWrong ? 'border-[#8B1A1A]' : 'border-[#D4CFC4]'

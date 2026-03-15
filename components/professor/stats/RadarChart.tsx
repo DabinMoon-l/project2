@@ -296,7 +296,7 @@ function RadarSvg({ radarData, weakCount }: {
           const labelPos = getPoint(i, 125);
           const isWeak = d.value > 0 && d.value < 60;
           return (
-            <g key={i}>
+            <g key={`axis-${d.fullLabel}`}>
               <line x1={CX} y1={CY} x2={end.x} y2={end.y}
                 stroke="#D4CFC4" strokeWidth={0.5} />
               <text
@@ -340,7 +340,7 @@ function RadarSvg({ radarData, weakCount }: {
           const ly = CY + labelR * Math.sin(labelAngle);
 
           return (
-            <motion.g key={i}
+            <motion.g key={`point-${radarData[i].fullLabel}`}
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ delay: 0.3 + i * 0.05 }}

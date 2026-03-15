@@ -838,7 +838,7 @@ export default function AnnouncementChannel({
                         {pendingImagePreviews.length > 0 && (
                           <div className="flex gap-1.5 overflow-x-auto">
                             {pendingImagePreviews.map((url, idx) => (
-                              <div key={idx} className="relative shrink-0">
+                              <div key={`img-preview-${idx}`} className="relative shrink-0">
                                 <img src={url} alt="" className="h-14 object-cover rounded-lg border border-white/15" />
                                 <button onClick={() => clearImg(idx)} className="absolute -top-1 -right-1 w-4 h-4 bg-white/80 text-black flex items-center justify-center text-[8px] rounded-full">✕</button>
                               </div>
@@ -847,7 +847,7 @@ export default function AnnouncementChannel({
                         )}
                         {/* 다중 파일 미리보기 */}
                         {pendingFiles.map((f, idx) => (
-                          <div key={idx} className="flex items-center gap-2 p-1.5 bg-white/5 border border-white/15 rounded-lg text-[11px]">
+                          <div key={`file-${f.name}-${idx}`} className="flex items-center gap-2 p-1.5 bg-white/5 border border-white/15 rounded-lg text-[11px]">
                             <span className="truncate flex-1 text-white/80">{f.name}</span>
                             <span className="text-white/40 shrink-0">{fmtSize(f.size)}</span>
                             <button onClick={() => clearFile(idx)} className="text-white/60 font-bold shrink-0">✕</button>
@@ -879,7 +879,7 @@ export default function AnnouncementChannel({
                                     <div className="flex items-center gap-1">
                                       {editingPolls.map((_, di) => (
                                         <button
-                                          key={di}
+                                          key={`poll-dot-${di}`}
                                           onClick={() => setEditingPollIdx(di)}
                                           className={`w-1.5 h-1.5 rounded-full transition-colors ${di === pi ? 'bg-white/80' : 'bg-white/25'}`}
                                         />
@@ -899,7 +899,7 @@ export default function AnnouncementChannel({
                                 <input value={cur.question} onChange={(e) => updateCur((p) => ({ ...p, question: e.target.value }))} placeholder="투표 질문"
                                   className="w-full p-1.5 border border-white/15 bg-white/10 rounded-lg text-[11px] text-white placeholder:text-white/40 focus:outline-none" />
                                 {cur.options.map((o, idx) => (
-                                  <div key={idx} className="flex items-center w-full border border-white/15 bg-white/10 rounded-lg">
+                                  <div key={`opt-${idx}`} className="flex items-center w-full border border-white/15 bg-white/10 rounded-lg">
                                     <input value={o}
                                       onChange={(e) => updateCur((p) => {
                                         const opts = [...p.options]; opts[idx] = e.target.value; return { ...p, options: opts };

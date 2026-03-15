@@ -172,7 +172,7 @@ function QuestionResultItem({
 
                       return (
                         <div
-                          key={index}
+                          key={`opt-${index}`}
                           className={`
                             text-sm p-2 rounded-lg flex items-center gap-2
                             ${isCorrectOption ? 'bg-green-100 text-green-800' : ''}

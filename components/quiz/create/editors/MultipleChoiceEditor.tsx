@@ -83,7 +83,7 @@ export default function MultipleChoiceEditor({
             : answerIndex === index;
 
           return (
-            <div key={index} className="flex items-center gap-2">
+            <div key={`choice-${index}`} className="flex items-center gap-2">
               {/* 정답 체크 버튼 */}
               <motion.button
                 type="button"

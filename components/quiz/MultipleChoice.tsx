@@ -177,7 +177,7 @@ export default function MultipleChoice({
 
         return (
           <motion.button
-            key={index}
+            key={`choice-${index}`}
             variants={itemVariants}
             whileTap={!disabled ? { scale: 0.98 } : undefined}
             onClick={() => handleSelect(index)}

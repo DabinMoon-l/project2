@@ -150,8 +150,9 @@ export function AcademicArchiveSection({ posts, courseId }: { posts: Post[]; cou
   if (loading) {
     return (
       <div className="grid grid-cols-2 gap-2.5">
+        {/* 스켈레톤 플레이스홀더 */}
         {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-[180px] rounded-none" />
+          <Skeleton key={`skel-${i}`} className="h-[180px] rounded-none" />
         ))}
       </div>
     );
@@ -909,7 +910,7 @@ export function ActivitySection({ posts, courseId }: { posts: Post[]; courseId: 
     return (
       <div className="space-y-3">
         <div className="grid grid-cols-3 gap-3">
-          {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 rounded-none" />)}
+          {[1, 2, 3].map(i => <Skeleton key={`skel-${i}`} className="h-16 rounded-none" />)}
         </div>
         <Skeleton className="h-48 rounded-none" />
       </div>
@@ -1062,7 +1063,7 @@ export function ActivitySection({ posts, courseId }: { posts: Post[]; courseId: 
                     const y = 82 - barH;
                     const isWeekend = day.day === '토' || day.day === '일';
                     return (
-                      <g key={i}>
+                      <g key={day.date}>
                         <rect x={x} y={y} width={barW} height={Math.max(barH, day.count > 0 ? 2 : 0)} fill="#1A1A1A" rx="1" />
                         {day.count > 0 && (
                           <text x={x + barW / 2} y={y - 6} textAnchor="middle" fontSize="11" fontWeight="700" fill="#1A1A1A">
@@ -1129,7 +1130,7 @@ export function ActivitySection({ posts, courseId }: { posts: Post[]; courseId: 
                       const barH = (m.count / maxMonthly) * 70;
                       const y = 95 - barH;
                       return (
-                        <g key={i}>
+                        <g key={m.label}>
                           <rect x={x} y={y} width={barW} height={Math.max(barH, m.count > 0 ? 2 : 0)} fill="#1A1A1A" rx="1" />
                           <text x={x + barW / 2} y={y - 7} textAnchor="middle" fontSize="12" fontWeight="700" fill="#1A1A1A">
                             {m.count}

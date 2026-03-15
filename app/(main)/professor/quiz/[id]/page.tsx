@@ -144,8 +144,9 @@ function QuestionAnalysis({
             onChange={(e) => onSelect(Number(e.target.value))}
             className="appearance-none bg-indigo-50 text-indigo-700 font-bold px-4 py-2 pr-8 rounded-lg cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-300"
           >
+            {/* 정적 드롭다운 옵션 — 순서 고정 */}
             {Array.from({ length: totalQuestions }, (_, i) => (
-              <option key={i} value={i}>
+              <option key={`q-${i}`} value={i}>
                 Q{i + 1}
               </option>
             ))}
@@ -291,7 +292,7 @@ function QuestionAnalysis({
           {/* 하위 문제들 */}
           <div className="space-y-4 mt-4">
             {subQuestions.map((sub, subIdx) => (
-              <div key={subIdx} className="p-4 bg-gray-50 rounded-xl">
+              <div key={sub.id} className="p-4 bg-gray-50 rounded-xl">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-sm font-bold text-gray-600">Q{questionIndex + 1}-{subIdx + 1}</span>
                   <span
@@ -319,9 +320,10 @@ function QuestionAnalysis({
                 {/* 하위 문제 선지 */}
                 {sub.type === 'multiple' && sub.choices && (
                   <div className="space-y-1">
+                    {/* 정적 선지 목록 — 순서 고정 */}
                     {sub.choices.map((choice, i) => (
                       <div
-                        key={i}
+                        key={`choice-${i}`}
                         className={`
                           text-xs px-2 py-1 rounded
                           ${
@@ -413,7 +415,7 @@ function QuestionAnalysis({
                   : correctAnswer === i;
 
                 return (
-                  <div key={i} className="flex items-center gap-3">
+                  <div key={`stat-${i}`} className="flex items-center gap-3">
                     <span className={`w-6 text-center font-bold text-sm ${isCorrect ? 'text-green-600' : 'text-gray-500'}`}>
                       {CHOICE_LABELS[i]}
                     </span>
@@ -503,8 +505,9 @@ function QuestionAnalysis({
                 <div className="p-3 bg-blue-50 rounded-lg">
                   <p className="text-xs text-blue-600 font-medium mb-1">평가 기준</p>
                   <ul className="space-y-1 text-sm text-blue-800">
+                    {/* 루브릭 항목은 고유 ID 없음 — 접두사 + index 사용 */}
                     {question.rubric.filter((r) => r.criteria?.trim()).map((r: RubricEntry, idx: number) => (
-                      <li key={idx} className="flex items-start gap-2">
+                      <li key={`rubric-${idx}`} className="flex items-start gap-2">
                         <span className="font-bold shrink-0">·</span>
                         <span>
                           {r.criteria}
@@ -1001,7 +1004,7 @@ export default function QuizDetailPage() {
 
                       return (
                         <div
-                          key={i}
+                          key={`preview-choice-${i}`}
                           className={`
                             text-xs px-2 py-1 rounded
                             ${isCorrect ? 'bg-green-100 text-green-700 font-medium' : 'text-gray-600'}

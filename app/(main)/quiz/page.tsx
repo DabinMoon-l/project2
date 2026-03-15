@@ -457,7 +457,7 @@ function QuizListPageContent() {
           {isLoadingMyQuizzes && (
             <div className="grid grid-cols-2 gap-3">
               {[1, 2, 3, 4].map((i) => (
-                <SkeletonCard key={i} />
+                <SkeletonCard key={`skel-${i}`} />
               ))}
             </div>
           )}
@@ -686,7 +686,7 @@ function QuizListPageContent() {
             {actualLoading.custom && (
               <div className="grid grid-cols-2 gap-3">
                 {[1, 2, 3, 4].map((i) => (
-                  <SkeletonCard key={i} />
+                  <SkeletonCard key={`skel-${i}`} />
                 ))}
               </div>
             )}
@@ -1050,7 +1050,7 @@ function QuizListPageContent() {
             {isLoadingMyQuizzes && (
               <div className="grid grid-cols-2 gap-3">
                 {[1, 2, 3, 4].map((i) => (
-                  <SkeletonCard key={i} />
+                  <SkeletonCard key={`skel-${i}`} />
                 ))}
               </div>
             )}

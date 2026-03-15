@@ -57,9 +57,10 @@ export default function Skeleton({
   if (variant === 'text' && lines > 1) {
     return (
       <div className="space-y-2" {...props}>
+        {/* 스켈레톤 라인 플레이스홀더 */}
         {Array.from({ length: lines }).map((_, index) => (
           <div
-            key={index}
+            key={`skel-line-${index}`}
             className={`
               bg-gray-200
               ${variantStyles.text}
@@ -166,9 +167,10 @@ interface SkeletonListProps {
 export function SkeletonList({ count = 5, className = '' }: SkeletonListProps) {
   return (
     <div className={`space-y-3 ${className}`}>
+      {/* 스켈레톤 리스트 플레이스홀더 */}
       {Array.from({ length: count }).map((_, index) => (
         <div
-          key={index}
+          key={`skel-item-${index}`}
           className="flex items-center gap-3 p-3 bg-white rounded-xl"
         >
           <SkeletonAvatar size={48} />
@@ -199,9 +201,10 @@ export function SkeletonQuizCard({ className = '' }: SkeletonQuizCardProps) {
       <SkeletonText lines={2} className="mb-4" />
       {/* 선택지 */}
       <div className="space-y-2">
+        {/* 스켈레톤 선택지 플레이스홀더 */}
         {Array.from({ length: 4 }).map((_, index) => (
           <Skeleton
-            key={index}
+            key={`skel-choice-${index}`}
             variant="rectangular"
             height={44}
           />
