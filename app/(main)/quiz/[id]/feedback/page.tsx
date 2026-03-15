@@ -22,6 +22,7 @@ import { useMilestone } from '@/lib/contexts/MilestoneContext';
 import {
   FEEDBACK_TYPE_OPTIONS,
   SWIPE_THRESHOLD,
+  FeedbackMixedBlock,
 } from './feedbackTypes';
 import type {
   FeedbackType,
@@ -34,6 +35,42 @@ import type {
 
 
 import { SingleQuestionCard, CombinedQuestionCard } from './feedbackQuestionCards';
+
+/** Firestore 퀴즈 문서 내 개별 문제 원본 데이터 */
+interface RawQuizQuestion {
+  id?: string;
+  type?: string;
+  text?: string;
+  question?: string;
+  choices?: string[];
+  options?: string[];
+  answer?: number | number[] | string;
+  correctAnswer?: number | string;
+  explanation?: string;
+  rubric?: Array<{ criteria: string; percentage: number; description?: string }>;
+  image?: string;
+  imageUrl?: string;
+  combinedGroupId?: string;
+  combinedIndex?: number;
+  subQuestionIndex?: number;
+  commonQuestion?: string;
+  passage?: string;
+  passageType?: string;
+  passageImage?: string;
+  koreanAbcItems?: string[];
+  passageMixedExamples?: FeedbackMixedBlock[];
+  examples?: string[];
+  examplesType?: string;
+  mixedExamples?: FeedbackMixedBlock[];
+  subQuestionOptions?: string[];
+  subQuestionOptionsType?: string;
+  passagePrompt?: string;
+  bogi?: {
+    questionText?: string;
+    items?: Array<{ label: string; content: string }>;
+  } | null;
+}
+
 
 export default function FeedbackPage() {
   const router = useRouter();
@@ -133,7 +170,7 @@ export default function FeedbackPage() {
           const resultJson = JSON.parse(storedResult);
           if (resultJson.questionResults && resultJson.questionResults.length > 0) {
             // 결과 데이터에서 userAnswer 추출
-            userAnswers = resultJson.questionResults.map((r: any) => r.userAnswer || '');
+            userAnswers = resultJson.questionResults.map((r: { userAnswer?: string }) => r.userAnswer || '');
           }
         } catch (e) {
           console.error('결과 데이터 파싱 오류:', e);
@@ -149,29 +186,29 @@ export default function FeedbackPage() {
       }
 
       // 문제별 결과 생성
-      const questionResults: QuestionResult[] = questions.map(
-        (q: any, index: number) => {
+      const questionResults: QuestionResult[] = (questions as RawQuizQuestion[]).map(
+        (q, index) => {
           const userAnswer = userAnswers[index] || '';
           // correctAnswer가 있으면 그대로 사용, 없으면 answer 필드에서 변환
-          let correctAnswer: any = '';
+          let correctAnswer: string = '';
           if (q.correctAnswer !== undefined && q.correctAnswer !== null) {
-            correctAnswer = q.correctAnswer;
+            correctAnswer = String(q.correctAnswer);
           } else if (q.answer !== undefined && q.answer !== null) {
             // AI 퀴즈: answer가 0-indexed 숫자 → 문자열 변환
             if (q.type === 'multiple') {
               if (Array.isArray(q.answer)) {
-                correctAnswer = q.answer.map((a: number) => String(a)).join(',');
+                correctAnswer = (q.answer as number[]).map((a) => String(a)).join(',');
               } else if (typeof q.answer === 'number') {
                 correctAnswer = String(q.answer);
               } else {
-                correctAnswer = q.answer;
+                correctAnswer = String(q.answer);
               }
             } else if (q.type === 'ox') {
               if (q.answer === 0) correctAnswer = 'O';
               else if (q.answer === 1) correctAnswer = 'X';
-              else correctAnswer = q.answer;
+              else correctAnswer = String(q.answer);
             } else {
-              correctAnswer = q.answer;
+              correctAnswer = String(q.answer);
             }
           }
 
@@ -222,30 +259,31 @@ export default function FeedbackPage() {
           let displayUserAnswer = userAnswer;
           if (q.type === 'ox') {
             // 정답 표시 변환
-            if (correctAnswer === '0' || correctAnswer === 0) displayCorrectAnswer = 'O';
-            else if (correctAnswer === '1' || correctAnswer === 1) displayCorrectAnswer = 'X';
+            if (correctAnswer === '0') displayCorrectAnswer = 'O';
+            else if (correctAnswer === '1') displayCorrectAnswer = 'X';
             // 사용자 답변은 이미 O/X로 저장됨
           }
 
           // mixedExamples 처리 (subQuestionOptions가 없고 mixedExamples가 있는 경우)
-          let subQuestionOptions = q.subQuestionOptions || null;
-          let subQuestionOptionsType = q.subQuestionOptionsType || null;
-          let mixedExamples = null;
+          let subQuestionOptions = q.subQuestionOptions || undefined;
+          let subQuestionOptionsType: QuestionResult['subQuestionOptionsType'] = (q.subQuestionOptionsType as QuestionResult['subQuestionOptionsType']) || undefined;
+          let mixedExamples: QuestionResult['mixedExamples'] = undefined;
 
           if (q.mixedExamples && q.mixedExamples.length > 0) {
             mixedExamples = q.mixedExamples;
-            subQuestionOptionsType = 'mixed';
+            subQuestionOptionsType = 'mixed' as const;
           } else if (!subQuestionOptions && q.examples && q.examples.length > 0) {
             // examples 필드를 subQuestionOptions로 변환
             subQuestionOptions = q.examples;
-            subQuestionOptionsType = q.examplesType || 'text';
+            subQuestionOptionsType = (q.examplesType as QuestionResult['subQuestionOptionsType']) || 'text';
           }
 
           // 타입 정규화: short_answer, subjective → short
-          const normalizedType = (() => {
+          const normalizedType = ((): QuestionResult['type'] => {
             const t = q.type || 'short';
             if (t === 'short_answer' || t === 'subjective') return 'short';
-            return t;
+            if (t === 'ox' || t === 'multiple' || t === 'short' || t === 'essay' || t === 'combined') return t;
+            return 'short';
           })();
 
           return {
@@ -261,7 +299,7 @@ export default function FeedbackPage() {
             rubric: q.rubric || undefined,
             combinedGroupId: q.combinedGroupId,
             subQuestionIndex: q.subQuestionIndex,
-            image: q.image || q.imageUrl || null,
+            image: q.image || q.imageUrl || undefined,
             subQuestionOptions,
             subQuestionOptionsType,
             mixedExamples,
@@ -270,7 +308,7 @@ export default function FeedbackPage() {
             bogiQuestionText: q.bogi?.questionText || undefined,
             bogi: q.bogi ? {
               questionText: q.bogi.questionText,
-              items: (q.bogi.items || []).map((item: any) => ({
+              items: (q.bogi.items || []).map((item: { label: string; content: string }) => ({
                 label: item.label,
                 content: item.content,
               })),
@@ -284,7 +322,7 @@ export default function FeedbackPage() {
       const processedGroupIds = new Set<string>();
       let displayNumber = 1;
 
-      questions.forEach((q: any, index: number) => {
+      (questions as RawQuizQuestion[]).forEach((q, index) => {
         const result = questionResults[index];
 
         if (q.combinedGroupId) {
@@ -293,11 +331,11 @@ export default function FeedbackPage() {
             processedGroupIds.add(q.combinedGroupId);
 
             // 같은 그룹의 모든 하위 문제 찾기
-            const groupQuestions = questions
-              .map((gq: any, gIdx: number) => ({ q: gq, idx: gIdx }))
-              .filter((item: any) => item.q.combinedGroupId === q.combinedGroupId);
+            const groupQuestions = (questions as RawQuizQuestion[])
+              .map((gq, gIdx) => ({ q: gq, idx: gIdx }))
+              .filter((item) => item.q.combinedGroupId === q.combinedGroupId);
 
-            const subQuestions = groupQuestions.map((item: any, subIdx: number) => ({
+            const subQuestions = groupQuestions.map((item, subIdx) => ({
               ...questionResults[item.idx],
               subQuestionIndex: subIdx,
             }));
@@ -380,7 +418,7 @@ export default function FeedbackPage() {
   /**
    * 스와이프 핸들러
    */
-  const handleDragEnd = (event: any, info: PanInfo) => {
+  const handleDragEnd = (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     if (info.offset.x > SWIPE_THRESHOLD) {
       goToPrev();
     } else if (info.offset.x < -SWIPE_THRESHOLD) {
