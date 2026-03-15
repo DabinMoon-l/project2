@@ -12,10 +12,8 @@ import type {
   QuestionResult,
   CombinedGroup,
   SingleQuestionCardProps,
-  FeedbackMixedBlock,
-  FeedbackMixedChild,
-  FeedbackLabeledItem,
 } from './feedbackTypes';
+import MixedExamplesRenderer from '@/components/common/MixedExamplesRenderer';
 
 /**
  * 일반 문제 카드 컴포넌트
@@ -52,76 +50,11 @@ export function SingleQuestionCard({
         </p>
       </div>
 
-      {/* 1. 지문 - 혼합 형식 (grouped 먼저, 나머지는 생성 순서대로) */}
+      {/* 1. 지문 - 혼합 형식 */}
       {question.mixedExamples && question.mixedExamples.length > 0 && (
         <div className="mb-4 space-y-2">
           <p className="text-xs font-bold text-[#5C5C5C]">지문</p>
-          {/* 1-1. 묶음 블록 (grouped) 먼저 */}
-          {question.mixedExamples.filter((b: FeedbackMixedBlock) => b.type === 'grouped').map((block: FeedbackMixedBlock) => (
-            <div key={block.id} className="p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A] space-y-1">
-              {(block.children || []).map((child: FeedbackMixedChild) => (
-                <div key={child.id}>
-                  {child.type === 'text' && child.content?.trim() && (
-                    <p className="text-[#5C5C5C] text-xs whitespace-pre-wrap">{child.content}</p>
-                  )}
-                  {child.type === 'labeled' && (child.items || []).filter((i: FeedbackLabeledItem) => i.content?.trim()).map((item: FeedbackLabeledItem) => (
-                    <p key={item.id} className="text-[#1A1A1A] text-xs">
-                      <span className="font-bold mr-1">{item.label}.</span>
-                      {item.content}
-                    </p>
-                  ))}
-                  {child.type === 'gana' && (child.items || []).filter((i: FeedbackLabeledItem) => i.content?.trim()).map((item: FeedbackLabeledItem) => (
-                    <p key={item.id} className="text-[#1A1A1A] text-xs">
-                      <span className="font-bold mr-1">({item.label})</span>
-                      {item.content}
-                    </p>
-                  ))}
-                  {child.type === 'image' && child.imageUrl && (
-                    <Image src={child.imageUrl} alt="지문 이미지" width={800} height={400} className="max-w-full h-auto border border-[#1A1A1A]" unoptimized />
-                  )}
-                </div>
-              ))}
-            </div>
-          ))}
-          {/* 1-2. 나머지 블록 (생성 순서대로) */}
-          {question.mixedExamples.filter((b: FeedbackMixedBlock) => b.type !== 'grouped').map((block: FeedbackMixedBlock) => (
-            <div key={block.id}>
-              {/* 텍스트 블록 */}
-              {block.type === 'text' && block.content?.trim() && (
-                <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
-                  <p className="text-[#1A1A1A] text-xs whitespace-pre-wrap">{block.content}</p>
-                </div>
-              )}
-              {/* ㄱㄴㄷ 블록 */}
-              {block.type === 'labeled' && (block.items || []).length > 0 && (
-                <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
-                  {(block.items || []).filter((i: FeedbackLabeledItem) => i.content?.trim()).map((item: FeedbackLabeledItem) => (
-                    <p key={item.id} className="text-[#1A1A1A] text-xs">
-                      <span className="font-bold mr-1">{item.label}.</span>
-                      {item.content}
-                    </p>
-                  ))}
-                </div>
-              )}
-              {/* (가)(나)(다) 블록 */}
-              {block.type === 'gana' && (block.items || []).length > 0 && (
-                <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
-                  {(block.items || []).filter((i: FeedbackLabeledItem) => i.content?.trim()).map((item: FeedbackLabeledItem) => (
-                    <p key={item.id} className="text-[#1A1A1A] text-xs">
-                      <span className="font-bold mr-1">({item.label})</span>
-                      {item.content}
-                    </p>
-                  ))}
-                </div>
-              )}
-              {/* 이미지 블록 */}
-              {block.type === 'image' && block.imageUrl && (
-                <div className="border border-[#1A1A1A] overflow-hidden">
-                  <Image src={block.imageUrl} alt="지문 이미지" width={800} height={400} className="max-w-full h-auto" unoptimized />
-                </div>
-              )}
-            </div>
-          ))}
+          <MixedExamplesRenderer blocks={question.mixedExamples} spacing="loose" textSize="xs" imageRenderer="next-image" blockWrapper="passage" groupedBorderThick />
         </div>
       )}
 
@@ -441,72 +374,8 @@ export function CombinedQuestionCard({
 
         {/* 공통 지문 - 혼합 형식 */}
         {group.passageMixedExamples && group.passageMixedExamples.length > 0 && (
-          <div className="mb-4 space-y-2">
-            {group.passageMixedExamples.map((block: FeedbackMixedBlock) => (
-              <div key={block.id}>
-                {/* 묶음 블록 */}
-                {block.type === 'grouped' && (
-                  <div className="p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A] space-y-1">
-                    {(block.children || []).map((child: FeedbackMixedChild) => (
-                      <div key={child.id}>
-                        {child.type === 'text' && child.content?.trim() && (
-                          <p className="text-[#5C5C5C] text-xs whitespace-pre-wrap">{child.content}</p>
-                        )}
-                        {child.type === 'labeled' && (child.items || []).filter((i: FeedbackLabeledItem) => i.content?.trim()).map((item: FeedbackLabeledItem) => (
-                          <p key={item.id} className="text-[#1A1A1A] text-xs">
-                            <span className="font-bold mr-1">{item.label}.</span>
-                            {item.content}
-                          </p>
-                        ))}
-                        {child.type === 'gana' && (child.items || []).filter((i: FeedbackLabeledItem) => i.content?.trim()).map((item: FeedbackLabeledItem) => (
-                          <p key={item.id} className="text-[#1A1A1A] text-xs">
-                            <span className="font-bold mr-1">({item.label})</span>
-                            {item.content}
-                          </p>
-                        ))}
-                        {child.type === 'image' && child.imageUrl && (
-                          <Image src={child.imageUrl} alt="지문 이미지" width={800} height={400} className="max-w-full h-auto border border-[#1A1A1A]" unoptimized />
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {/* 텍스트 블록 */}
-                {block.type === 'text' && block.content?.trim() && (
-                  <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
-                    <p className="text-[#1A1A1A] text-xs whitespace-pre-wrap">{block.content}</p>
-                  </div>
-                )}
-                {/* ㄱㄴㄷ 블록 */}
-                {block.type === 'labeled' && (block.items || []).length > 0 && (
-                  <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
-                    {(block.items || []).filter((i: FeedbackLabeledItem) => i.content?.trim()).map((item: FeedbackLabeledItem) => (
-                      <p key={item.id} className="text-[#1A1A1A] text-xs">
-                        <span className="font-bold mr-1">{item.label}.</span>
-                        {item.content}
-                      </p>
-                    ))}
-                  </div>
-                )}
-                {/* (가)(나)(다) 블록 */}
-                {block.type === 'gana' && (block.items || []).length > 0 && (
-                  <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
-                    {(block.items || []).filter((i: FeedbackLabeledItem) => i.content?.trim()).map((item: FeedbackLabeledItem) => (
-                      <p key={item.id} className="text-[#1A1A1A] text-xs">
-                        <span className="font-bold mr-1">({item.label})</span>
-                        {item.content}
-                      </p>
-                    ))}
-                  </div>
-                )}
-                {/* 이미지 블록 */}
-                {block.type === 'image' && block.imageUrl && (
-                  <div className="border border-[#1A1A1A] overflow-hidden">
-                    <Image src={block.imageUrl} alt="지문 이미지" width={800} height={400} className="max-w-full h-auto" unoptimized />
-                  </div>
-                )}
-              </div>
-            ))}
+          <div className="mb-4">
+            <MixedExamplesRenderer blocks={group.passageMixedExamples} spacing="loose" textSize="xs" imageRenderer="next-image" blockWrapper="passage" groupedBorderThick />
           </div>
         )}
 
@@ -574,76 +443,11 @@ export function CombinedQuestionCard({
               </div>
             )}
 
-            {/* 하위 문제 지문 - 혼합 형식 (grouped 먼저, 나머지 생성 순서대로) */}
+            {/* 하위 문제 지문 - 혼합 형식 */}
             {question.mixedExamples && question.mixedExamples.length > 0 && (
               <div className="mb-4 space-y-2">
                 <p className="text-xs font-bold text-[#5C5C5C]">지문</p>
-                {/* 묶음 블록 먼저 */}
-                {question.mixedExamples.filter((b: FeedbackMixedBlock) => b.type === 'grouped').map((block: FeedbackMixedBlock) => (
-                  <div key={block.id} className="p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A] space-y-1">
-                    {(block.children || []).map((child: FeedbackMixedChild) => (
-                      <div key={child.id}>
-                        {child.type === 'text' && child.content?.trim() && (
-                          <p className="text-[#5C5C5C] text-xs whitespace-pre-wrap">{child.content}</p>
-                        )}
-                        {child.type === 'labeled' && (child.items || []).filter((i: FeedbackLabeledItem) => i.content?.trim()).map((item: FeedbackLabeledItem) => (
-                          <p key={item.id} className="text-[#1A1A1A] text-xs">
-                            <span className="font-bold mr-1">{item.label}.</span>
-                            {item.content}
-                          </p>
-                        ))}
-                        {child.type === 'gana' && (child.items || []).filter((i: FeedbackLabeledItem) => i.content?.trim()).map((item: FeedbackLabeledItem) => (
-                          <p key={item.id} className="text-[#1A1A1A] text-xs">
-                            <span className="font-bold mr-1">({item.label})</span>
-                            {item.content}
-                          </p>
-                        ))}
-                        {child.type === 'image' && child.imageUrl && (
-                          <Image src={child.imageUrl} alt="지문 이미지" width={800} height={400} className="max-w-full h-auto border border-[#1A1A1A]" unoptimized />
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ))}
-                {/* 나머지 블록 (생성 순서대로) */}
-                {question.mixedExamples.filter((b: FeedbackMixedBlock) => b.type !== 'grouped').map((block: FeedbackMixedBlock) => (
-                  <div key={block.id}>
-                    {/* 텍스트 블록 */}
-                    {block.type === 'text' && block.content?.trim() && (
-                      <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
-                        <p className="text-[#1A1A1A] text-xs whitespace-pre-wrap">{block.content}</p>
-                      </div>
-                    )}
-                    {/* ㄱㄴㄷ 블록 */}
-                    {block.type === 'labeled' && (block.items || []).length > 0 && (
-                      <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
-                        {(block.items || []).filter((i: FeedbackLabeledItem) => i.content?.trim()).map((item: FeedbackLabeledItem) => (
-                          <p key={item.id} className="text-[#1A1A1A] text-xs">
-                            <span className="font-bold mr-1">{item.label}.</span>
-                            {item.content}
-                          </p>
-                        ))}
-                      </div>
-                    )}
-                    {/* (가)(나)(다) 블록 */}
-                    {block.type === 'gana' && (block.items || []).length > 0 && (
-                      <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
-                        {(block.items || []).filter((i: FeedbackLabeledItem) => i.content?.trim()).map((item: FeedbackLabeledItem) => (
-                          <p key={item.id} className="text-[#1A1A1A] text-xs">
-                            <span className="font-bold mr-1">({item.label})</span>
-                            {item.content}
-                          </p>
-                        ))}
-                      </div>
-                    )}
-                    {/* 이미지 블록 */}
-                    {block.type === 'image' && block.imageUrl && (
-                      <div className="border border-[#1A1A1A] overflow-hidden">
-                        <Image src={block.imageUrl} alt="지문 이미지" width={800} height={400} className="max-w-full h-auto" unoptimized />
-                      </div>
-                    )}
-                  </div>
-                ))}
+                <MixedExamplesRenderer blocks={question.mixedExamples} spacing="loose" textSize="xs" imageRenderer="next-image" blockWrapper="passage" groupedBorderThick />
               </div>
             )}
 

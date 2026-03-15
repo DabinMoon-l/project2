@@ -11,7 +11,7 @@ import { formatChapterLabel } from '@/lib/courseIndex';
 import { FEEDBACK_TYPES } from '@/components/review/types';
 import { KOREAN_LABELS } from '../reviewPracticeTypes';
 import type { ResultStageProps } from '../reviewPracticeTypes';
-import type { MixedExampleBlock, LabeledItem } from '@/components/quiz/create/questionTypes';
+import MixedExamplesRenderer from '@/components/common/MixedExamplesRenderer';
 
 export default function ResultStage({
   // 데이터
@@ -161,64 +161,7 @@ export default function ResultStage({
                                 </div>
                               )}
                               {firstItem.passageType === 'mixed' && firstItem.passageMixedExamples && firstItem.passageMixedExamples.length > 0 && (
-                                <div className="space-y-2">
-                                  {firstItem.passageMixedExamples.map((block: MixedExampleBlock) => (
-                                    <div key={block.id}>
-                                      {block.type === 'grouped' && (
-                                        <div className="space-y-1">
-                                          {(block.children || []).map((child: MixedExampleBlock) => (
-                                            <div key={child.id}>
-                                              {child.type === 'text' && child.content?.trim() && (
-                                                <p className="text-xs text-[#5C5C5C]">{child.content}</p>
-                                              )}
-                                              {child.type === 'labeled' && (child.items || []).filter((i: LabeledItem) => i.content?.trim()).map((item: LabeledItem) => (
-                                                <p key={item.id} className="text-xs text-[#1A1A1A]">
-                                                  <span className="font-bold mr-1">{item.label}.</span>
-                                                  {item.content}
-                                                </p>
-                                              ))}
-                                              {child.type === 'gana' && (child.items || []).filter((i: LabeledItem) => i.content?.trim()).map((item: LabeledItem) => (
-                                                <p key={item.id} className="text-xs text-[#1A1A1A]">
-                                                  <span className="font-bold mr-1">({item.label})</span>
-                                                  {item.content}
-                                                </p>
-                                              ))}
-                                              {child.type === 'image' && child.imageUrl && (
-                                                <img src={child.imageUrl} alt="지문 이미지" className="max-w-full h-auto border border-[#1A1A1A]" />
-                                              )}
-                                            </div>
-                                          ))}
-                                        </div>
-                                      )}
-                                      {block.type === 'text' && block.content?.trim() && (
-                                        <p className="text-xs text-[#1A1A1A]">{block.content}</p>
-                                      )}
-                                      {block.type === 'labeled' && (block.items || []).length > 0 && (
-                                        <div className="space-y-1">
-                                          {(block.items || []).filter((i: LabeledItem) => i.content?.trim()).map((item: LabeledItem) => (
-                                            <p key={item.id} className="text-xs text-[#1A1A1A]">
-                                              <span className="font-bold mr-1">{item.label}.</span>
-                                              {item.content}
-                                            </p>
-                                          ))}
-                                        </div>
-                                      )}
-                                      {block.type === 'gana' && (block.items || []).length > 0 && (
-                                        <div className="space-y-1">
-                                          {(block.items || []).filter((i: LabeledItem) => i.content?.trim()).map((item: LabeledItem) => (
-                                            <p key={item.id} className="text-xs text-[#1A1A1A]">
-                                              <span className="font-bold mr-1">({item.label})</span>
-                                              {item.content}
-                                            </p>
-                                          ))}
-                                        </div>
-                                      )}
-                                      {block.type === 'image' && block.imageUrl && (
-                                        <img src={block.imageUrl} alt="지문 이미지" className="max-w-full h-auto border border-[#1A1A1A]" />
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
+                                <MixedExamplesRenderer blocks={firstItem.passageMixedExamples} spacing="loose" textSize="xs" />
                               )}
                               {firstItem.passageImage && (
                                 <img src={firstItem.passageImage} alt="공통 이미지" className="mt-2 max-w-full max-h-[200px] object-contain border border-[#1A1A1A]" />
@@ -286,62 +229,7 @@ export default function ResultStage({
                                           {subItem.mixedExamples && subItem.mixedExamples.length > 0 && (
                                             <div className="space-y-2">
                                               <p className="text-xs font-bold text-[#8B6914]">지문</p>
-                                              {subItem.mixedExamples.map((block: MixedExampleBlock) => (
-                                                <div key={block.id}>
-                                                  {block.type === 'grouped' && (block.children?.length ?? 0) > 0 && (
-                                                    <div className="p-2 bg-[#FFF8E1] border-2 border-[#8B6914] space-y-1">
-                                                      {(block.children || []).map((child: MixedExampleBlock) => (
-                                                        <div key={child.id}>
-                                                          {child.type === 'text' && child.content?.trim() && (
-                                                            <p className="text-[#5C5C5C] text-xs whitespace-pre-wrap">{child.content}</p>
-                                                          )}
-                                                          {child.type === 'labeled' && (child.items || []).filter((i: LabeledItem) => i.content?.trim()).map((itm: LabeledItem) => (
-                                                            <p key={itm.id} className="text-[#1A1A1A] text-xs">
-                                                              <span className="font-bold mr-1">{itm.label}.</span>{itm.content}
-                                                            </p>
-                                                          ))}
-                                                          {child.type === 'gana' && (child.items || []).filter((i: LabeledItem) => i.content?.trim()).map((itm: LabeledItem) => (
-                                                            <p key={itm.id} className="text-[#1A1A1A] text-xs">
-                                                              <span className="font-bold mr-1">({itm.label})</span>{itm.content}
-                                                            </p>
-                                                          ))}
-                                                          {child.type === 'image' && child.imageUrl && (
-                                                            <img src={child.imageUrl} alt="지문 이미지" className="max-w-full h-auto border border-[#1A1A1A]" />
-                                                          )}
-                                                        </div>
-                                                      ))}
-                                                    </div>
-                                                  )}
-                                                  {block.type === 'text' && block.content?.trim() && (
-                                                    <div className="p-2 bg-[#FFF8E1] border border-[#8B6914]">
-                                                      <p className="text-[#1A1A1A] text-xs whitespace-pre-wrap">{block.content}</p>
-                                                    </div>
-                                                  )}
-                                                  {block.type === 'labeled' && (block.items || []).length > 0 && (
-                                                    <div className="p-2 bg-[#FFF8E1] border border-[#8B6914] space-y-1">
-                                                      {(block.items || []).filter((i: LabeledItem) => i.content?.trim()).map((itm: LabeledItem) => (
-                                                        <p key={itm.id} className="text-[#1A1A1A] text-xs">
-                                                          <span className="font-bold mr-1">{itm.label}.</span>{itm.content}
-                                                        </p>
-                                                      ))}
-                                                    </div>
-                                                  )}
-                                                  {block.type === 'gana' && (block.items || []).length > 0 && (
-                                                    <div className="p-2 bg-[#FFF8E1] border border-[#8B6914] space-y-1">
-                                                      {(block.items || []).filter((i: LabeledItem) => i.content?.trim()).map((itm: LabeledItem) => (
-                                                        <p key={itm.id} className="text-[#1A1A1A] text-xs">
-                                                          <span className="font-bold mr-1">({itm.label})</span>{itm.content}
-                                                        </p>
-                                                      ))}
-                                                    </div>
-                                                  )}
-                                                  {block.type === 'image' && block.imageUrl && (
-                                                    <div className="border border-[#1A1A1A] overflow-hidden">
-                                                      <img src={block.imageUrl} alt="지문 이미지" className="max-w-full h-auto" />
-                                                    </div>
-                                                  )}
-                                                </div>
-                                              ))}
+                                              <MixedExamplesRenderer blocks={subItem.mixedExamples} spacing="loose" textSize="xs" blockWrapper="passage-accent" groupedBorderThick />
                                             </div>
                                           )}
 
@@ -590,64 +478,7 @@ export default function ResultStage({
                                   </div>
                                 )}
                                 {item.passageType === 'mixed' && item.passageMixedExamples && item.passageMixedExamples.length > 0 && (
-                                  <div className="space-y-2">
-                                    {item.passageMixedExamples.map((block: MixedExampleBlock) => (
-                                      <div key={block.id}>
-                                        {block.type === 'grouped' && (
-                                          <div className="space-y-1">
-                                            {(block.children || []).map((child: MixedExampleBlock) => (
-                                              <div key={child.id}>
-                                                {child.type === 'text' && child.content?.trim() && (
-                                                  <p className="text-xs text-[#5C5C5C]">{child.content}</p>
-                                                )}
-                                                {child.type === 'labeled' && (child.items || []).filter((i: LabeledItem) => i.content?.trim()).map((it: LabeledItem) => (
-                                                  <p key={it.id} className="text-xs text-[#1A1A1A]">
-                                                    <span className="font-bold mr-1">{it.label}.</span>
-                                                    {it.content}
-                                                  </p>
-                                                ))}
-                                                {child.type === 'gana' && (child.items || []).filter((i: LabeledItem) => i.content?.trim()).map((it: LabeledItem) => (
-                                                  <p key={it.id} className="text-xs text-[#1A1A1A]">
-                                                    <span className="font-bold mr-1">({it.label})</span>
-                                                    {it.content}
-                                                  </p>
-                                                ))}
-                                                {child.type === 'image' && child.imageUrl && (
-                                                  <img src={child.imageUrl} alt="지문 이미지" className="max-w-full h-auto border border-[#1A1A1A]" />
-                                                )}
-                                              </div>
-                                            ))}
-                                          </div>
-                                        )}
-                                        {block.type === 'text' && block.content?.trim() && (
-                                          <p className="text-xs text-[#1A1A1A]">{block.content}</p>
-                                        )}
-                                        {block.type === 'labeled' && (block.items || []).length > 0 && (
-                                          <div className="space-y-1">
-                                            {(block.items || []).filter((i: LabeledItem) => i.content?.trim()).map((it: LabeledItem) => (
-                                              <p key={it.id} className="text-xs text-[#1A1A1A]">
-                                                <span className="font-bold mr-1">{it.label}.</span>
-                                                {it.content}
-                                              </p>
-                                            ))}
-                                          </div>
-                                        )}
-                                        {block.type === 'gana' && (block.items || []).length > 0 && (
-                                          <div className="space-y-1">
-                                            {(block.items || []).filter((i: LabeledItem) => i.content?.trim()).map((it: LabeledItem) => (
-                                              <p key={it.id} className="text-xs text-[#1A1A1A]">
-                                                <span className="font-bold mr-1">({it.label})</span>
-                                                {it.content}
-                                              </p>
-                                            ))}
-                                          </div>
-                                        )}
-                                        {block.type === 'image' && block.imageUrl && (
-                                          <img src={block.imageUrl} alt="지문 이미지" className="max-w-full h-auto border border-[#1A1A1A]" />
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
+                                  <MixedExamplesRenderer blocks={item.passageMixedExamples} spacing="loose" textSize="xs" />
                                 )}
                                 {item.passageImage && (
                                   <img src={item.passageImage} alt="공통 이미지" className="mt-2 max-w-full max-h-[200px] object-contain border border-[#1A1A1A]" />
@@ -661,71 +492,7 @@ export default function ResultStage({
                         {item.mixedExamples && item.mixedExamples.length > 0 && (
                           <div className="space-y-2">
                             <p className="text-xs font-bold text-[#8B6914]">지문</p>
-                            {item.mixedExamples.map((block: MixedExampleBlock) => (
-                              <div key={block.id}>
-                                {/* 묶음 블록 */}
-                                {block.type === 'grouped' && (block.children?.length ?? 0) > 0 && (
-                                  <div className="p-3 bg-[#FFF8E1] border-2 border-[#8B6914] space-y-1">
-                                    {(block.children || []).map((child: MixedExampleBlock) => (
-                                      <div key={child.id}>
-                                        {child.type === 'text' && child.content?.trim() && (
-                                          <p className="text-[#5C5C5C] text-xs whitespace-pre-wrap">{child.content}</p>
-                                        )}
-                                        {child.type === 'labeled' && (child.items || []).filter((i: LabeledItem) => i.content?.trim()).map((itm: LabeledItem) => (
-                                          <p key={itm.id} className="text-[#1A1A1A] text-xs">
-                                            <span className="font-bold mr-1">{itm.label}.</span>
-                                            {itm.content}
-                                          </p>
-                                        ))}
-                                        {child.type === 'gana' && (child.items || []).filter((i: LabeledItem) => i.content?.trim()).map((itm: LabeledItem) => (
-                                          <p key={itm.id} className="text-[#1A1A1A] text-xs">
-                                            <span className="font-bold mr-1">({itm.label})</span>
-                                            {itm.content}
-                                          </p>
-                                        ))}
-                                        {child.type === 'image' && child.imageUrl && (
-                                          <img src={child.imageUrl} alt="지문 이미지" className="max-w-full h-auto border border-[#1A1A1A]" />
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                                {/* 텍스트 블록 */}
-                                {block.type === 'text' && block.content?.trim() && (
-                                  <div className="p-3 bg-[#FFF8E1] border border-[#8B6914]">
-                                    <p className="text-[#1A1A1A] text-xs whitespace-pre-wrap">{block.content}</p>
-                                  </div>
-                                )}
-                                {/* ㄱㄴㄷ 블록 */}
-                                {block.type === 'labeled' && (block.items || []).length > 0 && (
-                                  <div className="p-3 bg-[#FFF8E1] border border-[#8B6914] space-y-1">
-                                    {(block.items || []).filter((i: LabeledItem) => i.content?.trim()).map((itm: LabeledItem) => (
-                                      <p key={itm.id} className="text-[#1A1A1A] text-xs">
-                                        <span className="font-bold mr-1">{itm.label}.</span>
-                                        {itm.content}
-                                      </p>
-                                    ))}
-                                  </div>
-                                )}
-                                {/* (가)(나)(다) 블록 */}
-                                {block.type === 'gana' && (block.items || []).length > 0 && (
-                                  <div className="p-3 bg-[#FFF8E1] border border-[#8B6914] space-y-1">
-                                    {(block.items || []).filter((i: LabeledItem) => i.content?.trim()).map((itm: LabeledItem) => (
-                                      <p key={itm.id} className="text-[#1A1A1A] text-xs">
-                                        <span className="font-bold mr-1">({itm.label})</span>
-                                        {itm.content}
-                                      </p>
-                                    ))}
-                                  </div>
-                                )}
-                                {/* 이미지 블록 */}
-                                {block.type === 'image' && block.imageUrl && (
-                                  <div className="border border-[#1A1A1A] overflow-hidden">
-                                    <img src={block.imageUrl} alt="지문 이미지" className="max-w-full h-auto" />
-                                  </div>
-                                )}
-                              </div>
-                            ))}
+                            <MixedExamplesRenderer blocks={item.mixedExamples} spacing="loose" textSize="xs" blockWrapper="passage-accent" groupedBorderThick />
                           </div>
                         )}
 

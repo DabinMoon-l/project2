@@ -6,17 +6,7 @@ import type { ReviewItem, FolderCategory } from '@/lib/hooks/useReview';
 import type { DisplayItem, FeedbackType } from '@/components/review/types';
 import { KOREAN_LABELS } from '@/lib/utils/reviewQuestionUtils';
 import QuestionCard from '@/components/review/QuestionCard';
-
-
-/** 혼합 지문 블록 (passageMixedExamples용) */
-interface ReviewMixedBlock {
-  id: string;
-  type: string;
-  content?: string;
-  items?: Array<{ id: string; label: string; content: string }>;
-  imageUrl?: string;
-  children?: ReviewMixedBlock[];
-}
+import MixedExamplesRenderer from '@/components/common/MixedExamplesRenderer';
 
 /** 카테고리별 그룹 */
 export interface CategoryGroup {
@@ -386,44 +376,7 @@ function CombinedGroupCard({
                     )}
                     {/* 혼합 형식 */}
                     {firstItem.passageMixedExamples && firstItem.passageMixedExamples.length > 0 && (
-                      <div className="space-y-2">
-                        {firstItem.passageMixedExamples.map((block: ReviewMixedBlock) => (
-                          <div key={block.id}>
-                            {block.type === 'grouped' && (
-                              <div className="space-y-1">
-                                {(block.children || []).map((child: ReviewMixedBlock) => (
-                                  <div key={child.id}>
-                                    {child.type === 'text' && <p className="text-sm text-[#5C5C5C] whitespace-pre-wrap">{child.content}</p>}
-                                    {child.type === 'labeled' && (child.items || []).map((i: { id: string; label: string; content: string }) => (
-                                      <p key={i.id} className="text-sm"><span className="font-bold">{i.label}.</span> {i.content}</p>
-                                    ))}
-                                    {child.type === 'gana' && (child.items || []).map((i: { id: string; label: string; content: string }) => (
-                                      <p key={i.id} className="text-sm"><span className="font-bold">({i.label})</span> {i.content}</p>
-                                    ))}
-                                    {child.type === 'image' && child.imageUrl && <Image src={child.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto" unoptimized />}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                            {block.type === 'text' && <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{block.content}</p>}
-                            {block.type === 'labeled' && (
-                              <div className="space-y-1">
-                                {(block.items || []).map((i: { id: string; label: string; content: string }) => (
-                                  <p key={i.id} className="text-sm"><span className="font-bold">{i.label}.</span> {i.content}</p>
-                                ))}
-                              </div>
-                            )}
-                            {block.type === 'gana' && (
-                              <div className="space-y-1">
-                                {(block.items || []).map((i: { id: string; label: string; content: string }) => (
-                                  <p key={i.id} className="text-sm"><span className="font-bold">({i.label})</span> {i.content}</p>
-                                ))}
-                              </div>
-                            )}
-                            {block.type === 'image' && block.imageUrl && <Image src={block.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto" unoptimized />}
-                          </div>
-                        ))}
-                      </div>
+                      <MixedExamplesRenderer blocks={firstItem.passageMixedExamples} spacing="loose" textSize="sm" filterEmpty={false} imageRenderer="next-image" />
                     )}
                     {/* 이미지 */}
                     {firstItem.passageImage && (
