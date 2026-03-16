@@ -237,23 +237,26 @@ const ImageViewer = memo(function ImageViewer({
     >
       {/* 컨트롤 (닫기, 다운로드, 화살표, 카운터) */}
       <div className={`transition-opacity duration-200 ${showControls && !isZoomed ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-        {/* 닫기 */}
+        {/* 닫기 — Dynamic Island 겹침 방지: safe-area-inset-top */}
         <motion.button
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
           transition={{ delay: 0.15 }}
-          onClick={onClose} className="absolute top-4 right-4 text-white p-2 z-10"
+          onClick={onClose}
+          className="absolute right-4 text-white p-2 z-10"
+          style={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
         >
           <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </motion.button>
-        {/* 다운로드 */}
+        {/* 다운로드 — Dynamic Island 겹침 방지 */}
         <motion.a
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
           transition={{ delay: 0.15 }}
           href={src} target="_blank" rel="noopener noreferrer" download
           onClick={(e) => e.stopPropagation()}
-          className="absolute top-4 left-4 text-white p-2 z-10"
+          className="absolute left-4 text-white p-2 z-10"
+          style={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
         >
           <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />

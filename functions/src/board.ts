@@ -5,6 +5,7 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import fetch from "node-fetch";
 import { readUserForExp, addExpInTransaction, EXP_REWARDS } from "./utils/gold";
 import { enforceRateLimit } from "./rateLimit";
+import { loadScopeForAI, inferChaptersFromText } from "./courseScope";
 
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 
@@ -536,7 +537,26 @@ async function generateBoardAIReply(
 
   // 과목명 확인
   const courseName = post.courseId ? COURSE_NAMES[post.courseId] || post.courseId : "";
-  const courseContext = courseName ? `\n\n[과목 정보]\n이 질문은 "${courseName}" 과목 게시판에 올라온 글이야. 해당 과목 맥락에 맞게 답변해줘.` : "";
+  let courseContext = courseName ? `\n\n[과목 정보]\n이 질문은 "${courseName}" 과목 게시판에 올라온 글이야. 해당 과목 맥락에 맞게 답변해줘.` : "";
+
+  // Scope 참조: 질문과 관련된 챕터 범위를 로드하여 정확한 답변 지원
+  if (post.courseId) {
+    try {
+      const questionText = `${post.title} ${post.content}`;
+      const relatedChapters = await inferChaptersFromText(post.courseId, questionText);
+      const scope = await loadScopeForAI(
+        post.courseId,
+        relatedChapters.length > 0 ? relatedChapters : undefined,
+        8000 // 콩콩이용 최대 8000자 (문제 생성보다 짧게)
+      );
+      if (scope && scope.content) {
+        courseContext += `\n\n[과목 학습 범위 — 참고 자료]\n아래는 이 과목의 관련 챕터 내용이야. 답변할 때 이 내용을 우선 참고하되, 범위에 없는 내용도 일반 지식으로 보충해서 답변해.\n\n${scope.content}`;
+        console.log(`[콩콩이] scope 로드: ${post.courseId}, 챕터=${scope.chaptersLoaded.join(",")}, ${scope.content.length}자`);
+      }
+    } catch (scopeErr) {
+      console.warn("[콩콩이] scope 로드 실패 (무시):", scopeErr);
+    }
+  }
 
   // 프롬프트 구성
   const systemPrompt = `너는 "콩콩이"라는 이름의 수업 보조 AI야. 학생이 학술 게시판에 올린 질문에 답변해줘.
@@ -710,7 +730,25 @@ async function generateAIReplyToComment(
 
   // 과목명 확인
   const courseName = post.courseId ? COURSE_NAMES[post.courseId] || post.courseId : "";
-  const courseContext = courseName ? `\n\n[과목 정보]\n이 대화는 "${courseName}" 과목 게시판의 글이야. 해당 과목 맥락에 맞게 답변해줘.` : "";
+  let courseContext = courseName ? `\n\n[과목 정보]\n이 대화는 "${courseName}" 과목 게시판의 글이야. 해당 과목 맥락에 맞게 답변해줘.` : "";
+
+  // Scope 참조 (대댓글에도 과목 범위 제공)
+  if (post.courseId) {
+    try {
+      const questionText = `${post.title} ${post.content} ${userReply.content || ""}`;
+      const relatedChapters = await inferChaptersFromText(post.courseId, questionText);
+      const scope = await loadScopeForAI(
+        post.courseId,
+        relatedChapters.length > 0 ? relatedChapters : undefined,
+        5000 // 대댓글은 대화 기록도 있어 scope 짧게
+      );
+      if (scope && scope.content) {
+        courseContext += `\n\n[과목 학습 범위 — 참고 자료]\n${scope.content}`;
+      }
+    } catch {
+      // scope 실패 무시
+    }
+  }
 
   const systemPrompt = `너는 "콩콩이"라는 이름의 수업 보조 AI야. 학생들이 너의 답변에 추가 질문을 하고 있어. 전체 대화 흐름을 이해하고, 가장 마지막 메시지에 대해 이어서 답변해줘.
 

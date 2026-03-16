@@ -172,14 +172,20 @@ export default function QuizStatsModal({
         // 2단계: 교수 계정 제외
         const professorIds = new Set<string>();
         const userIds = Array.from(allByUser.keys());
-        // 배치로 교수 여부 확인 (10명씩)
+        // 배치로 교수 여부 확인 (10명씩, 권한 에러 무시)
         for (let i = 0; i < userIds.length; i += 10) {
           const batch = userIds.slice(i, i + 10);
           const userDocs = await Promise.all(
-            batch.map((uid) => getDoc(doc(db, 'users', uid)))
+            batch.map(async (uid) => {
+              try {
+                return await getDoc(doc(db, 'users', uid));
+              } catch {
+                return null; // 학생 계정 — 다른 유저 get 권한 없음
+              }
+            })
           );
           userDocs.forEach((userDoc) => {
-            if (userDoc.exists() && userDoc.data()?.role === 'professor') {
+            if (userDoc?.exists() && userDoc.data()?.role === 'professor') {
               professorIds.add(userDoc.id);
             }
           });
@@ -1122,14 +1128,14 @@ export default function QuizStatsModal({
                         className="h-full overflow-y-auto overflow-x-hidden scrollbar-hide overscroll-contain"
                         style={{ WebkitOverflowScrolling: 'touch' }}
                       >
-                      {/* 참여자가 없는 반일 경우 */}
-                      {stats.participantCount === 0 ? (
-                        <div className="h-full flex items-center justify-center">
-                          <p className="text-sm text-[#5C5C5C]">
-                            {classFilter === 'all' ? '참여자가 없습니다.' : `${classFilter}반 참여자가 없습니다.`}
+                      {/* 참여자가 없는 반일 경우 안내 */}
+                      {stats.participantCount === 0 && (
+                        <div className="px-3 pt-3 pb-1">
+                          <p className="text-xs text-[#5C5C5C] text-center">
+                            {classFilter === 'all' ? '아직 참여자가 없습니다.' : `${classFilter}반 참여자가 없습니다.`}
                           </p>
                         </div>
-                      ) : (
+                      )}
                       <div className="p-3 min-h-full flex flex-col justify-center items-stretch">
                         {/* 문제 헤더 */}
                         <div className="flex items-center justify-center gap-2 mb-2">
@@ -1467,7 +1473,6 @@ export default function QuizStatsModal({
                         )}
 
                       </div>
-                      )}
                       </div>
                     </div>
                   )}

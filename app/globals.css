@@ -28,7 +28,8 @@ body {
   min-height: 100vh;
   min-height: 100dvh;
   min-height: -webkit-fill-available;
-  overflow-x: hidden;
+  /* overflow-x: hidden은 html에만 적용 — body에도 넣으면 별도 스크롤 컨테이너가 되어
+     min-height와 조합 시 세로 스크롤이 깨짐 */
   overscroll-behavior: none;
   background-color: #F5F0E8;
 }
