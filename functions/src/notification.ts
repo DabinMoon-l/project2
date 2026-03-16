@@ -346,13 +346,13 @@ export const onNewQuizCreated = onDocumentCreated(
     // 교수님이 올린 퀴즈만 알림 (custom, ai-generated 제외)
     if (quizData.type === "custom" || quizData.type === "ai-generated") return;
 
-    const { title, targetClass, creatorNickname } = quizData;
+    const { title, targetClass } = quizData;
     const quizId = event.params.quizId;
 
     // 알림 데이터
     const payload: NotificationPayload = {
-      title: "새로운 퀴즈가 출제되었어요!",
-      body: `${creatorNickname || "교수님"}이 "${title}" 퀴즈를 출제했습니다.`,
+      title: "새 퀴즈가 업로드 되었어요!",
+      body: title || "새 퀴즈",
       data: {
         type: "new_quiz",
         quizId,
@@ -407,7 +407,7 @@ export const onBoardCommentCreated = onDocumentCreated(
     // 알림 데이터
     const payload: NotificationPayload = {
       title: "새 댓글이 달렸어요!",
-      body: `"${postData?.title?.slice(0, 20)}..." 게시글에 새 댓글: "${content?.slice(0, 30)}..."`,
+      body: content?.slice(0, 50) || "새 댓글",
       data: {
         type: "board_comment",
         postId,
@@ -459,7 +459,7 @@ export const onBoardReplyCreated = onDocumentCreated(
     // 알림 데이터
     const payload: NotificationPayload = {
       title: "답글이 달렸어요!",
-      body: `내 댓글에 답글: "${content?.slice(0, 40)}..."`,
+      body: content?.slice(0, 50) || "새 답글",
       data: {
         type: "board_reply",
         postId,

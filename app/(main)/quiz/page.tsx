@@ -558,7 +558,7 @@ function QuizListPageContent() {
     <>
     <div className={`min-h-screen pb-72 ${isManageMode ? 'pointer-events-none' : ''}`} style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 - 배너 이미지 */}
-      <header className="flex flex-col items-center">
+      <header ref={customSectionRef} className="flex flex-col items-center">
         <div className="w-full h-[160px] mt-2">
           <img
             src={ribbonImage}
@@ -606,7 +606,7 @@ function QuizListPageContent() {
 
       {/* 자작 섹션 */}
       <section className="px-4">
-        <div ref={customSectionRef} className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-2">
           <ClassFilterTabs
             activeTab={classFilter}
             onChangeTab={setClassFilter}

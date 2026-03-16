@@ -316,3 +316,64 @@ E2E 8개 (페이지 로드 확인) + k6 부하 1개 (학생 300 + 교수 5)
 | 토끼 뽑기 안 됨 | lastGachaExp 불일치 | users.totalExp vs lastGachaExp |
 | 서재 공개 전환 오류 | quiz_completions 클라이언트 쓰기 | CF 전용 (if false) |
 | PPTX 변환 실패 | Cloud Run 타임아웃 | .pptx만 지원, 3분 타임아웃 |
+
+## TODO: 콩콩이 AI 답변 체크박스 (다음 세션에서 구현)
+
+### 개요
+
+글 작성 페이지(`app/(main)/board/write/page.tsx`)에서 태그 "학술" 선택 시 **"AI 답변"** 체크박스를 태그 버튼 줄 우측에 표시.
+체크 여부에 따라 콩콩이 답변 스타일이 달라짐.
+
+### 프론트엔드
+
+- `app/(main)/board/write/page.tsx` 수정
+- 태그 버튼(학사/학술/기타) 줄 우측에 체크박스 추가
+- **학술 태그 선택 시에만** 체크박스 표시 (AnimatePresence로 fade)
+- 체크 상태를 post 문서에 `aiDetailedAnswer: boolean` 필드로 저장
+- Firestore 규칙: `posts` 컬렉션 create/update에 `aiDetailedAnswer` 필드 허용 필요
+
+### 백엔드 (`functions/src/board.ts`)
+
+`generateBoardAIReply` 함수에서 `post.aiDetailedAnswer` 값에 따라 분기:
+
+#### 미체크 (기본, `aiDetailedAnswer: false` 또는 없음)
+- scope + 일반 지식 참고
+- 교수 댓글도 참고하되 **질문에 대한 답변 위주**로 간결하게
+- scope 최대 **8,000자**, maxOutputTokens **8,192**
+- 프롬프트: "질문에 대해 핵심만 간결하게 답변해"
+
+#### 체크 (`aiDetailedAnswer: true`)
+- scope + 교수님 댓글(이미지 포함) + 일반 지식 **풍부하게** 참고
+- 교수님이 중요하게 언급하신 내용, 스타일 반영
+- 질문 답변 + **연계 개념, 더 알면 좋은 내용** 덧붙이기
+- scope 최대 **12,000자**, maxOutputTokens **16,384** (답변 잘림 방지)
+- 프롬프트: "질문에 풍부하게 답변하고, 관련 개념도 연계해서 알려줘"
+
+### 교수 댓글 로딩 방법
+
+1. 해당 과목(`post.courseId`)의 학술 게시글에 달린 **교수 댓글**을 쿼리
+2. `comments` 컬렉션에서 `authorId` → `users/{uid}.role === 'professor'` 확인
+3. 교수 댓글의 `content` + `imageUrls`(있으면 base64 변환)를 프롬프트에 포함
+4. 최근 교수 댓글 최대 **10개** 참고 (토큰 관리)
+5. 프롬프트 섹션: `[교수님 답변 스타일 참고]\n교수님이 다른 학술 질문에 답변하신 내용이야. 이 스타일과 강조점을 참고해서 답변해.\n\n${professorComments}`
+
+### 토큰 계산 (Gemini 2.5 Flash 입력 1M 토큰)
+
+| 항목 | 미체크 | 체크 |
+|------|--------|------|
+| 시스템 프롬프트 | ~500자 | ~600자 |
+| scope | 최대 8,000자 | 최대 12,000자 |
+| 교수 댓글 | 참고만 | 최대 10개 (~5,000자) |
+| 질문 본문+이미지 | ~2,000자 | ~2,000자 |
+| **입력 합계** | ~10,500자 (~2.6K 토큰) | ~19,600자 (~5K 토큰) |
+| **출력 한도** | 8,192 토큰 | 16,384 토큰 |
+
+→ 입력 0.5% 미만, 출력도 충분 → **답변 잘림 없음**
+
+### 구현 순서
+
+1. `app/(main)/board/write/page.tsx` — 체크박스 UI + `aiDetailedAnswer` 필드 추가
+2. `firestore.rules` — posts create/update에 `aiDetailedAnswer` 허용
+3. `functions/src/board.ts` — `generateBoardAIReply`에서 분기 로직
+4. `functions/src/board.ts` — 교수 댓글 로딩 함수 추가
+5. 빌드 검증 (프론트 + Functions)

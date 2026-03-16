@@ -103,7 +103,12 @@ export default function ExpandModal({
           {/* 모달 콘텐츠 */}
           <div
             className="fixed inset-0 flex items-center justify-center p-4 pointer-events-none"
-            style={{ zIndex: zIndex + 1, left: 'var(--modal-left, 0px)' }}
+            style={{
+              zIndex: zIndex + 1,
+              left: 'var(--modal-left, 0px)',
+              // 네비게이션 겹침 방지
+              paddingBottom: 'calc(4.25rem + env(safe-area-inset-bottom, 0px) + 0.5rem)',
+            }}
           >
             <motion.div
               key="expand-content"
