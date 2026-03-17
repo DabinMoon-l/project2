@@ -244,7 +244,7 @@ export default function CharacterBox() {
 
   return (
     <>
-      <div className="flex-1 flex flex-col items-center w-full">
+      <div className="flex-[2] flex flex-col items-center w-full">
         {/* XP / 도감 */}
         <div className="w-full flex items-center justify-between px-8 mb-1 mt-3 relative z-20">
           <div className="h-[36px] flex items-center gap-2.5 px-5 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl">

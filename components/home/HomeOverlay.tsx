@@ -318,12 +318,15 @@ export default function HomeOverlay() {
         <CharacterBox />
 
         {/* 하단 그룹: 랭킹 + 스와이프 힌트 */}
-        <div>
+        <div className="flex-1 flex flex-col">
           <RankingSection />
+
+          {/* 유연 간격: 랭킹 ↔ 스와이프 힌트 */}
+          <div className="flex-1" />
 
           {/* 스와이프 힌트 — 하단 (가로모드에서는 숨김) */}
           {!isWide && (
-            <div className="mt-4 flex flex-col items-center gap-0.5 pointer-events-none">
+            <div className="flex flex-col items-center gap-0.5 pointer-events-none">
               <motion.svg
                 className="w-4 h-4 text-white/50"
                 fill="none"
