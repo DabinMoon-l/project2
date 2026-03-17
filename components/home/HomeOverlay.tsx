@@ -255,7 +255,7 @@ export default function HomeOverlay() {
       style={{
         position: 'fixed',
         top: 0,
-        bottom: 0,
+        bottom: 'calc(-1 * env(safe-area-inset-bottom, 0px))',
         right: isWide ? 'calc(50% - 120px)' : 0,
         left: isWide ? '240px' : 0,
         zIndex: 100,

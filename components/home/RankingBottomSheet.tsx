@@ -261,7 +261,7 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-[110] flex items-end justify-center bg-black/60"
-          style={{ left: 'var(--home-sheet-left, 0px)' }}
+          style={{ left: 'var(--home-sheet-left, 0px)', bottom: 'calc(-1 * env(safe-area-inset-bottom, 0px))' }}
           onClick={onClose}
         >
           <motion.div
