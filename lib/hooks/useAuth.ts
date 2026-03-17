@@ -12,7 +12,6 @@ import { useRouter } from 'next/navigation';
 import { callFunction } from '@/lib/api';
 import {
   onAuthStateChanged,
-  getCurrentUser,
   signInWithEmail,
   formatStudentEmail,
   signOut,
@@ -54,9 +53,8 @@ interface UseRequireAuthOptions {
 // ============================================================
 
 export const useAuth = (): UseAuthReturn => {
-  // Firebase Auth 캐시된 사용자로 초기화 (로딩 화면 방지)
-  const [user, setUser] = useState<User | null>(() => getCurrentUser());
-  const [loading, setLoading] = useState<boolean>(() => !getCurrentUser());
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   // 인증 상태 구독
@@ -188,10 +186,8 @@ export const useRequireAuth = (
 ): { user: User | null; loading: boolean } => {
   const { redirectTo = '/login' } = options;
   const router = useRouter();
-
-  // Firebase Auth 캐시된 사용자로 초기화 (SPA 네비게이션 시 로딩 화면 방지)
-  const [user, setUser] = useState<User | null>(() => getCurrentUser());
-  const [loading, setLoading] = useState<boolean>(() => !getCurrentUser());
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged((firebaseUser) => {

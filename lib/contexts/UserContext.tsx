@@ -80,8 +80,7 @@ export function UserProvider({ children }: UserProviderProps) {
       return;
     }
 
-    // 이미 프로필이 있으면 로딩 표시 안 함 (재구독 시 깜빡임 방지)
-    if (!profile) setLoading(true);
+    setLoading(true);
     setError(null);
 
     // userRepo로 실시간 구독
@@ -104,7 +103,7 @@ export function UserProvider({ children }: UserProviderProps) {
             uid: user.uid,
             email: data.email || user.email || '',
             nickname: data.nickname || '용사',
-            classType: data.role === 'professor' ? '' : (data.classId || ''), // classId 없으면 빈 문자열
+            classType: data.role === 'professor' ? '' : (data.classId || 'A'), // 교수님은 반 없음
             studentId: data.studentId,
             department: data.department,
             // courseId에서 따옴표 제거 (Firestore 데이터 문제 대응)
