@@ -19,8 +19,6 @@ export function lockScroll() {
     document.body.style.left = '0';
     document.body.style.right = '0';
     document.body.style.overflow = 'hidden';
-    // 바텀시트/모달 백드롭 뒤 크림색 비침 방지
-    document.documentElement.style.backgroundColor = '#000';
   }
 }
 
@@ -32,7 +30,6 @@ export function unlockScroll() {
     document.body.style.left = '';
     document.body.style.right = '';
     document.body.style.overflow = '';
-    document.documentElement.style.backgroundColor = '';
     window.scrollTo(0, savedScrollY);
   }
 }
