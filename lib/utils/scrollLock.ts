@@ -18,6 +18,7 @@ export function lockScroll() {
     document.body.style.top = `-${savedScrollY}px`;
     document.body.style.left = '0';
     document.body.style.right = '0';
+    document.body.style.bottom = '0';
     document.body.style.overflow = 'hidden';
   }
 }
@@ -29,6 +30,7 @@ export function unlockScroll() {
     document.body.style.top = '';
     document.body.style.left = '';
     document.body.style.right = '';
+    document.body.style.bottom = '';
     document.body.style.overflow = '';
     window.scrollTo(0, savedScrollY);
   }
