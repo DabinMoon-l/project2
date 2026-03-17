@@ -15,9 +15,7 @@
 }
 
 html {
-  min-height: 100vh;
-  min-height: 100dvh;
-  min-height: -webkit-fill-available;
+  height: 100%;
   overflow-x: hidden;
   overscroll-behavior: none;
   /* 아이폰 둥근 모서리 뒤 — 크림 (앱 배경과 동일하게 매끄럽게) */
@@ -30,7 +28,8 @@ body {
   min-height: 100vh;
   min-height: 100dvh;
   min-height: -webkit-fill-available;
-  overflow-x: hidden;
+  /* overflow-x: hidden은 html에만 적용 — body에도 넣으면 별도 스크롤 컨테이너가 되어
+     min-height와 조합 시 세로 스크롤이 깨짐 */
   overscroll-behavior: none;
   background-color: #F5F0E8;
 }
@@ -41,17 +40,6 @@ body {
   min-height: 100dvh;
 }
 
-/* iOS PWA: fixed 전체화면 백드롭/오버레이가 safe area 밖까지 확장 */
-.fixed.inset-0::after {
-  content: '';
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: env(safe-area-inset-bottom, 0px);
-  background: inherit;
-  pointer-events: none;
-}
 
 /* Samsung Internet 자체 "맨 위로" FAB 억제 */
 html::-webkit-scrollbar-button,
