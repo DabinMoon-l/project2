@@ -54,6 +54,8 @@ export interface Post {
   tag?: BoardTag;
   // 채택된 댓글 ID
   acceptedCommentId?: string;
+  // 콩콩이 상세 답변 요청 여부
+  aiDetailedAnswer?: boolean;
 }
 
 /** 댓글 데이터 타입 */
@@ -87,6 +89,7 @@ export interface CreatePostData {
   courseId?: string; // 과목 ID (과목별 분리)
   toProfessor?: boolean; // 교수님께 전달 여부
   tag?: BoardTag; // 태그 (학사/학술/기타)
+  aiDetailedAnswer?: boolean; // 콩콩이 상세 답변 요청
 }
 
 /** 댓글 작성 데이터 */

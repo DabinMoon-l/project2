@@ -32,6 +32,7 @@ interface Post {
   commentCount: number;
   rewarded?: boolean;
   toProfessor?: boolean; // 교수님께 전달 여부
+  aiDetailedAnswer?: boolean; // 콩콩이 상세 답변 요청
   createdAt: FirebaseFirestore.Timestamp;
   updatedAt?: FirebaseFirestore.Timestamp;
 }
@@ -224,10 +225,16 @@ export const onCommentCreate = onDocumentCreated(
 
     const comment = snapshot.data() as Comment;
     const commentId = event.params.commentId;
+    const db = getFirestore();
 
-    // AI 댓글은 EXP 지급 및 알림 스킵
+    // AI 댓글은 commentCount만 증가, EXP/알림 스킵
     if (comment.authorId === "gemini-ai") {
       console.log(`AI 댓글이므로 보상/알림 스킵: ${commentId}`);
+      if (comment.postId) {
+        await db.collection("posts").doc(comment.postId).update({
+          commentCount: FieldValue.increment(1),
+        }).catch((e) => console.warn("AI 댓글 commentCount 증가 실패:", e));
+      }
       return;
     }
 
@@ -244,8 +251,6 @@ export const onCommentCreate = onDocumentCreated(
       console.error("필수 데이터가 누락되었습니다", { userId, postId });
       return;
     }
-
-    const db = getFirestore();
 
     try {
       await enforceRateLimit(userId, "COMMENT", commentId);
@@ -528,12 +533,77 @@ const COURSE_NAMES: Record<string, string> = {
   microbiology: "미생물학",
 };
 
+/**
+ * 해당 과목의 학술 게시글에 달린 교수 댓글을 최근 10개 로드
+ */
+async function loadProfessorComments(
+  courseId: string,
+  maxCount: number = 10,
+): Promise<Array<{ content: string; imageUrls?: string[] }>> {
+  const db = getFirestore();
+
+  // 해당 과목의 학술 게시글 최근 50개 조회
+  const postsSnap = await db.collection("posts")
+    .where("courseId", "==", courseId)
+    .where("tag", "==", "학술")
+    .orderBy("createdAt", "desc")
+    .limit(50)
+    .get();
+
+  if (postsSnap.empty) return [];
+
+  const postIds = postsSnap.docs.map((d) => d.id);
+
+  // 교수 uid 목록 조회
+  const professorsSnap = await db.collection("users")
+    .where("role", "==", "professor")
+    .get();
+  const professorIds = new Set(professorsSnap.docs.map((d) => d.id));
+
+  if (professorIds.size === 0) return [];
+
+  // 해당 게시글들의 댓글 중 교수 댓글 수집
+  const result: Array<{ content: string; imageUrls?: string[]; createdMs: number }> = [];
+
+  // Firestore in 쿼리 제한(30개)에 맞게 분할
+  for (let i = 0; i < postIds.length; i += 30) {
+    const batch = postIds.slice(i, i + 30);
+    const commentsSnap = await db.collection("comments")
+      .where("postId", "in", batch)
+      .get();
+
+    for (const doc of commentsSnap.docs) {
+      const data = doc.data();
+      if (!professorIds.has(data.authorId)) continue;
+      if (!data.content) continue;
+
+      const createdMs = data.createdAt?.toMillis?.() ||
+        (data.createdAt as unknown as { _seconds: number })?._seconds * 1000 || 0;
+      result.push({
+        content: data.content,
+        imageUrls: data.imageUrls?.length > 0 ? data.imageUrls : undefined,
+        createdMs,
+      });
+    }
+
+    if (result.length >= maxCount * 2) break;
+  }
+
+  // 최신순 정렬 후 상위 N개
+  result.sort((a, b) => b.createdMs - a.createdMs);
+  return result.slice(0, maxCount).map(({ content, imageUrls }) => ({ content, imageUrls }));
+}
+
 async function generateBoardAIReply(
   post: Post,
   postId: string,
   apiKey: string,
 ): Promise<void> {
   const db = getFirestore();
+  const isDetailed = post.aiDetailedAnswer === true;
+
+  // scope 최대 길이: 기본 8,000자, 상세 12,000자
+  const scopeMaxLength = isDetailed ? 12000 : 8000;
 
   // 과목명 확인
   const courseName = post.courseId ? COURSE_NAMES[post.courseId] || post.courseId : "";
@@ -547,7 +617,7 @@ async function generateBoardAIReply(
       const scope = await loadScopeForAI(
         post.courseId,
         relatedChapters.length > 0 ? relatedChapters : undefined,
-        8000 // 콩콩이용 최대 8000자 (문제 생성보다 짧게)
+        scopeMaxLength,
       );
       if (scope && scope.content) {
         courseContext += `\n\n[과목 학습 범위 — 참고 자료]\n아래는 이 과목의 관련 챕터 내용이야. 답변할 때 이 내용을 우선 참고하되, 범위에 없는 내용도 일반 지식으로 보충해서 답변해.\n\n${scope.content}`;
@@ -557,6 +627,36 @@ async function generateBoardAIReply(
       console.warn("[콩콩이] scope 로드 실패 (무시):", scopeErr);
     }
   }
+
+  // 상세 답변 모드: 교수 댓글 로딩
+  let professorContext = "";
+  if (isDetailed && post.courseId) {
+    try {
+      const profComments = await loadProfessorComments(post.courseId, 10);
+      if (profComments.length > 0) {
+        const formatted = profComments
+          .map((c, i) => `${i + 1}. ${c.content}`)
+          .join("\n\n");
+        professorContext = `\n\n[교수님 답변 스타일 참고]\n교수님이 다른 학술 질문에 답변하신 내용이야. 이 스타일과 강조점을 참고해서 답변해.\n\n${formatted}`;
+        console.log(`[콩콩이] 교수 댓글 ${profComments.length}개 로드 (상세 모드)`);
+
+        // 교수 댓글 이미지도 base64로 변환하여 추가 (아래에서 처리)
+      }
+    } catch (profErr) {
+      console.warn("[콩콩이] 교수 댓글 로드 실패 (무시):", profErr);
+    }
+  }
+
+  // 답변 스타일 분기
+  const answerStyle = isDetailed
+    ? `\n[답변 스타일: 상세 모드]
+- 질문에 풍부하게 답변하고, 관련 개념도 연계해서 알려줘.
+- 교수님이 중요하게 언급하신 내용이 있다면 그 스타일과 강조점을 반영해.
+- 답변 뒤에 연계 개념, 더 알면 좋은 내용도 덧붙여줘.
+- 충분한 깊이로 설명하되 장황하지는 않게.`
+    : `\n[답변 스타일: 간결 모드]
+- 질문에 대해 핵심만 간결하게 답변해.
+- 불필요한 부연 없이 명확하게.`;
 
   // 프롬프트 구성
   const systemPrompt = `너는 "콩콩이"라는 이름의 수업 보조 AI야. 학생이 학술 게시판에 올린 질문에 답변해줘.
@@ -576,7 +676,7 @@ async function generateBoardAIReply(
 - 글의 제목, 본문, 첨부된 이미지를 모두 참고해서 답변해
 - 핵심 개념과 원리를 충분히 자세하게 설명해. 예시나 비유도 적극 활용해.
 - 여러 개념이 나오면 번호를 매겨서 하나씩 정리해줘.
-- 불필요한 서론이나 반복은 빼되, 설명 자체는 충분히 해줘.
+- 불필요한 서론이나 반복은 빼되, 설명 자체는 충분히 해줘.${answerStyle}
 
 [답변 마무리]
 - 답변의 마지막 줄에 반드시 "궁금한 게 더 있으면 대댓글로 물어봐~"라고 안내해.
@@ -584,7 +684,7 @@ async function generateBoardAIReply(
 [정확성 검증]
 - 답변 작성 후 반드시 사실 관계, 수치, 용어를 한번 더 검토해.
 - 확실하지 않은 내용은 추측하지 말고, "이건 교수님한테 한번 확인해보는 게 좋을 것 같아!"로 안내해.
-- 교과서 수준의 정확한 정보만 전달해. 잘못된 정보를 주느니 모른다고 솔직하게 말하는 게 낫다.${courseContext}`;
+- 교과서 수준의 정확한 정보만 전달해. 잘못된 정보를 주느니 모른다고 솔직하게 말하는 게 낫다.${courseContext}${professorContext}`;
 
   const userText = `제목: ${post.title}\n본문: ${post.content}`;
 
@@ -614,13 +714,16 @@ async function generateBoardAIReply(
     }
   }
 
+  // 출력 토큰: 기본 8,192, 상세 16,384
+  const maxOutputTokens = isDetailed ? 16384 : 8192;
+
   const requestBody = {
     contents: [{ parts }],
     generationConfig: {
       temperature: 0.5,
       topK: 40,
       topP: 0.95,
-      maxOutputTokens: 8192,
+      maxOutputTokens,
     },
   };
 
@@ -676,10 +779,7 @@ async function generateBoardAIReply(
     createdAt: FieldValue.serverTimestamp(),
   });
 
-  // posts의 commentCount 증가
-  await db.collection("posts").doc(postId).update({
-    commentCount: FieldValue.increment(1),
-  });
+  // commentCount는 onCommentCreate 트리거에서 증가
 
   console.log(`AI 자동답변 생성 완료: postId=${postId}`);
 }
@@ -881,10 +981,7 @@ ${conversationHistory}`;
     createdAt: FieldValue.serverTimestamp(),
   });
 
-  // posts의 commentCount 증가
-  await db.collection("posts").doc(postId).update({
-    commentCount: FieldValue.increment(1),
-  });
+  // commentCount는 onCommentCreate 트리거에서 증가
 
   console.log(`콩콩이 대댓글 생성 완료: postId=${postId}, parentId=${parentCommentId}, thread=${recentThread.length}개`);
 }

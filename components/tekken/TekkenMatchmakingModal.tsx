@@ -7,10 +7,12 @@
  * 매칭 중 애니메이션 + 대기 시간 표시
  */
 
+import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { MatchState } from '@/lib/types/tekken';
 import { useHideNav } from '@/lib/hooks/useHideNav';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 interface TekkenMatchmakingModalProps {
   isOpen: boolean;
@@ -31,6 +33,14 @@ export default function TekkenMatchmakingModal({
 }: TekkenMatchmakingModalProps) {
   // 네비게이션 숨김
   useHideNav(isOpen);
+
+  // 스크롤 잠금
+  useEffect(() => {
+    if (isOpen) {
+      lockScroll();
+      return () => unlockScroll();
+    }
+  }, [isOpen]);
 
   if (typeof window === 'undefined') return null;
 

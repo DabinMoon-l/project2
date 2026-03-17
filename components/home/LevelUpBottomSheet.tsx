@@ -8,6 +8,7 @@ import { callFunction, type LevelUpResult } from '@/lib/api';
 import { computeRabbitDisplayName } from '@/lib/utils/rabbitDisplayName';
 import Image from 'next/image';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 const OPEN_MS = 380;
 const CLOSE_MS = 320;
@@ -38,6 +39,14 @@ export default function LevelUpBottomSheet({
 }: LevelUpBottomSheetProps) {
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+
+  // 스크롤 잠금
+  useEffect(() => {
+    if (isOpen) {
+      lockScroll();
+      return () => unlockScroll();
+    }
+  }, [isOpen]);
   const [result, setResult] = useState<LevelUpResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);

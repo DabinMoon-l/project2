@@ -14,6 +14,7 @@ import { getRabbitStats, useRabbitDoc, type RabbitHolding } from '@/lib/hooks/us
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 import { computeRabbitDisplayName } from '@/lib/utils/rabbitDisplayName';
 import { useHideNav } from '@/lib/hooks/useHideNav';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 interface TekkenBattleConfirmModalProps {
   isOpen: boolean;
@@ -116,6 +117,14 @@ export default function TekkenBattleConfirmModal({
 }: TekkenBattleConfirmModalProps) {
   // 네비게이션 숨김
   useHideNav(isOpen);
+
+  // 스크롤 잠금
+  useEffect(() => {
+    if (isOpen) {
+      lockScroll();
+      return () => unlockScroll();
+    }
+  }, [isOpen]);
 
   if (typeof window === 'undefined') return null;
 

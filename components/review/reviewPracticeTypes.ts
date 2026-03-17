@@ -136,6 +136,8 @@ export interface FeedbackStageProps {
   // 액션
   onBackToResult: () => void;
   onFinish: () => void;
+  /** 완료 처리 중 (중복 클릭 방지) */
+  isFinishing?: boolean;
 }
 
 /** 문제 풀이 화면 props */

@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { CustomFolder } from '@/lib/hooks/useCustomFolders';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 interface FolderSelectModalProps {
   isOpen: boolean;
@@ -22,6 +23,14 @@ export default function FolderSelectModal({
 }: FolderSelectModalProps) {
   const [newFolderName, setNewFolderName] = useState('');
   const [creating, setCreating] = useState(false);
+
+  // 스크롤 잠금
+  useEffect(() => {
+    if (isOpen) {
+      lockScroll();
+      return () => unlockScroll();
+    }
+  }, [isOpen]);
 
   const handleCreate = async () => {
     if (!newFolderName.trim() || creating) return;

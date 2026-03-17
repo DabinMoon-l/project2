@@ -33,6 +33,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           left: 0,
           right: 0,
           bottom: 0,
+          minHeight: '100dvh',
           zIndex: 0,
           backgroundColor: '#000',
           overflow: 'hidden',

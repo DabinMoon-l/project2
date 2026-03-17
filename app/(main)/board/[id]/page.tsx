@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { doc, updateDoc, increment, getDoc, db } from '@/lib/repositories';
@@ -11,6 +11,7 @@ import LinkifiedText from '@/components/board/LinkifiedText';
 import { usePost, useDeletePost, useLike } from '@/lib/hooks/useBoard';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useUser } from '@/lib/contexts';
+import { getScrollLockCount } from '@/lib/utils/scrollLock';
 
 /**
  * 날짜 포맷
@@ -175,6 +176,131 @@ export default function PostDetailPage() {
   const { deletePost, loading: deleting } = useDeletePost();
   const { toggleLike } = useLike();
 
+  // ── 좌측 스와이프 → 다음 게시글 네비게이션 ──
+  const swipeRef = useRef<HTMLDivElement>(null);
+  const swipeNav = useRef({ startX: 0, startY: 0, lastX: 0, active: false, locked: false, startTime: 0, navigating: false });
+
+  // 인접 게시글 ID (sessionStorage에서 목록 순서 읽기)
+  const [adjacentIds] = useState<{ next: string | null; current: number; total: number }>(() => {
+    if (typeof window === 'undefined') return { next: null, current: -1, total: 0 };
+    try {
+      const ids: string[] = JSON.parse(sessionStorage.getItem('board_post_ids') || '[]');
+      const idx = ids.indexOf(postId);
+      if (idx < 0) return { next: null, current: -1, total: 0 };
+      return {
+        next: idx < ids.length - 1 ? ids[idx + 1] : null,
+        current: idx,
+        total: ids.length,
+      };
+    } catch { return { next: null, current: -1, total: 0 }; }
+  });
+
+  // 좌측 스와이프 터치 핸들러
+  useEffect(() => {
+    const el = swipeRef.current;
+    if (!el || !adjacentIds.next) return;
+
+    const DIR_LOCK_DIST = 12;
+    const ANGLE_THRESHOLD = 55;
+    const SWIPE_THRESHOLD = 0.30;
+    const VELOCITY_THRESHOLD = 400;
+
+    const onTouchStart = (e: TouchEvent) => {
+      const s = swipeNav.current;
+      if (s.navigating) return;
+      if (getScrollLockCount() > 0) return;
+      if (document.body.hasAttribute('data-hide-nav')) return;
+      if (document.body.hasAttribute('data-home-overlay-open')) return;
+
+      const x = e.touches[0].clientX;
+      // 왼쪽 가장자리(SwipeBack 영역)에서 시작하면 무시
+      if (x < 35) return;
+
+      s.startX = x;
+      s.startY = e.touches[0].clientY;
+      s.lastX = x;
+      s.active = true;
+      s.locked = false;
+      s.startTime = Date.now();
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      const s = swipeNav.current;
+      if (!s.active || s.navigating) return;
+
+      const currentX = e.touches[0].clientX;
+      const dx = currentX - s.startX;
+      const dy = e.touches[0].clientY - s.startY;
+      s.lastX = currentX;
+
+      // 방향 잠금 (각도 기반)
+      if (!s.locked) {
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > DIR_LOCK_DIST) {
+          const angle = Math.atan2(Math.abs(dy), Math.abs(dx)) * (180 / Math.PI);
+          // 세로 스크롤이거나 오른쪽 스와이프 → 무시
+          if (angle > ANGLE_THRESHOLD || dx >= 0) {
+            s.active = false;
+            return;
+          }
+          s.locked = true;
+        } else {
+          return;
+        }
+      }
+
+      // 왼쪽 스와이프: 페이지가 손가락을 따라감
+      if (dx < 0) {
+        e.preventDefault();
+        const resistance = 1 - Math.min(Math.abs(dx) / window.innerWidth, 0.6) * 0.4;
+        el.style.transform = `translateX(${dx * resistance}px)`;
+        el.style.transition = 'none';
+      }
+    };
+
+    const onTouchEnd = () => {
+      const s = swipeNav.current;
+      if (!s.active || !s.locked || s.navigating) {
+        s.active = false;
+        return;
+      }
+      s.active = false;
+
+      const dx = s.lastX - s.startX;
+      const elapsed = Date.now() - s.startTime;
+      const velocity = Math.abs(dx) / (elapsed / 1000);
+      const screenW = window.innerWidth;
+
+      if (dx < 0 && (Math.abs(dx) > screenW * SWIPE_THRESHOLD || velocity > VELOCITY_THRESHOLD)) {
+        // 다음 게시글로 이동
+        s.navigating = true;
+        el.style.transition = 'transform 0.2s ease-out, opacity 0.2s ease-out';
+        el.style.transform = `translateX(${-screenW}px)`;
+        el.style.opacity = '0.3';
+
+        setTimeout(() => {
+          // 다음 페이지 슬라이드 인 애니메이션 활성화
+          sessionStorage.removeItem(`visited_board_${adjacentIds.next}`);
+          router.replace(`/board/${adjacentIds.next}`);
+        }, 180);
+      } else {
+        // 원위치 복귀
+        el.style.transition = 'transform 0.25s cubic-bezier(0.2, 0, 0, 1)';
+        el.style.transform = '';
+      }
+    };
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', onTouchEnd, { passive: true });
+
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [adjacentIds.next, router]);
+
   const isOwner = user?.uid === post?.authorId;
 
   // 교수님일 때 작성자 실명 조회
@@ -218,6 +344,18 @@ export default function PostDetailPage() {
     await toggleLike(postId);
     // onSnapshot이 자동 반영하므로 refresh() 불필요
   }, [toggleLike, postId]);
+
+  const handleShare = useCallback(async () => {
+    if (!post) return;
+    const url = `${window.location.origin}/board/${postId}`;
+    const text = `[${post.tag ? `#${post.tag}` : '게시판'}] ${post.title}\n\n${post.content}`;
+    if (navigator.share) {
+      try { await navigator.share({ title: post.title, text, url }); } catch { /* 취소 */ }
+    } else {
+      await navigator.clipboard.writeText(`${text}\n\n${url}`);
+      alert('클립보드에 복사되었습니다.');
+    }
+  }, [post, postId]);
 
   // 로딩
   if (loading) {
@@ -271,6 +409,7 @@ export default function PostDetailPage() {
   }
 
   return (
+    <div ref={swipeRef}>
     <motion.div
       className="min-h-screen pb-24 overflow-x-hidden" data-board-detail style={{ backgroundColor: '#F5F0E8' }}
       initial={slideIn ? { opacity: 0, x: 60 } : false}
@@ -279,14 +418,22 @@ export default function PostDetailPage() {
     >
       {/* 헤더 */}
       <header className="mx-4 mt-3 pb-2">
-        <button
-          onClick={() => goBack()}
-          className="flex items-center py-1 text-[#3A3A3A]"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => goBack()}
+            className="flex items-center py-1 text-[#3A3A3A]"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          {/* 게시글 위치 인디케이터 */}
+          {adjacentIds.total > 0 && (
+            <span className="text-[11px] text-[#999] font-medium tracking-wide">
+              {adjacentIds.current + 1} / {adjacentIds.total}
+            </span>
+          )}
+        </div>
       </header>
 
       <div className="mx-4 border-b-2 border-[#1A1A1A] mb-4" />
@@ -304,15 +451,37 @@ export default function PostDetailPage() {
             </span>
           )}
 
-          {/* 태그 */}
-          {post.tag && (
-            <span
-              className="inline-block px-2 py-0.5 text-xs font-bold mb-2"
-              style={{ border: '1px solid #1A1A1A', color: '#1A1A1A' }}
-            >
-              #{post.tag}
-            </span>
-          )}
+          {/* 태그 + 수정/삭제 */}
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              {post.tag && (
+                <span
+                  className="inline-block px-2 py-0.5 text-xs font-bold"
+                  style={{ border: '1px solid #1A1A1A', color: '#1A1A1A' }}
+                >
+                  #{post.tag}
+                </span>
+              )}
+            </div>
+            {isOwner && (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => router.push(`/board/${postId}/edit`)}
+                  className="text-[13px] text-[#999999] hover:text-[#1A1A1A] transition-colors"
+                >
+                  수정
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="text-[13px] transition-colors disabled:opacity-50"
+                  style={{ color: '#8B1A1A' }}
+                >
+                  {deleting ? '삭제중...' : '삭제'}
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* 제목 */}
           <h2 className="font-serif-display text-2xl md:text-3xl font-black leading-tight mb-3 text-[#1A1A1A]">
@@ -359,34 +528,33 @@ export default function PostDetailPage() {
             </div>
           )}
 
-          {/* 찜 줄: 좌=찜, 우=조회·댓글 */}
-          <div className="flex items-center justify-between py-2 mt-4 border-t border-dashed border-[#1A1A1A]">
-            <LikeButton count={post.likes} isLiked={post.likedBy?.includes(user?.uid || '') || false} onToggle={handleLike} />
-            <div className="flex items-center gap-3 text-xs text-[#5C5C5C]">
-              <span>조회 {post.viewCount}</span>
-              <span>댓글 {post.commentCount}</span>
+          {/* 하단 액션 줄: 좌=찜·조회·댓글 / 우=공유 */}
+          <div className="flex items-center justify-between py-2 mt-4">
+            <div className="flex items-center gap-3">
+              <LikeButton count={post.likes} isLiked={post.likedBy?.includes(user?.uid || '') || false} onToggle={handleLike} />
+              <span className="flex items-center gap-1 text-sm text-[#5C5C5C]">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                  <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                {post.viewCount}
+              </span>
+              <span className="flex items-center gap-1 text-sm text-[#5C5C5C]">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                {post.commentCount}
+              </span>
             </div>
+            <button
+              onClick={handleShare}
+              className="flex items-center gap-2 text-sm text-[#5C5C5C] active:scale-90 transition-transform"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+              </svg>
+            </button>
           </div>
-
-          {/* 수정/삭제 (작성자만) */}
-          {isOwner && (
-            <div className="flex items-center justify-end gap-3 pt-1">
-              <button
-                onClick={() => router.push(`/board/${postId}/edit`)}
-                className="text-[13px] text-[#999999] hover:text-[#1A1A1A] transition-colors"
-              >
-                수정
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={deleting}
-                className="text-[13px] transition-colors disabled:opacity-50"
-                style={{ color: '#8B1A1A' }}
-              >
-                {deleting ? '삭제중...' : '삭제'}
-              </button>
-            </div>
-          )}
         </motion.article>
 
         {/* 댓글 */}
@@ -396,5 +564,6 @@ export default function PostDetailPage() {
         </section>
       </main>
     </motion.div>
+    </div>
   );
 }

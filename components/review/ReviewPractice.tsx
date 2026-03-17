@@ -45,6 +45,8 @@ export default function ReviewPractice({
   const [submittedIndices, setSubmittedIndices] = useState<Set<number>>(new Set());
   // 나가기 확인 모달
   const [showExitModal, setShowExitModal] = useState(false);
+  // 완료 처리 중 (중복 클릭 방지)
+  const [isFinishing, setIsFinishing] = useState(false);
   // 결과 저장 (인덱스별) - 단일 문제용
   const [resultsMap, setResultsMap] = useState<Record<number, PracticeResult>>({});
   // 결합형 문제 결과 저장 (그룹 인덱스 -> 하위 인덱스 -> 결과)
@@ -342,7 +344,9 @@ export default function ReviewPractice({
   };
 
   // 피드백 화면에서 완료 — 복습 EXP + 피드백 EXP 합산 토스트
-  const handleFinish = () => {
+  const handleFinish = async () => {
+    if (isFinishing) return;
+    setIsFinishing(true);
     const revExp = correctCount * 2;
     const fbExp = feedbackSubmitCount * EXP_REWARDS.FEEDBACK_SUBMIT;
     const totalExp = revExp + fbExp;
@@ -352,7 +356,7 @@ export default function ReviewPractice({
       if (fbExp > 0) parts.push(`피드백 ${fbExp}`);
       showExpToast(totalExp, parts.join(' + '));
     }
-    onComplete(resultsArray);
+    await onComplete(resultsArray);
   };
 
   // 새 폴더 생성
@@ -564,6 +568,7 @@ export default function ReviewPractice({
         saveSuccess={saveSuccess}
         onBackToResult={() => setPhase('result')}
         onFinish={handleFinish}
+        isFinishing={isFinishing}
       />
     );
   }

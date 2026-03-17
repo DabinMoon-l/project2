@@ -624,19 +624,25 @@ export default function QuizPage() {
         const userStr = userAns === 'O' ? 'O' : userAns === 'X' ? 'X' : '';
         newResults[q.id] = { isCorrect: correctStr === userStr, correctAnswer: correctStr };
       } else if (q.type === 'multiple') {
-        if (Array.isArray(correctAns)) {
-          // 복수정답
-          const userSorted = Array.isArray(userAns) ? [...userAns].sort() : [];
-          const correctSorted = [...correctAns].sort();
+        if (Array.isArray(correctAns) && correctAns.length > 1) {
+          // 복수정답 (2개 이상)
+          const userSorted = Array.isArray(userAns)
+            ? [...userAns].map(Number).sort()
+            : [];
+          const correctSorted = [...correctAns].map(Number).sort();
           newResults[q.id] = {
             isCorrect: JSON.stringify(userSorted) === JSON.stringify(correctSorted),
-            correctAnswer: correctAns.map((a: number) => `${a + 1}번`).join(', '),
+            correctAnswer: correctAns.map((a: number) => `${Number(a) + 1}번`).join(', '),
           };
         } else {
-          // 단일정답
-          const correctNum = typeof correctAns === 'string' ? parseInt(correctAns, 10) : (correctAns ?? 0);
+          // 단일정답 — 서버(gradeQuestion)와 동일한 Number() 강제변환
+          const correctNum = Number(Array.isArray(correctAns) ? correctAns[0] : correctAns);
+          const userNum = Number(userAns);
+          if (process.env.NODE_ENV === 'development' && userNum === correctNum && userAns !== correctNum) {
+            console.warn('[채점 타입 불일치]', q.id, { userAns, correctAns, userType: typeof userAns, correctType: typeof correctAns });
+          }
           newResults[q.id] = {
-            isCorrect: userAns === correctNum,
+            isCorrect: userNum === correctNum,
             correctAnswer: `${correctNum + 1}번`,
           };
         }
@@ -992,7 +998,7 @@ export default function QuizPage() {
                                   handleAnswerChange(currentQuestion.id, index)
                                 }
                                 disabled={isSubmitted}
-                                correctIndex={isSubmitted ? Number(currentQuestion.answer) : undefined}
+                                correctIndex={isSubmitted ? Number(Array.isArray(currentQuestion.answer) ? currentQuestion.answer[0] : currentQuestion.answer) : undefined}
                               />
                             )
                           )}
@@ -1203,6 +1209,7 @@ export default function QuizPage() {
         answeredCount={answeredCount}
         totalQuestions={quiz.questions.length}
         isSaving={isSaving}
+        hideExitWithoutSave
       />
 
       {/* 이전 진행상황 복원 모달 */}

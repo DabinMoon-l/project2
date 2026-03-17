@@ -57,7 +57,7 @@ export default function LikeButton({
       onClick={handleClick}
       disabled={loading}
       className={`
-        flex items-center gap-2
+        flex items-center gap-1
         ${loading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
         transition-colors
       `}

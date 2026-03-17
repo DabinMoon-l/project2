@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 interface ImageViewerProps {
   urls: string[];
@@ -19,6 +20,12 @@ const ImageViewer = memo(function ImageViewer({
 }: ImageViewerProps) {
   const [idx, setIdx] = useState(initialIndex);
   const [showControls, setShowControls] = useState(true);
+
+  // 스크롤 잠금 (마운트 시)
+  useEffect(() => {
+    lockScroll();
+    return () => unlockScroll();
+  }, []);
 
   // 줌 상태
   const [scale, setScale] = useState(1);

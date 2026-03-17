@@ -149,8 +149,12 @@ export function flattenQuestionsForSave(
         if (sq.type === 'subjective' || sq.type === 'short_answer') {
           answer = sq.answerText || '';
         } else if (sq.type === 'multiple') {
-          if (sq.answerIndices && sq.answerIndices.length > 0) {
+          if (sq.answerIndices && sq.answerIndices.length > 1) {
+            // 복수정답: 배열로 저장
             answer = sq.answerIndices;
+          } else if (sq.answerIndices && sq.answerIndices.length === 1) {
+            // 단일정답: 숫자로 저장 (배열 → 숫자 추출)
+            answer = sq.answerIndices[0];
           } else {
             answer = (sq.answerIndex !== undefined && sq.answerIndex >= 0) ? sq.answerIndex : -1;
           }
@@ -206,8 +210,12 @@ export function flattenQuestionsForSave(
       if (q.type === 'subjective' || q.type === 'short_answer') {
         answer = q.answerText;
       } else if (q.type === 'multiple') {
-        if (q.answerIndices && q.answerIndices.length > 0) {
+        if (q.answerIndices && q.answerIndices.length > 1) {
+          // 복수정답: 배열로 저장
           answer = q.answerIndices;
+        } else if (q.answerIndices && q.answerIndices.length === 1) {
+          // 단일정답: 숫자로 저장 (배열 → 숫자 추출)
+          answer = q.answerIndices[0];
         } else {
           answer = q.answerIndex >= 0 ? q.answerIndex : -1;
         }

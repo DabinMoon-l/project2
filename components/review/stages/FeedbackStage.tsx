@@ -30,6 +30,7 @@ export default function FeedbackStage({
   // 액션
   onBackToResult,
   onFinish,
+  isFinishing,
 }: FeedbackStageProps) {
   return (
     <motion.div
@@ -180,9 +181,10 @@ export default function FeedbackStage({
           </button>
           <button
             onClick={onFinish}
-            className="flex-[2] py-3 text-sm bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors rounded-lg"
+            disabled={isFinishing}
+            className="flex-[2] py-3 text-sm bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors rounded-lg disabled:opacity-50"
           >
-            완료
+            {isFinishing ? '저장 중...' : '완료'}
           </button>
         </div>
       </div>

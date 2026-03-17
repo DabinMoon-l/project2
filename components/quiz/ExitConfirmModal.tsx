@@ -24,6 +24,8 @@ interface ExitConfirmModalProps {
   totalQuestions: number;
   /** 저장 중 상태 */
   isSaving?: boolean;
+  /** 저장하지 않고 나가기 버튼 숨김 (퀴즈 점수 조작 방지) */
+  hideExitWithoutSave?: boolean;
 }
 
 // 애니메이션 variants
@@ -73,6 +75,7 @@ export default function ExitConfirmModal({
   answeredCount,
   totalQuestions,
   isSaving = false,
+  hideExitWithoutSave = false,
 }: ExitConfirmModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
   const previousActiveElement = useRef<HTMLElement | null>(null);
@@ -232,16 +235,18 @@ export default function ExitConfirmModal({
                 )}
               </motion.button>
 
-              {/* 저장하지 않고 나가기 버튼 */}
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={onExitWithoutSave}
-                disabled={isSaving}
-                className="w-full py-2 text-xs font-bold bg-white text-[#8B1A1A] rounded-xl border border-[#D4CFC4] hover:bg-[#FDEAEA] transition-all duration-200 disabled:opacity-50"
-              >
-                저장하지 않고 나가기
-              </motion.button>
+              {/* 저장하지 않고 나가기 버튼 (퀴즈에서는 점수 조작 방지를 위해 숨김) */}
+              {!hideExitWithoutSave && (
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={onExitWithoutSave}
+                  disabled={isSaving}
+                  className="w-full py-2 text-xs font-bold bg-white text-[#8B1A1A] rounded-xl border border-[#D4CFC4] hover:bg-[#FDEAEA] transition-all duration-200 disabled:opacity-50"
+                >
+                  저장하지 않고 나가기
+                </motion.button>
+              )}
             </div>
           </motion.div>
         </div>

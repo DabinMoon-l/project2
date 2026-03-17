@@ -334,6 +334,7 @@ export const useCreatePost = (): UseCreatePostReturn => {
           isNotice: false,
           toProfessor: data.toProfessor || false, // 교수님께 전달 여부
           tag: data.tag || null, // 태그 (학사/학술/기타)
+          ...(data.aiDetailedAnswer ? { aiDetailedAnswer: true } : {}),
           viewCount: 0,
           createdAt: serverTimestamp(),
         };

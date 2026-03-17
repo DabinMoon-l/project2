@@ -442,9 +442,11 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
             if (sq.type === 'subjective' || sq.type === 'short_answer') {
               answer = sq.answerText || '';
             } else if (sq.type === 'multiple') {
-              // 복수정답이면 배열, 아니면 단일 숫자 (0-indexed)
-              if (sq.answerIndices && sq.answerIndices.length > 0) {
+              // 복수정답이면 배열, 단일정답이면 숫자 (0-indexed)
+              if (sq.answerIndices && sq.answerIndices.length > 1) {
                 answer = sq.answerIndices;
+              } else if (sq.answerIndices && sq.answerIndices.length === 1) {
+                answer = sq.answerIndices[0];
               } else {
                 answer = (sq.answerIndex !== undefined && sq.answerIndex >= 0) ? sq.answerIndex : -1;
               }
@@ -492,9 +494,11 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
           if (q.type === 'subjective' || q.type === 'short_answer') {
             answer = q.answerText;
           } else if (q.type === 'multiple') {
-            // 복수정답이면 배열, 아니면 단일 숫자 (0-indexed)
-            if (q.answerIndices && q.answerIndices.length > 0) {
+            // 복수정답이면 배열, 단일정답이면 숫자 (0-indexed)
+            if (q.answerIndices && q.answerIndices.length > 1) {
               answer = q.answerIndices;
+            } else if (q.answerIndices && q.answerIndices.length === 1) {
+              answer = q.answerIndices[0];
             } else {
               answer = q.answerIndex >= 0 ? q.answerIndex : -1;
             }
