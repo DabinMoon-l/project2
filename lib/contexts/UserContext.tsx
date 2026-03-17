@@ -104,7 +104,7 @@ export function UserProvider({ children }: UserProviderProps) {
             uid: user.uid,
             email: data.email || user.email || '',
             nickname: data.nickname || '용사',
-            classType: data.role === 'professor' ? '' : (data.classId || 'A'), // 교수님은 반 없음
+            classType: data.role === 'professor' ? '' : (data.classId || ''), // classId 없으면 빈 문자열
             studentId: data.studentId,
             department: data.department,
             // courseId에서 따옴표 제거 (Firestore 데이터 문제 대응)
