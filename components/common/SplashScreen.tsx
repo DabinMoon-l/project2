@@ -11,28 +11,37 @@ interface SplashScreenProps {
  * 스플래시 화면 컴포넌트
  * 앱 진입 시 2.5초간 로고를 보여주고 메인 콘텐츠로 전환
  */
-// 모듈 레벨 플래그 — 앱 프로세스 내 최초 1회만 스플래시 표시
-let splashShownInProcess = false;
+/**
+ * 스플래시 표시 여부 판별
+ * - PWA 재활성화(메모리 킬 후 복원)에서는 건너뛰기
+ * - 완전히 새로 연 경우만 표시
+ */
+function shouldShowSplash(): boolean {
+  if (typeof window === 'undefined') return false;
+  // 이미 로그인된 상태(Firebase IndexedDB 캐시)면 재활성화 → 스킵
+  if (document.cookie.includes('firebase') || localStorage.getItem('firebase:host:')) return false;
+  // performance.navigation으로 리로드 감지
+  if (performance?.navigation?.type === 1) return false;
+  // PWA standalone에서 visibilityState가 hidden→visible 전환이면 재활성화
+  if (document.visibilityState === 'hidden') return false;
+  // sessionStorage에 앱 사용 흔적이 있으면 재활성화
+  if (sessionStorage.length > 0) return false;
+  return true;
+}
 
 export default function SplashScreen({ children }: SplashScreenProps) {
-  const [showSplash, setShowSplash] = useState(() => {
-    if (splashShownInProcess) return false;
-    splashShownInProcess = true;
-    return true;
-  });
+  const [showSplash, setShowSplash] = useState(false);
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
-
-    if (!showSplash) return;
-
-    const timer = setTimeout(() => {
-      setShowSplash(false);
-    }, 3000);
-
-    return () => clearTimeout(timer);
-  }, [showSplash]);
+    const show = shouldShowSplash();
+    if (show) {
+      setShowSplash(true);
+      const timer = setTimeout(() => setShowSplash(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   // 서버 사이드 렌더링 중에는 children만 렌더링
   if (!isClient) {
