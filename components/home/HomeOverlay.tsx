@@ -255,7 +255,7 @@ export default function HomeOverlay() {
       style={{
         position: 'fixed',
         top: 0,
-        bottom: 'calc(-1 * env(safe-area-inset-bottom, 0px))',
+        bottom: 0,
         right: isWide ? 'calc(50% - 120px)' : 0,
         left: isWide ? '240px' : 0,
         zIndex: 100,
@@ -265,7 +265,6 @@ export default function HomeOverlay() {
         backgroundRepeat: 'no-repeat',
         backgroundColor: '#C8A090',
         paddingTop: 'env(safe-area-inset-top, 0px)',
-        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         transform: getTransform(),
         opacity: getOpacity(),
         borderRadius: `${getRadius()}px`,
@@ -319,15 +318,12 @@ export default function HomeOverlay() {
         <CharacterBox />
 
         {/* 하단 그룹: 랭킹 + 스와이프 힌트 */}
-        <div className="flex-1 flex flex-col">
+        <div>
           <RankingSection />
-
-          {/* 유연 간격: 랭킹 ↔ 스와이프 힌트 */}
-          <div className="flex-1" />
 
           {/* 스와이프 힌트 — 하단 (가로모드에서는 숨김) */}
           {!isWide && (
-            <div className="flex flex-col items-center gap-0.5 pointer-events-none">
+            <div className="mt-4 flex flex-col items-center gap-0.5 pointer-events-none">
               <motion.svg
                 className="w-4 h-4 text-white/50"
                 fill="none"
