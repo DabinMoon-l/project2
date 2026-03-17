@@ -195,10 +195,10 @@ export default function PostDetailPage() {
     } catch { return { next: null as string | null, current: -1, total: 0 }; }
   }, [postId]);
 
-  // 좌측 스와이프 터치 핸들러
+  // 좌측 스와이프 터치 핸들러 (document 레벨 — SwipeBack과 동일)
   useEffect(() => {
     const el = swipeRef.current;
-    if (!el || !adjacentIds.next) return;
+    if (!el) return;
 
     const DIR_LOCK_DIST = 12;
     const ANGLE_THRESHOLD = 55;
@@ -249,6 +249,12 @@ export default function PostDetailPage() {
         }
       }
 
+      // 다음 글이 없으면 무시
+      if (!adjacentIds.next) {
+        s.active = false;
+        return;
+      }
+
       // 왼쪽 스와이프: 페이지가 손가락을 따라감
       if (dx < 0) {
         e.preventDefault();
@@ -271,7 +277,7 @@ export default function PostDetailPage() {
       const velocity = Math.abs(dx) / (elapsed / 1000);
       const screenW = window.innerWidth;
 
-      if (dx < 0 && (Math.abs(dx) > screenW * SWIPE_THRESHOLD || velocity > VELOCITY_THRESHOLD)) {
+      if (adjacentIds.next && dx < 0 && (Math.abs(dx) > screenW * SWIPE_THRESHOLD || velocity > VELOCITY_THRESHOLD)) {
         // 다음 게시글로 이동
         s.navigating = true;
         el.style.transition = 'transform 0.2s ease-out, opacity 0.2s ease-out';
@@ -279,10 +285,8 @@ export default function PostDetailPage() {
         el.style.opacity = '0.3';
 
         setTimeout(() => {
-          // 다음 페이지 슬라이드 인 애니메이션 활성화
           sessionStorage.removeItem(`visited_board_${adjacentIds.next}`);
           router.replace(`/board/${adjacentIds.next}`);
-          // 네비게이션 후 스타일 리셋 (같은 컴포넌트 재사용 대비)
           setTimeout(() => {
             el.style.transition = '';
             el.style.transform = '';
@@ -297,14 +301,14 @@ export default function PostDetailPage() {
       }
     };
 
-    el.addEventListener('touchstart', onTouchStart, { passive: true });
-    el.addEventListener('touchmove', onTouchMove, { passive: false });
-    el.addEventListener('touchend', onTouchEnd, { passive: true });
+    document.addEventListener('touchstart', onTouchStart, { passive: true });
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+    document.addEventListener('touchend', onTouchEnd, { passive: true });
 
     return () => {
-      el.removeEventListener('touchstart', onTouchStart);
-      el.removeEventListener('touchmove', onTouchMove);
-      el.removeEventListener('touchend', onTouchEnd);
+      document.removeEventListener('touchstart', onTouchStart);
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend', onTouchEnd);
     };
   }, [adjacentIds.next, router]);
 
