@@ -223,9 +223,9 @@ function MainLayoutGrid({
           className="min-h-screen"
           style={{
             paddingTop: 'env(safe-area-inset-top, 0px)',
-            ...(!hideNavigation && !isWide
-              ? { paddingBottom: 'calc(4.25rem + env(safe-area-inset-bottom, 0px))' }
-              : {}),
+            paddingBottom: !hideNavigation && !isWide
+              ? 'calc(4.25rem + env(safe-area-inset-bottom, 0px))'
+              : 'env(safe-area-inset-bottom, 0px)',
             ...(isWide ? { marginLeft: '240px' } : {}),
             // fixed 요소 좌측 위치 조정용 CSS 변수
             // 모바일: 0, 가로모드(사이드바 없음): 240px, 라우트 사이드바: calc(50% + 120px)
