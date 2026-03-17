@@ -30,7 +30,7 @@ body {
   min-height: 100vh;
   min-height: 100dvh;
   min-height: -webkit-fill-available;
-  /* overflow-x: hidden/clip은 body에 넣으면 별도 스크롤 컨테이너가 되어 높이가 깨짐 — html에만 적용 */
+  overflow-x: hidden;
   overscroll-behavior: none;
   background-color: #F5F0E8;
 }
