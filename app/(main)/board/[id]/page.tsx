@@ -180,19 +180,19 @@ export default function PostDetailPage() {
   const swipeRef = useRef<HTMLDivElement>(null);
   const swipeNav = useRef({ startX: 0, startY: 0, lastX: 0, active: false, locked: false, startTime: 0, navigating: false });
 
-  // 인접 게시글 ID (sessionStorage에서 목록 순서 읽기, postId 변경 시 재계산)
-  const adjacentIds = useMemo(() => {
-    if (typeof window === 'undefined') return { next: null as string | null, current: -1, total: 0 };
+  // 다음 게시글 ID + 인디케이터 (마지막이면 첫번째로 순환)
+  const { nextPostId, currentIndex, totalPosts } = useMemo(() => {
+    if (typeof window === 'undefined') return { nextPostId: null as string | null, currentIndex: -1, totalPosts: 0 };
     try {
       const ids: string[] = JSON.parse(sessionStorage.getItem('board_post_ids') || '[]');
       const idx = ids.indexOf(postId);
-      if (idx < 0) return { next: null as string | null, current: -1, total: 0 };
+      if (idx < 0 || ids.length < 2) return { nextPostId: null as string | null, currentIndex: idx, totalPosts: ids.length };
       return {
-        next: idx < ids.length - 1 ? ids[idx + 1] : null,
-        current: idx,
-        total: ids.length,
+        nextPostId: ids[(idx + 1) % ids.length],
+        currentIndex: idx,
+        totalPosts: ids.length,
       };
-    } catch { return { next: null as string | null, current: -1, total: 0 }; }
+    } catch { return { nextPostId: null as string | null, currentIndex: -1, totalPosts: 0 }; }
   }, [postId]);
 
   // 좌측 스와이프 터치 핸들러 (document 레벨 — SwipeBack과 동일)
@@ -250,7 +250,7 @@ export default function PostDetailPage() {
       }
 
       // 다음 글이 없으면 무시
-      if (!adjacentIds.next) {
+      if (!nextPostId) {
         s.active = false;
         return;
       }
@@ -277,7 +277,7 @@ export default function PostDetailPage() {
       const velocity = Math.abs(dx) / (elapsed / 1000);
       const screenW = window.innerWidth;
 
-      if (adjacentIds.next && dx < 0 && (Math.abs(dx) > screenW * SWIPE_THRESHOLD || velocity > VELOCITY_THRESHOLD)) {
+      if (nextPostId && dx < 0 && (Math.abs(dx) > screenW * SWIPE_THRESHOLD || velocity > VELOCITY_THRESHOLD)) {
         // 다음 게시글로 이동
         s.navigating = true;
         el.style.transition = 'transform 0.2s ease-out, opacity 0.2s ease-out';
@@ -285,12 +285,13 @@ export default function PostDetailPage() {
         el.style.opacity = '0.3';
 
         setTimeout(() => {
-          sessionStorage.removeItem(`visited_board_${adjacentIds.next}`);
-          router.replace(`/board/${adjacentIds.next}`);
+          // 스타일 즉시 리셋 (네비게이션 후 잔여 transform 방지)
+          el.style.transition = '';
+          el.style.transform = '';
+          el.style.opacity = '';
+          sessionStorage.removeItem(`visited_board_${nextPostId}`);
+          router.replace(`/board/${nextPostId}`);
           setTimeout(() => {
-            el.style.transition = '';
-            el.style.transform = '';
-            el.style.opacity = '';
             s.navigating = false;
           }, 300);
         }, 180);
@@ -310,7 +311,7 @@ export default function PostDetailPage() {
       document.removeEventListener('touchmove', onTouchMove);
       document.removeEventListener('touchend', onTouchEnd);
     };
-  }, [adjacentIds.next, router]);
+  }, [nextPostId, router]);
 
   const isOwner = user?.uid === post?.authorId;
 
@@ -438,9 +439,9 @@ export default function PostDetailPage() {
             </svg>
           </button>
           {/* 게시글 위치 인디케이터 */}
-          {adjacentIds.total > 0 && (
+          {totalPosts > 0 && (
             <span className="text-[11px] text-[#999] font-medium tracking-wide">
-              {adjacentIds.current + 1} / {adjacentIds.total}
+              {currentIndex + 1} / {totalPosts}
             </span>
           )}
         </div>
