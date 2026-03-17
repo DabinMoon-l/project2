@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { SourceRect } from '@/lib/hooks/useExpandSource';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 const SPRING_GENIE = { type: 'spring' as const, stiffness: 400, damping: 30 };
 
@@ -45,6 +46,14 @@ export default function ExpandModal({
       capturedRef.current = sourceRect;
     }
   }, [isOpen, sourceRect]);
+
+  // 스크롤 잠금
+  useEffect(() => {
+    if (isOpen) {
+      lockScroll();
+      return () => unlockScroll();
+    }
+  }, [isOpen]);
 
   // ESC 키로 닫기
   useEffect(() => {

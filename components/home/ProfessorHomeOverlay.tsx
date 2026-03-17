@@ -8,6 +8,7 @@ import { useUser, useCourse } from '@/lib/contexts';
 import { useHomeOverlay } from '@/lib/contexts/HomeOverlayContext';
 import CourseSwitcher from '@/components/common/CourseSwitcher';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 import ProfessorRankingSection from '@/components/home/ProfessorRankingSection';
 
 // 대형 컴포넌트 lazy load
@@ -50,6 +51,14 @@ export default function ProfessorHomeOverlay() {
   const cleanupRef = useRef<(() => void) | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
+
+  // 스크롤 잠금
+  useEffect(() => {
+    if (visible) {
+      lockScroll();
+      return () => unlockScroll();
+    }
+  }, [visible]);
 
   const getOpenOrigin = useCallback(() => {
     if (!buttonRect) {

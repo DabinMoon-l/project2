@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 const OPEN_MS = 380;
 const CLOSE_MS = 320;
@@ -33,6 +34,14 @@ export default function MilestoneChoiceModal({
   const [visible, setVisible] = useState(false);
   const [phase, setPhase] = useState<Phase>('hidden');
   const phaseRef = useRef<Phase>('hidden');
+
+  // 스크롤 잠금
+  useEffect(() => {
+    if (isOpen) {
+      lockScroll();
+      return () => unlockScroll();
+    }
+  }, [isOpen]);
 
   // 열기
   useEffect(() => {

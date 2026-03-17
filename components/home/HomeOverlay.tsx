@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic';
 import { useUser } from '@/lib/contexts';
 import { useHomeOverlay } from '@/lib/contexts/HomeOverlayContext';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 import {
   CharacterBox,
   RankingSection,
@@ -53,6 +54,14 @@ export default function HomeOverlay() {
   const overlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setMounted(true); }, []);
+
+  // 스크롤 잠금
+  useEffect(() => {
+    if (visible) {
+      lockScroll();
+      return () => unlockScroll();
+    }
+  }, [visible]);
 
   // 열기 전용: 홈 버튼에서 확장하는 transformOrigin
   const getOpenOrigin = useCallback(() => {
@@ -265,7 +274,7 @@ export default function HomeOverlay() {
         overscrollBehavior: 'none',
       }}
     >
-      <div className="relative z-[2] flex-1 flex flex-col justify-between pt-1 pb-2">
+      <div className="relative z-[2] flex-1 flex flex-col pt-1 pb-2">
         {/* 상단 그룹: 프로필 + 공지 */}
         <div>
           {/* 프로필 + 닉네임 */}

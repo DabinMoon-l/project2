@@ -14,6 +14,7 @@ import { useHideNav } from '@/lib/hooks/useHideNav';
 import { getRabbitImageSrc } from '@/lib/utils/rabbitImage';
 import { readFullCache, writeFullCache } from '@/lib/utils/rankingCache';
 import { computeRankScore } from '@/lib/utils/ranking';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 interface RankedUser {
   id: string;
@@ -101,6 +102,14 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
 
   // 네비게이션 숨김
   useHideNav(isOpen);
+
+  // 스크롤 잠금
+  useEffect(() => {
+    if (isOpen) {
+      lockScroll();
+      return () => unlockScroll();
+    }
+  }, [isOpen]);
 
   // 열릴 때 초기화
   useEffect(() => {

@@ -244,7 +244,7 @@ export default function CharacterBox() {
 
   return (
     <>
-      <div className="flex flex-col items-center w-full">
+      <div className="flex-1 flex flex-col items-center w-full">
         {/* XP / 도감 */}
         <div className="w-full flex items-center justify-between px-8 mb-1 mt-3 relative z-20">
           <div className="h-[36px] flex items-center gap-2.5 px-5 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl">
@@ -265,6 +265,9 @@ export default function CharacterBox() {
             <span className="text-[17px] font-bold text-white">도감</span>
           </button>
         </div>
+
+        {/* 유연 간격: 도감줄 ↔ 캐릭터 */}
+        <div className="flex-1" />
 
         {/* 캐릭터 영역 — 항상 2슬롯 궤도 캐러셀 */}
         {slotCount >= 2 ? (
@@ -340,6 +343,9 @@ export default function CharacterBox() {
             </AnimatePresence>
           </div>
         ) : null}
+
+        {/* 유연 간격: 캐릭터 ↔ 닉네임 */}
+        <div className="flex-1" />
 
         {/* 토끼 이름 + 레벨 */}
         <div className="mt-[88px] relative top-[16px]">

@@ -388,7 +388,7 @@ export default function CombinedQuestionGroup({
                           selected={currentAnswer as number | null}
                           onSelect={(index) => onAnswerChange(question.id, index)}
                           disabled={isQSubmitted}
-                          correctIndex={isQSubmitted ? Number(question.answer) : undefined}
+                          correctIndex={isQSubmitted ? Number(Array.isArray(question.answer) ? question.answer[0] : question.answer) : undefined}
                         />
                       )
                     )}

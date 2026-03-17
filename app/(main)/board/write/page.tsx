@@ -2,11 +2,12 @@
 
 import { useCallback, useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '@/styles/themes/useTheme';
 import WriteForm from '@/components/board/WriteForm';
 import { useCreatePost, type CreatePostData, type BoardTag } from '@/lib/hooks/useBoard';
-import { useExpToast, Modal } from '@/components/common';
+import { useExpToast } from '@/components/common';
 import { useUser, useCourse } from '@/lib/contexts';
 import { EXP_REWARDS } from '@/lib/utils/expRewards';
 
@@ -192,47 +193,72 @@ export default function WritePage() {
         )}
       </AnimatePresence>
 
-      {/* 나가기 확인 모달 */}
-      <Modal
-        isOpen={showExitModal}
-        onClose={() => setShowExitModal(false)}
-        size="sm"
-        showCloseButton={false}
-      >
-        <div className="text-center">
-          <p className="text-sm font-bold text-gray-900 mb-1">
-            작성을 중단하시겠습니까?
-          </p>
-          <p className="text-xs text-gray-500 leading-relaxed">
-            {hasContent
-              ? '임시 저장하면 나중에 이어서 작성할 수 있습니다.'
-              : '작성된 내용이 없습니다.'
-            }
-          </p>
-        </div>
-        <div className="flex flex-col gap-2 mt-4">
-          <button
-            onClick={() => setShowExitModal(false)}
-            className="w-full py-2.5 text-sm font-bold text-white bg-[#1A1A1A] rounded-xl hover:bg-[#2A2A2A] transition-colors"
-          >
-            계속 작성하기
-          </button>
-          {hasContent && (
-            <button
-              onClick={handleSaveAndExit}
-              className="w-full py-2.5 text-sm font-bold text-[#1A1A1A] bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
-            >
-              임시저장하고 나가기
-            </button>
+      {/* 나가기 확인 모달 (ExitConfirmModal 스타일) */}
+      {typeof window !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {showExitModal && (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+              {/* 백드롭 */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowExitModal(false)}
+                className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              />
+
+              {/* 모달 */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 25 } }}
+                exit={{ opacity: 0, scale: 0.95, y: 10, transition: { duration: 0.15 } }}
+                className="relative w-full max-w-[280px] bg-[#F5F0E8] rounded-2xl shadow-xl overflow-hidden"
+              >
+                {/* 본문 */}
+                <div className="px-5 pt-5 pb-3 text-center">
+                  <h2 className="text-sm font-bold text-[#1A1A1A] mb-1">
+                    작성을 중단하시겠습니까?
+                  </h2>
+                  <p className="text-xs text-[#5C5C5C] leading-relaxed">
+                    {hasContent
+                      ? '임시 저장하면 나중에 이어서 작성할 수 있습니다.'
+                      : '작성된 내용이 없습니다.'
+                    }
+                  </p>
+                </div>
+
+                {/* 버튼 영역 */}
+                <div className="flex flex-col gap-1.5 px-4 pb-4 pt-2">
+                  <motion.button
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowExitModal(false)}
+                    className="w-full py-2 text-xs font-bold text-[#F5F0E8] bg-[#1A1A1A] rounded-xl hover:bg-[#2A2A2A] transition-colors"
+                  >
+                    계속 작성하기
+                  </motion.button>
+                  {hasContent && (
+                    <motion.button
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleSaveAndExit}
+                      className="w-full py-2 text-xs font-bold bg-white text-[#1A1A1A] rounded-xl border border-[#D4CFC4] hover:bg-[#F5F0E8] transition-colors"
+                    >
+                      임시저장하고 나가기
+                    </motion.button>
+                  )}
+                  <motion.button
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleExitWithoutSave}
+                    className="w-full py-2 text-xs font-bold bg-white text-[#8B1A1A] rounded-xl border border-[#D4CFC4] hover:bg-[#FDEAEA] transition-colors"
+                  >
+                    나가기
+                  </motion.button>
+                </div>
+              </motion.div>
+            </div>
           )}
-          <button
-            onClick={handleExitWithoutSave}
-            className="w-full py-2.5 text-sm font-bold text-[#8B1A1A] bg-gray-100 rounded-xl hover:bg-red-50 transition-colors"
-          >
-            저장하지 않고 나가기
-          </button>
-        </div>
-      </Modal>
+        </AnimatePresence>,
+        document.body
+      )}
     </div>
   );
 }

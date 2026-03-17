@@ -23,6 +23,7 @@ import TekkenBattleResult from './TekkenBattleResult';
 import TekkenBattleArena from './TekkenBattleArena';
 import type { RoundResultData, BattleState, BattlePlayer, BattleRabbit, BattleResult, BattleStatus, RoundState, SubmitAnswerResult, MashState } from '@/lib/types/tekken';
 import { useHideNav } from '@/lib/hooks/useHideNav';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 interface TekkenBattleOverlayProps {
   tekken: {
@@ -66,6 +67,12 @@ export default function TekkenBattleOverlay({
 
   // 네비게이션 숨김
   useHideNav(true);
+
+  // 스크롤 잠금
+  useEffect(() => {
+    lockScroll();
+    return () => unlockScroll();
+  }, []);
 
   // 배틀 상태에 따라 phase 전환
   useEffect(() => {

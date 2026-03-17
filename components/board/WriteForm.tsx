@@ -43,6 +43,7 @@ export default function WriteForm({
   const [title, setTitle] = useState(initialTitle);
   const [content, setContent] = useState(initialContent);
   const [tag, setTag] = useState<BoardTag | undefined>(initialTag);
+  const [aiDetailedAnswer, setAiDetailedAnswer] = useState(true);
 
   // 부모에서 임시저장 복원 시 반영 (useState는 초기값만 사용하므로 동기화 필요)
   useEffect(() => {
@@ -71,6 +72,8 @@ export default function WriteForm({
   const handleTagSelect = useCallback((selectedTag: BoardTag) => {
     const newTag = tag === selectedTag ? undefined : selectedTag;
     setTag(newTag);
+    // 학술이 아닌 태그로 변경 시 체크박스 초기화
+    if (newTag !== '학술') setAiDetailedAnswer(false);
     onDraftChange?.(title, content, newTag);
   }, [tag, title, content, onDraftChange]);
 
@@ -248,11 +251,12 @@ export default function WriteForm({
         imageUrls: allImageUrls,
         fileUrls: uploadedFiles,
         tag,
+        ...(tag === '학술' && aiDetailedAnswer ? { aiDetailedAnswer: true } : {}),
       });
     } catch (err) {
       console.error('글 작성 실패:', err);
     }
-  }, [isValid, isSubmitting, uploading, images, files, linkedImageUrls, title, content, tag, uploadImage, uploadFile, onSubmit]);
+  }, [isValid, isSubmitting, uploading, images, files, linkedImageUrls, title, content, tag, aiDetailedAnswer, uploadImage, uploadFile, onSubmit]);
 
   return (
     <motion.div
@@ -301,7 +305,7 @@ export default function WriteForm({
         >
           태그 <span style={{ color: '#8B1A1A' }}>*</span>
         </label>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           {BOARD_TAGS.map((t) => (
             <button
               key={t}
@@ -321,6 +325,39 @@ export default function WriteForm({
               {t}
             </button>
           ))}
+
+          {/* 학술 태그 선택 시 AI 상세 답변 체크박스 */}
+          <AnimatePresence>
+            {tag === '학술' && (
+              <motion.label
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -8 }}
+                transition={{ duration: 0.15 }}
+                className="flex items-center gap-2 ml-auto cursor-pointer select-none"
+              >
+                <span
+                  className="flex items-center justify-center border border-[#1A1A1A]"
+                  style={{ width: 28, height: 28 }}
+                >
+                  {aiDetailedAnswer && (
+                    <svg className="w-4 h-4 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </span>
+                <input
+                  type="checkbox"
+                  checked={aiDetailedAnswer}
+                  onChange={(e) => setAiDetailedAnswer(e.target.checked)}
+                  className="sr-only"
+                />
+                <span className="text-xs font-bold text-[#1A1A1A]">
+                  AI 상세 답변
+                </span>
+              </motion.label>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 

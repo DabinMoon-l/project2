@@ -15,18 +15,57 @@ import { scaleCoord } from '@/lib/hooks/useViewportScale';
 /** 기본 토끼 이미지 경로 */
 const DEFAULT_RABBIT_IMAGE = '/rabbit/default-news.png';
 
+/** 게시글 통계 줄 (좌=태그, 우=아이콘) */
+function PostStats({ post, tag }: { post: Post; tag?: string }) {
+  return (
+    <div className="mt-2 flex items-center gap-2">
+      {tag && (
+        <span className="inline-block px-2 py-0.5 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8]">
+          #{tag}
+        </span>
+      )}
+      <div className="flex items-center gap-2 text-[11px] text-[#8A8578] ml-auto">
+        <span className="flex items-center gap-0.5">
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+            <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+          </svg>
+          {post.viewCount || 0}
+        </span>
+        <span className="flex items-center gap-0.5">
+          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+          </svg>
+          {post.likes || 0}
+        </span>
+        <span className="flex items-center gap-0.5">
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          </svg>
+          {post.commentCount || 0}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 /** 댓글을 postId별로 그룹화한 Map 타입 */
 type CommentsMap = Map<string, Comment[]>;
 
-/** 댓글 말줄임 상수 */
-const COMMENT_MAX_LENGTH = 30;
-
-/** 댓글 내용 말줄임 함수 */
-function truncateComment(content: string): string {
-  if (content.length <= COMMENT_MAX_LENGTH) {
+/** 댓글 내용 말줄임 함수 (역할별 분기) */
+function truncateComment(content: string, comment?: Comment): string {
+  // 교수님 댓글: 전체 표시
+  if (comment && !comment.authorClassType && comment.authorId !== 'gemini-ai') {
     return content;
   }
-  return content.slice(0, COMMENT_MAX_LENGTH) + '...더보기';
+  // 콩콩이 댓글: 80자
+  if (comment && (comment.authorId === 'gemini-ai' || comment.isAIReply)) {
+    if (content.length <= 80) return content;
+    return content.slice(0, 80) + '...';
+  }
+  // 학생 댓글: 30자
+  if (content.length <= 30) return content;
+  return content.slice(0, 30) + '...';
 }
 
 /** 랜덤 명언 목록 */
@@ -62,8 +101,6 @@ const HeadlineArticle = memo(function HeadlineArticle({
   onUnpin?: () => void;
 }) {
   const imageUrl = post.imageUrl || post.imageUrls?.[0] || DEFAULT_RABBIT_IMAGE;
-  // 헤드라인/고정글은 총 3개 댓글까지 (대댓글 포함)
-  const totalCommentCount = comments.length;
   const rootComments = comments.filter(c => !c.parentId);
 
   // 채택된 댓글을 최상단으로
@@ -75,21 +112,12 @@ const HeadlineArticle = memo(function HeadlineArticle({
     }
   }
 
-  // 표시할 댓글과 대댓글 합쳐서 최대 3개
-  let displayCount = 0;
-  const maxDisplay = 3;
+  // 모든 댓글 표시
   const displayItems: { comment: Comment; replies: Comment[] }[] = [];
-
   for (const comment of rootComments) {
-    if (displayCount >= maxDisplay) break;
     const replies = comments.filter(c => c.parentId === comment.id);
-    const availableSlots = maxDisplay - displayCount;
-    const replyCount = Math.min(replies.length, availableSlots - 1);
-    displayItems.push({ comment, replies: replies.slice(0, replyCount > 0 ? replyCount : 0) });
-    displayCount += 1 + (replyCount > 0 ? replyCount : 0);
+    displayItems.push({ comment, replies });
   }
-
-  const remainingCount = totalCommentCount - displayCount;
 
   return (
     <motion.article
@@ -126,45 +154,31 @@ const HeadlineArticle = memo(function HeadlineArticle({
 
           {/* 본문 및 댓글 */}
           <div className="p-3 flex-1">
-            <p className="text-xs text-[#1A1A1A] leading-relaxed line-clamp-3">
+            <p className="text-xs text-[#1A1A1A] leading-relaxed whitespace-pre-wrap">
               {post.content}
             </p>
 
-            {/* 댓글 및 대댓글 표시 (최대 3개, 대댓글 포함) */}
+            {/* 댓글 및 대댓글 표시 (전체) */}
             {displayItems.length > 0 && (
               <div className="mt-2 pt-2 border-t border-dashed border-[#1A1A1A] overflow-hidden">
                 {displayItems.map(({ comment, replies }) => (
                   <div key={comment.id} className="overflow-hidden">
                     <p className="text-xs text-[#1A1A1A] leading-snug py-0.5 overflow-hidden text-ellipsis" style={{ wordBreak: 'break-all', maxWidth: '100%' }}>
-                      <span className="whitespace-nowrap">ㄴ </span>{truncateComment(comment.content)}
+                      <span className="whitespace-nowrap">ㄴ </span>{truncateComment(comment.content, comment)}
                     </p>
                     {/* 대댓글 표시 */}
                     {replies.map((reply) => (
                       <p key={reply.id} className="text-xs text-[#5C5C5C] leading-snug py-0.5 pl-4 overflow-hidden text-ellipsis" style={{ wordBreak: 'break-all', maxWidth: '100%' }}>
-                        <span className="whitespace-nowrap">ㄴ </span>{truncateComment(reply.content)}
+                        <span className="whitespace-nowrap">ㄴ </span>{truncateComment(reply.content, reply)}
                       </p>
                     ))}
                   </div>
                 ))}
-                {/* 더보기 버튼 (검정 테두리 네모박스, 하단 중앙) */}
-                {remainingCount > 0 && (
-                  <div className="flex justify-center mt-2">
-                    <span className="px-3 py-1 text-xs border border-[#1A1A1A] text-[#1A1A1A]">
-                      더보기→
-                    </span>
-                  </div>
-                )}
               </div>
             )}
 
-            {/* 태그 (댓글 밑, 왼쪽 정렬) */}
-            {post.tag && (
-              <div className="mt-2">
-                <span className="inline-block px-2 py-0.5 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8]">
-                  #{post.tag}
-                </span>
-              </div>
-            )}
+            {/* 태그 + 통계 */}
+            <PostStats post={post} tag={post.tag} />
           </div>
         </div>
       </div>
@@ -307,8 +321,6 @@ const MasonryItem = memo(function MasonryItem({
 }) {
   const hasImage = post.imageUrl || (post.imageUrls && post.imageUrls.length > 0);
   const imageUrl = post.imageUrl || post.imageUrls?.[0];
-  // 일반 글은 총 4개 댓글까지 (대댓글 포함)
-  const totalCommentCount = comments.length;
   const rootComments = comments.filter(c => !c.parentId);
 
   // 채택된 댓글을 최상단으로
@@ -320,21 +332,12 @@ const MasonryItem = memo(function MasonryItem({
     }
   }
 
-  // 표시할 댓글과 대댓글 합쳐서 최대 4개
-  let displayCount = 0;
-  const maxDisplay = 4;
+  // 모든 댓글 표시
   const displayItems: { comment: Comment; replies: Comment[] }[] = [];
-
   for (const comment of rootComments) {
-    if (displayCount >= maxDisplay) break;
     const replies = comments.filter(c => c.parentId === comment.id);
-    const availableSlots = maxDisplay - displayCount;
-    const replyCount = Math.min(replies.length, availableSlots - 1);
-    displayItems.push({ comment, replies: replies.slice(0, replyCount > 0 ? replyCount : 0) });
-    displayCount += 1 + (replyCount > 0 ? replyCount : 0);
+    displayItems.push({ comment, replies });
   }
-
-  const remainingCount = totalCommentCount - displayCount;
 
   const ImageSection = hasImage && imageUrl && (
     <div className="relative w-full aspect-[4/3] border border-[#1A1A1A] bg-[#EDEAE4]">
@@ -376,45 +379,31 @@ const MasonryItem = memo(function MasonryItem({
       )}
 
       {/* 본문 */}
-      <p className="text-xs text-[#1A1A1A] leading-relaxed line-clamp-4 mt-2">
+      <p className="text-xs text-[#1A1A1A] leading-relaxed whitespace-pre-wrap mt-2">
         {post.content}
       </p>
 
-      {/* 댓글 및 대댓글 표시 (최대 4개, 대댓글 포함) */}
+      {/* 댓글 및 대댓글 표시 (전체) */}
       {displayItems.length > 0 && (
         <div className="mt-2 pt-2 border-t border-dashed border-[#1A1A1A] overflow-hidden">
           {displayItems.map(({ comment, replies }) => (
             <div key={comment.id} className="overflow-hidden">
               <p className="text-xs text-[#1A1A1A] leading-snug py-0.5 overflow-hidden text-ellipsis" style={{ wordBreak: 'break-all', maxWidth: '100%' }}>
-                <span className="whitespace-nowrap">ㄴ </span>{truncateComment(comment.content)}
+                <span className="whitespace-nowrap">ㄴ </span>{truncateComment(comment.content, comment)}
               </p>
               {/* 대댓글 표시 */}
               {replies.map((reply) => (
                 <p key={reply.id} className="text-xs text-[#5C5C5C] leading-snug py-0.5 pl-4 overflow-hidden text-ellipsis" style={{ wordBreak: 'break-all', maxWidth: '100%' }}>
-                  <span className="whitespace-nowrap">ㄴ </span>{truncateComment(reply.content)}
+                  <span className="whitespace-nowrap">ㄴ </span>{truncateComment(reply.content, reply)}
                 </p>
               ))}
             </div>
           ))}
-          {/* 더보기 버튼 (검정 테두리 네모박스, 하단 중앙) */}
-          {remainingCount > 0 && (
-            <div className="flex justify-center mt-2">
-              <span className="px-3 py-1 text-xs border border-[#1A1A1A] text-[#1A1A1A]">
-                더보기→
-              </span>
-            </div>
-          )}
         </div>
       )}
 
-      {/* 태그 (댓글 밑, 왼쪽 정렬) */}
-      {post.tag && (
-        <div className="mt-2">
-          <span className="inline-block px-2 py-0.5 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8]">
-            #{post.tag}
-          </span>
-        </div>
-      )}
+      {/* 태그 + 통계 */}
+      <PostStats post={post} tag={post.tag} />
     </motion.article>
   );
 });
@@ -599,8 +588,10 @@ export default function BoardPage() {
             parentId: data.parentId || undefined,
             authorId: data.authorId || '',
             authorNickname: data.authorNickname || '알 수 없음',
+            authorClassType: data.authorClassType || undefined,
             content: data.content || '',
             isAnonymous: data.isAnonymous || false,
+            isAIReply: data.isAIReply || false,
             createdAt: data.createdAt?.toDate() || new Date(),
             likes: data.likes || 0,
             likedBy: data.likedBy || [],
@@ -641,8 +632,10 @@ export default function BoardPage() {
 
   const handlePostClick = useCallback((postId: string) => {
     sessionStorage.setItem('board_scroll_y', String(window.scrollY));
+    // 스와이프 네비게이션용 게시글 ID 순서 저장
+    sessionStorage.setItem('board_post_ids', JSON.stringify(filteredPosts.map(p => p.id)));
     router.push(`/board/${postId}`);
-  }, [router]);
+  }, [router, filteredPosts]);
 
   const handleWriteClick = useCallback(() => {
     sessionStorage.setItem('board_scroll_y', String(window.scrollY));

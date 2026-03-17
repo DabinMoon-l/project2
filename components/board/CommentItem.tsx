@@ -192,10 +192,13 @@ function CommentItem({
 }: CommentItemProps) {
   const { theme } = useTheme();
   const isPostAuthor = !!(postAuthorId && comment.authorId === postAuthorId);
+  const isProfessorComment = !comment.authorClassType && comment.authorId !== 'gemini-ai';
+  const isAIComment = comment.authorId === 'gemini-ai';
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editContent, setEditContent] = useState(comment.content);
-  const [isExpanded, setIsExpanded] = useState(false);
+  // 교수님 댓글은 기본 펼침
+  const [isExpanded, setIsExpanded] = useState(isProfessorComment);
   const [isClamped, setIsClamped] = useState(false);
   const contentRef = useRef<HTMLParagraphElement>(null);
   const [viewerInfo, setViewerInfo] = useState<{ index: number } | null>(null);
@@ -571,7 +574,7 @@ function CommentItem({
           <div
             ref={contentRef}
             className={`text-[15px] whitespace-pre-wrap leading-relaxed ${
-              !isExpanded ? 'line-clamp-3' : ''
+              !isExpanded ? (isAIComment ? 'line-clamp-[8]' : 'line-clamp-3') : ''
             }`}
             style={{
               color: theme.colors.text,

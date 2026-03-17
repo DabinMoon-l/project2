@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
 import RabbitImage from '@/components/common/RabbitImage';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 const OPEN_MS = 380;
 const CLOSE_MS = 320;
@@ -102,6 +103,14 @@ export default function GachaResultModal({
   const [visible, setVisible] = useState(false);
   const [phase, setPhase] = useState<Phase>('hidden');
   const phaseRef = useRef<Phase>('hidden');
+
+  // 스크롤 잠금
+  useEffect(() => {
+    if (isOpen) {
+      lockScroll();
+      return () => unlockScroll();
+    }
+  }, [isOpen]);
 
   // 모달 재오픈 시 모든 상태 초기화
   useEffect(() => {

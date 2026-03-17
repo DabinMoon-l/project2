@@ -8,9 +8,10 @@
  * 드래그 핸들을 아래로 스와이프하면 닫힘.
  */
 
-import { type ReactNode, useCallback } from 'react';
+import { type ReactNode, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, type PanInfo } from 'framer-motion';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 interface MobileBottomSheetProps {
   open: boolean;
@@ -23,6 +24,14 @@ interface MobileBottomSheetProps {
 }
 
 export default function MobileBottomSheet({ open, onClose, children, maxHeight = '60vh', zClass = 'z-50' }: MobileBottomSheetProps) {
+  // 스크롤 잠금
+  useEffect(() => {
+    if (open) {
+      lockScroll();
+      return () => unlockScroll();
+    }
+  }, [open]);
+
   // 80px 이상 아래로 드래그하거나, 빠르게 스와이프하면 닫기
   const handleDragEnd = useCallback((_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     if (info.offset.y > 80 || info.velocity.y > 300) {
