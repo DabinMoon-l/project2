@@ -133,13 +133,13 @@ export default function RankingSection({ overrideCourseId }: { overrideCourseId?
   // 테스트 계정은 랭킹에서 제외 (기능은 정상 사용, 랭킹만 "-")
   const testAccountNicknames: Record<string, string[]> = {
     biology: ['빠샤'],
-    microbiology: ['test'],
+    microbiology: ['test', '콩콩이'],
   };
   const isTestAccount = userCourseId
     ? (testAccountNicknames[userCourseId] || []).includes(profile?.nickname || '')
     : false;
 
-  const teamRankLabel = loading ? '-' : isTestAccount ? '-' : teamRank > 0 ? `${teamRank}${ordinalSuffix(teamRank)}` : '-';
+  const teamRankLabel = loading ? '-' : (!classType || isTestAccount) ? '-' : teamRank > 0 ? `${teamRank}${ordinalSuffix(teamRank)}` : '-';
 
   return (
     <>
@@ -153,7 +153,7 @@ export default function RankingSection({ overrideCourseId }: { overrideCourseId?
           {/* TEAM */}
           <div className="text-center">
             <span className="text-[10px] font-bold text-white/50 tracking-widest">TEAM</span>
-            <div className="text-4xl font-black text-white leading-tight">{classType}</div>
+            <div className="text-4xl font-black text-white leading-tight">{classType || '-'}</div>
           </div>
 
           {/* 구분선 */}
