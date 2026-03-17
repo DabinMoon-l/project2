@@ -58,7 +58,7 @@ export default function SplashScreen({ children }: SplashScreenProps) {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.5, ease: 'easeOut' }}
             className="fixed inset-0 z-[9999] flex flex-col items-center bg-black"
-            style={{ minHeight: '100dvh' }}
+            style={{ bottom: 'calc(-1 * env(safe-area-inset-bottom, 0px))' }}
           >
             {/* 비디오 배경 */}
             <div className="absolute inset-0 overflow-hidden">
