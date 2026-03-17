@@ -221,7 +221,7 @@ export default function ProfessorHomeOverlay() {
       style={{
         position: 'fixed',
         top: 0,
-        bottom: 'calc(-1 * env(safe-area-inset-bottom, 0px))',
+        bottom: 0,
         right: isWide ? 'calc(50% - 120px)' : 0,
         left: isWide ? '240px' : 0,
         zIndex: 100,
@@ -231,7 +231,6 @@ export default function ProfessorHomeOverlay() {
         backgroundRepeat: 'no-repeat',
         backgroundColor: '#C8A090',
         paddingTop: 'env(safe-area-inset-top, 0px)',
-        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         transform: getTransform(),
         opacity: getOpacity(),
         borderRadius: `${getRadius()}px`,

@@ -18,11 +18,12 @@ interface SwipeBackProps {
   enabled?: boolean;
 }
 
-
 /**
  * 부모 경로 계산 (router.back() 대신 사용)
- * /board/456 → /board
  * /quiz/123/result → /quiz/123
+ * /quiz/123 → /quiz
+ * /board/456 → /board
+ * /professor/quiz/create → /professor/quiz
  */
 function getParentPath(pathname: string): string {
   const segments = pathname.split('/').filter(Boolean);
@@ -58,8 +59,6 @@ export default function SwipeBack({ children, enabled = true }: SwipeBackProps) 
   useEffect(() => {
     const unsubContent = springX.on('change', (x) => {
       if (!contentRef.current) return;
-      // 네비게이션 중에는 transform 적용 차단
-      if (navigating.current) return;
       if (Math.abs(x) < 0.5) {
         // 0에 수렴하면 transform 제거 → position: fixed 정상 동작
         contentRef.current.style.transform = '';
@@ -71,7 +70,6 @@ export default function SwipeBack({ children, enabled = true }: SwipeBackProps) 
     const halfScreen = typeof window !== 'undefined' ? window.innerWidth * 0.5 : 200;
     const unsubOverlay = springX.on('change', (x) => {
       if (!overlayRef.current) return;
-      if (navigating.current) return;
       const opacity = Math.max(0, Math.min(x / halfScreen * 0.4, 0.4));
       overlayRef.current.style.opacity = String(opacity);
     });
@@ -147,36 +145,28 @@ export default function SwipeBack({ children, enabled = true }: SwipeBackProps) 
       motionX.set(screenWidth);
       setTimeout(() => {
         // 콘텐츠를 투명하게 숨긴 후 위치 리셋 → 깜빡임 방지
-        // 즉시 리셋: transform/overlay 제거
         if (contentRef.current) {
           contentRef.current.style.opacity = '0';
           contentRef.current.style.pointerEvents = 'none';
-          contentRef.current.style.transform = '';
-        }
-        if (overlayRef.current) {
-          overlayRef.current.style.opacity = '0';
         }
         motionX.jump(0);
-        springX.jump(0);
         // 부모 경로로 이동 (router.back() 대신 → 엉뚱한 탭 방지)
         const parentPath = getParentPath(pathname || '/');
         router.replace(parentPath);
         // 새 페이지 렌더링 후 다시 표시
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            if (contentRef.current) {
-              contentRef.current.style.opacity = '';
-              contentRef.current.style.pointerEvents = '';
-            }
-            navigating.current = false;
-          });
-        });
+        setTimeout(() => {
+          if (contentRef.current) {
+            contentRef.current.style.opacity = '';
+            contentRef.current.style.pointerEvents = '';
+          }
+          navigating.current = false;
+        }, 250);
       }, 180);
     } else {
       // spring으로 원위치 복귀
       motionX.set(0);
     }
-  }, [motionX, springX, router, pathname]);
+  }, [motionX, router, pathname]);
 
   useEffect(() => {
     if (!enabled) return;

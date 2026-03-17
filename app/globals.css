@@ -40,13 +40,6 @@ body {
   min-height: 100dvh;
 }
 
-/* iOS PWA: fixed inset-0 백드롭이 safe area 밖까지 확장 (배경만, 레이아웃 영향 없음) */
-@supports (padding-bottom: env(safe-area-inset-bottom)) {
-  .fixed.inset-0 {
-    bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
-  }
-}
-
 /* Samsung Internet 자체 "맨 위로" FAB 억제 */
 html::-webkit-scrollbar-button,
 body::-webkit-scrollbar-button {
