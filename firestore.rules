@@ -135,8 +135,10 @@ service cloud.firestore {
     // ============================================================
 
     match /posts/{postId} {
-      // 읽기: 모든 로그인 사용자
-      allow read: if isAuthenticated();
+      // 단일 문서 읽기: 공개 (공유 링크용)
+      allow get: if true;
+      // 목록 쿼리: 로그인 사용자만
+      allow list: if isAuthenticated();
 
       // 생성: 로그인 사용자 (유효성 검증)
       // aiDetailedAnswer는 optional boolean (콩콩이 상세 답변 요청)
@@ -187,8 +189,8 @@ service cloud.firestore {
     // ============================================================
 
     match /comments/{commentId} {
-      // 읽기: 모든 로그인 사용자
-      allow read: if isAuthenticated();
+      // 읽기: 공개 (공유 링크에서 댓글 표시용)
+      allow read: if true;
 
       // 생성: 로그인 사용자 (유효성 검증, 이미지만 보낼 수도 있으므로 content 최소 0자)
       allow create: if isAuthenticated() &&

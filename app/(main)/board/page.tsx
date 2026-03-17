@@ -479,6 +479,8 @@ export default function BoardPage() {
   // 태그 필터
   const [selectedTags, setSelectedTags] = useState<BoardTag[]>([]);
   const [showTagFilter, setShowTagFilter] = useState(false);
+  // 교수님 픽 필터
+  const [profPickActive, setProfPickActive] = useState(false);
   // 댓글 맵 (postId -> comments)
   const [commentsMap, setCommentsMap] = useState<CommentsMap>(new Map());
 
@@ -611,13 +613,41 @@ export default function BoardPage() {
     return () => { cancelled = true; };
   }, [postIdsKey]);
 
-  // 검색 + 태그 필터링 및 정렬 (최신순)
+  // 교수님 픽: 교수님이 찜하거나 댓글 단 글
+  const profPickPostIds = useMemo(() => {
+    if (!profPickActive) return null;
+    const ids = new Set<string>();
+    // 교수님이 찜한 글
+    posts.forEach(post => {
+      if (post.likedBy?.some(uid => {
+        // commentsMap에서 교수 댓글 작성자 uid 확인
+        // 교수 계정 = authorClassType이 없고 gemini-ai가 아닌 댓글 작성자
+        return false; // likedBy에서는 uid만 있어서 역할 확인 불가 → 댓글 기반으로만 판별
+      })) {
+        ids.add(post.id);
+      }
+    });
+    // 교수님이 댓글 단 글 (authorClassType 없고 gemini-ai 아닌 댓글)
+    commentsMap.forEach((comments, postId) => {
+      if (comments.some(c => !c.authorClassType && c.authorId !== 'gemini-ai')) {
+        ids.add(postId);
+      }
+    });
+    return ids;
+  }, [profPickActive, posts, commentsMap]);
+
+  // 검색 + 태그 + 교수님 픽 필터링 및 정렬 (최신순)
   const filteredPosts = useMemo(() => {
     let result = searchQuery.trim()
       ? posts.filter(post =>
           post.title.toLowerCase().includes(searchQuery.toLowerCase())
         )
       : [...posts];
+
+    // 교수님 픽 필터
+    if (profPickPostIds) {
+      result = result.filter(post => profPickPostIds.has(post.id));
+    }
 
     // 태그 필터 적용 (선택된 태그 중 하나와 일치)
     if (selectedTags.length > 0) {
@@ -628,7 +658,7 @@ export default function BoardPage() {
     result.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
     return result;
-  }, [posts, searchQuery, selectedTags]);
+  }, [posts, searchQuery, selectedTags, profPickPostIds]);
 
   const handlePostClick = useCallback((postId: string) => {
     sessionStorage.setItem('board_scroll_y', String(window.scrollY));
@@ -827,9 +857,22 @@ export default function BoardPage() {
             관리
           </button>
 
+          {/* 교수님 픽 필터 */}
+          <button
+            type="button"
+            onClick={() => setProfPickActive(v => !v)}
+            className={`px-2 py-2 text-xs font-bold flex-shrink-0 border border-[#1A1A1A] transition-colors ${
+              profPickActive
+                ? 'bg-[#1A1A1A] text-[#F5F0E8]'
+                : 'bg-transparent text-[#1A1A1A]'
+            }`}
+          >
+            교수님 픽
+          </button>
+
           {/* 검색창 (태그 미선택 시만 표시) */}
           {selectedTags.length === 0 && (
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <input
                 type="text"
                 value={searchQuery}

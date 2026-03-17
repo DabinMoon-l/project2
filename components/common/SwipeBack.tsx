@@ -148,8 +148,10 @@ export default function SwipeBack({ children, enabled = true }: SwipeBackProps) 
         if (contentRef.current) {
           contentRef.current.style.opacity = '0';
           contentRef.current.style.pointerEvents = 'none';
+          contentRef.current.style.transform = '';
         }
         motionX.jump(0);
+        springX.jump(0);
         // 부모 경로로 이동 (router.back() 대신 → 엉뚱한 탭 방지)
         const parentPath = getParentPath(pathname || '/');
         router.replace(parentPath);
@@ -166,7 +168,7 @@ export default function SwipeBack({ children, enabled = true }: SwipeBackProps) 
       // spring으로 원위치 복귀
       motionX.set(0);
     }
-  }, [motionX, router, pathname]);
+  }, [motionX, springX, router, pathname]);
 
   useEffect(() => {
     if (!enabled) return;
