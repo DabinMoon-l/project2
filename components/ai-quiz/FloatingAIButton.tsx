@@ -47,7 +47,7 @@ export default function FloatingAIButton({ onClick }: FloatingAIButtonProps) {
         className="fixed z-40 flex items-center justify-center"
         style={{
           right: '-20px',
-          bottom: 'calc(4.25rem + env(safe-area-inset-bottom, 0px) + 22px)',
+          bottom: 'calc(4.25rem + env(safe-area-inset-bottom, 0px) + 10px)',
           width: '160px',
           height: '160px',
           filter: isPressed
