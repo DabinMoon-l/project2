@@ -49,7 +49,7 @@ export default function MobileBottomSheet({ open, onClose, children, maxHeight =
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className={`fixed inset-0 ${zClass} flex items-end`}
-          style={{ left: 'var(--modal-left, 0px)', bottom: 'calc(-1 * env(safe-area-inset-bottom, 0px))' }}
+          style={{ left: 'var(--modal-left, 0px)' }}
           onClick={onClose}
         >
           {/* 배경 딤 */}
