@@ -11,11 +11,14 @@ interface SplashScreenProps {
  * 스플래시 화면 컴포넌트
  * 앱 진입 시 2.5초간 로고를 보여주고 메인 콘텐츠로 전환
  */
+// 모듈 레벨 플래그 — 앱 프로세스 내 최초 1회만 스플래시 표시
+let splashShownInProcess = false;
+
 export default function SplashScreen({ children }: SplashScreenProps) {
-  // 세션 중 이미 스플래시를 봤으면 건너뛰기 (PWA 메모리 재시작 시 재표시 방지)
   const [showSplash, setShowSplash] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    return !sessionStorage.getItem('splash_shown');
+    if (splashShownInProcess) return false;
+    splashShownInProcess = true;
+    return true;
   });
   const [isClient, setIsClient] = useState(false);
 
@@ -24,7 +27,6 @@ export default function SplashScreen({ children }: SplashScreenProps) {
 
     if (!showSplash) return;
 
-    sessionStorage.setItem('splash_shown', '1');
     const timer = setTimeout(() => {
       setShowSplash(false);
     }, 3000);
