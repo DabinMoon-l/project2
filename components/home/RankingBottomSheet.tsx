@@ -249,8 +249,20 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.profileRabbitId, profile?.nickname, equippedJSON]);
 
-  const top3 = useMemo(() => rankedUsers.slice(0, 3), [rankedUsers]);
-  const restUsers = useMemo(() => rankedUsers.slice(3), [rankedUsers]);
+  // 테스트 계정 제외 (반 없는 계정)
+  const TEST_NICKNAMES: Record<string, string[]> = {
+    biology: ['빠샤'],
+    microbiology: ['test', '콩콩이'],
+  };
+  const filteredUsers = useMemo(() => {
+    const excludeList = userCourseId ? (TEST_NICKNAMES[userCourseId] || []) : [];
+    if (excludeList.length === 0) return rankedUsers;
+    return rankedUsers.filter(u => !excludeList.includes(u.nickname));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rankedUsers, userCourseId]);
+
+  const top3 = useMemo(() => filteredUsers.slice(0, 3), [filteredUsers]);
+  const restUsers = useMemo(() => filteredUsers.slice(3), [filteredUsers]);
   const visibleUsers = useMemo(() => restUsers.slice(0, displayCount), [restUsers, displayCount]);
 
   return createPortal(
