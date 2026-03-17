@@ -59,6 +59,8 @@ export default function SwipeBack({ children, enabled = true }: SwipeBackProps) 
   useEffect(() => {
     const unsubContent = springX.on('change', (x) => {
       if (!contentRef.current) return;
+      // 네비게이션 중에는 transform 적용 차단 (돌아온 페이지에 잔여 transform 방지)
+      if (navigating.current) return;
       if (Math.abs(x) < 0.5) {
         // 0에 수렴하면 transform 제거 → position: fixed 정상 동작
         contentRef.current.style.transform = '';
@@ -70,6 +72,7 @@ export default function SwipeBack({ children, enabled = true }: SwipeBackProps) 
     const halfScreen = typeof window !== 'undefined' ? window.innerWidth * 0.5 : 200;
     const unsubOverlay = springX.on('change', (x) => {
       if (!overlayRef.current) return;
+      if (navigating.current) return;
       const opacity = Math.max(0, Math.min(x / halfScreen * 0.4, 0.4));
       overlayRef.current.style.opacity = String(opacity);
     });
@@ -148,8 +151,13 @@ export default function SwipeBack({ children, enabled = true }: SwipeBackProps) 
         if (contentRef.current) {
           contentRef.current.style.opacity = '0';
           contentRef.current.style.pointerEvents = 'none';
+          contentRef.current.style.transform = '';
+        }
+        if (overlayRef.current) {
+          overlayRef.current.style.opacity = '0';
         }
         motionX.jump(0);
+        springX.jump(0);
         // 부모 경로로 이동 (router.back() 대신 → 엉뚱한 탭 방지)
         const parentPath = getParentPath(pathname || '/');
         router.replace(parentPath);
@@ -166,7 +174,7 @@ export default function SwipeBack({ children, enabled = true }: SwipeBackProps) 
       // spring으로 원위치 복귀
       motionX.set(0);
     }
-  }, [motionX, router, pathname]);
+  }, [motionX, springX, router, pathname]);
 
   useEffect(() => {
     if (!enabled) return;
