@@ -41,11 +41,16 @@ body {
   min-height: 100dvh;
 }
 
-/* iOS PWA: fixed 전체화면 요소가 safe area 밖(home indicator 영역)까지 확장 */
-.fixed.inset-0,
-[style*="position: fixed"][style*="bottom: 0"] {
-  bottom: calc(-1 * env(safe-area-inset-bottom, 0px)) !important;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+/* iOS PWA: fixed 전체화면 백드롭/오버레이가 safe area 밖까지 확장 */
+.fixed.inset-0::after {
+  content: '';
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: env(safe-area-inset-bottom, 0px);
+  background: inherit;
+  pointer-events: none;
 }
 
 /* Samsung Internet 자체 "맨 위로" FAB 억제 */
