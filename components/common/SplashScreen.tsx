@@ -12,19 +12,25 @@ interface SplashScreenProps {
  * 앱 진입 시 2.5초간 로고를 보여주고 메인 콘텐츠로 전환
  */
 export default function SplashScreen({ children }: SplashScreenProps) {
-  const [showSplash, setShowSplash] = useState(true);
+  // 세션 중 이미 스플래시를 봤으면 건너뛰기 (PWA 메모리 재시작 시 재표시 방지)
+  const [showSplash, setShowSplash] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return !sessionStorage.getItem('splash_shown');
+  });
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
 
-    // 3초 후 스플래시 화면 숨기기
+    if (!showSplash) return;
+
+    sessionStorage.setItem('splash_shown', '1');
     const timer = setTimeout(() => {
       setShowSplash(false);
     }, 3000);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [showSplash]);
 
   // 서버 사이드 렌더링 중에는 children만 렌더링
   if (!isClient) {
