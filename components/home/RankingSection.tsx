@@ -138,8 +138,10 @@ export default function RankingSection({ overrideCourseId }: { overrideCourseId?
   const isTestAccount = userCourseId
     ? (testAccountNicknames[userCourseId] || []).includes(profile?.nickname || '')
     : false;
+  // classId가 없는 계정 (빈 문자열 또는 undefined)
+  const hasNoClass = !profile?.classType;
 
-  const teamRankLabel = loading ? '-' : (!classType || isTestAccount) ? '-' : teamRank > 0 ? `${teamRank}${ordinalSuffix(teamRank)}` : '-';
+  const teamRankLabel = loading ? '-' : (hasNoClass || isTestAccount) ? '-' : teamRank > 0 ? `${teamRank}${ordinalSuffix(teamRank)}` : '-';
 
   return (
     <>
@@ -153,7 +155,7 @@ export default function RankingSection({ overrideCourseId }: { overrideCourseId?
           {/* TEAM */}
           <div className="text-center">
             <span className="text-[10px] font-bold text-white/50 tracking-widest">TEAM</span>
-            <div className="text-4xl font-black text-white leading-tight">{classType || '-'}</div>
+            <div className="text-4xl font-black text-white leading-tight">{hasNoClass ? '-' : classType}</div>
           </div>
 
           {/* 구분선 */}
