@@ -18,16 +18,9 @@ export default function SplashScreen({ children }: SplashScreenProps) {
   useEffect(() => {
     setIsClient(true);
 
-    // 스플래시 중 body 배경을 검정으로 (크림색 비침 방지)
-    document.documentElement.style.backgroundColor = '#000';
-    document.body.style.backgroundColor = '#000';
-
     // 3초 후 스플래시 화면 숨기기
     const timer = setTimeout(() => {
       setShowSplash(false);
-      // 원래 배경색 복원
-      document.documentElement.style.backgroundColor = '';
-      document.body.style.backgroundColor = '';
     }, 3000);
 
     return () => clearTimeout(timer);
@@ -48,6 +41,7 @@ export default function SplashScreen({ children }: SplashScreenProps) {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.5, ease: 'easeOut' }}
             className="fixed inset-0 z-[9999] flex flex-col items-center bg-black"
+            style={{ minHeight: '100dvh' }}
           >
             {/* 비디오 배경 */}
             <div className="absolute inset-0 overflow-hidden">

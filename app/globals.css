@@ -40,6 +40,13 @@ body {
   min-height: 100dvh;
 }
 
+/* fixed 전체화면 요소(백드롭/오버레이/모달)가 iOS safe area 밖까지 확장 */
+.fixed.inset-0 {
+  min-height: 100vh;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
+}
+
 /* Samsung Internet 자체 "맨 위로" FAB 억제 */
 html::-webkit-scrollbar-button,
 body::-webkit-scrollbar-button {
