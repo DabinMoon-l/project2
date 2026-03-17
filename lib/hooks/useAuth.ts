@@ -54,8 +54,9 @@ interface UseRequireAuthOptions {
 // ============================================================
 
 export const useAuth = (): UseAuthReturn => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  // Firebase Auth 캐시된 사용자로 초기화 (로딩 화면 방지)
+  const [user, setUser] = useState<User | null>(() => getCurrentUser());
+  const [loading, setLoading] = useState<boolean>(() => !getCurrentUser());
   const [error, setError] = useState<string | null>(null);
 
   // 인증 상태 구독
