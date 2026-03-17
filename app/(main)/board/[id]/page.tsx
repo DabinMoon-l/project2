@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState, useEffect, useRef } from 'react';
+import { useCallback, useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { doc, updateDoc, increment, getDoc, db } from '@/lib/repositories';
@@ -180,20 +180,20 @@ export default function PostDetailPage() {
   const swipeRef = useRef<HTMLDivElement>(null);
   const swipeNav = useRef({ startX: 0, startY: 0, lastX: 0, active: false, locked: false, startTime: 0, navigating: false });
 
-  // 인접 게시글 ID (sessionStorage에서 목록 순서 읽기)
-  const [adjacentIds] = useState<{ next: string | null; current: number; total: number }>(() => {
-    if (typeof window === 'undefined') return { next: null, current: -1, total: 0 };
+  // 인접 게시글 ID (sessionStorage에서 목록 순서 읽기, postId 변경 시 재계산)
+  const adjacentIds = useMemo(() => {
+    if (typeof window === 'undefined') return { next: null as string | null, current: -1, total: 0 };
     try {
       const ids: string[] = JSON.parse(sessionStorage.getItem('board_post_ids') || '[]');
       const idx = ids.indexOf(postId);
-      if (idx < 0) return { next: null, current: -1, total: 0 };
+      if (idx < 0) return { next: null as string | null, current: -1, total: 0 };
       return {
         next: idx < ids.length - 1 ? ids[idx + 1] : null,
         current: idx,
         total: ids.length,
       };
-    } catch { return { next: null, current: -1, total: 0 }; }
-  });
+    } catch { return { next: null as string | null, current: -1, total: 0 }; }
+  }, [postId]);
 
   // 좌측 스와이프 터치 핸들러
   useEffect(() => {
@@ -282,6 +282,13 @@ export default function PostDetailPage() {
           // 다음 페이지 슬라이드 인 애니메이션 활성화
           sessionStorage.removeItem(`visited_board_${adjacentIds.next}`);
           router.replace(`/board/${adjacentIds.next}`);
+          // 네비게이션 후 스타일 리셋 (같은 컴포넌트 재사용 대비)
+          setTimeout(() => {
+            el.style.transition = '';
+            el.style.transform = '';
+            el.style.opacity = '';
+            s.navigating = false;
+          }, 300);
         }, 180);
       } else {
         // 원위치 복귀
@@ -347,12 +354,11 @@ export default function PostDetailPage() {
 
   const handleShare = useCallback(async () => {
     if (!post) return;
-    const url = `${window.location.origin}/board/${postId}`;
-    const text = `[${post.tag ? `#${post.tag}` : '게시판'}] ${post.title}\n\n${post.content}`;
+    const url = `${window.location.origin}/share/board/${postId}`;
     if (navigator.share) {
-      try { await navigator.share({ title: post.title, text, url }); } catch { /* 취소 */ }
+      try { await navigator.share({ url }); } catch { /* 취소 */ }
     } else {
-      await navigator.clipboard.writeText(`${text}\n\n${url}`);
+      await navigator.clipboard.writeText(url);
       alert('클립보드에 복사되었습니다.');
     }
   }, [post, postId]);
