@@ -80,7 +80,8 @@ export function UserProvider({ children }: UserProviderProps) {
       return;
     }
 
-    setLoading(true);
+    // 이미 프로필이 있으면 로딩 표시 안 함 (재구독 시 깜빡임 방지)
+    if (!profile) setLoading(true);
     setError(null);
 
     // userRepo로 실시간 구독

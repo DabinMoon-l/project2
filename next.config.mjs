@@ -97,6 +97,36 @@ const pwaConfig = withPWA({
       urlPattern: /\.(?:mp4|webm|ogg)$/i,
       handler: "NetworkOnly",
     },
+    // Next.js 페이지 네비게이션 — 항상 네트워크 우선 (stale HTML/RSC 방지)
+    {
+      urlPattern: /^\/_next\/data\/.+\.json$/i,
+      handler: "NetworkFirst",
+      options: {
+        cacheName: "next-data",
+        expiration: { maxEntries: 32, maxAgeSeconds: 60 * 60 },
+        networkTimeoutSeconds: 5,
+      },
+    },
+    // Next.js RSC 페이로드 — 네트워크 우선
+    {
+      urlPattern: ({ request }) => request.headers.get("RSC") === "1",
+      handler: "NetworkFirst",
+      options: {
+        cacheName: "next-rsc",
+        expiration: { maxEntries: 32, maxAgeSeconds: 60 * 60 },
+        networkTimeoutSeconds: 5,
+      },
+    },
+    // HTML 페이지 — 네트워크 우선 (배포 후 stale 페이지 방지)
+    {
+      urlPattern: ({ request }) => request.mode === "navigate",
+      handler: "NetworkFirst",
+      options: {
+        cacheName: "pages",
+        expiration: { maxEntries: 50, maxAgeSeconds: 24 * 60 * 60 },
+        networkTimeoutSeconds: 5,
+      },
+    },
     // 기본 캐싱 규칙 (비디오 CacheFirst 제거)
     ...defaultCache.filter(entry => entry.options?.cacheName !== "static-video-assets"),
   ],
