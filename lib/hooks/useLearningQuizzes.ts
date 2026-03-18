@@ -18,6 +18,7 @@ import {
 } from '@/lib/repositories';
 import { useAuth } from './useAuth';
 import { useCourse } from '@/lib/contexts/CourseContext';
+import { callFunction } from '@/lib/api';
 
 /**
  * 학습 퀴즈 (서재) 아이템 인터페이스
@@ -58,7 +59,46 @@ export function useLearningQuizzes() {
   const [quizzes, setQuizzes] = useState<LearningQuiz[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // 실시간 구독
+  /** snapshot docs → LearningQuiz[] 변환 헬퍼 */
+  const toItems = useCallback((docs: { id: string; data: () => DocumentData }[], userId: string): LearningQuiz[] => {
+    return docs.map((docSnap) => {
+      const data = docSnap.data();
+      const myScore = data.userScores?.[userId] ?? data.score ?? 0;
+      const myFirstReviewScore = data.userFirstReviewScores?.[userId];
+
+      const questions = data.questions || [];
+      let oxCount = 0;
+      let multipleChoiceCount = 0;
+      let subjectiveCount = 0;
+      questions.forEach((q: DocumentData) => {
+        if (q.type === 'ox') oxCount++;
+        else if (q.type === 'multiple') multipleChoiceCount++;
+        else if (q.type === 'short' || q.type === 'short_answer') subjectiveCount++;
+      });
+
+      return {
+        id: docSnap.id,
+        title: data.title || '제목 없음',
+        questionCount: data.questions?.length || data.totalQuestions || 0,
+        score: data.score || 0,
+        totalQuestions: data.totalQuestions || data.questions?.length || 0,
+        createdAt: data.createdAt?.toDate() || new Date(),
+        completedAt: data.completedAt?.toDate() || new Date(),
+        isPublic: data.isPublic || false,
+        tags: data.tags || [],
+        difficulty: data.difficulty || 'medium',
+        myScore,
+        myFirstReviewScore,
+        oxCount,
+        multipleChoiceCount,
+        subjectiveCount,
+        creatorId: data.creatorId || undefined,
+        quizType: data.type || undefined,
+      };
+    });
+  }, []);
+
+  // 실시간 구독: AI생성 + 비공개 커스텀
   useEffect(() => {
     if (!user?.uid) {
       setQuizzes([]);
@@ -66,66 +106,57 @@ export function useLearningQuizzes() {
       return;
     }
 
-    // 복합 인덱스 없이 쿼리 (클라이언트에서 정렬)
-    const q = query(
+    const userId = user.uid;
+    let aiItems: LearningQuiz[] = [];
+    let customItems: LearningQuiz[] = [];
+    let aiReady = false;
+    let customReady = false;
+
+    const merge = () => {
+      if (!aiReady || !customReady) return;
+      const all = [...aiItems, ...customItems];
+      all.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      setQuizzes(all);
+      setLoading(false);
+    };
+
+    // 쿼리 1: AI 생성 퀴즈
+    const q1 = query(
       collection(db, 'quizzes'),
       where('type', '==', 'ai-generated'),
-      where('creatorId', '==', user.uid)
+      where('creatorId', '==', userId)
     );
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const userId = user.uid;
-        const items: LearningQuiz[] = snapshot.docs.map((docSnap) => {
-          const data = docSnap.data();
-          // 점수 계산: userScores에 있으면 사용, 없으면 score 사용
-          const myScore = data.userScores?.[userId] ?? data.score ?? 0;
-          const myFirstReviewScore = data.userFirstReviewScores?.[userId];
-
-          // 문제 유형별 개수 계산
-          const questions = data.questions || [];
-          let oxCount = 0;
-          let multipleChoiceCount = 0;
-          let subjectiveCount = 0;
-          questions.forEach((q: DocumentData) => {
-            if (q.type === 'ox') oxCount++;
-            else if (q.type === 'multiple') multipleChoiceCount++;
-            else if (q.type === 'short' || q.type === 'short_answer') subjectiveCount++;
-          });
-
-          return {
-            id: docSnap.id,
-            title: data.title || '제목 없음',
-            questionCount: data.questions?.length || data.totalQuestions || 0,
-            score: data.score || 0,
-            totalQuestions: data.totalQuestions || data.questions?.length || 0,
-            createdAt: data.createdAt?.toDate() || new Date(),
-            completedAt: data.completedAt?.toDate() || new Date(),
-            isPublic: data.isPublic || false,
-            tags: data.tags || [],
-            difficulty: data.difficulty || 'medium',
-            myScore,
-            myFirstReviewScore,
-            oxCount,
-            multipleChoiceCount,
-            subjectiveCount,
-            creatorId: data.creatorId || undefined,
-          };
-        });
-        // 클라이언트에서 최신순 정렬
-        items.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-        setQuizzes(items);
-        setLoading(false);
-      },
-      (error) => {
-        console.error('서재 퀴즈 로드 오류:', error);
-        setLoading(false);
-      }
+    // 쿼리 2: 비공개 커스텀 퀴즈
+    const q2 = query(
+      collection(db, 'quizzes'),
+      where('type', '==', 'custom'),
+      where('isPublic', '==', false),
+      where('creatorId', '==', userId)
     );
 
-    return () => unsubscribe();
-  }, [user?.uid]);
+    const unsub1 = onSnapshot(q1, (snap) => {
+      aiItems = toItems(snap.docs, userId);
+      aiReady = true;
+      merge();
+    }, (error) => {
+      console.error('서재 AI 퀴즈 로드 오류:', error);
+      aiReady = true;
+      merge();
+    });
+
+    const unsub2 = onSnapshot(q2, (snap) => {
+      customItems = toItems(snap.docs, userId);
+      customReady = true;
+      merge();
+    }, (error) => {
+      console.error('서재 커스텀 퀴즈 로드 오류:', error);
+      customReady = true;
+      merge();
+    });
+
+    return () => { unsub1(); unsub2(); };
+  }, [user?.uid, toItems]);
 
   // 서재 퀴즈 삭제
   const deleteQuiz = useCallback(async (quizId: string) => {
@@ -199,21 +230,28 @@ export function useLearningQuizzes() {
       }
 
       // 2. 퀴즈 문서 업데이트 (기존 태그와 난이도 유지)
-      // 참여자 수 0으로 초기화 (본인 풀이 미포함 — 다른 학생이 풀면 recordAttempt에서 증가)
-      await updateDoc(quizRef, {
+      // 출제자 본인 풀이를 참여자 수 / 평균 점수에 반영
+      const isAiType = quizData.type === 'ai-generated';
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const updateData: Record<string, any> = {
         type: 'custom',
-        isAiGenerated: true,
         isPublic: true,
         tags: tags || quizData.tags || [],
         difficulty: quizData.difficulty || 'medium',
         [`userScores.${user.uid}`]: score,
-        participantCount: 0,
+        participantCount: 1,
+        averageScore: score,
         uploadedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
+      };
+      if (isAiType) updateData.isAiGenerated = true;
+      await updateDoc(quizRef, updateData);
 
-      // quiz_completions / quizResults는 recordAttempt CF 전용
-      // 다른 학생이 이 퀴즈를 풀 때 자동 생성됨
+      // 분산 카운터 + quiz_completions 초기화 (출제자 점수 반영)
+      // CF에서 quiz_agg 샤드 + quiz_completions 생성 → recordAttempt와 정합성 유지
+      callFunction('initCreatorStats', { quizId }).catch((e) =>
+        console.warn('출제자 통계 초기화 실패 (무시 가능):', e)
+      );
 
       // 3. reviews 컬렉션에 각 문제 일괄 저장 (writeBatch)
       const batch = writeBatch(db);
