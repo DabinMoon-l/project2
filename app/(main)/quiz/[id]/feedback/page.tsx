@@ -237,8 +237,11 @@ export default function FeedbackPage() {
               isCorrect = userAnswerStr === correctAnswerStr;
             }
           } else if (q.type === 'ox') {
-            // OX: 정답이 "0"/"1" 또는 "O"/"X"일 수 있음
-            const userOX = userAnswer.toString().toUpperCase();
+            // OX: 정답과 사용자 답 모두 "0"/"1" 또는 "O"/"X"일 수 있음
+            let userOX = userAnswer.toString().toUpperCase();
+            if (userOX === '0') userOX = 'O';
+            else if (userOX === '1') userOX = 'X';
+
             let correctOX = correctAnswer.toString().toUpperCase();
             if (correctOX === '0') correctOX = 'O';
             else if (correctOX === '1') correctOX = 'X';
