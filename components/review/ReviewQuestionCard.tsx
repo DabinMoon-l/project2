@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ReviewItem } from '@/lib/hooks/useReview';
+import { renderInlineMarkdown } from '@/lib/utils/renderInlineMarkdown';
 
 interface ReviewQuestionCardProps {
   /** 복습 문제 데이터 */
@@ -176,7 +177,7 @@ export default function ReviewQuestionCard({
                           `}
                         >
                           <span className="font-medium w-5">{index + 1}.</span>
-                          <span className="flex-1">{option}</span>
+                          <span className="flex-1">{renderInlineMarkdown(option)}</span>
                           {isCorrectOption && (
                             <span className="text-green-600 text-xs font-semibold">정답</span>
                           )}

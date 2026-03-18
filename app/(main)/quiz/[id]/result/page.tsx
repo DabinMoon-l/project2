@@ -26,6 +26,7 @@ import { useCourse, useMilestone } from '@/lib/contexts';
 import { formatChapterLabel } from '@/lib/courseIndex';
 import type { QuestionResult, ResultDisplayItem, QuizResultData, FirestoreQuizQuestion } from './resultTypes';
 import MixedExamplesRenderer from '@/components/common/MixedExamplesRenderer';
+import { renderInlineMarkdown } from '@/lib/utils/renderInlineMarkdown';
 import type { FieldValue } from '@/lib/repositories/firebase/firestoreBase';
 
 /**
@@ -1054,7 +1055,7 @@ export default function QuizResultPage() {
                     } : undefined}
                   >
                     <span>
-                      {idx + 1}. {opt}
+                      {idx + 1}. {renderInlineMarkdown(opt)}
                       {isMultipleAnswer && isCorrectOption && ' (정답)'}
                       {isMultipleAnswer && isUserAnswer && ' (내 답)'}
                     </span>
