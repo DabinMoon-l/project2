@@ -53,6 +53,12 @@ export default function StatsQuizFeedbackModal({
   sourceRect,
   getFeedbackQuestionNum,
 }: StatsQuizFeedbackModalProps) {
+  // questionNum > 0이면 해당 문제 피드백만 필터링
+  const filtered = useMemo(() => {
+    if (questionNum === 0) return feedbackList;
+    return feedbackList.filter((fb) => getFeedbackQuestionNum(fb) === questionNum);
+  }, [feedbackList, questionNum, getFeedbackQuestionNum]);
+
   // 요술지니 오프셋 계산
   const genieOffset = useMemo(() => {
     if (!sourceRect || typeof window === 'undefined') return { dx: 0, dy: 0 };
@@ -99,7 +105,7 @@ export default function StatsQuizFeedbackModal({
                 </div>
               )}
 
-              {!loading && feedbackList.length === 0 && (
+              {!loading && filtered.length === 0 && (
                 <div className="py-6 text-center">
                   <p className="text-xs text-[#5C5C5C]">아직 피드백이 없습니다.</p>
                 </div>
@@ -107,7 +113,7 @@ export default function StatsQuizFeedbackModal({
 
               {!loading && feedbackList.length > 0 && (
                 <div className="space-y-1.5">
-                  {feedbackList.map((feedback) => {
+                  {filtered.map((feedback) => {
                     const typeLabel = FEEDBACK_TYPE_LABELS[feedback.feedbackType] || feedback.feedbackType || '피드백';
                     const fbQuestionNum = getFeedbackQuestionNum(feedback);
 

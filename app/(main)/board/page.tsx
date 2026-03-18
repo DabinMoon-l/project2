@@ -52,21 +52,8 @@ function PostStats({ post, tag }: { post: Post; tag?: string }) {
 /** 댓글을 postId별로 그룹화한 Map 타입 */
 type CommentsMap = Map<string, Comment[]>;
 
-/** 댓글 내용 말줄임 함수 (역할별 분기) */
-function truncateComment(content: string, comment?: Comment): string {
-  // 교수님 댓글: 전체 표시
-  if (comment && !comment.authorClassType && comment.authorId !== 'gemini-ai') {
-    return content;
-  }
-  // 콩콩이 댓글: 80자
-  if (comment && (comment.authorId === 'gemini-ai' || comment.isAIReply)) {
-    if (content.length <= 80) return content;
-    return content.slice(0, 80) + '...';
-  }
-  // 학생 댓글: 30자
-  if (content.length <= 30) return content;
-  return content.slice(0, 30) + '...';
-}
+/** 댓글 CSS line-clamp 클래스 (모든 역할 동일 3줄) */
+const COMMENT_CLAMP = 'line-clamp-3';
 
 /** 랜덤 명언 목록 */
 const MOTIVATIONAL_QUOTES = [
@@ -154,7 +141,7 @@ const HeadlineArticle = memo(function HeadlineArticle({
 
           {/* 본문 및 댓글 */}
           <div className="p-3 flex-1">
-            <p className="text-xs text-[#1A1A1A] leading-relaxed whitespace-pre-wrap">
+            <p className="text-xs text-[#1A1A1A] leading-relaxed line-clamp-3">
               {post.content}
             </p>
 
@@ -162,14 +149,13 @@ const HeadlineArticle = memo(function HeadlineArticle({
             {displayItems.length > 0 && (
               <div className="mt-2 pt-2 border-t border-dashed border-[#1A1A1A] overflow-hidden">
                 {displayItems.map(({ comment, replies }) => (
-                  <div key={comment.id} className="overflow-hidden">
-                    <p className="text-xs text-[#1A1A1A] leading-snug py-0.5 overflow-hidden text-ellipsis" style={{ wordBreak: 'break-all', maxWidth: '100%' }}>
-                      <span className="whitespace-nowrap">ㄴ </span>{truncateComment(comment.content, comment)}
+                  <div key={comment.id}>
+                    <p className={`text-xs text-[#1A1A1A] leading-snug py-0.5 ${COMMENT_CLAMP}`}>
+                      <span className="whitespace-nowrap">ㄴ </span>{comment.content}
                     </p>
-                    {/* 대댓글 표시 */}
                     {replies.map((reply) => (
-                      <p key={reply.id} className="text-xs text-[#5C5C5C] leading-snug py-0.5 pl-4 overflow-hidden text-ellipsis" style={{ wordBreak: 'break-all', maxWidth: '100%' }}>
-                        <span className="whitespace-nowrap">ㄴ </span>{truncateComment(reply.content, reply)}
+                      <p key={reply.id} className={`text-xs text-[#5C5C5C] leading-snug py-0.5 pl-4 ${COMMENT_CLAMP}`}>
+                        <span className="whitespace-nowrap">ㄴ </span>{reply.content}
                       </p>
                     ))}
                   </div>
@@ -379,22 +365,21 @@ const MasonryItem = memo(function MasonryItem({
       )}
 
       {/* 본문 */}
-      <p className="text-xs text-[#1A1A1A] leading-relaxed whitespace-pre-wrap mt-2">
+      <p className="text-xs text-[#1A1A1A] leading-relaxed line-clamp-3 mt-2">
         {post.content}
       </p>
 
       {/* 댓글 및 대댓글 표시 (전체) */}
       {displayItems.length > 0 && (
-        <div className="mt-2 pt-2 border-t border-dashed border-[#1A1A1A] overflow-hidden">
+        <div className="mt-2 pt-2 border-t border-dashed border-[#1A1A1A]">
           {displayItems.map(({ comment, replies }) => (
-            <div key={comment.id} className="overflow-hidden">
-              <p className="text-xs text-[#1A1A1A] leading-snug py-0.5 overflow-hidden text-ellipsis" style={{ wordBreak: 'break-all', maxWidth: '100%' }}>
-                <span className="whitespace-nowrap">ㄴ </span>{truncateComment(comment.content, comment)}
+            <div key={comment.id}>
+              <p className={`text-xs text-[#1A1A1A] leading-snug py-0.5 ${COMMENT_CLAMP}`}>
+                <span className="whitespace-nowrap">ㄴ </span>{comment.content}
               </p>
-              {/* 대댓글 표시 */}
               {replies.map((reply) => (
-                <p key={reply.id} className="text-xs text-[#5C5C5C] leading-snug py-0.5 pl-4 overflow-hidden text-ellipsis" style={{ wordBreak: 'break-all', maxWidth: '100%' }}>
-                  <span className="whitespace-nowrap">ㄴ </span>{truncateComment(reply.content, reply)}
+                <p key={reply.id} className={`text-xs text-[#5C5C5C] leading-snug py-0.5 pl-4 ${COMMENT_CLAMP}`}>
+                  <span className="whitespace-nowrap">ㄴ </span>{reply.content}
                 </p>
               ))}
             </div>
