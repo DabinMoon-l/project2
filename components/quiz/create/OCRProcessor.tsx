@@ -191,17 +191,15 @@ async function cropImageRegion(
  * PDF 파일을 이미지(base64)로 변환
  * 멀티 페이지 PDF의 경우 모든 페이지를 하나의 긴 이미지로 합침
  */
-async function pdfToImages(file: File): Promise<{ images: string[]; combinedImage: string }> {
+/** PDF 페이지별 이미지 + 청크별 합친 이미지 생성 */
+async function pdfToImages(file: File): Promise<{ images: string[]; combinedImage: string; chunkImages: string[] }> {
   const arrayBuffer = await file.arrayBuffer();
   const pdfjsLib = await getPdfjs();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   const numPages = pdf.numPages;
 
   const images: string[] = [];
-  const scale = 2.0; // 고해상도 렌더링
-
-  let totalHeight = 0;
-  let maxWidth = 0;
+  const scale = 2.0;
   const pageCanvases: HTMLCanvasElement[] = [];
 
   // 각 페이지를 캔버스로 렌더링
@@ -216,36 +214,107 @@ async function pdfToImages(file: File): Promise<{ images: string[]; combinedImag
     const ctx = canvas.getContext('2d');
     if (!ctx) continue;
 
-    await page.render({
-      canvasContext: ctx,
-      viewport: viewport,
-    }).promise;
-
-    // 개별 페이지 이미지 저장
+    await page.render({ canvasContext: ctx, viewport }).promise;
     images.push(canvas.toDataURL('image/png'));
     pageCanvases.push(canvas);
-
-    totalHeight += viewport.height;
-    maxWidth = Math.max(maxWidth, viewport.width);
   }
 
-  // 모든 페이지를 하나의 긴 이미지로 합치기
-  const combinedCanvas = document.createElement('canvas');
-  combinedCanvas.width = maxWidth;
-  combinedCanvas.height = totalHeight;
-  const combinedCtx = combinedCanvas.getContext('2d');
-
-  if (combinedCtx) {
-    let yOffset = 0;
-    for (const pageCanvas of pageCanvases) {
-      combinedCtx.drawImage(pageCanvas, 0, yOffset);
-      yOffset += pageCanvas.height;
+  /** 캔버스 배열 → 1개 합친 이미지 */
+  const combineCanvases = (canvases: HTMLCanvasElement[]): string => {
+    let totalHeight = 0;
+    let maxWidth = 0;
+    for (const c of canvases) {
+      totalHeight += c.height;
+      maxWidth = Math.max(maxWidth, c.width);
     }
+    const combined = document.createElement('canvas');
+    combined.width = maxWidth;
+    combined.height = totalHeight;
+    const ctx = combined.getContext('2d');
+    if (ctx) {
+      let y = 0;
+      for (const c of canvases) {
+        ctx.drawImage(c, 0, y);
+        y += c.height;
+      }
+    }
+    return combined.toDataURL('image/png');
+  };
+
+  // 청크별 합친 이미지 (5페이지씩)
+  const CHUNK_SIZE = 5;
+  const chunkImages: string[] = [];
+  for (let i = 0; i < pageCanvases.length; i += CHUNK_SIZE) {
+    const chunk = pageCanvases.slice(i, i + CHUNK_SIZE);
+    chunkImages.push(combineCanvases(chunk));
   }
 
   return {
     images,
-    combinedImage: combinedCanvas.toDataURL('image/png'),
+    combinedImage: combineCanvases(pageCanvases),
+    chunkImages,
+  };
+}
+
+/** V4 문제 배열 → ParseResult 변환 (단일/청크 공용) */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function convertV4ToParseResult(questions: any[], rawText: string): ParseResult {
+  return {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    questions: questions.map((q: any) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const question: Record<string, any> = {
+        text: q.stem,
+        type: q.type === 'multipleChoice' ? 'multiple' : q.type === 'ox' ? 'ox' : 'short_answer',
+        choices: q.choices?.map((c: { text: string }) => c.text) || [],
+        answer: '',
+        explanation: '',
+      };
+
+      // 제시문 → mixedExamples
+      const mixedExamples: Array<{
+        id: string;
+        type: 'text' | 'gana' | 'bullet';
+        content?: string;
+        items?: Array<{ id: string; label: string; content: string }>;
+      }> = [];
+
+      if (q.passage) {
+        mixedExamples.push({ id: `passage_text_${Date.now()}_${Math.random()}`, type: 'text', content: q.passage });
+      }
+      if (q.labeledPassages && Object.keys(q.labeledPassages).length > 0) {
+        mixedExamples.push({
+          id: `passage_gana_${Date.now()}_${Math.random()}`,
+          type: 'gana',
+          items: Object.entries(q.labeledPassages).map(([label, text], idx) => ({
+            id: `gana_${Date.now()}_${idx}`, label, content: text as string,
+          })),
+        });
+      }
+      if (q.bulletItems?.length > 0) {
+        mixedExamples.push({
+          id: `passage_bullet_${Date.now()}_${Math.random()}`,
+          type: 'bullet',
+          items: q.bulletItems.map((text: string, idx: number) => ({
+            id: `bullet_${Date.now()}_${idx}`, label: '◦', content: text,
+          })),
+        });
+      }
+      if (mixedExamples.length > 0) question.mixedExamples = mixedExamples;
+      if (q.passagePrompt) question.passagePrompt = q.passagePrompt;
+      if (q.boxItems?.length > 0) {
+        question.bogi = {
+          questionText: q.bogiPrompt || '',
+          items: q.boxItems.map((b: { label: string; text: string }, idx: number) => ({
+            id: `bogi_${Date.now()}_${idx}`, label: b.label, content: b.text,
+          })),
+        };
+      }
+      return question;
+    }) as unknown as ParsedQuestion[],
+    rawText,
+    success: true,
+    message: `${questions.length}개의 문제를 인식했습니다. (AI 전처리)`,
   };
 }
 
@@ -338,18 +407,98 @@ export default function OCRProcessor({
         let base64Image: string;
 
         if (isPdf) {
-          // PDF 파일 처리
+          // PDF 파일 처리 — 5페이지씩 청크 분할
           setProgress({ progress: 5, status: 'PDF 변환 중...' });
 
-          const { combinedImage, images } = await pdfToImages(targetFile);
-          base64Image = combinedImage;
+          const { combinedImage, images, chunkImages } = await pdfToImages(targetFile);
 
-          // PDF의 첫 페이지 이미지를 크롭용으로 전달
+          // 첫 페이지 이미지를 크롭용으로 전달
           if (images.length > 0) {
             onImageReady?.(images[0]);
           }
 
-          console.log(`[OCRProcessor] PDF 변환 완료: ${images.length}페이지`);
+          console.log(`[OCRProcessor] PDF 변환 완료: ${images.length}페이지, ${chunkImages.length}청크`);
+
+          if (chunkImages.length <= 1) {
+            // 5페이지 이하 — 기존 방식 (단일 호출)
+            base64Image = combinedImage;
+          } else {
+            // 6페이지 이상 — 청크별 병렬 처리
+            setProgress({ progress: 15, status: `${chunkImages.length}개 청크로 분할 처리 중...` });
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const chunkResults: any[] = [];
+            for (let i = 0; i < chunkImages.length; i++) {
+              if (isCancelledRef.current) return;
+              const pct = 15 + Math.round((i / chunkImages.length) * 55);
+              setProgress({ progress: pct, status: `청크 ${i + 1}/${chunkImages.length} OCR 처리 중...` });
+
+              try {
+                const result = await callFunction('runClovaOcr', { image: chunkImages[i] });
+                chunkResults.push(result);
+              } catch (chunkErr) {
+                console.error(`[OCRProcessor] 청크 ${i + 1} 실패:`, chunkErr);
+                // 실패한 청크는 건너뜀
+              }
+            }
+
+            if (isCancelledRef.current) return;
+
+            // 청크 결과 병합
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const allV4Questions: any[] = [];
+            let combinedText = '';
+            let lastUsage = null;
+
+            for (const r of chunkResults) {
+              if (r?.text) combinedText += r.text + '\n';
+              if (r?.usage) lastUsage = r.usage;
+              if (r?.parsedV4?.success && r.parsedV4.questions?.length > 0) {
+                allV4Questions.push(...r.parsedV4.questions);
+              }
+            }
+
+            // 문제 번호 기준 중복 제거 + 정렬
+            const seen = new Set<string>();
+            const deduped = allV4Questions.filter(q => {
+              const num = String(q.questionNumber ?? q.stem?.match(/^\d+/)?.[0] ?? '');
+              if (num && seen.has(num)) return false;
+              if (num) seen.add(num);
+              return true;
+            });
+
+            console.log(`[OCRProcessor] 청크 병합: 총 ${allV4Questions.length}문제 → 중복제거 ${deduped.length}문제`);
+
+            // 병합 결과를 ocrResult 형식으로 구성
+            type OcrResult = { text: string; usage: { used: number; limit: number; remaining: number }; parsedV4: { success: boolean; questions: typeof deduped; debug?: { error?: string } } };
+            const mergedResult: OcrResult = {
+              text: combinedText,
+              usage: lastUsage || { used: 0, limit: 500, remaining: 500 },
+              parsedV4: {
+                success: deduped.length > 0,
+                questions: deduped,
+              },
+            };
+
+            setOcrUsage(mergedResult.usage);
+            setStep('parsing');
+            setProgress({ progress: 80, status: '문제 분석 중...' });
+            await new Promise(resolve => setTimeout(resolve, 300));
+            if (isCancelledRef.current) return;
+
+            // V4 결과 처리 (아래 공통 로직으로 이동하지 않고 여기서 직접 처리)
+            const { parsedV4: mergedV4 } = mergedResult;
+            if (mergedV4.success && mergedV4.questions.length > 0) {
+              const parsed = convertV4ToParseResult(mergedV4.questions, combinedText);
+              setParseResult(parsed);
+              setStep('review');
+              setProgress({ progress: 100, status: '완료!' });
+              onComplete(parsed);
+            } else {
+              throw new Error(`PDF OCR: ${chunkResults.length}개 청크 처리했지만 문제를 인식하지 못했습니다.`);
+            }
+            return; // 청크 처리 완료 → 아래 단일 처리 건너뜀
+          }
         } else {
           // 이미지 파일 처리
           // 원본 이미지 URL 생성 및 전달 (이미지 크롭용)
@@ -437,90 +586,7 @@ export default function OCRProcessor({
           }
 
           // V4 결과를 앱의 ParseResult 형식으로 변환
-          const parsed: ParseResult = {
-            questions: (parsedV4.questions.map((q) => {
-              const question: Record<string, any> = {
-                // 필수 필드
-                text: q.stem,
-                type: q.type === 'multipleChoice' ? 'multiple' : q.type === 'ox' ? 'ox' : 'short_answer',
-                // 선지는 text만 사용 (UI에서 번호 표시)
-                choices: q.choices.map((c) => c.text),
-                answer: '',
-                explanation: '',
-              };
-
-              // 제시문 처리 - mixedExamples 형식으로 변환 (QuestionEditor UI와 호환)
-              // QuestionEditor는 mixedExamples를 사용하여 제시문 섹션을 렌더링함
-              const mixedExamples: Array<{
-                id: string;
-                type: 'text' | 'gana' | 'bullet';
-                content?: string;
-                items?: Array<{ id: string; label: string; content: string }>;
-              }> = [];
-
-              // 1. text 타입 제시문
-              if (q.passage) {
-                mixedExamples.push({
-                  id: `passage_text_${Date.now()}`,
-                  type: 'text',
-                  content: q.passage,
-                });
-              }
-
-              // 2. (가)(나)(다) 타입 제시문
-              if (q.labeledPassages && Object.keys(q.labeledPassages).length > 0) {
-                mixedExamples.push({
-                  id: `passage_gana_${Date.now()}`,
-                  type: 'gana',
-                  items: Object.entries(q.labeledPassages).map(([label, text], idx) => ({
-                    id: `gana_item_${Date.now()}_${idx}`,
-                    label: label,
-                    content: text as string,
-                  })),
-                });
-              }
-
-              // 3. bullet 타입 제시문 (◦ 항목)
-              if (q.bulletItems && q.bulletItems.length > 0) {
-                mixedExamples.push({
-                  id: `passage_bullet_${Date.now()}`,
-                  type: 'bullet',
-                  items: q.bulletItems.map((text, idx) => ({
-                    id: `bullet_item_${Date.now()}_${idx}`,
-                    label: '◦',
-                    content: text,
-                  })),
-                });
-              }
-
-              // mixedExamples가 있으면 추가 (QuestionEditor에서 제시문 섹션에 표시됨)
-              if (mixedExamples.length > 0) {
-                question.mixedExamples = mixedExamples;
-              }
-
-              // 제시문 발문
-              if (q.passagePrompt) {
-                question.passagePrompt = q.passagePrompt;
-              }
-
-              // 보기 데이터 (bogi 형식으로 변환)
-              if (q.boxItems && q.boxItems.length > 0) {
-                question.bogi = {
-                  questionText: q.bogiPrompt || '',  // 보기 발문
-                  items: q.boxItems.map((b, idx) => ({
-                    id: `bogi_${Date.now()}_${idx}`,
-                    label: b.label,
-                    content: b.text,
-                  })),
-                };
-              }
-
-              return question;
-            }) as unknown as ParsedQuestion[]),
-            rawText: text,
-            success: true,
-            message: `${parsedV4.questions.length}개의 문제를 인식했습니다. (AI 전처리)`,
-          };
+          const parsed = convertV4ToParseResult(parsedV4.questions, text);
 
           setParseResult(parsed);
           setStep('review');
