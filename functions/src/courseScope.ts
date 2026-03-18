@@ -87,6 +87,9 @@ export const uploadCourseScope = onCall(
         throw new HttpsError("invalid-argument", "파싱된 챕터가 없습니다.");
       }
 
+      // 챕터 간 공통 단어 제거 (노이즈 방지)
+      removeCommonKeywords(chapters);
+
       const batch = db.batch();
       const scopeRef = db.collection("courseScopes").doc(courseId);
 
@@ -174,29 +177,57 @@ function parseChapters(content: string): Omit<ChapterScope, "updatedAt">[] {
 
 /**
  * 챕터 내용에서 키워드 추출
+ *
+ * 1차: 전체 3자+ 한글 단어 추출
+ * 2차: 업로드 시 챕터 간 공통 단어(3+챕터 등장)를 제거하여 고유 키워드만 보존
  */
 function extractKeywordsFromContent(content: string): string[] {
   const keywords = new Set<string>();
 
-  // **굵은 글씨** 추출
-  const boldMatches = content.matchAll(/\*\*([^*]+)\*\*/g);
-  for (const match of boldMatches) {
-    const term = match[1].trim();
-    if (term.length >= 2 && term.length <= 30 && !/^\d+$/.test(term)) {
-      keywords.add(term);
+  // 전체 텍스트에서 3자 이상 한글 단어 추출
+  const koreanMatches = content.match(/[가-힣]{3,}/g);
+  if (koreanMatches) {
+    for (const word of koreanMatches) {
+      // 조사/어미로 끝나는 형태 제거 (은,는,이,가,을,를,의,에,로,와,과,도,만,까지 등)
+      const stem = word.replace(/[은는이가을를의에로와과도만까지서며고]$/, "");
+      if (stem.length >= 3) keywords.add(stem);
+      if (word.length >= 3) keywords.add(word);
     }
   }
 
-  // ⭐ 표시된 섹션 제목 추출
-  const starMatches = content.matchAll(/⭐+\s*(?:\(\d+\))?\s*(.+?)(?:\n|$)/g);
-  for (const match of starMatches) {
-    const term = match[1].trim().replace(/[()]/g, "");
-    if (term.length >= 2 && term.length <= 50) {
-      keywords.add(term);
+  // 영문+한글 복합 용어 (예: "DNA바이러스", "IgM항체")
+  const mixedMatches = content.match(/[A-Za-z]+[가-힣]{2,}/g);
+  if (mixedMatches) {
+    for (const word of mixedMatches) {
+      keywords.add(word);
     }
   }
 
-  return Array.from(keywords).slice(0, 100);  // 최대 100개
+  return Array.from(keywords);
+}
+
+/**
+ * 여러 챕터 간 공통 단어 제거 (3개 이상 챕터에 등장하는 범용어 제외)
+ */
+function removeCommonKeywords(
+  chapters: Omit<ChapterScope, "updatedAt">[]
+): void {
+  // 단어별 등장 챕터 수 카운트
+  const wordChapterCount = new Map<string, number>();
+  for (const ch of chapters) {
+    const uniqueWords = new Set(ch.keywords);
+    for (const word of uniqueWords) {
+      wordChapterCount.set(word, (wordChapterCount.get(word) || 0) + 1);
+    }
+  }
+
+  // 3개 이상 챕터에 등장하는 단어 제거
+  const threshold = Math.min(3, Math.ceil(chapters.length * 0.3));
+  for (const ch of chapters) {
+    ch.keywords = ch.keywords.filter(
+      (w) => (wordChapterCount.get(w) || 0) < threshold
+    );
+  }
 }
 
 // ============================================================

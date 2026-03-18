@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { BogiData } from '../questionTypes';
 import { BOGI_QUESTION_PRESETS, KOREAN_LABELS } from '../questionTypes';
@@ -16,9 +17,11 @@ interface BogiEditorProps {
  * 보기(<보기>) 에디터
  *
  * 객관식/주관식 문제에서 사용하는 <보기> 박스를 편집합니다.
- * 프리셋 발문, 직접 입력, ㄱ.ㄴ.ㄷ. 항목 추가/삭제를 지원합니다.
+ * 발문 없이 보기 항목만 추가 가능. 발문은 선택적으로 펼쳐서 입력.
  */
 export default function BogiEditor({ bogi, onBogiChange }: BogiEditorProps) {
+  const [showPrompt, setShowPrompt] = useState(!!bogi?.questionText);
+
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
@@ -32,12 +35,13 @@ export default function BogiEditor({ bogi, onBogiChange }: BogiEditorProps) {
               onBogiChange(null);
             } else {
               onBogiChange({
-                questionText: BOGI_QUESTION_PRESETS[0],
+                questionText: '',
                 items: [
                   { id: `bogi_${Date.now()}_0`, label: 'ㄱ', content: '' },
                   { id: `bogi_${Date.now()}_1`, label: 'ㄴ', content: '' },
                 ],
               });
+              setShowPrompt(false);
             }
           }}
           className={`
@@ -61,53 +65,68 @@ export default function BogiEditor({ bogi, onBogiChange }: BogiEditorProps) {
             exit={{ opacity: 0, height: 0 }}
             className="space-y-3 border-2 border-[#1A1A1A] p-4 bg-[#FAFAFA]"
           >
-            {/* 발문 */}
+            {/* 발문 토글 */}
             <div>
-              <label className="block text-xs font-bold text-[#5C5C5C] mb-1">
-                발문
-              </label>
-              <div className="space-y-2">
-                {/* 프리셋 버튼들 */}
-                <div className="flex flex-wrap gap-1">
-                  {BOGI_QUESTION_PRESETS.map((preset, idx) => (
-                    <button
-                      key={`preset-${idx}`}
-                      type="button"
-                      onClick={() => onBogiChange({ ...bogi, questionText: preset })}
-                      className={`
-                        px-2 py-1 text-xs border transition-colors
-                        ${bogi.questionText === preset
-                          ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                          : 'bg-white text-[#5C5C5C] border-[#D4CFC4] hover:border-[#1A1A1A]'
-                        }
-                      `}
-                    >
-                      프리셋 {idx + 1}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => onBogiChange({ ...bogi, questionText: '' })}
-                    className={`
-                      px-2 py-1 text-xs border transition-colors
-                      ${bogi.questionText === '' || (bogi.questionText && !BOGI_QUESTION_PRESETS.includes(bogi.questionText))
-                        ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
-                        : 'bg-white text-[#5C5C5C] border-[#D4CFC4] hover:border-[#1A1A1A]'
-                      }
-                    `}
+              <button
+                type="button"
+                onClick={() => {
+                  if (showPrompt) {
+                    // 발문 접기 → 발문 내용 제거
+                    onBogiChange({ ...bogi, questionText: '' });
+                    setShowPrompt(false);
+                  } else {
+                    setShowPrompt(true);
+                  }
+                }}
+                className={`
+                  px-2 py-1 text-xs font-bold border transition-colors
+                  ${showPrompt
+                    ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                    : 'bg-white text-[#5C5C5C] border-[#D4CFC4] hover:border-[#1A1A1A]'
+                  }
+                `}
+              >
+                {showPrompt ? '발문 제거' : '+ 발문 추가'}
+              </button>
+
+              <AnimatePresence>
+                {showPrompt && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="space-y-2 mt-2"
                   >
-                    직접 입력
-                  </button>
-                </div>
-                {/* 텍스트 입력 */}
-                <textarea
-                  value={bogi.questionText || ''}
-                  onChange={(e) => onBogiChange({ ...bogi, questionText: e.target.value })}
-                  placeholder="예: 이에 대한 설명으로 옳은 것만을 <보기>에서 있는 대로 고른 것은?"
-                  rows={2}
-                  className="w-full px-3 py-2 text-sm border border-[#1A1A1A] bg-white resize-none focus:outline-none"
-                />
-              </div>
+                    {/* 프리셋 버튼들 */}
+                    <div className="flex flex-wrap gap-1">
+                      {BOGI_QUESTION_PRESETS.map((preset, idx) => (
+                        <button
+                          key={`preset-${idx}`}
+                          type="button"
+                          onClick={() => onBogiChange({ ...bogi, questionText: preset })}
+                          className={`
+                            px-2 py-1 text-xs border transition-colors
+                            ${bogi.questionText === preset
+                              ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
+                              : 'bg-white text-[#5C5C5C] border-[#D4CFC4] hover:border-[#1A1A1A]'
+                            }
+                          `}
+                        >
+                          프리셋 {idx + 1}
+                        </button>
+                      ))}
+                    </div>
+                    {/* 텍스트 입력 */}
+                    <textarea
+                      value={bogi.questionText || ''}
+                      onChange={(e) => onBogiChange({ ...bogi, questionText: e.target.value })}
+                      placeholder="예: 이에 대한 설명으로 옳은 것만을 <보기>에서 있는 대로 고른 것은?"
+                      rows={2}
+                      className="w-full px-3 py-2 text-sm border border-[#1A1A1A] bg-white resize-none focus:outline-none"
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             {/* ㄱㄴㄷ 항목들 */}

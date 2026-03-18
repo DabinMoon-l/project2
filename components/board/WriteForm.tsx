@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { useTheme } from '@/styles/themes/useTheme';
 import { useUpload, type FileInfo } from '@/lib/hooks/useStorage';
 import type { CreatePostData, AttachedFile, BoardTag } from '@/lib/hooks/useBoard';
 import { BOARD_TAGS } from '@/lib/hooks/useBoard';
+import { useChapterKeywords } from '@/lib/hooks/useChapterKeywords';
+import { useCourse } from '@/lib/contexts/CourseContext';
 
 interface WriteFormProps {
   /** 제출 핸들러 */
@@ -39,11 +41,35 @@ export default function WriteForm({
 }: WriteFormProps) {
   const { theme } = useTheme();
   const { uploadImage, uploadFile, loading: uploading, error: uploadError } = useUpload();
+  const { userCourseId } = useCourse();
+  const { chapters, detectChapters } = useChapterKeywords(userCourseId);
 
   const [title, setTitle] = useState(initialTitle);
   const [content, setContent] = useState(initialContent);
   const [tag, setTag] = useState<BoardTag | undefined>(initialTag);
   const [aiDetailedAnswer, setAiDetailedAnswer] = useState(true);
+  const [chapterTags, setChapterTags] = useState<string[]>([]);
+  const [showChapterPicker, setShowChapterPicker] = useState(false);
+  const autoDetectTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // 제목+본문 변경 시 챕터 자동 추천 (디바운스 1초)
+  useEffect(() => {
+    if (autoDetectTimer.current) clearTimeout(autoDetectTimer.current);
+    autoDetectTimer.current = setTimeout(() => {
+      const text = `${title} ${content}`;
+      if (text.trim().length >= 10) {
+        const detected = detectChapters(text);
+        if (detected.length > 0) {
+          setChapterTags(prev => {
+            // 이미 수동 선택한 태그는 유지, 자동 추천만 추가
+            const manual = prev.filter(t => !detected.includes(t));
+            return [...new Set([...manual, ...detected])];
+          });
+        }
+      }
+    }, 1000);
+    return () => { if (autoDetectTimer.current) clearTimeout(autoDetectTimer.current); };
+  }, [title, content, detectChapters]);
 
   // 부모에서 임시저장 복원 시 반영 (useState는 초기값만 사용하므로 동기화 필요)
   useEffect(() => {
@@ -251,6 +277,7 @@ export default function WriteForm({
         imageUrls: allImageUrls,
         fileUrls: uploadedFiles,
         tag,
+        ...(chapterTags.length > 0 ? { chapterTags } : {}),
         ...(tag === '학술' && aiDetailedAnswer ? { aiDetailedAnswer: true } : {}),
       });
     } catch (err) {
@@ -360,6 +387,79 @@ export default function WriteForm({
           </AnimatePresence>
         </div>
       </div>
+
+      {/* 챕터 태그 (scope 있을 때만) */}
+      {chapters.length > 0 && (
+        <div className="mb-3">
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-xs font-bold" style={{ color: theme.colors.text }}>
+              단원
+            </label>
+            <button
+              type="button"
+              onClick={() => setShowChapterPicker(!showChapterPicker)}
+              className={`px-2 py-0.5 text-[10px] font-bold transition-colors ${
+                showChapterPicker
+                  ? 'bg-[#1A1A1A] text-[#F5F0E8]'
+                  : 'bg-transparent text-[#5C5C5C] border border-[#D4CFC4]'
+              }`}
+            >
+              {showChapterPicker ? '닫기' : '선택'}
+            </button>
+          </div>
+
+          {/* 선택된 챕터 태그 표시 */}
+          {chapterTags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-1.5">
+              {chapterTags.map(ct => (
+                <span
+                  key={ct}
+                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-[10px] font-bold"
+                >
+                  #{ct}
+                  <button
+                    type="button"
+                    onClick={() => setChapterTags(prev => prev.filter(t => t !== ct))}
+                    className="ml-0.5 hover:text-[#999]"
+                  >
+                    ✕
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* 챕터 목록 */}
+          <AnimatePresence>
+            {showChapterPicker && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="flex flex-wrap gap-1 p-2 bg-[#EDEAE4] border border-[#D4CFC4]">
+                  {chapters
+                    .filter(ch => !chapterTags.includes(ch.tag))
+                    .map(ch => (
+                      <button
+                        key={ch.number}
+                        type="button"
+                        onClick={() => {
+                          setChapterTags(prev => [...prev, ch.tag]);
+                        }}
+                        className="px-2 py-1 text-[10px] font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+                      >
+                        #{ch.tag}
+                      </button>
+                    ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
 
       {/* 내용 입력 */}
       <div className="mb-3">
