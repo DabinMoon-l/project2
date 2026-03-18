@@ -369,6 +369,7 @@ export default function ProfessorQuizListPage() {
     const q = query(
       collection(db, 'quizzes'),
       where('type', '==', 'custom'),
+      where('isPublic', '==', true),
       where('courseId', '==', userCourseId)
     );
 
