@@ -1319,7 +1319,6 @@ export default function QuizStatsModal({
                         {/* 보기 (<보기> 박스) */}
                         {currentQuestion.bogi && currentQuestion.bogi.items && currentQuestion.bogi.items.some(i => i.content?.trim()) && (
                           <div className="mb-2 p-2 bg-[#F5F0E8] border-2 border-[#1A1A1A] rounded-lg">
-                            <p className="text-[10px] text-center text-[#5C5C5C] mb-1.5 font-bold">&lt;보 기&gt;</p>
                             <div className="space-y-1">
                               {currentQuestion.bogi.items.filter(i => i.content?.trim()).map((item) => (
                                 <p key={item.label} className="text-xs text-[#1A1A1A]">

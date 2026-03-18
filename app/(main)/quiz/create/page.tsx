@@ -87,6 +87,9 @@ interface FlattenedQuestion {
   koreanAbcItems?: string[] | null;
   passageMixedExamples?: MixedExampleBlock[] | null;
   combinedMainText?: string;
+  passagePrompt?: string;
+  bogi?: { questionText: string; items: Array<{ id: string; label: string; content: string }> } | null;
+  passageBlocks?: Array<{ id: string; type: string; content?: string; items?: Array<{ id: string; label: string; content: string }>; imageUrl?: string; children?: unknown[]; prompt?: string }>;
 }
 
 // ============================================================
@@ -1014,6 +1017,8 @@ export default function QuizCreatePage() {
                         case 'text':
                           return block.content?.trim();
                         case 'labeled':
+                        case 'gana':
+                        case 'bullet':
                           return (block.items || []).some((i: LabeledItem) => i.content?.trim());
                         case 'image':
                           return block.imageUrl?.trim();
@@ -1024,7 +1029,7 @@ export default function QuizCreatePage() {
                       }
                     })
                     .map((block: MixedExampleBlock) => {
-                      if (block.type === 'labeled') {
+                      if (block.type === 'labeled' || block.type === 'gana' || block.type === 'bullet') {
                         return {
                           ...block,
                           items: (block.items || []).filter((i: LabeledItem) => i.content?.trim()),
@@ -1035,7 +1040,7 @@ export default function QuizCreatePage() {
                           ...block,
                           children: (block.children || []).filter((child: MixedExampleBlock) => {
                             if (child.type === 'text') return child.content?.trim();
-                            if (child.type === 'labeled') return (child.items || []).some((i: LabeledItem) => i.content?.trim());
+                            if (child.type === 'labeled' || child.type === 'gana' || child.type === 'bullet') return (child.items || []).some((i: LabeledItem) => i.content?.trim());
                             if (child.type === 'image') return child.imageUrl?.trim();
                             return false;
                           }),
@@ -1059,6 +1064,10 @@ export default function QuizCreatePage() {
                   imageUrl: sq.image || null,
                   examples: subExamples,
                   mixedExamples: subMixedExamples,
+                  // 제시문/보기
+                  ...(sq.passagePrompt ? { passagePrompt: sq.passagePrompt } : {}),
+                  ...(sq.bogi ? { bogi: sq.bogi } : {}),
+                  ...(sq.passageBlocks && sq.passageBlocks.length > 0 ? { passageBlocks: sq.passageBlocks } : {}),
                   // 결합형 그룹 정보
                   combinedGroupId,
                   combinedIndex: sqIndex,
@@ -1159,6 +1168,8 @@ export default function QuizCreatePage() {
                       case 'text':
                         return block.content?.trim();
                       case 'labeled':
+                      case 'gana':
+                      case 'bullet':
                         return (block.items || []).some(i => i.content?.trim());
                       case 'image':
                         return block.imageUrl?.trim();
@@ -1169,7 +1180,7 @@ export default function QuizCreatePage() {
                     }
                   })
                   .map(block => {
-                    if (block.type === 'labeled') {
+                    if (block.type === 'labeled' || block.type === 'gana' || block.type === 'bullet') {
                       return {
                         ...block,
                         items: (block.items || []).filter(i => i.content?.trim()),
@@ -1180,7 +1191,7 @@ export default function QuizCreatePage() {
                         ...block,
                         children: (block.children || []).filter(child => {
                           if (child.type === 'text') return child.content?.trim();
-                          if (child.type === 'labeled') return (child.items || []).some(i => i.content?.trim());
+                          if (child.type === 'labeled' || child.type === 'gana' || child.type === 'bullet') return (child.items || []).some(i => i.content?.trim());
                           if (child.type === 'image') return child.imageUrl?.trim();
                           return false;
                         }),
@@ -1204,6 +1215,10 @@ export default function QuizCreatePage() {
                 imageUrl: q.imageUrl || null,
                 examples: questionExamples,
                 mixedExamples: questionMixedExamples,
+                // 제시문/보기
+                ...(q.passagePrompt ? { passagePrompt: q.passagePrompt } : {}),
+                ...(q.bogi ? { bogi: q.bogi } : {}),
+                ...(q.passageBlocks && q.passageBlocks.length > 0 ? { passageBlocks: q.passageBlocks } : {}),
                 // 챕터 정보
                 chapterId: q.chapterId || null,
                 chapterDetailId: q.chapterDetailId || null,

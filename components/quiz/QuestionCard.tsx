@@ -452,7 +452,6 @@ function QuestionCard({ question, courseId, headerRight }: QuestionCardProps) {
         <div className="mt-3">
           {/* <보기> 박스 (발문은 아래에서 별도 표시) */}
           <div className="p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A]">
-            <p className="text-[10px] text-center text-[#5C5C5C] mb-1.5 font-bold">&lt;보 기&gt;</p>
             <div className="space-y-1">
               {question.bogi.items.filter(i => i.content?.trim()).map((item) => (
                 <p key={item.label} className="text-[#1A1A1A] text-sm">

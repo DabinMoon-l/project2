@@ -11,6 +11,7 @@ import { usePosts, usePinnedPosts, type Post, type Comment, type BoardTag, BOARD
 import { useCourse } from '@/lib/contexts/CourseContext';
 import { useUser } from '@/lib/contexts/UserContext';
 import { type CourseId } from '@/lib/types/course';
+import { generateCourseTags } from '@/lib/courseIndex';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
 /** 기본 토끼 이미지 경로 */
 const DEFAULT_RABBIT_IMAGE = '/rabbit/default-news.png';
@@ -628,16 +629,11 @@ export default function BoardPage() {
     return ids;
   }, [profPickActive, posts, commentsMap]);
 
-  // 게시글에서 사용된 챕터 태그 수집
+  // 전체 챕터 태그 목록 (과목 인덱스 기반 — 게시글 유무와 무관하게 항상 표시)
   const availableChapterTags = useMemo(() => {
-    const tagSet = new Set<string>();
-    posts.forEach(p => p.chapterTags?.forEach(ct => tagSet.add(ct)));
-    return [...tagSet].sort((a, b) => {
-      const na = parseInt(a.split('_')[0]) || 0;
-      const nb = parseInt(b.split('_')[0]) || 0;
-      return na - nb;
-    });
-  }, [posts]);
+    const courseTags = generateCourseTags(selectedCourseId);
+    return courseTags.map(t => t.value);
+  }, [selectedCourseId]);
 
   // 검색 + 태그 + 교수님 픽 필터링 및 정렬 (최신순)
   const filteredPosts = useMemo(() => {

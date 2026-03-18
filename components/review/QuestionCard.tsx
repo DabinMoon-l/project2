@@ -305,7 +305,6 @@ export default function QuestionCard({
                   {/* 1. 묶은 보기 (grouped) 먼저 */}
                   {item.mixedExamples.filter(b => b.type === 'grouped').map((block) => (
                     <div key={block.id} className="p-3 border-2 border-[#8B6914] bg-[#FFF8E1] mb-3">
-                      <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
                       <div className="space-y-1">
                         {block.children?.map((child) => (
                           <div key={child.id}>
@@ -322,8 +321,13 @@ export default function QuestionCard({
                                 <span className="font-bold">({labeledItem.label})</span> {labeledItem.content}
                               </p>
                             ))}
+                            {child.type === 'bullet' && (child.items || []).filter(i => i.content.trim()).map((labeledItem) => (
+                              <p key={labeledItem.id} className="text-sm text-[#1A1A1A]">
+                                <span className="mr-1">&bull;</span>{labeledItem.content}
+                              </p>
+                            ))}
                             {child.type === 'image' && child.imageUrl && (
-                              <Image src={child.imageUrl} alt="보기 이미지" width={800} height={400} className="max-w-full h-auto border border-[#1A1A1A]" unoptimized />
+                              <Image src={child.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto border border-[#1A1A1A]" unoptimized />
                             )}
                           </div>
                         ))}
@@ -335,7 +339,6 @@ export default function QuestionCard({
                     if (block.type === 'text' && block.content?.trim()) {
                       return (
                         <div key={block.id} className="p-3 border border-[#8B6914] bg-[#FFF8E1] mb-3">
-                          <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
                           <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{block.content}</p>
                         </div>
                       );
@@ -343,7 +346,6 @@ export default function QuestionCard({
                     if (block.type === 'labeled') {
                       return (
                         <div key={block.id} className="p-3 border border-[#8B6914] bg-[#FFF8E1] mb-3">
-                          <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
                           <div className="space-y-1">
                             {(block.items || []).filter(i => i.content.trim()).map((labeledItem) => (
                               <p key={labeledItem.id} className="text-sm text-[#1A1A1A]">
@@ -357,11 +359,23 @@ export default function QuestionCard({
                     if (block.type === 'gana') {
                       return (
                         <div key={block.id} className="p-3 border border-[#8B6914] bg-[#FFF8E1] mb-3">
-                          <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
                           <div className="space-y-1">
                             {(block.items || []).filter(i => i.content.trim()).map((labeledItem) => (
                               <p key={labeledItem.id} className="text-sm text-[#1A1A1A]">
                                 <span className="font-bold">({labeledItem.label})</span> {labeledItem.content}
+                              </p>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+                    if (block.type === 'bullet') {
+                      return (
+                        <div key={block.id} className="p-3 border border-[#8B6914] bg-[#FFF8E1] mb-3">
+                          <div className="space-y-1">
+                            {(block.items || []).filter(i => i.content.trim()).map((labeledItem) => (
+                              <p key={labeledItem.id} className="text-sm text-[#1A1A1A]">
+                                <span className="mr-1">&bull;</span>{labeledItem.content}
                               </p>
                             ))}
                           </div>
@@ -375,7 +389,6 @@ export default function QuestionCard({
                 // 레거시 보기 (텍스트 또는 ㄱㄴㄷ 형식)
                 item.subQuestionOptions && item.subQuestionOptions.length > 0 && (
                   <div className="p-3 border border-[#8B6914] bg-[#FFF8E1] mb-3">
-                    <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
                     {item.subQuestionOptionsType === 'text' ? (
                       <p className="text-sm text-[#1A1A1A]">
                         {item.subQuestionOptions.join(', ')}
@@ -413,7 +426,7 @@ export default function QuestionCard({
                 <div className="mb-3">
                   <Image
                     src={item.subQuestionImage}
-                    alt="보기 이미지"
+                    alt=""
                     width={800}
                     height={400}
                     className="max-w-full max-h-[300px] object-contain border border-[#1A1A1A]"
@@ -425,7 +438,6 @@ export default function QuestionCard({
               {/* 보기 (<보기> 박스) - 이미지 다음, 발문 전에 표시 */}
               {item.bogi && item.bogi.items && item.bogi.items.some(i => i.content?.trim()) && (
                 <div className="mb-3 p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A]">
-                  <p className="text-xs text-center text-[#5C5C5C] mb-2 font-bold">&lt;보 기&gt;</p>
                   <div className="space-y-1">
                     {item.bogi.items.filter(i => i.content?.trim()).map((bogiItem) => (
                       <p key={`bogi-${bogiItem.label}`} className="text-sm text-[#1A1A1A]">

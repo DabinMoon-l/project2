@@ -205,7 +205,6 @@ function renderQuestion(q: QuestionExportData, num: number, skipSharedPassage = 
   // 보기 박스 (개별 문제 고유)
   if (q.bogi && q.bogi.items && q.bogi.items.some(i => i.content?.trim())) {
     parts.push('<div class="bogi">');
-    parts.push('<div class="bogi-title">&lt; 보 기 &gt;</div>');
     q.bogi.items.filter(i => i.content?.trim()).forEach((item) => {
       parts.push(`<div class="bogi-item"><span class="bogi-lbl">${esc(item.label)}.</span> ${esc(item.content)}</div>`);
     });

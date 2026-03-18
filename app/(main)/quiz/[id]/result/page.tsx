@@ -855,7 +855,6 @@ export default function QuizResultPage() {
       {/* 1. 묶은 보기 (grouped) - 먼저 표시 */}
       {groupedBlocks.map((block) => (
         <div key={block.id} className="mb-3 p-3 border-2 border-[#1A1A1A] bg-[#FFF8E1] rounded-lg">
-          <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
           <div className="space-y-1">
             {block.children?.map((child) => (
               <div key={child.id}>
@@ -873,7 +872,7 @@ export default function QuizResultPage() {
                   </p>
                 ))}
                 {child.type === 'image' && child.imageUrl && (
-                  <Image src={child.imageUrl} alt="보기 이미지" width={800} height={400} className="max-w-full h-auto border border-[#1A1A1A]" unoptimized />
+                  <Image src={child.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto border border-[#1A1A1A]" unoptimized />
                 )}
               </div>
             ))}
@@ -886,7 +885,6 @@ export default function QuizResultPage() {
         if (block.type === 'text' && block.content?.trim()) {
           return (
             <div key={block.id} className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-lg">
-              <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
               <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{block.content}</p>
             </div>
           );
@@ -894,7 +892,6 @@ export default function QuizResultPage() {
         if (block.type === 'labeled') {
           return (
             <div key={block.id} className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-lg">
-              <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
               <div className="space-y-1">
                 {(block.items || []).filter(i => i.content?.trim()).map((item) => (
                   <p key={item.id} className="text-sm text-[#1A1A1A]">
@@ -908,7 +905,6 @@ export default function QuizResultPage() {
         if (block.type === 'gana') {
           return (
             <div key={block.id} className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-lg">
-              <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
               <div className="space-y-1">
                 {(block.items || []).filter(i => i.content?.trim()).map((item) => (
                   <p key={item.id} className="text-sm text-[#1A1A1A]">
@@ -925,7 +921,6 @@ export default function QuizResultPage() {
       {/* 레거시 보기 - 텍스트 형식 (혼합 보기가 없을 때만) */}
       {!hasMixedExamples && result.subQuestionOptions && result.subQuestionOptions.length > 0 && result.subQuestionOptionsType === 'text' && (
         <div className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-lg">
-          <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
           <p className="text-sm text-[#1A1A1A]">
             {result.subQuestionOptions.join(', ')}
           </p>
@@ -935,7 +930,6 @@ export default function QuizResultPage() {
       {/* 레거시 보기 - ㄱㄴㄷ 형식 (혼합 보기가 없을 때만) */}
       {!hasMixedExamples && result.subQuestionOptions && result.subQuestionOptions.length > 0 && result.subQuestionOptionsType === 'labeled' && (
         <div className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-lg">
-          <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
           <div className="space-y-1">
             {result.subQuestionOptions.map((itm, idx) => (
               <p key={`label-${['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ'][idx]}`} className="text-sm text-[#1A1A1A]">
@@ -965,7 +959,6 @@ export default function QuizResultPage() {
       {/* 5. 보기 (<보기> 박스) - 이미지 다음, 발문 전에 표시 */}
       {result.bogi && result.bogi.items && result.bogi.items.some(i => i.content?.trim()) && (
         <div className="mb-3 p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A] rounded-lg">
-          <p className="text-xs text-center text-[#5C5C5C] mb-2 font-bold">&lt;보 기&gt;</p>
           <div className="space-y-1">
             {result.bogi.items.filter(i => i.content?.trim()).map((item) => (
               <p key={item.label} className="text-sm text-[#1A1A1A]">
