@@ -1,9 +1,8 @@
 'use client';
 
-import { useCallback, useState, useMemo, useRef, useEffect } from 'react';
+import { useCallback, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, query, where, getDocs, onSnapshot, db } from '@/lib/repositories';
 import { useTheme } from '@/styles/themes/useTheme';
 import { Skeleton } from '@/components/common';
 import { useUser, useCourse } from '@/lib/contexts';
@@ -22,9 +21,7 @@ import {
 import type { CourseId } from '@/lib/types/course';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
 import {
-  SpiralWordCloud,
   CLASS_COLORS,
-  CLOUD_COLORS,
 } from './boardManageParts';
 import type { ArchiveComment, ArchivePost } from './boardManageParts';
 
@@ -63,65 +60,6 @@ export default function ManagePostsPage() {
   const { posts: allPosts, loading: allLoading, error: allError } = useAllPostsForCourse(
     isProfessor ? selectedCourseId : undefined
   );
-
-  // 과목 scope 키워드 로드 (courseScopes/{courseId}/chapters/* 의 keywords)
-  // Map<소문자, 원문> 으로 저장 — 매칭은 소문자로, 표시는 원문으로
-  const [scopeTerms, setScopeTerms] = useState<Map<string, string>>(new Map());
-
-  useEffect(() => {
-    if (!isProfessor || !selectedCourseId) return;
-    setScopeTerms(new Map()); // 과목 전환 시 이전 데이터 초기화
-
-    const loadScopeKeywords = async () => {
-      try {
-        const chaptersRef = collection(db, 'courseScopes', selectedCourseId, 'chapters');
-        const snap = await getDocs(chaptersRef);
-        const terms = new Map<string, string>();
-        snap.docs.forEach(d => {
-          const kws = d.data()?.keywords;
-          if (Array.isArray(kws)) {
-            kws.forEach((kw: string) => {
-              if (kw && kw.length >= 2) {
-                const lower = kw.toLowerCase();
-                // 더 짧은 원문 우선 (중복 시)
-                if (!terms.has(lower)) terms.set(lower, kw);
-              }
-            });
-          }
-        });
-        setScopeTerms(terms);
-      } catch (err) {
-        console.error('scope 키워드 로드 실패:', err);
-      }
-    };
-
-    loadScopeKeywords();
-  }, [isProfessor, selectedCourseId]);
-
-  // 워드클라우드 데이터 — 게시글에서 과목 scope 키워드만 추출 (indexOf로 빠른 매칭)
-  const keywords = useMemo(() => {
-    if (!allPosts.length || scopeTerms.size === 0) return [];
-
-    // 게시글 전체 텍스트 (소문자)
-    const allText = allPosts.map(p => `${p.title} ${p.content}`).join(' ').toLowerCase();
-
-    // indexOf 기반 카운트 (정규식 대비 10배+ 빠름)
-    const freq = new Map<string, number>();
-    scopeTerms.forEach((original, lower) => {
-      let count = 0;
-      let pos = 0;
-      while ((pos = allText.indexOf(lower, pos)) !== -1) {
-        count++;
-        pos += lower.length;
-      }
-      if (count > 0) freq.set(original, count);
-    });
-
-    return Array.from(freq.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 40)
-      .map(([text, value]) => ({ text, value }));
-  }, [allPosts, scopeTerms]);
 
   // 학생 훅 (교수님은 skip — 불필요한 Firestore 쿼리 방지)
   const { posts, loading: postsLoading, error: postsError, hasMore, loadMore, refresh: refreshPosts } = useMyPosts(isProfessor);
@@ -274,26 +212,6 @@ export default function ManagePostsPage() {
                 <ActivitySection posts={allPosts} courseId={selectedCourseId} />
               </section>
 
-              {/* ── KEYWORD CLOUD ── */}
-              <section>
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="flex-1 h-px bg-[#1A1A1A]" />
-                  <h2 className="font-serif-display text-lg font-bold text-[#1A1A1A]">KEYWORD CLOUD</h2>
-                  <div className="flex-1 h-px bg-[#1A1A1A]" />
-                </div>
-
-                <div className="border border-[#1A1A1A] bg-[#FDFBF7] overflow-hidden" style={{ aspectRatio: '1 / 1' }}>
-                  {keywords.length === 0 ? (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <p className="text-sm text-[#5C5C5C]">
-                        {scopeTerms.size === 0 ? '과목 범위(scope)가 업로드되지 않았습니다' : '매칭되는 키워드가 없습니다'}
-                      </p>
-                    </div>
-                  ) : (
-                    <SpiralWordCloud data={keywords} colors={CLOUD_COLORS} />
-                  )}
-                </div>
-              </section>
             </>
           )}
         </div>
