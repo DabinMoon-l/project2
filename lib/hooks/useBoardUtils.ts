@@ -130,6 +130,8 @@ export const docToPost = (doc: QueryDocumentSnapshot | DocumentSnapshot): Post =
     viewCount: data?.viewCount || 0,
     // 태그
     tag: data?.tag || undefined,
+    // 챕터 태그
+    chapterTags: data?.chapterTags || undefined,
     // 채택된 댓글 ID
     acceptedCommentId: data?.acceptedCommentId || undefined,
   };

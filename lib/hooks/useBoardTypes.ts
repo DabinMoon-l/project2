@@ -56,6 +56,8 @@ export interface Post {
   acceptedCommentId?: string;
   // 콩콩이 상세 답변 요청 여부
   aiDetailedAnswer?: boolean;
+  // 챕터 태그 (예: ["1_미생물과 미생물학", "2_숙주면역반응"])
+  chapterTags?: string[];
 }
 
 /** 댓글 데이터 타입 */
@@ -90,6 +92,7 @@ export interface CreatePostData {
   toProfessor?: boolean; // 교수님께 전달 여부
   tag?: BoardTag; // 태그 (학사/학술/기타)
   aiDetailedAnswer?: boolean; // 콩콩이 상세 답변 요청
+  chapterTags?: string[]; // 챕터 태그 (예: ["1_미생물과 미생물학"])
 }
 
 /** 댓글 작성 데이터 */

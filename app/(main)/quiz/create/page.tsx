@@ -928,7 +928,7 @@ export default function QuizCreatePage() {
   /**
    * 퀴즈 저장
    */
-  const handleSaveQuiz = useCallback(async () => {
+  const handleSaveQuiz = useCallback(async (isPublic: boolean) => {
     if (!user) {
       setSaveError('로그인이 필요합니다.');
       return;
@@ -943,7 +943,7 @@ export default function QuizCreatePage() {
         // 메타 정보
         title: quizMeta.title.trim(),
         tags: quizMeta.tags,
-        isPublic: quizMeta.isPublic,
+        isPublic,
         difficulty: quizMeta.difficulty,
         type: 'custom' as const, // 자체제작 퀴즈
 
@@ -1288,9 +1288,9 @@ export default function QuizCreatePage() {
       // 저장된 초안 삭제
       deleteDraft();
 
-      // 성공 시 퀴즈 목록 페이지로 이동
+      // 성공 시 이동: 공개→퀴즈 목록, 비공개→서재
       setTimeout(() => {
-        router.push('/quiz?created=true');
+        router.push(cleanedQuizData.isPublic ? '/quiz?created=true' : '/review?filter=library');
       }, 300);
     } catch (error) {
       console.error('퀴즈 저장 실패:', error);
@@ -1713,20 +1713,30 @@ export default function QuizCreatePage() {
               다음
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={handleSaveQuiz}
-              disabled={isSaving}
-              className="flex-1 py-3 text-sm bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 rounded-lg"
-            >
-              {isSaving && (
-                <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-              )}
-              퀴즈 저장하기
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => handleSaveQuiz(false)}
+                disabled={isSaving}
+                className="flex-1 py-3 text-sm border-2 border-[#1A1A1A] text-[#1A1A1A] font-bold hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors disabled:opacity-50 disabled:cursor-not-allowed rounded-lg"
+              >
+                비공개 저장
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSaveQuiz(true)}
+                disabled={isSaving}
+                className="flex-1 py-3 text-sm bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 rounded-lg"
+              >
+                {isSaving && (
+                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                )}
+                공개 저장
+              </button>
+            </>
           )}
         </div>
       </div>}

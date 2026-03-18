@@ -19,11 +19,18 @@ const DEFAULT_RABBIT_IMAGE = '/rabbit/default-news.png';
 function PostStats({ post, tag }: { post: Post; tag?: string }) {
   return (
     <div className="mt-2 flex items-center gap-2">
-      {tag && (
-        <span className="inline-block px-2 py-0.5 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8]">
-          #{tag}
-        </span>
-      )}
+      <div className="flex flex-wrap gap-1">
+        {tag && (
+          <span className="inline-block px-2 py-0.5 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8]">
+            #{tag}
+          </span>
+        )}
+        {post.chapterTags?.map(ct => (
+          <span key={ct} className="inline-block px-1.5 py-0.5 text-[10px] font-bold bg-[#5C5C5C] text-[#F5F0E8]">
+            #{ct}
+          </span>
+        ))}
+      </div>
       <div className="flex items-center gap-2 text-[11px] text-[#8A8578] ml-auto">
         <span className="flex items-center gap-0.5">
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
@@ -461,8 +468,8 @@ export default function BoardPage() {
 
   // 검색
   const [searchQuery, setSearchQuery] = useState('');
-  // 태그 필터
-  const [selectedTags, setSelectedTags] = useState<BoardTag[]>([]);
+  // 태그 필터 (BoardTag + 챕터 태그 혼합)
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [showTagFilter, setShowTagFilter] = useState(false);
   // 교수님 픽 필터
   const [profPickActive, setProfPickActive] = useState(false);
@@ -621,6 +628,17 @@ export default function BoardPage() {
     return ids;
   }, [profPickActive, posts, commentsMap]);
 
+  // 게시글에서 사용된 챕터 태그 수집
+  const availableChapterTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    posts.forEach(p => p.chapterTags?.forEach(ct => tagSet.add(ct)));
+    return [...tagSet].sort((a, b) => {
+      const na = parseInt(a.split('_')[0]) || 0;
+      const nb = parseInt(b.split('_')[0]) || 0;
+      return na - nb;
+    });
+  }, [posts]);
+
   // 검색 + 태그 + 교수님 픽 필터링 및 정렬 (최신순)
   const filteredPosts = useMemo(() => {
     let result = searchQuery.trim()
@@ -634,9 +652,15 @@ export default function BoardPage() {
       result = result.filter(post => profPickPostIds.has(post.id));
     }
 
-    // 태그 필터 적용 (선택된 태그 중 하나와 일치)
+    // 태그 필터 적용 (선택된 태그 중 하나와 일치 — BoardTag 또는 챕터 태그)
     if (selectedTags.length > 0) {
-      result = result.filter(post => post.tag && selectedTags.includes(post.tag));
+      result = result.filter(post => {
+        // BoardTag 매칭 (학사/학술/기타)
+        if (post.tag && selectedTags.includes(post.tag)) return true;
+        // 챕터 태그 매칭
+        if (post.chapterTags && post.chapterTags.some(ct => selectedTags.includes(ct))) return true;
+        return false;
+      });
     }
 
     // 최신순 정렬
@@ -914,23 +938,47 @@ export default function BoardPage() {
               transition={{ duration: 0.2 }}
               className="overflow-hidden mt-2"
             >
-              <div className="flex flex-wrap justify-end gap-1.5 p-2 bg-[#EDEAE4] border border-[#D4CFC4]">
-                {BOARD_TAGS
-                  .filter(tag => !selectedTags.includes(tag))
-                  .map((tag) => (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={() => {
-                        setSelectedTags(prev => [...prev, tag]);
-                        setShowTagFilter(false);
-                        setSearchQuery('');
-                      }}
-                      className="flex-1 py-1.5 text-xs font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#E5E0D8] transition-colors"
-                    >
-                      #{tag}
-                    </button>
-                  ))}
+              <div className="p-2 bg-[#EDEAE4] border border-[#D4CFC4] space-y-1.5">
+                {/* 기존 태그 (학사/학술/기타) */}
+                <div className="flex flex-wrap justify-end gap-1.5">
+                  {BOARD_TAGS
+                    .filter(t => !selectedTags.includes(t))
+                    .map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => {
+                          setSelectedTags(prev => [...prev, t]);
+                          setShowTagFilter(false);
+                          setSearchQuery('');
+                        }}
+                        className="flex-1 py-1.5 text-xs font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#E5E0D8] transition-colors"
+                      >
+                        #{t}
+                      </button>
+                    ))}
+                </div>
+                {/* 챕터 태그 */}
+                {availableChapterTags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 pt-1.5 border-t border-[#D4CFC4]">
+                    {availableChapterTags
+                      .filter(ct => !selectedTags.includes(ct))
+                      .map((ct) => (
+                        <button
+                          key={ct}
+                          type="button"
+                          onClick={() => {
+                            setSelectedTags(prev => [...prev, ct]);
+                            setShowTagFilter(false);
+                            setSearchQuery('');
+                          }}
+                          className="px-2 py-1 text-[10px] font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+                        >
+                          #{ct}
+                        </button>
+                      ))}
+                  </div>
+                )}
               </div>
             </motion.div>
           )}
