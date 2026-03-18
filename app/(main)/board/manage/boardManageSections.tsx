@@ -12,9 +12,7 @@ import { BOARD_TAGS } from '@/lib/hooks/useBoard';
 import type { CourseId } from '@/lib/types/course';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
 import {
-  SpiralWordCloud,
   CLASS_COLORS,
-  CLOUD_COLORS,
 } from './boardManageParts';
 import type { ArchiveComment, ArchivePost } from './boardManageParts';
 
@@ -507,6 +505,7 @@ export function LikedPostCard({
 /** 댓글 데이터 (ActivitySection 내부용) */
 interface ActivityComment {
   authorId: string;
+  authorNickname?: string;
   authorClassType?: string;
   postId: string;
   createdAt: Date;
@@ -568,6 +567,7 @@ export function ActivitySection({ posts, courseId }: { posts: Post[]; courseId: 
           const data = d.data();
           allComments.push({
             authorId: data.authorId || '',
+            authorNickname: data.authorNickname,
             authorClassType: data.authorClassType,
             postId: data.postId || '',
             createdAt: data.createdAt?.toDate() || new Date(),
@@ -697,7 +697,7 @@ export function ActivitySection({ posts, courseId }: { posts: Post[]; courseId: 
     comments.forEach(c => {
       const cls = c.authorClassType || classMap[c.authorId];
       if (!cls) return;
-      if (!scores[c.authorId]) scores[c.authorId] = { nickname: nicknameMap[c.authorId] || '알 수 없음', classType: cls, posts: 0, comments: 0, likes: 0 };
+      if (!scores[c.authorId]) scores[c.authorId] = { nickname: c.authorNickname || nicknameMap[c.authorId] || '알 수 없음', classType: cls, posts: 0, comments: 0, likes: 0 };
       scores[c.authorId].comments++;
     });
 
