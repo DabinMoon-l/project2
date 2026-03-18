@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import type { ReviewItem } from '@/lib/hooks/useReview';
@@ -72,6 +72,19 @@ export default function QuestionCard({
   const [isFeedbackSubmitted, setIsFeedbackSubmitted] = useState(false);
   const [isFeedbackDone, setIsFeedbackDone] = useState(false);
   const [expandedChoices, setExpandedChoices] = useState<Set<number>>(new Set());
+
+  // 선지별 해설이 있으면 정답 선지 아코디언을 기본 열림
+  useEffect(() => {
+    if (item.type !== 'multiple' || !item.choiceExplanations?.some(e => e)) return;
+    const correctStr = item.correctAnswer?.toString() || '';
+    const correctIndices = correctStr.includes(',')
+      ? correctStr.split(',').map(s => parseInt(s.trim(), 10))
+      : [parseInt(correctStr, 10)];
+    const validIndices = correctIndices.filter(i => !isNaN(i) && item.choiceExplanations?.[i]);
+    if (validIndices.length > 0) {
+      setExpandedChoices(new Set(validIndices));
+    }
+  }, [item.correctAnswer, item.choiceExplanations, item.type]);
 
   const toggleFeedbackType = (type: FeedbackType) => {
     setSelectedFeedbackTypes(prev => {
@@ -321,7 +334,7 @@ export default function QuestionCard({
                                 <span className="font-bold">({labeledItem.label})</span> {labeledItem.content}
                               </p>
                             ))}
-                            {child.type === 'bullet' && (child.items || []).filter(i => i.content.trim()).map((labeledItem) => (
+                            {(child.type as string) === 'bullet' && (child.items || []).filter(i => i.content.trim()).map((labeledItem) => (
                               <p key={labeledItem.id} className="text-sm text-[#1A1A1A]">
                                 <span className="mr-1">&bull;</span>{labeledItem.content}
                               </p>
@@ -369,7 +382,7 @@ export default function QuestionCard({
                         </div>
                       );
                     }
-                    if (block.type === 'bullet') {
+                    if ((block.type as string) === 'bullet') {
                       return (
                         <div key={block.id} className="p-3 border border-[#8B6914] bg-[#FFF8E1] mb-3">
                           <div className="space-y-1">
