@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence, type PanInfo } from 'framer-motion';
+import { motion, AnimatePresence, useDragControls, type PanInfo } from 'framer-motion';
 import type { StudentDetail, ClassType } from '@/lib/hooks/useProfessorStudents';
 import { mean, sd, zScore, rankPercentile } from '@/lib/utils/statistics';
 import StudentRadar from './StudentRadar';
 import { useHideNav } from '@/lib/hooks/useHideNav';
+import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 const CLASS_COLORS: Record<ClassType, string> = {
   A: '#8B1A1A', B: '#B8860B', C: '#1D5D4A', D: '#1E3A5F',
@@ -21,6 +22,17 @@ interface Props {
 export default function StudentDetailModal({ student, allStudents, isOpen, onClose }: Props) {
   // 네비게이션 숨김
   useHideNav(isOpen);
+
+  // 배경 스크롤 방지
+  useEffect(() => {
+    if (isOpen) {
+      lockScroll();
+      return () => unlockScroll();
+    }
+  }, [isOpen]);
+
+  // 드래그 컨트롤 (핸들 영역에서만 드래그 시작)
+  const dragControls = useDragControls();
 
   // 드래그로 닫기
   const handleDragEnd = useCallback((_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
@@ -76,19 +88,24 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
       >
         <motion.div
           className="w-full bg-[#F5F0E8] rounded-t-2xl shadow-[0_-8px_32px_rgba(0,0,0,0.12)] border border-[#D4CFC4]/60 border-b-0 overflow-hidden flex flex-col"
-          style={{ height: '60vh' }}
+          style={{ height: '60vh', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
           initial={{ y: '100%' }}
           animate={{ y: 0 }}
           exit={{ y: '100%' }}
           transition={{ type: 'spring', damping: 28, stiffness: 300 }}
           drag="y"
+          dragControls={dragControls}
+          dragListener={false}
           dragConstraints={{ top: 0 }}
           dragElastic={0.2}
           onDragEnd={handleDragEnd}
           onClick={e => e.stopPropagation()}
         >
-          {/* 핸들 */}
-          <div className="flex justify-center pt-3 pb-1 cursor-grab active:cursor-grabbing">
+          {/* 핸들 — 이 영역에서만 드래그로 닫기 가능 */}
+          <div
+            className="flex justify-center pt-3 pb-1 cursor-grab active:cursor-grabbing touch-none"
+            onPointerDown={e => dragControls.start(e)}
+          >
             <div className="w-10 h-1 bg-[#D4CFC4]/80 rounded-full" />
           </div>
 
@@ -124,7 +141,7 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
           </div>
 
           {/* 콘텐츠 — 스크롤 가능 */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-6">
+          <div className="flex-1 overflow-y-auto overscroll-contain p-5 space-y-6">
             {/* 종합 역량 레이더 */}
             <div>
               <StudentRadar

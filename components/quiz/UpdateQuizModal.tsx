@@ -29,6 +29,7 @@ import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 import { useHideNav } from '@/lib/hooks/useHideNav';
 import type { MixedExampleBlock } from '@/components/quiz/create/questionTypes';
 import MixedExamplesRenderer from '@/components/common/MixedExamplesRenderer';
+import { renderInlineMarkdown } from '@/lib/utils/renderInlineMarkdown';
 import type { FieldValue } from '@/lib/repositories/firebase/firestoreBase';
 
 // ============================================================
@@ -994,7 +995,7 @@ function AnswerInput({
               }`}
             >
               <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-xs font-bold border border-current rounded-full">{idx + 1}</span>
-              <span className="flex-1 text-xs leading-relaxed">{choice}</span>
+              <span className="flex-1 text-xs leading-relaxed">{renderInlineMarkdown(choice)}</span>
             </button>
           );
         })}
@@ -1159,7 +1160,7 @@ function QuestionResultCard({
                 : isUserChoice ? 'border-[#8B1A1A] bg-[#FFCDD2] text-[#8B1A1A]'
                 : 'border-[#ddd] bg-white text-[#5C5C5C]'
               }`}>
-                <span className="font-bold">{choiceNum}.</span> {choice}
+                <span className="font-bold">{choiceNum}.</span> {renderInlineMarkdown(choice)}
                 {correctAnswerIndex.length > 1 && isCorrectChoice && <span className="ml-1 font-bold">(정답)</span>}
                 {correctAnswerIndex.length > 1 && isUserChoice && <span className="ml-1 font-bold">(내 답)</span>}
                 {r.choiceExplanations && r.choiceExplanations[i] && (

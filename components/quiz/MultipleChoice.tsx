@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { useThemeColors } from '@/styles/themes/useTheme';
+import { renderInlineMarkdown } from '@/lib/utils/renderInlineMarkdown';
 
 /**
  * MultipleChoice Props 타입
@@ -209,7 +210,7 @@ export default function MultipleChoice({
 
             {/* 선지 텍스트 */}
             <span className="flex-1 text-xs leading-relaxed break-words">
-              {choice}
+              {renderInlineMarkdown(choice)}
             </span>
 
             {/* 선택 체크 아이콘 */}

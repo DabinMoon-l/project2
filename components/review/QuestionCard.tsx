@@ -9,6 +9,7 @@ import { type FeedbackType, FEEDBACK_TYPES } from '@/components/review/types';
 import { choiceLabels, KOREAN_LABELS } from '@/lib/utils/reviewQuestionUtils';
 import { formatChapterLabel } from '@/lib/courseIndex';
 import MixedExamplesRenderer from '@/components/common/MixedExamplesRenderer';
+import { renderInlineMarkdown } from '@/lib/utils/renderInlineMarkdown';
 
 export interface QuestionCardProps {
   item: ReviewItem;
@@ -384,7 +385,7 @@ export default function QuestionCard({
                         {/* 정적 보기 항목 — 순서 고정 */}
                         {item.subQuestionOptions.map((opt, idx) => (
                           <p key={`opt-${idx}`} className="text-sm text-[#1A1A1A]">
-                            <span className="font-bold">{KOREAN_LABELS[idx]}.</span> {opt}
+                            <span className="font-bold">{KOREAN_LABELS[idx]}.</span> {renderInlineMarkdown(opt)}
                           </p>
                         ))}
                       </div>
@@ -608,7 +609,7 @@ export default function QuestionCard({
                               />
                             ) : (
                               <span className="flex-1 text-xs leading-relaxed break-words">
-                                {opt}
+                                {renderInlineMarkdown(opt)}
                                 {isMultipleAnswerQuestion && isCorrectOption && <span className="ml-1 font-bold">(정답)</span>}
                                 {isMultipleAnswerQuestion && isUserAnswer && <span className="ml-1 font-bold">(내 답)</span>}
                               </span>

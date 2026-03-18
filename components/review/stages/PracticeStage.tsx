@@ -13,6 +13,7 @@ import ShortAnswer from '@/components/quiz/ShortAnswer';
 import { FeedbackIcon, InlineFeedbackPanel } from '@/components/common/InlineFeedback';
 import { KOREAN_LABELS } from '../reviewPracticeTypes';
 import type { PracticeStageProps } from '../reviewPracticeTypes';
+import { renderInlineMarkdown } from '@/lib/utils/renderInlineMarkdown';
 import MixedExamplesRenderer from '@/components/common/MixedExamplesRenderer';
 
 export default function PracticeStage({
@@ -263,7 +264,7 @@ export default function PracticeStage({
                               {/* 정적 보기 항목 — 순서 고정 */}
                               {subItem.subQuestionOptions.map((opt, i) => (
                                 <p key={`opt-${i}`} className="text-xs text-[#1A1A1A]">
-                                  <span className="font-bold">{KOREAN_LABELS[i]}.</span> {opt}
+                                  <span className="font-bold">{KOREAN_LABELS[i]}.</span> {renderInlineMarkdown(opt)}
                                 </p>
                               ))}
                             </div>
@@ -452,7 +453,7 @@ export default function PracticeStage({
                           {/* 정적 보기 항목 — 순서 고정 */}
                           {currentItem.subQuestionOptions.map((opt, i) => (
                             <p key={`opt-${i}`} className="text-xs text-[#1A1A1A]">
-                              <span className="font-bold">{KOREAN_LABELS[i]}.</span> {opt}
+                              <span className="font-bold">{KOREAN_LABELS[i]}.</span> {renderInlineMarkdown(opt)}
                             </p>
                           ))}
                         </div>
@@ -697,7 +698,7 @@ export default function PracticeStage({
                                 }`}>
                                   {idx + 1}
                                 </span>
-                                <span className="flex-1 text-sm text-[#1A1A1A] truncate">{opt}</span>
+                                <span className="flex-1 text-sm text-[#1A1A1A] truncate">{renderInlineMarkdown(opt)}</span>
                                 <svg
                                   className={`w-4 h-4 text-[#5C5C5C] transition-transform ${isChoiceExpanded ? 'rotate-180' : ''}`}
                                   fill="none"

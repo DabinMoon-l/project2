@@ -274,7 +274,7 @@ export default function HomeOverlay() {
         overscrollBehavior: 'none',
       }}
     >
-      <div className="relative z-[2] flex-1 flex flex-col pt-1 pb-2">
+      <div className="relative z-[2] flex-1 flex flex-col justify-between pt-1 pb-2">
         {/* 상단 그룹: 프로필 + 공지 */}
         <div>
           {/* 프로필 + 닉네임 */}

@@ -7,6 +7,7 @@ import {
   FEEDBACK_TYPE_OPTIONS,
   SWIPE_THRESHOLD,
 } from './feedbackTypes';
+import { renderInlineMarkdown } from '@/lib/utils/renderInlineMarkdown';
 import type {
   FeedbackType,
   QuestionResult,
@@ -146,7 +147,7 @@ export function SingleQuestionCard({
                 }`}
               >
                 <span className="font-bold mr-2">{idx + 1}.</span>
-                {option}
+                {renderInlineMarkdown(option)}
                 {isMultipleAnswer && isCorrect && <span className="ml-2 font-bold">(정답)</span>}
                 {isMultipleAnswer && isUserAnswer && <span className="ml-2 font-bold">(내 답)</span>}
               </div>
@@ -508,7 +509,7 @@ export function CombinedQuestionCard({
                       }`}
                     >
                       <span className="font-bold mr-2">{optIdx + 1}.</span>
-                      {option}
+                      {renderInlineMarkdown(option)}
                       {isMultipleAnswer && isCorrect && <span className="ml-2 font-bold">(정답)</span>}
                       {isMultipleAnswer && isUserAnswer && <span className="ml-2 font-bold">(내 답)</span>}
                     </div>

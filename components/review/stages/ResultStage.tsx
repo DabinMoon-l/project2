@@ -12,6 +12,7 @@ import { FEEDBACK_TYPES } from '@/components/review/types';
 import { KOREAN_LABELS } from '../reviewPracticeTypes';
 import type { ResultStageProps } from '../reviewPracticeTypes';
 import MixedExamplesRenderer from '@/components/common/MixedExamplesRenderer';
+import { renderInlineMarkdown } from '@/lib/utils/renderInlineMarkdown';
 
 export default function ResultStage({
   // 데이터
@@ -247,7 +248,7 @@ export default function ResultStage({
                                                   {/* 정적 보기 항목 — 순서 고정 */}
                                                   {subItem.subQuestionOptions.map((opt, i) => (
                                                     <p key={`opt-${i}`} className="text-xs text-[#1A1A1A]">
-                                                      <span className="font-bold">{KOREAN_LABELS[i]}.</span> {opt}
+                                                      <span className="font-bold">{KOREAN_LABELS[i]}.</span> {renderInlineMarkdown(opt)}
                                                     </p>
                                                   ))}
                                                 </div>
@@ -298,7 +299,7 @@ export default function ResultStage({
                                                     >
                                                       <div className="flex items-center justify-between">
                                                         <span className="flex-1">
-                                                          {optIdx + 1}. {opt}
+                                                          {optIdx + 1}. {renderInlineMarkdown(opt)}
                                                           {isMultipleAnswer && isCorrectOption && ' (정답)'}
                                                           {isMultipleAnswer && isUserAnswer && ' (내 선택)'}
                                                         </span>
@@ -512,7 +513,7 @@ export default function ResultStage({
                                 {/* 정적 보기 항목 — 순서 고정 */}
                                 {item.subQuestionOptions.map((opt, i) => (
                                   <p key={`opt-${i}`} className="text-xs text-[#1A1A1A]">
-                                    <span className="font-bold">{KOREAN_LABELS[i]}.</span> {opt}
+                                    <span className="font-bold">{KOREAN_LABELS[i]}.</span> {renderInlineMarkdown(opt)}
                                   </p>
                                 ))}
                               </div>
@@ -603,7 +604,7 @@ export default function ResultStage({
                                   >
                                     <div className="flex items-center justify-between">
                                       <span className="flex-1">
-                                        {optIdx + 1}. {opt}
+                                        {optIdx + 1}. {renderInlineMarkdown(opt)}
                                         {isMultipleAnswer && isCorrectOption && ' (정답)'}
                                         {isMultipleAnswer && isUserAnswer && ' (내 선택)'}
                                       </span>

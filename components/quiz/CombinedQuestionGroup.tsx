@@ -6,6 +6,7 @@ import Image from 'next/image';
 import OXChoice, { OXAnswer } from './OXChoice';
 import MultipleChoice from './MultipleChoice';
 import ShortAnswer from './ShortAnswer';
+import { renderInlineMarkdown } from '@/lib/utils/renderInlineMarkdown';
 import { Question, LabeledItem } from './QuestionCard';
 import { formatChapterLabel } from '@/lib/courseIndex';
 import { FeedbackIcon, InlineFeedbackPanel } from '@/components/common/InlineFeedback';
@@ -458,7 +459,7 @@ export default function CombinedQuestionGroup({
                                     className="w-full px-3 py-2 flex items-center gap-2 text-left hover:bg-[#F5F0E8] transition-colors"
                                   >
                                     <span className="text-xs font-bold text-[#5C5C5C] flex-shrink-0">{cIdx + 1}번</span>
-                                    <span className="text-xs text-[#1A1A1A] flex-1 truncate">{choice}</span>
+                                    <span className="text-xs text-[#1A1A1A] flex-1 truncate">{renderInlineMarkdown(choice)}</span>
                                     <svg className={`w-3 h-3 text-[#5C5C5C] transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                     </svg>

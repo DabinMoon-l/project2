@@ -51,6 +51,7 @@ export default function MultipleChoiceEditor({
       <div className="flex items-center justify-between mb-2">
         <label className="text-xs font-bold text-[#1A1A1A]">
           선지 (정답 클릭) - {choices.length}개
+          <span className="ml-1 font-normal text-[#8A8578]">· *기울임*</span>
         </label>
         {/* 복수정답 토글 */}
         <button
