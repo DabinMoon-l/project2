@@ -527,7 +527,7 @@ export default function AnnouncementChannel({
                 transition={{ type: 'spring', damping: 28, stiffness: 300 }}
                 onClick={(e) => e.stopPropagation()}
                 className="relative w-full flex flex-col overflow-hidden rounded-t-2xl will-change-transform"
-                style={{ height: sheetTop > 0 ? `calc(100vh - ${sheetTop + 16 + bottomOffset}px)` : bottomOffset > 0 ? `calc(92vh - ${bottomOffset}px)` : '92vh' }}
+                style={{ height: sheetTop > 0 ? `calc(100dvh - ${sheetTop + 16 + bottomOffset}px)` : bottomOffset > 0 ? `calc(92dvh - ${bottomOffset}px)` : '92dvh' }}
               >
                 {/* ── 배경 이미지 (blur를 이미지에 직접 적용 — backdrop-blur보다 GPU 효율적) ── */}
                 <div className="absolute inset-0 rounded-t-2xl overflow-hidden">
