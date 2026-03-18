@@ -261,15 +261,22 @@ export default function ProfessorLibraryTab({
       // 메타 변경
       const descChanged = editedDescription !== (previewQuiz.description || '');
       const tagsChanged = JSON.stringify(editedTags) !== JSON.stringify(previewQuiz.tags || []);
-      const typeChanged = editType !== ((previewQuiz.type || (previewQuiz as ProfessorAiQuiz & { quizType?: string }).quizType || 'midterm') as 'midterm' | 'final' | 'past' | 'independent');
+      const PROF_TYPES = new Set(['midterm', 'final', 'past', 'professor', 'professor-ai', 'independent', 'ai-generated']);
+      const originalType = previewQuiz.type || (previewQuiz as ProfessorAiQuiz & { quizType?: string }).quizType || '';
+      // 원본이 교수 퀴즈 타입이 아니면 (custom 등) type 변경 방지
+      const typeChanged = PROF_TYPES.has(originalType)
+        ? editType !== originalType
+        : false;
       const diffChanged = editDifficulty !== ((previewQuiz.difficulty || 'normal') as 'easy' | 'normal' | 'hard');
       if (descChanged || tagsChanged || typeChanged || diffChanged) {
-        await updateMeta(previewQuiz.id, {
+        const metaUpdate: Record<string, unknown> = {
           description: editedDescription,
           tags: editedTags,
-          type: editType,
           difficulty: editDifficulty,
-        });
+        };
+        // type은 교수 퀴즈일 때만 변경
+        if (typeChanged) metaUpdate.type = editType;
+        await updateMeta(previewQuiz.id, metaUpdate as Parameters<typeof updateMeta>[1]);
       }
       // 문제 저장
       await updateQuestions(previewQuiz.id, flattenedQuestions);

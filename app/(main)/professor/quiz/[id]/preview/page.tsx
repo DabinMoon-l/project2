@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom';
 import { useRouter, useParams } from 'next/navigation';
 import { doc, getDoc, collection, query, where, getDocs, db } from '@/lib/repositories';
 import { callFunction } from '@/lib/api';
-import { useCourse } from '@/lib/contexts';
+import { useCourse, useUser } from '@/lib/contexts';
 import { formatChapterLabel, generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
@@ -207,6 +207,7 @@ export default function QuizPreviewPage() {
   const router = useRouter();
   const params = useParams();
   const { userCourseId } = useCourse();
+  const { profile } = useUser();
   const quizId = params.id as string;
 
   const [quizTitle, setQuizTitle] = useState('');
@@ -222,6 +223,13 @@ export default function QuizPreviewPage() {
   // 수정 모드 상태
   const [isEditMode, setIsEditMode] = useState(false);
   const [rawQuizData, setRawQuizData] = useState<RawQuizData | null>(null);
+
+  // 퀴즈 소유자 여부 (본인 퀴즈만 수정/삭제 가능)
+  const isOwner = useMemo(() => {
+    if (!profile?.uid || !rawQuizData) return false;
+    return (rawQuizData as Record<string, unknown>).creatorId === profile.uid
+      || (rawQuizData as Record<string, unknown>).creatorUid === profile.uid;
+  }, [profile?.uid, rawQuizData]);
   const [editableQuestions, setEditableQuestions] = useState<QuestionData[]>([]);
   const [originalQuestions, setOriginalQuestions] = useState<RawQuestion[]>([]);
   const [editTitle, setEditTitle] = useState('');
@@ -243,6 +251,7 @@ export default function QuizPreviewPage() {
   }>>(new Map());
 
   const { updateQuiz, deleteQuiz, clearError } = useProfessorQuiz();
+  const originalTypeRef = useRef('');
 
   // 삭제 모달 상태
   const [deleteTarget, setDeleteTarget] = useState<{ title: string; questionCount: number; participantCount: number } | null>(null);
@@ -473,9 +482,11 @@ export default function QuizPreviewPage() {
     setEditableQuestions(converted);
     setOriginalQuestions(rawQuizData.questions || []);
     setEditTitle(rawQuizData.title || '');
-    // professor/professor-ai 등 비표준 타입은 midterm으로 기본 매핑
+    // 타입 매핑 — 유효한 교수 퀴즈 타입이면 유지, 아니면 type 변경하지 않도록 원본 저장
     const validTypes = ['midterm', 'final', 'past', 'independent'];
     setEditType(rawQuizData.type && validTypes.includes(rawQuizData.type) ? rawQuizData.type as 'midterm' | 'final' | 'past' | 'independent' : 'midterm');
+    // 원본 type 저장 (저장 시 비교용)
+    originalTypeRef.current = rawQuizData.type || '';
     setEditDifficulty((rawQuizData.difficulty as 'easy' | 'normal' | 'hard') || 'normal');
     setEditTags(rawQuizData.tags || []);
     setEditDescription(rawQuizData.description || '');
@@ -500,11 +511,15 @@ export default function QuizPreviewPage() {
 
       // 재시험 모드면 questionUpdatedAt 설정, 아니면 설정 안 함
       const flattenedQuestions = flattenQuestionsForSave(editableQuestions, originalQuestions, { trackChanges: true, useQuestionUpdatedAt: requireRetest });
+      // 원본 type이 유효한 교수 퀴즈 타입이 아니면 (ai-generated, custom 등) type 변경 방지
+      const EDITABLE_TYPES = new Set(['midterm', 'final', 'past', 'independent']);
+      const shouldUpdateType = EDITABLE_TYPES.has(originalTypeRef.current);
+
       const quizInput: Partial<QuizInput> = {
         title: editTitle,
         description: editDescription,
         difficulty: editDifficulty,
-        quizType: editType,
+        ...(shouldUpdateType ? { quizType: editType } : {}),
         tags: editTags,
         questions: flattenedQuestions,
       };
@@ -635,11 +650,15 @@ export default function QuizPreviewPage() {
       // 재시험 모드면 questionUpdatedAt 설정, 아니면 설정 안 함
       const flattenedQuestions = flattenQuestionsForSave(editableQuestions, originalQuestions, { trackChanges: true, useQuestionUpdatedAt: requireRetest });
 
+      // 원본 type이 유효한 교수 퀴즈 타입이 아니면 (ai-generated, custom 등) type 변경 방지
+      const EDITABLE_TYPES = new Set(['midterm', 'final', 'past', 'independent']);
+      const shouldUpdateType = EDITABLE_TYPES.has(originalTypeRef.current);
+
       const quizInput: Partial<QuizInput> = {
         title: editTitle,
         description: editDescription,
         difficulty: editDifficulty,
-        quizType: editType,
+        ...(shouldUpdateType ? { quizType: editType } : {}),
         tags: editTags,
         questions: flattenedQuestions,
       };
@@ -1035,8 +1054,8 @@ export default function QuizPreviewPage() {
             {isEditMode ? '퀴즈 수정' : '문제 미리보기'}
           </h1>
           <div className="flex items-center">
-            {/* 삭제 버튼 — 수정 모드가 아닐 때만 표시 */}
-            {!isEditMode && (
+            {/* 삭제 버튼 — 본인 퀴즈 + 수정 모드 아닐 때만 표시 */}
+            {isOwner && !isEditMode && (
               <button
                 onClick={() => setDeleteTarget({
                   title: quizTitle,
@@ -1051,18 +1070,20 @@ export default function QuizPreviewPage() {
                 </svg>
               </button>
             )}
-            {/* 수정 버튼 */}
-            <button
-              onClick={toggleEditMode}
-              className={`w-10 h-10 flex items-center justify-center transition-colors ${
-                isEditMode ? 'text-[#8B1A1A]' : 'text-[#5C5C5C] hover:text-[#1A1A1A]'
-              }`}
-              aria-label={isEditMode ? '수정 모드 해제' : '수정 모드'}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
-            </button>
+            {/* 수정 버튼 — 본인 퀴즈만 표시 */}
+            {isOwner && (
+              <button
+                onClick={toggleEditMode}
+                className={`w-10 h-10 flex items-center justify-center transition-colors ${
+                  isEditMode ? 'text-[#8B1A1A]' : 'text-[#5C5C5C] hover:text-[#1A1A1A]'
+                }`}
+                aria-label={isEditMode ? '수정 모드 해제' : '수정 모드'}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
       </header>
