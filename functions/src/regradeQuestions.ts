@@ -27,10 +27,10 @@ function restoreUserAnswer(
     // "O" → 0, "X" → 1
     return userAnswerStr === "O" ? 0 : 1;
   } else if (questionType === "multiple") {
-    // "1" → 0, "1,3" → [0, 2] (1-indexed → 0-indexed)
+    // gradeQuestion이 저장하는 userAnswerStr은 이미 0-indexed ("0", "2", "0,2" 등)
     const parts = userAnswerStr
       .split(",")
-      .map((s) => parseInt(s.trim()) - 1);
+      .map((s) => parseInt(s.trim()));
     return parts.length === 1 ? parts[0] : parts;
   }
   // short_answer 등은 문자열 그대로

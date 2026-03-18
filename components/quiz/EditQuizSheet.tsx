@@ -177,10 +177,37 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
                   } else if (sq.answer >= 0) {
                     answerIndex = sq.answer;
                   }
+                } else if (typeof sq.answer === 'string') {
+                  // AI 생성 등에서 문자열로 저장된 경우 ("2", "0,2")
+                  if (sq.answer.includes(',')) {
+                    const parsed = sq.answer.split(',').map((s: string) => parseInt(s.trim(), 10)).filter((n: number) => !isNaN(n));
+                    if (parsed.length > 1) {
+                      answerIndices = parsed;
+                      isMultipleAnswer = true;
+                      answerIndex = parsed[0];
+                    } else if (parsed.length === 1) {
+                      answerIndex = parsed[0];
+                    }
+                  } else {
+                    const parsed = parseInt(sq.answer, 10);
+                    if (!isNaN(parsed)) {
+                      const sqChoiceCount = (sq.choices || []).length || 4;
+                      answerIndex = parsed >= sqChoiceCount ? parsed - 1 : parsed;
+                    }
+                  }
                 }
-              } else if (sq.type === 'ox' && typeof sq.answer === 'number') {
-                answerIndex = sq.answer;
+              } else if (sq.type === 'ox') {
+                if (typeof sq.answer === 'number') {
+                  answerIndex = sq.answer;
+                } else if (typeof sq.answer === 'string') {
+                  const upper = sq.answer.toUpperCase();
+                  answerIndex = (upper === 'O' || upper === '0') ? 0 : 1;
+                }
               }
+
+              // 객관식/OX의 문자열 answer는 answerIndex로 변환 완료
+              const sqAnswerText = (sq.type !== 'multiple' && sq.type !== 'ox' && typeof sq.answer === 'string')
+                ? sq.answer : undefined;
 
               return {
                 id: sq.id || `${q.combinedGroupId}_${sq.combinedIndex || 0}`,
@@ -190,7 +217,7 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
                 answerIndex: sq.type === 'multiple' || sq.type === 'ox' ? answerIndex : undefined,
                 answerIndices: isMultipleAnswer ? answerIndices : undefined,
                 isMultipleAnswer: isMultipleAnswer || undefined,
-                answerText: typeof sq.answer === 'string' ? sq.answer : undefined,
+                answerText: sqAnswerText,
                 explanation: sq.explanation || undefined,
                 mixedExamples: (sq.mixedExamples || sq.examples || undefined) as MixedExampleBlock[] | undefined,
                 image: sq.imageUrl || undefined,
@@ -237,12 +264,38 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
                 } else if (q.answer >= 0) {
                   answerIndex = q.answer;
                 }
+              } else if (typeof q.answer === 'string') {
+                // AI 생성 등에서 문자열로 저장된 경우 ("2", "0,2")
+                if (q.answer.includes(',')) {
+                  const parsed = q.answer.split(',').map((s: string) => parseInt(s.trim(), 10)).filter((n: number) => !isNaN(n));
+                  if (parsed.length > 1) {
+                    answerIndices = parsed;
+                    isMultipleAnswer = true;
+                    answerIndex = parsed[0];
+                  } else if (parsed.length === 1) {
+                    answerIndex = parsed[0];
+                  }
+                } else {
+                  const parsed = parseInt(q.answer, 10);
+                  if (!isNaN(parsed)) {
+                    const qChoiceCount = (q.choices || []).length || 4;
+                    answerIndex = parsed >= qChoiceCount ? parsed - 1 : parsed;
+                  }
+                }
               }
-            } else if (q.type === 'ox' && typeof q.answer === 'number') {
-              answerIndex = q.answer;
+            } else if (q.type === 'ox') {
+              if (typeof q.answer === 'number') {
+                answerIndex = q.answer;
+              } else if (typeof q.answer === 'string') {
+                const upper = q.answer.toUpperCase();
+                answerIndex = (upper === 'O' || upper === '0') ? 0 : 1;
+              }
             }
 
             const questionType = (q.type || 'multiple') as QuestionData['type'];
+            // 객관식/OX의 문자열 answer는 answerIndex로 변환 완료 → answerText는 주관식/단답용만
+            const answerText = (q.type !== 'multiple' && q.type !== 'ox' && typeof q.answer === 'string')
+              ? q.answer : '';
             loadedQuestions.push({
               id: q.id || `q_${index}`,
               text: q.text || '',
@@ -251,7 +304,7 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
               answerIndex,
               answerIndices: isMultipleAnswer ? answerIndices : undefined,
               isMultipleAnswer: isMultipleAnswer || undefined,
-              answerText: typeof q.answer === 'string' ? q.answer : '',
+              answerText,
               explanation: q.explanation || '',
               imageUrl: q.imageUrl || null,
               examples: (q.examples || null) as QuestionData['examples'],

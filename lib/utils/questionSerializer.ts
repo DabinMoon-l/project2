@@ -31,12 +31,24 @@ export function isQuestionChanged(original: AnyValue | undefined, current: Quest
   if (current.type === 'subjective' || current.type === 'short_answer') {
     if ((original.answer?.toString() || '') !== (current.answerText || '')) return true;
   } else if (current.type === 'multiple') {
-    const origNum = parseInt(String(original.answer), 10);
-    if (!isNaN(origNum)) {
-      const choiceCount = (original.choices || []).length || 4;
-      const origAnswer = origNum >= choiceCount ? origNum - 1 : origNum;
-      if (origAnswer !== current.answerIndex) return true;
-    } else if (current.answerIndex !== -1) return true;
+    if (Array.isArray(original.answer)) {
+      // 복수정답: 배열 비교
+      const origSorted = [...original.answer].map(Number).sort();
+      const currSorted = current.answerIndices ? [...current.answerIndices].sort() : [current.answerIndex];
+      if (JSON.stringify(origSorted) !== JSON.stringify(currSorted)) return true;
+    } else if (typeof original.answer === 'string' && original.answer.includes(',')) {
+      // 복수정답 문자열 ("0,2")
+      const origSorted = original.answer.split(',').map((s: string) => parseInt(s.trim(), 10)).sort();
+      const currSorted = current.answerIndices ? [...current.answerIndices].sort() : [current.answerIndex];
+      if (JSON.stringify(origSorted) !== JSON.stringify(currSorted)) return true;
+    } else {
+      const origNum = parseInt(String(original.answer), 10);
+      if (!isNaN(origNum)) {
+        const choiceCount = (original.choices || []).length || 4;
+        const origAnswer = origNum >= choiceCount ? origNum - 1 : origNum;
+        if (origAnswer !== current.answerIndex) return true;
+      } else if (current.answerIndex !== -1) return true;
+    }
   } else if (current.type === 'ox') {
     if (normalizeOx(original.answer) !== normalizeOx(current.answerIndex)) return true;
   } else {
@@ -69,12 +81,22 @@ export function isQuestionChangedForSubQuestion(original: AnyValue, current: Sub
   if (current.type === 'subjective' || current.type === 'short_answer') {
     if (original.answer !== (current.answerText || '')) return true;
   } else if (current.type === 'multiple') {
-    const origNum = parseInt(String(original.answer), 10);
-    if (!isNaN(origNum)) {
-      const choiceCount = (original.choices || []).length || 4;
-      const origAnswer = origNum >= choiceCount ? origNum - 1 : origNum;
-      if (origAnswer !== (current.answerIndex ?? -1)) return true;
-    } else if ((current.answerIndex ?? -1) !== -1) return true;
+    if (Array.isArray(original.answer)) {
+      const origSorted = [...original.answer].map(Number).sort();
+      const currSorted = current.answerIndices ? [...current.answerIndices].sort() : [current.answerIndex ?? -1];
+      if (JSON.stringify(origSorted) !== JSON.stringify(currSorted)) return true;
+    } else if (typeof original.answer === 'string' && original.answer.includes(',')) {
+      const origSorted = original.answer.split(',').map((s: string) => parseInt(s.trim(), 10)).sort();
+      const currSorted = current.answerIndices ? [...current.answerIndices].sort() : [current.answerIndex ?? -1];
+      if (JSON.stringify(origSorted) !== JSON.stringify(currSorted)) return true;
+    } else {
+      const origNum = parseInt(String(original.answer), 10);
+      if (!isNaN(origNum)) {
+        const choiceCount = (original.choices || []).length || 4;
+        const origAnswer = origNum >= choiceCount ? origNum - 1 : origNum;
+        if (origAnswer !== (current.answerIndex ?? -1)) return true;
+      } else if ((current.answerIndex ?? -1) !== -1) return true;
+    }
   } else if (current.type === 'ox') {
     if (normalizeOx(original.answer) !== normalizeOx(current.answerIndex ?? 0)) return true;
   }

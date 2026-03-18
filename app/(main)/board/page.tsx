@@ -855,43 +855,18 @@ export default function BoardPage() {
             교수님 픽
           </button>
 
-          {/* 검색창 (태그 미선택 시만 표시) */}
-          {selectedTags.length === 0 && (
-            <div className="flex-1 min-w-0">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="제목 검색..."
-                className="w-full px-2.5 py-2 text-xs outline-none"
-                style={{ border: '1px solid #1A1A1A', backgroundColor: '#F5F0E8' }}
-              />
-            </div>
-          )}
+          {/* 검색창 */}
+          <div className="flex-1 min-w-0">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="제목 검색..."
+              className="w-full px-2.5 py-2 text-xs outline-none"
+              style={{ border: '1px solid #1A1A1A', backgroundColor: '#F5F0E8' }}
+            />
+          </div>
 
-          {/* 선택된 태그 칩 (태그 아이콘 왼쪽에 표시) */}
-          {selectedTags.length > 0 && (
-            <div className="flex-1 flex items-center justify-end gap-1.5">
-              {selectedTags.map((tag) => (
-                <div
-                  key={tag}
-                  className="flex items-center gap-0.5 px-1.5 h-9 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold border border-[#1A1A1A] shrink-0"
-                >
-                  #{tag}
-                  <button
-                    onClick={() => {
-                      setSelectedTags(prev => prev.filter(t => t !== tag));
-                    }}
-                    className="ml-0.5 hover:text-[#999]"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* 태그 필터 토글 버튼 */}
           <button
             type="button"
             onClick={() => setShowTagFilter(!showTagFilter)}
@@ -906,6 +881,28 @@ export default function BoardPage() {
             </svg>
           </button>
         </div>
+
+        {/* 선택된 태그 칩 (줄바꿈, 우측 정렬) */}
+        {selectedTags.length > 0 && (
+          <div className="flex flex-wrap justify-end gap-1.5 mt-2">
+            {selectedTags.map((tag) => (
+              <div
+                key={tag}
+                className="flex items-center gap-0.5 px-1.5 h-9 bg-[#1A1A1A] text-[#F5F0E8] text-xs font-bold border border-[#1A1A1A]"
+              >
+                #{tag}
+                <button
+                  onClick={() => {
+                    setSelectedTags(prev => prev.filter(t => t !== tag));
+                  }}
+                  className="ml-0.5 hover:text-[#999]"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* 태그 필터 확장 패널 */}
         <AnimatePresence>
