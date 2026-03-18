@@ -5,6 +5,9 @@
  * body를 position: fixed로 고정하고 스크롤 위치를 보존하는 방식 사용.
  *
  * 여러 모달/바텀시트가 동시에 열려도 마지막이 닫힐 때까지 스크롤 잠금 유지.
+ *
+ * ⚠️ iOS PWA safe area 보존: position: fixed 시 bottom: 0 + height: 100%를
+ *    설정해 home indicator 영역까지 body가 커버하도록 함.
  */
 
 let lockCount = 0;
@@ -18,6 +21,7 @@ export function lockScroll() {
     document.body.style.top = `-${savedScrollY}px`;
     document.body.style.left = '0';
     document.body.style.right = '0';
+    document.body.style.bottom = '0';
     document.body.style.overflow = 'hidden';
   }
 }
@@ -29,6 +33,7 @@ export function unlockScroll() {
     document.body.style.top = '';
     document.body.style.left = '';
     document.body.style.right = '';
+    document.body.style.bottom = '';
     document.body.style.overflow = '';
     window.scrollTo(0, savedScrollY);
   }

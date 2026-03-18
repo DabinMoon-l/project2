@@ -52,7 +52,7 @@ export default function ResultStage({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       className="fixed inset-0 z-[60] overflow-y-auto overscroll-contain"
-      style={{ backgroundColor: '#F5F0E8' }}
+      style={{ backgroundColor: '#F5F0E8', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
       {/* 헤더 */}
       <header className="sticky top-0 z-50 border-b-2 border-[#1A1A1A] bg-[#F5F0E8]">

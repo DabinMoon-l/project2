@@ -216,6 +216,7 @@ export default function BottomSheet({
               focus:outline-none
               ${heightStyles[height]}
             `}
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
           >
             {/* 드래그 핸들 */}
             {enableDrag && (

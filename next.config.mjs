@@ -97,14 +97,15 @@ const pwaConfig = withPWA({
       urlPattern: /\.(?:mp4|webm|ogg)$/i,
       handler: "NetworkOnly",
     },
-    // Next.js 페이지 네비게이션 — 항상 네트워크 우선 (stale HTML/RSC 방지)
+    // Next.js 페이지 네비게이션 — 네트워크 우선 (stale HTML/RSC 방지)
+    // ⚠️ networkTimeoutSeconds 제거: 타임아웃이 짧으면 캐시에 없는 페이지에서 무한 로딩 발생
+    //    네트워크 실패 시에만 캐시 폴백, 느린 네트워크에서는 응답을 기다림
     {
       urlPattern: /^\/_next\/data\/.+\.json$/i,
       handler: "NetworkFirst",
       options: {
         cacheName: "next-data",
         expiration: { maxEntries: 32, maxAgeSeconds: 60 * 60 },
-        networkTimeoutSeconds: 5,
       },
     },
     // Next.js RSC 페이로드 — 네트워크 우선
@@ -114,7 +115,6 @@ const pwaConfig = withPWA({
       options: {
         cacheName: "next-rsc",
         expiration: { maxEntries: 32, maxAgeSeconds: 60 * 60 },
-        networkTimeoutSeconds: 5,
       },
     },
     // HTML 페이지 — 네트워크 우선 (배포 후 stale 페이지 방지)
@@ -124,7 +124,6 @@ const pwaConfig = withPWA({
       options: {
         cacheName: "pages",
         expiration: { maxEntries: 50, maxAgeSeconds: 24 * 60 * 60 },
-        networkTimeoutSeconds: 5,
       },
     },
     // 기본 캐싱 규칙 (비디오 CacheFirst 제거)

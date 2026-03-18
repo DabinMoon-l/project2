@@ -64,7 +64,7 @@ export default function PracticeStage({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-[60] flex flex-col"
-      style={{ backgroundColor: '#F5F0E8' }}
+      style={{ backgroundColor: '#F5F0E8', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
       {/* 헤더 */}
       <header
@@ -741,7 +741,7 @@ export default function PracticeStage({
       {/* 하단 버튼 */}
       <div
         className="fixed bottom-0 right-0 p-4 border-t-2 border-[#1A1A1A]"
-        style={{ backgroundColor: '#F5F0E8', left: 'var(--detail-panel-left, 0)' }}
+        style={{ backgroundColor: '#F5F0E8', left: 'var(--detail-panel-left, 0)', paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
       >
         <div className="flex gap-3">
           {currentIndex > 0 && (
