@@ -247,6 +247,66 @@ OCR 텍스트:
 `;
 
 // ============================================================
+// 잘린 JSON 복구 유틸
+// ============================================================
+
+/**
+ * 토큰 초과로 잘린 JSON에서 완전한 문제들만 추출
+ * "questions": [...{완전한 문제}, {잘린 문제 ← 버림]
+ */
+function recoverTruncatedJson(
+  text: string
+): Record<string, unknown> | Record<string, unknown>[] | null {
+  try {
+    // questions 배열의 시작 위치 찾기
+    const questionsStart = text.indexOf('"questions"');
+    const arrayStart = questionsStart !== -1
+      ? text.indexOf("[", questionsStart)
+      : text.indexOf("[");
+
+    if (arrayStart === -1) return null;
+
+    // 마지막으로 완성된 객체(}의 위치)를 역순으로 찾기
+    // }, 또는 }\n 패턴을 찾아서 배열을 닫음
+    let lastCompleteObj = -1;
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+
+    for (let i = arrayStart + 1; i < text.length; i++) {
+      const ch = text[i];
+      if (escaped) { escaped = false; continue; }
+      if (ch === "\\") { escaped = true; continue; }
+      if (ch === '"') { inString = !inString; continue; }
+      if (inString) continue;
+      if (ch === "{") depth++;
+      if (ch === "}") {
+        depth--;
+        if (depth === 0) lastCompleteObj = i;
+      }
+    }
+
+    if (lastCompleteObj === -1) return null;
+
+    // 배열을 닫아서 파싱
+    const fixedArray = text.substring(arrayStart, lastCompleteObj + 1) + "]";
+    const questions = JSON.parse(fixedArray);
+
+    if (!Array.isArray(questions) || questions.length === 0) return null;
+
+    console.log(`[Preprocess] 잘림 복구: ${questions.length}개 문제 추출`);
+
+    // questions 배열이 { "questions": [...] } 안에 있었으면 감싸서 반환
+    if (questionsStart !== -1) {
+      return { questions };
+    }
+    return questions;
+  } catch {
+    return null;
+  }
+}
+
+// ============================================================
 // Gemini API 호출
 // ============================================================
 
@@ -271,7 +331,7 @@ export async function preprocessOcrText(
       temperature: 0.2,  // 낮은 온도로 일관성 유지
       topK: 40,
       topP: 0.95,
-      maxOutputTokens: 8192,
+      maxOutputTokens: 32768,
     },
   };
 
@@ -350,27 +410,34 @@ export async function preprocessOcrText(
       console.log("[Preprocess] 중괄호로 추출됨, 길이:", jsonText.length);
     }
 
-    // 3. JSON 파싱 시도
+    // 3. JSON 파싱 시도 (잘림 복구 포함)
     let parsed: Record<string, unknown> | Record<string, unknown>[];
     try {
       parsed = JSON.parse(jsonText);
     } catch (parseError: unknown) {
-      // 더 자세한 에러 정보 포함
-      const parseMsg = parseError instanceof Error ? parseError.message : "";
-      const errorPos = parseInt(parseMsg.match(/position (\d+)/)?.[1] || "0");
-      const contextStart = Math.max(0, errorPos - 50);
-      const contextEnd = Math.min(jsonText.length, errorPos + 50);
-      const errorContext = jsonText.substring(contextStart, contextEnd);
+      // JSON 잘림 복구 시도 — 토큰 초과로 잘린 경우
+      console.warn("[Preprocess] JSON 파싱 실패, 잘림 복구 시도...");
+      const recovered = recoverTruncatedJson(jsonText);
+      if (recovered) {
+        console.log("[Preprocess] 잘림 복구 성공");
+        parsed = recovered;
+      } else {
+        const parseMsg = parseError instanceof Error ? parseError.message : "";
+        const errorPos = parseInt(parseMsg.match(/position (\d+)/)?.[1] || "0");
+        const contextStart = Math.max(0, errorPos - 50);
+        const contextEnd = Math.min(jsonText.length, errorPos + 50);
+        const errorContext = jsonText.substring(contextStart, contextEnd);
 
-      console.error("[Preprocess] JSON 파싱 실패:", parseMsg);
-      console.error("[Preprocess] 전체 길이:", jsonText.length);
-      console.error("[Preprocess] 에러 위치 주변:", errorContext);
+        console.error("[Preprocess] JSON 파싱 실패:", parseMsg);
+        console.error("[Preprocess] 전체 길이:", jsonText.length);
+        console.error("[Preprocess] 에러 위치 주변:", errorContext);
 
-      return {
-        success: false,
-        questions: [],
-        error: `JSON 파싱 실패 (길이:${jsonText.length}): 에러 위치(${errorPos}) 주변: ...${errorContext}...`,
-      };
+        return {
+          success: false,
+          questions: [],
+          error: `JSON 파싱 실패 (길이:${jsonText.length}): 에러 위치(${errorPos}) 주변: ...${errorContext}...`,
+        };
+      }
     }
 
     // 여러 형식 처리
