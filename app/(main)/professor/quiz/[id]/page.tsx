@@ -255,7 +255,7 @@ function QuestionAnalysis({
                             </p>
                           ))}
                           {child.type === 'image' && child.imageUrl && (
-                            <Image src={child.imageUrl} alt="보기 이미지" width={800} height={400} className="max-w-full h-auto rounded" unoptimized />
+                            <Image src={child.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto rounded" unoptimized />
                           )}
                         </div>
                       ))}
@@ -281,7 +281,7 @@ function QuestionAnalysis({
                   {/* 이미지 블록 */}
                   {block.type === 'image' && block.imageUrl && (
                     <div className="rounded-lg overflow-hidden">
-                      <Image src={block.imageUrl} alt="보기 이미지" width={800} height={400} className="max-w-full h-auto" unoptimized />
+                      <Image src={block.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto" unoptimized />
                     </div>
                   )}
                 </div>

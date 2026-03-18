@@ -230,7 +230,6 @@ export default function ResultStage({
                                           {/* 지문 - 혼합 형식 (mixedExamples) */}
                                           {subItem.mixedExamples && subItem.mixedExamples.length > 0 && (
                                             <div className="space-y-2">
-                                              <p className="text-xs font-bold text-[#8B6914]">지문</p>
                                               <MixedExamplesRenderer blocks={subItem.mixedExamples} spacing="loose" textSize="xs" blockWrapper="passage-accent" groupedBorderThick />
                                             </div>
                                           )}
@@ -238,7 +237,6 @@ export default function ResultStage({
                                           {/* 지문 - 레거시 형식 (subQuestionOptions) */}
                                           {!subItem.mixedExamples && subItem.subQuestionOptions && subItem.subQuestionOptions.length > 0 && (
                                             <div className="p-3 border border-[#8B6914] bg-[#FFF8E1]">
-                                              <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
                                               {subItem.subQuestionOptionsType === 'text' ? (
                                                 <p className="text-xs text-[#1A1A1A]">
                                                   {subItem.subQuestionOptions.join(', ')}
@@ -495,7 +493,6 @@ export default function ResultStage({
                         {/* 1. 지문 - 혼합 형식 (mixedExamples) - 이미지보다 먼저 */}
                         {item.mixedExamples && item.mixedExamples.length > 0 && (
                           <div className="space-y-2">
-                            <p className="text-xs font-bold text-[#8B6914]">지문</p>
                             <MixedExamplesRenderer blocks={item.mixedExamples} spacing="loose" textSize="xs" blockWrapper="passage-accent" groupedBorderThick />
                           </div>
                         )}
@@ -503,7 +500,6 @@ export default function ResultStage({
                         {/* 2. 지문 - 레거시 형식 (subQuestionOptions) */}
                         {!item.mixedExamples && item.subQuestionOptions && item.subQuestionOptions.length > 0 && (
                           <div className="p-3 border border-[#8B6914] bg-[#FFF8E1]">
-                            <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
                             {item.subQuestionOptionsType === 'text' ? (
                               <p className="text-xs text-[#1A1A1A]">
                                 {item.subQuestionOptions.join(', ')}
@@ -532,13 +528,12 @@ export default function ResultStage({
 
                         {/* 하위 문제 이미지 */}
                         {item.subQuestionImage && (
-                          <img src={item.subQuestionImage} alt="지문 이미지" className="max-w-full max-h-[200px] object-contain border border-[#1A1A1A]" />
+                          <img src={item.subQuestionImage} alt="" className="max-w-full max-h-[200px] object-contain border border-[#1A1A1A]" />
                         )}
 
                         {/* 4. 보기 (<보기> 박스) - 이미지 다음, 발문 전에 표시 */}
                         {item.bogi && item.bogi.items && item.bogi.items.some(i => i.content?.trim()) && (
                           <div className="p-2 bg-[#EDEAE4] border-2 border-[#1A1A1A]">
-                            <p className="text-[10px] text-center text-[#5C5C5C] mb-1.5 font-bold">&lt;보 기&gt;</p>
                             <div className="space-y-1">
                               {item.bogi.items.filter(i => i.content?.trim()).map((bogiItem) => (
                                 <p key={`bogi-${bogiItem.label}`} className="text-xs text-[#1A1A1A]">

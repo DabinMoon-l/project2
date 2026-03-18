@@ -672,7 +672,6 @@ export default function QuizPreviewPage() {
         {/* 묶은 보기 (grouped) */}
         {groupedBlocks.map((block: PreviewMixedBlock) => (
           <div key={block.id} className="mb-3 p-3 border-2 border-[#1A1A1A] bg-[#FFF8E1] rounded-lg">
-            <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
             <div className="space-y-1">
               {block.children?.map((child: PreviewMixedChild) => (
                 <div key={child.id}>
@@ -690,7 +689,7 @@ export default function QuizPreviewPage() {
                     </p>
                   ))}
                   {child.type === 'image' && child.imageUrl && (
-                    <Image src={child.imageUrl} alt="보기 이미지" width={800} height={400} className="max-w-full h-auto border border-[#1A1A1A] rounded-lg" unoptimized />
+                    <Image src={child.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto border border-[#1A1A1A] rounded-lg" unoptimized />
                   )}
                 </div>
               ))}
@@ -703,7 +702,6 @@ export default function QuizPreviewPage() {
           if (block.type === 'text' && block.content?.trim()) {
             return (
               <div key={block.id} className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-lg">
-                <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
                 <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{block.content}</p>
               </div>
             );
@@ -711,7 +709,6 @@ export default function QuizPreviewPage() {
           if (block.type === 'labeled') {
             return (
               <div key={block.id} className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-lg">
-                <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
                 <div className="space-y-1">
                   {(block.items || []).filter((i: PreviewLabeledItem) => i.content?.trim()).map((item: PreviewLabeledItem) => (
                     <p key={item.id} className="text-sm text-[#1A1A1A]">
@@ -725,7 +722,6 @@ export default function QuizPreviewPage() {
           if (block.type === 'gana') {
             return (
               <div key={block.id} className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-lg">
-                <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
                 <div className="space-y-1">
                   {(block.items || []).filter((i: PreviewLabeledItem) => i.content?.trim()).map((item: PreviewLabeledItem) => (
                     <p key={item.id} className="text-sm text-[#1A1A1A]">
@@ -742,7 +738,6 @@ export default function QuizPreviewPage() {
         {/* 레거시 보기 - 텍스트 */}
         {!hasMixedExamples && q.subQuestionOptions && q.subQuestionOptions.length > 0 && q.subQuestionOptionsType === 'text' && (
           <div className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-lg">
-            <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
             <p className="text-sm text-[#1A1A1A]">{q.subQuestionOptions.join(', ')}</p>
           </div>
         )}
@@ -750,7 +745,6 @@ export default function QuizPreviewPage() {
         {/* 레거시 보기 - ㄱㄴㄷ */}
         {!hasMixedExamples && q.subQuestionOptions && q.subQuestionOptions.length > 0 && q.subQuestionOptionsType === 'labeled' && (
           <div className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-lg">
-            <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
             <div className="space-y-1">
               {/* 정적 ㄱㄴㄷ 보기 — 순서 고정 */}
               {q.subQuestionOptions.map((itm, idx) => (
@@ -781,7 +775,6 @@ export default function QuizPreviewPage() {
         {/* 보기 (<보기> 박스) */}
         {q.bogi && q.bogi.items && q.bogi.items.some(i => i.content?.trim()) && (
           <div className="mb-3 p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A] rounded-lg">
-            <p className="text-xs text-center text-[#5C5C5C] mb-2 font-bold">&lt;보 기&gt;</p>
             <div className="space-y-1">
               {q.bogi.items.filter(i => i.content?.trim()).map((item) => (
                 <p key={`bogi-${item.label}`} className="text-sm text-[#1A1A1A]">

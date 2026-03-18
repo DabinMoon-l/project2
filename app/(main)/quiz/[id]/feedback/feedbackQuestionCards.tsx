@@ -54,7 +54,6 @@ export function SingleQuestionCard({
       {/* 1. 지문 - 혼합 형식 */}
       {question.mixedExamples && question.mixedExamples.length > 0 && (
         <div className="mb-4 space-y-2">
-          <p className="text-xs font-bold text-[#5C5C5C]">지문</p>
           <MixedExamplesRenderer blocks={question.mixedExamples} spacing="loose" textSize="xs" imageRenderer="next-image" blockWrapper="passage" groupedBorderThick />
         </div>
       )}
@@ -62,7 +61,6 @@ export function SingleQuestionCard({
       {/* 2. 지문 - 텍스트 형식 */}
       {!question.mixedExamples && question.subQuestionOptions && question.subQuestionOptions.length > 0 && question.subQuestionOptionsType === 'text' && (
         <div className="mb-4 p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
-          <p className="text-xs font-bold text-[#5C5C5C] mb-2">지문</p>
           <p className="text-[#1A1A1A] text-xs">
             {question.subQuestionOptions.join(', ')}
           </p>
@@ -72,7 +70,6 @@ export function SingleQuestionCard({
       {/* 3. 지문 - ㄱㄴㄷ 형식 */}
       {!question.mixedExamples && question.subQuestionOptions && question.subQuestionOptions.length > 0 && question.subQuestionOptionsType === 'labeled' && (
         <div className="mb-4 p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
-          <p className="text-xs font-bold text-[#5C5C5C] mb-2">지문</p>
           {/* 정적 ㄱㄴㄷ 보기 — 순서 고정 */}
           {question.subQuestionOptions.map((itm, idx) => (
             <p key={`kabc-${idx}`} className="text-[#1A1A1A] text-xs">
@@ -93,7 +90,6 @@ export function SingleQuestionCard({
       {/* 5. 보기 (<보기> 박스) - 이미지 다음, 발문 전에 표시 */}
       {question.bogi && question.bogi.items && question.bogi.items.some(i => i.content?.trim()) && (
         <div className="mb-4 p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A]">
-          <p className="text-xs text-center text-[#5C5C5C] mb-2 font-bold">&lt;보 기&gt;</p>
           <div className="space-y-1">
             {question.bogi.items.filter(i => i.content?.trim()).map((item) => (
               <p key={`bogi-${item.label}`} className="text-xs text-[#1A1A1A]">
@@ -362,7 +358,6 @@ export function CombinedQuestionCard({
         {/* 공통 지문 - ㄱㄴㄷ 형식 */}
         {group.passageType === 'korean_abc' && group.koreanAbcItems && group.koreanAbcItems.length > 0 && (
           <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A] mb-4 space-y-1">
-            <p className="text-xs text-[#5C5C5C] mb-2 font-bold">지문</p>
             {/* 정적 ㄱㄴㄷ 제시문 — 순서 고정 */}
             {group.koreanAbcItems.filter((i: string) => i.trim()).map((item: string, idx: number) => (
               <p key={`kabc-${idx}`} className="text-[#1A1A1A] text-xs">
@@ -449,7 +444,6 @@ export function CombinedQuestionCard({
             {/* 하위 문제 지문 - 혼합 형식 */}
             {question.mixedExamples && question.mixedExamples.length > 0 && (
               <div className="mb-4 space-y-2">
-                <p className="text-xs font-bold text-[#5C5C5C]">지문</p>
                 <MixedExamplesRenderer blocks={question.mixedExamples} spacing="loose" textSize="xs" imageRenderer="next-image" blockWrapper="passage" groupedBorderThick />
               </div>
             )}
@@ -457,7 +451,6 @@ export function CombinedQuestionCard({
             {/* 하위 문제 지문 - 텍스트 형식 */}
             {!question.mixedExamples && question.subQuestionOptions && question.subQuestionOptions.length > 0 && question.subQuestionOptionsType === 'text' && (
               <div className="mb-4 p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
-                <p className="text-xs font-bold text-[#5C5C5C] mb-2">지문</p>
                 <p className="text-[#1A1A1A] text-xs">
                   {question.subQuestionOptions.join(', ')}
                 </p>
@@ -467,7 +460,6 @@ export function CombinedQuestionCard({
             {/* 하위 문제 지문 - ㄱㄴㄷ 형식 */}
             {!question.mixedExamples && question.subQuestionOptions && question.subQuestionOptions.length > 0 && question.subQuestionOptionsType === 'labeled' && (
               <div className="mb-4 p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
-                <p className="text-xs font-bold text-[#5C5C5C] mb-2">지문</p>
                 {/* 정적 ㄱㄴㄷ 보기 — 순서 고정 */}
                 {question.subQuestionOptions.map((itm, idx) => (
                   <p key={`kabc-${idx}`} className="text-[#1A1A1A] text-xs">

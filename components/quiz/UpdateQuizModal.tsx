@@ -879,7 +879,6 @@ function QuestionExtras({ question: q }: { question: UpdatedQuestion }) {
       {/* 레거시 하위 문제 보기 */}
       {!(q.mixedExamples && q.mixedExamples.length > 0) && q.subQuestionOptions && q.subQuestionOptions.length > 0 && (
         <div className="p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-xl mb-3">
-          <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
           {q.subQuestionOptionsType === 'text' ? (
             <p className="text-sm text-[#1A1A1A]">{q.subQuestionOptions.join(', ')}</p>
           ) : (
@@ -903,14 +902,13 @@ function QuestionExtras({ question: q }: { question: UpdatedQuestion }) {
       {/* 하위 문제 이미지 */}
       {q.subQuestionImage && (
         <div className="mb-3">
-          <img src={q.subQuestionImage} alt="보기 이미지" className="max-w-full max-h-[300px] object-contain border border-[#1A1A1A] rounded-lg" />
+          <img src={q.subQuestionImage} alt="" className="max-w-full max-h-[300px] object-contain border border-[#1A1A1A] rounded-lg" />
         </div>
       )}
 
       {/* 보기 (<보기> 박스) */}
       {q.bogi && q.bogi.items && q.bogi.items.some(i => i.content?.trim()) && (
         <div className="mb-3 p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A] rounded-xl">
-          <p className="text-xs text-center text-[#5C5C5C] mb-2 font-bold">&lt;보 기&gt;</p>
           <div className="space-y-1">
             {q.bogi.items.filter(i => i.content?.trim()).map((bi) => (
               <p key={`bogi-${bi.label}`} className="text-sm text-[#1A1A1A]"><span className="font-bold mr-1">{bi.label}.</span>{bi.content}</p>
@@ -1097,14 +1095,13 @@ function QuestionResultCard({
       {/* 하위 문제 이미지 */}
       {r.subQuestionImage && (
         <div className="mb-2">
-          <img src={r.subQuestionImage} alt="보기 이미지" className="max-w-full max-h-[200px] object-contain border border-[#1A1A1A] rounded-lg" />
+          <img src={r.subQuestionImage} alt="" className="max-w-full max-h-[200px] object-contain border border-[#1A1A1A] rounded-lg" />
         </div>
       )}
 
       {/* 보기 박스 */}
       {r.bogi && r.bogi.items && r.bogi.items.some((i: { label: string; content: string }) => i.content?.trim()) && (
         <div className="mb-2 p-2 bg-[#EDEAE4] border border-[#1A1A1A] rounded-lg text-xs">
-          <p className="text-center text-[#5C5C5C] mb-1 font-bold">&lt;보 기&gt;</p>
           <div className="space-y-0.5">
             {r.bogi.items.filter((i: { label: string; content: string }) => i.content?.trim()).map((bi: { label: string; content: string }) => (
               <p key={`bogi-${bi.label}`} className="text-[#1A1A1A]"><span className="font-bold mr-1">{bi.label}.</span>{bi.content}</p>

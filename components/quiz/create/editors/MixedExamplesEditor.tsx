@@ -386,7 +386,7 @@ export default function MixedExamplesEditor({
                       </div>
                       <img
                         src={block.imageUrl}
-                        alt="보기 이미지"
+                        alt=""
                         className="max-h-32 object-contain border border-[#D4CFC4]"
                       />
                     </div>

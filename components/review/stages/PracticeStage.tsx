@@ -246,7 +246,6 @@ export default function PracticeStage({
                       {/* 지문 - 혼합 형식 (mixedExamples) */}
                       {subItem.mixedExamples && subItem.mixedExamples.length > 0 && (
                         <div className="space-y-2 mb-3">
-                          <p className="text-xs font-bold text-[#8B6914]">지문</p>
                           <MixedExamplesRenderer blocks={subItem.mixedExamples} spacing="loose" textSize="xs" blockWrapper="passage-accent" groupedBorderThick />
                         </div>
                       )}
@@ -254,7 +253,6 @@ export default function PracticeStage({
                       {/* 지문 - 레거시 형식 (subQuestionOptions) */}
                       {!subItem.mixedExamples && subItem.subQuestionOptions && subItem.subQuestionOptions.length > 0 && (
                         <div className="p-3 border border-[#8B6914] bg-[#FFF8E1] mb-3">
-                          <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
                           {subItem.subQuestionOptionsType === 'text' ? (
                             <p className="text-xs text-[#1A1A1A]">
                               {subItem.subQuestionOptions.join(', ')}
@@ -435,7 +433,6 @@ export default function PracticeStage({
                   {/* 지문 - 혼합 형식 (mixedExamples) */}
                   {currentItem.mixedExamples && currentItem.mixedExamples.length > 0 && (
                     <div className="mt-4 space-y-2">
-                      <p className="text-xs font-bold text-[#8B6914]">지문</p>
                       <MixedExamplesRenderer blocks={currentItem.mixedExamples} spacing="loose" textSize="xs" blockWrapper="passage-accent" groupedBorderThick />
                     </div>
                   )}
@@ -443,7 +440,6 @@ export default function PracticeStage({
                   {/* 지문 - 레거시 형식 (subQuestionOptions) */}
                   {!currentItem.mixedExamples && currentItem.subQuestionOptions && currentItem.subQuestionOptions.length > 0 && (
                     <div className="mt-4 p-3 border border-[#8B6914] bg-[#FFF8E1]">
-                      <p className="text-xs font-bold text-[#8B6914] mb-2">지문</p>
                       {currentItem.subQuestionOptionsType === 'text' ? (
                         <p className="text-xs text-[#1A1A1A]">
                           {currentItem.subQuestionOptions.join(', ')}

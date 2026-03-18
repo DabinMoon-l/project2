@@ -97,7 +97,7 @@ function RenderImage({
   return (
     <img
       src={src}
-      alt="지문 이미지"
+      alt=""
       className={`max-w-full h-auto ${hasBorder ? 'border border-[#1A1A1A]' : ''}`}
     />
   );

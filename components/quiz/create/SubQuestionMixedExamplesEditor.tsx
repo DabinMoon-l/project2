@@ -469,7 +469,7 @@ export default function SubQuestionMixedExamplesEditor({
                 </div>
                 <img
                   src={block.imageUrl}
-                  alt="보기 이미지"
+                  alt=""
                   className="max-h-32 object-contain border border-[#D4CFC4]"
                 />
               </div>
@@ -642,7 +642,7 @@ export default function SubQuestionMixedExamplesEditor({
                     </p>
                   ))}
                   {block.type === 'image' && block.imageUrl && (
-                    <img src={block.imageUrl} alt="보기 이미지" className="max-h-24 object-contain" />
+                    <img src={block.imageUrl} alt="" className="max-h-24 object-contain" />
                   )}
                   {block.type === 'grouped' && block.children && (
                     <div className="space-y-1">

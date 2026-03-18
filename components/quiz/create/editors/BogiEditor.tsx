@@ -201,7 +201,6 @@ export default function BogiEditor({ bogi, onBogiChange }: BogiEditorProps) {
                   <p className="text-sm text-[#1A1A1A] mb-2">{bogi.questionText}</p>
                 )}
                 <div className="border border-[#1A1A1A] bg-white p-2">
-                  <p className="text-xs text-center text-[#5C5C5C] mb-1">&lt;보 기&gt;</p>
                   {(bogi.items || []).filter(i => i.content?.trim()).map((item) => (
                     <p key={item.id} className="text-sm text-[#1A1A1A]">
                       <span className="font-bold">{item.label}.</span> {item.content}

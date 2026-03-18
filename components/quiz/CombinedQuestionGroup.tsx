@@ -121,7 +121,6 @@ export default function CombinedQuestionGroup({
         {/* 공통 지문 - ㄱㄴㄷ 형식 */}
         {passageType === 'korean_abc' && koreanAbcItems && koreanAbcItems.length > 0 && (
           <div className="p-4 bg-[#EDEAE4] border border-[#1A1A1A] mb-4 space-y-2">
-            <p className="text-xs text-[#5C5C5C] mb-2 font-bold">지문</p>
             {koreanAbcItems.filter((i: string) => i.trim()).map((item: string, idx: number) => (
               <p key={`label-${['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ'][idx]}`} className="text-[#1A1A1A] text-sm">
                 <span className="font-bold text-[#1A1A1A] mr-1">
@@ -241,7 +240,7 @@ export default function CombinedQuestionGroup({
                             </p>
                           ))}
                           {child.type === 'image' && child.imageUrl && (
-                            <img src={child.imageUrl} alt="보기 이미지" className="max-w-full h-auto border border-[#1A1A1A]" />
+                            <img src={child.imageUrl} alt="" className="max-w-full h-auto border border-[#1A1A1A]" />
                           )}
                         </div>
                       ))}
@@ -331,7 +330,6 @@ export default function CombinedQuestionGroup({
                   {/* 5. 보기 (<보기> 박스) - 이미지 다음, 발문 전에 표시 */}
                   {question.bogi && question.bogi.items && question.bogi.items.some((i: LabeledItem) => i.content?.trim()) && (
                     <div className="mb-4 p-4 bg-[#EDEAE4] border-2 border-[#1A1A1A]">
-                      <p className="text-xs text-center text-[#5C5C5C] mb-2 font-bold">&lt;보 기&gt;</p>
                       <div className="space-y-1">
                         {question.bogi.items.filter((i: LabeledItem) => i.content?.trim()).map((item: LabeledItem) => (
                           <p key={item.label} className="text-[#1A1A1A] text-sm">
