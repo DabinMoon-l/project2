@@ -42,6 +42,9 @@ interface RawQuestion {
   chapterId?: string;
   chapterDetailId?: string;
   questionUpdatedAt?: unknown;
+  passagePrompt?: string;
+  bogi?: { questionText?: string; items?: Array<{ id?: string; label: string; content: string }> } | null;
+  passageBlocks?: Array<{ id: string; type: string; content?: string; items?: Array<{ id: string; label: string; content: string }>; imageUrl?: string; children?: unknown[]; prompt?: string }>;
 }
 
 interface EditQuizSheetProps {
@@ -222,8 +225,8 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
                 mixedExamples: (sq.mixedExamples || sq.examples || undefined) as MixedExampleBlock[] | undefined,
                 image: sq.imageUrl || undefined,
                 passagePrompt: sq.passagePrompt || undefined,
-                bogi: sq.bogi || undefined,
-                passageBlocks: sq.passageBlocks || undefined,
+                bogi: (sq.bogi || undefined) as SubQuestion['bogi'],
+                passageBlocks: (sq.passageBlocks || undefined) as SubQuestion['passageBlocks'],
                 chapterId: sq.chapterId || undefined,
                 chapterDetailId: sq.chapterDetailId || undefined,
               };
@@ -313,8 +316,8 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
               examples: (q.examples || null) as QuestionData['examples'],
               mixedExamples: (q.mixedExamples || null) as QuestionData['mixedExamples'],
               passagePrompt: q.passagePrompt || undefined,
-              bogi: q.bogi || undefined,
-              passageBlocks: q.passageBlocks || undefined,
+              bogi: (q.bogi || undefined) as QuestionData['bogi'],
+              passageBlocks: (q.passageBlocks || undefined) as QuestionData['passageBlocks'],
               chapterId: q.chapterId || undefined,
               chapterDetailId: q.chapterDetailId || undefined,
             });

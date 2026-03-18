@@ -58,6 +58,25 @@ export default function ReviewPractice({
   // 선지별 해설 펼침 상태 (문제인덱스-선지인덱스 조합)
   const [expandedChoiceExplanations, setExpandedChoiceExplanations] = useState<Set<string>>(new Set());
 
+  // 결과 화면 진입 시 정답 선지 해설 기본 열림
+  useEffect(() => {
+    if (phase !== 'result') return;
+    const defaultExpanded = new Set<string>();
+    items.forEach(item => {
+      if (item.type !== 'multiple' || !item.choiceExplanations?.some(e => e)) return;
+      const correctStr = item.correctAnswer?.toString() || '';
+      const correctIndices = correctStr.includes(',')
+        ? correctStr.split(',').map(s => parseInt(s.trim(), 10))
+        : [parseInt(correctStr, 10)];
+      correctIndices.forEach(idx => {
+        if (!isNaN(idx) && item.choiceExplanations?.[idx]) {
+          defaultExpanded.add(`result-${item.id}-${idx}`);
+        }
+      });
+    });
+    if (defaultExpanded.size > 0) setExpandedChoiceExplanations(defaultExpanded);
+  }, [phase, items]);
+
   // 피드백 화면 상태
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [newFolderName, setNewFolderName] = useState('');

@@ -58,6 +58,25 @@ export default function QuizResultPage() {
   // 선지별 해설 펼침 상태 (문제ID-선지인덱스 조합)
   const [expandedChoices, setExpandedChoices] = useState<Set<string>>(new Set());
 
+  // 선지별 해설이 있으면 정답 선지 아코디언 기본 열림
+  useEffect(() => {
+    if (!resultData?.questionResults) return;
+    const defaultExpanded = new Set<string>();
+    resultData.questionResults.forEach((r) => {
+      if (r.type !== 'multiple' || !r.choiceExplanations?.some(e => e)) return;
+      const correctStr = r.correctAnswer?.toString() || '';
+      const correctIndices = correctStr.includes(',')
+        ? correctStr.split(',').map(s => parseInt(s.trim(), 10))
+        : [parseInt(correctStr, 10)];
+      correctIndices.forEach(idx => {
+        if (!isNaN(idx) && r.choiceExplanations?.[idx]) {
+          defaultExpanded.add(`${r.id}-${idx}`);
+        }
+      });
+    });
+    if (defaultExpanded.size > 0) setExpandedChoices(defaultExpanded);
+  }, [resultData]);
+
   // 선지별 해설에서 "선지N 해설:" 접두사 제거
   const stripChoicePrefix = (text: string) =>
     text.replace(/^선지\s*\d+\s*해설\s*[:：]\s*/i, '');
