@@ -31,6 +31,7 @@ export { onQuizComplete, updateQuizStatistics, onQuizCreate, onQuizMakePublic } 
 // 퀴즈 제출 (서버 채점 + 분산 쓰기)
 // ============================================
 export { recordAttempt } from "./recordAttempt";
+export { initCreatorStats } from "./initCreatorStats";
 
 // ============================================
 // 퀴즈 재채점 Functions

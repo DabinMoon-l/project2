@@ -193,6 +193,10 @@ export interface CloudFunctionMap {
     input: { quizId: string; correctCount: number; totalCount: number; score: number };
     output: void;
   };
+  initCreatorStats: {
+    input: { quizId: string };
+    output: void;
+  };
   regradeQuestions: {
     input: { quizId: string; questionIds: string[] };
     output: void;
