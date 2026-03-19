@@ -9,6 +9,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { renderInlineMarkdown } from '@/lib/utils/renderInlineMarkdown';
 
 // 선지 번호 라벨 (최대 8개 지원)
 const choiceLabels = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧'];
@@ -64,7 +65,7 @@ export default function PreviewQuestionCard({
                 </span>
               )}
             </div>
-            <p className="text-xs text-[#1A1A1A]">{editData?.text ?? question.text}</p>
+            <p className="text-xs text-[#1A1A1A]">{renderInlineMarkdown(editData?.text ?? question.text ?? '')}</p>
           </div>
 
           {/* 확장 아이콘 */}
@@ -239,7 +240,7 @@ export default function PreviewQuestionCard({
                               />
                             ) : (
                               <span className="flex-1 text-xs leading-relaxed break-words">
-                                {choice}
+                                {renderInlineMarkdown(choice)}
                                 {Array.isArray(question.answer) && question.answer.length > 1 && isCorrectOption && (
                                   <span className="ml-1 font-bold">(정답)</span>
                                 )}
@@ -291,7 +292,7 @@ export default function PreviewQuestionCard({
                               <p className={`text-xs whitespace-pre-wrap ${
                                 isCorrectOption ? 'text-[#1A6B1A]' : 'text-[#5C5C5C]'
                               }`}>
-                                {choiceExp.replace(/^선지\d+\s*해설\s*[:：]\s*/i, '')}
+                                {renderInlineMarkdown(choiceExp.replace(/^선지\d+\s*해설\s*[:：]\s*/i, ''))}
                               </p>
                             </div>
                           ) : null}
@@ -338,7 +339,7 @@ export default function PreviewQuestionCard({
                 <div className="p-2 border border-[#1A1A1A] bg-[#F5F0E8]">
                   <p className="text-[10px] font-bold text-[#5C5C5C] mb-0.5">해설</p>
                   <p className="text-xs text-[#5C5C5C] whitespace-pre-wrap">
-                    {question.explanation}
+                    {renderInlineMarkdown(question.explanation || '')}
                   </p>
                 </div>
               ) : (

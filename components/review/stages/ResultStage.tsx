@@ -150,7 +150,7 @@ export default function ResultStage({
                           {(firstItem.passage || firstItem.passageImage || (firstItem.koreanAbcItems && firstItem.koreanAbcItems.length > 0) || (firstItem.passageMixedExamples && firstItem.passageMixedExamples.length > 0)) && (
                             <div className="p-2 border border-[#8B6914] bg-[#FFF8E1]">
                               {firstItem.passage && firstItem.passageType !== 'korean_abc' && firstItem.passageType !== 'mixed' && (
-                                <p className="text-xs text-[#1A1A1A]">{firstItem.passage}</p>
+                                <p className="text-xs text-[#1A1A1A]">{renderInlineMarkdown(firstItem.passage || '')}</p>
                               )}
                               {firstItem.passageType === 'korean_abc' && firstItem.koreanAbcItems && firstItem.koreanAbcItems.length > 0 && (
                                 <div className="space-y-1">
