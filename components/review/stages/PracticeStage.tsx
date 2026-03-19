@@ -148,7 +148,7 @@ export default function PracticeStage({
                   {/* 공통 문제 */}
                   {currentGroup.items[0]?.commonQuestion && (
                     <p className="text-[#1A1A1A] text-sm leading-relaxed whitespace-pre-wrap">
-                      {currentGroup.items[0].commonQuestion}
+                      {renderInlineMarkdown(currentGroup.items[0].commonQuestion || '')}
                     </p>
                   )}
 
@@ -156,7 +156,7 @@ export default function PracticeStage({
                   {(currentGroup.items[0]?.passage || currentGroup.items[0]?.koreanAbcItems || currentGroup.items[0]?.passageMixedExamples) && (
                     <div className={`p-3 border border-[#8B6914] bg-[#FFF8E1] ${currentGroup.items[0]?.commonQuestion ? 'mt-3' : ''}`}>
                       {currentGroup.items[0].passage && currentGroup.items[0].passageType !== 'korean_abc' && currentGroup.items[0].passageType !== 'mixed' && (
-                        <p className="text-xs text-[#1A1A1A]">{currentGroup.items[0].passage}</p>
+                        <p className="text-xs text-[#1A1A1A]">{renderInlineMarkdown(currentGroup.items[0].passage || '')}</p>
                       )}
                       {currentGroup.items[0].passageType === 'korean_abc' && currentGroup.items[0].koreanAbcItems && (
                         <div className="space-y-1">
@@ -229,7 +229,7 @@ export default function PracticeStage({
 
                       {/* 하위 문제 텍스트 */}
                       <p className="text-[#1A1A1A] text-sm leading-relaxed whitespace-pre-wrap mb-3">
-                        {subItem.question}
+                        {renderInlineMarkdown(subItem.question || '')}
                       </p>
 
                       {/* 하위 문제 이미지 */}

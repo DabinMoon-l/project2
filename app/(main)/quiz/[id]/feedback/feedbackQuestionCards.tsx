@@ -94,7 +94,7 @@ export function SingleQuestionCard({
             {question.bogi.items.filter(i => i.content?.trim()).map((item) => (
               <p key={`bogi-${item.label}`} className="text-xs text-[#1A1A1A]">
                 <span className="font-bold mr-1">{item.label}.</span>
-                {item.content}
+                {renderInlineMarkdown(item.content)}
               </p>
             ))}
           </div>

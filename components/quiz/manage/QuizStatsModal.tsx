@@ -1128,14 +1128,6 @@ export default function QuizStatsModal({
                         className="h-full overflow-y-auto overflow-x-hidden scrollbar-hide overscroll-contain"
                         style={{ WebkitOverflowScrolling: 'touch' }}
                       >
-                      {/* 참여자가 없는 반일 경우 안내 */}
-                      {stats.participantCount === 0 && (
-                        <div className="px-3 pt-3 pb-1">
-                          <p className="text-xs text-[#5C5C5C] text-center">
-                            {classFilter === 'all' ? '아직 참여자가 없습니다.' : `${classFilter}반 참여자가 없습니다.`}
-                          </p>
-                        </div>
-                      )}
                       <div className="p-3 min-h-full flex flex-col justify-center items-stretch">
                         {/* 문제 헤더 */}
                         <div className="flex items-center justify-center gap-2 mb-2">

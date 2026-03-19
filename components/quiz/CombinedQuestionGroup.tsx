@@ -105,7 +105,7 @@ export default function CombinedQuestionGroup({
         {/* 공통 문제 (있는 경우) */}
         {commonQuestion && (
           <p className="text-[#1A1A1A] text-base leading-relaxed whitespace-pre-wrap mb-4">
-            {commonQuestion}
+            {renderInlineMarkdown(commonQuestion)}
           </p>
         )}
 
@@ -113,7 +113,7 @@ export default function CombinedQuestionGroup({
         {passage && (!passageType || passageType === 'text') && (
           <div className="p-4 bg-[#EDEAE4] border border-[#1A1A1A] mb-4">
             <p className="text-[#1A1A1A] text-sm leading-relaxed whitespace-pre-wrap">
-              {passage}
+              {renderInlineMarkdown(passage || '')}
             </p>
           </div>
         )}
@@ -207,7 +207,7 @@ export default function CombinedQuestionGroup({
 
             {/* 하위 문제 텍스트 */}
             <p className="text-[#1A1A1A] text-base leading-relaxed whitespace-pre-wrap mb-4">
-              {question.text}
+              {renderInlineMarkdown(question.text)}
             </p>
 
             {/* 보기 표시 순서: 묶은 보기 → 텍스트박스 단독 → ㄱ.ㄴ.ㄷ.형식 → (가)(나)(다)형식 → 이미지 */}
@@ -225,18 +225,18 @@ export default function CombinedQuestionGroup({
                       {block.children?.map((child) => (
                         <div key={child.id}>
                           {child.type === 'text' && child.content?.trim() && (
-                            <p className="text-[#5C5C5C] text-sm whitespace-pre-wrap">{child.content}</p>
+                            <p className="text-[#5C5C5C] text-sm whitespace-pre-wrap">{renderInlineMarkdown(child.content)}</p>
                           )}
                           {child.type === 'labeled' && (child.items || []).filter(i => i.content.trim()).map((item) => (
                             <p key={item.label} className="text-[#1A1A1A] text-sm">
                               <span className="font-bold mr-1">{item.label}.</span>
-                              {item.content}
+                              {renderInlineMarkdown(item.content)}
                             </p>
                           ))}
                           {child.type === 'gana' && (child.items || []).filter(i => i.content.trim()).map((item) => (
                             <p key={item.label} className="text-[#1A1A1A] text-sm">
                               <span className="font-bold mr-1">({item.label})</span>
-                              {item.content}
+                              {renderInlineMarkdown(item.content)}
                             </p>
                           ))}
                           {child.type === 'image' && child.imageUrl && (
@@ -252,7 +252,7 @@ export default function CombinedQuestionGroup({
                     if (block.type === 'text' && block.content?.trim()) {
                       return (
                         <div key={block.id} className="mb-4 p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
-                          <p className="text-[#1A1A1A] text-sm whitespace-pre-wrap">{block.content}</p>
+                          <p className="text-[#1A1A1A] text-sm whitespace-pre-wrap">{renderInlineMarkdown(block.content)}</p>
                         </div>
                       );
                     }
@@ -262,7 +262,7 @@ export default function CombinedQuestionGroup({
                           {(block.items || []).filter(i => i.content.trim()).map((item) => (
                             <p key={item.label} className="text-[#1A1A1A] text-sm">
                               <span className="font-bold mr-1">{item.label}.</span>
-                              {item.content}
+                              {renderInlineMarkdown(item.content)}
                             </p>
                           ))}
                         </div>
@@ -274,7 +274,7 @@ export default function CombinedQuestionGroup({
                           {(block.items || []).filter(i => i.content.trim()).map((item) => (
                             <p key={item.label} className="text-[#1A1A1A] text-sm">
                               <span className="font-bold mr-1">({item.label})</span>
-                              {item.content}
+                              {renderInlineMarkdown(item.content)}
                             </p>
                           ))}
                         </div>
@@ -334,7 +334,7 @@ export default function CombinedQuestionGroup({
                         {question.bogi.items.filter((i: LabeledItem) => i.content?.trim()).map((item: LabeledItem) => (
                           <p key={item.label} className="text-[#1A1A1A] text-sm">
                             <span className="font-bold mr-1">{item.label}.</span>
-                            {item.content}
+                            {renderInlineMarkdown(item.content)}
                           </p>
                         ))}
                       </div>
@@ -433,7 +433,7 @@ export default function CombinedQuestionGroup({
                           <div className="p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A]">
                             <p className="text-xs font-bold text-[#1A1A1A] mb-1">해설</p>
                             <p className="text-xs text-[#1A1A1A] leading-relaxed whitespace-pre-wrap">
-                              {question.explanation}
+                              {renderInlineMarkdown(question.explanation || '')}
                             </p>
                           </div>
                         )}
@@ -472,7 +472,7 @@ export default function CombinedQuestionGroup({
                                         className="overflow-hidden"
                                       >
                                         <p className="px-3 pb-2 text-xs text-[#5C5C5C] leading-relaxed whitespace-pre-wrap">
-                                          {expText}
+                                          {renderInlineMarkdown(expText)}
                                         </p>
                                       </motion.div>
                                     )}

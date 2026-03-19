@@ -4,6 +4,7 @@ import { memo } from 'react';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
 import { formatChapterLabel } from '@/lib/courseIndex';
+import { renderInlineMarkdown } from '@/lib/utils/renderInlineMarkdown';
 
 /**
  * 문제 타입
@@ -254,7 +255,7 @@ function QuestionCard({ question, courseId, headerRight }: QuestionCardProps) {
 
       {/* 문제 텍스트 */}
       <p className="text-[#1A1A1A] text-sm leading-relaxed whitespace-pre-wrap">
-        {question.text}
+        {renderInlineMarkdown(question.text)}
       </p>
 
       {/*
@@ -270,20 +271,20 @@ function QuestionCard({ question, courseId, headerRight }: QuestionCardProps) {
             {item.children?.filter(child => isValidMixedItem(child)).map((child) => (
               <div key={child.id}>
                 {child.type === 'text' && child.content && (
-                  <p className="text-[#5C5C5C] text-xs whitespace-pre-wrap">{child.content}</p>
+                  <p className="text-[#5C5C5C] text-xs whitespace-pre-wrap">{renderInlineMarkdown(child.content)}</p>
                 )}
                 {child.type === 'labeled' && (
                   <>
                     {child.content && (
                       <p className="text-[#1A1A1A] text-xs">
                         <span className="font-bold text-[#1A1A1A] mr-1">{child.label}.</span>
-                        {child.content}
+                        {renderInlineMarkdown(child.content)}
                       </p>
                     )}
                     {child.items && child.items.map((labeledItem) => (
                       <p key={`${child.id}-${labeledItem.label}`} className="text-[#1A1A1A] text-xs">
                         <span className="font-bold text-[#1A1A1A] mr-1">{labeledItem.label}.</span>
-                        {labeledItem.content}
+                        {renderInlineMarkdown(labeledItem.content)}
                       </p>
                     ))}
                   </>
@@ -293,13 +294,13 @@ function QuestionCard({ question, courseId, headerRight }: QuestionCardProps) {
                     {child.content && (
                       <p className="text-[#1A1A1A] text-xs">
                         <span className="font-bold text-[#1A1A1A] mr-1">({child.label})</span>
-                        {child.content}
+                        {renderInlineMarkdown(child.content)}
                       </p>
                     )}
                     {child.items && child.items.map((labeledItem) => (
                       <p key={`${child.id}-${labeledItem.label}`} className="text-[#1A1A1A] text-xs">
                         <span className="font-bold text-[#1A1A1A] mr-1">({labeledItem.label})</span>
-                        {labeledItem.content}
+                        {renderInlineMarkdown(labeledItem.content)}
                       </p>
                     ))}
                   </>
@@ -309,13 +310,13 @@ function QuestionCard({ question, courseId, headerRight }: QuestionCardProps) {
                     {child.content && (
                       <p className="text-[#1A1A1A] text-xs">
                         <span className="font-bold text-[#1A1A1A] mr-1">◦</span>
-                        {child.content}
+                        {renderInlineMarkdown(child.content)}
                       </p>
                     )}
                     {child.items && child.items.map((labeledItem, idx) => (
                       <p key={`${child.id}-bullet-${idx}`} className="text-[#1A1A1A] text-xs">
                         <span className="font-bold text-[#1A1A1A] mr-1">◦</span>
-                        {labeledItem.content}
+                        {renderInlineMarkdown(labeledItem.content)}
                       </p>
                     ))}
                   </>
@@ -341,7 +342,7 @@ function QuestionCard({ question, courseId, headerRight }: QuestionCardProps) {
           if (item.type === 'text') {
             return (
               <div key={item.id} className="mt-3 p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
-                <p className="text-[#1A1A1A] text-xs whitespace-pre-wrap">{item.content}</p>
+                <p className="text-[#1A1A1A] text-xs whitespace-pre-wrap">{renderInlineMarkdown(item.content || '')}</p>
               </div>
             );
           }
@@ -351,13 +352,13 @@ function QuestionCard({ question, courseId, headerRight }: QuestionCardProps) {
                 {item.content && (
                   <p className="text-[#1A1A1A] text-xs">
                     <span className="font-bold text-[#1A1A1A] mr-1">{item.label}.</span>
-                    {item.content}
+                    {renderInlineMarkdown(item.content)}
                   </p>
                 )}
                 {item.items && item.items.map((labeledItem) => (
                   <p key={`${item.id}-${labeledItem.label}`} className="text-[#1A1A1A] text-xs">
                     <span className="font-bold text-[#1A1A1A] mr-1">{labeledItem.label}.</span>
-                    {labeledItem.content}
+                    {renderInlineMarkdown(labeledItem.content)}
                   </p>
                 ))}
               </div>
@@ -369,13 +370,13 @@ function QuestionCard({ question, courseId, headerRight }: QuestionCardProps) {
                 {item.content && (
                   <p className="text-[#1A1A1A] text-xs">
                     <span className="font-bold text-[#1A1A1A] mr-1">({item.label})</span>
-                    {item.content}
+                    {renderInlineMarkdown(item.content)}
                   </p>
                 )}
                 {item.items && item.items.map((labeledItem) => (
                   <p key={`${item.id}-${labeledItem.label}`} className="text-[#1A1A1A] text-xs">
                     <span className="font-bold text-[#1A1A1A] mr-1">({labeledItem.label})</span>
-                    {labeledItem.content}
+                    {renderInlineMarkdown(labeledItem.content)}
                   </p>
                 ))}
               </div>
@@ -387,13 +388,13 @@ function QuestionCard({ question, courseId, headerRight }: QuestionCardProps) {
                 {item.content && (
                   <p className="text-[#1A1A1A] text-xs">
                     <span className="font-bold text-[#1A1A1A] mr-1">◦</span>
-                    {item.content}
+                    {renderInlineMarkdown(item.content)}
                   </p>
                 )}
                 {item.items && item.items.map((labeledItem, idx) => (
                   <p key={`${item.id}-bullet-${idx}`} className="text-[#1A1A1A] text-xs">
                     <span className="font-bold text-[#1A1A1A] mr-1">◦</span>
-                    {labeledItem.content}
+                    {renderInlineMarkdown(labeledItem.content)}
                   </p>
                 ))}
               </div>
@@ -456,7 +457,7 @@ function QuestionCard({ question, courseId, headerRight }: QuestionCardProps) {
               {question.bogi.items.filter(i => i.content?.trim()).map((item) => (
                 <p key={item.label} className="text-[#1A1A1A] text-sm">
                   <span className="font-bold mr-1">{item.label}.</span>
-                  {item.content}
+                  {renderInlineMarkdown(item.content)}
                 </p>
               ))}
             </div>
@@ -488,7 +489,7 @@ function QuestionCard({ question, courseId, headerRight }: QuestionCardProps) {
             <div className="p-3 bg-[#EDEAE4] border border-[#1A1A1A]">
               <p className="text-[10px] text-[#5C5C5C] mb-1.5 font-bold">공통 제시문</p>
               <p className="text-[#1A1A1A] text-sm leading-relaxed whitespace-pre-wrap">
-                {question.passage}
+                {renderInlineMarkdown(question.passage || '')}
               </p>
             </div>
           )}
