@@ -9,6 +9,7 @@
 
 import Image from 'next/image';
 import type { MixedExampleBlock, LabeledItem } from '@/components/quiz/create/questionTypes';
+import { renderInlineMarkdown } from '@/lib/utils/renderInlineMarkdown';
 
 // ─── 블록 호환 타입 (다양한 파일에서 사용하는 타입 통합) ───
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -158,7 +159,7 @@ function RenderBlock({
 
     const textColor = isChild ? 'text-[#5C5C5C]' : 'text-[#1A1A1A]';
     const inner = (
-      <p className={`${textSizeCls} ${textColor} whitespace-pre-wrap`}>{content}</p>
+      <p className={`${textSizeCls} ${textColor} whitespace-pre-wrap`}>{renderInlineMarkdown(content || '')}</p>
     );
 
     if (blockWrapper !== 'none' && !isChild) {
@@ -172,7 +173,7 @@ function RenderBlock({
     const inner = filteredItems.map((item) => (
       <p key={item.id} className={`${textSizeCls} text-[#1A1A1A]`}>
         <span className="font-bold mr-1">{item.label}.</span>
-        {item.content}
+        {renderInlineMarkdown(item.content)}
       </p>
     ));
 
@@ -187,7 +188,7 @@ function RenderBlock({
     const inner = filteredItems.map((item) => (
       <p key={item.id} className={`${textSizeCls} text-[#1A1A1A]`}>
         <span className="font-bold mr-1">({item.label})</span>
-        {item.content}
+        {renderInlineMarkdown(item.content)}
       </p>
     ));
 
@@ -202,7 +203,7 @@ function RenderBlock({
     const inner = filteredItems.map((item) => (
       <p key={item.id} className={`${textSizeCls} text-[#1A1A1A]`}>
         <span className="mr-1">&bull;</span>
-        {item.content}
+        {renderInlineMarkdown(item.content)}
       </p>
     ));
 

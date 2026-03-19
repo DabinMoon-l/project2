@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { renderInlineMarkdown } from '@/lib/utils/renderInlineMarkdown';
 
 /** 객관식 선지 에디터 Props */
 interface MultipleChoiceEditorProps {
@@ -51,7 +52,7 @@ export default function MultipleChoiceEditor({
       <div className="flex items-center justify-between mb-2">
         <label className="text-xs font-bold text-[#1A1A1A]">
           선지 (정답 클릭) - {choices.length}개
-          <span className="ml-1 font-normal text-[#8A8578]">· *기울임*</span>
+          <span className="ml-1 font-normal text-[#8A8578]">· *기울임* CO{'{2}'} ^위^</span>
         </label>
         {/* 복수정답 토글 */}
         <button
@@ -84,7 +85,7 @@ export default function MultipleChoiceEditor({
             : answerIndex === index;
 
           return (
-            <div key={`choice-${index}`} className="flex items-center gap-2">
+            <div key={`choice-${index}`} className="relative flex items-center gap-2 mb-1">
               {/* 정답 체크 버튼 */}
               <motion.button
                 type="button"
@@ -126,6 +127,13 @@ export default function MultipleChoiceEditor({
                   }
                 `}
               />
+
+              {/* 서식 미리보기 (*, {}, ^ 포함 시) */}
+              {choice && (/[*{^]/.test(choice)) && (
+                <div className="absolute left-10 right-10 -bottom-5 text-[10px] text-[#8A8578] truncate pointer-events-none">
+                  {renderInlineMarkdown(choice)}
+                </div>
+              )}
 
               {/* 선지 삭제 버튼 (2개 초과일 때만) */}
               {choices.length > 2 && (
