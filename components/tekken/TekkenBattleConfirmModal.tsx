@@ -128,10 +128,10 @@ export default function TekkenBattleConfirmModal({
 
   if (typeof window === 'undefined') return null;
 
-  // 항상 2슬롯 (빈 슬롯은 null)
+  // 1마리 이상이면 배틀 가능 (1마리일 때 같은 토끼가 로테이션)
   const slot0 = equippedRabbits[0] || null;
   const slot1 = equippedRabbits[1] || null;
-  const bothSlotsFilled = !!slot0 && !!slot1;
+  const canBattle = !!slot0;
 
   return createPortal(
     <AnimatePresence>
@@ -165,21 +165,27 @@ export default function TekkenBattleConfirmModal({
             {/* 토끼 라인업 */}
             <div className="flex items-start gap-8">
               <RabbitSlotCard slot={slot0} holdings={holdings} />
-              <RabbitSlotCard slot={slot1} holdings={holdings} />
+              {slot1 && <RabbitSlotCard slot={slot1} holdings={holdings} />}
             </div>
+            {/* 1마리 안내 */}
+            {slot0 && !slot1 && (
+              <p className="text-xs text-white/50 text-center">
+                같은 토끼가 2회 출전합니다
+              </p>
+            )}
 
             {/* 버튼 */}
             <div className="flex items-center gap-3 mt-2 w-full px-6">
               <motion.button
-                onClick={bothSlotsFilled ? onConfirm : undefined}
-                disabled={!bothSlotsFilled}
+                onClick={canBattle ? onConfirm : undefined}
+                disabled={!canBattle}
                 className={`flex-1 py-2.5 rounded-full font-black text-sm transition-transform ${
-                  bothSlotsFilled
+                  canBattle
                     ? 'bg-red-500 text-white active:scale-95'
                     : 'bg-white/20 text-white/30 cursor-not-allowed'
                 }`}
-                whileHover={bothSlotsFilled ? { scale: 1.05 } : undefined}
-                whileTap={bothSlotsFilled ? { scale: 0.95 } : undefined}
+                whileHover={canBattle ? { scale: 1.05 } : undefined}
+                whileTap={canBattle ? { scale: 0.95 } : undefined}
               >
                 배틀!
               </motion.button>
@@ -191,12 +197,6 @@ export default function TekkenBattleConfirmModal({
               </button>
             </div>
 
-            {/* 2슬롯 미충족 안내 */}
-            {!bothSlotsFilled && (
-              <p className="text-xs text-white/50 text-center mt-1">
-                토끼 2마리를 장착해야 배틀할 수 있어요
-              </p>
-            )}
           </motion.div>
         </motion.div>
       )}

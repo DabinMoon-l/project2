@@ -53,6 +53,11 @@ async function getPlayerBattleRabbits(
     })
   );
 
+  // 1마리만 장착 시 같은 토끼를 복제하여 2슬롯으로 (풀 HP 로테이션)
+  if (rabbits.length === 1) {
+    rabbits.push({ ...rabbits[0] });
+  }
+
   return rabbits;
 }
 
