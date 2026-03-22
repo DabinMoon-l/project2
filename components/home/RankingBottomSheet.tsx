@@ -389,13 +389,13 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
               <div className="relative leading-[0] mt-1" style={{ transform: 'scaleY(1.05)', transformOrigin: 'top' }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/images/rank_banner.png" alt="랭킹 배너" className="w-full block" />
-                {!loading && rankedUsers[0] && (
+                {!loading && filteredUsers[0] && (
                   <div
                     className="absolute inset-0 flex items-center justify-center pointer-events-none px-[20%]"
                     style={{ zIndex: 10, paddingTop: '8px' }}
                   >
                     <span className="text-2xl leading-normal font-sans text-[#1A1A1A] truncate" style={{ fontWeight: 900 }}>
-                      {displayName(rankedUsers[0])}
+                      {displayName(filteredUsers[0])}
                     </span>
                   </div>
                 )}
