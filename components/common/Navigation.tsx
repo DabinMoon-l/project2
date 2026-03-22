@@ -211,17 +211,29 @@ export default function Navigation({ role }: NavigationProps) {
   if (isHidden && !isWide) return null;
   if (isHidden && isWide && !isOverlayAttr) return null;
 
-  // 가로모드: 블랙 글래스 사이드바 (프로필 + 네비게이션)
+  // 가로모드: 프로스티드 글래스 사이드바 (Apple Music 스타일)
+  // 홈 오버레이 열림 → 핑크 글래스 + 흰 글씨, 닫힘 → 화이트 글래스 + 어두운 글씨
   if (isWide) {
+    const isHome = isOverlayOpen;
+    const textColor = '#1A1A1A';
+
     return (
       <nav
-        className="fixed left-0 top-0 bottom-0 z-50 flex flex-col"
+        className="fixed z-50 flex flex-col overflow-hidden transition-colors duration-300"
         style={{
-          width: '240px',
-          backgroundColor: 'rgba(0, 0, 0, 0.82)',
-          backdropFilter: 'blur(40px)',
-          WebkitBackdropFilter: 'blur(40px)',
-          borderRight: '1px solid rgba(255, 255, 255, 0.08)',
+          left: '8px',
+          top: '8px',
+          bottom: '8px',
+          width: '224px',
+          borderRadius: '14px',
+          backgroundColor: isHome
+            ? 'rgba(120, 80, 100, 0.52)'     // 핑크 글래스 (진하게)
+            : 'rgba(200, 195, 188, 0.75)',   // 크림 글래스 (따뜻하게)
+          backdropFilter: 'saturate(180%) blur(24px)',
+          WebkitBackdropFilter: 'saturate(180%) blur(24px)',
+          boxShadow: isHome
+            ? '0 2px 20px rgba(0, 0, 0, 0.15)'
+            : '0 2px 20px rgba(0, 0, 0, 0.08), 0 0 0 0.5px rgba(0, 0, 0, 0.06)',
         }}
       >
         {/* 프로필 섹션 */}
@@ -231,46 +243,49 @@ export default function Navigation({ role }: NavigationProps) {
         >
           <div
             className="w-11 h-11 flex items-center justify-center flex-shrink-0 rounded-xl overflow-hidden"
-            style={{ background: 'rgba(255, 255, 255, 0.1)', border: '1px solid rgba(255, 255, 255, 0.15)' }}
+            style={{
+              background: 'rgba(0, 0, 0, 0.05)',
+              border: '1px solid rgba(0, 0, 0, 0.08)',
+            }}
           >
             {profile?.profileRabbitId != null ? (
               <img src={getRabbitProfileUrl(profile.profileRabbitId)} alt="프로필" className="w-full h-full object-cover" />
             ) : (
-              <svg width={28} height={28} viewBox="0 0 24 24" fill="white">
+              <svg width={28} height={28} viewBox="0 0 24 24" fill={textColor}>
                 <circle cx="12" cy="8" r="4" />
                 <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
               </svg>
             )}
           </div>
-          <p className="font-bold text-lg text-white truncate flex-1">
+          <p className="font-bold text-lg truncate flex-1 transition-colors duration-300" style={{ color: textColor }}>
             {profile?.nickname || ''}
           </p>
         </div>
 
         {/* 구분선 */}
-        <div className="mx-5 border-t border-white/10 mb-2" />
+        <div className="mx-5 border-t mb-2" style={{ borderColor: 'rgba(0,0,0,0.1)' }} />
 
         {/* 네비게이션 아이템 */}
         <div className="flex-1 px-3 flex flex-col gap-1">
           {tabs.map((tab) => {
             const isActive = isActiveTab(pathname, tab.path);
-            const isHome = tab.path === homePath;
+            const isHomeTab = tab.path === homePath;
 
             return (
               <Link
                 key={tab.path}
                 href={tab.path}
-                ref={isHome ? (el: HTMLAnchorElement | null) => { homeButtonRef.current = el; } : undefined}
-                onClick={isHome ? handleHomeClick : handleTabClick}
+                ref={isHomeTab ? (el: HTMLAnchorElement | null) => { homeButtonRef.current = el; } : undefined}
+                onClick={isHomeTab ? handleHomeClick : handleTabClick}
                 className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200"
                 style={{
-                  backgroundColor: isActive ? 'rgba(255, 255, 255, 0.15)' : 'transparent',
-                  opacity: isActive ? 1 : 0.6,
+                  backgroundColor: isActive ? 'rgba(0, 0, 0, 0.07)' : 'transparent',
+                  opacity: isActive ? 1 : 0.5,
                 }}
                 aria-label={tab.label}
               >
-                {tab.icon(true)}
-                <span className="text-sm font-semibold text-white">
+                {tab.icon(false)}
+                <span className="text-sm font-semibold transition-colors duration-300" style={{ color: textColor }}>
                   {tab.label}
                 </span>
               </Link>

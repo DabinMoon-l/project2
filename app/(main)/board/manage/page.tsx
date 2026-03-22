@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '@/styles/themes/useTheme';
 import { Skeleton } from '@/components/common';
-import { useUser, useCourse } from '@/lib/contexts';
+import { useUser, useCourse, useDetailPanel } from '@/lib/contexts';
 import {
   useMyPosts,
   useDeletePost,
@@ -40,7 +40,7 @@ import {
 // 메인 페이지
 // ============================================================
 
-export default function ManagePostsPage() {
+export default function ManagePostsPage({ isPanelMode: propPanelMode }: { isPanelMode?: boolean } = {}) {
   const router = useRouter();
   const { theme } = useTheme();
   const { profile } = useUser();
@@ -69,9 +69,24 @@ export default function ManagePostsPage() {
   const { posts: likedPosts, loading: likedLoading, error: likedError } = useMyLikedPosts(isProfessor);
   const likesScrollRef = useRef<HTMLDivElement>(null);
 
+  const { closeDetail, replaceDetail } = useDetailPanel();
+  const isPanelMode = !!propPanelMode;
   const handlePostClick = useCallback((postId: string) => {
+    if (isPanelMode) {
+      import('../[id]/page').then(mod => {
+        const PostDetailPage = mod.default;
+        replaceDetail(
+          <PostDetailPage
+            key={postId}
+            panelPostId={postId}
+            onPanelBack={() => replaceDetail(<ManagePostsPage isPanelMode />)}
+          />
+        );
+      });
+      return;
+    }
     router.push(`/board/${postId}`);
-  }, [router]);
+  }, [router, isPanelMode, replaceDetail]);
 
   const handleDeletePost = useCallback(async (postId: string) => {
     if (window.confirm('이 기사를 삭제하시겠습니까?')) {
@@ -88,8 +103,9 @@ export default function ManagePostsPage() {
   }, [deleteComment, refreshComments]);
 
   const handleBack = useCallback(() => {
+    if (isPanelMode) { closeDetail(); return; }
     router.back();
-  }, [router]);
+  }, [router, isPanelMode, closeDetail]);
 
   return (
     <div

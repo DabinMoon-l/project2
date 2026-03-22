@@ -25,6 +25,7 @@ const AnnouncementMessageItem = memo(function AnnouncementMessageItem({
   onImageClick,
   onEditSubmit,
   professorRabbitId,
+  professorNickname,
 }: {
   announcement: Announcement;
   showDate: boolean;
@@ -40,6 +41,8 @@ const AnnouncementMessageItem = memo(function AnnouncementMessageItem({
   onEditSubmit?: (id: string, data: EditSubmitData) => Promise<void>;
   /** 교수 프로필 토끼 ID (공지 데이터에 없을 때 폴백) */
   professorRabbitId?: number | null;
+  /** 교수 닉네임 */
+  professorNickname?: string;
 }) {
   const readCount = useMemo(() => (a.readBy?.filter((uid) => uid !== a.createdBy) || []).length, [a.readBy, a.createdBy]);
   const reactions = useMemo(() => Object.entries(a.reactions || {}), [a.reactions]);
@@ -183,7 +186,7 @@ const AnnouncementMessageItem = memo(function AnnouncementMessageItem({
           className="w-10 h-10 shrink-0 object-cover rounded-full mt-0.5"
         />
         <div className={`min-w-0 ${editing ? 'w-[65%]' : (useFullWidth ? 'w-[65%]' : 'max-w-[65%]')} ${isOwnProfessor ? 'flex flex-col items-end' : ''}`}>
-          <p className={`text-xs font-bold text-white/70 mb-0.5 ${isOwnProfessor ? 'text-right' : ''}`}>Prof. Kim</p>
+          <p className={`text-xs font-bold text-white/70 mb-0.5 ${isOwnProfessor ? 'text-right' : ''}`}>{professorNickname ? `${professorNickname} 교수님` : '교수님'}</p>
           <div className={`flex items-center gap-1.5 ${useFullWidth || editing ? 'self-stretch' : ''}`}
             style={{ flexDirection: isOwnProfessor ? 'row' : 'row-reverse' }}
           >
@@ -375,7 +378,7 @@ const AnnouncementMessageItem = memo(function AnnouncementMessageItem({
               const rect = emojiBtnRef.current!.getBoundingClientRect();
               return createPortal(
                 <>
-                  <div className="fixed inset-0 z-[120]" style={{ left: 'var(--modal-left, 0px)' }} onClick={(e) => { e.stopPropagation(); onToggleEmojiPicker(null); }} />
+                  <div className="fixed inset-0 z-[120]" style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }} onClick={(e) => { e.stopPropagation(); onToggleEmojiPicker(null); }} />
                   <div
                     className="fixed z-[121] bg-black/60 backdrop-blur-md border border-white/20 rounded-lg p-1.5 flex gap-1 shadow-lg"
                     style={{

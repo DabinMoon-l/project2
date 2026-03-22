@@ -9,6 +9,7 @@ import { useRequireAuth } from '@/lib/hooks/useAuth';
 import Navigation from '@/components/common/Navigation';
 import { NotificationProvider, ExpToastProvider, SwipeBack, ComposeProviders } from '@/components/common';
 import { UserProvider, useUser, CourseProvider, useCourse, MilestoneProvider, HomeOverlayProvider, DetailPanelProvider, useDetailPanel } from '@/lib/contexts';
+import { useHomeOverlay } from '@/lib/contexts/HomeOverlayContext';
 import { useActivityTracker } from '@/lib/hooks/useActivityTracker';
 
 import { usePageViewLogger } from '@/lib/hooks/usePageViewLogger';
@@ -23,7 +24,6 @@ const LibraryJobToast = dynamic(() => import('@/components/professor/library/Lib
 // 라우트 사이드바 lazy load (가로모드 전용)
 const QuizListSidebar = dynamic(() => import('@/components/quiz/QuizListSidebar'), { ssr: false });
 const BoardListSidebar = dynamic(() => import('@/components/board/BoardListSidebar'), { ssr: false });
-const ReviewListSidebar = dynamic(() => import('@/components/review/ReviewListSidebar'), { ssr: false });
 import { useViewportScale, useWideMode } from '@/lib/hooks/useViewportScale';
 import { useScrollDismissKeyboard, useKeyboardCSSVariable } from '@/lib/hooks/useKeyboardAware';
 import OfflineBanner from '@/components/common/OfflineBanner';
@@ -176,16 +176,14 @@ function MainLayoutGrid({
   searchParams: ReturnType<typeof useSearchParams>;
 }) {
   const { content: detailContent, isDetailOpen, closeDetail } = useDetailPanel();
+  const { isOpen: isHomeOverlayOpen } = useHomeOverlay();
 
   // 라우트 기반 사이드바 타입 감지 (가로모드 전용)
   const routeSidebarType = useMemo(() => {
     if (!isWide) return null;
     // /quiz/[id]/* (NOT /quiz/create, /professor/quiz/create)
     if (/^\/quiz\/[^/]+/.test(pathname) && pathname !== '/quiz/create') return 'quiz' as const;
-    // /board/[id]/*
-    if (/^\/board\/[^/]+/.test(pathname)) return 'board' as const;
-    // /review/[type]/[id] or /review/random
-    if (/^\/review\/[^/]+\/[^/]+/.test(pathname) || pathname === '/review/random') return 'review' as const;
+    // 게시판·복습: 라우트 사이드바 사용 안 함 → 2쪽 메인 고정, 3쪽에서 상세 표시
     // /professor/quiz/[id]/preview
     if (/^\/professor\/quiz\/[^/]+\/preview/.test(pathname)) return 'quiz' as const;
     return null;
@@ -248,12 +246,42 @@ function MainLayoutGrid({
     };
   }, [isWide]);
 
+  // --modal-right: 3쪽(디테일패널) 열림 시 모달을 2쪽 안에 가두기
+  useEffect(() => {
+    const body = document.body;
+    if (isWide && isDetailOpen) {
+      body.style.setProperty('--modal-right', 'calc(50% - 120px)');
+    } else {
+      body.style.setProperty('--modal-right', '0px');
+    }
+  }, [isWide, isDetailOpen]);
+
   const isBoardDetail = /^\/board\/[^/]+$/.test(pathname) && pathname !== '/board/manage';
 
   return (
     <>
       <LibraryJobToast />
       <OfflineBanner />
+
+      {/* 가로모드: 사이드바 뒤 배경 (플로팅 패널 갭에 보임) */}
+      {isWide && (
+        <div
+          className="fixed left-0 top-0 bottom-0 z-40"
+          style={{ width: '240px', backgroundColor: '#F5F0E8' }}
+        >
+          {/* 홈 오버레이 열릴 때: home-bg 이미지로 전환 */}
+          <div
+            className="absolute inset-0 transition-opacity duration-300"
+            style={{
+              backgroundImage: 'url(/images/home-bg.jpg)',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center top',
+              opacity: isHomeOverlayOpen ? 1 : 0,
+            }}
+          />
+        </div>
+      )}
+
       <SwipeBack enabled={!isWide && !isTabRoot && !isBoardDetail}>
         <div
           data-main-content
@@ -265,66 +293,54 @@ function MainLayoutGrid({
               : {}),
             ...(isWide ? { marginLeft: '240px' } : {}),
             // fixed 요소 좌측 위치 조정용 CSS 변수
-            // 모바일: 0, 가로모드(사이드바 없음): 240px, 라우트 사이드바: calc(50% + 120px)
+            // 모바일: 0, 가로모드(디테일/사이드바 열림): calc(50% + 120px), 그 외: 240px
             '--detail-panel-left': !isWide
               ? '0'
-              : routeSidebarType
+              : (routeSidebarType || isDetailOpen)
                 ? 'calc(50% + 120px)'
                 : '240px',
           } as React.CSSProperties & Record<string, string>}
         >
-          <div className={isWide ? 'flex min-h-screen' : ''}>
-            {/* 라우트 사이드바 (가로모드 좌측 — 퀴즈/게시판/복습 목록) */}
+          <div className={isWide ? 'flex h-screen overflow-hidden' : ''}>
+            {/* 라우트 사이드바 (가로모드 좌측 — 퀴즈/복습 목록) */}
             {hasRouteSidebar && (
               <div
-                className="w-1/2 flex-shrink-0 overflow-x-hidden overflow-y-auto min-h-screen"
+                className="w-1/2 flex-shrink-0 overflow-x-hidden overflow-y-auto h-screen"
                 style={{ borderRight: '1px solid #B0A898' }}
               >
                 {routeSidebarType === 'quiz' && <QuizListSidebar />}
-                {routeSidebarType === 'board' && <BoardListSidebar />}
-                {routeSidebarType === 'review' && <ReviewListSidebar />}
               </div>
             )}
 
-            {/* 메인 콘텐츠 */}
+            {/* 메인 콘텐츠 (2쪽) — 독립 스크롤, transform으로 fixed 요소 패널 내 격리 */}
             <main
               className={
                 isWide
-                  ? 'w-1/2 flex-shrink-0 overflow-x-hidden overflow-y-auto min-h-screen'
+                  ? 'w-1/2 flex-shrink-0 overflow-x-hidden overflow-y-auto h-screen relative'
                   : ''
               }
+              style={isWide ? { transform: 'translateZ(0)' } : undefined}
             >
               {children}
               {!isProfessor && pathname === '/quiz' && searchParams?.get('manage') !== 'true' && <AIQuizContainer />}
               {isProfessor && pathname === '/professor/quiz' && <AIQuizContainer />}
             </main>
 
-            {/* 우측: 디테일 패널 (라우트 사이드바가 없을 때만 표시) */}
+            {/* 우측 디테일 패널 (3쪽) — 독립 스크롤, transform으로 fixed 요소 패널 내 격리 */}
             {isWide && !hasRouteSidebar && (
               <aside
-                className="w-1/2 flex-shrink-0 overflow-x-hidden overflow-y-auto min-h-screen relative"
+                className="w-1/2 flex-shrink-0 overflow-x-hidden overflow-y-auto h-screen relative"
                 style={{
                   borderLeft: '1px solid #B0A898',
                   backgroundColor: '#F5F0E8',
                   paddingRight: 'env(safe-area-inset-right, 0px)',
+                  transform: 'translateZ(0)',
                 }}
               >
                 {isDetailOpen && (
-                  <>
-                    <button
-                      onClick={closeDetail}
-                      className="sticky top-3 float-right mr-3 z-10 w-8 h-8 rounded-full flex items-center justify-center"
-                      style={{ backgroundColor: 'rgba(26, 26, 26, 0.08)' }}
-                      aria-label="패널 닫기"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="#1A1A1A" strokeWidth={2} viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                    <div className="max-w-[640px]">
-                      {detailContent}
-                    </div>
-                  </>
+                  <div>
+                    {detailContent}
+                  </div>
                 )}
               </aside>
             )}

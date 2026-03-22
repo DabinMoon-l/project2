@@ -117,10 +117,10 @@ export default function SettingsPage() {
   return (
     <div className="relative min-h-screen pb-8">
       {/* 배경 이미지 + 글래스 오버레이 */}
-      <div className="fixed inset-0" style={{ left: 'var(--modal-left, 0px)' }}>
+      <div className="fixed inset-0" style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}>
         <Image src="/images/home-bg.jpg" alt="" fill className="object-cover" />
       </div>
-      <div className="fixed inset-0 bg-white/10 backdrop-blur-2xl" style={{ left: 'var(--modal-left, 0px)' }} />
+      <div className="fixed inset-0 bg-white/10 backdrop-blur-2xl" style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }} />
 
       {/* 헤더 */}
       <header className="relative z-10 flex items-center justify-between px-4 pt-4 pb-2">
@@ -225,7 +225,7 @@ export default function SettingsPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/50"
-            style={{ left: 'var(--modal-left, 0px)' }}
+            style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
           >
             <motion.div
               initial={{ scale: 0.9 }}
@@ -272,7 +272,7 @@ export default function SettingsPage() {
             exit={{ opacity: 0 }}
             onClick={() => setShowProfilePicker(false)}
             className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/50"
-            style={{ left: 'var(--modal-left, 0px)' }}
+            style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
           >
             <motion.div
               initial={{ scale: 0.9 }}
@@ -376,7 +376,7 @@ export default function SettingsPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/50"
-            style={{ left: 'var(--modal-left, 0px)' }}
+            style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
           >
             <motion.div
               initial={{ scale: 0.9 }}

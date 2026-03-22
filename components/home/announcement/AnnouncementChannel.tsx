@@ -567,7 +567,7 @@ export default function AnnouncementChannel({
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="fixed inset-0 z-[110] flex items-end bg-black/40"
-              style={{ left: 'var(--modal-left, 0px)' }}
+              style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
               onClick={() => {
                 // 키보드 열림 시 키보드만 닫고 모달 유지 (네이티브 앱 패턴)
                 if (document.activeElement instanceof HTMLTextAreaElement ||
@@ -815,6 +815,7 @@ export default function AnnouncementChannel({
                             onImageClick={handleImageClick}
                             onEditSubmit={isProfessor ? handleEditSubmitMsg : undefined}
                             professorRabbitId={professorRabbitId}
+                            professorNickname={profile?.nickname}
                           />
                         );
                       })}

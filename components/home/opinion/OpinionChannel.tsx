@@ -67,11 +67,11 @@ const OpinionItem = memo(function OpinionItem({
   const [showMenu, setShowMenu] = useState(false);
   const isDev = msg.studentId === '25010423';
 
-  // 표시명: 개발자 "개발자", 교수 "실명", 학생 "닉네임"
+  // 표시명: 개발자 "개발자", 교수 "닉네임 교수님", 학생 "닉네임"
   const displayName = isDev
     ? '개발자'
     : msg.authorRole === 'professor'
-      ? msg.authorName
+      ? `${msg.authorName} 교수님`
       : msg.authorName;
 
   return (
@@ -358,7 +358,7 @@ export default function OpinionChannel() {
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="fixed inset-0 z-[110] flex items-end bg-black/40"
-              style={{ left: 'var(--modal-left, 0px)' }}
+              style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
               onClick={() => {
                 // 키보드 열림 시 키보드만 닫고 모달 유지 (네이티브 앱 패턴)
                 if (document.activeElement instanceof HTMLTextAreaElement ||

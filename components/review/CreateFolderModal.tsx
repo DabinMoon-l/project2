@@ -39,7 +39,7 @@ export default function CreateFolderModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      style={{ position: 'fixed', touchAction: 'none', left: 'var(--modal-left, 0px)' }}
+      style={{ position: 'fixed', touchAction: 'none', left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
     >
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}

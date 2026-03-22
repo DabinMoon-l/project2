@@ -130,7 +130,7 @@ export default function ExitConfirmModal({
       {isOpen && (
         <div
           className="fixed inset-0 z-[70] flex items-center justify-center p-4"
-          style={{ left: 'var(--modal-left, 0px)' }}
+          style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
         >
           {/* 백드롭 */}
           <motion.div

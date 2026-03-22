@@ -78,7 +78,7 @@ export default function StatsQuizFeedbackModal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/50"
-          style={{ left: 'var(--modal-left, 0px)' }}
+          style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
           onClick={(e) => { e.stopPropagation(); onClose(); }}
         >
           <motion.div

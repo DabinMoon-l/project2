@@ -236,7 +236,7 @@ const ImageViewer = memo(function ImageViewer({
     <div
       ref={containerRef}
       className="fixed inset-0 z-[120] bg-black/90 flex items-center justify-center"
-      style={{ left: 'var(--modal-left, 0px)', touchAction: 'none' }}
+      style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)', touchAction: 'none' }}
       onClick={handleBackdropClick}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}

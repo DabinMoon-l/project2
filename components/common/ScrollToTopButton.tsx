@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, type RefObject } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
 
 interface ScrollToTopButtonProps {
   /** 이 요소가 화면에서 사라지면 버튼 표시 */
@@ -19,12 +20,13 @@ interface ScrollToTopButtonProps {
 export default function ScrollToTopButton({
   targetRef,
   bottomPx = 96,
-  side = 'right',
+  side = 'right' as const,
   variant = 'dark',
   hidden = false,
 }: ScrollToTopButtonProps) {
   const [show, setShow] = useState(false);
   const observerRef = useRef<IntersectionObserver | null>(null);
+  const isWide = useWideMode();
 
   // 레이아웃 안정 후 IntersectionObserver 시작 (초기 깜빡임 방지)
   useEffect(() => {
@@ -53,12 +55,23 @@ export default function ScrollToTopButton({
   }, [targetRef]);
 
   const scrollToTop = useCallback(() => {
+    // 가로모드: <main> 등 개별 스크롤 컨테이너를 찾아 스크롤
+    const el = targetRef.current;
+    if (el) {
+      let parent = el.parentElement;
+      while (parent) {
+        const style = getComputedStyle(parent);
+        if ((style.overflowY === 'auto' || style.overflowY === 'scroll') && parent.scrollTop > 0) {
+          parent.scrollTo({ top: 0, behavior: 'smooth' });
+          return;
+        }
+        parent = parent.parentElement;
+      }
+    }
+    // 폴백: window 스크롤
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
-  }, []);
+  }, [targetRef]);
 
-  const sideClass = side === 'left' ? 'left-4' : 'right-4';
   const variantClass =
     variant === 'glass'
       ? 'bg-white/20 backdrop-blur-sm text-white hover:bg-white/30'
@@ -75,12 +88,15 @@ export default function ScrollToTopButton({
           whileTap={{ scale: 0.95, opacity: 0.7 }}
           transition={{ type: 'spring', stiffness: 400, damping: 25 }}
           onClick={scrollToTop}
-          className={`fixed ${sideClass} z-40 w-10 h-10 ${variantClass} rounded-full shadow-lg flex items-center justify-center transition-colors`}
+          className={`fixed z-40 w-10 h-10 ${variantClass} rounded-full shadow-lg flex items-center justify-center transition-colors`}
           style={{
-            // 네비게이션(4.25rem) + safe area + 여유 공간 — 모든 기종에서 겹침 방지
-            bottom: `calc(4.25rem + env(safe-area-inset-bottom, 0px) + ${bottomPx - 68}px)`,
-            // 가로모드: 사이드바 너비만큼 오프셋
-            marginLeft: 'var(--modal-left, 0px)',
+            bottom: isWide
+              ? '1rem'
+              : `calc(4.25rem + env(safe-area-inset-bottom, 0px) + ${bottomPx - 68}px)`,
+            // 가로모드: 세로모드 위치 + (50% - 120px) = 2쪽 기준 동일 배치
+            ...(side === 'left'
+              ? { left: isWide ? 'calc(240px + 1rem)' : '1rem' }
+              : { right: isWide ? 'calc(50% - 120px + 1rem)' : '1rem' }),
             WebkitTapHighlightColor: 'transparent',
             touchAction: 'manipulation',
           }}

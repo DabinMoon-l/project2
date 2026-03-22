@@ -24,7 +24,8 @@ import { ScrollToTopButton, ExpandModal } from '@/components/common';
 const UpdateQuizModal = dynamic(() => import('@/components/quiz/UpdateQuizModal'), { ssr: false });
 const QuizStatsModal = dynamic(() => import('@/components/quiz/manage/QuizStatsModal'), { ssr: false });
 import { useExpandSource } from '@/lib/hooks/useExpandSource';
-import { useCourse } from '@/lib/contexts';
+import { useCourse, useDetailPanel } from '@/lib/contexts';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
 import { getPastExamOptions, type PastExamOption } from '@/lib/types/course';
 import { generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import { parseAverageScore, sortByLatest, formatQuestionTypes } from '@/lib/utils/quizHelpers';
@@ -46,6 +47,8 @@ function QuizListPageContent() {
   const { isBookmarked, toggleBookmark } = useQuizBookmark();
   const { userCourseId, getCourseById } = useCourse();
   const { updatedQuizzes, checkQuizUpdate, refresh: refreshUpdates, loading: updatesLoading } = useQuizUpdate();
+  const isWide = useWideMode();
+  const { openDetail, replaceDetail, isDetailOpen } = useDetailPanel();
 
   // 과목별 리본 이미지
   const currentCourse = userCourseId ? getCourseById(userCourseId) : null;
@@ -118,8 +121,8 @@ function QuizListPageContent() {
   // 삭제 확인 모달
   const [quizToDelete, setQuizToDelete] = useState<QuizCardData | null>(null);
 
-  // Details/관리 모달 열릴 때 네비게이션 숨김
-  useHideNav(!!(selectedQuiz || quizToDelete || isManageMode || statsQuiz));
+  // Details/관리 모달 열릴 때 네비게이션 숨김 (가로모드: 관리 모드는 3쪽이라 숨기지 않음)
+  useHideNav(!!(selectedQuiz || quizToDelete || (!isWide && isManageMode) || statsQuiz));
 
   // body 스크롤 방지 통합 (모달/관리모드 열림 시 PullToHome 스와이프 방지)
   useEffect(() => {
@@ -474,7 +477,17 @@ function QuizListPageContent() {
                 첫 번째 퀴즈를 만들어보세요!
               </p>
               <button
-                onClick={() => router.push('/quiz/create')}
+                onClick={() => {
+              if (isWide) {
+                import('./create/page').then(mod => {
+                  const CreatePage = mod.default;
+                  const action = isDetailOpen ? replaceDetail : openDetail;
+                  action(<CreatePage isPanelMode />);
+                });
+                return;
+              }
+              router.push('/quiz/create');
+            }}
                 className="px-5 py-2.5 bg-[#1A1A1A] text-[#F5F0E8] font-bold text-sm"
               >
                 퀴즈 만들기
@@ -577,7 +590,17 @@ function QuizListPageContent() {
             퀴즈 관리
           </button>
           <button
-            onClick={() => router.push('/quiz/create')}
+            onClick={() => {
+              if (isWide) {
+                import('./create/page').then(mod => {
+                  const CreatePage = mod.default;
+                  const action = isDetailOpen ? replaceDetail : openDetail;
+                  action(<CreatePage isPanelMode />);
+                });
+                return;
+              }
+              router.push('/quiz/create');
+            }}
             className="px-4 py-3 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] whitespace-nowrap hover:bg-[#3A3A3A] transition-colors rounded-lg"
           >
             퀴즈 만들기
@@ -1016,17 +1039,23 @@ function QuizListPageContent() {
       <ScrollToTopButton targetRef={customSectionRef} bottomPx={90} side="left" />
     </div>
 
-    {/* 관리 모드 오버레이 (들어갈 때 + 나갈 때 슬라이드 애니메이션) */}
+    {/* 관리 모드 오버레이 (가로모드: 3쪽 영역, 세로모드: 전체화면 슬라이드) */}
     <AnimatePresence>
       {isManageMode && (
         <motion.div
           key="manage-mode"
-          initial={{ x: '-100%' }}
-          animate={{ x: 0 }}
-          exit={{ x: '-100%' }}
-          transition={{ type: 'spring', stiffness: 400, damping: 35 }}
-          className="fixed inset-0 overflow-y-auto overscroll-contain pb-28 z-[60]"
-          style={{ backgroundColor: '#F5F0E8' }}
+          initial={isWide ? { opacity: 0 } : { x: '-100%' }}
+          animate={isWide ? { opacity: 1 } : { x: 0 }}
+          exit={isWide ? { opacity: 0 } : { x: '-100%' }}
+          transition={isWide ? { duration: 0.15 } : { type: 'spring', stiffness: 400, damping: 35 }}
+          className="fixed overflow-y-auto overscroll-contain pb-28 z-[60]"
+          style={{
+            backgroundColor: '#F5F0E8',
+            top: 0,
+            bottom: 0,
+            right: 0,
+            left: isWide ? 'calc(50% + 120px)' : 0,
+          }}
         >
           {/* 헤더: 제목 + 오른쪽 화살표(닫기) */}
           <header className="px-4 pb-3 border-b border-[#EDEAE4]" style={{ paddingTop: 'calc(1rem + env(safe-area-inset-top, 0px))' }}>
@@ -1059,7 +1088,18 @@ function QuizListPageContent() {
               <div className="flex flex-col items-center justify-center text-center" style={{ minHeight: 'calc(100vh - 320px)' }}>
                 <h3 className="font-bold text-base mb-2 text-[#1A1A1A]">아직 만든 퀴즈가 없습니다</h3>
                 <p className="text-sm text-[#5C5C5C] mb-4">첫 번째 퀴즈를 만들어보세요!</p>
-                <button onClick={() => router.push('/quiz/create')} className="px-5 py-2.5 bg-[#1A1A1A] text-[#F5F0E8] font-bold text-sm">퀴즈 만들기</button>
+                <button onClick={() => {
+                  if (isWide) {
+                    import('./create/page').then(mod => {
+                      const CreatePage = mod.default;
+                      const action = isDetailOpen ? replaceDetail : openDetail;
+                      action(<CreatePage isPanelMode />);
+                    });
+                    setIsManageMode(false);
+                    return;
+                  }
+                  router.push('/quiz/create');
+                }} className="px-5 py-2.5 bg-[#1A1A1A] text-[#F5F0E8] font-bold text-sm">퀴즈 만들기</button>
               </div>
             )}
 

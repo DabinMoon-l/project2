@@ -61,7 +61,11 @@ export function useHideNav(shouldHide: boolean) {
 
   useEffect(() => {
     const id = idRef.current;
-    if (shouldHide) {
+    // 가로모드(1024px+landscape)에서는 1쪽(Navigation) 항상 표시
+    const isWide = typeof window !== 'undefined'
+      && window.innerWidth >= 1024
+      && window.matchMedia('(orientation: landscape)').matches;
+    if (shouldHide && !isWide) {
       activeHiders.add(id);
       hiderHeartbeats.set(id, Date.now());
       updateHideNavAttribute();

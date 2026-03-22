@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePathname } from 'next/navigation';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
 
 interface FloatingAIButtonProps {
   onClick: (e: React.MouseEvent) => void;
@@ -18,6 +19,7 @@ interface FloatingAIButtonProps {
 export default function FloatingAIButton({ onClick }: FloatingAIButtonProps) {
   const pathname = usePathname();
   const [isPressed, setIsPressed] = useState(false);
+  const isWide = useWideMode();
 
   // 퀴즈 페이지에서만 표시 (학생: /quiz, 교수: /professor/quiz)
   const shouldShow = pathname === '/quiz' || pathname === '/professor/quiz';
@@ -46,8 +48,9 @@ export default function FloatingAIButton({ onClick }: FloatingAIButtonProps) {
         onTouchEnd={() => setIsPressed(false)}
         className="fixed z-40 flex items-center justify-center"
         style={{
-          right: '-20px',
-          bottom: 'calc(4.25rem + env(safe-area-inset-bottom, 0px) + 10px)',
+          // 가로모드: 세로모드 right + (50% - 120px) = 2쪽 우측 끝 기준 동일 배치
+          right: isWide ? 'calc(50% - 120px - 20px)' : '-20px',
+          bottom: isWide ? '16px' : 'calc(4.25rem + env(safe-area-inset-bottom, 0px) + 10px)',
           width: '160px',
           height: '160px',
           filter: isPressed

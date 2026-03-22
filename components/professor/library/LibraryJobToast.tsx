@@ -93,7 +93,7 @@ export default function LibraryJobToast() {
           exit={{ y: -80, opacity: 0 }}
           transition={{ type: 'spring', damping: 25, stiffness: 300 }}
           className="fixed top-3 -translate-x-1/2 z-[9999] w-[calc(100%-32px)] max-w-sm"
-          style={{ left: 'calc(50% + var(--modal-left, 0px) / 2)' }}
+          style={{ left: 'calc(50% + var(--modal-left, 0px) / 2)', right: 'var(--modal-right, 0px)' }}
         >
           {/* 진행 중 토스트 */}
           {toast.type === 'progress' && (

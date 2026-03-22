@@ -10,7 +10,7 @@ import CommentSection from '@/components/board/CommentSection';
 import LinkifiedText from '@/components/board/LinkifiedText';
 import { usePost, useDeletePost, useLike } from '@/lib/hooks/useBoard';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { useUser } from '@/lib/contexts';
+import { useUser, useDetailPanel } from '@/lib/contexts';
 import { getScrollLockCount } from '@/lib/utils/scrollLock';
 
 /**
@@ -154,16 +154,18 @@ function ImageGallery({ images }: { images: string[] }) {
 
 /**
  * 게시글 상세 페이지
+ * panelPostId가 전달되면 DetailPanel(3쪽) 모드로 동작 (스와이프/뒤로가기 비활성화)
  */
-export default function PostDetailPage() {
+export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPostId?: string; onPanelBack?: () => void } = {}) {
   const params = useParams();
   const router = useRouter();
-  const postId = params.id as string;
+  const postId = panelPostId || (params?.id as string);
+  const isPanelMode = !!panelPostId;
 
-  // 최초 진입 시에만 슬라이드 애니메이션 (뒤로가기 시 재발동 방지)
+  // 최초 진입 시에만 슬라이드 애니메이션 (패널 모드에서는 비활성화)
   const [slideIn] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    const key = `visited_board_${params.id}`;
+    if (isPanelMode || typeof window === 'undefined') return false;
+    const key = `visited_board_${postId}`;
     if (sessionStorage.getItem(key)) return false;
     sessionStorage.setItem(key, '1');
     return true;
@@ -199,6 +201,11 @@ export default function PostDetailPage() {
   nextPostIdRef.current = nextPostId;
   const routerRef = useRef(router);
   routerRef.current = router;
+  const isPanelModeRef = useRef(isPanelMode);
+  isPanelModeRef.current = isPanelMode;
+  const { replaceDetail, closeDetail } = useDetailPanel();
+  const replaceDetailRef = useRef(replaceDetail);
+  replaceDetailRef.current = replaceDetail;
 
   // ref callback으로 DOM 요소 잡히는 즉시 이벤트 등록
   const cleanupRef = useRef<(() => void) | null>(null);
@@ -262,8 +269,12 @@ export default function PostDetailPage() {
         el.style.opacity = '0';
         setTimeout(() => {
           sessionStorage.removeItem(`visited_board_${target}`);
-          routerRef.current.replace(`/board/${target}`);
-          // 스타일 리셋은 다음 페이지에서 새 el이 생기므로 불필요
+          if (isPanelModeRef.current) {
+            // 패널 모드: 3쪽에서 다음 글로 교체
+            replaceDetailRef.current(<PostDetailPage key={target} panelPostId={target} />);
+          } else {
+            routerRef.current.replace(`/board/${target}`);
+          }
           setTimeout(() => { s.navigating = false; }, 500);
         }, 150);
       } else {
@@ -328,9 +339,13 @@ export default function PostDetailPage() {
     }).catch(() => {});
   }, [isProfessor, post?.authorId]);
 
-  // 안전한 뒤로가기 — SPA 내부 히스토리가 있으면 back, 없으면 게시판 목록으로
+  // 안전한 뒤로가기 — 패널 모드에서는 onPanelBack 또는 closeDetail
   const goBack = useCallback(() => {
-    // sessionStorage에 내부 네비게이션 기록이 있는지 확인
+    if (isPanelMode) {
+      if (onPanelBack) { onPanelBack(); return; }
+      closeDetail();
+      return;
+    }
     const hasInternalHistory = window.history.length > 1 &&
       (document.referrer.includes(window.location.host) || sessionStorage.getItem('board_nav'));
     if (hasInternalHistory) {
@@ -338,7 +353,7 @@ export default function PostDetailPage() {
     } else {
       router.push('/board');
     }
-  }, [router]);
+  }, [router, isPanelMode, closeDetail]);
 
   // 조회수 기록 (상세 페이지 진입 시마다)
   useEffect(() => {

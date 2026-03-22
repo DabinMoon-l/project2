@@ -128,7 +128,7 @@ export default function PageSelectionModal({
       {isOpen && (
         <div
           className="fixed inset-0 z-[60] flex flex-col bg-[#F5F0E8]"
-          style={{ left: 'var(--modal-left, 0px)' }}
+          style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
         >
           {/* 헤더 */}
           <motion.div
