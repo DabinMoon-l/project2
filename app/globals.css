@@ -154,8 +154,9 @@ body::-webkit-scrollbar-button {
   font-weight: 700;
 }
 
-/* 모바일 입력 자동완성/자동수정 방지 */
-input, textarea {
+/* 모바일 입력 — iOS 자동 확대 방지 (16px 미만이면 Safari가 줌) + 자동완성 방지 */
+input, textarea, select {
+  font-size: 16px;
   -webkit-text-security: none;
 }
 
