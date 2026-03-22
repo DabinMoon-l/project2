@@ -355,17 +355,17 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
                   <span className="text-sm font-black text-white leading-none">i</span>
                 </button>
 
-                {/* Day / Week / All 탭 */}
+                {/* DAY / WEEK / ALL 탭 */}
                 <div className="flex items-center gap-5">
                   {(['day', 'week', 'all'] as const).map(p => (
                     <button
                       key={p}
                       onClick={() => setPeriodFilter(p)}
-                      className={`text-base font-black transition-colors ${
+                      className={`text-lg font-black transition-colors ${
                         periodFilter === p ? 'text-white' : 'text-white/30'
                       }`}
                     >
-                      {p === 'day' ? 'Day' : p === 'week' ? 'Week' : 'All'}
+                      {p.toUpperCase()}
                     </button>
                   ))}
                 </div>
