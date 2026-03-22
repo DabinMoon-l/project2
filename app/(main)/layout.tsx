@@ -191,6 +191,17 @@ function MainLayoutGrid({
   // 라우트 사이드바 표시 여부 (컨텍스트 디테일 > 라우트 사이드바 우선순위)
   const hasRouteSidebar = !!routeSidebarType && !isDetailOpen;
 
+  // iOS PWA 핀치 줌 차단 — viewport user-scalable=no를 iOS가 무시하므로 JS로 보강
+  useEffect(() => {
+    const preventZoom = (e: Event) => { e.preventDefault(); };
+    document.addEventListener('gesturestart', preventZoom, { passive: false });
+    document.addEventListener('gesturechange', preventZoom, { passive: false });
+    return () => {
+      document.removeEventListener('gesturestart', preventZoom);
+      document.removeEventListener('gesturechange', preventZoom);
+    };
+  }, []);
+
   // CSS 변수를 body에 설정 (createPortal로 body에 렌더되는 모달/바텀시트가 상속받도록)
   useEffect(() => {
     const body = document.body;
