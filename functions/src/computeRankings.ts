@@ -96,6 +96,7 @@ interface UserDoc {
   profileRabbitId?: number | null;
   equippedRabbits?: Array<{ rabbitId: number; courseId?: string }>;
   professorQuizzesCompleted?: number;
+  lastActiveAt?: { toDate?: () => Date };
 }
 
 async function computeRankingsForCourse(courseId: string) {
@@ -304,6 +305,7 @@ async function computeRankingsForCourse(courseId: string) {
 
   const rankedUsers: RankedUserDoc[] = students.map((u) => {
     const exp = u.totalExp || 0;
+    const lastActive = u.lastActiveAt?.toDate?.() || null;
     const profStat = studentProfStats[u.id] || { correct: 0, attempted: 0, quizzesTaken: new Set<string>() };
     // 평균 정답률 (0~100)
     const correctRate = profStat.attempted > 0 ? (profStat.correct / profStat.attempted) * 100 : 0;
@@ -354,10 +356,12 @@ async function computeRankingsForCourse(courseId: string) {
       nickname: u.nickname || "익명",
       classType: u.classId || "A",
       totalExp: exp,
-      dailyExp: u.id in dailyExpMap ? dailyExpMap[u.id] : null,
-      weeklyExp: u.id in weeklyExpMap ? weeklyExpMap[u.id] : null,
-      dailyRankScore,
-      weeklyRankScore,
+      dailyExp: u.id in dailyExpMap ? dailyExpMap[u.id]
+        : (lastActive && lastActive >= todayStartUTC ? 0 : null),
+      weeklyExp: u.id in weeklyExpMap ? weeklyExpMap[u.id]
+        : (lastActive && lastActive >= weekStartUTC ? 0 : null),
+      dailyRankScore: dailyRankScore ?? (lastActive && lastActive >= todayStartUTC ? computeRankScore(0, 0, 0) : null),
+      weeklyRankScore: weeklyRankScore ?? (lastActive && lastActive >= weekStartUTC ? computeRankScore(0, 0, 0) : null),
       profCorrectCount: profStat.correct,
       rankScore,
       profileRabbitId: u.profileRabbitId ?? null,
