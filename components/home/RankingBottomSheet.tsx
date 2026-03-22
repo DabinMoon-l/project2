@@ -305,6 +305,13 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
   const restUsers = useMemo(() => filteredUsers.slice(3), [filteredUsers]);
   const visibleUsers = useMemo(() => restUsers.slice(0, displayCount), [restUsers, displayCount]);
 
+  // 기간별 내 순위 (filteredUsers에서 현재 유저 찾기)
+  const myFilteredRank = useMemo(() => {
+    if (!profile?.uid) return myRank;
+    const me = filteredUsers.find(u => u.id === profile.uid);
+    return me || (periodFilter === 'all' ? myRank : null);
+  }, [filteredUsers, profile?.uid, myRank, periodFilter]);
+
   return createPortal(
     <AnimatePresence>
       {isOpen && (
@@ -332,7 +339,7 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
             <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl pointer-events-none" />
 
             {/* 스크롤 가능한 컨텐츠 */}
-            <div ref={scrollRef} className="relative z-10 h-full overflow-y-auto scrollbar-hide" style={{ paddingBottom: myRank ? 'calc(72px + env(safe-area-inset-bottom, 0px))' : 16 }}>
+            <div ref={scrollRef} className="relative z-10 h-full overflow-y-auto scrollbar-hide" style={{ paddingBottom: myFilteredRank ? 'calc(72px + env(safe-area-inset-bottom, 0px))' : 16 }}>
               {/* 핸들 바 */}
               <div className="flex justify-center pt-3 pb-2">
                 <div className="w-10 h-1 bg-white/30 rounded-full" />
@@ -427,20 +434,19 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
                 </div>
               ) : (
                 <>
-                  {/* 빈 상태 메시지 (Day/Week에서 활동자 없을 때) */}
-                  {periodFilter !== 'all' && filteredUsers.length === 0 && (
-                    <div className="flex flex-col items-center py-6 text-center">
-                      <p className="text-base font-black text-white/50 mb-1">
-                        {periodFilter === 'day' ? '오늘' : '이번 주'} 활동한 학생이 없습니다
-                      </p>
-                      <p className="text-xs text-white/30">
-                        퀴즈를 풀거나 활동하면 랭킹에 표시됩니다
-                      </p>
-                    </div>
-                  )}
-
                   {/* Top 3 단상 */}
-                  <div ref={top3Ref} className="mx-4 mt-36 mb-3">
+                  <div ref={top3Ref} className="mx-4 mt-36 mb-3 relative">
+                    {/* 빈 상태 메시지 — 단상 위 겹침 */}
+                    {periodFilter !== 'all' && filteredUsers.length === 0 && (
+                      <div className="absolute -top-24 left-0 right-0 flex flex-col items-center text-center">
+                        <p className="text-sm font-black text-white mb-0.5">
+                          {periodFilter === 'day' ? '오늘' : '이번 주'} 활동한 학생이 없습니다
+                        </p>
+                        <p className="text-[11px] text-white/50">
+                          퀴즈를 풀거나 활동하면 랭킹에 표시됩니다
+                        </p>
+                      </div>
+                    )}
                     <div>
                       <div className="relative">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -544,7 +550,7 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
                   transition={{ type: 'spring', stiffness: 400, damping: 25 }}
                   onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
                   className="absolute right-4 z-40 w-10 h-10 bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 rounded-full shadow-lg flex items-center justify-center transition-colors"
-                  style={{ bottom: myRank ? 80 : 20 }}
+                  style={{ bottom: myFilteredRank ? 80 : 20 }}
                   aria-label="맨 위로"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -554,27 +560,27 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
               )}
             </AnimatePresence>
 
-            {/* 하단 고정: 내 순위 — safe area까지 배경 확장 */}
-            {myRank && (
+            {/* 하단 고정: 내 순위 — 기간별 반영 */}
+            {myFilteredRank && (
               <div className="absolute bottom-0 left-0 right-0 border-t border-white/15 p-3 z-30 bg-black/40 backdrop-blur-xl" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}>
                 <div className="flex items-center gap-2.5">
                   <div className="w-10 h-10 flex items-center justify-center font-black text-lg bg-white/20 text-white rounded-lg">
-                    {myRank.rank}
+                    {myFilteredRank.rank}
                   </div>
                   <div className="w-10 h-10 flex items-center justify-center border-2 border-white/30 rounded-lg overflow-hidden flex-shrink-0 bg-white/10">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={getRabbitProfileUrl(myRank.profileRabbitId ?? 0)} alt="" width={40} height={40} className="w-full h-full object-cover" />
+                    <img src={getRabbitProfileUrl(myFilteredRank.profileRabbitId ?? 0)} alt="" width={40} height={40} className="w-full h-full object-cover" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold text-white truncate">{myRank.nickname} · {myRank.classType}반</p>
-                    {myRank.equippedRabbitNames ? (
-                      <p className="text-xs text-white/50 truncate">{myRank.equippedRabbitNames}</p>
+                    <p className="font-bold text-white truncate">{myFilteredRank.nickname} · {myFilteredRank.classType}반</p>
+                    {myFilteredRank.equippedRabbitNames ? (
+                      <p className="text-xs text-white/50 truncate">{myFilteredRank.equippedRabbitNames}</p>
                     ) : (
-                      <p className="text-xs text-white/50">{myRank.totalExp.toLocaleString()} XP</p>
+                      <p className="text-xs text-white/50">{myFilteredRank.totalExp.toLocaleString()} XP</p>
                     )}
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <p className="text-base font-black text-white">{Math.round(myRank.rankScore)}점</p>
+                    <p className="text-base font-black text-white">{Math.round(myFilteredRank.rankScore)}점</p>
                   </div>
                 </div>
               </div>
