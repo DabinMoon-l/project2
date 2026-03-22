@@ -253,7 +253,8 @@ async function computeHomeFallback(
   const ranked = students.map((u) => {
     const exp = u.totalExp || 0;
     const profStat = studentProfStats[u.id] || { correct: 0, attempted: 0 };
-    return { id: u.id, classId: u.classId || 'A', rankScore: computeRankScore(profStat.correct, exp), rank: 0 };
+    const correctRate = profStat.attempted > 0 ? (profStat.correct / profStat.attempted) * 100 : 0;
+    return { id: u.id, classId: u.classId || 'A', rankScore: computeRankScore(correctRate, 0, exp), rank: 0 };
   });
   ranked.sort((a, b) => b.rankScore - a.rankScore);
   ranked.forEach((u, i) => { u.rank = i + 1; });

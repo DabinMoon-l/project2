@@ -14,8 +14,19 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
 
 // ── 랭킹 계산 유틸 (클라이언트 ranking.ts와 동일 로직) ──
 
-function computeRankScore(profCorrectCount: number, totalExp: number): number {
-  return profCorrectCount * 4 + totalExp * 0.6;
+/**
+ * 개인 랭킹 점수 = 퀴즈점수(정답률×응시율) × 4 + totalExp × 0.6
+ *
+ * 퀴즈점수 = 평균정답률(0~100) × 0.5 + 응시율(0~100) × 0.5
+ * → 많이 풀고(응시율↑) 잘 풀어야(정답률↑) 높은 점수
+ */
+function computeRankScore(
+  correctRate: number,
+  completionRate: number,
+  totalExp: number
+): number {
+  const quizScore = correctRate * 0.5 + completionRate * 0.5;
+  return quizScore * 4 + totalExp * 0.6;
 }
 
 function computeTeamScore(normalizedAvgExp: number, avgCorrectRate: number, avgCompletionRate: number): number {
@@ -58,6 +69,8 @@ interface RankedUserDoc {
   totalExp: number;
   dailyExp?: number | null;
   weeklyExp?: number | null;
+  dailyRankScore?: number | null;
+  weeklyRankScore?: number | null;
   profCorrectCount: number;
   rankScore: number;
   profileRabbitId: number | null;
@@ -245,25 +258,69 @@ async function computeRankingsForCourse(courseId: string) {
     totalProfQuizzes = profQuizIds.size;
   }
 
-  // quizResults 집계
-  const studentProfStats: Record<string, { correct: number; attempted: number }> = {};
+  // quizResults 집계 (전체 + 주간 + 일간)
+  type ProfStats = { correct: number; attempted: number; quizzesTaken: Set<string> };
+  const newStats = (): ProfStats => ({ correct: 0, attempted: 0, quizzesTaken: new Set() });
+
+  const studentProfStats: Record<string, ProfStats> = {};
+  const studentWeeklyStats: Record<string, ProfStats> = {};
+  const studentDailyStats: Record<string, ProfStats> = {};
+
   resultsSnap.docs.forEach(d => {
     const r = d.data();
     if (r.isUpdate) return;
     const isProfQuiz = professorUids.includes(r.quizCreatorId) || profQuizIds.has(r.quizId);
     if (!isProfQuiz) return;
     const uid = r.userId as string;
-    if (!studentProfStats[uid]) studentProfStats[uid] = { correct: 0, attempted: 0 };
-    studentProfStats[uid].correct += r.correctCount || 0;
-    studentProfStats[uid].attempted += r.totalCount || 0;
+    const correct = r.correctCount || 0;
+    const attempted = r.totalCount || 0;
+    const quizId = r.quizId as string;
+    const ts = r.completedAt?.toDate?.() || r.createdAt?.toDate?.();
+
+    // 전체 (누적)
+    if (!studentProfStats[uid]) studentProfStats[uid] = newStats();
+    studentProfStats[uid].correct += correct;
+    studentProfStats[uid].attempted += attempted;
+    if (quizId) studentProfStats[uid].quizzesTaken.add(quizId);
+
+    // 기간별
+    if (ts) {
+      if (ts >= weekStartUTC) {
+        if (!studentWeeklyStats[uid]) studentWeeklyStats[uid] = newStats();
+        studentWeeklyStats[uid].correct += correct;
+        studentWeeklyStats[uid].attempted += attempted;
+        if (quizId) studentWeeklyStats[uid].quizzesTaken.add(quizId);
+      }
+      if (ts >= todayStartUTC) {
+        if (!studentDailyStats[uid]) studentDailyStats[uid] = newStats();
+        studentDailyStats[uid].correct += correct;
+        studentDailyStats[uid].attempted += attempted;
+        if (quizId) studentDailyStats[uid].quizzesTaken.add(quizId);
+      }
+    }
   });
 
   // ── 개인 랭킹 ──
 
   const rankedUsers: RankedUserDoc[] = students.map((u) => {
     const exp = u.totalExp || 0;
-    const profStat = studentProfStats[u.id] || { correct: 0, attempted: 0 };
-    const rankScore = computeRankScore(profStat.correct, exp);
+    const profStat = studentProfStats[u.id] || { correct: 0, attempted: 0, quizzesTaken: new Set<string>() };
+    // 평균 정답률 (0~100)
+    const correctRate = profStat.attempted > 0 ? (profStat.correct / profStat.attempted) * 100 : 0;
+    // 응시율 (0~100) — 풀은 퀴즈 수 / 전체 교수 퀴즈 수
+    const completionRate = totalProfQuizzes > 0 ? Math.min((profStat.quizzesTaken.size / totalProfQuizzes) * 100, 100) : 0;
+    const rankScore = computeRankScore(correctRate, completionRate, exp);
+
+    // 기간별 rankScore (같은 공식, 기간별 데이터)
+    const calcPeriodScore = (stats: ProfStats | undefined, periodExp: number | null): number | null => {
+      if (periodExp == null) return null;
+      if (!stats) return computeRankScore(0, 0, periodExp);
+      const cr = stats.attempted > 0 ? (stats.correct / stats.attempted) * 100 : 0;
+      const cmr = totalProfQuizzes > 0 ? Math.min((stats.quizzesTaken.size / totalProfQuizzes) * 100, 100) : 0;
+      return computeRankScore(cr, cmr, periodExp);
+    };
+    const dailyRankScore = calcPeriodScore(studentDailyStats[u.id], dailyExpMap[u.id] ?? null);
+    const weeklyRankScore = calcPeriodScore(studentWeeklyStats[u.id], weeklyExpMap[u.id] ?? null);
 
     // 장착 토끼 이름 (discoveryOrder 반영 — "뭉치 2세" 등)
     const allEquipped = u.equippedRabbits || [];
@@ -299,6 +356,8 @@ async function computeRankingsForCourse(courseId: string) {
       totalExp: exp,
       dailyExp: u.id in dailyExpMap ? dailyExpMap[u.id] : null,
       weeklyExp: u.id in weeklyExpMap ? weeklyExpMap[u.id] : null,
+      dailyRankScore,
+      weeklyRankScore,
       profCorrectCount: profStat.correct,
       rankScore,
       profileRabbitId: u.profileRabbitId ?? null,

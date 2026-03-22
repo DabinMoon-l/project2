@@ -14,24 +14,27 @@ import {
 // ============================================================
 
 describe("computeRankScore", () => {
-  it("기본 공식: profCorrectCount × 4 + totalExp × 0.6", () => {
-    expect(computeRankScore(10, 100)).toBe(10 * 4 + 100 * 0.6); // 100
+  it("기본 공식: (정답률×0.5 + 응시율×0.5) × 4 + totalExp × 0.6", () => {
+    // 정답률 80%, 응시율 60%, EXP 100
+    const quizScore = 80 * 0.5 + 60 * 0.5; // 70
+    expect(computeRankScore(80, 60, 100)).toBe(quizScore * 4 + 100 * 0.6); // 280 + 60 = 340
   });
 
-  it("0점, 0 EXP → 0", () => {
-    expect(computeRankScore(0, 0)).toBe(0);
+  it("0점, 0 응시, 0 EXP → 0", () => {
+    expect(computeRankScore(0, 0, 0)).toBe(0);
   });
 
-  it("정답만 있고 EXP 0 → 정답 × 4", () => {
-    expect(computeRankScore(25, 0)).toBe(100);
+  it("정답률 100%, 응시율 100%, EXP 0 → 퀴즈점수만", () => {
+    expect(computeRankScore(100, 100, 0)).toBe(100 * 4); // 400
   });
 
-  it("EXP만 있고 정답 0 → EXP × 0.6", () => {
-    expect(computeRankScore(0, 500)).toBe(300);
+  it("EXP만 있고 퀴즈 0 → EXP × 0.6", () => {
+    expect(computeRankScore(0, 0, 500)).toBe(300);
   });
 
-  it("높은 값 (정답 100, EXP 2000)", () => {
-    expect(computeRankScore(100, 2000)).toBe(400 + 1200); // 1600
+  it("높은 값 (정답률 90%, 응시율 80%, EXP 2000)", () => {
+    const quizScore = 90 * 0.5 + 80 * 0.5; // 85
+    expect(computeRankScore(90, 80, 2000)).toBe(85 * 4 + 2000 * 0.6); // 340 + 1200 = 1540
   });
 });
 

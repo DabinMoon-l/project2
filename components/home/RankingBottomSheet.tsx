@@ -268,31 +268,33 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
       result = result.filter(u => u.classType === classFilter);
     }
 
-    // 기간별 점수 산정 + 재정렬
-    const getScore = (u: typeof result[0]) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const r = u as any;
-      if (periodFilter === 'day') return (r.dailyExp as number) ?? -1;
-      if (periodFilter === 'week') return (r.weeklyExp as number) ?? -1;
+    // 기간별 점수 선택 + 활동자 필터
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const getPeriodScore = (u: any): number | null => {
+      if (periodFilter === 'day') return u.dailyRankScore ?? null;
+      if (periodFilter === 'week') return u.weeklyRankScore ?? null;
       return u.rankScore;
     };
 
-    // Day/Week: dailyExp/weeklyExp 필드가 있는 유저만 (해당 기간 활동자)
+    // Day/Week: 활동자만 (기간별 점수가 null이 아닌 유저)
     if (periodFilter !== 'all') {
-      result = result.filter(u => getScore(u) >= 0);
+      result = result.filter(u => getPeriodScore(u) != null);
     }
 
-    // 점수 기준으로 재정렬
-    result = [...result].sort((a, b) => getScore(b) - getScore(a));
+    // 기간별 점수로 재정렬 + rankScore 덮어쓰기
+    result = result.map(u => ({
+      ...u,
+      rankScore: getPeriodScore(u) ?? u.rankScore,
+    }));
+    result.sort((a, b) => b.rankScore - a.rankScore);
 
     // 순위 재배정
     let currentRank = 1;
     result = result.map((u, i) => {
-      const score = Math.max(0, getScore(u));
-      if (i > 0 && score < Math.max(0, getScore(result[i - 1]))) {
+      if (i > 0 && u.rankScore < result[i - 1].rankScore) {
         currentRank = i + 1;
       }
-      return { ...u, rank: currentRank, rankScore: periodFilter === 'all' ? u.rankScore : score };
+      return { ...u, rank: currentRank };
     });
 
     return result;
@@ -483,7 +485,7 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
                   <div className="mx-4 border-t border-white/20 mb-4" />
 
                   {/* 나머지 유저 목록 */}
-                  <div className="mx-4">
+                  <div className="mx-4 pb-20">
                     {visibleUsers.map((user) => (
                       <div
                         key={user.id}
@@ -612,8 +614,13 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
                     <h3 className="text-sm font-black text-white text-center mb-2">랭킹은 이렇게 매겨져요!</h3>
                     <div className="text-[10px] text-white/60 space-y-0.5 mb-3">
                       <p className="font-bold text-white text-xs">개인 랭킹</p>
-                      <p>- 교수님 퀴즈 정답 수 + EXP로 계산됩니다.</p>
-                      <p>- 퀴즈를 많이 맞히고, 활동을 많이 할수록 점수가 올라요.</p>
+                      <p>- 퀴즈 점수 + EXP로 계산됩니다.</p>
+                      <p>- 퀴즈 점수 = 정답률(50%) + 응시율(50%)</p>
+                      <p>- 많이 풀고, 잘 풀수록 점수가 올라요!</p>
+                      <div className="pt-2" />
+                      <p className="font-bold text-white text-xs">Day / Week</p>
+                      <p>- 해당 기간에 활동한 학생만 표시됩니다.</p>
+                      <p>- 점수 공식은 All과 동일합니다.</p>
                       <div className="pt-2" />
                       <p className="font-bold text-white text-xs">팀 랭킹</p>
                       <p>- 평균 참여도(40%) + 평균 성적(40%) + 퀴즈 응시율(20%).</p>
@@ -740,7 +747,8 @@ async function computeRankingsClientSide(courseId: string): Promise<RankedUser[]
   const ranked: RankedUser[] = students.map((u) => {
     const exp = u.totalExp || 0;
     const profStat = studentProfStats[u.id] || { correct: 0, attempted: 0 };
-    const rankScore = computeRankScore(profStat.correct, exp);
+    const correctRate = profStat.attempted > 0 ? (profStat.correct / profStat.attempted) * 100 : 0;
+    const rankScore = computeRankScore(correctRate, 0, exp);
     const allEquipped: EquippedRabbitEntry[] = u.equippedRabbits || [];
     const names = allEquipped.map((r) => {
       if (r.rabbitId === 0) return '토끼';
