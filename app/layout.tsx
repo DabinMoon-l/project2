@@ -43,10 +43,6 @@ export const metadata: Metadata = {
     type: "website",
     locale: "ko_KR",
   },
-  // themeColor — iOS 26에서 Liquid Glass가 무시하지만 Android Chrome용 유지
-  other: {
-    'theme-color': '#F5F0E8',
-  },
 };
 
 export default function RootLayout({
@@ -62,6 +58,7 @@ export default function RootLayout({
       <head>
         {/* viewport-fit=cover 명시 — Next.js Viewport export 대신 직접 제어 (iOS 26 PWA safe area 확장 필수) */}
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+        <meta name="theme-color" content="#F5F0E8" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <link rel="dns-prefetch" href="https://firebasestorage.googleapis.com" />
