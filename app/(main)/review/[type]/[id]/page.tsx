@@ -1765,7 +1765,7 @@ export default function FolderDetailPage() {
 
       {/* 하단 버튼 영역 — 선택 모드에서 선택 항목 없으면 숨김, 문제 에디터 열려있을 때 숨김 */}
       {!loading && (questions.length > 0 || (isEditMode && editableQuestions.length > 0)) && !(isSelectMode && !isAssignMode && selectedIds.size === 0) && !(isEditMode && editingIndex !== null) && (
-        <div className="fixed bottom-0 right-0 p-3 bg-[#F5F0E8] border-t-2 border-[#1A1A1A]" style={{ left: 'var(--detail-panel-left, 0)' }}>
+        <div className="fixed bottom-0 right-0 p-3 bg-[#F5F0E8] border-t-2 border-[#1A1A1A]" style={{ left: 'var(--detail-panel-left, 0)', paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}>
           {isEditMode ? (
             /* 수정 모드일 때 - 취소/저장 */
             <div className="flex gap-2">
@@ -1824,7 +1824,7 @@ export default function FolderDetailPage() {
 
       {/* 배정 모드일 때 하단 안내 */}
       {!loading && isAssignMode && isSelectMode && selectedIds.size === 0 && (
-        <div className="fixed bottom-0 right-0 p-3 bg-[#EDEAE4] border-t-2 border-[#1A1A1A]" style={{ left: 'var(--detail-panel-left, 0)' }}>
+        <div className="fixed bottom-0 right-0 p-3 bg-[#EDEAE4] border-t-2 border-[#1A1A1A]" style={{ left: 'var(--detail-panel-left, 0)', paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}>
           <p className="text-xs text-center text-[#5C5C5C]">
             분류할 문제를 선택하세요
           </p>

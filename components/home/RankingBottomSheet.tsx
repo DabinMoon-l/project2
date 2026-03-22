@@ -292,7 +292,7 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
             <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl pointer-events-none" />
 
             {/* 스크롤 가능한 컨텐츠 */}
-            <div ref={scrollRef} className="relative z-10 h-full overflow-y-auto scrollbar-hide" style={{ paddingBottom: myRank ? 72 : 16 }}>
+            <div ref={scrollRef} className="relative z-10 h-full overflow-y-auto scrollbar-hide" style={{ paddingBottom: myRank ? 'calc(72px + env(safe-area-inset-bottom, 0px))' : 16 }}>
               {/* 핸들 바 */}
               <div className="flex justify-center pt-3 pb-2">
                 <div className="w-10 h-1 bg-white/30 rounded-full" />
@@ -471,9 +471,9 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
               )}
             </AnimatePresence>
 
-            {/* 하단 고정: 내 순위 */}
+            {/* 하단 고정: 내 순위 — safe area까지 배경 확장 */}
             {myRank && (
-              <div className="absolute bottom-0 left-0 right-0 border-t border-white/15 p-3 z-30 bg-black/40 backdrop-blur-xl">
+              <div className="absolute bottom-0 left-0 right-0 border-t border-white/15 p-3 z-30 bg-black/40 backdrop-blur-xl" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}>
                 <div className="flex items-center gap-2.5">
                   <div className="w-10 h-10 flex items-center justify-center font-black text-lg bg-white/20 text-white rounded-lg">
                     {myRank.rank}

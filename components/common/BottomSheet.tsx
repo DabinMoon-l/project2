@@ -216,7 +216,6 @@ export default function BottomSheet({
               focus:outline-none
               ${heightStyles[height]}
             `}
-            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
           >
             {/* 드래그 핸들 */}
             {enableDrag && (
@@ -240,12 +239,13 @@ export default function BottomSheet({
               </div>
             )}
 
-            {/* 본문 */}
+            {/* 본문 — safe area 패딩을 내부 스크롤에 적용 (배경은 바닥까지 확장) */}
             <div
               className={`
-                px-6 py-4 overflow-y-auto overscroll-contain
+                px-6 pt-4 overflow-y-auto overscroll-contain
                 ${height === 'auto' ? 'max-h-[70vh]' : 'flex-1'}
               `}
+              style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
             >
               {children}
             </div>

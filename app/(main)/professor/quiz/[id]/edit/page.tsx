@@ -443,7 +443,7 @@ export default function EditQuizPage() {
 
       {/* 하단 저장 버튼 */}
       {step === 'questions' && editingIndex === null && (
-        <div className="fixed bottom-0 right-0 p-4 bg-white border-t border-gray-100 safe-area-bottom" style={{ left: 'var(--detail-panel-left, 0)' }}>
+        <div className="fixed bottom-0 right-0 p-4 bg-white border-t border-gray-100 safe-area-bottom" style={{ left: 'var(--detail-panel-left, 0)', paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}>
           <Button
             fullWidth
             onClick={handleSave}

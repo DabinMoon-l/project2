@@ -392,8 +392,8 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
             </div>
             <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl pointer-events-none" />
 
-            {/* 스크롤 영역 */}
-            <div ref={sheetRef} className="relative z-10 overflow-y-auto overscroll-contain max-h-[75vh]">
+            {/* 스크롤 영역 — safe area 패딩 내부 적용 */}
+            <div ref={sheetRef} className="relative z-10 overflow-y-auto overscroll-contain max-h-[75vh]" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
               {/* 드래그 핸들 */}
               <div className="flex justify-center pt-3 pb-1">
                 <div className="w-10 h-1 bg-white/40 rounded-full" />

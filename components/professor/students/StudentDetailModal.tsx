@@ -88,7 +88,7 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
       >
         <motion.div
           className="w-full bg-[#F5F0E8] rounded-t-2xl shadow-[0_-8px_32px_rgba(0,0,0,0.12)] border border-[#D4CFC4]/60 border-b-0 overflow-hidden flex flex-col"
-          style={{ height: '60vh', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          style={{ height: '60vh' }}
           initial={{ y: '100%' }}
           animate={{ y: 0 }}
           exit={{ y: '100%' }}
@@ -140,8 +140,8 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
             )}
           </div>
 
-          {/* 콘텐츠 — 스크롤 가능 */}
-          <div className="flex-1 overflow-y-auto overscroll-contain p-5 space-y-6">
+          {/* 콘텐츠 — 스크롤 가능 (safe area 패딩은 내부에 적용) */}
+          <div className="flex-1 overflow-y-auto overscroll-contain p-5 space-y-6" style={{ paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom, 0px))' }}>
             {/* 종합 역량 레이더 */}
             <div>
               <StudentRadar
