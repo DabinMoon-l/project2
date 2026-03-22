@@ -1,5 +1,5 @@
 import { motion, useTransform, type MotionValue } from 'framer-motion';
-import { ORBIT_RX, ORBIT_RY, CHAR_SIZE } from './characterBoxConstants';
+import { ORBIT_RX as DEFAULT_RX, ORBIT_RY as DEFAULT_RY, CHAR_SIZE as DEFAULT_SIZE } from './characterBoxConstants';
 import { FloatingWrapper } from './FloatingWrapper';
 
 /** 궤도 위 캐릭터 — useTransform으로 타원 경로 공전 */
@@ -8,19 +8,25 @@ export function OrbitalCharacter({
   springRotation,
   charIndex,
   isPressing = false,
+  orbitRx = DEFAULT_RX,
+  orbitRy = DEFAULT_RY,
+  charSize = DEFAULT_SIZE,
 }: {
   rabbitId: number;
   springRotation: MotionValue<number>;
   charIndex: number;
   isPressing?: boolean;
+  orbitRx?: number;
+  orbitRy?: number;
+  charSize?: number;
 }) {
   const offset = charIndex * Math.PI;
 
   const x = useTransform(springRotation, r =>
-    ORBIT_RX * (1 + Math.cos(r + offset))
+    orbitRx * (1 + Math.cos(r + offset))
   );
   const y = useTransform(springRotation, r =>
-    ORBIT_RY * (1 + Math.sin(r + offset))
+    orbitRy * (1 + Math.sin(r + offset))
   );
   const scale = useTransform(springRotation, r => {
     const depth = (Math.sin(r + offset) + 1) / 2;
@@ -44,8 +50,8 @@ export function OrbitalCharacter({
         <motion.img
           src={`/rabbit/rabbit-${String(rabbitId + 1).padStart(3, '0')}.png`}
           alt=""
-          width={CHAR_SIZE}
-          height={Math.round(CHAR_SIZE * (969 / 520))}
+          width={charSize}
+          height={Math.round(charSize * (969 / 520))}
           draggable={false}
           onContextMenu={(e) => e.preventDefault()}
           className="drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
