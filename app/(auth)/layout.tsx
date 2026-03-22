@@ -10,6 +10,7 @@
 import { useEffect } from 'react';
 import Image from 'next/image';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
+import { useKeyboardCSSVariable } from '@/lib/hooks/useKeyboardAware';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   // Auth 페이지: 스크롤 방지
@@ -17,6 +18,9 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
     lockScroll();
     return () => unlockScroll();
   }, []);
+
+  // --kb-offset CSS 변수 설정 (로그인 키보드 대응)
+  useKeyboardCSSVariable();
 
   return (
     <>
