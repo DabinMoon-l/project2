@@ -42,6 +42,7 @@ export interface Announcement {
   createdAt: Timestamp;
   createdBy: string;
   courseId: string;
+  profileRabbitId?: number;
 }
 
 /** 수정 제출 데이터 */

@@ -14,6 +14,7 @@ import { ImageViewer } from '@/components/common';
 import { useKeyboardAware } from '@/lib/hooks/useKeyboardAware';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 import { useHideNav } from '@/lib/hooks/useHideNav';
+import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 
 // ─── 타입 ────────────────────────────────────────────
 interface OpinionMessage {
@@ -25,7 +26,7 @@ interface OpinionMessage {
   authorName: string;
   authorRole: 'student' | 'professor';
   studentId?: string;
-  realName?: string;
+  profileRabbitId?: number;
 }
 
 // ─── 유틸 ────────────────────────────────────────────
@@ -85,9 +86,16 @@ const OpinionItem = memo(function OpinionItem({
       )}
       <div className="px-4 py-1.5 group">
         <div className="flex items-start gap-2">
-          {/* 아바타 */}
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${isDev ? 'bg-emerald-500/30 text-emerald-200' : 'bg-white/15 text-white/80'}`}>
-            {isDev ? '⚙' : msg.authorName[0] || '?'}
+          {/* 아바타 — 프로필 토끼 */}
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 overflow-hidden ${isDev ? 'bg-emerald-500/30' : 'bg-white/15'}`}>
+            {isDev ? (
+              <span className="text-xs">⚙</span>
+            ) : msg.profileRabbitId != null ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={getRabbitProfileUrl(msg.profileRabbitId)} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-xs font-bold text-white/80">{msg.authorName[0] || '?'}</span>
+            )}
           </div>
           <div className="flex-1 min-w-0">
             {/* 이름 + 시간 */}
@@ -232,6 +240,7 @@ export default function OpinionChannel() {
         authorName: profile.nickname || '익명',
         authorRole: isProfessor ? 'professor' : 'student',
         studentId: (profile as unknown as Record<string, string>).studentId || '',
+        profileRabbitId: profile.profileRabbitId ?? null,
       });
 
       if (textareaRef.current) textareaRef.current.value = '';

@@ -7,6 +7,7 @@ import { deleteDoc, doc, db } from '@/lib/repositories';
 import type { Announcement, FileAttachment, Poll, EditSubmitData } from './types';
 import { REACTION_EMOJIS, BUBBLE_SIDE_MULTI, getImageUrls, getFiles, getPolls, fmtDate, fmtTime, URL_RE } from './types';
 import { Bubble, ImageCarousel, FileCarousel, PollCarousel, MessageContent } from './BubbleComponents';
+import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 
 // ─── 메시지 아이템 (memo로 불필요한 리렌더 방지) ────────
 
@@ -172,7 +173,13 @@ const AnnouncementMessageItem = memo(function AnnouncementMessageItem({
         </div>
       )}
       <div className={`flex gap-2 ${isOwnProfessor ? 'flex-row-reverse' : ''} ${isHighlighted ? 'bg-black/15 rounded-xl p-1 -m-1' : ''}`}>
-        <img src="/notice/avatar_professor.png" alt="교수님" className="w-10 h-10 shrink-0 object-cover rounded-full mt-0.5" />
+        {a.profileRabbitId != null ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={getRabbitProfileUrl(a.profileRabbitId)} alt="교수님" className="w-10 h-10 shrink-0 object-cover rounded-full mt-0.5" />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src="/notice/avatar_professor.png" alt="교수님" className="w-10 h-10 shrink-0 object-cover rounded-full mt-0.5" />
+        )}
         <div className={`min-w-0 ${editing ? 'w-[65%]' : (useFullWidth ? 'w-[65%]' : 'max-w-[65%]')} ${isOwnProfessor ? 'flex flex-col items-end' : ''}`}>
           <p className={`text-xs font-bold text-white/70 mb-0.5 ${isOwnProfessor ? 'text-right' : ''}`}>Prof. Kim</p>
           <div className={`flex items-center gap-1.5 ${useFullWidth || editing ? 'self-stretch' : ''}`}
