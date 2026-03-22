@@ -69,8 +69,8 @@ export default function PracticeStage({
     >
       {/* 헤더 */}
       <header
-        className="sticky top-0 z-[60] w-full border-b-2 border-[#1A1A1A]"
-        style={{ backgroundColor: '#F5F0E8', paddingTop: 'env(safe-area-inset-top, 0px)' }}
+        className="sticky top-0 z-[60] w-full border-b-2 border-[#1A1A1A] header-extend-safe-area"
+        style={{ backgroundColor: '#F5F0E8' }}
       >
         <div className="flex items-center justify-between h-14 px-4">
           <motion.button
