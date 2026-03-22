@@ -304,11 +304,7 @@ export default function OpinionChannel() {
 
   // 최신 메시지 미리보기
   const latest = messages[0];
-  const previewText = loading
-    ? '불러오는 중...'
-    : latest
-      ? latest.content || '사진을 보냈습니다.'
-      : '여러분의 의견을 보내주세요!';
+  const previewText = '여러분의 의견을 보내주세요!';
 
   return (
     <>
