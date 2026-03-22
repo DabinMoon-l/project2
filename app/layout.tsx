@@ -1,4 +1,4 @@
-import type { Metadata, Viewport } from "next";
+import type { Metadata } from "next";
 import { Noto_Sans_KR, Playfair_Display, Cormorant_Garamond } from "next/font/google";
 import "./globals.css";
 import { WebVitalsReporter } from "@/components/common/WebVitalsReporter";
@@ -43,10 +43,10 @@ export const metadata: Metadata = {
     type: "website",
     locale: "ko_KR",
   },
-};
-
-export const viewport: Viewport = {
-  themeColor: "#F5F0E8",
+  // themeColor — iOS 26에서 Liquid Glass가 무시하지만 Android Chrome용 유지
+  other: {
+    'theme-color': '#F5F0E8',
+  },
 };
 
 export default function RootLayout({
