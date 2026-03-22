@@ -202,6 +202,27 @@ function MainLayoutGrid({
     };
   }, []);
 
+  // 배포 후 chunk 로드 실패 시 자동 새로고침 (SW 캐시 ↔ 서버 불일치 대응)
+  useEffect(() => {
+    const handleError = (e: ErrorEvent) => {
+      if (e.message?.includes('ChunkLoadError') || e.message?.includes('Loading chunk') || e.message?.includes('Failed to fetch dynamically imported module')) {
+        window.location.reload();
+      }
+    };
+    const handleRejection = (e: PromiseRejectionEvent) => {
+      const msg = e.reason?.message || String(e.reason);
+      if (msg.includes('ChunkLoadError') || msg.includes('Loading chunk') || msg.includes('Failed to fetch dynamically imported module')) {
+        window.location.reload();
+      }
+    };
+    window.addEventListener('error', handleError);
+    window.addEventListener('unhandledrejection', handleRejection);
+    return () => {
+      window.removeEventListener('error', handleError);
+      window.removeEventListener('unhandledrejection', handleRejection);
+    };
+  }, []);
+
   // CSS 변수를 body에 설정 (createPortal로 body에 렌더되는 모달/바텀시트가 상속받도록)
   useEffect(() => {
     const body = document.body;
