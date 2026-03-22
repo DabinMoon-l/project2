@@ -242,60 +242,65 @@ export default function ProfessorHomeOverlay() {
       }}
     >
       <div className="relative z-[2] flex-1 flex flex-col pt-1 pb-2">
-        {/* 프로필 + 닉네임 (학생과 동일) */}
-        <div className="px-8 flex items-center gap-3 mb-2 mt-10">
-          <button
-            className="w-14 h-14 flex items-center justify-center flex-shrink-0 rounded-xl overflow-hidden"
-            style={{ background: 'rgba(0, 0, 0, 0.3)', border: '1px solid rgba(255, 255, 255, 0.1)' }}
-            onClick={() => setShowProfileDrawer(true)}
-          >
-            {profile.profileRabbitId != null ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={getRabbitProfileUrl(profile.profileRabbitId)}
-                alt="프로필"
-                width={80}
-                height={80}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <svg width={40} height={40} viewBox="0 0 24 24" fill="white">
-                <circle cx="12" cy="8" r="4" />
-                <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
-              </svg>
-            )}
-          </button>
-          <p className="font-bold text-4xl text-white truncate leading-normal flex-1">
-            {profile.nickname}
-          </p>
+        {/* ① 상단 섹션: 프로필 + 공지 + 의견 (flex-none) */}
+        <div className="flex-none">
+          <div className="px-8 flex items-center gap-3 mb-2 mt-10">
+            <button
+              className="w-14 h-14 flex items-center justify-center flex-shrink-0 rounded-xl overflow-hidden"
+              style={{ background: 'rgba(0, 0, 0, 0.3)', border: '1px solid rgba(255, 255, 255, 0.1)' }}
+              onClick={() => setShowProfileDrawer(true)}
+            >
+              {profile.profileRabbitId != null ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={getRabbitProfileUrl(profile.profileRabbitId)}
+                  alt="프로필"
+                  width={80}
+                  height={80}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <svg width={40} height={40} viewBox="0 0 24 24" fill="white">
+                  <circle cx="12" cy="8" r="4" />
+                  <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
+                </svg>
+              )}
+            </button>
+            <p className="font-bold text-4xl text-white truncate leading-normal flex-1">
+              {profile.nickname}
+            </p>
+          </div>
+          <div className="px-10 mb-2 mt-1 relative z-30">
+            <AnnouncementChannel
+              overrideCourseId={selectedCourse}
+              headerContent={
+                <CourseSwitcher
+                  value={selectedCourse}
+                  onChange={setProfessorCourse}
+                  textClassName="text-2xl font-black text-white/90 tracking-wide inline-block"
+                  courseIds={assignedCourses}
+                />
+              }
+            />
+          </div>
+          <div className="px-8 mb-1 relative z-20">
+            <OpinionChannel />
+          </div>
         </div>
 
-        {/* 공지 — CourseSwitcher 헤더 포함 (학생과 동일 패딩) */}
-        <div className="px-10 mb-2 mt-1 relative z-30">
-          <AnnouncementChannel
-            overrideCourseId={selectedCourse}
-            headerContent={
-              <CourseSwitcher
-                value={selectedCourse}
-                onChange={setProfessorCourse}
-                textClassName="text-2xl font-black text-white/90 tracking-wide inline-block"
-                courseIds={assignedCourses}
-              />
-            }
-          />
-        </div>
+        {/* 균등 간격 1: 상단 ↔ 토끼 */}
+        <div className="flex-1" />
 
-        {/* 의견 게시판 */}
-        <div className="px-8 mb-1 relative z-20">
-          <OpinionChannel />
-        </div>
-
-        {/* 캐릭터 영역 — 아래로 내림 */}
-        <div className="mt-8">
+        {/* ② 토끼 섹션: 캐릭터 + 궤도 (flex-none) */}
+        <div className="flex-none">
           <ProfessorCharacterBox />
         </div>
 
-        <div className="mt-32">
+        {/* 균등 간격 2: 토끼 ↔ 랭킹 */}
+        <div className="flex-1" />
+
+        {/* ③ 랭킹 섹션: 과목 전환 + 랭킹 (flex-none) */}
+        <div className="flex-none">
           <div className="mb-2 flex items-center justify-center px-8">
             <CourseSwitcher
               value={selectedCourse}
@@ -307,9 +312,12 @@ export default function ProfessorHomeOverlay() {
           <ProfessorRankingSection overrideCourseId={selectedCourse} />
         </div>
 
-        {/* 스와이프 힌트 (학생과 동일) */}
+        {/* 균등 간격 3: 랭킹 ↔ 스와이프 힌트 */}
+        <div className="flex-1" />
+
+        {/* ④ 스와이프 힌트 (flex-none) */}
         {!isWide && (
-          <div className="absolute bottom-5 left-0 right-0 flex flex-col items-center gap-0.5 pointer-events-none">
+          <div className="flex-none flex flex-col items-center gap-0.5 pointer-events-none pb-1">
             <motion.svg
               className="w-4 h-4 text-white/50"
               fill="none"
