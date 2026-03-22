@@ -176,167 +176,149 @@ export default function PostDetailPage() {
   const { deletePost, loading: deleting } = useDeletePost();
   const { toggleLike } = useLike();
 
-  // ── 양방향 스와이프 → 이전/다음 게시글 네비게이션 ──
+  // ── 우→좌 스와이프 → 다음 게시글 (순환) ──
   const swipeRef = useRef<HTMLDivElement>(null);
   const swipeNav = useRef({ startX: 0, startY: 0, lastX: 0, active: false, locked: false, startTime: 0, navigating: false });
 
-  // 이전/다음 게시글 ID + 인디케이터
-  const { prevPostId, nextPostId, currentIndex, totalPosts } = useMemo(() => {
-    const empty = { prevPostId: null as string | null, nextPostId: null as string | null, currentIndex: -1, totalPosts: 0 };
+  // 다음 게시글 ID + 인디케이터 (순환: 마지막이면 첫 글로)
+  const { nextPostId, currentIndex, totalPosts } = useMemo(() => {
+    const empty = { nextPostId: null as string | null, currentIndex: -1, totalPosts: 0 };
     if (typeof window === 'undefined') return empty;
     try {
       const ids: string[] = JSON.parse(sessionStorage.getItem('board_post_ids') || '[]');
       const idx = ids.indexOf(postId);
       if (idx < 0 || ids.length < 2) return { ...empty, currentIndex: idx, totalPosts: ids.length };
       return {
-        prevPostId: idx > 0 ? ids[idx - 1] : null,
-        nextPostId: idx < ids.length - 1 ? ids[idx + 1] : null,
+        nextPostId: ids[(idx + 1) % ids.length],
         currentIndex: idx,
         totalPosts: ids.length,
       };
     } catch { return empty; }
   }, [postId]);
 
-  // 스와이프로 이동하는 헬퍼
-  const navigateToPost = useCallback((targetId: string, direction: 'left' | 'right') => {
-    const el = swipeRef.current;
-    if (!el) return;
-    const s = swipeNav.current;
-    s.navigating = true;
+  // nextPostId를 ref에 저장 (useEffect 의존성에서 제외하여 리스너 항상 유지)
+  const nextPostIdRef = useRef(nextPostId);
+  nextPostIdRef.current = nextPostId;
 
-    const translateX = direction === 'left' ? -window.innerWidth : window.innerWidth;
-    el.style.transition = 'transform 0.2s ease-out, opacity 0.2s ease-out';
-    el.style.transform = `translateX(${translateX}px)`;
-    el.style.opacity = '0.3';
-
-    setTimeout(() => {
-      el.style.transition = '';
-      el.style.transform = '';
-      el.style.opacity = '';
-      sessionStorage.removeItem(`visited_board_${targetId}`);
-      router.replace(`/board/${targetId}`);
-      setTimeout(() => { s.navigating = false; }, 300);
-    }, 180);
-  }, [router]);
-
-  // 터치 + 마우스 스와이프 핸들러
+  // 우→좌 스와이프로 다음 글 이동 (el에 직접 바인딩)
   useEffect(() => {
     const el = swipeRef.current;
     if (!el) return;
 
-    const DIR_LOCK_DIST = 12;
-    const ANGLE_THRESHOLD = 55;
-    const SWIPE_THRESHOLD = 0.30;
+    const SWIPE_THRESHOLD = 0.25;
     const VELOCITY_THRESHOLD = 400;
 
-    const onPointerDown = (x: number, y: number) => {
+    const onTouchStart = (e: TouchEvent) => {
       const s = swipeNav.current;
-      if (s.navigating) return;
+      if (s.navigating || !nextPostIdRef.current) return;
       if (getScrollLockCount() > 0) return;
-      if (document.body.hasAttribute('data-hide-nav')) return;
-
-      s.startX = x;
-      s.startY = y;
-      s.lastX = x;
+      s.startX = e.touches[0].clientX;
+      s.startY = e.touches[0].clientY;
+      s.lastX = s.startX;
       s.active = true;
       s.locked = false;
       s.startTime = Date.now();
     };
 
-    const onPointerMove = (x: number, y: number, e?: Event) => {
+    const onTouchMove = (e: TouchEvent) => {
       const s = swipeNav.current;
       if (!s.active || s.navigating) return;
-
-      const dx = x - s.startX;
-      const dy = y - s.startY;
-      s.lastX = x;
+      const cx = e.touches[0].clientX;
+      const dx = cx - s.startX;
+      const dy = e.touches[0].clientY - s.startY;
+      s.lastX = cx;
 
       if (!s.locked) {
         const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > DIR_LOCK_DIST) {
-          const angle = Math.atan2(Math.abs(dy), Math.abs(dx)) * (180 / Math.PI);
-          if (angle > ANGLE_THRESHOLD) { s.active = false; return; }
-          // 이동 가능한 방향인지 확인
-          const canMove = (dx < 0 && nextPostId) || (dx > 0 && prevPostId);
-          if (!canMove) { s.active = false; return; }
-          s.locked = true;
-        } else {
-          return;
-        }
+        if (dist < 10) return;
+        const angle = Math.atan2(Math.abs(dy), Math.abs(dx)) * (180 / Math.PI);
+        // 세로 스크롤 or 오른쪽 스와이프 → 무시
+        if (angle > 50 || dx >= 0) { s.active = false; return; }
+        s.locked = true;
       }
 
-      e?.preventDefault();
-      const resistance = 1 - Math.min(Math.abs(dx) / window.innerWidth, 0.6) * 0.4;
-      el.style.transform = `translateX(${dx * resistance}px)`;
+      e.preventDefault();
+      const r = 1 - Math.min(Math.abs(dx) / window.innerWidth, 0.5) * 0.3;
+      el.style.transform = `translateX(${dx * r}px)`;
       el.style.transition = 'none';
     };
 
-    const onPointerEnd = () => {
+    const onTouchEnd = () => {
       const s = swipeNav.current;
       if (!s.active || !s.locked || s.navigating) { s.active = false; return; }
       s.active = false;
 
+      const target = nextPostIdRef.current;
+      if (!target) { el.style.transform = ''; return; }
+
       const dx = s.lastX - s.startX;
       const elapsed = Date.now() - s.startTime;
       const velocity = Math.abs(dx) / (elapsed / 1000);
-      const screenW = window.innerWidth;
-      const triggered = Math.abs(dx) > screenW * SWIPE_THRESHOLD || velocity > VELOCITY_THRESHOLD;
+      const W = window.innerWidth;
 
-      if (triggered && dx < 0 && nextPostId) {
-        navigateToPost(nextPostId, 'left');
-      } else if (triggered && dx > 0 && prevPostId) {
-        navigateToPost(prevPostId, 'right');
+      if (dx < 0 && (Math.abs(dx) > W * SWIPE_THRESHOLD || velocity > VELOCITY_THRESHOLD)) {
+        s.navigating = true;
+        el.style.transition = 'transform 0.2s ease-out, opacity 0.15s ease-out';
+        el.style.transform = `translateX(${-W}px)`;
+        el.style.opacity = '0.3';
+        setTimeout(() => {
+          el.style.transition = ''; el.style.transform = ''; el.style.opacity = '';
+          sessionStorage.removeItem(`visited_board_${target}`);
+          router.replace(`/board/${target}`);
+          setTimeout(() => { s.navigating = false; }, 300);
+        }, 180);
       } else {
-        el.style.transition = 'transform 0.25s cubic-bezier(0.2, 0, 0, 1)';
+        el.style.transition = 'transform 0.2s ease-out';
         el.style.transform = '';
       }
     };
 
-    // 터치
-    const onTouchStart = (e: TouchEvent) => onPointerDown(e.touches[0].clientX, e.touches[0].clientY);
-    const onTouchMove = (e: TouchEvent) => onPointerMove(e.touches[0].clientX, e.touches[0].clientY, e);
-    const onTouchEnd = () => onPointerEnd();
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', onTouchEnd, { passive: true });
 
-    // 마우스 (PC 드래그)
+    // PC 마우스
     let mouseDown = false;
     const onMouseDown = (e: MouseEvent) => {
-      // 링크, 버튼, 입력 요소 위에서는 드래그 시작 안 함
-      const target = e.target as HTMLElement;
-      if (target.closest('a, button, input, textarea, [contenteditable]')) return;
+      if ((e.target as HTMLElement).closest('a,button,input,textarea,[contenteditable]')) return;
+      if (!nextPostIdRef.current || swipeNav.current.navigating) return;
       mouseDown = true;
-      el.style.cursor = 'grabbing';
-      el.style.userSelect = 'none';
+      el.style.cursor = 'grabbing'; el.style.userSelect = 'none';
       e.preventDefault();
-      onPointerDown(e.clientX, e.clientY);
+      Object.assign(swipeNav.current, { startX: e.clientX, startY: e.clientY, lastX: e.clientX, active: true, locked: false, startTime: Date.now() });
     };
     const onMouseMove = (e: MouseEvent) => {
       if (!mouseDown) return;
-      onPointerMove(e.clientX, e.clientY, e);
+      const s = swipeNav.current;
+      if (!s.active || s.navigating) return;
+      const dx = e.clientX - s.startX;
+      const dy = e.clientY - s.startY;
+      s.lastX = e.clientX;
+      if (!s.locked) {
+        if (Math.sqrt(dx*dx+dy*dy) < 10) return;
+        if (Math.atan2(Math.abs(dy),Math.abs(dx))*(180/Math.PI) > 50 || dx >= 0) { s.active = false; return; }
+        s.locked = true;
+      }
+      e.preventDefault();
+      const r = 1 - Math.min(Math.abs(dx)/window.innerWidth, 0.5)*0.3;
+      el.style.transform = `translateX(${dx*r}px)`; el.style.transition = 'none';
     };
-    const onMouseUp = () => {
-      if (!mouseDown) return;
-      mouseDown = false;
-      el.style.cursor = '';
-      el.style.userSelect = '';
-      onPointerEnd();
-    };
+    const onMouseUp = () => { if (!mouseDown) return; mouseDown = false; el.style.cursor = ''; el.style.userSelect = ''; onTouchEnd(); };
 
-    document.addEventListener('touchstart', onTouchStart, { passive: true });
-    document.addEventListener('touchmove', onTouchMove, { passive: false });
-    document.addEventListener('touchend', onTouchEnd, { passive: true });
     el.addEventListener('mousedown', onMouseDown);
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
 
     return () => {
-      document.removeEventListener('touchstart', onTouchStart);
-      document.removeEventListener('touchmove', onTouchMove);
-      document.removeEventListener('touchend', onTouchEnd);
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
       el.removeEventListener('mousedown', onMouseDown);
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
     };
-  }, [prevPostId, nextPostId, navigateToPost]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router]);
 
   const isOwner = user?.uid === post?.authorId;
 
@@ -445,7 +427,7 @@ export default function PostDetailPage() {
   }
 
   return (
-    <div ref={swipeRef} style={{ cursor: (prevPostId || nextPostId) ? 'grab' : undefined }}>
+    <div ref={swipeRef} style={{ cursor: nextPostId ? 'grab' : undefined }}>
     <motion.div
       className="min-h-screen pb-24 overflow-x-hidden" data-board-detail style={{ backgroundColor: '#F5F0E8' }}
       initial={slideIn ? { opacity: 0, x: 60 } : false}

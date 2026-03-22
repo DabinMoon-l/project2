@@ -887,7 +887,7 @@ export default function BoardPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="제목 검색..."
-              className="w-full px-2.5 h-8 text-[11px] outline-none"
+              className="w-full px-2.5 h-8 text-[6px] outline-none"
               style={{ border: '1px solid #1A1A1A', backgroundColor: '#F5F0E8' }}
             />
           </div>
@@ -940,8 +940,8 @@ export default function BoardPage() {
               className="overflow-hidden mt-2"
             >
               <div className="p-2 bg-[#EDEAE4] border border-[#D4CFC4] space-y-1.5">
-                {/* 기존 태그 (학사/학술/기타) */}
-                <div className="flex flex-wrap justify-end gap-1.5">
+                {/* 기존 태그 (학사/학술/건의/기타) */}
+                <div className="flex flex-wrap justify-center gap-1.5">
                   {BOARD_TAGS
                     .filter(t => !selectedTags.includes(t))
                     .map((t) => (
@@ -961,7 +961,7 @@ export default function BoardPage() {
                 </div>
                 {/* 챕터 태그 */}
                 {availableChapterTags.length > 0 && (
-                  <div className="flex flex-wrap gap-1 pt-1.5 border-t border-[#D4CFC4]">
+                  <div className="flex flex-wrap justify-center gap-1 pt-1.5 border-t border-[#D4CFC4]">
                     {availableChapterTags
                       .filter(ct => !selectedTags.includes(ct))
                       .map((ct) => (
