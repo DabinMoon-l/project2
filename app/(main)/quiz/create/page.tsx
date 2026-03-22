@@ -7,7 +7,7 @@ import { collection, addDoc, serverTimestamp, db } from '@/lib/repositories';
 import { auth } from '@/lib/firebase';
 import { processQuizImages, sanitizeForFirestore } from '@/lib/utils/quizImageUpload';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { useCourse, useUser } from '@/lib/contexts';
+import { useCourse, useUser, useDetailPanel } from '@/lib/contexts';
 import { useExpToast } from '@/components/common';
 import { EXP_REWARDS } from '@/lib/utils/expRewards';
 import { getCurrentSemesterByDate } from '@/lib/types/course';
@@ -102,12 +102,13 @@ interface FlattenedQuestion {
  * OCR을 통한 이미지/PDF 업로드 또는 직접 입력으로
  * 퀴즈 문제를 생성하고 저장합니다.
  */
-export default function QuizCreatePage() {
+export default function QuizCreatePage({ isPanelMode }: { isPanelMode?: boolean } = {}) {
   const router = useRouter();
   const { user } = useAuth();
   const { userCourseId } = useCourse();
   const { profile } = useUser();
   const { showExpToast } = useExpToast();
+  const { closeDetail } = useDetailPanel();
 
   // 단계 관리
   const [step, setStep] = useState<Step>('upload');
@@ -286,11 +287,12 @@ export default function QuizCreatePage() {
   // 슬라이드 아웃 애니메이션 상태
   const [isClosing, setIsClosing] = useState(false);
 
-  // 슬라이드 아웃 후 실제 이동
+  // 뒤로가기 — 패널 모드: closeDetail, 세로모드: 슬라이드 아웃
   const navigateBack = useCallback(() => {
+    if (isPanelMode) { closeDetail(); return; }
     setIsClosing(true);
     setTimeout(() => router.back(), 280);
-  }, [router]);
+  }, [router, isPanelMode, closeDetail]);
 
   /**
    * 저장하고 나가기
@@ -1303,8 +1305,9 @@ export default function QuizCreatePage() {
       // 저장된 초안 삭제
       deleteDraft();
 
-      // 성공 시 이동: 공개→퀴즈 목록, 비공개→서재
+      // 성공 시 이동
       setTimeout(() => {
+        if (isPanelMode) { closeDetail(); return; }
         router.push(cleanedQuizData.isPublic ? '/quiz?created=true' : '/review?filter=library');
       }, 300);
     } catch (error) {
@@ -1346,10 +1349,13 @@ export default function QuizCreatePage() {
 
   return (
     <motion.div
-      initial={{ x: '100%' }}
-      animate={{ x: isClosing ? '100%' : 0 }}
-      transition={{ type: 'spring', stiffness: 400, damping: 35 }}
-      className="fixed inset-0 z-40 flex flex-col overflow-y-auto"
+      initial={isPanelMode ? { opacity: 0 } : { x: '100%' }}
+      animate={isPanelMode ? { opacity: 1 } : { x: isClosing ? '100%' : 0 }}
+      transition={isPanelMode ? { duration: 0.15 } : { type: 'spring', stiffness: 400, damping: 35 }}
+      className={isPanelMode
+        ? 'flex flex-col min-h-screen'
+        : 'fixed inset-0 z-40 flex flex-col overflow-y-auto'
+      }
       style={{ backgroundColor: '#F5F0E8' }}
     >
       {/* 헤더 */}

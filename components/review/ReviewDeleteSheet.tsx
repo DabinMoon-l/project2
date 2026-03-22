@@ -36,7 +36,7 @@ export default function ReviewDeleteSheet({
           animate={{ opacity: 1, pointerEvents: 'auto' as const }}
           exit={{ opacity: 0, pointerEvents: 'none' as const }}
           className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50"
-          style={{ left: 'var(--modal-left, 0px)' }}
+          style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
           onClick={onClose}
         >
           <motion.div

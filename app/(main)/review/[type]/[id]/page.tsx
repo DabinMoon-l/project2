@@ -23,6 +23,7 @@ import { callFunction } from '@/lib/api';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useReview, type ReviewItem, type FolderCategory, type CustomFolderQuestion } from '@/lib/hooks/useReview';
 import { useCourse } from '@/lib/contexts/CourseContext';
+import { useDetailPanel } from '@/lib/contexts';
 import dynamic from 'next/dynamic';
 import { Skeleton, useExpToast } from '@/components/common';
 import { EXP_REWARDS } from '@/lib/utils/expRewards';
@@ -48,29 +49,45 @@ import EditMetadataSection from '@/components/review/detail/EditMetadataSection'
 
 /**
  * 폴더 상세 페이지
+ * panelType/panelId가 주어지면 3쪽 패널 모드 (가로모드)
  */
-export default function FolderDetailPage() {
+interface FolderDetailPageProps {
+  panelType?: string;
+  panelId?: string;
+  panelAutoStart?: string | null;
+}
+
+export default function FolderDetailPage({ panelType, panelId, panelAutoStart }: FolderDetailPageProps = {}) {
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const { userCourse, userClassId } = useCourse();
   const { showExpToast } = useExpToast();
+  const { closeDetail } = useDetailPanel();
 
-  const folderType = params.type as string; // solved, wrong, bookmark, custom
-  const folderId = params.id as string;
+  // 패널 모드: prop 우선, 없으면 라우트 params 폴백
+  const isPanelMode = !!panelType;
+  const folderType = panelType || (params.type as string); // solved, wrong, bookmark, custom
+  const folderId = panelId || (params.id as string);
 
   // 최초 진입 시에만 슬라이드 애니메이션 (뒤로가기 시 재발동 방지)
   const [slideIn] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    const key = `visited_review_${params.id}`;
+    if (isPanelMode || typeof window === 'undefined') return false;
+    const key = `visited_review_${folderId}`;
     if (sessionStorage.getItem(key)) return false;
     sessionStorage.setItem(key, '1');
     return true;
   });
-  const chapterFilter = searchParams.get('chapter'); // 챕터 필터 (오답 탭에서 챕터별 클릭 시)
-  const fromQuizPage = searchParams.get('from') === 'quiz'; // 퀴즈 페이지 복습탭에서 접근 시 수정 비활성화
-  const autoStart = searchParams.get('autoStart'); // 'all' | 'wrongOnly' — 퀴즈 페이지에서 바로 복습 시작
+  const chapterFilter = isPanelMode ? null : searchParams.get('chapter');
+  const fromQuizPage = isPanelMode ? false : searchParams.get('from') === 'quiz';
+  const autoStart = isPanelMode ? (panelAutoStart || null) : searchParams.get('autoStart');
+
+  // 뒤로가기: 패널 모드에서는 closeDetail, 일반 모드에서는 router.push
+  const goBackToList = useCallback((filter?: string) => {
+    if (isPanelMode) { closeDetail(); return; }
+    router.push(`/review?filter=${filter || folderType}`);
+  }, [isPanelMode, closeDetail, router, folderType]);
 
   // 과목별 리본 이미지 (solved 타입 또는 퀴즈 페이지에서 온 경우 퀴즈 리본, 나머지는 리뷰 리본)
   const ribbonImage = (folderType === 'solved' || fromQuizPage)
@@ -166,7 +183,7 @@ export default function FolderDetailPage() {
   const supplementedExpsRef = useRef<string | null>(null);
 
   // 네비게이션 숨김
-  useHideNav(true);
+  useHideNav(!isPanelMode); // 패널 모드에서는 네비게이션 숨기지 않음
 
   // 커스텀 폴더 찾기
   const customFolder = useMemo(() => {
@@ -1426,7 +1443,7 @@ export default function FolderDetailPage() {
     }
 
     if (autoStart) {
-      router.push(`/review?filter=${folderType}`);
+      goBackToList();
     } else {
       setPracticeItems(null);
       setPracticeMode(null);
@@ -1454,7 +1471,7 @@ export default function FolderDetailPage() {
         onComplete={handlePracticeComplete}
         onClose={() => {
           if (autoStart) {
-            router.push(`/review?filter=${folderType}`);
+            goBackToList();
           } else {
             setPracticeItems(null);
             setPracticeMode(null);
@@ -1483,7 +1500,7 @@ export default function FolderDetailPage() {
   const handleFilterChange = (filter: ReviewFilter) => {
     // 현재 폴더 타입과 다른 필터를 선택하면 리뷰 페이지로 이동
     if (filter !== folderType) {
-      router.push(`/review?filter=${filter}`);
+      goBackToList(filter);
     }
   };
 
@@ -1502,7 +1519,7 @@ export default function FolderDetailPage() {
         folderTitle={folderTitle}
         fromQuizPage={fromQuizPage}
         quizScores={quizScores}
-        onBack={() => router.push(`/review?filter=${folderType}`)}
+        onBack={() => goBackToList()}
       />
 
       {/* 폴더 제목 + 점수 (solved 타입 제외) */}
@@ -1515,7 +1532,7 @@ export default function FolderDetailPage() {
                 {/* 뒤로가기 < 화살표 */}
                 {!isEditMode && (
                   <button
-                    onClick={() => router.push(`/review?filter=${folderType}`)}
+                    onClick={() => goBackToList()}
                     className="p-1 text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors flex-shrink-0"
                   >
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1594,7 +1611,7 @@ export default function FolderDetailPage() {
           ) : (
             <div className="flex items-center gap-2">
               <button
-                onClick={() => router.push(`/review?filter=${folderType}`)}
+                onClick={() => goBackToList()}
                 className="p-1 text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors flex-shrink-0"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1921,7 +1938,7 @@ export default function FolderDetailPage() {
               await deleteDoc(doc(db, 'quizzes', folderId));
             }
             setShowDeleteModal(false);
-            router.push(`/review?filter=${folderType}`);
+            goBackToList();
           } catch (err) {
             console.error('삭제 실패:', err);
           }

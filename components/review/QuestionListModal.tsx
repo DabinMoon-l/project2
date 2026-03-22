@@ -37,7 +37,7 @@ export default function QuestionListModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
-      style={{ left: 'var(--modal-left, 0px)' }}
+      style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
       onClick={onClose}
     >
       <motion.div

@@ -9,7 +9,7 @@
  * 모바일 세로모드에서는 사용되지 않음.
  */
 
-import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 
@@ -51,10 +51,21 @@ export function DetailPanelProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // 탭 전환 시 (pathname이 탭 루트로 변경되면) 디테일 패널 자동 닫기
+  // 단, 현재 탭과 같은 루트에서는 닫지 않음 (2쪽 고정 + 3쪽 상세 패턴)
+  const prevPathnameRef = useRef(pathname);
   useEffect(() => {
     const tabRoots = ['/', '/quiz', '/review', '/board', '/professor', '/professor/stats', '/professor/quiz', '/professor/students', '/settings', '/profile'];
+    const prev = prevPathnameRef.current;
+    prevPathnameRef.current = pathname;
+
     if (tabRoots.includes(pathname)) {
-      setContent(null);
+      // 같은 탭 루트 내에서 돌아온 경우(예: /review/xxx → /review)는 닫지 않음
+      // 다른 탭으로 전환한 경우만 닫기
+      const prevRoot = tabRoots.find(r => r !== '/' && prev.startsWith(r)) || '/';
+      const currRoot = tabRoots.find(r => r !== '/' && pathname.startsWith(r)) || '/';
+      if (prevRoot !== currRoot) {
+        setContent(null);
+      }
     }
   }, [pathname]);
 

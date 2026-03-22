@@ -99,7 +99,7 @@ export default function ExpandModal({
           <motion.div
             key="expand-backdrop"
             className="fixed inset-0"
-            style={{ zIndex, left: 'var(--modal-left, 0px)' }}
+            style={{ zIndex, left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -116,6 +116,7 @@ export default function ExpandModal({
             style={{
               zIndex: zIndex + 1,
               left: 'var(--modal-left, 0px)',
+              right: 'var(--modal-right, 0px)',
               padding: '1rem',
               paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))',
             }}

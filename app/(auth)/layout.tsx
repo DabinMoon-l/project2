@@ -11,6 +11,7 @@ import { useEffect } from 'react';
 import Image from 'next/image';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 import { useKeyboardCSSVariable } from '@/lib/hooks/useKeyboardAware';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   // Auth 페이지: 스크롤 방지
@@ -21,6 +22,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
 
   // --kb-offset CSS 변수 설정 (로그인 키보드 대응)
   useKeyboardCSSVariable();
+  const isWide = useWideMode();
 
   return (
     <>
@@ -43,6 +45,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           loop
           muted
           playsInline
+          poster="/images/home-bg.jpg"
           style={{
             position: 'absolute',
             top: 0,
@@ -50,6 +53,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             width: '100%',
             height: '100%',
             objectFit: 'cover',
+            // 가로모드: 영상 원본 464×832 → 블러로 저해상도 마스킹
+            ...(isWide ? { filter: 'blur(4px)', transform: 'scale(1.04)' } : {}),
           }}
         >
           <source src="/videos/login-bg.mp4" type="video/mp4" />
@@ -61,7 +66,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             left: 0,
             width: '100%',
             height: '100%',
-            backgroundColor: 'rgba(0,0,0,0.2)',
+            // 가로모드: 오버레이 약간 진하게 → 폼 가독성 향상
+            backgroundColor: isWide ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.2)',
           }}
         />
       </div>

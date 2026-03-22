@@ -12,7 +12,10 @@ import { useCourse } from '@/lib/contexts/CourseContext';
 import { useUser } from '@/lib/contexts/UserContext';
 import { type CourseId } from '@/lib/types/course';
 import { generateCourseTags } from '@/lib/courseIndex';
-import { scaleCoord } from '@/lib/hooks/useViewportScale';
+import { scaleCoord, useWideMode } from '@/lib/hooks/useViewportScale';
+import { useDetailPanel } from '@/lib/contexts/DetailPanelContext';
+import PostDetailPage from './[id]/page';
+import WritePage from './write/page';
 /** 기본 토끼 이미지 경로 */
 const DEFAULT_RABBIT_IMAGE = '/rabbit/default-news.png';
 
@@ -431,6 +434,8 @@ export default function BoardPage() {
   const router = useRouter();
   const { semesterSettings, userCourseId, setProfessorCourse, assignedCourses, getCourseById, courseList: allCourses } = useCourse();
   const { profile } = useUser();
+  const isWide = useWideMode();
+  const { openDetail, replaceDetail, isDetailOpen } = useDetailPanel();
 
   // 교수님 여부 확인
   const isProfessor = profile?.role === 'professor';
@@ -670,21 +675,41 @@ export default function BoardPage() {
   }, [posts, searchQuery, selectedTags, profPickPostIds]);
 
   const handlePostClick = useCallback((postId: string) => {
+    if (isWide) {
+      // 가로모드: 2쪽 유지, 3쪽에 상세페이지 표시
+      const action = isDetailOpen ? replaceDetail : openDetail;
+      action(<PostDetailPage panelPostId={postId} />);
+      return;
+    }
     sessionStorage.setItem('board_scroll_y', String(window.scrollY));
     // 스와이프 네비게이션용 게시글 ID 순서 저장
     sessionStorage.setItem('board_post_ids', JSON.stringify(filteredPosts.map(p => p.id)));
     sessionStorage.setItem('board_nav', 'board');
     router.push(`/board/${postId}`);
-  }, [router, filteredPosts]);
+  }, [router, filteredPosts, isWide, isDetailOpen, openDetail, replaceDetail]);
 
   const handleWriteClick = useCallback(() => {
+    if (isWide) {
+      const action = isDetailOpen ? replaceDetail : openDetail;
+      action(<WritePage isPanelMode />);
+      return;
+    }
     sessionStorage.setItem('board_scroll_y', String(window.scrollY));
     router.push('/board/write');
-  }, [router]);
+  }, [router, isWide, isDetailOpen, openDetail, replaceDetail]);
 
   const handleManageClick = useCallback(() => {
+    if (isWide) {
+      // 관리 페이지는 동적 import로 3쪽에 표시
+      import('./manage/page').then(mod => {
+        const ManagePage = mod.default;
+        const action = isDetailOpen ? replaceDetail : openDetail;
+        action(<ManagePage isPanelMode />);
+      });
+      return;
+    }
     router.push(isProfessor ? `/board/manage?course=${selectedCourseId}` : '/board/manage');
-  }, [router, isProfessor, selectedCourseId]);
+  }, [router, isProfessor, selectedCourseId, isWide, isDetailOpen, openDetail, replaceDetail]);
 
   // 핀 토스트 표시
   const showPinToast = useCallback((message: string) => {

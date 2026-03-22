@@ -511,7 +511,7 @@ export default function AIQuizContainer() {
 
       {/* AI 퀴즈 연습 모드 */}
       {isPracticeOpen && practiceItems.length > 0 && (
-        <div className="fixed inset-0 z-50 bg-[#F5F0E8]" style={{ left: 'var(--modal-left, 0px)' }}>
+        <div className="fixed inset-0 z-50 bg-[#F5F0E8]" style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}>
           <ReviewPractice
             items={practiceItems}
             onComplete={handlePracticeComplete}

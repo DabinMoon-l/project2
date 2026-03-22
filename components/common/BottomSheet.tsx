@@ -179,7 +179,7 @@ export default function BottomSheet({
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
           className={`fixed inset-0 ${zIndex}`}
-          style={{ left: 'var(--modal-left, 0px)' }}
+          style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
         >
           {/* 백드롭 */}
           <motion.div

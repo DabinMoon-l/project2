@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
 
 interface SplashScreenProps {
   children: React.ReactNode;
@@ -10,13 +11,21 @@ interface SplashScreenProps {
 /**
  * 스플래시 화면 컴포넌트
  * 앱 진입 시 2.5초간 로고를 보여주고 메인 콘텐츠로 전환
+ * 가로모드(태블릿): 스플래시 건너뛰기
  */
 export default function SplashScreen({ children }: SplashScreenProps) {
   const [showSplash, setShowSplash] = useState(true);
   const [isClient, setIsClient] = useState(false);
+  const isWide = useWideMode();
 
   useEffect(() => {
     setIsClient(true);
+
+    // 가로모드: 스플래시 즉시 건너뛰기
+    if (window.matchMedia('(orientation: landscape) and (min-width: 1024px)').matches) {
+      setShowSplash(false);
+      return;
+    }
 
     const timer = setTimeout(() => {
       setShowSplash(false);
@@ -24,6 +33,11 @@ export default function SplashScreen({ children }: SplashScreenProps) {
 
     return () => clearTimeout(timer);
   }, []);
+
+  // 스플래시 중 가로 전환 시에도 즉시 닫기
+  useEffect(() => {
+    if (isWide && showSplash) setShowSplash(false);
+  }, [isWide, showSplash]);
 
   // 서버 사이드 렌더링 중에는 children만 렌더링
   if (!isClient) {

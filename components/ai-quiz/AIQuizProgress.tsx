@@ -50,7 +50,7 @@ export default function AIQuizProgress({ isOpen, progress, folderName }: AIQuizP
   return createPortal(
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ left: 'var(--modal-left, 0px)' }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}>
           {/* 백드롭 */}
           <motion.div
             initial={{ opacity: 0 }}

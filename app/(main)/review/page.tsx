@@ -13,10 +13,12 @@ import { useQuizUpdate, type QuizUpdateInfo as DetailedQuizUpdateInfo } from '@/
 // 대형 컴포넌트 lazy load
 const ReviewPractice = dynamic(() => import('@/components/review/ReviewPractice'), { ssr: false });
 const UpdateQuizModal = dynamic(() => import('@/components/quiz/UpdateQuizModal'), { ssr: false });
+const FolderDetailPage = dynamic(() => import('./[type]/[id]/page'), { ssr: false });
 import { useQuizBookmark, type BookmarkedQuiz } from '@/lib/hooks/useQuizBookmark';
 import { useLearningQuizzes, type LearningQuiz } from '@/lib/hooks/useLearningQuizzes';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { useCourse, useUser } from '@/lib/contexts';
+import { useCourse, useUser, useDetailPanel } from '@/lib/contexts';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
 import { getChapterById, generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import type { QuestionExportData as PdfQuestionData } from '@/lib/utils/questionPdfExport';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
@@ -56,6 +58,8 @@ function ReviewPageContent() {
   const { user } = useAuth();
   const { userCourseId, semesterSettings, getCourseById } = useCourse();
   const { profile } = useUser();
+  const isWide = useWideMode();
+  const { openDetail, replaceDetail, isDetailOpen } = useDetailPanel();
 
   // 과목별 리본 이미지
   const currentCourse = userCourseId ? getCourseById(userCourseId) : null;
@@ -330,11 +334,26 @@ function ReviewPageContent() {
         newSelected.add(folderId);
       }
       setDeleteFolderIds(newSelected);
+    } else if (isWide) {
+      // 가로모드: 2쪽 유지, 3쪽에 상세 표시
+      const action = isDetailOpen ? replaceDetail : openDetail;
+      action(<FolderDetailPage panelType={folder.filterType} panelId={folder.id} />);
     } else {
-      // 일반 모드에서는 폴더 상세로 이동
+      // 모바일: 폴더 상세로 이동
       router.push(`/review/${folder.filterType}/${folder.id}`);
     }
   };
+
+  // 가로모드에서 복습 상세 열기 (3쪽 패널)
+  const openReviewDetail = useCallback((type: string, id: string, autoStart?: string) => {
+    if (isWide) {
+      const action = isDetailOpen ? replaceDetail : openDetail;
+      action(<FolderDetailPage panelType={type} panelId={id} panelAutoStart={autoStart} />);
+    } else {
+      const qs = autoStart ? `?autoStart=${autoStart}` : '';
+      router.push(`/review/${type}/${id}${qs}`);
+    }
+  }, [isWide, isDetailOpen, openDetail, replaceDetail, router]);
 
   // 폴더 삭제 핸들러
   const handleDeleteFolder = async (folder: { id: string; filterType: string }) => {
@@ -1189,10 +1208,10 @@ function ReviewPageContent() {
             reviewSelectedIds={reviewSelectedIds}
             setReviewSelectedIds={setReviewSelectedIds}
             registerLibraryRef={registerLibraryRef}
-            onCardNavigate={(quizId) => router.push(`/review/library/${quizId}`)}
+            onCardNavigate={(quizId) => openReviewDetail('library', quizId)}
             onOpenDetailModal={openLibraryQuizModal}
-            onReview={(quizId) => router.push(`/review/library/${quizId}?autoStart=all`)}
-            onReviewWrongOnly={(quizId) => router.push(`/review/library/${quizId}?autoStart=wrongOnly`)}
+            onReview={(quizId) => openReviewDetail('library', quizId, 'all')}
+            onReviewWrongOnly={(quizId) => openReviewDetail('library', quizId, 'wrongOnly')}
             onPublish={(quizId) => setPublishConfirmQuizId(quizId)}
             currentUserId={user?.uid}
           />
@@ -1215,7 +1234,7 @@ function ReviewPageContent() {
             reviewSelectedIds={reviewSelectedIds}
             setReviewSelectedIds={setReviewSelectedIds}
             updatedQuizzes={updatedQuizzes}
-            onQuizCardClick={(quizId) => router.push(`/review/bookmark/${quizId}`)}
+            onQuizCardClick={(quizId) => openReviewDetail('bookmark', quizId)}
             onQuizDetails={(quiz) => setSelectedBookmarkedQuiz(quiz)}
             onStartQuiz={(quizId) => router.push(`/quiz/${quizId}`)}
             onStartReview={handleStartReviewByQuizId}
@@ -1243,7 +1262,18 @@ function ReviewPageContent() {
             reviewSelectedIds={reviewSelectedIds}
             setReviewSelectedIds={setReviewSelectedIds}
             updatedQuizzes={updatedQuizzes}
-            onFolderNavigate={(url) => router.push(url)}
+            onFolderNavigate={(url) => {
+              if (isWide) {
+                // URL에서 type, id, chapter 추출: /review/wrong/quizId?chapter=xxx
+                const match = url.match(/\/review\/([^/]+)\/([^?]+)/);
+                if (match) {
+                  const action = isDetailOpen ? replaceDetail : openDetail;
+                  action(<FolderDetailPage panelType={match[1]} panelId={match[2]} />);
+                  return;
+                }
+              }
+              router.push(url);
+            }}
             onUpdateClick={(quizId, quizTitle) => {
               setUpdateModalInfo({ quizId, quizTitle, filterType: 'wrong' });
             }}
@@ -1290,7 +1320,7 @@ function ReviewPageContent() {
       {selectedBookmarkedQuiz && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
-          style={{ left: 'var(--modal-left, 0px)' }}
+          style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
           onClick={() => setSelectedBookmarkedQuiz(null)}
         >
           <motion.div
@@ -1436,7 +1466,7 @@ function ReviewPageContent() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
-            style={{ left: 'var(--modal-left, 0px)' }}
+            style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
           >
             <motion.div
               initial={{ scale: 0.9 }}
@@ -1456,7 +1486,7 @@ function ReviewPageContent() {
       {updateModalInfo && !detailedUpdateInfo && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          style={{ left: 'var(--modal-left, 0px)' }}
+          style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
           onClick={() => !updateModalLoading && setUpdateModalInfo(null)}
         >
           <motion.div

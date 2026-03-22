@@ -8,7 +8,7 @@ import { useTheme } from '@/styles/themes/useTheme';
 import WriteForm from '@/components/board/WriteForm';
 import { useCreatePost, type CreatePostData, type BoardTag } from '@/lib/hooks/useBoard';
 import { useExpToast } from '@/components/common';
-import { useUser, useCourse } from '@/lib/contexts';
+import { useUser, useCourse, useDetailPanel } from '@/lib/contexts';
 import { EXP_REWARDS } from '@/lib/utils/expRewards';
 
 // localStorage 키
@@ -25,13 +25,14 @@ interface Draft {
 // 글 작성 페이지
 // ============================================================
 
-export default function WritePage() {
+export default function WritePage({ isPanelMode }: { isPanelMode?: boolean } = {}) {
   const router = useRouter();
   const { theme } = useTheme();
   const { createPost, loading, error } = useCreatePost();
   const { profile } = useUser();
   const { userCourseId } = useCourse();
   const { showExpToast } = useExpToast();
+  const { closeDetail, replaceDetail } = useDetailPanel();
 
   // 모달 상태
   const [showExitModal, setShowExitModal] = useState(false);
@@ -83,14 +84,19 @@ export default function WritePage() {
     setHasContent(title.trim().length > 0 || content.trim().length > 0);
   }, []);
 
+  const goBack = useCallback(() => {
+    if (isPanelMode) { closeDetail(); return; }
+    router.back();
+  }, [isPanelMode, closeDetail, router]);
+
   // 뒤로가기 → 모달 표시
   const handleBack = useCallback(() => {
     if (hasContent) {
       setShowExitModal(true);
     } else {
-      router.back();
+      goBack();
     }
-  }, [hasContent, router]);
+  }, [hasContent, goBack]);
 
   // 임시저장하고 나가기
   const handleSaveAndExit = useCallback(() => {
@@ -102,15 +108,15 @@ export default function WritePage() {
     };
     localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
     setShowExitModal(false);
-    router.back();
-  }, [router]);
+    goBack();
+  }, [goBack]);
 
   // 저장하지 않고 나가기
   const handleExitWithoutSave = useCallback(() => {
     localStorage.removeItem(DRAFT_KEY);
     setShowExitModal(false);
-    router.back();
-  }, [router]);
+    goBack();
+  }, [goBack]);
 
   // 글 게시 성공 시 드래프트 삭제
   const handleSubmit = useCallback(async (data: CreatePostData) => {
@@ -121,17 +127,20 @@ export default function WritePage() {
 
     const postId = await createPost(postData);
     if (postId) {
-      // 게시 성공 → 드래프트 삭제
       localStorage.removeItem(DRAFT_KEY);
 
       if (profile?.role !== 'professor') {
         showExpToast(EXP_REWARDS.POST_CREATE, '게시글 작성');
       }
-      setTimeout(() => {
-        router.replace(`/board/${postId}`);
-      }, 300);
+      if (isPanelMode) {
+        // 패널 모드: 작성 완료 → 3쪽에 해당 글 상세 표시
+        const PostDetailPage = (await import('../[id]/page')).default;
+        setTimeout(() => replaceDetail(<PostDetailPage key={postId} panelPostId={postId} />), 300);
+      } else {
+        setTimeout(() => router.replace(`/board/${postId}`), 300);
+      }
     }
-  }, [createPost, router, profile, userCourseId, showExpToast]);
+  }, [createPost, router, profile, userCourseId, showExpToast, isPanelMode, replaceDetail]);
 
   return (
     <div

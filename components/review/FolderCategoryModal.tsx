@@ -49,7 +49,7 @@ export default function FolderCategoryModal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-50 flex items-center justify-center p-3"
-          style={{ position: 'fixed', touchAction: 'none', left: 'var(--modal-left, 0px)' }}
+          style={{ position: 'fixed', touchAction: 'none', left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
           onClick={handleClose}
         >
           {/* 배경 오버레이 */}
