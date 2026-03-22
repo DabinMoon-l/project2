@@ -322,7 +322,7 @@ export default function OpinionChannel() {
           className="w-full text-left flex items-center"
         >
           <div className="flex-1 min-w-0">
-            <p className="text-sm text-white/60 truncate leading-tight">
+            <p className="text-base text-white/60 truncate leading-tight">
               {previewText}
             </p>
           </div>
