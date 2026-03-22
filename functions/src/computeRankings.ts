@@ -56,8 +56,8 @@ interface RankedUserDoc {
   nickname: string;
   classType: string;
   totalExp: number;
-  dailyExp: number;
-  weeklyExp: number;
+  dailyExp?: number | null;
+  weeklyExp?: number | null;
   profCorrectCount: number;
   rankScore: number;
   profileRabbitId: number | null;
@@ -194,19 +194,26 @@ async function computeRankingsForCourse(courseId: string) {
         );
         snaps.forEach((snap, idx) => {
           const uid = batch[idx].id;
+          if (snap.empty) return; // expHistory 기록 없으면 스킵 (접속 안 한 유저)
           let daily = 0;
           let weekly = 0;
+          let hasDailyRecord = false;
           snap.docs.forEach(d => {
             const data = d.data();
             const amount = (data.amount as number) || 0;
             const ts = data.createdAt?.toDate?.();
             if (ts) {
               weekly += amount;
-              if (ts >= todayStartUTC) daily += amount;
+              if (ts >= todayStartUTC) {
+                daily += amount;
+                hasDailyRecord = true;
+              }
             }
           });
-          dailyExp[uid] = daily;
+          // 이번 주 활동자
           weeklyExp[uid] = weekly;
+          // 오늘 활동자만 dailyExp 설정
+          if (hasDailyRecord) dailyExp[uid] = daily;
         });
       }
       return { dailyExp, weeklyExp };
@@ -290,8 +297,8 @@ async function computeRankingsForCourse(courseId: string) {
       nickname: u.nickname || "익명",
       classType: u.classId || "A",
       totalExp: exp,
-      dailyExp: dailyExpMap[u.id] || 0,
-      weeklyExp: weeklyExpMap[u.id] || 0,
+      dailyExp: u.id in dailyExpMap ? dailyExpMap[u.id] : null,
+      weeklyExp: u.id in weeklyExpMap ? weeklyExpMap[u.id] : null,
       profCorrectCount: profStat.correct,
       rankScore,
       profileRabbitId: u.profileRabbitId ?? null,

@@ -423,17 +423,20 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
                 <div className="flex items-center justify-center py-20">
                   <div className="w-8 h-8 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
                 </div>
-              ) : filteredUsers.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 text-center">
-                  <p className="text-lg font-black text-white/60 mb-2">
-                    {periodFilter === 'day' ? '오늘' : '이번 주'} 활동한 학생이 없습니다
-                  </p>
-                  <p className="text-sm text-white/40">
-                    퀴즈를 풀거나 활동하면 랭킹에 표시됩니다
-                  </p>
-                </div>
               ) : (
                 <>
+                  {/* 빈 상태 메시지 (Day/Week에서 활동자 없을 때) */}
+                  {periodFilter !== 'all' && filteredUsers.length === 0 && (
+                    <div className="flex flex-col items-center py-6 text-center">
+                      <p className="text-base font-black text-white/50 mb-1">
+                        {periodFilter === 'day' ? '오늘' : '이번 주'} 활동한 학생이 없습니다
+                      </p>
+                      <p className="text-xs text-white/30">
+                        퀴즈를 풀거나 활동하면 랭킹에 표시됩니다
+                      </p>
+                    </div>
+                  )}
+
                   {/* Top 3 단상 */}
                   <div ref={top3Ref} className="mx-4 mt-36 mb-3">
                     <div>
