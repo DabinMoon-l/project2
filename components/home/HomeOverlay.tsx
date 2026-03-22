@@ -55,16 +55,11 @@ export default function HomeOverlay() {
 
   useEffect(() => { setMounted(true); }, []);
 
-  // 스크롤 잠금 + html 배경을 석양 톤에 맞춤 (다이나믹 아일랜드 모서리)
+  // 스크롤 잠금
   useEffect(() => {
     if (visible) {
-      const html = document.documentElement;
-      html.style.backgroundColor = '#C8A090';
       lockScroll();
-      return () => {
-        html.style.backgroundColor = '#F5F0E8';
-        unlockScroll();
-      };
+      return () => unlockScroll();
     }
   }, [visible]);
 

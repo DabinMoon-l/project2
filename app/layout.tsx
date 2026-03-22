@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Noto_Sans_KR, Playfair_Display, Cormorant_Garamond } from "next/font/google";
 import "./globals.css";
 import { WebVitalsReporter } from "@/components/common/WebVitalsReporter";
@@ -31,6 +31,15 @@ const cormorantGaramond = Cormorant_Garamond({
   variable: "--font-cormorant",
 });
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
+  themeColor: "#F5F0E8",
+};
+
 export const metadata: Metadata = {
   title: "RabbiTory",
   description: "퀴즈를 풀고 토끼를 성장시키는 학습 앱",
@@ -56,9 +65,6 @@ export default function RootLayout({
       className={`${notoSansKR.variable} ${playfairDisplay.variable} ${cormorantGaramond.variable}`}
     >
       <head>
-        {/* viewport-fit=cover 명시 — Next.js Viewport export 대신 직접 제어 (iOS 26 PWA safe area 확장 필수) */}
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-        <meta name="theme-color" content="#F5F0E8" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <link rel="dns-prefetch" href="https://firebasestorage.googleapis.com" />

@@ -12,16 +12,10 @@ import Image from 'next/image';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
-  // Auth 페이지: html 배경을 비디오 톤에 맞춤 (다이나믹 아일랜드 모서리) + 스크롤 방지
+  // Auth 페이지: 스크롤 방지
   useEffect(() => {
-    const html = document.documentElement;
-    const prevBg = html.style.backgroundColor;
-    html.style.backgroundColor = '#1a1210';
     lockScroll();
-    return () => {
-      html.style.backgroundColor = prevBg || '';
-      unlockScroll();
-    };
+    return () => unlockScroll();
   }, []);
 
   return (
