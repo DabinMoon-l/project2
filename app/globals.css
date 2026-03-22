@@ -21,6 +21,9 @@ html {
   /* 아이폰 둥근 모서리 뒤 — 크림 (앱 배경과 동일하게 매끄럽게) */
   background-color: #F5F0E8;
   color: var(--text-dark);
+  /* iOS PWA 확대 방지 — viewport user-scalable=no를 iOS가 무시하므로 CSS로 보강 */
+  touch-action: pan-x pan-y;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
