@@ -84,8 +84,8 @@ const OpinionItem = memo(function OpinionItem({
           </span>
         </div>
       )}
-      <div className={`px-4 py-1.5 group ${isOwn ? 'flex justify-end' : ''}`}>
-        <div className={`flex items-start gap-2 ${isOwn ? 'flex-row-reverse max-w-[85%]' : ''}`}>
+      <div className="px-4 py-1.5 group">
+        <div className={`flex items-start gap-2 ${isOwn ? 'flex-row-reverse ml-auto max-w-[85%]' : ''}`}>
           {/* 아바타 — 프로필 토끼 */}
           <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 overflow-hidden ${isDev ? 'bg-emerald-500/30' : isOwn ? 'bg-white/20' : 'bg-white/15'}`}>
             {isDev ? (
@@ -100,30 +100,55 @@ const OpinionItem = memo(function OpinionItem({
           <div className={`flex-1 min-w-0 ${isOwn ? 'text-right' : ''}`}>
             {/* 이름 + 시간 */}
             <div className={`flex items-baseline gap-2 mb-0.5 ${isOwn ? 'justify-end' : ''}`}>
-              {isOwn && <span className="text-[10px] text-white/30">{fmtTime(msg.createdAt)}</span>}
-              <span className={`text-xs font-bold ${isDev ? 'text-emerald-300' : 'text-white/80'}`}>
+              {isOwn && <span className="text-xs text-white/30">{fmtTime(msg.createdAt)}</span>}
+              <span className={`text-sm font-bold ${isDev ? 'text-emerald-300' : 'text-white/80'}`}>
                 {displayName}
               </span>
-              {!isOwn && <span className="text-[10px] text-white/30">{fmtTime(msg.createdAt)}</span>}
+              {!isOwn && <span className="text-xs text-white/30">{fmtTime(msg.createdAt)}</span>}
             </div>
             {/* 내용 */}
             {msg.content && (
-              <p
-                className={`text-sm leading-relaxed whitespace-pre-wrap break-words ${isOwn ? 'text-white' : 'text-white/90'}`}
-                onContextMenu={(e) => { if (isOwn) { e.preventDefault(); setShowMenu(true); } }}
-              >
-                {msg.content}
-              </p>
+              <div className="relative inline-block">
+                <p
+                  className={`text-[15px] leading-relaxed whitespace-pre-wrap break-words ${isOwn ? 'text-white' : 'text-white/90'}`}
+                  onContextMenu={(e) => { if (isOwn) { e.preventDefault(); setShowMenu(true); } }}
+                >
+                  {msg.content}
+                </p>
+                {isOwn && !showMenu && (
+                  <button
+                    onClick={() => setShowMenu(true)}
+                    className="absolute -top-1 -right-5 w-4 h-4 hidden group-hover:flex items-center justify-center text-white/30 hover:text-red-400 transition-colors"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                )}
+              </div>
             )}
             {/* 이미지 */}
             {msg.imageUrls && msg.imageUrls.length > 0 && (
-              <div className={`mt-1.5 flex gap-1.5 flex-wrap ${isOwn ? 'justify-end' : ''}`}>
+              <div
+                className={`mt-1.5 flex gap-1.5 flex-wrap ${isOwn ? 'justify-end' : ''}`}
+                onContextMenu={(e) => { if (isOwn) { e.preventDefault(); setShowMenu(true); } }}
+              >
                 {msg.imageUrls.map((url, i) => (
                   <button key={i} onClick={() => onImageClick(url)} className="rounded-lg overflow-hidden border border-white/10">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={url} alt="" className="max-w-[200px] max-h-[200px] object-cover" />
                   </button>
                 ))}
+                {isOwn && !showMenu && !msg.content && (
+                  <button
+                    onClick={() => setShowMenu(true)}
+                    className="absolute -top-1 -right-5 w-4 h-4 hidden group-hover:flex items-center justify-center text-white/30 hover:text-red-400 transition-colors"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                )}
               </div>
             )}
           </div>
