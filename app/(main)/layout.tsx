@@ -246,15 +246,15 @@ function MainLayoutGrid({
     };
   }, [isWide]);
 
-  // --modal-right: 3쪽(디테일패널) 열림 시 모달을 2쪽 안에 가두기
+  // --modal-right: 가로모드에서 모달을 2쪽 안에 가두기 (aside가 항상 존재)
   useEffect(() => {
     const body = document.body;
-    if (isWide && isDetailOpen) {
+    if (isWide && !hasRouteSidebar) {
       body.style.setProperty('--modal-right', 'calc(50% - 120px)');
     } else {
       body.style.setProperty('--modal-right', '0px');
     }
-  }, [isWide, isDetailOpen]);
+  }, [isWide, hasRouteSidebar]);
 
   const isBoardDetail = /^\/board\/[^/]+$/.test(pathname) && pathname !== '/board/manage';
 
@@ -312,14 +312,13 @@ function MainLayoutGrid({
               </div>
             )}
 
-            {/* 메인 콘텐츠 (2쪽) — 독립 스크롤, transform으로 fixed 요소 패널 내 격리 */}
+            {/* 메인 콘텐츠 (2쪽) — 독립 스크롤 */}
             <main
               className={
                 isWide
-                  ? 'w-1/2 flex-shrink-0 overflow-x-hidden overflow-y-auto h-screen relative'
+                  ? 'w-1/2 flex-shrink-0 overflow-x-hidden overflow-y-auto h-screen'
                   : ''
               }
-              style={isWide ? { transform: 'translateZ(0)' } : undefined}
             >
               {children}
               {!isProfessor && pathname === '/quiz' && searchParams?.get('manage') !== 'true' && <AIQuizContainer />}
@@ -335,10 +334,15 @@ function MainLayoutGrid({
                   backgroundColor: '#F5F0E8',
                   paddingRight: 'env(safe-area-inset-right, 0px)',
                   transform: 'translateZ(0)',
-                }}
+                  // 3쪽 내부의 fixed 요소가 패널 전체를 사용하도록 CSS 변수 오버라이드
+                  '--detail-panel-left': '0px',
+                  '--modal-left': '0px',
+                  '--modal-right': '0px',
+                  '--kb-offset': '0px',
+                } as React.CSSProperties & Record<string, string>}
               >
                 {isDetailOpen && (
-                  <div>
+                  <div className="h-full">
                     {detailContent}
                   </div>
                 )}
