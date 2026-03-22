@@ -65,6 +65,7 @@ function getTodayStartUTC(): Date {
 interface RankedUserDoc {
   id: string;
   nickname: string;
+  name?: string;
   classType: string;
   totalExp: number;
   dailyExp?: number | null;
@@ -91,6 +92,7 @@ interface UserDoc {
   id: string;
   role?: string;
   nickname?: string;
+  name?: string;
   classId?: string;
   totalExp?: number;
   profileRabbitId?: number | null;
@@ -354,6 +356,7 @@ async function computeRankingsForCourse(courseId: string) {
     return {
       id: u.id,
       nickname: u.nickname || "익명",
+      name: u.name || undefined,
       classType: u.classId || "A",
       totalExp: exp,
       dailyExp: u.id in dailyExpMap ? dailyExpMap[u.id]

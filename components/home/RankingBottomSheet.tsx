@@ -19,6 +19,7 @@ import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 interface RankedUser {
   id: string;
   nickname: string;
+  name?: string;
   classType: ClassType;
   totalExp: number;
   profCorrectCount: number;
@@ -89,6 +90,9 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
   const { profile } = useUser();
   const { userCourseId } = useCourse();
   useTheme();
+  const isProfessor = profile?.role === 'professor';
+  /** 교수: 실명 우선, 학생: 닉네임 */
+  const displayName = (u: RankedUser) => isProfessor && u.name ? u.name : u.nickname;
 
   const [rankedUsers, setRankedUsers] = useState<RankedUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -391,7 +395,7 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
                     style={{ zIndex: 10, paddingTop: '8px' }}
                   >
                     <span className="text-2xl leading-normal font-sans text-[#1A1A1A] truncate" style={{ fontWeight: 900 }}>
-                      {rankedUsers[0].nickname}
+                      {displayName(rankedUsers[0])}
                     </span>
                   </div>
                 )}
@@ -475,7 +479,7 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
                           <div key={i} className="text-center">
                             {user && (
                               <>
-                                <p className="text-sm font-black text-white truncate">{user.nickname}</p>
+                                <p className="text-sm font-black text-white truncate">{displayName(user)}</p>
                                 <p className="text-[11px] text-white/60">{user.classType}반 · {Math.round(user.rankScore)}점</p>
                                 {user.equippedRabbitNames && <p className="text-[11px] text-white/60 truncate">{user.equippedRabbitNames}</p>}
                               </>
@@ -505,7 +509,7 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
                           <img src={getRabbitProfileUrl(user.profileRabbitId ?? 0)} alt="" width={40} height={40} className="w-full h-full object-cover" loading="lazy" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-bold text-white truncate">{user.nickname} · {user.classType}반</p>
+                          <p className="font-bold text-white truncate">{displayName(user)} · {user.classType}반</p>
                           {user.equippedRabbitNames ? (
                             <p className="text-xs text-white/50 truncate">{user.equippedRabbitNames}</p>
                           ) : (
@@ -572,7 +576,7 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
                     <img src={getRabbitProfileUrl(myFilteredRank.profileRabbitId ?? 0)} alt="" width={40} height={40} className="w-full h-full object-cover" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold text-white truncate">{myFilteredRank.nickname} · {myFilteredRank.classType}반</p>
+                    <p className="font-bold text-white truncate">{displayName(myFilteredRank)} · {myFilteredRank.classType}반</p>
                     {myFilteredRank.equippedRabbitNames ? (
                       <p className="text-xs text-white/50 truncate">{myFilteredRank.equippedRabbitNames}</p>
                     ) : (
