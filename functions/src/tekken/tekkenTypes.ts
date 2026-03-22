@@ -83,6 +83,8 @@ export interface BattleRoundData {
 export interface BattleData {
   status: string;
   courseId: string;
+  /** 출제 범위 (챕터 번호 배열) */
+  chapters?: string[];
   createdAt: number;
   countdownStartedAt?: number;
   endsAt: number;
@@ -109,6 +111,20 @@ export interface PlayerSetup {
   profileRabbitId: number;
   isBot: boolean;
   equippedRabbits: Array<{ rabbitId: number; courseId: string }>;
+  /** 매칭 시 선택한 챕터 (번호 배열, 예: ["2","3","5"]) */
+  chapters?: string[];
+}
+
+/** 챕터별 풀 생성 태스크 */
+export interface TekkenPoolTask {
+  courseId: string;
+  chapter: string;
+  status: "pending" | "processing" | "completed" | "failed";
+  targetSize: number;
+  createdAt: number;
+  completedAt?: number;
+  addedCount?: number;
+  error?: string;
 }
 
 /** 봇 플레이어 설정 (미리 계산된 토끼 스탯 포함) */

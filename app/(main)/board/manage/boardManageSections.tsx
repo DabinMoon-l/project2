@@ -262,7 +262,10 @@ export function AcademicArchiveSection({ posts, courseId }: { posts: Post[]; cou
         {filtered.map((post) => (
           <button
             key={post.id}
-            onClick={() => router.push(`/board/${post.id}`)}
+            onClick={() => {
+              sessionStorage.setItem('board_nav', 'manage');
+              router.push(`/board/${post.id}`);
+            }}
             className="text-left border border-[#1A1A1A] bg-[#FDFBF7] overflow-hidden hover:shadow-md transition-shadow"
           >
             {/* 이미지 썸네일 */}

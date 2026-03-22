@@ -669,6 +669,7 @@ export default function BoardPage() {
     sessionStorage.setItem('board_scroll_y', String(window.scrollY));
     // 스와이프 네비게이션용 게시글 ID 순서 저장
     sessionStorage.setItem('board_post_ids', JSON.stringify(filteredPosts.map(p => p.id)));
+    sessionStorage.setItem('board_nav', 'board');
     router.push(`/board/${postId}`);
   }, [router, filteredPosts]);
 

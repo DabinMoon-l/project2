@@ -8,10 +8,10 @@
 export type BoardCategory = 'toProfessor' | 'community' | 'all';
 
 /** 게시판 태그 */
-export type BoardTag = '학사' | '학술' | '기타';
+export type BoardTag = '학사' | '학술' | '건의' | '기타';
 
 /** 태그 목록 상수 */
-export const BOARD_TAGS: BoardTag[] = ['학사', '학술', '기타'];
+export const BOARD_TAGS: BoardTag[] = ['학사', '학술', '건의', '기타'];
 
 /** 첨부파일 정보 타입 */
 export interface AttachedFile {

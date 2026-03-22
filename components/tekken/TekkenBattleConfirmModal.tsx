@@ -3,11 +3,13 @@
 /**
  * 배틀 출전 확인 모달
  *
- * 꾹 누르기 → 이 모달 → "배틀!" 클릭 → 매칭 시작
+ * 꾹 누르기 → 이 모달 → 챕터 선택 → "배틀!" 클릭 → 매칭 시작
  * 철권 캐릭터 선택창 느낌의 다크 오버레이
+ *
+ * 챕터 선택: < 챕터명 > 캐러셀 + 선택 태그 표시
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getRabbitStats, useRabbitDoc, type RabbitHolding } from '@/lib/hooks/useRabbit';
@@ -15,13 +17,15 @@ import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 import { computeRabbitDisplayName } from '@/lib/utils/rabbitDisplayName';
 import { useHideNav } from '@/lib/hooks/useHideNav';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
+import { COURSE_INDEXES } from '@/lib/courseIndex';
 
 interface TekkenBattleConfirmModalProps {
   isOpen: boolean;
-  onConfirm: () => void;
+  onConfirm: (chapters: string[]) => void;
   onCancel: () => void;
   equippedRabbits: Array<{ rabbitId: number; courseId: string }>;
   holdings: RabbitHolding[];
+  courseId: string;
 }
 
 /** 개별 토끼 슬롯 카드 */
@@ -35,7 +39,6 @@ function RabbitSlotCard({
   const { rabbit: rabbitDoc } = useRabbitDoc(slot?.courseId, slot?.rabbitId);
 
   if (!slot) {
-    // 빈 슬롯
     return (
       <div className="flex flex-col items-center gap-1.5">
         <div className="w-[72px] h-[72px] rounded-xl bg-white/10 border border-white/20 flex items-center justify-center">
@@ -58,7 +61,6 @@ function RabbitSlotCard({
 
   return (
     <div className="flex flex-col items-center gap-1.5">
-      {/* 프로필 이미지 */}
       <div className="w-[72px] h-[72px] rounded-xl bg-white/10 border border-white/20 overflow-hidden">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -68,8 +70,6 @@ function RabbitSlotCard({
           draggable={false}
         />
       </div>
-
-      {/* 이름 + 레벨 */}
       <div className="text-center">
         <p className="text-white font-bold text-sm leading-tight">
           {displayName}
@@ -80,8 +80,6 @@ function RabbitSlotCard({
           </p>
         )}
       </div>
-
-      {/* 스탯 */}
       {info && (
         <div className="flex items-center gap-2 text-xs font-bold">
           <span className="text-red-400">
@@ -114,11 +112,10 @@ export default function TekkenBattleConfirmModal({
   onCancel,
   equippedRabbits,
   holdings,
+  courseId,
 }: TekkenBattleConfirmModalProps) {
-  // 네비게이션 숨김
   useHideNav(isOpen);
 
-  // 스크롤 잠금
   useEffect(() => {
     if (isOpen) {
       lockScroll();
@@ -126,12 +123,70 @@ export default function TekkenBattleConfirmModal({
     }
   }, [isOpen]);
 
+  // 챕터 데이터 (챕터 1 제외)
+  const courseChapters = useMemo(() => {
+    const index = COURSE_INDEXES[courseId];
+    if (!index) return [];
+    return index.chapters
+      .filter((ch) => !ch.id.endsWith('_1'))
+      .map((ch) => {
+        const match = ch.id.match(/_(\d+)$/);
+        const num = match ? match[1] : ch.id;
+        return { num, shortName: ch.shortName };
+      });
+  }, [courseId]);
+
+  // 캐러셀 인덱스
+  const [carouselIdx, setCarouselIdx] = useState(0);
+
+  // 챕터 선택 상태 (기본: 비어있음)
+  const [selectedChapters, setSelectedChapters] = useState<Set<string>>(new Set());
+
+  // isOpen 변경 시 초기화
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedChapters(new Set());
+      setCarouselIdx(0);
+    }
+  }, [isOpen]);
+
+  const goPrev = useCallback(() => {
+    setCarouselIdx(i => (i - 1 + courseChapters.length) % courseChapters.length);
+  }, [courseChapters.length]);
+
+  const goNext = useCallback(() => {
+    setCarouselIdx(i => (i + 1) % courseChapters.length);
+  }, [courseChapters.length]);
+
+  const currentChapter = courseChapters[carouselIdx];
+  const isCurrentSelected = currentChapter ? selectedChapters.has(currentChapter.num) : false;
+
+  const toggleCurrent = useCallback(() => {
+    if (!currentChapter) return;
+    setSelectedChapters(prev => {
+      const next = new Set(prev);
+      if (next.has(currentChapter.num)) {
+        next.delete(currentChapter.num);
+      } else {
+        next.add(currentChapter.num);
+      }
+      return next;
+    });
+  }, [currentChapter]);
+
+  const removeChapter = useCallback((num: string) => {
+    setSelectedChapters(prev => {
+      const next = new Set(prev);
+      next.delete(num);
+      return next;
+    });
+  }, []);
+
   if (typeof window === 'undefined') return null;
 
-  // 1마리 이상이면 배틀 가능 (1마리일 때 같은 토끼가 로테이션)
   const slot0 = equippedRabbits[0] || null;
   const slot1 = equippedRabbits[1] || null;
-  const canBattle = !!slot0;
+  const canBattle = !!slot0 && selectedChapters.size > 0;
 
   return createPortal(
     <AnimatePresence>
@@ -145,19 +200,19 @@ export default function TekkenBattleConfirmModal({
           onContextMenu={(e) => e.preventDefault()}
         >
           <motion.div
-            className="flex flex-col items-center gap-4"
+            className="flex flex-col items-center gap-2.5 w-full max-w-sm px-4"
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.9, opacity: 0 }}
             transition={{ type: 'spring', damping: 20, stiffness: 300 }}
           >
             {/* 타이틀 */}
-            <div className="flex items-center gap-2 mb-1">
-              <svg className="w-6 h-6 text-red-400" viewBox="0 0 24 24" fill="currentColor">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-red-400" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" />
               </svg>
-              <h2 className="text-2xl font-black text-white">배틀 준비</h2>
-              <svg className="w-6 h-6 text-red-400" viewBox="0 0 24 24" fill="currentColor">
+              <h2 className="text-xl font-black text-white">배틀 준비</h2>
+              <svg className="w-5 h-5 text-red-400" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" />
               </svg>
             </div>
@@ -167,31 +222,98 @@ export default function TekkenBattleConfirmModal({
               <RabbitSlotCard slot={slot0} holdings={holdings} />
               {slot1 && <RabbitSlotCard slot={slot1} holdings={holdings} />}
             </div>
-            {/* 1마리 안내 */}
             {slot0 && !slot1 && (
-              <p className="text-xs text-white/50 text-center">
+              <p className="text-[10px] text-white/50 text-center -mt-1">
                 같은 토끼가 2회 출전합니다
               </p>
             )}
 
+            {/* 챕터 선택 캐러셀 */}
+            <div className="w-full mt-0.5">
+              {/* < 챕터명 > 캐러셀 */}
+              {currentChapter && (
+                <div className="flex items-center justify-center gap-1">
+                  <button
+                    onClick={goPrev}
+                    className="w-8 h-8 flex items-center justify-center text-white/60 active:text-white transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+
+                  <button
+                    onClick={toggleCurrent}
+                    className={`flex-1 py-2 rounded-xl text-sm font-black transition-all ${
+                      isCurrentSelected
+                        ? 'bg-white text-black'
+                        : 'bg-white/10 text-white/50 border border-white/20'
+                    }`}
+                  >
+                    <AnimatePresence mode="wait">
+                      <motion.span
+                        key={carouselIdx}
+                        initial={{ opacity: 0, x: 10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -10 }}
+                        transition={{ duration: 0.15 }}
+                        className="block"
+                      >
+                        {currentChapter.num}. {currentChapter.shortName}
+                      </motion.span>
+                    </AnimatePresence>
+                  </button>
+
+                  <button
+                    onClick={goNext}
+                    className="w-8 h-8 flex items-center justify-center text-white/60 active:text-white transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+
+              {/* 선택된 챕터 태그 */}
+              <div className="flex flex-wrap gap-1.5 mt-2 min-h-[28px] justify-center">
+                {courseChapters
+                  .filter(c => selectedChapters.has(c.num))
+                  .map(({ num, shortName }) => (
+                    <button
+                      key={num}
+                      onClick={() => removeChapter(num)}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/15 text-white/80 text-[11px] font-bold"
+                    >
+                      {num}. {shortName}
+                      <svg className="w-3 h-3 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  ))}
+                {selectedChapters.size === 0 && (
+                  <p className="text-[10px] text-white/30">챕터를 선택하세요</p>
+                )}
+              </div>
+            </div>
+
             {/* 버튼 */}
-            <div className="flex items-center gap-3 mt-2 w-full px-6">
+            <div className="flex items-center gap-3 mt-1 w-full px-4">
               <motion.button
-                onClick={canBattle ? onConfirm : undefined}
+                onClick={canBattle ? () => onConfirm([...selectedChapters]) : undefined}
                 disabled={!canBattle}
-                className={`flex-1 py-2.5 rounded-full font-black text-sm transition-transform ${
+                className={`flex-1 py-2 rounded-full font-black text-xs transition-transform ${
                   canBattle
                     ? 'bg-red-500 text-white active:scale-95'
                     : 'bg-white/20 text-white/30 cursor-not-allowed'
                 }`}
-                whileHover={canBattle ? { scale: 1.05 } : undefined}
                 whileTap={canBattle ? { scale: 0.95 } : undefined}
               >
                 배틀!
               </motion.button>
               <button
                 onClick={onCancel}
-                className="flex-1 py-2.5 bg-white/10 border border-white/20 rounded-full text-white text-sm font-bold active:scale-95 transition-transform"
+                className="flex-1 py-2 bg-white/10 border border-white/20 rounded-full text-white text-xs font-bold active:scale-95 transition-transform"
               >
                 취소
               </button>

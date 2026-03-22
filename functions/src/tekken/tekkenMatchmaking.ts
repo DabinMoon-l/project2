@@ -1,11 +1,11 @@
 /**
  * 철권퀴즈 매칭 — joinMatchmaking, cancelMatchmaking, matchWithBot
  *
- * 매칭 락 패턴:
- * ① 각 유저가 자기 경로에 쓰기 (경합 0)
- * ② 락 획득한 1명이 큐 전체를 읽어서 FIFO 페어링
+ * v2 — 챕터 기반 매칭:
+ * ① 각 유저가 자기 경로에 쓰기 (경합 0) + chaptersKey 포함
+ * ② 락 획득한 1명이 큐를 chaptersKey로 그룹핑 → 같은 그룹끼리만 FIFO 페어링
  * ③ matchResults/{userId}로 양쪽 모두에 알림
- * → 기존 전체 큐 트랜잭션 대비 동시접속 경합 제거
+ * ④ 챕터가 다른 유저는 절대 매칭 안 됨 → 10초 후 봇 매칭
  */
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
@@ -19,8 +19,13 @@ import type { PlayerSetup, BotPlayerSetup } from "./tekkenTypes";
 
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 
-// 매칭 락 유효 시간 (ms) — 이 시간 내에 매처가 처리 완료해야 함
+// 매칭 락 유효 시간 (ms)
 const MATCH_LOCK_TTL = 10_000;
+
+/** 챕터 배열을 정렬된 키 문자열로 변환 (매칭 그룹핑용) */
+function toChaptersKey(chapters: string[]): string {
+  return [...chapters].sort((a, b) => Number(a) - Number(b)).join(",");
+}
 
 // ============================================
 // joinMatchmaking
@@ -37,11 +42,16 @@ export const joinMatchmaking = onCall(
     }
 
     const userId = request.auth.uid;
-    const { courseId } = request.data as { courseId: string };
+    const { courseId, chapters } = request.data as { courseId: string; chapters: string[] };
 
     if (!courseId) {
       throw new HttpsError("invalid-argument", "courseId가 필요합니다.");
     }
+    if (!chapters || chapters.length === 0) {
+      throw new HttpsError("invalid-argument", "최소 1개 챕터를 선택해야 합니다.");
+    }
+
+    const chaptersKey = toChaptersKey(chapters);
 
     const rtdb = getDatabase();
     const fsDb = getFirestore();
@@ -64,10 +74,14 @@ export const joinMatchmaking = onCall(
       nickname: userData.nickname || "플레이어",
       profileRabbitId: equippedRabbits[0]?.rabbitId || 0,
       equippedRabbits,
+      chapters,
     };
     await Promise.all([
       rtdb.ref(`tekken/matchmaking_data/${courseId}/${userId}`).set(profileData),
-      rtdb.ref(`tekken/matchmaking/${courseId}/${userId}`).set({ joinedAt: Date.now() }),
+      rtdb.ref(`tekken/matchmaking/${courseId}/${userId}`).set({
+        joinedAt: Date.now(),
+        chaptersKey,
+      }),
     ]);
 
     // ② 매칭 락 획득 시도
@@ -76,7 +90,7 @@ export const joinMatchmaking = onCall(
     await lockRef.transaction((current) => {
       if (current && Date.now() - current.lockedAt < MATCH_LOCK_TTL) {
         acquired = false;
-        return current; // 다른 매처가 처리 중
+        return current;
       }
       acquired = true;
       return { lockedAt: Date.now(), matcherId: userId };
@@ -95,8 +109,8 @@ export const joinMatchmaking = onCall(
         lockRef.remove().catch(() => {});
       }
 
-      // 매처였지만 홀수번째라 매칭 안 됨 → 대기
-      pregenBattleQuestions(courseId, userId, GEMINI_API_KEY.value()).catch(() => {});
+      // 매처였지만 매칭 안 됨 → 대기
+      pregenBattleQuestions(courseId, userId, GEMINI_API_KEY.value(), chapters).catch(() => {});
       return { status: "waiting" };
     }
 
@@ -107,15 +121,14 @@ export const joinMatchmaking = onCall(
       return { status: "matched", battleId: myMatch.val().battleId };
     }
 
-    // 아직 매칭 안 됨 → 클라이언트에서 matchResults 리스너 or 봇 폴백
-    pregenBattleQuestions(courseId, userId, GEMINI_API_KEY.value()).catch(() => {});
+    pregenBattleQuestions(courseId, userId, GEMINI_API_KEY.value(), chapters).catch(() => {});
     return { status: "waiting" };
   }
 );
 
 /**
- * 매처: 큐 전체를 읽어서 FIFO 순서로 페어링
- * 경합 없음 — 락 획득한 1명만 실행
+ * 매처: 큐를 chaptersKey로 그룹핑 → 같은 그룹끼리만 FIFO 페어링
+ * 다른 chaptersKey의 유저끼리는 절대 매칭하지 않음
  */
 async function runMatchmaker(
   courseId: string,
@@ -131,9 +144,33 @@ async function runMatchmaker(
 
   if (userIds.length < 2) return null;
 
-  // 프로필 일괄 로드
+  // chaptersKey별 그룹핑
+  const groups: Record<string, string[]> = {};
+  for (const uid of userIds) {
+    const key = queue[uid].chaptersKey || "";
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(uid);
+  }
+
+  // 각 그룹 내 FIFO 페어링 (2명 미만인 그룹은 스킵 → 큐에 남음)
+  const allPairs: { pair: [string, string]; chaptersKey: string }[] = [];
+  for (const [key, members] of Object.entries(groups)) {
+    for (let i = 0; i + 1 < members.length; i += 2) {
+      allPairs.push({ pair: [members[i], members[i + 1]], chaptersKey: key });
+    }
+  }
+
+  if (allPairs.length === 0) return null;
+
+  // 프로필 일괄 로드 (페어에 포함된 유저만)
+  const pairedUserIds = new Set<string>();
+  for (const { pair } of allPairs) {
+    pairedUserIds.add(pair[0]);
+    pairedUserIds.add(pair[1]);
+  }
+
   const profileSnaps = await Promise.all(
-    userIds.map(id =>
+    [...pairedUserIds].map(id =>
       rtdb.ref(`tekken/matchmaking_data/${courseId}/${id}`).once("value")
     )
   );
@@ -141,20 +178,15 @@ async function runMatchmaker(
     nickname?: string;
     profileRabbitId?: number;
     equippedRabbits?: Array<{ rabbitId: number; courseId: string }>;
+    chapters?: string[];
   }
   const profiles: Record<string, MatchProfile> = {};
-  userIds.forEach((id, i) => { profiles[id] = profileSnaps[i].val() || {}; });
+  [...pairedUserIds].forEach((id, i) => { profiles[id] = profileSnaps[i].val() || {}; });
 
-  // FIFO 페어링
-  const pairs: [string, string][] = [];
-  for (let i = 0; i + 1 < userIds.length; i += 2) {
-    pairs.push([userIds[i], userIds[i + 1]]);
-  }
-
-  // 전체 페어 병렬 처리
+  // 페어 병렬 처리
   let matcherBattleId: string | null = null;
 
-  await Promise.all(pairs.map(async ([id1, id2]) => {
+  await Promise.all(allPairs.map(async ({ pair: [id1, id2], chaptersKey }) => {
     // 큐에서 양쪽 제거
     await Promise.all([
       rtdb.ref(`tekken/matchmaking/${courseId}/${id1}`).remove(),
@@ -163,6 +195,7 @@ async function runMatchmaker(
 
     const p1 = profiles[id1];
     const p2 = profiles[id2];
+    const chapters = chaptersKey.split(",");
 
     const player1: PlayerSetup = {
       userId: id1,
@@ -179,7 +212,7 @@ async function runMatchmaker(
       equippedRabbits: p2.equippedRabbits || [],
     };
 
-    const battleId = await createBattle(courseId, player1, player2, apiKey);
+    const battleId = await createBattle(courseId, player1, player2, apiKey, chapters);
 
     // 양쪽 모두에 matchResults 알림
     await Promise.all([
@@ -187,13 +220,12 @@ async function runMatchmaker(
       rtdb.ref(`tekken/matchResults/${id2}`).set({ battleId, matchedAt: Date.now() }),
     ]);
 
-    // 프로필 정리 (fire-and-forget)
+    // 프로필 정리
     Promise.all([
       rtdb.ref(`tekken/matchmaking_data/${courseId}/${id1}`).remove(),
       rtdb.ref(`tekken/matchmaking_data/${courseId}/${id2}`).remove(),
     ]).catch(() => {});
 
-    // 매처 본인이 페어에 포함됐는지 확인
     if (id1 === matcherId || id2 === matcherId) {
       matcherBattleId = battleId;
     }
@@ -218,7 +250,6 @@ export const cancelMatchmaking = onCall(
     const rtdb = getDatabase();
     await rtdb.ref(`tekken/matchmaking/${courseId}/${userId}`).remove();
 
-    // 프로필 데이터 + 사전 캐시 정리
     rtdb.ref(`tekken/matchmaking_data/${courseId}/${userId}`).remove().catch(() => {});
     rtdb.ref(`tekken/pregenQuestions/${courseId}_${userId}`).remove().catch(() => {});
 
@@ -240,12 +271,12 @@ export const matchWithBot = onCall(
     }
 
     const userId = request.auth.uid;
-    const { courseId } = request.data as { courseId: string };
+    const { courseId, chapters } = request.data as { courseId: string; chapters: string[] };
 
     const rtdb = getDatabase();
     const fsDb = getFirestore();
 
-    // 큐에서 원자적 제거 — 이미 없으면(다른 유저가 매칭) 봇 생성 스킵
+    // 큐에서 원자적 제거
     const queueEntryRef = rtdb.ref(`tekken/matchmaking/${courseId}/${userId}`);
     let removedFromQueue = false;
     await queueEntryRef.transaction((current) => {
@@ -257,11 +288,9 @@ export const matchWithBot = onCall(
       return current;
     });
 
-    // 프로필 데이터 정리
     rtdb.ref(`tekken/matchmaking_data/${courseId}/${userId}`).remove().catch(() => {});
 
     if (!removedFromQueue) {
-      // 이미 다른 유저와 매칭됨 — matchResults에서 battleId 확인
       const matchResultSnap = await rtdb
         .ref(`tekken/matchResults/${userId}`)
         .once("value");
@@ -269,7 +298,6 @@ export const matchWithBot = onCall(
       if (matchResult?.battleId) {
         return { status: "matched", battleId: matchResult.battleId };
       }
-      // RTDB 전파 딜레이 대비 재확인
       await new Promise(resolve => setTimeout(resolve, 1000));
       const retrySnap = await rtdb
         .ref(`tekken/matchResults/${userId}`)
@@ -281,7 +309,7 @@ export const matchWithBot = onCall(
       return { status: "already_matched" };
     }
 
-    // 큐에서 정상 제거됨 → 봇 매칭 진행
+    // 봇 매칭 진행
     const userDoc = await fsDb.collection("users").doc(userId).get();
     if (!userDoc.exists) {
       throw new HttpsError("not-found", "사용자를 찾을 수 없습니다.");
@@ -292,7 +320,6 @@ export const matchWithBot = onCall(
       throw new HttpsError("failed-precondition", "장착된 토끼가 없습니다.");
     }
 
-    // 유저 토끼 레벨 조회 (봇 레벨 산정용)
     const holdingDocs = await Promise.all(
       equippedRabbits.slice(0, 2).map((eq: { rabbitId: number; courseId: string }) =>
         fsDb.collection("users").doc(userId)
@@ -327,7 +354,8 @@ export const matchWithBot = onCall(
       courseId,
       player1,
       player2,
-      GEMINI_API_KEY.value()
+      GEMINI_API_KEY.value(),
+      chapters
     );
 
     return { status: "matched", battleId };

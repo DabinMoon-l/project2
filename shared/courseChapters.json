@@ -161,7 +161,7 @@
         { "id": "micro_3_2", "name": "감염과 발병" },
         { "id": "micro_3_3", "name": "감염의 경과" }
       ]},
-      { "id": "micro_4", "name": "4. 세균의 일반적인 성질", "shortName": "세균의 일반적인 성질", "details": [
+      { "id": "micro_4", "name": "4. 세균의 일반적인 성질", "shortName": "세균", "details": [
         { "id": "micro_4_1", "name": "세균의 분류" },
         { "id": "micro_4_2", "name": "세균의 형태와 구조" },
         { "id": "micro_4_3", "name": "세균의 증식" },
@@ -183,7 +183,7 @@
         { "id": "micro_5_9", "name": "스피로헤타" },
         { "id": "micro_5_10", "name": "미코플라스마, 리케차, 클라미디아" }
       ]},
-      { "id": "micro_6", "name": "6. 바이러스의 일반적 성질", "shortName": "바이러스의 일반적 성질", "details": [
+      { "id": "micro_6", "name": "6. 바이러스의 일반적 성질", "shortName": "바이러스", "details": [
         { "id": "micro_6_1", "name": "바이러스의 특징" },
         { "id": "micro_6_2", "name": "바이러스의 분류" },
         { "id": "micro_6_3", "name": "바이러스의 형태와 구조" },
@@ -200,7 +200,7 @@
         { "id": "micro_7_4", "name": "종양바이러스" },
         { "id": "micro_7_5", "name": "프리온" }
       ]},
-      { "id": "micro_8", "name": "8. 진균의 일반적 성질", "shortName": "진균의 일반적 성질", "details": [
+      { "id": "micro_8", "name": "8. 진균의 일반적 성질", "shortName": "진균", "details": [
         { "id": "micro_8_1", "name": "진균의 형태와 구조" },
         { "id": "micro_8_2", "name": "진균의 증식" },
         { "id": "micro_8_3", "name": "진균의 분류" },
@@ -223,7 +223,7 @@
         { "id": "micro_10_6", "name": "항원충제" },
         { "id": "micro_10_7", "name": "병원성 원충" }
       ]},
-      { "id": "micro_11", "name": "11. 감염병의 예방과 대책", "shortName": "감염병의 예방과 대책", "details": [
+      { "id": "micro_11", "name": "11. 감염병의 예방과 대책", "shortName": "감염병", "details": [
         { "id": "micro_11_1", "name": "감염병 현황" },
         { "id": "micro_11_2", "name": "감염병 예방" },
         { "id": "micro_11_3", "name": "감염병 대책" }

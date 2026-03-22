@@ -24,7 +24,8 @@ const RabbitDogam = dynamic(() => import('./RabbitDogam'), { ssr: false });
 const TekkenBattleOverlay = dynamic(() => import('@/components/tekken/TekkenBattleOverlay'), { ssr: false });
 import { BATTLE_CONFIG } from '@/lib/types/tekken';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
-import { SWIPE_THRESHOLD, ORBIT_RX, ORBIT_RY, CHAR_SIZE, CHAR_HALF, ORBIT_Y_SHIFT } from './characterBoxConstants';
+import { SWIPE_THRESHOLD, BASE_ORBIT_RX, BASE_ORBIT_RY, BASE_CHAR_SIZE, BASE_ORBIT_Y_SHIFT } from './characterBoxConstants';
+import { useHomeScale } from './useHomeScale';
 import { StatBadge } from './StatBadge';
 import { FloatingWrapper } from './FloatingWrapper';
 import { OrbitalCharacter } from './OrbitalCharacter';
@@ -70,6 +71,14 @@ export default function CharacterBox() {
   const longPressTriggered = useRef(false);
   const tekken = useTekkenBattle(profile?.uid);
   const isStudent = profile?.role !== 'professor';
+  const scale = useHomeScale();
+
+  // 스케일 적용된 궤도 파라미터
+  const ORBIT_RX = Math.round(BASE_ORBIT_RX * scale);
+  const ORBIT_RY = Math.round(BASE_ORBIT_RY * scale);
+  const CHAR_SIZE = Math.round(BASE_CHAR_SIZE * scale);
+  const CHAR_HALF = CHAR_SIZE / 2;
+  const ORBIT_Y_SHIFT = Math.round(BASE_ORBIT_Y_SHIFT * scale);
 
   // 장착된 토끼 (항상 2슬롯: 빈 슬롯은 null로 표시)
   const equippedRabbits = profile?.equippedRabbits || [];
@@ -151,11 +160,11 @@ export default function CharacterBox() {
   }, [isStudent, userCourseId, slotCount, clearLongPress]);
 
   // 배틀 확인 → 매칭 시작
-  const handleConfirmBattle = useCallback(() => {
+  const handleConfirmBattle = useCallback((chapters: string[]) => {
     if (!userCourseId) return;
     setShowBattleConfirm(false);
     setShowMatchmaking(true);
-    tekken.startMatchmaking(userCourseId);
+    tekken.startMatchmaking(userCourseId, chapters);
   }, [userCourseId, tekken]);
 
   const onLongPressMove = useCallback((x: number, y: number) => {
@@ -247,9 +256,9 @@ export default function CharacterBox() {
       <div className="flex-[2] flex flex-col items-center w-full">
         {/* XP / 도감 */}
         <div className="w-full flex items-center justify-between px-8 mb-1 mt-3 relative z-20">
-          <div className="h-[36px] flex items-center gap-2.5 px-5 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl">
-            <span className="text-[17px] font-bold text-white">XP</span>
-            <span className="font-bold text-[17px] text-white leading-none text-right">{totalExp}</span>
+          <div className="flex items-center gap-2.5 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl" style={{ height: Math.round(36 * scale), paddingLeft: Math.round(20 * scale), paddingRight: Math.round(20 * scale) }}>
+            <span className="font-bold text-white" style={{ fontSize: Math.round(17 * scale) }}>XP</span>
+            <span className="font-bold text-white leading-none text-right" style={{ fontSize: Math.round(17 * scale) }}>{totalExp}</span>
           </div>
           <button
             ref={dogamBtnRef}
@@ -260,9 +269,10 @@ export default function CharacterBox() {
               }
               setShowDogam(true);
             }}
-            className="h-[36px] flex items-center justify-center px-5 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl transition-transform duration-200 hover:scale-110 active:scale-95"
+            className="flex items-center justify-center bg-black/40 border border-white/10 rounded-full backdrop-blur-xl transition-transform duration-200 hover:scale-110 active:scale-95"
+            style={{ height: Math.round(36 * scale), paddingLeft: Math.round(20 * scale), paddingRight: Math.round(20 * scale) }}
           >
-            <span className="text-[17px] font-bold text-white">도감</span>
+            <span className="font-bold text-white" style={{ fontSize: Math.round(17 * scale) }}>도감</span>
           </button>
         </div>
 
@@ -272,10 +282,11 @@ export default function CharacterBox() {
         {/* 캐릭터 영역 — 항상 2슬롯 궤도 캐러셀 */}
         {slotCount >= 2 ? (
           <div
-            className="relative select-none -mt-14"
+            className="relative select-none"
             style={{
               width: containerW,
               height: containerH,
+              marginTop: Math.round(-56 * scale),
               isolation: 'isolate',
               cursor: 'grab',
               WebkitTouchCallout: 'none',
@@ -311,12 +322,18 @@ export default function CharacterBox() {
                   springRotation={springRotation}
                   charIndex={idx}
                   isPressing={isPressing}
+                  orbitRx={ORBIT_RX}
+                  orbitRy={ORBIT_RY}
+                  charSize={CHAR_SIZE}
                 />
               ) : (
                 <OrbitalPlaceholder
                   key={`empty-${idx}`}
                   springRotation={springRotation}
                   charIndex={idx}
+                  orbitRx={ORBIT_RX}
+                  orbitRy={ORBIT_RY}
+                  charSize={CHAR_SIZE}
                 />
               )
             ))}
@@ -331,9 +348,11 @@ export default function CharacterBox() {
                 transition={{ duration: 0.2 }}
                 className="absolute flex flex-col gap-1"
                 style={{
-                  right: 40,
+                  right: Math.round(16 * scale),
                   top: '58%',
                   zIndex: 15,
+                  transform: `scale(${Math.max(0.85, scale)})`,
+                  transformOrigin: 'right center',
                 }}
               >
                 <StatBadge icon="heart" value={isEmptySlot ? '-' : frontInfo?.stats.hp ?? '-'} color="#f87171" />
@@ -348,7 +367,7 @@ export default function CharacterBox() {
         <div className="flex-1" />
 
         {/* 토끼 이름 + 레벨 */}
-        <div className="mt-[88px] relative top-[16px]">
+        <div style={{ marginTop: Math.round(88 * scale), position: 'relative', top: Math.round(16 * scale) }}>
           <AnimatePresence mode="wait">
             {isEmptySlot ? (
               <motion.div
@@ -426,8 +445,8 @@ export default function CharacterBox() {
             </div>
           </div>
           {/* EXP 바 */}
-          <div className="px-3 py-1.5 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl">
-            <div className="h-3 overflow-hidden bg-white/20 rounded-full">
+          <div className="bg-black/40 border border-white/10 rounded-full backdrop-blur-xl" style={{ padding: `${Math.round(6 * scale)}px ${Math.round(12 * scale)}px` }}>
+            <div className="overflow-hidden bg-white/20 rounded-full" style={{ height: Math.round(12 * scale) }}>
               <motion.div
                 className="h-full rounded-full"
                 style={{
@@ -466,6 +485,7 @@ export default function CharacterBox() {
         onCancel={() => setShowBattleConfirm(false)}
         equippedRabbits={[slot0, slot1].filter((s): s is { rabbitId: number; courseId: string } => s !== null)}
         holdings={holdings}
+        courseId={userCourseId || 'biology'}
       />
 
       {/* 철권퀴즈 매칭 모달 */}

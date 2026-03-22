@@ -283,11 +283,11 @@ export interface CloudFunctionMap {
 
   // ── 철권퀴즈 ──
   joinMatchmaking: {
-    input: { courseId: string };
+    input: { courseId: string; chapters: string[] };
     output: JoinMatchmakingResult;
   };
   matchWithBot: {
-    input: { courseId: string };
+    input: { courseId: string; chapters: string[] };
     output: JoinMatchmakingResult;
   };
   cancelMatchmaking: {

@@ -324,9 +324,12 @@ export default function PostDetailPage() {
     }).catch(() => {});
   }, [isProfessor, post?.authorId]);
 
-  // 안전한 뒤로가기 — 내부 히스토리 없으면 게시판 목록으로
+  // 안전한 뒤로가기 — SPA 내부 히스토리가 있으면 back, 없으면 게시판 목록으로
   const goBack = useCallback(() => {
-    if (window.history.length > 1 && document.referrer.includes(window.location.host)) {
+    // sessionStorage에 내부 네비게이션 기록이 있는지 확인
+    const hasInternalHistory = window.history.length > 1 &&
+      (document.referrer.includes(window.location.host) || sessionStorage.getItem('board_nav'));
+    if (hasInternalHistory) {
       router.back();
     } else {
       router.push('/board');
