@@ -353,6 +353,7 @@ export default function AnnouncementChannel({
       const data: Record<string, unknown> = {
         content, reactions: {}, readBy: [],
         createdAt: serverTimestamp(), createdBy: profile.uid, courseId: userCourseId,
+        profileRabbitId: profile.profileRabbitId ?? null,
       };
       // 이미지 + 파일 동시 병렬 업로드
       const [imgUrls, fileInfos] = await Promise.all([
