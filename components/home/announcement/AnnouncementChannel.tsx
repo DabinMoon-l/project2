@@ -66,6 +66,10 @@ export default function AnnouncementChannel({
   const [pendingImages, setPendingImages] = useState<File[]>([]);
   const [pendingImagePreviews, setPendingImagePreviews] = useState<string[]>([]);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [linkedImageUrls, setLinkedImageUrls] = useState<string[]>([]);
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const [urlInputValue, setUrlInputValue] = useState('');
+  const urlInputRef = useRef<HTMLInputElement>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null);
   const [viewerImages, setViewerImages] = useState<{ urls: string[]; index: number } | null>(null);
   const [hasUnread, setHasUnread] = useState(false);
@@ -263,6 +267,32 @@ export default function AnnouncementChannel({
     setPendingImagePreviews([]);
   };
 
+  // ─── 이미지 URL 관련
+  const IMAGE_URL_PATTERN = /^https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp|bmp|svg|avif)(?:[?#]\S*)?$/i;
+  const KNOWN_IMAGE_HOST = /^https?:\/\/(?:i\.imgur\.com|firebasestorage\.googleapis\.com|lh[0-9]*\.googleusercontent\.com|cdn\.discordapp\.com|postfiles\.naver\.net|blogfiles\.naver\.net|upload\.wikimedia\.org)\//i;
+
+  const handleAnnouncePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const text = e.clipboardData.getData('text').trim();
+    if (!text) return;
+    if (IMAGE_URL_PATTERN.test(text) || KNOWN_IMAGE_HOST.test(text)) {
+      if (pendingImages.length + linkedImageUrls.length >= 10) return;
+      if (linkedImageUrls.includes(text)) return;
+      e.preventDefault();
+      setLinkedImageUrls(prev => [...prev, text]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingImages.length, linkedImageUrls]);
+
+  const handleAddAnnounceImageUrl = useCallback(() => {
+    const url = urlInputValue.trim();
+    if (!url) return;
+    if (pendingImages.length + linkedImageUrls.length >= 10) return;
+    if (linkedImageUrls.includes(url)) return;
+    setLinkedImageUrls(prev => [...prev, url]);
+    setUrlInputValue('');
+    setTimeout(() => urlInputRef.current?.focus(), 50);
+  }, [urlInputValue, pendingImages.length, linkedImageUrls]);
+
   // ─── 파일 선택 (다중)
   const onFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -360,7 +390,8 @@ export default function AnnouncementChannel({
         pendingImages.length > 0 ? uploadMultipleImages(pendingImages) : Promise.resolve([]),
         pendingFiles.length > 0 ? uploadMultipleFiles(pendingFiles) : Promise.resolve([]),
       ]);
-      if (imgUrls.length > 0) data.imageUrls = imgUrls;
+      const allImgUrls = [...imgUrls, ...linkedImageUrls];
+      if (allImgUrls.length > 0) data.imageUrls = allImgUrls;
       if (fileInfos.length > 0) {
         data.files = fileInfos.map((fi) => ({ url: fi.url, name: fi.name, type: fi.type, size: fi.size }));
       }
@@ -378,7 +409,7 @@ export default function AnnouncementChannel({
       if (textareaRef.current) textareaRef.current.value = '';
       setHasText(false); setShowPollCreator(false);
       setEditingPolls([{ question: '', options: ['', ''], allowMultiple: false, maxSelections: 2 }]);
-      setEditingPollIdx(0); clearAllImgs(); setPendingFiles([]); setShowToolbar(false);
+      setEditingPollIdx(0); clearAllImgs(); setPendingFiles([]); setLinkedImageUrls([]); setShowUrlInput(false); setShowToolbar(false);
       setInputExpanded(false); setInputOverflows(false);
       requestAnimationFrame(() => { const t = textareaRef.current; if (t) t.style.height = '36px'; });
     } catch (err) { console.error('공지 작성 실패:', err); }
@@ -832,6 +863,33 @@ export default function AnnouncementChannel({
                         <p className="text-sm font-bold text-white/70">파일을 여기에 놓으세요</p>
                       </div>
                     )}
+                    {/* URL 입력 패널 */}
+                    {showUrlInput && (
+                      <div className="mb-2 flex items-center gap-2">
+                        <input
+                          ref={urlInputRef}
+                          type="text"
+                          value={urlInputValue}
+                          onChange={(e) => setUrlInputValue(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddAnnounceImageUrl(); } }}
+                          placeholder="이미지 URL 붙여넣기"
+                          className="flex-1 bg-white/10 border border-white/15 rounded-lg text-xs text-white placeholder:text-white/30 px-2.5 py-1.5 focus:outline-none"
+                        />
+                        <button onClick={handleAddAnnounceImageUrl} className="text-xs font-bold text-white/60 shrink-0">추가</button>
+                      </div>
+                    )}
+                    {/* 링크 이미지 미리보기 */}
+                    {linkedImageUrls.length > 0 && (
+                      <div className="mb-2 flex gap-1.5 overflow-x-auto">
+                        {linkedImageUrls.map((url, idx) => (
+                          <div key={`link-${idx}`} className="relative shrink-0">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={url} alt="" className="h-14 object-cover rounded-lg border border-white/15" />
+                            <button onClick={() => setLinkedImageUrls(prev => prev.filter((_, i) => i !== idx))} className="absolute -top-1 -right-1 w-4 h-4 bg-white/80 text-black flex items-center justify-center text-[8px] rounded-full">✕</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     {/* 첨부 미리보기 */}
                     {(pendingImagePreviews.length > 0 || pendingFiles.length > 0 || showPollCreator) && (
                       <div className="mb-2 space-y-1.5">
@@ -1048,6 +1106,7 @@ export default function AnnouncementChannel({
                           autoComplete="off"
                           autoCorrect="off"
                           autoCapitalize="off"
+                          onPaste={handleAnnouncePaste}
                           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handlePost(); } }}
                         />
                         {/* 입력창 확장/축소 버튼 (2줄 이상일 때만) */}
@@ -1069,7 +1128,7 @@ export default function AnnouncementChannel({
                       </div>
 
                       <button onClick={handlePost}
-                        disabled={(!hasText && !pendingImages.length && !pendingFiles.length && !(showPollCreator && editingPolls.some((p) => p.question.trim() && p.options.filter((o) => o.trim()).length >= 2))) || uploadLoading}
+                        disabled={(!hasText && !pendingImages.length && !pendingFiles.length && !linkedImageUrls.length && !(showPollCreator && editingPolls.some((p) => p.question.trim() && p.options.filter((o) => o.trim()).length >= 2))) || uploadLoading}
                         className="w-9 h-9 flex items-center justify-center shrink-0 text-white/70 disabled:text-white/20 transition-colors -mt-1"
                       >
                         {uploadLoading ? (
@@ -1090,6 +1149,11 @@ export default function AnnouncementChannel({
                             <button onClick={() => imgRef.current?.click()} className="p-1.5 text-white/50 hover:text-white/80 transition-colors" title="이미지">
                               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            </button>
+                            <button onClick={() => setShowUrlInput(v => !v)} className={`p-1.5 transition-colors ${showUrlInput ? 'text-white/80' : 'text-white/50 hover:text-white/80'}`} title="URL 이미지">
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                               </svg>
                             </button>
                             <button onClick={() => fileRef.current?.click()} className="p-1.5 text-white/50 hover:text-white/80 transition-colors" title="파일">

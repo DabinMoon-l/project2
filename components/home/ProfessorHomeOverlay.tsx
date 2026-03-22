@@ -14,6 +14,7 @@ import ProfessorRankingSection from '@/components/home/ProfessorRankingSection';
 // 대형 컴포넌트 lazy load
 const ProfileDrawer = dynamic(() => import('@/components/common/ProfileDrawer'), { ssr: false });
 const AnnouncementChannel = dynamic(() => import('@/components/home/announcement'), { ssr: false });
+const OpinionChannel = dynamic(() => import('@/components/home/opinion'), { ssr: false });
 import ProfessorCharacterBox from '@/components/home/ProfessorCharacterBox';
 import { useWideMode, scaleCoord } from '@/lib/hooks/useViewportScale';
 
@@ -282,6 +283,11 @@ export default function ProfessorHomeOverlay() {
               />
             }
           />
+        </div>
+
+        {/* 의견 게시판 */}
+        <div className="px-8 mb-1 relative z-20">
+          <OpinionChannel />
         </div>
 
         {/* 캐릭터 영역 — 아래로 내림 */}
