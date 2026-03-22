@@ -136,6 +136,12 @@ body::-webkit-scrollbar-button {
   border-top: none;
 }
 
+/* 퀴즈/복습 sticky 헤더 — data-main-content의 paddingTop을 상쇄하여 배경이 다이나믹 아일랜드까지 확장 */
+.header-extend-safe-area {
+  margin-top: calc(-1 * env(safe-area-inset-top, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
 /* 네비게이션 하단 영역 — fixed bottom 바의 safe area 패딩 */
 .safe-area-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0px);
