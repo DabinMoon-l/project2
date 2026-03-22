@@ -611,6 +611,25 @@ service cloud.firestore {
     }
 
     // ============================================================
+    // 의견 게시판 (학생/교수 모두 참여 가능한 전체 채팅)
+    // ============================================================
+    match /opinions/{opinionId} {
+      // 읽기: 로그인 사용자
+      allow read: if isAuthenticated();
+
+      // 생성: 로그인 사용자 (학생/교수 모두)
+      allow create: if isAuthenticated()
+        && request.resource.data.createdBy == request.auth.uid;
+
+      // 수정: 불가
+      allow update: if false;
+
+      // 삭제: 본인 또는 교수님 (관리 목적)
+      allow delete: if isAuthenticated()
+        && (resource.data.createdBy == request.auth.uid || isProfessor());
+    }
+
+    // ============================================================
     // 문의 컬렉션 (학생 문의 → 관리자 확인)
     // ============================================================
     match /inquiries/{inquiryId} {

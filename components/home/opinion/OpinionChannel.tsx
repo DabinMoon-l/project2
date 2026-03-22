@@ -263,7 +263,7 @@ export default function OpinionChannel() {
     ? '불러오는 중...'
     : latest
       ? `${latest.authorName}: ${latest.content || '사진을 보냈습니다.'}`
-      : '여러분의 소중한 의견을 들려주세요';
+      : '여러분의 의견을 보내주세요!';
 
   return (
     <>
