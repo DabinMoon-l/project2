@@ -141,7 +141,7 @@ export default function HomeOverlay() {
   }, []);
 
   const onTouchMove = useCallback((e: TouchEvent) => {
-    if (phaseRef.current !== 'open') return;
+    if (phaseRef.current !== 'open' || isModalOpen()) return;
     const cy = scaleCoord(e.touches[0].clientY);
     const delta = startY.current - cy;
 

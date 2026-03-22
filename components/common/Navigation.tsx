@@ -268,8 +268,11 @@ export default function Navigation({ role }: NavigationProps) {
         {/* 네비게이션 아이템 */}
         <div className="flex-1 px-3 flex flex-col gap-1">
           {tabs.map((tab) => {
-            const isActive = isActiveTab(pathname, tab.path);
             const isHomeTab = tab.path === homePath;
+            // 홈 오버레이 열림 → 홈 탭만 활성화, 나머지 비활성화
+            const isActive = isOverlayOpen
+              ? isHomeTab
+              : isActiveTab(pathname, tab.path);
 
             return (
               <Link
