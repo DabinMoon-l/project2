@@ -177,7 +177,6 @@ export default function PostDetailPage() {
   const { toggleLike } = useLike();
 
   // ── 우→좌 스와이프 → 다음 게시글 (순환) ──
-  const swipeRef = useRef<HTMLDivElement>(null);
   const swipeNav = useRef({ startX: 0, startY: 0, lastX: 0, active: false, locked: false, startTime: 0, navigating: false });
 
   // 다음 게시글 ID + 인디케이터 (순환: 마지막이면 첫 글로)
@@ -196,20 +195,23 @@ export default function PostDetailPage() {
     } catch { return empty; }
   }, [postId]);
 
-  // nextPostId를 ref에 저장 (useEffect 의존성에서 제외하여 리스너 항상 유지)
   const nextPostIdRef = useRef(nextPostId);
   nextPostIdRef.current = nextPostId;
+  const routerRef = useRef(router);
+  routerRef.current = router;
 
-  // 우→좌 스와이프로 다음 글 이동 (el에 직접 바인딩)
-  useEffect(() => {
-    const el = swipeRef.current;
+  // ref callback으로 DOM 요소 잡히는 즉시 이벤트 등록
+  const cleanupRef = useRef<(() => void) | null>(null);
+  const swipeRef = useCallback((el: HTMLDivElement | null) => {
+    // 이전 리스너 정리
+    if (cleanupRef.current) { cleanupRef.current(); cleanupRef.current = null; }
     if (!el) return;
 
+    const s = swipeNav.current;
     const SWIPE_THRESHOLD = 0.25;
     const VELOCITY_THRESHOLD = 400;
 
     const onTouchStart = (e: TouchEvent) => {
-      const s = swipeNav.current;
       if (s.navigating || !nextPostIdRef.current) return;
       if (getScrollLockCount() > 0) return;
       s.startX = e.touches[0].clientX;
@@ -221,7 +223,6 @@ export default function PostDetailPage() {
     };
 
     const onTouchMove = (e: TouchEvent) => {
-      const s = swipeNav.current;
       if (!s.active || s.navigating) return;
       const cx = e.touches[0].clientX;
       const dx = cx - s.startX;
@@ -232,7 +233,6 @@ export default function PostDetailPage() {
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist < 10) return;
         const angle = Math.atan2(Math.abs(dy), Math.abs(dx)) * (180 / Math.PI);
-        // 세로 스크롤 or 오른쪽 스와이프 → 무시
         if (angle > 50 || dx >= 0) { s.active = false; return; }
         s.locked = true;
       }
@@ -243,8 +243,7 @@ export default function PostDetailPage() {
       el.style.transition = 'none';
     };
 
-    const onTouchEnd = () => {
-      const s = swipeNav.current;
+    const finishSwipe = () => {
       if (!s.active || !s.locked || s.navigating) { s.active = false; return; }
       s.active = false;
 
@@ -258,39 +257,38 @@ export default function PostDetailPage() {
 
       if (dx < 0 && (Math.abs(dx) > W * SWIPE_THRESHOLD || velocity > VELOCITY_THRESHOLD)) {
         s.navigating = true;
-        el.style.transition = 'transform 0.2s ease-out, opacity 0.15s ease-out';
+        el.style.transition = 'transform 0.15s ease-out, opacity 0.1s ease-out';
         el.style.transform = `translateX(${-W}px)`;
-        el.style.opacity = '0.3';
+        el.style.opacity = '0';
         setTimeout(() => {
-          el.style.transition = ''; el.style.transform = ''; el.style.opacity = '';
           sessionStorage.removeItem(`visited_board_${target}`);
-          router.replace(`/board/${target}`);
-          setTimeout(() => { s.navigating = false; }, 300);
-        }, 180);
+          routerRef.current.replace(`/board/${target}`);
+          // 스타일 리셋은 다음 페이지에서 새 el이 생기므로 불필요
+          setTimeout(() => { s.navigating = false; }, 500);
+        }, 150);
       } else {
         el.style.transition = 'transform 0.2s ease-out';
         el.style.transform = '';
       }
     };
 
-    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    // 터치
+    el.addEventListener('touchstart', onTouchStart, { passive: false });
     el.addEventListener('touchmove', onTouchMove, { passive: false });
-    el.addEventListener('touchend', onTouchEnd, { passive: true });
+    el.addEventListener('touchend', finishSwipe, { passive: true });
 
     // PC 마우스
     let mouseDown = false;
     const onMouseDown = (e: MouseEvent) => {
       if ((e.target as HTMLElement).closest('a,button,input,textarea,[contenteditable]')) return;
-      if (!nextPostIdRef.current || swipeNav.current.navigating) return;
+      if (!nextPostIdRef.current || s.navigating) return;
       mouseDown = true;
       el.style.cursor = 'grabbing'; el.style.userSelect = 'none';
       e.preventDefault();
-      Object.assign(swipeNav.current, { startX: e.clientX, startY: e.clientY, lastX: e.clientX, active: true, locked: false, startTime: Date.now() });
+      Object.assign(s, { startX: e.clientX, startY: e.clientY, lastX: e.clientX, active: true, locked: false, startTime: Date.now() });
     };
     const onMouseMove = (e: MouseEvent) => {
-      if (!mouseDown) return;
-      const s = swipeNav.current;
-      if (!s.active || s.navigating) return;
+      if (!mouseDown || !s.active || s.navigating) return;
       const dx = e.clientX - s.startX;
       const dy = e.clientY - s.startY;
       s.lastX = e.clientX;
@@ -303,22 +301,21 @@ export default function PostDetailPage() {
       const r = 1 - Math.min(Math.abs(dx)/window.innerWidth, 0.5)*0.3;
       el.style.transform = `translateX(${dx*r}px)`; el.style.transition = 'none';
     };
-    const onMouseUp = () => { if (!mouseDown) return; mouseDown = false; el.style.cursor = ''; el.style.userSelect = ''; onTouchEnd(); };
+    const onMouseUp = () => { if (!mouseDown) return; mouseDown = false; el.style.cursor = ''; el.style.userSelect = ''; finishSwipe(); };
 
     el.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
 
-    return () => {
+    cleanupRef.current = () => {
       el.removeEventListener('touchstart', onTouchStart);
       el.removeEventListener('touchmove', onTouchMove);
-      el.removeEventListener('touchend', onTouchEnd);
+      el.removeEventListener('touchend', finishSwipe);
       el.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router]);
+  }, []);
 
   const isOwner = user?.uid === post?.authorId;
 
@@ -427,9 +424,9 @@ export default function PostDetailPage() {
   }
 
   return (
+    <div ref={swipeRef} style={{ cursor: nextPostId ? 'grab' : undefined }}>
     <motion.div
-      ref={swipeRef}
-      className="min-h-screen pb-24 overflow-x-hidden" data-board-detail style={{ backgroundColor: '#F5F0E8', cursor: nextPostId ? 'grab' : undefined }}
+      className="min-h-screen pb-24 overflow-x-hidden" data-board-detail style={{ backgroundColor: '#F5F0E8' }}
       initial={slideIn ? { opacity: 0, x: 60 } : false}
       animate={{ opacity: 1, x: 0 }}
       transition={{ type: 'spring', stiffness: 400, damping: 35 }}
@@ -582,5 +579,6 @@ export default function PostDetailPage() {
         </section>
       </main>
     </motion.div>
+    </div>
   );
 }
