@@ -850,7 +850,7 @@ export default function QuizPage() {
     return (
       <div className="min-h-screen" style={{ backgroundColor: '#F5F0E8' }}>
         {/* 헤더 스켈레톤 */}
-        <div className="sticky top-0 z-50 border-b-2 border-[#1A1A1A]" style={{ backgroundColor: '#F5F0E8' }}>
+        <div className="sticky top-0 z-50 border-b-2 border-[#1A1A1A]" style={{ backgroundColor: '#F5F0E8', paddingTop: 'env(safe-area-inset-top, 0px)' }}>
           <div className="flex items-center justify-between h-14 px-4">
             <Skeleton className="w-10 h-10 rounded-none" />
             <Skeleton className="w-32 h-6 rounded-none" />
