@@ -18,20 +18,12 @@ export default function SplashScreen({ children }: SplashScreenProps) {
   useEffect(() => {
     setIsClient(true);
 
-    // 스플래시 중 html 배경을 검정으로 (다이나믹 아일랜드 주변 색상 통일)
-    const html = document.documentElement;
-    html.style.backgroundColor = '#000';
-
     // 3초 후 스플래시 화면 숨기기
     const timer = setTimeout(() => {
       setShowSplash(false);
-      html.style.backgroundColor = '#F5F0E8';
     }, 3000);
 
-    return () => {
-      clearTimeout(timer);
-      html.style.backgroundColor = '#F5F0E8';
-    };
+    return () => clearTimeout(timer);
   }, []);
 
   // 서버 사이드 렌더링 중에는 children만 렌더링
