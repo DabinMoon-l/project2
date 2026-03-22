@@ -17,6 +17,7 @@ import { useWideMode, scaleCoord } from '@/lib/hooks/useViewportScale';
 // 대형 컴포넌트 lazy load (오버레이 열릴 때만 필요)
 const ProfileDrawer = dynamic(() => import('@/components/common/ProfileDrawer'), { ssr: false });
 const AnnouncementChannel = dynamic(() => import('@/components/home/announcement'), { ssr: false });
+const OpinionChannel = dynamic(() => import('@/components/home/opinion'), { ssr: false });
 
 const SWIPE_THRESHOLD = 120;
 const WHEEL_THRESHOLD = 80;
@@ -311,6 +312,11 @@ export default function HomeOverlay() {
           {/* 공지 */}
           <div className="px-8 mb-2 mt-1 relative z-30">
             <AnnouncementChannel />
+          </div>
+
+          {/* 의견 게시판 */}
+          <div className="px-8 mb-1 relative z-20">
+            <OpinionChannel />
           </div>
         </div>
 
