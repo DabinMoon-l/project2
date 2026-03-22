@@ -296,8 +296,8 @@ export default function ProfessorHomeOverlay() {
           <ProfessorCharacterBox />
         </div>
 
-        {/* 균등 간격 2: 토끼 ↔ 랭킹 */}
-        <div className="flex-1" />
+        {/* 균등 간격 2: 토끼 ↔ 랭킹 (캐릭터 하단 오버플로 ~100px 보상) */}
+        <div style={{ flex: '1 1 100px' }} />
 
         {/* ③ 랭킹 섹션: 과목 전환 + 랭킹 (flex-none) */}
         <div className="flex-none">
