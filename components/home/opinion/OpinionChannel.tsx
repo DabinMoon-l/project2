@@ -307,7 +307,7 @@ export default function OpinionChannel() {
   const previewText = loading
     ? '불러오는 중...'
     : latest
-      ? `${latest.authorName}: ${latest.content || '사진을 보냈습니다.'}`
+      ? latest.content || '사진을 보냈습니다.'
       : '여러분의 의견을 보내주세요!';
 
   return (
