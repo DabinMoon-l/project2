@@ -100,17 +100,17 @@ const OpinionItem = memo(function OpinionItem({
           <div className={`flex-1 min-w-0 ${isOwn ? 'text-right' : ''}`}>
             {/* 이름 + 시간 */}
             <div className={`flex items-baseline gap-2 mb-0.5 ${isOwn ? 'justify-end' : ''}`}>
-              {isOwn && <span className="text-xs text-white/30">{fmtTime(msg.createdAt)}</span>}
-              <span className={`text-sm font-bold ${isDev ? 'text-emerald-300' : 'text-white/80'}`}>
+              {isOwn && <span className="text-sm text-white/30">{fmtTime(msg.createdAt)}</span>}
+              <span className={`text-base font-bold ${isDev ? 'text-emerald-300' : 'text-white/80'}`}>
                 {displayName}
               </span>
-              {!isOwn && <span className="text-xs text-white/30">{fmtTime(msg.createdAt)}</span>}
+              {!isOwn && <span className="text-sm text-white/30">{fmtTime(msg.createdAt)}</span>}
             </div>
             {/* 내용 */}
             {msg.content && (
               <div className="relative inline-block">
                 <p
-                  className={`text-[15px] leading-relaxed whitespace-pre-wrap break-words ${isOwn ? 'text-white' : 'text-white/90'}`}
+                  className={`text-base leading-relaxed whitespace-pre-wrap break-words ${isOwn ? 'text-white' : 'text-white/90'}`}
                   onContextMenu={(e) => { if (isOwn) { e.preventDefault(); setShowMenu(true); } }}
                 >
                   {msg.content}
@@ -344,7 +344,7 @@ export default function OpinionChannel() {
           className="w-full text-left flex items-center"
         >
           <div className="flex-1 min-w-0">
-            <p className="text-base text-white/60 truncate leading-tight">
+            <p className="text-xl text-white/60 truncate leading-tight">
               {previewText}
             </p>
           </div>
