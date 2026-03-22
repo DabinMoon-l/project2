@@ -69,7 +69,8 @@ export async function createBattle(
   courseId: string,
   player1: PlayerSetup,
   player2: PlayerSetup,
-  _apiKey: string
+  _apiKey: string,
+  chapters?: string[]
 ): Promise<string> {
   const rtdb = getDatabase();
   const battleId = rtdb.ref("tekken/battles").push().key!;
@@ -89,7 +90,7 @@ export async function createBattle(
       : getPlayerBattleRabbits(player2.userId, player2.equippedRabbits),
     // 풀에서 문제 추출 (동기)
     humanPlayerIds.length > 0
-      ? drawQuestionsFromPool(courseId, humanPlayerIds, 10).catch(() => null)
+      ? drawQuestionsFromPool(courseId, humanPlayerIds, 10, chapters).catch(() => null)
       : Promise.resolve(null),
   ]);
 
@@ -107,7 +108,11 @@ export async function createBattle(
       const cacheRef = rtdb.ref(`tekken/pregenQuestions/${courseId}_${pid}`);
       const cacheSnap = await cacheRef.once("value");
       const cache = cacheSnap.val() as PregenCache | null;
-      if (cache?.questions && cache.questions.length >= 5 &&
+      // 챕터 일치 확인 (정렬 후 비교)
+      const cacheChaptersKey = cache?.chapters ? [...cache.chapters].sort().join(",") : "";
+      const requestChaptersKey = chapters ? [...chapters].sort().join(",") : "";
+      const chaptersMatch = !chapters || cacheChaptersKey === requestChaptersKey;
+      if (chaptersMatch && cache?.questions && cache.questions.length >= 5 &&
           cache.createdAt > Date.now() - 5 * 60 * 1000) {
         questions = cache.questions.slice(0, 10);
         await cacheRef.remove();
@@ -148,6 +153,7 @@ export async function createBattle(
   const battleData = {
     status: "countdown",
     courseId,
+    ...(chapters ? { chapters } : {}),
     createdAt: writeNow,
     countdownStartedAt: writeNow + 1500, // 1.5초 뒤 시작 — 양쪽 클라이언트가 데이터 수신할 시간 확보
     endsAt: writeNow + BATTLE_CONFIG.BATTLE_DURATION + 5000,

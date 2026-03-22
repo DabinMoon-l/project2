@@ -14,30 +14,26 @@ import { COURSE_NAMES } from "./tekkenTypes";
 /**
  * 교수님이 설정한 배틀 출제 챕터 조회
  */
-export async function getTekkenChapters(courseId: string): Promise<string[]> {
-  // 과목별 기본 전 챕터
-  const DEFAULT_CHAPTERS: Record<string, string[]> = {
-    biology: ["1", "2", "3", "4", "5", "6"],
-    pathophysiology: ["3", "4", "5", "7", "8", "9", "10", "11"],
-    microbiology: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"],
-  };
-  const defaultChapters = DEFAULT_CHAPTERS[courseId] || ["2", "3", "4"];
+/**
+ * 과목의 전체 챕터 번호 목록 반환
+ * shared/courseChapters.json에서 동적으로 추출
+ */
+export function getTekkenChapters(courseId: string): string[] {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const courseChaptersData = require("../shared/courseChapters.json") as Record<
+    string,
+    { chapters: Array<{ id: string }> }
+  >;
+  const data = courseChaptersData[courseId];
+  if (!data) return ["2", "3", "4"];
 
-  try {
-    const db = getFirestore();
-    const doc = await db
-      .collection("settings")
-      .doc("tekken")
-      .collection("courses")
-      .doc(courseId)
-      .get();
-    if (doc.exists) {
-      return doc.data()?.chapters || defaultChapters;
-    }
-  } catch {
-    // 설정 없으면 기본값
-  }
-  return defaultChapters;
+  // 챕터 id에서 번호 추출 (예: "bio_3" → "3"), 챕터 1 제외 (역사/개론)
+  return data.chapters
+    .filter((ch) => !ch.id.endsWith("_1"))
+    .map((ch) => {
+      const match = ch.id.match(/_(\d+)$/);
+      return match ? match[1] : ch.id;
+    });
 }
 
 /**
@@ -549,7 +545,7 @@ export async function generateBattleQuestions(
   difficulty: TekkenDifficulty = "medium",
   existingTexts: string[] = []
 ): Promise<GeneratedQuestion[]> {
-  const targetChapters = chapters || await getTekkenChapters(courseId);
+  const targetChapters = chapters || getTekkenChapters(courseId);
   const courseName = COURSE_NAMES[courseId] || "생물학";
 
   // scope + focusGuide + 교수 스타일/키워드 병렬 로드
@@ -607,7 +603,7 @@ JSON 배열로 출력: [{"text":"문제","type":"multiple","choices":["선지1",
 
       const generationConfig: Record<string, unknown> = {
         temperature: isSimplified ? 0.7 : 0.9,
-        maxOutputTokens: isSimplified ? 4096 : 8192,
+        maxOutputTokens: isSimplified ? 4096 : 12288,
       };
 
       // 구조화 출력 (3차 시도에서만 자유형)
@@ -672,7 +668,8 @@ JSON 배열로 출력: [{"text":"문제","type":"multiple","choices":["선지1",
 export async function pregenBattleQuestions(
   courseId: string,
   userId: string,
-  apiKey: string
+  apiKey: string,
+  chapters?: string[]
 ): Promise<void> {
   const rtdb = getDatabase();
   const cacheRef = rtdb.ref(`tekken/pregenQuestions/${courseId}_${userId}`);
@@ -682,14 +679,14 @@ export async function pregenBattleQuestions(
   const existingData = existing.val() as PregenCache | null;
   if (existingData?.createdAt && existingData.createdAt > Date.now() - 5 * 60 * 1000) return;
 
-  const chapters = await getTekkenChapters(courseId);
-  const questions = await generateBattleQuestions(courseId, apiKey, 10, chapters);
+  const chaps = chapters || getTekkenChapters(courseId);
+  const questions = await generateBattleQuestions(courseId, apiKey, 10, chaps);
 
   if (questions.length >= 5) {
     await cacheRef.set({
       questions,
       createdAt: Date.now(),
-      chapters,
+      chapters: chaps,
     });
   }
 }

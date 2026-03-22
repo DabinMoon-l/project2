@@ -1,19 +1,23 @@
 /**
  * 철권퀴즈 문제 풀 사전 생성 시스템
  *
- * - 야간 스케줄(매일 새벽 3시)로 문제를 미리 Firestore에 저장
- * - 배틀 시 풀에서 즉시 뽑아 사용 (Gemini 대기 제거)
- * - 같은 유저가 연속 배틀에서 동일 문제를 보지 않도록 seenQuestions 관리
+ * v2 — 챕터당 150문제 생성 (전 챕터)
+ *
+ * 구조:
+ * - 스케줄러(03:00 KST) → Firestore 태스크 디스패치 (per course×chapter)
+ * - onDocumentCreated 워커 → 챕터당 150문제 생성 (무중단 교체)
+ * - drawQuestionsFromPool → 학생 선택 챕터 기반 추출
  *
  * Firestore 구조:
- *   tekkenQuestionPool/{courseId}                    — 메타 문서
- *   tekkenQuestionPool/{courseId}/questions/{qId}    — 개별 문제
+ *   tekkenQuestionPool/{courseId}/questions/{qId}    — 개별 문제 (chapter 필드)
  *   tekkenQuestionPool/{courseId}/seenQuestions/{id}  — 유저별 본 문제 기록
+ *   tekkenPoolTasks/{taskId}                         — 챕터별 생성 태스크
  */
 
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
+import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { defineSecret } from "firebase-functions/params";
 import { verifyProfessorAccess } from "./utils/professorAccess";
 import {
@@ -22,7 +26,7 @@ import {
   COURSE_NAMES,
   type GeneratedQuestion,
 } from "./tekkenBattle";
-import type { TekkenDifficulty } from "./tekken/tekkenTypes";
+import type { TekkenDifficulty, TekkenPoolTask } from "./tekken/tekkenTypes";
 
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 
@@ -33,14 +37,12 @@ const getAllCourses = () => Object.keys(COURSE_NAMES);
  * 현재 학기 과목만 반환
  * 1학기 (02-22 ~ 08-21): biology, microbiology
  * 2학기 (08-22 ~ 02-21): pathophysiology만
- * (생물학은 1학기 전용 과목)
  */
 function getCurrentSemesterCourses(): string[] {
   const now = new Date();
-  const month = now.getMonth() + 1; // 1~12
+  const month = now.getMonth() + 1;
   const day = now.getDate();
 
-  // 1학기: 2/22 ~ 8/21
   const isSemester1 =
     (month > 2 || (month === 2 && day >= 22)) &&
     (month < 8 || (month === 8 && day <= 21));
@@ -48,118 +50,54 @@ function getCurrentSemesterCourses(): string[] {
   if (isSemester1) {
     return ["biology", "microbiology"];
   }
-  // 2학기: 8/22 ~ 2/21 (병태생리학만)
   return ["pathophysiology"];
 }
 
-/**
- * 과목별 챕터 조회
- * 교수 설정(settings/tekken/courses/{courseId}) 우선 사용
- */
-async function getSeasonalChapters(courseId: string): Promise<string[]> {
-  const chapters = await getTekkenChapters(courseId);
-  console.log(`[챕터] ${courseId}: ${chapters.join(",")}`);
-  return chapters;
-}
+// ── 상수 ──
 
-/**
- * 배틀 10문제 난이도 배분: easy 5 + medium 5
- * 풀 생성 시에도 이 비율로 생성 (300문제 = easy 150 + medium 150)
- * hard 제거: Gemini 구조화 출력 실패율이 높아 풀 미달 → 배틀 로딩 지연 원인
- */
+/** 챕터당 목표 문제 수 */
+const TARGET_PER_CHAPTER = 150;
+/** 배치당 문제 수 (Gemini 1회 호출) */
+const BATCH_SIZE = 15;
+/** 배치 간 대기 (ms) */
+const BATCH_DELAY_MS = 3000;
+/** 보충 라운드 최대 횟수 */
+const MAX_SUPPLEMENT_ROUNDS = 3;
+
+/** 난이도 배분: easy 50% + medium 50% */
 const DIFFICULTY_DISTRIBUTION: { difficulty: TekkenDifficulty; ratio: number }[] = [
   { difficulty: "easy", ratio: 0.5 },
   { difficulty: "medium", ratio: 0.5 },
 ];
 
-// 풀 목표 크기 (매일 초기화 후 새로 생성)
-const TARGET_POOL_SIZE = 300;
-// 문제 유효 기간 (1일 — 매일 새벽 초기화)
-const QUESTION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-// 배치당 문제 수 (풍부한 프롬프트로 토큰 증가 → 10개로 축소)
-const BATCH_SIZE = 10;
-// 배치 간 대기 (6초 — RPM 10 무료 제한 준수)
-const BATCH_DELAY_MS = 6000;
-// 목표 미달 시 보충 라운드 최대 횟수 (easy/medium만이므로 실패율 매우 낮음)
-const MAX_SUPPLEMENT_ROUNDS = 5;
+// ── 챕터별 풀 생성 ──
 
 /**
- * 문제 풀 보충 — 챕터별 배치 분리 방식
+ * 단일 챕터의 문제 풀 생성
  *
- * 핵심: "모든 챕터에서 20문제"가 아니라 "2장에서 15문제", "3장에서 15문제" 식으로
- * 챕터 1개당 1배치로 생성 → 챕터 간 주제 중복 원천 차단
- *
- * - 챕터 1은 과목별 2~4문제만 (역사/개론 → 중요도 낮음)
- * - 미생물학 1장은 코흐(Koch)만
- * - 보충 라운드에서 부족분은 주요 챕터에서 추가 생성
+ * 75 easy + 75 medium = 150문제 / 챕터
+ * 배치 15개씩, 3초 대기 → 약 90초/챕터
  */
-export async function replenishQuestionPool(
+export async function replenishChapterPool(
   courseId: string,
+  chapter: string,
   apiKey: string,
-  targetSize: number = TARGET_POOL_SIZE,
-  /** true면 기존 풀 크기 무시하고 targetSize만큼 강제 생성 (무중단 교체용) */
-  forceAdd: boolean = false
-): Promise<{ added: number; deleted: number }> {
+  targetSize: number = TARGET_PER_CHAPTER,
+): Promise<{ added: number }> {
   const db = getFirestore();
   const poolRef = db.collection("tekkenQuestionPool").doc(courseId);
   const questionsRef = poolRef.collection("questions");
 
-  let deleted = 0;
-  let initialCount = 0;
-
-  if (!forceAdd) {
-    // 1. 만료 문제 삭제 (일반 보충 모드)
-    const expiredThreshold = Timestamp.fromMillis(Date.now() - QUESTION_MAX_AGE_MS);
-    const expiredSnap = await questionsRef
-      .where("generatedAt", "<", expiredThreshold)
-      .get();
-
-    if (!expiredSnap.empty) {
-      const batch = db.batch();
-      for (const doc of expiredSnap.docs) {
-        batch.delete(doc.ref);
-        deleted++;
-      }
-      await batch.commit();
-    }
-
-    // 2. 현재 풀 크기 확인
-    const initialSnap = await questionsRef.count().get();
-    initialCount = initialSnap.data().count;
-
-    if (initialCount >= targetSize) {
-      await poolRef.set({
-        totalQuestions: initialCount,
-        lastRefreshedAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
-      return { added: 0, deleted };
-    }
-  }
-  // forceAdd: initialCount=0으로 취급 → targetSize만큼 전부 새로 생성
-
-  // 3. 챕터 조회 + 분류
-  const chapters = await getSeasonalChapters(courseId);
-  const mainChapters = chapters.filter(c => c !== "1");
-  const hasChapter1 = chapters.includes("1");
-
-  // 챕터 1 예산: easy 2 + medium 2 = 4문제 (0~1문제만 배틀에 나오도록 풀에 소량만)
-  const CH1_BUDGET = hasChapter1 ? 4 : 0;
-  const mainBudget = targetSize - initialCount - CH1_BUDGET;
-
   let totalAdded = 0;
-
-  // 중복 방지: 이번 세션에서 생성된 문제 텍스트 추적
   const generatedTexts: string[] = [];
 
-  // Firestore 배치 저장 헬퍼 (해설 없는 문제 필터링)
+  // Firestore 배치 저장 헬퍼
   const saveQuestions = async (
     questions: GeneratedQuestion[],
     difficulty: TekkenDifficulty,
-    chapter: string,
     batchLabel: string,
   ) => {
     if (questions.length === 0) return 0;
-    // 해설 + 선지별해설 모두 있는 문제만 저장 (복습 오답 품질 보장)
     const withExplanation = questions.filter(
       q => q.explanation && q.choiceExplanations && q.choiceExplanations.length > 0
     );
@@ -179,154 +117,108 @@ export async function replenishQuestionPool(
         correctAnswer: q.correctAnswer,
         difficulty: q.difficulty || difficulty,
         chapter: q.chapterId || chapter,
-        chapters,
         generatedAt: FieldValue.serverTimestamp(),
         batchId,
         explanation: q.explanation,
         choiceExplanations: q.choiceExplanations,
       });
-      // 중복 방지용 텍스트 기록
       generatedTexts.push(q.text);
     }
     await writeBatch.commit();
     return withExplanation.length;
   };
 
-  // 4. 챕터별 배치 생성 (챕터 1개 = 1 Gemini 호출)
+  // 난이도별 생성
   for (const { difficulty, ratio } of DIFFICULTY_DISTRIBUTION) {
-    const difficultyBudget = Math.round(mainBudget * ratio);
-    if (difficultyBudget <= 0) continue;
+    const budget = Math.round(targetSize * ratio);
+    if (budget <= 0) continue;
 
-    // 각 챕터에 균등 배분
-    const perChapter = Math.ceil(difficultyBudget / mainChapters.length);
     let difficultyAdded = 0;
+    const batches = Math.ceil(budget / BATCH_SIZE);
 
-    for (const chapter of mainChapters) {
-      const count = Math.min(perChapter, difficultyBudget - difficultyAdded);
-      if (count <= 0) break;
+    for (let b = 0; b < batches; b++) {
+      const batchCount = Math.min(BATCH_SIZE, budget - difficultyAdded);
+      if (batchCount <= 0) break;
 
-      // 한 챕터에서 BATCH_SIZE 초과 시 분할
-      const batches = Math.ceil(count / BATCH_SIZE);
-      for (let b = 0; b < batches; b++) {
-        const batchCount = Math.min(BATCH_SIZE, count - b * BATCH_SIZE);
-        if (batchCount <= 0) break;
-
-        try {
-          const questions = await generateBattleQuestions(
-            courseId, apiKey, batchCount, [chapter], difficulty, generatedTexts
-          );
-          const saved = await saveQuestions(questions, difficulty, chapter, `${b}`);
-          difficultyAdded += saved;
-          totalAdded += saved;
-        } catch (err) {
-          console.error(`[풀] ${courseId}/${difficulty}/ch${chapter} 실패:`, err);
-        }
-
-        // 배치 간 대기
-        if (b < batches - 1) {
-          await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
-        }
+      try {
+        const questions = await generateBattleQuestions(
+          courseId, apiKey, batchCount, [chapter], difficulty, generatedTexts
+        );
+        const saved = await saveQuestions(questions, difficulty, `${b}`);
+        difficultyAdded += saved;
+        totalAdded += saved;
+      } catch (err) {
+        console.error(`[풀] ${courseId}/${difficulty}/ch${chapter} 배치${b} 실패:`, err);
       }
 
-      // 챕터 간 대기 (RPM 준수)
-      await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
-    }
-
-    console.log(`[풀] ${courseId}/${difficulty}: ${difficultyAdded}문제 생성 (챕터별 분리)`);
-
-    // 챕터 1 소량 생성
-    if (hasChapter1) {
-      const ch1Count = Math.round(CH1_BUDGET * ratio); // easy 2, medium 2
-      if (ch1Count > 0) {
-        try {
-          const questions = await generateBattleQuestions(
-            courseId, apiKey, ch1Count, ["1"], difficulty, generatedTexts
-          );
-          const saved = await saveQuestions(questions, difficulty, "1", "ch1");
-          totalAdded += saved;
-        } catch (err) {
-          console.error(`[풀] ${courseId}/${difficulty}/ch1 실패 (무시):`, err);
-        }
-      }
-    }
-  }
-
-  // 5. 보충 라운드 — 목표 미달 시 부족분을 주요 챕터에서 추가
-  for (let round = 1; round <= MAX_SUPPLEMENT_ROUNDS; round++) {
-    const remaining = targetSize - initialCount - totalAdded;
-    if (remaining <= 0) break;
-
-    console.log(`[풀 보충] ${courseId}: 라운드 ${round} — 부족분 ${remaining}개`);
-
-    for (const { difficulty, ratio } of DIFFICULTY_DISTRIBUTION) {
-      const supplementTarget = Math.round(remaining * ratio);
-      if (supplementTarget <= 0) continue;
-
-      // 부족분을 주요 챕터에 라운드 로빈 배분
-      let supplementAdded = 0;
-      let chIdx = 0;
-      while (supplementAdded < supplementTarget && chIdx < mainChapters.length) {
-        const chapter = mainChapters[chIdx % mainChapters.length];
-        const count = Math.min(BATCH_SIZE, supplementTarget - supplementAdded);
-
-        try {
-          const questions = await generateBattleQuestions(
-            courseId, apiKey, count, [chapter], difficulty, generatedTexts
-          );
-          const saved = await saveQuestions(questions, difficulty, chapter, `s${round}`);
-          supplementAdded += saved;
-          totalAdded += saved;
-        } catch (err) {
-          console.error(`[보충] ${courseId}/${difficulty}/ch${chapter}/r${round} 실패:`, err);
-        }
-        chIdx++;
-
+      if (b < batches - 1) {
         await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
       }
     }
+
+    console.log(`[풀] ${courseId}/ch${chapter}/${difficulty}: ${difficultyAdded}문제 생성`);
   }
 
-  // 6. 메타 문서 업데이트
-  const finalTotal = initialCount + totalAdded;
-  await poolRef.set({
-    totalQuestions: finalTotal,
-    lastRefreshedAt: FieldValue.serverTimestamp(),
-    chapters,
-  }, { merge: true });
+  // 보충 라운드
+  for (let round = 1; round <= MAX_SUPPLEMENT_ROUNDS; round++) {
+    const remaining = targetSize - totalAdded;
+    if (remaining <= 0) break;
 
-  console.log(`문제 풀 보충 완료 (${courseId}): 추가 ${totalAdded}개, 삭제 ${deleted}개, 총 ${finalTotal}개`);
+    console.log(`[보충] ${courseId}/ch${chapter}: 라운드 ${round} — 부족분 ${remaining}개`);
+    for (const { difficulty, ratio } of DIFFICULTY_DISTRIBUTION) {
+      const count = Math.min(BATCH_SIZE, Math.round(remaining * ratio));
+      if (count <= 0) continue;
 
-  if (finalTotal < targetSize) {
-    console.warn(`[경고] ${courseId}: 목표 미달 (${finalTotal}/${targetSize}) — ${targetSize - finalTotal}개 부족`);
+      try {
+        const questions = await generateBattleQuestions(
+          courseId, apiKey, count, [chapter], difficulty, generatedTexts
+        );
+        const saved = await saveQuestions(questions, difficulty, `s${round}`);
+        totalAdded += saved;
+      } catch (err) {
+        console.error(`[보충] ${courseId}/ch${chapter}/${difficulty}/r${round} 실패:`, err);
+      }
+
+      await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+    }
   }
 
-  return { added: totalAdded, deleted };
+  console.log(`[풀] ${courseId}/ch${chapter}: 총 ${totalAdded}문제 생성 (목표 ${targetSize})`);
+  return { added: totalAdded };
 }
+
+// ── 풀에서 문제 추출 ──
 
 /**
  * 풀에서 문제 추출 (중복 방지)
  *
- * - 풀 전체 조회 (60문서 이하이므로 전체 로드)
+ * - 선택 챕터만 Firestore 쿼리로 로드
  * - 양쪽 플레이어의 최근 24시간 seenQuestions 제외
- * - 부족 시 null 반환 (호출자가 Gemini 폴백)
+ * - 챕터별 라운드 로빈으로 균등 분배
+ * - 부족 시 null 반환
  */
 export async function drawQuestionsFromPool(
   courseId: string,
   playerIds: string[],
-  count: number = 10
+  count: number = 10,
+  chapters?: string[]
 ): Promise<GeneratedQuestion[] | null> {
   const db = getFirestore();
   const poolRef = db.collection("tekkenQuestionPool").doc(courseId);
   const questionsRef = poolRef.collection("questions");
   const seenRef = poolRef.collection("seenQuestions");
 
-  // 1. 풀 전체 + seenQuestions 병렬 조회
+  // 1. 풀 조회 (챕터 필터)
   const seenQuestionIds = new Set<string>();
-
-  // userId 단일 필드 쿼리 — 복합 인덱스 불필요, seenAt은 코드에서 필터
   const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+
+  let poolQuery: FirebaseFirestore.Query = questionsRef;
+  if (chapters && chapters.length > 0) {
+    poolQuery = questionsRef.where("chapter", "in", chapters);
+  }
+
   const [poolSnap, ...seenSnaps] = await Promise.all([
-    questionsRef.get(),
+    poolQuery.get(),
     ...playerIds.map(pid =>
       seenRef.where("userId", "==", pid).get()
     ),
@@ -336,7 +228,6 @@ export async function drawQuestionsFromPool(
   for (const seenSnap of seenSnaps) {
     for (const doc of seenSnap.docs) {
       const data = doc.data();
-      // seenAt 필터 (코드에서 24시간 체크 — 복합 인덱스 불필요)
       const seenAt = data.seenAt?.toMillis?.() || 0;
       if (seenAt < oneDayAgo) continue;
       const ids = data.questionIds as string[] | undefined;
@@ -346,12 +237,11 @@ export async function drawQuestionsFromPool(
     }
   }
 
-  // 3. 미시청 문제 필터링
+  // 2. 미시청 문제 필터링
   let available = poolSnap.docs.filter(doc => !seenQuestionIds.has(doc.id));
 
   if (available.length < count) {
     if (available.length < 5) {
-      // 5문제 미만 → seen 기록 초기화 후 전체 풀에서 재시도 (헤비 유저 대응)
       console.log(`미시청 문제 부족 (${available.length}개) — seen 초기화 후 재사용`);
       const oldSeenSnaps = await Promise.all(
         playerIds.map(pid => seenRef.where("userId", "==", pid).get())
@@ -361,7 +251,6 @@ export async function drawQuestionsFromPool(
         snap.docs.forEach(doc => resetBatch.delete(doc.ref));
       }
       await resetBatch.commit();
-      // 초기화 후 전체 풀 사용 (Fisher-Yates 셔플)
       available = [...poolSnap.docs];
       for (let i = available.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -370,18 +259,17 @@ export async function drawQuestionsFromPool(
     }
   }
 
-  // 4. 난이도별 + 챕터별 분류
+  // 3. 난이도별 분류 + 셔플
   const byDifficulty: Record<string, typeof available> = { easy: [], medium: [], hard: [] };
   for (const doc of available) {
     const diff = doc.data().difficulty || "medium";
     if (byDifficulty[diff]) {
       byDifficulty[diff].push(doc);
     } else {
-      byDifficulty["medium"].push(doc); // 알 수 없는 난이도 → medium
+      byDifficulty["medium"].push(doc);
     }
   }
 
-  // 각 난이도 Fisher-Yates 셔플
   for (const key of Object.keys(byDifficulty)) {
     const arr = byDifficulty[key];
     for (let i = arr.length - 1; i > 0; i--) {
@@ -390,16 +278,12 @@ export async function drawQuestionsFromPool(
     }
   }
 
-  /**
-   * 챕터 균등 분배 선택 헬퍼
-   * 난이도 풀에서 챕터별 라운드 로빈으로 선택 → 모든 챕터 골고루 커버
-   */
+  /** 챕터 균등 분배 선택 — 라운드 로빈 */
   const pickBalanced = (
     pool: typeof available,
     targetCount: number,
     usedIds: Set<string>
   ): typeof available => {
-    // 챕터별 그룹핑
     const byChapter: Record<string, typeof available> = {};
     for (const doc of pool) {
       if (usedIds.has(doc.id)) continue;
@@ -408,19 +292,16 @@ export async function drawQuestionsFromPool(
       byChapter[chapter].push(doc);
     }
 
-    // 챕터 목록 셔플 (시작 챕터 랜덤화)
     const chapterKeys = Object.keys(byChapter);
     for (let i = chapterKeys.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [chapterKeys[i], chapterKeys[j]] = [chapterKeys[j], chapterKeys[i]];
     }
 
-    // 라운드 로빈: 각 챕터에서 1개씩 순환
     const result: typeof available = [];
     const chapterIdx: Record<string, number> = {};
     for (const ch of chapterKeys) chapterIdx[ch] = 0;
 
-    let round = 0;
     while (result.length < targetCount) {
       let pickedThisRound = false;
       for (const ch of chapterKeys) {
@@ -433,13 +314,11 @@ export async function drawQuestionsFromPool(
           pickedThisRound = true;
         }
       }
-      if (!pickedThisRound) break; // 모든 챕터 소진
-      round++;
+      if (!pickedThisRound) break;
     }
     return result;
   };
 
-  // easy 5 → medium 5 (챕터 균등 분배)
   const targets = [
     { difficulty: "easy", count: 5 },
     { difficulty: "medium", count: 5 },
@@ -453,7 +332,6 @@ export async function drawQuestionsFromPool(
     const picked = pickBalanced(pool, target.count, usedIds);
     selected.push(...picked);
 
-    // 부족하면 다른 난이도에서 보충
     if (picked.length < target.count) {
       let need = target.count - picked.length;
       for (const doc of available) {
@@ -466,9 +344,9 @@ export async function drawQuestionsFromPool(
     }
   }
 
-  if (selected.length < 5) return null; // 최소 5문제 확보 불가
+  if (selected.length < 5) return null;
 
-  // 5. seenQuestions 기록
+  // 4. seenQuestions 기록
   const selectedIds = selected.map(doc => doc.id);
   const battleId = `battle_${Date.now()}`;
 
@@ -484,8 +362,7 @@ export async function drawQuestionsFromPool(
   }
   await writeBatch.commit();
 
-  // 6. 문제 데이터 반환 (해설+선지별해설+챕터 포함)
-  // 풀의 chapter는 순수 번호("3")지만 클라이언트 courseIndex는 접두사 형식("bio_3")
+  // 5. 반환 (챕터 접두사 추가)
   const chapterPrefix: Record<string, string> = {
     biology: "bio_",
     microbiology: "micro_",
@@ -495,7 +372,6 @@ export async function drawQuestionsFromPool(
 
   return selected.map(doc => {
     const data = doc.data();
-    // 이미 접두사가 있으면 그대로, 없으면 붙여줌
     let chapterId = data.chapter || "";
     if (chapterId && prefix && !chapterId.startsWith(prefix)) {
       chapterId = `${prefix}${chapterId}`;
@@ -513,110 +389,149 @@ export async function drawQuestionsFromPool(
   });
 }
 
-/**
- * 단일 과목 문제 풀 초기화 + 재생성 (무중단 교체)
- *
- * 핵심: 새 문제 생성이 100% 완료될 때까지 기존 풀 유지
- * 1. 기존 문제 ID 목록 스냅샷 저장
- * 2. 새 문제 300개 생성 (기존 풀과 공존)
- * 3. 새 문제 생성 완료 후 기존 문제 + seenQuestions 삭제
- * → 생성 도중 배틀 요청 시 기존 풀에서 정상 추출
- */
-async function refreshPoolForCourse(courseId: string, apiKey: string): Promise<void> {
-  const db = getFirestore();
-  const poolRef = db.collection("tekkenQuestionPool").doc(courseId);
-  const questionsRef = poolRef.collection("questions");
-
-  // 1. 기존 문제 ID 스냅샷 (교체 시 삭제 대상)
-  const [existingSnap, seenSnap] = await Promise.all([
-    questionsRef.get(),
-    poolRef.collection("seenQuestions").get(),
-  ]);
-  const oldDocIds = existingSnap.docs.map(d => d.id);
-
-  console.log(`[스케줄] ${courseId}: 기존 ${oldDocIds.length}개 유지하면서 새 풀 생성 시작`);
-
-  // 2. 새 문제 300개 생성 (기존 풀과 공존, forceAdd로 기존 크기 무시)
-  const result = await replenishQuestionPool(courseId, apiKey, TARGET_POOL_SIZE, true);
-  console.log(`[스케줄] ${courseId}: 새로 ${result.added}개 생성 완료 — 이제 기존 풀 삭제`);
-
-  // 3. 새 문제 생성 완료 후 기존 문제 + seenQuestions 삭제
-  const deleteBatches = (docs: { ref: FirebaseFirestore.DocumentReference }[]) => {
-    const batches: Promise<void>[] = [];
-    for (let i = 0; i < docs.length; i += 500) {
-      const batch = db.batch();
-      docs.slice(i, i + 500).forEach(d => batch.delete(d.ref));
-      batches.push(batch.commit().then(() => {}));
-    }
-    return Promise.all(batches);
-  };
-
-  // 기존 문제만 삭제 (새로 생성된 문제는 유지)
-  const oldDocs = oldDocIds.map(id => ({ ref: questionsRef.doc(id) }));
-  await Promise.all([
-    oldDocs.length > 0 ? deleteBatches(oldDocs) : Promise.resolve([]),
-    seenSnap.empty ? Promise.resolve([]) : deleteBatches(seenSnap.docs),
-  ]);
-
-  console.log(`[스케줄] ${courseId}: 기존 ${oldDocIds.length}개 삭제, seenQuestions ${seenSnap.size}개 초기화`);
-
-  // 4. 메타 업데이트
-  const finalSnap = await questionsRef.count().get();
-  await poolRef.set({
-    totalQuestions: finalSnap.data().count,
-    lastRefreshedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
-}
+// ── 스케줄러 (디스패처) ──
 
 /**
- * 스케줄 CF: 매일 새벽 3시 KST 문제 풀 초기화
+ * 매일 새벽 3시 KST — 챕터별 태스크 디스패치
  *
- * 각 과목을 병렬로 실행 → 타임아웃 격리 + 속도 향상
- * 과목당 독립 실행이므로 한 과목 실패가 다른 과목에 영향 안 줌
+ * 전 챕터 × 현재 학기 과목에 대해 tekkenPoolTasks 문서 생성
+ * → onDocumentCreated 워커가 병렬로 처리 (maxInstances: 5)
  */
 export const tekkenPoolRefillScheduled = onSchedule(
   {
-    schedule: "0 3 * * *", // 매일 03:00 KST
+    schedule: "0 3 * * *",
     region: "asia-northeast3",
     timeZone: "Asia/Seoul",
-    secrets: [GEMINI_API_KEY],
-    timeoutSeconds: 540, // 9분 (과목별 병렬 처리)
-    memory: "1GiB",
+    timeoutSeconds: 120,
+    memory: "256MiB",
   },
   async () => {
-    const apiKey = GEMINI_API_KEY.value();
-    if (!apiKey) {
-      console.error("GEMINI_API_KEY가 설정되지 않았습니다.");
-      return;
+    const db = getFirestore();
+    const courses = getCurrentSemesterCourses();
+    console.log(`[스케줄] 챕터별 태스크 디스패치 — 과목: ${courses.join(", ")}`);
+
+    const tasks: Promise<FirebaseFirestore.DocumentReference>[] = [];
+
+    for (const courseId of courses) {
+      const chapters = getTekkenChapters(courseId);
+      console.log(`[스케줄] ${courseId}: ${chapters.length}챕터 × ${TARGET_PER_CHAPTER}문제`);
+
+      for (const chapter of chapters) {
+        const task: TekkenPoolTask = {
+          courseId,
+          chapter,
+          status: "pending",
+          targetSize: TARGET_PER_CHAPTER,
+          createdAt: Date.now(),
+        };
+        tasks.push(db.collection("tekkenPoolTasks").add(task));
+      }
     }
 
-    // 현재 학기 과목만 생성 (1학기: biology+microbiology, 2학기: pathophysiology만)
-    const courses = getCurrentSemesterCourses();
-    console.log(`[스케줄] 매일 초기화 시작 — 과목: ${courses.join(", ")}`);
-
-    // 과목별 병렬 실행 (각 과목이 독립적으로 처리)
-    const results = await Promise.allSettled(
-      courses.map(courseId => refreshPoolForCourse(courseId, apiKey))
-    );
-
-    // 결과 로깅
-    results.forEach((result, i) => {
-      if (result.status === "rejected") {
-        console.error(`[스케줄] ${courses[i]} 풀 생성 실패:`, result.reason);
-      }
-    });
+    const results = await Promise.allSettled(tasks);
+    const created = results.filter(r => r.status === "fulfilled").length;
+    console.log(`[스케줄] ${created}개 태스크 생성 완료`);
   }
 );
 
+// ── 워커 (챕터별 문제 생성) ──
+
 /**
- * Callable CF: 교수 수동 풀 초기화/재생성
- * 챕터 변경 시 기존 풀 전체 삭제 + 새 챕터로 재생성
+ * 챕터별 풀 생성 워커
+ *
+ * tekkenPoolTasks/{taskId} 생성 시 트리거
+ * 무중단 교체: 새 문제 생성 → 기존 문제 삭제
+ */
+export const tekkenPoolWorker = onDocumentCreated(
+  {
+    document: "tekkenPoolTasks/{taskId}",
+    region: "asia-northeast3",
+    secrets: [GEMINI_API_KEY],
+    timeoutSeconds: 540,
+    memory: "1GiB",
+    maxInstances: 5,
+  },
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+
+    const task = snap.data() as TekkenPoolTask;
+    const { courseId, chapter, targetSize } = task;
+    const taskRef = snap.ref;
+
+    const apiKey = GEMINI_API_KEY.value();
+    if (!apiKey) {
+      await taskRef.update({ status: "failed", error: "GEMINI_API_KEY 미설정" });
+      return;
+    }
+
+    // 상태: processing
+    await taskRef.update({ status: "processing" });
+
+    const db = getFirestore();
+    const poolRef = db.collection("tekkenQuestionPool").doc(courseId);
+    const questionsRef = poolRef.collection("questions");
+
+    try {
+      // 1. 기존 문제 ID 스냅샷 (이 챕터만)
+      const existingSnap = await questionsRef
+        .where("chapter", "==", chapter)
+        .get();
+      const oldDocIds = existingSnap.docs.map(d => d.id);
+
+      console.log(`[워커] ${courseId}/ch${chapter}: 기존 ${oldDocIds.length}개, 새 ${targetSize}개 생성 시작`);
+
+      // 2. 새 문제 생성 (기존 풀과 공존)
+      const result = await replenishChapterPool(courseId, chapter, apiKey, targetSize);
+
+      // 3. 기존 문제 삭제 (무중단 교체 완료)
+      if (oldDocIds.length > 0) {
+        for (let i = 0; i < oldDocIds.length; i += 500) {
+          const batch = db.batch();
+          oldDocIds.slice(i, i + 500).forEach(id =>
+            batch.delete(questionsRef.doc(id))
+          );
+          await batch.commit();
+        }
+      }
+
+      // 4. seenQuestions 중 이 챕터 관련은 자연 만료 (24시간)
+
+      // 5. 메타 업데이트
+      const totalSnap = await questionsRef.count().get();
+      await poolRef.set({
+        totalQuestions: totalSnap.data().count,
+        lastRefreshedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+      // 6. 태스크 완료
+      await taskRef.update({
+        status: "completed",
+        completedAt: Date.now(),
+        addedCount: result.added,
+      });
+
+      console.log(`[워커] ${courseId}/ch${chapter}: ${result.added}문제 생성 완료, 기존 ${oldDocIds.length}개 삭제`);
+    } catch (err) {
+      console.error(`[워커] ${courseId}/ch${chapter} 실패:`, err);
+      await taskRef.update({
+        status: "failed",
+        error: String(err),
+      });
+    }
+  }
+);
+
+// ── 교수 수동 풀 초기화 ──
+
+/**
+ * Callable CF: 교수 수동 풀 초기화
+ * 전체 챕터에 대해 태스크 디스패치
  */
 export const tekkenPoolRefill = onCall(
   {
     region: "asia-northeast3",
-    secrets: [GEMINI_API_KEY],
-    timeoutSeconds: 300, // 5분
+    timeoutSeconds: 60,
   },
   async (request) => {
     if (!request.auth) {
@@ -624,55 +539,34 @@ export const tekkenPoolRefill = onCall(
     }
 
     const db = getFirestore();
-
     const { courseId } = request.data as { courseId: string };
 
-    // 교수 권한 + 과목 소유권 확인
     await verifyProfessorAccess(request.auth.uid, courseId);
     if (!courseId || !getAllCourses().includes(courseId)) {
       throw new HttpsError("invalid-argument", "유효한 courseId가 필요합니다.");
     }
 
-    const apiKey = GEMINI_API_KEY.value();
-    if (!apiKey) {
-      throw new HttpsError("internal", "GEMINI_API_KEY가 설정되지 않았습니다.");
+    const chapters = getTekkenChapters(courseId);
+    const tasks: Promise<FirebaseFirestore.DocumentReference>[] = [];
+
+    for (const chapter of chapters) {
+      const task: TekkenPoolTask = {
+        courseId,
+        chapter,
+        status: "pending",
+        targetSize: TARGET_PER_CHAPTER,
+        createdAt: Date.now(),
+      };
+      tasks.push(db.collection("tekkenPoolTasks").add(task));
     }
 
-    // 기존 풀 전체 삭제
-    const poolRef = db.collection("tekkenQuestionPool").doc(courseId);
-    const questionsRef = poolRef.collection("questions");
-    const existingSnap = await questionsRef.get();
+    await Promise.all(tasks);
 
-    if (!existingSnap.empty) {
-      // 500개씩 batch 삭제
-      const chunks: FirebaseFirestore.DocumentReference[] = [];
-      existingSnap.docs.forEach(doc => chunks.push(doc.ref));
-
-      for (let i = 0; i < chunks.length; i += 500) {
-        const batch = db.batch();
-        chunks.slice(i, i + 500).forEach(ref => batch.delete(ref));
-        await batch.commit();
-      }
-    }
-
-    // seenQuestions도 전체 삭제 (챕터 변경으로 문제가 완전히 바뀌므로)
-    const seenRef = poolRef.collection("seenQuestions");
-    const seenSnap = await seenRef.get();
-    if (!seenSnap.empty) {
-      const batch = db.batch();
-      seenSnap.docs.forEach(doc => batch.delete(doc.ref));
-      await batch.commit();
-    }
-
-    // 새로 채우기
-    const result = await replenishQuestionPool(courseId, apiKey);
-
-    console.log(`[수동] ${courseId} 풀 초기화: 기존 ${existingSnap.size}개 삭제, 새로 ${result.added}개 생성`);
+    console.log(`[수동] ${courseId}: ${chapters.length}챕터 태스크 디스패치 완료`);
 
     return {
       success: true,
-      deleted: existingSnap.size,
-      added: result.added,
+      chaptersDispatched: chapters.length,
     };
   }
 );

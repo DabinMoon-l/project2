@@ -49,7 +49,7 @@ interface UseTekkenBattleReturn {
   // 매칭
   matchState: MatchState;
   waitTime: number;
-  startMatchmaking: (courseId: string) => Promise<void>;
+  startMatchmaking: (courseId: string, chapters: string[]) => Promise<void>;
   cancelMatch: () => void;
 
   // 배틀 상태
@@ -101,6 +101,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
   const battleIdRef = useRef<string | null>(null);
   const opponentIdRef = useRef<string | null>(null);
   const courseIdRef = useRef<string | null>(null);
+  const chaptersRef = useRef<string[]>([]);
   const waitTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const matchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const battleTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -246,19 +247,20 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
   }, [battle?.status, battle?.nextRound]);
 
   // 매칭 시작
-  const startMatchmaking = useCallback(async (courseId: string) => {
+  const startMatchmaking = useCallback(async (courseId: string, chapters: string[]) => {
     if (!userId) return;
     setMatchState('searching');
     setWaitTime(0);
     setError(null);
     courseIdRef.current = courseId;
+    chaptersRef.current = chapters;
 
     waitTimerRef.current = setInterval(() => {
       setWaitTime((prev) => prev + 1);
     }, 1000);
 
     try {
-      const result = await callFunction('joinMatchmaking', { courseId });
+      const result = await callFunction('joinMatchmaking', { courseId, chapters });
 
       if (result.status === 'matched' && result.battleId) {
         battleIdRef.current = result.battleId;
@@ -289,7 +291,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
         if (battleIdRef.current) return;
 
         try {
-          const botResult = await callFunction('matchWithBot', { courseId });
+          const botResult = await callFunction('matchWithBot', { courseId, chapters: chaptersRef.current });
 
           // 봇 CF 실행 중 실제 매칭이 성사됐으면 무시 (실제 매칭 우선)
           if (battleIdRef.current) return;
