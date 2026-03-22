@@ -60,8 +60,8 @@ function RabbitSlotCard({
       : '...';
 
   return (
-    <div className="flex flex-col items-center gap-1.5">
-      <div className="w-[72px] h-[72px] rounded-xl bg-white/10 border border-white/20 overflow-hidden">
+    <div className="flex flex-col items-center gap-2">
+      <div className="w-[84px] h-[84px] rounded-xl bg-white/10 border border-white/20 overflow-hidden">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={getRabbitProfileUrl(slot.rabbitId)}
@@ -71,31 +71,31 @@ function RabbitSlotCard({
         />
       </div>
       <div className="text-center">
-        <p className="text-white font-bold text-sm leading-tight">
+        <p className="text-white font-bold text-base leading-tight">
           {displayName}
         </p>
         {info && (
-          <p className="text-white/60 text-xs font-bold">
+          <p className="text-white/60 text-sm font-bold">
             Lv.{info.level}
           </p>
         )}
       </div>
       {info && (
-        <div className="flex items-center gap-2 text-xs font-bold">
+        <div className="flex items-center gap-2.5 text-sm font-bold">
           <span className="text-red-400">
-            <svg className="w-3 h-3 inline mr-0.5 -mt-0.5" viewBox="0 0 24 24" fill="currentColor">
+            <svg className="w-3.5 h-3.5 inline mr-0.5 -mt-0.5" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
             </svg>
             {info.stats.hp}
           </span>
           <span className="text-orange-400">
-            <svg className="w-3 h-3 inline mr-0.5 -mt-0.5" viewBox="0 0 24 24" fill="currentColor">
+            <svg className="w-3.5 h-3.5 inline mr-0.5 -mt-0.5" viewBox="0 0 24 24" fill="currentColor">
               <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" />
             </svg>
             {info.stats.atk}
           </span>
           <span className="text-blue-400">
-            <svg className="w-3 h-3 inline mr-0.5 -mt-0.5" viewBox="0 0 24 24" fill="currentColor">
+            <svg className="w-3.5 h-3.5 inline mr-0.5 -mt-0.5" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" />
             </svg>
             {info.stats.def}
@@ -207,12 +207,12 @@ export default function TekkenBattleConfirmModal({
             transition={{ type: 'spring', damping: 20, stiffness: 300 }}
           >
             {/* 타이틀 */}
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5 text-red-400" viewBox="0 0 24 24" fill="currentColor">
+            <div className="flex items-center gap-2.5 mb-1">
+              <svg className="w-6 h-6 text-red-400" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" />
               </svg>
-              <h2 className="text-xl font-black text-white">배틀 준비</h2>
-              <svg className="w-5 h-5 text-red-400" viewBox="0 0 24 24" fill="currentColor">
+              <h2 className="text-2xl font-black text-white">배틀 준비</h2>
+              <svg className="w-6 h-6 text-red-400" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z" />
               </svg>
             </div>

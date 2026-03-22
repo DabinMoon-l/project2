@@ -567,3 +567,154 @@ export function extractChapterNumbersFromTags(tags: string[]): string[] {
 
   return [...new Set(chapters)]; // 중복 제거
 }
+
+// ============================================================
+// 기존 게시글 chapterTags 소급 적용
+// ============================================================
+
+/** 과목별 챕터 핵심 키워드 (내장) */
+const CHAPTER_KEYWORDS: Record<string, Record<string, string[]>> = {
+  microbiology: {
+    "2": ["면역", "항체", "항원", "igm", "igg", "iga", "ige", "면역글로불린", "b세포", "t세포", "림프구", "대식세포", "보체", "선천면역", "후천면역", "적응면역", "세포면역", "체액면역", "백신", "예방접종", "mhc", "사이토카인", "인터류킨", "인터페론", "nk세포", "수지상세포", "호중구", "과민반응", "자가면역", "면역결핍", "옵소닌", "형질세포", "기억세포", "아나필락시스", "능동면역", "수동면역"],
+    "3": ["감염", "발병", "병원체", "독소", "내독소", "외독소", "감염경로", "수직감염", "수평감염", "비말감염", "잠복기", "전파", "병원성", "독력", "침습", "균혈증", "패혈증", "독혈증", "기회감염", "정상세균총", "코흐"],
+    "4": ["세균", "박테리아", "그람양성", "그람음성", "세포벽", "펩티도글리칸", "편모", "섬모", "캡슐", "포자", "내생포자", "플라스미드", "접합", "형질전환", "형질도입", "이분법", "호기성", "혐기성", "항균제", "항생제", "페니실린", "내성", "그람염색"],
+    "5": ["포도알균", "사슬알균", "황색포도알균", "mrsa", "대장균", "살모넬라", "이질", "콜레라", "결핵", "나병", "파상풍", "보툴리눔", "헬리코박터", "클로스트리디움", "디프테리아", "백일해", "수막구균", "임균", "폐렴구균", "클라미디아", "리케차", "매독"],
+    "6": ["바이러스", "캡시드", "외피", "핵산", "역전사", "레트로바이러스", "용원", "용균", "항바이러스제", "엔벨로프", "프로파지"],
+    "7": ["인플루엔자", "독감", "코로나", "hiv", "aids", "간염", "b형간염", "c형간염", "홍역", "풍진", "수두", "대상포진", "노로", "로타", "광견병", "hpv", "헤르페스", "소아마비", "사스", "메르스"],
+    "8": ["진균", "곰팡이", "효모", "균사", "분생자", "항진균제"],
+    "9": ["칸디다", "아스페르길루스", "크립토코쿠스", "무좀", "백선", "피부사상균", "암포테리신"],
+    "10": ["원충", "말라리아", "톡소플라스마", "아메바", "트리코모나스", "기생충", "편모충", "이질아메바"],
+    "11": ["감염병", "법정감염병", "격리", "소독", "멸균", "검역", "역학", "유행", "팬데믹", "감염관리", "손위생"],
+  },
+  biology: {
+    "2": ["세포", "세포막", "소포체", "리보솜", "미토콘드리아", "골지체", "핵", "세포골격", "원핵", "진핵"],
+    "3": ["탄수화물", "단백질", "지질", "핵산", "아미노산", "ph", "삼투압"],
+    "4": ["소화", "영양", "물질대사", "효소", "에너지", "atp", "해당", "tca"],
+    "5": ["유전", "멘델", "dna", "염색체", "복제", "유전체", "이중나선"],
+    "6": ["전사", "번역", "rna", "단백질합성", "코돈", "돌연변이", "유전자발현"],
+    "7": ["세포주기", "유사분열", "감수분열", "세포자멸", "아포토시스"],
+    "8": ["생식", "발생", "분화", "줄기세포", "배아", "수정"],
+    "9": ["조직", "상피조직", "결합조직", "근육조직", "신경조직", "혈액", "혈구"],
+    "10": ["소화계", "호흡계", "비뇨계", "순환계", "심장", "폐", "신장"],
+    "11": ["호르몬", "내분비", "갑상선", "부신", "인슐린", "글루카곤", "뇌하수체", "항상성"],
+    "12": ["신경", "뉴런", "시냅스", "신경전달물질", "중추신경", "말초신경", "활동전위"],
+  },
+  pathophysiology: {
+    "3": ["세포손상", "괴사", "세포자멸", "비대", "증식", "위축", "화생", "이형성"],
+    "4": ["염증", "급성염증", "만성염증", "부종", "삼출"],
+    "5": ["혈역학", "혈전", "색전", "경색", "출혈", "쇼크"],
+    "7": ["종양", "암", "양성종양", "악성종양", "전이", "발암"],
+    "8": ["감염", "세균감염", "바이러스감염"],
+    "9": ["면역", "과민반응", "자가면역", "면역결핍"],
+    "10": ["유전질환", "염색체이상"],
+    "11": ["환경", "영양장애", "비만"],
+  },
+};
+
+/** 과목별 챕터 shortName 매핑 */
+const CHAPTER_NAMES: Record<string, Record<string, string>> = {
+  microbiology: {
+    "2": "숙주면역반응", "3": "감염과 발병", "4": "세균", "5": "병원성 세균",
+    "6": "바이러스", "7": "병원성 바이러스", "8": "진균", "9": "병원성 진균",
+    "10": "원충", "11": "감염병",
+  },
+  biology: {
+    "2": "세포의 특성", "3": "생명체의 화학적 이해", "4": "영양과 물질대사",
+    "5": "유전과 분자생물학", "6": "유전자의 발현과 조절", "7": "세포의 주기와 죽음",
+    "8": "생식·발생·분화", "9": "동물의 조직", "10": "동물의 기관",
+    "11": "내분비계", "12": "신경계",
+  },
+  pathophysiology: {
+    "3": "세포손상", "4": "염증", "5": "혈역학장애", "7": "종양",
+    "8": "감염", "9": "면역", "10": "유전", "11": "환경",
+  },
+};
+
+/**
+ * 텍스트에서 챕터 자동 추천 (서버 사이드)
+ */
+function detectChaptersServer(courseId: string, text: string): string[] {
+  const courseKw = CHAPTER_KEYWORDS[courseId];
+  const courseNames = CHAPTER_NAMES[courseId];
+  if (!courseKw || !courseNames) return [];
+
+  const lowerText = text.toLowerCase();
+  const scores = new Map<string, number>();
+
+  for (const [chNum, keywords] of Object.entries(courseKw)) {
+    let score = 0;
+    for (const kw of keywords) {
+      if (kw.length >= 2 && lowerText.includes(kw)) {
+        score++;
+      }
+    }
+    if (score > 0) scores.set(chNum, score);
+  }
+
+  if (scores.size === 0) return [];
+
+  const sorted = [...scores.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 2);
+
+  // 1개 이상 매칭이면 태그 생성
+  return sorted
+    .filter(([, s]) => s >= 1)
+    .map(([chNum]) => {
+      const name = courseNames[chNum] || chNum;
+      return `${chNum}_${name}`;
+    });
+}
+
+/**
+ * 기존 게시글에 chapterTags 소급 적용 (교수 전용)
+ *
+ * 모든 게시글의 제목+본문을 분석하여 chapterTags를 자동 부여
+ */
+export const backfillChapterTags = onCall(
+  {
+    region: "asia-northeast3",
+    timeoutSeconds: 300,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+    }
+
+    const { courseId } = request.data as { courseId: string };
+    if (!courseId) {
+      throw new HttpsError("invalid-argument", "courseId가 필요합니다.");
+    }
+
+    await verifyProfessorAccess(request.auth.uid, courseId);
+
+    const db = getFirestore();
+    const postsSnap = await db
+      .collection("courses").doc(courseId)
+      .collection("posts")
+      .get();
+
+    let updated = 0;
+    let skipped = 0;
+    const batch = db.batch();
+
+    for (const doc of postsSnap.docs) {
+      const data = doc.data();
+      const text = `${data.title || ""} ${data.content || ""}`;
+      const detected = detectChaptersServer(courseId, text);
+
+      if (detected.length > 0) {
+        batch.update(doc.ref, { chapterTags: detected });
+        updated++;
+      } else {
+        skipped++;
+      }
+    }
+
+    await batch.commit();
+
+    console.log(`[chapterTags 소급] ${courseId}: ${updated}개 태그 부여, ${skipped}개 스킵 (총 ${postsSnap.size}개)`);
+
+    return { success: true, total: postsSnap.size, updated, skipped };
+  }
+);

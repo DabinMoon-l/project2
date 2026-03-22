@@ -310,7 +310,7 @@ export { generateStyledQuiz, getStyleProfile } from "./styledQuizGenerator";
 // ============================================
 // 과목 범위(Scope) 관리 Functions
 // ============================================
-export { uploadCourseScope, getCourseScope } from "./courseScope";
+export { uploadCourseScope, getCourseScope, backfillChapterTags } from "./courseScope";
 
 // ============================================
 // AI 문제 생성 Jobs 시스템

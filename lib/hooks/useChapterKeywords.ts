@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { collection, getDocs, db } from '@/lib/repositories';
 import { getCourseIndex } from '@/lib/courseIndex';
+import CHAPTER_KEYWORDS from '@/lib/data/chapterKeywords';
 
 /** 챕터별 키워드 맵 (챕터번호 → 키워드 Set) */
 type ChapterKeywordMap = Map<string, Set<string>>;
@@ -11,7 +12,7 @@ type ChapterKeywordMap = Map<string, Set<string>>;
 export interface ChapterInfo {
   number: string;
   name: string;
-  /** 태그 형식: "1_미생물과 미생물학" */
+  /** 태그 형식: "2_숙주면역반응" */
   tag: string;
 }
 
@@ -22,6 +23,20 @@ const cache = new Map<string, {
   loadedAt: number;
 }>();
 const CACHE_TTL = 10 * 60 * 1000; // 10분
+
+/**
+ * 내장 키워드에서 ChapterKeywordMap 생성 (Firestore 폴백)
+ */
+function getBuiltinKeywords(courseId: string): ChapterKeywordMap {
+  const kwMap: ChapterKeywordMap = new Map();
+  const courseData = CHAPTER_KEYWORDS[courseId];
+  if (!courseData) return kwMap;
+
+  for (const [chNum, keywords] of Object.entries(courseData)) {
+    kwMap.set(chNum, new Set(keywords.map(k => k.toLowerCase())));
+  }
+  return kwMap;
+}
 
 /**
  * 과목 scope 키워드를 로드하고 텍스트에서 챕터를 자동 추천하는 훅
@@ -50,7 +65,7 @@ export function useChapterKeywords(courseId?: string | null) {
     const load = async () => {
       setLoading(true);
       try {
-        // courseChapters.json에서 챕터 정보 가져오기
+        // courseChapters.json에서 챕터 정보
         const courseIndex = getCourseIndex(courseId);
         const chapterInfos: ChapterInfo[] = courseIndex
           ? courseIndex.chapters.map(ch => {
@@ -59,26 +74,45 @@ export function useChapterKeywords(courseId?: string | null) {
             })
           : [];
 
-        // Firestore에서 키워드 로드
-        const chaptersRef = collection(db, 'courseScopes', courseId, 'chapters');
-        const snap = await getDocs(chaptersRef);
+        // Firestore에서 키워드 로드 시도
+        let kwMap: ChapterKeywordMap = new Map();
+        try {
+          const chaptersRef = collection(db, 'courseScopes', courseId, 'chapters');
+          const snap = await getDocs(chaptersRef);
 
-        const kwMap: ChapterKeywordMap = new Map();
-        snap.docs.forEach(d => {
-          const data = d.data();
-          const chNum = data.chapterNumber as string;
-          const kws = data.keywords as string[] | undefined;
-          if (chNum && kws && kws.length > 0) {
-            kwMap.set(chNum, new Set(kws.map(k => k.toLowerCase())));
-          }
-        });
+          snap.docs.forEach(d => {
+            const data = d.data();
+            const chNum = data.chapterNumber as string;
+            const kws = data.keywords as string[] | undefined;
+            if (chNum && kws && kws.length > 0) {
+              kwMap.set(chNum, new Set(kws.map(k => k.toLowerCase())));
+            }
+          });
+        } catch {
+          // Firestore 실패 → 무시
+        }
+
+        // Firestore 데이터 부족 시 내장 키워드 사용
+        if (kwMap.size === 0) {
+          kwMap = getBuiltinKeywords(courseId);
+        } else {
+          // Firestore 데이터가 있어도 내장 키워드 보충 (합집합)
+          const builtin = getBuiltinKeywords(courseId);
+          builtin.forEach((keywords, chNum) => {
+            const existing = kwMap.get(chNum);
+            if (existing) {
+              keywords.forEach(kw => existing.add(kw));
+            } else {
+              kwMap.set(chNum, keywords);
+            }
+          });
+        }
 
         if (cancelled) return;
 
         keywordsRef.current = kwMap;
         setChapters(chapterInfos);
 
-        // 캐시 저장
         cache.set(courseId, {
           keywords: kwMap,
           chapters: chapterInfos,
@@ -97,7 +131,7 @@ export function useChapterKeywords(courseId?: string | null) {
 
   /**
    * 텍스트에서 챕터 자동 추천
-   * @returns 매칭 점수 상위 챕터 태그 배열
+   * 키워드 매칭 점수 상위 2개 챕터 반환
    */
   const detectChapters = useCallback((text: string): string[] => {
     const kwMap = keywordsRef.current;
@@ -106,11 +140,11 @@ export function useChapterKeywords(courseId?: string | null) {
     const lowerText = text.toLowerCase();
     const scores = new Map<string, number>();
 
-    // 각 챕터 키워드와 매칭
     kwMap.forEach((keywords, chNum) => {
       let score = 0;
       keywords.forEach(kw => {
-        if (kw.length >= 3 && lowerText.includes(kw)) {
+        // 2자 이상 키워드 매칭 (기존 3자 → 2자로 완화)
+        if (kw.length >= 2 && lowerText.includes(kw)) {
           score++;
         }
       });
@@ -119,16 +153,14 @@ export function useChapterKeywords(courseId?: string | null) {
 
     if (scores.size === 0) return [];
 
-    // 점수 내림차순 정렬, 상위 2개까지
+    // 점수 내림차순, 상위 2개
     const sorted = [...scores.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 2);
 
-    // 최소 매칭 수 2개 이상인 챕터만
-    const minScore = 2;
-    const matched = sorted.filter(([, s]) => s >= minScore);
+    // 1개 이상 매칭이면 추천 (기존 2 → 1로 완화)
+    const matched = sorted.filter(([, s]) => s >= 1);
 
-    // 챕터 번호 → 태그 변환
     return matched.map(([chNum]) => {
       const info = chapters.find(c => c.number === chNum);
       return info ? info.tag : chNum;
