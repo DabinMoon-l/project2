@@ -18,12 +18,21 @@ export default function SplashScreen({ children }: SplashScreenProps) {
   useEffect(() => {
     setIsClient(true);
 
-    // 3초 후 스플래시 화면 숨기기
+    // 스플래시 중 html 배경을 비디오 톤에 맞춤 (다이나믹 아일랜드 모서리 색상 통일)
+    const html = document.documentElement;
+    const prevBg = html.style.backgroundColor;
+    html.style.backgroundColor = '#1a1210';
+
+    // 3초 후 스플래시 화면 숨기기 → html 배경 복원
     const timer = setTimeout(() => {
       setShowSplash(false);
+      html.style.backgroundColor = prevBg || '';
     }, 3000);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      html.style.backgroundColor = prevBg || '';
+    };
   }, []);
 
   // 서버 사이드 렌더링 중에는 children만 렌더링
