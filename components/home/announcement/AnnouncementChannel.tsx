@@ -98,6 +98,27 @@ export default function AnnouncementChannel({
   const [inputOverflows, setInputOverflows] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // 공지 작성 교수의 프로필 토끼 조회 (기존 공지에 profileRabbitId 없을 때 폴백)
+  const [professorRabbitId, setProfessorRabbitId] = useState<number | null>(null);
+  useEffect(() => {
+    if (announcements.length === 0) return;
+    const creatorUid = announcements[0]?.createdBy;
+    if (!creatorUid) return;
+    // 이미 공지 데이터에 있으면 조회 불필요
+    if (announcements[0]?.profileRabbitId != null) {
+      setProfessorRabbitId(announcements[0].profileRabbitId);
+      return;
+    }
+    // Firestore에서 교수 프로필 조회
+    import('@/lib/repositories').then(({ doc: docRef, getDoc, db: fireDb }) => {
+      getDoc(docRef(fireDb, 'users', creatorUid)).then((snap) => {
+        if (snap.exists()) {
+          setProfessorRabbitId(snap.data().profileRabbitId ?? null);
+        }
+      }).catch(() => {});
+    });
+  }, [announcements]);
+
   // courseId 변경 시 캐시에서 즉시 복원 (과목 전환)
   const prevCourseRef = useRef(userCourseId);
   useEffect(() => {
@@ -788,6 +809,7 @@ export default function AnnouncementChannel({
                             onVote={handleVote}
                             onImageClick={handleImageClick}
                             onEditSubmit={isProfessor ? handleEditSubmitMsg : undefined}
+                            professorRabbitId={professorRabbitId}
                           />
                         );
                       })}
