@@ -156,8 +156,9 @@ body::-webkit-scrollbar-button {
 }
 
 /* 모바일 입력 — iOS 자동 확대 방지 (16px 미만이면 Safari가 줌) + 자동완성 방지 */
+/* !important: Tailwind text-sm 등 클래스 셀렉터보다 우선 적용 */
 input, textarea, select {
-  font-size: 16px;
+  font-size: 16px !important;
   -webkit-text-security: none;
 }
 
