@@ -93,6 +93,13 @@ export default function QuizPage() {
   const colors = useThemeColors();
   const quizId = params.id as string;
 
+  // 퀴즈 풀이 페이지: data-main-content의 paddingTop 제거 (헤더가 직접 처리)
+  useEffect(() => {
+    const el = document.querySelector('[data-main-content]') as HTMLElement | null;
+    if (el) el.style.paddingTop = '0px';
+    return () => { if (el) el.style.paddingTop = ''; };
+  }, []);
+
   // 최초 진입 시에만 슬라이드 애니메이션 (뒤로가기 시 재발동 방지)
   const [slideIn] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -850,7 +857,7 @@ export default function QuizPage() {
     return (
       <div className="min-h-screen" style={{ backgroundColor: '#F5F0E8' }}>
         {/* 헤더 스켈레톤 */}
-        <div className="sticky top-0 z-50 border-b-2 border-[#1A1A1A] header-extend-safe-area" style={{ backgroundColor: '#F5F0E8' }}>
+        <div className="sticky top-0 z-50 border-b-2 border-[#1A1A1A]" style={{ backgroundColor: '#F5F0E8', paddingTop: 'env(safe-area-inset-top, 0px)' }}>
           <div className="flex items-center justify-between h-14 px-4">
             <Skeleton className="w-10 h-10 rounded-none" />
             <Skeleton className="w-32 h-6 rounded-none" />

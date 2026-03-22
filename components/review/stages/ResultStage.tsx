@@ -56,7 +56,7 @@ export default function ResultStage({
       style={{ backgroundColor: '#F5F0E8' }}
     >
       {/* 헤더 */}
-      <header className="sticky top-0 z-50 border-b-2 border-[#1A1A1A] bg-[#F5F0E8] header-extend-safe-area">
+      <header className="sticky top-0 z-50 border-b-2 border-[#1A1A1A] bg-[#F5F0E8]" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div className="flex items-center justify-between h-12 px-4">
           <div className="w-10" />
           <h1 className="text-sm font-bold text-[#1A1A1A]">{headerTitle} 결과</h1>
