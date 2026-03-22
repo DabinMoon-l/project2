@@ -26,11 +26,6 @@ function PostStats({ post, tag }: { post: Post; tag?: string }) {
             #{tag}
           </span>
         )}
-        {post.chapterTags?.map(ct => (
-          <span key={ct} className="inline-block px-1.5 py-0.5 text-[10px] font-bold bg-[#5C5C5C] text-[#F5F0E8]">
-            #{ct}
-          </span>
-        ))}
       </div>
       <div className="flex items-center gap-2 text-[11px] text-[#8A8578] ml-auto">
         <span className="flex items-center gap-0.5">
@@ -650,12 +645,21 @@ export default function BoardPage() {
 
     // 태그 필터 적용 (선택된 태그 중 하나와 일치 — BoardTag 또는 챕터 태그)
     if (selectedTags.length > 0) {
+      // 글유형 태그(학사/학술/건의/기타)와 챕터 태그 분리 → AND 조합
+      const boardTagSet = new Set(['학사', '학술', '건의', '기타']);
+      const selectedBoardTags = selectedTags.filter(t => boardTagSet.has(t));
+      const selectedChapterTags = selectedTags.filter(t => !boardTagSet.has(t));
+
       result = result.filter(post => {
-        // BoardTag 매칭 (학사/학술/기타)
-        if (post.tag && selectedTags.includes(post.tag)) return true;
-        // 챕터 태그 매칭
-        if (post.chapterTags && post.chapterTags.some(ct => selectedTags.includes(ct))) return true;
-        return false;
+        // 글유형 태그 필터 (선택된 게 있으면 반드시 매칭)
+        if (selectedBoardTags.length > 0) {
+          if (!post.tag || !selectedBoardTags.includes(post.tag)) return false;
+        }
+        // 챕터 태그 필터 (선택된 게 있으면 반드시 매칭)
+        if (selectedChapterTags.length > 0) {
+          if (!post.chapterTags || !post.chapterTags.some(ct => selectedChapterTags.includes(ct))) return false;
+        }
+        return true;
       });
     }
 
@@ -883,7 +887,7 @@ export default function BoardPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="제목 검색..."
-              className="w-full px-2.5 py-2 text-xs outline-none"
+              className="w-full px-2.5 h-9 text-xs outline-none"
               style={{ border: '1px solid #1A1A1A', backgroundColor: '#F5F0E8' }}
             />
           </div>

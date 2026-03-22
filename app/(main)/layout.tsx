@@ -224,11 +224,14 @@ function MainLayoutGrid({
     };
   }, [isWide]);
 
+  // 게시글 상세에서 스와이프 네비게이션 사용 시 SwipeBack 비활성화
+  const isBoardDetail = /^\/board\/[^/]+$/.test(pathname) && pathname !== '/board/manage';
+
   return (
     <>
       <LibraryJobToast />
       <OfflineBanner />
-      <SwipeBack enabled={!isWide && !isTabRoot}>
+      <SwipeBack enabled={!isWide && !isTabRoot && !isBoardDetail}>
         <div
           data-main-content
           className="min-h-screen"
