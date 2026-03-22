@@ -65,12 +65,14 @@ const OpinionItem = memo(function OpinionItem({
   onImageClick: (url: string) => void;
 }) {
   const [showMenu, setShowMenu] = useState(false);
-  const isProfMsg = msg.authorRole === 'professor';
+  const isDev = msg.studentId === '25010423';
 
-  // 표시명: 학생 "25학번 닉네임", 교수 "교수 닉네임"
-  const displayName = isProfMsg
-    ? `교수 ${msg.authorName}`.trim()
-    : `${getYear(msg.studentId)} ${msg.authorName}`.trim();
+  // 표시명: 개발자 "개발자", 교수 "실명", 학생 "닉네임"
+  const displayName = isDev
+    ? '개발자'
+    : msg.authorRole === 'professor'
+      ? msg.authorName
+      : msg.authorName;
 
   return (
     <>
@@ -84,13 +86,13 @@ const OpinionItem = memo(function OpinionItem({
       <div className="px-4 py-1.5 group">
         <div className="flex items-start gap-2">
           {/* 아바타 */}
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${isProfMsg ? 'bg-amber-500/30 text-amber-200' : 'bg-white/15 text-white/80'}`}>
-            {isProfMsg ? '교' : msg.authorName[0] || '?'}
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${isDev ? 'bg-emerald-500/30 text-emerald-200' : 'bg-white/15 text-white/80'}`}>
+            {isDev ? '⚙' : msg.authorName[0] || '?'}
           </div>
           <div className="flex-1 min-w-0">
             {/* 이름 + 시간 */}
             <div className="flex items-baseline gap-2 mb-0.5">
-              <span className={`text-xs font-bold ${isProfMsg ? 'text-amber-300' : 'text-white/80'}`}>
+              <span className={`text-xs font-bold ${isDev ? 'text-emerald-300' : 'text-white/80'}`}>
                 {displayName}
               </span>
               <span className="text-[10px] text-white/30">{fmtTime(msg.createdAt)}</span>
