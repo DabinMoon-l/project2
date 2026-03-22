@@ -275,10 +275,9 @@ export default function HomeOverlay() {
         overscrollBehavior: 'none',
       }}
     >
-      <div className="relative z-[2] flex-1 flex flex-col justify-between pt-1 pb-2">
-        {/* 상단 그룹: 프로필 + 공지 */}
-        <div>
-          {/* 프로필 + 닉네임 */}
+      <div className="relative z-[2] flex-1 flex flex-col pt-1 pb-2">
+        {/* ① 상단 섹션: 프로필 + 공지 + 의견 + XP/도감 (flex-none) */}
+        <div className="flex-none">
           <div className="px-8 flex items-center gap-3 mb-2 mt-10">
             <button
               className="w-14 h-14 flex items-center justify-center flex-shrink-0 rounded-xl overflow-hidden"
@@ -308,44 +307,49 @@ export default function HomeOverlay() {
               {profile.nickname}
             </p>
           </div>
-
-          {/* 공지 */}
           <div className="px-8 mb-2 mt-1 relative z-30">
             <AnnouncementChannel />
           </div>
-
-          {/* 의견 게시판 */}
           <div className="px-8 mb-1 relative z-20">
             <OpinionChannel />
           </div>
         </div>
 
-        {/* 중앙 그룹: 캐릭터 */}
+        {/* 균등 간격 1: 상단 ↔ 토끼 */}
+        <div className="flex-1" />
+
+        {/* ② 토끼 섹션: 캐릭터 + 스탯 + 궤도 + 닉네임 + EXP (flex-none) */}
         <CharacterBox />
 
-        {/* 하단 그룹: 랭킹 + 스와이프 힌트 */}
-        <div>
-          <RankingSection />
+        {/* 균등 간격 2: 토끼 ↔ 하단 */}
+        <div className="flex-1" />
 
-          {/* 스와이프 힌트 — 하단 (가로모드에서는 숨김) */}
-          {!isWide && (
-            <div className="mt-4 flex flex-col items-center gap-0.5 pointer-events-none">
-              <motion.svg
-                className="w-4 h-4 text-white/50"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                animate={{ y: [0, -6, 0] }}
-                transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
-              </motion.svg>
-              <span className="text-[10px] font-bold text-white/50 backdrop-blur-sm">
-                위로 스와이프하여 학습 시작
-              </span>
-            </div>
-          )}
+        {/* ③ 하단 섹션: 랭킹 (flex-none) */}
+        <div className="flex-none">
+          <RankingSection />
         </div>
+
+        {/* 균등 간격 3: 하단 ↔ 스와이프 힌트 */}
+        <div className="flex-1" />
+
+        {/* ④ 스와이프 힌트 (flex-none) */}
+        {!isWide && (
+          <div className="flex-none flex flex-col items-center gap-0.5 pointer-events-none pb-1">
+            <motion.svg
+              className="w-4 h-4 text-white/50"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              animate={{ y: [0, -6, 0] }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
+            </motion.svg>
+            <span className="text-[10px] font-bold text-white/50 backdrop-blur-sm">
+              위로 스와이프하여 학습 시작
+            </span>
+          </div>
+        )}
       </div>
 
       {/* 프로필 드로어 */}

@@ -253,9 +253,9 @@ export default function CharacterBox() {
 
   return (
     <>
-      <div className="flex-[2] flex flex-col items-center w-full">
+      <div className="flex-none flex flex-col items-center w-full">
         {/* XP / 도감 */}
-        <div className="w-full flex items-center justify-between px-8 mb-1 mt-3 relative z-20">
+        <div className="w-full flex items-center justify-between px-8 mb-1 mt-1 relative z-20">
           <div className="flex items-center gap-2.5 bg-black/40 border border-white/10 rounded-full backdrop-blur-xl" style={{ height: Math.round(36 * scale), paddingLeft: Math.round(20 * scale), paddingRight: Math.round(20 * scale) }}>
             <span className="font-bold text-white" style={{ fontSize: Math.round(17 * scale) }}>XP</span>
             <span className="font-bold text-white leading-none text-right" style={{ fontSize: Math.round(17 * scale) }}>{totalExp}</span>
@@ -276,8 +276,7 @@ export default function CharacterBox() {
           </button>
         </div>
 
-        {/* 유연 간격: 도감줄 ↔ 캐릭터 */}
-        <div className="flex-1" />
+        {/* 간격: 도감줄 ↔ 캐릭터 */}
 
         {/* 캐릭터 영역 — 항상 2슬롯 궤도 캐러셀 */}
         {slotCount >= 2 ? (
@@ -363,8 +362,7 @@ export default function CharacterBox() {
           </div>
         ) : null}
 
-        {/* 유연 간격: 캐릭터 ↔ 닉네임 */}
-        <div className="flex-1" />
+        {/* 간격: 캐릭터 ↔ 닉네임 */}
 
         {/* 토끼 이름 + 레벨 */}
         <div style={{ marginTop: Math.round(88 * scale), position: 'relative', top: Math.round(16 * scale) }}>
