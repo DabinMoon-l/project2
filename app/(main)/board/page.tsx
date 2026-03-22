@@ -854,14 +854,14 @@ export default function BoardPage() {
         <div className="flex items-center gap-2">
           <button
             onClick={handleWriteClick}
-            className="px-3 py-2 text-xs font-bold flex-shrink-0"
+            className="px-3 h-8 text-[11px] font-bold flex-shrink-0"
             style={{ backgroundColor: '#1A1A1A', color: '#F5F0E8' }}
           >
             글 작성
           </button>
           <button
             onClick={handleManageClick}
-            className="px-3 py-2 text-xs font-bold flex-shrink-0"
+            className="px-3 h-8 text-[11px] font-bold flex-shrink-0"
             style={{ backgroundColor: 'transparent', color: '#1A1A1A', border: '1px solid #1A1A1A' }}
           >
             관리
@@ -871,7 +871,7 @@ export default function BoardPage() {
           <button
             type="button"
             onClick={() => setProfPickActive(v => !v)}
-            className={`px-2 py-2 text-xs font-bold flex-shrink-0 border border-[#1A1A1A] transition-colors ${
+            className={`px-2 h-8 text-[11px] font-bold flex-shrink-0 border border-[#1A1A1A] transition-colors ${
               profPickActive
                 ? 'bg-[#1A1A1A] text-[#F5F0E8]'
                 : 'bg-transparent text-[#1A1A1A]'
@@ -887,7 +887,7 @@ export default function BoardPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="제목 검색..."
-              className="w-full px-2.5 h-9 text-xs outline-none"
+              className="w-full px-2.5 h-8 text-[11px] outline-none"
               style={{ border: '1px solid #1A1A1A', backgroundColor: '#F5F0E8' }}
             />
           </div>
@@ -895,7 +895,7 @@ export default function BoardPage() {
           <button
             type="button"
             onClick={() => setShowTagFilter(!showTagFilter)}
-            className={`flex items-center justify-center w-9 h-9 border transition-colors shrink-0 ${
+            className={`flex items-center justify-center w-8 h-8 border transition-colors shrink-0 ${
               showTagFilter
                 ? 'bg-[#1A1A1A] text-[#F5F0E8] border-[#1A1A1A]'
                 : 'bg-[#F5F0E8] text-[#1A1A1A] border-[#1A1A1A]'

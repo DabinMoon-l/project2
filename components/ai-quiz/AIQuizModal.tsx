@@ -513,7 +513,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
             {/* 퀴즈 이름 */}
             <div>
               <label className="block text-xs font-semibold text-[#1A1A1A] mb-1.5">
-                퀴즈 이름
+                퀴즈 이름 <span className="text-[#8B1A1A]">*</span>
               </label>
               <input
                 type="text"
@@ -528,7 +528,9 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs font-semibold text-[#1A1A1A]">
-                  태그 {courseCustomized && <span className="text-[#8B1A1A] font-semibold text-xs">(챕터 필수)</span>}
+                  태그 {courseCustomized
+                    ? <span className="text-[#8B1A1A]">* <span className="font-normal text-[10px]">챕터 필수</span></span>
+                    : <span className="text-[#999] font-normal text-[10px]">선택</span>}
                 </label>
                 <button
                   type="button"
@@ -612,7 +614,9 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
             {/* 파일 업로드 */}
             <div>
               <label className="block text-xs font-semibold text-[#1A1A1A] mb-1.5">
-                학습 자료 업로드
+                학습 자료 업로드 {courseCustomized
+                  ? <span className="text-[#999] font-normal text-[10px]">선택</span>
+                  : <span className="text-[#8B1A1A]">*</span>}
               </label>
 
               {/* 업로드 버튼들 */}

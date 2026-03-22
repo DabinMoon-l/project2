@@ -38,6 +38,17 @@ function getWeekStartUTC(): Date {
   return new Date(mondayKST.getTime() - KST_OFFSET);
 }
 
+/**
+ * 오늘 00:00 KST를 UTC Date로 반환
+ */
+function getTodayStartUTC(): Date {
+  const KST_OFFSET = 9 * 60 * 60 * 1000;
+  const now = new Date();
+  const kstNow = new Date(now.getTime() + KST_OFFSET);
+  kstNow.setUTCHours(0, 0, 0, 0);
+  return new Date(kstNow.getTime() - KST_OFFSET);
+}
+
 // ── 랭킹 계산 핵심 로직 ──
 
 interface RankedUserDoc {
@@ -45,6 +56,8 @@ interface RankedUserDoc {
   nickname: string;
   classType: string;
   totalExp: number;
+  dailyExp: number;
+  weeklyExp: number;
   profCorrectCount: number;
   rankScore: number;
   profileRabbitId: number | null;
@@ -118,8 +131,11 @@ async function computeRankingsForCourse(courseId: string) {
     });
   });
 
-  // ── 2단계: quizzes + quizResults + rabbits + holdings 병렬 조회 ──
-  const [quizResult, resultsResult, rabbitResult, holdingsResult] = await Promise.allSettled([
+  // ── 2단계: quizzes + quizResults + rabbits + holdings + expHistory 병렬 조회 ──
+  const todayStartUTC = getTodayStartUTC();
+  const weekStartUTC = getWeekStartUTC();
+
+  const [quizResult, resultsResult, rabbitResult, holdingsResult, expHistoryResult] = await Promise.allSettled([
     professorUids.length > 0
       ? db.collection("quizzes").where("courseId", "==", courseId)
           .select("creatorId", "creatorUid").get()
@@ -160,6 +176,41 @@ async function computeRankingsForCourse(courseId: string) {
       }
       return orders;
     })(),
+    // 각 학생의 expHistory에서 오늘/이번 주 EXP 합산
+    (async () => {
+      const dailyExp: Record<string, number> = {};
+      const weeklyExp: Record<string, number> = {};
+      // 학생 10명씩 배치 쿼리
+      for (let i = 0; i < students.length; i += 10) {
+        const batch = students.slice(i, i + 10);
+        const snaps = await Promise.all(
+          batch.map(u =>
+            db.collection("users").doc(u.id)
+              .collection("expHistory")
+              .where("createdAt", ">=", weekStartUTC)
+              .select("amount", "createdAt")
+              .get()
+          )
+        );
+        snaps.forEach((snap, idx) => {
+          const uid = batch[idx].id;
+          let daily = 0;
+          let weekly = 0;
+          snap.docs.forEach(d => {
+            const data = d.data();
+            const amount = (data.amount as number) || 0;
+            const ts = data.createdAt?.toDate?.();
+            if (ts) {
+              weekly += amount;
+              if (ts >= todayStartUTC) daily += amount;
+            }
+          });
+          dailyExp[uid] = daily;
+          weeklyExp[uid] = weekly;
+        });
+      }
+      return { dailyExp, weeklyExp };
+    })(),
   ]);
 
   if (resultsResult.status === "rejected") {
@@ -171,6 +222,8 @@ async function computeRankingsForCourse(courseId: string) {
   const resultsSnap = resultsResult.value;
   const rabbitNames: Record<string, string | null> = rabbitResult.status === "fulfilled" ? rabbitResult.value : {};
   const holdingOrders: Record<string, number> = holdingsResult.status === "fulfilled" ? holdingsResult.value : {};
+  const { dailyExp: dailyExpMap, weeklyExp: weeklyExpMap } = expHistoryResult.status === "fulfilled"
+    ? expHistoryResult.value : { dailyExp: {} as Record<string, number>, weeklyExp: {} as Record<string, number> };
 
   // 교수 퀴즈 ID 수집
   const profQuizIds = new Set<string>();
@@ -237,6 +290,8 @@ async function computeRankingsForCourse(courseId: string) {
       nickname: u.nickname || "익명",
       classType: u.classId || "A",
       totalExp: exp,
+      dailyExp: dailyExpMap[u.id] || 0,
+      weeklyExp: weeklyExpMap[u.id] || 0,
       profCorrectCount: profStat.correct,
       rankScore,
       profileRabbitId: u.profileRabbitId ?? null,
@@ -264,7 +319,6 @@ async function computeRankingsForCourse(courseId: string) {
 
   // ── 주간 참여율 (월~일, KST 기준) ──
   const studentIdSet = new Set(students.map((u) => u.id));
-  const weekStartUTC = getWeekStartUTC();
   const weeklyActiveIds = new Set<string>();
   resultsSnap.docs.forEach(d => {
     const r = d.data();
