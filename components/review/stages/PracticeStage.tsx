@@ -65,7 +65,7 @@ export default function PracticeStage({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-[60] flex flex-col"
-      style={{ backgroundColor: '#F5F0E8', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      style={{ backgroundColor: '#F5F0E8' }}
     >
       {/* 헤더 */}
       <header

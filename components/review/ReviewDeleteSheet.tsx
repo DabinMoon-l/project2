@@ -46,6 +46,7 @@ export default function ReviewDeleteSheet({
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
             onClick={(e) => e.stopPropagation()}
             className="w-full max-h-[70vh] bg-[#F5F0E8] border-t-2 border-[#1A1A1A] overflow-hidden flex flex-col"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
           >
             {/* 헤더 */}
             <div className="flex items-center justify-between p-4 border-b border-[#EDEAE4]">

@@ -53,7 +53,7 @@ export default function ResultStage({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       className="fixed inset-0 z-[60] overflow-y-auto overscroll-contain"
-      style={{ backgroundColor: '#F5F0E8', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      style={{ backgroundColor: '#F5F0E8' }}
     >
       {/* 헤더 */}
       <header className="sticky top-0 z-50 border-b-2 border-[#1A1A1A] bg-[#F5F0E8]">
@@ -719,7 +719,7 @@ export default function ResultStage({
       </main>
 
       {/* 하단 버튼 */}
-      <div className="fixed bottom-0 right-0 p-3 border-t-2 border-[#1A1A1A] bg-[#F5F0E8]" style={{ left: 'var(--detail-panel-left, 0)' }}>
+      <div className="fixed bottom-0 right-0 p-3 border-t-2 border-[#1A1A1A] bg-[#F5F0E8]" style={{ left: 'var(--detail-panel-left, 0)', paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}>
         <div className="flex gap-2.5">
           <button
             onClick={onBackToPractice}

@@ -67,13 +67,15 @@ export default function MobileBottomSheet({ open, onClose, children, maxHeight =
             onDragEnd={handleDragEnd}
             onClick={(e) => e.stopPropagation()}
             className="relative w-full bg-[#F5F0E8] rounded-t-2xl shadow-[0_-8px_32px_rgba(0,0,0,0.12)] border border-[#D4CFC4]/60 border-b-0 overflow-y-auto"
-            style={{ maxHeight, touchAction: 'pan-x', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+            style={{ maxHeight, touchAction: 'pan-x' }}
           >
             {/* 드래그 핸들 */}
             <div className="flex justify-center pt-3 pb-1 sticky top-0 bg-[#F5F0E8] z-10 rounded-t-2xl cursor-grab active:cursor-grabbing">
               <div className="w-10 h-1 bg-[#D4CFC4]/80 rounded-full" />
             </div>
             {children}
+            {/* safe area 스페이서 — 배경은 바닥까지, 콘텐츠는 home indicator 위 */}
+            <div style={{ height: 'env(safe-area-inset-bottom, 0px)', flexShrink: 0 }} />
           </motion.div>
         </motion.div>
       )}

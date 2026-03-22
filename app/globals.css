@@ -25,9 +25,10 @@ html {
 
 body {
   /* safe area 포함 전체 화면 높이 — iOS PWA에서 home indicator 영역까지 콘텐츠 확장 */
+  /* iOS 26: 100vh = outerHeight로 변경됨 → dvh가 최종 폴백 (가장 신뢰) */
   min-height: 100vh;
-  min-height: 100dvh;
   min-height: -webkit-fill-available;
+  min-height: 100dvh;
   /* overflow-x: hidden은 html에만 적용 — body에도 넣으면 별도 스크롤 컨테이너가 되어
      min-height와 조합 시 세로 스크롤이 깨짐 */
   overscroll-behavior: none;
@@ -131,9 +132,9 @@ body::-webkit-scrollbar-button {
   border-top: none;
 }
 
-/* 네비게이션 하단 영역 */
+/* 네비게이션 하단 영역 — fixed bottom 바의 safe area 패딩 */
 .safe-area-bottom {
-  padding-bottom: 0;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .pb-navigation {
@@ -196,8 +197,8 @@ img {
   right: 0;
   bottom: 0;
   width: 100%;
-  min-height: 100dvh;
   min-height: -webkit-fill-available;
+  min-height: 100dvh;
   z-index: 1;
   display: flex;
   flex-direction: column;
