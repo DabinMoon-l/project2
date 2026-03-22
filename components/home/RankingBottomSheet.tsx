@@ -95,6 +95,9 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
   const [myRank, setMyRank] = useState<RankedUser | null>(null);
   const [showInfo, setShowInfo] = useState(false);
   const [displayCount, setDisplayCount] = useState(30);
+  const [classFilter, setClassFilter] = useState<'all' | 'A' | 'B' | 'C' | 'D'>('all');
+  const [showClassDropdown, setShowClassDropdown] = useState(false);
+  const [periodFilter, setPeriodFilter] = useState<'day' | 'week' | 'all'>('day');
   const [showScrollTop, setShowScrollTop] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const top3Ref = useRef<HTMLDivElement>(null);
@@ -256,10 +259,45 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
   };
   const filteredUsers = useMemo(() => {
     const excludeList = userCourseId ? (TEST_NICKNAMES[userCourseId] || []) : [];
-    if (excludeList.length === 0) return rankedUsers;
-    return rankedUsers.filter(u => !excludeList.includes(u.nickname));
+    let result = rankedUsers;
+    if (excludeList.length > 0) {
+      result = result.filter(u => !excludeList.includes(u.nickname));
+    }
+    // 반별 필터
+    if (classFilter !== 'all') {
+      result = result.filter(u => u.classType === classFilter);
+    }
+
+    // 기간별 점수 산정 + 재정렬
+    const getScore = (u: typeof result[0]) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const r = u as any;
+      if (periodFilter === 'day') return (r.dailyExp as number) ?? -1;
+      if (periodFilter === 'week') return (r.weeklyExp as number) ?? -1;
+      return u.rankScore;
+    };
+
+    // Day/Week: dailyExp/weeklyExp 필드가 있는 유저만 (해당 기간 활동자)
+    if (periodFilter !== 'all') {
+      result = result.filter(u => getScore(u) >= 0);
+    }
+
+    // 점수 기준으로 재정렬
+    result = [...result].sort((a, b) => getScore(b) - getScore(a));
+
+    // 순위 재배정
+    let currentRank = 1;
+    result = result.map((u, i) => {
+      const score = Math.max(0, getScore(u));
+      if (i > 0 && score < Math.max(0, getScore(result[i - 1]))) {
+        currentRank = i + 1;
+      }
+      return { ...u, rank: currentRank, rankScore: periodFilter === 'all' ? u.rankScore : score };
+    });
+
+    return result;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rankedUsers, userCourseId]);
+  }, [rankedUsers, userCourseId, classFilter, periodFilter]);
 
   const top3 = useMemo(() => filteredUsers.slice(0, 3), [filteredUsers]);
   const restUsers = useMemo(() => filteredUsers.slice(3), [filteredUsers]);
@@ -307,6 +345,22 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
                 >
                   <span className="text-sm font-black text-white leading-none">i</span>
                 </button>
+
+                {/* Day / Week / All 탭 */}
+                <div className="flex items-center gap-5">
+                  {(['day', 'week', 'all'] as const).map(p => (
+                    <button
+                      key={p}
+                      onClick={() => setPeriodFilter(p)}
+                      className={`text-base font-black transition-colors ${
+                        periodFilter === p ? 'text-white' : 'text-white/30'
+                      }`}
+                    >
+                      {p === 'day' ? 'Day' : p === 'week' ? 'Week' : 'All'}
+                    </button>
+                  ))}
+                </div>
+
                 <button
                   onClick={onClose}
                   className="w-8 h-8 flex items-center justify-center"
@@ -334,9 +388,49 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
                 )}
               </div>
 
+              {/* 반별 필터 드롭다운 */}
+              <div className="flex justify-end px-4 mt-1 relative">
+                <button
+                  onClick={() => setShowClassDropdown(v => !v)}
+                  className="flex items-center justify-center gap-1 w-14 py-1.5 text-sm font-bold bg-white/15 text-white/80 border border-white/25 rounded-md"
+                >
+                  {classFilter === 'all' ? 'All' : classFilter}
+                  <svg className={`w-3.5 h-3.5 text-white/50 transition-transform ${showClassDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {showClassDropdown && (
+                  <div className="fixed inset-0 z-10" onClick={() => setShowClassDropdown(false)} />
+                )}
+                {showClassDropdown && (
+                  <div className="absolute right-4 top-9 z-20 w-14 border border-white/25 rounded-md overflow-hidden backdrop-blur-xl">
+                    {(['all', 'A', 'B', 'C', 'D'] as const).map(v => (
+                      <button
+                        key={v}
+                        onClick={() => { setClassFilter(v); setShowClassDropdown(false); setDisplayCount(30); }}
+                        className={`block w-full py-1.5 text-sm font-bold text-center transition-colors ${
+                          classFilter === v ? 'bg-white/25 text-white' : 'bg-white/10 text-white/70 hover:bg-white/20'
+                        }`}
+                      >
+                        {v === 'all' ? 'All' : v}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {loading ? (
                 <div className="flex items-center justify-center py-20">
                   <div className="w-8 h-8 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : filteredUsers.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <p className="text-lg font-black text-white/60 mb-2">
+                    {periodFilter === 'day' ? '오늘' : '이번 주'} 활동한 학생이 없습니다
+                  </p>
+                  <p className="text-sm text-white/40">
+                    퀴즈를 풀거나 활동하면 랭킹에 표시됩니다
+                  </p>
                 </div>
               ) : (
                 <>
@@ -366,33 +460,17 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
 
                       {/* Top3 정보 */}
                       <div className="grid grid-cols-3 gap-1 mt-2">
-                        <div className="text-center">
-                          {top3[1] && (
-                            <>
-                              <p className="text-sm font-black text-white truncate">{top3[1].nickname}</p>
-                              <p className="text-xs text-white/60">{top3[1].classType}반 · {Math.round(top3[1].rankScore)}점</p>
-                              {top3[1].equippedRabbitNames && <p className="text-xs text-white/60 truncate">{top3[1].equippedRabbitNames}</p>}
-                            </>
-                          )}
-                        </div>
-                        <div className="text-center">
-                          {top3[0] && (
-                            <>
-                              <p className="text-base font-black text-white truncate">{top3[0].nickname}</p>
-                              <p className="text-xs text-white/60">{top3[0].classType}반 · {Math.round(top3[0].rankScore)}점</p>
-                              {top3[0].equippedRabbitNames && <p className="text-xs text-white/60 truncate">{top3[0].equippedRabbitNames}</p>}
-                            </>
-                          )}
-                        </div>
-                        <div className="text-center">
-                          {top3[2] && (
-                            <>
-                              <p className="text-sm font-black text-white truncate">{top3[2].nickname}</p>
-                              <p className="text-xs text-white/60">{top3[2].classType}반 · {Math.round(top3[2].rankScore)}점</p>
-                              {top3[2].equippedRabbitNames && <p className="text-xs text-white/60 truncate">{top3[2].equippedRabbitNames}</p>}
-                            </>
-                          )}
-                        </div>
+                        {[top3[1], top3[0], top3[2]].map((user, i) => (
+                          <div key={i} className="text-center">
+                            {user && (
+                              <>
+                                <p className="text-sm font-black text-white truncate">{user.nickname}</p>
+                                <p className="text-[11px] text-white/60">{user.classType}반 · {Math.round(user.rankScore)}점</p>
+                                {user.equippedRabbitNames && <p className="text-[11px] text-white/60 truncate">{user.equippedRabbitNames}</p>}
+                              </>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>

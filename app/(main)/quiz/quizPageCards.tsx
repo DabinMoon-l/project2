@@ -12,6 +12,7 @@ import {
   getDefaultCarouselIndex,
   CompletedBadge,
 } from './quizPageParts';
+import { getDefaultQuizTab } from '@/lib/types/course';
 import type { NewsCardType, QuizCardData, CarouselCard } from './quizPageParts';
 import type { PastExamOption } from '@/lib/types/course';
 
@@ -614,29 +615,36 @@ export function NewsCarousel({
     }
   }, [realIndex]);
 
-  // 데이터 로드 후 최신 퀴즈가 있는 탭으로 자동 이동 (sessionStorage 저장값 없을 때만)
+  // 데이터 로드 후 최신 퀴즈가 있는 탭으로 자동 이동 (세션 내 1회)
   useEffect(() => {
     if (autoNavigatedRef.current) return;
     if (isLoading.midterm || isLoading.final || isLoading.past || isLoading.independent) return;
-    if (typeof window !== 'undefined' && sessionStorage.getItem(QUIZ_CAROUSEL_KEY) !== null) {
-      autoNavigatedRef.current = true;
-      return;
-    }
     autoNavigatedRef.current = true;
+    // 유저가 직접 스와이프한 적 있으면 유지
+    if (sessionStorage.getItem('quiz_carousel_user_set') === '1') return;
 
     // 각 카드의 최신 퀴즈 createdAt 비교
     const quizArrays: QuizCardData[][] = [midtermQuizzes, pastQuizzes, finalQuizzes, ...independentQuizzes.map(q => [q])];
     let latestTime = 0;
-    let latestIndex = getDefaultCarouselIndex(TOTAL);
+    let latestIndex = -1;
     quizArrays.forEach((quizzes, index) => {
       for (const q of quizzes) {
-        const t = q.createdAt instanceof Date ? q.createdAt.getTime() : 0;
+        const ca = q.createdAt;
+        const t = ca instanceof Date ? ca.getTime()
+          : ca?.toMillis ? ca.toMillis()
+          : ca?.seconds ? ca.seconds * 1000
+          : 0;
         if (t > latestTime) {
           latestTime = t;
           latestIndex = index;
         }
       }
     });
+    // 퀴즈가 없으면 학기 기반 폴백
+    if (latestIndex < 0) {
+      const tab = getDefaultQuizTab();
+      latestIndex = tab === 'midterm' ? 0 : tab === 'past' ? 1 : tab === 'final' ? 2 : 0;
+    }
     setTransitionOn(false);
     setVisualIndex(latestIndex + 1);
     requestAnimationFrame(() => setTransitionOn(true));
@@ -659,12 +667,14 @@ export function NewsCarousel({
     syncCloneScroll();
     setTransitionOn(true);
     setVisualIndex((prev) => prev + 1);
+    sessionStorage.setItem('quiz_carousel_user_set', '1');
   }, [syncCloneScroll]);
 
   const goToPrev = useCallback(() => {
     syncCloneScroll();
     setTransitionOn(true);
     setVisualIndex((prev) => prev - 1);
+    sessionStorage.setItem('quiz_carousel_user_set', '1');
   }, [syncCloneScroll]);
 
   // 터치 스와이프로 카드 전환 (세로 스크롤 허용)

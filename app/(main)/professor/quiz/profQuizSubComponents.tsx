@@ -446,6 +446,19 @@ export function ProfessorNewsCarousel({
   const containerRef = useRef<HTMLDivElement>(null);
   // 카드별 래퍼 ref (클론 스크롤 동기화용)
   const cardWrapperRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const autoNavigatedRef = useRef(false);
+
+  // 데이터 로드 후 최신 퀴즈가 있는 카드로 자동 이동 (세션 내 1회)
+  useEffect(() => {
+    if (autoNavigatedRef.current) return;
+    if (latestCardIndex < 0) return;
+    autoNavigatedRef.current = true;
+    // 유저가 직접 스와이프한 적 있으면 유지
+    if (sessionStorage.getItem('prof_quiz_carousel_user_set') === '1') return;
+    setTransitionOn(false);
+    setVisualIndex(latestCardIndex + 1);
+    requestAnimationFrame(() => setTransitionOn(true));
+  }, [latestCardIndex]);
 
   // 실제 인덱스 (0~TOTAL-1)
   const realIndex = useMemo(() => {
@@ -480,12 +493,14 @@ export function ProfessorNewsCarousel({
     syncCloneScroll();
     setTransitionOn(true);
     setVisualIndex((prev) => prev + 1);
+    sessionStorage.setItem('prof_quiz_carousel_user_set', '1');
   }, [syncCloneScroll]);
 
   const goToPrev = useCallback(() => {
     syncCloneScroll();
     setTransitionOn(true);
     setVisualIndex((prev) => prev - 1);
+    sessionStorage.setItem('prof_quiz_carousel_user_set', '1');
   }, [syncCloneScroll]);
 
   // 터치 스와이프로 카드 전환 (세로 스크롤 허용)

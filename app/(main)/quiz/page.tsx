@@ -168,10 +168,13 @@ function QuizListPageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [midtermQuizzes, finalQuizzes, pastQuizzes, independentQuizzes, customQuizzes, completionVer, applyCompletionAndSort]);
 
-  // 태그 필터링된 자작 퀴즈 (커스텀 퀴즈는 반 필터 무시 — all에서만 표시)
+  // 태그 + 반별 필터링된 자작 퀴즈
   const filteredCustomQuizzes = useMemo(() => {
-    if (classFilter !== 'all') return [];
     let result = customQuizzesWithUpdate;
+    // 반별 필터
+    if (classFilter !== 'all') {
+      result = result.filter(quiz => quiz.creatorClassType === classFilter);
+    }
     // 태그 필터
     if (selectedTags.length > 0) {
       result = result.filter(quiz =>
