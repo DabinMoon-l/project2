@@ -645,8 +645,8 @@ export default function BoardPage() {
 
     // 태그 필터 적용 (선택된 태그 중 하나와 일치 — BoardTag 또는 챕터 태그)
     if (selectedTags.length > 0) {
-      // 글유형 태그(학사/학술/건의/기타)와 챕터 태그 분리 → AND 조합
-      const boardTagSet = new Set(['학사', '학술', '건의', '기타']);
+      // 글유형 태그(학사/학술/기타)와 챕터 태그 분리 → AND 조합
+      const boardTagSet = new Set(['학사', '학술', '기타']);
       const selectedBoardTags = selectedTags.filter(t => boardTagSet.has(t));
       const selectedChapterTags = selectedTags.filter(t => !boardTagSet.has(t));
 
