@@ -7,8 +7,9 @@
 
 // ── 개인 랭킹 점수 ──
 
-export function computeRankScore(profCorrectCount: number, totalExp: number): number {
-  return profCorrectCount * 4 + totalExp * 0.6;
+export function computeRankScore(correctRate: number, completionRate: number, totalExp: number): number {
+  const quizScore = correctRate * 0.5 + completionRate * 0.5;
+  return quizScore * 4 + totalExp * 0.6;
 }
 
 // ── 팀 랭킹 점수 ──
