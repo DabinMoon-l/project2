@@ -115,8 +115,6 @@ export default function ExpandModal({
             style={{
               zIndex: zIndex + 1,
               left: 'var(--modal-left, 0px)',
-              // 네비게이션 겹침 방지
-              paddingBottom: 'calc(4.25rem + env(safe-area-inset-bottom, 0px) + 0.5rem)',
             }}
           >
             <motion.div
