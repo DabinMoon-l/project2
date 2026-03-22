@@ -161,10 +161,14 @@ export default function OpinionChannel() {
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
   const [pendingImage, setPendingImage] = useState<File | null>(null);
   const [pendingPreview, setPendingPreview] = useState<string>('');
+  const [linkedImageUrls, setLinkedImageUrls] = useState<string[]>([]);
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const [urlInputValue, setUrlInputValue] = useState('');
   const [sending, setSending] = useState(false);
 
   const msgAreaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const urlInputRef = useRef<HTMLInputElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const [sheetTop, setSheetTop] = useState(0);
 
@@ -218,18 +222,46 @@ export default function OpinionChannel() {
     input.click();
   }, []);
 
+  // 이미지 URL 패턴
+  const IMAGE_URL_PATTERN = /^https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp|bmp|svg|avif)(?:[?#]\S*)?$/i;
+  const KNOWN_IMAGE_HOST = /^https?:\/\/(?:i\.imgur\.com|firebasestorage\.googleapis\.com|lh[0-9]*\.googleusercontent\.com|cdn\.discordapp\.com|postfiles\.naver\.net|blogfiles\.naver\.net|upload\.wikimedia\.org)\//i;
+
+  // 텍스트 붙여넣기 시 이미지 URL 감지
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const text = e.clipboardData.getData('text').trim();
+    if (!text) return;
+    if (IMAGE_URL_PATTERN.test(text) || KNOWN_IMAGE_HOST.test(text)) {
+      if (linkedImageUrls.length + (pendingImage ? 1 : 0) >= 5) return;
+      if (linkedImageUrls.includes(text)) return;
+      e.preventDefault();
+      setLinkedImageUrls(prev => [...prev, text]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkedImageUrls, pendingImage]);
+
+  // URL 입력으로 이미지 추가
+  const handleAddImageUrl = useCallback(() => {
+    const url = urlInputValue.trim();
+    if (!url) return;
+    if (linkedImageUrls.length + (pendingImage ? 1 : 0) >= 5) return;
+    if (linkedImageUrls.includes(url)) return;
+    setLinkedImageUrls(prev => [...prev, url]);
+    setUrlInputValue('');
+    setTimeout(() => urlInputRef.current?.focus(), 50);
+  }, [urlInputValue, linkedImageUrls, pendingImage]);
+
   // 전송
   const handleSend = useCallback(async () => {
     const text = textareaRef.current?.value.trim() || '';
-    if (!text && !pendingImage) return;
+    if (!text && !pendingImage && linkedImageUrls.length === 0) return;
     if (!profile) return;
     setSending(true);
 
     try {
-      let imageUrls: string[] = [];
+      let imageUrls: string[] = [...linkedImageUrls];
       if (pendingImage) {
         const url = await uploadImage(pendingImage);
-        if (url) imageUrls = [url];
+        if (url) imageUrls = [url, ...imageUrls];
       }
 
       await addDoc(collection(db, 'opinions'), {
@@ -246,6 +278,8 @@ export default function OpinionChannel() {
       if (textareaRef.current) textareaRef.current.value = '';
       setPendingImage(null);
       setPendingPreview('');
+      setLinkedImageUrls([]);
+      setShowUrlInput(false);
       // 전송 후 맨 아래로 스크롤
       setTimeout(() => {
         msgAreaRef.current?.scrollTo({ top: msgAreaRef.current.scrollHeight, behavior: 'smooth' });
@@ -255,7 +289,7 @@ export default function OpinionChannel() {
     } finally {
       setSending(false);
     }
-  }, [pendingImage, profile, isProfessor, uploadImage]);
+  }, [pendingImage, linkedImageUrls, profile, isProfessor, uploadImage]);
 
   const handleDelete = useCallback(async (id: string) => {
     try {
@@ -376,19 +410,51 @@ export default function OpinionChannel() {
 
                 {/* 입력 바 */}
                 <div className="relative z-10 shrink-0 border-t border-white/10 bg-black/20 backdrop-blur-xl">
-                  {/* 이미지 미리보기 */}
-                  {pendingPreview && (
+                  {/* 이미지 미리보기 (파일 + URL) */}
+                  {(pendingPreview || linkedImageUrls.length > 0) && (
+                    <div className="px-4 pt-2 flex items-center gap-2 flex-wrap">
+                      {pendingPreview && (
+                        <div className="relative">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={pendingPreview} alt="" className="w-14 h-14 object-cover rounded-lg border border-white/20" />
+                          <button onClick={() => { setPendingImage(null); setPendingPreview(''); }} className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-white text-[8px] flex items-center justify-center">✕</button>
+                        </div>
+                      )}
+                      {linkedImageUrls.map((url, i) => (
+                        <div key={i} className="relative">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={url} alt="" className="w-14 h-14 object-cover rounded-lg border border-white/20" />
+                          <button onClick={() => setLinkedImageUrls(prev => prev.filter((_, j) => j !== i))} className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-white text-[8px] flex items-center justify-center">✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* URL 입력 패널 */}
+                  {showUrlInput && (
                     <div className="px-4 pt-2 flex items-center gap-2">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={pendingPreview} alt="" className="w-16 h-16 object-cover rounded-lg border border-white/20" />
-                      <button onClick={() => { setPendingImage(null); setPendingPreview(''); }} className="text-xs text-red-400">제거</button>
+                      <input
+                        ref={urlInputRef}
+                        type="text"
+                        value={urlInputValue}
+                        onChange={(e) => setUrlInputValue(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddImageUrl(); } }}
+                        placeholder="이미지 URL 붙여넣기"
+                        className="flex-1 bg-white/10 border border-white/15 rounded-lg text-xs text-white placeholder:text-white/30 px-2.5 py-1.5 focus:outline-none"
+                      />
+                      <button onClick={handleAddImageUrl} className="text-xs font-bold text-white/60 shrink-0">추가</button>
                     </div>
                   )}
                   <div className="flex items-end gap-2 px-3 py-2" style={{ paddingBottom: `max(0.5rem, env(safe-area-inset-bottom, 0px))` }}>
                     {/* 이미지 버튼 */}
-                    <button onClick={handleImagePick} disabled={uploadLoading} className="w-9 h-9 flex items-center justify-center shrink-0 text-white/50">
+                    <button onClick={handleImagePick} disabled={uploadLoading} className="w-8 h-9 flex items-center justify-center shrink-0 text-white/50">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </button>
+                    {/* URL 이미지 버튼 */}
+                    <button onClick={() => setShowUrlInput(v => !v)} className={`w-8 h-9 flex items-center justify-center shrink-0 transition-colors ${showUrlInput ? 'text-white' : 'text-white/50'}`}>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                       </svg>
                     </button>
                     {/* 텍스트 입력 */}
@@ -397,6 +463,7 @@ export default function OpinionChannel() {
                       placeholder="의견을 입력하세요..."
                       rows={1}
                       className="flex-1 bg-white/10 border border-white/15 rounded-xl text-sm text-white placeholder:text-white/30 px-3 py-2 resize-none focus:outline-none focus:border-white/30 max-h-24 overflow-y-auto"
+                      onPaste={handlePaste}
                       onInput={(e) => {
                         const t = e.currentTarget;
                         t.style.height = 'auto';
