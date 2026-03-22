@@ -12,13 +12,17 @@ import Image from 'next/image';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
-  // Auth 페이지: body 배경 검정 + 스크롤 방지
+  // Auth 페이지: html/body 배경 검정 + 스크롤 방지 (다이나믹 아일랜드 주변 색상 통일)
   useEffect(() => {
-    const prevBg = document.body.style.backgroundColor;
+    const html = document.documentElement;
+    const prevHtmlBg = html.style.backgroundColor;
+    const prevBodyBg = document.body.style.backgroundColor;
+    html.style.backgroundColor = '#000';
     document.body.style.backgroundColor = '#000';
     lockScroll();
     return () => {
-      document.body.style.backgroundColor = prevBg;
+      html.style.backgroundColor = prevHtmlBg || '#F5F0E8';
+      document.body.style.backgroundColor = prevBodyBg;
       unlockScroll();
     };
   }, []);
