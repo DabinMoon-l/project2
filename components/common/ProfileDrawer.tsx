@@ -45,7 +45,6 @@ import type { Inquiry, ProfileDrawerProps } from './profileDrawerParts';
 import RecoveryEmailModal from './profileDrawerModals/RecoveryEmailModal';
 import PasswordChangeModal from './profileDrawerModals/PasswordChangeModal';
 import PasswordResetModal from './profileDrawerModals/PasswordResetModal';
-import TekkenSettingsModal from './profileDrawerModals/TekkenSettingsModal';
 import AccountDeletionDialog from './profileDrawerModals/AccountDeletionDialog';
 
 /**
@@ -83,7 +82,6 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [showCacheConfirm, setShowCacheConfirm] = useState(false);
-  const [showTekkenSettings, setShowTekkenSettings] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const [showInquiryModal, setShowInquiryModal] = useState(false);
@@ -566,22 +564,6 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                     Support
                   </h3>
                   <div className="space-y-3">
-                    {/* 배틀 퀴즈 범위 (교수 전용) */}
-                    {isProfessor && (
-                      <button
-                        onClick={() => setShowTekkenSettings(true)}
-                        className="w-full flex items-center justify-between py-2.5"
-                      >
-                        <div className="text-left">
-                          <span className="text-sm text-white/80">배틀 퀴즈 범위</span>
-                          <p className="text-xs text-white/40">과목별 출제 챕터 설정</p>
-                        </div>
-                        <svg className="w-4 h-4 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                    )}
-
                     {/* 캐시 초기화 */}
                     <button
                       onClick={() => setShowCacheConfirm(true)}
@@ -1007,11 +989,6 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
             onClose={() => setShowDeleteConfirm(false)}
           />
 
-          {/* 배틀 퀴즈 챕터 설정 (교수 전용) */}
-          <TekkenSettingsModal
-            isOpen={showTekkenSettings}
-            onClose={() => setShowTekkenSettings(false)}
-          />
         </>
       )}
     </AnimatePresence>

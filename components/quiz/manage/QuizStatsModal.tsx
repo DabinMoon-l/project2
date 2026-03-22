@@ -870,13 +870,35 @@ export default function QuizStatsModal({
   return (
     <AnimatePresence>
     {isOpen && (
+    <>
+    {/* safe area 하단 커버 — 뷰포트 밑으로 밀어서 safe area 영역만 채움 */}
     <motion.div
+      key="stats-safe-cover"
+      className="fixed left-0 right-0 z-[100] pointer-events-none"
+      style={{
+        left: 'var(--modal-left, 0px)',
+        bottom: 0,
+        height: 'env(safe-area-inset-bottom, 0px)',
+        transform: 'translateY(100%)',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.15 }}
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 overflow-hidden overscroll-none"
-      style={{ left: 'var(--modal-left, 0px)' }}
+    />
+    <motion.div
+      key="stats-modal"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.15 }}
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 overflow-hidden overscroll-none"
+      style={{
+        left: 'var(--modal-left, 0px)',
+        padding: '1rem',
+        paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))',
+      }}
       onClick={onClose}
     >
       <motion.div
@@ -1519,6 +1541,7 @@ export default function QuizStatsModal({
         )}
       </AnimatePresence>
     </motion.div>
+    </>
     )}
     </AnimatePresence>
   );

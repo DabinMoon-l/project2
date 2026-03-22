@@ -106,15 +106,18 @@ export default function ExpandModal({
             transition={{ duration: 0.2 }}
             onClick={onClose}
           >
-            <div className="absolute inset-0 bg-black/50" />
+            {/* safe area 하단까지 커버 */}
+            <div className="absolute inset-0 bg-black/50" style={{ bottom: 'calc(-1 * env(safe-area-inset-bottom, 0px))' }} />
           </motion.div>
 
           {/* 모달 콘텐츠 */}
           <div
-            className="fixed inset-0 flex items-center justify-center p-4 pointer-events-none"
+            className="fixed inset-0 flex items-center justify-center pointer-events-none"
             style={{
               zIndex: zIndex + 1,
               left: 'var(--modal-left, 0px)',
+              padding: '1rem',
+              paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))',
             }}
           >
             <motion.div
