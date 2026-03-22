@@ -11,7 +11,6 @@ import {
 import { useUser } from '@/lib/contexts';
 import { useUpload } from '@/lib/hooks/useStorage';
 import { ImageViewer } from '@/components/common';
-import { useKeyboardAware } from '@/lib/hooks/useKeyboardAware';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 import { useHideNav } from '@/lib/hooks/useHideNav';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
@@ -179,8 +178,6 @@ const OpinionItem = memo(function OpinionItem({
 export default function OpinionChannel() {
   const { profile, isProfessor } = useUser();
   const { uploadImage, loading: uploadLoading } = useUpload();
-  const { bottomOffset } = useKeyboardAware();
-
   const [messages, setMessages] = useState<OpinionMessage[]>(opinionCache.length > 0 ? [...opinionCache] : []);
   const [loading, setLoading] = useState(opinionCache.length === 0);
   const [showModal, setShowModal] = useState(false);
@@ -362,7 +359,15 @@ export default function OpinionChannel() {
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="fixed inset-0 z-[110] flex items-end bg-black/40"
               style={{ left: 'var(--modal-left, 0px)' }}
-              onClick={closeModal}
+              onClick={() => {
+                // 키보드 열림 시 키보드만 닫고 모달 유지 (네이티브 앱 패턴)
+                if (document.activeElement instanceof HTMLTextAreaElement ||
+                    document.activeElement instanceof HTMLInputElement) {
+                  (document.activeElement as HTMLElement).blur();
+                  return;
+                }
+                closeModal();
+              }}
             >
               <motion.div
                 initial={{ y: '100%' }}
@@ -371,7 +376,7 @@ export default function OpinionChannel() {
                 transition={{ type: 'spring', damping: 28, stiffness: 300 }}
                 onClick={(e) => e.stopPropagation()}
                 className="relative w-full flex flex-col overflow-hidden rounded-t-2xl will-change-transform"
-                style={{ height: sheetTop > 0 ? `calc(100dvh - ${sheetTop + 16 + bottomOffset}px)` : bottomOffset > 0 ? `calc(92dvh - ${bottomOffset}px)` : '92dvh' }}
+                style={{ height: sheetTop > 0 ? `calc(100dvh - ${sheetTop + 16}px - var(--kb-offset, 0px))` : `calc(92dvh - var(--kb-offset, 0px))` }}
               >
                 {/* 배경 */}
                 <div className="absolute inset-0 rounded-t-2xl overflow-hidden">

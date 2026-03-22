@@ -476,8 +476,8 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
       {/* 하단 고정 입력바 */}
       {user && (
         <div
-          className="fixed left-3 right-3 z-40 rounded-2xl bg-[#F5F0E8]/80 backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.12)] border border-[#D4CFC4]/60 overflow-hidden transition-[bottom] duration-100"
-          style={{ bottom: bottomOffset ? bottomOffset : '0.75rem' }}
+          className="fixed left-3 right-3 z-40 rounded-2xl bg-[#F5F0E8]/80 backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.12)] border border-[#D4CFC4]/60 overflow-hidden will-change-[bottom]"
+          style={{ bottom: 'max(var(--kb-offset, 0px), 0.75rem)' }}
         >
           {/* 답글 대상 표시 */}
           <AnimatePresence>

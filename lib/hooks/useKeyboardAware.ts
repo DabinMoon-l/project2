@@ -168,6 +168,44 @@ export function useScrollDismissKeyboard() {
  * @param inputBarHeight - 하단 고정 입력바 높이 (px)
  * @param containerSelector - 스크롤 컨테이너 CSS 선택자
  */
+/**
+ * --kb-offset CSS 변수를 documentElement에 직접 설정하는 전역 훅
+ *
+ * React 리렌더 없이 매 프레임 키보드 높이를 CSS 변수로 반영하여
+ * Claude 앱 같은 부드러운 키보드 모션을 구현합니다.
+ *
+ * 레이아웃에서 한 번만 호출하면, 모든 컴포넌트가
+ * var(--kb-offset, 0px)로 키보드 높이에 반응할 수 있습니다.
+ */
+export function useKeyboardCSSVariable() {
+  const rafRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    const handleResize = () => {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        const offset = Math.max(0, window.innerHeight - (vv.offsetTop + vv.height));
+        document.documentElement.style.setProperty('--kb-offset', offset + 'px');
+      });
+    };
+
+    vv.addEventListener('resize', handleResize);
+    vv.addEventListener('scroll', handleResize);
+
+    return () => {
+      vv.removeEventListener('resize', handleResize);
+      vv.removeEventListener('scroll', handleResize);
+      cancelAnimationFrame(rafRef.current);
+      document.documentElement.style.setProperty('--kb-offset', '0px');
+    };
+  }, []);
+}
+
 export function useKeyboardScrollAdjust(
   bottomOffset: number,
   inputBarHeight: number = 80,

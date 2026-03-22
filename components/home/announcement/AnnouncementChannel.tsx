@@ -21,7 +21,6 @@ import { useUser, useCourse } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
 import { useUpload } from '@/lib/hooks/useStorage';
 import { ImageViewer } from '@/components/common';
-import { useKeyboardAware } from '@/lib/hooks/useKeyboardAware';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 import { useHideNav } from '@/lib/hooks/useHideNav';
 import type { Announcement, EditingPoll, EditSubmitData } from './types';
@@ -46,8 +45,6 @@ export default function AnnouncementChannel({
   const userCourseId = overrideCourseId ?? contextCourseId;
   const { theme } = useTheme();
   const { uploadImage, uploadFile, uploadMultipleImages, uploadMultipleFiles, loading: uploadLoading } = useUpload();
-  const { bottomOffset } = useKeyboardAware();
-
   // 캐시된 데이터가 있으면 즉시 표시 (loading=false)
   const cached = userCourseId ? announcementCache.get(userCourseId) : undefined;
   const [announcements, setAnnouncements] = useState<Announcement[]>(cached ?? []);
@@ -571,7 +568,15 @@ export default function AnnouncementChannel({
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="fixed inset-0 z-[110] flex items-end bg-black/40"
               style={{ left: 'var(--modal-left, 0px)' }}
-              onClick={closeModal}
+              onClick={() => {
+                // 키보드 열림 시 키보드만 닫고 모달 유지 (네이티브 앱 패턴)
+                if (document.activeElement instanceof HTMLTextAreaElement ||
+                    document.activeElement instanceof HTMLInputElement) {
+                  (document.activeElement as HTMLElement).blur();
+                  return;
+                }
+                closeModal();
+              }}
             >
               <motion.div
                 initial={{ y: '100%' }}
@@ -580,7 +585,7 @@ export default function AnnouncementChannel({
                 transition={{ type: 'spring', damping: 28, stiffness: 300 }}
                 onClick={(e) => e.stopPropagation()}
                 className="relative w-full flex flex-col overflow-hidden rounded-t-2xl will-change-transform"
-                style={{ height: sheetTop > 0 ? `calc(100dvh - ${sheetTop + 16 + bottomOffset}px)` : bottomOffset > 0 ? `calc(92dvh - ${bottomOffset}px)` : '92dvh' }}
+                style={{ height: sheetTop > 0 ? `calc(100dvh - ${sheetTop + 16}px - var(--kb-offset, 0px))` : `calc(92dvh - var(--kb-offset, 0px))` }}
               >
                 {/* ── 배경 이미지 (blur를 이미지에 직접 적용 — backdrop-blur보다 GPU 효율적) ── */}
                 <div className="absolute inset-0 rounded-t-2xl overflow-hidden">
