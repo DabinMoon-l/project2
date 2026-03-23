@@ -29,6 +29,7 @@ interface TekkenMashMinigameProps {
   mashEndsAt: number; // 안전 타임아웃 (UI에 표시 안 함)
   opponentMashTaps: number;
   writeMashTap: (count: number) => void;
+  writeBotTap?: (count: number) => void; // 봇 탭 RTDB 기록 (CF가 정확한 값 사용)
   onSubmit: (taps: number) => Promise<void>;
   myColor: 'red' | 'blue';
   isOpponentBot?: boolean; // 봇이면 로컬 시뮬레이션
@@ -47,6 +48,7 @@ export default function TekkenMashMinigame({
   mashEndsAt,
   opponentMashTaps,
   writeMashTap,
+  writeBotTap,
   onSubmit,
   myColor,
   isOpponentBot = false,
@@ -55,6 +57,7 @@ export default function TekkenMashMinigame({
   const [botLocalTaps, setBotLocalTaps] = useState(0); // 봇 로컬 시뮬레이션 (RTDB 미사용)
   const [submitted, setSubmitted] = useState(false);
   const myTapsRef = useRef(0);
+  const botLocalTapsRef = useRef(0);
   const lastWriteRef = useRef(0);
   const submittedRef = useRef(false);
   const retryRef = useRef(0);
@@ -73,6 +76,10 @@ export default function TekkenMashMinigame({
     submittedRef.current = true;
     setSubmitted(true);
     writeMashTap(myTapsRef.current);
+    // 봇 탭을 RTDB에 기록 → CF가 경과시간 재계산 대신 실제 값 사용
+    if (isOpponentBot && writeBotTap) {
+      writeBotTap(botLocalTapsRef.current);
+    }
     try {
       await onSubmit(myTapsRef.current);
     } catch {
@@ -85,7 +92,7 @@ export default function TekkenMashMinigame({
         }, 1500);
       }
     }
-  }, [writeMashTap, onSubmit]);
+  }, [writeMashTap, writeBotTap, isOpponentBot, onSubmit]);
 
   // 봇 탭 로컬 시뮬레이션 (RTDB 미사용 → 리렌더 부하 제거)
   // 서버 submitMashResult CF가 opTaps=0일 때 경과시간 기반으로 자동 계산
@@ -96,7 +103,8 @@ export default function TekkenMashMinigame({
 
     const timer = setInterval(() => {
       if (submittedRef.current) return;
-      setBotLocalTaps(prev => prev + 1);
+      botLocalTapsRef.current += 1;
+      setBotLocalTaps(botLocalTapsRef.current);
     }, intervalMs);
 
     return () => clearInterval(timer);

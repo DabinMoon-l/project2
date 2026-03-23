@@ -230,6 +230,7 @@ export default function TekkenBattleOverlay({
                   mashEndsAt={tekken.mash.endsAt || (Date.now() + 15000)}
                   opponentMashTaps={tekken.opponentMashTaps}
                   writeMashTap={tekken.writeMashTap}
+                  writeBotTap={tekken.writeBotTap}
                   onSubmit={handleMashSubmit}
                   myColor={tekken.battle?.colorAssignment?.[userId] || 'red'}
                   isOpponentBot={isOpponentBot}

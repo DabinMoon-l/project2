@@ -12,7 +12,7 @@
  * 교수가 계속 문제를 올려도 sampleQuestions는 최근 20개만 유지 (FIFO 회전).
  */
 
-import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { defineSecret } from "firebase-functions/params";
 import fetch from "node-fetch";
@@ -332,7 +332,7 @@ ${questionsText.slice(0, 8000)}
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
+        generationConfig: { temperature: 0.2, maxOutputTokens: 8192 },
       }),
     }
   );
@@ -616,12 +616,15 @@ function mergeQuestionBank(
 // ============================================================
 
 /**
- * 교수 퀴즈 생성 시 자동 분석 (v2)
+ * 교수 퀴즈 공개 시 자동 분석 (v3)
  *
- * 트리거: quizzes/{quizId} 문서 생성
- * 조건: 생성자가 교수 (role: 'professor')
+ * 트리거: quizzes/{quizId} 문서 생성 또는 수정
+ * 조건: isPublished === true + 생성자가 교수 + 아직 분석 안 됨
+ *
+ * 이전: onDocumentCreated → 새 문서 생성 시에만 발동 (기존 퀴즈 공개 시 누락)
+ * 변경: onDocumentWritten → 공개될 때 분석 (생성 시 바로 공개 + 나중에 공개 모두 대응)
  */
-export const onProfessorQuizCreated = onDocumentCreated(
+export const onProfessorQuizCreated = onDocumentWritten(
   {
     document: "quizzes/{quizId}",
     region: "asia-northeast3",
@@ -630,15 +633,17 @@ export const onProfessorQuizCreated = onDocumentCreated(
     timeoutSeconds: 120,
   },
   async (event) => {
-    const snapshot = event.data;
-    if (!snapshot) return;
+    const afterSnap = event.data?.after;
+    if (!afterSnap?.exists) return; // 삭제된 경우
 
     const quizId = event.params.quizId;
-    const quizData = snapshot.data() as {
+    const quizData = afterSnap.data() as {
       creatorId: string;
       courseId?: string;
       courseName?: string;
       type?: string;
+      isLoadTest?: boolean;
+      isPublished?: boolean;
       questions?: Array<{
         text?: string;
         stem?: string;
@@ -648,21 +653,49 @@ export const onProfessorQuizCreated = onDocumentCreated(
       }>;
     };
 
+    // 0. 공개되지 않은 퀴즈는 분석 안 함
+    if (!quizData.isPublished) return;
+
+    // 이전에 비공개→공개 전환인지 확인 (불필요한 재분석 방지)
+    const beforeSnap = event.data?.before;
+    if (beforeSnap?.exists) {
+      const beforeData = beforeSnap.data() as { isPublished?: boolean; questions?: unknown[] };
+      // 이미 공개 상태에서 다른 필드만 수정된 경우 → 문제 수가 같으면 스킵
+      if (beforeData.isPublished &&
+          (beforeData.questions || []).length === (quizData.questions || []).length) {
+        return;
+      }
+    }
+
     const db = getFirestore();
 
-    // 1. 생성자가 교수인지 확인
+    // 1. 부하테스트 데이터는 분석 건너뛰기
+    if (quizData.isLoadTest || quizId.startsWith("load-test-")) {
+      console.log(`[교수 퀴즈 분석] 부하테스트 데이터 스킵: ${quizId}`);
+      return;
+    }
+
+    // 2. 생성자가 교수인지 확인
     const userDoc = await db.collection("users").doc(quizData.creatorId).get();
     if (!userDoc.exists || userDoc.data()?.role !== "professor") {
       return;
     }
 
-    // 2. 문제 목록 확인
+    // 3. 이미 분석된 퀴즈인지 확인 (중복 분석 방지)
+    const courseId = quizData.courseId || "general";
+    const existingRaw = await db.collection("professorQuizAnalysis")
+      .doc(courseId).collection("raw").doc(quizId).get();
+    if (existingRaw.exists && !existingRaw.data()?.backfilled) {
+      // 이미 정상 분석됨 (백필이 아닌 Gemini 분석 완료) → 스킵
+      return;
+    }
+
+    // 4. 문제 목록 확인
     const questions = quizData.questions;
     if (!questions || questions.length === 0) {
       return;
     }
 
-    const courseId = quizData.courseId || "general";
     const courseName = quizData.courseName || "일반";
 
     console.log(`[교수 퀴즈 분석] ${quizId}, ${courseName}, ${questions.length}문제`);

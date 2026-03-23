@@ -401,7 +401,7 @@ async function executeJobProcessing(
           professorPrompt,
           pageImages.length > 0,
           tags,
-          chapterRepetition + 1, // 반복 횟수 증가 → 다른 문제 유도
+          chapterRepetition + 1,
           chapterRepetitionMap,
           isProfessor
         );
