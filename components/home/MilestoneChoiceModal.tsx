@@ -150,8 +150,7 @@ export default function MilestoneChoiceModal({
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="absolute inset-0"><Image src="/images/home-bg.jpg" alt="" fill className="object-cover" /></div>
-          <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
+          <div className="absolute inset-0 backdrop-blur-2xl" style={{ backgroundColor: 'rgba(120, 80, 100, 0.52)' }} />
           <div className="relative z-10 flex justify-center pt-2 pb-1"><div className="w-8 h-1 rounded-full bg-white/30" /></div>
           {milestoneContent}
         </div>

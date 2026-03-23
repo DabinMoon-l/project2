@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { SourceRect } from '@/lib/hooks/useExpandSource';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 const SPRING_GENIE = { type: 'spring' as const, stiffness: 400, damping: 30 };
@@ -65,7 +66,48 @@ export default function ExpandModal({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
+  const isWide = useWideMode();
+
   if (!mounted) return null;
+
+  // 가로모드: 패널 전체 너비 바텀시트 + 투명 오버레이(클릭으로 닫기)
+  if (isWide) {
+    const wideContent = (
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            {/* 투명 오버레이 — 바텀시트 외 영역 클릭 시 닫기 */}
+            <motion.div
+              key="expand-overlay-wide"
+              className="fixed inset-0"
+              style={{ zIndex, left: 'var(--modal-left, 240px)', right: 'var(--modal-right, 0px)' }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={onClose}
+            />
+            {/* 바텀시트 — 패널 전체 너비 */}
+            <motion.div
+              key="expand-content-wide"
+              className="fixed bottom-0 bg-[#F5F0E8] rounded-t-2xl border-t-2 border-x-2 border-[#1A1A1A] shadow-[0_-4px_24px_rgba(0,0,0,0.15)] overflow-hidden"
+              style={{ zIndex: zIndex + 1, left: 'var(--modal-left, 240px)', right: 'var(--modal-right, 0px)' }}
+              onClick={(e) => e.stopPropagation()}
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+            >
+              <div className="flex justify-center pt-2 pb-1">
+                <div className="w-8 h-1 rounded-full bg-[#D4CFC4]" />
+              </div>
+              {children}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    );
+    return createPortal(wideContent, document.body);
+  }
 
   // 요술지니 initial/exit 계산
   const rect = capturedRef.current || sourceRect;

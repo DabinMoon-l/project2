@@ -116,7 +116,7 @@ export async function replenishChapterPool(
         choices: q.choices,
         correctAnswer: q.correctAnswer,
         difficulty: q.difficulty || difficulty,
-        chapter: q.chapterId || chapter,
+        chapter,  // 생성 요청 챕터 고정 (Gemini chapterId는 접두사/오류 가능성)
         generatedAt: FieldValue.serverTimestamp(),
         batchId,
         explanation: q.explanation,
@@ -212,9 +212,20 @@ export async function drawQuestionsFromPool(
   const seenQuestionIds = new Set<string>();
   const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
 
+  // 챕터 필터 (기존 접두사 데이터 호환: "3" + "bio_3" 모두 매칭)
+  const chapterPrefixMap: Record<string, string> = {
+    biology: "bio_", microbiology: "micro_", pathophysiology: "patho_",
+  };
   let poolQuery: FirebaseFirestore.Query = questionsRef;
   if (chapters && chapters.length > 0) {
-    poolQuery = questionsRef.where("chapter", "in", chapters);
+    const pfx = chapterPrefixMap[courseId] || "";
+    const allFormats = [...chapters];
+    if (pfx) {
+      for (const ch of chapters) {
+        if (!ch.startsWith(pfx)) allFormats.push(`${pfx}${ch}`);
+      }
+    }
+    poolQuery = questionsRef.where("chapter", "in", allFormats);
   }
 
   const [poolSnap, ...seenSnaps] = await Promise.all([

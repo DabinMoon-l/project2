@@ -122,8 +122,19 @@ export async function createBattle(
       }
     }
     if (!cacheUsed) {
-      questions = getEmergencyQuestions(courseId);
-      console.warn(`배틀 비상 문제 사용 (${courseId}) — 풀/캐시 모두 실패`);
+      const allEmergency = getEmergencyQuestions(courseId);
+      // 선택 챕터 필터 적용 (chapterId에서 숫자 추출 후 비교)
+      if (chapters && chapters.length > 0) {
+        const chapSet = new Set(chapters);
+        const filtered = allEmergency.filter(q => {
+          const m = (q.chapterId || "").match(/(\d+)$/);
+          return m ? chapSet.has(m[1]) : false;
+        });
+        questions = filtered.length >= 3 ? filtered : allEmergency;
+      } else {
+        questions = allEmergency;
+      }
+      console.warn(`배틀 비상 문제 사용 (${courseId}) — 풀/캐시 모두 실패, ${questions.length}문제`);
     }
   }
 

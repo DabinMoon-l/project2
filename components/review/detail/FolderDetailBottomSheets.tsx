@@ -1,7 +1,8 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { BottomSheet } from '@/components/common';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
 import type { FolderCategory, CustomFolderQuestion } from '@/lib/hooks/useReview';
 
 /** 커스텀 폴더 데이터 (카테고리 관리용) */
@@ -81,6 +82,8 @@ export default function FolderDetailBottomSheets({
   folderType,
   onDelete,
 }: FolderDetailBottomSheetsProps) {
+  const isWide = useWideMode();
+
   return (
     <>
       {/* 카테고리 관리 바텀시트 */}
@@ -223,7 +226,32 @@ export default function FolderDetailBottomSheets({
       </BottomSheet>
 
       {/* 폴더/서재 삭제 확인 모달 */}
-      {showDeleteModal && (
+      {showDeleteModal && (isWide ? (
+        <AnimatePresence>
+          <div className="fixed inset-0 z-[9998]" style={{ left: 'var(--detail-panel-left, calc(50% + 120px))' }} onClick={onCloseDeleteModal} />
+          <motion.div
+            initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+            transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+            className="fixed bottom-0 right-0 z-[9999] bg-[#F5F0E8] rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.15)] border-t-2 border-x-2 border-[#1A1A1A] p-4"
+            style={{ left: 'var(--detail-panel-left, calc(50% + 120px))' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-center -mt-2 mb-2"><div className="w-8 h-1 rounded-full bg-[#D4CFC4]" /></div>
+            <div className="flex justify-center mb-3">
+              <div className="w-10 h-10 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4] rounded-lg">
+                <svg className="w-5 h-5 text-[#8B1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+              </div>
+            </div>
+            <h3 className="text-center font-bold text-base text-[#1A1A1A] mb-2">{folderType === 'custom' ? '폴더를 삭제할까요?' : '퀴즈를 삭제할까요?'}</h3>
+            <p className="text-xs text-[#5C5C5C] mb-1">{folderType === 'custom' ? '- 삭제된 폴더는 복구할 수 없습니다.' : '- 삭제된 퀴즈는 복구할 수 없습니다.'}</p>
+            <p className="text-xs text-[#5C5C5C] mb-5">{folderType === 'custom' ? '- 폴더 안의 문제는 원본에 남아있습니다.' : '- 이미 푼 사람은 복습 가능합니다.'}</p>
+            <div className="flex gap-3">
+              <button onClick={onCloseDeleteModal} className="flex-1 py-2.5 font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] rounded-lg">취소</button>
+              <button onClick={onDelete} className="flex-1 py-2.5 font-bold border-2 border-[#8B1A1A] text-[#8B1A1A] bg-[#F5F0E8] rounded-lg">삭제</button>
+            </div>
+          </motion.div>
+        </AnimatePresence>
+      ) : (
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50"
           onClick={onCloseDeleteModal}
@@ -273,7 +301,7 @@ export default function FolderDetailBottomSheets({
             </div>
           </motion.div>
         </div>
-      )}
+      ))}
     </>
   );
 }

@@ -8,7 +8,8 @@ import { Skeleton, ScrollToTopButton, ExpandModal } from '@/components/common';
 import { useExpandSource } from '@/lib/hooks/useExpandSource';
 import { TAP_SCALE } from '@/lib/constants/springs';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { useCourse, useUser } from '@/lib/contexts';
+import { useCourse, useUser, useDetailPanel } from '@/lib/contexts';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
 import { type CourseId, getDefaultQuizTab, getPastExamOptions, type PastExamOption } from '@/lib/types/course';
 import { type ProfessorQuiz, type QuizTypeFilter, type QuizQuestion } from '@/lib/hooks/useProfessorQuiz';
 import { calcFeedbackScore, getFeedbackLabel } from '@/lib/utils/feedbackScore';
@@ -86,6 +87,8 @@ export default function ProfessorQuizListPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { userCourseId, setProfessorCourse, assignedCourses, courseList, getCourseById } = useCourse();
+  const isWide = useWideMode();
+  const { openDetail, replaceDetail, isDetailOpen } = useDetailPanel();
   const courseIds = useMemo(() => {
     const allIds = courseList.map(c => c.id) as CourseId[];
     if (assignedCourses.length > 0) {
@@ -950,7 +953,17 @@ export default function ProfessorQuizListPage() {
                       feedbackInfo={feedbackMap[quiz.id]}
                       onDetails={() => { captureDetailsRect(quiz.id); setDetailsSource('custom'); setDetailsQuiz(quiz); }}
                       onStats={() => setStatsQuizId({ id: quiz.id, title: quiz.title })}
-                      onClick={() => router.push(`/professor/quiz/${quiz.id}/preview`)}
+                      onClick={() => {
+                        if (isWide) {
+                          import('./[id]/preview/page').then(mod => {
+                            const PreviewPage = mod.default;
+                            const action = isDetailOpen ? replaceDetail : openDetail;
+                            action(<PreviewPage panelQuizId={quiz.id} />);
+                          });
+                        } else {
+                          router.push(`/professor/quiz/${quiz.id}/preview`);
+                        }
+                      }}
                     />
                   </motion.div>
                 ))}
@@ -1321,7 +1334,15 @@ export default function ProfessorQuizListPage() {
                     const quiz = detailsQuiz;
                     setDetailsQuiz(null);
                     clearDetailsRect();
-                    router.push(`/professor/quiz/${quiz.id}/preview`);
+                    if (isWide) {
+                      import('./[id]/preview/page').then(mod => {
+                        const PreviewPage = mod.default;
+                        const action = isDetailOpen ? replaceDetail : openDetail;
+                        action(<PreviewPage panelQuizId={quiz.id} />);
+                      });
+                    } else {
+                      router.push(`/professor/quiz/${quiz.id}/preview`);
+                    }
                   }}
                   className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors rounded-lg"
                 >

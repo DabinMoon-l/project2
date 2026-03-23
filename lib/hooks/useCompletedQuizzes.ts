@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { collection, db, query, where, onSnapshot, getDocs, limit, Timestamp } from '@/lib/repositories';
 import type { User } from 'firebase/auth';
 import type { LearningQuiz } from '@/lib/hooks/useLearningQuizzes';
@@ -6,9 +6,10 @@ import type { LearningQuiz } from '@/lib/hooks/useLearningQuizzes';
 /**
  * 완료된 퀴즈 구독 훅
  *
- * quiz_completions에서 사용자가 완료한 퀴즈를 실시간 구독하고,
- * AI 생성 퀴즈(libraryQuizzesRaw)를 제외한 커스텀/교수 퀴즈만 반환.
- * 삭제된 퀴즈는 quizResults에서 제목을 폴백으로 가져옴.
+ * 최적화:
+ * - 배치 크기 10 → 30 (Firestore in 쿼리 최대값)
+ * - 삭제된 퀴즈 폴백도 배치 처리
+ * - libraryQuizzesRaw ID Set을 ref로 캐시하여 불필요한 재실행 방지
  */
 export function useCompletedQuizzes(
   user: User | null,
@@ -17,6 +18,11 @@ export function useCompletedQuizzes(
 ) {
   const [completedQuizzes, setCompletedQuizzes] = useState<LearningQuiz[]>([]);
   const [completedLoading, setCompletedLoading] = useState(true);
+
+  // libraryQuizzesRaw ID를 안정적으로 캐시 (배열 참조 변경에 무관)
+  const aiQuizIdsKey = useMemo(() => libraryQuizzesRaw.map(q => q.id).sort().join(','), [libraryQuizzesRaw]);
+  const aiQuizIds = useRef(new Set<string>());
+  aiQuizIds.current = new Set(libraryQuizzesRaw.map(q => q.id));
 
   useEffect(() => {
     if (!user || !userCourseId) {
@@ -46,9 +52,8 @@ export function useCompletedQuizzes(
         return;
       }
 
-      // AI 생성 퀴즈는 이미 libraryQuizzesRaw에 있으므로 제외
-      const aiQuizIds = new Set(libraryQuizzesRaw.map(q => q.id));
-      const quizIds = Array.from(completionMap.keys()).filter(id => !aiQuizIds.has(id));
+      // AI 생성 퀴즈 제외
+      const quizIds = Array.from(completionMap.keys()).filter(id => !aiQuizIds.current.has(id));
 
       if (quizIds.length === 0) {
         setCompletedQuizzes([]);
@@ -56,14 +61,21 @@ export function useCompletedQuizzes(
         return;
       }
 
-      // 퀴즈 메타데이터 로드 (10개씩 배치)
+      // 퀴즈 메타데이터 배치 로드 (30개씩 — Firestore in 쿼리 최대)
       const quizzes: LearningQuiz[] = [];
       const foundIds = new Set<string>();
-      for (let i = 0; i < quizIds.length; i += 10) {
-        const batch = quizIds.slice(i, i + 10);
-        const quizzesRef = collection(db, 'quizzes');
-        const batchQuery = query(quizzesRef, where('__name__', 'in', batch));
-        const batchSnap = await getDocs(batchQuery);
+      const BATCH = 30;
+
+      const metaBatches = [];
+      for (let i = 0; i < quizIds.length; i += BATCH) {
+        metaBatches.push(quizIds.slice(i, i + BATCH));
+      }
+      const metaResults = await Promise.all(
+        metaBatches.map(batch =>
+          getDocs(query(collection(db, 'quizzes'), where('__name__', 'in', batch)))
+        )
+      );
+      for (const batchSnap of metaResults) {
         batchSnap.docs.forEach(d => {
           const data = d.data();
           if (data.courseId !== userCourseId) return;
@@ -91,51 +103,57 @@ export function useCompletedQuizzes(
         });
       }
 
-      // 삭제된 퀴즈 폴백: quizResults에서 제목 가져오기
+      // 삭제된 퀴즈 폴백: quizResults에서 배치 조회 (순차 → 병렬)
       const missingIds = quizIds.filter(id => !foundIds.has(id));
-      for (const missingId of missingIds) {
-        const comp = completionMap.get(missingId);
-        if (comp?.courseId && comp.courseId !== userCourseId) continue;
-        let title = '퀴즈';
-        let totalCount = comp?.total ?? 0;
-        let quizCreatorId: string | undefined;
-        let quizType: string | undefined;
-        let quizIsPublic = false;
-        try {
-          const resultQuery = query(
-            collection(db, 'quizResults'),
-            where('userId', '==', user.uid),
-            where('quizId', '==', missingId),
-            limit(1)
-          );
-          const resultSnap = await getDocs(resultQuery);
-          if (!resultSnap.empty) {
-            const resultData = resultSnap.docs[0].data();
-            title = resultData.quizTitle || '퀴즈';
-            totalCount = resultData.totalCount || totalCount;
-            quizCreatorId = resultData.quizCreatorId || undefined;
-            quizType = resultData.quizType || undefined;
-            quizIsPublic = resultData.quizIsPublic ?? false;
-          }
-        } catch { /* 무시 */ }
-        if (!quizType && quizCreatorId && quizCreatorId !== user.uid) {
-          quizType = 'professor';
+      if (missingIds.length > 0) {
+        const fallbackResults = await Promise.all(
+          missingIds.map(async (missingId) => {
+            const comp = completionMap.get(missingId);
+            if (comp?.courseId && comp.courseId !== userCourseId) return null;
+            let title = '퀴즈';
+            let totalCount = comp?.total ?? 0;
+            let quizCreatorId: string | undefined;
+            let quizType: string | undefined;
+            let quizIsPublic = false;
+            try {
+              const resultSnap = await getDocs(query(
+                collection(db, 'quizResults'),
+                where('userId', '==', user.uid),
+                where('quizId', '==', missingId),
+                limit(1)
+              ));
+              if (!resultSnap.empty) {
+                const resultData = resultSnap.docs[0].data();
+                title = resultData.quizTitle || '퀴즈';
+                totalCount = resultData.totalCount || totalCount;
+                quizCreatorId = resultData.quizCreatorId || undefined;
+                quizType = resultData.quizType || undefined;
+                quizIsPublic = resultData.quizIsPublic ?? false;
+              }
+            } catch { /* 무시 */ }
+            if (!quizType && quizCreatorId && quizCreatorId !== user.uid) {
+              quizType = 'professor';
+            }
+            return {
+              id: missingId,
+              title,
+              questionCount: totalCount,
+              score: comp?.score ?? 0,
+              totalQuestions: totalCount,
+              createdAt: comp?.completedAt?.toDate?.() ?? new Date(),
+              completedAt: comp?.completedAt?.toDate?.() ?? new Date(),
+              isPublic: quizIsPublic,
+              tags: [],
+              difficulty: 'medium' as const,
+              myScore: comp?.score,
+              creatorId: quizCreatorId,
+              quizType,
+            };
+          })
+        );
+        for (const q of fallbackResults) {
+          if (q) quizzes.push(q);
         }
-        quizzes.push({
-          id: missingId,
-          title,
-          questionCount: totalCount,
-          score: comp?.score ?? 0,
-          totalQuestions: totalCount,
-          createdAt: comp?.completedAt?.toDate?.() ?? new Date(),
-          completedAt: comp?.completedAt?.toDate?.() ?? new Date(),
-          isPublic: quizIsPublic,
-          tags: [],
-          difficulty: 'medium',
-          myScore: comp?.score,
-          creatorId: quizCreatorId,
-          quizType,
-        });
       }
 
       quizzes.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
@@ -144,7 +162,7 @@ export function useCompletedQuizzes(
     });
 
     return () => unsub();
-  }, [user, userCourseId, libraryQuizzesRaw]);
+  }, [user, userCourseId, aiQuizIdsKey]); // ID 키 문자열로 안정적 비교
 
   return { completedQuizzes, completedLoading };
 }

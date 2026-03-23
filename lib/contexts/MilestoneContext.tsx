@@ -14,6 +14,7 @@ import {
 import { useUser, useCourse } from '@/lib/contexts';
 import { useRabbitHoldings, type RabbitHolding } from '@/lib/hooks/useRabbit';
 import { getPendingMilestones, getExpBarDisplay } from '@/lib/utils/milestone';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
 import dynamic from 'next/dynamic';
 import { callFunction, type RollResultData } from '@/lib/api';
 import MilestoneChoiceModal from '@/components/home/MilestoneChoiceModal';
@@ -73,6 +74,7 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
   const { profile } = useUser();
   const { userCourseId } = useCourse();
   const { holdings } = useRabbitHoldings(profile?.uid);
+  const isWide = useWideMode();
 
   // 모달 상태
   const [showMilestoneModal, setShowMilestoneModal] = useState(false);
@@ -137,7 +139,9 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
 
   // 마일스톤 자동 트리거
   // pending > 0, 모든 모달 닫힘, dismiss 안 됨, suppress 안 됨 → 600ms 후 자동 오픈
+  // 가로모드에서는 자동 트리거 비활성화 (별 버튼 수동 클릭만 허용)
   useEffect(() => {
+    if (isWide) return;
     if (!profileStableRef.current) return;
     if (pendingCount <= 0) return;
     if (userDismissed || suppressAutoTrigger) return;
@@ -151,7 +155,7 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
       setShowMilestoneModal(true);
     }, 600);
     return () => clearTimeout(timer);
-  }, [pendingCount, userDismissed, suppressAutoTrigger, showMilestoneModal, showGachaModal, showLevelUpSheet]);
+  }, [isWide, pendingCount, userDismissed, suppressAutoTrigger, showMilestoneModal, showGachaModal, showLevelUpSheet]);
 
   // 마일스톤 모달 → 선택 (dismiss 설정 → 액션 완료 시 pendingCount 변경으로 리셋됨)
   const handleChooseGacha = useCallback(() => {
