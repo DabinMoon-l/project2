@@ -35,6 +35,8 @@ export default function ProfessorHomeOverlay() {
   const { isOpen, isCloseRequested, close, buttonRect } = useHomeOverlay();
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
   const isWide = useWideMode();
+  const isWideRef = useRef(isWide);
+  isWideRef.current = isWide;
   const [mounted, setMounted] = useState(false);
 
   const selectedCourse = (userCourseId as 'biology' | 'pathophysiology' | 'microbiology') || 'microbiology';
@@ -74,6 +76,11 @@ export default function ProfessorHomeOverlay() {
   useEffect(() => {
     if (isOpen && (phaseRef.current === 'hidden' || phaseRef.current === 'entering')) {
       setVisible(true);
+      if (isWideRef.current) {
+        setPhase('open');
+        phaseRef.current = 'open';
+        return;
+      }
       setPhase('entering');
       phaseRef.current = 'entering';
       const rafId1 = requestAnimationFrame(() => {
@@ -103,11 +110,18 @@ export default function ProfessorHomeOverlay() {
 
   const runExitAnimation = useCallback(() => {
     if (phaseRef.current === 'exiting') return;
-    setPhase('exiting');
-    phaseRef.current = 'exiting';
     setPullY(0);
     pulling.current = false;
     noTransitionRef.current = false;
+    if (isWideRef.current) {
+      close();
+      setVisible(false);
+      setPhase('hidden');
+      phaseRef.current = 'hidden';
+      return;
+    }
+    setPhase('exiting');
+    phaseRef.current = 'exiting';
     setTimeout(() => {
       close();
       setVisible(false);
@@ -126,14 +140,14 @@ export default function ProfessorHomeOverlay() {
   const isModalOpen = () => document.body.hasAttribute('data-hide-nav');
 
   const onTouchStart = useCallback((e: React.TouchEvent) => {
-    if (phaseRef.current !== 'open' || isModalOpen()) return;
+    if (isWideRef.current || phaseRef.current !== 'open' || isModalOpen()) return;
     startY.current = scaleCoord(e.touches[0].clientY);
     pulling.current = true;
     noTransitionRef.current = true;
   }, []);
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!pulling.current || phaseRef.current !== 'open') return;
+    if (isWideRef.current || !pulling.current || phaseRef.current !== 'open') return;
     // 위로 스와이프 → 오버레이 위로 올라감
     const delta = startY.current - scaleCoord(e.touches[0].clientY);
     if (delta > 0) {
@@ -159,7 +173,7 @@ export default function ProfessorHomeOverlay() {
   useEffect(() => {
     if (!visible) return;
     const handleWheel = (e: WheelEvent) => {
-      if (phaseRef.current !== 'open' || isModalOpen()) return;
+      if (isWideRef.current || phaseRef.current !== 'open' || isModalOpen()) return;
       if (e.deltaY > 0) {
         noTransitionRef.current = true;
         wheelAccum.current += e.deltaY;

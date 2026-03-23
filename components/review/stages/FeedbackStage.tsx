@@ -31,12 +31,16 @@ export default function FeedbackStage({
   onBackToResult,
   onFinish,
   isFinishing,
+  isPanelMode,
 }: FeedbackStageProps) {
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="fixed inset-0 z-[60] flex flex-col overscroll-contain"
+      className={isPanelMode
+        ? "h-full flex flex-col overflow-y-auto overscroll-contain"
+        : "fixed inset-0 z-[60] flex flex-col overscroll-contain"
+      }
       style={{ backgroundColor: '#F5F0E8' }}
     >
       {/* 헤더 */}
@@ -121,7 +125,7 @@ export default function FeedbackStage({
                   value={newFolderName}
                   onChange={(e) => setNewFolderName(e.target.value)}
                   placeholder="폴더 이름 입력"
-                  className="flex-1 px-3 py-1.5 text-xs border border-[#1A1A1A] bg-[#F5F0E8] outline-none focus:border-2 rounded-lg"
+                  className="min-w-0 flex-1 px-3 py-1.5 text-xs border border-[#1A1A1A] bg-[#F5F0E8] outline-none focus:border-2 rounded-lg"
                 />
                 <button
                   onClick={handleCreateFolder}

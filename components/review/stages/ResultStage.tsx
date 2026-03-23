@@ -47,16 +47,21 @@ export default function ResultStage({
   // 액션
   onGoToFeedback,
   onBackToPractice,
+  // 패널 모드 (3쪽 잠금)
+  isPanelMode,
 }: ResultStageProps) {
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="fixed inset-0 z-[60] overflow-y-auto overscroll-contain"
+      className={isPanelMode
+        ? 'h-full flex flex-col overflow-y-auto'
+        : 'fixed inset-0 z-[60] overflow-y-auto overscroll-contain'
+      }
       style={{ backgroundColor: '#F5F0E8' }}
     >
       {/* 헤더 */}
-      <header className="sticky top-0 z-50 border-b-2 border-[#1A1A1A] bg-[#F5F0E8]" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+      <header className="sticky top-0 z-50 border-b-2 border-[#1A1A1A] bg-[#F5F0E8]" style={!isPanelMode ? { paddingTop: 'env(safe-area-inset-top, 0px)' } : {}}>
         <div className="flex items-center justify-between h-12 px-4">
           <div className="w-10" />
           <h1 className="text-sm font-bold text-[#1A1A1A]">{headerTitle} 결과</h1>
@@ -64,7 +69,7 @@ export default function ResultStage({
         </div>
       </header>
 
-      <main className="px-4 py-5 pb-24">
+      <main className={isPanelMode ? 'flex-1 px-4 py-5' : 'px-4 py-5 pb-24'}>
         {/* 점수 */}
         <div className="text-center mb-5">
           <div className="flex items-center justify-center gap-2 mb-1">
@@ -719,7 +724,16 @@ export default function ResultStage({
       </main>
 
       {/* 하단 버튼 */}
-      <div className="fixed bottom-0 right-0 p-3 border-t-2 border-[#1A1A1A] bg-[#F5F0E8]" style={{ left: 'var(--detail-panel-left, 0)', paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}>
+      <div
+        className={isPanelMode
+          ? 'sticky bottom-0 z-10 p-3 border-t-2 border-[#1A1A1A] bg-[#F5F0E8]'
+          : 'fixed bottom-0 right-0 p-3 border-t-2 border-[#1A1A1A] bg-[#F5F0E8]'
+        }
+        style={isPanelMode
+          ? { paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }
+          : { left: 'var(--detail-panel-left, 0)', paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }
+        }
+      >
         <div className="flex gap-2.5">
           <button
             onClick={onBackToPractice}

@@ -64,7 +64,7 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
   const { user } = useAuth();
   const { userCourse, userClassId } = useCourse();
   const { showExpToast } = useExpToast();
-  const { closeDetail } = useDetailPanel();
+  const { closeDetail, lockDetail, unlockDetail } = useDetailPanel();
 
   // 패널 모드: prop 우선, 없으면 라우트 params 폴백
   const isPanelMode = !!panelType;
@@ -83,11 +83,11 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
   const fromQuizPage = isPanelMode ? false : searchParams.get('from') === 'quiz';
   const autoStart = isPanelMode ? (panelAutoStart || null) : searchParams.get('autoStart');
 
-  // 뒤로가기: 패널 모드에서는 closeDetail, 일반 모드에서는 router.push
+  // 뒤로가기: 패널 모드에서는 잠금 해제 후 closeDetail, 일반 모드에서는 router.push
   const goBackToList = useCallback((filter?: string) => {
-    if (isPanelMode) { closeDetail(); return; }
+    if (isPanelMode) { unlockDetail(); closeDetail(); return; }
     router.push(`/review?filter=${filter || folderType}`);
-  }, [isPanelMode, closeDetail, router, folderType]);
+  }, [isPanelMode, unlockDetail, closeDetail, router, folderType]);
 
   // 과목별 리본 이미지 (solved 타입 또는 퀴즈 페이지에서 온 경우 퀴즈 리본, 나머지는 리뷰 리본)
   const ribbonImage = (folderType === 'solved' || fromQuizPage)
@@ -133,6 +133,15 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
   const practiceModeRef = useRef<'all' | 'wrongOnly' | null>(null);
   // practiceMode 변경 시 ref 동기화 (useCallback 클로저 문제 방지)
   useEffect(() => { practiceModeRef.current = practiceMode; }, [practiceMode]);
+
+  // 패널 모드 연습: 시작 시 잠금, 종료 시 해제
+  const hasPracticeItems = !!practiceItems;
+  useEffect(() => {
+    if (isPanelMode && hasPracticeItems) {
+      lockDetail();
+      return () => unlockDetail();
+    }
+  }, [isPanelMode, hasPracticeItems, lockDetail, unlockDetail]);
   const [isAddMode, setIsAddMode] = useState(false);
   const [showEmptyMessage, setShowEmptyMessage] = useState(false);
 
@@ -1479,6 +1488,7 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
         }}
         currentUserId={user?.uid}
         showFeedback={folderType !== 'library'}
+        isPanelMode={isPanelMode}
       />
     );
   }

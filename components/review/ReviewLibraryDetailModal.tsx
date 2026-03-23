@@ -1,8 +1,12 @@
 'use client';
 
+import { useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ExpandModal } from '@/components/common';
 import { formatQuestionTypes } from '@/components/review/utils';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
+import { useDetailPanel } from '@/lib/contexts';
+import FolderDetailPage from '@/app/(main)/review/[type]/[id]/page';
 import type { LearningQuiz } from '@/lib/hooks/useLearningQuizzes';
 import type { SourceRect } from '@/lib/hooks/useExpandSource';
 
@@ -14,6 +18,18 @@ interface Props {
 
 export default function ReviewLibraryDetailModal({ quiz, sourceRect, onClose }: Props) {
   const router = useRouter();
+  const isWide = useWideMode();
+  const { openDetail, replaceDetail, isDetailOpen, isLocked } = useDetailPanel();
+
+  const openLibraryReview = useCallback((quizId: string, autoStart?: string) => {
+    if (isWide && !isLocked) {
+      const action = isDetailOpen ? replaceDetail : openDetail;
+      action(<FolderDetailPage panelType="library" panelId={quizId} panelAutoStart={autoStart} />);
+    } else {
+      const qs = autoStart ? `?autoStart=${autoStart}` : '';
+      router.push(`/review/library/${quizId}${qs}`);
+    }
+  }, [isWide, isLocked, isDetailOpen, openDetail, replaceDetail, router]);
 
   return (
     <ExpandModal
@@ -94,7 +110,7 @@ export default function ReviewLibraryDetailModal({ quiz, sourceRect, onClose }: 
               onClick={() => {
                 const quizId = quiz.id;
                 onClose();
-                router.push(`/review/library/${quizId}?autoStart=all`);
+                openLibraryReview(quizId, 'all');
               }}
               className="flex-1 py-2 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors rounded-lg"
             >

@@ -19,6 +19,7 @@ import {
 } from '@/lib/repositories';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useThemeColors } from '@/styles/themes/useTheme';
+import { useDetailPanel } from '@/lib/contexts';
 import { Skeleton } from '@/components/common';
 
 /** Firestore 퀴즈 문제 문서 타입 */
@@ -86,24 +87,28 @@ type Answer = OXAnswer | number | number[] | string | null;
  * - 진행 상황 저장/불러오기 지원
  * - 제출 시 서버에서 채점 후 결과 페이지로 이동
  */
-export default function QuizPage() {
+export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId?: string; onPanelNavigate?: (path: string) => void } = {}) {
   const params = useParams();
   const router = useRouter();
   const { user } = useAuth();
   const colors = useThemeColors();
-  const quizId = params.id as string;
+  const quizId = panelQuizId || (params?.id as string);
+  const isPanelMode = !!panelQuizId;
+  const { closeDetail } = useDetailPanel();
 
   // 퀴즈 풀이 페이지: data-main-content의 paddingTop 제거 (헤더가 직접 처리)
+  // 패널 모드에서는 스킵 (3쪽 안에서 동작)
   useEffect(() => {
+    if (isPanelMode) return;
     const el = document.querySelector('[data-main-content]') as HTMLElement | null;
     if (el) el.style.paddingTop = '0px';
     return () => { if (el) el.style.paddingTop = ''; };
-  }, []);
+  }, [isPanelMode]);
 
   // 최초 진입 시에만 슬라이드 애니메이션 (뒤로가기 시 재발동 방지)
   const [slideIn] = useState(() => {
     if (typeof window === 'undefined') return false;
-    const key = `visited_quiz_${params.id}`;
+    const key = `visited_quiz_${quizId}`;
     if (sessionStorage.getItem(key)) return false;
     sessionStorage.setItem(key, '1');
     return true;
@@ -789,6 +794,7 @@ export default function QuizPage() {
       await deleteProgress();
 
       // 결과 페이지로 이동
+      if (onPanelNavigate) { onPanelNavigate(`/quiz/${quizId}/result`); return; }
       router.push(`/quiz/${quizId}/result`);
     } catch (err) {
       console.error('퀴즈 제출 실패:', err);
@@ -835,22 +841,23 @@ export default function QuizPage() {
   const handleSaveAndExit = useCallback(async () => {
     const success = await saveProgress();
     if (success) {
-      // 퀴즈 풀이 중 이탈 시 항상 퀴즈 목록으로 이동 (관리창이 아님)
+      if (onPanelNavigate) { onPanelNavigate('/quiz'); return; }
+      if (isPanelMode) { closeDetail(); return; }
       router.push('/quiz');
     } else {
       alert('저장에 실패했습니다. 다시 시도해주세요.');
     }
-  }, [saveProgress, router]);
+  }, [saveProgress, router, isPanelMode, closeDetail, onPanelNavigate]);
 
   /**
    * 저장하지 않고 나가기 (기존 저장된 진행상황도 삭제)
    */
   const handleExitWithoutSave = useCallback(async () => {
-    // 기존 저장된 진행상황 삭제
     await deleteProgress();
-    // 퀴즈 풀이 중 이탈 시 항상 퀴즈 목록으로 이동 (관리창이 아님)
+    if (onPanelNavigate) { onPanelNavigate('/quiz'); return; }
+    if (isPanelMode) { closeDetail(); return; }
     router.push('/quiz');
-  }, [router, deleteProgress]);
+  }, [router, deleteProgress, isPanelMode, closeDetail, onPanelNavigate]);
 
   // 로딩 상태
   if (isLoading) {
@@ -904,7 +911,7 @@ export default function QuizPage() {
             잠시 후 다시 시도해주세요.
           </p>
           <button
-            onClick={() => router.push('/quiz')}
+            onClick={() => onPanelNavigate ? onPanelNavigate('/quiz') : isPanelMode ? closeDetail() : router.push('/quiz')}
             className="px-6 py-3 bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
           >
             돌아가기
@@ -919,7 +926,8 @@ export default function QuizPage() {
 
   return (
     <motion.div
-      className="min-h-screen pb-24" style={{ backgroundColor: '#F5F0E8' }}
+      className={isPanelMode ? 'flex flex-col h-full' : 'min-h-screen pb-24'}
+      style={{ backgroundColor: '#F5F0E8' }}
       initial={slideIn ? { opacity: 0, x: 60 } : false}
       animate={{ opacity: 1, x: 0 }}
       transition={{ type: 'spring', stiffness: 400, damping: 35 }}
@@ -933,7 +941,7 @@ export default function QuizPage() {
       />
 
       {/* 문제 영역 */}
-      <main className="px-4 py-6">
+      <main className={isPanelMode ? 'flex-1 overflow-y-auto px-4 py-6' : 'px-4 py-6'}>
         <AnimatePresence mode="wait">
           {currentDisplayItem && (
             <motion.div
@@ -1205,6 +1213,7 @@ export default function QuizPage() {
         isSubmitting={isSubmitting}
         onGrade={handleGradeCurrentItem}
         isGraded={isCurrentItemSubmitted}
+        isPanelMode={isPanelMode}
       />
 
       {/* 나가기 확인 모달 */}
@@ -1217,75 +1226,72 @@ export default function QuizPage() {
         totalQuestions={quiz.questions.length}
         isSaving={isSaving}
         hideExitWithoutSave
+        isPanelMode={isPanelMode}
       />
 
       {/* 이전 진행상황 복원 모달 */}
       <AnimatePresence>
         {showResumeModal && savedProgress && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
-          >
+          isPanelMode ? (
+            /* 패널 모드: 3쪽 하단 바텀시트 (오버레이 없이) */
+            <div className="absolute bottom-0 left-0 right-0 z-50">
+              <motion.div
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+                className="w-full bg-[#F5F0E8] rounded-t-2xl border-t-2 border-x-2 border-[#1A1A1A] shadow-[0_-4px_24px_rgba(0,0,0,0.15)] p-4"
+              >
+                <div className="flex justify-center mb-2"><div className="w-8 h-1 rounded-full bg-[#D4CFC4]" /></div>
+                <div className="flex justify-center mb-3">
+                  <div className="w-10 h-10 bg-[#FFF8E1] border-2 border-[#8B6914] flex items-center justify-center rounded-lg">
+                    <svg className="w-5 h-5 text-[#8B6914]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  </div>
+                </div>
+                <h2 className="text-base font-bold text-[#1A1A1A] text-center mb-1.5">이전 진행상황이 있습니다</h2>
+                <p className="text-xs text-[#5C5C5C] text-center mb-3">이전에 풀던 문제가 저장되어 있습니다.</p>
+                <div className="bg-[#EDEAE4] border border-[#1A1A1A] p-2.5 mb-3 rounded-lg">
+                  <div className="flex justify-between text-xs"><span className="text-[#5C5C5C]">답변한 문제</span><span className="font-bold">{savedProgress.answeredCount} / {quiz.questions.length}문제</span></div>
+                  <div className="flex justify-between text-xs mt-1"><span className="text-[#5C5C5C]">마지막 위치</span><span className="font-bold">{savedProgress.currentQuestionIndex + 1}번 문제</span></div>
+                </div>
+                <div className="space-y-1.5">
+                  <button onClick={handleResume} className="w-full py-2.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] rounded-xl">이어서 풀기</button>
+                  <button onClick={handleStartFresh} className="w-full py-2.5 text-xs font-bold bg-[#F5F0E8] text-[#1A1A1A] border-2 border-[#1A1A1A] rounded-xl">처음부터 다시 풀기</button>
+                </div>
+              </motion.div>
+            </div>
+          ) : (
+            /* 모바일: 기존 센터 모달 */
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
             >
-              {/* 아이콘 */}
-              <div className="flex justify-center mb-3">
-                <div className="w-10 h-10 bg-[#FFF8E1] border-2 border-[#8B6914] flex items-center justify-center">
-                  <svg className="w-5 h-5 text-[#8B6914]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="w-full max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
+              >
+                <div className="flex justify-center mb-3">
+                  <div className="w-10 h-10 bg-[#FFF8E1] border-2 border-[#8B6914] flex items-center justify-center">
+                    <svg className="w-5 h-5 text-[#8B6914]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  </div>
                 </div>
-              </div>
-
-              {/* 제목 */}
-              <h2 className="text-base font-bold text-[#1A1A1A] text-center mb-1.5">
-                이전 진행상황이 있습니다
-              </h2>
-
-              {/* 설명 */}
-              <p className="text-xs text-[#5C5C5C] text-center mb-3">
-                이전에 풀던 문제가 저장되어 있습니다.
-              </p>
-
-              {/* 진행 상황 정보 */}
-              <div className="bg-[#EDEAE4] border border-[#1A1A1A] p-2.5 mb-3">
-                <div className="flex justify-between text-xs">
-                  <span className="text-[#5C5C5C]">답변한 문제</span>
-                  <span className="font-bold text-[#1A1A1A]">
-                    {savedProgress.answeredCount} / {quiz.questions.length}문제
-                  </span>
+                <h2 className="text-base font-bold text-[#1A1A1A] text-center mb-1.5">이전 진행상황이 있습니다</h2>
+                <p className="text-xs text-[#5C5C5C] text-center mb-3">이전에 풀던 문제가 저장되어 있습니다.</p>
+                <div className="bg-[#EDEAE4] border border-[#1A1A1A] p-2.5 mb-3">
+                  <div className="flex justify-between text-xs"><span className="text-[#5C5C5C]">답변한 문제</span><span className="font-bold text-[#1A1A1A]">{savedProgress.answeredCount} / {quiz.questions.length}문제</span></div>
+                  <div className="flex justify-between text-xs mt-1"><span className="text-[#5C5C5C]">마지막 위치</span><span className="font-bold text-[#1A1A1A]">{savedProgress.currentQuestionIndex + 1}번 문제</span></div>
                 </div>
-                <div className="flex justify-between text-xs mt-1">
-                  <span className="text-[#5C5C5C]">마지막 위치</span>
-                  <span className="font-bold text-[#1A1A1A]">
-                    {savedProgress.currentQuestionIndex + 1}번 문제
-                  </span>
+                <div className="space-y-1.5">
+                  <button onClick={handleResume} className="w-full py-2.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors">이어서 풀기</button>
+                  <button onClick={handleStartFresh} className="w-full py-2.5 text-xs font-bold bg-[#F5F0E8] text-[#1A1A1A] border-2 border-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors">처음부터 다시 풀기</button>
                 </div>
-              </div>
-
-              {/* 버튼들 */}
-              <div className="space-y-1.5">
-                <button
-                  onClick={handleResume}
-                  className="w-full py-2.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
-                >
-                  이어서 풀기
-                </button>
-                <button
-                  onClick={handleStartFresh}
-                  className="w-full py-2.5 text-xs font-bold bg-[#F5F0E8] text-[#1A1A1A] border-2 border-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors"
-                >
-                  처음부터 다시 풀기
-                </button>
-              </div>
+              </motion.div>
             </motion.div>
-          </motion.div>
+          )
         )}
       </AnimatePresence>
     </motion.div>

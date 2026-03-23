@@ -46,7 +46,7 @@ interface ExpInfo {
  *
  * 퀴즈 완료 후 획득할 EXP 상세 정보를 표시합니다.
  */
-export default function ExpPage() {
+export default function ExpPage({ panelQuizId, onPanelNavigate }: { panelQuizId?: string; onPanelNavigate?: (path: string) => void } = {}) {
   const router = useRouter();
   const params = useParams();
   const { user } = useAuth();
@@ -54,7 +54,7 @@ export default function ExpPage() {
   const { showExpToast } = useExpToast();
   const { setSuppressAutoTrigger } = useMilestone();
 
-  const quizId = params.id as string;
+  const quizId = panelQuizId || (params.id as string);
 
   // EXP 페이지에서도 마일스톤 자동 트리거 억제
   useEffect(() => {
@@ -183,6 +183,7 @@ export default function ExpPage() {
       localStorage.removeItem(`quiz_inline_feedback_count_${quizId}`);
 
       // 퀴즈 목록으로 이동
+      if (onPanelNavigate) { onPanelNavigate('/quiz'); return; }
       router.push('/quiz');
     } catch (err) {
       console.error('완료 처리 오류:', err);
@@ -211,7 +212,7 @@ export default function ExpPage() {
         <h2 className="text-xl font-bold text-[#1A1A1A] mb-2">오류 발생</h2>
         <p className="text-[#5C5C5C] text-center mb-6">{error || '알 수 없는 오류가 발생했습니다.'}</p>
         <button
-          onClick={() => router.push('/quiz')}
+          onClick={() => onPanelNavigate ? onPanelNavigate('/quiz') : router.push('/quiz')}
           className="px-6 py-2 bg-[#1A1A1A] text-[#F5F0E8] font-bold"
         >
           퀴즈 목록으로

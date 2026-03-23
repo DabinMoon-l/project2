@@ -11,6 +11,7 @@ import LinkifiedText from '@/components/board/LinkifiedText';
 import { usePost, useDeletePost, useLike } from '@/lib/hooks/useBoard';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useUser, useDetailPanel } from '@/lib/contexts';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
 import { getScrollLockCount } from '@/lib/utils/scrollLock';
 
 /**
@@ -159,8 +160,20 @@ function ImageGallery({ images }: { images: string[] }) {
 export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPostId?: string; onPanelBack?: () => void } = {}) {
   const params = useParams();
   const router = useRouter();
+  const { replaceDetail, closeDetail, isLocked } = useDetailPanel();
   const postId = panelPostId || (params?.id as string);
   const isPanelMode = !!panelPostId;
+  const isWide = useWideMode();
+
+  // 가로모드에서 직접 라우트 진입 시 → /board로 리다이렉트 (3쪽 패널로 열기 위해)
+  // fixed 입력바가 aside의 transform 격리 밖에서 화면 전체를 차지하는 문제 방지
+  // 잠금 상태에서는 리다이렉트 안 함 (2쪽에서 그대로 렌더)
+  useEffect(() => {
+    if (isWide && !isPanelMode && !isLocked && postId) {
+      sessionStorage.setItem('board_panel_post', postId);
+      router.replace('/board');
+    }
+  }, [isWide, isPanelMode, isLocked, postId, router]);
 
   // 최초 진입 시에만 슬라이드 애니메이션 (패널 모드에서는 비활성화)
   const [slideIn] = useState(() => {
@@ -203,7 +216,6 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
   routerRef.current = router;
   const isPanelModeRef = useRef(isPanelMode);
   isPanelModeRef.current = isPanelMode;
-  const { replaceDetail, closeDetail } = useDetailPanel();
   const replaceDetailRef = useRef(replaceDetail);
   replaceDetailRef.current = replaceDetail;
 

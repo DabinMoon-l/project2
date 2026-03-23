@@ -19,6 +19,8 @@ export interface ReviewPracticeProps {
   headerTitle?: string;
   /** 피드백 기능 표시 여부 (기본값: true) */
   showFeedback?: boolean;
+  /** 3쪽 패널 모드 (fixed→flow 전환) */
+  isPanelMode?: boolean;
 }
 
 /**
@@ -109,6 +111,9 @@ export interface ResultStageProps {
   // 액션
   onGoToFeedback: () => void;
   onBackToPractice: () => void;
+
+  // 패널 모드 (3쪽 잠금)
+  isPanelMode?: boolean;
 }
 
 /** 피드백(완료) 화면 props */
@@ -138,6 +143,8 @@ export interface FeedbackStageProps {
   onFinish: () => void;
   /** 완료 처리 중 (중복 클릭 방지) */
   isFinishing?: boolean;
+  /** 3쪽 패널 모드 */
+  isPanelMode?: boolean;
 }
 
 /** 문제 풀이 화면 props */
@@ -189,4 +196,5 @@ export interface PracticeStageProps {
   feedbackSubmitCount: number;
   setFeedbackSubmitCount: React.Dispatch<React.SetStateAction<number>>;
   user: { uid: string } | null;
+  isPanelMode?: boolean;
 }
