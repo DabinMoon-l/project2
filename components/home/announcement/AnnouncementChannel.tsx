@@ -570,7 +570,7 @@ export default function AnnouncementChannel({
 
       {/* ═══ 패널 모드: 인라인 렌더링 ═══ */}
       {isPanelMode && showModal && (
-        <div className="h-full relative overflow-hidden flex flex-col" style={{ backgroundImage: 'url(/images/home-bg-3.jpg)', backgroundSize: '100% 100%' }}>
+        <div className="h-full relative overflow-hidden flex flex-col" style={{ backgroundImage: 'url(/images/home-bg-3.jpg)', backgroundSize: '102% 102%', backgroundPosition: 'center' }}>
 
           {/* 패널 모드 내부 콘텐츠 — 바텀시트와 동일 */}
           {(() => {

@@ -175,7 +175,7 @@ function MainLayoutGrid({
   pathname: string;
   searchParams: ReturnType<typeof useSearchParams>;
 }) {
-  const { content: detailContent, isDetailOpen, closeDetail, isLocked } = useDetailPanel();
+  const { content: detailContent, isDetailOpen, closeDetail, isLocked, queuedContent, isQueuedOpen } = useDetailPanel();
   const { isOpen: isHomeOverlayOpen } = useHomeOverlay();
 
   // 라우트 기반 사이드바 타입 감지 (가로모드 전용)
@@ -265,6 +265,18 @@ function MainLayoutGrid({
     };
   }, [isWide, isLocked]);
 
+  // 홈 오버레이 열림 시 body 배경 숨기기 (3쪽 오른쪽 크림선 방지)
+  useEffect(() => {
+    if (isWide && isHomeOverlayOpen) {
+      document.body.style.backgroundColor = 'transparent';
+      document.documentElement.style.backgroundColor = '#1a1a1a';
+      return () => {
+        document.body.style.backgroundColor = '';
+        document.documentElement.style.backgroundColor = '';
+      };
+    }
+  }, [isWide, isHomeOverlayOpen]);
+
   // --modal-right: 가로모드에서 모달을 2쪽 안에 가두기 (aside가 항상 존재)
   useEffect(() => {
     const body = document.body;
@@ -352,15 +364,19 @@ function MainLayoutGrid({
               <aside
                 className="w-1/2 flex-shrink-0 overflow-x-hidden overflow-y-auto h-screen relative"
                 style={{
-                  borderLeft: isDetailOpen ? '1px solid #B0A898' : 'none',
-                  backgroundColor: isDetailOpen ? '#F5F0E8' : 'transparent',
+                  borderLeft: isHomeOverlayOpen ? 'none' : (isDetailOpen ? '1px solid #B0A898' : 'none'),
+                  // 홈: 항상 배경 이미지 (detail 열림 무관), 비홈: 크림 or 투명
+                  ...(isHomeOverlayOpen ? {
+                    backgroundImage: 'url(/images/home-bg-3.jpg)',
+                    backgroundSize: '102% 102%',
+                    backgroundPosition: 'center',
+                  } : {
+                    backgroundColor: isDetailOpen ? '#F5F0E8' : 'transparent',
+                  }),
                   paddingRight: 'env(safe-area-inset-right, 0px)',
                 } as React.CSSProperties}
               >
-                {/* 홈 오버레이: 3쪽 배경 이미지 */}
-                {isHomeOverlayOpen && !isDetailOpen && (
-                  <div className="absolute inset-0 z-0" style={{ backgroundImage: 'url(/images/home-bg-3.jpg)', backgroundSize: '100% 100%' }} />
-                )}
+                {/* 홈 배경은 aside 자체의 backgroundImage로 처리 (overflow-hidden 영향 없음) */}
                 {isDetailOpen && (
                   <div className="h-full">
                     {detailContent}
@@ -377,6 +393,24 @@ function MainLayoutGrid({
         </div>
       </SwipeBack>
       {!isProfessor ? <HomeOverlay /> : <ProfessorHomeOverlay />}
+
+      {/* 잠금 시 대기 콘텐츠 — 2쪽에 3쪽 배경과 함께 오버레이 (잠금 해제 시 3쪽으로 승격) */}
+      {isWide && isQueuedOpen && (
+        <div
+          className="fixed top-0 bottom-0 z-[46] overflow-y-auto"
+          style={{
+            left: '240px',
+            right: 'calc(50% - 120px)',
+            paddingTop: 'env(safe-area-inset-top, 0px)',
+            backgroundImage: 'url(/images/home-bg-3.jpg)',
+            backgroundSize: '102% 102%',
+            backgroundPosition: 'center',
+            borderRight: '1px solid #B0A898',
+          }}
+        >
+          {queuedContent}
+        </div>
+      )}
     </>
   );
 }

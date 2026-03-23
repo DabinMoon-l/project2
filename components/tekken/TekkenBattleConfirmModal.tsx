@@ -192,7 +192,7 @@ export default function TekkenBattleConfirmModal({
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          className="fixed inset-0 z-[110] flex flex-col items-center justify-center bg-black/90 select-none"
+          className="fixed top-0 right-0 bottom-0 z-[110] flex flex-col items-center justify-center bg-black/90 select-none"
           style={{ left: 'var(--home-sheet-left, 0px)', WebkitTouchCallout: 'none' }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}

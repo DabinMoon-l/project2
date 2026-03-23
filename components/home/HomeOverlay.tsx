@@ -42,9 +42,12 @@ export default function HomeOverlay() {
   const isWide = useWideMode();
   const { openDetail, closeDetail, isDetailOpen } = useDetailPanel();
 
+  // 홈 오버레이 열리면 기존 3쪽 detail 닫기 (홈 배경으로 초기화)
   // 홈 오버레이 닫히면 프로필 드로어 + 3쪽 detail도 닫기
   useEffect(() => {
-    if (!isOpen) {
+    if (isOpen) {
+      if (isDetailOpen) closeDetail();
+    } else {
       setShowProfileDrawer(false);
       if (isDetailOpen) closeDetail();
     }

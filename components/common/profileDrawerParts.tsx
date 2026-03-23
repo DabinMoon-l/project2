@@ -121,30 +121,42 @@ export function ToggleSwitch({
   );
 }
 
-/** 글래스 모달 래퍼 */
+/** 글래스 바텀시트 래퍼 (3쪽 패널 너비에 맞춤, 투명 오버레이) */
 export function GlassModal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
-      style={{ left: 'var(--home-sheet-left, 0px)' }}
-      onClick={onClose}
-    >
+    <>
+      {/* 투명 오버레이 (닫기용) */}
       <motion.div
-        initial={{ scale: 0.9 }}
-        animate={{ scale: 1 }}
-        exit={{ scale: 0.9 }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[60]"
+        onClick={onClose}
+      />
+      {/* 바텀시트 (3쪽 패널에 고정) */}
+      <motion.div
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        exit={{ y: '100%' }}
+        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-[300px] rounded-2xl overflow-hidden p-4"
+        className="fixed bottom-0 right-0 z-[60] rounded-t-2xl overflow-hidden"
+        style={{ left: 'var(--home-sheet-left, 0px)' }}
       >
-        <div className="absolute inset-0 rounded-2xl overflow-hidden">
+        <div className="absolute inset-0 rounded-t-2xl overflow-hidden">
           <Image src="/images/home-bg.jpg" alt="" fill className="object-cover" />
         </div>
         <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
-        <div className="relative z-10">{children}</div>
+        <div className="relative z-10">
+          {/* 드래그 핸들 */}
+          <div className="flex justify-center pt-3 pb-1">
+            <div className="w-10 h-1 bg-white/40 rounded-full" />
+          </div>
+          <div className="px-4 pb-4" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 0px))' }}>
+            {children}
+          </div>
+        </div>
       </motion.div>
-    </motion.div>
+    </>
   );
 }
