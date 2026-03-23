@@ -68,7 +68,7 @@ export function generateBotAnswer(
   choiceCount: number
 ): { answer: number; delay: number } {
   const isCorrect = Math.random() < 0.4;
-  const delay = 1000 + Math.floor(Math.random() * 7000);
+  const delay = 6000; // 봇은 항상 6초 후 응답 (유저 대기 방지)
 
   if (isCorrect) {
     return { answer: correctAnswer, delay };
