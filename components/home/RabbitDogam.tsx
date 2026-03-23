@@ -25,6 +25,8 @@ interface RabbitDogamProps {
   equippedRabbits: Array<{ rabbitId: number; courseId: string }>;
   buttonRect?: Rect | null;
   holdings?: RabbitHolding[];
+  /** 가로모드 3쪽 패널용 — 포탈/지니 애니메이션 없이 인라인 렌더링 */
+  isPanelMode?: boolean;
 }
 
 /**
@@ -40,16 +42,17 @@ export default function RabbitDogam({
   equippedRabbits,
   buttonRect,
   holdings: propHoldings,
+  isPanelMode,
 }: RabbitDogamProps) {
-  // 도감 열림 시 네비게이션 숨김
-  useHideNav(isOpen);
+  // 도감 열림 시 네비게이션 숨김 (패널 모드에서는 불필요)
+  useHideNav(isOpen && !isPanelMode);
 
-  // 도감 열림 시 body 스크롤 방지
+  // 도감 열림 시 body 스크롤 방지 (패널 모드에서는 skip)
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || isPanelMode) return;
     lockScroll();
     return () => { unlockScroll(); };
-  }, [isOpen]);
+  }, [isOpen, isPanelMode]);
 
   const { rabbits: allRabbits, loading: rabbitsLoading } = useRabbitsForCourse(courseId);
   // MilestoneContext에서 이미 구독한 holdings를 prop으로 받음 (중복 onSnapshot 방지)
@@ -191,8 +194,103 @@ export default function RabbitDogam({
     transition: `opacity ${p === 'exiting' ? CLOSE_MS : OPEN_MS}ms ease`,
   });
 
-  if (!visible) return null;
+  if (!visible && !isPanelMode) return null;
+  if (isPanelMode && !isOpen) return null;
 
+  // === 패널 모드: 포탈/지니 애니메이션 없이 인라인 렌더링 ===
+  if (isPanelMode) {
+    return (
+      <div className="h-full relative overflow-hidden" style={{ backgroundImage: 'url(/images/home-bg-3.jpg)', backgroundSize: '100% 100%' }}>
+
+        {/* 헤더 */}
+        <div className="relative z-10 flex items-center justify-between px-3 py-2.5 border-b border-white/15">
+          <span className="font-bold text-base text-white">토끼 도감</span>
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-base text-white/80">{discoveredCount}/80</span>
+            <button onClick={onClose} className="w-8 h-8 flex items-center justify-center">
+              <svg className="w-6 h-6 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* 그리드 */}
+        <div className="relative z-10 flex-1 overflow-y-auto overscroll-contain p-3" style={{ height: 'calc(100% - 44px)' }}>
+          {loading ? (
+            <div className="text-center py-8 text-white/50">로딩 중...</div>
+          ) : (
+            <StudentRabbitGrid
+              onSelect={openDetail}
+              myHoldingMap={myHoldingMap}
+              equippedRabbits={equippedRabbits}
+            />
+          )}
+        </div>
+
+        {/* 상세 바텀시트 (패널 내 absolute) */}
+        {selectedRabbitId !== null && (
+          <>
+            {/* 투명 오버레이 */}
+            <div
+              className="absolute inset-0 z-20"
+              onClick={closeDetail}
+            />
+            {/* 바텀시트 */}
+            <div className="absolute bottom-0 left-0 right-0 z-30 rounded-t-2xl overflow-hidden">
+              {/* 배경 */}
+              <div className="absolute inset-0 overflow-hidden">
+                <Image src="/images/home-bg-3.jpg" alt="" fill className="object-cover" />
+              </div>
+              <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
+
+              {/* 헤더 */}
+              <div className="relative z-10 flex items-center justify-between px-3 py-2.5 border-b border-white/15">
+                <span className="font-bold text-base text-white">토끼 상세</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-base text-white/80">
+                    {selectedRabbitId !== null ? `#${selectedRabbitId + 1}` : ''}
+                  </span>
+                  <button onClick={closeDetail} className="w-8 h-8 flex items-center justify-center">
+                    <svg className="w-6 h-6 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* 상세 본문 */}
+              <div className="relative z-10 overflow-y-auto overscroll-contain p-3">
+                {selectedRabbit && selectedHolding ? (
+                  <RabbitDetail rabbit={selectedRabbit} holding={selectedHolding} />
+                ) : (
+                  <div className="text-center py-8 text-white/50">로딩 중...</div>
+                )}
+              </div>
+
+              {/* 푸터 */}
+              {selectedRabbit && selectedHolding && (
+                <div className="relative z-10 px-3 py-2 border-t border-white/10">
+                  <FooterWithEquip
+                    rabbit={selectedRabbit}
+                    equippedRabbits={equippedRabbits}
+                    courseId={courseId}
+                    onBack={closeDetail}
+                    rabbitNames={equippedRabbits.map((e) => {
+                      const doc = rabbitDocMap.get(e.rabbitId);
+                      return doc?.name || (e.rabbitId === 0 ? '기본 토끼' : `토끼 #${e.rabbitId + 1}`);
+                    })}
+                  />
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // === 기본 모드: 포탈 + 요술지니 애니메이션 ===
   return createPortal(
     <>
       {/* ====== 도감 모달 ====== */}

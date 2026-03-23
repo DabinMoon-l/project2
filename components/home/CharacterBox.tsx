@@ -7,8 +7,9 @@ import {
   useMotionValue,
   useSpring,
 } from 'framer-motion';
-import { useUser, useCourse, useMilestone } from '@/lib/contexts';
+import { useUser, useCourse, useMilestone, useDetailPanel } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
 import { useRabbitDoc, getRabbitStats } from '@/lib/hooks/useRabbit';
 import { computeRabbitDisplayName } from '@/lib/utils/rabbitDisplayName';
 import dynamic from 'next/dynamic';
@@ -38,6 +39,8 @@ export default function CharacterBox() {
   const { profile } = useUser();
   const { userCourseId } = useCourse();
   const { theme } = useTheme();
+  const isWide = useWideMode();
+  const { openDetail: openDetailPanel, closeDetail: closeDetailPanel } = useDetailPanel();
 
   // 마일스톤 Context (holdings 포함 — 중복 onSnapshot 방지)
   const milestone = useMilestone();
@@ -263,11 +266,27 @@ export default function CharacterBox() {
           <button
             ref={dogamBtnRef}
             onClick={() => {
-              if (dogamBtnRef.current) {
-                const r = dogamBtnRef.current.getBoundingClientRect();
-                setDogamRect({ x: r.x, y: r.y, width: r.width, height: r.height });
+              if (isWide && userCourseId && profile) {
+                // 가로모드: 3쪽 디테일 패널에 도감 렌더링
+                openDetailPanel(
+                  <RabbitDogam
+                    isPanelMode
+                    isOpen
+                    onClose={closeDetailPanel}
+                    courseId={userCourseId}
+                    userId={profile.uid}
+                    equippedRabbits={equippedRabbits}
+                    holdings={holdings}
+                  />
+                );
+              } else {
+                // 세로모드: 기존 포탈 모달
+                if (dogamBtnRef.current) {
+                  const r = dogamBtnRef.current.getBoundingClientRect();
+                  setDogamRect({ x: r.x, y: r.y, width: r.width, height: r.height });
+                }
+                setShowDogam(true);
               }
-              setShowDogam(true);
             }}
             className="flex items-center justify-center bg-black/40 border border-white/10 rounded-full backdrop-blur-xl transition-transform duration-200 hover:scale-110 active:scale-95"
             style={{ height: Math.round(36 * scale), paddingLeft: Math.round(20 * scale), paddingRight: Math.round(20 * scale) }}

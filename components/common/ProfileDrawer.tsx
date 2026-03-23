@@ -51,7 +51,7 @@ import AccountDeletionDialog from './profileDrawerModals/AccountDeletionDialog';
 /**
  * 글래스모피즘 프로필/설정 바텀시트
  */
-export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
+export default function ProfileDrawer({ isOpen, onClose, isPanelMode }: ProfileDrawerProps) {
   const router = useRouter();
   const { user, logout } = useAuth();
   const { profile, updateNickname, updateProfile, isProfessor } = useUser();
@@ -152,15 +152,15 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
     }
   }, [user?.uid, isOpen, fetchSettings]);
 
-  // 네비게이션 숨김
-  useHideNav(isOpen);
+  // 네비게이션 숨김 (패널 모드에서는 불필요)
+  useHideNav(isOpen && !isPanelMode);
 
-  // body 스크롤 방지
+  // body 스크롤 방지 (패널 모드에서는 불필요 — 3쪽 패널 내부)
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || isPanelMode) return;
     lockScroll();
     return () => unlockScroll();
-  }, [isOpen]);
+  }, [isOpen, isPanelMode]);
 
   // 프로필 피커 점진적 렌더링 — 애니메이션 완료 후 12개씩
   useEffect(() => {
@@ -363,6 +363,630 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
 
   if (!profile) return null;
 
+  // ============================================================
+  // 공유 JSX — 패널 모드와 바텀시트 모드에서 동일하게 사용
+  // ============================================================
+
+  /** 메인 콘텐츠 (헤더 + 프로필 + 설정 목록) */
+  const drawerContent = (
+    <>
+      {/* 헤더 */}
+      <div className="px-5 pt-1 pb-3">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-white">Settings</h2>
+          <button onClick={onClose} className="p-2 -mr-2">
+            <svg className="w-6 h-6 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* 프로필 정보 */}
+        <div className="flex items-center gap-3 mb-4">
+          <button
+            onClick={() => {
+              if (sheetRef.current) setPickerHeight(sheetRef.current.offsetHeight);
+              setShowProfilePicker(true);
+            }}
+            className="w-14 h-14 flex items-center justify-center flex-shrink-0 overflow-hidden rounded-xl border-2 border-white/30 bg-white/10 transition-transform active:scale-95"
+          >
+            {profile.profileRabbitId != null ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={getRabbitProfileUrl(profile.profileRabbitId)}
+                alt="프로필"
+                width={56}
+                height={56}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="rgba(255,255,255,0.6)">
+                <circle cx="12" cy="8" r="4" />
+                <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
+              </svg>
+            )}
+          </button>
+          <div className="flex-1">
+            <button
+              onClick={() => {
+                setNewNickname(profile.nickname);
+                setNicknameError('');
+                setShowNicknameModal(true);
+              }}
+              className="flex items-center gap-1"
+            >
+              <span className="text-lg font-bold text-white">
+                {profile.nickname}
+              </span>
+              <svg className="w-3.5 h-3.5 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+            </button>
+            {!isProfessor && (
+              <div className="flex items-center gap-1 text-sm text-white/50">
+                <span>{profile.studentId}</span>
+                <span>·</span>
+                <button
+                  onClick={() => {
+                    setSelectedClass((profile.classType as 'A' | 'B' | 'C' | 'D') || 'A');
+                    setShowClassModal(true);
+                  }}
+                  className="flex items-center gap-0.5 hover:text-white/70 transition-colors"
+                >
+                  <span>{profile.classType}반</span>
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 뽑기 마일스톤 게이지 (학생만) */}
+        {milestoneInfo && !isProfessor && (
+          <div>
+            <div className="flex justify-end mb-1">
+              <span className="text-sm font-medium text-white">
+                {profile.totalExp} XP
+              </span>
+            </div>
+            <div className="h-2 rounded-full overflow-hidden bg-white/15">
+              <motion.div
+                className="h-full rounded-full bg-white/60"
+                initial={{ width: 0 }}
+                animate={{ width: `${expProgress}%` }}
+                transition={{ duration: 0.5 }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 구분선 */}
+      <div className="h-px mx-5 bg-white/15" />
+
+      {/* 설정 목록 */}
+      <div className="px-5 py-4">
+        {/* 알림 설정 (학생만) */}
+        {!isProfessor && (
+          <div className="mb-6">
+            <h3 className="text-sm font-bold text-white/70 mb-3">
+              Notifications
+            </h3>
+            <div className="space-y-4">
+              {NOTIFICATION_ITEMS.map((item) => (
+                <div key={item.key} className="flex items-center justify-between">
+                  <div>
+                    <span className="text-sm text-white/80">
+                      {item.label}
+                    </span>
+                    <p className="text-xs text-white/40">{item.desc}</p>
+                  </div>
+                  <ToggleSwitch
+                    checked={displaySettings.notifications[item.key]}
+                    onChange={() => handleNotificationChange(item.key, !displaySettings.notifications[item.key])}
+                    animated={settingsReady}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Account 섹션 */}
+        <div className="mb-6">
+          <h3 className="text-sm font-bold text-white/70 mb-3">
+            Account
+          </h3>
+          <div className="space-y-3">
+            {/* 복구 이메일 (학생만) */}
+            {!isProfessor && (
+              <button
+                onClick={() => setShowRecoveryModal(true)}
+                className="w-full flex items-center justify-between py-2.5"
+              >
+                <div className="text-left">
+                  <span className="text-sm text-white/80">복구 이메일</span>
+                  <p className="text-xs text-white/40">
+                    {maskedRecovery || '미등록'}
+                  </p>
+                </div>
+                <svg className="w-4 h-4 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            )}
+
+            {/* 비밀번호 변경 */}
+            <button
+              onClick={() => setShowPasswordModal(true)}
+              className="w-full flex items-center justify-between py-2.5"
+            >
+              <span className="text-sm text-white/80">비밀번호 변경</span>
+              <svg className="w-4 h-4 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Support 섹션 */}
+        <div className="mb-6">
+          <h3 className="text-sm font-bold text-white/70 mb-3">
+            Support
+          </h3>
+          <div className="space-y-3">
+            {/* 캐시 초기화 */}
+            <button
+              onClick={() => setShowCacheConfirm(true)}
+              className="w-full flex items-center justify-between py-2.5"
+            >
+              <div className="text-left">
+                <span className="text-sm text-white/80">캐시 초기화</span>
+                <p className="text-xs text-white/40">앱 데이터 초기화</p>
+              </div>
+              <svg className="w-4 h-4 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+
+            {/* 관리자 비밀번호 초기화 */}
+            {isAdmin && (
+              <>
+                <div className="border-t border-white/5 my-1" />
+                <button
+                  onClick={() => setShowPasswordReset(prev => !prev)}
+                  className="w-full flex items-center justify-between py-2.5"
+                >
+                  <span className="text-sm text-white/80">비밀번호 초기화</span>
+                  <svg
+                    className={`w-4 h-4 text-white/30 transition-transform ${showPasswordReset ? 'rotate-90' : ''}`}
+                    fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+
+                <AnimatePresence>
+                  {showPasswordReset && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="space-y-2 pb-2">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="학번 (7-10자리)"
+                          value={adminResetStudentId}
+                          onChange={(e) => setAdminResetStudentId(e.target.value.replace(/\D/g, ''))}
+                          maxLength={10}
+                          className="w-full px-3 py-2.5 rounded-xl text-sm outline-none bg-white/10 text-white placeholder:text-white/40 border border-white/15"
+                        />
+                        <input
+                          type="text"
+                          placeholder="새 비밀번호 (6자 이상)"
+                          value={adminResetPassword}
+                          onChange={(e) => setAdminResetPassword(e.target.value)}
+                          className="w-full px-3 py-2.5 rounded-xl text-sm outline-none bg-white/10 text-white placeholder:text-white/40 border border-white/15"
+                        />
+                        <button
+                          onClick={handleAdminResetPassword}
+                          disabled={adminResetting || !adminResetStudentId || !adminResetPassword}
+                          className="w-full py-2.5 rounded-xl text-sm font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-40"
+                        >
+                          {adminResetting ? '초기화 중...' : '비밀번호 초기화'}
+                        </button>
+                        {adminResetResult && (
+                          <p className={`text-xs text-center ${adminResetResult.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+                            {adminResetResult.message}
+                          </p>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* 로그아웃 버튼 */}
+        <button
+          onClick={handleLogout}
+          disabled={loggingOut}
+          className="w-full py-2 rounded-xl text-center text-sm font-medium transition-colors bg-red-500/20 border border-red-400/30 text-red-300 hover:bg-red-500/30 disabled:opacity-50"
+        >
+          {loggingOut ? '로그아웃 중...' : '로그아웃'}
+        </button>
+
+        {/* 계정 삭제 (학생만) */}
+        {!isProfessor && (
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="w-full mt-3 text-center text-xs text-red-400/60 hover:text-red-400/80 transition-colors py-2"
+          >
+            계정 삭제
+          </button>
+        )}
+
+        {/* 앱 정보 */}
+        <div className="text-center pt-4 pb-2">
+          <p className="text-xs text-white/30">
+            RabbiTory v1.0.0
+          </p>
+        </div>
+      </div>
+    </>
+  );
+
+  /** 서브 모달 (프로필 피커, 닉네임, 반 변경, 복구 이메일, 비밀번호 등) */
+  const subModals = (
+    <>
+      {/* 프로필 사진 선택 드로어 (좌측 슬라이드) */}
+      <AnimatePresence>
+        {showProfilePicker && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[60] bg-black/50"
+              style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
+              onClick={() => setShowProfilePicker(false)}
+            />
+            <motion.div
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+              className="fixed left-0 bottom-0 z-[60] w-56 rounded-tr-2xl overflow-hidden"
+              style={{ height: pickerHeight > 0 ? pickerHeight : '85vh' }}
+            >
+              {/* 글래스 배경 */}
+              <div className="absolute inset-0 overflow-hidden">
+                <Image src="/images/home-bg.jpg" alt="" fill className="object-cover" />
+              </div>
+              <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
+
+              <div className="relative z-10 h-full flex flex-col">
+                {/* 헤더 */}
+                <div className="flex items-center justify-between px-4 pt-5 pb-3 border-b border-white/10">
+                  <h3 className="text-lg font-bold text-white">프로필 사진</h3>
+                  <button onClick={() => setShowProfilePicker(false)} className="p-1">
+                    <svg className="w-5 h-5 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* 기본 프로필 */}
+                <button
+                  onClick={async () => {
+                    await updateProfile({ profileRabbitId: null });
+                    setShowProfilePicker(false);
+                  }}
+                  className={`flex items-center gap-3 mx-3 mt-3 p-3 rounded-xl border transition-colors ${
+                    profile.profileRabbitId == null
+                      ? 'border-white/40 bg-white/15'
+                      : 'border-white/15 hover:bg-white/5'
+                  }`}
+                >
+                  <div className="w-10 h-10 flex items-center justify-center bg-white/10 border border-white/20 rounded-lg">
+                    <svg width={20} height={20} viewBox="0 0 24 24" fill="rgba(255,255,255,0.6)">
+                      <circle cx="12" cy="8" r="4" />
+                      <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
+                    </svg>
+                  </div>
+                  <span className="text-sm font-bold text-white">기본</span>
+                  {profile.profileRabbitId == null && (
+                    <span className="ml-auto text-xs text-white/50">선택됨</span>
+                  )}
+                </button>
+
+                {/* 토끼 그리드 */}
+                <div className="flex-1 overflow-y-auto p-3">
+                  {!pickerReady ? (
+                    <div className="flex items-center justify-center py-12">
+                      <div className="w-6 h-6 border-2 border-white/30 border-t-white/80 rounded-full animate-spin" />
+                    </div>
+                  ) : isProfessor ? (
+                    <div className="grid grid-cols-3 gap-2">
+                      {Array.from({ length: 80 }, (_, i) => i).map(rabbitId => (
+                        <button
+                          key={rabbitId}
+                          onClick={async () => {
+                            await updateProfile({ profileRabbitId: rabbitId });
+                            setShowProfilePicker(false);
+                          }}
+                          className={`aspect-square rounded-xl border overflow-hidden transition-all ${
+                            profile.profileRabbitId === rabbitId
+                              ? 'border-white/50 scale-95 bg-white/20'
+                              : 'border-white/15 hover:border-white/30'
+                          }`}
+                          style={{ contentVisibility: 'auto', containIntrinsicSize: '80px 80px' }}
+                        >
+                          {rabbitId < visibleCount ? (
+                            <img
+                              src={getRabbitProfileUrl(rabbitId)}
+                              alt={`토끼 #${rabbitId}`}
+                              loading="lazy"
+                              decoding="async"
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-white/5" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  ) : sortedHoldings.length > 0 ? (
+                    <div className="grid grid-cols-3 gap-2">
+                      {sortedHoldings.map((h, idx) => (
+                        <button
+                          key={h.id}
+                          onClick={async () => {
+                            await updateProfile({ profileRabbitId: h.rabbitId });
+                            setShowProfilePicker(false);
+                          }}
+                          className={`aspect-square rounded-xl border overflow-hidden transition-all ${
+                            profile.profileRabbitId === h.rabbitId
+                              ? 'border-white/50 scale-95 bg-white/20'
+                              : 'border-white/15 hover:border-white/30'
+                          }`}
+                          style={{ contentVisibility: 'auto', containIntrinsicSize: '80px 80px' }}
+                        >
+                          {idx < visibleCount ? (
+                            <img
+                              src={getRabbitProfileUrl(h.rabbitId)}
+                              alt={`토끼 #${h.rabbitId}`}
+                              loading="lazy"
+                              decoding="async"
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-white/5" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-sm text-white/60">아직 발견한 토끼가 없어요</p>
+                      <p className="text-xs text-white/40 mt-1">퀴즈를 풀어 토끼를 발견해보세요!</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* 닉네임 변경 모달 */}
+      <AnimatePresence>
+        {showNicknameModal && (
+          <GlassModal onClose={() => setShowNicknameModal(false)}>
+            <h3 className="text-base font-bold text-white mb-3">닉네임 변경</h3>
+
+            {nicknameCooldownDays > 0 && (
+              <p className="text-xs text-white/50 mb-2">
+                닉네임은 변경 후 30일이 지나야 다시 변경할 수 있습니다.
+                <br />
+                <span className="text-red-300">({nicknameCooldownDays}일 후 변경 가능)</span>
+              </p>
+            )}
+
+            <input
+              type="text"
+              value={newNickname}
+              onChange={(e) => {
+                setNewNickname(e.target.value);
+                setNicknameError('');
+              }}
+              placeholder="새 닉네임 (2-6자)"
+              maxLength={6}
+              disabled={nicknameCooldownDays > 0}
+              className={`w-full px-3 py-2 rounded-xl outline-none text-sm bg-white/10 text-white placeholder:text-white/40 disabled:opacity-50 border ${
+                nicknameError ? 'border-red-400/50' : 'border-white/15'
+              }`}
+            />
+            {nicknameError && (
+              <p className="text-xs mt-1 text-red-300">{nicknameError}</p>
+            )}
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={() => setShowNicknameModal(false)}
+                className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/15 text-white hover:bg-white/20 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleNicknameChange}
+                disabled={savingNickname || newNickname.length < 2 || newNickname.length > 6 || nicknameCooldownDays > 0}
+                className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
+              >
+                {savingNickname ? '저장 중...' : '변경'}
+              </button>
+            </div>
+          </GlassModal>
+        )}
+      </AnimatePresence>
+
+      {/* 반 변경 모달 */}
+      <AnimatePresence>
+        {showClassModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/50"
+            style={isWide ? { left: '240px', right: 'calc(50% - 120px)' } : {}}
+            onClick={() => setShowClassModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.9 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-xs rounded-2xl overflow-hidden p-6"
+            >
+              <div className="absolute inset-0 rounded-2xl overflow-hidden">
+                <Image src="/images/home-bg.jpg" alt="" fill className="object-cover" />
+              </div>
+              <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
+              <div className="relative z-10">
+                <h3 className="text-sm font-bold text-white/70 mb-3">반 변경</h3>
+                <div className="grid grid-cols-4 gap-2">
+                  {CLASS_OPTIONS.map((cls) => (
+                    <button
+                      key={cls}
+                      onClick={() => setSelectedClass(cls)}
+                      className={`py-2 rounded-xl text-sm font-bold text-white transition-colors ${
+                        selectedClass === cls
+                          ? 'bg-white/30 border border-white/50'
+                          : 'bg-white/10 border border-white/15 hover:bg-white/20'
+                      }`}
+                    >
+                      {cls}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-3 mt-3">
+                  <button
+                    onClick={() => setShowClassModal(false)}
+                    className="flex-1 py-2.5 rounded-xl font-medium bg-white/15 text-white/70 hover:bg-white/20 transition-colors text-sm"
+                  >
+                    취소
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (selectedClass && selectedClass !== profile.classType && user?.uid) {
+                        await updateDoc(doc(db, 'users', user.uid), {
+                          classId: selectedClass,
+                          updatedAt: serverTimestamp(),
+                        });
+                      }
+                      setShowClassModal(false);
+                    }}
+                    disabled={selectedClass === profile.classType}
+                    className="flex-1 py-2.5 rounded-xl font-medium bg-white/30 text-white hover:bg-white/40 transition-colors text-sm disabled:opacity-50"
+                  >
+                    변경
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 복구 이메일 모달 */}
+      <RecoveryEmailModal
+        isOpen={showRecoveryModal}
+        onClose={() => setShowRecoveryModal(false)}
+        maskedRecovery={maskedRecovery}
+        profile={profile}
+      />
+
+      {/* 비밀번호 변경 모달 */}
+      <PasswordChangeModal
+        isOpen={showPasswordModal}
+        onClose={() => setShowPasswordModal(false)}
+        onForgotPassword={() => {
+          setShowPasswordModal(false);
+          setShowResetModal(true);
+        }}
+        isProfessor={isProfessor}
+      />
+
+      {/* 비밀번호 재설정 모달 (인증코드 → 새 비밀번호) */}
+      <PasswordResetModal
+        isOpen={showResetModal}
+        onClose={() => setShowResetModal(false)}
+        profile={profile}
+      />
+
+      {/* 캐시 초기화 확인 모달 */}
+      <AnimatePresence>
+        {showCacheConfirm && (
+          <GlassModal onClose={() => setShowCacheConfirm(false)}>
+            <h3 className="text-base font-bold text-white mb-2">캐시 초기화</h3>
+            <p className="text-sm text-white/60 mb-2">
+              앱 데이터를 초기화합니다. 로그인은 유지됩니다.
+            </p>
+            <p className="text-xs text-white/40 mb-4">
+              작성 중인 임시저장, 추출한 이미지, 복습 폴더 분류/순서가 초기화됩니다.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCacheConfirm(false)}
+                className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/15 text-white hover:bg-white/20 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleClearCache}
+                className="flex-1 py-2 rounded-xl text-sm font-medium bg-red-500/30 border border-red-400/30 text-red-200 hover:bg-red-500/40 transition-colors"
+              >
+                초기화
+              </button>
+            </div>
+          </GlassModal>
+        )}
+      </AnimatePresence>
+
+      {/* 계정 삭제 확인 모달 */}
+      <AccountDeletionDialog
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+      />
+    </>
+  );
+
+  // ============================================================
+  // 패널 모드 — 3쪽 패널 내부에 full-height로 렌더링
+  // ============================================================
+  if (isPanelMode && isOpen) {
+    return (
+      <div className="h-full relative overflow-hidden" style={{ backgroundImage: 'url(/images/home-bg-3.jpg)', backgroundSize: '100% 100%' }}>
+        {/* 스크롤 영역 */}
+        <div ref={sheetRef} className="relative z-10 overflow-y-auto overscroll-contain h-full">
+          {drawerContent}
+        </div>
+
+        {/* 서브 모달 */}
+        {subModals}
+      </div>
+    );
+  }
+
+  // ============================================================
+  // 기본 모드 — 바텀시트 (포털/fixed)
+  // ============================================================
   return (
     <AnimatePresence>
       {isOpen && (
@@ -404,598 +1028,12 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                 <div className="w-10 h-1 bg-white/40 rounded-full" />
               </div>
 
-              {/* 헤더 */}
-              <div className="px-5 pt-1 pb-3">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-bold text-white">Settings</h2>
-                  <button onClick={onClose} className="p-2 -mr-2">
-                    <svg className="w-6 h-6 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-
-                {/* 프로필 정보 */}
-                <div className="flex items-center gap-3 mb-4">
-                  <button
-                    onClick={() => {
-                      if (sheetRef.current) setPickerHeight(sheetRef.current.offsetHeight);
-                      setShowProfilePicker(true);
-                    }}
-                    className="w-14 h-14 flex items-center justify-center flex-shrink-0 overflow-hidden rounded-xl border-2 border-white/30 bg-white/10 transition-transform active:scale-95"
-                  >
-                    {profile.profileRabbitId != null ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={getRabbitProfileUrl(profile.profileRabbitId)}
-                        alt="프로필"
-                        width={56}
-                        height={56}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <svg width="28" height="28" viewBox="0 0 24 24" fill="rgba(255,255,255,0.6)">
-                        <circle cx="12" cy="8" r="4" />
-                        <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
-                      </svg>
-                    )}
-                  </button>
-                  <div className="flex-1">
-                    <button
-                      onClick={() => {
-                        setNewNickname(profile.nickname);
-                        setNicknameError('');
-                        setShowNicknameModal(true);
-                      }}
-                      className="flex items-center gap-1"
-                    >
-                      <span className="text-lg font-bold text-white">
-                        {profile.nickname}
-                      </span>
-                      <svg className="w-3.5 h-3.5 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                      </svg>
-                    </button>
-                    {!isProfessor && (
-                      <div className="flex items-center gap-1 text-sm text-white/50">
-                        <span>{profile.studentId}</span>
-                        <span>·</span>
-                        <button
-                          onClick={() => {
-                            setSelectedClass((profile.classType as 'A' | 'B' | 'C' | 'D') || 'A');
-                            setShowClassModal(true);
-                          }}
-                          className="flex items-center gap-0.5 hover:text-white/70 transition-colors"
-                        >
-                          <span>{profile.classType}반</span>
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                          </svg>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* 뽑기 마일스톤 게이지 (학생만) */}
-                {milestoneInfo && !isProfessor && (
-                  <div>
-                    <div className="flex justify-end mb-1">
-                      <span className="text-sm font-medium text-white">
-                        {profile.totalExp} XP
-                      </span>
-                    </div>
-                    <div className="h-2 rounded-full overflow-hidden bg-white/15">
-                      <motion.div
-                        className="h-full rounded-full bg-white/60"
-                        initial={{ width: 0 }}
-                        animate={{ width: `${expProgress}%` }}
-                        transition={{ duration: 0.5 }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* 구분선 */}
-              <div className="h-px mx-5 bg-white/15" />
-
-              {/* 설정 목록 */}
-              <div className="px-5 py-4">
-                {/* 알림 설정 (학생만) */}
-                {!isProfessor && (
-                  <div className="mb-6">
-                    <h3 className="text-sm font-bold text-white/70 mb-3">
-                      Notifications
-                    </h3>
-                    <div className="space-y-4">
-                      {NOTIFICATION_ITEMS.map((item) => (
-                        <div key={item.key} className="flex items-center justify-between">
-                          <div>
-                            <span className="text-sm text-white/80">
-                              {item.label}
-                            </span>
-                            <p className="text-xs text-white/40">{item.desc}</p>
-                          </div>
-                          <ToggleSwitch
-                            checked={displaySettings.notifications[item.key]}
-                            onChange={() => handleNotificationChange(item.key, !displaySettings.notifications[item.key])}
-                            animated={settingsReady}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Account 섹션 */}
-                <div className="mb-6">
-                  <h3 className="text-sm font-bold text-white/70 mb-3">
-                    Account
-                  </h3>
-                  <div className="space-y-3">
-                    {/* 복구 이메일 (학생만) */}
-                    {!isProfessor && (
-                      <button
-                        onClick={() => setShowRecoveryModal(true)}
-                        className="w-full flex items-center justify-between py-2.5"
-                      >
-                        <div className="text-left">
-                          <span className="text-sm text-white/80">복구 이메일</span>
-                          <p className="text-xs text-white/40">
-                            {maskedRecovery || '미등록'}
-                          </p>
-                        </div>
-                        <svg className="w-4 h-4 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                    )}
-
-                    {/* 비밀번호 변경 */}
-                    <button
-                      onClick={() => setShowPasswordModal(true)}
-                      className="w-full flex items-center justify-between py-2.5"
-                    >
-                      <span className="text-sm text-white/80">비밀번호 변경</span>
-                      <svg className="w-4 h-4 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Support 섹션 */}
-                <div className="mb-6">
-                  <h3 className="text-sm font-bold text-white/70 mb-3">
-                    Support
-                  </h3>
-                  <div className="space-y-3">
-                    {/* 캐시 초기화 */}
-                    <button
-                      onClick={() => setShowCacheConfirm(true)}
-                      className="w-full flex items-center justify-between py-2.5"
-                    >
-                      <div className="text-left">
-                        <span className="text-sm text-white/80">캐시 초기화</span>
-                        <p className="text-xs text-white/40">앱 데이터 초기화</p>
-                      </div>
-                      <svg className="w-4 h-4 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-
-                    {/* 관리자 비밀번호 초기화 */}
-                    {isAdmin && (
-                      <>
-                        <div className="border-t border-white/5 my-1" />
-                        <button
-                          onClick={() => setShowPasswordReset(prev => !prev)}
-                          className="w-full flex items-center justify-between py-2.5"
-                        >
-                          <span className="text-sm text-white/80">비밀번호 초기화</span>
-                          <svg
-                            className={`w-4 h-4 text-white/30 transition-transform ${showPasswordReset ? 'rotate-90' : ''}`}
-                            fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </button>
-
-                        <AnimatePresence>
-                          {showPasswordReset && (
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              className="overflow-hidden"
-                            >
-                              <div className="space-y-2 pb-2">
-                                <input
-                                  type="text"
-                                  inputMode="numeric"
-                                  placeholder="학번 (7-10자리)"
-                                  value={adminResetStudentId}
-                                  onChange={(e) => setAdminResetStudentId(e.target.value.replace(/\D/g, ''))}
-                                  maxLength={10}
-                                  className="w-full px-3 py-2.5 rounded-xl text-sm outline-none bg-white/10 text-white placeholder:text-white/40 border border-white/15"
-                                />
-                                <input
-                                  type="text"
-                                  placeholder="새 비밀번호 (6자 이상)"
-                                  value={adminResetPassword}
-                                  onChange={(e) => setAdminResetPassword(e.target.value)}
-                                  className="w-full px-3 py-2.5 rounded-xl text-sm outline-none bg-white/10 text-white placeholder:text-white/40 border border-white/15"
-                                />
-                                <button
-                                  onClick={handleAdminResetPassword}
-                                  disabled={adminResetting || !adminResetStudentId || !adminResetPassword}
-                                  className="w-full py-2.5 rounded-xl text-sm font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-40"
-                                >
-                                  {adminResetting ? '초기화 중...' : '비밀번호 초기화'}
-                                </button>
-                                {adminResetResult && (
-                                  <p className={`text-xs text-center ${adminResetResult.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
-                                    {adminResetResult.message}
-                                  </p>
-                                )}
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* 로그아웃 버튼 */}
-                <button
-                  onClick={handleLogout}
-                  disabled={loggingOut}
-                  className="w-full py-2 rounded-xl text-center text-sm font-medium transition-colors bg-red-500/20 border border-red-400/30 text-red-300 hover:bg-red-500/30 disabled:opacity-50"
-                >
-                  {loggingOut ? '로그아웃 중...' : '로그아웃'}
-                </button>
-
-                {/* 계정 삭제 (학생만) */}
-                {!isProfessor && (
-                  <button
-                    onClick={() => setShowDeleteConfirm(true)}
-                    className="w-full mt-3 text-center text-xs text-red-400/60 hover:text-red-400/80 transition-colors py-2"
-                  >
-                    계정 삭제
-                  </button>
-                )}
-
-                {/* 앱 정보 */}
-                <div className="text-center pt-4 pb-2">
-                  <p className="text-xs text-white/30">
-                    RabbiTory v1.0.0
-                  </p>
-                </div>
-              </div>
+              {drawerContent}
             </div>
           </motion.div>
 
-          {/* 프로필 사진 선택 드로어 (좌측 슬라이드) */}
-          <AnimatePresence>
-            {showProfilePicker && (
-              <>
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="fixed inset-0 z-[60] bg-black/50"
-                  style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
-                  onClick={() => setShowProfilePicker(false)}
-                />
-                <motion.div
-                  initial={{ x: '-100%' }}
-                  animate={{ x: 0 }}
-                  exit={{ x: '-100%' }}
-                  transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                  className="fixed left-0 bottom-0 z-[60] w-56 rounded-tr-2xl overflow-hidden"
-                  style={{ height: pickerHeight > 0 ? pickerHeight : '85vh' }}
-                >
-                  {/* 글래스 배경 */}
-                  <div className="absolute inset-0 overflow-hidden">
-                    <Image src="/images/home-bg.jpg" alt="" fill className="object-cover" />
-                  </div>
-                  <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
-
-                  <div className="relative z-10 h-full flex flex-col">
-                    {/* 헤더 */}
-                    <div className="flex items-center justify-between px-4 pt-5 pb-3 border-b border-white/10">
-                      <h3 className="text-lg font-bold text-white">프로필 사진</h3>
-                      <button onClick={() => setShowProfilePicker(false)} className="p-1">
-                        <svg className="w-5 h-5 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-
-                    {/* 기본 프로필 */}
-                    <button
-                      onClick={async () => {
-                        await updateProfile({ profileRabbitId: null });
-                        setShowProfilePicker(false);
-                      }}
-                      className={`flex items-center gap-3 mx-3 mt-3 p-3 rounded-xl border transition-colors ${
-                        profile.profileRabbitId == null
-                          ? 'border-white/40 bg-white/15'
-                          : 'border-white/15 hover:bg-white/5'
-                      }`}
-                    >
-                      <div className="w-10 h-10 flex items-center justify-center bg-white/10 border border-white/20 rounded-lg">
-                        <svg width={20} height={20} viewBox="0 0 24 24" fill="rgba(255,255,255,0.6)">
-                          <circle cx="12" cy="8" r="4" />
-                          <path d="M12 14c-4 0-8 2-8 4v2h16v-2c0-2-4-4-8-4z" />
-                        </svg>
-                      </div>
-                      <span className="text-sm font-bold text-white">기본</span>
-                      {profile.profileRabbitId == null && (
-                        <span className="ml-auto text-xs text-white/50">선택됨</span>
-                      )}
-                    </button>
-
-                    {/* 토끼 그리드 */}
-                    <div className="flex-1 overflow-y-auto p-3">
-                      {!pickerReady ? (
-                        <div className="flex items-center justify-center py-12">
-                          <div className="w-6 h-6 border-2 border-white/30 border-t-white/80 rounded-full animate-spin" />
-                        </div>
-                      ) : isProfessor ? (
-                        <div className="grid grid-cols-3 gap-2">
-                          {Array.from({ length: 80 }, (_, i) => i).map(rabbitId => (
-                            <button
-                              key={rabbitId}
-                              onClick={async () => {
-                                await updateProfile({ profileRabbitId: rabbitId });
-                                setShowProfilePicker(false);
-                              }}
-                              className={`aspect-square rounded-xl border overflow-hidden transition-all ${
-                                profile.profileRabbitId === rabbitId
-                                  ? 'border-white/50 scale-95 bg-white/20'
-                                  : 'border-white/15 hover:border-white/30'
-                              }`}
-                              style={{ contentVisibility: 'auto', containIntrinsicSize: '80px 80px' }}
-                            >
-                              {rabbitId < visibleCount ? (
-                                <img
-                                  src={getRabbitProfileUrl(rabbitId)}
-                                  alt={`토끼 #${rabbitId}`}
-                                  loading="lazy"
-                                  decoding="async"
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <div className="w-full h-full bg-white/5" />
-                              )}
-                            </button>
-                          ))}
-                        </div>
-                      ) : sortedHoldings.length > 0 ? (
-                        <div className="grid grid-cols-3 gap-2">
-                          {sortedHoldings.map((h, idx) => (
-                            <button
-                              key={h.id}
-                              onClick={async () => {
-                                await updateProfile({ profileRabbitId: h.rabbitId });
-                                setShowProfilePicker(false);
-                              }}
-                              className={`aspect-square rounded-xl border overflow-hidden transition-all ${
-                                profile.profileRabbitId === h.rabbitId
-                                  ? 'border-white/50 scale-95 bg-white/20'
-                                  : 'border-white/15 hover:border-white/30'
-                              }`}
-                              style={{ contentVisibility: 'auto', containIntrinsicSize: '80px 80px' }}
-                            >
-                              {idx < visibleCount ? (
-                                <img
-                                  src={getRabbitProfileUrl(h.rabbitId)}
-                                  alt={`토끼 #${h.rabbitId}`}
-                                  loading="lazy"
-                                  decoding="async"
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <div className="w-full h-full bg-white/5" />
-                              )}
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-center py-8">
-                          <p className="text-sm text-white/60">아직 발견한 토끼가 없어요</p>
-                          <p className="text-xs text-white/40 mt-1">퀴즈를 풀어 토끼를 발견해보세요!</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </motion.div>
-              </>
-            )}
-          </AnimatePresence>
-
-          {/* 닉네임 변경 모달 */}
-          <AnimatePresence>
-            {showNicknameModal && (
-              <GlassModal onClose={() => setShowNicknameModal(false)}>
-                <h3 className="text-base font-bold text-white mb-3">닉네임 변경</h3>
-
-                {nicknameCooldownDays > 0 && (
-                  <p className="text-xs text-white/50 mb-2">
-                    닉네임은 변경 후 30일이 지나야 다시 변경할 수 있습니다.
-                    <br />
-                    <span className="text-red-300">({nicknameCooldownDays}일 후 변경 가능)</span>
-                  </p>
-                )}
-
-                <input
-                  type="text"
-                  value={newNickname}
-                  onChange={(e) => {
-                    setNewNickname(e.target.value);
-                    setNicknameError('');
-                  }}
-                  placeholder="새 닉네임 (2-6자)"
-                  maxLength={6}
-                  disabled={nicknameCooldownDays > 0}
-                  className={`w-full px-3 py-2 rounded-xl outline-none text-sm bg-white/10 text-white placeholder:text-white/40 disabled:opacity-50 border ${
-                    nicknameError ? 'border-red-400/50' : 'border-white/15'
-                  }`}
-                />
-                {nicknameError && (
-                  <p className="text-xs mt-1 text-red-300">{nicknameError}</p>
-                )}
-                <div className="flex gap-3 mt-4">
-                  <button
-                    onClick={() => setShowNicknameModal(false)}
-                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/15 text-white hover:bg-white/20 transition-colors"
-                  >
-                    취소
-                  </button>
-                  <button
-                    onClick={handleNicknameChange}
-                    disabled={savingNickname || newNickname.length < 2 || newNickname.length > 6 || nicknameCooldownDays > 0}
-                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
-                  >
-                    {savingNickname ? '저장 중...' : '변경'}
-                  </button>
-                </div>
-              </GlassModal>
-            )}
-          </AnimatePresence>
-
-          {/* 반 변경 모달 */}
-          <AnimatePresence>
-            {showClassModal && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/50"
-                style={isWide ? { left: '240px', right: 'calc(50% - 120px)' } : {}}
-                onClick={() => setShowClassModal(false)}
-              >
-                <motion.div
-                  initial={{ scale: 0.9 }}
-                  animate={{ scale: 1 }}
-                  exit={{ scale: 0.9 }}
-                  onClick={(e) => e.stopPropagation()}
-                  className="relative w-full max-w-xs rounded-2xl overflow-hidden p-6"
-                >
-                  <div className="absolute inset-0 rounded-2xl overflow-hidden">
-                    <Image src="/images/home-bg.jpg" alt="" fill className="object-cover" />
-                  </div>
-                  <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
-                  <div className="relative z-10">
-                    <h3 className="text-sm font-bold text-white/70 mb-3">반 변경</h3>
-                    <div className="grid grid-cols-4 gap-2">
-                      {CLASS_OPTIONS.map((cls) => (
-                        <button
-                          key={cls}
-                          onClick={() => setSelectedClass(cls)}
-                          className={`py-2 rounded-xl text-sm font-bold text-white transition-colors ${
-                            selectedClass === cls
-                              ? 'bg-white/30 border border-white/50'
-                              : 'bg-white/10 border border-white/15 hover:bg-white/20'
-                          }`}
-                        >
-                          {cls}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="flex gap-3 mt-3">
-                      <button
-                        onClick={() => setShowClassModal(false)}
-                        className="flex-1 py-2.5 rounded-xl font-medium bg-white/15 text-white/70 hover:bg-white/20 transition-colors text-sm"
-                      >
-                        취소
-                      </button>
-                      <button
-                        onClick={async () => {
-                          if (selectedClass && selectedClass !== profile.classType && user?.uid) {
-                            await updateDoc(doc(db, 'users', user.uid), {
-                              classId: selectedClass,
-                              updatedAt: serverTimestamp(),
-                            });
-                          }
-                          setShowClassModal(false);
-                        }}
-                        disabled={selectedClass === profile.classType}
-                        className="flex-1 py-2.5 rounded-xl font-medium bg-white/30 text-white hover:bg-white/40 transition-colors text-sm disabled:opacity-50"
-                      >
-                        변경
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* 복구 이메일 모달 */}
-          <RecoveryEmailModal
-            isOpen={showRecoveryModal}
-            onClose={() => setShowRecoveryModal(false)}
-            maskedRecovery={maskedRecovery}
-            profile={profile}
-          />
-
-          {/* 비밀번호 변경 모달 */}
-          <PasswordChangeModal
-            isOpen={showPasswordModal}
-            onClose={() => setShowPasswordModal(false)}
-            onForgotPassword={() => {
-              setShowPasswordModal(false);
-              setShowResetModal(true);
-            }}
-            isProfessor={isProfessor}
-          />
-
-          {/* 비밀번호 재설정 모달 (인증코드 → 새 비밀번호) */}
-          <PasswordResetModal
-            isOpen={showResetModal}
-            onClose={() => setShowResetModal(false)}
-            profile={profile}
-          />
-
-          {/* 캐시 초기화 확인 모달 */}
-          <AnimatePresence>
-            {showCacheConfirm && (
-              <GlassModal onClose={() => setShowCacheConfirm(false)}>
-                <h3 className="text-base font-bold text-white mb-2">캐시 초기화</h3>
-                <p className="text-sm text-white/60 mb-2">
-                  앱 데이터를 초기화합니다. 로그인은 유지됩니다.
-                </p>
-                <p className="text-xs text-white/40 mb-4">
-                  작성 중인 임시저장, 추출한 이미지, 복습 폴더 분류/순서가 초기화됩니다.
-                </p>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setShowCacheConfirm(false)}
-                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/15 text-white hover:bg-white/20 transition-colors"
-                  >
-                    취소
-                  </button>
-                  <button
-                    onClick={handleClearCache}
-                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-red-500/30 border border-red-400/30 text-red-200 hover:bg-red-500/40 transition-colors"
-                  >
-                    초기화
-                  </button>
-                </div>
-              </GlassModal>
-            )}
-          </AnimatePresence>
-
-          {/* 계정 삭제 확인 모달 */}
-          <AccountDeletionDialog
-            isOpen={showDeleteConfirm}
-            onClose={() => setShowDeleteConfirm(false)}
-          />
-
+          {/* 서브 모달 */}
+          {subModals}
         </>
       )}
     </AnimatePresence>
