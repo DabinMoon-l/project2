@@ -641,11 +641,19 @@ JSON 배열로 출력: [{"text":"문제","type":"multiple","choices":["선지1",
 
       const questions = robustParseQuestionArray(responseText);
 
-      const valid = questions.filter(isValidQuestion).map(q => ({
-        ...q,
-        type: "multiple" as const,
-        difficulty,
-      }));
+      const valid = questions.filter(isValidQuestion).map(q => {
+        // chapterId 정규화 — 접두사 제거 후 target 범위 검증
+        let chId = q.chapterId || "";
+        const m = chId.match(/(\d+)$/);
+        if (m) chId = m[1];
+        if (!targetChapters.includes(chId)) chId = targetChapters[0] || chId;
+        return {
+          ...q,
+          type: "multiple" as const,
+          difficulty,
+          chapterId: chId,
+        };
+      });
 
       if (valid.length >= Math.min(3, count)) {
         if (attempt > 0) console.log(`재시도 ${attempt + 1}차 성공: ${valid.length}개 (${difficulty})`);

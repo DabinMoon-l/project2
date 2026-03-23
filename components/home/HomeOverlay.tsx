@@ -42,9 +42,12 @@ export default function HomeOverlay() {
   const isWide = useWideMode();
   const { openDetail, closeDetail, isDetailOpen } = useDetailPanel();
 
-  // 홈 오버레이 닫히면 프로필 드로어도 닫기
+  // 홈 오버레이 닫히면 프로필 드로어 + 3쪽 detail도 닫기
   useEffect(() => {
-    if (!isOpen) setShowProfileDrawer(false);
+    if (!isOpen) {
+      setShowProfileDrawer(false);
+      if (isDetailOpen) closeDetail();
+    }
   }, [isOpen]);
   const isWideRef = useRef(isWide);
   isWideRef.current = isWide;
@@ -297,6 +300,7 @@ export default function HomeOverlay() {
         overscrollBehavior: 'none',
       }}
     >
+      {/* 글래스 효과는 layout.tsx의 전역 레이어에서 처리 */}
       <div className="relative z-[2] flex-1 flex flex-col pt-1 pb-2">
         {/* ① 상단 섹션: 프로필 + 공지 + 의견 + XP/도감 (flex-none) */}
         <div className="flex-none">

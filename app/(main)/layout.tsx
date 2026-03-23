@@ -288,7 +288,7 @@ function MainLayoutGrid({
           className="fixed left-0 top-0 bottom-0 z-40"
           style={{ width: '240px', backgroundColor: '#F5F0E8' }}
         >
-          {/* 홈 오버레이 열릴 때: 1쪽 배경 이미지로 전환 */}
+          {/* 홈 오버레이 열릴 때: 1쪽 배경 이미지 */}
           <div
             className="absolute inset-0 transition-opacity duration-300"
             style={{
@@ -352,16 +352,15 @@ function MainLayoutGrid({
               <aside
                 className="w-1/2 flex-shrink-0 overflow-x-hidden overflow-y-auto h-screen relative"
                 style={{
-                  borderLeft: isHomeOverlayOpen && !isDetailOpen ? 'none' : '1px solid #B0A898',
+                  borderLeft: isDetailOpen ? '1px solid #B0A898' : 'none',
                   backgroundColor: isDetailOpen ? '#F5F0E8' : 'transparent',
                   paddingRight: 'env(safe-area-inset-right, 0px)',
-                  // 홈 오버레이 열림 + 3쪽 비어있을 때 배경 이미지
-                  ...(isHomeOverlayOpen && !isDetailOpen ? {
-                    backgroundImage: 'url(/images/home-bg-3.jpg)',
-                    backgroundSize: '100% 100%',
-                  } : {}),
                 } as React.CSSProperties}
               >
+                {/* 홈 오버레이: 3쪽 배경 이미지 */}
+                {isHomeOverlayOpen && !isDetailOpen && (
+                  <div className="absolute inset-0 z-0" style={{ backgroundImage: 'url(/images/home-bg-3.jpg)', backgroundSize: '100% 100%' }} />
+                )}
                 {isDetailOpen && (
                   <div className="h-full">
                     {detailContent}

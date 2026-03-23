@@ -209,38 +209,33 @@ export async function processImagesForQuiz(
   apiKey: string,
   userId: string
 ): Promise<CroppedImage[]> {
+  // 병렬 처리 (최대 5개 동시) — 순차 대비 3~5배 빠름
+  const CONCURRENCY = 5;
   const allCroppedImages: CroppedImage[] = [];
 
-  for (let i = 0; i < images.length; i++) {
-    const imageBase64 = images[i];
-
-    console.log(`[이미지 처리] ${i + 1}/${images.length} 이미지 분석 중...`);
-
-    // 이미지 영역 분석
+  const processOne = async (imageBase64: string, idx: number): Promise<CroppedImage[]> => {
+    console.log(`[이미지 처리] ${idx + 1}/${images.length} 이미지 분석 중...`);
     const analysisResult = await analyzeImageRegions(imageBase64, apiKey);
 
     if (!analysisResult.success || analysisResult.regions.length === 0) {
-      console.log(`[이미지 처리] ${i + 1}번 이미지: 시각 자료 영역 없음`);
-      continue;
+      console.log(`[이미지 처리] ${idx + 1}번 이미지: 시각 자료 영역 없음`);
+      return [];
     }
 
-    console.log(
-      `[이미지 처리] ${i + 1}번 이미지: ${analysisResult.regions.length}개 영역 발견`
-    );
+    console.log(`[이미지 처리] ${idx + 1}번 이미지: ${analysisResult.regions.length}개 영역 발견`);
+    const cropResult = await cropAndUploadRegions(imageBase64, analysisResult.regions, userId);
+    return cropResult.success ? cropResult.images : [];
+  };
 
-    // 크롭 및 업로드
-    const cropResult = await cropAndUploadRegions(
-      imageBase64,
-      analysisResult.regions,
-      userId
+  // 동시성 제한 병렬 실행
+  for (let i = 0; i < images.length; i += CONCURRENCY) {
+    const batch = images.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(
+      batch.map((img, j) => processOne(img, i + j))
     );
-
-    if (cropResult.success) {
-      allCroppedImages.push(...cropResult.images);
-    }
+    for (const imgs of results) allCroppedImages.push(...imgs);
   }
 
   console.log(`[이미지 처리] 총 ${allCroppedImages.length}개 이미지 크롭 완료`);
-
   return allCroppedImages;
 }

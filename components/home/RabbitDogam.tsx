@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useRabbitsForCourse, getRabbitStats, type RabbitDoc, type RabbitHolding } from '@/lib/hooks/useRabbit';
 import { callFunction } from '@/lib/api';
 import Image from 'next/image';
@@ -228,21 +229,28 @@ export default function RabbitDogam({
           )}
         </div>
 
-        {/* 상세 바텀시트 (패널 내 absolute) */}
-        {selectedRabbitId !== null && (
+        {/* 상세 바텀시트 (패널 내 absolute, 슬라이드업 애니메이션) */}
+        <AnimatePresence>
+          {selectedRabbitId !== null && (
           <>
             {/* 투명 오버레이 */}
-            <div
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
               className="absolute inset-0 z-20"
               onClick={closeDetail}
             />
             {/* 바텀시트 */}
-            <div className="absolute bottom-0 left-0 right-0 z-30 rounded-t-2xl overflow-hidden">
-              {/* 배경 */}
-              <div className="absolute inset-0 overflow-hidden">
-                <Image src="/images/home-bg-3.jpg" alt="" fill className="object-cover" />
-              </div>
-              <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+              className="absolute bottom-0 left-0 right-0 z-30 rounded-t-2xl overflow-hidden"
+            >
+              {/* 1쪽 글래스 배경 */}
+              <div className="absolute inset-0 backdrop-blur-2xl" style={{ backgroundColor: 'rgba(120, 80, 100, 0.52)' }} />
 
               {/* 헤더 */}
               <div className="relative z-10 flex items-center justify-between px-3 py-2.5 border-b border-white/15">
@@ -283,9 +291,10 @@ export default function RabbitDogam({
                   />
                 </div>
               )}
-            </div>
+            </motion.div>
           </>
-        )}
+          )}
+        </AnimatePresence>
       </div>
     );
   }

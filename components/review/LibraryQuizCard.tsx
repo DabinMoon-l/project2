@@ -6,7 +6,7 @@ import { TAP_SCALE } from '@/lib/constants/springs';
 import { NEWSPAPER_BG_TEXT } from './types';
 
 // 교수 퀴즈 타입 판별
-const PROFESSOR_TYPES = ['professor', 'professor-ai', 'midterm', 'final', 'past'];
+const PROFESSOR_TYPES = ['professor', 'professor-ai', 'midterm', 'final', 'past', 'independent'];
 
 /**
  * 서재 퀴즈 카드 (CustomReviewQuizCard와 동일한 스타일)

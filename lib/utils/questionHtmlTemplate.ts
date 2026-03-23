@@ -98,6 +98,24 @@ function renderMixedContent(blocks: MixedExampleBlock[]): string {
           }
         }
         break;
+      case 'gana':
+        if (block.items?.length) {
+          for (const item of block.items) {
+            if (item.content?.trim()) {
+              parts.push(`<div class="bogi-item"><span class="bogi-lbl">(${esc(item.label || '')})</span> ${esc(item.content)}</div>`);
+            }
+          }
+        }
+        break;
+      case 'bullet':
+        if (block.items?.length) {
+          for (const item of block.items) {
+            if (item.content?.trim()) {
+              parts.push(`<div class="bogi-item"><span class="bogi-lbl">&bull;</span> ${esc(item.content)}</div>`);
+            }
+          }
+        }
+        break;
       case 'image':
         if (block.imageUrl) {
           parts.push(`<div class="q-img"><img src="${esc(block.imageUrl)}" alt="[이미지]"></div>`);

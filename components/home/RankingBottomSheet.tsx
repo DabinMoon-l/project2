@@ -7,6 +7,7 @@ import { doc, getDoc, collection, query, where, getDocs, onSnapshot, db } from '
 import { callFunction } from '@/lib/api';
 import { useUser, useCourse } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
 import { type ClassType } from '@/styles/themes';
 import Image from 'next/image';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
@@ -92,6 +93,7 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
   const { profile } = useUser();
   const { userCourseId } = useCourse();
   useTheme();
+  const isWide = useWideMode();
   const isProfessor = profile?.role === 'professor';
   /** 교수: 실명 우선, 학생: 닉네임 */
   const displayName = (u: RankedUser) => isProfessor && u.name ? u.name : u.nickname;
@@ -586,72 +588,65 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
   );
 
   // 랭킹 안내 모달 (바텀시트/패널 공통)
+  const infoContent = (
+    <div className="relative z-10 p-3">
+      <div className="flex justify-center mb-2">
+        <div className="w-7 h-7 border-2 border-white/30 rounded-lg flex items-center justify-center bg-white/10">
+          <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+      </div>
+      <h3 className="text-sm font-black text-white text-center mb-2">랭킹은 이렇게 매겨져요!</h3>
+      <div className="text-[10px] text-white/60 space-y-0.5 mb-3">
+        <p className="font-bold text-white text-xs">개인 랭킹</p>
+        <p>- 퀴즈 점수 + EXP로 계산됩니다.</p>
+        <p>- 퀴즈 점수 = 정답률(50%) + 응시율(50%)</p>
+        <p>- 많이 풀고, 잘 풀수록 점수가 올라요!</p>
+        <div className="pt-2" />
+        <p className="font-bold text-white text-xs">Day / Week</p>
+        <p>- 해당 기간에 활동한 학생만 표시됩니다.</p>
+        <p>- 점수 공식은 All과 동일합니다.</p>
+        <div className="pt-2" />
+        <p className="font-bold text-white text-xs">팀 랭킹</p>
+        <p>- 평균 참여도(40%) + 평균 성적(40%) + 퀴즈 응시율(20%).</p>
+        <p>- 응시율 = 교수님 퀴즈 중 반 평균 풀이 비율.</p>
+        {profile?.role === 'professor' && (
+          <>
+            <div className="pt-2" />
+            <p className="font-bold text-white text-xs">홈 화면 OVERVIEW %</p>
+            <p>- 이번 주(월~일) 퀴즈에 참여한 학생 비율입니다.</p>
+            <p>- 5분마다 자동 갱신됩니다.</p>
+          </>
+        )}
+      </div>
+      <button onClick={() => setShowInfo(false)} className="w-full py-1.5 bg-white/20 backdrop-blur-sm text-white font-bold text-xs rounded-xl hover:bg-white/30 transition-colors">확인</button>
+    </div>
+  );
+
   const infoModal = (
     <AnimatePresence>
-      {showInfo && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className={isPanelMode
-            ? 'absolute inset-0 z-[120] flex items-center justify-center p-6 bg-black/50'
-            : 'fixed inset-0 z-[120] flex items-center justify-center p-6 bg-black/50'
-          }
-          style={isPanelMode ? undefined : { left: 'var(--home-sheet-left, 0px)' }}
-          onClick={() => setShowInfo(false)}
-        >
-          <motion.div
-            initial={{ scale: 0.9 }}
-            animate={{ scale: 1 }}
-            exit={{ scale: 0.9 }}
-            onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-[240px] rounded-2xl overflow-hidden p-3"
-          >
-            <div className="absolute inset-0 rounded-2xl overflow-hidden">
-              <Image src="/images/home-bg.jpg" alt="" fill className="object-cover" />
-            </div>
+      {showInfo && (isWide ? (
+        <>
+          {/* 투명 오버레이 — 3쪽 영역 클릭 시 닫기 */}
+          <motion.div key="info-ov" className={isPanelMode ? 'absolute inset-0 z-[120]' : 'fixed inset-0 z-[120]'} style={isPanelMode ? undefined : { left: 'var(--home-sheet-left, 0px)' }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowInfo(false)} />
+          {/* 바텀시트 */}
+          <motion.div key="info-bs" className={isPanelMode ? 'absolute bottom-0 left-0 right-0 z-[121] rounded-t-2xl overflow-hidden shadow-[0_-4px_24px_rgba(0,0,0,0.15)]' : 'fixed bottom-0 right-0 z-[121] rounded-t-2xl overflow-hidden shadow-[0_-4px_24px_rgba(0,0,0,0.15)]'} style={isPanelMode ? undefined : { left: 'var(--home-sheet-left, 0px)' }} initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', stiffness: 400, damping: 35 }} onClick={(e) => e.stopPropagation()}>
+            <div className="absolute inset-0"><Image src="/images/home-bg.jpg" alt="" fill className="object-cover" /></div>
             <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
-            <div className="relative z-10">
-              <div className="flex justify-center mb-2">
-                <div className="w-7 h-7 border-2 border-white/30 rounded-lg flex items-center justify-center bg-white/10">
-                  <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-              </div>
-              <h3 className="text-sm font-black text-white text-center mb-2">랭킹은 이렇게 매겨져요!</h3>
-              <div className="text-[10px] text-white/60 space-y-0.5 mb-3">
-                <p className="font-bold text-white text-xs">개인 랭킹</p>
-                <p>- 퀴즈 점수 + EXP로 계산됩니다.</p>
-                <p>- 퀴즈 점수 = 정답률(50%) + 응시율(50%)</p>
-                <p>- 많이 풀고, 잘 풀수록 점수가 올라요!</p>
-                <div className="pt-2" />
-                <p className="font-bold text-white text-xs">Day / Week</p>
-                <p>- 해당 기간에 활동한 학생만 표시됩니다.</p>
-                <p>- 점수 공식은 All과 동일합니다.</p>
-                <div className="pt-2" />
-                <p className="font-bold text-white text-xs">팀 랭킹</p>
-                <p>- 평균 참여도(40%) + 평균 성적(40%) + 퀴즈 응시율(20%).</p>
-                <p>- 응시율 = 교수님 퀴즈 중 반 평균 풀이 비율.</p>
-                {profile?.role === 'professor' && (
-                  <>
-                    <div className="pt-2" />
-                    <p className="font-bold text-white text-xs">홈 화면 OVERVIEW %</p>
-                    <p>- 이번 주(월~일) 퀴즈에 참여한 학생 비율입니다.</p>
-                    <p>- 5분마다 자동 갱신됩니다.</p>
-                  </>
-                )}
-              </div>
-              <button
-                onClick={() => setShowInfo(false)}
-                className="w-full py-1.5 bg-white/20 backdrop-blur-sm text-white font-bold text-xs rounded-xl hover:bg-white/30 transition-colors"
-              >
-                확인
-              </button>
-            </div>
+            <div className="relative z-10 flex justify-center pt-2 pb-1"><div className="w-8 h-1 rounded-full bg-white/30" /></div>
+            {infoContent}
+          </motion.div>
+        </>
+      ) : (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[120] flex items-center justify-center p-6 bg-black/50" onClick={() => setShowInfo(false)}>
+          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} onClick={(e) => e.stopPropagation()} className="relative w-full max-w-[240px] rounded-2xl overflow-hidden">
+            <div className="absolute inset-0 rounded-2xl overflow-hidden"><Image src="/images/home-bg.jpg" alt="" fill className="object-cover" /></div>
+            <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
+            {infoContent}
           </motion.div>
         </motion.div>
-      )}
+      ))}
     </AnimatePresence>
   );
 

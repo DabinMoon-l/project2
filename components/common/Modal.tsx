@@ -4,6 +4,7 @@ import { useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 // Modal 크기 타입
@@ -121,6 +122,7 @@ export default function Modal({
   const modalRef = useRef<HTMLDivElement>(null);
   const previousActiveElement = useRef<HTMLElement | null>(null);
   const prefersReducedMotion = useReducedMotion();
+  const isWide = useWideMode();
 
   // 접근성 설정에 따라 애니메이션 선택
   const activeModalVariants = prefersReducedMotion ? reducedMotionVariants : modalVariants;
@@ -173,6 +175,62 @@ export default function Modal({
   // SSR 대응
   if (typeof window === 'undefined') {
     return null;
+  }
+
+  // 가로모드: 패널 전체 너비 바텀시트 + 투명 오버레이(클릭으로 닫기)
+  if (isWide) {
+    return createPortal(
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            {/* 투명 오버레이 — 바텀시트 외 영역 클릭 시 닫기 */}
+            {closeOnBackdropClick && (
+              <motion.div
+                key="modal-overlay-wide"
+                className="fixed inset-0 z-[49]"
+                style={{ left: 'var(--modal-left, 240px)', right: 'var(--modal-right, 0px)' }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={onClose}
+              />
+            )}
+            {/* 바텀시트 — 패널 전체 너비 */}
+            <motion.div
+              ref={modalRef}
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={title ? 'modal-title' : undefined}
+              tabIndex={-1}
+              className="fixed bottom-0 z-50 bg-[#F5F0E8] rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.15)] overflow-hidden focus:outline-none border-t-2 border-x-2 border-[#1A1A1A]"
+              style={{ left: 'var(--modal-left, 240px)', right: 'var(--modal-right, 0px)' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex justify-center pt-2 pb-1">
+                <div className="w-8 h-1 rounded-full bg-[#D4CFC4]" />
+              </div>
+              {(title || showCloseButton) && (
+                <div className="flex items-center justify-between px-5 pb-3">
+                  {title && <h2 id="modal-title" className="text-base font-bold text-[#1A1A1A]">{title}</h2>}
+                  {showCloseButton && (
+                    <button onClick={onClose} className="p-1 text-[#5C5C5C] hover:text-[#1A1A1A]" aria-label="닫기">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                  )}
+                </div>
+              )}
+              <div className="px-5 pb-4">{children}</div>
+              {footer && <div className="flex items-center justify-end gap-2 px-5 pb-4 pt-2 border-t border-[#EDEAE4]">{footer}</div>}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>,
+      document.body
+    );
   }
 
   return createPortal(

@@ -41,6 +41,7 @@ import LibraryTab from '@/components/review/tabs/LibraryTab';
 import WrongTab from '@/components/review/tabs/WrongTab';
 import BookmarkTab from '@/components/review/tabs/BookmarkTab';
 import CustomTab from '@/components/review/tabs/CustomTab';
+import BookmarkDetailSheet from '@/components/review/BookmarkDetailSheet';
 import { PROFESSOR_QUIZ_TYPES } from '@/app/(main)/quiz/quizPageParts';
 
 /* ============================================================
@@ -1370,145 +1371,26 @@ function ReviewPageContent() {
         onCreate={handleCreateFolder}
       />
 
-      {/* 찜한 퀴즈 상세보기 모달 */}
-      {selectedBookmarkedQuiz && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
-          style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
-          onClick={() => setSelectedBookmarkedQuiz(null)}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.88 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.88 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-[280px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-3"
-          >
-            <h2 className="text-xs font-bold text-[#1A1A1A] mb-2">
-              {selectedBookmarkedQuiz.title}
-            </h2>
-
-            {/* 미완료 퀴즈: 평균 점수 대형 표시 (Start 버전) */}
-            {!selectedBookmarkedQuiz.hasCompleted && (
-              <div className="text-center py-1.5 mb-1.5 border-2 border-dashed border-[#1A1A1A] bg-[#EDEAE4]">
-                <p className="text-[9px] text-[#5C5C5C] mb-0.5">평균 점수</p>
-                <p className="text-xl font-black text-[#1A1A1A]">
-                  {selectedBookmarkedQuiz.participantCount > 0
-                    ? <>{(selectedBookmarkedQuiz.averageScore ?? 0).toFixed(0)}<span className="text-[10px] font-bold">점</span></>
-                    : '-'}
-                </p>
-              </div>
-            )}
-
-            <div className="space-y-1 mb-3">
-              <div className="flex justify-between text-[11px]">
-                <span className="text-[#5C5C5C]">문제 수</span>
-                <span className="font-bold text-[#1A1A1A]">{selectedBookmarkedQuiz.questionCount}문제</span>
-              </div>
-              <div className="flex justify-between text-[11px]">
-                <span className="text-[#5C5C5C]">참여자</span>
-                <span className="font-bold text-[#1A1A1A]">{selectedBookmarkedQuiz.participantCount}명</span>
-              </div>
-              <div className="flex justify-between text-[11px]">
-                <span className="text-[#5C5C5C]">난이도</span>
-                <span className="font-bold text-[#1A1A1A]">
-                  {selectedBookmarkedQuiz.difficulty === 'easy' ? '쉬움' : selectedBookmarkedQuiz.difficulty === 'hard' ? '어려움' : '보통'}
-                </span>
-              </div>
-              <div className="flex justify-between text-[11px]">
-                <span className="text-[#5C5C5C]">문제 유형</span>
-                <span className="font-bold text-[#1A1A1A]">
-                  {formatQuestionTypes(
-                    selectedBookmarkedQuiz.oxCount || 0,
-                    selectedBookmarkedQuiz.multipleChoiceCount || 0,
-                    selectedBookmarkedQuiz.subjectiveCount || 0
-                  )}
-                </span>
-              </div>
-              <div className="flex justify-between text-[11px]">
-                <span className="text-[#5C5C5C]">제작자</span>
-                <span className="font-bold text-[#1A1A1A]">
-                  {selectedBookmarkedQuiz.type && PROFESSOR_QUIZ_TYPES.has(selectedBookmarkedQuiz.type) ? '교수님' : (selectedBookmarkedQuiz.creatorNickname || '익명')}
-                </span>
-              </div>
-
-              {/* 완료된 퀴즈: 평균 점수 행 + 점수 표시 (Review 버전) */}
-              {selectedBookmarkedQuiz.hasCompleted && (
-                <>
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-[#5C5C5C]">평균 점수</span>
-                    <span className="font-bold text-[#1A1A1A]">
-                      {selectedBookmarkedQuiz.participantCount > 0
-                        ? `${(selectedBookmarkedQuiz.averageScore ?? 0).toFixed(0)}점`
-                        : '-'}
-                    </span>
-                  </div>
-                  <div className="py-1.5 border-t border-[#A0A0A0]">
-                    <div className="flex items-center justify-center gap-2">
-                      <span className="text-xl font-black text-[#1A1A1A]">
-                        {selectedBookmarkedQuiz.myScore !== undefined ? selectedBookmarkedQuiz.myScore : '-'}
-                      </span>
-                      <span className="text-xs text-[#5C5C5C]">/</span>
-                      <span className="text-2xl font-black text-[#1A1A1A]">
-                        {selectedBookmarkedQuiz.myFirstReviewScore !== undefined ? selectedBookmarkedQuiz.myFirstReviewScore : '-'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-center gap-6 mt-0.5">
-                      <span className="text-[9px] text-[#5C5C5C]">퀴즈</span>
-                      <span className="text-[9px] text-[#5C5C5C]">복습</span>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {selectedBookmarkedQuiz.tags && selectedBookmarkedQuiz.tags.length > 0 && (
-                <div className="pt-1.5 border-t border-[#A0A0A0]">
-                  <div className="flex flex-wrap gap-1">
-                    {selectedBookmarkedQuiz.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="px-1 py-0.5 bg-[#1A1A1A] text-[#F5F0E8] text-[10px] font-medium"
-                      >
-                        #{tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                onClick={() => setSelectedBookmarkedQuiz(null)}
-                className="flex-1 py-1.5 text-[11px] font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
-              >
-                닫기
-              </button>
-              <button
-                onClick={() => {
-                  const qId = selectedBookmarkedQuiz.quizId;
-                  const hasCompleted = selectedBookmarkedQuiz.hasCompleted;
-                  setSelectedBookmarkedQuiz(null);
-                  if (hasCompleted) {
-                    // 이미 푼 퀴즈 → 복습
-                    openReviewDetail('bookmark', qId);
-                  } else if (isWide && !isLocked) {
-                    // 안 푼 퀴즈 → 퀴즈 풀기 (가로모드)
-                    const action = isDetailOpen ? replaceDetail : openDetail;
-                    action(<QuizPanelContainer quizId={qId} />);
-                  } else {
-                    router.push(`/quiz/${qId}`);
-                  }
-                }}
-                className="flex-1 py-1.5 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
-              >
-                {selectedBookmarkedQuiz.hasCompleted ? '복습하기' : '시작하기'}
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
+      {/* 찜한 퀴즈 상세보기 */}
+      <BookmarkDetailSheet
+        quiz={selectedBookmarkedQuiz}
+        isWide={isWide}
+        onClose={() => setSelectedBookmarkedQuiz(null)}
+        onAction={() => {
+          if (!selectedBookmarkedQuiz) return;
+          const qId = selectedBookmarkedQuiz.quizId;
+          const hasCompleted = selectedBookmarkedQuiz.hasCompleted;
+          setSelectedBookmarkedQuiz(null);
+          if (hasCompleted) {
+            openReviewDetail('bookmark', qId);
+          } else if (isWide && !isLocked) {
+            const action = isDetailOpen ? replaceDetail : openDetail;
+            action(<QuizPanelContainer quizId={qId} />);
+          } else {
+            router.push(`/quiz/${qId}`);
+          }
+        }}
+      />
 
       {/* 문제 상세보기 모달 (문제 목록 표시) */}
       {questionListQuiz && (

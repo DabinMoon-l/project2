@@ -203,12 +203,12 @@ function EditExitModal({
 // 미리보기 페이지
 // ============================================================
 
-export default function QuizPreviewPage() {
+export default function QuizPreviewPage({ panelQuizId }: { panelQuizId?: string } = {}) {
   const router = useRouter();
   const params = useParams();
   const { userCourseId } = useCourse();
   const { profile } = useUser();
-  const quizId = params.id as string;
+  const quizId = panelQuizId || (params?.id as string);
 
   const [quizTitle, setQuizTitle] = useState('');
   const [averageScore, setAverageScore] = useState(0);

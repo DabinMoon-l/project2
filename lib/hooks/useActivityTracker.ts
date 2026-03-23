@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { doc, updateDoc, serverTimestamp, db } from '@/lib/repositories';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { useHomeOverlay } from '@/lib/contexts/HomeOverlayContext';
 
 const UPDATE_INTERVAL = 120_000; // 120초 (30초 → 120초로 줄여 Firestore 쓰기 빈도 75% 감소)
 
@@ -25,6 +26,7 @@ function getCurrentActivity(pathname: string): string {
 export function useActivityTracker() {
   const { user } = useAuth();
   const pathname = usePathname();
+  const { isOpen: isHomeOverlayOpen } = useHomeOverlay();
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastActivityRef = useRef<string>('');
   const lastWriteRef = useRef<number>(0);
@@ -33,7 +35,8 @@ export function useActivityTracker() {
     if (!user?.uid) return;
 
     const userRef = doc(db, 'users', user.uid);
-    const activity = getCurrentActivity(pathname);
+    // 홈 오버레이가 열려있으면 실제 pathname과 무관하게 '홈'
+    const activity = isHomeOverlayOpen ? '홈' : getCurrentActivity(pathname);
 
     const update = () => {
       lastActivityRef.current = activity;
@@ -57,5 +60,5 @@ export function useActivityTracker() {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [user?.uid, pathname]);
+  }, [user?.uid, pathname, isHomeOverlayOpen]);
 }
