@@ -26,6 +26,8 @@ const QuizStatsModal = dynamic(() => import('@/components/quiz/manage/QuizStatsM
 import { useExpandSource } from '@/lib/hooks/useExpandSource';
 import { useCourse, useDetailPanel } from '@/lib/contexts';
 import { useWideMode } from '@/lib/hooks/useViewportScale';
+import FolderDetailPage from '@/app/(main)/review/[type]/[id]/page';
+import QuizPanelContainer from '@/components/quiz/QuizPanelContainer';
 import { getPastExamOptions, type PastExamOption } from '@/lib/types/course';
 import { generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import { parseAverageScore, sortByLatest, formatQuestionTypes } from '@/lib/utils/quizHelpers';
@@ -48,7 +50,19 @@ function QuizListPageContent() {
   const { userCourseId, getCourseById } = useCourse();
   const { updatedQuizzes, checkQuizUpdate, refresh: refreshUpdates, loading: updatesLoading } = useQuizUpdate();
   const isWide = useWideMode();
-  const { openDetail, replaceDetail, isDetailOpen } = useDetailPanel();
+  const { openDetail, replaceDetail, isDetailOpen, isLocked } = useDetailPanel();
+
+  // 가로모드: 서재 복습을 3쪽 패널로 열기 (2쪽 퀴즈 목록 유지)
+  const openLibraryReview = useCallback((quizId: string, autoStart?: string) => {
+    if (isWide && !isLocked) {
+      if (isManageMode) setIsManageMode(false);
+      const action = isDetailOpen ? replaceDetail : openDetail;
+      action(<FolderDetailPage panelType="library" panelId={quizId} panelAutoStart={autoStart} />);
+    } else {
+      const qs = autoStart ? `?from=quiz&autoStart=${autoStart}` : '?from=quiz';
+      router.push(`/review/library/${quizId}${qs}`);
+    }
+  }, [isWide, isLocked, isDetailOpen, openDetail, replaceDetail, router]);
 
   // 과목별 리본 이미지
   const currentCourse = userCourseId ? getCourseById(userCourseId) : null;
@@ -125,13 +139,14 @@ function QuizListPageContent() {
   useHideNav(!!(selectedQuiz || quizToDelete || (!isWide && isManageMode) || statsQuiz));
 
   // body 스크롤 방지 통합 (모달/관리모드 열림 시 PullToHome 스와이프 방지)
+  // 가로모드: 관리 모드는 3쪽 패널이므로 2쪽 스크롤 유지
   useEffect(() => {
-    const lock = !!quizToDelete || isManageMode;
+    const lock = !!quizToDelete || (!isWide && isManageMode);
     if (lock) {
       lockScroll();
       return () => unlockScroll();
     }
-  }, [quizToDelete, isManageMode]);
+  }, [quizToDelete, isManageMode, isWide]);
 
   // (삭제 모달은 위의 통합 useEffect에서 처리)
 
@@ -362,6 +377,13 @@ function QuizListPageContent() {
   // ============================================================
 
   const handleStartQuiz = (quizId: string) => {
+    if (isManageMode) setIsManageMode(false);
+    if (isWide && !isLocked) {
+      // 가로모드: 3쪽 패널에서 퀴즈 풀기 (잠금 포함)
+      const action = isDetailOpen ? replaceDetail : openDetail;
+      action(<QuizPanelContainer quizId={quizId} />);
+      return;
+    }
     router.push(`/quiz/${quizId}`);
   };
 
@@ -478,7 +500,7 @@ function QuizListPageContent() {
               </p>
               <button
                 onClick={() => {
-              if (isWide) {
+              if (isWide && !isLocked) {
                 import('./create/page').then(mod => {
                   const CreatePage = mod.default;
                   const action = isDetailOpen ? replaceDetail : openDetail;
@@ -569,7 +591,7 @@ function QuizListPageContent() {
   // 메인 페이지
   return (
     <>
-    <div className={`min-h-screen pb-72 ${isManageMode ? 'pointer-events-none' : ''}`} style={{ backgroundColor: '#F5F0E8' }}>
+    <div className={`min-h-screen pb-72 ${isManageMode && !isWide ? 'pointer-events-none' : ''}`} style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 - 배너 이미지 */}
       <header ref={customSectionRef} className="flex flex-col items-center">
         <div className="w-full h-[160px] mt-2">
@@ -591,7 +613,8 @@ function QuizListPageContent() {
           </button>
           <button
             onClick={() => {
-              if (isWide) {
+              if (isWide && !isLocked) {
+                setIsManageMode(false); // 관리 모드 닫기
                 import('./create/page').then(mod => {
                   const CreatePage = mod.default;
                   const action = isDetailOpen ? replaceDetail : openDetail;
@@ -622,8 +645,8 @@ function QuizListPageContent() {
           onStart={handleStartQuiz}
           onUpdate={handleOpenUpdateModal}
           onShowDetails={handleShowDetails}
-          onReview={(quizId) => router.push(`/review/library/${quizId}?from=quiz&autoStart=all`)}
-          onReviewWrongOnly={(quizId) => router.push(`/review/library/${quizId}?from=quiz&autoStart=wrongOnly`)}
+          onReview={(quizId) => openLibraryReview(quizId, 'all')}
+          onReviewWrongOnly={(quizId) => openLibraryReview(quizId, 'wrongOnly')}
         />
       </section>
 
@@ -759,8 +782,8 @@ function QuizListPageContent() {
                       isBookmarked={isBookmarked(quiz.id)}
                       onToggleBookmark={() => toggleBookmark(quiz.id)}
                       onUpdate={() => handleOpenUpdateModal(quiz)}
-                      onReview={() => router.push(`/review/library/${quiz.id}?from=quiz&autoStart=all`)}
-                      onReviewWrongOnly={quiz.myScore === 100 ? undefined : () => router.push(`/review/library/${quiz.id}?from=quiz&autoStart=wrongOnly`)}
+                      onReview={() => openLibraryReview(quiz.id, 'all')}
+                      onReviewWrongOnly={quiz.myScore === 100 ? undefined : () => openLibraryReview(quiz.id, 'wrongOnly')}
                     />
                   </motion.div>
                 ))}
@@ -890,7 +913,7 @@ function QuizListPageContent() {
                   setSelectedQuiz(null);
                   clearRect();
                   if (quiz.isCompleted) {
-                    router.push(`/review/library/${quiz.id}?from=quiz`);
+                    openLibraryReview(quiz.id);
                   } else {
                     handleStartQuiz(quiz.id);
                   }
@@ -1089,7 +1112,7 @@ function QuizListPageContent() {
                 <h3 className="font-bold text-base mb-2 text-[#1A1A1A]">아직 만든 퀴즈가 없습니다</h3>
                 <p className="text-sm text-[#5C5C5C] mb-4">첫 번째 퀴즈를 만들어보세요!</p>
                 <button onClick={() => {
-                  if (isWide) {
+                  if (isWide && !isLocked) {
                     import('./create/page').then(mod => {
                       const CreatePage = mod.default;
                       const action = isDetailOpen ? replaceDetail : openDetail;

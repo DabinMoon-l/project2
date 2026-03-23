@@ -14,6 +14,7 @@ import { useQuizUpdate, type QuizUpdateInfo as DetailedQuizUpdateInfo } from '@/
 const ReviewPractice = dynamic(() => import('@/components/review/ReviewPractice'), { ssr: false });
 const UpdateQuizModal = dynamic(() => import('@/components/quiz/UpdateQuizModal'), { ssr: false });
 const FolderDetailPage = dynamic(() => import('./[type]/[id]/page'), { ssr: false });
+import QuizPanelContainer from '@/components/quiz/QuizPanelContainer';
 import { useQuizBookmark, type BookmarkedQuiz } from '@/lib/hooks/useQuizBookmark';
 import { useLearningQuizzes, type LearningQuiz } from '@/lib/hooks/useLearningQuizzes';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -59,7 +60,7 @@ function ReviewPageContent() {
   const { userCourseId, semesterSettings, getCourseById } = useCourse();
   const { profile } = useUser();
   const isWide = useWideMode();
-  const { openDetail, replaceDetail, isDetailOpen } = useDetailPanel();
+  const { openDetail, replaceDetail, closeDetail, isDetailOpen, isLocked } = useDetailPanel();
 
   // 과목별 리본 이미지
   const currentCourse = userCourseId ? getCourseById(userCourseId) : null;
@@ -334,26 +335,47 @@ function ReviewPageContent() {
         newSelected.add(folderId);
       }
       setDeleteFolderIds(newSelected);
-    } else if (isWide) {
+    } else if (isWide && !isLocked) {
       // 가로모드: 2쪽 유지, 3쪽에 상세 표시
       const action = isDetailOpen ? replaceDetail : openDetail;
       action(<FolderDetailPage panelType={folder.filterType} panelId={folder.id} />);
     } else {
-      // 모바일: 폴더 상세로 이동
+      // 모바일 또는 잠금: 폴더 상세로 이동
       router.push(`/review/${folder.filterType}/${folder.id}`);
     }
   };
 
   // 가로모드에서 복습 상세 열기 (3쪽 패널)
   const openReviewDetail = useCallback((type: string, id: string, autoStart?: string) => {
-    if (isWide) {
+    if (isWide && !isLocked) {
       const action = isDetailOpen ? replaceDetail : openDetail;
       action(<FolderDetailPage panelType={type} panelId={id} panelAutoStart={autoStart} />);
     } else {
       const qs = autoStart ? `?autoStart=${autoStart}` : '';
       router.push(`/review/${type}/${id}${qs}`);
     }
-  }, [isWide, isDetailOpen, openDetail, replaceDetail, router]);
+  }, [isWide, isLocked, isDetailOpen, openDetail, replaceDetail, router]);
+
+  // 가로모드: ReviewPractice를 3쪽 패널에서 열기 (2쪽 복습 목록 유지)
+  // handleEndPractice는 아래 정의 → ref로 안전 참조
+  const handleEndPracticeRef = useRef<(results?: PracticeResult[]) => void>(() => {});
+  const startPractice = useCallback((items: ReviewItem[], mode: 'all' | 'wrongOnly') => {
+    if (isWide && !isLocked) {
+      const action = isDetailOpen ? replaceDetail : openDetail;
+      action(
+        <ReviewPractice
+          items={items}
+          onComplete={(results) => { handleEndPracticeRef.current(results); }}
+          onClose={() => { handleEndPracticeRef.current(); }}
+          currentUserId={user?.uid}
+          isPanelMode
+        />
+      );
+    } else {
+      setPracticeMode(mode);
+      setPracticeItems(items);
+    }
+  }, [isWide, isLocked, isDetailOpen, openDetail, replaceDetail, user?.uid]);
 
   // 폴더 삭제 핸들러
   const handleDeleteFolder = async (folder: { id: string; filterType: string }) => {
@@ -383,7 +405,7 @@ function ReviewPageContent() {
     }
 
     if (items.length > 0) {
-      setPracticeItems(items);
+      startPractice(items, 'all');
     }
   };
 
@@ -628,8 +650,7 @@ function ReviewPageContent() {
     }
 
     if (items.length > 0) {
-      setPracticeMode('all'); // 선택 복습도 "모두" 복습으로 취급
-      setPracticeItems(items);
+      startPractice(items, 'all');
       setIsReviewSelectMode(false);
       setReviewSelectedIds(new Set());
     } else {
@@ -682,28 +703,28 @@ function ReviewPageContent() {
 
   // 퀴즈 ID로 복습 시작 (찜탭, 문제탭에서 Review 버튼 클릭 시)
   const handleStartReviewByQuizId = useCallback((quizId: string) => {
-    // solved에서 해당 퀴즈의 문제들 찾기
     const solvedGroup = groupedSolvedItems.find(g => g.quizId === quizId);
     if (solvedGroup && solvedGroup.items.length > 0) {
-      setPracticeMode('all'); // 모두 복습 모드
-      setPracticeItems(solvedGroup.items);
+      startPractice(solvedGroup.items, 'all');
+    } else if (isWide && !isLocked) {
+      // solved 아이템 없음 = 아직 안 푼 퀴즈 → 퀴즈로 시작
+      const action = isDetailOpen ? replaceDetail : openDetail;
+      action(<QuizPanelContainer quizId={quizId} />);
     } else {
-      // 복습할 문제가 없으면 퀴즈 페이지로 이동
       router.push(`/quiz/${quizId}`);
     }
-  }, [groupedSolvedItems, router]);
+  }, [groupedSolvedItems, router, isWide, isLocked, isDetailOpen, openDetail, replaceDetail, startPractice]);
 
   // 퀴즈 ID로 오답만 복습 시작
   const handleStartReviewWrongOnlyByQuizId = useCallback((quizId: string) => {
     // wrong에서 해당 퀴즈의 오답 문제들 찾기
     const wrongGroup = groupedWrongItems.find(g => g.quizId === quizId);
     if (wrongGroup && wrongGroup.items.length > 0) {
-      setPracticeMode('wrongOnly'); // 오답만 복습 모드
-      setPracticeItems(wrongGroup.items);
+      startPractice(wrongGroup.items, 'wrongOnly');
     } else {
       alert('이 문제지에 오답이 없습니다.');
     }
-  }, [groupedWrongItems]);
+  }, [groupedWrongItems, startPractice]);
 
   const handleEndPractice = useCallback(async (results?: PracticeResult[]) => {
     // 복습 완료된 문제 reviewCount 증가 (복습력 측정용)
@@ -750,10 +771,35 @@ function ReviewPageContent() {
     }
     setPracticeItems(null);
     setPracticeMode(null);
-  }, [user, markAsReviewed]);
+    // 가로모드: 3쪽 패널도 닫기
+    if (isWide && isDetailOpen) closeDetail();
+  }, [user, markAsReviewed, isWide, isDetailOpen, closeDetail]);
 
-  // 연습 모드
-  if (practiceItems) {
+  // startPractice에서 사용하는 ref 업데이트
+  useEffect(() => { handleEndPracticeRef.current = handleEndPractice; }, [handleEndPractice]);
+
+  // 가로모드: practiceItems가 실수로 set된 경우 3쪽 패널로 이동
+  useEffect(() => {
+    if (isWide && !isLocked && practiceItems) {
+      const items = practiceItems;
+      const mode = practiceMode || 'all';
+      setPracticeItems(null);
+      setPracticeMode(null);
+      const action = isDetailOpen ? replaceDetail : openDetail;
+      action(
+        <ReviewPractice
+          items={items}
+          onComplete={(results) => { handleEndPracticeRef.current(results); }}
+          onClose={() => { handleEndPracticeRef.current(); }}
+          currentUserId={user?.uid}
+          isPanelMode
+        />
+      );
+    }
+  }, [isWide, isLocked, practiceItems, practiceMode, isDetailOpen, openDetail, replaceDetail, user?.uid]);
+
+  // 연습 모드 (모바일 전용 — 가로모드에서는 위 useEffect가 3쪽으로 리다이렉트)
+  if (practiceItems && !isWide) {
     return (
       <ReviewPractice
         items={practiceItems}
@@ -1236,7 +1282,15 @@ function ReviewPageContent() {
             updatedQuizzes={updatedQuizzes}
             onQuizCardClick={(quizId) => openReviewDetail('bookmark', quizId)}
             onQuizDetails={(quiz) => setSelectedBookmarkedQuiz(quiz)}
-            onStartQuiz={(quizId) => router.push(`/quiz/${quizId}`)}
+            onStartQuiz={(quizId) => {
+              if (isWide && !isLocked) {
+                // Start: 퀴즈 풀기 (복습 아님) → QuizPanelContainer로 3쪽 잠금
+                const action = isDetailOpen ? replaceDetail : openDetail;
+                action(<QuizPanelContainer quizId={quizId} />);
+              } else {
+                router.push(`/quiz/${quizId}`);
+              }
+            }}
             onStartReview={handleStartReviewByQuizId}
             onStartReviewWrongOnly={handleStartReviewWrongOnlyByQuizId}
             onUnbookmark={toggleQuizBookmark}
@@ -1263,7 +1317,7 @@ function ReviewPageContent() {
             setReviewSelectedIds={setReviewSelectedIds}
             updatedQuizzes={updatedQuizzes}
             onFolderNavigate={(url) => {
-              if (isWide) {
+              if (isWide && !isLocked) {
                 // URL에서 type, id, chapter 추출: /review/wrong/quizId?chapter=xxx
                 const match = url.match(/\/review\/([^/]+)\/([^?]+)/);
                 if (match) {
@@ -1433,8 +1487,19 @@ function ReviewPageContent() {
               </button>
               <button
                 onClick={() => {
-                  router.push(`/quiz/${selectedBookmarkedQuiz.quizId}`);
+                  const qId = selectedBookmarkedQuiz.quizId;
+                  const hasCompleted = selectedBookmarkedQuiz.hasCompleted;
                   setSelectedBookmarkedQuiz(null);
+                  if (hasCompleted) {
+                    // 이미 푼 퀴즈 → 복습
+                    openReviewDetail('bookmark', qId);
+                  } else if (isWide && !isLocked) {
+                    // 안 푼 퀴즈 → 퀴즈 풀기 (가로모드)
+                    const action = isDetailOpen ? replaceDetail : openDetail;
+                    action(<QuizPanelContainer quizId={qId} />);
+                  } else {
+                    router.push(`/quiz/${qId}`);
+                  }
                 }}
                 className="flex-1 py-1.5 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
               >

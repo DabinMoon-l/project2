@@ -25,6 +25,8 @@ interface QuizNavigationProps {
   onGrade?: () => void;
   /** 현재 문제가 채점되었는지 */
   isGraded?: boolean;
+  /** 패널 모드 (3쪽 잠금) — fixed 대신 sticky 사용 */
+  isPanelMode?: boolean;
 }
 
 /**
@@ -45,6 +47,7 @@ export default function QuizNavigation({
   isSubmitting = false,
   onGrade,
   isGraded = false,
+  isPanelMode = false,
 }: QuizNavigationProps) {
   const colors = useThemeColors();
 
@@ -61,11 +64,16 @@ export default function QuizNavigation({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: 0.2 }}
-      className="fixed bottom-0 right-0 bg-[#F5F0E8] border-t-2 border-[#1A1A1A] px-4 py-3"
-      style={{
-        paddingBottom: 'max(12px, env(safe-area-inset-bottom, 0px))',
-        left: 'var(--detail-panel-left, 0)',
-      }}
+      className={
+        isPanelMode
+          ? 'sticky bottom-0 z-10 bg-[#F5F0E8] border-t-2 border-[#1A1A1A] px-4 py-3'
+          : 'fixed bottom-0 right-0 bg-[#F5F0E8] border-t-2 border-[#1A1A1A] px-4 py-3'
+      }
+      style={
+        isPanelMode
+          ? { paddingBottom: 'max(12px, env(safe-area-inset-bottom, 0px))' }
+          : { paddingBottom: 'max(12px, env(safe-area-inset-bottom, 0px))', left: 'var(--detail-panel-left, 0)' }
+      }
     >
       <div className="max-w-lg mx-auto flex gap-3">
         {/* 이전 버튼 */}

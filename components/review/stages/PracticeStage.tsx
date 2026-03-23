@@ -58,19 +58,23 @@ export default function PracticeStage({
   feedbackSubmitCount,
   setFeedbackSubmitCount,
   user,
+  isPanelMode,
 }: PracticeStageProps) {
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[60] flex flex-col"
+      className={isPanelMode
+        ? "h-full flex flex-col overflow-y-auto"
+        : "fixed inset-0 z-[60] flex flex-col"
+      }
       style={{ backgroundColor: '#F5F0E8' }}
     >
       {/* 헤더 */}
       <header
         className="sticky top-0 z-[60] w-full border-b-2 border-[#1A1A1A]"
-        style={{ backgroundColor: '#F5F0E8', paddingTop: 'env(safe-area-inset-top, 0px)' }}
+        style={{ backgroundColor: '#F5F0E8', ...(!isPanelMode ? { paddingTop: 'env(safe-area-inset-top, 0px)' } : {}) }}
       >
         <div className="flex items-center justify-between h-14 px-4">
           <motion.button
@@ -737,8 +741,14 @@ export default function PracticeStage({
 
       {/* 하단 버튼 */}
       <div
-        className="fixed bottom-0 right-0 p-4 border-t-2 border-[#1A1A1A]"
-        style={{ backgroundColor: '#F5F0E8', left: 'var(--detail-panel-left, 0)', paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
+        className={isPanelMode
+          ? 'sticky bottom-0 z-10 p-4 border-t-2 border-[#1A1A1A]'
+          : 'fixed bottom-0 right-0 p-4 border-t-2 border-[#1A1A1A]'
+        }
+        style={isPanelMode
+          ? { backgroundColor: '#F5F0E8', paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }
+          : { backgroundColor: '#F5F0E8', left: 'var(--detail-panel-left, 0)', paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }
+        }
       >
         <div className="flex gap-3">
           {currentIndex > 0 && (

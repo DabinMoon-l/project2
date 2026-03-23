@@ -108,7 +108,15 @@ export default function QuizCreatePage({ isPanelMode }: { isPanelMode?: boolean 
   const { userCourseId } = useCourse();
   const { profile } = useUser();
   const { showExpToast } = useExpToast();
-  const { closeDetail } = useDetailPanel();
+  const { closeDetail, lockDetail, unlockDetail } = useDetailPanel();
+
+  // 패널 모드: mount 시 잠금, unmount 시 해제
+  useEffect(() => {
+    if (isPanelMode) {
+      lockDetail();
+      return () => unlockDetail();
+    }
+  }, [isPanelMode, lockDetail, unlockDetail]);
 
   // 단계 관리
   const [step, setStep] = useState<Step>('upload');
@@ -289,10 +297,10 @@ export default function QuizCreatePage({ isPanelMode }: { isPanelMode?: boolean 
 
   // 뒤로가기 — 패널 모드: closeDetail, 세로모드: 슬라이드 아웃
   const navigateBack = useCallback(() => {
-    if (isPanelMode) { closeDetail(); return; }
+    if (isPanelMode) { unlockDetail(); closeDetail(); return; }
     setIsClosing(true);
     setTimeout(() => router.back(), 280);
-  }, [router, isPanelMode, closeDetail]);
+  }, [router, isPanelMode, unlockDetail, closeDetail]);
 
   /**
    * 저장하고 나가기
@@ -1307,7 +1315,7 @@ export default function QuizCreatePage({ isPanelMode }: { isPanelMode?: boolean 
 
       // 성공 시 이동
       setTimeout(() => {
-        if (isPanelMode) { closeDetail(); return; }
+        if (isPanelMode) { unlockDetail(); closeDetail(); return; }
         router.push(cleanedQuizData.isPublic ? '/quiz?created=true' : '/review?filter=library');
       }, 300);
     } catch (error) {

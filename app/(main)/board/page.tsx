@@ -435,7 +435,7 @@ export default function BoardPage() {
   const { semesterSettings, userCourseId, setProfessorCourse, assignedCourses, getCourseById, courseList: allCourses } = useCourse();
   const { profile } = useUser();
   const isWide = useWideMode();
-  const { openDetail, replaceDetail, isDetailOpen } = useDetailPanel();
+  const { openDetail, replaceDetail, isDetailOpen, isLocked } = useDetailPanel();
 
   // 교수님 여부 확인
   const isProfessor = profile?.role === 'professor';
@@ -675,31 +675,31 @@ export default function BoardPage() {
   }, [posts, searchQuery, selectedTags, profPickPostIds]);
 
   const handlePostClick = useCallback((postId: string) => {
-    if (isWide) {
+    // 스와이프 네비게이션용 게시글 ID 순서 저장 (가로/세로 공통)
+    sessionStorage.setItem('board_post_ids', JSON.stringify(filteredPosts.map(p => p.id)));
+    if (isWide && !isLocked) {
       // 가로모드: 2쪽 유지, 3쪽에 상세페이지 표시
       const action = isDetailOpen ? replaceDetail : openDetail;
       action(<PostDetailPage panelPostId={postId} />);
       return;
     }
     sessionStorage.setItem('board_scroll_y', String(window.scrollY));
-    // 스와이프 네비게이션용 게시글 ID 순서 저장
-    sessionStorage.setItem('board_post_ids', JSON.stringify(filteredPosts.map(p => p.id)));
     sessionStorage.setItem('board_nav', 'board');
     router.push(`/board/${postId}`);
-  }, [router, filteredPosts, isWide, isDetailOpen, openDetail, replaceDetail]);
+  }, [router, filteredPosts, isWide, isLocked, isDetailOpen, openDetail, replaceDetail]);
 
   const handleWriteClick = useCallback(() => {
-    if (isWide) {
+    if (isWide && !isLocked) {
       const action = isDetailOpen ? replaceDetail : openDetail;
       action(<WritePage isPanelMode />);
       return;
     }
     sessionStorage.setItem('board_scroll_y', String(window.scrollY));
     router.push('/board/write');
-  }, [router, isWide, isDetailOpen, openDetail, replaceDetail]);
+  }, [router, isWide, isLocked, isDetailOpen, openDetail, replaceDetail]);
 
   const handleManageClick = useCallback(() => {
-    if (isWide) {
+    if (isWide && !isLocked) {
       // 관리 페이지는 동적 import로 3쪽에 표시
       import('./manage/page').then(mod => {
         const ManagePage = mod.default;
@@ -709,7 +709,7 @@ export default function BoardPage() {
       return;
     }
     router.push(isProfessor ? `/board/manage?course=${selectedCourseId}` : '/board/manage');
-  }, [router, isProfessor, selectedCourseId, isWide, isDetailOpen, openDetail, replaceDetail]);
+  }, [router, isProfessor, selectedCourseId, isWide, isLocked, isDetailOpen, openDetail, replaceDetail]);
 
   // 핀 토스트 표시
   const showPinToast = useCallback((message: string) => {
@@ -744,6 +744,17 @@ export default function BoardPage() {
       requestAnimationFrame(() => window.scrollTo(0, Number(saved)));
     }
   }, [loading, posts.length]);
+
+  // 가로모드: /board/[id]에서 리다이렉트된 경우 3쪽 패널로 열기
+  useEffect(() => {
+    if (!isWide || isLocked) return;
+    const pendingPostId = sessionStorage.getItem('board_panel_post');
+    if (pendingPostId) {
+      sessionStorage.removeItem('board_panel_post');
+      const action = isDetailOpen ? replaceDetail : openDetail;
+      action(<PostDetailPage panelPostId={pendingPostId} />);
+    }
+  }, [isWide, isLocked, isDetailOpen, openDetail, replaceDetail]);
 
   // 최신 글을 헤드라인으로, 나머지를 masonry에
   const headline = filteredPosts.length > 0 ? filteredPosts[0] : null;

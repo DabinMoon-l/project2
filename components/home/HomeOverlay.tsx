@@ -39,6 +39,13 @@ export default function HomeOverlay() {
   const { isOpen, isCloseRequested, close, buttonRect } = useHomeOverlay();
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
   const isWide = useWideMode();
+
+  // 홈 오버레이 닫히면 프로필 드로어도 닫기
+  useEffect(() => {
+    if (!isOpen) setShowProfileDrawer(false);
+  }, [isOpen]);
+  const isWideRef = useRef(isWide);
+  isWideRef.current = isWide;
   const [mounted, setMounted] = useState(false);
 
   const [visible, setVisible] = useState(false);
@@ -75,10 +82,16 @@ export default function HomeOverlay() {
     return `${cx - offsetX}px ${cy}px`;
   }, [buttonRect, isWide]);
 
-  // isOpen → 열기 애니메이션
+  // isOpen → 열기 애니메이션 (가로모드: 즉시 표시)
   useEffect(() => {
     if (isOpen && (phaseRef.current === 'hidden' || phaseRef.current === 'entering')) {
       setVisible(true);
+      if (isWideRef.current) {
+        // 가로모드: 애니메이션 없이 즉시 open
+        setPhase('open');
+        phaseRef.current = 'open';
+        return;
+      }
       setPhase('entering');
       phaseRef.current = 'entering';
       const rafId1 = requestAnimationFrame(() => {
@@ -88,7 +101,6 @@ export default function HomeOverlay() {
             phaseRef.current = 'open';
           }
         });
-        // cleanup 내부 rAF
         cleanupRef.current = () => cancelAnimationFrame(rafId2);
       });
       return () => {
@@ -108,14 +120,22 @@ export default function HomeOverlay() {
     }
   }, [isOpen]);
 
-  // 닫기: 위로 슬라이드 애니메이션
+  // 닫기: 위로 슬라이드 애니메이션 (가로모드: 즉시 닫기)
   const runExitAnimation = useCallback(() => {
     if (phaseRef.current === 'exiting') return;
-    setPhase('exiting');
-    phaseRef.current = 'exiting';
     setPullY(0);
     pulling.current = false;
     noTransitionRef.current = false;
+    if (isWideRef.current) {
+      // 가로모드: 애니메이션 없이 즉시 닫기
+      close();
+      setVisible(false);
+      setPhase('hidden');
+      phaseRef.current = 'hidden';
+      return;
+    }
+    setPhase('exiting');
+    phaseRef.current = 'exiting';
     setTimeout(() => {
       close();
       setVisible(false);
@@ -134,14 +154,14 @@ export default function HomeOverlay() {
   const isModalOpen = () => document.body.hasAttribute('data-hide-nav');
 
   const onTouchStart = useCallback((e: React.TouchEvent) => {
-    if (phaseRef.current !== 'open' || isModalOpen()) return;
+    if (isWideRef.current || phaseRef.current !== 'open' || isModalOpen()) return;
     startY.current = scaleCoord(e.touches[0].clientY);
     // 바로 pulling 시작하지 않음 — dead zone 통과 후 시작
     pulling.current = false;
   }, []);
 
   const onTouchMove = useCallback((e: TouchEvent) => {
-    if (phaseRef.current !== 'open' || isModalOpen()) return;
+    if (isWideRef.current || phaseRef.current !== 'open' || isModalOpen()) return;
     const cy = scaleCoord(e.touches[0].clientY);
     const delta = startY.current - cy;
 
@@ -182,7 +202,7 @@ export default function HomeOverlay() {
   useEffect(() => {
     if (!visible) return;
     const handleWheel = (e: WheelEvent) => {
-      if (phaseRef.current !== 'open' || isModalOpen()) return;
+      if (isWideRef.current || phaseRef.current !== 'open' || isModalOpen()) return;
       // 아래로 스크롤 → 슬라이드 다운 dismiss
       if (e.deltaY > 0) {
         noTransitionRef.current = true;

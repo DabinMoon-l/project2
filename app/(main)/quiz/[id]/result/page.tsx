@@ -32,7 +32,7 @@ import type { FieldValue } from '@/lib/repositories/firebase/firestoreBase';
 /**
  * 퀴즈 결과 페이지
  */
-export default function QuizResultPage() {
+export default function QuizResultPage({ panelQuizId, onPanelNavigate }: { panelQuizId?: string; onPanelNavigate?: (path: string) => void } = {}) {
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
@@ -40,7 +40,7 @@ export default function QuizResultPage() {
   const { userCourseId, userClassId } = useCourse();
   const { setSuppressAutoTrigger } = useMilestone();
 
-  const quizId = params.id as string;
+  const quizId = panelQuizId || (params.id as string);
 
   // 퀴즈 결과 페이지에서는 마일스톤 모달 자동 트리거 억제
   useEffect(() => {
@@ -828,13 +828,16 @@ export default function QuizResultPage() {
     const isAIQuiz = resultData?.quizType === 'ai-generated';
 
     if (isOwnQuiz || isAIQuiz) {
+      if (onPanelNavigate) { onPanelNavigate(`/quiz/${quizId}/exp`); return; }
       router.push(`/quiz/${quizId}/exp`);
     } else {
+      if (onPanelNavigate) { onPanelNavigate(`/quiz/${quizId}/feedback`); return; }
       router.push(`/quiz/${quizId}/feedback`);
     }
   };
 
   const handleGoHome = () => {
+    if (onPanelNavigate) { onPanelNavigate('/quiz'); return; }
     router.push('/quiz');
   };
 
@@ -1524,7 +1527,16 @@ export default function QuizResultPage() {
       </motion.main>
 
       {/* 하단 버튼 */}
-      <div className="fixed bottom-0 right-0 p-3 bg-[#F5F0E8] border-t-2 border-[#1A1A1A]" style={{ left: 'var(--detail-panel-left, 0)', paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}>
+      <div
+        className={onPanelNavigate
+          ? 'sticky bottom-0 z-10 p-3 bg-[#F5F0E8] border-t-2 border-[#1A1A1A]'
+          : 'fixed bottom-0 right-0 p-3 bg-[#F5F0E8] border-t-2 border-[#1A1A1A]'
+        }
+        style={onPanelNavigate
+          ? { paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }
+          : { left: 'var(--detail-panel-left, 0)', paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }
+        }
+      >
         <button
           onClick={handleNext}
           className="w-full py-3 text-sm bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors rounded-lg"

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { LazyMotion, domAnimation } from 'framer-motion';
@@ -175,7 +175,7 @@ function MainLayoutGrid({
   pathname: string;
   searchParams: ReturnType<typeof useSearchParams>;
 }) {
-  const { content: detailContent, isDetailOpen, closeDetail } = useDetailPanel();
+  const { content: detailContent, isDetailOpen, closeDetail, isLocked } = useDetailPanel();
   const { isOpen: isHomeOverlayOpen } = useHomeOverlay();
 
   // 라우트 기반 사이드바 타입 감지 (가로모드 전용)
@@ -189,8 +189,27 @@ function MainLayoutGrid({
     return null;
   }, [isWide, pathname]);
 
-  // 라우트 사이드바 표시 여부 (컨텍스트 디테일 > 라우트 사이드바 우선순위)
-  const hasRouteSidebar = !!routeSidebarType && !isDetailOpen;
+  // 잠금 해제 시 상세 라우트에 있으면 탭 루트로 복귀
+  // (잠금 중 2쪽에서 상세 페이지를 볼 수 있는데, 해제 후 2쪽은 메인이어야 함)
+  const router = useRouter();
+  const prevLockedRef = useRef(isLocked);
+  useEffect(() => {
+    const wasLocked = prevLockedRef.current;
+    prevLockedRef.current = isLocked;
+
+    // 잠금 → 해제 전환 감지
+    if (wasLocked && !isLocked && isWide) {
+      const tabRoots = ['/', '/quiz', '/review', '/board', '/professor', '/professor/stats', '/professor/quiz', '/professor/students', '/settings', '/profile', '/ranking', '/review/random'];
+      if (!tabRoots.includes(pathname)) {
+        // 현재 탭의 루트로 이동
+        const tabRoot = tabRoots.find(r => r !== '/' && pathname.startsWith(r)) || '/';
+        router.replace(tabRoot);
+      }
+    }
+  }, [isLocked, isWide, pathname, router]);
+
+  // 라우트 사이드바 표시 여부 (컨텍스트 디테일 > 라우트 사이드바, 잠금 시 억제)
+  const hasRouteSidebar = !!routeSidebarType && !isDetailOpen && !isLocked;
 
   // iOS PWA 핀치 줌 차단 — viewport user-scalable=no를 iOS가 무시하므로 JS로 보강
   useEffect(() => {
@@ -230,8 +249,8 @@ function MainLayoutGrid({
     if (isWide) {
       // --modal-left: 모달/바텀시트 백드롭 시작점 (항상 사이드바 너비)
       body.style.setProperty('--modal-left', '240px');
-      // --detail-panel-left: 우측 패널 시작점
-      body.style.setProperty('--detail-panel-left', 'calc(50% + 120px)');
+      // --detail-panel-left: 잠금 시 main 영역 기준, 그 외 우측 패널 시작점
+      body.style.setProperty('--detail-panel-left', isLocked ? '240px' : 'calc(50% + 120px)');
       // --home-sheet-left: 홈 오버레이 바텀시트 위치 (우측 패널)
       body.style.setProperty('--home-sheet-left', 'calc(50% + 120px)');
     } else {
@@ -244,7 +263,7 @@ function MainLayoutGrid({
       body.style.removeProperty('--detail-panel-left');
       body.style.removeProperty('--home-sheet-left');
     };
-  }, [isWide]);
+  }, [isWide, isLocked]);
 
   // --modal-right: 가로모드에서 모달을 2쪽 안에 가두기 (aside가 항상 존재)
   useEffect(() => {
@@ -269,13 +288,12 @@ function MainLayoutGrid({
           className="fixed left-0 top-0 bottom-0 z-40"
           style={{ width: '240px', backgroundColor: '#F5F0E8' }}
         >
-          {/* 홈 오버레이 열릴 때: home-bg 이미지로 전환 */}
+          {/* 홈 오버레이 열릴 때: 1쪽 배경 이미지로 전환 */}
           <div
             className="absolute inset-0 transition-opacity duration-300"
             style={{
-              backgroundImage: 'url(/images/home-bg.jpg)',
-              backgroundSize: 'cover',
-              backgroundPosition: 'center top',
+              backgroundImage: 'url(/images/home-bg-1.jpg)',
+              backgroundSize: '100% 100%',
               opacity: isHomeOverlayOpen ? 1 : 0,
             }}
           />
@@ -293,12 +311,15 @@ function MainLayoutGrid({
               : {}),
             ...(isWide ? { marginLeft: '240px' } : {}),
             // fixed 요소 좌측 위치 조정용 CSS 변수
-            // 모바일: 0, 가로모드(디테일/사이드바 열림): calc(50% + 120px), 그 외: 240px
+            // 모바일: 0, 잠금 시: 240px (main 영역은 nav 오프셋만)
+            // 가로모드(디테일/사이드바 열림): calc(50% + 120px), 그 외: 240px
             '--detail-panel-left': !isWide
               ? '0'
-              : (routeSidebarType || isDetailOpen)
-                ? 'calc(50% + 120px)'
-                : '240px',
+              : isLocked
+                ? '240px'
+                : (routeSidebarType || isDetailOpen)
+                  ? 'calc(50% + 120px)'
+                  : '240px',
           } as React.CSSProperties & Record<string, string>}
         >
           <div className={isWide ? 'flex h-screen overflow-hidden' : ''}>
@@ -325,21 +346,21 @@ function MainLayoutGrid({
               {isProfessor && pathname === '/professor/quiz' && <AIQuizContainer />}
             </main>
 
-            {/* 우측 디테일 패널 (3쪽) — 독립 스크롤, transform으로 fixed 요소 패널 내 격리 */}
+            {/* 우측 디테일 패널 (3쪽) — 독립 스크롤 */}
+            {/* fixed 요소는 뷰포트 기준 + --detail-panel-left CSS 변수로 3쪽 영역에 고정 */}
             {isWide && !hasRouteSidebar && (
               <aside
                 className="w-1/2 flex-shrink-0 overflow-x-hidden overflow-y-auto h-screen relative"
                 style={{
-                  borderLeft: '1px solid #B0A898',
-                  backgroundColor: '#F5F0E8',
+                  borderLeft: isHomeOverlayOpen && !isDetailOpen ? 'none' : '1px solid #B0A898',
+                  backgroundColor: isDetailOpen ? '#F5F0E8' : 'transparent',
                   paddingRight: 'env(safe-area-inset-right, 0px)',
-                  transform: 'translateZ(0)',
-                  // 3쪽 내부의 fixed 요소가 패널 전체를 사용하도록 CSS 변수 오버라이드
-                  '--detail-panel-left': '0px',
-                  '--modal-left': '0px',
-                  '--modal-right': '0px',
-                  '--kb-offset': '0px',
-                } as React.CSSProperties & Record<string, string>}
+                  // 홈 오버레이 열림 + 3쪽 비어있을 때 배경 이미지
+                  ...(isHomeOverlayOpen && !isDetailOpen ? {
+                    backgroundImage: 'url(/images/home-bg-3.jpg)',
+                    backgroundSize: '100% 100%',
+                  } : {}),
+                } as React.CSSProperties}
               >
                 {isDetailOpen && (
                   <div className="h-full">

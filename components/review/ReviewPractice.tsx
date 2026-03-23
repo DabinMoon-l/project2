@@ -28,12 +28,14 @@ export default function ReviewPractice({
   currentUserId,
   headerTitle = '복습',
   showFeedback = true,
+  isPanelMode = false,
 }: ReviewPracticeProps) {
-  // 전체화면 오버레이 body 스크롤 방지
+  // 전체화면 오버레이 body 스크롤 방지 (패널 모드에서는 스킵)
   useEffect(() => {
+    if (isPanelMode) return;
     lockScroll();
     return () => { unlockScroll(); };
-  }, []);
+  }, [isPanelMode]);
 
   // 현재 화면 단계
   const [phase, setPhase] = useState<Phase>('practice');
@@ -561,6 +563,7 @@ export default function ReviewPractice({
         handleFeedbackSubmit={handleFeedbackSubmit}
         onGoToFeedback={handleGoToFeedback}
         onBackToPractice={() => setPhase('practice')}
+        isPanelMode={isPanelMode}
       />
     );
   }
@@ -588,6 +591,7 @@ export default function ReviewPractice({
         onBackToResult={() => setPhase('result')}
         onFinish={handleFinish}
         isFinishing={isFinishing}
+        isPanelMode={isPanelMode}
       />
     );
   }
@@ -630,6 +634,7 @@ export default function ReviewPractice({
         feedbackSubmitCount={feedbackSubmitCount}
         setFeedbackSubmitCount={setFeedbackSubmitCount}
         user={user}
+        isPanelMode={isPanelMode}
       />
 
       {/* 나가기 확인 모달 (부모에 유지) */}

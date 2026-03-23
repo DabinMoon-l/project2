@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
 import { callFunction } from '@/lib/api';
 import {
   collection,
@@ -55,6 +56,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
   const { user, logout } = useAuth();
   const { profile, updateNickname, updateProfile, isProfessor } = useUser();
   const { userCourseId } = useCourse();
+  const isWide = useWideMode();
   const { holdings } = useMilestone();
   const {
     settings,
@@ -365,16 +367,17 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* 오버레이 */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 bg-black/50 z-40"
-            style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
-            onClick={onClose}
-          />
+          {/* 오버레이 — 가로모드에서는 숨김 (홈 배경이 보여야 함) */}
+          {!isWide && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 bg-black/50 z-40"
+              onClick={onClose}
+            />
+          )}
 
           {/* 바텀시트 */}
           <motion.div
@@ -382,7 +385,11 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            className="fixed left-0 right-0 bottom-0 z-50 max-h-[75vh] rounded-t-2xl overflow-hidden"
+            className="fixed bottom-0 z-50 max-h-[75vh] rounded-t-2xl overflow-hidden"
+            style={isWide
+              ? { left: '240px', right: 'calc(50% - 120px)' }
+              : { left: 'var(--home-sheet-left, 0px)', right: '0' }
+            }
           >
             {/* 글래스 배경 레이어 — pointer-events-none으로 클릭 관통 */}
             <div className="absolute inset-0 rounded-t-2xl overflow-hidden pointer-events-none">
@@ -868,7 +875,7 @@ export default function ProfileDrawer({ isOpen, onClose }: ProfileDrawerProps) {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/50"
-                style={{ left: 'var(--home-sheet-left, 0px)' }}
+                style={isWide ? { left: '240px', right: 'calc(50% - 120px)' } : {}}
                 onClick={() => setShowClassModal(false)}
               >
                 <motion.div
