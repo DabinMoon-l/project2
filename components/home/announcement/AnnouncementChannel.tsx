@@ -153,7 +153,7 @@ export default function AnnouncementChannel({
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // ─── 네비게이션 숨김 (패널 모드에서는 스킵)
-  useHideNav(!isPanelMode && showModal);
+  useHideNav(!!(!isPanelMode && showModal));
 
   // ─── 모달 열림 시 body 스크롤 방지 (패널 모드에서는 스킵)
   useEffect(() => {
