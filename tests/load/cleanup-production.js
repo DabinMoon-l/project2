@@ -233,7 +233,77 @@ async function cleanupFirestore() {
   }
   console.log("  feedbacks 삭제 완료");
 
-  // 11. jobs (load-test 유저)
+  // 11. professorQuizAnalysis — 부하테스트로 오염된 분석 데이터 완전 정리
+  for (const courseId of COURSES) {
+    const analysisRef = db.collection("professorQuizAnalysis").doc(courseId);
+    const dataRef = analysisRef.collection("data");
+
+    // raw 분석 중 load-test 퀴즈 삭제
+    const rawSnap = await analysisRef.collection("raw").get();
+    if (!rawSnap.empty) {
+      const batch = db.batch();
+      let count = 0;
+      for (const doc of rawSnap.docs) {
+        if (doc.id.startsWith("load-test-")) {
+          batch.delete(doc.ref);
+          count++;
+        }
+      }
+      if (count > 0) {
+        await batch.commit();
+        console.log(`  ${courseId} raw 분석 ${count}개 삭제`);
+      }
+    }
+
+    // styleProfile 삭제 (부하테스트 패턴이 학습됨 — 교수 퀴즈 생성 시 자동 재구축)
+    const styleDoc = await dataRef.doc("styleProfile").get();
+    if (styleDoc.exists) {
+      await dataRef.doc("styleProfile").delete();
+      console.log(`  ${courseId} styleProfile 삭제`);
+    }
+
+    // keywords 삭제 (부하테스트 키워드 오염 — 자동 재구축)
+    const keywordsDoc = await dataRef.doc("keywords").get();
+    if (keywordsDoc.exists) {
+      await dataRef.doc("keywords").delete();
+      console.log(`  ${courseId} keywords 삭제`);
+    }
+
+    // questionBank에서 load-test 문제 제거
+    const bankRef = dataRef.doc("questionBank");
+    const bankDoc = await bankRef.get();
+    if (bankDoc.exists) {
+      const bank = bankDoc.data();
+      if (bank && bank.questions) {
+        const cleaned = bank.questions.filter(
+          (q) => !q.quizId || !q.quizId.startsWith("load-test-")
+        );
+        if (cleaned.length < bank.questions.length) {
+          const removed = bank.questions.length - cleaned.length;
+          if (cleaned.length === 0) {
+            await bankRef.delete();
+            console.log(`  ${courseId} questionBank 삭제 (전부 부하테스트)`);
+          } else {
+            await bankRef.set({ ...bank, questions: cleaned, totalCount: cleaned.length });
+            console.log(`  ${courseId} questionBank: ${removed}개 제거 (잔여 ${cleaned.length}개)`);
+          }
+        }
+      }
+    }
+
+    // 메타데이터: 실제 raw가 없으면 메타도 삭제
+    const remainingRaw = await analysisRef.collection("raw").limit(1).get();
+    if (remainingRaw.empty) {
+      const metaDoc = await analysisRef.get();
+      if (metaDoc.exists) {
+        await analysisRef.delete();
+        console.log(`  ${courseId} 메타데이터 삭제 (실제 퀴즈 0개)`);
+      }
+    }
+  }
+  console.log("  professorQuizAnalysis 정리 완료");
+
+  // 12. jobs (load-test 유저)
   for (let i = 0; i < NUM_STUDENTS; i += 30) {
     const uids = [];
     for (let j = i; j < Math.min(i + 30, NUM_STUDENTS); j++) {

@@ -456,19 +456,20 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src="/images/rank.png" alt="단상" className="w-full block" />
 
+                        {/* 토끼: items-end로 발끝 단상 위 고정 */}
                         {top3[1] && (
-                          <div className="absolute z-10 flex justify-center" style={{ left: '5%', width: '30%', bottom: '62%' }}>
-                            <PodiumRabbit rabbitId={top3[1].firstEquippedRabbitId} size={52} />
+                          <div className="absolute z-10 flex justify-center items-end" style={{ left: '5%', width: '30%', bottom: '62%' }}>
+                            <PodiumRabbit rabbitId={top3[1].firstEquippedRabbitId} widthPercent={42} />
                           </div>
                         )}
                         {top3[0] && (
-                          <div className="absolute z-10 flex justify-center" style={{ left: '33%', width: '34%', bottom: '95%' }}>
-                            <PodiumRabbit rabbitId={top3[0].firstEquippedRabbitId} size={60} />
+                          <div className="absolute z-10 flex justify-center items-end" style={{ left: '33%', width: '34%', bottom: '95%' }}>
+                            <PodiumRabbit rabbitId={top3[0].firstEquippedRabbitId} widthPercent={45} />
                           </div>
                         )}
                         {top3[2] && (
-                          <div className="absolute z-10 flex justify-center" style={{ left: '65%', width: '30%', bottom: '58%' }}>
-                            <PodiumRabbit rabbitId={top3[2].firstEquippedRabbitId} size={52} />
+                          <div className="absolute z-10 flex justify-center items-end" style={{ left: '65%', width: '30%', bottom: '58%' }}>
+                            <PodiumRabbit rabbitId={top3[2].firstEquippedRabbitId} widthPercent={42} />
                           </div>
                         )}
                       </div>
@@ -665,7 +666,7 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
 /**
  * 단상 위 토끼 이미지
  */
-function PodiumRabbit({ rabbitId, size }: { rabbitId?: number; size: number }) {
+function PodiumRabbit({ rabbitId, widthPercent }: { rabbitId?: number; widthPercent: number }) {
   // 장착 토끼가 없으면 기본 토끼(#0) 표시 (모든 유저는 온보딩 시 기본 토끼 지급)
   const displayId = rabbitId ?? 0;
   return (
@@ -673,8 +674,7 @@ function PodiumRabbit({ rabbitId, size }: { rabbitId?: number; size: number }) {
     <img
       src={getRabbitImageSrc(displayId)}
       alt=""
-      width={size}
-      height={Math.round(size * (969 / 520))}
+      style={{ width: `${widthPercent}%`, aspectRatio: '520 / 969' }}
       className="object-contain"
     />
   );
