@@ -48,7 +48,7 @@ export default function TekkenMatchmakingModal({
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          className="fixed inset-0 z-[110] flex flex-col items-center justify-center bg-black/90"
+          className="fixed top-0 right-0 bottom-0 z-[110] flex flex-col items-center justify-center bg-black/90"
           style={{ left: 'var(--home-sheet-left, 0px)' }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}

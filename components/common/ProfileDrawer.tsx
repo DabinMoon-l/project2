@@ -654,17 +654,26 @@ export default function ProfileDrawer({ isOpen, onClose, isPanelMode }: ProfileD
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[60] bg-black/50"
-              style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
+              className={`fixed inset-0 z-[60] ${isWide ? '' : 'bg-black/50'}`}
+              style={isWide
+                ? undefined
+                : { left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }
+              }
               onClick={() => setShowProfilePicker(false)}
             />
             <motion.div
-              initial={{ x: '-100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '-100%' }}
+              initial={isWide ? { y: '100%' } : { x: '-100%' }}
+              animate={isWide ? { y: 0 } : { x: 0 }}
+              exit={isWide ? { y: '100%' } : { x: '-100%' }}
               transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-              className="fixed left-0 bottom-0 z-[60] w-56 rounded-tr-2xl overflow-hidden"
-              style={{ height: pickerHeight > 0 ? pickerHeight : '85vh' }}
+              className={isWide
+                ? "fixed bottom-0 right-0 z-[60] rounded-t-2xl overflow-hidden"
+                : "fixed left-0 bottom-0 z-[60] w-56 rounded-tr-2xl overflow-hidden"
+              }
+              style={isWide
+                ? { left: 'var(--home-sheet-left, 0px)', maxHeight: '70vh' }
+                : { height: pickerHeight > 0 ? pickerHeight : '85vh' }
+              }
             >
               {/* 글래스 배경 */}
               <div className="absolute inset-0 overflow-hidden">
@@ -672,7 +681,13 @@ export default function ProfileDrawer({ isOpen, onClose, isPanelMode }: ProfileD
               </div>
               <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
 
-              <div className="relative z-10 h-full flex flex-col">
+              <div className={`relative z-10 flex flex-col ${isWide ? 'max-h-[70vh]' : 'h-full'}`}>
+                {/* 드래그 핸들 (가로모드) */}
+                {isWide && (
+                  <div className="flex justify-center pt-3 pb-1">
+                    <div className="w-10 h-1 bg-white/40 rounded-full" />
+                  </div>
+                )}
                 {/* 헤더 */}
                 <div className="flex items-center justify-between px-4 pt-5 pb-3 border-b border-white/10">
                   <h3 className="text-lg font-bold text-white">프로필 사진</h3>
@@ -708,13 +723,13 @@ export default function ProfileDrawer({ isOpen, onClose, isPanelMode }: ProfileD
                 </button>
 
                 {/* 토끼 그리드 */}
-                <div className="flex-1 overflow-y-auto p-3">
+                <div className="flex-1 overflow-y-auto p-3 min-h-0">
                   {!pickerReady ? (
                     <div className="flex items-center justify-center py-12">
                       <div className="w-6 h-6 border-2 border-white/30 border-t-white/80 rounded-full animate-spin" />
                     </div>
                   ) : isProfessor ? (
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className={`grid ${isWide ? 'grid-cols-5' : 'grid-cols-3'} gap-2`}>
                       {Array.from({ length: 80 }, (_, i) => i).map(rabbitId => (
                         <button
                           key={rabbitId}
@@ -744,7 +759,7 @@ export default function ProfileDrawer({ isOpen, onClose, isPanelMode }: ProfileD
                       ))}
                     </div>
                   ) : sortedHoldings.length > 0 ? (
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className={`grid ${isWide ? 'grid-cols-5' : 'grid-cols-3'} gap-2`}>
                       {sortedHoldings.map((h, idx) => (
                         <button
                           key={h.id}
@@ -972,7 +987,7 @@ export default function ProfileDrawer({ isOpen, onClose, isPanelMode }: ProfileD
   // ============================================================
   if (isPanelMode && isOpen) {
     return (
-      <div className="h-full relative overflow-hidden" style={{ backgroundImage: 'url(/images/home-bg-3.jpg)', backgroundSize: '100% 100%' }}>
+      <div className="h-full relative overflow-hidden" style={{ backgroundImage: 'url(/images/home-bg-3.jpg)', backgroundSize: '102% 102%', backgroundPosition: 'center' }}>
         {/* 스크롤 영역 */}
         <div ref={sheetRef} className="relative z-10 overflow-y-auto overscroll-contain h-full">
           {drawerContent}

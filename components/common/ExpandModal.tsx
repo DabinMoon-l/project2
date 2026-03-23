@@ -100,7 +100,9 @@ export default function ExpandModal({
               <div className="flex justify-center pt-2 pb-1">
                 <div className="w-8 h-1 rounded-full bg-[#D4CFC4]" />
               </div>
-              {children}
+              <div className="px-3 pb-3">
+                {children}
+              </div>
             </motion.div>
           </>
         )}

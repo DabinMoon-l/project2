@@ -67,8 +67,9 @@ export default function BookmarkDetailSheet({ quiz, isWide, onClose, onAction }:
   if (isWide) {
     return (
       <AnimatePresence>
-        <div className="fixed inset-0 z-[60]" style={{ left: 'var(--modal-left, 240px)', right: 'var(--modal-right, 0px)' }} onClick={onClose} />
+        <div key="backdrop" className="fixed inset-0 z-[60]" style={{ left: 'var(--modal-left, 240px)', right: 'var(--modal-right, 0px)' }} onClick={onClose} />
         <motion.div
+          key="sheet"
           initial={{ y: '100%' }}
           animate={{ y: 0 }}
           exit={{ y: '100%' }}

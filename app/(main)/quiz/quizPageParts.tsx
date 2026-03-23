@@ -63,18 +63,18 @@ export const QUIZ_SCROLL_KEY = (type: string) => `quiz-scroll-${type}`;
 /** getDefaultQuizTab → 캐러셀 인덱스 매핑 (midterm=0, past=1, final=2, 이후 단독 퀴즈) */
 export function getDefaultCarouselIndex(totalCards?: number): number {
   if (typeof window !== 'undefined') {
-    const saved = sessionStorage.getItem(QUIZ_CAROUSEL_KEY);
-    if (saved !== null) {
-      const idx = parseInt(saved, 10);
-      // 카드 수가 바뀌었으면 범위 체크
-      if (totalCards !== undefined && idx >= totalCards) return 0;
-      return idx;
+    // 유저가 직접 스와이프한 적 있으면 그 인덱스 유지
+    const userSet = sessionStorage.getItem('quiz_carousel_user_set') === '1';
+    if (userSet) {
+      const saved = sessionStorage.getItem(QUIZ_CAROUSEL_KEY);
+      if (saved !== null) {
+        const idx = parseInt(saved, 10);
+        if (totalCards !== undefined && idx >= totalCards) return 0;
+        return idx;
+      }
     }
   }
-  const tab = getDefaultQuizTab();
-  if (tab === 'midterm') return 0;
-  if (tab === 'past') return 1;
-  if (tab === 'final') return 2;
+  // 유저가 스와이프하지 않았으면 0 반환 (이후 autoNavigate가 최신 퀴즈로 이동)
   return 0;
 }
 

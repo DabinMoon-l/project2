@@ -201,7 +201,7 @@ export default function RabbitDogam({
   // === 패널 모드: 포탈/지니 애니메이션 없이 인라인 렌더링 ===
   if (isPanelMode) {
     return (
-      <div className="h-full relative overflow-hidden" style={{ backgroundImage: 'url(/images/home-bg-3.jpg)', backgroundSize: '100% 100%' }}>
+      <div className="h-full relative overflow-hidden" style={{ backgroundImage: 'url(/images/home-bg-3.jpg)', backgroundSize: '102% 102%', backgroundPosition: 'center' }}>
 
         {/* 헤더 */}
         <div className="relative z-10 flex items-center justify-between px-3 py-2.5 border-b border-white/15">

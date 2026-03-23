@@ -170,7 +170,7 @@ export default function TekkenBattleOverlay({
 
   return createPortal(
     <motion.div
-      className="fixed inset-0 z-[110] flex flex-col overflow-hidden"
+      className="fixed top-0 right-0 bottom-0 z-[110] flex flex-col overflow-hidden"
       style={{ left: 'var(--home-sheet-left, 0px)' }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
