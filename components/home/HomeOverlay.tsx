@@ -13,6 +13,7 @@ import {
   RankingSection,
 } from '@/components/home';
 import { useWideMode, scaleCoord } from '@/lib/hooks/useViewportScale';
+import { useDetailPanel } from '@/lib/contexts/DetailPanelContext';
 
 // 대형 컴포넌트 lazy load (오버레이 열릴 때만 필요)
 const ProfileDrawer = dynamic(() => import('@/components/common/ProfileDrawer'), { ssr: false });
@@ -39,6 +40,7 @@ export default function HomeOverlay() {
   const { isOpen, isCloseRequested, close, buttonRect } = useHomeOverlay();
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
   const isWide = useWideMode();
+  const { openDetail, closeDetail, isDetailOpen } = useDetailPanel();
 
   // 홈 오버레이 닫히면 프로필 드로어도 닫기
   useEffect(() => {
@@ -305,7 +307,13 @@ export default function HomeOverlay() {
                 background: 'rgba(0, 0, 0, 0.3)',
                 border: '1px solid rgba(255, 255, 255, 0.1)',
               }}
-              onClick={() => setShowProfileDrawer(true)}
+              onClick={() => {
+                if (isWide) {
+                  openDetail(<ProfileDrawer isOpen isPanelMode onClose={closeDetail} />);
+                } else {
+                  setShowProfileDrawer(true);
+                }
+              }}
             >
               {profile.profileRabbitId != null ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -328,10 +336,10 @@ export default function HomeOverlay() {
             </p>
           </div>
           <div className="px-8 mb-2 mt-1 relative z-30">
-            <AnnouncementChannel />
+            <AnnouncementChannel onOpenPanel={isWide ? () => openDetail(<AnnouncementChannel isPanelMode onClosePanel={closeDetail} />) : undefined} />
           </div>
           <div className="px-8 mb-1 relative z-20">
-            <OpinionChannel />
+            <OpinionChannel onOpenPanel={isWide ? () => openDetail(<OpinionChannel isPanelMode onClosePanel={closeDetail} />) : undefined} />
           </div>
         </div>
 

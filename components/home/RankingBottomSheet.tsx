@@ -35,6 +35,8 @@ interface RankedUser {
 interface RankingBottomSheetProps {
   isOpen: boolean;
   onClose: () => void;
+  /** 가로모드 3쪽 패널에서 렌더링할 때 true */
+  isPanelMode?: boolean;
 }
 
 /**
@@ -86,7 +88,7 @@ async function resolveRabbitNamesForAll(users: RankedUser[]) {
 /**
  * 랭킹 바텀시트 — 홈 오버레이에서 열리는 전체 랭킹
  */
-export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomSheetProps) {
+export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: RankingBottomSheetProps) {
   const { profile } = useUser();
   const { userCourseId } = useCourse();
   useTheme();
@@ -107,16 +109,17 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
   const top3Ref = useRef<HTMLDivElement>(null);
   const rankedUsersRef = useRef<RankedUser[]>(rankedUsers);
 
-  // 네비게이션 숨김
-  useHideNav(isOpen);
+  // 네비게이션 숨김 (패널 모드에서는 불필요)
+  useHideNav(!isPanelMode && isOpen);
 
-  // 스크롤 잠금
+  // 스크롤 잠금 (패널 모드에서는 불필요)
   useEffect(() => {
+    if (isPanelMode) return;
     if (isOpen) {
       lockScroll();
       return () => unlockScroll();
     }
-  }, [isOpen]);
+  }, [isOpen, isPanelMode]);
 
   // 열릴 때 초기화
   useEffect(() => {
@@ -316,6 +319,353 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
     return me || (periodFilter === 'all' ? myRank : null);
   }, [filteredUsers, profile?.uid, myRank, periodFilter]);
 
+  // 랭킹 콘텐츠 (바텀시트/패널 공통)
+  const rankingContent = (
+    <>
+      {/* 배경 이미지 + 글래스 오버레이 (패널 모드에서는 부모가 배경 처리) */}
+      {!isPanelMode && (
+        <>
+          <div className="absolute inset-0 pointer-events-none">
+            <Image src="/images/home-bg.jpg" alt="" fill className="object-cover" />
+          </div>
+          <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl pointer-events-none" />
+        </>
+      )}
+
+      {/* 스크롤 가능한 컨텐츠 */}
+      <div ref={scrollRef} className="relative z-10 h-full overflow-y-auto scrollbar-hide" style={{ paddingBottom: myFilteredRank ? 'calc(72px + env(safe-area-inset-bottom, 0px))' : 16 }}>
+        {/* 핸들 바 (패널 모드에서는 숨김) */}
+        {!isPanelMode && (
+          <div className="flex justify-center pt-3 pb-2">
+            <div className="w-10 h-1 bg-white/30 rounded-full" />
+          </div>
+        )}
+
+        {/* 헤더 */}
+        <div className={`px-4 mb-0 flex items-center justify-between ${isPanelMode ? 'pt-3' : ''}`}>
+          <button
+            onClick={() => setShowInfo(true)}
+            className="w-8 h-8 flex items-center justify-center border-2 border-white/30 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+            aria-label="랭킹 안내"
+          >
+            <span className="text-sm font-black text-white leading-none">i</span>
+          </button>
+
+          {/* DAY / WEEK / ALL 탭 */}
+          <div className="flex items-center gap-5">
+            {(['day', 'week', 'all'] as const).map(p => (
+              <button
+                key={p}
+                onClick={() => setPeriodFilter(p)}
+                className={`text-lg font-black transition-colors ${
+                  periodFilter === p ? 'text-white' : 'text-white/30'
+                }`}
+              >
+                {p.toUpperCase()}
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center"
+            aria-label="닫기"
+          >
+            <svg className="w-5 h-5 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* 배너 */}
+        <div className="relative leading-[0] mt-1" style={{ transform: 'scaleY(1.05)', transformOrigin: 'top' }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/images/rank_banner.png" alt="랭킹 배너" className="w-full block" />
+          {!loading && filteredUsers[0] && (
+            <div
+              className="absolute inset-0 flex items-center justify-center pointer-events-none px-[20%]"
+              style={{ zIndex: 10, paddingTop: '8px' }}
+            >
+              <span className="text-2xl leading-normal font-sans text-[#1A1A1A] truncate" style={{ fontWeight: 900 }}>
+                {displayName(filteredUsers[0])}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* 반별 필터 드롭다운 */}
+        <div className="flex justify-end px-4 mt-1 relative">
+          <button
+            onClick={() => setShowClassDropdown(v => !v)}
+            className="flex items-center justify-center gap-1 w-14 py-1.5 text-sm font-bold bg-white/15 text-white/80 border border-white/25 rounded-md"
+          >
+            {classFilter === 'all' ? 'All' : classFilter}
+            <svg className={`w-3.5 h-3.5 text-white/50 transition-transform ${showClassDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {showClassDropdown && (
+            <div className="fixed inset-0 z-10" onClick={() => setShowClassDropdown(false)} />
+          )}
+          {showClassDropdown && (
+            <div className="absolute right-4 top-9 z-20 w-14 border border-white/25 rounded-md overflow-hidden backdrop-blur-xl">
+              {(['all', 'A', 'B', 'C', 'D'] as const).map(v => (
+                <button
+                  key={v}
+                  onClick={() => { setClassFilter(v); setShowClassDropdown(false); setDisplayCount(30); }}
+                  className={`block w-full py-1.5 text-sm font-bold text-center transition-colors ${
+                    classFilter === v ? 'bg-white/25 text-white' : 'bg-white/10 text-white/70 hover:bg-white/20'
+                  }`}
+                >
+                  {v === 'all' ? 'All' : v}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="w-8 h-8 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : (
+          <>
+            {/* Top 3 단상 */}
+            <div ref={top3Ref} className="mx-4 mt-36 mb-3 relative">
+              {/* 빈 상태 메시지 — 단상 위 겹침 */}
+              {periodFilter !== 'all' && filteredUsers.length === 0 && (
+                <div className="absolute -top-24 left-0 right-0 flex flex-col items-center text-center">
+                  <p className="text-sm font-black text-white mb-0.5">
+                    {periodFilter === 'day' ? '오늘' : '이번 주'} 활동한 학생이 없습니다
+                  </p>
+                  <p className="text-[11px] text-white/50">
+                    퀴즈를 풀거나 활동하면 랭킹에 표시됩니다
+                  </p>
+                </div>
+              )}
+              <div>
+                <div className="relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/images/rank.png" alt="단상" className="w-full block" />
+
+                  {/* 토끼: items-end로 발끝 단상 위 고정 */}
+                  {top3[1] && (
+                    <div className="absolute z-10 flex justify-center items-end" style={{ left: '5%', width: '30%', bottom: '62%' }}>
+                      <PodiumRabbit rabbitId={top3[1].firstEquippedRabbitId} widthPercent={42} />
+                    </div>
+                  )}
+                  {top3[0] && (
+                    <div className="absolute z-10 flex justify-center items-end" style={{ left: '33%', width: '34%', bottom: '95%' }}>
+                      <PodiumRabbit rabbitId={top3[0].firstEquippedRabbitId} widthPercent={45} />
+                    </div>
+                  )}
+                  {top3[2] && (
+                    <div className="absolute z-10 flex justify-center items-end" style={{ left: '65%', width: '30%', bottom: '58%' }}>
+                      <PodiumRabbit rabbitId={top3[2].firstEquippedRabbitId} widthPercent={42} />
+                    </div>
+                  )}
+                </div>
+
+                {/* Top3 정보 */}
+                <div className="grid grid-cols-3 gap-1 mt-2">
+                  {[top3[1], top3[0], top3[2]].map((user, i) => (
+                    <div key={i} className="text-center">
+                      {user && (
+                        <>
+                          <p className="text-sm font-black text-white truncate">{displayName(user)}</p>
+                          <p className="text-[11px] text-white/60">{user.classType}반 · {Math.round(user.rankScore)}점</p>
+                          {user.equippedRabbitNames && <p className="text-[11px] text-white/60 truncate">{user.equippedRabbitNames}</p>}
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* 구분선 */}
+            <div className="mx-4 border-t-2 border-white/30 mb-1" />
+            <div className="mx-4 border-t border-white/20 mb-4" />
+
+            {/* 나머지 유저 목록 */}
+            <div className="mx-4 pb-20">
+              {visibleUsers.map((user) => (
+                <div
+                  key={user.id}
+                  className={`flex items-center gap-3 py-3 border-b border-white/15 ${
+                    user.id === profile?.uid ? 'bg-white/10 -mx-2 px-2 rounded-lg' : ''
+                  }`}
+                >
+                  <div className="w-8 text-center font-black text-white/60">{user.rank}</div>
+                  <div className="w-10 h-10 flex items-center justify-center border-2 border-white/30 rounded-lg overflow-hidden flex-shrink-0 bg-white/10">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={getRabbitProfileUrl(user.profileRabbitId ?? 0)} alt="" width={40} height={40} className="w-full h-full object-cover" loading="lazy" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-white truncate">{displayName(user)} · {user.classType}반</p>
+                    {user.equippedRabbitNames ? (
+                      <p className="text-xs text-white/50 truncate">{user.equippedRabbitNames}</p>
+                    ) : (
+                      <p className="text-xs text-white/50">{user.totalExp.toLocaleString()} XP</p>
+                    )}
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className="font-black text-white">{Math.round(user.rankScore)}점</p>
+                  </div>
+                </div>
+              ))}
+
+              {displayCount < restUsers.length && (
+                <button
+                  onClick={() => setDisplayCount(prev => prev + 30)}
+                  className="w-full py-4 text-center text-sm font-medium text-white/50 hover:text-white/70 transition-colors"
+                >
+                  더보기 ({visibleUsers.length}/{restUsers.length})
+                </button>
+              )}
+
+              {rankedUsers.length === 0 && (
+                <div className="text-center py-12">
+                  <h3 className="font-serif-display text-2xl font-black mb-2 text-white">NO DATA YET</h3>
+                  <p className="text-sm text-white/50">아직 랭킹 데이터가 없습니다.</p>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* 스크롤 맨 위로 버튼 */}
+      <AnimatePresence>
+        {showScrollTop && (
+          <motion.button
+            key="scroll-top"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            whileTap={{ scale: 0.95, opacity: 0.7 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+            onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+            className="absolute right-4 z-40 w-10 h-10 bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 rounded-full shadow-lg flex items-center justify-center transition-colors"
+            style={{ bottom: myFilteredRank ? 80 : 20 }}
+            aria-label="맨 위로"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+            </svg>
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      {/* 하단 고정: 내 순위 — 기간별 반영 */}
+      {myFilteredRank && (
+        <div className="absolute bottom-0 left-0 right-0 border-t border-white/15 p-3 z-30 bg-black/40 backdrop-blur-xl" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}>
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 flex items-center justify-center font-black text-lg bg-white/20 text-white rounded-lg">
+              {myFilteredRank.rank}
+            </div>
+            <div className="w-10 h-10 flex items-center justify-center border-2 border-white/30 rounded-lg overflow-hidden flex-shrink-0 bg-white/10">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={getRabbitProfileUrl(myFilteredRank.profileRabbitId ?? 0)} alt="" width={40} height={40} className="w-full h-full object-cover" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-white truncate">{displayName(myFilteredRank)} · {myFilteredRank.classType}반</p>
+              {myFilteredRank.equippedRabbitNames ? (
+                <p className="text-xs text-white/50 truncate">{myFilteredRank.equippedRabbitNames}</p>
+              ) : (
+                <p className="text-xs text-white/50">{myFilteredRank.totalExp.toLocaleString()} XP</p>
+              )}
+            </div>
+            <div className="text-right flex-shrink-0">
+              <p className="text-base font-black text-white">{Math.round(myFilteredRank.rankScore)}점</p>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  // 랭킹 안내 모달 (바텀시트/패널 공통)
+  const infoModal = (
+    <AnimatePresence>
+      {showInfo && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className={isPanelMode
+            ? 'absolute inset-0 z-[120] flex items-center justify-center p-6 bg-black/50'
+            : 'fixed inset-0 z-[120] flex items-center justify-center p-6 bg-black/50'
+          }
+          style={isPanelMode ? undefined : { left: 'var(--home-sheet-left, 0px)' }}
+          onClick={() => setShowInfo(false)}
+        >
+          <motion.div
+            initial={{ scale: 0.9 }}
+            animate={{ scale: 1 }}
+            exit={{ scale: 0.9 }}
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-[240px] rounded-2xl overflow-hidden p-3"
+          >
+            <div className="absolute inset-0 rounded-2xl overflow-hidden">
+              <Image src="/images/home-bg.jpg" alt="" fill className="object-cover" />
+            </div>
+            <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
+            <div className="relative z-10">
+              <div className="flex justify-center mb-2">
+                <div className="w-7 h-7 border-2 border-white/30 rounded-lg flex items-center justify-center bg-white/10">
+                  <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+              </div>
+              <h3 className="text-sm font-black text-white text-center mb-2">랭킹은 이렇게 매겨져요!</h3>
+              <div className="text-[10px] text-white/60 space-y-0.5 mb-3">
+                <p className="font-bold text-white text-xs">개인 랭킹</p>
+                <p>- 퀴즈 점수 + EXP로 계산됩니다.</p>
+                <p>- 퀴즈 점수 = 정답률(50%) + 응시율(50%)</p>
+                <p>- 많이 풀고, 잘 풀수록 점수가 올라요!</p>
+                <div className="pt-2" />
+                <p className="font-bold text-white text-xs">Day / Week</p>
+                <p>- 해당 기간에 활동한 학생만 표시됩니다.</p>
+                <p>- 점수 공식은 All과 동일합니다.</p>
+                <div className="pt-2" />
+                <p className="font-bold text-white text-xs">팀 랭킹</p>
+                <p>- 평균 참여도(40%) + 평균 성적(40%) + 퀴즈 응시율(20%).</p>
+                <p>- 응시율 = 교수님 퀴즈 중 반 평균 풀이 비율.</p>
+                {profile?.role === 'professor' && (
+                  <>
+                    <div className="pt-2" />
+                    <p className="font-bold text-white text-xs">홈 화면 OVERVIEW %</p>
+                    <p>- 이번 주(월~일) 퀴즈에 참여한 학생 비율입니다.</p>
+                    <p>- 5분마다 자동 갱신됩니다.</p>
+                  </>
+                )}
+              </div>
+              <button
+                onClick={() => setShowInfo(false)}
+                className="w-full py-1.5 bg-white/20 backdrop-blur-sm text-white font-bold text-xs rounded-xl hover:bg-white/30 transition-colors"
+              >
+                확인
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
+  // 패널 모드: 포탈/바텀시트 없이 직접 렌더링
+  if (isPanelMode) {
+    return (
+      <div className="h-full relative overflow-hidden" style={{ backgroundImage: 'url(/images/home-bg-3.jpg)', backgroundSize: '100% 100%' }}>
+        {rankingContent}
+        {infoModal}
+      </div>
+    );
+  }
+
+  // 기본 모드: 포탈 바텀시트
   return createPortal(
     <AnimatePresence>
       {isOpen && (
@@ -336,326 +686,11 @@ export default function RankingBottomSheet({ isOpen, onClose }: RankingBottomShe
             style={{ height: '92vh' }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* 배경 이미지 + 글래스 오버레이 */}
-            <div className="absolute inset-0 pointer-events-none">
-              <Image src="/images/home-bg.jpg" alt="" fill className="object-cover" />
-            </div>
-            <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl pointer-events-none" />
-
-            {/* 스크롤 가능한 컨텐츠 */}
-            <div ref={scrollRef} className="relative z-10 h-full overflow-y-auto scrollbar-hide" style={{ paddingBottom: myFilteredRank ? 'calc(72px + env(safe-area-inset-bottom, 0px))' : 16 }}>
-              {/* 핸들 바 */}
-              <div className="flex justify-center pt-3 pb-2">
-                <div className="w-10 h-1 bg-white/30 rounded-full" />
-              </div>
-
-              {/* 헤더 */}
-              <div className="px-4 mb-0 flex items-center justify-between">
-                <button
-                  onClick={() => setShowInfo(true)}
-                  className="w-8 h-8 flex items-center justify-center border-2 border-white/30 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-                  aria-label="랭킹 안내"
-                >
-                  <span className="text-sm font-black text-white leading-none">i</span>
-                </button>
-
-                {/* DAY / WEEK / ALL 탭 */}
-                <div className="flex items-center gap-5">
-                  {(['day', 'week', 'all'] as const).map(p => (
-                    <button
-                      key={p}
-                      onClick={() => setPeriodFilter(p)}
-                      className={`text-lg font-black transition-colors ${
-                        periodFilter === p ? 'text-white' : 'text-white/30'
-                      }`}
-                    >
-                      {p.toUpperCase()}
-                    </button>
-                  ))}
-                </div>
-
-                <button
-                  onClick={onClose}
-                  className="w-8 h-8 flex items-center justify-center"
-                  aria-label="닫기"
-                >
-                  <svg className="w-5 h-5 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              {/* 배너 */}
-              <div className="relative leading-[0] mt-1" style={{ transform: 'scaleY(1.05)', transformOrigin: 'top' }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/images/rank_banner.png" alt="랭킹 배너" className="w-full block" />
-                {!loading && filteredUsers[0] && (
-                  <div
-                    className="absolute inset-0 flex items-center justify-center pointer-events-none px-[20%]"
-                    style={{ zIndex: 10, paddingTop: '8px' }}
-                  >
-                    <span className="text-2xl leading-normal font-sans text-[#1A1A1A] truncate" style={{ fontWeight: 900 }}>
-                      {displayName(filteredUsers[0])}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* 반별 필터 드롭다운 */}
-              <div className="flex justify-end px-4 mt-1 relative">
-                <button
-                  onClick={() => setShowClassDropdown(v => !v)}
-                  className="flex items-center justify-center gap-1 w-14 py-1.5 text-sm font-bold bg-white/15 text-white/80 border border-white/25 rounded-md"
-                >
-                  {classFilter === 'all' ? 'All' : classFilter}
-                  <svg className={`w-3.5 h-3.5 text-white/50 transition-transform ${showClassDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-                {showClassDropdown && (
-                  <div className="fixed inset-0 z-10" onClick={() => setShowClassDropdown(false)} />
-                )}
-                {showClassDropdown && (
-                  <div className="absolute right-4 top-9 z-20 w-14 border border-white/25 rounded-md overflow-hidden backdrop-blur-xl">
-                    {(['all', 'A', 'B', 'C', 'D'] as const).map(v => (
-                      <button
-                        key={v}
-                        onClick={() => { setClassFilter(v); setShowClassDropdown(false); setDisplayCount(30); }}
-                        className={`block w-full py-1.5 text-sm font-bold text-center transition-colors ${
-                          classFilter === v ? 'bg-white/25 text-white' : 'bg-white/10 text-white/70 hover:bg-white/20'
-                        }`}
-                      >
-                        {v === 'all' ? 'All' : v}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {loading ? (
-                <div className="flex items-center justify-center py-20">
-                  <div className="w-8 h-8 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
-                </div>
-              ) : (
-                <>
-                  {/* Top 3 단상 */}
-                  <div ref={top3Ref} className="mx-4 mt-36 mb-3 relative">
-                    {/* 빈 상태 메시지 — 단상 위 겹침 */}
-                    {periodFilter !== 'all' && filteredUsers.length === 0 && (
-                      <div className="absolute -top-24 left-0 right-0 flex flex-col items-center text-center">
-                        <p className="text-sm font-black text-white mb-0.5">
-                          {periodFilter === 'day' ? '오늘' : '이번 주'} 활동한 학생이 없습니다
-                        </p>
-                        <p className="text-[11px] text-white/50">
-                          퀴즈를 풀거나 활동하면 랭킹에 표시됩니다
-                        </p>
-                      </div>
-                    )}
-                    <div>
-                      <div className="relative">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src="/images/rank.png" alt="단상" className="w-full block" />
-
-                        {/* 토끼: items-end로 발끝 단상 위 고정 */}
-                        {top3[1] && (
-                          <div className="absolute z-10 flex justify-center items-end" style={{ left: '5%', width: '30%', bottom: '62%' }}>
-                            <PodiumRabbit rabbitId={top3[1].firstEquippedRabbitId} widthPercent={42} />
-                          </div>
-                        )}
-                        {top3[0] && (
-                          <div className="absolute z-10 flex justify-center items-end" style={{ left: '33%', width: '34%', bottom: '95%' }}>
-                            <PodiumRabbit rabbitId={top3[0].firstEquippedRabbitId} widthPercent={45} />
-                          </div>
-                        )}
-                        {top3[2] && (
-                          <div className="absolute z-10 flex justify-center items-end" style={{ left: '65%', width: '30%', bottom: '58%' }}>
-                            <PodiumRabbit rabbitId={top3[2].firstEquippedRabbitId} widthPercent={42} />
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Top3 정보 */}
-                      <div className="grid grid-cols-3 gap-1 mt-2">
-                        {[top3[1], top3[0], top3[2]].map((user, i) => (
-                          <div key={i} className="text-center">
-                            {user && (
-                              <>
-                                <p className="text-sm font-black text-white truncate">{displayName(user)}</p>
-                                <p className="text-[11px] text-white/60">{user.classType}반 · {Math.round(user.rankScore)}점</p>
-                                {user.equippedRabbitNames && <p className="text-[11px] text-white/60 truncate">{user.equippedRabbitNames}</p>}
-                              </>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 구분선 */}
-                  <div className="mx-4 border-t-2 border-white/30 mb-1" />
-                  <div className="mx-4 border-t border-white/20 mb-4" />
-
-                  {/* 나머지 유저 목록 */}
-                  <div className="mx-4 pb-20">
-                    {visibleUsers.map((user) => (
-                      <div
-                        key={user.id}
-                        className={`flex items-center gap-3 py-3 border-b border-white/15 ${
-                          user.id === profile?.uid ? 'bg-white/10 -mx-2 px-2 rounded-lg' : ''
-                        }`}
-                      >
-                        <div className="w-8 text-center font-black text-white/60">{user.rank}</div>
-                        <div className="w-10 h-10 flex items-center justify-center border-2 border-white/30 rounded-lg overflow-hidden flex-shrink-0 bg-white/10">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={getRabbitProfileUrl(user.profileRabbitId ?? 0)} alt="" width={40} height={40} className="w-full h-full object-cover" loading="lazy" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-white truncate">{displayName(user)} · {user.classType}반</p>
-                          {user.equippedRabbitNames ? (
-                            <p className="text-xs text-white/50 truncate">{user.equippedRabbitNames}</p>
-                          ) : (
-                            <p className="text-xs text-white/50">{user.totalExp.toLocaleString()} XP</p>
-                          )}
-                        </div>
-                        <div className="text-right flex-shrink-0">
-                          <p className="font-black text-white">{Math.round(user.rankScore)}점</p>
-                        </div>
-                      </div>
-                    ))}
-
-                    {displayCount < restUsers.length && (
-                      <button
-                        onClick={() => setDisplayCount(prev => prev + 30)}
-                        className="w-full py-4 text-center text-sm font-medium text-white/50 hover:text-white/70 transition-colors"
-                      >
-                        더보기 ({visibleUsers.length}/{restUsers.length})
-                      </button>
-                    )}
-
-                    {rankedUsers.length === 0 && (
-                      <div className="text-center py-12">
-                        <h3 className="font-serif-display text-2xl font-black mb-2 text-white">NO DATA YET</h3>
-                        <p className="text-sm text-white/50">아직 랭킹 데이터가 없습니다.</p>
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* 스크롤 맨 위로 버튼 */}
-            <AnimatePresence>
-              {showScrollTop && (
-                <motion.button
-                  key="scroll-top"
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.8 }}
-                  whileTap={{ scale: 0.95, opacity: 0.7 }}
-                  transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-                  onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
-                  className="absolute right-4 z-40 w-10 h-10 bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 rounded-full shadow-lg flex items-center justify-center transition-colors"
-                  style={{ bottom: myFilteredRank ? 80 : 20 }}
-                  aria-label="맨 위로"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                  </svg>
-                </motion.button>
-              )}
-            </AnimatePresence>
-
-            {/* 하단 고정: 내 순위 — 기간별 반영 */}
-            {myFilteredRank && (
-              <div className="absolute bottom-0 left-0 right-0 border-t border-white/15 p-3 z-30 bg-black/40 backdrop-blur-xl" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}>
-                <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 flex items-center justify-center font-black text-lg bg-white/20 text-white rounded-lg">
-                    {myFilteredRank.rank}
-                  </div>
-                  <div className="w-10 h-10 flex items-center justify-center border-2 border-white/30 rounded-lg overflow-hidden flex-shrink-0 bg-white/10">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={getRabbitProfileUrl(myFilteredRank.profileRabbitId ?? 0)} alt="" width={40} height={40} className="w-full h-full object-cover" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-white truncate">{displayName(myFilteredRank)} · {myFilteredRank.classType}반</p>
-                    {myFilteredRank.equippedRabbitNames ? (
-                      <p className="text-xs text-white/50 truncate">{myFilteredRank.equippedRabbitNames}</p>
-                    ) : (
-                      <p className="text-xs text-white/50">{myFilteredRank.totalExp.toLocaleString()} XP</p>
-                    )}
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-base font-black text-white">{Math.round(myFilteredRank.rankScore)}점</p>
-                  </div>
-                </div>
-              </div>
-            )}
+            {rankingContent}
           </motion.div>
 
           {/* 랭킹 안내 모달 — 바텀시트 위에 표시 */}
-          <AnimatePresence>
-            {showInfo && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 z-[120] flex items-center justify-center p-6 bg-black/50"
-                style={{ left: 'var(--home-sheet-left, 0px)' }}
-                onClick={() => setShowInfo(false)}
-              >
-                <motion.div
-                  initial={{ scale: 0.9 }}
-                  animate={{ scale: 1 }}
-                  exit={{ scale: 0.9 }}
-                  onClick={(e) => e.stopPropagation()}
-                  className="relative w-full max-w-[240px] rounded-2xl overflow-hidden p-3"
-                >
-                  <div className="absolute inset-0 rounded-2xl overflow-hidden">
-                    <Image src="/images/home-bg.jpg" alt="" fill className="object-cover" />
-                  </div>
-                  <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
-                  <div className="relative z-10">
-                    <div className="flex justify-center mb-2">
-                      <div className="w-7 h-7 border-2 border-white/30 rounded-lg flex items-center justify-center bg-white/10">
-                        <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      </div>
-                    </div>
-                    <h3 className="text-sm font-black text-white text-center mb-2">랭킹은 이렇게 매겨져요!</h3>
-                    <div className="text-[10px] text-white/60 space-y-0.5 mb-3">
-                      <p className="font-bold text-white text-xs">개인 랭킹</p>
-                      <p>- 퀴즈 점수 + EXP로 계산됩니다.</p>
-                      <p>- 퀴즈 점수 = 정답률(50%) + 응시율(50%)</p>
-                      <p>- 많이 풀고, 잘 풀수록 점수가 올라요!</p>
-                      <div className="pt-2" />
-                      <p className="font-bold text-white text-xs">Day / Week</p>
-                      <p>- 해당 기간에 활동한 학생만 표시됩니다.</p>
-                      <p>- 점수 공식은 All과 동일합니다.</p>
-                      <div className="pt-2" />
-                      <p className="font-bold text-white text-xs">팀 랭킹</p>
-                      <p>- 평균 참여도(40%) + 평균 성적(40%) + 퀴즈 응시율(20%).</p>
-                      <p>- 응시율 = 교수님 퀴즈 중 반 평균 풀이 비율.</p>
-                      {profile?.role === 'professor' && (
-                        <>
-                          <div className="pt-2" />
-                          <p className="font-bold text-white text-xs">홈 화면 OVERVIEW %</p>
-                          <p>- 이번 주(월~일) 퀴즈에 참여한 학생 비율입니다.</p>
-                          <p>- 5분마다 자동 갱신됩니다.</p>
-                        </>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => setShowInfo(false)}
-                      className="w-full py-1.5 bg-white/20 backdrop-blur-sm text-white font-bold text-xs rounded-xl hover:bg-white/30 transition-colors"
-                    >
-                      확인
-                    </button>
-                  </div>
-                </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {infoModal}
         </motion.div>
       )}
     </AnimatePresence>,

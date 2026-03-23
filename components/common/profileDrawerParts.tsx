@@ -47,6 +47,8 @@ export interface Inquiry {
 export interface ProfileDrawerProps {
   isOpen: boolean;
   onClose: () => void;
+  /** 3쪽 패널 모드 — 포탈 없이 h-full 렌더 */
+  isPanelMode?: boolean;
 }
 
 // ============================================================

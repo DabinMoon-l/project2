@@ -175,12 +175,12 @@ const OpinionItem = memo(function OpinionItem({
 });
 
 // ─── 메인 컴포넌트 ──────────────────────────────────
-export default function OpinionChannel() {
+export default function OpinionChannel({ isPanelMode = false, onOpenPanel, onClosePanel }: { isPanelMode?: boolean; onOpenPanel?: () => void; onClosePanel?: () => void } = {}) {
   const { profile, isProfessor } = useUser();
   const { uploadImage, loading: uploadLoading } = useUpload();
   const [messages, setMessages] = useState<OpinionMessage[]>(opinionCache.length > 0 ? [...opinionCache] : []);
   const [loading, setLoading] = useState(opinionCache.length === 0);
-  const [showModal, setShowModal] = useState(false);
+  const [showModal, setShowModal] = useState(isPanelMode);
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
   const [pendingImage, setPendingImage] = useState<File | null>(null);
   const [pendingPreview, setPendingPreview] = useState<string>('');
@@ -195,12 +195,14 @@ export default function OpinionChannel() {
   const previewRef = useRef<HTMLDivElement>(null);
   const [sheetTop, setSheetTop] = useState(0);
 
-  useHideNav(showModal);
+  // 패널 모드에서는 네비 숨김/스크롤 잠금 스킵
+  useHideNav(!isPanelMode && showModal);
 
-  // 스크롤 잠금
+  // 스크롤 잠금 (패널 모드에서는 스킵)
   useEffect(() => {
+    if (isPanelMode) return;
     if (showModal) { lockScroll(); return () => unlockScroll(); }
-  }, [showModal]);
+  }, [showModal, isPanelMode]);
 
   // Firestore 구독 — 전체 글로벌 (과목 무관)
   useEffect(() => {
@@ -225,10 +227,11 @@ export default function OpinionChannel() {
   }, [showModal]);
 
   const closeModal = useCallback(() => {
+    if (onClosePanel) { onClosePanel(); return; }
     setShowModal(false);
     setPendingImage(null);
     setPendingPreview('');
-  }, []);
+  }, [onClosePanel]);
 
   // 이미지 선택
   const handleImagePick = useCallback(() => {
@@ -331,10 +334,11 @@ export default function OpinionChannel() {
 
   return (
     <>
-      {/* ═══ 미리보기 ═══ */}
-      <div ref={previewRef} onTouchStart={(e) => e.stopPropagation()}>
+      {/* ═══ 미리보기 (패널 모드에서는 숨김) ═══ */}
+      {!isPanelMode && <div ref={previewRef} onTouchStart={(e) => e.stopPropagation()}>
         <button
           onClick={() => {
+            if (onOpenPanel) { onOpenPanel(); return; }
             if (previewRef.current) setSheetTop(previewRef.current.getBoundingClientRect().bottom);
             setShowModal(true);
           }}
@@ -349,10 +353,149 @@ export default function OpinionChannel() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         </button>
-      </div>
+      </div>}
 
-      {/* ═══ 바텀시트 ═══ */}
-      {typeof document !== 'undefined' && createPortal(
+      {/* ═══ 패널 모드: 포탈 없이 인라인 렌더링 ═══ */}
+      {isPanelMode && showModal && (
+        <div className="h-full relative overflow-hidden" style={{ backgroundImage: 'url(/images/home-bg-3.jpg)', backgroundSize: '100% 100%' }}>
+          <div className="relative z-10 h-full flex flex-col">
+            {/* 상단 바 */}
+            <div className="shrink-0 pt-3 pb-2 px-4">
+              <div className="flex items-center">
+                <h2 className="text-base font-bold text-white flex-1">의견 게시판</h2>
+                <button onClick={closeModal} className="w-9 h-9 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* 메시지 영역 — h-full 스크롤 */}
+            <div
+              ref={msgAreaRef}
+              className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide overscroll-contain px-0 py-2"
+            >
+              {loading ? (
+                <div className="flex items-center justify-center py-20">
+                  <div className="w-6 h-6 border-2 border-white/40 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : chrono.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-white/40">
+                  <svg className="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  <p className="text-sm">아직 의견이 없습니다</p>
+                  <p className="text-xs mt-1">첫 번째 의견을 남겨보세요!</p>
+                </div>
+              ) : (
+                chrono.map((msg, idx) => {
+                  const prev = idx > 0 ? chrono[idx - 1] : null;
+                  const showDate = !prev || dateKey(msg.createdAt) !== dateKey(prev.createdAt);
+                  return (
+                    <OpinionItem
+                      key={msg.id}
+                      msg={msg}
+                      showDate={showDate}
+                      isOwn={msg.createdBy === profile?.uid}
+                      onDelete={handleDelete}
+                      onImageClick={(url) => setViewerUrl(url)}
+                    />
+                  );
+                })
+              )}
+            </div>
+
+            {/* 입력 바 */}
+            <div className="shrink-0 border-t border-white/10 bg-black/20 backdrop-blur-xl">
+              {/* 이미지 미리보기 (파일 + URL) */}
+              {(pendingPreview || linkedImageUrls.length > 0) && (
+                <div className="px-4 pt-2 flex items-center gap-2 flex-wrap">
+                  {pendingPreview && (
+                    <div className="relative">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={pendingPreview} alt="" className="w-14 h-14 object-cover rounded-lg border border-white/20" />
+                      <button onClick={() => { setPendingImage(null); setPendingPreview(''); }} className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-white text-[8px] flex items-center justify-center">✕</button>
+                    </div>
+                  )}
+                  {linkedImageUrls.map((url, i) => (
+                    <div key={i} className="relative">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt="" className="w-14 h-14 object-cover rounded-lg border border-white/20" />
+                      <button onClick={() => setLinkedImageUrls(prev => prev.filter((_, j) => j !== i))} className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-white text-[8px] flex items-center justify-center">✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {/* URL 입력 패널 */}
+              {showUrlInput && (
+                <div className="px-4 pt-2 flex items-center gap-2">
+                  <input
+                    ref={urlInputRef}
+                    type="text"
+                    value={urlInputValue}
+                    onChange={(e) => setUrlInputValue(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddImageUrl(); } }}
+                    placeholder="이미지 URL 붙여넣기"
+                    className="flex-1 bg-white/10 border border-white/15 rounded-lg text-xs text-white placeholder:text-white/30 px-2.5 py-1.5 focus:outline-none"
+                  />
+                  <button onClick={handleAddImageUrl} className="text-xs font-bold text-white/60 shrink-0">추가</button>
+                </div>
+              )}
+              <div className="flex items-end gap-2 px-3 py-2">
+                {/* 이미지 버튼 */}
+                <button onClick={handleImagePick} disabled={uploadLoading} className="w-8 h-9 flex items-center justify-center shrink-0 text-white/50">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </button>
+                {/* URL 이미지 버튼 */}
+                <button onClick={() => setShowUrlInput(v => !v)} className={`w-8 h-9 flex items-center justify-center shrink-0 transition-colors ${showUrlInput ? 'text-white' : 'text-white/50'}`}>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                </button>
+                {/* 텍스트 입력 */}
+                <textarea
+                  ref={textareaRef}
+                  placeholder="의견을 입력하세요..."
+                  rows={1}
+                  className="flex-1 bg-white/10 border border-white/15 rounded-xl text-sm text-white placeholder:text-white/30 px-3 py-2 resize-none focus:outline-none focus:border-white/30 max-h-24 overflow-y-auto"
+                  onPaste={handlePaste}
+                  onInput={(e) => {
+                    const t = e.currentTarget;
+                    t.style.height = 'auto';
+                    t.style.height = Math.min(t.scrollHeight, 96) + 'px';
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSend();
+                    }
+                  }}
+                />
+                {/* 전송 */}
+                <button
+                  onClick={handleSend}
+                  disabled={sending || uploadLoading}
+                  className="w-9 h-9 flex items-center justify-center shrink-0 bg-white/20 rounded-full text-white disabled:opacity-40"
+                >
+                  {sending || uploadLoading ? (
+                    <div className="w-4 h-4 border-2 border-white/40 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19V5m0 0l-7 7m7-7l7 7" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ 바텀시트 (기존 포탈 모드) ═══ */}
+      {!isPanelMode && typeof document !== 'undefined' && createPortal(
         <AnimatePresence>
           {showModal && (
             <motion.div

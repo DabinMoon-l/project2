@@ -6,6 +6,8 @@ import { useUser, useCourse } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
 import { readHomeCache, writeHomeCache } from '@/lib/utils/rankingCache';
 import { computeRankScore, computeTeamScore } from '@/lib/utils/ranking';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
+import { useDetailPanel } from '@/lib/contexts/DetailPanelContext';
 import RankingBottomSheet from './RankingBottomSheet';
 
 /** rankings/{courseId} 문서의 rankedUsers 배열 항목 */
@@ -55,6 +57,8 @@ export default function RankingSection({ overrideCourseId }: { overrideCourseId?
   const [totalStudents, setTotalStudents] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [showRanking, setShowRanking] = useState(false);
+  const isWide = useWideMode();
+  const { openDetail, closeDetail } = useDetailPanel();
 
   useEffect(() => {
     if (!userCourseId || !profile) return;
@@ -147,7 +151,14 @@ export default function RankingSection({ overrideCourseId }: { overrideCourseId?
     <>
       <button
         onClick={() => {
-          if (!loading) setShowRanking(true);
+          if (!loading) {
+            if (isWide) {
+              // 가로모드: 3쪽 디테일 패널에 랭킹 표시
+              openDetail(<RankingBottomSheet isPanelMode isOpen onClose={closeDetail} />);
+            } else {
+              setShowRanking(true);
+            }
+          }
         }}
         className="w-full px-8 -mt-0.5 active:scale-[0.98] transition-transform"
       >
