@@ -192,12 +192,21 @@ export default function ProfessorLibraryTab({
 
   // 프리뷰 열기
   const openPreview = useCallback((quiz: ProfessorAiQuiz) => {
+    // 가로모드: 3쪽 패널에 QuizPreviewPage 표시
+    if (isWide) {
+      import('@/app/(main)/professor/quiz/[id]/preview/page').then(mod => {
+        const QuizPreviewPage = mod.default;
+        const action = isDetailOpen ? replaceDetail : openDetail;
+        action(<QuizPreviewPage panelQuizId={quiz.id} />);
+      });
+      return;
+    }
     setPreviewQuiz(quiz);
     setIsEditMode(false);
     setEditedTitle('');
     setEditingIndex(null);
     onPreviewChange?.(true);
-  }, [onPreviewChange]);
+  }, [onPreviewChange, isWide, isDetailOpen, openDetail, replaceDetail]);
 
   // 프리뷰 닫기
   const closePreview = useCallback(() => {
