@@ -357,7 +357,7 @@ export default function OpinionChannel({ isPanelMode = false, onOpenPanel, onClo
 
       {/* ═══ 패널 모드: 포탈 없이 인라인 렌더링 ═══ */}
       {isPanelMode && showModal && (
-        <div className="h-full relative overflow-hidden" style={{ backgroundImage: 'url(/images/home-bg-3.jpg)', backgroundSize: '102% 102%', backgroundPosition: 'center' }}>
+        <div className="h-full relative overflow-hidden">
           <div className="relative z-10 h-full flex flex-col">
             {/* 상단 바 */}
             <div className="shrink-0 pt-3 pb-2 px-4">

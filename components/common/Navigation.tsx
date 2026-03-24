@@ -295,6 +295,11 @@ export default function Navigation({ role }: NavigationProps) {
             );
           })}
         </div>
+        <div className="mt-auto px-6 py-2.5 pb-4">
+          <p className="text-sm font-semibold transition-colors duration-300" style={{ color: textColor, opacity: 0.45 }}>
+            Prof. Jin-A Kim
+          </p>
+        </div>
       </nav>
     );
   }

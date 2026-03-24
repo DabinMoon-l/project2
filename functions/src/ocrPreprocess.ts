@@ -331,7 +331,10 @@ export async function preprocessOcrText(
       temperature: 0.2,  // 낮은 온도로 일관성 유지
       topK: 40,
       topP: 0.95,
-      maxOutputTokens: 32768,
+      maxOutputTokens: 2048 + 32768,  // thinking(2048) + 응답(32768)
+      thinkingConfig: {
+        thinkingBudget: 2048,
+      },
     },
   };
 

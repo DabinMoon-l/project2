@@ -20,6 +20,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { useUser } from '@/lib/contexts';
 import { useUpload } from '@/lib/hooks/useStorage';
 import { useKeyboardAware, useKeyboardScrollAdjust } from '@/lib/hooks/useKeyboardAware';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
 
 interface CommentSectionProps {
   postId: string;
@@ -46,6 +47,7 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
   const { uploadMultipleImages, loading: uploading } = useUpload();
   const { bottomOffset } = useKeyboardAware();
   useKeyboardScrollAdjust(bottomOffset);
+  const isWide = useWideMode();
 
   const isProfessor = profile?.role === 'professor';
 
@@ -478,7 +480,7 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
         <div
           className="fixed right-3 z-40 rounded-2xl bg-[#F5F0E8]/80 backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.12)] border border-[#D4CFC4]/60 overflow-hidden will-change-[bottom]"
           style={{
-            left: 'calc(var(--detail-panel-left, 0px) + 0.75rem)',
+            left: isWide ? 'calc(var(--detail-panel-left, 0px) + 0.75rem)' : '0.75rem',
             bottom: 'max(var(--kb-offset, 0px), 0.75rem)',
           }}
         >

@@ -926,7 +926,7 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
 
   return (
     <motion.div
-      className={isPanelMode ? 'flex flex-col h-full' : 'min-h-screen pb-24'}
+      className={isPanelMode ? 'relative flex flex-col h-full overflow-hidden' : 'min-h-screen pb-24'}
       style={{ backgroundColor: '#F5F0E8' }}
       initial={slideIn ? { opacity: 0, x: 60 } : false}
       animate={{ opacity: 1, x: 0 }}
@@ -1202,19 +1202,21 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
         </AnimatePresence>
       </main>
 
-      {/* 네비게이션 */}
-      <QuizNavigation
-        currentQuestion={currentQuestionIndex + 1}
-        totalQuestions={quiz.displayItems.length}
-        onPrev={handlePrev}
-        onNext={handleNext}
-        onSubmit={handleSubmit}
-        hasAnswered={isCurrentItemAnswered}
-        isSubmitting={isSubmitting}
-        onGrade={handleGradeCurrentItem}
-        isGraded={isCurrentItemSubmitted}
-        isPanelMode={isPanelMode}
-      />
+      {/* 네비게이션 — 나가기 모달 열림 시 invisible (DOM 유지로 레이아웃 안정) */}
+      <div className={showExitModal ? 'invisible' : ''}>
+        <QuizNavigation
+          currentQuestion={currentQuestionIndex + 1}
+          totalQuestions={quiz.displayItems.length}
+          onPrev={handlePrev}
+          onNext={handleNext}
+          onSubmit={handleSubmit}
+          hasAnswered={isCurrentItemAnswered}
+          isSubmitting={isSubmitting}
+          onGrade={handleGradeCurrentItem}
+          isGraded={isCurrentItemSubmitted}
+          isPanelMode={isPanelMode}
+        />
+      </div>
 
       {/* 나가기 확인 모달 */}
       <ExitConfirmModal

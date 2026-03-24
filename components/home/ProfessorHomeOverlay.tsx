@@ -237,10 +237,10 @@ export default function ProfessorHomeOverlay() {
         position: 'fixed',
         top: 0,
         bottom: 0,
-        right: isWide ? 'calc(50% - 120px)' : 0,
-        left: isWide ? '240px' : 0,
-        zIndex: 100,
-        backgroundImage: `url(${HOME_BG_IMAGE})`,
+        right: 0,
+        left: 0,
+        zIndex: isWide ? 44 : 100,
+        backgroundImage: isWide ? 'url(/images/home-garo.png)' : `url(${HOME_BG_IMAGE})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center top',
         backgroundRepeat: 'no-repeat',
@@ -255,7 +255,18 @@ export default function ProfessorHomeOverlay() {
         overscrollBehavior: 'none',
       }}
     >
-      <div className="relative z-[2] flex-1 flex flex-col pt-1 pb-2">
+      {/* 가로모드: 2쪽↔3쪽 구분선 (종이 접힌 느낌) */}
+      {isWide && (
+        <div className="absolute top-0 bottom-0 z-[3] pointer-events-none" style={{
+          left: 'calc(50vw + 119px)',
+          width: '3px',
+          background: 'linear-gradient(to right, rgba(0,0,0,0.15), rgba(255,255,255,0.08))',
+        }} />
+      )}
+      <div
+        className="relative z-[2] flex-1 flex flex-col pt-1 pb-2"
+        style={isWide ? { marginLeft: '240px', marginRight: 'calc(50vw - 120px)' } : undefined}
+      >
         {/* ① 상단 섹션: 프로필 + 공지 + 의견 (flex-none) */}
         <div className="flex-none">
           <div className="px-8 flex items-center gap-3 mb-2 mt-10">

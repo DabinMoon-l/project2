@@ -285,10 +285,14 @@ export default function HomeOverlay() {
         position: 'fixed',
         top: 0,
         bottom: 0,
-        right: isWide ? 'calc(50% - 120px)' : 0,
-        left: isWide ? '240px' : 0,
-        zIndex: 100,
-        backgroundImage: `url(${HOME_BG_IMAGE})`,
+        // 가로모드: 전체 뷰포트 (창 느낌 — 오버레이 아님)
+        // 세로모드: 전체 화면 (오버레이)
+        right: 0,
+        left: 0,
+        // 가로모드: Nav(z-50) 아래 → 창 느낌, 세로모드: z-100
+        zIndex: isWide ? 44 : 100,
+        // 가로모드: 파노라마, 세로모드: 세로 이미지
+        backgroundImage: isWide ? 'url(/images/home-garo.png)' : `url(${HOME_BG_IMAGE})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center top',
         backgroundRepeat: 'no-repeat',
@@ -303,8 +307,19 @@ export default function HomeOverlay() {
         overscrollBehavior: 'none',
       }}
     >
-      {/* 글래스 효과는 layout.tsx의 전역 레이어에서 처리 */}
-      <div className="relative z-[2] flex-1 flex flex-col pt-1 pb-2">
+      {/* 가로모드: 2쪽↔3쪽 구분선 (종이 접힌 느낌 — 그림자+하이라이트) */}
+      {isWide && (
+        <div className="absolute top-0 bottom-0 z-[3] pointer-events-none" style={{
+          left: 'calc(50vw + 119px)',
+          width: '3px',
+          background: 'linear-gradient(to right, rgba(0,0,0,0.15), rgba(255,255,255,0.08))',
+        }} />
+      )}
+      {/* 가로모드: 콘텐츠를 2쪽 영역에 배치 (1쪽/3쪽은 배경만 보임) */}
+      <div
+        className="relative z-[2] flex-1 flex flex-col pt-1 pb-2"
+        style={isWide ? { marginLeft: '240px', marginRight: 'calc(50vw - 120px)' } : undefined}
+      >
         {/* ① 상단 섹션: 프로필 + 공지 + 의견 + XP/도감 (flex-none) */}
         <div className="flex-none">
           <div className="px-8 flex items-center gap-3 mb-2 mt-10">

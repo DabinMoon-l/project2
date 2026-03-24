@@ -868,7 +868,10 @@ export default function BoardPage() {
             </button>
           </div>
         ) : (
-          <h1 className="font-serif-display text-4xl md:text-6xl font-black tracking-tight text-[#1A1A1A] text-center pt-2 pb-2 border-y-4 border-[#1A1A1A]">
+          <h1
+            className="font-serif-display font-black tracking-tight text-[#1A1A1A] text-center border-y-4 border-[#1A1A1A] whitespace-nowrap"
+            style={{ fontSize: 'min(15vw, 4.5rem)', lineHeight: '1.15', paddingTop: '0.15em', paddingBottom: '0.15em' }}
+          >
             JIBDAN JISUNG
           </h1>
         )}

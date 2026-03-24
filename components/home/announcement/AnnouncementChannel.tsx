@@ -101,8 +101,9 @@ export default function AnnouncementChannel({
   const [inputOverflows, setInputOverflows] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // 공지 작성 교수의 프로필 토끼 조회 (기존 공지에 profileRabbitId 없을 때 폴백)
+  // 공지 작성 교수의 프로필 토끼 + 닉네임 조회
   const [professorRabbitId, setProfessorRabbitId] = useState<number | null>(null);
+  const [professorNickname, setProfessorNickname] = useState<string | null>(null);
   useEffect(() => {
     if (announcements.length === 0) return;
     const creatorUid = announcements[0]?.createdBy;
@@ -110,13 +111,14 @@ export default function AnnouncementChannel({
     // 이미 공지 데이터에 있으면 조회 불필요
     if (announcements[0]?.profileRabbitId != null) {
       setProfessorRabbitId(announcements[0].profileRabbitId);
-      return;
     }
-    // Firestore에서 교수 프로필 조회
+    // Firestore에서 교수 프로필 + 닉네임 조회
     import('@/lib/repositories').then(({ doc: docRef, getDoc, db: fireDb }) => {
       getDoc(docRef(fireDb, 'users', creatorUid)).then((snap) => {
         if (snap.exists()) {
-          setProfessorRabbitId(snap.data().profileRabbitId ?? null);
+          const data = snap.data();
+          setProfessorRabbitId(prev => prev ?? data.profileRabbitId ?? null);
+          setProfessorNickname(data.nickname ?? null);
         }
       }).catch(() => {});
     });
@@ -570,7 +572,7 @@ export default function AnnouncementChannel({
 
       {/* ═══ 패널 모드: 인라인 렌더링 ═══ */}
       {isPanelMode && showModal && (
-        <div className="h-full relative overflow-hidden flex flex-col" style={{ backgroundImage: 'url(/images/home-bg-3.jpg)', backgroundSize: '102% 102%', backgroundPosition: 'center' }}>
+        <div className="h-full relative overflow-hidden flex flex-col">
 
           {/* 패널 모드 내부 콘텐츠 — 바텀시트와 동일 */}
           {(() => {
@@ -790,7 +792,7 @@ export default function AnnouncementChannel({
                             onImageClick={handleImageClick}
                             onEditSubmit={isProfessor ? handleEditSubmitMsg : undefined}
                             professorRabbitId={professorRabbitId}
-                            professorNickname={profile?.nickname}
+                            professorNickname={professorNickname ?? undefined}
                           />
                         );
                       })}
@@ -1443,7 +1445,7 @@ export default function AnnouncementChannel({
                             onImageClick={handleImageClick}
                             onEditSubmit={isProfessor ? handleEditSubmitMsg : undefined}
                             professorRabbitId={professorRabbitId}
-                            professorNickname={profile?.nickname}
+                            professorNickname={professorNickname ?? undefined}
                           />
                         );
                       })}

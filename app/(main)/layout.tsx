@@ -294,22 +294,12 @@ function MainLayoutGrid({
       <LibraryJobToast />
       <OfflineBanner />
 
-      {/* 가로모드: 사이드바 뒤 배경 (플로팅 패널 갭에 보임) */}
+      {/* 가로모드: 사이드바 뒤 크림 배경 (홈일 때는 HomeOverlay가 전체 뷰포트를 덮음) */}
       {isWide && (
         <div
           className="fixed left-0 top-0 bottom-0 z-40"
           style={{ width: '240px', backgroundColor: '#F5F0E8' }}
-        >
-          {/* 홈 오버레이 열릴 때: 1쪽 배경 이미지 */}
-          <div
-            className="absolute inset-0 transition-opacity duration-300"
-            style={{
-              backgroundImage: 'url(/images/home-bg-1.jpg)',
-              backgroundSize: '100% 100%',
-              opacity: isHomeOverlayOpen ? 1 : 0,
-            }}
-          />
-        </div>
+        />
       )}
 
       <SwipeBack enabled={!isWide && !isTabRoot && !isBoardDetail}>
@@ -365,19 +355,15 @@ function MainLayoutGrid({
                 className="w-1/2 flex-shrink-0 overflow-x-hidden overflow-y-auto h-screen relative"
                 style={{
                   borderLeft: isHomeOverlayOpen ? 'none' : (isDetailOpen ? '1px solid #B0A898' : 'none'),
-                  // 홈: 항상 배경 이미지 (detail 열림 무관), 비홈: 크림 or 투명
-                  ...(isHomeOverlayOpen ? {
-                    backgroundImage: 'url(/images/home-bg-3.jpg)',
-                    backgroundSize: '102% 102%',
-                    backgroundPosition: 'center',
-                  } : {
+                  // 홈: 전체 뷰포트 배경(z-44)이 비침 → 투명, 비홈: 크림 or 투명
+                  ...(!isHomeOverlayOpen ? {
                     backgroundColor: isDetailOpen ? '#F5F0E8' : 'transparent',
-                  }),
+                  } : {}),
                   paddingRight: 'env(safe-area-inset-right, 0px)',
                 } as React.CSSProperties}
               >
-                {/* 홈 배경은 aside 자체의 backgroundImage로 처리 (overflow-hidden 영향 없음) */}
-                {isDetailOpen && (
+                {/* 홈 열림 시 3쪽 디테일은 z-[46] fixed로 렌더 (전체 배경 위) */}
+                {!isHomeOverlayOpen && isDetailOpen && (
                   <div className="h-full">
                     {detailContent}
                   </div>
@@ -394,7 +380,35 @@ function MainLayoutGrid({
       </SwipeBack>
       {!isProfessor ? <HomeOverlay /> : <ProfessorHomeOverlay />}
 
-      {/* 잠금 시 대기 콘텐츠 — 2쪽에 3쪽 배경과 함께 오버레이 (잠금 해제 시 3쪽으로 승격) */}
+      {/* 가로모드 홈 + 3쪽 디테일: 전체 배경 위 fixed 렌더 */}
+      {/* 잠금 시 left: 240px (전체폭), 비잠금 시 left: calc(50% + 120px) (우측 패널) */}
+      {isWide && isHomeOverlayOpen && isDetailOpen && (
+        <div
+          className="fixed top-0 bottom-0 z-[46] overflow-y-auto"
+          style={{
+            left: isLocked ? '240px' : 'calc(50% + 120px)',
+            right: 0,
+            paddingTop: 'env(safe-area-inset-top, 0px)',
+            paddingRight: 'env(safe-area-inset-right, 0px)',
+          }}
+        >
+          {/* 배경: HomeOverlay의 home-garo.png과 동일하게 맞춤 */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none" style={{ zIndex: 0 }}>
+            <div className="absolute top-0 bottom-0" style={{
+              left: isLocked ? '-240px' : 'calc(-50vw - 120px)',
+              width: '100vw',
+              backgroundImage: 'url(/images/home-garo.png)',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center top',
+            }} />
+          </div>
+          <div className="h-full relative" style={{ zIndex: 1 }}>
+            {detailContent}
+          </div>
+        </div>
+      )}
+
+      {/* 잠금 시 대기 콘텐츠 — 2쪽에 오버레이 (잠금 해제 시 3쪽으로 승격) */}
       {isWide && isQueuedOpen && (
         <div
           className="fixed top-0 bottom-0 z-[46] overflow-y-auto"
@@ -402,13 +416,26 @@ function MainLayoutGrid({
             left: '240px',
             right: 'calc(50% - 120px)',
             paddingTop: 'env(safe-area-inset-top, 0px)',
-            backgroundImage: 'url(/images/home-bg-3.jpg)',
-            backgroundSize: '102% 102%',
-            backgroundPosition: 'center',
+            // 비홈: 크림색, 홈: 투명 (배경 div가 처리)
+            ...(!isHomeOverlayOpen ? { backgroundColor: '#F5F0E8' } : {}),
             borderRight: '1px solid #B0A898',
           }}
         >
-          {queuedContent}
+          {/* 홈 열림 시: HomeOverlay의 home-garo.png 배경 맞춤 */}
+          {isHomeOverlayOpen && (
+            <div className="absolute inset-0 overflow-hidden pointer-events-none" style={{ zIndex: 0 }}>
+              <div className="absolute top-0 bottom-0" style={{
+                left: '-240px',
+                width: '100vw',
+                backgroundImage: 'url(/images/home-garo.png)',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center top',
+              }} />
+            </div>
+          )}
+          <div className="relative" style={{ zIndex: 1 }}>
+            {queuedContent}
+          </div>
         </div>
       )}
     </>
