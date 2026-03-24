@@ -231,11 +231,17 @@ export function useDetailPosition() {
 export function usePanelLock(enabled = true) {
   const position = useDetailPosition();
   const { lockDetail, unlockDetail } = useDetailPanel();
+  const rafRef = useRef<number>(0);
 
   useEffect(() => {
     if (enabled && position === 'detail') {
+      // remount 시 이전 cleanup의 rAF 취소 → 잠금 유지
+      cancelAnimationFrame(rafRef.current);
       lockDetail();
-      return () => unlockDetail();
+      return () => {
+        // rAF로 지연: 같은 cycle에 remount되면 lockDetail()이 먼저 호출되어 취소됨
+        rafRef.current = requestAnimationFrame(() => unlockDetail());
+      };
     }
   }, [enabled, position, lockDetail, unlockDetail]);
 }
