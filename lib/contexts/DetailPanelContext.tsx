@@ -111,13 +111,13 @@ export function DetailPanelProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const lockDetail = useCallback(() => {
-    // 대기 중인 unlock rAF가 있으면 취소 (usePanelLock 리마운트 보호)
     if (_pendingUnlockRaf) {
       cancelAnimationFrame(_pendingUnlockRaf);
       _pendingUnlockRaf = 0;
     }
     isLockedRef.current = true;
     setIsLocked(true);
+    console.log('[lock] LOCKED', new Error().stack?.split('\n')[2]?.trim());
   }, []);
 
   /**
@@ -127,7 +127,7 @@ export function DetailPanelProvider({ children }: { children: ReactNode }) {
    */
   const unlockDetail = useCallback((andClose = false) => {
     if (isLockedRef.current) {
-      // 잠금 해제
+      console.log('[unlock] UNLOCKED andClose=', andClose, new Error().stack?.split('\n')[2]?.trim());
       isLockedRef.current = false;
       setIsLocked(false);
       if (andClose) {
@@ -181,7 +181,7 @@ export function DetailPanelProvider({ children }: { children: ReactNode }) {
       queuedRef.current = null;
       setQueuedContent(null);
       // 잠금 상태에서는 메인 콘텐츠(3쪽) 유지
-      // 잠금 상태에서는 메인 콘텐츠(3쪽) 유지
+      console.log(`[tab] ${prevRoot}→${currRoot} locked=${isLockedRef.current}`);
       if (!isLockedRef.current) {
         setContent(null);
       }
