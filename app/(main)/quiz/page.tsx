@@ -54,7 +54,7 @@ function QuizListPageContent() {
 
   // 가로모드: 서재 복습을 3쪽 패널로 열기 (2쪽 퀴즈 목록 유지)
   const openLibraryReview = useCallback((quizId: string, autoStart?: string) => {
-    if (isWide && !isLocked) {
+    if (isWide) {
       if (isManageMode) setIsManageMode(false);
       const action = isDetailOpen ? replaceDetail : openDetail;
       action(<FolderDetailPage panelType="library" panelId={quizId} panelAutoStart={autoStart} />);
@@ -378,7 +378,7 @@ function QuizListPageContent() {
 
   const handleStartQuiz = (quizId: string) => {
     if (isManageMode) setIsManageMode(false);
-    if (isWide && !isLocked) {
+    if (isWide) {
       // 가로모드: 3쪽 패널에서 퀴즈 풀기 (잠금 포함)
       const action = isDetailOpen ? replaceDetail : openDetail;
       action(<QuizPanelContainer quizId={quizId} />);
@@ -500,7 +500,7 @@ function QuizListPageContent() {
               </p>
               <button
                 onClick={() => {
-              if (isWide && !isLocked) {
+              if (isWide) {
                 import('./create/page').then(mod => {
                   const CreatePage = mod.default;
                   const action = isDetailOpen ? replaceDetail : openDetail;
@@ -614,7 +614,7 @@ function QuizListPageContent() {
           </button>
           <button
             onClick={() => {
-              if (isWide && !isLocked) {
+              if (isWide) {
                 setIsManageMode(false); // 관리 모드 닫기
                 import('./create/page').then(mod => {
                   const CreatePage = mod.default;
@@ -1148,7 +1148,7 @@ function QuizListPageContent() {
                 <h3 className="font-bold text-base mb-2 text-[#1A1A1A]">아직 만든 퀴즈가 없습니다</h3>
                 <p className="text-sm text-[#5C5C5C] mb-4">첫 번째 퀴즈를 만들어보세요!</p>
                 <button onClick={() => {
-                  if (isWide && !isLocked) {
+                  if (isWide) {
                     import('./create/page').then(mod => {
                       const CreatePage = mod.default;
                       const action = isDetailOpen ? replaceDetail : openDetail;
