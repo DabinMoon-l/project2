@@ -176,7 +176,7 @@ export function DetailPanelProvider({ children }: { children: ReactNode }) {
       queuedRef.current = null;
       setQueuedContent(null);
       // 잠금 상태에서는 메인 콘텐츠(3쪽) 유지
-      console.log(`[DetailPanel] 탭 전환: ${prevRoot} → ${currRoot}, isLocked=${isLockedRef.current}`);
+      console.log(`[DetailPanel] 탭 전환: ${prevRoot} → ${currRoot}, isLocked=${isLockedRef.current}`, new Error().stack?.split('\n').slice(0,3).join(' '));
       if (!isLockedRef.current) {
         setContent(null);
       }
@@ -237,13 +237,17 @@ export function usePanelLock(enabled = true) {
   const { lockDetail, unlockDetail } = useDetailPanel();
 
   useEffect(() => {
+    console.log(`[usePanelLock] enabled=${enabled}, position=${position}`);
     if (enabled && position === 'detail') {
-      // remount 시 이전 cleanup의 rAF 취소 → 잠금 유지
       cancelAnimationFrame(_panelLockRafId);
       lockDetail();
+      console.log('[usePanelLock] LOCKED');
       return () => {
-        // rAF로 지연: 같은 cycle에 remount되면 lockDetail()이 먼저 호출되어 취소됨
-        _panelLockRafId = requestAnimationFrame(() => unlockDetail());
+        console.log('[usePanelLock] cleanup → rAF unlockDetail');
+        _panelLockRafId = requestAnimationFrame(() => {
+          console.log('[usePanelLock] rAF fired → unlockDetail');
+          unlockDetail();
+        });
       };
     }
   }, [enabled, position, lockDetail, unlockDetail]);
