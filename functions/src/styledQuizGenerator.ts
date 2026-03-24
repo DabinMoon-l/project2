@@ -44,6 +44,14 @@ export interface GeneratedQuestion {
     questionText: string;   // 발문 ("옳은 것만을 <보기>에서 있는 대로 고른 것은?")
     items: Array<{ label: string; content: string }>; // ㄱ, ㄴ, ㄷ 항목
   };
+  // 제시문 (HARD) — QuestionCard가 읽는 형식
+  passagePrompt?: string;   // 제시문 발문 ("다음은 감염 경로에 대한 설명이다.")
+  mixedExamples?: Array<{
+    id: string;
+    type: string;           // 'text' | 'gana' | 'bullet'
+    content?: string;       // text 타입
+    items?: Array<{ label: string; content: string }>; // gana, bullet 타입
+  }>;
   // 이미지 (HARD - 자동 크롭)
   imageUrl?: string;        // 학습 자료에서 크롭된 이미지 URL
   imageDescription?: string; // 이미지 설명 (그래프, 표, 그림 등)
@@ -177,13 +185,35 @@ const MICROBIOLOGY_FOCUS_GUIDE = `## 미생물학 퀴즈 출제 포커스
   - 빠른 반응 vs 느린 반응(수일 소요)
   - 면역기억 없음 vs 면역기억 있음(2차 반응 강화)
   - 구성요소: 선천(피부장벽, 탐식세포, NK세포, 보체) vs 후천(B세포/항체, T세포)
+- **(필수 출제) MHC 항원제시 경로 비교**:
+  - MHC 클래스 I: 거의 모든 유핵세포 발현, 프로테아좀 분해 → 세포질그물 → 표면 제시 → CD8⁺ CTL 인식
+  - MHC 클래스 II: 항원제시세포(가지세포, B세포, 큰포식세포)에서 발현, 엔도솜 분해 → 표면 제시 → CD4⁺ Th세포 인식
+  - 교차제시(cross-presentation): 가지세포 특유 — 외래항원을 MHC 클래스 I에도 제시 가능
+- **(필수 출제) CD4 T세포 vs CD8 T세포 기능 비교**:
+  - CD4⁺ 보조T세포(Th): MHC 클래스 II 인식, 사이토카인으로 면역반응 조절
+  - CD8⁺ 세포독성T세포(CTL): MHC 클래스 I 인식, 퍼포린·그랜자임으로 감염세포 직접 살해
+- **(필수 출제) 보조T세포 아형 비교 (Th1/Th2/Th17/TFH)**:
+  - Th1: IFN-γ 생산 → 큰포식세포 활성화, CTL 활성화 (세포 내 기생세균/원충)
+  - Th2: IL-4/5/13 → B세포 항체생산 촉진, IgE → 호산구·비만세포 동원 (기생충)
+  - Th17: IL-17 → 호중구 동원, 과도 시 자가면역 관여
+  - TFH: 림프소포에서 B세포와 상호작용 → 항체생산 촉진
+- **(필수 출제) 체액성면역 vs 세포매개면역**:
+  - 체액성(humoral): B세포 → 항체 → 중화, 옵소닌화, ADCC, 보체 활성화
+  - 세포매개(cellular): T세포(CTL, Th1) → 감염세포 직접 살해, 큰포식세포 활성화
 - **(필수 출제) 보체 시스템**: 활성화 경로(고전경로, 대체경로, 렉틴경로), C3a/C4a/C5a 기능, MAC(막공격복합체)
 - **(필수 출제) 항체(면역글로불린) 구조와 종류**: IgG, IgM, IgA, IgE, IgD — 각각의 특징과 기능
+- **(고빈도) 항체가 관여하는 과민반응 (I~III형)**:
+  - I형(즉시형): **IgE** → 비만세포 탈과립 → 아나필락시스, 알레르기
+  - II형(세포독성): **IgG/IgM** → 보체 활성화 → 세포용해 (용혈빈혈)
+  - III형(면역복합체): **IgG/IgM** → 면역복합체 침착 → 혈관염 (SLE, 류마티스)
+  - cf. IV형(지연형): 항체 무관, T세포(Th1/CTL) 매개 → 육아종 (결핵, GVHD)
+- **(고빈도) 선천→후천면역 전환 기전**: 가지세포가 감염부위에서 항원 포식 → 림프절 이동 → MHC에 항원 제시 → 후천면역 활성화
 - **(고빈도) B세포/T세포 수용체와 항체 관계**: BCR(B세포 수용체)=막결합 항체, TCR(T세포 수용체)의 항원 인식
 - **(고빈도) 후천면역 그래프 문제**: 1차 면역반응 vs 2차 면역반응 — 그래프에서 3가지 인사이트 활용:
   - ① 면역기억(memory): 2차 반응이 빠르고 강한 이유
   - ② 항체 농도 차이: 2차 반응에서 항체 양이 훨씬 많음
   - ③ 주된 항체 종류 변화: 1차=IgM 우세, 2차=IgG 우세
+- 후천면역의 감염반응: 병원체 유형별 면역전략 — 세포 내 기생세균(CTL), 엔도솜 내 세균(Th1→큰포식세포), 바이러스(CTL+ADCC+IFN-α/β)
 
 ### 3장. 감염과 발병
 - **(필수 출제) 감염 성립 3요소**: 감염원, 감염경로, 감수성 숙주 — 각각의 정의와 관계
@@ -501,8 +531,8 @@ export const DIFFICULTY_PARAMS = {
     stemLength: "간결한 발문 (1-2문장) — 문제는 짧지만 선지에서 깊이를 요구",
     typeRatio: "비교/기전 30%, 부정형 25%, 복수정답 25%, 임상케이스 20%",
     allowedFormats: ["multiple"],
-    allowPassage: false,
-    allowBogi: false,
+    allowPassage: true,
+    allowBogi: true,
   },
 };
 
@@ -675,6 +705,24 @@ function buildDifficultyPrompt(
 - "answer": [0, 2] 형식으로 여러 정답 인덱스를 배열로 지정
 - 발문에 "옳은 것을 모두 고르시오" 또는 "(복수정답)" 표시를 포함하세요
 - 모든 문제를 복수정답으로 만들지 말고, 적절한 경우에만 사용하세요 (약 20% 이하)`;
+  }
+
+  if (params.allowPassage) {
+    formatInstructions += `
+### 제시문 형식 (어려움 난이도 전용)
+- 문제 앞에 제시문(지문)을 붙일 수 있습니다. 제시문은 "passageBlocks" 배열로 표현합니다.
+- **3가지 블록 유형**을 조합하여 사용하세요:
+  1. **text** (텍스트박스): 단락형 지문. 예: 임상 사례, 실험 결과 설명
+  2. **gana** ((가)(나)(다)): 라벨링된 항목. 예: 조건 나열, 단계별 설명
+  3. **bullet** (◦ 불렛): 항목 나열. 예: 특징 목록, 증상 목록
+- "passagePrompt"에 제시문 발문을 작성하세요 (예: "다음은 감염 경로에 대한 설명이다.")
+- 제시문 예시:
+  "passagePrompt": "다음은 감염병 경과 단계에 대한 설명이다.",
+  "passageBlocks": [
+    {"type": "gana", "items": [{"label": "(가)", "content": "병원체 침입 후 증상이 나타나기 전 단계"}, {"label": "(나)", "content": "전신 증상이 나타나는 단계"}, {"label": "(다)", "content": "특이적 증상이 최고조에 달하는 단계"}]}
+  ]
+- **제시문이 필요 없는 문제에서는 passageBlocks와 passagePrompt를 생략하세요.**
+- 10문제 중 2~3개만 제시문을 사용하세요. 모든 문제에 붙이지 마세요.`;
   }
 
   return `
@@ -962,8 +1010,8 @@ ${availableImages.map((img, idx) => `### 이미지 ${idx + 1}
 
   // 세부 출제 허용 조건: 어려움 난이도 또는 12문제 이상
   const allowDetailedQuestions = isHard || questionCount >= 12;
-  // 핵심 집중 조건: 쉬움/보통 난이도 + 8문제 이하
-  const isLowQuestionCount = !allowDetailedQuestions && questionCount <= 8;
+  // 핵심 집중 조건: 쉬움/보통 난이도 + 10문제 이하 (10문제 이하에서는 핵심 개념 우선)
+  const isLowQuestionCount = !allowDetailedQuestions && questionCount <= 10;
 
   // Focus Guide 섹션 (난이도, 문제 수, 반복 횟수에 따라 핵심 강조도 조절)
   // chapterRepetition이 높을수록 포커스 가이드 의존도 ↓, 다양성 ↑
@@ -1133,7 +1181,7 @@ ${styledScopeContext}
 
 1. ${contentRule}
 2. **문제 수**: 정확히 ${questionCount}개
-3. **선지 수**: 객관식은 반드시 **5개** 선지 (OX 문제 제외)
+3. **선지 수**: 객관식은 반드시 **5개** 선지 (OX 문제 제외). **선지에 "가.", "나.", "다." 등의 접두사를 붙이지 마세요** — UI가 자동으로 ①②③④⑤ 번호를 표시합니다.
 4. **난이도 일관성**: 모든 문제가 ${difficulty.toUpperCase()} 난이도에 맞아야 합니다
 5. **다양성**: 같은 개념을 반복하지 말고 다양한 주제를 다루세요
 6. **한국어**: 모든 내용을 한국어로 작성하세요
@@ -1205,7 +1253,9 @@ ${imageRule}
 - chapterId는 문제가 속하는 챕터 ID입니다 (필수).
 - chapterDetailId는 세부 주제 ID입니다 (세부 주제가 있으면 필수, 없으면 생략).
 - figureId는 이미지를 참조할 때만 포함하세요 (예: "figure_1"). 이미지가 없으면 생략.
-- bogi는 어려움 난이도에서 ㄱ,ㄴ,ㄷ 보기 문제일 때만 포함. 예: {"questionText": "옳은 것만을 <보기>에서 있는 대로 고른 것은?", "items": [{"label": "ㄱ", "content": "내용1"}, {"label": "ㄴ", "content": "내용2"}, {"label": "ㄷ", "content": "내용3"}]}. 보기 문제가 아니면 생략.`;
+- bogi는 어려움 난이도에서 ㄱ,ㄴ,ㄷ 보기 문제일 때만 포함. 예: {"questionText": "옳은 것만을 <보기>에서 있는 대로 고른 것은?", "items": [{"label": "ㄱ", "content": "내용1"}, {"label": "ㄴ", "content": "내용2"}, {"label": "ㄷ", "content": "내용3"}]}. 보기 문제가 아니면 생략.
+- passagePrompt는 제시문 발문입니다 (예: "다음은 감염 경로에 대한 설명이다."). 제시문이 없으면 생략.
+- passageBlocks는 제시문 블록 배열입니다. 3가지 타입: text(텍스트박스), gana((가)(나)(다)), bullet(◦불렛). 예: [{"type": "gana", "items": [{"label": "(가)", "content": "내용1"}, {"label": "(나)", "content": "내용2"}]}] 또는 [{"type": "text", "content": "임상 사례 텍스트..."}] 또는 [{"type": "bullet", "items": [{"label": "◦", "content": "항목1"}, {"label": "◦", "content": "항목2"}]}]. 제시문이 없으면 생략.`;
 }
 
 // ============================================================
@@ -1291,8 +1341,9 @@ export async function generateWithGemini(
   // 문제 수에 따라 토큰 수 조절
   // hard 난이도: 복수정답/부정형/상세해설로 문제당 토큰 증가
   const estimatedTokensPerQuestion = 1000;
-  // 최소 8192 보장 (truncation 방지)
-  const maxTokens = Math.max(questionCount * estimatedTokensPerQuestion + 2000, 8192);
+  // thinking 예산 + 응답 토큰 (thinking 토큰이 maxOutputTokens에 합산되므로 여유 확보)
+  const thinkingBudget = 10240;
+  const maxTokens = thinkingBudget + Math.max(questionCount * estimatedTokensPerQuestion + 2000, 8192);
 
   // 페이지 이미지를 inlineData parts로 변환 (최대 10장)
   const imageParts: Array<{ inlineData: { mimeType: string; data: string } }> = [];
@@ -1319,6 +1370,9 @@ export async function generateWithGemini(
       topP: 0.9,
       maxOutputTokens: maxTokens,
       responseMimeType: "application/json", // JSON 모드 강제 — 파싱 실패 방지
+      thinkingConfig: {
+        thinkingBudget,  // thinking 품질 유지 + maxOutputTokens에 합산되므로 예산 제어
+      },
     },
   };
 
@@ -1466,6 +1520,19 @@ export async function generateWithGemini(
           imageDescription = imageInfo.description;
         }
 
+        // passageBlocks → mixedExamples 변환 (QuestionCard 렌더링 호환)
+        let mixedExamples: Array<{ id: string; type: string; content?: string; items?: Array<{ label: string; content: string }> }> | undefined;
+        let passagePrompt: string | undefined;
+        if (Array.isArray(q.passageBlocks) && q.passageBlocks.length > 0) {
+          mixedExamples = q.passageBlocks.map((block: { type: string; content?: string; items?: Array<{ label: string; content: string }> }, i: number) => ({
+            id: `ai_passage_${i}`,
+            type: block.type || "text",
+            content: block.content,
+            items: block.items,
+          }));
+          passagePrompt = q.passagePrompt || undefined;
+        }
+
         validQuestions.push({
           text: q.text,
           type: isOxQuestion ? "ox" : (q.type || "multiple"),
@@ -1482,6 +1549,8 @@ export async function generateWithGemini(
           chapterId: q.chapterId,           // 챕터 ID (Gemini 할당)
           chapterDetailId: q.chapterDetailId, // 세부 챕터 ID (Gemini 할당)
           bogi: q.bogi || undefined,         // 보기 (ㄱㄴㄷ)
+          ...(mixedExamples && { mixedExamples }), // 제시문 (text/gana/bullet)
+          ...(passagePrompt && { passagePrompt }), // 제시문 발문
           imageUrl,                          // 크롭된 이미지 URL
           imageDescription,                  // 이미지 설명
         });

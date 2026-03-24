@@ -168,7 +168,10 @@ answer는 0부터 시작하는 인덱스입니다 (0=첫 번째 선지).`;
       temperature: 0.7,
       topK: 40,
       topP: 0.95,
-      maxOutputTokens: 4096,
+      maxOutputTokens: 10240 + 4096,  // thinking(10240) + 응답(4096)
+      thinkingConfig: {
+        thinkingBudget: 10240,
+      },
     },
   };
 

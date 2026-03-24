@@ -222,11 +222,14 @@ STEP 3. 자체 검증 (필수)
       temperature: 0.7,
       topK: 40,
       topP: 0.95,
-      maxOutputTokens: 4096,
+      maxOutputTokens: 10240 + 4096,  // thinking(10240) + 응답(4096)
+      thinkingConfig: {
+        thinkingBudget: 10240,
+      },
     },
   };
 
-  // Gemini 2.0 Flash 사용 (최신 무료 모델)
+  // Gemini 2.5 Flash (thinking 활성화)
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 60_000);
   let response: Awaited<ReturnType<typeof fetch>>;
@@ -581,7 +584,10 @@ async function extractKeywordsWithGeminiApi(
       temperature: 0.3,
       topK: 40,
       topP: 0.95,
-      maxOutputTokens: 1024,
+      maxOutputTokens: 4096 + 1024,  // thinking(4096) + 응답(1024)
+      thinkingConfig: {
+        thinkingBudget: 4096,
+      },
     },
   };
 

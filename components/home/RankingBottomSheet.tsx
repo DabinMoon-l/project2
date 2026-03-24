@@ -653,7 +653,7 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
   // 패널 모드: 포탈/바텀시트 없이 직접 렌더링
   if (isPanelMode) {
     return (
-      <div className="h-full relative overflow-hidden" style={{ backgroundImage: 'url(/images/home-bg-3.jpg)', backgroundSize: '102% 102%', backgroundPosition: 'center' }}>
+      <div className="h-full relative overflow-hidden">
         <div className="relative z-10 h-full">{rankingContent}</div>
         {infoModal}
       </div>

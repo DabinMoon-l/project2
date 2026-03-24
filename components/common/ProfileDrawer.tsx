@@ -987,7 +987,7 @@ export default function ProfileDrawer({ isOpen, onClose, isPanelMode }: ProfileD
   // ============================================================
   if (isPanelMode && isOpen) {
     return (
-      <div className="h-full relative overflow-hidden" style={{ backgroundImage: 'url(/images/home-bg-3.jpg)', backgroundSize: '102% 102%', backgroundPosition: 'center' }}>
+      <div className="h-full relative overflow-hidden">
         {/* 스크롤 영역 */}
         <div ref={sheetRef} className="relative z-10 overflow-y-auto overscroll-contain h-full">
           {drawerContent}

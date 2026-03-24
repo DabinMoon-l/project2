@@ -87,17 +87,19 @@ export default function ExitConfirmModal({
   useEffect(() => {
     if (isOpen) {
       previousActiveElement.current = document.activeElement as HTMLElement;
-      modalRef.current?.focus();
-      lockScroll();
+      modalRef.current?.focus({ preventScroll: true });
+      // 패널 모드: body 스크롤 잠금 불필요 (aside 자체 스크롤 컨텍스트)
+      // lockScroll()이 body.overflow=hidden 설정 → vw 변경 → 3쪽 레이아웃 흔들림 방지
+      if (!isPanelMode) lockScroll();
     }
 
     return () => {
-      unlockScroll();
+      if (!isPanelMode) unlockScroll();
       if (previousActiveElement.current) {
         previousActiveElement.current.focus();
       }
     };
-  }, [isOpen]);
+  }, [isOpen, isPanelMode]);
 
   // ESC 키로 닫기
   useEffect(() => {

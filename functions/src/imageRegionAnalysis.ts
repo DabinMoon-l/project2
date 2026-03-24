@@ -146,7 +146,10 @@ export async function analyzeImageRegions(
       temperature: 0.1,
       topK: 32,
       topP: 0.95,
-      maxOutputTokens: 4096,
+      maxOutputTokens: 2048 + 4096,  // thinking(2048) + 응답(4096)
+      thinkingConfig: {
+        thinkingBudget: 2048,
+      },
     },
   };
 

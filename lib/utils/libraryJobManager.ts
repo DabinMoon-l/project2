@@ -53,6 +53,12 @@ interface GeneratedQuestion {
     questionText: string;
     items: Array<{ label: string; content: string }>;
   };
+  mixedExamples?: Array<{
+    type: string;
+    content: string;
+    label?: string;
+  }>;
+  passagePrompt?: string;
 }
 
 // ============================================================
@@ -233,6 +239,8 @@ async function pollAndSave(jobId: string, config: QuizSaveConfig) {
           explanation: q.explanation || '',
           ...(q.choiceExplanations ? { choiceExplanations: q.choiceExplanations } : {}),
           ...(q.bogi ? { bogi: q.bogi } : {}),
+          ...(q.mixedExamples ? { mixedExamples: q.mixedExamples } : {}),
+          ...(q.passagePrompt ? { passagePrompt: q.passagePrompt } : {}),
           chapterId,
           chapterDetailId: q.chapterDetailId || null,
           imageUrl: q.imageUrl || null,
