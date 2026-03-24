@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom';
 import { useRouter, useParams } from 'next/navigation';
 import { doc, getDoc, collection, query, where, getDocs, db } from '@/lib/repositories';
 import { callFunction } from '@/lib/api';
-import { useCourse, useUser } from '@/lib/contexts';
+import { useCourse, useUser, useDetailPanel } from '@/lib/contexts';
 import { formatChapterLabel, generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
@@ -209,6 +209,8 @@ export default function QuizPreviewPage({ panelQuizId }: { panelQuizId?: string 
   const { userCourseId } = useCourse();
   const { profile } = useUser();
   const quizId = panelQuizId || (params?.id as string);
+  const isPanelMode = !!panelQuizId;
+  const { closeDetail } = useDetailPanel();
 
   const [quizTitle, setQuizTitle] = useState('');
   const [averageScore, setAverageScore] = useState(0);
@@ -1024,7 +1026,7 @@ export default function QuizPreviewPage({ panelQuizId }: { panelQuizId?: string 
         <h2 className="text-xl font-bold text-[#1A1A1A] mb-2">오류 발생</h2>
         <p className="text-[#5C5C5C] text-center mb-6">{error}</p>
         <button
-          onClick={() => router.back()}
+          onClick={() => isPanelMode ? closeDetail() : router.back()}
           className="px-6 py-3 bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
         >
           돌아가기
@@ -1037,23 +1039,22 @@ export default function QuizPreviewPage({ panelQuizId }: { panelQuizId?: string 
     <div className={`min-h-screen ${isEditMode ? 'pb-24' : 'pb-8'}`} style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 */}
       <header className="sticky top-0 z-50 w-full border-b-2 border-[#1A1A1A]" style={{ backgroundColor: '#F5F0E8', marginTop: 'calc(-1 * env(safe-area-inset-top, 0px))', paddingTop: 'env(safe-area-inset-top, 0px)' }}>
-        <div className="flex items-center h-14 px-4">
-          {isEditMode ? (
-            <div className="w-10 h-10" />
-          ) : (
+        <div className="relative flex items-center h-14 px-2">
+          {/* 좌측 버튼 — absolute로 배치하여 타이틀 중앙에 영향 안 줌 */}
+          {isEditMode ? null : (
             <button
-              onClick={() => router.back()}
-              className="w-10 h-10 flex items-center justify-center text-[#1A1A1A] hover:text-[#5C5C5C] transition-colors"
+              onClick={() => isPanelMode ? closeDetail() : router.back()}
+              className="absolute left-2 w-8 h-8 flex items-center justify-center text-[#1A1A1A] hover:text-[#5C5C5C] transition-colors"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
           )}
-          <h1 className="flex-1 text-center text-base font-bold text-[#1A1A1A] truncate px-4">
+          <h1 className="flex-1 text-center text-base font-bold text-[#1A1A1A] truncate">
             {isEditMode ? '퀴즈 수정' : '문제 미리보기'}
           </h1>
-          <div className="flex items-center">
+          <div className="absolute right-2 flex items-center">
             {/* 삭제 버튼 — 본인 퀴즈 + 수정 모드 아닐 때만 표시 */}
             {isOwner && !isEditMode && (
               <button

@@ -20,6 +20,7 @@ interface Props {
   open: boolean;
   onClose: () => void;
   courseId: string;
+  isPanelMode?: boolean;
 }
 
 type TabType = 'excel' | 'manual';
@@ -28,14 +29,14 @@ type TabType = 'excel' | 'manual';
 // 메인 컴포넌트
 // ============================================================
 
-export default function StudentManagementSheet({ open, onClose, courseId }: Props) {
+export default function StudentManagementSheet({ open, onClose, courseId, isPanelMode }: Props) {
   const {
     enrolledStudents,
     loading,
     enrolledCount,
     registeredCount,
     unregisteredStudents,
-  } = useEnrolledStudents(open ? courseId : null);
+  } = useEnrolledStudents((open || isPanelMode) ? courseId : null);
 
   // 미가입 학생 서브시트
   const [showUnregistered, setShowUnregistered] = useState(false);
@@ -184,12 +185,11 @@ export default function StudentManagementSheet({ open, onClose, courseId }: Prop
   const C = 2 * Math.PI * R;
   const registeredLen = (registrationPct / 100) * C;
 
-  return (
-    <>
-      <MobileBottomSheet open={open} onClose={onClose} maxHeight="85vh">
+  // 패널 모드: MobileBottomSheet 없이 일반 div로 렌더
+  const sheetContent = (
         <div className="px-5 pb-6">
-          {/* 헤더 */}
-          <h2 className="text-lg font-bold text-[#1A1A1A] mb-4">학생 관리</h2>
+          {/* 헤더 — 패널 모드에서는 상단 헤더바에 이미 표시됨 */}
+          {!isPanelMode && <h2 className="text-lg font-bold text-[#1A1A1A] mb-4">학생 관리</h2>}
 
           {loading ? (
             <div className="flex justify-center py-8">
@@ -441,6 +441,31 @@ export default function StudentManagementSheet({ open, onClose, courseId }: Prop
             </>
           )}
         </div>
+  );
+
+  if (isPanelMode) {
+    return (
+      <div className="h-full flex flex-col bg-[#F5F0E8] overflow-hidden">
+        {/* 헤더 + 닫기 */}
+        <div className="px-5 pt-4 pb-2 flex items-center justify-between border-b border-[#D4CFC4]">
+          <h2 className="text-lg font-bold text-[#1A1A1A]">학생 관리</h2>
+          <button onClick={onClose} className="p-1 text-[#5C5C5C]">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {sheetContent}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <MobileBottomSheet open={open} onClose={onClose} maxHeight="85vh">
+        {sheetContent}
       </MobileBottomSheet>
 
       {/* ======== D. 미가입 학생 서브시트 ======== */}
