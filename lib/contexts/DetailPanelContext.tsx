@@ -228,19 +228,21 @@ export function useDetailPosition() {
  * 패널 잠금 — 3쪽(detail)에서만 lock/unlock, 2쪽(queued)에서는 no-op
  * @param enabled false면 잠금 안 함 (비패널 모드용, hooks 규칙 준수)
  */
+// 모듈 레벨 — 리마운트 시에도 동일한 rAF ID 참조 가능
+let _panelLockRafId = 0;
+
 export function usePanelLock(enabled = true) {
   const position = useDetailPosition();
   const { lockDetail, unlockDetail } = useDetailPanel();
-  const rafRef = useRef<number>(0);
 
   useEffect(() => {
     if (enabled && position === 'detail') {
       // remount 시 이전 cleanup의 rAF 취소 → 잠금 유지
-      cancelAnimationFrame(rafRef.current);
+      cancelAnimationFrame(_panelLockRafId);
       lockDetail();
       return () => {
         // rAF로 지연: 같은 cycle에 remount되면 lockDetail()이 먼저 호출되어 취소됨
-        rafRef.current = requestAnimationFrame(() => unlockDetail());
+        _panelLockRafId = requestAnimationFrame(() => unlockDetail());
       };
     }
   }, [enabled, position, lockDetail, unlockDetail]);
