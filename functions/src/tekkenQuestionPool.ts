@@ -381,12 +381,19 @@ export async function drawQuestionsFromPool(
   };
   const prefix = chapterPrefix[courseId] || "";
 
+  // 챕터 폴백: 풀에 chapter 필드가 없는 문제 대비
+  const fallbackChapter = chapters && chapters.length > 0
+    ? (prefix && !chapters[0].startsWith(prefix) ? `${prefix}${chapters[0]}` : chapters[0])
+    : "";
+
   return selected.map(doc => {
     const data = doc.data();
     let chapterId = data.chapter || "";
     if (chapterId && prefix && !chapterId.startsWith(prefix)) {
       chapterId = `${prefix}${chapterId}`;
     }
+    // chapterId가 없으면 요청 챕터로 폴백 (미분류 방지)
+    if (!chapterId) chapterId = fallbackChapter;
     return {
       text: data.text,
       type: data.type,
@@ -395,7 +402,7 @@ export async function drawQuestionsFromPool(
       difficulty: data.difficulty,
       ...(data.explanation ? { explanation: data.explanation } : {}),
       ...(data.choiceExplanations ? { choiceExplanations: data.choiceExplanations } : {}),
-      ...(chapterId ? { chapterId } : {}),
+      chapterId,
     };
   });
 }
@@ -484,11 +491,30 @@ export const tekkenPoolWorker = onDocumentCreated(
     const questionsRef = poolRef.collection("questions");
 
     try {
-      // 1. 기존 문제 ID 스냅샷 (이 챕터만)
-      const existingSnap = await questionsRef
-        .where("chapter", "==", chapter)
-        .get();
-      const oldDocIds = existingSnap.docs.map(d => d.id);
+      // 1. 기존 문제 ID 스냅샷 (이 챕터 + 구형 접두사 형식 포함)
+      const chapterPfxMap: Record<string, string> = {
+        biology: "bio_", microbiology: "micro_", pathophysiology: "patho_",
+      };
+      const pfx = chapterPfxMap[courseId] || "";
+      // 매칭 대상: "3", "bio_3", "bio_3_1", "bio_3_2" 등 (구형 하위섹션 형식도 포함)
+      const chapterFormats = [chapter];
+      if (pfx) chapterFormats.push(`${pfx}${chapter}`);
+
+      const existingSnaps = await Promise.all(
+        chapterFormats.map(ch => questionsRef.where("chapter", "==", ch).get())
+      );
+      // 구형 하위섹션 형식 (e.g., "micro_3_1", "micro_3_2", ...) 추가 스캔
+      let legacySnap: Awaited<ReturnType<typeof questionsRef.get>> | null = null;
+      if (pfx) {
+        legacySnap = await questionsRef
+          .where("chapter", ">=", `${pfx}${chapter}_`)
+          .where("chapter", "<", `${pfx}${chapter}_~`)
+          .get();
+      }
+      const oldDocIds = [
+        ...existingSnaps.flatMap(snap => snap.docs.map(d => d.id)),
+        ...(legacySnap ? legacySnap.docs.map(d => d.id) : []),
+      ];
 
       console.log(`[워커] ${courseId}/ch${chapter}: 기존 ${oldDocIds.length}개, 새 ${targetSize}개 생성 시작`);
 

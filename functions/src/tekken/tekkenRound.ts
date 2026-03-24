@@ -138,11 +138,20 @@ export async function createBattle(
     }
   }
 
-  // 라운드 데이터 구성
+  // 라운드 데이터 구성 (chapterId에 과목 접두사 보정)
+  const pfxMap: Record<string, string> = { biology: "bio_", microbiology: "micro_", pathophysiology: "patho_" };
+  const coursePfx = pfxMap[courseId] || "";
+  const ensurePrefix = (id: string): string => {
+    if (!id) return "";
+    if (coursePfx && /^\d+$/.test(id)) return `${coursePfx}${id}`;
+    return id;
+  };
+
   const rounds: Record<string, Omit<BattleRoundData, 'started' | 'result' | 'answers'>> = {};
   const battleAnswersData: Record<string, number> = {};
   for (let i = 0; i < questions!.length; i++) {
     const q = questions![i];
+    const rawChId = q.chapterId || (chapters && chapters.length > 0 ? chapters[0] : "");
     rounds[i] = {
       questionData: {
         text: q.text,
@@ -150,7 +159,7 @@ export async function createBattle(
         choices: q.choices,
         ...(q.explanation ? { explanation: q.explanation } : {}),
         ...(q.choiceExplanations ? { choiceExplanations: q.choiceExplanations } : {}),
-        ...(q.chapterId ? { chapterId: q.chapterId } : {}),
+        chapterId: ensurePrefix(rawChId),
       },
       startedAt: 0,
       timeoutAt: 0,
@@ -499,9 +508,19 @@ async function saveBattleWrongAnswers(
       if (questionData.choiceExplanations) {
         reviewDoc.choiceExplanations = questionData.choiceExplanations;
       }
-      // 챕터 태그
-      if (questionData.chapterId) {
-        reviewDoc.chapterId = questionData.chapterId;
+      // 챕터 태그 (미분류 방지: 배틀 챕터 폴백 + 접두사 보정)
+      let chId = questionData.chapterId || "";
+      if (!chId && battle.chapters && battle.chapters.length > 0) {
+        chId = battle.chapters[0];
+      }
+      // 접두사 없으면 과목별 접두사 추가 (reviews에서 챕터 매칭에 필요)
+      if (chId && /^\d+$/.test(chId)) {
+        const pfxMap: Record<string, string> = { biology: "bio_", microbiology: "micro_", pathophysiology: "patho_" };
+        const pfx = pfxMap[courseId] || "";
+        if (pfx) chId = `${pfx}${chId}`;
+      }
+      if (chId) {
+        reviewDoc.chapterId = chId;
       }
 
       writeBatch.set(db.collection("reviews").doc(), reviewDoc);
