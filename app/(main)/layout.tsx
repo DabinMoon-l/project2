@@ -199,6 +199,8 @@ function MainLayoutGrid({
 
     // 잠금 → 해제 전환 감지
     if (wasLocked && !isLocked && isWide) {
+      // 새 콘텐츠가 바로 열려있으면 탭 루트 복귀 스킵 (서재 바로가기 전환 등)
+      if (isDetailOpen) return;
       const tabRoots = ['/', '/quiz', '/review', '/board', '/professor', '/professor/stats', '/professor/quiz', '/professor/students', '/settings', '/profile', '/ranking', '/review/random'];
       if (!tabRoots.includes(pathname)) {
         // 현재 탭의 루트로 이동

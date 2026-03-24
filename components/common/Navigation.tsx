@@ -1,14 +1,19 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react';
 import { useWideMode } from '@/lib/hooks/useViewportScale';
 import { pruneAllStaleHiders } from '@/lib/hooks/useHideNav';
 import { useHomeOverlay } from '@/lib/contexts/HomeOverlayContext';
 import { useUser } from '@/lib/contexts/UserContext';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
+import { useDetailPanel } from '@/lib/contexts/DetailPanelContext';
+import { useLearningQuizzes } from '@/lib/hooks/useLearningQuizzes';
+import { useCompletedQuizzes } from '@/lib/hooks/useCompletedQuizzes';
+import { useAuth } from '@/lib/hooks/useAuth';
+import { useCourse } from '@/lib/contexts/CourseContext';
 
 export type UserRole = 'student' | 'professor';
 
@@ -130,6 +135,92 @@ function isActiveTab(pathname: string, tabPath: string): boolean {
 }
 
 /**
+ * 복습 탭 하위 서재 퀴즈 바로가기 (가로모드 전용)
+ * "서재" 헤더 없이 문제지 목록만 표시
+ * 클릭 시 2쪽=FolderDetailPage + 3쪽=ReviewPractice 자동 시작
+ */
+function SidebarLibraryItems({ textColor, onItemClick }: { textColor: string; onItemClick?: () => void }) {
+  const router = useRouter();
+  const { user } = useAuth();
+  const { userCourseId } = useCourse();
+  const { quizzes: libraryQuizzesRaw, loading: libraryLoading } = useLearningQuizzes();
+  const { completedQuizzes, completedLoading } = useCompletedQuizzes(user, userCourseId, libraryQuizzesRaw);
+  const { isDetailOpen, unlockDetail } = useDetailPanel();
+  const [activeQuizId, setActiveQuizId] = useState<string | null>(null);
+
+  // 서재 전체 목록 (AI 생성 + 비공개 커스텀 + 완료된 교수 퀴즈)
+  const quizzes = useMemo(() => {
+    return [...libraryQuizzesRaw, ...completedQuizzes];
+  }, [libraryQuizzesRaw, completedQuizzes]);
+  const loading = libraryLoading || completedLoading;
+
+  // 바로가기 클릭: 3쪽 잠금만 해제(콘텐츠 유지) + 네비게이션
+  // 콘텐츠를 유지해야 layout의 "탭 루트 복귀"가 isDetailOpen 체크로 스킵됨
+  // FolderDetailPage autoStart가 실제 콘텐츠 교체 처리
+  const handleClick = useCallback((quizId: string) => {
+    onItemClick?.();
+    unlockDetail(false); // 잠금만 해제, 콘텐츠 유지
+    setActiveQuizId(quizId);
+    prevDetailOpenRef.current = false;
+    router.push(`/review/library/${quizId}?autoStart=all`);
+  }, [onItemClick, unlockDetail, router]);
+
+  // 3쪽이 열렸다가 닫힌 경우 하이라이트 해제 (탭 전환 시 컴포넌트 언마운트로 자동 초기화)
+  const prevDetailOpenRef = useRef(false);
+  useEffect(() => {
+    if (activeQuizId && prevDetailOpenRef.current && !isDetailOpen) {
+      setActiveQuizId(null);
+    }
+    prevDetailOpenRef.current = isDetailOpen;
+  }, [isDetailOpen, activeQuizId]);
+
+  if (loading || quizzes.length === 0) return null;
+
+  return (
+    <motion.div
+      initial={{ height: 0, opacity: 0 }}
+      animate={{ height: 'auto', opacity: 1 }}
+      exit={{ height: 0, opacity: 0 }}
+      transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+      className="overflow-hidden"
+    >
+      <div
+        className="py-1 overflow-y-auto"
+        style={{ maxHeight: 'calc(100vh - 400px)', scrollbarWidth: 'thin' }}
+      >
+        {quizzes.map((quiz) => {
+          const isSelected = activeQuizId === quiz.id;
+          return (
+            <button
+              key={quiz.id}
+              onClick={() => handleClick(quiz.id)}
+              className="w-full flex items-center gap-2 pl-10 pr-3 py-1.5 rounded-xl transition-all duration-200 text-left"
+              style={{
+                backgroundColor: isSelected ? 'rgba(0, 0, 0, 0.07)' : 'transparent',
+                opacity: isSelected ? 1 : 0.5,
+              }}
+            >
+              <span
+                className="text-xs truncate flex-1 font-semibold transition-colors duration-300"
+                style={{ color: textColor }}
+              >
+                {quiz.title}
+              </span>
+              <span
+                className="text-[10px] flex-shrink-0 tabular-nums font-semibold transition-colors duration-300"
+                style={{ color: textColor }}
+              >
+                {quiz.questionCount}문
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </motion.div>
+  );
+}
+
+/**
  * 네비게이션 — 세로모드: 하단 바 / 가로모드: 좌측 사이드바
  * 오버레이가 열려 있어도 항상 표시 (z-50 > 오버레이 z-45)
  */
@@ -145,6 +236,7 @@ export default function Navigation({ role }: NavigationProps) {
     homeButtonRef,
   } = useHomeOverlay();
   const { profile } = useUser();
+  const { unlockDetail: navUnlockDetail } = useDetailPanel();
 
   // 경로 기반 네비게이션 숨김 — layout.tsx hideNavigation과 동기화
   const shouldHideByPath = useMemo(() => {
@@ -201,12 +293,13 @@ export default function Navigation({ role }: NavigationProps) {
     }
   }, [pathname, openHomeOverlay, closeOverlayAnimated, isOverlayOpen, isWide]);
 
-  // 다른 탭 클릭: 오버레이가 열려있으면 즉시 닫기
+  // 다른 탭 클릭: 오버레이 닫기 + 3쪽 잠금 강제 해제 (잠긴 상태에서 탭 전환 시 3쪽 잔류 방지)
   const handleTabClick = useCallback(() => {
     if (isOverlayOpen) {
       closeOverlay();
     }
-  }, [isOverlayOpen, closeOverlay]);
+    navUnlockDetail(true);
+  }, [isOverlayOpen, closeOverlay, navUnlockDetail]);
 
   // 가로모드 사이드바는 항상 유지 (퀴즈 풀이 등 상세 페이지에서도 좌측 네비 표시)
   if (shouldHideByPath && !isWide) return null;
@@ -267,37 +360,65 @@ export default function Navigation({ role }: NavigationProps) {
         {/* 구분선 */}
         <div className="mx-5 border-t mb-2" style={{ borderColor: 'rgba(0,0,0,0.1)' }} />
 
-        {/* 네비게이션 아이템 */}
-        <div className="flex-1 px-3 flex flex-col gap-1">
+        {/* 네비게이션 아이템 + 복습 하위 서재 바로가기 */}
+        <div className="flex-1 px-3 flex flex-col gap-1 overflow-hidden">
           {tabs.map((tab) => {
             const isHomeTab = tab.path === homePath;
-            // 홈 오버레이 열림 → 홈 탭만 활성화, 나머지 비활성화
             const isActive = isOverlayOpen
               ? isHomeTab
               : isActiveTab(pathname, tab.path);
+            const isReviewTab = tab.path === '/review';
+            const showLibrary = isReviewTab && role === 'student' && isActive && !isOverlayOpen;
 
             return (
-              <Link
-                key={tab.path}
-                href={tab.path}
-                ref={isHomeTab ? (el: HTMLAnchorElement | null) => { homeButtonRef.current = el; } : undefined}
-                onClick={isHomeTab ? handleHomeClick : handleTabClick}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200"
-                style={{
-                  backgroundColor: isActive ? 'rgba(0, 0, 0, 0.07)' : 'transparent',
-                  opacity: isActive ? 1 : 0.5,
-                }}
-                aria-label={tab.label}
-              >
-                {tab.icon(false)}
-                <span className="text-sm font-semibold transition-colors duration-300" style={{ color: textColor }}>
-                  {tab.label}
-                </span>
-              </Link>
+              <Fragment key={tab.path}>
+                <Link
+                  href={tab.path}
+                  ref={isHomeTab ? (el: HTMLAnchorElement | null) => { homeButtonRef.current = el; } : undefined}
+                  onClick={isHomeTab ? handleHomeClick : handleTabClick}
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 flex-shrink-0"
+                  style={{
+                    backgroundColor: isActive ? 'rgba(0, 0, 0, 0.07)' : 'transparent',
+                    opacity: isActive ? 1 : 0.5,
+                  }}
+                  aria-label={tab.label}
+                >
+                  {tab.icon(false)}
+                  <span className="text-sm font-semibold flex-1 transition-colors duration-300" style={{ color: textColor }}>
+                    {tab.label}
+                  </span>
+                  {/* 복습 드롭다운 화살표 (학생 전용) */}
+                  {isReviewTab && role === 'student' && !isOverlayOpen && (
+                    <motion.svg
+                      className="w-3 h-3 flex-shrink-0"
+                      fill="none"
+                      stroke={textColor}
+                      strokeWidth={2.5}
+                      viewBox="0 0 24 24"
+                      animate={{ rotate: isActive ? 90 : 0 }}
+                      transition={{ duration: 0.2 }}
+                      style={{ opacity: 0.4 }}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                    </motion.svg>
+                  )}
+                </Link>
+                {/* 복습 탭 하위: 서재 퀴즈 바로가기 */}
+                <AnimatePresence>
+                  {showLibrary && (
+                    <SidebarLibraryItems
+                      key="library-items"
+                      textColor={textColor}
+                      onItemClick={isOverlayOpen ? closeOverlay : undefined}
+                    />
+                  )}
+                </AnimatePresence>
+              </Fragment>
             );
           })}
         </div>
-        <div className="mt-auto px-6 py-2.5 pb-4">
+
+        <div className="flex-shrink-0 px-6 py-2.5 pb-4">
           <p className="text-sm font-semibold transition-colors duration-300" style={{ color: textColor, opacity: 0.45 }}>
             Prof. Jin-A Kim
           </p>
