@@ -117,7 +117,6 @@ export function DetailPanelProvider({ children }: { children: ReactNode }) {
     }
     isLockedRef.current = true;
     setIsLocked(true);
-    console.log('[lock] LOCKED', new Error().stack?.split('\n')[2]?.trim());
   }, []);
 
   /**
@@ -127,7 +126,6 @@ export function DetailPanelProvider({ children }: { children: ReactNode }) {
    */
   const unlockDetail = useCallback((andClose = false) => {
     if (isLockedRef.current) {
-      console.log('[unlock] UNLOCKED andClose=', andClose, new Error().stack?.split('\n')[2]?.trim());
       isLockedRef.current = false;
       setIsLocked(false);
       if (andClose) {
@@ -181,7 +179,6 @@ export function DetailPanelProvider({ children }: { children: ReactNode }) {
       queuedRef.current = null;
       setQueuedContent(null);
       // 잠금 상태에서는 메인 콘텐츠(3쪽) 유지
-      console.log(`[tab] ${prevRoot}→${currRoot} locked=${isLockedRef.current}`);
       if (!isLockedRef.current) {
         setContent(null);
       }
