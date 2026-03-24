@@ -176,7 +176,7 @@ export function DetailPanelProvider({ children }: { children: ReactNode }) {
       queuedRef.current = null;
       setQueuedContent(null);
       // 잠금 상태에서는 메인 콘텐츠(3쪽) 유지
-      console.log(`[DetailPanel] 탭 전환: ${prevRoot} → ${currRoot}, isLocked=${isLockedRef.current}`, new Error().stack?.split('\n').slice(0,3).join(' '));
+      // 잠금 상태에서는 메인 콘텐츠(3쪽) 유지
       if (!isLockedRef.current) {
         setContent(null);
       }
@@ -229,24 +229,24 @@ export function useDetailPosition() {
  * 패널 잠금 — 3쪽(detail)에서만 lock/unlock, 2쪽(queued)에서는 no-op
  * @param enabled false면 잠금 안 함 (비패널 모드용, hooks 규칙 준수)
  */
-// 모듈 레벨 — 리마운트 시에도 동일한 rAF ID 참조 가능
-let _panelLockRafId = 0;
+// 모듈 레벨 카운터 — lock 횟수 추적으로 stale unlock 방지
+let _panelLockGeneration = 0;
 
 export function usePanelLock(enabled = true) {
   const position = useDetailPosition();
   const { lockDetail, unlockDetail } = useDetailPanel();
 
   useEffect(() => {
-    console.log(`[usePanelLock] enabled=${enabled}, position=${position}`);
     if (enabled && position === 'detail') {
-      cancelAnimationFrame(_panelLockRafId);
+      // 새 세대 번호 발급 → 이전 cleanup의 unlock을 무효화
+      const gen = ++_panelLockGeneration;
       lockDetail();
-      console.log('[usePanelLock] LOCKED');
       return () => {
-        console.log('[usePanelLock] cleanup → rAF unlockDetail');
-        _panelLockRafId = requestAnimationFrame(() => {
-          console.log('[usePanelLock] rAF fired → unlockDetail');
-          unlockDetail();
+        // 다음 frame에서 unlock — 같은 cycle에 remount되면 gen이 달라져서 스킵
+        requestAnimationFrame(() => {
+          if (_panelLockGeneration === gen) {
+            unlockDetail();
+          }
         });
       };
     }
