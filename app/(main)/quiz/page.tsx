@@ -807,7 +807,7 @@ function QuizListPageContent() {
 
             {/* 총평 */}
             {selectedQuiz.description && (
-              <p className="text-xs text-[#5C5C5C] mb-3 line-clamp-3">&ldquo;{selectedQuiz.description}&rdquo;</p>
+              <p className="text-xs text-[#5C5C5C] mb-3">&ldquo;{selectedQuiz.description}&rdquo;</p>
             )}
             {!selectedQuiz.description && <div className="mb-1" />}
 
