@@ -176,6 +176,7 @@ export function DetailPanelProvider({ children }: { children: ReactNode }) {
       queuedRef.current = null;
       setQueuedContent(null);
       // 잠금 상태에서는 메인 콘텐츠(3쪽) 유지
+      console.log(`[DetailPanel] 탭 전환: ${prevRoot} → ${currRoot}, isLocked=${isLockedRef.current}`);
       if (!isLockedRef.current) {
         setContent(null);
       }
