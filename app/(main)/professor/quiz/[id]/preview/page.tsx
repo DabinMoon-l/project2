@@ -80,27 +80,29 @@ function EditExitModal({
   onSaveAndExit,
   onExitWithoutSave,
   isSaving,
+  isPanelMode,
 }: {
   isOpen: boolean;
   onClose: () => void;
   onSaveAndExit: () => void;
   onExitWithoutSave: () => void;
   isSaving: boolean;
+  isPanelMode?: boolean;
 }) {
   const modalRef = useRef<HTMLDivElement>(null);
   const previousActiveElement = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !isPanelMode) {
       previousActiveElement.current = document.activeElement as HTMLElement;
       modalRef.current?.focus();
       lockScroll();
     }
     return () => {
-      unlockScroll();
+      if (!isPanelMode) unlockScroll();
       if (previousActiveElement.current) previousActiveElement.current.focus();
     };
-  }, [isOpen]);
+  }, [isOpen, isPanelMode]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -112,84 +114,65 @@ function EditExitModal({
 
   if (typeof window === 'undefined') return null;
 
+  const content = (
+    <div className="text-center p-4">
+      <div className="w-9 h-9 bg-[#FFF8E7] border-2 border-[#D4A84B] flex items-center justify-center mx-auto mb-3">
+        <svg className="w-4 h-4 text-[#D4A84B]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+      </div>
+      <h3 className="text-sm font-bold text-[#1A1A1A] mb-1.5">수정 중인 내용이 있습니다</h3>
+      <p className="text-xs text-[#5C5C5C] mb-4">저장하지 않고 나가면 변경사항이 사라집니다.</p>
+      <div className="space-y-1.5">
+        <button onClick={onSaveAndExit} disabled={isSaving}
+          className="w-full py-1.5 px-3 text-xs bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors rounded-lg disabled:opacity-50 flex items-center justify-center">
+          {isSaving ? '저장 중...' : '저장하고 나가기'}
+        </button>
+        <button onClick={onExitWithoutSave} disabled={isSaving}
+          className="w-full py-1.5 px-3 text-xs bg-[#EDEAE4] text-[#8B1A1A] font-bold border-2 border-[#8B1A1A] hover:bg-[#FDEAEA] transition-colors rounded-lg disabled:opacity-50">
+          저장하지 않고 나가기
+        </button>
+        <button onClick={onClose} disabled={isSaving}
+          className="w-full py-1.5 px-3 text-xs bg-[#EDEAE4] text-[#1A1A1A] font-bold border-2 border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors rounded-lg disabled:opacity-50">
+          계속 수정하기
+        </button>
+      </div>
+    </div>
+  );
+
+  // 패널 모드: 3쪽/2쪽 안에서 absolute 바텀시트
+  if (isPanelMode) {
+    return (
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[60]" style={{ left: 'var(--detail-panel-left, 0)' }}
+              onClick={() => { if (!isSaving) onClose(); }} />
+            <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+              transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+              className="fixed bottom-0 right-0 z-[60] bg-[#F5F0E8] border-t-2 border-[#1A1A1A] rounded-t-2xl overflow-hidden"
+              style={{ left: 'var(--detail-panel-left, 0)' }}>
+              <div className="flex justify-center pt-2 pb-1"><div className="w-10 h-1 rounded-full bg-[#C4C0B8]" /></div>
+              {content}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    );
+  }
+
   return createPortal(
     <AnimatePresence>
       {isOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-        >
-          {/* 백드롭 */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => { if (!isSaving) onClose(); }}
-            className="absolute inset-0 bg-black/50"
-          />
-
-          {/* 모달 */}
-          <motion.div
-            ref={modalRef}
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.95, opacity: 0 }}
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => { if (!isSaving) onClose(); }} className="absolute inset-0 bg-black/50" />
+          <motion.div ref={modalRef} initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
             role="alertdialog" aria-modal="true" tabIndex={-1}
-            className="relative bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 max-w-[280px] w-full rounded-xl focus:outline-none"
-          >
-            <div className="text-center">
-              {/* 아이콘 */}
-              <div className="w-9 h-9 bg-[#FFF8E7] border-2 border-[#D4A84B] flex items-center justify-center mx-auto mb-3">
-                <svg className="w-4 h-4 text-[#D4A84B]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-
-              {/* 제목 */}
-              <h3 className="text-sm font-bold text-[#1A1A1A] mb-1.5">
-                수정 중인 내용이 있습니다
-              </h3>
-
-              {/* 설명 */}
-              <p className="text-xs text-[#5C5C5C] mb-4">
-                저장하지 않고 나가면 변경사항이 사라집니다.
-              </p>
-
-              {/* 버튼 */}
-              <div className="space-y-1.5">
-                <motion.button
-                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                  onClick={onSaveAndExit} disabled={isSaving}
-                  className="w-full py-1.5 px-3 text-xs bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors rounded-lg disabled:opacity-50 flex items-center justify-center"
-                >
-                  {isSaving ? (
-                    <>
-                      <svg className="animate-spin w-3.5 h-3.5 mr-1.5" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                      저장 중...
-                    </>
-                  ) : '저장하고 나가기'}
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                  onClick={onExitWithoutSave} disabled={isSaving}
-                  className="w-full py-1.5 px-3 text-xs bg-[#EDEAE4] text-[#8B1A1A] font-bold border-2 border-[#8B1A1A] hover:bg-[#FDEAEA] transition-colors rounded-lg disabled:opacity-50"
-                >
-                  저장하지 않고 나가기
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                  onClick={onClose} disabled={isSaving}
-                  className="w-full py-1.5 px-3 text-xs bg-[#EDEAE4] text-[#1A1A1A] font-bold border-2 border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors rounded-lg disabled:opacity-50"
-                >
-                  계속 수정하기
-                </motion.button>
-              </div>
-            </div>
+            className="relative bg-[#F5F0E8] border-2 border-[#1A1A1A] max-w-[280px] w-full rounded-xl focus:outline-none">
+            {content}
           </motion.div>
         </motion.div>
       )}
@@ -1319,6 +1302,7 @@ export default function QuizPreviewPage({ panelQuizId }: { panelQuizId?: string 
                 onEditQuestion={handleEditQuestion}
                 userRole="professor"
                 courseId={userCourseId || undefined}
+                isPanelMode={isPanelMode}
               />
             )}
 
@@ -1615,6 +1599,7 @@ export default function QuizPreviewPage({ panelQuizId }: { panelQuizId?: string 
         onSaveAndExit={handleSaveAndExit}
         onExitWithoutSave={handleExitWithoutSave}
         isSaving={saving}
+        isPanelMode={isPanelMode}
       />
 
       {/* 퀴즈 삭제 확인 모달 */}
@@ -1623,6 +1608,7 @@ export default function QuizPreviewPage({ panelQuizId }: { panelQuizId?: string 
         loading={deleting}
         onConfirm={handleDeleteQuiz}
         onCancel={() => setDeleteTarget(null)}
+        isPanelMode={isPanelMode}
       />
     </div>
   );

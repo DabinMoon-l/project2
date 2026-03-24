@@ -165,7 +165,85 @@ export default function ProfessorQuizListPage() {
   const [folderLoading, setFolderLoading] = useState(false);
 
   // 폴더 클릭 시 문제 로드 (useEffect 대신 직접 호출 — onSnapshot이 customFolders를 갱신하면 useEffect가 cancelled되는 문제 방지)
-  const handleOpenFolder = useCallback(async (folder: { id: string; questions: CustomFolderQuestion[] }) => {
+  // 가로모드: 폴더 상세를 3쪽 패널로 로드 후 표시
+  const openFolderInPanel = useCallback(async (folder: { id: string; name: string; questions: CustomFolderQuestion[] }) => {
+    // 즉시 로딩 상태로 패널 열기
+    const action = isDetailOpen ? replaceDetail : openDetail;
+    const close = () => closeDetail();
+    const renderPanel = (questions: (FirestoreQuizQuestion & { _quizTitle?: string })[]) => (
+      <div className="h-full flex flex-col bg-[#F5F0E8] overflow-hidden">
+        <div className="flex items-center gap-2 p-4 border-b-2 border-[#1A1A1A] flex-shrink-0">
+          <button onClick={close} className="p-1 text-[#5C5C5C] hover:text-[#1A1A1A]">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <h3 className="text-lg font-black text-[#1A1A1A] flex-1 truncate">{folder.name}</h3>
+          <span className="text-xs text-[#5C5C5C]">{folder.questions.length}문제</span>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4">
+          {questions.length === 0 ? (
+            <p className="text-sm text-[#5C5C5C] text-center py-8">문제가 없습니다.</p>
+          ) : (
+            <div className="space-y-2">
+              {questions.map((q, idx) => (
+                <PreviewQuestionCard key={q.id || `fq${idx}`} question={q} questionNumber={idx + 1} />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+
+    // 로딩 상태로 패널 열기
+    action(
+      <div className="h-full flex flex-col bg-[#F5F0E8] items-center justify-center">
+        <div className="w-6 h-6 border-2 border-[#1A1A1A] border-t-transparent animate-spin rounded-full" />
+      </div>
+    );
+
+    // 데이터 로드
+    if (!folder.questions || folder.questions.length === 0) {
+      replaceDetail(renderPanel([]));
+      return;
+    }
+    try {
+      const quizIdSet = new Set<string>();
+      for (const q of folder.questions) quizIdSet.add(q.quizId);
+      const quizCache = new Map<string, DocumentData>();
+      for (const quizId of quizIdSet) {
+        try { const d = await getDoc(doc(db, 'quizzes', quizId)); if (d.exists()) quizCache.set(quizId, d.data()); } catch {}
+      }
+      const questions: (FirestoreQuizQuestion & { _quizTitle?: string })[] = [];
+      const quizIndexCounters: Record<string, number> = {};
+      for (const q of folder.questions) {
+        const quizData = quizCache.get(q.quizId);
+        if (!quizData?.questions) continue;
+        if (!quizIndexCounters[q.quizId]) quizIndexCounters[q.quizId] = 0;
+        let matchedQ: FirestoreQuizQuestion | null = null;
+        if (q.questionId) {
+          matchedQ = quizData.questions.find((qq: FirestoreQuizQuestion) => qq.id === q.questionId) || null;
+        }
+        if (!matchedQ) {
+          const idx = quizIndexCounters[q.quizId];
+          if (idx < quizData.questions.length) matchedQ = quizData.questions[idx];
+          quizIndexCounters[q.quizId] = idx + 1;
+        }
+        if (matchedQ) questions.push({ ...matchedQ, _quizTitle: quizData.title || '' });
+      }
+      replaceDetail(renderPanel(questions));
+    } catch {
+      replaceDetail(renderPanel([]));
+    }
+  }, [isDetailOpen, openDetail, replaceDetail, closeDetail]);
+
+  const handleOpenFolder = useCallback(async (folder: { id: string; name?: string; questions: CustomFolderQuestion[] }) => {
+    // 가로모드: 3쪽 패널로 표시
+    if (isWide) {
+      const fullFolder = customFolders.find(f => f.id === folder.id);
+      openFolderInPanel({ id: folder.id, name: fullFolder?.name || folder.name || '폴더', questions: folder.questions });
+      return;
+    }
     setOpenFolderId(folder.id);
     setFolderQuestions([]);
 

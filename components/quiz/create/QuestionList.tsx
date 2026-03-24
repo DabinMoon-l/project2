@@ -25,6 +25,8 @@ interface QuestionListProps {
   courseId?: string;
   /** 추가 클래스명 */
   className?: string;
+  /** 패널 모드 (가로모드 3쪽 안에서 렌더) */
+  isPanelMode?: boolean;
 }
 
 // ============================================================
@@ -60,6 +62,7 @@ export default function QuestionList({
   userRole = 'student',
   courseId,
   className = '',
+  isPanelMode,
 }: QuestionListProps) {
   // 역할에 따른 라벨 반환
   const getTypeLabel = (type: string) => {
@@ -422,83 +425,60 @@ export default function QuestionList({
 
       {/* 삭제 확인 모달 */}
       <AnimatePresence>
-        {deleteIndex !== null && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          >
-            {/* 백드롭 */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setDeleteIndex(null)}
-              className="absolute inset-0 bg-black/50"
-            />
-
-            {/* 모달 */}
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="relative bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 max-w-[280px] w-full"
-            >
-              <div className="text-center">
-                {/* 아이콘 */}
+        {deleteIndex !== null && (isPanelMode ? (
+          /* 패널 모드: fixed 바텀시트 (3쪽/2쪽 영역 내) + 투명 오버레이 */
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[60]" style={{ left: 'var(--detail-panel-left, 0)' }}
+              onClick={() => setDeleteIndex(null)} />
+            <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+              transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+              className="fixed bottom-0 right-0 z-[60] bg-[#F5F0E8] border-t-2 border-[#1A1A1A] rounded-t-2xl overflow-hidden"
+              style={{ left: 'var(--detail-panel-left, 0)' }}>
+              <div className="flex justify-center pt-2 pb-1"><div className="w-10 h-1 rounded-full bg-[#C4C0B8]" /></div>
+              <div className="text-center p-4">
                 <div className="w-9 h-9 bg-[#FDEAEA] border-2 border-[#8B1A1A] flex items-center justify-center mx-auto mb-3">
-                  <svg
-                    className="w-4 h-4 text-[#8B1A1A]"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                    />
+                  <svg className="w-4 h-4 text-[#8B1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                   </svg>
                 </div>
-
-                {/* 제목 */}
-                <h3 className="text-sm font-bold text-[#1A1A1A] mb-1.5">
-                  문제를 삭제할까요?
-                </h3>
-
-                {/* 설명 */}
-                <p className="text-xs text-[#5C5C5C] mb-4">
-                  문제 {deleteIndex + 1}번이 삭제됩니다.
-                  <br />이 작업은 되돌릴 수 없습니다.
-                </p>
-
-                {/* 버튼 */}
+                <h3 className="text-sm font-bold text-[#1A1A1A] mb-1.5">문제를 삭제할까요?</h3>
+                <p className="text-xs text-[#5C5C5C] mb-4">문제 {deleteIndex + 1}번이 삭제됩니다.<br />이 작업은 되돌릴 수 없습니다.</p>
                 <div className="flex gap-2">
-                  <motion.button
-                    type="button"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setDeleteIndex(null)}
-                    className="flex-1 py-1.5 px-3 text-xs bg-[#EDEAE4] text-[#1A1A1A] font-bold border-2 border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
-                  >
-                    취소
-                  </motion.button>
-                  <motion.button
-                    type="button"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => handleDelete(deleteIndex)}
-                    className="flex-1 py-1.5 px-3 text-xs bg-[#8B1A1A] text-[#F5F0E8] font-bold border-2 border-[#8B1A1A] hover:bg-[#6B1414] transition-colors"
-                  >
-                    삭제
-                  </motion.button>
+                  <button type="button" onClick={() => setDeleteIndex(null)}
+                    className="flex-1 py-1.5 px-3 text-xs bg-[#EDEAE4] text-[#1A1A1A] font-bold border-2 border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors">취소</button>
+                  <button type="button" onClick={() => handleDelete(deleteIndex)}
+                    className="flex-1 py-1.5 px-3 text-xs bg-[#8B1A1A] text-[#F5F0E8] font-bold border-2 border-[#8B1A1A] hover:bg-[#6B1414] transition-colors">삭제</button>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        ) : (
+          /* 세로모드: fixed 중앙 모달 */
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setDeleteIndex(null)} className="absolute inset-0 bg-black/50" />
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="relative bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 max-w-[280px] w-full">
+              <div className="text-center">
+                <div className="w-9 h-9 bg-[#FDEAEA] border-2 border-[#8B1A1A] flex items-center justify-center mx-auto mb-3">
+                  <svg className="w-4 h-4 text-[#8B1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <h3 className="text-sm font-bold text-[#1A1A1A] mb-1.5">문제를 삭제할까요?</h3>
+                <p className="text-xs text-[#5C5C5C] mb-4">문제 {deleteIndex + 1}번이 삭제됩니다.<br />이 작업은 되돌릴 수 없습니다.</p>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setDeleteIndex(null)}
+                    className="flex-1 py-1.5 px-3 text-xs bg-[#EDEAE4] text-[#1A1A1A] font-bold border-2 border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors">취소</button>
+                  <button type="button" onClick={() => handleDelete(deleteIndex)}
+                    className="flex-1 py-1.5 px-3 text-xs bg-[#8B1A1A] text-[#F5F0E8] font-bold border-2 border-[#8B1A1A] hover:bg-[#6B1414] transition-colors">삭제</button>
                 </div>
               </div>
             </motion.div>
           </motion.div>
-        )}
+        ))}
       </AnimatePresence>
 
     </div>
