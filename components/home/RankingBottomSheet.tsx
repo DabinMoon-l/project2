@@ -95,8 +95,9 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
   useTheme();
   const isWide = useWideMode();
   const isProfessor = profile?.role === 'professor';
-  /** 교수: 실명 우선, 학생: 닉네임 */
-  const displayName = (u: RankedUser) => isProfessor && u.name ? u.name : u.nickname;
+  const [showRealName, setShowRealName] = useState(true);
+  /** 교수: 실명/닉네임 토글, 학생: 닉네임 고정 */
+  const displayName = (u: RankedUser) => isProfessor && showRealName && u.name ? u.name : u.nickname;
 
   const [rankedUsers, setRankedUsers] = useState<RankedUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -395,8 +396,20 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
           )}
         </div>
 
-        {/* 반별 필터 드롭다운 */}
-        <div className="flex justify-end px-4 mt-1 relative">
+        {/* 반별 필터 드롭다운 + 실명/닉네임 토글 */}
+        <div className="flex items-center justify-between px-4 mt-1 relative">
+          {/* 교수 전용: 실명/닉네임 토글 */}
+          {isProfessor ? (
+            <button
+              onClick={() => setShowRealName(v => !v)}
+              className="flex items-center gap-1.5 py-1.5 px-2.5 text-xs font-bold bg-white/15 text-white/80 border border-white/25 rounded-md"
+            >
+              <div className={`relative w-7 h-4 rounded-full transition-colors ${showRealName ? 'bg-white/40' : 'bg-white/15'}`}>
+                <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${showRealName ? 'left-3.5' : 'left-0.5'}`} />
+              </div>
+              {showRealName ? '실명' : '닉네임'}
+            </button>
+          ) : <div />}
           <button
             onClick={() => setShowClassDropdown(v => !v)}
             className="flex items-center justify-center gap-1 w-14 py-1.5 text-sm font-bold bg-white/15 text-white/80 border border-white/25 rounded-md"

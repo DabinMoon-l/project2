@@ -6,7 +6,8 @@ import { useUser, useCourse } from '@/lib/contexts';
 import { readHomeCache, writeHomeCache } from '@/lib/utils/rankingCache';
 import { computeRankScore, computeTeamScore } from '@/lib/utils/ranking';
 import { AnimatePresence, motion } from 'framer-motion';
-import { scaleCoord } from '@/lib/hooks/useViewportScale';
+import { useWideMode, scaleCoord } from '@/lib/hooks/useViewportScale';
+import { useDetailPanel } from '@/lib/contexts/DetailPanelContext';
 import RankingBottomSheet from './RankingBottomSheet';
 
 // 순위 접미사
@@ -51,6 +52,8 @@ export default function ProfessorRankingSection({ overrideCourseId }: { override
   const { profile } = useUser();
   const { userCourseId: contextCourseId } = useCourse();
   const userCourseId = overrideCourseId ?? contextCourseId;
+  const isWide = useWideMode();
+  const { openDetail, closeDetail } = useDetailPanel();
 
   // 4팀 랭킹 데이터 (랭크순 정렬)
   const [teamEntries, setTeamEntries] = useState<TeamRankEntry[]>([]);
@@ -299,7 +302,14 @@ export default function ProfessorRankingSection({ overrideCourseId }: { override
 
         {/* OVERVIEW (클릭 시 랭킹 바텀시트) */}
         <button
-          onClick={() => !loading && setShowRanking(true)}
+          onClick={() => {
+            if (loading) return;
+            if (isWide) {
+              openDetail(<RankingBottomSheet isPanelMode isOpen onClose={closeDetail} />);
+            } else {
+              setShowRanking(true);
+            }
+          }}
           className="flex items-center gap-2 active:scale-95 transition-transform"
         >
           <div className="text-center">

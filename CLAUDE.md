@@ -166,7 +166,9 @@ HomeOverlay(z-45) — 전체화면 오버레이, 네비 위에 표시.
 
 **복습 연습 플로우**: `FolderDetailPage` → `ReviewPractice` → 3단계(Practice → Result → Feedback)
 - `PracticeStage`: 문제 풀이 (채점 즉시), `ResultStage`: 결과 + 피드백 바텀시트, `FeedbackStage`: 오답 폴더 저장 + EXP 획득
-- 가로모드: `openDetail(<FolderDetailPage isPanelMode />)`, 연습 시작 시 `lockDetail()` → 3쪽 잠금
+- 가로모드(복습 탭): `openDetail(<FolderDetailPage isPanelMode />)`, 연습 시작 시 `lockDetail()` → 3쪽 잠금
+- 가로모드(서재 바로가기): 2쪽=`FolderDetailPage`(페이지) + 3쪽=`WidePagePractice`(autoStart)
+- **서재 바로가기**: 1쪽 사이드바 복습 하위 문제지 클릭 → `/review/library/{id}?autoStart=all` → 2쪽 상세 + 3쪽 즉시 복습
 
 ### 게시판 탭 (`/board`)
 
@@ -392,12 +394,37 @@ interface DetailPanelContextType {
 }
 ```
 
-**잠금 대상 4가지**: 퀴즈(`QuizPanelContainer`), 복습(`ReviewPractice`), 퀴즈만들기(`QuizCreatePage`), 배틀(포탈 독립)
+**잠금 대상 4가지**: 퀴즈(`QuizPanelContainer`), 복습(`ReviewPractice`/`WidePagePractice`), 퀴즈만들기(`QuizCreatePage`), 배틀(포탈 독립)
 
 **잠금 중 동작**:
-- 탭 전환 → 3쪽 유지, 2쪽만 변경
+- 탭 전환 → `handleTabClick`에서 `unlockDetail(true)` 강제 해제 → 3쪽 정리
 - `openDetail()` → 2쪽에 대기
 - 잠금 해제 → 대기 콘텐츠 3쪽 승격, 2쪽을 탭 루트로 복귀
+- 잠금 해제 시 `isDetailOpen`이면 탭 루트 복귀 스킵 (서재 바로가기 전환 등)
+
+### 서재 바로가기 (1쪽 사이드바)
+
+가로모드 복습 탭 하위에 문제지 목록 인라인 표시, 클릭 시 즉시 복습 시작.
+
+**UI**: `SidebarLibraryItems` 컴포넌트 (`Navigation.tsx`)
+- 복습 탭 활성화 시 자동 표시, 드롭다운 화살표(▸/▾)
+- 다른 탭 클릭 시 컴포넌트 언마운트로 자동 숨김
+- 선택된 항목: 탭 활성 스타일과 동일 (`rgba(0,0,0,0.07)` + `opacity: 1`)
+- 데이터: `useLearningQuizzes` + `useCompletedQuizzes` (서재 탭과 동일)
+
+**클릭 플로우**:
+```
+1. unlockDetail(false) — 3쪽 잠금만 해제 (콘텐츠 유지 → layout 탭 복귀 방지)
+2. router.push('/review/library/{id}?autoStart=all') — 2쪽 FolderDetailPage
+3. FolderDetailPage autoStart effect — unlockDetail(true) + openDetail(WidePagePractice)
+4. WidePagePractice mount → usePanelLock() → 3쪽 잠금
+```
+
+**`WidePagePractice`** (`review/[type]/[id]/page.tsx`): 가로모드 페이지에서 3쪽으로 열리는 복습 래퍼
+- `usePanelLock()` + `useClosePanel()` (review/page.tsx의 `ReviewPracticePanel`과 동일 패턴)
+- `handlePracticeCompleteRef`: stale closure 방지용 ref
+
+**`autoStartedForRef`**: folderId별 1회 실행 + 데이터 신선도 검증 (`questions[0]?.quizId === folderId`)
 
 ### CSS 변수
 

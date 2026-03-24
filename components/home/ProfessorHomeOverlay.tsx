@@ -34,7 +34,7 @@ export default function ProfessorHomeOverlay() {
   const { userCourseId, setProfessorCourse, assignedCourses } = useCourse();
   const { isOpen, isCloseRequested, close, buttonRect } = useHomeOverlay();
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
-  const { closeDetail, clearQueue, isLocked } = useDetailPanel();
+  const { openDetail, closeDetail, clearQueue, isLocked } = useDetailPanel();
   const isWide = useWideMode();
 
   // 홈 오버레이 열리면: 잠금 시 대기만 제거, 비잠금 시 3쪽 닫기
@@ -282,7 +282,13 @@ export default function ProfessorHomeOverlay() {
             <button
               className="w-14 h-14 flex items-center justify-center flex-shrink-0 rounded-xl overflow-hidden"
               style={{ background: 'rgba(0, 0, 0, 0.3)', border: '1px solid rgba(255, 255, 255, 0.1)' }}
-              onClick={() => setShowProfileDrawer(true)}
+              onClick={() => {
+                if (isWide) {
+                  openDetail(<ProfileDrawer isOpen isPanelMode onClose={closeDetail} />);
+                } else {
+                  setShowProfileDrawer(true);
+                }
+              }}
             >
               {profile.profileRabbitId != null ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -315,10 +321,25 @@ export default function ProfessorHomeOverlay() {
                   courseIds={assignedCourses}
                 />
               }
+              onOpenPanel={isWide ? () => openDetail(
+                <AnnouncementChannel
+                  isPanelMode
+                  onClosePanel={closeDetail}
+                  overrideCourseId={selectedCourse}
+                  headerContent={
+                    <CourseSwitcher
+                      value={selectedCourse}
+                      onChange={setProfessorCourse}
+                      textClassName="text-2xl font-black text-white/90 tracking-wide inline-block"
+                      courseIds={assignedCourses}
+                    />
+                  }
+                />
+              ) : undefined}
             />
           </div>
           <div className="px-8 mb-1 relative z-20">
-            <OpinionChannel />
+            <OpinionChannel onOpenPanel={isWide ? () => openDetail(<OpinionChannel isPanelMode onClosePanel={closeDetail} />) : undefined} />
           </div>
         </div>
 

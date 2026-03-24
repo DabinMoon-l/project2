@@ -209,10 +209,11 @@ export default function StudentMonitoringPage() {
         weightedScore: detail.weightedScore ?? initialDetail.weightedScore,
         classWeightedScores: detail.classWeightedScores ?? initialDetail.classWeightedScores,
       };
-      // 세로모드: state 업데이트로 바텀시트 갱신 (리마운트 없음)
-      // 가로모드: replaceDetail은 리마운트 → 레이더 애니메이션 재실행되므로 스킵
-      // (캐시에 레이더+학업 데이터 있으므로 초기 렌더로 충분)
-      if (!isWide) {
+      if (isWide) {
+        // 가로모드: 3쪽 패널 갱신 (퀴즈 성적 등 보충 데이터 반영)
+        openStudentPanel(merged);
+      } else {
+        // 세로모드: state 업데이트로 바텀시트 갱신 (리마운트 없음)
         setSelectedStudentDetail(prev => prev ? merged : detail);
       }
     }

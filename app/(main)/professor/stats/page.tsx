@@ -11,7 +11,8 @@ import { callFunction } from '@/lib/api';
 import { mean as statMean, sd as statSd, zScore } from '@/lib/utils/statistics';
 import type { FeedbackType } from '@/components/quiz/InstantFeedbackButton';
 import type { CourseId } from '@/lib/types/course';
-import { scaleCoord } from '@/lib/hooks/useViewportScale';
+import { scaleCoord, useWideMode } from '@/lib/hooks/useViewportScale';
+import { useDetailPanel } from '@/lib/contexts/DetailPanelContext';
 
 import ClassComparison from '@/components/professor/stats/ClassComparison';
 import RadarChart from '@/components/professor/stats/RadarChart';
@@ -63,6 +64,8 @@ const CLUSTER_META = [
 
 export default function ProfessorStatsPage() {
   const { userCourseId, setProfessorCourse, assignedCourses, courseList } = useCourse();
+  const isWide = useWideMode();
+  const { openDetail, closeDetail, isDetailOpen } = useDetailPanel();
   const courseIds = useMemo(() => {
     const allIds = courseList.map(c => c.id) as CourseId[];
     if (assignedCourses.length > 0) {
@@ -136,6 +139,43 @@ export default function ProfessorStatsPage() {
   useEffect(() => {
     fetchStats(courseId, source);
   }, [courseId, source, fetchStats]);
+
+  // 가로모드: 챕터분석(RadarChart)을 3쪽 디테일 패널에 자동 표시
+  const radarOpenedForRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isWide || !data || loading) return;
+    // 과목이 바뀌거나 최초 로드 시 3쪽 갱신
+    const key = `${courseId}_radar`;
+    if (radarOpenedForRef.current === key) return;
+    radarOpenedForRef.current = key;
+    openDetail(
+      <div className="h-full overflow-y-auto bg-[#F5F0E8]" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+        <div className="px-4 pt-4 pb-24">
+          <RadarChart chapterStats={data.chapterStats} />
+        </div>
+      </div>
+    );
+  }, [isWide, data, loading, courseId, openDetail]);
+
+  // 가로모드 해제 시 3쪽 닫기
+  useEffect(() => {
+    if (!isWide && radarOpenedForRef.current) {
+      radarOpenedForRef.current = null;
+      closeDetail();
+    }
+  }, [isWide, closeDetail]);
+
+  // 페이지 언마운트 시 3쪽 정리
+  const closeDetailRef = useRef(closeDetail);
+  closeDetailRef.current = closeDetail;
+  useEffect(() => {
+    return () => {
+      if (radarOpenedForRef.current) {
+        radarOpenedForRef.current = null;
+        closeDetailRef.current();
+      }
+    };
+  }, []);
 
   // 위험학생 계산
   const { atRiskStudentList, atRiskWarningMap } = useMemo(() => {
@@ -452,7 +492,7 @@ export default function ProfessorStatsPage() {
   }, []);
 
   return (
-    <div className="min-h-screen pb-24 bg-[#F5F0E8]">
+    <div className={`pb-24 bg-[#F5F0E8] ${isWide ? 'flex flex-col min-h-full' : 'min-h-screen'}`}>
       {/* 리본 헤더 */}
       <header className="flex flex-col items-center">
         <DashboardRibbonHeader
@@ -462,7 +502,7 @@ export default function ProfessorStatsPage() {
         />
       </header>
 
-      <div className="px-4 pt-3 space-y-6">
+      <div className={`px-4 pt-3 space-y-6 ${isWide ? 'flex-1 flex flex-col' : ''}`}>
 
         {/* 요약 카드 2개 (가운데 정렬 + 숫자 크게) */}
         {data && (
@@ -607,10 +647,13 @@ export default function ProfessorStatsPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3 }}
-            className="space-y-8"
+            className={isWide ? 'flex-1 flex flex-col space-y-8' : 'space-y-8'}
           >
-            <ClassComparison classStats={data.classStats} students={students} onClassClick={handleClassClick} />
-            <RadarChart chapterStats={data.chapterStats} />
+            <div className={isWide ? 'flex-1' : ''}>
+              <ClassComparison classStats={data.classStats} students={students} onClassClick={handleClassClick} />
+            </div>
+            {/* 세로모드에서만 2쪽에 표시 (가로모드에서는 3쪽 디테일 패널) */}
+            {!isWide && <RadarChart chapterStats={data.chapterStats} />}
 
             {/* 피드백 분석 */}
             {extraData.feedbackData && extraData.feedbackData.total > 0 && (
