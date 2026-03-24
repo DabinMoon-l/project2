@@ -54,6 +54,8 @@ export interface FolderDetailBottomSheetsProps {
   folderType: string;
   /** 삭제 실행 핸들러 */
   onDelete: () => void;
+  /** 패널 모드 (가로 3쪽/2쪽 안에서 렌더) */
+  isPanelMode?: boolean;
 }
 
 /**
@@ -81,6 +83,7 @@ export default function FolderDetailBottomSheets({
   onCloseDeleteModal,
   folderType,
   onDelete,
+  isPanelMode,
 }: FolderDetailBottomSheetsProps) {
   const isWide = useWideMode();
 
@@ -226,14 +229,14 @@ export default function FolderDetailBottomSheets({
       </BottomSheet>
 
       {/* 폴더/서재 삭제 확인 모달 */}
-      {showDeleteModal && (isWide ? (
+      {showDeleteModal && ((isWide && isPanelMode) ? (
+        /* 패널 모드: 3쪽/2쪽 안에서 absolute 바텀시트 */
         <AnimatePresence>
-          <div className="fixed inset-0 z-[9998]" style={{ left: 'var(--detail-panel-left, calc(50% + 120px))' }} onClick={onCloseDeleteModal} />
+          <div className="absolute inset-0 z-[9998]" onClick={onCloseDeleteModal} />
           <motion.div
             initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
             transition={{ type: 'spring', stiffness: 400, damping: 35 }}
-            className="fixed bottom-0 right-0 z-[9999] bg-[#F5F0E8] rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.15)] border-t-2 border-x-2 border-[#1A1A1A] p-4"
-            style={{ left: 'var(--detail-panel-left, calc(50% + 120px))' }}
+            className="absolute bottom-0 left-0 right-0 z-[9999] bg-[#F5F0E8] rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.15)] border-t-2 border-[#1A1A1A] p-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-center -mt-2 mb-2"><div className="w-8 h-1 rounded-full bg-[#D4CFC4]" /></div>
