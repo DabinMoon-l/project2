@@ -821,7 +821,7 @@ export function buildFullPrompt(
   const chapterIndexPrompt = (courseCustomized || tagChapterNumbers.length > 0)
     ? buildChapterIndexPrompt(courseId, chapterFilterForIndex)
     : "";
-  const focusGuide = courseCustomized ? getFocusGuide(courseId, scopeChapters) : null;
+  const focusGuide = courseCustomized ? getFocusGuide(courseId, tagChapterNumbers.length > 0 ? tagChapterNumbers : scopeChapters) : null;
   // 과목 개요 (과목 특성 + 선택 챕터 상세 커리큘럼)
   // courseCustomized=false라도 챕터 태그가 선택되면 커리큘럼 개요는 포함
   const courseOverviewPrompt = (courseCustomized || tagChapterNumbers.length > 0)

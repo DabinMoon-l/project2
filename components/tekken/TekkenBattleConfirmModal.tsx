@@ -9,7 +9,7 @@
  * 챕터 선택: < 챕터명 > 캐러셀 + 선택 태그 표시
  */
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getRabbitStats, useRabbitDoc, type RabbitHolding } from '@/lib/hooks/useRabbit';
@@ -158,6 +158,20 @@ export default function TekkenBattleConfirmModal({
     setCarouselIdx(i => (i + 1) % courseChapters.length);
   }, [courseChapters.length]);
 
+  // 스와이프 (터치 + 마우스 드래그)
+  const swipeStartX = useRef<number | null>(null);
+  const onPointerDown = useCallback((e: React.PointerEvent) => {
+    swipeStartX.current = e.clientX;
+  }, []);
+  const onPointerUp = useCallback((e: React.PointerEvent) => {
+    if (swipeStartX.current === null) return;
+    const dx = e.clientX - swipeStartX.current;
+    swipeStartX.current = null;
+    if (Math.abs(dx) < 30) return;
+    if (dx < 0) goNext();
+    else goPrev();
+  }, [goNext, goPrev]);
+
   const currentChapter = courseChapters[carouselIdx];
   const isCurrentSelected = currentChapter ? selectedChapters.has(currentChapter.num) : false;
 
@@ -232,7 +246,11 @@ export default function TekkenBattleConfirmModal({
             <div className="w-full mt-0.5">
               {/* < 챕터명 > 캐러셀 */}
               {currentChapter && (
-                <div className="flex items-center justify-center gap-1">
+                <div
+                  className="flex items-center justify-center gap-1 touch-pan-y"
+                  onPointerDown={onPointerDown}
+                  onPointerUp={onPointerUp}
+                >
                   <button
                     onClick={goPrev}
                     className="w-8 h-8 flex items-center justify-center text-white/60 active:text-white transition-colors"
