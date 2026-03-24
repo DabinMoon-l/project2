@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { auth } from '@/lib/firebase';
 import { uploadBase64ToStorage, sanitizeForFirestore } from '@/lib/utils/quizImageUpload';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { useCourse } from '@/lib/contexts';
+import { useCourse, useClosePanel, usePanelLock, usePanelStatePreservation } from '@/lib/contexts';
 import { useProfessorQuiz, type QuizInput, type Difficulty } from '@/lib/hooks/useProfessorQuiz';
 import type { QuizType } from '@/components/professor/QuizEditorForm';
 import type { CourseId } from '@/lib/types/course';
@@ -109,11 +109,15 @@ const DIFFICULTY_OPTIONS: { value: Difficulty; label: string }[] = [
  * 3. 퀴즈 정보 (시험 유형, 과목, 대상 반, 제목, 난이도)
  * 4. 확인 및 저장
  */
-export default function ProfessorQuizCreatePage() {
+export default function ProfessorQuizCreatePage({ isPanelMode }: { isPanelMode?: boolean } = {}) {
   const router = useRouter();
+  const closePanel = useClosePanel();
   const { user } = useAuth();
   const { semesterSettings, userCourseId, getCourseById, courseList } = useCourse();
   const { createQuiz, error, clearError } = useProfessorQuiz();
+
+  // 3쪽 패널 잠금 (가로모드)
+  usePanelLock(isPanelMode);
 
   // 단계 관리
   const [step, setStep] = useState<Step>('upload');
@@ -178,6 +182,27 @@ export default function ProfessorQuizCreatePage() {
       setSelectedCourseId(userCourseId as CourseId);
     }
   }, [userCourseId, selectedCourseId]);
+
+  // 2쪽→3쪽 승격 시 상태 보존
+  usePanelStatePreservation(
+    'professor-quiz-create',
+    () => isPanelMode ? ({
+      step, questions, quizType, selectedCourseId, title, description,
+      difficulty, tags, pastYear, pastExamType,
+    }) : ({}),
+    (saved) => {
+      if (saved.step) setStep(saved.step as Step);
+      if (saved.questions) setQuestions(saved.questions as QuestionData[]);
+      if (saved.quizType !== undefined) setQuizType(saved.quizType as QuizType);
+      if (saved.selectedCourseId) setSelectedCourseId(saved.selectedCourseId as CourseId);
+      if (saved.title) setTitle(saved.title as string);
+      if (saved.description) setDescription(saved.description as string);
+      if (saved.difficulty) setDifficulty(saved.difficulty as Difficulty);
+      if (saved.tags) setTags(saved.tags as string[]);
+      if (saved.pastYear) setPastYear(saved.pastYear as number);
+      if (saved.pastExamType) setPastExamType(saved.pastExamType as 'midterm' | 'final');
+    },
+  );
 
   // 태그 옵션 (과목별)
   const tagOptions = useMemo(() => {
@@ -322,22 +347,27 @@ export default function ProfessorQuizCreatePage() {
   /**
    * 저장하고 나가기
    */
+  const goBack = useCallback(() => {
+    if (isPanelMode) closePanel();
+    else router.back();
+  }, [isPanelMode, closePanel, router]);
+
   const handleSaveAndExit = useCallback(() => {
     const success = saveDraft();
     if (success) {
-      router.back();
+      goBack();
     } else {
       alert('저장에 실패했습니다.');
     }
-  }, [saveDraft, router]);
+  }, [saveDraft, goBack]);
 
   /**
    * 저장하지 않고 나가기
    */
   const handleExitWithoutSave = useCallback(() => {
     deleteDraft();
-    router.back();
-  }, [deleteDraft, router]);
+    goBack();
+  }, [deleteDraft, goBack]);
 
   /**
    * 뒤로가기 버튼 핸들러
@@ -346,9 +376,9 @@ export default function ProfessorQuizCreatePage() {
     if (step !== 'upload' || questions.length > 0 || title) {
       setShowExitModal(true);
     } else {
-      router.back();
+      goBack();
     }
-  }, [step, questions.length, title, router]);
+  }, [step, questions.length, title, goBack]);
 
   /**
    * Blob을 dataUrl로 변환
@@ -967,7 +997,8 @@ export default function ProfessorQuizCreatePage() {
       deleteDraft();
 
       // 성공 시 퀴즈 목록으로 이동
-      router.push('/professor/quiz');
+      if (isPanelMode) closePanel();
+      else router.push('/professor/quiz');
     } catch (error) {
       console.error('퀴즈 저장 실패:', error);
       setSaveError('퀴즈 저장에 실패했습니다. 다시 시도해주세요.');

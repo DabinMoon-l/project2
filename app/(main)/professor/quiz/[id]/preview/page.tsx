@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom';
 import { useRouter, useParams } from 'next/navigation';
 import { doc, getDoc, collection, query, where, getDocs, db } from '@/lib/repositories';
 import { callFunction } from '@/lib/api';
-import { useCourse, useUser, useDetailPanel } from '@/lib/contexts';
+import { useCourse, useUser, useDetailPanel, useClosePanel, usePanelLock, usePanelStatePreservation } from '@/lib/contexts';
 import { formatChapterLabel, generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
@@ -194,6 +194,10 @@ export default function QuizPreviewPage({ panelQuizId }: { panelQuizId?: string 
   const quizId = panelQuizId || (params?.id as string);
   const isPanelMode = !!panelQuizId;
   const { closeDetail } = useDetailPanel();
+  const closePanel = useClosePanel();
+
+  // 3쪽 패널 잠금 (preview 전체)
+  usePanelLock(isPanelMode);
 
   const [quizTitle, setQuizTitle] = useState('');
   const [averageScore, setAverageScore] = useState(0);
@@ -241,6 +245,20 @@ export default function QuizPreviewPage({ panelQuizId }: { panelQuizId?: string 
   // 삭제 모달 상태
   const [deleteTarget, setDeleteTarget] = useState<{ title: string; questionCount: number; participantCount: number } | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // 2쪽→3쪽 승격 시 수정 상태 보존
+  usePanelStatePreservation(
+    'professor-quiz-preview',
+    () => isPanelMode ? ({ isEditMode, editTitle, editDescription, editTags, editType, editDifficulty }) : ({}),
+    (saved) => {
+      if (saved.isEditMode) setIsEditMode(true);
+      if (saved.editTitle) setEditTitle(saved.editTitle as string);
+      if (saved.editDescription) setEditDescription(saved.editDescription as string);
+      if (saved.editTags) setEditTags(saved.editTags as string[]);
+      if (saved.editType) setEditType(saved.editType as typeof editType);
+      if (saved.editDifficulty) setEditDifficulty(saved.editDifficulty as typeof editDifficulty);
+    },
+  );
 
   // 태그 옵션 (과목별)
   const tagOptions = useMemo(() => {
@@ -1026,7 +1044,7 @@ export default function QuizPreviewPage({ panelQuizId }: { panelQuizId?: string 
           {/* 좌측 버튼 — absolute로 배치하여 타이틀 중앙에 영향 안 줌 */}
           {isEditMode ? null : (
             <button
-              onClick={() => isPanelMode ? closeDetail() : router.back()}
+              onClick={() => isPanelMode ? closePanel() : router.back()}
               className="absolute left-2 w-8 h-8 flex items-center justify-center text-[#1A1A1A] hover:text-[#5C5C5C] transition-colors"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
