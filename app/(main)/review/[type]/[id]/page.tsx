@@ -23,7 +23,8 @@ import { callFunction } from '@/lib/api';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useReview, type ReviewItem, type FolderCategory, type CustomFolderQuestion } from '@/lib/hooks/useReview';
 import { useCourse } from '@/lib/contexts/CourseContext';
-import { useDetailPanel, useClosePanel, useDetailPosition, usePanelStatePreservation } from '@/lib/contexts';
+import { useDetailPanel, useClosePanel, useDetailPosition, usePanelStatePreservation, usePanelLock, useUser } from '@/lib/contexts';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
 import dynamic from 'next/dynamic';
 import { Skeleton, useExpToast } from '@/components/common';
 import { EXP_REWARDS } from '@/lib/utils/expRewards';
@@ -48,6 +49,39 @@ import FolderDetailBottomSheets from '@/components/review/detail/FolderDetailBot
 import EditMetadataSection from '@/components/review/detail/EditMetadataSection';
 
 /**
+ * 가로모드 페이지에서 3쪽으로 열리는 복습 연습 래퍼
+ * mount 시 lockDetail, close/complete 시 closePanel
+ */
+function WidePagePractice({
+  items,
+  quizTitle,
+  onComplete,
+  currentUserId,
+  showFeedback,
+}: {
+  items: ReviewItem[];
+  quizTitle: string;
+  onComplete: (results: PracticeResult[]) => void;
+  currentUserId?: string;
+  showFeedback: boolean;
+}) {
+  const closePanel = useClosePanel();
+  usePanelLock();
+
+  return (
+    <ReviewPractice
+      items={items}
+      quizTitle={quizTitle}
+      onComplete={(results) => { onComplete(results); closePanel(); }}
+      onClose={() => closePanel()}
+      currentUserId={currentUserId}
+      showFeedback={showFeedback}
+      isPanelMode
+    />
+  );
+}
+
+/**
  * 폴더 상세 페이지
  * panelType/panelId가 주어지면 3쪽 패널 모드 (가로모드)
  */
@@ -62,10 +96,13 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
   const params = useParams();
   const searchParams = useSearchParams();
   const { user } = useAuth();
+  const { profile } = useUser();
+  const isProfessor = profile?.role === 'professor';
   const { userCourse, userClassId } = useCourse();
   const { showExpToast } = useExpToast();
-  const { lockDetail, unlockDetail } = useDetailPanel();
+  const { lockDetail, unlockDetail, openDetail, replaceDetail, isDetailOpen } = useDetailPanel();
   const closePanel = useClosePanel();
+  const isWide = useWideMode();
 
   // 패널 모드: prop 우선, 없으면 라우트 params 폴백
   const isPanelMode = !!panelType;
@@ -90,11 +127,12 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
     router.push(`/review?filter=${filter || folderType}`);
   }, [isPanelMode, closePanel, router, folderType]);
 
-  // 과목별 리본 이미지 (solved 타입 또는 퀴즈 페이지에서 온 경우 퀴즈 리본, 나머지는 리뷰 리본)
-  const ribbonImage = (folderType === 'solved' || fromQuizPage)
+  // 과목별 리본 이미지
+  // 교수: quiz(archive) 리본, 학생 solved/퀴즈 경유: quiz 리본, 나머지: review 리본
+  const ribbonImage = (isProfessor || folderType === 'solved' || fromQuizPage)
     ? (userCourse?.quizRibbonImage || '/images/biology-quiz-ribbon.png')
     : (userCourse?.reviewRibbonImage || '/images/biology-review-ribbon.png');
-  const ribbonScale = (folderType === 'solved' || fromQuizPage)
+  const ribbonScale = (isProfessor || folderType === 'solved' || fromQuizPage)
     ? (userCourse?.quizRibbonScale || 1)
     : (userCourse?.reviewRibbonScale || 1);
 
@@ -302,6 +340,57 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
     const loadCustomQuestions = async () => {
       setCustomLoading(true);
 
+      // 교수: reviews가 없으므로 quizzes 문서에서 직접 로드
+      if (isProfessor) {
+        const quizGroups = new Map<string, string[]>();
+        for (const q of customFolder.questions) {
+          const ids = quizGroups.get(q.quizId) || [];
+          ids.push(q.questionId);
+          quizGroups.set(q.quizId, ids);
+        }
+        const items: ReviewItem[] = [];
+        for (const [quizId, questionIds] of quizGroups) {
+          try {
+            const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
+            if (!quizDoc.exists()) continue;
+            const quizData = quizDoc.data();
+            const quizQuestions = quizData.questions || [];
+            const quizTitle = quizData.title || '';
+            for (const qId of questionIds) {
+              const matched = quizQuestions.find((qq: DocumentData, idx: number) => (qq.id || `q${idx}`) === qId);
+              if (matched) {
+                items.push({
+                  id: `${quizId}_${qId}`,
+                  userId: user.uid,
+                  quizId,
+                  quizTitle,
+                  questionId: qId,
+                  question: matched.question || matched.text || '',
+                  type: matched.type || 'multiple',
+                  options: matched.options || matched.choices || [],
+                  correctAnswer: String(matched.answer ?? matched.correctAnswer ?? ''),
+                  userAnswer: '',
+                  isCorrect: true,
+                  reviewType: 'solved',
+                  isBookmarked: false,
+                  reviewCount: 0,
+                  courseId: quizData.courseId || '',
+                  explanation: matched.explanation || '',
+                  choiceExplanations: matched.choiceExplanations || [],
+                  chapterId: matched.chapterId || '',
+                  createdAt: quizData.createdAt || null,
+                } as unknown as ReviewItem);
+              }
+            }
+          } catch {}
+        }
+        setCustomQuestions(sortByQuestionId(items));
+        loadedFolderRef.current = folderId;
+        setCustomLoading(false);
+        return;
+      }
+
+      // 학생: reviews에서 조회
       // quizId별로 questionId 그룹화 (in 쿼리 일괄 조회용)
       const quizGroups = new Map<string, string[]>();
       for (const q of customFolder.questions) {
@@ -880,8 +969,24 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
       return;
     }
 
-    setPracticeMode('all'); // 전체 복습 모드
-    setPracticeItems(targetItems);
+    setPracticeMode('all');
+
+    // 가로모드 + 페이지: 3쪽에서 복습
+    if (isWide && !isPanelMode) {
+      const action = isDetailOpen ? replaceDetail : openDetail;
+      action(
+        <WidePagePractice
+          items={targetItems}
+          quizTitle={folderTitle}
+          onComplete={(results) => handlePracticeCompleteRef.current(results)}
+          currentUserId={user?.uid}
+          showFeedback={folderType !== 'library'}
+        />
+      );
+    } else {
+      setPracticeItems(targetItems);
+    }
+
     setIsSelectMode(false);
     setSelectedIds(new Set());
   };
@@ -904,8 +1009,24 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
       return;
     }
 
-    setPracticeMode('wrongOnly'); // 오답만 복습 모드 (첫복습점수 저장 안함)
-    setPracticeItems(wrongOnlyItems);
+    setPracticeMode('wrongOnly');
+
+    // 가로모드 + 페이지: 3쪽에서 복습
+    if (isWide && !isPanelMode) {
+      const action = isDetailOpen ? replaceDetail : openDetail;
+      action(
+        <WidePagePractice
+          items={wrongOnlyItems}
+          quizTitle={folderTitle}
+          onComplete={(results) => handlePracticeCompleteRef.current(results)}
+          currentUserId={user?.uid}
+          showFeedback={folderType !== 'library'}
+        />
+      );
+    } else {
+      setPracticeItems(wrongOnlyItems);
+    }
+
     setIsSelectMode(false);
     setSelectedIds(new Set());
   };
@@ -1045,37 +1166,51 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
     return questions.filter(q => wrongQuestionKeys.has(`${q.quizId}:${q.questionId}`)).length;
   }, [folderType, folderId, questions, wrongItems]);
 
+  // 가로모드 페이지에서 3쪽으로 열 때 사용하는 콜백 ref (stale closure 방지)
+  const handlePracticeCompleteRef = useRef<(results: PracticeResult[]) => void>(() => {});
+
   // 퀴즈 페이지에서 autoStart 파라미터로 바로 복습 시작
   const autoStartedRef = useRef(false);
   useEffect(() => {
     if (!autoStart || autoStartedRef.current || loading || questions.length === 0) return;
     autoStartedRef.current = true;
 
+    let items: ReviewItem[];
+    let mode: 'all' | 'wrongOnly' = 'all';
+
     if (autoStart === 'wrongOnly') {
-      // wrong 타입: 이미 오답만 로드됨 → 전체 복습
+      mode = 'wrongOnly';
       if (folderType === 'wrong') {
-        setPracticeMode('wrongOnly');
-        setPracticeItems(questions);
+        items = questions;
       } else {
-        // library 타입에서 오답만 필터링
         const wrongQuestionKeys = new Set(
-          wrongItems
-            .filter(w => w.quizId === folderId)
-            .map(w => `${w.quizId}:${w.questionId}`)
+          wrongItems.filter(w => w.quizId === folderId).map(w => `${w.quizId}:${w.questionId}`)
         );
-        const wrongOnlyItems = questions.filter(q =>
-          wrongQuestionKeys.has(`${q.quizId}:${q.questionId}`)
-        );
-        if (wrongOnlyItems.length > 0) {
-          setPracticeMode('wrongOnly');
-          setPracticeItems(wrongOnlyItems);
-        }
+        items = questions.filter(q => wrongQuestionKeys.has(`${q.quizId}:${q.questionId}`));
+        if (items.length === 0) return;
       }
     } else {
-      // autoStart === 'all'
-      setPracticeMode('all');
-      setPracticeItems(questions);
+      items = questions;
     }
+
+    setPracticeMode(mode);
+
+    // 가로모드 + 페이지: 2쪽 상세뷰 유지, 3쪽에서 ReviewPractice 열기
+    if (isWide && !isPanelMode) {
+      const action = isDetailOpen ? replaceDetail : openDetail;
+      action(
+        <WidePagePractice
+          items={items}
+          quizTitle={folderTitle}
+          onComplete={(results) => handlePracticeCompleteRef.current(results)}
+          currentUserId={user?.uid}
+          showFeedback={folderType !== 'library'}
+        />
+      );
+    } else {
+      setPracticeItems(items);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStart, loading, questions, wrongItems, folderType, folderId]);
 
   // 선택된 문제들 삭제
@@ -1464,16 +1599,21 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
       }
     }
 
-    if (autoStart) {
+    // 가로모드 + 페이지: 2쪽 상세뷰 유지 (네비게이션 안 함)
+    if (autoStart && !(isWide && !isPanelMode)) {
       goBackToList();
     } else {
       setPracticeItems(null);
       setPracticeMode(null);
     }
-  }, [folderId, user, folderType, autoStart, markAsReviewed, router, questions, folderTitle, userCourse]);
+  }, [folderId, user, folderType, autoStart, markAsReviewed, router, questions, folderTitle, userCourse, isWide, isPanelMode]);
+
+  // handlePracticeCompleteRef 동기화 (3쪽 WidePagePractice에서 참조)
+  useEffect(() => { handlePracticeCompleteRef.current = handlePracticeComplete; }, [handlePracticeComplete]);
 
   // autoStart 모드: 데이터 로딩 중이면 로딩 스피너만 표시 (폴더 상세 안 보여줌)
-  if (autoStart && !practiceItems && (loading || questions.length === 0)) {
+  // 가로모드 + 페이지: 2쪽 상세뷰를 보여주므로 스피너 스킵
+  if (autoStart && !practiceItems && (loading || questions.length === 0) && !(isWide && !isPanelMode)) {
     return (
       <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor: '#F5F0E8' }}>
         <div className="flex flex-col items-center gap-4">
