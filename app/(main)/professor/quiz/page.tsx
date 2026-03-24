@@ -305,7 +305,7 @@ export default function ProfessorQuizListPage() {
     } finally {
       setFolderLoading(false);
     }
-  }, []);
+  }, [isWide, customFolders, openFolderInPanel]);
 
   // PDF 폴더 선택 모드
   const [isProfPdfSelectMode, setIsProfPdfSelectMode] = useState(false);
@@ -873,7 +873,17 @@ export default function ProfessorQuizListPage() {
             </div>
           ) : (
             <button
-              onClick={() => router.push('/professor/quiz/create')}
+              onClick={() => {
+                if (isWide) {
+                  import('./create/page').then(mod => {
+                    const CreatePage = mod.default;
+                    const action = isDetailOpen ? replaceDetail : openDetail;
+                    action(<CreatePage isPanelMode />);
+                  });
+                } else {
+                  router.push('/professor/quiz/create');
+                }
+              }}
               className="px-4 py-3 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] whitespace-nowrap hover:bg-[#3A3A3A] transition-colors rounded-lg"
             >
               퀴즈 만들기
