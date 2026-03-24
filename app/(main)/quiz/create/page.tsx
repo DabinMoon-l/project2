@@ -297,7 +297,7 @@ export default function QuizCreatePage({ isPanelMode }: { isPanelMode?: boolean 
 
   // 뒤로가기 — 패널 모드: closeDetail, 세로모드: 슬라이드 아웃
   const navigateBack = useCallback(() => {
-    if (isPanelMode) { unlockDetail(); closeDetail(); return; }
+    if (isPanelMode) { unlockDetail(true); return; }
     setIsClosing(true);
     setTimeout(() => router.back(), 280);
   }, [router, isPanelMode, unlockDetail, closeDetail]);
@@ -1315,7 +1315,7 @@ export default function QuizCreatePage({ isPanelMode }: { isPanelMode?: boolean 
 
       // 성공 시 이동
       setTimeout(() => {
-        if (isPanelMode) { unlockDetail(); closeDetail(); return; }
+        if (isPanelMode) { unlockDetail(true); return; }
         router.push(cleanedQuizData.isPublic ? '/quiz?created=true' : '/review?filter=library');
       }, 300);
     } catch (error) {
@@ -1777,7 +1777,10 @@ export default function QuizCreatePage({ isPanelMode }: { isPanelMode?: boolean 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            className={isPanelMode
+              ? 'absolute inset-0 z-50 flex items-end'
+              : 'fixed inset-0 z-50 flex items-center justify-center p-4'
+            }
           >
             {/* 백드롭 */}
             <motion.div
@@ -1785,15 +1788,19 @@ export default function QuizCreatePage({ isPanelMode }: { isPanelMode?: boolean 
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowExitModal(false)}
-              className="absolute inset-0 bg-black/50"
+              className={isPanelMode ? 'absolute inset-0 bg-black/15' : 'absolute inset-0 bg-black/50'}
             />
 
-            {/* 모달 */}
+            {/* 패널 모드: 바텀시트, 세로모드: 센터 모달 */}
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="relative bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 max-w-[280px] w-full rounded-xl"
+              initial={isPanelMode ? { y: '100%' } : { scale: 0.95, opacity: 0 }}
+              animate={isPanelMode ? { y: 0 } : { scale: 1, opacity: 1 }}
+              exit={isPanelMode ? { y: '100%' } : { scale: 0.95, opacity: 0 }}
+              transition={isPanelMode ? { type: 'spring', stiffness: 400, damping: 35 } : undefined}
+              className={isPanelMode
+                ? 'relative bg-[#F5F0E8] border-t-2 border-[#1A1A1A] p-4 w-full rounded-t-2xl'
+                : 'relative bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 max-w-[280px] w-full rounded-xl'
+              }
             >
               <div className="text-center">
                 {/* 아이콘 */}

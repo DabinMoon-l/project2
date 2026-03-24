@@ -52,13 +52,15 @@ interface EditQuizSheetProps {
   onClose: () => void;
   /** 저장 완료 후 콜백 */
   onSaved?: () => void;
+  /** 패널 모드: absolute 위치 + 투명 오버레이 */
+  isPanelMode?: boolean;
 }
 
 /**
  * 퀴즈 수정 바텀시트 컴포넌트
  * 관리 페이지 위에 오버레이로 렌더링됩니다.
  */
-export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizSheetProps) {
+export default function EditQuizSheet({ quizId, onClose, onSaved, isPanelMode }: EditQuizSheetProps) {
   const { user } = useAuth();
   const { userCourseId } = useCourse();
 
@@ -628,8 +630,8 @@ export default function EditQuizSheet({ quizId, onClose, onSaved }: EditQuizShee
   return (
     <>
       <div
-        className="fixed inset-0 z-[65] flex items-end"
-        style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}
+        className={`${isPanelMode ? 'absolute' : 'fixed'} inset-0 z-[65] flex items-end`}
+        style={isPanelMode ? undefined : { backgroundColor: 'rgba(0,0,0,0.3)' }}
         onClick={onClose}
       >
         <motion.div

@@ -2,6 +2,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
 
 interface AIQuizProgressProps {
   isOpen: boolean;
@@ -39,18 +40,103 @@ const PROGRESS_MESSAGES = {
   },
 };
 
+/** 공통 진행 인디케이터 */
+function ProgressDots({ progress }: { progress: string }) {
+  const steps = ['uploading', 'analyzing', 'generating'];
+  const currentIdx = steps.indexOf(progress);
+
+  return (
+    <div className="flex gap-1.5 mt-4">
+      {steps.map((step, idx) => (
+        <div
+          key={step}
+          className={`w-2.5 h-2.5 rounded-full transition-all ${
+            idx < currentIdx
+              ? 'bg-[#1A6B1A]'
+              : idx === currentIdx
+              ? 'bg-[#1A1A1A] animate-pulse'
+              : 'bg-[#E5E5E5]'
+          }`}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** 공통 아이콘 + 스피너 */
+function SpinnerIcon({ icon }: { icon: React.ReactNode }) {
+  return (
+    <div className="relative mb-3">
+      <motion.div
+        animate={{ rotate: 360 }}
+        transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+        className="absolute -inset-2 border-2 border-[#1A1A1A] border-t-transparent rounded-full"
+      />
+      <div className="p-2 bg-white border-2 border-[#1A1A1A] rounded-full">
+        {icon}
+      </div>
+    </div>
+  );
+}
+
 /**
- * AI 퀴즈 생성 진행 상태 표시 모달
+ * AI 퀴즈 생성 진행 상태 표시
+ * - 세로모드: 중앙 모달 + 블러 백드롭
+ * - 가로모드: 2쪽 하단 바텀시트 + 투명 오버레이
  */
 export default function AIQuizProgress({ isOpen, progress, folderName }: AIQuizProgressProps) {
   if (typeof window === 'undefined') return null;
 
+  const isWide = useWideMode();
   const { title, subtitle, icon } = PROGRESS_MESSAGES[progress];
 
+  // 가로모드: 2쪽 하단 바텀시트 + 투명 오버레이
+  if (isWide) {
+    return createPortal(
+      <AnimatePresence>
+        {isOpen && (
+          <div
+            className="fixed inset-0 z-50"
+            style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
+          >
+            {/* 투명 오버레이 (블러 없음) */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/15"
+            />
+
+            {/* 바텀시트 */}
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+              className="absolute bottom-0 left-0 right-0 bg-[#F5F0E8] border-t-2 border-[#1A1A1A] rounded-t-2xl px-6 py-5"
+            >
+              <div className="flex items-center gap-4">
+                <SpinnerIcon icon={icon} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs text-[#5C5C5C] truncate mb-0.5">{folderName}</div>
+                  <h3 className="text-sm font-bold text-[#1A1A1A]">{title}</h3>
+                  <p className="text-xs text-[#5C5C5C]">{subtitle}</p>
+                </div>
+                <ProgressDots progress={progress} />
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>,
+      document.body
+    );
+  }
+
+  // 세로모드: 기존 중앙 모달
   return createPortal(
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           {/* 백드롭 */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -67,47 +153,11 @@ export default function AIQuizProgress({ isOpen, progress, folderName }: AIQuizP
             className="relative w-[85%] max-w-sm bg-[#F5F0E8] border-2 border-[#1A1A1A] shadow-[4px_4px_0px_#1A1A1A] p-4 rounded-2xl"
           >
             <div className="flex flex-col items-center text-center">
-              {/* 아이콘 + 스피너 */}
-              <div className="relative mb-3">
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-                  className="absolute -inset-2 border-2 border-[#1A1A1A] border-t-transparent rounded-full"
-                />
-                <div className="p-2 bg-white border-2 border-[#1A1A1A] rounded-full">
-                  {icon}
-                </div>
-              </div>
-
-              {/* 폴더명 */}
+              <SpinnerIcon icon={icon} />
               <div className="text-xs text-[#5C5C5C] mb-1.5">{folderName}</div>
-
-              {/* 진행 상태 */}
               <h3 className="text-sm font-bold text-[#1A1A1A] mb-1.5">{title}</h3>
               <p className="text-xs text-[#5C5C5C]">{subtitle}</p>
-
-              {/* 진행 인디케이터 */}
-              <div className="flex gap-1.5 mt-4">
-                {(['uploading', 'analyzing', 'generating'] as const).map((step, idx) => {
-                  const steps = ['uploading', 'analyzing', 'generating'];
-                  const currentIdx = steps.indexOf(progress);
-                  const isCompleted = idx < currentIdx;
-                  const isCurrent = idx === currentIdx;
-
-                  return (
-                    <div
-                      key={step}
-                      className={`w-2.5 h-2.5 rounded-full transition-all ${
-                        isCompleted
-                          ? 'bg-[#1A6B1A]'
-                          : isCurrent
-                          ? 'bg-[#1A1A1A] animate-pulse'
-                          : 'bg-[#E5E5E5]'
-                      }`}
-                    />
-                  );
-                })}
-              </div>
+              <ProgressDots progress={progress} />
             </div>
           </motion.div>
         </div>

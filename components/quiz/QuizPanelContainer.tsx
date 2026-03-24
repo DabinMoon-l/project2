@@ -22,7 +22,7 @@ interface QuizPanelContainerProps {
 
 export default function QuizPanelContainer({ quizId }: QuizPanelContainerProps) {
   const [stage, setStage] = useState<QuizStage>('quiz');
-  const { lockDetail, unlockDetail, closeDetail } = useDetailPanel();
+  const { lockDetail, unlockDetail } = useDetailPanel();
 
   // mount 시 잠금, unmount 시 해제
   useEffect(() => {
@@ -39,11 +39,10 @@ export default function QuizPanelContainer({ quizId }: QuizPanelContainerProps) 
     } else if (path.includes('/exp')) {
       setStage('exp');
     } else {
-      // /quiz (목록) → 완료, 잠금 해제 + 패널 닫기
-      unlockDetail();
-      closeDetail();
+      // /quiz (목록) → 완료, 잠금 해제 (대기 있으면 3쪽 승격, 없으면 닫기)
+      unlockDetail(true);
     }
-  }, [unlockDetail, closeDetail]);
+  }, [unlockDetail]);
 
   switch (stage) {
     case 'quiz':

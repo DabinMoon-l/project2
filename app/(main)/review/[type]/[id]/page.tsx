@@ -85,7 +85,7 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
 
   // 뒤로가기: 패널 모드에서는 잠금 해제 후 closeDetail, 일반 모드에서는 router.push
   const goBackToList = useCallback((filter?: string) => {
-    if (isPanelMode) { unlockDetail(); closeDetail(); return; }
+    if (isPanelMode) { unlockDetail(true); return; }
     router.push(`/review?filter=${filter || folderType}`);
   }, [isPanelMode, unlockDetail, closeDetail, router, folderType]);
 

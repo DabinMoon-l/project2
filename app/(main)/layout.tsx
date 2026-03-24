@@ -349,20 +349,17 @@ function MainLayoutGrid({
             </main>
 
             {/* 우측 디테일 패널 (3쪽) — 독립 스크롤 */}
-            {/* fixed 요소는 뷰포트 기준 + --detail-panel-left CSS 변수로 3쪽 영역에 고정 */}
             {isWide && !hasRouteSidebar && (
               <aside
                 className="w-1/2 flex-shrink-0 overflow-x-hidden overflow-y-auto h-screen relative"
                 style={{
                   borderLeft: isHomeOverlayOpen ? 'none' : (isDetailOpen ? '1px solid #B0A898' : 'none'),
-                  // 홈: 전체 뷰포트 배경(z-44)이 비침 → 투명, 비홈: 크림 or 투명
                   ...(!isHomeOverlayOpen ? {
                     backgroundColor: isDetailOpen ? '#F5F0E8' : 'transparent',
                   } : {}),
                   paddingRight: 'env(safe-area-inset-right, 0px)',
                 } as React.CSSProperties}
               >
-                {/* 홈 열림 시 3쪽 디테일은 z-[46] fixed로 렌더 (전체 배경 위) */}
                 {!isHomeOverlayOpen && isDetailOpen && (
                   <div className="h-full">
                     {detailContent}
@@ -381,12 +378,11 @@ function MainLayoutGrid({
       {!isProfessor ? <HomeOverlay /> : <ProfessorHomeOverlay />}
 
       {/* 가로모드 홈 + 3쪽 디테일: 전체 배경 위 fixed 렌더 */}
-      {/* 잠금 시 left: 240px (전체폭), 비잠금 시 left: calc(50% + 120px) (우측 패널) */}
       {isWide && isHomeOverlayOpen && isDetailOpen && (
         <div
           className="fixed top-0 bottom-0 z-[46] overflow-y-auto"
           style={{
-            left: isLocked ? '240px' : 'calc(50% + 120px)',
+            left: 'calc(50% + 120px)',
             right: 0,
             paddingTop: 'env(safe-area-inset-top, 0px)',
             paddingRight: 'env(safe-area-inset-right, 0px)',
@@ -395,7 +391,7 @@ function MainLayoutGrid({
           {/* 배경: HomeOverlay의 home-garo.png과 동일하게 맞춤 */}
           <div className="absolute inset-0 overflow-hidden pointer-events-none" style={{ zIndex: 0 }}>
             <div className="absolute top-0 bottom-0" style={{
-              left: isLocked ? '-240px' : 'calc(-50vw - 120px)',
+              left: 'calc(-50vw - 120px)',
               width: '100vw',
               backgroundImage: 'url(/images/home-garo.png)',
               backgroundSize: 'cover',
@@ -411,7 +407,7 @@ function MainLayoutGrid({
       {/* 잠금 시 대기 콘텐츠 — 2쪽에 오버레이 (잠금 해제 시 3쪽으로 승격) */}
       {isWide && isQueuedOpen && (
         <div
-          className="fixed top-0 bottom-0 z-[46] overflow-y-auto"
+          className="fixed top-0 bottom-0 z-[46] overflow-hidden"
           style={{
             left: '240px',
             right: 'calc(50% - 120px)',
@@ -433,7 +429,7 @@ function MainLayoutGrid({
               }} />
             </div>
           )}
-          <div className="relative" style={{ zIndex: 1 }}>
+          <div className="h-full relative" style={{ zIndex: 1 }}>
             {queuedContent}
           </div>
         </div>

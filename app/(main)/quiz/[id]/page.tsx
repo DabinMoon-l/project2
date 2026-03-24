@@ -1258,7 +1258,6 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
                 </div>
                 <div className="space-y-1.5">
                   <button onClick={handleResume} className="w-full py-2.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] rounded-xl">이어서 풀기</button>
-                  <button onClick={handleStartFresh} className="w-full py-2.5 text-xs font-bold bg-[#F5F0E8] text-[#1A1A1A] border-2 border-[#1A1A1A] rounded-xl">처음부터 다시 풀기</button>
                 </div>
               </motion.div>
             </div>
@@ -1289,7 +1288,6 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
                 </div>
                 <div className="space-y-1.5">
                   <button onClick={handleResume} className="w-full py-2.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors">이어서 풀기</button>
-                  <button onClick={handleStartFresh} className="w-full py-2.5 text-xs font-bold bg-[#F5F0E8] text-[#1A1A1A] border-2 border-[#1A1A1A] hover:bg-[#EDEAE4] transition-colors">처음부터 다시 풀기</button>
                 </div>
               </motion.div>
             </motion.div>

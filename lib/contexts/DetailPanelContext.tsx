@@ -35,8 +35,8 @@ interface DetailPanelContextType {
   isLocked: boolean;
   /** 패널 잠금 (탭 전환해도 유지) */
   lockDetail: () => void;
-  /** 패널 잠금 해제 (대기 콘텐츠 → 3쪽 승격) */
-  unlockDetail: () => void;
+  /** 패널 잠금 해제 (andClose=true: 닫기 포함, false: cleanup용) */
+  unlockDetail: (andClose?: boolean) => void;
 }
 
 const DetailPanelContext = createContext<DetailPanelContextType>({
@@ -98,16 +98,31 @@ export function DetailPanelProvider({ children }: { children: ReactNode }) {
     setIsLocked(true);
   }, []);
 
-  const unlockDetail = useCallback(() => {
-    isLockedRef.current = false;
-    setIsLocked(false);
-    // 대기 콘텐츠가 있으면 3쪽으로 승격
-    const queued = queuedRef.current;
-    queuedRef.current = null;
-    setQueuedContent(null);
-    if (queued) {
-      setContent(queued);
+  /**
+   * 패널 잠금 해제 + 닫기
+   * @param andClose true → 잠금 해제 후 닫기 (명시적 뒤로가기/완료용)
+   *   - 잠금 상태: 해제 + 대기 승격 or 닫기
+   *   - 비잠금 상태: 바로 닫기 (일반 상세창 < 버튼)
+   *   false → cleanup용 (StrictMode remount 대응, 콘텐츠 유지)
+   */
+  const unlockDetail = useCallback((andClose = false) => {
+    if (isLockedRef.current) {
+      // 잠금 해제
+      isLockedRef.current = false;
+      setIsLocked(false);
+      const queued = queuedRef.current;
+      queuedRef.current = null;
+      setQueuedContent(null);
+      if (queued) {
+        setContent(queued);  // 대기 → 3쪽 승격
+      } else if (andClose) {
+        setContent(null);    // 대기 없으면 3쪽 닫기
+      }
+    } else if (andClose) {
+      // 비잠금: 바로 닫기 (일반 상세창 뒤로가기)
+      setContent(null);
     }
+    // andClose=false + 비잠금 → no-op (cleanup 중복 방지)
   }, []);
 
   // 탭 전환 시 (pathname이 탭 루트로 변경되면) 디테일 패널 자동 닫기

@@ -29,6 +29,8 @@ import AIQuizProgress from './AIQuizProgress';
 const ReviewPractice = dynamic(() => import('@/components/review/ReviewPractice'), { ssr: false });
 const AIQuizModal = dynamic(() => import('./AIQuizModal'), { ssr: false });
 import { useHideNav } from '@/lib/hooks/useHideNav';
+import { useDetailPanel } from '@/lib/contexts/DetailPanelContext';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
 
 interface GeneratedQuestion {
   text: string;
@@ -83,6 +85,8 @@ export default function AIQuizContainer() {
   const router = useRouter();
   const { profile } = useUser();
   const { userCourseId, userClassId, userCourse } = useCourse();
+  const isWide = useWideMode();
+  const { openDetail } = useDetailPanel();
 
   // 모달 상태
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -304,14 +308,28 @@ export default function AIQuizContainer() {
       }
 
       // 학생: 저장 후 바로 연습 모드
-      setSavedQuiz({
+      const quizDoc = {
         id: quizId,
         title: data.folderName,
         tags: data.tags,
         difficulty: data.difficulty,
         questions: quizData.questions,
-      });
-      setIsPracticeOpen(true);
+      };
+      setSavedQuiz(quizDoc);
+
+      if (isWide) {
+        // 가로모드: 3쪽 패널에서 잠금 연습 (AIQuizPracticePanel)
+        openDetail(
+          <AIQuizPracticePanel
+            quizDoc={quizDoc}
+            userId={profile.uid}
+            userCourseId={userCourseId || ''}
+            userClassId={userClassId || ''}
+          />
+        );
+      } else {
+        setIsPracticeOpen(true);
+      }
 
     } catch (err: unknown) {
       console.error('AI 퀴즈 생성 오류:', err);
@@ -509,9 +527,9 @@ export default function AIQuizContainer() {
         folderName={currentFolderName}
       />
 
-      {/* AI 퀴즈 연습 모드 */}
-      {isPracticeOpen && practiceItems.length > 0 && (
-        <div className="fixed inset-0 z-50 bg-[#F5F0E8]" style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}>
+      {/* AI 퀴즈 연습 모드 (세로모드 전용 — 가로모드는 3쪽 패널 사용) */}
+      {!isWide && isPracticeOpen && practiceItems.length > 0 && (
+        <div className="fixed inset-0 z-50 bg-[#F5F0E8]">
           <ReviewPractice
             items={practiceItems}
             onComplete={handlePracticeComplete}
@@ -523,5 +541,153 @@ export default function AIQuizContainer() {
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * AI 퀴즈 연습 패널 (가로모드 3쪽 잠금용)
+ * mount 시 잠금, unmount 시 해제 (대기 있으면 승격)
+ */
+function AIQuizPracticePanel({
+  quizDoc,
+  userId,
+  userCourseId,
+  userClassId,
+}: {
+  quizDoc: QuizDocument;
+  userId: string;
+  userCourseId: string;
+  userClassId: string;
+}) {
+  const { lockDetail, unlockDetail } = useDetailPanel();
+
+  useEffect(() => {
+    lockDetail();
+    return () => unlockDetail();
+  }, [lockDetail, unlockDetail]);
+
+  const practiceItems: ReviewItem[] = useMemo(() => {
+    return quizDoc.questions.map((q) => {
+      const isOx = q.type === 'ox';
+      const correctAnswer = isOx
+        ? String(q.answer)
+        : Array.isArray(q.answer)
+          ? q.answer.map(a => String(a)).join(',')
+          : String(Number(q.answer));
+
+      return {
+        id: `temp_${q.id}`,
+        userId,
+        quizId: quizDoc.id,
+        quizTitle: quizDoc.title,
+        questionId: q.id,
+        question: q.text,
+        type: isOx ? 'ox' : 'multiple',
+        options: isOx ? undefined : q.choices,
+        correctAnswer,
+        userAnswer: '',
+        explanation: q.explanation,
+        reviewType: 'solved' as const,
+        isBookmarked: false,
+        reviewCount: 0,
+        lastReviewedAt: null,
+        createdAt: Timestamp.now(),
+        chapterId: q.chapterId || undefined,
+        chapterDetailId: q.chapterDetailId || undefined,
+        choiceExplanations: q.choiceExplanations || undefined,
+        imageUrl: q.imageUrl || undefined,
+      };
+    });
+  }, [quizDoc, userId]);
+
+  const handleComplete = useCallback(async (results: PracticeResult[]) => {
+    try {
+      const correctCount = results.filter(r => r.isCorrect).length;
+      const totalCount = results.length;
+      const score = Math.round((correctCount / totalCount) * 100);
+
+      const questionsWithResults = quizDoc.questions.map(q => {
+        const result = results.find(r => r.questionId === q.id);
+        return { ...q, isCorrect: result?.isCorrect ?? true, userAnswer: result?.userAnswer ?? null };
+      });
+
+      const quizRef = doc(db, 'quizzes', quizDoc.id);
+      await setDoc(quizRef, {
+        participantCount: 1,
+        userScores: { [userId]: score },
+        score, correctCount, totalQuestions: totalCount,
+        questions: questionsWithResults,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+
+      const reviewsRef = collection(db, 'reviews');
+      for (const result of results) {
+        const question = quizDoc.questions.find(q => q.id === result.questionId);
+        if (!question) continue;
+
+        const isOx = question.type === 'ox' ||
+          (typeof question.answer === 'string' && (question.answer === 'O' || question.answer === 'X'));
+        const qType = isOx ? 'ox' : 'multiple';
+
+        let correctAnswer: string;
+        let userAnswer: string;
+
+        if (isOx) {
+          correctAnswer = question.answer === 0 ? 'O' : question.answer === 1 ? 'X' : String(question.answer);
+          const ua = result.userAnswer as string | number;
+          userAnswer = ua === '0' || ua === 0 ? 'O' : ua === '1' || ua === 1 ? 'X' : String(ua);
+        } else {
+          correctAnswer = Array.isArray(question.answer)
+            ? question.answer.map(a => String(Number(a))).join(',')
+            : String(Number(question.answer));
+          userAnswer = Array.isArray(result.userAnswer)
+            ? result.userAnswer.map(a => String(Number(a))).join(',')
+            : String(Number(result.userAnswer));
+        }
+
+        const reviewData = {
+          userId, quizId: quizDoc.id, quizTitle: quizDoc.title,
+          questionId: question.id, question: question.text,
+          type: qType, options: isOx ? null : question.choices,
+          correctAnswer, userAnswer,
+          explanation: question.explanation,
+          choiceExplanations: question.choiceExplanations || null,
+          isBookmarked: false, isCorrect: result.isCorrect,
+          reviewCount: 0, lastReviewedAt: null,
+          createdAt: serverTimestamp(), quizUpdatedAt: serverTimestamp(),
+          chapterId: question.chapterId, chapterDetailId: question.chapterDetailId,
+          imageUrl: question.imageUrl || null,
+          courseId: userCourseId || null,
+          quizType: 'ai-generated', quizCreatorId: userId,
+        };
+
+        await addDoc(reviewsRef, { ...reviewData, reviewType: 'solved' });
+        if (!result.isCorrect) {
+          await addDoc(reviewsRef, { ...reviewData, reviewType: 'wrong' });
+        }
+      }
+    } catch (err) {
+      console.error('퀴즈 결과 저장 오류:', err);
+    }
+
+    unlockDetail(true);
+  }, [quizDoc, userId, userCourseId, unlockDetail]);
+
+  const handleClose = useCallback(() => {
+    if (confirm('연습을 종료하시겠습니까?')) {
+      unlockDetail(true);
+    }
+  }, [unlockDetail]);
+
+  return (
+    <ReviewPractice
+      items={practiceItems}
+      onComplete={handleComplete}
+      onClose={handleClose}
+      currentUserId={userId}
+      headerTitle={quizDoc.title}
+      showFeedback={false}
+      isPanelMode
+    />
   );
 }
