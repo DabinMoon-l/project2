@@ -40,17 +40,18 @@ export default function HomeOverlay() {
   const { isOpen, isCloseRequested, close, buttonRect } = useHomeOverlay();
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
   const isWide = useWideMode();
-  const { openDetail, closeDetail } = useDetailPanel();
+  const { openDetail, closeDetail, clearQueue, isLocked } = useDetailPanel();
 
-  // 홈 오버레이 열리면 비잠금 3쪽 상세 닫기 + 2쪽 대기 제거
+  // 홈 오버레이 열리면: 잠금 시 대기만 제거, 비잠금 시 3쪽 닫기
   // 홈 오버레이 닫히면 프로필 드로어 닫기
   useEffect(() => {
     if (isOpen) {
-      closeDetail();  // 비잠금: 3쪽 닫기, 잠금: 대기만 닫기 (3쪽 보호)
+      if (isLocked) clearQueue();
+      else closeDetail();
     } else {
       setShowProfileDrawer(false);
     }
-  }, [isOpen, closeDetail]);
+  }, [isOpen, isLocked, closeDetail, clearQueue]);
   const isWideRef = useRef(isWide);
   isWideRef.current = isWide;
   const [mounted, setMounted] = useState(false);

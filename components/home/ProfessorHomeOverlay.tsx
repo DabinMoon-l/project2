@@ -34,13 +34,16 @@ export default function ProfessorHomeOverlay() {
   const { userCourseId, setProfessorCourse, assignedCourses } = useCourse();
   const { isOpen, isCloseRequested, close, buttonRect } = useHomeOverlay();
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
-  const { closeDetail } = useDetailPanel();
+  const { closeDetail, clearQueue, isLocked } = useDetailPanel();
   const isWide = useWideMode();
 
-  // 홈 오버레이 열리면 비잠금 3쪽 상세 닫기
+  // 홈 오버레이 열리면: 잠금 시 대기만 제거, 비잠금 시 3쪽 닫기
   useEffect(() => {
-    if (isOpen) closeDetail();
-  }, [isOpen, closeDetail]);
+    if (isOpen) {
+      if (isLocked) clearQueue();
+      else closeDetail();
+    }
+  }, [isOpen, isLocked, closeDetail, clearQueue]);
   const isWideRef = useRef(isWide);
   isWideRef.current = isWide;
   const [mounted, setMounted] = useState(false);

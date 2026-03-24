@@ -357,7 +357,11 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
             const quizQuestions = quizData.questions || [];
             const quizTitle = quizData.title || '';
             for (const qId of questionIds) {
-              const matched = quizQuestions.find((qq: DocumentData, idx: number) => (qq.id || `q${idx}`) === qId);
+              // 결합형 문제: q1_0 → q1 (부모 ID로 매칭)
+              const parentId = qId.includes('_') ? qId.split('_').slice(0, -1).join('_') : qId;
+              const matched = quizQuestions.find((qq: DocumentData, idx: number) =>
+                (qq.id || `q${idx}`) === qId || (qq.id || `q${idx}`) === parentId
+              );
               if (matched) {
                 items.push({
                   id: `${quizId}_${qId}`,
@@ -1169,11 +1173,15 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
   // 가로모드 페이지에서 3쪽으로 열 때 사용하는 콜백 ref (stale closure 방지)
   const handlePracticeCompleteRef = useRef<(results: PracticeResult[]) => void>(() => {});
 
-  // 퀴즈 페이지에서 autoStart 파라미터로 바로 복습 시작
-  const autoStartedRef = useRef(false);
+  // autoStart: folderId별 1회만 실행 + 데이터 신선도 검증 (같은 라우트에서 퀴즈 전환 시 race condition 방지)
+  const autoStartedForRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!autoStart || autoStartedRef.current || loading || questions.length === 0) return;
-    autoStartedRef.current = true;
+    if (!autoStart || loading || questions.length === 0) return;
+    // 이미 이 폴더에서 autoStart 했으면 스킵
+    if (autoStartedForRef.current === folderId) return;
+    // 데이터가 현재 폴더의 것인지 확인 (folderId 변경 직후 이전 데이터로 실행 방지)
+    if (folderType === 'library' && questions[0]?.quizId && questions[0].quizId !== folderId) return;
+    autoStartedForRef.current = folderId;
 
     let items: ReviewItem[];
     let mode: 'all' | 'wrongOnly' = 'all';
