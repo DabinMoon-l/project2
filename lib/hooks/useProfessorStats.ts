@@ -102,6 +102,7 @@ const PROF_TYPES = ['midterm', 'final', 'past', 'professor', 'professor-ai', 'in
 
 /** 학생 기본 데이터 (통계 페이지 부가 데이터 계산용) */
 export interface RawStudentData {
+  uid: string;
   classId: string;
   totalExp: number;
   profCorrectCount: number;
@@ -422,6 +423,7 @@ export function useProfessorStats() {
           userClassMap[d.id] = cls as ClassType;
         }
         rawStudents.push({
+          uid: d.id,
           classId: (cls || 'A') as string,
           totalExp: u.totalExp || 0,
           profCorrectCount: u.profCorrectCount || 0,

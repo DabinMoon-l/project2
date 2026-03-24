@@ -270,7 +270,7 @@ export default function ProfessorStatsPage() {
               profAttemptCount: data.profAttemptCount || 0,
               equippedRabbits: Array.isArray(data.equippedRabbits) ? data.equippedRabbits : [],
               lastGachaExp: data.lastGachaExp || 0,
-            } as RawStudentData & { uid: string };
+            } as RawStudentData;
           });
         }
         if (cancelled) return;
@@ -315,7 +315,7 @@ export default function ProfessorStatsPage() {
         // profCorrectCount가 users에 미저장될 수 있으므로 quizStats 기반이 정확
         const studentMap = new Map(students.map(s => [s.uid, s]));
         const rawStudentData = rawStudents.map(s => {
-          const uid = (s as RawStudentData & { uid?: string }).uid || '';
+          const uid = s.uid;
           const studentDetail = studentMap.get(uid);
           // quizStats.averageScore (0~100) 사용, 없으면 profCorrectCount 폴백
           const correctRate = studentDetail?.quizStats.averageScore
@@ -649,8 +649,8 @@ export default function ProfessorStatsPage() {
             transition={{ duration: 0.3 }}
             className={isWide ? 'flex-1 flex flex-col space-y-8' : 'space-y-8'}
           >
-            <div className={isWide ? 'flex-1' : ''}>
-              <ClassComparison classStats={data.classStats} students={students} onClassClick={handleClassClick} />
+            <div className={isWide ? 'flex-1 min-h-0' : ''}>
+              <ClassComparison classStats={data.classStats} students={students} onClassClick={handleClassClick} fillHeight={isWide} />
             </div>
             {/* 세로모드에서만 2쪽에 표시 (가로모드에서는 3쪽 디테일 패널) */}
             {!isWide && <RadarChart chapterStats={data.chapterStats} />}
@@ -725,7 +725,7 @@ export default function ProfessorStatsPage() {
       </div>
 
       {/* 위험학생 바텀시트 */}
-      <MobileBottomSheet open={atRiskSheetOpen} onClose={() => setAtRiskSheetOpen(false)} maxHeight="80vh">
+      <MobileBottomSheet open={atRiskSheetOpen} onClose={() => setAtRiskSheetOpen(false)} maxHeight="80vh" transparent>
         <div className="px-4 pb-6">
           {atRiskStudentList.length === 0 ? (
             <p className="text-sm text-[#5C5C5C] text-center py-8">위험 학생이 없습니다</p>
@@ -742,6 +742,7 @@ export default function ProfessorStatsPage() {
       {/* 반별 클러스터 바텀시트 */}
       <MobileBottomSheet
         open={clusterSheetOpen}
+        transparent
         onClose={() => { setClusterSheetOpen(false); setSelectedClusterClass(null); setSelectedClusterType(null); }}
         maxHeight="85vh"
       >

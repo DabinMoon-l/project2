@@ -21,9 +21,11 @@ interface MobileBottomSheetProps {
   maxHeight?: string;
   /** z-index 클래스 (기본 z-50) */
   zClass?: string;
+  /** 배경 딤 투명 처리 (기본 false) */
+  transparent?: boolean;
 }
 
-export default function MobileBottomSheet({ open, onClose, children, maxHeight = '60vh', zClass = 'z-50' }: MobileBottomSheetProps) {
+export default function MobileBottomSheet({ open, onClose, children, maxHeight = '60vh', zClass = 'z-50', transparent }: MobileBottomSheetProps) {
   // 스크롤 잠금
   useEffect(() => {
     if (open) {
@@ -53,7 +55,7 @@ export default function MobileBottomSheet({ open, onClose, children, maxHeight =
           onClick={onClose}
         >
           {/* 배경 딤 */}
-          <div className="absolute inset-0 bg-black/30" />
+          <div className={`absolute inset-0 ${transparent ? '' : 'bg-black/30'}`} />
 
           {/* 시트 */}
           <motion.div
