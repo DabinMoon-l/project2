@@ -111,6 +111,11 @@ export function DetailPanelProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const lockDetail = useCallback(() => {
+    // 대기 중인 unlock rAF가 있으면 취소 (usePanelLock 리마운트 보호)
+    if (_pendingUnlockRaf) {
+      cancelAnimationFrame(_pendingUnlockRaf);
+      _pendingUnlockRaf = 0;
+    }
     isLockedRef.current = true;
     setIsLocked(true);
   }, []);
@@ -229,8 +234,8 @@ export function useDetailPosition() {
  * 패널 잠금 — 3쪽(detail)에서만 lock/unlock, 2쪽(queued)에서는 no-op
  * @param enabled false면 잠금 안 함 (비패널 모드용, hooks 규칙 준수)
  */
-// 모듈 레벨 카운터 — lock 횟수 추적으로 stale unlock 방지
-let _panelLockGeneration = 0;
+// 모듈 레벨 — 대기 중인 unlock rAF를 lockDetail에서 취소
+let _pendingUnlockRaf = 0;
 
 export function usePanelLock(enabled = true) {
   const position = useDetailPosition();
@@ -238,15 +243,15 @@ export function usePanelLock(enabled = true) {
 
   useEffect(() => {
     if (enabled && position === 'detail') {
-      // 새 세대 번호 발급 → 이전 cleanup의 unlock을 무효화
-      const gen = ++_panelLockGeneration;
+      // 대기 중인 unlock rAF 취소 (리마운트/StrictMode 보호)
+      cancelAnimationFrame(_pendingUnlockRaf);
+      _pendingUnlockRaf = 0;
       lockDetail();
       return () => {
-        // 다음 frame에서 unlock — 같은 cycle에 remount되면 gen이 달라져서 스킵
-        requestAnimationFrame(() => {
-          if (_panelLockGeneration === gen) {
-            unlockDetail();
-          }
+        // unlock을 rAF로 지연 — remount 시 위의 cancelAnimationFrame이 취소
+        _pendingUnlockRaf = requestAnimationFrame(() => {
+          _pendingUnlockRaf = 0;
+          unlockDetail();
         });
       };
     }
