@@ -1955,8 +1955,8 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
         </main>
       )}
 
-      {/* 하단 버튼 영역 — 선택 모드에서 선택 항목 없으면 숨김, 문제 에디터 열려있을 때 숨김 */}
-      {!loading && (questions.length > 0 || (isEditMode && editableQuestions.length > 0)) && !(isSelectMode && !isAssignMode && selectedIds.size === 0) && !(isEditMode && editingIndex !== null) && (
+      {/* 하단 버튼 영역 — 교수 custom에서는 숨김 (복습/선택 없음) */}
+      {!loading && !(isProfessor && (folderType as string) === 'custom') && (questions.length > 0 || (isEditMode && editableQuestions.length > 0)) && !(isSelectMode && !isAssignMode && selectedIds.size === 0) && !(isEditMode && editingIndex !== null) && (
         <div className={isPanelMode ? "sticky bottom-0 p-3 bg-[#F5F0E8] border-t-2 border-[#1A1A1A]" : "fixed bottom-0 right-0 p-3 bg-[#F5F0E8] border-t-2 border-[#1A1A1A]"} style={isPanelMode ? {} : { left: 'var(--detail-panel-left, 0)', paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}>
           {isEditMode ? (
             /* 수정 모드일 때 - 취소/저장 */
@@ -2118,6 +2118,7 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
             console.error('삭제 실패:', err);
           }
         }}
+        isPanelMode={isPanelMode}
       />
     </motion.div>
   );

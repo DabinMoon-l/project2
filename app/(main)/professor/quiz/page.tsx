@@ -8,7 +8,7 @@ import { Skeleton, ScrollToTopButton, ExpandModal } from '@/components/common';
 import { useExpandSource } from '@/lib/hooks/useExpandSource';
 import { TAP_SCALE } from '@/lib/constants/springs';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { useCourse, useUser, useDetailPanel, usePanelLock } from '@/lib/contexts';
+import { useCourse, useUser, useDetailPanel } from '@/lib/contexts';
 import { useWideMode } from '@/lib/hooks/useViewportScale';
 import { type CourseId, getDefaultQuizTab, getPastExamOptions, type PastExamOption } from '@/lib/types/course';
 import { type ProfessorQuiz, type QuizTypeFilter, type QuizQuestion } from '@/lib/hooks/useProfessorQuiz';
@@ -171,7 +171,7 @@ export default function ProfessorQuizListPage() {
       import('@/app/(main)/review/[type]/[id]/page').then(mod => {
         const FolderDetailPage = mod.default;
         const action = isDetailOpen ? replaceDetail : openDetail;
-        action(<LockedFolderPanel panelType="custom" panelId={folder.id} FolderDetailPage={FolderDetailPage} />);
+        action(<FolderDetailPage panelType="custom" panelId={folder.id} />);
       });
       return;
     }
@@ -1456,12 +1456,3 @@ export default function ProfessorQuizListPage() {
   );
 }
 
-/** 커스텀 폴더 상세 래퍼 — 항상 잠금 + FolderDetailPage 렌더 */
-function LockedFolderPanel({ panelType, panelId, FolderDetailPage }: {
-  panelType: string;
-  panelId: string;
-  FolderDetailPage: React.ComponentType<{ panelType?: string; panelId?: string }>;
-}) {
-  usePanelLock();
-  return <FolderDetailPage panelType={panelType} panelId={panelId} />;
-}
