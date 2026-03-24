@@ -12,4 +12,4 @@ export { MilestoneProvider, useMilestone } from './MilestoneContext';
 
 export { HomeOverlayProvider, useHomeOverlay } from './HomeOverlayContext';
 
-export { DetailPanelProvider, useDetailPanel } from './DetailPanelContext';
+export { DetailPanelProvider, useDetailPanel, DetailPositionProvider, useDetailPosition, useClosePanel, usePanelLock, usePanelStatePreservation } from './DetailPanelContext';

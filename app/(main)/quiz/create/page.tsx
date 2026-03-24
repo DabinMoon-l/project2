@@ -7,7 +7,7 @@ import { collection, addDoc, serverTimestamp, db } from '@/lib/repositories';
 import { auth } from '@/lib/firebase';
 import { processQuizImages, sanitizeForFirestore } from '@/lib/utils/quizImageUpload';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { useCourse, useUser, useDetailPanel } from '@/lib/contexts';
+import { useCourse, useUser, useClosePanel, usePanelLock, usePanelStatePreservation } from '@/lib/contexts';
 import { useExpToast } from '@/components/common';
 import { EXP_REWARDS } from '@/lib/utils/expRewards';
 import { getCurrentSemesterByDate } from '@/lib/types/course';
@@ -108,18 +108,12 @@ export default function QuizCreatePage({ isPanelMode }: { isPanelMode?: boolean 
   const { userCourseId } = useCourse();
   const { profile } = useUser();
   const { showExpToast } = useExpToast();
-  const { closeDetail, lockDetail, unlockDetail } = useDetailPanel();
-
-  // 패널 모드: mount 시 잠금, unmount 시 해제
-  useEffect(() => {
-    if (isPanelMode) {
-      lockDetail();
-      return () => unlockDetail();
-    }
-  }, [isPanelMode, lockDetail, unlockDetail]);
+  const closePanel = useClosePanel();
+  usePanelLock(isPanelMode); // 패널 모드 + 3쪽에서만 lock
 
   // 단계 관리
   const [step, setStep] = useState<Step>('upload');
+  // (아래에서 usePanelStatePreservation으로 승격 시 복원)
 
   // 파일 업로드 상태
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -168,6 +162,17 @@ export default function QuizCreatePage({ isPanelMode }: { isPanelMode?: boolean 
     isPublic: true,
     difficulty: 'normal',
   });
+
+  // 승격 시 상태 보존 (2쪽→3쪽 이동 시 step/questions/quizMeta 유지)
+  usePanelStatePreservation(
+    'quiz-create',
+    () => ({ step, questions, quizMeta }),
+    (saved) => {
+      if (saved.step) setStep(saved.step as Step);
+      if (saved.questions) setQuestions(saved.questions as QuestionData[]);
+      if (saved.quizMeta) setQuizMeta(saved.quizMeta as QuizMeta);
+    },
+  );
 
   // 저장 상태
   const [isSaving, setIsSaving] = useState(false);
@@ -297,10 +302,10 @@ export default function QuizCreatePage({ isPanelMode }: { isPanelMode?: boolean 
 
   // 뒤로가기 — 패널 모드: closeDetail, 세로모드: 슬라이드 아웃
   const navigateBack = useCallback(() => {
-    if (isPanelMode) { unlockDetail(true); return; }
+    if (isPanelMode) { closePanel(); return; }
     setIsClosing(true);
     setTimeout(() => router.back(), 280);
-  }, [router, isPanelMode, unlockDetail, closeDetail]);
+  }, [router, isPanelMode, closePanel]);
 
   /**
    * 저장하고 나가기
@@ -1315,7 +1320,7 @@ export default function QuizCreatePage({ isPanelMode }: { isPanelMode?: boolean 
 
       // 성공 시 이동
       setTimeout(() => {
-        if (isPanelMode) { unlockDetail(true); return; }
+        if (isPanelMode) { closePanel(); return; }
         router.push(cleanedQuizData.isPublic ? '/quiz?created=true' : '/review?filter=library');
       }, 300);
     } catch (error) {

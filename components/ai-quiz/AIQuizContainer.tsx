@@ -29,7 +29,7 @@ import AIQuizProgress from './AIQuizProgress';
 const ReviewPractice = dynamic(() => import('@/components/review/ReviewPractice'), { ssr: false });
 const AIQuizModal = dynamic(() => import('./AIQuizModal'), { ssr: false });
 import { useHideNav } from '@/lib/hooks/useHideNav';
-import { useDetailPanel } from '@/lib/contexts/DetailPanelContext';
+import { useDetailPanel, useClosePanel, usePanelLock } from '@/lib/contexts/DetailPanelContext';
 import { useWideMode } from '@/lib/hooks/useViewportScale';
 
 interface GeneratedQuestion {
@@ -559,12 +559,8 @@ function AIQuizPracticePanel({
   userCourseId: string;
   userClassId: string;
 }) {
-  const { lockDetail, unlockDetail } = useDetailPanel();
-
-  useEffect(() => {
-    lockDetail();
-    return () => unlockDetail();
-  }, [lockDetail, unlockDetail]);
+  const closePanel = useClosePanel();
+  usePanelLock(); // 3쪽에서만 lock, 2쪽에서는 no-op
 
   const practiceItems: ReviewItem[] = useMemo(() => {
     return quizDoc.questions.map((q) => {
@@ -670,14 +666,14 @@ function AIQuizPracticePanel({
       console.error('퀴즈 결과 저장 오류:', err);
     }
 
-    unlockDetail(true);
-  }, [quizDoc, userId, userCourseId, unlockDetail]);
+    closePanel();
+  }, [quizDoc, userId, userCourseId, closePanel]);
 
   const handleClose = useCallback(() => {
     if (confirm('연습을 종료하시겠습니까?')) {
-      unlockDetail(true);
+      closePanel();
     }
-  }, [unlockDetail]);
+  }, [closePanel]);
 
   return (
     <ReviewPractice

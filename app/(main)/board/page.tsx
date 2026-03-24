@@ -677,7 +677,7 @@ export default function BoardPage() {
   const handlePostClick = useCallback((postId: string) => {
     // 스와이프 네비게이션용 게시글 ID 순서 저장 (가로/세로 공통)
     sessionStorage.setItem('board_post_ids', JSON.stringify(filteredPosts.map(p => p.id)));
-    if (isWide && !isLocked) {
+    if (isWide) {
       // 가로모드: 2쪽 유지, 3쪽에 상세페이지 표시
       const action = isDetailOpen ? replaceDetail : openDetail;
       action(<PostDetailPage panelPostId={postId} />);
@@ -689,7 +689,7 @@ export default function BoardPage() {
   }, [router, filteredPosts, isWide, isLocked, isDetailOpen, openDetail, replaceDetail]);
 
   const handleWriteClick = useCallback(() => {
-    if (isWide && !isLocked) {
+    if (isWide) {
       const action = isDetailOpen ? replaceDetail : openDetail;
       action(<WritePage isPanelMode />);
       return;
@@ -699,7 +699,7 @@ export default function BoardPage() {
   }, [router, isWide, isLocked, isDetailOpen, openDetail, replaceDetail]);
 
   const handleManageClick = useCallback(() => {
-    if (isWide && !isLocked) {
+    if (isWide) {
       // 관리 페이지는 동적 import로 3쪽에 표시
       import('./manage/page').then(mod => {
         const ManagePage = mod.default;
@@ -868,12 +868,14 @@ export default function BoardPage() {
             </button>
           </div>
         ) : (
-          <h1
-            className="font-serif-display font-black tracking-tight text-[#1A1A1A] text-center border-y-4 border-[#1A1A1A] whitespace-nowrap"
-            style={{ fontSize: 'min(15vw, 4.5rem)', lineHeight: '1.15', paddingTop: '0.15em', paddingBottom: '0.15em' }}
-          >
-            JIBDAN JISUNG
-          </h1>
+          <div style={{ containerType: 'inline-size' }}>
+            <h1
+              className="font-serif-display font-black tracking-tight text-[#1A1A1A] text-center border-y-4 border-[#1A1A1A] whitespace-nowrap"
+              style={{ fontSize: 'clamp(2rem, 13cqi, 5rem)', lineHeight: '1.15', paddingTop: '0.15em', paddingBottom: '0.15em' }}
+            >
+              JIBDAN JISUNG
+            </h1>
+          </div>
         )}
 
         {/* 서브타이틀 및 슬로건 */}

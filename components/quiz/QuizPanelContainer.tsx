@@ -7,8 +7,8 @@
  * 내부 state로 관리. mount 시 패널 잠금, unmount 시 해제.
  */
 
-import { useState, useCallback, useEffect } from 'react';
-import { useDetailPanel } from '@/lib/contexts/DetailPanelContext';
+import { useState, useCallback } from 'react';
+import { useClosePanel, usePanelLock, usePanelStatePreservation } from '@/lib/contexts/DetailPanelContext';
 import QuizPage from '@/app/(main)/quiz/[id]/page';
 import QuizResultPage from '@/app/(main)/quiz/[id]/result/page';
 import FeedbackPage from '@/app/(main)/quiz/[id]/feedback/page';
@@ -22,15 +22,16 @@ interface QuizPanelContainerProps {
 
 export default function QuizPanelContainer({ quizId }: QuizPanelContainerProps) {
   const [stage, setStage] = useState<QuizStage>('quiz');
-  const { lockDetail, unlockDetail } = useDetailPanel();
+  const closePanel = useClosePanel();
+  usePanelLock();
 
-  // mount 시 잠금, unmount 시 해제
-  useEffect(() => {
-    lockDetail();
-    return () => unlockDetail();
-  }, [lockDetail, unlockDetail]);
+  // 승격 시 stage 보존
+  usePanelStatePreservation(
+    'quiz-panel',
+    () => ({ stage }),
+    (saved) => { if (saved.stage) setStage(saved.stage as QuizStage); },
+  );
 
-  // 단계 전환 콜백 (각 stage 페이지의 router.push 대체)
   const handleNavigate = useCallback((path: string) => {
     if (path.includes('/result')) {
       setStage('result');
@@ -39,10 +40,9 @@ export default function QuizPanelContainer({ quizId }: QuizPanelContainerProps) 
     } else if (path.includes('/exp')) {
       setStage('exp');
     } else {
-      // /quiz (목록) → 완료, 잠금 해제 (대기 있으면 3쪽 승격, 없으면 닫기)
-      unlockDetail(true);
+      closePanel();
     }
-  }, [unlockDetail]);
+  }, [closePanel]);
 
   switch (stage) {
     case 'quiz':

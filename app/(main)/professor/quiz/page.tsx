@@ -1381,66 +1381,50 @@ export default function ProfessorQuizListPage() {
       />
 
       {/* 공개 확인 모달 */}
-      <AnimatePresence>
-        {publishConfirmQuizId && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+      <ExpandModal
+        isOpen={!!publishConfirmQuizId}
+        onClose={() => setPublishConfirmQuizId(null)}
+        className="w-full max-w-[280px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 rounded-xl"
+      >
+        <div className="flex justify-center mb-3">
+          <div className="w-9 h-9 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
+            <svg className="w-4 h-4 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.6 9h16.8M3.6 15h16.8" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3a15.3 15.3 0 0 1 4 9 15.3 15.3 0 0 1-4 9 15.3 15.3 0 0 1-4-9 15.3 15.3 0 0 1 4-9z" />
+            </svg>
+          </div>
+        </div>
+        <h3 className="text-center font-bold text-sm text-[#1A1A1A] mb-2">
+          퀴즈를 공개할까요?
+        </h3>
+        <p className="text-center text-xs text-[#5C5C5C] mb-4">
+          공개하면 학생들이 풀 수 있어요.
+        </p>
+        <div className="flex gap-2">
+          <button
             onClick={() => setPublishConfirmQuizId(null)}
+            className="flex-1 py-1.5 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
           >
-            <motion.div
-              initial={{ scale: 0.88, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.88, opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-              onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-[280px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
-            >
-              <div className="flex justify-center mb-3">
-                <div className="w-9 h-9 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
-                  <svg className="w-4 h-4 text-[#1A1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.6 9h16.8M3.6 15h16.8" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3a15.3 15.3 0 0 1 4 9 15.3 15.3 0 0 1-4 9 15.3 15.3 0 0 1-4-9 15.3 15.3 0 0 1 4-9z" />
-                  </svg>
-                </div>
-              </div>
-              <h3 className="text-center font-bold text-sm text-[#1A1A1A] mb-2">
-                퀴즈를 공개할까요?
-              </h3>
-              <p className="text-center text-xs text-[#5C5C5C] mb-4">
-                공개하면 학생들이 풀 수 있어요.
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setPublishConfirmQuizId(null)}
-                  className="flex-1 py-1.5 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors"
-                >
-                  취소
-                </button>
-                <button
-                  onClick={async () => {
-                    if (publishConfirmQuizId) {
-                      // 인라인 togglePublish (publishHook 인스턴스 제거)
-                      await updateDoc(doc(db, 'quizzes', publishConfirmQuizId), {
-                        isPublished: true,
-                        updatedAt: Timestamp.now(),
-                      });
-                      refreshExamQuizzes();
-                    }
-                    setPublishConfirmQuizId(null);
-                  }}
-                  className="flex-1 py-1.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
-                >
-                  공개
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            취소
+          </button>
+          <button
+            onClick={async () => {
+              if (publishConfirmQuizId) {
+                await updateDoc(doc(db, 'quizzes', publishConfirmQuizId), {
+                  isPublished: true,
+                  updatedAt: Timestamp.now(),
+                });
+                refreshExamQuizzes();
+              }
+              setPublishConfirmQuizId(null);
+            }}
+            className="flex-1 py-1.5 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
+          >
+            공개
+          </button>
+        </div>
+      </ExpandModal>
 
       {/* 스크롤 맨 위로 버튼 (프리뷰 모드에서 숨김) */}
       <ScrollToTopButton

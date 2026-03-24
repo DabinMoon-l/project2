@@ -18,7 +18,7 @@ import QuizPanelContainer from '@/components/quiz/QuizPanelContainer';
 import { useQuizBookmark, type BookmarkedQuiz } from '@/lib/hooks/useQuizBookmark';
 import { useLearningQuizzes, type LearningQuiz } from '@/lib/hooks/useLearningQuizzes';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { useCourse, useUser, useDetailPanel } from '@/lib/contexts';
+import { useCourse, useUser, useDetailPanel, useClosePanel, usePanelLock } from '@/lib/contexts';
 import { useWideMode } from '@/lib/hooks/useViewportScale';
 import { getChapterById, generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import type { QuestionExportData as PdfQuestionData } from '@/lib/utils/questionPdfExport';
@@ -61,7 +61,7 @@ function ReviewPageContent() {
   const { userCourseId, semesterSettings, getCourseById } = useCourse();
   const { profile } = useUser();
   const isWide = useWideMode();
-  const { openDetail, replaceDetail, closeDetail, lockDetail, isDetailOpen, isLocked } = useDetailPanel();
+  const { openDetail, replaceDetail, closeDetail, lockDetail, unlockDetail, isDetailOpen, isLocked } = useDetailPanel();
 
   // 과목별 리본 이미지
   const currentCourse = userCourseId ? getCourseById(userCourseId) : null;
@@ -364,20 +364,17 @@ function ReviewPageContent() {
     if (isWide) {
       const action = isDetailOpen ? replaceDetail : openDetail;
       action(
-        <ReviewPractice
+        <ReviewPracticePanel
           items={items}
           onComplete={(results) => { handleEndPracticeRef.current(results); }}
-          onClose={() => { handleEndPracticeRef.current(); }}
           currentUserId={user?.uid}
-          isPanelMode
         />
       );
-      lockDetail();
     } else {
       setPracticeMode(mode);
       setPracticeItems(items);
     }
-  }, [isWide, isLocked, isDetailOpen, openDetail, replaceDetail, lockDetail, user?.uid]);
+  }, [isWide, isDetailOpen, openDetail, replaceDetail, user?.uid]);
 
   // 폴더 삭제 핸들러
   const handleDeleteFolder = async (folder: { id: string; filterType: string }) => {
@@ -773,9 +770,8 @@ function ReviewPageContent() {
     }
     setPracticeItems(null);
     setPracticeMode(null);
-    // 가로모드: 3쪽 패널도 닫기
-    if (isWide && isDetailOpen) closeDetail();
-  }, [user, markAsReviewed, isWide, isDetailOpen, closeDetail]);
+    // 가로모드: ReviewPracticePanel wrapper가 closePanel() 처리
+  }, [user, markAsReviewed]);
 
   // startPractice에서 사용하는 ref 업데이트
   useEffect(() => { handleEndPracticeRef.current = handleEndPractice; }, [handleEndPractice]);
@@ -784,21 +780,18 @@ function ReviewPageContent() {
   useEffect(() => {
     if (isWide && practiceItems) {
       const items = practiceItems;
-      const mode = practiceMode || 'all';
       setPracticeItems(null);
       setPracticeMode(null);
       const action = isDetailOpen ? replaceDetail : openDetail;
       action(
-        <ReviewPractice
+        <ReviewPracticePanel
           items={items}
           onComplete={(results) => { handleEndPracticeRef.current(results); }}
-          onClose={() => { handleEndPracticeRef.current(); }}
           currentUserId={user?.uid}
-          isPanelMode
         />
       );
     }
-  }, [isWide, isLocked, practiceItems, practiceMode, isDetailOpen, openDetail, replaceDetail, user?.uid]);
+  }, [isWide, practiceItems, isDetailOpen, openDetail, replaceDetail, user?.uid]);
 
   // 연습 모드 (모바일 전용 — 가로모드에서는 위 useEffect가 3쪽으로 리다이렉트)
   if (practiceItems && !isWide) {
@@ -1613,5 +1606,32 @@ export default function ReviewPage() {
     >
       <ReviewPageContent />
     </Suspense>
+  );
+}
+
+/**
+ * 복습 연습 패널 wrapper (가로모드 3쪽/2쪽 잠금용)
+ * mount 시 lockDetail, close/complete 시 closePanel (위치 자동 분기)
+ */
+function ReviewPracticePanel({
+  items,
+  onComplete,
+  currentUserId,
+}: {
+  items: ReviewItem[];
+  onComplete: (results: PracticeResult[]) => void;
+  currentUserId?: string;
+}) {
+  const closePanel = useClosePanel();
+  usePanelLock(); // 3쪽에서만 lock, 2쪽에서는 no-op
+
+  return (
+    <ReviewPractice
+      items={items}
+      onComplete={(results) => { onComplete(results); closePanel(); }}
+      onClose={() => closePanel()}
+      currentUserId={currentUserId}
+      isPanelMode
+    />
   );
 }

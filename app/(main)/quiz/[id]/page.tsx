@@ -19,7 +19,7 @@ import {
 } from '@/lib/repositories';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useThemeColors } from '@/styles/themes/useTheme';
-import { useDetailPanel } from '@/lib/contexts';
+import { useDetailPanel, useClosePanel } from '@/lib/contexts';
 import { Skeleton } from '@/components/common';
 
 /** Firestore 퀴즈 문제 문서 타입 */
@@ -94,7 +94,7 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
   const colors = useThemeColors();
   const quizId = panelQuizId || (params?.id as string);
   const isPanelMode = !!panelQuizId;
-  const { closeDetail } = useDetailPanel();
+  const closePanel = useClosePanel();
 
   // 퀴즈 풀이 페이지: data-main-content의 paddingTop 제거 (헤더가 직접 처리)
   // 패널 모드에서는 스킵 (3쪽 안에서 동작)
@@ -842,12 +842,12 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
     const success = await saveProgress();
     if (success) {
       if (onPanelNavigate) { onPanelNavigate('/quiz'); return; }
-      if (isPanelMode) { closeDetail(); return; }
+      if (isPanelMode) { closePanel(); return; }
       router.push('/quiz');
     } else {
       alert('저장에 실패했습니다. 다시 시도해주세요.');
     }
-  }, [saveProgress, router, isPanelMode, closeDetail, onPanelNavigate]);
+  }, [saveProgress, router, isPanelMode, closePanel, onPanelNavigate]);
 
   /**
    * 저장하지 않고 나가기 (기존 저장된 진행상황도 삭제)
@@ -855,9 +855,9 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
   const handleExitWithoutSave = useCallback(async () => {
     await deleteProgress();
     if (onPanelNavigate) { onPanelNavigate('/quiz'); return; }
-    if (isPanelMode) { closeDetail(); return; }
+    if (isPanelMode) { closePanel(); return; }
     router.push('/quiz');
-  }, [router, deleteProgress, isPanelMode, closeDetail, onPanelNavigate]);
+  }, [router, deleteProgress, isPanelMode, closePanel, onPanelNavigate]);
 
   // 로딩 상태
   if (isLoading) {
@@ -911,7 +911,7 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
             잠시 후 다시 시도해주세요.
           </p>
           <button
-            onClick={() => onPanelNavigate ? onPanelNavigate('/quiz') : isPanelMode ? closeDetail() : router.push('/quiz')}
+            onClick={() => onPanelNavigate ? onPanelNavigate('/quiz') : isPanelMode ? closePanel() : router.push('/quiz')}
             className="px-6 py-3 bg-[#1A1A1A] text-[#F5F0E8] font-bold border-2 border-[#1A1A1A] hover:bg-[#333] transition-colors"
           >
             돌아가기

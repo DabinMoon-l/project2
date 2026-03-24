@@ -8,7 +8,7 @@ import { ThemeProvider } from '@/styles/themes/ThemeProvider';
 import { useRequireAuth } from '@/lib/hooks/useAuth';
 import Navigation from '@/components/common/Navigation';
 import { NotificationProvider, ExpToastProvider, SwipeBack, ComposeProviders } from '@/components/common';
-import { UserProvider, useUser, CourseProvider, useCourse, MilestoneProvider, HomeOverlayProvider, DetailPanelProvider, useDetailPanel } from '@/lib/contexts';
+import { UserProvider, useUser, CourseProvider, useCourse, MilestoneProvider, HomeOverlayProvider, DetailPanelProvider, useDetailPanel, DetailPositionProvider } from '@/lib/contexts';
 import { useHomeOverlay } from '@/lib/contexts/HomeOverlayContext';
 import { useActivityTracker } from '@/lib/hooks/useActivityTracker';
 
@@ -175,7 +175,7 @@ function MainLayoutGrid({
   pathname: string;
   searchParams: ReturnType<typeof useSearchParams>;
 }) {
-  const { content: detailContent, isDetailOpen, closeDetail, isLocked, queuedContent, isQueuedOpen } = useDetailPanel();
+  const { content: detailContent, contentKey, isDetailOpen, closeDetail, isLocked, queuedContent, isQueuedOpen } = useDetailPanel();
   const { isOpen: isHomeOverlayOpen } = useHomeOverlay();
 
   // 라우트 기반 사이드바 타입 감지 (가로모드 전용)
@@ -249,18 +249,21 @@ function MainLayoutGrid({
     if (isWide) {
       // --modal-left: 모달/바텀시트 백드롭 시작점 (항상 사이드바 너비)
       body.style.setProperty('--modal-left', '240px');
-      // --detail-panel-left: 잠금 시 main 영역 기준, 그 외 우측 패널 시작점
+      // --detail-panel-left/right: 3쪽 패널의 fixed 요소 경계
       body.style.setProperty('--detail-panel-left', isLocked ? '240px' : 'calc(50% + 120px)');
+      body.style.setProperty('--detail-panel-right', '0px'); // 3쪽: 오른쪽 끝까지
       // --home-sheet-left: 홈 오버레이 바텀시트 위치 (우측 패널)
       body.style.setProperty('--home-sheet-left', 'calc(50% + 120px)');
     } else {
       body.style.setProperty('--modal-left', '0px');
       body.style.setProperty('--detail-panel-left', '0px');
+      body.style.setProperty('--detail-panel-right', '0px');
       body.style.setProperty('--home-sheet-left', '0px');
     }
     return () => {
       body.style.removeProperty('--modal-left');
       body.style.removeProperty('--detail-panel-left');
+      body.style.removeProperty('--detail-panel-right');
       body.style.removeProperty('--home-sheet-left');
     };
   }, [isWide, isLocked]);
@@ -361,8 +364,10 @@ function MainLayoutGrid({
                 } as React.CSSProperties}
               >
                 {!isHomeOverlayOpen && isDetailOpen && (
-                  <div className="h-full">
-                    {detailContent}
+                  <div className="h-full" key={contentKey}>
+                    <DetailPositionProvider value="detail">
+                      {detailContent}
+                    </DetailPositionProvider>
                   </div>
                 )}
               </aside>
@@ -398,8 +403,10 @@ function MainLayoutGrid({
               backgroundPosition: 'center top',
             }} />
           </div>
-          <div className="h-full relative" style={{ zIndex: 1 }}>
-            {detailContent}
+          <div className="h-full relative" style={{ zIndex: 1 }} key={contentKey}>
+            <DetailPositionProvider value="detail">
+              {detailContent}
+            </DetailPositionProvider>
           </div>
         </div>
       )}
@@ -429,8 +436,20 @@ function MainLayoutGrid({
               }} />
             </div>
           )}
-          <div className="h-full relative" style={{ zIndex: 1 }}>
-            {queuedContent}
+          <div
+            className="h-full relative overflow-y-auto"
+            style={{
+              zIndex: 1,
+              // 2쪽 영역 CSS 변수 덮어쓰기 — fixed 요소가 2쪽 경계 안에 배치되도록
+              '--detail-panel-left': '240px',
+              '--detail-panel-right': 'calc(50% - 120px)',
+              '--modal-left': '240px',
+              '--modal-right': 'calc(50% - 120px)',
+            } as React.CSSProperties}
+          >
+            <DetailPositionProvider value="queued">
+              {queuedContent}
+            </DetailPositionProvider>
           </div>
         </div>
       )}
