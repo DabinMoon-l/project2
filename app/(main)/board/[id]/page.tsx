@@ -10,7 +10,7 @@ import CommentSection from '@/components/board/CommentSection';
 import LinkifiedText from '@/components/board/LinkifiedText';
 import { usePost, useDeletePost, useLike } from '@/lib/hooks/useBoard';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { useUser, useDetailPanel } from '@/lib/contexts';
+import { useUser, useDetailPanel, useClosePanel } from '@/lib/contexts';
 import { useWideMode } from '@/lib/hooks/useViewportScale';
 import { getScrollLockCount } from '@/lib/utils/scrollLock';
 
@@ -351,11 +351,12 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
     }).catch(() => {});
   }, [isProfessor, post?.authorId]);
 
-  // 안전한 뒤로가기 — 패널 모드에서는 onPanelBack 또는 closeDetail
+  // 안전한 뒤로가기 — 패널 모드에서는 onPanelBack 또는 closePanel
+  const closePanel = useClosePanel();
   const goBack = useCallback(() => {
     if (isPanelMode) {
       if (onPanelBack) { onPanelBack(); return; }
-      closeDetail();
+      closePanel();
       return;
     }
     const hasInternalHistory = window.history.length > 1 &&
@@ -365,7 +366,7 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
     } else {
       router.push('/board');
     }
-  }, [router, isPanelMode, closeDetail]);
+  }, [router, isPanelMode, closePanel]);
 
   // 조회수 기록 (상세 페이지 진입 시마다)
   useEffect(() => {

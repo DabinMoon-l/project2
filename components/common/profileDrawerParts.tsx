@@ -121,27 +121,26 @@ export function ToggleSwitch({
   );
 }
 
-/** 글래스 바텀시트 래퍼 (3쪽 패널 너비에 맞춤, 투명 오버레이) */
+/** 글래스 바텀시트 래퍼 (부모 컨테이너 기준 — 2쪽/3쪽 자동 대응) */
 export function GlassModal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
     <>
-      {/* 투명 오버레이 (닫기용) */}
+      {/* 투명 오버레이 (닫기용) — 부모 기준 absolute */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[60]"
+        className="absolute inset-0 z-[60]"
         onClick={onClose}
       />
-      {/* 바텀시트 (3쪽 패널에 고정) */}
+      {/* 바텀시트 — 부모 기준 absolute */}
       <motion.div
         initial={{ y: '100%' }}
         animate={{ y: 0 }}
         exit={{ y: '100%' }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
         onClick={(e) => e.stopPropagation()}
-        className="fixed bottom-0 right-0 z-[60] rounded-t-2xl overflow-hidden"
-        style={{ left: 'var(--home-sheet-left, 0px)' }}
+        className="absolute bottom-0 left-0 right-0 z-[60] rounded-t-2xl overflow-hidden"
       >
         <div className="absolute inset-0 rounded-t-2xl overflow-hidden">
           <Image src="/images/home-bg.jpg" alt="" fill className="object-cover" />

@@ -3,7 +3,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { collection, addDoc, serverTimestamp, doc, getDoc, db } from '@/lib/repositories';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { useCourse } from '@/lib/contexts';
+import { useCourse, usePanelStatePreservation } from '@/lib/contexts';
 import type { ReviewItem } from '@/lib/hooks/useReview';
 import { useReview } from '@/lib/hooks/useReview';
 import { getChapterById } from '@/lib/courseIndex';
@@ -104,6 +104,25 @@ export default function ReviewPractice({
 
   // 인라인 피드백 (풀이 중 피드백)
   const [inlineFeedbackOpen, setInlineFeedbackOpen] = useState<string | null>(null);
+
+  // 승격 시 연습 상태 보존 (패널 모드에서만)
+  usePanelStatePreservation(
+    'review-practice',
+    () => isPanelMode ? ({
+      phase, currentIndex, answers, combinedAnswers,
+      submittedIndices: Array.from(submittedIndices),
+      resultsMap, combinedResultsMap,
+    }) : ({}),
+    (saved) => {
+      if (saved.phase) setPhase(saved.phase as Phase);
+      if (saved.currentIndex !== undefined) setCurrentIndex(saved.currentIndex as number);
+      if (saved.answers) setAnswers(saved.answers as Record<number, AnswerType>);
+      if (saved.combinedAnswers) setCombinedAnswers(saved.combinedAnswers as Record<number, Record<number, AnswerType>>);
+      if (saved.submittedIndices) setSubmittedIndices(new Set(saved.submittedIndices as number[]));
+      if (saved.resultsMap) setResultsMap(saved.resultsMap as Record<number, PracticeResult>);
+      if (saved.combinedResultsMap) setCombinedResultsMap(saved.combinedResultsMap as Record<number, Record<number, PracticeResult>>);
+    },
+  );
 
   // 결합형 문제 그룹화
   const groupedItems = useMemo(() => {

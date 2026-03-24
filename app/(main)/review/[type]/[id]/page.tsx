@@ -23,7 +23,7 @@ import { callFunction } from '@/lib/api';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useReview, type ReviewItem, type FolderCategory, type CustomFolderQuestion } from '@/lib/hooks/useReview';
 import { useCourse } from '@/lib/contexts/CourseContext';
-import { useDetailPanel } from '@/lib/contexts';
+import { useDetailPanel, useClosePanel, useDetailPosition, usePanelStatePreservation } from '@/lib/contexts';
 import dynamic from 'next/dynamic';
 import { Skeleton, useExpToast } from '@/components/common';
 import { EXP_REWARDS } from '@/lib/utils/expRewards';
@@ -64,7 +64,8 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
   const { user } = useAuth();
   const { userCourse, userClassId } = useCourse();
   const { showExpToast } = useExpToast();
-  const { closeDetail, lockDetail, unlockDetail } = useDetailPanel();
+  const { lockDetail, unlockDetail } = useDetailPanel();
+  const closePanel = useClosePanel();
 
   // 패널 모드: prop 우선, 없으면 라우트 params 폴백
   const isPanelMode = !!panelType;
@@ -83,11 +84,11 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
   const fromQuizPage = isPanelMode ? false : searchParams.get('from') === 'quiz';
   const autoStart = isPanelMode ? (panelAutoStart || null) : searchParams.get('autoStart');
 
-  // 뒤로가기: 패널 모드에서는 잠금 해제 후 closeDetail, 일반 모드에서는 router.push
+  // 뒤로가기: 3쪽이면 잠금해제+승격, 2쪽이면 대기만 닫기 (useClosePanel이 자동 분기)
   const goBackToList = useCallback((filter?: string) => {
-    if (isPanelMode) { unlockDetail(true); return; }
+    if (isPanelMode) { closePanel(); return; }
     router.push(`/review?filter=${filter || folderType}`);
-  }, [isPanelMode, unlockDetail, closeDetail, router, folderType]);
+  }, [isPanelMode, closePanel, router, folderType]);
 
   // 과목별 리본 이미지 (solved 타입 또는 퀴즈 페이지에서 온 경우 퀴즈 리본, 나머지는 리뷰 리본)
   const ribbonImage = (folderType === 'solved' || fromQuizPage)
@@ -134,14 +135,26 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
   // practiceMode 변경 시 ref 동기화 (useCallback 클로저 문제 방지)
   useEffect(() => { practiceModeRef.current = practiceMode; }, [practiceMode]);
 
-  // 패널 모드 연습: 시작 시 잠금, 종료 시 해제
+  // 패널 모드 연습: 시작 시 잠금, 종료 시 해제 (3쪽에서만 — 2쪽 cleanup이 3쪽 잠금 해제 방지)
   const hasPracticeItems = !!practiceItems;
+  const position = useDetailPosition();
   useEffect(() => {
-    if (isPanelMode && hasPracticeItems) {
+    if (isPanelMode && hasPracticeItems && position === 'detail') {
       lockDetail();
       return () => unlockDetail();
     }
-  }, [isPanelMode, hasPracticeItems, lockDetail, unlockDetail]);
+  }, [isPanelMode, hasPracticeItems, position, lockDetail, unlockDetail]);
+
+  // 승격 시 practiceItems/practiceMode 보존 (연습 중 승격 시 연습 상태 유지)
+  usePanelStatePreservation(
+    'folder-detail',
+    () => isPanelMode ? ({ practiceItems, practiceMode }) : ({}),
+    (saved) => {
+      if (saved.practiceItems) setPracticeItems(saved.practiceItems as ReviewItem[]);
+      if (saved.practiceMode) setPracticeMode(saved.practiceMode as 'all' | 'wrongOnly');
+    },
+  );
+
   const [isAddMode, setIsAddMode] = useState(false);
   const [showEmptyMessage, setShowEmptyMessage] = useState(false);
 
@@ -1479,7 +1492,10 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
         quizTitle={folderTitle}
         onComplete={handlePracticeComplete}
         onClose={() => {
-          if (autoStart) {
+          if (isPanelMode) {
+            // 패널 모드: 복습 전체 닫기 (다른 고정창처럼 한 번에)
+            closePanel();
+          } else if (autoStart) {
             goBackToList();
           } else {
             setPracticeItems(null);
@@ -1516,7 +1532,7 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
 
   return (
     <motion.div
-      className="min-h-screen pb-24" style={{ backgroundColor: '#F5F0E8' }}
+      className={isPanelMode ? "min-h-full flex flex-col" : "min-h-screen pb-24"} style={{ backgroundColor: '#F5F0E8' }}
       initial={slideIn ? { opacity: 0, x: 60 } : false}
       animate={{ opacity: 1, x: 0 }}
       transition={{ type: 'spring', stiffness: 400, damping: 35 }}
@@ -1723,7 +1739,7 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
 
       {/* 수정 모드: 메타 편집 + QuestionList + QuestionEditor (교수 서재와 동일) */}
       {!loading && isEditMode && folderType === 'library' && (
-        <main className="px-4 space-y-2">
+        <main className={isPanelMode ? "px-4 space-y-2 flex-1" : "px-4 space-y-2"}>
           {editingIndex !== null ? (
             <QuestionEditor
               initialQuestion={editingIndex >= 0 ? editableQuestions[editingIndex] : undefined}
@@ -1767,7 +1783,7 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
 
       {/* 문제 목록 (일반 모드) */}
       {!loading && !(isEditMode && folderType === 'library') && (
-        <main className="px-4 space-y-2">
+        <main className={isPanelMode ? "px-4 space-y-2 flex-1" : "px-4 space-y-2"}>
           <QuestionListSection
             questions={questions}
             displayItems={displayItems}
@@ -1792,7 +1808,7 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
 
       {/* 하단 버튼 영역 — 선택 모드에서 선택 항목 없으면 숨김, 문제 에디터 열려있을 때 숨김 */}
       {!loading && (questions.length > 0 || (isEditMode && editableQuestions.length > 0)) && !(isSelectMode && !isAssignMode && selectedIds.size === 0) && !(isEditMode && editingIndex !== null) && (
-        <div className="fixed bottom-0 right-0 p-3 bg-[#F5F0E8] border-t-2 border-[#1A1A1A]" style={{ left: 'var(--detail-panel-left, 0)', paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}>
+        <div className={isPanelMode ? "sticky bottom-0 p-3 bg-[#F5F0E8] border-t-2 border-[#1A1A1A]" : "fixed bottom-0 right-0 p-3 bg-[#F5F0E8] border-t-2 border-[#1A1A1A]"} style={isPanelMode ? {} : { left: 'var(--detail-panel-left, 0)', paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}>
           {isEditMode ? (
             /* 수정 모드일 때 - 취소/저장 */
             <div className="flex gap-2">
@@ -1851,7 +1867,7 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
 
       {/* 배정 모드일 때 하단 안내 */}
       {!loading && isAssignMode && isSelectMode && selectedIds.size === 0 && (
-        <div className="fixed bottom-0 right-0 p-3 bg-[#EDEAE4] border-t-2 border-[#1A1A1A]" style={{ left: 'var(--detail-panel-left, 0)', paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}>
+        <div className={isPanelMode ? "sticky bottom-0 p-3 bg-[#EDEAE4] border-t-2 border-[#1A1A1A]" : "fixed bottom-0 right-0 p-3 bg-[#EDEAE4] border-t-2 border-[#1A1A1A]"} style={isPanelMode ? {} : { left: 'var(--detail-panel-left, 0)', paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}>
           <p className="text-xs text-center text-[#5C5C5C]">
             분류할 문제를 선택하세요
           </p>

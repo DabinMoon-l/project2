@@ -8,7 +8,7 @@ import { useTheme } from '@/styles/themes/useTheme';
 import WriteForm from '@/components/board/WriteForm';
 import { useCreatePost, type CreatePostData, type BoardTag } from '@/lib/hooks/useBoard';
 import { useExpToast } from '@/components/common';
-import { useUser, useCourse, useDetailPanel } from '@/lib/contexts';
+import { useUser, useCourse, useDetailPanel, useClosePanel } from '@/lib/contexts';
 import { EXP_REWARDS } from '@/lib/utils/expRewards';
 
 // localStorage 키
@@ -84,10 +84,11 @@ export default function WritePage({ isPanelMode }: { isPanelMode?: boolean } = {
     setHasContent(title.trim().length > 0 || content.trim().length > 0);
   }, []);
 
+  const closePanel = useClosePanel();
   const goBack = useCallback(() => {
-    if (isPanelMode) { closeDetail(); return; }
+    if (isPanelMode) { closePanel(); return; }
     router.back();
-  }, [isPanelMode, closeDetail, router]);
+  }, [isPanelMode, closePanel, router]);
 
   // 뒤로가기 → 모달 표시
   const handleBack = useCallback(() => {

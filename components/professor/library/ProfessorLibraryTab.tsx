@@ -11,6 +11,9 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ExpandModal } from '@/components/common';
+import { useDetailPanel } from '@/lib/contexts';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
 import { callFunction } from '@/lib/api';
 import { useUser } from '@/lib/contexts';
 import { useCourse } from '@/lib/contexts/CourseContext';
@@ -103,6 +106,24 @@ export default function ProfessorLibraryTab({
 
   // Stats 모달
   const [statsQuizId, setStatsQuizId] = useState<{ id: string; title: string } | null>(null);
+  const isWide = useWideMode();
+  const { openDetail, replaceDetail, closeDetail, isDetailOpen } = useDetailPanel();
+
+  // 가로모드: stats를 3쪽 패널로 표시
+  const openStatsPanel = useCallback((quizId: string, quizTitle: string) => {
+    const close = () => closeDetail();
+    const action = isDetailOpen ? replaceDetail : openDetail;
+    action(
+      <QuizStatsModal
+        quizId={quizId}
+        quizTitle={quizTitle}
+        isOpen
+        onClose={close}
+        isProfessor
+        isPanelMode
+      />
+    );
+  }, [isDetailOpen, openDetail, replaceDetail, closeDetail]);
 
   // 삭제 확인
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -839,18 +860,13 @@ export default function ProfessorLibraryTab({
       {/* ============================================================ */}
       {/* Details 모달 (학생 서재탭과 동일한 레이아웃) */}
       {/* ============================================================ */}
-      {selectedDetailQuiz && createPortal(
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
-          onClick={() => setSelectedDetailQuiz(null)}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.88 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-[300px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 rounded-xl"
-          >
+      <ExpandModal
+        isOpen={!!selectedDetailQuiz}
+        onClose={() => setSelectedDetailQuiz(null)}
+        className="w-full max-w-[300px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 rounded-xl"
+      >
+        {selectedDetailQuiz && (
+          <>
             <h2 className="text-base font-bold text-[#1A1A1A] mb-3">
               {selectedDetailQuiz.title}
             </h2>
@@ -913,7 +929,8 @@ export default function ProfessorLibraryTab({
               <button
                 disabled={!(selectedDetailQuiz.isPublished || selectedDetailQuiz.wasPublished)}
                 onClick={() => {
-                  setStatsQuizId({ id: selectedDetailQuiz.id, title: selectedDetailQuiz.title });
+                  if (isWide) { openStatsPanel(selectedDetailQuiz.id, selectedDetailQuiz.title); }
+                  else { setStatsQuizId({ id: selectedDetailQuiz.id, title: selectedDetailQuiz.title }); }
                   setSelectedDetailQuiz(null);
                 }}
                 className={`flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] rounded-lg transition-colors ${
@@ -925,23 +942,19 @@ export default function ProfessorLibraryTab({
                 Stats
               </button>
             </div>
-          </motion.div>
-        </div>,
-        document.body
-      )}
+          </>
+        )}
+      </ExpandModal>
 
       {/* ============================================================ */}
       {/* 공개 타입 선택 모달 */}
       {/* ============================================================ */}
-      {publishTarget && (
-        <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50"
-          onClick={() => setPublishTarget(null)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-[280px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 rounded-xl"
-          >
+      <ExpandModal
+        isOpen={!!publishTarget}
+        onClose={() => { setPublishTarget(null); setShowPublishDropdown(false); setShowPastSubDropdown(false); setSelectedPastExam(null); }}
+        className="w-full max-w-[280px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 rounded-xl"
+        zIndex={9999}
+      >
             {/* 지구본 아이콘 */}
             <div className="flex justify-center mb-3">
               <div className="w-9 h-9 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
@@ -1059,9 +1072,7 @@ export default function ProfessorLibraryTab({
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+      </ExpandModal>
 
       {/* ============================================================ */}
       {/* 삭제 확인 모달 */}
@@ -1121,19 +1132,12 @@ export default function ProfessorLibraryTab({
       {/* ============================================================ */}
       {/* 비공개 전환 확인 모달 */}
       {/* ============================================================ */}
-      {unpublishTarget && (
-        <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50"
-          onClick={() => setUnpublishTarget(null)}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.88 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.88 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-[280px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 rounded-xl"
-          >
+      <ExpandModal
+        isOpen={!!unpublishTarget}
+        onClose={() => setUnpublishTarget(null)}
+        className="w-full max-w-[280px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 rounded-xl"
+        zIndex={9999}
+      >
             {/* 자물쇠 아이콘 */}
             <div className="flex justify-center mb-3">
               <div className="w-9 h-9 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4] rounded-lg">
@@ -1173,9 +1177,7 @@ export default function ProfessorLibraryTab({
                 비공개
               </button>
             </div>
-          </motion.div>
-        </div>
-      )}
+      </ExpandModal>
 
       {/* ============================================================ */}
       {/* Stats 모달 */}

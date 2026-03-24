@@ -22,7 +22,7 @@ export default function ReviewLibraryDetailModal({ quiz, sourceRect, onClose }: 
   const { openDetail, replaceDetail, isDetailOpen, isLocked } = useDetailPanel();
 
   const openLibraryReview = useCallback((quizId: string, autoStart?: string) => {
-    if (isWide && !isLocked) {
+    if (isWide) {
       const action = isDetailOpen ? replaceDetail : openDetail;
       action(<FolderDetailPage panelType="library" panelId={quizId} panelAutoStart={autoStart} />);
     } else {
