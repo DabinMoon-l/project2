@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import type { ClassStats } from '@/lib/hooks/useProfessorStats';
 import type { StudentData } from '@/lib/hooks/useProfessorStudents';
@@ -23,6 +23,8 @@ interface Props {
   classStats: ClassStats[];
   students: StudentData[];
   onClassClick?: (classId: string) => void;
+  /** 가로모드: 컨테이너 높이에 맞게 차트 확장 */
+  fillHeight?: boolean;
 }
 
 // 박스플롯 데이터
@@ -71,8 +73,28 @@ function calcSd(arr: number[]): number {
   return Math.sqrt(arr.reduce((s, v) => s + (v - m) ** 2, 0) / (arr.length - 1));
 }
 
-export default function ClassComparison({ classStats, students, onClassClick }: Props) {
+export default function ClassComparison({ classStats, students, onClassClick, fillHeight }: Props) {
   const [mode, setMode] = useState<CompareMode>('score');
+  const [containerH, setContainerH] = useState(0);
+  const [containerW, setContainerW] = useState(0);
+  const roRef = useRef<ResizeObserver | null>(null);
+
+  // callback ref: mode 전환 시에도 ResizeObserver 재연결
+  const containerRef = useMemo(() => {
+    if (!fillHeight) return undefined;
+    return (el: HTMLDivElement | null) => {
+      if (roRef.current) roRef.current.disconnect();
+      if (!el) return;
+      roRef.current = new ResizeObserver(([entry]) => {
+        setContainerH(entry.contentRect.height);
+        setContainerW(entry.contentRect.width);
+      });
+      roRef.current.observe(el);
+    };
+  }, [fillHeight]);
+
+  // 언마운트 시 정리
+  useEffect(() => () => roRef.current?.disconnect(), []);
 
   // ── 참여도 박스플롯 데이터 ──
   const boxPlots = useMemo<BoxPlotData[]>(() => {
@@ -83,9 +105,14 @@ export default function ClassComparison({ classStats, students, onClassClick }: 
     });
   }, [classStats, students]);
 
-  // ── 공통 차트 크기 ──
+  // ── 공통 차트 크기 (fillHeight: 컨테이너 높이에 맞게 동적 계산) ──
   const chartW = 360;
-  const chartH = 240;
+  // 토글(~48px) + 설명(~20px) + 여유(~12px) = ~80px → SVG가 사용할 수 있는 높이
+  const headerSpace = 80;
+  const defaultChartH = 240;
+  const chartH = fillHeight && containerH > 0
+    ? Math.max(defaultChartH, (containerH - headerSpace) * (chartW / (containerW || chartW)))
+    : defaultChartH;
   const padL = 44;
   const padR = 16;
   const padT = 24;
@@ -121,10 +148,10 @@ export default function ClassComparison({ classStats, students, onClassClick }: 
     const barW = Math.min(56, gap * 0.6);
 
     return (
-      <div>
+      <div ref={containerRef} className={fillHeight ? 'h-full flex flex-col' : ''}>
         <ModeToggle mode={mode} setMode={setMode} />
         <p className="text-[10px] text-[#5C5C5C] mb-3">평균 점수 (± SD) · 막대 클릭 시 클러스터 분석</p>
-        <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full">
+        <svg viewBox={`0 0 ${chartW} ${chartH}`} className={fillHeight ? 'w-full flex-1' : 'w-full'}>
           <defs><clipPath id="plot-clip"><rect x={padL} y={0} width={plotW} height={sBaseY + 1} /></clipPath></defs>
           {[0, 25, 50, 75, 100].map(v => (
             <g key={v}>
@@ -180,11 +207,11 @@ export default function ClassComparison({ classStats, students, onClassClick }: 
   const baseY = toY(0);
 
   return (
-    <div>
+    <div ref={containerRef} className={fillHeight ? 'h-full flex flex-col' : ''}>
       <ModeToggle mode={mode} setMode={setMode} />
       <p className="text-[10px] text-[#5C5C5C] mb-3">EXP 분포 (박스플롯) · ○ = 이상치</p>
 
-      <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full">
+      <svg viewBox={`0 0 ${chartW} ${chartH}`} className={fillHeight ? 'w-full flex-1' : 'w-full'}>
         {engYTicks.map(v => (
           <g key={v}>
             <line x1={padL} y1={toY(v)} x2={chartW - padR} y2={toY(v)}

@@ -192,6 +192,10 @@ HomeOverlay(z-45) — 전체화면 오버레이, 네비 위에 표시.
 - **위험 학생 감지**: Z-score < -1.5 주의, < -2 위험
 - **변별도**: 상위 27% - 하위 27% 정답률 (참여 ≥4명)
 - **월별 리포트**: Claude Sonnet-4 인사이트 → Excel/Word 내보내기
+- **가로모드 3패널**: 2쪽(요약카드+반비교+피드백) + 3쪽(챕터분석 RadarChart 자동 표시)
+  - 통계 탭 진입 시 `openDetail(<RadarChart />)` 자동 호출, 과목 변경 시 3쪽 갱신
+  - ClassComparison `fillHeight` prop: ResizeObserver로 컨테이너 높이 측정 → 동적 viewBox
+  - 페이지 언마운트/가로모드 해제 시 3쪽 자동 닫기
 
 ### 퀴즈 관리 (`/professor/quiz`)
 - 직접 출제 / AI 생성 / 미리보기 / 공개 설정
@@ -332,6 +336,7 @@ baseDamage = max(ceil(ATK² / (ATK + DEF) × 1.5), 2)
 - 10분 사전 계산 (`computeRankingsScheduled`)
 - 동점 시 같은 순위 (1위, 1위, 3위)
 - 일간/주간/전체 필터
+- **교수 실명/닉네임 토글**: `RankingBottomSheet`에서 교수만 표시, 반별 드롭다운 좌측 위치
 
 ## 퀴즈 시스템
 
