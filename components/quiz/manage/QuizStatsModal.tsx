@@ -868,65 +868,13 @@ export default function QuizStatsModal({
     };
   }, [sourceRect]);
 
-  return (
-    <AnimatePresence>
-    {isOpen && (
-    <>
-    {/* 백드롭 — safe area 하단까지 커버 */}
-    {!isPanelMode && (
-    <motion.div
-      key="stats-safe-cover"
-      className="fixed inset-0 z-[100] pointer-events-none"
-      style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.15 }}
-    >
-      <div className="absolute inset-0 bg-black/50" style={{ bottom: 'calc(-1 * env(safe-area-inset-bottom, 0px))' }} />
-    </motion.div>
-    )}
-    {/* 패널 모드: 투명 백드롭 (클릭 시 닫기) */}
-    {isPanelMode && (
-      <div key="stats-panel-backdrop" className="absolute inset-0 z-[100]" onClick={onClose} />
-    )}
-    <motion.div
-      key="stats-modal"
-      initial={isPanelMode ? { y: '100%' } : { opacity: 0 }}
-      animate={isPanelMode ? { y: 0 } : { opacity: 1 }}
-      exit={isPanelMode ? { y: '100%' } : { opacity: 0 }}
-      transition={isPanelMode
-        ? { type: 'spring', stiffness: 400, damping: 35 }
-        : { duration: 0.15 }
+  // 공통 콘텐츠 래퍼
+  const statsContent = (
+      <div className={isPanelMode
+        ? 'h-full bg-[#F5F0E8] overflow-hidden flex flex-col'
+        : 'w-full max-w-lg bg-[#F5F0E8] border-2 border-[#1A1A1A] max-h-[82vh] overflow-hidden flex flex-col rounded-xl'
       }
-      className={isPanelMode
-        ? 'absolute bottom-0 left-0 right-0 z-[100] bg-[#F5F0E8] border-t-2 border-x-2 border-[#1A1A1A] rounded-t-2xl overflow-hidden flex flex-col max-h-[85%]'
-        : 'fixed inset-0 z-[100] flex items-center justify-center overflow-hidden overscroll-none'
-      }
-      style={isPanelMode ? undefined : {
-        left: 'var(--modal-left, 0px)',
-        right: 'var(--modal-right, 0px)',
-        padding: '1rem',
-        paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))',
-      }}
-      onClick={isPanelMode ? undefined : onClose}
-    >
-      {/* 패널 모드: 드래그 핸들 바 */}
-      {isPanelMode && (
-        <div className="flex justify-center pt-2 pb-1 flex-shrink-0">
-          <div className="w-10 h-1 rounded-full bg-[#C4C0B8]" />
-        </div>
-      )}
-      <motion.div
-        initial={isPanelMode ? false : { opacity: 0, scale: 0.05, x: genieOffset.dx, y: genieOffset.dy }}
-        animate={isPanelMode ? undefined : { opacity: 1, scale: 1, x: 0, y: 0 }}
-        exit={isPanelMode ? undefined : { opacity: 0, scale: 0.05, x: genieOffset.dx, y: genieOffset.dy }}
-        transition={isPanelMode ? { duration: 0 } : { type: 'spring', stiffness: 400, damping: 30 }}
         onClick={(e) => e.stopPropagation()}
-        className={isPanelMode
-          ? 'flex flex-col overflow-hidden flex-1 min-h-0'
-          : 'w-full max-w-lg bg-[#F5F0E8] border-2 border-[#1A1A1A] max-h-[82vh] overflow-hidden flex flex-col rounded-xl'
-        }
       >
         {/* 헤더 */}
         <div className="px-3 py-2 border-b-2 border-[#1A1A1A] flex items-center justify-between flex-shrink-0">
@@ -1115,7 +1063,7 @@ export default function QuizStatsModal({
                   {/* 문제 상세 — 남은 공간에서 스크롤 */}
                   {currentQuestion && (
                     <div
-                      className="relative flex-1 min-h-0 overflow-hidden"
+                      className="relative flex-1 min-h-0 overflow-hidden flex flex-col"
                       onTouchStart={handleQSwipeStart}
                       onTouchMove={handleQSwipeMove}
                       onTouchEnd={handleQSwipeEnd}
@@ -1165,7 +1113,7 @@ export default function QuizStatsModal({
                       )}
                       <div
                         ref={questionContentRef}
-                        className="h-full overflow-y-auto overflow-x-hidden scrollbar-hide overscroll-contain"
+                        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden scrollbar-hide overscroll-contain"
                         style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}
                       >
                       <div className="p-3 min-h-full flex flex-col justify-center items-stretch">
@@ -1512,9 +1460,12 @@ export default function QuizStatsModal({
             </div>
           )}
 
-      </motion.div>
+    </div>
+  );
 
-      {/* 피드백 모달 */}
+  // sub-modal (statsContent 밖에서 렌더)
+  const subModals = (
+    <>
       <StatsQuizFeedbackModal
         isOpen={showFeedbackModal}
         onClose={() => { setShowFeedbackModal(false); setFeedbackQuestionNum(0); }}
@@ -1527,8 +1478,6 @@ export default function QuizStatsModal({
         getFeedbackQuestionNum={getFeedbackQuestionNum}
         isPanelMode={isPanelMode}
       />
-
-      {/* 서술형 답안 모달 */}
       <StatsEssayAnswersModal
         isOpen={showEssayModal}
         onClose={() => setShowEssayModal(false)}
@@ -1536,8 +1485,6 @@ export default function QuizStatsModal({
         userClassCache={_statsUserClassCache}
         userNameCache={_statsUserNameCache}
       />
-
-      {/* 폴더 선택 모달 */}
       <FolderSelectModal
         isOpen={showFolderModal}
         onClose={() => setShowFolderModal(false)}
@@ -1545,8 +1492,6 @@ export default function QuizStatsModal({
         folders={customFolders}
         onCreateFolder={createCustomFolder}
       />
-
-      {/* 폴더 저장 토스트 */}
       <AnimatePresence>
         {folderSaveToast && (
           <motion.div
@@ -1559,7 +1504,54 @@ export default function QuizStatsModal({
           </motion.div>
         )}
       </AnimatePresence>
+    </>
+  );
+
+  // 패널 모드: 래퍼 없이 직접 렌더
+  if (isPanelMode) return <>{statsContent}{subModals}</>;
+
+  // 모달 모드: AnimatePresence + backdrop + 요술지니 애니메이션
+  return (
+    <AnimatePresence>
+    {isOpen && (
+    <>
+    <motion.div
+      key="stats-safe-cover"
+      className="fixed inset-0 z-[100] pointer-events-none"
+      style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.15 }}
+    >
+      <div className="absolute inset-0 bg-black/50" style={{ bottom: 'calc(-1 * env(safe-area-inset-bottom, 0px))' }} />
     </motion.div>
+    <motion.div
+      key="stats-modal"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.15 }}
+      className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden overscroll-none"
+      style={{
+        left: 'var(--modal-left, 0px)',
+        right: 'var(--modal-right, 0px)',
+        padding: '1rem',
+        paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))',
+      }}
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.05, x: genieOffset.dx, y: genieOffset.dy }}
+        animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
+        exit={{ opacity: 0, scale: 0.05, x: genieOffset.dx, y: genieOffset.dy }}
+        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {statsContent}
+      </motion.div>
+    </motion.div>
+    {subModals}
     </>
     )}
     </AnimatePresence>

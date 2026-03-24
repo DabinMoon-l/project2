@@ -1,7 +1,31 @@
 'use client';
 
+import { useRef, useCallback } from 'react';
 import FolderCard from '@/components/review/FolderCard';
 import type { ChapterGroupedWrongItems, QuizUpdateInfo } from '@/lib/hooks/useReview';
+
+/** 마우스 드래그로 가로 스크롤 가능하게 하는 핸들러 */
+function useDragScroll() {
+  const dragState = useRef<{ startX: number; scrollLeft: number } | null>(null);
+  const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === 'touch') return; // 터치는 네이티브 스크롤 사용
+    const el = e.currentTarget;
+    dragState.current = { startX: e.clientX, scrollLeft: el.scrollLeft };
+    el.setPointerCapture(e.pointerId);
+    el.style.cursor = 'grabbing';
+  }, []);
+  const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragState.current) return;
+    const dx = e.clientX - dragState.current.startX;
+    e.currentTarget.scrollLeft = dragState.current.scrollLeft - dx;
+  }, []);
+  const onPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragState.current) return;
+    dragState.current = null;
+    e.currentTarget.style.cursor = '';
+  }, []);
+  return { onPointerDown, onPointerMove, onPointerUp };
+}
 
 /** 오답 탭 props */
 export interface WrongTabProps {
@@ -46,6 +70,7 @@ export default function WrongTab({
   onFolderNavigate,
   onUpdateClick,
 }: WrongTabProps) {
+  const dragScroll = useDragScroll();
   return (
     <div className="space-y-4">
       {chapterGroupedWrongItems.map((chapterGroup) => (
@@ -116,7 +141,10 @@ export default function WrongTab({
           <div>
             {chapterGroup.folders.length >= 4 ? (
               /* 4개 이상: 가로 스크롤 */
-              <div className="overflow-x-auto pb-2 -mx-4 px-4">
+              <div
+                className="overflow-x-auto pb-2 -mx-4 px-4 cursor-grab select-none"
+                {...dragScroll}
+              >
                 <div className="flex gap-3" style={{ minWidth: 'min-content' }}>
                   {chapterGroup.folders.map((folder) => {
                     const chapterKey = chapterGroup.chapterId || 'uncategorized';

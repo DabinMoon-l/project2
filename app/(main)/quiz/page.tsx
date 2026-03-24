@@ -50,7 +50,7 @@ function QuizListPageContent() {
   const { userCourseId, getCourseById } = useCourse();
   const { updatedQuizzes, checkQuizUpdate, refresh: refreshUpdates, loading: updatesLoading } = useQuizUpdate();
   const isWide = useWideMode();
-  const { openDetail, replaceDetail, isDetailOpen, isLocked } = useDetailPanel();
+  const { openDetail, replaceDetail, closeDetail, isDetailOpen, isLocked } = useDetailPanel();
 
   // 가로모드: 서재 복습을 3쪽 패널로 열기 (2쪽 퀴즈 목록 유지)
   const openLibraryReview = useCallback((quizId: string, autoStart?: string) => {
@@ -124,6 +124,21 @@ function QuizListPageContent() {
   const [updateConfirmLoading, setUpdateConfirmLoading] = useState(false);
   const [statsQuiz, setStatsQuiz] = useState<QuizCardData | null>(null);
   const [statsSourceRect, setStatsSourceRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+
+  // 가로모드: stats 모달을 3쪽 패널로 표시
+  const openStatsPanel = useCallback((quiz: QuizCardData) => {
+    const close = () => closeDetail();
+    const action = isDetailOpen ? replaceDetail : openDetail;
+    action(
+      <QuizStatsModal
+        quizId={quiz.id}
+        quizTitle={quiz.title}
+        isOpen
+        onClose={close}
+        isPanelMode
+      />
+    );
+  }, [isDetailOpen, openDetail, replaceDetail, closeDetail]);
   const [deleteSourceRect, setDeleteSourceRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
 
   // 자작 섹션 반별 필터
@@ -525,7 +540,7 @@ function QuizListPageContent() {
                   quiz={quiz}
                   onEdit={() => handleEditQuiz(quiz.id)}
                   onDelete={(rect) => handleDeleteQuiz(quiz, rect)}
-                  onStats={(rect) => { setStatsSourceRect(rect); setStatsQuiz(quiz); }}
+                  onStats={(rect) => { if (isWide) { openStatsPanel(quiz); } else { setStatsSourceRect(rect); setStatsQuiz(quiz); } }}
                 />
               ))}
             </div>
@@ -1170,7 +1185,7 @@ function QuizListPageContent() {
                     quiz={quiz}
                     onEdit={() => handleEditQuiz(quiz.id)}
                     onDelete={(rect) => handleDeleteQuiz(quiz, rect)}
-                    onStats={(rect) => { setStatsSourceRect(rect); setStatsQuiz(quiz); }}
+                    onStats={(rect) => { if (isWide) { openStatsPanel(quiz); } else { setStatsSourceRect(rect); setStatsQuiz(quiz); } }}
                   />
                 ))}
               </div>

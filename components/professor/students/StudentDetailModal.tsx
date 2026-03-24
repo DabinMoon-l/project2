@@ -7,6 +7,7 @@ import { mean, sd, zScore, rankPercentile } from '@/lib/utils/statistics';
 import StudentRadar from './StudentRadar';
 import { useHideNav } from '@/lib/hooks/useHideNav';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
+import { useDetailPanel } from '@/lib/contexts';
 
 const CLASS_COLORS: Record<ClassType, string> = {
   A: '#8B1A1A', B: '#B8860B', C: '#1D5D4A', D: '#1E3A5F',
@@ -17,15 +18,16 @@ interface Props {
   allStudents: { uid: string; classId: ClassType; averageScore: number }[];
   isOpen: boolean;
   onClose: () => void;
+  isPanelMode?: boolean;
 }
 
-export default function StudentDetailModal({ student, allStudents, isOpen, onClose }: Props) {
-  // 네비게이션 숨김
-  useHideNav(isOpen);
+export default function StudentDetailModal({ student, allStudents, isOpen, onClose, isPanelMode }: Props) {
+  // 네비게이션 숨김 (패널 모드에서는 불필요)
+  useHideNav(isOpen && !isPanelMode);
 
-  // 배경 스크롤 방지
+  // 배경 스크롤 방지 (패널 모드에서는 불필요)
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !isPanelMode) {
       lockScroll();
       return () => unlockScroll();
     }
@@ -75,6 +77,112 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
 
   // 모든 퀴즈 (시간순 정렬 — recentQuizzes는 최신순이므로 reverse)
   const allQuizzes = [...student.recentQuizzes].reverse();
+
+  // 패널 모드: 오버레이 없이 일반 div로 렌더
+  if (isPanelMode) {
+    return (
+      <div className="h-full flex flex-col bg-[#F5F0E8] overflow-hidden">
+        {/* 헤더 */}
+        <div className="px-5 pt-4 pb-3 border-b border-[#D4CFC4]">
+          <div className="flex items-start gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline gap-2">
+                <h2 className="text-xl font-bold text-[#1A1A1A]">{displayName}</h2>
+                <p className="text-sm text-[#5C5C5C]">{student.classId}반 · {student.nickname}</p>
+              </div>
+              {student.studentId && (
+                <p className="text-sm text-[#5C5C5C]">{student.studentId}</p>
+              )}
+            </div>
+            <button onClick={onClose} className="p-1 text-[#5C5C5C] flex-shrink-0">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          {warnings.length > 0 && (
+            <div className="mt-2 space-y-1">
+              {warnings.map((w, i) => (
+                <div key={`warning-${i}`} className="text-xs px-2 py-1 bg-red-50 border border-[#8B1A1A] text-[#8B1A1A] font-bold">
+                  {w}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        {/* 콘텐츠 */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-6">
+          <div>
+            <StudentRadar
+              data={student.radarMetrics ?? { quizScore: 0, battle: 0, quizCreation: 0, community: 0, activity: 0 }}
+              classColor={CLASS_COLORS[student.classId]}
+            />
+          </div>
+          <div className="border-t border-[#D4CFC4]" />
+          <div className="space-y-6">
+            <AchievementGrid studentAvg={studentAvg} classMean={classMean} overallMean={overallMean} studentZ={studentZ} overallPercentile={overallPercentile} />
+            <div>
+              <p className="text-base font-bold text-[#1A1A1A] mb-3">최근 퀴즈 성적</p>
+              {allQuizzes.length === 0 ? (
+                <div className="flex items-center justify-center h-24 text-sm text-[#999]">퀴즈 기록 없음</div>
+              ) : (
+                <div className="overflow-x-auto scrollbar-hide -mx-5 px-5">
+                  {(() => {
+                    const spacing = 60;
+                    const paddingLeft = 30;
+                    const paddingRight = 30;
+                    const chartWidth = Math.max(300, paddingLeft + paddingRight + (allQuizzes.length - 1) * spacing);
+                    return (
+                      <svg viewBox={`0 0 ${chartWidth} 140`} width={chartWidth} height={140} className="min-w-full">
+                        <line x1={20} y1={30} x2={chartWidth - 20} y2={30} stroke="#D4CFC4" strokeWidth={0.3} strokeDasharray="3,3" />
+                        <line x1={20} y1={62.5} x2={chartWidth - 20} y2={62.5} stroke="#D4CFC4" strokeWidth={0.3} strokeDasharray="3,3" />
+                        <line x1={20} y1={95} x2={chartWidth - 20} y2={95} stroke="#D4CFC4" strokeWidth={0.5} />
+                        <text x={14} y={33} textAnchor="end" fontSize={7} fill="#5C5C5C">100</text>
+                        <text x={14} y={66} textAnchor="end" fontSize={7} fill="#5C5C5C">50</text>
+                        <text x={14} y={98} textAnchor="end" fontSize={7} fill="#5C5C5C">0</text>
+                        {allQuizzes.map((q, i, arr) => {
+                          const x = arr.length === 1 ? chartWidth / 2 : paddingLeft + i * spacing;
+                          const y = 95 - (q.score / 100) * 65;
+                          const prevX = i > 0 ? (paddingLeft + (i - 1) * spacing) : x;
+                          const prevY = i > 0 ? (95 - (arr[i - 1].score / 100) * 65) : y;
+                          return (
+                            <g key={`point-${q.quizId}`}>
+                              {i > 0 && <line x1={prevX} y1={prevY} x2={x} y2={y} stroke="#1A1A1A" strokeWidth={1.5} />}
+                              <circle cx={x} cy={y} r={4.5} fill="#F5F0E8" stroke="#1A1A1A" strokeWidth={2} />
+                              <text x={x} y={y - 10} textAnchor="middle" fontSize={10} fontWeight="bold" fill="#1A1A1A">{q.score}</text>
+                            </g>
+                          );
+                        })}
+                        {allQuizzes.map((q, i, arr) => {
+                          const x = arr.length === 1 ? chartWidth / 2 : paddingLeft + i * spacing;
+                          const name = q.quizTitle.length > 6 ? q.quizTitle.slice(0, 6) + '..' : q.quizTitle;
+                          return <text key={`label-${q.quizId}`} x={x} y={114} textAnchor="middle" fontSize={11} fill="#1A1A1A" fontWeight="600">{name}</text>;
+                        })}
+                      </svg>
+                    );
+                  })()}
+                </div>
+              )}
+            </div>
+          </div>
+          {student.recentFeedbacks.length > 0 && (
+            <>
+              <div className="border-t border-[#D4CFC4]" />
+              <div>
+                <p className="text-base font-bold text-[#1A1A1A] mb-2">피드백 ({student.feedbackCount}건)</p>
+                {student.recentFeedbacks.map(fb => (
+                  <div key={fb.feedbackId} className="py-2 border-b border-[#D4CFC4]">
+                    <p className="text-xs text-[#5C5C5C]">{fb.quizTitle}</p>
+                    <p className="text-base text-[#1A1A1A]">{fb.content}</p>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AnimatePresence>

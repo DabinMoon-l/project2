@@ -10,8 +10,9 @@ import {
   type StudentDetail,
   type ClassType,
 } from '@/lib/hooks/useProfessorStudents';
-import { useCourse } from '@/lib/contexts';
+import { useCourse, useDetailPanel } from '@/lib/contexts';
 import { ScrollToTopButton } from '@/components/common';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
 import { mean, sd, zScore } from '@/lib/utils/statistics';
 
 import StudentListView from '@/components/professor/students/StudentListView';
@@ -55,6 +56,8 @@ export default function StudentMonitoringPage() {
   } = useProfessorStudents();
 
   const { userCourseId, setProfessorCourse, assignedCourses, courseList } = useCourse();
+  const isWide = useWideMode();
+  const { openDetail, replaceDetail, closeDetail, isDetailOpen } = useDetailPanel();
   const courseIds = useMemo(() => {
     const allIds = courseList.map(c => c.id) as CourseId[];
     if (assignedCourses.length > 0) {
@@ -137,40 +140,6 @@ export default function StudentMonitoringPage() {
     return map;
   }, [filteredStudents]);
 
-  // 학생 클릭 — 동기 캐시에서 즉시 레이더+학업 표시 + 백그라운드 보충
-  const handleStudentClick = useCallback(async (uid: string) => {
-    // 캐시에서 동기적으로 데이터 가져오기 (레이더+학업 즉시 표시)
-    const instant = getInstantDetail(uid);
-
-    if (instant) {
-      setSelectedStudentDetail(instant);
-    } else {
-      const basicStudent = studentsRef.current.find(s => s.uid === uid);
-      if (!basicStudent) return;
-      setSelectedStudentDetail({
-        ...basicStudent,
-        recentQuizzes: [],
-        recentFeedbacks: [],
-      });
-    }
-    setDetailOpen(true);
-
-    // 백그라운드에서 보충 데이터 로드 (recentQuizzes, recentFeedbacks)
-    // 기존 레이더/학업 데이터는 절대 덮어쓰지 않음
-    const detail = await fetchStudentDetail(uid);
-    if (detail) {
-      setSelectedStudentDetail(prev => {
-        if (!prev) return detail;
-        return {
-          ...detail,
-          radarMetrics: detail.radarMetrics ?? prev.radarMetrics,
-          weightedScore: detail.weightedScore ?? prev.weightedScore,
-          classWeightedScores: detail.classWeightedScores ?? prev.classWeightedScores,
-        };
-      });
-    }
-  }, [getInstantDetail, fetchStudentDetail]);
-
   // allStudents (모달에 전달)
   const allStudentsForModal = useMemo(() =>
     students.map(s => ({
@@ -179,6 +148,75 @@ export default function StudentMonitoringPage() {
       averageScore: s.quizStats.averageScore,
     })),
   [students]);
+
+  // 가로모드: 3쪽 패널에 학생 상세/관리 표시 (클릭 핸들러에서 직접 호출)
+  const openStudentPanel = useCallback((detail: StudentDetail) => {
+    const close = () => { setDetailOpen(false); closeDetail(); };
+    const action = isDetailOpen ? replaceDetail : openDetail;
+    action(
+      <StudentDetailModal
+        student={detail}
+        allStudents={allStudentsForModal}
+        isOpen
+        onClose={close}
+        isPanelMode
+      />
+    );
+  }, [allStudentsForModal, isDetailOpen, openDetail, replaceDetail, closeDetail]);
+
+  const openManagePanel = useCallback(() => {
+    if (!userCourseId) return;
+    const close = () => { setShowManagement(false); closeDetail(); };
+    const action = isDetailOpen ? replaceDetail : openDetail;
+    action(
+      <StudentManagementSheet
+        open
+        onClose={close}
+        courseId={userCourseId}
+        isPanelMode
+      />
+    );
+  }, [userCourseId, isDetailOpen, openDetail, replaceDetail, closeDetail]);
+
+  // 학생 클릭 — 동기 캐시에서 즉시 레이더+학업 표시 + 백그라운드 보충
+  const handleStudentClick = useCallback(async (uid: string) => {
+    // 캐시에서 동기적으로 데이터 가져오기 (레이더+학업 즉시 표시)
+    const instant = getInstantDetail(uid);
+
+    let initialDetail: StudentDetail;
+    if (instant) {
+      initialDetail = instant;
+    } else {
+      const basicStudent = studentsRef.current.find(s => s.uid === uid);
+      if (!basicStudent) return;
+      initialDetail = { ...basicStudent, recentQuizzes: [], recentFeedbacks: [] };
+    }
+
+    // 가로모드: 3쪽 패널로 표시 (세로모드: 바텀시트)
+    if (isWide) {
+      openStudentPanel(initialDetail);
+    } else {
+      setSelectedStudentDetail(initialDetail);
+      setDetailOpen(true);
+    }
+
+    // 백그라운드에서 보충 데이터 로드 (recentQuizzes, recentFeedbacks)
+    const detail = await fetchStudentDetail(uid);
+    if (detail) {
+      const merged = {
+        ...detail,
+        radarMetrics: detail.radarMetrics ?? initialDetail.radarMetrics,
+        weightedScore: detail.weightedScore ?? initialDetail.weightedScore,
+        classWeightedScores: detail.classWeightedScores ?? initialDetail.classWeightedScores,
+      };
+      // 세로모드: state 업데이트로 바텀시트 갱신 (리마운트 없음)
+      // 가로모드: replaceDetail은 리마운트 → 레이더 애니메이션 재실행되므로 스킵
+      // (캐시에 레이더+학업 데이터 있으므로 초기 렌더로 충분)
+      if (!isWide) {
+        setSelectedStudentDetail(prev => prev ? merged : detail);
+      }
+    }
+  }, [getInstantDetail, fetchStudentDetail, isWide, openStudentPanel]);
 
   const CLASS_OPTIONS: (ClassType | 'all')[] = ['all', 'A', 'B', 'C', 'D'];
 
@@ -271,25 +309,27 @@ export default function StudentMonitoringPage() {
               students={filteredStudents}
               onStudentClick={handleStudentClick}
               warningMap={warningMap}
-              onManageClick={() => setShowManagement(true)}
+              onManageClick={() => { if (isWide) { openManagePanel(); } else { setShowManagement(true); } }}
             />
           </>
         )}
       </div>
 
-      {/* 학생 상세 모달 */}
-      <StudentDetailModal
-        student={selectedStudentDetail}
-        allStudents={allStudentsForModal}
-        isOpen={detailOpen}
-        onClose={() => setDetailOpen(false)}
-      />
+      {/* 학생 상세 모달 (세로모드만 — 가로모드는 3쪽 패널로 표시) */}
+      {!isWide && (
+        <StudentDetailModal
+          student={selectedStudentDetail}
+          allStudents={allStudentsForModal}
+          isOpen={detailOpen}
+          onClose={() => setDetailOpen(false)}
+        />
+      )}
 
       {/* 스크롤 맨 위로 */}
       <ScrollToTopButton targetRef={donutRef} />
 
-      {/* 학생 관리 바텀시트 */}
-      {userCourseId && (
+      {/* 학생 관리 바텀시트 (세로모드만 — 가로모드는 3쪽 패널로 표시) */}
+      {!isWide && userCourseId && (
         <StudentManagementSheet
           open={showManagement}
           onClose={() => setShowManagement(false)}

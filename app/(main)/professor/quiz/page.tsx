@@ -88,7 +88,23 @@ export default function ProfessorQuizListPage() {
   const { user } = useAuth();
   const { userCourseId, setProfessorCourse, assignedCourses, courseList, getCourseById } = useCourse();
   const isWide = useWideMode();
-  const { openDetail, replaceDetail, isDetailOpen } = useDetailPanel();
+  const { openDetail, replaceDetail, closeDetail, isDetailOpen } = useDetailPanel();
+
+  // 가로모드: stats 모달을 3쪽 패널로 표시
+  const openStatsPanel = useCallback((quizId: string, quizTitle: string) => {
+    const close = () => closeDetail();
+    const action = isDetailOpen ? replaceDetail : openDetail;
+    action(
+      <QuizStatsModal
+        quizId={quizId}
+        quizTitle={quizTitle}
+        isOpen
+        onClose={close}
+        isProfessor
+        isPanelMode
+      />
+    );
+  }, [isDetailOpen, openDetail, replaceDetail, closeDetail]);
   const courseIds = useMemo(() => {
     const allIds = courseList.map(c => c.id) as CourseId[];
     if (assignedCourses.length > 0) {
@@ -570,9 +586,10 @@ export default function ProfessorQuizListPage() {
   const handleCarouselStats = useCallback(
     (quiz: ProfessorQuiz) => {
       if (!quiz.isPublished) return;
+      if (isWide) { openStatsPanel(quiz.id, quiz.title); return; }
       setStatsQuizId({ id: quiz.id, title: quiz.title });
     },
-    []
+    [isWide, openStatsPanel]
   );
 
   const handleCourseChange = useCallback(
@@ -952,7 +969,7 @@ export default function ProfessorQuizListPage() {
                       quiz={quiz}
                       feedbackInfo={feedbackMap[quiz.id]}
                       onDetails={() => { captureDetailsRect(quiz.id); setDetailsSource('custom'); setDetailsQuiz(quiz); }}
-                      onStats={() => setStatsQuizId({ id: quiz.id, title: quiz.title })}
+                      onStats={() => { if (isWide) { openStatsPanel(quiz.id, quiz.title); return; } setStatsQuizId({ id: quiz.id, title: quiz.title }); }}
                       onClick={() => {
                         if (isWide) {
                           import('./[id]/preview/page').then(mod => {

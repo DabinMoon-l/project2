@@ -191,13 +191,15 @@ export default function Navigation({ role }: NavigationProps) {
   // 홈 버튼: 오버레이 토글 (열려있으면 축소 애니메이션으로 닫기)
   const handleHomeClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
+    // 가로모드: 이미 열린 상태에서 홈 다시 누르면 아무 일도 안 함
     if (isOverlayOpen) {
+      if (isWide) return;
       closeOverlayAnimated();
     } else {
       sessionStorage.setItem('home_return_path', pathname);
       openHomeOverlay();
     }
-  }, [pathname, openHomeOverlay, closeOverlayAnimated, isOverlayOpen]);
+  }, [pathname, openHomeOverlay, closeOverlayAnimated, isOverlayOpen, isWide]);
 
   // 다른 탭 클릭: 오버레이가 열려있으면 즉시 닫기
   const handleTabClick = useCallback(() => {

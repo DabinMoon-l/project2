@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import dynamic from 'next/dynamic';
-import { useUser, useCourse } from '@/lib/contexts';
+import { useUser, useCourse, useDetailPanel } from '@/lib/contexts';
 import { useHomeOverlay } from '@/lib/contexts/HomeOverlayContext';
 import CourseSwitcher from '@/components/common/CourseSwitcher';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
@@ -34,7 +34,13 @@ export default function ProfessorHomeOverlay() {
   const { userCourseId, setProfessorCourse, assignedCourses } = useCourse();
   const { isOpen, isCloseRequested, close, buttonRect } = useHomeOverlay();
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
+  const { closeDetail } = useDetailPanel();
   const isWide = useWideMode();
+
+  // 홈 오버레이 열리면 비잠금 3쪽 상세 닫기
+  useEffect(() => {
+    if (isOpen) closeDetail();
+  }, [isOpen, closeDetail]);
   const isWideRef = useRef(isWide);
   isWideRef.current = isWide;
   const [mounted, setMounted] = useState(false);

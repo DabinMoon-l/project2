@@ -16,7 +16,7 @@ import {
 } from './boardManageParts';
 import type { ArchiveComment, ArchivePost } from './boardManageParts';
 
-export function AcademicArchiveSection({ posts, courseId }: { posts: Post[]; courseId: string }) {
+export function AcademicArchiveSection({ posts, courseId, onPostClick }: { posts: Post[]; courseId: string; onPostClick?: (postId: string) => void }) {
   const router = useRouter();
   const [archivePosts, setArchivePosts] = useState<ArchivePost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -264,6 +264,7 @@ export function AcademicArchiveSection({ posts, courseId }: { posts: Post[]; cou
             key={post.id}
             onClick={() => {
               sessionStorage.setItem('board_nav', 'manage');
+              if (onPostClick) { onPostClick(post.id); return; }
               router.push(`/board/${post.id}`);
             }}
             className="text-left border border-[#1A1A1A] bg-[#FDFBF7] overflow-hidden hover:shadow-md transition-shadow"
@@ -520,7 +521,7 @@ type ClassStudentCounts = Record<string, number>;
 export const ACTIVITY_TABS = ['참여도', '트렌드', '조회'] as const;
 type ActivityTab = typeof ACTIVITY_TABS[number];
 
-export function ActivitySection({ posts, courseId }: { posts: Post[]; courseId: string }) {
+export function ActivitySection({ posts, courseId, onPostClick }: { posts: Post[]; courseId: string; onPostClick?: (postId: string) => void }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<ActivityTab>(() => {
     // 뒤로가기 시 이전 탭 복원
@@ -1189,7 +1190,7 @@ export function ActivitySection({ posts, courseId }: { posts: Post[]; courseId: 
                       <button
                         key={item.id}
                         type="button"
-                        onClick={() => router.push(`/board/${item.id}`)}
+                        onClick={() => { if (onPostClick) { onPostClick(item.id); return; } router.push(`/board/${item.id}`); }}
                         className="w-full flex items-center gap-2.5 py-2.5 border-b border-[#EDEAE4] last:border-0 text-left"
                       >
                         <span className="text-base font-black text-[#1A1A1A] w-5">{i + 1}</span>

@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '@/styles/themes/useTheme';
 import { Skeleton } from '@/components/common';
-import { useUser, useCourse, useDetailPanel } from '@/lib/contexts';
+import { useUser, useCourse, useDetailPanel, useClosePanel } from '@/lib/contexts';
 import {
   useMyPosts,
   useDeletePost,
@@ -102,10 +102,11 @@ export default function ManagePostsPage({ isPanelMode: propPanelMode }: { isPane
     }
   }, [deleteComment, refreshComments]);
 
+  const closePanel = useClosePanel();
   const handleBack = useCallback(() => {
-    if (isPanelMode) { closeDetail(); return; }
+    if (isPanelMode) { closePanel(); return; }
     router.back();
-  }, [router, isPanelMode, closeDetail]);
+  }, [router, isPanelMode, closePanel]);
 
   return (
     <div
@@ -214,7 +215,7 @@ export default function ManagePostsPage({ isPanelMode: propPanelMode }: { isPane
                   <div className="flex-1 h-px bg-[#1A1A1A]" />
                 </div>
 
-                <AcademicArchiveSection posts={allPosts} courseId={selectedCourseId} />
+                <AcademicArchiveSection posts={allPosts} courseId={selectedCourseId} onPostClick={handlePostClick} />
               </section>
 
               {/* ── ACTIVITY ── */}
@@ -225,7 +226,7 @@ export default function ManagePostsPage({ isPanelMode: propPanelMode }: { isPane
                   <div className="flex-1 h-px bg-[#1A1A1A]" />
                 </div>
 
-                <ActivitySection posts={allPosts} courseId={selectedCourseId} />
+                <ActivitySection posts={allPosts} courseId={selectedCourseId} onPostClick={handlePostClick} />
               </section>
 
             </>
