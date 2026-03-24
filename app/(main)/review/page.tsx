@@ -61,7 +61,7 @@ function ReviewPageContent() {
   const { userCourseId, semesterSettings, getCourseById } = useCourse();
   const { profile } = useUser();
   const isWide = useWideMode();
-  const { openDetail, replaceDetail, closeDetail, isDetailOpen, isLocked } = useDetailPanel();
+  const { openDetail, replaceDetail, closeDetail, lockDetail, isDetailOpen, isLocked } = useDetailPanel();
 
   // 과목별 리본 이미지
   const currentCourse = userCourseId ? getCourseById(userCourseId) : null;
@@ -336,7 +336,7 @@ function ReviewPageContent() {
         newSelected.add(folderId);
       }
       setDeleteFolderIds(newSelected);
-    } else if (isWide && !isLocked) {
+    } else if (isWide) {
       // 가로모드: 2쪽 유지, 3쪽에 상세 표시
       const action = isDetailOpen ? replaceDetail : openDetail;
       action(<FolderDetailPage panelType={folder.filterType} panelId={folder.id} />);
@@ -348,7 +348,7 @@ function ReviewPageContent() {
 
   // 가로모드에서 복습 상세 열기 (3쪽 패널)
   const openReviewDetail = useCallback((type: string, id: string, autoStart?: string) => {
-    if (isWide && !isLocked) {
+    if (isWide) {
       const action = isDetailOpen ? replaceDetail : openDetail;
       action(<FolderDetailPage panelType={type} panelId={id} panelAutoStart={autoStart} />);
     } else {
@@ -361,7 +361,7 @@ function ReviewPageContent() {
   // handleEndPractice는 아래 정의 → ref로 안전 참조
   const handleEndPracticeRef = useRef<(results?: PracticeResult[]) => void>(() => {});
   const startPractice = useCallback((items: ReviewItem[], mode: 'all' | 'wrongOnly') => {
-    if (isWide && !isLocked) {
+    if (isWide) {
       const action = isDetailOpen ? replaceDetail : openDetail;
       action(
         <ReviewPractice
@@ -372,11 +372,12 @@ function ReviewPageContent() {
           isPanelMode
         />
       );
+      lockDetail();
     } else {
       setPracticeMode(mode);
       setPracticeItems(items);
     }
-  }, [isWide, isLocked, isDetailOpen, openDetail, replaceDetail, user?.uid]);
+  }, [isWide, isLocked, isDetailOpen, openDetail, replaceDetail, lockDetail, user?.uid]);
 
   // 폴더 삭제 핸들러
   const handleDeleteFolder = async (folder: { id: string; filterType: string }) => {
@@ -707,7 +708,7 @@ function ReviewPageContent() {
     const solvedGroup = groupedSolvedItems.find(g => g.quizId === quizId);
     if (solvedGroup && solvedGroup.items.length > 0) {
       startPractice(solvedGroup.items, 'all');
-    } else if (isWide && !isLocked) {
+    } else if (isWide) {
       // solved 아이템 없음 = 아직 안 푼 퀴즈 → 퀴즈로 시작
       const action = isDetailOpen ? replaceDetail : openDetail;
       action(<QuizPanelContainer quizId={quizId} />);
@@ -781,7 +782,7 @@ function ReviewPageContent() {
 
   // 가로모드: practiceItems가 실수로 set된 경우 3쪽 패널로 이동
   useEffect(() => {
-    if (isWide && !isLocked && practiceItems) {
+    if (isWide && practiceItems) {
       const items = practiceItems;
       const mode = practiceMode || 'all';
       setPracticeItems(null);
@@ -1284,7 +1285,7 @@ function ReviewPageContent() {
             onQuizCardClick={(quizId) => openReviewDetail('bookmark', quizId)}
             onQuizDetails={(quiz) => setSelectedBookmarkedQuiz(quiz)}
             onStartQuiz={(quizId) => {
-              if (isWide && !isLocked) {
+              if (isWide) {
                 // Start: 퀴즈 풀기 (복습 아님) → QuizPanelContainer로 3쪽 잠금
                 const action = isDetailOpen ? replaceDetail : openDetail;
                 action(<QuizPanelContainer quizId={quizId} />);
@@ -1318,7 +1319,7 @@ function ReviewPageContent() {
             setReviewSelectedIds={setReviewSelectedIds}
             updatedQuizzes={updatedQuizzes}
             onFolderNavigate={(url) => {
-              if (isWide && !isLocked) {
+              if (isWide) {
                 // URL에서 type, id, chapter 추출: /review/wrong/quizId?chapter=xxx
                 const match = url.match(/\/review\/([^/]+)\/([^?]+)/);
                 if (match) {
@@ -1383,7 +1384,7 @@ function ReviewPageContent() {
           setSelectedBookmarkedQuiz(null);
           if (hasCompleted) {
             openReviewDetail('bookmark', qId);
-          } else if (isWide && !isLocked) {
+          } else if (isWide) {
             const action = isDetailOpen ? replaceDetail : openDetail;
             action(<QuizPanelContainer quizId={qId} />);
           } else {
