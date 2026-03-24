@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence, useDragControls, type PanInfo } from 'framer-motion';
 import type { StudentDetail, ClassType } from '@/lib/hooks/useProfessorStudents';
 import { mean, sd, zScore, rankPercentile } from '@/lib/utils/statistics';
@@ -121,49 +121,7 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
           <div className="border-t border-[#D4CFC4]" />
           <div className="space-y-6">
             <AchievementGrid studentAvg={studentAvg} classMean={classMean} overallMean={overallMean} studentZ={studentZ} overallPercentile={overallPercentile} />
-            <div>
-              <p className="text-base font-bold text-[#1A1A1A] mb-3">최근 퀴즈 성적</p>
-              {allQuizzes.length === 0 ? (
-                <div className="flex items-center justify-center h-24 text-sm text-[#999]">퀴즈 기록 없음</div>
-              ) : (
-                <div className="overflow-x-auto scrollbar-hide -mx-5 px-5">
-                  {(() => {
-                    const spacing = 60;
-                    const paddingLeft = 30;
-                    const paddingRight = 30;
-                    const chartWidth = Math.max(300, paddingLeft + paddingRight + (allQuizzes.length - 1) * spacing);
-                    return (
-                      <svg viewBox={`0 0 ${chartWidth} 140`} width={chartWidth} height={140} className="min-w-full">
-                        <line x1={20} y1={30} x2={chartWidth - 20} y2={30} stroke="#D4CFC4" strokeWidth={0.3} strokeDasharray="3,3" />
-                        <line x1={20} y1={62.5} x2={chartWidth - 20} y2={62.5} stroke="#D4CFC4" strokeWidth={0.3} strokeDasharray="3,3" />
-                        <line x1={20} y1={95} x2={chartWidth - 20} y2={95} stroke="#D4CFC4" strokeWidth={0.5} />
-                        <text x={14} y={33} textAnchor="end" fontSize={7} fill="#5C5C5C">100</text>
-                        <text x={14} y={66} textAnchor="end" fontSize={7} fill="#5C5C5C">50</text>
-                        <text x={14} y={98} textAnchor="end" fontSize={7} fill="#5C5C5C">0</text>
-                        {allQuizzes.map((q, i, arr) => {
-                          const x = arr.length === 1 ? chartWidth / 2 : paddingLeft + i * spacing;
-                          const y = 95 - (q.score / 100) * 65;
-                          const prevX = i > 0 ? (paddingLeft + (i - 1) * spacing) : x;
-                          const prevY = i > 0 ? (95 - (arr[i - 1].score / 100) * 65) : y;
-                          return (
-                            <g key={`point-${q.quizId}`}>
-                              {i > 0 && <line x1={prevX} y1={prevY} x2={x} y2={y} stroke="#1A1A1A" strokeWidth={1.5} />}
-                              <circle cx={x} cy={y} r={4.5} fill="#F5F0E8" stroke="#1A1A1A" strokeWidth={2} />
-                              <text x={x} y={y - 10} textAnchor="middle" fontSize={10} fontWeight="bold" fill="#1A1A1A">{q.score}</text>
-                            </g>
-                          );
-                        })}
-                        {allQuizzes.map((q, i, arr) => {
-                          const x = arr.length === 1 ? chartWidth / 2 : paddingLeft + i * spacing;
-                          const name = q.quizTitle.length > 6 ? q.quizTitle.slice(0, 6) + '..' : q.quizTitle;
-                          return <text key={`label-${q.quizId}`} x={x} y={114} textAnchor="middle" fontSize={11} fill="#1A1A1A" fontWeight="600">{name}</text>;
-                        })}
-                      </svg>
-                    );
-                  })()}
-                </div>
-              )}
-            </div>
+            <QuizLineChart quizzes={allQuizzes} />
           </div>
           {student.recentFeedbacks.length > 0 && (
             <>
@@ -274,65 +232,7 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
                 overallPercentile={overallPercentile}
               />
 
-              {/* 전체 퀴즈 성적 차트 (가로 스크롤) */}
-              <div>
-                <p className="text-base font-bold text-[#1A1A1A] mb-3">최근 퀴즈 성적</p>
-                {allQuizzes.length === 0 ? (
-                  <div className="flex items-center justify-center h-24 text-sm text-[#999]">
-                    퀴즈 기록 없음
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto scrollbar-hide -mx-5 px-5">
-                    {(() => {
-                      const spacing = 60;
-                      const paddingLeft = 30;
-                      const paddingRight = 30;
-                      const chartWidth = Math.max(300, paddingLeft + paddingRight + (allQuizzes.length - 1) * spacing);
-                      return (
-                        <svg viewBox={`0 0 ${chartWidth} 140`} width={chartWidth} height={140} className="min-w-full">
-                          {/* Y축 가이드라인 */}
-                          <line x1={20} y1={30} x2={chartWidth - 20} y2={30} stroke="#D4CFC4" strokeWidth={0.3} strokeDasharray="3,3" />
-                          <line x1={20} y1={62.5} x2={chartWidth - 20} y2={62.5} stroke="#D4CFC4" strokeWidth={0.3} strokeDasharray="3,3" />
-                          <line x1={20} y1={95} x2={chartWidth - 20} y2={95} stroke="#D4CFC4" strokeWidth={0.5} />
-                          {/* Y축 레이블 */}
-                          <text x={14} y={33} textAnchor="end" fontSize={7} fill="#5C5C5C">100</text>
-                          <text x={14} y={66} textAnchor="end" fontSize={7} fill="#5C5C5C">50</text>
-                          <text x={14} y={98} textAnchor="end" fontSize={7} fill="#5C5C5C">0</text>
-                          {allQuizzes.map((q, i, arr) => {
-                            const x = arr.length === 1 ? chartWidth / 2 : paddingLeft + i * spacing;
-                            const y = 95 - (q.score / 100) * 65;
-                            const prevX = i > 0 ? (paddingLeft + (i - 1) * spacing) : x;
-                            const prevY = i > 0 ? (95 - (arr[i - 1].score / 100) * 65) : y;
-                            return (
-                              <g key={`point-${q.quizId}`}>
-                                {i > 0 && (
-                                  <line x1={prevX} y1={prevY} x2={x} y2={y}
-                                    stroke="#1A1A1A" strokeWidth={1.5} />
-                                )}
-                                <circle cx={x} cy={y} r={4.5} fill="#F5F0E8" stroke="#1A1A1A" strokeWidth={2} />
-                                <text x={x} y={y - 10} textAnchor="middle" fontSize={10}
-                                  fontWeight="bold" fill="#1A1A1A">
-                                  {q.score}
-                                </text>
-                              </g>
-                            );
-                          })}
-                          {allQuizzes.map((q, i, arr) => {
-                            const x = arr.length === 1 ? chartWidth / 2 : paddingLeft + i * spacing;
-                            const name = q.quizTitle.length > 6 ? q.quizTitle.slice(0, 6) + '..' : q.quizTitle;
-                            return (
-                              <text key={`label-${q.quizId}`} x={x} y={114} textAnchor="middle" fontSize={11}
-                                fill="#1A1A1A" fontWeight="600">
-                                {name}
-                              </text>
-                            );
-                          })}
-                        </svg>
-                      );
-                    })()}
-                  </div>
-                )}
-              </div>
+              <QuizLineChart quizzes={allQuizzes} />
             </div>
 
             {/* 최근 피드백 */}
@@ -354,6 +254,100 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
         </motion.div>
       </motion.div>
     </AnimatePresence>
+  );
+}
+
+// ============================================================
+// 퀴즈 성적 라인차트 (가로 스크롤, 2줄 이름)
+// ============================================================
+
+function splitQuizName(title: string): string[] {
+  if (title.length <= 6) return [title];
+  const line1 = title.slice(0, 6);
+  const rest = title.slice(6);
+  if (rest.length <= 6) return [line1, rest];
+  return [line1, rest.slice(0, 5) + '…'];
+}
+
+function QuizLineChart({ quizzes }: { quizzes: { quizId: string; quizTitle: string; score: number }[] }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const dragState = useRef({ isDragging: false, startX: 0, scrollLeft: 0 });
+
+  // PC: 마우스 드래그로 가로 스크롤
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onDown = (e: MouseEvent) => {
+      dragState.current = { isDragging: true, startX: e.clientX, scrollLeft: el.scrollLeft };
+      el.style.cursor = 'grabbing';
+      el.style.userSelect = 'none';
+    };
+    const onMove = (e: MouseEvent) => {
+      if (!dragState.current.isDragging) return;
+      const dx = e.clientX - dragState.current.startX;
+      el.scrollLeft = dragState.current.scrollLeft - dx;
+    };
+    const onUp = () => {
+      dragState.current.isDragging = false;
+      el.style.cursor = 'grab';
+      el.style.userSelect = '';
+    };
+    el.addEventListener('mousedown', onDown);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      el.removeEventListener('mousedown', onDown);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, []);
+
+  const spacing = 60;
+  const paddingLeft = 30;
+  const paddingRight = 30;
+  const chartWidth = Math.max(300, paddingLeft + paddingRight + (quizzes.length - 1) * spacing);
+
+  return (
+    <div>
+      <p className="text-base font-bold text-[#1A1A1A] mb-3">최근 퀴즈 성적</p>
+      {quizzes.length === 0 ? (
+        <div className="flex items-center justify-center h-24 text-sm text-[#999]">퀴즈 기록 없음</div>
+      ) : (
+        <div ref={scrollRef} className="overflow-x-auto scrollbar-hide -mx-5 px-5" style={{ cursor: 'grab', WebkitOverflowScrolling: 'touch' }}>
+          <svg viewBox={`0 0 ${chartWidth} 145`} width={chartWidth} height={145} className="min-w-full">
+            <line x1={20} y1={30} x2={chartWidth - 20} y2={30} stroke="#D4CFC4" strokeWidth={0.3} strokeDasharray="3,3" />
+            <line x1={20} y1={62.5} x2={chartWidth - 20} y2={62.5} stroke="#D4CFC4" strokeWidth={0.3} strokeDasharray="3,3" />
+            <line x1={20} y1={95} x2={chartWidth - 20} y2={95} stroke="#D4CFC4" strokeWidth={0.5} />
+            <text x={14} y={33} textAnchor="end" fontSize={7} fill="#5C5C5C">100</text>
+            <text x={14} y={66} textAnchor="end" fontSize={7} fill="#5C5C5C">50</text>
+            <text x={14} y={98} textAnchor="end" fontSize={7} fill="#5C5C5C">0</text>
+            {quizzes.map((q, i, arr) => {
+              const x = arr.length === 1 ? chartWidth / 2 : paddingLeft + i * spacing;
+              const y = 95 - (q.score / 100) * 65;
+              const prevX = i > 0 ? (paddingLeft + (i - 1) * spacing) : x;
+              const prevY = i > 0 ? (95 - (arr[i - 1].score / 100) * 65) : y;
+              return (
+                <g key={`point-${q.quizId}`}>
+                  {i > 0 && <line x1={prevX} y1={prevY} x2={x} y2={y} stroke="#1A1A1A" strokeWidth={1.5} />}
+                  <circle cx={x} cy={y} r={4.5} fill="#F5F0E8" stroke="#1A1A1A" strokeWidth={2} />
+                  <text x={x} y={y - 10} textAnchor="middle" fontSize={10} fontWeight="bold" fill="#1A1A1A">{q.score}</text>
+                </g>
+              );
+            })}
+            {quizzes.map((q, i, arr) => {
+              const x = arr.length === 1 ? chartWidth / 2 : paddingLeft + i * spacing;
+              const lines = splitQuizName(q.quizTitle);
+              return (
+                <text key={`label-${q.quizId}`} textAnchor="middle" fontSize={10} fill="#1A1A1A" fontWeight="600">
+                  <tspan x={x} y={110}>{lines[0]}</tspan>
+                  {lines[1] && <tspan x={x} dy={13}>{lines[1]}</tspan>}
+                </text>
+              );
+            })}
+          </svg>
+        </div>
+      )}
+    </div>
   );
 }
 
