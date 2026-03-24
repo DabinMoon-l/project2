@@ -643,9 +643,9 @@ JSON 배열로 출력: [{"text":"문제","type":"multiple","choices":["선지1",
       const questions = robustParseQuestionArray(responseText);
 
       const valid = questions.filter(isValidQuestion).map(q => {
-        // chapterId 정규화 — 접두사 제거 후 target 범위 검증
+        // chapterId 정규화 — 첫 번째 숫자(주 챕터 번호)만 추출 후 target 범위 검증
         let chId = q.chapterId || "";
-        const m = chId.match(/(\d+)$/);
+        const m = chId.match(/(\d+)/);  // 첫 번째 숫자 (e.g., "micro_2_1" → "2", "3_5" → "3")
         if (m) chId = m[1];
         if (!targetChapters.includes(chId)) chId = targetChapters[0] || chId;
         return {
