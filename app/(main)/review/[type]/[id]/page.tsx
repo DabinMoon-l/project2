@@ -100,7 +100,7 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
   const isProfessor = profile?.role === 'professor';
   const { userCourse, userClassId } = useCourse();
   const { showExpToast } = useExpToast();
-  const { lockDetail, unlockDetail, openDetail, replaceDetail, isDetailOpen } = useDetailPanel();
+  const { lockDetail, unlockDetail, openDetail } = useDetailPanel();
   const closePanel = useClosePanel();
   const isWide = useWideMode();
 
@@ -975,10 +975,10 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
 
     setPracticeMode('all');
 
-    // 가로모드 + 페이지: 3쪽에서 복습
+    // 가로모드 + 페이지: 기존 3쪽 잠금 해제 후 새 복습 열기
     if (isWide && !isPanelMode) {
-      const action = isDetailOpen ? replaceDetail : openDetail;
-      action(
+      unlockDetail(true);
+      openDetail(
         <WidePagePractice
           items={targetItems}
           quizTitle={folderTitle}
@@ -1015,10 +1015,10 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
 
     setPracticeMode('wrongOnly');
 
-    // 가로모드 + 페이지: 3쪽에서 복습
+    // 가로모드 + 페이지: 기존 3쪽 잠금 해제 후 새 복습 열기
     if (isWide && !isPanelMode) {
-      const action = isDetailOpen ? replaceDetail : openDetail;
-      action(
+      unlockDetail(true);
+      openDetail(
         <WidePagePractice
           items={wrongOnlyItems}
           quizTitle={folderTitle}
@@ -1203,10 +1203,10 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
 
     setPracticeMode(mode);
 
-    // 가로모드 + 페이지: 2쪽 상세뷰 유지, 3쪽에서 ReviewPractice 열기
+    // 가로모드 + 페이지: 기존 3쪽 잠금 해제 후 새 복습 열기
     if (isWide && !isPanelMode) {
-      const action = isDetailOpen ? replaceDetail : openDetail;
-      action(
+      unlockDetail(true);
+      openDetail(
         <WidePagePractice
           items={items}
           quizTitle={folderTitle}
@@ -1714,7 +1714,7 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
                     </svg>
                   </button>
                 )}
-                {folderType === 'library' && isEditMode ? (
+                {(folderType === 'library' || (isProfessor && (folderType as string) === 'custom')) && isEditMode ? (
                   <input
                     type="text"
                     value={editedTitle}
@@ -1727,7 +1727,8 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
                     <h2 className="text-2xl font-black text-[#1A1A1A] flex-1">
                       {folderTitle}
                     </h2>
-                    {folderType === 'library' && !isSelectMode && !fromQuizPage && quizCreatorsMap.get(folderId) === user?.uid && (
+                    {((folderType === 'library' && !fromQuizPage && quizCreatorsMap.get(folderId) === user?.uid)
+                      || (isProfessor && (folderType as string) === 'custom')) && !isSelectMode && (
                       <>
                         <button
                           onClick={handleEnterEditMode}
@@ -1752,8 +1753,8 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
                   </>
                 )}
               </div>
-              {/* 수정 모드일 때 점수 영역 숨김 */}
-              {!isEditMode && (
+              {/* 수정 모드 또는 교수일 때 점수 영역 숨김 */}
+              {!isEditMode && !isProfessor && (
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="flex items-center gap-3">
@@ -1811,8 +1812,8 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
         </div>
       )}
 
-      {/* 커스텀 폴더일 때 문제 추가 버튼 */}
-      {folderType === 'custom' && !isSelectMode && (
+      {/* 커스텀 폴더일 때 문제 추가 버튼 (교수는 숨김) */}
+      {folderType === 'custom' && !isSelectMode && !isProfessor && (
         <div className="px-4 pt-2">
           <button
             onClick={() => setIsAddMode(true)}
@@ -1833,8 +1834,8 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
             </span>
           )}
         </p>
-        {/* 수정 모드일 때 선택 버튼 숨김 */}
-        {!isEditMode && (
+        {/* 수정 모드 또는 교수일 때 선택 버튼 숨김 */}
+        {!isEditMode && !isProfessor && (
           <div className="flex gap-2">
             {/* 선택 모드일 때 전체 선택 버튼 */}
             {isSelectMode && (
@@ -1979,16 +1980,16 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
                 {isSavingEdit ? '저장 중...' : '저장'}
               </button>
             </div>
-          ) : isSelectMode && selectedIds.size > 0 ? (
-            /* 선택 모드일 때 - 선택한 문제 복습 */
+          ) : !isProfessor && isSelectMode && selectedIds.size > 0 ? (
+            /* 선택 모드일 때 - 선택한 문제 복습 (교수는 숨김) */
             <button
               onClick={handleStartPractice}
               className="w-full py-3 text-sm font-bold bg-[#1A1A1A] text-[#F5F0E8] border-2 border-[#1A1A1A] hover:bg-[#3A3A3A] transition-colors rounded-lg"
             >
               선택 복습하기 ({selectedIds.size})
             </button>
-          ) : !isSelectMode ? (
-            /* 기본 모드 - 전체 복습 + 오답 복습 */
+          ) : !isSelectMode && !isProfessor ? (
+            /* 기본 모드 - 전체 복습 + 오답 복습 (교수는 숨김) */
             <div className="flex gap-2">
               <button
                 onClick={handleStartPractice}
