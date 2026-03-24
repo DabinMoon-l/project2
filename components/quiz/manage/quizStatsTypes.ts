@@ -18,6 +18,7 @@ export interface QuizStatsModalProps {
   onClose: () => void;
   isProfessor?: boolean;
   sourceRect?: SourceRect | null;
+  isPanelMode?: boolean;
 }
 
 export interface LabeledItem {

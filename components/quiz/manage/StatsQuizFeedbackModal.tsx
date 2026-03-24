@@ -40,6 +40,8 @@ export interface StatsQuizFeedbackModalProps {
   sourceRect?: { x: number; y: number; width: number; height: number } | null;
   /** 피드백에서 문제 번호를 추출하는 헬퍼 */
   getFeedbackQuestionNum: (fb: FeedbackItem) => number;
+  /** 3쪽 패널 모드 */
+  isPanelMode?: boolean;
 }
 
 export default function StatsQuizFeedbackModal({
@@ -52,6 +54,7 @@ export default function StatsQuizFeedbackModal({
   quizTitle,
   sourceRect,
   getFeedbackQuestionNum,
+  isPanelMode = false,
 }: StatsQuizFeedbackModalProps) {
   // questionNum > 0이면 해당 문제 피드백만 필터링
   const filtered = useMemo(() => {
@@ -69,6 +72,69 @@ export default function StatsQuizFeedbackModal({
       dy: sourceRect.y + sourceRect.height / 2 - cy,
     };
   }, [sourceRect]);
+
+  // 공유 콘텐츠
+  const feedbackContent = (
+    <>
+      {/* 헤더 */}
+      <div className="px-3 py-2 border-b border-[#1A1A1A] flex-shrink-0">
+        <h2 className="text-sm font-bold text-[#1A1A1A] text-center truncate">
+          {questionNum > 0 ? `${questionNum}번 문제 피드백` : quizTitle}
+          {classFilter !== 'all' && <span className="text-[#5C5C5C] font-normal"> ({classFilter}반)</span>}
+        </h2>
+      </div>
+      {/* 피드백 목록 */}
+      <div className="flex-1 overflow-y-auto overscroll-contain p-2">
+        {loading && <div className="py-6 text-center"><p className="text-xs text-[#5C5C5C]">로딩 중...</p></div>}
+        {!loading && filtered.length === 0 && <div className="py-6 text-center"><p className="text-xs text-[#5C5C5C]">아직 피드백이 없습니다.</p></div>}
+        {!loading && feedbackList.length > 0 && (
+          <div className="space-y-1.5">
+            {filtered.map((feedback) => {
+              const typeLabel = FEEDBACK_TYPE_LABELS[feedback.feedbackType] || feedback.feedbackType || '피드백';
+              const fbQuestionNum = getFeedbackQuestionNum(feedback);
+              return (
+                <div key={feedback.id} className="p-1.5 border border-[#1A1A1A] bg-[#EDEAE4] rounded-lg">
+                  <div className="flex items-center gap-1 mb-0.5">
+                    {questionNum === 0 && fbQuestionNum > 0 && <span className="text-[10px] text-[#5C5C5C]">Q{fbQuestionNum}.</span>}
+                    <span className="text-[11px] font-bold text-[#8B6914]">{typeLabel}</span>
+                  </div>
+                  {feedback.feedback && <p className="text-[11px] text-[#1A1A1A]">{feedback.feedback}</p>}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      {/* 닫기 버튼 */}
+      <div className="p-1.5 border-t border-[#1A1A1A] flex-shrink-0">
+        <button onClick={onClose} className="w-full py-1.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] rounded-lg">닫기</button>
+      </div>
+    </>
+  );
+
+  if (isPanelMode) {
+    return (
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            <div key="fb-backdrop" className="absolute inset-0 z-[110]" onClick={(e) => { e.stopPropagation(); onClose(); }} />
+            <motion.div
+              key="fb-sheet"
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+              onClick={(e) => e.stopPropagation()}
+              className="absolute bottom-0 left-0 right-0 z-[110] bg-[#F5F0E8] border-t-2 border-x-2 border-[#1A1A1A] rounded-t-2xl max-h-[70%] overflow-hidden flex flex-col"
+            >
+              <div className="flex justify-center pt-2 pb-1 flex-shrink-0"><div className="w-10 h-1 rounded-full bg-[#C4C0B8]" /></div>
+              {feedbackContent}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    );
+  }
 
   return (
     <AnimatePresence>
@@ -89,71 +155,7 @@ export default function StatsQuizFeedbackModal({
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-xs bg-[#F5F0E8] border-2 border-[#1A1A1A] max-h-[60vh] overflow-visible flex flex-col rounded-xl"
           >
-            {/* 헤더 */}
-            <div className="px-3 py-2 border-b border-[#1A1A1A]">
-              <h2 className="text-sm font-bold text-[#1A1A1A] text-center truncate">
-                {questionNum > 0 ? `${questionNum}번 문제 피드백` : quizTitle}
-                {classFilter !== 'all' && <span className="text-[#5C5C5C] font-normal"> ({classFilter}반)</span>}
-              </h2>
-            </div>
-
-            {/* 피드백 목록 */}
-            <div className="flex-1 overflow-y-auto overscroll-contain p-2">
-              {loading && (
-                <div className="py-6 text-center">
-                  <p className="text-xs text-[#5C5C5C]">로딩 중...</p>
-                </div>
-              )}
-
-              {!loading && filtered.length === 0 && (
-                <div className="py-6 text-center">
-                  <p className="text-xs text-[#5C5C5C]">아직 피드백이 없습니다.</p>
-                </div>
-              )}
-
-              {!loading && feedbackList.length > 0 && (
-                <div className="space-y-1.5">
-                  {filtered.map((feedback) => {
-                    const typeLabel = FEEDBACK_TYPE_LABELS[feedback.feedbackType] || feedback.feedbackType || '피드백';
-                    const fbQuestionNum = getFeedbackQuestionNum(feedback);
-
-                    return (
-                      <div
-                        key={feedback.id}
-                        className="p-1.5 border border-[#1A1A1A] bg-[#EDEAE4] rounded-lg"
-                      >
-                        <div className="flex items-center gap-1 mb-0.5">
-                          {/* 전체 보기일 때만 문제 번호 표시 */}
-                          {questionNum === 0 && fbQuestionNum > 0 && (
-                            <span className="text-[10px] text-[#5C5C5C]">
-                              Q{fbQuestionNum}.
-                            </span>
-                          )}
-                          <span className="text-[11px] font-bold text-[#8B6914]">
-                            {typeLabel}
-                          </span>
-                        </div>
-                        {feedback.feedback && (
-                          <p className="text-[11px] text-[#1A1A1A]">
-                            {feedback.feedback}
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* 닫기 버튼 */}
-            <div className="p-1.5 border-t border-[#1A1A1A]">
-              <button
-                onClick={onClose}
-                className="w-full py-1.5 text-xs font-bold border border-[#1A1A1A] text-[#1A1A1A] hover:bg-[#EDEAE4] rounded-lg"
-              >
-                닫기
-              </button>
-            </div>
+            {feedbackContent}
           </motion.div>
         </motion.div>
       )}

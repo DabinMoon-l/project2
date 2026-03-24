@@ -539,6 +539,7 @@ function QuizListPageContent() {
           isOpen={!!statsQuiz}
           onClose={() => setStatsQuiz(null)}
           sourceRect={statsSourceRect}
+          isPanelMode={isWide}
         />
 
         {/* 삭제 확인 모달 */}
@@ -591,7 +592,7 @@ function QuizListPageContent() {
   // 메인 페이지
   return (
     <>
-    <div className={`min-h-screen pb-72 ${isManageMode && !isWide ? 'pointer-events-none' : ''}`} style={{ backgroundColor: '#F5F0E8' }}>
+    <div className={`relative min-h-screen pb-72 ${isManageMode && !isWide ? 'pointer-events-none' : ''}`} style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 - 배너 이미지 */}
       <header ref={customSectionRef} className="flex flex-col items-center">
         <div className="w-full h-[160px] mt-2">
@@ -1022,7 +1023,41 @@ function QuizListPageContent() {
         const cy = typeof window !== 'undefined' ? window.innerHeight / 2 : 0;
         const dx = sr ? (sr.x + sr.width / 2 - cx) : 0;
         const dy = sr ? (sr.y + sr.height / 2 - cy) : 0;
-        return (
+        return isWide ? (
+        // 가로모드: 바텀시트 (투명 오버레이 + 아래에서 슬라이드)
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="absolute inset-0 z-[70] flex items-end"
+          onClick={() => setQuizToDelete(null)}
+        >
+          <motion.div
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full bg-[#F5F0E8] border-t-2 border-x-2 border-[#1A1A1A] p-4 rounded-t-xl"
+          >
+            <div className="flex justify-center mb-3">
+              <div className="w-10 h-10 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
+                <svg className="w-5 h-5 text-[#8B1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+            </div>
+            <h3 className="text-center font-bold text-sm text-[#1A1A1A] mb-1.5">퀴즈를 삭제할까요?</h3>
+            <p className="text-xs text-[#5C5C5C] mb-0.5">- 삭제된 퀴즈는 복구할 수 없습니다.</p>
+            <p className="text-xs text-[#5C5C5C] mb-4">- 이미 푼 사람은 복습 가능합니다.</p>
+            <div className="flex gap-2">
+              <button onClick={() => setQuizToDelete(null)} className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors rounded-lg">취소</button>
+              <button onClick={confirmDeleteQuiz} className="flex-1 py-2 text-xs font-bold border-2 border-[#8B1A1A] text-[#8B1A1A] bg-[#F5F0E8] hover:bg-[#FDEAEA] transition-colors rounded-lg">삭제</button>
+            </div>
+          </motion.div>
+        </motion.div>
+        ) : (
+        // 세로모드: 기존 중앙 모달
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -1077,7 +1112,8 @@ function QuizListPageContent() {
             top: 0,
             bottom: 0,
             right: 0,
-            left: isWide ? 'calc(50% + 120px)' : 0,
+            left: isWide ? (isLocked ? '240px' : 'calc(50% + 120px)') : 0,
+            ...(isWide && isLocked ? { right: 'calc(50% - 120px)' } : {}),
           }}
         >
           {/* 헤더: 제목 + 오른쪽 화살표(닫기) */}
@@ -1140,20 +1176,18 @@ function QuizListPageContent() {
               </div>
             )}
           </main>
-        </motion.div>
-      )}
-    </AnimatePresence>
 
-    {/* 관리 모드 모달 (슬라이드 밖에서 렌더링 — transform 영향 방지) */}
-    {isManageMode && (
-      <>
-        <QuizStatsModal
-          quizId={statsQuiz?.id || ''}
-          quizTitle={statsQuiz?.title || ''}
-          isOpen={!!statsQuiz}
-          onClose={() => setStatsQuiz(null)}
-          sourceRect={statsSourceRect}
-        />
+          {/* 관리 모드 모달 — 오버레이 안에서 렌더 (absolute가 이 fixed 컨테이너 기준) */}
+          {isWide && (
+            <>
+              <QuizStatsModal
+                quizId={statsQuiz?.id || ''}
+                quizTitle={statsQuiz?.title || ''}
+                isOpen={!!statsQuiz}
+                onClose={() => setStatsQuiz(null)}
+                sourceRect={statsSourceRect}
+                isPanelMode
+              />
         <AnimatePresence>
           {quizToDelete && (() => {
             const sr = deleteSourceRect;
@@ -1161,7 +1195,41 @@ function QuizListPageContent() {
             const cy = typeof window !== 'undefined' ? window.innerHeight / 2 : 0;
             const dx = sr ? (sr.x + sr.width / 2 - cx) : 0;
             const dy = sr ? (sr.y + sr.height / 2 - cy) : 0;
-            return (
+            return isWide ? (
+              // 가로모드: 바텀시트 (투명 오버레이, 관리 오버레이 안에서 absolute)
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 z-[70] flex items-end"
+                onClick={() => setQuizToDelete(null)}
+              >
+                <motion.div
+                  initial={{ y: '100%' }}
+                  animate={{ y: 0 }}
+                  exit={{ y: '100%' }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-full bg-[#F5F0E8] border-t-2 border-x-2 border-[#1A1A1A] p-4 rounded-t-xl"
+                >
+                  <div className="flex justify-center mb-3">
+                    <div className="w-10 h-10 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
+                      <svg className="w-5 h-5 text-[#8B1A1A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </div>
+                  </div>
+                  <h3 className="text-center font-bold text-sm text-[#1A1A1A] mb-1.5">퀴즈를 삭제할까요?</h3>
+                  <p className="text-xs text-[#5C5C5C] mb-0.5">- 삭제된 퀴즈는 복구할 수 없습니다.</p>
+                  <p className="text-xs text-[#5C5C5C] mb-4">- 이미 푼 사람은 복습 가능합니다.</p>
+                  <div className="flex gap-2">
+                    <button onClick={() => setQuizToDelete(null)} className="flex-1 py-2 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors rounded-lg">취소</button>
+                    <button onClick={confirmDeleteQuiz} className="flex-1 py-2 text-xs font-bold border-2 border-[#8B1A1A] text-[#8B1A1A] bg-[#F5F0E8] hover:bg-[#FDEAEA] transition-colors rounded-lg">삭제</button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            ) : (
+              // 세로모드: 기존 중앙 모달
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -1196,23 +1264,53 @@ function QuizListPageContent() {
             );
           })()}
         </AnimatePresence>
+              <AnimatePresence>
+                {editingQuizId && (
+                  <EditQuizSheet
+                    key={editingQuizId}
+                    quizId={editingQuizId}
+                    isPanelMode
+                    onClose={() => setEditingQuizId(null)}
+                    onSaved={() => {
+                      if (fetchMyQuizzes) fetchMyQuizzes();
+                    }}
+                  />
+                )}
+              </AnimatePresence>
+            </>
+          )}
+        </motion.div>
+      )}
+    </AnimatePresence>
+
+    {/* 세로모드: 관리 모드 모달 (fixed, 기존 방식) */}
+    {isManageMode && !isWide && (
+      <>
+        <QuizStatsModal
+          quizId={statsQuiz?.id || ''}
+          quizTitle={statsQuiz?.title || ''}
+          isOpen={!!statsQuiz}
+          onClose={() => setStatsQuiz(null)}
+          sourceRect={statsSourceRect}
+        />
       </>
     )}
 
-    {/* 인라인 수정 바텀시트 (관리 모드 위에 오버레이) */}
-    <AnimatePresence>
-      {editingQuizId && (
-        <EditQuizSheet
-          key={editingQuizId}
-          quizId={editingQuizId}
-          onClose={() => setEditingQuizId(null)}
-          onSaved={() => {
-            // 수정 완료 후 내 퀴즈 목록 새로고침
-            if (fetchMyQuizzes) fetchMyQuizzes();
-          }}
-        />
-      )}
-    </AnimatePresence>
+    {/* 세로모드: 인라인 수정 바텀시트 */}
+    {!isWide && (
+      <AnimatePresence>
+        {editingQuizId && (
+          <EditQuizSheet
+            key={editingQuizId}
+            quizId={editingQuizId}
+            onClose={() => setEditingQuizId(null)}
+            onSaved={() => {
+              if (fetchMyQuizzes) fetchMyQuizzes();
+            }}
+          />
+        )}
+      </AnimatePresence>
+    )}
     </>
   );
 }
