@@ -37,6 +37,11 @@ export default function ProfessorHomeOverlay() {
   const { openDetail, closeDetail, clearQueue, isLocked } = useDetailPanel();
   const isWide = useWideMode();
 
+  // 가로모드: 홈은 일반 라우트(`/professor`) → 오버레이 사용 안 함
+  useEffect(() => {
+    if (isWide && isOpen) close();
+  }, [isWide, isOpen, close]);
+
   // 홈 오버레이 열리면: 잠금 시 대기만 제거, 비잠금 시 3쪽 닫기
   useEffect(() => {
     if (isOpen) {
@@ -208,6 +213,8 @@ export default function ProfessorHomeOverlay() {
     return () => window.removeEventListener('wheel', handleWheel);
   }, [visible, runExitAnimation]);
 
+  // 가로모드: 오버레이 렌더 안 함 (홈은 `/professor` 라우트로 렌더)
+  if (isWide) return null;
   if (!mounted || !visible || !profile) return null;
 
   const pullProgress = Math.min(pullY / (SWIPE_THRESHOLD * 1.5), 1);

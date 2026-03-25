@@ -177,6 +177,10 @@ function MainLayoutGrid({
 }) {
   const { content: detailContent, contentKey, isDetailOpen, closeDetail, isLocked, queuedContent, isQueuedOpen } = useDetailPanel();
   const { isOpen: isHomeOverlayOpen } = useHomeOverlay();
+  // 가로모드: 홈은 일반 라우트(`/`, `/professor`) → pathname으로 판별
+  // 세로모드: 홈은 오버레이 → isHomeOverlayOpen으로 판별
+  const isHomePage = pathname === '/' || pathname === '/professor';
+  const isHomeActive = isWide ? isHomePage : isHomeOverlayOpen;
 
   // 라우트 기반 사이드바 타입 감지 (가로모드 전용)
   const routeSidebarType = useMemo(() => {
@@ -272,7 +276,7 @@ function MainLayoutGrid({
 
   // 홈 오버레이 열림 시 body 배경 숨기기 (3쪽 오른쪽 크림선 방지)
   useEffect(() => {
-    if (isWide && isHomeOverlayOpen) {
+    if (isWide && isHomeActive) {
       document.body.style.backgroundColor = 'transparent';
       document.documentElement.style.backgroundColor = '#1a1a1a';
       return () => {
@@ -280,7 +284,7 @@ function MainLayoutGrid({
         document.documentElement.style.backgroundColor = '';
       };
     }
-  }, [isWide, isHomeOverlayOpen]);
+  }, [isWide, isHomeActive]);
 
   // --modal-right: 가로모드에서 모달을 2쪽 안에 가두기 (aside가 항상 존재)
   useEffect(() => {
@@ -358,14 +362,14 @@ function MainLayoutGrid({
               <aside
                 className="w-1/2 flex-shrink-0 overflow-x-hidden overflow-y-auto h-screen relative"
                 style={{
-                  borderLeft: isHomeOverlayOpen ? 'none' : (isDetailOpen ? '1px solid #B0A898' : 'none'),
-                  ...(!isHomeOverlayOpen ? {
+                  borderLeft: isHomeActive ? 'none' : (isDetailOpen ? '1px solid #B0A898' : 'none'),
+                  ...(!isHomeActive ? {
                     backgroundColor: isDetailOpen ? '#F5F0E8' : 'transparent',
                   } : {}),
                   paddingRight: 'env(safe-area-inset-right, 0px)',
                 } as React.CSSProperties}
               >
-                {!isHomeOverlayOpen && isDetailOpen && (
+                {!isHomeActive && isDetailOpen && (
                   <div className="h-full" key={contentKey}>
                     <DetailPositionProvider value="detail">
                       {detailContent}
@@ -385,7 +389,7 @@ function MainLayoutGrid({
       {!isProfessor ? <HomeOverlay /> : <ProfessorHomeOverlay />}
 
       {/* 가로모드 홈 + 3쪽 디테일: 전체 배경 위 fixed 렌더 */}
-      {isWide && isHomeOverlayOpen && isDetailOpen && (
+      {isWide && isHomeActive && isDetailOpen && (
         <div
           className="fixed top-0 bottom-0 z-[46] overflow-y-auto"
           style={{
@@ -422,12 +426,12 @@ function MainLayoutGrid({
             right: 'calc(50% - 120px)',
             paddingTop: 'env(safe-area-inset-top, 0px)',
             // 비홈: 크림색, 홈: 투명 (배경 div가 처리)
-            ...(!isHomeOverlayOpen ? { backgroundColor: '#F5F0E8' } : {}),
+            ...(!isHomeActive ? { backgroundColor: '#F5F0E8' } : {}),
             borderRight: '1px solid #B0A898',
           }}
         >
-          {/* 홈 열림 시: HomeOverlay의 home-wide.png 배경 맞춤 */}
-          {isHomeOverlayOpen && (
+          {/* 홈 열림 시: 홈 배경 맞춤 */}
+          {isHomeActive && (
             <div className="absolute inset-0 overflow-hidden pointer-events-none" style={{ zIndex: 0 }}>
               <div className="absolute top-0 bottom-0" style={{
                 left: '-240px',
