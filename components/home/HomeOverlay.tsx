@@ -292,7 +292,7 @@ export default function HomeOverlay() {
         // 가로모드: Nav(z-50) 아래 → 창 느낌, 세로모드: z-100
         zIndex: isWide ? 44 : 100,
         // 가로모드: 파노라마, 세로모드: 세로 이미지
-        backgroundImage: isWide ? 'url(/images/home-garo.png)' : `url(${HOME_BG_IMAGE})`,
+        backgroundImage: isWide ? 'url(/images/home-wide.png)' : `url(${HOME_BG_IMAGE})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center top',
         backgroundRepeat: 'no-repeat',
