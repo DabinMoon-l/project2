@@ -274,14 +274,22 @@ function MainLayoutGrid({
     };
   }, [isWide, isLocked]);
 
-  // 홈일 때 body/html 배경 정리 (fixed 배경 레이어가 전체를 덮으므로 불필요)
-  // 스크롤 바운스 시 검은색이 비치는 문제 방지
+  // 홈일 때 body에 파노라마 배경 직접 설정 (1쪽/2쪽/3쪽 이음새 없이)
   useEffect(() => {
     if (isWide && isHomeActive) {
-      document.body.style.backgroundColor = '#C8A090';
+      const s = document.body.style;
+      s.backgroundImage = 'url(/images/home-wide.png)';
+      s.backgroundSize = 'cover';
+      s.backgroundPosition = 'center top';
+      s.backgroundRepeat = 'no-repeat';
+      s.backgroundColor = '#C8A090';
       document.documentElement.style.backgroundColor = '#C8A090';
       return () => {
-        document.body.style.backgroundColor = '';
+        s.backgroundImage = '';
+        s.backgroundSize = '';
+        s.backgroundPosition = '';
+        s.backgroundRepeat = '';
+        s.backgroundColor = '';
         document.documentElement.style.backgroundColor = '';
       };
     }
@@ -304,43 +312,20 @@ function MainLayoutGrid({
       <LibraryJobToast />
       <OfflineBanner />
 
-      {/* 가로모드 홈: 전체 뷰포트 배경 + 구분선 (z-41, nav z-50 아래) */}
+      {/* 가로모드 홈: 2쪽↔3쪽 구분선 (배경은 body에서 처리) */}
       {isWide && isHomeActive && (
-        <>
-          <div
-            className="fixed inset-0 z-[41]"
-            style={{
-              backgroundImage: 'url(/images/home-wide.png)',
-              backgroundSize: 'cover',
-              backgroundPosition: 'center top',
-              backgroundRepeat: 'no-repeat',
-              backgroundColor: '#C8A090',
-              pointerEvents: 'none',
-            }}
-          />
-          <div className="fixed top-0 bottom-0 z-[43] pointer-events-none" style={{
-            left: 'calc(50% + 120px)',
-            width: '3px',
-            background: 'linear-gradient(to right, rgba(0,0,0,0.15), rgba(255,255,255,0.08))',
-          }} />
-        </>
+        <div className="fixed top-0 bottom-0 z-[43] pointer-events-none" style={{
+          left: 'calc(50% + 120px)',
+          width: '3px',
+          background: 'linear-gradient(to right, rgba(0,0,0,0.15), rgba(255,255,255,0.08))',
+        }} />
       )}
 
-      {/* 가로모드: 사이드바 뒤 배경 (홈: 홈 이미지, 그 외: 크림) */}
-      {isWide && (
+      {/* 가로모드: 사이드바 뒤 크림 배경 (홈일 때는 body 배경이 보이도록 투명) */}
+      {isWide && !isHomeActive && (
         <div
           className="fixed left-0 top-0 bottom-0 z-40"
-          style={{
-            width: '240px',
-            ...(isHomeActive ? {
-              backgroundImage: 'url(/images/home-wide.png)',
-              backgroundSize: 'cover',
-              backgroundPosition: 'left top',
-              backgroundColor: '#C8A090',
-            } : {
-              backgroundColor: '#F5F0E8',
-            }),
-          }}
+          style={{ width: '240px', backgroundColor: '#F5F0E8' }}
         />
       )}
 
@@ -366,10 +351,7 @@ function MainLayoutGrid({
                   : '240px',
           } as React.CSSProperties & Record<string, string>}
         >
-          <div
-            className={isWide ? 'flex h-screen overflow-hidden' : ''}
-            style={isWide && isHomeActive ? { position: 'relative', zIndex: 42 } : undefined}
-          >
+          <div className={isWide ? 'flex h-screen overflow-hidden' : ''}>
             {/* 라우트 사이드바 (가로모드 좌측 — 퀴즈/복습 목록) */}
             {hasRouteSidebar && (
               <div
@@ -405,7 +387,7 @@ function MainLayoutGrid({
                   paddingRight: 'env(safe-area-inset-right, 0px)',
                 } as React.CSSProperties}
               >
-                {!isHomeActive && isDetailOpen && (
+                {isDetailOpen && (
                   <div className="h-full" key={contentKey}>
                     <DetailPositionProvider value="detail">
                       {detailContent}
@@ -423,35 +405,6 @@ function MainLayoutGrid({
         </div>
       </SwipeBack>
       {!isProfessor ? <HomeOverlay /> : <ProfessorHomeOverlay />}
-
-      {/* 가로모드 홈 + 3쪽 디테일: 전체 배경 위 fixed 렌더 */}
-      {isWide && isHomeActive && isDetailOpen && (
-        <div
-          className="fixed top-0 bottom-0 z-[46] overflow-y-auto"
-          style={{
-            left: 'calc(50% + 120px)',
-            right: 0,
-            paddingTop: 'env(safe-area-inset-top, 0px)',
-            paddingRight: 'env(safe-area-inset-right, 0px)',
-          }}
-        >
-          {/* 배경: HomeOverlay의 home-wide.png과 동일하게 맞춤 */}
-          <div className="absolute inset-0 overflow-hidden pointer-events-none" style={{ zIndex: 0 }}>
-            <div className="absolute top-0 bottom-0" style={{
-              left: 'calc(-50vw - 120px)',
-              width: '100vw',
-              backgroundImage: 'url(/images/home-wide.png)',
-              backgroundSize: 'cover',
-              backgroundPosition: 'center top',
-            }} />
-          </div>
-          <div className="h-full relative" style={{ zIndex: 1 }} key={contentKey}>
-            <DetailPositionProvider value="detail">
-              {detailContent}
-            </DetailPositionProvider>
-          </div>
-        </div>
-      )}
 
       {/* 잠금 시 대기 콘텐츠 — 2쪽에 오버레이 (잠금 해제 시 3쪽으로 승격) */}
       {isWide && isQueuedOpen && (
