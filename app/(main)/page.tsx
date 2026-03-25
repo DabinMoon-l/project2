@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useUser, useHomeOverlay, useDetailPanel } from '@/lib/contexts';
@@ -39,35 +39,11 @@ export default function HomePage() {
     router.replace('/quiz', { scroll: false });
   }, [mounted, isWide]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 2쪽 너비에 따른 동적 스케일 (iPad 기준 비율 유지)
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [zoom, setZoom] = useState(1);
-  const updateZoom = useCallback(() => {
-    const el = containerRef.current?.parentElement; // <main>
-    if (!el) return;
-    const width = el.clientWidth;
-    // 470px = iPad Air 기준 2쪽 너비 ((1180 - 240) / 2)
-    setZoom(Math.max(0.8, Math.min(width / 470, 1.4)));
-  }, []);
-  useEffect(() => {
-    if (!mounted || !isWide) return;
-    updateZoom();
-    const el = containerRef.current?.parentElement;
-    if (!el) return;
-    const observer = new ResizeObserver(updateZoom);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [mounted, isWide, updateZoom]);
-
   // 가로모드 학생 전용 렌더 (배경은 layout.tsx에서 처리)
   if (!mounted || !isWide || isProfessor || !profile) return null;
 
   return (
-    <div
-      ref={containerRef}
-      className="flex flex-col pt-1 pb-2"
-      style={{ zoom, height: `${100 / zoom}%` }}
-    >
+    <div className="flex flex-col h-full pt-1 pb-2">
       {/* ① 상단: 프로필 + 공지 + 의견 */}
       <div className="flex-none">
         <div className="px-8 flex items-center gap-3 mb-2 mt-10">
