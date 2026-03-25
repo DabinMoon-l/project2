@@ -236,7 +236,7 @@ export default function Navigation({ role }: NavigationProps) {
     homeButtonRef,
   } = useHomeOverlay();
   const { profile } = useUser();
-  useDetailPanel(); // 패널 상태 참조 (바로가기에서 사용)
+  const { closeDetail, isLocked } = useDetailPanel();
 
   // 경로 기반 네비게이션 숨김 — layout.tsx hideNavigation과 동기화
   const shouldHideByPath = useMemo(() => {
@@ -293,13 +293,18 @@ export default function Navigation({ role }: NavigationProps) {
     }
   }, [pathname, openHomeOverlay, closeOverlayAnimated, isOverlayOpen, isWide]);
 
-  // 다른 탭 클릭: 오버레이가 열려있으면 즉시 닫기
-  // 잠금 상태 3쪽은 유지 (pathname effect에서 isLocked 체크로 보호)
+  // 다른 탭 클릭: 오버레이 닫기 + 비잠금 3쪽 정리
+  // 홈 오버레이에서 열린 상세(랭킹/프로필 등)가 동일 탭 클릭 시 pathname 미변경으로
+  // DetailPanelContext의 pathname effect가 발동하지 않는 문제 대응
   const handleTabClick = useCallback(() => {
     if (isOverlayOpen) {
       closeOverlay();
+      // 오버레이에서 열린 비잠금 3쪽 콘텐츠 정리
+      if (!isLocked) {
+        closeDetail();
+      }
     }
-  }, [isOverlayOpen, closeOverlay]);
+  }, [isOverlayOpen, closeOverlay, isLocked, closeDetail]);
 
   // 가로모드 사이드바는 항상 유지 (퀴즈 풀이 등 상세 페이지에서도 좌측 네비 표시)
   if (shouldHideByPath && !isWide) return null;
