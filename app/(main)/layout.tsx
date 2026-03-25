@@ -277,14 +277,24 @@ function MainLayoutGrid({
     };
   }, [isWide, isLocked]);
 
-  // 홈일 때 body/html 배경색 (스크롤 바운스 시 fallback)
+  // 홈일 때 html/body에도 홈 배경 설정 (iOS safe area가 html 배경을 참조)
   useEffect(() => {
     if (isWide && isHomeActive) {
-      document.body.style.backgroundColor = '#C8A090';
-      document.documentElement.style.backgroundColor = '#C8A090';
+      const html = document.documentElement.style;
+      const body = document.body.style;
+      html.backgroundImage = 'url(/images/home-wide.png)';
+      html.backgroundSize = 'cover';
+      html.backgroundPosition = 'center top';
+      html.backgroundRepeat = 'no-repeat';
+      html.backgroundColor = '#C8A090';
+      body.backgroundColor = '#C8A090';
       return () => {
-        document.body.style.backgroundColor = '';
-        document.documentElement.style.backgroundColor = '';
+        html.backgroundImage = '';
+        html.backgroundSize = '';
+        html.backgroundPosition = '';
+        html.backgroundRepeat = '';
+        html.backgroundColor = '';
+        body.backgroundColor = '';
       };
     }
   }, [isWide, isHomeActive]);
