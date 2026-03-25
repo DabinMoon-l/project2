@@ -154,41 +154,26 @@ export const spinRabbitGacha = onCall(
           .map((d) => d.data().rabbitId as number)
       );
 
-      // 전체 풀에서 균등 확률 선택 (보유 토끼 포함)
-      const rabbitId = Math.floor(Math.random() * 80);
+      // 미보유 토끼만 풀에서 선택
+      const availableIds = [];
+      for (let i = 0; i < 80; i++) {
+        if (!ownedIds.has(i)) availableIds.push(i);
+      }
+
+      if (availableIds.length === 0) {
+        throw new HttpsError(
+          "failed-precondition",
+          "모든 토끼를 발견했습니다! 더 이상 뽑을 토끼가 없어요."
+        );
+      }
+
+      const rabbitId = availableIds[Math.floor(Math.random() * availableIds.length)];
       const rabbitDocId = `${courseId}_${rabbitId}`;
 
       // 토끼 문서 확인
       const rabbitRef = db.collection("rabbits").doc(rabbitDocId);
       const rabbitDoc = await transaction.get(rabbitRef);
       const rabbitData = rabbitDoc.exists ? rabbitDoc.data()! : null;
-
-      // 이미 보유한 토끼 → 바로 레벨업 (발견 과정 스킵)
-      if (ownedIds.has(rabbitId)) {
-        // 보유 문서에서 이름 가져오기
-        const holdingRef = userRef
-          .collection("rabbitHoldings")
-          .doc(rabbitDocId);
-        const holdingDoc = await transaction.get(holdingRef);
-        const holdingData = holdingDoc.exists ? holdingDoc.data()! : null;
-
-        // 마일스톤 소비하지 않음 — levelUpRabbit에서 소비
-        // pendingSpin + 스핀 잠금만 저장
-        transaction.update(userRef, {
-          spinLock: Date.now(),
-          pendingSpin: { rabbitId, courseId },
-          updatedAt: FieldValue.serverTimestamp(),
-        });
-
-        return {
-          type: "owned",
-          rabbitId,
-          rabbitName: rabbitData?.name || null,
-          nextDiscoveryOrder: null,
-          myDiscoveryOrder: holdingData?.discoveryOrder || null,
-          equippedCount: equippedRabbits.length,
-        } as RollResult;
-      }
 
       // lastGachaExp += 50 + pendingSpin 저장 + 스핀 잠금 설정
       transaction.update(userRef, {

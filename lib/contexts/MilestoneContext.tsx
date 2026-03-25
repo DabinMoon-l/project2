@@ -107,7 +107,12 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
     () => getExpBarDisplay(totalExp, lastGachaExp),
     [totalExp, lastGachaExp]
   );
-  const allRabbitsDiscovered = false;
+  // 현재 과목에서 모든 토끼(80마리) 발견 여부
+  const allRabbitsDiscovered = useMemo(() => {
+    if (!userCourseId) return false;
+    const courseCount = holdings.filter(h => h.courseId === userCourseId).length;
+    return courseCount >= 80;
+  }, [holdings, userCourseId]);
 
   // 네비게이션 숨김 (마일스톤 관련 모달 중 하나라도 열려있을 때)
   useHideNav(showMilestoneModal || showGachaModal || showLevelUpSheet);
@@ -180,22 +185,6 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
         callFunction('spinRabbitGacha', { courseId: userCourseId }),
         new Promise(resolve => setTimeout(resolve, 2000)),
       ]);
-
-      // 이미 보유한 토끼 → 뽑기 모달 닫고 바로 레벨업
-      if (data.type === 'owned') {
-        // pendingSpin 정리 (pass)
-        await callFunction('claimGachaRabbit', {
-          courseId: userCourseId,
-          rabbitId: data.rabbitId,
-          action: 'pass',
-        });
-        // 뽑기 모달 닫고 레벨업 시트 열기
-        setRollResult(null);
-        setShowGachaModal(false);
-        setAutoLevelUpRabbitId(data.rabbitId);
-        setShowLevelUpSheet(true);
-        return;
-      }
 
       setRollResult(data);
     } catch (error: unknown) {
@@ -290,6 +279,7 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
         pendingCount={pendingCount}
         onChooseLevelUp={handleChooseLevelUp}
         onChooseGacha={handleChooseGacha}
+        allRabbitsDiscovered={allRabbitsDiscovered}
         buttonRect={buttonRect}
       />
 
@@ -300,6 +290,7 @@ export function MilestoneProvider({ children }: { children: ReactNode }) {
           onClose={handleLevelUpClose}
           courseId={userCourseId}
           holdings={holdings}
+          equippedRabbitIds={(profile?.equippedRabbits || []).map((r: { rabbitId: number }) => r.rabbitId)}
           autoLevelUpRabbitId={autoLevelUpRabbitId}
         />
       )}

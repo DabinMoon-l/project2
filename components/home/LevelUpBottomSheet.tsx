@@ -22,6 +22,8 @@ interface LevelUpBottomSheetProps {
   onClose: () => void;
   courseId: string;
   holdings: RabbitHolding[];
+  /** 장착 중인 토끼 (우선 표시용) */
+  equippedRabbitIds?: number[];
   /** 뽑기에서 보유 토끼가 나와 자동 레벨업할 rabbitId */
   autoLevelUpRabbitId?: number | null;
 }
@@ -36,6 +38,7 @@ export default function LevelUpBottomSheet({
   onClose,
   courseId,
   holdings,
+  equippedRabbitIds = [],
   autoLevelUpRabbitId,
 }: LevelUpBottomSheetProps) {
   const isWide = useWideMode();
@@ -58,7 +61,15 @@ export default function LevelUpBottomSheet({
   const [phase, setPhase] = useState<Phase>('hidden');
   const phaseRef = useRef<Phase>('hidden');
 
-  const courseHoldings = holdings.filter((h) => h.courseId === courseId);
+  // 장착 토끼 우선 정렬
+  const courseHoldings = useMemo(() => {
+    const filtered = holdings.filter((h) => h.courseId === courseId);
+    if (equippedRabbitIds.length === 0) return filtered;
+    const equippedSet = new Set(equippedRabbitIds);
+    const equipped = filtered.filter(h => equippedSet.has(h.rabbitId));
+    const rest = filtered.filter(h => !equippedSet.has(h.rabbitId));
+    return [...equipped, ...rest];
+  }, [holdings, courseId, equippedRabbitIds]);
   const rows: RabbitHolding[][] = [];
   for (let i = 0; i < courseHoldings.length; i += RABBITS_PER_ROW) {
     rows.push(courseHoldings.slice(i, i + RABBITS_PER_ROW));
