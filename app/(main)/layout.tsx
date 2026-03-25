@@ -335,8 +335,8 @@ function MainLayoutGrid({
         document.body
       )}
 
-      {/* 가로모드: 사이드바 뒤 크림 배경 (홈일 때는 포탈 배경이 덮음) */}
-      {isWide && (
+      {/* 가로모드: 사이드바 뒤 크림 배경 (홈일 때는 홈 배경이 전체 커버) */}
+      {isWide && !isHomeActive && (
         <div
           className="fixed left-0 top-0 bottom-0 z-40"
           style={{ width: '240px', backgroundColor: '#F5F0E8' }}
