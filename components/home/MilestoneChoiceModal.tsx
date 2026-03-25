@@ -18,6 +18,7 @@ interface MilestoneChoiceModalProps {
   pendingCount: number;
   onChooseLevelUp: () => void;
   onChooseGacha: () => void;
+  allRabbitsDiscovered: boolean;
   buttonRect?: { x: number; y: number; width: number; height: number } | null;
 }
 
@@ -30,6 +31,7 @@ export default function MilestoneChoiceModal({
   pendingCount,
   onChooseLevelUp,
   onChooseGacha,
+  allRabbitsDiscovered,
   buttonRect,
 }: MilestoneChoiceModalProps) {
   const isWide = useWideMode();
@@ -123,7 +125,7 @@ export default function MilestoneChoiceModal({
       </p>
       <div className="flex flex-col gap-2">
         <button onClick={() => handleChoose(onChooseLevelUp)} className="w-full py-2 text-sm bg-white/25 text-white font-bold border border-white/30 rounded-full active:scale-[0.98] transition-transform">토끼 레벨업</button>
-        <button onClick={() => handleChoose(onChooseGacha)} className="w-full py-2 text-sm bg-white/15 text-white font-bold border border-white/20 rounded-full active:scale-[0.98] transition-transform">토끼 뽑기</button>
+        <button onClick={() => handleChoose(onChooseGacha)} disabled={allRabbitsDiscovered} className="w-full py-2 text-sm bg-white/15 text-white font-bold border border-white/20 rounded-full active:scale-[0.98] transition-transform disabled:opacity-30 disabled:cursor-not-allowed">{allRabbitsDiscovered ? '모든 토끼 발견 완료!' : '토끼 뽑기'}</button>
         <button onClick={runClose} className="w-full py-1.5 text-white/50 text-xs hover:text-white/80 transition-colors">나중에 하기</button>
       </div>
     </div>
