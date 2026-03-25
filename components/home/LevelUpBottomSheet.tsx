@@ -9,6 +9,7 @@ import { computeRabbitDisplayName } from '@/lib/utils/rabbitDisplayName';
 import Image from 'next/image';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
 
 const OPEN_MS = 380;
 const CLOSE_MS = 320;
@@ -37,6 +38,7 @@ export default function LevelUpBottomSheet({
   holdings,
   autoLevelUpRabbitId,
 }: LevelUpBottomSheetProps) {
+  const isWide = useWideMode();
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -171,23 +173,189 @@ export default function LevelUpBottomSheet({
 
   if (!visible) return null;
 
+  // 공통 컨텐츠
+  const levelUpContent = (
+    <div className="relative z-10 px-4 pt-3 pb-8 overflow-y-auto" style={{ maxHeight: '80vh' }}>
+      {/* 핸들 바 */}
+      <div className="flex justify-center mb-3">
+        <div className="w-10 h-1 bg-white/30 rounded-full" />
+      </div>
+
+      <h2 className="text-lg font-bold text-center text-white mb-4">토끼 레벨업</h2>
+
+      {/* 토끼 선택 그리드 */}
+      <div className="flex flex-col gap-2 mb-4">
+        {rows.map((row, rowIdx) => (
+          <div key={rowIdx} className="flex items-center gap-1.5">
+            <button
+              onClick={() => scrollRow(rowIdx, 'left')}
+              disabled={isLoading}
+              className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-white/15 border border-white/20 text-white/70 hover:bg-white/25 transition-colors disabled:opacity-20"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <div
+              ref={(el) => { rowRefs.current[rowIdx] = el; }}
+              className="flex-1 flex gap-2 overflow-x-auto py-1 scrollbar-hide"
+              style={{ scrollSnapType: 'x mandatory' }}
+            >
+              {row.map((h, colIdx) => {
+                const globalIdx = rowIdx * RABBITS_PER_ROW + colIdx;
+                return (
+                  <button
+                    key={h.id}
+                    onClick={() => { setSelectedIdx(globalIdx); setResult(null); setError(null); }}
+                    className={`flex-shrink-0 w-11 h-11 rounded-full overflow-hidden border-2 transition-all ${
+                      globalIdx === selectedIdx
+                        ? 'border-[#D4AF37] scale-110 shadow-[0_0_12px_rgba(212,175,55,0.5)]'
+                        : 'border-white/30 opacity-50 hover:opacity-75'
+                    }`}
+                    style={{ scrollSnapAlign: 'center' }}
+                    disabled={isLoading}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={getRabbitProfileUrl(h.rabbitId)}
+                      alt={`토끼 #${h.rabbitId + 1}`}
+                      width={44}
+                      height={44}
+                      className="w-full h-full object-cover"
+                    />
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              onClick={() => scrollRow(rowIdx, 'right')}
+              disabled={isLoading}
+              className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-white/15 border border-white/20 text-white/70 hover:bg-white/25 transition-colors disabled:opacity-20"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* 선택된 토끼 정보 */}
+      {selectedInfo && selected && (
+        <div className="text-center">
+          {selectedName && (
+            <p className="text-sm font-bold text-white/80 mb-2">{selectedName}</p>
+          )}
+          {result ? (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.4 }}
+            >
+              <div className="text-2xl font-bold text-white mb-3">
+                Lv.{result.newLevel}
+              </div>
+              <div className="flex justify-center gap-5 mb-5">
+                <LevelUpStat icon="heart" label="HP" value={result.newStats.hp} increase={result.statIncreases.hp} color="#f87171" />
+                <LevelUpStat icon="attack" label="ATK" value={result.newStats.atk} increase={result.statIncreases.atk} color="#fb923c" />
+                <LevelUpStat icon="shield" label="DEF" value={result.newStats.def} increase={result.statIncreases.def} color="#60a5fa" />
+              </div>
+            </motion.div>
+          ) : (
+            <div className="flex items-center justify-center gap-3 mb-5">
+              <div className="flex-1 max-w-[120px]">
+                <div className="text-2xl font-bold text-white mb-2">
+                  Lv.{selectedInfo.level}
+                </div>
+                <div className="flex flex-col items-center gap-1.5">
+                  <StatRow icon="heart" label="HP" value={selectedInfo.stats.hp} color="#f87171" />
+                  <StatRow icon="attack" label="ATK" value={selectedInfo.stats.atk} color="#fb923c" />
+                  <StatRow icon="shield" label="DEF" value={selectedInfo.stats.def} color="#60a5fa" />
+                </div>
+              </div>
+              <div className="flex-shrink-0 text-white/60 text-2xl font-bold px-1">→</div>
+              <div className="flex-1 max-w-[120px]">
+                <div className="text-2xl font-bold text-white/50 mb-2">
+                  Lv.{selectedInfo.level + 1}
+                </div>
+                <div className="flex flex-col items-center gap-1.5">
+                  <StatRow icon="heart" label="HP" value="?" color="#f87171" muted />
+                  <StatRow icon="attack" label="ATK" value="?" color="#fb923c" muted />
+                  <StatRow icon="shield" label="DEF" value="?" color="#60a5fa" muted />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {error && <p className="text-xs text-red-300 mb-3">{error}</p>}
+
+          {result ? (
+            <button
+              onClick={runClose}
+              className="w-full py-2.5 rounded-xl font-bold text-sm text-white bg-white/20 border border-white/30 hover:bg-white/30 active:scale-[0.98] transition-all"
+            >
+              확인
+            </button>
+          ) : (
+            <button
+              onClick={handleLevelUp}
+              disabled={isLoading}
+              className="w-full py-2.5 rounded-xl font-bold text-sm text-white bg-white/20 border border-white/30 hover:bg-white/30 active:scale-[0.98] transition-all disabled:opacity-50"
+            >
+              {isLoading ? '레벨업 중...' : '레벨업!'}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  // 가로모드: 2쪽 투명 오버레이 + 바텀시트
+  if (isWide) {
+    return createPortal(
+      <>
+        {/* 투명 오버레이 — 2쪽 영역, 클릭 시 닫기 */}
+        <div
+          className="fixed inset-0 z-[110]"
+          style={{ left: '240px', right: 'calc(50% - 120px)' }}
+          onClick={runClose}
+        />
+        {/* 바텀시트 */}
+        <div
+          className="fixed bottom-0 z-[111] overflow-hidden rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.15)] border-t-2 border-x-2 border-white/20"
+          style={{
+            left: '240px',
+            right: 'calc(50% - 120px)',
+            maxHeight: '80vh',
+            transform: phase === 'open' ? 'translateY(0)' : 'translateY(100%)',
+            transition: `transform ${dur}ms ${EASE}`,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="absolute inset-0 backdrop-blur-2xl" style={{ backgroundColor: 'rgba(120, 80, 100, 0.52)' }} />
+          {levelUpContent}
+        </div>
+      </>,
+      document.body
+    );
+  }
+
+  // 모바일: 기존 요술지니 바텀시트
   return createPortal(
     <>
       {/* 백드롭 */}
       <div
         className="fixed inset-0 z-[110] bg-black/60"
         style={{
-          left: 'var(--home-sheet-left, 0px)',
           opacity: isTransition ? 0 : 1,
           transition: `opacity ${dur}ms ease`,
         }}
         onClick={runClose}
       />
-      {/* 모달 — 요술지니 (중앙) */}
+      {/* 바텀시트 */}
       <div
         className="fixed inset-0 z-[111] flex items-end justify-center pointer-events-none"
         style={{
-          left: 'var(--home-sheet-left, 0px)',
           transform: isTransition ? 'scale(0)' : 'scale(1)',
           opacity: isTransition ? 0 : 1,
           transformOrigin: 'center center',
@@ -205,142 +373,7 @@ export default function LevelUpBottomSheet({
             <Image src="/images/home-bg.jpg" alt="" fill className="object-cover" />
           </div>
           <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
-
-          {/* 컨텐츠 */}
-          <div className="relative z-10 px-4 pt-3 pb-8 overflow-y-auto" style={{ maxHeight: '80vh' }}>
-            {/* 핸들 바 */}
-            <div className="flex justify-center mb-3">
-              <div className="w-10 h-1 bg-white/30 rounded-full" />
-            </div>
-
-            <h2 className="text-lg font-bold text-center text-white mb-4">토끼 레벨업</h2>
-
-            {/* 토끼 선택 그리드 */}
-            <div className="flex flex-col gap-2 mb-4">
-              {rows.map((row, rowIdx) => (
-                <div key={rowIdx} className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => scrollRow(rowIdx, 'left')}
-                    disabled={isLoading}
-                    className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-white/15 border border-white/20 text-white/70 hover:bg-white/25 transition-colors disabled:opacity-20"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
-                  <div
-                    ref={(el) => { rowRefs.current[rowIdx] = el; }}
-                    className="flex-1 flex gap-2 overflow-x-auto py-1 scrollbar-hide"
-                    style={{ scrollSnapType: 'x mandatory' }}
-                  >
-                    {row.map((h, colIdx) => {
-                      const globalIdx = rowIdx * RABBITS_PER_ROW + colIdx;
-                      return (
-                        <button
-                          key={h.id}
-                          onClick={() => { setSelectedIdx(globalIdx); setResult(null); setError(null); }}
-                          className={`flex-shrink-0 w-11 h-11 rounded-full overflow-hidden border-2 transition-all ${
-                            globalIdx === selectedIdx
-                              ? 'border-[#D4AF37] scale-110 shadow-[0_0_12px_rgba(212,175,55,0.5)]'
-                              : 'border-white/30 opacity-50 hover:opacity-75'
-                          }`}
-                          style={{ scrollSnapAlign: 'center' }}
-                          disabled={isLoading}
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={getRabbitProfileUrl(h.rabbitId)}
-                            alt={`토끼 #${h.rabbitId + 1}`}
-                            width={44}
-                            height={44}
-                            className="w-full h-full object-cover"
-                          />
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <button
-                    onClick={() => scrollRow(rowIdx, 'right')}
-                    disabled={isLoading}
-                    className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-white/15 border border-white/20 text-white/70 hover:bg-white/25 transition-colors disabled:opacity-20"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            {/* 선택된 토끼 정보 */}
-            {selectedInfo && selected && (
-              <div className="text-center">
-                {/* 토끼 이름 */}
-                {selectedName && (
-                  <p className="text-sm font-bold text-white/80 mb-2">{selectedName}</p>
-                )}
-                {result ? (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.4 }}
-                  >
-                    <div className="text-2xl font-bold text-white mb-3">
-                      Lv.{result.newLevel}
-                    </div>
-                    <div className="flex justify-center gap-5 mb-5">
-                      <LevelUpStat icon="heart" label="HP" value={result.newStats.hp} increase={result.statIncreases.hp} color="#f87171" />
-                      <LevelUpStat icon="attack" label="ATK" value={result.newStats.atk} increase={result.statIncreases.atk} color="#fb923c" />
-                      <LevelUpStat icon="shield" label="DEF" value={result.newStats.def} increase={result.statIncreases.def} color="#60a5fa" />
-                    </div>
-                  </motion.div>
-                ) : (
-                  <div className="flex items-center justify-center gap-3 mb-5">
-                    <div className="flex-1 max-w-[120px]">
-                      <div className="text-2xl font-bold text-white mb-2">
-                        Lv.{selectedInfo.level}
-                      </div>
-                      <div className="flex flex-col items-center gap-1.5">
-                        <StatRow icon="heart" label="HP" value={selectedInfo.stats.hp} color="#f87171" />
-                        <StatRow icon="attack" label="ATK" value={selectedInfo.stats.atk} color="#fb923c" />
-                        <StatRow icon="shield" label="DEF" value={selectedInfo.stats.def} color="#60a5fa" />
-                      </div>
-                    </div>
-                    <div className="flex-shrink-0 text-white/60 text-2xl font-bold px-1">→</div>
-                    <div className="flex-1 max-w-[120px]">
-                      <div className="text-2xl font-bold text-white/50 mb-2">
-                        Lv.{selectedInfo.level + 1}
-                      </div>
-                      <div className="flex flex-col items-center gap-1.5">
-                        <StatRow icon="heart" label="HP" value="?" color="#f87171" muted />
-                        <StatRow icon="attack" label="ATK" value="?" color="#fb923c" muted />
-                        <StatRow icon="shield" label="DEF" value="?" color="#60a5fa" muted />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {error && <p className="text-xs text-red-300 mb-3">{error}</p>}
-
-                {result ? (
-                  <button
-                    onClick={runClose}
-                    className="w-full py-2.5 rounded-xl font-bold text-sm text-white bg-white/20 border border-white/30 hover:bg-white/30 active:scale-[0.98] transition-all"
-                  >
-                    확인
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleLevelUp}
-                    disabled={isLoading}
-                    className="w-full py-2.5 rounded-xl font-bold text-sm text-white bg-white/20 border border-white/30 hover:bg-white/30 active:scale-[0.98] transition-all disabled:opacity-50"
-                  >
-                    {isLoading ? '레벨업 중...' : '레벨업!'}
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
+          {levelUpContent}
         </div>
       </div>
     </>,
