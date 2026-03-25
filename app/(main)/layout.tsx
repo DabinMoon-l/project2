@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { LazyMotion, domAnimation } from 'framer-motion';
@@ -177,6 +178,8 @@ function MainLayoutGrid({
 }) {
   const { content: detailContent, contentKey, isDetailOpen, closeDetail, isLocked, queuedContent, isQueuedOpen } = useDetailPanel();
   const { isOpen: isHomeOverlayOpen } = useHomeOverlay();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
   // 가로모드: 홈은 일반 라우트(`/`, `/professor`) → pathname으로 판별
   // 세로모드: 홈은 오버레이 → isHomeOverlayOpen으로 판별
   const isHomePage = pathname === '/' || pathname === '/professor';
@@ -274,22 +277,13 @@ function MainLayoutGrid({
     };
   }, [isWide, isLocked]);
 
-  // 홈일 때 body에 파노라마 배경 직접 설정 (1쪽/2쪽/3쪽 이음새 없이)
+  // 홈일 때 body/html 배경색 (스크롤 바운스 시 fallback)
   useEffect(() => {
     if (isWide && isHomeActive) {
-      const s = document.body.style;
-      s.backgroundImage = 'url(/images/home-wide.png)';
-      s.backgroundSize = 'cover';
-      s.backgroundPosition = 'center top';
-      s.backgroundRepeat = 'no-repeat';
-      s.backgroundColor = '#C8A090';
+      document.body.style.backgroundColor = '#C8A090';
       document.documentElement.style.backgroundColor = '#C8A090';
       return () => {
-        s.backgroundImage = '';
-        s.backgroundSize = '';
-        s.backgroundPosition = '';
-        s.backgroundRepeat = '';
-        s.backgroundColor = '';
+        document.body.style.backgroundColor = '';
         document.documentElement.style.backgroundColor = '';
       };
     }
@@ -312,17 +306,37 @@ function MainLayoutGrid({
       <LibraryJobToast />
       <OfflineBanner />
 
-      {/* 가로모드 홈: 2쪽↔3쪽 구분선 (배경은 body에서 처리) */}
-      {isWide && isHomeActive && (
-        <div className="fixed top-0 bottom-0 z-[43] pointer-events-none" style={{
-          left: 'calc(50% + 120px)',
-          width: '3px',
-          background: 'linear-gradient(to right, rgba(0,0,0,0.15), rgba(255,255,255,0.08))',
-        }} />
+      {/* 가로모드 홈 배경: createPortal로 body에 직접 렌더 (이전 오버레이와 동일 방식) */}
+      {isWide && isHomeActive && mounted && createPortal(
+        <>
+          <div
+            style={{
+              position: 'fixed',
+              top: 0, bottom: 0, left: 0, right: 0,
+              zIndex: 44,
+              backgroundImage: 'url(/images/home-wide.png)',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center top',
+              backgroundRepeat: 'no-repeat',
+              backgroundColor: '#C8A090',
+              pointerEvents: 'none',
+            }}
+          />
+          <div style={{
+            position: 'fixed',
+            top: 0, bottom: 0,
+            left: 'calc(50% + 120px)',
+            width: '3px',
+            zIndex: 45,
+            background: 'linear-gradient(to right, rgba(0,0,0,0.15), rgba(255,255,255,0.08))',
+            pointerEvents: 'none',
+          }} />
+        </>,
+        document.body
       )}
 
-      {/* 가로모드: 사이드바 뒤 크림 배경 (홈일 때는 body 배경이 보이도록 투명) */}
-      {isWide && !isHomeActive && (
+      {/* 가로모드: 사이드바 뒤 크림 배경 (홈일 때는 포탈 배경이 덮음) */}
+      {isWide && (
         <div
           className="fixed left-0 top-0 bottom-0 z-40"
           style={{ width: '240px', backgroundColor: '#F5F0E8' }}
