@@ -1507,8 +1507,8 @@ export default function QuizStatsModal({
     </>
   );
 
-  // 패널 모드: 래퍼 없이 직접 렌더
-  if (isPanelMode) return <>{statsContent}{subModals}</>;
+  // 패널 모드: 래퍼 없이 직접 렌더 (isOpen일 때만)
+  if (isPanelMode) return isOpen ? <>{statsContent}{subModals}</> : null;
 
   // 모달 모드: AnimatePresence + backdrop + 요술지니 애니메이션
   return (
