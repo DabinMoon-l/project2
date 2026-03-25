@@ -348,7 +348,8 @@ function MainLayoutGrid({
           data-main-content
           className="min-h-screen"
           style={{
-            paddingTop: 'env(safe-area-inset-top, 0px)',
+            // 홈 가로모드: 배경 포탈이 safe area 포함 전체를 덮으므로 padding 불필요
+            paddingTop: (isWide && isHomeActive) ? '0px' : 'env(safe-area-inset-top, 0px)',
             ...(!hideNavigation && !isWide
               ? { paddingBottom: 'calc(4.25rem + env(safe-area-inset-bottom, 0px))' }
               : {}),
