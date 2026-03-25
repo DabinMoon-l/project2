@@ -398,7 +398,9 @@ function MainLayoutGrid({
                 className="w-1/2 flex-shrink-0 overflow-x-hidden overflow-y-auto h-screen relative"
                 style={{
                   borderLeft: isHomeActive ? 'none' : (isDetailOpen ? '1px solid #B0A898' : 'none'),
-                  backgroundColor: isDetailOpen ? '#F5F0E8' : 'transparent',
+                  ...(!isHomeActive ? {
+                    backgroundColor: isDetailOpen ? '#F5F0E8' : 'transparent',
+                  } : {}),
                   paddingRight: 'env(safe-area-inset-right, 0px)',
                 } as React.CSSProperties}
               >
