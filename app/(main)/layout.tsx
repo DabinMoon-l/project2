@@ -395,12 +395,12 @@ function MainLayoutGrid({
             paddingRight: 'env(safe-area-inset-right, 0px)',
           }}
         >
-          {/* 배경: HomeOverlay의 home-garo.png과 동일하게 맞춤 */}
+          {/* 배경: HomeOverlay의 home-wide.png과 동일하게 맞춤 */}
           <div className="absolute inset-0 overflow-hidden pointer-events-none" style={{ zIndex: 0 }}>
             <div className="absolute top-0 bottom-0" style={{
               left: 'calc(-50vw - 120px)',
               width: '100vw',
-              backgroundImage: 'url(/images/home-garo.png)',
+              backgroundImage: 'url(/images/home-wide.png)',
               backgroundSize: 'cover',
               backgroundPosition: 'center top',
             }} />
@@ -426,13 +426,13 @@ function MainLayoutGrid({
             borderRight: '1px solid #B0A898',
           }}
         >
-          {/* 홈 열림 시: HomeOverlay의 home-garo.png 배경 맞춤 */}
+          {/* 홈 열림 시: HomeOverlay의 home-wide.png 배경 맞춤 */}
           {isHomeOverlayOpen && (
             <div className="absolute inset-0 overflow-hidden pointer-events-none" style={{ zIndex: 0 }}>
               <div className="absolute top-0 bottom-0" style={{
                 left: '-240px',
                 width: '100vw',
-                backgroundImage: 'url(/images/home-garo.png)',
+                backgroundImage: 'url(/images/home-wide.png)',
                 backgroundSize: 'cover',
                 backgroundPosition: 'center top',
               }} />

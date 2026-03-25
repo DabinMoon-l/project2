@@ -249,7 +249,7 @@ export default function ProfessorHomeOverlay() {
         right: 0,
         left: 0,
         zIndex: isWide ? 44 : 100,
-        backgroundImage: isWide ? 'url(/images/home-garo.png)' : `url(${HOME_BG_IMAGE})`,
+        backgroundImage: isWide ? 'url(/images/home-wide.png)' : `url(${HOME_BG_IMAGE})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center top',
         backgroundRepeat: 'no-repeat',
