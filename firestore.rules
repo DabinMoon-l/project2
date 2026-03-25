@@ -387,13 +387,8 @@ service cloud.firestore {
     // ============================================================
 
     match /questionFeedbacks/{feedbackId} {
-      // 읽기: 본인 피드백, 교수님, 또는 해당 퀴즈의 제작자
-      allow read: if isAuthenticated() &&
-        (resource.data.userId == request.auth.uid ||
-         isProfessor() ||
-         // 퀴즈 제작자도 피드백 확인 가능
-         (resource.data.quizId != null &&
-          get(/databases/$(database)/documents/quizzes/$(resource.data.quizId)).data.creatorId == request.auth.uid));
+      // 읽기: 인증된 사용자 (피드백 타입만 저장, 민감 정보 없음)
+      allow read: if isAuthenticated();
 
       // 생성: 본인 것만 (삭제된 퀴즈 복습 중 피드백도 허용)
       allow create: if isAuthenticated() &&
