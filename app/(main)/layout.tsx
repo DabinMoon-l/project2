@@ -303,8 +303,30 @@ function MainLayoutGrid({
       <LibraryJobToast />
       <OfflineBanner />
 
-      {/* 가로모드: 사이드바 뒤 크림 배경 (홈일 때는 HomeOverlay가 전체 뷰포트를 덮음) */}
-      {isWide && (
+      {/* 가로모드 홈: 전체 뷰포트 배경 + 구분선 (z-41, nav z-50 아래) */}
+      {isWide && isHomeActive && (
+        <>
+          <div
+            className="fixed inset-0 z-[41]"
+            style={{
+              backgroundImage: 'url(/images/home-wide.png)',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center top',
+              backgroundRepeat: 'no-repeat',
+              backgroundColor: '#C8A090',
+              pointerEvents: 'none',
+            }}
+          />
+          <div className="fixed top-0 bottom-0 z-[43] pointer-events-none" style={{
+            left: 'calc(50% + 120px)',
+            width: '3px',
+            background: 'linear-gradient(to right, rgba(0,0,0,0.15), rgba(255,255,255,0.08))',
+          }} />
+        </>
+      )}
+
+      {/* 가로모드: 사이드바 뒤 크림 배경 (홈일 때는 홈 배경이 덮음) */}
+      {isWide && !isHomeActive && (
         <div
           className="fixed left-0 top-0 bottom-0 z-40"
           style={{ width: '240px', backgroundColor: '#F5F0E8' }}
@@ -333,7 +355,10 @@ function MainLayoutGrid({
                   : '240px',
           } as React.CSSProperties & Record<string, string>}
         >
-          <div className={isWide ? 'flex h-screen overflow-hidden' : ''}>
+          <div
+            className={isWide ? 'flex h-screen overflow-hidden' : ''}
+            style={isWide && isHomeActive ? { position: 'relative', zIndex: 42 } : undefined}
+          >
             {/* 라우트 사이드바 (가로모드 좌측 — 퀴즈/복습 목록) */}
             {hasRouteSidebar && (
               <div
