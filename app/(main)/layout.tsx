@@ -274,11 +274,12 @@ function MainLayoutGrid({
     };
   }, [isWide, isLocked]);
 
-  // 홈 오버레이 열림 시 body 배경 숨기기 (3쪽 오른쪽 크림선 방지)
+  // 홈일 때 body/html 배경 정리 (fixed 배경 레이어가 전체를 덮으므로 불필요)
+  // 스크롤 바운스 시 검은색이 비치는 문제 방지
   useEffect(() => {
     if (isWide && isHomeActive) {
-      document.body.style.backgroundColor = 'transparent';
-      document.documentElement.style.backgroundColor = '#1a1a1a';
+      document.body.style.backgroundColor = '#C8A090';
+      document.documentElement.style.backgroundColor = '#C8A090';
       return () => {
         document.body.style.backgroundColor = '';
         document.documentElement.style.backgroundColor = '';
