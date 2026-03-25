@@ -521,6 +521,7 @@ ${scopeContent.slice(0, 8000)}
 - correctAnswer가 실제 정답 선지의 인덱스(0부터)와 일치하는지 재확인
 - explanation이 정답 선지와 일치하는지 확인
 - choiceExplanations[correctAnswer]에 "정답" 표현 포함
+- "옳은 것은?" 발문 시 오답 선지는 반드시 학술적으로 틀린 내용이어야 함. 여러 선지가 옳은데 "가장 적절한 것"을 고르는 애매한 문제는 금지
 
 반드시 아래 JSON 형식만 출력 (다른 텍스트 없이):
 [
