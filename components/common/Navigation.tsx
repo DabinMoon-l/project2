@@ -226,6 +226,7 @@ function SidebarLibraryItems({ textColor, onItemClick }: { textColor: string; on
  */
 export default function Navigation({ role }: NavigationProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const [isHidden, setIsHidden] = useState(false);
   const isWide = useWideMode();
   const {
@@ -236,7 +237,7 @@ export default function Navigation({ role }: NavigationProps) {
     homeButtonRef,
   } = useHomeOverlay();
   const { profile } = useUser();
-  const { closeDetail, isLocked } = useDetailPanel();
+  const { closeDetail, clearQueue, isLocked } = useDetailPanel();
 
   // 경로 기반 네비게이션 숨김 — layout.tsx hideNavigation과 동기화
   const shouldHideByPath = useMemo(() => {
@@ -280,31 +281,42 @@ export default function Navigation({ role }: NavigationProps) {
   const tabs = role === 'professor' ? professorTabs : studentTabs;
   const homePath = role === 'professor' ? '/professor' : '/';
 
-  // 홈 버튼: 오버레이 토글 (열려있으면 축소 애니메이션으로 닫기)
+  // 가로모드 홈 페이지 여부 (라우트 기반)
+  const isHomePage = isWide && pathname === homePath;
+
+  // 홈 버튼: 가로모드 → 라우트 이동, 세로모드 → 오버레이 토글
   const handleHomeClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-    // 가로모드: 이미 열린 상태에서 홈 다시 누르면 아무 일도 안 함
+    if (isWide) {
+      // 가로모드: 이미 홈이면 무시, 아니면 라우트 이동
+      if (pathname === homePath) return;
+      // 잠금 시 대기열만 정리, 비잠금 시 3쪽 닫기
+      if (isLocked) clearQueue();
+      else closeDetail();
+      router.push(homePath);
+      return;
+    }
+    // 세로모드: 오버레이 토글
     if (isOverlayOpen) {
-      if (isWide) return;
       closeOverlayAnimated();
     } else {
       sessionStorage.setItem('home_return_path', pathname);
       openHomeOverlay();
     }
-  }, [pathname, openHomeOverlay, closeOverlayAnimated, isOverlayOpen, isWide]);
+  }, [pathname, homePath, openHomeOverlay, closeOverlayAnimated, isOverlayOpen, isWide, router, isLocked, closeDetail]);
 
-  // 다른 탭 클릭: 오버레이 닫기 + 비잠금 3쪽 정리
-  // 홈 오버레이에서 열린 상세(랭킹/프로필 등)가 동일 탭 클릭 시 pathname 미변경으로
-  // DetailPanelContext의 pathname effect가 발동하지 않는 문제 대응
+  // 다른 탭 클릭: 오버레이 닫기 + 홈 페이지 3쪽 정리
   const handleTabClick = useCallback(() => {
+    // 세로모드: 오버레이 열려있으면 닫기
     if (isOverlayOpen) {
       closeOverlay();
-      // 오버레이에서 열린 비잠금 3쪽 콘텐츠 정리
-      if (!isLocked) {
-        closeDetail();
-      }
+      if (!isLocked) closeDetail();
     }
-  }, [isOverlayOpen, closeOverlay, isLocked, closeDetail]);
+    // 가로모드: 홈 페이지에서 다른 탭으로 → 비잠금 디테일 닫기
+    if (isWide && pathname === homePath && !isLocked) {
+      closeDetail();
+    }
+  }, [isOverlayOpen, closeOverlay, isLocked, closeDetail, isWide, pathname, homePath]);
 
   // 가로모드 사이드바는 항상 유지 (퀴즈 풀이 등 상세 페이지에서도 좌측 네비 표시)
   if (shouldHideByPath && !isWide) return null;
@@ -314,7 +326,7 @@ export default function Navigation({ role }: NavigationProps) {
   // 가로모드: 프로스티드 글래스 사이드바 (Apple Music 스타일)
   // 홈 오버레이 열림 → 핑크 글래스 + 흰 글씨, 닫힘 → 화이트 글래스 + 어두운 글씨
   if (isWide) {
-    const isHome = isOverlayOpen;
+    const isHome = isHomePage || isOverlayOpen;
     const textColor = '#1A1A1A';
 
     return (
@@ -369,11 +381,11 @@ export default function Navigation({ role }: NavigationProps) {
         <div className="flex-1 px-3 flex flex-col gap-1 overflow-hidden">
           {tabs.map((tab) => {
             const isHomeTab = tab.path === homePath;
-            const isActive = isOverlayOpen
+            const isActive = (isHomePage || isOverlayOpen)
               ? isHomeTab
               : isActiveTab(pathname, tab.path);
             const isReviewTab = tab.path === '/review';
-            const showLibrary = isReviewTab && role === 'student' && isActive && !isOverlayOpen;
+            const showLibrary = isReviewTab && role === 'student' && isActive && !isOverlayOpen && !isHomePage;
 
             return (
               <Fragment key={tab.path}>
@@ -393,7 +405,7 @@ export default function Navigation({ role }: NavigationProps) {
                     {tab.label}
                   </span>
                   {/* 복습 드롭다운 화살표 (학생 전용) */}
-                  {isReviewTab && role === 'student' && !isOverlayOpen && (
+                  {isReviewTab && role === 'student' && !isOverlayOpen && !isHomePage && (
                     <motion.svg
                       className="w-3 h-3 flex-shrink-0"
                       fill="none"
