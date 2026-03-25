@@ -42,13 +42,15 @@ export default function ProfessorHomeOverlay() {
     if (isWide && isOpen) close();
   }, [isWide, isOpen, close]);
 
-  // 홈 오버레이 열리면: 잠금 시 대기만 제거, 비잠금 시 3쪽 닫기
+  // 홈 오버레이 열릴 때만 실행 (isLocked를 ref로 참조하여 변경 시 재실행 방지)
+  const isLockedRef = useRef(isLocked);
+  isLockedRef.current = isLocked;
   useEffect(() => {
     if (isOpen) {
-      if (isLocked) clearQueue();
+      if (isLockedRef.current) clearQueue();
       else closeDetail();
     }
-  }, [isOpen, isLocked, closeDetail, clearQueue]);
+  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   const isWideRef = useRef(isWide);
   isWideRef.current = isWide;
   const [mounted, setMounted] = useState(false);

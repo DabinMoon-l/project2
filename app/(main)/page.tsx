@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useUser, useHomeOverlay, useDetailPanel } from '@/lib/contexts';
@@ -42,7 +43,8 @@ export default function HomePage() {
   // 가로모드 학생 전용 렌더
   if (!mounted || !isWide || isProfessor || !profile) return null;
 
-  return (
+  // createPortal: <main>(w-1/2) 안에서 fixed가 뷰포트 대신 main 기준으로 잡히는 문제 방지
+  return createPortal(
     <div
       className="fixed inset-0 overflow-y-auto flex flex-col scrollbar-hide"
       style={{
@@ -115,6 +117,7 @@ export default function HomePage() {
         </div>
         <div className="flex-1" />
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
