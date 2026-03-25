@@ -326,11 +326,21 @@ function MainLayoutGrid({
         </>
       )}
 
-      {/* 가로모드: 사이드바 뒤 크림 배경 (홈일 때는 홈 배경이 덮음) */}
-      {isWide && !isHomeActive && (
+      {/* 가로모드: 사이드바 뒤 배경 (홈: 홈 이미지, 그 외: 크림) */}
+      {isWide && (
         <div
           className="fixed left-0 top-0 bottom-0 z-40"
-          style={{ width: '240px', backgroundColor: '#F5F0E8' }}
+          style={{
+            width: '240px',
+            ...(isHomeActive ? {
+              backgroundImage: 'url(/images/home-wide.png)',
+              backgroundSize: 'cover',
+              backgroundPosition: 'left top',
+              backgroundColor: '#C8A090',
+            } : {
+              backgroundColor: '#F5F0E8',
+            }),
+          }}
         />
       )}
 
