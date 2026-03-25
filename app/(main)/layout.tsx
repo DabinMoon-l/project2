@@ -365,7 +365,10 @@ function MainLayoutGrid({
                   : '240px',
           } as React.CSSProperties & Record<string, string>}
         >
-          <div className={isWide ? 'flex h-screen overflow-hidden' : ''}>
+          <div
+            className={isWide ? 'flex h-screen overflow-hidden' : ''}
+            style={isWide && isHomeActive ? { position: 'relative', zIndex: 45 } : undefined}
+          >
             {/* 라우트 사이드바 (가로모드 좌측 — 퀴즈/복습 목록) */}
             {hasRouteSidebar && (
               <div
