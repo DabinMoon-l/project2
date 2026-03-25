@@ -19,6 +19,8 @@ import { useQuizBookmark } from '@/lib/hooks/useQuizBookmark';
 import dynamic from 'next/dynamic';
 import { useQuizUpdate, type QuizUpdateInfo } from '@/lib/hooks/useQuizUpdate';
 import { ScrollToTopButton, ExpandModal } from '@/components/common';
+import { calcFeedbackScore, getFeedbackLabel } from '@/lib/utils/feedbackScore';
+import type { FeedbackType } from '@/components/quiz/InstantFeedbackButton';
 
 // 대형 모달 lazy load (버튼 클릭 시에만 로드)
 const UpdateQuizModal = dynamic(() => import('@/components/quiz/UpdateQuizModal'), { ssr: false });
@@ -99,6 +101,7 @@ function QuizListPageContent() {
   }), [isLoading, updatesLoading]);
 
   const [selectedQuiz, setSelectedQuiz] = useState<QuizCardData | null>(null);
+  const [detailFeedback, setDetailFeedback] = useState<{ score: number; count: number } | null>(null);
   const { sourceRect, registerRef, captureRect, clearRect } = useExpandSource();
 
   // 기출 드롭다운
@@ -401,6 +404,18 @@ function QuizListPageContent() {
     }
     router.push(`/quiz/${quizId}`);
   };
+
+  // Details 모달 열 때 피드백 조회
+  useEffect(() => {
+    if (!selectedQuiz) { setDetailFeedback(null); return; }
+    getDocs(query(collection(db, 'questionFeedbacks'), where('quizId', '==', selectedQuiz.id)))
+      .then(snap => {
+        if (snap.empty) { setDetailFeedback(null); return; }
+        const feedbacks = snap.docs.map(d => ({ type: d.data().type as FeedbackType }));
+        setDetailFeedback({ score: calcFeedbackScore(feedbacks), count: feedbacks.length });
+      })
+      .catch(() => setDetailFeedback(null));
+  }, [selectedQuiz]);
 
   const handleShowDetails = (quiz: QuizCardData) => {
     captureRect(quiz.id);
@@ -870,6 +885,25 @@ function QuizListPageContent() {
                   {!PROFESSOR_QUIZ_TYPES.has(selectedQuiz.type) && selectedQuiz.creatorClassType && ` · ${selectedQuiz.creatorClassType}반`}
                 </span>
               </div>
+
+              {/* 피드백 점수 */}
+              {detailFeedback && detailFeedback.count > 0 && (() => {
+                const label = getFeedbackLabel(detailFeedback.score);
+                return (
+                  <div className="flex justify-between text-xs items-center">
+                    <span className="text-[#5C5C5C]">피드백</span>
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className="text-[10px] font-bold px-1.5 py-0.5 border rounded"
+                        style={{ color: label.color, borderColor: label.color }}
+                      >
+                        {label.label}
+                      </span>
+                      <span className="text-[10px] text-[#5C5C5C]">{detailFeedback.count}건</span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* 완료: 평균 점수 행 + 퀴즈/복습 점수 (Review 버전) */}
               {selectedQuiz.isCompleted && (
