@@ -6,25 +6,45 @@ import type { ChapterGroupedWrongItems, QuizUpdateInfo } from '@/lib/hooks/useRe
 
 /** 마우스 드래그로 가로 스크롤 가능하게 하는 핸들러 */
 function useDragScroll() {
-  const dragState = useRef<{ startX: number; scrollLeft: number } | null>(null);
+  const dragState = useRef<{ startX: number; scrollLeft: number; el: HTMLDivElement } | null>(null);
+  const hasDragged = useRef(false);
+
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (e.pointerType === 'touch') return; // 터치는 네이티브 스크롤 사용
     const el = e.currentTarget;
-    dragState.current = { startX: e.clientX, scrollLeft: el.scrollLeft };
-    el.setPointerCapture(e.pointerId);
+    dragState.current = { startX: e.clientX, scrollLeft: el.scrollLeft, el };
+    hasDragged.current = false;
     el.style.cursor = 'grabbing';
+
+    // setPointerCapture 대신 document 리스너 사용 (capture가 click을 삼키는 버그 방지)
+    const onMove = (ev: PointerEvent) => {
+      if (!dragState.current) return;
+      const dx = ev.clientX - dragState.current.startX;
+      if (Math.abs(dx) > 3) hasDragged.current = true;
+      dragState.current.el.scrollLeft = dragState.current.scrollLeft - dx;
+    };
+    const onUp = () => {
+      if (dragState.current) {
+        dragState.current.el.style.cursor = '';
+        dragState.current = null;
+      }
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+    };
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
   }, []);
-  const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragState.current) return;
-    const dx = e.clientX - dragState.current.startX;
-    e.currentTarget.scrollLeft = dragState.current.scrollLeft - dx;
+
+  /** 드래그 중이었으면 클릭 전파 차단 (capture phase) */
+  const onClickCapture = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (hasDragged.current) {
+      e.stopPropagation();
+      e.preventDefault();
+      hasDragged.current = false;
+    }
   }, []);
-  const onPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragState.current) return;
-    dragState.current = null;
-    e.currentTarget.style.cursor = '';
-  }, []);
-  return { onPointerDown, onPointerMove, onPointerUp };
+
+  return { onPointerDown, onClickCapture };
 }
 
 /** 오답 탭 props */
