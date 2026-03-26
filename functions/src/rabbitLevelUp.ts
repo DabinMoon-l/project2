@@ -91,6 +91,20 @@ export const levelUpRabbit = onCall(
         updatedAt: FieldValue.serverTimestamp(),
       });
 
+      // WRITE: expHistory에 레벨업 기록 (EXP 0, 활동 추적 + 리포트용)
+      const historyRef = userRef.collection("expHistory").doc();
+      transaction.set(historyRef, {
+        type: "rabbit_levelup",
+        amount: 0,
+        reason: `토끼 레벨업 (Lv.${currentLevel} → ${newLevel})`,
+        previousExp: totalExp,
+        newExp: totalExp,
+        createdAt: FieldValue.serverTimestamp(),
+        sourceId: holdingId,
+        sourceCollection: "rabbitHoldings",
+        metadata: { rabbitId, courseId, newLevel, statIncreases: increases },
+      });
+
       return {
         newLevel,
         oldStats: currentStats,
