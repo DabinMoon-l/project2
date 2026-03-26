@@ -66,7 +66,8 @@ export function useActivityTracker(courseId?: string, isProfessor?: boolean) {
   // dailyAttendance/{courseId}_{YYYY-MM-DD} 문서에 uid를 arrayUnion
   useEffect(() => {
     if (!user?.uid || !courseId || isProfessor) return;
-    const today = new Date().toISOString().slice(0, 10);
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const storageKey = `daily-att-${user.uid}-${today}`;
     if (localStorage.getItem(storageKey)) return;
 

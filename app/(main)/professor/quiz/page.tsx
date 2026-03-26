@@ -314,7 +314,7 @@ export default function ProfessorQuizListPage() {
       creatorUid: data.creatorUid || data.creatorId || '',
       creatorNickname: data.creatorNickname || '',
       participantCount: data.participantCount || 0,
-      averageScore: data.averageScore || 0,
+      averageScore: Math.min(data.averageScore || 0, 100),
       feedbackCount: data.feedbackCount || 0,
       tags: data.tags || [],
       pastYear: data.pastYear,

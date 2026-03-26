@@ -163,7 +163,11 @@ export default function StudentMonitoringPage() {
     return `${todayDate.year}-${String(selectedMonth).padStart(2, '0')}-${String(clampedDay).padStart(2, '0')}`;
   }, [selectedMonth, selectedDay, maxDayInMonth, todayDate.year]);
 
-  const isTodaySelected = selectedDateStr === new Date().toISOString().slice(0, 10);
+  const isTodaySelected = useMemo(() => {
+    const now = new Date();
+    const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    return selectedDateStr === localToday;
+  }, [selectedDateStr]);
 
   // 일일 접속 데이터 조회
   const { attendedUids } = useDailyAttendance(userCourseId || '', selectedDateStr);
