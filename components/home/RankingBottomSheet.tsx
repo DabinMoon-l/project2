@@ -113,6 +113,7 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
   const [classFilter, setClassFilter] = useState<'all' | 'A' | 'B' | 'C' | 'D'>('all');
   const [showClassDropdown, setShowClassDropdown] = useState(false);
   const [periodFilter, setPeriodFilter] = useState<'day' | 'week' | 'all'>('day');
+  const [prevWeekRanks, setPrevWeekRanks] = useState<Record<string, number>>({});
   const [showScrollTop, setShowScrollTop] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const top3Ref = useRef<HTMLDivElement>(null);
@@ -183,6 +184,7 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
     const { data: cached } = readFullCache(userCourseId);
     if (cached) {
       applyRankings(cached.rankedUsers as RankedUser[]);
+      if (cached.prevWeekRanks) setPrevWeekRanks(cached.prevWeekRanks);
       setLoading(false);
     }
 
@@ -193,12 +195,14 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
         if (snapshot.exists()) {
           const data = snapshot.data();
           const users = (data.rankedUsers || []) as RankedUser[];
+          const pwRanks = (data.prevWeekRanks || {}) as Record<string, number>;
           applyRankings(users);
+          setPrevWeekRanks(pwRanks);
           setLoading(false);
           // 토끼 이름 실시간 갱신 (서버 캐시와 무관하게 최신 이름 반영)
           resolveRabbitNamesForAll(users).then(() => {
             applyRankings([...users]);
-            writeFullCache(userCourseId, { rankedUsers: users });
+            writeFullCache(userCourseId, { rankedUsers: users, prevWeekRanks: pwRanks });
           }).catch(() => {});
         } else if (!fallbackAttempted) {
           fallbackAttempted = true;
@@ -329,6 +333,52 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
     const me = filteredUsers.find(u => u.id === profile.uid);
     return me || (periodFilter === 'all' ? myRank : null);
   }, [filteredUsers, profile?.uid, myRank, periodFilter]);
+
+  // 주간 전체 순위 맵 (반 필터 무관, 등수 변동 계산용)
+  const weeklyGlobalRankMap = useMemo(() => {
+    if (periodFilter !== 'week') return {};
+    const excludeList = userCourseId ? (TEST_NICKNAMES[userCourseId] || []) : [];
+    const weekUsers = rankedUsers
+      .filter(u => !excludeList.includes(u.nickname))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .filter(u => (u as any).weeklyRankScore != null)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map(u => ({ id: u.id, score: (u as any).weeklyRankScore as number }))
+      .sort((a, b) => b.score - a.score);
+    const map: Record<string, number> = {};
+    let r = 1;
+    weekUsers.forEach((u, i) => {
+      if (i > 0 && u.score < weekUsers[i - 1].score) r = i + 1;
+      map[u.id] = r;
+    });
+    return map;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rankedUsers, periodFilter, userCourseId]);
+
+  // 주간 등수 변동 렌더링
+  const renderRankChange = (userId: string) => {
+    if (periodFilter !== 'week') return null;
+    const currentRank = weeklyGlobalRankMap[userId];
+    const prevRank = prevWeekRanks[userId];
+    if (currentRank == null) return null;
+    if (prevRank == null) {
+      return <span className="text-[10px] font-bold text-yellow-300/80">NEW</span>;
+    }
+    const diff = prevRank - currentRank;
+    if (diff === 0) return <span className="text-[10px] text-white/30">-</span>;
+    if (diff > 0) {
+      return (
+        <span className="text-[10px] font-bold text-green-400 inline-flex items-center gap-px">
+          ▲{diff}
+        </span>
+      );
+    }
+    return (
+      <span className="text-[10px] font-bold text-red-400 inline-flex items-center gap-px">
+        ▼{Math.abs(diff)}
+      </span>
+    );
+  };
 
   // 교수 전용: 학생 활동 오버레이 바텀시트
   const activityOverlay = (
@@ -537,6 +587,7 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
                         <>
                           <p className="text-sm font-black text-white truncate">{displayName(user)}</p>
                           <p className="text-[11px] text-white/60">{user.classType}반 · {Math.round(user.rankScore)}점</p>
+                          {renderRankChange(user.id)}
                           {user.equippedRabbitNames && <p className="text-[11px] text-white/60 truncate">{user.equippedRabbitNames}</p>}
                         </>
                       )}
@@ -575,6 +626,7 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
                   </div>
                   <div className="text-right flex-shrink-0">
                     <p className="font-black text-white">{Math.round(user.rankScore)}점</p>
+                    {renderRankChange(user.id)}
                   </div>
                 </div>
               ))}
@@ -642,6 +694,7 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
             </div>
             <div className="text-right flex-shrink-0">
               <p className="text-base font-black text-white">{Math.round(myFilteredRank.rankScore)}점</p>
+              {renderRankChange(myFilteredRank.id)}
             </div>
           </div>
         </div>
