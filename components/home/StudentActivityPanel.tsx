@@ -144,44 +144,63 @@ export default function StudentActivityPanel({
     });
   }, [selectedMonth, maxDayInMonth]);
 
-  // 데이터 로드 (7일치 한 번에 가져와서 클라이언트 필터링)
+  // 학생 프로필 (학번) — userId 변경 시 1회만
   useEffect(() => {
     if (!userId) return;
+    getDoc(doc(db, 'users', userId)).then(snap => {
+      if (snap.exists()) setStudentId(snap.data()?.studentId || '');
+    });
+  }, [userId]);
+
+  // 날짜별 활동 캐시 (학생 전환 시 초기화)
+  const dayCacheRef = useRef(new Map<string, ActivityItem[]>());
+  useEffect(() => { dayCacheRef.current.clear(); }, [userId]);
+
+  // 선택된 날짜의 활동 데이터 로드 (하루 단위 동적 쿼리)
+  const effectiveDay = Math.min(selectedDay, maxDayInMonth);
+  useEffect(() => {
+    if (!userId) return;
+
+    const dateKey = `${todayDate.year}-${selectedMonth}-${effectiveDay}`;
+    const cached = dayCacheRef.current.get(dateKey);
+    if (cached) {
+      setActivities(cached);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
 
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    sevenDaysAgo.setHours(0, 0, 0, 0);
-    const tsFrom = Timestamp.fromDate(sevenDaysAgo);
+    const dayStart = new Date(todayDate.year, selectedMonth - 1, effectiveDay, 0, 0, 0, 0);
+    const dayEnd = new Date(todayDate.year, selectedMonth - 1, effectiveDay, 23, 59, 59, 999);
+    const tsFrom = Timestamp.fromDate(dayStart);
+    const tsTo = Timestamp.fromDate(dayEnd);
 
     Promise.all([
-      // 학생 프로필 (학번)
-      getDoc(doc(db, 'users', userId)),
-      // expHistory 7일
+      // expHistory (선택 날짜)
       getDocs(query(
         collection(db, 'users', userId, 'expHistory'),
         where('createdAt', '>=', tsFrom),
+        where('createdAt', '<=', tsTo),
         orderBy('createdAt', 'desc'),
         limit(200),
       )),
-      // pageViews 7일
+      // pageViews (선택 날짜)
       getDocs(query(
         collection(db, 'pageViews'),
         where('userId', '==', userId),
         where('timestamp', '>=', tsFrom),
+        where('timestamp', '<=', tsTo),
         orderBy('timestamp', 'desc'),
         limit(200),
       )),
-      // rabbitHoldings 7일 (토끼 뽑기)
+      // rabbitHoldings (선택 날짜 — 토끼 뽑기)
       getDocs(query(
         collection(db, 'users', userId, 'rabbitHoldings'),
         where('createdAt', '>=', tsFrom),
+        where('createdAt', '<=', tsTo),
       )),
-    ]).then(async ([userSnap, expSnap, pvSnap, rabbitSnap]) => {
-      // 학번
-      if (userSnap.exists()) {
-        setStudentId(userSnap.data()?.studentId || '');
-      }
+    ]).then(async ([expSnap, pvSnap, rabbitSnap]) => {
 
       // expHistory에서 퀴즈 ID + 게시글 ID 수집
       const quizIds = new Set<string>();
@@ -381,21 +400,17 @@ export default function StudentActivityPanel({
         });
       });
 
-      // 시간순 정렬 (오래된 순)
+      // 시간순 정렬 + 캐시 저장
       items.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+      dayCacheRef.current.set(dateKey, items);
       setActivities(items);
       setLoading(false);
     }).catch(() => setLoading(false));
-  }, [userId, courseId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, courseId, selectedMonth, effectiveDay, todayDate.year]);
 
-  // 선택된 날짜로 필터링
-  const filteredActivities = useMemo(() => {
-    return activities.filter(a => {
-      return a.timestamp.getFullYear() === todayDate.year
-        && a.timestamp.getMonth() + 1 === selectedMonth
-        && a.timestamp.getDate() === Math.min(selectedDay, maxDayInMonth);
-    });
-  }, [activities, selectedMonth, selectedDay, maxDayInMonth, todayDate.year]);
+  // 이미 선택 날짜 기준으로 조회하므로 추가 필터링 불필요
+  const filteredActivities = activities;
 
   // 시간 포맷 (HH:MM)
   const formatTime = (d: Date) => {
