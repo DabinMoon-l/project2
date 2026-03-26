@@ -9,6 +9,7 @@ import type { CreatePostData, AttachedFile, BoardTag } from '@/lib/hooks/useBoar
 import { BOARD_TAGS } from '@/lib/hooks/useBoard';
 import { useChapterKeywords } from '@/lib/hooks/useChapterKeywords';
 import { useCourse } from '@/lib/contexts/CourseContext';
+import { useHomeScale } from '@/components/home/useHomeScale';
 
 interface WriteFormProps {
   /** 제출 핸들러 */
@@ -42,6 +43,7 @@ export default function WriteForm({
   const { theme } = useTheme();
   const { uploadImage, uploadFile, loading: uploading, error: uploadError } = useUpload();
   const { userCourseId } = useCourse();
+  const formScale = useHomeScale();
   const { chapters, detectChapters } = useChapterKeywords(userCourseId);
 
   const [title, setTitle] = useState(initialTitle);
@@ -289,10 +291,11 @@ export default function WriteForm({
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="p-3"
       style={{
         border: '1px solid #1A1A1A',
         backgroundColor: theme.colors.backgroundCard,
+        padding: Math.round(12 * formScale),
+        fontSize: Math.round(12 * formScale),
       }}
     >
       {/* 제목 입력 */}
@@ -711,10 +714,12 @@ export default function WriteForm({
         whileTap={{ scale: 0.99 }}
         onClick={handleSubmit}
         disabled={!isValid || isSubmitting || uploading}
-        className="w-full py-2.5 text-sm font-serif-display font-bold text-center transition-colors disabled:opacity-50"
+        className="w-full font-serif-display font-bold text-center transition-colors disabled:opacity-50"
         style={{
           backgroundColor: '#1A1A1A',
           color: '#F5F0E8',
+          padding: `${Math.round(10 * formScale)}px 0`,
+          fontSize: Math.round(14 * formScale),
         }}
       >
         {uploading ? '업로드 중...' : isSubmitting ? '게시 중...' : '게시하기'}

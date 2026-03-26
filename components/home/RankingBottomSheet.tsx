@@ -523,7 +523,7 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
             </svg>
           </button>
           {showClassDropdown && (
-            <div className="fixed inset-0 z-10" onClick={() => setShowClassDropdown(false)} />
+            <div className={`${isPanelMode ? 'absolute' : 'fixed'} inset-0 z-10`} onClick={() => setShowClassDropdown(false)} />
           )}
           {showClassDropdown && (
             <div className="absolute right-4 top-9 z-20 w-14 border border-white/25 rounded-md overflow-hidden backdrop-blur-xl">

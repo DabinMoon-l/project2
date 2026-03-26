@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { collection, query, where, orderBy, limit, getDocs, getDoc, doc, db, Timestamp } from '@/lib/repositories';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
+import { useHomeScale } from './useHomeScale';
 
 // ── 활동 타입 라벨 ──
 
@@ -74,10 +75,11 @@ function ScrollableDigit({ value, min, max, onChange }: {
 }) {
   const startY = useRef<number | null>(null);
   const accum = useRef(0);
+  const scale = useHomeScale();
   return (
     <span
-      className="inline-block cursor-ns-resize select-none touch-none font-black text-xl text-white tabular-nums leading-none"
-      style={{ minWidth: value >= 10 ? '1.5ch' : '0.8ch', textAlign: 'center' }}
+      className="inline-block cursor-ns-resize select-none touch-none font-black text-white tabular-nums leading-none"
+      style={{ fontSize: Math.round(20 * scale), minWidth: value >= 10 ? '1.5ch' : '0.8ch', textAlign: 'center' }}
       onPointerDown={(e) => { startY.current = e.clientY; accum.current = 0; (e.target as HTMLElement).setPointerCapture(e.pointerId); }}
       onPointerMove={(e) => {
         if (startY.current === null) return;
@@ -106,6 +108,7 @@ export default function StudentActivityPanel({
   const [studentId, setStudentId] = useState<string>('');
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const scale = useHomeScale();
 
   // 날짜 선택
   const todayDate = useMemo(() => {
@@ -454,10 +457,10 @@ export default function StudentActivityPanel({
         </button>
         <div className="flex items-baseline gap-0.5">
           <ScrollableDigit value={selectedMonth} min={1} max={12} onChange={handleMonthChange} />
-          <span className="text-sm font-bold text-white/50">月</span>
+          <span className="font-bold text-white/50" style={{ fontSize: Math.round(14 * scale) }}>月</span>
           <span className="w-1" />
           <ScrollableDigit value={Math.min(selectedDay, maxDayInMonth)} min={1} max={maxDayInMonth} onChange={setSelectedDay} />
-          <span className="text-sm font-bold text-white/50">日</span>
+          <span className="font-bold text-white/50" style={{ fontSize: Math.round(14 * scale) }}>日</span>
         </div>
         <button onClick={handleNextDay} className="w-7 h-7 flex items-center justify-center text-white/50 hover:text-white">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -481,7 +484,7 @@ export default function StudentActivityPanel({
             {filteredActivities.map(item => (
               <div key={item.id} className="flex items-start gap-3 py-2">
                 {/* 시간 */}
-                <span className="text-xs text-white/50 font-mono w-11 flex-shrink-0 pt-0.5">
+                <span className="text-white/50 font-mono flex-shrink-0 pt-0.5" style={{ fontSize: Math.round(12 * scale), width: Math.round(44 * scale) }}>
                   {formatTime(item.timestamp)}
                 </span>
                 {/* 아이콘 */}
@@ -499,18 +502,18 @@ export default function StudentActivityPanel({
                 </div>
                 {/* 내용 */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white font-medium">{item.label}</p>
+                  <p className="text-white font-medium" style={{ fontSize: Math.round(14 * scale) }}>{item.label}</p>
                   {item.detail && (
-                    <p className="text-xs text-white/50 truncate">{item.detail}</p>
+                    <p className="text-white/50 truncate" style={{ fontSize: Math.round(12 * scale) }}>{item.detail}</p>
                   )}
                 </div>
                 {/* EXP 또는 체류시간 */}
                 <div className="flex-shrink-0 text-right">
                   {item.exp != null && item.exp > 0 && (
-                    <span className="text-xs font-bold text-white">+{item.exp} XP</span>
+                    <span className="font-bold text-white" style={{ fontSize: Math.round(12 * scale) }}>+{item.exp} XP</span>
                   )}
                   {item.durationMs != null && item.durationMs > 0 && (
-                    <span className="text-xs text-white/50">{formatDuration(item.durationMs)}</span>
+                    <span className="text-white/50" style={{ fontSize: Math.round(12 * scale) }}>{formatDuration(item.durationMs)}</span>
                   )}
                 </div>
               </div>
@@ -521,11 +524,11 @@ export default function StudentActivityPanel({
 
       {/* 하단 요약 */}
       <div className="flex-shrink-0 px-4 py-3 pb-4 flex items-center justify-between" style={{ borderTop: '1px solid #B0A898' }}>
-        <span className="text-xs text-white/50">
+        <span className="text-white/50" style={{ fontSize: Math.round(12 * scale) }}>
           활동 {filteredActivities.filter(a => a.type === 'exp').length}건
           · 방문 {filteredActivities.filter(a => a.type === 'visit').length}회
         </span>
-        <span className="text-xs font-bold text-white">
+        <span className="font-bold text-white" style={{ fontSize: Math.round(12 * scale) }}>
           +{filteredActivities.reduce((s, a) => s + (a.exp || 0), 0)} XP
         </span>
       </div>
