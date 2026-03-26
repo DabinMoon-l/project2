@@ -341,35 +341,25 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 z-[60] bg-black/30"
+            className="absolute inset-0 z-[60] bg-black/10"
             onClick={() => setSelectedUser(null)}
           />
-          {/* 바텀시트 */}
+          {/* 바텀시트 — 투명 배경 */}
           <motion.div
             key="act-sheet"
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-            className="absolute bottom-0 left-0 right-0 z-[61] rounded-t-2xl overflow-hidden"
+            className="absolute bottom-0 left-0 right-0 z-[61] rounded-t-2xl overflow-hidden shadow-[0_-4px_24px_rgba(0,0,0,0.15)]"
             style={{ height: '85%', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* 세로모드: 랭킹과 동일한 배경 */}
-            {!isWide && (
-              <>
-                <div className="absolute inset-0"><Image src="/images/home-bg.jpg" alt="" fill className="object-cover" /></div>
-                <div className="absolute inset-0 bg-black/40 backdrop-blur-2xl" />
-              </>
-            )}
-            {/* 가로모드: 투명 글래스 */}
-            {isWide && (
-              <div className="absolute inset-0 bg-black/15 backdrop-blur-lg" />
-            )}
+            <div className="absolute inset-0 bg-[#F5F0E8]/90 backdrop-blur-sm" />
             <div className="relative z-10 h-full flex flex-col">
               {/* 드래그 핸들 */}
               <div className="flex justify-center pt-2 pb-1">
-                <div className="w-8 h-1 rounded-full bg-white/30" />
+                <div className="w-8 h-1 rounded-full bg-[#D4CFC4]" />
               </div>
               <StudentActivityPanel
                 userId={selectedUser.id}
