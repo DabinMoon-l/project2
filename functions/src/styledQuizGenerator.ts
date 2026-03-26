@@ -192,11 +192,6 @@ const MICROBIOLOGY_FOCUS_GUIDE = `## 미생물학 퀴즈 출제 포커스
 - **(필수 출제) CD4 T세포 vs CD8 T세포 기능 비교**:
   - CD4⁺ 보조T세포(Th): MHC 클래스 II 인식, 사이토카인으로 면역반응 조절
   - CD8⁺ 세포독성T세포(CTL): MHC 클래스 I 인식, 퍼포린·그랜자임으로 감염세포 직접 살해
-- **(필수 출제) 보조T세포 아형 비교 (Th1/Th2/Th17/TFH)**:
-  - Th1: IFN-γ 생산 → 큰포식세포 활성화, CTL 활성화 (세포 내 기생세균/원충)
-  - Th2: IL-4/5/13 → B세포 항체생산 촉진, IgE → 호산구·비만세포 동원 (기생충)
-  - Th17: IL-17 → 호중구 동원, 과도 시 자가면역 관여
-  - TFH: 림프소포에서 B세포와 상호작용 → 항체생산 촉진
 - **(필수 출제) 체액성면역 vs 세포매개면역**:
   - 체액성(humoral): B세포 → 항체 → 중화, 옵소닌화, ADCC, 보체 활성화
   - 세포매개(cellular): T세포(CTL, Th1) → 감염세포 직접 살해, 큰포식세포 활성화
@@ -206,11 +201,6 @@ const MICROBIOLOGY_FOCUS_GUIDE = `## 미생물학 퀴즈 출제 포커스
   - IgG: 혈청 내 최다·반감기 가장 김 → 2차 면역반응 주력, 옵소닌화, 태반 통과
   - IgM: 1차 면역반응에서 먼저 출현, 5량체 → 보체 활성화 강력
   - IgA: 점막 방어(분비형), 모유 통한 신생아 보호 (비중 낮음)
-- **(고빈도) 항체가 관여하는 과민반응 (I~III형)**:
-  - I형(즉시형): **IgE** → 비만세포 탈과립 → 아나필락시스, 알레르기
-  - II형(세포독성): **IgG/IgM** → 보체 활성화 → 세포용해 (용혈빈혈)
-  - III형(면역복합체): **IgG/IgM** → 면역복합체 침착 → 혈관염 (SLE, 류마티스)
-  - cf. IV형(지연형): 항체 무관, T세포(Th1/CTL) 매개 → 육아종 (결핵, GVHD)
 - **(필수 출제) 선천→후천면역 전환 기전**: 가지세포(APC)가 감염부위에서 항원 포식 → 림프절 이동 → MHC로 T세포에 항원제시 → 항원 특이적 후천면역 활성화 (반드시 이 흐름을 이해해야 함)
 - **(필수 출제) 항원수용체와 항체**: BCR(B세포 수용체)=막결합 항체 — 분비되면 항체, TCR(T세포 수용체)=MHC-항원 복합체 인식
 - **(필수 출제) 1차/2차 항원 노출과 항체 반응 (그래프)**:
@@ -706,14 +696,8 @@ function buildDifficultyPrompt(
   // 난이도별 특수 형식 안내
   let formatInstructions = "";
 
-  if (difficulty === "easy") {
-    formatInstructions = `
-### OX 문제 형식 (쉬움 난이도 전용)
-- 일부 문제를 OX 형식으로 출제할 수 있습니다.
-- OX 문제는 "type": "ox", "answer": "O" 또는 "X"로 설정
-- choices와 choiceExplanations는 생략
-- 명확한 참/거짓 판단이 가능한 진술로 구성`;
-  }
+  // OX 문제 생성 비활성화 — 참/거짓 경계가 애매한 문제가 자주 발생하여 제거
+  // 모든 난이도에서 객관식(5지선다)만 생성
 
   if (params.allowBogi) {
     formatInstructions += `
@@ -1231,7 +1215,7 @@ ${styledScopeContext}
 
 1. ${contentRule}
 2. **문제 수**: 정확히 ${questionCount}개
-3. **선지 수**: 객관식은 반드시 **5개** 선지 (OX 문제 제외). **선지에 "가.", "나.", "다." 등의 접두사를 붙이지 마세요** — UI가 자동으로 ①②③④⑤ 번호를 표시합니다.
+3. **선지 수**: 반드시 **5개** 선지. OX 문제는 출제하지 마세요. **선지에 "가.", "나.", "다." 등의 접두사를 붙이지 마세요** — UI가 자동으로 ①②③④⑤ 번호를 표시합니다.
 4. **난이도 일관성**: 모든 문제가 ${difficulty.toUpperCase()} 난이도에 맞아야 합니다
 5. **다양성**: 같은 개념을 반복하지 말고 다양한 주제를 다루세요
 6. **한국어**: 모든 내용을 한국어로 작성하세요
@@ -1533,16 +1517,17 @@ export async function generateWithGemini(
     // 문제 유효성 검사
     const validQuestions: GeneratedQuestion[] = [];
     for (const q of parsed.questions) {
-      // OX 문제 감지 (type이 "ox"이거나 answer가 "O"/"X" 문자열)
+      // OX 문제 감지 — 프롬프트에서 제거했지만 혹시 생성되면 스킵
       const isOxQuestion = q.type === "ox" ||
         (typeof q.answer === "string" && (q.answer === "O" || q.answer === "X"));
 
-      // 정답 유효성 검사 (단일 정답, 복수 정답, OX)
-      let isValidAnswer = false;
       if (isOxQuestion) {
-        // OX 문제: "O" 또는 "X" 문자열
-        isValidAnswer = q.answer === "O" || q.answer === "X";
-      } else if (typeof q.answer === "number") {
+        continue; // OX 문제는 애매한 참/거짓 경계 문제로 필터링
+      }
+
+      // 정답 유효성 검사 (단일 정답, 복수 정답)
+      let isValidAnswer = false;
+      if (typeof q.answer === "number") {
         // 단일 정답: 0-indexed
         isValidAnswer = q.choices && q.answer >= 0 && q.answer < q.choices.length;
       } else if (Array.isArray(q.answer)) {
@@ -1553,8 +1538,7 @@ export async function generateWithGemini(
           );
       }
 
-      // OX 문제는 choices 없어도 유효
-      const hasValidChoices = isOxQuestion || (Array.isArray(q.choices) && q.choices.length >= 2);
+      const hasValidChoices = Array.isArray(q.choices) && q.choices.length >= 2;
 
       if (
         q.text &&
@@ -1585,11 +1569,11 @@ export async function generateWithGemini(
 
         validQuestions.push({
           text: q.text,
-          type: isOxQuestion ? "ox" : (q.type || "multiple"),
-          choices: isOxQuestion ? undefined : q.choices,
+          type: q.type || "multiple",
+          choices: q.choices,
           answer: q.answer,
           explanation: q.explanation || "",
-          choiceExplanations: isOxQuestion ? undefined : (
+          choiceExplanations: (
             Array.isArray(q.choiceExplanations) && Array.isArray(q.choices) && q.choiceExplanations.length === q.choices.length
               ? q.choiceExplanations
               : undefined
