@@ -21,7 +21,8 @@ export function useDailyAttendance(courseId: string, date: string) {
 
     setLoading(true);
     const docRef = doc(db, 'dailyAttendance', `${courseId}_${date}`);
-    const today = new Date().toISOString().slice(0, 10);
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
     if (date === today) {
       // 오늘: 실시간 구독 (새 학생 접속 시 즉시 반영)

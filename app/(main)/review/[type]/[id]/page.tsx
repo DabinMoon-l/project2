@@ -918,7 +918,7 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
           setQuizScores({
             myScore,
             myFirstReviewScore: data.userFirstReviewScores?.[user.uid],
-            averageScore: data.averageScore,
+            averageScore: Math.min(data.averageScore || 0, 100),
             isPublic: data.isPublic ?? false,
           });
         }

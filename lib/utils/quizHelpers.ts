@@ -3,16 +3,16 @@
 // 신문 배경 텍스트 (생물학 관련)
 export const NEWSPAPER_BG_TEXT = `The cell membrane, also known as the plasma membrane, is a biological membrane that separates and protects the interior of all cells from the outside environment. The cell membrane consists of a lipid bilayer, including cholesterols that sit between phospholipids to maintain their fluidity at various temperatures. The membrane also contains membrane proteins, including integral proteins that span the membrane serving as membrane transporters, and peripheral proteins that loosely attach to the outer side of the cell membrane, acting as enzymes to facilitate interaction with the cell's environment. Glycolipids embedded in the outer lipid layer serve a similar purpose. The cell membrane controls the movement of substances in and out of cells and organelles, being selectively permeable to ions and organic molecules. In addition, cell membranes are involved in a variety of cellular processes such as cell adhesion, ion conductivity, and cell signaling.`;
 
-// averageScore fallback 계산
+// averageScore fallback 계산 (100 초과 시 userScores에서 재계산)
 export function parseAverageScore(data: Record<string, unknown>): number {
   let averageScore = (data.averageScore as number) || 0;
-  if (!averageScore && data.userScores) {
+  if ((!averageScore || averageScore > 100) && data.userScores) {
     const scores = Object.values(data.userScores as Record<string, number>);
     if (scores.length > 0) {
       averageScore = Math.round((scores.reduce((sum, s) => sum + s, 0) / scores.length) * 10) / 10;
     }
   }
-  return averageScore;
+  return Math.min(averageScore, 100);
 }
 
 // createdAt 기반 정렬 유틸 (최신순)

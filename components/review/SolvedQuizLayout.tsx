@@ -131,10 +131,10 @@ export default function SolvedQuizLayout({
             myScore: completionScore ?? data.userScores?.[userId],
             myFirstReviewScore: data.userFirstReviewScores?.[userId],
             isAiGenerated: data.isAiGenerated || data.type === 'ai-generated',
-            averageScore: data.averageScore || (() => {
+            averageScore: (data.averageScore && data.averageScore <= 100) ? data.averageScore : (() => {
               if (data.userScores) {
                 const scores = Object.values(data.userScores) as number[];
-                return scores.length > 0 ? Math.round((scores.reduce((s: number, v: number) => s + v, 0) / scores.length) * 10) / 10 : 0;
+                return scores.length > 0 ? Math.min(Math.round((scores.reduce((s: number, v: number) => s + v, 0) / scores.length) * 10) / 10, 100) : 0;
               }
               return 0;
             })(),
