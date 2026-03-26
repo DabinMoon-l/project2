@@ -253,17 +253,22 @@ export default function StudentActivityPanel({
 
         let detail: string | undefined = data.reason || undefined;
 
-        // 퀴즈 풀기: 퀴즈 이름 + 점수
+        // 퀴즈 풀기: 퀴즈 이름 + 점수 (metadata.score 우선, reason 폴백)
         if (t === 'quiz_complete' && sid) {
           const title = quizTitles[sid];
-          const scoreMatch = (data.reason || '').match(/점수[:\s]*(\d+)점/);
-          const scorePart = scoreMatch ? ` (점수: ${scoreMatch[1]}점)` : '';
+          const metaScore = meta?.score != null ? Number(meta.score) : null;
+          const scoreMatch = metaScore == null ? (data.reason || '').match(/점수[:\s]*(\d+)점/) : null;
+          const scorePart = metaScore != null ? ` (점수: ${metaScore}점)` : scoreMatch ? ` (점수: ${scoreMatch[1]}점)` : '';
           if (title) detail = `${title}${scorePart}`;
+          else if (scorePart) detail = (detail || '') + scorePart;
         }
-        // 복습 완료: 퀴즈 이름
+        // 복습 완료: 퀴즈 이름 + 점수
         else if (t === 'review_practice' && sid) {
           const title = quizTitles[sid];
-          if (title) detail = title;
+          const metaScore = meta?.score != null ? Number(meta.score) : null;
+          const scorePart = metaScore != null ? ` (점수: ${metaScore}점)` : '';
+          if (title) detail = `${title}${scorePart}`;
+          else if (scorePart) detail = (detail || '') + scorePart;
         }
         // 퀴즈 만들기/공개: 퀴즈 이름
         else if ((t === 'quiz_create' || t === 'quiz_make_public') && sid) {
