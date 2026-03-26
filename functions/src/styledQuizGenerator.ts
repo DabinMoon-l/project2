@@ -861,8 +861,10 @@ export function buildFullPrompt(
     }
   }
 
-  // focusGuide vs scope 문제 수 균등 분배
-  const focusQuestionCount = Math.round(questionCount / 2);
+  // focusGuide vs scope 문제 수 분배
+  // 1회차만 focus 사용 (50/50), 2회차부터 scope만 사용
+  const useFocusGuide = chapterRepetition === 0;
+  const focusQuestionCount = useFocusGuide ? Math.round(questionCount / 2) : 0;
   const scopeQuestionCount = questionCount - focusQuestionCount;
 
   // Scope가 있으면 "출제 범위"로, 없으면 "학습 자료"로 표현
@@ -1046,130 +1048,40 @@ ${availableImages.map((img, idx) => `### 이미지 ${idx + 1}
   // 핵심 집중 조건: 쉬움/보통 난이도 + 10문제 이하 (10문제 이하에서는 핵심 개념 우선)
   const isLowQuestionCount = !allowDetailedQuestions && questionCount <= 10;
 
-  // Focus Guide 섹션 (난이도, 문제 수, 반복 횟수에 따라 핵심 강조도 조절)
-  // chapterRepetition이 높을수록 포커스 가이드 의존도 ↓, 다양성 ↑
+  // Focus Guide 섹션: 1회차(chapterRepetition === 0)만 사용, 2회차부터 scope만
   let focusGuideSection = "";
-  if (hasFocusGuide) {
+  if (hasFocusGuide && useFocusGuide) {
     let focusInstruction: string;
 
-    // 반복 횟수별 다양성 지시
-    // 학생: 0-1회 핵심집중, 2회 다른관점, 3회 보충확대, 4+ 다양성확장
-    // 교수: 0회 핵심집중, 1+ 다른관점, 3+ 다양성확장 (기존 유지)
-    let repNote: string;
-    if (isProfessor) {
-      // 교수: 기존 임계값 유지
-      repNote = chapterRepetition >= 3
-        ? `\n> - ⚠️ **${chapterRepetition + 1}회차 생성**: 이전에 같은 챕터로 여러 번 생성했습니다. (고빈도) 개념은 최소한만 포함하고, 포커스 가이드의 덜 출제된 항목, 세부 개념, 응용 문제 위주로 출제하세요. 기존 문제와 최대한 다른 각도에서 출제하세요.`
-        : chapterRepetition >= 1
-          ? `\n> - ⚠️ **${chapterRepetition + 1}회차 생성**: 같은 챕터로 이전에 생성한 적 있습니다. 이전과 다른 개념, 다른 관점에서 출제하세요. 포커스 가이드의 아직 다루지 않은 항목을 우선 선택하세요.`
-          : "";
-    } else {
-      // 학생: 핵심집중 2라운드 (0-1회) → 다른관점(2회) → 보충확대(3회) → 다양성확장(4+)
-      repNote = chapterRepetition >= 4
-        ? `\n> - ⚠️ **${chapterRepetition + 1}회차 생성 (다양성 확장)**: 이 챕터로 ${chapterRepetition}번 이상 생성했습니다. (고빈도) 개념은 최소한만 포함하고, 포커스 가이드의 덜 출제된 항목, 세부 개념, 응용 문제 위주로 출제하세요. 기존 문제와 최대한 다른 각도에서 출제하세요.`
-        : chapterRepetition === 3
-          ? `\n> - ⚠️ **${chapterRepetition + 1}회차 생성 (보충 확대)**: 핵심 개념은 이미 충분히 다뤘습니다. 포커스 가이드의 보조 항목, 학습 자료의 세부 내용, 응용·비교 문제 위주로 확대하세요.`
-          : chapterRepetition === 2
-            ? `\n> - ⚠️ **${chapterRepetition + 1}회차 생성 (다른 관점)**: 같은 챕터로 이전에 생성한 적 있습니다. 이전과 다른 개념, 다른 관점에서 출제하세요. 포커스 가이드의 아직 다루지 않은 항목을 우선 선택하세요.`
-            : "";
-    }
-
     if (allowDetailedQuestions) {
-      // 어려움 난이도 또는 12문제 이상: 세부적인 내용도 출제 가능
-      const modeLabel = isHard ? "어려움 난이도" : `${questionCount}문제`;
-      const minCore = Math.max(1, Math.round(questionCount * Math.max(0.1, 0.3 - chapterRepetition * 0.05)));
-      focusInstruction = `> **세부 출제 허용 (${modeLabel})**:
+      // 어려움 난이도 또는 12문제 이상
+      const minCore = Math.max(1, Math.round(questionCount * 0.3));
+      focusInstruction = `> **세부 출제 허용 (${isHard ? "어려움 난이도" : `${questionCount}문제`})**:
 > - 포커스 가이드의 핵심 개념 + 학습 자료의 세부 내용 모두 출제 가능합니다
 > - **(고빈도)**, **(필수 출제)** 개념을 최소 ${minCore}개 포함하세요
 > - 나머지는 학습 자료에 명시된 세부 사항, 예외 케이스, 부가 설명에서도 출제 가능
-> - 지엽적인 내용도 학습 자료에 근거가 있으면 출제하세요${repNote}`;
+> - 지엽적인 내용도 학습 자료에 근거가 있으면 출제하세요`;
     } else if (isLowQuestionCount) {
       // 5-8문제 (쉬움/보통)
-      const minCore = Math.max(1, Math.min(questionCount, 5) - chapterRepetition);
-      // 학생: 0-1 핵심집중, 2 다른관점, 3 보충확대, 4+ 다양성확장
-      // 교수: 0 핵심집중, 1+ 다른관점, 3+ 다양성확장
-      const isDiversity = isProfessor ? chapterRepetition >= 3 : chapterRepetition >= 4;
-      const isSupplement = !isProfessor && chapterRepetition === 3;
-      const isDifferent = isProfessor ? chapterRepetition >= 1 : chapterRepetition === 2;
-
-      if (isDiversity) {
-        focusInstruction = `> **다양성 확장 모드 (${questionCount}문제, ${chapterRepetition + 1}회차)**:
-> - **(고빈도)** 개념은 ${minCore}개만 포함하고, 나머지는 포커스 가이드의 보조 항목이나 학습 자료의 세부 내용에서 출제하세요
-> - 이전에 출제되었을 가능성이 높은 핵심 개념 대신 새로운 관점의 문제를 만드세요
-> - 응용, 비교, 사례 적용 등 다양한 문제 유형을 활용하세요`;
-      } else if (isSupplement) {
-        focusInstruction = `> **보충 확대 모드 (${questionCount}문제, ${chapterRepetition + 1}회차)**:
-> - 핵심 개념은 이미 충분히 다뤘습니다. **(고빈도)** 개념은 ${minCore}개만 포함하세요
-> - 포커스 가이드의 보조 항목, 학습 자료의 세부 내용에서 나머지를 출제하세요
-> - 응용, 비교, 사례 적용 등 다양한 문제 유형을 활용하세요${repNote}`;
-      } else if (isDifferent) {
-        focusInstruction = `> **핵심+보충 모드 (${questionCount}문제, ${chapterRepetition + 1}회차)**:
-> - **(고빈도)**, **(필수 출제)** 개념에서 ${minCore}개 이상 출제하세요
-> - 나머지는 포커스 가이드의 다른 항목이나 학습 자료의 세부 내용에서 출제하세요
-> - 이전과 다른 관점, 다른 문제 유형으로 출제하세요${repNote}`;
-      } else {
-        focusInstruction = `> **핵심 집중 모드 (${questionCount}문제)**:
+      focusInstruction = `> **핵심 집중 모드 (${questionCount}문제)**:
 > - 반드시 **(고빈도)**, **(필수 출제)** 표시된 개념에서 ${Math.min(questionCount, 5)}개 이상 출제하세요
 > - **비교 문제** (vs), **기능 매칭** 등 핵심 유형을 우선 출제하세요
 > - 문제의 주제 자체가 해당 챕터의 핵심 내용이어야 합니다
 > - 지엽적인 세부사항, 예외 케이스, 부가 설명 등은 출제하지 마세요
 > - 선지 구성도 핵심 개념 간의 구분에 초점을 맞추세요`;
-      }
     } else {
       // 9-11문제 (쉬움/보통)
-      const corePercent = Math.max(20, 60 - chapterRepetition * 15);
-      // 학생: 0-1 핵심집중, 2 다른관점, 3 보충확대, 4+ 다양성확장
-      // 교수: 0 핵심집중, 1+ 다른관점, 3+ 다양성확장
-      const isDiversity = isProfessor ? chapterRepetition >= 3 : chapterRepetition >= 4;
-      const isSupplement = !isProfessor && chapterRepetition === 3;
-      const isDifferent = isProfessor ? chapterRepetition >= 1 : chapterRepetition === 2;
-
-      if (isDiversity) {
-        focusInstruction = `> **다양성 확장 모드 (${questionCount}문제, ${chapterRepetition + 1}회차)**:
-> - **(고빈도)** 개념은 ${corePercent}% 이하로 제한하고, 나머지는 다양한 세부 개념에서 출제하세요
-> - 포커스 가이드의 보조 항목, 학습 자료의 세부 사항, 응용 문제를 적극 활용하세요
-> - 기존에 반복 출제되었을 핵심 주제는 피하고 새로운 각도에서 접근하세요`;
-      } else if (isSupplement) {
-        focusInstruction = `> **보충 확대 모드 (${questionCount}문제, ${chapterRepetition + 1}회차)**:
-> - 핵심 개념은 충분히 다뤘습니다. **(고빈도)** 개념은 ${corePercent}% 이하로 제한하세요
-> - 포커스 가이드의 보조 항목, 학습 자료의 세부 내용에서 나머지를 출제하세요
-> - 응용, 비교, 사례 적용 등 다양한 문제 유형을 활용하세요${repNote}`;
-      } else if (isDifferent) {
-        focusInstruction = `> **핵심 우선 모드 (${questionCount}문제, ${chapterRepetition + 1}회차)**:
-> - **(고빈도)**, **(필수 출제)** 개념에서 최소 ${corePercent}% 이상 출제하세요
-> - 나머지는 포커스 가이드의 다른 항목에서 출제하세요
-> - 이전과 다른 관점에서 출제하세요${repNote}`;
-      } else {
-        focusInstruction = `> **핵심 우선 모드 (${questionCount}문제)**:
+      focusInstruction = `> **핵심 우선 모드 (${questionCount}문제)**:
 > - **(고빈도)**, **(필수 출제)** 표시된 개념에서 최소 60% 이상 출제하세요
 > - 나머지는 포커스 가이드의 다른 핵심 개념에서 출제하세요
 > - 학습 자료에만 있고 포커스 가이드에 없는 지엽적 내용은 가급적 피하세요`;
-      }
-    }
-
-    // 챕터별 반복 횟수 상세 정보 (Gemini에게 어떤 챕터를 다양화해야 하는지 알려줌)
-    let chapterRepDetail = "";
-    if (chapterRepetitionMap) {
-      const entries = Object.entries(chapterRepetitionMap).filter(([, v]) => v > 0);
-      if (entries.length > 0) {
-        chapterRepDetail = `\n\n> **챕터별 이전 생성 횟수** (높을수록 새로운 관점 필요):\n` +
-          entries.map(([tag, count]) => {
-            if (isProfessor) {
-              // 교수: 기존 임계값
-              return `> - ${tag}: ${count}회 생성됨${count >= 3 ? " → 세부/응용 위주로" : count >= 1 ? " → 다른 관점으로" : ""}`;
-            }
-            // 학생: 0-1 핵심, 2 다른관점, 3 보충확대, 4+ 다양성확장
-            const hint = count >= 4 ? " → 다양성 확장 (새로운 각도)" : count === 3 ? " → 보충 확대 (세부/응용)" : count === 2 ? " → 다른 관점으로" : "";
-            return `> - ${tag}: ${count}회 생성됨${hint}`;
-          }).join("\n");
-      }
     }
 
     focusGuideSection = `
 ## 출제 포커스 가이드
 ${focusGuide}
 
-${focusInstruction}${chapterRepDetail}
+${focusInstruction}
 `;
   }
 
@@ -1187,10 +1099,13 @@ ${trimmedProfessorPrompt}
 ` : "";
 
   // professorPrompt가 있으면 scope는 순수 참고용 — 비율 할당 금지
+  // focus 미사용 시 (2회차+) scope에 전체 문제 수 할당
   const scopeRatioPrefix = !professorPrompt
-    ? `(${questionCount}문제 중 약 ${scopeQuestionCount}문제는 이 넓은 범위에서 출제하세요.)`
+    ? useFocusGuide
+      ? `(${questionCount}문제 중 약 ${scopeQuestionCount}문제는 이 넓은 범위에서 출제하세요.)`
+      : `(${questionCount}문제 전부 이 범위에서 출제하세요. 학습 자료와 과목 범위를 기반으로 다양하게 출제하세요.)`
     : "";
-  const focusRatioPrefix = !professorPrompt
+  const focusRatioPrefix = !professorPrompt && useFocusGuide
     ? `(${questionCount}문제 중 약 ${focusQuestionCount}문제는 아래 핵심 포인트에서 출제하세요.)`
     : "";
 
@@ -1416,9 +1331,14 @@ export async function generateWithGemini(
 
   const startTime = Date.now();
 
-  // 120초 타임아웃 (CF 300초 내에서 다른 처리 여유 확보)
+  // 문제 수에 비례한 타임아웃 (hard 20문제 = ~32K 토큰 출력 → 120초 부족)
+  // 기본 120초 + 10문제 초과분당 12초 (최대 240초, CF 300초 내 여유 확보)
+  const apiTimeoutMs = Math.min(
+    120_000 + Math.max(0, questionCount - 10) * 12_000,
+    240_000
+  );
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 120_000);
+  const timeout = setTimeout(() => controller.abort(), apiTimeoutMs);
   let response: Awaited<ReturnType<typeof fetch>>;
   try {
     response = await fetch(
@@ -1433,7 +1353,7 @@ export async function generateWithGemini(
   } catch (err: unknown) {
     clearTimeout(timeout);
     if (err instanceof Error && err.name === "AbortError") {
-      throw new Error("Gemini API 요청 시간 초과 (120초)");
+      throw new Error(`Gemini API 요청 시간 초과 (${apiTimeoutMs / 1000}초)`);
     }
     throw err;
   }
