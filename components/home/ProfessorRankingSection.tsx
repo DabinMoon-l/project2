@@ -8,6 +8,7 @@ import { computeRankScore, computeTeamScore } from '@/lib/utils/ranking';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useWideMode, scaleCoord } from '@/lib/hooks/useViewportScale';
 import { useDetailPanel } from '@/lib/contexts/DetailPanelContext';
+import { useHomeScale } from './useHomeScale';
 import RankingBottomSheet from './RankingBottomSheet';
 
 // 순위 접미사
@@ -54,6 +55,7 @@ export default function ProfessorRankingSection({ overrideCourseId }: { override
   const userCourseId = overrideCourseId ?? contextCourseId;
   const isWide = useWideMode();
   const { openDetail, closeDetail } = useDetailPanel();
+  const scale = useHomeScale();
 
   // 4팀 랭킹 데이터 (랭크순 정렬)
   const [teamEntries, setTeamEntries] = useState<TeamRankEntry[]>([]);
@@ -242,10 +244,11 @@ export default function ProfessorRankingSection({ overrideCourseId }: { override
 
   return (
     <div className="w-full">
-      <div className="flex items-center justify-center gap-4">
+      <div className="flex items-center justify-center" style={{ gap: Math.round(16 * scale) }}>
         {/* TEAM + TEAM RANK (스와이프 전용) */}
         <div
-          className="flex items-center gap-4 select-none cursor-grab active:cursor-grabbing"
+          className="flex items-center select-none cursor-grab active:cursor-grabbing"
+          style={{ gap: Math.round(16 * scale) }}
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
@@ -255,17 +258,18 @@ export default function ProfessorRankingSection({ overrideCourseId }: { override
         >
           {/* TEAM */}
           <div className="text-center">
-            <span className="text-[10px] font-bold text-white/50 tracking-widest">TEAM</span>
-            <div className="h-[40px] relative overflow-hidden">
+            <span className="font-bold text-white/50 tracking-widest" style={{ fontSize: Math.round(10 * scale) }}>TEAM</span>
+            <div className="relative overflow-hidden" style={{ height: Math.round(40 * scale) }}>
               <AnimatePresence mode="popLayout" initial={false} custom={direction}>
                 <motion.div
                   key={`team-${currentIdx}`}
                   custom={direction}
-                  initial={{ y: direction > 0 ? 30 : -30, opacity: 0 }}
+                  initial={{ y: direction > 0 ? 30 * scale : -30 * scale, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: direction > 0 ? -30 : 30, opacity: 0 }}
+                  exit={{ y: direction > 0 ? -30 * scale : 30 * scale, opacity: 0 }}
                   transition={{ duration: 0.3, ease: 'easeInOut' }}
-                  className="text-4xl font-black text-white leading-tight"
+                  className="font-black text-white leading-tight"
+                  style={{ fontSize: Math.round(36 * scale) }}
                 >
                   {teamLabel}
                 </motion.div>
@@ -274,21 +278,22 @@ export default function ProfessorRankingSection({ overrideCourseId }: { override
           </div>
 
           {/* 구분선 */}
-          <div className="w-px h-8 bg-white/20" />
+          <div className="w-px bg-white/20" style={{ height: Math.round(32 * scale) }} />
 
           {/* TEAM RANK */}
           <div className="text-center">
-            <span className="text-[10px] font-bold text-white/50 tracking-widest">TEAM RANK</span>
-            <div className="h-[40px] relative overflow-hidden">
+            <span className="font-bold text-white/50 tracking-widest" style={{ fontSize: Math.round(10 * scale) }}>TEAM RANK</span>
+            <div className="relative overflow-hidden" style={{ height: Math.round(40 * scale) }}>
               <AnimatePresence mode="popLayout" initial={false} custom={direction}>
                 <motion.div
                   key={`rank-${currentIdx}`}
                   custom={direction}
-                  initial={{ y: direction > 0 ? 30 : -30, opacity: 0 }}
+                  initial={{ y: direction > 0 ? 30 * scale : -30 * scale, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: direction > 0 ? -30 : 30, opacity: 0 }}
+                  exit={{ y: direction > 0 ? -30 * scale : 30 * scale, opacity: 0 }}
                   transition={{ duration: 0.3, ease: 'easeInOut' }}
-                  className={`text-4xl font-black text-white leading-tight ${loading ? 'animate-pulse' : ''}`}
+                  className={`font-black text-white leading-tight ${loading ? 'animate-pulse' : ''}`}
+                  style={{ fontSize: Math.round(36 * scale) }}
                 >
                   {rankLabel}
                 </motion.div>
@@ -298,7 +303,7 @@ export default function ProfessorRankingSection({ overrideCourseId }: { override
         </div>
 
         {/* 구분선 */}
-        <div className="w-px h-8 bg-white/20" />
+        <div className="w-px bg-white/20" style={{ height: Math.round(32 * scale) }} />
 
         {/* OVERVIEW (클릭 시 랭킹 바텀시트) */}
         <button
@@ -313,16 +318,16 @@ export default function ProfessorRankingSection({ overrideCourseId }: { override
           className="flex items-center gap-2 active:scale-95 transition-transform"
         >
           <div className="text-center">
-            <span className="text-[10px] font-bold text-white/50 tracking-widest">OVERVIEW</span>
+            <span className="font-bold text-white/50 tracking-widest" style={{ fontSize: Math.round(10 * scale) }}>OVERVIEW</span>
             <div className="flex items-baseline justify-center">
-              <span className={`text-4xl font-black text-white leading-tight ${loading ? 'animate-pulse' : ''}`}>
+              <span className={`font-black text-white leading-tight ${loading ? 'animate-pulse' : ''}`} style={{ fontSize: Math.round(36 * scale) }}>
                 {loading ? '-' : `${participationRate}%`}
               </span>
             </div>
           </div>
 
           {/* 화살표 */}
-          <svg className="w-4 h-4 text-white/50 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="text-white/50 flex-shrink-0" style={{ width: Math.round(16 * scale), height: Math.round(16 * scale) }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
           </svg>
         </button>
