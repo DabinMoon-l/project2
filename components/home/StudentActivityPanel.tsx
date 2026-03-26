@@ -171,7 +171,12 @@ export default function StudentActivityPanel({
         orderBy('timestamp', 'desc'),
         limit(200),
       )),
-    ]).then(async ([userSnap, expSnap, pvSnap]) => {
+      // rabbitHoldings 7일 (토끼 뽑기)
+      getDocs(query(
+        collection(db, 'users', userId, 'rabbitHoldings'),
+        where('createdAt', '>=', tsFrom),
+      )),
+    ]).then(async ([userSnap, expSnap, pvSnap, rabbitSnap]) => {
       // 학번
       if (userSnap.exists()) {
         setStudentId(userSnap.data()?.studentId || '');
@@ -340,12 +345,42 @@ export default function StudentActivityPanel({
         });
       });
 
+      // rabbitHoldings → 토끼 뽑기 ActivityItem
+      // 토끼 이름 배치 조회
+      const rabbitDocIds = new Set<string>();
+      rabbitSnap.docs.forEach(d => {
+        const rid = d.data().rabbitDocId as string | undefined;
+        if (rid) rabbitDocIds.add(rid);
+      });
+      const rabbitNames: Record<string, string> = {};
+      const rArr = Array.from(rabbitDocIds);
+      for (let i = 0; i < rArr.length; i += 10) {
+        const batch = rArr.slice(i, i + 10);
+        const snaps = await Promise.all(batch.map(id => getDoc(doc(db, 'rabbits', id))));
+        snaps.forEach((snap, idx) => {
+          if (snap.exists()) rabbitNames[batch[idx]] = snap.data()?.name || '';
+        });
+      }
+      rabbitSnap.docs.forEach(d => {
+        const data = d.data();
+        const ts = data.createdAt?.toDate?.() || new Date(0);
+        const rid = data.rabbitDocId as string || '';
+        const rName = rabbitNames[rid] || `토끼 #${(data.rabbitId || 0) + 1}`;
+        items.push({
+          id: `rabbit-${d.id}`,
+          timestamp: ts,
+          type: 'exp',
+          label: '토끼 뽑기',
+          detail: rName,
+        });
+      });
+
       // 시간순 정렬 (오래된 순)
       items.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
       setActivities(items);
       setLoading(false);
     }).catch(() => setLoading(false));
-  }, [userId]);
+  }, [userId, courseId]);
 
   // 선택된 날짜로 필터링
   const filteredActivities = useMemo(() => {
