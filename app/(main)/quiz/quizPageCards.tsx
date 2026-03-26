@@ -12,7 +12,6 @@ import {
   getDefaultCarouselIndex,
   CompletedBadge,
 } from './quizPageParts';
-import { getDefaultQuizTab } from '@/lib/types/course';
 import type { NewsCardType, QuizCardData, CarouselCard } from './quizPageParts';
 import type { PastExamOption } from '@/lib/types/course';
 
@@ -562,19 +561,54 @@ export function NewsCarousel({
   onReview: (quizId: string) => void;
   onReviewWrongOnly: (quizId: string) => void;
 }) {
-  // 동적 카드 배열: 기본 3개 + 단독 퀴즈 각각
+  // 동적 카드 배열: 비어있지 않은 고정 카드 + 단독 퀴즈
   const carouselCards: CarouselCard[] = useMemo(() => {
-    const cards: CarouselCard[] = [
-      { kind: 'list', type: 'midterm', title: 'MIDTERM PREP', subtitle: 'Vol.1 · Midterm Edition' },
-      { kind: 'past' },
-      { kind: 'list', type: 'final', title: 'FINAL PREP', subtitle: 'Vol.2 · Final Edition' },
-    ];
-    // 각 단독 퀴즈를 개별 캐러셀 카드로 추가
+    const cards: CarouselCard[] = [];
+    if (midtermQuizzes.length > 0) {
+      cards.push({ kind: 'list', type: 'midterm', title: 'MIDTERM PREP', subtitle: 'Vol.1 · Midterm Edition' });
+    }
+    if (pastQuizzes.length > 0) {
+      cards.push({ kind: 'past' });
+    }
+    if (finalQuizzes.length > 0) {
+      cards.push({ kind: 'list', type: 'final', title: 'FINAL PREP', subtitle: 'Vol.2 · Final Edition' });
+    }
     for (const quiz of independentQuizzes) {
       cards.push({ kind: 'single', quiz });
     }
+    // 교수가 퀴즈를 하나도 업로드하지 않은 경우 플레이스홀더
+    if (cards.length === 0) {
+      cards.push({ kind: 'list', type: 'midterm', title: 'QUIZ ARCHIVE', subtitle: 'Coming Soon' });
+    }
     return cards;
-  }, [independentQuizzes]);
+  }, [midtermQuizzes, pastQuizzes, finalQuizzes, independentQuizzes]);
+
+  // 카드 인덱스 → 퀴즈 배열/로딩 매핑 (auto-navigation에서 사용하므로 먼저 선언)
+  const quizzesByIndex: QuizCardData[][] = useMemo(() =>
+    carouselCards.map(card => {
+      if (card.kind === 'past') return pastQuizzes;
+      if (card.kind === 'single') return [card.quiz];
+      if (card.kind === 'list') {
+        if (card.type === 'midterm') return midtermQuizzes;
+        if (card.type === 'final') return finalQuizzes;
+      }
+      return [];
+    }),
+    [carouselCards, midtermQuizzes, pastQuizzes, finalQuizzes]
+  );
+
+  const loadingByIndex: boolean[] = useMemo(() =>
+    carouselCards.map(card => {
+      if (card.kind === 'past') return isLoading.past;
+      if (card.kind === 'single') return isLoading.independent;
+      if (card.kind === 'list') {
+        if (card.type === 'midterm') return isLoading.midterm;
+        if (card.type === 'final') return isLoading.final;
+      }
+      return false;
+    }),
+    [carouselCards, isLoading]
+  );
 
   const TOTAL = carouselCards.length;
   // visualIndex: 0=clone_last, 1~TOTAL=real cards, TOTAL+1=clone_first
@@ -623,11 +657,10 @@ export function NewsCarousel({
     // 유저가 직접 스와이프한 적 있으면 유지
     if (sessionStorage.getItem('quiz_carousel_user_set') === '1') return;
 
-    // 각 카드의 최신 퀴즈 createdAt 비교
-    const quizArrays: QuizCardData[][] = [midtermQuizzes, pastQuizzes, finalQuizzes, ...independentQuizzes.map(q => [q])];
+    // 각 카드의 최신 퀴즈 createdAt 비교 (동적 카드 배열 기반)
     let latestTime = 0;
-    let latestIndex = -1;
-    quizArrays.forEach((quizzes, index) => {
+    let latestIndex = 0;
+    quizzesByIndex.forEach((quizzes, index) => {
       for (const q of quizzes) {
         const ca = q.createdAt;
         const t = ca instanceof Date ? ca.getTime()
@@ -640,15 +673,10 @@ export function NewsCarousel({
         }
       }
     });
-    // 퀴즈가 없으면 학기 기반 폴백
-    if (latestIndex < 0) {
-      const tab = getDefaultQuizTab();
-      latestIndex = tab === 'midterm' ? 0 : tab === 'past' ? 1 : tab === 'final' ? 2 : 0;
-    }
     setTransitionOn(false);
     setVisualIndex(latestIndex + 1);
     requestAnimationFrame(() => setTransitionOn(true));
-  }, [isLoading, midtermQuizzes, finalQuizzes, pastQuizzes, independentQuizzes, TOTAL]);
+  }, [isLoading, quizzesByIndex, TOTAL]);
 
   // 클론 카드 스크롤을 실제 카드와 동기화
   const syncCloneScroll = useCallback(() => {
@@ -745,17 +773,6 @@ export function NewsCarousel({
     () => [TOTAL - 1, ...Array.from({ length: TOTAL }, (_, i) => i), 0],
     [TOTAL]
   );
-
-  // 카드 인덱스 → 퀴즈 배열 매핑 (midterm=0, past=1, final=2, 이후 단독)
-  const quizzesByIndex: QuizCardData[][] = useMemo(() => [
-    midtermQuizzes, pastQuizzes, finalQuizzes,
-    ...independentQuizzes.map(q => [q]),
-  ], [midtermQuizzes, pastQuizzes, finalQuizzes, independentQuizzes]);
-
-  const loadingByIndex: boolean[] = useMemo(() => [
-    isLoading.midterm, isLoading.past, isLoading.final,
-    ...independentQuizzes.map(() => isLoading.independent),
-  ], [isLoading, independentQuizzes]);
 
   const CARD_WIDTH_PERCENT = 82;
   const SIDE_PEEK_PERCENT = (100 - CARD_WIDTH_PERCENT) / 2;
