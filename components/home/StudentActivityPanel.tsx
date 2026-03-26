@@ -75,7 +75,7 @@ function ScrollableDigit({ value, min, max, onChange }: {
   const accum = useRef(0);
   return (
     <span
-      className="inline-block cursor-ns-resize select-none touch-none font-black text-xl text-white tabular-nums leading-none"
+      className="inline-block cursor-ns-resize select-none touch-none font-black text-xl text-[#1A1A1A] tabular-nums leading-none"
       style={{ minWidth: value >= 10 ? '1.5ch' : '0.8ch', textAlign: 'center' }}
       onPointerDown={(e) => { startY.current = e.clientY; accum.current = 0; (e.target as HTMLElement).setPointerCapture(e.pointerId); }}
       onPointerMove={(e) => {
@@ -370,40 +370,40 @@ export default function StudentActivityPanel({
   return (
     <div className="h-full flex flex-col">
       {/* 헤더: 뒤로가기 + 학생 정보 */}
-      <div className="flex items-center gap-3 px-4 pt-4 pb-3 border-b border-white/15">
-        <button onClick={onBack} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white">
+      <div className="flex items-center gap-3 px-4 pt-4 pb-3 border-b border-[#D4CFC4]">
+        <button onClick={onBack} className="w-8 h-8 flex items-center justify-center text-[#5C5C5C] hover:text-[#1A1A1A]">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        <div className="w-10 h-10 rounded-lg overflow-hidden border-2 border-white/30 bg-white/10 flex-shrink-0">
+        <div className="w-10 h-10 rounded-lg overflow-hidden border-2 border-[#D4CFC4] bg-[#EDEAE4] flex-shrink-0">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={getRabbitProfileUrl(profileRabbitId ?? 0)} alt="" width={40} height={40} className="w-full h-full object-cover" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-bold text-white truncate">
+          <p className="font-bold text-[#1A1A1A] truncate">
             {name || nickname}
-            {name && <span className="text-white/50 font-normal ml-1.5">({nickname})</span>}
+            {name && <span className="text-[#5C5C5C] font-normal ml-1.5">({nickname})</span>}
           </p>
-          <p className="text-xs text-white/50">{studentId} · {classType}반</p>
+          <p className="text-xs text-[#5C5C5C]">{studentId} · {classType}반</p>
         </div>
       </div>
 
       {/* 날짜 선택 */}
       <div className="flex items-center justify-center gap-2 px-4 py-3 border-b border-white/10">
-        <button onClick={handlePrevDay} className="w-7 h-7 flex items-center justify-center text-white/50 hover:text-white">
+        <button onClick={handlePrevDay} className="w-7 h-7 flex items-center justify-center text-[#5C5C5C] hover:text-[#1A1A1A]">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
         <div className="flex items-baseline gap-0.5">
           <ScrollableDigit value={selectedMonth} min={1} max={12} onChange={handleMonthChange} />
-          <span className="text-sm font-bold text-white/50">月</span>
+          <span className="text-sm font-bold text-[#5C5C5C]">月</span>
           <span className="w-1" />
           <ScrollableDigit value={Math.min(selectedDay, maxDayInMonth)} min={1} max={maxDayInMonth} onChange={setSelectedDay} />
-          <span className="text-sm font-bold text-white/50">日</span>
+          <span className="text-sm font-bold text-[#5C5C5C]">日</span>
         </div>
-        <button onClick={handleNextDay} className="w-7 h-7 flex items-center justify-center text-white/50 hover:text-white">
+        <button onClick={handleNextDay} className="w-7 h-7 flex items-center justify-center text-[#5C5C5C] hover:text-[#1A1A1A]">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
           </svg>
@@ -414,28 +414,28 @@ export default function StudentActivityPanel({
       <div className="flex-1 overflow-y-auto px-4 py-2">
         {loading ? (
           <div className="flex justify-center py-12">
-            <div className="w-6 h-6 border-2 border-white/50 border-t-transparent rounded-full animate-spin" />
+            <div className="w-6 h-6 border-2 border-[#1A1A1A] border-t-transparent rounded-full animate-spin" />
           </div>
         ) : filteredActivities.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-sm text-white/40">이 날의 활동 기록이 없습니다</p>
+            <p className="text-sm text-[#5C5C5C]">이 날의 활동 기록이 없습니다</p>
           </div>
         ) : (
           <div className="space-y-1">
             {filteredActivities.map(item => (
-              <div key={item.id} className="flex items-start gap-3 py-2 border-b border-white/8">
+              <div key={item.id} className="flex items-start gap-3 py-2 border-b border-[#EDEAE4]">
                 {/* 시간 */}
-                <span className="text-xs text-white/40 font-mono w-11 flex-shrink-0 pt-0.5">
+                <span className="text-xs text-[#5C5C5C] font-mono w-11 flex-shrink-0 pt-0.5">
                   {formatTime(item.timestamp)}
                 </span>
                 {/* 아이콘 */}
                 <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                  item.type === 'exp' ? 'bg-white/20' : 'bg-white/10'
+                  item.type === 'exp' ? 'bg-[#1A1A1A]/15' : 'bg-[#1A1A1A]/8'
                 }`}>
                   {item.type === 'exp' ? (
                     <span className="text-[10px]">+</span>
                   ) : (
-                    <svg className="w-2.5 h-2.5 text-white/50" fill="currentColor" viewBox="0 0 20 20">
+                    <svg className="w-2.5 h-2.5 text-[#5C5C5C]" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
                       <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
                     </svg>
@@ -443,18 +443,18 @@ export default function StudentActivityPanel({
                 </div>
                 {/* 내용 */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white font-medium">{item.label}</p>
+                  <p className="text-sm text-[#1A1A1A] font-medium">{item.label}</p>
                   {item.detail && (
-                    <p className="text-xs text-white/40 truncate">{item.detail}</p>
+                    <p className="text-xs text-[#5C5C5C] truncate">{item.detail}</p>
                   )}
                 </div>
                 {/* EXP 또는 체류시간 */}
                 <div className="flex-shrink-0 text-right">
                   {item.exp != null && item.exp > 0 && (
-                    <span className="text-xs font-bold text-white/60">+{item.exp} XP</span>
+                    <span className="text-xs font-bold text-[#1A1A1A]">+{item.exp} XP</span>
                   )}
                   {item.durationMs != null && item.durationMs > 0 && (
-                    <span className="text-xs text-white/40">{formatDuration(item.durationMs)}</span>
+                    <span className="text-xs text-[#5C5C5C]">{formatDuration(item.durationMs)}</span>
                   )}
                 </div>
               </div>
@@ -464,12 +464,12 @@ export default function StudentActivityPanel({
       </div>
 
       {/* 하단 요약 */}
-      <div className="flex-shrink-0 px-4 py-3 pb-4 border-t border-white/15 flex items-center justify-between">
-        <span className="text-xs text-white/40">
+      <div className="flex-shrink-0 px-4 py-3 pb-4 border-t border-[#D4CFC4] flex items-center justify-between">
+        <span className="text-xs text-[#5C5C5C]">
           활동 {filteredActivities.filter(a => a.type === 'exp').length}건
           · 방문 {filteredActivities.filter(a => a.type === 'visit').length}회
         </span>
-        <span className="text-xs font-bold text-white/60">
+        <span className="text-xs font-bold text-[#1A1A1A]">
           +{filteredActivities.reduce((s, a) => s + (a.exp || 0), 0)} XP
         </span>
       </div>
