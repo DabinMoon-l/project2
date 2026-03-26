@@ -9,6 +9,7 @@ import { computeRankScore, computeTeamScore } from '@/lib/utils/ranking';
 import { useWideMode } from '@/lib/hooks/useViewportScale';
 import { useDetailPanel } from '@/lib/contexts/DetailPanelContext';
 import { useHomeScale } from './useHomeScale';
+import { useLogOverlayView } from '@/lib/hooks/usePageViewLogger';
 import RankingBottomSheet from './RankingBottomSheet';
 
 /** rankings/{courseId} 문서의 rankedUsers 배열 항목 */
@@ -61,6 +62,7 @@ export default function RankingSection({ overrideCourseId }: { overrideCourseId?
   const isWide = useWideMode();
   const { openDetail, closeDetail } = useDetailPanel();
   const scale = useHomeScale();
+  const logOverlay = useLogOverlayView();
 
   useEffect(() => {
     if (!userCourseId || !profile) return;
@@ -158,6 +160,7 @@ export default function RankingSection({ overrideCourseId }: { overrideCourseId?
               // 가로모드: 3쪽 디테일 패널에 랭킹 표시
               openDetail(<RankingBottomSheet isPanelMode isOpen onClose={closeDetail} />);
             } else {
+              logOverlay('ranking_open');
               setShowRanking(true);
             }
           }

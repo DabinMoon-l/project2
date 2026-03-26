@@ -27,6 +27,7 @@ import type { Announcement, EditingPoll, EditSubmitData } from './types';
 import { getImageUrls, getPolls, getFiles, fmtSize, dateKey, lastReadKey } from './types';
 import AnnouncementMessageItem from './AnnouncementMessageItem';
 import MediaDrawer from './MediaDrawer';
+import { useLogOverlayView } from '@/lib/hooks/usePageViewLogger';
 
 // ─── 모듈 레벨 캐시 (재마운트 시 즉시 표시) ──────────────
 const announcementCache = new Map<string, Announcement[]>();
@@ -50,6 +51,7 @@ export default function AnnouncementChannel({
   const { userCourseId: contextCourseId } = useCourse();
   const userCourseId = overrideCourseId ?? contextCourseId;
   const { theme } = useTheme();
+  const logOverlay = useLogOverlayView();
   const { uploadImage, uploadFile, uploadMultipleImages, uploadMultipleFiles, loading: uploadLoading } = useUpload();
   // 캐시된 데이터가 있으면 즉시 표시 (loading=false)
   const cached = userCourseId ? announcementCache.get(userCourseId) : undefined;
@@ -552,6 +554,7 @@ export default function AnnouncementChannel({
           <div ref={previewRef} onTouchStart={e => e.stopPropagation()}>
           <button onClick={() => {
             if (onOpenPanel) { onOpenPanel(); return; }
+            logOverlay('announcement_open');
             if (previewRef.current) {
               setSheetTop(previewRef.current.getBoundingClientRect().bottom);
             }

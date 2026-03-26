@@ -14,6 +14,7 @@ import { ImageViewer } from '@/components/common';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 import { useHideNav } from '@/lib/hooks/useHideNav';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
+import { useLogOverlayView } from '@/lib/hooks/usePageViewLogger';
 
 // ─── 타입 ────────────────────────────────────────────
 interface OpinionMessage {
@@ -178,6 +179,7 @@ const OpinionItem = memo(function OpinionItem({
 export default function OpinionChannel({ isPanelMode = false, onOpenPanel, onClosePanel }: { isPanelMode?: boolean; onOpenPanel?: () => void; onClosePanel?: () => void } = {}) {
   const { profile, isProfessor } = useUser();
   const { uploadImage, loading: uploadLoading } = useUpload();
+  const logOverlay = useLogOverlayView();
   const [messages, setMessages] = useState<OpinionMessage[]>(opinionCache.length > 0 ? [...opinionCache] : []);
   const [loading, setLoading] = useState(opinionCache.length === 0);
   const [showModal, setShowModal] = useState(isPanelMode);
@@ -339,6 +341,7 @@ export default function OpinionChannel({ isPanelMode = false, onOpenPanel, onClo
         <button
           onClick={() => {
             if (onOpenPanel) { onOpenPanel(); return; }
+            logOverlay('opinion_open');
             if (previewRef.current) setSheetTop(previewRef.current.getBoundingClientRect().bottom);
             setShowModal(true);
           }}
