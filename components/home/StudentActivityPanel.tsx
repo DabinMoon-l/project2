@@ -16,6 +16,7 @@ const EXP_LABELS: Record<string, string> = {
   comment_create: '댓글 작성',
   comment_accepted: '댓글 채택',
   tekken_battle: '배틀',
+  rabbit_levelup: '토끼 레벨업',
   other: '기타 활동',
 };
 
