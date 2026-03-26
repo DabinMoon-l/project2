@@ -149,7 +149,7 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
     <AnimatePresence>
       <motion.div
         key="student-detail-overlay"
-        className={`fixed z-[100] flex items-end ${isWide ? 'bg-black/10' : 'bg-black/30'}`}
+        className={`fixed z-[100] flex items-end ${isWide ? 'bg-black/30' : 'bg-black/40'}`}
         style={isWide ? {
           top: 0, bottom: 0,
           left: '240px',

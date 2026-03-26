@@ -17,6 +17,7 @@ const AnnouncementChannel = dynamic(() => import('@/components/home/announcement
 const OpinionChannel = dynamic(() => import('@/components/home/opinion'), { ssr: false });
 import ProfessorCharacterBox from '@/components/home/ProfessorCharacterBox';
 import { useWideMode, scaleCoord } from '@/lib/hooks/useViewportScale';
+import { useLogOverlayView } from '@/lib/hooks/usePageViewLogger';
 
 const SWIPE_THRESHOLD = 120;
 const WHEEL_THRESHOLD = 80;
@@ -36,6 +37,7 @@ export default function ProfessorHomeOverlay() {
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
   const { openDetail, closeDetail, clearQueue, isLocked } = useDetailPanel();
   const isWide = useWideMode();
+  const logOverlay = useLogOverlayView();
 
   // 가로모드: 홈은 일반 라우트(`/professor`) → 오버레이 사용 안 함
   useEffect(() => {
@@ -330,7 +332,7 @@ export default function ProfessorHomeOverlay() {
                   courseIds={assignedCourses}
                 />
               }
-              onOpenPanel={isWide ? () => openDetail(
+              onOpenPanel={isWide ? () => { logOverlay('announcement_open'); openDetail(
                 <AnnouncementChannel
                   isPanelMode
                   onClosePanel={closeDetail}
@@ -344,11 +346,11 @@ export default function ProfessorHomeOverlay() {
                     />
                   }
                 />
-              ) : undefined}
+              ); } : undefined}
             />
           </div>
           <div className="px-8 mb-1 relative z-20">
-            <OpinionChannel onOpenPanel={isWide ? () => openDetail(<OpinionChannel isPanelMode onClosePanel={closeDetail} />) : undefined} />
+            <OpinionChannel onOpenPanel={isWide ? () => { logOverlay('opinion_open'); openDetail(<OpinionChannel isPanelMode onClosePanel={closeDetail} />); } : undefined} />
           </div>
         </div>
 
