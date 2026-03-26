@@ -58,6 +58,7 @@ interface JobInput {
   courseCustomized: boolean;
   professorPrompt?: string;
   tags?: string[];
+  selectedDetails?: string[];
 }
 
 interface JobResult {
@@ -146,7 +147,7 @@ async function executeJobProcessing(
   const {
     text, images, difficulty, questionCount,
     courseId, courseName, userId,
-    courseCustomized, professorPrompt, tags,
+    courseCustomized, professorPrompt, tags, selectedDetails,
   } = input;
 
   const trimmedText = (text || "").trim();
@@ -358,7 +359,8 @@ async function executeJobProcessing(
     tags,
     chapterRepetition,
     chapterRepetitionMap,
-    isProfessor
+    isProfessor,
+    selectedDetails
   );
 
   console.log(
@@ -403,7 +405,8 @@ async function executeJobProcessing(
           tags,
           chapterRepetition + 1,
           chapterRepetitionMap,
-          isProfessor
+          isProfessor,
+          selectedDetails
         );
         const supplement = await generateWithGemini(
           supplementPrompt,
@@ -595,6 +598,7 @@ export const workerProcessJob = onDocumentCreated(
         courseCustomized: jobData.courseCustomized ?? true,
         professorPrompt: jobData.professorPrompt,
         tags: jobData.tags,
+        selectedDetails: jobData.selectedDetails,
       }, apiKey, db, `[Worker] Job ${jobId}`);
 
       // 문제별 고유 ID 부여
@@ -723,6 +727,7 @@ export const retryQueuedJobs = onSchedule(
             courseCustomized: jobData.courseCustomized ?? true,
             professorPrompt: jobData.professorPrompt,
             tags: jobData.tags,
+            selectedDetails: jobData.selectedDetails,
           }, apiKey, db, `[Retry] Job ${jobId}`);
 
           // 문제별 고유 ID 부여

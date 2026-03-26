@@ -213,6 +213,7 @@ export interface CloudFunctionMap {
       courseName?: string;
       courseCustomized?: boolean;
       tags?: string[];
+      selectedDetails?: string[];
     };
     output: { jobId: string; status: string; deduplicated: boolean };
   };

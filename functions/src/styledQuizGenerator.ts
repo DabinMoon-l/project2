@@ -796,7 +796,8 @@ export function buildFullPrompt(
   tags?: string[],  // 챕터 태그 (예: ["12_신경계"])
   chapterRepetition: number = 0,  // 챕터별 평균 반복 횟수
   chapterRepetitionMap?: Record<string, number>,  // 챕터별 개별 반복 횟수
-  isProfessor: boolean = false  // 교수 여부 (교수는 기존 임계값 유지)
+  isProfessor: boolean = false,  // 교수 여부 (교수는 기존 임계값 유지)
+  selectedDetails?: string[]  // 세부단원 IDs (예: ["bio_3_1", "micro_5_2"])
 ): string {
   // Scope에서 로드된 챕터 번호 (여러 곳에서 사용)
   const scopeChapters = context.scope?.chaptersLoaded;
@@ -830,6 +831,32 @@ export function buildFullPrompt(
   const courseOverviewPrompt = (courseCustomized || tagChapterNumbers.length > 0)
     ? buildCourseOverviewPrompt(courseId, tagChapterNumbers.length > 0 ? tagChapterNumbers : scopeChapters)
     : "";
+
+  // 세부단원 집중 지시 (사용자가 선택한 세부단원)
+  let selectedDetailsPrompt = "";
+  if (selectedDetails && selectedDetails.length > 0) {
+    const courseIndex = getCourseIndex(courseId);
+    if (courseIndex) {
+      const detailLabels = selectedDetails.map(detailId => {
+        for (const ch of courseIndex.chapters) {
+          const detail = ch.details.find(d => d.id === detailId);
+          if (detail) {
+            const chNum = ch.id.split("_")[1];
+            return `${chNum}장 - ${detail.name} (${detailId})`;
+          }
+        }
+        return detailId;
+      });
+      const detailCount = selectedDetails.length;
+      selectedDetailsPrompt = `\n## 세부단원 집중 출제 지시 (필수)\n\n` +
+        `학생이 다음 ${detailCount}개 세부단원을 선택했습니다.\n` +
+        `**전체 ${questionCount}개 문제 중 최소 ${Math.min(questionCount, Math.ceil(questionCount * 0.7))}개는 반드시 아래 세부단원에서 출제**하세요.\n` +
+        `나머지 문제는 같은 챕터의 다른 세부단원에서 출제할 수 있습니다.\n\n` +
+        detailLabels.map(l => `- ${l}`).join("\n") + "\n\n" +
+        `**중요**: 위 세부단원에서 출제한 문제의 chapterDetailId에 해당 ID(예: ${selectedDetails[0]})를 반드시 정확하게 할당하세요.\n` +
+        `chapterDetailId를 빈 값이나 null로 두지 마세요.\n`;
+    }
+  }
 
   // focusGuide vs scope 문제 수 균등 분배
   const focusQuestionCount = Math.round(questionCount / 2);
@@ -1178,6 +1205,7 @@ ${difficultyPrompt}
 ${styleContext}
 ${hardModeExtra}
 ${chapterIndexPrompt}
+${selectedDetailsPrompt}
 ${imageSection}
 ${styledScopeContext}
 ## Step 1: 문제 생성 규칙

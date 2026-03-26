@@ -39,6 +39,9 @@ export interface GenerationJob {
   // 챕터 태그 (예: ["12_신경계", "11_내분비계"]) — 챕터 추론 대신 직접 범위 확정
   tags?: string[];
 
+  // 세부단원 IDs (예: ["bio_3_1", "micro_5_2"]) — 세부단원 정밀 태깅
+  selectedDetails?: string[];
+
   // 중복 방지
   dedupeKey: string;
 
@@ -76,7 +79,8 @@ function buildDedupeKey(
   courseId: string,
   courseCustomized: boolean,
   professorPrompt?: string,
-  tags?: string[]
+  tags?: string[],
+  selectedDetails?: string[]
 ): string {
   const hash = crypto.createHash("sha256");
   hash.update(userId);
@@ -92,6 +96,10 @@ function buildDedupeKey(
   // 태그 포함
   if (tags && tags.length > 0) {
     hash.update(tags.sort().join(","));
+  }
+  // 세부단원 포함
+  if (selectedDetails && selectedDetails.length > 0) {
+    hash.update("d:" + selectedDetails.sort().join(","));
   }
 
   // 이미지는 앞 100바이트씩만 해싱 (전체 base64는 너무 큼)
@@ -126,6 +134,7 @@ export const enqueueGenerationJob = onCall(
       courseCustomized?: boolean;
       professorPrompt?: string | null;
       tags?: string[] | null;
+      selectedDetails?: string[] | null;
     };
     // Firebase SDK가 undefined → null로 직렬화하므로 ?? 로 안전하게 처리
     const text = raw.text ?? "";
@@ -137,6 +146,7 @@ export const enqueueGenerationJob = onCall(
     const courseCustomized = raw.courseCustomized ?? true;
     const professorPrompt = raw.professorPrompt ?? undefined;
     const tags = raw.tags ?? undefined;
+    const selectedDetails = raw.selectedDetails ?? undefined;
 
     const db = getFirestore();
 
@@ -150,7 +160,8 @@ export const enqueueGenerationJob = onCall(
       courseId,
       courseCustomized,
       professorPrompt,
-      tags
+      tags,
+      selectedDetails
     );
 
     // Rate limit 2종 + 중복 확인 병렬 처리 (순차 대비 ~200ms 절약)
@@ -235,6 +246,7 @@ export const enqueueGenerationJob = onCall(
       courseCustomized,
       ...(professorPrompt ? { professorPrompt } : {}),
       ...(tags && tags.length > 0 ? { tags } : {}),
+      ...(selectedDetails && selectedDetails.length > 0 ? { selectedDetails } : {}),
       dedupeKey,
       materialFingerprint,
       createdAt: FieldValue.serverTimestamp(),

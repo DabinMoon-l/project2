@@ -171,6 +171,7 @@ export default function AIQuizContainer() {
         courseName: userCourse?.name || '일반',
         courseCustomized: data.courseCustomized ?? true,
         tags: data.tags.length > 0 ? data.tags : undefined,
+        selectedDetails: data.selectedDetails,
       });
 
       const { jobId, status: initialStatus, deduplicated } = enqueueResult as { jobId: string; status: string; deduplicated: boolean };
