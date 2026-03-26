@@ -73,10 +73,8 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
   // 표시 이름
   const displayName = student.name || student.nickname;
 
-  // 경고 — D: Z-score가 null이면 경고 스킵
+  // 경고 배너 비활성화 (교수 요청)
   const warnings: string[] = [];
-  if (studentZ !== null && studentZ < -2.0) warnings.push('Z-score < -2.0 — 위험');
-  else if (studentZ !== null && studentZ < -1.5) warnings.push('Z-score < -1.5 — 주의');
 
   // 모든 퀴즈 (시간순 정렬 — recentQuizzes는 최신순이므로 reverse)
   const allQuizzes = [...student.recentQuizzes].reverse();

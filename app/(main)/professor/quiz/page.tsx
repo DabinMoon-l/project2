@@ -28,6 +28,7 @@ import type { QuestionExportData as PdfQuestionData } from '@/lib/utils/question
 import type { MixedExampleBlock } from '@/components/quiz/create/questionTypes';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
 import { useHideNav } from '@/lib/hooks/useHideNav';
+import { useHomeScale } from '@/components/home/useHomeScale';
 import {
   FIXED_CARDS,
   PROF_QUIZ_CAROUSEL_KEY,
@@ -89,6 +90,17 @@ export default function ProfessorQuizListPage() {
   const { userCourseId, setProfessorCourse, assignedCourses, courseList, getCourseById } = useCourse();
   const isWide = useWideMode();
   const { openDetail, replaceDetail, closeDetail, isDetailOpen } = useDetailPanel();
+  const pageScale = useHomeScale();
+  // 캐러셀 동적 스케일: 기준 0.85 × viewport 비율
+  const cScale = Math.max(0.75, Math.min(0.85 * pageScale, 1.1));
+  const cWidth = 100 / cScale;
+  const carouselStyle: React.CSSProperties = {
+    transform: `scale(${cScale})`,
+    transformOrigin: 'top center',
+    width: `${cWidth.toFixed(2)}%`,
+    marginLeft: `-${((cWidth - 100) / 2).toFixed(3)}%`,
+    marginBottom: '-12px',
+  };
 
   // 가로모드: stats 모달을 3쪽 패널로 표시
   const openStatsPanel = useCallback((quizId: string, quizTitle: string) => {
@@ -620,7 +632,7 @@ export default function ProfessorQuizListPage() {
       </header>
 
       {/* 뉴스 캐러셀 (중간/기말/기출/단독) — 데이터 로드 후 마운트 (깜빡임 방지) */}
-      <section className="mt-6" style={{ transform: 'scale(0.85)', transformOrigin: 'top center', width: '117.65%', marginLeft: '-8.825%', marginBottom: '-12px' }}>
+      <section className="mt-6" style={carouselStyle}>
         {examLoading ? (
           <div className="flex justify-center" style={{ height: 440 }}>
             <div className="w-[82%] h-[400px] border border-[#999] bg-[#1A1A1A] rounded-xl flex items-center justify-center">
