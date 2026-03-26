@@ -259,11 +259,16 @@ export default function StudentActivityPanel({
           if (title) detail = title;
         }
 
+        // AI 문제 생성 vs 커스텀 퀴즈 만들기 구분
+        const label = (t === 'quiz_create' && meta?.isAiSave)
+          ? 'AI 문제 생성'
+          : EXP_LABELS[t] || t || '활동';
+
         items.push({
           id: `exp-${d.id}`,
           timestamp: ts,
           type: 'exp',
-          label: EXP_LABELS[t] || t || '활동',
+          label,
           detail,
           exp: data.amount || 0,
         });
