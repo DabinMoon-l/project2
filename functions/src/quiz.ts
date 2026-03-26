@@ -260,30 +260,8 @@ export const updateQuizStatistics = onDocumentCreated(
     const db = getFirestore();
 
     try {
-      // 퀴즈 전체 통계 업데이트
-      const quizRef = db.collection("quizzes").doc(quizId);
-
-      await db.runTransaction(async (transaction) => {
-        const quizDoc = await transaction.get(quizRef);
-        if (!quizDoc.exists) return;
-
-        const quizData = quizDoc.data();
-        const currentAttemptCount = quizData?.attemptCount || 0;
-        const currentTotalScore = quizData?.totalScore || 0;
-
-        // 새로운 값 계산
-        const newAttemptCount = currentAttemptCount + 1;
-        const newTotalScore = currentTotalScore + result.score;
-        const newAverageScore = newTotalScore / newAttemptCount;
-
-        // 퀴즈 통계 업데이트 (평균 점수 포함)
-        transaction.update(quizRef, {
-          attemptCount: newAttemptCount,
-          totalScore: newTotalScore,
-          averageScore: Math.round(newAverageScore * 10) / 10, // 소수점 1자리
-          updatedAt: FieldValue.serverTimestamp(),
-        });
-      });
+      // averageScore는 recordAttempt의 분산 카운터(quiz_agg)가 관리
+      // 이 트리거에서는 문제별 통계만 업데이트 (레거시 totalScore/attemptCount 제거)
 
       // 문제별 통계 업데이트 (배치 처리)
       const batch = db.batch();
