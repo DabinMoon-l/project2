@@ -187,7 +187,7 @@ HomeOverlay(z-45) — 전체화면 오버레이, 네비 위에 표시.
 - 교수 전용 HomeOverlay (`ProfessorHomeOverlay`)
 
 ### 통계 (`/professor/stats`)
-- **5축 레이더** (10분 사전 계산, `computeRadarNormScheduled`): 퀴즈/활동량/배틀/소통/출제력
+- **5축 레이더** (2시간 사전 계산, `computeRadarNormScheduled`): 퀴즈/활동량/배틀/소통/출제력
 - **4군집 분류**: passionate/hardworking/efficient/atRisk (median 기반 동적 분류)
 - **위험 학생 감지**: Z-score < -1.5 주의, < -2 위험
 - **변별도**: 상위 27% - 하위 27% 정답률 (참여 ≥4명)
@@ -308,7 +308,7 @@ Gemini Vision → jimp 이미지 크롭 → 크롭본만 전송, 복수정답 `[
 - 챕터 교집합이 없으면 봇 매칭
 
 **문제 풀 (사전 생성)**:
-- Cloud Run `tekkenPoolRefillScheduled` — 매일 03:00 KST
+- Cloud Run `tekkenPoolRefillScheduled` — 주 2회 월/목 03:00 KST (비용 절감, 기존 매일)
 - 과목당 전 챕터 × 150문제 (easy 75 + medium 75)
 - `generateBattleQuestions()` — Scope + FocusGuide + 교수 스타일 병렬 로드
 - 배틀 특성: 30초 제한 → 문제 1-2문장, 선지 최대 30자, 4지선다만 (OX 금지)
@@ -333,7 +333,7 @@ baseDamage = max(ceil(ATK² / (ATK + DEF) × 1.5), 2)
 | **개인** | `profCorrectCount × 4 + totalExp × 0.6` |
 | **팀** | `normalizedAvgExp × 0.4 + avgCorrectRate × 0.4 + avgCompletionRate × 0.2` |
 
-- 10분 사전 계산 (`computeRankingsScheduled`)
+- 2시간 사전 계산 (`computeRankingsScheduled`, 비용 절감: 기존 10분→30분→2시간)
 - 동점 시 같은 순위 (1위, 1위, 3위)
 - 일간/주간/전체 필터
 - **교수 실명/닉네임 토글**: `RankingBottomSheet`에서 교수만 표시, 반별 드롭다운 좌측 위치
@@ -509,6 +509,23 @@ PWA: viewport-fit cover, standalone, skipWaiting, FCM (`worker/index.js`)
 
 - Cloud Functions → Supabase Edge Functions + Cloud Run (AI)
 - Vercel 유지 (프론트)
+
+### Phase 4: Firebase 비용 절감 복원 (Supabase 마이그레이션 후)
+
+Firebase의 읽기 과금(문서 읽기 5만/일 무료) 때문에 다운그레이드한 항목들을 Supabase(PostgreSQL 읽기 무제한) 전환 후 원래 사양으로 복원:
+
+| 항목 | 현재 (Firebase 비용 절감) | 복원 후 (Supabase) | 방식 |
+|------|------------------------|-------------------|------|
+| **랭킹 계산** | 2시간 (10분→30분→2시간) | **10분** | `pg_cron` + Materialized View REFRESH |
+| **레이더 정규화** | 2시간 (30분→2시간) | **10분** | `pg_cron` + Materialized View REFRESH |
+| **배틀 문제 풀** | 주 2회 월/목 (매일→주2회) | **매일** | Edge Function cron, Gemini 비용은 동일 |
+| **users 쿼리** | `.select()` 필드 제한 | **전체 row** | PostgreSQL은 SELECT 비용 없음 |
+| **quizResults 쿼리** | `.select()` 필드 제한 | **전체 row** 또는 VIEW | JOIN으로 한 번에 집계 가능 |
+| **expHistory** | 10명씩 배치 + 주간만 조회 | **SQL 집계** | `SUM(amount) WHERE created_at >= $1` 단일 쿼리 |
+| **weeklyStats 주간 EXP** | 미구현 (서브컬렉션 비용 과다) | **구현** | `expHistory` 테이블 단순 GROUP BY |
+| **weeklyStats 토끼 발견** | 미구현 (rabbitHoldings 비용 과다) | **구현** | `rabbit_holdings` 테이블 COUNT |
+
+**핵심 이점**: Firestore는 문서 1개 읽기 = 1 read 과금이라 `.select()`·배치·주기 다운그레이드가 필수였지만, PostgreSQL은 행 수와 무관하게 쿼리 단위 실행 → 복잡한 집계도 단일 쿼리로 해결.
 
 ## Firestore Security Rules 보호 필드
 
