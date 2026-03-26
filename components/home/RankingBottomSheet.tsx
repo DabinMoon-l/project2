@@ -387,7 +387,7 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 z-[90] bg-black/40"
+            className="absolute inset-0 z-[90]"
             onClick={() => setSelectedUser(null)}
           />
           {/* 바텀시트 — home-bg-3 불투명 배경 */}
