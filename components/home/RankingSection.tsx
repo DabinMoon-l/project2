@@ -8,6 +8,7 @@ import { readHomeCache, writeHomeCache } from '@/lib/utils/rankingCache';
 import { computeRankScore, computeTeamScore } from '@/lib/utils/ranking';
 import { useWideMode } from '@/lib/hooks/useViewportScale';
 import { useDetailPanel } from '@/lib/contexts/DetailPanelContext';
+import { useHomeScale } from './useHomeScale';
 import RankingBottomSheet from './RankingBottomSheet';
 
 /** rankings/{courseId} 문서의 rankedUsers 배열 항목 */
@@ -59,6 +60,7 @@ export default function RankingSection({ overrideCourseId }: { overrideCourseId?
   const [showRanking, setShowRanking] = useState(false);
   const isWide = useWideMode();
   const { openDetail, closeDetail } = useDetailPanel();
+  const scale = useHomeScale();
 
   useEffect(() => {
     if (!userCourseId || !profile) return;
@@ -162,34 +164,34 @@ export default function RankingSection({ overrideCourseId }: { overrideCourseId?
         }}
         className="w-full px-8 -mt-0.5 active:scale-[0.98] transition-transform"
       >
-        <div className="flex items-center justify-center gap-4">
+        <div className="flex items-center justify-center" style={{ gap: Math.round(16 * scale) }}>
           {/* TEAM */}
           <div className="text-center">
-            <span className="text-[10px] font-bold text-white/50 tracking-widest">TEAM</span>
-            <div className="text-4xl font-black text-white leading-tight">{hasNoClass ? '-' : classType}</div>
+            <span className="font-bold text-white/50 tracking-widest" style={{ fontSize: Math.round(10 * scale) }}>TEAM</span>
+            <div className="font-black text-white leading-tight" style={{ fontSize: Math.round(36 * scale) }}>{hasNoClass ? '-' : classType}</div>
           </div>
 
           {/* 구분선 */}
-          <div className="w-px h-8 bg-white/20" />
+          <div className="w-px bg-white/20" style={{ height: Math.round(32 * scale) }} />
 
           {/* TEAM RANK */}
           <div className="text-center">
-            <span className="text-[10px] font-bold text-white/50 tracking-widest">TEAM RANK</span>
-            <div className={`text-4xl font-black text-white leading-tight ${loading ? 'animate-pulse' : ''}`}>{teamRankLabel}</div>
+            <span className="font-bold text-white/50 tracking-widest" style={{ fontSize: Math.round(10 * scale) }}>TEAM RANK</span>
+            <div className={`font-black text-white leading-tight ${loading ? 'animate-pulse' : ''}`} style={{ fontSize: Math.round(36 * scale) }}>{teamRankLabel}</div>
           </div>
 
           {/* 구분선 */}
-          <div className="w-px h-8 bg-white/20" />
+          <div className="w-px bg-white/20" style={{ height: Math.round(32 * scale) }} />
 
           {/* MY RANK */}
           <div className="text-center">
-            <span className="text-[10px] font-bold text-white/50 tracking-widest">MY RANK</span>
+            <span className="font-bold text-white/50 tracking-widest" style={{ fontSize: Math.round(10 * scale) }}>MY RANK</span>
             <div className="flex items-baseline justify-center">
-              <span className={`text-4xl font-black text-white leading-tight ${loading ? 'animate-pulse' : ''}`}>
+              <span className={`font-black text-white leading-tight ${loading ? 'animate-pulse' : ''}`} style={{ fontSize: Math.round(36 * scale) }}>
                 {loading ? '-' : isTestAccount ? '-' : (personalRank || '-')}
               </span>
               {!loading && !isTestAccount && (
-                <span className="text-base font-bold text-white/50 ml-0.5">
+                <span className="font-bold text-white/50 ml-0.5" style={{ fontSize: Math.round(16 * scale) }}>
                   /{totalStudents}
                 </span>
               )}
@@ -197,7 +199,7 @@ export default function RankingSection({ overrideCourseId }: { overrideCourseId?
           </div>
 
           {/* 화살표 */}
-          <svg className="w-4 h-4 text-white/50 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="text-white/50 flex-shrink-0" style={{ width: Math.round(16 * scale), height: Math.round(16 * scale) }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
           </svg>
         </div>

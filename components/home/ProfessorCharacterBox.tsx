@@ -2,23 +2,13 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  motion,
   useMotionValue,
   useSpring,
-  useTransform,
-  type MotionValue,
 } from 'framer-motion';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
-
-
-const SWIPE_THRESHOLD = 40;
-
-/* 궤도 파라미터 (학생과 동일) */
-const ORBIT_RX = 110;
-const ORBIT_RY = 32;
-const CHAR_SIZE = 115;
-const CHAR_HALF = CHAR_SIZE / 2;
-const ORBIT_Y_SHIFT = 135;
+import { OrbitalCharacter } from './OrbitalCharacter';
+import { useHomeScale } from './useHomeScale';
+import { BASE_ORBIT_RX, BASE_ORBIT_RY, BASE_CHAR_SIZE, BASE_ORBIT_Y_SHIFT, SWIPE_THRESHOLD } from './characterBoxConstants';
 
 /* 교수님 홈에 표시할 토끼 후보 (rabbitId 0-indexed) */
 const PROFESSOR_RABBIT_POOL = [21, 26, 56, 58, 59, 61];
@@ -39,6 +29,14 @@ function pickTwo(): [number, number] {
  */
 export default function ProfessorCharacterBox() {
   const [equipped, setEquipped] = useState<number[]>([]);
+  const scale = useHomeScale();
+
+  // 스케일 적용된 궤도 파라미터
+  const ORBIT_RX = Math.round(BASE_ORBIT_RX * scale);
+  const ORBIT_RY = Math.round(BASE_ORBIT_RY * scale);
+  const CHAR_SIZE = Math.round(BASE_CHAR_SIZE * scale);
+  const CHAR_HALF = CHAR_SIZE / 2;
+  const ORBIT_Y_SHIFT = Math.round(BASE_ORBIT_Y_SHIFT * scale);
 
   useEffect(() => {
     setEquipped(pickTwo());
@@ -116,10 +114,11 @@ export default function ProfessorCharacterBox() {
     <div className="flex flex-col items-center w-full">
       {/* 캐릭터 궤도 영역 */}
       <div
-        className="relative select-none -mt-14"
+        className="relative select-none"
         style={{
           width: containerW,
           height: containerH,
+          marginTop: Math.round(-56 * scale),
           isolation: 'isolate',
           cursor: 'grab',
         }}
@@ -150,83 +149,12 @@ export default function ProfessorCharacterBox() {
             rabbitId={rabbitId}
             springRotation={springRotation}
             charIndex={idx}
+            orbitRx={ORBIT_RX}
+            orbitRy={ORBIT_RY}
+            charSize={CHAR_SIZE}
           />
         ))}
       </div>
     </div>
-  );
-}
-
-/**
- * 궤도 위 캐릭터 — useTransform으로 타원 경로 공전
- */
-function OrbitalCharacter({
-  rabbitId,
-  springRotation,
-  charIndex,
-}: {
-  rabbitId: number;
-  springRotation: MotionValue<number>;
-  charIndex: number;
-}) {
-  const offset = charIndex * Math.PI;
-
-  const x = useTransform(springRotation, r =>
-    ORBIT_RX * (1 + Math.cos(r + offset))
-  );
-  const y = useTransform(springRotation, r =>
-    ORBIT_RY * (1 + Math.sin(r + offset))
-  );
-  const scale = useTransform(springRotation, r => {
-    const depth = (Math.sin(r + offset) + 1) / 2;
-    return 0.5 + 0.5 * depth;
-  });
-  const zIndex = useTransform(springRotation, r =>
-    Math.sin(r + offset) > -0.1 ? 10 : 1
-  );
-  const opacity = useTransform(springRotation, r => {
-    const depth = (Math.sin(r + offset) + 1) / 2;
-    return 0.4 + 0.6 * depth;
-  });
-
-  return (
-    <motion.div
-      className="absolute"
-      style={{ left: 0, top: 0, x, y, scale, zIndex, opacity }}
-    >
-      <FloatingWrapper seed={charIndex}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={`/rabbit/rabbit-${String(rabbitId + 1).padStart(3, '0')}.png`}
-          alt=""
-          width={CHAR_SIZE}
-          height={Math.round(CHAR_SIZE * (969 / 520))}
-          draggable={false}
-          className="drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
-          style={{ filter: 'sepia(0.08) saturate(1.1) brightness(1.03) hue-rotate(-5deg)' }}
-        />
-      </FloatingWrapper>
-    </motion.div>
-  );
-}
-
-/**
- * 둥실둥실 떠다니는 래퍼
- */
-function FloatingWrapper({ children, seed = 0 }: { children: React.ReactNode; seed?: number }) {
-  const duration = 2.6 + seed * 0.4;
-  return (
-    <motion.div
-      animate={{
-        y: [0, -18, 0],
-        rotate: [0, 2.5, 0, -2.5, 0],
-      }}
-      transition={{
-        y: { duration, repeat: Infinity, ease: 'easeInOut' },
-        rotate: { duration: duration * 1.6, repeat: Infinity, ease: 'easeInOut' },
-      }}
-    >
-      {children}
-    </motion.div>
   );
 }

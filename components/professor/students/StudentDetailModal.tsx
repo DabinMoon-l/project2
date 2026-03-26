@@ -322,7 +322,7 @@ function QuizLineChart({ quizzes }: { quizzes: { quizId: string; quizTitle: stri
         <div className="flex items-center justify-center h-24 text-sm text-[#999]">퀴즈 기록 없음</div>
       ) : (
         <div ref={scrollRef} className="overflow-x-auto scrollbar-hide -mx-5 px-5" style={{ cursor: 'grab', WebkitOverflowScrolling: 'touch' }}>
-          <svg viewBox={`0 0 ${chartWidth} 145`} width={chartWidth} height={145} className="min-w-full">
+          <svg viewBox={`0 0 ${chartWidth} 145`} className="w-full" style={{ minWidth: chartWidth }}>
             <line x1={20} y1={30} x2={chartWidth - 20} y2={30} stroke="#D4CFC4" strokeWidth={0.3} strokeDasharray="3,3" />
             <line x1={20} y1={62.5} x2={chartWidth - 20} y2={62.5} stroke="#D4CFC4" strokeWidth={0.3} strokeDasharray="3,3" />
             <line x1={20} y1={95} x2={chartWidth - 20} y2={95} stroke="#D4CFC4" strokeWidth={0.5} />
