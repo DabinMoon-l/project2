@@ -426,7 +426,7 @@ export default function StudentActivityPanel({
   return (
     <div className="h-full flex flex-col">
       {/* 헤더: 뒤로가기 + 학생 정보 */}
-      <div className="flex items-center gap-3 px-4 pt-4 pb-3 border-b border-white/15">
+      <div className="flex items-center gap-3 px-4 pt-4 pb-3" style={{ borderBottom: '1px solid #B0A898' }}>
         <button onClick={onBack} className="w-8 h-8 flex items-center justify-center text-white/60 hover:text-white">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -446,7 +446,7 @@ export default function StudentActivityPanel({
       </div>
 
       {/* 날짜 선택 */}
-      <div className="flex items-center justify-center gap-2 px-4 py-3 border-b border-white/15">
+      <div className="flex items-center justify-center gap-2 px-4 py-3">
         <button onClick={handlePrevDay} className="w-7 h-7 flex items-center justify-center text-white/50 hover:text-white">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
@@ -479,7 +479,7 @@ export default function StudentActivityPanel({
         ) : (
           <div className="space-y-1">
             {filteredActivities.map(item => (
-              <div key={item.id} className="flex items-start gap-3 py-2 border-b border-white/10">
+              <div key={item.id} className="flex items-start gap-3 py-2">
                 {/* 시간 */}
                 <span className="text-xs text-white/50 font-mono w-11 flex-shrink-0 pt-0.5">
                   {formatTime(item.timestamp)}
@@ -520,7 +520,7 @@ export default function StudentActivityPanel({
       </div>
 
       {/* 하단 요약 */}
-      <div className="flex-shrink-0 px-4 py-3 pb-4 border-t border-white/15 flex items-center justify-between">
+      <div className="flex-shrink-0 px-4 py-3 pb-4 flex items-center justify-between" style={{ borderTop: '1px solid #B0A898' }}>
         <span className="text-xs text-white/50">
           활동 {filteredActivities.filter(a => a.type === 'exp').length}건
           · 방문 {filteredActivities.filter(a => a.type === 'visit').length}회
