@@ -12,6 +12,7 @@ import { mean as statMean, sd as statSd, zScore } from '@/lib/utils/statistics';
 import type { FeedbackType } from '@/components/quiz/InstantFeedbackButton';
 import type { CourseId } from '@/lib/types/course';
 import { scaleCoord, useWideMode } from '@/lib/hooks/useViewportScale';
+import { useHomeScale } from '@/components/home/useHomeScale';
 import { useDetailPanel } from '@/lib/contexts/DetailPanelContext';
 
 import ClassComparison from '@/components/professor/stats/ClassComparison';
@@ -866,6 +867,7 @@ function DashboardRibbonHeader({
   courseIds: CourseId[];
 }) {
   const { getCourseById } = useCourse();
+  const scale = useHomeScale();
   const currentIndex = courseIds.indexOf(currentCourseId);
   const course = getCourseById(currentCourseId);
   const ribbonImage = course?.dashboardRibbonImage || '/images/biology-dashboard-ribbon.png';
@@ -915,13 +917,13 @@ function DashboardRibbonHeader({
   return (
     <div className="flex flex-col items-center">
       <div
-        className="w-full h-[160px] mt-2 cursor-grab active:cursor-grabbing select-none"
+        className="w-full mt-2 cursor-grab active:cursor-grabbing select-none"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
-        style={{ touchAction: 'pan-y' }}
+        style={{ height: Math.round(120 * scale), touchAction: 'pan-y' }}
       >
         <AnimatePresence mode="wait">
           <motion.div

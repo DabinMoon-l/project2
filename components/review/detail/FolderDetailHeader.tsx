@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { useHomeScale } from '@/components/home/useHomeScale';
 
 /** 폴더 상세 페이지 상단 헤더 (리본 이미지 + solved 점수 표시) */
 export interface FolderDetailHeaderProps {
@@ -37,10 +38,11 @@ export default function FolderDetailHeader({
   quizScores,
   onBack,
 }: FolderDetailHeaderProps) {
+  const ribbonHeightScale = useHomeScale();
   return (
     <header className="pt-2 pb-1 flex flex-col items-center">
       {/* 리본 이미지 — 퀴즈 페이지와 동일 크기 */}
-      <div className="relative w-full h-[160px] mt-2">
+      <div className="relative w-full mt-2" style={{ height: Math.round(120 * ribbonHeightScale) }}>
         <Image
           src={ribbonImage}
           alt="Review"

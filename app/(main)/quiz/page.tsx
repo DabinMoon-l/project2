@@ -28,6 +28,7 @@ const QuizStatsModal = dynamic(() => import('@/components/quiz/manage/QuizStatsM
 import { useExpandSource } from '@/lib/hooks/useExpandSource';
 import { useCourse, useDetailPanel } from '@/lib/contexts';
 import { useWideMode } from '@/lib/hooks/useViewportScale';
+import { useHomeScale } from '@/components/home/useHomeScale';
 import FolderDetailPage from '@/app/(main)/review/[type]/[id]/page';
 import QuizPanelContainer from '@/components/quiz/QuizPanelContainer';
 import { getPastExamOptions, type PastExamOption } from '@/lib/types/course';
@@ -52,6 +53,7 @@ function QuizListPageContent() {
   const { userCourseId, getCourseById } = useCourse();
   const { updatedQuizzes, checkQuizUpdate, refresh: refreshUpdates, loading: updatesLoading } = useQuizUpdate();
   const isWide = useWideMode();
+  const ribbonHeightScale = useHomeScale();
   const { openDetail, replaceDetail, closeDetail, isDetailOpen, isLocked } = useDetailPanel();
 
   // 가로모드: 서재 복습을 3쪽 패널로 열기 (2쪽 퀴즈 목록 유지)
@@ -625,7 +627,7 @@ function QuizListPageContent() {
     <div className={`relative min-h-screen pb-72 ${isManageMode && !isWide ? 'pointer-events-none' : ''}`} style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 - 배너 이미지 */}
       <header ref={customSectionRef} className="flex flex-col items-center">
-        <div className="w-full h-[160px] mt-2">
+        <div className="w-full mt-2" style={{ height: Math.round(120 * ribbonHeightScale) }}>
           <img
             src={ribbonImage}
             alt="Quiz"
