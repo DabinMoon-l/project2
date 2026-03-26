@@ -358,22 +358,14 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
     const prevRank = prevWeekRanks[userId];
     if (currentRank == null) return null;
     if (prevRank == null) {
-      return <span className="text-[10px] font-bold text-yellow-300/80">NEW</span>;
+      return <p className="text-[10px] font-bold text-yellow-300/80">NEW</p>;
     }
     const diff = prevRank - currentRank;
-    if (diff === 0) return <span className="text-[10px] font-bold text-yellow-300/80">-</span>;
+    if (diff === 0) return <p className="text-[10px] font-bold text-yellow-300/80">-</p>;
     if (diff > 0) {
-      return (
-        <span className="text-[10px] font-bold text-red-400 inline-flex items-center gap-px">
-          ▲{diff}
-        </span>
-      );
+      return <p className="text-[10px] font-bold text-red-400">▲{diff}</p>;
     }
-    return (
-      <span className="text-[10px] font-bold text-blue-400 inline-flex items-center gap-px">
-        ▼{Math.abs(diff)}
-      </span>
-    );
+    return <p className="text-[10px] font-bold text-blue-400">▼{Math.abs(diff)}</p>;
   };
 
   // 교수 전용: 학생 활동 오버레이 바텀시트
