@@ -361,16 +361,16 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
       return <span className="text-[10px] font-bold text-yellow-300/80">NEW</span>;
     }
     const diff = prevRank - currentRank;
-    if (diff === 0) return <span className="text-[10px] text-white/30">-</span>;
+    if (diff === 0) return <span className="text-[10px] font-bold text-yellow-300/80">-</span>;
     if (diff > 0) {
       return (
-        <span className="text-[10px] font-bold text-green-400 inline-flex items-center gap-px">
+        <span className="text-[10px] font-bold text-red-400 inline-flex items-center gap-px">
           ▲{diff}
         </span>
       );
     }
     return (
-      <span className="text-[10px] font-bold text-red-400 inline-flex items-center gap-px">
+      <span className="text-[10px] font-bold text-blue-400 inline-flex items-center gap-px">
         ▼{Math.abs(diff)}
       </span>
     );
