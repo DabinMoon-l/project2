@@ -574,11 +574,12 @@ function ScrollableDigit({ value, min, max, onChange }: {
 }) {
   const startY = useRef<number | null>(null);
   const accum = useRef(0);
+  const scale = useHomeScale();
 
   return (
     <span
-      className="inline-block cursor-ns-resize select-none touch-none font-black text-2xl text-[#1A1A1A] tabular-nums leading-none"
-      style={{ minWidth: value >= 10 ? '1.6ch' : '0.9ch', textAlign: 'center' }}
+      className="inline-block cursor-ns-resize select-none touch-none font-black text-[#1A1A1A] tabular-nums leading-none"
+      style={{ fontSize: Math.round(24 * scale), minWidth: value >= 10 ? '1.6ch' : '0.9ch', textAlign: 'center' }}
       onPointerDown={(e) => {
         startY.current = e.clientY;
         accum.current = 0;
