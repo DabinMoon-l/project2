@@ -1793,7 +1793,7 @@ export default function QuizCreatePage({ isPanelMode }: { isPanelMode?: boolean 
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowExitModal(false)}
-              className={isPanelMode ? 'absolute inset-0 bg-black/15' : 'absolute inset-0 bg-black/50'}
+              className={isPanelMode ? 'absolute inset-0 bg-transparent' : 'absolute inset-0 bg-black/50'}
             />
 
             {/* 패널 모드: 바텀시트, 세로모드: 센터 모달 */}

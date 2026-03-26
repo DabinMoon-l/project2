@@ -56,24 +56,31 @@ function WidePagePractice({
   items,
   quizTitle,
   onComplete,
+  onBeforeClose,
   currentUserId,
   showFeedback,
 }: {
   items: ReviewItem[];
   quizTitle: string;
   onComplete: (results: PracticeResult[]) => void;
+  onBeforeClose?: () => void;
   currentUserId?: string;
   showFeedback: boolean;
 }) {
   const closePanel = useClosePanel();
   usePanelLock();
 
+  const handleClose = useCallback(() => {
+    onBeforeClose?.(); // 잠금 상태에서 호출 → 대기열에 콘텐츠 추가
+    closePanel();
+  }, [onBeforeClose, closePanel]);
+
   return (
     <ReviewPractice
       items={items}
       quizTitle={quizTitle}
-      onComplete={(results) => { onComplete(results); closePanel(); }}
-      onClose={() => closePanel()}
+      onComplete={(results) => { onComplete(results); handleClose(); }}
+      onClose={handleClose}
       currentUserId={currentUserId}
       showFeedback={showFeedback}
       isPanelMode
@@ -983,6 +990,7 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
           items={targetItems}
           quizTitle={folderTitle}
           onComplete={(results) => handlePracticeCompleteRef.current(results)}
+          onBeforeClose={() => openDetail(<FolderDetailPage panelType={folderType} panelId={folderId} />)}
           currentUserId={user?.uid}
           showFeedback={folderType !== 'library'}
         />
@@ -1023,6 +1031,7 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
           items={wrongOnlyItems}
           quizTitle={folderTitle}
           onComplete={(results) => handlePracticeCompleteRef.current(results)}
+          onBeforeClose={() => openDetail(<FolderDetailPage panelType={folderType} panelId={folderId} />)}
           currentUserId={user?.uid}
           showFeedback={folderType !== 'library'}
         />
@@ -1211,6 +1220,7 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
           items={items}
           quizTitle={folderTitle}
           onComplete={(results) => handlePracticeCompleteRef.current(results)}
+          onBeforeClose={() => openDetail(<FolderDetailPage panelType={folderType} panelId={folderId} />)}
           currentUserId={user?.uid}
           showFeedback={folderType !== 'library'}
         />

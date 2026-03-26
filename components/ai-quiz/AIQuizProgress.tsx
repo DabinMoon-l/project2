@@ -104,7 +104,7 @@ export default function AIQuizProgress({ isOpen, progress, folderName }: AIQuizP
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/15"
+              className="absolute inset-0 bg-transparent"
             />
 
             {/* 바텀시트 */}
