@@ -29,6 +29,7 @@ const VISIT_LABELS: Record<string, string> = {
   quiz_solve: '퀴즈 풀기',
   quiz_result: '퀴즈 결과',
   quiz_feedback: '퀴즈 피드백',
+  quiz_exp: 'EXP 획득',
   review_list: '복습 목록',
   review_practice: '복습 연습',
   review_detail: '복습 상세',
@@ -220,12 +221,16 @@ export default function StudentActivityPanel({
       // expHistory에서 퀴즈 ID + 게시글 ID 수집
       const quizIds = new Set<string>();
       const expPostIds = new Set<string>();
+      const completedQuizIds = new Set<string>(); // 퀴즈 플로우 병합용
+      const reviewedQuizIds = new Set<string>();  // 복습 플로우 병합용
       expSnap.docs.forEach(d => {
         const data = d.data();
         const t = data.type as string;
         const sid = data.sourceId as string | undefined;
         const meta = data.metadata as Record<string, unknown> | undefined;
         if ((t === 'quiz_complete' || t === 'quiz_create' || t === 'quiz_make_public' || t === 'review_practice') && sid) quizIds.add(sid);
+        if (t === 'quiz_complete' && sid) completedQuizIds.add(sid);
+        if (t === 'review_practice' && sid) reviewedQuizIds.add(sid);
         if (t === 'post_create' && sid) expPostIds.add(sid);
         if (t === 'comment_create' && meta?.postId) expPostIds.add(meta.postId as string);
         if (t === 'comment_accepted' && meta?.postId) expPostIds.add(meta.postId as string);
@@ -329,7 +334,7 @@ export default function StudentActivityPanel({
           const m = path.match(/^\/board\/([^/]+)/);
           if (m) postIds.add(m[1]);
         }
-        if (data.category === 'quiz_solve' || data.category === 'quiz_result' || data.category === 'quiz_feedback') {
+        if (data.category === 'quiz_solve' || data.category === 'quiz_result' || data.category === 'quiz_feedback' || data.category === 'quiz_exp') {
           const m = path.match(/^\/quiz\/([^/]+)/);
           if (m && !quizTitles[m[1]]) pvQuizIds.add(m[1]);
         }
@@ -359,19 +364,31 @@ export default function StudentActivityPanel({
         });
       }
 
-      // pageViews → ActivityItem
+      // pageViews → ActivityItem (퀴즈/복습 플로우는 EXP 기록과 병합)
       pvDocs.forEach(d => {
         const data = d.data();
         const ts = data.timestamp?.toDate?.() || new Date(0);
         const path = data.path as string || '';
         const cat = data.category as string || 'other';
 
+        // 퀴즈 플로우 — EXP 기록(quiz_complete)이 있으면 방문 기록 스킵 (점수 포함된 EXP 항목으로 통합)
+        if (cat === 'quiz_solve' || cat === 'quiz_result' || cat === 'quiz_feedback' || cat === 'quiz_exp') {
+          const m = path.match(/^\/quiz\/([^/]+)/);
+          if (m && completedQuizIds.has(m[1])) return;
+        }
+
+        // 복습 플로우 — EXP 기록(review_practice)이 있으면 방문 기록 스킵
+        if (cat === 'review_detail') {
+          const m = path.match(/^\/review\/[^/]+\/([^/]+)/);
+          if (m && reviewedQuizIds.has(m[1])) return;
+        }
+
         // 상세 페이지: 제목 표시 / 목록 페이지: detail 없음
         let pvDetail: string | undefined;
         if (cat === 'board_detail') {
           const m = path.match(/^\/board\/([^/]+)/);
           pvDetail = m ? (postTitles[m[1]] || undefined) : undefined;
-        } else if (cat === 'quiz_solve' || cat === 'quiz_result' || cat === 'quiz_feedback') {
+        } else if (cat === 'quiz_solve' || cat === 'quiz_result' || cat === 'quiz_feedback' || cat === 'quiz_exp') {
           const m = path.match(/^\/quiz\/([^/]+)/);
           pvDetail = m ? (quizTitles[m[1]] || undefined) : undefined;
         } else if (cat === 'review_detail') {

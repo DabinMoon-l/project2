@@ -26,6 +26,7 @@ function categorize(path: string): string {
   if (path.startsWith('/quiz/create') || path === '/professor/quiz/create') return 'quiz_create';
   if (/^\/quiz\/[^/]+\/result/.test(path)) return 'quiz_result';
   if (/^\/quiz\/[^/]+\/feedback/.test(path)) return 'quiz_feedback';
+  if (/^\/quiz\/[^/]+\/exp/.test(path)) return 'quiz_exp';
   if (/^\/quiz\/[^/]+/.test(path)) return 'quiz_solve';
   if (path === '/review') return 'review_list';
   if (path === '/review/random') return 'review_practice';
