@@ -16,6 +16,8 @@ import { getRabbitImageSrc } from '@/lib/utils/rabbitImage';
 import { readFullCache, writeFullCache } from '@/lib/utils/rankingCache';
 import { computeRankScore } from '@/lib/utils/ranking';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
+import dynamic from 'next/dynamic';
+const StudentActivityPanel = dynamic(() => import('./StudentActivityPanel'), { ssr: false });
 
 interface RankedUser {
   id: string;
@@ -95,9 +97,11 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
   useTheme();
   const isWide = useWideMode();
   const isProfessor = profile?.role === 'professor';
-  const [showRealName, setShowRealName] = useState(true);
-  /** 교수: 실명/닉네임 토글, 학생: 닉네임 고정 */
-  const displayName = (u: RankedUser) => isProfessor && showRealName && u.name ? u.name : u.nickname;
+  /** 디폴트 닉네임 (바텀시트에서 실명 확인) */
+  const displayName = (u: RankedUser) => u.nickname;
+
+  // 교수 전용: 학생 활동 패널
+  const [selectedUser, setSelectedUser] = useState<RankedUser | null>(null);
 
   const [rankedUsers, setRankedUsers] = useState<RankedUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -129,6 +133,7 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
     if (isOpen) {
       setDisplayCount(30);
       setShowScrollTop(false);
+      setSelectedUser(null);
       scrollRef.current?.scrollTo(0, 0);
     }
   }, [isOpen]);
@@ -322,6 +327,28 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
     return me || (periodFilter === 'all' ? myRank : null);
   }, [filteredUsers, profile?.uid, myRank, periodFilter]);
 
+  // 교수 전용: 학생 활동 패널 콘텐츠
+  const activityContent = selectedUser && isProfessor ? (
+    <>
+      {!isPanelMode && (
+        <>
+          <div className="absolute inset-0"><Image src="/images/home-bg.jpg" alt="" fill className="object-cover" /></div>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-2xl" />
+        </>
+      )}
+      <div className="relative z-10 h-full">
+        <StudentActivityPanel
+          userId={selectedUser.id}
+          nickname={selectedUser.nickname}
+          name={selectedUser.name}
+          classType={selectedUser.classType}
+          profileRabbitId={selectedUser.profileRabbitId}
+          onBack={() => setSelectedUser(null)}
+        />
+      </div>
+    </>
+  ) : null;
+
   // 랭킹 콘텐츠 (바텀시트/패널 공통)
   const rankingContent = (
     <>
@@ -398,18 +425,7 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
 
         {/* 반별 필터 드롭다운 + 실명/닉네임 토글 */}
         <div className="flex items-center justify-between px-4 mt-1 relative">
-          {/* 교수 전용: 실명/닉네임 토글 */}
-          {isProfessor ? (
-            <button
-              onClick={() => setShowRealName(v => !v)}
-              className="flex items-center gap-1.5 py-1.5 px-2.5 text-xs font-bold bg-white/15 text-white/80 border border-white/25 rounded-md"
-            >
-              <div className={`relative w-7 h-4 rounded-full transition-colors ${showRealName ? 'bg-white/40' : 'bg-white/15'}`}>
-                <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${showRealName ? 'left-3.5' : 'left-0.5'}`} />
-              </div>
-              {showRealName ? '실명' : '닉네임'}
-            </button>
-          ) : <div />}
+          <div />
           <button
             onClick={() => setShowClassDropdown(v => !v)}
             className="flex items-center justify-center gap-1 w-14 py-1.5 text-sm font-bold bg-white/15 text-white/80 border border-white/25 rounded-md"
@@ -481,10 +497,14 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
                   )}
                 </div>
 
-                {/* Top3 정보 */}
+                {/* Top3 정보 — 교수: 클릭 시 활동 내역 */}
                 <div className="grid grid-cols-3 gap-1 mt-2">
                   {[top3[1], top3[0], top3[2]].map((user, i) => (
-                    <div key={i} className="text-center">
+                    <div
+                      key={i}
+                      className={`text-center ${isProfessor && user ? 'cursor-pointer active:opacity-70' : ''}`}
+                      onClick={() => { if (isProfessor && user) setSelectedUser(user); }}
+                    >
                       {user && (
                         <>
                           <p className="text-sm font-black text-white truncate">{displayName(user)}</p>
@@ -509,7 +529,8 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
                   key={user.id}
                   className={`flex items-center gap-3 py-3 border-b border-white/15 ${
                     user.id === profile?.uid ? 'bg-white/10 -mx-2 px-2 rounded-lg' : ''
-                  }`}
+                  } ${isProfessor ? 'cursor-pointer active:bg-white/5' : ''}`}
+                  onClick={() => { if (isProfessor) setSelectedUser(user); }}
                 >
                   <div className="w-8 text-center font-black text-white/60">{user.rank}</div>
                   <div className="w-10 h-10 flex items-center justify-center border-2 border-white/30 rounded-lg overflow-hidden flex-shrink-0 bg-white/10">
@@ -667,8 +688,8 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
   if (isPanelMode) {
     return (
       <div className="h-full relative overflow-hidden">
-        <div className="relative z-10 h-full">{rankingContent}</div>
-        {infoModal}
+        <div className="relative z-10 h-full">{activityContent || rankingContent}</div>
+        {!selectedUser && infoModal}
       </div>
     );
   }
@@ -694,7 +715,7 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
             style={{ height: '92vh' }}
             onClick={(e) => e.stopPropagation()}
           >
-            {rankingContent}
+            {activityContent || rankingContent}
           </motion.div>
 
           {/* 랭킹 안내 모달 — 바텀시트 위에 표시 */}
