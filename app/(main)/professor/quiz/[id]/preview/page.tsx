@@ -140,19 +140,18 @@ function EditExitModal({
     </div>
   );
 
-  // 패널 모드: 3쪽/2쪽 안에서 absolute 바텀시트
+  // 패널 모드: 해당 쪽 안에서만 absolute 바텀시트
   if (isPanelMode) {
     return (
       <AnimatePresence>
         {isOpen && (
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[60]" style={{ left: 'var(--detail-panel-left, 0)' }}
+              className="absolute inset-0 z-[60] bg-black/20"
               onClick={() => { if (!isSaving) onClose(); }} />
             <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
               transition={{ type: 'spring', stiffness: 400, damping: 35 }}
-              className="fixed bottom-0 right-0 z-[60] bg-[#F5F0E8] border-t-2 border-[#1A1A1A] rounded-t-2xl overflow-hidden"
-              style={{ left: 'var(--detail-panel-left, 0)' }}>
+              className="absolute bottom-0 left-0 right-0 z-[60] bg-[#F5F0E8] border-t-2 border-[#1A1A1A] rounded-t-2xl overflow-hidden">
               <div className="flex justify-center pt-2 pb-1"><div className="w-10 h-1 rounded-full bg-[#C4C0B8]" /></div>
               {content}
             </motion.div>

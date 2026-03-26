@@ -13,6 +13,7 @@ import { type CourseId, getDefaultQuizTab, type PastExamOption } from '@/lib/typ
 import type { QuizFeedbackInfo, CarouselCard } from './profQuizPageParts';
 import { PROF_QUIZ_CAROUSEL_KEY, PROF_QUIZ_SCROLL_KEY } from './profQuizPageParts';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
+import { useHomeScale } from '@/components/home/useHomeScale';
 
 // ============================================================
 // 뉴스 기사 컴포넌트 (교수용 — 난이도 이미지 + 왼쪽 정렬)
@@ -754,6 +755,7 @@ export function CourseRibbonHeader({
   courseIds: CourseId[];
 }) {
   const { getCourseById } = useCourse();
+  const scale = useHomeScale();
   const currentIndex = courseIds.indexOf(currentCourseId);
   const course = getCourseById(currentCourseId);
   const ribbonImage = course?.quizRibbonImage || '/images/biology-quiz-ribbon.png';
@@ -820,13 +822,13 @@ export function CourseRibbonHeader({
     <div className="flex flex-col items-center">
       {/* 리본 이미지 — 터치/마우스 드래그로 과목 전환 */}
       <div
-        className="w-full h-[160px] mt-2 cursor-grab active:cursor-grabbing select-none"
+        className="w-full mt-2 cursor-grab active:cursor-grabbing select-none"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
-        style={{ touchAction: 'pan-y' }}
+        style={{ height: Math.round(160 * scale), touchAction: 'pan-y' }}
       >
         <AnimatePresence mode="wait">
           <motion.div
@@ -882,6 +884,7 @@ export function ProfessorCustomQuizCard({
   onClick: () => void;
 }) {
   const fbLabel = feedbackInfo ? getFeedbackLabel(feedbackInfo.score) : null;
+  const scale = useHomeScale();
 
   return (
     <motion.div
@@ -915,8 +918,8 @@ export function ProfessorCustomQuizCard({
       {/* 카드 내용 */}
       <div className="relative z-10 p-3 bg-[#F5F0E8]/60">
         {/* 제목 (2줄 고정 높이) */}
-        <div className="h-[36px] mb-1.5">
-          <h3 className="font-bold text-sm line-clamp-2 text-[#1A1A1A] pr-6 leading-snug">
+        <div className="mb-1.5" style={{ height: Math.round(36 * scale) }}>
+          <h3 className="font-bold line-clamp-2 text-[#1A1A1A] pr-6 leading-snug" style={{ fontSize: Math.round(14 * scale) }}>
             {quiz.title}
           </h3>
         </div>
@@ -928,7 +931,7 @@ export function ProfessorCustomQuizCard({
         </p>
 
         {/* 태그 (2줄 고정 높이) */}
-        <div className="h-[42px] mb-1.5 overflow-hidden">
+        <div className="mb-1.5 overflow-hidden" style={{ height: Math.round(42 * scale) }}>
           {quiz.tags && quiz.tags.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {quiz.tags.slice(0, 8).map((tag) => (
