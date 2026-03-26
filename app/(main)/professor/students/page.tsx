@@ -116,18 +116,51 @@ export default function StudentMonitoringPage() {
   // 날짜 선택 (일일 접속 통계용)
   const todayDate = useMemo(() => {
     const now = new Date();
-    return { month: now.getMonth() + 1, day: now.getDate() };
+    return { year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate() };
   }, []);
   const [selectedMonth, setSelectedMonth] = useState(todayDate.month);
   const [selectedDay, setSelectedDay] = useState(todayDate.day);
 
-  // 선택된 날짜 → YYYY-MM-DD 문자열 (월별 최대 일수 보정)
+  // 해당 월의 최대 일수 (2월 윤년 등 자동 반영)
+  const maxDayInMonth = useMemo(
+    () => new Date(todayDate.year, selectedMonth, 0).getDate(),
+    [todayDate.year, selectedMonth],
+  );
+
+  // 월 변경 시 일이 최대일을 초과하면 자동 보정
+  const handleMonthChange = useCallback((m: number) => {
+    setSelectedMonth(m);
+    const maxDay = new Date(todayDate.year, m, 0).getDate();
+    setSelectedDay(prev => Math.min(prev, maxDay));
+  }, [todayDate.year]);
+
+  // < > 하루 이동
+  const handlePrevDay = useCallback(() => {
+    setSelectedDay(prev => {
+      if (prev > 1) return prev - 1;
+      // 이전 달로
+      const newMonth = selectedMonth > 1 ? selectedMonth - 1 : 12;
+      const newMaxDay = new Date(todayDate.year, newMonth, 0).getDate();
+      setSelectedMonth(newMonth);
+      return newMaxDay;
+    });
+  }, [selectedMonth, todayDate.year]);
+
+  const handleNextDay = useCallback(() => {
+    setSelectedDay(prev => {
+      if (prev < maxDayInMonth) return prev + 1;
+      // 다음 달로
+      const newMonth = selectedMonth < 12 ? selectedMonth + 1 : 1;
+      setSelectedMonth(newMonth);
+      return 1;
+    });
+  }, [selectedMonth, maxDayInMonth]);
+
+  // 선택된 날짜 → YYYY-MM-DD 문자열
   const selectedDateStr = useMemo(() => {
-    const year = new Date().getFullYear();
-    const maxDay = new Date(year, selectedMonth, 0).getDate();
-    const clampedDay = Math.min(selectedDay, maxDay);
-    return `${year}-${String(selectedMonth).padStart(2, '0')}-${String(clampedDay).padStart(2, '0')}`;
-  }, [selectedMonth, selectedDay]);
+    const clampedDay = Math.min(selectedDay, maxDayInMonth);
+    return `${todayDate.year}-${String(selectedMonth).padStart(2, '0')}-${String(clampedDay).padStart(2, '0')}`;
+  }, [selectedMonth, selectedDay, maxDayInMonth, todayDate.year]);
 
   const isTodaySelected = selectedDateStr === new Date().toISOString().slice(0, 10);
 
@@ -316,8 +349,11 @@ export default function StudentMonitoringPage() {
           classFilter={selectedClass}
           month={selectedMonth}
           day={selectedDay}
-          onMonthChange={setSelectedMonth}
+          maxDay={maxDayInMonth}
+          onMonthChange={handleMonthChange}
           onDayChange={setSelectedDay}
+          onPrevDay={handlePrevDay}
+          onNextDay={handleNextDay}
         />
 
         <div className="h-3" />
@@ -571,11 +607,13 @@ function ScrollableDigit({ value, min, max, onChange }: {
 // 일일 접속 도넛 차트 + 날짜 선택 + 범례
 // ============================================================
 
-function SessionDonut({ attended, total, classFilter, month, day, onMonthChange, onDayChange }: {
+function SessionDonut({ attended, total, classFilter, month, day, maxDay, onMonthChange, onDayChange, onPrevDay, onNextDay }: {
   attended: number; total: number; classFilter: string;
-  month: number; day: number;
+  month: number; day: number; maxDay: number;
   onMonthChange: (m: number) => void;
   onDayChange: (d: number) => void;
+  onPrevDay: () => void;
+  onNextDay: () => void;
 }) {
   const notAttended = total - attended;
   const pct = total > 0 ? Math.round((attended / total) * 100) : 0;
@@ -617,13 +655,25 @@ function SessionDonut({ attended, total, classFilter, month, day, onMonthChange,
 
       {/* 날짜 + 범례 */}
       <div className="w-[160px] space-y-2">
-        {/* 날짜 선택 (위아래 스와이프) */}
-        <div className="flex items-baseline justify-center gap-0.5 pb-1 border-b border-dashed border-[#D4CFC4]">
-          <ScrollableDigit value={month} min={1} max={12} onChange={onMonthChange} />
-          <span className="text-base font-bold text-[#5C5C5C]">月</span>
-          <span className="w-1" />
-          <ScrollableDigit value={day} min={1} max={31} onChange={onDayChange} />
-          <span className="text-base font-bold text-[#5C5C5C]">日</span>
+        {/* 날짜 선택: < X月 X日 > */}
+        <div className="flex items-center justify-center gap-1 pb-1 border-b border-dashed border-[#D4CFC4]">
+          <button onClick={onPrevDay} className="w-6 h-6 flex items-center justify-center text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <div className="flex items-baseline gap-0.5">
+            <ScrollableDigit value={month} min={1} max={12} onChange={onMonthChange} />
+            <span className="text-base font-bold text-[#5C5C5C]">月</span>
+            <span className="w-0.5" />
+            <ScrollableDigit value={day} min={1} max={maxDay} onChange={onDayChange} />
+            <span className="text-base font-bold text-[#5C5C5C]">日</span>
+          </div>
+          <button onClick={onNextDay} className="w-6 h-6 flex items-center justify-center text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
         </div>
 
         {/* 전체 */}
