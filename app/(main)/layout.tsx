@@ -363,7 +363,7 @@ function MainLayoutGrid({
             ...(!hideNavigation && !isWide
               ? { paddingBottom: 'calc(4.25rem + env(safe-area-inset-bottom, 0px))' }
               : {}),
-            ...(isWide ? { marginLeft: '240px', height: '100dvh', overflow: 'hidden' } : {}),
+            ...(isWide ? { marginLeft: '240px', height: 'var(--app-height, 100dvh)', minHeight: 'var(--app-height, 100dvh)', overflow: 'hidden' } : {}),
             // fixed 요소 좌측 위치 조정용 CSS 변수
             // 모바일: 0, 잠금 시: 240px (main 영역은 nav 오프셋만)
             // 가로모드(디테일/사이드바 열림): calc(50% + 120px), 그 외: 240px

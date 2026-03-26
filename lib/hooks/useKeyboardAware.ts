@@ -74,9 +74,11 @@ export function useKeyboardAware(): KeyboardAwareState {
       // rAF로 배치하여 레이아웃 thrashing 방지
       cancelAnimationFrame(rafRef.current);
       rafRef.current = requestAnimationFrame(() => {
+        // 키보드 높이 = 전체 화면 - 보이는 영역
+        // vv.offsetTop 제거: iOS가 window 자동 스크롤 시 offsetTop이 변해 offset이 줄어드는 버그 방지
         // iOS: innerHeight 고정, vv.height 축소 → offset = keyboard height
         // Android: 둘 다 축소 → offset ≈ 0
-        const offset = Math.max(0, window.innerHeight - (vv.offsetTop + vv.height));
+        const offset = Math.max(0, window.innerHeight - vv.height);
 
         // Android 감지 보조: 초기 높이 대비 줄어든 양도 체크
         const heightDiff = initialHeightRef.current - vv.height;
@@ -169,16 +171,23 @@ export function useScrollDismissKeyboard() {
  * @param containerSelector - 스크롤 컨테이너 CSS 선택자
  */
 /**
- * --kb-offset CSS 변수를 documentElement에 직접 설정하는 전역 훅
+ * --kb-offset / --app-height CSS 변수를 documentElement에 직접 설정하는 전역 훅
  *
  * React 리렌더 없이 매 프레임 키보드 높이를 CSS 변수로 반영하여
  * Claude 앱 같은 부드러운 키보드 모션을 구현합니다.
  *
  * 레이아웃에서 한 번만 호출하면, 모든 컴포넌트가
  * var(--kb-offset, 0px)로 키보드 높이에 반응할 수 있습니다.
+ *
+ * iOS PWA 가로모드 핵심 수정:
+ * 1. innerHeight - vv.height 로 키보드 높이 계산 (vv.offsetTop 제거 → scroll 무관)
+ * 2. --app-height: 키보드 열림 시 vv.height로 축소 → 스크롤 컨테이너가 키보드 위에만 존재
+ * 3. window scroll 방지: iOS가 typing 중 자동으로 window를 스크롤하는 것을 차단
+ * 4. focusin 시 scrollIntoView: 키보드 열린 후 입력 요소가 보이도록 보정
  */
 export function useKeyboardCSSVariable() {
   const rafRef = useRef<number>(0);
+  const isOpenRef = useRef(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -186,22 +195,72 @@ export function useKeyboardCSSVariable() {
     const vv = window.visualViewport;
     if (!vv) return;
 
-    const handleResize = () => {
+    const resetScroll = () => {
+      if (window.scrollY !== 0 || document.documentElement.scrollTop !== 0) {
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+      }
+    };
+
+    const update = () => {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = requestAnimationFrame(() => {
-        const offset = Math.max(0, window.innerHeight - (vv.offsetTop + vv.height));
-        document.documentElement.style.setProperty('--kb-offset', offset + 'px');
+        // iOS가 window를 자동 스크롤했으면 먼저 리셋 (정확한 계산 보장)
+        if (isOpenRef.current) resetScroll();
+
+        // 키보드 높이 = 전체 화면 - 보이는 영역 (vv.offsetTop 제거 → scroll 위치 무관)
+        const kbHeight = Math.max(0, window.innerHeight - vv.height);
+        const wasOpen = isOpenRef.current;
+        isOpenRef.current = kbHeight > 50;
+
+        document.documentElement.style.setProperty('--kb-offset', kbHeight + 'px');
+
+        // 가로모드 레이아웃 높이 조정: 키보드 위 영역만큼 축소
+        // Android: innerHeight 자체가 줄어들어 kbHeight ≈ 0 → 100dvh 유지 (네이티브 처리)
+        // iOS PWA: innerHeight 불변, vv.height만 줄어듦 → vv.height로 축소 필요
+        document.documentElement.style.setProperty(
+          '--app-height',
+          isOpenRef.current ? `${vv.height}px` : '100dvh'
+        );
+
+        // 키보드 닫힘 직후 window scroll 리셋
+        if (wasOpen && !isOpenRef.current) resetScroll();
       });
     };
 
-    vv.addEventListener('resize', handleResize);
-    vv.addEventListener('scroll', handleResize);
+    // iOS가 typing 중 window를 자동 스크롤하는 것을 즉시 차단
+    const handleWindowScroll = () => {
+      if (isOpenRef.current) resetScroll();
+    };
+
+    // 포커스된 입력 요소를 스크롤 컨테이너 내에서 보이도록 조정
+    const handleFocusIn = (e: FocusEvent) => {
+      const target = e.target;
+      if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return;
+
+      // 키보드 열림 + 레이아웃 갱신 대기 후 scrollIntoView
+      setTimeout(() => {
+        if (!isOpenRef.current) return;
+        target.scrollIntoView({ block: 'nearest' });
+        // scrollIntoView가 window를 스크롤했을 수 있으므로 리셋
+        resetScroll();
+      }, 300);
+    };
+
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    window.addEventListener('scroll', handleWindowScroll, { passive: true });
+    document.addEventListener('focusin', handleFocusIn);
 
     return () => {
-      vv.removeEventListener('resize', handleResize);
-      vv.removeEventListener('scroll', handleResize);
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+      window.removeEventListener('scroll', handleWindowScroll);
+      document.removeEventListener('focusin', handleFocusIn);
       cancelAnimationFrame(rafRef.current);
       document.documentElement.style.setProperty('--kb-offset', '0px');
+      document.documentElement.style.setProperty('--app-height', '100dvh');
     };
   }, []);
 }
