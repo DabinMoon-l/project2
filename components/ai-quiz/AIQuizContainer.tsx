@@ -188,7 +188,11 @@ export default function AIQuizContainer() {
       // (polling 대비 지연 0초 + CF 호출 오버헤드 제거)
       const questions = await new Promise<GeneratedQuestion[]>((resolve, reject) => {
         const jobDocRef = doc(db, 'jobs', jobId);
-        const timeoutMs = 180000; // 3분 타임아웃
+        // 문제 수에 비례한 타임아웃 (hard 20문제 → Gemini 최대 240초 + 전후처리 여유)
+        const timeoutMs = Math.min(
+          180000 + Math.max(0, data.questionCount - 10) * 12000,
+          300000
+        );
 
         const timeout = setTimeout(() => {
           unsub();
