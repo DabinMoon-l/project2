@@ -27,14 +27,15 @@ export default function HomePage() {
 
   useEffect(() => { setMounted(true); }, []);
 
-  // 세로모드: 기존 동작 (오버레이 열기 + 리다이렉트)
+  // 교수는 가로/세로 무관하게 항상 /professor로 리다이렉트
+  // 세로모드 학생: 오버레이 열기 + 퀴즈 탭으로 리다이렉트
   useEffect(() => {
     if (!mounted) return;
-    if (isWide) return;
     if (isProfessor) {
       router.replace('/professor');
       return;
     }
+    if (isWide) return;
     if (!isOpen) open();
     router.replace('/quiz', { scroll: false });
   }, [mounted, isWide]); // eslint-disable-line react-hooks/exhaustive-deps
