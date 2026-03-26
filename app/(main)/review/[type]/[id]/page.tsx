@@ -1937,6 +1937,7 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
                 onEditQuestion={handleEditQuestion}
                 userRole="student"
                 courseId={userCourse?.id}
+                isPanelMode={isPanelMode}
               />
               <motion.button
                 onClick={handleAddQuestion}
