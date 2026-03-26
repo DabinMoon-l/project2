@@ -43,6 +43,7 @@ export function writeHomeCache(courseId: string, data: HomeCacheData) {
 
 export interface FullCacheData {
   rankedUsers: unknown[];
+  prevWeekRanks?: Record<string, number>;
 }
 
 const FULL_KEY = (courseId: string) => `ranking_full_${courseId}`;
