@@ -731,6 +731,7 @@ export default function EditQuizSheet({ quizId, onClose, onSaved, isPanelMode }:
                               onQuestionsChange={setQuestions}
                               onEditQuestion={handleEditQuestion}
                               userRole="student"
+                              isPanelMode={isPanelMode}
                             />
                           </div>
 
