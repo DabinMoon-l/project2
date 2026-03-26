@@ -203,8 +203,8 @@ export default function StudentActivityPanel({
         });
       });
 
-      // 시간순 정렬 (최신 먼저)
-      items.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+      // 시간순 정렬 (오래된 순)
+      items.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
       setActivities(items);
       setLoading(false);
     }).catch(() => setLoading(false));
