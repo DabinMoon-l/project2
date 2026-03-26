@@ -1600,9 +1600,32 @@ export default function ProfessorQuizCreatePage({ isPanelMode }: { isPanelMode?:
       {/* 나가기 확인 모달 */}
       <AnimatePresence>
         {showExitModal && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowExitModal(false)} className="absolute inset-0 bg-black/50" />
-            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 max-w-[280px] w-full rounded-xl">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className={isPanelMode
+              ? 'absolute inset-0 z-50 flex items-end'
+              : 'fixed inset-0 z-50 flex items-center justify-center p-4'
+            }
+          >
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowExitModal(false)}
+              className={isPanelMode ? 'absolute inset-0 bg-transparent' : 'absolute inset-0 bg-black/50'}
+            />
+            <motion.div
+              initial={isPanelMode ? { y: '100%' } : { scale: 0.95, opacity: 0 }}
+              animate={isPanelMode ? { y: 0 } : { scale: 1, opacity: 1 }}
+              exit={isPanelMode ? { y: '100%' } : { scale: 0.95, opacity: 0 }}
+              transition={isPanelMode ? { type: 'spring', stiffness: 400, damping: 35 } : undefined}
+              className={isPanelMode
+                ? 'relative bg-[#F5F0E8] border-t-2 border-[#1A1A1A] p-4 w-full rounded-t-2xl'
+                : 'relative bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 max-w-[280px] w-full rounded-xl'
+              }
+            >
               <div className="text-center">
                 <div className="w-9 h-9 bg-[#FFF8E7] border-2 border-[#D4A84B] flex items-center justify-center mx-auto mb-3">
                   <svg className="w-4 h-4 text-[#D4A84B]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
