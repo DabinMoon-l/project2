@@ -214,11 +214,11 @@ export const refreshRadarNorm = onCall(
   }
 );
 
-// ── Scheduled: 30분마다 모든 courseId 갱신 (Firestore 읽기 절감: 10분→30분) ──
+// ── Scheduled: 2시간마다 모든 courseId 갱신 (비용 절감: 30분→2시간) ──
 
 export const computeRadarNormScheduled = onSchedule(
   {
-    schedule: "every 30 minutes",
+    schedule: "every 2 hours",
     region: "asia-northeast3",
     timeZone: "Asia/Seoul",
     memory: "1GiB",

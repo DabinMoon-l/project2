@@ -467,11 +467,11 @@ async function getQueuePosition(queueId: string): Promise<number> {
 }
 
 /**
- * 큐 처리 스케줄러 (매분 실행)
+ * 큐 처리 스케줄러 (5분마다 실행 — 비용 절감)
  */
 export const processGeminiQueue = onSchedule(
   {
-    schedule: "every 1 minutes",
+    schedule: "every 5 minutes",
     region: "asia-northeast3",
     timeZone: "Asia/Seoul",
     secrets: [GEMINI_API_KEY],
