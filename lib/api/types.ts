@@ -307,7 +307,7 @@ export interface CloudFunctionMap {
     output: void;
   };
   submitMashResult: {
-    input: { battleId: string; taps: number };
+    input: { battleId: string; taps: number; botTaps?: number };
     output: void;
   };
   submitTimeout: {
