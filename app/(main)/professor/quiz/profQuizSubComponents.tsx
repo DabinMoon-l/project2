@@ -828,7 +828,7 @@ export function CourseRibbonHeader({
         onTouchEnd={handleTouchEnd}
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
-        style={{ height: Math.round(160 * scale), touchAction: 'pan-y' }}
+        style={{ height: Math.round(120 * scale), touchAction: 'pan-y' }}
       >
         <AnimatePresence mode="wait">
           <motion.div

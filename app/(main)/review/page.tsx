@@ -20,6 +20,7 @@ import { useLearningQuizzes, type LearningQuiz } from '@/lib/hooks/useLearningQu
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse, useUser, useDetailPanel, useClosePanel, usePanelLock } from '@/lib/contexts';
 import { useWideMode } from '@/lib/hooks/useViewportScale';
+import { useHomeScale } from '@/components/home/useHomeScale';
 import { getChapterById, generateCourseTags, COMMON_TAGS } from '@/lib/courseIndex';
 import type { QuestionExportData as PdfQuestionData } from '@/lib/utils/questionPdfExport';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
@@ -61,6 +62,7 @@ function ReviewPageContent() {
   const { userCourseId, semesterSettings, getCourseById } = useCourse();
   const { profile } = useUser();
   const isWide = useWideMode();
+  const ribbonHeightScale = useHomeScale();
   const { openDetail, replaceDetail, closeDetail, lockDetail, unlockDetail, isDetailOpen, isLocked } = useDetailPanel();
 
   // 과목별 리본 이미지
@@ -809,7 +811,7 @@ function ReviewPageContent() {
     <div className="min-h-screen pb-28" style={{ backgroundColor: '#F5F0E8' }}>
       {/* 헤더 - 배너 이미지 */}
       <header className="flex flex-col items-center">
-        <div className="w-full h-[160px] mt-2">
+        <div className="w-full mt-2" style={{ height: Math.round(120 * ribbonHeightScale) }}>
           <img
             src={ribbonImage}
             alt="Review"
