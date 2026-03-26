@@ -14,6 +14,7 @@ import {
 } from '@/components/home';
 import { useWideMode, scaleCoord } from '@/lib/hooks/useViewportScale';
 import { useDetailPanel } from '@/lib/contexts/DetailPanelContext';
+import { useLogOverlayView } from '@/lib/hooks/usePageViewLogger';
 
 // 대형 컴포넌트 lazy load (오버레이 열릴 때만 필요)
 const ProfileDrawer = dynamic(() => import('@/components/common/ProfileDrawer'), { ssr: false });
@@ -41,6 +42,7 @@ export default function HomeOverlay() {
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
   const isWide = useWideMode();
   const { openDetail, closeDetail, clearQueue, isLocked } = useDetailPanel();
+  const logOverlay = useLogOverlayView();
 
   // 가로모드: 홈은 일반 라우트(`/`) → 오버레이 사용 안 함
   useEffect(() => {
@@ -367,10 +369,10 @@ export default function HomeOverlay() {
             </p>
           </div>
           <div className="px-8 mb-2 mt-1 relative z-30">
-            <AnnouncementChannel onOpenPanel={isWide ? () => openDetail(<AnnouncementChannel isPanelMode onClosePanel={closeDetail} />) : undefined} />
+            <AnnouncementChannel onOpenPanel={isWide ? () => { logOverlay('announcement_open'); openDetail(<AnnouncementChannel isPanelMode onClosePanel={closeDetail} />); } : undefined} />
           </div>
           <div className="px-8 mb-1 relative z-20">
-            <OpinionChannel onOpenPanel={isWide ? () => openDetail(<OpinionChannel isPanelMode onClosePanel={closeDetail} />) : undefined} />
+            <OpinionChannel onOpenPanel={isWide ? () => { logOverlay('opinion_open'); openDetail(<OpinionChannel isPanelMode onClosePanel={closeDetail} />); } : undefined} />
           </div>
         </div>
 

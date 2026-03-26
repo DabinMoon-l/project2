@@ -37,6 +37,9 @@ const VISIT_LABELS: Record<string, string> = {
   prof_stats: '통계',
   prof_students: '학생 관리',
   prof_quiz_preview: '퀴즈 미리보기',
+  announcement_open: '공지',
+  opinion_open: '의견게시판',
+  ranking_open: '랭킹',
   other: '기타',
 };
 
@@ -173,12 +176,21 @@ export default function StudentActivityPanel({
         setStudentId(userSnap.data()?.studentId || '');
       }
 
-      // 퀴즈 제목 배치 조회 (quiz_complete의 sourceId)
+      // expHistory에서 퀴즈 ID + 게시글 ID 수집
       const quizIds = new Set<string>();
+      const expPostIds = new Set<string>();
       expSnap.docs.forEach(d => {
         const data = d.data();
-        if (data.type === 'quiz_complete' && data.sourceId) quizIds.add(data.sourceId as string);
+        const t = data.type as string;
+        const sid = data.sourceId as string | undefined;
+        const meta = data.metadata as Record<string, unknown> | undefined;
+        if ((t === 'quiz_complete' || t === 'quiz_create' || t === 'quiz_make_public' || t === 'review_practice') && sid) quizIds.add(sid);
+        if (t === 'post_create' && sid) expPostIds.add(sid);
+        if (t === 'comment_create' && meta?.postId) expPostIds.add(meta.postId as string);
+        if (t === 'comment_accepted' && meta?.postId) expPostIds.add(meta.postId as string);
       });
+
+      // 퀴즈 제목 배치 조회
       const quizTitles: Record<string, string> = {};
       const qArr = Array.from(quizIds);
       for (let i = 0; i < qArr.length; i += 10) {
@@ -189,42 +201,134 @@ export default function StudentActivityPanel({
         });
       }
 
+      // 게시글 제목 배치 조회 (expHistory용)
+      const expPostTitles: Record<string, string> = {};
+      const epArr = Array.from(expPostIds);
+      for (let i = 0; i < epArr.length; i += 10) {
+        const batch = epArr.slice(i, i + 10);
+        const snaps = await Promise.all(batch.map(id => getDoc(doc(db, 'posts', id))));
+        snaps.forEach((snap, idx) => {
+          if (snap.exists()) expPostTitles[batch[idx]] = snap.data()?.title || '';
+        });
+      }
+
       const items: ActivityItem[] = [];
 
       // expHistory → ActivityItem
       expSnap.docs.forEach(d => {
         const data = d.data();
         const ts = data.createdAt?.toDate?.() || new Date(0);
+        const t = data.type as string;
+        const sid = data.sourceId as string | undefined;
+        const meta = data.metadata as Record<string, unknown> | undefined;
 
-        // quiz_complete: "퀴즈 완료" 대신 퀴즈 이름 + 점수 표시
         let detail: string | undefined = data.reason || undefined;
-        if (data.type === 'quiz_complete' && data.sourceId) {
-          const title = quizTitles[data.sourceId as string];
+
+        // 퀴즈 풀기: 퀴즈 이름 + 점수
+        if (t === 'quiz_complete' && sid) {
+          const title = quizTitles[sid];
           const scoreMatch = (data.reason || '').match(/점수[:\s]*(\d+)점/);
           const scorePart = scoreMatch ? ` (점수: ${scoreMatch[1]}점)` : '';
           if (title) detail = `${title}${scorePart}`;
+        }
+        // 복습 완료: 퀴즈 이름
+        else if (t === 'review_practice' && sid) {
+          const title = quizTitles[sid];
+          if (title) detail = title;
+        }
+        // 퀴즈 만들기/공개: 퀴즈 이름
+        else if ((t === 'quiz_create' || t === 'quiz_make_public') && sid) {
+          const title = quizTitles[sid];
+          if (title) detail = title;
+        }
+        // 게시글 작성: 글 제목
+        else if (t === 'post_create' && sid) {
+          const title = expPostTitles[sid];
+          if (title) detail = title;
+        }
+        // 댓글 작성/채택: 게시글 제목
+        else if ((t === 'comment_create' || t === 'comment_accepted') && meta?.postId) {
+          const title = expPostTitles[meta.postId as string];
+          if (title) detail = title;
         }
 
         items.push({
           id: `exp-${d.id}`,
           timestamp: ts,
           type: 'exp',
-          label: EXP_LABELS[data.type] || data.type || '활동',
+          label: EXP_LABELS[t] || t || '활동',
           detail,
           exp: data.amount || 0,
         });
       });
 
-      // pageViews → ActivityItem (expHistory와 중복되는 카테고리 제외)
+      // pageViews → 상세 페이지 제목 배치 조회
+      const postIds = new Set<string>();
+      const pvQuizIds = new Set<string>();
+      pvSnap.docs.forEach(d => {
+        const data = d.data();
+        const path = data.path as string || '';
+        if (data.category === 'board_detail') {
+          const m = path.match(/^\/board\/([^/]+)/);
+          if (m) postIds.add(m[1]);
+        }
+        if (data.category === 'quiz_solve' || data.category === 'quiz_result' || data.category === 'quiz_feedback') {
+          const m = path.match(/^\/quiz\/([^/]+)/);
+          if (m && !quizTitles[m[1]]) pvQuizIds.add(m[1]);
+        }
+        if (data.category === 'review_detail') {
+          const m = path.match(/^\/review\/[^/]+\/([^/]+)/);
+          if (m && !quizTitles[m[1]]) pvQuizIds.add(m[1]);
+        }
+      });
+
+      // 게시글 제목 배치 조회
+      const postTitles: Record<string, string> = {};
+      const pArr = Array.from(postIds);
+      for (let i = 0; i < pArr.length; i += 10) {
+        const batch = pArr.slice(i, i + 10);
+        const snaps = await Promise.all(batch.map(id => getDoc(doc(db, 'posts', id))));
+        snaps.forEach((snap, idx) => {
+          if (snap.exists()) postTitles[batch[idx]] = snap.data()?.title || '';
+        });
+      }
+      // 추가 퀴즈 제목 조회 (expHistory에서 못 가져온 것)
+      const pvqArr = Array.from(pvQuizIds);
+      for (let i = 0; i < pvqArr.length; i += 10) {
+        const batch = pvqArr.slice(i, i + 10);
+        const snaps = await Promise.all(batch.map(id => getDoc(doc(db, 'quizzes', id))));
+        snaps.forEach((snap, idx) => {
+          if (snap.exists()) quizTitles[batch[idx]] = snap.data()?.title || '';
+        });
+      }
+
+      // pageViews → ActivityItem
       pvSnap.docs.forEach(d => {
         const data = d.data();
         const ts = data.timestamp?.toDate?.() || new Date(0);
+        const path = data.path as string || '';
+        const cat = data.category as string || 'other';
+
+        // 상세 페이지: 제목 표시 / 목록 페이지: detail 없음
+        let pvDetail: string | undefined;
+        if (cat === 'board_detail') {
+          const m = path.match(/^\/board\/([^/]+)/);
+          pvDetail = m ? (postTitles[m[1]] || undefined) : undefined;
+        } else if (cat === 'quiz_solve' || cat === 'quiz_result' || cat === 'quiz_feedback') {
+          const m = path.match(/^\/quiz\/([^/]+)/);
+          pvDetail = m ? (quizTitles[m[1]] || undefined) : undefined;
+        } else if (cat === 'review_detail') {
+          const m = path.match(/^\/review\/[^/]+\/([^/]+)/);
+          pvDetail = m ? (quizTitles[m[1]] || undefined) : undefined;
+        }
+        // 목록/홈 등은 detail 없음 (raw path 숨김)
+
         items.push({
           id: `pv-${d.id}`,
           timestamp: ts,
           type: 'visit',
-          label: VISIT_LABELS[data.category] || '페이지 방문',
-          detail: data.path || undefined,
+          label: VISIT_LABELS[cat] || '페이지 방문',
+          detail: pvDetail,
           durationMs: data.durationMs || undefined,
         });
       });

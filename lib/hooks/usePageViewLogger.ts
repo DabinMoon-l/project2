@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
 import { collection, addDoc, updateDoc, doc, serverTimestamp, db } from '@/lib/repositories';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -86,4 +86,26 @@ export function usePageViewLogger() {
       prevDocIdRef.current = ref.id;
     }).catch(() => {});
   }, [user?.uid, pathname, userCourseId, userClassId]);
+}
+
+/**
+ * 오버레이/바텀시트 열기 이벤트 로깅 훅
+ * URL이 바뀌지 않는 오버레이(공지, 의견, 랭킹 등) 열기를 pageViews에 기록
+ */
+export function useLogOverlayView() {
+  const { user } = useAuth();
+  const { userCourseId, userClassId } = useCourse();
+
+  return useCallback((category: string) => {
+    if (!user?.uid) return;
+    addDoc(collection(db, 'pageViews'), {
+      userId: user.uid,
+      path: `/@overlay/${category}`,
+      category,
+      sessionId: getSessionId(),
+      courseId: userCourseId || null,
+      classId: userClassId || null,
+      timestamp: serverTimestamp(),
+    }).catch(() => {});
+  }, [user?.uid, userCourseId, userClassId]);
 }

@@ -16,6 +16,7 @@ import { getRabbitImageSrc } from '@/lib/utils/rabbitImage';
 import { readFullCache, writeFullCache } from '@/lib/utils/rankingCache';
 import { computeRankScore } from '@/lib/utils/ranking';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
+import { useLogOverlayView } from '@/lib/hooks/usePageViewLogger';
 import dynamic from 'next/dynamic';
 const StudentActivityPanel = dynamic(() => import('./StudentActivityPanel'), { ssr: false });
 
@@ -97,6 +98,7 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
   useTheme();
   const isWide = useWideMode();
   const isProfessor = profile?.role === 'professor';
+  const logOverlay = useLogOverlayView();
   /** 디폴트 닉네임 (바텀시트에서 실명 확인) */
   const displayName = (u: RankedUser) => u.nickname;
 
@@ -128,13 +130,14 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
     }
   }, [isOpen, isPanelMode]);
 
-  // 열릴 때 초기화
+  // 열릴 때 초기화 + 오버레이 뷰 로깅
   useEffect(() => {
     if (isOpen) {
       setDisplayCount(30);
       setShowScrollTop(false);
       setSelectedUser(null);
       scrollRef.current?.scrollTo(0, 0);
+      logOverlay('ranking_open');
     }
   }, [isOpen]);
 
@@ -352,8 +355,17 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
             style={{ height: '85%' }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="absolute inset-0"><Image src="/images/home-bg.jpg" alt="" fill className="object-cover" /></div>
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-2xl" />
+            {/* 세로모드: 랭킹과 동일한 배경 */}
+            {!isWide && (
+              <>
+                <div className="absolute inset-0"><Image src="/images/home-bg.jpg" alt="" fill className="object-cover" /></div>
+                <div className="absolute inset-0 bg-black/50 backdrop-blur-2xl" />
+              </>
+            )}
+            {/* 가로모드: 투명 글래스 */}
+            {isWide && (
+              <div className="absolute inset-0 bg-black/20 backdrop-blur-xl" />
+            )}
             <div className="relative z-10 h-full flex flex-col">
               {/* 드래그 핸들 */}
               <div className="flex justify-center pt-2 pb-1">

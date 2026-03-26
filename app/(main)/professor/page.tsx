@@ -9,6 +9,7 @@ import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 import CourseSwitcher from '@/components/common/CourseSwitcher';
 import ProfessorCharacterBox from '@/components/home/ProfessorCharacterBox';
 import ProfessorRankingSection from '@/components/home/ProfessorRankingSection';
+import { useLogOverlayView } from '@/lib/hooks/usePageViewLogger';
 
 const ProfileDrawer = dynamic(() => import('@/components/common/ProfileDrawer'), { ssr: false });
 const AnnouncementChannel = dynamic(() => import('@/components/home/announcement'), { ssr: false });
@@ -26,6 +27,7 @@ export default function ProfessorHomePage() {
   const { openDetail, closeDetail } = useDetailPanel();
   const router = useRouter();
   const isWide = useWideMode();
+  const logOverlay = useLogOverlayView();
   const [mounted, setMounted] = useState(false);
 
   const selectedCourse = (userCourseId as 'biology' | 'pathophysiology' | 'microbiology') || 'microbiology';
@@ -83,25 +85,28 @@ export default function ProfessorHomePage() {
                 courseIds={assignedCourses}
               />
             }
-            onOpenPanel={() => openDetail(
-              <AnnouncementChannel
-                isPanelMode
-                onClosePanel={closeDetail}
-                overrideCourseId={selectedCourse}
-                headerContent={
-                  <CourseSwitcher
-                    value={selectedCourse}
-                    onChange={setProfessorCourse}
-                    textClassName="text-2xl font-black text-white/90 tracking-wide inline-block"
-                    courseIds={assignedCourses}
-                  />
-                }
-              />
-            )}
+            onOpenPanel={() => {
+              logOverlay('announcement_open');
+              openDetail(
+                <AnnouncementChannel
+                  isPanelMode
+                  onClosePanel={closeDetail}
+                  overrideCourseId={selectedCourse}
+                  headerContent={
+                    <CourseSwitcher
+                      value={selectedCourse}
+                      onChange={setProfessorCourse}
+                      textClassName="text-2xl font-black text-white/90 tracking-wide inline-block"
+                      courseIds={assignedCourses}
+                    />
+                  }
+                />
+              );
+            }}
           />
         </div>
         <div className="px-8 mb-1 relative z-20">
-          <OpinionChannel onOpenPanel={() => openDetail(<OpinionChannel isPanelMode onClosePanel={closeDetail} />)} />
+          <OpinionChannel onOpenPanel={() => { logOverlay('opinion_open'); openDetail(<OpinionChannel isPanelMode onClosePanel={closeDetail} />); }} />
         </div>
       </div>
 
