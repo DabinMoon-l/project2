@@ -6,7 +6,7 @@ import { callFunction } from '@/lib/api';
 import { auth } from '@/lib/firebase';
 import { useCourse } from '@/lib/contexts/CourseContext';
 // OCR 제거됨 — Gemini가 이미지를 직접 분석하므로 별도 OCR 불필요
-import { generateCourseTags, COMMON_TAGS, type TagOption } from '@/lib/courseIndex';
+import { generateCourseTags, COMMON_TAGS, COURSE_INDEXES, type TagOption } from '@/lib/courseIndex';
 import ExpandModal from '@/components/common/ExpandModal';
 import type { SourceRect } from '@/lib/hooks/useExpandSource';
 import PageSelectionModal from './PageSelectionModal';
@@ -36,6 +36,7 @@ export interface AIQuizData {
   questionCount: number;
   tags: string[]; // 태그 배열
   courseCustomized?: boolean; // 과목 맞춤형 (교수 스타일/범위/포커스 반영)
+  selectedDetails?: string[]; // 세부단원 IDs (예: ["bio_3_1", "micro_5_2"])
 }
 
 interface DocumentPage {
@@ -83,12 +84,6 @@ function useIsMobileDevice() {
 export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }: AIQuizModalProps) {
   const isMobile = useIsMobileDevice();
   const { userCourseId } = useCourse();
-  // 과목별 동적 태그 생성 (챕터 번호 포함)
-  const tagOptions = useMemo(() => {
-    const courseTags = generateCourseTags(userCourseId);
-    // 공통 태그 + 과목별 챕터 태그
-    return [...COMMON_TAGS, ...courseTags];
-  }, [userCourseId]);
 
   const [folderName, setFolderName] = useState('');
   const [images, setImages] = useState<string[]>([]);
@@ -97,6 +92,20 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [courseCustomized, setCourseCustomized] = useState(true);
   const [showTagFilter, setShowTagFilter] = useState(false);
+
+  // 과목별 동적 태그 생성 (과목 맞춤형: 공통 태그만, 일반: 챕터 태그 포함)
+  const tagOptions = useMemo(() => {
+    if (courseCustomized) return [...COMMON_TAGS];
+    const courseTags = generateCourseTags(userCourseId);
+    return [...COMMON_TAGS, ...courseTags];
+  }, [userCourseId, courseCustomized]);
+
+  // 챕터 캐러셀 (과목 맞춤형)
+  const [chapterCarouselIdx, setChapterCarouselIdx] = useState(0);
+  const [selectedChapterNums, setSelectedChapterNums] = useState<Set<string>>(new Set());
+  // 세부단원 캐러셀
+  const [detailCarouselIdx, setDetailCarouselIdx] = useState(0);
+  const [selectedDetailIds, setSelectedDetailIds] = useState<Set<string>>(new Set());
   const [documentPages, setDocumentPages] = useState<DocumentPage[]>([]);
   const [isLoadingDocument, setIsLoadingDocument] = useState(false);
   const [uploadType, setUploadType] = useState<'image' | 'pdf' | 'ppt' | null>(null);
@@ -114,6 +123,147 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const pptInputRef = useRef<HTMLInputElement>(null);
+
+  // ── 챕터/세부단원 캐러셀 데이터 + 콜백 ──
+
+  const courseChapters = useMemo(() => {
+    if (!userCourseId) return [];
+    const index = COURSE_INDEXES[userCourseId];
+    if (!index) return [];
+    return index.chapters.map((ch) => {
+      const match = ch.id.match(/_(\d+)$/);
+      const num = match ? match[1] : ch.id;
+      return { id: ch.id, num, shortName: ch.shortName, details: ch.details };
+    });
+  }, [userCourseId]);
+
+  // 선택된 챕터의 세부단원 목록
+  const availableDetails = useMemo(() => {
+    if (selectedChapterNums.size === 0) return [];
+    return courseChapters
+      .filter(ch => selectedChapterNums.has(ch.num))
+      .flatMap(ch =>
+        ch.details.map(d => {
+          const detailMatch = d.id.match(/_(\d+)_(\d+)$/);
+          const detailNum = detailMatch ? detailMatch[2] : '?';
+          return {
+            id: d.id,
+            chapterNum: ch.num,
+            detailNum,
+            name: d.name,
+            displayName: `${ch.num}-${detailNum}. ${d.name}`,
+          };
+        })
+      );
+  }, [courseChapters, selectedChapterNums]);
+
+  // 캐러셀 안전 인덱스
+  const safeChapterIdx = courseChapters.length > 0
+    ? Math.min(chapterCarouselIdx, courseChapters.length - 1) : 0;
+  const safeDetailIdx = availableDetails.length > 0
+    ? Math.min(detailCarouselIdx, availableDetails.length - 1) : 0;
+
+  const currentChapter = courseChapters[safeChapterIdx];
+  const currentDetail = availableDetails[safeDetailIdx];
+  const isChapterSelected = currentChapter ? selectedChapterNums.has(currentChapter.num) : false;
+  const isDetailSelected = currentDetail ? selectedDetailIds.has(currentDetail.id) : false;
+
+  // 스와이프 (챕터)
+  const chapterSwipeRef = useRef<number | null>(null);
+  const onChapterPointerDown = useCallback((e: React.PointerEvent) => {
+    chapterSwipeRef.current = e.clientX;
+  }, []);
+  const onChapterPointerUp = useCallback((e: React.PointerEvent) => {
+    if (chapterSwipeRef.current === null) return;
+    const dx = e.clientX - chapterSwipeRef.current;
+    chapterSwipeRef.current = null;
+    if (Math.abs(dx) < 30) return;
+    if (dx < 0) setChapterCarouselIdx(i => (i + 1) % courseChapters.length);
+    else setChapterCarouselIdx(i => (i - 1 + courseChapters.length) % courseChapters.length);
+  }, [courseChapters.length]);
+
+  // 스와이프 (세부단원)
+  const detailSwipeRef = useRef<number | null>(null);
+  const onDetailPointerDown = useCallback((e: React.PointerEvent) => {
+    detailSwipeRef.current = e.clientX;
+  }, []);
+  const onDetailPointerUp = useCallback((e: React.PointerEvent) => {
+    if (detailSwipeRef.current === null) return;
+    const dx = e.clientX - detailSwipeRef.current;
+    detailSwipeRef.current = null;
+    if (Math.abs(dx) < 30) return;
+    if (dx < 0) setDetailCarouselIdx(i => (i + 1) % availableDetails.length);
+    else setDetailCarouselIdx(i => (i - 1 + availableDetails.length) % availableDetails.length);
+  }, [availableDetails.length]);
+
+  // 챕터 선택/해제
+  const toggleChapter = useCallback(() => {
+    if (!currentChapter) return;
+    setSelectedChapterNums(prev => {
+      const next = new Set(prev);
+      if (next.has(currentChapter.num)) {
+        next.delete(currentChapter.num);
+        // 해당 챕터의 세부단원도 제거
+        const ch = courseChapters.find(c => c.num === currentChapter.num);
+        if (ch) {
+          setSelectedDetailIds(prevD => {
+            const nextD = new Set(prevD);
+            ch.details.forEach(d => nextD.delete(d.id));
+            return nextD;
+          });
+        }
+      } else {
+        next.add(currentChapter.num);
+      }
+      return next;
+    });
+    setDetailCarouselIdx(0);
+  }, [currentChapter, courseChapters]);
+
+  // 챕터 제거
+  const removeChapter = useCallback((num: string) => {
+    setSelectedChapterNums(prev => {
+      const next = new Set(prev);
+      next.delete(num);
+      return next;
+    });
+    const ch = courseChapters.find(c => c.num === num);
+    if (ch) {
+      setSelectedDetailIds(prevD => {
+        const nextD = new Set(prevD);
+        ch.details.forEach(d => nextD.delete(d.id));
+        return nextD;
+      });
+    }
+    setDetailCarouselIdx(0);
+  }, [courseChapters]);
+
+  // 세부단원 선택/해제
+  const toggleDetail = useCallback(() => {
+    if (!currentDetail) return;
+    setSelectedDetailIds(prev => {
+      const next = new Set(prev);
+      if (next.has(currentDetail.id)) next.delete(currentDetail.id);
+      else next.add(currentDetail.id);
+      return next;
+    });
+  }, [currentDetail]);
+
+  // 세부단원 제거
+  const removeDetail = useCallback((id: string) => {
+    setSelectedDetailIds(prev => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }, []);
+
+  // 과목 맞춤형 전환 시 기존 챕터 태그 정리
+  useEffect(() => {
+    if (courseCustomized) {
+      setSelectedTags(prev => prev.filter(t => ['중간', '기말', '기타'].includes(t)));
+    }
+  }, [courseCustomized]);
 
   // 모달 닫힐 때 상태 초기화
   useEffect(() => {
@@ -133,6 +283,10 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
       setShowPageSelectionModal(false);
       setPageSelectionTitle('');
       setRenderedPageImages([]);
+      setChapterCarouselIdx(0);
+      setSelectedChapterNums(new Set());
+      setDetailCarouselIdx(0);
+      setSelectedDetailIds(new Set());
     }
   }, [isOpen]);
 
@@ -344,11 +498,8 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
     }
   }, []);
 
-  // 제외할 태그 (챕터 태그가 아닌 것들)
-  const EXCLUDED_TAGS = ['중간', '기말', '기타'];
-
-  // 챕터 태그가 선택되었는지 확인
-  const hasChapterTag = selectedTags.some(tag => !EXCLUDED_TAGS.includes(tag));
+  // 과목 맞춤형: 챕터 캐러셀에서 선택 여부
+  const hasChapterSelection = selectedChapterNums.size > 0;
 
   // 페이지 선택/해제 토글
   const togglePage = useCallback((pageNum: number) => {
@@ -443,24 +594,36 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
       return;
     }
 
-    if (selectedTags.length === 0) {
-      alert('태그를 1개 이상 선택해주세요.');
-      return;
+    if (courseCustomized) {
+      // 과목 맞춤형: 챕터 캐러셀 선택 필수
+      if (selectedChapterNums.size === 0) {
+        alert('챕터를 1개 이상 선택해주세요.');
+        return;
+      }
+    } else {
+      // 일반 모드: 태그 필수
+      if (selectedTags.length === 0) {
+        alert('태그를 1개 이상 선택해주세요.');
+        return;
+      }
     }
 
-    // 챕터 태그 필수 체크 (과목 맞춤형일 때만)
-    if (courseCustomized && !hasChapterTag) {
-      alert('챕터 태그를 1개 이상 선택해주세요.\n(#중간, #기말, #기타는 챕터 태그가 아닙니다)');
-      return;
-    }
-
-    // 이미지 + 캐시된 PDF/PPT 페이지 이미지 합치기 (중복 렌더링 없음)
     const finalImages = [...images, ...renderedPageImages];
 
-    // 과목 맞춤형 + 챕터 태그 선택 시 학습 자료 없이도 생성 가능
-    if (finalImages.length === 0 && !(courseCustomized && hasChapterTag)) {
-      alert('학습 자료를 업로드해주세요.\n(과목 맞춤형 + 챕터 태그 선택 시 자료 없이 생성 가능)');
+    // 일반 모드: 학습 자료 필수
+    if (!courseCustomized && finalImages.length === 0) {
+      alert('학습 자료를 업로드해주세요.');
       return;
+    }
+
+    // 과목 맞춤형: 선택된 챕터를 태그 형식으로 변환 (서버 호환)
+    let finalTags = [...selectedTags];
+    if (courseCustomized) {
+      const chapterTags = [...selectedChapterNums].map(num => {
+        const ch = courseChapters.find(c => c.num === num);
+        return ch ? `${num}_${ch.shortName}` : num;
+      });
+      finalTags = [...chapterTags, ...selectedTags];
     }
 
     onStartQuiz({
@@ -468,10 +631,11 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
       images: finalImages,
       difficulty,
       questionCount,
-      tags: selectedTags,
+      tags: finalTags,
       courseCustomized,
+      selectedDetails: selectedDetailIds.size > 0 ? [...selectedDetailIds] : undefined,
     });
-  }, [folderName, images, renderedPageImages, difficulty, questionCount, onStartQuiz, selectedTags, hasChapterTag, courseCustomized]);
+  }, [folderName, images, renderedPageImages, difficulty, questionCount, onStartQuiz, selectedTags, courseCustomized, selectedChapterNums, selectedDetailIds, courseChapters]);
 
   // body overflow 제어 (ExpandModal이 ESC 키 처리)
   useEffect(() => {
@@ -488,8 +652,8 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
   const gridCols = isMobile ? 'grid-cols-4' : 'grid-cols-3';
 
   const selectedPageCount = documentPages.filter(p => p.selected).length;
-  // 콘텐츠 존재 여부 (과목 맞춤형 + 챕터 태그면 자료 없이도 OK)
-  const hasContent = images.length > 0 || selectedPageCount > 0 || (courseCustomized && hasChapterTag);
+  // 콘텐츠 존재 여부 (과목 맞춤형 + 챕터 선택이면 자료 없이도 OK)
+  const hasContent = images.length > 0 || selectedPageCount > 0 || (courseCustomized && hasChapterSelection);
 
   return (
     <>
@@ -524,13 +688,13 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
               />
             </div>
 
-            {/* 태그 선택 (챕터 태그 필수) */}
+            {/* 태그 선택 */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs font-semibold text-[#1A1A1A]">
                   태그 {courseCustomized
-                    ? <span className="text-[#8B1A1A]">* <span className="font-normal text-[10px]">챕터 필수</span></span>
-                    : <span className="text-[#999] font-normal text-[10px]">선택</span>}
+                    ? <span className="text-[#999] font-normal text-[10px]">선택</span>
+                    : <span className="text-[#8B1A1A]">*</span>}
                 </label>
                 <button
                   type="button"
@@ -570,13 +734,6 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
                 </div>
               )}
 
-              {/* 챕터 태그 미선택 경고 (과목 맞춤형일 때만) */}
-              {courseCustomized && !hasChapterTag && (
-                <p className="text-xs text-[#8B1A1A] font-medium px-0.5 mb-1.5">
-                  태그 버튼을 눌러 챕터 태그를 선택해주세요
-                </p>
-              )}
-
               {/* 태그 선택 목록 */}
               <AnimatePresence>
                 {showTagFilter && (
@@ -611,12 +768,161 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
               </AnimatePresence>
             </div>
 
-            {/* 파일 업로드 */}
+            {/* 과목 맞춤형: 챕터 + 세부단원 캐러셀 */}
+            {courseCustomized && (
+              <div className="space-y-2.5">
+                {/* 챕터 선택 */}
+                <div>
+                  <label className="block text-xs font-semibold text-[#1A1A1A] mb-1.5">
+                    챕터 선택 <span className="text-[#8B1A1A]">*</span>
+                  </label>
+                  {currentChapter && (
+                    <div
+                      className="flex items-center justify-center gap-1 touch-pan-y"
+                      onPointerDown={onChapterPointerDown}
+                      onPointerUp={onChapterPointerUp}
+                    >
+                      <button
+                        onClick={() => setChapterCarouselIdx(i => (i - 1 + courseChapters.length) % courseChapters.length)}
+                        className="w-8 h-8 flex items-center justify-center text-[#5C5C5C] active:text-[#1A1A1A] transition-colors"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={toggleChapter}
+                        className={`flex-1 py-2 rounded-xl text-sm font-black transition-all ${
+                          isChapterSelected
+                            ? 'bg-[#1A1A1A] text-white'
+                            : 'bg-white text-[#5C5C5C] border-2 border-[#1A1A1A]'
+                        }`}
+                      >
+                        <AnimatePresence mode="wait">
+                          <motion.span
+                            key={safeChapterIdx}
+                            initial={{ opacity: 0, x: 10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -10 }}
+                            transition={{ duration: 0.15 }}
+                            className="block"
+                          >
+                            {currentChapter.num}. {currentChapter.shortName}
+                          </motion.span>
+                        </AnimatePresence>
+                      </button>
+                      <button
+                        onClick={() => setChapterCarouselIdx(i => (i + 1) % courseChapters.length)}
+                        className="w-8 h-8 flex items-center justify-center text-[#5C5C5C] active:text-[#1A1A1A] transition-colors"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                  {/* 선택된 챕터 태그 */}
+                  <div className="flex flex-wrap gap-1.5 mt-2 min-h-[28px]">
+                    {courseChapters
+                      .filter(c => selectedChapterNums.has(c.num))
+                      .map(({ num, shortName }) => (
+                        <button
+                          key={num}
+                          onClick={() => removeChapter(num)}
+                          className="flex items-center gap-0.5 px-2 py-1 text-xs font-bold bg-[#1A1A1A] text-[#F5F0E8] rounded-lg"
+                        >
+                          {num}. {shortName}
+                          <svg className="w-3 h-3 ml-0.5 text-[#F5F0E8]/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      ))}
+                    {selectedChapterNums.size === 0 && (
+                      <p className="text-[10px] text-[#8B1A1A]">챕터를 선택하세요</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* 세부단원 선택 */}
+                {availableDetails.length > 0 && (
+                  <div>
+                    <label className="block text-xs font-semibold text-[#1A1A1A] mb-1.5">
+                      세부단원 <span className="text-[#999] font-normal text-[10px]">선택</span>
+                    </label>
+                    {currentDetail && (
+                      <div
+                        className="flex items-center justify-center gap-1 touch-pan-y"
+                        onPointerDown={onDetailPointerDown}
+                        onPointerUp={onDetailPointerUp}
+                      >
+                        <button
+                          onClick={() => setDetailCarouselIdx(i => (i - 1 + availableDetails.length) % availableDetails.length)}
+                          className="w-8 h-8 flex items-center justify-center text-[#5C5C5C] active:text-[#1A1A1A] transition-colors"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={toggleDetail}
+                          className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
+                            isDetailSelected
+                              ? 'bg-[#1A1A1A] text-white'
+                              : 'bg-white text-[#5C5C5C] border-2 border-[#1A1A1A]'
+                          }`}
+                        >
+                          <AnimatePresence mode="wait">
+                            <motion.span
+                              key={safeDetailIdx}
+                              initial={{ opacity: 0, x: 10 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              exit={{ opacity: 0, x: -10 }}
+                              transition={{ duration: 0.15 }}
+                              className="block"
+                            >
+                              {currentDetail.displayName}
+                            </motion.span>
+                          </AnimatePresence>
+                        </button>
+                        <button
+                          onClick={() => setDetailCarouselIdx(i => (i + 1) % availableDetails.length)}
+                          className="w-8 h-8 flex items-center justify-center text-[#5C5C5C] active:text-[#1A1A1A] transition-colors"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+                    {/* 선택된 세부단원 태그 */}
+                    {selectedDetailIds.size > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {availableDetails
+                          .filter(d => selectedDetailIds.has(d.id))
+                          .map(d => (
+                            <button
+                              key={d.id}
+                              onClick={() => removeDetail(d.id)}
+                              className="flex items-center gap-0.5 px-2 py-1 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8] rounded-lg"
+                            >
+                              {d.displayName}
+                              <svg className="w-3 h-3 ml-0.5 text-[#F5F0E8]/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 일반 모드: 학습 자료 업로드 */}
+            {!courseCustomized && (
             <div>
               <label className="block text-xs font-semibold text-[#1A1A1A] mb-1.5">
-                학습 자료 업로드 {courseCustomized
-                  ? <span className="text-[#999] font-normal text-[10px]">선택</span>
-                  : <span className="text-[#8B1A1A]">*</span>}
+                학습 자료 업로드 <span className="text-[#8B1A1A]">*</span>
               </label>
 
               {/* 업로드 버튼들 */}
@@ -778,6 +1084,7 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
                 </div>
               )}
             </div>
+            )}
 
             {/* 난이도 */}
             <div>
@@ -850,9 +1157,9 @@ export default function AIQuizModal({ isOpen, onClose, onStartQuiz, sourceRect }
           <div className="px-4 py-3 border-t-2 border-[#1A1A1A] bg-[#EDEAE4]">
             <button
               onClick={handleStart}
-              disabled={!folderName.trim() || !hasContent || (courseCustomized && !hasChapterTag)}
+              disabled={!folderName.trim() || !hasContent || (courseCustomized && !hasChapterSelection)}
               className={`w-full py-2.5 font-bold text-sm border-2 border-[#1A1A1A] rounded-lg transition-all ${
-                folderName.trim() && hasContent && (!courseCustomized || hasChapterTag)
+                folderName.trim() && hasContent && (!courseCustomized || hasChapterSelection)
                   ? 'bg-[#1A1A1A] text-white hover:bg-[#3A3A3A] shadow-[2px_2px_0px_#1A1A1A] active:shadow-none active:translate-x-[2px] active:translate-y-[2px]'
                   : 'bg-[#E5E5E5] text-[#9A9A9A] cursor-not-allowed'
               }`}
