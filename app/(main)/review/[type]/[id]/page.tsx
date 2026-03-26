@@ -990,7 +990,10 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
           items={targetItems}
           quizTitle={folderTitle}
           onComplete={(results) => handlePracticeCompleteRef.current(results)}
-          onBeforeClose={() => openDetail(<FolderDetailPage panelType={folderType} panelId={folderId} />)}
+          onBeforeClose={() => {
+            openDetail(<FolderDetailPage panelType={folderType} panelId={folderId} />);
+            router.replace('/review'); // 2쪽 탭 루트 복귀 (승격 시 isDetailOpen=true라 layout 효과 스킵됨)
+          }}
           currentUserId={user?.uid}
           showFeedback={folderType !== 'library'}
         />
@@ -1031,7 +1034,10 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
           items={wrongOnlyItems}
           quizTitle={folderTitle}
           onComplete={(results) => handlePracticeCompleteRef.current(results)}
-          onBeforeClose={() => openDetail(<FolderDetailPage panelType={folderType} panelId={folderId} />)}
+          onBeforeClose={() => {
+            openDetail(<FolderDetailPage panelType={folderType} panelId={folderId} />);
+            router.replace('/review'); // 2쪽 탭 루트 복귀
+          }}
           currentUserId={user?.uid}
           showFeedback={folderType !== 'library'}
         />
@@ -1220,7 +1226,10 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
           items={items}
           quizTitle={folderTitle}
           onComplete={(results) => handlePracticeCompleteRef.current(results)}
-          onBeforeClose={() => openDetail(<FolderDetailPage panelType={folderType} panelId={folderId} />)}
+          onBeforeClose={() => {
+            openDetail(<FolderDetailPage panelType={folderType} panelId={folderId} />);
+            router.replace('/review'); // 2쪽 탭 루트 복귀
+          }}
           currentUserId={user?.uid}
           showFeedback={folderType !== 'library'}
         />
