@@ -91,14 +91,15 @@ export default function ProfessorQuizListPage() {
   const isWide = useWideMode();
   const { openDetail, replaceDetail, closeDetail, isDetailOpen } = useDetailPanel();
   const pageScale = useHomeScale();
-  // 캐러셀 동적 스케일: 기준 0.85 × viewport 비율
-  const cScale = Math.max(0.75, Math.min(0.85 * pageScale, 1.1));
+  // 캐러셀 동적 스케일: 기준 0.85, peek 효과 유지를 위해 최대 0.95
+  const cScale = Math.max(0.78, Math.min(0.85 * pageScale, 0.95));
   const cWidth = 100 / cScale;
+  const cMargin = (cWidth - 100) / 2;
   const carouselStyle: React.CSSProperties = {
     transform: `scale(${cScale})`,
     transformOrigin: 'top center',
     width: `${cWidth.toFixed(2)}%`,
-    marginLeft: `-${((cWidth - 100) / 2).toFixed(3)}%`,
+    marginLeft: `${(-cMargin).toFixed(3)}%`,
     marginBottom: '-12px',
   };
 

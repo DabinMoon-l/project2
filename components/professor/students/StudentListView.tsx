@@ -6,6 +6,7 @@ import type { StudentData, ClassType } from '@/lib/hooks/useProfessorStudents';
 import type { WarningItem } from '@/app/(main)/professor/students/page';
 import { mean, sd, zScore } from '@/lib/utils/statistics';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
+import { useHomeScale } from '@/components/home/useHomeScale';
 
 const CLASS_COLORS: Record<ClassType, string> = {
   A: '#8B1A1A', B: '#B8860B', C: '#1D5D4A', D: '#1E3A5F',
@@ -116,8 +117,9 @@ export default function StudentListView({ students, onStudentClick, warningMap, 
     });
   }, [enrichedStudents]);
 
-  // 프로필 크기
-  const PROFILE_SIZE = 90;
+  // 프로필 크기 (뷰포트 비례)
+  const scale = useHomeScale();
+  const PROFILE_SIZE = Math.round(90 * scale);
 
   return (
     <div>
