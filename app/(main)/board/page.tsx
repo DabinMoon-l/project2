@@ -14,6 +14,7 @@ import { type CourseId } from '@/lib/types/course';
 import { generateCourseTags } from '@/lib/courseIndex';
 import { scaleCoord, useWideMode } from '@/lib/hooks/useViewportScale';
 import { useDetailPanel } from '@/lib/contexts/DetailPanelContext';
+import { useHomeScale } from '@/components/home/useHomeScale';
 import PostDetailPage from './[id]/page';
 import WritePage from './write/page';
 /** 기본 토끼 이미지 경로 */
@@ -436,6 +437,7 @@ export default function BoardPage() {
   const { profile } = useUser();
   const isWide = useWideMode();
   const { openDetail, replaceDetail, isDetailOpen, isLocked } = useDetailPanel();
+  const pageScale = useHomeScale();
 
   // 교수님 여부 확인
   const isProfessor = profile?.role === 'professor';
@@ -1014,7 +1016,8 @@ export default function BoardPage() {
                             setShowTagFilter(false);
                             setSearchQuery('');
                           }}
-                          className="px-2 py-1 text-[10px] font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+                          className="py-1 font-bold bg-[#F5F0E8] text-[#1A1A1A] border border-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-[#F5F0E8] transition-colors"
+                          style={{ fontSize: Math.round(10 * pageScale), paddingLeft: Math.round(8 * pageScale), paddingRight: Math.round(8 * pageScale) }}
                         >
                           #{ct}
                         </button>

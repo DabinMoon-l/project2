@@ -20,6 +20,7 @@ import StudentDetailModal from '@/components/professor/students/StudentDetailMod
 import StudentManagementSheet from '@/components/professor/students/StudentManagementSheet';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
 import { useDailyAttendance } from '@/lib/hooks/useDailyAttendance';
+import { useHomeScale } from '@/components/home/useHomeScale';
 
 // ============================================================
 // 접속 상태 유틸
@@ -430,6 +431,7 @@ function StudentsRibbonHeader({
   courseIds: CourseId[];
 }) {
   const { getCourseById } = useCourse();
+  const scale = useHomeScale();
   const currentIndex = courseIds.indexOf(currentCourseId);
   const course = getCourseById(currentCourseId);
   const ribbonImage = course?.studentsRibbonImage || '/images/biology-students-ribbon.png';
@@ -496,13 +498,13 @@ function StudentsRibbonHeader({
     <div className="flex flex-col items-center">
       {/* 리본 이미지 — 터치/마우스 드래그로 과목 전환 */}
       <div
-        className="w-full h-[160px] mt-2 cursor-grab active:cursor-grabbing select-none"
+        className="w-full mt-2 cursor-grab active:cursor-grabbing select-none"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
-        style={{ touchAction: 'pan-y' }}
+        style={{ height: Math.round(160 * scale), touchAction: 'pan-y' }}
       >
         <AnimatePresence mode="wait">
           <motion.div
@@ -617,17 +619,19 @@ function SessionDonut({ attended, total, classFilter, month, day, maxDay, onMont
 }) {
   const notAttended = total - attended;
   const pct = total > 0 ? Math.round((attended / total) * 100) : 0;
+  const scale = useHomeScale();
 
   const R = 42;
   const C = 2 * Math.PI * R;
   const attendedLen = (pct / 100) * C;
   const animKey = `donut-${classFilter}-${month}-${day}`;
+  const donutSize = Math.round(160 * scale);
 
   return (
-    <div className="flex items-center justify-center gap-6 py-2">
+    <div className="flex items-center justify-center py-2" style={{ gap: Math.round(24 * scale) }}>
       {/* 도넛 차트 */}
-      <div className="flex-shrink-0 w-[160px] h-[160px]">
-        <svg width="160" height="160" viewBox="0 0 100 100">
+      <div className="flex-shrink-0" style={{ width: donutSize, height: donutSize }}>
+        <svg width={donutSize} height={donutSize} viewBox="0 0 100 100">
           {/* 미접속 링 */}
           <circle
             cx="50" cy="50" r={R} fill="none"
@@ -654,23 +658,23 @@ function SessionDonut({ attended, total, classFilter, month, day, maxDay, onMont
       </div>
 
       {/* 날짜 + 범례 */}
-      <div className="w-[160px] space-y-2">
+      <div style={{ width: Math.round(160 * scale) }} className="space-y-2">
         {/* 날짜 선택: < X月 X日 > */}
         <div className="flex items-center justify-between pb-1 border-b border-dashed border-[#D4CFC4]">
-          <button onClick={onPrevDay} className="w-6 h-6 flex items-center justify-center text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <button onClick={onPrevDay} className="flex items-center justify-center text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors" style={{ width: Math.round(24 * scale), height: Math.round(24 * scale) }}>
+            <svg style={{ width: Math.round(14 * scale), height: Math.round(14 * scale) }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
           <div className="flex items-baseline gap-0.5">
             <ScrollableDigit value={month} min={1} max={12} onChange={onMonthChange} />
-            <span className="text-base font-bold text-[#5C5C5C]">月</span>
+            <span className="font-bold text-[#5C5C5C]" style={{ fontSize: Math.round(16 * scale) }}>月</span>
             <span className="w-0.5" />
             <ScrollableDigit value={day} min={1} max={maxDay} onChange={onDayChange} />
-            <span className="text-base font-bold text-[#5C5C5C]">日</span>
+            <span className="font-bold text-[#5C5C5C]" style={{ fontSize: Math.round(16 * scale) }}>日</span>
           </div>
-          <button onClick={onNextDay} className="w-6 h-6 flex items-center justify-center text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <button onClick={onNextDay} className="flex items-center justify-center text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors" style={{ width: Math.round(24 * scale), height: Math.round(24 * scale) }}>
+            <svg style={{ width: Math.round(14 * scale), height: Math.round(14 * scale) }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
             </svg>
           </button>
@@ -679,26 +683,26 @@ function SessionDonut({ attended, total, classFilter, month, day, maxDay, onMont
         {/* 전체 */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded-full flex-shrink-0 border-2 border-[#1A1A1A] bg-[#1A1A1A]/50" />
-            <span className="text-base font-bold text-[#1A1A1A]">전체</span>
+            <div className="rounded-full flex-shrink-0 border-2 border-[#1A1A1A] bg-[#1A1A1A]/50" style={{ width: Math.round(16 * scale), height: Math.round(16 * scale) }} />
+            <span className="font-bold text-[#1A1A1A]" style={{ fontSize: Math.round(16 * scale) }}>전체</span>
           </div>
-          <span className="text-2xl font-bold text-[#1A1A1A]">{total}<span className="text-sm text-[#5C5C5C] font-normal ml-0.5">명</span></span>
+          <span className="font-bold text-[#1A1A1A]" style={{ fontSize: Math.round(24 * scale) }}>{total}<span className="text-[#5C5C5C] font-normal ml-0.5" style={{ fontSize: Math.round(14 * scale) }}>명</span></span>
         </div>
         {/* 접속 */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded-full bg-[#1A1A1A] flex-shrink-0" />
-            <span className="text-base font-bold text-[#1A1A1A]">접속</span>
+            <div className="rounded-full bg-[#1A1A1A] flex-shrink-0" style={{ width: Math.round(16 * scale), height: Math.round(16 * scale) }} />
+            <span className="font-bold text-[#1A1A1A]" style={{ fontSize: Math.round(16 * scale) }}>접속</span>
           </div>
-          <span className="text-2xl font-bold text-[#1A1A1A]">{attended}<span className="text-sm text-[#5C5C5C] font-normal ml-0.5">명</span></span>
+          <span className="font-bold text-[#1A1A1A]" style={{ fontSize: Math.round(24 * scale) }}>{attended}<span className="text-[#5C5C5C] font-normal ml-0.5" style={{ fontSize: Math.round(14 * scale) }}>명</span></span>
         </div>
         {/* 미접속 */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded-full border-2 border-[#1A1A1A] bg-[#F5F0E8] flex-shrink-0" />
-            <span className="text-base font-bold text-[#1A1A1A]">미접속</span>
+            <div className="rounded-full border-2 border-[#1A1A1A] bg-[#F5F0E8] flex-shrink-0" style={{ width: Math.round(16 * scale), height: Math.round(16 * scale) }} />
+            <span className="font-bold text-[#1A1A1A]" style={{ fontSize: Math.round(16 * scale) }}>미접속</span>
           </div>
-          <span className="text-2xl font-bold text-[#1A1A1A]">{notAttended}<span className="text-sm text-[#5C5C5C] font-normal ml-0.5">명</span></span>
+          <span className="font-bold text-[#1A1A1A]" style={{ fontSize: Math.round(24 * scale) }}>{notAttended}<span className="text-[#5C5C5C] font-normal ml-0.5" style={{ fontSize: Math.round(14 * scale) }}>명</span></span>
         </div>
       </div>
     </div>
