@@ -11,7 +11,7 @@ import AutoVideo, { getDifficultyVideo } from '@/components/quiz/AutoVideo';
 import { NEWSPAPER_BG_TEXT } from '@/lib/utils/quizHelpers';
 import { type CourseId, getDefaultQuizTab, type PastExamOption } from '@/lib/types/course';
 import type { QuizFeedbackInfo, CarouselCard } from './profQuizPageParts';
-import { FIXED_CARDS, PROF_QUIZ_CAROUSEL_KEY, PROF_QUIZ_SCROLL_KEY } from './profQuizPageParts';
+import { PROF_QUIZ_CAROUSEL_KEY, PROF_QUIZ_SCROLL_KEY } from './profQuizPageParts';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
 
 // ============================================================
@@ -389,18 +389,34 @@ export function ProfessorNewsCarousel({
   pastExamOptions: PastExamOption[];
   onSelectPastExam: (value: string) => void;
 }) {
-  // 동적 캐러셀 카드 배열: [중간, 기출, 기말, 단독1, 단독2, ...]
+  // 동적 캐러셀 카드 배열: 비어있지 않은 고정 카드 + 단독 퀴즈
   const carouselCards: CarouselCard[] = useMemo(() => {
-    const fixed: CarouselCard[] = FIXED_CARDS.map(c => ({ ...c }));
+    const cards: CarouselCard[] = [];
+    // 데이터가 있는 고정 카드만 포함
+    if (midtermQuizzes.length > 0) {
+      cards.push({ type: 'midterm', title: 'MIDTERM PREP', subtitle: 'Vol.1 · Midterm Edition' });
+    }
+    if (pastQuizzes.length > 0) {
+      cards.push({ type: 'past', title: 'PAST EXAM', subtitle: 'Official Archive' });
+    }
+    if (finalQuizzes.length > 0) {
+      cards.push({ type: 'final', title: 'FINAL PREP', subtitle: 'Vol.2 · Final Edition' });
+    }
     // 단독 퀴즈는 각각 개별 카드 (최신순)
-    const indCards: CarouselCard[] = independentQuizzes.map(quiz => ({
-      type: 'independent' as QuizTypeFilter,
-      title: 'SPECIAL EDITION',
-      subtitle: quiz.title,
-      independentQuiz: quiz,
-    }));
-    return [...fixed, ...indCards];
-  }, [independentQuizzes]);
+    for (const quiz of independentQuizzes) {
+      cards.push({
+        type: 'independent' as QuizTypeFilter,
+        title: 'SPECIAL EDITION',
+        subtitle: quiz.title,
+        independentQuiz: quiz,
+      });
+    }
+    // 퀴즈가 하나도 없으면 플레이스홀더 1개
+    if (cards.length === 0) {
+      cards.push({ type: 'midterm', title: 'QUIZ ARCHIVE', subtitle: 'No Quizzes Yet' });
+    }
+    return cards;
+  }, [midtermQuizzes, pastQuizzes, finalQuizzes, independentQuizzes]);
 
   const TOTAL = carouselCards.length;
 
@@ -437,10 +453,8 @@ export function ProfessorNewsCarousel({
       }
     }
     const tab = getDefaultQuizTab();
-    if (tab === 'midterm') return 1;
-    if (tab === 'past') return 2;
-    if (tab === 'final') return 3;
-    return 1;
+    const tabIdx = carouselCards.findIndex(c => c.type === tab);
+    return tabIdx >= 0 ? tabIdx + 1 : 1;
   });
   const [transitionOn, setTransitionOn] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
