@@ -161,6 +161,7 @@ export const onPostCreate = onDocumentCreated(
           // 해당 과목의 교수님들 조회
           const professorsSnapshot = await db.collection("users")
             .where("role", "==", "professor")
+            .select()
             .get();
 
           const authorNickname = post.authorNickname || post.userName || "학생";
@@ -554,9 +555,10 @@ async function loadProfessorComments(
 
   const postIds = postsSnap.docs.map((d) => d.id);
 
-  // 교수 uid 목록 조회
+  // 교수 uid 목록 조회 (ID만 필요 — select()로 대역폭 절감)
   const professorsSnap = await db.collection("users")
     .where("role", "==", "professor")
+    .select()
     .get();
   const professorIds = new Set(professorsSnap.docs.map((d) => d.id));
 

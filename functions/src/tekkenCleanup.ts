@@ -14,7 +14,7 @@ import { getFirestore, Timestamp } from "firebase-admin/firestore";
 
 export const tekkenCleanup = onSchedule(
   {
-    schedule: "every 5 minutes",
+    schedule: "every 15 minutes",
     region: "asia-northeast3",
     timeZone: "Asia/Seoul",
   },

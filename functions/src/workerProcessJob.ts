@@ -631,7 +631,7 @@ export const workerProcessJob = onDocumentCreated(
  */
 export const retryQueuedJobs = onSchedule(
   {
-    schedule: "every 1 minutes",
+    schedule: "every 5 minutes",
     region: "asia-northeast3",
     secrets: [GEMINI_API_KEY],
     memory: "1GiB",

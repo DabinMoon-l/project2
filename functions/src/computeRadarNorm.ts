@@ -21,6 +21,7 @@ async function computeRadarNormForCourse(courseId: string) {
   const usersSnap = await db.collection("users")
     .where("role", "==", "student")
     .where("courseId", "==", courseId)
+    .select("totalExp", "feedbackCount", "tekkenTotal", "classId")
     .get();
 
   if (usersSnap.empty) {
