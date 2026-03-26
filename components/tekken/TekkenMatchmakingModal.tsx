@@ -13,6 +13,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { MatchState } from '@/lib/types/tekken';
 import { useHideNav } from '@/lib/hooks/useHideNav';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
+import { useDetailPanel } from '@/lib/contexts/DetailPanelContext';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
 
 interface TekkenMatchmakingModalProps {
   isOpen: boolean;
@@ -31,6 +33,9 @@ export default function TekkenMatchmakingModal({
   error,
   onCancel,
 }: TekkenMatchmakingModalProps) {
+  const isWide = useWideMode();
+  const { isLocked } = useDetailPanel();
+
   // 네비게이션 숨김
   useHideNav(isOpen);
 
@@ -48,8 +53,11 @@ export default function TekkenMatchmakingModal({
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          className="fixed top-0 right-0 bottom-0 z-[110] flex flex-col items-center justify-center bg-black/90"
-          style={{ left: 'var(--home-sheet-left, 0px)' }}
+          className="fixed top-0 bottom-0 z-[110] flex flex-col items-center justify-center bg-black/90"
+          style={{
+            left: isWide && isLocked ? '240px' : 'var(--home-sheet-left, 0px)',
+            right: isWide && isLocked ? 'calc(50% - 120px)' : '0px',
+          }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}

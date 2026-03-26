@@ -24,6 +24,8 @@ import TekkenBattleArena from './TekkenBattleArena';
 import type { RoundResultData, BattleState, BattlePlayer, BattleRabbit, BattleResult, BattleStatus, RoundState, SubmitAnswerResult, MashState } from '@/lib/types/tekken';
 import { useHideNav } from '@/lib/hooks/useHideNav';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
+import { useDetailPanel } from '@/lib/contexts/DetailPanelContext';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
 
 interface TekkenBattleOverlayProps {
   tekken: {
@@ -60,6 +62,9 @@ export default function TekkenBattleOverlay({
   userId,
   onClose,
 }: TekkenBattleOverlayProps) {
+  const isWide = useWideMode();
+  const { isLocked } = useDetailPanel();
+
   const [phase, setPhase] = useState<'loading' | 'countdown' | 'battle' | 'result'>('loading');
   const [hasAnswered, setHasAnswered] = useState(false);
   const [showRoundResult, setShowRoundResult] = useState(false);
@@ -170,8 +175,11 @@ export default function TekkenBattleOverlay({
 
   return createPortal(
     <motion.div
-      className="fixed top-0 right-0 bottom-0 z-[110] flex flex-col overflow-hidden"
-      style={{ left: 'var(--home-sheet-left, 0px)' }}
+      className="fixed top-0 bottom-0 z-[110] flex flex-col overflow-hidden"
+      style={{
+        left: isWide && isLocked ? '240px' : 'var(--home-sheet-left, 0px)',
+        right: isWide && isLocked ? 'calc(50% - 120px)' : '0px',
+      }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
     >
