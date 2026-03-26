@@ -54,8 +54,8 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
   // --kb-offset CSS 변수 전역 설정 (키보드 부드러운 모션)
   useKeyboardCSSVariable();
 
-  // 접속 추적 (lastActiveAt + currentActivity)
-  useActivityTracker();
+  // 접속 추적 (lastActiveAt + currentActivity + 일일 접속 기록)
+  useActivityTracker(userCourseId || undefined, isProfessor);
 
 
   // 페이지뷰 로깅 (연구용)

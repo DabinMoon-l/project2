@@ -19,6 +19,7 @@ import StudentListView from '@/components/professor/students/StudentListView';
 import StudentDetailModal from '@/components/professor/students/StudentDetailModal';
 import StudentManagementSheet from '@/components/professor/students/StudentManagementSheet';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
+import { useDailyAttendance } from '@/lib/hooks/useDailyAttendance';
 
 // ============================================================
 // 접속 상태 유틸
@@ -112,14 +113,47 @@ export default function StudentMonitoringPage() {
     return list;
   }, [students, selectedClass, debouncedSearch]);
 
-  // 실시간 접속 통계
-  const sessionStats = useMemo(() => {
-    let onlineCount = 0;
-    for (const s of filteredStudents) {
-      if (getOnlineStatus(s.lastActiveAt) === 'online') onlineCount++;
+  // 날짜 선택 (일일 접속 통계용)
+  const todayDate = useMemo(() => {
+    const now = new Date();
+    return { month: now.getMonth() + 1, day: now.getDate() };
+  }, []);
+  const [selectedMonth, setSelectedMonth] = useState(todayDate.month);
+  const [selectedDay, setSelectedDay] = useState(todayDate.day);
+
+  // 선택된 날짜 → YYYY-MM-DD 문자열 (월별 최대 일수 보정)
+  const selectedDateStr = useMemo(() => {
+    const year = new Date().getFullYear();
+    const maxDay = new Date(year, selectedMonth, 0).getDate();
+    const clampedDay = Math.min(selectedDay, maxDay);
+    return `${year}-${String(selectedMonth).padStart(2, '0')}-${String(clampedDay).padStart(2, '0')}`;
+  }, [selectedMonth, selectedDay]);
+
+  const isTodaySelected = selectedDateStr === new Date().toISOString().slice(0, 10);
+
+  // 일일 접속 데이터 조회
+  const { attendedUids } = useDailyAttendance(userCourseId || '', selectedDateStr);
+
+  // 일일 접속 통계 (필터된 학생 기준)
+  const attendanceStats = useMemo(() => {
+    const attendedSet = new Set(attendedUids);
+
+    // 오늘: lastActiveAt가 오늘인 학생도 포함 (코드 배포 전 접속한 학생 포착)
+    if (isTodaySelected) {
+      const todayStr = new Date().toDateString();
+      for (const s of filteredStudents) {
+        if (s.lastActiveAt.toDateString() === todayStr) {
+          attendedSet.add(s.uid);
+        }
+      }
     }
-    return { onlineCount, totalCount: filteredStudents.length };
-  }, [filteredStudents]);
+
+    let count = 0;
+    for (const s of filteredStudents) {
+      if (attendedSet.has(s.uid)) count++;
+    }
+    return { attendedCount: count, totalCount: filteredStudents.length };
+  }, [filteredStudents, attendedUids, isTodaySelected]);
 
   // 경고 시스템 (StudentListView에 전달)
   const warningMap = useMemo((): Map<string, WarningItem> => {
@@ -274,12 +308,16 @@ export default function StudentMonitoringPage() {
 
         <div className="h-3" />
 
-        {/* 실시간 접속 — 도넛 차트 + 범례 */}
+        {/* 일일 접속 — 도넛 차트 + 날짜 선택 + 범례 */}
         <div ref={donutRef} />
         <SessionDonut
-          online={sessionStats.onlineCount}
-          total={sessionStats.totalCount}
+          attended={attendanceStats.attendedCount}
+          total={attendanceStats.totalCount}
           classFilter={selectedClass}
+          month={selectedMonth}
+          day={selectedDay}
+          onMonthChange={setSelectedMonth}
+          onDayChange={setSelectedDay}
         />
 
         <div className="h-3" />
@@ -489,33 +527,76 @@ function ClassFilterTabs({
 }
 
 // ============================================================
-// 접속 도넛 차트 + 범례
+// 위아래 스와이프 숫자 선택기
 // ============================================================
 
-function SessionDonut({ online, total, classFilter }: { online: number; total: number; classFilter: string }) {
-  const offline = total - online;
-  const onlinePct = total > 0 ? Math.round((online / total) * 100) : 0;
+function ScrollableDigit({ value, min, max, onChange }: {
+  value: number; min: number; max: number;
+  onChange: (v: number) => void;
+}) {
+  const startY = useRef<number | null>(null);
+  const accum = useRef(0);
 
-  // SVG 도넛
+  return (
+    <span
+      className="inline-block cursor-ns-resize select-none touch-none font-black text-2xl text-[#1A1A1A] tabular-nums leading-none"
+      style={{ minWidth: value >= 10 ? '1.6ch' : '0.9ch', textAlign: 'center' }}
+      onPointerDown={(e) => {
+        startY.current = e.clientY;
+        accum.current = 0;
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      }}
+      onPointerMove={(e) => {
+        if (startY.current === null) return;
+        const dy = startY.current - e.clientY; // 위로 = 증가
+        accum.current += dy;
+        startY.current = e.clientY;
+        const step = 25;
+        if (Math.abs(accum.current) >= step) {
+          const dir = accum.current > 0 ? 1 : -1;
+          accum.current = 0;
+          const next = value + dir;
+          if (next >= min && next <= max) onChange(next);
+        }
+      }}
+      onPointerUp={() => { startY.current = null; }}
+      onPointerCancel={() => { startY.current = null; }}
+    >
+      {value}
+    </span>
+  );
+}
+
+// ============================================================
+// 일일 접속 도넛 차트 + 날짜 선택 + 범례
+// ============================================================
+
+function SessionDonut({ attended, total, classFilter, month, day, onMonthChange, onDayChange }: {
+  attended: number; total: number; classFilter: string;
+  month: number; day: number;
+  onMonthChange: (m: number) => void;
+  onDayChange: (d: number) => void;
+}) {
+  const notAttended = total - attended;
+  const pct = total > 0 ? Math.round((attended / total) * 100) : 0;
+
   const R = 42;
   const C = 2 * Math.PI * R;
-  const onlineLen = (onlinePct / 100) * C;
-
-  // 애니메이션 키 — classFilter가 바뀔 때만 리트리거 (모달/탭 변경은 무시)
-  const animKey = `donut-${classFilter}`;
+  const attendedLen = (pct / 100) * C;
+  const animKey = `donut-${classFilter}-${month}-${day}`;
 
   return (
     <div className="flex items-center justify-center gap-6 py-2">
       {/* 도넛 차트 */}
       <div className="flex-shrink-0 w-[160px] h-[160px]">
         <svg width="160" height="160" viewBox="0 0 100 100">
-          {/* 오프라인 링 */}
+          {/* 미접속 링 */}
           <circle
             cx="50" cy="50" r={R} fill="none"
             stroke="#1A1A1A" strokeWidth="13" opacity="0.12"
           />
-          {/* 접속 중 — 채움 애니메이션 */}
-          {onlinePct > 0 && (
+          {/* 접속 — 채움 애니메이션 */}
+          {pct > 0 && (
             <motion.circle
               key={animKey}
               cx="50" cy="50" r={R} fill="none"
@@ -523,19 +604,28 @@ function SessionDonut({ online, total, classFilter }: { online: number; total: n
               strokeLinecap="round"
               transform="rotate(-90 50 50)"
               initial={{ strokeDasharray: `0 ${C}` }}
-              animate={{ strokeDasharray: `${onlineLen} ${C - onlineLen}` }}
+              animate={{ strokeDasharray: `${attendedLen} ${C - attendedLen}` }}
               transition={{ duration: 0.8, ease: 'easeOut' }}
             />
           )}
           {/* 중앙 퍼센트 */}
           <text x="50" y="50" textAnchor="middle" dominantBaseline="central" className="font-bold text-[16px] fill-[#1A1A1A]">
-            {onlinePct}%
+            {pct}%
           </text>
         </svg>
       </div>
 
-      {/* 범례 */}
-      <div className="w-[160px] space-y-2.5">
+      {/* 날짜 + 범례 */}
+      <div className="w-[160px] space-y-2">
+        {/* 날짜 선택 (위아래 스와이프) */}
+        <div className="flex items-baseline justify-center gap-0.5 pb-1 border-b border-dashed border-[#D4CFC4]">
+          <ScrollableDigit value={month} min={1} max={12} onChange={onMonthChange} />
+          <span className="text-base font-bold text-[#5C5C5C]">月</span>
+          <span className="w-1" />
+          <ScrollableDigit value={day} min={1} max={31} onChange={onDayChange} />
+          <span className="text-base font-bold text-[#5C5C5C]">日</span>
+        </div>
+
         {/* 전체 */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -544,21 +634,21 @@ function SessionDonut({ online, total, classFilter }: { online: number; total: n
           </div>
           <span className="text-2xl font-bold text-[#1A1A1A]">{total}<span className="text-sm text-[#5C5C5C] font-normal ml-0.5">명</span></span>
         </div>
-        {/* 접속 중 */}
+        {/* 접속 */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 rounded-full bg-[#1A1A1A] flex-shrink-0" />
-            <span className="text-base font-bold text-[#1A1A1A]">접속 중</span>
+            <span className="text-base font-bold text-[#1A1A1A]">접속</span>
           </div>
-          <span className="text-2xl font-bold text-[#1A1A1A]">{online}<span className="text-sm text-[#5C5C5C] font-normal ml-0.5">명</span></span>
+          <span className="text-2xl font-bold text-[#1A1A1A]">{attended}<span className="text-sm text-[#5C5C5C] font-normal ml-0.5">명</span></span>
         </div>
-        {/* 오프라인 */}
+        {/* 미접속 */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 rounded-full border-2 border-[#1A1A1A] bg-[#F5F0E8] flex-shrink-0" />
-            <span className="text-base font-bold text-[#1A1A1A]">오프라인</span>
+            <span className="text-base font-bold text-[#1A1A1A]">미접속</span>
           </div>
-          <span className="text-2xl font-bold text-[#1A1A1A]">{offline}<span className="text-sm text-[#5C5C5C] font-normal ml-0.5">명</span></span>
+          <span className="text-2xl font-bold text-[#1A1A1A]">{notAttended}<span className="text-sm text-[#5C5C5C] font-normal ml-0.5">명</span></span>
         </div>
       </div>
     </div>
