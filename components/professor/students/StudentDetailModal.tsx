@@ -8,6 +8,7 @@ import StudentRadar from './StudentRadar';
 import { useHideNav } from '@/lib/hooks/useHideNav';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 import { useDetailPanel } from '@/lib/contexts';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
 
 const CLASS_COLORS: Record<ClassType, string> = {
   A: '#8B1A1A', B: '#B8860B', C: '#1D5D4A', D: '#1E3A5F',
@@ -22,6 +23,8 @@ interface Props {
 }
 
 export default function StudentDetailModal({ student, allStudents, isOpen, onClose, isPanelMode }: Props) {
+  const isWide = useWideMode();
+
   // 네비게이션 숨김 (패널 모드에서는 불필요)
   useHideNav(isOpen && !isPanelMode);
 
@@ -146,7 +149,12 @@ export default function StudentDetailModal({ student, allStudents, isOpen, onClo
     <AnimatePresence>
       <motion.div
         key="student-detail-overlay"
-        className="fixed inset-0 z-[100] bg-black/30 flex items-end"
+        className={`fixed z-[100] flex items-end ${isWide ? 'bg-black/10' : 'bg-black/30'}`}
+        style={isWide ? {
+          top: 0, bottom: 0,
+          left: '240px',
+          right: 'calc(50% - 120px)',
+        } : { inset: 0 }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
