@@ -68,9 +68,10 @@ export const submitMashResult = onCall(
     }
 
     const userId = request.auth.uid;
-    const { battleId, taps } = request.data as {
+    const { battleId, taps, botTaps: clientBotTaps } = request.data as {
       battleId: string;
       taps: number;
+      botTaps?: number; // 클라이언트가 전달한 봇 탭 수 (RTDB 레이스컨디션 방지)
     };
 
     const rtdb = getDatabase();
@@ -112,18 +113,26 @@ export const submitMashResult = onCall(
       return { winnerId: latestResult?.winnerId, bonusDamage: latestResult?.bonusDamage };
     }
 
-    // ⚠️ 최신 탭 수 읽기 (클라이언트 writeMashTap/writeBotTap이 기록한 실시간 값)
+    // 최신 탭 수: 클라이언트 파라미터 우선, RTDB 보조
     const latestTapsSnap = await battleRef.child("mash/taps").once("value");
     const latestTaps = latestTapsSnap.val() || {};
     const myTaps = latestTaps[userId] || validTaps;
     let opTaps = latestTaps[opponentId] || 0;
 
-    // 봇 처리 — 최신 RTDB 값이 없을 때만 서버에서 생성 (역전 방지)
-    if (opponent.isBot && opTaps <= 0) {
-      const elapsed = Math.max(1000, Date.now() - (battle.mash.startedAt || Date.now()));
-      const botTapsPerSec = 3 + Math.random() * 2;
-      opTaps = Math.floor((elapsed / 1000) * botTapsPerSec);
-      await battleRef.child(`mash/taps/${opponentId}`).set(opTaps);
+    // 봇 처리 — 클라이언트 전달값 > RTDB > 서버 생성 (레이스컨디션 방지)
+    if (opponent.isBot) {
+      const validBotTaps = clientBotTaps != null ? Math.max(0, Math.min(Math.floor(clientBotTaps), MAX_TAPS)) : 0;
+      if (validBotTaps > 0) {
+        // 클라이언트가 전달한 봇 탭 사용 (게임 화면과 동일한 값)
+        opTaps = validBotTaps;
+        await battleRef.child(`mash/taps/${opponentId}`).set(opTaps);
+      } else if (opTaps <= 0) {
+        // 폴백: RTDB에도 없으면 경과시간 기반 생성
+        const elapsed = Math.max(1000, Date.now() - (battle.mash.startedAt || Date.now()));
+        const botTapsPerSec = 3 + Math.random() * 2;
+        opTaps = Math.floor((elapsed / 1000) * botTapsPerSec);
+        await battleRef.child(`mash/taps/${opponentId}`).set(opTaps);
+      }
     }
 
     const mashWinnerId = myTaps > opTaps ? userId : myTaps < opTaps ? opponentId : userId;

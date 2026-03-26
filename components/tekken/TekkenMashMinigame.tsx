@@ -30,7 +30,7 @@ interface TekkenMashMinigameProps {
   opponentMashTaps: number;
   writeMashTap: (count: number) => void;
   writeBotTap?: (count: number) => void; // 봇 탭 RTDB 기록 (CF가 정확한 값 사용)
-  onSubmit: (taps: number) => Promise<void>;
+  onSubmit: (taps: number, botTaps?: number) => Promise<void>;
   myColor: 'red' | 'blue';
   isOpponentBot?: boolean; // 봇이면 로컬 시뮬레이션
 }
@@ -76,12 +76,13 @@ export default function TekkenMashMinigame({
     submittedRef.current = true;
     setSubmitted(true);
     writeMashTap(myTapsRef.current);
-    // 봇 탭을 RTDB에 기록 → CF가 경과시간 재계산 대신 실제 값 사용
+    // 봇 탭을 RTDB에 기록 (백업) + CF 파라미터로 직접 전달
     if (isOpponentBot && writeBotTap) {
       writeBotTap(botLocalTapsRef.current);
     }
+    const botTaps = isOpponentBot ? botLocalTapsRef.current : undefined;
     try {
-      await onSubmit(myTapsRef.current);
+      await onSubmit(myTapsRef.current, botTaps);
     } catch {
       // CF 실패 → 자동 재시도
       if (retryRef.current < 3) {

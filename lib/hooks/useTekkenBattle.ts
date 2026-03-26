@@ -68,7 +68,7 @@ interface UseTekkenBattleReturn {
   // 액션
   submitAnswer: (answer: number) => Promise<SubmitAnswerResult | null>;
   swapRabbit: () => Promise<void>;
-  submitMashTaps: (taps: number) => Promise<void>;
+  submitMashTaps: (taps: number, botTaps?: number) => Promise<void>;
   startRound: (roundIndex: number) => Promise<void>;
   submitTimeout: () => Promise<void>;
 
@@ -383,11 +383,15 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
   }, []);
 
   // 연타 결과 제출 — 네트워크 에러 시 throw (호출자가 submitted 복구)
-  const handleSubmitMashTaps = useCallback(async (taps: number) => {
+  const handleSubmitMashTaps = useCallback(async (taps: number, botTaps?: number) => {
     if (!battleIdRef.current) return;
 
     try {
-      await callFunction('submitMashResult', { battleId: battleIdRef.current, taps });
+      await callFunction('submitMashResult', {
+        battleId: battleIdRef.current,
+        taps,
+        ...(botTaps !== undefined && { botTaps }),
+      });
     } catch (err: unknown) {
       // 예상된 에러 (이미 처리됨 등) → 무시
       if (isExpectedError(err)) return;

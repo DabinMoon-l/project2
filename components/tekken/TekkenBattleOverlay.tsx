@@ -42,7 +42,7 @@ interface TekkenBattleOverlayProps {
     questionTimeLeft: number;
     submitAnswer: (answer: number) => Promise<SubmitAnswerResult | null>;
     swapRabbit: () => Promise<void>;
-    submitMashTaps: (taps: number) => Promise<void>;
+    submitMashTaps: (taps: number, botTaps?: number) => Promise<void>;
     startRound: (roundIndex: number) => Promise<void>;
     submitTimeout: () => Promise<void>;
     writeMashTap: (count: number) => void;
@@ -146,8 +146,8 @@ export default function TekkenBattleOverlay({
   }, [tekken]);
 
   // 연타 결과 제출
-  const handleMashSubmit = useCallback(async (taps: number) => {
-    await tekken.submitMashTaps(taps);
+  const handleMashSubmit = useCallback(async (taps: number, botTaps?: number) => {
+    await tekken.submitMashTaps(taps, botTaps);
   }, [tekken]);
 
   // 라운드 결과 — RTDB에서 직접 도출 (useMemo로 불필요 재생성 방지)
