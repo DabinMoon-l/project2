@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { collection, query, where, orderBy, limit, getDocs, getDoc, doc, db, Timestamp } from '@/lib/repositories';
 import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 import { useHomeScale } from './useHomeScale';
@@ -109,6 +110,17 @@ export default function StudentActivityPanel({
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const scale = useHomeScale();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+
+  // 스크롤 위치로 버튼 표시 여부
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const handleScroll = () => setShowScrollTop(el.scrollTop > 300);
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // 날짜 선택
   const todayDate = useMemo(() => {
@@ -475,7 +487,7 @@ export default function StudentActivityPanel({
       </div>
 
       {/* 활동 목록 */}
-      <div className="flex-1 overflow-y-auto px-4 py-2">
+      <div ref={scrollRef} className="relative flex-1 overflow-y-auto px-4 py-2">
         {loading ? (
           <div className="flex justify-center py-12">
             <div className="w-6 h-6 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
@@ -525,6 +537,27 @@ export default function StudentActivityPanel({
             ))}
           </div>
         )}
+
+        {/* 맨 위로 버튼 */}
+        <AnimatePresence>
+          {showScrollTop && (
+            <motion.button
+              key="scroll-top"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              whileTap={{ scale: 0.95, opacity: 0.7 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+              onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+              className="sticky bottom-4 float-right mr-0 w-10 h-10 bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 rounded-full shadow-lg flex items-center justify-center transition-colors"
+              aria-label="맨 위로"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+              </svg>
+            </motion.button>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* 하단 요약 */}
