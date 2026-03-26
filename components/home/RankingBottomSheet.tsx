@@ -334,31 +334,27 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
     return me || (periodFilter === 'all' ? myRank : null);
   }, [filteredUsers, profile?.uid, myRank, periodFilter]);
 
-  // 주간 전체 순위 맵 (반 필터 무관, 등수 변동 계산용)
-  const weeklyGlobalRankMap = useMemo(() => {
-    if (periodFilter !== 'week') return {};
+  // 전체(ALL) 순위 맵 (반 필터 무관, 등수 변동 계산용)
+  const allGlobalRankMap = useMemo(() => {
+    if (periodFilter !== 'all') return {};
     const excludeList = userCourseId ? (TEST_NICKNAMES[userCourseId] || []) : [];
-    const weekUsers = rankedUsers
+    const sorted = [...rankedUsers]
       .filter(u => !excludeList.includes(u.nickname))
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .filter(u => (u as any).weeklyRankScore != null)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .map(u => ({ id: u.id, score: (u as any).weeklyRankScore as number }))
-      .sort((a, b) => b.score - a.score);
+      .sort((a, b) => b.rankScore - a.rankScore);
     const map: Record<string, number> = {};
     let r = 1;
-    weekUsers.forEach((u, i) => {
-      if (i > 0 && u.score < weekUsers[i - 1].score) r = i + 1;
+    sorted.forEach((u, i) => {
+      if (i > 0 && u.rankScore < sorted[i - 1].rankScore) r = i + 1;
       map[u.id] = r;
     });
     return map;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rankedUsers, periodFilter, userCourseId]);
 
-  // 주간 등수 변동 렌더링
+  // 등수 변동 렌더링 (ALL 탭, 일주일 간격 갱신)
   const renderRankChange = (userId: string) => {
-    if (periodFilter !== 'week') return null;
-    const currentRank = weeklyGlobalRankMap[userId];
+    if (periodFilter !== 'all') return null;
+    const currentRank = allGlobalRankMap[userId];
     const prevRank = prevWeekRanks[userId];
     if (currentRank == null) return null;
     if (prevRank == null) {
