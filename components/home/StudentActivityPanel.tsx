@@ -523,7 +523,7 @@ export default function StudentActivityPanel({
       </div>
 
       {/* 하단 요약 */}
-      <div className="flex-shrink-0 px-4 py-3 pb-4 flex items-center justify-between" style={{ borderTop: '1px solid #B0A898' }}>
+      <div className="flex-shrink-0 px-4 flex items-center justify-between" style={{ borderTop: '1px solid #B0A898', paddingTop: Math.round(12 * scale), paddingBottom: `calc(${Math.round(16 * scale)}px + env(safe-area-inset-bottom, 0px))` }}>
         <span className="text-white/50" style={{ fontSize: Math.round(12 * scale) }}>
           활동 {filteredActivities.filter(a => a.type === 'exp').length}건
           · 방문 {filteredActivities.filter(a => a.type === 'visit').length}회
