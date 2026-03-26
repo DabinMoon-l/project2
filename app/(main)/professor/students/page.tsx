@@ -656,7 +656,7 @@ function SessionDonut({ attended, total, classFilter, month, day, maxDay, onMont
       {/* 날짜 + 범례 */}
       <div className="w-[160px] space-y-2">
         {/* 날짜 선택: < X月 X日 > */}
-        <div className="flex items-center justify-center gap-1 pb-1 border-b border-dashed border-[#D4CFC4]">
+        <div className="flex items-center justify-between pb-1 border-b border-dashed border-[#D4CFC4]">
           <button onClick={onPrevDay} className="w-6 h-6 flex items-center justify-center text-[#5C5C5C] hover:text-[#1A1A1A] transition-colors">
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
