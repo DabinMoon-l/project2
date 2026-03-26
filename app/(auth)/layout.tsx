@@ -40,25 +40,41 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           overflow: 'hidden',
         }}
       >
-        <video
-          autoPlay
-          loop
-          muted
-          playsInline
-          poster="/images/home-bg.jpg"
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            // 가로모드: 영상 원본 464×832 → 블러로 저해상도 마스킹
-            ...(isWide ? { filter: 'blur(4px)', transform: 'scale(1.04)' } : {}),
-          }}
-        >
-          <source src="/videos/login-bg.mp4" type="video/mp4" />
-        </video>
+        {isWide ? (
+          // 가로모드: 정적 이미지 배경
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src="/images/home-garo.png"
+            alt=""
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+            }}
+          />
+        ) : (
+          // 세로모드: 비디오 배경
+          <video
+            autoPlay
+            loop
+            muted
+            playsInline
+            poster="/images/home-bg.jpg"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+            }}
+          >
+            <source src="/videos/login-bg.mp4" type="video/mp4" />
+          </video>
+        )}
         <div
           style={{
             position: 'absolute',
