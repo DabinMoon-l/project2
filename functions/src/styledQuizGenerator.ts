@@ -1373,7 +1373,6 @@ export async function generateWithGemini(
   // 문제 수에 따라 토큰 수 조절
   // hard 난이도: 복수정답/부정형/상세해설로 문제당 토큰 증가
   const estimatedTokensPerQuestion = 1000;
-  // thinking 예산 + 응답 토큰 (thinking 토큰이 maxOutputTokens에 합산되므로 여유 확보)
   const thinkingBudget = 10240;
   const maxTokens = thinkingBudget + Math.max(questionCount * estimatedTokensPerQuestion + 2000, 8192);
 
@@ -1403,7 +1402,7 @@ export async function generateWithGemini(
       maxOutputTokens: maxTokens,
       responseMimeType: "application/json", // JSON 모드 강제 — 파싱 실패 방지
       thinkingConfig: {
-        thinkingBudget,  // thinking 품질 유지 + maxOutputTokens에 합산되므로 예산 제어
+        thinkingBudget,
       },
     },
   };

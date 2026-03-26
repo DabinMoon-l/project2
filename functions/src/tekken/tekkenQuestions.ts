@@ -602,10 +602,9 @@ export async function generateBattleQuestions(
 JSON 배열로 출력: [{"text":"문제","type":"multiple","choices":["선지1","선지2","선지3","선지4"],"correctAnswer":0,"difficulty":"${difficulty}","explanation":"정답 해설","choiceExplanations":["선지1 해설","선지2 해설","선지3 해설","선지4 해설"],"chapterId":"3"}]`
         : prompt;
 
-      const thinkingBudget = isSimplified ? 4096 : 10240;
       const generationConfig: Record<string, unknown> = {
         temperature: isSimplified ? 0.7 : 0.9,
-        maxOutputTokens: thinkingBudget + (isSimplified ? 4096 : 12288),
+        maxOutputTokens: isSimplified ? 4096 : 12288,
       };
 
       // 구조화 출력 (3차 시도에서만 자유형)
@@ -621,7 +620,7 @@ JSON 배열로 출력: [{"text":"문제","type":"multiple","choices":["선지1",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             contents: [{ parts: [{ text: currentPrompt }] }],
-            generationConfig: { ...generationConfig, thinkingConfig: { thinkingBudget } },
+            generationConfig,
           }),
           timeout: 120000,
         } as import("node-fetch").RequestInit
