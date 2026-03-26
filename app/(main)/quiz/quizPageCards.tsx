@@ -83,6 +83,7 @@ const NewsArticle = memo(function NewsArticle({
         <div className="px-3 mt-0.5">
           <p className="text-sm text-[#1A1A1A]">
             {quiz.questionCount}문제 · {formatQuestionTypes(quiz.oxCount, quiz.multipleChoiceCount, quiz.subjectiveCount)}
+            {quiz.participantCount > 0 && ` · ${quiz.participantCount}명 참여`}
           </p>
         </div>
         <div className="px-3 pb-3 pt-1.5 flex gap-2">
