@@ -327,27 +327,52 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
     return me || (periodFilter === 'all' ? myRank : null);
   }, [filteredUsers, profile?.uid, myRank, periodFilter]);
 
-  // 교수 전용: 학생 활동 패널 콘텐츠
-  const activityContent = selectedUser && isProfessor ? (
-    <>
-      {!isPanelMode && (
+  // 교수 전용: 학생 활동 오버레이 바텀시트
+  const activityOverlay = (
+    <AnimatePresence>
+      {selectedUser && isProfessor && (
         <>
-          <div className="absolute inset-0"><Image src="/images/home-bg.jpg" alt="" fill className="object-cover" /></div>
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-2xl" />
+          {/* 투명 오버레이 배경 — 클릭 시 닫기 */}
+          <motion.div
+            key="act-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-[60] bg-black/40"
+            onClick={() => setSelectedUser(null)}
+          />
+          {/* 바텀시트 */}
+          <motion.div
+            key="act-sheet"
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+            className="absolute bottom-0 left-0 right-0 z-[61] rounded-t-2xl overflow-hidden"
+            style={{ height: '85%' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="absolute inset-0"><Image src="/images/home-bg.jpg" alt="" fill className="object-cover" /></div>
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-2xl" />
+            <div className="relative z-10 h-full flex flex-col">
+              {/* 드래그 핸들 */}
+              <div className="flex justify-center pt-2 pb-1">
+                <div className="w-8 h-1 rounded-full bg-white/30" />
+              </div>
+              <StudentActivityPanel
+                userId={selectedUser.id}
+                nickname={selectedUser.nickname}
+                name={selectedUser.name}
+                classType={selectedUser.classType}
+                profileRabbitId={selectedUser.profileRabbitId}
+                onBack={() => setSelectedUser(null)}
+              />
+            </div>
+          </motion.div>
         </>
       )}
-      <div className="relative z-10 h-full">
-        <StudentActivityPanel
-          userId={selectedUser.id}
-          nickname={selectedUser.nickname}
-          name={selectedUser.name}
-          classType={selectedUser.classType}
-          profileRabbitId={selectedUser.profileRabbitId}
-          onBack={() => setSelectedUser(null)}
-        />
-      </div>
-    </>
-  ) : null;
+    </AnimatePresence>
+  );
 
   // 랭킹 콘텐츠 (바텀시트/패널 공통)
   const rankingContent = (
@@ -688,8 +713,9 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
   if (isPanelMode) {
     return (
       <div className="h-full relative overflow-hidden">
-        <div className="relative z-10 h-full">{activityContent || rankingContent}</div>
+        <div className="relative z-10 h-full">{rankingContent}</div>
         {!selectedUser && infoModal}
+        {activityOverlay}
       </div>
     );
   }
@@ -715,7 +741,8 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
             style={{ height: '92vh' }}
             onClick={(e) => e.stopPropagation()}
           >
-            {activityContent || rankingContent}
+            {rankingContent}
+            {activityOverlay}
           </motion.div>
 
           {/* 랭킹 안내 모달 — 바텀시트 위에 표시 */}
