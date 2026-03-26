@@ -390,7 +390,7 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
             className="absolute inset-0 z-[90]"
             onClick={() => setSelectedUser(null)}
           />
-          {/* 바텀시트 — home-bg-3 불투명 배경 */}
+          {/* 바텀시트 — 세로: 글래스(랭킹과 동일) / 가로: home-garo-detail */}
           <motion.div
             key="act-sheet"
             initial={{ y: '100%' }}
@@ -401,13 +401,24 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
             style={{ height: '85%', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* 불투명 배경 레이어 (솔리드 크림 + 이미지) */}
-            <div className="absolute inset-0 bg-[#F5F0E8]" />
-            <div className="absolute inset-0" style={{ backgroundImage: 'url(/images/home-bg-3.jpg)', backgroundSize: 'cover', backgroundPosition: 'center' }} />
+            {/* 배경: 가로모드 = home-garo-detail / 세로모드 = 랭킹 글래스 */}
+            {isWide ? (
+              <>
+                <div className="absolute inset-0 bg-[#F5F0E8]" />
+                <Image src="/images/home-garo-detail.png" alt="" fill className="object-cover absolute inset-0" />
+              </>
+            ) : (
+              <>
+                <div className="absolute inset-0">
+                  <Image src="/images/home-bg.jpg" alt="" fill className="object-cover" />
+                </div>
+                <div className="absolute inset-0 bg-white/10 backdrop-blur-2xl" />
+              </>
+            )}
             <div className="relative z-10 h-full flex flex-col">
               {/* 드래그 핸들 */}
               <div className="flex justify-center pt-2 pb-1">
-                <div className="w-8 h-1 rounded-full bg-[#D4CFC4]" />
+                <div className="w-8 h-1 rounded-full bg-white/30" />
               </div>
               <StudentActivityPanel
                 userId={selectedUser.id}
