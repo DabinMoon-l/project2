@@ -401,10 +401,9 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
             style={{ height: '85%', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="absolute inset-0">
-              <Image src="/images/home-bg-3.jpg" alt="" fill className="object-cover" />
-            </div>
-            <div className="absolute inset-0 bg-white/40" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/images/home-bg-3.jpg" alt="" className="absolute inset-0 w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-[#F5F0E8]/60" />
             <div className="relative z-10 h-full flex flex-col">
               {/* 드래그 핸들 */}
               <div className="flex justify-center pt-2 pb-1">
