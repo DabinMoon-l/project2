@@ -464,15 +464,13 @@ function resolvePrevWeekRanks(
   if (!existingData) return {};
 
   if (existingData.weekStartISO && existingData.weekStartISO !== currentWeekStartISO) {
-    // 주가 바뀜 → 기존 주간 랭킹을 prevWeekRanks로 저장
-    const oldUsers = (existingData.rankedUsers || []) as Array<{ id: string; weeklyRankScore?: number | null }>;
-    const weeklyActive = oldUsers
-      .filter(u => u.weeklyRankScore != null)
-      .sort((a, b) => (b.weeklyRankScore || 0) - (a.weeklyRankScore || 0));
+    // 주가 바뀜 → 기존 전체(ALL) 랭킹을 prevWeekRanks로 저장
+    const oldUsers = (existingData.rankedUsers || []) as Array<{ id: string; rankScore?: number }>;
+    const sorted = [...oldUsers].sort((a, b) => (b.rankScore || 0) - (a.rankScore || 0));
     const prevWeekRanks: Record<string, number> = {};
     let rank = 1;
-    weeklyActive.forEach((u, i) => {
-      if (i > 0 && (u.weeklyRankScore || 0) < (weeklyActive[i - 1].weeklyRankScore || 0)) {
+    sorted.forEach((u, i) => {
+      if (i > 0 && (u.rankScore || 0) < (sorted[i - 1].rankScore || 0)) {
         rank = i + 1;
       }
       prevWeekRanks[u.id] = rank;
