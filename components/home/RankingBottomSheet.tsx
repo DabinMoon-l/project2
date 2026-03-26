@@ -377,6 +377,7 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
                 name={selectedUser.name}
                 classType={selectedUser.classType}
                 profileRabbitId={selectedUser.profileRabbitId}
+                courseId={userCourseId || undefined}
                 onBack={() => setSelectedUser(null)}
               />
             </div>

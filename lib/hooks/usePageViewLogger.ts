@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
 import { collection, addDoc, updateDoc, doc, serverTimestamp, db } from '@/lib/repositories';
+import { auth } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse } from '@/lib/contexts/CourseContext';
 
@@ -91,15 +92,17 @@ export function usePageViewLogger() {
 /**
  * 오버레이/바텀시트 열기 이벤트 로깅 훅
  * URL이 바뀌지 않는 오버레이(공지, 의견, 랭킹 등) 열기를 pageViews에 기록
+ * 주의: useAuth()는 stale 클로저 문제가 있으므로 getAuth().currentUser를 직접 참조
  */
 export function useLogOverlayView() {
-  const { user } = useAuth();
   const { userCourseId, userClassId } = useCourse();
 
   return useCallback((category: string) => {
-    if (!user?.uid) return;
+    // auth.currentUser를 직접 참조 (useAuth의 stale 클로저 문제 방지)
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
     addDoc(collection(db, 'pageViews'), {
-      userId: user.uid,
+      userId: uid,
       path: `/@overlay/${category}`,
       category,
       sessionId: getSessionId(),
@@ -107,5 +110,5 @@ export function useLogOverlayView() {
       classId: userClassId || null,
       timestamp: serverTimestamp(),
     }).catch(() => {});
-  }, [user?.uid, userCourseId, userClassId]);
+  }, [userCourseId, userClassId]);
 }

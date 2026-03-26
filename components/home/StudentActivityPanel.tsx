@@ -61,6 +61,7 @@ interface StudentActivityPanelProps {
   name?: string;
   classType: string;
   profileRabbitId?: number;
+  courseId?: string;
   onBack: () => void;
 }
 
@@ -99,7 +100,7 @@ function ScrollableDigit({ value, min, max, onChange }: {
 // ── 메인 컴포넌트 ──
 
 export default function StudentActivityPanel({
-  userId, nickname, name, classType, profileRabbitId, onBack,
+  userId, nickname, name, classType, profileRabbitId, courseId, onBack,
 }: StudentActivityPanelProps) {
   const [studentId, setStudentId] = useState<string>('');
   const [activities, setActivities] = useState<ActivityItem[]>([]);
@@ -262,10 +263,16 @@ export default function StudentActivityPanel({
         });
       });
 
-      // pageViews → 상세 페이지 제목 배치 조회
+      // pageViews → 현재 과목만 필터링 + 상세 페이지 제목 배치 조회
+      const pvDocs = courseId
+        ? pvSnap.docs.filter(d => {
+            const c = d.data().courseId;
+            return !c || c === courseId; // courseId 없는 항목도 포함 (오버레이 등)
+          })
+        : pvSnap.docs;
       const postIds = new Set<string>();
       const pvQuizIds = new Set<string>();
-      pvSnap.docs.forEach(d => {
+      pvDocs.forEach(d => {
         const data = d.data();
         const path = data.path as string || '';
         if (data.category === 'board_detail') {
@@ -303,7 +310,7 @@ export default function StudentActivityPanel({
       }
 
       // pageViews → ActivityItem
-      pvSnap.docs.forEach(d => {
+      pvDocs.forEach(d => {
         const data = d.data();
         const ts = data.timestamp?.toDate?.() || new Date(0);
         const path = data.path as string || '';

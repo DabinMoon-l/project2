@@ -356,8 +356,13 @@ service cloud.firestore {
       allow create: if isAuthenticated() &&
         request.resource.data.userId == request.auth.uid;
 
-      // 수정/삭제: 불가
-      allow update, delete: if false;
+      // 수정: 본인 문서의 durationMs만 업데이트 허용 (체류시간 기록)
+      allow update: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['durationMs']);
+
+      // 삭제: 불가
+      allow delete: if false;
     }
 
     // ============================================================
