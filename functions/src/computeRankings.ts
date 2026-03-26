@@ -104,8 +104,9 @@ interface UserDoc {
 async function computeRankingsForCourse(courseId: string) {
   const db = getFirestore();
 
-  // ── 1단계: users 쿼리 ──
-  const usersSnap = await db.collection("users").where("courseId", "==", courseId).get();
+  // ── 1단계: users 쿼리 (필요한 필드만 — 대역폭/메모리 절감) ──
+  const usersSnap = await db.collection("users").where("courseId", "==", courseId)
+    .select("role", "nickname", "name", "classId", "totalExp", "profileRabbitId", "equippedRabbits", "professorQuizzesCompleted", "lastActiveAt").get();
   const allUsers: UserDoc[] = usersSnap.docs.map(d => ({ id: d.id, ...d.data() } as UserDoc));
 
   // 테스트 계정 닉네임 (랭킹에서만 제외, 기능은 정상 사용)
