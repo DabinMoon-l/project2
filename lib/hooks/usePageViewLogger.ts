@@ -2,9 +2,11 @@
 
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
-import { collection, addDoc, serverTimestamp, db } from '@/lib/repositories';
+import { collection, addDoc, updateDoc, doc, serverTimestamp, db } from '@/lib/repositories';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse } from '@/lib/contexts/CourseContext';
+
+const MAX_DURATION_MS = 30 * 60 * 1000; // 30분 이상은 비활성 탭으로 간주
 
 // 세션 ID 생성 (탭 단위 — 새 탭/새로고침마다 새 세션)
 function getSessionId(): string {
@@ -51,18 +53,27 @@ export function usePageViewLogger() {
   const { userCourseId, userClassId } = useCourse();
   const lastPathRef = useRef<string>('');
   const lastTimeRef = useRef<number>(0);
+  const prevDocIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!user?.uid || !pathname) return;
 
-    // 같은 경로 2초 내 중복 방지
     const now = Date.now();
+    // 같은 경로 2초 내 중복 방지
     if (pathname === lastPathRef.current && now - lastTimeRef.current < 2000) return;
+
+    // 이전 페이지뷰에 체류시간 기록 (30분 미만만)
+    if (prevDocIdRef.current && lastTimeRef.current) {
+      const durationMs = now - lastTimeRef.current;
+      if (durationMs < MAX_DURATION_MS) {
+        updateDoc(doc(db, 'pageViews', prevDocIdRef.current), { durationMs }).catch(() => {});
+      }
+    }
 
     lastPathRef.current = pathname;
     lastTimeRef.current = now;
 
-    // 비동기 로깅 (실패해도 무시)
+    // 새 페이지뷰 기록
     addDoc(collection(db, 'pageViews'), {
       userId: user.uid,
       path: pathname,
@@ -71,6 +82,8 @@ export function usePageViewLogger() {
       courseId: userCourseId || null,
       classId: userClassId || null,
       timestamp: serverTimestamp(),
+    }).then(ref => {
+      prevDocIdRef.current = ref.id;
     }).catch(() => {});
   }, [user?.uid, pathname, userCourseId, userClassId]);
 }

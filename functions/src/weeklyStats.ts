@@ -73,6 +73,8 @@ interface WeeklyStats {
     byCategory: Record<string, number>;
     avgSessionViews: number;
     peakHours: number[]; // 상위 3개 시간대 (0~23, KST)
+    avgDurationByCategory: Record<string, number>; // 카테고리별 평균 체류시간(ms)
+    avgSessionDurationMs: number; // 세션당 평균 체류시간(ms)
   };
 }
 
@@ -433,6 +435,9 @@ async function collectWeeklyStats(courseId: string, start: Date, end: Date, labe
   const pvUniqueUsers = new Set<string>();
   const pvSessionViews: Record<string, number> = {};
   const pvHourCounts: Record<number, number> = {};
+  // 체류시간 집계
+  const durationByCategory: Record<string, { total: number; count: number }> = {};
+  const sessionDurations: Record<string, number> = {};
   const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
   pvSnap.docs.forEach(d => {
@@ -442,6 +447,16 @@ async function collectWeeklyStats(courseId: string, start: Date, end: Date, labe
     if (data.userId) pvUniqueUsers.add(data.userId as string);
     if (data.sessionId) {
       pvSessionViews[data.sessionId as string] = (pvSessionViews[data.sessionId as string] || 0) + 1;
+    }
+    // 체류시간 집계 (durationMs 필드가 있는 문서만)
+    const dur = data.durationMs as number | undefined;
+    if (dur && dur > 0 && dur < 30 * 60 * 1000) {
+      if (!durationByCategory[cat]) durationByCategory[cat] = { total: 0, count: 0 };
+      durationByCategory[cat].total += dur;
+      durationByCategory[cat].count += 1;
+      if (data.sessionId) {
+        sessionDurations[data.sessionId as string] = (sessionDurations[data.sessionId as string] || 0) + dur;
+      }
     }
     // KST 시간대별 집계
     if (data.timestamp?.toDate) {
@@ -514,6 +529,13 @@ async function collectWeeklyStats(courseId: string, start: Date, end: Date, labe
       byCategory: pvByCategory,
       avgSessionViews,
       peakHours,
+      avgDurationByCategory: Object.fromEntries(
+        Object.entries(durationByCategory).map(([cat, { total, count }]) => [cat, Math.round(total / count)])
+      ),
+      avgSessionDurationMs: (() => {
+        const vals = Object.values(sessionDurations);
+        return vals.length > 0 ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : 0;
+      })(),
     },
   };
 }
