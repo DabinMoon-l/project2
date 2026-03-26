@@ -167,10 +167,26 @@ export default function StudentActivityPanel({
         orderBy('timestamp', 'desc'),
         limit(200),
       )),
-    ]).then(([userSnap, expSnap, pvSnap]) => {
+    ]).then(async ([userSnap, expSnap, pvSnap]) => {
       // 학번
       if (userSnap.exists()) {
         setStudentId(userSnap.data()?.studentId || '');
+      }
+
+      // 퀴즈 제목 배치 조회 (quiz_complete의 sourceId)
+      const quizIds = new Set<string>();
+      expSnap.docs.forEach(d => {
+        const data = d.data();
+        if (data.type === 'quiz_complete' && data.sourceId) quizIds.add(data.sourceId as string);
+      });
+      const quizTitles: Record<string, string> = {};
+      const qArr = Array.from(quizIds);
+      for (let i = 0; i < qArr.length; i += 10) {
+        const batch = qArr.slice(i, i + 10);
+        const snaps = await Promise.all(batch.map(id => getDoc(doc(db, 'quizzes', id))));
+        snaps.forEach((snap, idx) => {
+          if (snap.exists()) quizTitles[batch[idx]] = snap.data()?.title || '';
+        });
       }
 
       const items: ActivityItem[] = [];
@@ -179,12 +195,22 @@ export default function StudentActivityPanel({
       expSnap.docs.forEach(d => {
         const data = d.data();
         const ts = data.createdAt?.toDate?.() || new Date(0);
+
+        // quiz_complete: "퀴즈 완료" 대신 퀴즈 이름 + 점수 표시
+        let detail: string | undefined = data.reason || undefined;
+        if (data.type === 'quiz_complete' && data.sourceId) {
+          const title = quizTitles[data.sourceId as string];
+          const scoreMatch = (data.reason || '').match(/점수[:\s]*(\d+)점/);
+          const scorePart = scoreMatch ? ` (점수: ${scoreMatch[1]}점)` : '';
+          if (title) detail = `${title}${scorePart}`;
+        }
+
         items.push({
           id: `exp-${d.id}`,
           timestamp: ts,
           type: 'exp',
           label: EXP_LABELS[data.type] || data.type || '활동',
-          detail: data.reason || undefined,
+          detail,
           exp: data.amount || 0,
         });
       });
