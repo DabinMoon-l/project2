@@ -29,7 +29,7 @@ const VISIT_LABELS: Record<string, string> = {
   review_list: '복습 목록',
   review_practice: '복습 연습',
   review_detail: '복습 상세',
-  board_list: '게시판',
+  board_list: '게시판 목록',
   board_detail: '게시글',
   ranking: '랭킹',
   profile: '프로필',
@@ -457,7 +457,7 @@ export default function StudentActivityPanel({
       </div>
 
       {/* 하단 요약 */}
-      <div className="px-4 py-3 border-t border-white/15 flex items-center justify-between">
+      <div className="flex-shrink-0 px-4 py-3 pb-4 border-t border-white/15 flex items-center justify-between">
         <span className="text-xs text-white/40">
           활동 {filteredActivities.filter(a => a.type === 'exp').length}건
           · 방문 {filteredActivities.filter(a => a.type === 'visit').length}회
