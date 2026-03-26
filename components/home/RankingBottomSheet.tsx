@@ -341,7 +341,7 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 z-[60] bg-black/10"
+            className="absolute inset-0 z-[60]"
             onClick={() => setSelectedUser(null)}
           />
           {/* 바텀시트 — 투명 배경 */}
