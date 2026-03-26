@@ -44,7 +44,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           // 가로모드: 정적 이미지 배경
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src="/images/home-garo.png"
+            src="/images/home-wide.png"
             alt=""
             style={{
               position: 'absolute',
