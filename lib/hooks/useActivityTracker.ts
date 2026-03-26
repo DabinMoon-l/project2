@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
-import { doc, updateDoc, serverTimestamp, db } from '@/lib/repositories';
+import { doc, updateDoc, setDoc, serverTimestamp, arrayUnion, db } from '@/lib/repositories';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useHomeOverlay } from '@/lib/contexts/HomeOverlayContext';
 
@@ -23,7 +23,7 @@ function getCurrentActivity(pathname: string): string {
 
 // 학생 접속 상태 추적 훅 — 120초마다 lastActiveAt + currentActivity 업데이트
 // activity가 변경된 경우에만 즉시 쓰기, 동일하면 인터벌만 유지
-export function useActivityTracker() {
+export function useActivityTracker(courseId?: string, isProfessor?: boolean) {
   const { user } = useAuth();
   const pathname = usePathname();
   const { isOpen: isHomeOverlayOpen } = useHomeOverlay();
@@ -61,4 +61,18 @@ export function useActivityTracker() {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [user?.uid, pathname, isHomeOverlayOpen]);
+
+  // 일일 접속 기록 (학생만, 하루 1회)
+  // dailyAttendance/{courseId}_{YYYY-MM-DD} 문서에 uid를 arrayUnion
+  useEffect(() => {
+    if (!user?.uid || !courseId || isProfessor) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const storageKey = `daily-att-${user.uid}-${today}`;
+    if (localStorage.getItem(storageKey)) return;
+
+    const attRef = doc(db, 'dailyAttendance', `${courseId}_${today}`);
+    setDoc(attRef, { attendedUids: arrayUnion(user.uid) }, { merge: true })
+      .then(() => localStorage.setItem(storageKey, '1'))
+      .catch(() => {});
+  }, [user?.uid, courseId, isProfessor]);
 }
