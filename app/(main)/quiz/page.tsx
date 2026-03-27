@@ -130,20 +130,6 @@ function QuizListPageContent() {
   const [statsQuiz, setStatsQuiz] = useState<QuizCardData | null>(null);
   const [statsSourceRect, setStatsSourceRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
 
-  // 가로모드: stats 모달을 3쪽 패널로 표시
-  const openStatsPanel = useCallback((quiz: QuizCardData) => {
-    const close = () => closeDetail();
-    const action = isDetailOpen ? replaceDetail : openDetail;
-    action(
-      <QuizStatsModal
-        quizId={quiz.id}
-        quizTitle={quiz.title}
-        isOpen
-        onClose={close}
-        isPanelMode
-      />
-    );
-  }, [isDetailOpen, openDetail, replaceDetail, closeDetail]);
   const [deleteSourceRect, setDeleteSourceRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
 
   // 자작 섹션 반별 필터
@@ -156,7 +142,7 @@ function QuizListPageContent() {
   const [quizToDelete, setQuizToDelete] = useState<QuizCardData | null>(null);
 
   // Details/관리 모달 열릴 때 네비게이션 숨김 (가로모드: 관리 모드는 3쪽이라 숨기지 않음)
-  useHideNav(!!(selectedQuiz || quizToDelete || (!isWide && isManageMode) || statsQuiz));
+  useHideNav(!!(selectedQuiz || quizToDelete || (!isWide && isManageMode)));
 
   // body 스크롤 방지 통합 (모달/관리모드 열림 시 PullToHome 스와이프 방지)
   // 가로모드: 관리 모드는 3쪽 패널이므로 2쪽 스크롤 유지
@@ -557,7 +543,7 @@ function QuizListPageContent() {
                   quiz={quiz}
                   onEdit={() => handleEditQuiz(quiz.id)}
                   onDelete={(rect) => handleDeleteQuiz(quiz, rect)}
-                  onStats={(rect) => { if (isWide) { openStatsPanel(quiz); } else { setStatsSourceRect(rect); setStatsQuiz(quiz); } }}
+                  onStats={(rect) => { setStatsSourceRect(rect); setStatsQuiz(quiz); }}
                 />
               ))}
             </div>
@@ -1221,24 +1207,79 @@ function QuizListPageContent() {
                     quiz={quiz}
                     onEdit={() => handleEditQuiz(quiz.id)}
                     onDelete={(rect) => handleDeleteQuiz(quiz, rect)}
-                    onStats={(rect) => { if (isWide) { openStatsPanel(quiz); } else { setStatsSourceRect(rect); setStatsQuiz(quiz); } }}
+                    onStats={(rect) => { setStatsSourceRect(rect); setStatsQuiz(quiz); }}
                   />
                 ))}
               </div>
             )}
           </main>
 
-          {/* 관리 모드 모달 — 오버레이 안에서 렌더 (absolute가 이 fixed 컨테이너 기준) */}
+          {/* 통계 모달/바텀시트 — 관리 오버레이 안에서 렌더 (absolute가 이 fixed 컨테이너 기준) */}
+          <AnimatePresence>
+            {!!statsQuiz && (
+              isWide ? (
+                // 가로모드: 바텀시트 (투명 오버레이 + 아래에서 슬라이드)
+                <motion.div
+                  key="stats-sheet"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute inset-0 z-[70]"
+                  onClick={() => setStatsQuiz(null)}
+                >
+                  <motion.div
+                    initial={{ y: '100%' }}
+                    animate={{ y: 0 }}
+                    exit={{ y: '100%' }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute inset-x-0 bottom-0 top-10 bg-[#F5F0E8] border-t-2 border-[#1A1A1A] rounded-t-xl overflow-hidden"
+                  >
+                    <QuizStatsModal
+                      quizId={statsQuiz.id}
+                      quizTitle={statsQuiz.title}
+                      isOpen
+                      onClose={() => setStatsQuiz(null)}
+                      isPanelMode
+                    />
+                  </motion.div>
+                </motion.div>
+              ) : (
+                // 세로모드: 중앙 모달 (어두운 배경 + 지니 애니메이션)
+                <motion.div
+                  key="stats-modal"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute inset-0 z-[70] flex items-center justify-center overflow-hidden"
+                  style={{ padding: '1rem' }}
+                  onClick={() => setStatsQuiz(null)}
+                >
+                  <div className="absolute inset-0 bg-black/50" />
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.05, x: statsSourceRect ? statsSourceRect.x + statsSourceRect.width / 2 - (typeof window !== 'undefined' ? window.innerWidth / 2 : 0) : 0, y: statsSourceRect ? statsSourceRect.y + statsSourceRect.height / 2 - (typeof window !== 'undefined' ? window.innerHeight / 2 : 0) : 0 }}
+                    animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.05, x: statsSourceRect ? statsSourceRect.x + statsSourceRect.width / 2 - (typeof window !== 'undefined' ? window.innerWidth / 2 : 0) : 0, y: statsSourceRect ? statsSourceRect.y + statsSourceRect.height / 2 - (typeof window !== 'undefined' ? window.innerHeight / 2 : 0) : 0 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="relative w-full max-w-lg max-h-[82vh] z-[1]"
+                  >
+                    <QuizStatsModal
+                      quizId={statsQuiz.id}
+                      quizTitle={statsQuiz.title}
+                      isOpen
+                      onClose={() => setStatsQuiz(null)}
+                      isPanelMode
+                    />
+                  </motion.div>
+                </motion.div>
+              )
+            )}
+          </AnimatePresence>
+
           {isWide && (
             <>
-              <QuizStatsModal
-                quizId={statsQuiz?.id || ''}
-                quizTitle={statsQuiz?.title || ''}
-                isOpen={!!statsQuiz}
-                onClose={() => setStatsQuiz(null)}
-                sourceRect={statsSourceRect}
-                isPanelMode
-              />
         <AnimatePresence>
           {quizToDelete && (() => {
             const sr = deleteSourceRect;
@@ -1333,19 +1374,6 @@ function QuizListPageContent() {
         </motion.div>
       )}
     </AnimatePresence>
-
-    {/* 세로모드: 관리 모드 모달 (fixed, 기존 방식) */}
-    {isManageMode && !isWide && (
-      <>
-        <QuizStatsModal
-          quizId={statsQuiz?.id || ''}
-          quizTitle={statsQuiz?.title || ''}
-          isOpen={!!statsQuiz}
-          onClose={() => setStatsQuiz(null)}
-          sourceRect={statsSourceRect}
-        />
-      </>
-    )}
 
     {/* 세로모드: 인라인 수정 바텀시트 */}
     {!isWide && (
