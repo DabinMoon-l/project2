@@ -1313,9 +1313,9 @@ export async function generateWithGemini(
 ): Promise<GeminiResult> {
   // 문제 수에 따라 토큰 수 조절
   // hard 난이도: 복수정답/부정형/상세해설로 문제당 토큰 증가
-  const estimatedTokensPerQuestion = 1000;
-  const thinkingBudget = 10240;
-  const maxTokens = thinkingBudget + Math.max(questionCount * estimatedTokensPerQuestion + 2000, 8192);
+  const estimatedTokensPerQuestion = 1200;
+  const thinkingBudget = 16384;
+  const maxTokens = thinkingBudget + Math.max(questionCount * estimatedTokensPerQuestion + 4000, 10240);
 
   // 페이지 이미지를 inlineData parts로 변환 (최대 10장)
   const imageParts: Array<{ inlineData: { mimeType: string; data: string } }> = [];

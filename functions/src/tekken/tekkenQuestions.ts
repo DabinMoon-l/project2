@@ -615,10 +615,10 @@ export async function generateBattleQuestions(
 JSON 배열로 출력: [{"text":"문제","type":"multiple","choices":["선지1","선지2","선지3","선지4"],"correctAnswer":0,"difficulty":"${difficulty}","explanation":"정답 해설","choiceExplanations":["선지1 해설","선지2 해설","선지3 해설","선지4 해설"],"chapterId":"3"}]`
         : prompt;
 
-      const thinkingBudget = 8192;
+      const thinkingBudget = 16384;
       const generationConfig: Record<string, unknown> = {
         temperature: isSimplified ? 0.7 : 0.9,
-        maxOutputTokens: thinkingBudget + (isSimplified ? 4096 : 12288),
+        maxOutputTokens: thinkingBudget + (isSimplified ? 6144 : 16384),
         thinkingConfig: { thinkingBudget },
       };
 
