@@ -296,6 +296,10 @@ function CommentItem({
     setIsEditMode(false);
   };
 
+  // 이미지 URL 검증 패턴
+  const IMAGE_URL_PATTERN = /^https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp|bmp|svg|tiff|ico|avif)(?:[?#]\S*)?$/i;
+  const KNOWN_IMAGE_HOST_PATTERN = /^https?:\/\/(?:i\.imgur\.com|pbs\.twimg\.com|images\.unsplash\.com|lh[0-9]*\.googleusercontent\.com|firebasestorage\.googleapis\.com|encrypted-tbn[0-9]*\.gstatic\.com|blogfiles\.naver\.net|postfiles\.naver\.net|[a-z0-9-]+\.googleusercontent\.com|cdn\.discordapp\.com|media\.discordapp\.net|i\.namu\.wiki|upload\.wikimedia\.org|img\.icons8\.com)\//i;
+
   // 수정 모드: URL로 이미지 추가
   const handleAddEditImageUrl = () => {
     const url = editUrlInputValue.trim();
@@ -303,6 +307,10 @@ function CommentItem({
     const total = editExistingImages.length + editNewFiles.length + editLinkedUrls.length;
     if (total >= 5) return;
     if (editLinkedUrls.includes(url) || editExistingImages.includes(url)) return;
+    if (!IMAGE_URL_PATTERN.test(url) && !KNOWN_IMAGE_HOST_PATTERN.test(url)) {
+      alert('이미지 URL만 추가할 수 있습니다.\n(jpg, png, gif, webp 등)');
+      return;
+    }
     setEditLinkedUrls(prev => [...prev, url]);
     setEditUrlInputValue('');
     setTimeout(() => editUrlInputRef.current?.focus(), 50);
