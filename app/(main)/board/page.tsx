@@ -60,7 +60,7 @@ function PostStats({ post, tag }: { post: Post; tag?: string }) {
 type CommentsMap = Map<string, Comment[]>;
 
 /** 댓글 CSS line-clamp 클래스 (모든 역할 동일 3줄) */
-const COMMENT_CLAMP = 'line-clamp-3';
+const COMMENT_CLAMP = 'line-clamp-3 break-words';
 
 /** 랜덤 명언 목록 */
 const MOTIVATIONAL_QUOTES = [
@@ -138,17 +138,17 @@ const HeadlineArticle = memo(function HeadlineArticle({
         </div>
 
         {/* 우측 - 제목, 본문, 댓글 */}
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 min-w-0 flex flex-col">
           {/* 제목 - 검정 박스 */}
           <div className="bg-[#1A1A1A] px-3 py-3">
-            <h1 className="font-serif-display text-2xl md:text-3xl font-black text-[#F5F0E8] leading-tight" style={{ fontWeight: 900 }}>
+            <h1 className="font-serif-display text-2xl md:text-3xl font-black text-[#F5F0E8] leading-tight line-clamp-3" style={{ fontWeight: 900 }}>
               {post.title}
             </h1>
           </div>
 
           {/* 본문 및 댓글 */}
-          <div className="p-3 flex-1">
-            <p className="text-xs text-[#1A1A1A] leading-relaxed line-clamp-3">
+          <div className="p-3 flex-1 min-w-0">
+            <p className="text-xs text-[#1A1A1A] leading-relaxed line-clamp-3 break-words">
               {post.content}
             </p>
 
@@ -346,7 +346,7 @@ const MasonryItem = memo(function MasonryItem({
   );
 
   const TitleSection = (
-    <h2 className="font-serif-display text-2xl md:text-3xl font-black leading-tight text-[#1A1A1A]" style={{ fontWeight: 900 }}>
+    <h2 className="font-serif-display text-2xl md:text-3xl font-black leading-tight text-[#1A1A1A] break-words" style={{ fontWeight: 900 }}>
       {post.title}
     </h2>
   );
@@ -356,7 +356,7 @@ const MasonryItem = memo(function MasonryItem({
       onClick={onClick}
       whileTap={TAP_SCALE}
       transition={SPRING_TAP}
-      className="cursor-pointer group break-inside-avoid mb-4 p-3 border border-[#1A1A1A] bg-[#F5F0E8] relative hover:-translate-y-0.5 hover:shadow-md transition-[transform,box-shadow]"
+      className="cursor-pointer group break-inside-avoid mb-4 p-3 border border-[#1A1A1A] bg-[#F5F0E8] relative hover:-translate-y-0.5 hover:shadow-md transition-[transform,box-shadow] overflow-hidden"
       style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
     >
       {imagePosition === 'top' ? (
@@ -372,7 +372,7 @@ const MasonryItem = memo(function MasonryItem({
       )}
 
       {/* 본문 */}
-      <p className="text-xs text-[#1A1A1A] leading-relaxed line-clamp-3 mt-2">
+      <p className="text-xs text-[#1A1A1A] leading-relaxed line-clamp-3 mt-2 break-words">
         {post.content}
       </p>
 
