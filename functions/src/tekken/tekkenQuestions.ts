@@ -512,6 +512,12 @@ ${scopeContent.slice(0, 8000)}
 - ${chapters.length}개 챕터를 골고루 커버 (특정 챕터에 편중 금지)
 - ⚠️ 1장 문제는 절대 2문제 이상 금지
 
+## ⛔ 금지 문제 유형 (반드시 피할 것)
+- "~은 무엇인가?", "~의 정의는?", "~을 담당하는 것은?" 같은 단순 정의/용어 문제
+- 한 단어만 알면 풀리는 단순 암기 문제
+- 대신 비교·구별·적용·인과관계·조건 판단 중심으로 출제
+- 좋은 예: "A와 B의 차이로 올바른 것은?", "~상황에서 나타나는 반응은?", "~가 억제되면 어떤 결과가 나타나는가?"
+
 ## 해설 규칙 (필수)
 - explanation: 정답이 왜 맞는지 1~2문장 (최대 100자)
 - choiceExplanations: 각 선지마다 왜 맞/틀린지 1문장 (각 최대 50자). 반드시 4개 선지 모두 해설.
@@ -596,15 +602,24 @@ export async function generateBattleQuestions(
       const isFreeform = attempt >= 2;
 
       const currentPrompt = isSimplified
-        ? `대학교 ${courseName} 과목 ${difficulty === "easy" ? "쉬운" : "보통"} 4지선다 객관식 문제 ${count}개.
-범위: ${targetChapters.join(", ")}장. 각 챕터에서 골고루 출제.
-각 문제에 explanation(정답 해설 1~2문장), choiceExplanations(선지별 해설 4개), chapterId(챕터 번호) 필수.
+        ? `당신은 ${courseName} 과목의 대학 교수입니다. 배틀 퀴즈용 4지선다 객관식 문제 ${count}개를 만드세요.
+
+## 핵심 규칙
+- 난이도: ${difficulty === "easy" ? "쉬움 — 단순 암기가 아닌 개념 이해 확인" : "보통 — 개념 적용·비교·구별 수준"}
+- 범위: ${targetChapters.join(", ")}장에서 골고루 출제
+- 문제 1~2문장(최대 80자), 선지 최대 30자, 4지선다만
+- "~은 무엇인가?" 같은 단순 정의 질문 금지. 비교·구별·적용·인과관계 중심으로 출제
+- 오답 선지는 그럴듯하게 (명백히 틀린 보기 금지)
+- explanation(정답 해설 1~2문장), choiceExplanations(선지별 해설 4개), chapterId 필수
+
 JSON 배열로 출력: [{"text":"문제","type":"multiple","choices":["선지1","선지2","선지3","선지4"],"correctAnswer":0,"difficulty":"${difficulty}","explanation":"정답 해설","choiceExplanations":["선지1 해설","선지2 해설","선지3 해설","선지4 해설"],"chapterId":"3"}]`
         : prompt;
 
+      const thinkingBudget = 8192;
       const generationConfig: Record<string, unknown> = {
         temperature: isSimplified ? 0.7 : 0.9,
-        maxOutputTokens: isSimplified ? 4096 : 12288,
+        maxOutputTokens: thinkingBudget + (isSimplified ? 4096 : 12288),
+        thinkingConfig: { thinkingBudget },
       };
 
       // 구조화 출력 (3차 시도에서만 자유형)

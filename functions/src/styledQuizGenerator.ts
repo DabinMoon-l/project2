@@ -509,7 +509,9 @@ export async function loadScopeForQuiz(
 export const DIFFICULTY_PARAMS = {
   easy: {
     preferredTypes: ["DEFINITION_MATCH", "CLASSIFICATION", "COMPARISON"],
-    cognitiveLevel: "기억/이해 — 개념 정의, 특징, 분류를 직접적으로 확인",
+    cognitiveLevel: `기억/이해 — 개념의 특징, 분류, 기본 비교를 확인.
+   - ❌ 금지: "~은 무엇인가?", "~의 정의는?", "~을 담당하는 것은?" 같은 한 단어 암기 문제
+   - ✅ 권장: "~의 특징으로 올바른 것은?", "~와 ~의 공통점은?", "~에 해당하는 것은?" 등 개념 이해를 확인하는 문제`,
     trapStyle: "없음 (명확한 정오 구분, 선지 간 차이가 분명)",
     choiceStyle: `핵심 개념 중심의 명확한 선지 — 선지 간 차이가 분명하고, 수업을 들은 학생이라면 쉽게 소거 가능.
    - 선지는 개념을 설명하는 문장이어야 함. 단어 1~2개로만 구성된 선지 금지.
