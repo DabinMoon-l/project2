@@ -47,6 +47,10 @@ export interface LibraryTabProps {
   onPublish: (quizId: string) => void;
   /** 현재 로그인 사용자 uid */
   currentUserId?: string;
+  /** 업데이트된 퀴즈 맵 (useQuizUpdate → quizId 키) */
+  updatedQuizIds?: Map<string, any>;
+  /** 업데이트 뱃지 클릭 핸들러 */
+  onUpdateClick?: (quizId: string, quizTitle: string) => void;
 }
 
 /**
@@ -75,6 +79,8 @@ export default function LibraryTab({
   onReviewWrongOnly,
   onPublish,
   currentUserId,
+  updatedQuizIds,
+  onUpdateClick,
 }: LibraryTabProps) {
   return (
     <div className="space-y-4">
@@ -228,6 +234,8 @@ export default function LibraryTab({
                   isSelectMode={isLibrarySelectMode || isReviewSelectMode}
                   isSelected={isSelected}
                   currentUserId={currentUserId}
+                  hasUpdate={!!updatedQuizIds?.has(quiz.id)}
+                  onUpdateClick={() => onUpdateClick?.(quiz.id, quiz.title)}
                 />
               </motion.div>
             );
