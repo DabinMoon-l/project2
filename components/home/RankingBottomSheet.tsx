@@ -113,7 +113,7 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
   const [classFilter, setClassFilter] = useState<'all' | 'A' | 'B' | 'C' | 'D'>('all');
   const [showClassDropdown, setShowClassDropdown] = useState(false);
   const [periodFilter, setPeriodFilter] = useState<'day' | 'week' | 'all'>('day');
-  const [prevWeekRanks, setPrevWeekRanks] = useState<Record<string, number>>({});
+  const [prevDayRanks, setPrevWeekRanks] = useState<Record<string, number>>({});
   const [showScrollTop, setShowScrollTop] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const top3Ref = useRef<HTMLDivElement>(null);
@@ -184,7 +184,7 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
     const { data: cached } = readFullCache(userCourseId);
     if (cached) {
       applyRankings(cached.rankedUsers as RankedUser[]);
-      if (cached.prevWeekRanks) setPrevWeekRanks(cached.prevWeekRanks);
+      if (cached.prevDayRanks) setPrevWeekRanks(cached.prevDayRanks);
       setLoading(false);
     }
 
@@ -195,14 +195,14 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
         if (snapshot.exists()) {
           const data = snapshot.data();
           const users = (data.rankedUsers || []) as RankedUser[];
-          const pwRanks = (data.prevWeekRanks || {}) as Record<string, number>;
+          const pwRanks = (data.prevDayRanks || {}) as Record<string, number>;
           applyRankings(users);
           setPrevWeekRanks(pwRanks);
           setLoading(false);
           // 토끼 이름 실시간 갱신 (서버 캐시와 무관하게 최신 이름 반영)
           resolveRabbitNamesForAll(users).then(() => {
             applyRankings([...users]);
-            writeFullCache(userCourseId, { rankedUsers: users, prevWeekRanks: pwRanks });
+            writeFullCache(userCourseId, { rankedUsers: users, prevDayRanks: pwRanks });
           }).catch(() => {});
         } else if (!fallbackAttempted) {
           fallbackAttempted = true;
@@ -351,11 +351,11 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rankedUsers, periodFilter, userCourseId]);
 
-  // 등수 변동 렌더링 (ALL 탭, 일주일 간격 갱신)
+  // 등수 변동 렌더링 (ALL 탭, 일간 갱신)
   const renderRankChange = (userId: string) => {
     if (periodFilter !== 'all') return null;
     const currentRank = allGlobalRankMap[userId];
-    const prevRank = prevWeekRanks[userId];
+    const prevRank = prevDayRanks[userId];
     if (currentRank == null) return null;
     if (prevRank == null) {
       return <p className="text-[10px] font-bold text-yellow-300/80">NEW</p>;
