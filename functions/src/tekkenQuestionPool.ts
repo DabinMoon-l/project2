@@ -417,7 +417,7 @@ export async function drawQuestionsFromPool(
  */
 export const tekkenPoolRefillScheduled = onSchedule(
   {
-    schedule: "0 3 * * 1,4",  // 주 2회 (월/목) — 비용 절감
+    schedule: "0 3 * * 1,2,4,5",  // 주 4회 (월/화/목/금)
     region: "asia-northeast3",
     timeZone: "Asia/Seoul",
     timeoutSeconds: 120,
