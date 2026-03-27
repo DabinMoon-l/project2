@@ -104,6 +104,7 @@ export default function ProfileDrawer({ isOpen, onClose, isPanelMode }: ProfileD
   const [adminResetting, setAdminResetting] = useState(false);
 
   const isAdmin = profile?.studentId === ADMIN_STUDENT_ID;
+  const canViewInquiries = isAdmin || isProfessor;
 
   // ============================================================
   // 메모이제이션 — 렌더마다 재계산 방지
@@ -186,9 +187,9 @@ export default function ProfileDrawer({ isOpen, onClose, isPanelMode }: ProfileD
     return () => cancelAnimationFrame(raf);
   }, [pickerReady, visibleCount, isProfessor, sortedHoldings.length]);
 
-  // 관리자: 읽지 않은 문의 수 실시간 구독 (목록이 닫혀 있을 때만 — 열려 있으면 목록 구독이 카운트 갱신)
+  // 관리자/교수: 읽지 않은 문의 수 실시간 구독 (목록이 닫혀 있을 때만 — 열려 있으면 목록 구독이 카운트 갱신)
   useEffect(() => {
-    if (!isAdmin || !isOpen || showInquiryList) return;
+    if (!canViewInquiries || !isOpen || showInquiryList) return;
     const q = query(
       collection(db, 'inquiries'),
       where('isRead', '==', false)
@@ -199,11 +200,11 @@ export default function ProfileDrawer({ isOpen, onClose, isPanelMode }: ProfileD
       // Firestore 권한 에러 무시 (inquiries는 교수만 읽기 가능)
     });
     return () => unsubscribe();
-  }, [isAdmin, isOpen, showInquiryList]);
+  }, [canViewInquiries, isOpen, showInquiryList]);
 
-  // 관리자: 문의 목록 실시간 구독
+  // 관리자/교수: 문의 목록 실시간 구독
   useEffect(() => {
-    if (!isAdmin || !showInquiryList) return;
+    if (!canViewInquiries || !showInquiryList) return;
     const q = query(
       collection(db, 'inquiries'),
       orderBy('createdAt', 'desc'),
@@ -221,7 +222,7 @@ export default function ProfileDrawer({ isOpen, onClose, isPanelMode }: ProfileD
       // Firestore 권한 에러 무시 (inquiries는 교수만 읽기 가능)
     });
     return () => unsubscribe();
-  }, [isAdmin, showInquiryList]);
+  }, [canViewInquiries, showInquiryList]);
 
   // ============================================================
   // 핸들러
@@ -537,8 +538,8 @@ export default function ProfileDrawer({ isOpen, onClose, isPanelMode }: ProfileD
             Support
           </h3>
           <div className="space-y-3">
-            {/* 문의하기 (관리자 제외) */}
-            {!isAdmin && (
+            {/* 문의하기 (학생만, 관리자/교수 제외) */}
+            {!canViewInquiries && (
               <button
                 onClick={() => setShowInquiryModal(true)}
                 className="w-full flex items-center justify-between py-2.5"
@@ -553,8 +554,8 @@ export default function ProfileDrawer({ isOpen, onClose, isPanelMode }: ProfileD
               </button>
             )}
 
-            {/* 관리자: 문의 확인 */}
-            {isAdmin && (
+            {/* 관리자/교수: 문의 확인 */}
+            {canViewInquiries && (
               <>
                 <button
                   onClick={() => setShowInquiryList(prev => !prev)}
@@ -635,8 +636,8 @@ export default function ProfileDrawer({ isOpen, onClose, isPanelMode }: ProfileD
               </svg>
             </button>
 
-            {/* 관리자 비밀번호 초기화 */}
-            {isAdmin && (
+            {/* 관리자/교수 비밀번호 초기화 */}
+            {canViewInquiries && (
               <>
                 <div className="border-t border-white/5 my-1" />
                 <button
