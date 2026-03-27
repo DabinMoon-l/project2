@@ -707,17 +707,141 @@ Firebase에 "default" orgId를 추가하여 코드를 멀티테넌시 준비 상
 - 목표: p95 < 100ms → Supabase Realtime으로 전환 가능
 - p95 > 200ms → RTDB 유지
 
-### Phase 5: 셀프서비스 온보딩 + 빌링 (2주, LOW 리스크)
+### Phase 5: 동적 Scope/FocusGuide 시스템 (3주, MEDIUM 리스크)
+
+현재 하드코딩된 과목 데이터를 교수가 직접 관리할 수 있도록 전환.
+
+**현재 (하드코딩) → SaaS (동적):**
+
+| 현재 | 파일 | SaaS 전환 |
+|------|------|----------|
+| `courseScope.ts` (과목별 교과서 내용) | 코드에 직접 | `course_scopes` 테이블, 교수 업로드 |
+| `focusGuide` (챕터별 필수/고빈도) | `styledQuizGenerator.ts` 내 | `course_focus_guides` 테이블, 교수 편집 |
+| `courseChapters.json` (챕터 구조) | shared/ 파일 | `courses.chapters` JSONB 컬럼 |
+| `COURSE_NAMES` (과목명) | 코드 상수 | `courses.name` 컬럼 |
+
+**추가 테이블:**
+
+```sql
+-- ── 과목 학습 범위 (교과서 내용) ──
+CREATE TABLE course_scopes (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id      UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  course_id   UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  chapter_id  TEXT NOT NULL,                    -- "bio_3", "micro_5"
+  content     TEXT NOT NULL,                    -- 교과서 텍스트 (Scope)
+  source_type TEXT DEFAULT 'manual',            -- 'manual' | 'pdf_extract' | 'ai_extract'
+  updated_at  TIMESTAMPTZ DEFAULT now(),
+  UNIQUE (org_id, course_id, chapter_id)
+);
+
+-- ── 출제 포커스 가이드 ──
+CREATE TABLE course_focus_guides (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id      UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  course_id   UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  chapter_id  TEXT NOT NULL,
+  items       JSONB NOT NULL DEFAULT '[]',      -- [{text, priority: "필수출제"|"고빈도"|"보통"}]
+  updated_at  TIMESTAMPTZ DEFAULT now(),
+  UNIQUE (org_id, course_id, chapter_id)
+);
+```
+
+**교수 온보딩 시 과목 설정 플로우:**
+
+```
+1. 과목 생성 (이름, 학기, 반 구조)
+2. 교재 업로드 (PDF/PPTX) → AI 자동 추출
+   → Gemini가 챕터 구조 + Scope + FocusGuide 초안 생성
+   → 교수가 검토/수정
+3. 또는 수동 입력 (챕터별 텍스트 + 포커스 항목 편집)
+4. 과목 설정 완료 → AI 문제 생성/배틀 풀 즉시 사용 가능
+```
+
+**교수 과목 관리 UI (`/professor/course-settings`):**
+- 챕터 트리 편집기 (드래그앤드롭 순서 변경)
+- 챕터별 Scope 텍스트 에디터 (마크다운)
+- FocusGuide 편집: 항목 추가/삭제, 우선순위(필수출제/고빈도/보통) 태그
+- PDF 업로드 → AI 자동 추출 버튼 (기존 OCR 파이프라인 활용)
+
+### Phase 6: 셀프서비스 온보딩 + 빌링 (3주, LOW 리스크)
+
+**로그인/회원가입 재설계:**
+
+```
+┌─ 랜딩 페이지 (/landing) ────────────┐
+│                                      │
+│  "AI로 수업을 더 똑똑하게"            │
+│  [교수로 시작하기]  → 회원가입 플로우  │
+│  [학생 참여하기]    → 초대 코드 입력   │
+│  [로그인]          → 기존 사용자       │
+│                                      │
+└──────────────────────────────────────┘
+```
+
+**교수 가입 플로우 (셀프서비스):**
+```
+1. 이메일 + 비밀번호 회원가입
+2. 대학 검색 또는 신규 생성
+   → 기존 대학: 관리자 승인 요청 OR 초대 코드
+   → 신규 대학: 자동 생성 (본인이 admin)
+3. 과목 생성 → 교재 업로드 → Scope/FocusGuide AI 추출
+4. 학생 초대 코드 발급 (예: "HANKOOK-BIO-2026")
+5. 바로 사용 시작
+```
+
+**학생 가입 플로우 (초대 코드):**
+```
+1. 초대 코드 입력 → 대학/과목 자동 연결
+2. 학번 + 비밀번호 설정
+3. 닉네임 설정 → 바로 참여
+```
+
+**`allowed_professors` 테이블 제거** → 셀프 가입으로 대체. 대학 관리자가 교수 승인/거부 가능.
+
+**추가 테이블:**
+
+```sql
+-- ── 초대 코드 ──
+CREATE TABLE invite_codes (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id      UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  course_id   UUID REFERENCES courses(id),       -- NULL이면 대학 전체 초대
+  code        TEXT UNIQUE NOT NULL,               -- "HANKOOK-BIO-2026"
+  role        TEXT NOT NULL DEFAULT 'student',    -- 'student' | 'professor'
+  max_uses    INT,                                -- NULL = 무제한
+  use_count   INT DEFAULT 0,
+  expires_at  TIMESTAMPTZ,
+  created_by  UUID NOT NULL,
+  created_at  TIMESTAMPTZ DEFAULT now()
+);
+```
 
 **작업:**
-- 랜딩 페이지 (`/pricing`, `/signup`)
+- 랜딩 페이지 (`/landing`, `/pricing`)
 - Stripe 연동
-  - Free: 1 과목, 50 학생
-  - Pro: 무제한 과목, 500 학생, AI 생성 무제한
-  - Enterprise: SSO, 커스텀 도메인, SLA
+  - Free: 1 과목, 30 학생, AI 생성 일 5회
+  - Pro ($25/월): 무제한 과목, 500 학생, AI 생성 무제한
+  - Enterprise: SSO, 커스텀 도메인, SLA, 전담 지원
+- 교수 대시보드 (`/professor/dashboard`)
+  - 과목 관리, 학생 초대, 사용량 모니터링
 - 대학 관리자 대시보드 (`/admin`)
-  - 과목 관리, 교수 초대, 사용량 모니터링
+  - 교수 승인, 전체 통계, 빌링 관리
 - 커스텀 도메인 지원 (Vercel wildcard domain)
+
+### Phase 7: 앱스토어 출시 (2주, LOW 리스크)
+
+**작업:**
+- PWA → TWA (Trusted Web Activity) 래핑 (Android)
+- PWA → WKWebView 래핑 (iOS, Capacitor 또는 PWABuilder)
+- 앱스토어 메타데이터 (스크린샷, 설명, 키워드)
+- 심사 대응 (Apple 가이드라인 4.2 — 단순 웹뷰 리젝 방지: 네이티브 푸시 + 오프라인 지원 강조)
+
+**네이티브 기능 활용:**
+- 푸시 알림: FCM 그대로 (이미 구현)
+- 오프라인: Service Worker 캐싱 (이미 구현)
+- 카메라: OCR 촬영 (이미 구현)
+- 햅틱: 배틀 히트/크리티컬 피드백 (추가)
 
 ---
 
@@ -857,28 +981,39 @@ posts: orgId + courseId + createdAt
 
 ## 8. 비용 예측
 
-### 단일 대학 (현재, ~300 학생)
+### 단일 대학 (현재, ~300 학생, 2026년 3월 실측)
 
-| 서비스 | 월 비용 |
-|--------|---------|
-| Firebase (Blaze) | ~$30 |
-| Vercel (Pro) | $20 |
-| Gemini API | ~$15 |
-| Claude API | ~$5 |
-| **합계** | **~$70** |
+| 서비스 | 월 비용 | 비고 |
+|--------|---------|------|
+| Cloud Firestore | ₩81,521 | 읽기 과금이 주요 원인 |
+| Cloud Functions | ₩44,968 | 컴퓨트 |
+| Gemini API | ₩112,631 (표시) | **무료 크레딧 전액 절감 → 실제 ₩0** |
+| Non-Firebase | ₩46,589 | Cloud Run 등 |
+| Vercel (Pro) | $20 (~₩27,000) | |
+| Claude API | ~₩7,000 | 월별 리포트만 |
+| **합계 (표시)** | **₩285,745** | |
+| **실제 청구** | **~₩207,000** | Gemini 크레딧 적용 후 |
 
 ### SaaS (10개 대학, ~3,000 학생)
 
-| 서비스 | 월 비용 |
-|--------|---------|
-| Supabase (Pro) | $25 |
-| Firebase (RTDB + FCM) | ~$20 |
-| Cloud Run | ~$30 |
-| Vercel (Pro) | $20 |
-| Gemini API | ~$100 |
-| Claude API | ~$30 |
-| Better Auth (셀프호스트) | $0 |
-| **합계** | **~$225** |
+| 서비스 | 월 비용 | 비고 |
+|--------|---------|------|
+| Supabase (Pro) | $25 (~₩34K) | 읽기 무제한, RLS 격리 |
+| Firebase (RTDB + FCM) | ~$10 (~₩14K) | 배틀 + 푸시만 잔류 |
+| Cloud Run | ~$30 (~₩41K) | AI 워크로드 |
+| Vercel (Pro) | $20 (~₩27K) | |
+| Gemini API | ~$80 (~₩108K) | 무료 크레딧 한도 초과 가능 |
+| Claude API | ~$30 (~₩41K) | 대학별 월별 리포트 |
+| Better Auth (셀프호스트) | $0 | |
+| **합계** | **~$195 (~₩265K)** | |
+
+### SaaS 수익 vs 비용 (목표)
+
+| 규모 | 월 비용 | 월 수익 (Pro $25×교수 수) | 이익 |
+|------|---------|--------------------------|------|
+| 10개 대학, 교수 20명 | ~$195 | $500 | +$305 |
+| 30개 대학, 교수 60명 | ~$350 | $1,500 | +$1,150 |
+| 100개 대학, 교수 200명 | ~$800 | $5,000 | +$4,200 |
 
 ---
 
@@ -913,3 +1048,118 @@ SaaS Phase 2 (Firestore → PostgreSQL) 시 hooks의 raw Firestore 쿼리를 Rep
 - Phase 2에서 hooks → Repository 전환 작업이 이 파일들을 건드리게 됨
 - 그때 함께 Context 기반 분리를 하면 **한 번만 건드려서** 리스크 최소화
 - 테스트 커버리지를 먼저 확보한 후 리팩토링하면 회귀 버그 방지
+
+---
+
+## 11. 경쟁력 분석
+
+### 11.1 시장 내 경쟁 제품
+
+| 제품 | 특징 | 가격 | 약점 |
+|------|------|------|------|
+| **Kahoot!** | 실시간 퀴즈쇼, 게이미피케이션 | 교사 $6/월~ | AI 문제 생성 없음, 복습 시스템 없음, 일회성 이벤트용 |
+| **Quizlet** | 플래시카드 + 학습 모드 | 무료/Pro $8/월 | AI 생성 단순 (정의 수준), 교수 대시보드 없음, 게이미피케이션 약함 |
+| **Quizizz** | 비동기 퀴즈 + 보고서 | 교사 $4/월~ | AI 생성 기본, 배틀 없음, 커스텀 제한적 |
+| **Socrative** | 실시간 투표/퀴즈 | $10/월 | AI 없음, 복습 없음, 오래된 UI |
+| **ClassCard** (클래스카드) | 한국형 단어/문제 학습 | 무료/유료 | 대학 수준 부족, AI 생성 없음 |
+| **AI Tutor 류** | ChatGPT 기반 학습 | 다양 | 구조화된 퀴즈 관리 없음, 교수 통제 불가 |
+
+### 11.2 RabbiTory 차별점 (경쟁 우위)
+
+| 차별점 | 설명 | 경쟁사 현황 |
+|--------|------|------------|
+| **🧠 10레이어 AI 문제 생성** | Scope + FocusGuide + 교수 스타일 + 문제 뱅크 기반 고품질 출제 | 경쟁사는 단순 프롬프트 기반 (정의 수준) |
+| **🎮 실시간 1v1 배틀** | 토끼 캐릭터 기반 철권 스타일 배틀, RTDB 50ms 실시간 | Kahoot은 교실 단위, 1v1 대전 없음 |
+| **📊 교수 학습 분석** | 5축 레이더, 4군집 분류, 위험 학생 감지, 변별도, 월별 AI 리포트 | 대부분 단순 점수 통계만 제공 |
+| **🐰 게이미피케이션 깊이** | 80마리 토끼 도감, 뽑기, 레벨업, 스탯, 배틀, 연승 보너스 | Kahoot/Quizizz는 포인트/리더보드 수준 |
+| **📝 5탭 복습 시스템** | 서재/오답/찜/커스텀 + AI 오답 자동 분류 | 대부분 복습 기능 없거나 기본적 |
+| **🎯 교수 스타일 학습** | 교수 출제 패턴 자동 분석 → AI가 해당 스타일로 문제 생성 | 경쟁사에 없는 기능 |
+| **📱 PWA 가로모드 3패널** | 모바일/데스크탑 완전 반응형, 3패널 레이아웃 | 대부분 모바일만 또는 데스크탑만 |
+
+### 11.3 시장 기회
+
+**타깃**: 대학/고등교육 교수·강사 (글로벌 영어권 우선 → 아시아 → 한국)
+
+**핵심 포지셔닝: 과목 무관, 교수 특화**
+- RabbiTory는 특정 과목 전용이 아님
+- **어떤 교수든** 자신의 교재/시험을 올리면 AI가 그 교수의 출제 스타일을 학습
+- 생물학이든 경제학이든 역사학이든 — 교수의 발문 패턴, 오답 전략, 주제 비중을 분석하여 맞춤 문제 생성
+
+**왜 국외 우선인가:**
+
+| | 국내 | 글로벌 (영어권) |
+|---|---|---|
+| **시장 규모** | 대학 ~400개 | US 4,000+, 글로벌 수만 개 |
+| **지불 의향** | 낮음 (무료 선호, 기관 결재 느림) | 높음 (교수 개인 카드 결제 문화) |
+| **수익 구조** | ₩25,000/월 | $25/월 = ₩34,000 (달러 수익, 원화 비용) |
+| **채택 속도** | 느림 (행정 절차) | 빠름 (Product Hunt → 바로 사용) |
+| **경쟁 상황** | Kahoot/ClassCard + 행정적 장벽 | AI 교수 맞춤 출제는 공백 |
+
+**왜 지금인가:**
+- 대학 교육에서 AI 활용 수요 급증 (2025~2026)
+- Kahoot/Quizlet은 "교실 이벤트" or "자습 도구" → **교수 중심 학습 관리** 영역은 공백
+- ChatGPT/Gemini를 직접 쓰는 교수들이 늘고 있지만, 구조화된 출제·관리·분석 도구는 없음
+
+**핵심 가치 제안:**
+> "Your teaching style, AI-powered quizzes.
+> Upload your materials — AI learns how you test, generates exam-quality questions,
+> gamification drives student engagement, and real-time analytics spot at-risk students."
+
+### 11.4 GTM (Go-to-Market) 전략 — 국외 우선
+
+**Phase A: 론칭 & 초기 유저 확보 (SaaS 전환 직후)**
+```
+1. Product Hunt 론칭 — "AI Quiz Generator that learns your teaching style"
+2. X(Twitter) / LinkedIn — 교수·EdTech 커뮤니티 타깃 포스팅
+3. Reddit — r/professors, r/highereducation, r/edtech
+4. YouTube — 2분 데모 영상 (교재 PDF 업로드 → AI 문제 생성 → 학생 배틀)
+5. 무료 체험 (Free: 1과목, 30학생, AI 5회/일)
+```
+
+**Phase B: 성장 (론칭 후 3~6개월)**
+```
+1. 교수 입소문 (교수→동료 교수 추천이 가장 강력한 채널)
+2. 대학 교수학습센터(CTL) 파트너십 — 기관 단위 도입
+3. 교육 컨퍼런스 부스/시연 (EDUCAUSE, ASQ 등)
+4. 블로그/케이스스터디 — "Professor X improved exam scores by 15% using RabbiTory"
+```
+
+**Phase C: 국내 진출 (글로벌 검증 후)**
+```
+1. 글로벌 실적으로 국내 대학 어필 — "해외 X개 대학에서 사용 중"
+2. 한국어 이미 완성된 상태 → 즉시 출시 가능
+3. 대학 행정 채널 공략 (교무처, 교수학습센터)
+```
+
+### 11.5 i18n 우선순위
+
+SaaS 전환 시 Phase 5 (Scope/FocusGuide) 이전에 i18n 기반 작업 필요:
+
+```
+1. next-intl 또는 next-i18next 도입
+2. 영어 번역 (UI 텍스트 ~500개 키)
+3. AI 프롬프트 영어 분기 (교수 locale에 따라)
+4. 랜딩 페이지 영어 우선
+5. 토끼 이름/설명 영어 번역
+6. 콩콩이 AI 영어 응답 지원
+```
+
+### 11.4 약점 & 보완 필요
+
+| 약점 | 현황 | 보완 방안 |
+|------|------|----------|
+| **과목 범용성** | 생물학/미생물학/병태생리학 3과목 전용 | Phase 5 동적 Scope/FocusGuide로 해결 |
+| **언어** | 한국어 전용 | 국제화(i18n) 추가 필요 |
+| **오프라인** | Service Worker 기본 캐싱만 | 오프라인 퀴즈 풀이 → 온라인 시 동기화 |
+| **LMS 연동** | 없음 | LTI(Learning Tools Interoperability) 표준 지원 추가 |
+| **접근성** | 기본 수준 | WCAG 2.1 AA 준수 필요 (앱스토어 심사 대비) |
+
+### 11.5 전략적 판단
+
+**결론: 경쟁력 있음. 단, 조건부.**
+
+1. **강점이 명확함**: AI 문제 생성 품질(10레이어) + 교수 분석 + 배틀 시스템은 경쟁사 대비 기술적 해자(moat)가 있음
+2. **SaaS 전환이 필수**: 현재 단일 교수 맞춤형 → 어떤 과목이든 사용 가능해야 시장 진입 가능
+3. **과목 범용화가 핵심 마일스톤**: Scope/FocusGuide 동적 시스템이 SaaS 성패를 결정
+4. **초기 GTM(Go-to-Market)**: 글로벌 영어권 우선 → Product Hunt/LinkedIn/Reddit 론칭 → 교수 입소문 → 국내는 글로벌 실적으로 역진출
+5. **가격 경쟁력**: Pro $25/월은 Kahoot ($6~)보다 비싸지만, 제공 가치(AI 생성 + 분석)가 훨씬 크므로 정당화 가능. 대학 기관 계약 시 Enterprise 모델이 주 수익원
