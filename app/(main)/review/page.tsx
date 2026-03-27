@@ -43,6 +43,7 @@ import WrongTab from '@/components/review/tabs/WrongTab';
 import BookmarkTab from '@/components/review/tabs/BookmarkTab';
 import CustomTab from '@/components/review/tabs/CustomTab';
 import BookmarkDetailSheet from '@/components/review/BookmarkDetailSheet';
+import BottomSheet from '@/components/common/BottomSheet';
 import { PROFESSOR_QUIZ_TYPES } from '@/app/(main)/quiz/quizPageParts';
 
 /* ============================================================
@@ -261,6 +262,7 @@ function ReviewPageContent() {
 
   // 퀴즈 업데이트 감지 훅 (상세 정보 포함)
   const {
+    updatedQuizzes: detailedUpdatedQuizzes,
     checkQuizUpdate,
     refresh: refreshQuizUpdate,
   } = useQuizUpdate();
@@ -1257,6 +1259,10 @@ function ReviewPageContent() {
             onReviewWrongOnly={(quizId) => openReviewDetail('library', quizId, 'wrongOnly')}
             onPublish={(quizId) => setPublishConfirmQuizId(quizId)}
             currentUserId={user?.uid}
+            updatedQuizIds={detailedUpdatedQuizzes}
+            onUpdateClick={(quizId, quizTitle) => {
+              setUpdateModalInfo({ quizId, quizTitle, filterType: 'library' });
+            }}
           />
         )}
 
@@ -1425,102 +1431,94 @@ function ReviewPageContent() {
         )}
       </AnimatePresence>
 
-      {/* 퀴즈 업데이트 확인 모달 */}
-      {updateModalInfo && !detailedUpdateInfo && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
-          onClick={() => !updateModalLoading && setUpdateModalInfo(null)}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.88 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.88 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-[280px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4"
-          >
-            {/* 아이콘 */}
-            <div className="flex justify-center mb-3">
-              <div className="w-9 h-9 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
-                <svg
-                  className="w-4 h-4 text-[#1A1A1A]"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                  />
-                </svg>
-              </div>
-            </div>
-
-            <h3 className="text-center font-bold text-sm text-[#1A1A1A] mb-2">
-              수정된 문제를 풀까요?
-            </h3>
-            <p className="text-xs text-[#5C5C5C] mb-1">
-              - 수정된 문제만 다시 풀 수 있습니다.
-            </p>
-            <p className="text-xs text-[#5C5C5C] mb-1">
-              - 새로운 답변이 복습 기록에 반영됩니다.
-            </p>
-            <p className="text-xs text-[#5C5C5C] mb-4">
-              - 정답 여부와 복습 횟수가 업데이트됩니다.
-            </p>
-
-            <div className="flex gap-2">
-              <button
-                onClick={() => setUpdateModalInfo(null)}
-                disabled={updateModalLoading}
-                className="flex-1 py-1.5 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors disabled:opacity-50"
+      {/* 퀴즈 업데이트 확인 바텀시트 */}
+      <BottomSheet
+        isOpen={!!updateModalInfo && !detailedUpdateInfo}
+        onClose={() => !updateModalLoading && setUpdateModalInfo(null)}
+        height="auto"
+      >
+        <div className="px-4 pb-4">
+          {/* 아이콘 */}
+          <div className="flex justify-center mb-3">
+            <div className="w-9 h-9 flex items-center justify-center border-2 border-[#1A1A1A] bg-[#EDEAE4]">
+              <svg
+                className="w-4 h-4 text-[#1A1A1A]"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
               >
-                취소
-              </button>
-              <button
-                onClick={async () => {
-                  try {
-                    setUpdateModalLoading(true);
-                    const info = await checkQuizUpdate(updateModalInfo.quizId);
-                    if (info && info.hasUpdate && info.updatedQuestions.length > 0) {
-                      const quizDoc = await getDoc(doc(db, 'quizzes', updateModalInfo.quizId));
-                      if (quizDoc.exists()) {
-                        const quizData = quizDoc.data();
-                        setTotalQuestionCount(quizData.questions?.length || 0);
-                      }
-                      setDetailedUpdateInfo(info);
-                    } else {
-                      alert('이미 최신 상태입니다.');
-                      setUpdateModalInfo(null);
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+            </div>
+          </div>
+
+          <h3 className="text-center font-bold text-sm text-[#1A1A1A] mb-2">
+            수정된 문제를 풀까요?
+          </h3>
+          <p className="text-xs text-[#5C5C5C] mb-1">
+            - 수정된 문제만 다시 풀 수 있습니다.
+          </p>
+          <p className="text-xs text-[#5C5C5C] mb-1">
+            - 최신 해설이 복습 기록에 반영됩니다.
+          </p>
+          <p className="text-xs text-[#5C5C5C] mb-4">
+            - 기존 점수는 변경되지 않습니다.
+          </p>
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => setUpdateModalInfo(null)}
+              disabled={updateModalLoading}
+              className="flex-1 py-1.5 text-xs font-bold border-2 border-[#1A1A1A] text-[#1A1A1A] bg-[#F5F0E8] hover:bg-[#EDEAE4] transition-colors disabled:opacity-50"
+            >
+              취소
+            </button>
+            <button
+              onClick={async () => {
+                if (!updateModalInfo) return;
+                try {
+                  setUpdateModalLoading(true);
+                  const info = await checkQuizUpdate(updateModalInfo.quizId);
+                  if (info && info.hasUpdate && info.updatedQuestions.length > 0) {
+                    const quizDoc = await getDoc(doc(db, 'quizzes', updateModalInfo.quizId));
+                    if (quizDoc.exists()) {
+                      const quizData = quizDoc.data();
+                      setTotalQuestionCount(quizData.questions?.length || 0);
                     }
-                  } catch (err) {
-                    alert('업데이트 정보를 불러오는데 실패했습니다.');
-                  } finally {
-                    setUpdateModalLoading(false);
+                    setDetailedUpdateInfo(info);
+                  } else {
+                    alert('이미 최신 상태입니다.');
+                    setUpdateModalInfo(null);
                   }
-                }}
-                disabled={updateModalLoading}
-                className="flex-1 py-1.5 text-xs font-bold border-2 border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#333] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {updateModalLoading ? (
-                  <>
-                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    로딩...
-                  </>
-                ) : (
-                  '풀기'
-                )}
-              </button>
-            </div>
-          </motion.div>
+                } catch (err) {
+                  alert('업데이트 정보를 불러오는데 실패했습니다.');
+                } finally {
+                  setUpdateModalLoading(false);
+                }
+              }}
+              disabled={updateModalLoading}
+              className="flex-1 py-1.5 text-xs font-bold border-2 border-[#1A1A1A] bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#333] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {updateModalLoading ? (
+                <>
+                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  로딩...
+                </>
+              ) : (
+                '풀기'
+              )}
+            </button>
+          </div>
         </div>
-      )}
+      </BottomSheet>
 
       {/* 수정된 문제 풀기 모달 (UpdateQuizModal) */}
       {detailedUpdateInfo && (
@@ -1532,7 +1530,8 @@ function ReviewPageContent() {
           }}
           updateInfo={detailedUpdateInfo}
           totalQuestionCount={totalQuestionCount}
-          onComplete={(newScore, newCorrectCount) => {
+          practiceOnly
+          onComplete={() => {
             // 완료 후 새로고침
             refresh();
             refreshQuizUpdate();

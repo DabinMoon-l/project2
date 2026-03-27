@@ -42,6 +42,8 @@ interface UpdateQuizModalProps {
   updateInfo: QuizUpdateInfo;
   totalQuestionCount: number;
   onComplete: (newScore: number, newCorrectCount: number) => void;
+  /** true면 점수 저장 없이 연습만 (reviews 내용 갱신 + 뱃지 제거만) */
+  practiceOnly?: boolean;
 }
 
 // ㄱㄴㄷ 라벨
@@ -60,6 +62,7 @@ export default function UpdateQuizModal({
   updateInfo,
   totalQuestionCount,
   onComplete,
+  practiceOnly = false,
 }: UpdateQuizModalProps) {
   const { user } = useAuth();
   const { userCourseId, userClassId } = useCourse();
@@ -320,6 +323,63 @@ export default function UpdateQuizModal({
         });
       }
 
+      // practiceOnly 모드: 점수 저장 없이 연습만, reviews 내용 갱신 + 뱃지 제거
+      if (practiceOnly) {
+        // reviews 내용만 최신화 + quizUpdatedAt 갱신
+        const reviewsQuery = query(
+          collection(db, 'reviews'),
+          where('userId', '==', user.uid),
+          where('quizId', '==', updateInfo.quizId)
+        );
+        const reviewsSnapshot = await getDocs(reviewsQuery);
+        const updatedQuestionIds = new Set(questions.map((q) => q.questionId));
+
+        for (const reviewDoc of reviewsSnapshot.docs) {
+          const reviewData = reviewDoc.data();
+          const questionId = reviewData.questionId;
+
+          if (updatedQuestionIds.has(questionId)) {
+            // 수정된 문제: 내용(문제/선지/해설) 최신화 + quizUpdatedAt
+            const updatedQ = questions.find((q) => q.questionId === questionId);
+            if (updatedQ) {
+              await updateDoc(doc(db, 'reviews', reviewDoc.id), {
+                question: updatedQ.questionText,
+                options: updatedQ.choices || [],
+                correctAnswer: updatedQ.correctAnswer,
+                explanation: updatedQ.explanation || '',
+                quizUpdatedAt: serverTimestamp(),
+              });
+            }
+          } else {
+            // 수정 안 된 문제: quizUpdatedAt만 갱신 (뱃지 제거용)
+            await updateDoc(doc(db, 'reviews', reviewDoc.id), {
+              quizUpdatedAt: serverTimestamp(),
+            });
+          }
+        }
+
+        // 원본 quizResult의 answeredAt만 갱신 (useQuizUpdate 뱃지 제거용)
+        const updatedScores: Record<string, any> = {};
+        for (const q of questions) {
+          if (originalScores[q.questionId]) {
+            updatedScores[`questionScores.${q.questionId}.answeredAt`] = serverTimestamp();
+          }
+        }
+        if (Object.keys(updatedScores).length > 0) {
+          await updateDoc(doc(db, 'quizResults', updateInfo.originalResultId), updatedScores);
+        }
+
+        // 연습 결과 표시 (점수 변경 없음)
+        const practiceCorrect = questionResults.filter((r) => r.isCorrect).length;
+        setResultData({
+          newCorrectCount: practiceCorrect,
+          newScore: Math.round((practiceCorrect / questions.length) * 100),
+          questionResults,
+        });
+        setShowResult(true);
+        return;
+      }
+
       // 2. 기존 점수와 병합
       const mergedScores: Record<string, { isCorrect: boolean; userAnswer: string; correctAnswer?: string; answeredAt: FieldValue | Timestamp }> = { ...originalScores };
 
@@ -456,7 +516,7 @@ export default function UpdateQuizModal({
     } finally {
       setIsSubmitting(false);
     }
-  }, [user, userAnswers, questions, updateInfo, totalQuestionCount, userCourseId, userClassId]);
+  }, [user, userAnswers, questions, updateInfo, totalQuestionCount, userCourseId, userClassId, practiceOnly]);
 
   /**
    * 완료
@@ -474,7 +534,7 @@ export default function UpdateQuizModal({
   if (showResult && resultData) {
     const correctCount = resultData.questionResults.filter((r) => r.isCorrect).length;
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3" style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}>
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -624,6 +684,7 @@ export default function UpdateQuizModal({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+              style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
             >
               <motion.div
                 initial={{ scale: 0.9 }}

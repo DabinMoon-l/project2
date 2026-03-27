@@ -30,6 +30,8 @@ function LibraryQuizCard({
   isSelected = false,
   isProfessorView = false,
   currentUserId,
+  hasUpdate = false,
+  onUpdateClick,
 }: {
   quiz: {
     id: string;
@@ -55,6 +57,10 @@ function LibraryQuizCard({
   isProfessorView?: boolean;
   /** 현재 로그인한 사용자 ID (교수 문제 판별용) */
   currentUserId?: string;
+  /** 수정된 문제가 있는지 */
+  hasUpdate?: boolean;
+  /** 수정 뱃지 클릭 핸들러 */
+  onUpdateClick?: () => void;
 }) {
   const [showReviewMenu, setShowReviewMenu] = useState(false);
   const reviewMenuRef = useRef<HTMLDivElement>(null);
@@ -150,6 +156,19 @@ function LibraryQuizCard({
           : 'border-[#999]'
       }`}
     >
+      {/* 수정된 문제 뱃지 */}
+      {hasUpdate && !isSelectMode && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onUpdateClick?.();
+          }}
+          className="absolute -top-1 -right-1 z-30 w-5 h-5 bg-[#F5C518] rounded-full flex items-center justify-center border-2 border-[#1A1A1A] hover:scale-110 transition-transform"
+        >
+          <span className="text-[#1A1A1A] font-bold text-xs">!</span>
+        </button>
+      )}
+
       {/* 신문 배경 텍스트 */}
       <div className="absolute inset-0 p-2 overflow-hidden pointer-events-none">
         <p className="text-[5px] text-[#E8E8E8] leading-tight break-words">
