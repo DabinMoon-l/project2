@@ -212,7 +212,10 @@ ${questionsText}
           temperature: 0.3,
           topK: 40,
           topP: 0.95,
-          maxOutputTokens: 4096,
+          maxOutputTokens: 8192 + 8192,
+          thinkingConfig: {
+            thinkingBudget: 8192,
+          },
         },
       }),
     }
@@ -332,7 +335,11 @@ ${questionsText.slice(0, 8000)}
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 8192 },
+        generationConfig: {
+          temperature: 0.2,
+          maxOutputTokens: 8192 + 8192,
+          thinkingConfig: { thinkingBudget: 8192 },
+        },
       }),
     }
   );
