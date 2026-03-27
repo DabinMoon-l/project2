@@ -52,13 +52,13 @@ export default function ReviewPublishModal({ quizId, onClose, onConfirm }: Props
         isWide ? (
           <>
             <motion.div key="pub-overlay" className="fixed inset-0 z-50" style={{ left: 'var(--modal-left, 240px)', right: 'var(--modal-right, 0px)' }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
-            <motion.div key="pub-sheet" className="fixed bottom-0 z-[51] bg-[#F5F0E8] rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.15)] border-t-2 border-x-2 border-[#1A1A1A] p-4" style={{ left: 'var(--modal-left, 240px)', right: 'var(--modal-right, 0px)' }} initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', stiffness: 400, damping: 35 }} onClick={(e) => e.stopPropagation()}>
+            <motion.div key="pub-sheet" className="fixed z-[51] bg-[#F5F0E8] rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.15)] border-t-2 border-x-2 border-[#1A1A1A] p-4" style={{ left: 'var(--modal-left, 240px)', right: 'var(--modal-right, 0px)', bottom: 'var(--kb-offset, 0px)' }} initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', stiffness: 400, damping: 35 }} onClick={(e) => e.stopPropagation()}>
               <div className="flex justify-center -mt-2 mb-2"><div className="w-8 h-1 rounded-full bg-[#D4CFC4]" /></div>
               {modalContent}
             </motion.div>
           </>
         ) : (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" style={{ paddingBottom: 'var(--kb-offset, 0px)' }} onClick={onClose}>
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} onClick={(e) => e.stopPropagation()} className="w-[85%] max-w-[280px] bg-[#F5F0E8] border-2 border-[#1A1A1A] p-4 rounded-2xl">
               {modalContent}
             </motion.div>

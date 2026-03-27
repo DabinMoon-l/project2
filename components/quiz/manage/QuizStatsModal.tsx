@@ -211,20 +211,12 @@ export default function QuizStatsModal({
           return;
         }
 
-        // 결과에서 classId 추출 (없으면 배치로 users 컬렉션에서 가져오기)
-        const resultsNeedingClass: { data: Record<string, any> }[] = [];
+        // 항상 users 컬렉션에서 반 정보 조회 (결과의 classId는 퀴즈 문서에서 온 것일 수 있어 신뢰 불가)
         const resultsWithClassDirect: ResultWithClass[] = [];
+        const resultsNeedingClass: { data: Record<string, any> }[] = [];
 
         dedupedResults.forEach(({ data }) => {
-          if (data.classId) {
-            resultsWithClassDirect.push({
-              userId: data.userId,
-              classType: data.classId as 'A' | 'B' | 'C' | 'D',
-              score: data.score || 0,
-              questionScores: data.questionScores || {},
-              createdAt: data.createdAt,
-            });
-          } else if (userClassCache.has(data.userId)) {
+          if (userClassCache.has(data.userId)) {
             resultsWithClassDirect.push({
               userId: data.userId,
               classType: userClassCache.get(data.userId) || null,
@@ -237,7 +229,7 @@ export default function QuizStatsModal({
           }
         });
 
-        // classId가 없는 결과들에 대해 배치로 조회 (N+1 → 30개씩 배치 쿼리)
+        // 캐시에 없는 유저들 배치로 조회 (30개씩)
         const classNeededUserIds = [...new Set(resultsNeedingClass.map((r) => r.data.userId))];
 
         if (classNeededUserIds.length > 0) {

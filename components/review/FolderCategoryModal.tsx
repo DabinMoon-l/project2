@@ -173,8 +173,8 @@ export default function FolderCategoryModal({
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
               transition={{ type: 'spring', stiffness: 400, damping: 35 }}
-              className="fixed bottom-0 z-50 bg-[#F5F0E8] border-t-2 border-x-2 border-[#1A1A1A] rounded-t-2xl max-h-[80vh] overflow-hidden flex flex-col"
-              style={{ left: 'var(--modal-left, 240px)', right: 'var(--modal-right, 0px)' }}
+              className="fixed z-50 bg-[#F5F0E8] border-t-2 border-x-2 border-[#1A1A1A] rounded-t-2xl max-h-[80vh] overflow-hidden flex flex-col"
+              style={{ left: 'var(--modal-left, 240px)', right: 'var(--modal-right, 0px)', bottom: 'var(--kb-offset, 0px)' }}
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex justify-center pt-2 pb-1 flex-shrink-0">
@@ -197,7 +197,7 @@ export default function FolderCategoryModal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-50 flex items-center justify-center p-3"
-          style={{ position: 'fixed', touchAction: 'none', left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
+          style={{ position: 'fixed', touchAction: 'none', left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)', paddingBottom: 'var(--kb-offset, 0px)' }}
           onClick={handleClose}
         >
           <div className="absolute inset-0 bg-black/50" />

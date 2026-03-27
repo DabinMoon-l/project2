@@ -133,14 +133,15 @@ export function GlassModal({ children, onClose }: { children: React.ReactNode; o
         className="absolute inset-0 z-[60]"
         onClick={onClose}
       />
-      {/* 바텀시트 — 부모 기준 absolute */}
+      {/* 바텀시트 — 부모 기준 absolute, 키보드 위로 상승 */}
       <motion.div
         initial={{ y: '100%' }}
         animate={{ y: 0 }}
         exit={{ y: '100%' }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
         onClick={(e) => e.stopPropagation()}
-        className="absolute bottom-0 left-0 right-0 z-[60] rounded-t-2xl overflow-hidden"
+        className="absolute left-0 right-0 z-[60] rounded-t-2xl overflow-hidden"
+        style={{ bottom: 'var(--kb-offset, 0px)' }}
       >
         <div className="absolute inset-0 rounded-t-2xl overflow-hidden">
           <Image src="/images/home-bg.jpg" alt="" fill className="object-cover" />

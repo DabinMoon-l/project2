@@ -64,8 +64,8 @@ export default function WideBottomSheet({
           {/* 바텀시트 */}
           <motion.div
             key="wbs-sheet"
-            className="fixed bottom-0 bg-[#F5F0E8] rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.15)] overflow-hidden border-t-2 border-x-2 border-[#1A1A1A]"
-            style={{ zIndex: zIndex + 1, ...panelStyle }}
+            className="fixed bg-[#F5F0E8] rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.15)] overflow-hidden border-t-2 border-x-2 border-[#1A1A1A]"
+            style={{ zIndex: zIndex + 1, bottom: 'var(--kb-offset, 0px)', ...panelStyle }}
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
