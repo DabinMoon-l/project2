@@ -206,6 +206,11 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
     if (!url) return;
     if (pendingImages.length + linkedImageUrls.length >= 5) return;
     if (linkedImageUrls.includes(url)) return;
+    // 이미지 URL인지 검증 (확장자 또는 알려진 이미지 호스트)
+    if (!IMAGE_URL_PATTERN.test(url) && !KNOWN_IMAGE_HOST_PATTERN.test(url)) {
+      alert('이미지 URL만 추가할 수 있습니다.\n(jpg, png, gif, webp 등)');
+      return;
+    }
     setLinkedImageUrls(prev => [...prev, url]);
     setUrlInputValue('');
     // 입력칸에 포커스 유지
