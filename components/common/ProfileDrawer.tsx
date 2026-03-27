@@ -537,6 +537,90 @@ export default function ProfileDrawer({ isOpen, onClose, isPanelMode }: ProfileD
             Support
           </h3>
           <div className="space-y-3">
+            {/* 문의하기 (관리자 제외) */}
+            {!isAdmin && (
+              <button
+                onClick={() => setShowInquiryModal(true)}
+                className="w-full flex items-center justify-between py-2.5"
+              >
+                <div className="text-left">
+                  <span className="text-sm text-white/80">문의하기</span>
+                  <p className="text-xs text-white/40">관리자에게 문의</p>
+                </div>
+                <svg className="w-4 h-4 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            )}
+
+            {/* 관리자: 문의 확인 */}
+            {isAdmin && (
+              <>
+                <button
+                  onClick={() => setShowInquiryList(prev => !prev)}
+                  className="w-full flex items-center justify-between py-2.5"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-white/80">문의 확인</span>
+                    {unreadCount > 0 && (
+                      <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500/80 text-white min-w-[18px] text-center">
+                        {unreadCount}
+                      </span>
+                    )}
+                  </div>
+                  <svg
+                    className={`w-4 h-4 text-white/30 transition-transform ${showInquiryList ? 'rotate-90' : ''}`}
+                    fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+
+                <AnimatePresence>
+                  {showInquiryList && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="space-y-2 pb-2 max-h-[300px] overflow-y-auto">
+                        {inquiries.length === 0 ? (
+                          <p className="text-xs text-white/30 text-center py-4">문의가 없습니다</p>
+                        ) : (
+                          inquiries.map((inq) => (
+                            <div
+                              key={inq.id}
+                              className={`p-2.5 rounded-xl border transition-colors ${
+                                inq.isRead
+                                  ? 'bg-white/5 border-white/5'
+                                  : 'bg-white/10 border-white/15'
+                              }`}
+                              onClick={() => !inq.isRead && handleMarkRead(inq.id)}
+                            >
+                              <div className="flex items-center gap-2 mb-1">
+                                {!inq.isRead && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />
+                                )}
+                                <span className="text-[11px] text-white/30">
+                                  {inq.createdAt?.toDate?.().toLocaleDateString('ko-KR', {
+                                    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                                  }) || ''}
+                                </span>
+                              </div>
+                              <InquiryMessageItem message={inq.message} />
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </>
+            )}
+
+            <div className="border-t border-white/5 my-1" />
+
             {/* 캐시 초기화 */}
             <button
               onClick={() => setShowCacheConfirm(true)}
@@ -970,6 +1054,47 @@ export default function ProfileDrawer({ isOpen, onClose, isPanelMode }: ProfileD
                 초기화
               </button>
             </div>
+          </GlassModal>
+        )}
+      </AnimatePresence>
+
+      {/* 문의하기 모달 */}
+      <AnimatePresence>
+        {showInquiryModal && (
+          <GlassModal onClose={() => { setShowInquiryModal(false); setInquirySent(false); setInquiryMessage(''); }}>
+            <h3 className="text-base font-bold text-white mb-3">문의하기</h3>
+            {inquirySent ? (
+              <div className="py-6 text-center">
+                <p className="text-sm text-green-300">문의가 전송되었습니다!</p>
+              </div>
+            ) : (
+              <>
+                <textarea
+                  value={inquiryMessage}
+                  onChange={(e) => setInquiryMessage(e.target.value)}
+                  placeholder="문의 내용을 입력하세요"
+                  rows={4}
+                  maxLength={500}
+                  className="w-full px-3 py-2.5 rounded-xl outline-none text-sm bg-white/10 text-white placeholder:text-white/40 border border-white/15 resize-none"
+                />
+                <p className="text-[11px] text-white/30 text-right mt-1">{inquiryMessage.length}/500</p>
+                <div className="flex gap-3 mt-3">
+                  <button
+                    onClick={() => { setShowInquiryModal(false); setInquiryMessage(''); }}
+                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/15 text-white hover:bg-white/20 transition-colors"
+                  >
+                    취소
+                  </button>
+                  <button
+                    onClick={handleSendInquiry}
+                    disabled={sendingInquiry || !inquiryMessage.trim()}
+                    className="flex-1 py-2 rounded-xl text-sm font-medium bg-white/30 text-white hover:bg-white/40 transition-colors disabled:opacity-50"
+                  >
+                    {sendingInquiry ? '전송 중...' : '전송'}
+                  </button>
+                </div>
+              </>
+            )}
           </GlassModal>
         )}
       </AnimatePresence>

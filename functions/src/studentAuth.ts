@@ -372,8 +372,15 @@ export const resetStudentPassword = onCall(
       newPassword: string;
     };
 
-    // 교수님 권한 + 과목 소유권 확인
-    await verifyProfessorAccess(request.auth.uid, courseId);
+    // 교수님 또는 관리자 학생(25010423) 권한 확인
+    const ADMIN_STUDENT_ID = "25010423";
+    const callerDoc = await db.collection("users").doc(request.auth.uid).get();
+    const callerData = callerDoc.data();
+    const isAdminStudent = callerData?.studentId === ADMIN_STUDENT_ID;
+
+    if (!isAdminStudent) {
+      await verifyProfessorAccess(request.auth.uid, courseId);
+    }
 
     if (!studentId || !courseId || !newPassword) {
       throw new HttpsError("invalid-argument", "학번, 과목, 새 비밀번호가 필요합니다.");
