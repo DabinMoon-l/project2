@@ -1150,10 +1150,11 @@ export default function ProfileDrawer({ isOpen, onClose, isPanelMode }: ProfileD
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            className="fixed bottom-0 z-50 max-h-[75vh] rounded-t-2xl overflow-hidden"
+            className="fixed z-50 max-h-[75vh] rounded-t-2xl overflow-hidden"
+            data-profile-drawer
             style={isWide
-              ? { left: '240px', right: 'calc(50% - 120px)' }
-              : { left: 'var(--home-sheet-left, 0px)', right: '0' }
+              ? { left: '240px', right: 'calc(50% - 120px)', bottom: 'var(--kb-offset, 0px)' }
+              : { left: 'var(--home-sheet-left, 0px)', right: '0', bottom: 'var(--kb-offset, 0px)' }
             }
           >
             {/* 글래스 배경 레이어 — pointer-events-none으로 클릭 관통 */}

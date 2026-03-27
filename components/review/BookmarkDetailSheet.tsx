@@ -74,8 +74,8 @@ export default function BookmarkDetailSheet({ quiz, isWide, onClose, onAction }:
           animate={{ y: 0 }}
           exit={{ y: '100%' }}
           transition={{ type: 'spring', stiffness: 400, damping: 35 }}
-          className="fixed bottom-0 z-[61] bg-[#F5F0E8] rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.15)] border-t-2 border-x-2 border-[#1A1A1A]"
-          style={{ left: 'var(--modal-left, 240px)', right: 'var(--modal-right, 0px)' }}
+          className="fixed z-[61] bg-[#F5F0E8] rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.15)] border-t-2 border-x-2 border-[#1A1A1A]"
+          style={{ left: 'var(--modal-left, 240px)', right: 'var(--modal-right, 0px)', bottom: 'var(--kb-offset, 0px)' }}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex justify-center pt-2 pb-1"><div className="w-8 h-1 rounded-full bg-[#D4CFC4]" /></div>

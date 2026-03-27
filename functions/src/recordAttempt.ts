@@ -111,15 +111,17 @@ export const recordAttempt = onCall(
       throw e;
     }
 
-    // ── ②-b attemptNo + 퀴즈 로드 + 이전 완료 정보 — 병렬 조회 ──
-    const [prevAttempts, quizDoc] = await Promise.all([
+    // ── ②-b attemptNo + 퀴즈 로드 + 유저 반 정보 — 병렬 조회 ──
+    const [prevAttempts, quizDoc, userDoc] = await Promise.all([
       db.collection("quizResults")
         .where("userId", "==", userId)
         .where("quizId", "==", quizId)
         .count()
         .get(),
       db.doc(`quizzes/${quizId}`).get(),
+      db.doc(`users/${userId}`).get(),
     ]);
+    const userClassId = userDoc.exists ? userDoc.data()?.classId || null : null;
     const attemptNo = prevAttempts.data().count + 1;
 
     // ── ③ Idempotency 검사 (락 통과 후에도 2차 확인) ──
@@ -211,7 +213,7 @@ export const recordAttempt = onCall(
       reviewsGenerated: false,
       isUpdate: attemptNo > 1,
       courseId: quizData.courseId || null,
-      classId: quizData.classId || null,
+      classId: userClassId,
       createdAt: FieldValue.serverTimestamp(),
     });
 

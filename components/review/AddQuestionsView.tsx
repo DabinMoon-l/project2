@@ -213,8 +213,8 @@ export default function AddQuestionsView({
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="fixed bottom-0 right-0 z-50 bg-[#F5F0E8] border-t-2 border-[#1A1A1A] max-h-[70vh] flex flex-col"
-              style={{ left: 'var(--detail-panel-left, 0)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+              className="fixed right-0 z-50 bg-[#F5F0E8] border-t-2 border-[#1A1A1A] max-h-[70vh] flex flex-col"
+              style={{ left: 'var(--detail-panel-left, 0)', bottom: 'var(--kb-offset, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
             >
               {/* 바텀시트 헤더 */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-[#EDEAE4] flex-shrink-0">

@@ -72,8 +72,8 @@ export default function CreateFolderModal({
           animate={{ y: 0 }}
           exit={{ y: '100%' }}
           transition={{ type: 'spring', stiffness: 400, damping: 35 }}
-          className="fixed bottom-0 z-[51] bg-[#F5F0E8] rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.15)] border-t-2 border-x-2 border-[#1A1A1A] p-4"
-          style={{ left: 'var(--modal-left, 240px)', right: 'var(--modal-right, 0px)' }}
+          className="fixed z-[51] bg-[#F5F0E8] rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.15)] border-t-2 border-x-2 border-[#1A1A1A] p-4"
+          style={{ left: 'var(--modal-left, 240px)', right: 'var(--modal-right, 0px)', bottom: 'var(--kb-offset, 0px)' }}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex justify-center -mt-2 mb-2"><div className="w-8 h-1 rounded-full bg-[#D4CFC4]" /></div>
@@ -87,7 +87,7 @@ export default function CreateFolderModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      style={{ touchAction: 'none' }}
+      style={{ touchAction: 'none', paddingBottom: 'var(--kb-offset, 0px)' }}
       onClick={onClose}
     >
       <motion.div

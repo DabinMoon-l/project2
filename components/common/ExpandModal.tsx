@@ -89,8 +89,8 @@ export default function ExpandModal({
             {/* 바텀시트 — 패널 전체 너비 */}
             <motion.div
               key="expand-content-wide"
-              className="fixed bottom-0 bg-[#F5F0E8] rounded-t-2xl border-t-2 border-x-2 border-[#1A1A1A] shadow-[0_-4px_24px_rgba(0,0,0,0.15)] overflow-hidden"
-              style={{ zIndex: zIndex + 1, left: 'var(--modal-left, 240px)', right: 'var(--modal-right, 0px)' }}
+              className="fixed bg-[#F5F0E8] rounded-t-2xl border-t-2 border-x-2 border-[#1A1A1A] shadow-[0_-4px_24px_rgba(0,0,0,0.15)] overflow-hidden"
+              style={{ zIndex: zIndex + 1, left: 'var(--modal-left, 240px)', right: 'var(--modal-right, 0px)', bottom: 'var(--kb-offset, 0px)' }}
               onClick={(e) => e.stopPropagation()}
               initial={{ y: '100%' }}
               animate={{ y: 0 }}

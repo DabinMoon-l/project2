@@ -195,7 +195,7 @@ img {
   }
 }
 
-/* Auth 콘텐츠 — fixed로 전체 화면 + 키보드 스크롤 방지 */
+/* Auth 콘텐츠 — fixed로 전체 화면 + 키보드 열림 시 스크롤 허용 */
 .auth-content {
   position: fixed;
   top: 0;
@@ -212,8 +212,10 @@ img {
   justify-content: center;
   padding: env(safe-area-inset-top, 0px) 0
     calc(env(safe-area-inset-bottom, 0px) + var(--kb-offset, 0px));
-  overflow: hidden;
-  overscroll-behavior: none;
-  -webkit-overflow-scrolling: auto;
+  /* 키보드 열림 시 폼이 잘리지 않도록 스크롤 허용 */
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 

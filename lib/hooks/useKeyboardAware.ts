@@ -179,11 +179,11 @@ export function useScrollDismissKeyboard() {
  * 레이아웃에서 한 번만 호출하면, 모든 컴포넌트가
  * var(--kb-offset, 0px)로 키보드 높이에 반응할 수 있습니다.
  *
- * iOS PWA 가로모드 핵심 수정:
- * 1. innerHeight - vv.height 로 키보드 높이 계산 (vv.offsetTop 제거 → scroll 무관)
- * 2. --app-height: 키보드 열림 시 vv.height로 축소 → 스크롤 컨테이너가 키보드 위에만 존재
- * 3. window scroll 방지: iOS가 typing 중 자동으로 window를 스크롤하는 것을 차단
- * 4. focusin 시 scrollIntoView: 키보드 열린 후 입력 요소가 보이도록 보정
+ * 키보드 UX 원칙 (Claude/ChatGPT 패턴):
+ * 1. 키보드 열림 → --kb-offset으로 fixed 요소가 부드럽게 상승
+ * 2. 입력 요소가 자연스럽게 보이도록 scrollIntoView 허용
+ * 3. 키보드 열린 상태에서도 자유로운 스크롤 가능
+ * 4. 키보드 닫힘 → scroll 위치 복원, --kb-offset 0으로 복귀
  */
 export function useKeyboardCSSVariable() {
   const rafRef = useRef<number>(0);
@@ -195,6 +195,7 @@ export function useKeyboardCSSVariable() {
     const vv = window.visualViewport;
     if (!vv) return;
 
+    // 키보드 닫힘 시에만 window scroll 리셋 (열려있는 동안은 자연 스크롤 허용)
     const resetScroll = () => {
       if (window.scrollY !== 0 || document.documentElement.scrollTop !== 0) {
         window.scrollTo(0, 0);
@@ -206,9 +207,6 @@ export function useKeyboardCSSVariable() {
     const update = () => {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = requestAnimationFrame(() => {
-        // iOS가 window를 자동 스크롤했으면 먼저 리셋 (정확한 계산 보장)
-        if (isOpenRef.current) resetScroll();
-
         // 키보드 높이 = 전체 화면 - 보이는 영역 (vv.offsetTop 제거 → scroll 위치 무관)
         const kbHeight = Math.max(0, window.innerHeight - vv.height);
         const wasOpen = isOpenRef.current;
@@ -224,17 +222,12 @@ export function useKeyboardCSSVariable() {
           isOpenRef.current ? `${vv.height}px` : '100dvh'
         );
 
-        // 키보드 닫힘 직후 window scroll 리셋
+        // 키보드 닫힘 직후 window scroll 리셋 (원래 화면 위치 복원)
         if (wasOpen && !isOpenRef.current) resetScroll();
       });
     };
 
-    // iOS가 typing 중 window를 자동 스크롤하는 것을 즉시 차단
-    const handleWindowScroll = () => {
-      if (isOpenRef.current) resetScroll();
-    };
-
-    // 포커스된 입력 요소를 스크롤 컨테이너 내에서 보이도록 조정
+    // 포커스된 입력 요소를 스크롤 컨테이너 내에서 보이도록 부드럽게 조정
     const handleFocusIn = (e: FocusEvent) => {
       const target = e.target;
       if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return;
@@ -242,21 +235,19 @@ export function useKeyboardCSSVariable() {
       // 키보드 열림 + 레이아웃 갱신 대기 후 scrollIntoView
       setTimeout(() => {
         if (!isOpenRef.current) return;
-        target.scrollIntoView({ block: 'nearest' });
-        // scrollIntoView가 window를 스크롤했을 수 있으므로 리셋
-        resetScroll();
+        // 부드러운 스크롤로 입력 요소를 뷰포트 안에 배치
+        // window scroll 리셋 하지 않음 → 입력 요소가 보이는 상태 유지
+        target.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       }, 300);
     };
 
     vv.addEventListener('resize', update);
     vv.addEventListener('scroll', update);
-    window.addEventListener('scroll', handleWindowScroll, { passive: true });
     document.addEventListener('focusin', handleFocusIn);
 
     return () => {
       vv.removeEventListener('resize', update);
       vv.removeEventListener('scroll', update);
-      window.removeEventListener('scroll', handleWindowScroll);
       document.removeEventListener('focusin', handleFocusIn);
       cancelAnimationFrame(rafRef.current);
       document.documentElement.style.setProperty('--kb-offset', '0px');

@@ -206,8 +206,8 @@ export default function Modal({
               aria-modal="true"
               aria-labelledby={title ? 'modal-title' : undefined}
               tabIndex={-1}
-              className="fixed bottom-0 z-50 bg-[#F5F0E8] rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.15)] overflow-hidden focus:outline-none border-t-2 border-x-2 border-[#1A1A1A]"
-              style={{ left: 'var(--modal-left, 240px)', right: 'var(--modal-right, 0px)' }}
+              className="fixed z-50 bg-[#F5F0E8] rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.15)] overflow-hidden focus:outline-none border-t-2 border-x-2 border-[#1A1A1A]"
+              style={{ left: 'var(--modal-left, 240px)', right: 'var(--modal-right, 0px)', bottom: 'var(--kb-offset, 0px)' }}
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex justify-center pt-2 pb-1">
@@ -238,7 +238,12 @@ export default function Modal({
       {isOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
+          style={{
+            left: 'var(--modal-left, 0px)',
+            right: 'var(--modal-right, 0px)',
+            // 키보드 열림 시 모달을 위로 밀어 입력 필드가 키보드 위에 보이도록
+            paddingBottom: 'var(--kb-offset, 0px)',
+          }}
         >
           {/* 백드롭 */}
           <motion.div
