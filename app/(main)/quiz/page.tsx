@@ -1278,8 +1278,7 @@ function QuizListPageContent() {
             )}
           </AnimatePresence>
 
-          {isWide && (
-            <>
+          <>
         <AnimatePresence>
           {quizToDelete && (() => {
             const sr = deleteSourceRect;
@@ -1370,7 +1369,6 @@ function QuizListPageContent() {
                 )}
               </AnimatePresence>
             </>
-          )}
         </motion.div>
       )}
     </AnimatePresence>
