@@ -64,10 +64,9 @@ const BATCH_DELAY_MS = 3000;
 /** 보충 라운드 최대 횟수 */
 const MAX_SUPPLEMENT_ROUNDS = 3;
 
-/** 난이도 배분: easy 50% + medium 50% */
+/** 난이도 배분: medium 100% (easy 제거 — 선지 소거가 너무 쉬움) */
 const DIFFICULTY_DISTRIBUTION: { difficulty: TekkenDifficulty; ratio: number }[] = [
-  { difficulty: "easy", ratio: 0.5 },
-  { difficulty: "medium", ratio: 0.5 },
+  { difficulty: "medium", ratio: 1.0 },
 ];
 
 // ── 챕터별 풀 생성 ──
@@ -75,7 +74,7 @@ const DIFFICULTY_DISTRIBUTION: { difficulty: TekkenDifficulty; ratio: number }[]
 /**
  * 단일 챕터의 문제 풀 생성
  *
- * 75 easy + 75 medium = 150문제 / 챕터
+ * 150 medium = 150문제 / 챕터
  * 배치 15개씩, 3초 대기 → 약 90초/챕터
  */
 export async function replenishChapterPool(
@@ -331,8 +330,7 @@ export async function drawQuestionsFromPool(
   };
 
   const targets = [
-    { difficulty: "easy", count: 5 },
-    { difficulty: "medium", count: 5 },
+    { difficulty: "medium", count: 10 },
   ];
 
   const selected: typeof available = [];
