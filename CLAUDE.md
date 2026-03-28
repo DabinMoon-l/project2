@@ -19,7 +19,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | lib 모듈 | 118개 |
 | Cloud Functions (export) | 45개 |
 | Firestore 보안 규칙 | 856줄 |
-| 커밋 수 | 666+ |
+| 커밋 수 | 669+ |
 
 ## 기술 스택
 
@@ -258,6 +258,14 @@ AI 문제 생성 + 배틀 문제 풀 양쪽에서 동일한 Focus Guide 사용.
 
 Gemini Vision → jimp 이미지 크롭 → 크롭본만 전송, 복수정답 `[0, 2]`, 교차 챕터 함정
 
+### 선지 품질 규칙 (AI 프롬프트 내장)
+
+- **길이 균일**: 정답/오답 선지 길이를 비슷하게. 정답만 유독 길면 안 됨
+- **정보량 제한**: 각 선지에 팩트 최대 2개. "A이고 B이며 C이다" 식 3개 이상 나열 금지
+- **극단어 분산**: "반드시/유일한/항상" 같은 한정어를 오답에만 집중 배치 금지
+- **구조 균일**: 정답이 양면 비교면 오답도 양면 비교 구조
+- **포괄성 금지**: "N가지 모두 서술한 선지=정답" 패턴 금지
+
 ### 교수 스타일 학습
 
 `professorQuizAnalysis/{courseId}` — 발문패턴/오답전략/주제비중. `onDocumentWritten` + `isPublished === true` 트리거.
@@ -311,7 +319,7 @@ Gemini Vision → jimp 이미지 크롭 → 크롭본만 전송, 복수정답 `[
 
 **문제 풀 (사전 생성)**:
 - Cloud Run `tekkenPoolRefillScheduled` — 주 2회 월/목 03:00 KST (비용 절감, 기존 매일)
-- 과목당 전 챕터 × 150문제 (easy 75 + medium 75)
+- 과목당 전 챕터 × 150문제 (medium 100%, easy 제거 — 선지 소거가 너무 쉬움)
 - `generateBattleQuestions()` — Scope + FocusGuide + 교수 스타일 병렬 로드
 - 배틀 특성: 30초 제한 → 문제 1-2문장, 선지 최대 30자, 4지선다만 (OX 금지), 단순 정의 문제("~은 무엇인가?") 금지
 - `drawQuestionsFromPool()` — 학생 선택 챕터 기반 추출 (24시간 seen 중복 방지)
