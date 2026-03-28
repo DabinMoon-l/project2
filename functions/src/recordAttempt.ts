@@ -254,8 +254,8 @@ export const recordAttempt = onCall(
       ? (prevCompletionDoc.data()?.score || 0)
       : 0;
 
-    // ── ⑧ quizzes 문서 참여자/평균점수 + users quizStats — 비동기 병렬 (응답 차단 안 함) ──
-    // 분산 카운터 합산 + quizzes 문서 + users 갱신을 병렬 fire-and-forget
+    // ── ⑧ quizzes 문서 참여자/평균점수 + users quizStats — 병렬 실행 (반드시 완료 대기) ──
+    // CF 반환 전에 완료해야 averageScore/participantCount 누락 방지
     const quizStatsPromise = (async () => {
       try {
         const { count: participantCount, scoreSum: aggScoreSum } = await getShardedTotal(`quiz_agg/${quizId}`);
@@ -307,13 +307,13 @@ export const recordAttempt = onCall(
 
     // ── ⑨ reviews 생성은 generateReviewsOnResult 트리거에서 비동기 처리 ──
 
-    // 통계 업데이트: fire-and-forget (응답 차단하지 않음)
-    // quizResults + quiz_completions + quiz_agg 는 이미 기록됨 → 파생 통계는 비동기 OK
-    Promise.all([quizStatsPromise, userStatsPromise]).catch((e) =>
+    // 통계 업데이트: 반드시 완료 대기 (fire-and-forget → await 변경)
+    // CF가 반환 후 런타임 종료 시 미완료 Promise가 드랍되어 averageScore 누락 발생
+    await Promise.all([quizStatsPromise, userStatsPromise]).catch((e) =>
       console.warn("통계 업데이트 실패 (무시 가능):", e)
     );
 
-    // 제출 락 해제: fire-and-forget
+    // 제출 락 해제 (통계 완료 후)
     lockRef.delete().catch(() => {});
 
     console.log(

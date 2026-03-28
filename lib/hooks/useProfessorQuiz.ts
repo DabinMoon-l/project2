@@ -27,6 +27,7 @@ import {
   type DocumentData,
 } from '@/lib/repositories';
 import { computeQuizStatistics, type QuizResultData } from '@/lib/utils/quizStatsComputation';
+import { parseAverageScore } from '@/lib/utils/quizHelpers';
 
 // ============================================================
 // 타입 정의
@@ -216,7 +217,7 @@ const docToQuiz = (doc: DocumentSnapshot | QueryDocumentSnapshot): ProfessorQuiz
     creatorUid: data.creatorUid,
     creatorNickname: data.creatorNickname,
     participantCount: data.participantCount || 0,
-    averageScore: Math.min(data.averageScore || 0, 100),
+    averageScore: parseAverageScore(data),
     feedbackCount: data.feedbackCount || 0,
     tags: data.tags || [],
     pastYear: data.pastYear,

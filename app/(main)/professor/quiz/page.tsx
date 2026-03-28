@@ -23,7 +23,7 @@ const ProfessorLibraryTab = dynamic(() => import('@/components/professor/library
 import { useCustomFolders, type CustomFolderQuestion } from '@/lib/hooks/useCustomFolders';
 import type { FeedbackType } from '@/components/quiz/InstantFeedbackButton';
 import AutoVideo, { getDifficultyVideo } from '@/components/quiz/AutoVideo';
-import { NEWSPAPER_BG_TEXT } from '@/lib/utils/quizHelpers';
+import { NEWSPAPER_BG_TEXT, parseAverageScore } from '@/lib/utils/quizHelpers';
 import type { QuestionExportData as PdfQuestionData } from '@/lib/utils/questionPdfExport';
 import type { MixedExampleBlock } from '@/components/quiz/create/questionTypes';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
@@ -314,7 +314,7 @@ export default function ProfessorQuizListPage() {
       creatorUid: data.creatorUid || data.creatorId || '',
       creatorNickname: data.creatorNickname || '',
       participantCount: data.participantCount || 0,
-      averageScore: Math.min(data.averageScore || 0, 100),
+      averageScore: parseAverageScore(data),
       feedbackCount: data.feedbackCount || 0,
       tags: data.tags || [],
       pastYear: data.pastYear,
