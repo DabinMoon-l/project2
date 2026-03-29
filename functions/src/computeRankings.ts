@@ -112,7 +112,7 @@ async function computeRankingsForCourse(courseId: string) {
   // 테스트 계정 닉네임 (랭킹에서만 제외, 기능은 정상 사용)
   const testAccountNicknames: Record<string, string[]> = {
     biology: ["빠샤"],
-    microbiology: ["test"],
+    microbiology: ["test", "콩콩이"],
   };
   const excludedNicknames = testAccountNicknames[courseId] || [];
 
