@@ -454,33 +454,39 @@ async function computeRankingsForCourse(courseId: string) {
 }
 
 /**
- * 기존 rankings 문서에서 prevDayRanks 결정
- * - 날짜가 바뀌었으면 기존 전체(ALL) 랭킹을 prevDayRanks로 저장
- * - 같은 날이면 기존 prevDayRanks 유지
+ * 기존 rankings 문서에서 prevRanks 결정
+ * - 매 갱신(2시간)마다 직전 계산 결과의 순위를 prevDayRanks로 저장
+ * - 클라이언트에서 "직전 갱신 대비 순위 변동" 표시
  */
-function resolvePrevDayRanks(
+function resolvePrevRanks(
   existingData: FirebaseFirestore.DocumentData | null | undefined,
-  currentDayStartISO: string
 ): Record<string, number> {
   if (!existingData) return {};
 
-  if (existingData.dayStartISO && existingData.dayStartISO !== currentDayStartISO) {
-    // 날짜가 바뀜 → 기존 전체(ALL) 랭킹을 prevDayRanks로 저장
-    const oldUsers = (existingData.rankedUsers || []) as Array<{ id: string; rankScore?: number }>;
+  // 기존 rankedUsers의 이미 계산된 rank 필드를 그대로 사용
+  const oldUsers = (existingData.rankedUsers || []) as Array<{ id: string; rank?: number; rankScore?: number }>;
+  if (oldUsers.length === 0) return existingData.prevDayRanks || {};
+
+  const prevRanks: Record<string, number> = {};
+  for (const u of oldUsers) {
+    if (u.rank) {
+      prevRanks[u.id] = u.rank;
+    }
+  }
+
+  // rank 필드가 없는 구형 데이터 폴백: rankScore로 재계산
+  if (Object.keys(prevRanks).length === 0) {
     const sorted = [...oldUsers].sort((a, b) => (b.rankScore || 0) - (a.rankScore || 0));
-    const prevDayRanks: Record<string, number> = {};
     let rank = 1;
     sorted.forEach((u, i) => {
       if (i > 0 && (u.rankScore || 0) < (sorted[i - 1].rankScore || 0)) {
         rank = i + 1;
       }
-      prevDayRanks[u.id] = rank;
+      prevRanks[u.id] = rank;
     });
-    return prevDayRanks;
   }
 
-  // 같은 날 → 기존 prevDayRanks 유지
-  return existingData.prevDayRanks || {};
+  return prevRanks;
 }
 
 // ── Callable: 특정 courseId 강제 갱신 ──
@@ -510,13 +516,11 @@ export const refreshRankings = onCall(
 
     const existingData = existing.exists ? existing.data() ?? null : null;
     const result = await computeRankingsForCourse(courseId);
-    const currentDayStartISO = getTodayStartUTC().toISOString();
-    const prevDayRanks = resolvePrevDayRanks(existingData, currentDayStartISO);
+    const prevDayRanks = resolvePrevRanks(existingData);
 
     await db.collection("rankings").doc(courseId).set({
       ...result,
       prevDayRanks,
-      dayStartISO: currentDayStartISO,
       updatedAt: FieldValue.serverTimestamp(),
     });
 
@@ -567,18 +571,16 @@ export const computeRankingsScheduled = onSchedule(
 
     for (const courseId of uniqueIds) {
       try {
-        // 기존 문서에서 prevDayRanks 결정
+        // 기존 문서에서 prevRanks 결정 (직전 갱신 대비 순위 변동)
         const existingDoc = await db.collection("rankings").doc(courseId).get();
         const existingData = existingDoc.exists ? existingDoc.data() ?? null : null;
 
         const result = await computeRankingsForCourse(courseId);
-        const currentDayStartISO = getTodayStartUTC().toISOString();
-        const prevDayRanks = resolvePrevDayRanks(existingData, currentDayStartISO);
+        const prevDayRanks = resolvePrevRanks(existingData);
 
         await db.collection("rankings").doc(courseId).set({
           ...result,
           prevDayRanks,
-          dayStartISO: currentDayStartISO,
           updatedAt: FieldValue.serverTimestamp(),
         });
         console.log(`랭킹 계산 완료: ${courseId} (${result.totalStudents}명)`);
