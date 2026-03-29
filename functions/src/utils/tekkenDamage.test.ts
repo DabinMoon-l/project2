@@ -37,16 +37,16 @@ describe("배틀 상수", () => {
 // ============================================================
 
 describe("calcBaseDamage", () => {
-  it("공식: max(ceil(ATK² / (ATK + DEF) * 1.5), 2)", () => {
-    // ATK=10, DEF=5 → ceil(100/15 * 1.5) = ceil(10) = 10
-    expect(calcBaseDamage(10, 5)).toBe(10);
+  it("공식: max(ceil(ATK² / (ATK + DEF*3.5)), 2)", () => {
+    // ATK=10, DEF=5 → ceil(100/(10+17.5)) = ceil(3.64) = 4
+    expect(calcBaseDamage(10, 5)).toBe(4);
   });
 
-  it("ATK=5, DEF=5 → ceil(25/10 * 1.5) = ceil(3.75) = 4", () => {
-    expect(calcBaseDamage(5, 5)).toBe(4);
+  it("ATK=5, DEF=5 → ceil(25/(5+17.5)) = ceil(1.11) = 2", () => {
+    expect(calcBaseDamage(5, 5)).toBe(2);
   });
 
-  it("ATK=3, DEF=10 → ceil(9/13 * 1.5) = ceil(1.038) = 2 (최소값 2)", () => {
+  it("ATK=3, DEF=10 → ceil(9/(3+35)) = ceil(0.24) = 2 (최소값 2)", () => {
     expect(calcBaseDamage(3, 10)).toBe(2);
   });
 
@@ -56,13 +56,13 @@ describe("calcBaseDamage", () => {
   });
 
   it("ATK이 높고 DEF가 낮으면 높은 데미지", () => {
-    // ATK=20, DEF=3 → ceil(400/23 * 1.5) = ceil(26.08) = 27
-    expect(calcBaseDamage(20, 3)).toBe(27);
+    // ATK=20, DEF=3 → ceil(400/(20+10.5)) = ceil(13.11) = 14
+    expect(calcBaseDamage(20, 3)).toBe(14);
   });
 
-  it("동일 스탯 (ATK=DEF) → ceil(ATK/2 * 1.5) = ceil(ATK * 0.75)", () => {
-    // ATK=8, DEF=8 → ceil(64/16 * 1.5) = ceil(6) = 6
-    expect(calcBaseDamage(8, 8)).toBe(6);
+  it("동일 스탯 (ATK=DEF) → ceil(ATK²/(ATK+DEF*3.5))", () => {
+    // ATK=8, DEF=8 → ceil(64/(8+28)) = ceil(1.78) = 2
+    expect(calcBaseDamage(8, 8)).toBe(2);
   });
 });
 

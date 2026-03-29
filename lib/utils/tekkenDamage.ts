@@ -8,11 +8,11 @@ import { BATTLE_CONFIG } from '@/lib/types/tekken';
 
 /**
  * 기본 데미지 계산
- * baseDamage = max(ceil(ATK² / (ATK + opponent_DEF) × 1.5), 2)
- * 1.5x 배율: 7라운드 내 게임 종료를 위한 높은 데미지
+ * baseDamage = max(ceil(ATK² / (ATK + opponent_DEF × 3.5)), 2)
+ * DEF 3.5배 가중: 방어형 토끼 생존력 보장 + Lv50까지 스케일링 안정
  */
 export function calcBaseDamage(atk: number, opponentDef: number): number {
-  return Math.max(Math.ceil((atk * atk) / (atk + opponentDef) * 1.5), 2);
+  return Math.max(Math.ceil((atk * atk) / (atk + opponentDef * 3.5)), 2);
 }
 
 /**
