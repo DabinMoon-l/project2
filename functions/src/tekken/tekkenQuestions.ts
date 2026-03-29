@@ -12,6 +12,28 @@ import type { GeneratedQuestion, PregenCache, TekkenDifficulty } from "./tekkenT
 import { COURSE_NAMES } from "./tekkenTypes";
 
 /**
+ * 선지 셔플 — 정답 위치를 랜덤으로 재배치 (Gemini의 2번 편향 방지)
+ */
+function shuffleChoices(
+  choices: string[],
+  correctAnswer: number,
+  choiceExplanations?: string[],
+): { choices: string[]; correctAnswer: number; choiceExplanations?: string[] } {
+  const indices = choices.map((_, i) => i);
+  // Fisher-Yates 셔플
+  for (let i = indices.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [indices[i], indices[j]] = [indices[j], indices[i]];
+  }
+  const newChoices = indices.map(i => choices[i]);
+  const newCorrectAnswer = indices.indexOf(correctAnswer);
+  const newExplanations = choiceExplanations
+    ? indices.map(i => choiceExplanations[i])
+    : undefined;
+  return { choices: newChoices, correctAnswer: newCorrectAnswer, choiceExplanations: newExplanations };
+}
+
+/**
  * 교수님이 설정한 배틀 출제 챕터 조회
  */
 /**
@@ -508,8 +530,10 @@ ${scopeContent.slice(0, 8000)}
 - ⚠️ 문제는 반드시 1~2문장, 최대 80자 이내
 - 선지도 간결하게 (각 선지 최대 30자)
 - 오답 선지는 그럴듯하게 (명백히 틀린 보기 금지)
-- ⚠️ 선지 편향 방지: 정답만 길거나 상세하면 안 됨. 4개 선지 길이 비슷하게. 오답에 극단어("반드시/유일한/항상") 집중 배치 금지.
+- ⚠️ 선지 편향 방지: 정답만 길거나 상세하면 안 됨. 4개 선지 길이 비슷하게.
+- ⚠️ 극단어 분산: "반드시/유일한/항상/모든/절대/완전히" 같은 한정어를 오답에만 몰아넣지 말 것. 정답 선지에도 극단어를 자연스럽게 사용하거나, 오답에서 극단어 없이 그럴듯하게 틀린 내용으로 구성. 학생이 "극단어=오답" 소거법을 쓸 수 없어야 함.
 - ⚠️ 선지 정보량 제한: 각 선지에 팩트 최대 2개. "A이고 B이며 C이다" 식의 3개 이상 나열 금지. 짧고 담백하게.
+- ⚠️ 정답 위치 분산: correctAnswer를 0,1,2,3에 균등 배분. 특정 번호에 편중 금지. ${count}문제 중 각 위치에 최소 1개씩.
 - choices 4개, correctAnswer는 0~3
 - ${chapters.length}개 챕터를 골고루 커버 (특정 챕터에 편중 금지)
 - ⚠️ 1장 문제는 절대 2문제 이상 금지
@@ -665,11 +689,18 @@ JSON 배열로 출력: [{"text":"문제","type":"multiple","choices":["선지1",
         const m = chId.match(/(\d+)/);  // 첫 번째 숫자 (e.g., "micro_2_1" → "2", "3_5" → "3")
         if (m) chId = m[1];
         if (!targetChapters.includes(chId)) chId = targetChapters[0] || chId;
+
+        // 정답 위치 셔플 — Gemini의 2번 편향 방지
+        const shuffled = shuffleChoices(q.choices, q.correctAnswer, q.choiceExplanations);
+
         return {
           ...q,
           type: "multiple" as const,
           difficulty,
           chapterId: chId,
+          choices: shuffled.choices,
+          correctAnswer: shuffled.correctAnswer,
+          choiceExplanations: shuffled.choiceExplanations,
         };
       });
 
