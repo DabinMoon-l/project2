@@ -55,6 +55,11 @@ interface WeeklyStats {
       efficient: number;
       atRisk: number;
     };
+    // DAU/리텐션 지표
+    dauByDay: number[];          // [월,화,수,목,금,토,일] 일별 활동 유저 수
+    dauAvg: number;              // 주간 평균 DAU
+    dauMauRatio: number;         // DAU/MAU 비율 (%)
+    retentionFromLastWeek: number; // 직전 주 활동 유저 중 이번 주도 활동한 비율 (%)
   };
 
   // 게시판
@@ -379,16 +384,53 @@ async function collectWeeklyStats(courseId: string, start: Date, end: Date, labe
     else atRisk++;
   });
 
-  // ── 활동 학생 집계: 기간 내 퀴즈 결과 userId ──
+  // ── 활동 학생 집계 + DAU 계산 ──
+  const KST_OFFSET = 9 * 60 * 60 * 1000;
+  const dauSets: Set<string>[] = [new Set(), new Set(), new Set(), new Set(), new Set(), new Set(), new Set()]; // 월~일
+
   const weekResultsSnap = await db.collection("quizResults")
     .where("courseId", "==", courseId)
     .where("createdAt", ">=", startTs)
     .where("createdAt", "<", endTs)
     .get();
   weekResultsSnap.docs.forEach(d => {
-    const uid = d.data().userId as string;
-    if (studentIdSet.has(uid)) activeStudentIds.add(uid);
+    const data = d.data();
+    const uid = data.userId as string;
+    if (!studentIdSet.has(uid)) return;
+    activeStudentIds.add(uid);
+    // DAU 집계: KST 기준 요일별
+    const ts = data.createdAt?.toDate?.();
+    if (ts) {
+      const kstDay = new Date(ts.getTime() + KST_OFFSET).getUTCDay(); // 0=일,1=월...
+      const dayIdx = kstDay === 0 ? 6 : kstDay - 1; // 월=0,화=1,...일=6
+      dauSets[dayIdx].add(uid);
+    }
   });
+
+  // dauByDay/dauAvg/dauMauRatio는 페이지뷰 집계 후 계산 (pvSnap 필요)
+
+  // ── 리텐션: 직전 주 활동 유저 대비 이번 주 재방문율 ──
+  let retentionFromLastWeek = 0;
+  try {
+    const prevWeekStart = new Date(start.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const prevResultsSnap = await db.collection("quizResults")
+      .where("courseId", "==", courseId)
+      .where("createdAt", ">=", Timestamp.fromDate(prevWeekStart))
+      .where("createdAt", "<", startTs)
+      .select("userId")
+      .get();
+    const prevActiveIds = new Set<string>();
+    prevResultsSnap.docs.forEach(d => {
+      const uid = d.data().userId as string;
+      if (studentIdSet.has(uid)) prevActiveIds.add(uid);
+    });
+    if (prevActiveIds.size > 0) {
+      const retained = [...prevActiveIds].filter(uid => activeStudentIds.has(uid)).length;
+      retentionFromLastWeek = Math.round((retained / prevActiveIds.size) * 100);
+    }
+  } catch (err) {
+    console.warn(`[${courseId}] 리텐션 계산 실패:`, err);
+  }
 
   // ── 게시판 데이터 ──
   const postsSnap = await db.collection("posts")
@@ -465,6 +507,25 @@ async function collectWeeklyStats(courseId: string, start: Date, end: Date, labe
     }
   });
 
+  // 페이지뷰에서 DAU 집계 보강 (퀴즈 안 풀고 게시판만 본 학생 포함)
+  pvSnap.docs.forEach(d => {
+    const data = d.data();
+    const uid = data.userId as string;
+    if (!uid || !studentIdSet.has(uid)) return;
+    activeStudentIds.add(uid);
+    const ts = data.timestamp?.toDate?.();
+    if (ts) {
+      const kstDay = new Date(ts.getTime() + KST_OFFSET_MS).getUTCDay();
+      const dayIdx = kstDay === 0 ? 6 : kstDay - 1;
+      dauSets[dayIdx].add(uid);
+    }
+  });
+
+  const dauByDay = dauSets.map(s => s.size);
+  const activeDays = dauByDay.filter(d => d > 0).length;
+  const dauAvg = activeDays > 0 ? Math.round(dauByDay.reduce((a, b) => a + b, 0) / activeDays) : 0;
+  const dauMauRatio = totalStudents > 0 ? Math.round((dauAvg / totalStudents) * 100) : 0;
+
   // 세션당 평균 페이지뷰
   const sessionCounts = Object.values(pvSessionViews);
   const avgSessionViews = sessionCounts.length > 0
@@ -515,6 +576,10 @@ async function collectWeeklyStats(courseId: string, start: Date, end: Date, labe
       milestoneCount: totalMilestones,
       rabbitDiscoveries,
       clusterCounts: { passionate, hardworking, efficient, atRisk },
+      dauByDay,
+      dauAvg,
+      dauMauRatio,
+      retentionFromLastWeek,
     },
     board: {
       postCount: postsSnap.size,
