@@ -18,7 +18,6 @@ import { computeRabbitDisplayName } from '@/lib/utils/rabbitDisplayName';
 import { useHideNav } from '@/lib/hooks/useHideNav';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 import { COURSE_INDEXES } from '@/lib/courseIndex';
-import { useDetailPanel } from '@/lib/contexts/DetailPanelContext';
 import { useWideMode } from '@/lib/hooks/useViewportScale';
 
 interface TekkenBattleConfirmModalProps {
@@ -117,7 +116,6 @@ export default function TekkenBattleConfirmModal({
   courseId,
 }: TekkenBattleConfirmModalProps) {
   const isWide = useWideMode();
-  const { isLocked } = useDetailPanel();
 
   useHideNav(isOpen);
 
@@ -213,8 +211,8 @@ export default function TekkenBattleConfirmModal({
         <motion.div
           className="fixed top-0 bottom-0 z-[110] flex flex-col items-center justify-center bg-black/90 select-none"
           style={{
-            left: isWide && isLocked ? '240px' : 'var(--home-sheet-left, 0px)',
-            right: isWide && isLocked ? 'calc(50% - 120px)' : '0px',
+            left: 'var(--home-sheet-left, 0px)',
+            right: '0px',
             WebkitTouchCallout: 'none',
           }}
           initial={{ opacity: 0 }}
