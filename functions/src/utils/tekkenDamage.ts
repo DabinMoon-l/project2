@@ -23,11 +23,12 @@ export const BATTLE_XP = {
 };
 
 /**
- * 기본 데미지 = max(ceil(ATK² / (ATK + DEF) * 1.5), 2)
- * 1.5x 배율: 7라운드 내 게임 종료를 위한 높은 데미지
+ * 기본 데미지 = max(ceil(ATK² / (ATK + DEF × 3.5)), 2)
+ * DEF 3.5배 가중: 방어형 토끼 생존력 보장 + Lv50까지 스케일링 안정
+ * 일반 6~9문제 KO, 크리티컬 연타 4~6문제 KO (10문제 배틀에 적절)
  */
 export function calcBaseDamage(atk: number, opponentDef: number): number {
-  return Math.max(Math.ceil((atk * atk) / (atk + opponentDef) * 1.5), 2);
+  return Math.max(Math.ceil((atk * atk) / (atk + opponentDef * 3.5)), 2);
 }
 
 /**
