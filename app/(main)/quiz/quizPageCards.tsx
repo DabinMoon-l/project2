@@ -1270,53 +1270,8 @@ export function CustomQuizCard({
             Details
           </button>
           {isCompleted ? (
-            <div className="relative flex-1" ref={reviewMenuRef}>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowReviewMenu(!showReviewMenu);
-                }}
-                className="w-full py-1.5 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8] hover:bg-[#3A3A3A] transition-colors flex items-center justify-center gap-1 rounded-lg"
-              >
-                Review
-                <svg className={`w-3 h-3 transition-transform ${showReviewMenu ? 'rotate-180' : ''}`} fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </button>
-              <AnimatePresence>
-                {showReviewMenu && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -5 }}
-                    className="absolute bottom-full left-0 right-0 mb-1 bg-[#F5F0E8] border border-[#1A1A1A] shadow-lg z-50"
-                  >
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowReviewMenu(false);
-                        onReview?.();
-                      }}
-                      className="w-full px-2 py-1.5 text-[11px] font-bold text-[#1A1A1A] hover:bg-[#EDEAE4] text-left border-b border-[#EDEAE4]"
-                    >
-                      모두
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowReviewMenu(false);
-                        onReviewWrongOnly?.();
-                      }}
-                      className="w-full px-2 py-1.5 text-[11px] font-bold text-[#8B1A1A] hover:bg-[#FDEAEA] text-left"
-                    >
-                      오답만
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+            <div className="flex-1 py-1.5 text-[11px] font-bold bg-[#1A1A1A]/40 text-[#F5F0E8] text-center rounded-lg cursor-default">
+              Review
             </div>
           ) : (
             <button

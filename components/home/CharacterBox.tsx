@@ -40,7 +40,7 @@ export default function CharacterBox() {
   const { userCourseId } = useCourse();
   const { theme } = useTheme();
   const isWide = useWideMode();
-  const { openDetail: openDetailPanel, closeDetail: closeDetailPanel } = useDetailPanel();
+  const { openDetail: openDetailPanel, closeDetail: closeDetailPanel, lockDetail, unlockDetail } = useDetailPanel();
 
   // 마일스톤 Context (holdings 포함 — 중복 onSnapshot 방지)
   const milestone = useMilestone();
@@ -124,6 +124,16 @@ export default function CharacterBox() {
   useEffect(() => {
     milestone.setSuppressAutoTrigger(showDogam || showBattleConfirm || showMatchmaking || showBattle);
   }, [showDogam, showBattleConfirm, showMatchmaking, showBattle, milestone]);
+
+  // 배틀 flow 중 3쪽 패널 잠금 (배틀준비~매칭~배틀~결과)
+  const isBattleActive = showBattleConfirm || showMatchmaking || showBattle;
+  useEffect(() => {
+    if (!isWide) return;
+    if (isBattleActive) {
+      lockDetail();
+      return () => { unlockDetail(); };
+    }
+  }, [isBattleActive, isWide, lockDetail, unlockDetail]);
 
   // activeIndex 범위 보정
   useEffect(() => {
