@@ -82,6 +82,7 @@ export async function replenishChapterPool(
   chapter: string,
   apiKey: string,
   targetSize: number = TARGET_PER_CHAPTER,
+  runId?: string,
 ): Promise<{ added: number }> {
   const db = getFirestore();
   const poolRef = db.collection("tekkenQuestionPool").doc(courseId);
@@ -89,6 +90,8 @@ export async function replenishChapterPool(
 
   let totalAdded = 0;
   const generatedTexts: string[] = [];
+  // runId: 이 생성 라운드의 고유 식별자 (무중단 교체 시 old/new 구분용)
+  const currentRunId = runId || `run_${Date.now()}_ch${chapter}`;
 
   // Firestore 배치 저장 헬퍼
   const saveQuestions = async (
@@ -114,10 +117,11 @@ export async function replenishChapterPool(
         type: q.type,
         choices: q.choices,
         correctAnswer: q.correctAnswer,
-        difficulty: q.difficulty || difficulty,
+        difficulty,  // 요청한 난이도 강제 적용 (Gemini 응답 무시)
         chapter,  // 생성 요청 챕터 고정 (Gemini chapterId는 접두사/오류 가능성)
         generatedAt: FieldValue.serverTimestamp(),
         batchId,
+        runId: currentRunId,
         explanation: q.explanation,
         choiceExplanations: q.choiceExplanations,
       });
@@ -489,12 +493,19 @@ export const tekkenPoolWorker = onDocumentCreated(
     const questionsRef = poolRef.collection("questions");
 
     try {
-      // 1. 기존 문제 ID 스냅샷 (이 챕터 + 구형 접두사 형식 포함)
+      // runId로 old/new 구분 (old ID 캡처 방식의 race condition 방지)
+      const runId = `run_${Date.now()}_${courseId}_ch${chapter}`;
+
+      console.log(`[워커] ${courseId}/ch${chapter}: 새 ${targetSize}개 생성 시작 (runId: ${runId})`);
+
+      // 1. 새 문제 생성 (기존 풀과 공존, 모두 runId 태그)
+      const result = await replenishChapterPool(courseId, chapter, apiKey, targetSize, runId);
+
+      // 2. 이 챕터의 runId가 아닌 문제 삭제 (무중단 교체)
       const chapterPfxMap: Record<string, string> = {
         biology: "bio_", microbiology: "micro_", pathophysiology: "patho_",
       };
       const pfx = chapterPfxMap[courseId] || "";
-      // 매칭 대상: "3", "bio_3", "bio_3_1", "bio_3_2" 등 (구형 하위섹션 형식도 포함)
       const chapterFormats = [chapter];
       if (pfx) chapterFormats.push(`${pfx}${chapter}`);
 
@@ -502,33 +513,27 @@ export const tekkenPoolWorker = onDocumentCreated(
         chapterFormats.map(ch => questionsRef.where("chapter", "==", ch).get())
       );
       // 구형 하위섹션 형식 (e.g., "micro_3_1", "micro_3_2", ...) 추가 스캔
-      let legacySnap: Awaited<ReturnType<typeof questionsRef.get>> | null = null;
+      let legacySnap: FirebaseFirestore.QuerySnapshot | null = null;
       if (pfx) {
         legacySnap = await questionsRef
           .where("chapter", ">=", `${pfx}${chapter}_`)
           .where("chapter", "<", `${pfx}${chapter}_~`)
           .get();
       }
-      const oldDocIds = [
-        ...existingSnaps.flatMap(snap => snap.docs.map(d => d.id)),
-        ...(legacySnap ? legacySnap.docs.map(d => d.id) : []),
-      ];
+      // runId가 다른(=old) 문서만 삭제
+      const oldDocs = [
+        ...existingSnaps.flatMap(snap => snap.docs),
+        ...(legacySnap ? legacySnap.docs : []),
+      ].filter(doc => doc.data().runId !== runId);
 
-      console.log(`[워커] ${courseId}/ch${chapter}: 기존 ${oldDocIds.length}개, 새 ${targetSize}개 생성 시작`);
-
-      // 2. 새 문제 생성 (기존 풀과 공존)
-      const result = await replenishChapterPool(courseId, chapter, apiKey, targetSize);
-
-      // 3. 기존 문제 삭제 (무중단 교체 완료)
-      if (oldDocIds.length > 0) {
-        for (let i = 0; i < oldDocIds.length; i += 500) {
+      if (oldDocs.length > 0) {
+        for (let i = 0; i < oldDocs.length; i += 500) {
           const batch = db.batch();
-          oldDocIds.slice(i, i + 500).forEach(id =>
-            batch.delete(questionsRef.doc(id))
-          );
+          oldDocs.slice(i, i + 500).forEach(doc => batch.delete(doc.ref));
           await batch.commit();
         }
       }
+      console.log(`[워커] ${courseId}/ch${chapter}: old ${oldDocs.length}개 삭제`);
 
       // 4. seenQuestions 중 이 챕터 관련은 자연 만료 (24시간)
 
@@ -546,7 +551,7 @@ export const tekkenPoolWorker = onDocumentCreated(
         addedCount: result.added,
       });
 
-      console.log(`[워커] ${courseId}/ch${chapter}: ${result.added}문제 생성 완료, 기존 ${oldDocIds.length}개 삭제`);
+      console.log(`[워커] ${courseId}/ch${chapter}: ${result.added}문제 생성 완료, old ${oldDocs.length}개 삭제`);
     } catch (err) {
       console.error(`[워커] ${courseId}/ch${chapter} 실패:`, err);
       await taskRef.update({
