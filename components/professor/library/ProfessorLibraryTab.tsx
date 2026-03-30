@@ -147,7 +147,7 @@ export default function ProfessorLibraryTab({
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editType, setEditType] = useState<'midterm' | 'final' | 'past' | 'independent'>('midterm');
   const [editDifficulty, setEditDifficulty] = useState<'easy' | 'normal' | 'hard'>('normal');
-  const [requireRetest, setRequireRetest] = useState(false);
+  // requireRetest 제거 — 문제 수정 시 항상 questionUpdatedAt 설정
 
   // 피드백 데이터: questionNumber(1-indexed) → { counts, otherTexts }
   const [feedbackByQuestion, setFeedbackByQuestion] = useState<Map<number, {
@@ -233,7 +233,6 @@ export default function ProfessorLibraryTab({
     setEditType(resolvedType);
     const resolvedDiff = (previewQuiz.difficulty || 'normal') as 'easy' | 'normal' | 'hard';
     setEditDifficulty(resolvedDiff);
-    setRequireRetest(false);
     // 문제 변환
     const questions = previewQuiz.questions || [];
     setOriginalQuestions(questions);
@@ -283,7 +282,7 @@ export default function ProfessorLibraryTab({
       const changedIds = getChangedQuestionIds();
 
       // 재시험 모드면 questionUpdatedAt 설정, 아니면 설정 안 함
-      const flattenedQuestions = flattenQuestionsForSave(editableQuestions, originalQuestions, { trackChanges: true, useQuestionUpdatedAt: requireRetest, cleanupUndefined: true });
+      const flattenedQuestions = flattenQuestionsForSave(editableQuestions, originalQuestions, { trackChanges: true, useQuestionUpdatedAt: true, cleanupUndefined: true });
       // 제목 변경
       if (editedTitle && editedTitle !== previewQuiz.title) {
         await updateTitle(previewQuiz.id, editedTitle);
@@ -311,8 +310,8 @@ export default function ProfessorLibraryTab({
       // 문제 저장
       await updateQuestions(previewQuiz.id, flattenedQuestions);
 
-      // 재시험 모드가 아니고 변경된 문제가 있으면 → 재채점 CF 호출
-      if (!requireRetest && changedIds.length > 0) {
+      // 변경된 문제가 있으면 → 재채점 CF 호출
+      if (changedIds.length > 0) {
         try {
           await callFunction('regradeQuestions', { quizId: previewQuiz.id, questionIds: changedIds });
         } catch (err) {
@@ -327,7 +326,7 @@ export default function ProfessorLibraryTab({
     } finally {
       setIsSavingEdit(false);
     }
-  }, [previewQuiz, editedTitle, editedDescription, editedTags, editType, editDifficulty, editableQuestions, originalQuestions, requireRetest, updateTitle, updateQuestions, updateMeta]);
+  }, [previewQuiz, editedTitle, editedDescription, editedTags, editType, editDifficulty, editableQuestions, originalQuestions, updateTitle, updateQuestions, updateMeta]);
 
   // 부모에서 프리뷰 해제 시 내부 상태도 초기화
   useEffect(() => {
@@ -590,18 +589,7 @@ export default function ProfessorLibraryTab({
                 </AnimatePresence>
               </div>
 
-              {/* 재시험 체크박스 */}
-              <label className="flex items-center gap-2 mt-3 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={requireRetest}
-                  onChange={(e) => setRequireRetest(e.target.checked)}
-                  className="w-4 h-4 accent-[#1A1A1A]"
-                />
-                <span className="text-sm text-[#1A1A1A] font-medium">
-                  재시험 (수정 이전 응답 제외 + 수정 뱃지 표시)
-                </span>
-              </label>
+              {/* 문제 수정 시 자동으로 서재 뱃지 표시 (requireRetest 제거) */}
             </div>
           )}
 
