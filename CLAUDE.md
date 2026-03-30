@@ -555,6 +555,20 @@ Supabase 데이터 마이그레이션 시 해당 파일을 건드릴 때 병행.
 
 **원칙**: 동시에 하나만 켜지는 모드 플래그 → useReducer, 독립적 기능 단위 → 커스텀 훅, data+loading 쌍 → 통합
 
+### Gemini AI 비용 최적화 로드맵
+
+**현재**: Gemini 2.5 Flash 유료(pay-as-you-go), 월 ~$12 (학생 100명 기준)
+
+| 단계 | 시점 | 조치 | 절감 효과 |
+|------|------|------|----------|
+| **지금** | 즉시 | 유료 전환 (Billing 연결만) | RPD 250→무제한, RPM 10→2,000 |
+| **Phase 2~3** | SaaS 전환 | Context Caching (과목 Scope 캐시 공유) | 입력 토큰 75% 절감 |
+| **Phase 2~3** | SaaS 전환 | Flash-Lite 분리 (OCR/키워드 등 단순 작업) | 단순 작업 비용 60% 절감 |
+| **Phase 3** | CF 전환 | Vertex AI 전환 (SLA + IAM quota 관리) | 대학별 할당량 정밀 제어 |
+| **대규모** | 대학 50개+ | Committed Use Discount + 캐싱 병행 | 전체 비용 50%+ 절감 |
+
+**SaaS API 키 전략**: 소규모(~10대학) 단일 키 + org별 내부 quota → 중규모(~50) 대학별 키 → 대규모 Vertex AI
+
 ### Firebase 비용 절감 복원 (Supabase 전환 후)
 
 | 항목 | 현재 (Firebase) | 복원 후 (Supabase) |
