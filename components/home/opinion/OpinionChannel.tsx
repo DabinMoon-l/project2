@@ -360,7 +360,7 @@ export default function OpinionChannel({ isPanelMode = false, onOpenPanel, onClo
 
       {/* ═══ 패널 모드: 포탈 없이 인라인 렌더링 ═══ */}
       {isPanelMode && showModal && (
-        <div className="relative overflow-hidden" style={{ height: 'calc(100% - var(--kb-offset, 0px))' }}>
+        <div className="h-full relative overflow-hidden" style={{ paddingBottom: 'var(--kb-offset, 0px)' }}>
           <div className="relative z-10 h-full flex flex-col">
             {/* 상단 바 */}
             <div className="shrink-0 pt-3 pb-2 px-4">
@@ -504,7 +504,7 @@ export default function OpinionChannel({ isPanelMode = false, onOpenPanel, onClo
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="fixed inset-0 z-[110] flex items-end bg-black/40"
-              style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)', bottom: 'var(--kb-offset, 0px)' }}
+              style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
               onClick={() => {
                 // 키보드 열림 시 키보드만 닫고 모달 유지 (네이티브 앱 패턴)
                 if (document.activeElement instanceof HTMLTextAreaElement ||
@@ -522,7 +522,7 @@ export default function OpinionChannel({ isPanelMode = false, onOpenPanel, onClo
                 transition={{ type: 'spring', damping: 28, stiffness: 300 }}
                 onClick={(e) => e.stopPropagation()}
                 className="relative w-full flex flex-col overflow-hidden rounded-t-2xl will-change-transform"
-                style={{ height: sheetTop > 0 ? `calc(100dvh - ${sheetTop + 16}px - var(--kb-offset, 0px))` : `calc(92dvh - var(--kb-offset, 0px))` }}
+                style={{ height: sheetTop > 0 ? `calc(100dvh - ${sheetTop + 16}px)` : '92dvh', paddingBottom: 'var(--kb-offset, 0px)' }}
               >
                 {/* 배경 */}
                 <div className="absolute inset-0 rounded-t-2xl overflow-hidden">
