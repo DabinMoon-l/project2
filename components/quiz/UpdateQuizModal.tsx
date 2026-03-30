@@ -27,6 +27,7 @@ import { useCourse } from '@/lib/contexts';
 import type { QuizUpdateInfo, UpdatedQuestion } from '@/lib/hooks/useQuizUpdate';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 import { useHideNav } from '@/lib/hooks/useHideNav';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
 import type { MixedExampleBlock } from '@/components/quiz/create/questionTypes';
 import MixedExamplesRenderer from '@/components/common/MixedExamplesRenderer';
 import { renderInlineMarkdown } from '@/lib/utils/renderInlineMarkdown';
@@ -66,6 +67,7 @@ export default function UpdateQuizModal({
 }: UpdateQuizModalProps) {
   const { user } = useAuth();
   const { userCourseId, userClassId } = useCourse();
+  const isWide = useWideMode();
 
   // 현재 문제 인덱스
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -358,11 +360,20 @@ export default function UpdateQuizModal({
           }
         }
 
-        // 원본 quizResult의 answeredAt만 갱신 (useQuizUpdate 뱃지 제거용)
+        // 원본 quizResult의 answeredAt 갱신 (useQuizUpdate 뱃지 제거용)
         const updatedScores: Record<string, any> = {};
         for (const q of questions) {
+          const result = questionResults.find((r) => r.questionId === q.questionId);
           if (originalScores[q.questionId]) {
+            // 기존 문제: answeredAt만 갱신
             updatedScores[`questionScores.${q.questionId}.answeredAt`] = serverTimestamp();
+          } else {
+            // 새로 추가된 문제: 전체 스코어 항목 생성 (뱃지 제거용)
+            updatedScores[`questionScores.${q.questionId}`] = {
+              isCorrect: result?.isCorrect || false,
+              userAnswer: userAnswers[q.questionId] || '',
+              answeredAt: serverTimestamp(),
+            };
           }
         }
         if (Object.keys(updatedScores).length > 0) {
@@ -534,11 +545,19 @@ export default function UpdateQuizModal({
   if (showResult && resultData) {
     const correctCount = resultData.questionResults.filter((r) => r.isCorrect).length;
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3" style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}>
+      <div
+        className={`fixed inset-0 z-50 ${isWide ? 'flex items-end' : 'flex items-center justify-center bg-black/50 p-3'}`}
+        style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
+      >
+        {isWide && <div className="absolute inset-0" onClick={handleComplete} />}
         <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="w-full max-w-md bg-[#F5F0E8] border-2 border-[#1A1A1A] rounded-2xl max-h-[90vh] overflow-auto overscroll-contain"
+          initial={isWide ? { y: '100%' } : { opacity: 0, scale: 0.9 }}
+          animate={isWide ? { y: 0 } : { opacity: 1, scale: 1 }}
+          transition={isWide ? { type: 'spring', stiffness: 260, damping: 28 } : undefined}
+          className={isWide
+            ? 'relative w-full bg-[#F5F0E8] border-t-2 border-x-2 border-[#1A1A1A] rounded-t-2xl max-h-[85vh] overflow-auto overscroll-contain'
+            : 'w-full max-w-md bg-[#F5F0E8] border-2 border-[#1A1A1A] rounded-2xl max-h-[90vh] overflow-auto overscroll-contain'
+          }
         >
           {/* 헤더 */}
           <div className="px-4 py-3 border-b border-[#1A1A1A]">
@@ -653,12 +672,20 @@ export default function UpdateQuizModal({
 
   // 문제 풀이 화면
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3">
+    <div
+      className={`fixed inset-0 z-50 ${isWide ? 'flex items-end' : 'flex items-center justify-center bg-black/50 p-3'}`}
+      style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
+    >
+      {isWide && <div className="absolute inset-0" onClick={handleRequestClose} />}
       <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
+        initial={isWide ? { y: '100%' } : { opacity: 0, scale: 0.9 }}
+        animate={isWide ? { y: 0 } : { opacity: 1, scale: 1 }}
+        transition={isWide ? { type: 'spring', stiffness: 260, damping: 28 } : undefined}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md bg-[#F5F0E8] border-2 border-[#1A1A1A] rounded-2xl max-h-[90vh] overflow-auto overscroll-contain"
+        className={isWide
+          ? 'relative w-full bg-[#F5F0E8] border-t-2 border-x-2 border-[#1A1A1A] rounded-t-2xl max-h-[85vh] overflow-auto overscroll-contain'
+          : 'w-full max-w-md bg-[#F5F0E8] border-2 border-[#1A1A1A] rounded-2xl max-h-[90vh] overflow-auto overscroll-contain'
+        }
       >
         {/* 헤더 */}
         <div className="px-4 py-3 border-b border-[#1A1A1A] flex items-center justify-between">
@@ -683,14 +710,19 @@ export default function UpdateQuizModal({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+              className={`fixed inset-0 z-[60] ${isWide ? 'flex items-end' : 'flex items-center justify-center bg-black/50 p-4'}`}
               style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
             >
+              {isWide && <div className="absolute inset-0" onClick={() => setShowCloseConfirm(false)} />}
               <motion.div
-                initial={{ scale: 0.9 }}
-                animate={{ scale: 1 }}
-                exit={{ scale: 0.9 }}
-                className="bg-[#F5F0E8] border-2 border-[#1A1A1A] rounded-xl p-4 max-w-[260px] w-full"
+                initial={isWide ? { y: '100%' } : { scale: 0.9 }}
+                animate={isWide ? { y: 0 } : { scale: 1 }}
+                exit={isWide ? { y: '100%' } : { scale: 0.9 }}
+                transition={isWide ? { type: 'spring', stiffness: 260, damping: 28 } : undefined}
+                className={isWide
+                  ? 'relative w-full bg-[#F5F0E8] border-t-2 border-x-2 border-[#1A1A1A] rounded-t-2xl p-4'
+                  : 'bg-[#F5F0E8] border-2 border-[#1A1A1A] rounded-xl p-4 max-w-[260px] w-full'
+                }
               >
                 <p className="text-sm font-bold text-[#1A1A1A] text-center mb-1">풀이를 중단할까요?</p>
                 <p className="text-[10px] text-[#5C5C5C] text-center mb-3">지금까지 푼 답변이 저장되지 않습니다.</p>
@@ -1030,7 +1062,7 @@ function AnswerInput({
     return (
       <div className="space-y-2">
         {q.choices.map((choice, idx) => {
-          const optionValue = (idx + 1).toString();
+          const optionValue = idx.toString();
           const isSelected = userAnswer?.split(',').includes(optionValue);
           return (
             <button
@@ -1208,9 +1240,8 @@ function QuestionResultCard({
       {r.questionType === 'multiple' && r.choices && (
         <div className="mb-2 space-y-1">
           {r.choices.map((choice, i) => {
-            const choiceNum = i + 1;
-            const isCorrectChoice = correctAnswerIndex.includes(choiceNum);
-            const isUserChoice = userAnswerIndex.includes(choiceNum);
+            const isCorrectChoice = correctAnswerIndex.includes(i);
+            const isUserChoice = userAnswerIndex.includes(i);
             return (
               <div key={`choice-${i}`} className={`p-2 text-xs border rounded-lg ${
                 isCorrectChoice && isUserChoice ? 'border-[#1A6B1A] bg-[#C8E6C9] text-[#1A6B1A]'
@@ -1218,7 +1249,7 @@ function QuestionResultCard({
                 : isUserChoice ? 'border-[#8B1A1A] bg-[#FFCDD2] text-[#8B1A1A]'
                 : 'border-[#ddd] bg-white text-[#5C5C5C]'
               }`}>
-                <span className="font-bold">{choiceNum}.</span> {renderInlineMarkdown(choice)}
+                <span className="font-bold">{i + 1}.</span> {renderInlineMarkdown(choice)}
                 {correctAnswerIndex.length > 1 && isCorrectChoice && <span className="ml-1 font-bold">(정답)</span>}
                 {correctAnswerIndex.length > 1 && isUserChoice && <span className="ml-1 font-bold">(내 답)</span>}
                 {r.choiceExplanations && r.choiceExplanations[i] && (

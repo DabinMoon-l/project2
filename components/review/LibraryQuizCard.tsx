@@ -141,33 +141,34 @@ function LibraryQuizCard({
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -4, boxShadow: '0 8px 20px rgba(0, 0, 0, 0.08)' }}
-      whileTap={TAP_SCALE}
-      transition={{ duration: 0.2 }}
-      onClick={onCardClick}
-      className={`relative border bg-[#F5F0E8]/70 backdrop-blur-sm overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)] cursor-pointer rounded-xl ${
-        isSelectMode
-          ? isSelected
-            ? 'border-2 border-[#8B1A1A] bg-[#FDEAEA]'
-            : 'border border-[#999] hover:bg-[#EDEAE4]'
-          : 'border-[#999]'
-      }`}
-    >
-      {/* 수정된 문제 뱃지 */}
+    <div className="relative">
+      {/* 수정된 문제 뱃지 — overflow-hidden 밖에 위치 */}
       {hasUpdate && !isSelectMode && (
         <button
           onClick={(e) => {
             e.stopPropagation();
             onUpdateClick?.();
           }}
-          className="absolute -top-1 -right-1 z-30 w-5 h-5 bg-[#F5C518] rounded-full flex items-center justify-center border-2 border-[#1A1A1A] hover:scale-110 transition-transform"
+          className="absolute -top-1.5 -right-1.5 z-40 w-6 h-6 bg-[#F5C518] rounded-full flex items-center justify-center border-2 border-[#1A1A1A] hover:scale-110 transition-transform shadow-[1px_1px_0px_#1A1A1A]"
         >
           <span className="text-[#1A1A1A] font-bold text-xs">!</span>
         </button>
       )}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        whileHover={{ y: -4, boxShadow: '0 8px 20px rgba(0, 0, 0, 0.08)' }}
+        whileTap={TAP_SCALE}
+        transition={{ duration: 0.2 }}
+        onClick={onCardClick}
+        className={`relative border bg-[#F5F0E8]/70 backdrop-blur-sm overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.06)] cursor-pointer rounded-xl ${
+          isSelectMode
+            ? isSelected
+              ? 'border-2 border-[#8B1A1A] bg-[#FDEAEA]'
+              : 'border border-[#999] hover:bg-[#EDEAE4]'
+            : 'border-[#999]'
+        }`}
+      >
 
       {/* 신문 배경 텍스트 */}
       <div className="absolute inset-0 p-2 overflow-hidden pointer-events-none">
@@ -297,6 +298,7 @@ function LibraryQuizCard({
         )}
       </div>
     </motion.div>
+    </div>
   );
 }
 

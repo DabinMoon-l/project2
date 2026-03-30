@@ -36,33 +36,43 @@ describe("배틀 상수", () => {
 // calcBaseDamage
 // ============================================================
 
-describe("calcBaseDamage", () => {
-  it("공식: max(ceil(ATK² / (ATK + DEF*3.5)), 2)", () => {
-    // ATK=10, DEF=5 → ceil(100/(10+17.5)) = ceil(3.64) = 4
-    expect(calcBaseDamage(10, 5)).toBe(4);
+describe("calcBaseDamage (2vs2 로테이션 기준)", () => {
+  it("공식: max(ceil(ATK² / (ATK + DEF*1.5)), 5)", () => {
+    // ATK=10, DEF=5 → ceil(100/(10+7.5)) = ceil(5.71) = 6
+    expect(calcBaseDamage(10, 5)).toBe(6);
   });
 
-  it("ATK=5, DEF=5 → ceil(25/(5+17.5)) = ceil(1.11) = 2", () => {
-    expect(calcBaseDamage(5, 5)).toBe(2);
+  it("ATK=5, DEF=5 → ceil(25/(5+7.5)) = ceil(2.0) = 5 (최소값)", () => {
+    expect(calcBaseDamage(5, 5)).toBe(5);
   });
 
-  it("ATK=3, DEF=10 → ceil(9/(3+35)) = ceil(0.24) = 2 (최소값 2)", () => {
-    expect(calcBaseDamage(3, 10)).toBe(2);
+  it("ATK=3, DEF=10 → ceil(9/(3+15)) = ceil(0.5) = 5 (최소값 5)", () => {
+    expect(calcBaseDamage(3, 10)).toBe(5);
   });
 
-  it("최소 데미지는 2", () => {
-    expect(calcBaseDamage(1, 100)).toBe(2);
-    expect(calcBaseDamage(1, 1000)).toBe(2);
+  it("최소 데미지는 5", () => {
+    expect(calcBaseDamage(1, 100)).toBe(5);
+    expect(calcBaseDamage(1, 1000)).toBe(5);
   });
 
   it("ATK이 높고 DEF가 낮으면 높은 데미지", () => {
-    // ATK=20, DEF=3 → ceil(400/(20+10.5)) = ceil(13.11) = 14
-    expect(calcBaseDamage(20, 3)).toBe(14);
+    // ATK=20, DEF=3 → ceil(400/(20+4.5)) = ceil(16.33) = 17
+    expect(calcBaseDamage(20, 3)).toBe(17);
   });
 
-  it("동일 스탯 (ATK=DEF) → ceil(ATK²/(ATK+DEF*3.5))", () => {
-    // ATK=8, DEF=8 → ceil(64/(8+28)) = ceil(1.78) = 2
-    expect(calcBaseDamage(8, 8)).toBe(2);
+  it("동일 스탯 (ATK=DEF) → ceil(ATK²/(ATK+DEF*1.5))", () => {
+    // ATK=8, DEF=8 → ceil(64/(8+12)) = ceil(3.2) = 5 (최소값)
+    expect(calcBaseDamage(8, 8)).toBe(5);
+  });
+
+  it("균형형 vs 균형형 (Lv1)", () => {
+    // ATK=14, DEF=12 → ceil(196/(14+18)) = ceil(6.13) = 7
+    expect(calcBaseDamage(14, 12)).toBe(7);
+  });
+
+  it("공격형 vs 방어형 (Lv1)", () => {
+    // ATK=20, DEF=15 → ceil(400/(20+22.5)) = ceil(9.41) = 10
+    expect(calcBaseDamage(20, 15)).toBe(10);
   });
 });
 
@@ -124,16 +134,16 @@ describe("calcDamage", () => {
   it("크리티컬 시 데미지 1.5배", () => {
     const start = 0;
     const result = calcDamage(10, 5, start + 3000, start); // 3초 → 크리티컬
-    const baseDmg = calcBaseDamage(10, 5); // 10
+    const baseDmg = calcBaseDamage(10, 5); // 6
     expect(result.isCritical).toBe(true);
-    expect(result.damage).toBe(calcCriticalDamage(baseDmg)); // 15
+    expect(result.damage).toBe(calcCriticalDamage(baseDmg)); // 9
   });
 
   it("크리티컬 아닐 때 기본 데미지", () => {
     const start = 0;
     const result = calcDamage(10, 5, start + 15000, start); // 15초 → 일반
     expect(result.isCritical).toBe(false);
-    expect(result.damage).toBe(calcBaseDamage(10, 5)); // 10
+    expect(result.damage).toBe(calcBaseDamage(10, 5)); // 6
   });
 });
 

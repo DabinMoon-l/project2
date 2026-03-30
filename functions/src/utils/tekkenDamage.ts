@@ -23,12 +23,13 @@ export const BATTLE_XP = {
 };
 
 /**
- * 기본 데미지 = max(ceil(ATK² / (ATK + DEF × 3.5)), 2)
- * DEF 3.5배 가중: 방어형 토끼 생존력 보장 + Lv50까지 스케일링 안정
- * 일반 6~9문제 KO, 크리티컬 연타 4~6문제 KO (10문제 배틀에 적절)
+ * 기본 데미지 = max(ceil(ATK² / (ATK + DEF × 1.5)), 5)
+ * 2vs2 로테이션 10문제 기준 (기존 1v1 DEF×3.5 → 2v2 DEF×1.5)
+ * 총 HP 풀 2배(토끼 2마리)에 맞춰 데미지 상향
+ * 7/10 정답 시 양쪽 KO 가능, 밸런스 매치(5:5)는 점수 비교 결말
  */
 export function calcBaseDamage(atk: number, opponentDef: number): number {
-  return Math.max(Math.ceil((atk * atk) / (atk + opponentDef * 3.5)), 2);
+  return Math.max(Math.ceil((atk * atk) / (atk + opponentDef * 1.5)), 5);
 }
 
 /**
