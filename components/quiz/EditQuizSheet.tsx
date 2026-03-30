@@ -541,7 +541,7 @@ export default function EditQuizSheet({ quizId, onClose, onSaved, isPanelMode }:
               combinedTotal: subQuestionsCount,
               chapterId: sq.chapterId || null,
               chapterDetailId: sq.chapterDetailId || null,
-              questionUpdatedAt: hasChanged ? Timestamp.now() : (originalQ?.questionUpdatedAt || null),
+              questionUpdatedAt: originalQ?.questionUpdatedAt || null,
             };
 
             if (sqIndex === 0) {
