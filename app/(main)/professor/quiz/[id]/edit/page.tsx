@@ -185,7 +185,7 @@ export default function EditQuizPage() {
       setSaving(true);
       clearError();
 
-      const flattenedQuestions = flattenQuestionsForSave(questions, originalQuestions, { trackChanges: true });
+      const flattenedQuestions = flattenQuestionsForSave(questions, originalQuestions, { trackChanges: true, useQuestionUpdatedAt: false });
 
       const quizInput: Partial<QuizInput> = {
         title: quizMeta.title,
