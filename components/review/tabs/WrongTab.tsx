@@ -204,10 +204,7 @@ export default function WrongTab({
                           isSelectMode={isFolderDeleteMode || isReviewSelectMode}
                           isSelected={(isFolderDeleteMode ? deleteFolderIds : reviewSelectedIds).has(selectKey)}
                           showDelete={false}
-                          hasUpdate={hasUpdate}
-                          onUpdateClick={() => {
-                            onUpdateClick(folder.quizId, folder.quizTitle);
-                          }}
+                          hasUpdate={false}
                           variant="folder"
                         />
                       </div>

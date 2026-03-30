@@ -650,10 +650,7 @@ function FolderGrid({
               : (isFolderDeleteMode ? deleteFolderIds : reviewSelectedIds).has(updateKey)
         }
         showDelete={false}
-        hasUpdate={hasUpdate}
-        onUpdateClick={() => {
-          onUpdateClick(folder.id, folder.title, folder.filterType);
-        }}
+        hasUpdate={false}
         variant="folder"
       />
     );
