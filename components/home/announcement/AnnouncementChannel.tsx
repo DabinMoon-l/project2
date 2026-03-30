@@ -575,7 +575,7 @@ export default function AnnouncementChannel({
 
       {/* ═══ 패널 모드: 인라인 렌더링 ═══ */}
       {isPanelMode && showModal && (
-        <div className="h-full relative overflow-hidden flex flex-col">
+        <div className="relative overflow-hidden flex flex-col" style={{ height: 'calc(100% - var(--kb-offset, 0px))' }}>
 
           {/* 패널 모드 내부 콘텐츠 — 바텀시트와 동일 */}
           {(() => {
@@ -1200,7 +1200,7 @@ export default function AnnouncementChannel({
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="fixed inset-0 z-[110] flex items-end bg-black/40"
-              style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
+              style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)', bottom: 'var(--kb-offset, 0px)' }}
               onClick={() => {
                 // 키보드 열림 시 키보드만 닫고 모달 유지 (네이티브 앱 패턴)
                 if (document.activeElement instanceof HTMLTextAreaElement ||
