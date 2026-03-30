@@ -199,21 +199,7 @@ export default function BookmarkTab({
               setReviewSelectedIds(newSelected);
             }
           }}
-          getQuizUpdateInfo={(quizId) => {
-            const updateKey = `quiz-${quizId}`;
-            const info = updatedQuizzes.get(updateKey);
-            if (info && info.hasUpdate) {
-              return { hasUpdate: true, updatedCount: 0 };
-            }
-            return null;
-          }}
-          onUpdateClick={(quizId) => {
-            const updateKey = `quiz-${quizId}`;
-            const info = updatedQuizzes.get(updateKey);
-            if (info) {
-              onUpdateClick(quizId, info.quizTitle, 'bookmark');
-            }
-          }}
+          getQuizUpdateInfo={() => null}
         />
       )}
     </div>

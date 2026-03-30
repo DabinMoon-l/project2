@@ -4,6 +4,7 @@ import { useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence, useDragControls, PanInfo } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
+import { useWideMode } from '@/lib/hooks/useViewportScale';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 
 // BottomSheet 높이 타입
@@ -101,6 +102,7 @@ export default function BottomSheet({
   const dragControls = useDragControls();
   const previousActiveElement = useRef<HTMLElement | null>(null);
   const prefersReducedMotion = useReducedMotion();
+  const isWide = useWideMode();
 
   // 접근성 설정에 따라 애니메이션 선택
   const activeSheetVariants = prefersReducedMotion ? reducedMotionVariants : sheetVariants;
@@ -188,7 +190,7 @@ export default function BottomSheet({
             animate="visible"
             exit="exit"
             onClick={handleBackdropClick}
-            className="absolute inset-0 bg-black/50"
+            className={`absolute inset-0 ${isWide ? 'bg-transparent' : 'bg-black/50'}`}
             aria-hidden="true"
           />
 
