@@ -230,7 +230,7 @@ export default function QuizPreviewPage({ panelQuizId }: { panelQuizId?: string 
   const [reloadKey, setReloadKey] = useState(0);
   const [showTagPicker, setShowTagPicker] = useState(false);
   const [showExitModal, setShowExitModal] = useState(false);
-  const [requireRetest, setRequireRetest] = useState(false);
+  // requireRetest 제거 — 문제 수정 시 항상 questionUpdatedAt 설정
 
   // 피드백: questionNumber(1-indexed) → { type → count, otherTexts }
   const [feedbackByQuestion, setFeedbackByQuestion] = useState<Map<number, {
@@ -494,7 +494,6 @@ export default function QuizPreviewPage({ panelQuizId }: { panelQuizId?: string 
     setEditDescription(rawQuizData.description || '');
     setEditingIndex(null);
     setShowTagPicker(false);
-    setRequireRetest(false);
     setIsEditMode(true);
   };
 
@@ -512,7 +511,7 @@ export default function QuizPreviewPage({ panelQuizId }: { panelQuizId?: string 
       const changedIds = getChangedQuestionIds();
 
       // 재시험 모드면 questionUpdatedAt 설정, 아니면 설정 안 함
-      const flattenedQuestions = flattenQuestionsForSave(editableQuestions, originalQuestions, { trackChanges: true, useQuestionUpdatedAt: requireRetest });
+      const flattenedQuestions = flattenQuestionsForSave(editableQuestions, originalQuestions, { trackChanges: true, useQuestionUpdatedAt: true });
       // 원본 type이 유효한 교수 퀴즈 타입이 아니면 (ai-generated, custom 등) type 변경 방지
       const EDITABLE_TYPES = new Set(['midterm', 'final', 'past', 'independent']);
       const shouldUpdateType = EDITABLE_TYPES.has(originalTypeRef.current);
@@ -624,9 +623,9 @@ export default function QuizPreviewPage({ panelQuizId }: { panelQuizId?: string 
     return changedIds;
   };
 
-  // 재채점 CF 호출 (재시험 모드가 아니고 변경된 문제가 있을 때)
+  // 재채점 CF 호출 (변경된 문제가 있을 때)
   const callRegradeIfNeeded = async (changedIds: string[]) => {
-    if (!requireRetest && changedIds.length > 0) {
+    if (changedIds.length > 0) {
       try {
         await callFunction('regradeQuestions', { quizId, questionIds: changedIds });
       } catch (err) {
@@ -650,7 +649,7 @@ export default function QuizPreviewPage({ panelQuizId }: { panelQuizId?: string 
       const changedIds = getChangedQuestionIds();
 
       // 재시험 모드면 questionUpdatedAt 설정, 아니면 설정 안 함
-      const flattenedQuestions = flattenQuestionsForSave(editableQuestions, originalQuestions, { trackChanges: true, useQuestionUpdatedAt: requireRetest });
+      const flattenedQuestions = flattenQuestionsForSave(editableQuestions, originalQuestions, { trackChanges: true, useQuestionUpdatedAt: true });
 
       // 원본 type이 유효한 교수 퀴즈 타입이 아니면 (ai-generated, custom 등) type 변경 방지
       const EDITABLE_TYPES = new Set(['midterm', 'final', 'past', 'independent']);
@@ -1246,18 +1245,7 @@ export default function QuizPreviewPage({ panelQuizId }: { panelQuizId?: string 
                 </AnimatePresence>
               </div>
 
-              {/* 재시험 체크박스 */}
-              <label className="flex items-center gap-2 mt-3 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={requireRetest}
-                  onChange={(e) => setRequireRetest(e.target.checked)}
-                  className="w-4 h-4 accent-[#1A1A1A]"
-                />
-                <span className="text-sm text-[#1A1A1A] font-medium">
-                  재시험 (수정 이전 응답 제외 + 수정 뱃지 표시)
-                </span>
-              </label>
+              {/* 문제 수정 시 자동으로 서재 뱃지 표시 (requireRetest 제거) */}
             </div>
           </motion.div>
         ) : (
