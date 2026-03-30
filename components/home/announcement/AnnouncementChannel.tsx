@@ -575,7 +575,7 @@ export default function AnnouncementChannel({
 
       {/* ═══ 패널 모드: 인라인 렌더링 ═══ */}
       {isPanelMode && showModal && (
-        <div className="relative overflow-hidden flex flex-col" style={{ height: 'calc(100% - var(--kb-offset, 0px))' }}>
+        <div className="h-full relative overflow-hidden flex flex-col" style={{ paddingBottom: 'var(--kb-offset, 0px)' }}>
 
           {/* 패널 모드 내부 콘텐츠 — 바텀시트와 동일 */}
           {(() => {
@@ -1200,7 +1200,7 @@ export default function AnnouncementChannel({
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="fixed inset-0 z-[110] flex items-end bg-black/40"
-              style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)', bottom: 'var(--kb-offset, 0px)' }}
+              style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
               onClick={() => {
                 // 키보드 열림 시 키보드만 닫고 모달 유지 (네이티브 앱 패턴)
                 if (document.activeElement instanceof HTMLTextAreaElement ||
@@ -1218,7 +1218,7 @@ export default function AnnouncementChannel({
                 transition={{ type: 'spring', damping: 28, stiffness: 300 }}
                 onClick={(e) => e.stopPropagation()}
                 className="relative w-full flex flex-col overflow-hidden rounded-t-2xl will-change-transform"
-                style={{ height: sheetTop > 0 ? `calc(100dvh - ${sheetTop + 16}px - var(--kb-offset, 0px))` : `calc(92dvh - var(--kb-offset, 0px))` }}
+                style={{ height: sheetTop > 0 ? `calc(100dvh - ${sheetTop + 16}px)` : '92dvh', paddingBottom: 'var(--kb-offset, 0px)' }}
               >
                 {/* ── 배경 이미지 (blur를 이미지에 직접 적용 — backdrop-blur보다 GPU 효율적) ── */}
                 <div className="absolute inset-0 rounded-t-2xl overflow-hidden">
