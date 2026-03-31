@@ -305,7 +305,7 @@ export default function WriteForm({
         tag,
         ...(chapterTags.length > 0 ? { chapterTags } : {}),
         ...(tag === '학술' && aiDetailedAnswer ? { aiDetailedAnswer: true } : {}),
-        ...(tag === '비공개' ? { isPrivate: true } : {}),
+        ...(tag === '비공개' ? { isPrivate: true, aiDetailedAnswer: true } : {}),
       });
     } catch (err) {
       console.error('글 작성 실패:', err);
