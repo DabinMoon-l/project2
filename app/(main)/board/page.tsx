@@ -696,8 +696,9 @@ export default function BoardPage() {
   }, [posts, searchQuery, selectedTags, profPickPostIds]);
 
   const handlePostClick = useCallback((postId: string) => {
-    // 스와이프 네비게이션용 게시글 ID 순서 저장 (가로/세로 공통)
-    sessionStorage.setItem('board_post_ids', JSON.stringify(filteredPosts.map(p => p.id)));
+    // 스와이프 네비게이션용 게시글 ID 순서 저장 (비공개 글 제외)
+    const swipeableIds = filteredPosts.filter(p => !p.isPrivate).map(p => p.id);
+    sessionStorage.setItem('board_post_ids', JSON.stringify(swipeableIds));
     if (isWide) {
       // 가로모드: 2쪽 유지, 3쪽에 상세페이지 표시
       const action = isDetailOpen ? replaceDetail : openDetail;
