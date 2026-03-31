@@ -691,7 +691,7 @@ function SessionDonut({ attended, total, classFilter, month, day, maxDay, onMont
             <div className="rounded-full flex-shrink-0 border-2 border-[#1A1A1A] bg-[#1A1A1A]/50" style={{ width: Math.round(16 * scale), height: Math.round(16 * scale) }} />
             <span className="font-bold text-[#1A1A1A]" style={{ fontSize: Math.round(16 * scale) }}>전체</span>
           </div>
-          <span className="font-bold text-[#1A1A1A]" style={{ fontSize: Math.round(24 * scale) }}>{total}<span className="text-[#5C5C5C] font-normal ml-0.5" style={{ fontSize: Math.round(14 * scale) }}>명</span></span>
+          <span className="font-bold text-[#1A1A1A] whitespace-nowrap flex-shrink-0" style={{ fontSize: Math.round(24 * scale) }}>{total}<span className="text-[#5C5C5C] font-normal ml-0.5" style={{ fontSize: Math.round(14 * scale) }}>명</span></span>
         </div>
         {/* 접속 */}
         <div className="flex items-center justify-between">
@@ -699,7 +699,7 @@ function SessionDonut({ attended, total, classFilter, month, day, maxDay, onMont
             <div className="rounded-full bg-[#1A1A1A] flex-shrink-0" style={{ width: Math.round(16 * scale), height: Math.round(16 * scale) }} />
             <span className="font-bold text-[#1A1A1A]" style={{ fontSize: Math.round(16 * scale) }}>접속</span>
           </div>
-          <span className="font-bold text-[#1A1A1A]" style={{ fontSize: Math.round(24 * scale) }}>{attended}<span className="text-[#5C5C5C] font-normal ml-0.5" style={{ fontSize: Math.round(14 * scale) }}>명</span></span>
+          <span className="font-bold text-[#1A1A1A] whitespace-nowrap flex-shrink-0" style={{ fontSize: Math.round(24 * scale) }}>{attended}<span className="text-[#5C5C5C] font-normal ml-0.5" style={{ fontSize: Math.round(14 * scale) }}>명</span></span>
         </div>
         {/* 미접속 */}
         <div className="flex items-center justify-between">
@@ -707,7 +707,7 @@ function SessionDonut({ attended, total, classFilter, month, day, maxDay, onMont
             <div className="rounded-full border-2 border-[#1A1A1A] bg-[#F5F0E8] flex-shrink-0" style={{ width: Math.round(16 * scale), height: Math.round(16 * scale) }} />
             <span className="font-bold text-[#1A1A1A]" style={{ fontSize: Math.round(16 * scale) }}>미접속</span>
           </div>
-          <span className="font-bold text-[#1A1A1A]" style={{ fontSize: Math.round(24 * scale) }}>{notAttended}<span className="text-[#5C5C5C] font-normal ml-0.5" style={{ fontSize: Math.round(14 * scale) }}>명</span></span>
+          <span className="font-bold text-[#1A1A1A] whitespace-nowrap flex-shrink-0" style={{ fontSize: Math.round(24 * scale) }}>{notAttended}<span className="text-[#5C5C5C] font-normal ml-0.5" style={{ fontSize: Math.round(14 * scale) }}>명</span></span>
         </div>
       </div>
     </div>
