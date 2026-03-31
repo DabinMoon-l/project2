@@ -282,6 +282,36 @@ function ReviewPageContent() {
   // 업데이트 모달이 열릴 때 네비게이션 숨김
   useHideNav(!!(updateModalInfo || detailedUpdateInfo));
 
+  // 수정 뱃지 클릭 핸들러 — 가로모드에서는 확인 시트 건너뛰고 바로 UpdateQuizModal 열기
+  const handleUpdateBadgeClick = useCallback(async (quizId: string, quizTitle: string, filterType: string) => {
+    if (isWide) {
+      // 가로모드: 바로 로딩 → UpdateQuizModal
+      try {
+        setUpdateModalLoading(true);
+        setUpdateModalInfo({ quizId, quizTitle, filterType }); // 로딩 표시용
+        const info = await checkQuizUpdate(quizId);
+        if (info && info.hasUpdate && info.updatedQuestions.length > 0) {
+          const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
+          if (quizDoc.exists()) {
+            setTotalQuestionCount(quizDoc.data().questions?.length || 0);
+          }
+          setDetailedUpdateInfo(info);
+        } else {
+          alert('이미 최신 상태입니다.');
+          setUpdateModalInfo(null);
+        }
+      } catch {
+        alert('업데이트 정보를 불러오는데 실패했습니다.');
+        setUpdateModalInfo(null);
+      } finally {
+        setUpdateModalLoading(false);
+      }
+    } else {
+      // 세로모드: 기존 확인 바텀시트
+      setUpdateModalInfo({ quizId, quizTitle, filterType });
+    }
+  }, [isWide, checkQuizUpdate]);
+
   // 커스텀 폴더 (결합형 문제는 1개로 계산)
   const customFolders = customFoldersData.map(f => ({
     id: f.id,
@@ -629,8 +659,8 @@ function ReviewPageContent() {
               koreanAbcItems: q.koreanAbcItems || undefined,
               passageMixedExamples: q.passageMixedExamples || undefined,
               commonQuestion: q.commonQuestion || undefined,
-              // 보기
-              mixedExamples: q.mixedExamples || undefined,
+              // 보기 — passageBlocks 우선
+              mixedExamples: q.passageBlocks || q.mixedExamples || undefined,
               bogi: q.bogi || undefined,
               subQuestionOptions: q.subQuestionOptions || undefined,
               subQuestionOptionsType: q.subQuestionOptionsType || undefined,
@@ -1035,7 +1065,7 @@ function ReviewPageContent() {
                               combinedTotal: question.combinedTotal ?? undefined,
                               // 복합 제시문
                               passageMixedExamples: question.passageMixedExamples || undefined,
-                              mixedExamples: question.mixedExamples || undefined,
+                              mixedExamples: question.passageBlocks || question.mixedExamples || undefined,
                             });
                           }
                         }
@@ -1261,7 +1291,7 @@ function ReviewPageContent() {
             currentUserId={user?.uid}
             updatedQuizIds={detailedUpdatedQuizzes}
             onUpdateClick={(quizId, quizTitle) => {
-              setUpdateModalInfo({ quizId, quizTitle, filterType: 'library' });
+              handleUpdateBadgeClick(quizId, quizTitle, 'library');
             }}
           />
         )}
@@ -1298,7 +1328,7 @@ function ReviewPageContent() {
             onStartReviewWrongOnly={handleStartReviewWrongOnlyByQuizId}
             onUnbookmark={toggleQuizBookmark}
             onUpdateClick={(quizId, quizTitle, filterType) => {
-              setUpdateModalInfo({ quizId, quizTitle, filterType });
+              handleUpdateBadgeClick(quizId, quizTitle, filterType);
             }}
           />
         )}
@@ -1332,7 +1362,7 @@ function ReviewPageContent() {
               router.push(url);
             }}
             onUpdateClick={(quizId, quizTitle) => {
-              setUpdateModalInfo({ quizId, quizTitle, filterType: 'wrong' });
+              handleUpdateBadgeClick(quizId, quizTitle, 'wrong');
             }}
           />
         )}
@@ -1360,7 +1390,7 @@ function ReviewPageContent() {
             handleFolderClickInAssignMode={handleFolderClickInAssignMode}
             handleFolderClick={handleFolderClick}
             onUpdateClick={(quizId, quizTitle, filterType) => {
-              setUpdateModalInfo({ quizId, quizTitle, filterType });
+              handleUpdateBadgeClick(quizId, quizTitle, filterType);
             }}
           />
         )}

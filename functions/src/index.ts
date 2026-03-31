@@ -44,6 +44,63 @@ export { regradeQuestions } from "./regradeQuestions";
 export { recordReviewPractice } from "./reviewPractice";
 
 // ============================================
+// 수정 문제 practiceOnly 뱃지 제거 (quizResults answeredAt 갱신)
+// ============================================
+export const updatePracticeAnsweredAt = onCall(
+  { region: "asia-northeast3" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+    }
+    const uid = request.auth.uid;
+    const { quizId, questionUpdates } = request.data as {
+      quizId: string;
+      questionUpdates: Array<{
+        questionId: string;
+        isCorrect: boolean;
+        userAnswer: string;
+        isNew: boolean; // originalScores에 없던 문제
+      }>;
+    };
+
+    if (!quizId || !Array.isArray(questionUpdates) || questionUpdates.length === 0) {
+      throw new HttpsError("invalid-argument", "quizId와 questionUpdates가 필요합니다.");
+    }
+
+    const db = getFirestore();
+
+    // 해당 유저의 quizResult 찾기
+    const resultsSnap = await db.collection("quizResults")
+      .where("userId", "==", uid)
+      .where("quizId", "==", quizId)
+      .orderBy("completedAt", "desc")
+      .limit(1)
+      .get();
+
+    if (resultsSnap.empty) {
+      throw new HttpsError("not-found", "퀴즈 결과를 찾을 수 없습니다.");
+    }
+
+    const resultDoc = resultsSnap.docs[0];
+    const updatedScores: Record<string, unknown> = {};
+
+    for (const qu of questionUpdates) {
+      if (qu.isNew) {
+        updatedScores[`questionScores.${qu.questionId}`] = {
+          isCorrect: qu.isCorrect,
+          userAnswer: qu.userAnswer,
+          answeredAt: new Date(),
+        };
+      } else {
+        updatedScores[`questionScores.${qu.questionId}.answeredAt`] = new Date();
+      }
+    }
+
+    await resultDoc.ref.update(updatedScores);
+  }
+);
+
+// ============================================
 // Reviews 비동기 생성 (quizResults 생성 트리거)
 // ============================================
 export { generateReviewsOnResult } from "./reviewsGenerator";

@@ -201,6 +201,18 @@ export interface CloudFunctionMap {
     input: { quizId: string; questionIds: string[] };
     output: void;
   };
+  updatePracticeAnsweredAt: {
+    input: {
+      quizId: string;
+      questionUpdates: Array<{
+        questionId: string;
+        isCorrect: boolean;
+        userAnswer: string;
+        isNew: boolean;
+      }>;
+    };
+    output: void;
+  };
 
   // ── AI 문제 생성 ──
   enqueueGenerationJob: {
