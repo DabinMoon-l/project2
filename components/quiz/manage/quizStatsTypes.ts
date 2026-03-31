@@ -53,6 +53,7 @@ export interface FlattenedQuestion {
   imageUrl?: string;
   // 제시문 관련
   mixedExamples?: MixedExampleItem[];
+  passageBlocks?: MixedExampleItem[];
   passagePrompt?: string;
   // 보기 관련
   bogi?: BogiData | null;

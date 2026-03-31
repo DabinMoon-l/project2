@@ -51,6 +51,7 @@ export interface UpdatedQuestion {
   commonQuestion?: string;
   // 보기
   mixedExamples?: MixedExampleBlock[];
+  passageBlocks?: MixedExampleBlock[];
   bogi?: { questionText?: string; items: Array<{ label: string; content: string }> } | null;
   subQuestionOptions?: string[];
   subQuestionOptionsType?: 'text' | 'labeled' | 'mixed';

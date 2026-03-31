@@ -524,7 +524,7 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
               koreanAbcItems: data.koreanAbcItems || undefined,
               passageMixedExamples: data.passageMixedExamples || undefined,
               commonQuestion: data.commonQuestion || undefined,
-              mixedExamples: data.mixedExamples || undefined,
+              mixedExamples: data.passageBlocks || data.mixedExamples || undefined,
               bogi: data.bogi || undefined,
               subQuestionOptions: data.subQuestionOptions || undefined,
               subQuestionOptionsType: data.subQuestionOptionsType || undefined,
@@ -639,8 +639,8 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
             koreanAbcItems: q.koreanAbcItems || undefined,
             passageMixedExamples: q.passageMixedExamples || undefined,
             commonQuestion: q.commonQuestion || undefined,
-            // 보기
-            mixedExamples: q.mixedExamples || undefined,
+            // 보기 — passageBlocks 우선
+            mixedExamples: q.passageBlocks || q.mixedExamples || undefined,
             bogi: q.bogi || undefined,
             subQuestionOptions: q.subQuestionOptions || undefined,
             subQuestionOptionsType: q.subQuestionOptionsType || undefined,
@@ -738,7 +738,7 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
             passageMixedExamples: q.passageMixedExamples,
             commonQuestion: q.commonQuestion,
             image: q.image || q.imageUrl,
-            mixedExamples: q.mixedExamples,
+            mixedExamples: q.passageBlocks || q.mixedExamples,
             subQuestionOptions: q.subQuestionOptions,
             subQuestionOptionsType: q.subQuestionOptionsType,
             subQuestionImage: q.subQuestionImage,

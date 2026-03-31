@@ -62,6 +62,7 @@ interface RawQuizQuestion {
   examples?: string[];
   examplesType?: string;
   mixedExamples?: FeedbackMixedBlock[];
+  passageBlocks?: FeedbackMixedBlock[];
   subQuestionOptions?: string[];
   subQuestionOptionsType?: string;
   passagePrompt?: string;
@@ -272,8 +273,9 @@ export default function FeedbackPage({ panelQuizId, onPanelNavigate }: { panelQu
           let subQuestionOptionsType: QuestionResult['subQuestionOptionsType'] = (q.subQuestionOptionsType as QuestionResult['subQuestionOptionsType']) || undefined;
           let mixedExamples: QuestionResult['mixedExamples'] = undefined;
 
-          if (q.mixedExamples && q.mixedExamples.length > 0) {
-            mixedExamples = q.mixedExamples;
+          const passageOrMixed = q.passageBlocks || q.mixedExamples;
+          if (passageOrMixed && passageOrMixed.length > 0) {
+            mixedExamples = passageOrMixed;
             subQuestionOptionsType = 'mixed' as const;
           } else if (!subQuestionOptions && q.examples && q.examples.length > 0) {
             // examples 필드를 subQuestionOptions로 변환

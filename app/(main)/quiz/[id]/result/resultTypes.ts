@@ -24,6 +24,7 @@ export interface FirestoreQuizQuestion {
   /** @deprecated 제시문(passageBlocks)으로 대체됨 */
   koreanAbcExamples?: Array<{ text: string }>;
   mixedExamples?: MixedExampleBlock[];
+  passageBlocks?: MixedExampleBlock[];
   subQuestionOptions?: string[];
   subQuestionOptionsType?: 'text' | 'labeled' | 'mixed';
   subQuestionImage?: string;
