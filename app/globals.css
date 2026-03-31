@@ -205,10 +205,11 @@ img {
   border-radius: 4px;
 }
 
-/* 가로모드: 모든 fixed 오버레이를 사이드바 뒤로 안 가게 조정 */
+/* 가로모드: 모든 fixed 오버레이를 사이드바 뒤로 안 가게 + 2쪽 안에 가두기 */
 @media (orientation: landscape) and (min-width: 1024px) {
   .fixed.inset-0 {
     left: var(--modal-left, 0px) !important;
+    right: var(--modal-right, 0px) !important;
   }
 }
 

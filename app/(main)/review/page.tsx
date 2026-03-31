@@ -282,35 +282,10 @@ function ReviewPageContent() {
   // 업데이트 모달이 열릴 때 네비게이션 숨김
   useHideNav(!!(updateModalInfo || detailedUpdateInfo));
 
-  // 수정 뱃지 클릭 핸들러 — 가로모드에서는 확인 시트 건너뛰고 바로 UpdateQuizModal 열기
+  // 수정 뱃지 클릭 핸들러 — 확인 바텀시트 표시
   const handleUpdateBadgeClick = useCallback(async (quizId: string, quizTitle: string, filterType: string) => {
-    if (isWide) {
-      // 가로모드: 바로 로딩 → UpdateQuizModal
-      try {
-        setUpdateModalLoading(true);
-        setUpdateModalInfo({ quizId, quizTitle, filterType }); // 로딩 표시용
-        const info = await checkQuizUpdate(quizId);
-        if (info && info.hasUpdate && info.updatedQuestions.length > 0) {
-          const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
-          if (quizDoc.exists()) {
-            setTotalQuestionCount(quizDoc.data().questions?.length || 0);
-          }
-          setDetailedUpdateInfo(info);
-        } else {
-          alert('이미 최신 상태입니다.');
-          setUpdateModalInfo(null);
-        }
-      } catch {
-        alert('업데이트 정보를 불러오는데 실패했습니다.');
-        setUpdateModalInfo(null);
-      } finally {
-        setUpdateModalLoading(false);
-      }
-    } else {
-      // 세로모드: 기존 확인 바텀시트
-      setUpdateModalInfo({ quizId, quizTitle, filterType });
-    }
-  }, [isWide, checkQuizUpdate]);
+    setUpdateModalInfo({ quizId, quizTitle, filterType });
+  }, []);
 
   // 커스텀 폴더 (결합형 문제는 1개로 계산)
   const customFolders = customFoldersData.map(f => ({

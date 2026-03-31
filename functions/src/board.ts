@@ -804,7 +804,8 @@ async function generateBoardAIReply(
   // 출력 토큰: 기본 8,192, 상세 16,384
   const maxOutputTokens = isDetailed ? 16384 : 8192;
 
-  const thinkingBudget = 8192;
+  // 비공개 콩콩이는 thinking 끄기 (비용 5배 절감)
+  const thinkingBudget = post.isPrivate ? 0 : 8192;
   const requestBody = {
     contents: [{ parts }],
     generationConfig: {
@@ -812,9 +813,11 @@ async function generateBoardAIReply(
       topK: 40,
       topP: 0.95,
       maxOutputTokens: thinkingBudget + maxOutputTokens,
-      thinkingConfig: {
-        thinkingBudget,
-      },
+      ...(thinkingBudget > 0 ? {
+        thinkingConfig: {
+          thinkingBudget,
+        },
+      } : {}),
     },
   };
 
@@ -1041,16 +1044,20 @@ ${conversationHistory}`;
     }
   }
 
+  // 비공개 콩콩이는 thinking 끄기 (비용 5배 절감)
+  const thinkingBudget = post.isPrivate ? 0 : 8192;
   const requestBody = {
     contents: [{ parts }],
     generationConfig: {
       temperature: 0.5,
       topK: 40,
       topP: 0.95,
-      maxOutputTokens: 8192 + 8192,  // thinking(8192) + 응답(8192)
-      thinkingConfig: {
-        thinkingBudget: 8192,
-      },
+      maxOutputTokens: thinkingBudget + 8192,
+      ...(thinkingBudget > 0 ? {
+        thinkingConfig: {
+          thinkingBudget,
+        },
+      } : {}),
     },
   };
 

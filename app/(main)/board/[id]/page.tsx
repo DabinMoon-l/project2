@@ -10,7 +10,7 @@ import CommentSection from '@/components/board/CommentSection';
 import LinkifiedText from '@/components/board/LinkifiedText';
 import { usePost, useDeletePost, useLike } from '@/lib/hooks/useBoard';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { useUser, useDetailPanel, useClosePanel } from '@/lib/contexts';
+import { useUser, useDetailPanel, useClosePanel, usePanelLock } from '@/lib/contexts';
 import { useWideMode } from '@/lib/hooks/useViewportScale';
 import { getScrollLockCount } from '@/lib/utils/scrollLock';
 
@@ -190,6 +190,9 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
   const { post, loading, error, refresh } = usePost(postId);
   const { deletePost, loading: deleting } = useDeletePost();
   const { toggleLike } = useLike();
+
+  // 비공개 글(나만의 콩콩이)이면 3쪽 잠금 — 다른 콘텐츠에 밀리지 않도록
+  usePanelLock(isPanelMode && !!post?.isPrivate);
 
   // ── 우→좌 스와이프 → 다음 게시글 (순환) ──
   const swipeNav = useRef({ startX: 0, startY: 0, lastX: 0, active: false, locked: false, startTime: 0, navigating: false });
