@@ -28,12 +28,14 @@ interface CommentSectionProps {
   postAuthorId?: string;
   /** 이미 채택된 댓글 ID */
   acceptedCommentId?: string;
+  /** 비공개 글 여부 (EXP 미지급) */
+  isPrivatePost?: boolean;
 }
 
 /**
  * 댓글 섹션 컴포넌트 — 하단 고정 입력바 + 이미지 첨부
  */
-export default function CommentSection({ postId, postAuthorId, acceptedCommentId }: CommentSectionProps) {
+export default function CommentSection({ postId, postAuthorId, acceptedCommentId, isPrivatePost }: CommentSectionProps) {
   const { theme } = useTheme();
   const { user } = useAuth();
   const { profile } = useUser();
@@ -301,7 +303,7 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
       setShowUrlInput(false);
       setUrlInputValue('');
       setReplyingTo(null);
-      if (profile?.role !== 'professor') {
+      if (profile?.role !== 'professor' && !isPrivatePost) {
         setTimeout(() => {
           showExpToast(EXP_REWARDS.COMMENT_CREATE, '댓글 작성');
         }, 500);

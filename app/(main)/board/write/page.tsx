@@ -131,7 +131,7 @@ export default function WritePage({ isPanelMode }: { isPanelMode?: boolean } = {
     if (postId) {
       localStorage.removeItem(DRAFT_KEY);
 
-      if (profile?.role !== 'professor') {
+      if (profile?.role !== 'professor' && !postData.isPrivate) {
         showExpToast(EXP_REWARDS.POST_CREATE, '게시글 작성');
       }
       if (isPanelMode) {
