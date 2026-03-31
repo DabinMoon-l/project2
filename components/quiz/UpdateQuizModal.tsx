@@ -140,11 +140,12 @@ export default function UpdateQuizModal({
     setResultData(null);
     setShowCloseConfirm(false);
     hasStartedRef.current = false;
-    lockScroll();
+    // 가로모드에서는 스크롤 잠금 스킵 (레이아웃 깨짐 방지)
+    if (!isWide) lockScroll();
     return () => {
-      unlockScroll();
+      if (!isWide) unlockScroll();
     };
-  }, [isOpen, updateInfo.quizId]);
+  }, [isOpen, updateInfo.quizId, isWide]);
 
   const questions = updateInfo.updatedQuestions;
 
