@@ -360,7 +360,7 @@ export default function OpinionChannel({ isPanelMode = false, onOpenPanel, onClo
 
       {/* ═══ 패널 모드: 포탈 없이 인라인 렌더링 ═══ */}
       {isPanelMode && showModal && (
-        <div className="h-full relative overflow-hidden" style={{ paddingBottom: 'var(--kb-offset, 0px)' }}>
+        <div className="h-full relative overflow-hidden">
           <div className="relative z-10 h-full flex flex-col">
             {/* 상단 바 */}
             <div className="shrink-0 pt-3 pb-2 px-4">
@@ -374,10 +374,10 @@ export default function OpinionChannel({ isPanelMode = false, onOpenPanel, onClo
               </div>
             </div>
 
-            {/* 메시지 영역 — h-full 스크롤 */}
+            {/* 메시지 영역 — h-full 스크롤, 하단에 입력바 높이만큼 여백 */}
             <div
               ref={msgAreaRef}
-              className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide overscroll-contain px-0 py-2"
+              className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide overscroll-contain px-0 py-2 pb-16"
             >
               {loading ? (
                 <div className="flex items-center justify-center py-20">
@@ -409,8 +409,16 @@ export default function OpinionChannel({ isPanelMode = false, onOpenPanel, onClo
               )}
             </div>
 
-            {/* 입력 바 */}
-            <div className="shrink-0 border-t border-white/10 bg-black/20 backdrop-blur-xl">
+            {/* 입력 바 — fixed로 키보드 위에 고정 */}
+            <div
+              data-kb-fixed
+              className="fixed z-40 border-t border-white/10 bg-black/20 backdrop-blur-xl"
+              style={{
+                left: 'var(--detail-panel-left, 0px)',
+                right: 'var(--detail-panel-right, 0px)',
+                bottom: 'var(--kb-offset, 0px)',
+              }}
+            >
               {/* 이미지 미리보기 (파일 + URL) */}
               {(pendingPreview || linkedImageUrls.length > 0) && (
                 <div className="px-4 pt-2 flex items-center gap-2 flex-wrap">
@@ -549,7 +557,7 @@ export default function OpinionChannel({ isPanelMode = false, onOpenPanel, onClo
                 {/* 메시지 영역 */}
                 <div
                   ref={msgAreaRef}
-                  className="relative z-10 flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide overscroll-contain px-0 py-2"
+                  className="relative z-10 flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide overscroll-contain px-0 py-2 pb-4"
                 >
                   {loading ? (
                     <div className="flex items-center justify-center py-20">
@@ -582,7 +590,7 @@ export default function OpinionChannel({ isPanelMode = false, onOpenPanel, onClo
                 </div>
 
                 {/* 입력 바 */}
-                <div className="relative z-10 shrink-0 border-t border-white/10 bg-black/20 backdrop-blur-xl">
+                <div data-kb-fixed className="relative z-10 shrink-0 border-t border-white/10 bg-black/20 backdrop-blur-xl">
                   {/* 이미지 미리보기 (파일 + URL) */}
                   {(pendingPreview || linkedImageUrls.length > 0) && (
                     <div className="px-4 pt-2 flex items-center gap-2 flex-wrap">

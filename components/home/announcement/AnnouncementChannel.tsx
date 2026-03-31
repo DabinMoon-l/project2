@@ -575,7 +575,7 @@ export default function AnnouncementChannel({
 
       {/* ═══ 패널 모드: 인라인 렌더링 ═══ */}
       {isPanelMode && showModal && (
-        <div className="h-full relative overflow-hidden flex flex-col" style={{ paddingBottom: 'var(--kb-offset, 0px)' }}>
+        <div className="h-full relative overflow-hidden flex flex-col">
 
           {/* 패널 모드 내부 콘텐츠 — 바텀시트와 동일 */}
           {(() => {
@@ -854,10 +854,16 @@ export default function AnnouncementChannel({
                   </AnimatePresence>
                 </div>
 
-                {/* ── 하단 입력 (교수님 전용) ── */}
+                {/* ── 하단 입력 (교수님 전용) — fixed로 키보드 위에 고정 ── */}
                 {isProfessor && (
                   <div
-                    className="relative z-10 shrink-0 mx-3 mb-3 rounded-2xl bg-white/8 backdrop-blur-xl border border-white/15 shadow-[0_4px_24px_rgba(0,0,0,0.25)] px-3 py-3"
+                    data-kb-fixed
+                    className="fixed z-40 mx-3 rounded-2xl bg-white/8 backdrop-blur-xl border border-white/15 shadow-[0_4px_24px_rgba(0,0,0,0.25)] px-3 py-3"
+                    style={{
+                      left: 'var(--detail-panel-left, 0px)',
+                      right: 'var(--detail-panel-right, 0px)',
+                      bottom: 'calc(var(--kb-offset, 0px) + 0.75rem)',
+                    }}
                     onDragEnter={handleDragEnter}
                     onDragLeave={handleDragLeave}
                     onDragOver={handleDragOver}
@@ -1512,6 +1518,7 @@ export default function AnnouncementChannel({
                 {/* ── 하단 입력 (교수님 전용) ── */}
                 {isProfessor && (
                   <div
+                    data-kb-fixed
                     className="relative z-10 shrink-0 mx-3 mb-3 rounded-2xl bg-white/8 backdrop-blur-xl border border-white/15 shadow-[0_4px_24px_rgba(0,0,0,0.25)] px-3 py-3"
                     onDragEnter={handleDragEnter}
                     onDragLeave={handleDragLeave}
