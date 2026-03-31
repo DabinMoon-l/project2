@@ -360,8 +360,10 @@ function MainLayoutGrid({
             // 홈 가로모드: 배경 포탈이 safe area 포함 전체를 덮으므로 padding 불필요
             paddingTop: (isWide && isHomeActive) ? '0px' : 'env(safe-area-inset-top, 0px)',
             ...(!hideNavigation && !isWide
-              ? { paddingBottom: 'calc(4.25rem + env(safe-area-inset-bottom, 0px))' }
-              : {}),
+              ? { paddingBottom: 'calc(4.25rem + env(safe-area-inset-bottom, 0px) + var(--kb-offset, 0px))' }
+              : !isWide
+                ? { paddingBottom: 'var(--kb-offset, 0px)' }
+                : {}),
             ...(isWide ? { marginLeft: '240px', height: 'var(--app-height, 100dvh)', minHeight: 'var(--app-height, 100dvh)', overflow: 'hidden' } : {}),
             // fixed 요소 좌측 위치 조정용 CSS 변수
             // 모바일: 0, 잠금 시: 240px (main 영역은 nav 오프셋만)
