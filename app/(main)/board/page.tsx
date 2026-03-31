@@ -1087,17 +1087,12 @@ export default function BoardPage() {
 
         {/* 비공개 글 헤드라인 */}
         {privatePost && (
-          <div className="mb-4 relative">
-            <div className="absolute -top-2 left-3 z-10 px-2.5 py-0.5 text-[10px] font-bold text-white" style={{ backgroundColor: '#5B21B6' }}>
-              MY KONGKONGI
-            </div>
-            <div style={{ border: '2px solid #5B21B6' }}>
-              <HeadlineArticle
-                post={privatePost}
-                onClick={() => handlePostClick(privatePost.id)}
-                comments={commentsMap.get(privatePost.id) || []}
-              />
-            </div>
+          <div className="mb-4">
+            <HeadlineArticle
+              post={privatePost}
+              onClick={() => handlePostClick(privatePost.id)}
+              comments={commentsMap.get(privatePost.id) || []}
+            />
           </div>
         )}
 
