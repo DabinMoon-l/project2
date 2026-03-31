@@ -324,64 +324,84 @@ export const onCommentCreate = onDocumentCreated(
           });
         }
 
-        // 콩콩이 대댓글 자동 응답 트리거 (학술 또는 비공개 글)
-        if (comment.parentId && (postData.tag === "학술" || postData.isPrivate)) {
+        // 콩콩이 자동 응답 트리거
+        const shouldTriggerAI = (() => {
+          // 대댓글: 학술 또는 비공개 글
+          if (comment.parentId && (postData.tag === "학술" || postData.isPrivate)) return true;
+          // 비공개 글 루트 댓글: 새 브랜치 생성 (콩콩이가 대댓글로 응답)
+          if (!comment.parentId && postData.isPrivate) return true;
+          return false;
+        })();
+
+        if (shouldTriggerAI) {
           try {
-            // 부모 댓글이 콩콩이 댓글인지 확인
-            const parentDoc = await db.collection("comments").doc(comment.parentId).get();
-            if (parentDoc.exists) {
-              const parentComment = parentDoc.data() as Comment;
-              if (parentComment.authorId === "gemini-ai") {
-                // 작성자가 교수인지 확인
-                const authorDoc = await db.collection("users").doc(userId).get();
-                const authorRole = authorDoc.data()?.role;
+            // 비공개 글 루트 댓글 → 콩콩이가 대댓글로 응답 (새 브랜치)
+            if (!comment.parentId && postData.isPrivate) {
+              const authorDoc = await db.collection("users").doc(userId).get();
+              const authorRole = authorDoc.data()?.role;
+              if (authorRole !== "professor") {
+                await generateAIReplyToComment(
+                  postData,
+                  postId,
+                  commentId, // 이 루트 댓글이 브랜치의 parent
+                  comment,
+                  GEMINI_API_KEY.value(),
+                );
+              }
+            }
+            // 대댓글 → 콩콩이 응답
+            else if (comment.parentId) {
+              const parentDoc = await db.collection("comments").doc(comment.parentId).get();
+              if (parentDoc.exists) {
+                const parentComment = parentDoc.data() as Comment;
+                // 학술: 부모가 콩콩이여야 응답 / 비공개: 부모가 누구든 응답
+                if (parentComment.authorId === "gemini-ai" || postData.isPrivate) {
+                  const authorDoc = await db.collection("users").doc(userId).get();
+                  const authorRole = authorDoc.data()?.role;
 
-                if (authorRole !== "professor") {
-                  // 스팸 방지: 같은 유저가 30초 내 연속 AI 응답 트리거하는 것 방지
-                  // (다른 유저는 독립적으로 응답 받을 수 있음)
-                  const recentReplies = await db.collection("comments")
-                    .where("parentId", "==", comment.parentId)
-                    .get();
+                  if (authorRole !== "professor") {
+                    // 스팸 방지: 같은 유저가 30초 내 연속 AI 응답 트리거하는 것 방지
+                    const recentReplies = await db.collection("comments")
+                      .where("parentId", "==", comment.parentId)
+                      .get();
 
-                  const thirtySecAgo = Date.now() - 30 * 1000;
-                  const hasRecentAIForUser = recentReplies.docs.some((d) => {
-                    const data = d.data();
-                    if (data.authorId !== "gemini-ai") return false;
-                    const ts = data.createdAt?.toMillis?.() || data.createdAt?._seconds * 1000 || 0;
-                    if (ts <= thirtySecAgo) return false;
-                    // 이 AI 댓글 직전에 같은 유저의 댓글이 있는지 확인
-                    const sorted = recentReplies.docs
-                      .map((r) => r.data())
-                      .filter((r) => {
-                        const rTs = r.createdAt?.toMillis?.() || r.createdAt?._seconds * 1000 || 0;
-                        return rTs < ts && rTs > thirtySecAgo;
-                      })
-                      .sort((a, b) => {
-                        const aTs = a.createdAt?.toMillis?.() || a.createdAt?._seconds * 1000 || 0;
-                        const bTs = b.createdAt?.toMillis?.() || b.createdAt?._seconds * 1000 || 0;
-                        return bTs - aTs;
-                      });
-                    // 직전 댓글이 같은 유저면 스팸으로 판단
-                    return sorted.length > 0 && sorted[0].authorId === userId;
-                  });
+                    const thirtySecAgo = Date.now() - 30 * 1000;
+                    const hasRecentAIForUser = recentReplies.docs.some((d) => {
+                      const data = d.data();
+                      if (data.authorId !== "gemini-ai") return false;
+                      const ts = data.createdAt?.toMillis?.() || data.createdAt?._seconds * 1000 || 0;
+                      if (ts <= thirtySecAgo) return false;
+                      const sorted = recentReplies.docs
+                        .map((r) => r.data())
+                        .filter((r) => {
+                          const rTs = r.createdAt?.toMillis?.() || r.createdAt?._seconds * 1000 || 0;
+                          return rTs < ts && rTs > thirtySecAgo;
+                        })
+                        .sort((a, b) => {
+                          const aTs = a.createdAt?.toMillis?.() || a.createdAt?._seconds * 1000 || 0;
+                          const bTs = b.createdAt?.toMillis?.() || b.createdAt?._seconds * 1000 || 0;
+                          return bTs - aTs;
+                        });
+                      return sorted.length > 0 && sorted[0].authorId === userId;
+                    });
 
-                  if (!hasRecentAIForUser) {
-                    await generateAIReplyToComment(
-                      postData,
-                      postId,
-                      comment.parentId,
-                      comment,
-                      GEMINI_API_KEY.value(),
-                    );
-                  } else {
-                    console.log(`스팸 방지: ${userId}에 대한 30초 내 AI 대댓글 이미 존재`);
+                    if (!hasRecentAIForUser) {
+                      await generateAIReplyToComment(
+                        postData,
+                        postId,
+                        comment.parentId,
+                        comment,
+                        GEMINI_API_KEY.value(),
+                      );
+                    } else {
+                      console.log(`스팸 방지: ${userId}에 대한 30초 내 AI 대댓글 이미 존재`);
+                    }
                   }
                 }
               }
             }
           } catch (aiError) {
-            // AI 대댓글 실패해도 댓글 작성은 성공으로 처리
-            console.error("콩콩이 대댓글 자동 응답 실패:", aiError);
+            console.error("콩콩이 자동 응답 실패:", aiError);
           }
         }
       }
@@ -846,8 +866,11 @@ async function generateAIReplyToComment(
 
   // 전체 대화 기록 사용 (Gemini 1M 컨텍스트 — 제한 불필요)
 
-  // 대화 기록 구성
-  let conversationHistory = `콩콩이: ${rootComment.content}`;
+  // 대화 기록 구성 (루트 댓글 화자 자동 판별)
+  const rootSpeaker = rootComment.authorId === "gemini-ai"
+    ? "콩콩이"
+    : (rootComment.authorNickname || "학생");
+  let conversationHistory = `${rootSpeaker}: ${rootComment.content}`;
   for (const msg of threadComments) {
     const speaker = msg.authorId === "gemini-ai"
       ? "콩콩이"
