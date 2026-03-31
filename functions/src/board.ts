@@ -617,7 +617,7 @@ async function generateBoardAIReply(
   apiKey: string,
 ): Promise<void> {
   const db = getFirestore();
-  const isDetailed = post.aiDetailedAnswer === true;
+  const isDetailed = post.aiDetailedAnswer === true || post.isPrivate === true;
 
   // scope 최대 길이: 기본 8,000자, 상세 12,000자
   const scopeMaxLength = isDetailed ? 12000 : 8000;
