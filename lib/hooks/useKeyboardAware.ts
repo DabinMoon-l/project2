@@ -205,24 +205,24 @@ export function useKeyboardCSSVariable() {
     };
 
     const update = () => {
+      // --kb-offset은 동기로 즉시 설정 (rAF 지연 시 첫 키보드 열림에 1프레임 늦음)
+      const kbHeight = Math.max(0, window.innerHeight - vv.height);
+      document.documentElement.style.setProperty('--kb-offset', kbHeight + 'px');
+
       cancelAnimationFrame(rafRef.current);
       rafRef.current = requestAnimationFrame(() => {
-        // 키보드 높이 = 전체 화면 - 보이는 영역 (vv.offsetTop 제거 → scroll 위치 무관)
-        const kbHeight = Math.max(0, window.innerHeight - vv.height);
         const wasOpen = isOpenRef.current;
         isOpenRef.current = kbHeight > 50;
 
-        document.documentElement.style.setProperty('--kb-offset', kbHeight + 'px');
-
-        // 가로모드 레이아웃 높이 조정: 키보드 위 영역만큼 축소
-        // Android: innerHeight 자체가 줄어들어 kbHeight ≈ 0 → 100dvh 유지 (네이티브 처리)
-        // iOS PWA: innerHeight 불변, vv.height만 줄어듦 → vv.height로 축소 필요
+        // 가로모드 레이아웃 높이 조정
         document.documentElement.style.setProperty(
           '--app-height',
           isOpenRef.current ? `${vv.height}px` : '100dvh'
         );
 
-        // 키보드 닫힘 직후 window scroll 리셋 (원래 화면 위치 복원)
+        // iOS: 키보드 열림 시 fixed 오버레이 안 input에 포커스하면 페이지 자체가 스크롤됨 → 리셋
+        if (isOpenRef.current) resetScroll();
+        // 키보드 닫힘 직후 window scroll 리셋
         if (wasOpen && !isOpenRef.current) resetScroll();
       });
     };
@@ -232,11 +232,18 @@ export function useKeyboardCSSVariable() {
       const target = e.target;
       if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return;
 
+      // focusin 시점에도 --kb-offset 즉시 동기화 (resize 이벤트보다 먼저 발생할 수 있음)
+      const kbHeight = Math.max(0, window.innerHeight - vv.height);
+      if (kbHeight > 0) {
+        document.documentElement.style.setProperty('--kb-offset', kbHeight + 'px');
+      }
+
+      // fixed 요소 내 input은 scrollIntoView 스킵 (입력바가 자체적으로 --kb-offset으로 위치)
+      if (target.closest('[data-kb-fixed]')) return;
+
       // 키보드 열림 + 레이아웃 갱신 대기 후 scrollIntoView
       setTimeout(() => {
         if (!isOpenRef.current) return;
-        // 부드러운 스크롤로 입력 요소를 뷰포트 안에 배치
-        // window scroll 리셋 하지 않음 → 입력 요소가 보이는 상태 유지
         target.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       }, 300);
     };
