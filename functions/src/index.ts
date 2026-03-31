@@ -73,7 +73,7 @@ export const updatePracticeAnsweredAt = onCall(
     const resultsSnap = await db.collection("quizResults")
       .where("userId", "==", uid)
       .where("quizId", "==", quizId)
-      .orderBy("completedAt", "desc")
+      .orderBy("createdAt", "desc")
       .limit(1)
       .get();
 
