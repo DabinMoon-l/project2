@@ -220,8 +220,8 @@ export function useKeyboardCSSVariable() {
           isOpenRef.current ? `${vv.height}px` : '100dvh'
         );
 
-        // iOS: 키보드 열림 시 fixed 오버레이 안 input에 포커스하면 페이지 자체가 스크롤됨 → 리셋
-        if (isOpenRef.current) resetScroll();
+        // iOS: 키보드 열리는 순간에만 scroll 리셋 (열려있는 동안은 자유 스크롤 허용)
+        if (!wasOpen && isOpenRef.current) resetScroll();
         // 키보드 닫힘 직후 window scroll 리셋
         if (wasOpen && !isOpenRef.current) resetScroll();
       });
