@@ -463,6 +463,7 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
                       currentUserId={user?.uid}
                       onDelete={handleDelete}
                       onEdit={handleEdit}
+                      onReply={() => handleReply(comment.id, comment.authorNickname)}
                       onLike={handleLike}
                       isLiked={checkIsLiked(reply.id)}
                       isDeleting={deletingId === reply.id}

@@ -641,11 +641,10 @@ export async function generateBattleQuestions(
 JSON 배열로 출력: [{"text":"문제","type":"multiple","choices":["선지1","선지2","선지3","선지4"],"correctAnswer":0,"difficulty":"${difficulty}","explanation":"정답 해설","choiceExplanations":["선지1 해설","선지2 해설","선지3 해설","선지4 해설"],"chapterId":"3"}]`
         : prompt;
 
-      const thinkingBudget = 16384;
+      // 배틀 문제는 단순 4지선다라 thinking 불필요 (비용 절감)
       const generationConfig: Record<string, unknown> = {
         temperature: isSimplified ? 0.7 : 0.9,
-        maxOutputTokens: thinkingBudget + (isSimplified ? 6144 : 16384),
-        thinkingConfig: { thinkingBudget },
+        maxOutputTokens: isSimplified ? 6144 : 16384,
       };
 
       // 구조화 출력 (3차 시도에서만 자유형)
