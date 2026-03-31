@@ -16,7 +16,7 @@ export interface PreviewLabeledItem {
  */
 export interface PreviewMixedChild {
   id: string;
-  type: 'text' | 'labeled' | 'gana' | 'image';
+  type: 'text' | 'labeled' | 'gana' | 'bullet' | 'image';
   label?: string;
   content?: string;
   items?: PreviewLabeledItem[];
@@ -24,11 +24,11 @@ export interface PreviewMixedChild {
 }
 
 /**
- * 혼합 지문 블록 (text/labeled/gana/image/grouped)
+ * 혼합 지문 블록 (text/labeled/gana/bullet/image/grouped)
  */
 export interface PreviewMixedBlock {
   id: string;
-  type: 'text' | 'labeled' | 'gana' | 'image' | 'grouped';
+  type: 'text' | 'labeled' | 'gana' | 'bullet' | 'image' | 'grouped';
   label?: string;
   content?: string;
   items?: PreviewLabeledItem[];

@@ -280,6 +280,25 @@ export default function CombinedQuestionGroup({
                         </div>
                       );
                     }
+                    if (block.type === 'bullet') {
+                      return (
+                        <div key={block.id} className="mb-4 p-3 bg-[#EDEAE4] border border-[#1A1A1A] space-y-1">
+                          {(block.items || []).filter(i => i.content.trim()).map((item, idx) => (
+                            <p key={`${block.id}-bullet-${idx}`} className="text-[#1A1A1A] text-sm">
+                              <span className="font-bold mr-1">◦</span>
+                              {renderInlineMarkdown(item.content)}
+                            </p>
+                          ))}
+                        </div>
+                      );
+                    }
+                    if (block.type === 'image' && block.imageUrl) {
+                      return (
+                        <div key={block.id} className="mb-4 overflow-hidden border border-[#1A1A1A]">
+                          <img src={block.imageUrl} alt="" className="max-w-full h-auto object-contain" />
+                        </div>
+                      );
+                    }
                     return null;
                   })}
 

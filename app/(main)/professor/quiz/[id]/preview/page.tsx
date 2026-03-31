@@ -70,6 +70,7 @@ interface RawQuestion {
   passageImage?: string;
   koreanAbcItems?: string[];
   passageMixedExamples?: PreviewMixedBlock[];
+  passageBlocks?: PreviewMixedBlock[];
   commonQuestion?: string;
   [key: string]: unknown;
 }
@@ -332,7 +333,8 @@ export default function QuizPreviewPage({ panelQuizId }: { panelQuizId?: string 
             explanation: q.explanation || '',
             image: q.image || q.imageUrl || undefined,
             subQuestionOptions: (() => {
-              if (q.mixedExamples && Array.isArray(q.mixedExamples) && q.mixedExamples.length > 0) return undefined;
+              const blocks = q.passageBlocks || q.mixedExamples;
+              if (blocks && Array.isArray(blocks) && blocks.length > 0) return undefined;
               if (Array.isArray(q.examples)) return q.examples.filter((item: string) => item != null);
               if (q.examples && typeof q.examples === 'object' && !Array.isArray(q.examples) && Array.isArray(q.examples.items)) {
                 return q.examples.items.filter((item: string) => item != null);
@@ -343,13 +345,14 @@ export default function QuizPreviewPage({ panelQuizId }: { panelQuizId?: string 
               return q.subQuestionOptions || undefined;
             })(),
             subQuestionOptionsType: (() => {
-              if (q.mixedExamples && Array.isArray(q.mixedExamples) && q.mixedExamples.length > 0) return 'mixed' as const;
+              const blocks = q.passageBlocks || q.mixedExamples;
+              if (blocks && Array.isArray(blocks) && blocks.length > 0) return 'mixed' as const;
               if (Array.isArray(q.examples)) return 'text' as const;
               if (q.examples && typeof q.examples === 'object' && !Array.isArray(q.examples) && q.examples.type) return q.examples.type as 'text' | 'labeled' | 'mixed';
               if (q.koreanAbcExamples && Array.isArray(q.koreanAbcExamples)) return 'labeled' as const;
               return undefined;
             })(),
-            mixedExamples: q.mixedExamples || undefined,
+            mixedExamples: q.passageBlocks || q.mixedExamples || undefined,
             subQuestionImage: q.subQuestionImage || undefined,
             chapterId: q.chapterId || undefined,
             chapterDetailId: q.chapterDetailId || undefined,
@@ -708,6 +711,11 @@ export default function QuizPreviewPage({ panelQuizId }: { panelQuizId?: string 
                       <span className="font-bold">({item.label})</span> {item.content}
                     </p>
                   ))}
+                  {child.type === 'bullet' && (child.items || []).filter((i: PreviewLabeledItem) => i.content?.trim()).map((item: PreviewLabeledItem) => (
+                    <p key={item.id} className="text-sm text-[#1A1A1A]">
+                      <span className="mr-1">&bull;</span>{item.content}
+                    </p>
+                  ))}
                   {child.type === 'image' && child.imageUrl && (
                     <Image src={child.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto border border-[#1A1A1A] rounded-lg" unoptimized />
                   )}
@@ -749,6 +757,26 @@ export default function QuizPreviewPage({ panelQuizId }: { panelQuizId?: string 
                     </p>
                   ))}
                 </div>
+              </div>
+            );
+          }
+          if (block.type === 'bullet') {
+            return (
+              <div key={block.id} className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-lg">
+                <div className="space-y-1">
+                  {(block.items || []).filter((i: PreviewLabeledItem) => i.content?.trim()).map((item: PreviewLabeledItem) => (
+                    <p key={item.id} className="text-sm text-[#1A1A1A]">
+                      <span className="mr-1">&bull;</span>{item.content}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            );
+          }
+          if (block.type === 'image' && block.imageUrl) {
+            return (
+              <div key={block.id} className="mb-3 overflow-hidden border border-[#1A1A1A] rounded-lg">
+                <Image src={block.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto" unoptimized />
               </div>
             );
           }

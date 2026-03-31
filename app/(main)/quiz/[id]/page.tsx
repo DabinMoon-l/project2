@@ -305,7 +305,7 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
             imageUrl: q.imageUrl || undefined,
             choices: q.choices || undefined,
             examples: q.examples || undefined,
-            mixedExamples: q.mixedExamples || undefined,
+            mixedExamples: q.passageBlocks || q.mixedExamples || undefined,
             hasMultipleAnswers,
             // 결합형 그룹 정보 추가
             combinedGroupId: q.combinedGroupId,
@@ -372,7 +372,7 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
                 imageUrl: sq.imageUrl || undefined,
                 choices: sq.choices || undefined,
                 examples: sq.examples || undefined,
-                mixedExamples: sq.mixedExamples || undefined,
+                mixedExamples: sq.passageBlocks || sq.mixedExamples || undefined,
                 hasMultipleAnswers,
                 // 결합형 그룹 정보 추가 (하위 호환)
                 combinedGroupId: legacyCombinedGroupId,
@@ -449,7 +449,7 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
             imageUrl: q.imageUrl || undefined,
             choices: q.choices || undefined,
             examples: q.examples || undefined,
-            mixedExamples: q.mixedExamples || undefined,
+            mixedExamples: q.passageBlocks || q.mixedExamples || undefined,
             hasMultipleAnswers,
             // 발문 정보 추가
             passagePrompt: q.passagePrompt || undefined,

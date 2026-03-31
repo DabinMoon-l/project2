@@ -355,7 +355,7 @@ export default function QuizStatsModal({
           chapterId: q.chapterId,
           chapterDetailId: q.chapterDetailId,
           imageUrl: q.imageUrl,
-          mixedExamples: q.mixedExamples,
+          mixedExamples: q.passageBlocks || q.mixedExamples,
           passagePrompt: q.passagePrompt,
           bogi: q.bogi,
           passage: q.passage,
@@ -523,7 +523,7 @@ export default function QuizStatsModal({
         chapterId: q.chapterId,
         chapterDetailId: q.chapterDetailId,
         imageUrl: q.imageUrl,
-        mixedExamples: q.mixedExamples,
+        mixedExamples: q.passageBlocks || q.mixedExamples,
         passagePrompt: q.passagePrompt,
         bogi: q.bogi,
         passage: q.passage,
@@ -1271,6 +1271,24 @@ export default function QuizStatsModal({
                                       <span className="font-bold mr-1">({labeledItem.label})</span>{labeledItem.content}
                                     </p>
                                   ))}
+                                </div>
+                              );
+                            }
+                            if (item.type === 'bullet') {
+                              return (
+                                <div key={item.id} className="mb-2 p-2 bg-[#F5F0E8] border border-[#1A1A1A] space-y-1 rounded-lg">
+                                  {item.items?.map((labeledItem, idx) => (
+                                    <p key={`${item.id}-bullet-${idx}`} className="text-xs text-[#1A1A1A]">
+                                      <span className="font-bold mr-1">◦</span>{labeledItem.content}
+                                    </p>
+                                  ))}
+                                </div>
+                              );
+                            }
+                            if (item.type === 'image' && item.imageUrl) {
+                              return (
+                                <div key={item.id} className="mb-2 overflow-hidden border border-[#1A1A1A] rounded-lg">
+                                  <img src={item.imageUrl} alt="" className="w-full max-w-xs h-auto object-contain" />
                                 </div>
                               );
                             }

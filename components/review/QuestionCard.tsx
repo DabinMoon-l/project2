@@ -395,6 +395,13 @@ export default function QuestionCard({
                         </div>
                       );
                     }
+                    if (block.type === 'image' && block.imageUrl) {
+                      return (
+                        <div key={block.id} className="mb-3 overflow-hidden border border-[#1A1A1A]">
+                          <Image src={block.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto" unoptimized />
+                        </div>
+                      );
+                    }
                     return null;
                   })}
                 </>

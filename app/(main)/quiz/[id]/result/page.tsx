@@ -301,10 +301,11 @@ export default function QuizResultPage({ panelQuizId, onPanelNavigate }: { panel
             // 문제 이미지/보기 필드
             image: q.image || q.imageUrl || undefined,
             // 보기: examples 객체에서 items 추출
-            // mixedExamples가 있으면 그것을 직접 사용하므로 subQuestionOptions는 null
+            // passageBlocks/mixedExamples가 있으면 그것을 직접 사용하므로 subQuestionOptions는 null
             subQuestionOptions: (() => {
-              // mixedExamples가 있는 경우 - mixedExamples를 직접 사용하므로 undefined 반환
-              if (q.mixedExamples && Array.isArray(q.mixedExamples) && q.mixedExamples.length > 0) {
+              // passageBlocks 또는 mixedExamples가 있는 경우
+              const blocks = q.passageBlocks || q.mixedExamples;
+              if (blocks && Array.isArray(blocks) && blocks.length > 0) {
                 return undefined;
               }
               // examples가 직접 배열인 경우 (이전 형식)
@@ -326,8 +327,9 @@ export default function QuizResultPage({ panelQuizId, onPanelNavigate }: { panel
             })(),
             // 보기 타입 추출
             subQuestionOptionsType: (() => {
-              // mixedExamples가 있는 경우 (최신 형식 - 텍스트+ㄱㄴㄷ 혼합)
-              if (q.mixedExamples && Array.isArray(q.mixedExamples) && q.mixedExamples.length > 0) {
+              // passageBlocks 또는 mixedExamples가 있는 경우 (최신 형식)
+              const blocks = q.passageBlocks || q.mixedExamples;
+              if (blocks && Array.isArray(blocks) && blocks.length > 0) {
                 return 'mixed' as const; // 혼합 형식 표시
               }
               if (Array.isArray(q.examples)) {
@@ -341,8 +343,8 @@ export default function QuizResultPage({ panelQuizId, onPanelNavigate }: { panel
               }
               return undefined;
             })(),
-            // 혼합 보기 원본 데이터 (렌더링용)
-            mixedExamples: q.mixedExamples || undefined,
+            // 혼합 보기 원본 데이터 (렌더링용) — passageBlocks 우선
+            mixedExamples: q.passageBlocks || q.mixedExamples || undefined,
             subQuestionImage: q.subQuestionImage || undefined,
             // 챕터 정보
             chapterId: q.chapterId || undefined,
@@ -893,6 +895,11 @@ export default function QuizResultPage({ panelQuizId, onPanelNavigate }: { panel
                     <span className="font-bold">({item.label})</span> {item.content}
                   </p>
                 ))}
+                {child.type === 'bullet' && (child.items || []).filter(i => i.content?.trim()).map((item) => (
+                  <p key={item.id} className="text-sm text-[#1A1A1A]">
+                    <span className="mr-1">&bull;</span>{item.content}
+                  </p>
+                ))}
                 {child.type === 'image' && child.imageUrl && (
                   <Image src={child.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto border border-[#1A1A1A]" unoptimized />
                 )}
@@ -934,6 +941,26 @@ export default function QuizResultPage({ panelQuizId, onPanelNavigate }: { panel
                   </p>
                 ))}
               </div>
+            </div>
+          );
+        }
+        if (block.type === 'bullet') {
+          return (
+            <div key={block.id} className="mb-3 p-3 border border-[#8B6914] bg-[#FFF8E1] rounded-lg">
+              <div className="space-y-1">
+                {(block.items || []).filter(i => i.content?.trim()).map((item) => (
+                  <p key={item.id} className="text-sm text-[#1A1A1A]">
+                    <span className="mr-1">&bull;</span>{item.content}
+                  </p>
+                ))}
+              </div>
+            </div>
+          );
+        }
+        if (block.type === 'image' && block.imageUrl) {
+          return (
+            <div key={block.id} className="mb-3 overflow-hidden border border-[#1A1A1A] rounded-lg">
+              <Image src={block.imageUrl} alt="" width={800} height={400} className="max-w-full h-auto" unoptimized />
             </div>
           );
         }

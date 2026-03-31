@@ -400,6 +400,13 @@ function QuestionCard({ question, courseId, headerRight }: QuestionCardProps) {
               </div>
             );
           }
+          if (item.type === 'image' && item.imageUrl) {
+            return (
+              <div key={item.id} className="mt-3 relative w-full max-w-xs overflow-hidden bg-white border border-[#1A1A1A]">
+                <img src={item.imageUrl} alt="제시문 이미지" className="w-full h-auto object-contain" />
+              </div>
+            );
+          }
           return null;
         })}
 
