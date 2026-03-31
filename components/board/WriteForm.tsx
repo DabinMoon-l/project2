@@ -342,7 +342,7 @@ export default function WriteForm({
           style={{
             border: '1px solid #1A1A1A',
             backgroundColor: tag === '비공개' ? '#EDEAE4' : theme.colors.background,
-            color: tag === '비공개' ? '#5B21B6' : theme.colors.text,
+            color: theme.colors.text,
             fontWeight: tag === '비공개' ? 700 : 400,
           }}
         />
@@ -392,9 +392,9 @@ export default function WriteForm({
             disabled={hasPrivatePost && tag !== '비공개'}
             className="px-3 py-1.5 text-xs font-bold transition-colors"
             style={tag === '비공개' ? {
-              backgroundColor: '#5B21B6',
+              backgroundColor: '#1A1A1A',
               color: '#F5F0E8',
-              border: '1px solid #5B21B6',
+              border: '1px solid #1A1A1A',
             } : hasPrivatePost ? {
               backgroundColor: 'transparent',
               color: '#999',
@@ -402,8 +402,8 @@ export default function WriteForm({
               cursor: 'not-allowed',
             } : {
               backgroundColor: 'transparent',
-              color: '#5B21B6',
-              border: '1px solid #5B21B6',
+              color: '#1A1A1A',
+              border: '1px solid #1A1A1A',
             }}
           >
             비공개
@@ -451,7 +451,7 @@ export default function WriteForm({
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
               className="text-[11px] mt-1.5"
-              style={{ color: '#5B21B6' }}
+              style={{ color: '#5C5C5C' }}
             >
               나만 볼 수 있는 글이에요. 콩콩이가 모든 대화를 기억하며 답변해줘요!
             </motion.p>
