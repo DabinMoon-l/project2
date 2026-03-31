@@ -10,8 +10,7 @@ import { BOARD_TAGS } from '@/lib/hooks/useBoard';
 import { useChapterKeywords } from '@/lib/hooks/useChapterKeywords';
 import { useCourse } from '@/lib/contexts/CourseContext';
 import { useHomeScale } from '@/components/home/useHomeScale';
-import { useAuth } from '@/lib/hooks/useAuth';
-import { collection, query, where, getDocs, db } from '@/lib/repositories';
+import { useUser } from '@/lib/contexts/UserContext';
 
 interface WriteFormProps {
   /** 제출 핸들러 */
@@ -46,6 +45,7 @@ export default function WriteForm({
   hasPrivatePost = false,
 }: WriteFormProps) {
   const { theme } = useTheme();
+  const { profile } = useUser();
   const { uploadImage, uploadFile, loading: uploading, error: uploadError } = useUpload();
   const { userCourseId } = useCourse();
   const formScale = useHomeScale();
@@ -114,22 +114,20 @@ export default function WriteForm({
   }, [tag, title, content, onDraftChange]);
 
   // 비공개 태그 선택 시 이미 비공개 글이 있으면 차단
-  const prevTagRef = useRef<BoardTag | undefined>(undefined);
+  const privateTitle = `${profile?.nickname || '나'}의 콩콩이`;
   const handlePrivateToggle = useCallback(() => {
     if (tag === '비공개') {
-      // 비공개 해제 → 이전 제목 복원 (고정 제목이었으므로 비움)
       setTag(undefined);
       setTitle('');
       onDraftChange?.('', content, undefined);
     } else {
-      if (hasPrivatePost) return; // 이미 비공개 글 존재
-      prevTagRef.current = tag;
+      if (hasPrivatePost) return;
       setTag('비공개');
-      setTitle('나만의 콩콩이');
+      setTitle(privateTitle);
       setAiDetailedAnswer(false);
-      onDraftChange?.('나만의 콩콩이', content, '비공개');
+      onDraftChange?.(privateTitle, content, '비공개');
     }
-  }, [tag, content, onDraftChange, hasPrivatePost]);
+  }, [tag, content, onDraftChange, hasPrivatePost, privateTitle]);
 
   // 첨부 파일 상태
   const [images, setImages] = useState<{ file: File; preview: string }[]>([]);
@@ -455,7 +453,7 @@ export default function WriteForm({
               className="text-[11px] mt-1.5"
               style={{ color: '#5B21B6' }}
             >
-              나만 볼 수 있는 글이에요. 콩콩이가 모든 대화를 기억하며 답변해줘요.
+              나만 볼 수 있는 글이에요. 콩콩이가 모든 대화를 기억하며 답변해줘요!
             </motion.p>
           )}
           {hasPrivatePost && tag !== '비공개' && (
