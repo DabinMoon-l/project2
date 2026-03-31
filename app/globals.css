@@ -39,10 +39,12 @@ body {
 }
 
 /* 메인 콘텐츠 영역 — dvh 폴백으로 모든 기종에서 화면 채움 보장 */
+/* 키보드 열림 시 하단 패딩 추가 → 가려진 콘텐츠를 스크롤로 볼 수 있음 */
 [data-main-content] {
   min-height: 100vh;
   min-height: 100dvh;
   overflow-x: hidden;
+  padding-bottom: var(--kb-offset, 0px);
 }
 
 /* Samsung Internet 자체 "맨 위로" FAB 억제 */
