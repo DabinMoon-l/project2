@@ -188,6 +188,23 @@ img {
   display: none;
 }
 
+/* 사이드바 서재 스크롤바 */
+.scrollbar-sidebar {
+  scrollbar-width: thin;
+  scrollbar-color: #C6C0B8 transparent;
+}
+.scrollbar-sidebar::-webkit-scrollbar {
+  display: block;
+  width: 4px;
+}
+.scrollbar-sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-sidebar::-webkit-scrollbar-thumb {
+  background-color: #C6C0B8;
+  border-radius: 4px;
+}
+
 /* 가로모드: 모든 fixed 오버레이를 사이드바 뒤로 안 가게 조정 */
 @media (orientation: landscape) and (min-width: 1024px) {
   .fixed.inset-0 {

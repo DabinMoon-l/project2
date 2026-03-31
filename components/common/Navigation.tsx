@@ -185,8 +185,8 @@ function SidebarLibraryItems({ textColor, onItemClick }: { textColor: string; on
       className="overflow-hidden"
     >
       <div
-        className="py-1 overflow-y-auto"
-        style={{ maxHeight: 'calc(100vh - 400px)', scrollbarWidth: 'thin' }}
+        className="py-1 overflow-y-auto scrollbar-sidebar"
+        style={{ maxHeight: 'calc(100vh - 400px)' }}
       >
         {quizzes.map((quiz) => {
           const isSelected = activeQuizId === quiz.id;
