@@ -105,10 +105,15 @@ export const onPostCreate = onDocumentCreated(
 
     const db = getFirestore();
 
-    try {
-      await enforceRateLimit(userId, "POST", postId);
+    // 비공개 글(나만의 콩콩이)은 EXP 미지급
+    const skipExp = !!post.isPrivate;
 
-      const expReward = EXP_REWARDS.POST_CREATE;
+    try {
+      if (!skipExp) {
+        await enforceRateLimit(userId, "POST", postId);
+      }
+
+      const expReward = skipExp ? 0 : EXP_REWARDS.POST_CREATE;
       const reason = "게시글 작성";
 
       await db.runTransaction(async (transaction) => {
@@ -119,25 +124,29 @@ export const onPostCreate = onDocumentCreated(
           return;
         }
 
-        // READ 먼저
-        const userDoc = await readUserForExp(transaction, userId);
-
-        // WRITE
+        // WRITE — rewarded 마킹 (비공개도 마킹하여 중복 방지)
         transaction.update(snapshot.ref, {
           rewarded: true,
           rewardedAt: FieldValue.serverTimestamp(),
           expRewarded: expReward,
         });
 
-        addExpInTransaction(transaction, userId, expReward, reason, userDoc, {
-          type: "post_create",
-          sourceId: postId,
-          sourceCollection: "posts",
-          metadata: { tag: post.tag || null },
-        });
+        if (!skipExp) {
+          // READ 먼저
+          const userDoc = await readUserForExp(transaction, userId);
+
+          addExpInTransaction(transaction, userId, expReward, reason, userDoc, {
+            type: "post_create",
+            sourceId: postId,
+            sourceCollection: "posts",
+            metadata: { tag: post.tag || null },
+          });
+        }
       });
 
-      console.log(`게시글 보상 지급 완료: ${userId}`, { postId, expReward });
+      console.log(skipExp
+        ? `비공개 글 EXP 스킵: ${postId}`
+        : `게시글 보상 지급 완료: ${userId}`, { postId, expReward });
 
       // 비공개 글: 1인 1개 검증 (중복 시 새 글 삭제)
       if (post.isPrivate) {
@@ -269,9 +278,18 @@ export const onCommentCreate = onDocumentCreated(
     }
 
     try {
-      await enforceRateLimit(userId, "COMMENT", commentId);
+      // 게시글 조회 (비공개 여부 확인 + 이후 알림/AI에서 재사용)
+      const postDoc = await db.collection("posts").doc(postId).get();
+      const postData = postDoc.exists ? postDoc.data() as Post : null;
 
-      const expReward = EXP_REWARDS.COMMENT_CREATE;
+      // 비공개 글(나만의 콩콩이) 댓글은 EXP 미지급
+      const skipExp = !!postData?.isPrivate;
+
+      if (!skipExp) {
+        await enforceRateLimit(userId, "COMMENT", commentId);
+      }
+
+      const expReward = skipExp ? 0 : EXP_REWARDS.COMMENT_CREATE;
       const reason = "댓글 작성";
 
       await db.runTransaction(async (transaction) => {
@@ -282,22 +300,24 @@ export const onCommentCreate = onDocumentCreated(
           return;
         }
 
-        // READ 먼저
-        const userDoc = await readUserForExp(transaction, userId);
-
-        // WRITE
+        // WRITE — rewarded 마킹 (비공개도 마킹하여 중복 방지)
         transaction.update(snapshot.ref, {
           rewarded: true,
           rewardedAt: FieldValue.serverTimestamp(),
           expRewarded: expReward,
         });
 
-        addExpInTransaction(transaction, userId, expReward, reason, userDoc, {
-          type: "comment_create",
-          sourceId: commentId,
-          sourceCollection: "comments",
-          metadata: { postId },
-        });
+        if (!skipExp) {
+          // READ 먼저
+          const userDoc = await readUserForExp(transaction, userId);
+
+          addExpInTransaction(transaction, userId, expReward, reason, userDoc, {
+            type: "comment_create",
+            sourceId: commentId,
+            sourceCollection: "comments",
+            metadata: { postId },
+          });
+        }
       });
 
       // 게시글의 댓글 수 서버사이드 증가
@@ -305,12 +325,12 @@ export const onCommentCreate = onDocumentCreated(
         commentCount: FieldValue.increment(1),
       }).catch((e) => console.warn("commentCount 증가 실패:", e));
 
-      console.log(`댓글 보상 지급 완료: ${userId}`, { postId, commentId, expReward });
+      console.log(skipExp
+        ? `비공개 글 댓글 EXP 스킵: ${commentId}`
+        : `댓글 보상 지급 완료: ${userId}`, { postId, commentId, expReward });
 
       // 게시글 작성자에게 알림 (본인 댓글은 제외)
-      const postDoc = await db.collection("posts").doc(postId).get();
-      if (postDoc.exists) {
-        const postData = postDoc.data() as Post;
+      if (postDoc.exists && postData) {
         const postAuthorId = postData.authorId || postData.userId;
         if (postAuthorId && postAuthorId !== userId) {
           await db.collection("notifications").add({
