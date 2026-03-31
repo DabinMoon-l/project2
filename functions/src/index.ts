@@ -73,15 +73,18 @@ export const updatePracticeAnsweredAt = onCall(
     const resultsSnap = await db.collection("quizResults")
       .where("userId", "==", uid)
       .where("quizId", "==", quizId)
-      .orderBy("createdAt", "desc")
-      .limit(1)
       .get();
 
     if (resultsSnap.empty) {
       throw new HttpsError("not-found", "퀴즈 결과를 찾을 수 없습니다.");
     }
 
-    const resultDoc = resultsSnap.docs[0];
+    // 최신 결과 선택 (createdAt 내림차순)
+    const resultDoc = resultsSnap.docs.sort((a, b) => {
+      const aTime = a.data().createdAt?.toMillis?.() || 0;
+      const bTime = b.data().createdAt?.toMillis?.() || 0;
+      return bTime - aTime;
+    })[0];
     const updatedScores: Record<string, unknown> = {};
 
     for (const qu of questionUpdates) {

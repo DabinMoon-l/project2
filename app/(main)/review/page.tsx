@@ -282,20 +282,38 @@ function ReviewPageContent() {
   // 업데이트 모달이 열릴 때 네비게이션 숨김
   useHideNav(!!(updateModalInfo || detailedUpdateInfo));
 
-  // 수정 뱃지 클릭 핸들러 — 가로모드에서는 확인 시트 건너뛰고 바로 UpdateQuizModal 열기
+  // 수정 뱃지 클릭 핸들러 — 가로모드에서는 확인 시트 건너뛰고 바로 3쪽에 UpdateQuizModal 열기
   const handleUpdateBadgeClick = useCallback(async (quizId: string, quizTitle: string, filterType: string) => {
     if (isWide) {
-      // 가로모드: 바로 로딩 → UpdateQuizModal
+      // 가로모드: 3쪽 패널에 UpdateQuizModal 열기
       try {
         setUpdateModalLoading(true);
         setUpdateModalInfo({ quizId, quizTitle, filterType }); // 로딩 표시용
         const info = await checkQuizUpdate(quizId);
         if (info && info.hasUpdate && info.updatedQuestions.length > 0) {
           const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
-          if (quizDoc.exists()) {
-            setTotalQuestionCount(quizDoc.data().questions?.length || 0);
-          }
-          setDetailedUpdateInfo(info);
+          const totalCount = quizDoc.exists() ? (quizDoc.data().questions?.length || 0) : 0;
+          // 3쪽 패널에 모달 열기
+          const action = isDetailOpen ? replaceDetail : openDetail;
+          action(
+            <UpdateQuizModal
+              isOpen
+              onClose={() => {
+                closeDetail();
+                setUpdateModalInfo(null);
+              }}
+              updateInfo={info}
+              totalQuestionCount={totalCount}
+              practiceOnly
+              onComplete={() => {
+                refresh();
+                refreshQuizUpdate();
+                closeDetail();
+                setUpdateModalInfo(null);
+              }}
+            />
+          );
+          setUpdateModalInfo(null);
         } else {
           alert('이미 최신 상태입니다.');
           setUpdateModalInfo(null);
@@ -310,7 +328,7 @@ function ReviewPageContent() {
       // 세로모드: 기존 확인 바텀시트
       setUpdateModalInfo({ quizId, quizTitle, filterType });
     }
-  }, [isWide, checkQuizUpdate]);
+  }, [isWide, checkQuizUpdate, isDetailOpen, openDetail, replaceDetail, closeDetail, refresh, refreshQuizUpdate]);
 
   // 커스텀 폴더 (결합형 문제는 1개로 계산)
   const customFolders = customFoldersData.map(f => ({
