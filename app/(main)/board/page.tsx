@@ -402,7 +402,7 @@ const MasonryItem = memo(function MasonryItem({
       )}
 
       {/* 태그 + 통계 */}
-      <PostStats post={post} tag={post.tag} />
+      <PostStats post={post} tag={post.tag} isPrivate={post.isPrivate} />
     </motion.article>
   );
 });
