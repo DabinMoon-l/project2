@@ -22,6 +22,7 @@ export {
   useToProfessorPosts,
   usePostsByClass,
   useAllPostsForCourse,
+  useMyPrivatePost,
 } from './useBoardPosts';
 
 // 댓글 훅

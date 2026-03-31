@@ -864,7 +864,7 @@ export default function QuizStatsModal({
   const statsContent = (
       <div className={isPanelMode
         ? 'h-full bg-[#F5F0E8] overflow-hidden flex flex-col'
-        : 'w-full max-w-lg bg-[#F5F0E8] border-2 border-[#1A1A1A] max-h-[82vh] overflow-hidden flex flex-col rounded-xl'
+        : 'w-full max-w-lg bg-[#F5F0E8] border-2 border-[#1A1A1A] h-[82vh] overflow-hidden flex flex-col rounded-xl'
       }
         onClick={(e) => e.stopPropagation()}
       >

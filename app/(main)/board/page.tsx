@@ -7,7 +7,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { collection, query, where, getDocs, db } from '@/lib/repositories';
 import { Skeleton, ScrollToTopButton } from '@/components/common';
 import { SPRING_TAP, TAP_SCALE } from '@/lib/constants/springs';
-import { usePosts, usePinnedPosts, type Post, type Comment, type BoardTag, BOARD_TAGS } from '@/lib/hooks/useBoard';
+import { usePosts, usePinnedPosts, useMyPrivatePost, type Post, type Comment, type BoardTag, BOARD_TAGS } from '@/lib/hooks/useBoard';
+import { useAuth } from '@/lib/hooks/useAuth';
 import { useCourse } from '@/lib/contexts/CourseContext';
 import { useUser } from '@/lib/contexts/UserContext';
 import { type CourseId } from '@/lib/types/course';
@@ -434,6 +435,7 @@ function NewspaperSkeleton() {
 export default function BoardPage() {
   const router = useRouter();
   const { semesterSettings, userCourseId, setProfessorCourse, assignedCourses, getCourseById, courseList: allCourses } = useCourse();
+  const { user } = useAuth();
   const { profile } = useUser();
   const isWide = useWideMode();
   const { openDetail, replaceDetail, isDetailOpen, isLocked } = useDetailPanel();
@@ -460,6 +462,7 @@ export default function BoardPage() {
   const activeCourseId = isProfessor ? selectedCourseId : profile?.courseId;
   const { posts, loading, error, hasMore, loadMore, refresh } = usePosts('all', activeCourseId);
   const { pinnedPosts, pinPost, unpinPost } = usePinnedPosts(activeCourseId);
+  const { privatePost } = useMyPrivatePost();
 
   // 과목 목록 (교수님용 — assignedCourses 기반 필터링)
   const courseList = useMemo(() => {
@@ -482,13 +485,18 @@ export default function BoardPage() {
   // 헤더 가시성 추적 (스크롤 맨 위로 버튼용)
   const headerRef = useRef<HTMLElement>(null);
 
-  // 댓글 미리보기 대상 postId (고정글 + 최신 20개만 — 카드 미리보기용)
+  // 댓글 미리보기 대상 postId (비공개글 + 고정글 + 최신 20개만 — 카드 미리보기용)
   const commentTargetIds = useMemo(() => {
-    const pinnedIds = pinnedPosts.map(p => p.id);
-    const pinnedSet = new Set(pinnedIds);
-    const otherIds = posts.filter(p => !pinnedSet.has(p.id)).slice(0, 20).map(p => p.id);
-    return [...pinnedIds, ...otherIds];
-  }, [pinnedPosts, posts]);
+    const ids = new Set<string>();
+    // 비공개 글 우선
+    if (privatePost) ids.add(privatePost.id);
+    // 고정 글
+    pinnedPosts.forEach(p => ids.add(p.id));
+    // 나머지 최신 20개
+    const otherIds = posts.filter(p => !ids.has(p.id)).slice(0, 20).map(p => p.id);
+    otherIds.forEach(id => ids.add(id));
+    return [...ids];
+  }, [pinnedPosts, posts, privatePost]);
 
   const postIdsKey = useMemo(() => commentTargetIds.join(','), [commentTargetIds]);
 
@@ -639,11 +647,16 @@ export default function BoardPage() {
 
   // 검색 + 태그 + 교수님 픽 필터링 및 정렬 (최신순)
   const filteredPosts = useMemo(() => {
-    let result = searchQuery.trim()
-      ? posts.filter(post =>
-          post.title.toLowerCase().includes(searchQuery.toLowerCase())
-        )
-      : [...posts];
+    // 타인의 비공개 글 제외
+    let result = posts.filter(post =>
+      !post.isPrivate || post.authorId === user?.uid
+    );
+
+    if (searchQuery.trim()) {
+      result = result.filter(post =>
+        post.title.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
 
     // 교수님 픽 필터
     if (profPickPostIds) {
@@ -758,9 +771,14 @@ export default function BoardPage() {
     }
   }, [isWide, isLocked, isDetailOpen, openDetail, replaceDetail]);
 
-  // 최신 글을 헤드라인으로, 나머지를 masonry에
-  const headline = filteredPosts.length > 0 ? filteredPosts[0] : null;
-  const masonryPosts = filteredPosts.slice(1);
+  // 비공개 글이 있으면 헤드라인에 고정, 없으면 최신 공개 글
+  const publicPosts = useMemo(() =>
+    filteredPosts.filter(p => !p.isPrivate),
+  [filteredPosts]);
+  const headline = privatePost || (publicPosts.length > 0 ? publicPosts[0] : null);
+  const masonryPosts = privatePost
+    ? publicPosts // 비공개 글이 헤드라인 → 공개 글 전부 masonry
+    : publicPosts.slice(1); // 기존 로직: 최신 공개 글이 헤드라인
 
   // 랜덤 명언 (컴포넌트 마운트 시 한 번만 선택)
   const randomQuote = useMemo(() => {
@@ -1058,8 +1076,24 @@ export default function BoardPage() {
           </div>
         )}
 
-        {/* 헤드라인 (최신 글) */}
-        {headline && (
+        {/* 비공개 글 헤드라인 (나만의 콩콩이) */}
+        {privatePost && (
+          <div className="mb-4 relative">
+            <div className="absolute -top-2 left-3 z-10 px-2.5 py-0.5 text-[10px] font-bold text-white" style={{ backgroundColor: '#5B21B6' }}>
+              나만의 콩콩이
+            </div>
+            <div style={{ border: '2px solid #5B21B6' }}>
+              <HeadlineArticle
+                post={privatePost}
+                onClick={() => handlePostClick(privatePost.id)}
+                comments={commentsMap.get(privatePost.id) || []}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* 헤드라인 (최신 공개 글) */}
+        {!privatePost && headline && (
           <div className="mb-4">
             <HeadlineArticle
               post={headline}

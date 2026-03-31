@@ -33,6 +33,7 @@ interface Post {
   rewarded?: boolean;
   toProfessor?: boolean; // 교수님께 전달 여부
   aiDetailedAnswer?: boolean; // 콩콩이 상세 답변 요청
+  isPrivate?: boolean; // 비공개 글 (나만의 콩콩이)
   createdAt: FirebaseFirestore.Timestamp;
   updatedAt?: FirebaseFirestore.Timestamp;
 }
@@ -138,8 +139,22 @@ export const onPostCreate = onDocumentCreated(
 
       console.log(`게시글 보상 지급 완료: ${userId}`, { postId, expReward });
 
-      // 학술 태그 게시글이면 Gemini AI 자동답변 생성 (교수님 글 제외)
-      if (post.tag === "학술") {
+      // 비공개 글: 1인 1개 검증 (중복 시 새 글 삭제)
+      if (post.isPrivate) {
+        const existing = await db.collection("posts")
+          .where("authorId", "==", userId)
+          .where("isPrivate", "==", true)
+          .get();
+        const duplicates = existing.docs.filter(d => d.id !== postId);
+        if (duplicates.length > 0) {
+          console.log(`비공개 글 중복 감지 — 새 글 삭제: ${postId}`);
+          await db.collection("posts").doc(postId).delete();
+          return;
+        }
+      }
+
+      // 학술 태그 또는 비공개 글이면 Gemini AI 자동답변 생성 (교수님 글 제외)
+      if (post.tag === "학술" || post.isPrivate) {
         try {
           const authorDoc = await db.collection("users").doc(userId).get();
           const authorRole = authorDoc.data()?.role;
@@ -309,8 +324,8 @@ export const onCommentCreate = onDocumentCreated(
           });
         }
 
-        // 콩콩이 대댓글 자동 응답 트리거
-        if (comment.parentId && postData.tag === "학술") {
+        // 콩콩이 대댓글 자동 응답 트리거 (학술 또는 비공개 글)
+        if (comment.parentId && (postData.tag === "학술" || postData.isPrivate)) {
           try {
             // 부모 댓글이 콩콩이 댓글인지 확인
             const parentDoc = await db.collection("comments").doc(comment.parentId).get();
@@ -829,12 +844,11 @@ async function generateAIReplyToComment(
       return aTs - bTs;
     });
 
-  // 최근 20개만 사용 (너무 긴 대화 방지)
-  const recentThread = threadComments.slice(-20);
+  // 전체 대화 기록 사용 (Gemini 1M 컨텍스트 — 제한 불필요)
 
   // 대화 기록 구성
   let conversationHistory = `콩콩이: ${rootComment.content}`;
-  for (const msg of recentThread) {
+  for (const msg of threadComments) {
     const speaker = msg.authorId === "gemini-ai"
       ? "콩콩이"
       : (msg.authorNickname || "학생");
@@ -1005,7 +1019,7 @@ ${conversationHistory}`;
 
   // commentCount는 onCommentCreate 트리거에서 증가
 
-  console.log(`콩콩이 대댓글 생성 완료: postId=${postId}, parentId=${parentCommentId}, thread=${recentThread.length}개`);
+  console.log(`콩콩이 대댓글 생성 완료: postId=${postId}, parentId=${parentCommentId}, thread=${threadComments.length}개`);
 }
 
 /**
