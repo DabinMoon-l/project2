@@ -26,7 +26,7 @@ const LibraryJobToast = dynamic(() => import('@/components/professor/library/Lib
 const QuizListSidebar = dynamic(() => import('@/components/quiz/QuizListSidebar'), { ssr: false });
 const BoardListSidebar = dynamic(() => import('@/components/board/BoardListSidebar'), { ssr: false });
 import { useViewportScale, useWideMode } from '@/lib/hooks/useViewportScale';
-import { useScrollDismissKeyboard, useKeyboardCSSVariable } from '@/lib/hooks/useKeyboardAware';
+import { useKeyboardCSSVariable } from '@/lib/hooks/useKeyboardAware';
 import OfflineBanner from '@/components/common/OfflineBanner';
 
 
@@ -48,10 +48,9 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
   useViewportScale();
   const isWide = useWideMode();
 
-  // 스크롤 시 키보드 자동 닫기 (iOS 네이티브 앱 UX 패턴)
-  useScrollDismissKeyboard();
-
   // --kb-offset CSS 변수 전역 설정 (키보드 부드러운 모션)
+  // 키보드 열린 상태에서 스크롤로 가려진 콘텐츠를 볼 수 있도록
+  // useScrollDismissKeyboard 제거 (스크롤 시 키보드 유지)
   useKeyboardCSSVariable();
 
   // 접속 추적 (lastActiveAt + currentActivity + 일일 접속 기록)
