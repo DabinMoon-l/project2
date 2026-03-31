@@ -328,54 +328,61 @@ export default function UpdateQuizModal({
 
       // practiceOnly 모드: 점수 저장 없이 연습만, reviews 내용 갱신 + 뱃지 제거
       if (practiceOnly) {
-        // reviews 내용만 최신화 + quizUpdatedAt 갱신
-        const reviewsQuery = query(
-          collection(db, 'reviews'),
-          where('userId', '==', user.uid),
-          where('quizId', '==', updateInfo.quizId)
-        );
-        const reviewsSnapshot = await getDocs(reviewsQuery);
-        const updatedQuestionIds = new Set(questions.map((q) => q.questionId));
+        // Step 1: reviews 내용만 최신화 + quizUpdatedAt 갱신
+        try {
+          const reviewsQuery = query(
+            collection(db, 'reviews'),
+            where('userId', '==', user.uid),
+            where('quizId', '==', updateInfo.quizId)
+          );
+          const reviewsSnapshot = await getDocs(reviewsQuery);
+          const updatedQuestionIds = new Set(questions.map((q) => q.questionId));
 
-        for (const reviewDoc of reviewsSnapshot.docs) {
-          const reviewData = reviewDoc.data();
-          const questionId = reviewData.questionId;
+          for (const reviewDoc of reviewsSnapshot.docs) {
+            const reviewData = reviewDoc.data();
+            const questionId = reviewData.questionId;
 
-          if (updatedQuestionIds.has(questionId)) {
-            // 수정된 문제: 내용(문제/선지/해설) 최신화 + quizUpdatedAt
-            const updatedQ = questions.find((q) => q.questionId === questionId);
-            if (updatedQ) {
+            if (updatedQuestionIds.has(questionId)) {
+              const updatedQ = questions.find((q) => q.questionId === questionId);
+              if (updatedQ) {
+                await updateDoc(doc(db, 'reviews', reviewDoc.id), {
+                  question: updatedQ.questionText,
+                  options: updatedQ.choices || [],
+                  correctAnswer: updatedQ.correctAnswer,
+                  explanation: updatedQ.explanation || '',
+                  quizUpdatedAt: serverTimestamp(),
+                });
+              }
+            } else {
               await updateDoc(doc(db, 'reviews', reviewDoc.id), {
-                question: updatedQ.questionText,
-                options: updatedQ.choices || [],
-                correctAnswer: updatedQ.correctAnswer,
-                explanation: updatedQ.explanation || '',
                 quizUpdatedAt: serverTimestamp(),
               });
             }
-          } else {
-            // 수정 안 된 문제: quizUpdatedAt만 갱신 (뱃지 제거용)
-            await updateDoc(doc(db, 'reviews', reviewDoc.id), {
-              quizUpdatedAt: serverTimestamp(),
-            });
           }
+        } catch (reviewErr) {
+          console.error('[practiceOnly] Step 1 reviews 업데이트 실패:', reviewErr);
+          throw reviewErr;
         }
 
-        // 원본 quizResult의 answeredAt 갱신 (useQuizUpdate 뱃지 제거용)
-        // quizResults는 보안 규칙상 클라이언트 쓰기 불가 → CF 호출
-        const questionUpdates = questions.map((q) => {
-          const result = questionResults.find((r) => r.questionId === q.questionId);
-          return {
-            questionId: q.questionId,
-            isCorrect: result?.isCorrect || false,
-            userAnswer: userAnswers[q.questionId] || '',
-            isNew: !originalScores[q.questionId],
-          };
-        });
-        await callFunction('updatePracticeAnsweredAt', {
-          quizId: updateInfo.quizId,
-          questionUpdates,
-        });
+        // Step 2: 원본 quizResult의 answeredAt 갱신 (뱃지 제거용)
+        try {
+          const questionUpdates = questions.map((q) => {
+            const result = questionResults.find((r) => r.questionId === q.questionId);
+            return {
+              questionId: q.questionId,
+              isCorrect: result?.isCorrect || false,
+              userAnswer: userAnswers[q.questionId] || '',
+              isNew: !originalScores[q.questionId],
+            };
+          });
+          await callFunction('updatePracticeAnsweredAt', {
+            quizId: updateInfo.quizId,
+            questionUpdates,
+          });
+        } catch (cfErr) {
+          console.error('[practiceOnly] Step 2 CF 호출 실패:', cfErr);
+          throw cfErr;
+        }
 
         // 연습 결과 표시 (점수 변경 없음)
         const practiceCorrect = questionResults.filter((r) => r.isCorrect).length;
