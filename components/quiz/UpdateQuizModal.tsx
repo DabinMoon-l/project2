@@ -32,6 +32,7 @@ import type { MixedExampleBlock } from '@/components/quiz/create/questionTypes';
 import MixedExamplesRenderer from '@/components/common/MixedExamplesRenderer';
 import { renderInlineMarkdown } from '@/lib/utils/renderInlineMarkdown';
 import type { FieldValue } from '@/lib/repositories/firebase/firestoreBase';
+import { callFunction } from '@/lib/api';
 
 // ============================================================
 // 타입 정의
@@ -313,7 +314,7 @@ export default function UpdateQuizModal({
           passageImage: q.passageImage,
           koreanAbcItems: q.koreanAbcItems,
           passageMixedExamples: q.passageMixedExamples,
-          mixedExamples: q.mixedExamples,
+          mixedExamples: q.passageBlocks || q.mixedExamples,
           bogi: q.bogi,
           subQuestionOptions: q.subQuestionOptions,
           subQuestionOptionsType: q.subQuestionOptionsType,
@@ -361,24 +362,20 @@ export default function UpdateQuizModal({
         }
 
         // 원본 quizResult의 answeredAt 갱신 (useQuizUpdate 뱃지 제거용)
-        const updatedScores: Record<string, any> = {};
-        for (const q of questions) {
+        // quizResults는 보안 규칙상 클라이언트 쓰기 불가 → CF 호출
+        const questionUpdates = questions.map((q) => {
           const result = questionResults.find((r) => r.questionId === q.questionId);
-          if (originalScores[q.questionId]) {
-            // 기존 문제: answeredAt만 갱신
-            updatedScores[`questionScores.${q.questionId}.answeredAt`] = serverTimestamp();
-          } else {
-            // 새로 추가된 문제: 전체 스코어 항목 생성 (뱃지 제거용)
-            updatedScores[`questionScores.${q.questionId}`] = {
-              isCorrect: result?.isCorrect || false,
-              userAnswer: userAnswers[q.questionId] || '',
-              answeredAt: serverTimestamp(),
-            };
-          }
-        }
-        if (Object.keys(updatedScores).length > 0) {
-          await updateDoc(doc(db, 'quizResults', updateInfo.originalResultId), updatedScores);
-        }
+          return {
+            questionId: q.questionId,
+            isCorrect: result?.isCorrect || false,
+            userAnswer: userAnswers[q.questionId] || '',
+            isNew: !originalScores[q.questionId],
+          };
+        });
+        await callFunction('updatePracticeAnsweredAt', {
+          quizId: updateInfo.quizId,
+          questionUpdates,
+        });
 
         // 연습 결과 표시 (점수 변경 없음)
         const practiceCorrect = questionResults.filter((r) => r.isCorrect).length;
@@ -817,8 +814,8 @@ export default function UpdateQuizModal({
           ) : null}
         </div>
 
-        {/* 네비게이션 버튼 */}
-        <div className="px-4 py-3 border-t border-[#1A1A1A] flex gap-2">
+        {/* 네비게이션 버튼 — sticky로 키보드/스크롤 시에도 항상 보임 */}
+        <div className="px-4 py-3 border-t border-[#1A1A1A] bg-[#F5F0E8] flex gap-2 sticky bottom-0">
           {currentIndex > 0 && (
             <button
               onClick={handlePrev}
