@@ -27,10 +27,7 @@ function PostStats({ post, tag, isPrivate }: { post: Post; tag?: string; isPriva
     <div className="mt-2 flex items-center gap-2">
       <div className="flex flex-wrap gap-1">
         {tag && (
-          <span
-            className="inline-block px-2 py-0.5 text-[11px] font-bold text-[#F5F0E8]"
-            style={{ backgroundColor: isPrivate ? '#5B21B6' : '#1A1A1A' }}
-          >
+          <span className="inline-block px-2 py-0.5 text-[11px] font-bold bg-[#1A1A1A] text-[#F5F0E8]">
             #{tag}
           </span>
         )}
