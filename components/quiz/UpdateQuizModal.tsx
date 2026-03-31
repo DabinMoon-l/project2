@@ -551,7 +551,7 @@ export default function UpdateQuizModal({
     const correctCount = resultData.questionResults.filter((r) => r.isCorrect).length;
     return (
       <div
-        className={`fixed inset-0 z-50 ${isWide ? 'flex items-end' : 'flex items-center justify-center bg-black/50 p-3'}`}
+        className={`fixed inset-0 z-50 ${isWide ? 'flex items-end bg-black/40' : 'flex items-center justify-center bg-black/50 p-3'}`}
         style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
       >
         {isWide && <div className="absolute inset-0" onClick={handleComplete} />}
@@ -678,7 +678,7 @@ export default function UpdateQuizModal({
   // 문제 풀이 화면
   return (
     <div
-      className={`fixed inset-0 z-50 ${isWide ? 'flex items-end' : 'flex items-center justify-center bg-black/50 p-3'}`}
+      className={`fixed inset-0 z-50 ${isWide ? 'flex items-end bg-black/40' : 'flex items-center justify-center bg-black/50 p-3'}`}
       style={{ left: 'var(--modal-left, 0px)', right: 'var(--modal-right, 0px)' }}
     >
       {isWide && <div className="absolute inset-0" onClick={handleRequestClose} />}
