@@ -8,10 +8,13 @@
 export type BoardCategory = 'toProfessor' | 'community' | 'all';
 
 /** 게시판 태그 */
-export type BoardTag = '학사' | '학술' | '기타';
+export type BoardTag = '학사' | '학술' | '기타' | '비공개';
 
-/** 태그 목록 상수 */
+/** 태그 목록 상수 (공개 태그만 — 비공개는 별도 토글) */
 export const BOARD_TAGS: BoardTag[] = ['학사', '학술', '기타'];
+
+/** 전체 태그 (비공개 포함) */
+export const ALL_BOARD_TAGS: BoardTag[] = ['학사', '학술', '기타', '비공개'];
 
 /** 첨부파일 정보 타입 */
 export interface AttachedFile {
@@ -58,6 +61,8 @@ export interface Post {
   aiDetailedAnswer?: boolean;
   // 챕터 태그 (예: ["1_미생물과 미생물학", "2_숙주면역반응"])
   chapterTags?: string[];
+  // 비공개 글 (나만의 콩콩이)
+  isPrivate?: boolean;
 }
 
 /** 댓글 데이터 타입 */
@@ -93,6 +98,7 @@ export interface CreatePostData {
   tag?: BoardTag; // 태그 (학사/학술/기타)
   aiDetailedAnswer?: boolean; // 콩콩이 상세 답변 요청
   chapterTags?: string[]; // 챕터 태그 (예: ["1_미생물과 미생물학"])
+  isPrivate?: boolean; // 비공개 글 (나만의 콩콩이)
 }
 
 /** 댓글 작성 데이터 */

@@ -10,6 +10,8 @@ import { BOARD_TAGS } from '@/lib/hooks/useBoard';
 import { useChapterKeywords } from '@/lib/hooks/useChapterKeywords';
 import { useCourse } from '@/lib/contexts/CourseContext';
 import { useHomeScale } from '@/components/home/useHomeScale';
+import { useAuth } from '@/lib/hooks/useAuth';
+import { collection, query, where, getDocs, db } from '@/lib/repositories';
 
 interface WriteFormProps {
   /** 제출 핸들러 */
@@ -26,6 +28,8 @@ interface WriteFormProps {
   initialTag?: BoardTag;
   /** 제목/본문 변경 시 콜백 (임시저장용) */
   onDraftChange?: (title: string, content: string, tag?: BoardTag) => void;
+  /** 비공개 글 존재 여부 (외부에서 전달) */
+  hasPrivatePost?: boolean;
 }
 
 /**
@@ -39,6 +43,7 @@ export default function WriteForm({
   initialContent = '',
   initialTag,
   onDraftChange,
+  hasPrivatePost = false,
 }: WriteFormProps) {
   const { theme } = useTheme();
   const { uploadImage, uploadFile, loading: uploading, error: uploadError } = useUpload();
@@ -102,8 +107,29 @@ export default function WriteForm({
     setTag(newTag);
     // 학술이 아닌 태그로 변경 시 체크박스 초기화
     if (newTag !== '학술') setAiDetailedAnswer(false);
-    onDraftChange?.(title, content, newTag);
+    // 비공개에서 다른 태그로 전환 시 고정 제목 해제
+    const newTitle = tag === '비공개' ? '' : title;
+    if (tag === '비공개') setTitle('');
+    onDraftChange?.(newTitle, content, newTag);
   }, [tag, title, content, onDraftChange]);
+
+  // 비공개 태그 선택 시 이미 비공개 글이 있으면 차단
+  const prevTagRef = useRef<BoardTag | undefined>(undefined);
+  const handlePrivateToggle = useCallback(() => {
+    if (tag === '비공개') {
+      // 비공개 해제 → 이전 제목 복원 (고정 제목이었으므로 비움)
+      setTag(undefined);
+      setTitle('');
+      onDraftChange?.('', content, undefined);
+    } else {
+      if (hasPrivatePost) return; // 이미 비공개 글 존재
+      prevTagRef.current = tag;
+      setTag('비공개');
+      setTitle('나만의 콩콩이');
+      setAiDetailedAnswer(false);
+      onDraftChange?.('나만의 콩콩이', content, '비공개');
+    }
+  }, [tag, content, onDraftChange, hasPrivatePost]);
 
   // 첨부 파일 상태
   const [images, setImages] = useState<{ file: File; preview: string }[]>([]);
@@ -281,6 +307,7 @@ export default function WriteForm({
         tag,
         ...(chapterTags.length > 0 ? { chapterTags } : {}),
         ...(tag === '학술' && aiDetailedAnswer ? { aiDetailedAnswer: true } : {}),
+        ...(tag === '비공개' ? { isPrivate: true } : {}),
       });
     } catch (err) {
       console.error('글 작성 실패:', err);
@@ -312,19 +339,23 @@ export default function WriteForm({
           onChange={(e) => handleTitleChange(e.target.value)}
           placeholder="기사 제목을 입력하세요 (2자 이상)"
           maxLength={100}
+          disabled={tag === '비공개'}
           className="w-full px-3 py-2 outline-none transition-colors text-sm"
           style={{
             border: '1px solid #1A1A1A',
-            backgroundColor: theme.colors.background,
-            color: theme.colors.text,
+            backgroundColor: tag === '비공개' ? '#EDEAE4' : theme.colors.background,
+            color: tag === '비공개' ? '#5B21B6' : theme.colors.text,
+            fontWeight: tag === '비공개' ? 700 : 400,
           }}
         />
-        <div
-          className="mt-1 text-xs text-right"
-          style={{ color: theme.colors.textSecondary }}
-        >
-          {title.length}/100
-        </div>
+        {tag !== '비공개' && (
+          <div
+            className="mt-1 text-xs text-right"
+            style={{ color: theme.colors.textSecondary }}
+          >
+            {title.length}/100
+          </div>
+        )}
       </div>
 
       {/* 태그 선택 (필수) — 제목과 본문 사이 */}
@@ -335,7 +366,7 @@ export default function WriteForm({
         >
           태그 <span style={{ color: '#8B1A1A' }}>*</span>
         </label>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {BOARD_TAGS.map((t) => (
             <button
               key={t}
@@ -355,6 +386,30 @@ export default function WriteForm({
               {t}
             </button>
           ))}
+
+          {/* 비공개 (나만의 콩콩이) 태그 */}
+          <button
+            type="button"
+            onClick={handlePrivateToggle}
+            disabled={hasPrivatePost && tag !== '비공개'}
+            className="px-3 py-1.5 text-xs font-bold transition-colors"
+            style={tag === '비공개' ? {
+              backgroundColor: '#5B21B6',
+              color: '#F5F0E8',
+              border: '1px solid #5B21B6',
+            } : hasPrivatePost ? {
+              backgroundColor: 'transparent',
+              color: '#999',
+              border: '1px solid #D4CFC4',
+              cursor: 'not-allowed',
+            } : {
+              backgroundColor: 'transparent',
+              color: '#5B21B6',
+              border: '1px solid #5B21B6',
+            }}
+          >
+            비공개
+          </button>
 
           {/* 학술 태그 선택 시 AI 상세 답변 체크박스 */}
           <AnimatePresence>
@@ -389,6 +444,32 @@ export default function WriteForm({
             )}
           </AnimatePresence>
         </div>
+
+        {/* 비공개 태그 설명 */}
+        <AnimatePresence>
+          {tag === '비공개' && (
+            <motion.p
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="text-[11px] mt-1.5"
+              style={{ color: '#5B21B6' }}
+            >
+              나만 볼 수 있는 글이에요. 콩콩이가 모든 대화를 기억하며 답변해줘요.
+            </motion.p>
+          )}
+          {hasPrivatePost && tag !== '비공개' && (
+            <motion.p
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="text-[11px] mt-1.5"
+              style={{ color: '#999' }}
+            >
+              이미 비공개 글이 있어요. 삭제 후 새로 작성할 수 있어요.
+            </motion.p>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* 내용 입력 */}

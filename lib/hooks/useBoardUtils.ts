@@ -134,6 +134,8 @@ export const docToPost = (doc: QueryDocumentSnapshot | DocumentSnapshot): Post =
     chapterTags: data?.chapterTags || undefined,
     // 채택된 댓글 ID
     acceptedCommentId: data?.acceptedCommentId || undefined,
+    // 비공개 글
+    isPrivate: data?.isPrivate || false,
   };
 };
 

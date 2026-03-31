@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '@/styles/themes/useTheme';
 import WriteForm from '@/components/board/WriteForm';
-import { useCreatePost, type CreatePostData, type BoardTag } from '@/lib/hooks/useBoard';
+import { useCreatePost, useMyPrivatePost, type CreatePostData, type BoardTag } from '@/lib/hooks/useBoard';
 import { useExpToast } from '@/components/common';
 import { useUser, useCourse, useDetailPanel, useClosePanel } from '@/lib/contexts';
 import { EXP_REWARDS } from '@/lib/utils/expRewards';
@@ -29,6 +29,7 @@ export default function WritePage({ isPanelMode }: { isPanelMode?: boolean } = {
   const router = useRouter();
   const { theme } = useTheme();
   const { createPost, loading, error } = useCreatePost();
+  const { privatePost } = useMyPrivatePost();
   const { profile } = useUser();
   const { userCourseId } = useCourse();
   const { showExpToast } = useExpToast();
@@ -186,6 +187,7 @@ export default function WritePage({ isPanelMode }: { isPanelMode?: boolean } = {
           initialContent={initialContent}
           initialTag={initialTag}
           onDraftChange={handleDraftChange}
+          hasPrivatePost={!!privatePost}
         />
       </main>
 

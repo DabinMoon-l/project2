@@ -316,6 +316,19 @@ export const useCreatePost = (): UseCreatePostReturn => {
           userClassType = userData.classId; // Firestore 필드명은 classId
         }
 
+        // 비공개 글 중복 체크 (서버 사이드 안전장치)
+        if (data.isPrivate) {
+          const existingPrivate = await getDocs(query(
+            collection(db, 'posts'),
+            where('authorId', '==', user.uid),
+            where('isPrivate', '==', true),
+          ));
+          if (!existingPrivate.empty) {
+            setError('이미 비공개 글이 있습니다. 삭제 후 다시 작성해주세요.');
+            return null;
+          }
+        }
+
         const postData = {
           title: data.title,
           content: data.content,
@@ -333,9 +346,10 @@ export const useCreatePost = (): UseCreatePostReturn => {
           commentCount: 0,
           isNotice: false,
           toProfessor: data.toProfessor || false, // 교수님께 전달 여부
-          tag: data.tag || null, // 태그 (학사/학술/기타)
+          tag: data.tag || null, // 태그 (학사/학술/기타/비공개)
           ...(data.chapterTags && data.chapterTags.length > 0 ? { chapterTags: data.chapterTags } : {}),
           ...(data.aiDetailedAnswer ? { aiDetailedAnswer: true } : {}),
+          ...(data.isPrivate ? { isPrivate: true } : {}),
           viewCount: 0,
           createdAt: serverTimestamp(),
         };
@@ -778,4 +792,52 @@ export const useAllPostsForCourse = (courseId?: string): UseAllPostsForCourseRet
   }, [courseId]);
 
   return { posts, loading, error };
+};
+
+// ============================================================
+// useMyPrivatePost 훅 - 내 비공개 글 조회
+// ============================================================
+
+/**
+ * 현재 사용자의 비공개 글을 실시간 구독하는 훅
+ * 비공개 글은 1인당 1개만 존재 가능
+ */
+export const useMyPrivatePost = (): { privatePost: Post | null; loading: boolean } => {
+  const { user } = useAuth();
+  const [privatePost, setPrivatePost] = useState<Post | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    const privateQuery = query(
+      collection(db, 'posts'),
+      where('authorId', '==', user.uid),
+      where('isPrivate', '==', true),
+      limit(1)
+    );
+
+    const unsub = onSnapshot(
+      privateQuery,
+      (snapshot) => {
+        if (snapshot.empty) {
+          setPrivatePost(null);
+        } else {
+          setPrivatePost(docToPost(snapshot.docs[0]));
+        }
+        setLoading(false);
+      },
+      (err) => {
+        console.error('비공개 글 구독 실패:', err);
+        setLoading(false);
+      }
+    );
+
+    return () => unsub();
+  }, [user]);
+
+  return { privatePost, loading };
 };
