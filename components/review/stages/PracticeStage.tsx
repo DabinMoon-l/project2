@@ -274,6 +274,29 @@ export default function PracticeStage({
                         </div>
                       )}
 
+                      {/* 보기 (<보기> 박스) */}
+                      {subItem.bogi && subItem.bogi.items && subItem.bogi.items.some(i => i.content?.trim()) && (
+                        <div className="p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A] mb-3">
+                          <div className="space-y-1">
+                            {subItem.bogi.items.filter(i => i.content?.trim()).map((bogiItem) => (
+                              <p key={`bogi-${bogiItem.label}`} className="text-sm text-[#1A1A1A]">
+                                <span className="font-bold mr-1">{bogiItem.label}.</span>
+                                {renderInlineMarkdown(bogiItem.content)}
+                              </p>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 발문 (제시문 발문 + 보기 발문) */}
+                      {(subItem.passagePrompt || subItem.bogi?.questionText || subItem.bogiQuestionText) && (
+                        <p className="text-[#1A1A1A] text-sm leading-relaxed mb-3">
+                          {subItem.passagePrompt && (subItem.bogi?.questionText || subItem.bogiQuestionText)
+                            ? `${subItem.passagePrompt} ${subItem.bogi?.questionText || subItem.bogiQuestionText}`
+                            : subItem.passagePrompt || subItem.bogi?.questionText || subItem.bogiQuestionText}
+                        </p>
+                      )}
+
                       {/* 선지 영역 */}
                       <div>
                         {subItem.type === 'ox' && (
@@ -459,6 +482,29 @@ export default function PracticeStage({
                         </div>
                       )}
                     </div>
+                  )}
+
+                  {/* 보기 (<보기> 박스) */}
+                  {currentItem.bogi && currentItem.bogi.items && currentItem.bogi.items.some(i => i.content?.trim()) && (
+                    <div className="mt-3 p-3 bg-[#EDEAE4] border-2 border-[#1A1A1A]">
+                      <div className="space-y-1">
+                        {currentItem.bogi.items.filter(i => i.content?.trim()).map((item) => (
+                          <p key={item.label} className="text-sm text-[#1A1A1A]">
+                            <span className="font-bold mr-1">{item.label}.</span>
+                            {renderInlineMarkdown(item.content)}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 발문 (제시문 발문 + 보기 발문) */}
+                  {(currentItem.passagePrompt || currentItem.bogi?.questionText || currentItem.bogiQuestionText) && (
+                    <p className="mt-3 text-[#1A1A1A] text-sm leading-relaxed">
+                      {currentItem.passagePrompt && (currentItem.bogi?.questionText || currentItem.bogiQuestionText)
+                        ? `${currentItem.passagePrompt} ${currentItem.bogi?.questionText || currentItem.bogiQuestionText}`
+                        : currentItem.passagePrompt || currentItem.bogi?.questionText || currentItem.bogiQuestionText}
+                    </p>
                   )}
                 </div>
 
