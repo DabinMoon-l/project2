@@ -85,7 +85,7 @@ export default function MultipleChoiceEditor({
             : answerIndex === index;
 
           return (
-            <div key={`choice-${index}`} className="relative flex items-center gap-2 mb-1">
+            <div key={`choice-${index}`} className="relative flex items-center gap-1.5 mb-1">
               {/* 정답 체크 버튼 */}
               <motion.button
                 type="button"
@@ -93,8 +93,8 @@ export default function MultipleChoiceEditor({
                 whileTap={{ scale: 0.9 }}
                 onClick={() => onAnswerSelect(index)}
                 className={`
-                  w-8 h-8 flex items-center justify-center
-                  text-sm font-bold border-2
+                  w-9 h-9 shrink-0 flex items-center justify-center
+                  text-sm font-bold border-2 rounded
                   transition-all duration-200
                   ${
                     isSelected
@@ -115,7 +115,7 @@ export default function MultipleChoiceEditor({
                 onChange={(e) => onChoiceChange(index, e.target.value)}
                 placeholder={`선지 ${index + 1}`}
                 className={`
-                  flex-1 px-3 py-2 text-sm border-2 bg-[#F5F0E8]
+                  min-w-0 flex-1 px-2 py-2 text-sm border-2 bg-[#F5F0E8]
                   transition-colors duration-200
                   focus:outline-none
                   ${
@@ -130,7 +130,7 @@ export default function MultipleChoiceEditor({
 
               {/* 서식 미리보기 (*, {}, ^ 포함 시) */}
               {choice && (/[*{^]/.test(choice)) && (
-                <div className="absolute left-10 right-10 -bottom-5 text-[10px] text-[#8A8578] truncate pointer-events-none">
+                <div className="absolute left-11 right-10 -bottom-5 text-[10px] text-[#8A8578] truncate pointer-events-none">
                   {renderInlineMarkdown(choice)}
                 </div>
               )}
@@ -140,7 +140,7 @@ export default function MultipleChoiceEditor({
                 <button
                   type="button"
                   onClick={() => onRemoveChoice(index)}
-                  className="w-8 h-8 flex items-center justify-center text-[#8B1A1A] hover:bg-[#FDEAEA] transition-colors"
+                  className="w-8 h-8 shrink-0 flex items-center justify-center text-[#8B1A1A] hover:bg-[#FDEAEA] transition-colors"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
