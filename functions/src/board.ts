@@ -117,12 +117,16 @@ export const onPostCreate = onDocumentCreated(
       const reason = "게시글 작성";
 
       await db.runTransaction(async (transaction) => {
-        // 트랜잭션 내 중복 체크 (at-least-once 방어)
+        // READ — 모든 읽기를 쓰기보다 먼저 실행 (Firestore 트랜잭션 규칙)
         const freshDoc = await transaction.get(snapshot.ref);
         if (freshDoc.data()?.rewarded) {
           console.log(`트랜잭션 내 중복 감지 (게시글): ${postId}`);
           return;
         }
+
+        const userDoc = !skipExp
+          ? await readUserForExp(transaction, userId)
+          : null;
 
         // WRITE — rewarded 마킹 (비공개도 마킹하여 중복 방지)
         transaction.update(snapshot.ref, {
@@ -131,10 +135,7 @@ export const onPostCreate = onDocumentCreated(
           expRewarded: expReward,
         });
 
-        if (!skipExp) {
-          // READ 먼저
-          const userDoc = await readUserForExp(transaction, userId);
-
+        if (!skipExp && userDoc) {
           addExpInTransaction(transaction, userId, expReward, reason, userDoc, {
             type: "post_create",
             sourceId: postId,
@@ -293,12 +294,16 @@ export const onCommentCreate = onDocumentCreated(
       const reason = "댓글 작성";
 
       await db.runTransaction(async (transaction) => {
-        // 트랜잭션 내 중복 체크 (at-least-once 방어)
+        // READ — 모든 읽기를 쓰기보다 먼저 실행 (Firestore 트랜잭션 규칙)
         const freshDoc = await transaction.get(snapshot.ref);
         if (freshDoc.data()?.rewarded) {
           console.log(`트랜잭션 내 중복 감지 (댓글): ${commentId}`);
           return;
         }
+
+        const userDoc = !skipExp
+          ? await readUserForExp(transaction, userId)
+          : null;
 
         // WRITE — rewarded 마킹 (비공개도 마킹하여 중복 방지)
         transaction.update(snapshot.ref, {
@@ -307,10 +312,7 @@ export const onCommentCreate = onDocumentCreated(
           expRewarded: expReward,
         });
 
-        if (!skipExp) {
-          // READ 먼저
-          const userDoc = await readUserForExp(transaction, userId);
-
+        if (!skipExp && userDoc) {
           addExpInTransaction(transaction, userId, expReward, reason, userDoc, {
             type: "comment_create",
             sourceId: commentId,
