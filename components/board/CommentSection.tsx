@@ -435,7 +435,7 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
         {!loading && organizedComments.length > 0 && (
           <AnimatePresence>
             {organizedComments.map((comment) => (
-              <div key={comment.id}>
+              <div key={comment.id} id={`comment-${comment.id}`}>
                 <CommentItem
                   comment={comment}
                   currentUserId={user?.uid}
