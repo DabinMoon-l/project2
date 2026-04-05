@@ -57,6 +57,11 @@ export default function SharedPostClient({ postId }: { postId: string }) {
         }
 
         const data = postSnap.data();
+        if (data.isPrivate) {
+          setError('비공개 글은 공유할 수 없습니다.');
+          setLoading(false);
+          return;
+        }
         setPost({
           title: data.title,
           content: data.content,

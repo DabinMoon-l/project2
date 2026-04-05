@@ -344,6 +344,19 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
   }, []);
 
   const isOwner = user?.uid === post?.authorId;
+  const closePanel = useClosePanel();
+
+  // 비공개 글 접근 제어: 본인 또는 교수만 열람 가능
+  useEffect(() => {
+    if (!post || !user) return;
+    if (post.isPrivate && post.authorId !== user.uid && !isProfessor) {
+      if (isPanelMode) {
+        closePanel();
+      } else {
+        router.replace('/board');
+      }
+    }
+  }, [post, user, isProfessor, isPanelMode, router, closePanel]);
 
   // 교수님일 때 작성자 실명 조회
   const [authorName, setAuthorName] = useState<string | null>(null);
@@ -355,7 +368,6 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
   }, [isProfessor, post?.authorId]);
 
   // 안전한 뒤로가기 — 패널 모드에서는 onPanelBack 또는 closePanel
-  const closePanel = useClosePanel();
   const goBack = useCallback(() => {
     if (isPanelMode) {
       if (onPanelBack) { onPanelBack(); return; }
