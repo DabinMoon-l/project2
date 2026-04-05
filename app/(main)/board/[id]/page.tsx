@@ -3,7 +3,8 @@
 import { useCallback, useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { doc, updateDoc, increment, getDoc, getDocs, deleteDoc, collection, query, where, db } from '@/lib/repositories';
+import { doc, updateDoc, increment, getDoc, db } from '@/lib/repositories';
+import { callFunction } from '@/lib/api';
 import { Skeleton, ImageViewer } from '@/components/common';
 import LikeButton from '@/components/board/LikeButton';
 import CommentSection from '@/components/board/CommentSection';
@@ -208,24 +209,10 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
   const [threadDeleteTarget, setThreadDeleteTarget] = useState<string | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 스레드 삭제 (루트 댓글 + 모든 대댓글)
+  // 스레드 삭제 (CF로 콩콩이 댓글도 삭제 가능)
   const handleDeleteThread = useCallback(async (rootCommentId: string) => {
     try {
-      // 루트 댓글의 대댓글 조회
-      const repliesSnap = await getDocs(query(
-        collection(db, 'comments'),
-        where('parentId', '==', rootCommentId)
-      ));
-      // 대댓글 삭제
-      const deletePromises = repliesSnap.docs.map((d) => deleteDoc(doc(db, 'comments', d.id)));
-      // 루트 댓글 삭제
-      deletePromises.push(deleteDoc(doc(db, 'comments', rootCommentId)));
-      await Promise.all(deletePromises);
-      // commentCount 감소
-      const deletedCount = repliesSnap.size + 1;
-      await updateDoc(doc(db, 'posts', postId), {
-        commentCount: increment(-deletedCount),
-      });
+      await callFunction('deleteThread', { rootCommentId, postId });
     } catch (err) {
       console.error('스레드 삭제 실패:', err);
     }
@@ -644,7 +631,7 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
                     }}
                     onPointerUp={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
                     onPointerLeave={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
-                    className="px-3 py-1.5 text-xs border border-[#D4CFC4] bg-[#FDFBF7] text-[#3A3A3A] rounded-full active:scale-95 transition-transform whitespace-nowrap flex-shrink-0 select-none"
+                    className="px-3 py-1.5 text-xs border border-[#1A1A1A] text-[#1A1A1A] active:scale-95 transition-transform whitespace-nowrap flex-shrink-0 select-none"
                   >
                     <span className="font-bold text-[#1A1A1A] mr-1">#{idx + 1}</span>
                     {preview}

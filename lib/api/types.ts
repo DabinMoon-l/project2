@@ -357,6 +357,10 @@ export interface CloudFunctionMap {
     input: { postId: string };
     output: void;
   };
+  deleteThread: {
+    input: { rootCommentId: string; postId: string };
+    output: { success: boolean; deletedCount: number };
+  };
   acceptComment: {
     input: { postId: string; commentId: string };
     output: void;

@@ -1594,3 +1594,59 @@ export const deletePost = onCall(
     return { success: true, deletedComments: commentsSnap.size };
   }
 );
+
+/**
+ * 비공개 글 스레드 삭제 (루트 댓글 + 모든 대댓글)
+ * admin SDK로 콩콩이 댓글도 삭제 가능
+ */
+export const deleteThread = onCall(
+  { region: "asia-northeast3" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+    }
+
+    const { rootCommentId, postId } = request.data as { rootCommentId: string; postId: string };
+    if (!rootCommentId || !postId) {
+      throw new HttpsError("invalid-argument", "rootCommentId와 postId가 필요합니다.");
+    }
+
+    const db = getFirestore();
+
+    // 게시글 확인: 비공개 글의 작성자만 삭제 가능
+    const postSnap = await db.collection("posts").doc(postId).get();
+    if (!postSnap.exists) {
+      throw new HttpsError("not-found", "글을 찾을 수 없습니다.");
+    }
+    const postData = postSnap.data()!;
+    const postAuthorId = postData.authorId || postData.userId;
+
+    if (!postData.isPrivate) {
+      throw new HttpsError("permission-denied", "비공개 글에서만 스레드 삭제가 가능합니다.");
+    }
+    if (request.auth.uid !== postAuthorId) {
+      throw new HttpsError("permission-denied", "본인의 비공개 글에서만 삭제할 수 있습니다.");
+    }
+
+    // 루트 댓글 + 대댓글 조회
+    const rootRef = db.collection("comments").doc(rootCommentId);
+    const repliesSnap = await db.collection("comments")
+      .where("parentId", "==", rootCommentId)
+      .get();
+
+    // 배치 삭제
+    const batch = db.batch();
+    repliesSnap.docs.forEach((d) => batch.delete(d.ref));
+    batch.delete(rootRef);
+    await batch.commit();
+
+    // commentCount 감소
+    const deletedCount = repliesSnap.size + 1;
+    await db.collection("posts").doc(postId).update({
+      commentCount: FieldValue.increment(-deletedCount),
+    });
+
+    console.log(`스레드 삭제 완료: rootCommentId=${rootCommentId}, 총 ${deletedCount}개`);
+    return { success: true, deletedCount };
+  }
+);
