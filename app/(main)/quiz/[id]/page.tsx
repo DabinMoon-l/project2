@@ -148,6 +148,8 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
     answers: Record<string, Answer>;
     currentQuestionIndex: number;
     answeredCount: number;
+    submittedQuestions: string[];
+    gradeResults: Record<string, { isCorrect: boolean; correctAnswer: string }>;
   } | null>(null);
 
   // 현재 표시 아이템 (단일 문제 또는 결합형 그룹)
@@ -216,6 +218,8 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
           id: progressDoc.id,
           answers: data.answers || {},
           currentQuestionIndex: data.currentQuestionIndex || 0,
+          submittedQuestions: data.submittedQuestions || [],
+          gradeResults: data.gradeResults || {},
         };
       }
     } catch (err) {
@@ -721,6 +725,9 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
         quizId,
         answers,
         currentQuestionIndex,
+        // 채점 결과도 저장 (바로 채점 모드에서 복원 시 필요)
+        submittedQuestions: Array.from(submittedQuestions),
+        gradeResults,
         updatedAt: serverTimestamp(),
       };
 
@@ -743,7 +750,7 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
     } finally {
       setIsSaving(false);
     }
-  }, [user, quizId, answers, currentQuestionIndex, progressId]);
+  }, [user, quizId, answers, currentQuestionIndex, progressId, submittedQuestions, gradeResults]);
 
   /**
    * 진행 상황 삭제
@@ -812,6 +819,13 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
       setProgressId(savedProgress.id);
       setAnswers(savedProgress.answers);
       setCurrentQuestionIndex(savedProgress.currentQuestionIndex);
+      // 채점 결과 복원 (바로 채점 모드)
+      if (savedProgress.submittedQuestions.length > 0) {
+        setSubmittedQuestions(new Set(savedProgress.submittedQuestions));
+      }
+      if (Object.keys(savedProgress.gradeResults).length > 0) {
+        setGradeResults(savedProgress.gradeResults);
+      }
     }
     setShowResumeModal(false);
     setSavedProgress(null);
