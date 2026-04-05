@@ -43,8 +43,9 @@ export default function WideBottomSheet({
   }
 
   // 가로모드: 투명 오버레이 + 바텀시트
+  // 3쪽은 항상 calc(50%+120px)~100% (isLocked에서 --detail-panel-left가 240px로 바뀌어도 3쪽 위치는 고정)
   const panelStyle = panel === '3'
-    ? { left: 'var(--detail-panel-left, calc(50% + 120px))', right: '0' }
+    ? { left: 'calc(50% + 120px)', right: '0' }
     : { left: 'var(--modal-left, 240px)', right: 'var(--modal-right, 0px)' };
 
   return createPortal(
