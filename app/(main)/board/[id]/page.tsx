@@ -205,7 +205,6 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
       .filter((c) => !c.parentId)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()); // 최신 먼저
   }, [allComments, post?.isPrivate]);
-  const [threadPage, setThreadPage] = useState(0);
   const [threadDeleteTarget, setThreadDeleteTarget] = useState<string | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -628,81 +627,32 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
             </div>
           )}
 
-          {/* 비공개 글: 스레드 바로가기 캐러셀 */}
-          {post.isPrivate && threadRoots.length > 0 && (() => {
-            const perPage = 3;
-            const totalPages = Math.ceil(threadRoots.length / perPage);
-            const visible = threadRoots.slice(threadPage * perPage, (threadPage + 1) * perPage);
-            // 전체에서의 번호 (최신=1)
-            const startIdx = threadPage * perPage;
-
-            return (
-              <div className="mt-4 mb-2">
-                <div className="flex items-center gap-2">
-                  {/* 이전 화살표 */}
+          {/* 비공개 글: 스레드 바로가기 (가로 스크롤) */}
+          {post.isPrivate && threadRoots.length > 0 && (
+            <div className="mt-4 mb-2 flex gap-2 overflow-x-auto scrollbar-hide -mx-4 px-4">
+              {threadRoots.map((root, idx) => {
+                const preview = root.content.replace(/\n/g, ' ').slice(0, 18) + (root.content.length > 18 ? '..' : '');
+                return (
                   <button
-                    onClick={() => setThreadPage((p) => Math.max(0, p - 1))}
-                    disabled={threadPage === 0}
-                    className="w-7 h-7 flex items-center justify-center rounded-full border border-[#D4CFC4] text-[#1A1A1A] disabled:opacity-20 active:scale-90 transition-all flex-shrink-0"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
-
-                  {/* 스레드 칩 */}
-                  <div
-                    className="flex gap-2 flex-1 overflow-x-auto scrollbar-hide"
-                    onTouchStart={(e) => {
-                      const touch = e.touches[0];
-                      (e.currentTarget as HTMLElement).dataset.startX = String(touch.clientX);
+                    key={root.id}
+                    onClick={() => {
+                      const el = document.getElementById(`comment-${root.id}`);
+                      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     }}
-                    onTouchEnd={(e) => {
-                      const startX = Number((e.currentTarget as HTMLElement).dataset.startX || 0);
-                      const endX = e.changedTouches[0].clientX;
-                      const diff = startX - endX;
-                      if (diff > 50 && threadPage < totalPages - 1) setThreadPage((p) => p + 1);
-                      if (diff < -50 && threadPage > 0) setThreadPage((p) => p - 1);
+                    onPointerDown={() => {
+                      longPressTimer.current = setTimeout(() => setThreadDeleteTarget(root.id), 600);
                     }}
+                    onPointerUp={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
+                    onPointerLeave={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
+                    className="px-3 py-1.5 text-xs border border-[#D4CFC4] bg-[#FDFBF7] text-[#3A3A3A] rounded-full active:scale-95 transition-transform whitespace-nowrap flex-shrink-0 select-none"
                   >
-                    {visible.map((root, i) => {
-                      const globalIdx = startIdx + i + 1;
-                      const preview = root.content.replace(/\n/g, ' ').slice(0, 18) + (root.content.length > 18 ? '..' : '');
-                      return (
-                        <button
-                          key={root.id}
-                          onClick={() => {
-                            const el = document.getElementById(`comment-${root.id}`);
-                            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                          }}
-                          onPointerDown={() => {
-                            longPressTimer.current = setTimeout(() => setThreadDeleteTarget(root.id), 600);
-                          }}
-                          onPointerUp={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
-                          onPointerLeave={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
-                          className="px-3 py-1.5 text-xs border border-[#D4CFC4] bg-[#FDFBF7] text-[#3A3A3A] rounded-full active:scale-95 transition-transform whitespace-nowrap flex-shrink-0 select-none"
-                        >
-                          <span className="font-bold text-[#1A1A1A] mr-1">#{globalIdx}</span>
-                          {preview}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* 다음 화살표 */}
-                  <button
-                    onClick={() => setThreadPage((p) => Math.min(totalPages - 1, p + 1))}
-                    disabled={threadPage >= totalPages - 1}
-                    className="w-7 h-7 flex items-center justify-center rounded-full border border-[#D4CFC4] text-[#1A1A1A] disabled:opacity-20 active:scale-90 transition-all flex-shrink-0"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                    </svg>
+                    <span className="font-bold text-[#1A1A1A] mr-1">#{idx + 1}</span>
+                    {preview}
                   </button>
-                </div>
-              </div>
-            );
-          })()}
+                );
+              })}
+            </div>
+          )}
 
           {/* 하단 액션 줄: 좌=찜·조회·댓글 / 우=공유 */}
           <div className="flex items-center justify-between py-2 mt-4">
