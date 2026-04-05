@@ -113,11 +113,6 @@ export default function WriteForm({
     onDraftChange?.(newTitle, content, newTag);
   }, [tag, title, content, onDraftChange]);
 
-  // 비공개(나만의 콩콩이) 허용 계정 — 교수님 허락 후 전체 오픈 예정
-  const PRIVATE_POST_ALLOWED_IDS = ['25010423', '11111111', '26030001'];
-  const canUsePrivatePost = profile?.role === 'professor'
-    || PRIVATE_POST_ALLOWED_IDS.includes(profile?.studentId || '');
-
   // 비공개 태그 선택 시 이미 비공개 글이 있으면 차단
   const privateTitle = `${profile?.nickname || '나'}의 콩콩이`;
   const handlePrivateToggle = useCallback(() => {
@@ -390,31 +385,29 @@ export default function WriteForm({
             </button>
           ))}
 
-          {/* 비공개 (나만의 콩콩이) 태그 — 허용 계정만 표시 */}
-          {canUsePrivatePost && (
-            <button
-              type="button"
-              onClick={handlePrivateToggle}
-              disabled={hasPrivatePost && tag !== '비공개'}
-              className="px-3 py-1.5 text-xs font-bold transition-colors"
-              style={tag === '비공개' ? {
-                backgroundColor: '#1A1A1A',
-                color: '#F5F0E8',
-                border: '1px solid #1A1A1A',
-              } : hasPrivatePost ? {
-                backgroundColor: 'transparent',
-                color: '#999',
-                border: '1px solid #D4CFC4',
-                cursor: 'not-allowed',
-              } : {
-                backgroundColor: 'transparent',
-                color: '#1A1A1A',
-                border: '1px solid #1A1A1A',
-              }}
-            >
-              비공개
-            </button>
-          )}
+          {/* 비공개 (나만의 콩콩이) 태그 */}
+          <button
+            type="button"
+            onClick={handlePrivateToggle}
+            disabled={hasPrivatePost && tag !== '비공개'}
+            className="px-3 py-1.5 text-xs font-bold transition-colors"
+            style={tag === '비공개' ? {
+              backgroundColor: '#1A1A1A',
+              color: '#F5F0E8',
+              border: '1px solid #1A1A1A',
+            } : hasPrivatePost ? {
+              backgroundColor: 'transparent',
+              color: '#999',
+              border: '1px solid #D4CFC4',
+              cursor: 'not-allowed',
+            } : {
+              backgroundColor: 'transparent',
+              color: '#1A1A1A',
+              border: '1px solid #1A1A1A',
+            }}
+          >
+            비공개
+          </button>
 
           {/* 학술 태그 선택 시 AI 상세 답변 체크박스 */}
           <AnimatePresence>
