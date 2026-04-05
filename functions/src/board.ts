@@ -399,28 +399,32 @@ export const onCommentCreate = onDocumentCreated(
 
         // 콩콩이 자동 응답 트리거
         const shouldTriggerAI = (() => {
+          // 학술 글 루트 댓글: 콩콩이가 대댓글로 응답
+          if (!comment.parentId && postData.tag === "학술") return true;
+          // 비공개 글 루트 댓글: 콩콩이가 대댓글로 응답
+          if (!comment.parentId && postData.isPrivate) return true;
           // 대댓글: 학술 또는 비공개 글
           if (comment.parentId && (postData.tag === "학술" || postData.isPrivate)) return true;
-          // 비공개 글 루트 댓글: 새 브랜치 생성 (콩콩이가 대댓글로 응답)
-          if (!comment.parentId && postData.isPrivate) return true;
           return false;
         })();
 
         if (shouldTriggerAI) {
           try {
-            // 비공개 글 루트 댓글 → 콩콩이가 대댓글로 응답 (새 브랜치)
-            if (!comment.parentId && postData.isPrivate) {
-              const authorDoc = await db.collection("users").doc(userId).get();
-              const authorRole = authorDoc.data()?.role;
-              if (authorRole !== "professor") {
-                await generateAIReplyToComment(
-                  postData,
-                  postId,
-                  commentId, // 이 루트 댓글이 브랜치의 parent
-                  comment,
-                  GEMINI_API_KEY.value(),
-                );
-              }
+            const authorDoc = await db.collection("users").doc(userId).get();
+            const authorRole = authorDoc.data()?.role;
+
+            if (authorRole === "professor") {
+              console.log(`교수님 댓글이므로 AI 응답 스킵: ${commentId}`);
+            }
+            // 루트 댓글 → 콩콩이가 대댓글로 응답 (학술 + 비공개 모두)
+            else if (!comment.parentId) {
+              await generateAIReplyToComment(
+                postData,
+                postId,
+                commentId, // 이 루트 댓글이 브랜치의 parent
+                comment,
+                GEMINI_API_KEY.value(),
+              );
             }
             // 대댓글 → 콩콩이 응답
             else if (comment.parentId) {
@@ -429,46 +433,41 @@ export const onCommentCreate = onDocumentCreated(
                 const parentComment = parentDoc.data() as Comment;
                 // 학술: 부모가 콩콩이여야 응답 / 비공개: 부모가 누구든 응답
                 if (parentComment.authorId === "gemini-ai" || postData.isPrivate) {
-                  const authorDoc = await db.collection("users").doc(userId).get();
-                  const authorRole = authorDoc.data()?.role;
+                  // 스팸 방지: 같은 유저가 30초 내 연속 AI 응답 트리거하는 것 방지
+                  const recentReplies = await db.collection("comments")
+                    .where("parentId", "==", comment.parentId)
+                    .get();
 
-                  if (authorRole !== "professor") {
-                    // 스팸 방지: 같은 유저가 30초 내 연속 AI 응답 트리거하는 것 방지
-                    const recentReplies = await db.collection("comments")
-                      .where("parentId", "==", comment.parentId)
-                      .get();
+                  const thirtySecAgo = Date.now() - 30 * 1000;
+                  const hasRecentAIForUser = recentReplies.docs.some((d) => {
+                    const data = d.data();
+                    if (data.authorId !== "gemini-ai") return false;
+                    const ts = data.createdAt?.toMillis?.() || data.createdAt?._seconds * 1000 || 0;
+                    if (ts <= thirtySecAgo) return false;
+                    const sorted = recentReplies.docs
+                      .map((r) => r.data())
+                      .filter((r) => {
+                        const rTs = r.createdAt?.toMillis?.() || r.createdAt?._seconds * 1000 || 0;
+                        return rTs < ts && rTs > thirtySecAgo;
+                      })
+                      .sort((a, b) => {
+                        const aTs = a.createdAt?.toMillis?.() || a.createdAt?._seconds * 1000 || 0;
+                        const bTs = b.createdAt?.toMillis?.() || b.createdAt?._seconds * 1000 || 0;
+                        return bTs - aTs;
+                      });
+                    return sorted.length > 0 && sorted[0].authorId === userId;
+                  });
 
-                    const thirtySecAgo = Date.now() - 30 * 1000;
-                    const hasRecentAIForUser = recentReplies.docs.some((d) => {
-                      const data = d.data();
-                      if (data.authorId !== "gemini-ai") return false;
-                      const ts = data.createdAt?.toMillis?.() || data.createdAt?._seconds * 1000 || 0;
-                      if (ts <= thirtySecAgo) return false;
-                      const sorted = recentReplies.docs
-                        .map((r) => r.data())
-                        .filter((r) => {
-                          const rTs = r.createdAt?.toMillis?.() || r.createdAt?._seconds * 1000 || 0;
-                          return rTs < ts && rTs > thirtySecAgo;
-                        })
-                        .sort((a, b) => {
-                          const aTs = a.createdAt?.toMillis?.() || a.createdAt?._seconds * 1000 || 0;
-                          const bTs = b.createdAt?.toMillis?.() || b.createdAt?._seconds * 1000 || 0;
-                          return bTs - aTs;
-                        });
-                      return sorted.length > 0 && sorted[0].authorId === userId;
-                    });
-
-                    if (!hasRecentAIForUser) {
-                      await generateAIReplyToComment(
-                        postData,
-                        postId,
-                        comment.parentId,
-                        comment,
-                        GEMINI_API_KEY.value(),
-                      );
-                    } else {
-                      console.log(`스팸 방지: ${userId}에 대한 30초 내 AI 대댓글 이미 존재`);
-                    }
+                  if (!hasRecentAIForUser) {
+                    await generateAIReplyToComment(
+                      postData,
+                      postId,
+                      comment.parentId,
+                      comment,
+                      GEMINI_API_KEY.value(),
+                    );
+                  } else {
+                    console.log(`스팸 방지: ${userId}에 대한 30초 내 AI 대댓글 이미 존재`);
                   }
                 }
               }
@@ -943,7 +942,7 @@ async function generateAIReplyToComment(
 ): Promise<void> {
   const db = getFirestore();
 
-  // 루트 콩콩이 댓글 로드
+  // 루트 댓글 로드
   const rootDoc = await db.collection("comments").doc(parentCommentId).get();
   if (!rootDoc.exists) return;
   const rootComment = rootDoc.data() as Comment;
@@ -962,7 +961,34 @@ async function generateAIReplyToComment(
       return aTs - bTs;
     });
 
-  // 전체 대화 기록 사용 (Gemini 1M 컨텍스트 — 제한 불필요)
+  // 학술글: 이 글의 다른 댓글/대댓글도 전체 맥락으로 참조 (제목, 본문, 기존 콩콩이 답변 등)
+  let otherCommentsContext = "";
+  if (post.tag === "학술" && !post.isPrivate) {
+    try {
+      const allCommentsSnap = await db.collection("comments")
+        .where("postId", "==", postId)
+        .get();
+      const otherComments = allCommentsSnap.docs
+        .map((d) => ({ id: d.id, ...d.data() as Comment }))
+        .filter((c) => c.id !== parentCommentId) // 현재 루트 댓글 제외 (아래서 별도 표시)
+        .filter((c) => !c.parentId || c.parentId !== parentCommentId) // 현재 스레드 대댓글 제외
+        .sort((a, b) => {
+          const aTs = a.createdAt?.toMillis?.() || (a.createdAt as unknown as { _seconds: number })?._seconds * 1000 || 0;
+          const bTs = b.createdAt?.toMillis?.() || (b.createdAt as unknown as { _seconds: number })?._seconds * 1000 || 0;
+          return aTs - bTs;
+        });
+      if (otherComments.length > 0) {
+        const lines = otherComments.map((c) => {
+          const speaker = c.authorId === "gemini-ai" ? "콩콩이" : (c.authorNickname || "학생");
+          const prefix = c.parentId ? "  (대댓글) " : "";
+          return `${prefix}${speaker}: ${c.content}`;
+        });
+        otherCommentsContext = `\n\n[이 글의 다른 댓글/대댓글]\n${lines.join("\n\n")}`;
+      }
+    } catch {
+      // 다른 댓글 로드 실패 무시
+    }
+  }
 
   // 대화 기록 구성 (루트 댓글 화자 자동 판별)
   const rootSpeaker = rootComment.authorId === "gemini-ai"
@@ -1057,8 +1083,9 @@ async function generateAIReplyToComment(
   const contextText = `[원본 게시글]
 제목: ${post.title}
 본문: ${post.content}
+${otherCommentsContext}
 
-[대화 기록]
+[현재 대화 스레드]
 ${conversationHistory}`;
 
   // Gemini API 요청 parts 구성
