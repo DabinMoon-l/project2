@@ -469,7 +469,7 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
   return (
     <div ref={swipeRef} style={{ cursor: nextPostId ? 'grab' : undefined }}>
     <motion.div
-      className="min-h-screen pb-24 overflow-x-hidden" data-board-detail style={{ backgroundColor: '#F5F0E8' }}
+      className={`min-h-screen overflow-x-hidden ${isPanelMode ? 'pb-0' : 'pb-24'}`} data-board-detail style={{ backgroundColor: '#F5F0E8' }}
       initial={slideIn ? { opacity: 0, x: 60 } : false}
       animate={{ opacity: 1, x: 0 }}
       transition={{ type: 'spring', stiffness: 400, damping: 35 }}
