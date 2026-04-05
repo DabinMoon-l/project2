@@ -19,6 +19,26 @@ import ScrollToTopButton from '@/components/common/ScrollToTopButton';
 import WideBottomSheet from '@/components/common/WideBottomSheet';
 
 /**
+ * 가장 가까운 스크롤 컨테이너를 찾아 대상 요소까지 smooth scroll
+ */
+function scrollToElement(target: HTMLElement) {
+  let parent = target.parentElement;
+  while (parent) {
+    const style = getComputedStyle(parent);
+    if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
+      const parentRect = parent.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const offset = targetRect.top - parentRect.top + parent.scrollTop;
+      parent.scrollTo({ top: offset, behavior: 'smooth' });
+      return;
+    }
+    parent = parent.parentElement;
+  }
+  // 폴백: window
+  target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/**
  * 날짜 포맷
  */
 function formatDate(date: Date) {
@@ -624,7 +644,7 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
                     key={root.id}
                     onClick={() => {
                       const el = document.getElementById(`comment-${root.id}`);
-                      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      if (el) scrollToElement(el);
                     }}
                     onPointerDown={() => {
                       longPressTimer.current = setTimeout(() => setThreadDeleteTarget(root.id), 600);
