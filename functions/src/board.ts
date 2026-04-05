@@ -412,6 +412,22 @@ export const onCommentCreate = onDocumentCreated(
           try {
             const authorDoc = await db.collection("users").doc(userId).get();
             const authorRole = authorDoc.data()?.role;
+            const authorStudentId = authorDoc.data()?.studentId || "";
+
+            // 비공개 글 일일 대화 한도 (사용자 메시지 100개/일, 25010423 제외)
+            if (postData.isPrivate && authorStudentId !== "25010423") {
+              const todayStart = new Date();
+              todayStart.setHours(0, 0, 0, 0);
+              const todayUserMessages = await db.collection("comments")
+                .where("postId", "==", postId)
+                .where("authorId", "==", userId)
+                .where("createdAt", ">=", todayStart)
+                .get();
+              if (todayUserMessages.size >= 100) {
+                console.log(`비공개 콩콩이 일일 한도 초과 (${todayUserMessages.size}/100): ${userId}`);
+                return;
+              }
+            }
 
             if (authorRole === "professor") {
               console.log(`교수님 댓글이므로 AI 응답 스킵: ${commentId}`);
