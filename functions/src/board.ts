@@ -233,6 +233,57 @@ export const onPostCreate = onDocumentCreated(
 );
 
 /**
+ * 게시글 태그 변경 시 콩콩이 자동답변 트리거
+ * 기타/학사 → 학술로 변경 시 콩콩이가 응답하도록
+ */
+export const onPostUpdate = onDocumentWritten(
+  {
+    document: "posts/{postId}",
+    region: "asia-northeast3",
+    secrets: [GEMINI_API_KEY],
+  },
+  async (event) => {
+    const before = event.data?.before?.data() as Post | undefined;
+    const after = event.data?.after?.data() as Post | undefined;
+    if (!before || !after) return;
+
+    // 태그가 학술로 변경된 경우에만 트리거
+    if (before.tag === after.tag) return;
+    if (after.tag !== "학술") return;
+
+    const postId = event.params.postId;
+
+    // 이미 콩콩이 댓글이 있으면 스킵
+    const existingAI = await getFirestore().collection("comments")
+      .where("postId", "==", postId)
+      .where("authorId", "==", "gemini-ai")
+      .limit(1)
+      .get();
+    if (!existingAI.empty) {
+      console.log(`이미 콩콩이 댓글 존재, 태그 변경 트리거 스킵: ${postId}`);
+      return;
+    }
+
+    // 교수님 글 제외
+    const userId = after.authorId || after.userId;
+    if (userId) {
+      const authorDoc = await getFirestore().collection("users").doc(userId).get();
+      if (authorDoc.data()?.role === "professor") {
+        console.log(`교수님 게시글이므로 태그 변경 AI 스킵: ${postId}`);
+        return;
+      }
+    }
+
+    try {
+      console.log(`태그 변경 감지 (${before.tag} → 학술), 콩콩이 자동답변 생성: ${postId}`);
+      await generateBoardAIReply(after, postId, GEMINI_API_KEY.value());
+    } catch (aiError) {
+      console.error("태그 변경 AI 자동답변 생성 실패:", aiError);
+    }
+  }
+);
+
+/**
  * 댓글 생성 시 경험치 지급
  * 클라이언트는 comments 컬렉션에 저장하므로 해당 경로를 리스닝
  */
@@ -668,10 +719,11 @@ async function generateBoardAIReply(
   const courseName = post.courseId ? COURSE_NAMES[post.courseId] || post.courseId : "";
   let courseContext = courseName ? `\n\n[과목 정보]\n이 질문은 "${courseName}" 과목 게시판에 올라온 글이야. 해당 과목 맥락에 맞게 답변해줘.` : "";
 
-  // Scope 참조: 질문과 관련된 챕터 범위를 로드하여 정확한 답변 지원
+  // Scope 참조: 질문과 ��련된 챕터 범위를 로드하여 정확한 답변 지원
   if (post.courseId) {
     try {
-      const questionText = `${post.title} ${post.content}`;
+      // 비공개 글 제목은 "XX의 콩콩이"라 챕터 추론에 무의미 → 본문만 사용
+      const questionText = post.isPrivate ? post.content : `${post.title} ${post.content}`;
       const relatedChapters = await inferChaptersFromText(post.courseId, questionText);
       const scope = await loadScopeForAI(
         post.courseId,
@@ -931,7 +983,10 @@ async function generateAIReplyToComment(
   // Scope 참조 (대댓글에도 과목 범위 제공)
   if (post.courseId) {
     try {
-      const questionText = `${post.title} ${post.content} ${userReply.content || ""}`;
+      // 비공개 글 제목은 "XX의 콩���이"라 챕터 추론에 무의미 → 대화 기록 전체 활용
+      const questionText = post.isPrivate
+        ? `${post.content} ${conversationHistory} ${userReply.content || ""}`
+        : `${post.title} ${post.content} ${userReply.content || ""}`;
       const relatedChapters = await inferChaptersFromText(post.courseId, questionText);
       const scope = await loadScopeForAI(
         post.courseId,
