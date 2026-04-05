@@ -712,8 +712,14 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
         </div>
       </BottomSheet>
 
-      {/* 비공개 글: 스크롤 초기화 버튼 */}
-      {post.isPrivate && <ScrollToTopButton targetRef={headerRef} bottomPx={120} />}
+      {/* 비공개 글: 스크롤 초기화 버튼 — 입력창 위에 배치 */}
+      {post.isPrivate && (
+        <ScrollToTopButton
+          targetRef={headerRef}
+          bottomPx={140}
+          side={isPanelMode ? 'right' : 'right'}
+        />
+      )}
     </motion.div>
     </div>
   );

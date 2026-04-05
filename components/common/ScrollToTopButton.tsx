@@ -91,12 +91,11 @@ export default function ScrollToTopButton({
           className={`fixed z-40 w-10 h-10 ${variantClass} rounded-full shadow-lg flex items-center justify-center transition-colors`}
           style={{
             bottom: isWide
-              ? '1rem'
+              ? `${Math.max(16, bottomPx - 68)}px`
               : `calc(4.25rem + env(safe-area-inset-bottom, 0px) + ${bottomPx - 68}px)`,
-            // 가로모드: 세로모드 위치 + (50% - 120px) = 2쪽 기준 동일 배치
             ...(side === 'left'
               ? { left: isWide ? 'calc(240px + 1rem)' : '1rem' }
-              : { right: isWide ? 'calc(50% - 120px + 1rem)' : '1rem' }),
+              : { right: isWide ? '1rem' : '1rem' }),
             WebkitTapHighlightColor: 'transparent',
             touchAction: 'manipulation',
           }}

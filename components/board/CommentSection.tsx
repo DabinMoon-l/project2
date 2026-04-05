@@ -491,7 +491,9 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
           data-kb-fixed
           className="fixed z-40 rounded-2xl bg-[#F5F0E8]/80 backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.12)] border border-[#D4CFC4]/60 overflow-hidden will-change-[bottom]"
           style={{
-            left: isWide ? 'calc(var(--detail-panel-left, 0px) + 0.75rem)' : '0.75rem',
+            left: isWide
+              ? isPanelMode ? 'calc(50% + 120px + 0.75rem)' : 'calc(var(--detail-panel-left, 0px) + 0.75rem)'
+              : '0.75rem',
             right: isWide
               ? isPanelMode ? '0.75rem' : 'calc(var(--detail-panel-right, 0px) + 0.75rem)'
               : '0.75rem',
