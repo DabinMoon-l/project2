@@ -133,10 +133,8 @@ service cloud.firestore {
     // ============================================================
 
     match /posts/{postId} {
-      // 단일 문서 읽기: 비공개 글은 작성자 또는 교수만
-      allow get: if resource.data.isPrivate != true
-        || isOwner(resource.data.authorId)
-        || isProfessor();
+      // 단일 문서 읽기: 공개 (공유 링크 + 비공개 글 접근 제어는 클라이언트에서 처리)
+      allow get: if true;
       // 목록 쿼리: 로그인 사용자만 (비공개 글은 클라이언트에서 추가 필터링)
       allow list: if isAuthenticated();
 
