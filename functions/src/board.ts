@@ -703,6 +703,149 @@ async function loadProfessorComments(
   return result.slice(0, maxCount).map(({ content, imageUrls }) => ({ content, imageUrls }));
 }
 
+/**
+ * 교수 퀴즈에서 관련 문제 + 오답 통계를 로드
+ * 챕터 기반 필터링 → 문제text + explanation + 정답률/오답 선지 통계
+ */
+const PROFESSOR_QUIZ_TYPES = new Set(["midterm", "final", "past", "independent", "professor", "custom"]);
+
+async function loadQuizContextForAI(
+  courseId: string,
+  chapters: string[],
+  maxQuestions: number = 8,
+): Promise<string> {
+  const db = getFirestore();
+
+  // 해당 과목의 교수 퀴즈 로드
+  const quizzesSnap = await db.collection("quizzes")
+    .where("courseId", "==", courseId)
+    .get();
+
+  if (quizzesSnap.empty) return "";
+
+  // 교수 퀴즈만 필터 + 챕터 매칭 문제 추출
+  interface QuizQuestion {
+    text: string;
+    choices?: string[];
+    answer: number | string;
+    explanation?: string;
+    choiceExplanations?: string[];
+    chapterId?: string;
+    type?: string;
+    quizTitle: string;
+    quizType: string;
+    questionIndex: number;
+    quizId: string;
+  }
+  const matchedQuestions: QuizQuestion[] = [];
+  const quizIds: string[] = [];
+
+  for (const doc of quizzesSnap.docs) {
+    const quiz = doc.data();
+    if (!PROFESSOR_QUIZ_TYPES.has(quiz.type)) continue;
+    if (!quiz.questions || quiz.questions.length === 0) continue;
+
+    const quizId = doc.id;
+    let hasMatch = false;
+
+    for (let i = 0; i < quiz.questions.length; i++) {
+      const q = quiz.questions[i];
+      const qChapter = q.chapterId || "";
+      // 챕터 매칭: chapterId가 있으면 비교, 없으면 전체 포함
+      const chapterMatch = chapters.length === 0
+        || !qChapter
+        || chapters.some((ch) => qChapter.includes(ch) || qChapter.endsWith(`_${ch}`));
+
+      if (chapterMatch && q.text) {
+        matchedQuestions.push({
+          text: q.text,
+          choices: q.choices,
+          answer: q.answer,
+          explanation: q.explanation,
+          choiceExplanations: q.choiceExplanations,
+          chapterId: q.chapterId,
+          type: q.type,
+          quizTitle: quiz.title || "",
+          quizType: quiz.type,
+          questionIndex: i,
+          quizId: quizId,
+        });
+        if (!hasMatch) { quizIds.push(quizId); hasMatch = true; }
+      }
+    }
+  }
+
+  if (matchedQuestions.length === 0) return "";
+
+  // 오답 통계 수집: quizId별로 quizResults에서 questionScores 집계
+  const wrongAnswerStats: Record<string, { total: number; wrong: number; wrongChoices: Record<string, number> }> = {};
+
+  for (let i = 0; i < quizIds.length; i += 30) {
+    const batch = quizIds.slice(i, i + 30);
+    const resultsSnap = await db.collection("quizResults")
+      .where("quizId", "in", batch)
+      .get();
+
+    for (const rDoc of resultsSnap.docs) {
+      const r = rDoc.data();
+      const scores = r.questionScores;
+      if (!scores) continue;
+
+      for (const [qKey, score] of Object.entries(scores)) {
+        const s = score as { isCorrect?: boolean; userAnswer?: string; correctAnswer?: string };
+        const statKey = `${r.quizId}_${qKey}`;
+        if (!wrongAnswerStats[statKey]) {
+          wrongAnswerStats[statKey] = { total: 0, wrong: 0, wrongChoices: {} };
+        }
+        wrongAnswerStats[statKey].total++;
+        if (!s.isCorrect) {
+          wrongAnswerStats[statKey].wrong++;
+          const ua = String(s.userAnswer ?? "");
+          if (ua) wrongAnswerStats[statKey].wrongChoices[ua] = (wrongAnswerStats[statKey].wrongChoices[ua] || 0) + 1;
+        }
+      }
+    }
+  }
+
+  // 상위 N개 문제 선택 (오답률 높은 순 우선)
+  const withStats = matchedQuestions.map((q) => {
+    const statKey = `${q.quizId}_q${q.questionIndex + 1}`;
+    const stat = wrongAnswerStats[statKey];
+    const wrongRate = stat && stat.total >= 3 ? stat.wrong / stat.total : 0;
+    return { ...q, stat, wrongRate };
+  });
+  withStats.sort((a, b) => b.wrongRate - a.wrongRate);
+  const selected = withStats.slice(0, maxQuestions);
+
+  // 컨텍스트 문자열 생성
+  const lines = selected.map((q) => {
+    let line = `문제: ${q.text}`;
+    if (q.choices && q.choices.length > 0) {
+      line += `\n선지: ${q.choices.map((c, i) => `${i + 1}) ${c}`).join(" / ")}`;
+    }
+    if (q.explanation) {
+      line += `\n해설: ${q.explanation}`;
+    }
+    if (q.stat && q.stat.total >= 3) {
+      const correctRate = Math.round((1 - q.wrongRate) * 100);
+      line += `\n정답률: ${correctRate}% (${q.stat.total}명 응시)`;
+      // 가장 많이 고른 오답 선지
+      const topWrong = Object.entries(q.stat.wrongChoices).sort((a, b) => b[1] - a[1])[0];
+      if (topWrong && q.choices) {
+        const idx = parseInt(topWrong[0]);
+        if (!isNaN(idx) && q.choices[idx]) {
+          line += ` — 가장 많이 틀린 선지: ${idx + 1}번 "${q.choices[idx]}"`;
+        }
+      }
+    }
+    return line;
+  });
+
+  console.log(`[콩콩이] 퀴즈 컨텍스트 로드: ${courseId}, ${selected.length}문제 (전체 ${matchedQuestions.length}개 중)`);
+
+  return `\n\n[이 과목의 교수 퀴즈 — 참고용]\n아래는 이 과목에서 출제된 관련 퀴즈 문제와 해설, 학생들의 정답률이야. 답변할 때 자연스럽게 참고하되, 퀴즈 내용을 그대로 읊지는 마. "이 개념은 시험에서도 나왔는데~", "친구들도 많이 헷갈려하더라~" 같은 식으로 녹여서 활용해.\n\n${lines.join("\n\n")}`;
+}
+
 async function generateBoardAIReply(
   post: Post,
   postId: string,
@@ -718,12 +861,20 @@ async function generateBoardAIReply(
   const courseName = post.courseId ? COURSE_NAMES[post.courseId] || post.courseId : "";
   let courseContext = courseName ? `\n\n[과목 정보]\n이 질문은 "${courseName}" 과목 게시판에 올라온 글이야. 해당 과목 맥락에 맞게 답변해줘.` : "";
 
-  // Scope 참조: 질문과 ��련된 챕터 범위를 로드하여 정확한 답변 지원
+  // 챕터 추론 (scope + 퀴즈 양쪽에서 사용)
+  let relatedChapters: string[] = [];
   if (post.courseId) {
     try {
-      // 비공개 글 제목은 "XX의 콩콩이"라 챕터 추론에 무의미 → 본문만 사용
       const questionText = post.isPrivate ? post.content : `${post.title} ${post.content}`;
-      const relatedChapters = await inferChaptersFromText(post.courseId, questionText);
+      relatedChapters = await inferChaptersFromText(post.courseId, questionText);
+    } catch {
+      // 챕터 추론 실패 무시
+    }
+  }
+
+  // Scope 참조: 질문과 관련된 챕터 범위를 로드하여 정확한 답변 지원
+  if (post.courseId) {
+    try {
       const scope = await loadScopeForAI(
         post.courseId,
         relatedChapters.length > 0 ? relatedChapters : undefined,
@@ -735,6 +886,16 @@ async function generateBoardAIReply(
       }
     } catch (scopeErr) {
       console.warn("[콩콩이] scope 로드 실패 (무시):", scopeErr);
+    }
+  }
+
+  // 교수 퀴즈 문제 + 오답 통계 로딩
+  let quizContext = "";
+  if (post.courseId) {
+    try {
+      quizContext = await loadQuizContextForAI(post.courseId, relatedChapters, 8);
+    } catch (quizErr) {
+      console.warn("[콩콩이] 퀴즈 컨텍스트 로드 실패 (무시):", quizErr);
     }
   }
 
@@ -793,7 +954,7 @@ async function generateBoardAIReply(
 - 한국어로 답변해
 - 학생이 너한테 별명을 지어주거나 역할을 부여하면 그에 맞게 행동해.
 - 수업 관련 질문에는 정확하고 자세하게, 잡담에는 재미있게 답해줘.
-- 답변 마지막에 "궁금한 게 더 있으면 댓글로 물어봐~" 라고 안내해.${courseContext}${professorContext}`
+- 답변 마지막에 "궁금한 게 더 있으면 댓글로 물어봐~" 라고 안내해.${courseContext}${quizContext}${professorContext}`
     : `너는 "콩콩이"라는 이름의 수업 보조 AI야. 학생이 학술 게시판에 올린 질문에 답변해줘.
 
 [절대 금지]
@@ -851,7 +1012,7 @@ async function generateBoardAIReply(
 - **용어 정밀도**: 의학/생물학은 비슷한 용어가 많아. "침입"과 "정착", "감염"과 "발병", "독소"와 "독력인자" 같은 구분을 정확히 해줘. 대충 비슷한 말로 바꿔 쓰지 마.
 - **학생이 틀린 전제로 질문했을 때**: 바로 "틀렸어!"라고 하지 말고, "좋은 질문인데, 여기서 한 가지 짚고 가자면~" 하고 부드럽게 교정해줘. 왜 헷갈릴 수 있는지도 설명해주면 더 좋아.
 - **인과관계 주의**: "A이므로 B이다"를 쓸 때, 진짜 인과관계인지 상관관계인지 구분해. 교과서에서 "~한다"라고 쓴 건 확정, "~할 수 있다"라고 쓴 건 가능성이야.
-- 답변 작성 후 반드시 사실 관계, 수치, 용어를 한번 더 검토해.${courseContext}${professorContext}`;
+- 답변 작성 후 반드시 사실 관계, 수치, 용어를 한번 더 검토해.${courseContext}${quizContext}${professorContext}`;
 
   const userText = `제목: ${post.title}\n본문: ${post.content}`;
 
@@ -1035,14 +1196,22 @@ async function generateAIReplyToComment(
   const courseName = post.courseId ? COURSE_NAMES[post.courseId] || post.courseId : "";
   let courseContext = courseName ? `\n\n[과목 정보]\n이 대화는 "${courseName}" 과목 게시판의 글이야. 해당 과목 맥락에 맞게 답변해줘.` : "";
 
-  // Scope 참조 (대댓글에도 과목 범위 제공)
+  // 챕터 추론
+  let relatedChapters: string[] = [];
   if (post.courseId) {
     try {
-      // 비공개 글 제목은 "XX의 콩���이"라 챕터 추론에 무의미 → 대화 기록 전체 활용
       const questionText = post.isPrivate
         ? `${post.content} ${conversationHistory} ${userReply.content || ""}`
         : `${post.title} ${post.content} ${userReply.content || ""}`;
-      const relatedChapters = await inferChaptersFromText(post.courseId, questionText);
+      relatedChapters = await inferChaptersFromText(post.courseId, questionText);
+    } catch {
+      // 챕터 추론 실패 무시
+    }
+  }
+
+  // Scope 참조 (대댓글에도 과목 범위 제공)
+  if (post.courseId) {
+    try {
       const scope = await loadScopeForAI(
         post.courseId,
         relatedChapters.length > 0 ? relatedChapters : undefined,
@@ -1053,6 +1222,16 @@ async function generateAIReplyToComment(
       }
     } catch {
       // scope 실패 무시
+    }
+  }
+
+  // 교수 퀴즈 문제 + 오답 통계 (대댓글은 4개로 축소)
+  let quizContext = "";
+  if (post.courseId && !post.isPrivate) {
+    try {
+      quizContext = await loadQuizContextForAI(post.courseId, relatedChapters, 4);
+    } catch {
+      // 퀴즈 로드 실패 무시
     }
   }
 
@@ -1128,7 +1307,7 @@ async function generateAIReplyToComment(
 - **용어 정밀도**: 비슷한 용어 구분을 정확히 해줘. 대충 비슷한 말로 바꿔 쓰지 마.
 - **학생이 틀린 전제로 질문했을 때**: "좋은 질문인데, 여기서 한 가지 짚고 가자면~" 하고 부드럽게 교정해줘.
 - **인과관계 주의**: "~한다"(확정)와 "~할 수 있다"(가능성)를 구분해서 써.
-- 답변 작성 후 반드시 사실 관계, 수치, 용어를 한번 더 검토해.${courseContext}`;
+- 답변 작성 후 반드시 사실 관계, 수치, 용어를 한번 더 검토해.${courseContext}${quizContext}`;
 
   const contextText = `[원본 게시글]
 제목: ${post.title}
