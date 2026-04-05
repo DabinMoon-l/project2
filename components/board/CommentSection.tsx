@@ -489,15 +489,14 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
       {user && (
         <div
           data-kb-fixed
-          className={
-            isPanelMode
-              ? "sticky z-40 rounded-2xl bg-[#F5F0E8]/80 backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.12)] border border-[#D4CFC4]/60 overflow-hidden bottom-3 mx-0"
-              : "fixed z-40 rounded-2xl bg-[#F5F0E8]/80 backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.12)] border border-[#D4CFC4]/60 overflow-hidden will-change-[bottom]"
-          }
-          style={isPanelMode ? {} : {
-            left: isWide ? 'calc(var(--detail-panel-left, 0px) + 0.75rem)' : '0.75rem',
-            right: isWide ? 'calc(var(--detail-panel-right, 0px) + 0.75rem)' : '0.75rem',
-            bottom: 'max(var(--kb-offset, 0px), 0.75rem)',
+          className="fixed z-40 rounded-2xl bg-[#F5F0E8]/80 backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.12)] border border-[#D4CFC4]/60 overflow-hidden will-change-[bottom]"
+          style={{
+            left: isPanelMode
+              ? 'calc(var(--detail-panel-left, 0px) + 0.75rem)'
+              : isWide ? 'calc(var(--detail-panel-left, 0px) + 0.75rem)' : '0.75rem',
+            right: isPanelMode ? '0.75rem'
+              : isWide ? 'calc(var(--detail-panel-right, 0px) + 0.75rem)' : '0.75rem',
+            bottom: 'var(--kb-offset, 0px)',
           }}
         >
           {/* 답글 대상 표시 */}
