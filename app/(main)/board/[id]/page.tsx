@@ -15,6 +15,7 @@ import { useUser, useDetailPanel, useClosePanel, usePanelLock } from '@/lib/cont
 import { useWideMode } from '@/lib/hooks/useViewportScale';
 import { getScrollLockCount } from '@/lib/utils/scrollLock';
 import ScrollToTopButton from '@/components/common/ScrollToTopButton';
+import BottomSheet from '@/components/common/BottomSheet';
 
 /**
  * 날짜 포맷
@@ -739,29 +740,27 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
         </section>
       </main>
 
-      {/* 스레드 삭제 확인 모달 */}
-      {threadDeleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setThreadDeleteTarget(null)}>
-          <div className="bg-[#FDFBF7] rounded-lg p-5 mx-6 max-w-sm w-full shadow-lg border border-[#D4CFC4]" onClick={(e) => e.stopPropagation()}>
-            <p className="text-sm font-bold text-[#1A1A1A] mb-1">스레드 삭제</p>
-            <p className="text-xs text-[#5C5C5C] mb-4">이 스레드의 댓글과 콩콩이 답변이 모두 삭제됩니다.</p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setThreadDeleteTarget(null)}
-                className="flex-1 py-2 text-xs font-bold border border-[#D4CFC4] text-[#3A3A3A] rounded"
-              >
-                취소
-              </button>
-              <button
-                onClick={() => handleDeleteThread(threadDeleteTarget)}
-                className="flex-1 py-2 text-xs font-bold bg-[#8B1A1A] text-white rounded"
-              >
-                삭제
-              </button>
-            </div>
+      {/* 스레드 삭제 확인 바텀시트 */}
+      <BottomSheet isOpen={!!threadDeleteTarget} onClose={() => setThreadDeleteTarget(null)}>
+        <div className="px-5 pb-6 pt-2">
+          <p className="text-sm font-bold text-[#1A1A1A] mb-1">스레드 삭제</p>
+          <p className="text-xs text-[#5C5C5C] mb-4">이 스레드의 댓글과 콩콩이 답변이 모두 삭제됩니다.</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setThreadDeleteTarget(null)}
+              className="flex-1 py-2.5 text-xs font-bold border border-[#D4CFC4] text-[#3A3A3A] rounded"
+            >
+              취소
+            </button>
+            <button
+              onClick={() => threadDeleteTarget && handleDeleteThread(threadDeleteTarget)}
+              className="flex-1 py-2.5 text-xs font-bold bg-[#8B1A1A] text-white rounded"
+            >
+              삭제
+            </button>
           </div>
         </div>
-      )}
+      </BottomSheet>
 
       {/* 비공개 글: 스크롤 초기화 버튼 */}
       {post.isPrivate && <ScrollToTopButton targetRef={headerRef} bottomPx={120} />}
