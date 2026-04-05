@@ -9,10 +9,12 @@ import LikeButton from '@/components/board/LikeButton';
 import CommentSection from '@/components/board/CommentSection';
 import LinkifiedText from '@/components/board/LinkifiedText';
 import { usePost, useDeletePost, useLike } from '@/lib/hooks/useBoard';
+import { useComments } from '@/lib/hooks/useBoardComments';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useUser, useDetailPanel, useClosePanel, usePanelLock } from '@/lib/contexts';
 import { useWideMode } from '@/lib/hooks/useViewportScale';
 import { getScrollLockCount } from '@/lib/utils/scrollLock';
+import ScrollToTopButton from '@/components/common/ScrollToTopButton';
 
 /**
  * 날짜 포맷
@@ -193,6 +195,18 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
 
   // 비공개 글(나만의 콩콩이)이면 3쪽 잠금 — 다른 콘텐츠에 밀리지 않도록
   usePanelLock(isPanelMode && !!post?.isPrivate);
+
+  // 비공개 글 스레드 바로가기용 댓글 데이터
+  const { comments: allComments } = useComments(postId);
+  const threadRoots = useMemo(() => {
+    if (!post?.isPrivate) return [];
+    return allComments
+      .filter((c) => !c.parentId)
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  }, [allComments, post?.isPrivate]);
+
+  // 스크롤 초기화 버튼용 ref
+  const headerRef = useRef<HTMLElement>(null);
 
   // ── 우→좌 스와이프 → 다음 게시글 (순환) ──
   const swipeNav = useRef({ startX: 0, startY: 0, lastX: 0, active: false, locked: false, startTime: 0, navigating: false });
@@ -475,7 +489,7 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
       transition={{ type: 'spring', stiffness: 400, damping: 35 }}
     >
       {/* 헤더 */}
-      <header className="mx-4 mt-3 pb-2">
+      <header ref={headerRef} className="mx-4 mt-3 pb-2">
         <div className="flex items-center justify-between">
           <button
             onClick={() => goBack()}
@@ -586,6 +600,28 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
             </div>
           )}
 
+          {/* 비공개 글: 스레드 바로가기 */}
+          {post.isPrivate && threadRoots.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-4 mb-2">
+              {threadRoots.map((root, idx) => {
+                const preview = root.content.replace(/\n/g, ' ').slice(0, 20) + (root.content.length > 20 ? '...' : '');
+                return (
+                  <button
+                    key={root.id}
+                    onClick={() => {
+                      const el = document.getElementById(`comment-${root.id}`);
+                      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }}
+                    className="px-3 py-1.5 text-xs border border-[#D4CFC4] bg-[#FDFBF7] text-[#3A3A3A] rounded-full active:scale-95 transition-transform truncate max-w-[200px]"
+                  >
+                    <span className="font-bold text-[#1A1A1A] mr-1">#{idx + 1}</span>
+                    {preview}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {/* 하단 액션 줄: 좌=찜·조회·댓글 / 우=공유 */}
           <div className="flex items-center justify-between py-2 mt-4">
             <div className="flex items-center gap-3">
@@ -621,6 +657,9 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
           <CommentSection postId={postId} postAuthorId={post.authorId} acceptedCommentId={post.acceptedCommentId} isPrivatePost={post.isPrivate} isPanelMode={isPanelMode} />
         </section>
       </main>
+
+      {/* 비공개 글: 스크롤 초기화 버튼 */}
+      {post.isPrivate && <ScrollToTopButton targetRef={headerRef} />}
     </motion.div>
     </div>
   );
