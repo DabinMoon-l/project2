@@ -57,11 +57,7 @@ export default function SharedPostClient({ postId }: { postId: string }) {
         }
 
         const data = postSnap.data();
-        if (data.isPrivate) {
-          setError('비공개 글은 공유할 수 없습니다.');
-          setLoading(false);
-          return;
-        }
+        // 비공개 글도 공유 링크로는 열람 가능 (본인이 의도적으로 공유하는 것)
         setPost({
           title: data.title,
           content: data.content,
