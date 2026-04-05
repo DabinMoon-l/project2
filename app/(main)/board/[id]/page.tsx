@@ -19,13 +19,14 @@ import ScrollToTopButton from '@/components/common/ScrollToTopButton';
 import WideBottomSheet from '@/components/common/WideBottomSheet';
 
 /**
- * 가장 가까운 스크롤 컨테이너를 찾아 대상 요소까지 smooth scroll
+ * 가장 가까운 실제 스크롤 컨테이너를 찾아 대상 요소까지 smooth scroll
  */
 function scrollToElement(target: HTMLElement) {
   let parent = target.parentElement;
   while (parent) {
     const style = getComputedStyle(parent);
-    if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
+    // 실제로 스크롤 가능한 컨테이너만 (scrollHeight > clientHeight)
+    if ((style.overflowY === 'auto' || style.overflowY === 'scroll') && parent.scrollHeight > parent.clientHeight + 10) {
       const parentRect = parent.getBoundingClientRect();
       const targetRect = target.getBoundingClientRect();
       const offset = targetRect.top - parentRect.top + parent.scrollTop;
@@ -34,8 +35,7 @@ function scrollToElement(target: HTMLElement) {
     }
     parent = parent.parentElement;
   }
-  // 폴백: window
-  target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  window.scrollTo({ top: target.getBoundingClientRect().top + window.scrollY, behavior: 'smooth' });
 }
 
 /**
