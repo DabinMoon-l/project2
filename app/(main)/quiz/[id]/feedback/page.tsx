@@ -518,6 +518,7 @@ export default function FeedbackPage({ panelQuizId, onPanelNavigate }: { panelQu
    */
   const handleSkip = () => {
     // EXP 페이지로 이동 (피드백 미제출)
+    if (onPanelNavigate) { onPanelNavigate(`/quiz/${quizId}/exp`); return; }
     router.replace(`/quiz/${quizId}/exp`);
   };
 
