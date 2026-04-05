@@ -124,6 +124,8 @@ export {
   onLikeRemoved,
   acceptComment,
   deletePost,
+  deleteThread,
+  onPostUpdate,
 } from "./board";
 
 // ============================================
