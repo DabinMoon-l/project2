@@ -433,8 +433,8 @@ export { migrateQuizAnswersTo0Indexed } from "./migrateQuizAnswers";
 // ============================================
 // 주별 자동 수집 & 월별 리포트 Functions
 // ============================================
-export { collectWeeklyStatsScheduled, backfillWeeklyStats } from "./weeklyStats";
-export { generateMonthlyReport } from "./monthlyReport";
+export { collectWeeklyStatsScheduled, backfillWeeklyStats } from "./stats/collector";
+export { generateMonthlyReport, generateMonthlyReportScheduled } from "./monthlyReport";
 
 // ============================================
 // 교수님 계정 초기화 (서버사이드 권한 검증)
