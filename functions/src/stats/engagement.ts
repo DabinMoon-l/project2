@@ -5,7 +5,7 @@
  */
 
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
-import { CollectContext, EngagementStats, kstDayIndex } from "./types";
+import { CollectContext, EngagementStats, CohortEntry, kstDayIndex, formatWeekRange } from "./types";
 
 export async function collectEngagement(ctx: CollectContext): Promise<EngagementStats> {
   const db = getFirestore();
@@ -101,6 +101,39 @@ export async function collectEngagement(ctx: CollectContext): Promise<Engagement
     console.warn(`[${courseId}] 리텐션 계산 실패:`, err);
   }
 
+  // 코호트 리텐션: 가입 주차별 이번 주 활동률
+  const cohortRetention: CohortEntry[] = [];
+  try {
+    // 최근 8주간 가입자 코호트
+    for (let w = 0; w < 8; w++) {
+      const cohortStart = new Date(start.getTime() - w * 7 * 86400000);
+      const cohortEnd = new Date(cohortStart.getTime() + 7 * 86400000);
+
+      const cohortSnap = await db.collection("users")
+        .where("courseId", "==", courseId)
+        .where("role", "==", "student")
+        .where("createdAt", ">=", Timestamp.fromDate(cohortStart))
+        .where("createdAt", "<", Timestamp.fromDate(cohortEnd))
+        .select()
+        .get();
+
+      if (cohortSnap.size === 0) continue;
+
+      const cohortUids = new Set(cohortSnap.docs.map(d => d.id));
+      const activeInCohort = [...cohortUids].filter(uid => activeUserIds.has(uid)).length;
+      const weekLabel = formatWeekRange(cohortStart, cohortEnd);
+
+      cohortRetention.push({
+        cohortWeek: `W-${w} (${weekLabel})`,
+        totalUsers: cohortUids.size,
+        activeThisWeek: activeInCohort,
+        retentionRate: Math.round((activeInCohort / cohortUids.size) * 100),
+      });
+    }
+  } catch (err) {
+    console.warn(`[${courseId}] 코호트 리텐션 계산 실패:`, err);
+  }
+
   return {
     activeCount: activeUserIds.size,
     totalCount: totalStudents,
@@ -109,6 +142,7 @@ export async function collectEngagement(ctx: CollectContext): Promise<Engagement
     dauAvg,
     dauMauRatio,
     retentionFromLastWeek,
+    cohortRetention,
     activeUserIds,
   };
 }

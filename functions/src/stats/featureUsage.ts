@@ -1,60 +1,19 @@
 /**
- * 기능별 사용 패턴 통계
+ * 기능별 사용 패턴 — raw 데이터 수집
  *
- * pageViews 기반: 기능별 순위, 체류시간, 세션 깊이, 바운스율
- * 유저 분류: 둘러보기 vs 능동 유저
+ * 원칙: 수집은 구체적 숫자, 분석은 Claude에게
+ * - 일별 기능 접속자 수 + 전체 접속 대비 비율
+ * - 기능별 체류시간 분포
+ * - 세션 깊이 분포
+ * - 기능 간 동시 사용률
  */
 
 import { getFirestore } from "firebase-admin/firestore";
-import { CollectContext, FeatureUsageStats, KST_OFFSET } from "./types";
-
-/** 유저 행동 세그먼트 */
-export interface UserSegmentation {
-  /** 세그먼트별 인원 수 */
-  segments: Record<string, number>;
-  /** 유령 유저: 가입만 하고 접속 안 함 */
-  ghostUsers: number;
-  /** 유저별 사용 기능 수 평균 */
-  avgFeaturesUsed: number;
-  /** 가장 많이 사용하는 기능 조합 TOP 5 */
-  topFeatureCombos: string[];
-}
-
-// 기능별 카테고리 그룹
-const QUIZ_CATS = new Set(["quiz_solve", "quiz_result", "quiz_feedback", "quiz_exp"]);
-const REVIEW_CATS = new Set(["review_detail", "review_practice"]);
-const BOARD_CATS = new Set(["board_detail", "board_list"]);
-const CREATE_CATS = new Set(["quiz_create"]);
-
-/**
- * 유저를 행동 패턴으로 세그먼트 분류
- *
- * - 올라운더: 퀴즈+복습+게시판 모두 사용
- * - 퀴즈집중형: 퀴즈만 주로 사용
- * - 복습러: 복습 기능 적극 사용
- * - 소통형: 게시판/콩콩이 위주
- * - 창작자: 퀴즈 만들기 활발
- * - 가벼운접속: 홈만 보고 나감
- */
-function classifyUser(cats: Set<string>): string {
-  const usesQuiz = [...cats].some(c => QUIZ_CATS.has(c));
-  const usesReview = [...cats].some(c => REVIEW_CATS.has(c));
-  const usesBoard = [...cats].some(c => BOARD_CATS.has(c));
-  const usesCreate = [...cats].some(c => CREATE_CATS.has(c));
-
-  if (usesQuiz && usesReview && usesBoard) return "올라운더";
-  if (usesCreate) return "창작자";
-  if (usesReview && usesQuiz) return "복습러";
-  if (usesQuiz && !usesReview && !usesBoard) return "퀴즈집중형";
-  if (usesBoard && !usesQuiz) return "소통형";
-  if (usesQuiz && usesBoard) return "퀴즈+소통형";
-  if (cats.size <= 2) return "가벼운접속";
-  return "기타";
-}
+import { CollectContext, FeatureUsageStats, UserJourneyStats, KST_OFFSET } from "./types";
 
 export async function collectFeatureUsage(
   ctx: CollectContext,
-): Promise<{ featureUsage: FeatureUsageStats; segmentation: UserSegmentation }> {
+): Promise<FeatureUsageStats> {
   const db = getFirestore();
   const { courseId, startTs, endTs, studentIds, totalStudents } = ctx;
 
@@ -64,6 +23,7 @@ export async function collectFeatureUsage(
     .where("timestamp", "<", endTs)
     .get();
 
+  // 기본 집계
   const byCategory: Record<string, number> = {};
   const uniqueUsers = new Set<string>();
   const sessionViews: Record<string, number> = {};
@@ -71,8 +31,16 @@ export async function collectFeatureUsage(
   const durationByCategory: Record<string, { total: number; count: number }> = {};
   const sessionDurations: Record<string, number> = {};
 
-  // 유저별 사용 기능 카테고리 추적
-  const userCategories: Record<string, Set<string>> = {};
+  // 일별 기능 접속자 추적 (월=0 ~ 일=6)
+  const dailyFeatureUsers: Record<number, Record<string, Set<string>>> = {};
+  const dailyTotalUsers: Record<number, Set<string>> = {};
+  for (let i = 0; i < 7; i++) {
+    dailyFeatureUsers[i] = {};
+    dailyTotalUsers[i] = new Set();
+  }
+
+  // 유저별 사용 기능 추적 (동시 사용률 계산용)
+  const userFeatures: Record<string, Set<string>> = {};
 
   pvSnap.docs.forEach(d => {
     const data = d.data();
@@ -83,10 +51,10 @@ export async function collectFeatureUsage(
     byCategory[cat] = (byCategory[cat] || 0) + 1;
     if (uid) {
       uniqueUsers.add(uid);
-      // 유저별 카테고리 추적
+      // 유저별 기능 추적
       if (studentIds.has(uid)) {
-        if (!userCategories[uid]) userCategories[uid] = new Set();
-        userCategories[uid].add(cat);
+        if (!userFeatures[uid]) userFeatures[uid] = new Set();
+        userFeatures[uid].add(cat);
       }
     }
     if (sid) sessionViews[sid] = (sessionViews[sid] || 0) + 1;
@@ -100,87 +68,182 @@ export async function collectFeatureUsage(
       if (sid) sessionDurations[sid] = (sessionDurations[sid] || 0) + dur;
     }
 
-    // 시간대
-    if (data.timestamp?.toDate) {
-      const kstHour = new Date(data.timestamp.toDate().getTime() + KST_OFFSET).getUTCHours();
+    // 시간대 + 일별 기능 접속자
+    const ts = data.timestamp?.toDate?.();
+    if (ts) {
+      const kstTime = new Date(ts.getTime() + KST_OFFSET);
+      const kstHour = kstTime.getUTCHours();
       hourCounts[kstHour] = (hourCounts[kstHour] || 0) + 1;
+
+      const kstDay = kstTime.getUTCDay();
+      const dayIdx = kstDay === 0 ? 6 : kstDay - 1;
+      if (uid && studentIds.has(uid)) {
+        dailyTotalUsers[dayIdx].add(uid);
+        if (!dailyFeatureUsers[dayIdx][cat]) dailyFeatureUsers[dayIdx][cat] = new Set();
+        dailyFeatureUsers[dayIdx][cat].add(uid);
+      }
     }
   });
 
-  // 세션 깊이 분석
+  // 일별 기능별 접속률 (%) — Claude가 요일별 패턴 분석
+  const dailyFeatureRates: Record<string, Record<string, number>> = {};
+  const dayNames = ["월", "화", "수", "목", "금", "토", "일"];
+  for (let i = 0; i < 7; i++) {
+    const total = dailyTotalUsers[i].size;
+    if (total === 0) continue;
+    const rates: Record<string, number> = { 접속자: total };
+    for (const [cat, users] of Object.entries(dailyFeatureUsers[i])) {
+      rates[cat] = Math.round((users.size / total) * 100);
+    }
+    dailyFeatureRates[dayNames[i]] = rates;
+  }
+
+  // 기능 동시 사용률 — "퀴즈 사용자 중 복습도 한 비율" 등
+  const totalAccessedStudents = Object.keys(userFeatures).length;
+  const featurePenetration: Record<string, string> = {};
+  const keyFeatures = ["quiz_solve", "review_detail", "board_detail", "quiz_create", "quiz_result"];
+  for (const feat of keyFeatures) {
+    const users = Object.values(userFeatures).filter(s => s.has(feat)).length;
+    if (totalAccessedStudents > 0) {
+      featurePenetration[feat] = `${users}명/${totalAccessedStudents}명 (${Math.round((users / totalAccessedStudents) * 100)}%)`;
+    }
+  }
+
+  // 세션 깊이 분포 — 1페이지/2페이지/3-5/6-10/11+
   const sessionCounts = Object.values(sessionViews);
+  const depthDist = { "1페이지": 0, "2페이지": 0, "3~5": 0, "6~10": 0, "11+": 0 };
+  sessionCounts.forEach(c => {
+    if (c === 1) depthDist["1페이지"]++;
+    else if (c === 2) depthDist["2페이지"]++;
+    else if (c <= 5) depthDist["3~5"]++;
+    else if (c <= 10) depthDist["6~10"]++;
+    else depthDist["11+"]++;
+  });
+
   const totalSessions = sessionCounts.length;
-  const bounceSessions = sessionCounts.filter(c => c === 1).length;
-  const deepSessions = sessionCounts.filter(c => c >= 3).length;
-  const bounceRate = totalSessions > 0 ? Math.round((bounceSessions / totalSessions) * 100) : 0;
-  const deepSessionRate = totalSessions > 0 ? Math.round((deepSessions / totalSessions) * 100) : 0;
+  const bounceRate = totalSessions > 0 ? Math.round((depthDist["1페이지"] / totalSessions) * 100) : 0;
+  const deepSessionRate = totalSessions > 0
+    ? Math.round(((depthDist["6~10"] + depthDist["11+"]) / totalSessions) * 100) : 0;
 
   const avgSessionViews = totalSessions > 0
     ? Math.round((sessionCounts.reduce((a, b) => a + b, 0) / totalSessions) * 10) / 10
     : 0;
 
-  // 피크 시간대 TOP 3
   const peakHours = Object.entries(hourCounts)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3)
     .map(([h]) => Number(h));
 
-  // 세션당 평균 체류시간
   const sessionDurVals = Object.values(sessionDurations);
   const avgSessionDurationMs = sessionDurVals.length > 0
     ? Math.round(sessionDurVals.reduce((a, b) => a + b, 0) / sessionDurVals.length)
     : 0;
 
-  // byCategory를 내림차순 정렬
+  // byCategory 내림차순
   const sortedByCategory = Object.fromEntries(
     Object.entries(byCategory).sort((a, b) => b[1] - a[1])
   );
 
-  // 유저 세그멘테이션
-  const accessedUserIds = new Set(Object.keys(userCategories));
-  const segments: Record<string, number> = {};
-  const featureCounts: number[] = [];
-  const comboCounts: Record<string, number> = {};
-  const coreCats = new Set([...QUIZ_CATS, ...REVIEW_CATS, ...BOARD_CATS, ...CREATE_CATS]);
+  // 체류시간 기반 "실제 사용" vs "스쳐감" (30초 기준)
+  const realUsageVsBrowse: Record<string, { realUsers: number; browseUsers: number }> = {};
+  // 유저별 기능별 체류시간 모음
+  const userCatDurations: Record<string, Record<string, number[]>> = {};
 
-  for (const [, cats] of Object.entries(userCategories)) {
-    featureCounts.push(cats.size);
-    const segment = classifyUser(cats);
-    segments[segment] = (segments[segment] || 0) + 1;
-    // 기능 조합
-    const sorted = [...cats].filter(c => coreCats.has(c)).sort().join("+");
-    if (sorted) comboCounts[sorted] = (comboCounts[sorted] || 0) + 1;
+  pvSnap.docs.forEach(d => {
+    const data = d.data();
+    const uid = data.userId as string;
+    const cat = (data.category || "other") as string;
+    const dur = data.durationMs as number | undefined;
+    if (!uid || !studentIds.has(uid) || !dur || dur <= 0 || dur >= 30 * 60 * 1000) return;
+    if (!userCatDurations[uid]) userCatDurations[uid] = {};
+    if (!userCatDurations[uid][cat]) userCatDurations[uid][cat] = [];
+    userCatDurations[uid][cat].push(dur);
+  });
+
+  // 기능별 실제 사용 vs 스쳐감
+  const coreCats = ["quiz_solve", "quiz_result", "quiz_feedback", "review_detail",
+    "board_detail", "quiz_create", "home", "review_practice"];
+  for (const cat of coreCats) {
+    let real = 0, browse = 0;
+    for (const durations of Object.values(userCatDurations)) {
+      const catDurs = durations[cat];
+      if (!catDurs) continue;
+      const avgDur = catDurs.reduce((a, b) => a + b, 0) / catDurs.length;
+      if (avgDur >= 30000) real++; // 30초+ → 실제 사용
+      else browse++;
+    }
+    if (real > 0 || browse > 0) {
+      realUsageVsBrowse[cat] = { realUsers: real, browseUsers: browse };
+    }
   }
 
-  const ghostUsers = Math.max(0, totalStudents - accessedUserIds.size);
-  const avgFeaturesUsed = featureCounts.length > 0
-    ? Math.round((featureCounts.reduce((a, b) => a + b, 0) / featureCounts.length) * 10) / 10
-    : 0;
+  // 기능별 평균 체류시간 (실제 사용자만)
+  const avgQuizSolveDur = durationByCategory["quiz_solve"];
+  const avgReviewDur = durationByCategory["review_detail"];
+  const avgBoardDur = durationByCategory["board_detail"];
 
-  const topFeatureCombos = Object.entries(comboCounts)
+  // 짧은/긴 세션 비율
+  const quickVisits = sessionDurVals.filter(d => d < 60000).length;
+  const longSessions = sessionDurVals.filter(d => d >= 600000).length;
+  const quickVisitRate = sessionDurVals.length > 0 ? Math.round((quickVisits / sessionDurVals.length) * 100) : 0;
+  const longSessionRate = sessionDurVals.length > 0 ? Math.round((longSessions / sessionDurVals.length) * 100) : 0;
+
+  // 세션 흐름 (페이지 이동 순서) TOP 5
+  const sessionFlows: Record<string, string[]> = {};
+  pvSnap.docs.forEach(d => {
+    const data = d.data();
+    const sid = data.sessionId as string;
+    const cat = (data.category || "other") as string;
+    const ts = data.timestamp?.toDate?.()?.getTime() || 0;
+    if (!sid) return;
+    if (!sessionFlows[sid]) sessionFlows[sid] = [];
+    sessionFlows[sid].push(`${ts}:${cat}`);
+  });
+
+  const flowCounts: Record<string, number> = {};
+  for (const pages of Object.values(sessionFlows)) {
+    if (pages.length < 2) continue;
+    // 시간순 정렬 → 카테고리만 추출 → 연속 중복 제거
+    const sorted = pages.sort().map(p => p.split(":")[1]);
+    const deduped: string[] = [];
+    sorted.forEach(c => { if (deduped[deduped.length - 1] !== c) deduped.push(c); });
+    if (deduped.length < 2) continue;
+    const flow = deduped.slice(0, 4).join("→"); // 최대 4단계
+    flowCounts[flow] = (flowCounts[flow] || 0) + 1;
+  }
+
+  const topSessionFlows = Object.entries(flowCounts)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
-    .map(([combo, count]) => `${combo} (${count}명)`);
+    .map(([flow, count]) => `${flow} (${count}회)`);
+
+  const userJourneyStats: UserJourneyStats = {
+    realUsageVsBrowse,
+    avgQuizSolveDurationMs: avgQuizSolveDur ? Math.round(avgQuizSolveDur.total / avgQuizSolveDur.count) : 0,
+    avgReviewDurationMs: avgReviewDur ? Math.round(avgReviewDur.total / avgReviewDur.count) : 0,
+    avgBoardReadDurationMs: avgBoardDur ? Math.round(avgBoardDur.total / avgBoardDur.count) : 0,
+    quickVisitRate,
+    longSessionRate,
+    topSessionFlows,
+  };
 
   return {
-    featureUsage: {
-      totalViews: pvSnap.size,
-      uniqueUsers: uniqueUsers.size,
-      byCategory: sortedByCategory,
-      avgDurationByCategory: Object.fromEntries(
-        Object.entries(durationByCategory).map(([cat, { total, count }]) => [cat, Math.round(total / count)])
-      ),
-      avgSessionViews,
-      avgSessionDurationMs,
-      peakHours,
-      bounceRate,
-      deepSessionRate,
-    },
-    segmentation: {
-      segments,
-      ghostUsers,
-      avgFeaturesUsed,
-      topFeatureCombos,
-    },
+    totalViews: pvSnap.size,
+    uniqueUsers: uniqueUsers.size,
+    byCategory: sortedByCategory,
+    avgDurationByCategory: Object.fromEntries(
+      Object.entries(durationByCategory).map(([cat, { total, count }]) => [cat, Math.round(total / count)])
+    ),
+    avgSessionViews,
+    avgSessionDurationMs,
+    peakHours,
+    bounceRate,
+    deepSessionRate,
+    dailyFeatureRates,
+    featurePenetration,
+    sessionDepthDist: depthDist,
+    accessedStudents: totalAccessedStudents,
+    ghostStudents: Math.max(0, totalStudents - totalAccessedStudents),
+    userJourneyStats,
   };
 }
