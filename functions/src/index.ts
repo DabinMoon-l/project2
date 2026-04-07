@@ -433,7 +433,7 @@ export { migrateQuizAnswersTo0Indexed } from "./migrateQuizAnswers";
 // ============================================
 // 주별 자동 수집 & 월별 리포트 Functions
 // ============================================
-export { collectWeeklyStatsScheduled } from "./weeklyStats";
+export { collectWeeklyStatsScheduled, backfillWeeklyStats } from "./weeklyStats";
 export { generateMonthlyReport } from "./monthlyReport";
 
 // ============================================

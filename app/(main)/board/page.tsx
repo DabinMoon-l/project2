@@ -702,7 +702,7 @@ export default function BoardPage() {
     if (isWide) {
       // 가로모드: 2쪽 유지, 3쪽에 상세페이지 표시
       const action = isDetailOpen ? replaceDetail : openDetail;
-      action(<PostDetailPage panelPostId={postId} />);
+      action(<PostDetailPage panelPostId={postId} />, `/board/${postId}`);
       return;
     }
     sessionStorage.setItem('board_scroll_y', String(window.scrollY));
@@ -774,7 +774,7 @@ export default function BoardPage() {
     if (pendingPostId) {
       sessionStorage.removeItem('board_panel_post');
       const action = isDetailOpen ? replaceDetail : openDetail;
-      action(<PostDetailPage panelPostId={pendingPostId} />);
+      action(<PostDetailPage panelPostId={pendingPostId} />, `/board/${pendingPostId}`);
     }
   }, [isWide, isLocked, isDetailOpen, openDetail, replaceDetail]);
 

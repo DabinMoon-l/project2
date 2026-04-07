@@ -387,7 +387,7 @@ function QuizListPageContent() {
     if (isWide) {
       // 가로모드: 3쪽 패널에서 퀴즈 풀기 (잠금 포함)
       const action = isDetailOpen ? replaceDetail : openDetail;
-      action(<QuizPanelContainer quizId={quizId} />);
+      action(<QuizPanelContainer quizId={quizId} />, `/quiz/${quizId}`);
       return;
     }
     router.push(`/quiz/${quizId}`);

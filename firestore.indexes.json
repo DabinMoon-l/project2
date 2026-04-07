@@ -73,6 +73,14 @@
       "collectionGroup": "quizResults",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "quizResults",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "userId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
@@ -146,6 +154,14 @@
       ]
     },
     {
+      "collectionGroup": "posts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "deletedReviewItems",
       "queryScope": "COLLECTION",
       "fields": [
@@ -160,6 +176,14 @@
         { "fieldPath": "userId", "order": "ASCENDING" },
         { "fieldPath": "courseId", "order": "ASCENDING" },
         { "fieldPath": "deletedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "questionFeedbacks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
       ]
     },
     {
@@ -280,6 +304,14 @@
         { "fieldPath": "type", "order": "ASCENDING" },
         { "fieldPath": "isPublished", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "quizzes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "courseId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
       ]
     },
     {

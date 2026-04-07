@@ -15,16 +15,18 @@
 import { createContext, useContext, useState, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
+import { collection, addDoc, serverTimestamp, db } from '@/lib/repositories';
+import { auth } from '@/lib/firebase';
 
 interface DetailPanelContextType {
   /** 현재 우측 패널(3쪽)에 표시 중인 콘텐츠 */
   content: ReactNode | null;
   /** 잠금 중 2쪽에 대기 중인 콘텐츠 */
   queuedContent: ReactNode | null;
-  /** 우측 패널에 콘텐츠 표시 (잠금 시 2쪽 대기) */
-  openDetail: (content: ReactNode) => void;
-  /** 우측 패널 콘텐츠 교체 (잠금 시 2쪽 대기) */
-  replaceDetail: (content: ReactNode) => void;
+  /** 우측 패널에 콘텐츠 표시 (잠금 시 2쪽 대기, trackingPath로 pageView 자동 기록) */
+  openDetail: (content: ReactNode, trackingPath?: string) => void;
+  /** 우측 패널 콘텐츠 교체 (잠금 시 2쪽 대기, trackingPath로 pageView 자동 기록) */
+  replaceDetail: (content: ReactNode, trackingPath?: string) => void;
   /** 우측 패널 닫기 (잠금 시 대기 콘텐츠 닫기) */
   closeDetail: () => void;
   /** 대기(2쪽)만 지우기 — 잠금/콘텐츠 무관 */
@@ -72,17 +74,35 @@ export function DetailPanelProvider({ children }: { children: ReactNode }) {
 
   const queuedRef = useRef<ReactNode | null>(null);
 
-  const openDetail = useCallback((newContent: ReactNode) => {
-    if (isLockedRef.current) {
-      queuedRef.current = newContent;
-      setQueuedContent(newContent);
-      return;
-    }
-    setContentKey(k => k + 1);
-    setContent(newContent);
+  // 3쪽 pageView 자동 기록 (trackingPath가 있을 때만)
+  const logDetailView = useCallback((trackingPath: string) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !trackingPath) return;
+    // 경로에서 카테고리 추론
+    let category = 'detail_other';
+    if (/^\/board\//.test(trackingPath)) category = 'board_detail';
+    else if (/^\/quiz\/[^/]+\/result/.test(trackingPath)) category = 'quiz_result';
+    else if (/^\/quiz\/[^/]+\/feedback/.test(trackingPath)) category = 'quiz_feedback';
+    else if (/^\/quiz\/[^/]+/.test(trackingPath)) category = 'quiz_solve';
+    else if (/^\/review\//.test(trackingPath)) category = 'review_detail';
+    else if (/^\/professor\/quiz\/[^/]+\/preview/.test(trackingPath)) category = 'prof_quiz_preview';
+
+    let sessionId = '';
+    try { sessionId = sessionStorage.getItem('pv_session_id') || ''; } catch { /* SSR */ }
+
+    addDoc(collection(db, 'pageViews'), {
+      userId: uid,
+      path: trackingPath,
+      category,
+      sessionId,
+      courseId: null, // 컨텍스트 없으므로 null — pageViewLogger에서 보충됨
+      classId: null,
+      timestamp: serverTimestamp(),
+      isDetailPanel: true, // 3쪽 패널에서 발생한 뷰 구분용
+    }).catch(() => {});
   }, []);
 
-  const replaceDetail = useCallback((newContent: ReactNode) => {
+  const openDetail = useCallback((newContent: ReactNode, trackingPath?: string) => {
     if (isLockedRef.current) {
       queuedRef.current = newContent;
       setQueuedContent(newContent);
@@ -90,7 +110,19 @@ export function DetailPanelProvider({ children }: { children: ReactNode }) {
     }
     setContentKey(k => k + 1);
     setContent(newContent);
-  }, []);
+    if (trackingPath) logDetailView(trackingPath);
+  }, [logDetailView]);
+
+  const replaceDetail = useCallback((newContent: ReactNode, trackingPath?: string) => {
+    if (isLockedRef.current) {
+      queuedRef.current = newContent;
+      setQueuedContent(newContent);
+      return;
+    }
+    setContentKey(k => k + 1);
+    setContent(newContent);
+    if (trackingPath) logDetailView(trackingPath);
+  }, [logDetailView]);
 
   /** 대기(2쪽)만 지우기 — 잠금/콘텐츠 무관 */
   const clearQueue = useCallback(() => {

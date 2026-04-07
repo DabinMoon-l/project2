@@ -7,6 +7,7 @@
  */
 
 import { onSchedule } from "firebase-functions/v2/scheduler";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
 import { defineSecret } from "firebase-functions/params";
 import fetch from "node-fetch";
@@ -647,5 +648,90 @@ export const collectWeeklyStatsScheduled = onSchedule(
     }
 
     console.log("주별 통계 수집 완료");
+  }
+);
+
+// ============================================================
+// 백필용 Callable (과거 주간 데이터 일괄 생성)
+// ============================================================
+
+/**
+ * 특정 날짜 범위의 주간 통계를 백필
+ * @param data.startDate - 시작일 (YYYY-MM-DD, 해당 주의 월요일로 정렬됨)
+ * @param data.endDate - 종료일 (YYYY-MM-DD)
+ */
+export const backfillWeeklyStats = onCall(
+  {
+    region: "asia-northeast3",
+    timeoutSeconds: 540,
+    memory: "512MiB",
+    secrets: [ANTHROPIC_API_KEY],
+  },
+  async (request) => {
+    // 교수 권한 확인
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "로그인 필요");
+    }
+
+    const { startDate, endDate } = request.data as { startDate: string; endDate: string };
+    if (!startDate || !endDate) {
+      throw new HttpsError("invalid-argument", "startDate, endDate 필요");
+    }
+
+    const db = getFirestore();
+    const apiKey = ANTHROPIC_API_KEY.value();
+    const KST_OFFSET = 9 * 60 * 60 * 1000;
+
+    // 시작일을 KST 기준 월요일로 맞춤
+    const startKST = new Date(new Date(startDate + "T00:00:00+09:00").getTime());
+    const endKST = new Date(new Date(endDate + "T23:59:59+09:00").getTime());
+
+    const results: string[] = [];
+    let current = new Date(startKST);
+
+    // 월요일로 정렬
+    const dayOfWeek = current.getDay();
+    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    current.setDate(current.getDate() + daysToMonday);
+
+    while (current < endKST) {
+      const mondayKST = new Date(current);
+      mondayKST.setHours(0, 0, 0, 0);
+      const sundayKST = new Date(mondayKST);
+      sundayKST.setDate(mondayKST.getDate() + 7);
+
+      // KST → UTC
+      const start = new Date(mondayKST.getTime() - KST_OFFSET);
+      const end = new Date(sundayKST.getTime() - KST_OFFSET);
+
+      // ISO 주 번호
+      const jan1 = new Date(mondayKST.getFullYear(), 0, 1);
+      const daysSinceJan1 = Math.floor((mondayKST.getTime() - jan1.getTime()) / 86400000);
+      const weekNum = Math.ceil((daysSinceJan1 + jan1.getDay() + 1) / 7);
+      const label = `${mondayKST.getFullYear()}-W${String(weekNum).padStart(2, "0")}`;
+
+      for (const courseId of COURSE_IDS) {
+        // 이미 존재하면 스킵
+        const existing = await db.collection("weeklyStats").doc(courseId).collection("weeks").doc(label).get();
+        if (existing.exists) {
+          results.push(`${courseId} ${label}: 이미 존재 (스킵)`);
+          continue;
+        }
+
+        try {
+          const stats = await collectWeeklyStats(courseId, start, end, label, apiKey);
+          await db.collection("weeklyStats").doc(courseId).collection("weeks").doc(label).set(stats);
+          results.push(`${courseId} ${label}: 생성 완료`);
+        } catch (err) {
+          results.push(`${courseId} ${label}: 실패 — ${err}`);
+        }
+      }
+
+      // 다음 주로
+      current.setDate(current.getDate() + 7);
+    }
+
+    console.log("백필 결과:", results);
+    return { results };
   }
 );

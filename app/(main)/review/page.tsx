@@ -717,7 +717,7 @@ function ReviewPageContent() {
     } else if (isWide) {
       // solved 아이템 없음 = 아직 안 푼 퀴즈 → 퀴즈로 시작
       const action = isDetailOpen ? replaceDetail : openDetail;
-      action(<QuizPanelContainer quizId={quizId} />);
+      action(<QuizPanelContainer quizId={quizId} />, `/quiz/${quizId}`);
     } else {
       router.push(`/quiz/${quizId}`);
     }
@@ -1294,7 +1294,7 @@ function ReviewPageContent() {
               if (isWide) {
                 // Start: 퀴즈 풀기 (복습 아님) → QuizPanelContainer로 3쪽 잠금
                 const action = isDetailOpen ? replaceDetail : openDetail;
-                action(<QuizPanelContainer quizId={quizId} />);
+                action(<QuizPanelContainer quizId={quizId} />, `/quiz/${quizId}`);
               } else {
                 router.push(`/quiz/${quizId}`);
               }
