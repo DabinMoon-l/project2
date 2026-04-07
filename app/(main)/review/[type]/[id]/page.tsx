@@ -991,12 +991,13 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
           quizTitle={folderTitle}
           onComplete={(results) => handlePracticeCompleteRef.current(results)}
           onBeforeClose={() => {
-            openDetail(<FolderDetailPage panelType={folderType} panelId={folderId} />);
-            router.replace('/review'); // 2쪽 탭 루트 복귀 (승격 시 isDetailOpen=true라 layout 효과 스킵됨)
+            openDetail(<FolderDetailPage panelType={folderType} panelId={folderId} />, `/review/${folderType}/${folderId}`);
+            router.replace('/review');
           }}
           currentUserId={user?.uid}
           showFeedback={folderType !== 'library'}
-        />
+        />,
+        `/review/${folderType}/${folderId}`
       );
     } else {
       setPracticeItems(targetItems);
@@ -1035,12 +1036,13 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
           quizTitle={folderTitle}
           onComplete={(results) => handlePracticeCompleteRef.current(results)}
           onBeforeClose={() => {
-            openDetail(<FolderDetailPage panelType={folderType} panelId={folderId} />);
-            router.replace('/review'); // 2쪽 탭 루트 복귀
+            openDetail(<FolderDetailPage panelType={folderType} panelId={folderId} />, `/review/${folderType}/${folderId}`);
+            router.replace('/review');
           }}
           currentUserId={user?.uid}
           showFeedback={folderType !== 'library'}
-        />
+        />,
+        `/review/${folderType}/${folderId}`
       );
     } else {
       setPracticeItems(wrongOnlyItems);
@@ -1227,12 +1229,13 @@ export default function FolderDetailPage({ panelType, panelId, panelAutoStart }:
           quizTitle={folderTitle}
           onComplete={(results) => handlePracticeCompleteRef.current(results)}
           onBeforeClose={() => {
-            openDetail(<FolderDetailPage panelType={folderType} panelId={folderId} />);
-            router.replace('/review'); // 2쪽 탭 루트 복귀
+            openDetail(<FolderDetailPage panelType={folderType} panelId={folderId} />, `/review/${folderType}/${folderId}`);
+            router.replace('/review');
           }}
           currentUserId={user?.uid}
           showFeedback={folderType !== 'library'}
-        />
+        />,
+        `/review/${folderType}/${folderId}`
       );
     } else {
       setPracticeItems(items);

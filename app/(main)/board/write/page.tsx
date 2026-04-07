@@ -137,7 +137,7 @@ export default function WritePage({ isPanelMode }: { isPanelMode?: boolean } = {
       if (isPanelMode) {
         // 패널 모드: 작성 완료 → 3쪽에 해당 글 상세 표시
         const PostDetailPage = (await import('../[id]/page')).default;
-        setTimeout(() => replaceDetail(<PostDetailPage key={postId} panelPostId={postId} />), 300);
+        setTimeout(() => replaceDetail(<PostDetailPage key={postId} panelPostId={postId} />, `/board/${postId}`), 300);
       } else {
         setTimeout(() => router.replace(`/board/${postId}`), 300);
       }

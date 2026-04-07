@@ -80,7 +80,8 @@ export default function ManagePostsPage({ isPanelMode: propPanelMode }: { isPane
             key={postId}
             panelPostId={postId}
             onPanelBack={() => replaceDetail(<ManagePostsPage isPanelMode />)}
-          />
+          />,
+          `/board/${postId}`
         );
       });
       return;

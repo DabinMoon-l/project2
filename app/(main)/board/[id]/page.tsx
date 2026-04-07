@@ -334,7 +334,7 @@ export default function PostDetailPage({ panelPostId, onPanelBack }: { panelPost
           sessionStorage.removeItem(`visited_board_${target}`);
           if (isPanelModeRef.current) {
             // 패널 모드: 3쪽에서 다음 글로 교체
-            replaceDetailRef.current(<PostDetailPage key={target} panelPostId={target} />);
+            replaceDetailRef.current(<PostDetailPage key={target} panelPostId={target} />, `/board/${target}`);
           } else {
             routerRef.current.replace(`/board/${target}`);
           }
