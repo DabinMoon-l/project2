@@ -47,29 +47,68 @@ export function formatWeekRange(start: Date, end: Date): string {
 export interface EngagementStats {
   activeCount: number;
   totalCount: number;
-  newSignups: number; // 주간 신규 가입자
+  newSignups: number;
   dauByDay: number[];
   dauAvg: number;
   dauMauRatio: number;
   retentionFromLastWeek: number;
-  /** pageViews 기반 활동 uid Set (다른 도메인에서 활용) */
+  /** 코호트 리텐션: 가입 주차별 현재 주 활동률 */
+  cohortRetention: CohortEntry[];
+  /** pageViews 기반 활동 uid Set (다른 도메인에서 활용, 직렬화 안 됨) */
   activeUserIds: Set<string>;
+}
+
+export interface CohortEntry {
+  /** 가입 주차 라벨 (예: "W10 (3/2~3/8)") */
+  cohortWeek: string;
+  /** 해당 코호트 총 가입자 수 */
+  totalUsers: number;
+  /** 이번 주에 활동한 수 */
+  activeThisWeek: number;
+  /** 활동률 (%) */
+  retentionRate: number;
 }
 
 export interface FeatureUsageStats {
   totalViews: number;
   uniqueUsers: number;
-  /** 기능별 조회수 (내림차순) */
   byCategory: Record<string, number>;
-  /** 기능별 평균 체류시간(ms) */
   avgDurationByCategory: Record<string, number>;
   avgSessionViews: number;
   avgSessionDurationMs: number;
   peakHours: number[];
-  /** 세션 깊이: 1페이지만 본 비율 (%) */
   bounceRate: number;
-  /** 세션 깊이: 3+ 페이지 본 비율 (%) */
   deepSessionRate: number;
+  /** 일별(월~일) 기능별 접속률(%) — Claude가 요일 패턴 분석 */
+  dailyFeatureRates: Record<string, Record<string, number>>;
+  /** 핵심 기능별 침투율 — "quiz_solve: 89명/135명 (66%)" */
+  featurePenetration: Record<string, string>;
+  /** 세션 깊이 분포 — 1페이지/2/3~5/6~10/11+ */
+  sessionDepthDist: Record<string, number>;
+  /** 접속한 학생 수 */
+  accessedStudents: number;
+  /** 미접속 학생 수 */
+  ghostStudents: number;
+  /** 유저 행동 흐름: 평균 체류 패턴 */
+  userJourneyStats: UserJourneyStats;
+}
+
+/** 유저 행동 흐름 통계 — 체류시간 기반 실제 사용 패턴 */
+export interface UserJourneyStats {
+  /** 기능별 "실제 사용자" 수 (30초+ 체류) vs "스쳐간" 수 (<30초) */
+  realUsageVsBrowse: Record<string, { realUsers: number; browseUsers: number }>;
+  /** 퀴즈 풀이 평균 체류시간 (문제당 소요 시간 추정) */
+  avgQuizSolveDurationMs: number;
+  /** 복습 평균 체류시간 */
+  avgReviewDurationMs: number;
+  /** 게시판 글 읽기 평균 체류시간 */
+  avgBoardReadDurationMs: number;
+  /** 짧은 접속(< 1분) 비율 (%) */
+  quickVisitRate: number;
+  /** 장시간 접속(10분+) 비율 (%) */
+  longSessionRate: number;
+  /** 세션 흐름 TOP 5: "home→quiz_solve→quiz_result (23회)" */
+  topSessionFlows: string[];
 }
 
 export interface LearningStats {
@@ -79,22 +118,22 @@ export interface LearningStats {
     avgCorrectRate: number;
     avgCompletionRate: number;
     topWrongQuestions: { quizId: string; questionIndex: number; wrongRate: number }[];
-    /** 교수 퀴즈 vs AI 퀴즈 정답률 비교 */
     profQuizCorrectRate: number;
     aiQuizCorrectRate: number;
   };
+  /** 퀴즈별 상세: 제목, 풀이수, 정답률, 오답TOP, 피드백 내역 */
+  quizDetails: QuizDetail[];
+  /** 챕터별 정답률: 첫시도 vs 복습후 (before/after) */
+  chapterCorrectRates: Record<string, { firstAttempt: number; afterReview: number; attempts: number }>;
   feedback: {
     total: number;
     byType: Record<string, number>;
     avgScore: number;
   };
   review: {
-    /** 복습 완료 수 (quizResults에서 isReview=true) */
     completedCount: number;
-    /** 퀴즈 풀이 → 복습 전환율 (%) */
     reviewConversionRate: number;
   };
-  /** 주간 정답률 추이를 위한 학생별 스냅샷 */
   clusterCounts: {
     passionate: number;
     hardworking: number;
@@ -103,6 +142,21 @@ export interface LearningStats {
   };
   avgExp: number;
   milestoneCount: number;
+}
+
+export interface QuizDetail {
+  quizId: string;
+  title: string;
+  type: string;
+  /** 풀이 학생 수 */
+  solveCount: number;
+  /** 정답률 (%) */
+  correctRate: number;
+  /** 오답률 높은 문제 TOP 3 (문제번호, 오답률) */
+  topWrongQuestions: { index: number; wrongRate: number }[];
+  /** 피드백 수 + 유형별 */
+  feedbackCount: number;
+  feedbackByType: Record<string, number>;
 }
 
 export interface GamificationStats {
@@ -140,13 +194,6 @@ export interface SocialStats {
 // 최종 WeeklyStats 문서 스키마
 // ============================================================
 
-export interface UserSegmentationStats {
-  segments: Record<string, number>;
-  ghostUsers: number;
-  avgFeaturesUsed: number;
-  topFeatureCombos: string[];
-}
-
 export interface WeeklyStats {
   courseId: string;
   weekStart: string;
@@ -156,7 +203,6 @@ export interface WeeklyStats {
   createdAt: FirebaseFirestore.FieldValue;
   engagement: EngagementStats;
   featureUsage: FeatureUsageStats;
-  segmentation: UserSegmentationStats;
   learning: LearningStats;
   gamification: GamificationStats;
   social: SocialStats;

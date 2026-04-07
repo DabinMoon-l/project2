@@ -47,7 +47,7 @@ async function collectWeeklyStats(
   const ctx = await buildContext(courseId, start, end);
 
   // 병렬 실행 (독립적인 도메인)
-  const [engagement, featureResult, learning, gamification, social] = await Promise.all([
+  const [engagement, featureUsage, learning, gamification, social] = await Promise.all([
     collectEngagement(ctx),
     collectFeatureUsage(ctx),
     collectLearning(ctx),
@@ -66,8 +66,7 @@ async function collectWeeklyStats(
     weekRangeKo: formatWeekRange(start, end),
     createdAt: FieldValue.serverTimestamp(),
     engagement: engagementData as WeeklyStats["engagement"],
-    featureUsage: featureResult.featureUsage,
-    segmentation: featureResult.segmentation,
+    featureUsage,
     learning,
     gamification,
     social,
