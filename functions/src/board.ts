@@ -334,14 +334,15 @@ export const onCommentCreate = onDocumentCreated(
       const postDoc = await db.collection("posts").doc(postId).get();
       const postData = postDoc.exists ? postDoc.data() as Post : null;
 
-      // 비공개 글(나만의 콩콩이) 댓글은 EXP 미지급
-      const skipExp = !!postData?.isPrivate;
+      // 비공개 글(나만의 콩콩이): rate limit 면제 (콩콩이와 자연스러운 대화 위해)
+      // EXP는 공개 댓글과 동일하게 지급
+      const isPrivate = !!postData?.isPrivate;
 
-      if (!skipExp) {
+      if (!isPrivate) {
         await enforceRateLimit(userId, "COMMENT", commentId);
       }
 
-      const expReward = skipExp ? 0 : EXP_REWARDS.COMMENT_CREATE;
+      const expReward = EXP_REWARDS.COMMENT_CREATE;
       const reason = "댓글 작성";
 
       await db.runTransaction(async (transaction) => {
@@ -352,18 +353,16 @@ export const onCommentCreate = onDocumentCreated(
           return;
         }
 
-        const userDoc = !skipExp
-          ? await readUserForExp(transaction, userId)
-          : null;
+        const userDoc = await readUserForExp(transaction, userId);
 
-        // WRITE — rewarded 마킹 (비공개도 마킹하여 중복 방지)
+        // WRITE — rewarded 마킹
         transaction.update(snapshot.ref, {
           rewarded: true,
           rewardedAt: FieldValue.serverTimestamp(),
           expRewarded: expReward,
         });
 
-        if (!skipExp && userDoc) {
+        if (userDoc) {
           addExpInTransaction(transaction, userId, expReward, reason, userDoc, {
             type: "comment_create",
             sourceId: commentId,
@@ -378,9 +377,7 @@ export const onCommentCreate = onDocumentCreated(
         commentCount: FieldValue.increment(1),
       }).catch((e) => console.warn("commentCount 증가 실패:", e));
 
-      console.log(skipExp
-        ? `비공개 글 댓글 EXP 스킵: ${commentId}`
-        : `댓글 보상 지급 완료: ${userId}`, { postId, commentId, expReward });
+      console.log(`댓글 보상 지급 완료: ${userId}`, { postId, commentId, expReward, isPrivate });
 
       // 게시글 작성자에게 알림 (본인 댓글은 제외)
       if (postDoc.exists && postData) {

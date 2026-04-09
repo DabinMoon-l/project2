@@ -220,10 +220,16 @@ export function useKeyboardCSSVariable() {
           isOpenRef.current ? `${vv.height}px` : '100dvh'
         );
 
-        // iOS: 키보드 열리는 순간에만 scroll 리셋 (열려있는 동안은 자유 스크롤 허용)
-        if (!wasOpen && isOpenRef.current) resetScroll();
-        // 키보드 닫힘 직후 window scroll 리셋
-        if (wasOpen && !isOpenRef.current) resetScroll();
+        // 게시글 상세 페이지(나만의 콩콩이 등)에서는 scroll 리셋 안 함
+        // — 더보기/답글/입력창 클릭으로 textarea 포커스가 바뀔 때마다 위로 튀는 현상 방지
+        const inBoardDetail = !!document.querySelector('[data-board-detail]');
+
+        if (!inBoardDetail) {
+          // iOS: 키보드 열리는 순간에만 scroll 리셋 (열려있는 동안은 자유 스크롤 허용)
+          if (!wasOpen && isOpenRef.current) resetScroll();
+          // 키보드 닫힘 직후 window scroll 리셋
+          if (wasOpen && !isOpenRef.current) resetScroll();
+        }
       });
     };
 

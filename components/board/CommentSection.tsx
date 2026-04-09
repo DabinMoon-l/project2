@@ -304,15 +304,19 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
       setLinkedImageUrls([]);
       setShowUrlInput(false);
       setUrlInputValue('');
-      setReplyingTo(null);
-      if (profile?.role !== 'professor' && !isPrivatePost) {
+      // 비공개 글(나만의 콩콩이): 스레드 대화 유지를 위해 답글 대상 보존
+      // — 매번 답글 버튼을 누르지 않고도 같은 스레드에 계속 이어 댓글 가능
+      if (!isPrivatePost) {
+        setReplyingTo(null);
+      }
+      if (profile?.role !== 'professor') {
         setTimeout(() => {
           showExpToast(EXP_REWARDS.COMMENT_CREATE, '댓글 작성');
         }, 500);
       }
       refresh();
     }
-  }, [content, pendingImages, linkedImageUrls, user, postId, replyingTo, createComment, uploadMultipleImages, refresh, showExpToast, imagePreviews, profile?.role]);
+  }, [content, pendingImages, linkedImageUrls, user, postId, replyingTo, createComment, uploadMultipleImages, refresh, showExpToast, imagePreviews, profile?.role, isPrivatePost]);
 
   const handleDelete = useCallback(async (commentId: string) => {
     setDeletingId(commentId);
