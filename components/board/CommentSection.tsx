@@ -451,6 +451,7 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
                   isLiked={checkIsLiked(comment.id)}
                   isDeleting={deletingId === comment.id}
                   isEditing={editingId === comment.id}
+                  isPrivatePost={isPrivatePost}
                   canAccept={canAcceptComment(comment)}
                   isAccepting={accepting}
                   isProfessor={isProfessor}
@@ -475,6 +476,7 @@ export default function CommentSection({ postId, postAuthorId, acceptedCommentId
                       isDeleting={deletingId === reply.id}
                       isEditing={editingId === reply.id}
                       isReply
+                      isPrivatePost={isPrivatePost}
                       isProfessor={isProfessor}
                       authorNameMap={authorNameMap}
                       authorNicknameMap={authorNicknameMap}
