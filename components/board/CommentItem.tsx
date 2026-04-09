@@ -19,6 +19,8 @@ interface CommentItemProps {
   isDeleting?: boolean;
   isEditing?: boolean;
   isReply?: boolean;
+  /** 비공개 글(나만의 콩콩이) 여부 — true면 본문 전체 표시 (더보기 없음) */
+  isPrivatePost?: boolean;
   /** 채택 버튼 표시 여부 */
   canAccept?: boolean;
   /** 채택 처리 중 */
@@ -182,6 +184,7 @@ function CommentItem({
   isDeleting = false,
   isEditing: isEditingProp = false,
   isReply = false,
+  isPrivatePost = false,
   canAccept = false,
   isAccepting = false,
   isProfessor = false,
@@ -197,8 +200,8 @@ function CommentItem({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editContent, setEditContent] = useState(comment.content);
-  // 교수님 댓글은 기본 펼침
-  const [isExpanded, setIsExpanded] = useState(isProfessorComment);
+  // 교수님 댓글, 비공개 글(나만의 콩콩이)은 기본 펼침
+  const [isExpanded, setIsExpanded] = useState(isProfessorComment || isPrivatePost);
   const [isClamped, setIsClamped] = useState(false);
   const contentRef = useRef<HTMLParagraphElement>(null);
   const [viewerInfo, setViewerInfo] = useState<{ index: number } | null>(null);
@@ -215,12 +218,14 @@ function CommentItem({
   const editUrlInputRef = useRef<HTMLInputElement>(null);
 
   // 실제 DOM에서 line-clamp에 의해 잘리는지 감지
+  // 비공개 글은 line-clamp 자체가 없으므로 감지 스킵
   useEffect(() => {
+    if (isPrivatePost) return;
     const el = contentRef.current;
     if (el && !isExpanded) {
       setIsClamped(el.scrollHeight > el.clientHeight + 1);
     }
-  }, [comment.content, isExpanded]);
+  }, [comment.content, isExpanded, isPrivatePost]);
   const images = comment.imageUrls || [];
 
   const isOwner = currentUserId === comment.authorId;
@@ -574,7 +579,7 @@ function CommentItem({
           <div
             ref={contentRef}
             className={`text-[15px] whitespace-pre-wrap leading-relaxed ${
-              !isExpanded ? (isAIComment ? 'line-clamp-[8]' : 'line-clamp-3') : ''
+              isPrivatePost || isExpanded ? '' : (isAIComment ? 'line-clamp-[8]' : 'line-clamp-3')
             }`}
             style={{
               color: theme.colors.text,
@@ -584,9 +589,9 @@ function CommentItem({
           >
             <LinkifiedText text={comment.content} />
           </div>
-          {/* 더보기/접기 + 답글 버튼 */}
+          {/* 더보기/접기 + 답글 버튼 (비공개 글은 더보기 없음) */}
           <div className="flex items-center gap-3 mt-1">
-            {(isClamped || isExpanded) && (
+            {!isPrivatePost && (isClamped || isExpanded) && (
               <button
                 type="button"
                 onClick={() => setIsExpanded(!isExpanded)}
