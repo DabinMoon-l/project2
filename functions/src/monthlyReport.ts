@@ -6,6 +6,7 @@
  */
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { defineSecret } from "firebase-functions/params";
 import fetch from "node-fetch";
@@ -242,5 +243,122 @@ ${JSON.stringify(weeklyData, null, 2)}
       insight,
       weeklyStatsUsed: weekLabels,
     };
+  }
+);
+
+// ============================================================
+// 월별 리포트 자동 생성 (매월 1일 03:00 KST)
+// ============================================================
+
+const COURSE_IDS = ["biology", "pathophysiology", "microbiology"];
+
+/**
+ * 매월 1일 03:00 KST에 전월 리포트 자동 생성
+ * - 이미 존재하는 리포트는 스킵 (교수가 수동으로 먼저 뽑았으면 비용 안 나감)
+ * - 과목별 1회씩만 호출
+ */
+export const generateMonthlyReportScheduled = onSchedule(
+  {
+    schedule: "0 3 1 * *", // 매월 1일 03:00
+    region: "asia-northeast3",
+    timeZone: "Asia/Seoul",
+    timeoutSeconds: 300,
+    memory: "512MiB",
+    secrets: [ANTHROPIC_API_KEY],
+  },
+  async () => {
+    const db = getFirestore();
+    const apiKey = ANTHROPIC_API_KEY.value();
+
+    // 전월 계산
+    const now = new Date();
+    const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const year = prevMonth.getFullYear();
+    const month = prevMonth.getMonth() + 1;
+    const monthLabel = `${year}-${String(month).padStart(2, "0")}`;
+
+    console.log(`월별 리포트 자동 생성 시작: ${monthLabel}`);
+
+    for (const courseId of COURSE_IDS) {
+      try {
+        // 이미 존재하면 스킵
+        const existing = await db.collection("monthlyReports")
+          .doc(courseId).collection("months").doc(monthLabel).get();
+        if (existing.exists) {
+          console.log(`[${courseId}] ${monthLabel} 리포트 이미 존재 — 스킵`);
+          continue;
+        }
+
+        // 해당 월의 weeklyStats 조회
+        const nextMonth = month === 12
+          ? `${year + 1}-01-01`
+          : `${year}-${String(month + 1).padStart(2, "0")}-01`;
+        const weeksSnap = await db.collection("weeklyStats")
+          .doc(courseId).collection("weeks")
+          .where("weekStart", ">=", `${year}-${String(month).padStart(2, "0")}-01`)
+          .where("weekStart", "<", nextMonth)
+          .orderBy("weekStart")
+          .get();
+
+        if (weeksSnap.empty) {
+          console.log(`[${courseId}] ${monthLabel} weeklyStats 없음 — 스킵`);
+          continue;
+        }
+
+        const courseName = COURSE_NAMES[courseId] || courseId;
+        const weeklyData = weeksSnap.docs.map(d => ({ label: d.id, ...d.data() }));
+        const weekLabels = weeksSnap.docs.map(d => d.id);
+
+        // Claude 프롬프트 (callable과 동일)
+        const prompt = `당신은 대학 수업 보조 앱 "RabbiTory"의 데이터 분석가입니다.
+게이미피케이션(EXP, 토끼 수집, 마일스톤)과 AI 문제 생성을 활용한
+${courseName} 수업의 ${year}년 ${month}월 월간 데이터를 분석해주세요.
+
+## 주별 수집 데이터
+
+${JSON.stringify(weeklyData, null, 2)}
+
+## 분석 항목
+
+다음 항목들을 포함하여 분석해주세요:
+
+1. **핵심 요약** (3줄 이내)
+2. **DAU/MAU 분석** — 일별 활동 유저(dauByDay: [월~일]), 평균 DAU, DAU/MAU 비율 추이. 요일별 패턴(평일 vs 주말), 시험 기간 효과
+3. **리텐션 분석** — 주간 리텐션(retentionFromLastWeek) 추이. 50% 이상이면 건강, 30% 이하면 이탈 경고. 리텐션이 떨어지는 시점과 원인 추정
+4. **긍정적 변화** — 학생 참여도, 성취도 등의 개선 사항
+5. **주의가 필요한 부분** — 하락 추세, 이상 징후
+6. **이탈 위험 학생 분석** — atRisk 군집 규모와 추이, DAU 대비 비활동 학생 비율
+7. **게이미피케이션 효과** — EXP/토끼/마일스톤과 학업 성취 상관관계
+8. **AI 문제 활용도 분석** — AI 생성 문제 vs 교수 출제 문제 비교
+9. **피드백 분석** — 문제 품질 추이, AI vs 교수 비교
+10. **페이지뷰 행동 분석** — 기능별 사용 빈도(카테고리별), 피크 시간대, 세션당 깊이, 주차별 추이. 학습 행동 패턴 인사이트
+11. **통계적 신뢰도** — 효과 크기(Cohen's d), 상관계수, 신뢰구간 등 가능한 범위에서 제시
+12. **다음 달 제안사항** — 구체적인 액션 아이템
+
+한국어로 작성해주세요. 마크다운 형식을 사용하세요.`;
+
+        const insight = await callClaudeSonnet(apiKey, prompt);
+
+        // 리포트 저장
+        const report: MonthlyReport = {
+          courseId,
+          year,
+          month,
+          monthLabel,
+          weeklyStatsUsed: weekLabels,
+          insight,
+          createdAt: FieldValue.serverTimestamp(),
+        };
+
+        await db.collection("monthlyReports")
+          .doc(courseId).collection("months").doc(monthLabel).set(report);
+
+        console.log(`[${courseId}] ${monthLabel} 리포트 생성 완료`);
+      } catch (err) {
+        console.error(`[${courseId}] ${monthLabel} 리포트 생성 실패:`, err);
+      }
+    }
+
+    console.log("월별 리포트 자동 생성 완료");
   }
 );
