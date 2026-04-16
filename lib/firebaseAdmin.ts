@@ -20,8 +20,10 @@ function getAdminApp(): App {
 
   // 로컬 개발: ADC 또는 serviceAccountKey.json
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const serviceAccount = require('../serviceAccountKey.json');
+    const fs = require('fs');
+    const path = require('path');
+    const keyPath = path.join(process.cwd(), 'serviceAccountKey.json');
+    const serviceAccount = JSON.parse(fs.readFileSync(keyPath, 'utf8'));
     return initializeApp({ credential: cert(serviceAccount) });
   } catch {
     // ADC (GOOGLE_APPLICATION_CREDENTIALS) 폴백
