@@ -200,8 +200,8 @@ function CommentItem({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editContent, setEditContent] = useState(comment.content);
-  // 교수님 댓글, 비공개 글(나만의 콩콩이)은 기본 펼침
-  const [isExpanded, setIsExpanded] = useState(isProfessorComment || isPrivatePost);
+  // 교수님 댓글, 콩콩이(AI) 댓글, 비공개 글은 기본 펼침
+  const [isExpanded, setIsExpanded] = useState(isProfessorComment || isAIComment || isPrivatePost);
   const [isClamped, setIsClamped] = useState(false);
   const contentRef = useRef<HTMLParagraphElement>(null);
   const [viewerInfo, setViewerInfo] = useState<{ index: number } | null>(null);
@@ -218,9 +218,9 @@ function CommentItem({
   const editUrlInputRef = useRef<HTMLInputElement>(null);
 
   // 실제 DOM에서 line-clamp에 의해 잘리는지 감지
-  // 비공개 글은 line-clamp 자체가 없으므로 감지 스킵
+  // 콩콩이(AI) 댓글, 비공개 글은 line-clamp 자체가 없으므로 감지 스킵
   useEffect(() => {
-    if (isPrivatePost) return;
+    if (isPrivatePost || isAIComment) return;
     const el = contentRef.current;
     if (el && !isExpanded) {
       setIsClamped(el.scrollHeight > el.clientHeight + 1);
@@ -579,7 +579,7 @@ function CommentItem({
           <div
             ref={contentRef}
             className={`text-[15px] whitespace-pre-wrap leading-relaxed ${
-              isPrivatePost || isExpanded ? '' : (isAIComment ? 'line-clamp-[8]' : 'line-clamp-3')
+              isPrivatePost || isAIComment || isExpanded ? '' : 'line-clamp-3'
             }`}
             style={{
               color: theme.colors.text,
@@ -591,7 +591,7 @@ function CommentItem({
           </div>
           {/* 더보기/접기 + 답글 버튼 (비공개 글은 더보기 없음) */}
           <div className="flex items-center gap-3 mt-1">
-            {!isPrivatePost && (isClamped || isExpanded) && (
+            {!isPrivatePost && !isAIComment && (isClamped || isExpanded) && (
               <button
                 type="button"
                 onClick={() => setIsExpanded(!isExpanded)}
