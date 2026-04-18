@@ -11,6 +11,11 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import {
+  SUPABASE_URL_SECRET,
+  SUPABASE_SERVICE_ROLE_SECRET,
+  supabaseDualWriteUpsert,
+} from "./utils/supabase";
 
 // ── 랭킹 계산 유틸 (클라이언트 ranking.ts와 동일 로직) ──
 
@@ -492,7 +497,11 @@ function resolvePrevRanks(
 // ── Callable: 특정 courseId 강제 갱신 ──
 
 export const refreshRankings = onCall(
-  { region: "asia-northeast3", concurrency: 10 },
+  {
+    region: "asia-northeast3",
+    concurrency: 10,
+    secrets: [SUPABASE_URL_SECRET, SUPABASE_SERVICE_ROLE_SECRET],
+  },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -524,6 +533,12 @@ export const refreshRankings = onCall(
       updatedAt: FieldValue.serverTimestamp(),
     });
 
+    // Supabase 듀얼 라이트 (Firestore 센티넬 updatedAt 제외)
+    await supabaseDualWriteUpsert("rankings", courseId, {
+      ...result,
+      prevDayRanks,
+    });
+
     return { success: true, totalStudents: result.totalStudents };
   }
 );
@@ -537,6 +552,7 @@ export const computeRankingsScheduled = onSchedule(
     timeZone: "Asia/Seoul",
     memory: "512MiB",
     timeoutSeconds: 120,
+    secrets: [SUPABASE_URL_SECRET, SUPABASE_SERVICE_ROLE_SECRET],
   },
   async () => {
     const db = getFirestore();
@@ -583,6 +599,13 @@ export const computeRankingsScheduled = onSchedule(
           prevDayRanks,
           updatedAt: FieldValue.serverTimestamp(),
         });
+
+        // Supabase 듀얼 라이트
+        await supabaseDualWriteUpsert("rankings", courseId, {
+          ...result,
+          prevDayRanks,
+        });
+
         console.log(`랭킹 계산 완료: ${courseId} (${result.totalStudents}명)`);
       } catch (error) {
         console.error(`랭킹 계산 실패: ${courseId}`, error);

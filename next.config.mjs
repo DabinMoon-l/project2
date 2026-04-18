@@ -97,33 +97,35 @@ const pwaConfig = withPWA({
       urlPattern: /\.(?:mp4|webm|ogg)$/i,
       handler: "NetworkOnly",
     },
-    // Next.js 페이지 네비게이션 — 네트워크 우선 (stale HTML/RSC 방지)
-    // ⚠️ networkTimeoutSeconds 제거: 타임아웃이 짧으면 캐시에 없는 페이지에서 무한 로딩 발생
-    //    네트워크 실패 시에만 캐시 폴백, 느린 네트워크에서는 응답을 기다림
+    // Next.js 페이지 네비게이션 — StaleWhileRevalidate로 전환:
+    //   • 캐시에서 즉시 응답 → iOS PWA cold reload·저속 네트워크에서 빈 화면 시간 최소화
+    //   • 백그라운드에서 네트워크 요청해 다음 방문 시 최신 반영
+    //   • 배포 후 chunk mismatch는 layout.tsx의 ChunkLoadError 자동 리로드가 복구
+    //   • skipWaiting: true와 함께 SW가 즉시 활성화되고, HTML은 SWR로 갱신
     {
       urlPattern: /^\/_next\/data\/.+\.json$/i,
-      handler: "NetworkFirst",
+      handler: "StaleWhileRevalidate",
       options: {
         cacheName: "next-data",
-        expiration: { maxEntries: 32, maxAgeSeconds: 60 * 60 },
+        expiration: { maxEntries: 64, maxAgeSeconds: 60 * 60 * 24 },
       },
     },
-    // Next.js RSC 페이로드 — 네트워크 우선
+    // Next.js RSC 페이로드 — StaleWhileRevalidate
     {
       urlPattern: ({ request }) => request.headers.get("RSC") === "1",
-      handler: "NetworkFirst",
+      handler: "StaleWhileRevalidate",
       options: {
         cacheName: "next-rsc",
-        expiration: { maxEntries: 32, maxAgeSeconds: 60 * 60 },
+        expiration: { maxEntries: 64, maxAgeSeconds: 60 * 60 * 24 },
       },
     },
-    // HTML 페이지 — 네트워크 우선 (배포 후 stale 페이지 방지)
+    // HTML 페이지 — StaleWhileRevalidate
     {
       urlPattern: ({ request }) => request.mode === "navigate",
-      handler: "NetworkFirst",
+      handler: "StaleWhileRevalidate",
       options: {
         cacheName: "pages",
-        expiration: { maxEntries: 50, maxAgeSeconds: 24 * 60 * 60 },
+        expiration: { maxEntries: 80, maxAgeSeconds: 60 * 60 * 24 * 7 },
       },
     },
     // 기본 캐싱 규칙 (비디오 CacheFirst 제거)

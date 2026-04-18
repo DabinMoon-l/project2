@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { doc, getDoc, collection, query, where, getDocs, db } from '@/lib/repositories';
+import { rankingRepo } from '@/lib/repositories';
 import { callFunction } from '@/lib/api';
 import { useUser, useCourse } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
@@ -203,11 +204,13 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
 
     const loadRankings = async () => {
       try {
-        const snapshot = await getDoc(doc(db, 'rankings', userCourseId));
+        const data = await rankingRepo.getRanking(userCourseId) as {
+          rankedUsers?: RankedUser[];
+          prevDayRanks?: Record<string, number>;
+        } | null;
 
-        if (snapshot.exists()) {
+        if (data) {
           if (cancelled) return;
-          const data = snapshot.data();
           const users = (data.rankedUsers || []) as RankedUser[];
           const pwRanks = (data.prevDayRanks || {}) as Record<string, number>;
           applyRankings(users);
@@ -229,11 +232,13 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
         } catch { /* CF 미배포 또는 실패 */ }
 
         if (cancelled) return;
-        const retrySnap = await getDoc(doc(db, 'rankings', userCourseId));
-        if (!cancelled && retrySnap.exists()) {
-          const data = retrySnap.data();
-          const users = (data.rankedUsers || []) as RankedUser[];
-          const pwRanks = (data.prevDayRanks || {}) as Record<string, number>;
+        const retryData = await rankingRepo.getRanking(userCourseId) as {
+          rankedUsers?: RankedUser[];
+          prevDayRanks?: Record<string, number>;
+        } | null;
+        if (!cancelled && retryData) {
+          const users = (retryData.rankedUsers || []) as RankedUser[];
+          const pwRanks = (retryData.prevDayRanks || {}) as Record<string, number>;
           applyRankings(users);
           setPrevWeekRanks(pwRanks);
           setLoading(false);

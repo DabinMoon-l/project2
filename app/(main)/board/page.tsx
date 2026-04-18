@@ -15,6 +15,7 @@ import { type CourseId } from '@/lib/types/course';
 import { generateCourseTags } from '@/lib/courseIndex';
 import { scaleCoord, useWideMode } from '@/lib/hooks/useViewportScale';
 import { useDetailPanel } from '@/lib/contexts/DetailPanelContext';
+import { saveScroll, loadScroll, clearScroll } from '@/lib/utils/scrollStorage';
 import { useHomeScale } from '@/components/home/useHomeScale';
 import PostDetailPage from './[id]/page';
 import WritePage from './write/page';
@@ -705,7 +706,7 @@ export default function BoardPage() {
       action(<PostDetailPage panelPostId={postId} />, `/board/${postId}`);
       return;
     }
-    sessionStorage.setItem('board_scroll_y', String(window.scrollY));
+    saveScroll('board_scroll_y', window.scrollY);
     sessionStorage.setItem('board_nav', 'board');
     router.push(`/board/${postId}`);
   }, [router, filteredPosts, isWide, isLocked, isDetailOpen, openDetail, replaceDetail]);
@@ -716,7 +717,7 @@ export default function BoardPage() {
       action(<WritePage isPanelMode />);
       return;
     }
-    sessionStorage.setItem('board_scroll_y', String(window.scrollY));
+    saveScroll('board_scroll_y', window.scrollY);
     router.push('/board/write');
   }, [router, isWide, isLocked, isDetailOpen, openDetail, replaceDetail]);
 
@@ -757,13 +758,13 @@ export default function BoardPage() {
     }
   }, [unpinPost, showPinToast]);
 
-  // 스크롤 위치 복원 (글 상세/작성에서 돌아왔을 때)
+  // 스크롤 위치 복원 (글 상세/작성에서 돌아왔을 때, cold reload도 포함)
   useEffect(() => {
     if (loading || posts.length === 0) return;
-    const saved = sessionStorage.getItem('board_scroll_y');
-    if (saved) {
-      sessionStorage.removeItem('board_scroll_y');
-      requestAnimationFrame(() => window.scrollTo(0, Number(saved)));
+    const saved = loadScroll('board_scroll_y');
+    if (saved !== null) {
+      clearScroll('board_scroll_y');
+      requestAnimationFrame(() => window.scrollTo(0, saved));
     }
   }, [loading, posts.length]);
 

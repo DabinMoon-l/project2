@@ -13,6 +13,7 @@ import { type CourseId, getDefaultQuizTab, type PastExamOption } from '@/lib/typ
 import type { QuizFeedbackInfo, CarouselCard } from './profQuizPageParts';
 import { PROF_QUIZ_CAROUSEL_KEY, PROF_QUIZ_SCROLL_KEY } from './profQuizPageParts';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
+import { saveScroll, loadScroll } from '@/lib/utils/scrollStorage';
 import { useHomeScale } from '@/components/home/useHomeScale';
 
 // ============================================================
@@ -107,23 +108,30 @@ const ProfessorNewsCard = memo(function ProfessorNewsCard({
     return () => ro.disconnect();
   }, []);
 
-  // 스크롤 위치 복원
+  // 스크롤 위치 복원 (cold reload 포함)
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || !itemHeight || isLoading || quizzes.length === 0) return;
-    const saved = sessionStorage.getItem(PROF_QUIZ_SCROLL_KEY(type));
-    if (saved) el.scrollTop = parseInt(saved, 10);
+    const saved = loadScroll(PROF_QUIZ_SCROLL_KEY(type));
+    if (saved !== null) el.scrollTop = saved;
   }, [type, itemHeight, isLoading, quizzes.length]);
 
-  // 스크롤 위치 저장
+  // 스크롤 위치 저장 (debounced localStorage)
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
     const handleScroll = () => {
-      sessionStorage.setItem(PROF_QUIZ_SCROLL_KEY(type), String(el.scrollTop));
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        saveScroll(PROF_QUIZ_SCROLL_KEY(type), el.scrollTop);
+      }, 120);
     };
     el.addEventListener('scroll', handleScroll, { passive: true });
-    return () => el.removeEventListener('scroll', handleScroll);
+    return () => {
+      el.removeEventListener('scroll', handleScroll);
+      if (timer) clearTimeout(timer);
+    };
   }, [type]);
 
   return (

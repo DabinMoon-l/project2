@@ -300,6 +300,11 @@ export { runClovaOcr, getOcrUsage } from "./ocr";
 export { generateQuizWithGemini, getGeminiUsage, extractKeywords } from "./gemini";
 
 // ============================================
+// 자체제작 퀴즈 자동 해설 생성
+// ============================================
+export { generateCustomExplanations } from "./explanationGenerator";
+
+// ============================================
 // Vision OCR Functions (Google Cloud Vision)
 // ============================================
 export { runVisionOcr, getVisionOcrUsage } from "./visionOcr";

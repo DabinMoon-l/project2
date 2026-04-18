@@ -22,6 +22,7 @@ import {
   ExtractedImagesProvider,
   useExtractedImages,
   ExtractedImagePicker,
+  AutoExplanationGenerator,
   type QuestionData,
   type QuizMeta,
 } from '@/components/quiz/create';
@@ -72,6 +73,7 @@ interface FlattenedQuestion {
   choices?: string[] | null;
   answer: string | number | number[];
   explanation?: string | null;
+  choiceExplanations?: string[] | null;
   imageUrl?: string | null;
   examples?: { type: string; items: string[] } | null;
   mixedExamples?: MixedExampleBlock[] | null;
@@ -1076,6 +1078,9 @@ export default function QuizCreatePage({ isPanelMode }: { isPanelMode?: boolean 
                   choices: sq.type === 'multiple' && sq.choices ? sq.choices.filter((c) => c && c.trim()) : null,
                   answer: subAnswer,
                   explanation: sq.explanation || null,
+                  choiceExplanations: sq.type === 'multiple' && sq.choiceExplanations && sq.choiceExplanations.some((e) => e && e.trim())
+                    ? sq.choiceExplanations.slice(0, (sq.choices || []).filter((c) => c && c.trim()).length)
+                    : null,
                   imageUrl: sq.image || null,
                   examples: subExamples,
                   mixedExamples: subMixedExamples,
@@ -1227,6 +1232,9 @@ export default function QuizCreatePage({ isPanelMode }: { isPanelMode?: boolean 
                 choices: q.type === 'multiple' && q.choices ? q.choices.filter((c) => c && c.trim()) : null,
                 answer,
                 explanation: q.explanation || null,
+                choiceExplanations: q.type === 'multiple' && q.choiceExplanations && q.choiceExplanations.some((e) => e && e.trim())
+                  ? q.choiceExplanations.slice(0, (q.choices || []).filter((c) => c && c.trim()).length)
+                  : null,
                 imageUrl: q.imageUrl || null,
                 examples: questionExamples,
                 mixedExamples: questionMixedExamples,
@@ -1640,10 +1648,17 @@ export default function QuizCreatePage({ isPanelMode }: { isPanelMode?: boolean 
                 </div>
               </div>
 
+              {/* 자동 해설 생성 */}
+              <AutoExplanationGenerator
+                questions={questions}
+                courseId={userCourseId || null}
+                onApply={setQuestions}
+              />
+
               {/* 문제 미리보기 */}
               <div className="p-3 border border-[#1A1A1A] rounded-xl" style={{ backgroundColor: '#F5F0E8' }}>
                 <h3 className="text-xs font-bold text-[#1A1A1A] mb-2">문제 미리보기</h3>
-                <div className="space-y-2 max-h-64 overflow-y-auto">
+                <div className="space-y-2 max-h-80 overflow-y-auto">
                   {questions.map((q, index) => (
                     <div key={q.id}>
                       {/* 일반 문제 또는 결합형 문제 헤더 */}
@@ -1687,17 +1702,32 @@ export default function QuizCreatePage({ isPanelMode }: { isPanelMode?: boolean 
                           )}
                         </div>
                       </div>
+                      {/* 해설 (일반 문제) */}
+                      {q.type !== 'combined' && q.explanation && q.explanation.trim() && (
+                        <div className="ml-8 px-2 py-1.5 border-l-2 border-[#1D5D4A] bg-[#F0F7F4] text-[11px] text-[#1A1A1A] leading-relaxed">
+                          <span className="font-bold text-[#1D5D4A] mr-1">해설</span>
+                          {q.explanation}
+                        </div>
+                      )}
                       {/* 결합형: 하위 문제 목록 (펼쳤을 때) */}
                       {q.type === 'combined' && q.subQuestions && previewExpanded.has(q.id) && (
                         <div className="ml-8 border-l-2 border-[#1A1A1A] bg-[#F5F0E8]">
                           {q.subQuestions.map((sq, sqIdx) => (
-                            <div key={sq.id} className="flex items-start gap-2 p-2 border-b border-[#EDEAE4] last:border-b-0">
-                              <span className="text-sm font-bold text-[#5C5C5C] flex-shrink-0 w-8">
-                                {index + 1}-{sqIdx + 1}
-                              </span>
-                              <p className="text-sm text-[#1A1A1A] line-clamp-1 flex-1">
-                                {sq.text || '(내용 없음)'}
-                              </p>
+                            <div key={sq.id} className="border-b border-[#EDEAE4] last:border-b-0">
+                              <div className="flex items-start gap-2 p-2">
+                                <span className="text-sm font-bold text-[#5C5C5C] flex-shrink-0 w-8">
+                                  {index + 1}-{sqIdx + 1}
+                                </span>
+                                <p className="text-sm text-[#1A1A1A] line-clamp-1 flex-1">
+                                  {sq.text || '(내용 없음)'}
+                                </p>
+                              </div>
+                              {sq.explanation && sq.explanation.trim() && (
+                                <div className="ml-10 mr-2 mb-2 px-2 py-1.5 border-l-2 border-[#1D5D4A] bg-[#F0F7F4] text-[11px] text-[#1A1A1A] leading-relaxed">
+                                  <span className="font-bold text-[#1D5D4A] mr-1">해설</span>
+                                  {sq.explanation}
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>

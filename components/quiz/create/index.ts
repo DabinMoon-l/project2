@@ -30,3 +30,6 @@ export { default as ExtractedImagePicker } from './ExtractedImagePicker';
 
 // AIQuizGenerator: AI 문제 생성 컴포넌트 (Gemini)
 export { default as AIQuizGenerator } from './AIQuizGenerator';
+
+// AutoExplanationGenerator: 자동 해설 생성 컴포넌트 (확인 단계)
+export { default as AutoExplanationGenerator } from './AutoExplanationGenerator';

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { doc, getDoc, collection, query, where, getDocs, db } from '@/lib/repositories';
+import { rankingRepo } from '@/lib/repositories';
 import { useUser, useCourse } from '@/lib/contexts';
 import { readHomeCache, writeHomeCache } from '@/lib/utils/rankingCache';
 import { computeRankScore, computeTeamScore } from '@/lib/utils/ranking';
@@ -97,13 +98,16 @@ export default function ProfessorRankingSection({ overrideCourseId }: { override
       if (isFresh) return;
     }
 
-    // 2. Firestore rankings/{courseId} 문서 읽기
+    // 2. rankings/{courseId} 읽기 (Feature flag → Firestore/Supabase)
     const loadRankings = async () => {
       try {
-        const rankDoc = await getDoc(doc(db, 'rankings', userCourseId));
+        const data = await rankingRepo.getRanking(userCourseId) as {
+          teamRanks?: TeamRankEntry[];
+          rankedUsers?: RankedUserEntry[];
+          weeklyParticipationRate?: number;
+        } | null;
 
-        if (rankDoc.exists()) {
-          const data = rankDoc.data();
+        if (data) {
           const teamRanksArr = data.teamRanks || [];
           const rankedUsers: RankedUserEntry[] = (data.rankedUsers || []) as RankedUserEntry[];
 
