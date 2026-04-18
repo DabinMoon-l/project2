@@ -10,7 +10,8 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
-import { getFirestore, FieldValue } from "firebase-admin/firestore";
+// FieldValue는 Firestore 쓰기 복구 시 import 재추가 필요
+import { getFirestore } from "firebase-admin/firestore";
 import {
   SUPABASE_URL_SECRET,
   SUPABASE_SERVICE_ROLE_SECRET,
