@@ -214,12 +214,13 @@ export const refreshRadarNorm = onCall(
     }
 
     const result = await computeRadarNormForCourse(courseId);
-    await db.collection("radarNorm").doc(courseId).set({
-      ...result,
-      updatedAt: FieldValue.serverTimestamp(),
-    });
+    // Firestore 쓰기 2026-04-19 중단. 복구 필요 시 주석 해제.
+    // await db.collection("radarNorm").doc(courseId).set({
+    //   ...result,
+    //   updatedAt: FieldValue.serverTimestamp(),
+    // });
 
-    // Supabase 듀얼 라이트
+    // Supabase가 primary (단일 소스)
     await supabaseDualWriteUpsert("radar_norms", courseId, result);
 
     return { success: true, totalStudents: result.totalStudents };
@@ -230,7 +231,8 @@ export const refreshRadarNorm = onCall(
 
 export const computeRadarNormScheduled = onSchedule(
   {
-    schedule: "every 2 hours",
+    // 10분 간격 (Supabase 전환으로 Firestore 읽기 비용 없음)
+    schedule: "every 10 minutes",
     region: "asia-northeast3",
     timeZone: "Asia/Seoul",
     memory: "1GiB",
@@ -269,12 +271,13 @@ export const computeRadarNormScheduled = onSchedule(
     for (const courseId of uniqueIds) {
       try {
         const result = await computeRadarNormForCourse(courseId);
-        await db.collection("radarNorm").doc(courseId).set({
-          ...result,
-          updatedAt: FieldValue.serverTimestamp(),
-        });
+        // Firestore 쓰기 2026-04-19 중단. 복구 필요 시 주석 해제.
+        // await db.collection("radarNorm").doc(courseId).set({
+        //   ...result,
+        //   updatedAt: FieldValue.serverTimestamp(),
+        // });
 
-        // Supabase 듀얼 라이트
+        // Supabase가 primary (단일 소스)
         await supabaseDualWriteUpsert("radar_norms", courseId, result);
 
         console.log(`레이더 정규화 계산 완료: ${courseId} (${result.totalStudents}명)`);

@@ -527,13 +527,15 @@ export const refreshRankings = onCall(
     const result = await computeRankingsForCourse(courseId);
     const prevDayRanks = resolvePrevRanks(existingData);
 
-    await db.collection("rankings").doc(courseId).set({
-      ...result,
-      prevDayRanks,
-      updatedAt: FieldValue.serverTimestamp(),
-    });
+    // Firestore 쓰기는 2026-04-19에 Supabase 단독 쓰기로 전환됨.
+    // 복구 필요 시 아래 블록 주석 해제:
+    // await db.collection("rankings").doc(courseId).set({
+    //   ...result,
+    //   prevDayRanks,
+    //   updatedAt: FieldValue.serverTimestamp(),
+    // });
 
-    // Supabase 듀얼 라이트 (Firestore 센티넬 updatedAt 제외)
+    // Supabase가 이제 primary (읽기·쓰기 단일 소스)
     await supabaseDualWriteUpsert("rankings", courseId, {
       ...result,
       prevDayRanks,
@@ -547,7 +549,8 @@ export const refreshRankings = onCall(
 
 export const computeRankingsScheduled = onSchedule(
   {
-    schedule: "every 2 hours",
+    // 10분 간격 (Supabase 전환으로 Firestore 읽기 비용 없음 → 실시간성 복원)
+    schedule: "every 10 minutes",
     region: "asia-northeast3",
     timeZone: "Asia/Seoul",
     memory: "512MiB",
@@ -594,13 +597,14 @@ export const computeRankingsScheduled = onSchedule(
         const result = await computeRankingsForCourse(courseId);
         const prevDayRanks = resolvePrevRanks(existingData);
 
-        await db.collection("rankings").doc(courseId).set({
-          ...result,
-          prevDayRanks,
-          updatedAt: FieldValue.serverTimestamp(),
-        });
+        // Firestore 쓰기 2026-04-19 중단. 복구 필요 시 주석 해제.
+        // await db.collection("rankings").doc(courseId).set({
+        //   ...result,
+        //   prevDayRanks,
+        //   updatedAt: FieldValue.serverTimestamp(),
+        // });
 
-        // Supabase 듀얼 라이트
+        // Supabase가 primary (단일 소스)
         await supabaseDualWriteUpsert("rankings", courseId, {
           ...result,
           prevDayRanks,
