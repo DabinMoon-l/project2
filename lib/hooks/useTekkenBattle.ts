@@ -49,7 +49,7 @@ interface UseTekkenBattleReturn {
   // 매칭
   matchState: MatchState;
   waitTime: number;
-  startMatchmaking: (courseId: string, chapters: string[]) => Promise<void>;
+  startMatchmaking: (courseId: string, chapters: string[], aiOnly?: boolean) => Promise<void>;
   cancelMatch: () => void;
 
   // 배틀 상태
@@ -247,7 +247,7 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
   }, [battle?.status, battle?.nextRound]);
 
   // 매칭 시작
-  const startMatchmaking = useCallback(async (courseId: string, chapters: string[]) => {
+  const startMatchmaking = useCallback(async (courseId: string, chapters: string[], aiOnly: boolean = false) => {
     if (!userId) return;
     setMatchState('searching');
     setWaitTime(0);
@@ -258,6 +258,29 @@ export function useTekkenBattle(userId: string | undefined): UseTekkenBattleRetu
     waitTimerRef.current = setInterval(() => {
       setWaitTime((prev) => prev + 1);
     }, 1000);
+
+    // AI 전용 매칭 — joinMatchmaking 큐 건너뛰고 바로 봇 매칭 (대기 시간 없음)
+    if (aiOnly) {
+      try {
+        const botResult = await callFunction('matchWithBot', { courseId, chapters, aiOnly: true });
+        if (botResult.battleId) {
+          battleIdRef.current = botResult.battleId;
+          setActiveBattleId(botResult.battleId);
+          setMatchState('matched');
+          clearTimers();
+        } else {
+          setMatchState('error');
+          setError('AI 매칭에 실패했습니다.');
+          clearTimers();
+        }
+      } catch (err: unknown) {
+        console.error('AI 매칭 실패:', err);
+        setMatchState('error');
+        setError((err as { message?: string })?.message || 'AI 매칭에 실패했습니다.');
+        clearTimers();
+      }
+      return;
+    }
 
     try {
       const result = await callFunction('joinMatchmaking', { courseId, chapters });

@@ -173,11 +173,11 @@ export default function CharacterBox() {
   }, [isStudent, userCourseId, slotCount, clearLongPress]);
 
   // 배틀 확인 → 매칭 시작
-  const handleConfirmBattle = useCallback((chapters: string[]) => {
+  const handleConfirmBattle = useCallback((chapters: string[], aiOnly: boolean) => {
     if (!userCourseId) return;
     setShowBattleConfirm(false);
     setShowMatchmaking(true);
-    tekken.startMatchmaking(userCourseId, chapters);
+    tekken.startMatchmaking(userCourseId, chapters, aiOnly);
   }, [userCourseId, tekken]);
 
   const onLongPressMove = useCallback((x: number, y: number) => {

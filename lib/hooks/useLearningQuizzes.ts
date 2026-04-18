@@ -98,7 +98,9 @@ export function useLearningQuizzes() {
     });
   }, []);
 
-  // 실시간 구독: AI생성 + 비공개 커스텀
+  // 실시간 구독: creatorId == 본인인 퀴즈 전체 (1쿼리) → 클라이언트에서 타입 필터
+  // 필터 조건: type === 'ai-generated' || (type === 'custom' && isPublic === false)
+  // 비공개 'custom' + AI 서재가 서재 탭 대상. 공개 'custom'은 다른 학생에게 공유된 것이므로 제외.
   useEffect(() => {
     if (!user?.uid) {
       setQuizzes([]);
@@ -107,55 +109,30 @@ export function useLearningQuizzes() {
     }
 
     const userId = user.uid;
-    let aiItems: LearningQuiz[] = [];
-    let customItems: LearningQuiz[] = [];
-    let aiReady = false;
-    let customReady = false;
 
-    const merge = () => {
-      if (!aiReady || !customReady) return;
-      const all = [...aiItems, ...customItems];
+    const q = query(
+      collection(db, 'quizzes'),
+      where('creatorId', '==', userId)
+    );
+
+    const unsub = onSnapshot(q, (snap) => {
+      const filteredDocs = snap.docs.filter((d) => {
+        const data = d.data();
+        if (data.type === 'ai-generated') return true;
+        if (data.type === 'custom' && data.isPublic === false) return true;
+        return false;
+      });
+      const all = toItems(filteredDocs, userId);
       all.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
       setQuizzes(all);
       setLoading(false);
-    };
-
-    // 쿼리 1: AI 생성 퀴즈
-    const q1 = query(
-      collection(db, 'quizzes'),
-      where('type', '==', 'ai-generated'),
-      where('creatorId', '==', userId)
-    );
-
-    // 쿼리 2: 비공개 커스텀 퀴즈
-    const q2 = query(
-      collection(db, 'quizzes'),
-      where('type', '==', 'custom'),
-      where('isPublic', '==', false),
-      where('creatorId', '==', userId)
-    );
-
-    const unsub1 = onSnapshot(q1, (snap) => {
-      aiItems = toItems(snap.docs, userId);
-      aiReady = true;
-      merge();
     }, (error) => {
-      console.error('서재 AI 퀴즈 로드 오류:', error);
-      aiReady = true;
-      merge();
+      console.error('서재 퀴즈 로드 오류:', error);
+      setQuizzes([]);
+      setLoading(false);
     });
 
-    const unsub2 = onSnapshot(q2, (snap) => {
-      customItems = toItems(snap.docs, userId);
-      customReady = true;
-      merge();
-    }, (error) => {
-      console.error('서재 커스텀 퀴즈 로드 오류:', error);
-      customReady = true;
-      merge();
-    });
-
-    return () => { unsub1(); unsub2(); };
+    return () => unsub();
   }, [user?.uid, toItems]);
 
   // 서재 퀴즈 삭제

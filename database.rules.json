@@ -64,6 +64,15 @@
         }
       }
     },
+    "presence": {
+      "$courseId": {
+        ".read": "auth != null",
+        "$uid": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "!newData.exists() || (newData.hasChild('lastActiveAt') && newData.hasChild('currentActivity'))"
+        }
+      }
+    },
     ".read": false,
     ".write": false
   }

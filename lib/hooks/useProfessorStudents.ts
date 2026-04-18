@@ -16,6 +16,8 @@ import {
   type DocumentData,
 } from '@/lib/repositories';
 import type { Unsubscribe } from '@/lib/repositories';
+import { ref as rtdbRef, onValue, off as rtdbOff } from 'firebase/database';
+import { getRtdb } from '@/lib/firebase';
 import { rankPercentile } from '@/lib/utils/statistics';
 import { RadarNormData, readRadarNormCache, writeRadarNormCache } from '@/lib/utils/radarNormCache';
 
@@ -147,10 +149,22 @@ const _studentsListCacheMap = new Map<string, StudentData[]>();
 /** 현재 활성 과목 */
 let _activeCourseId: string | null = null;
 
-/** radarNorm onSnapshot 데이터 (과목별) */
+/** radarNorm 데이터 (과목별) — 2시간마다 스케줄러 갱신이라 getDoc 1회 로드로 충분 */
 const _radarNormMap = new Map<string, RadarNormData>();
-/** radarNorm onSnapshot 구독 해제 함수 (과목별) */
-const _radarNormUnsubMap = new Map<string, Unsubscribe>();
+/** radarNorm 마지막 fetch 시각 (과목별) — 재방문 시 TTL 기반 재사용 */
+const _radarNormFetchedAtMap = new Map<string, number>();
+/** radarNorm TTL (10분) — 스케줄러 2h 주기 대비 충분히 신선함 */
+const RADAR_NORM_TTL = 10 * 60 * 1000;
+
+/**
+ * RTDB presence 데이터 (과목별) — 학생 uid → { lastActiveAt, currentActivity }
+ * useActivityTracker가 RTDB `presence/{courseId}/{uid}`에 120초마다 쓰고, onDisconnect로 정리.
+ * 교수 화면은 이 맵을 Firestore users 데이터에 덮어써서 온라인/활동 UI를 렌더.
+ */
+interface PresenceEntry { lastActiveAt: Date; currentActivity?: string }
+const _presenceMap = new Map<string, Map<string, PresenceEntry>>();
+/** RTDB presence 구독 해제 함수 (과목별) */
+const _presenceUnsubMap = new Map<string, () => void>();
 
 /** 학생 상세 캐시 — 재클릭 시 쿼리 0개 즉시 표시 */
 const _studentDetailCacheMap = new Map<string, { detail: StudentDetail; ts: number }>();
@@ -207,12 +221,16 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
   const currentFetchUidRef = useRef<string | null>(null);
 
   /**
-   * Firestore 문서를 StudentData로 변환
+   * Firestore 문서 → StudentData 변환. presence(lastActiveAt/currentActivity)는
+   * RTDB `presence/{courseId}/{uid}`가 권위 소스이므로 있으면 덮어씀.
+   * presence가 없으면(오프라인) Firestore의 legacy 값 또는 new Date(0) 폴백.
    */
   const convertToStudentData = (
-    docSnap: QueryDocumentSnapshot<DocumentData>
+    docSnap: QueryDocumentSnapshot<DocumentData>,
+    courseId: string,
   ): StudentData => {
     const data = docSnap.data();
+    const presence = _presenceMap.get(courseId)?.get(docSnap.id);
     return {
       uid: docSnap.id,
       name: data.name || undefined,
@@ -227,11 +245,11 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
         averageScore: data.quizStats?.averageScore || 0,
         lastAttemptAt: data.quizStats?.lastAttemptAt?.toDate?.() || undefined,
       },
-      currentActivity: data.currentActivity || undefined,
+      currentActivity: presence?.currentActivity ?? (data.currentActivity || undefined),
       profileRabbitId: data.profileRabbitId ?? undefined,
       feedbackCount: data.feedbackCount || 0,
       createdAt: data.createdAt?.toDate?.() || new Date(),
-      lastActiveAt: data.lastActiveAt?.toDate?.() || new Date(0),
+      lastActiveAt: presence?.lastActiveAt ?? (data.lastActiveAt?.toDate?.() || new Date(0)),
     };
   };
 
@@ -241,6 +259,15 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
   const subscribeStudents = useCallback((courseId: string) => {
     // 기존 구독 해제
     if (unsubRef.current) unsubRef.current();
+
+    // 이전 과목 presence 리스너 정리 (현재 과목 제외)
+    _presenceUnsubMap.forEach((unsub, prevCourseId) => {
+      if (prevCourseId !== courseId) {
+        unsub();
+        _presenceUnsubMap.delete(prevCourseId);
+        _presenceMap.delete(prevCourseId);
+      }
+    });
 
     // 과목 전환 추적
     _activeCourseId = courseId;
@@ -266,37 +293,28 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
       }
     }
 
-    // 이전 과목의 radarNorm 구독 해제 (메모리 누수 방지)
-    _radarNormUnsubMap.forEach((unsub, prevCourseId) => {
-      if (prevCourseId !== courseId) {
-        unsub();
-        _radarNormUnsubMap.delete(prevCourseId);
-        _radarNormMap.delete(prevCourseId);
-      }
-    });
-
-    // radarNorm/{courseId} onSnapshot 구독 (이미 구독 중이면 스킵)
-    if (!_radarNormUnsubMap.has(courseId)) {
-      const normDocRef = doc(db, 'radarNorm', courseId);
-      const normUnsub = onSnapshot(
-        normDocRef,
-        (snapshot) => {
+    // radarNorm — 2시간마다 스케줄러가 갱신하므로 실시간 리스너 불필요.
+    // TTL(10분) 지났거나 캐시 없으면 getDoc 1회 호출.
+    const lastFetched = _radarNormFetchedAtMap.get(courseId) ?? 0;
+    if (Date.now() - lastFetched > RADAR_NORM_TTL) {
+      _radarNormFetchedAtMap.set(courseId, Date.now());
+      getDoc(doc(db, 'radarNorm', courseId))
+        .then((snapshot) => {
           if (snapshot.exists()) {
             const data = snapshot.data() as RadarNormData;
             _radarNormMap.set(courseId, data);
             writeRadarNormCache(courseId, data);
           }
-        },
-        (err) => {
-          console.error('radarNorm 구독 실패:', err);
-        },
-      );
-      _radarNormUnsubMap.set(courseId, normUnsub);
+        })
+        .catch((err) => {
+          console.error('radarNorm 로드 실패:', err);
+        });
     }
 
-    // orderBy 제거: 학생 정렬은 클라이언트에서 studentId 순으로 수행
-    // orderBy('lastActiveAt', 'desc')가 있으면 학생마다 하트비트 쓰기 시 Firestore가
-    // 정렬 순서 재평가 → onSnapshot 트리거 빈도 폭증
+    // orderBy 제거: 학생 정렬은 클라이언트에서 studentId 순으로 수행.
+    // 또한 presence(lastActiveAt/currentActivity)는 RTDB로 분리되어
+    // 학생 heartbeat가 더 이상 Firestore users 문서를 변경하지 않음 →
+    // onSnapshot 트리거가 실제 의미 있는 변경(닉네임/반/EXP/퀴즈통계)에만 발동.
     const usersRef = collection(db, 'users');
     const q = query(
       usersRef,
@@ -307,6 +325,58 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
     // docChanges() 활용: 변경된 문서만 증분 업데이트
     const studentsMap = new Map<string, ReturnType<typeof convertToStudentData>>();
 
+    /** presence(RTDB) 변경 시 studentsMap을 재병합해 setStudents 트리거 */
+    const applyPresenceOverlay = () => {
+      const presenceForCourse = _presenceMap.get(courseId);
+      if (!presenceForCourse) return;
+      for (const [uid, entry] of studentsMap.entries()) {
+        const p = presenceForCourse.get(uid);
+        studentsMap.set(uid, {
+          ...entry,
+          lastActiveAt: p?.lastActiveAt ?? entry.lastActiveAt,
+          currentActivity: p?.currentActivity ?? entry.currentActivity,
+        });
+      }
+      const studentsList = Array.from(studentsMap.values());
+      setStudents(studentsList);
+      _studentsListCacheMap.set(courseId, studentsList);
+    };
+
+    // RTDB presence 구독 (과목별 1개 유지) — heartbeat를 Firestore 트리거 없이 실시간 수신
+    if (!_presenceUnsubMap.has(courseId)) {
+      const presenceRootRef = rtdbRef(getRtdb(), `presence/${courseId}`);
+      const listener = onValue(
+        presenceRootRef,
+        (snap) => {
+          const val = snap.val() as Record<string, { lastActiveAt?: number; currentActivity?: string }> | null;
+          const next = new Map<string, PresenceEntry>();
+          if (val) {
+            for (const [uid, entry] of Object.entries(val)) {
+              next.set(uid, {
+                lastActiveAt: entry?.lastActiveAt ? new Date(entry.lastActiveAt) : new Date(0),
+                currentActivity: entry?.currentActivity,
+              });
+            }
+          }
+          _presenceMap.set(courseId, next);
+          // 30초 throttle — 너무 자주 setStudents 안 하도록
+          const now = Date.now();
+          if (now - lastPresenceFlushRef.current < 30_000) return;
+          lastPresenceFlushRef.current = now;
+          if (hasLoadedRef.current) applyPresenceOverlay();
+        },
+        (err) => {
+          console.error('presence 구독 실패:', err);
+        },
+      );
+      _presenceUnsubMap.set(courseId, () => {
+        rtdbOff(presenceRootRef, 'value', listener);
+      });
+    } else if (hasLoadedRef.current) {
+      // 이미 구독 중이면 기존 맵으로 초기 오버레이 적용
+      applyPresenceOverlay();
+    }
+
     unsubRef.current = onSnapshot(
       q,
       (snapshot) => {
@@ -316,40 +386,15 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
 
         // 첫 스냅샷이면 전체 로드 (docChanges가 전부 'added')
         if (!hasLoadedRef.current) {
-          snapshot.docs.forEach(d => studentsMap.set(d.id, convertToStudentData(d)));
+          snapshot.docs.forEach(d => studentsMap.set(d.id, convertToStudentData(d, courseId)));
         } else {
           // 증분 업데이트: 변경된 문서만 처리
-          let hasNonActivityChange = false;
           for (const change of changes) {
             if (change.type === 'removed') {
               studentsMap.delete(change.doc.id);
-              hasNonActivityChange = true;
             } else {
-              const newData = convertToStudentData(change.doc);
-              const existing = studentsMap.get(change.doc.id);
-              studentsMap.set(change.doc.id, newData);
-
-              // lastActiveAt/currentActivity만 변경된 경우 리렌더 스킵
-              if (existing && change.type === 'modified') {
-                const isPresenceOnly =
-                  existing.nickname === newData.nickname &&
-                  existing.classId === newData.classId &&
-                  existing.totalExp === newData.totalExp &&
-                  existing.quizStats.totalAttempts === newData.quizStats.totalAttempts &&
-                  existing.quizStats.averageScore === newData.quizStats.averageScore &&
-                  existing.feedbackCount === newData.feedbackCount;
-                if (!isPresenceOnly) hasNonActivityChange = true;
-              } else {
-                hasNonActivityChange = true;
-              }
+              studentsMap.set(change.doc.id, convertToStudentData(change.doc, courseId));
             }
-          }
-
-          // 접속 상태만 변경된 경우: 30초 간격으로만 setStudents 호출 (온라인 정렬 갱신 + 리렌더 절약)
-          if (!hasNonActivityChange) {
-            const now = Date.now();
-            if (now - lastPresenceFlushRef.current < 30_000) return;
-            lastPresenceFlushRef.current = now;
           }
         }
 
