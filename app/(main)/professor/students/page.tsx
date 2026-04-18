@@ -163,35 +163,21 @@ export default function StudentMonitoringPage() {
     return `${todayDate.year}-${String(selectedMonth).padStart(2, '0')}-${String(clampedDay).padStart(2, '0')}`;
   }, [selectedMonth, selectedDay, maxDayInMonth, todayDate.year]);
 
-  const isTodaySelected = useMemo(() => {
-    const now = new Date();
-    const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    return selectedDateStr === localToday;
-  }, [selectedDateStr]);
 
   // 일일 접속 데이터 조회
   const { attendedUids } = useDailyAttendance(userCourseId || '', selectedDateStr);
 
   // 일일 접속 통계 (필터된 학생 기준)
+  // dailyAttendance 문서의 attendedUids만 단일 소스로 사용.
+  // 이전의 lastActiveAt 폴백은 배포 전환기 임시 로직이었고 현재는 과다 집계 원인이 되어 제거.
   const attendanceStats = useMemo(() => {
     const attendedSet = new Set(attendedUids);
-
-    // 오늘: lastActiveAt가 오늘인 학생도 포함 (코드 배포 전 접속한 학생 포착)
-    if (isTodaySelected) {
-      const todayStr = new Date().toDateString();
-      for (const s of filteredStudents) {
-        if (s.lastActiveAt.toDateString() === todayStr) {
-          attendedSet.add(s.uid);
-        }
-      }
-    }
-
     let count = 0;
     for (const s of filteredStudents) {
       if (attendedSet.has(s.uid)) count++;
     }
     return { attendedCount: count, totalCount: filteredStudents.length };
-  }, [filteredStudents, attendedUids, isTodaySelected]);
+  }, [filteredStudents, attendedUids]);
 
   // 경고 시스템 (StudentListView에 전달)
   const warningMap = useMemo((): Map<string, WarningItem> => {
