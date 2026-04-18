@@ -168,10 +168,18 @@ export default function StudentMonitoringPage() {
   const { attendedUids } = useDailyAttendance(userCourseId || '', selectedDateStr);
 
   // 일일 접속 통계 (필터된 학생 기준)
-  // dailyAttendance 문서의 attendedUids만 단일 소스로 사용.
-  // 이전의 lastActiveAt 폴백은 배포 전환기 임시 로직이었고 현재는 과다 집계 원인이 되어 제거.
+  // 1차 소스: Firestore dailyAttendance/{courseId}_{today}.attendedUids
+  // 2차 보완: 현재 RTDB presence가 있는(최근 5분 내 heartbeat) 학생
+  //   — dailyAttendance write 실패/race로 누락된 실제 접속자 즉시 반영.
+  //   stale Firestore lastActiveAt은 제외 (RTDB 기반이라 접속 중만 참)
   const attendanceStats = useMemo(() => {
     const attendedSet = new Set(attendedUids);
+    const liveThreshold = Date.now() - 5 * 60 * 1000; // 5분 이내 heartbeat = 현재 접속
+    for (const s of filteredStudents) {
+      if (s.lastActiveAt.getTime() > liveThreshold) {
+        attendedSet.add(s.uid);
+      }
+    }
     let count = 0;
     for (const s of filteredStudents) {
       if (attendedSet.has(s.uid)) count++;
