@@ -76,52 +76,18 @@ export function useActivityTracker(courseId?: string, isProfessor?: boolean) {
     };
   }, [user?.uid, courseId, isProfessor, pathname, isHomeOverlayOpen]);
 
-  // 일일 접속 기록 (학생만)
-  // dailyAttendance/{courseId}_{YYYY-MM-DD} 문서에 uid를 arrayUnion. arrayUnion이 idempotent이라
-  // 매번 실행해도 dedup.
-  // 재실행 트리거:
-  //   1) 마운트 즉시
-  //   2) 자정 넘어가면 자동 (setTimeout으로 다음 자정+5초 계산)
-  //   3) 앱 포그라운드 복귀 시 (visibilitychange)
-  // — 학생이 자정 전에 앱 켜고 그대로 두면 자정 넘어도 새 문서에 기록되도록.
+  // 일일 접속 기록 (학생만, 하루 1회)
+  // dailyAttendance/{courseId}_{YYYY-MM-DD} 문서에 uid를 arrayUnion
   useEffect(() => {
     if (!user?.uid || !courseId || isProfessor) return;
-
-    const uid = user.uid;
-
-    const writeAttendance = () => {
-      const now = new Date();
-      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-      const attRef = doc(db, 'dailyAttendance', `${courseId}_${today}`);
-      setDoc(attRef, { attendedUids: arrayUnion(uid) }, { merge: true })
-        .catch((err) => {
-          console.warn('[dailyAttendance] write failed:', err);
-        });
-    };
-
-    // 1) 즉시 실행
-    writeAttendance();
-
-    // 2) 다음 자정 + 5초 버퍼에 1회 재실행 (이후 interval로 24h 주기)
     const now = new Date();
-    const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5);
-    const msUntilMidnight = Math.max(nextMidnight.getTime() - now.getTime(), 1000);
-    let intervalId: ReturnType<typeof setInterval> | null = null;
-    const midnightTimer = setTimeout(() => {
-      writeAttendance();
-      intervalId = setInterval(writeAttendance, 24 * 60 * 60 * 1000);
-    }, msUntilMidnight);
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const storageKey = `daily-att-${user.uid}-${today}`;
+    if (localStorage.getItem(storageKey)) return;
 
-    // 3) 포그라운드 복귀 시 (iOS PWA eviction 후 복귀 포함)
-    const onVisibility = () => {
-      if (document.visibilityState === 'visible') writeAttendance();
-    };
-    document.addEventListener('visibilitychange', onVisibility);
-
-    return () => {
-      clearTimeout(midnightTimer);
-      if (intervalId) clearInterval(intervalId);
-      document.removeEventListener('visibilitychange', onVisibility);
-    };
+    const attRef = doc(db, 'dailyAttendance', `${courseId}_${today}`);
+    setDoc(attRef, { attendedUids: arrayUnion(user.uid) }, { merge: true })
+      .then(() => localStorage.setItem(storageKey, '1'))
+      .catch(() => {});
   }, [user?.uid, courseId, isProfessor]);
 }

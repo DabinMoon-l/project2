@@ -115,42 +115,12 @@ export default function StudentMonitoringPage() {
   }, [students, selectedClass, debouncedSearch]);
 
   // 날짜 선택 (일일 접속 통계용)
-  // 1분마다 재평가하여 자정 지나면 자동으로 오늘 날짜로 업데이트
-  const [todayDate, setTodayDate] = useState(() => {
+  const todayDate = useMemo(() => {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate() };
-  });
-  useEffect(() => {
-    const tick = () => {
-      const now = new Date();
-      setTodayDate((prev) => {
-        const y = now.getFullYear();
-        const m = now.getMonth() + 1;
-        const d = now.getDate();
-        if (prev.year === y && prev.month === m && prev.day === d) return prev;
-        return { year: y, month: m, day: d };
-      });
-    };
-    const id = setInterval(tick, 60_000); // 1분마다
-    return () => clearInterval(id);
   }, []);
-
   const [selectedMonth, setSelectedMonth] = useState(todayDate.month);
   const [selectedDay, setSelectedDay] = useState(todayDate.day);
-
-  // todayDate가 자정 넘어 변경되면, 사용자가 "오늘"을 보고 있던 경우에 한해 자동 추종
-  const prevTodayRef = useRef(todayDate);
-  useEffect(() => {
-    const prev = prevTodayRef.current;
-    const sameDay = prev.year === todayDate.year && prev.month === todayDate.month && prev.day === todayDate.day;
-    if (sameDay) return;
-    // 이전에 "오늘"을 보고 있었으면 (selectedMonth/Day가 prev와 일치) 오늘로 자동 이동
-    if (selectedMonth === prev.month && selectedDay === prev.day) {
-      setSelectedMonth(todayDate.month);
-      setSelectedDay(todayDate.day);
-    }
-    prevTodayRef.current = todayDate;
-  }, [todayDate, selectedMonth, selectedDay]);
 
   // 해당 월의 최대 일수 (2월 윤년 등 자동 반영)
   const maxDayInMonth = useMemo(
@@ -193,29 +163,35 @@ export default function StudentMonitoringPage() {
     return `${todayDate.year}-${String(selectedMonth).padStart(2, '0')}-${String(clampedDay).padStart(2, '0')}`;
   }, [selectedMonth, selectedDay, maxDayInMonth, todayDate.year]);
 
+  const isTodaySelected = useMemo(() => {
+    const now = new Date();
+    const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    return selectedDateStr === localToday;
+  }, [selectedDateStr]);
 
   // 일일 접속 데이터 조회
   const { attendedUids } = useDailyAttendance(userCourseId || '', selectedDateStr);
 
   // 일일 접속 통계 (필터된 학생 기준)
-  // 1차 소스: Firestore dailyAttendance/{courseId}_{today}.attendedUids
-  // 2차 보완: 현재 RTDB presence가 있는(최근 5분 내 heartbeat) 학생
-  //   — dailyAttendance write 실패/race로 누락된 실제 접속자 즉시 반영.
-  //   stale Firestore lastActiveAt은 제외 (RTDB 기반이라 접속 중만 참)
   const attendanceStats = useMemo(() => {
     const attendedSet = new Set(attendedUids);
-    const liveThreshold = Date.now() - 5 * 60 * 1000; // 5분 이내 heartbeat = 현재 접속
-    for (const s of filteredStudents) {
-      if (s.lastActiveAt.getTime() > liveThreshold) {
-        attendedSet.add(s.uid);
+
+    // 오늘: lastActiveAt가 오늘인 학생도 포함 (코드 배포 전 접속한 학생 포착)
+    if (isTodaySelected) {
+      const todayStr = new Date().toDateString();
+      for (const s of filteredStudents) {
+        if (s.lastActiveAt.toDateString() === todayStr) {
+          attendedSet.add(s.uid);
+        }
       }
     }
+
     let count = 0;
     for (const s of filteredStudents) {
       if (attendedSet.has(s.uid)) count++;
     }
     return { attendedCount: count, totalCount: filteredStudents.length };
-  }, [filteredStudents, attendedUids]);
+  }, [filteredStudents, attendedUids, isTodaySelected]);
 
   // 경고 시스템 (StudentListView에 전달)
   const warningMap = useMemo((): Map<string, WarningItem> => {
