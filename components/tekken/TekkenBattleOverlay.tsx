@@ -277,6 +277,7 @@ export default function TekkenBattleOverlay({
             result={tekken.result}
             userId={userId}
             opponentNickname={tekken.opponent?.nickname ?? '상대방'}
+            rounds={tekken.battle?.rounds}
             onClose={onClose}
           />
         )}
