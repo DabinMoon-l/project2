@@ -138,6 +138,8 @@ export interface SubQuestion {
   answerTexts?: string[];
   rubric?: RubricItem[];
   explanation?: string;
+  /** 선지별 해설 (객관식 전용, choices와 동일 길이) */
+  choiceExplanations?: string[];
   /** @deprecated 제시문(passageBlocks)으로 대체됨 */
   examplesType?: 'text' | 'korean_abc' | 'mixed';
   /** @deprecated 제시문(passageBlocks)으로 대체됨 */
@@ -184,6 +186,8 @@ export interface QuestionData {
   answerTexts?: string[];
   /** 해설 */
   explanation: string;
+  /** 선지별 해설 (객관식 전용, choices와 동일 길이) */
+  choiceExplanations?: string[];
   /** 문제 이미지 URL */
   imageUrl?: string | null;
   /** @deprecated 제시문(passageBlocks)으로 대체됨 - 호환성 유지 */
