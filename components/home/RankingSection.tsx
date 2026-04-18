@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { doc, getDoc, collection, query, where, getDocs, db } from '@/lib/repositories';
+import { collection, query, where, getDocs, db } from '@/lib/repositories';
+import { rankingRepo } from '@/lib/repositories';
 import { useUser, useCourse } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
 import { readHomeCache, writeHomeCache } from '@/lib/utils/rankingCache';
@@ -77,13 +78,15 @@ export default function RankingSection({ overrideCourseId }: { overrideCourseId?
       if (isFresh) return;
     }
 
-    // 2. Firestore rankings/{courseId} 문서 1개 읽기
+    // 2. rankings/{courseId} 문서 1개 읽기 (Feature flag에 따라 Firestore/Supabase)
     const loadRankings = async () => {
       try {
-        const rankDoc = await getDoc(doc(db, 'rankings', userCourseId));
+        const data = await rankingRepo.getRanking(userCourseId) as {
+          rankedUsers?: RankedUserEntry[];
+          teamRanks?: TeamRankEntry[];
+        } | null;
 
-        if (rankDoc.exists()) {
-          const data = rankDoc.data();
+        if (data) {
           const rankedUsers = data.rankedUsers || [];
           const teamRanksArr = data.teamRanks || [];
 
@@ -106,15 +109,16 @@ export default function RankingSection({ overrideCourseId }: { overrideCourseId?
             totalStudents: rankedUsers.length,
           });
         } else {
-          // rankings 문서 없음 → CF에 갱신 요청 (클라이언트 폴백 제거 — 300명 동시 쿼리 폭풍 방지)
-          // refreshRankings CF가 비동기로 계산, 다음 로드 시 캐시 히트
+          // rankings 문서 없음 → CF에 갱신 요청
           try {
             const { callFunction: callFn } = await import('@/lib/api');
             await callFn('refreshRankings', { courseId: userCourseId });
-            // 재시도 — CF가 즉시 계산 완료하면 이번에 데이터 표시
-            const retrySnap = await getDoc(doc(db, 'rankings', userCourseId));
-            if (retrySnap.exists()) {
-              const retryData = retrySnap.data();
+            // 재시도
+            const retryData = await rankingRepo.getRanking(userCourseId) as {
+              rankedUsers?: RankedUserEntry[];
+              teamRanks?: TeamRankEntry[];
+            } | null;
+            if (retryData) {
               const rankedUsers = retryData.rankedUsers || [];
               const teamRanksArr = retryData.teamRanks || [];
               const myTeam = teamRanksArr.find((t: TeamRankEntry) => t.classId === classType);
@@ -124,7 +128,7 @@ export default function RankingSection({ overrideCourseId }: { overrideCourseId?
               setTotalStudents(rankedUsers.length);
             }
           } catch {
-            // CF 호출 실패해도 무방 — 다음 스케줄(10분)에서 자동 생성
+            // CF 호출 실패해도 무방
           }
         }
 

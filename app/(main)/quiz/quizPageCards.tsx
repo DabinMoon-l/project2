@@ -6,6 +6,7 @@ import { Skeleton } from '@/components/common';
 import AutoVideo, { getDifficultyVideo } from '@/components/quiz/AutoVideo';
 import { NEWSPAPER_BG_TEXT, formatQuestionTypes } from '@/lib/utils/quizHelpers';
 import { scaleCoord } from '@/lib/hooks/useViewportScale';
+import { saveScroll, loadScroll } from '@/lib/utils/scrollStorage';
 import {
   QUIZ_CAROUSEL_KEY,
   QUIZ_SCROLL_KEY,
@@ -208,23 +209,30 @@ const NewsCard = memo(function NewsCard({
     return () => ro.disconnect();
   }, []);
 
-  // 스크롤 위치 복원
+  // 스크롤 위치 복원 (cold reload 포함)
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || !itemHeight || isLoading || quizzes.length === 0) return;
-    const saved = sessionStorage.getItem(QUIZ_SCROLL_KEY(type));
-    if (saved) el.scrollTop = parseInt(saved, 10);
+    const saved = loadScroll(QUIZ_SCROLL_KEY(type));
+    if (saved !== null) el.scrollTop = saved;
   }, [type, itemHeight, isLoading, quizzes.length]);
 
-  // 스크롤 위치 저장
+  // 스크롤 위치 저장 (debounce로 localStorage 쓰기 빈도 제한)
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
     const handleScroll = () => {
-      sessionStorage.setItem(QUIZ_SCROLL_KEY(type), String(el.scrollTop));
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        saveScroll(QUIZ_SCROLL_KEY(type), el.scrollTop);
+      }, 120);
     };
     el.addEventListener('scroll', handleScroll, { passive: true });
-    return () => el.removeEventListener('scroll', handleScroll);
+    return () => {
+      el.removeEventListener('scroll', handleScroll);
+      if (timer) clearTimeout(timer);
+    };
   }, [type]);
 
   return (

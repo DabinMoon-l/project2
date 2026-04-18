@@ -16,6 +16,7 @@ import {
   type DocumentData,
 } from '@/lib/repositories';
 import type { Unsubscribe } from '@/lib/repositories';
+import { rankingRepo } from '@/lib/repositories';
 import { ref as rtdbRef, onValue, off as rtdbOff } from 'firebase/database';
 import { getRtdb } from '@/lib/firebase';
 import { rankPercentile } from '@/lib/utils/statistics';
@@ -294,16 +295,16 @@ export function useProfessorStudents(): UseProfessorStudentsReturn {
     }
 
     // radarNorm — 2시간마다 스케줄러가 갱신하므로 실시간 리스너 불필요.
-    // TTL(10분) 지났거나 캐시 없으면 getDoc 1회 호출.
+    // TTL(10분) 지났거나 캐시 없으면 1회 fetch (Feature flag → Firestore/Supabase).
     const lastFetched = _radarNormFetchedAtMap.get(courseId) ?? 0;
     if (Date.now() - lastFetched > RADAR_NORM_TTL) {
       _radarNormFetchedAtMap.set(courseId, Date.now());
-      getDoc(doc(db, 'radarNorm', courseId))
-        .then((snapshot) => {
-          if (snapshot.exists()) {
-            const data = snapshot.data() as RadarNormData;
-            _radarNormMap.set(courseId, data);
-            writeRadarNormCache(courseId, data);
+      rankingRepo.getRadarNorm(courseId)
+        .then((data) => {
+          if (data) {
+            const typed = data as unknown as RadarNormData;
+            _radarNormMap.set(courseId, typed);
+            writeRadarNormCache(courseId, typed);
           }
         })
         .catch((err) => {

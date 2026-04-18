@@ -20,6 +20,7 @@ import {
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useThemeColors } from '@/styles/themes/useTheme';
 import { useDetailPanel, useClosePanel } from '@/lib/contexts';
+import { useQuizDraft, useAutoSaveQuizDraft } from '@/lib/hooks/useQuizDraft';
 import { Skeleton } from '@/components/common';
 
 /** Firestore 퀴즈 문제 문서 타입 */
@@ -151,6 +152,49 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
     submittedQuestions: string[];
     gradeResults: Record<string, { isCorrect: boolean; correctAnswer: string }>;
   } | null>(null);
+
+  // localStorage 기반 draft (PWA eviction 대응)
+  const quizDraft = useQuizDraft<Answer, { isCorrect: boolean; correctAnswer: string }>(
+    user?.uid,
+    quizId,
+  );
+  // 로컬 draft 복원 1회 트리거 플래그
+  const [localDraftChecked, setLocalDraftChecked] = useState(false);
+
+  // 퀴즈 로드 완료 + Firestore resume modal 없음 + 아직 답변 없음일 때 로컬 draft 복원
+  useEffect(() => {
+    if (localDraftChecked) return;
+    if (!quiz || !user?.uid) return;
+    if (showResumeModal) return; // Firestore resume 우선
+    if (Object.values(answers).some(a => a !== null && a !== '' && !(Array.isArray(a) && a.length === 0))) return;
+
+    const draft = quizDraft.load();
+    if (!draft) {
+      setLocalDraftChecked(true);
+      return;
+    }
+    // 복원
+    setAnswers(draft.answers);
+    setCurrentQuestionIndex(draft.currentQuestionIndex || 0);
+    if (Array.isArray(draft.submittedQuestions) && draft.submittedQuestions.length > 0) {
+      setSubmittedQuestions(new Set(draft.submittedQuestions));
+    }
+    if (draft.gradeResults && Object.keys(draft.gradeResults).length > 0) {
+      setGradeResults(draft.gradeResults);
+    }
+    setLocalDraftChecked(true);
+  }, [quiz, user?.uid, showResumeModal, answers, quizDraft, localDraftChecked]);
+
+  // 답안/진행 상태 변경 시 debounced localStorage 저장
+  useAutoSaveQuizDraft({
+    enabled: !!quiz && !!user?.uid && !isSubmitting && !showResumeModal,
+    userId: user?.uid,
+    quizId,
+    answers,
+    currentQuestionIndex,
+    submittedQuestions,
+    gradeResults,
+  });
 
   // 현재 표시 아이템 (단일 문제 또는 결합형 그룹)
   const currentDisplayItem = useMemo(
@@ -797,8 +841,9 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
       localStorage.setItem(`quiz_answers_${quizId}`, JSON.stringify(orderedAnswers));
       localStorage.setItem(`quiz_time_${quizId}`, '0'); // 시간 측정은 나중에 구현
 
-      // 저장된 진행 상황 삭제
+      // 저장된 진행 상황 삭제 (Firestore + 로컬 draft)
       await deleteProgress();
+      quizDraft.clear();
 
       // 결과 페이지로 이동
       if (onPanelNavigate) { onPanelNavigate(`/quiz/${quizId}/result`); return; }
@@ -809,7 +854,7 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
     } finally {
       setIsSubmitting(false);
     }
-  }, [quiz, user, answers, isSubmitting, quizId, router, deleteProgress]);
+  }, [quiz, user, answers, isSubmitting, quizId, router, deleteProgress, quizDraft]);
 
   /**
    * 이전 진행상황 이어서 하기
@@ -835,7 +880,7 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
    * 처음부터 다시 하기
    */
   const handleStartFresh = useCallback(async () => {
-    // 기존 저장된 진행상황 삭제
+    // 기존 저장된 진행상황 삭제 (Firestore + 로컬 draft)
     if (savedProgress) {
       try {
         await deleteDoc(doc(db, 'quizProgress', savedProgress.id));
@@ -843,11 +888,12 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
         console.error('진행상황 삭제 실패:', err);
       }
     }
+    quizDraft.clear();
     setShowResumeModal(false);
     setSavedProgress(null);
     setProgressId(null);
     setCurrentQuestionIndex(0);
-  }, [savedProgress]);
+  }, [savedProgress, quizDraft]);
 
   /**
    * 저장하고 나가기
@@ -868,10 +914,11 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
    */
   const handleExitWithoutSave = useCallback(async () => {
     await deleteProgress();
+    quizDraft.clear();
     if (onPanelNavigate) { onPanelNavigate('/quiz'); return; }
     if (isPanelMode) { closePanel(); return; }
     router.push('/quiz');
-  }, [router, deleteProgress, isPanelMode, closePanel, onPanelNavigate]);
+  }, [router, deleteProgress, isPanelMode, closePanel, onPanelNavigate, quizDraft]);
 
   // 로딩 상태
   if (isLoading) {

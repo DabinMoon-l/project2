@@ -11,6 +11,11 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import {
+  SUPABASE_URL_SECRET,
+  SUPABASE_SERVICE_ROLE_SECRET,
+  supabaseDualWriteUpsert,
+} from "./utils/supabase";
 
 // ── 핵심 로직 ──
 
@@ -182,7 +187,11 @@ async function computeRadarNormForCourse(courseId: string) {
 // ── Callable: 특정 courseId 강제 갱신 (60초 레이트리밋) ──
 
 export const refreshRadarNorm = onCall(
-  { region: "asia-northeast3", concurrency: 10 },
+  {
+    region: "asia-northeast3",
+    concurrency: 10,
+    secrets: [SUPABASE_URL_SECRET, SUPABASE_SERVICE_ROLE_SECRET],
+  },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
@@ -210,6 +219,9 @@ export const refreshRadarNorm = onCall(
       updatedAt: FieldValue.serverTimestamp(),
     });
 
+    // Supabase 듀얼 라이트
+    await supabaseDualWriteUpsert("radar_norms", courseId, result);
+
     return { success: true, totalStudents: result.totalStudents };
   }
 );
@@ -223,6 +235,7 @@ export const computeRadarNormScheduled = onSchedule(
     timeZone: "Asia/Seoul",
     memory: "1GiB",
     timeoutSeconds: 120,
+    secrets: [SUPABASE_URL_SECRET, SUPABASE_SERVICE_ROLE_SECRET],
   },
   async () => {
     const db = getFirestore();
@@ -260,6 +273,10 @@ export const computeRadarNormScheduled = onSchedule(
           ...result,
           updatedAt: FieldValue.serverTimestamp(),
         });
+
+        // Supabase 듀얼 라이트
+        await supabaseDualWriteUpsert("radar_norms", courseId, result);
+
         console.log(`레이더 정규화 계산 완료: ${courseId} (${result.totalStudents}명)`);
       } catch (error) {
         console.error(`레이더 정규화 계산 실패: ${courseId}`, error);

@@ -17,6 +17,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 import { collection, addDoc, serverTimestamp, db } from '@/lib/repositories';
 import { auth } from '@/lib/firebase';
+import { usePanelStateStore } from '@/lib/stores/panelStateStore';
 
 interface DetailPanelContextType {
   /** 현재 우측 패널(3쪽)에 표시 중인 콘텐츠 */
@@ -306,24 +307,20 @@ export function usePanelStatePreservation(
   const restoreRef = useRef(restoreState);
   restoreRef.current = restoreState;
 
-  // mount 시 복원 (3쪽에서만)
+  // mount 시 복원 (3쪽에서만) — 정적 import된 store를 동기 호출해 race 제거
   useEffect(() => {
     if (position === 'detail') {
-      import('@/lib/stores/panelStateStore').then(m => {
-        const saved = m.usePanelStateStore.getState().consume(componentType);
-        if (saved) restoreRef.current(saved);
-      });
+      const saved = usePanelStateStore.getState().consume(componentType);
+      if (saved) restoreRef.current(saved);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // mount 1회만
 
-  // unmount 시 저장 (2쪽에서만)
+  // unmount 시 저장 (2쪽에서만) — cleanup은 반드시 동기여야 save가 확정됨
   useEffect(() => {
     return () => {
       if (position === 'queued') {
-        import('@/lib/stores/panelStateStore').then(m => {
-          m.usePanelStateStore.getState().save(componentType, getStateRef.current());
-        });
+        usePanelStateStore.getState().save(componentType, getStateRef.current());
       }
     };
   }, [position, componentType]);

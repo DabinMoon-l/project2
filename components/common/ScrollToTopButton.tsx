@@ -94,8 +94,8 @@ export default function ScrollToTopButton({
               ? `${Math.max(16, bottomPx - 68)}px`
               : `calc(4.25rem + env(safe-area-inset-bottom, 0px) + ${bottomPx - 68}px)`,
             ...(side === 'left'
-              ? { left: isWide ? 'calc(240px + 1rem)' : '1rem' }
-              : { right: isWide ? '1rem' : '1rem' }),
+              ? { left: isWide ? 'calc(var(--modal-left, 240px) + 1rem)' : '1rem' }
+              : { right: isWide ? 'calc(var(--modal-right, 0px) + 1rem)' : '1rem' }),
             WebkitTapHighlightColor: 'transparent',
             touchAction: 'manipulation',
           }}

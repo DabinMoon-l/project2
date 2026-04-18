@@ -27,6 +27,7 @@ const QuizListSidebar = dynamic(() => import('@/components/quiz/QuizListSidebar'
 const BoardListSidebar = dynamic(() => import('@/components/board/BoardListSidebar'), { ssr: false });
 import { useViewportScale, useWideMode } from '@/lib/hooks/useViewportScale';
 import { useKeyboardCSSVariable } from '@/lib/hooks/useKeyboardAware';
+import { useSessionSnapshot } from '@/lib/hooks/useSessionSnapshot';
 import OfflineBanner from '@/components/common/OfflineBanner';
 
 
@@ -52,6 +53,9 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
   // 키보드 열린 상태에서 스크롤로 가려진 콘텐츠를 볼 수 있도록
   // useScrollDismissKeyboard 제거 (스크롤 시 키보드 유지)
   useKeyboardCSSVariable();
+
+  // PWA resume — 앱 전환/복귀 시 마지막 경로+스크롤 복원
+  useSessionSnapshot();
 
   // 접속 추적 (lastActiveAt + currentActivity + 일일 접속 기록)
   useActivityTracker(userCourseId || undefined, isProfessor);
@@ -417,7 +421,15 @@ function MainLayoutGrid({
                 } as React.CSSProperties}
               >
                 {isDetailOpen && (
-                  <div className="h-full" key={contentKey}>
+                  <div
+                    className="h-full"
+                    key={contentKey}
+                    style={{
+                      // 3쪽 내부에서는 fixed 요소가 3쪽 경계(=뷰포트 우측) 기준이어야 함
+                      '--modal-right': '0px',
+                      '--modal-left': 'calc(50% + 120px)',
+                    } as React.CSSProperties & Record<string, string>}
+                  >
                     <DetailPositionProvider value="detail">
                       {detailContent}
                     </DetailPositionProvider>

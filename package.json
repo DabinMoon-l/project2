@@ -15,6 +15,7 @@
     "test:e2e:headed": "playwright test --headed"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.103.3",
     "date-fns": "^3.0.0",
     "docx": "^9.5.3",
     "exceljs": "^4.4.0",

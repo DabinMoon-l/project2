@@ -78,8 +78,21 @@ export * as quizRepo from './firebase/quizRepo';
 export * as reviewRepo from './firebase/reviewRepo';
 export * as postRepo from './firebase/postRepo';
 export * as rabbitRepo from './firebase/rabbitRepo';
-export * as rankingRepo from './firebase/rankingRepo';
 export * as announcementRepo from './firebase/announcementRepo';
 export * as battleRepo from './firebase/battleRepo';
 export * as enrollmentRepo from './firebase/enrollmentRepo';
 export * as storageRepo from './firebase/storageRepo';
+
+// Ranking Repo — Feature flag 기반 분기 (Phase 1 마이그레이션)
+// NEXT_PUBLIC_USE_SUPABASE_RANKINGS=true → Supabase, 아니면 Firestore
+// getRanking / subscribeRanking / getRadarNorm 모두 동일 시그니처 유지
+import * as firebaseRankingRepo from './firebase/rankingRepo';
+import * as supabaseRankingRepo from './supabase/rankingRepo';
+
+const _useSupabaseRankings =
+  typeof process !== 'undefined' &&
+  process.env.NEXT_PUBLIC_USE_SUPABASE_RANKINGS === 'true';
+
+export const rankingRepo: typeof firebaseRankingRepo = _useSupabaseRankings
+  ? (supabaseRankingRepo as typeof firebaseRankingRepo)
+  : firebaseRankingRepo;
