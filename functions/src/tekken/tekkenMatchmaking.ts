@@ -271,42 +271,50 @@ export const matchWithBot = onCall(
     }
 
     const userId = request.auth.uid;
-    const { courseId, chapters } = request.data as { courseId: string; chapters: string[] };
+    const { courseId, chapters, aiOnly } = request.data as {
+      courseId: string;
+      chapters: string[];
+      aiOnly?: boolean;
+    };
 
     const rtdb = getDatabase();
     const fsDb = getFirestore();
 
-    // 큐에서 원자적 제거
-    const queueEntryRef = rtdb.ref(`tekken/matchmaking/${courseId}/${userId}`);
-    let removedFromQueue = false;
-    await queueEntryRef.transaction((current) => {
-      if (current) {
-        removedFromQueue = true;
-        return null;
-      }
-      removedFromQueue = false;
-      return current;
-    });
+    // AI 전용 모드: 큐 체크 건너뛰고 바로 봇 매칭
+    // (유저가 joinMatchmaking을 호출하지 않았으므로 큐에 없음)
+    if (!aiOnly) {
+      // 큐에서 원자적 제거
+      const queueEntryRef = rtdb.ref(`tekken/matchmaking/${courseId}/${userId}`);
+      let removedFromQueue = false;
+      await queueEntryRef.transaction((current) => {
+        if (current) {
+          removedFromQueue = true;
+          return null;
+        }
+        removedFromQueue = false;
+        return current;
+      });
 
-    rtdb.ref(`tekken/matchmaking_data/${courseId}/${userId}`).remove().catch(() => {});
+      rtdb.ref(`tekken/matchmaking_data/${courseId}/${userId}`).remove().catch(() => {});
 
-    if (!removedFromQueue) {
-      const matchResultSnap = await rtdb
-        .ref(`tekken/matchResults/${userId}`)
-        .once("value");
-      const matchResult = matchResultSnap.val();
-      if (matchResult?.battleId) {
-        return { status: "matched", battleId: matchResult.battleId };
+      if (!removedFromQueue) {
+        const matchResultSnap = await rtdb
+          .ref(`tekken/matchResults/${userId}`)
+          .once("value");
+        const matchResult = matchResultSnap.val();
+        if (matchResult?.battleId) {
+          return { status: "matched", battleId: matchResult.battleId };
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const retrySnap = await rtdb
+          .ref(`tekken/matchResults/${userId}`)
+          .once("value");
+        const retryResult = retrySnap.val();
+        if (retryResult?.battleId) {
+          return { status: "matched", battleId: retryResult.battleId };
+        }
+        return { status: "already_matched" };
       }
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      const retrySnap = await rtdb
-        .ref(`tekken/matchResults/${userId}`)
-        .once("value");
-      const retryResult = retrySnap.val();
-      if (retryResult?.battleId) {
-        return { status: "matched", battleId: retryResult.battleId };
-      }
-      return { status: "already_matched" };
     }
 
     // 봇 매칭 진행

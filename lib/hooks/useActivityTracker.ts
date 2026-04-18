@@ -2,11 +2,13 @@
 
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
-import { doc, updateDoc, setDoc, serverTimestamp, arrayUnion, db } from '@/lib/repositories';
+import { ref as rtdbRef, set, onDisconnect, serverTimestamp as rtdbServerTimestamp } from 'firebase/database';
+import { doc, setDoc, arrayUnion, db } from '@/lib/repositories';
+import { getRtdb } from '@/lib/firebase';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useHomeOverlay } from '@/lib/contexts/HomeOverlayContext';
 
-const UPDATE_INTERVAL = 120_000; // 120초 (30초 → 120초로 줄여 Firestore 쓰기 빈도 75% 감소)
+const UPDATE_INTERVAL = 120_000; // 120초
 
 // 경로 기반 현재 활동 판정
 function getCurrentActivity(pathname: string): string {
@@ -21,46 +23,58 @@ function getCurrentActivity(pathname: string): string {
   return '탐색 중';
 }
 
-// 학생 접속 상태 추적 훅 — 120초마다 lastActiveAt + currentActivity 업데이트
-// activity가 변경된 경우에만 즉시 쓰기, 동일하면 인터벌만 유지
+/**
+ * 학생 접속 상태 추적 훅 — RTDB presence 기반.
+ *
+ * **이유**: 이전엔 120초마다 Firestore `users/{uid}.lastActiveAt`을 업데이트했는데,
+ * 교수의 `users` 컬렉션 onSnapshot이 모든 학생 heartbeat마다 트리거돼 읽기 폭증 유발.
+ * → RTDB `presence/{courseId}/{uid}`로 분리하면 Firestore users 문서는 건드리지 않음.
+ *
+ * 경로: `presence/{courseId}/{uid}` = `{ lastActiveAt, currentActivity }`
+ * - `onDisconnect().remove()`로 탭 닫기/네트워크 끊김 시 자동 정리
+ * - 교수 측은 `useProfessorStudents`에서 RTDB onValue로 병합해 렌더
+ *
+ * 일일 접속 기록(`dailyAttendance`)은 영구 통계용이라 Firestore 유지 (하루 1회 쓰기).
+ */
 export function useActivityTracker(courseId?: string, isProfessor?: boolean) {
   const { user } = useAuth();
   const pathname = usePathname();
   const { isOpen: isHomeOverlayOpen } = useHomeOverlay();
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const lastActivityRef = useRef<string>('');
-  const lastWriteRef = useRef<number>(0);
+  const onDisconnectCancelRef = useRef<(() => Promise<void>) | null>(null);
 
+  // presence 쓰기 — RTDB `presence/{courseId}/{uid}` 120초마다 갱신
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!user?.uid || !courseId || isProfessor) return;
 
-    const userRef = doc(db, 'users', user.uid);
-    // 홈 오버레이가 열려있으면 실제 pathname과 무관하게 '홈'
+    const presenceRef = rtdbRef(getRtdb(), `presence/${courseId}/${user.uid}`);
     const activity = isHomeOverlayOpen ? '홈' : getCurrentActivity(pathname);
 
-    const update = () => {
-      lastActivityRef.current = activity;
-      lastWriteRef.current = Date.now();
-      updateDoc(userRef, {
-        lastActiveAt: serverTimestamp(),
+    const write = () => {
+      set(presenceRef, {
+        lastActiveAt: rtdbServerTimestamp(),
         currentActivity: activity,
       }).catch(() => {});
     };
 
-    // activity가 변경되었거나 마지막 쓰기로부터 충분한 시간이 지났을 때만 즉시 쓰기
-    const timeSinceLastWrite = Date.now() - lastWriteRef.current;
-    if (activity !== lastActivityRef.current || timeSinceLastWrite > UPDATE_INTERVAL) {
-      update();
-    }
+    // 연결 끊김/탭 닫기 시 자동 제거 — 교수 화면에서 즉시 오프라인 반영
+    const disconnectHandle = onDisconnect(presenceRef);
+    disconnectHandle.remove().catch(() => {});
+    onDisconnectCancelRef.current = () => disconnectHandle.cancel().catch(() => {});
 
-    // 이전 인터벌 정리 후 새 인터벌 설정
+    // 즉시 1회 쓰기 + 인터벌
+    write();
     if (intervalRef.current) clearInterval(intervalRef.current);
-    intervalRef.current = setInterval(update, UPDATE_INTERVAL);
+    intervalRef.current = setInterval(write, UPDATE_INTERVAL);
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
+      // 마운트 해제(로그아웃/언마운트) 시 onDisconnect 핸들러는 유지해도 되지만,
+      // 명시적으로 제거 후 한 번 더 write(remove)까지 하진 않음 (최소 변경).
+      onDisconnectCancelRef.current?.();
+      onDisconnectCancelRef.current = null;
     };
-  }, [user?.uid, pathname, isHomeOverlayOpen]);
+  }, [user?.uid, courseId, isProfessor, pathname, isHomeOverlayOpen]);
 
   // 일일 접속 기록 (학생만, 하루 1회)
   // dailyAttendance/{courseId}_{YYYY-MM-DD} 문서에 uid를 arrayUnion

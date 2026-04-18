@@ -237,6 +237,58 @@ export interface CloudFunctionMap {
     input: void;
     output: GeminiUsage;
   };
+
+  // ── 자체제작 퀴즈 자동 해설 ──
+  generateCustomExplanations: {
+    input: {
+      courseId: string;
+      questions: Array<{
+        id: string;
+        text: string;
+        type: string;
+        choices?: string[];
+        answerIndex?: number;
+        answerIndices?: number[];
+        answerText?: string;
+        answerTexts?: string[];
+        passageText?: string;
+        bogiText?: string;
+        imageBase64?: string;
+        chapterId?: string;
+        subQuestions?: Array<{
+          id: string;
+          text: string;
+          type: string;
+          choices?: string[];
+          answerIndex?: number;
+          answerIndices?: number[];
+          answerText?: string;
+          answerTexts?: string[];
+          passageText?: string;
+          bogiText?: string;
+          chapterId?: string;
+        }>;
+      }>;
+    };
+    output: {
+      success: boolean;
+      explanations: Array<{
+        id: string;
+        explanation: string;
+        choiceExplanations?: string[];
+        subExplanations?: Array<{
+          id: string;
+          explanation: string;
+          choiceExplanations?: string[];
+        }>;
+      }>;
+      usage: {
+        userUsed: number;
+        userLimit: number;
+        userRemaining: number;
+      };
+    };
+  };
   addToGeminiQueue: {
     input: { image: string; difficulty: string };
     output: QueueResult;
@@ -300,7 +352,7 @@ export interface CloudFunctionMap {
     output: JoinMatchmakingResult;
   };
   matchWithBot: {
-    input: { courseId: string; chapters: string[] };
+    input: { courseId: string; chapters: string[]; aiOnly?: boolean };
     output: JoinMatchmakingResult;
   };
   cancelMatchmaking: {

@@ -22,7 +22,7 @@ import { useWideMode } from '@/lib/hooks/useViewportScale';
 
 interface TekkenBattleConfirmModalProps {
   isOpen: boolean;
-  onConfirm: (chapters: string[]) => void;
+  onConfirm: (chapters: string[], aiOnly: boolean) => void;
   onCancel: () => void;
   equippedRabbits: Array<{ rabbitId: number; courseId: string }>;
   holdings: RabbitHolding[];
@@ -145,11 +145,15 @@ export default function TekkenBattleConfirmModal({
   // 챕터 선택 상태 (기본: 비어있음)
   const [selectedChapters, setSelectedChapters] = useState<Set<string>>(new Set());
 
+  // AI 전용 매칭 (기본: false — 실제 유저 매칭 시도 후 10초 뒤 봇 폴백)
+  const [aiOnly, setAiOnly] = useState(false);
+
   // isOpen 변경 시 초기화
   useEffect(() => {
     if (isOpen) {
       setSelectedChapters(new Set());
       setCarouselIdx(0);
+      setAiOnly(false);
     }
   }, [isOpen]);
 
@@ -322,10 +326,32 @@ export default function TekkenBattleConfirmModal({
               </div>
             </div>
 
+            {/* AI 전용 매칭 체크박스 */}
+            <button
+              type="button"
+              onClick={() => setAiOnly(v => !v)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/15 active:scale-95 transition-transform"
+            >
+              <span
+                className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+                  aiOnly ? 'bg-red-500 border-red-500' : 'bg-transparent border-white/40'
+                }`}
+              >
+                {aiOnly && (
+                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </span>
+              <span className="text-[11px] font-bold text-white/80">
+                AI와만 매칭 (즉시 시작)
+              </span>
+            </button>
+
             {/* 버튼 */}
             <div className="flex items-center gap-3 mt-1 w-full px-4">
               <motion.button
-                onClick={canBattle ? () => onConfirm([...selectedChapters]) : undefined}
+                onClick={canBattle ? () => onConfirm([...selectedChapters], aiOnly) : undefined}
                 disabled={!canBattle}
                 className={`flex-1 py-2 rounded-full font-black text-xs transition-transform ${
                   canBattle

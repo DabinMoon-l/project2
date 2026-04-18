@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { doc, getDoc, collection, query, where, getDocs, onSnapshot, db } from '@/lib/repositories';
+import { doc, getDoc, collection, query, where, getDocs, db } from '@/lib/repositories';
 import { callFunction } from '@/lib/api';
 import { useUser, useCourse } from '@/lib/contexts';
 import { useTheme } from '@/styles/themes/useTheme';
@@ -14,6 +14,7 @@ import { getRabbitProfileUrl } from '@/lib/utils/rabbitProfile';
 import { useHideNav } from '@/lib/hooks/useHideNav';
 import { getRabbitImageSrc } from '@/lib/utils/rabbitImage';
 import { readFullCache, writeFullCache } from '@/lib/utils/rankingCache';
+import { readRabbitName, writeRabbitName, partitionCacheMisses } from '@/lib/utils/rabbitNameCache';
 import { computeRankScore } from '@/lib/utils/ranking';
 import { lockScroll, unlockScroll } from '@/lib/utils/scrollLock';
 import { useLogOverlayView } from '@/lib/hooks/usePageViewLogger';
@@ -44,7 +45,8 @@ interface RankingBottomSheetProps {
 }
 
 /**
- * 서버 캐시된 토끼 이름을 rabbits 컬렉션에서 실시간으로 갱신
+ * 토끼 이름 해석 — sessionStorage 캐시 우선, 미스분만 Firestore 배치 조회.
+ * 토끼 이름은 거의 변경되지 않으므로 24h 신선 / 7d 최대 TTL 캐시가 효과적.
  */
 async function resolveRabbitNamesForAll(users: RankedUser[]) {
   // 고유 rabbit 문서 ID 수집
@@ -58,19 +60,24 @@ async function resolveRabbitNamesForAll(users: RankedUser[]) {
   }
   if (rabbitDocIds.size === 0) return;
 
-  // 배치 조회 (10개씩)
-  const names: Record<string, string | null> = {};
-  const ids = Array.from(rabbitDocIds);
-  for (let i = 0; i < ids.length; i += 10) {
-    const batch = ids.slice(i, i + 10);
-    const snaps = await Promise.all(
-      batch.map(docId => getDoc(doc(db, 'rabbits', docId)))
-    );
-    snaps.forEach((snap, idx) => {
-      if (snap.exists()) {
-        names[batch[idx]] = snap.data()?.name || null;
-      }
-    });
+  // 캐시에서 우선 조회, 미스만 Firestore에서 가져오기
+  const { hitsMap, misses } = partitionCacheMisses(Array.from(rabbitDocIds));
+  const names: Record<string, string | null> = { ...hitsMap };
+
+  if (misses.length > 0) {
+    // 배치 조회 (10개씩)
+    for (let i = 0; i < misses.length; i += 10) {
+      const batch = misses.slice(i, i + 10);
+      const snaps = await Promise.all(
+        batch.map(docId => getDoc(doc(db, 'rabbits', docId)))
+      );
+      snaps.forEach((snap, idx) => {
+        const docId = batch[idx];
+        const name = snap.exists() ? (snap.data()?.name || null) : null;
+        names[docId] = name;
+        writeRabbitName(docId, name); // 네거티브 캐시 포함
+      });
+    }
   }
 
   // 각 유저의 equippedRabbitNames 갱신 (discoveryOrder 반영 — "뭉치 2세" 등)
@@ -178,57 +185,85 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
   }, [profile?.uid, profile?.profileRabbitId, profile?.nickname, profile?.equippedRabbits]);
 
   // 랭킹 데이터 로드
+  // rankings 문서는 2시간마다 스케줄러가 재계산하므로 실시간 리스너(onSnapshot) 불필요 →
+  // 캐시가 fresh(5분 이내)면 fetch 생략, 그 외엔 getDoc 1회만.
   useEffect(() => {
     if (!isOpen || !userCourseId || !profile) return;
 
-    const { data: cached } = readFullCache(userCourseId);
+    let cancelled = false;
+
+    const { data: cached, isFresh } = readFullCache(userCourseId);
     if (cached) {
       applyRankings(cached.rankedUsers as RankedUser[]);
       if (cached.prevDayRanks) setPrevWeekRanks(cached.prevDayRanks);
       setLoading(false);
+      // fresh(5분 이내)면 Firestore 읽기 생략
+      if (isFresh) return;
     }
 
-    let fallbackAttempted = false;
-    const unsubscribe = onSnapshot(
-      doc(db, 'rankings', userCourseId),
-      async (snapshot) => {
+    const loadRankings = async () => {
+      try {
+        const snapshot = await getDoc(doc(db, 'rankings', userCourseId));
+
         if (snapshot.exists()) {
+          if (cancelled) return;
           const data = snapshot.data();
           const users = (data.rankedUsers || []) as RankedUser[];
           const pwRanks = (data.prevDayRanks || {}) as Record<string, number>;
           applyRankings(users);
           setPrevWeekRanks(pwRanks);
           setLoading(false);
-          // 토끼 이름 실시간 갱신 (서버 캐시와 무관하게 최신 이름 반영)
+          // 토끼 이름 캐시 활용 — 미스분만 Firestore에서 batch fetch
           resolveRabbitNamesForAll(users).then(() => {
+            if (cancelled) return;
             applyRankings([...users]);
             writeFullCache(userCourseId, { rankedUsers: users, prevDayRanks: pwRanks });
           }).catch(() => {});
-        } else if (!fallbackAttempted) {
-          fallbackAttempted = true;
-          if (!cached) setLoading(true);
-
-          let generated = false;
-          try {
-            await callFunction('refreshRankings', { courseId: userCourseId });
-            generated = true;
-          } catch { /* CF 미배포 */ }
-
-          if (!generated) {
-            const users = await computeRankingsClientSide(userCourseId);
-            applyRankings(users);
-            if (users.length > 0) writeFullCache(userCourseId, { rankedUsers: users });
-            setLoading(false);
-          }
+          return;
         }
-      },
-      (error) => {
-        console.error('랭킹 구독 실패:', error);
-        setLoading(false);
-      }
-    );
 
-    return () => unsubscribe();
+        // rankings 문서 없음 → CF refreshRankings 호출 + 1회 재시도
+        if (!cached) setLoading(true);
+        try {
+          await callFunction('refreshRankings', { courseId: userCourseId });
+        } catch { /* CF 미배포 또는 실패 */ }
+
+        if (cancelled) return;
+        const retrySnap = await getDoc(doc(db, 'rankings', userCourseId));
+        if (!cancelled && retrySnap.exists()) {
+          const data = retrySnap.data();
+          const users = (data.rankedUsers || []) as RankedUser[];
+          const pwRanks = (data.prevDayRanks || {}) as Record<string, number>;
+          applyRankings(users);
+          setPrevWeekRanks(pwRanks);
+          setLoading(false);
+          resolveRabbitNamesForAll(users).then(() => {
+            if (cancelled) return;
+            applyRankings([...users]);
+            writeFullCache(userCourseId, { rankedUsers: users, prevDayRanks: pwRanks });
+          }).catch(() => {});
+          return;
+        }
+
+        // 최후 폴백: 클라이언트 직접 계산 (300명 동시 접속 환경에선 무거움 — 예외적 상황)
+        if (!cancelled) {
+          const users = await computeRankingsClientSide(userCourseId);
+          if (cancelled) return;
+          applyRankings(users);
+          if (users.length > 0) writeFullCache(userCourseId, { rankedUsers: users });
+          setLoading(false);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('랭킹 로드 실패:', error);
+          setLoading(false);
+        }
+      }
+    };
+
+    loadRankings();
+
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, userCourseId, profile?.uid]);
 
@@ -253,12 +288,21 @@ export default function RankingBottomSheet({ isOpen, onClose, isPanelMode }: Ran
       for (const r of equipped) {
         if (r.rabbitId === 0) { names.push('토끼'); continue; }
         const key = r.courseId ? `${r.courseId}_${r.rabbitId}` : null;
-        if (key) {
-          try {
-            const snap = await getDoc(doc(db, 'rabbits', key));
-            names.push(snap.exists() ? (snap.data()?.name || `토끼 #${r.rabbitId + 1}`) : `토끼 #${r.rabbitId + 1}`);
-          } catch { names.push(`토끼 #${r.rabbitId + 1}`); }
-        } else { names.push(`토끼 #${r.rabbitId + 1}`); }
+        if (!key) { names.push(`토끼 #${r.rabbitId + 1}`); continue; }
+
+        // 캐시 우선 — 대부분 히트 (내 토끼는 resolveRabbitNamesForAll에서 이미 채움)
+        const { name, hit } = readRabbitName(key);
+        if (hit) {
+          names.push(name || `토끼 #${r.rabbitId + 1}`);
+          continue;
+        }
+        // 캐시 미스 시에만 Firestore 조회
+        try {
+          const snap = await getDoc(doc(db, 'rabbits', key));
+          const resolved = snap.exists() ? (snap.data()?.name || null) : null;
+          writeRabbitName(key, resolved);
+          names.push(resolved || `토끼 #${r.rabbitId + 1}`);
+        } catch { names.push(`토끼 #${r.rabbitId + 1}`); }
       }
 
       me.profileRabbitId = profile.profileRabbitId ?? undefined;
