@@ -76,18 +76,20 @@ export function useActivityTracker(courseId?: string, isProfessor?: boolean) {
     };
   }, [user?.uid, courseId, isProfessor, pathname, isHomeOverlayOpen]);
 
-  // 일일 접속 기록 (학생만, 하루 1회)
-  // dailyAttendance/{courseId}_{YYYY-MM-DD} 문서에 uid를 arrayUnion
+  // 일일 접속 기록 (학생만)
+  // dailyAttendance/{courseId}_{YYYY-MM-DD} 문서에 uid를 arrayUnion.
+  // arrayUnion이 idempotent(dedup)라 매번 실행해도 결과 동일 — localStorage 중복 방지 제거.
+  // 이전 localStorage 체크는 학생이 최초 1회 쓰기 실패 시 영구적 누락 가능성이 있어 제거.
   useEffect(() => {
     if (!user?.uid || !courseId || isProfessor) return;
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    const storageKey = `daily-att-${user.uid}-${today}`;
-    if (localStorage.getItem(storageKey)) return;
 
     const attRef = doc(db, 'dailyAttendance', `${courseId}_${today}`);
     setDoc(attRef, { attendedUids: arrayUnion(user.uid) }, { merge: true })
-      .then(() => localStorage.setItem(storageKey, '1'))
-      .catch(() => {});
+      .catch((err) => {
+        // 실패를 조용히 삼키지 않고 로그로 노출 (이후 진단 가능)
+        console.warn('[dailyAttendance] write failed:', err);
+      });
   }, [user?.uid, courseId, isProfessor]);
 }
