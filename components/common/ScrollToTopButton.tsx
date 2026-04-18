@@ -95,7 +95,9 @@ export default function ScrollToTopButton({
               : `calc(4.25rem + env(safe-area-inset-bottom, 0px) + ${bottomPx - 68}px)`,
             ...(side === 'left'
               ? { left: isWide ? 'calc(var(--modal-left, 240px) + 1rem)' : '1rem' }
-              : { right: isWide ? 'calc(var(--modal-right, 0px) + 1rem)' : '1rem' }),
+              // fallback: 2쪽 메인 우측 경계(calc(50% - 120px))
+              // 라우트 사이드바 있는 페이지(/quiz/[id] 등)는 layout이 --modal-right: 0px 명시
+              : { right: isWide ? 'calc(var(--modal-right, calc(50% - 120px)) + 1rem)' : '1rem' }),
             WebkitTapHighlightColor: 'transparent',
             touchAction: 'manipulation',
           }}
