@@ -24,10 +24,17 @@ const SESSION_TOKEN_KEY = 'rabbitory-session-token';
 // cold reload로 경로 복원 직후, 그 경로 페이지가 "이건 in-app navigation이 아니라
 // cold-reload 복원이다"를 구분할 수 있게 저장하는 플래그. 1회 consume 방식.
 const COLD_RESTORED_PATH_KEY = 'rabbitory-cold-restored-path';
-// "앱을 껐다 켬" vs "잠깐 다른 앱" 구분 — 30분 내 복귀면 백그라운드 복귀로 보고
-// 저장된 경로 복원. 그 이상 지났으면 사용자가 의도적으로 닫은 것으로 간주,
-// 홈화면(PWA manifest start_url=/)에 그대로 진입.
-const MAX_AGE_MS = 30 * 60 * 1000;
+// app boot 시점에 "이번이 cold start"임을 기록하는 1회 consume 플래그.
+// useSessionSnapshot의 redirect 여부와 무관하게, 앱 최초 mount 페이지가
+// "내가 cold start로 열린건가?"를 판별할 때 사용.
+// 예: iOS PWA가 저장된 URL로 직접 재시작해도 이 플래그는 true.
+const COLD_START_CONSUMABLE_KEY = 'rabbitory-cold-start-consumable';
+// "앱을 껐다 켬" vs "잠깐 다른 앱" 구분 — 2분 내 복귀면 백그라운드 복귀로 보고
+// 저장된 경로 복원. 그 이상 지났으면 사용자가 의도적으로 닫은 것으로 간주하고
+// 홈화면(PWA manifest start_url=/)에 그대로 진입 (복원 스킵).
+// iOS PWA가 저장된 URL 자체로 relaunch하는 경우에도 cold-start-consumable을
+// set하지 않아 퀴즈 등 페이지의 '이전 진행' 모달이 정상 표시됨.
+const MAX_AGE_MS = 2 * 60 * 1000;
 
 /**
  * cold reload로 복원된 경로를 1회 소비.
@@ -43,6 +50,22 @@ export function consumeColdRestoredPath(): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * 이번 앱 mount가 cold start인지 1회 소비. app layout이 boot 시 set하고,
+ * 최초 페이지(특히 quiz/[id], /board/[id] 등)가 "나 지금 cold reload로 열린 거야?"를
+ * 판별할 때 사용. useSessionSnapshot redirect 여부와 무관하게 true.
+ */
+export function consumeColdStart(): boolean {
+  try {
+    const v = sessionStorage.getItem(COLD_START_CONSUMABLE_KEY);
+    if (v) {
+      sessionStorage.removeItem(COLD_START_CONSUMABLE_KEY);
+      return true;
+    }
+  } catch { /* noop */ }
+  return false;
 }
 
 interface Snapshot {
@@ -148,12 +171,19 @@ export function useSessionSnapshot() {
     markSessionAlive();
 
     if (!cold) return;
-    if (!TAB_ROOTS.has(pathname)) return;
 
+    // 스냅샷이 valid(2분 이내) 할 때만 "백그라운드 복귀"로 간주해 복원 수행.
+    // 유효하지 않으면 아무것도 하지 않음 → 사용자는 장시간 닫은 후 재시작한 것이므로
+    // PWA manifest start_url(/) 또는 iOS가 preserve한 URL 그대로 진입.
     const snap = loadSnapshot();
     if (!snap) return;
+
+    // 복원 확정 — 자식 페이지가 "이번 mount는 cold-reload 복원이다"를 감지하도록
+    // consumable 플래그 set. 퀴즈 등의 resume 모달을 스킵하는 데 쓰임.
+    try { sessionStorage.setItem(COLD_START_CONSUMABLE_KEY, '1'); } catch { /* noop */ }
+
     if (snap.pathname === pathname) {
-      // 이미 같은 경로 — 스크롤만 복원
+      // 이미 같은 경로 (iOS가 URL preserve한 경우 포함) — 스크롤만 복원
       requestAnimationFrame(() => {
         if (typeof window !== 'undefined') {
           window.scrollTo(0, snap.scrollY);
@@ -163,10 +193,16 @@ export function useSessionSnapshot() {
       return;
     }
 
+    // 다른 경로 — 탭 루트에서만 redirect (직접 URL 진입은 존중)
+    if (!TAB_ROOTS.has(pathname)) {
+      clearSnapshot();
+      return;
+    }
+
     // 복원은 1회성 → 즉시 클리어
     clearSnapshot();
 
-    // 해당 경로 페이지가 "cold-reload 복원이다"를 감지할 수 있도록 플래그 저장
+    // 해당 경로 페이지가 "cold-reload 복원이다"를 감지할 수 있도록 경로 플래그도 저장
     try { sessionStorage.setItem(COLD_RESTORED_PATH_KEY, snap.pathname); } catch { /* noop */ }
 
     // 저장된 경로로 replace (뒤로가기에 홈이 쌓이지 않게)
