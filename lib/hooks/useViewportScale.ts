@@ -1,10 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useState, useRef, useCallback } from 'react';
-
-/** SSR 안전 layout effect — 클라이언트에서만 useLayoutEffect, 서버에서는 noop-useEffect */
-const useIsomorphicLayoutEffect =
-  typeof window !== 'undefined' ? useLayoutEffect : useEffect;
+import { useSyncExternalStore } from 'react';
 
 /**
  * CSS zoom 제거됨 — 항상 1 반환 (하위 호환용)
@@ -29,40 +25,34 @@ export function useViewportScale() {
 }
 
 /**
- * 가로모드(wide) 감지 훅
- * orientation: landscape + min-width: 1024px
- * 100ms 디바운스로 화면 회전 시 깜빡임 방지
+ * 가로모드(wide) 감지 훅 — useSyncExternalStore 기반.
+ *
+ * 왜 useSyncExternalStore인가:
+ * - useState + useEffect는 초기 render에 매칭 전 값(false)을 쓰고 effect 후 재render.
+ *   이 경우 브라우저가 이미 paint한 뒤 전환이 일어나 1프레임 '세로→가로' 깜빡임 발생.
+ *   특히 cold reload + SW 캐시된 HTML에서 두드러짐.
+ * - useSyncExternalStore는 초기 render 시점에 getSnapshot을 호출해 paint 전 동기화.
+ *
+ * SSR 시 getServerSnapshot은 false (window 없음) → 하이드레이션 시 첫 render에서 정확한 값 반영.
  */
+const MQL_QUERY = '(orientation: landscape) and (min-width: 1024px)';
+
+function subscribe(callback: () => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+  const mql = window.matchMedia(MQL_QUERY);
+  mql.addEventListener('change', callback);
+  return () => mql.removeEventListener('change', callback);
+}
+
+function getSnapshot(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.matchMedia(MQL_QUERY).matches;
+}
+
+function getServerSnapshot(): boolean {
+  return false;
+}
+
 export function useWideMode(): boolean {
-  const [isWide, setIsWide] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const handleChange = useCallback((mql: MediaQueryList | MediaQueryListEvent) => {
-    const matches = 'matches' in mql ? mql.matches : (mql as MediaQueryList).matches;
-    // 100ms 디바운스 — 회전 애니메이션 중 중간 상태 무시
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
-      setIsWide(matches);
-    }, 100);
-  }, []);
-
-  // 초기 동기화는 paint 전에 끝내야 세로→가로 깜빡임이 없음 (특히 cold reload).
-  // useLayoutEffect가 SSR에서 경고를 내므로 isomorphic wrapper 사용.
-  useIsomorphicLayoutEffect(() => {
-    const mql = window.matchMedia(
-      '(orientation: landscape) and (min-width: 1024px)'
-    );
-
-    // 초기값은 디바운스 없이 즉시 설정 (paint 전)
-    setIsWide(mql.matches);
-
-    const listener = (e: MediaQueryListEvent) => handleChange(e);
-    mql.addEventListener('change', listener);
-    return () => {
-      mql.removeEventListener('change', listener);
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [handleChange]);
-
-  return isWide;
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
