@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import type { ReviewItem } from '@/lib/hooks/useReview';
+import { useSessionState, useSessionStateSet } from '@/lib/hooks/useSessionState';
 import { BottomSheet } from '@/components/common';
 import { type FeedbackType, FEEDBACK_TYPES } from '@/components/review/types';
 import { choiceLabels, KOREAN_LABELS } from '@/lib/utils/reviewQuestionUtils';
@@ -64,14 +65,16 @@ export default function QuestionCard({
   onEditChange,
   editData,
 }: QuestionCardProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  // cold reload에도 펼침 상태 유지 — question id 기반 키
+  const cardKey = `qcard:${item.id}`;
+  const [isExpanded, setIsExpanded] = useSessionState<boolean>(`${cardKey}:exp`, false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [selectedFeedbackTypes, setSelectedFeedbackTypes] = useState<Set<FeedbackType>>(new Set());
   const [feedbackContent, setFeedbackContent] = useState('');
   const [isFeedbackSubmitting, setIsFeedbackSubmitting] = useState(false);
   const [isFeedbackSubmitted, setIsFeedbackSubmitted] = useState(false);
   const [isFeedbackDone, setIsFeedbackDone] = useState(false);
-  const [expandedChoices, setExpandedChoices] = useState<Set<number>>(new Set());
+  const [expandedChoices, setExpandedChoices] = useSessionStateSet<number>(`${cardKey}:expC`, new Set());
 
   // 선지별 해설이 있으면 정답 선지 아코디언을 기본 열림
   useEffect(() => {

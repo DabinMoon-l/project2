@@ -594,10 +594,18 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
         (a) => a !== null && a !== '' && !(Array.isArray(a) && a.length === 0)
       );
 
-      // 모달 표시 조건: Firestore or draft 어느 쪽이든 이전 진행 상황이 있으면.
-      // 클릭 시 복원되는 값은 handleResume에서 "둘 중 최신" 선택.
-      // 초기 answers는 항상 빈값 — 모달에서 사용자 선택 후 적용.
-      if (loadedProgress || draftHasData) {
+      // "이번 사용자가 모달을 이미 처리했다" 플래그 — cold reload로 재진입 시 모달 재출현 방지.
+      // 모달 '이어하기'/'새로 시작' 클릭 시 set, 퀴즈 완료·startFresh 시 clear.
+      const engagedKey = user?.uid ? `quiz-engaged:${user.uid}:${quizId}` : '';
+      let alreadyEngaged = false;
+      try {
+        alreadyEngaged = engagedKey ? !!localStorage.getItem(engagedKey) : false;
+      } catch { /* noop */ }
+
+      // 모달 표시 조건:
+      // - 이전 진행(Firestore or draft) 있음 + 이번 세션에 아직 engaged 플래그 없음 → 모달
+      // - engaged 플래그 있으면 → 모달 스킵하고 draft로 조용히 복원 (앱 전환 복귀 대응)
+      if ((loadedProgress || draftHasData) && !alreadyEngaged) {
         const progressSource = loadedProgress ?? {
           id: '',
           answers: draft!.answers as Record<string, Answer>,
@@ -610,11 +618,29 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
         ).length;
         setSavedProgress({ ...progressSource, answeredCount });
         setShowResumeModal(true);
-      }
 
-      const initialAnswers: Record<string, Answer> = {};
-      questions.forEach((q) => { initialAnswers[q.id] = null; });
-      setAnswers(initialAnswers);
+        const initialAnswers: Record<string, Answer> = {};
+        questions.forEach((q) => { initialAnswers[q.id] = null; });
+        setAnswers(initialAnswers);
+      } else if (draftHasData) {
+        // 이미 engaged 상태 + draft 있음 → 조용히 draft 복원
+        const initialAnswers: Record<string, Answer> = {};
+        questions.forEach((q) => { initialAnswers[q.id] = null; });
+        setAnswers({ ...initialAnswers, ...(draft!.answers as Record<string, Answer>) });
+        setCurrentQuestionIndex(draft!.currentQuestionIndex || 0);
+        if (Array.isArray(draft!.submittedQuestions) && draft!.submittedQuestions.length > 0) {
+          setSubmittedQuestions(new Set(draft!.submittedQuestions));
+        }
+        if (draft!.gradeResults && Object.keys(draft!.gradeResults).length > 0) {
+          setGradeResults(draft!.gradeResults);
+        }
+        if (loadedProgress) setProgressId(loadedProgress.id);
+        setLocalDraftChecked(true);
+      } else {
+        const initialAnswers: Record<string, Answer> = {};
+        questions.forEach((q) => { initialAnswers[q.id] = null; });
+        setAnswers(initialAnswers);
+      }
     } catch (err: unknown) {
       console.error('퀴즈 로드 실패:', err);
       console.error('에러 코드:', (err as { code?: string })?.code);
@@ -844,9 +870,12 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
       localStorage.setItem(`quiz_answers_${quizId}`, JSON.stringify(orderedAnswers));
       localStorage.setItem(`quiz_time_${quizId}`, '0'); // 시간 측정은 나중에 구현
 
-      // 저장된 진행 상황 삭제 (Firestore + 로컬 draft)
+      // 저장된 진행 상황 삭제 (Firestore + 로컬 draft + engaged 플래그)
       await deleteProgress();
       quizDraft.clear();
+      if (user?.uid) {
+        try { localStorage.removeItem(`quiz-engaged:${user.uid}:${quizId}`); } catch {}
+      }
 
       // 결과 페이지로 이동
       if (onPanelNavigate) { onPanelNavigate(`/quiz/${quizId}/result`); return; }
@@ -893,7 +922,11 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
     }
     setShowResumeModal(false);
     setSavedProgress(null);
-  }, [savedProgress, quizDraft]);
+    // 엔게이지 플래그 — 다음 mount부터 모달 재출현 방지 (앱 전환 후 복귀 시나리오)
+    if (user?.uid && quizId) {
+      try { localStorage.setItem(`quiz-engaged:${user.uid}:${quizId}`, '1'); } catch {}
+    }
+  }, [savedProgress, quizDraft, user?.uid, quizId]);
 
   /**
    * 처음부터 다시 하기
@@ -912,7 +945,11 @@ export default function QuizPage({ panelQuizId, onPanelNavigate }: { panelQuizId
     setSavedProgress(null);
     setProgressId(null);
     setCurrentQuestionIndex(0);
-  }, [savedProgress, quizDraft]);
+    // '새로 시작' 역시 사용자가 모달을 처리한 상태이므로 engaged 플래그 set
+    if (user?.uid && quizId) {
+      try { localStorage.setItem(`quiz-engaged:${user.uid}:${quizId}`, '1'); } catch {}
+    }
+  }, [savedProgress, quizDraft, user?.uid, quizId]);
 
   /**
    * 저장하고 나가기
