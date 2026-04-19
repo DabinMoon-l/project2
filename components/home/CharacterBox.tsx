@@ -173,10 +173,16 @@ export default function CharacterBox() {
   }, [isStudent, userCourseId, slotCount, clearLongPress]);
 
   // 배틀 확인 → 매칭 시작
+  // aiOnly=true면 "상대 찾는 중" 모달 건너뛰고 바로 배틀 오버레이로 전환
+  // (overlay 자체에 로딩 상태 — 배틀 데이터 수신 시 countdown으로 진입)
   const handleConfirmBattle = useCallback((chapters: string[], aiOnly: boolean) => {
     if (!userCourseId) return;
     setShowBattleConfirm(false);
-    setShowMatchmaking(true);
+    if (aiOnly) {
+      setShowBattle(true);
+    } else {
+      setShowMatchmaking(true);
+    }
     tekken.startMatchmaking(userCourseId, chapters, aiOnly);
   }, [userCourseId, tekken]);
 
