@@ -3,6 +3,9 @@
 /**
  * 열린 PDF PiP 창들을 렌더하는 루트. main layout에 1회 마운트.
  * 가로모드 + createPortal(body)로 어떤 페이지든 위에 떠다님.
+ *
+ * ErrorBoundary로 감싸서 PDF 서브시스템 에러가 앱 전체 에러 페이지로
+ * 번지는 걸 막음 — PiP 실패해도 나머지 앱은 계속 동작.
  */
 
 import { useEffect } from 'react';
@@ -10,8 +13,17 @@ import { createPortal } from 'react-dom';
 import PdfPipWindow from './PdfPipWindow';
 import { usePdfViewerStore } from '@/lib/stores/pdfViewerStore';
 import { useWideMode } from '@/lib/hooks/useViewportScale';
+import ErrorBoundary from '@/components/common/ErrorBoundary';
 
 export default function PdfViewerRoot() {
+  return (
+    <ErrorBoundary fallback={null}>
+      <PdfViewerRootInner />
+    </ErrorBoundary>
+  );
+}
+
+function PdfViewerRootInner() {
   const isWide = useWideMode();
   const openWindows = usePdfViewerStore((s) => s.openWindows);
   const savedPdfs = usePdfViewerStore((s) => s.savedPdfs);
