@@ -41,8 +41,12 @@ interface PdfViewerStore {
   removePdf: (id: string) => Promise<void>;
 
   openPdf: (id: string, defaultGeom: PdfGeom) => void;
-  closePdf: (id: string) => void;
+  closePdf: (id: string, lastPage?: number) => void;
   updateWindowGeom: (id: string, geom: Partial<PdfGeom>) => void;
+  /** 클릭한 PDF 창을 최상단(스택 맨 뒤)으로 이동 */
+  focusWindow: (id: string) => void;
+  /** 현재 페이지 persist (페이지 이동 시 호출) — 재오픈 시 복원 */
+  updateLastPage: (id: string, page: number) => void;
 
   /** 북마크 토글 — 이미 북마크된 페이지면 해제, 아니면 추가. IDB에도 반영 */
   toggleBookmark: (pdfId: string, page: number) => void;
@@ -109,14 +113,14 @@ export const usePdfViewerStore = create<PdfViewerStore>((set, get) => ({
     set({ openWindows: trimmed });
   },
 
-  closePdf: (id) => {
-    // 현재 창 geom을 IndexedDB에 저장 (다음 열 때 위치 기억)
+  closePdf: (id, lastPage) => {
+    // 현재 창 geom + lastPage를 IndexedDB에 저장 (다음 열 때 그대로 복원)
     const win = get().openWindows.find((w) => w.pdfId === id);
     if (win) {
-      updatePdfMeta(id, { lastGeom: win.geom }).catch(() => {});
-      // 로컬 savedPdfs 캐시도 업데이트
+      const patch = { lastGeom: win.geom, ...(typeof lastPage === 'number' ? { lastPage } : {}) };
+      updatePdfMeta(id, patch).catch(() => {});
       set((s) => ({
-        savedPdfs: s.savedPdfs.map((p) => (p.id === id ? { ...p, lastGeom: win.geom } : p)),
+        savedPdfs: s.savedPdfs.map((p) => (p.id === id ? { ...p, ...patch } : p)),
       }));
     }
     set((s) => ({ openWindows: s.openWindows.filter((w) => w.pdfId !== id) }));
@@ -128,6 +132,24 @@ export const usePdfViewerStore = create<PdfViewerStore>((set, get) => ({
         w.pdfId === id ? { ...w, geom: { ...w.geom, ...patch } } : w,
       ),
     })),
+
+  focusWindow: (id) =>
+    set((s) => {
+      const win = s.openWindows.find((w) => w.pdfId === id);
+      if (!win) return s;
+      // 이미 맨 뒤(=최상단)면 no-op — 불필요한 리렌더 방지
+      if (s.openWindows[s.openWindows.length - 1]?.pdfId === id) return s;
+      return {
+        openWindows: [...s.openWindows.filter((w) => w.pdfId !== id), win],
+      };
+    }),
+
+  updateLastPage: (id, page) => {
+    updatePdfMeta(id, { lastPage: page }).catch(() => {});
+    set((s) => ({
+      savedPdfs: s.savedPdfs.map((p) => (p.id === id ? { ...p, lastPage: page } : p)),
+    }));
+  },
 
   addStroke: (pdfId, page, stroke) => {
     const current = get().savedPdfs.find((p) => p.id === pdfId);

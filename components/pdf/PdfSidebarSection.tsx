@@ -22,6 +22,7 @@ export default function PdfSidebarSection() {
   const isListExpanded = usePdfViewerStore((s) => s.isListExpanded);
   const toggleList = usePdfViewerStore((s) => s.toggleList);
   const openPdf = usePdfViewerStore((s) => s.openPdf);
+  const closePdf = usePdfViewerStore((s) => s.closePdf);
   const isOpen = usePdfViewerStore((s) => s.isOpen);
   const addPdfToList = usePdfViewerStore((s) => s.addPdfToList);
   const removePdf = usePdfViewerStore((s) => s.removePdf);
@@ -141,19 +142,25 @@ export default function PdfSidebarSection() {
               <div
                 key={p.id}
                 className={`flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs ${
-                  active ? 'bg-black/10' : 'hover:bg-black/5'
+                  active ? 'bg-black/15' : 'hover:bg-black/5'
                 }`}
                 style={{ color: '#1A1A1A' }}
               >
+                {/* 이름 클릭 = 창 토글. 열리면 진한 회색 배경으로 "선택됨" 표시,
+                    다시 누르면 닫힘(store.closePdf가 위치·페이지 자동 저장). */}
                 <button
                   type="button"
-                  onClick={() => handleOpen(p.id)}
+                  onClick={() => {
+                    if (active) closePdf(p.id);
+                    else handleOpen(p.id);
+                  }}
                   className="flex-1 text-left truncate font-medium"
                   title={p.name}
                   style={{ opacity: active ? 1 : 0.75 }}
                 >
                   {p.name}
                 </button>
+                {/* X 버튼 = 파일 완전 삭제 (IDB에서 제거, 열림 상태도 해제) */}
                 <button
                   type="button"
                   onClick={(e) => {
